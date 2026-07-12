@@ -25,6 +25,9 @@
 - V4: modelo de dominio `Memory`/`MemoryRevision` con reglas de origen obligatorio y transición de estados en dominio, independiente de SQLAlchemy.
 - V4: puerto `MemoryRepository` y adaptador SQLite, con nueva migración (`create memories and memory revisions`) que no modifica las de V2 ni V3.
 - V4: corrección versionada sin sobrescritura, archivo que conserva contenido, eliminación que redacta contenido conservando un marcador trazable; el arranque solo aplica la migración, sin crear memorias por defecto.
+- V5: modelo de dominio `Identity`/`IdentityVersion` versionado (una sola versión vigente, historial estable) con identidad inicial tomada literalmente de la documentación canónica.
+- V5: puerto `IdentityRepository` y adaptador SQLite, con nueva migración (`create identities and identity versions`) que no modifica las de V2, V3 ni V4; bootstrap crea la identidad canónica de forma idempotente.
+- V5: `ContextBuilder` (constructor de contexto determinista con 5 secciones en orden fijo, solo a partir de puertos) y `SendMessageUseCase` (invoca `FakeLLMProvider` y persiste ambos mensajes con estrategia explícita ante fallos); sin interfaz de conversación todavía.
 
 ## Primera acción en el equipo Windows
 

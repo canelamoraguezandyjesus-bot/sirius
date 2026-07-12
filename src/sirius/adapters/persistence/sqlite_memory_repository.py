@@ -111,7 +111,9 @@ class SqliteMemoryRepository:
     def list_current_memories(self) -> list[Memory]:
         with session_scope(self._session_factory) as session:
             models = session.scalars(
-                select(MemoryModel).where(MemoryModel.status == MemoryStatus.CURRENT)
+                select(MemoryModel)
+                .where(MemoryModel.status == MemoryStatus.CURRENT)
+                .order_by(MemoryModel.id)
             ).all()
             return [_load_memory(session, model) for model in models]
 

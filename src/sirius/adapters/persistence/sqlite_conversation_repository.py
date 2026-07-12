@@ -36,6 +36,12 @@ def _to_domain_message(model: MessageModel) -> Message:
     )
 
 
+def _find_main_conversation_model(session: Session) -> ConversationModel | None:
+    return session.scalars(
+        select(ConversationModel).where(ConversationModel.is_main.is_(True)).limit(1)
+    ).first()
+
+
 class SqliteConversationRepository:
     """Conversation repository backed by a local SQLite database."""
 
@@ -44,13 +50,18 @@ class SqliteConversationRepository:
 
     def get_or_create_main_conversation(self) -> Conversation:
         with session_scope(self._session_factory) as session:
-            model = session.scalars(
-                select(ConversationModel).where(ConversationModel.is_main.is_(True)).limit(1)
-            ).first()
+            model = _find_main_conversation_model(session)
             if model is None:
                 model = ConversationModel(created_at=_utc_now_naive(), is_main=True)
                 session.add(model)
                 session.flush()
+            return _to_domain_conversation(model)
+
+    def get_main_conversation(self) -> Conversation | None:
+        with session_scope(self._session_factory) as session:
+            model = _find_main_conversation_model(session)
+            if model is None:
+                return None
             return _to_domain_conversation(model)
 
     def append_message(self, conversation_id: int, role: MessageRole, content: str) -> Message:

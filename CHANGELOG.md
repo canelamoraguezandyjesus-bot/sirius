@@ -40,3 +40,13 @@
 - Corrección versionada: cada corrección añade una revisión nueva y desactiva la anterior sin sobrescribirla; solo una revisión vigente por memoria (puntero único estructural, no un flag booleano).
 - Archivar conserva el contenido y retira la memoria de las consultas de vigentes; eliminar redacta el contenido estructurado de toda la historia de revisiones y dispara el estado `DELETED`, conservando un marcador mínimo trazable (regla DR-012).
 - No se crea ninguna memoria por defecto: el arranque solo aplica la migración.
+
+### V5 — Identidad versionada y constructor de contexto
+
+- Modelo de dominio `Identity`/`IdentityVersion`, versionado con el mismo patrón de V4 (`is_current` + índice único parcial: como máximo una versión vigente, historial en orden estable).
+- Identidad inicial tomada literalmente del Manual de Visión e Identidad v1.2 y de la Definición de Producto 0.1 (propósito, rasgos nucleares, honestidad intelectual, autoridad del usuario); ningún rasgo o regla inventados.
+- Puerto `IdentityRepository` y adaptador SQLite (`SqliteIdentityRepository`); nueva migración (`create identities and identity versions`) que no modifica las de V2, V3 ni V4.
+- Bootstrap extendido: crea la identidad canónica al arrancar, de forma idempotente.
+- `application.context.ContextBuilder`: constructor de contexto determinista, con 5 secciones en orden fijo (identidad, proyecto activo, memorias vigentes, historial reciente, mensaje actual), construido solo a partir de puertos; excluye memorias archivadas/eliminadas y respeta el orden de los mensajes.
+- `application.send_message.SendMessageUseCase`: caso de uso mínimo que construye el contexto, invoca `FakeLLMProvider` y persiste el turno de usuario y de Sirius con una estrategia explícita (dos escrituras independientes, cada una atómica) probada ante fallo del proveedor y de la persistencia.
+- No se añadió interfaz de conversación ni de edición de identidad; la ventana permanece sin cambios visibles.

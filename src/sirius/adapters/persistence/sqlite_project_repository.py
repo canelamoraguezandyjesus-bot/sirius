@@ -33,6 +33,12 @@ def _to_domain_project(model: ProjectModel) -> Project:
     )
 
 
+def _find_active_project_model(session: Session) -> ProjectModel | None:
+    return session.scalars(
+        select(ProjectModel).where(ProjectModel.is_active.is_(True)).limit(1)
+    ).first()
+
+
 class SqliteProjectRepository:
     """Project repository backed by a local SQLite database."""
 
@@ -41,9 +47,7 @@ class SqliteProjectRepository:
 
     def get_or_create_active_project(self) -> Project:
         with session_scope(self._session_factory) as session:
-            model = session.scalars(
-                select(ProjectModel).where(ProjectModel.is_active.is_(True)).limit(1)
-            ).first()
+            model = _find_active_project_model(session)
             if model is None:
                 now = _utc_now_naive()
                 model = ProjectModel(
@@ -57,6 +61,13 @@ class SqliteProjectRepository:
                 )
                 session.add(model)
                 session.flush()
+            return _to_domain_project(model)
+
+    def get_active_project(self) -> Project | None:
+        with session_scope(self._session_factory) as session:
+            model = _find_active_project_model(session)
+            if model is None:
+                return None
             return _to_domain_project(model)
 
     def update_project(

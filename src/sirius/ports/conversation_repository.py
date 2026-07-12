@@ -14,6 +14,10 @@ class ConversationRepository(Protocol):
         """Return the single main conversation, creating it if it does not exist yet."""
         ...
 
+    def get_main_conversation(self) -> Conversation | None:
+        """Return the main conversation if it exists, without creating it."""
+        ...
+
     def append_message(self, conversation_id: int, role: MessageRole, content: str) -> Message:
         """Persist a new message at the end of the conversation and return it."""
         ...

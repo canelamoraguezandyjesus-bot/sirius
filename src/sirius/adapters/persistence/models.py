@@ -133,3 +133,43 @@ class MemoryRevisionModel(Base):
     origin: Mapped[str] = mapped_column(Text, nullable=False)
     is_current: Mapped[bool] = mapped_column(nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
+class IdentityModel(Base):
+    """Sirius's single identity. Its current version is found in
+    ``identity_versions`` by querying ``identity_id`` together with
+    ``is_current = True``.
+    """
+
+    __tablename__ = "identities"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
+class IdentityVersionModel(Base):
+    """One immutable, versioned snapshot of Sirius's identity; at most one row
+    per ``identity_id`` may have ``is_current`` set at any time.
+    """
+
+    __tablename__ = "identity_versions"
+    __table_args__ = (
+        UniqueConstraint("identity_id", "version", name="uq_identity_versions_identity_version"),
+        Index(
+            "uq_identity_versions_single_current_per_identity",
+            "identity_id",
+            unique=True,
+            sqlite_where=text("is_current = 1"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    identity_id: Mapped[int] = mapped_column(
+        ForeignKey("identities.id", ondelete="CASCADE"), nullable=False
+    )
+    version: Mapped[int] = mapped_column(nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    personality_instructions: Mapped[str] = mapped_column(Text, nullable=False)
+    is_current: Mapped[bool] = mapped_column(nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(nullable=False)

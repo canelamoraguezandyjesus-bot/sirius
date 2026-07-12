@@ -7,10 +7,13 @@ from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.adapters.persistence.database import build_engine, build_session_factory, session_scope
 from sirius.adapters.persistence.models import (
     ConversationModel,
+    IdentityModel,
+    IdentityVersionModel,
     MemoryModel,
     MemoryRevisionModel,
     ProjectModel,
 )
+from sirius.domain.identity import INITIAL_IDENTITY_NAME
 from sirius.infrastructure.paths import resolve_paths
 
 
@@ -41,6 +44,18 @@ def _memory_revision_rows(database_path: Path) -> list[MemoryRevisionModel]:
     session_factory = build_session_factory(build_engine(database_path))
     with session_scope(session_factory) as session:
         return list(session.scalars(select(MemoryRevisionModel)).all())
+
+
+def _identity_rows(database_path: Path) -> list[IdentityModel]:
+    session_factory = build_session_factory(build_engine(database_path))
+    with session_scope(session_factory) as session:
+        return list(session.scalars(select(IdentityModel)).all())
+
+
+def _identity_version_rows(database_path: Path) -> list[IdentityVersionModel]:
+    session_factory = build_session_factory(build_engine(database_path))
+    with session_scope(session_factory) as session:
+        return list(session.scalars(select(IdentityVersionModel)).all())
 
 
 @pytest.mark.integration
@@ -77,6 +92,22 @@ def test_initialize_persistence_creates_memory_tables_without_seeding_any_memory
 
 
 @pytest.mark.integration
+def test_initialize_persistence_creates_the_canonical_identity() -> None:
+    paths = resolve_paths()
+
+    initialize_persistence(paths)
+
+    database_path = paths.data_dir / "sirius.db"
+    identity_rows = _identity_rows(database_path)
+    version_rows = _identity_version_rows(database_path)
+
+    assert len(identity_rows) == 1
+    assert len(version_rows) == 1
+    assert version_rows[0].name == INITIAL_IDENTITY_NAME
+    assert version_rows[0].is_current is True
+
+
+@pytest.mark.integration
 def test_starting_sirius_twice_is_idempotent_and_does_not_duplicate_anything() -> None:
     paths = resolve_paths()
 
@@ -87,3 +118,5 @@ def test_starting_sirius_twice_is_idempotent_and_does_not_duplicate_anything() -
     assert len(_conversation_rows(database_path)) == 1
     assert len(_project_rows(database_path)) == 1
     assert _memory_rows(database_path) == []
+    assert len(_identity_rows(database_path)) == 1
+    assert len(_identity_version_rows(database_path)) == 1

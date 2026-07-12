@@ -14,6 +14,10 @@ class ProjectRepository(Protocol):
         """Return the single active project, creating it with neutral values if absent."""
         ...
 
+    def get_active_project(self) -> Project | None:
+        """Return the active project if it exists, without creating it."""
+        ...
+
     def update_project(
         self,
         project_id: int,
