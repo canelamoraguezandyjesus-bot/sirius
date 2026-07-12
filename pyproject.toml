@@ -1,0 +1,83 @@
+[project]
+name = "sirius-personal-engineer"
+version = "0.1.0.dev0"
+description = "Sirius 0.1: companion for personal creation and engineering"
+readme = "README.md"
+requires-python = ">=3.14,<3.15"
+license = { text = "Proprietary" }
+authors = [
+  { name = "Sirius Project" }
+]
+dependencies = [
+  "PySide6>=6.11.1,<7",
+  "SQLAlchemy>=2.0.51,<3",
+  "alembic>=1.18.5,<2",
+  "pydantic>=2.11,<3",
+  "platformdirs>=4.3,<5",
+  "keyring>=25.6,<26",
+  "openai>=2.45,<3",
+  "cryptography>=45",
+  "argon2-cffi>=25",
+]
+
+[project.scripts]
+sirius = "sirius.main:main"
+
+[build-system]
+requires = ["uv_build>=0.11.28,<0.12"]
+build-backend = "uv_build"
+[tool.uv.build-backend]
+module-name = "sirius"
+[dependency-groups]
+dev = [
+  "mypy>=1.17",
+  "pytest>=8.4",
+  "pytest-cov>=6.2",
+  "pytest-qt>=4.5",
+  "ruff>=0.12",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+src = ["src", "tests"]
+exclude = ["migrations/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+warn_unused_configs = true
+files = ["src", "tests"]
+exclude = ["migrations/versions"]
+
+[[tool.mypy.overrides]]
+module = ["PySide6.*", "pytestqt.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = [
+  "--import-mode=importlib",
+  "--strict-config",
+  "--strict-markers",
+  "-ra",
+]
+markers = [
+  "integration: tests that use real infrastructure such as SQLite",
+  "contract: tests for adapter contracts",
+  "gui: tests for Qt presentation",
+  "acceptance: end-to-end product acceptance tests",
+]

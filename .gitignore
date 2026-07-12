@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+*.egg-info/
+build/
+dist/
+
+# Environments and tools
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/settings.local.json
+.idea/
+
+# Local Sirius data and secrets
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+!.env.example
+.local/
+logs/
+backups/
+exports/
+/settings.json
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
