@@ -28,6 +28,9 @@
 - V5: modelo de dominio `Identity`/`IdentityVersion` versionado (una sola versión vigente, historial estable) con identidad inicial tomada literalmente de la documentación canónica.
 - V5: puerto `IdentityRepository` y adaptador SQLite, con nueva migración (`create identities and identity versions`) que no modifica las de V2, V3 ni V4; bootstrap crea la identidad canónica de forma idempotente.
 - V5: `ContextBuilder` (constructor de contexto determinista con 5 secciones en orden fijo, solo a partir de puertos) y `SendMessageUseCase` (invoca `FakeLLMProvider` y persiste ambos mensajes con estrategia explícita ante fallos); sin interfaz de conversación todavía.
+- V6A: conversación visual y funcional en la ventana principal (historial, envío, estado, error) usando exclusivamente `FakeLLMProvider`; configuración existente conservada en su propia pestaña.
+- V6A: `GetConversationHistoryUseCase` (lectura pura) y `composition_root.py` (fuera de `presentation`) que inyecta repositorios y casos de uso en `MainWindow`.
+- V6A: envío en `QThreadPool` sin bloquear el hilo gráfico, doble envío bloqueado, entrada vacía rechazada, cierre de ventana seguro durante un envío en curso; sin migraciones nuevas ni proveedor real.
 
 ## Primera acción en el equipo Windows
 

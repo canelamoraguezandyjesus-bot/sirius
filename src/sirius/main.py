@@ -7,20 +7,26 @@ import sys
 from PySide6.QtWidgets import QApplication
 
 from sirius.adapters.persistence.bootstrap import initialize_persistence
+from sirius.composition_root import build_conversation_dependencies
 from sirius.infrastructure.paths import resolve_paths
 from sirius.presentation.main_window import MainWindow
 
 
 def main() -> int:
     """Start the Sirius desktop application."""
-    initialize_persistence(resolve_paths())
+    paths = resolve_paths()
+    initialize_persistence(paths)
+    dependencies = build_conversation_dependencies(paths.data_dir / "sirius.db")
 
     app = QApplication.instance()
     owns_app = app is None
     if app is None:
         app = QApplication(sys.argv)
 
-    window = MainWindow()
+    window = MainWindow(
+        send_message_use_case=dependencies.send_message_use_case,
+        get_history_use_case=dependencies.get_history_use_case,
+    )
     window.show()
 
     if not owns_app:

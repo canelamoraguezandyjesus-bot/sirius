@@ -50,3 +50,13 @@
 - `application.context.ContextBuilder`: constructor de contexto determinista, con 5 secciones en orden fijo (identidad, proyecto activo, memorias vigentes, historial reciente, mensaje actual), construido solo a partir de puertos; excluye memorias archivadas/eliminadas y respeta el orden de los mensajes.
 - `application.send_message.SendMessageUseCase`: caso de uso mínimo que construye el contexto, invoca `FakeLLMProvider` y persiste el turno de usuario y de Sirius con una estrategia explícita (dos escrituras independientes, cada una atómica) probada ante fallo del proveedor y de la persistencia.
 - No se añadió interfaz de conversación ni de edición de identidad; la ventana permanece sin cambios visibles.
+
+### V6A — Conversación visual con FakeLLMProvider
+
+- Nueva pestaña "Conversación" en la ventana principal: historial de la conversación principal, mensajes de usuario y de Sirius visualmente diferenciados (negrita para Sirius), campo de entrada, botón de enviar, estado visible mientras Sirius responde y mensaje de error genérico ante fallo. La pestaña "Configuración" existente se conserva intacta.
+- `application.get_conversation_history.GetConversationHistoryUseCase`: caso de uso de solo lectura (independiente de SQLAlchemy) para cargar el historial al arrancar, sin crear ni modificar datos.
+- `composition_root.py`: composition root fuera de `presentation`, construye repositorios, `ContextBuilder`, `FakeLLMProvider` y los casos de uso, e inyecta las dependencias en `MainWindow` (cuyo constructor ya no las construye por su cuenta).
+- Envío en segundo plano con `QThreadPool` (`presentation.conversation_worker`): la interfaz nunca bloquea el hilo gráfico durante el envío; el resultado o el error vuelven mediante señales Qt, procesadas siempre en el hilo principal.
+- Entrada vacía o solo espacios rechazada sin llamar al caso de uso; doble envío bloqueado mientras hay una operación en curso; cierre de ventana espera a que termine el envío en curso antes de cerrar.
+- `presentation` sigue sin importar SQLAlchemy, los adaptadores de persistencia ni el proveedor LLM directamente (verificado con una prueba estática de importaciones).
+- Sin OpenAI real, sin streaming real, sin migraciones nuevas: se reutiliza íntegramente el esquema y los casos de uso de V2-V5.
