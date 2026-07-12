@@ -19,6 +19,9 @@
 - V2: modelos de dominio `Conversation`/`Message` y puerto `ConversationRepository` independiente de SQLAlchemy.
 - V2: adaptador SQLite sobre la ruta de datos de `SiriusPaths`, con Alembic activo y la primera migración real (`create conversations and messages`).
 - V2: conversación principal única, recuperación de mensajes en orden estable entre sesiones y operaciones transaccionales (sin datos parciales ante fallo).
+- V3: modelo de dominio `Project` y puerto `ProjectRepository` independiente de SQLAlchemy, con actualización total o parcial.
+- V3: adaptador SQLite y nueva migración (`create projects`) que no modifica la migración publicada de V2.
+- V3: proyecto activo único garantizado por índice único parcial, con valores iniciales neutros; bootstrap de persistencia lo crea de forma idempotente al arrancar.
 
 ## Primera acción en el equipo Windows
 

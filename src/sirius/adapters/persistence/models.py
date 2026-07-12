@@ -57,3 +57,26 @@ class MessageModel(Base):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
+class ProjectModel(Base):
+    """A project; exactly one row may have ``is_active`` set at any time."""
+
+    __tablename__ = "projects"
+    __table_args__ = (
+        Index(
+            "uq_projects_single_active",
+            "is_active",
+            unique=True,
+            sqlite_where=text("is_active = 1"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    objective: Mapped[str] = mapped_column(Text, nullable=False)
+    current_state: Mapped[str] = mapped_column(Text, nullable=False)
+    next_step: Mapped[str] = mapped_column(Text, nullable=False)
+    is_active: Mapped[bool] = mapped_column(nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(nullable=False)

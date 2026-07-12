@@ -22,3 +22,12 @@
 - Adaptador SQLite (`SqliteConversationRepository`) sobre la ruta de datos de `SiriusPaths`, sin rutas relativas.
 - Alembic activado, con la primera migración real (`create conversations and messages`).
 - Conversación principal única, recuperable entre sesiones, con mensajes en orden estable y operaciones transaccionales (sin datos parciales ante fallo).
+
+### V3 — Proyecto activo
+
+- Modelo de dominio `Project` (id, nombre, objetivo, estado actual, siguiente paso, fecha de creación y de actualización).
+- Puerto `ProjectRepository`, independiente de SQLAlchemy, con actualización total o parcial.
+- Adaptador SQLite (`SqliteProjectRepository`); nueva migración (`create projects`) que no modifica la de V2.
+- Proyecto activo único garantizado por índice único parcial en la base de datos, sin impedir futuros proyectos archivados.
+- Proyecto inicial con valores neutros (vacíos), sin datos personales ni decisiones de producto inventadas.
+- Bootstrap de persistencia extendido: crea el proyecto activo al arrancar, de forma idempotente.

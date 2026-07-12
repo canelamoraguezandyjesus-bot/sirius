@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.adapters.persistence.database import build_engine, build_session_factory, session_scope
-from sirius.adapters.persistence.models import ConversationModel
+from sirius.adapters.persistence.models import ConversationModel, ProjectModel
 from sirius.infrastructure.paths import resolve_paths
 
 
@@ -20,8 +20,14 @@ def _conversation_rows(database_path: Path) -> list[ConversationModel]:
         return list(session.scalars(select(ConversationModel)).all())
 
 
+def _project_rows(database_path: Path) -> list[ProjectModel]:
+    session_factory = build_session_factory(build_engine(database_path))
+    with session_scope(session_factory) as session:
+        return list(session.scalars(select(ProjectModel)).all())
+
+
 @pytest.mark.integration
-def test_initialize_persistence_creates_directories_schema_and_main_conversation() -> None:
+def test_initialize_persistence_creates_directories_schema_main_conversation_and_project() -> None:
     paths = resolve_paths()
 
     initialize_persistence(paths)
@@ -30,17 +36,23 @@ def test_initialize_persistence_creates_directories_schema_and_main_conversation
     database_path = paths.data_dir / "sirius.db"
     assert database_path.is_file()
 
-    rows = _conversation_rows(database_path)
-    assert len(rows) == 1
-    assert rows[0].is_main is True
+    conversation_rows = _conversation_rows(database_path)
+    assert len(conversation_rows) == 1
+    assert conversation_rows[0].is_main is True
+
+    project_rows = _project_rows(database_path)
+    assert len(project_rows) == 1
+    assert project_rows[0].is_active is True
+    assert project_rows[0].name == ""
 
 
 @pytest.mark.integration
-def test_starting_sirius_twice_is_idempotent_and_does_not_duplicate_the_main_conversation() -> None:
+def test_starting_sirius_twice_is_idempotent_and_does_not_duplicate_anything() -> None:
     paths = resolve_paths()
 
     initialize_persistence(paths)  # first startup
     initialize_persistence(paths)  # second startup, same local data directory
 
-    rows = _conversation_rows(paths.data_dir / "sirius.db")
-    assert len(rows) == 1
+    database_path = paths.data_dir / "sirius.db"
+    assert len(_conversation_rows(database_path)) == 1
+    assert len(_project_rows(database_path)) == 1
