@@ -6,13 +6,14 @@ import sys
 
 from PySide6.QtWidgets import QApplication
 
-from sirius.infrastructure.paths import ensure_paths, resolve_paths
+from sirius.adapters.persistence.bootstrap import initialize_persistence
+from sirius.infrastructure.paths import resolve_paths
 from sirius.presentation.main_window import MainWindow
 
 
 def main() -> int:
     """Start the Sirius desktop application."""
-    ensure_paths(resolve_paths())
+    initialize_persistence(resolve_paths())
 
     app = QApplication.instance()
     owns_app = app is None

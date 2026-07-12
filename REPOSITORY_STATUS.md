@@ -16,6 +16,9 @@
 - V1: rutas locales tipadas (configuración, datos, registros, copias de seguridad, exportaciones) con creación automática al arrancar.
 - V1: configuración no sensible persistida en el directorio de configuración correcto de Windows.
 - V1: contrato `SecretStore` y almacén de secretos simulado en memoria (sin Windows Credential Manager todavía).
+- V2: modelos de dominio `Conversation`/`Message` y puerto `ConversationRepository` independiente de SQLAlchemy.
+- V2: adaptador SQLite sobre la ruta de datos de `SiriusPaths`, con Alembic activo y la primera migración real (`create conversations and messages`).
+- V2: conversación principal única, recuperación de mensajes en orden estable entre sesiones y operaciones transaccionales (sin datos parciales ante fallo).
 
 ## Primera acción en el equipo Windows
 
