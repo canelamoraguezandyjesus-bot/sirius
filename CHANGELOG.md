@@ -31,3 +31,12 @@
 - Proyecto activo único garantizado por índice único parcial en la base de datos, sin impedir futuros proyectos archivados.
 - Proyecto inicial con valores neutros (vacíos), sin datos personales ni decisiones de producto inventadas.
 - Bootstrap de persistencia extendido: crea el proyecto activo al arrancar, de forma idempotente.
+
+### V4 — Memoria manual, versionada y trazable
+
+- Modelo de dominio `Memory`/`MemoryRevision` y estados `CURRENT`/`ARCHIVED`/`DELETED`, con reglas de origen obligatorio y transición de estados en dominio (`sirius.domain.memory`), sin dependencia de SQLAlchemy.
+- Puerto `MemoryRepository`: crear, consultar vigentes, consultar historial completo, corregir (nueva revisión sin sobrescribir), archivar y eliminar.
+- Adaptador SQLite (`SqliteMemoryRepository`); nueva migración (`create memories and memory revisions`) que no modifica las de V2 ni V3.
+- Corrección versionada: cada corrección añade una revisión nueva y desactiva la anterior sin sobrescribirla; solo una revisión vigente por memoria (puntero único estructural, no un flag booleano).
+- Archivar conserva el contenido y retira la memoria de las consultas de vigentes; eliminar redacta el contenido estructurado de toda la historia de revisiones y dispara el estado `DELETED`, conservando un marcador mínimo trazable (regla DR-012).
+- No se crea ninguna memoria por defecto: el arranque solo aplica la migración.

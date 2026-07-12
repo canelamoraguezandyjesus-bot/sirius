@@ -22,6 +22,9 @@
 - V3: modelo de dominio `Project` y puerto `ProjectRepository` independiente de SQLAlchemy, con actualización total o parcial.
 - V3: adaptador SQLite y nueva migración (`create projects`) que no modifica la migración publicada de V2.
 - V3: proyecto activo único garantizado por índice único parcial, con valores iniciales neutros; bootstrap de persistencia lo crea de forma idempotente al arrancar.
+- V4: modelo de dominio `Memory`/`MemoryRevision` con reglas de origen obligatorio y transición de estados en dominio, independiente de SQLAlchemy.
+- V4: puerto `MemoryRepository` y adaptador SQLite, con nueva migración (`create memories and memory revisions`) que no modifica las de V2 ni V3.
+- V4: corrección versionada sin sobrescritura, archivo que conserva contenido, eliminación que redacta contenido conservando un marcador trazable; el arranque solo aplica la migración, sin crear memorias por defecto.
 
 ## Primera acción en el equipo Windows
 

@@ -24,7 +24,13 @@ def test_upgrade_head_creates_the_expected_tables(tmp_path: Path) -> None:
     command.upgrade(_alembic_config(database_path), "head")
 
     inspector = inspect(build_engine(database_path))
-    assert {"conversations", "messages", "projects"}.issubset(set(inspector.get_table_names()))
+    assert {
+        "conversations",
+        "messages",
+        "projects",
+        "memories",
+        "memory_revisions",
+    }.issubset(set(inspector.get_table_names()))
 
 
 @pytest.mark.integration
@@ -37,6 +43,8 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
     conversation_columns = {c["name"] for c in inspector.get_columns("conversations")}
     message_columns = {c["name"] for c in inspector.get_columns("messages")}
     project_columns = {c["name"] for c in inspector.get_columns("projects")}
+    memory_columns = {c["name"] for c in inspector.get_columns("memories")}
+    memory_revision_columns = {c["name"] for c in inspector.get_columns("memory_revisions")}
 
     assert conversation_columns == {"id", "created_at", "is_main"}
     assert message_columns == {
@@ -56,6 +64,16 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
         "is_active",
         "created_at",
         "updated_at",
+    }
+    assert memory_columns == {"id", "status", "created_at", "updated_at"}
+    assert memory_revision_columns == {
+        "id",
+        "memory_id",
+        "version",
+        "content",
+        "origin",
+        "is_current",
+        "created_at",
     }
 
 
@@ -86,6 +104,21 @@ def test_upgrade_head_creates_the_single_active_project_index(tmp_path: Path) ->
 
 
 @pytest.mark.integration
+def test_upgrade_head_creates_the_single_current_revision_per_memory_index(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "sirius.db"
+
+    command.upgrade(_alembic_config(database_path), "head")
+
+    inspector = inspect(build_engine(database_path))
+    indexes = {index["name"]: index for index in inspector.get_indexes("memory_revisions")}
+
+    assert "uq_memory_revisions_single_current_per_memory" in indexes
+    assert bool(indexes["uq_memory_revisions_single_current_per_memory"]["unique"])
+
+
+@pytest.mark.integration
 def test_upgrade_head_is_safe_to_run_again_on_an_existing_database(tmp_path: Path) -> None:
     database_path = tmp_path / "sirius.db"
     config = _alembic_config(database_path)
@@ -106,8 +139,21 @@ def test_downgrade_to_v2_removes_only_projects(tmp_path: Path) -> None:
     command.downgrade(config, "c4d8fc9d6f51")
 
     table_names = set(inspect(build_engine(database_path)).get_table_names())
-    assert "projects" not in table_names
+    assert not {"projects", "memories", "memory_revisions"}.intersection(table_names)
     assert {"conversations", "messages"}.issubset(table_names)
+
+
+@pytest.mark.integration
+def test_downgrade_to_v3_removes_only_memory_tables(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+
+    command.upgrade(config, "head")
+    command.downgrade(config, "5ee754bfb0c2")
+
+    table_names = set(inspect(build_engine(database_path)).get_table_names())
+    assert not {"memories", "memory_revisions"}.intersection(table_names)
+    assert {"conversations", "messages", "projects"}.issubset(table_names)
 
 
 @pytest.mark.integration
@@ -119,6 +165,10 @@ def test_downgrade_removes_the_tables(tmp_path: Path) -> None:
     command.downgrade(config, "base")
 
     inspector = inspect(build_engine(database_path))
-    assert not {"conversations", "messages", "projects"}.intersection(
-        set(inspector.get_table_names())
-    )
+    assert not {
+        "conversations",
+        "messages",
+        "projects",
+        "memories",
+        "memory_revisions",
+    }.intersection(set(inspector.get_table_names()))
