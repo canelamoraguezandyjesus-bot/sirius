@@ -1,3 +1,4 @@
+import threading
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -18,9 +19,18 @@ from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_p
 from sirius.application.context import ContextBuilder
 from sirius.application.send_message import SendMessageUseCase
 from sirius.composition_root import build_conversation_dependencies
-from sirius.domain.conversation import Conversation, Message, MessageRole
+from sirius.domain.conversation import Conversation, Message, MessageRole, MessageStatus
 from sirius.ports.conversation_repository import ConversationRepository
-from sirius.ports.llm import LLMChunk, LLMRequest
+from sirius.ports.llm import (
+    LLMCancelled,
+    LLMCompleted,
+    LLMError,
+    LLMErrorKind,
+    LLMProvider,
+    LLMRequest,
+    LLMStreamEvent,
+    LLMTextDelta,
+)
 from sirius.presentation.main_window import MainWindow
 
 
@@ -46,18 +56,49 @@ def _build_window(database_path: Path) -> MainWindow:
     )
 
 
-class _RaisingLLMProvider:
-    """Test double: always fails, to exercise the provider-failure path."""
+class _FailingLLMProvider:
+    """Test double: always fails before any delta, to exercise the provider-failure path."""
 
     def health_check(self) -> bool:
         return True
 
-    def stream_response(self, request: LLMRequest) -> Iterable[LLMChunk]:
+    def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
         del request
-        raise RuntimeError("simulated provider failure")
+        yield LLMError(kind=LLMErrorKind.CONNECTION, message="no se pudo contactar")
 
     def cancel(self, operation_id: str) -> None:
         del operation_id
+
+
+class _BlockingUntilReleasedProvider:
+    """Test double: yields one delta, then blocks until the test calls ``release()``.
+
+    Gives tests deterministic control over "cancel/close while a stream is
+    genuinely in flight" without any arbitrary sleep: the worker thread
+    parks on a real ``threading.Event`` until the test is ready to let it
+    observe cancellation (or not).
+    """
+
+    def __init__(self) -> None:
+        self._continue_event = threading.Event()
+        self._cancelled: set[str] = set()
+
+    def health_check(self) -> bool:
+        return True
+
+    def release(self) -> None:
+        self._continue_event.set()
+
+    def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
+        yield LLMTextDelta(text="parcial")
+        self._continue_event.wait(timeout=5)
+        if request.operation_id in self._cancelled:
+            yield LLMCancelled(partial_text="parcial")
+            return
+        yield LLMCompleted(text="parcial completo", input_tokens=1, output_tokens=2)
+
+    def cancel(self, operation_id: str) -> None:
+        self._cancelled.add(operation_id)
 
 
 class _FailOnNthAppendConversationRepository:
@@ -74,15 +115,51 @@ class _FailOnNthAppendConversationRepository:
     def get_main_conversation(self) -> Conversation | None:
         return self._delegate.get_main_conversation()
 
-    def append_message(self, conversation_id: int, role: MessageRole, content: str) -> Message:
+    def append_message(
+        self,
+        conversation_id: int,
+        role: MessageRole,
+        content: str,
+        *,
+        operation_id: str | None = None,
+        identity_version: int | None = None,
+        status: MessageStatus = MessageStatus.COMPLETED,
+    ) -> Message:
         self._calls += 1
         if self._calls == self._fail_on_call:
             msg = "simulated persistence failure"
             raise RuntimeError(msg)
-        return self._delegate.append_message(conversation_id, role, content)
+        return self._delegate.append_message(
+            conversation_id,
+            role,
+            content,
+            operation_id=operation_id,
+            identity_version=identity_version,
+            status=status,
+        )
 
     def list_messages(self, conversation_id: int) -> list[Message]:
         return self._delegate.list_messages(conversation_id)
+
+
+def _swap_send_message_use_case(
+    window: MainWindow,
+    database_path: Path,
+    llm_provider: LLMProvider,
+    conversation_repository: ConversationRepository | None = None,
+) -> None:
+    repository = conversation_repository or build_sqlite_conversation_repository(database_path)
+    context_builder = ContextBuilder(
+        identity_repository=build_sqlite_identity_repository(database_path),
+        project_repository=build_sqlite_project_repository(database_path),
+        memory_repository=build_sqlite_memory_repository(database_path),
+        conversation_repository=repository,
+    )
+    window._send_message_use_case = SendMessageUseCase(
+        context_builder=context_builder,
+        conversation_repository=repository,
+        llm_provider=llm_provider,
+    )
 
 
 @pytest.mark.gui
@@ -139,6 +216,25 @@ def test_sending_a_message_shows_user_and_reply_and_persists_both(
     conversation = conversation_repository.get_or_create_main_conversation()
     persisted = conversation_repository.list_messages(conversation.id)
     assert [m.content for m in persisted] == ["hola Sirius", "Respuesta simulada de Sirius."]
+
+
+@pytest.mark.gui
+def test_response_streams_progressively_before_completion(qtbot: QtBot, tmp_path: Path) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    _swap_send_message_use_case(
+        window, database_path, FakeLLMProvider(chunks=("uno ", "dos ", "tres"))
+    )
+
+    window.message_input.setText("hola")
+    window.send_button.click()
+
+    qtbot.waitUntil(lambda: window.message_list.count() == 2, timeout=5000)
+    qtbot.waitUntil(
+        lambda: window.message_list.item(1).text() == "Sirius: uno dos tres", timeout=5000
+    )
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
 
 
 @pytest.mark.gui
@@ -214,25 +310,34 @@ def test_status_label_shows_and_clears_while_sending(qtbot: QtBot, tmp_path: Pat
 
 
 @pytest.mark.gui
-def test_provider_failure_shows_a_clear_error_and_keeps_the_user_message(
-    qtbot: QtBot, tmp_path: Path
-) -> None:
+def test_cancel_button_is_visible_only_during_an_operation(qtbot: QtBot, tmp_path: Path) -> None:
     database_path = _bootstrapped_database(tmp_path / "sirius.db")
     window = _build_window(database_path)
     qtbot.addWidget(window)
+    window.show()
 
-    conversation_repository = build_sqlite_conversation_repository(database_path)
-    context_builder = ContextBuilder(
-        identity_repository=build_sqlite_identity_repository(database_path),
-        project_repository=build_sqlite_project_repository(database_path),
-        memory_repository=build_sqlite_memory_repository(database_path),
-        conversation_repository=conversation_repository,
-    )
-    window._send_message_use_case = SendMessageUseCase(
-        context_builder=context_builder,
-        conversation_repository=conversation_repository,
-        llm_provider=_RaisingLLMProvider(),
-    )
+    assert window.cancel_button.isVisible() is False
+
+    window.message_input.setText("hola")
+    window.send_button.click()
+    assert window.cancel_button.isVisible() is True
+
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+    assert window.cancel_button.isVisible() is False
+
+
+@pytest.mark.gui
+def test_provider_failure_shows_a_clear_error_and_persists_the_failed_reply(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """A provider failure is a normal (non-crashing) outcome: the SIRIUS
+    message is persisted as FAILED, with whatever partial text streamed
+    (here none), and stays visible for traceability — it is never removed.
+    """
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    _swap_send_message_use_case(window, database_path, _FailingLLMProvider())
 
     window.message_input.setText("hola")
     window.send_button.click()
@@ -240,9 +345,16 @@ def test_provider_failure_shows_a_clear_error_and_keeps_the_user_message(
     qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
 
     assert window.error_label.text() != ""
-    assert "simulated provider failure" not in window.error_label.text()
-    assert window.message_list.count() == 1
+    assert "no se pudo contactar" not in window.error_label.text()
+    assert window.message_list.count() == 2
     assert window.message_list.item(0).text() == "Tú: hola"
+    assert window.message_list.item(1).text() == "Sirius:  (fallido)"
+
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    persisted = conversation_repository.list_messages(conversation.id)
+    assert [m.content for m in persisted] == ["hola", ""]
+    assert [m.status for m in persisted] == [MessageStatus.COMPLETED, MessageStatus.FAILED]
 
 
 @pytest.mark.gui
@@ -257,17 +369,7 @@ def test_persistence_failure_shows_a_clear_error_and_keeps_only_the_user_message
     failing_repository = _FailOnNthAppendConversationRepository(
         real_conversation_repository, fail_on_call=2
     )
-    context_builder = ContextBuilder(
-        identity_repository=build_sqlite_identity_repository(database_path),
-        project_repository=build_sqlite_project_repository(database_path),
-        memory_repository=build_sqlite_memory_repository(database_path),
-        conversation_repository=real_conversation_repository,
-    )
-    window._send_message_use_case = SendMessageUseCase(
-        context_builder=context_builder,
-        conversation_repository=failing_repository,
-        llm_provider=FakeLLMProvider(),
-    )
+    _swap_send_message_use_case(window, database_path, FakeLLMProvider(), failing_repository)
 
     window.message_input.setText("hola")
     window.send_button.click()
@@ -294,17 +396,7 @@ def test_first_persistence_failure_removes_the_optimistic_message(
     failing_repository = _FailOnNthAppendConversationRepository(
         real_conversation_repository, fail_on_call=1
     )
-    context_builder = ContextBuilder(
-        identity_repository=build_sqlite_identity_repository(database_path),
-        project_repository=build_sqlite_project_repository(database_path),
-        memory_repository=build_sqlite_memory_repository(database_path),
-        conversation_repository=real_conversation_repository,
-    )
-    window._send_message_use_case = SendMessageUseCase(
-        context_builder=context_builder,
-        conversation_repository=failing_repository,
-        llm_provider=FakeLLMProvider(),
-    )
+    _swap_send_message_use_case(window, database_path, FakeLLMProvider(), failing_repository)
 
     window.message_input.setText("esto nunca se guarda")
     window.send_button.click()
@@ -320,31 +412,95 @@ def test_first_persistence_failure_removes_the_optimistic_message(
 
 
 @pytest.mark.gui
-def test_closing_while_sending_does_not_block_and_closes_once_done(
+def test_clicking_cancel_stops_the_stream_and_reconciles_the_interface(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    provider = _BlockingUntilReleasedProvider()
+    _swap_send_message_use_case(window, database_path, provider)
+
+    window.message_input.setText("hola")
+    window.send_button.click()
+    qtbot.waitUntil(lambda: window.message_list.count() == 2, timeout=5000)
+    assert window.message_list.item(1).text() == "Sirius: parcial"
+
+    window.cancel_button.click()
+    provider.release()
+
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+
+    # The cancelled partial text is never treated as a completed answer, but
+    # SIRIUS-ARQ-0.1 S5.1 requires it to be conserved and shown, clearly
+    # marked as cancelled, for traceability.
+    assert window.error_label.text() != ""
+    assert window.message_list.count() == 2
+    assert window.message_list.item(0).text() == "Tú: hola"
+    assert window.message_list.item(1).text() == "Sirius: parcial (cancelado)"
+
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    persisted = conversation_repository.list_messages(conversation.id)
+    assert [m.content for m in persisted] == ["hola", "parcial"]
+    assert [m.status for m in persisted] == [MessageStatus.COMPLETED, MessageStatus.CANCELLED]
+
+
+@pytest.mark.gui
+def test_clicking_cancel_twice_is_safe(qtbot: QtBot, tmp_path: Path) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    provider = _BlockingUntilReleasedProvider()
+    _swap_send_message_use_case(window, database_path, provider)
+
+    window.message_input.setText("hola")
+    window.send_button.click()
+    qtbot.waitUntil(lambda: window.message_list.count() == 2, timeout=5000)
+
+    window.cancel_button.click()
+    assert window.cancel_button.isEnabled() is False
+    window.cancel_button.click()  # a second click must be a harmless no-op
+
+    provider.release()
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    persisted = conversation_repository.list_messages(conversation.id)
+    assert [m.content for m in persisted] == ["hola", "parcial"]
+
+
+@pytest.mark.gui
+def test_closing_while_streaming_requests_cancellation_and_closes_once_done(
     qtbot: QtBot, tmp_path: Path
 ) -> None:
     database_path = _bootstrapped_database(tmp_path / "sirius.db")
     window = _build_window(database_path)
     qtbot.addWidget(window)
     window.show()
+    provider = _BlockingUntilReleasedProvider()
+    _swap_send_message_use_case(window, database_path, provider)
 
     window.message_input.setText("hola")
     window.send_button.click()
-    assert window._is_sending is True
+    qtbot.waitUntil(lambda: window.message_list.count() == 2, timeout=5000)
 
     window.close()  # must return immediately: the close is deferred, not blocked
 
-    # The window is still open right after close(): the operation was not
-    # torn down mid-flight, and the GUI thread was never blocked waiting.
+    # The window is still open right after close(): the GUI thread was never
+    # blocked waiting, and cancellation was requested instead of killing
+    # anything.
     assert window.isVisible() is True
     assert window._close_requested is True
 
+    provider.release()
     qtbot.waitUntil(lambda: not window.isVisible(), timeout=5000)
 
     conversation_repository = build_sqlite_conversation_repository(database_path)
     conversation = conversation_repository.get_or_create_main_conversation()
     persisted = conversation_repository.list_messages(conversation.id)
-    assert [m.content for m in persisted] == ["hola", "Respuesta simulada de Sirius."]
+    assert [m.content for m in persisted] == ["hola", "parcial"]
 
 
 @pytest.mark.gui

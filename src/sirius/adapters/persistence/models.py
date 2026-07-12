@@ -8,7 +8,7 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy import ForeignKey, Index, Text, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from sirius.domain.conversation import MessageRole
+from sirius.domain.conversation import MessageRole, MessageStatus
 from sirius.domain.memory import MemoryStatus
 
 
@@ -35,11 +35,22 @@ class ConversationModel(Base):
 
 
 class MessageModel(Base):
-    """A single message belonging to a conversation, in stable order."""
+    """A single message belonging to a conversation, in stable order.
+
+    ``uq_messages_operation_role`` protects real idempotency: the USER
+    message and the SIRIUS message of one turn share ``operation_id`` but
+    differ in ``role``, so at most one row of each role may exist per
+    ``operation_id``. Rows predating V6B keep ``operation_id`` NULL; SQL
+    treats every NULL as distinct, so old rows never collide with each
+    other or with new ones.
+    """
 
     __tablename__ = "messages"
     __table_args__ = (
         UniqueConstraint("conversation_id", "sequence", name="uq_messages_conversation_sequence"),
+        UniqueConstraint(
+            "conversation_id", "operation_id", "role", name="uq_messages_operation_role"
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -58,6 +69,19 @@ class MessageModel(Base):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
+    operation_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    identity_version: Mapped[int | None] = mapped_column(nullable=True)
+    status: Mapped[MessageStatus] = mapped_column(
+        SAEnum(
+            MessageStatus,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+            native_enum=False,
+            length=16,
+        ),
+        nullable=False,
+        default=MessageStatus.COMPLETED,
+        server_default=MessageStatus.COMPLETED.value,
+    )
 
 
 class ProjectModel(Base):
@@ -173,3 +197,19 @@ class IdentityVersionModel(Base):
     personality_instructions: Mapped[str] = mapped_column(Text, nullable=False)
     is_current: Mapped[bool] = mapped_column(nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
+class LLMUsageModel(Base):
+    """Accumulated OpenAI spend for one UTC calendar month (DR-018).
+
+    The minimal persistence a *monthly* budget envelope requires: without
+    it, the cap would silently reset on every restart and stop being
+    monthly at all. One row per ``year_month`` (e.g. ``"2026-07"``).
+    """
+
+    __tablename__ = "llm_usage"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    year_month: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    spent_usd: Mapped[float] = mapped_column(nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(nullable=False)

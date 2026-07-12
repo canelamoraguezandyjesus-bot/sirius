@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sirius.domain.conversation import Message
+from sirius.domain.conversation import Message, MessageStatus
 from sirius.domain.identity import Identity
 from sirius.domain.memory import Memory
 from sirius.domain.project import Project
@@ -99,7 +99,12 @@ class ContextBuilder:
 
         memories = tuple(self._memory_repository.list_current_memories())
         all_messages = self._conversation_repository.list_messages(conversation.id)
-        recent_messages = tuple(all_messages[-self._recent_messages_limit :])
+        # SIRIUS-ARQ-0.1 S5.1/S5.2: "Mensajes parciales conservan su
+        # contenido y quedan excluidos del contexto normal." A CANCELLED or
+        # FAILED SIRIUS message stays in the conversation history (for
+        # traceability) but must never feed a future context.
+        completed_messages = [m for m in all_messages if m.status is MessageStatus.COMPLETED]
+        recent_messages = tuple(completed_messages[-self._recent_messages_limit :])
 
         return Context(
             identity=identity,

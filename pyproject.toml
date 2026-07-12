@@ -30,6 +30,7 @@ build-backend = "uv_build"
 module-name = "sirius"
 [dependency-groups]
 dev = [
+  "httpx>=0.28,<1",
   "mypy>=1.17",
   "pytest>=8.4",
   "pytest-cov>=6.2",

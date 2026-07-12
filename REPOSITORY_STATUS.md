@@ -31,6 +31,18 @@
 - V6A: conversación visual y funcional en la ventana principal (historial, envío, estado, error) usando exclusivamente `FakeLLMProvider`; configuración existente conservada en su propia pestaña.
 - V6A: `GetConversationHistoryUseCase` (lectura pura) y `composition_root.py` (fuera de `presentation`) que inyecta repositorios y casos de uso en `MainWindow`.
 - V6A: envío en `QThreadPool` sin bloquear el hilo gráfico, doble envío bloqueado, entrada vacía rechazada, cierre de ventana seguro durante un envío en curso; sin migraciones nuevas ni proveedor real.
+- V6B: `OpenAIResponsesProvider` real (Responses API, streaming, `store=false`, sin herramientas), con eventos tipados de aplicación (`LLMTextDelta`/`LLMCompleted`/`LLMCancelled`/`LLMError`, con texto parcial en cancelación/fallo) y `FakeLLMProvider` mantenido para pruebas y desarrollo.
+- V6B: selección `fake`/`openai` provisional por variable de entorno (`SIRIUS_LLM_PROVIDER`, valor no reconocido levanta `LLMProviderConfigurationError` en vez de caer a `fake`); clave leída solo de `OPENAI_API_KEY` y nunca persistida; documentado como provisional hasta V7.
+- V6B: único sistema de reintentos activo — el adaptador tiene su propia política probada (máx. 2, solo en la conexión inicial) y el cliente del SDK se construye con `max_retries=0` para que ambas políticas nunca se multipliquen.
+- V6B: `MessageStatus` (`COMPLETED`/`CANCELLED`/`FAILED`) en el dominio; un mensaje de Sirius cancelado o fallido conserva su texto parcial con el estado correspondiente, queda excluido del contexto de futuros envíos y se muestra en el historial marcado como tal, sin tratarse nunca como respuesta completa.
+- V6B: idempotencia real por `operation_id` — `ConversationRepository.append_message` es idempotente por `(conversación, operation_id, rol)`, con restricción única en base de datos como respaldo; reintentar una operación tras un fallo de persistencia nunca duplica el mensaje de usuario.
+- V6B: presupuesto mensual (DR-018) persistido en SQLite (`llm_usage`, una fila por mes UTC) para que sobreviva a reinicios de la aplicación; `BudgetTracker` conserva un modo en memoria cuando no se inyecta el repositorio.
+- V6B: migración (no publicada) añade `messages.operation_id`, `identity_version`, `status` y la restricción única de idempotencia; migración nueva independiente crea `llm_usage`. Ninguna migración publicada de V2-V5 se modifica.
+- V6B: interfaz con streaming progresivo y botón "Cancelar"; cancelación y cierre de ventana durante un streaming no bloquean el hilo gráfico; los mensajes cancelados/fallidos permanecen visibles en el historial.
+
+## Verificación de V6B (proveedor OpenAI real)
+
+Todo lo descrito en V6B está verificado mediante pruebas automáticas (`scripts/check.ps1`: Ruff, mypy estricto y pytest) usando exclusivamente clientes y streams de OpenAI completamente simulados — `OpenAIResponsesProvider` nunca se ha ejecutado contra la API real. **Pendiente**: prueba manual end-to-end contra la API real de OpenAI, bloqueada porque el usuario todavía no dispone de una clave `OPENAI_API_KEY`. Esta prueba manual debe realizarse antes de considerar V6B validado en condiciones reales de red, límites de la cuenta y respuestas reales del modelo.
 
 ## Primera acción en el equipo Windows
 

@@ -6,7 +6,7 @@ from sirius.application.get_conversation_history import (
     ConversationNotInitializedError,
     GetConversationHistoryUseCase,
 )
-from sirius.domain.conversation import Conversation, Message, MessageRole
+from sirius.domain.conversation import Conversation, Message, MessageRole, MessageStatus
 
 
 class _InMemoryConversationRepository:
@@ -24,7 +24,16 @@ class _InMemoryConversationRepository:
     def get_main_conversation(self) -> Conversation | None:
         return self._conversation
 
-    def append_message(self, conversation_id: int, role: MessageRole, content: str) -> Message:
+    def append_message(
+        self,
+        conversation_id: int,
+        role: MessageRole,
+        content: str,
+        *,
+        operation_id: str | None = None,
+        identity_version: int | None = None,
+        status: MessageStatus = MessageStatus.COMPLETED,
+    ) -> Message:
         raise AssertionError("a read-only use case must never append a message")
 
     def list_messages(self, conversation_id: int) -> list[Message]:

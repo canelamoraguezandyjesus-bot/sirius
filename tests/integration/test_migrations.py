@@ -32,6 +32,7 @@ def test_upgrade_head_creates_the_expected_tables(tmp_path: Path) -> None:
         "memory_revisions",
         "identities",
         "identity_versions",
+        "llm_usage",
     }.issubset(set(inspector.get_table_names()))
 
 
@@ -49,6 +50,7 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
     memory_revision_columns = {c["name"] for c in inspector.get_columns("memory_revisions")}
     identity_columns = {c["name"] for c in inspector.get_columns("identities")}
     identity_version_columns = {c["name"] for c in inspector.get_columns("identity_versions")}
+    llm_usage_columns = {c["name"] for c in inspector.get_columns("llm_usage")}
 
     assert conversation_columns == {"id", "created_at", "is_main"}
     assert message_columns == {
@@ -58,7 +60,11 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
         "role",
         "content",
         "created_at",
+        "operation_id",
+        "identity_version",
+        "status",
     }
+    assert llm_usage_columns == {"id", "year_month", "spent_usd", "updated_at"}
     assert project_columns == {
         "id",
         "name",
@@ -149,6 +155,18 @@ def test_upgrade_head_creates_the_single_current_version_per_identity_index(
 
 
 @pytest.mark.integration
+def test_upgrade_head_creates_the_operation_role_idempotency_constraint(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+
+    command.upgrade(_alembic_config(database_path), "head")
+
+    inspector = inspect(build_engine(database_path))
+    constraints = {c["name"] for c in inspector.get_unique_constraints("messages")}
+
+    assert "uq_messages_operation_role" in constraints
+
+
+@pytest.mark.integration
 def test_upgrade_head_is_safe_to_run_again_on_an_existing_database(tmp_path: Path) -> None:
     database_path = tmp_path / "sirius.db"
     config = _alembic_config(database_path)
@@ -210,6 +228,46 @@ def test_downgrade_to_v4_removes_only_identity_tables(tmp_path: Path) -> None:
 
 
 @pytest.mark.integration
+def test_downgrade_to_v5_removes_only_the_new_message_columns(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+
+    command.upgrade(config, "head")
+    command.downgrade(config, "bd39e7e3df5e")
+
+    message_columns = {
+        c["name"] for c in inspect(build_engine(database_path)).get_columns("messages")
+    }
+    assert message_columns == {
+        "id",
+        "conversation_id",
+        "sequence",
+        "role",
+        "content",
+        "created_at",
+    }
+
+
+@pytest.mark.integration
+def test_downgrade_to_v6b_message_fields_removes_only_llm_usage(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+
+    command.upgrade(config, "head")
+    command.downgrade(config, "f5fb28ed426a")
+
+    table_names = set(inspect(build_engine(database_path)).get_table_names())
+    assert "llm_usage" not in table_names
+    assert "messages" in table_names
+
+    message_columns = {
+        c["name"] for c in inspect(build_engine(database_path)).get_columns("messages")
+    }
+    assert "status" in message_columns
+    assert "operation_id" in message_columns
+
+
+@pytest.mark.integration
 def test_downgrade_removes_the_tables(tmp_path: Path) -> None:
     database_path = tmp_path / "sirius.db"
     config = _alembic_config(database_path)
@@ -226,4 +284,5 @@ def test_downgrade_removes_the_tables(tmp_path: Path) -> None:
         "memory_revisions",
         "identities",
         "identity_versions",
+        "llm_usage",
     }.intersection(set(inspector.get_table_names()))

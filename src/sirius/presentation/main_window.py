@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+
 from PySide6.QtCore import Qt, QThreadPool
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
@@ -25,7 +27,7 @@ from sirius.application.get_conversation_history import (
 )
 from sirius.application.send_message import SendMessageResult, SendMessageUseCase
 from sirius.config.settings import load_settings, save_settings
-from sirius.domain.conversation import MessageRole
+from sirius.domain.conversation import MessageRole, MessageStatus
 from sirius.presentation.conversation_worker import SendMessageWorker
 
 
@@ -42,6 +44,9 @@ class MainWindow(QMainWindow):
         self._get_history_use_case = get_history_use_case
         self._is_sending = False
         self._close_requested = False
+        self._active_operation_id: str | None = None
+        self._streaming_item: QListWidgetItem | None = None
+        self._streaming_text = ""
         self._thread_pool = QThreadPool()
 
         self.setWindowTitle("Sirius 0.1")
@@ -67,9 +72,14 @@ class MainWindow(QMainWindow):
         self.send_button = QPushButton("Enviar")
         self.send_button.clicked.connect(self._handle_send_clicked)
 
+        self.cancel_button = QPushButton("Cancelar")
+        self.cancel_button.clicked.connect(self._handle_cancel_clicked)
+        self.cancel_button.setVisible(False)
+
         input_row = QHBoxLayout()
         input_row.addWidget(self.message_input)
         input_row.addWidget(self.send_button)
+        input_row.addWidget(self.cancel_button)
 
         self.status_label = QLabel("")
         self.error_label = QLabel("")
@@ -89,12 +99,13 @@ class MainWindow(QMainWindow):
     def _replace_history_with_authoritative_state(self) -> None:
         """Rebuild the visible list from GetConversationHistoryUseCase.
 
-        Used at startup and to reconcile after a failed send: an optimistic
-        message that never actually persisted disappears; one that did
-        persist before the failure (e.g. the provider failed afterwards)
-        stays, because it is really there.
+        Used at startup and to reconcile after a cancelled or failed send: an
+        optimistic/streamed message that never actually persisted disappears;
+        one that did persist before the failure (e.g. the provider failed
+        afterwards) stays, because it is really there.
         """
         self.message_list.clear()
+        self._streaming_item = None
         try:
             messages = self._get_history_use_case.get_history()
         except ConversationNotInitializedError:
@@ -102,16 +113,30 @@ class MainWindow(QMainWindow):
             return
 
         for message in messages:
-            self._append_message_item(message.role, message.content)
+            self._append_message_item(message.role, message.content, message.status)
 
-    def _append_message_item(self, role: MessageRole, content: str) -> None:
-        prefix = "Tú" if role is MessageRole.USER else "Sirius"
-        item = QListWidgetItem(f"{prefix}: {content}")
+    def _append_message_item(
+        self, role: MessageRole, content: str, status: MessageStatus = MessageStatus.COMPLETED
+    ) -> QListWidgetItem:
+        item = QListWidgetItem("")
+        self._set_item_text(item, role, content, status)
         if role is MessageRole.SIRIUS:
             font = item.font()
             font.setBold(True)
             item.setFont(font)
         self.message_list.addItem(item)
+        return item
+
+    @staticmethod
+    def _set_item_text(
+        item: QListWidgetItem, role: MessageRole, content: str, status: MessageStatus
+    ) -> None:
+        prefix = "Tú" if role is MessageRole.USER else "Sirius"
+        suffix = {
+            MessageStatus.CANCELLED: " (cancelado)",
+            MessageStatus.FAILED: " (fallido)",
+        }.get(status, "")
+        item.setText(f"{prefix}: {content}{suffix}")
 
     def _handle_send_clicked(self) -> None:
         text = self.message_input.text()
@@ -121,7 +146,12 @@ class MainWindow(QMainWindow):
             return
 
         self._is_sending = True
+        self._active_operation_id = str(uuid.uuid4())
+        self._streaming_item = None
+        self._streaming_text = ""
         self.send_button.setEnabled(False)
+        self.cancel_button.setVisible(True)
+        self.cancel_button.setEnabled(True)
         self.message_input.setEnabled(False)
         self.status_label.setText("Sirius está pensando...")
         self.error_label.setText("")
@@ -129,27 +159,65 @@ class MainWindow(QMainWindow):
         self._append_message_item(MessageRole.USER, text)
         self.message_input.clear()
 
-        worker = SendMessageWorker(self._send_message_use_case, text)
-        worker.signals.succeeded.connect(self._on_send_succeeded)
-        worker.signals.failed.connect(self._on_send_failed)
+        worker = SendMessageWorker(self._send_message_use_case, text, self._active_operation_id)
+        worker.signals.delta.connect(self._on_delta)
+        worker.signals.finished.connect(self._on_finished)
+        worker.signals.crashed.connect(self._on_crashed)
         self._thread_pool.start(worker)
 
-    def _on_send_succeeded(self, result: SendMessageResult) -> None:
-        self._append_message_item(result.sirius_message.role, result.sirius_message.content)
+    def _handle_cancel_clicked(self) -> None:
+        # Idempotent: disabling the button after the first click prevents
+        # repeated calls, and SendMessageUseCase.cancel() is itself
+        # idempotent even if called more than once for the same operation.
+        if self._active_operation_id is None:
+            return
+        self.cancel_button.setEnabled(False)
+        self.status_label.setText("Cancelando...")
+        self._send_message_use_case.cancel(self._active_operation_id)
+
+    def _on_delta(self, text: str) -> None:
+        self._streaming_text += text
+        if self._streaming_item is None:
+            self._streaming_item = self._append_message_item(MessageRole.SIRIUS, "")
+        self._set_item_text(
+            self._streaming_item, MessageRole.SIRIUS, self._streaming_text, MessageStatus.COMPLETED
+        )
+
+    def _on_finished(self, result: SendMessageResult) -> None:
+        # ``result.sirius_message`` is the row SendMessageUseCase actually
+        # persisted (COMPLETED with the full reply, or CANCELLED/FAILED with
+        # whatever partial text streamed) — authoritative, no need to reload.
+        if self._streaming_item is None:
+            self._streaming_item = self._append_message_item(
+                MessageRole.SIRIUS, result.sirius_message.content, result.sirius_message.status
+            )
+        else:
+            self._set_item_text(
+                self._streaming_item,
+                MessageRole.SIRIUS,
+                result.sirius_message.content,
+                result.sirius_message.status,
+            )
+
+        if result.outcome is MessageStatus.CANCELLED:
+            self.error_label.setText("Envío cancelado.")
+        elif result.outcome is MessageStatus.FAILED:
+            self.error_label.setText("No se pudo completar el envío. Inténtalo de nuevo.")
         self._finish_sending()
 
-    def _on_send_failed(self, error_message: str) -> None:
+    def _on_crashed(self, error_message: str) -> None:
         del error_message  # not shown verbatim: keep the user-facing message safe and generic
-        # Reconcile the optimistic message against what actually persisted:
-        # gone if the first write failed, kept if it succeeded before the
-        # provider/second write failed.
         self._replace_history_with_authoritative_state()
         self.error_label.setText("No se pudo completar el envío. Inténtalo de nuevo.")
         self._finish_sending()
 
     def _finish_sending(self) -> None:
         self._is_sending = False
+        self._active_operation_id = None
+        self._streaming_item = None
+        self._streaming_text = ""
         self.send_button.setEnabled(True)
+        self.cancel_button.setVisible(False)
         self.message_input.setEnabled(True)
         self.status_label.setText("")
         if self._close_requested:
@@ -157,7 +225,7 @@ class MainWindow(QMainWindow):
             self.close()
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        """Defer closing instead of blocking while a send is in flight.
+        """Request cancellation and defer closing instead of blocking.
 
         The worker keeps running to completion on its own thread; once it
         finishes, ``_finish_sending`` notices the pending request and closes
@@ -166,6 +234,8 @@ class MainWindow(QMainWindow):
         """
         if self._is_sending:
             self._close_requested = True
+            if self._active_operation_id is not None:
+                self._send_message_use_case.cancel(self._active_operation_id)
             event.ignore()
             return
         super().closeEvent(event)

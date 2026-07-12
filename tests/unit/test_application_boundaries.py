@@ -1,9 +1,8 @@
-"""Architectural guardrail: presentation must never import SQLite/SQLAlchemy directly.
+"""Architectural guardrail: application must never import openai or SQLAlchemy.
 
-AGENTS.md: "No accedas a SQLite, OpenAI o secretos desde la interfaz." This is
-enforced here by parsing the import statements of every module in
-``sirius.presentation`` and asserting none of them reference SQLAlchemy, the
-persistence adapters, or an LLM provider adapter.
+Mirrors ``test_presentation_boundaries.py``: application orchestrates use
+cases through ports only. Only the concrete adapters (``sirius.adapters.*``)
+may know about ``openai``, SQLAlchemy, or the SQLite persistence details.
 """
 
 from __future__ import annotations
@@ -11,13 +10,12 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-_PRESENTATION_DIR = Path(__file__).resolve().parents[2] / "src" / "sirius" / "presentation"
+_APPLICATION_DIR = Path(__file__).resolve().parents[2] / "src" / "sirius" / "application"
 
 _FORBIDDEN_MODULE_PREFIXES = (
     "sqlalchemy",
     "openai",
-    "sirius.adapters.persistence",
-    "sirius.adapters.llm",
+    "sirius.adapters",
 )
 
 
@@ -32,12 +30,12 @@ def _imported_module_names(source_path: Path) -> set[str]:
     return names
 
 
-def test_presentation_never_imports_persistence_or_sqlalchemy_directly() -> None:
-    presentation_files = sorted(_PRESENTATION_DIR.glob("*.py"))
-    assert presentation_files, "expected to find presentation source files"
+def test_application_never_imports_openai_sqlalchemy_or_adapters_directly() -> None:
+    application_files = sorted(_APPLICATION_DIR.glob("*.py"))
+    assert application_files, "expected to find application source files"
 
     offenders: dict[str, set[str]] = {}
-    for source_path in presentation_files:
+    for source_path in application_files:
         imported = _imported_module_names(source_path)
         forbidden = {
             name
