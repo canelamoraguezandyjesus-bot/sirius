@@ -27,9 +27,26 @@ from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.composition_root import build_conversation_dependencies
 from sirius.config.secrets_config import OPENAI_API_KEY_SECRET_NAME
 from sirius.config.settings import load_settings
+from sirius.ports.secrets import SecretStore, SecretStoreError
 from sirius.presentation.main_window import MainWindow
 
 _FAKE_KEY = "sk-should-never-be-shown-1234567890"
+
+
+class _RaisingSecretStore:
+    """Test double for an unavailable or locked OS credential backend."""
+
+    def get_secret(self, key: str) -> str | None:
+        raise SecretStoreError("boom")
+
+    def set_secret(self, key: str, value: str) -> None:
+        raise SecretStoreError("boom")
+
+    def delete_secret(self, key: str) -> None:
+        raise SecretStoreError("boom")
+
+    def is_secure_backend(self) -> bool:
+        return True
 
 
 @pytest.fixture(autouse=True)
@@ -47,7 +64,7 @@ def _bootstrapped_database(database_path: Path) -> Path:
 
 def _build_window(
     database_path: Path,
-    secret_store: FakeSecretStore,
+    secret_store: SecretStore,
     *,
     show_warning: Callable[[str, str], None] | None = None,
     show_information: Callable[[str, str], None] | None = None,
@@ -78,6 +95,19 @@ def test_key_status_label_shows_no_key_by_default(qtbot: QtBot, tmp_path: Path) 
     qtbot.addWidget(window)
 
     assert "no configurada" in window.key_status_label.text()
+
+
+@pytest.mark.gui
+def test_key_status_failure_does_not_prevent_window_construction(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+
+    window = _build_window(database_path, _RaisingSecretStore())
+    qtbot.addWidget(window)
+
+    assert "estado no disponible" in window.key_status_label.text()
+    assert "No se pudo consultar" in window.key_feedback_label.text()
 
 
 @pytest.mark.gui
@@ -220,3 +250,40 @@ def test_saving_configuration_with_invalid_numbers_shows_a_warning(
     window._save_configuration()
 
     assert len(warnings) == 1
+
+
+@pytest.mark.gui
+@pytest.mark.parametrize(
+    ("max_output_tokens", "monthly_budget"),
+    [("0", "10"), ("-1", "10"), ("100", "0"), ("100", "-1")],
+)
+def test_saving_configuration_with_non_positive_limits_is_rejected(
+    qtbot: QtBot,
+    tmp_path: Path,
+    max_output_tokens: str,
+    monthly_budget: str,
+) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    warnings: list[tuple[str, str]] = []
+    window = _build_window(
+        database_path,
+        FakeSecretStore(),
+        show_warning=lambda title, text: warnings.append((title, text)),
+    )
+    qtbot.addWidget(window)
+
+    window.name_input.setText("Ada")
+    window.max_output_tokens_input.setText(max_output_tokens)
+    window.budget_input.setText(monthly_budget)
+
+    window._save_configuration()
+
+    assert warnings == [
+        (
+            "Valor inválido",
+            "El máximo de tokens y el presupuesto mensual deben ser mayores que cero.",
+        )
+    ]
+    settings = load_settings()
+    assert "openai_max_output_tokens" not in settings
+    assert "openai_monthly_budget_usd" not in settings
