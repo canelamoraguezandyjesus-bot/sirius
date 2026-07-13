@@ -36,3 +36,12 @@ exports/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Claude Code: configuración compartida y configuración local
+!.claude/
+.claude/*
+!.claude/settings.json
+!.claude/commands/
+.claude/commands/*
+!.claude/commands/check.md
+.claude/settings.local.json
