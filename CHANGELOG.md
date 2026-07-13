@@ -89,3 +89,10 @@
 - Pestaña "Configuración": conserva los campos existentes; añade selección de proveedor, modelo, límite de tokens y presupuesto mensual (persistidos como configuración no sensible); añade un campo enmascarado para introducir una clave nueva y acciones para guardarla o eliminarla. La clave nunca se prellena ni se vuelve a mostrar; solo se indica si hay una clave configurada o no.
 - `composition_root.py` construye e inyecta el `SecretStore` real; el modo `fake` sigue funcionando sin ninguna clave configurada.
 - Ninguna prueba toca el Credential Manager real ni realiza llamadas de red; pruebas dedicadas demuestran que la clave nunca aparece en `settings.json`, SQLite, los archivos de registro, excepciones mostradas, textos de la interfaz ni las representaciones de los objetos relevantes.
+- Endurecimiento posterior: consultar el estado de la clave traduce de forma segura los errores del almacén y nunca impide construir la ventana; la interfaz muestra un estado no disponible sin revelar detalles.
+- Endurecimiento posterior: la configuración rechaza límites de tokens y presupuestos iguales a cero o negativos antes de persistirlos.
+
+### Reconciliación documental
+
+- `README.md`, `REPOSITORY_STATUS.md` y `docs/implementation/PLAN.md` se actualizan para distinguir trabajo completado, validaciones manuales pendientes, alcance restante de V7 y V8.
+- Se retiran del estado operativo las instrucciones de preparación inicial ya superadas, sin modificar producto, requisitos, Manual ni arquitectura.

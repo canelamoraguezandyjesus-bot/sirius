@@ -1,56 +1,49 @@
 # Sirius 0.1
 
-Repositorio base del compañero personal de creación e ingeniería Sirius.
+Repositorio privado del compañero personal de creación e ingeniería Sirius.
 
-## Estado
+## Estado actual
 
-- Producto 0.1: aprobado.
-- Arquitectura técnica 0.1: aprobada.
-- Estado del repositorio: preparado para comenzar la implementación por verticales.
-- Alcance: no ampliar sin una decisión registrada y aprobada.
+- Producto Sirius 0.1: aprobado.
+- Arquitectura técnica 0.1 y decisiones ATD-001 a ATD-012: aprobadas.
+- Implementación completada hasta V7A, incluido su endurecimiento posterior.
+- Alcance activo restante de V7: copia cifrada, validación de integridad y restauración segura.
+- V8 permanece pendiente para la aceptación completa de Sirius 0.1.
+- El alcance no debe ampliarse sin una decisión registrada y aprobada.
 
-## Preparación en Windows 11
+La arquitectura modular ya existe y está parcialmente implementada. No debe rediseñarse desde cero salvo que aparezca una contradicción o un riesgo concreto.
 
-1. Instala Git y `uv`.
-2. Abre PowerShell en la raíz del repositorio.
-3. Ejecuta:
+## Fuentes de verdad
+
+Antes de modificar el proyecto, lee:
+
+1. `docs/canonical/STATUS.md`;
+2. `docs/implementation/PLAN.md`;
+3. `REPOSITORY_STATUS.md`;
+4. `AGENTS.md`.
+
+Los documentos canónicos conservan en algunos nombres la palabra `PROPUESTO` porque son instantáneas históricas anteriores a su aprobación. Su estado vigente está fijado en `docs/canonical/STATUS.md`.
+
+## Preparar o sincronizar el equipo Windows 11
+
+En una copia local existente:
 
 ```powershell
+git switch main
+git pull --ff-only origin main
 .\scripts\bootstrap.ps1
 ```
 
-El primer arranque generara `uv.lock`. Debe incluirse en el primer commit para que el entorno quede reproducible.
-
-## Crear el repositorio Git
-
-Tras generar `uv.lock` y pasar las comprobaciones:
-
-```powershell
-git init -b main
-git add .
-git commit -m "chore: prepare Sirius 0.1 repository"
-```
-
-Despues se conecta el repositorio privado de GitHub.
-
-## Ejecutar el esqueleto
+Para ejecutar Sirius:
 
 ```powershell
 uv run sirius
 ```
 
-## Comprobar calidad
+Para ejecutar todas las comprobaciones locales:
 
 ```powershell
 .\scripts\check.ps1
 ```
 
-## Principios operativos
-
-- La interfaz no accede directamente a SQLite ni al proveedor LLM.
-- El dominio no depende de PySide6, SQLAlchemy ni del SDK de OpenAI.
-- La memoria y el historial son locales y canónicos.
-- Cada cambio de alcance requiere una decisión explícita.
-- Se implementa una vertical completa cada vez.
-
-Lee `AGENTS.md`, `docs/implementation/PLAN.md` y `docs/canonical/STATUS.md` antes de programar.
+GitHub Actions ejecuta también Ruff, mypy y pytest en Windows para cada pull request y cada cambio integrado en `main`.
