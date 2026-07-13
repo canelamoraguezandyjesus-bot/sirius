@@ -47,5 +47,3 @@ Para ejecutar todas las comprobaciones locales:
 ```
 
 GitHub Actions ejecuta también Ruff, mypy y pytest en Windows para cada pull request y cada cambio integrado en `main`.
-
-##
