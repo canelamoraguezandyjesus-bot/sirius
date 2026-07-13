@@ -72,12 +72,22 @@ La implementación y las pruebas simuladas están completas. Permanece pendiente
 - manejo seguro de fallos al consultar credenciales;
 - rechazo de límites no positivos antes de persistir la configuración.
 
+### Completado dentro de V7 (copia cifrada)
+
+- `BackupService.create_backup()`: instantánea consistente con `VACUUM INTO`,
+  empaquetado con `manifest.json` (formato, versión de aplicación, esquema,
+  fecha, hash), derivación de clave con Argon2id y cifrado con Fernet;
+- guardado como un único archivo `.siriusbackup`, sin la clave API ni logs;
+- límite de 100 MB antes de escribir el archivo final;
+- autovalidación (descifrado, manifiesto e integridad de SQLite) antes de
+  anunciar éxito;
+- pruebas automáticas correspondientes.
+
 ### Pendiente dentro del alcance aprobado de V7
 
-- copia cifrada;
-- validación de integridad;
-- restauración segura;
-- pruebas automáticas correspondientes;
+- `validate_backup()` y `restore_backup()` (restauración segura);
+- integración de la copia cifrada en la interfaz;
+- pruebas automáticas correspondientes a la restauración;
 - prueba manual del Credential Manager en Windows real.
 
 No se asigna todavía un nombre canónico a la siguiente subdivisión de V7.
