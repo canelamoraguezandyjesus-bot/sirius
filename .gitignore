@@ -45,3 +45,5 @@ Desktop.ini
 .claude/commands/*
 !.claude/commands/check.md
 .claude/settings.local.json
+
+!.claude/commands/work.md
