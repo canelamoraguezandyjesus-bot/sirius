@@ -62,6 +62,8 @@ class LLMErrorKind(StrEnum):
     TIMEOUT = "timeout"
     INVALID_RESPONSE = "invalid_response"
     BUDGET_EXCEEDED = "budget_exceeded"
+    # Provider selected but not usable yet (missing/invalid key or settings).
+    CONFIGURATION = "configuration"
     UNKNOWN = "unknown"
 
 

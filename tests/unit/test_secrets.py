@@ -39,3 +39,7 @@ def test_delete_secret_is_a_no_op_when_absent() -> None:
     store.delete_secret("openai_api_key")
 
     assert store.get_secret("openai_api_key") is None
+
+
+def test_is_secure_backend_is_always_true() -> None:
+    assert FakeSecretStore().is_secure_backend() is True

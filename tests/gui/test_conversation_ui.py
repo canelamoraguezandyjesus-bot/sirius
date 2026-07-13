@@ -16,6 +16,7 @@ from sirius.adapters.persistence.sqlite_identity_repository import (
 )
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
+from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.context import ContextBuilder
 from sirius.application.send_message import SendMessageUseCase
 from sirius.composition_root import build_conversation_dependencies
@@ -49,10 +50,13 @@ def _bootstrapped_database(database_path: Path) -> Path:
 
 
 def _build_window(database_path: Path) -> MainWindow:
-    dependencies = build_conversation_dependencies(database_path)
+    dependencies = build_conversation_dependencies(database_path, secret_store=FakeSecretStore())
     return MainWindow(
         send_message_use_case=dependencies.send_message_use_case,
         get_history_use_case=dependencies.get_history_use_case,
+        api_key_settings_use_case=dependencies.api_key_settings_use_case,
+        show_warning=lambda title, text: None,
+        show_information=lambda title, text: None,
     )
 
 

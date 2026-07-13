@@ -39,10 +39,19 @@
 - V6B: presupuesto mensual (DR-018) persistido en SQLite (`llm_usage`, una fila por mes UTC) para que sobreviva a reinicios de la aplicación; `BudgetTracker` conserva un modo en memoria cuando no se inyecta el repositorio.
 - V6B: migración (no publicada) añade `messages.operation_id`, `identity_version`, `status` y la restricción única de idempotencia; migración nueva independiente crea `llm_usage`. Ninguna migración publicada de V2-V5 se modifica.
 - V6B: interfaz con streaming progresivo y botón "Cancelar"; cancelación y cierre de ventana durante un streaming no bloquean el hilo gráfico; los mensajes cancelados/fallidos permanecen visibles en el historial.
+- V7A: `KeyringSecretStore` real sobre Windows Credential Manager detrás del puerto `SecretStore` (que añade `is_secure_backend()`); nunca cae a texto plano si el backend seguro no está disponible; `FakeSecretStore` conservado para pruebas.
+- V7A: proveedor, modelo, límite de tokens y presupuesto mensual pasan a ser configuración no sensible en `settings.json`, editable desde la pestaña "Configuración"; la clave de OpenAI se resuelve desde el `SecretStore` (flujo normal), con `OPENAI_API_KEY` de entorno como mecanismo explícito de desarrollo únicamente.
+- V7A: la aplicación arranca siempre, incluso con "openai" mal configurado (sin clave, límites inválidos); el error seguro (`UnconfiguredLLMProvider`, `LLMErrorKind.CONFIGURATION`) solo aparece al intentar enviar un mensaje.
+- V7A: registro local rotatorio (`logs/application.log`, 5 archivos de 5 MB) con redacción defensiva; registra arranque, proveedor, operaciones y errores clasificados, nunca contenido de mensajes ni la clave.
+- V7A: pestaña "Configuración" con campo enmascarado para la clave, acciones de guardar/eliminar, y estado (configurada/no configurada) sin mostrar nunca el valor.
 
 ## Verificación de V6B (proveedor OpenAI real)
 
 Todo lo descrito en V6B está verificado mediante pruebas automáticas (`scripts/check.ps1`: Ruff, mypy estricto y pytest) usando exclusivamente clientes y streams de OpenAI completamente simulados — `OpenAIResponsesProvider` nunca se ha ejecutado contra la API real. **Pendiente**: prueba manual end-to-end contra la API real de OpenAI, bloqueada porque el usuario todavía no dispone de una clave `OPENAI_API_KEY`. Esta prueba manual debe realizarse antes de considerar V6B validado en condiciones reales de red, límites de la cuenta y respuestas reales del modelo.
+
+## Verificación de V7A (secretos y diagnóstico)
+
+Todo lo descrito en V7A está verificado mediante pruebas automáticas usando `keyring` completamente simulado (todas sus funciones monkeypatcheadas): ningún test lee, escribe ni elimina nada en el Credential Manager real de Windows. **Pendiente**: prueba manual de humo en un equipo Windows real, guardando y eliminando una clave desde la interfaz y confirmando que aparece en el Credential Manager del sistema (`certmgr`/"Administrador de credenciales" de Windows) con el nombre de servicio `Sirius`. Pendiente también: el proveedor/clave guardados desde la pestaña Configuración solo se aplican al próximo arranque de Sirius (no hay recarga en caliente de la sesión en curso); esto no estaba en el alcance obligatorio de V7A y queda como decisión abierta.
 
 ## Primera acción en el equipo Windows
 

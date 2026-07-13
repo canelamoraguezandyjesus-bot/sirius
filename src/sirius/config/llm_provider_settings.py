@@ -1,11 +1,13 @@
-"""Provisional (pre-V7) configuration for choosing and configuring the LLM provider.
+"""Configuration for choosing and configuring the LLM provider (V7A).
 
-This is explicitly temporary: until V7 introduces Windows Credential Manager
-and a real secret store, the API key is read *only* from the ``OPENAI_API_KEY``
-environment variable, never written to ``settings.json``, SQLite, logs, or
-error messages. Provider selection and model/limits are non-sensitive and
-read from environment variables so no secret ever needs to be persisted to
-enable "openai" mode.
+Provider, model, output token limit, and monthly budget are non-sensitive and
+live in ``settings.json`` (see ``sirius.config.settings``), editable from the
+"Configuración" tab. The OpenAI API key is never part of that file: it comes
+from the injected ``SecretStore`` (Windows Credential Manager in production).
+``OPENAI_API_KEY`` may still be read as an explicit developer override when
+the secret store has nothing stored — SIRIUS-ARQ-0.1 S11.1: "Los archivos
+.env solo se permiten en desarrollo local... nunca son formato de
+producción" — it is never the normal user flow.
 """
 
 from __future__ import annotations
@@ -13,9 +15,14 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Any
+
+from sirius.config.secrets_config import OPENAI_API_KEY_SECRET_NAME
+from sirius.ports.secrets import SecretStore
 
 _DEFAULT_MODEL = "gpt-5.6-terra"  # DR-017: reference model
 _DEFAULT_MAX_OUTPUT_TOKENS = 4096  # SIRIUS-ARQ-0.1 S9: "Salida normal 4.096 tokens"
+_DEFAULT_MONTHLY_BUDGET_USD = 20.0  # SIRIUS-ARQ-0.1 S9.1: "Envolvente mensual aprobada: 20 USD"
 
 
 class LLMProviderKind(StrEnum):
@@ -26,7 +33,7 @@ class LLMProviderKind(StrEnum):
 
 
 class LLMProviderConfigurationError(RuntimeError):
-    """Raised when 'openai' is selected but the key or model are not usable.
+    """Raised when 'openai' is selected but the configuration is not usable.
 
     The message is always safe: it never includes the key's value or any
     part of it.
@@ -39,51 +46,90 @@ class OpenAIProviderSettings:
 
     model: str
     max_output_tokens: int
+    monthly_budget_usd: float
 
 
-def resolve_provider_kind() -> LLMProviderKind:
-    """Read the provider selection from ``SIRIUS_LLM_PROVIDER``.
+def resolve_provider_kind(settings: dict[str, Any]) -> LLMProviderKind:
+    """Read the provider selection from persisted settings (key ``llm_provider``).
 
     Unset (or blank) defaults to ``fake`` — the safe mode when nothing was
-    asked for. But once the user *has* set a value, only ``"fake"`` and
-    ``"openai"`` are valid: an unrecognized value raises
-    ``LLMProviderConfigurationError`` instead of silently falling back to
-    fake, so a typo can never be mistaken for "OpenAI is off".
+    asked for. But once a value *is* present, only ``"fake"`` and ``"openai"``
+    are valid: an unrecognized value raises ``LLMProviderConfigurationError``
+    instead of silently falling back to fake, so a typo can never be mistaken
+    for "OpenAI is off".
     """
-    raw_value = os.environ.get("SIRIUS_LLM_PROVIDER")
-    if raw_value is None or not raw_value.strip():
+    raw_value = settings.get("llm_provider")
+    if raw_value is None or not str(raw_value).strip():
         return LLMProviderKind.FAKE
 
-    normalized = raw_value.strip().lower()
+    normalized = str(raw_value).strip().lower()
     if normalized == LLMProviderKind.FAKE.value:
         return LLMProviderKind.FAKE
     if normalized == LLMProviderKind.OPENAI.value:
         return LLMProviderKind.OPENAI
 
     msg = (
-        f"SIRIUS_LLM_PROVIDER={raw_value!r} no es válido. "
+        f"El proveedor configurado ({raw_value!r}) no es válido. "
         "Los únicos valores admitidos son 'fake' y 'openai'."
     )
     raise LLMProviderConfigurationError(msg)
 
 
-def resolve_openai_api_key() -> str | None:
-    """Read the API key exclusively from ``OPENAI_API_KEY``. Never persisted."""
+def resolve_openai_api_key(secret_store: SecretStore) -> str | None:
+    """Resolve the OpenAI API key: the secret store first, then ``OPENAI_API_KEY``.
+
+    The secret store is the normal production path (a key saved from the
+    "Configuración" tab). The environment variable is kept only as an
+    explicit development convenience for when nothing has been saved there.
+    """
+    stored = secret_store.get_secret(OPENAI_API_KEY_SECRET_NAME)
+    if stored:
+        return stored
     return os.environ.get("OPENAI_API_KEY") or None
 
 
-def resolve_openai_provider_settings() -> OpenAIProviderSettings:
-    """Read the non-sensitive OpenAI settings (model, output token limit)."""
-    model = os.environ.get("SIRIUS_OPENAI_MODEL", "").strip() or _DEFAULT_MODEL
-    raw_max_output_tokens = os.environ.get("SIRIUS_OPENAI_MAX_OUTPUT_TOKENS", "").strip()
-    max_output_tokens = _DEFAULT_MAX_OUTPUT_TOKENS
-    if raw_max_output_tokens:
-        try:
-            max_output_tokens = int(raw_max_output_tokens)
-        except ValueError as exc:
-            msg = "SIRIUS_OPENAI_MAX_OUTPUT_TOKENS must be a whole number of tokens."
-            raise LLMProviderConfigurationError(msg) from exc
-    if max_output_tokens <= 0:
-        msg = "SIRIUS_OPENAI_MAX_OUTPUT_TOKENS must be a positive number of tokens."
+def _positive_int(raw_value: Any, setting_name: str) -> int:
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        msg = f"{setting_name} debe ser un número entero de tokens."
+        raise LLMProviderConfigurationError(msg) from exc
+    if value <= 0:
+        msg = f"{setting_name} debe ser un número positivo de tokens."
         raise LLMProviderConfigurationError(msg)
-    return OpenAIProviderSettings(model=model, max_output_tokens=max_output_tokens)
+    return value
+
+
+def _positive_float(raw_value: Any, setting_name: str) -> float:
+    try:
+        value = float(raw_value)
+    except (TypeError, ValueError) as exc:
+        msg = f"{setting_name} debe ser un número."
+        raise LLMProviderConfigurationError(msg) from exc
+    if value <= 0:
+        msg = f"{setting_name} debe ser un número positivo."
+        raise LLMProviderConfigurationError(msg)
+    return value
+
+
+def resolve_openai_provider_settings(settings: dict[str, Any]) -> OpenAIProviderSettings:
+    """Read the non-sensitive OpenAI settings (model, output limit, budget)."""
+    model = str(settings.get("openai_model") or "").strip() or _DEFAULT_MODEL
+
+    raw_max_output_tokens = settings.get("openai_max_output_tokens")
+    max_output_tokens = (
+        _positive_int(raw_max_output_tokens, "El límite de tokens de salida")
+        if raw_max_output_tokens is not None
+        else _DEFAULT_MAX_OUTPUT_TOKENS
+    )
+
+    raw_monthly_budget = settings.get("openai_monthly_budget_usd")
+    monthly_budget_usd = (
+        _positive_float(raw_monthly_budget, "El presupuesto mensual")
+        if raw_monthly_budget is not None
+        else _DEFAULT_MONTHLY_BUDGET_USD
+    )
+
+    return OpenAIProviderSettings(
+        model=model, max_output_tokens=max_output_tokens, monthly_budget_usd=monthly_budget_usd
+    )

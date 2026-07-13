@@ -17,3 +17,8 @@ class FakeSecretStore:
 
     def delete_secret(self, key: str) -> None:
         self._secrets.pop(key, None)
+
+    def is_secure_backend(self) -> bool:
+        """Always True: this is an explicit, safe test double, not an
+        insecure fallback being used unknowingly."""
+        return True

@@ -11,6 +11,9 @@ from __future__ import annotations
 from PySide6.QtCore import QObject, QRunnable, Signal
 
 from sirius.application.send_message import SendMessageResult, SendMessageUseCase
+from sirius.infrastructure.logging import get_logger
+
+_logger = get_logger(__name__)
 
 
 class SendMessageWorkerSignals(QObject):
@@ -34,6 +37,7 @@ class SendMessageWorker(QRunnable):
         self.signals = SendMessageWorkerSignals()
 
     def run(self) -> None:
+        _logger.info("Operación %s iniciada", self._operation_id)
         try:
             result: SendMessageResult = self._send_message_use_case.send_message(
                 self._user_text,
@@ -41,6 +45,12 @@ class SendMessageWorker(QRunnable):
                 on_delta=self.signals.delta.emit,
             )
         except Exception as exc:  # A worker-boundary catch: report, never crash the pool thread.
+            _logger.error(
+                "Operación %s interrumpida por una excepción (%s)",
+                self._operation_id,
+                type(exc).__name__,
+            )
             self.signals.crashed.emit(str(exc))
         else:
+            _logger.info("Operación %s finalizada: %s", self._operation_id, result.outcome.value)
             self.signals.finished.emit(result)

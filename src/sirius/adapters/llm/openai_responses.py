@@ -20,6 +20,7 @@ from typing import Literal
 import openai
 
 from sirius.adapters.llm.budget import BudgetTracker
+from sirius.infrastructure.logging import get_logger
 from sirius.ports.llm import (
     LLMCancelled,
     LLMCompleted,
@@ -29,6 +30,8 @@ from sirius.ports.llm import (
     LLMStreamEvent,
     LLMTextDelta,
 )
+
+_logger = get_logger(__name__)
 
 _MAX_RETRIES = 2
 _BASE_BACKOFF_SECONDS = 0.5
@@ -149,13 +152,20 @@ class OpenAIResponsesProvider:
                 return
 
             if not self._budget_tracker.has_remaining_budget():
+                _logger.warning(
+                    "Operación %s bloqueada: presupuesto mensual agotado", request.operation_id
+                )
                 yield _build_error(LLMErrorKind.BUDGET_EXCEEDED)
                 return
 
             try:
                 stream = self._create_stream(request)
             except Exception as exc:  # translated to a safe, typed event; never re-raised
-                yield _build_error(_classify_exception(exc))
+                kind = _classify_exception(exc)
+                _logger.error(
+                    "Operación %s falló al conectar (%s)", request.operation_id, kind.value
+                )
+                yield _build_error(kind)
                 return
 
             try:
@@ -188,13 +198,23 @@ class OpenAIResponsesProvider:
                     yield completed
                     return
                 elif event_type in ("response.failed", "response.incomplete"):
+                    _logger.error(
+                        "Operación %s: respuesta inválida del proveedor", request.operation_id
+                    )
                     yield _build_error(LLMErrorKind.INVALID_RESPONSE, "".join(accumulated))
                     return
                 elif event_type == "error":
+                    _logger.error(
+                        "Operación %s: error no clasificado del proveedor", request.operation_id
+                    )
                     yield _build_error(LLMErrorKind.UNKNOWN, "".join(accumulated))
                     return
         except Exception as exc:  # translated to a safe, typed event; never re-raised
-            yield _build_error(_classify_exception(exc), "".join(accumulated))
+            kind = _classify_exception(exc)
+            _logger.error(
+                "Operación %s falló durante el streaming (%s)", request.operation_id, kind.value
+            )
+            yield _build_error(kind, "".join(accumulated))
             return
 
         # The stream ended without ever reaching a terminal event.

@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
+from typing import Any
 
 from PySide6.QtCore import Qt, QThreadPool
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
+    QComboBox,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -21,27 +24,50 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from sirius.application.api_key_settings import ApiKeySettingsError, ApiKeySettingsUseCase
 from sirius.application.get_conversation_history import (
     ConversationNotInitializedError,
     GetConversationHistoryUseCase,
 )
 from sirius.application.send_message import SendMessageResult, SendMessageUseCase
+from sirius.config.llm_provider_settings import (
+    LLMProviderConfigurationError,
+    LLMProviderKind,
+    resolve_openai_provider_settings,
+    resolve_provider_kind,
+)
 from sirius.config.settings import load_settings, save_settings
 from sirius.domain.conversation import MessageRole, MessageStatus
 from sirius.presentation.conversation_worker import SendMessageWorker
 
 
 class MainWindow(QMainWindow):
-    """Ventana principal de Sirius: conversación y configuración."""
+    """Ventana principal de Sirius: conversación y configuración.
+
+    Never receives a ``SecretStore`` and never calls ``get_secret``: the only
+    secret-related dependency it holds is ``ApiKeySettingsUseCase``, whose
+    API cannot return the key's value (AGENTS.md: "No accedas a ... secretos
+    desde la interfaz").
+    """
 
     def __init__(
         self,
         send_message_use_case: SendMessageUseCase,
         get_history_use_case: GetConversationHistoryUseCase,
+        api_key_settings_use_case: ApiKeySettingsUseCase,
+        *,
+        show_warning: Callable[[str, str], None] | None = None,
+        show_information: Callable[[str, str], None] | None = None,
     ) -> None:
         super().__init__()
         self._send_message_use_case = send_message_use_case
         self._get_history_use_case = get_history_use_case
+        self._api_key_settings_use_case = api_key_settings_use_case
+        # Dialogs are shown only through these two seams: production defaults
+        # to real QMessageBox popups, but tests inject a recording double so
+        # scripts/check.ps1 never opens a real window on the desktop.
+        self._show_warning = show_warning or self._default_show_warning
+        self._show_information = show_information or self._default_show_information
         self._is_sending = False
         self._close_requested = False
         self._active_operation_id: str | None = None
@@ -58,6 +84,12 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(tabs)
 
         self._load_history()
+
+    def _default_show_warning(self, title: str, text: str) -> None:
+        QMessageBox.warning(self, title, text)
+
+    def _default_show_information(self, title: str, text: str) -> None:
+        QMessageBox.information(self, title, text)
 
     # --- Conversación --------------------------------------------------
 
@@ -199,16 +231,22 @@ class MainWindow(QMainWindow):
                 result.sirius_message.status,
             )
 
+        operation_id = result.sirius_message.operation_id
         if result.outcome is MessageStatus.CANCELLED:
             self.error_label.setText("Envío cancelado.")
         elif result.outcome is MessageStatus.FAILED:
-            self.error_label.setText("No se pudo completar el envío. Inténtalo de nuevo.")
+            self.error_label.setText(
+                f"No se pudo completar el envío. Inténtalo de nuevo. (ref: {operation_id})"
+            )
         self._finish_sending()
 
     def _on_crashed(self, error_message: str) -> None:
         del error_message  # not shown verbatim: keep the user-facing message safe and generic
+        operation_id = self._active_operation_id
         self._replace_history_with_authoritative_state()
-        self.error_label.setText("No se pudo completar el envío. Inténtalo de nuevo.")
+        self.error_label.setText(
+            f"No se pudo completar el envío. Inténtalo de nuevo. (ref: {operation_id})"
+        )
         self._finish_sending()
 
     def _finish_sending(self) -> None:
@@ -262,8 +300,52 @@ class MainWindow(QMainWindow):
         form.addRow("Tu nombre:", self.name_input)
         form.addRow("Carpeta de datos:", self.data_path_input)
 
+        self.provider_combo = QComboBox()
+        self.provider_combo.addItems([kind.value for kind in LLMProviderKind])
+        try:
+            current_provider = resolve_provider_kind(settings)
+        except LLMProviderConfigurationError:
+            current_provider = LLMProviderKind.FAKE
+        self.provider_combo.setCurrentText(current_provider.value)
+
+        self.model_input = QLineEdit()
+        self.max_output_tokens_input = QLineEdit()
+        self.budget_input = QLineEdit()
+        try:
+            provider_defaults = resolve_openai_provider_settings(settings)
+        except LLMProviderConfigurationError:
+            provider_defaults = resolve_openai_provider_settings({})
+        self.model_input.setText(provider_defaults.model)
+        self.max_output_tokens_input.setText(str(provider_defaults.max_output_tokens))
+        self.budget_input.setText(str(provider_defaults.monthly_budget_usd))
+
+        form.addRow("Proveedor:", self.provider_combo)
+        form.addRow("Modelo:", self.model_input)
+        form.addRow("Máximo de tokens de salida:", self.max_output_tokens_input)
+        form.addRow("Presupuesto mensual (USD):", self.budget_input)
+
         save_button = QPushButton("Guardar configuración")
         save_button.clicked.connect(self._save_configuration)
+
+        self.api_key_input = QLineEdit()
+        self.api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.api_key_input.setPlaceholderText("Nueva clave de API de OpenAI")
+
+        self.key_status_label = QLabel()
+        self.key_feedback_label = QLabel("")
+        self._refresh_key_status_label()
+
+        save_key_button = QPushButton("Guardar clave")
+        save_key_button.clicked.connect(self._save_api_key)
+        delete_key_button = QPushButton("Eliminar clave")
+        delete_key_button.clicked.connect(self._delete_api_key)
+
+        key_form = QFormLayout()
+        key_form.addRow("Clave de API de OpenAI:", self.api_key_input)
+
+        key_buttons_row = QHBoxLayout()
+        key_buttons_row.addWidget(save_key_button)
+        key_buttons_row.addWidget(delete_key_button)
 
         container = QWidget()
         layout = QVBoxLayout(container)
@@ -271,30 +353,87 @@ class MainWindow(QMainWindow):
         layout.addWidget(subtitle)
         layout.addLayout(form)
         layout.addWidget(save_button)
+        layout.addLayout(key_form)
+        layout.addLayout(key_buttons_row)
+        layout.addWidget(self.key_status_label)
+        layout.addWidget(self.key_feedback_label)
         layout.addStretch()
         return container
+
+    def _refresh_key_status_label(self) -> None:
+        has_key = self._api_key_settings_use_case.has_key()
+        self.key_status_label.setText(
+            "Clave de API: configurada." if has_key else "Clave de API: no configurada."
+        )
+
+    def _save_api_key(self) -> None:
+        key = self.api_key_input.text().strip()
+        if not key:
+            self.key_feedback_label.setText("")
+            self._show_warning("Falta la clave", "Escribe una clave antes de guardarla.")
+            return
+        try:
+            self._api_key_settings_use_case.save_key(key)
+        except ApiKeySettingsError:
+            self.key_feedback_label.setText("")
+            self._show_warning(
+                "No se pudo guardar",
+                "No se pudo guardar la clave en el almacén seguro de Windows.",
+            )
+            return
+        finally:
+            self.api_key_input.clear()
+
+        self._refresh_key_status_label()
+        # An inline, non-modal status replaces a success dialog here: saving
+        # a key is a frequent action and must never require a click to
+        # dismiss (V7A: no QMessageBox for this specific confirmation).
+        self.key_feedback_label.setText("Clave guardada.")
+
+    def _delete_api_key(self) -> None:
+        try:
+            self._api_key_settings_use_case.delete_key()
+        except ApiKeySettingsError:
+            self.key_feedback_label.setText("")
+            self._show_warning(
+                "No se pudo eliminar",
+                "No se pudo eliminar la clave del almacén seguro de Windows.",
+            )
+            return
+
+        self._refresh_key_status_label()
+        self.key_feedback_label.setText("")
+        self._show_information("Clave eliminada", "La clave de API se ha eliminado.")
 
     def _save_configuration(self) -> None:
         name = self.name_input.text().strip()
         data_path = self.data_path_input.text().strip()
 
         if not name:
-            QMessageBox.warning(
-                self,
-                "Falta información",
-                "Escribe primero tu nombre.",
+            self._show_warning("Falta información", "Escribe primero tu nombre.")
+            return
+
+        try:
+            max_output_tokens = int(self.max_output_tokens_input.text().strip())
+            monthly_budget_usd = float(self.budget_input.text().strip())
+        except ValueError:
+            self._show_warning(
+                "Valor inválido",
+                "El máximo de tokens y el presupuesto mensual deben ser números.",
             )
             return
 
-        save_settings(
-            {
-                "user_name": name,
-                "data_path": data_path,
-            }
-        )
+        data: dict[str, Any] = {
+            "user_name": name,
+            "data_path": data_path,
+            "llm_provider": self.provider_combo.currentText(),
+            "openai_model": self.model_input.text().strip(),
+            "openai_max_output_tokens": max_output_tokens,
+            "openai_monthly_budget_usd": monthly_budget_usd,
+        }
+        save_settings(data)
 
-        QMessageBox.information(
-            self,
+        self._show_information(
             "Configuración guardada",
             f"Sirius recordará que debe llamarte {name}.",
         )
