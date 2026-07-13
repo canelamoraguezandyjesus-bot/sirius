@@ -15,7 +15,7 @@ from sirius.ports.secrets import SecretStore, SecretStoreError
 
 
 class ApiKeySettingsError(RuntimeError):
-    """Raised when saving or deleting the API key fails.
+    """Raised when checking, saving, or deleting the API key fails.
 
     The message is always safe: it never includes the key's value.
     """
@@ -29,7 +29,10 @@ class ApiKeySettingsUseCase:
 
     def has_key(self) -> bool:
         """Return whether a key is currently saved — never the key itself."""
-        return self._secret_store.get_secret(OPENAI_API_KEY_SECRET_NAME) is not None
+        try:
+            return self._secret_store.get_secret(OPENAI_API_KEY_SECRET_NAME) is not None
+        except SecretStoreError as exc:
+            raise ApiKeySettingsError(str(exc)) from exc
 
     def save_key(self, value: str) -> None:
         try:

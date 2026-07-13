@@ -360,11 +360,20 @@ class MainWindow(QMainWindow):
         layout.addStretch()
         return container
 
-    def _refresh_key_status_label(self) -> None:
-        has_key = self._api_key_settings_use_case.has_key()
+    def _refresh_key_status_label(self) -> bool:
+        try:
+            has_key = self._api_key_settings_use_case.has_key()
+        except ApiKeySettingsError:
+            self.key_status_label.setText("Clave de API: estado no disponible.")
+            self.key_feedback_label.setText(
+                "No se pudo consultar el almacén seguro de credenciales de Windows."
+            )
+            return False
+
         self.key_status_label.setText(
             "Clave de API: configurada." if has_key else "Clave de API: no configurada."
         )
+        return True
 
     def _save_api_key(self) -> None:
         key = self.api_key_input.text().strip()
@@ -384,11 +393,11 @@ class MainWindow(QMainWindow):
         finally:
             self.api_key_input.clear()
 
-        self._refresh_key_status_label()
-        # An inline, non-modal status replaces a success dialog here: saving
-        # a key is a frequent action and must never require a click to
-        # dismiss (V7A: no QMessageBox for this specific confirmation).
-        self.key_feedback_label.setText("Clave guardada.")
+        if self._refresh_key_status_label():
+            # An inline, non-modal status replaces a success dialog here: saving
+            # a key is a frequent action and must never require a click to
+            # dismiss (V7A: no QMessageBox for this specific confirmation).
+            self.key_feedback_label.setText("Clave guardada.")
 
     def _delete_api_key(self) -> None:
         try:
@@ -401,8 +410,8 @@ class MainWindow(QMainWindow):
             )
             return
 
-        self._refresh_key_status_label()
-        self.key_feedback_label.setText("")
+        if self._refresh_key_status_label():
+            self.key_feedback_label.setText("")
         self._show_information("Clave eliminada", "La clave de API se ha eliminado.")
 
     def _save_configuration(self) -> None:
@@ -420,6 +429,13 @@ class MainWindow(QMainWindow):
             self._show_warning(
                 "Valor inválido",
                 "El máximo de tokens y el presupuesto mensual deben ser números.",
+            )
+            return
+
+        if max_output_tokens <= 0 or monthly_budget_usd <= 0:
+            self._show_warning(
+                "Valor inválido",
+                "El máximo de tokens y el presupuesto mensual deben ser mayores que cero.",
             )
             return
 

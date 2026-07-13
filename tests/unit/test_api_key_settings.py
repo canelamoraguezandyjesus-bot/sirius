@@ -50,6 +50,13 @@ def test_has_key_is_true_after_saving() -> None:
     assert secret_store.get_secret(OPENAI_API_KEY_SECRET_NAME) == "sk-fake-value"
 
 
+def test_has_key_translates_secret_store_errors() -> None:
+    use_case = ApiKeySettingsUseCase(_RaisingSecretStore())
+
+    with pytest.raises(ApiKeySettingsError):
+        use_case.has_key()
+
+
 def test_delete_key_removes_it() -> None:
     secret_store = FakeSecretStore()
     use_case = ApiKeySettingsUseCase(secret_store)
