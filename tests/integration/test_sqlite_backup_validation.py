@@ -13,6 +13,7 @@ from typing import cast
 
 import pytest
 from cryptography.fernet import Fernet
+
 from sirius.adapters.backup.sqlite_backup_service import _derive_key as derive_key
 from sirius.adapters.backup.sqlite_backup_service import _KdfParams, build_sqlite_backup_service
 from sirius.adapters.persistence.migrations import upgrade_to_head
