@@ -30,9 +30,13 @@ from argon2.low_level import Type, hash_secret_raw
 from cryptography.fernet import Fernet, InvalidToken
 
 from sirius import __version__ as _APP_VERSION
+from sirius.adapters.persistence.migrations import get_supported_schema_version
 from sirius.ports.backup import (
+    BackupConfirmationRequiredError,
     BackupError,
     BackupManifest,
+    BackupRestoreError,
+    BackupRestoreResult,
     BackupResult,
     BackupTooLargeError,
     BackupValidationError,
@@ -182,6 +186,61 @@ def _write_atomically(destination: Path, data: bytes) -> None:
         with contextlib.suppress(FileNotFoundError):
             os.unlink(tmp_name)
         raise
+
+
+def _sqlite_sidecar_paths(database_path: Path) -> tuple[Path, Path, Path]:
+    base = str(database_path)
+    return Path(f"{base}-wal"), Path(f"{base}-shm"), Path(f"{base}-journal")
+
+
+def _remove_sqlite_sidecars(database_path: Path) -> None:
+    """Remove stale ``-wal``/``-shm``/``-journal`` files next to ``database_path``.
+
+    ``os.replace`` swaps only the main SQLite file. A sidecar left over from
+    the previous generation of the file would no longer correspond to its
+    content, and SQLite could mistake it for an unfinished transaction and
+    "recover" the new file back into a stale, partial state.
+    """
+    for sidecar in _sqlite_sidecar_paths(database_path):
+        with contextlib.suppress(FileNotFoundError):
+            sidecar.unlink()
+
+
+def _verify_database_matches_manifest(database_path: Path, manifest: BackupManifest) -> bool:
+    """Re-open ``database_path`` read-only and confirm it matches ``manifest``.
+
+    Runs after every atomic replace (forward restore and rollback) so a
+    corrupted or unexpectedly different file is caught before Sirius trusts
+    it, instead of assuming the write succeeded just because it did not raise.
+
+    This function is total: it never raises. Opening fails safe (a missing
+    file, a locked file, an unreadable schema, or any other I/O/SQLite/schema
+    lookup error all resolve to ``False``) and it only ever reads, never
+    writes or creates a file — the connection URI forces SQLite's own
+    read-only mode rather than relying on ``PRAGMA query_only`` alone.
+    """
+    if not database_path.is_file():
+        return False
+    try:
+        if hashlib.sha256(database_path.read_bytes()).hexdigest() != manifest.sha256:
+            return False
+        supported_schema_version = get_supported_schema_version()
+        readonly_uri = f"{database_path.resolve().as_uri()}?mode=ro"
+        connection = sqlite3.connect(readonly_uri, uri=True)
+        try:
+            connection.execute("PRAGMA query_only = ON")
+            row = connection.execute("SELECT version_num FROM alembic_version LIMIT 1").fetchone()
+            real_schema_version = str(row[0]) if row is not None else "unknown"
+            if real_schema_version != manifest.schema_version:
+                return False
+            if real_schema_version != supported_schema_version:
+                return False
+            integrity_rows = connection.execute("PRAGMA integrity_check").fetchall()
+            return len(integrity_rows) == 1 and str(integrity_rows[0][0]) == "ok"
+        finally:
+            connection.close()
+    except OSError, sqlite3.Error, RuntimeError:
+        return False
 
 
 def _parse_kdf_params(kdf: object) -> _KdfParams:
@@ -376,17 +435,122 @@ class SQLiteBackupService:
             )
             raise BackupTooLargeError(msg)
 
-        self._validate_bytes(
+        self._validate_and_extract(
             envelope_bytes,
             password,
             expected_sha256=db_sha256,
-            expected_schema_version=schema_version,
         )
 
         _write_atomically(destination, envelope_bytes)
         return BackupResult(path=destination, manifest=manifest, size_bytes=len(envelope_bytes))
 
     def validate_backup(self, backup_path: Path, password: str) -> BackupValidationResult:
+        manifest, _db_bytes, size_bytes = self._read_and_validate(backup_path, password)
+        return BackupValidationResult(
+            path=backup_path,
+            manifest=manifest,
+            size_bytes=size_bytes,
+        )
+
+    def restore_backup(
+        self,
+        backup_path: Path,
+        password: str,
+        *,
+        confirmed: bool,
+    ) -> BackupRestoreResult:
+        if not confirmed:
+            msg = "La restauración requiere confirmación explícita antes de modificar los datos."
+            raise BackupConfirmationRequiredError(msg)
+
+        manifest, restored_db_bytes, size_bytes = self._read_and_validate(backup_path, password)
+
+        database_existed = self._database_path.is_file()
+        safety_backup_path = self.create_backup(password).path if database_existed else None
+
+        try:
+            _write_atomically(self._database_path, restored_db_bytes)
+        except OSError as exc:
+            msg = (
+                "No se pudo reemplazar la base de datos de forma atómica; "
+                "no se modificaron los datos actuales."
+            )
+            raise BackupRestoreError(msg) from exc
+
+        try:
+            _remove_sqlite_sidecars(self._database_path)
+            restored_ok = _verify_database_matches_manifest(self._database_path, manifest)
+        except Exception:
+            # Anything going wrong after a successful replace (sidecar cleanup,
+            # opening the file, hashing, schema lookup, integrity check) must
+            # never leave the new, unverified database installed — treat it
+            # exactly like a failed post-restore validation and roll back.
+            restored_ok = False
+
+        if restored_ok:
+            return BackupRestoreResult(
+                path=backup_path,
+                manifest=manifest,
+                size_bytes=size_bytes,
+                safety_backup_path=safety_backup_path,
+            )
+
+        self._rollback_after_failed_restore(safety_backup_path, password, database_existed)
+        msg = (
+            "La base restaurada no superó la validación posterior; "
+            "se revirtió automáticamente al estado anterior."
+        )
+        raise BackupRestoreError(msg)
+
+    def _rollback_after_failed_restore(
+        self,
+        safety_backup_path: Path | None,
+        password: str,
+        database_existed: bool,
+    ) -> None:
+        rollback_ok = False
+        try:
+            if safety_backup_path is not None:
+                envelope_bytes = safety_backup_path.read_bytes()
+                safety_manifest, safety_db_bytes = self._validate_and_extract(
+                    envelope_bytes, password
+                )
+                _write_atomically(self._database_path, safety_db_bytes)
+                _remove_sqlite_sidecars(self._database_path)
+                rollback_ok = _verify_database_matches_manifest(
+                    self._database_path, safety_manifest
+                )
+            elif not database_existed:
+                with contextlib.suppress(FileNotFoundError):
+                    self._database_path.unlink()
+                _remove_sqlite_sidecars(self._database_path)
+                rollback_ok = not self._database_path.exists()
+        except Exception as exc:
+            msg = (
+                "La restauración falló la validación posterior y el rollback automático "
+                "también falló; los datos actuales podrían estar dañados. La copia de "
+                f"seguridad previa sigue disponible en: {safety_backup_path}."
+            )
+            raise BackupRestoreError(msg) from exc
+
+        if not rollback_ok:
+            msg = (
+                "La restauración falló la validación posterior; el rollback automático no "
+                "dejó los datos anteriores íntegros y los datos actuales podrían estar "
+                f"dañados. La copia de seguridad previa sigue disponible en: {safety_backup_path}."
+            )
+            raise BackupRestoreError(msg)
+
+    def _snapshot(self) -> tuple[bytes, str]:
+        with tempfile.TemporaryDirectory() as scratch_dir:
+            snapshot_path = Path(scratch_dir) / "sirius.db"
+            _snapshot_database(self._database_path, snapshot_path)
+            schema_version = _read_schema_version(snapshot_path)
+            return snapshot_path.read_bytes(), schema_version
+
+    def _read_and_validate(
+        self, backup_path: Path, password: str
+    ) -> tuple[BackupManifest, bytes, int]:
         if not password:
             msg = "La contraseña de la copia no puede estar vacía."
             raise BackupValidationError(msg)
@@ -409,47 +573,22 @@ class SQLiteBackupService:
             msg = "No se pudo leer el archivo de copia."
             raise BackupValidationError(msg) from exc
 
-        expected_schema_version = (
-            _read_schema_version(self._database_path) if self._database_path.is_file() else None
-        )
-        manifest = self._validate_bytes(
-            envelope_bytes,
-            password,
-            expected_schema_version=expected_schema_version,
-        )
-        return BackupValidationResult(
-            path=backup_path,
-            manifest=manifest,
-            size_bytes=size_bytes,
-        )
+        manifest, db_bytes = self._validate_and_extract(envelope_bytes, password)
+        return manifest, db_bytes, size_bytes
 
-    def _snapshot(self) -> tuple[bytes, str]:
-        with tempfile.TemporaryDirectory() as scratch_dir:
-            snapshot_path = Path(scratch_dir) / "sirius.db"
-            _snapshot_database(self._database_path, snapshot_path)
-            schema_version = _read_schema_version(snapshot_path)
-            return snapshot_path.read_bytes(), schema_version
-
-    def _validate_bytes(
+    def _validate_and_extract(
         self,
         envelope_bytes: bytes,
         password: str,
         *,
         expected_sha256: str | None = None,
-        expected_schema_version: str | None = None,
-    ) -> BackupManifest:
+    ) -> tuple[BackupManifest, bytes]:
         package_bytes = _decrypt_envelope(envelope_bytes, password)
         manifest_mapping, db_bytes = _read_package(package_bytes)
         manifest = _manifest_from_mapping(manifest_mapping)
 
         if _version_family(manifest.app_version) != _version_family(_APP_VERSION):
             msg = "La copia pertenece a una versión de Sirius incompatible con esta aplicación."
-            raise BackupValidationError(msg)
-        if (
-            expected_schema_version is not None
-            and manifest.schema_version != expected_schema_version
-        ):
-            msg = "La copia utiliza una versión de esquema incompatible con los datos actuales."
             raise BackupValidationError(msg)
         if expected_sha256 is not None and manifest.sha256 != expected_sha256:
             msg = "La copia generada no superó la validación de integridad del manifiesto."
@@ -465,7 +604,27 @@ class SQLiteBackupService:
             if not check(snapshot_path):
                 msg = "La copia no superó la comprobación de integridad de SQLite."
                 raise BackupValidationError(msg)
-        return manifest
+
+            try:
+                real_schema_version = _read_schema_version(snapshot_path)
+            except sqlite3.Error as exc:
+                msg = (
+                    "No se pudo determinar el esquema de la base de datos empaquetada en la copia."
+                )
+                raise BackupValidationError(msg) from exc
+            if real_schema_version != manifest.schema_version:
+                msg = (
+                    "La copia declara una versión de esquema incompatible con el "
+                    "contenido real de la base de datos."
+                )
+                raise BackupValidationError(msg)
+            if real_schema_version != get_supported_schema_version():
+                msg = (
+                    "La copia utiliza una versión de esquema no soportada por esta "
+                    "versión de Sirius."
+                )
+                raise BackupValidationError(msg)
+        return manifest, db_bytes
 
 
 def build_sqlite_backup_service(database_path: Path, backups_dir: Path) -> SQLiteBackupService:

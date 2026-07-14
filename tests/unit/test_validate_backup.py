@@ -10,6 +10,7 @@ import pytest
 from sirius.application.validate_backup import ValidateBackupUseCase
 from sirius.ports.backup import (
     BackupManifest,
+    BackupRestoreResult,
     BackupResult,
     BackupValidationError,
     BackupValidationResult,
@@ -27,6 +28,11 @@ class _FakeBackupService:
         self.received: list[tuple[Path, str]] = []
 
     def create_backup(self, password: str) -> BackupResult:
+        raise NotImplementedError
+
+    def restore_backup(
+        self, backup_path: Path, password: str, *, confirmed: bool
+    ) -> BackupRestoreResult:
         raise NotImplementedError
 
     def validate_backup(self, backup_path: Path, password: str) -> BackupValidationResult:

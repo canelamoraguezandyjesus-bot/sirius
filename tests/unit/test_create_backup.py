@@ -13,6 +13,7 @@ from sirius.application.create_backup import CreateBackupUseCase
 from sirius.ports.backup import (
     BackupError,
     BackupManifest,
+    BackupRestoreResult,
     BackupResult,
     BackupValidationResult,
 )
@@ -32,6 +33,11 @@ class _FakeBackupService:
         return self._result
 
     def validate_backup(self, backup_path: Path, password: str) -> BackupValidationResult:
+        raise NotImplementedError
+
+    def restore_backup(
+        self, backup_path: Path, password: str, *, confirmed: bool
+    ) -> BackupRestoreResult:
         raise NotImplementedError
 
 
