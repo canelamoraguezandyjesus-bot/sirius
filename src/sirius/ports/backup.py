@@ -1,8 +1,8 @@
 """Encrypted single-file backup contract.
 
-SIRIUS-ARQ-0.1 S4 defines three operations: create, validate, and restore.
-This increment implements creation and validation; restoration remains a later
-V7 block.
+SIRIUS-ARQ-0.1 S4 defines creation, validation, and restoration. All three
+operations are implemented behind this port; presentation only uses application
+use cases and never accesses the adapter directly.
 """
 
 from __future__ import annotations
@@ -16,8 +16,8 @@ from typing import Protocol
 class BackupError(RuntimeError):
     """Raised when a backup operation fails.
 
-    The message is always safe: it never includes the backup password or any
-    decrypted content.
+    Messages are safe: they never include the backup password or decrypted
+    content.
     """
 
 
@@ -31,6 +31,14 @@ class BackupTooLargeError(BackupError):
     SIRIUS-ARQ-0.1 S12.2 requires streaming encryption before increasing this
     limit. Sirius 0.1 therefore refuses oversized files.
     """
+
+
+class BackupRestoreError(BackupError):
+    """Raised when a validated backup cannot be restored safely."""
+
+
+class BackupConfirmationRequiredError(BackupRestoreError):
+    """Raised when a destructive restoration lacks explicit confirmation."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +70,16 @@ class BackupValidationResult:
     size_bytes: int
 
 
+@dataclass(frozen=True, slots=True)
+class BackupRestoreResult:
+    """The outcome of an atomic restoration and its pre-restore safety copy."""
+
+    path: Path
+    manifest: BackupManifest
+    size_bytes: int
+    safety_backup_path: Path | None
+
+
 class BackupService(Protocol):
     """Contract implemented by the encrypted single-file backup adapter."""
 
@@ -71,4 +89,14 @@ class BackupService(Protocol):
 
     def validate_backup(self, backup_path: Path, password: str) -> BackupValidationResult:
         """Validate password, format, hashes, version, schema, and SQLite integrity."""
+        ...
+
+    def restore_backup(
+        self,
+        backup_path: Path,
+        password: str,
+        *,
+        confirmed: bool,
+    ) -> BackupRestoreResult:
+        """Restore a validated backup atomically after explicit confirmation."""
         ...
