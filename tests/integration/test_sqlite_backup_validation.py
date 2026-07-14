@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import cast
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from cryptography.fernet import Fernet
 
 from sirius.adapters.backup.sqlite_backup_service import _derive_key as derive_key
@@ -20,6 +22,8 @@ from sirius.adapters.persistence.migrations import upgrade_to_head
 from sirius.ports.backup import BackupTooLargeError, BackupValidationError
 
 _PASSWORD = "correct horse battery staple"
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_OLDER_SCHEMA_REVISION = "c4d8fc9d6f51"
 
 
 @pytest.fixture
@@ -171,6 +175,46 @@ def test_validate_backup_rejects_an_incompatible_schema(
     _rewrite_encrypted_package(created.path, _PASSWORD, alter_schema)
 
     with pytest.raises(BackupValidationError, match="esquema incompatible"):
+        service.validate_backup(created.path, _PASSWORD)
+
+
+@pytest.mark.integration
+def test_validate_backup_rejects_a_coherent_but_unsupported_internal_schema(
+    database_path: Path, backups_dir: Path, tmp_path: Path
+) -> None:
+    """A manifest can lie about ``schema_version`` and still be internally
+    coherent (its ``sha256`` genuinely matches the packaged database) if the
+    packaged database itself was downgraded to an older, still-valid schema.
+    Validation must catch this by reading the database's own real schema
+    marker, not just trusting whatever the manifest declares.
+    """
+    service = build_sqlite_backup_service(database_path, backups_dir)
+    created = service.create_backup(_PASSWORD)
+
+    def downgrade_to_an_older_but_internally_consistent_schema(
+        _manifest: dict[str, object], db_bytes: bytes
+    ) -> tuple[dict[str, object], bytes]:
+        older_db_path = tmp_path / "older-schema.db"
+        older_db_path.write_bytes(db_bytes)
+        config = Config(str(_REPO_ROOT / "alembic.ini"))
+        config.set_main_option("script_location", str(_REPO_ROOT / "migrations"))
+        config.set_main_option("sqlalchemy.url", f"sqlite:///{older_db_path}")
+        command.downgrade(config, _OLDER_SCHEMA_REVISION)
+        older_db_bytes = older_db_path.read_bytes()
+        coherent_manifest: dict[str, object] = {
+            "format": "siriusbackup",
+            "app_version": created.manifest.app_version,
+            "schema_version": _OLDER_SCHEMA_REVISION,
+            "created_at": created.manifest.created_at.isoformat(),
+            "sha256": hashlib.sha256(older_db_bytes).hexdigest(),
+        }
+        return coherent_manifest, older_db_bytes
+
+    _rewrite_encrypted_package(
+        created.path, _PASSWORD, downgrade_to_an_older_but_internally_consistent_schema
+    )
+
+    with pytest.raises(BackupValidationError, match="no soportada"):
         service.validate_backup(created.path, _PASSWORD)
 
 
