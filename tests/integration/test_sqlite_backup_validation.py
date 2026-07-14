@@ -13,10 +13,8 @@ from typing import cast
 
 import pytest
 from cryptography.fernet import Fernet
-
-from sirius.adapters.backup.sqlite_backup_service import _KdfParams
 from sirius.adapters.backup.sqlite_backup_service import _derive_key as derive_key
-from sirius.adapters.backup.sqlite_backup_service import build_sqlite_backup_service
+from sirius.adapters.backup.sqlite_backup_service import _KdfParams, build_sqlite_backup_service
 from sirius.adapters.persistence.migrations import upgrade_to_head
 from sirius.ports.backup import BackupTooLargeError, BackupValidationError
 
@@ -87,9 +85,7 @@ def test_validate_backup_returns_verified_metadata_without_changing_current_data
 
 
 @pytest.mark.integration
-def test_validate_backup_rejects_wrong_password(
-    database_path: Path, backups_dir: Path
-) -> None:
+def test_validate_backup_rejects_wrong_password(database_path: Path, backups_dir: Path) -> None:
     service = build_sqlite_backup_service(database_path, backups_dir)
     created = service.create_backup(_PASSWORD)
 
