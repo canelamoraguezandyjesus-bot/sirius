@@ -28,7 +28,6 @@ from typing import cast
 
 from argon2.low_level import Type, hash_secret_raw
 from cryptography.fernet import Fernet, InvalidToken
-
 from sirius import __version__ as _APP_VERSION
 from sirius.ports.backup import (
     BackupError,
@@ -88,9 +87,7 @@ def _snapshot_database(database_path: Path, destination: Path) -> None:
 def _read_schema_version(snapshot_path: Path) -> str:
     connection = sqlite3.connect(str(snapshot_path))
     try:
-        row = connection.execute(
-            "SELECT version_num FROM alembic_version LIMIT 1"
-        ).fetchone()
+        row = connection.execute("SELECT version_num FROM alembic_version LIMIT 1").fetchone()
         return str(row[0]) if row is not None else "unknown"
     finally:
         connection.close()
@@ -173,9 +170,7 @@ def _build_envelope(ciphertext: bytes, params: _KdfParams) -> bytes:
 def _write_atomically(destination: Path, data: bytes) -> None:
     """Write ``data`` without ever exposing a partial destination file."""
     directory = destination.parent
-    fd, tmp_name = tempfile.mkstemp(
-        dir=directory, prefix=".sirius-backup-", suffix=".tmp"
-    )
+    fd, tmp_name = tempfile.mkstemp(dir=directory, prefix=".sirius-backup-", suffix=".tmp")
     try:
         with os.fdopen(fd, "wb") as tmp_file:
             tmp_file.write(data)
@@ -292,11 +287,7 @@ def _manifest_from_mapping(manifest: dict[str, object]) -> BackupManifest:
     if not isinstance(app_version, str) or _version_family(app_version) is None:
         msg = "El manifiesto contiene una versión de aplicación inválida."
         raise BackupValidationError(msg)
-    if (
-        not isinstance(schema_version, str)
-        or not schema_version
-        or schema_version == "unknown"
-    ):
+    if not isinstance(schema_version, str) or not schema_version or schema_version == "unknown":
         msg = "El manifiesto no contiene una versión de esquema válida."
         raise BackupValidationError(msg)
     if not isinstance(created_at_value, str):
@@ -392,13 +383,9 @@ class SQLiteBackupService:
         )
 
         _write_atomically(destination, envelope_bytes)
-        return BackupResult(
-            path=destination, manifest=manifest, size_bytes=len(envelope_bytes)
-        )
+        return BackupResult(path=destination, manifest=manifest, size_bytes=len(envelope_bytes))
 
-    def validate_backup(
-        self, backup_path: Path, password: str
-    ) -> BackupValidationResult:
+    def validate_backup(self, backup_path: Path, password: str) -> BackupValidationResult:
         if not password:
             msg = "La contraseña de la copia no puede estar vacía."
             raise BackupValidationError(msg)
@@ -422,9 +409,7 @@ class SQLiteBackupService:
             raise BackupValidationError(msg) from exc
 
         expected_schema_version = (
-            _read_schema_version(self._database_path)
-            if self._database_path.is_file()
-            else None
+            _read_schema_version(self._database_path) if self._database_path.is_file() else None
         )
         manifest = self._validate_bytes(
             envelope_bytes,
@@ -482,8 +467,6 @@ class SQLiteBackupService:
         return manifest
 
 
-def build_sqlite_backup_service(
-    database_path: Path, backups_dir: Path
-) -> SQLiteBackupService:
+def build_sqlite_backup_service(database_path: Path, backups_dir: Path) -> SQLiteBackupService:
     """Build a backup service bound to the given database and backup directory."""
     return SQLiteBackupService(database_path, backups_dir)
