@@ -28,6 +28,7 @@ from typing import cast
 
 from argon2.low_level import Type, hash_secret_raw
 from cryptography.fernet import Fernet, InvalidToken
+
 from sirius import __version__ as _APP_VERSION
 from sirius.ports.backup import (
     BackupError,
