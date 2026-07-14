@@ -6,7 +6,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-
 from sirius.application.validate_backup import ValidateBackupUseCase
 from sirius.ports.backup import (
     BackupManifest,
@@ -29,9 +28,7 @@ class _FakeBackupService:
     def create_backup(self, password: str) -> BackupResult:
         raise NotImplementedError
 
-    def validate_backup(
-        self, backup_path: Path, password: str
-    ) -> BackupValidationResult:
+    def validate_backup(self, backup_path: Path, password: str) -> BackupValidationResult:
         self.received.append((backup_path, password))
         if self._error is not None:
             raise self._error
