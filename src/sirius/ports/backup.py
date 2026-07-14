@@ -69,8 +69,6 @@ class BackupService(Protocol):
         """Create a validated, encrypted single-file backup and return it."""
         ...
 
-    def validate_backup(
-        self, backup_path: Path, password: str
-    ) -> BackupValidationResult:
+    def validate_backup(self, backup_path: Path, password: str) -> BackupValidationResult:
         """Validate password, format, hashes, version, schema, and SQLite integrity."""
         ...
