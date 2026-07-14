@@ -18,9 +18,7 @@ from sirius.ports.backup import (
 
 
 class _FakeBackupService:
-    def __init__(
-        self, result: BackupResult | None = None, error: BackupError | None = None
-    ):
+    def __init__(self, result: BackupResult | None = None, error: BackupError | None = None):
         self._result = result
         self._error = error
         self.received_passwords: list[str] = []
@@ -32,9 +30,7 @@ class _FakeBackupService:
         assert self._result is not None
         return self._result
 
-    def validate_backup(
-        self, backup_path: Path, password: str
-    ) -> BackupValidationResult:
+    def validate_backup(self, backup_path: Path, password: str) -> BackupValidationResult:
         raise NotImplementedError
 
 
