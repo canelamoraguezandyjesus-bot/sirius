@@ -24,7 +24,5 @@ class ValidateBackupUseCase:
     def __init__(self, backup_service: BackupService) -> None:
         self._backup_service = backup_service
 
-    def validate_backup(
-        self, backup_path: Path, password: str
-    ) -> BackupValidationResult:
+    def validate_backup(self, backup_path: Path, password: str) -> BackupValidationResult:
         return self._backup_service.validate_backup(backup_path, password)
