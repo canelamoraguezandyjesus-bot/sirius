@@ -6,7 +6,7 @@ Cada vertical debe producir una parte usable, probada y documentada antes de ini
 
 - V0 a V6B: completadas.
 - V7A: completada y endurecida posteriormente.
-- V7: en curso; permanecen las funciones de copia cifrada, validación y restauración segura.
+- V7: en curso; permanecen la restauración segura y la integración en interfaz.
 - V8: pendiente.
 
 Las etiquetas de estado de este archivo describen la implementación. No modifican el producto, los requisitos ni la arquitectura aprobados.
@@ -81,12 +81,22 @@ La implementación y las pruebas simuladas están completas. Permanece pendiente
 - límite de 100 MB antes de escribir el archivo final;
 - autovalidación (descifrado, manifiesto e integridad de SQLite) antes de
   anunciar éxito;
+- escritura atómica y nombres sin colisión;
 - pruebas automáticas correspondientes.
+
+### Completado dentro de V7 (validación de copia)
+
+- `BackupService.validate_backup()`: lectura sin modificar los datos actuales;
+- validación de contraseña, sobre cifrado, versión de formato, perfil Argon2id,
+  estructura interna, manifiesto, versión de aplicación y esquema;
+- comprobación de hash SHA-256 y `PRAGMA integrity_check` en directorio temporal;
+- rechazo temprano de archivos o contenido descomprimido superiores a 100 MB;
+- caso de uso de aplicación y pruebas unitarias/de integración.
 
 ### Pendiente dentro del alcance aprobado de V7
 
-- `validate_backup()` y `restore_backup()` (restauración segura);
-- integración de la copia cifrada en la interfaz;
+- `restore_backup()` con copia previa, reemplazo atómico y rollback automático;
+- integración de copia, validación y restauración en la interfaz;
 - pruebas automáticas correspondientes a la restauración;
 - prueba manual del Credential Manager en Windows real.
 
