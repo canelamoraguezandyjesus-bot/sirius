@@ -27,7 +27,8 @@ class _ModelsResource(Protocol):
 
 
 class _OpenAIClient(Protocol):
-    models: _ModelsResource
+    @property
+    def models(self) -> _ModelsResource: ...
 
 
 ClientFactory = Callable[[str], _OpenAIClient]
