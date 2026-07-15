@@ -7,54 +7,79 @@
 - Decisiones ATD-001 a ATD-012: aprobadas.
 - Implementación autorizada por verticales, sin ampliar el alcance aprobado.
 
-## Implementación completada
+## Implementación técnica disponible
 
 - V0: repositorio, entorno reproducible, PySide6, Ruff, mypy, pytest y CI en Windows.
 - V1: rutas locales y configuración no sensible.
 - V2: historial persistente con SQLite y Alembic.
-- V3: proyecto activo único y persistente.
-- V4: memoria manual, versionada y trazable.
-- V5: identidad versionada y constructor de contexto.
+- V3: infraestructura de proyecto activo único y persistente.
+- V4: infraestructura de memoria genérica versionada, archivo y eliminación.
+- V5: identidad versionada y constructor básico de contexto.
 - V6A: interfaz de conversación con proveedor simulado.
-- V6B: proveedor OpenAI real, streaming, cancelación, errores tipados, idempotencia y presupuesto persistente.
+- V6B: adaptador OpenAI, streaming, cancelación, errores tipados internos, idempotencia y presupuesto persistente.
 - V7A: Windows Credential Manager, configuración del proveedor, diagnóstico local y protección frente a configuraciones inválidas.
-- Endurecimiento de V7A: fallo seguro al consultar credenciales y rechazo de límites no positivos antes de persistirlos.
+- V7: creación, validación y restauración segura de copias cifradas, incluida su interfaz.
+
+Estas entradas describen infraestructura o hitos de implementación. No demuestran por sí solas que la capacidad completa de producto sea utilizable ni que sus pruebas de aceptación hayan pasado.
+
+En particular:
+
+- el proyecto sigue incompleto como capacidad observable de producto;
+- la memoria no contiene todavía toda la semántica aprobada de decisiones, eventos, sustitución, conflictos y origen consultable;
+- no existe todavía el panel de contexto;
+- el constructor de contexto no aplica aún toda la selección, precedencia y política de presupuesto aprobadas.
 
 ## Estado de verificación
 
 ### Confirmado automáticamente
 
 - GitHub Actions funciona en Windows.
-- Ruff format, Ruff lint, mypy estricto y pytest pasan para la rama principal y para pull requests verificadas.
-- Las pruebas de OpenAI usan clientes y streams simulados; no realizan llamadas de red reales.
+- Ruff format, Ruff lint, mypy estricto y pytest han pasado en las pull requests integradas examinadas.
+- Las pruebas normales usan proveedores y streams simulados y no realizan llamadas de red reales.
 - Las pruebas de `keyring` no leen ni escriben en el Credential Manager real.
+- La creación, validación y restauración de copias están cubiertas automáticamente e integradas en la interfaz.
 
 ### Pendiente de validación manual
 
-- Prueba end-to-end con una clave real de OpenAI.
-- Guardar y eliminar una clave desde la interfaz en Windows real y comprobar su presencia en el Credential Manager bajo el servicio `Sirius`.
-- Comprobación visual de la aplicación en el equipo objetivo.
-- Confirmar si la configuración de proveedor y clave debe recargarse sin reiniciar; actualmente se aplica al próximo arranque y no existe una decisión aprobada que obligue a la recarga en caliente.
+- Guardar, consultar mediante el sistema y eliminar un valor señuelo en Windows Credential Manager.
+- Construir y ejecutar el artefacto empaquetado en Windows 11.
+- Comprobar escalado, teclado, foco, rutas, cierre forzado y restauración empaquetada.
+- Ejecutar posteriormente la ventana autorizada con proveedor real.
+- Completar PA-E2E-01, PS-01 a PS-07 y las pruebas manuales de seguridad y privacidad.
 
-## Alcance activo restante
+## Estado de V7
 
-V7 todavía no está completa. Permanecen dentro del alcance ya aprobado:
+La implementación automatizada de V7 está terminada.
 
-- copia cifrada;
-- validación de integridad;
-- restauración segura;
-- pruebas automáticas y manuales correspondientes.
+Permanece pendiente únicamente la validación manual de Windows Credential Manager con un valor señuelo. Esta validación no autoriza todavía el uso de una clave API real.
 
-El nombre de una posible subdivisión posterior de V7 no se considera canónico hasta que se registre expresamente.
+## Estado de V8
 
-## Fase posterior
+V8 está iniciada solo en su subetapa correctiva y automatizada.
 
-V8 — Aceptación de Sirius 0.1:
+Puede incluir:
 
-- prueba completa durante varias sesiones;
-- proyecto pequeño real de principio a fin;
-- corrección de defectos;
-- paquete ejecutable de prueba.
+- reconciliación documental;
+- corrección de los defectos trazados D-01 a D-11 y A-01 a A-04;
+- pruebas con FakeLLM;
+- suite automática PA/SP;
+- rendimiento local;
+- empaquetado;
+- comprobaciones de Windows sin clave;
+- recopilación de evidencia.
+
+No se considera iniciada la aceptación formal con proveedor real.
+
+La ventana con proveedor real permanece bloqueada hasta que:
+
+- estén resueltos D-01, D-02, D-03, D-04, D-05, D-08, D-11 y A-01;
+- exista un ejecutable reproducible;
+- la suite automática y FakeLLM estén verdes sobre la integración exacta;
+- Credential Manager haya sido comprobado con un valor señuelo;
+- copia y restauración hayan sido verificadas en el ejecutable;
+- no exista una contradicción documental material.
+
+No se crea una fase canónica adicional denominada `Preparación V8`.
 
 ## Método de trabajo vigente
 
