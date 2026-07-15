@@ -4,12 +4,16 @@ Cada vertical debe producir una parte usable, probada y documentada antes de ini
 
 ## Estado global
 
-- V0 a V6B: completadas.
-- V7A: completada y endurecida posteriormente.
-- V7: en curso; la restauración segura y su integración en interfaz ya están implementadas; permanece la prueba manual del Credential Manager en Windows real.
-- V8: pendiente.
+- V0 a V6B: infraestructura de las verticales implementada.
+- V7A: implementada y endurecida.
+- V7: implementación automatizada terminada; permanece la validación manual de Windows Credential Manager con un valor señuelo.
+- V8: INICIADA únicamente en corrección documental, corrección funcional y automatización sin clave API.
+- Aceptación manual con proveedor real: BLOQUEADA.
+- Sirius 0.1: NO ACEPTADO y NO TERMINADO.
 
-Las etiquetas de estado de este archivo describen la implementación. No modifican el producto, los requisitos ni la arquitectura aprobados.
+Las etiquetas de este archivo describen hitos de implementación. No constituyen evidencia suficiente de cumplimiento funcional ni sustituyen las pruebas PA, PS, SP o PA-E2E-01.
+
+Una vertical puede tener su infraestructura implementada y mantener defectos de producto abiertos que deban corregirse dentro de V8.
 
 ## V0 — Repositorio y humo — COMPLETADA
 
@@ -32,18 +36,49 @@ Las etiquetas de estado de este archivo describen la implementación. No modific
 - persistencia transaccional;
 - recuperación entre sesiones.
 
-## V3 — Proyecto activo — COMPLETADA
+## V3 — Infraestructura de proyecto activo — IMPLEMENTADA; CAPACIDAD DE PRODUCTO INCOMPLETA
 
-- creación del único proyecto activo;
-- objetivo, estado y siguiente paso;
-- recuperación al iniciar.
+Implementado:
 
-## V4 — Memoria manual y versionada — COMPLETADA
+- persistencia de un único proyecto activo;
+- campos básicos de nombre, objetivo, estado y siguiente paso;
+- recuperación del registro activo al iniciar;
+- restricción estructural de un solo proyecto activo.
 
-- conocimiento estructurado;
-- origen obligatorio;
-- corrección, sustitución, archivo y eliminación;
-- consulta trazable.
+Pendiente dentro de V8:
+
+- creación utilizable desde casos de uso e interfaz;
+- bloqueos;
+- decisiones relacionadas;
+- completar y archivar conservando historial;
+- resumen observable al retomar;
+- pruebas PA-006 a PA-009 y la parte correspondiente de PA-E2E-01.
+
+Defectos relacionados: D-02 y D-04.
+
+## V4 — Infraestructura de memoria versionada — IMPLEMENTADA; CAPACIDAD DE PRODUCTO INCOMPLETA
+
+Implementado:
+
+- recuerdo genérico versionado;
+- origen obligatorio como valor no vacío;
+- corrección mediante nueva revisión;
+- archivo;
+- redacción del contenido estructurado al eliminar.
+
+Pendiente dentro de V8:
+
+- evento o mensaje de origen consultable;
+- entidad y estados de decisión;
+- propuesta, aprobación y sustitución;
+- precedencia entre decisión y recuerdo;
+- detección y resolución explícita de conflictos;
+- elección de redactar también el mensaje fuente;
+- indexación y búsqueda pertinente;
+- casos de uso e interfaz;
+- pruebas PA-010 a PA-016 y la parte correspondiente de PA-E2E-01.
+
+Defectos relacionados: D-03, D-04 y D-11.
 
 ## V5 — Contexto y proveedor simulado — COMPLETADA
 
@@ -61,7 +96,7 @@ Las etiquetas de estado de este archivo describen la implementación. No modific
 
 La implementación y las pruebas simuladas están completas. Permanece pendiente una prueba manual end-to-end con una clave y una cuenta reales de OpenAI.
 
-## V7 — Seguridad, copias y recuperación — EN CURSO
+## V7 — Seguridad, copias y recuperación — IMPLEMENTACIÓN AUTOMATIZADA TERMINADA
 
 ### Completado en V7A
 
@@ -218,16 +253,92 @@ La implementación y las pruebas simuladas están completas. Permanece pendiente
 
 ### Pendiente dentro del alcance aprobado de V7
 
-- prueba manual del Credential Manager en Windows real.
+- prueba manual del Credential Manager en Windows real con un valor señuelo.
 
-No se asigna todavía un nombre canónico a la siguiente subdivisión de V7.
+## Correspondencia con las verticales de la Arquitectura aprobada
 
-## V8 — Aceptación 0.1 — PENDIENTE
+La numeración de este plan es una descomposición operativa posterior. No sustituye ni modifica la Arquitectura Técnica aprobada.
 
-- prueba completa durante varias sesiones;
-- proyecto pequeño real de principio a fin;
-- corrección de defectos;
-- paquete ejecutable de prueba.
+Correspondencia principal:
+
+| Arquitectura aprobada | Plan operativo actual |
+|---|---|
+| V0 · Bootstrap | V0 y parte de V1 |
+| V1 · Conversación falsa | V5 y V6A |
+| V2 · Persistencia | V2 |
+| V3 · Proveedor real | V6B y V7A |
+| V4 · Proyecto | V3 y correcciones de V8 |
+| V5 · Memoria | V4 y correcciones de V8 |
+| V6 · Portabilidad | V7 y exportación pendiente en V8 |
+| V7 · Cierre | V8 |
+
+La correspondencia describe contenido, no equivalencia de estado. Una etiqueta `COMPLETADA` del plan no demuestra la aceptación de la vertical arquitectónica completa.
+
+## V8 — Corrección, aceptación y cierre de Sirius 0.1 — INICIADA PARCIALMENTE
+
+V8 no constituye una nueva versión de producto. Ejecuta las correcciones, pruebas, empaquetado y aceptación ya previstos para Sirius 0.1.
+
+### V8.1 — Corrección documental y automatizada — ACTIVA
+
+Permitido:
+
+- reconciliar documentación;
+- construir y mantener la matriz requisito–defecto–prueba;
+- corregir D-01 a D-11 y A-01 a A-04 sin ampliar el alcance;
+- ejecutar pruebas con FakeLLM;
+- completar pruebas automáticas PA/SP;
+- medir rendimiento local;
+- preparar empaquetado;
+- recopilar evidencia automática.
+
+Prohibido en esta subetapa:
+
+- usar u obtener una clave API real;
+- declarar pruebas manuales como superadas;
+- iniciar PA-E2E-01 formal;
+- cambiar Producto, Arquitectura o ATD;
+- introducir capacidades fuera de Sirius 0.1.
+
+### V8.2 — Windows sin clave — BLOQUEADA HASTA INTEGRACIÓN AUTOMÁTICA VERDE
+
+Incluye:
+
+- Credential Manager con valor señuelo;
+- ejecutable Nuitka;
+- rutas y funcionamiento sin administrador;
+- escalado, teclado y foco;
+- cierre forzado;
+- restauración empaquetada;
+- rendimiento local;
+- inspección de archivos, logs, copias y exportaciones;
+- monitorización de tráfico sin proveedor real.
+
+### V8.3 — Ventana con proveedor real — BLOQUEADA
+
+No puede comenzar hasta que:
+
+- D-01, D-02, D-03, D-04, D-05, D-08, D-11 y A-01 estén cerrados;
+- D-06, D-07, D-09 y D-10 estén corregidos o exista una resolución admisible según el Plan de Pruebas;
+- A-02 y A-03 hayan sido verificados;
+- la suite automática completa esté verde;
+- exista un ejecutable reproducible;
+- Credential Manager haya sido comprobado con un valor señuelo;
+- no existan defectos BLOQUEANTES o ALTOS conocidos;
+- el usuario autorice expresamente obtener y utilizar una clave temporal.
+
+### V8.4 — PA-E2E-01 y cierre — BLOQUEADA
+
+Incluye:
+
+- proyecto pequeño real durante varias sesiones;
+- PS-01 a PS-07;
+- PA-E2E-01;
+- regresión completa;
+- consolidación de evidencia;
+- reconciliación documental final;
+- aprobación explícita del usuario.
+
+No se crea una fase canónica nueva denominada `Preparación V8`.
 
 ## Reglas para continuar
 
