@@ -6,7 +6,7 @@ Cada vertical debe producir una parte usable, probada y documentada antes de ini
 
 - V0 a V6B: completadas.
 - V7A: completada y endurecida posteriormente.
-- V7: en curso; la restauración segura ya está implementada; permanece la integración en interfaz.
+- V7: en curso; la restauración segura y su integración en interfaz ya están implementadas; permanece la prueba manual del Credential Manager en Windows real.
 - V8: pendiente.
 
 Las etiquetas de estado de este archivo describen la implementación. No modifican el producto, los requisitos ni la arquitectura aprobados.
@@ -148,9 +148,76 @@ La implementación y las pruebas simuladas están completas. Permanece pendiente
   reemplazo ya exitoso, una base sin tabla `alembic_version`, y la apertura
   de validación en modo solo lectura que nunca crea una base inexistente.
 
+### Completado dentro de V7 (integración en interfaz)
+
+- Sección "Copia de seguridad y restauración" añadida a la pestaña
+  "Configuración" existente (no se creó ninguna pantalla nueva), usando
+  exclusivamente `CreateBackupUseCase`, `ValidateBackupUseCase` y
+  `RestoreBackupUseCase` inyectados desde `composition_root`; la presentación
+  no importa el adaptador SQLite ni accede a la base de datos directamente;
+- **Crear copia**: contraseña y repetición en campos ocultos, rechazo de
+  contraseña vacía o distinta antes de llamar al caso de uso, ejecución en
+  `QThreadPool` (`CreateBackupWorker`), controles desactivados con estado
+  visible mientras trabaja, éxito con la ruta exacta y error con mensaje
+  seguro; la contraseña no se persiste ni se registra, se elimina de
+  inmediato de los campos tras leerla, y solo permanece transitoriamente en
+  memoria mientras dura la operación de creación de la copia;
+- **Validar copia**: selector de archivo limitado a `*.siriusbackup`,
+  contraseña oculta, ejecución en `QThreadPool` (`ValidateBackupWorker`),
+  resultado comprensible (fecha, versión de aplicación, esquema, tamaño) o
+  mensaje de error seguro sin trazas ni excepciones internas;
+- **Restaurar copia**: valida primero (reutilizando `ValidateBackupWorker`) y
+  muestra el resumen; solo entonces pide una confirmación destructiva
+  explícita (seam `confirm_restore`, con `QMessageBox.question` bloqueado en
+  pruebas) que indica que los datos actuales serán sustituidos, que se
+  creará una copia de seguridad previa, que una copia antigua puede
+  reintroducir información eliminada, y que la clave de API no forma parte
+  de la copia ni se restaura; solo tras confirmar se llama a
+  `RestoreBackupUseCase.restore_backup(..., confirmed=True)` exactamente una
+  vez, en `QThreadPool` (`RestoreBackupWorker`); tras el éxito se muestra la
+  ruta de la copia de seguridad previa;
+- **Ciclo de vida real de SQLite/SQLAlchemy inspeccionado y verificado
+  empíricamente**: cada repositorio (`conversation`, `identity`, `project`,
+  `memory`, `llm_usage`) mantiene un `Engine` con `QueuePool`, que conserva
+  conexiones agrupadas abiertas mientras dure la ventana. Se comprobó
+  directamente que `os.replace()` falla con `PermissionError` en Windows si
+  una conexión sqlite3 al mismo archivo sigue abierta. Cada repositorio
+  añadió un método `close()` mínimo (`Engine.dispose()`); `composition_root`
+  expone `close_database_connections()` (no es un caso de uso, es el
+  mecanismo mínimo de ciclo de vida) y `MainWindow` lo invoca justo antes de
+  `RestoreBackupUseCase`, nunca después: así el reemplazo atómico no queda
+  bloqueado por las conexiones agrupadas de la propia ventana. Verificado de
+  extremo a extremo con los casos de uso reales;
+- tras una restauración exitosa, Sirius se cierra de forma controlada
+  (mismo patrón que la cancelación diferida ya existente para el envío de
+  mensajes) y pide al usuario que lo abra de nuevo; no se introdujo ningún
+  proceso auxiliar ni relanzamiento automático;
+- se evitan operaciones simultáneas: copia/validación/restauración se
+  excluyen mutuamente entre sí y con el envío de mensajes (en ambos
+  sentidos), reutilizando el patrón de deshabilitar/rehabilitar controles y
+  diferir el cierre ya usado para el envío de mensajes;
+- corregido un fallo real de PySide6/`QThreadPool` encontrado durante las
+  pruebas: sin una referencia fuerte en Python al `QRunnable`, un worker que
+  termina muy rápido puede recolectarse por el recolector de basura antes de
+  que su señal en cola entre hilos se entregue, perdiendo el resultado en
+  silencio; `MainWindow` retiene ahora una referencia tanto al worker de
+  conversación (`SendMessageWorker`, en `_active_send_worker`) como al worker
+  de copia en curso (`_active_backup_worker`) hasta que su señal se procesa;
+  ambas referencias se mantienen separadas y cada una se limpia únicamente
+  tras procesar el `finished`/`crashed` o `succeeded`/`failed` del worker que
+  le corresponde;
+- pruebas de GUI (`pytest-qt`) para cada escenario requerido: contraseña
+  vacía/distinta, controles desactivados durante la operación, éxito y error
+  de creación, validación válida e inválida, restauración cancelada en la
+  confirmación, restauración confirmada que llama exactamente una vez con
+  `confirmed=True` y en el orden correcto (cierre de conexiones antes que la
+  restauración), ningún fallo (incluida una excepción inesperada) modifica
+  la GUI fuera del hilo principal, composición que entrega los casos de uso
+  correctos, y flujo real de extremo a extremo (crear → validar → restaurar)
+  que cierra la ventana tras el éxito.
+
 ### Pendiente dentro del alcance aprobado de V7
 
-- integración de copia, validación y restauración en la interfaz;
 - prueba manual del Credential Manager en Windows real.
 
 No se asigna todavía un nombre canónico a la siguiente subdivisión de V7.

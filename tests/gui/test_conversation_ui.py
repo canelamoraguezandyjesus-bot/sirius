@@ -50,11 +50,17 @@ def _bootstrapped_database(database_path: Path) -> Path:
 
 
 def _build_window(database_path: Path) -> MainWindow:
-    dependencies = build_conversation_dependencies(database_path, secret_store=FakeSecretStore())
+    dependencies = build_conversation_dependencies(
+        database_path, database_path.parent / "backups", secret_store=FakeSecretStore()
+    )
     return MainWindow(
         send_message_use_case=dependencies.send_message_use_case,
         get_history_use_case=dependencies.get_history_use_case,
         api_key_settings_use_case=dependencies.api_key_settings_use_case,
+        create_backup_use_case=dependencies.create_backup_use_case,
+        validate_backup_use_case=dependencies.validate_backup_use_case,
+        restore_backup_use_case=dependencies.restore_backup_use_case,
+        close_database_connections=dependencies.close_database_connections,
         show_warning=lambda title, text: None,
         show_information=lambda title, text: None,
     )
@@ -505,6 +511,44 @@ def test_closing_while_streaming_requests_cancellation_and_closes_once_done(
     conversation = conversation_repository.get_or_create_main_conversation()
     persisted = conversation_repository.list_messages(conversation.id)
     assert [m.content for m in persisted] == ["hola", "parcial"]
+
+
+@pytest.mark.gui
+def test_send_worker_reference_is_retained_while_blocked_and_released_on_completion(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Mirrors the QThreadPool GC pitfall already guarded against for backup
+    workers: without a strong Python-level reference to the in-flight
+    SendMessageWorker, a fast-finishing QRunnable can be garbage-collected
+    before its queued cross-thread signal is delivered, silently losing the
+    result.
+    """
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    provider = _BlockingUntilReleasedProvider()
+    _swap_send_message_use_case(window, database_path, provider)
+
+    assert window._active_send_worker is None
+
+    window.message_input.setText("hola")
+    window.send_button.click()
+    qtbot.waitUntil(lambda: window.message_list.count() == 2, timeout=5000)
+
+    # The send is genuinely blocked mid-stream: the reference must still be held.
+    assert window._active_send_worker is not None
+
+    provider.release()
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+
+    assert window._active_send_worker is None
+    assert window.message_list.item(1).text() == "Sirius: parcial completo"
+
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    persisted = conversation_repository.list_messages(conversation.id)
+    assert [m.content for m in persisted] == ["hola", "parcial completo"]
+    assert [m.status for m in persisted] == [MessageStatus.COMPLETED, MessageStatus.COMPLETED]
 
 
 @pytest.mark.gui
