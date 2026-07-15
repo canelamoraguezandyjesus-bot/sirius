@@ -22,6 +22,7 @@ import openai
 from sirius.adapters.backup.sqlite_backup_service import build_sqlite_backup_service
 from sirius.adapters.llm.budget import BudgetPolicy, BudgetTracker
 from sirius.adapters.llm.fake import FakeLLMProvider
+from sirius.adapters.llm.openai_credential_validator import OpenAICredentialValidator
 from sirius.adapters.llm.openai_responses import OpenAIResponsesProvider
 from sirius.adapters.llm.unconfigured import UnconfiguredLLMProvider
 from sirius.adapters.persistence.sqlite_conversation_repository import (
@@ -43,6 +44,7 @@ from sirius.application.create_backup import CreateBackupUseCase
 from sirius.application.get_conversation_history import GetConversationHistoryUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.send_message import SendMessageUseCase
+from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
 from sirius.config.llm_provider_settings import (
     LLMProviderConfigurationError,
@@ -63,10 +65,9 @@ _logger = get_logger(__name__)
 class ConversationDependencies:
     """Everything ``MainWindow`` needs to drive its tabs, already wired.
 
-    ``api_key_settings_use_case`` is the *only* secret-related dependency
-    ``MainWindow`` ever receives: it can check whether a key exists, save
-    one, or delete one, but never read one back. The raw ``SecretStore`` (and
-    the actual key value) stay inside this module.
+    Secret-related presentation access is intentionally narrow. The window
+    can inspect existence, delete a saved key, or invoke validation-before-save;
+    it never receives the raw ``SecretStore`` and can never read a key back.
 
     ``close_database_connections`` is not a use case: it is the minimal
     SQLAlchemy-lifecycle mechanism a safe backup restoration needs. Every
@@ -80,6 +81,7 @@ class ConversationDependencies:
     send_message_use_case: SendMessageUseCase
     get_history_use_case: GetConversationHistoryUseCase
     api_key_settings_use_case: ApiKeySettingsUseCase
+    validate_and_save_api_key_use_case: ValidateAndSaveApiKeyUseCase
     create_backup_use_case: CreateBackupUseCase
     validate_backup_use_case: ValidateBackupUseCase
     restore_backup_use_case: RestoreBackupUseCase
@@ -194,6 +196,9 @@ def build_conversation_dependencies(
         send_message_use_case=send_message_use_case,
         get_history_use_case=get_history_use_case,
         api_key_settings_use_case=ApiKeySettingsUseCase(secret_store),
+        validate_and_save_api_key_use_case=ValidateAndSaveApiKeyUseCase(
+            OpenAICredentialValidator(), secret_store
+        ),
         create_backup_use_case=CreateBackupUseCase(backup_service),
         validate_backup_use_case=ValidateBackupUseCase(backup_service),
         restore_backup_use_case=RestoreBackupUseCase(backup_service),
