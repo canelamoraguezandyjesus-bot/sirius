@@ -5,13 +5,15 @@ Repositorio privado del compañero personal de creación e ingeniería Sirius.
 ## Estado actual
 
 - Producto Sirius 0.1: aprobado.
-- Arquitectura técnica 0.1 y decisiones ATD-001 a ATD-012: aprobadas.
-- Implementación completada hasta V7A, incluido su endurecimiento posterior.
-- Alcance activo restante de V7: copia cifrada, validación de integridad y restauración segura.
-- V8 permanece pendiente para la aceptación completa de Sirius 0.1.
+- Arquitectura Técnica 0.1 y decisiones ATD-001 a ATD-012: aprobadas.
+- V7 dispone de creación, validación y restauración de copias cifradas, incluida su integración en la interfaz.
+- La única validación pendiente de V7 es la comprobación manual de Windows Credential Manager en Windows real.
+- V8 está iniciada únicamente en su subetapa correctiva y automatizada, sin clave API y sin aceptación manual formal.
+- La ventana de aceptación con proveedor real permanece bloqueada hasta superar las puertas documentadas en `docs/implementation/PLAN.md`.
+- Sirius 0.1 todavía no está aceptado ni terminado.
 - El alcance no debe ampliarse sin una decisión registrada y aprobada.
 
-La arquitectura modular ya existe y está parcialmente implementada. No debe rediseñarse desde cero salvo que aparezca una contradicción o un riesgo concreto.
+La arquitectura modular ya existe y está parcialmente implementada. No debe rediseñarse desde cero salvo que aparezca una contradicción material o un riesgo concreto.
 
 ## Fuentes de verdad
 
