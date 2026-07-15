@@ -51,7 +51,8 @@ def test_validation_uses_the_candidate_key_and_configured_model() -> None:
     [("", "gpt-model"), ("   ", "gpt-model"), ("sk-candidate", "")],
 )
 def test_blank_configuration_is_rejected_before_building_a_client(
-    credential: str, model: str
+    credential: str,
+    model: str,
 ) -> None:
     factory_calls: list[str] = []
 
