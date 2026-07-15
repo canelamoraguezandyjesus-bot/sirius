@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from sirius.adapters.persistence.database import (
@@ -72,8 +72,13 @@ def _load_memory(session: Session, model: MemoryModel) -> Memory:
 class SqliteMemoryRepository:
     """Memory repository backed by a local SQLite database."""
 
-    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+    def __init__(self, session_factory: sessionmaker[Session], engine: Engine) -> None:
         self._session_factory = session_factory
+        self._engine = engine
+
+    def close(self) -> None:
+        """Release every pooled connection this repository's engine holds."""
+        self._engine.dispose()
 
     def create_memory(self, content: str, origin: str) -> Memory:
         ensure_valid_origin(origin)
@@ -201,4 +206,4 @@ def build_sqlite_memory_repository(database_path: Path) -> SqliteMemoryRepositor
     """Build a repository backed by a SQLite file at the given path."""
     engine = build_engine(database_path)
     session_factory = build_session_factory(engine)
-    return SqliteMemoryRepository(session_factory)
+    return SqliteMemoryRepository(session_factory, engine)

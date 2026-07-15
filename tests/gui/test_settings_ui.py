@@ -69,11 +69,17 @@ def _build_window(
     show_warning: Callable[[str, str], None] | None = None,
     show_information: Callable[[str, str], None] | None = None,
 ) -> MainWindow:
-    dependencies = build_conversation_dependencies(database_path, secret_store=secret_store)
+    dependencies = build_conversation_dependencies(
+        database_path, database_path.parent / "backups", secret_store=secret_store
+    )
     return MainWindow(
         send_message_use_case=dependencies.send_message_use_case,
         get_history_use_case=dependencies.get_history_use_case,
         api_key_settings_use_case=dependencies.api_key_settings_use_case,
+        create_backup_use_case=dependencies.create_backup_use_case,
+        validate_backup_use_case=dependencies.validate_backup_use_case,
+        restore_backup_use_case=dependencies.restore_backup_use_case,
+        close_database_connections=dependencies.close_database_connections,
         show_warning=show_warning or (lambda title, text: None),
         show_information=show_information or (lambda title, text: None),
     )

@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 
 import pytest
 from sqlalchemy import inspect, select
@@ -13,6 +14,14 @@ from sirius.adapters.persistence.models import (
     MemoryRevisionModel,
     ProjectModel,
 )
+from sirius.adapters.persistence.sqlite_conversation_repository import (
+    SqliteConversationRepository,
+)
+from sirius.adapters.persistence.sqlite_identity_repository import (
+    SqliteIdentityRepository,
+    build_sqlite_identity_repository,
+)
+from sirius.adapters.persistence.sqlite_project_repository import SqliteProjectRepository
 from sirius.domain.identity import INITIAL_IDENTITY_NAME
 from sirius.infrastructure.paths import resolve_paths
 
@@ -105,6 +114,102 @@ def test_initialize_persistence_creates_the_canonical_identity() -> None:
     assert len(version_rows) == 1
     assert version_rows[0].name == INITIAL_IDENTITY_NAME
     assert version_rows[0].is_current is True
+
+
+def _tracking_close(repository_class: Any, closed: list[str], label: str) -> Any:
+    """Build a class-level ``close`` replacement that records ``label``
+    before delegating to the repository's real ``close()``.
+
+    Patched onto the class (via ``monkeypatch.setattr(cls, "close", ...)``)
+    rather than assigned onto an instance, since mypy (correctly) forbids
+    reassigning a bound method on a typed instance.
+    """
+    original_close = repository_class.close
+
+    def _close(self: Any) -> None:
+        closed.append(label)
+        original_close(self)
+
+    return _close
+
+
+@pytest.mark.integration
+def test_initialize_persistence_closes_the_temporary_repositories_deterministically(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each repository built for startup is closed right after its own use,
+    not left for the garbage collector, and in the order it was used.
+    """
+    closed: list[str] = []
+    monkeypatch.setattr(
+        SqliteConversationRepository,
+        "close",
+        _tracking_close(SqliteConversationRepository, closed, "conversation"),
+    )
+    monkeypatch.setattr(
+        SqliteProjectRepository,
+        "close",
+        _tracking_close(SqliteProjectRepository, closed, "project"),
+    )
+    monkeypatch.setattr(
+        SqliteIdentityRepository,
+        "close",
+        _tracking_close(SqliteIdentityRepository, closed, "identity"),
+    )
+
+    paths = resolve_paths()
+    initialize_persistence(paths)
+
+    assert closed == ["conversation", "project", "identity"]
+
+
+@pytest.mark.integration
+def test_initialize_persistence_closes_already_built_repositories_even_if_a_later_step_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failure partway through startup must not leak the connections of
+    whichever repositories were already built, and must never even attempt
+    to build a repository whose turn never came.
+    """
+    import sirius.adapters.persistence.bootstrap as bootstrap_module
+
+    closed: list[str] = []
+    identity_builder_called = False
+
+    def _raise_get_or_create_active_project(self: Any) -> None:
+        msg = "simulated failure while creating the active project"
+        raise RuntimeError(msg)
+
+    def _tracking_identity_builder(database_path: Path) -> SqliteIdentityRepository:
+        nonlocal identity_builder_called
+        identity_builder_called = True
+        return build_sqlite_identity_repository(database_path)
+
+    monkeypatch.setattr(
+        SqliteConversationRepository,
+        "close",
+        _tracking_close(SqliteConversationRepository, closed, "conversation"),
+    )
+    monkeypatch.setattr(
+        SqliteProjectRepository,
+        "close",
+        _tracking_close(SqliteProjectRepository, closed, "project"),
+    )
+    monkeypatch.setattr(
+        SqliteProjectRepository,
+        "get_or_create_active_project",
+        _raise_get_or_create_active_project,
+    )
+    monkeypatch.setattr(
+        bootstrap_module, "build_sqlite_identity_repository", _tracking_identity_builder
+    )
+
+    paths = resolve_paths()
+    with pytest.raises(RuntimeError, match="simulated failure"):
+        initialize_persistence(paths)
+
+    assert closed == ["conversation", "project"]
+    assert identity_builder_called is False
 
 
 @pytest.mark.integration

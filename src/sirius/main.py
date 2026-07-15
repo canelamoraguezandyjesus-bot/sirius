@@ -21,7 +21,7 @@ def main() -> int:
     logger.info("Sirius iniciando")
 
     initialize_persistence(paths)
-    dependencies = build_conversation_dependencies(paths.data_dir / "sirius.db")
+    dependencies = build_conversation_dependencies(paths.data_dir / "sirius.db", paths.backups_dir)
 
     app = QApplication.instance()
     owns_app = app is None
@@ -32,6 +32,10 @@ def main() -> int:
         send_message_use_case=dependencies.send_message_use_case,
         get_history_use_case=dependencies.get_history_use_case,
         api_key_settings_use_case=dependencies.api_key_settings_use_case,
+        create_backup_use_case=dependencies.create_backup_use_case,
+        validate_backup_use_case=dependencies.validate_backup_use_case,
+        restore_backup_use_case=dependencies.restore_backup_use_case,
+        close_database_connections=dependencies.close_database_connections,
     )
     window.show()
     logger.info("Sirius iniciado")
