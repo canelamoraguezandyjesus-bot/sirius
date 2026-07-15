@@ -38,7 +38,10 @@ class CredentialValidationWorker(QRunnable):
         try:
             self._use_case.validate_and_save(self._credential, self._model)
         except (CredentialValidationError, ValidateAndSaveApiKeyError) as exc:
-            _logger.warning("Validación o guardado de credencial rechazado (%s)", type(exc).__name__)
+            _logger.warning(
+                "Validación o guardado de credencial rechazado (%s)",
+                type(exc).__name__,
+            )
             self.signals.failed.emit(str(exc))
         except Exception as exc:
             _logger.error(
