@@ -9,7 +9,7 @@ network access.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Protocol
+from typing import Protocol, cast
 
 import openai
 
@@ -34,7 +34,10 @@ ClientFactory = Callable[[str], _OpenAIClient]
 
 
 def _default_client_factory(credential: str) -> _OpenAIClient:
-    return openai.OpenAI(api_key=credential, max_retries=0, timeout=10.0)
+    return cast(
+        _OpenAIClient,
+        openai.OpenAI(api_key=credential, max_retries=0, timeout=10.0),
+    )
 
 
 def _classify_exception(exc: Exception) -> CredentialValidationKind:
