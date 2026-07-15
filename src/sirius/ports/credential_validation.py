@@ -28,9 +28,7 @@ _SAFE_MESSAGES: dict[CredentialValidationKind, str] = {
     CredentialValidationKind.RATE_LIMITED: (
         "El proveedor está limitando temporalmente las solicitudes."
     ),
-    CredentialValidationKind.CONFIGURATION: (
-        "La clave y el modelo deben estar configurados."
-    ),
+    CredentialValidationKind.CONFIGURATION: ("La clave y el modelo deben estar configurados."),
     CredentialValidationKind.UNKNOWN: "No se pudo validar la clave.",
 }
 
