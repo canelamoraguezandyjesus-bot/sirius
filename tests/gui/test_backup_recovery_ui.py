@@ -11,6 +11,8 @@ dispose-before-replace fix for Windows file locks — actually works together.
 
 from __future__ import annotations
 
+import gc
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -51,12 +53,65 @@ def _bootstrapped_database(database_path: Path) -> Path:
     """Mimic initialize_persistence(): real Alembic migrations (backup/restore
     reads ``alembic_version``, unlike the other GUI test suites' schema-only
     bootstrap) plus the three canonical singletons.
+
+    Each repository is temporary and closed immediately after use, exactly
+    like ``initialize_persistence()`` itself: left unclosed, its pooled
+    connection is only reclaimed whenever the cyclic garbage collector
+    happens to run, which is not guaranteed to happen before the real,
+    same-process restore later replaces this exact database file — on
+    Windows that stray open handle makes the atomic replace fail with
+    ``PermissionError: [WinError 5] Acceso denegado``.
     """
     upgrade_to_head(database_path)
-    build_sqlite_conversation_repository(database_path).get_or_create_main_conversation()
-    build_sqlite_project_repository(database_path).get_or_create_active_project()
-    build_sqlite_identity_repository(database_path).get_or_create_current_identity()
+
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    try:
+        conversation_repository.get_or_create_main_conversation()
+    finally:
+        conversation_repository.close()
+
+    project_repository = build_sqlite_project_repository(database_path)
+    try:
+        project_repository.get_or_create_active_project()
+    finally:
+        project_repository.close()
+
+    identity_repository = build_sqlite_identity_repository(database_path)
+    try:
+        identity_repository.get_or_create_current_identity()
+    finally:
+        identity_repository.close()
+
     return database_path
+
+
+def test_bootstrapped_database_helper_leaves_no_connection_blocking_a_file_replace(
+    tmp_path: Path,
+) -> None:
+    """Regression test for a real, reproducible flake: with a repository left
+    for the garbage collector to close (instead of closed deterministically),
+    an unrelated same-process ``os.replace()`` of this exact database file —
+    such as the one a real restore performs — failed with
+    ``PermissionError: [WinError 5] Acceso denegado`` on Windows, because the
+    stray pooled connection is only reclaimed whenever the cyclic garbage
+    collector happens to run next, which depends on unrelated allocations
+    elsewhere in the same pytest process. ``gc.disable()`` removes that
+    process-wide luck factor so this test fails deterministically without the
+    fix instead of only intermittently. Exercises the same file-replace
+    Windows uses to enforce open-handle exclusion that a real restore relies
+    on, without any Qt/thread timing.
+    """
+    gc_was_enabled = gc.isenabled()
+    gc.disable()
+    try:
+        database_path = _bootstrapped_database(tmp_path / "sirius.db")
+        replacement = tmp_path / "sirius.db.replacement"
+        replacement.write_bytes(database_path.read_bytes())
+
+        os.replace(replacement, database_path)
+    finally:
+        if gc_was_enabled:
+            gc.enable()
 
 
 def _fake_manifest(**overrides: Any) -> BackupManifest:
