@@ -13,9 +13,12 @@ La aprobación del documento fija alcance, reglas, arquitectura conceptual, fase
 
 ## Fuentes de verdad
 
-1. `SIRIUS_DOCUMENTO_RECTOR_CABEZA_ROBOTICA_HEAD-R1_v1.0_APROBADO.docx`
+1. `RECTOR.md`
 2. `DECISIONS.md`
 3. `STATUS.md`
 4. `AUDIT.md`
+5. `ARTIFACTS.md`
+
+`RECTOR.md` es la representación GitHub-native del documento aprobado. `ARTIFACTS.md` conserva la identificación y las huellas SHA-256 del DOCX formateado y de la referencia visual maestra.
 
 Cuando esta línea se reactive, deberá crearse y mantenerse `HEAD_STATUS.md` como estado operativo diario antes de iniciar cualquier actividad física.
