@@ -299,6 +299,30 @@ Prohibido en esta subetapa:
 - cambiar Producto, Arquitectura o ATD;
 - introducir capacidades fuera de Sirius 0.1.
 
+#### Correcciones ya fusionadas dentro de V8.1
+
+- Validación de credencial antes de guardarla (RF-002): `ValidateAndSaveApiKeyUseCase`
+  valida la clave contra el proveedor (`OpenAICredentialValidator`) antes de persistirla,
+  e integra el flujo en la interfaz mediante `ValidatedMainWindow` (subclase de
+  `MainWindow` que sustituye a `_save_api_key`, ejecuta la validación en `QThreadPool`
+  vía `CredentialValidationWorker` y nunca accede al almacén de secretos ni al proveedor
+  directamente desde la presentación). Cubierto con pruebas unitarias y de GUI
+  (`tests/unit/test_validate_and_save_api_key.py`, `tests/unit/test_openai_credential_validator.py`,
+  `tests/gui/test_validated_main_window.py`), siempre contra un validador simulado.
+  RF-002 está implementado y cubierto automáticamente. D-01 permanece abierto hasta
+  demostrar el resto de sus condiciones: falta RF-001 (pantalla de primera
+  configuración con política de datos) y D-10 (ruta de datos y activación clara)
+  permanece abierto sin ningún cambio; PA-001 y PA-002 formales exigen una
+  credencial real y no se declaran superadas — siguen bloqueadas hasta V8.3.
+- Corrección de una fuga de conexión SQLite en el helper de test de restauración
+  (`tests/gui/test_backup_recovery_ui.py::_bootstrapped_database`), que dejaba
+  repositorios temporales sin cerrar y causaba un fallo intermitente y reproducible
+  del reemplazo atómico de archivo en Windows (`PermissionError`) durante la prueba
+  de extremo a extremo de restauración. Es una corrección de higiene de prueba, no
+  un cambio de comportamiento de producto: el helper ahora cierra cada repositorio
+  en un `finally`, igual que `initialize_persistence()` ya hacía. Incluye una prueba
+  de regresión determinista.
+
 ### V8.2 — Windows sin clave — BLOQUEADA HASTA INTEGRACIÓN AUTOMÁTICA VERDE
 
 Incluye:

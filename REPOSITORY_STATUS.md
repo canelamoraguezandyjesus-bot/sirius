@@ -19,6 +19,11 @@
 - V6B: adaptador OpenAI, streaming, cancelación, errores tipados internos, idempotencia y presupuesto persistente.
 - V7A: Windows Credential Manager, configuración del proveedor, diagnóstico local y protección frente a configuraciones inválidas.
 - V7: creación, validación y restauración segura de copias cifradas, incluida su interfaz.
+- V8 (parcial, dentro de B2): validación de credencial contra el proveedor antes de
+  guardarla (RF-002), integrada en la interfaz (`ValidatedMainWindow`). RF-002 está
+  implementado y cubierto automáticamente. D-01 permanece abierto hasta demostrar
+  el resto de sus condiciones: no incluye todavía la pantalla de primera apertura
+  con la política de datos (RF-001), y D-10 permanece abierto sin ningún cambio.
 
 Estas entradas describen infraestructura o hitos de implementación. No demuestran por sí solas que la capacidad completa de producto sea utilizable ni que sus pruebas de aceptación hayan pasado.
 
@@ -38,6 +43,9 @@ En particular:
 - Las pruebas normales usan proveedores y streams simulados y no realizan llamadas de red reales.
 - Las pruebas de `keyring` no leen ni escriben en el Credential Manager real.
 - La creación, validación y restauración de copias están cubiertas automáticamente e integradas en la interfaz.
+- La validación de credencial antes de guardarla está cubierta automáticamente e
+  integrada en la interfaz, siempre contra un validador simulado (nunca contra el
+  proveedor real).
 
 ### Pendiente de validación manual
 
@@ -52,6 +60,10 @@ En particular:
 La implementación automatizada de V7 está terminada.
 
 Permanece pendiente únicamente la validación manual de Windows Credential Manager con un valor señuelo. Esta validación no autoriza todavía el uso de una clave API real.
+
+Se corrigió un fallo intermitente en `tests/gui/test_backup_recovery_ui.py` (fuga de
+conexión SQLite en el helper de test de bootstrap, no un defecto de producto); el
+comportamiento aprobado de V7 no cambió.
 
 ## Estado de V8
 

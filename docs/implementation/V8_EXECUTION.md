@@ -97,7 +97,7 @@ Cualquier defecto nuevo debe vincularse a un requisito ya aprobado. Si no puede 
 | Bloque | Entrega | Estado |
 |---|---|---|
 | B1 | Reconciliación documental y trazabilidad | En curso |
-| B2 | Onboarding, credencial, ruta y activación | Pendiente |
+| B2 | Onboarding, credencial, ruta y activación | En curso (RF-002 fusionado; RF-001 y D-10 pendientes) |
 | B3 | Proyecto mínimo y ciclo de vida | Pendiente |
 | B4 | Eventos, recuerdos, decisiones y conflictos | Pendiente |
 | B5 | Panel de contexto | Pendiente |
@@ -132,6 +132,9 @@ Añadir una fila por resultado verificable. No registrar secretos ni contenido s
 | Fecha | Bloque | Commit/artefacto | Tipo | Prueba | Resultado | Evidencia | Observaciones |
 |---|---|---|---|---|---|---|---|
 | 2026-07-15 | B1 | `a05af3c` | Documental | Reconciliación de estado y puertas | Superada | PR #17, CI Quality verde | Sin cambios funcionales |
+| 2026-07-16 | B2 | `fcba319` (PR #19) | automática | `test_validate_and_save_api_key.py`, `test_openai_credential_validator.py`, `test_composition_root_credential_validation.py` | Superada | CI verde, `scripts/check.ps1` verde | RF-002 está implementado y cubierto automáticamente (caso de uso y validador contra el proveedor, sin GUI todavía). D-01 permanece abierto hasta demostrar el resto de sus condiciones |
+| 2026-07-16 | B2 | `fba51df` (PR #20) | automática | `test_validated_main_window.py` | Superada | CI verde, `scripts/check.ps1` verde | Integra RF-002 en la GUI (`ValidatedMainWindow`). D-01 permanece abierto: falta RF-001 (pantalla de primera configuración con política de datos); D-10 permanece abierto sin ningún cambio; PA-001 y PA-002 no se declaran superadas — exigen credencial real y quedan bloqueadas hasta V8.3 |
+| 2026-07-16 | B1 | `0f5af4e` (PR #22) | automática | `tests/gui/test_backup_recovery_ui.py` (23/23, 5 repeticiones) | Superada | CI verde, `scripts/check.ps1` verde | Corrección de higiene de prueba (fuga de conexión SQLite en el helper de bootstrap), no defecto de producto; sin cambio de comportamiento aprobado de V7 |
 
 Tipos permitidos: `automática`, `CI`, `manual-Windows`, `proveedor-real`, `evaluación-humana`, `documental`.
 
@@ -148,7 +151,46 @@ Estados permitidos: `no preparada`, `preparada`, `automática superada`, `manual
 
 ## Próximo trabajo autorizado
 
-Completar B1 mediante revisión e integración de este documento. Después, preparar B2 o el bloque que se autorice expresamente, sin iniciar todavía Windows real ni proveedor real.
+B1 (reconciliación documental) integrado. B2 está en curso: RF-002 (validación de
+credencial antes de guardar) ya está fusionado e integrado en la GUI.
+
+### B2a — Primera configuración básica
+
+El siguiente corte propuesto dentro de B2 detecta el estado real de "primera
+apertura" (ausencia de clave configurada, mediante `ApiKeySettingsUseCase.has_key()`
+ya existente) y, solo en ese estado, presenta un paso distinto de la vista normal
+que:
+
+- detecta ausencia de credencial mediante `ApiKeySettingsUseCase.has_key()`;
+- muestra qué datos permanecen locales y qué se envía al proveedor;
+- muestra proveedor y modelo predeterminados;
+- solicita únicamente la clave;
+- reutiliza RF-002 para validar y guardar;
+- tras éxito, permite continuar a la conversación principal usando la ruta local
+  predeterminada existente (sin editarla en este corte).
+
+Un bloque de texto permanente en Ajustes no equivale a esto: no distingue primera
+apertura de uso normal ni conduce a ningún flujo.
+
+La edición de la ruta local queda explícitamente fuera de B2a y pasa a **B2b**,
+independiente: la ruta debe resolverse antes de inicializar SQLite y construir las
+dependencias completas, no es una modificación limitada a la capa de presentación,
+y mezclarla con el onboarding básico ampliaría innecesariamente el riesgo de este
+corte.
+
+Con B2a:
+
+- RF-001 queda implementable y cubierto automáticamente con este corte.
+- D-01 sigue abierto hasta las pruebas formales con proveedor real (PA-001/PA-002).
+- D-10 sigue parcialmente abierto: cubre explicar la política de datos y mostrar
+  proveedor/modelo predeterminados, pero no la edición de la ruta (B2b) ni el
+  saludo con identidad propia y la propuesta de crear/describir el proyecto
+  inicial (última cláusula de Producto §5.1), que permanecen pendientes de B3
+  (D-02, capacidad de proyecto utilizable).
+- PA-001 y PA-002 no se declaran superadas: exigen una credencial real y quedan
+  bloqueadas hasta V8.3.
+
+Sin iniciar todavía Windows real ni proveedor real.
 
 ## Cierre de V8
 
