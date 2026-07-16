@@ -10,7 +10,7 @@ from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.composition_root import build_conversation_dependencies
 from sirius.infrastructure.logging import configure_logging, get_logger
 from sirius.infrastructure.paths import resolve_paths
-from sirius.presentation.main_window import MainWindow
+from sirius.presentation.validated_main_window import ValidatedMainWindow
 
 
 def main() -> int:
@@ -28,10 +28,11 @@ def main() -> int:
     if app is None:
         app = QApplication(sys.argv)
 
-    window = MainWindow(
+    window = ValidatedMainWindow(
         send_message_use_case=dependencies.send_message_use_case,
         get_history_use_case=dependencies.get_history_use_case,
         api_key_settings_use_case=dependencies.api_key_settings_use_case,
+        validate_and_save_api_key_use_case=dependencies.validate_and_save_api_key_use_case,
         create_backup_use_case=dependencies.create_backup_use_case,
         validate_backup_use_case=dependencies.validate_backup_use_case,
         restore_backup_use_case=dependencies.restore_backup_use_case,
