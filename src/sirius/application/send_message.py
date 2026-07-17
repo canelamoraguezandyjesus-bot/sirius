@@ -100,6 +100,15 @@ class SendMessageUseCase:
         self._conversation_repository = conversation_repository
         self._llm_provider = llm_provider
 
+    def set_llm_provider(self, llm_provider: LLMProvider) -> None:
+        """Swap the active provider (e.g. after B2a onboarding validates a key).
+
+        Lets the composition root activate a freshly validated OpenAI
+        provider in the same run, without rebuilding persistence or asking
+        the user to restart Sirius.
+        """
+        self._llm_provider = llm_provider
+
     def send_message(
         self,
         user_text: str,

@@ -21,9 +21,18 @@
 - V7: creación, validación y restauración segura de copias cifradas, incluida su interfaz.
 - V8 (parcial, dentro de B2): validación de credencial contra el proveedor antes de
   guardarla (RF-002), integrada en la interfaz (`ValidatedMainWindow`). RF-002 está
+  implementado y cubierto automáticamente. Además (B2a, commit local en
+  `feat/v8-b2a-first-run-onboarding`, sin PR todavía), la pantalla de primera
+  apertura (`OnboardingWindow`) se muestra únicamente cuando
+  `ApiKeySettingsUseCase.has_key()` es falso, explica la política de datos, muestra
+  proveedor y modelo predeterminados, y activa el proveedor real en la misma
+  ejecución tras validar y guardar la clave, sin exigir reinicio. RF-001 está
   implementado y cubierto automáticamente. D-01 permanece abierto hasta demostrar
-  el resto de sus condiciones: no incluye todavía la pantalla de primera apertura
-  con la política de datos (RF-001), y D-10 permanece abierto sin ningún cambio.
+  el resto de sus condiciones (pruebas formales con proveedor real, PA-001/PA-002);
+  D-10 permanece parcialmente abierto: falta la edición de la ruta local (B2b) y
+  la comprobación real de activación en Windows (Credential Manager, pendiente de
+  validación manual). El saludo con identidad propia y la propuesta de proyecto
+  inicial pertenecen a B3 y no son una condición de cierre de D-10.
 
 Estas entradas describen infraestructura o hitos de implementación. No demuestran por sí solas que la capacidad completa de producto sea utilizable ni que sus pruebas de aceptación hayan pasado.
 

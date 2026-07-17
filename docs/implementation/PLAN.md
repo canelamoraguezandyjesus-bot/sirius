@@ -322,6 +322,30 @@ Prohibido en esta subetapa:
   un cambio de comportamiento de producto: el helper ahora cierra cada repositorio
   en un `finally`, igual que `initialize_persistence()` ya hacía. Incluye una prueba
   de regresión determinista.
+- Primera configuración básica (B2a, RF-001): `OnboardingWindow` (nueva ventana de
+  presentación, independiente de `MainWindow`) se muestra únicamente cuando
+  `ApiKeySettingsUseCase.has_key()` es falso; explica en un único lugar centralizado
+  (`onboarding_window.DATA_POLICY_TEXT`) qué se conserva localmente y qué se envía
+  al proveedor, muestra proveedor y modelo predeterminados (reutilizados de
+  `LLMProviderKind`/`resolve_openai_provider_settings`, sin selector nuevo) y
+  solicita únicamente la clave, reutilizando `ValidateAndSaveApiKeyUseCase` y
+  `CredentialValidationWorker` de RF-002 sin duplicar el flujo. Tras una validación
+  correcta, activa el proveedor real en la misma ejecución mediante la nueva
+  `ConversationDependencies.activate_configured_llm_provider` (composition root:
+  fija `llm_provider="openai"` en la configuración no sensible existente y
+  reconstruye el proveedor con `SendMessageUseCase.set_llm_provider`) y
+  `sirius.main` sustituye la ventana de onboarding por `ValidatedMainWindow` sin
+  reiniciar Sirius. Cubierto con pruebas unitarias y de GUI
+  (`tests/gui/test_onboarding_window.py`, `tests/gui/test_app_bootstrap.py`,
+  nuevos casos en `tests/unit/test_composition_root_credential_validation.py` y
+  `tests/integration/test_send_message.py`), siempre contra un validador simulado
+  y sin red real. RF-001 está implementado y cubierto automáticamente. D-01
+  permanece abierto hasta las pruebas formales con proveedor real (PA-001/PA-002);
+  D-10 sigue parcialmente abierto: cubre política de datos y valores
+  predeterminados, pero no la edición de la ruta local (B2b) ni la comprobación
+  real de activación en Windows (Credential Manager con valor señuelo, pendiente
+  de validación manual). El saludo con identidad propia y la propuesta de
+  proyecto inicial pertenecen a B3 (D-02) y no son una condición de D-10.
 
 ### V8.2 — Windows sin clave — BLOQUEADA HASTA INTEGRACIÓN AUTOMÁTICA VERDE
 
