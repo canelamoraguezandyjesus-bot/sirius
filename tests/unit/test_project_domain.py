@@ -2,15 +2,15 @@ from datetime import UTC, datetime
 
 import pytest
 
-from sirius.domain.project import Project
+from sirius.domain.project import Project, is_configured
 
 
-def _any_project() -> Project:
+def _any_project(*, name: str = "", objective: str = "") -> Project:
     now = datetime.now(UTC)
     return Project(
         id=1,
-        name="",
-        objective="",
+        name=name,
+        objective=objective,
         current_state="",
         next_step="",
         created_at=now,
@@ -23,3 +23,31 @@ def test_project_is_immutable() -> None:
 
     with pytest.raises(AttributeError):
         project.name = "otro"  # type: ignore[misc]
+
+
+def test_bootstrap_placeholder_is_not_configured() -> None:
+    placeholder = _any_project(name="", objective="")
+
+    assert is_configured(placeholder) is False
+
+
+def test_project_with_name_and_objective_is_configured() -> None:
+    project = _any_project(name="Sirius 0.1", objective="Cerrar B3a")
+
+    assert is_configured(project) is True
+
+
+@pytest.mark.parametrize(
+    ("name", "objective"),
+    [
+        ("Sirius", ""),
+        ("", "Cerrar B3a"),
+        ("   ", "Cerrar B3a"),
+        ("Sirius", "   "),
+        ("   ", "   "),
+    ],
+)
+def test_project_missing_either_field_is_not_configured(name: str, objective: str) -> None:
+    project = _any_project(name=name, objective=objective)
+
+    assert is_configured(project) is False
