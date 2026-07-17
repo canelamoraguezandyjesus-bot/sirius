@@ -98,7 +98,7 @@ Cualquier defecto nuevo debe vincularse a un requisito ya aprobado. Si no puede 
 |---|---|---|
 | B1 | Reconciliación documental y trazabilidad | En curso |
 | B2 | Onboarding, credencial, ruta y activación | En curso (RF-002, B2a y B2b implementados y cubiertos automáticamente; activación real en Windows pendiente) |
-| B3 | Proyecto mínimo y ciclo de vida | Pendiente |
+| B3 | Proyecto mínimo y ciclo de vida | En curso (B3a implementado y cubierto automáticamente; bloqueos, decisiones, completar/archivar y resumen al retomar pendientes) |
 | B4 | Eventos, recuerdos, decisiones y conflictos | Pendiente |
 | B5 | Panel de contexto | Pendiente |
 | B6 | Selección y presupuesto de contexto | Pendiente |
@@ -134,9 +134,10 @@ Añadir una fila por resultado verificable. No registrar secretos ni contenido s
 | 2026-07-15 | B1 | `a05af3c` | Documental | Reconciliación de estado y puertas | Superada | PR #17, CI Quality verde | Sin cambios funcionales |
 | 2026-07-16 | B2 | `fcba319` (PR #19) | automática | `test_validate_and_save_api_key.py`, `test_openai_credential_validator.py`, `test_composition_root_credential_validation.py` | Superada | CI verde, `scripts/check.ps1` verde | RF-002 está implementado y cubierto automáticamente (caso de uso y validador contra el proveedor, sin GUI todavía). D-01 permanece abierto hasta demostrar el resto de sus condiciones |
 | 2026-07-16 | B2 | `fba51df` (PR #20) | automática | `test_validated_main_window.py` | Superada | CI verde, `scripts/check.ps1` verde | Integra RF-002 en la GUI (`ValidatedMainWindow`). D-01 permanece abierto: falta RF-001 (pantalla de primera configuración con política de datos); D-10 permanece abierto sin ningún cambio; PA-001 y PA-002 no se declaran superadas — exigen credencial real y quedan bloqueadas hasta V8.3 |
-| 2026-07-17 | B2a | rama `feat/v8-b2a-first-run-onboarding` (commit local, sin PR) | automática | `test_onboarding_window.py`, `test_app_bootstrap.py`, `test_composition_root_credential_validation.py` (nuevos casos), `test_send_message.py` (`set_llm_provider`), suite GUI de B2a repetida 5 veces | Superada | `scripts/check.ps1` verde localmente (Ruff format, Ruff lint, mypy estricto, 360 pytest) | RF-001 implementado y cubierto automáticamente vía `OnboardingWindow` + recomposición segura del proveedor en la misma ejecución (`activate_configured_llm_provider`, sin reinicio). D-01 permanece abierto hasta PA-001/PA-002 con proveedor real; D-10 sigue parcialmente abierto (falta B2b y la comprobación real de Credential Manager); sin clave real ni red |
+| 2026-07-17 | B2a | `f7134ca` (PR #24) | automática | `test_onboarding_window.py`, `test_app_bootstrap.py`, `test_composition_root_credential_validation.py` (nuevos casos), `test_send_message.py` (`set_llm_provider`), suite GUI de B2a repetida 5 veces | Superada | CI verde, `scripts/check.ps1` verde localmente (Ruff format, Ruff lint, mypy estricto, 360 pytest) | RF-001 implementado y cubierto automáticamente vía `OnboardingWindow` + recomposición segura del proveedor en la misma ejecución (`activate_configured_llm_provider`, sin reinicio). D-01 permanece abierto hasta PA-001/PA-002 con proveedor real; D-10 sigue parcialmente abierto (falta B2b y la comprobación real de Credential Manager); sin clave real ni red |
 | 2026-07-16 | B1 | `0f5af4e` (PR #22) | automática | `tests/gui/test_backup_recovery_ui.py` (23/23, 5 repeticiones) | Superada | CI verde, `scripts/check.ps1` verde | Corrección de higiene de prueba (fuga de conexión SQLite en el helper de bootstrap), no defecto de producto; sin cambio de comportamiento aprobado de V7 |
-| 2026-07-17 | B2b | rama `feat/v8-b2b-data-path` (commit local, sin PR) | automática | `test_paths.py`, `test_data_path_validator.py`, `test_bootstrap_location_store.py`, `test_data_location_use_case.py`, `test_data_location_window.py`, `test_app_bootstrap.py`; suite GUI de B2b repetida 5 veces | Superada | `scripts/check.ps1` verde localmente (Ruff format, Ruff lint, mypy estricto, 412 pytest) | Selección y persistencia de la ruta local de datos antes de SQLite, logging y composición (D-10, parte de B2). Sin clave real ni red; sin movimiento ni migración de datos existentes |
+| 2026-07-17 | B2b | `2c60afc` (PR #26) | automática | `test_paths.py`, `test_data_path_validator.py`, `test_bootstrap_location_store.py`, `test_data_location_use_case.py`, `test_data_location_window.py`, `test_app_bootstrap.py`; suite GUI de B2b repetida 5 veces | Superada | CI verde, `scripts/check.ps1` verde localmente (Ruff format, Ruff lint, mypy estricto, 412 pytest) | Selección y persistencia de la ruta local de datos antes de SQLite, logging y composición (D-10, parte de B2). Sin clave real ni red; sin movimiento ni migración de datos existentes |
+| 2026-07-17 | B3a | rama `feat/v8-b3-initial-project` (commit local) | automática | `test_project_domain.py` (nuevos casos), `test_initial_project_use_case.py` (unit e integración), `test_initial_project_window.py`, `test_app_bootstrap.py` (nuevos casos); suite GUI de B2a/B2b/B3a repetida 5 veces | Superada | `scripts/check.ps1` verde localmente (Ruff format, Ruff lint, mypy estricto, 455 pytest) | Saludo determinista y creación utilizable del primer proyecto (D-02, parcial). RF-014 cubierto automáticamente; RF-015 protegido en la capa de aplicación; parte inicial de RF-016 (estado y siguiente paso iniciales) cubierta. Sin clave real ni red; sin B3b, B4 ni B5 |
 
 Tipos permitidos: `automática`, `CI`, `manual-Windows`, `proveedor-real`, `evaluación-humana`, `documental`.
 
@@ -154,13 +155,13 @@ Estados permitidos: `no preparada`, `preparada`, `automática superada`, `manual
 ## Próximo trabajo autorizado
 
 B1 (reconciliación documental) integrado. B2 está en curso: RF-002 (validación de
-credencial antes de guardar) ya está fusionado e integrado en la GUI. B2a (primera
-configuración básica) ya está implementado y cubierto automáticamente, en la rama
-`feat/v8-b2a-first-run-onboarding` (commit local, todavía sin PR). B2b (selección y
-persistencia de la ruta local de datos) ya está implementado y cubierto
-automáticamente, en la rama `feat/v8-b2b-data-path` (commit local, todavía sin PR).
+credencial antes de guardar), B2a (primera configuración básica, PR #24, squash
+`f7134ca`) y B2b (selección y persistencia de la ruta local de datos, PR #26,
+squash `2c60afc`) ya están fusionados en `main`. B3 está en curso: B3a (saludo y
+creación del primer proyecto) ya está implementado y cubierto automáticamente, en
+la rama `feat/v8-b3-initial-project` (commit local).
 
-### B2a — Primera configuración básica — IMPLEMENTADA (commit local, sin PR)
+### B2a — Primera configuración básica — FUSIONADA (PR #24, squash `f7134ca658e6343779ee6bfe89ad05dd2f0a8ba3`)
 
 Este corte dentro de B2 detecta el estado real de "primera apertura" (ausencia de
 clave configurada, mediante `ApiKeySettingsUseCase.has_key()` ya existente) y,
@@ -203,7 +204,7 @@ Con B2a:
 - PA-001 y PA-002 no se declaran superadas: exigen una credencial real y quedan
   bloqueadas hasta V8.3.
 
-### B2b — Selección y persistencia de la ruta local de datos — IMPLEMENTADA (commit local, sin PR)
+### B2b — Selección y persistencia de la ruta local de datos — FUSIONADA (PR #26, squash `2c60afc2652aadbf3aaa3e8672cd5a1f476e4ac4`)
 
 Este corte dentro de B2 resuelve la ubicación de los datos **antes** de crear
 directorios de datos, configurar el logging dependiente de la ruta, abrir
@@ -275,6 +276,86 @@ Con B2b:
 - No se inició B3.
 
 Sin iniciar todavía Windows real ni proveedor real. Sin usar clave real ni red.
+
+### B3a — Saludo inicial y creación utilizable del primer proyecto — IMPLEMENTADA (commit local, rama `feat/v8-b3-initial-project`)
+
+Primer corte dentro de B3: cubre parcialmente RF-014, RF-015 y el inicio de
+RF-016, y la cláusula de Producto §5.1 sobre saludar con identidad propia y
+proponer crear o describir el proyecto inicial. No completa B3 ni cierra D-02.
+
+- `sirius.domain.project.is_configured()` distingue el placeholder de
+  arranque (nombre y objetivo vacíos, sembrado por
+  `get_or_create_active_project()` desde V3) de un proyecto realmente
+  configurado por el usuario; es la única fuente de verdad para esa
+  distinción, reutilizada por el caso de uso y por el arranque.
+  `INITIAL_PROJECT_STATE`/`INITIAL_PROJECT_NEXT_STEP` son los valores
+  mínimos y centralizados que RF-016 todavía no tenía definidos en ninguna
+  fuente aprobada; aplicación, presentación y pruebas comparten esta única
+  definición.
+- `InitialProjectUseCase` (`sirius.application.initial_project`) consulta si
+  el proyecto activo ya está configurado, lo expone de solo lectura y crea
+  el primero completando transaccionalmente el placeholder existente (nunca
+  insertando una segunda fila: la base ya impone una única fila con
+  `is_active=1` mediante su índice único parcial), sin conocer SQLAlchemy ni
+  SQLite. Rechaza con `InitialProjectAlreadyConfiguredError` un segundo
+  intento cuando ya hay un proyecto configurado, comprobado antes de
+  escribir nada y dejando el proyecto existente intacto (RF-015); rechaza
+  con `InvalidInitialProjectDataError` un nombre u objetivo vacío tras
+  recortar espacios, también antes de tocar el repositorio.
+- `InitialProjectWindow` (nueva ventana de presentación, independiente de
+  `OnboardingWindow` y de `MainWindow`) muestra un saludo determinista y
+  centralizado (`GREETING_TEXT`, nunca generado por el proveedor, que
+  reutiliza `sirius.domain.identity.INITIAL_IDENTITY_NAME` en vez de
+  duplicar "Sirius" como constante) y solicita únicamente nombre y objetivo;
+  foco inicial en el nombre, envío por botón o teclado, controles
+  deshabilitados y reactivados de forma segura ante error, sin mostrar
+  trazas internas, sin datos parciales al cerrar.
+- `sirius.main` extiende la puerta de arranque existente: tras confirmarse
+  la clave (ya existente o recién validada en la misma ejecución vía
+  `OnboardingWindow`), `_build_post_key_window` consulta
+  `InitialProjectUseCase.is_configured()` una única vez —compartida por
+  ambos caminos que pueden llegar a "hay clave configurada", sin duplicar la
+  comprobación— y solo entonces muestra `InitialProjectWindow`; al crear el
+  proyecto se abre `ValidatedMainWindow` en la misma ejecución, sin
+  reiniciar SQLite ni reconstruir el resto de repositorios.
+- El proyecto configurado llega a `ContextBuilder` mediante el mecanismo ya
+  existente (`ProjectRepository.get_active_project()`), sin ningún cambio en
+  `sirius.application.context`: como `InitialProjectWindow` bloquea la
+  apertura de `ValidatedMainWindow` hasta que el proyecto queda configurado,
+  el placeholder vacío nunca llega a construirse un contexto real que se
+  envíe al proveedor.
+
+Cubierto con pruebas unitarias, de integración y de GUI
+(`tests/unit/test_project_domain.py`,
+`tests/unit/test_initial_project_use_case.py`,
+`tests/integration/test_initial_project_persistence.py`,
+`tests/gui/test_initial_project_window.py`, nuevos casos en
+`tests/gui/test_app_bootstrap.py` incluyendo la cadena completa
+DataLocationWindow → OnboardingWindow → InitialProjectWindow →
+ValidatedMainWindow en una sola ejecución), siempre con dobles deterministas
+o SQLite temporal, sin datos reales, sin clave real, sin red y sin
+Credential Manager real. La suite GUI de B2a/B2b/B3a se repitió 5 veces sin
+fallos.
+
+Con B3a:
+
+- RF-014 (crear con nombre y objetivo) queda implementado y cubierto
+  automáticamente.
+- RF-015 (impedir dos proyectos activos) queda protegido en la capa de
+  aplicación y cubierto automáticamente.
+- RF-016 queda cubierto solo en su parte inicial (estado y siguiente paso
+  iniciales al crear); la actualización cotidiana, el resumen al retomar y
+  el resto de RF-016 quedan pendientes.
+- RF-017 y RF-018 no se abordan en este corte.
+- D-02 queda parcialmente corregido: la creación del primer proyecto es
+  utilizable desde la interfaz. Siguen pendientes de un corte posterior de
+  B3: bloqueos del proyecto, decisiones relacionadas, completar y archivar
+  conservando historial, y el resumen observable al retomar.
+- PA-006 y PA-007 quedan preparadas/cubiertas automáticamente por esta
+  implementación, pero no se declaran formalmente superadas (exigen
+  evaluación conforme al Plan de Pruebas, no solo cobertura automática).
+- No se implementó B3b, B4 ni B5. No se llamó a un proveedor real ni se usó
+  una clave real.
 
 ## Cierre de V8
 

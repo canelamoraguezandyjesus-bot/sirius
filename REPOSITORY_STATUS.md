@@ -19,38 +19,53 @@
 - V6B: adaptador OpenAI, streaming, cancelación, errores tipados internos, idempotencia y presupuesto persistente.
 - V7A: Windows Credential Manager, configuración del proveedor, diagnóstico local y protección frente a configuraciones inválidas.
 - V7: creación, validación y restauración segura de copias cifradas, incluida su interfaz.
-- V8 (parcial, dentro de B2): validación de credencial contra el proveedor antes de
-  guardarla (RF-002), integrada en la interfaz (`ValidatedMainWindow`). RF-002 está
-  implementado y cubierto automáticamente. Además (B2a, commit local en
-  `feat/v8-b2a-first-run-onboarding`, sin PR todavía), la pantalla de primera
-  apertura (`OnboardingWindow`) se muestra únicamente cuando
+- V8 (parcial, dentro de B2 y B3): validación de credencial contra el proveedor
+  antes de guardarla (RF-002), integrada en la interfaz (`ValidatedMainWindow`).
+  RF-002 está implementado y cubierto automáticamente. Además (B2a, PR #24,
+  squash `f7134ca658e6343779ee6bfe89ad05dd2f0a8ba3`, fusionado en `main`), la
+  pantalla de primera apertura (`OnboardingWindow`) se muestra únicamente cuando
   `ApiKeySettingsUseCase.has_key()` es falso, explica la política de datos, muestra
   proveedor y modelo predeterminados, y activa el proveedor real en la misma
   ejecución tras validar y guardar la clave, sin exigir reinicio. RF-001 está
   implementado y cubierto automáticamente. D-01 permanece abierto hasta demostrar
   el resto de sus condiciones (pruebas formales con proveedor real, PA-001/PA-002).
-  Además (B2b, commit local en `feat/v8-b2b-data-path`, sin PR todavía), la
-  ubicación de los datos se resuelve, valida y persiste antes de crear directorios
-  de datos, configurar el logging dependiente de la ruta, abrir SQLite o construir
-  la composición: `BootstrapLocationStore` guarda un puntero JSON atómico y
-  mínimo en el directorio de configuración estable de Windows (independiente de
-  `data_dir`), `WindowsDataPathValidator` prueba escritura real y detecta
-  instalaciones existentes y carpetas bajo OneDrive, y `DataLocationWindow`
-  ofrece la ruta predeterminada ya seleccionada con una opción avanzada para
-  elegir otra carpeta, solo cuando hace falta una primera elección. Una ruta
-  personalizada con datos existentes se bloquea sin adoptarla ni migrarla; un
-  archivo de ubicación corrupto nunca abre una base predeterminada en silencio.
-  D-10 permanece parcialmente abierto: falta la comprobación real de activación
-  en Windows (Credential Manager, pendiente de validación manual) y la
-  validación manual de rutas reales de Windows. El saludo con identidad propia y
-  la propuesta de proyecto inicial pertenecen a B3 y no son una condición de
-  cierre de D-10.
+  Además (B2b, PR #26, squash `2c60afc2652aadbf3aaa3e8672cd5a1f476e4ac4`,
+  fusionado en `main`), la ubicación de los datos se resuelve, valida y persiste
+  antes de crear directorios de datos, configurar el logging dependiente de la
+  ruta, abrir SQLite o construir la composición: `BootstrapLocationStore` guarda
+  un puntero JSON atómico y mínimo en el directorio de configuración estable de
+  Windows (independiente de `data_dir`), `WindowsDataPathValidator` prueba
+  escritura real y detecta instalaciones existentes y carpetas bajo OneDrive, y
+  `DataLocationWindow` ofrece la ruta predeterminada ya seleccionada con una
+  opción avanzada para elegir otra carpeta, solo cuando hace falta una primera
+  elección. Una ruta personalizada con datos existentes se bloquea sin adoptarla
+  ni migrarla; un archivo de ubicación corrupto nunca abre una base
+  predeterminada en silencio. D-10 permanece parcialmente abierto: falta la
+  comprobación real de activación en Windows (Credential Manager, pendiente de
+  validación manual) y la validación manual de rutas reales de Windows. Además
+  (B3a, commit local en `feat/v8-b3-initial-project`, todavía sin PR), tras
+  resolver la ruta y configurar la clave, Sirius distingue el placeholder vacío
+  de arranque de un proyecto realmente configurado
+  (`sirius.domain.project.is_configured()`), y `InitialProjectUseCase` crea el
+  primero completando ese placeholder (sin insertar una segunda fila) con
+  nombre, objetivo y un estado/siguiente paso iniciales mínimos y centralizados;
+  `InitialProjectWindow` muestra un saludo determinista (reutiliza
+  `INITIAL_IDENTITY_NAME`, nunca generado por el proveedor) y se muestra solo
+  cuando hay clave configurada pero ningún proyecto todavía, abriendo
+  `ValidatedMainWindow` en la misma ejecución al crearlo. RF-014 y RF-015 están
+  implementados y cubiertos automáticamente; RF-016 solo en su parte inicial.
+  D-02 queda parcialmente corregido: quedan pendientes bloqueos, decisiones
+  relacionadas, completar/archivar conservando historial y el resumen al
+  retomar, para un corte posterior de B3.
 
 Estas entradas describen infraestructura o hitos de implementación. No demuestran por sí solas que la capacidad completa de producto sea utilizable ni que sus pruebas de aceptación hayan pasado.
 
 En particular:
 
-- el proyecto sigue incompleto como capacidad observable de producto;
+- el proyecto sigue incompleto como capacidad observable de producto: B3a
+  cubre el saludo inicial y la creación del primer proyecto, pero bloqueos,
+  decisiones relacionadas, completar/archivar conservando historial y el
+  resumen observable al retomar quedan pendientes;
 - la memoria no contiene todavía toda la semántica aprobada de decisiones, eventos, sustitución, conflictos y origen consultable;
 - no existe todavía el panel de contexto;
 - el constructor de contexto no aplica aún toda la selección, precedencia y política de presupuesto aprobadas.
@@ -70,6 +85,10 @@ En particular:
 - La selección y persistencia de la ruta local de datos (B2b) resuelve la
   ubicación antes de SQLite, logging y composición; cubierta automáticamente con
   dobles deterministas, sin datos reales, sin OneDrive real y sin red.
+- El saludo inicial y la creación utilizable del primer proyecto (B3a) están
+  cubiertos automáticamente (unidad, integración con SQLite real y GUI), con
+  la protección contra un segundo proyecto activo verificada antes de
+  escribir cualquier dato; sin datos reales y sin red.
 
 ### Pendiente de validación manual
 

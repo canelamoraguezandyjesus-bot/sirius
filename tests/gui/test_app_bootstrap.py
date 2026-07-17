@@ -1,9 +1,12 @@
-"""GUI tests for the B2a startup gate: onboarding vs. the normal experience.
+"""GUI tests for the full startup gate: location, onboarding, initial project.
 
-``sirius.main`` decides which top-level window to show first, using only
-``ApiKeySettingsUseCase.has_key()`` — never the secret store, keyring, or any
-provider SDK directly. No test here ever touches the real Windows Credential
-Manager (``FakeSecretStore`` everywhere) or the real OpenAI API.
+``sirius.main`` decides which top-level window to show first and next,
+using only ``ApiKeySettingsUseCase.has_key()`` (B2a),
+``DataLocationUseCase.resolve()`` (B2b), and
+``InitialProjectUseCase.is_configured()`` (B3a) — never the secret store,
+keyring, provider SDK, or ``ProjectRepository`` directly. No test here ever
+touches the real Windows Credential Manager (``FakeSecretStore`` everywhere)
+or the real OpenAI API.
 """
 
 from __future__ import annotations
@@ -36,6 +39,7 @@ from sirius.infrastructure.data_path_validator import WindowsDataPathValidator
 from sirius.infrastructure.paths import resolve_paths
 from sirius.main import _build_first_window, _build_initial_window, _build_onboarding_window
 from sirius.presentation.data_location_window import RECOVERY_INTRO_TEXT, DataLocationWindow
+from sirius.presentation.initial_project_window import InitialProjectWindow
 from sirius.presentation.onboarding_window import OnboardingWindow
 from sirius.presentation.validated_main_window import ValidatedMainWindow
 
@@ -58,10 +62,24 @@ def isolated_local_appdata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv("WIN_PD_OVERRIDE_LOCAL_APPDATA", str(tmp_path / "appdata"))
 
 
-def _bootstrapped_database(database_path: Path) -> Path:
+def _bootstrapped_database(database_path: Path, *, configure_project: bool = True) -> Path:
+    """Seed the three bootstrap singletons.
+
+    ``configure_project=True`` (the default, matching every pre-B3a caller
+    in this file) also completes the placeholder project with a name and
+    objective, representing an installation that has already been through
+    B3a's first-project screen. Pass ``configure_project=False`` to keep the
+    neutral placeholder in place, for B3a tests that specifically exercise
+    the "no project configured yet" gate.
+    """
     Base.metadata.create_all(build_engine(database_path))
     build_sqlite_conversation_repository(database_path).get_or_create_main_conversation()
-    build_sqlite_project_repository(database_path).get_or_create_active_project()
+    project_repository = build_sqlite_project_repository(database_path)
+    project = project_repository.get_or_create_active_project()
+    if configure_project:
+        project_repository.update_project(
+            project.id, name="Proyecto de prueba", objective="Probar Sirius"
+        )
     build_sqlite_identity_repository(database_path).get_or_create_current_identity()
     return database_path
 
@@ -253,3 +271,149 @@ def test_corrupted_location_file_shows_recovery_and_never_opens_a_database_silen
     assert isinstance(window, DataLocationWindow)
     assert window.intro_label.text() == RECOVERY_INTRO_TEXT
     assert not (default_paths.data_dir / "sirius.db").exists()
+
+
+# --- B3a: initial project screen gates opening the real main window ---------
+
+
+@pytest.mark.gui
+def test_key_and_project_already_configured_opens_the_main_window_directly(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Scenario 1: nothing left to configure — straight to ValidatedMainWindow."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")  # project configured
+    secret_store = FakeSecretStore()
+    secret_store.set_secret(OPENAI_API_KEY_SECRET_NAME, "sk-already-configured")
+    dependencies = build_conversation_dependencies(
+        database_path, database_path.parent / "backups", secret_store=secret_store
+    )
+    windows: list[QMainWindow] = []
+
+    window = _build_initial_window(dependencies, windows)
+    qtbot.addWidget(window)
+
+    assert isinstance(window, ValidatedMainWindow)
+    assert not isinstance(window, InitialProjectWindow)
+
+
+@pytest.mark.gui
+def test_key_exists_but_no_project_configured_shows_the_initial_project_window(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Scenario 2: a key exists but no project has been configured yet."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db", configure_project=False)
+    secret_store = FakeSecretStore()
+    secret_store.set_secret(OPENAI_API_KEY_SECRET_NAME, "sk-already-configured")
+    dependencies = build_conversation_dependencies(
+        database_path, database_path.parent / "backups", secret_store=secret_store
+    )
+    windows: list[QMainWindow] = []
+
+    window = _build_initial_window(dependencies, windows)
+    qtbot.addWidget(window)
+
+    assert isinstance(window, InitialProjectWindow)
+    assert not isinstance(window, ValidatedMainWindow)
+
+
+@pytest.mark.gui
+def test_completing_onboarding_without_a_configured_project_shows_the_project_window(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Scenario 9: the project is consulted right after onboarding completes,
+    and the conversation is never opened prematurely."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db", configure_project=False)
+    secret_store = FakeSecretStore()
+    dependencies = build_conversation_dependencies(
+        database_path, database_path.parent / "backups", secret_store=secret_store
+    )
+    windows: list[QMainWindow] = []
+    onboarding = _build_onboarding_window(dependencies, windows)
+    windows.append(onboarding)
+    qtbot.addWidget(onboarding)
+    onboarding.show()
+    onboarding._validate_and_save_api_key_use_case = ValidateAndSaveApiKeyUseCase(
+        _RecordingValidator(), secret_store
+    )
+    onboarding._thread_pool = cast(QThreadPool, _ImmediateThreadPool())
+
+    onboarding.api_key_input.setText("sk-candidate")
+    onboarding._handle_continue_clicked()
+
+    assert len(windows) == 2
+    assert isinstance(windows[1], InitialProjectWindow)
+    assert not isinstance(windows[1], ValidatedMainWindow)
+    assert windows[1].isVisible() is True
+    assert onboarding.isVisible() is False
+
+
+@pytest.mark.gui
+def test_creating_the_initial_project_opens_the_main_window_in_the_same_run(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db", configure_project=False)
+    secret_store = FakeSecretStore()
+    secret_store.set_secret(OPENAI_API_KEY_SECRET_NAME, "sk-already-configured")
+    dependencies = build_conversation_dependencies(
+        database_path, database_path.parent / "backups", secret_store=secret_store
+    )
+    windows: list[QMainWindow] = []
+
+    window = _build_initial_window(dependencies, windows)
+    windows.append(window)
+    qtbot.addWidget(window)
+    window.show()
+    assert isinstance(window, InitialProjectWindow)
+
+    window.name_input.setText("Mi Proyecto")
+    window.objective_input.setText("Aprender Sirius")
+    window._handle_create_clicked()
+
+    assert len(windows) == 2
+    assert isinstance(windows[1], ValidatedMainWindow)
+    assert windows[1].isVisible() is True
+    assert window.isVisible() is False
+    assert dependencies.initial_project_use_case.is_configured() is True
+
+
+@pytest.mark.gui
+def test_full_fresh_install_chain_reaches_the_main_window_in_one_run(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Scenario 3/8: DataLocationWindow -> OnboardingWindow ->
+    InitialProjectWindow -> ValidatedMainWindow, all in the same run."""
+    shared_secret_store = FakeSecretStore()
+    monkeypatch.setattr(
+        "sirius.composition_root.build_keyring_secret_store", lambda: shared_secret_store
+    )
+    windows: list[QMainWindow] = []
+
+    window = _build_first_window(_location_use_case(), windows)
+    qtbot.addWidget(window)
+    assert isinstance(window, DataLocationWindow)
+
+    window.accept_default_button.click()
+
+    assert len(windows) == 1
+    assert isinstance(windows[0], OnboardingWindow)
+    onboarding = windows[0]
+    onboarding._validate_and_save_api_key_use_case = ValidateAndSaveApiKeyUseCase(
+        _RecordingValidator(), shared_secret_store
+    )
+    onboarding._thread_pool = cast(QThreadPool, _ImmediateThreadPool())
+    onboarding.api_key_input.setText("sk-candidate")
+    onboarding._handle_continue_clicked()
+
+    assert len(windows) == 2
+    assert isinstance(windows[1], InitialProjectWindow)
+    project_window = windows[1]
+
+    project_window.name_input.setText("Mi Proyecto")
+    project_window.objective_input.setText("Aprender Sirius")
+    project_window._handle_create_clicked()
+
+    assert len(windows) == 3
+    assert isinstance(windows[2], ValidatedMainWindow)
+    assert windows[2].isVisible() is True
+    assert onboarding.isVisible() is False
+    assert project_window.isVisible() is False

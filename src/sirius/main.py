@@ -16,6 +16,7 @@ from sirius.infrastructure.data_path_validator import build_data_path_validator
 from sirius.infrastructure.logging import configure_logging, get_logger
 from sirius.infrastructure.paths import resolve_paths
 from sirius.presentation.data_location_window import DataLocationWindow
+from sirius.presentation.initial_project_window import InitialProjectWindow
 from sirius.presentation.onboarding_window import OnboardingWindow
 from sirius.presentation.validated_main_window import ValidatedMainWindow
 
@@ -36,7 +37,7 @@ def _build_main_window(dependencies: ConversationDependencies) -> ValidatedMainW
 def _build_onboarding_window(
     dependencies: ConversationDependencies, windows: list[QMainWindow]
 ) -> OnboardingWindow:
-    """Build the B2a first-run screen, wired to open the real main window.
+    """Build the B2a first-run screen, wired to continue the bootstrap gate.
 
     ``windows`` is the caller's own list of top-level windows kept alive for
     the life of the event loop (see ``main()``): a top-level PySide6 widget
@@ -46,10 +47,10 @@ def _build_onboarding_window(
     """
     provider_defaults = resolve_openai_provider_settings({})
 
-    def _open_main_window() -> None:
-        main_window = _build_main_window(dependencies)
-        windows.append(main_window)
-        main_window.show()
+    def _continue_after_onboarding() -> None:
+        next_window = _build_post_key_window(dependencies, windows)
+        windows.append(next_window)
+        next_window.show()
         onboarding_window.close()
 
     onboarding_window = OnboardingWindow(
@@ -58,8 +59,46 @@ def _build_onboarding_window(
         default_provider=LLMProviderKind.OPENAI.value,
         default_model=provider_defaults.model,
     )
-    onboarding_window.configured.connect(_open_main_window)
+    onboarding_window.configured.connect(_continue_after_onboarding)
     return onboarding_window
+
+
+def _build_initial_project_window(
+    dependencies: ConversationDependencies, windows: list[QMainWindow]
+) -> InitialProjectWindow:
+    """Build the B3a first-project screen, wired to open the real main window.
+
+    See ``_build_onboarding_window`` for why the window built here on success
+    must be appended to ``windows``, not just constructed and shown.
+    """
+
+    def _open_main_window() -> None:
+        main_window = _build_main_window(dependencies)
+        windows.append(main_window)
+        main_window.show()
+        project_window.close()
+
+    project_window = InitialProjectWindow(dependencies.initial_project_use_case)
+    project_window.created.connect(_open_main_window)
+    return project_window
+
+
+def _build_post_key_window(
+    dependencies: ConversationDependencies, windows: list[QMainWindow]
+) -> QMainWindow:
+    """RF-014/D-02 (B3a): the initial-project screen only while a key is
+    configured but no project has been set up yet.
+
+    Determined exclusively through ``InitialProjectUseCase.is_configured()``
+    — never by querying ``ProjectRepository`` directly. Shared by both paths
+    that can reach "a key is now configured": the key already existed at
+    startup, and the key was just validated and saved during this run
+    (B2a's ``OnboardingWindow``) — so the project check never runs twice or
+    is duplicated between callbacks.
+    """
+    if dependencies.initial_project_use_case.is_configured():
+        return _build_main_window(dependencies)
+    return _build_initial_project_window(dependencies, windows)
 
 
 def _build_initial_window(
@@ -70,9 +109,9 @@ def _build_initial_window(
     Determined exclusively through ``ApiKeySettingsUseCase.has_key()`` — never
     by touching the secret store, keyring, or any provider SDK directly.
     """
-    if dependencies.api_key_settings_use_case.has_key():
-        return _build_main_window(dependencies)
-    return _build_onboarding_window(dependencies, windows)
+    if not dependencies.api_key_settings_use_case.has_key():
+        return _build_onboarding_window(dependencies, windows)
+    return _build_post_key_window(dependencies, windows)
 
 
 def _start_with_resolved_path(data_dir: Path, windows: list[QMainWindow]) -> QMainWindow:

@@ -36,23 +36,29 @@ Una vertical puede tener su infraestructura implementada y mantener defectos de 
 - persistencia transaccional;
 - recuperación entre sesiones.
 
-## V3 — Infraestructura de proyecto activo — IMPLEMENTADA; CAPACIDAD DE PRODUCTO INCOMPLETA
+## V3 — Infraestructura de proyecto activo — IMPLEMENTADA; CAPACIDAD DE PRODUCTO PARCIALMENTE COMPLETA (B3a)
 
 Implementado:
 
 - persistencia de un único proyecto activo;
 - campos básicos de nombre, objetivo, estado y siguiente paso;
 - recuperación del registro activo al iniciar;
-- restricción estructural de un solo proyecto activo.
+- restricción estructural de un solo proyecto activo;
+- creación utilizable desde un caso de uso de aplicación
+  (`InitialProjectUseCase`) y desde la interfaz (`InitialProjectWindow`,
+  B3a): nombre y objetivo, con estado y siguiente paso iniciales mínimos y
+  centralizados, protegida contra un segundo proyecto activo.
 
 Pendiente dentro de V8:
 
-- creación utilizable desde casos de uso e interfaz;
 - bloqueos;
 - decisiones relacionadas;
 - completar y archivar conservando historial;
+- actualización cotidiana del estado y del siguiente paso;
 - resumen observable al retomar;
-- pruebas PA-006 a PA-009 y la parte correspondiente de PA-E2E-01.
+- pruebas PA-008, PA-009 y la parte correspondiente de PA-E2E-01 (PA-006 y
+  PA-007 quedan preparadas/cubiertas automáticamente por B3a, sin declararse
+  formalmente superadas).
 
 Defectos relacionados: D-02 y D-04.
 
@@ -386,6 +392,38 @@ Prohibido en esta subetapa:
   sigue sin cerrarse por completo: falta la comprobación real de activación
   en Windows (Credential Manager con valor señuelo, pendiente de validación
   manual) y las validaciones manuales de rutas reales de Windows.
+- Saludo inicial y creación utilizable del primer proyecto (B3a, parte de
+  D-02): tras resolver la ruta y configurar la clave, Sirius distingue el
+  placeholder vacío que `get_or_create_active_project()` siembra desde V3
+  (`sirius.domain.project.is_configured()`) de un proyecto realmente
+  configurado, y `InitialProjectUseCase`
+  (`sirius.application.initial_project`) crea el primero completando ese
+  placeholder transaccionalmente (sin insertar una segunda fila) solo con
+  nombre y objetivo, asignando un estado y un siguiente paso iniciales
+  mínimos y centralizados (`INITIAL_PROJECT_STATE`/`INITIAL_PROJECT_NEXT_STEP`).
+  Rechaza un segundo proyecto activo antes de escribir nada, con un error
+  tipado y sin tocar el proyecto existente. `InitialProjectWindow` (nueva
+  ventana de presentación) muestra un saludo determinista que reutiliza
+  `sirius.domain.identity.INITIAL_IDENTITY_NAME` (nunca generado por el
+  proveedor) y solicita únicamente nombre y objetivo; `sirius.main` la
+  muestra solo cuando ya hay clave configurada pero ningún proyecto
+  configurado todavía, y abre `ValidatedMainWindow` en la misma ejecución al
+  crearlo. El proyecto configurado llega a `ContextBuilder` mediante el
+  mecanismo ya existente, sin cambios en `sirius.application.context`, porque
+  la conversación nunca se abre antes de que el proyecto quede configurado.
+  Cubierto con pruebas unitarias, de integración y de GUI
+  (`tests/unit/test_project_domain.py`,
+  `tests/unit/test_initial_project_use_case.py`,
+  `tests/integration/test_initial_project_persistence.py`,
+  `tests/gui/test_initial_project_window.py`, nuevos casos en
+  `tests/gui/test_app_bootstrap.py`), siempre con dobles deterministas o
+  SQLite temporal, sin datos reales, sin clave real y sin red. RF-014 y
+  RF-015 quedan implementados y cubiertos automáticamente; RF-016 solo en su
+  parte inicial (estado y siguiente paso al crear). D-02 queda parcialmente
+  corregido: quedan pendientes de un corte posterior de B3 los bloqueos,
+  las decisiones relacionadas, completar/archivar conservando historial y el
+  resumen observable al retomar. PA-006 y PA-007 quedan preparadas/cubiertas
+  automáticamente, sin declararse formalmente superadas.
 
 ### V8.2 — Windows sin clave — BLOQUEADA HASTA INTEGRACIÓN AUTOMÁTICA VERDE
 
