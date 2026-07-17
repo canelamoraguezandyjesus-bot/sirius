@@ -98,7 +98,7 @@ Cualquier defecto nuevo debe vincularse a un requisito ya aprobado. Si no puede 
 |---|---|---|
 | B1 | Reconciliación documental y trazabilidad | En curso |
 | B2 | Onboarding, credencial, ruta y activación | En curso (RF-002, B2a y B2b implementados y cubiertos automáticamente; activación real en Windows pendiente) |
-| B3 | Proyecto mínimo y ciclo de vida | En curso (B3a implementado y cubierto automáticamente; bloqueos, decisiones, completar/archivar y resumen al retomar pendientes) |
+| B3 | Proyecto mínimo y ciclo de vida | En curso (B3a y B3b implementados y cubiertos automáticamente; decisiones, completar/archivar y proyecto posterior pendientes) |
 | B4 | Eventos, recuerdos, decisiones y conflictos | Pendiente |
 | B5 | Panel de contexto | Pendiente |
 | B6 | Selección y presupuesto de contexto | Pendiente |
@@ -137,7 +137,8 @@ Añadir una fila por resultado verificable. No registrar secretos ni contenido s
 | 2026-07-17 | B2a | `f7134ca` (PR #24) | automática | `test_onboarding_window.py`, `test_app_bootstrap.py`, `test_composition_root_credential_validation.py` (nuevos casos), `test_send_message.py` (`set_llm_provider`), suite GUI de B2a repetida 5 veces | Superada | CI verde, `scripts/check.ps1` verde localmente (Ruff format, Ruff lint, mypy estricto, 360 pytest) | RF-001 implementado y cubierto automáticamente vía `OnboardingWindow` + recomposición segura del proveedor en la misma ejecución (`activate_configured_llm_provider`, sin reinicio). D-01 permanece abierto hasta PA-001/PA-002 con proveedor real; D-10 sigue parcialmente abierto (falta B2b y la comprobación real de Credential Manager); sin clave real ni red |
 | 2026-07-16 | B1 | `0f5af4e` (PR #22) | automática | `tests/gui/test_backup_recovery_ui.py` (23/23, 5 repeticiones) | Superada | CI verde, `scripts/check.ps1` verde | Corrección de higiene de prueba (fuga de conexión SQLite en el helper de bootstrap), no defecto de producto; sin cambio de comportamiento aprobado de V7 |
 | 2026-07-17 | B2b | `2c60afc` (PR #26) | automática | `test_paths.py`, `test_data_path_validator.py`, `test_bootstrap_location_store.py`, `test_data_location_use_case.py`, `test_data_location_window.py`, `test_app_bootstrap.py`; suite GUI de B2b repetida 5 veces | Superada | CI verde, `scripts/check.ps1` verde localmente (Ruff format, Ruff lint, mypy estricto, 412 pytest) | Selección y persistencia de la ruta local de datos antes de SQLite, logging y composición (D-10, parte de B2). Sin clave real ni red; sin movimiento ni migración de datos existentes |
-| 2026-07-17 | B3a | rama `feat/v8-b3-initial-project` (commit local) | automática | `test_project_domain.py` (nuevos casos), `test_initial_project_use_case.py` (unit e integración), `test_initial_project_window.py`, `test_app_bootstrap.py` (nuevos casos); suite GUI de B2a/B2b/B3a repetida 5 veces | Superada | `scripts/check.ps1` verde localmente (Ruff format, Ruff lint, mypy estricto, 455 pytest) | Saludo determinista y creación utilizable del primer proyecto (D-02, parcial). RF-014 cubierto automáticamente; RF-015 protegido en la capa de aplicación; parte inicial de RF-016 (estado y siguiente paso iniciales) cubierta. Sin clave real ni red; sin B3b, B4 ni B5 |
+| 2026-07-17 | B3a | `882ab62` (PR #27) | automática | `test_project_domain.py` (nuevos casos), `test_initial_project_use_case.py` (unit e integración), `test_initial_project_window.py`, `test_app_bootstrap.py` (nuevos casos); suite GUI de B2a/B2b/B3a repetida 5 veces | Superada | CI verde, `scripts/check.ps1` verde localmente (Ruff format, Ruff lint, mypy estricto, 455 pytest) | Saludo determinista y creación utilizable del primer proyecto (D-02, parcial). RF-014 cubierto automáticamente; RF-015 protegido en la capa de aplicación; parte inicial de RF-016 (estado y siguiente paso iniciales) cubierta. Sin clave real ni red; sin B3b, B4 ni B5 |
+| 2026-07-17 | B3b | rama `feat/v8-b3b-project-continuity` (commit local) | automática | `test_project_domain.py` (nuevos casos), `test_project_continuity_use_case.py`, `test_render_instructions.py`, `test_sqlite_project_repository.py` (nuevos casos), `test_migrations.py` (nuevos casos, Alembic real), `test_send_message.py` (nuevo caso), `test_composition_root_project_continuity.py`, `test_project_continuity_widget.py`, `test_main_window.py` (nuevos casos), `test_app_bootstrap.py` (nuevos casos); suite GUI de B2a/B2b/B3a/B3b repetida 5 veces | Superada | `scripts/check.ps1` verde localmente (Ruff format, Ruff lint, mypy estricto, 518 pytest) | Continuidad observable del proyecto activo (D-02, parcial). RF-016 cubierto en estado, bloqueos y siguiente paso (no en decisiones, que pertenecen a B4); RF-017 cubierto (recuperación y resumen breve al retomar). Migración Alembic no destructiva (`66951344e4b9`) probada con Alembic real desde el head anterior. Sin clave real ni red; sin completar/archivar, B4, B5 ni B6 |
 
 Tipos permitidos: `automática`, `CI`, `manual-Windows`, `proveedor-real`, `evaluación-humana`, `documental`.
 
@@ -158,8 +159,10 @@ B1 (reconciliación documental) integrado. B2 está en curso: RF-002 (validació
 credencial antes de guardar), B2a (primera configuración básica, PR #24, squash
 `f7134ca`) y B2b (selección y persistencia de la ruta local de datos, PR #26,
 squash `2c60afc`) ya están fusionados en `main`. B3 está en curso: B3a (saludo y
-creación del primer proyecto) ya está implementado y cubierto automáticamente, en
-la rama `feat/v8-b3-initial-project` (commit local).
+creación del primer proyecto, PR #27, squash `882ab62`) ya está fusionado en
+`main`. B3b (continuidad observable del proyecto activo) ya está implementado y
+cubierto automáticamente, en la rama `feat/v8-b3b-project-continuity` (commit
+local).
 
 ### B2a — Primera configuración básica — FUSIONADA (PR #24, squash `f7134ca658e6343779ee6bfe89ad05dd2f0a8ba3`)
 
@@ -277,7 +280,7 @@ Con B2b:
 
 Sin iniciar todavía Windows real ni proveedor real. Sin usar clave real ni red.
 
-### B3a — Saludo inicial y creación utilizable del primer proyecto — IMPLEMENTADA (commit local, rama `feat/v8-b3-initial-project`)
+### B3a — Saludo inicial y creación utilizable del primer proyecto — FUSIONADA (PR #27, squash `882ab62416574e6a77c4714c6510565c1b670b1d`)
 
 Primer corte dentro de B3: cubre parcialmente RF-014, RF-015 y el inicio de
 RF-016, y la cláusula de Producto §5.1 sobre saludar con identidad propia y
@@ -356,6 +359,110 @@ Con B3a:
   evaluación conforme al Plan de Pruebas, no solo cobertura automática).
 - No se implementó B3b, B4 ni B5. No se llamó a un proveedor real ni se usó
   una clave real.
+
+### B3b — Continuidad observable del proyecto activo — IMPLEMENTADA (commit local, rama `feat/v8-b3b-project-continuity`)
+
+Segundo corte dentro de B3. Texto aprobado verificado antes de implementar
+(Definición de Producto Sirius 0.1 v0.2, S10): RF-016 "Conservar objetivo,
+estado breve, decisiones, bloqueos y siguiente paso"; RF-017 "Recuperar el
+proyecto al iniciar y resumirlo brevemente". Este corte cubre RF-016 en todo
+salvo "decisiones" (que pertenece a B4, no implementado aquí) y cubre RF-017
+completo. No completa B3 ni cierra D-02.
+
+- Modelo y esquema: `Project.blockers: str` (dominio), columna `blockers`
+  TEXT NOT NULL en `projects` (`ProjectModel`), migración Alembic
+  `66951344e4b9` (revisa `0902e8217d75`) que añade la columna con
+  `server_default=''` — no destructiva, conserva todo proyecto existente
+  (id, nombre, objetivo, estado, siguiente paso, `is_active`), probada con
+  Alembic real actualizando desde el head anterior y con `downgrade`.
+  `ProjectRepository.update_project()` acepta `blockers: str | None = None`;
+  `SqliteProjectRepository` lee/escribe la columna y persiste estado,
+  bloqueos y siguiente paso en una única transacción por llamada. Cero o
+  varios bloqueos se representan como texto libre separado por saltos de
+  línea, sin tabla ni entidad `Blocker` independiente (decisión explícita de
+  este corte).
+- `ProjectContinuityUseCase` (`sirius.application.project_continuity`)
+  consulta (`get_summary()`) y actualiza (`update()`) conjuntamente estado,
+  bloqueos y siguiente paso del proyecto ya configurado, sin conocer
+  SQLAlchemy ni SQLite. Nunca crea un proyecto como efecto de una lectura;
+  rechaza con `ProjectNotConfiguredError` la ausencia de proyecto o el
+  placeholder de arranque (nunca se devuelve como resumen válido); rechaza
+  con `InvalidProjectContinuityDataError` un estado o siguiente paso vacío
+  tras recortar espacios (bloqueos vacíos sí se permiten); normaliza
+  bloqueos multilínea recortando espacios exteriores de cada línea y
+  eliminando solo las líneas vacías del principio y el final, conservando el
+  orden y los saltos de línea interiores intencionados; traduce cualquier
+  fallo del repositorio a `ProjectContinuityError`, sin exponer nunca el
+  tipo o el mensaje de la excepción original. Independiente de
+  `InitialProjectUseCase` (responsabilidad distinta: primera configuración
+  frente a continuidad de un proyecto ya configurado), ambos comparten la
+  misma instancia de `ProjectRepository` construida una sola vez en
+  `composition_root`.
+- `ProjectContinuityWidget` (nuevo widget de presentación, no una pestaña ni
+  ventana nueva) insertado por `MainWindow` encima del historial de mensajes
+  en la pestaña "Conversación" existente: muestra nombre, objetivo, estado y
+  bloqueos (`NO_BLOCKERS_TEXT`, "Sin bloqueos registrados.", centralizado)
+  siempre que hay un proyecto configurado, y destaca el siguiente paso como
+  "Ahora toca: …"; resumen determinista, local, visible al abrir, nunca
+  generado por el proveedor, nunca persistido como mensaje ni añadido al
+  historial. La acción "Actualizar proyecto" permite editar únicamente
+  estado, bloqueos y siguiente paso (nombre y objetivo quedan de solo
+  lectura en este corte) con "Guardar actualización"/"Cancelar": cancelar no
+  escribe y recarga los valores persistidos; guardar actualiza los tres
+  campos en una sola llamada, refresca el resumen y el "Ahora toca"
+  inmediatamente, impide doble envío y, ante error, conserva lo escrito,
+  reactiva los controles y muestra un mensaje seguro sin trazas ni nombres
+  de excepciones. Si `MainWindow` se construye sin un proyecto configurado
+  (caso defensivo; el flujo normal de `sirius.main` ya lo impide), el widget
+  muestra un estado seguro ("Todavía no hay un proyecto configurado.") sin
+  crear ningún proyecto y sin excepción sin traducir.
+- `MainWindow` y `ValidatedMainWindow` reciben `ProjectContinuityUseCase`
+  explícitamente (nuevo parámetro del constructor, sin exponer
+  `ProjectRepository`); `composition_root` lo construye reutilizando el
+  `ProjectRepository` ya existente (sin repositorio adicional) y lo añade a
+  `ConversationDependencies`; `sirius.main` lo pasa a `ValidatedMainWindow`
+  sin reiniciar SQLite ni reconstruir composición al actualizar.
+- `render_instructions()` (`sirius.application.send_message`) añade
+  `Nombre:` y `Bloqueos:` a la sección `# Proyecto activo` ya existente
+  (formato: Nombre, Objetivo, Estado, Bloqueos, Siguiente paso), con
+  "Bloqueos: Ninguno registrado." cuando no hay bloqueos; no incluye
+  decisiones, recuerdos ni prioridades ficticias; no cambia la política de
+  selección de contexto ni los límites de B6.
+
+Cubierto con pruebas unitarias, de integración (incluida Alembic real, no
+solo `Base.metadata.create_all`) y de GUI
+(`tests/unit/test_project_domain.py` nuevos casos,
+`tests/unit/test_project_continuity_use_case.py`,
+`tests/unit/test_render_instructions.py`,
+`tests/unit/test_composition_root_project_continuity.py`,
+`tests/integration/test_sqlite_project_repository.py` nuevos casos,
+`tests/integration/test_migrations.py` nuevos casos,
+`tests/integration/test_send_message.py` nuevo caso,
+`tests/gui/test_project_continuity_widget.py`,
+`tests/gui/test_main_window.py` nuevos casos, `tests/gui/test_app_bootstrap.py`
+nuevos casos incluyendo B3a en la misma ejecución y un reinicio simulado),
+siempre con dobles deterministas o SQLite/Alembic reales sobre archivos
+temporales, sin datos reales, sin clave real y sin red. La suite GUI de
+B2a/B2b/B3a/B3b se repitió 5 veces sin fallos.
+
+Con B3b:
+
+- RF-016 queda cubierto en estado, bloqueos y siguiente paso; la parte de
+  "decisiones" que también menciona su texto aprobado no se cubre aquí y
+  pertenece a B4.
+- RF-017 queda implementado y cubierto automáticamente (recuperación y
+  resumen breve al retomar).
+- D-02 sigue parcialmente corregido: quedan pendientes decisiones
+  relacionadas (B4), completar y archivar el proyecto conservando historial,
+  habilitar un proyecto posterior (solo permitido después de completar o
+  archivar) y el resto de RF-018.
+- PA-006 y PA-007 permanecen como en B3a (preparadas/cubiertas
+  automáticamente, no formalmente superadas). PA-008 y PA-009 no se declaran
+  superadas: PA-008 exige además recuperar una decisión registrada (B4, no
+  implementado aquí) y PA-009 exige una recomendación evaluada del
+  proveedor, no solo la presencia del dato en el contexto.
+- No se implementó completar, archivar, un proyecto posterior, decisiones,
+  B4, B5 ni B6. No se llamó a un proveedor real ni se usó una clave real.
 
 ## Cierre de V8
 

@@ -36,29 +36,33 @@ Una vertical puede tener su infraestructura implementada y mantener defectos de 
 - persistencia transaccional;
 - recuperación entre sesiones.
 
-## V3 — Infraestructura de proyecto activo — IMPLEMENTADA; CAPACIDAD DE PRODUCTO PARCIALMENTE COMPLETA (B3a)
+## V3 — Infraestructura de proyecto activo — IMPLEMENTADA; CAPACIDAD DE PRODUCTO PARCIALMENTE COMPLETA (B3a, B3b)
 
 Implementado:
 
 - persistencia de un único proyecto activo;
-- campos básicos de nombre, objetivo, estado y siguiente paso;
+- campos de nombre, objetivo, estado, bloqueos (B3b) y siguiente paso;
 - recuperación del registro activo al iniciar;
 - restricción estructural de un solo proyecto activo;
 - creación utilizable desde un caso de uso de aplicación
   (`InitialProjectUseCase`) y desde la interfaz (`InitialProjectWindow`,
   B3a): nombre y objetivo, con estado y siguiente paso iniciales mínimos y
-  centralizados, protegida contra un segundo proyecto activo.
+  centralizados, protegida contra un segundo proyecto activo;
+- continuidad utilizable desde un caso de uso de aplicación
+  (`ProjectContinuityUseCase`) y desde la interfaz
+  (`ProjectContinuityWidget`, B3b): actualización conjunta de estado,
+  bloqueos y siguiente paso, resumen observable al abrir la conversación y
+  siguiente paso destacado ("Ahora toca: …").
 
 Pendiente dentro de V8:
 
-- bloqueos;
-- decisiones relacionadas;
+- decisiones relacionadas (B4);
 - completar y archivar conservando historial;
-- actualización cotidiana del estado y del siguiente paso;
-- resumen observable al retomar;
+- habilitar un proyecto posterior (solo tras completar o archivar);
 - pruebas PA-008, PA-009 y la parte correspondiente de PA-E2E-01 (PA-006 y
   PA-007 quedan preparadas/cubiertas automáticamente por B3a, sin declararse
-  formalmente superadas).
+  formalmente superadas; PA-008 exige además una decisión registrada, y
+  PA-009 una recomendación evaluada del proveedor real).
 
 Defectos relacionados: D-02 y D-04.
 
@@ -424,6 +428,52 @@ Prohibido en esta subetapa:
   las decisiones relacionadas, completar/archivar conservando historial y el
   resumen observable al retomar. PA-006 y PA-007 quedan preparadas/cubiertas
   automáticamente, sin declararse formalmente superadas.
+- Continuidad observable del proyecto activo (B3b, parte de D-02): texto
+  aprobado verificado antes de implementar (RF-016 "Conservar objetivo,
+  estado breve, decisiones, bloqueos y siguiente paso"; RF-017 "Recuperar el
+  proyecto al iniciar y resumirlo brevemente"). `Project.blockers` (texto
+  libre, cero o varias líneas, sin tabla ni entidad `Blocker` independiente)
+  se añade mediante la migración Alembic no destructiva `66951344e4b9`
+  (`server_default=''`, probada actualizando desde el head anterior con
+  Alembic real y conservando todo proyecto existente).
+  `ProjectContinuityUseCase` (`sirius.application.project_continuity`)
+  consulta y actualiza conjuntamente estado, bloqueos y siguiente paso en
+  una sola escritura del repositorio, sin conocer SQLAlchemy ni SQLite;
+  rechaza la ausencia de proyecto o el placeholder de arranque
+  (`ProjectNotConfiguredError`), un estado o siguiente paso vacío
+  (`InvalidProjectContinuityDataError`, bloqueos vacíos sí se permiten), y
+  traduce cualquier fallo del repositorio a `ProjectContinuityError` sin
+  exponer su detalle interno. `ProjectContinuityWidget` (nuevo widget de
+  presentación, no una pestaña ni ventana nueva) se inserta en la pestaña
+  "Conversación" existente, encima del historial: resumen determinista y
+  local (nunca generado por el proveedor, nunca persistido como mensaje) con
+  el siguiente paso destacado ("Ahora toca: …") y una acción "Actualizar
+  proyecto" que edita estado/bloqueos/siguiente paso (nombre y objetivo
+  quedan de solo lectura en este corte) con guardar/cancelar, doble envío
+  impedido y errores seguros sin trazas. `MainWindow`/`ValidatedMainWindow`
+  reciben el nuevo caso de uso explícitamente, reutilizando el
+  `ProjectRepository` ya construido en `composition_root` (sin repositorio
+  adicional, sin reiniciar SQLite). `render_instructions()` añade
+  `Nombre:`/`Bloqueos:` a la sección `# Proyecto activo` ya existente
+  ("Bloqueos: Ninguno registrado." cuando no hay bloqueos), sin decisiones
+  ni recuerdos ficticios y sin cambiar la política de contexto de B6.
+  Cubierto con pruebas unitarias, de integración (incluida Alembic real) y
+  de GUI (`tests/unit/test_project_domain.py` nuevos casos,
+  `tests/unit/test_project_continuity_use_case.py`,
+  `tests/unit/test_render_instructions.py`,
+  `tests/unit/test_composition_root_project_continuity.py`,
+  `tests/integration/test_sqlite_project_repository.py` nuevos casos,
+  `tests/integration/test_migrations.py` nuevos casos,
+  `tests/integration/test_send_message.py` nuevo caso,
+  `tests/gui/test_project_continuity_widget.py`,
+  `tests/gui/test_main_window.py` y `tests/gui/test_app_bootstrap.py` nuevos
+  casos), sin datos reales, sin clave real y sin red. RF-016 queda cubierto
+  salvo la parte de "decisiones" (pertenece a B4); RF-017 queda implementado
+  y cubierto automáticamente. D-02 sigue parcialmente corregido: quedan
+  pendientes decisiones relacionadas, completar/archivar conservando
+  historial y habilitar un proyecto posterior. PA-008 y PA-009 no se
+  declaran superadas: PA-008 exige además una decisión registrada (B4) y
+  PA-009 una recomendación evaluada del proveedor real.
 
 ### V8.2 — Windows sin clave — BLOQUEADA HASTA INTEGRACIÓN AUTOMÁTICA VERDE
 

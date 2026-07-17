@@ -8,12 +8,18 @@ from datetime import datetime
 
 @dataclass(frozen=True, slots=True)
 class Project:
-    """The single active project Sirius helps carry forward across sessions."""
+    """The single active project Sirius helps carry forward across sessions.
+
+    ``blockers`` (B3b, RF-016) is free text: zero, one, or several blockers
+    separated by newlines. An empty string means no blocker is registered —
+    there is no separate "blocker" entity or table in this cut.
+    """
 
     id: int
     name: str
     objective: str
     current_state: str
+    blockers: str
     next_step: str
     created_at: datetime
     updated_at: datetime

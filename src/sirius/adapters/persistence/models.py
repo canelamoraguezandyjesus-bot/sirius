@@ -101,6 +101,7 @@ class ProjectModel(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     objective: Mapped[str] = mapped_column(Text, nullable=False)
     current_state: Mapped[str] = mapped_column(Text, nullable=False)
+    blockers: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     next_step: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(nullable=False)

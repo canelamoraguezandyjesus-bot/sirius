@@ -76,6 +76,7 @@ def _build_window(
         send_message_use_case=dependencies.send_message_use_case,
         get_history_use_case=dependencies.get_history_use_case,
         api_key_settings_use_case=dependencies.api_key_settings_use_case,
+        project_continuity_use_case=dependencies.project_continuity_use_case,
         create_backup_use_case=dependencies.create_backup_use_case,
         validate_backup_use_case=dependencies.validate_backup_use_case,
         restore_backup_use_case=dependencies.restore_backup_use_case,

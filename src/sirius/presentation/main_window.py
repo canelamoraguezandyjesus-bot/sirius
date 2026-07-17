@@ -34,6 +34,7 @@ from sirius.application.get_conversation_history import (
     ConversationNotInitializedError,
     GetConversationHistoryUseCase,
 )
+from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.send_message import SendMessageResult, SendMessageUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
@@ -58,6 +59,7 @@ from sirius.presentation.backup_worker import (
     ValidateBackupWorker,
 )
 from sirius.presentation.conversation_worker import SendMessageWorker
+from sirius.presentation.project_continuity_widget import ProjectContinuityWidget
 
 _logger = get_logger(__name__)
 
@@ -76,6 +78,7 @@ class MainWindow(QMainWindow):
         send_message_use_case: SendMessageUseCase,
         get_history_use_case: GetConversationHistoryUseCase,
         api_key_settings_use_case: ApiKeySettingsUseCase,
+        project_continuity_use_case: ProjectContinuityUseCase,
         create_backup_use_case: CreateBackupUseCase,
         validate_backup_use_case: ValidateBackupUseCase,
         restore_backup_use_case: RestoreBackupUseCase,
@@ -90,6 +93,7 @@ class MainWindow(QMainWindow):
         self._send_message_use_case = send_message_use_case
         self._get_history_use_case = get_history_use_case
         self._api_key_settings_use_case = api_key_settings_use_case
+        self._project_continuity_use_case = project_continuity_use_case
         self._create_backup_use_case = create_backup_use_case
         self._validate_backup_use_case = validate_backup_use_case
         self._restore_backup_use_case = restore_backup_use_case
@@ -157,6 +161,10 @@ class MainWindow(QMainWindow):
     # --- Conversación --------------------------------------------------
 
     def _build_conversation_tab(self) -> QWidget:
+        self.project_continuity_widget = ProjectContinuityWidget(
+            self._project_continuity_use_case, show_warning=self._show_warning
+        )
+
         self.message_list = QListWidget()
         self.message_list.setAccessibleName("Historial de la conversación")
 
@@ -182,6 +190,7 @@ class MainWindow(QMainWindow):
 
         container = QWidget()
         layout = QVBoxLayout(container)
+        layout.addWidget(self.project_continuity_widget)
         layout.addWidget(self.message_list)
         layout.addLayout(input_row)
         layout.addWidget(self.status_label)

@@ -32,6 +32,7 @@ class _FakeProjectRepository:
                 name="",
                 objective="",
                 current_state="",
+                blockers="",
                 next_step="",
                 created_at=now,
                 updated_at=now,
@@ -48,6 +49,7 @@ class _FakeProjectRepository:
         name: str | None = None,
         objective: str | None = None,
         current_state: str | None = None,
+        blockers: str | None = None,
         next_step: str | None = None,
     ) -> Project:
         self.update_calls.append(
@@ -57,6 +59,7 @@ class _FakeProjectRepository:
                     "name": name,
                     "objective": objective,
                     "current_state": current_state,
+                    "blockers": blockers,
                     "next_step": next_step,
                 },
             )
@@ -70,6 +73,7 @@ class _FakeProjectRepository:
             current_state=current_state
             if current_state is not None
             else self._project.current_state,
+            blockers=blockers if blockers is not None else self._project.blockers,
             next_step=next_step if next_step is not None else self._project.next_step,
             created_at=self._project.created_at,
             updated_at=datetime.now(UTC),
@@ -84,6 +88,7 @@ def _placeholder(project_id: int = 1) -> Project:
         name="",
         objective="",
         current_state="",
+        blockers="",
         next_step="",
         created_at=now,
         updated_at=now,
@@ -99,6 +104,7 @@ def _configured(
         name=name,
         objective=objective,
         current_state=INITIAL_PROJECT_STATE,
+        blockers="",
         next_step=INITIAL_PROJECT_NEXT_STEP,
         created_at=now,
         updated_at=now,

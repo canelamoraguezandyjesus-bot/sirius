@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QPushButton
 from sirius.application.api_key_settings import ApiKeySettingsUseCase
 from sirius.application.create_backup import CreateBackupUseCase
 from sirius.application.get_conversation_history import GetConversationHistoryUseCase
+from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.send_message import SendMessageUseCase
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
@@ -27,6 +28,7 @@ class ValidatedMainWindow(MainWindow):
         get_history_use_case: GetConversationHistoryUseCase,
         api_key_settings_use_case: ApiKeySettingsUseCase,
         validate_and_save_api_key_use_case: ValidateAndSaveApiKeyUseCase,
+        project_continuity_use_case: ProjectContinuityUseCase,
         create_backup_use_case: CreateBackupUseCase,
         validate_backup_use_case: ValidateBackupUseCase,
         restore_backup_use_case: RestoreBackupUseCase,
@@ -45,6 +47,7 @@ class ValidatedMainWindow(MainWindow):
             send_message_use_case=send_message_use_case,
             get_history_use_case=get_history_use_case,
             api_key_settings_use_case=api_key_settings_use_case,
+            project_continuity_use_case=project_continuity_use_case,
             create_backup_use_case=create_backup_use_case,
             validate_backup_use_case=validate_backup_use_case,
             restore_backup_use_case=restore_backup_use_case,

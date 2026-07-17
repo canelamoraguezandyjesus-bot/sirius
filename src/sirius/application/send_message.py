@@ -62,6 +62,9 @@ class SendMessageResult:
     error_kind: LLMErrorKind | None = None
 
 
+_NO_BLOCKERS_CONTEXT_TEXT = "Ninguno registrado."
+
+
 def render_instructions(context: Context) -> str:
     """Render an already-built Context into the instructions text for the provider.
 
@@ -74,8 +77,10 @@ def render_instructions(context: Context) -> str:
         context.identity.current_version.personality_instructions,
         "",
         "# Proyecto activo",
+        f"Nombre: {context.project.name}",
         f"Objetivo: {context.project.objective}",
         f"Estado: {context.project.current_state}",
+        f"Bloqueos: {context.project.blockers or _NO_BLOCKERS_CONTEXT_TEXT}",
         f"Siguiente paso: {context.project.next_step}",
         "",
         "# Memorias vigentes",
