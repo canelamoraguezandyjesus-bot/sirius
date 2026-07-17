@@ -16,6 +16,7 @@ from PySide6.QtCore import QRunnable, QThreadPool
 from PySide6.QtWidgets import QMainWindow
 from pytestqt.qtbot import QtBot
 
+from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.adapters.persistence.database import build_engine
 from sirius.adapters.persistence.models import Base
 from sirius.adapters.persistence.sqlite_conversation_repository import (
@@ -26,10 +27,15 @@ from sirius.adapters.persistence.sqlite_identity_repository import (
 )
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.adapters.secrets.fake import FakeSecretStore
+from sirius.application.data_location import DataLocationUseCase
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
 from sirius.composition_root import build_conversation_dependencies
 from sirius.config.secrets_config import OPENAI_API_KEY_SECRET_NAME
-from sirius.main import _build_initial_window, _build_onboarding_window
+from sirius.infrastructure.bootstrap_location_store import BootstrapLocationStore
+from sirius.infrastructure.data_path_validator import WindowsDataPathValidator
+from sirius.infrastructure.paths import resolve_paths
+from sirius.main import _build_first_window, _build_initial_window, _build_onboarding_window
+from sirius.presentation.data_location_window import RECOVERY_INTRO_TEXT, DataLocationWindow
 from sirius.presentation.onboarding_window import OnboardingWindow
 from sirius.presentation.validated_main_window import ValidatedMainWindow
 
@@ -124,3 +130,126 @@ def test_successful_onboarding_opens_the_main_window_in_the_same_run(
     assert isinstance(windows[1], ValidatedMainWindow)
     assert windows[1].isVisible() is True
     assert onboarding.isVisible() is False
+
+
+# --- B2b: data location resolved before any SQLite/logging initialization ---
+
+
+def _location_use_case() -> DataLocationUseCase:
+    default_paths = resolve_paths()
+    return DataLocationUseCase(
+        BootstrapLocationStore(),
+        WindowsDataPathValidator(),
+        default_data_dir=default_paths.data_dir,
+    )
+
+
+@pytest.mark.gui
+def test_fresh_install_shows_the_location_window_before_any_persistence_or_logging(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    persistence_calls: list[Path] = []
+    logging_calls: list[Path] = []
+    monkeypatch.setattr(
+        "sirius.main.initialize_persistence",
+        lambda paths: persistence_calls.append(paths.data_dir),
+    )
+    monkeypatch.setattr(
+        "sirius.main.configure_logging",
+        lambda logs_dir, **kwargs: logging_calls.append(logs_dir),
+    )
+
+    windows: list[QMainWindow] = []
+    window = _build_first_window(_location_use_case(), windows)
+    qtbot.addWidget(window)
+
+    assert isinstance(window, DataLocationWindow)
+    assert persistence_calls == []
+    assert logging_calls == []
+
+
+@pytest.mark.gui
+def test_accepting_the_default_location_starts_persistence_in_the_same_run(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """B2b: after the location is confirmed, SQLite/composition start in the
+    same process — no restart — and the normal B2a onboarding gate applies."""
+    monkeypatch.setattr(
+        "sirius.composition_root.build_keyring_secret_store", lambda: FakeSecretStore()
+    )
+    default_paths = resolve_paths()
+    use_case = _location_use_case()
+    windows: list[QMainWindow] = []
+
+    window = _build_first_window(use_case, windows)
+    qtbot.addWidget(window)
+    assert isinstance(window, DataLocationWindow)
+    assert not (default_paths.data_dir / "sirius.db").exists()
+
+    window.accept_default_button.click()
+
+    assert (default_paths.data_dir / "sirius.db").exists()
+    assert len(windows) == 1
+    assert isinstance(windows[0], OnboardingWindow)
+
+
+@pytest.mark.gui
+def test_existing_default_installation_without_location_file_skips_the_selection_window(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """B2b case 2: an installation that predates the pointer file keeps using
+    the default path silently — no migration screen, no second database."""
+    monkeypatch.setattr(
+        "sirius.composition_root.build_keyring_secret_store", lambda: FakeSecretStore()
+    )
+    default_paths = resolve_paths()
+    initialize_persistence(default_paths)  # simulates a pre-B2b installation
+
+    use_case = _location_use_case()
+    windows: list[QMainWindow] = []
+
+    window = _build_first_window(use_case, windows)
+    qtbot.addWidget(window)
+
+    assert not isinstance(window, DataLocationWindow)
+    assert isinstance(window, OnboardingWindow)
+    assert (default_paths.config_dir / "data_location.json").exists()
+
+
+@pytest.mark.gui
+def test_previously_saved_custom_location_is_used_silently_without_reprompting(
+    qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "sirius.composition_root.build_keyring_secret_store", lambda: FakeSecretStore()
+    )
+    custom_dir = tmp_path / "Ubicacion Personalizada"
+    custom_dir.mkdir()
+    BootstrapLocationStore().save(custom_dir)
+
+    use_case = _location_use_case()
+    windows: list[QMainWindow] = []
+
+    window = _build_first_window(use_case, windows)
+    qtbot.addWidget(window)
+
+    assert not isinstance(window, DataLocationWindow)
+    assert (custom_dir / "sirius.db").exists()
+
+
+@pytest.mark.gui
+def test_corrupted_location_file_shows_recovery_and_never_opens_a_database_silently(
+    qtbot: QtBot,
+) -> None:
+    default_paths = resolve_paths()
+    location_file = default_paths.config_dir / "data_location.json"
+    location_file.parent.mkdir(parents=True, exist_ok=True)
+    location_file.write_text("{esto no es json valido", encoding="utf-8")
+
+    windows: list[QMainWindow] = []
+    window = _build_first_window(_location_use_case(), windows)
+    qtbot.addWidget(window)
+
+    assert isinstance(window, DataLocationWindow)
+    assert window.intro_label.text() == RECOVERY_INTRO_TEXT
+    assert not (default_paths.data_dir / "sirius.db").exists()

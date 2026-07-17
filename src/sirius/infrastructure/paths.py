@@ -31,16 +31,25 @@ class SiriusPaths:
         )
 
 
-def resolve_paths() -> SiriusPaths:
-    """Resolve the local directories Sirius uses, without creating them."""
+def resolve_paths(data_dir: Path | None = None) -> SiriusPaths:
+    """Resolve the local directories Sirius uses, without creating them.
+
+    ``config_dir`` always comes from the platform-default directory,
+    regardless of ``data_dir``: it must stay fixed and independent of the
+    data location so a pre-bootstrap component (B2b) can record *where* the
+    data directory is before the data directory itself is known or created.
+    ``data_dir`` defaults to that same platform directory when omitted,
+    preserving prior behavior for every caller that has no chosen location
+    yet.
+    """
     dirs = PlatformDirs(_APP_NAME, appauthor=False, roaming=False)
-    data_dir = Path(dirs.user_data_dir)
+    resolved_data_dir = data_dir if data_dir is not None else Path(dirs.user_data_dir)
     return SiriusPaths(
         config_dir=Path(dirs.user_config_dir),
-        data_dir=data_dir,
-        logs_dir=data_dir / "logs",
-        backups_dir=data_dir / "backups",
-        exports_dir=data_dir / "exports",
+        data_dir=resolved_data_dir,
+        logs_dir=resolved_data_dir / "logs",
+        backups_dir=resolved_data_dir / "backups",
+        exports_dir=resolved_data_dir / "exports",
     )
 
 

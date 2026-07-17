@@ -28,11 +28,23 @@
   proveedor y modelo predeterminados, y activa el proveedor real en la misma
   ejecución tras validar y guardar la clave, sin exigir reinicio. RF-001 está
   implementado y cubierto automáticamente. D-01 permanece abierto hasta demostrar
-  el resto de sus condiciones (pruebas formales con proveedor real, PA-001/PA-002);
-  D-10 permanece parcialmente abierto: falta la edición de la ruta local (B2b) y
-  la comprobación real de activación en Windows (Credential Manager, pendiente de
-  validación manual). El saludo con identidad propia y la propuesta de proyecto
-  inicial pertenecen a B3 y no son una condición de cierre de D-10.
+  el resto de sus condiciones (pruebas formales con proveedor real, PA-001/PA-002).
+  Además (B2b, commit local en `feat/v8-b2b-data-path`, sin PR todavía), la
+  ubicación de los datos se resuelve, valida y persiste antes de crear directorios
+  de datos, configurar el logging dependiente de la ruta, abrir SQLite o construir
+  la composición: `BootstrapLocationStore` guarda un puntero JSON atómico y
+  mínimo en el directorio de configuración estable de Windows (independiente de
+  `data_dir`), `WindowsDataPathValidator` prueba escritura real y detecta
+  instalaciones existentes y carpetas bajo OneDrive, y `DataLocationWindow`
+  ofrece la ruta predeterminada ya seleccionada con una opción avanzada para
+  elegir otra carpeta, solo cuando hace falta una primera elección. Una ruta
+  personalizada con datos existentes se bloquea sin adoptarla ni migrarla; un
+  archivo de ubicación corrupto nunca abre una base predeterminada en silencio.
+  D-10 permanece parcialmente abierto: falta la comprobación real de activación
+  en Windows (Credential Manager, pendiente de validación manual) y la
+  validación manual de rutas reales de Windows. El saludo con identidad propia y
+  la propuesta de proyecto inicial pertenecen a B3 y no son una condición de
+  cierre de D-10.
 
 Estas entradas describen infraestructura o hitos de implementación. No demuestran por sí solas que la capacidad completa de producto sea utilizable ni que sus pruebas de aceptación hayan pasado.
 
@@ -55,6 +67,9 @@ En particular:
 - La validación de credencial antes de guardarla está cubierta automáticamente e
   integrada en la interfaz, siempre contra un validador simulado (nunca contra el
   proveedor real).
+- La selección y persistencia de la ruta local de datos (B2b) resuelve la
+  ubicación antes de SQLite, logging y composición; cubierta automáticamente con
+  dobles deterministas, sin datos reales, sin OneDrive real y sin red.
 
 ### Pendiente de validación manual
 
