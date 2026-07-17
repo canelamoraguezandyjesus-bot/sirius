@@ -43,9 +43,9 @@
   predeterminada en silencio. D-10 permanece parcialmente abierto: falta la
   comprobación real de activación en Windows (Credential Manager, pendiente de
   validación manual) y la validación manual de rutas reales de Windows. Además
-  (B3a, commit local en `feat/v8-b3-initial-project`, todavía sin PR), tras
-  resolver la ruta y configurar la clave, Sirius distingue el placeholder vacío
-  de arranque de un proyecto realmente configurado
+  (B3a, PR #27, squash `882ab62416574e6a77c4714c6510565c1b670b1d`, fusionado en
+  `main`), tras resolver la ruta y configurar la clave, Sirius distingue el
+  placeholder vacío de arranque de un proyecto realmente configurado
   (`sirius.domain.project.is_configured()`), y `InitialProjectUseCase` crea el
   primero completando ese placeholder (sin insertar una segunda fila) con
   nombre, objetivo y un estado/siguiente paso iniciales mínimos y centralizados;
@@ -56,16 +56,34 @@
   implementados y cubiertos automáticamente; RF-016 solo en su parte inicial.
   D-02 queda parcialmente corregido: quedan pendientes bloqueos, decisiones
   relacionadas, completar/archivar conservando historial y el resumen al
-  retomar, para un corte posterior de B3.
+  retomar, para un corte posterior de B3. Además (B3b, commit local en
+  `feat/v8-b3b-project-continuity`, todavía sin PR), Sirius conserva y muestra
+  la continuidad del proyecto activo: `Project.blockers` (texto libre,
+  migración Alembic no destructiva `66951344e4b9`, probada con Alembic real
+  desde el head anterior) se añade junto a estado y siguiente paso;
+  `ProjectContinuityUseCase` consulta y actualiza los tres campos en una sola
+  escritura, rechazando la ausencia de proyecto o el placeholder y un estado o
+  siguiente paso vacío, y traduciendo cualquier fallo de infraestructura a un
+  error seguro; `ProjectContinuityWidget`, insertado por `MainWindow` encima
+  del historial en la pestaña "Conversación" existente (sin pestaña ni ventana
+  nueva), muestra un resumen local y determinista con el siguiente paso
+  destacado ("Ahora toca: …") y permite actualizar estado/bloqueos/siguiente
+  paso; `render_instructions()` incluye ahora nombre y bloqueos en la sección
+  "# Proyecto activo" enviada al proveedor. RF-016 queda cubierto salvo la
+  parte de "decisiones" (B4); RF-017 queda implementado y cubierto
+  automáticamente. D-02 sigue parcialmente corregido: quedan pendientes
+  decisiones relacionadas, completar/archivar conservando historial y
+  habilitar un proyecto posterior.
 
 Estas entradas describen infraestructura o hitos de implementación. No demuestran por sí solas que la capacidad completa de producto sea utilizable ni que sus pruebas de aceptación hayan pasado.
 
 En particular:
 
-- el proyecto sigue incompleto como capacidad observable de producto: B3a
-  cubre el saludo inicial y la creación del primer proyecto, pero bloqueos,
-  decisiones relacionadas, completar/archivar conservando historial y el
-  resumen observable al retomar quedan pendientes;
+- el proyecto sigue incompleto como capacidad observable de producto: B3a y
+  B3b cubren el saludo inicial, la creación del primer proyecto y su
+  continuidad (estado, bloqueos, siguiente paso, resumen al retomar), pero
+  decisiones relacionadas y completar/archivar conservando historial quedan
+  pendientes;
 - la memoria no contiene todavía toda la semántica aprobada de decisiones, eventos, sustitución, conflictos y origen consultable;
 - no existe todavía el panel de contexto;
 - el constructor de contexto no aplica aún toda la selección, precedencia y política de presupuesto aprobadas.
@@ -89,6 +107,11 @@ En particular:
   cubiertos automáticamente (unidad, integración con SQLite real y GUI), con
   la protección contra un segundo proyecto activo verificada antes de
   escribir cualquier dato; sin datos reales y sin red.
+- La continuidad observable del proyecto activo (B3b: estado, bloqueos,
+  siguiente paso, resumen al retomar y contexto actualizado) está cubierta
+  automáticamente (unidad, integración con SQLite/Alembic real y GUI); la
+  migración que añade `blockers` se probó actualizando una base real desde
+  el head anterior sin perder datos; sin datos reales y sin red.
 
 ### Pendiente de validación manual
 

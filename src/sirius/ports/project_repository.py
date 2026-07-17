@@ -25,6 +25,7 @@ class ProjectRepository(Protocol):
         name: str | None = None,
         objective: str | None = None,
         current_state: str | None = None,
+        blockers: str | None = None,
         next_step: str | None = None,
     ) -> Project:
         """Update the given fields of a project, leaving the rest untouched.

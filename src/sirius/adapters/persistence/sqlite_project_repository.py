@@ -27,6 +27,7 @@ def _to_domain_project(model: ProjectModel) -> Project:
         name=model.name,
         objective=model.objective,
         current_state=model.current_state,
+        blockers=model.blockers,
         next_step=model.next_step,
         created_at=model.created_at.replace(tzinfo=UTC),
         updated_at=model.updated_at.replace(tzinfo=UTC),
@@ -59,6 +60,7 @@ class SqliteProjectRepository:
                     name="",
                     objective="",
                     current_state="",
+                    blockers="",
                     next_step="",
                     is_active=True,
                     created_at=now,
@@ -82,6 +84,7 @@ class SqliteProjectRepository:
         name: str | None = None,
         objective: str | None = None,
         current_state: str | None = None,
+        blockers: str | None = None,
         next_step: str | None = None,
     ) -> Project:
         with session_scope(self._session_factory) as session:
@@ -96,6 +99,8 @@ class SqliteProjectRepository:
                 model.objective = objective
             if current_state is not None:
                 model.current_state = current_state
+            if blockers is not None:
+                model.blockers = blockers
             if next_step is not None:
                 model.next_step = next_step
             model.updated_at = _utc_now_naive()

@@ -41,6 +41,7 @@ from sirius.main import _build_first_window, _build_initial_window, _build_onboa
 from sirius.presentation.data_location_window import RECOVERY_INTRO_TEXT, DataLocationWindow
 from sirius.presentation.initial_project_window import InitialProjectWindow
 from sirius.presentation.onboarding_window import OnboardingWindow
+from sirius.presentation.project_continuity_widget import NO_BLOCKERS_TEXT
 from sirius.presentation.validated_main_window import ValidatedMainWindow
 
 
@@ -374,6 +375,48 @@ def test_creating_the_initial_project_opens_the_main_window_in_the_same_run(
     assert windows[1].isVisible() is True
     assert window.isVisible() is False
     assert dependencies.initial_project_use_case.is_configured() is True
+
+    # Scenario 12: the continuity section reflects the just-created project
+    # immediately, in the same run — no reopen required.
+    main_window = windows[1]
+    assert main_window.project_continuity_widget.name_label.text() == "Mi Proyecto"
+    assert main_window.project_continuity_widget.objective_label.text() == "Aprender Sirius"
+    assert main_window.project_continuity_widget.blockers_label.text() == NO_BLOCKERS_TEXT
+
+
+@pytest.mark.gui
+def test_simulated_restart_recovers_the_updated_continuity_summary(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Scenario 13: update continuity, close repositories, rebuild composition
+    (a fresh ``ConversationDependencies``, simulating a real restart), open
+    again, and confirm the summary and "Ahora toca" reflect what was saved."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")  # project configured
+    secret_store = FakeSecretStore()
+    secret_store.set_secret(OPENAI_API_KEY_SECRET_NAME, "sk-already-configured")
+
+    first_dependencies = build_conversation_dependencies(
+        database_path, database_path.parent / "backups", secret_store=secret_store
+    )
+    first_dependencies.project_continuity_use_case.update(
+        "estado tras actualizar", "bloqueo pendiente", "paso tras actualizar"
+    )
+    first_dependencies.close_database_connections()
+
+    second_dependencies = build_conversation_dependencies(
+        database_path, database_path.parent / "backups", secret_store=secret_store
+    )
+    windows: list[QMainWindow] = []
+    window = _build_initial_window(second_dependencies, windows)
+    qtbot.addWidget(window)
+
+    assert isinstance(window, ValidatedMainWindow)
+    assert window.project_continuity_widget.current_state_label.text() == "estado tras actualizar"
+    assert window.project_continuity_widget.blockers_label.text() == "bloqueo pendiente"
+    assert (
+        window.project_continuity_widget.next_step_label.text()
+        == "Ahora toca: paso tras actualizar"
+    )
 
 
 @pytest.mark.gui

@@ -128,6 +128,127 @@ def test_update_project_partial_update_leaves_other_fields_untouched(tmp_path: P
 
 
 @pytest.mark.integration
+def test_get_or_create_active_project_seeds_empty_blockers(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+
+    project = repository.get_or_create_active_project()
+
+    assert project.blockers == ""
+
+
+@pytest.mark.integration
+def test_update_project_writes_and_reads_back_blockers(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    project = repository.get_or_create_active_project()
+
+    updated = repository.update_project(project.id, blockers="bloqueo uno\nbloqueo dos")
+
+    assert updated.blockers == "bloqueo uno\nbloqueo dos"
+
+    reopened = build_sqlite_project_repository(database_path).get_or_create_active_project()
+    assert reopened.blockers == "bloqueo uno\nbloqueo dos"
+
+
+@pytest.mark.integration
+def test_update_project_updates_state_blockers_and_next_step_together(tmp_path: Path) -> None:
+    """B3b: a single continuity update writes all three fields in one call."""
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    project = repository.get_or_create_active_project()
+    repository.update_project(project.id, name="Sirius", objective="objetivo")
+
+    updated = repository.update_project(
+        project.id,
+        current_state="en curso",
+        blockers="esperando revisión",
+        next_step="publicar",
+    )
+
+    assert updated.name == "Sirius"  # untouched by this call
+    assert updated.objective == "objetivo"  # untouched by this call
+    assert updated.current_state == "en curso"
+    assert updated.blockers == "esperando revisión"
+    assert updated.next_step == "publicar"
+
+
+@pytest.mark.integration
+def test_update_project_leaves_blockers_untouched_when_not_passed(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    project = repository.get_or_create_active_project()
+    repository.update_project(project.id, blockers="bloqueo persistente")
+
+    updated = repository.update_project(project.id, current_state="nuevo estado")
+
+    assert updated.blockers == "bloqueo persistente"
+    assert updated.current_state == "nuevo estado"
+
+
+@pytest.mark.integration
+def test_update_project_blockers_can_be_cleared_explicitly(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    project = repository.get_or_create_active_project()
+    repository.update_project(project.id, blockers="bloqueo temporal")
+
+    updated = repository.update_project(project.id, blockers="")
+
+    assert updated.blockers == ""
+
+
+@pytest.mark.integration
+def test_update_project_advances_updated_at_when_only_blockers_change(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    project = repository.get_or_create_active_project()
+
+    time.sleep(0.01)
+    updated = repository.update_project(project.id, blockers="bloqueo nuevo")
+
+    assert updated.updated_at > project.updated_at
+    assert updated.created_at == project.created_at
+
+
+@pytest.mark.integration
+def test_failed_continuity_update_leaves_no_partial_change(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    project = repository.get_or_create_active_project()
+    repository.update_project(
+        project.id,
+        current_state="estado original",
+        blockers="bloqueo original",
+        next_step="siguiente original",
+    )
+
+    engine = build_engine(database_path)
+    session_factory = build_session_factory(engine)
+
+    class Boom(Exception):
+        pass
+
+    with (
+        pytest.raises(Boom),
+        session_scope(session_factory) as session,
+    ):
+        model = session.get(ProjectModel, project.id)
+        assert model is not None
+        model.current_state = "corrupto a mitad de camino"
+        model.blockers = "bloqueo corrupto a mitad de camino"
+        session.flush()
+        raise Boom
+
+    with session_scope(session_factory) as session:
+        model = session.get(ProjectModel, project.id)
+        assert model is not None
+        assert model.current_state == "estado original"
+        assert model.blockers == "bloqueo original"
+        assert model.next_step == "siguiente original"
+
+
+@pytest.mark.integration
 def test_update_project_advances_updated_at(tmp_path: Path) -> None:
     database_path = tmp_path / "sirius.db"
     repository = _build_repository(database_path)

@@ -1,13 +1,15 @@
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 
 from sirius.adapters.persistence.database import build_engine
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+_PREVIOUS_HEAD_REVISION = "0902e8217d75"  # head immediately before B3b's "add project blockers"
 
 
 def _alembic_config(database_path: Path) -> Config:
@@ -70,6 +72,7 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
         "name",
         "objective",
         "current_state",
+        "blockers",
         "next_step",
         "is_active",
         "created_at",
@@ -265,6 +268,94 @@ def test_downgrade_to_v6b_message_fields_removes_only_llm_usage(tmp_path: Path) 
     }
     assert "status" in message_columns
     assert "operation_id" in message_columns
+
+
+@pytest.mark.integration
+def test_downgrade_to_v7_removes_only_the_blockers_column(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+
+    command.upgrade(config, "head")
+    command.downgrade(config, _PREVIOUS_HEAD_REVISION)
+
+    table_names = set(inspect(build_engine(database_path)).get_table_names())
+    assert "projects" in table_names
+    assert "llm_usage" in table_names  # unaffected by this downgrade
+
+    project_columns = {
+        c["name"] for c in inspect(build_engine(database_path)).get_columns("projects")
+    }
+    assert project_columns == {
+        "id",
+        "name",
+        "objective",
+        "current_state",
+        "next_step",
+        "is_active",
+        "created_at",
+        "updated_at",
+    }
+
+
+@pytest.mark.integration
+def test_upgrading_from_the_previous_head_preserves_the_existing_project(tmp_path: Path) -> None:
+    """B3b compatibility: a base created before this migration existed (still
+    at the previous head) upgrades to the new head without losing the
+    existing project row, its id, or any of its other fields; ``blockers``
+    starts empty for it, and the single-active-project row stays unique."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+    command.upgrade(config, _PREVIOUS_HEAD_REVISION)
+
+    now = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO projects "
+                "(name, objective, current_state, next_step, is_active, created_at, updated_at) "
+                "VALUES (:name, :objective, :state, :next_step, 1, :now, :now)"
+            ),
+            {
+                "name": "Sirius 0.1",
+                "objective": "Cerrar B3b",
+                "state": "en curso",
+                "next_step": "probar la migración",
+                "now": now,
+            },
+        )
+
+    command.upgrade(config, "head")
+
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        rows = connection.execute(
+            text(
+                "SELECT id, name, objective, current_state, next_step, is_active, blockers "
+                "FROM projects"
+            )
+        ).fetchall()
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.name == "Sirius 0.1"
+    assert row.objective == "Cerrar B3b"
+    assert row.current_state == "en curso"
+    assert row.next_step == "probar la migración"
+    assert row.is_active == 1
+    assert row.blockers == ""
+
+
+@pytest.mark.integration
+def test_a_fresh_database_created_directly_at_head_includes_blockers(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+
+    command.upgrade(_alembic_config(database_path), "head")
+
+    project_columns = {
+        c["name"] for c in inspect(build_engine(database_path)).get_columns("projects")
+    }
+    assert "blockers" in project_columns
 
 
 @pytest.mark.integration

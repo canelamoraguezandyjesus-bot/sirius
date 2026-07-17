@@ -21,7 +21,8 @@ from sirius.adapters.persistence.sqlite_identity_repository import (
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.application.context import ContextBuilder
-from sirius.application.send_message import SendMessageUseCase
+from sirius.application.project_continuity import ProjectContinuityUseCase
+from sirius.application.send_message import SendMessageUseCase, render_instructions
 from sirius.domain.conversation import Conversation, Message, MessageRole, MessageStatus
 from sirius.ports.conversation_repository import ConversationRepository
 from sirius.ports.llm import (
@@ -215,6 +216,33 @@ def test_send_message_uses_context_built_from_current_identity_and_project(
 
     assert result.context.identity.current_version.name == "Sirius"
     assert result.context.current_user_message == "hola"
+
+
+@pytest.mark.integration
+def test_send_message_context_reflects_a_project_continuity_update(tmp_path: Path) -> None:
+    """B3b: state/blockers/next step updated via ProjectContinuityUseCase flow
+    into the very next context sent to the (simulated) provider."""
+    database_path = tmp_path / "sirius.db"
+    Base.metadata.create_all(build_engine(database_path))
+    _seed_bootstrap_singletons(database_path)
+    project_repository = build_sqlite_project_repository(database_path)
+    project_repository.update_project(
+        project_repository.get_or_create_active_project().id,
+        name="Sirius 0.1",
+        objective="Cerrar B3b",
+    )
+    ProjectContinuityUseCase(project_repository).update(
+        "estado actualizado", "bloqueo pendiente", "siguiente paso actualizado"
+    )
+
+    use_case = _build_use_case(database_path, FakeLLMProvider())
+    result = use_case.send_message("hola")
+
+    instructions = render_instructions(result.context)
+    assert "Nombre: Sirius 0.1" in instructions
+    assert "Estado: estado actualizado" in instructions
+    assert "Bloqueos: bloqueo pendiente" in instructions
+    assert "Siguiente paso: siguiente paso actualizado" in instructions
 
 
 @pytest.mark.integration

@@ -75,6 +75,7 @@ def _build_window(
             validator,
             secret_store,
         ),
+        project_continuity_use_case=dependencies.project_continuity_use_case,
         create_backup_use_case=dependencies.create_backup_use_case,
         validate_backup_use_case=dependencies.validate_backup_use_case,
         restore_backup_use_case=dependencies.restore_backup_use_case,
