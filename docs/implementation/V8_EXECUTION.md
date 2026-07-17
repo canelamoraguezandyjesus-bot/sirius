@@ -97,7 +97,7 @@ Cualquier defecto nuevo debe vincularse a un requisito ya aprobado. Si no puede 
 | Bloque | Entrega | Estado |
 |---|---|---|
 | B1 | Reconciliación documental y trazabilidad | En curso |
-| B2 | Onboarding, credencial, ruta y activación | En curso (RF-002 fusionado; RF-001 y D-10 pendientes) |
+| B2 | Onboarding, credencial, ruta y activación | En curso (RF-002 y B2a fusionados; ruta local (B2b) pendiente) |
 | B3 | Proyecto mínimo y ciclo de vida | Pendiente |
 | B4 | Eventos, recuerdos, decisiones y conflictos | Pendiente |
 | B5 | Panel de contexto | Pendiente |
@@ -134,6 +134,7 @@ Añadir una fila por resultado verificable. No registrar secretos ni contenido s
 | 2026-07-15 | B1 | `a05af3c` | Documental | Reconciliación de estado y puertas | Superada | PR #17, CI Quality verde | Sin cambios funcionales |
 | 2026-07-16 | B2 | `fcba319` (PR #19) | automática | `test_validate_and_save_api_key.py`, `test_openai_credential_validator.py`, `test_composition_root_credential_validation.py` | Superada | CI verde, `scripts/check.ps1` verde | RF-002 está implementado y cubierto automáticamente (caso de uso y validador contra el proveedor, sin GUI todavía). D-01 permanece abierto hasta demostrar el resto de sus condiciones |
 | 2026-07-16 | B2 | `fba51df` (PR #20) | automática | `test_validated_main_window.py` | Superada | CI verde, `scripts/check.ps1` verde | Integra RF-002 en la GUI (`ValidatedMainWindow`). D-01 permanece abierto: falta RF-001 (pantalla de primera configuración con política de datos); D-10 permanece abierto sin ningún cambio; PA-001 y PA-002 no se declaran superadas — exigen credencial real y quedan bloqueadas hasta V8.3 |
+| 2026-07-17 | B2a | rama `feat/v8-b2a-first-run-onboarding` (commit local, sin PR) | automática | `test_onboarding_window.py`, `test_app_bootstrap.py`, `test_composition_root_credential_validation.py` (nuevos casos), `test_send_message.py` (`set_llm_provider`), suite GUI de B2a repetida 5 veces | Superada | `scripts/check.ps1` verde localmente (Ruff format, Ruff lint, mypy estricto, 360 pytest) | RF-001 implementado y cubierto automáticamente vía `OnboardingWindow` + recomposición segura del proveedor en la misma ejecución (`activate_configured_llm_provider`, sin reinicio). D-01 permanece abierto hasta PA-001/PA-002 con proveedor real; D-10 sigue parcialmente abierto (falta B2b y la comprobación real de Credential Manager); sin clave real ni red |
 | 2026-07-16 | B1 | `0f5af4e` (PR #22) | automática | `tests/gui/test_backup_recovery_ui.py` (23/23, 5 repeticiones) | Superada | CI verde, `scripts/check.ps1` verde | Corrección de higiene de prueba (fuga de conexión SQLite en el helper de bootstrap), no defecto de producto; sin cambio de comportamiento aprobado de V7 |
 
 Tipos permitidos: `automática`, `CI`, `manual-Windows`, `proveedor-real`, `evaluación-humana`, `documental`.
@@ -152,22 +153,29 @@ Estados permitidos: `no preparada`, `preparada`, `automática superada`, `manual
 ## Próximo trabajo autorizado
 
 B1 (reconciliación documental) integrado. B2 está en curso: RF-002 (validación de
-credencial antes de guardar) ya está fusionado e integrado en la GUI.
+credencial antes de guardar) ya está fusionado e integrado en la GUI. B2a (primera
+configuración básica) ya está implementado y cubierto automáticamente, en la rama
+`feat/v8-b2a-first-run-onboarding` (commit local, todavía sin PR).
 
-### B2a — Primera configuración básica
+### B2a — Primera configuración básica — IMPLEMENTADA (commit local, sin PR)
 
-El siguiente corte propuesto dentro de B2 detecta el estado real de "primera
-apertura" (ausencia de clave configurada, mediante `ApiKeySettingsUseCase.has_key()`
-ya existente) y, solo en ese estado, presenta un paso distinto de la vista normal
-que:
+Este corte dentro de B2 detecta el estado real de "primera apertura" (ausencia de
+clave configurada, mediante `ApiKeySettingsUseCase.has_key()` ya existente) y,
+solo en ese estado, presenta un paso distinto de la vista normal
+(`OnboardingWindow`, ventana propia construida en `sirius.main`) que:
 
 - detecta ausencia de credencial mediante `ApiKeySettingsUseCase.has_key()`;
 - muestra qué datos permanecen locales y qué se envía al proveedor;
 - muestra proveedor y modelo predeterminados;
 - solicita únicamente la clave;
-- reutiliza RF-002 para validar y guardar;
-- tras éxito, permite continuar a la conversación principal usando la ruta local
-  predeterminada existente (sin editarla en este corte).
+- reutiliza RF-002 (`ValidateAndSaveApiKeyUseCase`, `CredentialValidationWorker`)
+  para validar y guardar;
+- tras éxito, activa el proveedor real en la misma ejecución (nueva
+  `ConversationDependencies.activate_configured_llm_provider`: selecciona "openai"
+  en la configuración no sensible existente y reconstruye el proveedor sobre
+  `SendMessageUseCase.set_llm_provider`, sin reiniciar SQLite ni pedir un reinicio
+  de Sirius) y abre la conversación principal usando la ruta local predeterminada
+  existente (sin editarla en este corte).
 
 Un bloque de texto permanente en Ajustes no equivale a esto: no distingue primera
 apertura de uso normal ni conduce a ningún flujo.
@@ -180,17 +188,19 @@ corte.
 
 Con B2a:
 
-- RF-001 queda implementable y cubierto automáticamente con este corte.
+- RF-001 queda implementado y cubierto automáticamente.
 - D-01 sigue abierto hasta las pruebas formales con proveedor real (PA-001/PA-002).
 - D-10 sigue parcialmente abierto: cubre explicar la política de datos y mostrar
-  proveedor/modelo predeterminados, pero no la edición de la ruta (B2b) ni el
-  saludo con identidad propia y la propuesta de crear/describir el proyecto
-  inicial (última cláusula de Producto §5.1), que permanecen pendientes de B3
-  (D-02, capacidad de proyecto utilizable).
+  proveedor/modelo predeterminados, pero no la edición de la ruta (B2b) ni la
+  comprobación real de activación en Windows (Credential Manager con valor
+  señuelo, pendiente de validación manual). El saludo con identidad propia y la
+  propuesta de crear/describir el proyecto inicial (última cláusula de Producto
+  §5.1) pertenecen a B3 (D-02, capacidad de proyecto utilizable) y no son una
+  condición de cierre de D-10.
 - PA-001 y PA-002 no se declaran superadas: exigen una credencial real y quedan
   bloqueadas hasta V8.3.
 
-Sin iniciar todavía Windows real ni proveedor real.
+Sin iniciar todavía Windows real ni proveedor real. Sin usar clave real ni red.
 
 ## Cierre de V8
 

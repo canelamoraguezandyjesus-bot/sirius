@@ -177,6 +177,19 @@ def test_send_message_invokes_the_provider_and_persists_both_messages(tmp_path: 
 
 
 @pytest.mark.integration
+def test_set_llm_provider_swaps_the_provider_used_by_a_later_send(tmp_path: Path) -> None:
+    """B2a: onboarding activates the real provider in the same run via this
+    seam, without rebuilding SendMessageUseCase or its persistence."""
+    database_path = tmp_path / "sirius.db"
+    use_case = _build_use_case(database_path, _StaticLLMProvider("respuesta original"))
+
+    use_case.set_llm_provider(_StaticLLMProvider("respuesta activada"))
+    result = use_case.send_message("hola")
+
+    assert result.sirius_message.content == "respuesta activada"
+
+
+@pytest.mark.integration
 def test_send_message_persists_messages_in_order_in_the_conversation(tmp_path: Path) -> None:
     database_path = tmp_path / "sirius.db"
     use_case = _build_use_case(database_path, FakeLLMProvider())

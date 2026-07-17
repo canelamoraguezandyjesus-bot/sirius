@@ -53,7 +53,7 @@ from sirius.config.llm_provider_settings import (
     resolve_openai_provider_settings,
     resolve_provider_kind,
 )
-from sirius.config.settings import load_settings
+from sirius.config.settings import load_settings, save_settings
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.llm import LLMProvider
 from sirius.ports.secrets import SecretStore
@@ -76,6 +76,14 @@ class ConversationDependencies:
     atomic file replace ``RestoreBackupUseCase`` performs. Calling this
     disposes every pool so the replace can proceed — after which ``MainWindow``
     must stop using its existing use cases and ask the user to reopen Sirius.
+
+    ``activate_configured_llm_provider`` is likewise not a use case: it is the
+    minimal recomposition mechanism the B2a first-run onboarding needs to
+    switch ``send_message_use_case`` from the safe fake/unconfigured provider
+    it was built with onto the real OpenAI adapter, in the same run, right
+    after a candidate key passes ``ValidateAndSaveApiKeyUseCase``. Without it,
+    activating a freshly saved key would need a full restart, because the
+    provider is otherwise selected once, at startup.
     """
 
     send_message_use_case: SendMessageUseCase
@@ -86,6 +94,7 @@ class ConversationDependencies:
     validate_backup_use_case: ValidateBackupUseCase
     restore_backup_use_case: RestoreBackupUseCase
     close_database_connections: Callable[[], None]
+    activate_configured_llm_provider: Callable[[], None]
 
 
 def _build_llm_provider(
@@ -192,6 +201,24 @@ def build_conversation_dependencies(
         for repository in repositories:
             repository.close()
 
+    def activate_configured_llm_provider() -> None:
+        """Select "openai" and rebuild the provider from the now-saved key.
+
+        Onboarding only ever offers OpenAI (Product §5.1: "El proveedor y el
+        modelo de referencia aparecen preseleccionados" — no selector), so a
+        successful validate-and-save implies this choice; recording it in
+        ``settings.json`` is what lets ``_build_llm_provider`` pick the real
+        adapter instead of silently keeping "fake".
+        """
+        settings = dict(load_settings())
+        settings["llm_provider"] = LLMProviderKind.OPENAI.value
+        save_settings(settings)
+        send_message_use_case.set_llm_provider(
+            _build_llm_provider(
+                database_path, secret_store, llm_usage_repository=llm_usage_repository
+            )
+        )
+
     return ConversationDependencies(
         send_message_use_case=send_message_use_case,
         get_history_use_case=get_history_use_case,
@@ -203,4 +230,5 @@ def build_conversation_dependencies(
         validate_backup_use_case=ValidateBackupUseCase(backup_service),
         restore_backup_use_case=RestoreBackupUseCase(backup_service),
         close_database_connections=close_database_connections,
+        activate_configured_llm_provider=activate_configured_llm_provider,
     )
