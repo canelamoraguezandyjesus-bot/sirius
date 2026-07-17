@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
@@ -36,6 +37,7 @@ from sirius.application.project_continuity import (
     ProjectContinuityUseCase,
     ProjectNotConfiguredError,
 )
+from sirius.application.project_lifecycle import ProjectLifecycleError, ProjectLifecycleUseCase
 from sirius.infrastructure.logging import get_logger
 
 _logger = get_logger(__name__)
@@ -43,6 +45,7 @@ _logger = get_logger(__name__)
 NO_BLOCKERS_TEXT = "Sin bloqueos registrados."
 _NOT_CONFIGURED_TEXT = "Todavía no hay un proyecto configurado."
 _GENERIC_ERROR_TEXT = "No se pudo actualizar el proyecto. Inténtalo de nuevo."
+_GENERIC_COMPLETE_ERROR_TEXT = "No se pudo completar el proyecto. Inténtalo de nuevo."
 
 _SUMMARY_PAGE = 0
 _EDIT_PAGE = 1
@@ -50,18 +53,40 @@ _NOT_CONFIGURED_PAGE = 2
 
 
 class ProjectContinuityWidget(QGroupBox):
-    """Resumen local del proyecto activo, con edición compacta de continuidad."""
+    """Resumen local del proyecto activo, con edición compacta de continuidad.
+
+    Emits ``project_completed`` exactly once, right after the active project
+    has actually been marked ``COMPLETED`` (RF-018) — never speculatively,
+    never before the confirmation dialog is accepted. The caller
+    (``MainWindow``, then ``sirius.main``) is responsible for closing this
+    window and opening ``InitialProjectWindow`` next; this widget never
+    creates a replacement project itself.
+
+    ``set_external_busy()`` is the sole seam through which ``MainWindow``
+    coordinates with operations outside this widget's own control (sending
+    a message, streaming, a pending cancellation, or a backup/restore in
+    flight): none of those touch this widget's private state directly, and
+    this widget never learns their kind, only that something incompatible
+    is happening elsewhere in the window.
+    """
+
+    project_completed = Signal()
 
     def __init__(
         self,
         project_continuity_use_case: ProjectContinuityUseCase,
+        project_lifecycle_use_case: ProjectLifecycleUseCase,
         *,
         show_warning: Callable[[str, str], None] | None = None,
+        confirm_completion: Callable[[str, str], bool] | None = None,
     ) -> None:
         super().__init__("Proyecto")
         self._use_case = project_continuity_use_case
+        self._lifecycle_use_case = project_lifecycle_use_case
         self._show_warning = show_warning or self._default_show_warning
+        self._confirm_completion = confirm_completion or self._default_confirm_completion
         self._is_busy = False
+        self._is_externally_busy = False
         self._current_summary: ProjectContinuitySummary | None = None
 
         self._stack = QStackedWidget()
@@ -92,6 +117,9 @@ class ProjectContinuityWidget(QGroupBox):
         self.update_button = QPushButton("Actualizar proyecto")
         self.update_button.clicked.connect(self._enter_edit_mode)
 
+        self.complete_button = QPushButton("Completar proyecto")
+        self.complete_button.clicked.connect(self._handle_complete_clicked)
+
         form = QFormLayout()
         form.addRow("Nombre:", self.name_label)
         form.addRow("Objetivo:", self.objective_label)
@@ -99,10 +127,14 @@ class ProjectContinuityWidget(QGroupBox):
         form.addRow("Bloqueos:", self.blockers_label)
         form.addRow(self.next_step_label)
 
+        buttons_row = QHBoxLayout()
+        buttons_row.addWidget(self.update_button)
+        buttons_row.addWidget(self.complete_button)
+
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.addLayout(form)
-        layout.addWidget(self.update_button)
+        layout.addLayout(buttons_row)
         return container
 
     def _build_edit_page(self) -> QWidget:
@@ -137,6 +169,16 @@ class ProjectContinuityWidget(QGroupBox):
     def _default_show_warning(self, title: str, text: str) -> None:
         QMessageBox.warning(self, title, text)
 
+    def _default_confirm_completion(self, title: str, text: str) -> bool:
+        answer = QMessageBox.question(
+            self,
+            title,
+            text,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
     def refresh(self) -> None:
         """Reload the authoritative summary (local, deterministic, no network).
 
@@ -167,8 +209,28 @@ class ProjectContinuityWidget(QGroupBox):
         self.blockers_label.setText(summary.blockers or NO_BLOCKERS_TEXT)
         self.next_step_label.setText(f"Ahora toca: {summary.next_step}")
 
+    def set_external_busy(self, is_busy: bool) -> None:
+        """Coordinate with a ``MainWindow``-level operation this widget does
+        not own: sending/streaming a message (including a pending
+        cancellation) or a backup/validation/restore in flight.
+
+        Never touches ``_is_busy`` — this widget's own save/complete
+        operations remain tracked independently. Entering edit mode and
+        completing the project are both blocked while externally busy
+        (``update_button``/``complete_button`` disabled, and the handlers
+        themselves refuse to proceed even if invoked directly). When the
+        external operation ends, controls are only restored if this widget
+        is not itself mid-write: an edit or completion already in flight
+        owns the controls until *it* finishes, so this never re-enables
+        them prematurely out from under an in-progress save.
+        """
+        self._is_externally_busy = is_busy
+        if self._is_busy:
+            return
+        self._set_summary_controls_enabled(not is_busy)
+
     def _enter_edit_mode(self) -> None:
-        if self._current_summary is None:
+        if self._current_summary is None or self._is_externally_busy:
             return
         self._is_busy = False
         self.current_state_input.setPlainText(self._current_summary.current_state)
@@ -222,3 +284,44 @@ class ProjectContinuityWidget(QGroupBox):
 
         self._is_busy = False
         self._set_edit_controls_enabled(True)
+
+    def _set_summary_controls_enabled(self, enabled: bool) -> None:
+        self.update_button.setEnabled(enabled)
+        self.complete_button.setEnabled(enabled)
+
+    def _handle_complete_clicked(self) -> None:
+        if self._is_busy or self._is_externally_busy or self._current_summary is None:
+            return
+
+        confirmed = self._confirm_completion(
+            "Completar proyecto",
+            "El proyecto se marcará como completado y dejará de estar activo.\n\n"
+            "Su historial se conserva íntegro: no se elimina ni se archiva nada.\n\n"
+            "¿Deseas continuar?",
+        )
+        if not confirmed:
+            return
+
+        self._is_busy = True
+        self._set_summary_controls_enabled(False)
+
+        try:
+            self._lifecycle_use_case.complete_active_project()
+        except ProjectNotConfiguredError as exc:
+            self._show_warning("No se pudo completar el proyecto", str(exc))
+        except ProjectLifecycleError as exc:
+            self._show_warning("No se pudo completar el proyecto", str(exc))
+        except Exception as exc:
+            _logger.error("No se pudo completar el proyecto (%s)", type(exc).__name__)
+            self._show_warning("No se pudo completar el proyecto", _GENERIC_COMPLETE_ERROR_TEXT)
+        else:
+            # Deliberately stays busy/disabled: the caller (MainWindow, then
+            # sirius.main) closes this window right after `project_completed`
+            # and opens InitialProjectWindow next, so re-enabling now-obsolete
+            # controls would be pointless (same pattern as
+            # InitialProjectWindow's own success path).
+            self.project_completed.emit()
+            return
+
+        self._is_busy = False
+        self._set_summary_controls_enabled(True)

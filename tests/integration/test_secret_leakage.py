@@ -103,7 +103,15 @@ def test_key_never_appears_in_sqlite_after_a_full_send(tmp_path: Path) -> None:
     Base.metadata.create_all(build_engine(database_path))
     conversation_repository = build_sqlite_conversation_repository(database_path)
     conversation_repository.get_or_create_main_conversation()
-    build_sqlite_project_repository(database_path).get_or_create_active_project()
+    project_repository = build_sqlite_project_repository(database_path)
+    project_repository.ensure_bootstrap_project()
+    project_repository.create_project(
+        "Proyecto de prueba",
+        "Objetivo de prueba",
+        state_summary="estado inicial",
+        blockers=(),
+        next_step="siguiente paso inicial",
+    )
     build_sqlite_identity_repository(database_path).get_or_create_current_identity()
 
     context_builder = ContextBuilder(

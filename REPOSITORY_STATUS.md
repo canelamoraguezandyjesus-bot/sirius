@@ -56,33 +56,61 @@
   implementados y cubiertos automáticamente; RF-016 solo en su parte inicial.
   D-02 queda parcialmente corregido: quedan pendientes bloqueos, decisiones
   relacionadas, completar/archivar conservando historial y el resumen al
-  retomar, para un corte posterior de B3. Además (B3b, commit local en
-  `feat/v8-b3b-project-continuity`, todavía sin PR), Sirius conserva y muestra
-  la continuidad del proyecto activo: `Project.blockers` (texto libre,
-  migración Alembic no destructiva `66951344e4b9`, probada con Alembic real
-  desde el head anterior) se añade junto a estado y siguiente paso;
-  `ProjectContinuityUseCase` consulta y actualiza los tres campos en una sola
-  escritura, rechazando la ausencia de proyecto o el placeholder y un estado o
-  siguiente paso vacío, y traduciendo cualquier fallo de infraestructura a un
-  error seguro; `ProjectContinuityWidget`, insertado por `MainWindow` encima
-  del historial en la pestaña "Conversación" existente (sin pestaña ni ventana
-  nueva), muestra un resumen local y determinista con el siguiente paso
-  destacado ("Ahora toca: …") y permite actualizar estado/bloqueos/siguiente
-  paso; `render_instructions()` incluye ahora nombre y bloqueos en la sección
-  "# Proyecto activo" enviada al proveedor. RF-016 queda cubierto salvo la
-  parte de "decisiones" (B4); RF-017 queda implementado y cubierto
-  automáticamente. D-02 sigue parcialmente corregido: quedan pendientes
-  decisiones relacionadas, completar/archivar conservando historial y
-  habilitar un proyecto posterior.
+  retomar, para un corte posterior de B3. Además (B3b, PR #28, squash
+  `a2f74df935f32835506c3228b328c2b9b6eec13b`, fusionado en `main`), Sirius
+  conserva y muestra la continuidad del proyecto activo: `Project.blockers`
+  (texto libre, migración Alembic no destructiva `66951344e4b9`, probada con
+  Alembic real desde el head anterior) se añade junto a estado y siguiente
+  paso; `ProjectContinuityUseCase` consulta y actualiza los tres campos en una
+  sola escritura, rechazando la ausencia de proyecto o el placeholder y un
+  estado o siguiente paso vacío, y traduciendo cualquier fallo de
+  infraestructura a un error seguro; `ProjectContinuityWidget`, insertado por
+  `MainWindow` encima del historial en la pestaña "Conversación" existente
+  (sin pestaña ni ventana nueva), muestra un resumen local y determinista con
+  el siguiente paso destacado ("Ahora toca: …") y permite actualizar
+  estado/bloqueos/siguiente paso; `render_instructions()` incluye ahora
+  nombre y bloqueos en la sección "# Proyecto activo" enviada al proveedor.
+  RF-016 queda cubierto salvo la parte de "decisiones" (B4); RF-017 queda
+  implementado y cubierto automáticamente. D-02 sigue parcialmente
+  corregido: quedan pendientes decisiones relacionadas, completar el
+  proyecto conservando historial y habilitar un proyecto posterior. Además
+  (B3c, PR #29), Sirius versiona la continuidad del proyecto activo y
+  permite cerrarlo: el historial ya no vive en columnas planas sino en
+  `project_revisions`, revisiones inmutables versionadas, con
+  `projects.current_revision_id` (campo mínimo de la arquitectura aprobada,
+  SIRIUS-ARQ-0.1 S7.3) como único
+  puntero autoritativo a la revisión vigente — con clave foránea física
+  hacia `project_revisions.id`, y validación en el repositorio de que la
+  revisión referenciada pertenece al mismo proyecto — sembradas por
+  migración Alembic no destructiva `6f710ea6c2d2` (relleno de la fila
+  existente en revisión 1 con su puntero fijado, resincronización de
+  columnas heredadas vía ese mismo puntero al bajar de versión);
+  `ContextBuilder` ya no exige un proyecto activo para construir el
+  contexto: su ausencia (ninguno creado todavía, o el último se acaba de
+  completar) deja `Context.project` en `None`, conforme al contrato
+  aprobado (`LLMRequest.project_context: str | None`), y
+  `render_instructions()` omite entonces la sección "# Proyecto activo"
+  entera; `ProjectLifecycleUseCase`
+  completa el proyecto activo (RF-018, "Marcarlo completado sin borrar su
+  historial") sin eliminar ni reescribir nada; `ProjectContinuityWidget` añade
+  el botón "Completar proyecto" con confirmación explícita antes de escribir;
+  al completar, `sirius.main` cierra la ventana principal y reabre
+  `InitialProjectWindow` en el mismo proceso — sin reiniciar Sirius y sin
+  reactivar ni sobrescribir jamás el proyecto cerrado — reutilizando el mismo
+  camino que ya usa el arranque cuando no hay proyecto configurado. Solo se
+  implementa COMPLETED: el texto aprobado de RF-018 no menciona archivar, y
+  ARCHIVED queda fuera de alcance de Sirius 0.1. RF-018 queda implementado y
+  cubierto automáticamente. D-02 queda cerrado en lo que respecta a B3
+  (decisiones relacionadas siguen perteneciendo a B4).
 
 Estas entradas describen infraestructura o hitos de implementación. No demuestran por sí solas que la capacidad completa de producto sea utilizable ni que sus pruebas de aceptación hayan pasado.
 
 En particular:
 
-- el proyecto sigue incompleto como capacidad observable de producto: B3a y
-  B3b cubren el saludo inicial, la creación del primer proyecto y su
-  continuidad (estado, bloqueos, siguiente paso, resumen al retomar), pero
-  decisiones relacionadas y completar/archivar conservando historial quedan
+- el proyecto ya cubre el ciclo de vida hasta donde llega B3: B3a, B3b y B3c
+  cubren el saludo inicial, la creación del primer proyecto, su continuidad
+  (estado, bloqueos, siguiente paso, resumen al retomar) y completarlo
+  conservando su historial, pero las decisiones relacionadas (B4) quedan
   pendientes;
 - la memoria no contiene todavía toda la semántica aprobada de decisiones, eventos, sustitución, conflictos y origen consultable;
 - no existe todavía el panel de contexto;
@@ -112,6 +140,13 @@ En particular:
   automáticamente (unidad, integración con SQLite/Alembic real y GUI); la
   migración que añade `blockers` se probó actualizando una base real desde
   el head anterior sin perder datos; sin datos reales y sin red.
+- El ciclo de vida y el versionado del proyecto (B3c: historial de
+  revisiones inmutable, completar el proyecto activo sin borrar su
+  historial, habilitar un proyecto posterior solo tras completar el actual)
+  está cubierto automáticamente (unidad, integración con SQLite/Alembic real
+  y GUI); la migración que crea `project_revisions` se probó con relleno
+  desde el head anterior y con resincronización al bajar de versión, sin
+  perder datos; sin datos reales y sin red.
 
 ### Pendiente de validación manual
 

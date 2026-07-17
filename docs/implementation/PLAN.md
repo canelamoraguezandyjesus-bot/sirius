@@ -36,11 +36,14 @@ Una vertical puede tener su infraestructura implementada y mantener defectos de 
 - persistencia transaccional;
 - recuperación entre sesiones.
 
-## V3 — Infraestructura de proyecto activo — IMPLEMENTADA; CAPACIDAD DE PRODUCTO PARCIALMENTE COMPLETA (B3a, B3b)
+## V3 — Infraestructura de proyecto activo — IMPLEMENTADA; CAPACIDAD DE PRODUCTO PARCIALMENTE COMPLETA (B3a, B3b, B3c)
 
 Implementado:
 
-- persistencia de un único proyecto activo;
+- persistencia de un único proyecto activo, con historial de continuidad
+  versionado e inmutable (`project_revisions`, B3c): cada actualización de
+  estado, bloqueos o siguiente paso crea una revisión nueva en vez de
+  sobrescribir la anterior;
 - campos de nombre, objetivo, estado, bloqueos (B3b) y siguiente paso;
 - recuperación del registro activo al iniciar;
 - restricción estructural de un solo proyecto activo;
@@ -52,13 +55,17 @@ Implementado:
   (`ProjectContinuityUseCase`) y desde la interfaz
   (`ProjectContinuityWidget`, B3b): actualización conjunta de estado,
   bloqueos y siguiente paso, resumen observable al abrir la conversación y
-  siguiente paso destacado ("Ahora toca: …").
+  siguiente paso destacado ("Ahora toca: …");
+- ciclo de vida del proyecto (`ProjectLifecycleUseCase`, B3c, RF-018):
+  completar el proyecto activo sin borrar su historial, con confirmación
+  explícita ("Completar proyecto") en `ProjectContinuityWidget`; un
+  proyecto siguiente solo puede crearse tras completar el actual —
+  `InitialProjectWindow` se reabre en el mismo proceso, sin reiniciar
+  Sirius, y nunca reutiliza ni reactiva el proyecto cerrado.
 
 Pendiente dentro de V8:
 
 - decisiones relacionadas (B4);
-- completar y archivar conservando historial;
-- habilitar un proyecto posterior (solo tras completar o archivar);
 - pruebas PA-008, PA-009 y la parte correspondiente de PA-E2E-01 (PA-006 y
   PA-007 quedan preparadas/cubiertas automáticamente por B3a, sin declararse
   formalmente superadas; PA-008 exige además una decisión registrada, y

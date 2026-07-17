@@ -17,10 +17,14 @@ from sirius.infrastructure.paths import SiriusPaths, ensure_paths
 
 def initialize_persistence(paths: SiriusPaths) -> None:
     """Prepare local directories, apply pending migrations, and ensure the main
-    conversation, the active project, and the current identity exist.
+    conversation, the current identity, and (only the very first time) a
+    bootstrap project placeholder exist.
 
     Safe to call on every startup: directory creation, migrations, and every
-    get-or-create lookup are idempotent.
+    get-or-create/ensure lookup are idempotent. After a project has been
+    completed, this deliberately does *not* create a replacement — Sirius
+    may legitimately have zero ``ACTIVE`` projects between a completion and
+    the user's next explicit "Crear nuevo proyecto".
     """
     ensure_paths(paths)
     database_path = paths.data_dir / "sirius.db"
@@ -39,7 +43,7 @@ def initialize_persistence(paths: SiriusPaths) -> None:
 
     project_repository = build_sqlite_project_repository(database_path)
     try:
-        project_repository.get_or_create_active_project()
+        project_repository.ensure_bootstrap_project()
     finally:
         project_repository.close()
 

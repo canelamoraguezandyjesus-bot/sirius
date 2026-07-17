@@ -1,4 +1,4 @@
-"""GUI tests for the B3a first-project screen (RF-014/015/016, D-02).
+"""GUI tests for the B3a/B3c first-project screen (RF-014/015/016, D-02).
 
 No test ever touches the real Windows Credential Manager, SQLite, or the LLM
 provider: every window here wraps a real ``InitialProjectUseCase`` around an
@@ -18,71 +18,111 @@ from pytestqt.qtbot import QtBot
 
 from sirius.application.initial_project import InitialProjectUseCase
 from sirius.domain.identity import INITIAL_IDENTITY_NAME
-from sirius.domain.project import Project
+from sirius.domain.project import Project, ProjectRevision, ProjectStatus
 from sirius.presentation.initial_project_window import GREETING_TEXT, InitialProjectWindow
 
 
 class _FakeProjectRepository:
-    def __init__(self, initial: Project | None = None, *, raise_on_update: bool = False) -> None:
+    def __init__(self, initial: Project | None = None, *, raise_on_create: bool = False) -> None:
         now = datetime.now(UTC)
         self._project = initial or Project(
             id=1,
             name="",
-            objective="",
-            current_state="",
-            blockers="",
-            next_step="",
+            status=ProjectStatus.ACTIVE,
+            current_revision=None,
             created_at=now,
             updated_at=now,
+            completed_at=None,
         )
-        self._raise_on_update = raise_on_update
-        self.update_calls: list[tuple[str, str]] = []
-
-    def get_or_create_active_project(self) -> Project:
-        return self._project
+        self._raise_on_create = raise_on_create
+        self.create_calls: list[tuple[str, str]] = []
 
     def get_active_project(self) -> Project | None:
         return self._project
 
-    def update_project(
+    def ensure_bootstrap_project(self) -> None:
+        raise AssertionError("must never be called by InitialProjectWindow")
+
+    def get_project(self, project_id: int) -> Project | None:
+        raise AssertionError("must never be called by InitialProjectWindow")
+
+    def list_project_revisions(self, project_id: int) -> tuple[ProjectRevision, ...]:
+        raise AssertionError("must never be called by InitialProjectWindow")
+
+    def append_revision(
         self,
         project_id: int,
         *,
-        name: str | None = None,
-        objective: str | None = None,
-        current_state: str | None = None,
-        blockers: str | None = None,
-        next_step: str | None = None,
+        objective: str,
+        state_summary: str,
+        blockers: tuple[str, ...],
+        next_step: str,
+        source_event_id: int | None = None,
     ) -> Project:
-        if self._raise_on_update:
+        raise AssertionError("must never be called by InitialProjectWindow")
+
+    def complete_active_project(self, project_id: int) -> Project:
+        raise AssertionError("must never be called by InitialProjectWindow")
+
+    def create_project(
+        self,
+        name: str,
+        objective: str,
+        *,
+        state_summary: str,
+        blockers: tuple[str, ...],
+        next_step: str,
+    ) -> Project:
+        if self._raise_on_create:
             raise RuntimeError("fallo simulado de infraestructura con detalles internos sensibles")
-        assert name is not None
-        assert objective is not None
-        self.update_calls.append((name, objective))
-        self._project = Project(
-            id=self._project.id,
-            name=name,
+        self.create_calls.append((name, objective))
+        now = datetime.now(UTC)
+        base_id = self._project.id if self._project is not None else 1
+        base_created_at = self._project.created_at if self._project is not None else now
+        revision = ProjectRevision(
+            id=1,
+            project_id=base_id,
+            version=1,
             objective=objective,
-            current_state=current_state or self._project.current_state,
-            blockers=blockers if blockers is not None else self._project.blockers,
-            next_step=next_step or self._project.next_step,
-            created_at=self._project.created_at,
-            updated_at=datetime.now(UTC),
+            state_summary=state_summary,
+            blockers=blockers,
+            next_step=next_step,
+            source_event_id=None,
+            created_at=now,
+        )
+        self._project = Project(
+            id=base_id,
+            name=name,
+            status=ProjectStatus.ACTIVE,
+            current_revision=revision,
+            created_at=base_created_at,
+            updated_at=now,
+            completed_at=None,
         )
         return self._project
 
 
 def _configured_project(project_id: int = 1) -> Project:
     now = datetime.now(UTC)
+    revision = ProjectRevision(
+        id=1,
+        project_id=project_id,
+        version=1,
+        objective="Objetivo original",
+        state_summary="s",
+        blockers=(),
+        next_step="n",
+        source_event_id=None,
+        created_at=now,
+    )
     return Project(
         id=project_id,
         name="Original",
-        objective="Objetivo original",
-        current_state="s",
-        blockers="",
-        next_step="n",
+        status=ProjectStatus.ACTIVE,
+        current_revision=revision,
         created_at=now,
         updated_at=now,
+        completed_at=None,
     )
 
 
@@ -145,7 +185,7 @@ def test_missing_fields_show_an_actionable_warning_without_calling_the_repositor
 
     window._handle_create_clicked()
 
-    assert repository.update_calls == []
+    assert repository.create_calls == []
     assert len(warnings) == 1
 
 
@@ -160,7 +200,7 @@ def test_whitespace_only_objective_is_rejected_before_calling_the_repository(
 
     window._handle_create_clicked()
 
-    assert repository.update_calls == []
+    assert repository.create_calls == []
 
 
 @pytest.mark.gui
@@ -179,7 +219,8 @@ def test_valid_submission_creates_the_project_and_emits_created(qtbot: QtBot) ->
     project = use_case.get_active_project()
     assert project is not None
     assert project.name == "Mi Proyecto"
-    assert project.objective == "Aprender Sirius"
+    assert project.current_revision is not None
+    assert project.current_revision.objective == "Aprender Sirius"
 
 
 @pytest.mark.gui
@@ -211,14 +252,14 @@ def test_already_configured_error_is_shown_inline_and_data_is_kept(qtbot: QtBot)
     assert window.objective_input.text() == "Otro objetivo"
     assert window.name_input.isEnabled() is True
     assert window.create_button.isEnabled() is True
-    assert repository.update_calls == []
+    assert repository.create_calls == []
 
 
 @pytest.mark.gui
 def test_a_repository_failure_never_shows_internal_details_and_leaves_no_partial_project(
     qtbot: QtBot,
 ) -> None:
-    repository = _FakeProjectRepository(raise_on_update=True)
+    repository = _FakeProjectRepository(raise_on_create=True)
     window, _repository, use_case = _build_window(repository)
     qtbot.addWidget(window)
     window.name_input.setText("Mi Proyecto")
@@ -245,4 +286,4 @@ def test_double_submit_is_prevented_while_busy(qtbot: QtBot) -> None:
     window._handle_create_clicked()
     window._handle_create_clicked()  # a second, redundant call right after success
 
-    assert len(repository.update_calls) == 1
+    assert len(repository.create_calls) == 1

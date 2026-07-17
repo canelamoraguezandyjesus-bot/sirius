@@ -1,9 +1,9 @@
-"""Integration tests for InitialProjectUseCase against real SQLite (B3a, D-02).
+"""Integration tests for InitialProjectUseCase against real SQLite (B3a/B3c, D-02).
 
 Demonstrates the requirement that a base created before B3a existed — which
 already had ``initialize_persistence()`` seed an empty placeholder row via
-``get_or_create_active_project()`` — stays compatible: no migration, no
-second row, no data loss.
+``ensure_bootstrap_project()`` — stays compatible: no migration, no second
+row, no data loss.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ def test_is_configured_is_false_right_after_bootstrap_seeds_the_placeholder(
     database_path = tmp_path / "sirius.db"
     _prepare_schema(database_path)
     project_repository = build_sqlite_project_repository(database_path)
-    project_repository.get_or_create_active_project()  # mimics initialize_persistence()
+    project_repository.ensure_bootstrap_project()  # mimics initialize_persistence()
     use_case = InitialProjectUseCase(project_repository)
 
     assert use_case.is_configured() is False
@@ -62,16 +62,19 @@ def test_create_initial_project_completes_the_historic_placeholder_without_a_sec
     database_path = tmp_path / "sirius.db"
     _prepare_schema(database_path)
     project_repository = build_sqlite_project_repository(database_path)
-    placeholder = project_repository.get_or_create_active_project()
+    project_repository.ensure_bootstrap_project()
+    placeholder = project_repository.get_active_project()
+    assert placeholder is not None
     use_case = InitialProjectUseCase(project_repository)
 
     created = use_case.create_initial_project("  Mi Proyecto  ", "  Aprender Sirius  ")
 
     assert created.id == placeholder.id
     assert created.name == "Mi Proyecto"
-    assert created.objective == "Aprender Sirius"
-    assert created.current_state == INITIAL_PROJECT_STATE
-    assert created.next_step == INITIAL_PROJECT_NEXT_STEP
+    assert created.current_revision is not None
+    assert created.current_revision.objective == "Aprender Sirius"
+    assert created.current_revision.state_summary == INITIAL_PROJECT_STATE
+    assert created.current_revision.next_step == INITIAL_PROJECT_NEXT_STEP
     assert _row_count(database_path) == 1
 
 
@@ -91,9 +94,10 @@ def test_configured_project_is_recovered_after_reconstructing_repositories(
     project = reopened_use_case.get_active_project()
     assert project is not None
     assert project.name == "Mi Proyecto"
-    assert project.objective == "Aprender Sirius"
-    assert project.current_state == INITIAL_PROJECT_STATE
-    assert project.next_step == INITIAL_PROJECT_NEXT_STEP
+    assert project.current_revision is not None
+    assert project.current_revision.objective == "Aprender Sirius"
+    assert project.current_revision.state_summary == INITIAL_PROJECT_STATE
+    assert project.current_revision.next_step == INITIAL_PROJECT_NEXT_STEP
 
 
 @pytest.mark.integration
@@ -103,7 +107,7 @@ def test_create_initial_project_rejects_empty_fields_without_touching_the_databa
     database_path = tmp_path / "sirius.db"
     _prepare_schema(database_path)
     project_repository = build_sqlite_project_repository(database_path)
-    project_repository.get_or_create_active_project()
+    project_repository.ensure_bootstrap_project()
     use_case = InitialProjectUseCase(project_repository)
 
     with pytest.raises(InvalidInitialProjectDataError):
@@ -130,7 +134,8 @@ def test_create_initial_project_rejects_a_second_project_and_keeps_the_first_int
     assert current is not None
     assert current.id == first.id
     assert current.name == "Primero"
-    assert current.objective == "Objetivo original"
+    assert current.current_revision is not None
+    assert current.current_revision.objective == "Objetivo original"
     assert _row_count(database_path) == 1
 
 
@@ -160,5 +165,7 @@ def test_configured_project_enters_the_context_via_context_builder(tmp_path: Pat
 
     context = builder.build("hola")
 
+    assert context.project is not None
     assert context.project.name == "Mi Proyecto"
-    assert context.project.objective == "Aprender Sirius"
+    assert context.project.current_revision is not None
+    assert context.project.current_revision.objective == "Aprender Sirius"

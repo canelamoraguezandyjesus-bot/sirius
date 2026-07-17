@@ -10,6 +10,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from sirius.domain.conversation import MessageRole, MessageStatus
 from sirius.domain.memory import MemoryStatus
+from sirius.domain.project import ProjectStatus
 
 
 class Base(DeclarativeBase):
@@ -85,7 +86,27 @@ class MessageModel(Base):
 
 
 class ProjectModel(Base):
-    """A project; exactly one row may have ``is_active`` set at any time."""
+    """A project; exactly one row may have ``is_active`` set at any time.
+
+    ``status``/``completed_at``/``current_revision_id`` are the authoritative
+    lifecycle fields since B3c (SIRIUS-ARQ-0.1 S7.3 "Campos mínimos":
+    ``project: id, name, status, current_revision_id, created_at,
+    completed_at"). ``current_revision_id`` points at the single vigente row
+    in ``project_revisions`` — ``NULL`` only for the neutral bootstrap
+    placeholder, which has no revision yet. This is the sole authoritative
+    mechanism for "which revision is current": there is no second,
+    competing flag on ``ProjectRevisionModel``. ``is_active`` remains as a
+    persistence-only projection kept in sync with ``status`` in the same
+    transaction (``ACTIVE`` implies ``is_active = True``, ``COMPLETED``
+    implies ``is_active = False``), because the SQLite partial unique index
+    below can only express uniqueness over a plain boolean column — this
+    field is additional to, not a substitute for, the architecture's minimum
+    field list. ``objective``, ``current_state``, ``blockers``, and
+    ``next_step`` are B3b's flat legacy columns, kept for non-destructive
+    migration compatibility; they are no longer written or read by any code
+    path added in B3c or later — ``ProjectRevisionModel`` is the sole
+    authoritative source for that content going forward.
+    """
 
     __tablename__ = "projects"
     __table_args__ = (
@@ -99,13 +120,58 @@ class ProjectModel(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[ProjectStatus] = mapped_column(
+        SAEnum(
+            ProjectStatus,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+            native_enum=False,
+            length=16,
+        ),
+        nullable=False,
+    )
+    current_revision_id: Mapped[int | None] = mapped_column(
+        ForeignKey("project_revisions.id"), nullable=True
+    )
+    is_active: Mapped[bool] = mapped_column(nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    # --- Legacy B3b columns: compatibility only, see class docstring. ---
     objective: Mapped[str] = mapped_column(Text, nullable=False)
     current_state: Mapped[str] = mapped_column(Text, nullable=False)
     blockers: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     next_step: Mapped[str] = mapped_column(Text, nullable=False)
-    is_active: Mapped[bool] = mapped_column(nullable=False, default=True)
+
+
+class ProjectRevisionModel(Base):
+    """One immutable, versioned snapshot of a project's continuity fields.
+
+    Which revision is "current" is determined exclusively by
+    ``ProjectModel.current_revision_id`` pointing at this row's ``id`` — this
+    table carries no ``is_current`` flag or other second source of truth.
+    ``blockers_json`` is a JSON array of strings — the sole place in Sirius
+    that serializes blockers; every other layer works with the domain's
+    ``tuple[str, ...]`` (application) or plain multiline text (presentation).
+    ``source_event_id`` has no foreign key yet: the events table B4 will add
+    does not exist in this cut.
+    """
+
+    __tablename__ = "project_revisions"
+    __table_args__ = (
+        UniqueConstraint("project_id", "version", name="uq_project_revisions_project_version"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    version: Mapped[int] = mapped_column(nullable=False)
+    objective: Mapped[str] = mapped_column(Text, nullable=False)
+    state_summary: Mapped[str] = mapped_column(Text, nullable=False)
+    blockers_json: Mapped[str] = mapped_column(Text, nullable=False)
+    next_step: Mapped[str] = mapped_column(Text, nullable=False)
+    source_event_id: Mapped[int | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(nullable=False)
 
 
 class MemoryModel(Base):

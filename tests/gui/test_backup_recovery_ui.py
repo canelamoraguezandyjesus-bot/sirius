@@ -72,7 +72,7 @@ def _bootstrapped_database(database_path: Path) -> Path:
 
     project_repository = build_sqlite_project_repository(database_path)
     try:
-        project_repository.get_or_create_active_project()
+        project_repository.ensure_bootstrap_project()
     finally:
         project_repository.close()
 
@@ -259,6 +259,7 @@ def _build_window(
         get_history_use_case=dependencies.get_history_use_case,
         api_key_settings_use_case=dependencies.api_key_settings_use_case,
         project_continuity_use_case=dependencies.project_continuity_use_case,
+        project_lifecycle_use_case=dependencies.project_lifecycle_use_case,
         create_backup_use_case=create_backup_use_case or dependencies.create_backup_use_case,
         validate_backup_use_case=validate_backup_use_case or dependencies.validate_backup_use_case,
         restore_backup_use_case=restore_backup_use_case or dependencies.restore_backup_use_case,

@@ -29,14 +29,27 @@ def _prepare_schema(database_path: Path) -> None:
     Base.metadata.create_all(build_engine(database_path))
 
 
-def _seed_bootstrap_singletons(database_path: Path) -> None:
-    """Mimic what initialize_persistence() does: seed the three singletons.
-
-    ContextBuilder itself must never do this — it is exercised separately
-    against an unseeded database in the tests below.
+def _seed_bootstrap_singletons(
+    database_path: Path,
+    *,
+    project_name: str = "Proyecto de prueba",
+    project_objective: str = "Objetivo de prueba",
+) -> None:
+    """Mimic what initialize_persistence() does, plus a configured project:
+    ContextBuilder (B3c) requires a configured, ``ACTIVE`` project, and never
+    creates one itself — it is exercised separately against an unseeded
+    database, and against an identity-only database, in the tests below.
     """
     build_sqlite_conversation_repository(database_path).get_or_create_main_conversation()
-    build_sqlite_project_repository(database_path).get_or_create_active_project()
+    project_repository = build_sqlite_project_repository(database_path)
+    project_repository.ensure_bootstrap_project()
+    project_repository.create_project(
+        project_name,
+        project_objective,
+        state_summary="estado inicial",
+        blockers=(),
+        next_step="siguiente paso inicial",
+    )
     build_sqlite_identity_repository(database_path).get_or_create_current_identity()
 
 
@@ -95,33 +108,91 @@ def test_build_on_unseeded_storage_raises_and_creates_no_rows(tmp_path: Path) ->
 def test_build_failure_is_clear_and_deterministic_about_the_missing_piece(
     tmp_path: Path,
 ) -> None:
+    """The active project's absence never blocks build() (see the tests
+    below) — with only the identity seeded, the next actually-required
+    piece is the main conversation."""
     database_path = tmp_path / "sirius.db"
     _prepare_schema(database_path)
-    # Seed only the identity: the project must be reported as the missing piece next.
     build_sqlite_identity_repository(database_path).get_or_create_current_identity()
     builder = _build_context_builder(database_path)
 
-    with pytest.raises(ContextAssemblyError, match="active project"):
+    with pytest.raises(ContextAssemblyError, match="main conversation"):
         builder.build("hola")
 
     # Repeating the same call raises the exact same, deterministic error.
-    with pytest.raises(ContextAssemblyError, match="active project"):
+    with pytest.raises(ContextAssemblyError, match="main conversation"):
         builder.build("hola")
+
+
+@pytest.mark.integration
+def test_build_succeeds_with_no_active_project_at_all(tmp_path: Path) -> None:
+    """SIRIUS-ARQ-0.1 S3 (LLMRequest.project_context: str | None): zero
+    configured ACTIVE projects is a normal state, not a bootstrap failure —
+    build() must never raise for this alone."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    build_sqlite_conversation_repository(database_path).get_or_create_main_conversation()
+    build_sqlite_identity_repository(database_path).get_or_create_current_identity()
+    builder = _build_context_builder(database_path)
+
+    context = builder.build("hola")
+
+    assert context.project is None
+
+
+@pytest.mark.integration
+def test_build_succeeds_with_only_the_bootstrap_placeholder(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    build_sqlite_conversation_repository(database_path).get_or_create_main_conversation()
+    build_sqlite_project_repository(database_path).ensure_bootstrap_project()
+    build_sqlite_identity_repository(database_path).get_or_create_current_identity()
+    builder = _build_context_builder(database_path)
+
+    context = builder.build("hola")
+
+    assert context.project is None
+
+
+@pytest.mark.integration
+def test_build_excludes_a_completed_project(tmp_path: Path) -> None:
+    """A COMPLETED project is never recovered by ContextBuilder, and its
+    absence never creates a replacement placeholder."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    build_sqlite_conversation_repository(database_path).get_or_create_main_conversation()
+    build_sqlite_identity_repository(database_path).get_or_create_current_identity()
+    project_repository = build_sqlite_project_repository(database_path)
+    project_repository.ensure_bootstrap_project()
+    project = project_repository.create_project(
+        "Proyecto cerrado",
+        "objetivo",
+        state_summary="estado",
+        blockers=(),
+        next_step="siguiente",
+    )
+    project_repository.complete_active_project(project.id)
+    builder = _build_context_builder(database_path)
+
+    counts_before = _row_counts(database_path)
+    context = builder.build("hola")
+    counts_after = _row_counts(database_path)
+
+    assert context.project is None
+    assert counts_after == counts_before  # no placeholder created as a side effect
 
 
 @pytest.mark.integration
 def test_build_assembles_every_section(tmp_path: Path) -> None:
     database_path = tmp_path / "sirius.db"
     _prepare_schema(database_path)
-    _seed_bootstrap_singletons(database_path)
+    _seed_bootstrap_singletons(
+        database_path, project_name="Sirius 0.1", project_objective="cerrar V5"
+    )
     builder = _build_context_builder(database_path)
 
     memory_repository = build_sqlite_memory_repository(database_path)
     memory_repository.create_memory("prefiere respuestas breves", "manual")
-
-    project_repository = build_sqlite_project_repository(database_path)
-    active_project = project_repository.get_or_create_active_project()
-    project_repository.update_project(active_project.id, name="Sirius 0.1", objective="cerrar V5")
 
     conversation_repository = build_sqlite_conversation_repository(database_path)
     conversation = conversation_repository.get_or_create_main_conversation()
@@ -131,6 +202,7 @@ def test_build_assembles_every_section(tmp_path: Path) -> None:
     context = builder.build("¿seguimos con V5?")
 
     assert context.identity.current_version.name == "Sirius"
+    assert context.project is not None
     assert context.project.name == "Sirius 0.1"
     assert len(context.memories) == 1
     assert context.memories[0].current_revision.content == "prefiere respuestas breves"
@@ -204,6 +276,7 @@ def test_context_includes_traceable_identifiers(tmp_path: Path) -> None:
     context = builder.build("hola")
 
     assert context.identity.current_version.version >= 1
+    assert context.project is not None
     assert context.project.id is not None
     assert context.memories[0].id == memory.id
     assert context.memories[0].current_revision.version == 1

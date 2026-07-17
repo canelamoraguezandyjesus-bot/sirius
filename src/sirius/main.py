@@ -21,18 +21,35 @@ from sirius.presentation.onboarding_window import OnboardingWindow
 from sirius.presentation.validated_main_window import ValidatedMainWindow
 
 
-def _build_main_window(dependencies: ConversationDependencies) -> ValidatedMainWindow:
-    return ValidatedMainWindow(
+def _build_main_window(
+    dependencies: ConversationDependencies, windows: list[QMainWindow]
+) -> ValidatedMainWindow:
+    """Build the real conversation window, wired so completing the active
+    project (RF-018) immediately reopens ``InitialProjectWindow`` — same
+    process, no restart, exactly as it does the very first time no project
+    is configured yet.
+    """
+
+    def _on_project_completed() -> None:
+        next_window = _build_initial_project_window(dependencies, windows)
+        windows.append(next_window)
+        next_window.show()
+        main_window.close()
+
+    main_window = ValidatedMainWindow(
         send_message_use_case=dependencies.send_message_use_case,
         get_history_use_case=dependencies.get_history_use_case,
         api_key_settings_use_case=dependencies.api_key_settings_use_case,
         validate_and_save_api_key_use_case=dependencies.validate_and_save_api_key_use_case,
         project_continuity_use_case=dependencies.project_continuity_use_case,
+        project_lifecycle_use_case=dependencies.project_lifecycle_use_case,
         create_backup_use_case=dependencies.create_backup_use_case,
         validate_backup_use_case=dependencies.validate_backup_use_case,
         restore_backup_use_case=dependencies.restore_backup_use_case,
         close_database_connections=dependencies.close_database_connections,
     )
+    main_window.project_completed.connect(_on_project_completed)
+    return main_window
 
 
 def _build_onboarding_window(
@@ -74,7 +91,7 @@ def _build_initial_project_window(
     """
 
     def _open_main_window() -> None:
-        main_window = _build_main_window(dependencies)
+        main_window = _build_main_window(dependencies, windows)
         windows.append(main_window)
         main_window.show()
         project_window.close()
@@ -98,7 +115,7 @@ def _build_post_key_window(
     is duplicated between callbacks.
     """
     if dependencies.initial_project_use_case.is_configured():
-        return _build_main_window(dependencies)
+        return _build_main_window(dependencies, windows)
     return _build_initial_project_window(dependencies, windows)
 
 

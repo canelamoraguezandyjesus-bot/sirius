@@ -76,10 +76,14 @@ def _bootstrapped_database(database_path: Path, *, configure_project: bool = Tru
     Base.metadata.create_all(build_engine(database_path))
     build_sqlite_conversation_repository(database_path).get_or_create_main_conversation()
     project_repository = build_sqlite_project_repository(database_path)
-    project = project_repository.get_or_create_active_project()
+    project_repository.ensure_bootstrap_project()
     if configure_project:
-        project_repository.update_project(
-            project.id, name="Proyecto de prueba", objective="Probar Sirius"
+        project_repository.create_project(
+            "Proyecto de prueba",
+            "Probar Sirius",
+            state_summary="estado inicial",
+            blockers=(),
+            next_step="siguiente paso inicial",
         )
     build_sqlite_identity_repository(database_path).get_or_create_current_identity()
     return database_path

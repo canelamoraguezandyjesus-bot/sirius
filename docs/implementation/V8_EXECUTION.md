@@ -98,7 +98,7 @@ Cualquier defecto nuevo debe vincularse a un requisito ya aprobado. Si no puede 
 |---|---|---|
 | B1 | Reconciliación documental y trazabilidad | En curso |
 | B2 | Onboarding, credencial, ruta y activación | En curso (RF-002, B2a y B2b implementados y cubiertos automáticamente; activación real en Windows pendiente) |
-| B3 | Proyecto mínimo y ciclo de vida | En curso (B3a y B3b implementados y cubiertos automáticamente; decisiones, completar/archivar y proyecto posterior pendientes) |
+| B3 | Proyecto mínimo y ciclo de vida | En curso (B3a, B3b y B3c implementados y cubiertos automáticamente; decisiones (B4) pendientes) |
 | B4 | Eventos, recuerdos, decisiones y conflictos | Pendiente |
 | B5 | Panel de contexto | Pendiente |
 | B6 | Selección y presupuesto de contexto | Pendiente |
@@ -138,7 +138,8 @@ Añadir una fila por resultado verificable. No registrar secretos ni contenido s
 | 2026-07-16 | B1 | `0f5af4e` (PR #22) | automática | `tests/gui/test_backup_recovery_ui.py` (23/23, 5 repeticiones) | Superada | CI verde, `scripts/check.ps1` verde | Corrección de higiene de prueba (fuga de conexión SQLite en el helper de bootstrap), no defecto de producto; sin cambio de comportamiento aprobado de V7 |
 | 2026-07-17 | B2b | `2c60afc` (PR #26) | automática | `test_paths.py`, `test_data_path_validator.py`, `test_bootstrap_location_store.py`, `test_data_location_use_case.py`, `test_data_location_window.py`, `test_app_bootstrap.py`; suite GUI de B2b repetida 5 veces | Superada | CI verde, `scripts/check.ps1` verde localmente (Ruff format, Ruff lint, mypy estricto, 412 pytest) | Selección y persistencia de la ruta local de datos antes de SQLite, logging y composición (D-10, parte de B2). Sin clave real ni red; sin movimiento ni migración de datos existentes |
 | 2026-07-17 | B3a | `882ab62` (PR #27) | automática | `test_project_domain.py` (nuevos casos), `test_initial_project_use_case.py` (unit e integración), `test_initial_project_window.py`, `test_app_bootstrap.py` (nuevos casos); suite GUI de B2a/B2b/B3a repetida 5 veces | Superada | CI verde, `scripts/check.ps1` verde localmente (Ruff format, Ruff lint, mypy estricto, 455 pytest) | Saludo determinista y creación utilizable del primer proyecto (D-02, parcial). RF-014 cubierto automáticamente; RF-015 protegido en la capa de aplicación; parte inicial de RF-016 (estado y siguiente paso iniciales) cubierta. Sin clave real ni red; sin B3b, B4 ni B5 |
-| 2026-07-17 | B3b | rama `feat/v8-b3b-project-continuity` (commit local) | automática | `test_project_domain.py` (nuevos casos), `test_project_continuity_use_case.py`, `test_render_instructions.py`, `test_sqlite_project_repository.py` (nuevos casos), `test_migrations.py` (nuevos casos, Alembic real), `test_send_message.py` (nuevo caso), `test_composition_root_project_continuity.py`, `test_project_continuity_widget.py`, `test_main_window.py` (nuevos casos), `test_app_bootstrap.py` (nuevos casos); suite GUI de B2a/B2b/B3a/B3b repetida 5 veces | Superada | `scripts/check.ps1` verde localmente (Ruff format, Ruff lint, mypy estricto, 518 pytest) | Continuidad observable del proyecto activo (D-02, parcial). RF-016 cubierto en estado, bloqueos y siguiente paso (no en decisiones, que pertenecen a B4); RF-017 cubierto (recuperación y resumen breve al retomar). Migración Alembic no destructiva (`66951344e4b9`) probada con Alembic real desde el head anterior. Sin clave real ni red; sin completar/archivar, B4, B5 ni B6 |
+| 2026-07-17 | B3b | `a2f74df` (PR #28) | automática | `test_project_domain.py` (nuevos casos), `test_project_continuity_use_case.py`, `test_render_instructions.py`, `test_sqlite_project_repository.py` (nuevos casos), `test_migrations.py` (nuevos casos, Alembic real), `test_send_message.py` (nuevo caso), `test_composition_root_project_continuity.py`, `test_project_continuity_widget.py`, `test_main_window.py` (nuevos casos), `test_app_bootstrap.py` (nuevos casos); suite GUI de B2a/B2b/B3a/B3b repetida 5 veces | Superada | `scripts/check.ps1` verde localmente (Ruff format, Ruff lint, mypy estricto, 518 pytest) | Continuidad observable del proyecto activo (D-02, parcial). RF-016 cubierto en estado, bloqueos y siguiente paso (no en decisiones, que pertenecen a B4); RF-017 cubierto (recuperación y resumen breve al retomar). Migración Alembic no destructiva (`66951344e4b9`) probada con Alembic real desde el head anterior. Sin clave real ni red; sin completar/archivar, B4, B5 ni B6 |
+| 2026-07-18 | B3c | PR #29 | automática | `test_project_domain.py`, `test_render_instructions.py` (reescritos para el nuevo dominio con revisión, incluida la sección de proyecto ausente); `test_initial_project_use_case.py`, `test_project_continuity_use_case.py` (reescritos sobre `create_project`/`append_revision`); `test_project_lifecycle_use_case.py` (nuevo); `test_sqlite_project_repository.py` (reescrito: `ensure_bootstrap_project`, `create_project`, `append_revision`, `complete_active_project`, `list_project_revisions`, JSON de bloqueos corrupto, puntero `current_revision_id`, revisión de otro proyecto rechazada, rollback ante fallo entre inserción y actualización del puntero); `test_migrations.py` (nuevos casos: backfill a revisión 1 con `current_revision_id` fijado, placeholder sin revisión con puntero `NULL`, fila inactiva histórica como COMPLETED, downgrade con resincronización de columnas heredadas vía el puntero, FK física `current_revision_id → project_revisions.id`, Alembic real); `test_initial_project_persistence.py`, `test_send_message.py`, `test_persistence_bootstrap.py`, `test_secret_leakage.py` (adaptados a la nueva forma del proyecto); `test_context_builder.py` (reescrito: cero proyectos activos, solo placeholder y proyecto COMPLETED ya no fallan y devuelven `context.project=None`); `test_backup_restore_project_lifecycle.py` (nuevo: copia/restauración conservan proyectos, revisiones, punteros `current_revision_id`, el único proyecto activo, y `ContextBuilder` usa el proyecto restaurado correcto); `test_project_continuity_widget.py` (nuevos casos "Completar proyecto"), `test_initial_project_window.py`, `test_main_window.py`, `test_app_bootstrap.py`, `test_settings_ui.py`, `test_validated_main_window.py`, `test_backup_recovery_ui.py`, `test_conversation_ui.py`, `test_onboarding_window.py` (adaptados a la nueva firma de `MainWindow`/`ProjectRepository`); suite GUI completa repetida 5 veces | Superada | `scripts/check.ps1` verde localmente (Ruff format, Ruff lint, mypy estricto, 557 pytest) | Ciclo de vida y versionado del proyecto (D-02, parcial). RF-018 cubierto: completar el proyecto activo (`ProjectLifecycleUseCase`) sin borrar su historial, con confirmación explícita en `ProjectContinuityWidget` ("Completar proyecto") y transición en el mismo proceso a `InitialProjectWindow` (nunca reactiva ni sobrescribe el proyecto cerrado). Historial de continuidad versionado e inmutable (`project_revisions`) con `projects.current_revision_id` (SIRIUS-ARQ-0.1 S7.3, campo mínimo aprobado) como único puntero autoritativo a la revisión vigente — corregido en auditoría de cierre tras detectarse que la primera implementación usaba en su lugar un indicador `is_current` no autorizado por la arquitectura — vía migración Alembic no destructiva (`6f710ea6c2d2`) con relleno (`backfill`) de la fila existente en revisión 1 y resincronización de columnas heredadas al bajar de versión. `ContextBuilder` ya no exige un proyecto activo: `Context.project` es `Project \| None` (SIRIUS-ARQ-0.1 S3, `LLMRequest.project_context: str \| None`), y su ausencia nunca lanza `ContextAssemblyError`. Solo se implementa COMPLETED (RF-018 no menciona archivar; ARCHIVED queda fuera de alcance de Sirius 0.1). Sin clave real ni red; sin decisiones, eventos, B4, B5 ni B6 |
 
 Tipos permitidos: `automática`, `CI`, `manual-Windows`, `proveedor-real`, `evaluación-humana`, `documental`.
 
@@ -159,10 +160,12 @@ B1 (reconciliación documental) integrado. B2 está en curso: RF-002 (validació
 credencial antes de guardar), B2a (primera configuración básica, PR #24, squash
 `f7134ca`) y B2b (selección y persistencia de la ruta local de datos, PR #26,
 squash `2c60afc`) ya están fusionados en `main`. B3 está en curso: B3a (saludo y
-creación del primer proyecto, PR #27, squash `882ab62`) ya está fusionado en
-`main`. B3b (continuidad observable del proyecto activo) ya está implementado y
-cubierto automáticamente, en la rama `feat/v8-b3b-project-continuity` (commit
-local).
+creación del primer proyecto, PR #27, squash `882ab62`) y B3b (continuidad
+observable del proyecto activo, PR #28, squash `a2f74df`) ya están fusionados en
+`main`. B3c (ciclo de vida y versionado del proyecto: historial de revisiones
+inmutable, completar el proyecto activo sin borrar su historial, habilitar un
+proyecto posterior solo tras completar el actual) ya está implementado y
+cubierto automáticamente — PR #29.
 
 ### B2a — Primera configuración básica — FUSIONADA (PR #24, squash `f7134ca658e6343779ee6bfe89ad05dd2f0a8ba3`)
 
@@ -360,7 +363,7 @@ Con B3a:
 - No se implementó B3b, B4 ni B5. No se llamó a un proveedor real ni se usó
   una clave real.
 
-### B3b — Continuidad observable del proyecto activo — IMPLEMENTADA (commit local, rama `feat/v8-b3b-project-continuity`)
+### B3b — Continuidad observable del proyecto activo — FUSIONADA (PR #28, squash `a2f74df935f32835506c3228b328c2b9b6eec13b`)
 
 Segundo corte dentro de B3. Texto aprobado verificado antes de implementar
 (Definición de Producto Sirius 0.1 v0.2, S10): RF-016 "Conservar objetivo,
@@ -463,6 +466,160 @@ Con B3b:
   proveedor, no solo la presencia del dato en el contexto.
 - No se implementó completar, archivar, un proyecto posterior, decisiones,
   B4, B5 ni B6. No se llamó a un proveedor real ni se usó una clave real.
+
+### B3c — Ciclo de vida y versionado del proyecto — PR #29
+
+Tercer y último corte dentro de B3. Texto aprobado verificado antes de
+implementar (Definición de Producto Sirius 0.1 v0.2, S10): RF-018 "Marcarlo
+completado sin borrar su historial". Solo se implementa COMPLETED: el texto
+aprobado no menciona archivar, y RF-024 ("archivar") se aplica a
+recuerdos/decisiones (B4), no al ciclo de vida propio de un proyecto —
+ARCHIVED queda deliberadamente fuera de alcance de Sirius 0.1. Este corte
+cierra D-02 en lo que respecta a B3 (decisiones relacionadas siguen
+perteneciendo a B4).
+
+- Dominio (`sirius.domain.project`, reescrito): `ProjectStatus` (`ACTIVE`,
+  `COMPLETED`); `ProjectRevision` (instantánea inmutable y versionada de
+  objetivo, estado, bloqueos y siguiente paso, con `source_event_id`
+  reservado para el evento de origen que introducirá B4, siempre `None` por
+  ahora); `Project` con `current_revision: ProjectRevision | None` (`None`
+  únicamente en el placeholder de arranque nunca configurado) en vez de los
+  campos planos de B3b — resuelto en persistencia a partir de
+  `current_revision_id`, no expuesto en el dominio ni en la interfaz.
+  `is_configured()` exige nombre no vacío, revisión presente y objetivo no
+  vacío.
+- Esquema (`ProjectModel`/`ProjectRevisionModel`) y migración Alembic
+  `6f710ea6c2d2` (revisa `66951344e4b9`), no destructiva: añade `status`,
+  `completed_at` y `current_revision_id` a `projects` (columnas planas
+  `objective`, `current_state`, `blockers`, `next_step` se conservan solo
+  por compatibilidad, ya no son la fuente autoritativa) y crea
+  `project_revisions`. `current_revision_id` (campo mínimo exigido por
+  SIRIUS-ARQ-0.1 S7.3, `NULL` solo en el placeholder sin configurar) es el
+  único mecanismo autoritativo para determinar la revisión vigente de un
+  proyecto — `project_revisions` no lleva ningún indicador `is_current` ni
+  otra segunda fuente de verdad; el patrón `is_current` que sí usan
+  `Identity`/`Memory` fue considerado y descartado aquí precisamente porque
+  la arquitectura aprobada especifica `current_revision_id` para `project`.
+  `current_revision_id` lleva una clave foránea física hacia
+  `project_revisions.id` (verificado que `ALTER TABLE ... ADD COLUMN ...
+  REFERENCES ...` y su posterior `DROP COLUMN` funcionan de forma directa en
+  este proyecto, sin necesitar el modo por lotes de Alembic ni reconstruir
+  la tabla); esa FK garantiza que la fila referenciada existe, pero no que
+  pertenezca al mismo proyecto — `SqliteProjectRepository` valida eso en
+  lectura y lo rechaza como corrupción (`InconsistentProjectRevisionError`)
+  si no coincide. `upgrade()` clasifica cada fila existente como configurada
+  o placeholder (mismo criterio que B3a/B3b) y, si está configurada, inserta
+  su revisión 1 con los valores heredados y apunta `current_revision_id` a
+  ella; `downgrade()` resincroniza las columnas planas desde la revisión
+  vigente (vía `current_revision_id`) de cada proyecto antes de eliminar la
+  tabla nueva (pérdida documentada y esperada de historial multi-revisión al
+  bajar de versión, no un fallo silencioso). Probada con Alembic real: alta
+  con relleno, alta de un placeholder sin revisión, alta de una fila ya
+  inactiva como COMPLETED, y baja con resincronización.
+- `ProjectRepository` (puerto, rediseñado): `get_active_project()`,
+  `get_project(id)`, `list_project_revisions(id)`, `ensure_bootstrap_project()`
+  (siembra el placeholder neutro solo si la tabla está vacía; nunca toca una
+  fila existente, activa o cerrada — sustituye al antiguo
+  `get_or_create_active_project()`), `create_project(...)` (reutiliza el
+  placeholder sin configurar si existe, o abre una fila nueva; nunca
+  reutiliza, reactiva ni sobrescribe un proyecto `COMPLETED`),
+  `append_revision(...)` (nueva revisión sobre un proyecto `ACTIVE`
+  configurado; nunca modifica una revisión anterior) y
+  `complete_active_project(id)` (cambia `status`/`is_active`/`completed_at`
+  en una sola transacción, sin tocar el contenido de la revisión actual).
+  `SqliteProjectRepository` codifica los bloqueos como JSON
+  (`blockers_json`, único lugar de serialización) y traduce un JSON inválido
+  a `CorruptProjectRevisionError` en vez de convertirlo silenciosamente en
+  una lista vacía.
+- `application/project_errors.py` (nuevo): errores compartidos por
+  `InitialProjectUseCase`, `ProjectContinuityUseCase` y el nuevo
+  `ProjectLifecycleUseCase`, evitando que la misma semántica ("proyecto no
+  configurado") divergiera entre los tres módulos.
+  `InitialProjectUseCase.create_initial_project()` ahora es la misma
+  operación tanto para el primer proyecto como para el siguiente tras
+  completar el anterior (delega en `create_project()`, que decide
+  internamente si reutiliza el placeholder o abre una fila nueva).
+  `ProjectContinuityUseCase.update()` ya no sobrescribe el proyecto en
+  sitio: añade una revisión nueva vía `append_revision()`, preservando el
+  objetivo de la revisión actual (esta operación nunca lo cambia).
+- `ProjectLifecycleUseCase` (nuevo, `sirius.application.project_lifecycle`):
+  `complete_active_project()` completa el proyecto `ACTIVE` configurado
+  conservando íntegramente su historial; rechaza con
+  `ProjectNotConfiguredError` la ausencia de un proyecto activo configurado;
+  nunca crea un proyecto siguiente (acción explícita y separada del
+  usuario).
+- `ContextBuilder.build()`: `Context.project` pasa a ser
+  `Project | None` (SIRIUS-ARQ-0.1 S3, `LLMRequest.project_context: str |
+  None`). Cero proyectos `ACTIVE` configurados — ausencia total, solo el
+  placeholder, o todo proyecto existente `COMPLETED` — ya no es un fallo de
+  arranque: `build()` nunca lanza `ContextAssemblyError` por esa causa
+  únicamente, nunca recupera un proyecto `COMPLETED`, nunca crea un
+  placeholder, y simplemente deja `context.project` en `None`. Identidad y
+  conversación principal ausentes siguen lanzando ese mismo error, sin
+  cambios. `render_instructions()` omite la sección "# Proyecto activo"
+  íntegra cuando `context.project is None` — sin texto de relleno, sin
+  proyecto inventado.
+- `ProjectContinuityWidget`: nuevo botón "Completar proyecto" en la página
+  de resumen, con diálogo de confirmación inyectable (mismo patrón que
+  `confirm_restore` en `MainWindow`) antes de tocar el repositorio; solo tras
+  confirmar llama a `ProjectLifecycleUseCase.complete_active_project()` y
+  emite la señal `project_completed` (una sola vez, nunca antes de que el
+  proyecto esté realmente completado). `MainWindow`/`ValidatedMainWindow`
+  reciben `ProjectLifecycleUseCase` (nuevo parámetro del constructor) y
+  reenvían la señal como `MainWindow.project_completed`.
+- `sirius.main`: `_build_main_window()` conecta `project_completed` para
+  cerrar la ventana principal y abrir `InitialProjectWindow` en el mismo
+  proceso, reutilizando exactamente el mismo camino que ya usa el arranque
+  cuando no hay proyecto configurado (`_build_initial_project_window`) — sin
+  reiniciar Sirius. Esta transición inmediata nunca crea un proyecto por sí
+  sola: `InitialProjectWindow` sigue exigiendo que el usuario escriba nombre
+  y objetivo y pulse "Crear proyecto" antes de persistir nada, así que la
+  garantía de que ningún proyecto se crea sin una acción explícita del
+  usuario se mantiene igual que en B3a.
+
+Cubierto con pruebas unitarias, de integración (incluida Alembic real) y de
+GUI: `tests/unit/test_project_domain.py`, `tests/unit/test_render_instructions.py`
+(reescritos sobre el nuevo dominio con revisión, incluida la ausencia de
+proyecto);
+`tests/unit/test_initial_project_use_case.py`,
+`tests/unit/test_project_continuity_use_case.py` (reescritos sobre
+`create_project`/`append_revision`); `tests/unit/test_project_lifecycle_use_case.py`
+(nuevo); `tests/integration/test_sqlite_project_repository.py` (reescrito:
+`ensure_bootstrap_project`, `create_project`, `append_revision`,
+`complete_active_project`, `list_project_revisions`, corrupción de
+`blockers_json`, puntero `current_revision_id`, FK física, revisión de otro
+proyecto rechazada, rollback completo ante fallo entre inserción y
+actualización del puntero); `tests/integration/test_migrations.py` (nuevos
+casos de relleno con `current_revision_id` fijado, placeholder con puntero
+`NULL`, y resincronización vía el puntero al bajar de versión);
+`tests/integration/test_initial_project_persistence.py`,
+`tests/integration/test_send_message.py`,
+`tests/integration/test_persistence_bootstrap.py`,
+`tests/integration/test_secret_leakage.py` (adaptados a la nueva forma del
+proyecto); `tests/integration/test_context_builder.py` (reescrito: cero
+proyectos activos, solo placeholder, y proyecto COMPLETED ya no fallan,
+`context.project` queda en `None`); `tests/integration/test_backup_restore_project_lifecycle.py`
+(nuevo); `tests/gui/test_project_continuity_widget.py`
+(nuevos casos "Completar proyecto"), y el resto de la suite GUI adaptada a
+la nueva firma de `MainWindow`/`ProjectRepository`. Suite GUI completa
+repetida 5 veces sin fallos; `scripts/check.ps1` verde localmente (Ruff
+format, Ruff lint, mypy estricto, 557 pytest).
+
+Con B3c:
+
+- RF-018 queda cubierto: completar sin borrar historial, con confirmación
+  explícita, sin permitir un segundo proyecto activo simultáneo (RF-015 se
+  mantiene) ni reactivar/editar/eliminar un proyecto ya cerrado.
+- D-02 queda cerrado en lo que respecta a B3 (decisiones relacionadas siguen
+  perteneciendo a B4, fuera de este corte).
+- PA-006 y PA-007 permanecen como en B3a/B3b (preparadas/cubiertas
+  automáticamente, no formalmente superadas). PA-008 y PA-009 siguen sin
+  declararse superadas: PA-008 exige además recuperar una decisión
+  registrada (B4) y PA-009 exige una recomendación evaluada del proveedor
+  real.
+- No se implementó ARCHIVED, decisiones, eventos, un historial general de
+  proyectos ni panel de gestión, B4, B5 ni B6. No se llamó a un proveedor
+  real ni se usó una clave real.
 
 ## Cierre de V8
 

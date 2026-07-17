@@ -1,4 +1,4 @@
-"""Unit tests for InitialProjectUseCase (B3a, D-02, RF-014/015/016).
+"""Unit tests for InitialProjectUseCase (B3a/B3c, D-02, RF-014/015/016).
 
 Uses an in-memory fake ``ProjectRepository`` so behavior is verified
 independently of SQLite (that gets its own dedicated integration coverage in
@@ -16,67 +16,79 @@ from sirius.application.initial_project import (
     InitialProjectUseCase,
     InvalidInitialProjectDataError,
 )
-from sirius.domain.project import INITIAL_PROJECT_NEXT_STEP, INITIAL_PROJECT_STATE, Project
+from sirius.domain.project import (
+    INITIAL_PROJECT_NEXT_STEP,
+    INITIAL_PROJECT_STATE,
+    Project,
+    ProjectRevision,
+    ProjectStatus,
+)
 
 
 class _FakeProjectRepository:
     def __init__(self, initial: Project | None = None) -> None:
         self._project = initial
-        self.update_calls: list[tuple[int, dict[str, str | None]]] = []
-
-    def get_or_create_active_project(self) -> Project:
-        if self._project is None:
-            now = datetime.now(UTC)
-            self._project = Project(
-                id=1,
-                name="",
-                objective="",
-                current_state="",
-                blockers="",
-                next_step="",
-                created_at=now,
-                updated_at=now,
-            )
-        return self._project
+        self.create_calls: list[tuple[str, str]] = []
 
     def get_active_project(self) -> Project | None:
         return self._project
 
-    def update_project(
+    def ensure_bootstrap_project(self) -> None:
+        raise AssertionError("must never be called by InitialProjectUseCase")
+
+    def get_project(self, project_id: int) -> Project | None:
+        raise AssertionError("must never be called by InitialProjectUseCase")
+
+    def list_project_revisions(self, project_id: int) -> tuple[ProjectRevision, ...]:
+        raise AssertionError("must never be called by InitialProjectUseCase")
+
+    def append_revision(
         self,
         project_id: int,
         *,
-        name: str | None = None,
-        objective: str | None = None,
-        current_state: str | None = None,
-        blockers: str | None = None,
-        next_step: str | None = None,
+        objective: str,
+        state_summary: str,
+        blockers: tuple[str, ...],
+        next_step: str,
+        source_event_id: int | None = None,
     ) -> Project:
-        self.update_calls.append(
-            (
-                project_id,
-                {
-                    "name": name,
-                    "objective": objective,
-                    "current_state": current_state,
-                    "blockers": blockers,
-                    "next_step": next_step,
-                },
-            )
+        raise AssertionError("must never be called by InitialProjectUseCase")
+
+    def complete_active_project(self, project_id: int) -> Project:
+        raise AssertionError("must never be called by InitialProjectUseCase")
+
+    def create_project(
+        self,
+        name: str,
+        objective: str,
+        *,
+        state_summary: str,
+        blockers: tuple[str, ...],
+        next_step: str,
+    ) -> Project:
+        self.create_calls.append((name, objective))
+        now = datetime.now(UTC)
+        base_id = self._project.id if self._project is not None else 1
+        base_created_at = self._project.created_at if self._project is not None else now
+        revision = ProjectRevision(
+            id=1,
+            project_id=base_id,
+            version=1,
+            objective=objective,
+            state_summary=state_summary,
+            blockers=blockers,
+            next_step=next_step,
+            source_event_id=None,
+            created_at=now,
         )
-        assert self._project is not None
-        assert self._project.id == project_id
         self._project = Project(
-            id=self._project.id,
-            name=name if name is not None else self._project.name,
-            objective=objective if objective is not None else self._project.objective,
-            current_state=current_state
-            if current_state is not None
-            else self._project.current_state,
-            blockers=blockers if blockers is not None else self._project.blockers,
-            next_step=next_step if next_step is not None else self._project.next_step,
-            created_at=self._project.created_at,
-            updated_at=datetime.now(UTC),
+            id=base_id,
+            name=name,
+            status=ProjectStatus.ACTIVE,
+            current_revision=revision,
+            created_at=base_created_at,
+            updated_at=now,
+            completed_at=None,
         )
         return self._project
 
@@ -86,12 +98,11 @@ def _placeholder(project_id: int = 1) -> Project:
     return Project(
         id=project_id,
         name="",
-        objective="",
-        current_state="",
-        blockers="",
-        next_step="",
+        status=ProjectStatus.ACTIVE,
+        current_revision=None,
         created_at=now,
         updated_at=now,
+        completed_at=None,
     )
 
 
@@ -99,15 +110,25 @@ def _configured(
     project_id: int = 1, *, name: str = "Sirius", objective: str = "Cerrar B3a"
 ) -> Project:
     now = datetime.now(UTC)
+    revision = ProjectRevision(
+        id=1,
+        project_id=project_id,
+        version=1,
+        objective=objective,
+        state_summary=INITIAL_PROJECT_STATE,
+        blockers=(),
+        next_step=INITIAL_PROJECT_NEXT_STEP,
+        source_event_id=None,
+        created_at=now,
+    )
     return Project(
         id=project_id,
         name=name,
-        objective=objective,
-        current_state=INITIAL_PROJECT_STATE,
-        blockers="",
-        next_step=INITIAL_PROJECT_NEXT_STEP,
+        status=ProjectStatus.ACTIVE,
+        current_revision=revision,
         created_at=now,
         updated_at=now,
+        completed_at=None,
     )
 
 
@@ -144,7 +165,8 @@ def test_create_initial_project_normalizes_and_persists_name_and_objective() -> 
     created = use_case.create_initial_project("  Mi Proyecto  ", "  Aprender Sirius  ")
 
     assert created.name == "Mi Proyecto"
-    assert created.objective == "Aprender Sirius"
+    assert created.current_revision is not None
+    assert created.current_revision.objective == "Aprender Sirius"
 
 
 def test_create_initial_project_assigns_the_canonical_initial_state_and_next_step() -> None:
@@ -152,8 +174,9 @@ def test_create_initial_project_assigns_the_canonical_initial_state_and_next_ste
 
     created = use_case.create_initial_project("Mi Proyecto", "Aprender Sirius")
 
-    assert created.current_state == INITIAL_PROJECT_STATE
-    assert created.next_step == INITIAL_PROJECT_NEXT_STEP
+    assert created.current_revision is not None
+    assert created.current_revision.state_summary == INITIAL_PROJECT_STATE
+    assert created.current_revision.next_step == INITIAL_PROJECT_NEXT_STEP
 
 
 def test_create_initial_project_completes_the_existing_placeholder_row() -> None:
@@ -164,7 +187,7 @@ def test_create_initial_project_completes_the_existing_placeholder_row() -> None
     created = use_case.create_initial_project("Mi Proyecto", "Aprender Sirius")
 
     assert created.id == 7
-    assert len(repository.update_calls) == 1
+    assert len(repository.create_calls) == 1
 
 
 def test_create_initial_project_becomes_the_single_active_project() -> None:
@@ -195,7 +218,7 @@ def test_create_initial_project_rejects_empty_or_whitespace_only_fields(
     with pytest.raises(InvalidInitialProjectDataError):
         use_case.create_initial_project(name, objective)
 
-    assert repository.update_calls == []
+    assert repository.create_calls == []
 
 
 def test_create_initial_project_rejects_a_second_configured_project() -> None:
@@ -206,7 +229,7 @@ def test_create_initial_project_rejects_a_second_configured_project() -> None:
     with pytest.raises(InitialProjectAlreadyConfiguredError):
         use_case.create_initial_project("Segundo", "Otro objetivo")
 
-    assert repository.update_calls == []
+    assert repository.create_calls == []
     assert repository.get_active_project() is original
 
 
