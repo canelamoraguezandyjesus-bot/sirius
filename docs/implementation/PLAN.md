@@ -346,6 +346,46 @@ Prohibido en esta subetapa:
   real de activación en Windows (Credential Manager con valor señuelo, pendiente
   de validación manual). El saludo con identidad propia y la propuesta de
   proyecto inicial pertenecen a B3 (D-02) y no son una condición de D-10.
+- Selección y persistencia de la ruta local de datos (B2b, parte de D-10):
+  la ubicación de datos se resuelve y valida antes de inicializar SQLite,
+  configurar el logging dependiente de la ruta o construir la composición.
+  Un nuevo componente aislado, `BootstrapLocationStore`
+  (`sirius.infrastructure.bootstrap_location_store`), guarda un puntero JSON
+  mínimo (`{"version": 1, "data_dir": "<ruta absoluta>"}`) en el directorio de
+  configuración estable de Windows (`SiriusPaths.config_dir`, ahora
+  independiente de `data_dir`: ver `resolve_paths(data_dir=...)`), separado de
+  `settings.json`, SQLite y el almacén de secretos; la escritura es atómica
+  (archivo temporal + `os.replace`). `WindowsDataPathValidator`
+  (`sirius.infrastructure.data_path_validator`) valida cada carpeta candidata
+  con una prueba de escritura real (nunca solo `os.access()`), caracteres y
+  nombres reservados de Windows, y detecta una instalación Sirius existente y
+  una carpeta bajo OneDrive. `DataLocationUseCase`
+  (`sirius.application.data_location`) orquesta resolución, validación y
+  persistencia sin conocer SQLite, SQLAlchemy, migraciones ni platformdirs
+  directamente. `DataLocationWindow` (nueva ventana de presentación,
+  independiente de `OnboardingWindow`) se muestra únicamente cuando hace
+  falta una primera elección (instalación nueva sin instalación previa en la
+  ruta predeterminada) o cuando el archivo externo de ubicación está dañado;
+  ofrece la ruta predeterminada ya seleccionada y una opción avanzada para
+  elegir otra carpeta. Una instalación existente en la ruta predeterminada
+  sin archivo de ubicación se conserva silenciosamente (sin pantalla de
+  migración); una ruta personalizada con datos existentes se bloquea sin
+  adoptarla, moverla ni sobrescribirla; un archivo de ubicación corrupto
+  nunca abre una base predeterminada en silencio y exige una elección nueva y
+  explícita antes de sobrescribirlo. `sirius.main` resuelve la ubicación
+  antes de cualquier paso dependiente de datos y solo entonces continúa con
+  el onboarding de credencial de B2a, en la misma ejecución. Cubierto con
+  pruebas unitarias y de GUI (`tests/unit/test_paths.py`,
+  `tests/unit/test_data_path_validator.py`,
+  `tests/unit/test_bootstrap_location_store.py`,
+  `tests/unit/test_data_location_use_case.py`,
+  `tests/gui/test_data_location_window.py`,
+  `tests/gui/test_app_bootstrap.py`), siempre con dobles deterministas, sin
+  datos reales y sin red. La migración o adopción de datos existentes fuera
+  de la ruta predeterminada queda explícitamente fuera de este corte. D-10
+  sigue sin cerrarse por completo: falta la comprobación real de activación
+  en Windows (Credential Manager con valor señuelo, pendiente de validación
+  manual) y las validaciones manuales de rutas reales de Windows.
 
 ### V8.2 — Windows sin clave — BLOQUEADA HASTA INTEGRACIÓN AUTOMÁTICA VERDE
 

@@ -97,7 +97,7 @@ Cualquier defecto nuevo debe vincularse a un requisito ya aprobado. Si no puede 
 | Bloque | Entrega | Estado |
 |---|---|---|
 | B1 | Reconciliación documental y trazabilidad | En curso |
-| B2 | Onboarding, credencial, ruta y activación | En curso (RF-002 y B2a fusionados; ruta local (B2b) pendiente) |
+| B2 | Onboarding, credencial, ruta y activación | En curso (RF-002, B2a y B2b implementados y cubiertos automáticamente; activación real en Windows pendiente) |
 | B3 | Proyecto mínimo y ciclo de vida | Pendiente |
 | B4 | Eventos, recuerdos, decisiones y conflictos | Pendiente |
 | B5 | Panel de contexto | Pendiente |
@@ -136,6 +136,7 @@ Añadir una fila por resultado verificable. No registrar secretos ni contenido s
 | 2026-07-16 | B2 | `fba51df` (PR #20) | automática | `test_validated_main_window.py` | Superada | CI verde, `scripts/check.ps1` verde | Integra RF-002 en la GUI (`ValidatedMainWindow`). D-01 permanece abierto: falta RF-001 (pantalla de primera configuración con política de datos); D-10 permanece abierto sin ningún cambio; PA-001 y PA-002 no se declaran superadas — exigen credencial real y quedan bloqueadas hasta V8.3 |
 | 2026-07-17 | B2a | rama `feat/v8-b2a-first-run-onboarding` (commit local, sin PR) | automática | `test_onboarding_window.py`, `test_app_bootstrap.py`, `test_composition_root_credential_validation.py` (nuevos casos), `test_send_message.py` (`set_llm_provider`), suite GUI de B2a repetida 5 veces | Superada | `scripts/check.ps1` verde localmente (Ruff format, Ruff lint, mypy estricto, 360 pytest) | RF-001 implementado y cubierto automáticamente vía `OnboardingWindow` + recomposición segura del proveedor en la misma ejecución (`activate_configured_llm_provider`, sin reinicio). D-01 permanece abierto hasta PA-001/PA-002 con proveedor real; D-10 sigue parcialmente abierto (falta B2b y la comprobación real de Credential Manager); sin clave real ni red |
 | 2026-07-16 | B1 | `0f5af4e` (PR #22) | automática | `tests/gui/test_backup_recovery_ui.py` (23/23, 5 repeticiones) | Superada | CI verde, `scripts/check.ps1` verde | Corrección de higiene de prueba (fuga de conexión SQLite en el helper de bootstrap), no defecto de producto; sin cambio de comportamiento aprobado de V7 |
+| 2026-07-17 | B2b | rama `feat/v8-b2b-data-path` (commit local, sin PR) | automática | `test_paths.py`, `test_data_path_validator.py`, `test_bootstrap_location_store.py`, `test_data_location_use_case.py`, `test_data_location_window.py`, `test_app_bootstrap.py`; suite GUI de B2b repetida 5 veces | Superada | `scripts/check.ps1` verde localmente (Ruff format, Ruff lint, mypy estricto, 412 pytest) | Selección y persistencia de la ruta local de datos antes de SQLite, logging y composición (D-10, parte de B2). Sin clave real ni red; sin movimiento ni migración de datos existentes |
 
 Tipos permitidos: `automática`, `CI`, `manual-Windows`, `proveedor-real`, `evaluación-humana`, `documental`.
 
@@ -155,7 +156,9 @@ Estados permitidos: `no preparada`, `preparada`, `automática superada`, `manual
 B1 (reconciliación documental) integrado. B2 está en curso: RF-002 (validación de
 credencial antes de guardar) ya está fusionado e integrado en la GUI. B2a (primera
 configuración básica) ya está implementado y cubierto automáticamente, en la rama
-`feat/v8-b2a-first-run-onboarding` (commit local, todavía sin PR).
+`feat/v8-b2a-first-run-onboarding` (commit local, todavía sin PR). B2b (selección y
+persistencia de la ruta local de datos) ya está implementado y cubierto
+automáticamente, en la rama `feat/v8-b2b-data-path` (commit local, todavía sin PR).
 
 ### B2a — Primera configuración básica — IMPLEMENTADA (commit local, sin PR)
 
@@ -199,6 +202,77 @@ Con B2a:
   condición de cierre de D-10.
 - PA-001 y PA-002 no se declaran superadas: exigen una credencial real y quedan
   bloqueadas hasta V8.3.
+
+### B2b — Selección y persistencia de la ruta local de datos — IMPLEMENTADA (commit local, sin PR)
+
+Este corte dentro de B2 resuelve la ubicación de los datos **antes** de crear
+directorios de datos, configurar el logging dependiente de la ruta, abrir
+SQLite, ejecutar migraciones o construir repositorios/casos de uso de
+persistencia:
+
+- `BootstrapLocationStore` (`sirius.infrastructure.bootstrap_location_store`)
+  guarda un puntero JSON mínimo de una única versión de esquema
+  (`{"version": 1, "data_dir": "<ruta absoluta>"}`) en el directorio de
+  configuración estable de Windows (`SiriusPaths.config_dir`, obtenido vía
+  `platformdirs`), ahora fijo e independiente de `data_dir`
+  (`resolve_paths(data_dir=...)`); escritura atómica (archivo temporal +
+  `os.replace`), lectura segura y error explícito (`LocationFileCorruptedError`)
+  ante corrupción, sin caer nunca en una base predeterminada en silencio.
+  Separado de `settings.json`, SQLite, el almacén de secretos y la
+  configuración del proveedor.
+- `WindowsDataPathValidator` (`sirius.infrastructure.data_path_validator`)
+  valida cada carpeta candidata: ruta absoluta, caracteres y nombres
+  reservados de Windows, ausencia de un archivo ocupando el lugar de la
+  carpeta, permiso de escritura probado con un archivo temporal real (nunca
+  solo `os.access()`), espacios y Unicode, y reporta si la carpeta ya
+  contiene una instalación Sirius (`sirius.db`) o está bajo OneDrive. No deja
+  directorios parciales cuando la validación falla tras crear la carpeta.
+- `DataLocationUseCase` (`sirius.application.data_location`) orquesta la
+  resolución sin conocer SQLite, SQLAlchemy, migraciones ni platformdirs
+  directamente: reutiliza silenciosamente una ubicación ya guardada (validada
+  de nuevo antes de usarla), conserva sin pantalla de migración una
+  instalación existente en la ruta predeterminada cuando todavía no hay
+  archivo de ubicación, y solo pide una primera elección cuando ninguna de
+  las dos aplica. Bloquea con `DataPathHasExistingInstallationError` una ruta
+  personalizada que ya contiene datos de Sirius: este corte no adopta, mueve
+  ni migra datos existentes fuera de la ruta predeterminada.
+- `DataLocationWindow` (nueva ventana de presentación, independiente de
+  `OnboardingWindow`) ofrece la ruta predeterminada ya seleccionada y una
+  opción avanzada para elegir otra carpeta; distingue en su texto la ruta
+  predeterminada, la personalizada, la advertencia de OneDrive (no
+  bloqueante, exige confirmación explícita), el error de acceso y el caso de
+  datos existentes no admitidos; se muestra también en modo recuperación
+  cuando el archivo de ubicación está corrupto, y solo lo sobrescribe tras
+  una elección nueva y válida.
+- `sirius.main` resuelve la ubicación antes de cualquier paso dependiente de
+  datos (`_build_first_window`) y solo entonces continúa, en la misma
+  ejecución, con `initialize_persistence`, la composición y el onboarding de
+  credencial de B2a (o la ventana principal si ya hay clave configurada); sin
+  reiniciar Sirius y sin duplicar ventanas.
+
+Cubierto con pruebas unitarias y de GUI (`tests/unit/test_paths.py`,
+`tests/unit/test_data_path_validator.py`,
+`tests/unit/test_bootstrap_location_store.py`,
+`tests/unit/test_data_location_use_case.py`,
+`tests/gui/test_data_location_window.py`, `tests/gui/test_app_bootstrap.py`),
+siempre con dobles deterministas (`tmp_path`, `monkeypatch`, `qtbot`), sin
+datos reales, sin clave real, sin Credential Manager real, sin OneDrive real
+y sin red. La suite GUI específica de B2b se repitió 5 veces sin fallos.
+
+Con B2b:
+
+- La ruta predeterminada y una ruta personalizada quedan resueltas antes de
+  SQLite, cubriendo la parte de D-10 relativa a la ruta de datos (Producto
+  §5.1).
+- La migración o adopción de datos existentes fuera de la ruta predeterminada
+  queda explícitamente fuera de este corte y de D-10.
+- D-10 sigue sin cerrarse por completo: falta la comprobación real de
+  activación en Windows (Credential Manager con valor señuelo, pendiente de
+  validación manual) y la validación manual de rutas reales de Windows
+  (unidades de red, permisos reales, OneDrive real).
+- PA-001 y PA-002 no se declaran superadas: exigen una credencial real y
+  quedan bloqueadas hasta V8.3.
+- No se inició B3.
 
 Sin iniciar todavía Windows real ni proveedor real. Sin usar clave real ni red.
 
