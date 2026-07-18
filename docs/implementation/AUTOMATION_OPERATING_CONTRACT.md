@@ -45,7 +45,7 @@ A fecha de este documento:
 - La rutina utiliza un disparador de **una sola ejecución programada**.
 - No utiliza disparador API.
 - No utiliza evento de GitHub.
-- Los conectores están vacíos.
+- La Routine utiliza el conector `Claude_Code_Remote`.
 - La corrección automática de pull requests está desactivada.
 - La notificación push está activada.
 - **18 de julio de 2026:** el resultado de la prueba de humo cloud quedó en `CLOUD_SMOKE_PASSED`. La PR #34, `docs: record successful cloud smoke test`, fue fusionada en `main`; su evidencia está registrada en `docs/implementation/CLOUD_SMOKE_EVIDENCE_20260718.md`.
@@ -98,7 +98,7 @@ Configuración aprobada:
 - disparador: una sola vez;
 - API: no;
 - evento de GitHub: no;
-- conectores: ninguno;
+- conector: `Claude_Code_Remote`;
 - auto-fix: desactivado;
 - notificación push: activada;
 - merge: prohibido.
