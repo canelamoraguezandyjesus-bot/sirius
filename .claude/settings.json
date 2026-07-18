@@ -60,8 +60,10 @@
       "PowerShell(python .\\scripts\\read_docx.py *)"
     ],
     "deny": [
-      "Bash(git push*)",
-      "PowerShell(git push*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "PowerShell(git push --force*)",
+      "PowerShell(git push -f*)",
       "Bash(git reset --hard*)",
       "PowerShell(git reset --hard*)",
       "Bash(git clean*)",
