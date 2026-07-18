@@ -97,7 +97,7 @@ class _RecordingMemoryRepository:
 
 
 class _UnusedDecisionRepository:
-    """B4b's ``UnitOfWork.decision_repository``; ``save()`` never touches it."""
+    """B4b/B4c's ``UnitOfWork.decision_repository``; ``save()`` never touches it."""
 
     def create_proposal(
         self, subject: str, project_id: int, content: str, *, source_event_id: int | None = None
@@ -109,6 +109,17 @@ class _UnusedDecisionRepository:
 
     def approve_decision(self, decision_id: int) -> Decision:
         raise AssertionError("save() must never approve a decision")
+
+    def supersede_decision(
+        self, superseded_decision_id: int, superseding_decision_id: int
+    ) -> Decision:
+        raise AssertionError("save() must never supersede a decision")
+
+    def list_current_decisions(self) -> list[Decision]:
+        raise AssertionError("save() must never list decisions")
+
+    def get_superseding_decision(self, decision_id: int) -> Decision | None:
+        raise AssertionError("save() must never read a superseding decision")
 
 
 class _FakeUnitOfWork:

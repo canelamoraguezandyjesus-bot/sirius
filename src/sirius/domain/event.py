@@ -17,8 +17,10 @@ from dataclasses import dataclass
 from datetime import datetime
 
 MANUAL_MEMORY_SAVE_EVENT_TYPE = "memory.manual_save"
+MEMORY_CORRECTED_EVENT_TYPE = "memory.corrected"
 DECISION_PROPOSED_EVENT_TYPE = "decision.proposed"
 DECISION_APPROVED_EVENT_TYPE = "decision.approved"
+DECISION_SUPERSEDED_EVENT_TYPE = "decision.superseded"
 USER_ACTOR = "user"
 
 

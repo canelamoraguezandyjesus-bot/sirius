@@ -29,6 +29,7 @@ from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_p
 from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
 from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
+from sirius.application.supersede_decision import SupersedeDecisionUseCase
 from sirius.domain.decision import DecisionStatus
 
 
@@ -213,3 +214,85 @@ def test_a_valid_approval_succeeds_after_a_rolled_back_attempt(
     approved = approve_use_case.approve(proposed.id, confirmed=True)
 
     assert approved.status is DecisionStatus.APPROVED
+
+
+@pytest.mark.integration
+def test_supersede_rolls_back_the_event_and_both_status_changes_together_on_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database_path = tmp_path / "sirius.db"
+    project_id = _bootstrap(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    original = ApproveDecisionUseCase(unit_of_work).approve(
+        ProposeDecisionUseCase(unit_of_work)
+        .propose("Motor de persistencia", project_id, "Usar SQLite local")
+        .id,
+        confirmed=True,
+    )
+    substitute = ProposeDecisionUseCase(unit_of_work).propose(
+        "Motor de persistencia", project_id, "Usar PostgreSQL en su lugar"
+    )
+    events_before, _, _ = _row_counts(database_path)
+
+    supersede_use_case = SupersedeDecisionUseCase(unit_of_work)
+
+    def _boom(self: object, superseded_decision_id: int, superseding_decision_id: int) -> None:
+        msg = "simulated supersession failure"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(
+        sqlite_decision_repository.SqliteDecisionRepository, "supersede_decision", _boom
+    )
+
+    with pytest.raises(RuntimeError):
+        supersede_use_case.supersede(original.id, substitute.id, confirmed=True)
+
+    monkeypatch.undo()
+
+    events_after_failed_supersede, _, _ = _row_counts(database_path)
+    assert events_after_failed_supersede == events_before
+
+    session_factory = build_session_factory(build_engine(database_path))
+    with session_scope(session_factory) as session:
+        original_model = session.get(DecisionModel, original.id)
+        substitute_model = session.get(DecisionModel, substitute.id)
+        assert original_model is not None
+        assert substitute_model is not None
+        assert original_model.status is DecisionStatus.APPROVED
+        assert substitute_model.status is DecisionStatus.PROPOSED
+        assert substitute_model.supersedes_decision_id is None
+
+
+@pytest.mark.integration
+def test_a_valid_supersession_succeeds_after_a_rolled_back_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    database_path = tmp_path / "sirius.db"
+    project_id = _bootstrap(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    original = ApproveDecisionUseCase(unit_of_work).approve(
+        ProposeDecisionUseCase(unit_of_work)
+        .propose("Motor de persistencia", project_id, "Usar SQLite local")
+        .id,
+        confirmed=True,
+    )
+    substitute = ProposeDecisionUseCase(unit_of_work).propose(
+        "Motor de persistencia", project_id, "Usar PostgreSQL en su lugar"
+    )
+    supersede_use_case = SupersedeDecisionUseCase(unit_of_work)
+
+    def _boom(self: object, superseded_decision_id: int, superseding_decision_id: int) -> None:
+        msg = "simulated supersession failure"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(
+        sqlite_decision_repository.SqliteDecisionRepository, "supersede_decision", _boom
+    )
+    with pytest.raises(RuntimeError):
+        supersede_use_case.supersede(original.id, substitute.id, confirmed=True)
+
+    monkeypatch.undo()
+    result = supersede_use_case.supersede(original.id, substitute.id, confirmed=True)
+
+    assert result.status is DecisionStatus.APPROVED
+    assert result.supersedes_decision_id == original.id

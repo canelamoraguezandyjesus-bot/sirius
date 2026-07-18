@@ -16,15 +16,23 @@ from sirius.adapters.persistence.models import Base, DecisionModel, MessageModel
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
 )
+from sirius.adapters.persistence.sqlite_decision_repository import (
+    build_sqlite_decision_repository,
+)
 from sirius.adapters.persistence.sqlite_identity_repository import (
     build_sqlite_identity_repository,
 )
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
+from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
+from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.context import ContextBuilder
 from sirius.application.project_continuity import ProjectContinuityUseCase
+from sirius.application.propose_decision import ProposeDecisionUseCase
+from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageUseCase, render_instructions
 from sirius.domain.conversation import Conversation, Message, MessageRole, MessageStatus
+from sirius.domain.decision import DecisionStatus
 from sirius.domain.project import is_configured
 from sirius.ports.conversation_repository import ConversationRepository
 from sirius.ports.llm import (
@@ -254,6 +262,51 @@ def test_send_message_never_creates_or_approves_a_decision_as_a_side_effect(
     session_factory = build_session_factory(build_engine(database_path))
     with session_scope(session_factory) as session:
         assert session.scalars(select(DecisionModel)).first() is None
+
+
+@pytest.mark.integration
+def test_send_message_never_corrects_a_memory_as_a_side_effect(tmp_path: Path) -> None:
+    """B4c, RF-022: a memory is corrected only by an explicit call to
+    ``CorrectMemoryUseCase``, never automatically by an ordinary
+    conversation turn discussing or restating it."""
+    database_path = tmp_path / "sirius.db"
+    use_case = _build_use_case(database_path, FakeLLMProvider())
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    memory = SaveManualMemoryUseCase(unit_of_work).save("El usuario prefiere respuestas breves")
+
+    use_case.send_message("en realidad prefiero respuestas detalladas")
+
+    memory_repository = build_sqlite_memory_repository(database_path)
+    unchanged = memory_repository.get_memory(memory.id)
+    assert unchanged.current_revision.version == 1
+    assert unchanged.current_revision.content == "El usuario prefiere respuestas breves"
+
+
+@pytest.mark.integration
+def test_send_message_never_supersedes_a_decision_as_a_side_effect(tmp_path: Path) -> None:
+    """B4c, RF-023: a decision is superseded only by an explicit call to
+    ``SupersedeDecisionUseCase``, never automatically by an ordinary
+    conversation turn debating a replacement."""
+    database_path = tmp_path / "sirius.db"
+    use_case = _build_use_case(database_path, FakeLLMProvider())
+    project_repository = build_sqlite_project_repository(database_path)
+    project = project_repository.get_active_project()
+    assert project is not None
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    approved = ApproveDecisionUseCase(unit_of_work).approve(
+        ProposeDecisionUseCase(unit_of_work)
+        .propose("Motor de persistencia", project.id, "Usar SQLite local")
+        .id,
+        confirmed=True,
+    )
+
+    use_case.send_message("deberíamos sustituir esa decisión por PostgreSQL")
+
+    decision_repository = build_sqlite_decision_repository(database_path)
+    unchanged = decision_repository.get_decision(approved.id)
+    assert unchanged.status is DecisionStatus.APPROVED
+    assert unchanged.supersedes_decision_id is None
+    assert decision_repository.get_superseding_decision(approved.id) is None
 
 
 @pytest.mark.integration

@@ -125,6 +125,7 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
         "subject",
         "project_id",
         "status",
+        "supersedes_decision_id",
         "created_at",
         "updated_at",
     }
@@ -281,6 +282,108 @@ def test_upgrade_head_creates_the_single_current_revision_per_decision_index(
 
     assert "uq_decision_revisions_single_current_per_decision" in indexes
     assert bool(indexes["uq_decision_revisions_single_current_per_decision"]["unique"])
+
+
+@pytest.mark.integration
+def test_upgrade_head_creates_supersedes_decision_id_as_a_physical_foreign_key(
+    tmp_path: Path,
+) -> None:
+    """B4c, RF-023: decisions.supersedes_decision_id is a real, enforced
+    self-referential link, not just a free-standing integer."""
+    database_path = tmp_path / "sirius.db"
+
+    command.upgrade(_alembic_config(database_path), "head")
+
+    inspector = inspect(build_engine(database_path))
+    foreign_keys = inspector.get_foreign_keys("decisions")
+    supersedes_fks = [fk for fk in foreign_keys if fk["referred_table"] == "decisions"]
+
+    assert len(supersedes_fks) == 1
+    assert supersedes_fks[0]["constrained_columns"] == ["supersedes_decision_id"]
+    assert supersedes_fks[0]["referred_columns"] == ["id"]
+
+
+@pytest.mark.integration
+def test_downgrade_to_previous_head_removes_only_supersedes_decision_id(tmp_path: Path) -> None:
+    """B4c: downgrading past this migration removes only the
+    ``supersedes_decision_id`` column; the ``decisions`` table itself and
+    every other table (including ``decision_revisions``) is unaffected."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+
+    command.upgrade(config, "head")
+    command.downgrade(config, "938fc6ac868c")
+
+    inspector = inspect(build_engine(database_path))
+    decision_columns = {c["name"] for c in inspector.get_columns("decisions")}
+    assert "supersedes_decision_id" not in decision_columns
+    assert {"decisions", "decision_revisions"}.issubset(set(inspector.get_table_names()))
+
+
+@pytest.mark.integration
+def test_upgrading_from_the_previous_head_preserves_existing_decisions(tmp_path: Path) -> None:
+    """B4c compatibility: a base created before this migration existed (still
+    at the previous head, 938fc6ac868c) upgrades to the new head without
+    losing any existing decision or decision revision; every previously
+    stored decision's ``supersedes_decision_id`` backfills to ``NULL``
+    (correct — no decision was ever superseded before this migration)."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+    command.upgrade(config, "938fc6ac868c")
+
+    now = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO projects "
+                "(name, objective, current_state, next_step, is_active, status, created_at, "
+                "updated_at) VALUES (:name, :objective, :state, :next_step, 1, 'active', "
+                ":now, :now)"
+            ),
+            {
+                "name": "Sirius 0.1",
+                "objective": "Cerrar B4c",
+                "state": "en curso",
+                "next_step": "probar la migración",
+                "now": now,
+            },
+        )
+        connection.execute(
+            text(
+                "INSERT INTO decisions (id, subject, project_id, status, created_at, updated_at) "
+                "VALUES (1, 'Motor de persistencia', 1, 'approved', :now, :now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO decision_revisions "
+                "(decision_id, version, content, is_current, created_at) "
+                "VALUES (1, 1, 'Usar SQLite local', 1, :now)"
+            ),
+            {"now": now},
+        )
+
+    command.upgrade(config, "head")
+
+    with engine.begin() as connection:
+        decision_rows = connection.execute(
+            text("SELECT id, subject, status, supersedes_decision_id FROM decisions")
+        ).fetchall()
+        revision_rows = connection.execute(
+            text("SELECT decision_id, version, content FROM decision_revisions")
+        ).fetchall()
+
+    assert len(decision_rows) == 1
+    assert decision_rows[0].id == 1
+    assert decision_rows[0].subject == "Motor de persistencia"
+    assert decision_rows[0].status == "approved"
+    assert decision_rows[0].supersedes_decision_id is None
+
+    assert len(revision_rows) == 1
+    assert revision_rows[0].decision_id == 1
+    assert revision_rows[0].content == "Usar SQLite local"
 
 
 @pytest.mark.integration

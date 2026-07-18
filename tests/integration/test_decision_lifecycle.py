@@ -32,6 +32,14 @@ from sirius.application.approve_decision import (
 )
 from sirius.application.decision_origin import DecisionOriginNotFoundError, GetDecisionOriginUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
+from sirius.application.supersede_decision import (
+    DecisionSupersessionNotConfirmedError,
+    InvalidDecisionSupersessionError,
+    SupersedeDecisionUseCase,
+)
+from sirius.application.supersede_decision import (
+    UnknownDecisionError as UnknownSupersessionDecisionError,
+)
 from sirius.domain.conversation import MessageRole
 from sirius.domain.decision import DecisionStatus
 
@@ -213,3 +221,126 @@ def test_decision_and_its_origin_survive_closing_and_reopening_the_store(tmp_pat
         reopened_decision_repository, reopened_event_repository, reopened_conversation_repository
     ).get_origin(approved.id)
     assert origin.message_content == "propongo esta decisión"
+
+
+@pytest.mark.integration
+def test_a_proposed_decision_can_explicitly_supersede_an_approved_one(tmp_path: Path) -> None:
+    """B4c, PA-013: approving a decision that replaces another marks the
+    original as SUSTITUIDA (SUPERSEDED) — never deleted, still consultable —
+    links it to its successor, and the successor becomes the only one the
+    ordinary vigente query returns."""
+    database_path = tmp_path / "sirius.db"
+    project_id = _bootstrap(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    decision_repository = build_sqlite_decision_repository(database_path)
+
+    original = ApproveDecisionUseCase(unit_of_work).approve(
+        ProposeDecisionUseCase(unit_of_work)
+        .propose("Motor de persistencia", project_id, "Usar SQLite local")
+        .id,
+        confirmed=True,
+    )
+    substitute_proposal = ProposeDecisionUseCase(unit_of_work).propose(
+        "Motor de persistencia", project_id, "Usar PostgreSQL en su lugar"
+    )
+
+    substitute = SupersedeDecisionUseCase(unit_of_work).supersede(
+        original.id, substitute_proposal.id, confirmed=True
+    )
+
+    assert substitute.status is DecisionStatus.APPROVED
+    assert substitute.supersedes_decision_id == original.id
+
+    # The original decision is never deleted: it stays consultable, marked
+    # SUPERSEDED rather than APPROVED.
+    superseded = decision_repository.get_decision(original.id)
+    assert superseded.status is DecisionStatus.SUPERSEDED
+
+    # The persistent link is queryable from either side.
+    superseding = decision_repository.get_superseding_decision(original.id)
+    assert superseding is not None
+    assert superseding.id == substitute.id
+
+    # The ordinary "vigente" query returns only the substitute.
+    current_ids = {decision.id for decision in decision_repository.list_current_decisions()}
+    assert current_ids == {substitute.id}
+
+
+@pytest.mark.integration
+def test_supersession_without_confirmation_is_rejected(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    project_id = _bootstrap(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    original = ApproveDecisionUseCase(unit_of_work).approve(
+        ProposeDecisionUseCase(unit_of_work)
+        .propose("Motor de persistencia", project_id, "Usar SQLite local")
+        .id,
+        confirmed=True,
+    )
+    substitute_proposal = ProposeDecisionUseCase(unit_of_work).propose(
+        "Motor de persistencia", project_id, "Usar PostgreSQL en su lugar"
+    )
+
+    with pytest.raises(DecisionSupersessionNotConfirmedError):
+        SupersedeDecisionUseCase(unit_of_work).supersede(
+            original.id, substitute_proposal.id, confirmed=False
+        )
+
+    decision_repository = build_sqlite_decision_repository(database_path)
+    assert decision_repository.get_decision(original.id).status is DecisionStatus.APPROVED
+    assert (
+        decision_repository.get_decision(substitute_proposal.id).status is DecisionStatus.PROPOSED
+    )
+
+
+@pytest.mark.integration
+def test_debating_alternatives_never_supersedes_a_decision(tmp_path: Path) -> None:
+    """PA-013's negative half, mirroring PA-011: nothing short of an explicit
+    call to ``SupersedeDecisionUseCase`` ever changes a decision's status to
+    SUPERSEDED — an ordinary conversation never calls it."""
+    database_path = tmp_path / "sirius.db"
+    project_id = _bootstrap(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    original = ApproveDecisionUseCase(unit_of_work).approve(
+        ProposeDecisionUseCase(unit_of_work)
+        .propose("Motor de persistencia", project_id, "Usar SQLite local")
+        .id,
+        confirmed=True,
+    )
+
+    decision_repository = build_sqlite_decision_repository(database_path)
+    assert decision_repository.get_decision(original.id).status is DecisionStatus.APPROVED
+    assert decision_repository.get_superseding_decision(original.id) is None
+
+
+@pytest.mark.integration
+def test_superseding_an_unknown_decision_id_is_handled_safely(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    project_id = _bootstrap(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    substitute_proposal = ProposeDecisionUseCase(unit_of_work).propose(
+        "Motor de persistencia", project_id, "Usar PostgreSQL en su lugar"
+    )
+
+    with pytest.raises(UnknownSupersessionDecisionError):
+        SupersedeDecisionUseCase(unit_of_work).supersede(
+            999, substitute_proposal.id, confirmed=True
+        )
+
+
+@pytest.mark.integration
+def test_superseding_with_incompatible_statuses_is_handled_safely(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    project_id = _bootstrap(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    still_proposed = ProposeDecisionUseCase(unit_of_work).propose(
+        "Motor de persistencia", project_id, "Usar SQLite local"
+    )
+    other_still_proposed = ProposeDecisionUseCase(unit_of_work).propose(
+        "Motor de persistencia", project_id, "Usar PostgreSQL en su lugar"
+    )
+
+    with pytest.raises(InvalidDecisionSupersessionError):
+        SupersedeDecisionUseCase(unit_of_work).supersede(
+            still_proposed.id, other_still_proposed.id, confirmed=True
+        )

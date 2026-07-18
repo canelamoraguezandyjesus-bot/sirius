@@ -259,13 +259,19 @@ class DecisionModel(Base):
     """A decision: stable identity (subject, project) and current lifecycle
     status. Its current revision is the single row in ``decision_revisions``
     with the matching ``decision_id`` and ``is_current = True`` (B4b creates
-    exactly one; B4c will use ``is_current`` the same way
-    ``MemoryRevisionModel`` already does for corrections).
+    exactly one; decisions never gain a second revision, since B4c's
+    correction only applies to memories — substitution is a relationship
+    between two ``DecisionModel`` rows instead, see
+    ``supersedes_decision_id``).
 
     ``status`` lives here, not on the revision — mirroring ``ProjectModel``:
     approving a decision (``ApproveDecisionUseCase``) changes this column in
     place and never creates a new revision, since the content does not
-    change.
+    change. B4c adds the third status, SUPERSEDED.
+
+    ``supersedes_decision_id`` (B4c, RF-023) is set only when this decision
+    became APPROVED by explicitly superseding another; ``NULL`` otherwise. A
+    nullable self-referential foreign key, additive over B4b's schema.
     """
 
     __tablename__ = "decisions"
@@ -283,6 +289,9 @@ class DecisionModel(Base):
             length=16,
         ),
         nullable=False,
+    )
+    supersedes_decision_id: Mapped[int | None] = mapped_column(
+        ForeignKey("decisions.id"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(nullable=False)
     updated_at: Mapped[datetime] = mapped_column(nullable=False)

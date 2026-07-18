@@ -81,6 +81,17 @@ class _RecordingDecisionRepository:
     def approve_decision(self, decision_id: int) -> Decision:
         raise AssertionError("propose() must never approve a decision")
 
+    def supersede_decision(
+        self, superseded_decision_id: int, superseding_decision_id: int
+    ) -> Decision:
+        raise AssertionError("propose() must never supersede a decision")
+
+    def list_current_decisions(self) -> list[Decision]:
+        raise AssertionError("propose() must never list decisions")
+
+    def get_superseding_decision(self, decision_id: int) -> Decision | None:
+        raise AssertionError("propose() must never read a superseding decision")
+
 
 class _UnusedMemoryRepository:
     """B4a's ``UnitOfWork.memory_repository``; ``propose()`` never touches it."""
