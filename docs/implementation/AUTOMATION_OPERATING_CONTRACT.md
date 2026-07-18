@@ -1,7 +1,8 @@
 # SIRIUS - Contrato operativo de automatización con Claude Code
 
-**Versión:** 1.0  
+**Versión:** 1.1
 **Fecha:** 18 de julio de 2026  
+**Última actualización:** 18 de julio de 2026 - cierre de la Fase A cloud y apertura del piloto local (ver Sección 13)
 **Estado:** VIGENTE - consolidación de decisiones ya tomadas  
 **Autoridad:** Operativa para el flujo de desarrollo automatizado de Sirius 0.1  
 **No modifica:** Producto, Arquitectura Técnica, ATD, requisitos ni alcance de Sirius 0.1
@@ -24,6 +25,8 @@ La automatización buscada es viable, pero solo mediante una progresión control
 4. repetir el método hasta acumular evidencia suficiente;
 5. automatizar eventos de GitHub únicamente después de demostrar estabilidad y recibir aprobación expresa.
 
+> **Nota (ver Sección 13):** los pasos 1 y 2 anteriores describen el plan cloud original y se conservan como registro histórico. Ambos quedaron sustituidos por la decisión registrada en la Sección 13: la vía vigente es el piloto local protegido definido en `docs/implementation/LOCAL_AUTOMATION_PILOT.md`, y B4a ya no depende de ninguna ejecución cloud.
+
 El objetivo no es una IA autónoma permanente. El objetivo es una fábrica de trabajo acotada que entregue uno de estos resultados:
 
 - `READY_FOR_HUMAN_REVIEW`
@@ -40,19 +43,21 @@ A fecha de este documento:
 - B3a, B3b y B3c están integrados.
 - B4 está autorizado y dividido operativamente en B4a-B4f.
 - La PR #30, `docs: define B4 staged execution and cloud smoke test`, está abierta, es fusionable y su CI `Quality` terminó correctamente.
-- La rutina de prueba de humo cloud ya fue creada y lanzada por el usuario.
-- La rutina utiliza un disparador de **una sola ejecución programada**.
-- No utiliza disparador API.
-- No utiliza evento de GitHub.
-- Los conectores están vacíos.
-- La corrección automática de pull requests está desactivada.
-- La notificación push está activada.
-- El resultado de la prueba de humo está pendiente de verificación.
-- B4a no ha comenzado.
+- La rutina de prueba de humo cloud fue creada y lanzada por el usuario.
+- La rutina utilizó un disparador de **una sola ejecución programada**.
+- No utilizó disparador API.
+- No utilizó evento de GitHub.
+- Los conectores estaban vacíos.
+- La corrección automática de pull requests estaba desactivada.
+- La notificación push estaba activada.
+- **La prueba de humo cloud quedó cerrada en `BLOCKED_BY_ENVIRONMENT`** (decisión registrada el 18 de julio de 2026; detalle en `docs/implementation/CLOUD_SMOKE_TEST.md`). Este cierre no equivale a `CLOUD_SMOKE_PASSED`.
+- No se realizarán más intentos cloud por ahora.
+- La vía operativa activa es el piloto local semiautomático definido en `docs/implementation/LOCAL_AUTOMATION_PILOT.md`.
+- B4a no ha comenzado y **no queda autorizado por este cambio de vía**.
 
 ### Próxima acción exacta
 
-Esperar el resultado real de la rutina ya lanzada. No crear otra rutina, no modificar permisos y no comenzar B4a antes de inspeccionar la evidencia de esa ejecución.
+Ejecutar y evaluar el piloto local semiautomático conforme a `docs/implementation/LOCAL_AUTOMATION_PILOT.md`. No reabrir la vía cloud sin una nueva decisión explícita del usuario, no ampliar permisos y no comenzar B4a antes de cumplir la puerta explícita descrita en ese documento.
 
 ## 3. Decisiones operativas no negociables
 
@@ -88,7 +93,7 @@ Esperar el resultado real de la rutina ya lanzada. No crear otra rutina, no modi
 
 ## 4. Flujo aprobado, fase por fase
 
-### Fase A - Prueba de humo cloud (fase actual)
+### Fase A - Prueba de humo cloud (CERRADA - `BLOCKED_BY_ENVIRONMENT`)
 
 Objetivo: demostrar que Claude puede trabajar desde un clon limpio, instalar dependencias, ejecutar toda la validación, crear evidencia y preparar una PR sin depender del ordenador del usuario ni solicitar aprobaciones rutinarias.
 
@@ -102,7 +107,7 @@ Configuración aprobada:
 - notificación push: activada;
 - merge: prohibido.
 
-Resultados posibles y acción obligatoria:
+Resultados posibles y acción prevista en su momento:
 
 | Resultado | Acción |
 |---|---|
@@ -112,11 +117,21 @@ Resultados posibles y acción obligatoria:
 | `FAILED_SAFELY` | Diagnosticar la causa. No comenzar B4a. |
 | `USAGE_LIMIT_REACHED` | Esperar la renovación de cuota. No rediseñar el flujo. |
 
-### Fase B - B4a en cloud controlado
+**Cierre registrado (18 de julio de 2026):** el resultado real fue `BLOCKED_BY_ENVIRONMENT`. Por decisión del usuario, no se aplica la acción de "repetir la prueba completa": no se realizarán más intentos cloud por ahora. Esta fase queda cerrada como registro histórico; no se reabre sin una nueva decisión explícita del usuario. Ver `docs/implementation/CLOUD_SMOKE_TEST.md` para el detalle conservado.
 
-Solo se abre si la prueba de humo pasa o si el usuario decide explícitamente continuar de otra forma.
+### Fase A-bis - Piloto local semiautomático (fase actual)
 
-La ejecución de B4a utilizará una nueva Routine o ejecución cloud controlada con disparador de una sola vez. No usará API ni evento de GitHub.
+Objetivo: mientras la vía cloud permanece cerrada, acumular evidencia auditable de que una sesión local, protegida por los permisos ya vigentes en `.claude/settings.json`, puede leer las fuentes obligatorias, ejecutar `scripts/check.ps1` y detenerse de forma segura, sin commit, push, PR, `gh` ni permisos nuevos.
+
+Definición completa, alcance, prohibiciones, evidencia y estados finales: `docs/implementation/LOCAL_AUTOMATION_PILOT.md`.
+
+Esta fase **no equivale** a la Fase B y no autoriza B4a por sí sola. La puerta explícita hacia B4a queda definida en `docs/implementation/LOCAL_AUTOMATION_PILOT.md`.
+
+### Fase B - B4a mediante el flujo local protegido
+
+Se abre únicamente cuando se cumpla la puerta explícita definida en `docs/implementation/LOCAL_AUTOMATION_PILOT.md`. No depende de una Routine ni de ninguna ejecución cloud: ninguna de las dos es obligatoria para abrir esta fase.
+
+Cuando B4a quede autorizado, se ejecutará en local, con el ordenador del usuario encendido durante toda la ejecución, bajo un flujo protegido y auditable equivalente en disciplina al piloto descrito en `docs/implementation/LOCAL_AUTOMATION_PILOT.md` — sujeto a la definición de alcance y permisos específicos que exige la puerta de ese documento antes de tocar código de producto (el piloto de validación, por sí mismo, prohíbe modificar `src/`, `tests/` y `migrations/`, y B4a sí necesita hacerlo). No usará API ni evento de GitHub.
 
 Debe:
 
@@ -280,6 +295,8 @@ Se afirmó que el sistema estaba preparado cuando todavía solo existían docume
 
 **Corrección:** la automatización real empieza cuando la Routine cloud completa una ejecución sin depender del ordenador del usuario.
 
+> **Nota (ver Sección 13):** la definición de "automatización real" fue ampliada por la decisión registrada en la Sección 13 para incluir también el flujo local protegido definido en `docs/implementation/LOCAL_AUTOMATION_PILOT.md`. La ejecución cloud descrita arriba ya no es un requisito vigente.
+
 ### Error 2 - Introducir el disparador API
 
 Se recomendó API pese a que el plan excluía APIs adicionales y el usuario no quería claves ni tokens.
@@ -343,6 +360,25 @@ No se exige que toda tarea termine implementada. Se exige que termine correctame
 
 Al retomar este trabajo, la primera pregunta operativa no es "¿qué automatizamos ahora?". Es:
 
-**¿Cuál fue el resultado real de la Routine de prueba de humo ya lanzada?**
+**¿Cuál es el estado real del piloto local semiautomático descrito en `docs/implementation/LOCAL_AUTOMATION_PILOT.md`, y se cumplió ya su puerta explícita antes de B4a?**
 
-Hasta conocerlo, la única acción válida es revisar su sesión, su evidencia y cualquier PR creada.
+El resultado de la prueba de humo cloud ya se conoce (`BLOCKED_BY_ENVIRONMENT`, cerrada el 18 de julio de 2026) y no se reabre esa vía sin una nueva decisión explícita del usuario. Hasta conocer el estado del piloto local, la única acción válida es revisar su evidencia y su estado final declarado.
+
+## 13. Registro de cambios del contrato
+
+### Cambio 1 - 18 de julio de 2026
+
+- **Decisión cambiada:** la Fase A (prueba de humo cloud) deja de ser la fase actual.
+- **Motivo:** la prueba de humo cloud terminó en `BLOCKED_BY_ENVIRONMENT`; el usuario decidió no seguir intentando la vía cloud por ahora.
+- **Sección que sustituye:** Sección 2 ("Estado actual verificado") y Sección 4 ("Fase A" y nueva "Fase A-bis").
+- **Estado operativo actualizado:** la fase operativa actual pasa a ser el piloto local semiautomático, definido en `docs/implementation/LOCAL_AUTOMATION_PILOT.md`.
+- **Aclaración expresa:** este cambio de vía no autoriza B4a. B4a sigue exigiendo la puerta explícita descrita en `docs/implementation/LOCAL_AUTOMATION_PILOT.md`.
+- Este registro no reescribe lo ocurrido en la Fase A: su configuración, resultado y cierre se conservan tal como sucedieron en la Sección 4 y en `docs/implementation/CLOUD_SMOKE_TEST.md`.
+
+### Cambio 2 - 18 de julio de 2026
+
+- **Decisión cambiada:** la Fase B deja de depender de una Routine o de una ejecución cloud.
+- **Nueva decisión vigente:** B4a, cuando quede autorizado, se ejecutará mediante el flujo local protegido.
+- **Motivo:** instrucción explícita del usuario tras cerrar la vía cloud como `BLOCKED_BY_ENVIRONMENT`.
+- **Secciones sustituidas o afectadas:** Fase B; Sección 9, "Error 1".
+- **Aclaración:** B4a sigue sin iniciarse; este cambio no amplía permisos; la autorización de B4a sigue dependiendo de la puerta definida en `docs/implementation/LOCAL_AUTOMATION_PILOT.md`.

@@ -221,4 +221,6 @@ B4 solo podrá marcarse terminado cuando:
 
 ## Primera tarea funcional
 
-La primera tarea funcional de esta secuencia será **B4a — origen consultable y guardado manual**. No debe iniciarse hasta superar la prueba de humo cloud definida en `docs/implementation/CLOUD_SMOKE_TEST.md` o hasta que el usuario decida explícitamente continuar con el flujo local actual.
+La primera tarea funcional de esta secuencia será **B4a — origen consultable y guardado manual**. No debe iniciarse hasta cumplir la puerta explícita definida en `docs/implementation/LOCAL_AUTOMATION_PILOT.md`.
+
+La prueba de humo cloud definida en `docs/implementation/CLOUD_SMOKE_TEST.md` quedó cerrada en `BLOCKED_BY_ENVIRONMENT` (18 de julio de 2026); no es una condición pendiente de este bloque. La vía operativa activa es el piloto local semiautomático, y B4a, cuando quede autorizado, se ejecutará mediante el flujo local protegido descrito en `docs/implementation/AUTOMATION_OPERATING_CONTRACT.md` (Fase B).

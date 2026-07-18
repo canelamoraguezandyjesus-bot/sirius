@@ -621,6 +621,19 @@ Con B3c:
   proyectos ni panel de gestión, B4, B5 ni B6. No se llamó a un proveedor
   real ni se usó una clave real.
 
+## Automatización de B4 — estado de la vía
+
+- La prueba de humo cloud (`docs/implementation/CLOUD_SMOKE_TEST.md`) quedó
+  cerrada en `BLOCKED_BY_ENVIRONMENT` el 18 de julio de 2026. Este cierre no
+  equivale a una prueba superada; ninguna PA, PS ni SP se declara superada
+  por ella.
+- La fase operativa actual es el piloto local semiautomático definido en
+  `docs/implementation/LOCAL_AUTOMATION_PILOT.md` (ver también
+  `docs/implementation/AUTOMATION_OPERATING_CONTRACT.md`, Fase A-bis).
+- B4a todavía no ha comenzado. Este registro es documental y no autoriza su
+  inicio; el alcance, los requisitos y los criterios técnicos de B4 siguen
+  siendo los definidos en `docs/implementation/B4_EXECUTION.md`, sin cambios.
+
 ## Cierre de V8
 
 V8 solo puede cerrarse cuando:

@@ -1,5 +1,11 @@
 # Prueba de humo de Claude Code cloud
 
+## Estado
+
+**CERRADA - `BLOCKED_BY_ENVIRONMENT`** (18 de julio de 2026).
+
+Por decisión del usuario, no se realizarán más intentos cloud por ahora. Este cierre no equivale a `CLOUD_SMOKE_PASSED`: ninguna PA, PS ni SP queda declarada superada por esta prueba. La vía operativa activa pasa a ser el piloto local semiautomático definido en `docs/implementation/LOCAL_AUTOMATION_PILOT.md`. El resto de este documento se conserva como registro histórico del diseño y del intento cloud; no se reabre esta vía sin una nueva decisión explícita del usuario.
+
 ## Propósito
 
 Demostrar antes de B4a que una sesión cloud puede trabajar sobre Sirius sin depender del ordenador del usuario ni exigir aprobaciones rutinarias continuas.
@@ -150,3 +156,5 @@ B4a puede comenzar cuando ocurra una de estas dos condiciones:
 
 - `CLOUD_SMOKE_PASSED`; o
 - el usuario decide explícitamente continuar temporalmente con el flujo local semiautomático, aceptando que el ordenador deberá permanecer encendido.
+
+> **Nota (18 de julio de 2026):** esta prueba se cerró en `BLOCKED_BY_ENVIRONMENT`, no en `CLOUD_SMOKE_PASSED`. El usuario ejerció la segunda condición: continuar con el flujo local semiautomático. Esta puerta queda satisfecha únicamente en el sentido de "vía activada"; la puerta funcional específica para iniciar B4a en local queda definida en `docs/implementation/LOCAL_AUTOMATION_PILOT.md` y todavía no se ha cumplido.
