@@ -139,6 +139,13 @@ class SqliteConversationRepository:
             ).all()
             return [_to_domain_message(model) for model in models]
 
+    def get_message(self, message_id: int) -> Message | None:
+        with session_scope(self._session_factory) as session:
+            model = session.get(MessageModel, message_id)
+            if model is None:
+                return None
+            return _to_domain_message(model)
+
 
 def build_sqlite_conversation_repository(database_path: Path) -> SqliteConversationRepository:
     """Build a repository backed by a SQLite file at the given path."""

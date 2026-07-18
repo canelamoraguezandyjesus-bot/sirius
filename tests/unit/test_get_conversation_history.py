@@ -39,6 +39,9 @@ class _InMemoryConversationRepository:
     def list_messages(self, conversation_id: int) -> list[Message]:
         return [m for m in self._messages if m.conversation_id == conversation_id]
 
+    def get_message(self, message_id: int) -> Message | None:
+        return next((m for m in self._messages if m.id == message_id), None)
+
 
 def _message(conversation_id: int, sequence: int, role: MessageRole, content: str) -> Message:
     return Message(

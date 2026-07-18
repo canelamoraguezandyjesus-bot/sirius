@@ -28,6 +28,7 @@ from sirius.adapters.llm.unconfigured import UnconfiguredLLMProvider
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
 )
+from sirius.adapters.persistence.sqlite_event_repository import build_sqlite_event_repository
 from sirius.adapters.persistence.sqlite_identity_repository import (
     build_sqlite_identity_repository,
 )
@@ -37,15 +38,18 @@ from sirius.adapters.persistence.sqlite_llm_usage_repository import (
 )
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
+from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
 from sirius.adapters.secrets.keyring_store import build_keyring_secret_store
 from sirius.application.api_key_settings import ApiKeySettingsUseCase
 from sirius.application.context import ContextBuilder
 from sirius.application.create_backup import CreateBackupUseCase
 from sirius.application.get_conversation_history import GetConversationHistoryUseCase
 from sirius.application.initial_project import InitialProjectUseCase
+from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.project_lifecycle import ProjectLifecycleUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
+from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageUseCase
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
@@ -96,6 +100,8 @@ class ConversationDependencies:
     initial_project_use_case: InitialProjectUseCase
     project_continuity_use_case: ProjectContinuityUseCase
     project_lifecycle_use_case: ProjectLifecycleUseCase
+    save_manual_memory_use_case: SaveManualMemoryUseCase
+    get_memory_origin_use_case: GetMemoryOriginUseCase
     create_backup_use_case: CreateBackupUseCase
     validate_backup_use_case: ValidateBackupUseCase
     restore_backup_use_case: RestoreBackupUseCase
@@ -176,7 +182,9 @@ def build_conversation_dependencies(
     identity_repository = build_sqlite_identity_repository(database_path)
     project_repository = build_sqlite_project_repository(database_path)
     memory_repository = build_sqlite_memory_repository(database_path)
+    event_repository = build_sqlite_event_repository(database_path)
     llm_usage_repository = build_sqlite_llm_usage_repository(database_path)
+    manual_memory_unit_of_work = build_sqlite_unit_of_work(database_path)
 
     context_builder = ContextBuilder(
         identity_repository=identity_repository,
@@ -200,7 +208,9 @@ def build_conversation_dependencies(
         identity_repository,
         project_repository,
         memory_repository,
+        event_repository,
         llm_usage_repository,
+        manual_memory_unit_of_work,
     )
 
     def close_database_connections() -> None:
@@ -235,6 +245,10 @@ def build_conversation_dependencies(
         initial_project_use_case=InitialProjectUseCase(project_repository),
         project_continuity_use_case=ProjectContinuityUseCase(project_repository),
         project_lifecycle_use_case=ProjectLifecycleUseCase(project_repository),
+        save_manual_memory_use_case=SaveManualMemoryUseCase(manual_memory_unit_of_work),
+        get_memory_origin_use_case=GetMemoryOriginUseCase(
+            memory_repository, event_repository, conversation_repository
+        ),
         create_backup_use_case=CreateBackupUseCase(backup_service),
         validate_backup_use_case=ValidateBackupUseCase(backup_service),
         restore_backup_use_case=RestoreBackupUseCase(backup_service),

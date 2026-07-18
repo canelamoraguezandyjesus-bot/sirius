@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -37,6 +39,7 @@ def _to_domain_revision(model: MemoryRevisionModel) -> MemoryRevision:
         version=model.version,
         content=model.content,
         origin=model.origin,
+        source_event_id=model.source_event_id,
         created_at=model.created_at.replace(tzinfo=UTC),
     )
 
@@ -70,19 +73,46 @@ def _load_memory(session: Session, model: MemoryModel) -> Memory:
 
 
 class SqliteMemoryRepository:
-    """Memory repository backed by a local SQLite database."""
+    """Memory repository backed by a local SQLite database.
 
-    def __init__(self, session_factory: sessionmaker[Session], engine: Engine) -> None:
+    Normally owns its ``session_factory`` and opens/commits/closes one short
+    session per call (via ``session_scope``). When ``session`` is given
+    instead, every call writes through that externally owned session and
+    never commits or closes it — this is how ``SqliteUnitOfWork`` binds this
+    repository to the same transaction as ``SqliteEventRepository``, so both
+    commit or roll back together.
+    """
+
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session] | None,
+        engine: Engine | None,
+        *,
+        session: Session | None = None,
+    ) -> None:
         self._session_factory = session_factory
         self._engine = engine
+        self._external_session = session
 
     def close(self) -> None:
         """Release every pooled connection this repository's engine holds."""
-        self._engine.dispose()
+        if self._engine is not None:
+            self._engine.dispose()
 
-    def create_memory(self, content: str, origin: str) -> Memory:
-        ensure_valid_origin(origin)
+    @contextmanager
+    def _scope(self) -> Iterator[Session]:
+        if self._external_session is not None:
+            yield self._external_session
+            return
+        assert self._session_factory is not None
         with session_scope(self._session_factory) as session:
+            yield session
+
+    def create_memory(
+        self, content: str, origin: str, *, source_event_id: int | None = None
+    ) -> Memory:
+        ensure_valid_origin(origin)
+        with self._scope() as session:
             now = _utc_now_naive()
             memory_model = MemoryModel(
                 status=MemoryStatus.CURRENT,
@@ -97,6 +127,7 @@ class SqliteMemoryRepository:
                 version=1,
                 content=content,
                 origin=origin,
+                source_event_id=source_event_id,
                 is_current=True,
                 created_at=now,
             )
@@ -106,7 +137,7 @@ class SqliteMemoryRepository:
             return _to_domain_memory(memory_model, revision_model)
 
     def get_memory(self, memory_id: int) -> Memory:
-        with session_scope(self._session_factory) as session:
+        with self._scope() as session:
             model = session.get(MemoryModel, memory_id)
             if model is None:
                 msg = f"Unknown memory id: {memory_id}"
@@ -114,7 +145,7 @@ class SqliteMemoryRepository:
             return _load_memory(session, model)
 
     def list_current_memories(self) -> list[Memory]:
-        with session_scope(self._session_factory) as session:
+        with self._scope() as session:
             models = session.scalars(
                 select(MemoryModel)
                 .where(MemoryModel.status == MemoryStatus.CURRENT)
@@ -123,7 +154,7 @@ class SqliteMemoryRepository:
             return [_load_memory(session, model) for model in models]
 
     def get_history(self, memory_id: int) -> list[MemoryRevision]:
-        with session_scope(self._session_factory) as session:
+        with self._scope() as session:
             memory_model = session.get(MemoryModel, memory_id)
             if memory_model is None:
                 msg = f"Unknown memory id: {memory_id}"
@@ -135,9 +166,11 @@ class SqliteMemoryRepository:
             ).all()
             return [_to_domain_revision(model) for model in revision_models]
 
-    def correct_memory(self, memory_id: int, content: str, origin: str) -> Memory:
+    def correct_memory(
+        self, memory_id: int, content: str, origin: str, *, source_event_id: int | None = None
+    ) -> Memory:
         ensure_valid_origin(origin)
-        with session_scope(self._session_factory) as session:
+        with self._scope() as session:
             memory_model = session.get(MemoryModel, memory_id)
             if memory_model is None:
                 msg = f"Unknown memory id: {memory_id}"
@@ -154,6 +187,7 @@ class SqliteMemoryRepository:
                 version=next_revision_version(memory.current_revision),
                 content=content,
                 origin=origin,
+                source_event_id=source_event_id,
                 is_current=True,
                 created_at=_utc_now_naive(),
             )
@@ -164,7 +198,7 @@ class SqliteMemoryRepository:
             return _to_domain_memory(memory_model, new_revision_model)
 
     def archive_memory(self, memory_id: int) -> Memory:
-        with session_scope(self._session_factory) as session:
+        with self._scope() as session:
             memory_model = session.get(MemoryModel, memory_id)
             if memory_model is None:
                 msg = f"Unknown memory id: {memory_id}"
@@ -179,7 +213,7 @@ class SqliteMemoryRepository:
             return _load_memory(session, memory_model)
 
     def delete_memory(self, memory_id: int) -> Memory:
-        with session_scope(self._session_factory) as session:
+        with self._scope() as session:
             memory_model = session.get(MemoryModel, memory_id)
             if memory_model is None:
                 msg = f"Unknown memory id: {memory_id}"
@@ -207,3 +241,8 @@ def build_sqlite_memory_repository(database_path: Path) -> SqliteMemoryRepositor
     engine = build_engine(database_path)
     session_factory = build_session_factory(engine)
     return SqliteMemoryRepository(session_factory, engine)
+
+
+def bind_sqlite_memory_repository(session: Session) -> SqliteMemoryRepository:
+    """Bind a repository to an externally owned session (used by ``SqliteUnitOfWork``)."""
+    return SqliteMemoryRepository(None, None, session=session)

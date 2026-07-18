@@ -41,3 +41,11 @@ class ConversationRepository(Protocol):
     def list_messages(self, conversation_id: int) -> list[Message]:
         """Return every message of a conversation in stable creation order."""
         ...
+
+    def get_message(self, message_id: int) -> Message | None:
+        """Return a single message by id, or ``None`` if it does not exist.
+
+        B4a (RF-021): lets an origin query "open" the message a memory's
+        source event points at, without exposing the whole conversation.
+        """
+        ...

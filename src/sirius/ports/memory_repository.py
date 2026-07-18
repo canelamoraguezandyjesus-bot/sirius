@@ -15,8 +15,15 @@ class MemoryRepository(Protocol):
     to enforce them before mutating storage.
     """
 
-    def create_memory(self, content: str, origin: str) -> Memory:
-        """Record a new manual memory with its first revision."""
+    def create_memory(
+        self, content: str, origin: str, *, source_event_id: int | None = None
+    ) -> Memory:
+        """Record a new manual memory with its first revision.
+
+        ``source_event_id`` (B4a) links the first revision to the event that
+        recorded why it was created; ``None`` when the caller does not have
+        one (e.g. a direct repository call with no explicit-save event).
+        """
         ...
 
     def get_memory(self, memory_id: int) -> Memory:
@@ -31,7 +38,9 @@ class MemoryRepository(Protocol):
         """Return every revision of a memory, in stable version order."""
         ...
 
-    def correct_memory(self, memory_id: int, content: str, origin: str) -> Memory:
+    def correct_memory(
+        self, memory_id: int, content: str, origin: str, *, source_event_id: int | None = None
+    ) -> Memory:
         """Create a new revision superseding the current one, without overwriting it."""
         ...
 

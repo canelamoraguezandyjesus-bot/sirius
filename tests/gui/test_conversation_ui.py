@@ -162,6 +162,9 @@ class _FailOnNthAppendConversationRepository:
     def list_messages(self, conversation_id: int) -> list[Message]:
         return self._delegate.list_messages(conversation_id)
 
+    def get_message(self, message_id: int) -> Message | None:
+        return self._delegate.get_message(message_id)
+
 
 def _swap_send_message_use_case(
     window: MainWindow,
