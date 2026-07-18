@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from sirius.adapters.llm.fake import FakeLLMProvider
@@ -11,7 +12,7 @@ from sirius.adapters.persistence.database import (
     build_session_factory,
     session_scope,
 )
-from sirius.adapters.persistence.models import Base, MessageModel
+from sirius.adapters.persistence.models import Base, DecisionModel, MessageModel
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
 )
@@ -235,6 +236,24 @@ def test_send_message_never_creates_memory_as_a_side_effect(tmp_path: Path) -> N
 
     memory_repository = build_sqlite_memory_repository(database_path)
     assert memory_repository.list_current_memories() == []
+
+
+@pytest.mark.integration
+def test_send_message_never_creates_or_approves_a_decision_as_a_side_effect(
+    tmp_path: Path,
+) -> None:
+    """B4b, RF-020/PA-011: debating or exploring alternatives in an ordinary
+    conversation turn never creates or approves a decision — only an
+    explicit call to ``ProposeDecisionUseCase``/``ApproveDecisionUseCase``
+    can, and ``SendMessageUseCase`` never calls either."""
+    database_path = tmp_path / "sirius.db"
+    use_case = _build_use_case(database_path, FakeLLMProvider())
+
+    use_case.send_message("deberíamos usar SQLite o un servidor remoto, debatamos las opciones")
+
+    session_factory = build_session_factory(build_engine(database_path))
+    with session_scope(session_factory) as session:
+        assert session.scalars(select(DecisionModel)).first() is None
 
 
 @pytest.mark.integration

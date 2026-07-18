@@ -50,11 +50,14 @@ A fecha de este documento:
 - La notificación push está activada.
 - **18 de julio de 2026:** el resultado de la prueba de humo cloud quedó en `CLOUD_SMOKE_PASSED`. La PR #34, `docs: record successful cloud smoke test`, fue fusionada en `main`; su evidencia está registrada en `docs/implementation/CLOUD_SMOKE_EVIDENCE_20260718.md`.
 - **18 de julio de 2026:** B4a se implementó en cloud controlado siguiendo la Fase B (rama `claude/intelligent-bohr-1s38y6`): evento de origen persistente, enlace real recuerdo-evento-mensaje, guardado manual explícito (`SaveManualMemoryUseCase`) y consulta de origen (`GetMemoryOriginUseCase`), sin GUI ni cambios de alcance. Ruff, mypy y pytest en verde (595 pruebas). Una PR borrador quedó abierta hacia `main`, sin merge; pendiente de revisión independiente (Fase C) y autorización de merge del usuario.
-- **18 de julio de 2026:** la revisión de Fase C sobre la PR #36 encontró un `BLOCKER` transaccional: `SaveManualMemoryUseCase` confirmaba el evento de origen y el recuerdo en dos sesiones/transacciones SQLite independientes, en contra de SIRIUS-ARQ-0.1 S4/S8.1 ("evento y cambio de memoria se guardan en la misma transacción" mediante una `UnitOfWork`). Se corrigió en la misma rama, sin nueva rama ni nueva PR: se añadió el puerto `UnitOfWork` (`src/sirius/ports/unit_of_work.py`) y su adaptador SQLite (`src/sirius/adapters/persistence/sqlite_unit_of_work.py`), y `SaveManualMemoryUseCase` ahora crea el evento, el recuerdo y su primera revisión dentro de una única transacción, con `commit()` solo si todo tuvo éxito y rollback completo ante cualquier excepción. `GetMemoryOriginUseCase` sigue usando repositorios independientes de solo lectura, sin transacción compartida. Ruff, mypy y pytest en verde (602 pruebas: 595 previas + 7 nuevas de atomicidad/rollback). B4b sigue sin iniciarse y no se realizó ningún merge.
+- **18 de julio de 2026:** la revisión de Fase C sobre la PR #36 encontró un `BLOCKER` transaccional: `SaveManualMemoryUseCase` confirmaba el evento de origen y el recuerdo en dos sesiones/transacciones SQLite independientes, en contra de SIRIUS-ARQ-0.1 S4/S8.1 ("evento y cambio de memoria se guardan en la misma transacción" mediante una `UnitOfWork`). Se corrigió en la misma rama, sin nueva rama ni nueva PR: se añadió el puerto `UnitOfWork` (`src/sirius/ports/unit_of_work.py`) y su adaptador SQLite (`src/sirius/adapters/persistence/sqlite_unit_of_work.py`), y `SaveManualMemoryUseCase` ahora crea el evento, el recuerdo y su primera revisión dentro de una única transacción, con `commit()` solo si todo tuvo éxito y rollback completo ante cualquier excepción. `GetMemoryOriginUseCase` sigue usando repositorios independientes de solo lectura, sin transacción compartida. Ruff, mypy y pytest en verde (602 pruebas: 595 previas + 7 nuevas de atomicidad/rollback).
+- **18 de julio de 2026:** la PR #36 (B4a) quedó **fusionada en `main`** (commit `c025683c960a19a1a9c1aa40fa861547026118cc`), con el workflow `Quality` en verde sobre ese commit. Verificado directamente sobre `origin/main` antes de iniciar B4b: `git log` confirma el commit de merge y el histórico del check run confirma `conclusion: success`.
+- **18 de julio de 2026:** B4b — Decisiones y aprobación explícita — se implementó en cloud controlado, partiendo del `main` ya fusionado de B4a: entidad de decisión, migración Alembic no destructiva (`decisions`/`decision_revisions`), `DecisionRepository`/`SqliteDecisionRepository`, extensión mínima de `UnitOfWork` con `decision_repository`, `ProposeDecisionUseCase`, `ApproveDecisionUseCase` (confirmación explícita obligatoria) y `GetDecisionOriginUseCase`. Ruff, mypy y pytest en verde (669 pruebas). Una PR borrador quedó abierta hacia `main`, sin merge.
+- **18 de julio de 2026 — decisión operativa expresa del usuario:** el usuario decidió sustituir, solo para esta transición concreta, la puerta de "tres PR consecutivas" de la §7 (Fase E) por una autorización directa y explícita: activar desde la PR de B4b la revisión automática solicitada mediante una incidencia GitHub etiquetada `agent-review-requested` en `canelamoraguezandyjesus-bot/sirius`, siempre que la PR de B4b quede lista y con CI (`Quality`) en verde. Ver §10 para el registro formal de este cambio y sus límites exactos.
 
 ### Próxima acción exacta
 
-La Fase A quedó superada con `CLOUD_SMOKE_PASSED`. La Fase B se ejecutó: B4a quedó implementado mediante una Routine cloud controlada, con disparador de una sola vez, sin API ni evento de GitHub, y dejó una PR borrador abierta sin merge. La Fase C (revisión independiente y controlada) es la próxima acción pendiente; el usuario conserva la autorización de merge.
+La Fase A quedó superada con `CLOUD_SMOKE_PASSED`. La Fase B se ejecutó dos veces: B4a (fusionado en `main`, PR #36) y B4b (PR borrador abierta, sin merge). Por la decisión operativa del 18 de julio de 2026 (§10), la PR de B4b activa la primera revisión por evento de GitHub (incidencia `agent-review-requested`) en lugar de esperar tres PR consecutivas adicionales — únicamente esa revisión automática; auto-fix general, revisión en cada push y merge automático siguen prohibidos. El usuario conserva la autorización de merge sobre B4b.
 
 ## 3. Decisiones operativas no negociables
 
@@ -252,6 +255,8 @@ La automatización puede avanzar de nivel únicamente si se cumplen todas estas 
 
 Cumplir las métricas no autoriza automáticamente el cambio de nivel.
 
+**Excepción registrada el 18 de julio de 2026** (ver §10): la condición 1 de esta puerta ("tres PR consecutivas terminan sin ampliación de alcance") queda sustituida, únicamente para la transición hacia la revisión automática por incidencia etiquetada `agent-review-requested`, por una autorización directa y explícita del usuario sobre la PR de B4b. Las condiciones 2 a 6 de esta puerta siguen exigiéndose tal cual sobre esa PR (suite completa verde, máximo dos ciclos de revisión-corrección, PR comprensible y acotada, sin cambios peligrosos, intervención del usuario limitada a iniciar/decidir/autorizar merge). Esta excepción no reduce ninguna otra restricción de la sección 3: sigue sin activarse revisión en cada push, auto-fix general ni merge automático.
+
 ## 8. Reglas antidesviación para ChatGPT y Claude
 
 Antes de dar una instrucción sobre Routines, cloud, revisión, permisos o automatización, el agente debe:
@@ -327,6 +332,25 @@ Toda modificación debe:
 
 Las ideas exploratorias y las capacidades disponibles en una herramienta no modifican este contrato.
 
+### Cambio registrado el 18 de julio de 2026
+
+- **Fecha:** 18 de julio de 2026.
+- **Decisión cambiada:** la condición 1 de la puerta de la sección 7 ("tres PR consecutivas terminan sin ampliación de alcance") y, en consecuencia, el disparador de entrada a la Fase E de la sección 4.
+- **Motivo:** decisión operativa expresa del usuario: en vez de esperar tres PR consecutivas satisfactorias adicionales a B4a, autoriza activar ya, desde la PR de B4b, la primera revisión automática por evento de GitHub descrita en la Fase E — una auditoría solicitada explícitamente mediante una incidencia etiquetada `agent-review-requested`, exactamente como la Fase E ya preveía como primer paso de esa etapa.
+- **Sección que sustituye:** sección 7, condición 1 (únicamente para esta transición); sección 4, Fase E (activación anticipada, con el mismo alcance ya descrito allí: ninguna otra ampliación).
+- **Estado operativo actualizado:** ver la nueva entrada del 18 de julio de 2026 en la sección 2 y la "Próxima acción exacta" de esa misma sección.
+- **Alcance exacto de lo autorizado — solo esto:**
+  - crear, en una sola operación, una incidencia GitHub en `canelamoraguezandyjesus-bot/sirius` con la etiqueta `agent-review-requested` aplicada desde su creación, únicamente cuando la PR de B4b exista, esté lista y su CI (`Quality`) esté en verde;
+  - esa incidencia existe solo para activar la Routine "Sirius PR Reviewer" ya configurada por el usuario para escuchar ese evento.
+- **Sigue expresamente prohibido** (sin cambios respecto a la sección 3.4 y la Fase E/F):
+  - revisión automática en cada push;
+  - auto-fix general o automático de cualquier tipo;
+  - merge automático;
+  - cambios automáticos de producto o arquitectura;
+  - trabajo paralelo sobre otros subbloques de B4;
+  - cualquier otra ampliación de automatización no descrita aquí.
+- Esta excepción es puntual, para la transición B4a→B4b descrita arriba; no reabre ni relaja de forma general la puerta de la sección 7 para transiciones futuras, que requerirán su propia decisión expresa o el cumplimiento ordinario de las condiciones ya definidas.
+
 ## 11. Definición de éxito del flujo
 
 El flujo se considera útil cuando el usuario puede iniciar una tarea acotada y ausentarse, y después recibe:
@@ -345,10 +369,12 @@ No se exige que toda tarea termine implementada. Se exige que termine correctame
 
 La Routine de prueba de humo ya lanzada terminó en `CLOUD_SMOKE_PASSED` (18 de julio de 2026; evidencia en `docs/implementation/CLOUD_SMOKE_EVIDENCE_20260718.md`, PR #34 fusionada).
 
-B4a se implementó el 18 de julio de 2026 (rama `claude/intelligent-bohr-1s38y6`) conforme a la Fase B, con Ruff, mypy y pytest en verde y una PR borrador abierta hacia `main`, sin merge. La Fase C encontró un `BLOCKER` transaccional (evento y recuerdo no se guardaban en la misma transacción); se corrigió en la misma rama y PR mediante una `UnitOfWork` (ver la entrada del 18 de julio de 2026 en la sección 2), con Ruff, mypy y pytest en verde (602 pruebas). B4b sigue sin iniciarse; no se ha hecho ningún merge.
+B4a se implementó el 18 de julio de 2026 (rama `claude/intelligent-bohr-1s38y6`) conforme a la Fase B. La Fase C encontró un `BLOCKER` transaccional (evento y recuerdo no se guardaban en la misma transacción); se corrigió en la misma rama y PR mediante una `UnitOfWork`, con Ruff, mypy y pytest en verde (602 pruebas). **La PR #36 quedó fusionada en `main`** el 18 de julio de 2026 (commit `c025683c960a19a1a9c1aa40fa861547026118cc`, `Quality` en verde).
+
+B4b se implementó el 18 de julio de 2026 sobre ese `main` ya fusionado, conforme a la Fase D (repetición secuencial de B4): rama propia, PR propia, Ruff/mypy/pytest en verde (669 pruebas). Por la decisión operativa registrada en la sección 10, esta PR activa además la primera revisión automática por evento de GitHub (incidencia `agent-review-requested`) en cuanto su CI quede en verde — sin esperar tres PR consecutivas adicionales, y sin ampliar ninguna otra prohibición vigente (sin revisión por push, sin auto-fix, sin merge automático). No se ha hecho ningún merge de la PR de B4b.
 
 Al retomar este trabajo, la primera pregunta operativa no es "¿qué automatizamos ahora?". Es:
 
-**¿La PR de B4a ya fue revisada de nuevo (segunda pasada de Fase C) y el usuario autorizó su merge, o sigue pendiente de revisión?**
+**¿La PR de B4b ya fue revisada (por la Routine "Sirius PR Reviewer" disparada por la incidencia, o por una revisión adicional) y el usuario autorizó su merge, o sigue pendiente?**
 
-Mientras esa PR no esté fusionada, la única acción válida es completar la Fase C (revisión independiente y controlada) sobre ella — nunca iniciar B4b, adelantar API, eventos de GitHub, auto-fix ni un merge automático.
+Mientras esa PR no esté fusionada, la única acción válida es completar su revisión — nunca iniciar B4c, adelantar más automatización de la descrita en la sección 10, ni un merge automático.

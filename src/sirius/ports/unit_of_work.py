@@ -6,11 +6,13 @@ session/transaction spanning every repository it exposes, so a caller that
 writes through more than one of them either commits all of those writes
 together or rolls back all of them. S8.1 spells out the concrete rule this
 port exists to satisfy: "Evento y cambio de memoria se guardan en la misma
-transacción."
+transacción" — B4b applies the same rule to "Evento y cambio de decisión".
 
-B4a's only cross-repository write is ``SaveManualMemoryUseCase`` (event +
-memory + first revision); this port therefore exposes only the two
-repositories that operation needs.
+B4a's only cross-repository write was ``SaveManualMemoryUseCase`` (event +
+memory + first revision); B4b adds ``ProposeDecisionUseCase`` (event +
+decision + first revision) and ``ApproveDecisionUseCase`` (event + decision
+status change), so this port now exposes the three repositories those
+operations need.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ from __future__ import annotations
 from types import TracebackType
 from typing import Protocol, Self
 
+from sirius.ports.decision_repository import DecisionRepository
 from sirius.ports.event_repository import EventRepository
 from sirius.ports.memory_repository import MemoryRepository
 
@@ -29,10 +32,11 @@ class UnitOfWork(Protocol):
 
     Used as a context manager: entering (``begin()``, done by ``__enter__``)
     opens the shared transaction and binds ``memory_repository``/
-    ``event_repository`` to it; exiting without a prior ``commit()`` rolls
-    back everything written through either repository — mirroring
-    ``sirius.adapters.persistence.database.session_scope`` but spanning more
-    than one repository instead of committing after a single call.
+    ``event_repository``/``decision_repository`` to it; exiting without a
+    prior ``commit()`` rolls back everything written through any of them —
+    mirroring ``sirius.adapters.persistence.database.session_scope`` but
+    spanning more than one repository instead of committing after a single
+    call.
     """
 
     @property
@@ -43,6 +47,11 @@ class UnitOfWork(Protocol):
     @property
     def event_repository(self) -> EventRepository:
         """The event repository bound to this unit of work's shared transaction."""
+        ...
+
+    @property
+    def decision_repository(self) -> DecisionRepository:
+        """The decision repository bound to this unit of work's shared transaction."""
         ...
 
     def __enter__(self) -> Self:
