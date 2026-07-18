@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -35,18 +37,43 @@ def _to_domain_event(model: EventModel) -> Event:
 
 
 class SqliteEventRepository:
-    """Event repository backed by a local SQLite database."""
+    """Event repository backed by a local SQLite database.
 
-    def __init__(self, session_factory: sessionmaker[Session], engine: Engine) -> None:
+    Normally owns its ``session_factory`` and opens/commits/closes one short
+    session per call (via ``session_scope``). When ``session`` is given
+    instead, every call writes through that externally owned session and
+    never commits or closes it — this is how ``SqliteUnitOfWork`` binds this
+    repository to the same transaction as ``SqliteMemoryRepository``, so both
+    commit or roll back together.
+    """
+
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session] | None,
+        engine: Engine | None,
+        *,
+        session: Session | None = None,
+    ) -> None:
         self._session_factory = session_factory
         self._engine = engine
+        self._external_session = session
 
     def close(self) -> None:
         """Release every pooled connection this repository's engine holds."""
-        self._engine.dispose()
+        if self._engine is not None:
+            self._engine.dispose()
+
+    @contextmanager
+    def _scope(self) -> Iterator[Session]:
+        if self._external_session is not None:
+            yield self._external_session
+            return
+        assert self._session_factory is not None
+        with session_scope(self._session_factory) as session:
+            yield session
 
     def append(self, event_type: str, actor: str, message_id: int | None) -> Event:
-        with session_scope(self._session_factory) as session:
+        with self._scope() as session:
             model = EventModel(
                 event_type=event_type,
                 actor=actor,
@@ -59,7 +86,7 @@ class SqliteEventRepository:
             return _to_domain_event(model)
 
     def get_source(self, event_id: int) -> Event | None:
-        with session_scope(self._session_factory) as session:
+        with self._scope() as session:
             model = session.get(EventModel, event_id)
             if model is None:
                 return None
@@ -71,3 +98,8 @@ def build_sqlite_event_repository(database_path: Path) -> SqliteEventRepository:
     engine = build_engine(database_path)
     session_factory = build_session_factory(engine)
     return SqliteEventRepository(session_factory, engine)
+
+
+def bind_sqlite_event_repository(session: Session) -> SqliteEventRepository:
+    """Bind a repository to an externally owned session (used by ``SqliteUnitOfWork``)."""
+    return SqliteEventRepository(None, None, session=session)

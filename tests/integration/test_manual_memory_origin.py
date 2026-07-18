@@ -17,6 +17,7 @@ from sirius.adapters.persistence.sqlite_conversation_repository import (
 )
 from sirius.adapters.persistence.sqlite_event_repository import build_sqlite_event_repository
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
+from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
 from sirius.application.memory_origin import GetMemoryOriginUseCase, MemoryOriginNotFoundError
 from sirius.application.save_manual_memory import MANUAL_MEMORY_ORIGIN, SaveManualMemoryUseCase
 from sirius.domain.conversation import MessageRole
@@ -37,13 +38,14 @@ def test_explicit_save_creates_a_traceable_memory_and_its_origin_can_be_opened(
     conversation_repository = build_sqlite_conversation_repository(database_path)
     memory_repository = build_sqlite_memory_repository(database_path)
     event_repository = build_sqlite_event_repository(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
 
     conversation = conversation_repository.get_or_create_main_conversation()
     source_message = conversation_repository.append_message(
         conversation.id, MessageRole.USER, "guarda que prefiero respuestas breves"
     )
 
-    save_use_case = SaveManualMemoryUseCase(memory_repository, event_repository)
+    save_use_case = SaveManualMemoryUseCase(unit_of_work)
     memory = save_use_case.save(
         "El usuario prefiere respuestas breves", message_id=source_message.id
     )
@@ -112,16 +114,18 @@ def test_manual_memory_and_its_origin_survive_closing_and_reopening_the_store(
     conversation_repository = build_sqlite_conversation_repository(database_path)
     memory_repository = build_sqlite_memory_repository(database_path)
     event_repository = build_sqlite_event_repository(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
     conversation = conversation_repository.get_or_create_main_conversation()
     source_message = conversation_repository.append_message(
         conversation.id, MessageRole.USER, "guarda esta preferencia"
     )
-    memory = SaveManualMemoryUseCase(memory_repository, event_repository).save(
+    memory = SaveManualMemoryUseCase(unit_of_work).save(
         "preferencia guardada", message_id=source_message.id
     )
     conversation_repository.close()
     memory_repository.close()
     event_repository.close()
+    unit_of_work.close()
 
     reopened_conversation_repository = build_sqlite_conversation_repository(database_path)
     reopened_memory_repository = build_sqlite_memory_repository(database_path)

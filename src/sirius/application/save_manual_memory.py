@@ -1,9 +1,9 @@
 """Explicit, manual memory creation (B4a, RF-019, PA-010).
 
 Mirrors ``InitialProjectUseCase``: a small, explicit contract so a future
-caller never touches ``MemoryRepository``, ``EventRepository``, SQLAlchemy,
-or SQLite directly (AGENTS.md: dependency direction presentation ->
-application -> domain).
+caller never touches ``MemoryRepository``, ``EventRepository``,
+``UnitOfWork``, SQLAlchemy, or SQLite directly (AGENTS.md: dependency
+direction presentation -> application -> domain).
 
 RF-019 "Crear un recuerdo únicamente por orden o confirmación explícita":
 this use case is never invoked by the ordinary conversation flow
@@ -12,21 +12,19 @@ when a caller deliberately calls ``save()`` — that absence of any automatic
 call site is what keeps an ordinary conversation from ever creating memory
 on its own (PA-010's negative case).
 
-The event is recorded before the memory: SIRIUS-ARQ-0.1 S8.1 wants "evento y
-cambio de memoria... en la misma transacción", but neither repository here
-shares a session with the other (no ``UnitOfWork`` spans repositories in
-this codebase yet — introducing one is out of B4a's scope). Recording the
-event first means the one possible failure window (event succeeds, then the
-memory write fails) only ever leaves a harmless orphan event; it can never
-leave a memory whose ``source_event_id`` points at nothing.
+SIRIUS-ARQ-0.1 S8.1 requires "evento y cambio de memoria... en la misma
+transacción": the event and the memory (with its first revision) are written
+through the same ``UnitOfWork``, and ``commit()`` runs only after both writes
+succeed. Any exception from either write leaves the transaction uncommitted,
+so ``UnitOfWork.__exit__`` rolls back everything — never an orphan event,
+never a memory whose ``source_event_id`` points at nothing.
 """
 
 from __future__ import annotations
 
 from sirius.domain.event import MANUAL_MEMORY_SAVE_EVENT_TYPE, USER_ACTOR
 from sirius.domain.memory import Memory
-from sirius.ports.event_repository import EventRepository
-from sirius.ports.memory_repository import MemoryRepository
+from sirius.ports.unit_of_work import UnitOfWork
 
 __all__ = [
     "INVALID_MANUAL_MEMORY_CONTENT_MESSAGE",
@@ -46,11 +44,8 @@ class InvalidManualMemoryDataError(ValueError):
 class SaveManualMemoryUseCase:
     """Guarda manualmente una preferencia o un hecho como recuerdo (RF-019)."""
 
-    def __init__(
-        self, memory_repository: MemoryRepository, event_repository: EventRepository
-    ) -> None:
-        self._memory_repository = memory_repository
-        self._event_repository = event_repository
+    def __init__(self, unit_of_work: UnitOfWork) -> None:
+        self._unit_of_work = unit_of_work
 
     def save(self, content: str, *, message_id: int | None = None) -> Memory:
         """Create a new memory from an explicit save order.
@@ -60,18 +55,26 @@ class SaveManualMemoryUseCase:
         origin link RF-021 opens later. Raises
         ``InvalidManualMemoryDataError`` if ``content`` is empty after
         trimming, checked before any write.
+
+        The event and the memory (with its first revision) are created and
+        committed within a single transaction: if either write fails, both
+        are rolled back and nothing persists.
         """
         clean_content = content.strip()
         if not clean_content:
             raise InvalidManualMemoryDataError(INVALID_MANUAL_MEMORY_CONTENT_MESSAGE)
 
-        event = self._event_repository.append(
-            event_type=MANUAL_MEMORY_SAVE_EVENT_TYPE,
-            actor=USER_ACTOR,
-            message_id=message_id,
-        )
-        return self._memory_repository.create_memory(
-            clean_content,
-            MANUAL_MEMORY_ORIGIN,
-            source_event_id=event.id,
-        )
+        with self._unit_of_work as uow:
+            event = uow.event_repository.append(
+                event_type=MANUAL_MEMORY_SAVE_EVENT_TYPE,
+                actor=USER_ACTOR,
+                message_id=message_id,
+            )
+            memory = uow.memory_repository.create_memory(
+                clean_content,
+                MANUAL_MEMORY_ORIGIN,
+                source_event_id=event.id,
+            )
+            uow.commit()
+
+        return memory

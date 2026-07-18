@@ -50,6 +50,7 @@ A fecha de este documento:
 - La notificación push está activada.
 - **18 de julio de 2026:** el resultado de la prueba de humo cloud quedó en `CLOUD_SMOKE_PASSED`. La PR #34, `docs: record successful cloud smoke test`, fue fusionada en `main`; su evidencia está registrada en `docs/implementation/CLOUD_SMOKE_EVIDENCE_20260718.md`.
 - **18 de julio de 2026:** B4a se implementó en cloud controlado siguiendo la Fase B (rama `claude/intelligent-bohr-1s38y6`): evento de origen persistente, enlace real recuerdo-evento-mensaje, guardado manual explícito (`SaveManualMemoryUseCase`) y consulta de origen (`GetMemoryOriginUseCase`), sin GUI ni cambios de alcance. Ruff, mypy y pytest en verde (595 pruebas). Una PR borrador quedó abierta hacia `main`, sin merge; pendiente de revisión independiente (Fase C) y autorización de merge del usuario.
+- **18 de julio de 2026:** la revisión de Fase C sobre la PR #36 encontró un `BLOCKER` transaccional: `SaveManualMemoryUseCase` confirmaba el evento de origen y el recuerdo en dos sesiones/transacciones SQLite independientes, en contra de SIRIUS-ARQ-0.1 S4/S8.1 ("evento y cambio de memoria se guardan en la misma transacción" mediante una `UnitOfWork`). Se corrigió en la misma rama, sin nueva rama ni nueva PR: se añadió el puerto `UnitOfWork` (`src/sirius/ports/unit_of_work.py`) y su adaptador SQLite (`src/sirius/adapters/persistence/sqlite_unit_of_work.py`), y `SaveManualMemoryUseCase` ahora crea el evento, el recuerdo y su primera revisión dentro de una única transacción, con `commit()` solo si todo tuvo éxito y rollback completo ante cualquier excepción. `GetMemoryOriginUseCase` sigue usando repositorios independientes de solo lectura, sin transacción compartida. Ruff, mypy y pytest en verde (602 pruebas: 595 previas + 7 nuevas de atomicidad/rollback). B4b sigue sin iniciarse y no se realizó ningún merge.
 
 ### Próxima acción exacta
 
@@ -344,10 +345,10 @@ No se exige que toda tarea termine implementada. Se exige que termine correctame
 
 La Routine de prueba de humo ya lanzada terminó en `CLOUD_SMOKE_PASSED` (18 de julio de 2026; evidencia en `docs/implementation/CLOUD_SMOKE_EVIDENCE_20260718.md`, PR #34 fusionada).
 
-B4a se implementó el 18 de julio de 2026 (rama `claude/intelligent-bohr-1s38y6`) conforme a la Fase B, con Ruff, mypy y pytest en verde y una PR borrador abierta hacia `main`, sin merge.
+B4a se implementó el 18 de julio de 2026 (rama `claude/intelligent-bohr-1s38y6`) conforme a la Fase B, con Ruff, mypy y pytest en verde y una PR borrador abierta hacia `main`, sin merge. La Fase C encontró un `BLOCKER` transaccional (evento y recuerdo no se guardaban en la misma transacción); se corrigió en la misma rama y PR mediante una `UnitOfWork` (ver la entrada del 18 de julio de 2026 en la sección 2), con Ruff, mypy y pytest en verde (602 pruebas). B4b sigue sin iniciarse; no se ha hecho ningún merge.
 
 Al retomar este trabajo, la primera pregunta operativa no es "¿qué automatizamos ahora?". Es:
 
-**¿La PR borrador de B4a ya fue revisada (Fase C) y el usuario autorizó su merge, o sigue pendiente de revisión?**
+**¿La PR de B4a ya fue revisada de nuevo (segunda pasada de Fase C) y el usuario autorizó su merge, o sigue pendiente de revisión?**
 
 Mientras esa PR no esté fusionada, la única acción válida es completar la Fase C (revisión independiente y controlada) sobre ella — nunca iniciar B4b, adelantar API, eventos de GitHub, auto-fix ni un merge automático.

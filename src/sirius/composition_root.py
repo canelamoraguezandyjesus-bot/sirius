@@ -38,6 +38,7 @@ from sirius.adapters.persistence.sqlite_llm_usage_repository import (
 )
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
+from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
 from sirius.adapters.secrets.keyring_store import build_keyring_secret_store
 from sirius.application.api_key_settings import ApiKeySettingsUseCase
 from sirius.application.context import ContextBuilder
@@ -183,6 +184,7 @@ def build_conversation_dependencies(
     memory_repository = build_sqlite_memory_repository(database_path)
     event_repository = build_sqlite_event_repository(database_path)
     llm_usage_repository = build_sqlite_llm_usage_repository(database_path)
+    manual_memory_unit_of_work = build_sqlite_unit_of_work(database_path)
 
     context_builder = ContextBuilder(
         identity_repository=identity_repository,
@@ -208,6 +210,7 @@ def build_conversation_dependencies(
         memory_repository,
         event_repository,
         llm_usage_repository,
+        manual_memory_unit_of_work,
     )
 
     def close_database_connections() -> None:
@@ -242,7 +245,7 @@ def build_conversation_dependencies(
         initial_project_use_case=InitialProjectUseCase(project_repository),
         project_continuity_use_case=ProjectContinuityUseCase(project_repository),
         project_lifecycle_use_case=ProjectLifecycleUseCase(project_repository),
-        save_manual_memory_use_case=SaveManualMemoryUseCase(memory_repository, event_repository),
+        save_manual_memory_use_case=SaveManualMemoryUseCase(manual_memory_unit_of_work),
         get_memory_origin_use_case=GetMemoryOriginUseCase(
             memory_repository, event_repository, conversation_repository
         ),
