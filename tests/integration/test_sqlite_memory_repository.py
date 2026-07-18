@@ -11,10 +11,12 @@ from sirius.adapters.persistence.database import (
     session_scope,
 )
 from sirius.adapters.persistence.models import Base, MemoryModel, MemoryRevisionModel
+from sirius.adapters.persistence.sqlite_event_repository import build_sqlite_event_repository
 from sirius.adapters.persistence.sqlite_memory_repository import (
     SqliteMemoryRepository,
     build_sqlite_memory_repository,
 )
+from sirius.domain.event import MANUAL_MEMORY_SAVE_EVENT_TYPE, USER_ACTOR
 from sirius.domain.memory import MemoryStatus
 
 
@@ -64,6 +66,33 @@ def test_create_and_recover_memory(tmp_path: Path) -> None:
 
     current_memories = repository.list_current_memories()
     assert [m.id for m in current_memories] == [created.id]
+
+
+@pytest.mark.integration
+def test_create_memory_without_source_event_id_leaves_it_none(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+
+    created = repository.create_memory("prefiere respuestas breves", "manual")
+
+    assert created.current_revision.source_event_id is None
+
+
+@pytest.mark.integration
+def test_create_memory_with_source_event_id_links_the_revision(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    event_repository = build_sqlite_event_repository(database_path)
+    event = event_repository.append(MANUAL_MEMORY_SAVE_EVENT_TYPE, USER_ACTOR, message_id=None)
+
+    created = repository.create_memory("v1", "manual", source_event_id=None)
+    linked = repository.create_memory("v2", "manual", source_event_id=event.id)
+
+    assert linked.current_revision.source_event_id == event.id
+    fetched = repository.get_memory(linked.id)
+    assert fetched.current_revision.source_event_id == event.id
+    # unrelated memory keeps no link
+    assert repository.get_memory(created.id).current_revision.source_event_id is None
 
 
 @pytest.mark.integration

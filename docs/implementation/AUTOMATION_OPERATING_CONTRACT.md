@@ -49,11 +49,11 @@ A fecha de este documento:
 - La corrección automática de pull requests está desactivada.
 - La notificación push está activada.
 - **18 de julio de 2026:** el resultado de la prueba de humo cloud quedó en `CLOUD_SMOKE_PASSED`. La PR #34, `docs: record successful cloud smoke test`, fue fusionada en `main`; su evidencia está registrada en `docs/implementation/CLOUD_SMOKE_EVIDENCE_20260718.md`.
-- B4a no ha comenzado.
+- **18 de julio de 2026:** B4a se implementó en cloud controlado siguiendo la Fase B (rama `claude/intelligent-bohr-1s38y6`): evento de origen persistente, enlace real recuerdo-evento-mensaje, guardado manual explícito (`SaveManualMemoryUseCase`) y consulta de origen (`GetMemoryOriginUseCase`), sin GUI ni cambios de alcance. Ruff, mypy y pytest en verde (595 pruebas). Una PR borrador quedó abierta hacia `main`, sin merge; pendiente de revisión independiente (Fase C) y autorización de merge del usuario.
 
 ### Próxima acción exacta
 
-La Fase A quedó superada con `CLOUD_SMOKE_PASSED`. La Fase B queda preparada para iniciar B4a mediante una Routine cloud controlada, con disparador de una sola vez, sin API ni evento de GitHub. B4a todavía no ha comenzado; no se inicia automáticamente por este documento.
+La Fase A quedó superada con `CLOUD_SMOKE_PASSED`. La Fase B se ejecutó: B4a quedó implementado mediante una Routine cloud controlada, con disparador de una sola vez, sin API ni evento de GitHub, y dejó una PR borrador abierta sin merge. La Fase C (revisión independiente y controlada) es la próxima acción pendiente; el usuario conserva la autorización de merge.
 
 ## 3. Decisiones operativas no negociables
 
@@ -344,8 +344,10 @@ No se exige que toda tarea termine implementada. Se exige que termine correctame
 
 La Routine de prueba de humo ya lanzada terminó en `CLOUD_SMOKE_PASSED` (18 de julio de 2026; evidencia en `docs/implementation/CLOUD_SMOKE_EVIDENCE_20260718.md`, PR #34 fusionada).
 
+B4a se implementó el 18 de julio de 2026 (rama `claude/intelligent-bohr-1s38y6`) conforme a la Fase B, con Ruff, mypy y pytest en verde y una PR borrador abierta hacia `main`, sin merge.
+
 Al retomar este trabajo, la primera pregunta operativa no es "¿qué automatizamos ahora?". Es:
 
-**¿B4a ya se inició en cloud controlado, o sigue preparado y pendiente de arranque?**
+**¿La PR borrador de B4a ya fue revisada (Fase C) y el usuario autorizó su merge, o sigue pendiente de revisión?**
 
-Mientras B4a no haya comenzado, la única acción válida es prepararlo conforme a la Fase B, sin adelantar API, eventos de GitHub, auto-fix ni merge automático.
+Mientras esa PR no esté fusionada, la única acción válida es completar la Fase C (revisión independiente y controlada) sobre ella — nunca iniciar B4b, adelantar API, eventos de GitHub, auto-fix ni un merge automático.

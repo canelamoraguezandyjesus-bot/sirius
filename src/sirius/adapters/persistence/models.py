@@ -85,6 +85,29 @@ class MessageModel(Base):
     )
 
 
+class EventModel(Base):
+    """Immutable audit record of the action that produced a memory revision.
+
+    SIRIUS-ARQ-0.1 S7.1/S7.3 minimal ``event`` fields; B4a populates only the
+    subset RF-019/RF-021 need (``event_type``, ``actor``, a single
+    ``message_id`` reference instead of the architecture's generic ``refs``
+    JSON blob, since a real foreign key gives a stronger "enlace real" than a
+    JSON reference for the one reference kind this cut requires).
+    ``redacted_at`` stays ``NULL`` until B4d adds redaction.
+    """
+
+    __tablename__ = "events"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    event_type: Mapped[str] = mapped_column(Text, nullable=False)
+    actor: Mapped[str] = mapped_column(Text, nullable=False)
+    message_id: Mapped[int | None] = mapped_column(
+        ForeignKey("messages.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(nullable=False)
+    redacted_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+
 class ProjectModel(Base):
     """A project; exactly one row may have ``is_active`` set at any time.
 
@@ -202,6 +225,10 @@ class MemoryRevisionModel(Base):
     ``content`` becomes NULL when the owning memory is deleted: structured
     content is redacted, but the row (version, origin, created_at) remains as
     a minimal marker.
+
+    ``source_event_id`` (B4a) is the real link to ``events`` RF-021 needs to
+    open a memory's origin; ``NULL`` for every revision that predates B4a or
+    was created through a path with no event yet (e.g. a B4c correction).
     """
 
     __tablename__ = "memory_revisions"
@@ -222,6 +249,7 @@ class MemoryRevisionModel(Base):
     version: Mapped[int] = mapped_column(nullable=False)
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
     origin: Mapped[str] = mapped_column(Text, nullable=False)
+    source_event_id: Mapped[int | None] = mapped_column(ForeignKey("events.id"), nullable=True)
     is_current: Mapped[bool] = mapped_column(nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
 

@@ -37,6 +37,7 @@ def _to_domain_revision(model: MemoryRevisionModel) -> MemoryRevision:
         version=model.version,
         content=model.content,
         origin=model.origin,
+        source_event_id=model.source_event_id,
         created_at=model.created_at.replace(tzinfo=UTC),
     )
 
@@ -80,7 +81,9 @@ class SqliteMemoryRepository:
         """Release every pooled connection this repository's engine holds."""
         self._engine.dispose()
 
-    def create_memory(self, content: str, origin: str) -> Memory:
+    def create_memory(
+        self, content: str, origin: str, *, source_event_id: int | None = None
+    ) -> Memory:
         ensure_valid_origin(origin)
         with session_scope(self._session_factory) as session:
             now = _utc_now_naive()
@@ -97,6 +100,7 @@ class SqliteMemoryRepository:
                 version=1,
                 content=content,
                 origin=origin,
+                source_event_id=source_event_id,
                 is_current=True,
                 created_at=now,
             )
@@ -135,7 +139,9 @@ class SqliteMemoryRepository:
             ).all()
             return [_to_domain_revision(model) for model in revision_models]
 
-    def correct_memory(self, memory_id: int, content: str, origin: str) -> Memory:
+    def correct_memory(
+        self, memory_id: int, content: str, origin: str, *, source_event_id: int | None = None
+    ) -> Memory:
         ensure_valid_origin(origin)
         with session_scope(self._session_factory) as session:
             memory_model = session.get(MemoryModel, memory_id)
@@ -154,6 +160,7 @@ class SqliteMemoryRepository:
                 version=next_revision_version(memory.current_revision),
                 content=content,
                 origin=origin,
+                source_event_id=source_event_id,
                 is_current=True,
                 created_at=_utc_now_naive(),
             )

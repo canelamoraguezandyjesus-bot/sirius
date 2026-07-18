@@ -131,6 +131,9 @@ class _FailOnNthAppendConversationRepository:
     def list_messages(self, conversation_id: int) -> list[Message]:
         return self._delegate.list_messages(conversation_id)
 
+    def get_message(self, message_id: int) -> Message | None:
+        return self._delegate.get_message(message_id)
+
 
 def _seed_bootstrap_singletons(database_path: Path) -> None:
     """Mimic initialize_persistence() plus a configured active project:
@@ -219,6 +222,19 @@ def test_send_message_persists_messages_in_order_in_the_conversation(tmp_path: P
 
     assert [m.content for m in messages] == ["primero", "Respuesta simulada de Sirius."]
     assert [m.role for m in messages] == [MessageRole.USER, MessageRole.SIRIUS]
+
+
+@pytest.mark.integration
+def test_send_message_never_creates_memory_as_a_side_effect(tmp_path: Path) -> None:
+    """B4a, RF-019/PA-010: memory is created only by an explicit save order,
+    never automatically by an ordinary conversation turn."""
+    database_path = tmp_path / "sirius.db"
+    use_case = _build_use_case(database_path, FakeLLMProvider())
+
+    use_case.send_message("recuerda que prefiero respuestas breves")
+
+    memory_repository = build_sqlite_memory_repository(database_path)
+    assert memory_repository.list_current_memories() == []
 
 
 @pytest.mark.integration

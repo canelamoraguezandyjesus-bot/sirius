@@ -24,6 +24,13 @@ class MemoryRevision:
     ``content`` is ``None`` only when the memory was deleted: deletion redacts
     structured content across the whole history but keeps a minimal marker
     (id, version, origin, created_at) for traceability.
+
+    ``origin`` is the free-text description V4 already required (non-empty,
+    see ``ensure_valid_origin``). ``source_event_id`` (B4a) is the real,
+    queryable link RF-021 needs to "open" the origin: it is set whenever the
+    revision was created through the explicit manual-save use case, and
+    ``None`` for every revision created before B4a or through a path that
+    does not (yet) record an event, such as a B4c correction.
     """
 
     id: int
@@ -31,6 +38,7 @@ class MemoryRevision:
     version: int
     content: str | None
     origin: str
+    source_event_id: int | None
     created_at: datetime
 
 

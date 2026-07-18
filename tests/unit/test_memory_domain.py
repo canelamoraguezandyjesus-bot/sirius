@@ -14,13 +14,16 @@ from sirius.domain.memory import (
 )
 
 
-def _revision(version: int = 1, content: str | None = "algo") -> MemoryRevision:
+def _revision(
+    version: int = 1, content: str | None = "algo", source_event_id: int | None = None
+) -> MemoryRevision:
     return MemoryRevision(
         id=1,
         memory_id=1,
         version=version,
         content=content,
         origin="manual",
+        source_event_id=source_event_id,
         created_at=datetime.now(UTC),
     )
 
@@ -75,6 +78,11 @@ def test_ensure_can_delete_accepts_current_or_archived(status: MemoryStatus) -> 
 def test_next_revision_version_increments_from_current() -> None:
     assert next_revision_version(_revision(version=1)) == 2
     assert next_revision_version(_revision(version=7)) == 8
+
+
+def test_memory_revision_source_event_id_defaults_to_none_and_round_trips() -> None:
+    assert _revision().source_event_id is None
+    assert _revision(source_event_id=42).source_event_id == 42
 
 
 def test_memory_is_immutable() -> None:
