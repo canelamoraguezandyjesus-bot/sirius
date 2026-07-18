@@ -1,4 +1,4 @@
-"""Unit tests for ProjectContinuityUseCase (B3b, D-02, RF-016/017).
+"""Unit tests for ProjectContinuityUseCase (B3b/B3c, D-02, RF-016/017).
 
 Uses an in-memory fake ``ProjectRepository`` so behavior is verified
 independently of SQLite (that gets its own dedicated integration coverage in
@@ -17,7 +17,7 @@ from sirius.application.project_continuity import (
     ProjectContinuityUseCase,
     ProjectNotConfiguredError,
 )
-from sirius.domain.project import Project
+from sirius.domain.project import Project, ProjectRevision, ProjectStatus, normalize_blockers
 
 
 class _FakeProjectRepository:
@@ -31,50 +31,78 @@ class _FakeProjectRepository:
         self._project = initial
         self._raise_on_get = raise_on_get
         self._raise_on_update = raise_on_update
-        self.update_calls: list[dict[str, str | None]] = []
-
-    def get_or_create_active_project(self) -> Project:
-        raise AssertionError("must never be called by ProjectContinuityUseCase")
+        self.append_revision_calls: list[dict[str, object]] = []
 
     def get_active_project(self) -> Project | None:
         if self._raise_on_get:
             raise RuntimeError("fallo simulado de infraestructura")
         return self._project
 
-    def update_project(
+    def ensure_bootstrap_project(self) -> None:
+        raise AssertionError("must never be called by ProjectContinuityUseCase")
+
+    def get_project(self, project_id: int) -> Project | None:
+        raise AssertionError("must never be called by ProjectContinuityUseCase")
+
+    def list_project_revisions(self, project_id: int) -> tuple[ProjectRevision, ...]:
+        raise AssertionError("must never be called by ProjectContinuityUseCase")
+
+    def create_project(
+        self,
+        name: str,
+        objective: str,
+        *,
+        state_summary: str,
+        blockers: tuple[str, ...],
+        next_step: str,
+    ) -> Project:
+        raise AssertionError("must never be called by ProjectContinuityUseCase")
+
+    def complete_active_project(self, project_id: int) -> Project:
+        raise AssertionError("must never be called by ProjectContinuityUseCase")
+
+    def append_revision(
         self,
         project_id: int,
         *,
-        name: str | None = None,
-        objective: str | None = None,
-        current_state: str | None = None,
-        blockers: str | None = None,
-        next_step: str | None = None,
+        objective: str,
+        state_summary: str,
+        blockers: tuple[str, ...],
+        next_step: str,
+        source_event_id: int | None = None,
     ) -> Project:
         if self._raise_on_update:
             raise RuntimeError("fallo simulado de infraestructura con detalle sensible")
-        self.update_calls.append(
+        self.append_revision_calls.append(
             {
-                "name": name,
                 "objective": objective,
-                "current_state": current_state,
+                "state_summary": state_summary,
                 "blockers": blockers,
                 "next_step": next_step,
             }
         )
         assert self._project is not None
         assert self._project.id == project_id
+        assert self._project.current_revision is not None
+        new_revision = ProjectRevision(
+            id=self._project.current_revision.id + 1,
+            project_id=project_id,
+            version=self._project.current_revision.version + 1,
+            objective=objective,
+            state_summary=state_summary,
+            blockers=blockers,
+            next_step=next_step,
+            source_event_id=source_event_id,
+            created_at=datetime.now(UTC),
+        )
         self._project = Project(
             id=self._project.id,
-            name=name if name is not None else self._project.name,
-            objective=objective if objective is not None else self._project.objective,
-            current_state=current_state
-            if current_state is not None
-            else self._project.current_state,
-            blockers=blockers if blockers is not None else self._project.blockers,
-            next_step=next_step if next_step is not None else self._project.next_step,
+            name=self._project.name,
+            status=self._project.status,
+            current_revision=new_revision,
             created_at=self._project.created_at,
             updated_at=datetime.now(UTC),
+            completed_at=self._project.completed_at,
         )
         return self._project
 
@@ -84,12 +112,11 @@ def _placeholder(project_id: int = 1) -> Project:
     return Project(
         id=project_id,
         name="",
-        objective="",
-        current_state="",
-        blockers="",
-        next_step="",
+        status=ProjectStatus.ACTIVE,
+        current_revision=None,
         created_at=now,
         updated_at=now,
+        completed_at=None,
     )
 
 
@@ -103,15 +130,25 @@ def _configured(
     next_step: str = "escribir pruebas",
 ) -> Project:
     now = datetime.now(UTC)
+    revision = ProjectRevision(
+        id=1,
+        project_id=project_id,
+        version=1,
+        objective=objective,
+        state_summary=current_state,
+        blockers=normalize_blockers(blockers),
+        next_step=next_step,
+        source_event_id=None,
+        created_at=now,
+    )
     return Project(
         id=project_id,
         name=name,
-        objective=objective,
-        current_state=current_state,
-        blockers=blockers,
-        next_step=next_step,
+        status=ProjectStatus.ACTIVE,
+        current_revision=revision,
         created_at=now,
         updated_at=now,
+        completed_at=None,
     )
 
 
@@ -121,15 +158,16 @@ def _configured(
 def test_get_summary_returns_every_continuity_field() -> None:
     project = _configured(blockers="bloqueo 1\nbloqueo 2")
     use_case = ProjectContinuityUseCase(_FakeProjectRepository(project))
+    assert project.current_revision is not None
 
     summary = use_case.get_summary()
 
     assert summary.project_id == project.id
     assert summary.name == project.name
-    assert summary.objective == project.objective
-    assert summary.current_state == project.current_state
+    assert summary.objective == project.current_revision.objective
+    assert summary.current_state == project.current_revision.state_summary
     assert summary.blockers == "bloqueo 1\nbloqueo 2"
-    assert summary.next_step == project.next_step
+    assert summary.next_step == project.current_revision.next_step
     assert summary.updated_at == project.updated_at
 
 
@@ -140,7 +178,7 @@ def test_get_summary_never_creates_a_project() -> None:
     with pytest.raises(ProjectNotConfiguredError):
         use_case.get_summary()
 
-    assert repository.update_calls == []
+    assert repository.append_revision_calls == []
 
 
 def test_get_summary_rejects_absence_of_a_project() -> None:
@@ -229,19 +267,26 @@ def test_update_returns_the_persisted_authoritative_state() -> None:
     assert summary.next_step == "nuevo paso"
 
 
+def test_update_preserves_the_objective_untouched() -> None:
+    repository = _FakeProjectRepository(_configured(objective="Cerrar B3c"))
+    use_case = ProjectContinuityUseCase(repository)
+
+    summary = use_case.update("estado", "bloqueo", "siguiente")
+
+    assert summary.objective == "Cerrar B3c"
+
+
 def test_update_persists_all_three_fields_in_a_single_repository_call() -> None:
     repository = _FakeProjectRepository(_configured())
     use_case = ProjectContinuityUseCase(repository)
 
     use_case.update("estado", "bloqueo", "siguiente")
 
-    assert len(repository.update_calls) == 1
-    call = repository.update_calls[0]
-    assert call["current_state"] == "estado"
-    assert call["blockers"] == "bloqueo"
+    assert len(repository.append_revision_calls) == 1
+    call = repository.append_revision_calls[0]
+    assert call["state_summary"] == "estado"
+    assert call["blockers"] == ("bloqueo",)
     assert call["next_step"] == "siguiente"
-    assert call["name"] is None  # name/objective are read-only in this cut
-    assert call["objective"] is None
 
 
 # --- update: validation -------------------------------------------------------
@@ -254,7 +299,7 @@ def test_update_rejects_empty_current_state() -> None:
     with pytest.raises(InvalidProjectContinuityDataError):
         use_case.update("", "bloqueo", "siguiente")
 
-    assert repository.update_calls == []
+    assert repository.append_revision_calls == []
 
 
 def test_update_rejects_whitespace_only_current_state() -> None:
@@ -264,7 +309,7 @@ def test_update_rejects_whitespace_only_current_state() -> None:
     with pytest.raises(InvalidProjectContinuityDataError):
         use_case.update("   ", "bloqueo", "siguiente")
 
-    assert repository.update_calls == []
+    assert repository.append_revision_calls == []
 
 
 def test_update_rejects_empty_next_step() -> None:
@@ -274,7 +319,7 @@ def test_update_rejects_empty_next_step() -> None:
     with pytest.raises(InvalidProjectContinuityDataError):
         use_case.update("estado", "bloqueo", "")
 
-    assert repository.update_calls == []
+    assert repository.append_revision_calls == []
 
 
 def test_update_rejects_whitespace_only_next_step() -> None:
@@ -284,7 +329,7 @@ def test_update_rejects_whitespace_only_next_step() -> None:
     with pytest.raises(InvalidProjectContinuityDataError):
         use_case.update("estado", "bloqueo", "   ")
 
-    assert repository.update_calls == []
+    assert repository.append_revision_calls == []
 
 
 def test_update_rejects_when_no_project_is_configured() -> None:

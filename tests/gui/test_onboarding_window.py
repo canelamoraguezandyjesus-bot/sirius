@@ -84,7 +84,7 @@ def isolated_local_appdata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
 def _bootstrapped_database(database_path: Path) -> Path:
     Base.metadata.create_all(build_engine(database_path))
     build_sqlite_conversation_repository(database_path).get_or_create_main_conversation()
-    build_sqlite_project_repository(database_path).get_or_create_active_project()
+    build_sqlite_project_repository(database_path).ensure_bootstrap_project()
     build_sqlite_identity_repository(database_path).get_or_create_current_identity()
     return database_path
 

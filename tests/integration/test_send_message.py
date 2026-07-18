@@ -24,6 +24,7 @@ from sirius.application.context import ContextBuilder
 from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.send_message import SendMessageUseCase, render_instructions
 from sirius.domain.conversation import Conversation, Message, MessageRole, MessageStatus
+from sirius.domain.project import is_configured
 from sirius.ports.conversation_repository import ConversationRepository
 from sirius.ports.llm import (
     LLMCompleted,
@@ -132,9 +133,24 @@ class _FailOnNthAppendConversationRepository:
 
 
 def _seed_bootstrap_singletons(database_path: Path) -> None:
-    """Mimic initialize_persistence(): ContextBuilder itself never seeds these."""
+    """Mimic initialize_persistence() plus a configured active project:
+    ContextBuilder requires one (B3c), and neither it nor SendMessageUseCase
+    ever creates one as a side effect. Idempotent across repeated calls
+    against the same database — several tests reopen the store and call this
+    again through ``_build_use_case``.
+    """
     build_sqlite_conversation_repository(database_path).get_or_create_main_conversation()
-    build_sqlite_project_repository(database_path).get_or_create_active_project()
+    project_repository = build_sqlite_project_repository(database_path)
+    project_repository.ensure_bootstrap_project()
+    active_project = project_repository.get_active_project()
+    if active_project is None or not is_configured(active_project):
+        project_repository.create_project(
+            "Proyecto de prueba",
+            "Objetivo de prueba",
+            state_summary="estado inicial",
+            blockers=(),
+            next_step="siguiente paso inicial",
+        )
     build_sqlite_identity_repository(database_path).get_or_create_current_identity()
 
 
@@ -224,18 +240,32 @@ def test_send_message_context_reflects_a_project_continuity_update(tmp_path: Pat
     into the very next context sent to the (simulated) provider."""
     database_path = tmp_path / "sirius.db"
     Base.metadata.create_all(build_engine(database_path))
-    _seed_bootstrap_singletons(database_path)
+    build_sqlite_conversation_repository(database_path).get_or_create_main_conversation()
     project_repository = build_sqlite_project_repository(database_path)
-    project_repository.update_project(
-        project_repository.get_or_create_active_project().id,
-        name="Sirius 0.1",
-        objective="Cerrar B3b",
+    project_repository.ensure_bootstrap_project()
+    project_repository.create_project(
+        "Sirius 0.1",
+        "Cerrar B3b",
+        state_summary="estado inicial",
+        blockers=(),
+        next_step="siguiente paso inicial",
     )
+    build_sqlite_identity_repository(database_path).get_or_create_current_identity()
     ProjectContinuityUseCase(project_repository).update(
         "estado actualizado", "bloqueo pendiente", "siguiente paso actualizado"
     )
 
-    use_case = _build_use_case(database_path, FakeLLMProvider())
+    context_builder = ContextBuilder(
+        identity_repository=build_sqlite_identity_repository(database_path),
+        project_repository=project_repository,
+        memory_repository=build_sqlite_memory_repository(database_path),
+        conversation_repository=build_sqlite_conversation_repository(database_path),
+    )
+    use_case = SendMessageUseCase(
+        context_builder=context_builder,
+        conversation_repository=build_sqlite_conversation_repository(database_path),
+        llm_provider=FakeLLMProvider(),
+    )
     result = use_case.send_message("hola")
 
     instructions = render_instructions(result.context)

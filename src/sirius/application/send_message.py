@@ -35,6 +35,7 @@ from dataclasses import dataclass
 
 from sirius.application.context import Context, ContextBuilder
 from sirius.domain.conversation import Message, MessageRole, MessageStatus
+from sirius.domain.project import blockers_to_text
 from sirius.ports.conversation_repository import ConversationRepository
 from sirius.ports.llm import (
     LLMCancelled,
@@ -69,6 +70,10 @@ def render_instructions(context: Context) -> str:
     """Render an already-built Context into the instructions text for the provider.
 
     Deterministic given the same Context; never queries a repository itself.
+    The "# Proyecto activo" section is omitted entirely when
+    ``context.project`` is ``None`` (SIRIUS-ARQ-0.1 S3,
+    ``LLMRequest.project_context: str | None``) — no placeholder text, no
+    fabricated project.
     """
     lines = [
         f"# Identidad (v{context.identity.current_version.version}): "
@@ -76,13 +81,20 @@ def render_instructions(context: Context) -> str:
         context.identity.current_version.description,
         context.identity.current_version.personality_instructions,
         "",
-        "# Proyecto activo",
-        f"Nombre: {context.project.name}",
-        f"Objetivo: {context.project.objective}",
-        f"Estado: {context.project.current_state}",
-        f"Bloqueos: {context.project.blockers or _NO_BLOCKERS_CONTEXT_TEXT}",
-        f"Siguiente paso: {context.project.next_step}",
-        "",
+    ]
+    if context.project is not None:
+        revision = context.project.current_revision
+        assert revision is not None  # ContextBuilder only resolves a configured project
+        lines += [
+            "# Proyecto activo",
+            f"Nombre: {context.project.name}",
+            f"Objetivo: {revision.objective}",
+            f"Estado: {revision.state_summary}",
+            f"Bloqueos: {blockers_to_text(revision.blockers) or _NO_BLOCKERS_CONTEXT_TEXT}",
+            f"Siguiente paso: {revision.next_step}",
+            "",
+        ]
+    lines += [
         "# Memorias vigentes",
         *(f"- ({memory.id}) {memory.current_revision.content}" for memory in context.memories),
         "",

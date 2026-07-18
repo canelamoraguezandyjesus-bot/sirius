@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QRunnable, Qt, QThreadPool
+from PySide6.QtCore import QRunnable, Qt, QThreadPool, Signal
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QComboBox,
@@ -35,6 +35,7 @@ from sirius.application.get_conversation_history import (
     GetConversationHistoryUseCase,
 )
 from sirius.application.project_continuity import ProjectContinuityUseCase
+from sirius.application.project_lifecycle import ProjectLifecycleUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.send_message import SendMessageResult, SendMessageUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
@@ -71,7 +72,15 @@ class MainWindow(QMainWindow):
     secret-related dependency it holds is ``ApiKeySettingsUseCase``, whose
     API cannot return the key's value (AGENTS.md: "No accedas a ... secretos
     desde la interfaz").
+
+    Emits ``project_completed`` exactly once, right after
+    ``ProjectContinuityWidget`` reports the active project was actually
+    completed (RF-018). The caller (``sirius.main``) is responsible for
+    closing this window and opening ``InitialProjectWindow`` next — this
+    window never creates a replacement project itself.
     """
+
+    project_completed = Signal()
 
     def __init__(
         self,
@@ -79,6 +88,7 @@ class MainWindow(QMainWindow):
         get_history_use_case: GetConversationHistoryUseCase,
         api_key_settings_use_case: ApiKeySettingsUseCase,
         project_continuity_use_case: ProjectContinuityUseCase,
+        project_lifecycle_use_case: ProjectLifecycleUseCase,
         create_backup_use_case: CreateBackupUseCase,
         validate_backup_use_case: ValidateBackupUseCase,
         restore_backup_use_case: RestoreBackupUseCase,
@@ -94,6 +104,7 @@ class MainWindow(QMainWindow):
         self._get_history_use_case = get_history_use_case
         self._api_key_settings_use_case = api_key_settings_use_case
         self._project_continuity_use_case = project_continuity_use_case
+        self._project_lifecycle_use_case = project_lifecycle_use_case
         self._create_backup_use_case = create_backup_use_case
         self._validate_backup_use_case = validate_backup_use_case
         self._restore_backup_use_case = restore_backup_use_case
@@ -162,8 +173,11 @@ class MainWindow(QMainWindow):
 
     def _build_conversation_tab(self) -> QWidget:
         self.project_continuity_widget = ProjectContinuityWidget(
-            self._project_continuity_use_case, show_warning=self._show_warning
+            self._project_continuity_use_case,
+            self._project_lifecycle_use_case,
+            show_warning=self._show_warning,
         )
+        self.project_continuity_widget.project_completed.connect(self.project_completed.emit)
 
         self.message_list = QListWidget()
         self.message_list.setAccessibleName("Historial de la conversación")
@@ -258,6 +272,7 @@ class MainWindow(QMainWindow):
         self.cancel_button.setEnabled(True)
         self.message_input.setEnabled(False)
         self._set_backup_controls_enabled(False)
+        self.project_continuity_widget.set_external_busy(True)
         self.status_label.setText("Sirius está pensando...")
         self.error_label.setText("")
 
@@ -334,6 +349,7 @@ class MainWindow(QMainWindow):
         self.message_input.setEnabled(True)
         self.status_label.setText("")
         self._set_backup_controls_enabled(True)
+        self.project_continuity_widget.set_external_busy(False)
         if self._close_requested:
             self._close_requested = False
             self.close()
@@ -566,6 +582,7 @@ class MainWindow(QMainWindow):
         self._set_backup_controls_enabled(False)
         self.send_button.setEnabled(False)
         self.message_input.setEnabled(False)
+        self.project_continuity_widget.set_external_busy(True)
 
     def _finish_backup_operation(self) -> None:
         self._is_backup_busy = False
@@ -573,6 +590,7 @@ class MainWindow(QMainWindow):
         self._set_backup_controls_enabled(True)
         self.send_button.setEnabled(True)
         self.message_input.setEnabled(True)
+        self.project_continuity_widget.set_external_busy(False)
         if self._close_requested:
             self._close_requested = False
             self.close()
@@ -780,6 +798,7 @@ class MainWindow(QMainWindow):
         # to close, and re-enabling now-obsolete controls would be pointless.
         self._is_backup_busy = False
         self._active_backup_worker = None
+        self.project_continuity_widget.set_external_busy(False)
         self.restore_backup_status_label.setText("")
         message = "Los datos se restauraron correctamente."
         if result.safety_backup_path is not None:

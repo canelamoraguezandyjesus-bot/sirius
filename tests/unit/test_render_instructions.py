@@ -1,4 +1,4 @@
-"""Unit tests for render_instructions() (B3b, D-02): the deterministic
+"""Unit tests for render_instructions() (B3b/B3c, D-02): the deterministic
 "# Proyecto activo" section sent to the provider.
 
 Pure and synchronous: builds a ``Context`` directly from domain dataclasses,
@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from sirius.application.context import Context
 from sirius.application.send_message import render_instructions
 from sirius.domain.identity import Identity, IdentityVersion
-from sirius.domain.project import Project
+from sirius.domain.project import Project, ProjectRevision, ProjectStatus, normalize_blockers
 
 _NOW = datetime.now(UTC)
 
@@ -33,15 +33,25 @@ def _identity() -> Identity:
 def _project(
     *, name: str = "Sirius 0.1", objective: str = "Cerrar B3b", blockers: str = ""
 ) -> Project:
+    revision = ProjectRevision(
+        id=1,
+        project_id=1,
+        version=1,
+        objective=objective,
+        state_summary="en curso",
+        blockers=normalize_blockers(blockers),
+        next_step="escribir pruebas",
+        source_event_id=None,
+        created_at=_NOW,
+    )
     return Project(
         id=1,
         name=name,
-        objective=objective,
-        current_state="en curso",
-        blockers=blockers,
-        next_step="escribir pruebas",
+        status=ProjectStatus.ACTIVE,
+        current_revision=revision,
         created_at=_NOW,
         updated_at=_NOW,
+        completed_at=None,
     )
 
 
@@ -49,6 +59,16 @@ def _context(project: Project) -> Context:
     return Context(
         identity=_identity(),
         project=project,
+        memories=(),
+        recent_messages=(),
+        current_user_message="hola",
+    )
+
+
+def _context_without_project() -> Context:
+    return Context(
+        identity=_identity(),
+        project=None,
         memories=(),
         recent_messages=(),
         current_user_message="hola",
@@ -68,15 +88,25 @@ def test_render_instructions_includes_the_project_objective() -> None:
 
 
 def test_render_instructions_includes_the_updated_current_state() -> None:
+    revision = ProjectRevision(
+        id=1,
+        project_id=1,
+        version=1,
+        objective="objetivo",
+        state_summary="estado actualizado",
+        blockers=(),
+        next_step="siguiente",
+        source_event_id=None,
+        created_at=_NOW,
+    )
     project = Project(
         id=1,
         name="Sirius",
-        objective="objetivo",
-        current_state="estado actualizado",
-        blockers="",
-        next_step="siguiente",
+        status=ProjectStatus.ACTIVE,
+        current_revision=revision,
         created_at=_NOW,
         updated_at=_NOW,
+        completed_at=None,
     )
 
     text = render_instructions(_context(project))
@@ -85,15 +115,25 @@ def test_render_instructions_includes_the_updated_current_state() -> None:
 
 
 def test_render_instructions_includes_the_updated_next_step() -> None:
+    revision = ProjectRevision(
+        id=1,
+        project_id=1,
+        version=1,
+        objective="objetivo",
+        state_summary="estado",
+        blockers=(),
+        next_step="siguiente paso actualizado",
+        source_event_id=None,
+        created_at=_NOW,
+    )
     project = Project(
         id=1,
         name="Sirius",
-        objective="objetivo",
-        current_state="estado",
-        blockers="",
-        next_step="siguiente paso actualizado",
+        status=ProjectStatus.ACTIVE,
+        current_revision=revision,
         created_at=_NOW,
         updated_at=_NOW,
+        completed_at=None,
     )
 
     text = render_instructions(_context(project))
@@ -131,3 +171,22 @@ def test_render_instructions_project_section_order_matches_the_documented_format
     assert lines[2].startswith("Estado:")
     assert lines[3].startswith("Bloqueos:")
     assert lines[4].startswith("Siguiente paso:")
+
+
+def test_render_instructions_omits_the_project_section_when_there_is_no_active_project() -> None:
+    """SIRIUS-ARQ-0.1 S3 (LLMRequest.project_context: str | None): with zero
+    configured ACTIVE projects, the section is absent entirely — no
+    placeholder text, no fabricated project."""
+    text = render_instructions(_context_without_project())
+
+    assert "# Proyecto activo" not in text
+    assert "Nombre:" not in text
+    assert "Objetivo:" not in text
+
+
+def test_render_instructions_still_includes_every_other_section_without_a_project() -> None:
+    text = render_instructions(_context_without_project())
+
+    assert "# Identidad" in text
+    assert "# Memorias vigentes" in text
+    assert "# Mensajes recientes" in text

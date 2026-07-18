@@ -176,7 +176,7 @@ def test_initialize_persistence_closes_already_built_repositories_even_if_a_late
     closed: list[str] = []
     identity_builder_called = False
 
-    def _raise_get_or_create_active_project(self: Any) -> None:
+    def _raise_ensure_bootstrap_project(self: Any) -> None:
         msg = "simulated failure while creating the active project"
         raise RuntimeError(msg)
 
@@ -197,8 +197,8 @@ def test_initialize_persistence_closes_already_built_repositories_even_if_a_late
     )
     monkeypatch.setattr(
         SqliteProjectRepository,
-        "get_or_create_active_project",
-        _raise_get_or_create_active_project,
+        "ensure_bootstrap_project",
+        _raise_ensure_bootstrap_project,
     )
     monkeypatch.setattr(
         bootstrap_module, "build_sqlite_identity_repository", _tracking_identity_builder

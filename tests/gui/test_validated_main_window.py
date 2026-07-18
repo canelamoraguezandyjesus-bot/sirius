@@ -52,7 +52,15 @@ def isolated_local_appdata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
 def _bootstrapped_database(database_path: Path) -> Path:
     Base.metadata.create_all(build_engine(database_path))
     build_sqlite_conversation_repository(database_path).get_or_create_main_conversation()
-    build_sqlite_project_repository(database_path).get_or_create_active_project()
+    project_repository = build_sqlite_project_repository(database_path)
+    project_repository.ensure_bootstrap_project()
+    project_repository.create_project(
+        "Proyecto de prueba",
+        "Objetivo de prueba",
+        state_summary="estado inicial",
+        blockers=(),
+        next_step="siguiente paso inicial",
+    )
     build_sqlite_identity_repository(database_path).get_or_create_current_identity()
     return database_path
 
@@ -76,6 +84,7 @@ def _build_window(
             secret_store,
         ),
         project_continuity_use_case=dependencies.project_continuity_use_case,
+        project_lifecycle_use_case=dependencies.project_lifecycle_use_case,
         create_backup_use_case=dependencies.create_backup_use_case,
         validate_backup_use_case=dependencies.validate_backup_use_case,
         restore_backup_use_case=dependencies.restore_backup_use_case,

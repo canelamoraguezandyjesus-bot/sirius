@@ -8,6 +8,11 @@ vigentes relacionadas" as separate sections; the former lives inside the
 identity's ``personality_instructions``, and the latter has no entity yet
 (V4 only modelled a generic Memory, not the "decisión" specialisation from
 DR-009) — both are intentional scope reductions, not a contradiction.
+
+``project`` is optional (SIRIUS-ARQ-0.1 S3, ``LLMRequest.project_context:
+str | None``): between completing a project (RF-018) and creating the next
+one, Sirius legitimately has zero configured ``ACTIVE`` projects. That is
+not a bootstrap failure — only a missing identity or main conversation is.
 """
 
 from __future__ import annotations
@@ -17,7 +22,7 @@ from dataclasses import dataclass
 from sirius.domain.conversation import Message, MessageStatus
 from sirius.domain.identity import Identity
 from sirius.domain.memory import Memory
-from sirius.domain.project import Project
+from sirius.domain.project import Project, is_configured
 from sirius.ports.conversation_repository import ConversationRepository
 from sirius.ports.identity_repository import IdentityRepository
 from sirius.ports.memory_repository import MemoryRepository
@@ -29,10 +34,13 @@ _DEFAULT_RECENT_MESSAGES_LIMIT = 20
 class ContextAssemblyError(RuntimeError):
     """Raised when a piece of data ContextBuilder requires does not exist yet.
 
-    ContextBuilder never creates data itself; seeding the main conversation,
-    the active project, and the current identity is the exclusive
-    responsibility of ``initialize_persistence()``. This error means that
-    bootstrap has not run (or has not completed) against this storage.
+    ContextBuilder never creates data itself; seeding the main conversation
+    and the current identity is the exclusive responsibility of
+    ``initialize_persistence()``. This error means that bootstrap has not
+    run (or has not completed) against this storage. The active project is
+    deliberately not part of this list: its absence (no project configured
+    yet, or the previous one was just completed) is a normal, expected
+    state, not a bootstrap failure — see ``Context.project``.
     """
 
 
@@ -42,10 +50,14 @@ class Context:
 
     Field order mirrors the section order given above; callers must not
     reorder or flatten these into a single opaque string before this point.
+    ``project`` is ``None`` whenever there is no configured ``ACTIVE``
+    project — absent entirely, still the bootstrap placeholder, or every
+    existing project is ``COMPLETED`` — never a ``COMPLETED`` project and
+    never the placeholder itself.
     """
 
     identity: Identity
-    project: Project
+    project: Project | None
     memories: tuple[Memory, ...]
     recent_messages: tuple[Message, ...]
     current_user_message: str
@@ -56,10 +68,10 @@ class ContextBuilder:
 
     Strictly read-only: it queries the pure ``get_*`` lookups exclusively and
     never the ``get_or_create_*`` ones, so building a context can never create
-    or modify a row. If the main conversation, the active project, or the
-    current identity does not exist yet, it raises ``ContextAssemblyError``
-    instead of creating it — that seeding is ``initialize_persistence()``'s
-    job alone.
+    or modify a row. If the main conversation or the current identity does
+    not exist yet, it raises ``ContextAssemblyError`` instead of creating it
+    — that seeding is ``initialize_persistence()``'s job alone. The active
+    project is resolved, never required: see ``Context.project``.
     """
 
     def __init__(
@@ -80,17 +92,20 @@ class ContextBuilder:
         """Assemble a Context; deterministic for the same underlying data.
 
         Raises ``ContextAssemblyError`` if bootstrap has not seeded the
-        identity, the active project, or the main conversation yet.
+        identity or the main conversation yet. Never raises for the active
+        project's absence: ``Context.project`` is simply ``None`` in that
+        case (no configured ``ACTIVE`` project — absent, still the
+        placeholder, or every project is ``COMPLETED``).
         """
         identity = self._identity_repository.get_current_identity()
         if identity is None:
             msg = "No current identity found; has initialize_persistence() run?"
             raise ContextAssemblyError(msg)
 
-        project = self._project_repository.get_active_project()
-        if project is None:
-            msg = "No active project found; has initialize_persistence() run?"
-            raise ContextAssemblyError(msg)
+        active_project = self._project_repository.get_active_project()
+        project = (
+            active_project if active_project is not None and is_configured(active_project) else None
+        )
 
         conversation = self._conversation_repository.get_main_conversation()
         if conversation is None:

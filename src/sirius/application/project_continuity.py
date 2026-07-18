@@ -1,4 +1,4 @@
-"""Presentation-facing use case for observable project continuity (B3b, D-02).
+"""Presentation-facing use case for observable project continuity (B3b/B3c, D-02).
 
 RF-016 (state, blockers, next step — everything except decisions, which
 belong to B4) and RF-017 (recover and summarize the project on resume).
@@ -8,6 +8,12 @@ or SQLite directly (AGENTS.md: dependency direction presentation ->
 application -> domain). Kept separate from ``InitialProjectUseCase``, whose
 responsibility (first configuration) is distinct from this one (ongoing
 continuity of an already-configured project).
+
+Since B3c, ``update()`` never overwrites the active project's fields in
+place: it appends a new, immutable ``ProjectRevision`` on top of the current
+one. The project's ``objective`` is preserved from the current revision —
+this use case never changes it (only ``InitialProjectUseCase`` sets an
+objective, at creation time).
 """
 
 from __future__ import annotations
@@ -15,7 +21,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from sirius.domain.project import Project, is_configured
+from sirius.application.project_errors import (
+    InvalidProjectContinuityDataError,
+    ProjectContinuityError,
+    ProjectNotConfiguredError,
+)
+from sirius.domain.project import Project, blockers_to_text, is_configured, normalize_blockers
 from sirius.ports.project_repository import ProjectRepository
 
 __all__ = [
@@ -25,20 +36,6 @@ __all__ = [
     "ProjectContinuityUseCase",
     "ProjectNotConfiguredError",
 ]
-
-
-class ProjectContinuityError(RuntimeError):
-    """Base error for project continuity operations. Messages are always safe:
-    they never include tracebacks or infrastructure-specific detail."""
-
-
-class ProjectNotConfiguredError(ProjectContinuityError):
-    """Raised when there is no configured project yet (absent or still the
-    bootstrap placeholder)."""
-
-
-class InvalidProjectContinuityDataError(ProjectContinuityError):
-    """Raised when ``current_state`` or ``next_step`` is empty after trimming."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,34 +48,23 @@ class ProjectContinuitySummary:
     current_state: str
     blockers: str
     next_step: str
+    revision_version: int
     updated_at: datetime
 
 
 def _to_summary(project: Project) -> ProjectContinuitySummary:
+    revision = project.current_revision
+    assert revision is not None  # guaranteed by is_configured() checks below
     return ProjectContinuitySummary(
         project_id=project.id,
         name=project.name,
-        objective=project.objective,
-        current_state=project.current_state,
-        blockers=project.blockers,
-        next_step=project.next_step,
+        objective=revision.objective,
+        current_state=revision.state_summary,
+        blockers=blockers_to_text(revision.blockers),
+        next_step=revision.next_step,
+        revision_version=revision.version,
         updated_at=project.updated_at,
     )
-
-
-def _normalize_blockers(raw: str) -> str:
-    """Trim exterior whitespace and leading/trailing blank lines, strip each
-    remaining line's exterior spaces, and keep interior blank lines and order
-    (never interpreted, never split on anything other than newlines).
-    """
-    lines = [line.strip() for line in raw.splitlines()]
-    start = 0
-    while start < len(lines) and lines[start] == "":
-        start += 1
-    end = len(lines)
-    while end > start and lines[end - 1] == "":
-        end -= 1
-    return "\n".join(lines[start:end])
 
 
 class ProjectContinuityUseCase:
@@ -102,7 +88,7 @@ class ProjectContinuityUseCase:
         return _to_summary(project)
 
     def update(self, current_state: str, blockers: str, next_step: str) -> ProjectContinuitySummary:
-        """Update state, blockers, and next step together, in a single write.
+        """Append a new revision with an updated state, blockers, and next step.
 
         Raises ``InvalidProjectContinuityDataError`` if ``current_state`` or
         ``next_step`` is empty after trimming (checked before touching the
@@ -115,16 +101,18 @@ class ProjectContinuityUseCase:
             raise InvalidProjectContinuityDataError("El estado actual no puede estar vacío.")
         if not clean_next_step:
             raise InvalidProjectContinuityDataError("El siguiente paso no puede estar vacío.")
-        clean_blockers = _normalize_blockers(blockers)
+        clean_blockers = normalize_blockers(blockers)
 
         project = self._safe_get_active_project()
         if project is None or not is_configured(project):
             raise ProjectNotConfiguredError("Todavía no hay un proyecto configurado.")
+        assert project.current_revision is not None
 
         try:
-            updated = self._project_repository.update_project(
+            updated = self._project_repository.append_revision(
                 project.id,
-                current_state=clean_state,
+                objective=project.current_revision.objective,
+                state_summary=clean_state,
                 blockers=clean_blockers,
                 next_step=clean_next_step,
             )

@@ -30,6 +30,7 @@ def test_upgrade_head_creates_the_expected_tables(tmp_path: Path) -> None:
         "conversations",
         "messages",
         "projects",
+        "project_revisions",
         "memories",
         "memory_revisions",
         "identities",
@@ -48,6 +49,7 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
     conversation_columns = {c["name"] for c in inspector.get_columns("conversations")}
     message_columns = {c["name"] for c in inspector.get_columns("messages")}
     project_columns = {c["name"] for c in inspector.get_columns("projects")}
+    project_revision_columns = {c["name"] for c in inspector.get_columns("project_revisions")}
     memory_columns = {c["name"] for c in inspector.get_columns("memories")}
     memory_revision_columns = {c["name"] for c in inspector.get_columns("memory_revisions")}
     identity_columns = {c["name"] for c in inspector.get_columns("identities")}
@@ -75,9 +77,24 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
         "blockers",
         "next_step",
         "is_active",
+        "status",
+        "completed_at",
+        "current_revision_id",
         "created_at",
         "updated_at",
     }
+    assert project_revision_columns == {
+        "id",
+        "project_id",
+        "version",
+        "objective",
+        "state_summary",
+        "blockers_json",
+        "next_step",
+        "source_event_id",
+        "created_at",
+    }
+    assert "is_current" not in project_revision_columns  # SIRIUS-ARQ-0.1 S7.3: no such field
     assert memory_columns == {"id", "status", "created_at", "updated_at"}
     assert memory_revision_columns == {
         "id",
@@ -125,6 +142,28 @@ def test_upgrade_head_creates_the_single_active_project_index(tmp_path: Path) ->
 
     assert "uq_projects_single_active" in indexes
     assert bool(indexes["uq_projects_single_active"]["unique"])
+
+
+@pytest.mark.integration
+def test_upgrade_head_creates_current_revision_id_as_a_physical_foreign_key(
+    tmp_path: Path,
+) -> None:
+    """SIRIUS-ARQ-0.1 S7.3: projects.current_revision_id is the single
+    authoritative pointer to the current revision — no is_current flag, no
+    second source of truth."""
+    database_path = tmp_path / "sirius.db"
+
+    command.upgrade(_alembic_config(database_path), "head")
+
+    inspector = inspect(build_engine(database_path))
+    foreign_keys = inspector.get_foreign_keys("projects")
+    current_revision_fks = [
+        fk for fk in foreign_keys if fk["referred_table"] == "project_revisions"
+    ]
+
+    assert len(current_revision_fks) == 1
+    assert current_revision_fks[0]["constrained_columns"] == ["current_revision_id"]
+    assert current_revision_fks[0]["referred_columns"] == ["id"]
 
 
 @pytest.mark.integration
@@ -192,6 +231,7 @@ def test_downgrade_to_v2_removes_only_projects(tmp_path: Path) -> None:
     table_names = set(inspect(build_engine(database_path)).get_table_names())
     assert not {
         "projects",
+        "project_revisions",
         "memories",
         "memory_revisions",
         "identities",
@@ -331,8 +371,8 @@ def test_upgrading_from_the_previous_head_preserves_the_existing_project(tmp_pat
     with engine.begin() as connection:
         rows = connection.execute(
             text(
-                "SELECT id, name, objective, current_state, next_step, is_active, blockers "
-                "FROM projects"
+                "SELECT id, name, objective, current_state, next_step, is_active, blockers, "
+                "status, completed_at, current_revision_id FROM projects"
             )
         ).fetchall()
 
@@ -344,6 +384,157 @@ def test_upgrading_from_the_previous_head_preserves_the_existing_project(tmp_pat
     assert row.next_step == "probar la migración"
     assert row.is_active == 1
     assert row.blockers == ""
+    assert row.status == "active"
+    assert row.completed_at is None
+    assert row.current_revision_id is not None
+
+    with engine.begin() as connection:
+        revision_rows = connection.execute(
+            text(
+                "SELECT id, project_id, version, objective, state_summary, blockers_json, "
+                "next_step FROM project_revisions"
+            )
+        ).fetchall()
+
+    assert len(revision_rows) == 1
+    revision_row = revision_rows[0]
+    assert revision_row.project_id == row.id
+    assert revision_row.version == 1
+    assert revision_row.objective == "Cerrar B3b"
+    assert revision_row.state_summary == "en curso"
+    assert revision_row.blockers_json == "[]"
+    assert revision_row.next_step == "probar la migración"
+    # current_revision_id is the sole pointer: it must resolve to exactly
+    # this backfilled revision, never left NULL for a configured project.
+    assert row.current_revision_id == revision_row.id
+
+
+@pytest.mark.integration
+def test_upgrade_backfills_an_inactive_row_as_completed(tmp_path: Path) -> None:
+    """A row already inactive before this migration (not expected in
+    practice — no prior code path ever produced one, but handled and
+    tested) migrates to COMPLETED with its updated_at as completed_at."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+    command.upgrade(config, _PREVIOUS_HEAD_REVISION)
+
+    now = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO projects "
+                "(name, objective, current_state, next_step, is_active, created_at, updated_at) "
+                "VALUES (:name, :objective, :state, :next_step, 0, :now, :now)"
+            ),
+            {
+                "name": "Proyecto viejo",
+                "objective": "objetivo viejo",
+                "state": "estado viejo",
+                "next_step": "n",
+                "now": now,
+            },
+        )
+
+    command.upgrade(config, "head")
+
+    with engine.begin() as connection:
+        rows = connection.execute(text("SELECT status, completed_at FROM projects")).fetchall()
+
+    assert len(rows) == 1
+    assert rows[0].status == "completed"
+    assert rows[0].completed_at == now
+
+
+@pytest.mark.integration
+def test_upgrade_backfills_an_unconfigured_placeholder_with_no_revision(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+    command.upgrade(config, _PREVIOUS_HEAD_REVISION)
+
+    now = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO projects "
+                "(name, objective, current_state, next_step, is_active, created_at, updated_at) "
+                "VALUES ('', '', '', '', 1, :now, :now)"
+            ),
+            {"now": now},
+        )
+
+    command.upgrade(config, "head")
+
+    with engine.begin() as connection:
+        project_rows = connection.execute(
+            text("SELECT id, status, current_revision_id FROM projects")
+        ).fetchall()
+        revision_rows = connection.execute(text("SELECT * FROM project_revisions")).fetchall()
+
+    assert len(project_rows) == 1
+    assert project_rows[0].status == "active"
+    assert project_rows[0].current_revision_id is None
+    assert revision_rows == []
+
+
+@pytest.mark.integration
+def test_downgrade_to_b3b_head_syncs_legacy_columns_from_the_current_revision(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+    command.upgrade(config, "head")
+
+    engine = build_engine(database_path)
+    now = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    with engine.begin() as connection:
+        project_id = connection.execute(
+            text(
+                "INSERT INTO projects "
+                "(name, objective, current_state, next_step, blockers, is_active, status, "
+                "completed_at, created_at, updated_at) "
+                "VALUES ('Sirius', '', '', '', '', 1, 'active', NULL, :now, :now)"
+            ),
+            {"now": now},
+        ).lastrowid
+        revision_id = connection.execute(
+            text(
+                "INSERT INTO project_revisions "
+                "(project_id, version, objective, state_summary, blockers_json, next_step, "
+                "source_event_id, created_at) "
+                "VALUES (:pid, 1, 'objetivo revisado', 'estado revisado', "
+                "'[\"bloqueo uno\"]', 'siguiente revisado', NULL, :now)"
+            ),
+            {"pid": project_id, "now": now},
+        ).lastrowid
+        connection.execute(
+            text("UPDATE projects SET current_revision_id = :rid WHERE id = :pid"),
+            {"rid": revision_id, "pid": project_id},
+        )
+
+    command.downgrade(config, "66951344e4b9")
+
+    table_names = set(inspect(build_engine(database_path)).get_table_names())
+    assert "project_revisions" not in table_names
+
+    project_columns = {
+        c["name"] for c in inspect(build_engine(database_path)).get_columns("projects")
+    }
+    assert "status" not in project_columns
+    assert "completed_at" not in project_columns
+    assert "current_revision_id" not in project_columns
+
+    with engine.begin() as connection:
+        rows = connection.execute(
+            text("SELECT objective, current_state, blockers, next_step FROM projects")
+        ).fetchall()
+
+    assert len(rows) == 1
+    assert rows[0].objective == "objetivo revisado"
+    assert rows[0].current_state == "estado revisado"
+    assert rows[0].blockers == "bloqueo uno"
+    assert rows[0].next_step == "siguiente revisado"
 
 
 @pytest.mark.integration
