@@ -9,6 +9,7 @@ from sqlalchemy import ForeignKey, Index, Text, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from sirius.domain.conversation import MessageRole, MessageStatus
+from sirius.domain.decision import DecisionStatus
 from sirius.domain.memory import MemoryStatus
 from sirius.domain.project import ProjectStatus
 
@@ -249,6 +250,69 @@ class MemoryRevisionModel(Base):
     version: Mapped[int] = mapped_column(nullable=False)
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
     origin: Mapped[str] = mapped_column(Text, nullable=False)
+    source_event_id: Mapped[int | None] = mapped_column(ForeignKey("events.id"), nullable=True)
+    is_current: Mapped[bool] = mapped_column(nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
+class DecisionModel(Base):
+    """A decision: stable identity (subject, project) and current lifecycle
+    status. Its current revision is the single row in ``decision_revisions``
+    with the matching ``decision_id`` and ``is_current = True`` (B4b creates
+    exactly one; B4c will use ``is_current`` the same way
+    ``MemoryRevisionModel`` already does for corrections).
+
+    ``status`` lives here, not on the revision — mirroring ``ProjectModel``:
+    approving a decision (``ApproveDecisionUseCase``) changes this column in
+    place and never creates a new revision, since the content does not
+    change.
+    """
+
+    __tablename__ = "decisions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    subject: Mapped[str] = mapped_column(Text, nullable=False)
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[DecisionStatus] = mapped_column(
+        SAEnum(
+            DecisionStatus,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+            native_enum=False,
+            length=16,
+        ),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
+class DecisionRevisionModel(Base):
+    """One immutable, versioned content snapshot of a decision; at most one
+    row per ``decision_id`` may have ``is_current`` set at any time.
+
+    ``source_event_id`` (B4b) is the real link to ``events`` that records why
+    this revision exists — set when ``ProposeDecisionUseCase`` creates it.
+    """
+
+    __tablename__ = "decision_revisions"
+    __table_args__ = (
+        UniqueConstraint("decision_id", "version", name="uq_decision_revisions_decision_version"),
+        Index(
+            "uq_decision_revisions_single_current_per_decision",
+            "decision_id",
+            unique=True,
+            sqlite_where=text("is_current = 1"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    decision_id: Mapped[int] = mapped_column(
+        ForeignKey("decisions.id", ondelete="CASCADE"), nullable=False
+    )
+    version: Mapped[int] = mapped_column(nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
     source_event_id: Mapped[int | None] = mapped_column(ForeignKey("events.id"), nullable=True)
     is_current: Mapped[bool] = mapped_column(nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(nullable=False)

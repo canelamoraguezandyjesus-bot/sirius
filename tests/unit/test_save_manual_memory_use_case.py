@@ -11,6 +11,7 @@ from sirius.application.save_manual_memory import (
     InvalidManualMemoryDataError,
     SaveManualMemoryUseCase,
 )
+from sirius.domain.decision import Decision
 from sirius.domain.event import MANUAL_MEMORY_SAVE_EVENT_TYPE, USER_ACTOR, Event
 from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
 
@@ -95,6 +96,21 @@ class _RecordingMemoryRepository:
         raise AssertionError("save() must never delete a memory")
 
 
+class _UnusedDecisionRepository:
+    """B4b's ``UnitOfWork.decision_repository``; ``save()`` never touches it."""
+
+    def create_proposal(
+        self, subject: str, project_id: int, content: str, *, source_event_id: int | None = None
+    ) -> Decision:
+        raise AssertionError("save() must never create a decision proposal")
+
+    def get_decision(self, decision_id: int) -> Decision:
+        raise AssertionError("save() must never read a decision")
+
+    def approve_decision(self, decision_id: int) -> Decision:
+        raise AssertionError("save() must never approve a decision")
+
+
 class _FakeUnitOfWork:
     """In-memory stand-in for ``SqliteUnitOfWork``: same commit/rollback contract.
 
@@ -109,6 +125,7 @@ class _FakeUnitOfWork:
     ) -> None:
         self.memory_repository = memory_repository
         self.event_repository = event_repository
+        self.decision_repository = _UnusedDecisionRepository()
         self.enter_count = 0
         self.committed = False
         self.rollback_count = 0

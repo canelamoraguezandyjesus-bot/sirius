@@ -34,6 +34,8 @@ def test_upgrade_head_creates_the_expected_tables(tmp_path: Path) -> None:
         "memories",
         "memory_revisions",
         "events",
+        "decisions",
+        "decision_revisions",
         "identities",
         "identity_versions",
         "llm_usage",
@@ -54,6 +56,8 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
     memory_columns = {c["name"] for c in inspector.get_columns("memories")}
     memory_revision_columns = {c["name"] for c in inspector.get_columns("memory_revisions")}
     event_columns = {c["name"] for c in inspector.get_columns("events")}
+    decision_columns = {c["name"] for c in inspector.get_columns("decisions")}
+    decision_revision_columns = {c["name"] for c in inspector.get_columns("decision_revisions")}
     identity_columns = {c["name"] for c in inspector.get_columns("identities")}
     identity_version_columns = {c["name"] for c in inspector.get_columns("identity_versions")}
     llm_usage_columns = {c["name"] for c in inspector.get_columns("llm_usage")}
@@ -115,6 +119,23 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
         "message_id",
         "created_at",
         "redacted_at",
+    }
+    assert decision_columns == {
+        "id",
+        "subject",
+        "project_id",
+        "status",
+        "created_at",
+        "updated_at",
+    }
+    assert decision_revision_columns == {
+        "id",
+        "decision_id",
+        "version",
+        "content",
+        "source_event_id",
+        "is_current",
+        "created_at",
     }
     assert identity_columns == {"id", "created_at"}
     assert identity_version_columns == {
@@ -207,6 +228,59 @@ def test_upgrade_head_creates_the_single_current_revision_per_memory_index(
 
     assert "uq_memory_revisions_single_current_per_memory" in indexes
     assert bool(indexes["uq_memory_revisions_single_current_per_memory"]["unique"])
+
+
+@pytest.mark.integration
+def test_upgrade_head_creates_decision_project_id_as_a_physical_foreign_key(
+    tmp_path: Path,
+) -> None:
+    """B4b, RF-020: decisions.project_id is a real, enforced link to
+    projects, not just a free-standing integer."""
+    database_path = tmp_path / "sirius.db"
+
+    command.upgrade(_alembic_config(database_path), "head")
+
+    inspector = inspect(build_engine(database_path))
+    foreign_keys = inspector.get_foreign_keys("decisions")
+    project_fks = [fk for fk in foreign_keys if fk["referred_table"] == "projects"]
+
+    assert len(project_fks) == 1
+    assert project_fks[0]["constrained_columns"] == ["project_id"]
+    assert project_fks[0]["referred_columns"] == ["id"]
+
+
+@pytest.mark.integration
+def test_upgrade_head_creates_decision_source_event_id_as_a_physical_foreign_key(
+    tmp_path: Path,
+) -> None:
+    """B4b, RF-020: decision_revisions.source_event_id is a real, enforced
+    link to events, not just a free-text field."""
+    database_path = tmp_path / "sirius.db"
+
+    command.upgrade(_alembic_config(database_path), "head")
+
+    inspector = inspect(build_engine(database_path))
+    foreign_keys = inspector.get_foreign_keys("decision_revisions")
+    source_event_fks = [fk for fk in foreign_keys if fk["referred_table"] == "events"]
+
+    assert len(source_event_fks) == 1
+    assert source_event_fks[0]["constrained_columns"] == ["source_event_id"]
+    assert source_event_fks[0]["referred_columns"] == ["id"]
+
+
+@pytest.mark.integration
+def test_upgrade_head_creates_the_single_current_revision_per_decision_index(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "sirius.db"
+
+    command.upgrade(_alembic_config(database_path), "head")
+
+    inspector = inspect(build_engine(database_path))
+    indexes = {index["name"]: index for index in inspector.get_indexes("decision_revisions")}
+
+    assert "uq_decision_revisions_single_current_per_decision" in indexes
+    assert bool(indexes["uq_decision_revisions_single_current_per_decision"]["unique"])
 
 
 @pytest.mark.integration
@@ -448,6 +522,77 @@ def test_upgrading_from_the_previous_head_preserves_existing_memories(tmp_path: 
     assert revision_row.origin == "manual"
     assert revision_row.source_event_id is None
     assert revision_row.is_current == 1
+
+
+@pytest.mark.integration
+def test_downgrade_to_previous_head_removes_only_the_decision_tables(tmp_path: Path) -> None:
+    """B4b: downgrading past this migration removes only ``decisions`` and
+    ``decision_revisions``; every other table (including ``events`` and
+    ``memories``, added by earlier migrations) is unaffected."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+
+    command.upgrade(config, "head")
+    command.downgrade(config, "810c1563f6c6")
+
+    table_names = set(inspect(build_engine(database_path)).get_table_names())
+    assert not {"decisions", "decision_revisions"}.intersection(table_names)
+    assert {"events", "memories", "memory_revisions", "projects", "project_revisions"}.issubset(
+        table_names
+    )
+
+
+@pytest.mark.integration
+def test_upgrading_from_the_previous_head_preserves_existing_events_and_memories(
+    tmp_path: Path,
+) -> None:
+    """B4b compatibility: a base created before this migration existed (still
+    at the previous head, 810c1563f6c6) upgrades to the new head without
+    losing any existing event, memory or memory revision."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+    command.upgrade(config, "810c1563f6c6")
+
+    now = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO events (id, event_type, actor, created_at) "
+                "VALUES (1, 'memory.manual_save', 'user', :now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO memories (id, status, created_at, updated_at) "
+                "VALUES (1, 'current', :now, :now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO memory_revisions "
+                "(memory_id, version, content, origin, source_event_id, is_current, created_at) "
+                "VALUES (1, 1, 'recuerdo previo a B4b', 'manual', 1, 1, :now)"
+            ),
+            {"now": now},
+        )
+
+    command.upgrade(config, "head")
+
+    with engine.begin() as connection:
+        event_rows = connection.execute(text("SELECT id, event_type FROM events")).fetchall()
+        memory_rows = connection.execute(text("SELECT id, status FROM memories")).fetchall()
+
+    assert len(event_rows) == 1
+    assert event_rows[0].id == 1
+    assert event_rows[0].event_type == "memory.manual_save"
+    assert len(memory_rows) == 1
+    assert memory_rows[0].id == 1
+
+    table_names = set(inspect(engine).get_table_names())
+    assert {"decisions", "decision_revisions"}.issubset(table_names)
 
 
 @pytest.mark.integration

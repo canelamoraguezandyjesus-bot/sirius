@@ -83,17 +83,28 @@ Implementado:
 - archivo;
 - redacción del contenido estructurado al eliminar.
 
+Implementado además en V8 (B4a, B4b):
+
+- evento de origen persistente y enlace real recuerdo/decisión-evento-mensaje,
+  con guardado manual explícito y consulta de origen (B4a, RF-019, RF-021,
+  PA-010);
+- entidad de decisión (asunto, proyecto, estado, versión, fecha y origen)
+  sobre la infraestructura de conocimiento existente, con los dos estados
+  mínimos propuesta/aprobada, un caso de uso explícito para proponer y otro,
+  distinto, que exige confirmación explícita para aprobar; una exploración o
+  debate conversacional nunca crea ni aprueba una decisión, porque
+  `SendMessageUseCase` nunca llama a ninguno de los dos casos de uso (B4b,
+  RF-020, PA-011).
+
 Pendiente dentro de V8:
 
-- evento o mensaje de origen consultable;
-- entidad y estados de decisión;
-- propuesta, aprobación y sustitución;
+- sustitución entre decisiones y corrección versionada (B4c, RF-022, RF-023);
 - precedencia entre decisión y recuerdo;
-- detección y resolución explícita de conflictos;
-- elección de redactar también el mensaje fuente;
+- detección y resolución explícita de conflictos (B4e);
+- archivo, eliminación y elección de redactar también el mensaje fuente (B4d);
 - indexación y búsqueda pertinente;
-- casos de uso e interfaz;
-- pruebas PA-010 a PA-016 y la parte correspondiente de PA-E2E-01.
+- casos de uso e interfaz de decisiones en las superficies existentes (B4f);
+- pruebas PA-012 a PA-016 y la parte correspondiente de PA-E2E-01.
 
 Defectos relacionados: D-03, D-04 y D-11.
 

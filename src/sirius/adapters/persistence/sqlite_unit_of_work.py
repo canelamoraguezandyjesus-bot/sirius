@@ -1,11 +1,9 @@
 """SQLite-backed ``UnitOfWork``: one session/transaction shared by its repositories.
 
-SIRIUS-ARQ-0.1 S4/S8.1: the memory and event repositories it exposes write
-through the exact same SQLAlchemy ``Session`` — hence the same connection and
-transaction — so ``commit()`` confirms both together and any exception rolls
-both back together. Nothing else in this codebase yet needs a third
-repository bound to the same transaction, so this stays a minimal, two-
-repository unit of work rather than a generic multi-repository one.
+SIRIUS-ARQ-0.1 S4/S8.1: the memory, event and decision repositories it
+exposes write through the exact same SQLAlchemy ``Session`` — hence the same
+connection and transaction — so ``commit()`` confirms all of them together
+and any exception rolls all of them back together.
 """
 
 from __future__ import annotations
@@ -18,6 +16,10 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from sirius.adapters.persistence.database import build_engine, build_session_factory
+from sirius.adapters.persistence.sqlite_decision_repository import (
+    SqliteDecisionRepository,
+    bind_sqlite_decision_repository,
+)
 from sirius.adapters.persistence.sqlite_event_repository import (
     SqliteEventRepository,
     bind_sqlite_event_repository,
@@ -31,7 +33,7 @@ __all__ = ["SqliteUnitOfWork", "build_sqlite_unit_of_work"]
 
 
 class SqliteUnitOfWork:
-    """Groups the memory and event repositories into one SQLite transaction.
+    """Groups the memory, event and decision repositories into one SQLite transaction.
 
     One instance is reusable across many, unrelated operations: each
     ``with`` block opens its own fresh session (``begin()``), so a rollback
@@ -45,6 +47,7 @@ class SqliteUnitOfWork:
         self._committed = False
         self.memory_repository: SqliteMemoryRepository
         self.event_repository: SqliteEventRepository
+        self.decision_repository: SqliteDecisionRepository
 
     def close(self) -> None:
         """Release every pooled connection this unit of work's engine holds."""
@@ -56,6 +59,7 @@ class SqliteUnitOfWork:
         self._committed = False
         self.memory_repository = bind_sqlite_memory_repository(self._session)
         self.event_repository = bind_sqlite_event_repository(self._session)
+        self.decision_repository = bind_sqlite_decision_repository(self._session)
 
     def __enter__(self) -> Self:
         self.begin()

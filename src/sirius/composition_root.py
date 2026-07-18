@@ -28,6 +28,9 @@ from sirius.adapters.llm.unconfigured import UnconfiguredLLMProvider
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
 )
+from sirius.adapters.persistence.sqlite_decision_repository import (
+    build_sqlite_decision_repository,
+)
 from sirius.adapters.persistence.sqlite_event_repository import build_sqlite_event_repository
 from sirius.adapters.persistence.sqlite_identity_repository import (
     build_sqlite_identity_repository,
@@ -41,13 +44,16 @@ from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_p
 from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
 from sirius.adapters.secrets.keyring_store import build_keyring_secret_store
 from sirius.application.api_key_settings import ApiKeySettingsUseCase
+from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.context import ContextBuilder
 from sirius.application.create_backup import CreateBackupUseCase
+from sirius.application.decision_origin import GetDecisionOriginUseCase
 from sirius.application.get_conversation_history import GetConversationHistoryUseCase
 from sirius.application.initial_project import InitialProjectUseCase
 from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.project_lifecycle import ProjectLifecycleUseCase
+from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageUseCase
@@ -102,6 +108,9 @@ class ConversationDependencies:
     project_lifecycle_use_case: ProjectLifecycleUseCase
     save_manual_memory_use_case: SaveManualMemoryUseCase
     get_memory_origin_use_case: GetMemoryOriginUseCase
+    propose_decision_use_case: ProposeDecisionUseCase
+    approve_decision_use_case: ApproveDecisionUseCase
+    get_decision_origin_use_case: GetDecisionOriginUseCase
     create_backup_use_case: CreateBackupUseCase
     validate_backup_use_case: ValidateBackupUseCase
     restore_backup_use_case: RestoreBackupUseCase
@@ -183,8 +192,12 @@ def build_conversation_dependencies(
     project_repository = build_sqlite_project_repository(database_path)
     memory_repository = build_sqlite_memory_repository(database_path)
     event_repository = build_sqlite_event_repository(database_path)
+    decision_repository = build_sqlite_decision_repository(database_path)
     llm_usage_repository = build_sqlite_llm_usage_repository(database_path)
-    manual_memory_unit_of_work = build_sqlite_unit_of_work(database_path)
+    # Shared by every use case that must write more than one repository
+    # atomically: SaveManualMemoryUseCase (B4a), ProposeDecisionUseCase and
+    # ApproveDecisionUseCase (B4b).
+    unit_of_work = build_sqlite_unit_of_work(database_path)
 
     context_builder = ContextBuilder(
         identity_repository=identity_repository,
@@ -209,8 +222,9 @@ def build_conversation_dependencies(
         project_repository,
         memory_repository,
         event_repository,
+        decision_repository,
         llm_usage_repository,
-        manual_memory_unit_of_work,
+        unit_of_work,
     )
 
     def close_database_connections() -> None:
@@ -245,9 +259,14 @@ def build_conversation_dependencies(
         initial_project_use_case=InitialProjectUseCase(project_repository),
         project_continuity_use_case=ProjectContinuityUseCase(project_repository),
         project_lifecycle_use_case=ProjectLifecycleUseCase(project_repository),
-        save_manual_memory_use_case=SaveManualMemoryUseCase(manual_memory_unit_of_work),
+        save_manual_memory_use_case=SaveManualMemoryUseCase(unit_of_work),
         get_memory_origin_use_case=GetMemoryOriginUseCase(
             memory_repository, event_repository, conversation_repository
+        ),
+        propose_decision_use_case=ProposeDecisionUseCase(unit_of_work),
+        approve_decision_use_case=ApproveDecisionUseCase(unit_of_work),
+        get_decision_origin_use_case=GetDecisionOriginUseCase(
+            decision_repository, event_repository, conversation_repository
         ),
         create_backup_use_case=CreateBackupUseCase(backup_service),
         validate_backup_use_case=ValidateBackupUseCase(backup_service),
