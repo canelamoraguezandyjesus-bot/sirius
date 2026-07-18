@@ -8,6 +8,7 @@ Este repositorio implementa Sirius 0.1. El producto y la arquitectura están apr
 2. Lee `docs/implementation/PLAN.md`.
 3. Identifica la vertical activa.
 4. No añadas funciones fuera de alcance.
+5. Si la tarea afecta Claude Code, Routines, cloud, permisos, revisión automática, PR automáticas o cualquier flujo de agentes, lee obligatoriamente `docs/implementation/AUTOMATION_OPERATING_CONTRACT.md` y ejecuta únicamente la fase vigente descrita allí.
 
 ## Reglas obligatorias
 
@@ -21,6 +22,8 @@ Este repositorio implementa Sirius 0.1. El producto y la arquitectura están apr
 - Ejecuta `scripts/check.ps1` antes de entregar.
 - Haz cambios pequeños, trazables y reversibles.
 - Actualiza la documentación cuando cambie el comportamiento aprobado.
+- No introduzcas disparador API, eventos de GitHub, auto-fix, merge automático, coordinación de agentes ni otro nivel de automatización antes de la puerta y aprobación expresa definidas en `AUTOMATION_OPERATING_CONTRACT.md`.
+- No pidas repetir una acción ya realizada. Antes de indicar el siguiente paso, verifica el estado real y la fase vigente.
 
 ## Criterio de parada
 
@@ -31,4 +34,5 @@ Detente y pide decisión cuando una tarea implique:
 - enviar más datos a terceros;
 - introducir otro proceso, servidor, agente o base de datos;
 - ejecutar acciones externas autónomas;
-- aumentar el presupuesto o reducir controles de seguridad.
+- aumentar el presupuesto o reducir controles de seguridad;
+- contradecir, saltar o reinterpretar el contrato operativo de automatización.
