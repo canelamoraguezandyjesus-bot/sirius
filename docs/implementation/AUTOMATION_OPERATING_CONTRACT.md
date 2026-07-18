@@ -39,20 +39,21 @@ A fecha de este documento:
 
 - B3a, B3b y B3c están integrados.
 - B4 está autorizado y dividido operativamente en B4a-B4f.
-- La PR #30, `docs: define B4 staged execution and cloud smoke test`, está abierta, es fusionable y su CI `Quality` terminó correctamente.
+- La PR #30, `docs: define B4 staged execution and cloud smoke test`, fue fusionada.
+- La PR #33, `test: isolate platform directories across OSes`, fue fusionada, corrigiendo el aislamiento multiplataforma de las pruebas.
 - La rutina de prueba de humo cloud ya fue creada y lanzada por el usuario.
 - La rutina utiliza un disparador de **una sola ejecución programada**.
 - No utiliza disparador API.
 - No utiliza evento de GitHub.
-- Los conectores están vacíos.
+- La Routine utiliza el conector `Claude_Code_Remote`.
 - La corrección automática de pull requests está desactivada.
 - La notificación push está activada.
-- El resultado de la prueba de humo está pendiente de verificación.
+- **18 de julio de 2026:** el resultado de la prueba de humo cloud quedó en `CLOUD_SMOKE_PASSED`. La PR #34, `docs: record successful cloud smoke test`, fue fusionada en `main`; su evidencia está registrada en `docs/implementation/CLOUD_SMOKE_EVIDENCE_20260718.md`.
 - B4a no ha comenzado.
 
 ### Próxima acción exacta
 
-Esperar el resultado real de la rutina ya lanzada. No crear otra rutina, no modificar permisos y no comenzar B4a antes de inspeccionar la evidencia de esa ejecución.
+La Fase A quedó superada con `CLOUD_SMOKE_PASSED`. La Fase B queda preparada para iniciar B4a mediante una Routine cloud controlada, con disparador de una sola vez, sin API ni evento de GitHub. B4a todavía no ha comenzado; no se inicia automáticamente por este documento.
 
 ## 3. Decisiones operativas no negociables
 
@@ -88,7 +89,7 @@ Esperar el resultado real de la rutina ya lanzada. No crear otra rutina, no modi
 
 ## 4. Flujo aprobado, fase por fase
 
-### Fase A - Prueba de humo cloud (fase actual)
+### Fase A - Prueba de humo cloud (SUPERADA — 18 de julio de 2026)
 
 Objetivo: demostrar que Claude puede trabajar desde un clon limpio, instalar dependencias, ejecutar toda la validación, crear evidencia y preparar una PR sin depender del ordenador del usuario ni solicitar aprobaciones rutinarias.
 
@@ -97,7 +98,7 @@ Configuración aprobada:
 - disparador: una sola vez;
 - API: no;
 - evento de GitHub: no;
-- conectores: ninguno;
+- conector: `Claude_Code_Remote`;
 - auto-fix: desactivado;
 - notificación push: activada;
 - merge: prohibido.
@@ -106,15 +107,15 @@ Resultados posibles y acción obligatoria:
 
 | Resultado | Acción |
 |---|---|
-| `CLOUD_SMOKE_PASSED` | Verificar evidencia y PR. Después se puede fusionar la PR #30 y preparar B4a. |
+| `CLOUD_SMOKE_PASSED` | Cumplido. Evidencia verificada en `docs/implementation/CLOUD_SMOKE_EVIDENCE_20260718.md`; PR #34 fusionada. Preparar B4a en Fase B. |
 | `BLOCKED_BY_PERMISSION` | Corregir únicamente el permiso exacto que bloqueó la ejecución. No ampliar permisos de forma general. Repetir la prueba completa. |
 | `BLOCKED_BY_ENVIRONMENT` | Corregir de forma reproducible el entorno cloud. Repetir la prueba completa. |
 | `FAILED_SAFELY` | Diagnosticar la causa. No comenzar B4a. |
 | `USAGE_LIMIT_REACHED` | Esperar la renovación de cuota. No rediseñar el flujo. |
 
-### Fase B - B4a en cloud controlado
+### Fase B - B4a en cloud controlado (preparada para iniciar, no iniciada)
 
-Solo se abre si la prueba de humo pasa o si el usuario decide explícitamente continuar de otra forma.
+La puerta de esta fase está satisfecha: la prueba de humo cloud terminó en `CLOUD_SMOKE_PASSED` (18 de julio de 2026). B4a queda preparado para ejecutarse en cloud controlado, pero todavía no ha comenzado.
 
 La ejecución de B4a utilizará una nueva Routine o ejecución cloud controlada con disparador de una sola vez. No usará API ni evento de GitHub.
 
@@ -341,8 +342,10 @@ No se exige que toda tarea termine implementada. Se exige que termine correctame
 
 ## 12. Estado que debe consultarse al reanudar
 
+La Routine de prueba de humo ya lanzada terminó en `CLOUD_SMOKE_PASSED` (18 de julio de 2026; evidencia en `docs/implementation/CLOUD_SMOKE_EVIDENCE_20260718.md`, PR #34 fusionada).
+
 Al retomar este trabajo, la primera pregunta operativa no es "¿qué automatizamos ahora?". Es:
 
-**¿Cuál fue el resultado real de la Routine de prueba de humo ya lanzada?**
+**¿B4a ya se inició en cloud controlado, o sigue preparado y pendiente de arranque?**
 
-Hasta conocerlo, la única acción válida es revisar su sesión, su evidencia y cualquier PR creada.
+Mientras B4a no haya comenzado, la única acción válida es prepararlo conforme a la Fase B, sin adelantar API, eventos de GitHub, auto-fix ni merge automático.

@@ -1,5 +1,14 @@
 # Prueba de humo de Claude Code cloud
 
+**Estado: SUPERADA — CLOUD_SMOKE_PASSED — 18 de julio de 2026.**
+Rama `chore/cloud-smoke-20260718-03`, fusionada mediante PR #34
+(`docs: record successful cloud smoke test`), con 562 pruebas superadas.
+Evidencia versionada en
+[`docs/implementation/CLOUD_SMOKE_EVIDENCE_20260718.md`](CLOUD_SMOKE_EVIDENCE_20260718.md).
+La puerta para B4a queda satisfecha. Este documento se conserva como
+protocolo histórico y reutilizable para futuras ejecuciones de la misma
+prueba.
+
 ## Propósito
 
 Demostrar antes de B4a que una sesión cloud puede trabajar sobre Sirius sin depender del ordenador del usuario ni exigir aprobaciones rutinarias continuas.
@@ -137,12 +146,7 @@ Acción: conservar evidencia suficiente y corregir la causa antes de B4a.
 
 ## Limpieza posterior
 
-La PR de humo no se fusionará en `main` salvo que el usuario decida conservar una evidencia mínima. Por defecto:
-
-- revisar la evidencia;
-- cerrar la PR sin merge;
-- borrar la rama desde GitHub de forma manual y controlada;
-- registrar el resultado resumido en `V8_EXECUTION.md` mediante una PR documental posterior.
+Por defecto la PR de humo no se fusiona en `main` salvo que el usuario decida conservar una evidencia mínima. En esta ejecución (18 de julio de 2026) el usuario decidió conservar y fusionar la evidencia: la PR #34 se fusionó en `main` con el único archivo `docs/implementation/CLOUD_SMOKE_EVIDENCE_20260718.md`, sin cambios funcionales. No fue necesario borrar ninguna rama adicional para conservar la evidencia.
 
 ## Puerta para B4a
 
@@ -150,3 +154,5 @@ B4a puede comenzar cuando ocurra una de estas dos condiciones:
 
 - `CLOUD_SMOKE_PASSED`; o
 - el usuario decide explícitamente continuar temporalmente con el flujo local semiautomático, aceptando que el ordenador deberá permanecer encendido.
+
+La primera condición ya se cumplió el 18 de julio de 2026 (`CLOUD_SMOKE_PASSED`, PR #34 fusionada). La puerta para B4a queda satisfecha; B4a todavía no ha comenzado.

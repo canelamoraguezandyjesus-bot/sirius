@@ -221,4 +221,6 @@ B4 solo podrá marcarse terminado cuando:
 
 ## Primera tarea funcional
 
-La primera tarea funcional de esta secuencia será **B4a — origen consultable y guardado manual**. No debe iniciarse hasta superar la prueba de humo cloud definida en `docs/implementation/CLOUD_SMOKE_TEST.md` o hasta que el usuario decida explícitamente continuar con el flujo local actual.
+La primera tarea funcional de esta secuencia será **B4a — origen consultable y guardado manual**.
+
+La prueba de humo cloud definida en `docs/implementation/CLOUD_SMOKE_TEST.md` terminó en `CLOUD_SMOKE_PASSED` el 18 de julio de 2026 (evidencia en `docs/implementation/CLOUD_SMOKE_EVIDENCE_20260718.md`, PR #34 fusionada). La puerta de entrada de B4a queda satisfecha: B4a está preparado para ejecutarse en cloud controlado, pero todavía no ha comenzado.
