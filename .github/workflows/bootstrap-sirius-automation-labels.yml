@@ -1,0 +1,28 @@
+name: Bootstrap Sirius automation labels
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - docs/automation-flow-plan-20260719
+    paths:
+      - .github/workflows/bootstrap-sirius-automation-labels.yml
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  ensure-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create or update automation labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          while IFS='|' read -r name color description; do
+            [ -n "$name" ] || continue
+            encoded_name="$(jq -rn --arg value "$name" '$value | @uri
