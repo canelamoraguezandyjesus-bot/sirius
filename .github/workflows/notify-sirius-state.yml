@@ -27,19 +27,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
           STATE_LABEL: ${{ github.event.label.name }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
 
-          head_sha="$(printf '%s\n' "$ISSUE_BODY" | sed -nE 's/^[[:space:]]*[-*]?[[:space:]]*Head SHA:[[:space:]]*`?([0-9a-fA-F]{7,40})`?.*/\1/p' | head -n 1)"
-          if [ -z "$head_sha" ]; then
-            head_sha="unknown"
-          fi
+          issue_json="$(gh issue view "$ISSUE_NUMBER" --repo "$GH_REPO" --json body,comments)"
+          head_sha="$(printf '%s' "$issue_json" | jq -r '[.comments[].body, .body] | map(select(. != null)) | map(capture("(?:Head SHA|Merge SHA):[[:space:]]*`?(?<sha>[0-9a-fA-F]{7,40})`?"; "g")?.sha) | flatten | map(select(. != null and . != "")) | first // "unknown"')"
 
           marker="<!-- sirius-notification:${STATE_LABEL}:${head_sha} -->"
-          if gh issue view "$ISSUE_NUMBER" --repo "$GH_REPO" --json comments --jq '.comments[].body' | grep -Fq "$marker"; then
+          if printf '%s' "$issue_json" | jq -r '.comments[].body' | grep -Fq "$marker"; then
             echo "Notification already emitted for ${STATE_LABEL} at ${head_sha}."
             exit 0
           fi
