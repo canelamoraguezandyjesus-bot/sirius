@@ -1,411 +1,171 @@
-# SIRIUS - Contrato operativo de automatización con Claude Code
+# SIRIUS - Contrato operativo de automatización
 
-**Versión:** 1.0  
-**Fecha:** 18 de julio de 2026  
-**Estado:** VIGENTE - consolidación de decisiones ya tomadas  
-**Autoridad:** Operativa para el flujo de desarrollo automatizado de Sirius 0.1  
+**Versión:** 1.1  
+**Fecha:** 19 de julio de 2026  
+**Estado:** VIGENTE  
+**Autoridad:** Operativa para el desarrollo automatizado de Sirius 0.1  
+**Sustituye:** versión 1.0 del 18 de julio de 2026  
 **No modifica:** Producto, Arquitectura Técnica, ATD, requisitos ni alcance de Sirius 0.1
 
 ## 0. Propósito
 
-Este documento consolida la conversación completa sobre la automatización del desarrollo de Sirius con Claude Code. Su finalidad es impedir desviaciones, improvisaciones y repeticiones de pasos ya realizados.
+Este contrato autoriza y regula un flujo permanente de automatización para Sirius 0.1 mediante Claude Code, Routines, GitHub, ChatGPT con conectores, tareas programadas y futuras aplicaciones de control. Su finalidad es que el usuario pueda iniciar trabajo mediante una instrucción breve y recibir una PR trazable, validada y revisada sin repetir autorizaciones administrativas por cada subbloque.
 
-No crea una arquitectura multiagente, no añade servicios de pago y no autoriza nuevas funciones de Sirius. Solo fija el orden de trabajo, las puertas de avance y las prohibiciones vigentes.
+La automatización no convierte a los agentes en autoridad de producto ni permite cambios fuera del alcance aprobado.
 
-Cuando una instrucción posterior contradiga este documento, el agente debe detenerse y pedir una decisión explícita al usuario. No debe reinterpretar, completar ni sustituir el plan por iniciativa propia.
+## 1. Decisión operativa vigente
 
-## 1. Conclusión de la auditoría
+Desde el 19 de julio de 2026 queda autorizada de forma general, para todo Sirius 0.1, la automatización secuencial de implementación y revisión de PR.
 
-La automatización buscada es viable, pero solo mediante una progresión controlada:
+Esta autorización cubre B4d, B4e, B4f y las verticales posteriores de Sirius 0.1, siempre que cada tarea:
 
-1. demostrar primero que una sesión cloud trabaja sin depender del ordenador del usuario ni solicitar aprobaciones rutinarias;
-2. ejecutar después un subbloque pequeño de B4 en cloud;
-3. revisar la PR de forma independiente y controlada;
-4. repetir el método hasta acumular evidencia suficiente;
-5. automatizar eventos de GitHub únicamente después de demostrar estabilidad y recibir aprobación expresa.
+- pertenezca al alcance ya aprobado;
+- tenga objetivo y límites verificables;
+- trabaje en una rama propia;
+- prepare una PR propia;
+- mantenga la suite completa en verde;
+- no modifique documentos canónicos, Producto, Arquitectura Técnica o ATD salvo instrucción explícita;
+- no haga merge automáticamente.
 
-El objetivo no es una IA autónoma permanente. El objetivo es una fábrica de trabajo acotada que entregue uno de estos resultados:
+No se requiere una nueva modificación de este contrato ni una nueva autorización administrativa para activar la revisión de cada PR.
 
-- `READY_FOR_HUMAN_REVIEW`
+## 2. Flujo permanente autorizado
+
+### 2.1 Inicio
+
+El trabajo puede iniciarse mediante cualquiera de estos mecanismos:
+
+- una instrucción directa del usuario en ChatGPT;
+- una Routine de Claude Code;
+- una tarea programada de ChatGPT;
+- una incidencia o etiqueta de GitHub;
+- una aplicación o interfaz futura conectada a GitHub o ChatGPT.
+
+El mecanismo de entrada debe identificar la tarea o permitir resolverla inequívocamente desde el estado vigente del repositorio.
+
+### 2.2 Implementación
+
+El agente implementador puede:
+
+- crear o utilizar una rama de trabajo;
+- modificar código, pruebas y documentación de implementación dentro del alcance autorizado;
+- ejecutar Ruff, mypy, pytest, comprobaciones de migraciones y otras validaciones ya existentes;
+- realizar commits y push en la rama de trabajo;
+- crear o actualizar una PR;
+- marcarla lista para revisión cuando el trabajo esté terminado y CI esté en verde.
+
+Debe detenerse con uno de estos estados:
+
+- `READY_FOR_REVIEW`
 - `BLOCKED_BY_DECISION`
 - `FAILED_SAFELY`
 - `USAGE_LIMIT_REACHED`
 
-El merge siempre permanece bajo control humano.
+### 2.3 Revisión automática
 
-## 2. Estado actual verificado
+Cuando una PR esté lista y su CI obligatorio esté en verde, queda autorizado activar automáticamente la Routine revisora mediante una incidencia etiquetada `agent-review-requested` o mediante otro disparador equivalente aprobado técnicamente.
 
-A fecha de este documento:
-
-- B3a, B3b y B3c están integrados.
-- B4 está autorizado y dividido operativamente en B4a-B4f.
-- La PR #30, `docs: define B4 staged execution and cloud smoke test`, fue fusionada.
-- La PR #33, `test: isolate platform directories across OSes`, fue fusionada, corrigiendo el aislamiento multiplataforma de las pruebas.
-- La rutina de prueba de humo cloud ya fue creada y lanzada por el usuario.
-- La rutina utiliza un disparador de **una sola ejecución programada**.
-- No utiliza disparador API.
-- No utiliza evento de GitHub.
-- La Routine utiliza el conector `Claude_Code_Remote`.
-- La corrección automática de pull requests está desactivada.
-- La notificación push está activada.
-- **18 de julio de 2026:** el resultado de la prueba de humo cloud quedó en `CLOUD_SMOKE_PASSED`. La PR #34, `docs: record successful cloud smoke test`, fue fusionada en `main`; su evidencia está registrada en `docs/implementation/CLOUD_SMOKE_EVIDENCE_20260718.md`.
-- **18 de julio de 2026:** B4a se implementó en cloud controlado siguiendo la Fase B (rama `claude/intelligent-bohr-1s38y6`): evento de origen persistente, enlace real recuerdo-evento-mensaje, guardado manual explícito (`SaveManualMemoryUseCase`) y consulta de origen (`GetMemoryOriginUseCase`), sin GUI ni cambios de alcance. Ruff, mypy y pytest en verde (595 pruebas). Una PR borrador quedó abierta hacia `main`, sin merge; pendiente de revisión independiente (Fase C) y autorización de merge del usuario.
-- **18 de julio de 2026:** la revisión de Fase C sobre la PR #36 encontró un `BLOCKER` transaccional: `SaveManualMemoryUseCase` confirmaba el evento de origen y el recuerdo en dos sesiones/transacciones SQLite independientes, en contra de SIRIUS-ARQ-0.1 S4/S8.1 ("evento y cambio de memoria se guardan en la misma transacción" mediante una `UnitOfWork`). Se corrigió en la misma rama, sin nueva rama ni nueva PR: se añadió el puerto `UnitOfWork` (`src/sirius/ports/unit_of_work.py`) y su adaptador SQLite (`src/sirius/adapters/persistence/sqlite_unit_of_work.py`), y `SaveManualMemoryUseCase` ahora crea el evento, el recuerdo y su primera revisión dentro de una única transacción, con `commit()` solo si todo tuvo éxito y rollback completo ante cualquier excepción. `GetMemoryOriginUseCase` sigue usando repositorios independientes de solo lectura, sin transacción compartida. Ruff, mypy y pytest en verde (602 pruebas: 595 previas + 7 nuevas de atomicidad/rollback).
-- **18 de julio de 2026:** la PR #36 (B4a) quedó **fusionada en `main`** (commit `c025683c960a19a1a9c1aa40fa861547026118cc`), con el workflow `Quality` en verde sobre ese commit. Verificado directamente sobre `origin/main` antes de iniciar B4b: `git log` confirma el commit de merge y el histórico del check run confirma `conclusion: success`.
-- **18 de julio de 2026:** B4b — Decisiones y aprobación explícita — se implementó en cloud controlado, partiendo del `main` ya fusionado de B4a: entidad de decisión, migración Alembic no destructiva (`decisions`/`decision_revisions`), `DecisionRepository`/`SqliteDecisionRepository`, extensión mínima de `UnitOfWork` con `decision_repository`, `ProposeDecisionUseCase`, `ApproveDecisionUseCase` (confirmación explícita obligatoria) y `GetDecisionOriginUseCase`. Ruff, mypy y pytest en verde (669 pruebas). Una PR borrador quedó abierta hacia `main`, sin merge.
-- **18 de julio de 2026 — decisión operativa expresa del usuario:** el usuario decidió sustituir, solo para esta transición concreta, la puerta de "tres PR consecutivas" de la §7 (Fase E) por una autorización directa y explícita: activar desde la PR de B4b la revisión automática solicitada mediante una incidencia GitHub etiquetada `agent-review-requested` en `canelamoraguezandyjesus-bot/sirius`, siempre que la PR de B4b quede lista y con CI (`Quality`) en verde. Ver §10 para el registro formal de este cambio y sus límites exactos.
-- **18 de julio de 2026 — estado real verificado de B4b:** la PR #37, `feat: implement B4b explicit decisions`, quedó **fusionada en `main`** (commit de merge `d1bbb872751a96ca11ec38c20fd8b3fb5322651c`), con el workflow `Quality` en verde sobre ese commit (669 pruebas superadas). Verificado directamente sobre `origin/main` (no solo por este resumen) antes de iniciar B4c: `git log` confirma el commit de merge y `pull_request_read`/`get_check_runs` confirma `conclusion: success` sobre el commit `982d968b9d4da425af57a5d53bcd903ecda94b2b` de la PR.
-- **18 de julio de 2026:** B4c — Corrección y sustitución — se implementó en cloud controlado, partiendo del `main` ya fusionado de B4b: `CorrectMemoryUseCase` (consolida `MemoryRepository.correct_memory`, ya existente desde V4, bajo el mismo contrato transaccional de B4a: evento + nueva revisión inmutable + movimiento del puntero `current_revision` en una sola `UnitOfWork`); estado `DecisionStatus.SUPERSEDED` y campo `Decision.supersedes_decision_id` (equivalente, a nivel de decisión, al `knowledge_revision.supersedes_revision_id` de la arquitectura aprobada); `SupersedeDecisionUseCase` (sustitución explícita con confirmación obligatoria, ya que aprueba la sustituta y marca la sustituida como `SUPERSEDED` en la misma transacción); `DecisionRepository.supersede_decision`/`list_current_decisions`/`get_superseding_decision`; migración Alembic aditiva `05559a954593` (`decisions.supersedes_decision_id`, columna nula, no destructiva). Ruff, mypy y pytest en verde (735 pruebas: 669 previas + 66 nuevas). Una PR borrador quedó abierta hacia `main`, sin merge.
-- **18 de julio de 2026 — autorización operativa expresa del usuario para B4c:** igual que para B4b (ver la entrada anterior y el cambio registrado en §10), el usuario autoriza expresamente activar desde la PR de B4c la revisión automática ya configurada: crear una incidencia GitHub etiquetada `agent-review-requested` en `canelamoraguezandyjesus-bot/sirius` en cuanto la PR de B4c quede lista y con CI (`Quality`) en verde, manteniendo la revisión separada de la implementación. Esta autorización cubre únicamente la revisión automática de B4c; siguen prohibidos revisión en cada push, auto-fix, correcciones de la Routine revisora, merge automático, trabajo paralelo sobre otro subbloque, check-ins horarios y tareas en segundo plano tras terminar. Ver §10 para el registro formal.
-- **19 de julio de 2026 — estado real verificado de B4c:** la PR #39, `feat: implement B4c correction and supersession`, quedó **fusionada en `main`** (commit `e244649affd11e6e1bdb8179adb00d2b6d610f7e`), con el workflow `quality` en verde sobre ese commit. Verificado directamente sobre `origin/main` (no solo por resumen) antes de iniciar B4d: `git log` confirma el commit de merge y `pull_request_read` confirma `merged: true` y `conclusion: success`.
-- **19 de julio de 2026 — inicio de B4d:** el usuario autoriza expresamente iniciar e implementar B4d (archivo, eliminación y redacción de origen), partiendo del `main` ya fusionado de B4c. Esta autorización **no** amplía el nivel de automatización vigente: a diferencia de B4b y B4c, no se autoriza crear la incidencia `agent-review-requested` ni activar la Routine revisora para la PR de B4d; siguen prohibidos revisión en cada push, auto-fix, merge automático, trabajo paralelo sobre otro subbloque, check-ins horarios y tareas en segundo plano tras terminar. B4d se implementó en cloud controlado siguiendo la Fase D (repetición secuencial de B4): rama propia (`feat/b4d-archive-delete-redaction-20260719-01`), PR propia, Ruff/mypy/pytest en verde (830 pruebas: 735 previas + 95 nuevas). Una PR borrador quedó abierta hacia `main`, sin merge y sin incidencia revisora. B4e y B4f siguen sin iniciarse.
+La autorización es permanente para Sirius 0.1 y no depende del nombre del subbloque ni exige una entrada adicional en este contrato.
 
-### Próxima acción exacta
+La revisión debe ser independiente de la implementación y puede:
 
-La Fase A quedó superada con `CLOUD_SMOKE_PASSED`. La Fase B se ejecutó cuatro veces: B4a (fusionado en `main`, PR #36), B4b (fusionado en `main`, PR #37), B4c (fusionado en `main`, PR #39) y B4d (PR borrador abierta, sin merge, implementada sobre el `main` con B4c ya fusionado). A diferencia de B4b y B4c, la PR de B4d **no** activa la revisión por evento de GitHub: la autorización operativa registrada en §10 para ese mecanismo fue puntual para las transiciones B4a→B4b y B4b→B4c, y esta ejecución de B4d no la extendió. El usuario conserva la autorización de merge sobre B4d. B4e y B4f no han comenzado.
+- inspeccionar diff, código, pruebas, migraciones y documentación operativa;
+- comprobar el alcance contra las fuentes aprobadas;
+- publicar observaciones o un veredicto;
+- devolver `REVIEW_APPROVED`, `CHANGES_REQUESTED`, `BLOCKED_BY_DECISION` o `FAILED_SAFELY`.
 
-## 3. Decisiones operativas no negociables
+La Routine revisora no debe bloquearse por ausencia de una autorización específica por PR, porque esta sección constituye la autorización general vigente.
 
-### 3.1 Coste y servicios
+### 2.4 Corrección tras revisión
 
-- No se utilizará una clave API de Anthropic para este flujo.
-- No se utilizará el disparador API de Routines.
-- No se añadirán APIs, créditos automáticos, servicios de revisión ni suscripciones adicionales.
-- Se utilizarán únicamente Claude Pro, Claude Code/Routines y GitHub dentro de las capacidades ya disponibles.
+Cuando el revisor solicite cambios técnicos concretos, queda autorizado un ciclo automático de corrección limitado a la misma rama y PR.
 
-### 3.2 Control y seguridad
+Puede corregir:
 
-- Ningún agente hace merge.
-- Ningún agente empuja directamente a `main`.
-- Ningún agente cambia Producto, Arquitectura, ATD o documentos canónicos.
-- Ningún agente rebaja, elimina o modifica pruebas para conseguir verde.
-- Ningún agente usa claves reales, proveedor real, Credential Manager real ni datos personales durante las fases automáticas iniciales.
-- Las pruebas manuales de Windows no se declaran superadas por una sesión cloud.
+- defectos de implementación;
+- pruebas insuficientes;
+- lint, formato, tipos e imports;
+- errores deterministas de CI;
+- migraciones aditivas o reversibles dentro del diseño aprobado;
+- incumplimientos claros de requisitos ya aprobados.
 
-### 3.3 Agentes y coordinación
+Debe detenerse y pedir decisión cuando el cambio afecte a:
 
-- No se construirá una plataforma multiagente.
-- No se añadirán agentes de coordinación, gestores de agentes ni orquestación adicional sin decisión expresa del usuario.
-- Una revisión independiente puede realizarse como una sesión separada y controlada, pero no se convierte en una arquitectura de agentes.
-- El usuario decide si en el futuro se añade cualquier agente especializado.
+- alcance de producto;
+- arquitectura aprobada;
+- ATD o contratos públicos no previstos;
+- seguridad con consecuencias no definidas;
+- migraciones destructivas o pérdida de datos;
+- costes o servicios externos nuevos;
+- credenciales reales o datos personales.
 
-### 3.4 Automatización progresiva
+Se permiten como máximo dos ciclos automáticos de revisión-corrección. Si no converge, el resultado será `BLOCKED_BY_DECISION`.
 
-- Durante el piloto no se activa una Routine por cada push.
-- Durante el piloto no se activa auto-fix general.
-- Durante el piloto no se automatiza el merge.
-- Un evento de GitHub no se introduce hasta cumplir la puerta definida en la sección 7.
+### 2.5 Merge
 
-## 4. Flujo aprobado, fase por fase
+El merge permanece bajo control humano.
 
-### Fase A - Prueba de humo cloud (SUPERADA — 18 de julio de 2026)
+Ningún agente, Routine, tarea programada o aplicación puede fusionar una PR sin una autorización explícita del usuario para ese merge, salvo que el usuario apruebe posteriormente una política distinta mediante una nueva decisión registrada.
 
-Objetivo: demostrar que Claude puede trabajar desde un clon limpio, instalar dependencias, ejecutar toda la validación, crear evidencia y preparar una PR sin depender del ordenador del usuario ni solicitar aprobaciones rutinarias.
-
-Configuración aprobada:
-
-- disparador: una sola vez;
-- API: no;
-- evento de GitHub: no;
-- conector: `Claude_Code_Remote`;
-- auto-fix: desactivado;
-- notificación push: activada;
-- merge: prohibido.
-
-Resultados posibles y acción obligatoria:
-
-| Resultado | Acción |
-|---|---|
-| `CLOUD_SMOKE_PASSED` | Cumplido. Evidencia verificada en `docs/implementation/CLOUD_SMOKE_EVIDENCE_20260718.md`; PR #34 fusionada. Preparar B4a en Fase B. |
-| `BLOCKED_BY_PERMISSION` | Corregir únicamente el permiso exacto que bloqueó la ejecución. No ampliar permisos de forma general. Repetir la prueba completa. |
-| `BLOCKED_BY_ENVIRONMENT` | Corregir de forma reproducible el entorno cloud. Repetir la prueba completa. |
-| `FAILED_SAFELY` | Diagnosticar la causa. No comenzar B4a. |
-| `USAGE_LIMIT_REACHED` | Esperar la renovación de cuota. No rediseñar el flujo. |
-
-### Fase B - B4a en cloud controlado (preparada para iniciar, no iniciada)
-
-La puerta de esta fase está satisfecha: la prueba de humo cloud terminó en `CLOUD_SMOKE_PASSED` (18 de julio de 2026). B4a queda preparado para ejecutarse en cloud controlado, pero todavía no ha comenzado.
-
-La ejecución de B4a utilizará una nueva Routine o ejecución cloud controlada con disparador de una sola vez. No usará API ni evento de GitHub.
-
-Debe:
-
-1. leer las fuentes obligatorias;
-2. inspeccionar la memoria V4 existente;
-3. implementar únicamente B4a;
-4. ejecutar Ruff, mypy, pytest y `git diff --check`;
-5. preparar una PR;
-6. detenerse sin merge.
-
-### Fase C - Revisión independiente y controlada
-
-La primera revisión no se activa automáticamente por GitHub.
-
-- Se inicia de forma explícita después de que exista la PR.
-- La revisión no modifica código en su primera pasada.
-- Se permiten como máximo dos ciclos revisión-corrección.
-- El comportamiento normal será una corrección y una segunda revisión.
-- Si no converge, el estado final es `BLOCKED_BY_DECISION`.
-- El usuario autoriza o rechaza el merge.
-
-### Fase D - Repetición secuencial de B4
-
-Los subbloques se ejecutan uno detrás de otro. No se trabaja en paralelo sobre memoria, migraciones o contratos compartidos.
-
-Cada subbloque requiere:
-
-- rama propia;
-- PR propia;
-- alcance trazado;
-- pruebas nuevas o actualizadas;
-- suite completa verde;
-- revisión;
-- autorización humana de merge.
-
-### Fase E - Automatización por eventos de GitHub
-
-No se abre hasta que existan **tres PR consecutivas satisfactorias** producidas por el flujo controlado y el usuario lo apruebe expresamente.
-
-Si se aprueba, la primera automatización por evento será una auditoría solicitada explícitamente, preferentemente mediante una etiqueta como:
-
-`agent-review-requested`
-
-No se activará en cada push. No hará merge. No decidirá producto ni arquitectura.
-
-### Fase F - Auto-fix limitado
-
-Solo se estudiará después de demostrar que CI y revisión producen observaciones claras y repetibles.
-
-Podrá limitarse a fallos inequívocos como lint, tipos, imports o pruebas deterministas. Nunca abarcará migraciones destructivas, seguridad, contratos públicos, memoria, documentos canónicos o decisiones de arquitectura sin aprobación expresa.
-
-## 5. División canónica de B4
-
-La división autorizada y vigente es:
-
-### B4a - Origen consultable y guardado manual
-
-- evento de origen persistente;
-- enlace entre recuerdo y evento o mensaje;
-- guardado manual explícito;
-- consulta del origen;
-- fecha, estado y versión observables;
-- RF-019, RF-021 y PA-010.
-
-### B4b - Decisiones y aprobación explícita
-
-- decisión sobre la infraestructura de conocimiento existente;
-- propuesta y aprobación;
-- una exploración no se convierte en decisión aprobada;
-- RF-020 y PA-011.
-
-### B4c - Corrección y sustitución
-
-- revisión inmutable;
-- versión vigente autoritativa;
-- relación de sustitución;
-- exclusión del contexto ordinario de versiones sustituidas;
-- RF-022, RF-023, PA-012 y PA-013.
-
-### B4d - Archivo, eliminación y redacción de origen
-
-- archivo consultable fuera del contexto normal;
-- eliminación con confirmación;
-- marcador mínimo sin contenido;
-- opción explícita sobre el mensaje fuente;
-- RF-024, RF-025, PA-015, PA-016 y SP-06.
-
-### B4e - Precedencia y conflictos
-
-- detección determinista de incompatibilidades;
-- prioridad de decisión aprobada vigente cuando corresponda;
-- aclaración cuando no exista precedencia;
-- prohibición de elegir silenciosamente;
-- RF-026, PA-014 y DR-011.
-
-### B4f - Integración observable y cierre
-
-- integración mínima en las superficies existentes;
-- composición, interfaz y pruebas GUI necesarias;
-- búsqueda local solo en la medida necesaria;
-- cierre de PA-010 a PA-016 en su parte automatizable;
-- actualización de evidencia operativa.
-
-## 6. Contrato de cada ejecución funcional
-
-Toda tarea automatizada debe contener explícitamente:
-
-- objetivo;
-- alcance permitido;
-- fuera de alcance;
-- requisitos y pruebas vinculadas;
-- archivos o capas previsibles;
-- comandos de validación;
-- condición de parada;
-- estados finales permitidos;
-- prohibición de merge.
-
-La ejecución debe trabajar hasta obtener un resultado verificable, pero no puede inventar una decisión para desbloquearse.
-
-## 7. Puerta para automatizar más
-
-La automatización puede avanzar de nivel únicamente si se cumplen todas estas condiciones:
-
-1. tres PR consecutivas terminan sin ampliación de alcance;
-2. la suite completa queda verde;
-3. no se necesitan más de dos ciclos de revisión-corrección;
-4. las PR son comprensibles y acotadas;
-5. no se producen cambios peligrosos o no autorizados;
-6. la intervención del usuario queda limitada a iniciar, resolver decisiones reales y autorizar merge;
-7. el usuario aprueba expresamente el siguiente nivel.
-
-Cumplir las métricas no autoriza automáticamente el cambio de nivel.
-
-**Excepción registrada el 18 de julio de 2026** (ver §10): la condición 1 de esta puerta ("tres PR consecutivas terminan sin ampliación de alcance") queda sustituida, únicamente para la transición hacia la revisión automática por incidencia etiquetada `agent-review-requested`, por una autorización directa y explícita del usuario sobre la PR de B4b. Las condiciones 2 a 6 de esta puerta siguen exigiéndose tal cual sobre esa PR (suite completa verde, máximo dos ciclos de revisión-corrección, PR comprensible y acotada, sin cambios peligrosos, intervención del usuario limitada a iniciar/decidir/autorizar merge). Esta excepción no reduce ninguna otra restricción de la sección 3: sigue sin activarse revisión en cada push, auto-fix general ni merge automático.
-
-## 8. Reglas antidesviación para ChatGPT y Claude
-
-Antes de dar una instrucción sobre Routines, cloud, revisión, permisos o automatización, el agente debe:
-
-1. leer este documento;
-2. declarar internamente cuál es la fase actual;
-3. proponer únicamente la siguiente acción de esa fase;
-4. comprobar si el usuario ya realizó esa acción;
-5. distinguir estado real, plan futuro y decisión pendiente.
+## 3. Reglas permanentes de seguridad
 
 Está prohibido:
 
-- introducir API cuando no está aprobada;
-- adelantar eventos de GitHub;
-- adelantar auto-fix;
-- convertir una posible capacidad futura en una instrucción actual;
-- pedir al usuario repetir pasos ya realizados;
-- ofrecer varias arquitecturas de agentes no solicitadas;
-- afirmar que algo está automatizado cuando solo existe documentación;
-- afirmar que una Routine terminó correctamente sin revisar su resultado y evidencia;
-- inventar elementos de la interfaz; si la pantalla no coincide, se pide una captura y se avanza desde lo visible.
+- hacer push directo a `main`;
+- reducir, eliminar o falsear pruebas para conseguir verde;
+- ocultar fallos o afirmar que una validación pasó sin evidencia;
+- introducir servicios de pago, APIs, claves o suscripciones no aprobadas;
+- usar secretos reales o datos personales en pruebas automáticas;
+- cambiar Producto, Arquitectura Técnica, ATD o documentos canónicos sin decisión explícita;
+- iniciar trabajo paralelo sobre componentes que compartan migraciones o contratos cuando exista riesgo de conflicto;
+- ejecutar merge automático;
+- interpretar una idea exploratoria como decisión aprobada.
 
-## 9. Auditoría de errores detectados en la conversación
+## 4. Automatizaciones futuras autorizadas como línea de trabajo
 
-### Error 1 - Confundir preparación con automatización
+Queda autorizada la exploración, diseño y puesta en marcha gradual de nuevas automatizaciones para reducir intervención manual, incluyendo:
 
-Se afirmó que el sistema estaba preparado cuando todavía solo existían documentos y comandos locales.
+- tareas programadas de ChatGPT para comprobaciones, resúmenes y avisos;
+- Routines de Claude Code para implementación, revisión y corrección;
+- disparadores mediante incidencias, etiquetas, comentarios o estados de GitHub;
+- aplicaciones ligeras desde las que el usuario pueda enviar una instrucción y crear automáticamente una tarea, incidencia, rama o PR;
+- flujos que conviertan un mensaje del usuario en una solicitud trazable dentro del repositorio;
+- paneles de estado y notificaciones.
 
-**Corrección:** la automatización real empieza cuando la Routine cloud completa una ejecución sin depender del ordenador del usuario.
+Cada nueva automatización puede desarrollarse sin reautorizar su mera investigación o prototipo. Antes de otorgarle permisos destructivos, acceso a secretos, gasto externo, merge o cambios canónicos, deberá existir una decisión explícita separada.
 
-### Error 2 - Introducir el disparador API
+## 5. Criterios para activar nuevas automatizaciones
 
-Se recomendó API pese a que el plan excluía APIs adicionales y el usuario no quería claves ni tokens.
+Una automatización nueva puede pasar de experimento a uso operativo cuando:
 
-**Corrección:** API queda expresamente fuera del piloto y del flujo vigente.
+1. su objetivo y permisos están delimitados;
+2. puede fallar de forma segura;
+3. deja trazabilidad suficiente;
+4. no cambia alcance de producto;
+5. no introduce gasto o servicios no aprobados;
+6. conserva el merge bajo control humano;
+7. ha sido probada al menos una vez en un caso acotado.
 
-### Error 3 - Adelantar eventos de GitHub
+No es necesario modificar este contrato para cada nueva Routine, tarea programada o interfaz que cumpla estas condiciones.
 
-Se propuso crear el auditor por evento antes de demostrar el flujo controlado.
+## 6. Estado operativo actual
 
-**Corrección:** los eventos de GitHub se posponen hasta tres PR satisfactorias y nueva aprobación explícita.
+- B4a, B4b y B4c están fusionados en `main`.
+- B4d está implementado en la PR #41, con CI verde y 830 pruebas.
+- La revisión automática de B4d queda autorizada por este contrato v1.1.
+- La incidencia #43 puede reutilizarse para reactivar la revisión después de que esta versión esté presente en la rama de la PR.
+- B4e y B4f no deben comenzar hasta cerrar B4d mediante revisión aprobada y merge autorizado por el usuario.
 
-### Error 4 - Adelantar auto-fix
+## 7. Gestión de cambios
 
-Se describió un bucle automático de corrección antes de validar su estabilidad.
+Este contrato solo cambia mediante una decisión explícita del usuario. Las modificaciones futuras deben indicar fecha, decisión, motivo y alcance.
 
-**Corrección:** auto-fix permanece desactivado y fuera de la fase actual.
+El historial anterior permanece disponible en Git y no se reescribe retrospectivamente.
 
-### Error 5 - Cambiar el plan mientras se ejecutaba
+## 8. Cambio registrado el 19 de julio de 2026
 
-Se dieron instrucciones distintas en mensajes consecutivos, aumentando carga mental y riesgo.
-
-**Corrección:** este documento fija la secuencia y obliga a trabajar con una única siguiente acción.
-
-### Error 6 - Añadir coordinación o agentes no solicitados
-
-Se sugirieron agentes, coordinación y estructuras que el usuario había reservado para una decisión posterior.
-
-**Corrección:** no se añade ninguna arquitectura de agentes. Una sesión revisora separada es una operación puntual, no una decisión de sistema.
-
-## 10. Gestión de cambios
-
-Este contrato solo puede cambiar por una decisión explícita del usuario.
-
-Toda modificación debe:
-
-- indicar fecha;
-- identificar la decisión cambiada;
-- explicar el motivo;
-- señalar qué sección sustituye;
-- actualizar el estado operativo correspondiente;
-- evitar reescribir retrospectivamente lo ocurrido.
-
-Las ideas exploratorias y las capacidades disponibles en una herramienta no modifican este contrato.
-
-### Cambio registrado el 18 de julio de 2026
-
-- **Fecha:** 18 de julio de 2026.
-- **Decisión cambiada:** la condición 1 de la puerta de la sección 7 ("tres PR consecutivas terminan sin ampliación de alcance") y, en consecuencia, el disparador de entrada a la Fase E de la sección 4.
-- **Motivo:** decisión operativa expresa del usuario: en vez de esperar tres PR consecutivas satisfactorias adicionales a B4a, autoriza activar ya, desde la PR de B4b, la primera revisión automática por evento de GitHub descrita en la Fase E — una auditoría solicitada explícitamente mediante una incidencia etiquetada `agent-review-requested`, exactamente como la Fase E ya preveía como primer paso de esa etapa.
-- **Sección que sustituye:** sección 7, condición 1 (únicamente para esta transición); sección 4, Fase E (activación anticipada, con el mismo alcance ya descrito allí: ninguna otra ampliación).
-- **Estado operativo actualizado:** ver la nueva entrada del 18 de julio de 2026 en la sección 2 y la "Próxima acción exacta" de esa misma sección.
-- **Alcance exacto de lo autorizado — solo esto:**
-  - crear, en una sola operación, una incidencia GitHub en `canelamoraguezandyjesus-bot/sirius` con la etiqueta `agent-review-requested` aplicada desde su creación, únicamente cuando la PR de B4b exista, esté lista y su CI (`Quality`) esté en verde;
-  - esa incidencia existe solo para activar la Routine "Sirius PR Reviewer" ya configurada por el usuario para escuchar ese evento.
-- **Sigue expresamente prohibido** (sin cambios respecto a la sección 3.4 y la Fase E/F):
-  - revisión automática en cada push;
-  - auto-fix general o automático de cualquier tipo;
-  - merge automático;
-  - cambios automáticos de producto o arquitectura;
-  - trabajo paralelo sobre otros subbloques de B4;
-  - cualquier otra ampliación de automatización no descrita aquí.
-- Esta excepción es puntual, para la transición B4a→B4b descrita arriba; no reabre ni relaja de forma general la puerta de la sección 7 para transiciones futuras, que requerirán su propia decisión expresa o el cumplimiento ordinario de las condiciones ya definidas.
-
-### Cambio registrado el 18 de julio de 2026 (B4b→B4c)
-
-- **Fecha:** 18 de julio de 2026.
-- **Decisión cambiada:** ninguna regla de la sección 7 ni de la Fase E se reinterpreta; este registro extiende, a la PR de B4c, la misma autorización puntual ya concedida a la PR de B4b (ver el cambio anterior), porque la PR de B4b se fusionó en el ínterin y B4c es ahora el subbloque en curso.
-- **Motivo:** decisión operativa expresa del usuario: activar, desde la PR de B4c y bajo las mismas condiciones y límites ya fijados para B4b, la revisión automática por incidencia etiquetada `agent-review-requested`.
-- **Sección que sustituye:** ninguna; es una aplicación puntual adicional del mismo mecanismo ya descrito en el cambio del 18 de julio de 2026 anterior y en la Fase E de la sección 4, no una modificación de sus términos.
-- **Estado operativo actualizado:** ver la nueva entrada del 18 de julio de 2026 en la sección 2 ("autorización operativa expresa del usuario para B4c") y la "Próxima acción exacta" de esa misma sección.
-- **Alcance exacto de lo autorizado — solo esto:**
-  - crear, en una sola operación, una incidencia GitHub en `canelamoraguezandyjesus-bot/sirius` con la etiqueta `agent-review-requested` aplicada desde su creación, únicamente cuando la PR de B4c exista, esté lista y su CI (`Quality`) esté en verde;
-  - esa incidencia existe solo para activar la Routine "Sirius PR Reviewer" ya configurada por el usuario para escuchar ese evento.
-- **Sigue expresamente prohibido** (sin cambios respecto a la sección 3.4 y la Fase E/F, y respecto al cambio anterior):
-  - revisión automática en cada push;
-  - auto-fix general o automático de cualquier tipo;
-  - correcciones realizadas por la Routine revisora;
-  - merge automático;
-  - cambios automáticos de producto o arquitectura;
-  - trabajo paralelo sobre otros subbloques de B4 (B4d, B4e, B4f no comienzan);
-  - check-ins horarios o suscripciones de vigilancia sobre esta PR;
-  - tareas en segundo plano después de terminar;
-  - cualquier otra ampliación de automatización no descrita aquí.
-- Esta excepción es puntual, para la transición B4b→B4c descrita arriba; no reabre ni relaja de forma general la puerta de la sección 7 para transiciones futuras.
-
-## 11. Definición de éxito del flujo
-
-El flujo se considera útil cuando el usuario puede iniciar una tarea acotada y ausentarse, y después recibe:
-
-- una PR trazable;
-- pruebas ejecutadas;
-- estado final claro;
-- ausencia de prompts rutinarios de permiso;
-- ausencia de cambios en `main`;
-- ausencia de merge automático;
-- bloqueo seguro cuando falta una decisión.
-
-No se exige que toda tarea termine implementada. Se exige que termine correctamente o se bloquee de forma explícita y segura.
-
-## 12. Estado que debe consultarse al reanudar
-
-La Routine de prueba de humo ya lanzada terminó en `CLOUD_SMOKE_PASSED` (18 de julio de 2026; evidencia en `docs/implementation/CLOUD_SMOKE_EVIDENCE_20260718.md`, PR #34 fusionada).
-
-B4a se implementó el 18 de julio de 2026 (rama `claude/intelligent-bohr-1s38y6`) conforme a la Fase B. La Fase C encontró un `BLOCKER` transaccional (evento y recuerdo no se guardaban en la misma transacción); se corrigió en la misma rama y PR mediante una `UnitOfWork`, con Ruff, mypy y pytest en verde (602 pruebas). **La PR #36 quedó fusionada en `main`** el 18 de julio de 2026 (commit `c025683c960a19a1a9c1aa40fa861547026118cc`, `Quality` en verde).
-
-B4b se implementó el 18 de julio de 2026 sobre ese `main` ya fusionado, conforme a la Fase D (repetición secuencial de B4): rama propia, PR propia, Ruff/mypy/pytest en verde (669 pruebas). Por la decisión operativa registrada en la sección 10, esa PR activó además la primera revisión automática por evento de GitHub (incidencia `agent-review-requested`). **La PR #37 quedó fusionada en `main`** el 18 de julio de 2026 (commit de merge `d1bbb872751a96ca11ec38c20fd8b3fb5322651c`, `Quality` en verde) — verificado directamente sobre `origin/main` antes de iniciar B4c.
-
-B4c — Corrección y sustitución — se implementó el 18 de julio de 2026 sobre ese `main` ya fusionado, conforme a la Fase D: rama propia (`feat/b4c-correction-supersession-20260719-01`), PR propia, Ruff/mypy/pytest en verde (735 pruebas: 669 previas + 66 nuevas). Por el cambio registrado en la sección 10 (B4b→B4c), esta PR activó también la revisión automática por incidencia `agent-review-requested`. **La PR #39 quedó fusionada en `main`** el 19 de julio de 2026 (commit `e244649affd11e6e1bdb8179adb00d2b6d610f7e`, `quality` en verde) — verificado directamente sobre `origin/main` antes de iniciar B4d.
-
-B4d — Archivo, eliminación y redacción de origen — se implementó el 19 de julio de 2026 sobre ese `main` ya fusionado, conforme a la Fase D: rama propia (`feat/b4d-archive-delete-redaction-20260719-01`), PR propia, Ruff/mypy/pytest en verde (830 pruebas: 735 previas + 95 nuevas). A diferencia de B4b y B4c, esta ejecución **no** estaba autorizada a activar la revisión automática por incidencia `agent-review-requested` — esa autorización puntual (sección 10) cubrió solo las transiciones B4a→B4b y B4b→B4c. Una PR borrador quedó abierta hacia `main`, sin merge y sin incidencia revisora creada.
-
-Al retomar este trabajo, la primera pregunta operativa no es "¿qué automatizamos ahora?". Es:
-
-**¿La PR de B4d ya fue revisada (por una sesión de revisión independiente y controlada, iniciada explícitamente, no por evento automático) y el usuario autorizó su merge, o sigue pendiente?**
-
-Mientras esa PR no esté fusionada, la única acción válida es completar su revisión — nunca iniciar B4e ni B4f, nunca crear por iniciativa propia la incidencia `agent-review-requested` para esta PR (no autorizada para B4d), ni un merge automático.
+- **Decisión:** sustituir las autorizaciones puntuales por subbloque por una autorización general de implementación y revisión automática para todo Sirius 0.1.
+- **Motivo:** evitar bloqueos administrativos repetidos y permitir un flujo realmente automatizado.
+- **Sustituye:** las restricciones de la versión 1.0 que exigían una excepción específica para B4b, B4c y cada PR posterior.
+- **Mantiene:** alcance aprobado, revisión independiente, máximo de dos ciclos, prohibición de push a `main`, prohibición de cambios canónicos no autorizados y merge bajo control humano.
+- **Autoriza además:** explorar y construir nuevas automatizaciones con Routines, tareas programadas de ChatGPT, eventos de GitHub y aplicaciones de control, dentro de los límites de este contrato.
