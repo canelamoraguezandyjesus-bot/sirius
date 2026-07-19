@@ -16,6 +16,7 @@ from sirius.adapters.persistence.sqlite_memory_repository import (
     SqliteMemoryRepository,
     build_sqlite_memory_repository,
 )
+from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.domain.event import MANUAL_MEMORY_SAVE_EVENT_TYPE, USER_ACTOR
 from sirius.domain.memory import MemoryStatus
 
@@ -24,6 +25,19 @@ def _build_repository(database_path: Path) -> SqliteMemoryRepository:
     repository = build_sqlite_memory_repository(database_path)
     Base.metadata.create_all(build_engine(database_path))
     return repository
+
+
+def _create_project(database_path: Path) -> int:
+    project_repository = build_sqlite_project_repository(database_path)
+    project_repository.ensure_bootstrap_project()
+    project = project_repository.create_project(
+        "Proyecto de prueba",
+        "Objetivo de prueba",
+        state_summary="en curso",
+        blockers=(),
+        next_step="siguiente paso",
+    )
+    return project.id
 
 
 @pytest.mark.integration
@@ -66,6 +80,61 @@ def test_create_and_recover_memory(tmp_path: Path) -> None:
 
     current_memories = repository.list_current_memories()
     assert [m.id for m in current_memories] == [created.id]
+
+
+@pytest.mark.integration
+def test_create_memory_without_subject_key_leaves_it_none(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+
+    created = repository.create_memory("prefiere respuestas breves", "manual")
+
+    assert created.subject_key is None
+    assert created.project_id is None
+    assert repository.get_memory(created.id).subject_key is None
+
+
+@pytest.mark.integration
+def test_create_memory_persists_subject_key_and_project_id(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    project_id = _create_project(database_path)
+
+    created = repository.create_memory(
+        "usar SQLite local",
+        "manual",
+        subject_key="Motor de persistencia",
+        project_id=project_id,
+    )
+
+    assert created.subject_key == "Motor de persistencia"
+    assert created.project_id == project_id
+    fetched = repository.get_memory(created.id)
+    assert fetched.subject_key == "Motor de persistencia"
+    assert fetched.project_id == project_id
+
+
+@pytest.mark.integration
+def test_create_memory_rejects_a_blank_subject_key(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    project_id = _create_project(database_path)
+
+    with pytest.raises(ValueError, match="cannot be blank"):
+        repository.create_memory("x", "manual", subject_key="   ", project_id=project_id)
+
+    assert repository.list_current_memories() == []
+
+
+@pytest.mark.integration
+def test_create_memory_rejects_a_subject_key_without_a_project(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+
+    with pytest.raises(ValueError, match="must also be associated with a project"):
+        repository.create_memory("x", "manual", subject_key="Motor de persistencia")
+
+    assert repository.list_current_memories() == []
 
 
 @pytest.mark.integration

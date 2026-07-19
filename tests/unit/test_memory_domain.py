@@ -9,7 +9,9 @@ from sirius.domain.memory import (
     ensure_can_archive,
     ensure_can_correct,
     ensure_can_delete,
+    ensure_subject_key_has_a_project,
     ensure_valid_origin,
+    ensure_valid_subject_key,
     next_revision_version,
 )
 
@@ -90,3 +92,37 @@ def test_memory_is_immutable() -> None:
 
     with pytest.raises(AttributeError):
         memory.status = MemoryStatus.ARCHIVED  # type: ignore[misc]
+
+
+def test_memory_subject_key_and_project_id_default_to_none() -> None:
+    memory = _memory(MemoryStatus.CURRENT)
+
+    assert memory.subject_key is None
+    assert memory.project_id is None
+
+
+@pytest.mark.parametrize("subject_key", ["", "   ", "\t\n"])
+def test_ensure_valid_subject_key_rejects_blank_when_given(subject_key: str) -> None:
+    with pytest.raises(ValueError, match="cannot be blank"):
+        ensure_valid_subject_key(subject_key)
+
+
+def test_ensure_valid_subject_key_accepts_none() -> None:
+    ensure_valid_subject_key(None)  # must not raise
+
+
+def test_ensure_valid_subject_key_accepts_non_blank_string() -> None:
+    ensure_valid_subject_key("Motor de persistencia")  # must not raise
+
+
+def test_ensure_subject_key_has_a_project_accepts_both_none() -> None:
+    ensure_subject_key_has_a_project(None, None)  # must not raise
+
+
+def test_ensure_subject_key_has_a_project_accepts_subject_with_project() -> None:
+    ensure_subject_key_has_a_project("Motor de persistencia", 1)  # must not raise
+
+
+def test_ensure_subject_key_has_a_project_rejects_subject_without_project() -> None:
+    with pytest.raises(ValueError, match="must also be associated with a project"):
+        ensure_subject_key_has_a_project("Motor de persistencia", None)

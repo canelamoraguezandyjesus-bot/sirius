@@ -16,6 +16,9 @@ from sirius.adapters.persistence.models import (
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
 )
+from sirius.adapters.persistence.sqlite_decision_repository import (
+    build_sqlite_decision_repository,
+)
 from sirius.adapters.persistence.sqlite_identity_repository import (
     build_sqlite_identity_repository,
 )
@@ -34,16 +37,19 @@ def _seed_bootstrap_singletons(
     *,
     project_name: str = "Proyecto de prueba",
     project_objective: str = "Objetivo de prueba",
-) -> None:
+) -> int:
     """Mimic what initialize_persistence() does, plus a configured project:
     ContextBuilder (B3c) requires a configured, ``ACTIVE`` project, and never
     creates one itself — it is exercised separately against an unseeded
     database, and against an identity-only database, in the tests below.
+
+    Returns the created project's id, so B4e tests can associate a memory or
+    a decision with it.
     """
     build_sqlite_conversation_repository(database_path).get_or_create_main_conversation()
     project_repository = build_sqlite_project_repository(database_path)
     project_repository.ensure_bootstrap_project()
-    project_repository.create_project(
+    project = project_repository.create_project(
         project_name,
         project_objective,
         state_summary="estado inicial",
@@ -51,6 +57,7 @@ def _seed_bootstrap_singletons(
         next_step="siguiente paso inicial",
     )
     build_sqlite_identity_repository(database_path).get_or_create_current_identity()
+    return project.id
 
 
 def _build_context_builder(database_path: Path, recent_messages_limit: int = 20) -> ContextBuilder:
@@ -59,6 +66,7 @@ def _build_context_builder(database_path: Path, recent_messages_limit: int = 20)
         project_repository=build_sqlite_project_repository(database_path),
         memory_repository=build_sqlite_memory_repository(database_path),
         conversation_repository=build_sqlite_conversation_repository(database_path),
+        decision_repository=build_sqlite_decision_repository(database_path),
         recent_messages_limit=recent_messages_limit,
     )
 
@@ -227,6 +235,63 @@ def test_build_excludes_archived_and_deleted_memories(tmp_path: Path) -> None:
     context = builder.build("hola")
 
     assert [m.id for m in context.memories] == [current.id]
+
+
+@pytest.mark.integration
+def test_build_excludes_a_memory_superseded_by_a_prevailing_decision(tmp_path: Path) -> None:
+    """B4e, DR-011: a current memory whose explicit subject/project matches a
+    single APPROVED decision is excluded from context — that decision
+    already prevails, so presenting both would contradict the precedence
+    Sirius already established through an explicit approval."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    project_id = _seed_bootstrap_singletons(database_path)
+    builder = _build_context_builder(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    decision_repository = build_sqlite_decision_repository(database_path)
+
+    unrelated = memory_repository.create_memory("recordatorio sin asunto", "manual")
+    memory_repository.create_memory(
+        "usar un servidor remoto",
+        "manual",
+        subject_key="Motor de persistencia",
+        project_id=project_id,
+    )
+    decision = decision_repository.create_proposal(
+        "Motor de persistencia", project_id, "Usar SQLite local"
+    )
+    decision_repository.approve_decision(decision.id)
+
+    context = builder.build("hola")
+
+    assert [m.id for m in context.memories] == [unrelated.id]
+
+
+@pytest.mark.integration
+def test_build_keeps_unresolved_conflicting_memories(tmp_path: Path) -> None:
+    """B4e never resolves a genuine memory-memory conflict itself (no
+    decision to prevail): both stay in context exactly as before — silently
+    picking or dropping one would be exactly the "elección silenciosa" B4e
+    forbids."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    project_id = _seed_bootstrap_singletons(database_path)
+    builder = _build_context_builder(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+
+    first = memory_repository.create_memory(
+        "usar SQLite local", "manual", subject_key="Motor de persistencia", project_id=project_id
+    )
+    second = memory_repository.create_memory(
+        "usar un servidor remoto",
+        "manual",
+        subject_key="Motor de persistencia",
+        project_id=project_id,
+    )
+
+    context = builder.build("hola")
+
+    assert {m.id for m in context.memories} == {first.id, second.id}
 
 
 @pytest.mark.integration

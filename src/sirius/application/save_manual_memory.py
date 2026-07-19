@@ -23,7 +23,11 @@ never a memory whose ``source_event_id`` points at nothing.
 from __future__ import annotations
 
 from sirius.domain.event import MANUAL_MEMORY_SAVE_EVENT_TYPE, USER_ACTOR
-from sirius.domain.memory import Memory
+from sirius.domain.memory import (
+    Memory,
+    ensure_subject_key_has_a_project,
+    ensure_valid_subject_key,
+)
 from sirius.ports.unit_of_work import UnitOfWork
 
 __all__ = [
@@ -47,7 +51,14 @@ class SaveManualMemoryUseCase:
     def __init__(self, unit_of_work: UnitOfWork) -> None:
         self._unit_of_work = unit_of_work
 
-    def save(self, content: str, *, message_id: int | None = None) -> Memory:
+    def save(
+        self,
+        content: str,
+        *,
+        message_id: int | None = None,
+        subject_key: str | None = None,
+        project_id: int | None = None,
+    ) -> Memory:
         """Create a new memory from an explicit save order.
 
         ``message_id`` identifies the user message that gave the explicit
@@ -56,6 +67,12 @@ class SaveManualMemoryUseCase:
         ``InvalidManualMemoryDataError`` if ``content`` is empty after
         trimming, checked before any write.
 
+        ``subject_key``/``project_id`` (B4e) are the optional, explicit
+        "asunto" identification precedence and conflict detection compare
+        memories on; omitted by default, exactly like every memory created
+        before B4e — such a memory is never considered for precedence or
+        conflict against anything else.
+
         The event and the memory (with its first revision) are created and
         committed within a single transaction: if either write fails, both
         are rolled back and nothing persists.
@@ -63,6 +80,11 @@ class SaveManualMemoryUseCase:
         clean_content = content.strip()
         if not clean_content:
             raise InvalidManualMemoryDataError(INVALID_MANUAL_MEMORY_CONTENT_MESSAGE)
+        try:
+            ensure_valid_subject_key(subject_key)
+            ensure_subject_key_has_a_project(subject_key, project_id)
+        except ValueError as exc:
+            raise InvalidManualMemoryDataError(str(exc)) from exc
 
         with self._unit_of_work as uow:
             event = uow.event_repository.append(
@@ -74,6 +96,8 @@ class SaveManualMemoryUseCase:
                 clean_content,
                 MANUAL_MEMORY_ORIGIN,
                 source_event_id=event.id,
+                subject_key=subject_key,
+                project_id=project_id,
             )
             uow.commit()
 

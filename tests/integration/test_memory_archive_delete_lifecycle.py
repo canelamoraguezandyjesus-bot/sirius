@@ -20,6 +20,9 @@ from sirius.adapters.persistence.models import Base
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
 )
+from sirius.adapters.persistence.sqlite_decision_repository import (
+    build_sqlite_decision_repository,
+)
 from sirius.adapters.persistence.sqlite_event_repository import build_sqlite_event_repository
 from sirius.adapters.persistence.sqlite_identity_repository import (
     build_sqlite_identity_repository,
@@ -461,7 +464,11 @@ def test_a_redacted_message_is_excluded_from_a_freshly_built_context(tmp_path: P
     )
 
     context = ContextBuilder(
-        identity_repository, project_repository, memory_repository, conversation_repository
+        identity_repository,
+        project_repository,
+        memory_repository,
+        conversation_repository,
+        build_sqlite_decision_repository(database_path),
     ).build("¿qué recuerdas de mí?")
 
     assert all(

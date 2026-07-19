@@ -23,7 +23,9 @@ from sirius.domain.memory import (
     ensure_can_archive,
     ensure_can_correct,
     ensure_can_delete,
+    ensure_subject_key_has_a_project,
     ensure_valid_origin,
+    ensure_valid_subject_key,
     next_revision_version,
 )
 
@@ -51,6 +53,8 @@ def _to_domain_memory(model: MemoryModel, revision_model: MemoryRevisionModel) -
         current_revision=_to_domain_revision(revision_model),
         created_at=model.created_at.replace(tzinfo=UTC),
         updated_at=model.updated_at.replace(tzinfo=UTC),
+        subject_key=model.subject_key,
+        project_id=model.project_id,
     )
 
 
@@ -109,13 +113,23 @@ class SqliteMemoryRepository:
             yield session
 
     def create_memory(
-        self, content: str, origin: str, *, source_event_id: int | None = None
+        self,
+        content: str,
+        origin: str,
+        *,
+        source_event_id: int | None = None,
+        subject_key: str | None = None,
+        project_id: int | None = None,
     ) -> Memory:
         ensure_valid_origin(origin)
+        ensure_valid_subject_key(subject_key)
+        ensure_subject_key_has_a_project(subject_key, project_id)
         with self._scope() as session:
             now = _utc_now_naive()
             memory_model = MemoryModel(
                 status=MemoryStatus.CURRENT,
+                subject_key=subject_key,
+                project_id=project_id,
                 created_at=now,
                 updated_at=now,
             )

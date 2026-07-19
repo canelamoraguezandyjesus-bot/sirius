@@ -127,16 +127,30 @@ Implementado además en V8 (B4a, B4b, B4c):
   `UnitOfWork` que el evento de auditoría. La eliminación de decisiones
   queda deliberadamente fuera de este corte: ni PA-016 ni la enumeración de
   estados de decisión de Producto S6 la mencionan (a diferencia de
-  "archivada").
+  "archivada");
+  precedencia y detección de conflictos entre recuerdos y decisiones
+  (`sirius.domain.precedence`, B4e, RF-026, PA-014, DR-011): identificación
+  explícita y opcional de asunto y proyecto en el recuerdo
+  (`Memory.subject_key`/`project_id`, el equivalente de
+  `Decision.subject`/`project_id` a la granularidad de recuerdo, `None` en
+  todo recuerdo que no la declare); una regla de dominio pura y determinista
+  (`evaluate_subject_precedence`/`find_subject_conflicts`) que hace
+  prevalecer una única decisión `APPROVED` vigente sobre recuerdos vigentes
+  incompatibles del mismo asunto y proyecto, y que devuelve un conflicto
+  explícito — con todos los elementos implicados, nunca un ganador elegido
+  por fecha u orden de inserción — cuando no hay precedencia inequívoca;
+  `DetectPrecedenceConflictsUseCase`, de solo lectura, expone la regla en la
+  capa de aplicación sin que `SendMessageUseCase` la invoque nunca; y una
+  conexión mínima en `ContextBuilder` que excluye del contexto únicamente el
+  recuerdo ya superado en autoridad por una decisión vigente inequívoca del
+  mismo asunto, sin resolver ni tocar un conflicto genuino entre recuerdos.
 
 Pendiente dentro de V8:
 
-- precedencia entre decisión y recuerdo;
-- detección y resolución explícita de conflictos (B4e);
 - indexación y búsqueda pertinente;
-- casos de uso e interfaz de decisiones y de archivo/eliminación en las
-  superficies existentes (B4f);
-- pruebas PA-014 y la parte correspondiente de PA-E2E-01.
+- casos de uso e interfaz de decisiones, de archivo/eliminación y de
+  resolución explícita de conflictos en las superficies existentes (B4f);
+- la parte correspondiente de PA-E2E-01.
 
 Defectos relacionados: D-03, D-04 y D-11.
 

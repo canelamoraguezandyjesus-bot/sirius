@@ -24,6 +24,9 @@ from sirius.adapters.persistence.models import Base
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
 )
+from sirius.adapters.persistence.sqlite_decision_repository import (
+    build_sqlite_decision_repository,
+)
 from sirius.adapters.persistence.sqlite_identity_repository import (
     build_sqlite_identity_repository,
 )
@@ -119,6 +122,7 @@ def test_key_never_appears_in_sqlite_after_a_full_send(tmp_path: Path) -> None:
         project_repository=build_sqlite_project_repository(database_path),
         memory_repository=build_sqlite_memory_repository(database_path),
         conversation_repository=conversation_repository,
+        decision_repository=build_sqlite_decision_repository(database_path),
     )
     client = _FakeOpenAIClient(lambda **kwargs: _FakeStream([_completed_event("hola")]))
     provider = OpenAIResponsesProvider(

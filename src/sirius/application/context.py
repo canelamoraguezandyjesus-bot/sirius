@@ -22,8 +22,10 @@ from dataclasses import dataclass
 from sirius.domain.conversation import Message, MessageStatus
 from sirius.domain.identity import Identity
 from sirius.domain.memory import Memory
+from sirius.domain.precedence import find_prevailing_decision
 from sirius.domain.project import Project, is_configured
 from sirius.ports.conversation_repository import ConversationRepository
+from sirius.ports.decision_repository import DecisionRepository
 from sirius.ports.identity_repository import IdentityRepository
 from sirius.ports.memory_repository import MemoryRepository
 from sirius.ports.project_repository import ProjectRepository
@@ -72,6 +74,17 @@ class ContextBuilder:
     not exist yet, it raises ``ContextAssemblyError`` instead of creating it
     — that seeding is ``initialize_persistence()``'s job alone. The active
     project is resolved, never required: see ``Context.project``.
+
+    B4e (DR-011) minimal connection: a current memory whose explicit
+    ``subject_key``/``project_id`` matches a single, unambiguous APPROVED
+    decision is excluded from ``Context.memories`` — that decision already
+    prevails over it, so presenting both as equally current knowledge would
+    contradict the precedence Sirius already established through an explicit
+    approval. This is the only conflict-related filtering ``ContextBuilder``
+    performs: a memory with no explicit subject, or one whose subject has no
+    unambiguous prevailing decision (including a genuine, unresolved
+    conflict between current memories), is never touched here — resolving
+    that stays out of scope until B4f's interface exists.
     """
 
     def __init__(
@@ -80,12 +93,14 @@ class ContextBuilder:
         project_repository: ProjectRepository,
         memory_repository: MemoryRepository,
         conversation_repository: ConversationRepository,
+        decision_repository: DecisionRepository,
         recent_messages_limit: int = _DEFAULT_RECENT_MESSAGES_LIMIT,
     ) -> None:
         self._identity_repository = identity_repository
         self._project_repository = project_repository
         self._memory_repository = memory_repository
         self._conversation_repository = conversation_repository
+        self._decision_repository = decision_repository
         self._recent_messages_limit = recent_messages_limit
 
     def build(self, current_user_message: str) -> Context:
@@ -112,7 +127,7 @@ class ContextBuilder:
             msg = "No main conversation found; has initialize_persistence() run?"
             raise ContextAssemblyError(msg)
 
-        memories = tuple(self._memory_repository.list_current_memories())
+        memories = self._select_memories()
         all_messages = self._conversation_repository.list_messages(conversation.id)
         # SIRIUS-ARQ-0.1 S5.1/S5.2: "Mensajes parciales conservan su
         # contenido y quedan excluidos del contexto normal." A CANCELLED or
@@ -127,4 +142,17 @@ class ContextBuilder:
             memories=memories,
             recent_messages=recent_messages,
             current_user_message=current_user_message,
+        )
+
+    def _select_memories(self) -> tuple[Memory, ...]:
+        """Current memories, minus any excluded by B4e decision precedence
+        (see the class docstring)."""
+        current_memories = self._memory_repository.list_current_memories()
+        decisions = self._decision_repository.list_current_decisions()
+        return tuple(
+            memory
+            for memory in current_memories
+            if memory.subject_key is None
+            or memory.project_id is None
+            or find_prevailing_decision(memory.subject_key, memory.project_id, decisions) is None
         )
