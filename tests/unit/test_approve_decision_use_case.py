@@ -91,6 +91,17 @@ class _StaticDecisionRepository:
         self._decision = approved
         return approved
 
+    def supersede_decision(
+        self, superseded_decision_id: int, superseding_decision_id: int
+    ) -> Decision:
+        raise AssertionError("approve() must never supersede a decision")
+
+    def list_current_decisions(self) -> list[Decision]:
+        raise AssertionError("approve() must never list decisions")
+
+    def get_superseding_decision(self, decision_id: int) -> Decision | None:
+        raise AssertionError("approve() must never read a superseding decision")
+
 
 class _UnusedMemoryRepository:
     """B4a's ``UnitOfWork.memory_repository``; ``approve()`` never touches it."""

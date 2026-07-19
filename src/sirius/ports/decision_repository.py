@@ -12,10 +12,11 @@ class DecisionRepository(Protocol):
 
     Transition rules (mandatory subject/content, legal status transitions)
     live in ``sirius.domain.decision``; implementations are expected to
-    enforce them before mutating storage. Only the two operations B4b needs:
-    proposing a decision and approving an existing proposal. Correction,
-    substitution, archival and deletion belong to later subblocks (B4c/B4d)
-    and are not part of this contract yet.
+    enforce them before mutating storage. B4b added proposing and approving;
+    B4c (RF-023, PA-013) adds explicit substitution and the two ordinary
+    queries substitution needs to keep superseded decisions out of the
+    vigente set. Correction and archival/deletion belong to B4c (memory
+    only) and B4d and are not part of this contract.
     """
 
     def create_proposal(
@@ -39,5 +40,39 @@ class DecisionRepository(Protocol):
         Never creates a new revision: content and version stay exactly what
         they were at proposal time. Raises ``ValueError`` if the decision
         does not exist or is not currently PROPOSED.
+        """
+        ...
+
+    def supersede_decision(
+        self, superseded_decision_id: int, superseding_decision_id: int
+    ) -> Decision:
+        """Mark ``superseded_decision_id`` as SUPERSEDED and approve
+        ``superseding_decision_id`` in its place, recording the persistent
+        link between them (RF-023).
+
+        Never creates a new revision on either decision. Raises
+        ``ValueError`` if either id is unknown, or if
+        ``sirius.domain.decision.ensure_can_supersede`` rejects the pair
+        (self-supersession, wrong statuses, mismatched subject/project).
+        Returns the now-APPROVED superseding decision.
+        """
+        ...
+
+    def list_current_decisions(self) -> list[Decision]:
+        """Return every decision whose status is APPROVED (vigente).
+
+        Excludes PROPOSED and SUPERSEDED decisions — this is the ordinary
+        query B4c requires to never surface a substituted decision as if it
+        were still current.
+        """
+        ...
+
+    def get_superseding_decision(self, decision_id: int) -> Decision | None:
+        """Return the decision that supersedes ``decision_id``, or ``None``
+        if it has not been superseded (or does not exist).
+
+        Together with the returned decision's own
+        ``supersedes_decision_id``, this makes the substitution link
+        queryable from either side without a second, redundant column.
         """
         ...

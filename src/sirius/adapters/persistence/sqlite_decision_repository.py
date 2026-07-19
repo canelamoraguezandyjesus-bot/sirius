@@ -21,6 +21,7 @@ from sirius.domain.decision import (
     DecisionRevision,
     DecisionStatus,
     ensure_can_approve,
+    ensure_can_supersede,
     ensure_valid_content,
     ensure_valid_subject,
 )
@@ -50,6 +51,7 @@ def _to_domain_decision(model: DecisionModel, revision_model: DecisionRevisionMo
         current_revision=_to_domain_revision(revision_model),
         created_at=model.created_at.replace(tzinfo=UTC),
         updated_at=model.updated_at.replace(tzinfo=UTC),
+        supersedes_decision_id=model.supersedes_decision_id,
     )
 
 
@@ -159,6 +161,51 @@ class SqliteDecisionRepository:
             session.flush()
 
             return _load_decision(session, decision_model)
+
+    def supersede_decision(
+        self, superseded_decision_id: int, superseding_decision_id: int
+    ) -> Decision:
+        with self._scope() as session:
+            superseded_model = session.get(DecisionModel, superseded_decision_id)
+            if superseded_model is None:
+                msg = f"Unknown decision id: {superseded_decision_id}"
+                raise ValueError(msg)
+            superseding_model = session.get(DecisionModel, superseding_decision_id)
+            if superseding_model is None:
+                msg = f"Unknown decision id: {superseding_decision_id}"
+                raise ValueError(msg)
+
+            superseded = _load_decision(session, superseded_model)
+            superseding = _load_decision(session, superseding_model)
+            ensure_can_supersede(superseded, superseding)
+
+            now = _utc_now_naive()
+            superseded_model.status = DecisionStatus.SUPERSEDED
+            superseded_model.updated_at = now
+            superseding_model.status = DecisionStatus.APPROVED
+            superseding_model.supersedes_decision_id = superseded_decision_id
+            superseding_model.updated_at = now
+            session.flush()
+
+            return _load_decision(session, superseding_model)
+
+    def list_current_decisions(self) -> list[Decision]:
+        with self._scope() as session:
+            models = session.scalars(
+                select(DecisionModel)
+                .where(DecisionModel.status == DecisionStatus.APPROVED)
+                .order_by(DecisionModel.id)
+            ).all()
+            return [_load_decision(session, model) for model in models]
+
+    def get_superseding_decision(self, decision_id: int) -> Decision | None:
+        with self._scope() as session:
+            model = session.scalars(
+                select(DecisionModel).where(DecisionModel.supersedes_decision_id == decision_id)
+            ).first()
+            if model is None:
+                return None
+            return _load_decision(session, model)
 
 
 def build_sqlite_decision_repository(database_path: Path) -> SqliteDecisionRepository:

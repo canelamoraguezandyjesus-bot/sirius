@@ -24,6 +24,7 @@ from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.decision_origin import GetDecisionOriginUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
+from sirius.application.supersede_decision import SupersedeDecisionUseCase
 from sirius.composition_root import build_conversation_dependencies
 from sirius.domain.decision import DecisionStatus
 
@@ -36,6 +37,7 @@ def test_build_conversation_dependencies_wires_decision_use_cases(tmp_path: Path
     assert isinstance(dependencies.propose_decision_use_case, ProposeDecisionUseCase)
     assert isinstance(dependencies.approve_decision_use_case, ApproveDecisionUseCase)
     assert isinstance(dependencies.get_decision_origin_use_case, GetDecisionOriginUseCase)
+    assert isinstance(dependencies.supersede_decision_use_case, SupersedeDecisionUseCase)
 
 
 def test_proposed_and_approved_decision_is_queryable_through_the_wired_use_cases(
@@ -71,3 +73,44 @@ def test_proposed_and_approved_decision_is_queryable_through_the_wired_use_cases
     assert origin.subject == "Motor de persistencia"
     assert origin.project_id == project.id
     assert origin.status is DecisionStatus.APPROVED
+
+
+def test_an_approved_decision_can_be_superseded_through_the_wired_use_cases(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "sirius.db"
+    Base.metadata.create_all(build_engine(database_path))
+    build_sqlite_conversation_repository(database_path).get_or_create_main_conversation()
+    build_sqlite_identity_repository(database_path).get_or_create_current_identity()
+    project_repository = build_sqlite_project_repository(database_path)
+    project_repository.ensure_bootstrap_project()
+    project = project_repository.create_project(
+        "Proyecto de prueba",
+        "Objetivo de prueba",
+        state_summary="En curso",
+        blockers=(),
+        next_step="Siguiente paso",
+    )
+    dependencies = build_conversation_dependencies(
+        database_path, tmp_path / "backups", secret_store=FakeSecretStore()
+    )
+
+    original = dependencies.approve_decision_use_case.approve(
+        dependencies.propose_decision_use_case.propose(
+            "Motor de persistencia", project.id, "Usar SQLite local"
+        ).id,
+        confirmed=True,
+    )
+    substitute_proposal = dependencies.propose_decision_use_case.propose(
+        "Motor de persistencia", project.id, "Usar PostgreSQL en su lugar"
+    )
+
+    substitute = dependencies.supersede_decision_use_case.supersede(
+        original.id, substitute_proposal.id, confirmed=True
+    )
+
+    assert substitute.status is DecisionStatus.APPROVED
+    assert substitute.supersedes_decision_id == original.id
+
+    superseded = dependencies.get_decision_origin_use_case.get_origin(original.id)
+    assert superseded.status is DecisionStatus.SUPERSEDED

@@ -83,7 +83,7 @@ Implementado:
 - archivo;
 - redacción del contenido estructurado al eliminar.
 
-Implementado además en V8 (B4a, B4b):
+Implementado además en V8 (B4a, B4b, B4c):
 
 - evento de origen persistente y enlace real recuerdo/decisión-evento-mensaje,
   con guardado manual explícito y consulta de origen (B4a, RF-019, RF-021,
@@ -94,17 +94,29 @@ Implementado además en V8 (B4a, B4b):
   distinto, que exige confirmación explícita para aprobar; una exploración o
   debate conversacional nunca crea ni aprueba una decisión, porque
   `SendMessageUseCase` nunca llama a ninguno de los dos casos de uso (B4b,
-  RF-020, PA-011).
+  RF-020, PA-011);
+- corrección explícita de recuerdos (`CorrectMemoryUseCase`) que consolida,
+  bajo el mismo contrato transaccional de B4a, la creación de revisión
+  inmutable que V4 ya implementaba: nueva revisión, puntero `current_revision`
+  autoritativo, revisión anterior conservada como histórica, evento de origen
+  obligatorio y atómico junto con la revisión (B4c, RF-022, PA-012);
+  sustitución explícita entre decisiones (`SupersedeDecisionUseCase`, nuevo
+  estado `DecisionStatus.SUPERSEDED` y `Decision.supersedes_decision_id`) que
+  exige confirmación explícita, valida estados y misma identidad de asunto y
+  proyecto, y aprueba la sustituta mientras marca la sustituida como
+  histórica en una sola transacción; la decisión sustituida permanece
+  consultable y enlazada con su sucesora, y la consulta ordinaria de
+  decisiones vigentes (`list_current_decisions`) devuelve solo la sustituta
+  (B4c, RF-023, PA-013).
 
 Pendiente dentro de V8:
 
-- sustitución entre decisiones y corrección versionada (B4c, RF-022, RF-023);
 - precedencia entre decisión y recuerdo;
 - detección y resolución explícita de conflictos (B4e);
 - archivo, eliminación y elección de redactar también el mensaje fuente (B4d);
 - indexación y búsqueda pertinente;
 - casos de uso e interfaz de decisiones en las superficies existentes (B4f);
-- pruebas PA-012 a PA-016 y la parte correspondiente de PA-E2E-01.
+- pruebas PA-014 a PA-016 y la parte correspondiente de PA-E2E-01.
 
 Defectos relacionados: D-03, D-04 y D-11.
 
