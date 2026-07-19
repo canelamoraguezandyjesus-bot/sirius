@@ -234,7 +234,10 @@ class MainWindow(QMainWindow):
             self._append_message_item(message.role, message.content, message.status)
 
     def _append_message_item(
-        self, role: MessageRole, content: str, status: MessageStatus = MessageStatus.COMPLETED
+        self,
+        role: MessageRole,
+        content: str | None,
+        status: MessageStatus = MessageStatus.COMPLETED,
     ) -> QListWidgetItem:
         item = QListWidgetItem("")
         self._set_item_text(item, role, content, status)
@@ -247,14 +250,17 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _set_item_text(
-        item: QListWidgetItem, role: MessageRole, content: str, status: MessageStatus
+        item: QListWidgetItem, role: MessageRole, content: str | None, status: MessageStatus
     ) -> None:
         prefix = "Tú" if role is MessageRole.USER else "Sirius"
         suffix = {
             MessageStatus.CANCELLED: " (cancelado)",
             MessageStatus.FAILED: " (fallido)",
         }.get(status, "")
-        item.setText(f"{prefix}: {content}{suffix}")
+        # REDACTED (B4d) is the only status whose content is ever None: the
+        # placeholder replaces it instead of literally rendering "None".
+        shown_content = "(mensaje redactado)" if status is MessageStatus.REDACTED else content
+        item.setText(f"{prefix}: {shown_content}{suffix}")
 
     def _handle_send_clicked(self) -> None:
         text = self.message_input.text()

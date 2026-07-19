@@ -45,10 +45,13 @@ from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of
 from sirius.adapters.secrets.keyring_store import build_keyring_secret_store
 from sirius.application.api_key_settings import ApiKeySettingsUseCase
 from sirius.application.approve_decision import ApproveDecisionUseCase
+from sirius.application.archive_decision import ArchiveDecisionUseCase
+from sirius.application.archive_memory import ArchiveMemoryUseCase
 from sirius.application.context import ContextBuilder
 from sirius.application.correct_memory import CorrectMemoryUseCase
 from sirius.application.create_backup import CreateBackupUseCase
 from sirius.application.decision_origin import GetDecisionOriginUseCase
+from sirius.application.delete_memory import DeleteMemoryUseCase
 from sirius.application.get_conversation_history import GetConversationHistoryUseCase
 from sirius.application.initial_project import InitialProjectUseCase
 from sirius.application.memory_origin import GetMemoryOriginUseCase
@@ -111,10 +114,13 @@ class ConversationDependencies:
     save_manual_memory_use_case: SaveManualMemoryUseCase
     get_memory_origin_use_case: GetMemoryOriginUseCase
     correct_memory_use_case: CorrectMemoryUseCase
+    archive_memory_use_case: ArchiveMemoryUseCase
+    delete_memory_use_case: DeleteMemoryUseCase
     propose_decision_use_case: ProposeDecisionUseCase
     approve_decision_use_case: ApproveDecisionUseCase
     get_decision_origin_use_case: GetDecisionOriginUseCase
     supersede_decision_use_case: SupersedeDecisionUseCase
+    archive_decision_use_case: ArchiveDecisionUseCase
     create_backup_use_case: CreateBackupUseCase
     validate_backup_use_case: ValidateBackupUseCase
     restore_backup_use_case: RestoreBackupUseCase
@@ -201,7 +207,8 @@ def build_conversation_dependencies(
     # Shared by every use case that must write more than one repository
     # atomically: SaveManualMemoryUseCase (B4a); ProposeDecisionUseCase and
     # ApproveDecisionUseCase (B4b); CorrectMemoryUseCase and
-    # SupersedeDecisionUseCase (B4c).
+    # SupersedeDecisionUseCase (B4c); ArchiveMemoryUseCase,
+    # DeleteMemoryUseCase and ArchiveDecisionUseCase (B4d).
     unit_of_work = build_sqlite_unit_of_work(database_path)
 
     context_builder = ContextBuilder(
@@ -269,12 +276,15 @@ def build_conversation_dependencies(
             memory_repository, event_repository, conversation_repository
         ),
         correct_memory_use_case=CorrectMemoryUseCase(unit_of_work),
+        archive_memory_use_case=ArchiveMemoryUseCase(unit_of_work),
+        delete_memory_use_case=DeleteMemoryUseCase(unit_of_work),
         propose_decision_use_case=ProposeDecisionUseCase(unit_of_work),
         approve_decision_use_case=ApproveDecisionUseCase(unit_of_work),
         get_decision_origin_use_case=GetDecisionOriginUseCase(
             decision_repository, event_repository, conversation_repository
         ),
         supersede_decision_use_case=SupersedeDecisionUseCase(unit_of_work),
+        archive_decision_use_case=ArchiveDecisionUseCase(unit_of_work),
         create_backup_use_case=CreateBackupUseCase(backup_service),
         validate_backup_use_case=ValidateBackupUseCase(backup_service),
         restore_backup_use_case=RestoreBackupUseCase(backup_service),

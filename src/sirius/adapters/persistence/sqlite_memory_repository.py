@@ -153,6 +153,15 @@ class SqliteMemoryRepository:
             ).all()
             return [_load_memory(session, model) for model in models]
 
+    def list_archived_memories(self) -> list[Memory]:
+        with self._scope() as session:
+            models = session.scalars(
+                select(MemoryModel)
+                .where(MemoryModel.status == MemoryStatus.ARCHIVED)
+                .order_by(MemoryModel.id)
+            ).all()
+            return [_load_memory(session, model) for model in models]
+
     def get_history(self, memory_id: int) -> list[MemoryRevision]:
         with self._scope() as session:
             memory_model = session.get(MemoryModel, memory_id)

@@ -393,6 +393,96 @@ def test_supersession_survives_closing_and_reopening_the_store(tmp_path: Path) -
 
 
 @pytest.mark.integration
+def test_archive_decision_removes_it_from_current_list_without_deleting_content(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    project_id = _project_id(database_path)
+    decision = repository.create_proposal("Motor de persistencia", project_id, "Usar SQLite local")
+    repository.approve_decision(decision.id)
+
+    archived = repository.archive_decision(decision.id)
+
+    assert archived.status is DecisionStatus.ARCHIVED
+    assert archived.current_revision.content == "Usar SQLite local"
+    assert decision.id not in {d.id for d in repository.list_current_decisions()}
+
+    fetched = repository.get_decision(decision.id)
+    assert fetched.current_revision.content == "Usar SQLite local"
+
+
+@pytest.mark.integration
+def test_list_archived_decisions_returns_only_archived(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    project_id = _project_id(database_path)
+    still_proposed = repository.create_proposal("Asunto A", project_id, "contenido A")
+    approved = repository.create_proposal("Asunto B", project_id, "contenido B")
+    repository.approve_decision(approved.id)
+    to_archive = repository.create_proposal("Asunto C", project_id, "contenido C")
+    repository.approve_decision(to_archive.id)
+    repository.archive_decision(to_archive.id)
+
+    archived_list = repository.list_archived_decisions()
+
+    assert [d.id for d in archived_list] == [to_archive.id]
+    assert still_proposed.id not in [d.id for d in archived_list]
+    assert approved.id not in [d.id for d in archived_list]
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("status_setup", ["proposed", "superseded", "archived"])
+def test_archiving_a_non_approved_decision_is_rejected(tmp_path: Path, status_setup: str) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    project_id = _project_id(database_path)
+    decision = repository.create_proposal("Asunto", project_id, "contenido")
+
+    if status_setup == "proposed":
+        target_id = decision.id
+    elif status_setup == "superseded":
+        repository.approve_decision(decision.id)
+        substitute = repository.create_proposal("Asunto", project_id, "contenido nuevo")
+        repository.supersede_decision(decision.id, substitute.id)
+        target_id = decision.id
+    else:
+        repository.approve_decision(decision.id)
+        repository.archive_decision(decision.id)
+        target_id = decision.id
+
+    with pytest.raises(ValueError, match="Cannot archive"):
+        repository.archive_decision(target_id)
+
+
+@pytest.mark.integration
+def test_archiving_an_unknown_decision_raises(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+
+    with pytest.raises(ValueError, match="Unknown decision"):
+        repository.archive_decision(999)
+
+
+@pytest.mark.integration
+def test_decision_archive_persists_after_closing_and_reopening_sqlite(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    project_id = _project_id(database_path)
+    decision = repository.create_proposal("Motor de persistencia", project_id, "Usar SQLite local")
+    repository.approve_decision(decision.id)
+    repository.archive_decision(decision.id)
+    repository.close()
+
+    reopened = build_sqlite_decision_repository(database_path)
+    fetched = reopened.get_decision(decision.id)
+    assert fetched.status is DecisionStatus.ARCHIVED
+    assert fetched.current_revision.content == "Usar SQLite local"
+    assert [d.id for d in reopened.list_archived_decisions()] == [decision.id]
+    reopened.close()
+
+
+@pytest.mark.integration
 def test_failed_proposal_leaves_no_partial_data(tmp_path: Path) -> None:
     database_path = tmp_path / "sirius.db"
     engine = build_engine(database_path)

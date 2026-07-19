@@ -42,6 +42,9 @@ class _InMemoryConversationRepository:
     def get_message(self, message_id: int) -> Message | None:
         return next((m for m in self._messages if m.id == message_id), None)
 
+    def redact_message(self, message_id: int) -> Message:
+        raise AssertionError("a read-only use case must never redact a message")
+
 
 def _message(conversation_id: int, sequence: int, role: MessageRole, content: str) -> Message:
     return Message(

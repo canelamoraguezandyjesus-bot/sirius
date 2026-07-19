@@ -49,3 +49,15 @@ class ConversationRepository(Protocol):
         source event points at, without exposing the whole conversation.
         """
         ...
+
+    def redact_message(self, message_id: int) -> Message:
+        """Redact a single message's content (B4d, RF-025/DR-012).
+
+        Sets ``content`` to ``None`` and ``status`` to ``REDACTED``,
+        recording ``redacted_at``; ``sequence``, ``created_at`` and every
+        other message stay exactly as they were — Product S7 "conservando
+        solo secuencia, fecha y marcador de eliminación". Never touches any
+        other message. Raises ``ValueError`` if ``message_id`` does not
+        refer to an existing message.
+        """
+        ...

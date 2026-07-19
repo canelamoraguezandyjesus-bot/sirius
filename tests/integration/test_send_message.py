@@ -33,6 +33,7 @@ from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageUseCase, render_instructions
 from sirius.domain.conversation import Conversation, Message, MessageRole, MessageStatus
 from sirius.domain.decision import DecisionStatus
+from sirius.domain.memory import MemoryStatus
 from sirius.domain.project import is_configured
 from sirius.ports.conversation_repository import ConversationRepository
 from sirius.ports.llm import (
@@ -142,6 +143,9 @@ class _FailOnNthAppendConversationRepository:
 
     def get_message(self, message_id: int) -> Message | None:
         return self._delegate.get_message(message_id)
+
+    def redact_message(self, message_id: int) -> Message:
+        return self._delegate.redact_message(message_id)
 
 
 def _seed_bootstrap_singletons(database_path: Path) -> None:
@@ -307,6 +311,53 @@ def test_send_message_never_supersedes_a_decision_as_a_side_effect(tmp_path: Pat
     assert unchanged.status is DecisionStatus.APPROVED
     assert unchanged.supersedes_decision_id is None
     assert decision_repository.get_superseding_decision(approved.id) is None
+
+
+@pytest.mark.integration
+def test_send_message_never_archives_or_deletes_a_memory_as_a_side_effect(
+    tmp_path: Path,
+) -> None:
+    """B4d, RF-024/RF-025: a memory is archived or deleted only by an
+    explicit call to ``ArchiveMemoryUseCase``/``DeleteMemoryUseCase``, never
+    automatically by an ordinary conversation turn discussing it."""
+    database_path = tmp_path / "sirius.db"
+    use_case = _build_use_case(database_path, FakeLLMProvider())
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    memory = SaveManualMemoryUseCase(unit_of_work).save("El usuario prefiere respuestas breves")
+
+    use_case.send_message("olvida lo que dije antes, ya no importa")
+
+    memory_repository = build_sqlite_memory_repository(database_path)
+    unchanged = memory_repository.get_memory(memory.id)
+
+    assert unchanged.status is MemoryStatus.CURRENT
+    assert unchanged.current_revision.content == "El usuario prefiere respuestas breves"
+
+
+@pytest.mark.integration
+def test_send_message_never_archives_a_decision_as_a_side_effect(tmp_path: Path) -> None:
+    """B4d, RF-024: a decision is archived only by an explicit call to
+    ``ArchiveDecisionUseCase``, never automatically by an ordinary
+    conversation turn."""
+    database_path = tmp_path / "sirius.db"
+    use_case = _build_use_case(database_path, FakeLLMProvider())
+    project_repository = build_sqlite_project_repository(database_path)
+    project = project_repository.get_active_project()
+    assert project is not None
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    approved = ApproveDecisionUseCase(unit_of_work).approve(
+        ProposeDecisionUseCase(unit_of_work)
+        .propose("Motor de persistencia", project.id, "Usar SQLite local")
+        .id,
+        confirmed=True,
+    )
+
+    use_case.send_message("esa decisión ya no aplica, archívala")
+
+    decision_repository = build_sqlite_decision_repository(database_path)
+    unchanged = decision_repository.get_decision(approved.id)
+    assert unchanged.status is DecisionStatus.APPROVED
+    assert decision_repository.list_archived_decisions() == []
 
 
 @pytest.mark.integration

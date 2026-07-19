@@ -1,5 +1,5 @@
-"""Domain entities and transition rules for decisions (B4b/B4c, RF-020,
-RF-023, PA-011, PA-013).
+"""Domain entities and transition rules for decisions (B4b/B4c/B4d, RF-020,
+RF-023, RF-024, PA-011, PA-013, PA-015).
 
 Product doc S6 "Modelo conceptual": "Decisión — Recuerdo especializado que
 expresa una elección propuesta, aprobada, sustituida o archivada." B4b
@@ -15,8 +15,17 @@ decision-granularity equivalent of the architecture's
 ``knowledge_revision.supersedes_revision_id`` (S7.3): B4b never gave
 decisions more than one revision (approving does not create one), so the
 substitution link this cut needs is between two ``Decision`` rows, not two
-``DecisionRevision`` rows. Archival (ARCHIVED) still belongs to B4d and is
-not modeled here.
+``DecisionRevision`` rows. B4d adds the fourth and final state the product
+doc's enumeration names — ARCHIVED, the architecture's "ARCHIVADA" (S7.4):
+only an APPROVED (vigente) decision can be archived, mirroring
+``sirius.domain.memory.ensure_can_archive``'s restriction to CURRENT — a
+still-PROPOSED decision was never part of ordinary context to begin with,
+and a SUPERSEDED one is already excluded from it. Deletion is deliberately
+*not* modeled for decisions in this cut: PA-016 and Product S7 "Reglas de
+memoria" both scope elimination to "un recuerdo", and S6's decision-state
+enumeration above does not list an eliminated state the way it explicitly
+lists "archivada" — so RF-025/DR-012 elimination applies to ``Memory``
+only.
 """
 
 from __future__ import annotations
@@ -28,14 +37,15 @@ from enum import StrEnum
 
 class DecisionStatus(StrEnum):
     """Lifecycle of a decision. A decision is either still a proposal, has
-    been explicitly approved, or (B4c) has been explicitly superseded by a
-    later approved decision of the same subject and project. There is no
-    path back from APPROVED or SUPERSEDED to PROPOSED, and no path from
-    SUPERSEDED back to APPROVED."""
+    been explicitly approved, has (B4c) been explicitly superseded by a
+    later approved decision of the same subject and project, or has (B4d)
+    been explicitly archived. There is no path back from APPROVED or
+    SUPERSEDED to PROPOSED, and no path from SUPERSEDED back to APPROVED."""
 
     PROPOSED = "proposed"
     APPROVED = "approved"
     SUPERSEDED = "superseded"
+    ARCHIVED = "archived"
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,4 +144,17 @@ def ensure_can_supersede(superseded: Decision, superseding: Decision) -> None:
         raise ValueError(msg)
     if superseding.subject != superseded.subject or superseding.project_id != superseded.project_id:
         msg = "A decision can only supersede another decision of the same subject and project."
+        raise ValueError(msg)
+
+
+def ensure_can_archive(decision: Decision) -> None:
+    """Only an APPROVED (vigente) decision can be archived (RF-024, B4d).
+
+    Mirrors ``sirius.domain.memory.ensure_can_archive``'s restriction to
+    CURRENT: a PROPOSED decision was never part of ordinary context, and a
+    SUPERSEDED one is already excluded from it, so archiving neither is a
+    meaningful transition.
+    """
+    if decision.status is not DecisionStatus.APPROVED:
+        msg = f"Cannot archive a decision with status '{decision.status.value}'."
         raise ValueError(msg)

@@ -80,6 +80,12 @@ class _StaticDecisionRepository:
     def get_superseding_decision(self, decision_id: int) -> Decision | None:
         raise AssertionError("get_origin() must never read a superseding decision")
 
+    def archive_decision(self, decision_id: int) -> Decision:
+        raise AssertionError("get_origin() must never archive a decision")
+
+    def list_archived_decisions(self) -> list[Decision]:
+        raise AssertionError("get_origin() must never list archived decisions")
+
 
 class _StaticEventRepository:
     def __init__(self, event: Event | None) -> None:
@@ -121,6 +127,9 @@ class _StaticConversationRepository:
     def get_message(self, message_id: int) -> Message | None:
         self.queried_message_ids.append(message_id)
         return self._message
+
+    def redact_message(self, message_id: int) -> Message:
+        raise AssertionError("get_origin() must never redact a message")
 
 
 def test_get_origin_raises_for_an_unknown_decision_id() -> None:

@@ -12,6 +12,7 @@ from sirius.application.approve_decision import (
     InvalidDecisionStatusError,
     UnknownDecisionError,
 )
+from sirius.domain.conversation import Conversation, Message, MessageRole, MessageStatus
 from sirius.domain.decision import Decision, DecisionRevision, DecisionStatus
 from sirius.domain.event import DECISION_APPROVED_EVENT_TYPE, USER_ACTOR, Event
 from sirius.domain.memory import Memory, MemoryRevision
@@ -102,6 +103,12 @@ class _StaticDecisionRepository:
     def get_superseding_decision(self, decision_id: int) -> Decision | None:
         raise AssertionError("approve() must never read a superseding decision")
 
+    def archive_decision(self, decision_id: int) -> Decision:
+        raise AssertionError("approve() must never archive a decision")
+
+    def list_archived_decisions(self) -> list[Decision]:
+        raise AssertionError("approve() must never list archived decisions")
+
 
 class _UnusedMemoryRepository:
     """B4a's ``UnitOfWork.memory_repository``; ``approve()`` never touches it."""
@@ -131,6 +138,40 @@ class _UnusedMemoryRepository:
     def delete_memory(self, memory_id: int) -> Memory:
         raise AssertionError("approve() must never delete a memory")
 
+    def list_archived_memories(self) -> list[Memory]:
+        raise AssertionError("approve() must never list archived memories")
+
+
+class _UnusedConversationRepository:
+    """B4d's ``UnitOfWork.conversation_repository``; ``approve()`` never touches it."""
+
+    def get_or_create_main_conversation(self) -> Conversation:
+        raise AssertionError("approve() must never touch the conversation")
+
+    def get_main_conversation(self) -> Conversation | None:
+        raise AssertionError("approve() must never touch the conversation")
+
+    def append_message(
+        self,
+        conversation_id: int,
+        role: MessageRole,
+        content: str,
+        *,
+        operation_id: str | None = None,
+        identity_version: int | None = None,
+        status: MessageStatus = MessageStatus.COMPLETED,
+    ) -> Message:
+        raise AssertionError("approve() must never append a message")
+
+    def list_messages(self, conversation_id: int) -> list[Message]:
+        raise AssertionError("approve() must never list messages")
+
+    def get_message(self, message_id: int) -> Message | None:
+        raise AssertionError("approve() must never read a message")
+
+    def redact_message(self, message_id: int) -> Message:
+        raise AssertionError("approve() must never redact a message")
+
 
 class _FakeUnitOfWork:
     def __init__(
@@ -141,6 +182,7 @@ class _FakeUnitOfWork:
         self.decision_repository = decision_repository
         self.event_repository = event_repository
         self.memory_repository = _UnusedMemoryRepository()
+        self.conversation_repository = _UnusedConversationRepository()
         self.enter_count = 0
         self.committed = False
         self.rollback_count = 0

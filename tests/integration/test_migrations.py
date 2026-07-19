@@ -73,6 +73,7 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
         "operation_id",
         "identity_version",
         "status",
+        "redacted_at",
     }
     assert llm_usage_columns == {"id", "year_month", "spent_usd", "updated_at"}
     assert project_columns == {
@@ -384,6 +385,93 @@ def test_upgrading_from_the_previous_head_preserves_existing_decisions(tmp_path:
     assert len(revision_rows) == 1
     assert revision_rows[0].decision_id == 1
     assert revision_rows[0].content == "Usar SQLite local"
+
+
+@pytest.mark.integration
+def test_upgrade_head_allows_null_message_content(tmp_path: Path) -> None:
+    """B4d: messages.content must accept NULL so a redacted message can be
+    stored (SIRIUS-ARQ-0.1 S7.3: "contenido NULL solo si REDACTADO")."""
+    database_path = tmp_path / "sirius.db"
+    command.upgrade(_alembic_config(database_path), "head")
+
+    now = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        connection.execute(
+            text("INSERT INTO conversations (created_at, is_main) VALUES (:now, 1)"), {"now": now}
+        )
+        connection.execute(
+            text(
+                "INSERT INTO messages "
+                "(conversation_id, sequence, role, content, created_at, status, redacted_at) "
+                "VALUES (1, 1, 'user', NULL, :now, 'redacted', :now)"
+            ),
+            {"now": now},
+        )
+        row = connection.execute(text("SELECT content, status FROM messages")).fetchone()
+
+    assert row is not None
+    assert row.content is None
+    assert row.status == "redacted"
+
+
+@pytest.mark.integration
+def test_downgrade_to_previous_head_removes_only_message_redaction(tmp_path: Path) -> None:
+    """B4d: downgrading past this migration removes only ``redacted_at`` and
+    restores ``content`` as NOT NULL; every other table (and column) is
+    unaffected."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+
+    command.upgrade(config, "head")
+    command.downgrade(config, "05559a954593")
+
+    inspector = inspect(build_engine(database_path))
+    message_columns = {c["name"] for c in inspector.get_columns("messages")}
+    assert "redacted_at" not in message_columns
+    content_column = next(c for c in inspector.get_columns("messages") if c["name"] == "content")
+    assert content_column["nullable"] is False
+    assert {"messages", "decisions", "decision_revisions"}.issubset(
+        set(inspector.get_table_names())
+    )
+
+
+@pytest.mark.integration
+def test_upgrading_from_the_previous_head_preserves_existing_messages(tmp_path: Path) -> None:
+    """B4d compatibility: a base created before this migration existed (still
+    at the previous head, 05559a954593) upgrades to the new head without
+    losing any existing message; every previously stored message's
+    ``redacted_at`` backfills to ``NULL`` (correct — no message was ever
+    redacted before this migration)."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+    command.upgrade(config, "05559a954593")
+
+    now = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        connection.execute(
+            text("INSERT INTO conversations (created_at, is_main) VALUES (:now, 1)"), {"now": now}
+        )
+        connection.execute(
+            text(
+                "INSERT INTO messages (conversation_id, sequence, role, content, created_at) "
+                "VALUES (1, 1, 'user', 'preferencia original', :now)"
+            ),
+            {"now": now},
+        )
+
+    command.upgrade(config, "head")
+
+    with engine.begin() as connection:
+        rows = connection.execute(
+            text("SELECT id, content, status, redacted_at FROM messages")
+        ).fetchall()
+
+    assert len(rows) == 1
+    assert rows[0].content == "preferencia original"
+    assert rows[0].status == "completed"
+    assert rows[0].redacted_at is None
 
 
 @pytest.mark.integration

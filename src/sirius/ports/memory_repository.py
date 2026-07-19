@@ -34,6 +34,16 @@ class MemoryRepository(Protocol):
         """Return every memory whose status is CURRENT."""
         ...
 
+    def list_archived_memories(self) -> list[Memory]:
+        """Return every memory whose status is ARCHIVED (B4d, RF-024).
+
+        The explicit "consulta de archivados" RF-024 requires: unlike
+        ``list_current_memories``, callers use this only when they
+        deliberately want archived memories, never as part of ordinary
+        context assembly.
+        """
+        ...
+
     def get_history(self, memory_id: int) -> list[MemoryRevision]:
         """Return every revision of a memory, in stable version order."""
         ...
@@ -45,7 +55,7 @@ class MemoryRepository(Protocol):
         ...
 
     def archive_memory(self, memory_id: int) -> Memory:
-        """Remove a memory from ordinary context while keeping its content."""
+        """Remove a memory from ordinary context while keeping its content (RF-024)."""
         ...
 
     def delete_memory(self, memory_id: int) -> Memory:

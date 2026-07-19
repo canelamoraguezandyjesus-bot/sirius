@@ -165,6 +165,9 @@ class _FailOnNthAppendConversationRepository:
     def get_message(self, message_id: int) -> Message | None:
         return self._delegate.get_message(message_id)
 
+    def redact_message(self, message_id: int) -> Message:
+        return self._delegate.redact_message(message_id)
+
 
 def _swap_send_message_use_case(
     window: MainWindow,
