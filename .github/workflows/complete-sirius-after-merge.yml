@@ -1,0 +1,57 @@
+name: Complete Sirius after merge
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: complete-sirius-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  complete:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Complete matching Sirius work item
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          set -euo pipefail
+
+          issue_number="$(gh issue list --repo "$GH_REPO" --state open --search "\"${PR_URL}\" in:body" --json number --jq '.[0].number // empty')"
+          if [ -z "$issue_number" ]; then
+            echo "No open Sirius work item references PR #${PR_NUMBER}."
+            exit 0
+          fi
+
+          for label in \
+            sirius:planned \
+            sirius:implement-requested \
+            sirius:implementing \
+            sirius:ci-pending \
+            sirius:review-requested \
+            sirius:reviewing \
+            sirius:repair-requested \
+            sirius:repairing \
+            sirius:ready-for-merge \
+            sirius:blocked-decision \
+            sirius:failed-safely; do
+            gh issue edit "$issue_number" --repo "$GH_REPO" --remove-label "$label" 2>/dev/null || true
+          done
+
+          gh issue edit "$issue_number" --repo "$GH_REPO" --add-label "sirius:completed"
+          gh issue comment "$issue_number" --repo "$GH_REPO" --body "<!-- sirius-completed:${MERGE_SHA} -->
+
+La PR #${PR_NUMBER} fue fusionada en \`${MERGE_SHA}\`. El bloque queda completado."
+          gh issue close "$issue_number" --repo "$GH_REPO" --reason completed
