@@ -19,3 +19,45 @@ jobs:
   advance:
     if: github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Advance matching Sirius work item
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          set -euo pipefail
+
+          pr_number="$(gh api "repos/${GH_REPO}/actions/runs/${RUN_ID}" --jq '.pull_requests[0].number // empty')"
+          if [ -z "$pr_number" ]; then
+            echo "No pull request associated with workflow run ${RUN_ID}."
+            exit 0
+          fi
+
+          pr_url="https://github.com/${GH_REPO}/pull/${pr_number}"
+          issue_number="$(gh issue list --repo "$GH_REPO" --state open --search "\"${pr_url}\" in:body" --json number,labels --jq '[.[] | select(any(.labels[]?; .name == "sirius:ci-pending"))][0].number // empty')"
+          if [ -z "$issue_number" ]; then
+            echo "No open Sirius work item in ci-pending references PR #${pr_number}."
+            exit 0
+          fi
+
+          current_head="$(gh pr view "$pr_number" --repo "$GH_REPO" --json headRefOid --jq '.headRefOid')"
+          if [ "$current_head" != "$HEAD_SHA" ]; then
+            echo "Ignoring stale Quality result for ${HEAD_SHA}; current PR head is ${current_head}."
+            exit 0
+          fi
+
+          if [ "$CONCLUSION" = "success" ]; then
+            gh issue edit "$issue_number" --repo "$GH_REPO" --remove-label "sirius:ci-pending" --add-label "sirius:review-requested"
+            gh issue comment "$issue_number" --repo "$GH_REPO" --body "<!-- sirius-quality:${HEAD_SHA}:success -->
+
+Quality terminó en verde para el head \`${HEAD_SHA}\` de la PR #${pr_number}. Se solicita revisión independiente."
+          else
+            gh issue edit "$issue_number" --repo "$GH_REPO" --remove-label "sirius:ci-pending" --add-label "sirius:repair-requested"
+            gh issue comment "$issue_number" --repo "$GH_REPO" --body "<!-- sirius-quality:${HEAD_SHA}:${CONCLUSION} -->
+
+Quality terminó con resultado \`${CONCLUSION}\` para el head \`${HEAD_SHA}\` de la PR #${pr_number}. Se solicita corrección limitada."
+          fi
