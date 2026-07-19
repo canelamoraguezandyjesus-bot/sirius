@@ -21,6 +21,7 @@ from sirius.domain.decision import (
     DecisionRevision,
     DecisionStatus,
     ensure_can_approve,
+    ensure_can_archive,
     ensure_can_supersede,
     ensure_valid_content,
     ensure_valid_subject,
@@ -194,6 +195,30 @@ class SqliteDecisionRepository:
             models = session.scalars(
                 select(DecisionModel)
                 .where(DecisionModel.status == DecisionStatus.APPROVED)
+                .order_by(DecisionModel.id)
+            ).all()
+            return [_load_decision(session, model) for model in models]
+
+    def archive_decision(self, decision_id: int) -> Decision:
+        with self._scope() as session:
+            decision_model = session.get(DecisionModel, decision_id)
+            if decision_model is None:
+                msg = f"Unknown decision id: {decision_id}"
+                raise ValueError(msg)
+            decision = _load_decision(session, decision_model)
+            ensure_can_archive(decision)
+
+            decision_model.status = DecisionStatus.ARCHIVED
+            decision_model.updated_at = _utc_now_naive()
+            session.flush()
+
+            return _load_decision(session, decision_model)
+
+    def list_archived_decisions(self) -> list[Decision]:
+        with self._scope() as session:
+            models = session.scalars(
+                select(DecisionModel)
+                .where(DecisionModel.status == DecisionStatus.ARCHIVED)
                 .order_by(DecisionModel.id)
             ).all()
             return [_load_decision(session, model) for model in models]

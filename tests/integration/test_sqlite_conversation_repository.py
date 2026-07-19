@@ -276,3 +276,61 @@ def test_database_rejects_a_second_row_for_the_same_operation_and_role(tmp_path:
             )
         )
         session.flush()
+
+
+@pytest.mark.integration
+def test_redact_message_nulls_content_and_sets_status_and_timestamp(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    conversation = repository.get_or_create_main_conversation()
+    message = repository.append_message(conversation.id, MessageRole.USER, "recuerda esto")
+
+    redacted = repository.redact_message(message.id)
+
+    assert redacted.content is None
+    assert redacted.status is MessageStatus.REDACTED
+    assert redacted.redacted_at is not None
+    assert redacted.sequence == message.sequence
+    assert redacted.created_at == message.created_at
+
+
+@pytest.mark.integration
+def test_redact_message_never_touches_a_different_message(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    conversation = repository.get_or_create_main_conversation()
+    target = repository.append_message(conversation.id, MessageRole.USER, "redactar este")
+    other = repository.append_message(conversation.id, MessageRole.SIRIUS, "conservar este")
+
+    repository.redact_message(target.id)
+
+    untouched = repository.get_message(other.id)
+    assert untouched is not None
+    assert untouched.content == "conservar este"
+    assert untouched.status is MessageStatus.COMPLETED
+    assert untouched.redacted_at is None
+
+
+@pytest.mark.integration
+def test_redact_message_rejects_an_unknown_id(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+
+    with pytest.raises(ValueError, match="Unknown message"):
+        repository.redact_message(999)
+
+
+@pytest.mark.integration
+def test_redaction_persists_after_closing_and_reopening_sqlite(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    conversation = repository.get_or_create_main_conversation()
+    message = repository.append_message(conversation.id, MessageRole.USER, "recuerda esto")
+    repository.redact_message(message.id)
+    repository.close()
+
+    reopened = build_sqlite_conversation_repository(database_path)
+    (reloaded,) = reopened.list_messages(conversation.id)
+    assert reloaded.content is None
+    assert reloaded.status is MessageStatus.REDACTED
+    reopened.close()

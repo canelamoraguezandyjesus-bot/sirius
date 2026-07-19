@@ -80,6 +80,9 @@ class _StaticMemoryRepository:
     def delete_memory(self, memory_id: int) -> Memory:
         raise AssertionError("get_origin() must never delete a memory")
 
+    def list_archived_memories(self) -> list[Memory]:
+        raise AssertionError("get_origin() must never list archived memories")
+
 
 class _StaticEventRepository:
     def __init__(self, event: Event | None) -> None:
@@ -121,6 +124,9 @@ class _StaticConversationRepository:
     def get_message(self, message_id: int) -> Message | None:
         self.queried_message_ids.append(message_id)
         return self._message
+
+    def redact_message(self, message_id: int) -> Message:
+        raise AssertionError("get_origin() must never redact a message")
 
 
 def test_get_origin_raises_for_an_unknown_memory_id() -> None:

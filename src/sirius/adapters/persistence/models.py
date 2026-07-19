@@ -45,6 +45,11 @@ class MessageModel(Base):
     ``operation_id``. Rows predating V6B keep ``operation_id`` NULL; SQL
     treats every NULL as distinct, so old rows never collide with each
     other or with new ones.
+
+    ``content`` is nullable (B4d) because it becomes NULL exactly when
+    ``status`` is REDACTED (RF-025/DR-012); every other status always
+    carries real, possibly partial, content. ``redacted_at`` mirrors
+    ``EventModel.redacted_at`` and stays NULL until a message is redacted.
     """
 
     __tablename__ = "messages"
@@ -69,7 +74,7 @@ class MessageModel(Base):
         ),
         nullable=False,
     )
-    content: Mapped[str] = mapped_column(Text, nullable=False)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
     operation_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     identity_version: Mapped[int | None] = mapped_column(nullable=True)
@@ -84,6 +89,7 @@ class MessageModel(Base):
         default=MessageStatus.COMPLETED,
         server_default=MessageStatus.COMPLETED.value,
     )
+    redacted_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
 
 class EventModel(Base):
@@ -267,7 +273,9 @@ class DecisionModel(Base):
     ``status`` lives here, not on the revision — mirroring ``ProjectModel``:
     approving a decision (``ApproveDecisionUseCase``) changes this column in
     place and never creates a new revision, since the content does not
-    change. B4c adds the third status, SUPERSEDED.
+    change. B4c adds the third status, SUPERSEDED; B4d adds the fourth,
+    ARCHIVED (RF-024) — only reachable from APPROVED, mirroring
+    ``MemoryModel``'s CURRENT -> ARCHIVED transition.
 
     ``supersedes_decision_id`` (B4c, RF-023) is set only when this decision
     became APPROVED by explicitly superseding another; ``NULL`` otherwise. A

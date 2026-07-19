@@ -11,6 +11,7 @@ from sirius.application.save_manual_memory import (
     InvalidManualMemoryDataError,
     SaveManualMemoryUseCase,
 )
+from sirius.domain.conversation import Conversation, Message, MessageRole, MessageStatus
 from sirius.domain.decision import Decision
 from sirius.domain.event import MANUAL_MEMORY_SAVE_EVENT_TYPE, USER_ACTOR, Event
 from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
@@ -95,6 +96,9 @@ class _RecordingMemoryRepository:
     def delete_memory(self, memory_id: int) -> Memory:
         raise AssertionError("save() must never delete a memory")
 
+    def list_archived_memories(self) -> list[Memory]:
+        raise AssertionError("save() must never list archived memories")
+
 
 class _UnusedDecisionRepository:
     """B4b/B4c's ``UnitOfWork.decision_repository``; ``save()`` never touches it."""
@@ -121,6 +125,43 @@ class _UnusedDecisionRepository:
     def get_superseding_decision(self, decision_id: int) -> Decision | None:
         raise AssertionError("save() must never read a superseding decision")
 
+    def archive_decision(self, decision_id: int) -> Decision:
+        raise AssertionError("save() must never archive a decision")
+
+    def list_archived_decisions(self) -> list[Decision]:
+        raise AssertionError("save() must never list archived decisions")
+
+
+class _UnusedConversationRepository:
+    """B4d's ``UnitOfWork.conversation_repository``; ``save()`` never touches it."""
+
+    def get_or_create_main_conversation(self) -> Conversation:
+        raise AssertionError("save() must never touch the conversation")
+
+    def get_main_conversation(self) -> Conversation | None:
+        raise AssertionError("save() must never touch the conversation")
+
+    def append_message(
+        self,
+        conversation_id: int,
+        role: MessageRole,
+        content: str,
+        *,
+        operation_id: str | None = None,
+        identity_version: int | None = None,
+        status: MessageStatus = MessageStatus.COMPLETED,
+    ) -> Message:
+        raise AssertionError("save() must never append a message")
+
+    def list_messages(self, conversation_id: int) -> list[Message]:
+        raise AssertionError("save() must never list messages")
+
+    def get_message(self, message_id: int) -> Message | None:
+        raise AssertionError("save() must never read a message")
+
+    def redact_message(self, message_id: int) -> Message:
+        raise AssertionError("save() must never redact a message")
+
 
 class _FakeUnitOfWork:
     """In-memory stand-in for ``SqliteUnitOfWork``: same commit/rollback contract.
@@ -137,6 +178,7 @@ class _FakeUnitOfWork:
         self.memory_repository = memory_repository
         self.event_repository = event_repository
         self.decision_repository = _UnusedDecisionRepository()
+        self.conversation_repository = _UnusedConversationRepository()
         self.enter_count = 0
         self.committed = False
         self.rollback_count = 0

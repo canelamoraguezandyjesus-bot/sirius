@@ -107,16 +107,36 @@ Implementado además en V8 (B4a, B4b, B4c):
   histórica en una sola transacción; la decisión sustituida permanece
   consultable y enlazada con su sucesora, y la consulta ordinaria de
   decisiones vigentes (`list_current_decisions`) devuelve solo la sustituta
-  (B4c, RF-023, PA-013).
+  (B4c, RF-023, PA-013);
+  archivo de recuerdos y decisiones, eliminación de recuerdos con
+  confirmación explícita y elección explícita sobre el mensaje fuente
+  (`ArchiveMemoryUseCase`, `ArchiveDecisionUseCase`, `DeleteMemoryUseCase`,
+  B4d, RF-024, RF-025, PA-015, PA-016, SP-06): archivar consolida, bajo el
+  contrato transaccional de B4a, el archivo que
+  `MemoryRepository.archive_memory`/`delete_memory` ya implementaban desde
+  V4; `DecisionStatus.ARCHIVED` (nuevo, solo alcanzable desde APROBADA) hace
+  lo mismo para decisiones; `list_archived_memories()`/
+  `list_archived_decisions()` son las consultas explícitas de archivados,
+  que las consultas ordinarias siguen excluyendo. `DeleteMemoryUseCase`
+  exige `confirmed=True` y una elección explícita y tipada
+  (`SourceMessageChoice.PRESERVE`/`REDACT`, sin valor por defecto) antes de
+  abrir ninguna transacción; redacta el contenido estructurado de toda la
+  historia de revisiones (conserva id, versión, origen y fecha como
+  marcador mínimo) y, si se elige redactar, también el mensaje fuente
+  (`ConversationRepository.redact_message`, nuevo), todo en la misma
+  `UnitOfWork` que el evento de auditoría. La eliminación de decisiones
+  queda deliberadamente fuera de este corte: ni PA-016 ni la enumeración de
+  estados de decisión de Producto S6 la mencionan (a diferencia de
+  "archivada").
 
 Pendiente dentro de V8:
 
 - precedencia entre decisión y recuerdo;
 - detección y resolución explícita de conflictos (B4e);
-- archivo, eliminación y elección de redactar también el mensaje fuente (B4d);
 - indexación y búsqueda pertinente;
-- casos de uso e interfaz de decisiones en las superficies existentes (B4f);
-- pruebas PA-014 a PA-016 y la parte correspondiente de PA-E2E-01.
+- casos de uso e interfaz de decisiones y de archivo/eliminación en las
+  superficies existentes (B4f);
+- pruebas PA-014 y la parte correspondiente de PA-E2E-01.
 
 Defectos relacionados: D-03, D-04 y D-11.
 

@@ -9,6 +9,7 @@ from sirius.domain.decision import (
     DecisionRevision,
     DecisionStatus,
     ensure_can_approve,
+    ensure_can_archive,
     ensure_can_supersede,
     ensure_valid_content,
     ensure_valid_subject,
@@ -71,8 +72,13 @@ def test_ensure_can_approve_rejects_an_already_approved_decision() -> None:
         ensure_can_approve(_decision(DecisionStatus.APPROVED))
 
 
-def test_decision_status_has_the_three_states_b4b_and_b4c_need() -> None:
-    assert {member.value for member in DecisionStatus} == {"proposed", "approved", "superseded"}
+def test_decision_status_has_the_four_states_b4b_b4c_and_b4d_need() -> None:
+    assert {member.value for member in DecisionStatus} == {
+        "proposed",
+        "approved",
+        "superseded",
+        "archived",
+    }
 
 
 def test_ensure_can_supersede_accepts_an_approved_decision_superseded_by_a_proposed_one() -> None:
@@ -130,3 +136,15 @@ def test_ensure_can_supersede_rejects_a_would_be_cyclical_reversal() -> None:
 
     with pytest.raises(ValueError, match="Cannot supersede"):
         ensure_can_supersede(original, substitute)
+
+
+def test_ensure_can_archive_accepts_an_approved_decision() -> None:
+    ensure_can_archive(_decision(DecisionStatus.APPROVED))  # must not raise
+
+
+@pytest.mark.parametrize(
+    "status", [DecisionStatus.PROPOSED, DecisionStatus.SUPERSEDED, DecisionStatus.ARCHIVED]
+)
+def test_ensure_can_archive_rejects_non_approved(status: DecisionStatus) -> None:
+    with pytest.raises(ValueError, match="Cannot archive"):
+        ensure_can_archive(_decision(status))

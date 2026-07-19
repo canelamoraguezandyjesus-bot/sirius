@@ -258,6 +258,27 @@ def test_archive_removes_memory_from_current_list_without_deleting_content(
 
 
 @pytest.mark.integration
+def test_list_archived_memories_returns_only_archived_and_excludes_current_and_deleted(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    current = repository.create_memory("vigente", "manual")
+    archived = repository.create_memory("archivado", "manual")
+    repository.archive_memory(archived.id)
+    deleted = repository.create_memory("eliminado", "manual")
+    repository.delete_memory(deleted.id)
+
+    archived_list = repository.list_archived_memories()
+
+    assert [m.id for m in archived_list] == [archived.id]
+    assert archived_list[0].status is MemoryStatus.ARCHIVED
+    assert archived_list[0].current_revision.content == "archivado"
+    assert current.id not in [m.id for m in archived_list]
+    assert deleted.id not in [m.id for m in archived_list]
+
+
+@pytest.mark.integration
 def test_archiving_an_already_archived_or_deleted_memory_is_rejected(tmp_path: Path) -> None:
     database_path = tmp_path / "sirius.db"
     repository = _build_repository(database_path)
@@ -309,6 +330,38 @@ def test_archived_memory_can_still_be_deleted(tmp_path: Path) -> None:
     deleted = repository.delete_memory(memory.id)
 
     assert deleted.status is MemoryStatus.DELETED
+
+
+@pytest.mark.integration
+def test_archive_persists_after_closing_and_reopening_sqlite(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    memory = repository.create_memory("preferencia", "manual")
+    repository.archive_memory(memory.id)
+    repository.close()
+
+    reopened = build_sqlite_memory_repository(database_path)
+    fetched = reopened.get_memory(memory.id)
+    assert fetched.status is MemoryStatus.ARCHIVED
+    assert fetched.current_revision.content == "preferencia"
+    assert [m.id for m in reopened.list_archived_memories()] == [memory.id]
+    reopened.close()
+
+
+@pytest.mark.integration
+def test_delete_persists_after_closing_and_reopening_sqlite(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    memory = repository.create_memory("preferencia", "manual")
+    repository.delete_memory(memory.id)
+    repository.close()
+
+    reopened = build_sqlite_memory_repository(database_path)
+    fetched = reopened.get_memory(memory.id)
+    assert fetched.status is MemoryStatus.DELETED
+    assert fetched.current_revision.content is None
+    assert reopened.list_current_memories() == []
+    reopened.close()
 
 
 @pytest.mark.integration

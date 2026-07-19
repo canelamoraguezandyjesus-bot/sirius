@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -36,6 +38,9 @@ def _to_domain_message(model: MessageModel) -> Message:
         operation_id=model.operation_id,
         identity_version=model.identity_version,
         status=model.status,
+        redacted_at=(
+            model.redacted_at.replace(tzinfo=UTC) if model.redacted_at is not None else None
+        ),
     )
 
 
@@ -46,11 +51,27 @@ def _find_main_conversation_model(session: Session) -> ConversationModel | None:
 
 
 class SqliteConversationRepository:
-    """Conversation repository backed by a local SQLite database."""
+    """Conversation repository backed by a local SQLite database.
 
-    def __init__(self, session_factory: sessionmaker[Session], engine: Engine) -> None:
+    Normally owns its ``session_factory`` and opens/commits/closes one short
+    session per call (via ``session_scope``). When ``session`` is given
+    instead (B4d), every call writes through that externally owned session
+    and never commits or closes it — this is how ``SqliteUnitOfWork`` binds
+    this repository to the same transaction as ``SqliteMemoryRepository``/
+    ``SqliteEventRepository``, so a memory deletion and the source message
+    redaction it may trigger commit or roll back together.
+    """
+
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session] | None,
+        engine: Engine | None,
+        *,
+        session: Session | None = None,
+    ) -> None:
         self._session_factory = session_factory
         self._engine = engine
+        self._external_session = session
 
     def close(self) -> None:
         """Release every pooled connection this repository's engine holds.
@@ -59,10 +80,20 @@ class SqliteConversationRepository:
         safe backup restoration: a connection left open in the pool blocks
         the atomic file replace on Windows.
         """
-        self._engine.dispose()
+        if self._engine is not None:
+            self._engine.dispose()
+
+    @contextmanager
+    def _scope(self) -> Iterator[Session]:
+        if self._external_session is not None:
+            yield self._external_session
+            return
+        assert self._session_factory is not None
+        with session_scope(self._session_factory) as session:
+            yield session
 
     def get_or_create_main_conversation(self) -> Conversation:
-        with session_scope(self._session_factory) as session:
+        with self._scope() as session:
             model = _find_main_conversation_model(session)
             if model is None:
                 model = ConversationModel(created_at=_utc_now_naive(), is_main=True)
@@ -71,7 +102,7 @@ class SqliteConversationRepository:
             return _to_domain_conversation(model)
 
     def get_main_conversation(self) -> Conversation | None:
-        with session_scope(self._session_factory) as session:
+        with self._scope() as session:
             model = _find_main_conversation_model(session)
             if model is None:
                 return None
@@ -87,7 +118,7 @@ class SqliteConversationRepository:
         identity_version: int | None = None,
         status: MessageStatus = MessageStatus.COMPLETED,
     ) -> Message:
-        with session_scope(self._session_factory) as session:
+        with self._scope() as session:
             conversation = session.get(ConversationModel, conversation_id)
             if conversation is None:
                 msg = f"Unknown conversation id: {conversation_id}"
@@ -131,7 +162,7 @@ class SqliteConversationRepository:
             return _to_domain_message(model)
 
     def list_messages(self, conversation_id: int) -> list[Message]:
-        with session_scope(self._session_factory) as session:
+        with self._scope() as session:
             models = session.scalars(
                 select(MessageModel)
                 .where(MessageModel.conversation_id == conversation_id)
@@ -140,10 +171,23 @@ class SqliteConversationRepository:
             return [_to_domain_message(model) for model in models]
 
     def get_message(self, message_id: int) -> Message | None:
-        with session_scope(self._session_factory) as session:
+        with self._scope() as session:
             model = session.get(MessageModel, message_id)
             if model is None:
                 return None
+            return _to_domain_message(model)
+
+    def redact_message(self, message_id: int) -> Message:
+        with self._scope() as session:
+            model = session.get(MessageModel, message_id)
+            if model is None:
+                msg = f"Unknown message id: {message_id}"
+                raise ValueError(msg)
+
+            model.content = None
+            model.status = MessageStatus.REDACTED
+            model.redacted_at = _utc_now_naive()
+            session.flush()
             return _to_domain_message(model)
 
 
@@ -152,3 +196,8 @@ def build_sqlite_conversation_repository(database_path: Path) -> SqliteConversat
     engine = build_engine(database_path)
     session_factory = build_session_factory(engine)
     return SqliteConversationRepository(session_factory, engine)
+
+
+def bind_sqlite_conversation_repository(session: Session) -> SqliteConversationRepository:
+    """Bind a repository to an externally owned session (used by ``SqliteUnitOfWork``)."""
+    return SqliteConversationRepository(None, None, session=session)
