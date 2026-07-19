@@ -1,19 +1,19 @@
 # SIRIUS - Máquina de estados del flujo automático
 
-**Versión:** 0.1 propuesta  
+**Versión:** 0.2 propuesta  
 **Fecha:** 19 de julio de 2026  
 **Estado:** En definición  
 **Alcance:** Orquestación automática por eventos para Sirius 0.1
 
 ## 1. Decisión de diseño
 
-El usuario debe poder escribir únicamente una orden breve, por ejemplo:
+El usuario debe poder escribir una orden breve, por ejemplo:
 
 > Implementa B4e.
 
-ChatGPT transforma esa orden en una incidencia de trabajo estructurada en GitHub y aplica una etiqueta de activación. Desde ese momento, el flujo avanza por eventos de GitHub sin copiar ni pegar prompts manualmente.
+ChatGPT convierte esa orden en una incidencia estructurada y aplica el evento inicial. Desde ese momento, GitHub Actions y las Routines hacen avanzar el trabajo por eventos.
 
-Las etiquetas no contienen el trabajo. La incidencia contiene el contrato completo de ejecución. Las etiquetas solo representan estados o transiciones.
+La incidencia contiene el contrato completo. Las etiquetas representan estados o transiciones.
 
 ## 2. Componentes
 
@@ -21,61 +21,51 @@ Las etiquetas no contienen el trabajo. La incidencia contiene el contrato comple
 
 Responsabilidades:
 
-- interpretar la orden breve del usuario;
-- leer Producto, Arquitectura, ATD y estado vigente;
-- crear la incidencia de trabajo con objetivo, alcance, prohibiciones, requisitos, pruebas y condición de parada;
-- aplicar la etiqueta inicial;
-- explicar bloqueos;
+- interpretar la orden breve;
+- leer las fuentes aprobadas;
+- crear la incidencia de trabajo;
+- aplicar el evento inicial;
+- consultar y explicar estados;
 - registrar decisiones humanas;
-- ejecutar el merge solo tras autorización explícita.
+- ejecutar el merge tras autorización explícita.
 
-ChatGPT no vigila por horas ni gobierna el ciclo mediante tareas programadas.
+Limitación operativa: ChatGPT no puede iniciar una conversación ni contactar al usuario por sí solo cuando el chat está inactivo.
 
-### 2.2 Incidencia de trabajo como fuente de verdad
+### 2.2 Incidencia de control
 
-Cada bloque utiliza una única incidencia de control con:
+Cada bloque mantiene una única incidencia con:
 
-- identificador del trabajo;
-- bloque solicitado;
-- objetivo;
-- alcance permitido;
+- identificador y bloque;
+- objetivo y alcance;
 - fuera de alcance;
-- requisitos y pruebas vinculadas;
-- validaciones obligatorias;
-- rama y PR asociadas;
-- head SHA vigente;
-- número de ciclo de corrección;
+- requisitos y pruebas;
+- rama, PR y head SHA;
+- contador de correcciones;
 - resultado actual;
 - decisiones pendientes;
-- prohibición de merge automático.
+- merge automático desactivado.
 
-### 2.3 Routine implementadora genérica
+### 2.3 Routines genéricas
 
-Una sola Routine implementadora sirve para cualquier bloque. No contiene instrucciones específicas de B4e, B4f u otra vertical. Lee la incidencia activadora y ejecuta únicamente el contrato allí definido.
+- **Implementadora:** ejecuta cualquier incidencia válida.
+- **Revisora:** audita cualquier PR vinculada sin modificar código en la primera pasada.
+- **Correctora:** corrige exclusivamente observaciones estructuradas en la misma rama y PR.
 
-### 2.4 Routine revisora genérica
+### 2.4 GitHub Actions
 
-Una sola Routine revisora audita cualquier PR vinculada a una incidencia válida. Revisa el head exacto, el alcance, las pruebas, la arquitectura y la seguridad. En la primera pasada no corrige código.
+Reacciona a:
 
-### 2.5 Routine correctora genérica
-
-Una sola Routine correctora recibe observaciones estructuradas, corrige exclusivamente esas observaciones en la misma rama y PR, ejecuta validaciones y devuelve el trabajo al ciclo de CI y revisión.
-
-### 2.6 GitHub Actions como orquestador determinista
-
-GitHub Actions reacciona a eventos objetivos:
-
-- etiqueta añadida;
-- PR abierta o marcada como lista;
+- etiquetas añadidas;
+- PR abierta o lista;
 - CI completado;
 - revisión publicada;
 - merge realizado.
 
-No toma decisiones de producto. Solo valida condiciones y mueve el trabajo al siguiente estado.
+Solo valida condiciones y mueve estados. No decide producto ni arquitectura.
 
-## 3. Etiquetas propuestas
+## 3. Etiquetas
 
-### Estados estables
+### Estados persistentes
 
 - `sirius:planned`
 - `sirius:implementing`
@@ -93,174 +83,138 @@ No toma decisiones de producto. Solo valida condiciones y mueve el trabajo al si
 - `sirius:review-requested`
 - `sirius:repair-requested`
 
-Las etiquetas de evento se consumen al comenzar la Routine correspondiente. No deben permanecer como estado permanente.
+Los eventos se consumen al comenzar la Routine correspondiente.
 
-## 4. Flujo completo
+## 4. Transiciones
 
 ### 4.1 Inicio
 
-1. El usuario escribe `Implementa <bloque>`.
-2. ChatGPT crea la incidencia estructurada.
-3. ChatGPT aplica `sirius:implement-requested`.
-4. La Routine implementadora valida la incidencia, consume la etiqueta de evento y aplica `sirius:implementing`.
+`planned -> implement-requested -> implementing`
 
-### 4.2 Implementación
+La implementadora valida la incidencia y consume el evento antes de actuar.
 
-La Routine implementadora:
+### 4.2 Implementación terminada
 
-- crea una rama propia desde la base registrada;
-- implementa solo el alcance autorizado;
-- añade o actualiza pruebas;
-- ejecuta Ruff, mypy, pytest y validaciones adicionales;
-- abre o actualiza una PR;
-- registra PR, rama y head SHA en la incidencia;
-- sustituye `sirius:implementing` por `sirius:ci-pending`;
-- se detiene sin merge.
+`implementing -> ci-pending`
 
-### 4.3 CI
+Debe registrar rama, PR y head SHA y detenerse sin merge.
 
-Cuando `Quality` termina sobre el head registrado:
+### 4.3 Resultado de CI
 
-- si pasa, GitHub elimina `sirius:ci-pending` y añade `sirius:review-requested`;
-- si falla y el fallo es técnicamente corregible, añade `sirius:repair-requested` con el diagnóstico estructurado;
-- si el fallo no es seguro de corregir automáticamente, aplica `sirius:failed-safely`.
+Con el head registrado:
+
+- éxito: `ci-pending -> review-requested`;
+- fallo corregible: `ci-pending -> repair-requested`;
+- fallo inseguro o no clasificable: `ci-pending -> failed-safely`.
 
 ### 4.4 Revisión
 
-La Routine revisora:
+`review-requested -> reviewing`
 
-- consume `sirius:review-requested`;
-- aplica `sirius:reviewing`;
-- verifica que el head SHA coincide con el CI aprobado;
-- audita el diff completo, pruebas, alcance, persistencia, migraciones, seguridad y arquitectura;
-- publica uno de los resultados permitidos.
+La revisora publica uno de estos resultados:
 
-Resultados:
-
-- `REVIEW_APPROVED` -> `sirius:ready-for-merge`;
-- `CHANGES_REQUESTED` -> `sirius:repair-requested`;
-- `BLOCKED_BY_DECISION` -> `sirius:blocked-decision`;
-- `FAILED_SAFELY` -> `sirius:failed-safely`.
+- `REVIEW_APPROVED -> ready-for-merge`;
+- `CHANGES_REQUESTED -> repair-requested`;
+- `BLOCKED_BY_DECISION -> blocked-decision`;
+- `FAILED_SAFELY -> failed-safely`.
 
 ### 4.5 Corrección
 
-La Routine correctora:
+`repair-requested -> repairing -> ci-pending`
 
-- consume `sirius:repair-requested`;
-- valida que existen observaciones concretas y un ciclo disponible;
-- aplica `sirius:repairing`;
-- corrige exclusivamente esas observaciones;
-- no amplía alcance ni reescribe requisitos;
-- incrementa el contador de ciclo;
-- ejecuta validaciones;
-- registra el nuevo head SHA;
-- vuelve a `sirius:ci-pending`.
+La correctora:
 
-Tras CI verde, el flujo vuelve automáticamente a revisión.
+- exige observaciones concretas;
+- corrige solo esas observaciones;
+- no amplía alcance;
+- incrementa el contador;
+- registra el nuevo head;
+- vuelve a CI.
 
-### 4.6 Límite del ciclo
+Máximo dos ciclos. Si no converge:
 
-Se permiten como máximo dos ciclos de revisión-corrección.
+`repairing -> blocked-decision`
 
-Si el segundo ciclo no converge:
+### 4.6 Listo para merge
 
-- se elimina cualquier evento de corrección pendiente;
-- se aplica `sirius:blocked-decision`;
-- se informa al usuario con el problema exacto;
-- no se realizan más cambios automáticos.
+Cuando se alcanza `ready-for-merge`:
 
-### 4.7 Merge
+- la PR permanece abierta y sin fusionar;
+- GitHub, la Routine o un canal expresamente configurado emite una notificación por evento;
+- el sistema se detiene.
 
-Cuando la incidencia tenga `sirius:ready-for-merge`, ChatGPT informa al usuario.
+ChatGPT no promete iniciar el aviso. Cuando el usuario abra el chat o responda a la notificación, podrá ordenar `Fusiona`.
 
-El merge requiere una orden explícita como:
+### 4.7 Merge y cierre
 
-> Fusiona.
-
-Antes de ejecutar el merge, ChatGPT verifica:
+Antes del merge, ChatGPT verifica:
 
 - PR abierta;
 - CI verde sobre el head actual;
-- `REVIEW_APPROVED` para ese mismo head;
-- ausencia de bloqueos;
-- ausencia de cambios posteriores a la aprobación.
+- aprobación para el mismo head;
+- ausencia de bloqueos y cambios posteriores.
 
-Tras el merge:
+Tras autorización explícita:
 
-- la incidencia pasa a `sirius:completed`;
-- se registra el commit de merge;
-- se cierra la incidencia;
-- no se inicia el siguiente bloque salvo orden del usuario o cola aprobada.
+`ready-for-merge -> completed`
 
-## 5. Protección contra duplicados y bucles
+Se registra el commit y se cierra la incidencia.
 
-Cada transición debe ser idempotente.
+## 5. Idempotencia y bloqueo de duplicados
 
-Antes de actuar, toda Routine comprueba:
+Toda transición comprueba:
 
-- identificador único de trabajo;
-- estado actual permitido;
+- identificador único;
+- estado de origen permitido;
 - head SHA esperado;
-- que no exista otra ejecución activa para el mismo trabajo y estado;
-- que la etiqueta de evento no haya sido ya consumida;
+- ausencia de ejecución activa equivalente;
+- evento no consumido;
 - contador de ciclos.
 
-Los eventos repetidos o webhooks reintentados no deben duplicar ramas, PR, revisiones ni correcciones.
+Los webhooks repetidos no pueden crear duplicados de ramas, PR, revisiones o correcciones.
 
-## 6. Formato de observaciones corregibles
+## 6. Formato de cambios solicitados
 
-`CHANGES_REQUESTED` debe publicar observaciones estructuradas con:
+Cada observación corregible incluirá:
 
 - identificador;
 - severidad;
 - archivo o componente;
-- problema observado;
+- problema;
 - criterio esperado;
 - prueba que demuestra el fallo;
 - límites de la corrección.
 
-La Routine correctora no acepta instrucciones vagas como `mejorar el código` o `revisar todo`.
+La correctora rechazará instrucciones vagas como `mejorar el código`.
 
-## 7. Qué puede automatizarse
+## 7. Control humano
 
-Puede automatizarse:
+Permanecen bajo control humano:
 
-- creación de la incidencia desde una orden breve;
-- activación del implementador;
-- creación de rama y PR;
-- CI;
-- activación de revisión;
-- revisión independiente;
-- correcciones técnicas acotadas;
-- repetición de CI y revisión;
-- actualización de estados;
-- aviso de listo para merge;
-- cierre posterior al merge.
-
-## 8. Qué permanece bajo control humano
-
-Permanece bajo control humano:
-
-- decisiones de producto o arquitectura;
+- producto y arquitectura;
 - ampliaciones de alcance;
 - excepciones de seguridad;
-- resolución de contradicciones canónicas;
+- contradicciones canónicas;
 - autorización final de merge.
 
-## 9. Qué no se utilizará como motor
+## 8. Prohibiciones
 
-No se utilizarán tareas horarias o vigilancia periódica como motor del flujo.
+- tareas horarias como motor;
+- vigilancia periódica de PR;
+- merge automático;
+- cambios directos en `main`;
+- bucles ilimitados;
+- inicio automático indefinido de bloques.
 
-Las tareas programadas de ChatGPT podrán usarse únicamente para resúmenes o recordatorios opcionales. La ejecución técnica se activa mediante eventos de GitHub.
+## 9. Orden de construcción
 
-## 10. Orden de implementación
-
-1. Crear las etiquetas y su semántica.
-2. Definir la plantilla estructurada de incidencia de trabajo.
-3. Generalizar la Routine implementadora.
-4. Automatizar `CI verde -> review-requested`.
-5. Generalizar la Routine revisora.
-6. Crear la Routine correctora.
-7. Implementar contador de ciclos e idempotencia.
-8. Automatizar el cierre tras merge.
-9. Probar el flujo completo con un bloque acotado antes de usarlo de forma general.
+1. Etiquetas.
+2. Plantilla universal de incidencia.
+3. Routine implementadora.
+4. Evento `CI verde -> review-requested`.
+5. Routine revisora.
+6. Routine correctora.
+7. Contador e idempotencia.
+8. Notificación por evento.
+9. Cierre tras merge.
+10. Prueba integral con un bloque acotado.
