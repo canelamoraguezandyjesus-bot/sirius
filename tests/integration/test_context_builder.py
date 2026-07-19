@@ -16,6 +16,9 @@ from sirius.adapters.persistence.models import (
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
 )
+from sirius.adapters.persistence.sqlite_decision_repository import (
+    build_sqlite_decision_repository,
+)
 from sirius.adapters.persistence.sqlite_identity_repository import (
     build_sqlite_identity_repository,
 )
@@ -23,6 +26,7 @@ from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_me
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.application.context import Context, ContextAssemblyError, ContextBuilder
 from sirius.domain.conversation import MessageRole
+from sirius.ports.decision_repository import DecisionRepository
 
 
 def _prepare_schema(database_path: Path) -> None:
@@ -53,12 +57,18 @@ def _seed_bootstrap_singletons(
     build_sqlite_identity_repository(database_path).get_or_create_current_identity()
 
 
-def _build_context_builder(database_path: Path, recent_messages_limit: int = 20) -> ContextBuilder:
+def _build_context_builder(
+    database_path: Path,
+    recent_messages_limit: int = 20,
+    *,
+    decision_repository: DecisionRepository | None = None,
+) -> ContextBuilder:
     return ContextBuilder(
         identity_repository=build_sqlite_identity_repository(database_path),
         project_repository=build_sqlite_project_repository(database_path),
         memory_repository=build_sqlite_memory_repository(database_path),
         conversation_repository=build_sqlite_conversation_repository(database_path),
+        decision_repository=decision_repository,
         recent_messages_limit=recent_messages_limit,
     )
 
@@ -314,3 +324,102 @@ def test_build_after_bootstrap_does_not_change_any_row_count(tmp_path: Path) -> 
     counts_after = _row_counts(database_path)
 
     assert counts_after == counts_before
+
+
+@pytest.mark.integration
+def test_build_without_a_decision_repository_never_excludes_conflicting_memories(
+    tmp_path: Path,
+) -> None:
+    """B4e: omitting ``decision_repository`` (the default) leaves build()
+    byte-for-byte identical to pre-B4e behaviour — even memories that would
+    otherwise conflict stay in context, since there is nothing available to
+    resolve them against."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    builder = _build_context_builder(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+
+    first = memory_repository.create_memory(
+        "responder breve", "manual", subject_key="tono", project_id=1
+    )
+    second = memory_repository.create_memory(
+        "responder extenso", "manual", subject_key="tono", project_id=1
+    )
+
+    context = builder.build("hola")
+
+    assert {m.id for m in context.memories} == {first.id, second.id}
+
+
+@pytest.mark.integration
+def test_build_excludes_a_conflicting_group_when_a_decision_repository_is_given(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    decision_repository = build_sqlite_decision_repository(database_path)
+    builder = _build_context_builder(database_path, decision_repository=decision_repository)
+
+    conflicting_first = memory_repository.create_memory(
+        "responder breve", "manual", subject_key="tono", project_id=1
+    )
+    conflicting_second = memory_repository.create_memory(
+        "responder extenso", "manual", subject_key="tono", project_id=1
+    )
+    uncontested = memory_repository.create_memory("prefiere el idioma español", "manual")
+
+    context = builder.build("hola")
+
+    memory_ids = {m.id for m in context.memories}
+    assert conflicting_first.id not in memory_ids
+    assert conflicting_second.id not in memory_ids
+    assert uncontested.id in memory_ids
+
+
+@pytest.mark.integration
+def test_build_keeps_a_memory_settled_by_an_approved_decision(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    decision_repository = build_sqlite_decision_repository(database_path)
+    builder = _build_context_builder(database_path, decision_repository=decision_repository)
+
+    settled_first = memory_repository.create_memory(
+        "responder breve", "manual", subject_key="tono", project_id=1
+    )
+    settled_second = memory_repository.create_memory(
+        "responder extenso", "manual", subject_key="tono", project_id=1
+    )
+    proposal = decision_repository.create_proposal("tono", 1, "responder siempre breve")
+    decision_repository.approve_decision(proposal.id)
+
+    context = builder.build("hola")
+
+    memory_ids = {m.id for m in context.memories}
+    assert settled_first.id in memory_ids
+    assert settled_second.id in memory_ids
+
+
+@pytest.mark.integration
+def test_build_different_subject_keys_never_conflict_with_each_other(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    decision_repository = build_sqlite_decision_repository(database_path)
+    builder = _build_context_builder(database_path, decision_repository=decision_repository)
+
+    tone = memory_repository.create_memory(
+        "responder breve", "manual", subject_key="tono", project_id=1
+    )
+    path = memory_repository.create_memory(
+        "usar ruta personalizada", "manual", subject_key="ruta de datos", project_id=1
+    )
+
+    context = builder.build("hola")
+
+    assert {m.id for m in context.memories} == {tone.id, path.id}

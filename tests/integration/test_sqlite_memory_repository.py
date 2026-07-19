@@ -16,6 +16,7 @@ from sirius.adapters.persistence.sqlite_memory_repository import (
     SqliteMemoryRepository,
     build_sqlite_memory_repository,
 )
+from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.domain.event import MANUAL_MEMORY_SAVE_EVENT_TYPE, USER_ACTOR
 from sirius.domain.memory import MemoryStatus
 
@@ -24,6 +25,19 @@ def _build_repository(database_path: Path) -> SqliteMemoryRepository:
     repository = build_sqlite_memory_repository(database_path)
     Base.metadata.create_all(build_engine(database_path))
     return repository
+
+
+def _seed_project(database_path: Path) -> int:
+    project_repository = build_sqlite_project_repository(database_path)
+    project_repository.ensure_bootstrap_project()
+    project = project_repository.create_project(
+        "Proyecto de prueba",
+        "Objetivo de prueba",
+        state_summary="en curso",
+        blockers=(),
+        next_step="siguiente paso",
+    )
+    return project.id
 
 
 @pytest.mark.integration
@@ -93,6 +107,49 @@ def test_create_memory_with_source_event_id_links_the_revision(tmp_path: Path) -
     assert fetched.current_revision.source_event_id == event.id
     # unrelated memory keeps no link
     assert repository.get_memory(created.id).current_revision.source_event_id is None
+
+
+@pytest.mark.integration
+def test_create_memory_without_subject_key_leaves_it_and_project_id_none(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+
+    created = repository.create_memory("prefiere respuestas breves", "manual")
+
+    assert created.subject_key is None
+    assert created.project_id is None
+
+
+@pytest.mark.integration
+def test_create_memory_with_subject_key_and_project_id_round_trips(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    project_id = _seed_project(database_path)
+
+    created = repository.create_memory(
+        "responder breve", "manual", subject_key="tono", project_id=project_id
+    )
+
+    assert created.subject_key == "tono"
+    assert created.project_id == project_id
+    fetched = repository.get_memory(created.id)
+    assert fetched.subject_key == "tono"
+    assert fetched.project_id == project_id
+
+
+@pytest.mark.integration
+def test_correct_memory_preserves_subject_key_and_project_id(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    project_id = _seed_project(database_path)
+    created = repository.create_memory(
+        "responder breve", "manual", subject_key="tono", project_id=project_id
+    )
+
+    corrected = repository.correct_memory(created.id, "responder extenso", "manual")
+
+    assert corrected.subject_key == "tono"
+    assert corrected.project_id == project_id
 
 
 @pytest.mark.integration

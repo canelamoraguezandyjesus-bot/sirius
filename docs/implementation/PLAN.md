@@ -129,14 +129,42 @@ Implementado además en V8 (B4a, B4b, B4c):
   estados de decisión de Producto S6 la mencionan (a diferencia de
   "archivada").
 
+Implementado además en V8 (B4e):
+
+- identificación mínima y explícita de asunto para recuerdos
+  (`Memory.subject_key`/`Memory.project_id`, ambos opcionales, nulos para
+  todo recuerdo anterior a B4e), la contraparte en `Memory` de
+  `Decision.subject`/`project_id` que B4b ya tenía; migración Alembic
+  aditiva y reversible (`43406702d62c`);
+  regla de dominio pura y determinista
+  (`sirius.domain.knowledge_precedence.resolve_memory_precedence`) que
+  compara únicamente recuerdos `CURRENT` y decisiones `APPROVED` del mismo
+  `subject_key`/`project_id`: una única decisión aprobada vigente prevalece
+  de forma trazable; dos o más recuerdos vigentes incompatibles sin una
+  decisión que los arbitre (o dos o más decisiones aprobadas del mismo
+  límite, un estado ya inconsistente) producen un conflicto explícito con
+  los elementos implicados; nunca se elige un ganador por fecha, orden de
+  inserción ni puntuación opaca (B4e, RF-026, PA-014, DR-011);
+  caso de uso de aplicación de solo lectura
+  (`EvaluateMemoryPrecedenceUseCase`) que reutiliza
+  `list_current_memories()`/`list_current_decisions()` ya existentes, sin
+  añadir un segundo sistema de conocimiento ni nuevos métodos de
+  repositorio; conexión mínima en `ContextBuilder` (parámetro
+  `decision_repository` opcional, `None` por defecto y sin efecto alguno
+  cuando se omite) que excluye del contexto ordinario únicamente los
+  recuerdos atrapados en un conflicto sin resolver, dejando sin cambios
+  tanto los recuerdos sin `subject_key` como los ya resueltos por una
+  decisión vigente — la integración de decisiones como sección propia del
+  contexto y la interfaz de conflicto siguen perteneciendo a B4f.
+
 Pendiente dentro de V8:
 
-- precedencia entre decisión y recuerdo;
-- detección y resolución explícita de conflictos (B4e);
 - indexación y búsqueda pertinente;
 - casos de uso e interfaz de decisiones y de archivo/eliminación en las
   superficies existentes (B4f);
-- pruebas PA-014 y la parte correspondiente de PA-E2E-01.
+- pruebas PA-014 y la parte correspondiente de PA-E2E-01 ya cubiertas
+  automáticamente por B4e, sin declararse formalmente superadas mientras
+  dependan de la interfaz de B4f o de evaluación humana.
 
 Defectos relacionados: D-03, D-04 y D-11.
 

@@ -10,6 +10,7 @@ from sirius.domain.memory import (
     ensure_can_correct,
     ensure_can_delete,
     ensure_valid_origin,
+    ensure_valid_subject_key,
     next_revision_version,
 )
 
@@ -28,7 +29,13 @@ def _revision(
     )
 
 
-def _memory(status: MemoryStatus, revision: MemoryRevision | None = None) -> Memory:
+def _memory(
+    status: MemoryStatus,
+    revision: MemoryRevision | None = None,
+    *,
+    subject_key: str | None = None,
+    project_id: int | None = None,
+) -> Memory:
     now = datetime.now(UTC)
     return Memory(
         id=1,
@@ -36,6 +43,8 @@ def _memory(status: MemoryStatus, revision: MemoryRevision | None = None) -> Mem
         current_revision=revision or _revision(),
         created_at=now,
         updated_at=now,
+        subject_key=subject_key,
+        project_id=project_id,
     )
 
 
@@ -90,3 +99,27 @@ def test_memory_is_immutable() -> None:
 
     with pytest.raises(AttributeError):
         memory.status = MemoryStatus.ARCHIVED  # type: ignore[misc]
+
+
+def test_memory_subject_key_and_project_id_default_to_none() -> None:
+    memory = _memory(MemoryStatus.CURRENT)
+
+    assert memory.subject_key is None
+    assert memory.project_id is None
+
+
+def test_memory_subject_key_and_project_id_round_trip() -> None:
+    memory = _memory(MemoryStatus.CURRENT, subject_key="tono de las respuestas", project_id=3)
+
+    assert memory.subject_key == "tono de las respuestas"
+    assert memory.project_id == 3
+
+
+@pytest.mark.parametrize("subject_key", ["", "   ", "\t\n"])
+def test_ensure_valid_subject_key_rejects_empty_or_blank(subject_key: str) -> None:
+    with pytest.raises(ValueError, match="non-empty"):
+        ensure_valid_subject_key(subject_key)
+
+
+def test_ensure_valid_subject_key_accepts_non_empty_string() -> None:
+    ensure_valid_subject_key("tono de las respuestas")  # must not raise

@@ -72,7 +72,13 @@ class _StaticMemoryRepository:
         self.delete_calls: list[int] = []
 
     def create_memory(
-        self, content: str, origin: str, *, source_event_id: int | None = None
+        self,
+        content: str,
+        origin: str,
+        *,
+        source_event_id: int | None = None,
+        subject_key: str | None = None,
+        project_id: int | None = None,
     ) -> Memory:
         raise AssertionError("delete() must never create a memory")
 

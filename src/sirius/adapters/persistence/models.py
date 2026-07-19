@@ -207,6 +207,13 @@ class ProjectRevisionModel(Base):
 class MemoryModel(Base):
     """A stable memory item. Its current revision is found in ``memory_revisions``
     by querying ``memory_id`` together with ``is_current = True``.
+
+    ``subject_key``/``project_id`` (B4e, RF-026, DR-011) are the optional
+    explicit subject/project boundary the precedence/conflict rule compares
+    memories on — the memory-side counterpart of
+    ``DecisionModel.subject``/``project_id``. Both are nullable and ``NULL``
+    for every memory that predates B4e or simply declares no subject; such a
+    memory never participates in precedence/conflict detection.
     """
 
     __tablename__ = "memories"
@@ -223,6 +230,10 @@ class MemoryModel(Base):
     )
     created_at: Mapped[datetime] = mapped_column(nullable=False)
     updated_at: Mapped[datetime] = mapped_column(nullable=False)
+    subject_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    project_id: Mapped[int | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
+    )
 
 
 class MemoryRevisionModel(Base):

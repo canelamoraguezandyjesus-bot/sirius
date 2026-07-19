@@ -55,6 +55,7 @@ from sirius.application.delete_memory import DeleteMemoryUseCase
 from sirius.application.get_conversation_history import GetConversationHistoryUseCase
 from sirius.application.initial_project import InitialProjectUseCase
 from sirius.application.memory_origin import GetMemoryOriginUseCase
+from sirius.application.memory_precedence import EvaluateMemoryPrecedenceUseCase
 from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.project_lifecycle import ProjectLifecycleUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
@@ -116,6 +117,7 @@ class ConversationDependencies:
     correct_memory_use_case: CorrectMemoryUseCase
     archive_memory_use_case: ArchiveMemoryUseCase
     delete_memory_use_case: DeleteMemoryUseCase
+    evaluate_memory_precedence_use_case: EvaluateMemoryPrecedenceUseCase
     propose_decision_use_case: ProposeDecisionUseCase
     approve_decision_use_case: ApproveDecisionUseCase
     get_decision_origin_use_case: GetDecisionOriginUseCase
@@ -216,6 +218,7 @@ def build_conversation_dependencies(
         project_repository=project_repository,
         memory_repository=memory_repository,
         conversation_repository=conversation_repository,
+        decision_repository=decision_repository,
     )
     send_message_use_case = SendMessageUseCase(
         context_builder=context_builder,
@@ -278,6 +281,9 @@ def build_conversation_dependencies(
         correct_memory_use_case=CorrectMemoryUseCase(unit_of_work),
         archive_memory_use_case=ArchiveMemoryUseCase(unit_of_work),
         delete_memory_use_case=DeleteMemoryUseCase(unit_of_work),
+        evaluate_memory_precedence_use_case=EvaluateMemoryPrecedenceUseCase(
+            memory_repository, decision_repository
+        ),
         propose_decision_use_case=ProposeDecisionUseCase(unit_of_work),
         approve_decision_use_case=ApproveDecisionUseCase(unit_of_work),
         get_decision_origin_use_case=GetDecisionOriginUseCase(

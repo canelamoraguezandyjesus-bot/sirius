@@ -104,7 +104,13 @@ class _UnusedMemoryRepository:
     """B4a's ``UnitOfWork.memory_repository``; ``propose()`` never touches it."""
 
     def create_memory(
-        self, content: str, origin: str, *, source_event_id: int | None = None
+        self,
+        content: str,
+        origin: str,
+        *,
+        source_event_id: int | None = None,
+        subject_key: str | None = None,
+        project_id: int | None = None,
     ) -> Memory:
         raise AssertionError("propose() must never create a memory")
 

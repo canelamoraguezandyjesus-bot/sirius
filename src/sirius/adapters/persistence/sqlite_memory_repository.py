@@ -51,6 +51,8 @@ def _to_domain_memory(model: MemoryModel, revision_model: MemoryRevisionModel) -
         current_revision=_to_domain_revision(revision_model),
         created_at=model.created_at.replace(tzinfo=UTC),
         updated_at=model.updated_at.replace(tzinfo=UTC),
+        subject_key=model.subject_key,
+        project_id=model.project_id,
     )
 
 
@@ -109,7 +111,13 @@ class SqliteMemoryRepository:
             yield session
 
     def create_memory(
-        self, content: str, origin: str, *, source_event_id: int | None = None
+        self,
+        content: str,
+        origin: str,
+        *,
+        source_event_id: int | None = None,
+        subject_key: str | None = None,
+        project_id: int | None = None,
     ) -> Memory:
         ensure_valid_origin(origin)
         with self._scope() as session:
@@ -118,6 +126,8 @@ class SqliteMemoryRepository:
                 status=MemoryStatus.CURRENT,
                 created_at=now,
                 updated_at=now,
+                subject_key=subject_key,
+                project_id=project_id,
             )
             session.add(memory_model)
             session.flush()
