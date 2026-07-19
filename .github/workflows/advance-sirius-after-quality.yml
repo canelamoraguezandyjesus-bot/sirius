@@ -38,9 +38,10 @@ jobs:
             exit 0
           fi
 
-          pr_state="$(gh pr view "$pr_number" --repo "$GH_REPO" --json state --jq '.state')"
-          pr_draft="$(gh pr view "$pr_number" --repo "$GH_REPO" --json isDraft --jq '.isDraft')"
-          current_head="$(gh pr view "$pr_number" --repo "$GH_REPO" --json headRefOid --jq '.headRefOid')"
+          pr_json="$(gh pr view "$pr_number" --repo "$GH_REPO" --json state,isDraft,headRefOid)"
+          pr_state="$(printf '%s' "$pr_json" | jq -r '.state')"
+          pr_draft="$(printf '%s' "$pr_json" | jq -r '.isDraft')"
+          current_head="$(printf '%s' "$pr_json" | jq -r '.headRefOid')"
 
           if [ "$pr_state" != "OPEN" ] || [ "$pr_draft" = "true" ]; then
             echo "PR #${pr_number} is not an open, reviewable pull request."
@@ -53,65 +54,109 @@ jobs:
           fi
 
           pr_url="https://github.com/${GH_REPO}/pull/${pr_number}"
-          mapfile -t issue_numbers < <(
+
+          # Localizar incidencias abiertas con sirius:ci-pending que referencien la PR
+          # en el cuerpo o en cualquiera de sus comentarios. No dependemos solo de la
+          # busqueda indexada de "gh issue list --search" porque puede retrasarse:
+          # listamos las candidatas por etiqueta y leemos body y comments directamente.
+          mapfile -t candidate_issues < <(
             gh issue list \
               --repo "$GH_REPO" \
               --state open \
+              --label "sirius:ci-pending" \
               --limit 100 \
-              --search "\"${pr_url}\" in:body" \
-              --json number,labels \
-              --jq '.[] | select(any(.labels[]?; .name == "sirius:ci-pending")) | .number'
+              --json number \
+              --jq '.[].number'
           )
 
-          if [ "${#issue_numbers[@]}" -eq 0 ]; then
+          matched_issues=()
+          for issue_number in "${candidate_issues[@]}"; do
+            issue_json="$(gh issue view "$issue_number" --repo "$GH_REPO" --json body,comments)"
+            if printf '%s' "$issue_json" \
+              | jq -r '[.body] + [.comments[].body] | map(select(. != null)) | .[]' \
+              | grep -oE 'https://github\.com/[^/[:space:]]+/[^/[:space:]]+/pull/[0-9]+' \
+              | grep -Fxq "$pr_url"; then
+              matched_issues+=("$issue_number")
+            fi
+          done
+
+          if [ "${#matched_issues[@]}" -eq 0 ]; then
             echo "No open Sirius work item in ci-pending references PR #${pr_number}."
             exit 0
           fi
 
-          if [ "${#issue_numbers[@]}" -ne 1 ]; then
-            for issue_number in "${issue_numbers[@]}"; do
-              gh issue comment "$issue_number" --repo "$GH_REPO" --body "<!-- sirius-quality:${HEAD_SHA}:ambiguous -->
-
-El flujo encontró varias incidencias \\`sirius:ci-pending\\` para la PR #${pr_number}. Se detiene de forma segura para evitar una transición ambigua.
-
-- Head SHA: \\`${HEAD_SHA}\\`
-- Quality: ${RUN_URL}"
+          if [ "${#matched_issues[@]}" -ne 1 ]; then
+            for issue_number in "${matched_issues[@]}"; do
+              marker="<!-- sirius-quality:${HEAD_SHA}:ambiguous -->"
+              if gh issue view "$issue_number" --repo "$GH_REPO" --json comments --jq '.comments[].body' | grep -Fq "$marker"; then
+                echo "Ambiguity already reported on issue #${issue_number} for ${HEAD_SHA}."
+              else
+                comment_body="$(printf '%s\n\n%s\n\n%s\n%s\n' \
+                  "${marker}" \
+                  "El flujo encontro varias incidencias \`sirius:ci-pending\` que referencian la PR #${pr_number}. Se detiene de forma segura para evitar una transicion ambigua." \
+                  "- Head SHA: \`${HEAD_SHA}\`" \
+                  "- Quality run: ${RUN_URL}")"
+                gh issue comment "$issue_number" --repo "$GH_REPO" --body "$comment_body"
+              fi
               gh issue edit "$issue_number" --repo "$GH_REPO" --remove-label "sirius:ci-pending" --add-label "sirius:failed-safely"
             done
             exit 1
           fi
 
-          issue_number="${issue_numbers[0]}"
+          issue_number="${matched_issues[0]}"
+          existing_comments="$(gh issue view "$issue_number" --repo "$GH_REPO" --json comments --jq '.comments[].body')"
 
           case "$CONCLUSION" in
             success)
-              gh issue comment "$issue_number" --repo "$GH_REPO" --body "<!-- sirius-quality:${HEAD_SHA}:success -->
-
-## QUALITY_SUCCESS
-
-- PR: ${pr_url}
-- Head SHA: \\`${HEAD_SHA}\\`
-- Quality run: ${RUN_URL}
-- Resultado: \\`success\\`
-- Siguiente transición: revisión independiente."
+              marker="<!-- sirius-quality:${HEAD_SHA}:success -->"
+              if printf '%s' "$existing_comments" | grep -Fq "$marker"; then
+                echo "Success transition already recorded for issue #${issue_number} at ${HEAD_SHA}."
+                exit 0
+              fi
+              comment_body="$(printf '%s\n\n%s\n\n%s\n%s\n%s\n%s\n%s\n' \
+                "${marker}" \
+                "## QUALITY_SUCCESS" \
+                "- PR: ${pr_url}" \
+                "- Head SHA: \`${HEAD_SHA}\`" \
+                "- Quality run: ${RUN_URL}" \
+                "- Resultado: \`success\`" \
+                "- Siguiente transicion: revision independiente.")"
+              gh issue comment "$issue_number" --repo "$GH_REPO" --body "$comment_body"
               gh issue edit "$issue_number" --repo "$GH_REPO" --remove-label "sirius:ci-pending" --add-label "sirius:review-requested"
               ;;
             failure|timed_out)
-              gh issue comment "$issue_number" --repo "$GH_REPO" --body "<!-- sirius-quality:${HEAD_SHA}:${CONCLUSION} -->
-
-## CI_FAILURE
-
-- PR: ${pr_url}
-- Head SHA: \\`${HEAD_SHA}\\`
-- Quality run: ${RUN_URL}
-- Resultado: \\`${CONCLUSION}\\`
-- Corrección autorizada: inspeccionar los jobs y logs fallidos de este run y corregir únicamente su causa dentro del alcance de la incidencia."
+              marker="<!-- sirius-quality:${HEAD_SHA}:${CONCLUSION} -->"
+              if printf '%s' "$existing_comments" | grep -Fq "$marker"; then
+                echo "Failure transition already recorded for issue #${issue_number} at ${HEAD_SHA} (${CONCLUSION})."
+                exit 0
+              fi
+              comment_body="$(printf '%s\n\n%s\n\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+                "${marker}" \
+                "## CI_FAILURE" \
+                "- PR: ${pr_url}" \
+                "- Head SHA: \`${HEAD_SHA}\`" \
+                "- Quality run: ${RUN_URL}" \
+                "- Resultado: \`${CONCLUSION}\`" \
+                "- Diagnostico: inspeccionar los jobs y logs fallidos de este run en ${RUN_URL}." \
+                "- Correccion autorizada: corregir unicamente su causa dentro del alcance de la incidencia.")"
+              gh issue comment "$issue_number" --repo "$GH_REPO" --body "$comment_body"
               gh issue edit "$issue_number" --repo "$GH_REPO" --remove-label "sirius:ci-pending" --add-label "sirius:repair-requested"
               ;;
             *)
-              gh issue comment "$issue_number" --repo "$GH_REPO" --body "<!-- sirius-quality:${HEAD_SHA}:${CONCLUSION} -->
-
-## CI_STOPPED_SAFELY
-
-- PR: ${pr_url}
-- Head SHA
+              marker="<!-- sirius-quality:${HEAD_SHA}:${CONCLUSION} -->"
+              if printf '%s' "$existing_comments" | grep -Fq "$marker"; then
+                echo "Safe stop already recorded for issue #${issue_number} at ${HEAD_SHA} (${CONCLUSION})."
+                exit 0
+              fi
+              comment_body="$(printf '%s\n\n%s\n\n%s\n%s\n%s\n%s\n%s\n' \
+                "${marker}" \
+                "## CI_STOPPED_SAFELY" \
+                "- PR: ${pr_url}" \
+                "- Head SHA: \`${HEAD_SHA}\`" \
+                "- Quality run: ${RUN_URL}" \
+                "- Resultado: \`${CONCLUSION}\`" \
+                "- No se activa revision ni correccion; la incidencia queda detenida de forma segura para intervencion manual.")"
+              gh issue comment "$issue_number" --repo "$GH_REPO" --body "$comment_body"
+              gh issue edit "$issue_number" --repo "$GH_REPO" --remove-label "sirius:ci-pending" --add-label "sirius:failed-safely"
+              ;;
+          esac
