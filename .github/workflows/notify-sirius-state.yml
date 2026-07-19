@@ -1,0 +1,77 @@
+name: Notify Sirius automation state
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: notify-sirius-${{ github.event.issue.number }}-${{ github.event.label.name }}
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    if: >-
+      github.event.label.name == 'sirius:ready-for-merge' ||
+      github.event.label.name == 'sirius:blocked-decision' ||
+      github.event.label.name == 'sirius:failed-safely' ||
+      github.event.label.name == 'sirius:completed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Notify repository owner once per state and head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          STATE_LABEL: ${{ github.event.label.name }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+
+          head_sha="$(printf '%s\n' "$ISSUE_BODY" | sed -nE 's/^[[:space:]]*[-*]?[[:space:]]*Head SHA:[[:space:]]*`?([0-9a-fA-F]{7,40})`?.*/\1/p' | head -n 1)"
+          if [ -z "$head_sha" ]; then
+            head_sha="unknown"
+          fi
+
+          marker="<!-- sirius-notification:${STATE_LABEL}:${head_sha} -->"
+          if gh issue view "$ISSUE_NUMBER" --repo "$GH_REPO" --json comments --jq '.comments[].body' | grep -Fq "$marker"; then
+            echo "Notification already emitted for ${STATE_LABEL} at ${head_sha}."
+            exit 0
+          fi
+
+          case "$STATE_LABEL" in
+            sirius:ready-for-merge)
+              summary="Trabajo revisado y listo para autorización humana de merge."
+              next_action="Abre la incidencia y, tras comprobar el resumen, vuelve a ChatGPT y escribe: Fusiona."
+              ;;
+            sirius:blocked-decision)
+              summary="El flujo se ha detenido porque falta una decisión humana."
+              next_action="Abre la incidencia, revisa la decisión pendiente y respóndela en ChatGPT."
+              ;;
+            sirius:failed-safely)
+              summary="El flujo se ha detenido de forma segura por un fallo operativo."
+              next_action="Abre la incidencia para consultar el diagnóstico y la siguiente acción segura."
+              ;;
+            sirius:completed)
+              summary="El bloque ha sido fusionado y cerrado."
+              next_action="No se iniciará otro bloque hasta que lo ordenes."
+              ;;
+          esac
+
+          gh issue edit "$ISSUE_NUMBER" --repo "$GH_REPO" --add-assignee "$REPOSITORY_OWNER"
+          gh issue comment "$ISSUE_NUMBER" --repo "$GH_REPO" --body "${marker}
+
+@${REPOSITORY_OWNER} **Sirius: ${STATE_LABEL}**
+
+${summary}
+
+- Head SHA: \`${head_sha}\`
+- Incidencia: #${ISSUE_NUMBER}
+- Siguiente acción: ${next_action}
+
+_Esta notificación se genera una sola vez por estado y head._"

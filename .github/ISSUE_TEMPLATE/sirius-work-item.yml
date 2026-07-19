@@ -1,0 +1,118 @@
+name: Sirius work item
+description: Contrato ejecutable por las Routines genéricas de Sirius 0.1
+title: "[SIRIUS] <bloque> — <objetivo breve>"
+labels:
+  - "sirius:planned"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Esta incidencia es la fuente de verdad del trabajo. Las etiquetas solo representan estados o eventos.
+        Ninguna Routine puede ampliar alcance, decidir producto o arquitectura, ni hacer merge.
+
+  - type: input
+    id: work_id
+    attributes:
+      label: Work ID
+      description: Identificador único y estable, por ejemplo SIRIUS-B4E-001.
+      placeholder: SIRIUS-B4E-001
+    validations:
+      required: true
+
+  - type: input
+    id: block
+    attributes:
+      label: Bloque
+      placeholder: B4e
+    validations:
+      required: true
+
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objetivo
+      description: Resultado verificable que debe entregar la implementación.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Alcance permitido
+      description: Cambios autorizados.
+    validations:
+      required: true
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Fuera de alcance
+      description: Cambios expresamente prohibidos.
+    validations:
+      required: true
+
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requisitos y pruebas de aceptación
+      description: Referencias exactas a requisitos, decisiones y pruebas.
+    validations:
+      required: true
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validaciones obligatorias
+      value: |
+        - `ruff format --check .`
+        - `ruff check .`
+        - `mypy src tests`
+        - `pytest`
+        - `git diff --check`
+    validations:
+      required: true
+
+  - type: input
+    id: base_branch
+    attributes:
+      label: Rama base
+      value: main
+    validations:
+      required: true
+
+  - type: dropdown
+    id: max_cycles
+    attributes:
+      label: Máximo de ciclos de corrección
+      options:
+        - "2"
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: stop_conditions
+    attributes:
+      label: Condiciones de parada
+      value: |
+        - `READY_FOR_REVIEW`
+        - `BLOCKED_BY_DECISION`
+        - `FAILED_SAFELY`
+        - `USAGE_LIMIT_REACHED`
+        - Merge automático prohibido.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: safeguards
+    attributes:
+      label: Salvaguardas
+      options:
+        - label: No cambiar Producto, Arquitectura Técnica, ATD ni documentos canónicos sin decisión explícita.
+          required: true
+        - label: No hacer push directo a `main`.
+          required: true
+        - label: No reducir ni falsear pruebas para conseguir verde.
+          required: true
+        - label: No hacer merge automático.
+          required: true
