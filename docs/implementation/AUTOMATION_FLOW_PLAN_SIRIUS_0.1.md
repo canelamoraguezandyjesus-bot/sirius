@@ -1,208 +1,176 @@
 # SIRIUS - Plan del flujo general de automatización
 
-**Versión:** 0.1 propuesta
-**Fecha:** 19 de julio de 2026
-**Estado:** En definición
+**Versión:** 0.2 propuesta  
+**Fecha:** 19 de julio de 2026  
+**Estado:** En definición  
 **Alcance:** Automatización general del desarrollo de Sirius 0.1
 
 ## 1. Objetivo
 
-Permitir que el usuario inicie un bloque de trabajo con una instrucción breve y que el sistema avance de forma trazable hasta dejar una PR validada y revisada, reservando para el usuario únicamente las decisiones reales y la autorización final de merge.
+Permitir que el usuario inicie un bloque con una orden breve, por ejemplo `Implementa B4e`, y que el sistema avance por eventos de GitHub hasta dejar una PR validada, revisada y preparada para merge.
 
-Ejemplo de orden inicial:
+El usuario solo interviene para:
 
-> Empieza B4e.
+- decisiones reales de producto, arquitectura o seguridad;
+- ampliaciones de alcance;
+- autorización final de merge.
 
 ## 2. Principio de diseño
 
-El motor principal será GitHub por eventos. Las tareas programadas de ChatGPT no gobernarán el desarrollo ni comprobarán PR de forma horaria.
+GitHub y las Routines gobiernan el ciclo mediante eventos. No se utilizarán comprobaciones horarias ni tareas programadas de ChatGPT como motor técnico.
 
-ChatGPT actuará como panel de mando para:
+ChatGPT actúa como panel de mando cuando el usuario abre el chat:
 
-- iniciar trabajo;
-- consultar estado;
-- explicar bloqueos;
-- registrar decisiones del usuario;
-- autorizar el merge cuando corresponda.
+- interpreta órdenes breves;
+- crea la incidencia de trabajo;
+- consulta y explica el estado;
+- registra decisiones;
+- ejecuta el merge tras autorización explícita.
 
-Claude Code o la Routine implementadora ejecutará el trabajo técnico. Una Routine revisora independiente auditará la PR.
+ChatGPT no puede iniciar una conversación ni avisar por sí solo cuando el usuario no está presente. Las notificaciones de estados terminales o bloqueos deben generarse mediante GitHub, la Routine o un canal de notificación configurado expresamente.
 
-## 3. Flujo objetivo
+## 3. Fuente de verdad
 
-### Paso 1 - Orden del usuario
+Cada bloque tendrá una incidencia de control que contendrá:
 
-El usuario da una instrucción breve para iniciar un bloque aprobado.
-
-### Paso 2 - Preparación de la tarea
-
-ChatGPT crea o completa una incidencia de trabajo con:
-
+- identificador y bloque;
 - objetivo;
-- alcance permitido;
-- fuera de alcance;
-- requisitos y pruebas vinculadas;
-- comandos de validación;
-- condición de parada;
-- estados finales permitidos;
+- alcance permitido y fuera de alcance;
+- requisitos y pruebas;
+- validaciones obligatorias;
+- rama, PR y head SHA;
+- contador de correcciones;
+- resultado vigente;
+- decisiones pendientes;
 - prohibición de merge automático.
 
-La incidencia recibe una etiqueta de activación para el implementador.
+Las etiquetas solo representan estados o eventos. No contienen el prompt ni el contrato de trabajo.
 
-### Paso 3 - Implementación
+## 4. Flujo objetivo
 
-La Routine implementadora:
+### 4.1 Inicio
+
+1. El usuario escribe `Implementa <bloque>`.
+2. ChatGPT crea la incidencia estructurada.
+3. ChatGPT aplica `sirius:implement-requested`.
+4. La Routine implementadora consume el evento y aplica `sirius:implementing`.
+
+### 4.2 Implementación
+
+La Routine implementadora genérica:
 
 - crea una rama propia;
-- implementa únicamente el bloque solicitado;
+- implementa solo el alcance autorizado;
 - añade o actualiza pruebas;
-- ejecuta Ruff, mypy, pytest y las validaciones definidas;
-- abre o actualiza una PR propia;
-- se detiene sin hacer merge.
+- ejecuta Ruff, mypy, pytest y validaciones adicionales;
+- abre o actualiza la PR;
+- registra rama, PR y head SHA;
+- pasa a `sirius:ci-pending`;
+- se detiene sin merge.
 
-### Paso 4 - CI
+### 4.3 CI
 
-GitHub Actions valida el head exacto de la PR.
+GitHub Actions valida el head exacto.
 
-- Si CI falla, se activa una corrección técnica acotada o se informa del fallo.
-- Si CI queda verde y la PR está lista, se genera automáticamente la solicitud de revisión independiente.
+- CI verde: genera `sirius:review-requested`.
+- Fallo técnicamente corregible: genera `sirius:repair-requested` con diagnóstico estructurado.
+- Fallo no corregible de forma segura: aplica `sirius:failed-safely`.
 
-### Paso 5 - Revisión independiente
+### 4.4 Revisión
 
-La Routine revisora comprueba:
+La Routine revisora independiente:
 
-- cumplimiento del alcance;
-- código y pruebas;
-- compatibilidad con Producto y Arquitectura aprobados;
-- migraciones y persistencia;
-- seguridad y ausencia de ampliaciones no autorizadas.
+- consume `sirius:review-requested`;
+- aplica `sirius:reviewing`;
+- verifica el head SHA;
+- revisa alcance, código, pruebas, arquitectura, persistencia y seguridad;
+- publica uno de estos resultados:
+  - `REVIEW_APPROVED`;
+  - `CHANGES_REQUESTED`;
+  - `BLOCKED_BY_DECISION`;
+  - `FAILED_SAFELY`.
 
-En la primera pasada no modifica código.
+### 4.5 Corrección automática limitada
 
-### Paso 6 - Resultado de revisión
+Cuando exista `CHANGES_REQUESTED`, la Routine correctora:
 
-Resultados permitidos:
+- consume `sirius:repair-requested`;
+- corrige únicamente observaciones concretas;
+- trabaja en la misma rama y PR;
+- incrementa el contador;
+- ejecuta validaciones;
+- registra el nuevo head;
+- vuelve a `sirius:ci-pending`.
 
-- `REVIEW_APPROVED`: PR técnicamente aprobada y lista para decisión humana de merge.
-- `CHANGES_REQUESTED`: observaciones técnicas corregibles y estructuradas.
-- `BLOCKED_BY_DECISION`: falta una decisión real de producto, arquitectura, seguridad o alcance.
-- `FAILED_SAFELY`: fallo operativo no resoluble de forma segura.
+Se permiten como máximo dos ciclos. Si no converge, pasa a `sirius:blocked-decision`.
 
-### Paso 7 - Corrección automática limitada
+### 4.6 Aprobación y notificación
 
-Cuando el resultado sea `CHANGES_REQUESTED`, la Routine implementadora puede corregir únicamente las observaciones registradas en la misma rama y PR.
+Cuando la revisión aprueba el head exacto:
 
-Después:
+- se aplica `sirius:ready-for-merge`;
+- GitHub, la Routine o el canal configurado emite la notificación;
+- el sistema queda detenido sin fusionar.
 
-- CI vuelve a ejecutarse;
-- la revisión vuelve a activarse al quedar verde;
-- se permiten como máximo dos ciclos de revisión-corrección.
+ChatGPT no promete iniciar el aviso. Cuando el usuario vuelva al chat o responda a la notificación, puede consultar el estado y ordenar `Fusiona`.
 
-Si no converge en dos ciclos, el estado pasa a `BLOCKED_BY_DECISION`.
-
-### Paso 8 - Merge humano
-
-Cuando exista `REVIEW_APPROVED`, ChatGPT informa al usuario.
-
-El merge solo se realiza tras una orden explícita, por ejemplo:
-
-> Fusiona.
+### 4.7 Merge humano
 
 Antes del merge se verifica:
 
 - PR abierta;
-- CI verde;
-- revisión aprobada;
-- head sin cambios desde la aprobación;
-- ausencia de bloqueos pendientes.
+- CI verde sobre el head actual;
+- `REVIEW_APPROVED` para el mismo head;
+- ausencia de bloqueos;
+- ausencia de cambios posteriores a la aprobación.
 
-### Paso 9 - Cierre
+El merge solo se ejecuta tras orden explícita del usuario.
+
+### 4.8 Cierre
 
 Tras el merge:
 
-- se actualiza el estado operativo;
-- se cierra la incidencia del bloque;
-- se registra la evidencia relevante;
-- no se inicia el siguiente bloque salvo orden del usuario o cola previamente aprobada.
+- se aplica `sirius:completed`;
+- se registra el commit de merge;
+- se cierra la incidencia;
+- no se inicia otro bloque sin orden o cola aprobada.
 
-## 4. Qué queda automatizado
+## 5. Protección contra duplicados
 
-- creación y preparación de la tarea;
-- rama y PR;
-- implementación;
-- pruebas y CI;
-- solicitud de revisión;
-- revisión independiente;
-- correcciones técnicas acotadas;
-- revalidación y segunda revisión;
-- actualización de estado y notificación.
+Todas las transiciones serán idempotentes. Antes de actuar se comprobará:
 
-## 5. Intervención reservada al usuario
+- identificador único;
+- estado permitido;
+- head esperado;
+- ausencia de ejecución activa equivalente;
+- evento no consumido;
+- contador de ciclos.
 
-- decisiones reales de producto o arquitectura;
-- ampliaciones de alcance;
-- excepciones de seguridad;
-- resolución de bloqueos no técnicos;
-- autorización final de merge.
+Los reintentos de webhooks no deben duplicar ramas, PR, revisiones ni correcciones.
 
-## 6. Prohibiciones vigentes
+## 6. Prohibiciones
 
 - merge automático;
 - cambios directos en `main`;
 - decisiones silenciosas de producto o arquitectura;
-- bucles ilimitados de corrección;
-- revisión automática en cada push sin condición;
-- vigilancia horaria como motor del flujo;
-- inicio indefinido de bloques sucesivos sin autorización.
+- correcciones ilimitadas;
+- revisión en cada push sin condiciones;
+- vigilancia horaria como motor;
+- inicio indefinido de bloques sin autorización.
 
-## 7. Papel de las tareas programadas de ChatGPT
+## 7. Tareas programadas de ChatGPT
 
-Solo se usarán como soporte opcional:
+Solo podrán utilizarse como soporte opcional para resúmenes o recordatorios. No sustituyen los eventos de GitHub y no se usarán para vigilar PR periódicamente.
 
-- resumen diario de trabajo activo;
-- aviso de bloqueos prolongados;
-- informe semanal;
-- recordatorio de decisiones pendientes.
+## 8. Orden de implementación
 
-No sustituirán los eventos de GitHub ni gobernarán el ciclo técnico.
-
-## 8. Implementación prevista por fases
-
-### Fase 1 - Activación general de revisión
-
-Automatizar el evento:
-
-PR lista + CI verde -> solicitud de revisión independiente.
-
-### Fase 2 - Corrección acotada
-
-Automatizar:
-
-`CHANGES_REQUESTED` -> corrección en la misma PR -> CI -> nueva revisión.
-
-Límite: dos ciclos.
-
-### Fase 3 - Panel de mando en ChatGPT
-
-Permitir órdenes breves:
-
-- `Empieza <bloque>`;
-- `¿Qué está bloqueado?`;
-- `Explícame la revisión`;
-- `Acepto esta decisión`;
-- `Fusiona`;
-- `Siguiente`.
-
-### Fase 4 - Aplicaciones de control
-
-Evaluar una interfaz o aplicación desde la que una instrucción del usuario cree una tarea trazable en GitHub y active el mismo flujo, sin duplicar la lógica de automatización.
-
-## 9. Primera acción de implementación
-
-Definir y crear el disparador general que, para cualquier PR de Sirius 0.1, active la revisión cuando se cumplan simultáneamente estas condiciones:
-
-1. PR abierta y no borrador;
-2. CI `Quality` completado con éxito sobre el head actual;
-3. etiqueta o estado que confirme que la implementación ha terminado;
-4. no existe ya una revisión activa para ese mismo head;
-5. el bloque pertenece al alcance aprobado;
-6. el merge permanece desactivado.
+1. Crear etiquetas y semántica.
+2. Definir plantilla universal de incidencia.
+3. Generalizar Routine implementadora.
+4. Automatizar `CI verde -> review-requested`.
+5. Generalizar Routine revisora.
+6. Crear Routine correctora.
+7. Implementar contador e idempotencia.
+8. Configurar notificación por evento.
+9. Automatizar cierre tras merge.
+10. Probar el flujo completo con un bloque acotado.
