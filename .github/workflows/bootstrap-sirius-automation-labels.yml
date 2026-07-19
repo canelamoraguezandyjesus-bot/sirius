@@ -23,6 +23,25 @@ jobs:
         run: |
           set -euo pipefail
 
-          while IFS='|' read -r name color description; do
-            [ -n "$name" ] || continue
-            encoded_name="$(jq -rn --arg value "$name" '$value | @uri
+          ensure_label() {
+            name="$1"
+            color="$2"
+            description="$3"
+
+            if gh label view "$name" --repo "$GH_REPO" >/dev/null 2>&1; then
+              gh label edit "$name" --repo "$GH_REPO" --color "$color" --description "$description"
+            else
+              gh label create "$name" --repo "$GH_REPO" --color "$color" --description "$description"
+            fi
+          }
+
+          ensure_label "sirius:implement-requested" "1D76DB" "Evento consumible: iniciar implementación de una incidencia válida"
+          ensure_label "sirius:implementing" "5319E7" "Estado: implementación en curso"
+          ensure_label "sirius:review-requested" "8250DF" "Evento consumible: iniciar revisión independiente"
+          ensure_label "sirius:reviewing" "7057FF" "Estado: revisión independiente en curso"
+          ensure_label "sirius:repair-requested" "FBCA04" "Evento consumible: corregir observaciones técnicas registradas"
+          ensure_label "sirius:repairing" "D4C5F9" "Estado: corrección técnica en curso"
+          ensure_label "sirius:blocked-decision" "B60205" "Estado terminal temporal: requiere decisión humana"
+          ensure_label "sirius:failed-safely" "D93F0B" "Estado terminal temporal: fallo operativo seguro"
+          ensure_label "sirius:ready-for-merge" "0E8A16" "Estado: revisión aprobada y lista para autorización humana de merge"
+          ensure_label "sirius:done" "006B75" "Estado terminal: bloque fusionado y cerrado"
