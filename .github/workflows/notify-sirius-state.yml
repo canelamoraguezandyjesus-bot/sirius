@@ -1,4 +1,4 @@
-name: Notify Sirius automation state
+name: Notificar estado de Sirius
 
 on:
   issues:
@@ -14,7 +14,10 @@ concurrency:
 
 jobs:
   notify:
+    name: Publicar notificación de estado
     if: >-
+      github.event.label.name == 'sirius:implementing' ||
+      github.event.label.name == 'sirius:repair-requested' ||
       github.event.label.name == 'sirius:ready-for-merge' ||
       github.event.label.name == 'sirius:blocked-decision' ||
       github.event.label.name == 'sirius:failed-safely' ||
@@ -22,7 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Notify repository owner once per state and head
+      - name: Publicar notificación de estado
+        shell: bash --noprofile --norc {0}
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -30,45 +34,86 @@ jobs:
           STATE_LABEL: ${{ github.event.label.name }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
         run: |
-          set -euo pipefail
+          set -u
+          set -o pipefail
 
-          issue_json="$(gh issue view "$ISSUE_NUMBER" --repo "$GH_REPO" --json body,comments)"
-          head_sha="$(printf '%s' "$issue_json" | jq -r '[.comments[].body, .body] | map(select(. != null)) | map(capture("(?:Head SHA|Merge SHA):[[:space:]]*`?(?<sha>[0-9a-fA-F]{7,40})`?"; "g")?.sha) | flatten | map(select(. != null and . != "")) | first // "unknown"')"
+          # Este workflow es secundario: nunca debe romper ni bloquear el flujo
+          # principal de Sirius. Ante cualquier problema para leer la incidencia,
+          # resolver el propietario o publicar el comentario, se deja un aviso en los
+          # logs y se termina con exito, sin alterar el estado de la incidencia. Por eso
+          # no se usa "set -e": un fallo secundario no debe convertirse en una ejecucion
+          # roja que a su vez genere otra notificacion tecnica.
 
-          marker="<!-- sirius-notification:${STATE_LABEL}:${head_sha} -->"
-          if printf '%s' "$issue_json" | jq -r '.comments[].body' | grep -Fq "$marker"; then
-            echo "Notification already emitted for ${STATE_LABEL} at ${head_sha}."
+          if [ -z "${REPOSITORY_OWNER:-}" ]; then
+            echo "::warning::No se pudo resolver el propietario del repositorio; se omite la notificacion sin alterar el flujo principal."
             exit 0
           fi
 
+          issue_json="$(gh issue view "$ISSUE_NUMBER" --repo "$GH_REPO" --json body,comments 2>/dev/null)"
+          if [ -z "$issue_json" ]; then
+            echo "::warning::No se pudo obtener la incidencia #${ISSUE_NUMBER}; se omite la notificacion sin alterar el flujo principal."
+            exit 0
+          fi
+
+          # Busqueda robusta del Head SHA / Merge SHA: primero en los comentarios mas
+          # recientes y despues en el cuerpo. Acepta SHA de 7 a 40 caracteres hex, no
+          # depende de expresiones jq fragiles y no falla si no encuentra ninguno ni si
+          # algun comentario no contiene SHA.
+          scan_text="$(printf '%s' "$issue_json" | jq -r '((.comments // []) | reverse | map(.body // "")) + [(.body // "")] | .[]' 2>/dev/null)"
+          head_sha="$(printf '%s\n' "$scan_text" | sed -nE 's/.*(Head|Merge) SHA:[[:space:]]*`?([0-9a-fA-F]{7,40}).*/\2/p' | head -n 1)"
+          if [ -z "${head_sha:-}" ]; then
+            head_sha="no-head"
+          fi
+
+          # Idempotencia: un marcador oculto estable por estado y version del trabajo
+          # garantiza una sola notificacion por incidencia y SHA relevante.
+          marker="<!-- sirius-notification:${STATE_LABEL}:${head_sha} -->"
+          existing="$(printf '%s' "$issue_json" | jq -r '.comments[]?.body // empty' 2>/dev/null)"
+          if printf '%s' "$existing" | grep -Fq "$marker"; then
+            echo "La notificacion para ${STATE_LABEL} (${head_sha}) ya existe; no se duplica."
+            exit 0
+          fi
+
+          titulo=""
+          cuerpo=""
           case "$STATE_LABEL" in
+            sirius:implementing)
+              titulo="🟦 **Sirius ha empezado a trabajar**"
+              cuerpo=$'He comenzado el bloque asociado a esta incidencia.\n\nNo necesitas hacer nada por ahora.'
+              ;;
+            sirius:repair-requested)
+              titulo="🟠 **He encontrado un problema corregible**"
+              cuerpo=$'Una comprobación automática ha fallado.\n\nVoy a intentar corregir únicamente la causa detectada y volveré a ejecutar las comprobaciones.\n\nNo necesitas intervenir por ahora.'
+              ;;
             sirius:ready-for-merge)
-              summary="Trabajo revisado y listo para autorización humana de merge."
-              next_action="Abre la incidencia y, tras comprobar el resumen, vuelve a ChatGPT y escribe: Fusiona."
+              titulo="🟢 **El trabajo está listo**"
+              cuerpo=$'La implementación, las comprobaciones y la revisión han terminado correctamente.\n\nSolo falta tu autorización para fusionarlo.\n\nEscribe **Fusiona** en ChatGPT para continuar.'
               ;;
             sirius:blocked-decision)
-              summary="El flujo se ha detenido porque falta una decisión humana."
-              next_action="Abre la incidencia, revisa la decisión pendiente y respóndela en ChatGPT."
+              titulo="🟡 **Necesito una decisión**"
+              cuerpo=$'El trabajo se ha detenido porque existe una decisión que no puedo tomar automáticamente.\n\nRevisa la incidencia y responde en ChatGPT.'
               ;;
             sirius:failed-safely)
-              summary="El flujo se ha detenido de forma segura por un fallo operativo."
-              next_action="Abre la incidencia para consultar el diagnóstico y la siguiente acción segura."
+              titulo="🔴 **Me he detenido de forma segura**"
+              cuerpo=$'He encontrado un problema que no puedo resolver automáticamente sin riesgo.\n\nLa incidencia contiene el diagnóstico y el siguiente paso recomendado.'
               ;;
             sirius:completed)
-              summary="El bloque ha sido fusionado y cerrado."
-              next_action="No se iniciará otro bloque hasta que lo ordenes."
+              titulo="✅ **Trabajo terminado**"
+              cuerpo=$'El bloque se ha fusionado e integrado correctamente.\n\nNo se iniciará otro bloque hasta que el usuario lo ordene.'
+              ;;
+            *)
+              echo "::warning::El estado ${STATE_LABEL} no es notificable; no se realiza ninguna accion."
+              exit 0
               ;;
           esac
 
-          gh issue edit "$ISSUE_NUMBER" --repo "$GH_REPO" --add-assignee "$REPOSITORY_OWNER"
-          gh issue comment "$ISSUE_NUMBER" --repo "$GH_REPO" --body "${marker}
+          # Una unica mencion al propietario para que la notificacion llegue de verdad.
+          comment_body="$(printf '%s\n\n%s\n\n%s\n\n%s\n' "$marker" "$titulo" "$cuerpo" "@${REPOSITORY_OWNER}")"
 
-@${REPOSITORY_OWNER} **Sirius: ${STATE_LABEL}**
+          if ! gh issue comment "$ISSUE_NUMBER" --repo "$GH_REPO" --body "$comment_body"; then
+            echo "::warning::No se pudo publicar la notificacion en la incidencia #${ISSUE_NUMBER}; el flujo principal continua sin cambios."
+            exit 0
+          fi
 
-${summary}
-
-- Head SHA: \`${head_sha}\`
-- Incidencia: #${ISSUE_NUMBER}
-- Siguiente acción: ${next_action}
-
-_Esta notificación se genera una sola vez por estado y head._"
+          echo "Notificacion publicada para ${STATE_LABEL} (${head_sha})."
+          exit 0
