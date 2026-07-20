@@ -80,7 +80,7 @@ jobs:
               ;;
             sirius:repair-requested)
               titulo="🟠 **He encontrado un problema corregible**"
-              cuerpo=$'Una comprobación automática ha fallado.\n\nVoy a intentar corregir únicamente la causa detectada y volveré a ejecutar las comprobaciones.\n\nNo necesitas intervenir por ahora.'
+              cuerpo=$'Una comprobación automática o la revisión independiente ha encontrado defectos concretos.\n\nVoy a intentar corregir únicamente lo señalado y volveré a ejecutar las comprobaciones.\n\nNo necesitas intervenir por ahora.'
               ;;
             sirius:ready-for-merge)
               titulo="🟢 **El trabajo está listo**"

@@ -1,0 +1,41 @@
+name: Reconciliar estados de Sirius
+
+# Reconciliador manual de estados atascados. SOLO se ejecuta bajo demanda
+# (workflow_dispatch): el contrato operativo prohíbe la vigilancia horaria como
+# motor del flujo, así que este workflow no se programa. Repara únicamente
+# estados inequívocos (ver scripts/automation/sirius_reconcile.sh) e informa
+# del resto en el resumen del run. Nunca hace merge ni inicia bloques.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  checks: read
+
+concurrency:
+  group: reconcile-sirius-states
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    name: Reconciliar estados atascados
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout automation library
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Reconciliar estados de trabajo
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+          bash scripts/automation/sirius_reconcile.sh "$GH_REPO"
