@@ -83,7 +83,7 @@ from sirius.application.supersede_decision import (
     InvalidDecisionSupersessionError,
     SupersedeDecisionUseCase,
 )
-from sirius.domain.decision import Decision
+from sirius.domain.decision import Decision, is_same_subject_and_project
 from sirius.domain.memory import Memory
 from sirius.domain.precedence import PrecedenceOutcome
 from sirius.infrastructure.logging import get_logger
@@ -133,11 +133,14 @@ class _DeleteMemoryDialog(QDialog):
 
         self.preserve_radio = QRadioButton("Conservar el mensaje fuente")
         self.redact_radio = QRadioButton("Redactar también el mensaje fuente")
-        self.preserve_radio.setChecked(True)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
+        self._ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        self._ok_button.setEnabled(False)
+        self.preserve_radio.toggled.connect(self._enable_ok_once_chosen)
+        self.redact_radio.toggled.connect(self._enable_ok_once_chosen)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 
@@ -147,6 +150,10 @@ class _DeleteMemoryDialog(QDialog):
         layout.addWidget(self.redact_radio)
         layout.addWidget(warning_label)
         layout.addWidget(buttons)
+
+    def _enable_ok_once_chosen(self, checked: bool) -> None:
+        if checked:
+            self._ok_button.setEnabled(True)
 
     def selected_choice(self) -> SourceMessageChoice:
         return (
@@ -533,8 +540,7 @@ class KnowledgeWidget(QGroupBox):
         candidates = [
             decision
             for decision in self._overview.proposed_decisions
-            if decision.subject == superseded.subject
-            and decision.project_id == superseded.project_id
+            if is_same_subject_and_project(decision, superseded)
         ]
         superseding = self._choose_superseding_decision(candidates)
         if superseding is None:

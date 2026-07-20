@@ -31,7 +31,7 @@ from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.delete_memory import OLD_BACKUP_WARNING, SourceMessageChoice
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
 from sirius.domain.decision import Decision
-from sirius.presentation.knowledge_widget import KnowledgeWidget
+from sirius.presentation.knowledge_widget import KnowledgeWidget, _DeleteMemoryDialog
 
 
 @pytest.fixture(autouse=True)
@@ -227,6 +227,42 @@ def test_delete_memory_preserving_source_message_shows_old_backup_warning(
     # so the overview this panel renders from no longer includes it.
     assert widget.memories_list.count() == 0
     assert recorder.informations[-1][1] == OLD_BACKUP_WARNING
+
+
+@pytest.mark.gui
+def test_delete_memory_redacting_source_message_shows_old_backup_warning(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.save_manual_memory_use_case.save("secreto a redactar")
+    recorder = _Recorder()
+    widget = _build_widget(
+        dependencies,
+        recorder,
+        confirm_delete_memory_value=SourceMessageChoice.REDACT,
+    )
+    qtbot.addWidget(widget)
+    widget.memories_list.setCurrentRow(0)
+
+    widget.delete_memory_button.click()
+
+    assert widget.memories_list.count() == 0
+    assert recorder.informations[-1][1] == OLD_BACKUP_WARNING
+
+
+@pytest.mark.gui
+def test_delete_memory_dialog_ok_button_disabled_until_explicit_choice(qtbot: QtBot) -> None:
+    dialog = _DeleteMemoryDialog()
+    qtbot.addWidget(dialog)
+    ok_button = dialog._ok_button
+
+    assert ok_button.isEnabled() is False
+    assert dialog.preserve_radio.isChecked() is False
+    assert dialog.redact_radio.isChecked() is False
+
+    dialog.redact_radio.setChecked(True)
+
+    assert ok_button.isEnabled() is True
 
 
 @pytest.mark.gui
