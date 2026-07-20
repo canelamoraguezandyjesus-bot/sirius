@@ -14,8 +14,10 @@ plataformas.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
+import sys
 import textwrap
 from pathlib import Path
 
@@ -43,9 +45,12 @@ def _bash_works() -> bool:
     return proc.returncode == 0 and proc.stdout.strip() == "sirius-bash-ok"
 
 
+# La biblioteca es Bash y solo se ejecuta en los runners Linux de los workflows y
+# en las Routines. En Windows (runner de Quality) se omite el módulo completo:
+# `bash` resuelve al stub de WSL sin distribución y estas pruebas no aplican.
 pytestmark = pytest.mark.skipif(
-    not _bash_works(),
-    reason="Requiere un Bash POSIX funcional (no disponible en el runner Windows de Quality).",
+    sys.platform == "win32" or not _bash_works(),
+    reason="Requiere un Bash POSIX funcional (no aplica en el runner Windows de Quality).",
 )
 
 # gh simulado con estado: emula las llamadas de la biblioteca y mantiene
@@ -201,8 +206,6 @@ _MARKER = "<!-- sirius-completed:abc1234 -->"
 
 
 def _setup(tmp_path: Path) -> dict[str, str]:
-    import os
-
     mock_dir = tmp_path / "mock"
     bin_dir = tmp_path / "bin"
     mock_dir.mkdir()
@@ -212,7 +215,7 @@ def _setup(tmp_path: Path) -> dict[str, str]:
     gh.chmod(0o755)
 
     env = dict(os.environ)
-    env["PATH"] = f"{bin_dir}:{env['PATH']}"
+    env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
     env["GH_MOCK_DIR"] = str(mock_dir)
     env["SIRIUS_RETRY_BASE_DELAY"] = "0"
     env["SIRIUS_RETRY_ATTEMPTS"] = "3"
