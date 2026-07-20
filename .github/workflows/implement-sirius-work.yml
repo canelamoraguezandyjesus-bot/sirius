@@ -1,0 +1,136 @@
+name: Implementar bloque Sirius
+
+# Ejecuta la Routine implementadora genérica de Sirius con Claude Code real,
+# dentro de este mismo runner, en cuanto se aplica sirius:implement-requested.
+# Sustituye a la "interfaz de Claude/Routines" externa (no inspeccionable)
+# descrita en versiones anteriores de SIRIUS_GENERIC_ROUTINES_0.1.md: aquí
+# todo el mecanismo vive en el repositorio y es auditable.
+#
+# IMPORTANTE — verifica antes del primer uso real: los nombres de entrada de
+# `anthropics/claude-code-action` (prompt, claude_code_oauth_token /
+# anthropic_api_key, allowed_tools, max_turns) corresponden a su interfaz
+# conocida en el momento de escribir este workflow. Es un producto externo
+# que puede cambiar; confirma su README antes de fiarte de este archivo sin
+# probarlo.
+#
+# Claude NUNCA muta etiquetas ni cierra la incidencia por su cuenta: solo
+# hace el trabajo (código, pruebas, commit, push, PR) y escribe un veredicto
+# en un archivo JSON de forma fija. `sirius_apply_verdict.sh` es quien aplica
+# esa decisión, reverificando todo por su cuenta.
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: sirius-work-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  implement:
+    name: Implementar con Claude Code
+    if: github.event.label.name == 'sirius:implement-requested'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          # A diferencia del resto de workflows de este repositorio, este SÍ
+          # necesita hacer push (Claude crea una rama y abre una PR).
+          persist-credentials: true
+
+      - name: Verificar precondiciones de activación
+        id: gate
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -uo pipefail
+          if bash scripts/automation/sirius_validate_activation.sh "$GH_REPO" "$ISSUE_NUMBER"; then
+            script_rc=0
+          else
+            script_rc=$?
+          fi
+          if [ "$script_rc" -ne 0 ]; then
+            echo "::error::La validacion de activacion no se pudo completar; reintentable."
+            exit 1
+          fi
+          labels_now="$(gh api "repos/${GH_REPO}/issues/${ISSUE_NUMBER}/labels" --jq '.[].name')"
+          if printf '%s\n' "$labels_now" | grep -Fxq "sirius:implement-requested"; then
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo "La activacion no era valida; la puerta ya la rechazo y explico el motivo en la incidencia."
+          fi
+
+      - name: Consumir el evento y marcar en curso
+        if: steps.gate.outputs.valid == 'true'
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -uo pipefail
+          source scripts/automation/sirius_issue.sh
+          sirius_set_issue_labels "$GH_REPO" "$ISSUE_NUMBER" \
+            "sirius:implementing" "sirius:implement-requested" "sirius:planned"
+
+      - name: Preparar instrucciones para Claude Code
+        if: steps.gate.outputs.valid == 'true'
+        id: build_prompt
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -uo pipefail
+          {
+            echo "prompt<<SIRIUS_PROMPT_EOF"
+            cat scripts/automation/prompts/implementer.md
+            echo ""
+            echo "## Contexto de esta ejecución"
+            echo "- Repositorio: ${GH_REPO}"
+            echo "- Incidencia de trabajo: #${ISSUE_NUMBER}"
+            echo "- Rama base: main"
+            echo "- El archivo de veredicto debe escribirse en la ruta exacta de la variable de entorno SIRIUS_VERDICT_FILE."
+            echo "SIRIUS_PROMPT_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Ejecutar Claude Code (implementador)
+        if: steps.gate.outputs.valid == 'true'
+        id: claude
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          SIRIUS_VERDICT_FILE: ${{ runner.temp }}/sirius_verdict.json
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: ${{ steps.build_prompt.outputs.prompt }}
+          allowed_tools: "Bash,Read,Write,Edit,Grep,Glob"
+          max_turns: "120"
+
+      - name: Aplicar el veredicto
+        if: always() && steps.gate.outputs.valid == 'true'
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -uo pipefail
+          bash scripts/automation/sirius_apply_verdict.sh \
+            "$GH_REPO" "$ISSUE_NUMBER" "implementer" "${RUNNER_TEMP}/sirius_verdict.json"

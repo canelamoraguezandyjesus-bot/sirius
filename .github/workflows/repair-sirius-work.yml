@@ -1,0 +1,180 @@
+name: Corregir bloque Sirius
+
+# Ejecuta la Routine correctora genérica de Sirius con Claude Code real,
+# dentro de este mismo runner, en cuanto se aplica sirius:repair-requested.
+# Ver la cabecera de implement-sirius-work.yml para el contexto general del
+# mecanismo y el aviso sobre verificar la interfaz de
+# `anthropics/claude-code-action`.
+#
+# Máximo dos ciclos de corrección (contrato §5): el número de ciclo se cuenta
+# a partir de los marcadores `<!-- sirius-repair-cycle:N -->` que deja
+# sirius_apply_verdict.sh en cada corrección aplicada. Al llegar al tercer
+# intento se fuerza sirius:blocked-decision SIN invocar a Claude — ni siquiera
+# se gasta una ejecución en comprobarlo.
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: sirius-work-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    name: Corregir con Claude Code
+    if: github.event.label.name == 'sirius:repair-requested'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          # A diferencia del resto de workflows de este repositorio, este SÍ
+          # necesita hacer push (el corrector sube nuevos commits a la PR).
+          persist-credentials: true
+
+      - name: Comprobar el contador de ciclos y localizar la PR
+        id: gate
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -uo pipefail
+          source scripts/automation/sirius_issue.sh
+
+          previous_cycle="$(sirius_retry gh api "repos/${GH_REPO}/issues/${ISSUE_NUMBER}/comments" --jq '.[].body' \
+            | grep -oE '<!-- sirius-repair-cycle:[0-9]+ -->' | grep -oE '[0-9]+' | sort -n | tail -1)"
+          previous_cycle="${previous_cycle:-0}"
+          next_cycle=$((previous_cycle + 1))
+
+          if [ "$previous_cycle" -ge 2 ]; then
+            marker="<!-- sirius-verdict:corrector:precheck:limite-ciclos -->"
+            body_file="$(mktemp)"
+            printf '%s\n\n%s\n\n%s\n' \
+              "$marker" \
+              "🟡 **Necesito una decisión**" \
+              "Ya se completaron ${previous_cycle} ciclos de revisión-corrección sin converger. El contrato permite un máximo de dos; se detiene para que decidas el siguiente paso." >"$body_file"
+            sirius_transition "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+              "sirius:blocked-decision" "D4C5F9" "Estado: requiere una decisión humana" \
+              "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar el limite de ciclos."
+            rm -f "$body_file"
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          mapfile -t pr_numbers < <(sirius_find_pr_for_issue "$GH_REPO" "$ISSUE_NUMBER")
+          if [ "${#pr_numbers[@]}" -ne 1 ]; then
+            reason="sin-pr"
+            why="No encuentro ninguna PR asociada a esta incidencia; no hay nada que corregir."
+            if [ "${#pr_numbers[@]}" -gt 1 ]; then
+              reason="varias-pr"
+              why="Esta incidencia referencia varias PR distintas; me detengo para no corregir la equivocada."
+            fi
+            marker="<!-- sirius-verdict:corrector:precheck:${reason} -->"
+            body_file="$(mktemp)"
+            printf '%s\n\n%s\n\n%s\n' "$marker" "🔴 **Me he detenido de forma segura**" "$why" >"$body_file"
+            sirius_transition "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+              "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
+              "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar la parada segura (${reason})."
+            rm -f "$body_file"
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          observations="$(sirius_extract_observations "$GH_REPO" "$ISSUE_NUMBER")"
+          if [ -z "$observations" ]; then
+            marker="<!-- sirius-verdict:corrector:precheck:sin-observaciones -->"
+            body_file="$(mktemp)"
+            printf '%s\n\n%s\n\n%s\n' \
+              "$marker" "🔴 **Me he detenido de forma segura**" \
+              "No encuentro ninguna observación estructurada que corregir en esta incidencia." >"$body_file"
+            sirius_transition "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+              "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
+              "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar la parada segura (sin-observaciones)."
+            rm -f "$body_file"
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          printf '%s' "$observations" > "${RUNNER_TEMP}/sirius_observations.json"
+          echo "valid=true" >> "$GITHUB_OUTPUT"
+          echo "pr_number=${pr_numbers[0]}" >> "$GITHUB_OUTPUT"
+          echo "cycle=${next_cycle}" >> "$GITHUB_OUTPUT"
+
+      - name: Consumir el evento y marcar en curso
+        if: steps.gate.outputs.valid == 'true'
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -uo pipefail
+          source scripts/automation/sirius_issue.sh
+          sirius_set_issue_labels "$GH_REPO" "$ISSUE_NUMBER" \
+            "sirius:repairing" "sirius:repair-requested"
+
+      - name: Preparar instrucciones para Claude Code
+        if: steps.gate.outputs.valid == 'true'
+        id: build_prompt
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
+          CYCLE: ${{ steps.gate.outputs.cycle }}
+        run: |
+          set -uo pipefail
+          {
+            echo "prompt<<SIRIUS_PROMPT_EOF"
+            cat scripts/automation/prompts/corrector.md
+            echo ""
+            echo "## Contexto de esta ejecución"
+            echo "- Repositorio: ${GH_REPO}"
+            echo "- Incidencia de trabajo: #${ISSUE_NUMBER}"
+            echo "- Pull Request a corregir: #${PR_NUMBER}"
+            echo "- Ciclo de corrección: ${CYCLE} de 2 como máximo"
+            echo "- Las observaciones estructuradas están en la ruta exacta de la variable de entorno SIRIUS_OBSERVATIONS_FILE."
+            echo "- El archivo de veredicto debe escribirse en la ruta exacta de la variable de entorno SIRIUS_VERDICT_FILE."
+            echo "SIRIUS_PROMPT_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Ejecutar Claude Code (corrector)
+        if: steps.gate.outputs.valid == 'true'
+        id: claude
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
+          SIRIUS_OBSERVATIONS_FILE: ${{ runner.temp }}/sirius_observations.json
+          SIRIUS_VERDICT_FILE: ${{ runner.temp }}/sirius_verdict.json
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: ${{ steps.build_prompt.outputs.prompt }}
+          allowed_tools: "Bash,Read,Write,Edit,Grep,Glob"
+          max_turns: "120"
+
+      - name: Aplicar el veredicto
+        if: always() && steps.gate.outputs.valid == 'true'
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          CYCLE: ${{ steps.gate.outputs.cycle }}
+        run: |
+          set -uo pipefail
+          bash scripts/automation/sirius_apply_verdict.sh \
+            "$GH_REPO" "$ISSUE_NUMBER" "corrector" "${RUNNER_TEMP}/sirius_verdict.json" "$CYCLE"

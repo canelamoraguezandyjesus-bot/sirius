@@ -1,0 +1,134 @@
+name: Revisar bloque Sirius
+
+# Ejecuta la Routine revisora genérica de Sirius con Claude Code real, dentro
+# de este mismo runner, en cuanto se aplica sirius:review-requested (solo
+# ocurre tras Quality en verde sobre el head registrado). Ver la cabecera de
+# implement-sirius-work.yml para el contexto general del mecanismo y el aviso
+# sobre verificar la interfaz de `anthropics/claude-code-action`.
+#
+# Esta pasada es de SOLO LECTURA a propósito: el permiso del job es
+# contents: read (no write) y la PR no se toca. Aunque el propio prompt le
+# pide a Claude que no edite nada, el permiso del token es la garantía real —
+# incluso si Claude intentara hacer push, el token no lo permite.
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: sirius-work-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  review:
+    name: Revisar con Claude Code
+    if: github.event.label.name == 'sirius:review-requested'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Localizar la PR asociada
+        id: gate
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -uo pipefail
+          source scripts/automation/sirius_issue.sh
+          mapfile -t pr_numbers < <(sirius_find_pr_for_issue "$GH_REPO" "$ISSUE_NUMBER")
+          if [ "${#pr_numbers[@]}" -eq 1 ]; then
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+            echo "pr_number=${pr_numbers[0]}" >> "$GITHUB_OUTPUT"
+          else
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            reason="sin-pr"
+            why="No encuentro ninguna PR asociada a esta incidencia; no hay nada que revisar."
+            if [ "${#pr_numbers[@]}" -gt 1 ]; then
+              reason="varias-pr"
+              why="Esta incidencia referencia varias PR distintas; me detengo para no revisar la equivocada."
+            fi
+            marker="<!-- sirius-verdict:reviewer:precheck:${reason} -->"
+            body_file="$(mktemp)"
+            printf '%s\n\n%s\n\n%s\n' "$marker" "🔴 **Me he detenido de forma segura**" "$why" >"$body_file"
+            sirius_transition "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+              "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
+              "noclose" "sirius:review-requested" || echo "::error::No se pudo aplicar la parada segura (${reason})."
+            rm -f "$body_file"
+          fi
+
+      - name: Consumir el evento y marcar en curso
+        if: steps.gate.outputs.valid == 'true'
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -uo pipefail
+          source scripts/automation/sirius_issue.sh
+          sirius_set_issue_labels "$GH_REPO" "$ISSUE_NUMBER" \
+            "sirius:reviewing" "sirius:review-requested"
+
+      - name: Preparar instrucciones para Claude Code
+        if: steps.gate.outputs.valid == 'true'
+        id: build_prompt
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
+        run: |
+          set -uo pipefail
+          {
+            echo "prompt<<SIRIUS_PROMPT_EOF"
+            cat scripts/automation/prompts/reviewer.md
+            echo ""
+            echo "## Contexto de esta ejecución"
+            echo "- Repositorio: ${GH_REPO}"
+            echo "- Incidencia de trabajo: #${ISSUE_NUMBER}"
+            echo "- Pull Request a auditar: #${PR_NUMBER}"
+            echo "- El archivo de veredicto debe escribirse en la ruta exacta de la variable de entorno SIRIUS_VERDICT_FILE."
+            echo "SIRIUS_PROMPT_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Ejecutar Claude Code (revisor)
+        if: steps.gate.outputs.valid == 'true'
+        id: claude
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
+          SIRIUS_VERDICT_FILE: ${{ runner.temp }}/sirius_verdict.json
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: ${{ steps.build_prompt.outputs.prompt }}
+          allowed_tools: "Bash,Read,Grep,Glob"
+          disallowed_tools: "Edit,Write,NotebookEdit"
+          max_turns: "60"
+
+      - name: Aplicar el veredicto
+        if: always() && steps.gate.outputs.valid == 'true'
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -uo pipefail
+          bash scripts/automation/sirius_apply_verdict.sh \
+            "$GH_REPO" "$ISSUE_NUMBER" "reviewer" "${RUNNER_TEMP}/sirius_verdict.json"

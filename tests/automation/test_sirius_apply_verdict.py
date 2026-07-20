@@ -1,0 +1,425 @@
+"""Pruebas de ``scripts/automation/sirius_apply_verdict.sh``.
+
+Ejercitan la aplicación determinista del veredicto de un rol de Claude Code
+(implementador/revisor/corrector) con un ``gh`` simulado y con estado. Sin red
+ni ``gh`` real. Se omiten en Windows por las mismas razones documentadas en
+``test_sirius_issue.py``.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+APPLY_VERDICT = REPO_ROOT / "scripts" / "automation" / "sirius_apply_verdict.sh"
+
+REPO = "owner/repo"
+ISSUE = 70
+
+
+def _bash_works() -> bool:
+    exe = shutil.which("bash")
+    if not exe:
+        return False
+    try:
+        proc = subprocess.run(
+            [exe, "-c", "echo ok"], capture_output=True, text=True, timeout=30, check=False
+        )
+    except OSError:
+        return False
+    return proc.returncode == 0 and proc.stdout.strip() == "ok"
+
+
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32" or not _bash_works(),
+    reason="Requiere un Bash POSIX funcional (no aplica en el runner Windows de Quality).",
+)
+
+# gh simulado con estado por incidencia (labels_N.txt / comments_N.txt /
+# body_N.txt) y PR (pr_N.json, ya con forma post-jq: head como SHA plano).
+_GH_MOCK = r"""#!/usr/bin/env bash
+D="$GH_MOCK_DIR"
+echo "gh $*" >> "$D/calls.log"
+sub="$1"; shift || true
+
+issue_from() { printf '%s' "$1" | grep -oE 'issues/[0-9]+' | head -1 | cut -d/ -f2; }
+
+case "$sub" in
+  api)
+    args="$*"
+    if printf '%s' "$args" | grep -q '/pulls/'; then
+      pr="$(printf '%s' "$args" | grep -oE 'pulls/[0-9]+' | cut -d/ -f2)"
+      cat "$D/pr_${pr}.json" 2>/dev/null || exit 1
+      exit 0
+    fi
+    n="$(issue_from "$args")"
+    if printf '%s' "$args" | grep -q '/labels'; then
+      cat "$D/labels_${n}.txt" 2>/dev/null; exit 0
+    fi
+    if printf '%s' "$args" | grep -q '/comments'; then
+      if printf '%s' "$args" | grep -q 'reverse'; then
+        tac "$D/comments_${n}.txt" 2>/dev/null
+      else
+        cat "$D/comments_${n}.txt" 2>/dev/null
+      fi
+      exit 0
+    fi
+    cat "$D/body_${n}.txt" 2>/dev/null
+    exit 0
+    ;;
+  issue)
+    action="$1"; shift || true
+    num=""
+    for a in "$@"; do case "$a" in [0-9]*) num="$a"; break;; esac; done
+    case "$action" in
+      view)
+        if printf '%s' "$*" | grep -q comments; then cat "$D/comments_${num}.txt" 2>/dev/null
+        else cat "$D/body_${num}.txt" 2>/dev/null; fi
+        exit 0;;
+      edit)
+        add=""; rem=""; prev=""
+        for a in "$@"; do
+          [ "$prev" = "--add-label" ] && add="$a"
+          [ "$prev" = "--remove-label" ] && rem="$a"
+          prev="$a"
+        done
+        lf="$D/labels_${num}.txt"
+        if [ -n "$add" ]; then
+          grep -Fxq "$add" "$lf" 2>/dev/null || echo "$add" >> "$lf"
+        fi
+        if [ -n "$rem" ] && [ -f "$lf" ]; then
+          grep -Fxv "$rem" "$lf" > "$lf.tmp" 2>/dev/null; mv "$lf.tmp" "$lf" 2>/dev/null || true
+        fi
+        exit 0;;
+      comment)
+        bf=""; prev=""
+        for a in "$@"; do [ "$prev" = "--body-file" ] && bf="$a"; prev="$a"; done
+        if [ -n "$bf" ]; then
+          cat "$bf" >> "$D/comments_${num}.txt"
+          printf '\n' >> "$D/comments_${num}.txt"
+        fi
+        echo "COMMENT ${num}" >> "$D/actions.log"; exit 0;;
+    esac;;
+  label)
+    action="$1"; shift || true
+    case "$action" in
+      create) exit 0;;
+      *) echo "unknown gh label $action" >&2; exit 2;;
+    esac;;
+esac
+exit 0
+"""
+
+
+def _setup(tmp_path: Path) -> dict[str, str]:
+    mock_dir = tmp_path / "mock"
+    bin_dir = tmp_path / "bin"
+    mock_dir.mkdir()
+    bin_dir.mkdir()
+    gh = bin_dir / "gh"
+    gh.write_text(_GH_MOCK, encoding="utf-8")
+    gh.chmod(0o755)
+    env = dict(os.environ)
+    env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
+    env["GH_MOCK_DIR"] = str(mock_dir)
+    env["SIRIUS_RETRY_BASE_DELAY"] = "0"
+    env["SIRIUS_RETRY_ATTEMPTS"] = "2"
+    return env
+
+
+def _md(env: dict[str, str]) -> Path:
+    return Path(env["GH_MOCK_DIR"])
+
+
+def _seed_issue(
+    env: dict[str, str], labels: list[str], comments: str = "", body: str = "cuerpo"
+) -> None:
+    md = _md(env)
+    (md / f"labels_{ISSUE}.txt").write_text("".join(f"{x}\n" for x in labels), encoding="utf-8")
+    (md / f"comments_{ISSUE}.txt").write_text(comments, encoding="utf-8")
+    (md / f"body_{ISSUE}.txt").write_text(body, encoding="utf-8")
+
+
+def _seed_pr(
+    env: dict[str, str],
+    pr: int,
+    *,
+    state: str = "open",
+    draft: bool = False,
+    head: str = "aa11bb22cc33",
+) -> None:
+    (_md(env) / f"pr_{pr}.json").write_text(
+        json.dumps({"state": state, "draft": draft, "head": head}), encoding="utf-8"
+    )
+
+
+def _verdict_file(tmp_path: Path, payload: dict[str, object]) -> Path:
+    f = tmp_path / "verdict.json"
+    f.write_text(json.dumps(payload), encoding="utf-8")
+    return f
+
+
+def _labels(env: dict[str, str]) -> list[str]:
+    f = _md(env) / f"labels_{ISSUE}.txt"
+    return f.read_text(encoding="utf-8").splitlines() if f.exists() else []
+
+
+def _comments(env: dict[str, str]) -> str:
+    f = _md(env) / f"comments_{ISSUE}.txt"
+    return f.read_text(encoding="utf-8") if f.exists() else ""
+
+
+def _run(
+    env: dict[str, str], role: str, verdict_file: Path, cycle: str = ""
+) -> subprocess.CompletedProcess[str]:
+    args = ["bash", str(APPLY_VERDICT), REPO, str(ISSUE), role, str(verdict_file)]
+    if cycle:
+        args.append(cycle)
+    return subprocess.run(args, capture_output=True, text=True, env=env, check=False)
+
+
+# --------------------------------------------------------------------------- #
+# Veredicto ausente, corrupto o fuera de conjunto: siempre parada segura
+# --------------------------------------------------------------------------- #
+
+
+def test_missing_verdict_file_stops_safely(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:implementing"])
+    r = _run(env, "implementer", tmp_path / "no-existe.json")
+    assert r.returncode != 0
+    assert "sirius:failed-safely" in _labels(env)
+    assert "sirius:implementing" not in _labels(env)
+    assert "sirius-verdict:implementer:precheck:sin-veredicto" in _comments(env)
+
+
+def test_invalid_json_stops_safely(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:implementing"])
+    vf = tmp_path / "verdict.json"
+    vf.write_text("no es json", encoding="utf-8")
+    r = _run(env, "implementer", vf)
+    assert r.returncode != 0
+    assert "sirius:failed-safely" in _labels(env)
+    assert "veredicto-invalido" in _comments(env)
+
+
+def test_verdict_outside_allowed_set_stops_safely(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:reviewing"])
+    vf = _verdict_file(tmp_path, {"verdict": "READY_FOR_REVIEW", "summary": "x"})
+    r = _run(env, "reviewer", vf)  # no es un veredicto permitido para el revisor
+    assert r.returncode != 0
+    assert "sirius:failed-safely" in _labels(env)
+    assert "veredicto-fuera-de-conjunto" in _comments(env)
+
+
+# --------------------------------------------------------------------------- #
+# Implementador
+# --------------------------------------------------------------------------- #
+
+
+def test_implementer_ready_for_review_with_pr(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(
+        env, ["sirius:implementing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
+    )
+    _seed_pr(env, 9, head="c4d482267d9a")
+    vf = _verdict_file(tmp_path, {"verdict": "READY_FOR_REVIEW", "summary": "listo"})
+    r = _run(env, "implementer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    labels = _labels(env)
+    assert "sirius:ci-pending" in labels
+    assert "sirius:implementing" not in labels
+    comments = _comments(env)
+    assert "pull/9" in comments
+    assert "c4d482267d9a" in comments
+
+
+def test_implementer_ready_for_review_without_pr_stops_safely(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:implementing"], comments="sin URL de PR")
+    vf = _verdict_file(tmp_path, {"verdict": "READY_FOR_REVIEW", "summary": "listo"})
+    r = _run(env, "implementer", vf)
+    assert r.returncode != 0
+    assert "sirius:failed-safely" in _labels(env)
+    assert "sin-pr" in _comments(env)
+
+
+def test_implementer_blocked_by_decision(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:implementing"])
+    vf = _verdict_file(
+        tmp_path, {"verdict": "BLOCKED_BY_DECISION", "summary": "necesito decidir X"}
+    )
+    r = _run(env, "implementer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    labels = _labels(env)
+    assert "sirius:blocked-decision" in labels
+    assert "sirius:implementing" not in labels
+    assert "necesito decidir X" in _comments(env)
+
+
+def test_implementer_usage_limit_reached(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:implementing"])
+    vf = _verdict_file(tmp_path, {"verdict": "USAGE_LIMIT_REACHED", "summary": "sin margen"})
+    r = _run(env, "implementer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "sirius:failed-safely" in _labels(env)
+
+
+# --------------------------------------------------------------------------- #
+# Revisor
+# --------------------------------------------------------------------------- #
+
+
+def test_reviewer_review_approved_with_matching_head(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(
+        env,
+        ["sirius:reviewing"],
+        comments=(
+            "QUALITY_SUCCESS\n- Head SHA: `c4d482267d9a`\n"
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+        ),
+    )
+    _seed_pr(env, 9, head="c4d482267d9a")
+    vf = _verdict_file(
+        tmp_path, {"verdict": "REVIEW_APPROVED", "summary": "aprobado", "observations": []}
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    labels = _labels(env)
+    assert "sirius:ready-for-merge" in labels
+    assert "sirius:reviewing" not in labels
+    assert "c4d482267d9a" in _comments(env)
+
+
+def test_reviewer_review_approved_with_stale_head_stops_safely(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(
+        env,
+        ["sirius:reviewing"],
+        comments=(
+            "QUALITY_SUCCESS\n- Head SHA: `aaaaaaaaaaaa`\n"
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+        ),
+    )
+    _seed_pr(env, 9, head="bbbbbbbbbbbb")  # la PR avanzo despues del ultimo CI verde
+    vf = _verdict_file(
+        tmp_path, {"verdict": "REVIEW_APPROVED", "summary": "aprobado", "observations": []}
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode != 0
+    assert "sirius:failed-safely" in _labels(env)
+    assert "head-inconsistente" in _comments(env)
+
+
+def test_reviewer_changes_requested_with_observations(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(
+        env, ["sirius:reviewing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
+    )
+    _seed_pr(env, 9, head="c4d482267d9a")
+    vf = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "CHANGES_REQUESTED",
+            "summary": "hay defectos",
+            "observations": [
+                {
+                    "id": "R1",
+                    "severidad": "alta",
+                    "archivo": "src/x.py",
+                    "problema": "no valida entrada",
+                    "criterio_esperado": "debe validar",
+                    "prueba": "test_x_invalid",
+                    "limites_correccion": "solo src/x.py",
+                }
+            ],
+        },
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    labels = _labels(env)
+    assert "sirius:repair-requested" in labels
+    assert "sirius:reviewing" not in labels
+    comments = _comments(env)
+    assert "OBSERVACIONES_ESTRUCTURADAS" in comments
+    assert "R1" in comments
+
+
+def test_reviewer_changes_requested_without_observations_stops_safely(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:reviewing"])
+    vf = _verdict_file(
+        tmp_path, {"verdict": "CHANGES_REQUESTED", "summary": "hay defectos", "observations": []}
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode != 0
+    assert "sirius:failed-safely" in _labels(env)
+    assert "sin-observaciones" in _comments(env)
+
+
+# --------------------------------------------------------------------------- #
+# Corrector
+# --------------------------------------------------------------------------- #
+
+
+def test_corrector_fixed_with_cycle_marker(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(
+        env, ["sirius:repairing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
+    )
+    _seed_pr(env, 9, head="d5e5f5061234")
+    vf = _verdict_file(tmp_path, {"verdict": "FIXED", "summary": "corregido"})
+    r = _run(env, "corrector", vf, cycle="1")
+    assert r.returncode == 0, r.stdout + r.stderr
+    labels = _labels(env)
+    assert "sirius:ci-pending" in labels
+    assert "sirius:repairing" not in labels
+    assert "sirius-repair-cycle:1" in _comments(env)
+
+
+def test_corrector_failed_safely(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:repairing"])
+    vf = _verdict_file(tmp_path, {"verdict": "FAILED_SAFELY", "summary": "no se pudo corregir"})
+    r = _run(env, "corrector", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "sirius:failed-safely" in _labels(env)
+
+
+# --------------------------------------------------------------------------- #
+# Rol desconocido e idempotencia
+# --------------------------------------------------------------------------- #
+
+
+def test_unknown_role_fails_immediately(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(env, [])
+    vf = _verdict_file(tmp_path, {"verdict": "READY_FOR_REVIEW", "summary": "x"})
+    r = _run(env, "bogus", vf)
+    assert r.returncode != 0
+    assert "rol desconocido" in r.stderr
+
+
+def test_blocked_by_decision_is_idempotent_no_duplicate_comment(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:implementing"])
+    vf = _verdict_file(
+        tmp_path, {"verdict": "BLOCKED_BY_DECISION", "summary": "necesito decidir X"}
+    )
+    r1 = _run(env, "implementer", vf)
+    assert r1.returncode == 0, r1.stdout + r1.stderr
+    r2 = _run(env, "implementer", vf)
+    assert r2.returncode == 0, r2.stdout + r2.stderr
+    assert _comments(env).count("sirius-verdict:implementer:blocked") == 1
