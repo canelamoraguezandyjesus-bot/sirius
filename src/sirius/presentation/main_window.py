@@ -71,6 +71,7 @@ from sirius.presentation.backup_worker import (
     RestoreBackupWorker,
     ValidateBackupWorker,
 )
+from sirius.presentation.context_panel_widget import ContextPanelWidget
 from sirius.presentation.conversation_worker import SendMessageWorker
 from sirius.presentation.knowledge_widget import KnowledgeWidget
 from sirius.presentation.project_continuity_widget import ProjectContinuityWidget
@@ -217,6 +218,17 @@ class MainWindow(QMainWindow):
         )
         self.project_continuity_widget.project_completed.connect(self.project_completed.emit)
 
+        # B5: panel de contexto completo, de solo lectura, junto al bloque de
+        # continuidad. Reutiliza casos de uso ya recibidos; no crea ninguno.
+        self.context_panel_widget = ContextPanelWidget(
+            self._project_continuity_use_case,
+            self._get_knowledge_overview_use_case,
+            self._get_memory_origin_use_case,
+            self._get_decision_origin_use_case,
+            show_warning=self._show_warning,
+            show_information=self._show_information,
+        )
+
         self.message_list = QListWidget()
         self.message_list.setAccessibleName("Historial de la conversación")
 
@@ -243,6 +255,7 @@ class MainWindow(QMainWindow):
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.addWidget(self.project_continuity_widget)
+        layout.addWidget(self.context_panel_widget)
         layout.addWidget(self.message_list)
         layout.addLayout(input_row)
         layout.addWidget(self.status_label)
@@ -342,6 +355,7 @@ class MainWindow(QMainWindow):
         self._set_backup_controls_enabled(False)
         self.project_continuity_widget.set_external_busy(True)
         self.knowledge_widget.set_external_busy(True)
+        self.context_panel_widget.set_external_busy(True)
         self.status_label.setText("Sirius está pensando...")
         self.error_label.setText("")
 
@@ -420,6 +434,7 @@ class MainWindow(QMainWindow):
         self._set_backup_controls_enabled(True)
         self.project_continuity_widget.set_external_busy(False)
         self.knowledge_widget.set_external_busy(False)
+        self.context_panel_widget.set_external_busy(False)
         if self._close_requested:
             self._close_requested = False
             self.close()
@@ -654,6 +669,7 @@ class MainWindow(QMainWindow):
         self.message_input.setEnabled(False)
         self.project_continuity_widget.set_external_busy(True)
         self.knowledge_widget.set_external_busy(True)
+        self.context_panel_widget.set_external_busy(True)
 
     def _finish_backup_operation(self) -> None:
         self._is_backup_busy = False
@@ -663,6 +679,7 @@ class MainWindow(QMainWindow):
         self.message_input.setEnabled(True)
         self.project_continuity_widget.set_external_busy(False)
         self.knowledge_widget.set_external_busy(False)
+        self.context_panel_widget.set_external_busy(False)
         if self._close_requested:
             self._close_requested = False
             self.close()
@@ -872,6 +889,7 @@ class MainWindow(QMainWindow):
         self._active_backup_worker = None
         self.project_continuity_widget.set_external_busy(False)
         self.knowledge_widget.set_external_busy(False)
+        self.context_panel_widget.set_external_busy(False)
         self.restore_backup_status_label.setText("")
         message = "Los datos se restauraron correctamente."
         if result.safety_backup_path is not None:

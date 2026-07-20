@@ -133,8 +133,13 @@ En particular:
 - la memoria ya contiene, e integra observablemente (B4a-B4f), la semántica
   aprobada de decisiones, eventos, corrección, sustitución, archivo,
   eliminación, conflictos y origen consultable;
-- no existe todavía el panel de contexto completo (B5): B4f solo integró lo
-  ya aprobado de B4 en la interfaz existente, sin ampliarla;
+- el panel de contexto completo (B5, SIRIUS-B5-001) está implementado en su
+  primera versión: un widget de solo lectura en la pestaña "Conversación"
+  (`ContextPanelWidget`) que reúne el ancla del proyecto activo con las
+  decisiones y los recuerdos vigentes y su origen, reutilizando los casos de
+  uso ya existentes sin crear repositorios, modelos ni migraciones nuevos.
+  Pendiente de revisión y de fusión con autorización humana explícita (no se
+  declara superado hasta entonces);
 - el constructor de contexto no aplica aún toda la selección, precedencia y política de presupuesto aprobadas.
 
 ## Estado de verificación
