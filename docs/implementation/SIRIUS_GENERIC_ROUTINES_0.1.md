@@ -63,10 +63,29 @@ Toda ejecución registra en la incidencia:
 **Nombre recomendado:** `Sirius Generic Implementer`  
 **Disparador:** incidencia etiquetada `sirius:implement-requested`.
 
+### Puerta de activación en el repositorio
+
+El workflow `.github/workflows/validate-sirius-activation.yml` valida cada
+activación en cuanto se aplica `sirius:implement-requested` (incidencia #60):
+incidencia abierta, `sirius:planned` presente, sin otros estados `sirius:`
+activos o terminales, y cuerpo estructuralmente completo. Si la activación es
+inválida, **rechaza temprano**: retira el evento, conserva el resto de
+etiquetas y publica un comentario con el motivo exacto (marcador idempotente
+por motivo) mencionando al propietario. Nunca añade `sirius:planned` (esa
+etiqueta certifica una planificación aprobada — decisión humana), nunca aplica
+`sirius:failed-safely` y nunca inicia trabajo. La puerta no garantiza ejecutarse
+antes que la Routine: la Routine **conserva estas mismas comprobaciones** como
+defensa en profundidad.
+
 ### Entrada válida
 
-- incidencia abierta y conforme a la plantilla;
-- estado `sirius:planned`;
+- incidencia abierta y conforme a la plantilla (todas las secciones
+  obligatorias del contrato presentes; un cuerpo truncado no es válido);
+- estado `sirius:planned` presente (la creación de la incidencia debe aplicarlo:
+  la plantilla lo hace automáticamente; una creación por API debe incluirlo);
+- sin otros estados `sirius:` activos o terminales (incluida
+  `sirius:failed-safely`: reactivar exige retirar antes el diagnóstico de forma
+  consciente);
 - sin rama o PR activa para el mismo `work_id`;
 - alcance previamente aprobado.
 

@@ -1,0 +1,45 @@
+name: Validar activación de Sirius
+
+# Puerta de validación de la activación (`sirius:implement-requested`). Rechaza
+# temprano las activaciones inválidas — sin `sirius:planned`, con estados
+# incompatibles o con el cuerpo del contrato truncado/incompleto — retirando el
+# evento y explicando exactamente qué falta (incidencia #60). Nunca añade
+# `sirius:planned` (certificar la planificación es una decisión humana), nunca
+# aplica `failed-safely` y nunca inicia trabajo. La Routine implementadora
+# conserva sus propias comprobaciones como defensa en profundidad.
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: validate-sirius-activation-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validar precondiciones de activación
+    if: github.event.label.name == 'sirius:implement-requested'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout automation library
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Validar activación
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -uo pipefail
+          bash scripts/automation/sirius_validate_activation.sh "$GH_REPO" "$ISSUE_NUMBER"
