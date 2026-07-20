@@ -26,10 +26,14 @@ Responsabilidades:
 - crear la incidencia de trabajo;
 - aplicar el evento inicial;
 - consultar y explicar estados;
-- registrar decisiones humanas;
-- ejecutar el merge tras autorización explícita.
+- registrar decisiones humanas.
 
 Limitación operativa: ChatGPT no puede iniciar una conversación ni contactar al usuario por sí solo cuando el chat está inactivo.
+
+El merge ya no lo ejecuta ChatGPT: lo ejecuta de forma nativa
+`.github/workflows/merge-sirius-work.yml` en cuanto detecta el comentario
+exacto del propietario en GitHub (véase §4.7). Esto evita depender de que el
+usuario tenga abierto un chat para autorizar un merge ya decidido.
 
 ### 2.2 Incidencia de control
 
@@ -143,22 +147,37 @@ Cuando se alcanza `ready-for-merge`:
 - GitHub, la Routine o un canal expresamente configurado emite una notificación por evento;
 - el sistema se detiene.
 
-ChatGPT no promete iniciar el aviso. Cuando el usuario abra el chat o responda a la notificación, podrá ordenar `Fusiona`.
+La notificación llega por GitHub (incidencia). El usuario no necesita abrir
+ningún chat: puede autorizar el merge escribiendo el comentario exacto
+`fusiona` directamente en la incidencia.
 
 ### 4.7 Merge y cierre
 
-Antes del merge, ChatGPT verifica:
+El merge se ejecuta mediante `.github/workflows/merge-sirius-work.yml`,
+disparado por un comentario del propietario del repositorio (verificado por
+`author_association == OWNER`) que contenga exactamente la palabra `fusiona`
+sobre una incidencia en `sirius:ready-for-merge`. Antes de fusionar, el
+workflow verifica por REST:
 
-- PR abierta;
-- CI verde sobre el head actual;
-- aprobación para el mismo head;
-- ausencia de bloqueos y cambios posteriores.
+- que el comentario proviene del propietario y la incidencia sigue en
+  `sirius:ready-for-merge`;
+- que existe una única PR asociada;
+- que esa PR está abierta, no es borrador, no está ya fusionada y no tiene
+  conflictos con la rama base;
+- que su head actual coincide con el último Head/Merge SHA aprobado
+  registrado en la incidencia (ningún cambio posterior sin revisar);
+- que `Quality` está en verde sobre ese head exacto.
 
-Tras autorización explícita:
+Si cualquier condición falla, publica una explicación concreta en la
+incidencia y no fusiona. La autorización para ese merge concreto sigue siendo
+del usuario; el workflow solo ejecuta un merge ya autorizado.
+
+Tras el merge:
 
 `ready-for-merge -> completed`
 
-Se registra el commit y se cierra la incidencia.
+Lo aplica `complete-sirius-after-merge.yml` al recibir el evento de PR
+fusionada; registra el commit y cierra la incidencia.
 
 ## 5. Idempotencia y bloqueo de duplicados
 
@@ -201,7 +220,7 @@ Permanecen bajo control humano:
 
 - tareas horarias como motor;
 - vigilancia periódica de PR;
-- merge automático;
+- fusionar sin el comentario explícito de autorización del propietario descrito en §4.7;
 - cambios directos en `main`;
 - bucles ilimitados;
 - inicio automático indefinido de bloques.

@@ -1,10 +1,10 @@
 # SIRIUS - Contrato operativo de automatización
 
-**Versión:** 1.1  
-**Fecha:** 19 de julio de 2026  
-**Estado:** PROPUESTO EN PR #44; VIGENTE ÚNICAMENTE TRAS MERGE HUMANO  
+**Versión:** 1.2  
+**Fecha:** 20 de julio de 2026  
+**Estado:** VIGENTE (§8 y §9 actualizadas; ver §10)  
 **Autoridad:** Operativa para el desarrollo automatizado de Sirius 0.1  
-**Sustituye:** versión 1.0 del 18 de julio de 2026  
+**Sustituye:** versión 1.1 del 19 de julio de 2026  
 **No modifica:** Producto, Arquitectura Técnica, ATD, requisitos ni alcance de Sirius 0.1
 
 ## 0. Propósito
@@ -158,24 +158,49 @@ La notificación es secundaria y nunca debe romper el flujo principal: ante un f
 
 ## 8. Merge
 
-El merge permanece bajo control humano.
+El merge permanece bajo control humano. Lo que cambia en esta versión es
+únicamente el canal de autorización y quién ejecuta el comando técnico; la
+decisión de fusionar sigue siendo exclusivamente del usuario para cada PR
+concreta.
 
-Ningún agente, Routine, workflow o aplicación puede fusionar una PR sin una autorización explícita del usuario para ese merge.
+Ningún agente, Routine, workflow o aplicación puede fusionar una PR sin una
+autorización explícita del usuario para ese merge. Esa autorización se
+expresa mediante un comentario del propietario del repositorio, con la
+palabra exacta `fusiona`, escrito directamente sobre la incidencia que está en
+`sirius:ready-for-merge`. Ninguna otra persona, bot o cuenta puede
+autorizarlo: el workflow verifica `author_association == OWNER` antes de
+actuar.
 
-Antes de fusionar se verificará:
+La ejecución técnica del merge la realiza `.github/workflows/merge-sirius-work.yml`
+(vía `scripts/automation/sirius_merge_on_command.sh`), disparado únicamente por
+ese comentario. Antes de fusionar se verificará por REST, en el momento del
+comentario (no solo cuando se alcanzó `ready-for-merge`):
 
-- PR abierta y fusionable;
-- CI verde sobre el head actual;
-- revisión aprobada sobre ese mismo head;
-- ausencia de bloqueos;
-- ausencia de cambios posteriores a la aprobación.
+- que la incidencia sigue en `sirius:ready-for-merge`;
+- que existe una única PR asociada, abierta y fusionable (no borrador, no
+  fusionada ya, sin conflictos con la rama base);
+- CI (`Quality`) verde sobre el head actual de esa PR;
+- que ese head coincide con el último Head/Merge SHA aprobado registrado en la
+  incidencia (ausencia de cambios posteriores a la aprobación sin revisar);
+- ausencia de otros bloqueos detectados.
+
+Si cualquier condición falla, el workflow no fusiona: publica en la incidencia
+una explicación concreta del motivo y se detiene. No reintenta por su cuenta;
+una nueva autorización requiere que el usuario vuelva a escribir `fusiona`
+después de resolver lo señalado.
+
+Tras un merge exitoso, `complete-sirius-after-merge.yml` sigue siendo quien
+transiciona la incidencia a `sirius:completed` y la cierra, exactamente como
+antes de este cambio.
 
 ## 9. Prohibiciones
 
 Está prohibido:
 
 - push directo a `main`;
-- merge automático;
+- fusionar una PR sin el comentario explícito de autorización descrito en §8
+  (ese comentario, no la mera llegada a `sirius:ready-for-merge`, es la
+  autorización);
 - reducir o falsear pruebas para conseguir verde;
 - ocultar fallos;
 - introducir servicios de pago, APIs, claves o suscripciones no aprobadas;
@@ -193,4 +218,12 @@ Está prohibido:
 - **Mantiene:** revisión independiente, máximo de dos ciclos, trazabilidad, seguridad y merge humano.
 - **Entrada en vigor:** únicamente cuando la PR #44 sea revisada, tenga CI verde y sea fusionada por autorización explícita del usuario.
 
-El historial de la versión 1.0 permanece disponible en Git y no se reescribe retrospectivamente.
+### 10.1 Versión 1.2 — merge nativo de GitHub por comentario
+
+- **Decisión:** sustituir el flujo de autorización de merge basado en pedirle a ChatGPT que ejecutara `Fusiona` por un mecanismo nativo de GitHub: el propietario escribe el comentario exacto `fusiona` sobre la incidencia en `sirius:ready-for-merge`, y `.github/workflows/merge-sirius-work.yml` ejecuta el merge tras reverificar por REST todas las condiciones del §8.
+- **Motivo:** permitir que el usuario autorice el único paso que le queda (el merge) sin depender de abrir una conversación con ChatGPT; reduce a un solo canal (GitHub) el lugar donde ocurre todo el ciclo de un bloque.
+- **Alcance:** exclusivamente la ejecución técnica del merge y la redacción de §8/§9 de este contrato, `AUTOMATION_STATE_MACHINE_SIRIUS_0.1.md` §2.1/§4.6/§4.7/§8 y el texto de `notify-sirius-state.yml`. No cambia la implementación, revisión ni corrección automática, que siguen siendo responsabilidad exclusiva de Claude Code/Routines.
+- **Mantiene:** el merge permanece bajo control humano y bajo autorización explícita del usuario para cada PR; solo cambia el canal de esa autorización y quién teclea el comando técnico.
+- **Entrada en vigor:** cuando la PR que introduce `merge-sirius-work.yml` y `sirius_merge_on_command.sh` sea revisada, tenga CI verde y sea fusionada por autorización explícita del usuario (con el mecanismo anterior, ya que este todavía no existe).
+
+El historial de las versiones 1.0 y 1.1 permanece disponible en Git y no se reescribe retrospectivamente.
