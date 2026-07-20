@@ -316,12 +316,28 @@ sirius_transition() {
   local repo="$1" num="$2" marker="$3" file="$4"
   local add="$5" color="$6" desc="$7" close_flag="$8" remove_csv="$9"
 
-  # Idempotencia: si el marcador ya existe, la transicion ya se completo.
-  local existing=""
+  # Idempotencia con verificacion: un marcador presente NO basta por si solo.
+  # Historicamente (incidencia #50) un flujo antiguo publico el marcador y murio
+  # antes de aplicar la etiqueta/cierre; salir temprano solo por el marcador
+  # dejaba ese estado atascado para siempre. Si el marcador existe, se verifica
+  # el estado final real: si ya esta aplicado, no se repite nada; si falta, se
+  # completa la transicion SIN publicar un comentario duplicado.
+  local existing="" marker_present=0
   existing="$(sirius_read_issue_comments "$repo" "$num" 2>/dev/null)"
   if printf '%s' "$existing" | grep -Fq "$marker"; then
-    echo "sirius_transition: transicion ya registrada para #${num} (${marker})" >&2
-    return 0
+    marker_present=1
+    local verified=1 labels_now="" state_now=""
+    labels_now="$(sirius_retry gh api "repos/${repo}/issues/${num}/labels" --jq '.[].name' 2>/dev/null)" || verified=0
+    printf '%s\n' "$labels_now" | grep -Fxq "$add" || verified=0
+    if [ "$close_flag" = "close" ] && [ "$verified" -eq 1 ]; then
+      state_now="$(sirius_retry gh api "repos/${repo}/issues/${num}" --jq '.state' 2>/dev/null)" || verified=0
+      [ "$state_now" = "closed" ] || verified=0
+    fi
+    if [ "$verified" -eq 1 ]; then
+      echo "sirius_transition: transicion ya registrada y verificada para #${num} (${marker})" >&2
+      return 0
+    fi
+    echo "sirius_transition: marcador presente pero estado incompleto en #${num}; se completa sin duplicar comentario." >&2
   fi
 
   # 1) Etiqueta terminal garantizada.
@@ -348,10 +364,13 @@ sirius_transition() {
     fi
   fi
 
-  # 4) Solo ahora, tras completar y verificar todo, se publica el marcador.
-  if ! sirius_comment_once "$repo" "$num" "$marker" "$file"; then
-    echo "::error::No se pudo publicar el comentario de transicion (#${num})." >&2
-    return 1
+  # 4) Solo ahora, tras completar y verificar todo, se publica el marcador
+  #    (salvo que ya existiera: entonces la reanudacion no debe duplicarlo).
+  if [ "$marker_present" -eq 0 ]; then
+    if ! sirius_comment_once "$repo" "$num" "$marker" "$file"; then
+      echo "::error::No se pudo publicar el comentario de transicion (#${num})." >&2
+      return 1
+    fi
   fi
   return 0
 }
