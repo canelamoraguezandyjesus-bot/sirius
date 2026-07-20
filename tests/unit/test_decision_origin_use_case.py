@@ -86,6 +86,9 @@ class _StaticDecisionRepository:
     def list_archived_decisions(self) -> list[Decision]:
         raise AssertionError("get_origin() must never list archived decisions")
 
+    def list_proposed_decisions(self) -> list[Decision]:
+        raise AssertionError("get_origin() must never list proposed decisions")
+
 
 class _StaticEventRepository:
     def __init__(self, event: Event | None) -> None:

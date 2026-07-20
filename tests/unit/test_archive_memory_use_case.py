@@ -144,6 +144,9 @@ class _UnusedDecisionRepository:
     def list_archived_decisions(self) -> list[Decision]:
         raise AssertionError("archive() must never list archived decisions")
 
+    def list_proposed_decisions(self) -> list[Decision]:
+        raise AssertionError("archive() must never list proposed decisions")
+
 
 class _UnusedConversationRepository:
     def get_or_create_main_conversation(self) -> Conversation:

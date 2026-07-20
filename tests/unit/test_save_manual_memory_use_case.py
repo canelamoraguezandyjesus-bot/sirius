@@ -139,6 +139,9 @@ class _UnusedDecisionRepository:
     def list_archived_decisions(self) -> list[Decision]:
         raise AssertionError("save() must never list archived decisions")
 
+    def list_proposed_decisions(self) -> list[Decision]:
+        raise AssertionError("save() must never list proposed decisions")
+
 
 class _UnusedConversationRepository:
     """B4d's ``UnitOfWork.conversation_repository``; ``save()`` never touches it."""

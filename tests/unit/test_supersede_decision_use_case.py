@@ -135,6 +135,9 @@ class _StaticDecisionRepository:
     def list_archived_decisions(self) -> list[Decision]:
         raise AssertionError("supersede() must never list archived decisions")
 
+    def list_proposed_decisions(self) -> list[Decision]:
+        raise AssertionError("supersede() must never list proposed decisions")
+
 
 class _UnusedMemoryRepository:
     """B4a/B4c's ``UnitOfWork.memory_repository``; ``supersede()`` never touches it."""

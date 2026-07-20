@@ -147,6 +147,19 @@ def ensure_can_supersede(superseded: Decision, superseding: Decision) -> None:
         raise ValueError(msg)
 
 
+def is_same_subject_and_project(first: Decision, second: Decision) -> bool:
+    """Whether two decisions share the conceptual identity
+    ``ensure_can_supersede`` requires (RF-023): same subject and project.
+
+    Exposed so callers that need to *narrow* a set of candidates before
+    attempting a supersession (e.g. populating a picker) can reuse this
+    single criterion instead of re-deriving it from the two fields
+    themselves; ``ensure_can_supersede`` remains the authority that
+    actually validates and rejects an attempt.
+    """
+    return first.subject == second.subject and first.project_id == second.project_id
+
+
 def ensure_can_archive(decision: Decision) -> None:
     """Only an APPROVED (vigente) decision can be archived (RF-024, B4d).
 
