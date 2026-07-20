@@ -36,6 +36,14 @@ body:
       required: true
 
   - type: textarea
+    id: base_and_dependencies
+    attributes:
+      label: Base y dependencias
+      description: Rama base real, bloques previos fusionados y piezas existentes que se deben reutilizar.
+    validations:
+      required: true
+
+  - type: textarea
     id: scope
     attributes:
       label: Alcance permitido
