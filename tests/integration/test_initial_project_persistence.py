@@ -18,6 +18,9 @@ from sirius.adapters.persistence.models import Base, ProjectModel
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
 )
+from sirius.adapters.persistence.sqlite_decision_repository import (
+    build_sqlite_decision_repository,
+)
 from sirius.adapters.persistence.sqlite_identity_repository import (
     build_sqlite_identity_repository,
 )
@@ -161,6 +164,7 @@ def test_configured_project_enters_the_context_via_context_builder(tmp_path: Pat
         project_repository=project_repository,
         memory_repository=memory_repository,
         conversation_repository=conversation_repository,
+        decision_repository=build_sqlite_decision_repository(database_path),
     )
 
     context = builder.build("hola")

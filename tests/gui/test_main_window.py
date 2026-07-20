@@ -13,6 +13,9 @@ from sirius.adapters.persistence.models import Base
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
 )
+from sirius.adapters.persistence.sqlite_decision_repository import (
+    build_sqlite_decision_repository,
+)
 from sirius.adapters.persistence.sqlite_identity_repository import (
     build_sqlite_identity_repository,
 )
@@ -198,6 +201,7 @@ def _swap_send_message_use_case(
         project_repository=build_sqlite_project_repository(database_path),
         memory_repository=build_sqlite_memory_repository(database_path),
         conversation_repository=conversation_repository,
+        decision_repository=build_sqlite_decision_repository(database_path),
     )
     window._send_message_use_case = SendMessageUseCase(
         context_builder=context_builder,

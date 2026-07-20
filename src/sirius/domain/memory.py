@@ -44,19 +44,54 @@ class MemoryRevision:
 
 @dataclass(frozen=True, slots=True)
 class Memory:
-    """A stable, manually recorded memory and its current revision."""
+    """A stable, manually recorded memory and its current revision.
+
+    ``subject_key``/``project_id`` (B4e, RF-026, DR-011) are the minimal,
+    explicit "asunto" identification precedence and conflict detection need
+    to compare memories: the same conceptual pairing
+    ``Decision.subject``/``Decision.project_id`` already uses. Both are
+    optional and independent of content or origin — most memories predate
+    B4e or are never meant to be compared against anything else, and stay
+    ``None`` (never considered for precedence or conflict against any other
+    item; see ``sirius.domain.precedence``). They live on the memory itself,
+    not its revision, mirroring ``Decision.subject``/``Decision.project_id``:
+    correcting a memory's content (B4c) never changes what asunto it is
+    about.
+    """
 
     id: int
     status: MemoryStatus
     current_revision: MemoryRevision
     created_at: datetime
     updated_at: datetime
+    subject_key: str | None = None
+    project_id: int | None = None
 
 
 def ensure_valid_origin(origin: str) -> None:
     """A memory, or a correction to it, can never be created without a real origin."""
     if not origin or not origin.strip():
         msg = "A memory revision requires a non-empty origin."
+        raise ValueError(msg)
+
+
+def ensure_valid_subject_key(subject_key: str | None) -> None:
+    """A memory's ``subject_key`` is optional, but never blank when given
+    (B4e): the same non-empty rule ``Decision.subject`` enforces via
+    ``sirius.domain.decision.ensure_valid_subject``, since both identify the
+    same conceptual "asunto"."""
+    if subject_key is not None and not subject_key.strip():
+        msg = "A memory's subject_key, when given, cannot be blank."
+        raise ValueError(msg)
+
+
+def ensure_subject_key_has_a_project(subject_key: str | None, project_id: int | None) -> None:
+    """An explicit ``subject_key`` requires an explicit ``project_id`` (B4e):
+    precedence and conflict detection compare memories within the same
+    subject *and* project boundary decisions already use — a subject with no
+    project would have no boundary to compare within."""
+    if subject_key is not None and project_id is None:
+        msg = "A memory with an explicit subject_key must also be associated with a project."
         raise ValueError(msg)
 
 

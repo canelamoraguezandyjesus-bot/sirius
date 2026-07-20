@@ -102,7 +102,14 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
         "created_at",
     }
     assert "is_current" not in project_revision_columns  # SIRIUS-ARQ-0.1 S7.3: no such field
-    assert memory_columns == {"id", "status", "created_at", "updated_at"}
+    assert memory_columns == {
+        "id",
+        "status",
+        "subject_key",
+        "project_id",
+        "created_at",
+        "updated_at",
+    }
     assert memory_revision_columns == {
         "id",
         "memory_id",
@@ -472,6 +479,129 @@ def test_upgrading_from_the_previous_head_preserves_existing_messages(tmp_path: 
     assert rows[0].content == "preferencia original"
     assert rows[0].status == "completed"
     assert rows[0].redacted_at is None
+
+
+@pytest.mark.integration
+def test_upgrade_head_creates_memory_project_id_as_a_physical_foreign_key(tmp_path: Path) -> None:
+    """B4e, RF-026/DR-011: memories.project_id is a real, enforced link to
+    projects, not just a free-standing integer."""
+    database_path = tmp_path / "sirius.db"
+
+    command.upgrade(_alembic_config(database_path), "head")
+
+    inspector = inspect(build_engine(database_path))
+    foreign_keys = inspector.get_foreign_keys("memories")
+    project_fks = [fk for fk in foreign_keys if fk["referred_table"] == "projects"]
+
+    assert len(project_fks) == 1
+    assert project_fks[0]["constrained_columns"] == ["project_id"]
+    assert project_fks[0]["referred_columns"] == ["id"]
+
+
+@pytest.mark.integration
+def test_downgrade_to_previous_head_removes_only_memory_subject_and_project(
+    tmp_path: Path,
+) -> None:
+    """B4e: downgrading past this migration removes only
+    ``subject_key``/``project_id``; the ``memories`` table itself and every
+    other table (including ``decisions``) is unaffected."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+
+    command.upgrade(config, "head")
+    command.downgrade(config, "bf0ac43b986b")
+
+    memory_columns = {
+        c["name"] for c in inspect(build_engine(database_path)).get_columns("memories")
+    }
+    assert "subject_key" not in memory_columns
+    assert "project_id" not in memory_columns
+    assert {"memories", "memory_revisions", "decisions", "decision_revisions"}.issubset(
+        set(inspect(build_engine(database_path)).get_table_names())
+    )
+
+
+@pytest.mark.integration
+def test_upgrading_from_the_previous_head_preserves_existing_memories_and_backfills_null(
+    tmp_path: Path,
+) -> None:
+    """B4e compatibility: a base created before this migration existed (still
+    at the previous head, bf0ac43b986b) upgrades to the new head without
+    losing an existing memory; ``subject_key``/``project_id`` backfill to
+    ``NULL`` (correct — no memory declared an explicit subject before this
+    migration, so it never participates in precedence or conflict, see
+    ``sirius.domain.precedence``)."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+    command.upgrade(config, "bf0ac43b986b")
+
+    now = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO memories (id, status, created_at, updated_at) "
+                "VALUES (1, 'current', :now, :now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO memory_revisions "
+                "(memory_id, version, content, origin, is_current, created_at) "
+                "VALUES (1, 1, 'recuerdo previo a B4e', 'manual', 1, :now)"
+            ),
+            {"now": now},
+        )
+
+    command.upgrade(config, "head")
+
+    with engine.begin() as connection:
+        memory_rows = connection.execute(
+            text("SELECT id, status, subject_key, project_id FROM memories")
+        ).fetchall()
+
+    assert len(memory_rows) == 1
+    assert memory_rows[0].id == 1
+    assert memory_rows[0].status == "current"
+    assert memory_rows[0].subject_key is None
+    assert memory_rows[0].project_id is None
+
+
+@pytest.mark.integration
+def test_memory_project_id_can_reference_an_existing_project(tmp_path: Path) -> None:
+    """B4e: a memory can be explicitly associated with a real project, the
+    same subject/project boundary decisions already use."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+    command.upgrade(config, "head")
+
+    now = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        project_id = connection.execute(
+            text(
+                "INSERT INTO projects "
+                "(name, objective, current_state, next_step, is_active, status, created_at, "
+                "updated_at) VALUES (:name, '', '', '', 1, 'active', :now, :now)"
+            ),
+            {"name": "Sirius 0.1", "now": now},
+        ).lastrowid
+        connection.execute(
+            text(
+                "INSERT INTO memories (id, status, subject_key, project_id, created_at, "
+                "updated_at) VALUES (1, 'current', 'Motor de persistencia', :project_id, "
+                ":now, :now)"
+            ),
+            {"project_id": project_id, "now": now},
+        )
+        row = connection.execute(
+            text("SELECT subject_key, project_id FROM memories WHERE id = 1")
+        ).fetchone()
+
+    assert row is not None
+    assert row.subject_key == "Motor de persistencia"
+    assert row.project_id == project_id
 
 
 @pytest.mark.integration

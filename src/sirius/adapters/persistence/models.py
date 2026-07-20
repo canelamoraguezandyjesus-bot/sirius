@@ -207,6 +207,14 @@ class ProjectRevisionModel(Base):
 class MemoryModel(Base):
     """A stable memory item. Its current revision is found in ``memory_revisions``
     by querying ``memory_id`` together with ``is_current = True``.
+
+    ``subject_key``/``project_id`` (B4e) are the minimal, explicit "asunto"
+    identification precedence and conflict detection compare memories on —
+    mirroring ``DecisionModel.subject``/``DecisionModel.project_id``. Both
+    stay ``NULL`` for any memory that never declares an explicit subject
+    (every memory created before B4e, and any created after it without one):
+    such a memory is never considered for precedence or conflict against
+    anything else (see ``sirius.domain.precedence``).
     """
 
     __tablename__ = "memories"
@@ -221,6 +229,8 @@ class MemoryModel(Base):
         ),
         nullable=False,
     )
+    subject_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
     updated_at: Mapped[datetime] = mapped_column(nullable=False)
 

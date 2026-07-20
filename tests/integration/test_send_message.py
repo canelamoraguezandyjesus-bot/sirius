@@ -183,6 +183,7 @@ def _build_use_case(
         project_repository=build_sqlite_project_repository(database_path),
         memory_repository=build_sqlite_memory_repository(database_path),
         conversation_repository=repository,
+        decision_repository=build_sqlite_decision_repository(database_path),
     )
     return SendMessageUseCase(
         context_builder=context_builder,
@@ -361,6 +362,38 @@ def test_send_message_never_archives_a_decision_as_a_side_effect(tmp_path: Path)
 
 
 @pytest.mark.integration
+def test_send_message_never_creates_resolves_or_approves_a_precedence_conflict(
+    tmp_path: Path,
+) -> None:
+    """B4e, RF-026/PA-014/DR-011: an ordinary conversation turn never
+    creates, corrects, resolves, or approves a memory or a decision, so it
+    can never create or silently resolve a precedence conflict either — no
+    call site in ``SendMessageUseCase`` reaches
+    ``sirius.domain.precedence`` or ``DetectPrecedenceConflictsUseCase``."""
+    database_path = tmp_path / "sirius.db"
+    use_case = _build_use_case(database_path, FakeLLMProvider())
+    project_repository = build_sqlite_project_repository(database_path)
+    project = project_repository.get_active_project()
+    assert project is not None
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    save_memory = SaveManualMemoryUseCase(unit_of_work).save
+    first = save_memory(
+        "usar SQLite local", subject_key="Motor de persistencia", project_id=project.id
+    )
+    second = save_memory(
+        "usar un servidor remoto", subject_key="Motor de persistencia", project_id=project.id
+    )
+
+    use_case.send_message("deberíamos resolver esa contradicción sobre el motor de persistencia")
+
+    memory_repository = build_sqlite_memory_repository(database_path)
+    decision_repository = build_sqlite_decision_repository(database_path)
+    assert memory_repository.get_memory(first.id).status is MemoryStatus.CURRENT
+    assert memory_repository.get_memory(second.id).status is MemoryStatus.CURRENT
+    assert decision_repository.list_current_decisions() == []
+
+
+@pytest.mark.integration
 def test_send_message_uses_context_built_from_current_identity_and_project(
     tmp_path: Path,
 ) -> None:
@@ -399,6 +432,7 @@ def test_send_message_context_reflects_a_project_continuity_update(tmp_path: Pat
         project_repository=project_repository,
         memory_repository=build_sqlite_memory_repository(database_path),
         conversation_repository=build_sqlite_conversation_repository(database_path),
+        decision_repository=build_sqlite_decision_repository(database_path),
     )
     use_case = SendMessageUseCase(
         context_builder=context_builder,
@@ -592,6 +626,7 @@ def test_send_message_keeps_only_the_user_message_when_persisting_the_reply_fail
         project_repository=build_sqlite_project_repository(database_path),
         memory_repository=build_sqlite_memory_repository(database_path),
         conversation_repository=real_conversation_repository,
+        decision_repository=build_sqlite_decision_repository(database_path),
     )
     use_case = SendMessageUseCase(
         context_builder=context_builder,
@@ -631,6 +666,7 @@ def test_retrying_after_a_mid_operation_persistence_failure_does_not_duplicate_t
         project_repository=build_sqlite_project_repository(database_path),
         memory_repository=build_sqlite_memory_repository(database_path),
         conversation_repository=real_conversation_repository,
+        decision_repository=build_sqlite_decision_repository(database_path),
     )
     failing_use_case = SendMessageUseCase(
         context_builder=context_builder,
@@ -649,6 +685,7 @@ def test_retrying_after_a_mid_operation_persistence_failure_does_not_duplicate_t
             project_repository=build_sqlite_project_repository(database_path),
             memory_repository=build_sqlite_memory_repository(database_path),
             conversation_repository=reopened_repository,
+            decision_repository=build_sqlite_decision_repository(database_path),
         ),
         conversation_repository=reopened_repository,
         llm_provider=FakeLLMProvider(),

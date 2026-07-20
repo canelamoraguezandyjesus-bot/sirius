@@ -24,6 +24,9 @@ from sirius.adapters.persistence.models import ProjectModel
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
 )
+from sirius.adapters.persistence.sqlite_decision_repository import (
+    build_sqlite_decision_repository,
+)
 from sirius.adapters.persistence.sqlite_identity_repository import (
     build_sqlite_identity_repository,
 )
@@ -146,6 +149,7 @@ def test_backup_and_restore_conserve_the_full_project_lifecycle(
         project_repository=restored_repository,
         memory_repository=build_sqlite_memory_repository(database_path),
         conversation_repository=build_sqlite_conversation_repository(database_path),
+        decision_repository=build_sqlite_decision_repository(database_path),
     )
 
     context = context_builder.build("hola")

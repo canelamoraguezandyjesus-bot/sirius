@@ -16,13 +16,24 @@ class MemoryRepository(Protocol):
     """
 
     def create_memory(
-        self, content: str, origin: str, *, source_event_id: int | None = None
+        self,
+        content: str,
+        origin: str,
+        *,
+        source_event_id: int | None = None,
+        subject_key: str | None = None,
+        project_id: int | None = None,
     ) -> Memory:
         """Record a new manual memory with its first revision.
 
         ``source_event_id`` (B4a) links the first revision to the event that
         recorded why it was created; ``None`` when the caller does not have
         one (e.g. a direct repository call with no explicit-save event).
+
+        ``subject_key``/``project_id`` (B4e) are the optional, explicit
+        "asunto" identification precedence and conflict detection compare
+        memories on (``sirius.domain.precedence``); ``None`` by default,
+        like every memory created before B4e.
         """
         ...
 

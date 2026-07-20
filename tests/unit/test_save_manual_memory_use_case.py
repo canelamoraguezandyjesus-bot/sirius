@@ -45,14 +45,20 @@ class _RecordingMemoryRepository:
     """Minimal Protocol-compliant fake; no SQLite involved."""
 
     def __init__(self, *, fail: bool = False) -> None:
-        self.calls: list[tuple[str, str, int | None]] = []
+        self.calls: list[tuple[str, str, int | None, str | None, int | None]] = []
         self._next_id = 1
         self.fail = fail
 
     def create_memory(
-        self, content: str, origin: str, *, source_event_id: int | None = None
+        self,
+        content: str,
+        origin: str,
+        *,
+        source_event_id: int | None = None,
+        subject_key: str | None = None,
+        project_id: int | None = None,
     ) -> Memory:
-        self.calls.append((content, origin, source_event_id))
+        self.calls.append((content, origin, source_event_id, subject_key, project_id))
         if self.fail:
             msg = "simulated memory-creation failure"
             raise RuntimeError(msg)
@@ -72,6 +78,8 @@ class _RecordingMemoryRepository:
             current_revision=revision,
             created_at=now,
             updated_at=now,
+            subject_key=subject_key,
+            project_id=project_id,
         )
         self._next_id += 1
         return memory
@@ -230,11 +238,13 @@ def test_save_records_the_event_before_the_memory_and_links_them() -> None:
 
     assert unit_of_work.event_repository.calls == [(MANUAL_MEMORY_SAVE_EVENT_TYPE, USER_ACTOR, 7)]
     assert len(memory_repository.calls) == 1
-    content, origin, source_event_id = memory_repository.calls[0]
+    content, origin, source_event_id, subject_key, project_id = memory_repository.calls[0]
     assert content == "prefiere respuestas breves"
     assert origin == MANUAL_MEMORY_ORIGIN
     assert source_event_id is not None
     assert memory.current_revision.source_event_id == source_event_id
+    assert subject_key is None
+    assert project_id is None
 
 
 def test_save_commits_the_unit_of_work_exactly_once_on_success() -> None:
@@ -283,6 +293,38 @@ def test_save_never_commits_when_memory_creation_fails_after_the_event_was_recor
     assert event_repository.calls == [(MANUAL_MEMORY_SAVE_EVENT_TYPE, USER_ACTOR, None)]
     assert unit_of_work.committed is False
     assert unit_of_work.rollback_count == 1
+
+
+def test_save_forwards_an_explicit_subject_key_and_project_id() -> None:
+    use_case, memory_repository, _ = _use_case()
+
+    memory = use_case.save("usar SQLite local", subject_key="Motor de persistencia", project_id=1)
+
+    assert memory.subject_key == "Motor de persistencia"
+    assert memory.project_id == 1
+    _, _, _, subject_key, project_id = memory_repository.calls[0]
+    assert subject_key == "Motor de persistencia"
+    assert project_id == 1
+
+
+def test_save_rejects_a_blank_subject_key_without_opening_a_transaction() -> None:
+    use_case, memory_repository, unit_of_work = _use_case()
+
+    with pytest.raises(InvalidManualMemoryDataError, match="cannot be blank"):
+        use_case.save("contenido", subject_key="   ", project_id=1)
+
+    assert memory_repository.calls == []
+    assert unit_of_work.enter_count == 0
+
+
+def test_save_rejects_a_subject_key_without_a_project_without_opening_a_transaction() -> None:
+    use_case, memory_repository, unit_of_work = _use_case()
+
+    with pytest.raises(InvalidManualMemoryDataError, match="associated with a project"):
+        use_case.save("contenido", subject_key="Motor de persistencia")
+
+    assert memory_repository.calls == []
+    assert unit_of_work.enter_count == 0
 
 
 def test_save_after_a_failed_attempt_can_still_succeed_with_a_fresh_transaction() -> None:
