@@ -28,16 +28,15 @@ jobs:
         run: |
           set -euo pipefail
 
+          # `gh label create --force` es un upsert: crea la etiqueta si falta y, si
+          # ya existe, actualiza color y descripcion. No se usa `gh label view`
+          # (subcomando inexistente en gh, que hacia caer en `gh label create` y
+          # fallar con "already exists" para etiquetas ya creadas).
           ensure_label() {
             name="$1"
             color="$2"
             description="$3"
-
-            if gh label view "$name" --repo "$GH_REPO" >/dev/null 2>&1; then
-              gh label edit "$name" --repo "$GH_REPO" --color "$color" --description "$description"
-            else
-              gh label create "$name" --repo "$GH_REPO" --color "$color" --description "$description"
-            fi
+            gh label create "$name" --repo "$GH_REPO" --color "$color" --description "$description" --force
           }
 
           ensure_label "sirius:planned" "D4C5F9" "Estado: trabajo definido y pendiente de activación"

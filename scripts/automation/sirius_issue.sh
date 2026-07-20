@@ -235,13 +235,14 @@ PY
 # --- Etiquetas ----------------------------------------------------------------
 
 # sirius_ensure_label <repo> <name> <color> <description> — idempotente.
+# `gh label create --force` es un "upsert": crea la etiqueta si no existe y, si ya
+# existe, actualiza su color y descripcion. NO se usa `gh label view` (subcomando
+# inexistente en gh: su fallo hacia caer en `gh label create`, que a su vez fallaba
+# con "already exists" para una etiqueta existente y detenia la transicion).
 sirius_ensure_label() {
   local repo="$1" name="$2" color="$3" description="$4"
-  if gh label view "$name" --repo "$repo" >/dev/null 2>&1; then
-    gh label edit "$name" --repo "$repo" --color "$color" --description "$description" >/dev/null
-  else
-    gh label create "$name" --repo "$repo" --color "$color" --description "$description" >/dev/null
-  fi
+  sirius_retry gh label create "$name" --repo "$repo" \
+    --color "$color" --description "$description" --force >/dev/null
 }
 
 # sirius_set_issue_labels <repo> <issue> <add_label> [remove_label...] — aplica
