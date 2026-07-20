@@ -24,6 +24,10 @@ No se debe usar una conversación, una propuesta o un documento histórico para 
 8. Los documentos de ejecución específicos de la vertical activa en `docs/implementation/`.
 9. Código, migraciones y pruebas relacionados.
 10. Historial de Git, incidencias y pull requests vinculados.
+11. `docs/operations/CLAUDE_SIRIUS_KNOWLEDGE_BASE.md` como mapa derivado de sesiones anteriores (verificar su fecha y commit auditado antes de confiar en él).
+12. Las auditorías fechadas de `docs/audits/` como evidencia secundaria del estado en su fecha.
+
+Para tareas de automatización, leer además el código real de los workflows en `.github/workflows/` y la biblioteca `scripts/automation/` (`sirius_issue.sh`, `validate_issue_body.py` y los scripts que la acompañan): la documentación describe el contrato; el comportamiento vigente es el de estos archivos.
 
 Para la línea física futura HEAD-R1, leer además:
 
@@ -57,8 +61,10 @@ Cuando una fuente antigua contiene `PROPUESTO`, prevalece `docs/canonical/STATUS
 - V7A y V7: implementación automatizada terminada; queda validación manual real de Windows Credential Manager y validaciones de empaquetado/Windows.
 - V8: iniciada en corrección documental, corrección funcional y automatización sin clave API.
 - B4a a B4f: memoria, decisiones, origen, corrección, sustitución, archivo, eliminación, conflictos y panel observable implementados y cubiertos automáticamente con proveedor simulado.
-- B5 y B6 siguen pendientes según el plan vivo.
+- B5 y B6 siguen pendientes según el plan vivo. B5 (panel de contexto completo) aún no tiene sección propia en `docs/implementation/PLAN.md`: su única definición vive en su incidencia de trabajo, que debe estar completa antes de activarla.
+- La exportación estructurada (RF-031) sigue pendiente dentro de V8.
 - La aceptación con proveedor real permanece bloqueada hasta superar las puertas documentadas.
+- El estado vivo de la automatización de desarrollo (workflows, reparaciones y auditorías) se verifica en `.github/workflows/`, `scripts/automation/`, `docs/audits/` y las PRs abiertas; no se duplica aquí.
 
 Antes de actuar, confirmar siempre este resumen contra los archivos vivos, porque puede quedar obsoleto.
 
@@ -161,6 +167,17 @@ uv run sirius
 ```
 
 Antes de entregar cambios debe pasar `scripts/check.ps1` o explicarse con precisión por qué no pudo ejecutarse.
+
+En un entorno sin PowerShell (por ejemplo, una sesión de Claude Code en Linux), ejecutar individualmente los cuatro pasos equivalentes y registrar sus resultados:
+
+```bash
+uv run ruff format --check .
+uv run ruff check .
+uv run mypy src tests
+uv run pytest
+```
+
+Las pruebas Bash de automatización (`tests/automation/`) solo se ejecutan donde exista un Bash POSIX funcional; en el runner Windows de Quality se omiten de forma documentada.
 
 ## Auditoría inicial obligatoria para una nueva sesión principal
 
