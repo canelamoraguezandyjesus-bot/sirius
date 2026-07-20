@@ -29,6 +29,20 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Garantiza que una etiqueta terminal exista antes de aplicarla, sin depender
+          # de que el workflow de bootstrap haya terminado. Es idempotente: si existe,
+          # actualiza color y descripcion; si no, la crea.
+          ensure_label() {
+            name="$1"
+            color="$2"
+            description="$3"
+            if gh label view "$name" --repo "$GH_REPO" >/dev/null 2>&1; then
+              gh label edit "$name" --repo "$GH_REPO" --color "$color" --description "$description"
+            else
+              gh label create "$name" --repo "$GH_REPO" --color "$color" --description "$description"
+            fi
+          }
+
           # Localizar incidencias Sirius abiertas que referencien la PR en el cuerpo
           # o en cualquiera de sus comentarios. La Routine implementadora suele
           # registrar la URL en un comentario, no en el body, y la busqueda indexada
@@ -60,6 +74,7 @@ jobs:
           fi
 
           if [ "${#matched_issues[@]}" -ne 1 ]; then
+            ensure_label "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura"
             for issue_number in "${matched_issues[@]}"; do
               marker="<!-- sirius-completed:${MERGE_SHA}:ambiguous -->"
               if gh issue view "$issue_number" --repo "$GH_REPO" --json comments --jq '.comments[].body' | grep -Fq "$marker"; then
@@ -106,5 +121,6 @@ jobs:
             "- Merge SHA: \`${MERGE_SHA}\`" \
             "- Resultado: bloque fusionado y completado.")"
           gh issue comment "$issue_number" --repo "$GH_REPO" --body "$comment_body"
+          ensure_label "sirius:completed" "006B75" "Estado terminal: bloque fusionado y cerrado"
           gh issue edit "$issue_number" --repo "$GH_REPO" --add-label "sirius:completed"
           gh issue close "$issue_number" --repo "$GH_REPO" --reason completed
