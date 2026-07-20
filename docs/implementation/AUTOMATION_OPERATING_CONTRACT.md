@@ -119,18 +119,42 @@ Cada transición debe comprobar:
 
 Los webhooks repetidos no deben duplicar ramas, PR, revisiones, correcciones ni notificaciones.
 
+Además, toda lectura o escritura del cuerpo de una incidencia debe ser robusta
+(ver `SIRIUS_GENERIC_ROUTINES_0.1.md` §0 y `scripts/automation/sirius_issue.sh`):
+
+- ninguna automatización depende de una sola vía de lectura: REST (`gh api`) con
+  reintentos y respaldo GraphQL;
+- una respuesta truncada nunca se acepta como cuerpo completo; se valida que
+  contenga todas las secciones obligatorias del contrato;
+- una escritura del cuerpo se construye en un archivo, se respalda el cuerpo
+  anterior, se escribe de una sola vez y se vuelve a leer para comparar longitud
+  y hash; si no coincide, la escritura se considera fallida;
+- nunca se sobrescribe una incidencia usando como fuente un cuerpo ya truncado;
+- `sirius:failed-safely` solo se aplica cuando han fallado todas las vías
+  permitidas, no hay una fuente local aprobada suficiente y continuar podría
+  producir un cambio incorrecto; un error temporal de una sola API no fuerza por
+  sí mismo una parada segura;
+- los workflows de transición y notificación toleran fallos secundarios: un error
+  transitorio de una API no debe volver roja la canalización ni dejar una
+  transición a medias (la etiqueta se aplica antes que el comentario con marcador
+  de idempotencia).
+
 ## 7. Notificaciones
 
 ChatGPT no puede iniciar una conversación ni avisar por sí solo cuando termina una ejecución.
 
-El canal operativo será GitHub. Al alcanzar cualquiera de estos estados, una automatización deberá asignar o mencionar al usuario en la incidencia y generar una notificación compatible con GitHub Mobile:
+El canal operativo será GitHub. Al alcanzar cualquiera de estos estados, una automatización deberá mencionar **una sola vez** al usuario en la incidencia (sin autoasignación) y generar una notificación en español compatible con GitHub Mobile:
 
+- `sirius:implementing`
+- `sirius:repair-requested`
 - `sirius:ready-for-merge`
 - `sirius:blocked-decision`
 - `sirius:failed-safely`
 - `sirius:completed`
 
-La notificación deberá incluir bloque, estado, PR, head SHA y siguiente acción humana. Debe emitirse una sola vez por combinación incidencia-estado-head.
+Los estados internos (`sirius:planned`, `sirius:ci-pending`, `sirius:review-requested`, `sirius:reviewing`, `sirius:repairing`) no generan notificación.
+
+La notificación es secundaria y nunca debe romper el flujo principal: ante un fallo de lectura o publicación deja un aviso en los logs y termina con éxito. Debe emitirse una sola vez por combinación incidencia-estado-head (se usa `no-head` como identificador estable cuando aún no hay head registrado).
 
 ## 8. Merge
 

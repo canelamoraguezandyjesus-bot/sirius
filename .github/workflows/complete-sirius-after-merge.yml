@@ -19,7 +19,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Checkout automation library
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
+
       - name: Complete matching Sirius work item
+        shell: bash --noprofile --norc {0}
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -27,100 +34,78 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
           MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          source scripts/automation/sirius_issue.sh
 
-          # Garantiza que una etiqueta terminal exista antes de aplicarla, sin depender
-          # de que el workflow de bootstrap haya terminado. Es idempotente: si existe,
-          # actualiza color y descripcion; si no, la crea.
-          ensure_label() {
-            name="$1"
-            color="$2"
-            description="$3"
-            if gh label view "$name" --repo "$GH_REPO" >/dev/null 2>&1; then
-              gh label edit "$name" --repo "$GH_REPO" --color "$color" --description "$description"
-            else
-              gh label create "$name" --repo "$GH_REPO" --color "$color" --description "$description"
-            fi
-          }
-
-          # Localizar incidencias Sirius abiertas que referencien la PR en el cuerpo
-          # o en cualquiera de sus comentarios. La Routine implementadora suele
-          # registrar la URL en un comentario, no en el body, y la busqueda indexada
-          # puede retrasarse, asi que listamos las candidatas por etiqueta y leemos
-          # body y comments directamente.
+          # Candidatas: incidencias abiertas con cualquier etiqueta sirius:* (REST,
+          # con reintentos). Se excluyen PR (REST /issues las incluye).
           mapfile -t candidate_issues < <(
-            gh issue list \
-              --repo "$GH_REPO" \
-              --state open \
-              --limit 100 \
-              --json number,labels \
-              --jq '.[] | select(any(.labels[]?; .name | startswith("sirius:"))) | .number'
+            sirius_retry gh api -X GET "repos/${GH_REPO}/issues" \
+              -f state=open -f per_page=100 --paginate \
+              --jq '.[] | select(has("pull_request") | not) | select(any(.labels[]?; .name | startswith("sirius:"))) | .number'
           )
 
           matched_issues=()
-          for issue_number in "${candidate_issues[@]}"; do
-            issue_json="$(gh issue view "$issue_number" --repo "$GH_REPO" --json body,comments)"
-            if printf '%s' "$issue_json" \
-              | jq -r '[.body] + [.comments[].body] | map(select(. != null)) | .[]' \
+          for issue_number in "${candidate_issues[@]:-}"; do
+            [ -z "${issue_number:-}" ] && continue
+            body_file="$(mktemp)"
+            comments_file="$(mktemp)"
+            if ! sirius_read_issue_body "$GH_REPO" "$issue_number" >"$body_file"; then
+              echo "::warning::No se pudo leer el cuerpo de #${issue_number}; se ignora en esta pasada."
+              rm -f "$body_file" "$comments_file"
+              continue
+            fi
+            sirius_read_issue_comments "$GH_REPO" "$issue_number" >"$comments_file" 2>/dev/null || true
+            if cat "$body_file" "$comments_file" \
               | grep -oE 'https://github\.com/[^/[:space:]]+/[^/[:space:]]+/pull/[0-9]+' \
               | grep -Fxq "$PR_URL"; then
               matched_issues+=("$issue_number")
             fi
+            rm -f "$body_file" "$comments_file"
           done
 
           if [ "${#matched_issues[@]}" -eq 0 ]; then
-            echo "No open Sirius work item references PR #${PR_NUMBER}."
+            echo "Ninguna incidencia Sirius referencia la PR #${PR_NUMBER}."
             exit 0
           fi
 
+          # Ambiguedad: parada segura en cada incidencia; resultado global fallo.
           if [ "${#matched_issues[@]}" -ne 1 ]; then
-            ensure_label "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura"
             for issue_number in "${matched_issues[@]}"; do
               marker="<!-- sirius-completed:${MERGE_SHA}:ambiguous -->"
-              if gh issue view "$issue_number" --repo "$GH_REPO" --json comments --jq '.comments[].body' | grep -Fq "$marker"; then
-                echo "Ambiguity already reported on issue #${issue_number} for ${MERGE_SHA}."
-              else
-                comment_body="$(printf '%s\n\n%s\n\n%s\n' \
-                  "${marker}" \
-                  "La PR #${PR_NUMBER} fue fusionada, pero existen varias incidencias Sirius abiertas que la referencian. El cierre automatico se detiene para evitar completar la incidencia equivocada." \
-                  "- Merge SHA: \`${MERGE_SHA}\`")"
-                gh issue comment "$issue_number" --repo "$GH_REPO" --body "$comment_body"
-              fi
-              gh issue edit "$issue_number" --repo "$GH_REPO" --add-label "sirius:failed-safely"
+              body_file="$(mktemp)"
+              printf '%s\n\n%s\n\n%s\n' \
+                "${marker}" \
+                "La PR #${PR_NUMBER} fue fusionada, pero existen varias incidencias Sirius abiertas que la referencian. El cierre automatico se detiene para evitar completar la incidencia equivocada." \
+                "- Merge SHA: \`${MERGE_SHA}\`" >"$body_file"
+              sirius_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
+                "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
+                "noclose" "" \
+                || echo "::error::No se pudo completar la parada segura en #${issue_number}."
+              rm -f "$body_file"
             done
             exit 1
           fi
 
           issue_number="${matched_issues[0]}"
-
           marker="<!-- sirius-completed:${MERGE_SHA} -->"
-          if gh issue view "$issue_number" --repo "$GH_REPO" --json comments --jq '.comments[].body' | grep -Fq "$marker"; then
-            echo "Completion already recorded for issue #${issue_number} at ${MERGE_SHA}."
-            exit 0
-          fi
-
-          for label in \
-            sirius:planned \
-            sirius:implement-requested \
-            sirius:implementing \
-            sirius:ci-pending \
-            sirius:review-requested \
-            sirius:reviewing \
-            sirius:repair-requested \
-            sirius:repairing \
-            sirius:ready-for-merge \
-            sirius:blocked-decision \
-            sirius:failed-safely; do
-            gh issue edit "$issue_number" --repo "$GH_REPO" --remove-label "$label" 2>/dev/null || true
-          done
-
-          comment_body="$(printf '%s\n\n%s\n\n%s\n%s\n%s\n' \
+          body_file="$(mktemp)"
+          printf '%s\n\n%s\n\n%s\n%s\n%s\n' \
             "${marker}" \
             "## SIRIUS_COMPLETED" \
             "- PR: ${PR_URL}" \
             "- Merge SHA: \`${MERGE_SHA}\`" \
-            "- Resultado: bloque fusionado y completado.")"
-          gh issue comment "$issue_number" --repo "$GH_REPO" --body "$comment_body"
-          ensure_label "sirius:completed" "006B75" "Estado terminal: bloque fusionado y cerrado"
-          gh issue edit "$issue_number" --repo "$GH_REPO" --add-label "sirius:completed"
-          gh issue close "$issue_number" --repo "$GH_REPO" --reason completed
+            "- Resultado: bloque fusionado y completado." >"$body_file"
+
+          # Transicion atomica: garantiza la etiqueta terminal, retira todas las
+          # etiquetas transitorias, cierra la incidencia (obligatorio) y SOLO
+          # entonces publica el marcador. Un fallo se detiene y queda reintentable.
+          remove_csv="sirius:planned,sirius:implement-requested,sirius:implementing,sirius:ci-pending,sirius:review-requested,sirius:reviewing,sirius:repair-requested,sirius:repairing,sirius:ready-for-merge,sirius:blocked-decision,sirius:failed-safely"
+          if ! sirius_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
+            "sirius:completed" "006B75" "Estado terminal: bloque fusionado y cerrado" \
+            "close" "$remove_csv"; then
+            rm -f "$body_file"
+            echo "::error::La finalizacion de #${issue_number} no se completo; se deja reintentable."
+            exit 1
+          fi
+          rm -f "$body_file"
