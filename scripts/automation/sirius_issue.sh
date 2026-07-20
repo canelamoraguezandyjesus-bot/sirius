@@ -244,6 +244,118 @@ sirius_ensure_label() {
   fi
 }
 
+# sirius_set_issue_labels <repo> <issue> <add_label> [remove_label...] — aplica
+# add_label y retira remove_label..., de forma idempotente y VERIFICADA por REST.
+# Devuelve 0 solo si, tras la operacion, add_label esta presente y cada
+# remove_label esta ausente. Reintenta cada operacion; segura para reejecuciones.
+sirius_set_issue_labels() {
+  local repo="$1" num="$2" add="$3"
+  shift 3
+  local removes=("$@")
+  sirius_retry gh issue edit "$num" --repo "$repo" --add-label "$add" >/dev/null 2>&1 || true
+  local r
+  for r in "${removes[@]}"; do
+    [ -z "${r:-}" ] && continue
+    sirius_retry gh issue edit "$num" --repo "$repo" --remove-label "$r" >/dev/null 2>&1 || true
+  done
+  # Verificacion autoritativa del estado final.
+  local labels=""
+  if ! labels="$(sirius_retry gh api "repos/${repo}/issues/${num}/labels" --jq '.[].name')"; then
+    echo "sirius_set_issue_labels: no se pudo verificar las etiquetas de #${num}" >&2
+    return 1
+  fi
+  if ! printf '%s\n' "$labels" | grep -Fxq "$add"; then
+    echo "sirius_set_issue_labels: la etiqueta ${add} no quedo aplicada en #${num}" >&2
+    return 1
+  fi
+  for r in "${removes[@]}"; do
+    [ -z "${r:-}" ] && continue
+    if printf '%s\n' "$labels" | grep -Fxq "$r"; then
+      echo "sirius_set_issue_labels: la etiqueta ${r} no se retiro de #${num}" >&2
+      return 1
+    fi
+  done
+  return 0
+}
+
+# sirius_close_issue <repo> <issue> — cierre idempotente: 0 si cierra o si ya
+# estaba cerrada; !=0 si no se pudo dejar cerrada.
+sirius_close_issue() {
+  local repo="$1" num="$2"
+  if sirius_retry gh issue close "$num" --repo "$repo" --reason completed >/dev/null 2>&1; then
+    return 0
+  fi
+  local state=""
+  state="$(sirius_retry gh api "repos/${repo}/issues/${num}" --jq '.state')" || return 1
+  [ "$state" = "closed" ] && return 0
+  return 1
+}
+
+# sirius_comment_once <repo> <issue> <marker> <body_file> — publica el comentario
+# solo si el marcador no existe ya. 0 si publica o si ya existia; !=0 si falla al
+# publicar.
+sirius_comment_once() {
+  local repo="$1" num="$2" marker="$3" file="$4" existing=""
+  existing="$(sirius_read_issue_comments "$repo" "$num" 2>/dev/null)"
+  if printf '%s' "$existing" | grep -Fq "$marker"; then
+    echo "sirius_comment_once: marcador ya presente en #${num} (${marker})" >&2
+    return 0
+  fi
+  sirius_retry gh issue comment "$num" --repo "$repo" --body-file "$file"
+}
+
+# sirius_transition <repo> <issue> <marker> <body_file> <add_label> <color>
+#                   <desc> <close_flag: close|noclose> <remove_csv>
+# Transicion de estado ATOMICA e idempotente. No depende de `set -e`: comprueba
+# explicitamente cada codigo de retorno y se detiene ante el primer fallo. El
+# comentario con marcador de idempotencia SOLO se publica despues de que todas las
+# operaciones criticas (etiqueta garantizada, etiquetas aplicadas y, si procede,
+# cierre) hayan terminado y se hayan verificado. Un fallo deja la ejecucion
+# reintentable (no se publica marcador) y devuelve !=0.
+sirius_transition() {
+  local repo="$1" num="$2" marker="$3" file="$4"
+  local add="$5" color="$6" desc="$7" close_flag="$8" remove_csv="$9"
+
+  # Idempotencia: si el marcador ya existe, la transicion ya se completo.
+  local existing=""
+  existing="$(sirius_read_issue_comments "$repo" "$num" 2>/dev/null)"
+  if printf '%s' "$existing" | grep -Fq "$marker"; then
+    echo "sirius_transition: transicion ya registrada para #${num} (${marker})" >&2
+    return 0
+  fi
+
+  # 1) Etiqueta terminal garantizada.
+  if ! sirius_ensure_label "$repo" "$add" "$color" "$desc"; then
+    echo "::error::No se pudo garantizar la etiqueta ${add} (#${num}); transicion detenida (reintentable)." >&2
+    return 1
+  fi
+
+  # 2) Etiquetas aplicadas y verificadas.
+  local removes=()
+  if [ -n "${remove_csv:-}" ]; then
+    IFS=',' read -r -a removes <<<"$remove_csv"
+  fi
+  if ! sirius_set_issue_labels "$repo" "$num" "$add" "${removes[@]}"; then
+    echo "::error::No se pudo aplicar la transicion de etiquetas (#${num}); detenida (reintentable)." >&2
+    return 1
+  fi
+
+  # 3) Cierre obligatorio cuando corresponde.
+  if [ "$close_flag" = "close" ]; then
+    if ! sirius_close_issue "$repo" "$num"; then
+      echo "::error::No se pudo cerrar la incidencia #${num}; transicion detenida (reintentable)." >&2
+      return 1
+    fi
+  fi
+
+  # 4) Solo ahora, tras completar y verificar todo, se publica el marcador.
+  if ! sirius_comment_once "$repo" "$num" "$marker" "$file"; then
+    echo "::error::No se pudo publicar el comentario de transicion (#${num})." >&2
+    return 1
+  fi
+  return 0
+}
+
 # --- Extracción de SHA --------------------------------------------------------
 
 # sirius_extract_sha <file> — imprime el primer Head/Merge SHA (7-40 hex) del

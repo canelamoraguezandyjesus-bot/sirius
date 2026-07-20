@@ -101,22 +101,10 @@ jobs:
             exit 0
           fi
 
-          comment_once() {
-            # comment_once <issue> <marker> <body_file> — publica el comentario solo
-            # si el marcador no existe ya (idempotencia por head y resultado).
-            local issue="$1" marker="$2" file="$3" existing=""
-            existing="$(sirius_read_issue_comments "$GH_REPO" "$issue" 2>/dev/null)"
-            if printf '%s' "$existing" | grep -Fq "$marker"; then
-              echo "Comentario ya presente para #${issue} (${marker})."
-              return 0
-            fi
-            sirius_retry gh issue comment "$issue" --repo "$GH_REPO" --body-file "$file"
-          }
-
+          # Ambiguedad: parada segura. Cada transicion a failed-safely es atomica;
+          # el resultado global es un fallo (exit 1) que exige intervencion.
           if [ "${#matched_issues[@]}" -ne 1 ]; then
-            sirius_ensure_label "$GH_REPO" "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura"
             for issue_number in "${matched_issues[@]}"; do
-              sirius_retry gh issue edit "$issue_number" --repo "$GH_REPO" --remove-label "sirius:ci-pending" --add-label "sirius:failed-safely"
               marker="<!-- sirius-quality:${HEAD_SHA}:ambiguous -->"
               body_file="$(mktemp)"
               printf '%s\n\n%s\n\n%s\n%s\n' \
@@ -124,31 +112,18 @@ jobs:
                 "El flujo encontro varias incidencias \`sirius:ci-pending\` que referencian la PR #${pr_number}. Se detiene de forma segura para evitar una transicion ambigua." \
                 "- Head SHA: \`${HEAD_SHA}\`" \
                 "- Quality run: ${RUN_URL}" >"$body_file"
-              comment_once "$issue_number" "$marker" "$body_file"
+              sirius_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
+                "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
+                "noclose" "sirius:ci-pending" \
+                || echo "::error::No se pudo completar la parada segura en #${issue_number}."
               rm -f "$body_file"
             done
             exit 1
           fi
 
           issue_number="${matched_issues[0]}"
-
-          transition() {
-            # transition <label> <color> <desc> <marker> <body_file>
-            # Aplica primero la etiqueta (idempotente) y publica el comentario al
-            # final, de modo que un fallo transitorio no deje una transicion a
-            # medias ni un marcador sin transicion.
-            local label="$1" color="$2" desc="$3" marker="$4" file="$5" existing=""
-            existing="$(sirius_read_issue_comments "$GH_REPO" "$issue_number" 2>/dev/null)"
-            if printf '%s' "$existing" | grep -Fq "$marker"; then
-              echo "Transicion ya registrada para #${issue_number} (${marker})."
-              return 0
-            fi
-            sirius_ensure_label "$GH_REPO" "$label" "$color" "$desc"
-            sirius_retry gh issue edit "$issue_number" --repo "$GH_REPO" --remove-label "sirius:ci-pending" --add-label "$label"
-            comment_once "$issue_number" "$marker" "$file"
-          }
-
           body_file="$(mktemp)"
+          rc=0
           case "$CONCLUSION" in
             success)
               marker="<!-- sirius-quality:${HEAD_SHA}:success -->"
@@ -160,7 +135,9 @@ jobs:
                 "- Quality run: ${RUN_URL}" \
                 "- Resultado: \`success\`" \
                 "- Siguiente transicion: revision independiente." >"$body_file"
-              transition "sirius:review-requested" "8250DF" "Evento consumible: iniciar revisión independiente" "$marker" "$body_file"
+              sirius_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
+                "sirius:review-requested" "8250DF" "Evento consumible: iniciar revisión independiente" \
+                "noclose" "sirius:ci-pending" || rc=1
               ;;
             failure|timed_out)
               marker="<!-- sirius-quality:${HEAD_SHA}:${CONCLUSION} -->"
@@ -173,7 +150,9 @@ jobs:
                 "- Resultado: \`${CONCLUSION}\`" \
                 "- Diagnostico: inspeccionar los jobs y logs fallidos de este run en ${RUN_URL}." \
                 "- Correccion autorizada: corregir unicamente su causa dentro del alcance de la incidencia." >"$body_file"
-              transition "sirius:repair-requested" "FBCA04" "Evento consumible: corregir observaciones técnicas registradas" "$marker" "$body_file"
+              sirius_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
+                "sirius:repair-requested" "FBCA04" "Evento consumible: corregir observaciones técnicas registradas" \
+                "noclose" "sirius:ci-pending" || rc=1
               ;;
             *)
               marker="<!-- sirius-quality:${HEAD_SHA}:${CONCLUSION} -->"
@@ -185,7 +164,13 @@ jobs:
                 "- Quality run: ${RUN_URL}" \
                 "- Resultado: \`${CONCLUSION}\`" \
                 "- No se activa revision ni correccion; la incidencia queda detenida de forma segura para intervencion manual." >"$body_file"
-              transition "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" "$marker" "$body_file"
+              sirius_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
+                "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
+                "noclose" "sirius:ci-pending" || rc=1
               ;;
           esac
           rm -f "$body_file"
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::La transicion de #${issue_number} no se completo; se deja reintentable."
+            exit 1
+          fi

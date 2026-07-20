@@ -69,27 +69,19 @@ jobs:
             exit 0
           fi
 
-          comment_once() {
-            local issue="$1" marker="$2" file="$3" existing=""
-            existing="$(sirius_read_issue_comments "$GH_REPO" "$issue" 2>/dev/null)"
-            if printf '%s' "$existing" | grep -Fq "$marker"; then
-              echo "Comentario ya presente para #${issue} (${marker})."
-              return 0
-            fi
-            sirius_retry gh issue comment "$issue" --repo "$GH_REPO" --body-file "$file"
-          }
-
+          # Ambiguedad: parada segura en cada incidencia; resultado global fallo.
           if [ "${#matched_issues[@]}" -ne 1 ]; then
-            sirius_ensure_label "$GH_REPO" "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura"
             for issue_number in "${matched_issues[@]}"; do
-              sirius_retry gh issue edit "$issue_number" --repo "$GH_REPO" --add-label "sirius:failed-safely"
               marker="<!-- sirius-completed:${MERGE_SHA}:ambiguous -->"
               body_file="$(mktemp)"
               printf '%s\n\n%s\n\n%s\n' \
                 "${marker}" \
                 "La PR #${PR_NUMBER} fue fusionada, pero existen varias incidencias Sirius abiertas que la referencian. El cierre automatico se detiene para evitar completar la incidencia equivocada." \
                 "- Merge SHA: \`${MERGE_SHA}\`" >"$body_file"
-              comment_once "$issue_number" "$marker" "$body_file"
+              sirius_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
+                "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
+                "noclose" "" \
+                || echo "::error::No se pudo completar la parada segura en #${issue_number}."
               rm -f "$body_file"
             done
             exit 1
@@ -97,33 +89,6 @@ jobs:
 
           issue_number="${matched_issues[0]}"
           marker="<!-- sirius-completed:${MERGE_SHA} -->"
-          existing="$(sirius_read_issue_comments "$GH_REPO" "$issue_number" 2>/dev/null)"
-          if printf '%s' "$existing" | grep -Fq "$marker"; then
-            echo "Cierre ya registrado para #${issue_number} (${MERGE_SHA})."
-            exit 0
-          fi
-
-          # Etiqueta terminal garantizada, transicion de etiquetas y cierre primero;
-          # el comentario con marcador se publica al final para que un fallo
-          # transitorio no deje un marcador sin cierre efectivo.
-          sirius_ensure_label "$GH_REPO" "sirius:completed" "006B75" "Estado terminal: bloque fusionado y cerrado"
-          for label in \
-            sirius:planned \
-            sirius:implement-requested \
-            sirius:implementing \
-            sirius:ci-pending \
-            sirius:review-requested \
-            sirius:reviewing \
-            sirius:repair-requested \
-            sirius:repairing \
-            sirius:ready-for-merge \
-            sirius:blocked-decision \
-            sirius:failed-safely; do
-            gh issue edit "$issue_number" --repo "$GH_REPO" --remove-label "$label" >/dev/null 2>&1 || true
-          done
-          sirius_retry gh issue edit "$issue_number" --repo "$GH_REPO" --add-label "sirius:completed"
-          sirius_retry gh issue close "$issue_number" --repo "$GH_REPO" --reason completed 2>/dev/null || true
-
           body_file="$(mktemp)"
           printf '%s\n\n%s\n\n%s\n%s\n%s\n' \
             "${marker}" \
@@ -131,5 +96,16 @@ jobs:
             "- PR: ${PR_URL}" \
             "- Merge SHA: \`${MERGE_SHA}\`" \
             "- Resultado: bloque fusionado y completado." >"$body_file"
-          comment_once "$issue_number" "$marker" "$body_file"
+
+          # Transicion atomica: garantiza la etiqueta terminal, retira todas las
+          # etiquetas transitorias, cierra la incidencia (obligatorio) y SOLO
+          # entonces publica el marcador. Un fallo se detiene y queda reintentable.
+          remove_csv="sirius:planned,sirius:implement-requested,sirius:implementing,sirius:ci-pending,sirius:review-requested,sirius:reviewing,sirius:repair-requested,sirius:repairing,sirius:ready-for-merge,sirius:blocked-decision,sirius:failed-safely"
+          if ! sirius_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
+            "sirius:completed" "006B75" "Estado terminal: bloque fusionado y cerrado" \
+            "close" "$remove_csv"; then
+            rm -f "$body_file"
+            echo "::error::La finalizacion de #${issue_number} no se completo; se deja reintentable."
+            exit 1
+          fi
           rm -f "$body_file"
