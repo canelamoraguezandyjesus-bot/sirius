@@ -179,10 +179,14 @@ case "$sub" in
   label)
     action="$1"; shift || true
     case "$action" in
-      view) [ "${GH_MOCK_LABEL_EXISTS:-1}" = "1" ] && exit 0 || exit 1 ;;
-      create|edit)
+      create)
+        # Modela `gh label create [--force]`: upsert cuando lleva --force.
         if [ "${GH_MOCK_FAIL_ENSURE:-0}" = "1" ]; then echo "ensure fail" >&2; exit 1; fi
-        echo "label $action" >> "$D/actions.log"; exit 0
+        echo "label create $*" >> "$D/actions.log"; exit 0
+        ;;
+      *)
+        # gh no tiene `gh label view`; cualquier otro subcomando es desconocido.
+        echo "unknown gh label subcommand: $action" >&2; exit 2
         ;;
     esac
     ;;
@@ -363,25 +367,22 @@ def test_write_refuses_truncated_source(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_ensure_label_creates_when_missing(tmp_path: Path) -> None:
+def test_ensure_label_upserts_via_force(tmp_path: Path) -> None:
+    # Regresión (#55): ensure_label debe usar `gh label create --force` (upsert) y
+    # NO `gh label view` (subcomando inexistente que hacía fallar la transición
+    # cuando la etiqueta ya existía).
     env = _setup(tmp_path)
-    env["GH_MOCK_LABEL_EXISTS"] = "0"
-    r = _run("sirius_ensure_label owner/repo sirius:completed 006B75 desc", env)
+    r = _run("sirius_ensure_label owner/repo sirius:review-requested 8250DF desc", env)
     assert r.returncode == 0, r.stderr
-    assert "label create" in _actions(env)
-
-
-def test_ensure_label_edits_when_present(tmp_path: Path) -> None:
-    env = _setup(tmp_path)
-    env["GH_MOCK_LABEL_EXISTS"] = "1"
-    r = _run("sirius_ensure_label owner/repo sirius:completed 006B75 desc", env)
-    assert r.returncode == 0, r.stderr
-    assert "label edit" in _actions(env)
+    actions = _actions(env)
+    assert "label create" in actions
+    assert "--force" in actions
+    calls = (_mock_dir(env) / "calls.log").read_text()
+    assert "label view" not in calls  # nunca debe invocarse `gh label view`
 
 
 def test_ensure_label_fails_returns_error(tmp_path: Path) -> None:
     env = _setup(tmp_path)
-    env["GH_MOCK_LABEL_EXISTS"] = "0"
     env["GH_MOCK_FAIL_ENSURE"] = "1"
     r = _run("sirius_ensure_label owner/repo sirius:completed 006B75 desc", env)
     assert r.returncode != 0
@@ -465,7 +466,6 @@ def test_close_fails_when_still_open(tmp_path: Path) -> None:
 
 def test_transition_stops_and_no_marker_when_ensure_label_fails(tmp_path: Path) -> None:
     env = _setup(tmp_path)
-    env["GH_MOCK_LABEL_EXISTS"] = "0"
     env["GH_MOCK_FAIL_ENSURE"] = "1"
     body = _write_body(env, _MARKER)
     r = _run(_transition_call(_MARKER, body, close="close", removes="sirius:ci-pending"), env)
