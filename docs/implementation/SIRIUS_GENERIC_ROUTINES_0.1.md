@@ -4,6 +4,37 @@
 **Fecha:** 19 de julio de 2026  
 **Estado:** Operativa tras merge de la PR de automatización y registro único de las Routines
 
+## 0. E/S robusta de incidencias (obligatoria)
+
+La incidencia #55 demostró que depender de una sola vía de lectura (GraphQL/MCP)
+es frágil: un 502/503 o un cuerpo truncado pueden abortar una Routine o, peor,
+provocar una escritura parcial que corrompa el cuerpo. Para evitarlo existe la
+biblioteca **`scripts/automation/sirius_issue.sh`** y el validador
+**`scripts/automation/validate_issue_body.py`**. Ninguna Routine ni workflow debe
+leer o escribir incidencias por una sola vía sin las siguientes garantías:
+
+- **Lectura:** vía principal GitHub REST (`gh api`) con reintentos limitados y
+  espera creciente; ante fallo, respaldo independiente por GraphQL
+  (`gh issue view`). Funciones: `sirius_read_issue_body`,
+  `sirius_read_issue_comments`.
+- **Validación estructural:** un contrato de trabajo solo se acepta si contiene
+  todas las secciones obligatorias (Work ID, Bloque, Objetivo, Base y
+  dependencias, Alcance permitido, Fuera de alcance, Requisitos y pruebas,
+  Validaciones, Rama base, Condiciones de parada, Salvaguardas). Una respuesta
+  truncada nunca se acepta como cuerpo completo. Función:
+  `sirius_read_workitem_body` (lee de forma robusta y valida antes de devolver).
+- **Escritura verificada:** el cuerpo se construye primero en un archivo, se
+  guarda una copia recuperable del cuerpo anterior, se escribe de una sola vez
+  por REST y se vuelve a leer; si la longitud y el hash del contenido almacenado
+  no coinciden con lo preparado, la escritura se considera fallida. Nunca se
+  sobrescribe una incidencia usando como fuente un cuerpo truncado. Función:
+  `sirius_write_issue_body`.
+- **Parada segura:** `FAILED_SAFELY` solo se aplica cuando han fallado todas las
+  vías permitidas, no existe una fuente local aprobada suficiente y continuar
+  podría producir un cambio incorrecto. Un error temporal de una sola API no
+  provoca `FAILED_SAFELY` de inmediato si otra vía autoritativa puede completar
+  la lectura.
+
 ## 1. Regla común
 
 Las tres Routines leen una incidencia creada con `.github/ISSUE_TEMPLATE/sirius-work-item.yml`. La incidencia es la fuente de verdad. Las etiquetas solo activan transiciones.
@@ -124,14 +155,24 @@ Tras dos ciclos sin convergencia se elimina cualquier evento de reparación y se
 
 ## 5. Notificación al usuario
 
-El workflow `.github/workflows/notify-sirius-state.yml` genera una notificación de GitHub al propietario cuando aparece cualquiera de estos estados:
+El workflow `.github/workflows/notify-sirius-state.yml` publica una notificación
+de GitHub, en español y comprensible, mencionando **una sola vez** al propietario
+(sin autoasignación) cuando aparece cualquiera de estos estados:
 
-- `sirius:ready-for-merge`;
-- `sirius:blocked-decision`;
-- `sirius:failed-safely`;
-- `sirius:completed`.
+- `sirius:implementing` — 🟦 inicio del trabajo;
+- `sirius:repair-requested` — 🟠 problema corregible, reparación automática;
+- `sirius:ready-for-merge` — 🟢 listo, requiere autorización de merge;
+- `sirius:blocked-decision` — 🟡 requiere una decisión humana;
+- `sirius:failed-safely` — 🔴 parada segura, requiere revisión;
+- `sirius:completed` — ✅ bloque integrado.
 
-La notificación es idempotente por incidencia, estado y head SHA.
+Los estados internos (`sirius:planned`, `sirius:ci-pending`,
+`sirius:review-requested`, `sirius:reviewing`, `sirius:repairing`) no notifican.
+
+La notificación es secundaria y nunca rompe el flujo principal: ante un fallo de
+lectura o publicación deja un aviso en los logs y termina con éxito. Es
+idempotente por incidencia, estado y head SHA (usa `no-head` como identificador
+estable cuando todavía no hay SHA registrado).
 
 ## 6. Registro único pendiente fuera del repositorio
 

@@ -25,6 +25,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Checkout automation library
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
+
       - name: Publicar notificación de estado
         shell: bash --noprofile --norc {0}
         env:
@@ -36,39 +42,30 @@ jobs:
         run: |
           set -u
           set -o pipefail
+          source scripts/automation/sirius_issue.sh
 
           # Este workflow es secundario: nunca debe romper ni bloquear el flujo
           # principal de Sirius. Ante cualquier problema para leer la incidencia,
           # resolver el propietario o publicar el comentario, se deja un aviso en los
-          # logs y se termina con exito, sin alterar el estado de la incidencia. Por eso
-          # no se usa "set -e": un fallo secundario no debe convertirse en una ejecucion
-          # roja que a su vez genere otra notificacion tecnica.
+          # logs y se termina con exito, sin alterar el estado de la incidencia. Por
+          # eso no se usa "set -e".
 
           if [ -z "${REPOSITORY_OWNER:-}" ]; then
             echo "::warning::No se pudo resolver el propietario del repositorio; se omite la notificacion sin alterar el flujo principal."
             exit 0
           fi
 
-          issue_json="$(gh issue view "$ISSUE_NUMBER" --repo "$GH_REPO" --json body,comments 2>/dev/null)"
-          if [ -z "$issue_json" ]; then
-            echo "::warning::No se pudo obtener la incidencia #${ISSUE_NUMBER}; se omite la notificacion sin alterar el flujo principal."
-            exit 0
-          fi
+          # Head/Merge SHA: escaneo robusto (REST con respaldo GraphQL) de los
+          # comentarios mas recientes y despues el cuerpo. Si no hay SHA se usa un
+          # identificador estable "no-head" para no repetir notificaciones.
+          scan_file="$(mktemp)"
+          sirius_scan_text "$GH_REPO" "$ISSUE_NUMBER" "$scan_file"
+          head_sha="$(sirius_extract_sha "$scan_file")"
+          rm -f "$scan_file"
 
-          # Busqueda robusta del Head SHA / Merge SHA: primero en los comentarios mas
-          # recientes y despues en el cuerpo. Acepta SHA de 7 a 40 caracteres hex, no
-          # depende de expresiones jq fragiles y no falla si no encuentra ninguno ni si
-          # algun comentario no contiene SHA.
-          scan_text="$(printf '%s' "$issue_json" | jq -r '((.comments // []) | reverse | map(.body // "")) + [(.body // "")] | .[]' 2>/dev/null)"
-          head_sha="$(printf '%s\n' "$scan_text" | sed -nE 's/.*(Head|Merge) SHA:[[:space:]]*`?([0-9a-fA-F]{7,40}).*/\2/p' | head -n 1)"
-          if [ -z "${head_sha:-}" ]; then
-            head_sha="no-head"
-          fi
-
-          # Idempotencia: un marcador oculto estable por estado y version del trabajo
-          # garantiza una sola notificacion por incidencia y SHA relevante.
+          # Idempotencia: una sola notificacion por incidencia, estado y SHA.
           marker="<!-- sirius-notification:${STATE_LABEL}:${head_sha} -->"
-          existing="$(printf '%s' "$issue_json" | jq -r '.comments[]?.body // empty' 2>/dev/null)"
+          existing="$(sirius_read_issue_comments "$GH_REPO" "$ISSUE_NUMBER" 2>/dev/null || true)"
           if printf '%s' "$existing" | grep -Fq "$marker"; then
             echo "La notificacion para ${STATE_LABEL} (${head_sha}) ya existe; no se duplica."
             exit 0
@@ -110,7 +107,7 @@ jobs:
           # Una unica mencion al propietario para que la notificacion llegue de verdad.
           comment_body="$(printf '%s\n\n%s\n\n%s\n\n%s\n' "$marker" "$titulo" "$cuerpo" "@${REPOSITORY_OWNER}")"
 
-          if ! gh issue comment "$ISSUE_NUMBER" --repo "$GH_REPO" --body "$comment_body"; then
+          if ! sirius_retry gh issue comment "$ISSUE_NUMBER" --repo "$GH_REPO" --body "$comment_body"; then
             echo "::warning::No se pudo publicar la notificacion en la incidencia #${ISSUE_NUMBER}; el flujo principal continua sin cambios."
             exit 0
           fi
