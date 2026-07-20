@@ -223,6 +223,15 @@ class SqliteDecisionRepository:
             ).all()
             return [_load_decision(session, model) for model in models]
 
+    def list_proposed_decisions(self) -> list[Decision]:
+        with self._scope() as session:
+            models = session.scalars(
+                select(DecisionModel)
+                .where(DecisionModel.status == DecisionStatus.PROPOSED)
+                .order_by(DecisionModel.id)
+            ).all()
+            return [_load_decision(session, model) for model in models]
+
     def get_superseding_decision(self, decision_id: int) -> Decision | None:
         with self._scope() as session:
             model = session.scalars(

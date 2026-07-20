@@ -19,7 +19,7 @@
 - V6B: adaptador OpenAI, streaming, cancelación, errores tipados internos, idempotencia y presupuesto persistente.
 - V7A: Windows Credential Manager, configuración del proveedor, diagnóstico local y protección frente a configuraciones inválidas.
 - V7: creación, validación y restauración segura de copias cifradas, incluida su interfaz.
-- V8 (parcial, dentro de B2 y B3): validación de credencial contra el proveedor
+- V8 (parcial, dentro de B2, B3 y B4): validación de credencial contra el proveedor
   antes de guardarla (RF-002), integrada en la interfaz (`ValidatedMainWindow`).
   RF-002 está implementado y cubierto automáticamente. Además (B2a, PR #24,
   squash `f7134ca658e6343779ee6bfe89ad05dd2f0a8ba3`, fusionado en `main`), la
@@ -101,7 +101,25 @@
   implementa COMPLETED: el texto aprobado de RF-018 no menciona archivar, y
   ARCHIVED queda fuera de alcance de Sirius 0.1. RF-018 queda implementado y
   cubierto automáticamente. D-02 queda cerrado en lo que respecta a B3
-  (decisiones relacionadas siguen perteneciendo a B4).
+  (decisiones relacionadas siguen perteneciendo a B4). Además (B4a-B4f,
+  ver `docs/implementation/B4_EXECUTION.md` y `docs/implementation/PLAN.md`
+  para el detalle completo por subbloque), Sirius completa la capacidad
+  observable de eventos, recuerdos y decisiones: guardado manual con origen
+  consultable (B4a, RF-019/RF-021, PA-010); decisiones con aprobación
+  explícita, sin que una exploración conversacional apruebe nada por sí sola
+  (B4b, RF-020, PA-011); corrección versionada de recuerdos y sustitución
+  explícita de decisiones (B4c, RF-022/RF-023, PA-012/PA-013); archivo,
+  eliminación con la elección explícita sobre el mensaje fuente y la
+  advertencia sobre copias antiguas (B4d, RF-024/RF-025, PA-015/PA-016,
+  SP-06); precedencia y detección determinista de conflictos entre
+  recuerdos y decisiones, sin elegir nunca un ganador en silencio (B4e,
+  RF-026, PA-014, DR-011); y, cerrando B4, la integración visible de todo lo
+  anterior en una pestaña nueva ("Memoria y decisiones") de la misma
+  `MainWindow` — sin aplicación de gestión independiente — junto con la
+  consulta de solo lectura `GetKnowledgeOverviewUseCase` que la alimenta
+  (B4f). RF-019 a RF-026 y PA-010 a PA-016 quedan implementados y cubiertos
+  automáticamente (proveedor simulado); la parte de PA-008 y PA-E2E-01 que
+  depende de proveedor real o evaluación humana no se declara superada.
 
 Estas entradas describen infraestructura o hitos de implementación. No demuestran por sí solas que la capacidad completa de producto sea utilizable ni que sus pruebas de aceptación hayan pasado.
 
@@ -110,10 +128,13 @@ En particular:
 - el proyecto ya cubre el ciclo de vida hasta donde llega B3: B3a, B3b y B3c
   cubren el saludo inicial, la creación del primer proyecto, su continuidad
   (estado, bloqueos, siguiente paso, resumen al retomar) y completarlo
-  conservando su historial, pero las decisiones relacionadas (B4) quedan
-  pendientes;
-- la memoria no contiene todavía toda la semántica aprobada de decisiones, eventos, sustitución, conflictos y origen consultable;
-- no existe todavía el panel de contexto;
+  conservando su historial; las decisiones relacionadas quedan cubiertas por
+  B4 (ver arriba);
+- la memoria ya contiene, e integra observablemente (B4a-B4f), la semántica
+  aprobada de decisiones, eventos, corrección, sustitución, archivo,
+  eliminación, conflictos y origen consultable;
+- no existe todavía el panel de contexto completo (B5): B4f solo integró lo
+  ya aprobado de B4 en la interfaz existente, sin ampliarla;
 - el constructor de contexto no aplica aún toda la selección, precedencia y política de presupuesto aprobadas.
 
 ## Estado de verificación

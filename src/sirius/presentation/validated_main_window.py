@@ -8,12 +8,24 @@ from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QPushButton
 
 from sirius.application.api_key_settings import ApiKeySettingsUseCase
+from sirius.application.approve_decision import ApproveDecisionUseCase
+from sirius.application.archive_decision import ArchiveDecisionUseCase
+from sirius.application.archive_memory import ArchiveMemoryUseCase
+from sirius.application.correct_memory import CorrectMemoryUseCase
 from sirius.application.create_backup import CreateBackupUseCase
+from sirius.application.decision_origin import GetDecisionOriginUseCase
+from sirius.application.delete_memory import DeleteMemoryUseCase
+from sirius.application.detect_precedence_conflicts import DetectPrecedenceConflictsUseCase
 from sirius.application.get_conversation_history import GetConversationHistoryUseCase
+from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
+from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.project_lifecycle import ProjectLifecycleUseCase
+from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
+from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageUseCase
+from sirius.application.supersede_decision import SupersedeDecisionUseCase
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
 from sirius.presentation.credential_validation_worker import CredentialValidationWorker
@@ -31,6 +43,18 @@ class ValidatedMainWindow(MainWindow):
         validate_and_save_api_key_use_case: ValidateAndSaveApiKeyUseCase,
         project_continuity_use_case: ProjectContinuityUseCase,
         project_lifecycle_use_case: ProjectLifecycleUseCase,
+        save_manual_memory_use_case: SaveManualMemoryUseCase,
+        get_memory_origin_use_case: GetMemoryOriginUseCase,
+        correct_memory_use_case: CorrectMemoryUseCase,
+        archive_memory_use_case: ArchiveMemoryUseCase,
+        delete_memory_use_case: DeleteMemoryUseCase,
+        propose_decision_use_case: ProposeDecisionUseCase,
+        approve_decision_use_case: ApproveDecisionUseCase,
+        get_decision_origin_use_case: GetDecisionOriginUseCase,
+        supersede_decision_use_case: SupersedeDecisionUseCase,
+        archive_decision_use_case: ArchiveDecisionUseCase,
+        detect_precedence_conflicts_use_case: DetectPrecedenceConflictsUseCase,
+        get_knowledge_overview_use_case: GetKnowledgeOverviewUseCase,
         create_backup_use_case: CreateBackupUseCase,
         validate_backup_use_case: ValidateBackupUseCase,
         restore_backup_use_case: RestoreBackupUseCase,
@@ -51,6 +75,18 @@ class ValidatedMainWindow(MainWindow):
             api_key_settings_use_case=api_key_settings_use_case,
             project_continuity_use_case=project_continuity_use_case,
             project_lifecycle_use_case=project_lifecycle_use_case,
+            save_manual_memory_use_case=save_manual_memory_use_case,
+            get_memory_origin_use_case=get_memory_origin_use_case,
+            correct_memory_use_case=correct_memory_use_case,
+            archive_memory_use_case=archive_memory_use_case,
+            delete_memory_use_case=delete_memory_use_case,
+            propose_decision_use_case=propose_decision_use_case,
+            approve_decision_use_case=approve_decision_use_case,
+            get_decision_origin_use_case=get_decision_origin_use_case,
+            supersede_decision_use_case=supersede_decision_use_case,
+            archive_decision_use_case=archive_decision_use_case,
+            detect_precedence_conflicts_use_case=detect_precedence_conflicts_use_case,
+            get_knowledge_overview_use_case=get_knowledge_overview_use_case,
             create_backup_use_case=create_backup_use_case,
             validate_backup_use_case=validate_backup_use_case,
             restore_backup_use_case=restore_backup_use_case,

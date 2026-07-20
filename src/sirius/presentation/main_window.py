@@ -29,15 +29,27 @@ from PySide6.QtWidgets import (
 )
 
 from sirius.application.api_key_settings import ApiKeySettingsError, ApiKeySettingsUseCase
+from sirius.application.approve_decision import ApproveDecisionUseCase
+from sirius.application.archive_decision import ArchiveDecisionUseCase
+from sirius.application.archive_memory import ArchiveMemoryUseCase
+from sirius.application.correct_memory import CorrectMemoryUseCase
 from sirius.application.create_backup import CreateBackupUseCase
+from sirius.application.decision_origin import GetDecisionOriginUseCase
+from sirius.application.delete_memory import DeleteMemoryUseCase
+from sirius.application.detect_precedence_conflicts import DetectPrecedenceConflictsUseCase
 from sirius.application.get_conversation_history import (
     ConversationNotInitializedError,
     GetConversationHistoryUseCase,
 )
+from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
+from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.project_lifecycle import ProjectLifecycleUseCase
+from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
+from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageResult, SendMessageUseCase
+from sirius.application.supersede_decision import SupersedeDecisionUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
 from sirius.config.llm_provider_settings import (
     LLMProviderConfigurationError,
@@ -60,6 +72,7 @@ from sirius.presentation.backup_worker import (
     ValidateBackupWorker,
 )
 from sirius.presentation.conversation_worker import SendMessageWorker
+from sirius.presentation.knowledge_widget import KnowledgeWidget
 from sirius.presentation.project_continuity_widget import ProjectContinuityWidget
 
 _logger = get_logger(__name__)
@@ -89,6 +102,18 @@ class MainWindow(QMainWindow):
         api_key_settings_use_case: ApiKeySettingsUseCase,
         project_continuity_use_case: ProjectContinuityUseCase,
         project_lifecycle_use_case: ProjectLifecycleUseCase,
+        save_manual_memory_use_case: SaveManualMemoryUseCase,
+        get_memory_origin_use_case: GetMemoryOriginUseCase,
+        correct_memory_use_case: CorrectMemoryUseCase,
+        archive_memory_use_case: ArchiveMemoryUseCase,
+        delete_memory_use_case: DeleteMemoryUseCase,
+        propose_decision_use_case: ProposeDecisionUseCase,
+        approve_decision_use_case: ApproveDecisionUseCase,
+        get_decision_origin_use_case: GetDecisionOriginUseCase,
+        supersede_decision_use_case: SupersedeDecisionUseCase,
+        archive_decision_use_case: ArchiveDecisionUseCase,
+        detect_precedence_conflicts_use_case: DetectPrecedenceConflictsUseCase,
+        get_knowledge_overview_use_case: GetKnowledgeOverviewUseCase,
         create_backup_use_case: CreateBackupUseCase,
         validate_backup_use_case: ValidateBackupUseCase,
         restore_backup_use_case: RestoreBackupUseCase,
@@ -105,6 +130,18 @@ class MainWindow(QMainWindow):
         self._api_key_settings_use_case = api_key_settings_use_case
         self._project_continuity_use_case = project_continuity_use_case
         self._project_lifecycle_use_case = project_lifecycle_use_case
+        self._save_manual_memory_use_case = save_manual_memory_use_case
+        self._get_memory_origin_use_case = get_memory_origin_use_case
+        self._correct_memory_use_case = correct_memory_use_case
+        self._archive_memory_use_case = archive_memory_use_case
+        self._delete_memory_use_case = delete_memory_use_case
+        self._propose_decision_use_case = propose_decision_use_case
+        self._approve_decision_use_case = approve_decision_use_case
+        self._get_decision_origin_use_case = get_decision_origin_use_case
+        self._supersede_decision_use_case = supersede_decision_use_case
+        self._archive_decision_use_case = archive_decision_use_case
+        self._detect_precedence_conflicts_use_case = detect_precedence_conflicts_use_case
+        self._get_knowledge_overview_use_case = get_knowledge_overview_use_case
         self._create_backup_use_case = create_backup_use_case
         self._validate_backup_use_case = validate_backup_use_case
         self._restore_backup_use_case = restore_backup_use_case
@@ -142,6 +179,7 @@ class MainWindow(QMainWindow):
 
         tabs = QTabWidget()
         tabs.addTab(self._build_conversation_tab(), "Conversación")
+        tabs.addTab(self._build_knowledge_tab(), "Memoria y decisiones")
         tabs.addTab(self._build_settings_tab(), "Configuración")
         self.setCentralWidget(tabs)
 
@@ -209,6 +247,30 @@ class MainWindow(QMainWindow):
         layout.addLayout(input_row)
         layout.addWidget(self.status_label)
         layout.addWidget(self.error_label)
+        return container
+
+    def _build_knowledge_tab(self) -> QWidget:
+        self.knowledge_widget = KnowledgeWidget(
+            self._get_knowledge_overview_use_case,
+            self._save_manual_memory_use_case,
+            self._get_memory_origin_use_case,
+            self._correct_memory_use_case,
+            self._archive_memory_use_case,
+            self._delete_memory_use_case,
+            self._propose_decision_use_case,
+            self._approve_decision_use_case,
+            self._get_decision_origin_use_case,
+            self._supersede_decision_use_case,
+            self._archive_decision_use_case,
+            self._detect_precedence_conflicts_use_case,
+            self._project_continuity_use_case,
+            show_warning=self._show_warning,
+            show_information=self._show_information,
+        )
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.addWidget(self.knowledge_widget)
         return container
 
     def _load_history(self) -> None:
@@ -279,6 +341,7 @@ class MainWindow(QMainWindow):
         self.message_input.setEnabled(False)
         self._set_backup_controls_enabled(False)
         self.project_continuity_widget.set_external_busy(True)
+        self.knowledge_widget.set_external_busy(True)
         self.status_label.setText("Sirius está pensando...")
         self.error_label.setText("")
 
@@ -356,6 +419,7 @@ class MainWindow(QMainWindow):
         self.status_label.setText("")
         self._set_backup_controls_enabled(True)
         self.project_continuity_widget.set_external_busy(False)
+        self.knowledge_widget.set_external_busy(False)
         if self._close_requested:
             self._close_requested = False
             self.close()
@@ -589,6 +653,7 @@ class MainWindow(QMainWindow):
         self.send_button.setEnabled(False)
         self.message_input.setEnabled(False)
         self.project_continuity_widget.set_external_busy(True)
+        self.knowledge_widget.set_external_busy(True)
 
     def _finish_backup_operation(self) -> None:
         self._is_backup_busy = False
@@ -597,6 +662,7 @@ class MainWindow(QMainWindow):
         self.send_button.setEnabled(True)
         self.message_input.setEnabled(True)
         self.project_continuity_widget.set_external_busy(False)
+        self.knowledge_widget.set_external_busy(False)
         if self._close_requested:
             self._close_requested = False
             self.close()
@@ -805,6 +871,7 @@ class MainWindow(QMainWindow):
         self._is_backup_busy = False
         self._active_backup_worker = None
         self.project_continuity_widget.set_external_busy(False)
+        self.knowledge_widget.set_external_busy(False)
         self.restore_backup_status_label.setText("")
         message = "Los datos se restauraron correctamente."
         if result.safety_backup_path is not None:

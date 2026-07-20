@@ -343,6 +343,27 @@ def test_list_current_decisions_excludes_proposed_and_superseded(tmp_path: Path)
 
 
 @pytest.mark.integration
+def test_list_proposed_decisions_returns_only_proposed(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    project_id = _project_id(database_path)
+    still_proposed = repository.create_proposal("Asunto A", project_id, "contenido A")
+    original = repository.create_proposal("Motor de persistencia", project_id, "Usar SQLite local")
+    repository.approve_decision(original.id)
+    substitute = repository.create_proposal(
+        "Motor de persistencia", project_id, "Usar PostgreSQL en su lugar"
+    )
+    repository.supersede_decision(original.id, substitute.id)
+    archived = repository.create_proposal("Asunto B", project_id, "contenido B")
+    repository.approve_decision(archived.id)
+    repository.archive_decision(archived.id)
+
+    proposed = repository.list_proposed_decisions()
+
+    assert [decision.id for decision in proposed] == [still_proposed.id]
+
+
+@pytest.mark.integration
 def test_get_superseding_decision_returns_the_substitute(tmp_path: Path) -> None:
     database_path = tmp_path / "sirius.db"
     repository = _build_repository(database_path)

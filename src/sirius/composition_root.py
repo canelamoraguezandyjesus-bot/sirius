@@ -55,6 +55,7 @@ from sirius.application.delete_memory import DeleteMemoryUseCase
 from sirius.application.detect_precedence_conflicts import DetectPrecedenceConflictsUseCase
 from sirius.application.get_conversation_history import GetConversationHistoryUseCase
 from sirius.application.initial_project import InitialProjectUseCase
+from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
 from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.project_lifecycle import ProjectLifecycleUseCase
@@ -123,6 +124,7 @@ class ConversationDependencies:
     supersede_decision_use_case: SupersedeDecisionUseCase
     archive_decision_use_case: ArchiveDecisionUseCase
     detect_precedence_conflicts_use_case: DetectPrecedenceConflictsUseCase
+    get_knowledge_overview_use_case: GetKnowledgeOverviewUseCase
     create_backup_use_case: CreateBackupUseCase
     validate_backup_use_case: ValidateBackupUseCase
     restore_backup_use_case: RestoreBackupUseCase
@@ -289,6 +291,9 @@ def build_conversation_dependencies(
         supersede_decision_use_case=SupersedeDecisionUseCase(unit_of_work),
         archive_decision_use_case=ArchiveDecisionUseCase(unit_of_work),
         detect_precedence_conflicts_use_case=DetectPrecedenceConflictsUseCase(
+            memory_repository, decision_repository
+        ),
+        get_knowledge_overview_use_case=GetKnowledgeOverviewUseCase(
             memory_repository, decision_repository
         ),
         create_backup_use_case=CreateBackupUseCase(backup_service),

@@ -70,6 +70,16 @@ class DecisionRepository(Protocol):
         """
         ...
 
+    def list_proposed_decisions(self) -> list[Decision]:
+        """Return every decision whose status is PROPOSED (B4f, RF-020).
+
+        The explicit query the observable surface needs to find decisions
+        awaiting an approval or a supersession — mirrors
+        ``list_archived_decisions``'s "consulta explícita" pattern for a
+        different status.
+        """
+        ...
+
     def archive_decision(self, decision_id: int) -> Decision:
         """Remove an APPROVED decision from ordinary context while keeping
         its content (B4d, RF-024). Raises ``ValueError`` if the decision

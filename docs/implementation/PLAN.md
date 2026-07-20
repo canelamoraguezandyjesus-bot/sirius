@@ -145,12 +145,35 @@ Implementado además en V8 (B4a, B4b, B4c):
   recuerdo ya superado en autoridad por una decisión vigente inequívoca del
   mismo asunto, sin resolver ni tocar un conflicto genuino entre recuerdos.
 
+Implementado además en V8 (B4f, RF-019 a RF-026, PA-010 a PA-016):
+
+- integración observable en la interfaz existente (`KnowledgeWidget`, nueva
+  pestaña "Memoria y decisiones" de la misma `MainWindow`, sin aplicación de
+  gestión independiente): recuerdos y decisiones visibles con su origen,
+  estado y versión; guardar, corregir, archivar y eliminar un recuerdo
+  (con la elección explícita de conservar o redactar el mensaje fuente y la
+  advertencia sobre copias antiguas, SP-06/DR-012); proponer, aprobar,
+  sustituir y archivar una decisión; consultar el origen de ambos —
+  integrando en todos los casos los casos de uso ya existentes de B4a-B4e,
+  sin duplicar lógica de dominio;
+- conflictos de precedencia (B4e, `DetectPrecedenceConflictsUseCase`)
+  mostrados con todos los elementos implicados, nunca resueltos ni elegidos
+  en silencio por el panel: la aclaración exige una acción explícita
+  separada sobre los elementos ya visibles;
+- consulta de solo lectura `GetKnowledgeOverviewUseCase`
+  (`sirius.application.knowledge_overview`) que reúne recuerdos vigentes y
+  archivados y decisiones propuestas, vigentes y archivadas en una sola
+  llamada, apoyada en un método nuevo y mínimo de `DecisionRepository`
+  (`list_proposed_decisions`, mirroring `list_archived_decisions`) —
+  indispensable para que una decisión propuesta sea descubrible desde la
+  interfaz y pueda aprobarse o usarse para sustituir otra.
+
 Pendiente dentro de V8:
 
-- indexación y búsqueda pertinente;
-- casos de uso e interfaz de decisiones, de archivo/eliminación y de
-  resolución explícita de conflictos en las superficies existentes (B4f);
-- la parte correspondiente de PA-E2E-01.
+- indexación y búsqueda pertinente más allá de lo estrictamente necesario
+  para PA-010 a PA-016 (B6);
+- la parte correspondiente de PA-E2E-01 y de PA-008 que dependa de
+  proveedor real o evaluación humana.
 
 Defectos relacionados: D-03, D-04 y D-11.
 

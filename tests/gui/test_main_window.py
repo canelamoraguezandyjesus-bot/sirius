@@ -70,6 +70,18 @@ def _build_window(database_path: Path) -> MainWindow:
         api_key_settings_use_case=dependencies.api_key_settings_use_case,
         project_continuity_use_case=dependencies.project_continuity_use_case,
         project_lifecycle_use_case=dependencies.project_lifecycle_use_case,
+        save_manual_memory_use_case=dependencies.save_manual_memory_use_case,
+        get_memory_origin_use_case=dependencies.get_memory_origin_use_case,
+        correct_memory_use_case=dependencies.correct_memory_use_case,
+        archive_memory_use_case=dependencies.archive_memory_use_case,
+        delete_memory_use_case=dependencies.delete_memory_use_case,
+        propose_decision_use_case=dependencies.propose_decision_use_case,
+        approve_decision_use_case=dependencies.approve_decision_use_case,
+        get_decision_origin_use_case=dependencies.get_decision_origin_use_case,
+        supersede_decision_use_case=dependencies.supersede_decision_use_case,
+        archive_decision_use_case=dependencies.archive_decision_use_case,
+        detect_precedence_conflicts_use_case=dependencies.detect_precedence_conflicts_use_case,
+        get_knowledge_overview_use_case=dependencies.get_knowledge_overview_use_case,
         create_backup_use_case=dependencies.create_backup_use_case,
         validate_backup_use_case=dependencies.validate_backup_use_case,
         restore_backup_use_case=dependencies.restore_backup_use_case,
@@ -91,6 +103,18 @@ def _build_window_with_backup_use_case(
         api_key_settings_use_case=dependencies.api_key_settings_use_case,
         project_continuity_use_case=dependencies.project_continuity_use_case,
         project_lifecycle_use_case=dependencies.project_lifecycle_use_case,
+        save_manual_memory_use_case=dependencies.save_manual_memory_use_case,
+        get_memory_origin_use_case=dependencies.get_memory_origin_use_case,
+        correct_memory_use_case=dependencies.correct_memory_use_case,
+        archive_memory_use_case=dependencies.archive_memory_use_case,
+        delete_memory_use_case=dependencies.delete_memory_use_case,
+        propose_decision_use_case=dependencies.propose_decision_use_case,
+        approve_decision_use_case=dependencies.approve_decision_use_case,
+        get_decision_origin_use_case=dependencies.get_decision_origin_use_case,
+        supersede_decision_use_case=dependencies.supersede_decision_use_case,
+        archive_decision_use_case=dependencies.archive_decision_use_case,
+        detect_precedence_conflicts_use_case=dependencies.detect_precedence_conflicts_use_case,
+        get_knowledge_overview_use_case=dependencies.get_knowledge_overview_use_case,
         create_backup_use_case=create_backup_use_case,
         validate_backup_use_case=dependencies.validate_backup_use_case,
         restore_backup_use_case=dependencies.restore_backup_use_case,
@@ -119,9 +143,10 @@ def test_main_window_shows_the_project_continuity_widget_in_the_conversation_tab
     qtbot.addWidget(window)
 
     tabs = cast(QTabWidget, window.centralWidget())
-    assert tabs.count() == 2
+    assert tabs.count() == 3
     assert tabs.tabText(0) == "Conversación"
-    assert tabs.tabText(1) == "Configuración"
+    assert tabs.tabText(1) == "Memoria y decisiones"
+    assert tabs.tabText(2) == "Configuración"
     assert isinstance(window.project_continuity_widget, ProjectContinuityWidget)
     assert window.project_continuity_widget.name_label.text() == "Sirius 0.1"
     assert window.project_continuity_widget.next_step_label.text() == "Ahora toca: escribir pruebas"

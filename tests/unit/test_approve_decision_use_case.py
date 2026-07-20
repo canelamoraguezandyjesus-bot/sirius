@@ -109,6 +109,9 @@ class _StaticDecisionRepository:
     def list_archived_decisions(self) -> list[Decision]:
         raise AssertionError("approve() must never list archived decisions")
 
+    def list_proposed_decisions(self) -> list[Decision]:
+        raise AssertionError("approve() must never list proposed decisions")
+
 
 class _UnusedMemoryRepository:
     """B4a's ``UnitOfWork.memory_repository``; ``approve()`` never touches it."""
