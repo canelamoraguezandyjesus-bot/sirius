@@ -376,6 +376,27 @@ sirius_transition() {
   return 0
 }
 
+# --- Localización de PR referenciada ------------------------------------------
+
+# sirius_find_pr_for_issue <repo> <issue> — imprime, una por línea, los números
+# de PR de este repositorio mencionados en el cuerpo o los comentarios de la
+# incidencia (a partir de su URL completa). Sin duplicados; vacío si no hay
+# ninguna. Best-effort: nunca falla por sí sola (una lectura agotada deja el
+# resultado vacío, no aborta).
+sirius_find_pr_for_issue() {
+  local repo="$1" num="$2" body_file="" comments_file=""
+  body_file="$(mktemp)"
+  comments_file="$(mktemp)"
+  sirius_read_issue_body "$repo" "$num" >"$body_file" 2>/dev/null || : >"$body_file"
+  sirius_read_issue_comments "$repo" "$num" >"$comments_file" 2>/dev/null || : >"$comments_file"
+  cat "$comments_file" "$body_file" \
+    | grep -oE "https://github\.com/${repo}/pull/[0-9]+" \
+    | sed -E 's#.*/pull/##' \
+    | sort -u
+  rm -f "$body_file" "$comments_file"
+  return 0
+}
+
 # --- Extracción de SHA --------------------------------------------------------
 
 # sirius_extract_sha <file> — imprime el primer Head/Merge SHA (7-40 hex) del

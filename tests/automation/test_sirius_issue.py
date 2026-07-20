@@ -539,3 +539,63 @@ def test_transition_idempotent_no_duplicate_after_success(tmp_path: Path) -> Non
     # El marcador aparece una sola vez y solo se publicó un comentario.
     assert _comments(env).count(_MARKER) == 1
     assert _actions(env).count("COMMENT") == 1
+
+
+# --------------------------------------------------------------------------- #
+# Localización de PR referenciada (usada por el merge por comentario)
+# --------------------------------------------------------------------------- #
+
+
+def test_find_pr_for_issue_none(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "body_rest.txt").write_text("sin PR aqui", encoding="utf-8")
+    r = _run("sirius_find_pr_for_issue owner/repo 55", env)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == ""
+
+
+def test_find_pr_for_issue_single_from_comments(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "body_rest.txt").write_text("cuerpo sin PR", encoding="utf-8")
+    (_mock_dir(env) / "comments.txt").write_text(
+        "READY https://github.com/owner/repo/pull/57\n", encoding="utf-8"
+    )
+    r = _run("sirius_find_pr_for_issue owner/repo 55", env)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.split() == ["57"]
+
+
+def test_find_pr_for_issue_dedups_body_and_comments(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "body_rest.txt").write_text(
+        "PR: https://github.com/owner/repo/pull/57\n", encoding="utf-8"
+    )
+    (_mock_dir(env) / "comments.txt").write_text(
+        "READY https://github.com/owner/repo/pull/57\n", encoding="utf-8"
+    )
+    r = _run("sirius_find_pr_for_issue owner/repo 55", env)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.split() == ["57"]
+
+
+def test_find_pr_for_issue_multiple_distinct(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "body_rest.txt").write_text(
+        "PR: https://github.com/owner/repo/pull/57\n", encoding="utf-8"
+    )
+    (_mock_dir(env) / "comments.txt").write_text(
+        "https://github.com/owner/repo/pull/58\n", encoding="utf-8"
+    )
+    r = _run("sirius_find_pr_for_issue owner/repo 55", env)
+    assert r.returncode == 0, r.stderr
+    assert sorted(r.stdout.split()) == ["57", "58"]
+
+
+def test_find_pr_for_issue_ignores_other_repo(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "body_rest.txt").write_text(
+        "https://github.com/other/repo/pull/9\n", encoding="utf-8"
+    )
+    r = _run("sirius_find_pr_for_issue owner/repo 55", env)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == ""

@@ -1,0 +1,53 @@
+name: Fusionar bloque Sirius
+
+# Ejecuta el merge de la PR asociada a una incidencia cuando el propietario del
+# repositorio escribe la orden exacta "fusiona" en esa incidencia mientras está
+# en `sirius:ready-for-merge`. El merge sigue bajo control humano (contrato
+# operativo §8): esta automatización solo ejecuta un merge YA autorizado
+# explícitamente por el propietario para ese trabajo concreto; no decide, no
+# reintenta por su cuenta y nunca actúa si la orden, el autor o el estado no
+# son exactamente los esperados. El script vuelve a verificar todo por REST
+# (ver scripts/automation/sirius_merge_on_command.sh) antes de fusionar.
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  checks: read
+
+concurrency:
+  group: merge-sirius-work-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    name: Fusionar si la orden es válida
+    if: >-
+      github.event.issue.pull_request == null &&
+      github.event.comment.author_association == 'OWNER' &&
+      contains(github.event.issue.labels.*.name, 'sirius:ready-for-merge')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout automation library
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Fusionar bloque Sirius
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -uo pipefail
+          bash scripts/automation/sirius_merge_on_command.sh \
+            "$GH_REPO" "$ISSUE_NUMBER" "$COMMENT_ID" "$COMMENT_BODY"

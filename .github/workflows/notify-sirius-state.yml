@@ -84,11 +84,11 @@ jobs:
               ;;
             sirius:ready-for-merge)
               titulo="🟢 **El trabajo está listo**"
-              cuerpo=$'La implementación, las comprobaciones y la revisión han terminado correctamente.\n\nSolo falta tu autorización para fusionarlo.\n\nEscribe **Fusiona** en ChatGPT para continuar.'
+              cuerpo=$'La implementación, las comprobaciones y la revisión han terminado correctamente.\n\nSolo falta tu autorización para fusionarlo.\n\nEscribe **fusiona** en un comentario de esta incidencia para fusionarlo automáticamente.'
               ;;
             sirius:blocked-decision)
               titulo="🟡 **Necesito una decisión**"
-              cuerpo=$'El trabajo se ha detenido porque existe una decisión que no puedo tomar automáticamente.\n\nRevisa la incidencia y responde en ChatGPT.'
+              cuerpo=$'El trabajo se ha detenido porque existe una decisión que no puedo tomar automáticamente.\n\nRevisa la incidencia y decide el siguiente paso directamente aquí.'
               ;;
             sirius:failed-safely)
               titulo="🔴 **Me he detenido de forma segura**"
