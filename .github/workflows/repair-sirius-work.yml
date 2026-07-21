@@ -165,7 +165,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
           prompt: ${{ steps.build_prompt.outputs.prompt }}
-          claude_args: '--allowedTools "Bash,Read,Write,Edit,Grep,Glob" --max-turns 120'
+          claude_args: '--dangerously-skip-permissions --allowedTools "Bash,Read,Write,Edit,Grep,Glob" --max-turns 120'
 
       - name: Aplicar el veredicto
         if: always() && steps.gate.outputs.valid == 'true'
