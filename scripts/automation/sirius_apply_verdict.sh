@@ -37,6 +37,17 @@ case "$ROLE" in
     ;;
 esac
 
+# Identificador único de esta ejecución. Los veredictos de parada (FAILED_SAFELY,
+# BLOCKED_BY_DECISION y las paradas precheck de este script) llevaban antes un
+# marcador fijo por rol; dos paradas seguidas compartían marcador y la segunda
+# se dedupaba, ocultando su motivo (incidencia observada en el piloto sobre #66).
+# Con este sufijo por run cada parada publica su propio comentario con su
+# diagnóstico, sin perder la idempotencia dentro del mismo run (reintentos del
+# mismo run conservan RUN_ID y RUN_ATTEMPT). Los veredictos de avance
+# (READY_FOR_REVIEW/FIXED/REVIEW_APPROVED/CHANGES_REQUESTED) siguen anclados al
+# head SHA o al hash del contenido, que ya los hace únicos y estables.
+SIRIUS_RUN_TAG="${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1}"
+
 # transition <marker> <body_file> <add_label> <color> <desc>
 transition() {
   local marker="$1" body_file="$2" add="$3" color="$4" desc="$5"
@@ -52,7 +63,7 @@ stop_safely() {
   # los casos de ambigüedad de advance-sirius-after-quality.yml), no un
   # rechazo esperado como el de la puerta de activación.
   local reason="$1" why="$2"
-  local marker="<!-- sirius-verdict:${ROLE}:precheck:${reason} -->"
+  local marker="<!-- sirius-verdict:${ROLE}:precheck:${reason}:${SIRIUS_RUN_TAG} -->"
   local body_file
   body_file="$(mktemp)"
   printf '%s\n\n%s\n\n%s\n' \
@@ -220,7 +231,7 @@ case "$verdict" in
     ;;
 
   BLOCKED_BY_DECISION)
-    marker="<!-- sirius-verdict:${ROLE}:blocked -->"
+    marker="<!-- sirius-verdict:${ROLE}:blocked:${SIRIUS_RUN_TAG} -->"
     body_file="$(mktemp)"
     printf '%s\n\n%s\n\n%s\n' "$marker" "🟡 **Necesito una decisión**" "${summary}" >"$body_file"
     if ! transition "$marker" "$body_file" "sirius:blocked-decision" "D4C5F9" "Estado: requiere una decisión humana"; then
@@ -231,7 +242,7 @@ case "$verdict" in
     ;;
 
   FAILED_SAFELY | USAGE_LIMIT_REACHED)
-    marker="<!-- sirius-verdict:${ROLE}:${verdict} -->"
+    marker="<!-- sirius-verdict:${ROLE}:${verdict}:${SIRIUS_RUN_TAG} -->"
     body_file="$(mktemp)"
     printf '%s\n\n%s\n\n%s\n' "$marker" "🔴 **Me he detenido de forma segura**" "${summary}" >"$body_file"
     if ! transition "$marker" "$body_file" "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura"; then

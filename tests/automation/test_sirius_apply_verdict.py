@@ -423,3 +423,47 @@ def test_blocked_by_decision_is_idempotent_no_duplicate_comment(tmp_path: Path) 
     r2 = _run(env, "implementer", vf)
     assert r2.returncode == 0, r2.stdout + r2.stderr
     assert _comments(env).count("sirius-verdict:implementer:blocked") == 1
+
+
+# --------------------------------------------------------------------------- #
+# Visibilidad: dos runs distintos publican su propio motivo (no se dedupan)
+# --------------------------------------------------------------------------- #
+
+
+def test_failed_safely_distinct_runs_post_distinct_reasons(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:implementing"])
+
+    env_run1 = dict(env)
+    env_run1["GITHUB_RUN_ID"] = "1001"
+    vf1 = _verdict_file(tmp_path, {"verdict": "FAILED_SAFELY", "summary": "motivo del primer run"})
+    r1 = _run(env_run1, "implementer", vf1)
+    assert r1.returncode == 0, r1.stdout + r1.stderr
+
+    # Segundo run distinto (otro GITHUB_RUN_ID), con un motivo diferente: su
+    # comentario NO debe deduparse contra el del primero — el sufijo por run lo
+    # hace único, de modo que el motivo nuevo queda visible en la incidencia.
+    env_run2 = dict(env)
+    env_run2["GITHUB_RUN_ID"] = "1002"
+    vf2 = _verdict_file(
+        tmp_path, {"verdict": "FAILED_SAFELY", "summary": "motivo distinto del segundo run"}
+    )
+    r2 = _run(env_run2, "implementer", vf2)
+    assert r2.returncode == 0, r2.stdout + r2.stderr
+
+    comments = _comments(env)
+    assert "sirius-verdict:implementer:FAILED_SAFELY:1001-1" in comments
+    assert "sirius-verdict:implementer:FAILED_SAFELY:1002-1" in comments
+    assert "motivo del primer run" in comments
+    assert "motivo distinto del segundo run" in comments
+
+
+def test_failed_safely_same_run_is_idempotent(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:implementing"])
+    env["GITHUB_RUN_ID"] = "2001"
+    vf = _verdict_file(tmp_path, {"verdict": "FAILED_SAFELY", "summary": "mismo run"})
+    _run(env, "implementer", vf)
+    _run(env, "implementer", vf)
+    # Reintento del MISMO run (mismo RUN_ID/ATTEMPT): no duplica el comentario.
+    assert _comments(env).count("sirius-verdict:implementer:FAILED_SAFELY:2001-1") == 1
