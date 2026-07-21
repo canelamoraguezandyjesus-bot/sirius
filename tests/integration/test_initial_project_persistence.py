@@ -13,16 +13,22 @@ from pathlib import Path
 import pytest
 from sqlalchemy import select
 
+from sirius.adapters.llm.token_counter import CharacterHeuristicTokenCounter
 from sirius.adapters.persistence.database import build_engine, build_session_factory, session_scope
-from sirius.adapters.persistence.models import Base, ProjectModel
+from sirius.adapters.persistence.migrations import upgrade_to_head
+from sirius.adapters.persistence.models import ProjectModel
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
 )
 from sirius.adapters.persistence.sqlite_decision_repository import (
     build_sqlite_decision_repository,
 )
+from sirius.adapters.persistence.sqlite_event_repository import build_sqlite_event_repository
 from sirius.adapters.persistence.sqlite_identity_repository import (
     build_sqlite_identity_repository,
+)
+from sirius.adapters.persistence.sqlite_knowledge_search_repository import (
+    build_sqlite_knowledge_search_repository,
 )
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
@@ -32,11 +38,12 @@ from sirius.application.initial_project import (
     InitialProjectUseCase,
     InvalidInitialProjectDataError,
 )
+from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.domain.project import INITIAL_PROJECT_NEXT_STEP, INITIAL_PROJECT_STATE
 
 
 def _prepare_schema(database_path: Path) -> None:
-    Base.metadata.create_all(build_engine(database_path))
+    upgrade_to_head(database_path)
 
 
 def _row_count(database_path: Path) -> int:
@@ -154,17 +161,27 @@ def test_configured_project_enters_the_context_via_context_builder(tmp_path: Pat
     identity_repository.get_or_create_current_identity()
     project_repository = build_sqlite_project_repository(database_path)
     memory_repository = build_sqlite_memory_repository(database_path)
+    decision_repository = build_sqlite_decision_repository(database_path)
 
     InitialProjectUseCase(project_repository).create_initial_project(
         "Mi Proyecto", "Aprender Sirius"
     )
 
+    rank_relevant_knowledge_use_case = RankRelevantKnowledgeUseCase(
+        memory_repository=memory_repository,
+        decision_repository=decision_repository,
+        project_repository=project_repository,
+        knowledge_search_repository=build_sqlite_knowledge_search_repository(database_path),
+    )
     builder = ContextBuilder(
         identity_repository=identity_repository,
         project_repository=project_repository,
         memory_repository=memory_repository,
         conversation_repository=conversation_repository,
-        decision_repository=build_sqlite_decision_repository(database_path),
+        decision_repository=decision_repository,
+        rank_relevant_knowledge_use_case=rank_relevant_knowledge_use_case,
+        event_repository=build_sqlite_event_repository(database_path),
+        token_counter=CharacterHeuristicTokenCounter(),
     )
 
     context = builder.build("hola")

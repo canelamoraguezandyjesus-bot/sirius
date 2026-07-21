@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 
 from sirius.application.context import Context
 from sirius.application.send_message import render_instructions
+from sirius.domain.decision import Decision, DecisionRevision, DecisionStatus
 from sirius.domain.identity import Identity, IdentityVersion
 from sirius.domain.project import Project, ProjectRevision, ProjectStatus, normalize_blockers
 
@@ -55,20 +56,42 @@ def _project(
     )
 
 
-def _context(project: Project) -> Context:
+def _decision(*, decision_id: int = 1, subject: str = "Motor de persistencia") -> Decision:
+    revision = DecisionRevision(
+        id=decision_id,
+        decision_id=decision_id,
+        version=1,
+        content="Usar SQLite local",
+        source_event_id=None,
+        created_at=_NOW,
+    )
+    return Decision(
+        id=decision_id,
+        subject=subject,
+        project_id=1,
+        status=DecisionStatus.APPROVED,
+        current_revision=revision,
+        created_at=_NOW,
+        updated_at=_NOW,
+    )
+
+
+def _context(project: Project, decisions: tuple[Decision, ...] = ()) -> Context:
     return Context(
         identity=_identity(),
         project=project,
+        decisions=decisions,
         memories=(),
         recent_messages=(),
         current_user_message="hola",
     )
 
 
-def _context_without_project() -> Context:
+def _context_without_project(decisions: tuple[Decision, ...] = ()) -> Context:
     return Context(
         identity=_identity(),
         project=None,
+        decisions=decisions,
         memories=(),
         recent_messages=(),
         current_user_message="hola",
@@ -153,12 +176,51 @@ def test_render_instructions_uses_ninguno_registrado_when_blockers_is_empty() ->
     assert "Bloqueos: Ninguno registrado." in text
 
 
-def test_render_instructions_never_mentions_decisions() -> None:
-    """B3b explicitly excludes decisions — no fabricated content in the
-    provider-facing project section."""
+def test_render_instructions_project_section_never_mentions_decisions() -> None:
+    """B3b's project section still excludes decisions — no fabricated
+    content there. The dedicated "# Decisiones vigentes relacionadas"
+    section (B6d) is a separate concern, covered below."""
     text = render_instructions(_context(_project()))
 
-    assert "decisi" not in text.lower()
+    project_section = text.split("# Proyecto activo\n", 1)[1].split("\n\n", 1)[0]
+    assert "decisi" not in project_section.lower()
+
+
+def test_render_instructions_includes_related_decisions_section() -> None:
+    """B6d, SIRIUS-ARQ-0.1 S6.1: "decisiones vigentes relacionadas" is its
+    own section, distinct from the project's own fields."""
+    decision = _decision(decision_id=7, subject="Motor de persistencia")
+    text = render_instructions(_context(_project(), decisions=(decision,)))
+
+    assert "# Decisiones vigentes relacionadas" in text
+    assert "- (7) [Motor de persistencia] Usar SQLite local" in text
+
+
+def test_render_instructions_decisions_section_falls_back_safely_when_empty() -> None:
+    """No current decisions is the safe, expected state — the header still
+    renders, with no fabricated bullet."""
+    text = render_instructions(_context(_project(), decisions=()))
+
+    assert "# Decisiones vigentes relacionadas" in text
+    assert (
+        "- ("
+        not in text.split("# Decisiones vigentes relacionadas\n", 1)[1].split(
+            "# Memorias vigentes", 1
+        )[0]
+    )
+
+
+def test_render_instructions_section_order_matches_sirius_arq_s6_1() -> None:
+    decision = _decision()
+    text = render_instructions(_context(_project(), decisions=(decision,)))
+
+    identity_index = text.index("# Identidad")
+    project_index = text.index("# Proyecto activo")
+    decisions_index = text.index("# Decisiones vigentes relacionadas")
+    memories_index = text.index("# Memorias vigentes")
+    messages_index = text.index("# Mensajes recientes")
+
+    assert identity_index < project_index < decisions_index < memories_index < messages_index
 
 
 def test_render_instructions_project_section_order_matches_the_documented_format() -> None:
@@ -188,5 +250,6 @@ def test_render_instructions_still_includes_every_other_section_without_a_projec
     text = render_instructions(_context_without_project())
 
     assert "# Identidad" in text
+    assert "# Decisiones vigentes relacionadas" in text
     assert "# Memorias vigentes" in text
     assert "# Mensajes recientes" in text

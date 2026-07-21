@@ -6,21 +6,26 @@ import pytest
 from pytestqt.qtbot import QtBot
 
 from sirius.adapters.llm.fake import FakeLLMProvider
-from sirius.adapters.persistence.database import build_engine
-from sirius.adapters.persistence.models import Base
+from sirius.adapters.llm.token_counter import CharacterHeuristicTokenCounter
+from sirius.adapters.persistence.migrations import upgrade_to_head
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
 )
 from sirius.adapters.persistence.sqlite_decision_repository import (
     build_sqlite_decision_repository,
 )
+from sirius.adapters.persistence.sqlite_event_repository import build_sqlite_event_repository
 from sirius.adapters.persistence.sqlite_identity_repository import (
     build_sqlite_identity_repository,
+)
+from sirius.adapters.persistence.sqlite_knowledge_search_repository import (
+    build_sqlite_knowledge_search_repository,
 )
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.context import ContextBuilder
+from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.application.send_message import SendMessageUseCase
 from sirius.composition_root import build_conversation_dependencies
 from sirius.domain.conversation import Conversation, Message, MessageRole, MessageStatus
@@ -46,7 +51,7 @@ def isolated_local_appdata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
 def _bootstrapped_database(database_path: Path) -> Path:
     """Mimic initialize_persistence(): schema + the three canonical singletons,
     plus a configured active project (B3c): ContextBuilder requires one."""
-    Base.metadata.create_all(build_engine(database_path))
+    upgrade_to_head(database_path)
     build_sqlite_conversation_repository(database_path).get_or_create_main_conversation()
     project_repository = build_sqlite_project_repository(database_path)
     project_repository.ensure_bootstrap_project()
@@ -191,12 +196,24 @@ def _swap_send_message_use_case(
     conversation_repository: ConversationRepository | None = None,
 ) -> None:
     repository = conversation_repository or build_sqlite_conversation_repository(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    decision_repository = build_sqlite_decision_repository(database_path)
+    project_repository = build_sqlite_project_repository(database_path)
+    rank_relevant_knowledge_use_case = RankRelevantKnowledgeUseCase(
+        memory_repository=memory_repository,
+        decision_repository=decision_repository,
+        project_repository=project_repository,
+        knowledge_search_repository=build_sqlite_knowledge_search_repository(database_path),
+    )
     context_builder = ContextBuilder(
         identity_repository=build_sqlite_identity_repository(database_path),
-        project_repository=build_sqlite_project_repository(database_path),
-        memory_repository=build_sqlite_memory_repository(database_path),
+        project_repository=project_repository,
+        memory_repository=memory_repository,
         conversation_repository=repository,
-        decision_repository=build_sqlite_decision_repository(database_path),
+        decision_repository=decision_repository,
+        rank_relevant_knowledge_use_case=rank_relevant_knowledge_use_case,
+        event_repository=build_sqlite_event_repository(database_path),
+        token_counter=CharacterHeuristicTokenCounter(),
     )
     window._send_message_use_case = SendMessageUseCase(
         context_builder=context_builder,

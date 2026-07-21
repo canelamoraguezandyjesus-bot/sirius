@@ -73,7 +73,10 @@ def render_instructions(context: Context) -> str:
     The "# Proyecto activo" section is omitted entirely when
     ``context.project`` is ``None`` (SIRIUS-ARQ-0.1 S3,
     ``LLMRequest.project_context: str | None``) — no placeholder text, no
-    fabricated project.
+    fabricated project. "# Decisiones vigentes relacionadas" (B6d, S6.1)
+    always renders, with an empty body when ``context.decisions`` is empty —
+    the safe state when none are relevant or none exist, never a fabricated
+    decision.
     """
     lines = [
         f"# Identidad (v{context.identity.current_version.version}): "
@@ -95,6 +98,12 @@ def render_instructions(context: Context) -> str:
             "",
         ]
     lines += [
+        "# Decisiones vigentes relacionadas",
+        *(
+            f"- ({decision.id}) [{decision.subject}] {decision.current_revision.content}"
+            for decision in context.decisions
+        ),
+        "",
         "# Memorias vigentes",
         *(f"- ({memory.id}) {memory.current_revision.content}" for memory in context.memories),
         "",
