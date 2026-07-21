@@ -103,6 +103,16 @@ case "$sub" in
       cat "$labels_file" 2>/dev/null
       exit 0
     fi
+    if printf '%s' "$args" | grep -q '/pulls/'; then
+      # Estado de una PR concreta: se devuelve un JSON con el estado por-PR
+      # (archivo pr_state_<N>.txt, "open" por defecto) para poder simular PRs
+      # cerradas/superadas. El llamador extrae `.state` con jq.
+      pr_num="$(printf '%s' "$args" | grep -oE '/pulls/[0-9]+' | grep -oE '[0-9]+' | head -1)"
+      pr_state="open"
+      [ -f "$D/pr_state_${pr_num}.txt" ] && pr_state="$(cat "$D/pr_state_${pr_num}.txt")"
+      printf '{"state":"%s"}' "$pr_state"
+      exit 0
+    fi
     if printf '%s' "$args" | grep -q '[.]state'; then
       cat "$state_file"
       exit 0
@@ -592,6 +602,37 @@ def test_find_pr_for_issue_multiple_distinct(tmp_path: Path) -> None:
     r = _run("sirius_find_pr_for_issue owner/repo 55", env)
     assert r.returncode == 0, r.stderr
     assert sorted(r.stdout.split()) == ["57", "58"]
+
+
+def test_find_pr_for_issue_excludes_closed(tmp_path: Path) -> None:
+    # Una PR cerrada mencionada en comentarios antiguos NO cuenta como vigente.
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "body_rest.txt").write_text("cuerpo sin PR", encoding="utf-8")
+    (_mock_dir(env) / "comments.txt").write_text(
+        "PR abierta: https://github.com/owner/repo/pull/57\n", encoding="utf-8"
+    )
+    (_mock_dir(env) / "pr_state_57.txt").write_text("closed", encoding="utf-8")
+    r = _run("sirius_find_pr_for_issue owner/repo 55", env)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == ""
+
+
+def test_find_pr_for_issue_keeps_only_open_when_superseded(tmp_path: Path) -> None:
+    # Escenario del relanzamiento (incidencia #66): una PR previa cerrada (#71)
+    # y una nueva abierta (#73) referenciadas en el historial. Solo debe contar
+    # la abierta, sin falso "varias PR".
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "body_rest.txt").write_text("cuerpo sin PR", encoding="utf-8")
+    (_mock_dir(env) / "comments.txt").write_text(
+        "PR abierta: https://github.com/owner/repo/pull/71\n"
+        "PR abierta: https://github.com/owner/repo/pull/73\n",
+        encoding="utf-8",
+    )
+    (_mock_dir(env) / "pr_state_71.txt").write_text("closed", encoding="utf-8")
+    (_mock_dir(env) / "pr_state_73.txt").write_text("open", encoding="utf-8")
+    r = _run("sirius_find_pr_for_issue owner/repo 55", env)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.split() == ["73"]
 
 
 def test_find_pr_for_issue_ignores_other_repo(tmp_path: Path) -> None:
