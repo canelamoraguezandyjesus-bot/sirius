@@ -18,9 +18,15 @@ que actúa dentro de las reglas siguientes y termina siempre con un veredicto.
   el comentario `PR abierta: <URL>`, y (5) **escrito el archivo de veredicto**
   (ver el final de este documento). Si te quedas a mitad, sigue siendo
   obligatorio el paso (5) con el veredicto que corresponda.
-- Tienes hasta 120 turnos: úsalos. Es normal que la implementación real lleve
-  muchos pasos (leer varios ficheros, escribir código, correr `uv sync` y la
-  suite completa, iterar). No abrevies ni concluyas antes de tiempo.
+- Dispones de un presupuesto de turnos amplio pero **finito**: úsalo con
+  cabeza. Es normal que la implementación real lleve muchos pasos (leer varios
+  ficheros, escribir código, correr `uv sync` y la suite completa, iterar); no
+  abrevies ni concluyas antes de tiempo, pero **tampoco lo malgastes**. Sé
+  eficiente: lee solo lo necesario, evita relecturas y comprobaciones
+  redundantes, y no repitas la suite entera para cambios triviales. Prioriza
+  llegar al final del flujo (código → validaciones → push → PR → veredicto)
+  antes que pulir de más. Si el trabajo es grande, avanza en bloques y **no
+  dejes para el último momento** el commit/push, la PR y el veredicto.
 
 ## Contrato que debes respetar
 
