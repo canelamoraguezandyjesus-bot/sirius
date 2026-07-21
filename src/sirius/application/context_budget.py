@@ -21,7 +21,7 @@ S6.3's rules, as implemented here:
 - Recent messages fill whatever budget remains, newest first: the oldest
   non-source message is dropped before any other. A message that is the
   recorded source (``source_event_id`` -> ``Event.message_id``) of an
-  already-selected knowledge item is never dropped while an older non-source
+  already-selected knowledge item is never dropped while any non-source
   message remains to drop instead — but it is not otherwise exempt, since
   only identity, rules/permissions, and the current user message are never
   trimmed at all.
@@ -127,7 +127,7 @@ def _trim_messages(
     source_message_ids: frozenset[int],
 ) -> tuple[Message, ...]:
     """Drop the oldest non-source message first, newest turns last; a source
-    message is only dropped once no older non-source message remains."""
+    message is only dropped once no non-source message remains."""
     completed = [
         message for message in recent_messages if message.status is MessageStatus.COMPLETED
     ]
@@ -165,9 +165,9 @@ def apply_context_budget(
     relevant first); it is never reordered, only capped and trimmed.
     ``recent_messages`` must be in chronological order (newest last).
     ``source_events`` lets a message that originated an included knowledge
-    item survive longer than other old messages (S6.3) — omit it (or pass
-    events with no bearing on ``ranked_knowledge``) and that protection
-    simply does not apply.
+    item survive while any non-source message remains to drop instead
+    (S6.3) — omit it (or pass events with no bearing on
+    ``ranked_knowledge``) and that protection simply does not apply.
 
     Never raises for a too-small budget: ``protected_tokens`` alone may
     already exceed ``token_budget``, in which case both ``knowledge`` and

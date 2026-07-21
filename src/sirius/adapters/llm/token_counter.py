@@ -19,9 +19,10 @@ _CHARACTERS_PER_TOKEN = 4
 class CharacterHeuristicTokenCounter:
     """Estimates token cost as ``ceil(len(text) / 4)``.
 
-    Rounds up so that any non-empty text costs at least one token; an empty
-    (or blank-only) text costs zero. Deterministic and pure: the same text
-    always yields the same estimate.
+    Rounds up so that any non-empty text costs at least one token; only the
+    empty string costs zero (a blank-only text like ``"   "`` still costs at
+    least one token). Deterministic and pure: the same text always yields
+    the same estimate.
     """
 
     def count_tokens(self, text: str) -> int:
