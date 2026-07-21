@@ -19,7 +19,7 @@
 - V6B: adaptador OpenAI, streaming, cancelación, errores tipados internos, idempotencia y presupuesto persistente.
 - V7A: Windows Credential Manager, configuración del proveedor, diagnóstico local y protección frente a configuraciones inválidas.
 - V7: creación, validación y restauración segura de copias cifradas, incluida su interfaz.
-- V8 (parcial, dentro de B2, B3 y B4): validación de credencial contra el proveedor
+- V8 (parcial, dentro de B2, B3, B4 y B5): validación de credencial contra el proveedor
   antes de guardarla (RF-002), integrada en la interfaz (`ValidatedMainWindow`).
   RF-002 está implementado y cubierto automáticamente. Además (B2a, PR #24,
   squash `f7134ca658e6343779ee6bfe89ad05dd2f0a8ba3`, fusionado en `main`), la
@@ -120,6 +120,13 @@
   (B4f). RF-019 a RF-026 y PA-010 a PA-016 quedan implementados y cubiertos
   automáticamente (proveedor simulado); la parte de PA-008 y PA-E2E-01 que
   depende de proveedor real o evaluación humana no se declara superada.
+  Además (B5, PR #79, squash `7370a19`, incidencia #60 completada),
+  `ContextPanelWidget` integra en la pestaña "Conversación" un panel de solo
+  lectura con el proyecto activo y su siguiente paso, las decisiones APPROVED
+  vigentes y los recuerdos vigentes, con consulta de origen y actualización
+  local bajo demanda. Reutiliza los cuatro casos de uso ya cableados, no añade
+  repositorios, modelos, migraciones ni llamadas de red y queda cubierto por
+  pruebas GUI deterministas.
 
 Estas entradas describen infraestructura o hitos de implementación. No demuestran por sí solas que la capacidad completa de producto sea utilizable ni que sus pruebas de aceptación hayan pasado.
 
@@ -133,9 +140,9 @@ En particular:
 - la memoria ya contiene, e integra observablemente (B4a-B4f), la semántica
   aprobada de decisiones, eventos, corrección, sustitución, archivo,
   eliminación, conflictos y origen consultable;
-- no existe todavía el panel de contexto completo (B5): B4f solo integró lo
-  ya aprobado de B4 en la interfaz existente, sin ampliarla;
-- el constructor de contexto no aplica aún toda la selección, precedencia y política de presupuesto aprobadas.
+- el panel de contexto completo B5 está implementado e integrado en la pestaña
+  "Conversación" como superficie local, determinista y de solo lectura;
+- el constructor de contexto no aplica aún toda la selección, precedencia y política de presupuesto aprobadas; B6 sigue pendiente y debe dividirse antes de activarse.
 
 ## Estado de verificación
 
@@ -168,6 +175,9 @@ En particular:
   y GUI); la migración que crea `project_revisions` se probó con relleno
   desde el head anterior y con resincronización al bajar de versión, sin
   perder datos; sin datos reales y sin red.
+- B5 está cubierto automáticamente con pruebas GUI sobre el panel de contexto,
+  incluidos estados vacíos, filtrado de decisiones APPROVED, origen,
+  actualización manual y coordinación con operaciones ocupadas.
 
 ### Pendiente de validación manual
 
@@ -176,6 +186,7 @@ En particular:
 - Comprobar escalado, teclado, foco, rutas, cierre forzado y restauración empaquetada.
 - Ejecutar posteriormente la ventana autorizada con proveedor real.
 - Completar PA-E2E-01, PS-01 a PS-07 y las pruebas manuales de seguridad y privacidad.
+- Revisar visualmente B5 con muchos recuerdos y decisiones y en una ventana pequeña; no es un bloqueo automático demostrado.
 
 ## Estado de V7
 
@@ -202,6 +213,8 @@ Puede incluir:
 - comprobaciones de Windows sin clave;
 - recopilación de evidencia.
 
+B5 está completado. Antes de B6 deben cerrarse la deriva documental y la higiene operativa, contrastar B6 contra las fuentes canónicas y dividirlo en subbloques pequeños y revisables. La exportación estructurada RF-031 continúa pendiente y puede ser un bloque intermedio más contenido.
+
 No se considera iniciada la aceptación formal con proveedor real.
 
 La ventana con proveedor real permanece bloqueada hasta que:
@@ -223,6 +236,7 @@ No se crea una fase canónica adicional denominada `Preparación V8`.
 - No se convierten conversaciones exploratorias en requisitos ni cambios de arquitectura.
 - Las pruebas visuales, físicas o dependientes del Windows real siguen requiriendo intervención del usuario.
 - Antes de volver a trabajar desde el equipo local, debe sincronizarse con `git pull --ff-only origin main`.
+- Cada bloque debe indicar expresamente qué documentos vivos actualiza. Los documentos de raíz o de operaciones que el agente automático no pueda modificar se sincronizan en una PR documental posterior al merge.
 
 ## Fuentes históricas
 
