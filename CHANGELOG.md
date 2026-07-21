@@ -92,7 +92,23 @@
 - Endurecimiento posterior: consultar el estado de la clave traduce de forma segura los errores del almacén y nunca impide construir la ventana; la interfaz muestra un estado no disponible sin revelar detalles.
 - Endurecimiento posterior: la configuración rechaza límites de tokens y presupuestos iguales a cero o negativos antes de persistirlos.
 
+### B5 — Panel de contexto completo
+
+- PR #79 (`7370a19`) fusionada; incidencia #60 cerrada como `sirius:completed`.
+- Nuevo `ContextPanelWidget` de solo lectura dentro de la pestaña "Conversación".
+- Muestra el proyecto activo y el siguiente paso, las decisiones APPROVED vigentes y los recuerdos vigentes.
+- Permite consultar el origen de decisiones y recuerdos y actualizar el panel localmente bajo demanda.
+- Reutiliza casos de uso ya existentes; no añade repositorios, modelos, migraciones, llamadas de red ni cambios de arquitectura.
+- Incluye pruebas GUI deterministas para estados vacíos, filtrado, origen, refresco y coordinación con operaciones ocupadas.
+
+### Automatización de desarrollo
+
+- El ciclo de implementación, Quality, revisión independiente, corrección limitada, autorización humana de merge y cierre automático quedó validado en vivo con la prueba de humo #75 y con B5 real (#60).
+- Los eventos que deben despertar otros workflows usan el PAT acotado; las lecturas de Actions y checks usan `GITHUB_TOKEN`.
+- Claude emite veredictos estructurados y los scripts deterministas verifican y aplican las transiciones de estado.
+
 ### Reconciliación documental
 
 - `README.md`, `REPOSITORY_STATUS.md` y `docs/implementation/PLAN.md` se actualizan para distinguir trabajo completado, validaciones manuales pendientes, alcance restante de V7 y V8.
 - Se retiran del estado operativo las instrucciones de preparación inicial ya superadas, sin modificar producto, requisitos, Manual ni arquitectura.
+- Tras B5 se establece que cada bloque debe declarar qué documentos vivos actualiza; los documentos fuera del allow-list del agente se sincronizan mediante una PR documental posterior al merge.
