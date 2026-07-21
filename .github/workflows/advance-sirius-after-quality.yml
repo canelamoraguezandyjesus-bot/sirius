@@ -30,7 +30,13 @@ jobs:
       - name: Advance matching Sirius work item
         shell: bash --noprofile --norc {0}
         env:
-          GH_TOKEN: ${{ github.token }}
+          # La etiqueta que aplica este paso (`sirius:review-requested` o
+          # `sirius:repair-requested`) debe despertar al workflow de revisión o
+          # de corrección. Un `issues: labeled` emitido por el GITHUB_TOKEN por
+          # defecto queda suprimido (anti-recursión), así que el ciclo se
+          # cortaría aquí. Con el PAT la etiqueta proviene de una identidad real
+          # y el siguiente rol arranca solo.
+          GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           RUN_ID: ${{ github.event.workflow_run.id }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}

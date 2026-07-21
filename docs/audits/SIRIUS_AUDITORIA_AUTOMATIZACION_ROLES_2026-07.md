@@ -41,6 +41,19 @@ Los tres workflows escuchan `issues: labeled` y compartían el grupo `sirius-wor
 
 **Corrección:** el grupo de concurrencia pasa a ser por **rol + incidencia + etiqueta**: `sirius-<rol>-<incidencia>-<label>`. Así los tres workflows no colisionan entre sí para un mismo evento, y el evento de `planned` no cancela al de `implement-requested`. Se conserva la exclusión única para dos eventos idénticos sobre la misma incidencia (evita duplicados reales).
 
+### H-4 — La cadena no se encadena sola: el `GITHUB_TOKEN` no dispara workflows · CORREGIDO
+El piloto llegó por primera vez a ejecutar **todo** el trabajo del implementador de forma autónoma (Claude creó la función, sus pruebas, hizo push de una rama nueva y **abrió la PR #71 él solo**), y la incidencia avanzó a `sirius:ci-pending`. Pero **Quality no arrancó**: el run quedó en `action_required` con cero jobs. Causa: GitHub, por prevención de recursión, **no dispara nuevos workflows a partir de eventos generados por el `GITHUB_TOKEN` por defecto** (con la única excepción de `workflow_dispatch`/`repository_dispatch`). Como la PR la abrió el bot `github-actions` con ese token, el evento `pull_request` de Quality no ejecuta, y sin `workflow_run` de Quality tampoco se dispara el avance a revisión. El mismo veto afecta a **todas** las transiciones internas de etiqueta pensadas para despertar al siguiente rol: un `sirius:review-requested`/`sirius:repair-requested` aplicado por un workflow con el `GITHUB_TOKEN` no lanzaría al revisor ni al corrector. Estos runs bloqueados por recursión **no se pueden aprobar a mano**; simplemente no corren.
+
+**Corrección:** las operaciones que deben originar un evento consumible por otro workflow pasan a usar un token de identidad real (un PAT fino de repositorio, secreto `SIRIUS_BOT_TOKEN`, con permisos *Contents*, *Issues* y *Pull requests* en lectura/escritura), en lugar del `GITHUB_TOKEN` por defecto:
+
+- **Implementador** (`implement-sirius-work.yml`): `checkout` y el paso de Claude usan el PAT, de modo que `gh pr create` y el push provienen de una identidad real y el `pull_request` dispara Quality.
+- **Corrector** (`repair-sirius-work.yml`): igual, para que el push de la corrección genere un `synchronize` que vuelva a ejecutar Quality y cierre el ciclo revisión→corrección→revisión.
+- **Avance tras Quality** (`advance-sirius-after-quality.yml`): el paso que aplica `sirius:review-requested`/`sirius:repair-requested` usa el PAT, para que despierte al rol siguiente.
+- **Revisor** (`review-sirius-work.yml`): solo el paso **determinista** de aplicación de veredicto usa el PAT (por si el veredicto es `CHANGES_REQUESTED` → `sirius:repair-requested`). El paso de Claude **conserva su token de solo lectura** (`contents: read`): la garantía de que el revisor no puede hacer push se mantiene intacta.
+- **Reconciliador** (`reconcile-sirius-states.yml`): su transición manual `ci-pending → review-requested` usa el PAT por el mismo motivo.
+
+Los pasos que solo hacen contabilidad de estado sin necesidad de despertar a otro workflow (`implementing`, `reviewing`, `repairing`, `ci-pending`, `ready-for-merge`, paradas seguras) siguen con el `GITHUB_TOKEN` por defecto. El merge sigue exigiendo autorización humana explícita (comentario `fusiona`), sin cambios.
+
 ## 4. Pruebas
 
 - `tests/automation/test_sirius_apply_verdict.py`: 17 casos (2 nuevos) — verifican que dos runs distintos publican su propio motivo (`FAILED_SAFELY` con sufijo por run) y que un reintento del mismo run sigue siendo idempotente.
@@ -49,7 +62,7 @@ Los tres workflows escuchan `issues: labeled` y compartían el grupo `sirius-wor
 
 ## 5. Validación en vivo pendiente
 
-Estas correcciones son de configuración de una acción externa que no puede probarse sin ejecutarla. El siguiente run del implementador sobre #66 debería, o bien completar el ciclo (crear la función, abrir PR, veredicto `READY_FOR_REVIEW`, incidencia a `sirius:ci-pending`), o bien —si quedara alguna denegación— **decir exactamente cuál** gracias a H-1. Coste: un run de Quality (PR) + un run del implementador. El merge de cualquier PR sigue requiriendo autorización humana explícita.
+El trabajo del implementador quedó **probado de punta a punta** en el piloto (código + pruebas + push + PR #71 abierta por el agente). Lo que queda por validar en vivo es la **cadena completa a partir de la corrección H-4**: que la PR abierta con el PAT dispare Quality, que su `workflow_run` avance a `sirius:review-requested`, que el revisor arranque, y que un eventual `CHANGES_REQUESTED` despierte al corrector y su push vuelva a disparar Quality. Todo ello depende de que exista el secreto `SIRIUS_BOT_TOKEN` (PAT fino con *Contents*/*Issues*/*Pull requests* RW sobre este repo); sin él, `${{ secrets.SIRIUS_BOT_TOKEN }}` queda vacío y los pasos afectados fallarían la autenticación. Coste de la validación: un ciclo de runs (implementador + Quality + revisor). El merge de cualquier PR sigue requiriendo autorización humana explícita.
 
 ## 6. Estado del contrato
 
