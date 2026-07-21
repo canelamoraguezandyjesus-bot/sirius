@@ -6,12 +6,12 @@ name: Implementar bloque Sirius
 # descrita en versiones anteriores de SIRIUS_GENERIC_ROUTINES_0.1.md: aquí
 # todo el mecanismo vive en el repositorio y es auditable.
 #
-# IMPORTANTE — verifica antes del primer uso real: los nombres de entrada de
-# `anthropics/claude-code-action` (prompt, claude_code_oauth_token /
-# anthropic_api_key, allowed_tools, max_turns) corresponden a su interfaz
-# conocida en el momento de escribir este workflow. Es un producto externo
-# que puede cambiar; confirma su README antes de fiarte de este archivo sin
-# probarlo.
+# Interfaz de `anthropics/claude-code-action@v1` (verificada en ejecución real,
+# run 29792217748): la autenticación de GitHub necesita `id-token: write` en los
+# permisos y/o `github_token` explícito; los flags de la CLI de Claude (tools,
+# turnos) NO son entradas sueltas — van dentro de `claude_args`. Es un producto
+# externo que puede cambiar; ante un fallo de este paso, revisa su README y los
+# nombres de entrada válidos que la propia acción imprime en el log.
 #
 # Claude NUNCA muta etiquetas ni cierra la incidencia por su cuenta: solo
 # hace el trabajo (código, pruebas, commit, push, PR) y escribe un veredicto
@@ -26,6 +26,7 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+  id-token: write
 
 concurrency:
   group: sirius-work-${{ github.event.issue.number }}
@@ -119,9 +120,9 @@ jobs:
           SIRIUS_VERDICT_FILE: ${{ runner.temp }}/sirius_verdict.json
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
           prompt: ${{ steps.build_prompt.outputs.prompt }}
-          allowed_tools: "Bash,Read,Write,Edit,Grep,Glob"
-          max_turns: "120"
+          claude_args: '--allowedTools "Bash,Read,Write,Edit,Grep,Glob" --max-turns 120'
 
       - name: Aplicar el veredicto
         if: always() && steps.gate.outputs.valid == 'true'
