@@ -54,6 +54,11 @@ El piloto llegó por primera vez a ejecutar **todo** el trabajo del implementado
 
 Los pasos que solo hacen contabilidad de estado sin necesidad de despertar a otro workflow (`implementing`, `reviewing`, `repairing`, `ci-pending`, `ready-for-merge`, paradas seguras) siguen con el `GITHUB_TOKEN` por defecto. El merge sigue exigiendo autorización humana explícita (comentario `fusiona`), sin cambios.
 
+### H-5 — El resolutor de PR contaba PRs ya cerradas (robustez del relanzamiento) · CORREGIDO
+Con H-4 ya en `main`, el relanzamiento limpio de #66 confirmó en vivo lo esencial: el implementador abrió la **PR #73 con el PAT** (identidad real) y **Quality arrancó sola sobre ella** — exactamente lo que antes quedaba muerto en `action_required`. Pero el paso de veredicto se detuvo de forma segura con `precheck:varias-pr`: `sirius_find_pr_for_issue` extrae los números de PR de las URL mencionadas en el cuerpo y los comentarios de la incidencia, y **contaba también la PR #71 ya cerrada** (su URL seguía en comentarios de un intento anterior). Al ver dos PRs "distintas" (#71 cerrada + #73 abierta) se paró por ambigüedad. Solo afecta a una incidencia **reutilizada** que arrastra la URL de una PR superada; un ítem de trabajo limpio (una sola PR) no lo dispara.
+
+**Corrección:** `sirius_find_pr_for_issue` ahora, tras extraer las URLs, **consulta el estado de cada PR candidata y conserva únicamente las que siguen abiertas** (`state == "open"`). Si no puede confirmar el estado de una candidata, la omite (fallo seguro: mejor una parada por "sin PR", reintentable, que operar sobre la equivocada). Beneficia a todos los que resuelven la PR de una incidencia (implementador, revisor, corrector y el merge por comentario). Dos pruebas nuevas cubren el caso de una PR cerrada descartada y el escenario exacto del relanzamiento (#71 cerrada + #73 abierta → solo cuenta #73).
+
 ## 4. Pruebas
 
 - `tests/automation/test_sirius_apply_verdict.py`: 17 casos (2 nuevos) — verifican que dos runs distintos publican su propio motivo (`FAILED_SAFELY` con sufijo por run) y que un reintento del mismo run sigue siendo idempotente.

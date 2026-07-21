@@ -399,20 +399,37 @@ sirius_transition() {
 
 # sirius_find_pr_for_issue <repo> <issue> — imprime, una por línea, los números
 # de PR de este repositorio mencionados en el cuerpo o los comentarios de la
-# incidencia (a partir de su URL completa). Sin duplicados; vacío si no hay
-# ninguna. Best-effort: nunca falla por sí sola (una lectura agotada deja el
-# resultado vacío, no aborta).
+# incidencia (a partir de su URL completa) que estén ACTUALMENTE ABIERTAS. Sin
+# duplicados; vacío si no hay ninguna. Best-effort: nunca falla por sí sola (una
+# lectura agotada deja el resultado vacío, no aborta).
+#
+# El filtro por estado abierto es deliberado: una incidencia puede arrastrar en
+# comentarios antiguos la URL de una PR ya cerrada o superada (p. ej. un
+# relanzamiento tras descartar un intento previo). Contarla como vigente haría
+# que el resolutor viese "varias PR" y se detuviera en falso. Solo cuentan las
+# PR abiertas; si no se puede confirmar el estado de una candidata, se omite
+# (fallo seguro: peor una parada por "sin PR", reintentable, que operar sobre la
+# PR equivocada).
 sirius_find_pr_for_issue() {
-  local repo="$1" num="$2" body_file="" comments_file=""
+  local repo="$1" num="$2" body_file="" comments_file="" candidates="" pr="" state=""
   body_file="$(mktemp)"
   comments_file="$(mktemp)"
   sirius_read_issue_body "$repo" "$num" >"$body_file" 2>/dev/null || : >"$body_file"
   sirius_read_issue_comments "$repo" "$num" >"$comments_file" 2>/dev/null || : >"$comments_file"
-  cat "$comments_file" "$body_file" \
+  candidates="$(cat "$comments_file" "$body_file" \
     | grep -oE "https://github\.com/${repo}/pull/[0-9]+" \
     | sed -E 's#.*/pull/##' \
-    | sort -u
+    | sort -u)"
   rm -f "$body_file" "$comments_file"
+  local pr_json=""
+  for pr in $candidates; do
+    [ -z "$pr" ] && continue
+    pr_json="$(sirius_retry gh api "repos/${repo}/pulls/${pr}" 2>/dev/null || true)"
+    state="$(printf '%s' "$pr_json" | jq -r '.state // empty' 2>/dev/null || true)"
+    if [ "$state" = "open" ]; then
+      printf '%s\n' "$pr"
+    fi
+  done
   return 0
 }
 

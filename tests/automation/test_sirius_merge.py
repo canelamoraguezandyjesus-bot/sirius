@@ -63,9 +63,13 @@ case "$sub" in
     fi
     if printf '%s' "$args" | grep -q '/pulls/'; then
       pr="$(printf '%s' "$args" | grep -oE 'pulls/[0-9]+' | cut -d/ -f2)"
-      if printf '%s' "$args" | grep -q 'draft'; then
+      if printf '%s' "$args" | grep -q 'draft' || ! printf '%s' "$args" | grep -q -- '--jq'; then
+        # Lectura de estado de la PR (jq con 'draft') y resolución por
+        # `sirius_find_pr_for_issue` (llamada sin --jq, que ahora comprueba que
+        # la PR siga abierta): ambas esperan el JSON completo con `state`.
         cat "$D/pr_${pr}.json" 2>/dev/null || exit 1
       else
+        # Relectura de confirmación del merge: `--jq '.merged'`.
         jq -r '.merged // "false"' "$D/pr_${pr}.json" 2>/dev/null || echo "false"
       fi
       exit 0
@@ -283,6 +287,10 @@ def test_multiple_prs_blocks(tmp_path: Path) -> None:
         ["sirius:ready-for-merge"],
         comments="https://github.com/owner/repo/pull/57\nhttps://github.com/owner/repo/pull/58\n",
     )
+    # Ambas PRs siguen ABIERTAS: solo entonces la referencia doble es una
+    # ambigüedad real (una PR cerrada quedaría descartada por el resolutor).
+    _seed_pr(env, 57)
+    _seed_pr(env, 58)
     r = _run_merge(env)
     assert r.returncode != 0
     assert "MERGE" not in _actions(env)
