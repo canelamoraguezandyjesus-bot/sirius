@@ -19,6 +19,7 @@ permissions:
   contents: read
   issues: write
   pull-requests: read
+  id-token: write
 
 concurrency:
   group: sirius-work-${{ github.event.issue.number }}
@@ -116,10 +117,9 @@ jobs:
           SIRIUS_VERDICT_FILE: ${{ runner.temp }}/sirius_verdict.json
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
           prompt: ${{ steps.build_prompt.outputs.prompt }}
-          allowed_tools: "Bash,Read,Grep,Glob"
-          disallowed_tools: "Edit,Write,NotebookEdit"
-          max_turns: "60"
+          claude_args: '--allowedTools "Bash,Read,Grep,Glob" --max-turns 60'
 
       - name: Aplicar el veredicto
         if: always() && steps.gate.outputs.valid == 'true'
