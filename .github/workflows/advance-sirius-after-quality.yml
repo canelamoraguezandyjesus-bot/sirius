@@ -30,13 +30,17 @@ jobs:
       - name: Advance matching Sirius work item
         shell: bash --noprofile --norc {0}
         env:
-          # La etiqueta que aplica este paso (`sirius:review-requested` o
-          # `sirius:repair-requested`) debe despertar al workflow de revisión o
-          # de corrección. Un `issues: labeled` emitido por el GITHUB_TOKEN por
-          # defecto queda suprimido (anti-recursión), así que el ciclo se
-          # cortaría aquí. Con el PAT la etiqueta proviene de una identidad real
-          # y el siguiente rol arranca solo.
-          GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
+          # Las LECTURAS de este paso (API de Actions para localizar la PR,
+          # estado de la PR, incidencias candidatas) van con el GITHUB_TOKEN, que
+          # tiene los permisos declarados del workflow (actions: read, etc.). El
+          # PAT no tiene alcance de Actions y aquí daría 403.
+          GH_TOKEN: ${{ github.token }}
+          # La ESCRITURA de la etiqueta que despierta al rol siguiente
+          # (`sirius:review-requested` / `sirius:repair-requested`) sí usa el PAT
+          # (identidad real): un `issues: labeled` del GITHUB_TOKEN por defecto
+          # queda suprimido (anti-recursión) y cortaría el ciclo. Se aplica solo a
+          # esas dos transiciones mediante `trigger_transition` (ver más abajo).
+          SIRIUS_TRIGGER_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           RUN_ID: ${{ github.event.workflow_run.id }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
@@ -45,6 +49,15 @@ jobs:
         run: |
           set -uo pipefail
           source scripts/automation/sirius_issue.sh
+
+          # Aplica una transición cuya etiqueta debe DESPERTAR a otro workflow
+          # (revisión o corrección): la escribe con el PAT en una subshell, para
+          # que el `issues: labeled` provenga de una identidad real y no lo
+          # suprima la regla anti-recursión del GITHUB_TOKEN. El resto del paso
+          # (lecturas y paradas seguras) sigue con el GITHUB_TOKEN.
+          trigger_transition() {
+            ( export GH_TOKEN="$SIRIUS_TRIGGER_TOKEN"; sirius_transition "$@" )
+          }
 
           # La PR asociada al run y el estado de la PR se leen por REST con
           # reintentos. Un fallo transitorio de lectura no debe volver roja la
@@ -141,7 +154,7 @@ jobs:
                 "- Quality run: ${RUN_URL}" \
                 "- Resultado: \`success\`" \
                 "- Siguiente transicion: revision independiente." >"$body_file"
-              sirius_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
+              trigger_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
                 "sirius:review-requested" "8250DF" "Evento consumible: iniciar revisión independiente" \
                 "noclose" "sirius:ci-pending" || rc=1
               ;;
@@ -156,7 +169,7 @@ jobs:
                 "- Resultado: \`${CONCLUSION}\`" \
                 "- Diagnostico: inspeccionar los jobs y logs fallidos de este run en ${RUN_URL}." \
                 "- Correccion autorizada: corregir unicamente su causa dentro del alcance de la incidencia." >"$body_file"
-              sirius_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
+              trigger_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
                 "sirius:repair-requested" "FBCA04" "Evento consumible: corregir observaciones técnicas registradas" \
                 "noclose" "sirius:ci-pending" || rc=1
               ;;

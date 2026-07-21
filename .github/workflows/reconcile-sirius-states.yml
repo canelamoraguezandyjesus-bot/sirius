@@ -34,12 +34,14 @@ jobs:
       - name: Reconciliar estados de trabajo
         shell: bash --noprofile --norc {0}
         env:
-          # El reconciliador puede aplicar `sirius:review-requested` para
-          # desatascar un ci-pending. Esa etiqueta debe despertar al revisor, y
-          # un `issues: labeled` del GITHUB_TOKEN por defecto quedaría suprimido
-          # (anti-recursión); por eso usa el PAT, igual que advance. No hay paso
-          # de Claude aquí, así que no afecta a ninguna garantía de solo lectura.
-          GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
+          # Las LECTURAS del reconciliador (incidencias, PRs y check-runs) van
+          # con el GITHUB_TOKEN, que tiene los permisos declarados del workflow
+          # (checks: read, etc.); el PAT no tiene esos alcances y daría 403.
+          GH_TOKEN: ${{ github.token }}
+          # La ESCRITURA de `sirius:review-requested` (única transición que debe
+          # despertar al revisor) usa el PAT vía `trigger_transition`, para que
+          # el `issues: labeled` no lo suprima la regla anti-recursión.
+          SIRIUS_TRIGGER_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -uo pipefail
