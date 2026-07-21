@@ -1,5 +1,16 @@
 name: Quality
 
+# El ciclo automático de Sirius (implementar → Quality → revisión → corrección)
+# ejecuta esta validación en CADA push/PR, así que su coste en minutos es el que
+# más pesa. GitHub factura los minutos de Windows a 2x los de Linux; mover esta
+# validación a `ubuntu-latest` reduce el consumo a la mitad, es más rápida y
+# evita los cuelgues puntuales del runner de Windows. La suite completa —incluida
+# la de GUI (PySide6, plugin `offscreen`)— se valida headless en Linux (probado
+# localmente y en cada run del implementador). La validación específica de
+# Windows queda como comprobación PUNTUAL bajo demanda en `quality-windows.yml`
+# (workflow_dispatch), no en cada iteración. La cadena de automatización se ancla
+# al nombre de workflow "Quality" y al check "quality" de este job, que no cambian.
+
 on:
   push:
     branches: [main]
@@ -10,12 +21,21 @@ permissions:
 
 jobs:
   quality:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      # PySide6 corre sin pantalla en el runner Linux: el plugin offscreen evita
+      # depender de un servidor X para las pruebas de GUI.
+      QT_QPA_PLATFORM: offscreen
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Install Qt system libraries for PySide6 (offscreen)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0
 
       - name: Install uv
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
