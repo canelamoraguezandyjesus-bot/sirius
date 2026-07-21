@@ -64,6 +64,13 @@ El relanzamiento sobre la incidencia limpia #75 confirmó en vivo **el tramo que
 
 **Corrección (principio de mínimo privilegio, sin ampliar el PAT):** en `advance-sirius-after-quality.yml` y en el reconciliador (`reconcile-sirius-states.yml` + `sirius_reconcile.sh`), las **lecturas** vuelven al `GITHUB_TOKEN` (que tiene `actions: read`/`checks: read` por los permisos declarados del workflow), y **solo** la escritura de la etiqueta que despierta al rol siguiente (`sirius:review-requested`/`sirius:repair-requested`) usa el PAT, a través de un ayudante `trigger_transition` que exporta el token en una subshell. Así el PAT se mantiene mínimo (*Contents/Issues/Pull requests*) y no hay que volver a tocarlo. El ayudante del reconciliador cae al `GH_TOKEN` vigente si `SIRIUS_TRIGGER_TOKEN` no está definido, de modo que sus pruebas no se ven afectadas.
 
+### H-7 — El cierre automático tras el merge no se disparaba (mismo patrón anti-recursión) · CORREGIDO
+El ciclo completo se validó en vivo sobre la incidencia limpia #75, **incluido el merge por comentario**: el propietario escribió `fusiona` y `merge-sirius-work.yml` fusionó la PR #76 tras reverificarlo todo. Pero la incidencia se quedó en `sirius:ready-for-merge` en vez de pasar a `sirius:completed`: el merge lo ejecutaba `gh pr merge` con el `GITHUB_TOKEN`, así que el evento `pull_request: closed (merged)` que debe disparar `complete-sirius-after-merge.yml` quedó suprimido por la misma regla anti-recursión.
+
+**Corrección (idéntico patrón que H-4/H-6):** el merge en sí (`sirius_merge_on_command.sh`) se ejecuta ahora con el PAT (`SIRIUS_TRIGGER_TOKEN`), en una subshell, para que el evento de "PR fusionada" provenga de una identidad real y dispare el cierre; **todas las verificaciones previas** (etiqueta, PR única y abierta, head aprobado, Quality en verde) siguen con el `GITHUB_TOKEN`. Si `SIRIUS_TRIGGER_TOKEN` no está definido, cae al `GH_TOKEN` vigente (las pruebas no se ven afectadas; 15 en verde).
+
+**Regla general resultante:** cualquier evento que deba despertar a otro workflow (abrir PR, `synchronize`, etiquetas `review/repair-requested`, PR fusionada) se origina con el PAT; las lecturas que exigen alcances que el PAT no tiene (`actions`/`checks`) se quedan con el `GITHUB_TOKEN`. El PAT se mantiene mínimo (*Contents/Issues/Pull requests*) y el control humano del merge no cambia.
+
 ## 4. Pruebas
 
 - `tests/automation/test_sirius_apply_verdict.py`: 17 casos (2 nuevos) — verifican que dos runs distintos publican su propio motivo (`FAILED_SAFELY` con sufijo por run) y que un reintento del mismo run sigue siendo idempotente.
