@@ -37,7 +37,7 @@ jobs:
     name: Implementar con Claude Code
     if: github.event.label.name == 'sirius:implement-requested'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -131,7 +131,16 @@ jobs:
           # `pull_request` dispara Quality.
           github_token: ${{ secrets.SIRIUS_BOT_TOKEN }}
           prompt: ${{ steps.build_prompt.outputs.prompt }}
-          claude_args: '--dangerously-skip-permissions --allowedTools "Bash,Read,Write,Edit,Grep,Glob" --max-turns 120'
+          # `--max-turns` alto: B6d (la integración más grande de B6) agotó los
+          # 120 turnos previos a mitad del trabajo real (run 29868614857:
+          # error_max_turns, 121 turnos, 14,6 min) sin llegar a push/PR/veredicto.
+          # 300 da margen para bloques grandes; los pequeños terminan mucho antes.
+          claude_args: '--dangerously-skip-permissions --allowedTools "Bash,Read,Write,Edit,Grep,Glob" --max-turns 300'
+          # Salida completa en el log del runner (repo privado, log solo visible
+          # para el propietario): permite auditar qué hizo el implementador si
+          # vuelve a agotarse el presupuesto o falla. Revertir a false cuando el
+          # ciclo esté estabilizado.
+          show_full_output: true
 
       - name: Aplicar el veredicto
         if: always() && steps.gate.outputs.valid == 'true'
