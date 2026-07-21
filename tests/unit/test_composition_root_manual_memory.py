@@ -10,8 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sirius.adapters.persistence.database import build_engine
-from sirius.adapters.persistence.models import Base
+from sirius.adapters.persistence.migrations import upgrade_to_head
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
 )
@@ -38,7 +37,7 @@ def test_build_conversation_dependencies_wires_manual_memory_use_cases(tmp_path:
 
 def test_saved_memory_origin_is_queryable_through_the_wired_use_cases(tmp_path: Path) -> None:
     database_path = tmp_path / "sirius.db"
-    Base.metadata.create_all(build_engine(database_path))
+    upgrade_to_head(database_path)
     build_sqlite_conversation_repository(database_path).get_or_create_main_conversation()
     build_sqlite_identity_repository(database_path).get_or_create_current_identity()
     dependencies = build_conversation_dependencies(
@@ -59,7 +58,7 @@ def test_saved_memory_origin_is_queryable_through_the_wired_use_cases(tmp_path: 
 
 def test_saved_memory_can_be_corrected_through_the_wired_use_case(tmp_path: Path) -> None:
     database_path = tmp_path / "sirius.db"
-    Base.metadata.create_all(build_engine(database_path))
+    upgrade_to_head(database_path)
     build_sqlite_conversation_repository(database_path).get_or_create_main_conversation()
     build_sqlite_identity_repository(database_path).get_or_create_current_identity()
     dependencies = build_conversation_dependencies(

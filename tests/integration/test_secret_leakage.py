@@ -19,21 +19,26 @@ import pytest
 
 from sirius.adapters.llm.budget import BudgetTracker
 from sirius.adapters.llm.openai_responses import OpenAIResponsesProvider
-from sirius.adapters.persistence.database import build_engine
-from sirius.adapters.persistence.models import Base
+from sirius.adapters.llm.token_counter import CharacterHeuristicTokenCounter
+from sirius.adapters.persistence.migrations import upgrade_to_head
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
 )
 from sirius.adapters.persistence.sqlite_decision_repository import (
     build_sqlite_decision_repository,
 )
+from sirius.adapters.persistence.sqlite_event_repository import build_sqlite_event_repository
 from sirius.adapters.persistence.sqlite_identity_repository import (
     build_sqlite_identity_repository,
+)
+from sirius.adapters.persistence.sqlite_knowledge_search_repository import (
+    build_sqlite_knowledge_search_repository,
 )
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.context import ContextBuilder
+from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.application.send_message import SendMessageUseCase
 from sirius.config.llm_provider_settings import OpenAIProviderSettings
 from sirius.config.secrets_config import OPENAI_API_KEY_SECRET_NAME
@@ -103,7 +108,7 @@ def test_key_never_appears_in_settings_json(tmp_path: Path) -> None:
 @pytest.mark.integration
 def test_key_never_appears_in_sqlite_after_a_full_send(tmp_path: Path) -> None:
     database_path = tmp_path / "sirius.db"
-    Base.metadata.create_all(build_engine(database_path))
+    upgrade_to_head(database_path)
     conversation_repository = build_sqlite_conversation_repository(database_path)
     conversation_repository.get_or_create_main_conversation()
     project_repository = build_sqlite_project_repository(database_path)
@@ -117,12 +122,23 @@ def test_key_never_appears_in_sqlite_after_a_full_send(tmp_path: Path) -> None:
     )
     build_sqlite_identity_repository(database_path).get_or_create_current_identity()
 
+    memory_repository = build_sqlite_memory_repository(database_path)
+    decision_repository = build_sqlite_decision_repository(database_path)
+    rank_relevant_knowledge_use_case = RankRelevantKnowledgeUseCase(
+        memory_repository=memory_repository,
+        decision_repository=decision_repository,
+        project_repository=project_repository,
+        knowledge_search_repository=build_sqlite_knowledge_search_repository(database_path),
+    )
     context_builder = ContextBuilder(
         identity_repository=build_sqlite_identity_repository(database_path),
-        project_repository=build_sqlite_project_repository(database_path),
-        memory_repository=build_sqlite_memory_repository(database_path),
+        project_repository=project_repository,
+        memory_repository=memory_repository,
         conversation_repository=conversation_repository,
-        decision_repository=build_sqlite_decision_repository(database_path),
+        decision_repository=decision_repository,
+        rank_relevant_knowledge_use_case=rank_relevant_knowledge_use_case,
+        event_repository=build_sqlite_event_repository(database_path),
+        token_counter=CharacterHeuristicTokenCounter(),
     )
     client = _FakeOpenAIClient(lambda **kwargs: _FakeStream([_completed_event("hola")]))
     provider = OpenAIResponsesProvider(

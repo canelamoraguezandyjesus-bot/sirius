@@ -24,6 +24,7 @@ from sirius.adapters.llm.budget import BudgetPolicy, BudgetTracker
 from sirius.adapters.llm.fake import FakeLLMProvider
 from sirius.adapters.llm.openai_credential_validator import OpenAICredentialValidator
 from sirius.adapters.llm.openai_responses import OpenAIResponsesProvider
+from sirius.adapters.llm.token_counter import CharacterHeuristicTokenCounter
 from sirius.adapters.llm.unconfigured import UnconfiguredLLMProvider
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
@@ -34,6 +35,9 @@ from sirius.adapters.persistence.sqlite_decision_repository import (
 from sirius.adapters.persistence.sqlite_event_repository import build_sqlite_event_repository
 from sirius.adapters.persistence.sqlite_identity_repository import (
     build_sqlite_identity_repository,
+)
+from sirius.adapters.persistence.sqlite_knowledge_search_repository import (
+    build_sqlite_knowledge_search_repository,
 )
 from sirius.adapters.persistence.sqlite_llm_usage_repository import (
     SqliteLLMUsageRepository,
@@ -60,6 +64,7 @@ from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.project_lifecycle import ProjectLifecycleUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
+from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageUseCase
@@ -207,6 +212,7 @@ def build_conversation_dependencies(
     memory_repository = build_sqlite_memory_repository(database_path)
     event_repository = build_sqlite_event_repository(database_path)
     decision_repository = build_sqlite_decision_repository(database_path)
+    knowledge_search_repository = build_sqlite_knowledge_search_repository(database_path)
     llm_usage_repository = build_sqlite_llm_usage_repository(database_path)
     # Shared by every use case that must write more than one repository
     # atomically: SaveManualMemoryUseCase (B4a); ProposeDecisionUseCase and
@@ -215,12 +221,21 @@ def build_conversation_dependencies(
     # DeleteMemoryUseCase and ArchiveDecisionUseCase (B4d).
     unit_of_work = build_sqlite_unit_of_work(database_path)
 
+    rank_relevant_knowledge_use_case = RankRelevantKnowledgeUseCase(
+        memory_repository=memory_repository,
+        decision_repository=decision_repository,
+        project_repository=project_repository,
+        knowledge_search_repository=knowledge_search_repository,
+    )
     context_builder = ContextBuilder(
         identity_repository=identity_repository,
         project_repository=project_repository,
         memory_repository=memory_repository,
         conversation_repository=conversation_repository,
         decision_repository=decision_repository,
+        rank_relevant_knowledge_use_case=rank_relevant_knowledge_use_case,
+        event_repository=event_repository,
+        token_counter=CharacterHeuristicTokenCounter(),
     )
     send_message_use_case = SendMessageUseCase(
         context_builder=context_builder,
@@ -240,6 +255,7 @@ def build_conversation_dependencies(
         memory_repository,
         event_repository,
         decision_repository,
+        knowledge_search_repository,
         llm_usage_repository,
         unit_of_work,
     )

@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 
 from sirius.adapters.backup.sqlite_backup_service import build_sqlite_backup_service
+from sirius.adapters.llm.token_counter import CharacterHeuristicTokenCounter
 from sirius.adapters.persistence.database import build_engine, build_session_factory, session_scope
 from sirius.adapters.persistence.migrations import upgrade_to_head
 from sirius.adapters.persistence.models import ProjectModel
@@ -27,12 +28,17 @@ from sirius.adapters.persistence.sqlite_conversation_repository import (
 from sirius.adapters.persistence.sqlite_decision_repository import (
     build_sqlite_decision_repository,
 )
+from sirius.adapters.persistence.sqlite_event_repository import build_sqlite_event_repository
 from sirius.adapters.persistence.sqlite_identity_repository import (
     build_sqlite_identity_repository,
+)
+from sirius.adapters.persistence.sqlite_knowledge_search_repository import (
+    build_sqlite_knowledge_search_repository,
 )
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.application.context import ContextBuilder
+from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.domain.project import ProjectStatus
 
 _PASSWORD = "correct horse battery staple"
@@ -144,12 +150,23 @@ def test_backup_and_restore_conserve_the_full_project_lifecycle(
     # --- ContextBuilder resolves to B, and A never enters the context.
     build_sqlite_conversation_repository(database_path).get_or_create_main_conversation()
     build_sqlite_identity_repository(database_path).get_or_create_current_identity()
+    memory_repository = build_sqlite_memory_repository(database_path)
+    decision_repository = build_sqlite_decision_repository(database_path)
+    rank_relevant_knowledge_use_case = RankRelevantKnowledgeUseCase(
+        memory_repository=memory_repository,
+        decision_repository=decision_repository,
+        project_repository=restored_repository,
+        knowledge_search_repository=build_sqlite_knowledge_search_repository(database_path),
+    )
     context_builder = ContextBuilder(
         identity_repository=build_sqlite_identity_repository(database_path),
         project_repository=restored_repository,
-        memory_repository=build_sqlite_memory_repository(database_path),
+        memory_repository=memory_repository,
         conversation_repository=build_sqlite_conversation_repository(database_path),
-        decision_repository=build_sqlite_decision_repository(database_path),
+        decision_repository=decision_repository,
+        rank_relevant_knowledge_use_case=rank_relevant_knowledge_use_case,
+        event_repository=build_sqlite_event_repository(database_path),
+        token_counter=CharacterHeuristicTokenCounter(),
     )
 
     context = context_builder.build("hola")

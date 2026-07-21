@@ -7,20 +7,26 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from sirius.adapters.llm.fake import FakeLLMProvider
+from sirius.adapters.llm.token_counter import CharacterHeuristicTokenCounter
 from sirius.adapters.persistence.database import (
     build_engine,
     build_session_factory,
     session_scope,
 )
-from sirius.adapters.persistence.models import Base, DecisionModel, MessageModel
+from sirius.adapters.persistence.migrations import upgrade_to_head
+from sirius.adapters.persistence.models import DecisionModel, MessageModel
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
 )
 from sirius.adapters.persistence.sqlite_decision_repository import (
     build_sqlite_decision_repository,
 )
+from sirius.adapters.persistence.sqlite_event_repository import build_sqlite_event_repository
 from sirius.adapters.persistence.sqlite_identity_repository import (
     build_sqlite_identity_repository,
+)
+from sirius.adapters.persistence.sqlite_knowledge_search_repository import (
+    build_sqlite_knowledge_search_repository,
 )
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
@@ -29,6 +35,7 @@ from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.context import ContextBuilder
 from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
+from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageUseCase, render_instructions
 from sirius.domain.conversation import Conversation, Message, MessageRole, MessageStatus
@@ -45,6 +52,7 @@ from sirius.ports.llm import (
     LLMStreamEvent,
     LLMTextDelta,
 )
+from sirius.ports.project_repository import ProjectRepository
 
 
 class _FailBeforeFirstDeltaProvider:
@@ -170,21 +178,41 @@ def _seed_bootstrap_singletons(database_path: Path) -> None:
     build_sqlite_identity_repository(database_path).get_or_create_current_identity()
 
 
+def _build_context_builder(
+    database_path: Path,
+    conversation_repository: ConversationRepository,
+    project_repository: ProjectRepository | None = None,
+) -> ContextBuilder:
+    memory_repository = build_sqlite_memory_repository(database_path)
+    decision_repository = build_sqlite_decision_repository(database_path)
+    project_repository = project_repository or build_sqlite_project_repository(database_path)
+    rank_relevant_knowledge_use_case = RankRelevantKnowledgeUseCase(
+        memory_repository=memory_repository,
+        decision_repository=decision_repository,
+        project_repository=project_repository,
+        knowledge_search_repository=build_sqlite_knowledge_search_repository(database_path),
+    )
+    return ContextBuilder(
+        identity_repository=build_sqlite_identity_repository(database_path),
+        project_repository=project_repository,
+        memory_repository=memory_repository,
+        conversation_repository=conversation_repository,
+        decision_repository=decision_repository,
+        rank_relevant_knowledge_use_case=rank_relevant_knowledge_use_case,
+        event_repository=build_sqlite_event_repository(database_path),
+        token_counter=CharacterHeuristicTokenCounter(),
+    )
+
+
 def _build_use_case(
     database_path: Path,
     llm_provider: LLMProvider,
     conversation_repository: ConversationRepository | None = None,
 ) -> SendMessageUseCase:
-    Base.metadata.create_all(build_engine(database_path))
+    upgrade_to_head(database_path)
     _seed_bootstrap_singletons(database_path)
     repository = conversation_repository or build_sqlite_conversation_repository(database_path)
-    context_builder = ContextBuilder(
-        identity_repository=build_sqlite_identity_repository(database_path),
-        project_repository=build_sqlite_project_repository(database_path),
-        memory_repository=build_sqlite_memory_repository(database_path),
-        conversation_repository=repository,
-        decision_repository=build_sqlite_decision_repository(database_path),
-    )
+    context_builder = _build_context_builder(database_path, repository)
     return SendMessageUseCase(
         context_builder=context_builder,
         conversation_repository=repository,
@@ -411,7 +439,7 @@ def test_send_message_context_reflects_a_project_continuity_update(tmp_path: Pat
     """B3b: state/blockers/next step updated via ProjectContinuityUseCase flow
     into the very next context sent to the (simulated) provider."""
     database_path = tmp_path / "sirius.db"
-    Base.metadata.create_all(build_engine(database_path))
+    upgrade_to_head(database_path)
     build_sqlite_conversation_repository(database_path).get_or_create_main_conversation()
     project_repository = build_sqlite_project_repository(database_path)
     project_repository.ensure_bootstrap_project()
@@ -427,12 +455,8 @@ def test_send_message_context_reflects_a_project_continuity_update(tmp_path: Pat
         "estado actualizado", "bloqueo pendiente", "siguiente paso actualizado"
     )
 
-    context_builder = ContextBuilder(
-        identity_repository=build_sqlite_identity_repository(database_path),
-        project_repository=project_repository,
-        memory_repository=build_sqlite_memory_repository(database_path),
-        conversation_repository=build_sqlite_conversation_repository(database_path),
-        decision_repository=build_sqlite_decision_repository(database_path),
+    context_builder = _build_context_builder(
+        database_path, build_sqlite_conversation_repository(database_path), project_repository
     )
     use_case = SendMessageUseCase(
         context_builder=context_builder,
@@ -615,19 +639,13 @@ def test_send_message_keeps_only_the_user_message_when_persisting_the_reply_fail
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "sirius.db"
-    Base.metadata.create_all(build_engine(database_path))
+    upgrade_to_head(database_path)
     _seed_bootstrap_singletons(database_path)
     real_conversation_repository = build_sqlite_conversation_repository(database_path)
     failing_repository = _FailOnNthAppendConversationRepository(
         real_conversation_repository, fail_on_call=2
     )
-    context_builder = ContextBuilder(
-        identity_repository=build_sqlite_identity_repository(database_path),
-        project_repository=build_sqlite_project_repository(database_path),
-        memory_repository=build_sqlite_memory_repository(database_path),
-        conversation_repository=real_conversation_repository,
-        decision_repository=build_sqlite_decision_repository(database_path),
-    )
+    context_builder = _build_context_builder(database_path, real_conversation_repository)
     use_case = SendMessageUseCase(
         context_builder=context_builder,
         conversation_repository=failing_repository,
@@ -655,19 +673,13 @@ def test_retrying_after_a_mid_operation_persistence_failure_does_not_duplicate_t
     row and record the SIRIUS reply this time.
     """
     database_path = tmp_path / "sirius.db"
-    Base.metadata.create_all(build_engine(database_path))
+    upgrade_to_head(database_path)
     _seed_bootstrap_singletons(database_path)
     real_conversation_repository = build_sqlite_conversation_repository(database_path)
     failing_repository = _FailOnNthAppendConversationRepository(
         real_conversation_repository, fail_on_call=2
     )
-    context_builder = ContextBuilder(
-        identity_repository=build_sqlite_identity_repository(database_path),
-        project_repository=build_sqlite_project_repository(database_path),
-        memory_repository=build_sqlite_memory_repository(database_path),
-        conversation_repository=real_conversation_repository,
-        decision_repository=build_sqlite_decision_repository(database_path),
-    )
+    context_builder = _build_context_builder(database_path, real_conversation_repository)
     failing_use_case = SendMessageUseCase(
         context_builder=context_builder,
         conversation_repository=failing_repository,
@@ -680,13 +692,7 @@ def test_retrying_after_a_mid_operation_persistence_failure_does_not_duplicate_t
     # and retry the exact same operation with a healthy repository.
     reopened_repository = build_sqlite_conversation_repository(database_path)
     retry_use_case = SendMessageUseCase(
-        context_builder=ContextBuilder(
-            identity_repository=build_sqlite_identity_repository(database_path),
-            project_repository=build_sqlite_project_repository(database_path),
-            memory_repository=build_sqlite_memory_repository(database_path),
-            conversation_repository=reopened_repository,
-            decision_repository=build_sqlite_decision_repository(database_path),
-        ),
+        context_builder=_build_context_builder(database_path, reopened_repository),
         conversation_repository=reopened_repository,
         llm_provider=FakeLLMProvider(),
     )
@@ -727,7 +733,7 @@ def test_database_rejects_two_sirius_rows_for_the_same_operation_id(tmp_path: Pa
     """The unique constraint is the ultimate backstop against duplicate
     persistence, independent of the use case's own idempotency pre-check."""
     database_path = tmp_path / "sirius.db"
-    Base.metadata.create_all(build_engine(database_path))
+    upgrade_to_head(database_path)
     _seed_bootstrap_singletons(database_path)
     conversation_repository = build_sqlite_conversation_repository(database_path)
     conversation = conversation_repository.get_or_create_main_conversation()
