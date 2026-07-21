@@ -28,6 +28,19 @@ SIRIUS_RECONCILE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 # shellcheck source=scripts/automation/sirius_issue.sh
 source "${SIRIUS_RECONCILE_DIR}/sirius_issue.sh"
 
+# Aplica una transición cuya etiqueta debe DESPERTAR a otro workflow (aquí,
+# ci-pending -> review-requested): si hay un token de identidad real disponible
+# en SIRIUS_TRIGGER_TOKEN, la escribe con él (en una subshell) para que el
+# `issues: labeled` no lo suprima la regla anti-recursión del GITHUB_TOKEN; las
+# lecturas de este script (incidencias, PRs, check-runs) siguen con GH_TOKEN. Si
+# la variable no está definida, cae al GH_TOKEN vigente (comportamiento previo).
+trigger_transition() {
+  (
+    [ -n "${SIRIUS_TRIGGER_TOKEN:-}" ] && export GH_TOKEN="$SIRIUS_TRIGGER_TOKEN"
+    sirius_transition "$@"
+  )
+}
+
 REPO="${1:?uso: sirius_reconcile.sh <owner/repo>}"
 
 STATE_LABELS="sirius:planned sirius:implement-requested sirius:implementing sirius:ci-pending sirius:review-requested sirius:reviewing sirius:repair-requested sirius:repairing sirius:ready-for-merge sirius:blocked-decision sirius:failed-safely sirius:completed"
@@ -132,7 +145,7 @@ for issue in "${open_issues[@]:-}"; do
           "- Head SHA: \`${open_head}\`" \
           "- Resultado: \`success\` (reconciliado)" \
           "- Siguiente transicion: revision independiente." >"$tfile"
-        if sirius_transition "$REPO" "$issue" "$marker" "$tfile" \
+        if trigger_transition "$REPO" "$issue" "$marker" "$tfile" \
           "sirius:review-requested" "8250DF" "Evento consumible: iniciar revisión independiente" \
           "noclose" "sirius:ci-pending"; then
           report CORREGIDO "#${issue}: transicion ci-pending -> review-requested reconciliada."
