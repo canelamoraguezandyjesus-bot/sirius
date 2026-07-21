@@ -14,6 +14,7 @@ plataformas.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -90,7 +91,8 @@ case "$sub" in
     if printf '%s' "$args" | grep -q '/comments'; then
       if should_fail comments_fail; then echo "503 comments" >&2; exit 1; fi
       if printf '%s' "$args" | grep -q 'reverse'; then
-        tac "$comments_file" 2>/dev/null
+        awk 'BEGIN{RS="";ORS="\n\n"} {a[NR]=$0} END{for(i=NR;i>=1;i--) print a[i]}' \
+          "$comments_file" 2>/dev/null
       else
         cat "$comments_file" 2>/dev/null
       fi
@@ -120,7 +122,8 @@ case "$sub" in
       view)
         if printf '%s' "$*" | grep -q 'comments'; then
           if printf '%s' "$*" | grep -q 'reverse'; then
-            tac "$comments_file" 2>/dev/null
+            awk 'BEGIN{RS="";ORS="\n\n"} {a[NR]=$0} END{for(i=NR;i>=1;i--) print a[i]}' \
+              "$comments_file" 2>/dev/null
           else
             cat "$comments_file" 2>/dev/null
           fi
@@ -599,3 +602,42 @@ def test_find_pr_for_issue_ignores_other_repo(tmp_path: Path) -> None:
     r = _run("sirius_find_pr_for_issue owner/repo 55", env)
     assert r.returncode == 0, r.stderr
     assert r.stdout.strip() == ""
+
+
+# --------------------------------------------------------------------------- #
+# Extracción de observaciones estructuradas (usada por el corrector)
+# --------------------------------------------------------------------------- #
+
+
+def test_extract_observations_none_when_absent(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "comments.txt").write_text("comentario sin observaciones\n", encoding="utf-8")
+    r = _run("sirius_extract_observations owner/repo 55", env)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == ""
+
+
+def test_extract_observations_extracts_json_block(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "comments.txt").write_text(
+        '## OBSERVACIONES_ESTRUCTURADAS\n```json\n[{"id": "R1"}]\n```\n\n',
+        encoding="utf-8",
+    )
+    r = _run("sirius_extract_observations owner/repo 55", env)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout) == [{"id": "R1"}]
+
+
+def test_extract_observations_uses_most_recent_round(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    # comments.txt esta en orden cronologico, separado por la linea en blanco
+    # que deja `gh issue comment` tras cada publicacion; el mock invierte por
+    # bloques (no por linea) para simular la consulta "reverse" real.
+    (_mock_dir(env) / "comments.txt").write_text(
+        '## OBSERVACIONES_ESTRUCTURADAS\n```json\n[{"id": "R1-old"}]\n```\n\n'
+        '## OBSERVACIONES_ESTRUCTURADAS\n```json\n[{"id": "R2-new"}]\n```\n\n',
+        encoding="utf-8",
+    )
+    r = _run("sirius_extract_observations owner/repo 55", env)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout) == [{"id": "R2-new"}]

@@ -1,15 +1,15 @@
 # SIRIUS - Contrato operativo de automatización
 
-**Versión:** 1.2  
+**Versión:** 1.3  
 **Fecha:** 20 de julio de 2026  
-**Estado:** VIGENTE (§8 y §9 actualizadas; ver §10)  
+**Estado:** VIGENTE (§8, §9 y §0 actualizadas; ver §10)  
 **Autoridad:** Operativa para el desarrollo automatizado de Sirius 0.1  
-**Sustituye:** versión 1.1 del 19 de julio de 2026  
+**Sustituye:** versión 1.2 del 20 de julio de 2026  
 **No modifica:** Producto, Arquitectura Técnica, ATD, requisitos ni alcance de Sirius 0.1
 
 ## 0. Propósito
 
-Este contrato autoriza y regula un flujo permanente, secuencial y dirigido por eventos para Sirius 0.1 mediante Claude Code/Routines, GitHub y ChatGPT con conectores.
+Este contrato autoriza y regula un flujo permanente, secuencial y dirigido por eventos para Sirius 0.1. Su motor son tres workflows de GitHub Actions que ejecutan Claude Code real (implementador, revisor, corrector) — ver el mecanismo concreto en `SIRIUS_GENERIC_ROUTINES_0.1.md` §6 — y GitHub como canal operativo único. ChatGPT, si el usuario lo usa, queda limitado a crear la incidencia inicial y aplicar la etiqueta de arranque; no ejecuta ninguno de los tres roles ni el merge (§8).
 
 Su finalidad es que el usuario pueda escribir una orden breve, por ejemplo `Implementa B4e`, y que el sistema prepare la tarea, implemente, valide, revise, corrija de forma limitada y notifique el resultado sin copiar ni pegar prompts manualmente.
 
@@ -226,4 +226,13 @@ Está prohibido:
 - **Mantiene:** el merge permanece bajo control humano y bajo autorización explícita del usuario para cada PR; solo cambia el canal de esa autorización y quién teclea el comando técnico.
 - **Entrada en vigor:** cuando la PR que introduce `merge-sirius-work.yml` y `sirius_merge_on_command.sh` sea revisada, tenga CI verde y sea fusionada por autorización explícita del usuario (con el mecanismo anterior, ya que este todavía no existe).
 
-El historial de las versiones 1.0 y 1.1 permanece disponible en Git y no se reescribe retrospectivamente.
+### 10.2 Versión 1.3 — ejecución real de las tres Routines dentro del repositorio
+
+- **Decisión:** sustituir la referencia a una interfaz externa de Claude/Routines (no inspeccionable desde el repositorio, sin single-flight garantizado) por tres workflows de GitHub Actions (`implement-sirius-work.yml`, `review-sirius-work.yml`, `repair-sirius-work.yml`) que ejecutan Claude Code real mediante `anthropics/claude-code-action`, con un script determinista (`sirius_apply_verdict.sh`) que aplica el veredicto del agente reverificándolo por su cuenta.
+- **Motivo:** el mecanismo anterior era un plan sin mecanismo de ejecución verificable desde el repositorio, y su ausencia de garantía de ejecución única fue la causa raíz del incidente de PRs duplicadas (#52/#53). El nuevo mecanismo es autocontenido, auditable en Git y usa `concurrency` de GitHub Actions para garantizar una sola ejecución activa por incidencia entre los tres roles.
+- **Alcance:** exclusivamente el mecanismo de ejecución de implementación/revisión/corrección y la redacción de §0 de este contrato y de `SIRIUS_GENERIC_ROUTINES_0.1.md` §6. No cambia el contrato de estados, el límite de dos ciclos de corrección, ni el mecanismo de merge (§8, ya actualizado en la v1.2).
+- **Mantiene:** ChatGPT sigue disponible como front-end conversacional para crear incidencias; deja de tener ningún rol de ejecución en el ciclo automático.
+- **Pendiente de la primera ejecución real:** el secreto `CLAUDE_CODE_OAUTH_TOKEN` (o `ANTHROPIC_API_KEY`) debe añadirse a los secretos del repositorio antes de que estos workflows puedan completar su trabajo; sin él, la puerta de activación y las comprobaciones deterministas siguen funcionando, pero el paso de Claude Code fallará y la incidencia terminará en `sirius:failed-safely`.
+- **Entrada en vigor:** cuando la PR que introduce estos tres workflows sea revisada, tenga CI verde y sea fusionada por autorización explícita del usuario.
+
+El historial de las versiones 1.0, 1.1 y 1.2 permanece disponible en Git y no se reescribe retrospectivamente.

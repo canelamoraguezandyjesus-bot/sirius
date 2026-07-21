@@ -124,6 +124,25 @@ sirius_scan_text() {
   return 0
 }
 
+# sirius_extract_observations <repo> <issue> — imprime el bloque JSON de la
+# ronda de observaciones más reciente (el que publica sirius_apply_verdict.sh
+# bajo "## OBSERVACIONES_ESTRUCTURADAS" en un CHANGES_REQUESTED), o nada si no
+# hay ninguna. Best-effort: nunca falla por sí sola.
+sirius_extract_observations() {
+  local repo="$1" num="$2" comments=""
+  comments="$(sirius_retry gh api "repos/${repo}/issues/${num}/comments" --jq 'reverse | .[].body' 2>/dev/null)" \
+    || comments="$(sirius_retry gh issue view "$num" --repo "$repo" --json comments --jq '[.comments[].body] | reverse | .[]' 2>/dev/null)" \
+    || comments=""
+  printf '%s' "$comments" | python3 -c '
+import re, sys
+text = sys.stdin.read()
+m = re.search(r"## OBSERVACIONES_ESTRUCTURADAS\s*```json\s*(.*?)\s*```", text, re.DOTALL)
+if m:
+    sys.stdout.write(m.group(1))
+'
+  return 0
+}
+
 # --- Validación estructural ---------------------------------------------------
 
 # sirius_body_is_complete <file> — 0 si el cuerpo del archivo contiene todas las

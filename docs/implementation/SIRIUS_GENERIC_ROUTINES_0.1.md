@@ -1,8 +1,15 @@
 # SIRIUS — Routines genéricas de automatización 0.1
 
-**Versión:** 0.1 propuesta  
-**Fecha:** 19 de julio de 2026  
-**Estado:** Operativa tras merge de la PR de automatización y registro único de las Routines
+**Versión:** 0.2  
+**Fecha:** 20 de julio de 2026  
+**Estado:** Operativa tras fusionar esta versión y configurar el secreto de autenticación de Claude Code descrito en §6.
+
+Nota sobre el nombre: "Routine" aquí es solo la etiqueta que ya tenían estos
+tres roles (implementadora, revisora, correctora) desde la versión 0.1 de
+este documento. Deja de referirse a una interfaz externa de Claude
+("Routines" como producto, no inspeccionable desde el repositorio): desde la
+versión 0.2, los tres roles se ejecutan como Claude Code real, dentro de
+GitHub Actions, con todo su mecanismo dentro de este repositorio.
 
 ## 0. E/S robusta de incidencias (obligatoria)
 
@@ -193,8 +200,70 @@ lectura o publicación deja un aviso en los logs y termina con éxito. Es
 idempotente por incidencia, estado y head SHA (usa `no-head` como identificador
 estable cuando todavía no hay SHA registrado).
 
-## 6. Registro único pendiente fuera del repositorio
+## 6. Mecanismo real de ejecución
 
-GitHub contiene el contrato, estados y disparadores. Para ejecutar Claude Code en respuesta a las tres etiquetas es necesario registrar una sola vez estas tres Routines en la interfaz de Claude/Routines y asociar cada una a su etiqueta correspondiente.
+Los tres roles se ejecutan como tres workflows de GitHub Actions, cada uno
+disparado por su etiqueta-evento, que invocan a `anthropics/claude-code-action`
+para correr Claude Code de verdad dentro del propio runner:
 
-Después de ese registro no se crean Routines por bloque y el usuario no copia prompts: ChatGPT crea la incidencia y aplica `sirius:implement-requested`.
+- `.github/workflows/implement-sirius-work.yml` — `sirius:implement-requested`.
+- `.github/workflows/review-sirius-work.yml` — `sirius:review-requested`.
+- `.github/workflows/repair-sirius-work.yml` — `sirius:repair-requested`.
+
+Todo el mecanismo vive en este repositorio y es inspeccionable: no hay
+ninguna interfaz externa que registrar. La única acción pendiente fuera del
+repositorio, y solo una vez, es añadir el secreto de autenticación de Claude
+Code en la configuración del repositorio (Settings → Secrets and variables →
+Actions):
+
+- `CLAUDE_CODE_OAUTH_TOKEN`, si se autentica con un plan de suscripción de
+  Claude (Pro/Max) — es el caso recomendado, ya que no genera facturación
+  aparte; se genera con `claude setup-token` desde una sesión de Claude Code
+  autenticada con esa cuenta.
+- Alternativamente `ANTHROPIC_API_KEY`, si se prefiere facturación por uso de
+  API; en ese caso hay que adaptar el nombre de la entrada en los tres
+  workflows (`anthropic_api_key` en vez de `claude_code_oauth_token`).
+
+`anthropics/claude-code-action` es un producto externo cuya interfaz exacta
+(nombres de entradas, comportamiento de `allowed_tools`/`disallowed_tools`)
+puede cambiar; verifica su README contra lo escrito en los tres workflows
+antes de la primera ejecución real.
+
+### Cómo se comunica Claude con el resto del sistema
+
+Claude Code, dentro de cada workflow, nunca cambia etiquetas de la incidencia
+ni la cierra por su cuenta: solo hace el trabajo (leer, implementar, revisar
+o corregir según su rol; en implementador/corrector también comitea, hace
+push y gestiona la PR) y termina escribiendo un único veredicto en un archivo
+JSON, en la ruta fija que indica `SIRIUS_VERDICT_FILE` (ver
+`scripts/automation/prompts/`). El script determinista
+`scripts/automation/sirius_apply_verdict.sh` es quien aplica esa decisión:
+reverifica por su cuenta todo lo que puede verificarse (existencia y estado
+de la PR, head actual, consistencia con el head que superó Quality) en vez
+de confiar en lo que el agente afirme. Un veredicto ausente, corrupto o fuera
+del conjunto permitido para el rol se trata siempre como un fallo seguro.
+
+### Permisos por rol (defensa en profundidad, no solo el prompt)
+
+- Implementador y corrector: `contents: write`, necesitan comitear y hacer
+  push.
+- Revisor: `contents: read` — ni siquiera con acceso al token podría hacer
+  push aunque lo intentara. La instrucción de "no modificar código en la
+  primera pasada" no depende solo de que el modelo la respete.
+
+### Single-flight y límite de reparación
+
+Los tres workflows comparten el mismo grupo de concurrencia
+(`sirius-work-<numero-de-incidencia>`), así que nunca hay dos ejecuciones
+simultáneas sobre la misma incidencia — esto es lo que faltaba en el diseño
+anterior y causó el incidente de PRs duplicadas (#52/#53). El corrector
+cuenta los ciclos ya completados mediante los marcadores
+`<!-- sirius-repair-cycle:N -->` que deja `sirius_apply_verdict.sh`; al llegar
+al tercer intento se aplica `sirius:blocked-decision` sin siquiera invocar a
+Claude.
+
+Después de configurar el secreto, el usuario no copia prompts ni interactúa
+con estas Routines directamente: crea la incidencia (a mano o pidiéndoselo a
+Claude/ChatGPT) con `sirius:planned` y aplica `sirius:implement-requested`;
+desde ahí todo avanza por eventos hasta `sirius:ready-for-merge`, donde solo
+falta el comentario `fusiona` (ver `AUTOMATION_OPERATING_CONTRACT.md` §8).
