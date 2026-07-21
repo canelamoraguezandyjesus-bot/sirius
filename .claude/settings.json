@@ -57,7 +57,19 @@
 
       "Bash(python scripts/read_docx.py *)",
       "PowerShell(python scripts/read_docx.py *)",
-      "PowerShell(python .\\scripts\\read_docx.py *)"
+      "PowerShell(python .\\scripts\\read_docx.py *)",
+
+      "Bash(gh issue view*)",
+      "Bash(gh issue list*)",
+      "Bash(gh issue comment*)",
+      "Bash(gh issue edit*)",
+      "Bash(gh pr create*)",
+      "Bash(gh pr view*)",
+      "Bash(gh pr list*)",
+      "Bash(gh pr diff*)",
+      "Bash(gh label *)",
+      "Bash(gh api*)",
+      "Bash(git push*)"
     ],
     "deny": [
       "Bash(git push --force*)",
@@ -110,8 +122,16 @@
       "PowerShell(Invoke-WebRequest*)",
       "PowerShell(Invoke-RestMethod*)",
 
-      "Bash(gh *)",
-      "PowerShell(gh *)",
+      "Bash(gh pr merge*)",
+      "PowerShell(gh pr merge*)",
+      "Bash(gh repo *)",
+      "PowerShell(gh repo *)",
+      "Bash(gh secret*)",
+      "PowerShell(gh secret*)",
+      "Bash(gh auth*)",
+      "PowerShell(gh auth*)",
+      "Bash(gh workflow *)",
+      "PowerShell(gh workflow *)",
 
       "Edit(./.claude/**)",
       "Edit(./.github/**)",
