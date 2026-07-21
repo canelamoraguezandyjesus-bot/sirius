@@ -40,6 +40,11 @@ jobs:
           # A diferencia del resto de workflows de este repositorio, este SÍ
           # necesita hacer push (el corrector sube nuevos commits a la PR).
           persist-credentials: true
+          # Con el PAT (no el GITHUB_TOKEN por defecto), el push de la corrección
+          # genera un evento `synchronize` que SÍ vuelve a disparar Quality; con
+          # el token por defecto ese re-disparo quedaría suprimido y el ciclo
+          # revisión→corrección→revisión no cerraría.
+          token: ${{ secrets.SIRIUS_BOT_TOKEN }}
 
       - name: Comprobar el contador de ciclos y localizar la PR
         id: gate
@@ -155,7 +160,7 @@ jobs:
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
@@ -163,7 +168,9 @@ jobs:
           SIRIUS_VERDICT_FILE: ${{ runner.temp }}/sirius_verdict.json
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          github_token: ${{ github.token }}
+          # Mismo PAT que el checkout: el push de la corrección debe provenir de
+          # una identidad real para que `synchronize` vuelva a disparar Quality.
+          github_token: ${{ secrets.SIRIUS_BOT_TOKEN }}
           prompt: ${{ steps.build_prompt.outputs.prompt }}
           claude_args: '--dangerously-skip-permissions --allowedTools "Bash,Read,Write,Edit,Grep,Glob" --max-turns 120'
 

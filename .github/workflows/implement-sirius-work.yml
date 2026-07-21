@@ -46,6 +46,12 @@ jobs:
           # A diferencia del resto de workflows de este repositorio, este SÍ
           # necesita hacer push (Claude crea una rama y abre una PR).
           persist-credentials: true
+          # La PR debe abrirse con un token que NO sea el GITHUB_TOKEN por
+          # defecto: GitHub no dispara workflows (Quality) a partir de eventos
+          # generados por el GITHUB_TOKEN (prevención de recursión). Con este
+          # PAT la PR y sus pushes provienen de una identidad real y Quality
+          # arranca sola, como si la abriera una persona.
+          token: ${{ secrets.SIRIUS_BOT_TOKEN }}
 
       - name: Verificar precondiciones de activación
         id: gate
@@ -114,13 +120,16 @@ jobs:
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           SIRIUS_VERDICT_FILE: ${{ runner.temp }}/sirius_verdict.json
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          github_token: ${{ github.token }}
+          # Mismo PAT para que `gh pr create` y el push de Claude provengan de
+          # una identidad real (ver la nota del checkout): así el evento
+          # `pull_request` dispara Quality.
+          github_token: ${{ secrets.SIRIUS_BOT_TOKEN }}
           prompt: ${{ steps.build_prompt.outputs.prompt }}
           claude_args: '--dangerously-skip-permissions --allowedTools "Bash,Read,Write,Edit,Grep,Glob" --max-turns 120'
 

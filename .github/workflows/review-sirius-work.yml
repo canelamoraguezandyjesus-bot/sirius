@@ -125,7 +125,13 @@ jobs:
         if: always() && steps.gate.outputs.valid == 'true'
         shell: bash --noprofile --norc {0}
         env:
-          GH_TOKEN: ${{ github.token }}
+          # Este paso NO es Claude, es el script determinista. Si el veredicto es
+          # CHANGES_REQUESTED aplica `sirius:repair-requested`, que debe despertar
+          # al corrector: por eso usa el PAT (un labeled del GITHUB_TOKEN quedaría
+          # suprimido). El paso de Claude de este workflow conserva el token de
+          # solo lectura (contents: read), así que la garantía de que el revisor
+          # no puede hacer push se mantiene intacta.
+          GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
