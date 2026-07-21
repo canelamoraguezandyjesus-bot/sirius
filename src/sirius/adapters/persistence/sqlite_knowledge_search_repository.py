@@ -19,7 +19,6 @@ from sirius.domain.relevance import KnowledgeKind
 
 __all__ = [
     "SqliteKnowledgeSearchRepository",
-    "bind_sqlite_knowledge_search_repository",
     "build_sqlite_knowledge_search_repository",
     "sanitize_fts5_query",
 ]
@@ -50,24 +49,17 @@ def sanitize_fts5_query(query_text: str) -> str:
 class SqliteKnowledgeSearchRepository:
     """Read-only FTS5 search over ``knowledge_fts`` (B6a), backed by SQLite.
 
-    Mirrors the other Sqlite*Repository classes' dual-mode constructor:
-    normally owns its ``session_factory`` and opens/commits/closes one short
-    session per call (via ``session_scope``); when ``session`` is given
-    instead, it reads through that externally owned session — a read never
-    needs its own transaction, but sharing an ongoing one (``SqliteUnitOfWork``)
-    is harmless.
+    Owns its ``session_factory`` and opens/commits/closes one short session
+    per call, via ``session_scope``.
     """
 
     def __init__(
         self,
         session_factory: sessionmaker[Session] | None,
         engine: Engine | None,
-        *,
-        session: Session | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._engine = engine
-        self._external_session = session
 
     def close(self) -> None:
         """Release every pooled connection this repository's engine holds."""
@@ -76,9 +68,6 @@ class SqliteKnowledgeSearchRepository:
 
     @contextmanager
     def _scope(self) -> Iterator[Session]:
-        if self._external_session is not None:
-            yield self._external_session
-            return
         assert self._session_factory is not None
         with session_scope(self._session_factory) as session:
             yield session
@@ -102,8 +91,3 @@ def build_sqlite_knowledge_search_repository(
     engine = build_engine(database_path)
     session_factory = build_session_factory(engine)
     return SqliteKnowledgeSearchRepository(session_factory, engine)
-
-
-def bind_sqlite_knowledge_search_repository(session: Session) -> SqliteKnowledgeSearchRepository:
-    """Bind a repository to an externally owned session (used by ``SqliteUnitOfWork``)."""
-    return SqliteKnowledgeSearchRepository(None, None, session=session)
