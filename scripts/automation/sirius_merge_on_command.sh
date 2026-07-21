@@ -135,8 +135,17 @@ if [ "$conclusion" != "success" ]; then
 fi
 
 # --- 7) Merge --------------------------------------------------------------------
+# El merge se ejecuta con un token de identidad real (SIRIUS_TRIGGER_TOKEN) si
+# está disponible: así el evento `pull_request` de "fusionada" no queda suprimido
+# por la regla anti-recursión del GITHUB_TOKEN y dispara el cierre automático
+# (`complete-sirius-after-merge.yml`), que pasa la incidencia a `sirius:completed`.
+# Todas las verificaciones previas de este script siguen con GH_TOKEN. Si la
+# variable no está definida, cae al GH_TOKEN vigente (comportamiento previo).
 _sirius_do_merge() {
-  gh pr merge "$pr_number" --repo "$REPO" --squash
+  (
+    [ -n "${SIRIUS_TRIGGER_TOKEN:-}" ] && export GH_TOKEN="$SIRIUS_TRIGGER_TOKEN"
+    gh pr merge "$pr_number" --repo "$REPO" --squash
+  )
 }
 merge_err_file="$(mktemp)"
 sirius_retry _sirius_do_merge >/dev/null 2>"$merge_err_file"

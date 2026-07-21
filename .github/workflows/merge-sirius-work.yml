@@ -42,7 +42,14 @@ jobs:
       - name: Fusionar bloque Sirius
         shell: bash --noprofile --norc {0}
         env:
+          # Las verificaciones (etiqueta, PR, head, Quality) van con el
+          # GITHUB_TOKEN (tiene checks: read, etc.). El merge en sí se ejecuta
+          # con el PAT (SIRIUS_TRIGGER_TOKEN) para que el evento de "PR fusionada"
+          # dispare el cierre automático (complete-sirius-after-merge.yml); un
+          # merge hecho con el GITHUB_TOKEN por defecto no lo dispararía
+          # (regla anti-recursión) y la incidencia se quedaría en ready-for-merge.
           GH_TOKEN: ${{ github.token }}
+          SIRIUS_TRIGGER_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           COMMENT_ID: ${{ github.event.comment.id }}
