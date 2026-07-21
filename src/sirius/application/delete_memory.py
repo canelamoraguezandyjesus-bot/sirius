@@ -32,10 +32,11 @@ adapter) does the structured-content redaction this use case requires:
 every revision's ``content`` becomes ``None`` — not just the current one —
 so no earlier version of the deleted content survives anywhere
 (``get_history`` keeps only the minimal marker: id, version, origin,
-created_at). There are no derived search indices yet in this codebase
-(FTS5 is explicitly out of scope for B4d), so nulling structured content is
-the entire "retirar índices derivados" this cut needs: nothing else
-indexes memory content.
+created_at). "Retirar índices derivados" is no longer a no-op: B6a adds
+``knowledge_fts`` (FTS5, was explicitly out of scope for B4d) and syncs it
+via a SQLite trigger on ``memory_revisions`` that fires on this exact
+content-to-``NULL`` update, in the same transaction — this use case does
+not call anything new to make that happen.
 
 SIRIUS-ARQ-0.1 S8.1's transactional rule applies to the whole operation:
 the audit event, the optional source-message redaction, and the memory's

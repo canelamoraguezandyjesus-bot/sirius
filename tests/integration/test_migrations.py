@@ -1147,3 +1147,170 @@ def test_downgrade_removes_the_tables(tmp_path: Path) -> None:
         "identity_versions",
         "llm_usage",
     }.intersection(set(inspector.get_table_names()))
+
+
+_B6A_PREVIOUS_HEAD_REVISION = "94418c79da9d"  # head immediately before B6a's FTS5 indexes
+
+
+@pytest.mark.integration
+def test_upgrade_head_creates_the_fts5_search_tables(tmp_path: Path) -> None:
+    """B6a, SIRIUS-ARQ-0.1 S7.1/S8.1; ATD-004; D-11: ``message_fts`` and
+    ``knowledge_fts`` exist after upgrading to head."""
+    database_path = tmp_path / "sirius.db"
+
+    command.upgrade(_alembic_config(database_path), "head")
+
+    table_names = set(inspect(build_engine(database_path)).get_table_names())
+    assert {"message_fts", "knowledge_fts"}.issubset(table_names)
+
+
+@pytest.mark.integration
+def test_downgrade_to_previous_head_removes_only_the_fts5_tables_and_triggers(
+    tmp_path: Path,
+) -> None:
+    """B6a: downgrading past this migration removes ``message_fts``,
+    ``knowledge_fts`` and their sync triggers, but no base table or its
+    data."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+    command.upgrade(config, "head")
+
+    now = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        connection.execute(
+            text("INSERT INTO conversations (id, created_at, is_main) VALUES (1, :now, 1)"),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO messages "
+                "(id, conversation_id, sequence, role, content, created_at, status) "
+                "VALUES (1, 1, 1, 'user', 'mensaje anterior a la migración', :now, 'completed')"
+            ),
+            {"now": now},
+        )
+
+    command.downgrade(config, _B6A_PREVIOUS_HEAD_REVISION)
+
+    table_names = set(inspect(build_engine(database_path)).get_table_names())
+    assert not {"message_fts", "knowledge_fts"}.intersection(table_names)
+    assert {"messages", "memories", "memory_revisions", "decisions", "decision_revisions"}.issubset(
+        table_names
+    )
+    with engine.begin() as connection:
+        preserved = connection.execute(text("SELECT content FROM messages WHERE id = 1")).fetchone()
+    assert preserved is not None
+    assert preserved.content == "mensaje anterior a la migración"
+
+
+@pytest.mark.integration
+def test_upgrading_from_the_previous_head_backfills_existing_messages(tmp_path: Path) -> None:
+    """B6a: a message written before this migration existed becomes
+    searchable in ``message_fts`` once the database upgrades to head."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+    command.upgrade(config, _B6A_PREVIOUS_HEAD_REVISION)
+
+    now = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        connection.execute(
+            text("INSERT INTO conversations (id, created_at, is_main) VALUES (1, :now, 1)"),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO messages "
+                "(id, conversation_id, sequence, role, content, created_at, status) "
+                "VALUES (1, 1, 1, 'user', 'palabraprevia a la migración', :now, 'completed')"
+            ),
+            {"now": now},
+        )
+
+    command.upgrade(config, "head")
+
+    with engine.begin() as connection:
+        rows = connection.execute(
+            text("SELECT rowid FROM message_fts WHERE message_fts MATCH 'palabraprevia'")
+        ).fetchall()
+    assert [row.rowid for row in rows] == [1]
+
+
+@pytest.mark.integration
+def test_upgrading_from_the_previous_head_backfills_existing_memories_and_decisions(
+    tmp_path: Path,
+) -> None:
+    """B6a: memories and decisions written before this migration existed
+    become searchable in ``knowledge_fts`` once the database upgrades to
+    head; a revision that is not current is not backfilled."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+    command.upgrade(config, _B6A_PREVIOUS_HEAD_REVISION)
+
+    now = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO memories (id, status, created_at, updated_at) "
+                "VALUES (1, 'current', :now, :now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO memory_revisions "
+                "(memory_id, version, content, origin, is_current, created_at) "
+                "VALUES (1, 1, 'recuerdoviejo obsoleto', 'manual', 0, :now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO memory_revisions "
+                "(memory_id, version, content, origin, is_current, created_at) "
+                "VALUES (1, 2, 'recuerdovigente antes de la migración', 'manual', 1, :now)"
+            ),
+            {"now": now},
+        )
+        project_id = connection.execute(
+            text(
+                "INSERT INTO projects "
+                "(name, objective, current_state, next_step, is_active, status, created_at, "
+                "updated_at) VALUES ('Sirius 0.1', '', '', '', 1, 'active', :now, :now)"
+            ),
+            {"now": now},
+        ).lastrowid
+        connection.execute(
+            text(
+                "INSERT INTO decisions (id, subject, project_id, status, created_at, updated_at) "
+                "VALUES (1, 'asunto', :project_id, 'approved', :now, :now)"
+            ),
+            {"project_id": project_id, "now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO decision_revisions "
+                "(decision_id, version, content, is_current, created_at) "
+                "VALUES (1, 1, 'decisionvigente antes de la migración', 1, :now)"
+            ),
+            {"now": now},
+        )
+
+    command.upgrade(config, "head")
+
+    with engine.begin() as connection:
+        current_memory_match = connection.execute(
+            text("SELECT item_id FROM knowledge_fts WHERE knowledge_fts MATCH 'recuerdovigente'")
+        ).fetchall()
+        stale_memory_match = connection.execute(
+            text("SELECT item_id FROM knowledge_fts WHERE knowledge_fts MATCH 'recuerdoviejo'")
+        ).fetchall()
+        decision_match = connection.execute(
+            text("SELECT item_id FROM knowledge_fts WHERE knowledge_fts MATCH 'decisionvigente'")
+        ).fetchall()
+
+    assert [row.item_id for row in current_memory_match] == [1]
+    assert stale_memory_match == []
+    assert [row.item_id for row in decision_match] == [1]
