@@ -69,7 +69,22 @@
       "Bash(gh pr diff*)",
       "Bash(gh label *)",
       "Bash(gh api*)",
-      "Bash(git push*)"
+
+      "Write(./src/**)",
+      "Write(./tests/**)",
+      "Write(./migrations/**)",
+      "Write(./docs/implementation/**)",
+
+      "Bash(git checkout*)",
+      "Bash(git switch*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git fetch*)",
+      "Bash(git rev-parse*)",
+      "Bash(git remote*)",
+      "Bash(git push*)",
+      "Bash(uv sync*)",
+      "Bash(uv run *)"
     ],
     "deny": [
       "Bash(git push --force*)",
