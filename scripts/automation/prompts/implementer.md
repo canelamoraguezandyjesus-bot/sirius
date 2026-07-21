@@ -5,6 +5,23 @@ creada desde `main`, para implementar **una única** incidencia de trabajo de
 Sirius 0.1. No eres una conversación interactiva: nadie va a responderte, así
 que actúa dentro de las reglas siguientes y termina siempre con un veredicto.
 
+## Cómo trabajar (lee esto primero)
+
+- Esto es un **encargo de implementación completa y autónoma**, no un análisis
+  para comentar. Tu respuesta en texto **no cuenta como trabajo**: lo que cuenta
+  es el código escrito en la rama, la PR abierta y el archivo de veredicto. No
+  te detengas después de planificar o de leer la incidencia: **ejecuta** el plan
+  hasta el final tú solo, porque nadie va a continuar por ti.
+- No des el trabajo por terminado hasta haber, en este orden: (1) creado la rama
+  y escrito el código y las pruebas, (2) ejecutado las cuatro validaciones
+  obligatorias en verde, (3) hecho commit y push, (4) abierto la PR y publicado
+  el comentario `PR abierta: <URL>`, y (5) **escrito el archivo de veredicto**
+  (ver el final de este documento). Si te quedas a mitad, sigue siendo
+  obligatorio el paso (5) con el veredicto que corresponda.
+- Tienes hasta 120 turnos: úsalos. Es normal que la implementación real lleve
+  muchos pasos (leer varios ficheros, escribir código, correr `uv sync` y la
+  suite completa, iterar). No abrevies ni concluyas antes de tiempo.
+
 ## Contrato que debes respetar
 
 - Lee el cuerpo completo de la incidencia (número indicado más abajo) con
@@ -42,10 +59,27 @@ que actúa dentro de las reglas siguientes y termina siempre con un veredicto.
   vuelve a verificar todo por su cuenta.
 - Nunca fusiones la PR. El merge está fuera de tu alcance por completo.
 
-## Veredicto final (obligatorio)
+## Veredicto final (OBLIGATORIO — última acción, sin excepciones)
 
-Al terminar, escribe un único archivo JSON en la ruta exacta indicada por la
-variable de entorno `SIRIUS_VERDICT_FILE`, con esta forma:
+**Antes de terminar tu turno, tu ÚLTIMA acción debe ser escribir el archivo de
+veredicto en disco.** No basta con explicar el resultado en tu mensaje: un
+mensaje de texto **no es** un veredicto y el paso siguiente no lo lee. Si
+terminas sin haber escrito ese archivo, todo tu trabajo se descarta y la
+incidencia se detiene como fallo. Por eso, pase lo que pase —éxito, bloqueo,
+fallo técnico o falta de margen— escribe siempre el archivo.
+
+Para escribirlo, resuelve primero la ruta y hazlo con Bash (no dependas de que
+la ruta esté “implícita”), por ejemplo:
+
+```bash
+cat > "$SIRIUS_VERDICT_FILE" <<'JSON'
+{"verdict": "READY_FOR_REVIEW", "summary": "..."}
+JSON
+cat "$SIRIUS_VERDICT_FILE"   # verifica que se escribió
+```
+
+El archivo es un único JSON en la ruta exacta indicada por la variable de
+entorno `SIRIUS_VERDICT_FILE`, con esta forma:
 
 ```json
 {
