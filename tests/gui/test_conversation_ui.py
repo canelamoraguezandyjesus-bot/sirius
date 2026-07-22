@@ -42,6 +42,7 @@ from sirius.ports.llm import (
 )
 from sirius.presentation.error_messages import describe_error
 from sirius.presentation.main_window import MainWindow
+from sirius.presentation.message_view import MessageItemWidget
 
 
 @pytest.fixture(autouse=True)
@@ -163,6 +164,30 @@ class _BlockingUntilReleasedProvider:
 
     def cancel(self, operation_id: str) -> None:
         self._cancelled.add(operation_id)
+
+
+class _BlockingMarkdownProvider:
+    """Test double like ``_BlockingUntilReleasedProvider``, but the delta and
+    final text contain Markdown syntax, to deterministically observe B8a's
+    plain-text-while-streaming/rendered-once-finished behavior."""
+
+    def __init__(self) -> None:
+        self._continue_event = threading.Event()
+
+    def health_check(self) -> bool:
+        return True
+
+    def release(self) -> None:
+        self._continue_event.set()
+
+    def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
+        del request
+        yield LLMTextDelta(text="**uno** ")
+        self._continue_event.wait(timeout=5)
+        yield LLMCompleted(text="**uno** dos", input_tokens=1, output_tokens=2)
+
+    def cancel(self, operation_id: str) -> None:
+        del operation_id
 
 
 class _FailOnNthAppendConversationRepository:
@@ -826,3 +851,148 @@ def test_retry_button_is_hidden_while_sending(qtbot: QtBot, tmp_path: Path) -> N
 
     provider.release()
     qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+
+
+# --- B8a: renderizado de Markdown seguro en la conversación (D-06, RF-008, SP-07) ---
+
+
+def _widget_at(window: MainWindow, index: int) -> MessageItemWidget:
+    item = window.message_list.item(index)
+    widget = window.message_list.itemWidget(item)
+    assert isinstance(widget, MessageItemWidget)
+    return widget
+
+
+@pytest.mark.gui
+def test_markdown_content_renders_instead_of_literal_syntax(qtbot: QtBot, tmp_path: Path) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    markdown_content = (
+        "# Título\n\n**negrita** y *cursiva*\n\n- uno\n- dos\n\n"
+        "`codigo en linea`\n\n```\nbloque de codigo\n```"
+    )
+    conversation_repository.append_message(conversation.id, MessageRole.SIRIUS, markdown_content)
+
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+
+    rendered = _widget_at(window, 0).rendered_plain_text()
+    assert "# Título" not in rendered
+    assert "**negrita**" not in rendered
+    assert "`codigo en linea`" not in rendered
+    assert "Título" in rendered
+    assert "negrita" in rendered
+    assert "codigo en linea" in rendered
+    assert "uno" in rendered
+    assert "bloque de codigo" in rendered
+
+    html = _widget_at(window, 0).rendered_html()
+    assert "font-weight:700" in html
+
+
+@pytest.mark.gui
+def test_html_and_script_content_is_shown_literal_and_never_interpreted(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """SP-07: untrusted content is never active HTML — it is always escaped."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    unsafe_content = 'Hola <script>alert(1)</script> y <b onclick="doEvil()">falso</b>.'
+    conversation_repository.append_message(conversation.id, MessageRole.SIRIUS, unsafe_content)
+
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+
+    widget = _widget_at(window, 0)
+    rendered = widget.rendered_plain_text()
+    assert "<script>alert(1)</script>" in rendered
+    assert '<b onclick="doEvil()">falso</b>' in rendered
+
+    html = widget.rendered_html()
+    assert "<script>" not in html
+    assert "<b onclick=" not in html
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+
+
+@pytest.mark.gui
+def test_streaming_shows_literal_text_and_final_result_renders_as_markdown(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """The in-flight delta shows unrendered Markdown syntax (plain text, B8a's
+    allowed simplification); once the provider completes, the same text is
+    consolidated into safe, rendered Markdown. A real ``threading.Event``
+    (mirroring ``_BlockingUntilReleasedProvider``) makes the mid-stream state
+    deterministically observable instead of racing the worker thread.
+    """
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    provider = _BlockingMarkdownProvider()
+    _swap_send_message_use_case(window, database_path, provider)
+
+    window.message_input.setText("hola")
+    window.send_button.click()
+    qtbot.waitUntil(lambda: window.message_list.count() == 2, timeout=5000)
+    qtbot.waitUntil(lambda: _widget_at(window, 1).rendered_plain_text() == "**uno** ", timeout=5000)
+
+    provider.release()
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+
+    final_rendered = _widget_at(window, 1).rendered_plain_text()
+    assert "**uno**" not in final_rendered
+    assert "uno dos" in final_rendered
+
+
+@pytest.mark.gui
+def test_failed_status_suffix_is_preserved_in_the_rendered_widget(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    _swap_send_message_use_case(window, database_path, _FailingLLMProvider())
+
+    window.message_input.setText("hola")
+    window.send_button.click()
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+
+    assert "(fallido)" in _widget_at(window, 1).rendered_plain_text()
+
+
+@pytest.mark.gui
+def test_cancelled_status_suffix_is_preserved_in_the_rendered_widget(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    provider = _BlockingUntilReleasedProvider()
+    _swap_send_message_use_case(window, database_path, provider)
+
+    window.message_input.setText("hola")
+    window.send_button.click()
+    qtbot.waitUntil(lambda: window.message_list.count() == 2, timeout=5000)
+
+    window.cancel_button.click()
+    provider.release()
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+
+    assert "(cancelado)" in _widget_at(window, 1).rendered_plain_text()
+
+
+@pytest.mark.gui
+def test_redacted_message_placeholder_is_preserved_in_the_rendered_widget(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    message = conversation_repository.append_message(conversation.id, MessageRole.USER, "secreto")
+    conversation_repository.redact_message(message.id)
+
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+
+    assert "(mensaje redactado)" in _widget_at(window, 0).rendered_plain_text()

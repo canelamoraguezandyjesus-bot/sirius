@@ -76,6 +76,7 @@ from sirius.presentation.context_panel_widget import ContextPanelWidget
 from sirius.presentation.conversation_worker import SendMessageWorker
 from sirius.presentation.error_messages import failed_send_message
 from sirius.presentation.knowledge_widget import KnowledgeWidget
+from sirius.presentation.message_view import MessageItemWidget
 from sirius.presentation.project_continuity_widget import ProjectContinuityWidget
 
 _logger = get_logger(__name__)
@@ -360,6 +361,18 @@ class MainWindow(QMainWindow):
             font.setBold(True)
             item.setFont(font)
         self.message_list.addItem(item)
+
+        # B8a/RF-008/SP-07: the item's own text above stays authoritative for
+        # accessibility and is never removed; this widget is the visible,
+        # safe-Markdown rendering shown to the user (setItemWidget does not
+        # affect QListWidgetItem.text()).
+        prefix = "Tú" if role is MessageRole.USER else "Sirius"
+        widget = MessageItemWidget()
+        widget.set_message(
+            prefix, self._compose_markdown_body(content, status), bold=role is MessageRole.SIRIUS
+        )
+        item.setSizeHint(widget.sizeHint())
+        self.message_list.setItemWidget(item, widget)
         return item
 
     @staticmethod
@@ -367,6 +380,10 @@ class MainWindow(QMainWindow):
         item: QListWidgetItem, role: MessageRole, content: str | None, status: MessageStatus
     ) -> None:
         prefix = "Tú" if role is MessageRole.USER else "Sirius"
+        item.setText(f"{prefix}: {MainWindow._compose_markdown_body(content, status)}")
+
+    @staticmethod
+    def _compose_markdown_body(content: str | None, status: MessageStatus) -> str:
         suffix = {
             MessageStatus.CANCELLED: " (cancelado)",
             MessageStatus.FAILED: " (fallido)",
@@ -374,7 +391,7 @@ class MainWindow(QMainWindow):
         # REDACTED (B4d) is the only status whose content is ever None: the
         # placeholder replaces it instead of literally rendering "None".
         shown_content = "(mensaje redactado)" if status is MessageStatus.REDACTED else content
-        item.setText(f"{prefix}: {shown_content}{suffix}")
+        return f"{shown_content}{suffix}"
 
     def _handle_send_clicked(self) -> None:
         text = self.message_input.text()
@@ -449,6 +466,12 @@ class MainWindow(QMainWindow):
         self._set_item_text(
             self._streaming_item, MessageRole.SIRIUS, self._streaming_text, MessageStatus.COMPLETED
         )
+        # B8a: streamed deltas render as plain text while in flight (simpler
+        # and stable); _on_finished consolidates the final text as Markdown.
+        widget = self.message_list.itemWidget(self._streaming_item)
+        if isinstance(widget, MessageItemWidget):
+            widget.set_streaming_text("Sirius", self._streaming_text, bold=True)
+            self._streaming_item.setSizeHint(widget.sizeHint())
 
     def _on_finished(self, result: SendMessageResult) -> None:
         # ``result.sirius_message`` is the row SendMessageUseCase actually
@@ -465,6 +488,16 @@ class MainWindow(QMainWindow):
                 result.sirius_message.content,
                 result.sirius_message.status,
             )
+            widget = self.message_list.itemWidget(self._streaming_item)
+            if isinstance(widget, MessageItemWidget):
+                widget.set_message(
+                    "Sirius",
+                    self._compose_markdown_body(
+                        result.sirius_message.content, result.sirius_message.status
+                    ),
+                    bold=True,
+                )
+                self._streaming_item.setSizeHint(widget.sizeHint())
 
         operation_id = result.sirius_message.operation_id
         if result.outcome is MessageStatus.CANCELLED:
