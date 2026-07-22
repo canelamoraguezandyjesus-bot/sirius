@@ -376,6 +376,36 @@ def test_create_backup_disables_controls_while_running_and_reenables_after_succe
 
 
 @pytest.mark.gui
+def test_retry_button_is_disabled_while_a_backup_operation_is_running(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """B7b: "Reintentar" shares the same busy/exclusion mechanism as the
+    other conversation controls, so a pending retry must not be clickable
+    while a backup operation is in progress."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    use_case = _BlockingCreateBackupUseCase()
+    window = _build_window(database_path, create_backup_use_case=use_case)
+    qtbot.addWidget(window)
+
+    # Simulate a pending failed send without exercising the whole send flow.
+    window._last_failed_text = "hola"
+    window.retry_button.setVisible(True)
+    window.retry_button.setEnabled(True)
+
+    window.create_backup_password_input.setText(_PASSWORD)
+    window.create_backup_password_repeat_input.setText(_PASSWORD)
+    window.create_backup_button.click()
+
+    assert window.retry_button.isEnabled() is False
+
+    use_case.set_result(_fake_backup_result(tmp_path / "b.siriusbackup"))
+    use_case.release()
+
+    qtbot.waitUntil(lambda: window.create_backup_button.isEnabled(), timeout=5000)
+    assert window.retry_button.isEnabled() is True
+
+
+@pytest.mark.gui
 def test_create_backup_success_shows_the_exact_backup_path(qtbot: QtBot, tmp_path: Path) -> None:
     database_path = _bootstrapped_database(tmp_path / "sirius.db")
     backup_path = tmp_path / "sirius-backup-x.siriusbackup"

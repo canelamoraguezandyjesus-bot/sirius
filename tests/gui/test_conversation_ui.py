@@ -115,6 +115,32 @@ class _FailingLLMProvider:
         del operation_id
 
 
+class _FailOnceThenSucceedProvider:
+    """Test double: fails the first ``stream_response`` call like
+    ``_FailingLLMProvider``, then behaves like ``FakeLLMProvider`` on every
+    call after — used to exercise "Reintentar" actually succeeding on the
+    second attempt.
+    """
+
+    def __init__(self, kind: LLMErrorKind = LLMErrorKind.CONNECTION) -> None:
+        self._kind = kind
+        self._calls = 0
+        self._fallback = FakeLLMProvider()
+
+    def health_check(self) -> bool:
+        return True
+
+    def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
+        self._calls += 1
+        if self._calls == 1:
+            yield LLMError(kind=self._kind, message="no se pudo contactar")
+            return
+        yield from self._fallback.stream_response(request)
+
+    def cancel(self, operation_id: str) -> None:
+        self._fallback.cancel(operation_id)
+
+
 class _BlockingUntilReleasedProvider:
     """Test double: yields one delta, then blocks until the test calls ``release()``.
 
@@ -447,6 +473,172 @@ def test_each_llm_error_kind_shows_its_actionable_message(
 
     assert window.error_label.text() == f"{describe_error(kind)} (ref: {operation_id})"
     assert "no se pudo contactar" not in window.error_label.text()
+
+
+@pytest.mark.gui
+def test_failed_send_shows_retry_button_and_remembers_the_failed_text(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """B7b (RF-007, D-05): a FAILED send offers "Reintentar" and remembers
+    the exact text, without ever repopulating the (possibly reused) input
+    field."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    window.show()
+    _swap_send_message_use_case(window, database_path, _FailingLLMProvider())
+
+    assert window.retry_button.isVisible() is False
+
+    window.message_input.setText("hola")
+    window.send_button.click()
+
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+
+    assert window.retry_button.isVisible() is True
+    assert window.retry_button.isEnabled() is True
+    assert window._last_failed_text == "hola"
+    assert window.message_input.text() == ""
+
+
+@pytest.mark.gui
+def test_clicking_retry_resends_the_same_text_with_a_new_operation_id_and_succeeds(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    window.show()
+    provider = _FailOnceThenSucceedProvider()
+    _swap_send_message_use_case(window, database_path, provider)
+
+    window.message_input.setText("hola")
+    window.send_button.click()
+    qtbot.waitUntil(lambda: window.retry_button.isVisible(), timeout=5000)
+
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    failed_operation_id = conversation_repository.list_messages(conversation.id)[-1].operation_id
+
+    window.retry_button.click()
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+
+    assert window.retry_button.isVisible() is False
+    assert window._last_failed_text is None
+
+    persisted = conversation_repository.list_messages(conversation.id)
+    assert [m.content for m in persisted] == [
+        "hola",
+        "",
+        "hola",
+        "Respuesta simulada de Sirius.",
+    ]
+    assert [m.status for m in persisted] == [
+        MessageStatus.COMPLETED,
+        MessageStatus.FAILED,
+        MessageStatus.COMPLETED,
+        MessageStatus.COMPLETED,
+    ]
+    # The retry is a new attempt, not a rewrite: a new operation_id, and the
+    # failed turn stays exactly as it was, marked "(fallido)".
+    assert persisted[2].operation_id != failed_operation_id
+    assert window.message_list.item(1).text() == "Sirius:  (fallido)"
+    assert window.message_list.count() == 4
+    assert window.message_list.item(2).text() == "Tú: hola"
+
+
+@pytest.mark.gui
+def test_cancelled_send_never_shows_retry(qtbot: QtBot, tmp_path: Path) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    window.show()
+    provider = _BlockingUntilReleasedProvider()
+    _swap_send_message_use_case(window, database_path, provider)
+
+    window.message_input.setText("hola")
+    window.send_button.click()
+    qtbot.waitUntil(lambda: window.message_list.count() == 2, timeout=5000)
+
+    window.cancel_button.click()
+    provider.release()
+
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+
+    assert window.retry_button.isVisible() is False
+    assert window._last_failed_text is None
+
+
+@pytest.mark.gui
+def test_retry_button_is_hidden_and_disabled_while_a_send_is_in_progress(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    window.show()
+    provider = _BlockingUntilReleasedProvider()
+    _swap_send_message_use_case(window, database_path, provider)
+
+    window.message_input.setText("hola")
+    window.send_button.click()
+    qtbot.waitUntil(lambda: window.message_list.count() == 2, timeout=5000)
+
+    assert window.retry_button.isVisible() is False
+    assert window.retry_button.isEnabled() is False
+
+    provider.release()
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+
+
+@pytest.mark.gui
+def test_starting_a_new_normal_send_clears_the_pending_retry_state(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    window.show()
+    _swap_send_message_use_case(window, database_path, _FailingLLMProvider())
+
+    window.message_input.setText("primero")
+    window.send_button.click()
+    qtbot.waitUntil(lambda: window.retry_button.isVisible(), timeout=5000)
+    assert window._last_failed_text == "primero"
+
+    _swap_send_message_use_case(window, database_path, FakeLLMProvider())
+    window.message_input.setText("segundo")
+    window.send_button.click()
+
+    # Cleared immediately, before the new send even finishes.
+    assert window.retry_button.isVisible() is False
+    assert window._last_failed_text is None
+
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+    assert window.retry_button.isVisible() is False
+    assert window._last_failed_text is None
+
+
+@pytest.mark.gui
+def test_unexpected_crash_also_offers_retry(qtbot: QtBot, tmp_path: Path) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    window.show()
+
+    real_conversation_repository = build_sqlite_conversation_repository(database_path)
+    failing_repository = _FailOnNthAppendConversationRepository(
+        real_conversation_repository, fail_on_call=2
+    )
+    _swap_send_message_use_case(window, database_path, FakeLLMProvider(), failing_repository)
+
+    window.message_input.setText("hola")
+    window.send_button.click()
+
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+
+    assert window.retry_button.isVisible() is True
+    assert window._last_failed_text == "hola"
 
 
 @pytest.mark.gui

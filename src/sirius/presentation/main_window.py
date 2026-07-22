@@ -165,6 +165,14 @@ class MainWindow(QMainWindow):
         self._active_operation_id: str | None = None
         self._streaming_item: QListWidgetItem | None = None
         self._streaming_text = ""
+        # B7b: text of the in-flight send, kept only to remember it as
+        # ``_last_failed_text`` if this attempt ends in FAILED/crashed —
+        # never repopulated into the input field.
+        self._sending_text: str | None = None
+        # Text of the last send that ended in FAILED (or crashed): what
+        # "Reintentar" resends verbatim with a new operation_id. ``None``
+        # whenever there is nothing pending to retry.
+        self._last_failed_text: str | None = None
         # QThreadPool.start() does not keep a Python-level reference to a
         # QRunnable: without this, a worker whose run() finishes very
         # quickly can be garbage-collected before its queued cross-thread
@@ -244,10 +252,15 @@ class MainWindow(QMainWindow):
         self.cancel_button.clicked.connect(self._handle_cancel_clicked)
         self.cancel_button.setVisible(False)
 
+        self.retry_button = QPushButton("Reintentar")
+        self.retry_button.clicked.connect(self._handle_retry_clicked)
+        self.retry_button.setVisible(False)
+
         input_row = QHBoxLayout()
         input_row.addWidget(self.message_input)
         input_row.addWidget(self.send_button)
         input_row.addWidget(self.cancel_button)
+        input_row.addWidget(self.retry_button)
 
         self.status_label = QLabel("")
         self.error_label = QLabel("")
@@ -345,13 +358,33 @@ class MainWindow(QMainWindow):
         if self._is_sending or self._is_backup_busy:
             return
 
+        self.message_input.clear()
+        self._start_send(text)
+
+    def _handle_retry_clicked(self) -> None:
+        if self._last_failed_text is None:
+            return
+        if self._is_sending or self._is_backup_busy:
+            return
+
+        self._start_send(self._last_failed_text)
+
+    def _start_send(self, text: str) -> None:
+        # A brand-new send (normal or retry) always supersedes any pending
+        # retry state: the button disappears immediately, and reappears only
+        # if this very attempt fails too.
+        self._last_failed_text = None
+        self.retry_button.setVisible(False)
+
         self._is_sending = True
+        self._sending_text = text
         self._active_operation_id = str(uuid.uuid4())
         self._streaming_item = None
         self._streaming_text = ""
         self.send_button.setEnabled(False)
         self.cancel_button.setVisible(True)
         self.cancel_button.setEnabled(True)
+        self.retry_button.setEnabled(False)
         self.message_input.setEnabled(False)
         self._set_backup_controls_enabled(False)
         self.project_continuity_widget.set_external_busy(True)
@@ -361,7 +394,6 @@ class MainWindow(QMainWindow):
         self.error_label.setText("")
 
         self._append_message_item(MessageRole.USER, text)
-        self.message_input.clear()
 
         worker = SendMessageWorker(self._send_message_use_case, text, self._active_operation_id)
         worker.signals.delta.connect(self._on_delta)
@@ -409,11 +441,13 @@ class MainWindow(QMainWindow):
             self.error_label.setText("Envío cancelado.")
         elif result.outcome is MessageStatus.FAILED:
             self.error_label.setText(failed_send_message(result.error_kind, operation_id))
+            self._last_failed_text = self._sending_text
         self._finish_sending()
 
     def _on_crashed(self, error_message: str) -> None:
         del error_message  # not shown verbatim: keep the user-facing message safe and generic
         operation_id = self._active_operation_id
+        self._last_failed_text = self._sending_text
         self._replace_history_with_authoritative_state()
         self.error_label.setText(failed_send_message(None, operation_id))
         self._finish_sending()
@@ -422,10 +456,13 @@ class MainWindow(QMainWindow):
         self._is_sending = False
         self._active_operation_id = None
         self._active_send_worker = None
+        self._sending_text = None
         self._streaming_item = None
         self._streaming_text = ""
         self.send_button.setEnabled(True)
         self.cancel_button.setVisible(False)
+        self.retry_button.setVisible(self._last_failed_text is not None)
+        self.retry_button.setEnabled(self._last_failed_text is not None)
         self.message_input.setEnabled(True)
         self.status_label.setText("")
         self._set_backup_controls_enabled(True)
@@ -664,6 +701,7 @@ class MainWindow(QMainWindow):
         self._set_backup_controls_enabled(False)
         self.send_button.setEnabled(False)
         self.message_input.setEnabled(False)
+        self.retry_button.setEnabled(False)
         self.project_continuity_widget.set_external_busy(True)
         self.knowledge_widget.set_external_busy(True)
         self.context_panel_widget.set_external_busy(True)
@@ -674,6 +712,7 @@ class MainWindow(QMainWindow):
         self._set_backup_controls_enabled(True)
         self.send_button.setEnabled(True)
         self.message_input.setEnabled(True)
+        self.retry_button.setEnabled(self._last_failed_text is not None)
         self.project_continuity_widget.set_external_busy(False)
         self.knowledge_widget.set_external_busy(False)
         self.context_panel_widget.set_external_busy(False)
