@@ -11,6 +11,7 @@ from sirius.application.api_key_settings import ApiKeySettingsUseCase
 from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.archive_decision import ArchiveDecisionUseCase
 from sirius.application.archive_memory import ArchiveMemoryUseCase
+from sirius.application.budget_status import GetBudgetStatusUseCase
 from sirius.application.correct_memory import CorrectMemoryUseCase
 from sirius.application.create_backup import CreateBackupUseCase
 from sirius.application.decision_origin import GetDecisionOriginUseCase
@@ -39,6 +40,7 @@ class ValidatedMainWindow(MainWindow):
         self,
         send_message_use_case: SendMessageUseCase,
         get_history_use_case: GetConversationHistoryUseCase,
+        get_budget_status_use_case: GetBudgetStatusUseCase,
         api_key_settings_use_case: ApiKeySettingsUseCase,
         validate_and_save_api_key_use_case: ValidateAndSaveApiKeyUseCase,
         project_continuity_use_case: ProjectContinuityUseCase,
@@ -72,6 +74,7 @@ class ValidatedMainWindow(MainWindow):
         super().__init__(
             send_message_use_case=send_message_use_case,
             get_history_use_case=get_history_use_case,
+            get_budget_status_use_case=get_budget_status_use_case,
             api_key_settings_use_case=api_key_settings_use_case,
             project_continuity_use_case=project_continuity_use_case,
             project_lifecycle_use_case=project_lifecycle_use_case,

@@ -32,6 +32,7 @@ from sirius.application.api_key_settings import ApiKeySettingsError, ApiKeySetti
 from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.archive_decision import ArchiveDecisionUseCase
 from sirius.application.archive_memory import ArchiveMemoryUseCase
+from sirius.application.budget_status import GetBudgetStatusUseCase
 from sirius.application.correct_memory import CorrectMemoryUseCase
 from sirius.application.create_backup import CreateBackupUseCase
 from sirius.application.decision_origin import GetDecisionOriginUseCase
@@ -101,6 +102,7 @@ class MainWindow(QMainWindow):
         self,
         send_message_use_case: SendMessageUseCase,
         get_history_use_case: GetConversationHistoryUseCase,
+        get_budget_status_use_case: GetBudgetStatusUseCase,
         api_key_settings_use_case: ApiKeySettingsUseCase,
         project_continuity_use_case: ProjectContinuityUseCase,
         project_lifecycle_use_case: ProjectLifecycleUseCase,
@@ -129,6 +131,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._send_message_use_case = send_message_use_case
         self._get_history_use_case = get_history_use_case
+        self._get_budget_status_use_case = get_budget_status_use_case
         self._api_key_settings_use_case = api_key_settings_use_case
         self._project_continuity_use_case = project_continuity_use_case
         self._project_lifecycle_use_case = project_lifecycle_use_case
@@ -263,6 +266,13 @@ class MainWindow(QMainWindow):
         self.error_label = QLabel("")
         self.error_label.setStyleSheet("color: #b00020;")
 
+        # B7c/RF-030/PA-018: non-blocking notice, never a modal dialog —
+        # sending stays allowed even while this is shown. Empty text is the
+        # hidden state; _refresh_budget_warning fills or clears it.
+        self.budget_warning_label = QLabel("")
+        self.budget_warning_label.setStyleSheet("color: #8a6d00;")
+        self.budget_warning_label.setWordWrap(True)
+
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.addWidget(self.project_continuity_widget)
@@ -271,6 +281,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(input_row)
         layout.addWidget(self.status_label)
         layout.addWidget(self.error_label)
+        layout.addWidget(self.budget_warning_label)
         return container
 
     def _build_knowledge_tab(self) -> QWidget:
@@ -299,6 +310,23 @@ class MainWindow(QMainWindow):
 
     def _load_history(self) -> None:
         self._replace_history_with_authoritative_state()
+        self._refresh_budget_warning()
+
+    def _refresh_budget_warning(self) -> None:
+        """Recompute the non-blocking budget notice (B7c).
+
+        Called on open and after every completed send — the only moments
+        spend can have changed. Never blocks sending: it only ever sets or
+        clears a label.
+        """
+        status = self._get_budget_status_use_case.get_status()
+        if status.is_near_limit:
+            self.budget_warning_label.setText(
+                f"Aviso: llevas {status.spent_usd:.2f} USD de "
+                f"{status.monthly_limit_usd:.2f} USD de gasto este mes."
+            )
+        else:
+            self.budget_warning_label.setText("")
 
     def _replace_history_with_authoritative_state(self) -> None:
         """Rebuild the visible list from GetConversationHistoryUseCase.
@@ -446,6 +474,7 @@ class MainWindow(QMainWindow):
             # Only a genuine failure offers "Reintentar" (D-05/B7b): a
             # CANCELLED outcome is a deliberate stop and never sets this.
             self._last_failed_text = self._active_send_text
+        self._refresh_budget_warning()
         self._finish_sending()
 
     def _on_crashed(self, error_message: str) -> None:

@@ -51,6 +51,7 @@ from sirius.application.api_key_settings import ApiKeySettingsUseCase
 from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.archive_decision import ArchiveDecisionUseCase
 from sirius.application.archive_memory import ArchiveMemoryUseCase
+from sirius.application.budget_status import GetBudgetStatusUseCase
 from sirius.application.context import ContextBuilder
 from sirius.application.correct_memory import CorrectMemoryUseCase
 from sirius.application.create_backup import CreateBackupUseCase
@@ -113,6 +114,7 @@ class ConversationDependencies:
 
     send_message_use_case: SendMessageUseCase
     get_history_use_case: GetConversationHistoryUseCase
+    get_budget_status_use_case: GetBudgetStatusUseCase
     api_key_settings_use_case: ApiKeySettingsUseCase
     validate_and_save_api_key_use_case: ValidateAndSaveApiKeyUseCase
     initial_project_use_case: InitialProjectUseCase
@@ -246,6 +248,22 @@ def build_conversation_dependencies(
     )
     get_history_use_case = GetConversationHistoryUseCase(conversation_repository)
 
+    # B7c: reads the *same* llm_usage_repository instance the OpenAI
+    # provider's own BudgetTracker writes to (built above, shared here), so
+    # the non-blocking warning and the provider's blocking check always
+    # agree on this month's spend. warn_threshold_usd is DR-018's fixed 15
+    # USD (BudgetPolicy's default, never configurable); monthly_limit_usd
+    # mirrors _build_llm_provider's own resolution of the configured budget.
+    try:
+        budget_settings = resolve_openai_provider_settings(load_settings())
+    except LLMProviderConfigurationError:
+        budget_settings = resolve_openai_provider_settings({})
+    get_budget_status_use_case = GetBudgetStatusUseCase(
+        usage_repository=llm_usage_repository,
+        warn_threshold_usd=BudgetPolicy().warn_threshold_usd,
+        monthly_limit_usd=budget_settings.monthly_budget_usd,
+    )
+
     backup_service = build_sqlite_backup_service(database_path, backups_dir)
 
     repositories = (
@@ -285,6 +303,7 @@ def build_conversation_dependencies(
     return ConversationDependencies(
         send_message_use_case=send_message_use_case,
         get_history_use_case=get_history_use_case,
+        get_budget_status_use_case=get_budget_status_use_case,
         api_key_settings_use_case=ApiKeySettingsUseCase(secret_store),
         validate_and_save_api_key_use_case=ValidateAndSaveApiKeyUseCase(
             OpenAICredentialValidator(), secret_store
