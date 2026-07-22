@@ -5,7 +5,8 @@
 - Archivo: `artifacts/SIRIUS_DOCUMENTO_RECTOR_HEAD-R1_v1.1_APROBADO.docx`
 - Estado: APROBADO
 - Fecha: 22 de julio de 2026
-- SHA-256: `a4b5244d7683e0bd6ec84fa679446ab7a1e15aced15e8bb93ce296c777c6f531`
+- SHA-256: `98313cd2e970ba544009faf26b0ad6bd7590c31131d1d9e6d068dc228487cb4f`
+- Generación: automática desde el `RECTOR.md` canónico mediante Pandoc.
 - Páginas verificadas: 12
 - Sustituye: Documento Rector v1.0 y propuesta v0.2.
 
