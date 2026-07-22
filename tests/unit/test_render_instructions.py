@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from sirius.application.context import Context
 from sirius.application.send_message import render_instructions
 from sirius.domain.decision import Decision, DecisionRevision, DecisionStatus
-from sirius.domain.identity import Identity, IdentityVersion
+from sirius.domain.identity import INITIAL_PERSONALITY_INSTRUCTIONS, Identity, IdentityVersion
 from sirius.domain.project import Project, ProjectRevision, ProjectStatus, normalize_blockers
 
 _NOW = datetime.now(UTC)
@@ -253,3 +253,35 @@ def test_render_instructions_still_includes_every_other_section_without_a_projec
     assert "# Decisiones vigentes relacionadas" in text
     assert "# Memorias vigentes" in text
     assert "# Mensajes recientes" in text
+
+
+def test_render_instructions_includes_the_external_actions_policy_from_the_canonical_seed() -> None:
+    """A-01/RF-035 (PA-024): the instructions actually sent to the provider
+    carry the canonical seed's rejection of external-action requests,
+    since `render_instructions` renders `personality_instructions` verbatim."""
+    version = IdentityVersion(
+        id=1,
+        identity_id=1,
+        version=1,
+        name="Sirius",
+        description="descripción de identidad",
+        personality_instructions=INITIAL_PERSONALITY_INSTRUCTIONS,
+        created_at=_NOW,
+    )
+    identity = Identity(id=1, current_version=version, created_at=_NOW)
+    context = Context(
+        identity=identity,
+        project=None,
+        decisions=(),
+        memories=(),
+        recent_messages=(),
+        current_user_message="hola",
+    )
+
+    text = render_instructions(context)
+
+    assert (
+        "no ejecuta acciones externas y rechaza las solicitudes de ejecutar "
+        "archivos, comandos, web o automatizaciones, por estar fuera del "
+        "alcance de 0.1." in text
+    )

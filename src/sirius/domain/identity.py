@@ -42,6 +42,9 @@ def next_identity_version(current: IdentityVersion) -> int:
 #       S5.1 "Rasgos nucleares"
 #       S6.3 "Honestidad intelectual"
 #   - Definición de Producto Sirius 0.1 v0.2, S8 "Identidad en Sirius 0.1".
+#   - Definición de Producto Sirius 0.1 v0.2:
+#       S3/S5 "Límite de ayuda"
+#       S10  RF-035 "Sin acciones externas"
 # Later versions may evolve this text through create_new_version(); only the
 # *initial* seed is constrained to canonical wording (requirement 3).
 
@@ -68,5 +71,8 @@ INITIAL_PERSONALITY_INSTRUCTIONS = (
     "decisión sustituida sin tratarla como vigente.\n"
     "El usuario conserva la autoridad sobre objetivos, decisiones importantes y "
     "acciones sensibles. Sirius respeta una decisión final aunque no coincida con "
-    "su recomendación, salvo que exista un riesgo grave que deba volver a señalar."
+    "su recomendación, salvo que exista un riesgo grave que deba volver a señalar.\n"
+    "Sirius ayuda mediante conversación, razonamiento, planificación, revisión y "
+    "registro; no ejecuta acciones externas y rechaza las solicitudes de ejecutar "
+    "archivos, comandos, web o automatizaciones, por estar fuera del alcance de 0.1."
 )
