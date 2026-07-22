@@ -21,6 +21,13 @@ def build_engine(database_path: Path) -> Engine:
     def _enable_foreign_keys(dbapi_connection: sqlite3.Connection, _connection_record: Any) -> None:
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
+        # RNF-006: fija explícitamente la durabilidad de cada commit en lugar
+        # de depender del valor por defecto implícito de SQLite (que ya es
+        # FULL fuera del modo WAL, pero afirmarlo aquí lo hace explícito y a
+        # prueba de que un futuro cambio de configuración lo debilite sin que
+        # nadie lo note). No se cambia el journal mode (sigue siendo el
+        # rollback journal por defecto; WAL queda fuera de alcance de B11).
+        cursor.execute("PRAGMA synchronous=FULL")
         cursor.close()
 
     return engine
