@@ -1,0 +1,87 @@
+name: Materialize approved DOCX artifacts
+
+on:
+  push:
+    branches:
+      - main
+      - docs/evolution-post-01-head-v11-20260722
+    paths:
+      - "docs/evolution/RECTOR.md"
+      - "docs/robotics/head/RECTOR.md"
+      - ".github/workflows/materialize-approved-docx.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Pandoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc
+
+      - name: Generate approved DOCX files
+        run: |
+          set -euo pipefail
+          mkdir -p docs/evolution/artifacts docs/robotics/head/artifacts
+          pandoc docs/evolution/RECTOR.md --from=gfm --to=docx \
+            --metadata title="Sirius - Documento Rector de Evolución Post-0.1" \
+            -o docs/evolution/artifacts/SIRIUS_DOCUMENTO_RECTOR_EVOLUCION_POST_0.1_v1.0_APROBADO.docx
+          pandoc docs/robotics/head/RECTOR.md --from=gfm --to=docx \
+            --metadata title="Sirius - Documento Rector HEAD-R1 v1.1" \
+            -o docs/robotics/head/artifacts/SIRIUS_DOCUMENTO_RECTOR_HEAD-R1_v1.1_APROBADO.docx
+
+      - name: Record artifact hashes
+        shell: python
+        run: |
+          from hashlib import sha256
+          from pathlib import Path
+          import re
+
+          items = [
+              (
+                  Path("docs/evolution/artifacts/SIRIUS_DOCUMENTO_RECTOR_EVOLUCION_POST_0.1_v1.0_APROBADO.docx"),
+                  Path("docs/evolution/ARTIFACTS.md"),
+              ),
+              (
+                  Path("docs/robotics/head/artifacts/SIRIUS_DOCUMENTO_RECTOR_HEAD-R1_v1.1_APROBADO.docx"),
+                  Path("docs/robotics/head/ARTIFACTS.md"),
+              ),
+          ]
+          for artifact, manifest in items:
+              digest = sha256(artifact.read_bytes()).hexdigest()
+              text = manifest.read_text(encoding="utf-8")
+              text = re.sub(
+                  r"(?m)^- SHA-256:.*$",
+                  f"- SHA-256: `{digest}`",
+                  text,
+                  count=1,
+              )
+              marker = "- Generación: automática desde el `RECTOR.md` canónico mediante Pandoc."
+              if marker not in text:
+                  text = text.replace(
+                      f"- SHA-256: `{digest}`",
+                      f"- SHA-256: `{digest}`\n{marker}",
+                      1,
+                  )
+              manifest.write_text(text, encoding="utf-8")
+
+      - name: Commit generated artifacts
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/evolution/artifacts docs/robotics/head/artifacts \
+            docs/evolution/ARTIFACTS.md docs/robotics/head/ARTIFACTS.md
+          if git diff --cached --quiet; then
+            echo "No artifact changes to commit."
+          else
+            git commit -m "docs: materialize approved DOCX artifacts"
+            git push origin "HEAD:$GITHUB_REF_NAME"
+          fi

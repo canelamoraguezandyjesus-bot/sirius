@@ -1,15 +1,16 @@
 # Sirius HEAD-R1
 
-Línea futura de la cabeza robótica de Sirius.
+Primera cabeza robótica física de Sirius.
 
 ## Estado
 
-- Documento rector: **v1.0 APROBADO** el 16 de julio de 2026.
+- Documento rector: **v1.1 APROBADO** el 22 de julio de 2026.
+- Sustituye al Documento Rector v1.0 y a la propuesta v0.2.
 - Ejecución física: **NO ACTIVADA**.
-- Compras, fabricación, firmware e integración con Sirius 0.1: **NO AUTORIZADOS**.
-- Prioridad actual: terminar Sirius 0.1.
+- Compras, fabricación, firmware e integración con Sirius: **NO AUTORIZADOS** hasta activar expresamente una fase.
+- Prioridad vigente: terminar Sirius 0.1.
 
-La aprobación del documento fija alcance, reglas, arquitectura conceptual, fases y criterios de aceptación. No equivale a autorizar la construcción.
+La aprobación fija alcance, fases, presupuesto orientativo, método de trabajo y seguridad. No equivale a iniciar la construcción.
 
 ## Fuentes de verdad
 
@@ -19,6 +20,6 @@ La aprobación del documento fija alcance, reglas, arquitectura conceptual, fase
 4. `AUDIT.md`
 5. `ARTIFACTS.md`
 
-`RECTOR.md` es la representación GitHub-native del documento aprobado. `ARTIFACTS.md` conserva la identificación y las huellas SHA-256 del DOCX formateado y de la referencia visual maestra.
+`RECTOR.md` es la representación GitHub-native del documento aprobado. `ARTIFACTS.md` identifica el DOCX formateado y sus huellas de integridad.
 
-Cuando esta línea se reactive, deberá crearse y mantenerse `HEAD_STATUS.md` como estado operativo diario antes de iniciar cualquier actividad física.
+Cuando se active una fase física deberá crearse y mantenerse `HEAD_STATUS.md` con fase activa, último avance, siguiente paso exacto, compras autorizadas y estado seguro del montaje.

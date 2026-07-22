@@ -1,345 +1,283 @@
-# Documento Rector — Cabeza Robótica Sirius HEAD-R1
+# Documento Rector - Cabeza Robótica Sirius HEAD-R1
 
 **Identificador:** `SIRIUS-HEAD-RECTOR-R1`  
-**Versión:** 1.0  
+**Versión:** 1.1  
 **Estado:** APROBADO  
-**Fecha:** 16 de julio de 2026  
+**Fecha:** 22 de julio de 2026  
 **Autoridad final:** usuario responsable del Proyecto Sirius
 
-> La aprobación de este documento fija la base canónica de HEAD-R1. No autoriza compras, fabricación, montaje eléctrico, firmware, aplicación de control, repositorio independiente ni integración con Sirius 0.1. La ejecución física requerirá una activación expresa y separada por fase.
+> v1.1 sustituye a v1.0 y v0.2. Añade la grabación de vídeo dirigida por Claude en cada sesión, pospone la sonrisa a R2 y fija un plan operativo simplificado por fases.
 
-## 1. Propósito y relación con Sirius
+> La aprobación documental no activa compras ni construcción. Cada fase se activa únicamente mediante autorización expresa del usuario.
 
-HEAD-R1 será el primer desarrollo físico robótico de Sirius: una cabeza expresiva de sobremesa, claramente robótica, modular, segura, mantenible y documentada.
+## 1. Qué es HEAD-R1
 
-HEAD-R1 pertenece a la evolución física futura de Sirius. No amplía el alcance aprobado de Sirius 0.1 ni modifica su arquitectura. La cabeza deberá poder diseñarse, construirse, probarse y validarse de forma independiente. La integración conversacional será posterior y separada.
+HEAD-R1 es la primera cabeza robótica de Sirius: un objeto de sobremesa de unos 35 cm de alto con pedestal, estética claramente robótica, superficies negras y gunmetal, ojos azules iluminados y mandíbula articulada.
 
-## 2. Jerarquía ante conflictos
+La cabeza gira e inclina el cuello, mueve los ojos en horizontal y vertical, parpadea, mueve las cejas, abre la boca y reproduce voz desde su interior. No pretende parecer humana.
+
+El proyecto será realizado por una sola persona sin experiencia previa, guiada paso a paso por Claude. El aprendizaje de mecánica, electrónica, diseño 3D y fabricación forma parte del resultado.
+
+### Datos clave
+
+- presupuesto orientativo: 900-2.500 EUR;
+- plazo realista: 12-30 meses a tiempo parcial;
+- un solo frente físico principal abierto a la vez;
+- conexión por cable al ordenador y a la corriente;
+- sin baterías y siempre bajo supervisión.
+
+## 2. Alcance
+
+### 2.1 Funciones incluidas
+
+| Función | Comportamiento |
+|---|---|
+| Cuello: girar | Izquierda y derecha. |
+| Cuello: inclinar | Arriba y abajo. |
+| Ojos: horizontal | Ambos ojos juntos a izquierda y derecha. |
+| Ojos: vertical | Ambos ojos juntos arriba y abajo. |
+| Párpados | Apertura, cierre y parpadeo conjunto. |
+| Cejas | Dos piezas visibles que suben y bajan juntas. |
+| Mandíbula | Apertura y cierre articulado. |
+| Voz | Altavoz dentro de la cabeza. |
+| Boca al hablar | Movimiento creíble sin sincronización fonética precisa. |
+| Ojos iluminados | Luz azul uniforme y suave. |
+
+### 2.2 Fuera de R1
+
+- sonrisa mecánica, pospuesta a R2;
+- cámaras, visión o reconocimiento;
+- micrófonos y escucha;
+- ojos, párpados o cejas independientes;
+- inclinación lateral del cuello;
+- baterías o uso sin cables;
+- operación desatendida;
+- cuerpo, torso, brazos o base móvil.
+
+### 2.3 Ojos a medida
+
+El mecanismo ocular se diseñará desde cero. Es el reto técnico principal de R1 y se acepta que necesitará varias versiones de prueba.
+
+### 2.4 Reservas futuras
+
+Se dejará hueco y paso de cables para una cámara futura en un ojo, micrófonos separados del altavoz y la sonrisa de R2. Reservar espacio no autoriza instalar esos elementos.
+
+## 3. Estética y medidas
+
+### 3.1 Identidad visual
+
+- apariencia robótica, no humana realista;
+- negro y gunmetal con detalles metálicos limitados;
+- tornillos, placas y mecanismos visibles cuando mejoren carácter o acceso;
+- ojos azules como sello de identidad;
+- mandíbula con dientes estéticos;
+- la referencia visual guía dirección, no dimensiones literales.
+
+### 3.2 Medidas
+
+| Medida | Valor |
+|---|---|
+| Altura objetivo | 35 cm con cabeza, cuello y pedestal. |
+| Altura máxima | 39 cm, límite absoluto. |
+| Cabeza orientativa | 19-20 cm alto, 16-17 cm ancho, 17-19 cm fondo. |
+| Parte móvil | Objetivo 1,3-1,8 kg; máximo 2,2 kg. |
+| Total con pedestal | 3,5-5 kg. |
+
+Las dimensiones se confirman mediante maqueta y piezas reales. Reducir masa móvil tiene prioridad práctica.
+
+### 3.3 Jerarquía
 
 1. Seguridad.
 2. Funcionamiento.
-3. Mantenimiento y reparabilidad.
+3. Mantenimiento y reparación.
 4. Tamaño y estabilidad.
-5. Robustez y durabilidad.
-6. Fidelidad a la referencia visual.
+5. Robustez y duración.
+6. Parecido visual.
 7. Coste.
 8. Refinamiento estético.
 
-La estética es un requisito central, pero no podrá imponerse sobre seguridad, funcionamiento o mantenimiento. El coste no justificará degradar una función crítica ni pagar por prestaciones innecesarias.
+## 4. Fases
 
-## 3. Alcance de HEAD-R1
+Cada fase tiene objetivo y prueba para pasar. Solo se activa con autorización del usuario y solo entonces se compran materiales.
 
-### 3.1 Funciones obligatorias
+### F0 - Preparación
 
-- cuello con giro horizontal;
-- cuello con inclinación vertical;
-- ojos con movimiento horizontal conjunto;
-- ojos con movimiento vertical conjunto;
-- párpados conjuntos;
-- cejas conjuntas;
-- mandíbula articulada;
-- sonrisa simétrica independiente de la mandíbula;
-- iluminación azul de los ojos;
-- reproducción de voz desde la cabeza;
-- movimiento básico y convincente de mandíbula durante el habla;
-- control determinista desde el ordenador.
+Aprender Tinkercad durante 2-3 semanas y después pasar a Onshape.
 
-### 3.2 Construcción y operación obligatorias
+**Prueba:** modelar una pieza sencilla y exportarla.
 
-- cabeza, cuello corto y pedestal estable de sobremesa;
-- carcasa desmontable;
-- esqueleto interno independiente de la carcasa estética;
-- módulos accesibles y sustituibles;
-- mantenimiento normal sin romper pegamento, cortar cables ni desoldar;
-- límites mecánicos y de control;
-- referencia y calibración documentadas por eje;
-- arranque y parada seguros;
-- modo de mantenimiento;
-- diagnóstico con actuadores desactivados;
-- corte físico de alimentación de actuadores independiente del software;
-- estrategia verificable ante bloqueo, sobrecarga o movimiento prolongado;
-- trazabilidad entre requisitos, piezas, configuración, pruebas y evidencia.
+### F1 - Primer servo
 
-### 3.3 Fuera de HEAD-R1
+Mover un micro-servo desde el ordenador e instalar un corte físico desde el primer día.
 
-- cámaras y visión artificial;
-- micrófonos integrados, escucha y cancelación de eco;
-- ojos, párpados o cejas independientes;
-- guiños;
-- inclinación lateral del cuello;
-- sincronización fonética avanzada;
-- autonomía física;
-- batería;
-- operación desatendida;
-- control directo de motores por el Sirius conversacional;
-- cuerpo, torso, brazos, manos o movilidad general.
+**Prueba:** moverlo a tres posiciones y detenerlo mediante el interruptor mientras se mueve.
 
-Las funciones excluidas podrán reservar espacio o interfaces cuando ello no penalice significativamente HEAD-R1, pero no se instalarán por anticipación.
+### F2 - Maqueta de escala
 
-## 4. Perfil de uso
+Construir una maqueta de cartón o espuma a 35 cm para validar tamaño y proporciones.
 
-HEAD-R1 será:
+**Prueba:** maqueta terminada, fotografiada con regla y aprobada frente a la referencia.
 
-- un objeto de sobremesa;
-- para interiores;
-- alimentado externamente por cable;
-- conectado por cable al ordenador;
-- operado bajo supervisión;
-- inmóvil sobre su base durante el funcionamiento;
-- destinado a uso doméstico y de taller;
-- transportable únicamente apagado y asegurado;
-- no diseñado inicialmente para exposición pública continua.
+### F3 - Banco eléctrico seguro
 
-## 5. Identidad visual y escala
+Montar fuente de 12 V, fusible, corte físico y un servo inteligente con telemetría y límites.
 
-La referencia visual maestra aprobada define una cabeza:
+**Prueba:** mover con límites, leer posición y temperatura, y demostrar parada segura al perder comunicación.
 
-- claramente robótica, no humana realista;
-- compacta y redondeada;
-- negra y gunmetal;
-- formada por placas y detalles mecánicos coherentes;
-- con ojos azules, cejas visibles, mandíbula, dientes, cuello corto y pedestal Sirius.
+### F4 - Ojos a medida
 
-La referencia visual guía la identidad, no constituye un plano ni garantiza fabricabilidad literal.
+Diseñar e imprimir el mecanismo ocular propio.
 
-- altura objetivo del conjunto: **35 cm**;
-- altura máxima absoluta: **39 cm**.
+**Prueba:** movimiento horizontal y vertical suave durante 15 minutos sin roce, vibración ni sobrecalentamiento.
 
-Las restantes dimensiones, masas y recorridos son provisionales hasta validación mediante maqueta, componentes reales, CAD y pruebas.
+### F5 - Párpados y cejas
 
-## 6. Arquitectura mecánica
+Añadir parpadeo y cejas conjuntas sin interferir con los ojos.
 
-### 6.1 Principio estructural
+**Prueba:** funcionamiento combinado durante 15 minutos en cualquier posición ocular.
 
-La arquitectura base será:
+### F6 - Mandíbula
 
-- esqueleto interno fijo;
-- cara frontal extraíble;
-- submódulos desmontables;
-- mandíbula unida de forma independiente al esqueleto;
-- cubierta posterior de acceso;
-- cabeza, cuello y pedestal como módulos separables.
+Construir una mandíbula desmontable sobre dos pivotes laterales.
 
-La carcasa será estética y de protección, no el soporte estructural principal. Los actuadores producirán movimiento, pero no serán los únicos cojinetes, ejes o apoyos de carga.
+**Prueba:** 200 ciclos suaves sin holgura creciente ni ruido anómalo.
 
-### 6.2 Módulos faciales
+### F7 - Cuello y pedestal
 
-- módulo ocular acoplado, preparado para movimiento horizontal y vertical;
-- párpados conjuntos sin roce con los ojos;
-- puente de cejas con dos piezas visibles y movimiento común;
-- mandíbula inferior articulada;
-- mecanismo de sonrisa separado de la mandíbula;
-- altavoz fijado a estructura o cámara acústica propia;
-- iluminación ocular desmontable.
+Construir giro e inclinación y probar primero con una masa falsa equivalente a la cabeza.
 
-La mandíbula podrá hablar sin sonreír y la sonrisa podrá mantenerse con la boca cerrada.
+**Prueba:** recorrido completo sin vuelco, pinzamiento de cables ni exceso de temperatura.
 
-### 6.3 Cuello y pedestal
+### F8 - Cabeza abierta integrada
 
-La primera generación tendrá dos grados de libertad: giro e inclinación. No incluirá inclinación lateral.
+Integrar ojos, párpados, cejas, mandíbula y cuello sin carcasa.
 
-El cuello se probará primero con masa simulada. La estructura deberá soportar la cabeza sin depender únicamente del par de los motores. El pedestal contendrá preferentemente los elementos pesados, calientes o de servicio: control principal, distribución eléctrica, protecciones, conexiones y lastre fijado.
+**Prueba:** secuencia combinada repetida 10 veces sin fallos ni choques.
 
-## 7. Alimentación, electrónica y control
+### F9 - Audio e iluminación
 
-La primera cabeza usará baja tensión externa. No incorporará inicialmente red de 230 V ni baterías dentro del pedestal.
+Instalar altavoz, movimiento de boca al hablar y luz azul difusa.
 
-La arquitectura separará conceptualmente:
+**Prueba:** voz inteligible a 2 m, boca creíble, luz uniforme y vibración aceptable.
 
-- lógica y comunicaciones;
-- actuadores;
-- audio e iluminación cuando sea necesario.
+### F10 - Carcasa y acabado
 
-Existirán:
+Diseñar carcasa desmontable negro/gunmetal sin perder mantenimiento o refrigeración.
 
-- interruptor general;
-- corte físico independiente de actuadores;
-- fusible principal y protecciones justificadas por ramas;
-- cableado adecuado a la corriente;
-- conectores identificados y no invertibles por error razonable;
-- alivio de tensión y rutas protegidas por el cuello;
-- capacidad de conservar diagnóstico con motores desactivados.
+**Prueba:** todo funciona con carcasa, la cara frontal se desmonta y se aprueba la comparación visual.
 
-El ordenador solicitará acciones de alto nivel. El controlador local aplicará límites, velocidad, aceleración, referencia, posición segura, validación de órdenes y respuesta ante pérdida de comunicación. Ninguna salida libre de un modelo conversacional llegará directamente a los motores.
+### F11 - Validación final
 
-Antes de energizar un eje deberá existir una referencia de posición válida y un trayecto de inicialización demostrado como seguro. Cada actuador tendrá una ficha con módulo, puerto o ID, orientación, sentido positivo, neutral, límites, alimentación, configuración, referencia, versión y pruebas asociadas.
+Realizar encendidos repetidos, extremos de recorrido, sesión larga, corte físico, desmontaje y restauración de configuraciones.
 
-## 8. Audio e iluminación
+**Prueba:** campaña completa documentada. Se congela HEAD-R1 y las mejoras pasan a R2.
 
-La voz deberá parecer proceder de la cabeza. El altavoz estará aislado mecánicamente para no hacer vibrar ojos, dientes, párpados o carcasa.
+## 5. Compras y presupuesto
 
-La mandíbula acompañará el audio de forma sencilla y convincente. No se exige sincronización fonética precisa.
+| Fase | Compra principal | Precio orientativo | Acumulado aproximado |
+|---|---|---:|---:|
+| F1 | Kit de inicio, micro-servos, controladora, protoboard, corte y alimentación. | 40-70 EUR | 70 EUR |
+| F2 | Material de maqueta. | 15-25 EUR | 95 EUR |
+| F3 | Fuente 12 V, servos inteligentes, bus, fusibles, multímetro, calibre y conexiones. | 180-250 EUR | 350 EUR |
+| F4 | Impresora 3D, filamento, micro-servos y mecánica fina. | 400-800 EUR | 1.150 EUR |
+| F5 | Micro-servos y material. | 30-60 EUR | 1.200 EUR |
+| F6 | Servo, pivotes, casquillos y muelles. | 40-70 EUR | 1.270 EUR |
+| F7 | Servos, rodamientos, pedestal, lastre y pasacables. | 90-150 EUR | 1.420 EUR |
+| F8 | Cableado, fundas y conectores. | 20-40 EUR | 1.460 EUR |
+| F9 | Altavoz, amplificador, LED y difusores. | 35-65 EUR | 1.520 EUR |
+| F10 | Filamento, lijas, imprimación y pintura. | 50-100 EUR | 1.620 EUR |
+| Reserva | Errores, repeticiones e imprevistos. | 300-900 EUR | 900-2.500 EUR |
 
-El azul será la identidad luminosa principal. La intensidad podrá variar suavemente por estado; el cambio habitual de color no forma parte de HEAD-R1.
+Los precios se verifican justo antes de comprar. No se compra soldador ni lotes grandes de servos antes de demostrar necesidad.
 
-La integración deberá comprobar consumo, temperatura, vibraciones, ruido eléctrico, inteligibilidad y compatibilidad con movimientos simultáneos.
+## 6. Seguridad práctica
 
-## 9. Materiales, fabricación y CAD
+- baja tensión de 12 V como máximo dentro del montaje;
+- corte físico siempre probado y al alcance;
+- un mecanismo que no se mueve suave a mano no se fuerza con motor;
+- ordenador y lógica primero, motores después;
+- manos fuera de zonas energizadas;
+- olor, humo, calor o ruido nuevo implican corte inmediato;
+- polaridad comprobada antes de conectar;
+- gafas y ventilación cuando proceda;
+- cansancio o frustración implican parar;
+- todo susto o casi-accidente se registra como `INC-###`.
 
-La cabeza deberá parecer metálica sin necesidad de fabricarse íntegramente en metal.
+## 7. Trabajo por sesión
 
-- polímeros y placas ligeras para formas y estructura cuando cumplan;
-- metal en ejes, tornillos, rodamientos, casquillos, refuerzos y cargas críticas;
-- piezas de desgaste reemplazables;
-- uniones desmontables como norma;
-- pegamento limitado a elementos no mantenibles o decorativos;
-- insertos, tuercas cautivas o tornillos pasantes en desmontajes frecuentes.
+### 7.1 Papeles
 
-No se fabricará la carcasa definitiva antes de validar mecanismos, cableado, masa, temperatura y mantenimiento. Sí se reservará desde el principio una envolvente exterior provisional para impedir que los mecanismos crezcan fuera de la estética aprobada.
+Claude prepara objetivo, pasos, explicaciones, seguridad, revisión de fotos, guía CAD y cierre. El usuario monta, imprime, conecta, observa, mide, documenta y decide.
 
-Existirá un ensamblaje maestro con sistema de referencias común, volúmenes reservados, interfaces, recorridos y accesos. Los componentes comprados se medirán físicamente antes de cerrar su geometría. Toda modificación manual que permanezca en el montaje deberá reflejarse en la configuración real.
+### 7.2 Inicio
 
-Las herramientas, materiales, tolerancias, servos, rodamientos, conectores e impresora se decidirán mediante pruebas, no por anticipación.
+> Claude, empezamos sesión. Lee el estado. Estoy en la fase [X]. Hoy quiero [objetivo]. Dime el plan en pasos, qué necesito tener a mano y qué NO hay que hacer hoy.
 
-## 10. Método de trabajo
+### 7.3 Cierre
 
-### 10.1 Regla de prueba
+> Cerramos sesión. Resume qué hemos hecho, qué ha fallado, qué queda pendiente de verificar y dame el texto para actualizar el estado y el siguiente paso exacto.
 
-Cada mecanismo seguirá, como mínimo:
+### 7.4 Costumbres
 
-1. inspección y movimiento manual sin energía;
-2. actuador aislado y centrado;
-3. unión al mecanismo con recorrido y velocidad reducidos;
-4. ciclos repetidos;
-5. integración con otros módulos;
-6. prueba combinada y de fallo.
+- fotos antes, durante el fallo y al terminar;
+- una variable cada vez;
+- verificar números críticos con fabricante o medición;
+- terminar sin corriente, con mecanismos relajados y piezas etiquetadas.
 
-Si una pieza no se mueve correctamente a mano, no se utilizará el motor para obligarla. Ante un fallo se modificará una sola variable siempre que sea razonable.
+### 7.5 Grabación dirigida
 
-### 10.2 Dirección de sesiones
+Claude indicará “Qué grabar hoy” con plano y momento concretos.
 
-Cada sesión tendrá:
+Mínimos por sesión:
 
-- identificador;
+- apertura general;
+- justo antes de un cambio;
+- prueba principal;
+- fallo, si ocurre;
+- cierre.
+
+Los archivos tendrán nombres cortos, por ejemplo `S014_servo-cuello.mp4`. Antes de publicar se revisará que no aparezcan credenciales, pantallas o datos privados.
+
+## 8. Registros y plantillas
+
+### 8.1 Registros
+
+| Código | Función |
+|---|---|
+| `DEC-###` | Decisiones importantes. |
+| `COMP-###` | Compras y resultado al probarlas. |
+| `TEST-###` | Pruebas, medidas y evidencia. |
+| `INC-###` | Incidentes, causa y prevención. |
+
+`HEAD_STATUS` será un documento de una página con fase activa, último avance, siguiente paso, compras autorizadas y estado del montaje.
+
+### 8.2 Plantilla de sesión
+
+- sesión y fecha;
 - fase y objetivo;
-- piezas y versiones;
-- materiales y herramientas;
-- pasos ordenados;
-- elementos que no deben hacerse todavía;
-- riesgos y condiciones de parada;
-- captura audiovisual obligatoria;
-- mediciones;
+- qué no tocar;
+- seguridad y condición de parada;
+- qué grabar;
+- resultado;
+- fallos;
+- archivos guardados;
+- estado seguro al terminar;
+- siguiente paso exacto.
+
+### 8.3 Plantilla de prueba
+
+- identificador y fecha;
+- qué se prueba y por qué;
+- pasos;
 - resultado esperado;
-- cierre, estado seguro y siguiente paso.
+- resultado real y medidas;
+- evidencia;
+- veredicto: superada, repetir o rediseñar.
 
-El usuario ejecutará físicamente, observará, medirá y conservará la autoridad final. El asistente preparará procedimiento, pruebas, diagnóstico, aprendizaje, nomenclatura, archivo, contenido audiovisual y siguiente paso.
+## 9. Relación con Sirius
 
-### 10.3 Documentación audiovisual
+HEAD-R1 no amplía Sirius 0.1. La futura integración usará intenciones de alto nivel y un puente de permisos. El controlador local aplicará límites y estado seguro. Ninguna salida libre de un modelo llegará directamente a los motores.
 
-Grabar forma parte de la ingeniería. Cada sesión conservará:
+## 10. Aprobación
 
-- apertura hablada;
-- estado anterior al cambio;
-- montaje o fabricación relevante;
-- prueba principal desde los ángulos necesarios;
-- sonido original cuando sea diagnóstico;
-- fallo en su posición exacta;
-- corrección;
-- resultado final;
-- cierre hablado.
-
-Cada archivo tendrá nombre corto y metadatos en un índice. El archivo físico será único aunque tenga varias etiquetas. Se distinguirá material técnico, privado y publicable. Ninguna toma justificará repetir una prueba insegura.
-
-## 11. Compras y presupuesto
-
-La estrategia vigente es incremental:
-
-- comprar solo lo necesario para superar la siguiente prueba;
-- exigir calidad suficiente para la función real;
-- probar pocas unidades antes de comprar cantidades;
-- no montar un laboratorio completo por anticipación;
-- no incluir soldador, impresora, cámaras, audio definitivo o servos premium antes de necesitarlos;
-- revalidar precios y disponibilidad en el momento de compra.
-
-El ciclo será:
-
-`HIPÓTESIS → CANDIDATO → COMPARADO → AUTORIZADO PARA PRUEBA → COMPRADO → RECIBIDO → VALIDADO → INTEGRADO → SUSTITUIDO/RECHAZADO`.
-
-Ninguna recomendación, enlace o presupuesto histórico equivale a autorización.
-
-## 12. Fases y puertas
-
-1. Gobernanza y requisitos.
-2. Maqueta de escala y envolvente.
-3. Banco eléctrico seguro.
-4. Primer mecanismo expresivo.
-5. Esqueleto facial provisional.
-6. Iteraciones entre mecanismos y esqueleto.
-7. Cuello y pedestal con masa simulada.
-8. Cabeza abierta integrada.
-9. Audio e iluminación.
-10. Carcasa y acabado.
-11. Validación de HEAD-R1.
-
-Solo habrá un frente físico principal activo. Cada puerta deberá registrar objetivo, pruebas, evidencia, riesgos, coste real, decisión y siguiente fase autorizada. Retroceder a una fase anterior será obligatorio cuando una prueba invalide una hipótesis.
-
-## 13. Seguridad, mantenimiento y almacenamiento
-
-La seguridad se resolverá primero por diseño, después mediante límites, protecciones, control y procedimiento.
-
-Reglas mínimas:
-
-- manos fuera durante movimientos automáticos;
-- velocidad y recorrido reducidos en primeras pruebas;
-- corte físico accesible y comprobado;
-- desconexión completa para mantenimiento;
-- ninguna prueba de desarrollo sin supervisión;
-- parada inmediata ante bloqueo, olor, humo, calor rápido, cable caliente, ruido anormal o reinicios repetidos;
-- cuello probado con masa falsa y sujeción secundaria;
-- pedestal estable y lastre fijado;
-- piezas dudosas en cuarentena;
-- almacenamiento sin energía, mecanismos relajados, piezas identificadas y estado fotografiado;
-- incidentes y casi accidentes registrados y corregidos mediante prueba.
-
-Las herramientas de corte, taladro, lijado, soldadura, pintura e impresión 3D requerirán procedimientos y protección adecuados cuando entren en una fase autorizada.
-
-## 14. Verificación, validación y cierre
-
-Todo requisito deberá estar enlazado con una prueba, configuración, evidencia y estado. No se crearán pruebas sin requisito, riesgo o decisión que las justifique.
-
-HEAD-R1 se considerará terminado únicamente cuando:
-
-- cumpla las funciones obligatorias;
-- arranque y se detenga de forma segura;
-- repita movimientos y expresiones sin depender de suerte;
-- supere pruebas individuales, combinadas, prolongadas y de fallo;
-- no presente riesgos críticos abiertos;
-- sea estable, mantenible y desmontable;
-- el montaje real coincida con CAD, cableado, firmware, parámetros y registros;
-- exista documentación suficiente para operar, reparar y reconstruir la versión;
-- la identidad visual sea aceptada expresamente por el usuario frente a la referencia maestra;
-- se registre una aprobación final `HEAD-CLOSURE-R1`.
-
-Ver moverse la cabeza, publicar un vídeo o completar una demostración aislada no equivale a liberar HEAD-R1.
-
-## 15. Sistema documental y estado operativo
-
-El sistema deberá mantener:
-
-- `RECTOR.md` y el artefacto DOCX aprobado;
-- `DECISIONS.md`;
-- `STATUS.md`;
-- registro de riesgos;
-- matriz requisito-prueba;
-- lista de piezas y revisiones;
-- configuraciones completas `HEAD-BUILD-*`;
-- sesiones, pruebas, incidentes y compras;
-- índice audiovisual;
-- backlog.
-
-Antes de iniciar actividad física deberá existir `HEAD_STATUS.md` con fase activa, última sesión, configuración montada, piezas vigentes, riesgos, compras autorizadas, pruebas pendientes y siguiente paso exacto.
-
-## 16. Frontera de activación vigente
-
-Actualmente solo están autorizadas auditoría, documentación, definición, planificación, aprendizaje y bocetos conceptuales.
-
-Para activar una fase física el usuario deberá aprobar expresamente:
-
-- fase;
-- objetivo;
-- presupuesto máximo;
-- compras permitidas;
-- prueba de salida;
-- condiciones de parada.
-
-Hasta entonces, HEAD-R1 permanece documentalmente aprobado pero físicamente inactivo.
+El usuario aprobó el Documento Rector HEAD-R1 v1.1 el 22 de julio de 2026. La versión permanece inactiva hasta la autorización expresa de una fase.
