@@ -73,6 +73,7 @@ from sirius.presentation.backup_worker import (
 )
 from sirius.presentation.context_panel_widget import ContextPanelWidget
 from sirius.presentation.conversation_worker import SendMessageWorker
+from sirius.presentation.error_messages import failed_send_message
 from sirius.presentation.knowledge_widget import KnowledgeWidget
 from sirius.presentation.project_continuity_widget import ProjectContinuityWidget
 
@@ -407,18 +408,14 @@ class MainWindow(QMainWindow):
         if result.outcome is MessageStatus.CANCELLED:
             self.error_label.setText("Envío cancelado.")
         elif result.outcome is MessageStatus.FAILED:
-            self.error_label.setText(
-                f"No se pudo completar el envío. Inténtalo de nuevo. (ref: {operation_id})"
-            )
+            self.error_label.setText(failed_send_message(result.error_kind, operation_id))
         self._finish_sending()
 
     def _on_crashed(self, error_message: str) -> None:
         del error_message  # not shown verbatim: keep the user-facing message safe and generic
         operation_id = self._active_operation_id
         self._replace_history_with_authoritative_state()
-        self.error_label.setText(
-            f"No se pudo completar el envío. Inténtalo de nuevo. (ref: {operation_id})"
-        )
+        self.error_label.setText(failed_send_message(None, operation_id))
         self._finish_sending()
 
     def _finish_sending(self) -> None:

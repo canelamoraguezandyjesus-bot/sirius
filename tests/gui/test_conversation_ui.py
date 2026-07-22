@@ -40,6 +40,7 @@ from sirius.ports.llm import (
     LLMStreamEvent,
     LLMTextDelta,
 )
+from sirius.presentation.error_messages import describe_error
 from sirius.presentation.main_window import MainWindow
 
 
@@ -100,12 +101,15 @@ def _build_window(database_path: Path) -> MainWindow:
 class _FailingLLMProvider:
     """Test double: always fails before any delta, to exercise the provider-failure path."""
 
+    def __init__(self, kind: LLMErrorKind = LLMErrorKind.CONNECTION) -> None:
+        self._kind = kind
+
     def health_check(self) -> bool:
         return True
 
     def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
         del request
-        yield LLMError(kind=LLMErrorKind.CONNECTION, message="no se pudo contactar")
+        yield LLMError(kind=self._kind, message="no se pudo contactar")
 
     def cancel(self, operation_id: str) -> None:
         del operation_id
@@ -406,6 +410,7 @@ def test_provider_failure_shows_a_clear_error_and_persists_the_failed_reply(
 
     assert window.error_label.text() != ""
     assert "no se pudo contactar" not in window.error_label.text()
+    assert window.error_label.text().startswith(describe_error(LLMErrorKind.CONNECTION))
     assert window.message_list.count() == 2
     assert window.message_list.item(0).text() == "Tú: hola"
     assert window.message_list.item(1).text() == "Sirius:  (fallido)"
@@ -415,6 +420,33 @@ def test_provider_failure_shows_a_clear_error_and_persists_the_failed_reply(
     persisted = conversation_repository.list_messages(conversation.id)
     assert [m.content for m in persisted] == ["hola", ""]
     assert [m.status for m in persisted] == [MessageStatus.COMPLETED, MessageStatus.FAILED]
+
+
+@pytest.mark.gui
+@pytest.mark.parametrize("kind", list(LLMErrorKind))
+def test_each_llm_error_kind_shows_its_actionable_message(
+    qtbot: QtBot, tmp_path: Path, kind: LLMErrorKind
+) -> None:
+    """B7a (RF-028): every ``LLMErrorKind`` reaches the interface as the
+    matching actionable message from ``error_messages.describe_error``,
+    never the provider's raw (potentially unsafe) ``LLMError.message``
+    (RNF-018), and keeps the support reference."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    _swap_send_message_use_case(window, database_path, _FailingLLMProvider(kind=kind))
+
+    window.message_input.setText("hola")
+    window.send_button.click()
+
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    operation_id = conversation_repository.list_messages(conversation.id)[-1].operation_id
+
+    assert window.error_label.text() == f"{describe_error(kind)} (ref: {operation_id})"
+    assert "no se pudo contactar" not in window.error_label.text()
 
 
 @pytest.mark.gui
@@ -436,7 +468,10 @@ def test_persistence_failure_shows_a_clear_error_and_keeps_only_the_user_message
 
     qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
 
-    assert window.error_label.text() != ""
+    # An unclassified crash (no LLMErrorKind available) still gets the safe
+    # generic message from the same helper, not the raw exception text.
+    assert window.error_label.text().startswith(describe_error(None))
+    assert "simulated persistence failure" not in window.error_label.text()
     conversation = real_conversation_repository.get_or_create_main_conversation()
     persisted = real_conversation_repository.list_messages(conversation.id)
     assert [m.content for m in persisted] == ["hola"]
@@ -493,8 +528,9 @@ def test_clicking_cancel_stops_the_stream_and_reconciles_the_interface(
 
     # The cancelled partial text is never treated as a completed answer, but
     # SIRIUS-ARQ-0.1 S5.1 requires it to be conserved and shown, clearly
-    # marked as cancelled, for traceability.
-    assert window.error_label.text() != ""
+    # marked as cancelled, for traceability. B7a only changes the FAILED
+    # branch — CANCELLED keeps its own text unchanged.
+    assert window.error_label.text() == "Envío cancelado."
     assert window.message_list.count() == 2
     assert window.message_list.item(0).text() == "Tú: hola"
     assert window.message_list.item(1).text() == "Sirius: parcial (cancelado)"
