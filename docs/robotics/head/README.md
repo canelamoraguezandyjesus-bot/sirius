@@ -8,7 +8,7 @@ Primera cabeza robótica física de Sirius.
 - Sustituye al Documento Rector v1.0 y a la propuesta v0.2.
 - Ejecución física: **NO ACTIVADA**.
 - Compras, fabricación, firmware e integración con Sirius: **NO AUTORIZADOS** hasta activar expresamente una fase.
-- Prioridad vigente: terminar Sirius 0.1.
+- Prioridad vigente: cerrar Sirius 0.1 (implementación terminada; pendiente empaquetado, pruebas manuales en Windows 11, configuración de clave real, prueba con proveedor real, recopilación de evidencias y aceptación formal).
 
 La aprobación fija alcance, fases, presupuesto orientativo, método de trabajo y seguridad. No equivale a iniciar la construcción.
 

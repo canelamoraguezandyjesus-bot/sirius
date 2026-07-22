@@ -7,7 +7,7 @@ Esta carpeta contiene la base canónica aprobada para evolucionar Sirius desde e
 - Documento Rector de Evolución Post-0.1: **v1.0 APROBADO** el 22 de julio de 2026.
 - Decisiones EV-001 a EV-014: **APROBADAS**.
 - Implementación de capacidades post-0.1: **NO ACTIVADA**.
-- Prioridad vigente: terminar y aceptar Sirius 0.1 sin ampliar su alcance.
+- Prioridad vigente: cerrar Sirius 0.1 sin ampliar su alcance — implementación terminada; pendiente empaquetado, pruebas manuales en Windows 11, configuración de clave real, prueba con proveedor real, recopilación de evidencias y aceptación formal.
 
 ## Fuentes de verdad
 
