@@ -3,6 +3,7 @@ name: Materialize approved DOCX artifacts
 on:
   push:
     branches:
+      - main
       - docs/evolution-post-01-head-v11-20260722
     paths:
       - "docs/evolution/RECTOR.md"
@@ -18,7 +19,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: docs/evolution-post-01-head-v11-20260722
           fetch-depth: 0
 
       - name: Install Pandoc
@@ -83,5 +83,5 @@ jobs:
             echo "No artifact changes to commit."
           else
             git commit -m "docs: materialize approved DOCX artifacts"
-            git push origin HEAD:docs/evolution-post-01-head-v11-20260722
+            git push origin "HEAD:$GITHUB_REF_NAME"
           fi
