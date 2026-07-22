@@ -106,7 +106,12 @@ def test_validate_backup_rejects_a_tampered_ciphertext(
     created = service.create_backup(_PASSWORD)
     envelope = json.loads(created.path.read_text(encoding="utf-8"))
     ciphertext = envelope["ciphertext"]
-    envelope["ciphertext"] = f"{ciphertext[:-1]}A"
+    # Cambia el último carácter por otro DISTINTO garantizado: reemplazarlo
+    # siempre por "A" no corrompía nada cuando el texto cifrado ya terminaba
+    # en "A" (el cifrado es no determinista, así que ocurría de forma
+    # intermitente ~1 de cada 60 ejecuciones y la validación no rechazaba nada).
+    tampered_last = "B" if ciphertext[-1] == "A" else "A"
+    envelope["ciphertext"] = f"{ciphertext[:-1]}{tampered_last}"
     created.path.write_text(json.dumps(envelope), encoding="utf-8")
 
     with pytest.raises(BackupValidationError):
