@@ -12,7 +12,8 @@ Repositorio privado del compañero personal de creación e ingeniería Sirius.
 - La ventana de aceptación con proveedor real permanece bloqueada hasta superar las puertas documentadas en `docs/implementation/PLAN.md`.
 - Sirius 0.1 todavía no está aceptado ni terminado.
 - El alcance no debe ampliarse sin una decisión registrada y aprobada.
-- La línea futura de cabeza robótica HEAD-R1 dispone de Documento Rector v1.0 aprobado, pero permanece físicamente inactiva y sin compras autorizadas; su estado está en `docs/robotics/head/STATUS.md`.
+- La evolución post-0.1 dispone de Documento Rector v1.0 y decisiones EV-001 a EV-014 aprobadas; permanece inactiva hasta aceptar 0.1. Su estado está en `docs/evolution/STATUS.md`.
+- La línea futura de cabeza robótica HEAD-R1 dispone de Documento Rector v1.1 aprobado, pero permanece físicamente inactiva y sin compras autorizadas; su estado está en `docs/robotics/head/STATUS.md`.
 
 La arquitectura modular ya existe y está parcialmente implementada. No debe rediseñarse desde cero salvo que aparezca una contradicción material o un riesgo concreto.
 
@@ -25,10 +26,15 @@ Antes de modificar el proyecto, lee:
 3. `REPOSITORY_STATUS.md`;
 4. `AGENTS.md`.
 
+Para la evolución posterior a 0.1, lee además:
+
+5. `docs/evolution/README.md`;
+6. `docs/evolution/STATUS.md`.
+
 Para la línea física futura HEAD-R1, lee además:
 
-5. `docs/robotics/head/README.md`;
-6. `docs/robotics/head/STATUS.md`.
+7. `docs/robotics/head/README.md`;
+8. `docs/robotics/head/STATUS.md`.
 
 Los documentos canónicos conservan en algunos nombres la palabra `PROPUESTO` porque son instantáneas históricas anteriores a su aprobación. Su estado vigente está fijado en `docs/canonical/STATUS.md`.
 
