@@ -5,7 +5,7 @@
 - Archivo: `artifacts/SIRIUS_DOCUMENTO_RECTOR_EVOLUCION_POST_0.1_v1.0_APROBADO.docx`
 - Estado: APROBADO
 - Fecha: 22 de julio de 2026
-- SHA-256: `42ea99b16fc20dfde238a8cac92d58606bb3eaf30d7313e28203c45e3d4e92dc`
+- SHA-256: `07450cc28dfdc500e2b07ece62e480735d17f0bce293244aa7fee1829c648fee`
 - Generación: automática desde el `RECTOR.md` canónico mediante Pandoc.
 - Páginas verificadas: 13
 
