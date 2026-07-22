@@ -23,6 +23,9 @@ from sirius.adapters.persistence.sqlite_identity_repository import (
 from sirius.adapters.persistence.sqlite_knowledge_search_repository import (
     build_sqlite_knowledge_search_repository,
 )
+from sirius.adapters.persistence.sqlite_llm_usage_repository import (
+    build_sqlite_llm_usage_repository,
+)
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.adapters.secrets.fake import FakeSecretStore
@@ -80,6 +83,7 @@ def _build_window(database_path: Path) -> MainWindow:
     return MainWindow(
         send_message_use_case=dependencies.send_message_use_case,
         get_history_use_case=dependencies.get_history_use_case,
+        get_budget_status_use_case=dependencies.get_budget_status_use_case,
         api_key_settings_use_case=dependencies.api_key_settings_use_case,
         project_continuity_use_case=dependencies.project_continuity_use_case,
         project_lifecycle_use_case=dependencies.project_lifecycle_use_case,
@@ -113,6 +117,7 @@ def _build_window_with_backup_use_case(
     return MainWindow(
         send_message_use_case=dependencies.send_message_use_case,
         get_history_use_case=dependencies.get_history_use_case,
+        get_budget_status_use_case=dependencies.get_budget_status_use_case,
         api_key_settings_use_case=dependencies.api_key_settings_use_case,
         project_continuity_use_case=dependencies.project_continuity_use_case,
         project_lifecycle_use_case=dependencies.project_lifecycle_use_case,
@@ -497,3 +502,80 @@ def test_project_lifecycle_use_case_never_runs_while_a_send_is_in_progress(
 
     provider.release()
     qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+
+
+# --- Aviso de presupuesto (B7c, RF-030/PA-018) ---------------------------
+
+
+def _current_year_month() -> str:
+    return datetime.now(UTC).strftime("%Y-%m")
+
+
+@pytest.mark.gui
+def test_budget_warning_is_hidden_when_spend_is_below_the_warn_threshold(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    build_sqlite_llm_usage_repository(database_path).add_spent_usd(_current_year_month(), 5.0)
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+
+    assert window.budget_warning_label.text() == ""
+
+
+@pytest.mark.gui
+def test_budget_warning_shows_the_amounts_once_spend_reaches_the_warn_threshold(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    build_sqlite_llm_usage_repository(database_path).add_spent_usd(_current_year_month(), 15.3)
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+
+    assert "15.30" in window.budget_warning_label.text()
+    assert "20.00" in window.budget_warning_label.text()
+
+
+@pytest.mark.gui
+def test_budget_warning_never_appears_with_the_simulated_provider(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """The fake provider never records usage: spend stays at 0.0, so no
+    amount of sending through it should ever surface the warning."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+
+    window.message_input.setText("hola")
+    window.send_button.click()
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+
+    assert window.budget_warning_label.text() == ""
+
+
+@pytest.mark.gui
+def test_budget_warning_is_recalculated_only_after_the_send_completes(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    assert window.budget_warning_label.text() == ""
+
+    provider = _BlockingUntilReleasedProvider()
+    _swap_send_message_use_case(window, database_path, provider)
+    # Spend crosses the warn threshold while the send is still in flight, via
+    # a repository instance independent of the window's own — mirroring how
+    # BudgetTracker.record_usage persists real usage after a real send.
+    build_sqlite_llm_usage_repository(database_path).add_spent_usd(_current_year_month(), 16.0)
+
+    window.message_input.setText("hola")
+    window.send_button.click()
+    qtbot.waitUntil(lambda: window.message_list.count() == 2, timeout=5000)
+
+    assert window.budget_warning_label.text() == ""
+
+    provider.release()
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+
+    assert "16.00" in window.budget_warning_label.text()

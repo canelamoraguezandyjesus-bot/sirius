@@ -83,6 +83,7 @@ def _build_window(
     return MainWindow(
         send_message_use_case=dependencies.send_message_use_case,
         get_history_use_case=dependencies.get_history_use_case,
+        get_budget_status_use_case=dependencies.get_budget_status_use_case,
         api_key_settings_use_case=dependencies.api_key_settings_use_case,
         project_continuity_use_case=dependencies.project_continuity_use_case,
         project_lifecycle_use_case=dependencies.project_lifecycle_use_case,
