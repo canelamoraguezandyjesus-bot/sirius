@@ -29,7 +29,7 @@
 
 ## Prioridad actual
 
-Terminar y aceptar Sirius 0.1. La siguiente definición de producto se abrirá únicamente cuando 0.1 produzca la evidencia aprobada.
+Implementación de Sirius 0.1 terminada. Pendiente: empaquetado, pruebas manuales en Windows 11, configuración de clave real, prueba con proveedor real, recopilación de evidencias y aceptación formal. La siguiente definición de producto se abrirá únicamente cuando 0.1 produzca la evidencia aprobada y quede aceptada.
 
 ## Próximo paso futuro
 

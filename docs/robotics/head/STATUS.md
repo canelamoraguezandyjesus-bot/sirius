@@ -30,7 +30,7 @@
 
 ## Prioridad actual
 
-Terminar Sirius 0.1 sin ampliar su alcance.
+Cerrar Sirius 0.1 sin ampliar su alcance: implementación terminada; pendiente empaquetado, pruebas manuales en Windows 11, configuración de clave real, prueba con proveedor real, recopilación de evidencias y aceptación formal.
 
 ## Próximo paso cuando se reactive
 
