@@ -5,12 +5,12 @@
 - Archivo: `artifacts/SIRIUS_DOCUMENTO_RECTOR_HEAD-R1_v1.1_APROBADO.docx`
 - Estado: APROBADO
 - Fecha: 22 de julio de 2026
-- SHA-256: `499376bbeafd2bf0da66cd6c68ca24f37c6b1ee17b4b651270a7fcb62461d17d`
-- Generación: automática desde el `RECTOR.md` canónico mediante Pandoc.
-- Páginas verificadas: 12
+- SHA-256: `52c55ad0a618340934b648416b4a3fe202b65c62403b9a323ed4654fd9872f70`
+- Origen: DOCX completo aprobado por el usuario (fuente canónica). El pie se corrigió de v1.0 a v1.1 y la nota de portada aclara que sustituye a v1.0 y v0.2.
+- Páginas verificadas: pendiente de verificación visual (el entorno de generación no renderiza páginas; confirmar al abrir el DOCX).
 - Sustituye: Documento Rector v1.0 y propuesta v0.2.
 
-El contenido normativo está reflejado en `RECTOR.md`, representación GitHub-native y revisable por diferencias.
+El contenido normativo completo está reflejado fielmente en `RECTOR.md`, representación GitHub-native y revisable por diferencias.
 
 ## Documento histórico anterior
 
