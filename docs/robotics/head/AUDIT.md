@@ -1,35 +1,36 @@
-# Auditoría y cierre documental — Sirius HEAD-R1
+# Auditoría y cierre documental - Sirius HEAD-R1
 
-## Alcance auditado
+## Estado vigente
 
-- conversación completa de definición de la cabeza;
-- bloques de escala, arquitectura, pruebas, audiovisual, operación, electrónica, audio, materiales, CAD, compras, fases, seguridad y cierre;
-- decisiones D-HEAD-01 a D-HEAD-05;
-- Documento Rector HEAD-R1 v0.1 y v0.2;
-- contraste no normativo con prácticas documentadas de Poppy, ROBOTIS, iCub, NASA Systems Engineering Handbook y ciclos de vida gestionados de ROS 2.
+El Documento Rector v1.1 fue aprobado el 22 de julio de 2026 y sustituye v1.0 y v0.2.
 
-## Correcciones incorporadas antes de aprobar
+## Cambios materiales de v1.1
 
-- estrategia obligatoria de referencia y calibración por eje;
-- protección verificable ante bloqueo o sobrecarga;
-- estados operativos y transiciones seguras;
-- control de interfaces mecánicas, eléctricas y lógicas;
-- escenarios nominales y de fallo;
-- separación entre verificación, validación y aceptación;
-- recuperación de firmware, configuración y calibraciones;
-- revisión breve de modos de fallo antes de energizar módulos;
-- flujo de compras corregido e incremental;
-- nomenclaturas normalizadas;
-- referencia visual tratada como activo controlado;
-- trazabilidad requisito-prueba obligatoria;
-- correcciones de accesibilidad, metadatos y maquetación.
+- sonrisa mecánica pospuesta a HEAD-R2;
+- mecanismo ocular a medida confirmado como reto principal;
+- medidas y masas objetivo concretadas;
+- plan operativo F0-F11;
+- presupuesto orientativo 900-2.500 EUR;
+- plazo realista 12-30 meses;
+- lista de compras por fase;
+- reglas de seguridad prácticas desde el primer servo;
+- método de sesión simplificado;
+- grabación de vídeo dirigida por Claude;
+- burocracia reducida a cuatro registros y dos plantillas;
+- `HEAD_STATUS` definido como estado operativo de una página.
+
+## Coherencia con Sirius
+
+- Sirius 0.1 permanece intacto y prioritario.
+- HEAD-R1 puede desarrollarse independientemente con control determinista.
+- la integración conversacional se pospone;
+- ningún modelo controla actuadores directamente;
+- la línea física requiere activación expresa por fase.
 
 ## Veredicto
 
-La versión 1.0 es coherente, suficiente y apta como base canónica de HEAD-R1.
-
-No intenta resolver anticipadamente actuadores, materiales, tensiones, conectores, CAD, tolerancias, umbrales térmicos o costes finales. Esas decisiones deberán tomarse por fase mediante componentes reales, mediciones y pruebas.
+La versión 1.1 es apta como base canónica práctica de HEAD-R1. Reduce complejidad respecto de v1.0, mejora ejecutabilidad para un constructor principiante y conserva las fronteras de seguridad.
 
 ## Restricción operativa
 
-La aprobación documental no activa compras ni construcción. La línea permanece detenida hasta una autorización expresa por fase, una vez atendida la prioridad vigente de Sirius 0.1.
+La aprobación no activa compras, fabricación, firmware ni integración. El estado sigue INACTIVO.
