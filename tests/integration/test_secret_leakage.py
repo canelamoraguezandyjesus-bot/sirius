@@ -9,6 +9,7 @@ relevant dataclass reprs — is inspected for its literal presence.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -17,6 +18,8 @@ import httpx
 import openai
 import pytest
 
+from sirius.adapters.clock.fake import FakeClock
+from sirius.adapters.export.filesystem_export_service import FilesystemExportService
 from sirius.adapters.llm.budget import BudgetTracker
 from sirius.adapters.llm.openai_responses import OpenAIResponsesProvider
 from sirius.adapters.llm.token_counter import CharacterHeuristicTokenCounter
@@ -36,13 +39,19 @@ from sirius.adapters.persistence.sqlite_knowledge_search_repository import (
 )
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
+from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
 from sirius.adapters.secrets.fake import FakeSecretStore
+from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.context import ContextBuilder
+from sirius.application.export_structured import ExportStructuredUseCase
+from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
+from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageUseCase
 from sirius.config.llm_provider_settings import OpenAIProviderSettings
 from sirius.config.secrets_config import OPENAI_API_KEY_SECRET_NAME
 from sirius.config.settings import load_settings, save_settings
+from sirius.domain.conversation import MessageRole
 from sirius.infrastructure.logging import LOG_FILE_NAME, configure_logging, get_logger
 from sirius.infrastructure.paths import resolve_paths
 from sirius.ports.llm import LLMError, LLMRequest
@@ -211,3 +220,58 @@ def test_key_is_absent_from_relevant_object_reprs() -> None:
     assert _FAKE_KEY not in repr(settings)
     assert _FAKE_KEY not in repr(provider)
     assert _FAKE_KEY not in repr(secret_store)
+
+
+@pytest.mark.integration
+def test_key_never_appears_in_a_structured_export(tmp_path: Path) -> None:
+    """RNF-013 for B9a: the S12.1 open export must never contain the API key,
+    even when a real key is configured in the secret store at export time.
+
+    ``ExportStructuredUseCase``/``FilesystemExportService`` never receive a
+    ``SecretStore`` at all (they only read conversation, project, memory and
+    decision repositories) — this proves that structurally, against the real
+    SQLite adapters and every one of the six files the export writes.
+    """
+    secret_store = FakeSecretStore()
+    secret_store.set_secret(OPENAI_API_KEY_SECRET_NAME, _FAKE_KEY)
+
+    database_path = tmp_path / "sirius.db"
+    upgrade_to_head(database_path)
+
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    conversation_repository.append_message(conversation.id, MessageRole.USER, "hola Sirius")
+
+    project_repository = build_sqlite_project_repository(database_path)
+    project_repository.ensure_bootstrap_project()
+    project = project_repository.create_project(
+        "Proyecto de prueba",
+        "Objetivo de prueba",
+        state_summary="En marcha",
+        blockers=(),
+        next_step="Siguiente paso",
+    )
+
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    SaveManualMemoryUseCase(unit_of_work).save(
+        "El usuario prefiere respuestas breves.", project_id=project.id
+    )
+    proposed = ProposeDecisionUseCase(unit_of_work).propose(
+        "Formato de exportación", project.id, "Usar JSON/JSONL abierto"
+    )
+    ApproveDecisionUseCase(unit_of_work).approve(proposed.id, confirmed=True)
+
+    use_case = ExportStructuredUseCase(
+        FilesystemExportService(FakeClock(datetime(2026, 3, 1, tzinfo=UTC))),
+        conversation_repository,
+        project_repository,
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    )
+
+    result = use_case.export_structured(tmp_path / "exports")
+
+    exported_files = list(result.iterdir())
+    assert len(exported_files) == 6
+    for exported_file in exported_files:
+        assert _FAKE_KEY not in exported_file.read_text(encoding="utf-8")
