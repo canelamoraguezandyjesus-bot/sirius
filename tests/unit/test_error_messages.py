@@ -44,11 +44,15 @@ def test_failed_send_message_appends_the_support_reference(kind: LLMErrorKind) -
     assert text == f"{describe_error(kind)} (ref: op-123)"
 
 
-def test_failed_send_message_never_leaks_a_raw_provider_message() -> None:
+@pytest.mark.parametrize("kind", list(LLMErrorKind))
+def test_failed_send_message_never_leaks_a_raw_provider_message(kind: LLMErrorKind) -> None:
     """RNF-018: only ``kind`` and the reference feed the label, never the
     provider's raw ``LLMError.message`` (which could contain request/response
-    details). Simulate a secret-looking provider message to prove it never
-    appears in the output."""
-    secret_looking_message = "Bearer sk-live-super-secret-token-should-never-appear"
-    text = failed_send_message(LLMErrorKind.AUTHENTICATION, "op-456")
-    assert secret_looking_message not in text
+    details such as API keys or tokens). Since ``describe_error`` and
+    ``failed_send_message`` only ever accept ``kind``/``operation_id`` (no raw
+    provider message parameter exists), every possible output is exercised
+    here and checked against secret-looking patterns."""
+    secret_patterns = ("bearer ", "sk-live-", "sk-", "api_key", "apikey", "token=")
+    text = failed_send_message(kind, "op-456").lower()
+    for pattern in secret_patterns:
+        assert pattern not in text
