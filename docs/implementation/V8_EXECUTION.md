@@ -108,7 +108,7 @@ Cualquier defecto nuevo debe vincularse a un requisito ya aprobado. Si no puede 
 | B10 | Política de acciones fuera de alcance | Completo (política RF-035 añadida a la semilla canónica de identidad y renderizada en las instrucciones; A-01 cerrado en su parte automatizable) |
 | B11 | Recuperación tras cierre forzado | Completo (prueba de integración que simula un cierre forzado —repositorios abandonados sin `close()` ordenado— sobre SQLite real migrado con Alembic, demostrando que el estado confirmado sobrevive íntegro, `PRAGMA integrity_check` es `ok`, un turno interrumpido a mitad de streaming deja el historial coherente sin fila parcial, y la reapertura es idempotente; `PRAGMA synchronous=FULL` afirma la durabilidad explícitamente; A-02 cerrado en su parte automatizable) |
 | B12 | Suite PA/SP automática, rendimiento y evidencia | Pendiente |
-| B13 | Empaquetado reproducible | Pendiente |
+| B13 | Empaquetado reproducible | Pendiente (groundwork: `sirius.adapters.persistence.migrations._resource_root` resuelve `alembic.ini`/`migrations/` junto al ejecutable cuando la app corre congelada —PyInstaller `sys.frozen` o Nuitka `__compiled__`— y desde la raíz del repositorio en desarrollo, sin cambios de comportamiento; cubierto por prueba unitaria con modo empaquetado simulado. El build real con Nuitka en Windows sigue pendiente) |
 | B14 | Windows sin clave | Bloqueado |
 | B15 | Ventana compacta con proveedor real | Bloqueado |
 | B16 | PA-E2E-01, regresión y cierre | Bloqueado |
