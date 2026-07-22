@@ -17,6 +17,7 @@ from sirius.application.create_backup import CreateBackupUseCase
 from sirius.application.decision_origin import GetDecisionOriginUseCase
 from sirius.application.delete_memory import DeleteMemoryUseCase
 from sirius.application.detect_precedence_conflicts import DetectPrecedenceConflictsUseCase
+from sirius.application.export_structured import ExportStructuredUseCase
 from sirius.application.get_conversation_history import GetConversationHistoryUseCase
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
 from sirius.application.memory_origin import GetMemoryOriginUseCase
@@ -60,12 +61,15 @@ class ValidatedMainWindow(MainWindow):
         create_backup_use_case: CreateBackupUseCase,
         validate_backup_use_case: ValidateBackupUseCase,
         restore_backup_use_case: RestoreBackupUseCase,
+        export_structured_use_case: ExportStructuredUseCase,
         close_database_connections: Callable[[], None],
         *,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
         confirm_restore: Callable[[str, str], bool] | None = None,
         choose_backup_file: Callable[[str], str] | None = None,
+        confirm_export: Callable[[str, str], bool] | None = None,
+        choose_export_directory: Callable[[str], str] | None = None,
     ) -> None:
         self._validate_and_save_api_key_use_case = validate_and_save_api_key_use_case
         self._is_credential_busy = False
@@ -93,11 +97,14 @@ class ValidatedMainWindow(MainWindow):
             create_backup_use_case=create_backup_use_case,
             validate_backup_use_case=validate_backup_use_case,
             restore_backup_use_case=restore_backup_use_case,
+            export_structured_use_case=export_structured_use_case,
             close_database_connections=close_database_connections,
             show_warning=show_warning,
             show_information=show_information,
             confirm_restore=confirm_restore,
             choose_backup_file=choose_backup_file,
+            confirm_export=confirm_export,
+            choose_export_directory=choose_export_directory,
         )
 
     def _save_api_key(self) -> None:
