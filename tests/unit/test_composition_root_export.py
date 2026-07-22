@@ -1,8 +1,9 @@
-"""Unit test for the composition root's structured-export wiring (B9a).
+"""Unit test for the composition root's structured-export wiring (B9a/B9b).
 
 Only checks that the use case comes out wired with the right type; behavior
-is covered by the adapter and use-case tests. No presentation code calls
-this use case yet (B9b), so there is nothing to wire beyond this.
+is covered by the adapter and use-case tests. Presentation wiring (the
+"Exportar" action in ``MainWindow``, B9b) is covered by
+``tests/gui/test_export_ui.py``.
 """
 
 from __future__ import annotations

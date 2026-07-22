@@ -276,6 +276,7 @@ def _build_window(
         create_backup_use_case=create_backup_use_case or dependencies.create_backup_use_case,
         validate_backup_use_case=validate_backup_use_case or dependencies.validate_backup_use_case,
         restore_backup_use_case=restore_backup_use_case or dependencies.restore_backup_use_case,
+        export_structured_use_case=dependencies.export_structured_use_case,
         close_database_connections=close_database_connections
         or dependencies.close_database_connections,
         show_warning=show_warning or (lambda title, text: None),

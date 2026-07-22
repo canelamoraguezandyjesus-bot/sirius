@@ -38,6 +38,7 @@ from sirius.application.create_backup import CreateBackupUseCase
 from sirius.application.decision_origin import GetDecisionOriginUseCase
 from sirius.application.delete_memory import DeleteMemoryUseCase
 from sirius.application.detect_precedence_conflicts import DetectPrecedenceConflictsUseCase
+from sirius.application.export_structured import ExportStructuredUseCase
 from sirius.application.get_conversation_history import (
     ConversationNotInitializedError,
     GetConversationHistoryUseCase,
@@ -75,6 +76,7 @@ from sirius.presentation.backup_worker import (
 from sirius.presentation.context_panel_widget import ContextPanelWidget
 from sirius.presentation.conversation_worker import SendMessageWorker
 from sirius.presentation.error_messages import failed_send_message
+from sirius.presentation.export_worker import ExportWorker
 from sirius.presentation.knowledge_widget import KnowledgeWidget
 from sirius.presentation.message_view import MessageItemWidget
 from sirius.presentation.project_continuity_widget import ProjectContinuityWidget
@@ -122,12 +124,15 @@ class MainWindow(QMainWindow):
         create_backup_use_case: CreateBackupUseCase,
         validate_backup_use_case: ValidateBackupUseCase,
         restore_backup_use_case: RestoreBackupUseCase,
+        export_structured_use_case: ExportStructuredUseCase,
         close_database_connections: Callable[[], None],
         *,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
         confirm_restore: Callable[[str, str], bool] | None = None,
         choose_backup_file: Callable[[str], str] | None = None,
+        confirm_export: Callable[[str, str], bool] | None = None,
+        choose_export_directory: Callable[[str], str] | None = None,
     ) -> None:
         super().__init__()
         self._send_message_use_case = send_message_use_case
@@ -151,6 +156,7 @@ class MainWindow(QMainWindow):
         self._create_backup_use_case = create_backup_use_case
         self._validate_backup_use_case = validate_backup_use_case
         self._restore_backup_use_case = restore_backup_use_case
+        self._export_structured_use_case = export_structured_use_case
         # Not a use case: the minimal SQLAlchemy-lifecycle mechanism a safe
         # restoration needs (see ConversationDependencies' docstring). Called
         # right before RestoreBackupUseCase so the atomic file replace is not
@@ -163,8 +169,13 @@ class MainWindow(QMainWindow):
         self._show_information = show_information or self._default_show_information
         self._confirm_restore = confirm_restore or self._default_confirm_restore
         self._choose_backup_file = choose_backup_file or self._default_choose_backup_file
+        self._confirm_export = confirm_export or self._default_confirm_export
+        self._choose_export_directory = (
+            choose_export_directory or self._default_choose_export_directory
+        )
         self._is_sending = False
         self._is_backup_busy = False
+        self._is_export_busy = False
         self._close_requested = False
         self._active_operation_id: str | None = None
         self._streaming_item: QListWidgetItem | None = None
@@ -183,6 +194,7 @@ class MainWindow(QMainWindow):
         # slot must only ever clear its own worker.
         self._active_send_worker: QRunnable | None = None
         self._active_backup_worker: QRunnable | None = None
+        self._active_export_worker: QRunnable | None = None
         self._thread_pool = QThreadPool()
 
         self.setWindowTitle("Sirius 0.1")
@@ -217,6 +229,19 @@ class MainWindow(QMainWindow):
             self, title, "", "Copias de Sirius (*.siriusbackup)"
         )
         return path_text
+
+    def _default_confirm_export(self, title: str, text: str) -> bool:
+        answer = QMessageBox.question(
+            self,
+            title,
+            text,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
+    def _default_choose_export_directory(self, title: str) -> str:
+        return QFileDialog.getExistingDirectory(self, title)
 
     # --- Conversación --------------------------------------------------
 
@@ -397,7 +422,7 @@ class MainWindow(QMainWindow):
         text = self.message_input.text()
         if not text.strip():
             return
-        if self._is_sending or self._is_backup_busy:
+        if self._is_sending or self._is_backup_busy or self._is_export_busy:
             return
 
         self.message_input.clear()
@@ -409,7 +434,7 @@ class MainWindow(QMainWindow):
         # touches message_input, which may hold an unrelated draft.
         if self._last_failed_text is None:
             return
-        if self._is_sending or self._is_backup_busy:
+        if self._is_sending or self._is_backup_busy or self._is_export_busy:
             return
 
         self._start_send(self._last_failed_text)
@@ -426,6 +451,7 @@ class MainWindow(QMainWindow):
         self.cancel_button.setEnabled(True)
         self.message_input.setEnabled(False)
         self._set_backup_controls_enabled(False)
+        self.export_button.setEnabled(False)
         self.project_continuity_widget.set_external_busy(True)
         self.knowledge_widget.set_external_busy(True)
         self.context_panel_widget.set_external_busy(True)
@@ -446,7 +472,10 @@ class MainWindow(QMainWindow):
         has_pending_retry = self._last_failed_text is not None
         self.retry_button.setVisible(has_pending_retry)
         self.retry_button.setEnabled(
-            has_pending_retry and not self._is_sending and not self._is_backup_busy
+            has_pending_retry
+            and not self._is_sending
+            and not self._is_backup_busy
+            and not self._is_export_busy
         )
 
     def _handle_cancel_clicked(self) -> None:
@@ -530,6 +559,7 @@ class MainWindow(QMainWindow):
         self.message_input.setEnabled(True)
         self.status_label.setText("")
         self._set_backup_controls_enabled(True)
+        self.export_button.setEnabled(True)
         self.project_continuity_widget.set_external_busy(False)
         self.knowledge_widget.set_external_busy(False)
         self.context_panel_widget.set_external_busy(False)
@@ -553,6 +583,10 @@ class MainWindow(QMainWindow):
             event.ignore()
             return
         if self._is_backup_busy:
+            self._close_requested = True
+            event.ignore()
+            return
+        if self._is_export_busy:
             self._close_requested = True
             event.ignore()
             return
@@ -638,6 +672,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.key_status_label)
         layout.addWidget(self.key_feedback_label)
         layout.addWidget(self._build_backup_group())
+        layout.addWidget(self._build_export_group())
         layout.addStretch()
 
         # The backup/recovery section grew this tab beyond the default
@@ -766,6 +801,7 @@ class MainWindow(QMainWindow):
         self._set_backup_controls_enabled(False)
         self.send_button.setEnabled(False)
         self.message_input.setEnabled(False)
+        self.export_button.setEnabled(False)
         self.project_continuity_widget.set_external_busy(True)
         self.knowledge_widget.set_external_busy(True)
         self.context_panel_widget.set_external_busy(True)
@@ -777,6 +813,7 @@ class MainWindow(QMainWindow):
         self._set_backup_controls_enabled(True)
         self.send_button.setEnabled(True)
         self.message_input.setEnabled(True)
+        self.export_button.setEnabled(True)
         self.project_continuity_widget.set_external_busy(False)
         self.knowledge_widget.set_external_busy(False)
         self.context_panel_widget.set_external_busy(False)
@@ -797,7 +834,7 @@ class MainWindow(QMainWindow):
     # --- Crear copia -------------------------------------------------------
 
     def _handle_create_backup_clicked(self) -> None:
-        if self._is_sending or self._is_backup_busy:
+        if self._is_sending or self._is_backup_busy or self._is_export_busy:
             return
 
         password = self.create_backup_password_input.text()
@@ -852,7 +889,7 @@ class MainWindow(QMainWindow):
             self.validate_backup_path_input.setText(path_text)
 
     def _handle_validate_backup_clicked(self) -> None:
-        if self._is_sending or self._is_backup_busy:
+        if self._is_sending or self._is_backup_busy or self._is_export_busy:
             return
 
         path_text = self.validate_backup_path_input.text().strip()
@@ -893,7 +930,7 @@ class MainWindow(QMainWindow):
             self.restore_backup_path_input.setText(path_text)
 
     def _handle_restore_backup_clicked(self) -> None:
-        if self._is_sending or self._is_backup_busy:
+        if self._is_sending or self._is_backup_busy or self._is_export_busy:
             return
 
         path_text = self.restore_backup_path_input.text().strip()
@@ -1010,6 +1047,95 @@ class MainWindow(QMainWindow):
         self._finish_backup_operation()
         self.restore_backup_status_label.setText("")
         self.restore_backup_feedback_label.setText(message)
+
+    # --- Exportación (B9b/S12.1/RF-031/PA-020) --------------------------
+
+    def _build_export_group(self) -> QGroupBox:
+        group = QGroupBox("Exportación de datos")
+        layout = QVBoxLayout(group)
+
+        self.export_button = QPushButton("Exportar")
+        self.export_button.clicked.connect(self._handle_export_clicked)
+
+        self.export_status_label = QLabel("")
+        self.export_status_label.setWordWrap(True)
+
+        layout.addWidget(self.export_button)
+        layout.addWidget(self.export_status_label)
+        return group
+
+    def _handle_export_clicked(self) -> None:
+        if self._is_sending or self._is_backup_busy or self._is_export_busy:
+            return
+
+        # S12.1: the personal-data/no-API-key notice is mandatory and must
+        # come first — cancelling here must never call the use case.
+        confirmed = self._confirm_export(
+            "Exportar datos",
+            "Vas a crear una exportación legible de tu conversación, tu "
+            "proyecto activo, tus recuerdos y tus decisiones vigentes.\n\n"
+            "Puede contener información personal. No incluye tu clave de "
+            "API de OpenAI.\n\n"
+            "¿Deseas continuar?",
+        )
+        if not confirmed:
+            return
+
+        destination_text = self._choose_export_directory("Selecciona la carpeta destino")
+        if not destination_text:
+            return
+
+        self._start_export_operation()
+        self.export_status_label.setText("Exportando...")
+
+        worker = ExportWorker(self._export_structured_use_case, Path(destination_text))
+        worker.signals.succeeded.connect(self._on_export_succeeded)
+        worker.signals.failed.connect(self._on_export_failed)
+        self._active_export_worker = worker
+        self._thread_pool.start(worker)
+
+    def _start_export_operation(self) -> None:
+        self._is_export_busy = True
+        self.export_button.setEnabled(False)
+        self.send_button.setEnabled(False)
+        self.message_input.setEnabled(False)
+        self._set_backup_controls_enabled(False)
+        self.project_continuity_widget.set_external_busy(True)
+        self.knowledge_widget.set_external_busy(True)
+        self.context_panel_widget.set_external_busy(True)
+        self._update_retry_button()
+
+    def _finish_export_operation(self) -> None:
+        self._is_export_busy = False
+        self._active_export_worker = None
+        self.export_button.setEnabled(True)
+        self.send_button.setEnabled(True)
+        self.message_input.setEnabled(True)
+        self._set_backup_controls_enabled(True)
+        self.project_continuity_widget.set_external_busy(False)
+        self.knowledge_widget.set_external_busy(False)
+        self.context_panel_widget.set_external_busy(False)
+        self._update_retry_button()
+        if self._close_requested:
+            self._close_requested = False
+            self.close()
+
+    def _on_export_succeeded(self, path: Path) -> None:
+        should_notify = not self._close_requested
+        self._finish_export_operation()
+        self.export_status_label.setText("")
+        if should_notify:
+            self._show_information(
+                "Exportación completada",
+                f"La exportación se creó correctamente en:\n{path}",
+            )
+
+    def _on_export_failed(self, message: str) -> None:
+        should_notify = not self._close_requested
+        self._finish_export_operation()
+        self.export_status_label.setText("")
+        if should_notify:
+            self._show_warning("No se pudo exportar", message)
 
     def _refresh_key_status_label(self) -> bool:
         try:

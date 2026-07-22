@@ -95,6 +95,7 @@ def _build_window(database_path: Path) -> MainWindow:
         create_backup_use_case=dependencies.create_backup_use_case,
         validate_backup_use_case=dependencies.validate_backup_use_case,
         restore_backup_use_case=dependencies.restore_backup_use_case,
+        export_structured_use_case=dependencies.export_structured_use_case,
         close_database_connections=dependencies.close_database_connections,
         show_warning=lambda title, text: None,
         show_information=lambda title, text: None,
