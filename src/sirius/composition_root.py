@@ -20,6 +20,8 @@ from pathlib import Path
 import openai
 
 from sirius.adapters.backup.sqlite_backup_service import build_sqlite_backup_service
+from sirius.adapters.clock.system_clock import build_system_clock
+from sirius.adapters.export.filesystem_export_service import build_filesystem_export_service
 from sirius.adapters.llm.budget import BudgetPolicy, BudgetTracker
 from sirius.adapters.llm.fake import FakeLLMProvider
 from sirius.adapters.llm.openai_credential_validator import OpenAICredentialValidator
@@ -58,6 +60,7 @@ from sirius.application.create_backup import CreateBackupUseCase
 from sirius.application.decision_origin import GetDecisionOriginUseCase
 from sirius.application.delete_memory import DeleteMemoryUseCase
 from sirius.application.detect_precedence_conflicts import DetectPrecedenceConflictsUseCase
+from sirius.application.export_structured import ExportStructuredUseCase
 from sirius.application.get_conversation_history import GetConversationHistoryUseCase
 from sirius.application.initial_project import InitialProjectUseCase
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
@@ -110,6 +113,10 @@ class ConversationDependencies:
     after a candidate key passes ``ValidateAndSaveApiKeyUseCase``. Without it,
     activating a freshly saved key would need a full restart, because the
     provider is otherwise selected once, at startup.
+
+    ``export_structured_use_case`` (B9a) is wired here but not yet called from
+    any presentation code: the personal-data warning, background thread and
+    "show the resulting path" UI belong to B9b, a later, separate cut.
     """
 
     send_message_use_case: SendMessageUseCase
@@ -135,6 +142,7 @@ class ConversationDependencies:
     create_backup_use_case: CreateBackupUseCase
     validate_backup_use_case: ValidateBackupUseCase
     restore_backup_use_case: RestoreBackupUseCase
+    export_structured_use_case: ExportStructuredUseCase
     close_database_connections: Callable[[], None]
     activate_configured_llm_provider: Callable[[], None]
 
@@ -265,6 +273,7 @@ def build_conversation_dependencies(
     )
 
     backup_service = build_sqlite_backup_service(database_path, backups_dir)
+    export_service = build_filesystem_export_service(build_system_clock())
 
     repositories = (
         conversation_repository,
@@ -334,6 +343,13 @@ def build_conversation_dependencies(
         create_backup_use_case=CreateBackupUseCase(backup_service),
         validate_backup_use_case=ValidateBackupUseCase(backup_service),
         restore_backup_use_case=RestoreBackupUseCase(backup_service),
+        export_structured_use_case=ExportStructuredUseCase(
+            export_service,
+            conversation_repository,
+            project_repository,
+            memory_repository,
+            decision_repository,
+        ),
         close_database_connections=close_database_connections,
         activate_configured_llm_provider=activate_configured_llm_provider,
     )
