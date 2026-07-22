@@ -49,7 +49,11 @@ def test_resource_root_is_next_to_the_executable_when_nuitka_compiled(
     (tmp_path / "migrations").mkdir()
     fake_executable = tmp_path / "sirius"
 
-    monkeypatch.setattr(sys, "__compiled__", True, raising=False)
+    # Nuitka does not set ``sys.__compiled__``; it injects ``__compiled__`` as
+    # a global of the compiled ``__main__`` module, so the fake must live
+    # there (see nuitka/PythonVersions.py's ``isRunningInInterpreter``).
+    main_module = sys.modules["__main__"]
+    monkeypatch.setattr(main_module, "__compiled__", True, raising=False)
     monkeypatch.setattr(sys, "executable", str(fake_executable))
 
     resolved = _resource_root()

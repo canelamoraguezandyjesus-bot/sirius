@@ -17,11 +17,14 @@ def _resource_root() -> Path:
     """Return the directory containing ``alembic.ini`` and ``migrations/``.
 
     In development this is the repository root. In a frozen build (PyInstaller
-    sets ``sys.frozen``; Nuitka sets ``__compiled__``), the executable ships
+    sets ``sys.frozen``; Nuitka injects a ``__compiled__`` global into the
+    ``__main__`` module, not an attribute on ``sys``), the executable ships
     those resources next to itself instead, since the repository root does not
     exist at runtime.
     """
-    is_frozen = getattr(sys, "frozen", False) or hasattr(sys, "__compiled__")
+    is_frozen = getattr(sys, "frozen", False) or hasattr(
+        sys.modules.get("__main__"), "__compiled__"
+    )
     if is_frozen:
         return Path(sys.executable).resolve().parent
     return _REPO_ROOT
