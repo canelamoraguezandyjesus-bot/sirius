@@ -3,6 +3,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
+from PySide6.QtWidgets import QApplication
 from pytestqt.qtbot import QtBot
 
 from sirius.adapters.llm.fake import FakeLLMProvider
@@ -996,3 +997,183 @@ def test_redacted_message_placeholder_is_preserved_in_the_rendered_widget(
     qtbot.addWidget(window)
 
     assert "(mensaje redactado)" in _widget_at(window, 0).rendered_plain_text()
+
+
+# --- B8b: bloques de código copiables (D-06, RF-008, cierre de D-06 junto a B8a) ---
+
+
+class _BlockingCodeBlockProvider:
+    """Like ``_BlockingMarkdownProvider``, but the delta/final text is a single
+    fenced code block, to observe deterministically that streaming still shows
+    it as unrendered plain text and the finished result segments it (B8b)."""
+
+    _TEXT = "```\ncodigo en streaming\n```"
+
+    def __init__(self) -> None:
+        self._continue_event = threading.Event()
+
+    def health_check(self) -> bool:
+        return True
+
+    def release(self) -> None:
+        self._continue_event.set()
+
+    def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
+        del request
+        yield LLMTextDelta(text=self._TEXT)
+        self._continue_event.wait(timeout=5)
+        yield LLMCompleted(text=self._TEXT, input_tokens=1, output_tokens=2)
+
+    def cancel(self, operation_id: str) -> None:
+        del operation_id
+
+
+@pytest.mark.gui
+def test_single_code_block_shows_copy_button_and_copies_exact_code(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    content = "Antes del bloque.\n\n```python\ndef f():\n    return 1\n```\n\nDespués del bloque."
+    conversation_repository.append_message(conversation.id, MessageRole.SIRIUS, content)
+
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+
+    widget = _widget_at(window, 0)
+    buttons = widget.copy_buttons()
+    assert len(buttons) == 1
+
+    buttons[0].click()
+    clipboard = QApplication.clipboard()
+    assert clipboard is not None
+    assert clipboard.text() == "def f():\n    return 1"
+
+
+@pytest.mark.gui
+def test_multiple_code_blocks_each_show_own_copy_button_and_copy_independently(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    content = (
+        "Primero:\n\n```\nprimer bloque\n```\n\nSegundo:\n\n```js\nsegundo bloque\n```\n\nFin."
+    )
+    conversation_repository.append_message(conversation.id, MessageRole.SIRIUS, content)
+
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+
+    widget = _widget_at(window, 0)
+    buttons = widget.copy_buttons()
+    assert len(buttons) == 2
+
+    clipboard = QApplication.clipboard()
+    assert clipboard is not None
+
+    buttons[0].click()
+    assert clipboard.text() == "primer bloque"
+
+    buttons[1].click()
+    assert clipboard.text() == "segundo bloque"
+
+
+@pytest.mark.gui
+def test_message_without_code_block_shows_no_copy_button(qtbot: QtBot, tmp_path: Path) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    content = "# Título\n\n**negrita** y `codigo en linea`, sin ningún bloque cercado."
+    conversation_repository.append_message(conversation.id, MessageRole.SIRIUS, content)
+
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+
+    widget = _widget_at(window, 0)
+    assert widget.copy_buttons() == []
+    rendered = widget.rendered_plain_text()
+    assert "Título" in rendered
+    assert "negrita" in rendered
+    assert "codigo en linea" in rendered
+
+
+@pytest.mark.gui
+def test_prose_order_is_preserved_around_code_blocks(qtbot: QtBot, tmp_path: Path) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    content = "antes\n\n```\nmedio\n```\n\ndespues"
+    conversation_repository.append_message(conversation.id, MessageRole.SIRIUS, content)
+
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+
+    rendered = _widget_at(window, 0).rendered_plain_text()
+    assert rendered.index("antes") < rendered.index("medio") < rendered.index("despues")
+
+
+@pytest.mark.gui
+def test_html_and_script_inside_code_block_is_shown_literal_and_never_interpreted(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """SP-07 also holds inside a fenced code block: shown/copied literal, never
+    interpreted, even though the code block is not part of B8a's Markdown flow."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    unsafe_code = '<script>alert(1)</script>\n<b onclick="doEvil()">falso</b>'
+    content = f"```\n{unsafe_code}\n```"
+    conversation_repository.append_message(conversation.id, MessageRole.SIRIUS, content)
+
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+
+    widget = _widget_at(window, 0)
+    buttons = widget.copy_buttons()
+    assert len(buttons) == 1
+
+    rendered = widget.rendered_plain_text()
+    assert "<script>alert(1)</script>" in rendered
+    assert '<b onclick="doEvil()">falso</b>' in rendered
+
+    html = widget.rendered_html()
+    assert "<script>" not in html
+    assert "<b onclick=" not in html
+
+    buttons[0].click()
+    clipboard = QApplication.clipboard()
+    assert clipboard is not None
+    assert clipboard.text() == unsafe_code
+
+
+@pytest.mark.gui
+def test_streaming_final_result_segments_code_block_with_copy_button(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    provider = _BlockingCodeBlockProvider()
+    _swap_send_message_use_case(window, database_path, provider)
+
+    window.message_input.setText("hola")
+    window.send_button.click()
+    qtbot.waitUntil(lambda: window.message_list.count() == 2, timeout=5000)
+    qtbot.waitUntil(
+        lambda: _widget_at(window, 1).rendered_plain_text() == "```\ncodigo en streaming\n```",
+        timeout=5000,
+    )
+    # B8a: no segmentation while streaming, so no "Copiar" button appears yet.
+    assert _widget_at(window, 1).copy_buttons() == []
+
+    provider.release()
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+
+    widget = _widget_at(window, 1)
+    buttons = widget.copy_buttons()
+    assert len(buttons) == 1
+    final_rendered = widget.rendered_plain_text()
+    assert "```" not in final_rendered
+    assert "codigo en streaming" in final_rendered
