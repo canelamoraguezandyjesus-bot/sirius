@@ -32,7 +32,15 @@ from sirius.application.send_message import SendMessageUseCase
 from sirius.composition_root import build_conversation_dependencies
 from sirius.domain.project import Project, ProjectRevision, ProjectStatus
 from sirius.ports.backup import BackupError, BackupManifest, BackupResult
-from sirius.ports.llm import LLMCompleted, LLMProvider, LLMRequest, LLMStreamEvent, LLMTextDelta
+from sirius.ports.llm import (
+    LLMCompleted,
+    LLMError,
+    LLMErrorKind,
+    LLMProvider,
+    LLMRequest,
+    LLMStreamEvent,
+    LLMTextDelta,
+)
 from sirius.presentation.main_window import MainWindow
 from sirius.presentation.project_continuity_widget import NO_BLOCKERS_TEXT, ProjectContinuityWidget
 
@@ -220,6 +228,21 @@ class _BlockingUntilReleasedProvider:
 
     def cancel(self, operation_id: str) -> None:
         self._cancelled.add(operation_id)
+
+
+class _FailingLLMProvider:
+    """Test double: always fails before any delta, mirroring the one in
+    ``tests/gui/test_conversation_ui.py``."""
+
+    def health_check(self) -> bool:
+        return True
+
+    def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
+        del request
+        yield LLMError(kind=LLMErrorKind.CONNECTION, message="no se pudo contactar")
+
+    def cancel(self, operation_id: str) -> None:
+        del operation_id
 
 
 def _swap_send_message_use_case(
@@ -414,6 +437,39 @@ def test_completar_proyecto_is_reenabled_after_a_backup_failure(
 
     qtbot.waitUntil(lambda: window.create_backup_button.isEnabled(), timeout=5000)
     assert window.project_continuity_widget.complete_button.isEnabled() is True
+
+
+@pytest.mark.gui
+def test_retry_button_is_disabled_during_backup_and_reenabled_after_success(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """B7b: "Reintentar" respects the same busy exclusion as a normal send —
+    disabled/hidden while a backup or restore operation is in progress."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    use_case = _BlockingCreateBackupUseCase()
+    window = _build_window_with_backup_use_case(database_path, use_case)
+    qtbot.addWidget(window)
+    window.show()
+    _swap_send_message_use_case(window, database_path, _FailingLLMProvider())
+
+    window.message_input.setText("hola")
+    window.send_button.click()
+    qtbot.waitUntil(lambda: window.retry_button.isVisible(), timeout=5000)
+    assert window.retry_button.isEnabled() is True
+
+    window.create_backup_password_input.setText("correct horse battery staple")
+    window.create_backup_password_repeat_input.setText("correct horse battery staple")
+    window.create_backup_button.click()
+
+    assert window.retry_button.isVisible() is True
+    assert window.retry_button.isEnabled() is False
+
+    use_case.set_result(_fake_backup_result(tmp_path / "b.siriusbackup"))
+    use_case.release()
+
+    qtbot.waitUntil(lambda: window.create_backup_button.isEnabled(), timeout=5000)
+    assert window.retry_button.isVisible() is True
+    assert window.retry_button.isEnabled() is True
 
 
 @pytest.mark.gui
