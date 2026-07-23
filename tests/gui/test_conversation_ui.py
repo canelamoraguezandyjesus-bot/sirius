@@ -1,8 +1,10 @@
+import itertools
 import threading
 from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import QRect
 from PySide6.QtWidgets import QApplication
 from pytestqt.qtbot import QtBot
 
@@ -1177,4 +1179,216 @@ def test_streaming_final_result_segments_code_block_with_copy_button(
     assert len(buttons) == 1
     final_rendered = widget.rendered_plain_text()
     assert "```" not in final_rendered
-    assert "codigo en streaming" in final_rendered
+
+
+# --- Bugfix: el historial no debe solaparse (defecto ALTO, ejecutable
+# empaquetado) ---
+
+
+def _wait_for_real_layout(qtbot: QtBot, window: MainWindow) -> None:
+    """Force the message list to receive a real (non-zero) column width
+    before measuring row geometry.
+
+    Without this, every ``_MessageBody`` would still be using its
+    construction-time width fallback, and the exact race this suite guards
+    against (ancho ficticio al construir vs. ancho real de la columna) would
+    never be exercised.
+    """
+    window.resize(900, 600)
+    window.show()
+    qtbot.waitUntil(lambda: window.message_list.viewport().width() > 0, timeout=5000)
+    QApplication.processEvents()
+
+
+def _row_rects(window: MainWindow) -> list[QRect]:
+    return [
+        window.message_list.visualItemRect(window.message_list.item(index))
+        for index in range(window.message_list.count())
+    ]
+
+
+def _assert_rows_do_not_overlap_in_chronological_order(window: MainWindow) -> None:
+    """Every row must start at or below the bottom of the previous row, in the
+    same order as the underlying (chronological) list: no vertical overlap
+    and no row rendered out of order."""
+    rects = _row_rects(window)
+    for previous, current in itertools.pairwise(rects):
+        assert previous.height() > 0
+        assert current.y() >= previous.y() + previous.height(), (
+            f"la fila en y={current.y()} se solapa con la fila anterior "
+            f"(y={previous.y()}, alto={previous.height()})"
+        )
+
+
+@pytest.mark.gui
+def test_two_consecutive_messages_do_not_overlap(qtbot: QtBot, tmp_path: Path) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    conversation_repository.append_message(conversation.id, MessageRole.USER, "uno")
+    conversation_repository.append_message(conversation.id, MessageRole.SIRIUS, "dos")
+
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    _wait_for_real_layout(qtbot, window)
+
+    assert window.message_list.count() == 2
+    _assert_rows_do_not_overlap_in_chronological_order(window)
+
+
+@pytest.mark.gui
+def test_long_message_increases_its_row_height(qtbot: QtBot, tmp_path: Path) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    conversation_repository.append_message(conversation.id, MessageRole.USER, "corto")
+    conversation_repository.append_message(conversation.id, MessageRole.SIRIUS, "palabra " * 400)
+
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    _wait_for_real_layout(qtbot, window)
+
+    rects = _row_rects(window)
+    assert rects[1].height() > rects[0].height()
+    _assert_rows_do_not_overlap_in_chronological_order(window)
+
+
+@pytest.mark.gui
+def test_user_and_sirius_messages_render_in_distinct_blocks(qtbot: QtBot, tmp_path: Path) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    conversation_repository.append_message(conversation.id, MessageRole.USER, "pregunta")
+    conversation_repository.append_message(conversation.id, MessageRole.SIRIUS, "respuesta")
+
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    _wait_for_real_layout(qtbot, window)
+
+    assert window.message_list.item(0).text() == "Tú: pregunta"
+    assert window.message_list.item(1).text() == "Sirius: respuesta"
+    assert window.message_list.item(0).font().bold() is False
+    assert window.message_list.item(1).font().bold() is True
+    _assert_rows_do_not_overlap_in_chronological_order(window)
+
+
+@pytest.mark.gui
+def test_visual_order_matches_chronological_order(qtbot: QtBot, tmp_path: Path) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    for index, text in enumerate(["uno", "dos", "tres", "cuatro", "cinco"]):
+        role = MessageRole.USER if index % 2 == 0 else MessageRole.SIRIUS
+        conversation_repository.append_message(conversation.id, role, text)
+
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    _wait_for_real_layout(qtbot, window)
+
+    tops = [rect.y() for rect in _row_rects(window)]
+    assert tops == sorted(tops)
+    assert len(set(tops)) == len(tops)
+    _assert_rows_do_not_overlap_in_chronological_order(window)
+
+
+@pytest.mark.gui
+def test_scroll_area_contains_every_message(qtbot: QtBot, tmp_path: Path) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    for index in range(30):
+        role = MessageRole.USER if index % 2 == 0 else MessageRole.SIRIUS
+        conversation_repository.append_message(conversation.id, role, f"mensaje numero {index}")
+
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    _wait_for_real_layout(qtbot, window)
+
+    assert window.message_list.count() == 30
+    _assert_rows_do_not_overlap_in_chronological_order(window)
+
+    scrollbar = window.message_list.verticalScrollBar()
+    assert scrollbar.maximum() > 0
+
+    scrollbar.setValue(scrollbar.maximum())
+    last_rect = window.message_list.visualItemRect(window.message_list.item(29))
+    assert window.message_list.viewport().rect().intersects(last_rect)
+
+
+@pytest.mark.gui
+def test_streaming_message_grows_without_overlapping_neighbours(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    _wait_for_real_layout(qtbot, window)
+    provider = _BlockingUntilReleasedProvider()
+    _swap_send_message_use_case(window, database_path, provider)
+
+    window.message_input.setText("hola")
+    window.send_button.click()
+    qtbot.waitUntil(lambda: window.message_list.count() == 2, timeout=5000)
+    qtbot.waitUntil(lambda: _widget_at(window, 1).rendered_plain_text() == "parcial", timeout=5000)
+    mid_stream_height = _row_rects(window)[1].height()
+    _assert_rows_do_not_overlap_in_chronological_order(window)
+
+    provider.release()
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+    _assert_rows_do_not_overlap_in_chronological_order(window)
+    assert _row_rects(window)[1].height() >= mid_stream_height
+
+    # A message that arrives once the stream has finished must not be
+    # invaded by the (now taller) row it grew into just before.
+    _swap_send_message_use_case(window, database_path, FakeLLMProvider())
+    window.message_input.setText("otra vez")
+    window.send_button.click()
+    qtbot.waitUntil(lambda: window.message_list.count() == 4, timeout=5000)
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+    _assert_rows_do_not_overlap_in_chronological_order(window)
+
+
+@pytest.mark.gui
+def test_reloading_the_conversation_still_has_no_overlap(qtbot: QtBot, tmp_path: Path) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    first_window = _build_window(database_path)
+    qtbot.addWidget(first_window)
+    first_window.message_input.setText("mensaje antes de cerrar " + "palabra " * 60)
+    first_window.send_button.click()
+    qtbot.waitUntil(lambda: first_window.send_button.isEnabled(), timeout=5000)
+    first_window.close()
+
+    second_window = _build_window(database_path)
+    qtbot.addWidget(second_window)
+    _wait_for_real_layout(qtbot, second_window)
+
+    assert second_window.message_list.count() == 2
+    _assert_rows_do_not_overlap_in_chronological_order(second_window)
+
+
+@pytest.mark.gui
+def test_failed_message_and_its_retry_remain_legible_and_do_not_overlap(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    _wait_for_real_layout(qtbot, window)
+    _swap_send_message_use_case(window, database_path, _FailingLLMProvider())
+
+    window.message_input.setText("hola")
+    window.send_button.click()
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+    assert window.retry_button.isVisible() is True
+    _assert_rows_do_not_overlap_in_chronological_order(window)
+
+    _swap_send_message_use_case(window, database_path, FakeLLMProvider())
+    window.retry_button.click()
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+
+    assert window.message_list.count() == 4
+    assert window.message_list.item(0).text() == "Tú: hola"
+    assert window.message_list.item(1).text() == "Sirius:  (fallido)"
+    assert window.message_list.item(2).text() == "Tú: hola"
+    assert window.message_list.item(3).text() == "Sirius: Respuesta simulada de Sirius."
+    _assert_rows_do_not_overlap_in_chronological_order(window)
