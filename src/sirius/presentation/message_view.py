@@ -23,7 +23,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QResizeEvent, QTextDocument
 from PySide6.QtWidgets import (
     QApplication,
@@ -84,6 +84,13 @@ def _segment_message(text: str) -> list[_Segment]:
 class _MessageBody(QTextEdit):
     """Área de texto de solo lectura que ajusta su alto al contenido."""
 
+    # Emitida cada vez que la altura fija realmente cambia (construcción con
+    # ancho todavía no real, primer reflow con el ancho real de la columna,
+    # o un resize posterior de la ventana) — quien contenga este widget debe
+    # volver a pedir su tamaño y propagarlo al QListWidgetItem, porque Qt no
+    # hace eso automáticamente por sí solo.
+    height_changed = Signal()
+
     def __init__(self) -> None:
         super().__init__()
         self.setReadOnly(True)
@@ -112,6 +119,7 @@ class _MessageBody(QTextEdit):
         height = int(self.document().size().height()) + 8
         if self.height() != height:
             self.setFixedHeight(height)
+            self.height_changed.emit()
 
 
 class _CodeBlockWidget(QWidget):
@@ -156,6 +164,13 @@ class _CodeBlockWidget(QWidget):
 class MessageItemWidget(QWidget):
     """Un mensaje completo (prefijo "Tú"/"Sirius" + cuerpo) para un item de la lista."""
 
+    # Emitida cada vez que el tamaño real de este widget puede haber
+    # cambiado (contenido nuevo o reflow tardío de algún segmento interno).
+    # ``MainWindow`` la conecta a ``item.setSizeHint(widget.sizeHint())``
+    # para que la fila reservada en el QListWidget nunca quede más baja de
+    # lo que el contenido necesita.
+    size_changed = Signal()
+
     def __init__(self) -> None:
         super().__init__()
         layout = QVBoxLayout(self)
@@ -180,10 +195,12 @@ class MessageItemWidget(QWidget):
         for segment in _segment_message(body_text):
             if segment.is_code:
                 block = _CodeBlockWidget(segment.text)
+                block.body.height_changed.connect(self._on_segment_height_changed)
                 self._content_layout.addWidget(block)
                 self._segment_bodies.append(block.body)
             else:
                 prose = _MessageBody()
+                prose.height_changed.connect(self._on_segment_height_changed)
                 prose.set_markdown_content(segment.text)
                 self._content_layout.addWidget(prose)
                 self._segment_bodies.append(prose)
@@ -195,6 +212,7 @@ class MessageItemWidget(QWidget):
         self._set_prefix(prefix, bold=bold)
         self._clear_content()
         plain = _MessageBody()
+        plain.height_changed.connect(self._on_segment_height_changed)
         plain.set_plain_content(body_text)
         self._content_layout.addWidget(plain)
         self._segment_bodies.append(plain)
@@ -235,6 +253,10 @@ class MessageItemWidget(QWidget):
                 widget.deleteLater()
         self._segment_bodies = []
 
+    def _on_segment_height_changed(self) -> None:
+        self._sync_size()
+
     def _sync_size(self) -> None:
         self.adjustSize()
         self.updateGeometry()
+        self.size_changed.emit()

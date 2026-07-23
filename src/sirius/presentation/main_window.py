@@ -265,6 +265,11 @@ class MainWindow(QMainWindow):
         )
 
         self.message_list = QListWidget()
+        # Bugfix (historial solapado): con el modo por defecto (Fixed), Qt no
+        # vuelve a calcular la posición/tamaño de los itemWidget cuando la
+        # columna cambia de ancho (p. ej. al redimensionar la ventana), lo
+        # que deja obsoleto el ancho de reflow usado por cada mensaje.
+        self.message_list.setResizeMode(QListWidget.ResizeMode.Adjust)
         self.message_list.setAccessibleName("Historial de la conversación")
 
         self.message_input = QLineEdit()
@@ -393,11 +398,18 @@ class MainWindow(QMainWindow):
         # affect QListWidgetItem.text()).
         prefix = "Tú" if role is MessageRole.USER else "Sirius"
         widget = MessageItemWidget()
+        # Bugfix (historial solapado): el ancho real de la columna solo
+        # existe una vez que el widget está dentro de la lista, así que la
+        # altura calculada en la construcción puede quedar corta. size_changed
+        # se conecta antes de poblar contenido para capturar también el
+        # reflow tardío (ancho real, streaming, o un resize posterior) y
+        # mantener el sizeHint del item siempre al día con la altura real.
+        widget.size_changed.connect(lambda: item.setSizeHint(widget.sizeHint()))
+        self.message_list.setItemWidget(item, widget)
         widget.set_message(
             prefix, self._compose_markdown_body(content, status), bold=role is MessageRole.SIRIUS
         )
         item.setSizeHint(widget.sizeHint())
-        self.message_list.setItemWidget(item, widget)
         return item
 
     @staticmethod
