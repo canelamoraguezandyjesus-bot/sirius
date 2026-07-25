@@ -16,7 +16,7 @@ from experiments.adr001.evidence import (
     PASS,
     SpikeEvidence,
 )
-from experiments.adr001.fingerprint import legacy_fingerprint
+from experiments.adr001.fingerprint import LEGACY_TABLES, legacy_fingerprint, legacy_schema_dump
 from experiments.adr001.synthetic import fresh_populated_db
 
 T0 = "2026-01-01T00:00:00"
@@ -538,121 +538,296 @@ def spike_06() -> SpikeEvidence:
         connection.close()
 
 
+def _read_state(connection: sqlite3.Connection, assertion_id: int) -> dict[str, str]:
+    """Relee el estado desde SQLite. La evidencia sale de la base, nunca del
+    diccionario que se uso para escribirla."""
+    return {
+        str(row[0]): str(row[1])
+        for row in connection.execute(
+            "SELECT dimension, value FROM x_state WHERE assertion_id = ? ORDER BY dimension",
+            (assertion_id,),
+        ).fetchall()
+    }
+
+
+def _assertion_with_state(
+    connection: sqlite3.Connection,
+    scope_id: int,
+    etiqueta: str,
+    estado: dict[str, str],
+    recorded_at: str,
+) -> int:
+    assertion_id = xmodel.insert_assertion(
+        connection,
+        scope_id=scope_id,
+        subject="dato",
+        predicate="tiene estado",
+        object_=etiqueta,
+        valid_from="2020-01-01T00:00:00",
+        valid_to=None,
+        recorded_at=recorded_at,
+    )
+    for dimension, value in estado.items():
+        xmodel.set_state(connection, assertion_id, dimension, value, recorded_at)
+    connection.commit()
+    return assertion_id
+
+
+def _legacy_counts(connection: sqlite3.Connection) -> dict[str, int]:
+    return {
+        table: int(connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+        for table in LEGACY_TABLES
+    }
+
+
+def _difieren_solo_en(a: dict[str, str], b: dict[str, str], dimension: str) -> bool:
+    distintas = [d for d in xmodel.STATE_DIMENSIONS if a[d] != b[d]]
+    return distintas == [dimension]
+
+
 def spike_07() -> SpikeEvidence:
     evidence = SpikeEvidence(
         numero=7,
-        nombre="Siete dimensiones ortogonales de estado sin enum monolitico",
+        nombre="Siete dimensiones canonicas ortogonales de estado sin enum monolitico",
         objetivo=(
-            "Comprobar si el estado puede descomponerse en 7 dimensiones independientes y si el "
-            "enum heredado pierde informacion al proyectarlas."
+            "Comprobar si el estado puede descomponerse en las SIETE DIMENSIONES CANONICAS "
+            "(confirmacion, validez, disponibilidad, sensibilidad, temporalidad, ambito y "
+            "autoridad) de forma independiente, y si el enum monolitico heredado pierde "
+            "informacion al proyectarlas."
         ),
         incertidumbre=(
-            "memories.status es un unico VARCHAR(16) con 3 valores que mezcla al menos "
-            "existencia, disponibilidad y estado epistemico (D-03)."
+            "memories.status es un unico VARCHAR(16) sin CHECK, con un dominio de 3 valores "
+            "impuesto por la aplicacion, que colapsa varias dimensiones a la vez (D-03). Se "
+            "ignora si las siete canonicas son representables por adicion y si ambito y "
+            "autoridad quedan realmente fuera del alcance del enum."
         ),
-        dataset="1 afirmacion con las 7 dimensiones fijadas, mas 2 combinaciones distintas que "
-        "colapsan al mismo valor heredado.",
-        preparacion="Base 0.1 sintetica + tablas x_ + ambitos.",
+        dataset=(
+            "15 afirmaciones coexistentes: una de partida con las 7 dimensiones canonicas "
+            "fijadas, mas 14 variantes que difieren de ella en una sola dimension. Ademas, 7 "
+            "afirmaciones independientes para el barrido de mutacion, una por dimension."
+        ),
+        preparacion="Base 0.1 sintetica creada con la cadena canonica de Alembic + tablas x_ + "
+        "ambitos. Se capturan huella, esquema heredado y recuentos heredados de partida.",
         operacion=(
-            "Fijar las 7 dimensiones, cambiar una sola y comprobar que las otras 6 no varian."
+            "1) Fijar las 7 dimensiones canonicas y releerlas desde SQLite. 2) Barrido: por cada "
+            "dimension, mutarla en una afirmacion propia y comprobar que las otras seis quedan "
+            "intactas. 3) Persistir 15 combinaciones distintas simultaneas y proyectarlas al enum "
+            "heredado. 4) Medir que ambito y autoridad no se derivan de confirmacion, validez ni "
+            "disponibilidad y que el enum es invariante ante ellas."
         ),
         resultado_esperado=(
-            "Las 7 dimensiones son independientes; el enum heredado es demostrablemente lossy."
+            "Las 7 dimensiones canonicas se representan de forma independiente; mutar una deja "
+            "intactas las otras seis; coexisten combinaciones que el enum monolitico no puede "
+            "expresar; ambito y autoridad no se colapsan con confirmacion, validez ni "
+            "disponibilidad; y las tablas heredadas quedan intactas."
         ),
-        criterio_de_fallo="Que cambiar una dimension arrastre otra, o que hagan falta cambios en "
-        "memories para representarlas.",
+        criterio_de_fallo=(
+            "Que cambiar una dimension arrastre otra, que el enum heredado baste para "
+            "reconstruir las siete, que ambito o autoridad resulten derivables de las tres "
+            "dimensiones que el enum roza, o que haga falta tocar memories."
+        ),
     )
     connection, scopes, before = _prepared()
     try:
         scope_id = scopes["global"]
-        assertion_id = xmodel.insert_assertion(
-            connection,
-            scope_id=scope_id,
-            subject="dato",
-            predicate="tiene",
-            object_="estado multiple",
-            valid_from="2020-01-01T00:00:00",
-            valid_to=None,
-            recorded_at=T1,
+        esquema_heredado_antes = legacy_schema_dump(connection)
+        recuentos_heredados_antes = _legacy_counts(connection)
+        ddl_memories = str(
+            connection.execute("SELECT sql FROM sqlite_master WHERE name = 'memories'").fetchone()[
+                0
+            ]
         )
-        inicial = {
-            "existencia": "presente",
-            "disponibilidad": "activa",
-            "epistemico": "afirmada",
-            "confianza": "alta",
-            "aprobacion": "aprobada",
-            "sensibilidad": "normal",
-            "verificacion": "verificada",
-        }
-        for dimension, value in inicial.items():
-            xmodel.set_state(connection, assertion_id, dimension, value, T1)
-        connection.commit()
 
-        xmodel.set_state(connection, assertion_id, "disponibilidad", "archivada", T2)
-        connection.commit()
+        inicial = dict(xmodel.CANONICAL_INITIAL_STATE)
 
-        final = dict(
-            connection.execute(
-                "SELECT dimension, value FROM x_state WHERE assertion_id = ? ORDER BY dimension",
-                (assertion_id,),
-            ).fetchall()
+        # --- A. Las siete dimensiones canonicas se representan por separado.
+        base_id = _assertion_with_state(connection, scope_id, "base", inicial, T1)
+        persistidas = _read_state(connection, base_id)
+        siete_representadas = (
+            len(persistidas) == 7
+            and set(persistidas) == set(xmodel.STATE_DIMENSIONS)
+            and persistidas == inicial
         )
-        sin_tocar = {k: v for k, v in final.items() if k != "disponibilidad"}
-        esperado_sin_tocar = {k: v for k, v in inicial.items() if k != "disponibilidad"}
 
-        # Perdida de informacion del enum heredado: dos combinaciones nuevas
-        # distintas se proyectan al mismo valor unico de memories.status.
-        combinacion_a = {
-            "existencia": "presente",
-            "disponibilidad": "archivada",
-            "epistemico": "afirmada",
-            "confianza": "baja",
+        # --- B. Barrido: mutar UNA dimension deja intactas las otras SEIS.
+        barrido: dict[str, dict[str, object]] = {}
+        for dimension in xmodel.STATE_DIMENSIONS:
+            nuevo = xmodel.CANONICAL_STATE_VALUES[dimension][1]
+            assertion_id = _assertion_with_state(
+                connection, scope_id, f"barrido:{dimension}", inicial, T1
+            )
+            antes_dim = _read_state(connection, assertion_id)
+            xmodel.set_state(connection, assertion_id, dimension, nuevo, T2)
+            connection.commit()
+            despues_dim = _read_state(connection, assertion_id)
+            otras_antes = {k: v for k, v in antes_dim.items() if k != dimension}
+            otras_despues = {k: v for k, v in despues_dim.items() if k != dimension}
+            barrido[dimension] = {
+                "valor_anterior": antes_dim[dimension],
+                "valor_nuevo": despues_dim[dimension],
+                "cambio_aplicado": despues_dim[dimension] == nuevo != antes_dim[dimension],
+                "otras_dimensiones_comprobadas": len(otras_despues),
+                "las_otras_seis_intactas": otras_antes == otras_despues,
+            }
+        independencia_total = all(
+            entry["cambio_aplicado"]
+            and entry["las_otras_seis_intactas"]
+            and entry["otras_dimensiones_comprobadas"] == 6
+            for entry in barrido.values()
+        )
+
+        # --- C. Combinaciones coexistentes que el enum monolitico no expresa.
+        combinaciones: dict[str, dict[str, str]] = {"base": dict(inicial)}
+        for dimension in xmodel.STATE_DIMENSIONS:
+            for valor in xmodel.CANONICAL_STATE_VALUES[dimension][1:]:
+                estado = dict(inicial)
+                estado[dimension] = valor
+                combinaciones[f"{dimension}={valor}"] = estado
+        ids = {
+            etiqueta: _assertion_with_state(connection, scope_id, etiqueta, estado, T3)
+            for etiqueta, estado in combinaciones.items()
         }
-        combinacion_b = {
-            "existencia": "presente",
-            "disponibilidad": "archivada",
-            "epistemico": "afirmada",
-            "confianza": "alta",
+        leidas = {etiqueta: _read_state(connection, aid) for etiqueta, aid in ids.items()}
+        tuplas = {tuple(estado[d] for d in xmodel.STATE_DIMENSIONS) for estado in leidas.values()}
+        proyecciones = {
+            etiqueta: xmodel.project_to_legacy_status(estado) for etiqueta, estado in leidas.items()
         }
-        proyeccion_a = "archived"
-        proyeccion_b = "archived"
-        colapso_demostrado = combinacion_a != combinacion_b and proyeccion_a == proyeccion_b
+        colisiones: dict[str, set[tuple[str, ...]]] = {}
+        for etiqueta, valor in proyecciones.items():
+            colisiones.setdefault(valor, set()).add(
+                tuple(leidas[etiqueta][d] for d in xmodel.STATE_DIMENSIONS)
+            )
+        mayor_colision = max(len(t) for t in colisiones.values())
+        enum_heredado_es_lossy = (
+            len(tuplas) == len(combinaciones)
+            and len(tuplas) > len(set(proyecciones.values()))
+            and mayor_colision >= 2
+        )
+        # Ejemplo explicito: dos estados que difieren en una dimension que el
+        # enum SI roza (confirmacion) y aun asi colapsan al mismo valor.
+        colapso_en_confirmacion = (
+            proyecciones["base"] == proyecciones["confirmación=provisional"]
+            and leidas["base"] != leidas["confirmación=provisional"]
+        )
 
-        legacy_status_values = connection.execute(
-            "SELECT COUNT(DISTINCT status) FROM memories"
-        ).fetchone()[0]
+        # --- D. Ambito y autoridad no se colapsan con confirmacion,
+        #        validez ni disponibilidad.
+        def _triple(estado: dict[str, str]) -> tuple[str, ...]:
+            return tuple(estado[d] for d in xmodel.LEGACY_PROJECTION_INPUTS)
 
+        triple_base = _triple(inicial)
+        mismo_triple = [estado for estado in leidas.values() if _triple(estado) == triple_base]
+        ambitos_con_el_mismo_triple = sorted({estado["ámbito"] for estado in mismo_triple})
+        autoridades_con_el_mismo_triple = sorted({estado["autoridad"] for estado in mismo_triple})
+        valores_heredados_del_grupo = sorted(
+            {xmodel.project_to_legacy_status(estado) for estado in mismo_triple}
+        )
+
+        invariancia: dict[str, bool] = {}
+        for dimension in ("ámbito", "autoridad"):
+            pares = [
+                (a, b)
+                for a in leidas
+                for b in leidas
+                if a < b and _difieren_solo_en(leidas[a], leidas[b], dimension)
+            ]
+            invariancia[dimension] = bool(pares) and all(
+                proyecciones[a] == proyecciones[b] for a, b in pares
+            )
+
+        ambito_y_autoridad_no_colapsan = (
+            "ámbito" not in xmodel.LEGACY_PROJECTION_INPUTS
+            and "autoridad" not in xmodel.LEGACY_PROJECTION_INPUTS
+            and len(ambitos_con_el_mismo_triple) == 3
+            and len(autoridades_con_el_mismo_triple) == 3
+            and len(valores_heredados_del_grupo) == 1
+            and invariancia["ámbito"]
+            and invariancia["autoridad"]
+            and bool(barrido["ámbito"]["las_otras_seis_intactas"])
+            and bool(barrido["autoridad"]["las_otras_seis_intactas"])
+        )
+
+        # --- E. Sirius 0.1 intacto y tablas heredadas sin alterar.
         after = legacy_fingerprint(connection)
+        esquema_heredado_despues = legacy_schema_dump(connection)
+        recuentos_heredados_despues = _legacy_counts(connection)
+        tablas_heredadas_intactas = (
+            esquema_heredado_antes == esquema_heredado_despues
+            and recuentos_heredados_antes == recuentos_heredados_despues
+        )
+        valores_distintos_en_datos_heredados = int(
+            connection.execute("SELECT COUNT(DISTINCT status) FROM memories").fetchone()[0]
+        )
+
         evidence.evidencia = {
-            "dimensiones_declaradas": list(xmodel.STATE_DIMENSIONS),
-            "dimensiones_persistidas": len(final),
-            "dimension_modificada": "disponibilidad",
-            "valor_nuevo": final.get("disponibilidad"),
-            "las_otras_seis_no_cambiaron": sin_tocar == esperado_sin_tocar,
-            "valores_distintos_en_el_enum_heredado": int(legacy_status_values),
-            "dos_combinaciones_distintas_colapsan_al_mismo_valor_heredado": colapso_demostrado,
-            "proyeccion_del_enum_heredado": xmodel.LEGACY_STATUS_PROJECTION,
-            "nota": (
-                "Las 7 dimensiones son EXPERIMENTALES: el paquete v1.0 exige el spike pero no "
-                "enumera las canonicas. La incertidumbre resuelta es estructural."
+            "dimensiones_canonicas": list(xmodel.STATE_DIMENSIONS),
+            "son_exactamente_siete": len(xmodel.STATE_DIMENSIONS) == 7,
+            "dimensiones_persistidas": len(persistidas),
+            "estado_releido_desde_sqlite": persistidas,
+            "siete_dimensiones_representadas_de_forma_independiente": siete_representadas,
+            "barrido_una_dimension_a_la_vez": barrido,
+            "mutar_una_deja_intactas_las_otras_seis": independencia_total,
+            "combinaciones_coexistentes_persistidas": len(combinaciones),
+            "combinaciones_distintas_releidas": len(tuplas),
+            "valores_distintos_del_enum_heredado": sorted(set(proyecciones.values())),
+            "mayor_grupo_de_combinaciones_que_colapsan_al_mismo_valor": mayor_colision,
+            "colisiones_por_valor_heredado": {
+                valor: len(tuplas_del_valor) for valor, tuplas_del_valor in colisiones.items()
+            },
+            "el_enum_monolitico_no_puede_expresarlas": enum_heredado_es_lossy,
+            "colapso_incluso_en_una_dimension_que_el_enum_roza": colapso_en_confirmacion,
+            "dimensiones_que_el_enum_heredado_alcanza": list(xmodel.LEGACY_PROJECTION_INPUTS),
+            "ambitos_distintos_con_confirmacion_validez_disponibilidad_iguales": (
+                ambitos_con_el_mismo_triple
             ),
+            "autoridades_distintas_con_confirmacion_validez_disponibilidad_iguales": (
+                autoridades_con_el_mismo_triple
+            ),
+            "valores_heredados_de_ese_grupo": valores_heredados_del_grupo,
+            "enum_invariante_ante_ambito": invariancia["ámbito"],
+            "enum_invariante_ante_autoridad": invariancia["autoridad"],
+            "ambito_y_autoridad_no_se_colapsan": ambito_y_autoridad_no_colapsan,
+            "ddl_memories_heredado": ddl_memories,
+            "dominio_del_enum_heredado": list(xmodel.LEGACY_STATUS_VALUES),
+            "valores_distintos_en_datos_heredados": valores_distintos_en_datos_heredados,
+            "esquema_heredado_sin_cambios": (esquema_heredado_antes == esquema_heredado_despues),
+            "recuentos_heredados_sin_cambios": (
+                recuentos_heredados_antes == recuentos_heredados_despues
+            ),
+            "tablas_heredadas_no_alteradas": tablas_heredadas_intactas,
             "huella_0_1_antes": before,
             "huella_0_1_despues": after,
             "0_1_intacto": before == after,
+            "modelo_experimental": True,
+            "ddl_productivo_fijado": False,
+            "nombres_fisicos_productivos_fijados": False,
+            "nota": (
+                "Las SIETE DIMENSIONES son las canonicas fijadas para esta correccion. El "
+                "vocabulario de valores de cada dimension y las tablas x_ siguen siendo "
+                "EXPERIMENTALES: no fijan DDL definitivo ni nombres fisicos productivos."
+            ),
         }
         ok = (
-            len(final) == 7
-            and final["disponibilidad"] == "archivada"
-            and sin_tocar == esperado_sin_tocar
-            and colapso_demostrado
+            siete_representadas
+            and independencia_total
+            and enum_heredado_es_lossy
+            and colapso_en_confirmacion
+            and ambito_y_autoridad_no_colapsan
+            and tablas_heredadas_intactas
             and before == after
         )
         evidence.resultado = PASS if ok else FAIL_STRUCTURAL_MODEL
         evidence.conclusion = (
-            "A soporta 7 dimensiones ortogonales por adicion; el enum heredado se conserva intacto "
-            "y queda como proyeccion lossy, no como fuente."
+            "A soporta las siete dimensiones canonicas por pura adicion: cada una se mueve sin "
+            "arrastrar a las otras seis, coexisten combinaciones que el enum monolitico heredado "
+            "no puede expresar, y ambito y autoridad quedan fuera de su alcance en lugar de "
+            "colapsarse con confirmacion, validez o disponibilidad. El enum heredado se conserva "
+            "intacto y queda como proyeccion lossy, no como fuente."
             if ok
-            else "Las dimensiones no son representables de forma independiente sin rediseño."
+            else (
+                "Las siete dimensiones canonicas no son representables de forma independiente sin "
+                "rediseñar el esquema heredado."
+            )
         )
         return evidence
     finally:

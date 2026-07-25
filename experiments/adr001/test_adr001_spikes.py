@@ -14,6 +14,7 @@ prueba falla.
 from __future__ import annotations
 
 import pytest
+from experiments.adr001 import xmodel
 from experiments.adr001.evidence import PASS, run_twice
 from experiments.adr001.spikes_deletion import spike_10, spike_19
 from experiments.adr001.spikes_migration import spike_15, spike_16
@@ -28,6 +29,17 @@ from experiments.adr001.spikes_model import (
     spike_08,
     spike_17,
     spike_18,
+)
+
+# Las siete dimensiones canonicas, en su orden canonico.
+DIMENSIONES_CANONICAS = (
+    "confirmación",
+    "validez",
+    "disponibilidad",
+    "sensibilidad",
+    "temporalidad",
+    "ámbito",
+    "autoridad",
 )
 
 MODEL_SPIKES = [
@@ -69,6 +81,84 @@ def test_spike_de_migracion_pasa(numero: int, spike) -> None:
     assert evidence.resultado == PASS, (
         f"spike {numero} ({evidence.nombre}) termino en {evidence.resultado}: {evidence.evidencia}"
     )
+
+
+def test_spike_7_usa_exactamente_las_siete_dimensiones_canonicas() -> None:
+    """Las siete canonicas sustituyen a las dimensiones experimentales de la v0.1."""
+    assert xmodel.STATE_DIMENSIONS == DIMENSIONES_CANONICAS
+
+    evidence = spike_07()
+    assert evidence.evidencia["dimensiones_canonicas"] == list(DIMENSIONES_CANONICAS)
+    assert evidence.evidencia["son_exactamente_siete"] is True
+    assert evidence.evidencia["dimensiones_persistidas"] == 7
+    assert evidence.evidencia["siete_dimensiones_representadas_de_forma_independiente"] is True
+
+
+def test_spike_7_mutar_una_dimension_deja_intactas_las_otras_seis() -> None:
+    evidence = spike_07()
+    barrido = evidence.evidencia["barrido_una_dimension_a_la_vez"]
+
+    assert set(barrido) == set(DIMENSIONES_CANONICAS)
+    for dimension, medida in barrido.items():
+        assert medida["cambio_aplicado"] is True, dimension
+        assert medida["otras_dimensiones_comprobadas"] == 6, dimension
+        assert medida["las_otras_seis_intactas"] is True, dimension
+    assert evidence.evidencia["mutar_una_deja_intactas_las_otras_seis"] is True
+
+
+def test_spike_7_coexisten_combinaciones_que_el_enum_monolitico_no_expresa() -> None:
+    evidence = spike_07()
+
+    distintas = evidence.evidencia["combinaciones_distintas_releidas"]
+    assert distintas == evidence.evidencia["combinaciones_coexistentes_persistidas"]
+    assert distintas > len(evidence.evidencia["valores_distintos_del_enum_heredado"])
+    assert evidence.evidencia["mayor_grupo_de_combinaciones_que_colapsan_al_mismo_valor"] >= 2
+    assert evidence.evidencia["el_enum_monolitico_no_puede_expresarlas"] is True
+    assert evidence.evidencia["colapso_incluso_en_una_dimension_que_el_enum_roza"] is True
+
+
+def test_spike_7_ambito_y_autoridad_no_se_colapsan() -> None:
+    """Ni con confirmacion, ni con validez, ni con disponibilidad."""
+    evidence = spike_07()
+    evidencia = evidence.evidencia
+
+    assert "ámbito" not in evidencia["dimensiones_que_el_enum_heredado_alcanza"]
+    assert "autoridad" not in evidencia["dimensiones_que_el_enum_heredado_alcanza"]
+    # Mismo triple (confirmacion, validez, disponibilidad) y aun asi ambito y
+    # autoridad toman valores distintos: no son derivables de el.
+    assert len(evidencia["ambitos_distintos_con_confirmacion_validez_disponibilidad_iguales"]) == 3
+    assert (
+        len(evidencia["autoridades_distintas_con_confirmacion_validez_disponibilidad_iguales"]) == 3
+    )
+    assert evidencia["valores_heredados_de_ese_grupo"] == ["current"]
+    assert evidencia["enum_invariante_ante_ambito"] is True
+    assert evidencia["enum_invariante_ante_autoridad"] is True
+    assert evidencia["ambito_y_autoridad_no_se_colapsan"] is True
+
+
+def test_spike_7_no_altera_las_tablas_heredadas() -> None:
+    evidence = spike_07()
+
+    assert evidence.evidencia["esquema_heredado_sin_cambios"] is True
+    assert evidence.evidencia["recuentos_heredados_sin_cambios"] is True
+    assert evidence.evidencia["tablas_heredadas_no_alteradas"] is True
+    assert evidence.evidencia["0_1_intacto"] is True
+
+
+def test_spike_7_sigue_siendo_experimental() -> None:
+    """La correccion no fija DDL definitivo ni nombres fisicos productivos."""
+    evidence = spike_07()
+
+    assert evidence.evidencia["modelo_experimental"] is True
+    assert evidence.evidencia["ddl_productivo_fijado"] is False
+    assert evidence.evidencia["nombres_fisicos_productivos_fijados"] is False
+
+
+def test_spike_7_se_repite_desde_base_limpia() -> None:
+    evidence = run_twice(spike_07)
+
+    assert evidence.resultado == PASS
+    assert evidence.repeticion_limpia.startswith("reproducido desde base limpia")
 
 
 def test_el_borrado_logico_no_purga_el_fichero() -> None:

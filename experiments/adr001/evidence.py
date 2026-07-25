@@ -50,9 +50,13 @@ def run_twice(build: Callable[[], SpikeEvidence]) -> SpikeEvidence:
     first = build()
     second = build()
     if first.resultado != second.resultado:
+        # El veredicto de la primera pasada se guarda ANTES de degradarlo: si
+        # no, el mensaje de la incidencia diria INCONCLUSIVE en lugar del
+        # resultado realmente obtenido.
+        primera = first.resultado
         first.resultado = INCONCLUSIVE
         first.repeticion_limpia = (
-            f"NO REPRODUCIBLE: primera pasada {first.resultado}, segunda {second.resultado}"
+            f"NO REPRODUCIBLE: primera pasada {primera}, segunda {second.resultado}"
         )
         return first
     first.repeticion_limpia = (

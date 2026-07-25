@@ -1,0 +1,65 @@
+REVISIÓN DIRIGIDA DE CONSISTENCIA — ADR-001
+====================================================================
+
+Alcance: cotejo del informe v0.1, el paquete de evidencia, las pruebas
+y el código. NO se reejecuta ningún spike salvo el 7, ya corregido.
+
+1. CORRESPONDENCIA ENTRE RESULTADOS, PRUEBAS Y JSON
+--------------------------------------------------------------------
+  spikes en el JSON            : 14 -> [1, 2, 3, 4, 5, 6, 7, 8, 10, 15, 16, 17, 18, 19]
+  coinciden con los exigidos   : True
+  todos invocados por pytest   : True
+  11 campos del §6 completos    : True
+  resultado ↔ repetición ↔ concl.: coherentes
+
+2. NINGÚN PASS DECLARADO SIN EVIDENCIA AUTOMÁTICA
+--------------------------------------------------------------------
+  spike  1  PASS    2 medidas  sostenido
+  spike  2  PASS    4 medidas  sostenido
+  spike  3  PASS    3 medidas  sostenido
+  spike  4  PASS    4 medidas  sostenido
+  spike  5  PASS    5 medidas  sostenido
+  spike  6  PASS    4 medidas  sostenido
+  spike  7  PASS   11 medidas  sostenido
+  spike  8  PASS    3 medidas  sostenido
+  spike 10  PASS    2 medidas  sostenido
+  spike 15  PASS    9 medidas  sostenido
+  spike 16  PASS    5 medidas  sostenido
+  spike 17  PASS    3 medidas  sostenido
+  spike 18  PASS    4 medidas  sostenido
+  spike 19  PASS    5 medidas  sostenido
+  evidencia no vacía en los 14  : True
+
+3. REGLA RATIFICAR A / ESCALAR A B / ABRIR C
+--------------------------------------------------------------------
+  los 14 en PASS                : True
+  decisión sobre el conjunto    : RATIFICAR A
+  14 en PASS                   -> RATIFICAR A            ok
+  FAIL_STRUCTURAL_MODEL en 7   -> ESCALAR A B            ok
+  FAIL_STRUCTURAL_MODEL en 15  -> ESCALAR A B            ok
+  FAIL_ENGINE_SQLITE en 10     -> ABRIR CONTINGENCIA C   ok
+  FAIL_ENGINE_SQLITE en 19     -> ABRIR CONTINGENCIA C   ok
+  INCONCLUSIVE en 3            -> DECISION BLOQUEADA     ok
+
+4. SPIKE 19 — MODELO DE AMENAZA Y LÍMITES
+--------------------------------------------------------------------
+  modelo de amenaza explícito   : True
+  declara el alcance            : True
+  declara lo que queda fuera    : True
+  contraste que valida la medida: True
+  límite recogido en el informe : True
+
+5. DERIVADOS, SECURE_DELETE Y WINDOWS SIGUEN SIENDO CONDICIONES
+--------------------------------------------------------------------
+  derivados        citado en el informe v0.1 : True
+  secure_delete    citado en el informe v0.1 : True
+  windows          citado en el informe v0.1 : True
+  declaradas como condiciones   : True
+
+RESULTADO DE LA REVISIÓN DIRIGIDA
+====================================================================
+  Sin defectos demostrables. No se cambia ningún resultado.
+
+  Las observaciones que NO constituyen defecto (asimetrías de rigor,
+  residuos de nomenclatura y desajustes de entorno) se detallan en el
+  informe v0.2, §6.

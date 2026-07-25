@@ -11,33 +11,89 @@ adición y requiriese rediseñar una tabla heredada, ese spike terminaría en
 ``FAIL_STRUCTURAL_MODEL`` y conduciría a B. El modelo es deliberadamente
 mínimo: no fija DDL definitivo ni nombres productivos.
 
-Las siete dimensiones ortogonales de estado se declaran aquí de forma
-EXPERIMENTAL (ver ``STATE_DIMENSIONS``). El paquete operativo v1.0 exige el
-spike pero no enumera las dimensiones canónicas; la incertidumbre que el
-spike resuelve es estructural (¿puede el modelo representar N dimensiones
-independientes sin un enum monolítico y absorber el enum heredado sin
-pérdida?), y esa respuesta no depende de los nombres concretos.
+Las siete dimensiones ortogonales de estado son ahora las CANÓNICAS fijadas
+para la corrección del spike 7 (ver ``STATE_DIMENSIONS``). Sustituyen a las
+dimensiones experimentales de la v0.1 (``existencia``, ``disponibilidad``,
+``epistemico``, ``confianza``, ``aprobacion``, ``sensibilidad``,
+``verificacion``), que quedan derogadas.
+
+Los valores de cada dimensión (``CANONICAL_STATE_VALUES``) siguen siendo
+EXPERIMENTALES: sirven para poder medir la ortogonalidad, no fijan
+vocabulario productivo, ni DDL definitivo, ni nombres físicos.
 """
 
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Mapping
 
-# Dimensiones ortogonales experimentales. El enum heredado
-# ``memories.status`` (current/archived/deleted) colapsa al menos tres de
-# ellas (existencia, disponibilidad y estado epistémico) en un solo valor.
+# Las SIETE DIMENSIONES CANÓNICAS de estado, en su orden canónico. El enum
+# heredado ``memories.status`` (current/archived/deleted) es un único valor
+# que solo alcanza a tres de ellas y no puede expresar las otras cuatro.
 STATE_DIMENSIONS: tuple[str, ...] = (
-    "existencia",
+    "confirmación",
+    "validez",
     "disponibilidad",
-    "epistemico",
-    "confianza",
-    "aprobacion",
     "sensibilidad",
-    "verificacion",
+    "temporalidad",
+    "ámbito",
+    "autoridad",
 )
 
-# Mapeo del enum heredado a las dimensiones nuevas. Demuestra que un solo
-# valor heredado se proyecta sobre varias dimensiones a la vez.
+# Vocabulario EXPERIMENTAL por dimensión. El primer valor de cada tupla es
+# el de partida del spike; los demás son alternativas usadas para medir que
+# mover una dimensión no arrastra a las otras seis.
+CANONICAL_STATE_VALUES: dict[str, tuple[str, ...]] = {
+    "confirmación": ("confirmada", "provisional", "refutada"),
+    "validez": ("vigente", "caducada", "anulada"),
+    "disponibilidad": ("activa", "archivada", "eliminada"),
+    "sensibilidad": ("normal", "restringida", "confidencial"),
+    "temporalidad": ("puntual", "duradera", "permanente"),
+    "ámbito": ("global", "proyecto", "conversación"),
+    "autoridad": ("usuario", "sistema", "derivada"),
+}
+
+CANONICAL_INITIAL_STATE: dict[str, str] = {
+    dimension: values[0] for dimension, values in CANONICAL_STATE_VALUES.items()
+}
+
+# Dominio del enum monolítico heredado (``memories.status``). No hay CHECK
+# en el DDL de 0.1: el dominio lo impone el código de aplicación.
+LEGACY_STATUS_VALUES: tuple[str, ...] = ("current", "archived", "deleted")
+
+# Únicas dimensiones canónicas que el enum heredado alcanza a rozar. Las
+# otras cuatro —sensibilidad, temporalidad, ámbito y autoridad— no tienen
+# ninguna representación posible en un solo VARCHAR de tres valores.
+LEGACY_PROJECTION_INPUTS: tuple[str, ...] = ("confirmación", "validez", "disponibilidad")
+
+
+def project_to_legacy_status(state: Mapping[str, str]) -> str:
+    """Proyecta un estado canónico sobre el enum monolítico heredado.
+
+    Es una proyección EXPERIMENTAL y deliberadamente total: sirve para medir
+    cuánta información se pierde al colapsar las siete dimensiones en un
+    único valor, no para fijar semántica productiva. Solo lee las tres
+    dimensiones de ``LEGACY_PROJECTION_INPUTS``; las otras cuatro no
+    intervienen porque el enum heredado no puede expresarlas.
+    """
+    if (
+        state["disponibilidad"] == "eliminada"
+        or state["validez"] == "anulada"
+        or state["confirmación"] == "refutada"
+    ):
+        return "deleted"
+    if state["disponibilidad"] == "archivada" or state["validez"] == "caducada":
+        return "archived"
+    return "current"
+
+
+# Backfill del enum heredado hacia dimensiones, tal y como lo consumió el
+# spike 15 en la v0.1. Se conserva SIN CAMBIOS y con las dimensiones
+# derogadas a propósito: esta ronda corrige únicamente el spike 7 y los
+# otros trece spikes no se reejecutan, así que su evidencia registrada debe
+# seguir correspondiendo exactamente con el código que la produjo. Unificar
+# este mapa con las dimensiones canónicas exige reejecutar el spike 15 y
+# queda pendiente de que ADR-001 ratifique la taxonomía.
 LEGACY_STATUS_PROJECTION: dict[str, dict[str, str]] = {
     "current": {"existencia": "presente", "disponibilidad": "activa", "epistemico": "afirmada"},
     "archived": {"existencia": "presente", "disponibilidad": "archivada", "epistemico": "afirmada"},
