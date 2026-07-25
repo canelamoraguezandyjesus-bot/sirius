@@ -1,0 +1,21 @@
+=== RUNNER DE LOS 14 SPIKES ===
+2026-07-25T03:39:28Z
+
+evidencia: /home/user/sirius/artifacts/adr001_spikes/evidencia_spikes.json
+  spike  1  PASS                   Afirmacion atomica con varias procedencias
+  spike  2  PASS                   Apoyo y refutacion multiples
+  spike  3  PASS                   Tiempo valido separado del tiempo de registro
+  spike  4  PASS                   Correccion retroactiva sin destruir el estado anterior
+  spike  5  PASS                   Consulta valida en T
+  spike  6  PASS                   Consulta conocida en T
+  spike  7  PASS                   Siete dimensiones ortogonales de estado sin enum monolitico
+  spike  8  PASS                   Ambito multi-proyecto cerrado
+  spike 10  PASS                   Borrado duro con FTS5 y todos los derivados
+  spike 15  PASS                   Migracion de una base Sirius 0.1 representativa
+  spike 16  PASS                   Rollback
+  spike 17  PASS                   Fallo inyectado durante una escritura critica
+  spike 18  PASS                   Ningun derivado actua como fuente canonica
+  spike 19  PASS                   No reconstruibilidad
+
+DECISION: RATIFICAR A
+duracion total: 10.8 s

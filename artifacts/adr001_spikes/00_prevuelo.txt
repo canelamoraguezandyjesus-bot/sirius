@@ -1,0 +1,48 @@
+=== PREVUELO ADR-001 — Paquete operativo v1.0 ===
+fecha_utc        : 2026-07-25T03:21:06Z
+raiz_repo        : /home/user/sirius
+rama             : fix/chat-history-layout
+HEAD             : b57ad7b24c7f0232d45540cde73294e2d68e02ef
+origin/main      : 24fc9d5869309b71f4a1a333a7b4f0fda51938e4
+paquete leido    : origin/main:docs/implementation/SIRIUS_0.2_ADR001_PAQUETE_OPERATIVO_SPIKES_v1.0.md
+
+--- git status inicial (antes de escribir nada) ---
+?? artifacts/
+
+--- versiones ---
+python         3.14.6
+sqlite_library 3.45.1
+sqlalchemy     2.0.51
+alembic        1.18.5
+platform       linux
+
+--- head alembic (cadena canonica, NO se toca) ---
+61be4bb269bf (head)
+
+--- PRAGMAs REALES via sirius.adapters.persistence.database.build_engine ---
+  foreign_keys    1
+  journal_mode    delete
+  secure_delete   1
+  auto_vacuum     0
+  synchronous     2
+  page_size       4096
+  cache_size      -2000
+
+--- mecanismo UnitOfWork ---
+  clase: SqliteUnitOfWork  (src/sirius/adapters/persistence/sqlite_unit_of_work.py)
+  metodos: ['__enter__', '__exit__', 'begin', 'close', 'commit', 'rollback']
+  repos expuestos: []
+
+--- triggers y FTS5 en head ---
+  triggers:
+   - decision_revisions_fts_ad
+   - decision_revisions_fts_ai
+   - memory_revisions_fts_ad
+   - memory_revisions_fts_ai
+   - memory_revisions_fts_au
+   - messages_fts_ad
+   - messages_fts_ai
+   - messages_fts_au
+  tablas virtuales FTS5:
+   - knowledge_fts
+   - message_fts

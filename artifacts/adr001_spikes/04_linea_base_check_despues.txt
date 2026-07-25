@@ -1,0 +1,16 @@
+=== CIERRE — equivalente de scripts/check.ps1 DESPUES de los experimentos ===
+fecha_utc: 2026-07-25T03:40:25Z
+
+--- [1/4] uv run ruff format --check . ---
+250 files already formatted
+--- [2/4] uv run ruff check . ---
+All checks passed!
+--- [3/4] uv run mypy src tests ---
+Success: no issues found in 236 source files
+--- [4/4] uv run pytest (suite de Sirius 0.1) ---
+........................................................................ [ 95%]
+...................................................                      [100%]
+1203 passed in 203.76s (0:03:23)
+
+NOTA: testpaths=['tests'] en pyproject.toml, por lo que 'uv run pytest' NO recoge
+experiments/. El recuento debe seguir siendo exactamente 1203, igual que en el prevuelo.

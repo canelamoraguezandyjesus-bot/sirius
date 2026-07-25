@@ -1,0 +1,6 @@
+=== PRUEBAS EXPERIMENTALES INDEPENDIENTES ===
+2026-07-25T03:40:00Z
+comando: uv run pytest experiments/adr001 -q
+
+..................                                                       [100%]
+18 passed in 13.83s
