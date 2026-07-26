@@ -1,0 +1,2909 @@
+{
+ "documento": "Casos del benchmark de ADR-002",
+ "version": "0.1",
+ "estado": "PROPUESTO",
+ "niveles": {
+  "1": "Casos canónicos reutilizados de B04-CA-01-50. Referencia congelada por B04 v1.0 APROBADO; el benchmark los ejecuta, no los reescribe.",
+  "2": "Casos arquitectónicos nuevos. Solo cuando ningún caso canónico los cubre.",
+  "3": "Ablaciones técnicas. Instrumentos de medida; nunca producen veredicto de conformidad."
+ },
+ "conteos": {
+  "nivel_1": 50,
+  "nivel_2": 5,
+  "nivel_3": 7
+ },
+ "nivel_1": [
+  {
+   "id": "N1-01",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-01",
+   "riesgo_canonico": "Preferencia actual directa",
+   "requisito_verificado": [
+    "B04-RF-01",
+    "B04-RF-15",
+    "B04-RF-22"
+   ],
+   "familia_pdp": [
+    "F01"
+   ],
+   "metrica_y_umbral": [
+    "B04-M02",
+    "B04-M03",
+    "B04-M14"
+   ],
+   "datos_sinteticos": [
+    "MEM-001"
+   ],
+   "consulta": "¿Cómo prefiero que redactes?",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "GLOBAL",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "MEM-001"
+   ],
+   "candidatos_prohibidos": [
+    "MEM-004",
+    "MEM-007"
+   ],
+   "resultado_esperado": "Recupera preferencia global confirmada, vigente y marcada si es crítica.",
+   "orden_esperado": [
+    "MEM-001"
+   ],
+   "explicacion_esperada": "coincidencia, ámbito global, tiempo vigente, estado confirmado, procedencia y criticidad",
+   "etapa_esperada": "E1",
+   "parada_esperada": "S1",
+   "cardinalidad": "EXACTA",
+   "criticidad": "IMPORTANTE",
+   "ejecutable_por_t0": "SI_CON_FALLO_PARCIAL",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "No encuentra o usa candidata.",
+   "traza_red": [
+    "RED-027"
+   ]
+  },
+  {
+   "id": "N1-02",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-02",
+   "riesgo_canonico": "Aislamiento de proyecto",
+   "requisito_verificado": [
+    "B04-RF-06",
+    "B04-RF-09"
+   ],
+   "familia_pdp": [
+    "F08"
+   ],
+   "metrica_y_umbral": [
+    "B04-M06",
+    "B04-M04"
+   ],
+   "datos_sinteticos": [
+    "MEM-002",
+    "MEM-003"
+   ],
+   "consulta": "¿Qué restricciones de transporte tengo?",
+   "modo": "M1",
+   "proposito": "planificar_viaje",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-MADEIRA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "MEM-002"
+   ],
+   "candidatos_prohibidos": [
+    "MEM-003"
+   ],
+   "resultado_esperado": "Solo aparece en Madeira o consulta explícita autorizada.",
+   "orden_esperado": [
+    "MEM-002"
+   ],
+   "explicacion_esperada": "ámbito de proyecto aplicado como puerta antes de generar candidatos",
+   "etapa_esperada": "E1",
+   "parada_esperada": "S5",
+   "cardinalidad": "EXHAUSTIVA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "SI_FALLO_DURO",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Contamina otros viajes.",
+   "traza_red": [
+    "RED-010"
+   ]
+  },
+  {
+   "id": "N1-03",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-03",
+   "riesgo_canonico": "Multi-proyecto cerrado",
+   "requisito_verificado": [
+    "B04-RF-06"
+   ],
+   "familia_pdp": [
+    "F08"
+   ],
+   "metrica_y_umbral": [
+    "B04-M06"
+   ],
+   "datos_sinteticos": [
+    "DEC-001"
+   ],
+   "consulta": "¿Qué reglas de calidad aplican a Gamma?",
+   "modo": "M1",
+   "proposito": "planificar_entrega",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-GAMMA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [],
+   "candidatos_prohibidos": [
+    "DEC-001"
+   ],
+   "resultado_esperado": "C queda fuera hasta añadirse explícitamente.",
+   "orden_esperado": [],
+   "explicacion_esperada": "la lista multi-proyecto cerrada no incluye Gamma; no se amplía por categoría",
+   "etapa_esperada": "E1",
+   "parada_esperada": "S5",
+   "cardinalidad": "EXHAUSTIVA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "C hereda por categoría.",
+   "traza_red": [
+    "RED-010"
+   ]
+  },
+  {
+   "id": "N1-04",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-04",
+   "riesgo_canonico": "Archivado ordinario",
+   "requisito_verificado": [
+    "B04-RF-12"
+   ],
+   "familia_pdp": [
+    "F13",
+    "F01"
+   ],
+   "metrica_y_umbral": [
+    "B04-M05"
+   ],
+   "datos_sinteticos": [
+    "MEM-004"
+   ],
+   "consulta": "¿Qué formato de informe uso?",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [],
+   "candidatos_prohibidos": [
+    "MEM-004"
+   ],
+   "resultado_esperado": "No aparece en M1.",
+   "orden_esperado": [],
+   "explicacion_esperada": "estado archivado excluido por el modo M1",
+   "etapa_esperada": "E1",
+   "parada_esperada": "S5",
+   "cardinalidad": "EXACTA",
+   "criticidad": "ORDINARIO",
+   "ejecutable_por_t0": "SI",
+   "requiere_t1_t4": false,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Ranking la presenta como vigente.",
+   "traza_red": [
+    "RED-014"
+   ]
+  },
+  {
+   "id": "N1-05",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-05",
+   "riesgo_canonico": "Histórico explícito",
+   "requisito_verificado": [
+    "B04-RF-08"
+   ],
+   "familia_pdp": [
+    "F04"
+   ],
+   "metrica_y_umbral": [
+    "B04-M11",
+    "B04-M05"
+   ],
+   "datos_sinteticos": [
+    "DEC-002",
+    "DEC-003",
+    "REL-001"
+   ],
+   "consulta": "¿Qué decisión de presupuesto usábamos antes?",
+   "modo": "M2",
+   "proposito": "revisar_historial",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "DEC-002"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Versión sustituida marcada histórica.",
+   "orden_esperado": [
+    "DEC-002"
+   ],
+   "explicacion_esperada": "estado sustituido y relación de sustitución con DEC-003",
+   "etapa_esperada": "E1",
+   "parada_esperada": "S1",
+   "cardinalidad": "EXACTA",
+   "criticidad": "ORDINARIO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "La oculta o aplica al presente.",
+   "traza_red": [
+    "RED-028"
+   ]
+  },
+  {
+   "id": "N1-06",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-06",
+   "riesgo_canonico": "Fecha futura",
+   "requisito_verificado": [
+    "B04-RF-07"
+   ],
+   "familia_pdp": [
+    "F09"
+   ],
+   "metrica_y_umbral": [
+    "B04-M11"
+   ],
+   "datos_sinteticos": [
+    "DEC-004"
+   ],
+   "consulta": "¿Qué proveedor de mensajería aplica?",
+   "modo": "M1",
+   "proposito": "planificar_entrega",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-09-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "DEC-004"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "M1 con objetivo septiembre lo recupera; M1 actual no lo aplica.",
+   "orden_esperado": [
+    "DEC-004"
+   ],
+   "explicacion_esperada": "aplicabilidad respecto del tiempo objetivo declarado, no de ahora",
+   "etapa_esperada": "E1",
+   "parada_esperada": "S1",
+   "cardinalidad": "EXACTA",
+   "criticidad": "ORDINARIO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Lo excluye siempre o lo aplica ahora.",
+   "traza_red": [
+    "RED-028"
+   ]
+  },
+  {
+   "id": "N1-07",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-07",
+   "riesgo_canonico": "Fecha insuficiente",
+   "requisito_verificado": [
+    "B04-RF-04",
+    "B04-RF-07"
+   ],
+   "familia_pdp": [
+    "F09"
+   ],
+   "metrica_y_umbral": [
+    "B04-M11",
+    "B04-M09"
+   ],
+   "datos_sinteticos": [
+    "MEM-005"
+   ],
+   "consulta": "¿Desde cuándo rige el contrato de mantenimiento?",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "MEM-005"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Parcial o aclaración.",
+   "orden_esperado": [
+    "MEM-005"
+   ],
+   "explicacion_esperada": "fecha de validez ausente; suficiencia PARCIAL declarada",
+   "etapa_esperada": "E1",
+   "parada_esperada": "S3",
+   "cardinalidad": "EXACTA",
+   "criticidad": "ORDINARIO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Asume vigencia.",
+   "traza_red": [
+    "RED-028"
+   ]
+  },
+  {
+   "id": "N1-08",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-08",
+   "riesgo_canonico": "Conflicto abierto",
+   "requisito_verificado": [
+    "B04-RF-21"
+   ],
+   "familia_pdp": [
+    "F06"
+   ],
+   "metrica_y_umbral": [
+    "B04-M08"
+   ],
+   "datos_sinteticos": [
+    "DEC-005",
+    "MEM-006",
+    "REL-002"
+   ],
+   "consulta": "¿Cuál es el presupuesto de Beta?",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-BETA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "DEC-005",
+    "MEM-006"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Devuelve ambos marcados; no certeza única.",
+   "orden_esperado": null,
+   "explicacion_esperada": "conflicto marcado con ambos lados, autoridad y procedencia",
+   "etapa_esperada": "E1",
+   "parada_esperada": "S6",
+   "cardinalidad": "EXHAUSTIVA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Elige por recencia/puntuación.",
+   "traza_red": [
+    "RED-009"
+   ]
+  },
+  {
+   "id": "N1-09",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-09",
+   "riesgo_canonico": "Candidata pendiente",
+   "requisito_verificado": [
+    "B04-RF-03",
+    "B04-RF-12"
+   ],
+   "familia_pdp": [
+    "F05"
+   ],
+   "metrica_y_umbral": [
+    "B04-M04"
+   ],
+   "datos_sinteticos": [
+    "MEM-007"
+   ],
+   "consulta": "¿Qué preferencia de reuniones tengo?",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [],
+   "candidatos_prohibidos": [
+    "MEM-007"
+   ],
+   "resultado_esperado": "Fuera de M1; visible en M4.",
+   "orden_esperado": [],
+   "explicacion_esperada": "estado candidata excluido del modo ordinario",
+   "etapa_esperada": "E1",
+   "parada_esperada": "S5",
+   "cardinalidad": "EXACTA",
+   "criticidad": "ORDINARIO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Influye en trabajo ordinario.",
+   "traza_red": [
+    "RED-013"
+   ]
+  },
+  {
+   "id": "N1-10",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-10",
+   "riesgo_canonico": "Rechazada/suprimida",
+   "requisito_verificado": [
+    "B04-RF-12"
+   ],
+   "familia_pdp": [
+    "F05"
+   ],
+   "metrica_y_umbral": [
+    "B04-M04"
+   ],
+   "datos_sinteticos": [
+    "MEM-008"
+   ],
+   "consulta": "¿Qué horario de entrega tengo fijado?",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [],
+   "candidatos_prohibidos": [
+    "MEM-008"
+   ],
+   "resultado_esperado": "No recupera como conocimiento; M4 muestra estado si se pide.",
+   "orden_esperado": [],
+   "explicacion_esperada": "estado rechazada excluido; visible solo en gestión de memoria",
+   "etapa_esperada": "E1",
+   "parada_esperada": "S5",
+   "cardinalidad": "EXACTA",
+   "criticidad": "ORDINARIO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "La trata como confirmada.",
+   "traza_red": [
+    "RED-022"
+   ]
+  },
+  {
+   "id": "N1-11",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-11",
+   "riesgo_canonico": "Eliminada",
+   "requisito_verificado": [
+    "B04-RF-10"
+   ],
+   "familia_pdp": [
+    "F13"
+   ],
+   "metrica_y_umbral": [
+    "B04-M04"
+   ],
+   "datos_sinteticos": [
+    "MEM-009"
+   ],
+   "consulta": "¿Qué sabes del expediente retirado?",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [],
+   "candidatos_prohibidos": [
+    "MEM-009"
+   ],
+   "resultado_esperado": "No aparece ni se reconstruye.",
+   "orden_esperado": [],
+   "explicacion_esperada": "contenido purgado; no recuperable ni reconstruible por traza",
+   "etapa_esperada": "E0",
+   "parada_esperada": "S5",
+   "cardinalidad": "EXHAUSTIVA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "SI",
+   "requiere_t1_t4": false,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Queda visible por historial.",
+   "traza_red": [
+    "RED-015"
+   ]
+  },
+  {
+   "id": "N1-12",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-12",
+   "riesgo_canonico": "Restringida",
+   "requisito_verificado": [
+    "B04-RF-12"
+   ],
+   "familia_pdp": [
+    "F11"
+   ],
+   "metrica_y_umbral": [
+    "B04-M04",
+    "B04-M20"
+   ],
+   "datos_sinteticos": [
+    "MEM-010"
+   ],
+   "consulta": "¿Hay información médica del titular?",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "NO_AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [],
+   "candidatos_prohibidos": [
+    "MEM-010"
+   ],
+   "resultado_esperado": "Se excluye sin revelar contenido, conteo ni categoría.",
+   "orden_esperado": [],
+   "explicacion_esperada": "estado externo SIN_RESULTADO_UTILIZABLE, sin conteo ni categoría",
+   "etapa_esperada": "E0",
+   "parada_esperada": "S2",
+   "cardinalidad": "EXACTA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Aparece o filtra existencia.",
+   "traza_red": [
+    "RED-013"
+   ]
+  },
+  {
+   "id": "N1-13",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-13",
+   "riesgo_canonico": "Alias resuelto",
+   "requisito_verificado": [
+    "B04-RF-05"
+   ],
+   "familia_pdp": [
+    "F07"
+   ],
+   "metrica_y_umbral": [
+    "B04-M02"
+   ],
+   "datos_sinteticos": [
+    "MEM-011",
+    "REL-005"
+   ],
+   "consulta": "¿Cuál es el identificador de PAA?",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "MEM-011"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Ambos resuelven el mismo ID.",
+   "orden_esperado": [
+    "MEM-011"
+   ],
+   "explicacion_esperada": "alias confirmado resuelto al mismo ID estable de entidad",
+   "etapa_esperada": "E1",
+   "parada_esperada": "S1",
+   "cardinalidad": "EXACTA",
+   "criticidad": "ORDINARIO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Duplica proyectos.",
+   "traza_red": [
+    "RED-012"
+   ]
+  },
+  {
+   "id": "N1-14",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-14",
+   "riesgo_canonico": "Entidad ambigua",
+   "requisito_verificado": [
+    "B04-RF-04",
+    "B04-RF-05"
+   ],
+   "familia_pdp": [
+    "F07"
+   ],
+   "metrica_y_umbral": [
+    "B04-M10",
+    "B04-M13"
+   ],
+   "datos_sinteticos": [
+    "MEM-012",
+    "MEM-013"
+   ],
+   "consulta": "¿De qué se ocupa Juan?",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "GLOBAL",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "MEM-012",
+    "MEM-013"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Aclara o devuelve grupos separados.",
+   "orden_esperado": null,
+   "explicacion_esperada": "dos entidades homónimas no fusionadas; grupos separados por ID",
+   "etapa_esperada": "E0",
+   "parada_esperada": "S3",
+   "cardinalidad": "EXHAUSTIVA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Fusiona por nombre.",
+   "traza_red": [
+    "RED-012"
+   ]
+  },
+  {
+   "id": "N1-15",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-15",
+   "riesgo_canonico": "Verificación literal",
+   "requisito_verificado": [
+    "B04-RF-03",
+    "B04-RF-18"
+   ],
+   "familia_pdp": [
+    "F10"
+   ],
+   "metrica_y_umbral": [
+    "B04-M07"
+   ],
+   "datos_sinteticos": [
+    "DOC-005"
+   ],
+   "consulta": "¿Dónde dije exactamente que el alcance no incluye la migración?",
+   "modo": "M3",
+   "proposito": "verificar_fuente",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "DOC-005"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "M3 devuelve fuente y fragmento atribuido.",
+   "orden_esperado": [
+    "DOC-005"
+   ],
+   "explicacion_esperada": "evidencia atribuida no canónica con procedencia literal",
+   "etapa_esperada": "E4",
+   "parada_esperada": "S1",
+   "cardinalidad": "EXACTA",
+   "criticidad": "ORDINARIO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Resumen presentado como cita.",
+   "traza_red": [
+    "RED-027"
+   ]
+  },
+  {
+   "id": "N1-16",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-16",
+   "riesgo_canonico": "Fallback autorizado",
+   "requisito_verificado": [
+    "B04-RF-18"
+   ],
+   "familia_pdp": [
+    "F10"
+   ],
+   "metrica_y_umbral": [
+    "B04-M12"
+   ],
+   "datos_sinteticos": [
+    "MEM-027",
+    "MSG-011"
+   ],
+   "consulta": "¿Quién cierra el circuito de firmas?",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-GAMMA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "MEM-027",
+    "MSG-011"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Devuelve evidencia no canónica atribuida.",
+   "orden_esperado": [
+    "MEM-027",
+    "MSG-011"
+   ],
+   "explicacion_esperada": "E1-E3 insuficientes; E4 aporta fragmento atribuido, no canónico",
+   "etapa_esperada": "E4",
+   "parada_esperada": "S1",
+   "cardinalidad": "EXACTA",
+   "criticidad": "ORDINARIO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "La presenta como verdad confirmada.",
+   "traza_red": [
+    "RED-034"
+   ]
+  },
+  {
+   "id": "N1-17",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-17",
+   "riesgo_canonico": "Ausencia confirmada",
+   "requisito_verificado": [
+    "B04-RF-25"
+   ],
+   "familia_pdp": [
+    "F23"
+   ],
+   "metrica_y_umbral": [
+    "B04-M09"
+   ],
+   "datos_sinteticos": [],
+   "consulta": "¿Qué política de teletrabajo tenemos en Alfa?",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "«Ninguno en este ámbito/tiempo» y espacios consultados seguros.",
+   "orden_esperado": [],
+   "explicacion_esperada": "estado interno NINGUNO_EN_AMBITO tras agotar etapas autorizadas",
+   "etapa_esperada": "E4",
+   "parada_esperada": "S5",
+   "cardinalidad": "EXHAUSTIVA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "SI_CON_FALLO_PARCIAL",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Inventa o dice «no existe» sin alcance.",
+   "traza_red": [
+    "RED-031"
+   ]
+  },
+  {
+   "id": "N1-18",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-18",
+   "riesgo_canonico": "Fuente inaccesible",
+   "requisito_verificado": [
+    "B04-RF-32"
+   ],
+   "familia_pdp": [
+    "F23",
+    "F10"
+   ],
+   "metrica_y_umbral": [
+    "B04-M09"
+   ],
+   "datos_sinteticos": [
+    "DOC-004"
+   ],
+   "consulta": "¿Qué dice el anexo técnico requerido?",
+   "modo": "M3",
+   "proposito": "verificar_fuente",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Parcial con parada S7, clase «fuente inaccesible» y siguiente acción segura.",
+   "orden_esperado": [],
+   "explicacion_esperada": "estado interno FUENTE_INACCESIBLE; no se adjudica ausencia",
+   "etapa_esperada": "E4",
+   "parada_esperada": "S7",
+   "cardinalidad": "EXACTA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Afirma que no existe o termina sin parada.",
+   "traza_red": [
+    "RED-034"
+   ]
+  },
+  {
+   "id": "N1-19",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-19",
+   "riesgo_canonico": "Duplicado multifuente",
+   "requisito_verificado": [
+    "B04-RF-20"
+   ],
+   "familia_pdp": [
+    "F10",
+    "F14"
+   ],
+   "metrica_y_umbral": [
+    "B04-M10",
+    "B04-M07"
+   ],
+   "datos_sinteticos": [
+    "DEC-006",
+    "DEC-007",
+    "DEC-008"
+   ],
+   "consulta": "¿Cuál es la plataforma de despliegue aprobada?",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "DEC-006",
+    "DEC-007",
+    "DEC-008"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Un grupo, representante justificado y tres procedencias.",
+   "orden_esperado": [
+    "DEC-006"
+   ],
+   "explicacion_esperada": "grupo de duplicados con representante y tres procedencias conservadas",
+   "etapa_esperada": "E1",
+   "parada_esperada": "S1",
+   "cardinalidad": "EXACTA",
+   "criticidad": "ORDINARIO",
+   "ejecutable_por_t0": "SI_CON_FALLO_PARCIAL",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Tres competidores o pérdida de matiz.",
+   "traza_red": [
+    "RED-030"
+   ]
+  },
+  {
+   "id": "N1-20",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-20",
+   "riesgo_canonico": "Restricción negativa",
+   "requisito_verificado": [
+    "B04-RF-19"
+   ],
+   "familia_pdp": [
+    "F15"
+   ],
+   "metrica_y_umbral": [
+    "B04-M17"
+   ],
+   "datos_sinteticos": [
+    "MEM-014",
+    "MEM-015",
+    "REL-004"
+   ],
+   "consulta": "¿Puedo usar vuelos con escala?",
+   "modo": "M1",
+   "proposito": "planificar_viaje",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "MEM-014"
+   ],
+   "candidatos_prohibidos": [
+    "MEM-015"
+   ],
+   "resultado_esperado": "Negación intacta en expansión/ranking.",
+   "orden_esperado": [
+    "MEM-014"
+   ],
+   "explicacion_esperada": "polaridad NEGATIVA preservada; no se transforma en preferencia positiva",
+   "etapa_esperada": "E3",
+   "parada_esperada": "S1",
+   "cardinalidad": "EXACTA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "SI_FALLO_DURO",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "La transforma en preferencia positiva.",
+   "traza_red": [
+    "RED-011"
+   ]
+  },
+  {
+   "id": "N1-21",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-21",
+   "riesgo_canonico": "Condición",
+   "requisito_verificado": [
+    "B04-RF-19"
+   ],
+   "familia_pdp": [
+    "F15"
+   ],
+   "metrica_y_umbral": [
+    "B04-M18"
+   ],
+   "datos_sinteticos": [
+    "MEM-016"
+   ],
+   "consulta": "¿Acepto escalas?",
+   "modo": "M1",
+   "proposito": "planificar_viaje",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "MEM-016"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Condición completa y aplicable.",
+   "orden_esperado": [
+    "MEM-016"
+   ],
+   "explicacion_esperada": "condición «ahorro > 200 EUR» recuperada íntegra con la afirmación",
+   "etapa_esperada": "E3",
+   "parada_esperada": "S1",
+   "cardinalidad": "EXACTA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "SI_CON_FALLO_PARCIAL",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Recupera «acepta escalas».",
+   "traza_red": [
+    "RED-011"
+   ]
+  },
+  {
+   "id": "N1-22",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-22",
+   "riesgo_canonico": "Intervalo temporal",
+   "requisito_verificado": [
+    "B04-RF-08"
+   ],
+   "familia_pdp": [
+    "F02"
+   ],
+   "metrica_y_umbral": [
+    "B04-M11"
+   ],
+   "datos_sinteticos": [
+    "DEC-009"
+   ],
+   "consulta": "¿Qué decisiones eran válidas entre enero y marzo?",
+   "modo": "M2",
+   "proposito": "revisar_historial",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-BETA",
+   "tiempo_objetivo": "2026-01-10T00:00:00Z/2026-03-20T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "DEC-009"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Filtra por tiempo válido.",
+   "orden_esperado": [
+    "DEC-009"
+   ],
+   "explicacion_esperada": "intervalo de tiempo válido, no fecha de registro",
+   "etapa_esperada": "E1",
+   "parada_esperada": "S5",
+   "cardinalidad": "EXHAUSTIVA",
+   "criticidad": "ORDINARIO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Usa fecha de registro.",
+   "traza_red": [
+    "RED-028"
+   ]
+  },
+  {
+   "id": "N1-23",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-23",
+   "riesgo_canonico": "Actual frente a anterior",
+   "requisito_verificado": [
+    "B04-RF-08"
+   ],
+   "familia_pdp": [
+    "F04"
+   ],
+   "metrica_y_umbral": [
+    "B04-M05",
+    "B04-M11"
+   ],
+   "datos_sinteticos": [
+    "DEC-002",
+    "DEC-003",
+    "REL-001"
+   ],
+   "consulta": "¿Cuál es la decisión de presupuesto actual y cuál reemplazó?",
+   "modo": "M2",
+   "proposito": "revisar_historial",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "DEC-003",
+    "DEC-002"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Vigente y relación de sustitución.",
+   "orden_esperado": [
+    "DEC-003",
+    "DEC-002"
+   ],
+   "explicacion_esperada": "vigente primero, sustituida marcada, relación explícita entre ambas",
+   "etapa_esperada": "E1",
+   "parada_esperada": "S1",
+   "cardinalidad": "EXACTA",
+   "criticidad": "IMPORTANTE",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Mezcla ambas como actuales.",
+   "traza_red": [
+    "RED-028"
+   ]
+  },
+  {
+   "id": "N1-24",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-24",
+   "riesgo_canonico": "Sin soporte",
+   "requisito_verificado": [
+    "B04-RF-10"
+   ],
+   "familia_pdp": [
+    "F10"
+   ],
+   "metrica_y_umbral": [
+    "B04-M04"
+   ],
+   "datos_sinteticos": [
+    "MEM-017",
+    "REL-006"
+   ],
+   "consulta": "¿Cada cuánto revisamos el alcance?",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [],
+   "candidatos_prohibidos": [
+    "MEM-017"
+   ],
+   "resultado_esperado": "Fuera de M1; visible en auditoría.",
+   "orden_esperado": [],
+   "explicacion_esperada": "validez SIN_SOPORTE; excluido de M1 y visible solo en gestión",
+   "etapa_esperada": "E1",
+   "parada_esperada": "S5",
+   "cardinalidad": "EXACTA",
+   "criticidad": "ORDINARIO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Mantiene autoridad.",
+   "traza_red": [
+    "RED-015"
+   ]
+  },
+  {
+   "id": "N1-25",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-25",
+   "riesgo_canonico": "Contaminación léxica",
+   "requisito_verificado": [
+    "B04-RF-06"
+   ],
+   "familia_pdp": [
+    "F08"
+   ],
+   "metrica_y_umbral": [
+    "B04-M06"
+   ],
+   "datos_sinteticos": [
+    "MEM-018",
+    "MEM-002"
+   ],
+   "consulta": "Atlas",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [],
+   "candidatos_prohibidos": [
+    "MEM-018"
+   ],
+   "resultado_esperado": "Ámbito evita cruces.",
+   "orden_esperado": [],
+   "explicacion_esperada": "el término compartido no cruza el ámbito; la puerta actúa antes del ranking",
+   "etapa_esperada": "E1",
+   "parada_esperada": "S5",
+   "cardinalidad": "EXHAUSTIVA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "SI_FALLO_DURO",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Resultados de otro proyecto.",
+   "traza_red": [
+    "RED-010"
+   ]
+  },
+  {
+   "id": "N1-26",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-26",
+   "riesgo_canonico": "Límite objetivo",
+   "requisito_verificado": [
+    "B04-RF-24"
+   ],
+   "familia_pdp": [
+    "F14"
+   ],
+   "metrica_y_umbral": [
+    "B04-M21",
+    "B04-M01"
+   ],
+   "datos_sinteticos": [
+    "MEM-101",
+    "MEM-102",
+    "MEM-103",
+    "MEM-104",
+    "MEM-105",
+    "MEM-106",
+    "MEM-107",
+    "MEM-108",
+    "MEM-109",
+    "MEM-110",
+    "MEM-111",
+    "MEM-112"
+   ],
+   "consulta": "Enumera las restricciones esenciales del expediente Alfa.",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "MEM-101",
+    "MEM-102",
+    "MEM-103",
+    "MEM-104",
+    "MEM-105",
+    "MEM-106",
+    "MEM-107",
+    "MEM-108",
+    "MEM-109",
+    "MEM-110",
+    "MEM-111"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Expansión a 11 visible y crítico incluido.",
+   "orden_esperado": null,
+   "explicacion_esperada": "límite objetivo 10 ampliado visiblemente a 11 para conservar el crítico",
+   "etapa_esperada": "E5",
+   "parada_esperada": "S1",
+   "cardinalidad": "ACOTADA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Se corta o amplía en silencio.",
+   "traza_red": [
+    "RED-030"
+   ]
+  },
+  {
+   "id": "N1-27",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-27",
+   "riesgo_canonico": "Autoridad por dominio",
+   "requisito_verificado": [
+    "B04-RF-21"
+   ],
+   "familia_pdp": [
+    "F06"
+   ],
+   "metrica_y_umbral": [
+    "B04-M08"
+   ],
+   "datos_sinteticos": [
+    "DEC-005",
+    "MEM-006",
+    "REL-002"
+   ],
+   "consulta": "¿Qué presupuesto aplico en Beta según el documento?",
+   "modo": "M5",
+   "proposito": "revisar_conflicto",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-BETA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "DEC-005",
+    "MEM-006"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Canónico + conflicto/propuesta.",
+   "orden_esperado": [
+    "DEC-005",
+    "MEM-006"
+   ],
+   "explicacion_esperada": "autoridad de documento canónico frente a informal; conflicto marcado, no resuelto",
+   "etapa_esperada": "E1",
+   "parada_esperada": "S6",
+   "cardinalidad": "EXHAUSTIVA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Frase reescribe documento.",
+   "traza_red": [
+    "RED-009"
+   ]
+  },
+  {
+   "id": "N1-28",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-28",
+   "riesgo_canonico": "No persistencia",
+   "requisito_verificado": [
+    "B04-RF-10"
+   ],
+   "familia_pdp": [
+    "F12"
+   ],
+   "metrica_y_umbral": [
+    "B04-M04"
+   ],
+   "datos_sinteticos": [
+    "MEM-019",
+    "MSG-013"
+   ],
+   "consulta": "¿Qué se dijo en la sesión no guardada?",
+   "modo": "M3",
+   "proposito": "verificar_fuente",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [],
+   "candidatos_prohibidos": [
+    "MEM-019",
+    "MSG-013"
+   ],
+   "resultado_esperado": "No existe en ningún espacio.",
+   "orden_esperado": [],
+   "explicacion_esperada": "contenido no guardado: inexistente en todo espacio, incluido el historial",
+   "etapa_esperada": "E0",
+   "parada_esperada": "S5",
+   "cardinalidad": "EXHAUSTIVA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Aparece por historial.",
+   "traza_red": [
+    "RED-025"
+   ]
+  },
+  {
+   "id": "N1-29",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-29",
+   "riesgo_canonico": "Fuente externa ordinaria",
+   "requisito_verificado": [
+    "B04-RF-13"
+   ],
+   "familia_pdp": [
+    "F10"
+   ],
+   "metrica_y_umbral": [
+    "B04-M07"
+   ],
+   "datos_sinteticos": [
+    "MEM-020",
+    "DOC-003"
+   ],
+   "consulta": "¿Cuál es el plazo legal de entrega?",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "MEM-020"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Resultado atribuido «la fuente afirma X», no verdad de Sirius.",
+   "orden_esperado": [
+    "MEM-020"
+   ],
+   "explicacion_esperada": "clase de evidencia externa atribuida, sin autoridad canónica",
+   "etapa_esperada": "E3",
+   "parada_esperada": "S1",
+   "cardinalidad": "EXACTA",
+   "criticidad": "ORDINARIO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Se presenta X como hecho canónico.",
+   "traza_red": [
+    "RED-018"
+   ]
+  },
+  {
+   "id": "N1-30",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-30",
+   "riesgo_canonico": "Explicación por resultado",
+   "requisito_verificado": [
+    "B04-RF-28"
+   ],
+   "familia_pdp": [
+    "F24",
+    "F01"
+   ],
+   "metrica_y_umbral": [
+    "B04-M14"
+   ],
+   "datos_sinteticos": [
+    "MEM-001",
+    "DEC-003",
+    "MEM-016"
+   ],
+   "consulta": "Resume mis restricciones vigentes con su razón.",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "DEC-003",
+    "MEM-016"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Cada uno indica coincidencia, ámbito, tiempo, estado y procedencia.",
+   "orden_esperado": null,
+   "explicacion_esperada": "los siete elementos de RF-28 por cada resultado, no solo el plan global",
+   "etapa_esperada": "E5",
+   "parada_esperada": "S1",
+   "cardinalidad": "ACOTADA",
+   "criticidad": "IMPORTANTE",
+   "ejecutable_por_t0": "SI_CON_FALLO_PARCIAL",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Solo explica el plan global.",
+   "traza_red": [
+    "RED-029"
+   ]
+  },
+  {
+   "id": "N1-31",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-31",
+   "riesgo_canonico": "Críticos dispersos",
+   "requisito_verificado": [
+    "B04-RF-23"
+   ],
+   "familia_pdp": [
+    "F14",
+    "F10"
+   ],
+   "metrica_y_umbral": [
+    "B04-M01"
+   ],
+   "datos_sinteticos": [
+    "MEM-002",
+    "MEM-014",
+    "MEM-016",
+    "DEC-003",
+    "MEM-025"
+   ],
+   "consulta": "Dame todas las restricciones esenciales que debo respetar.",
+   "modo": "M1",
+   "proposito": "planificar_entrega",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "MEM-014",
+    "MEM-016",
+    "DEC-003",
+    "MEM-025"
+   ],
+   "candidatos_prohibidos": [
+    "MEM-002"
+   ],
+   "resultado_esperado": "Recupera los cinco o declara límite duro incompleto.",
+   "orden_esperado": null,
+   "explicacion_esperada": "críticos alcanzados por alias, relación, historial y estructura, con su marca",
+   "etapa_esperada": "E4",
+   "parada_esperada": "S5",
+   "cardinalidad": "EXHAUSTIVA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Uno se pierde con buena precisión media.",
+   "traza_red": [
+    "RED-030"
+   ]
+  },
+  {
+   "id": "N1-32",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-32",
+   "riesgo_canonico": "Corte de registro",
+   "requisito_verificado": [
+    "B04-RF-08"
+   ],
+   "familia_pdp": [
+    "F03"
+   ],
+   "metrica_y_umbral": [
+    "B04-M11"
+   ],
+   "datos_sinteticos": [
+    "DEC-012",
+    "DEC-013",
+    "REL-008",
+    "REL-009"
+   ],
+   "consulta": "¿Qué sabía Sirius sobre el aforo el 1 de marzo?",
+   "modo": "M2",
+   "proposito": "revisar_historial",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-BETA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": "2026-03-01T00:00:00Z",
+   "candidatos_elegibles": [
+    "DEC-012"
+   ],
+   "candidatos_prohibidos": [
+    "DEC-013"
+   ],
+   "resultado_esperado": "Usa registros existentes hasta marzo, aunque hoy estén corregidos.",
+   "orden_esperado": [
+    "DEC-012"
+   ],
+   "explicacion_esperada": "corte de registro aplicado; la corrección de abril queda fuera",
+   "etapa_esperada": "E1",
+   "parada_esperada": "S1",
+   "cardinalidad": "EXACTA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Devuelve la verdad actual o tiempo válido.",
+   "traza_red": [
+    "RED-028"
+   ]
+  },
+  {
+   "id": "N1-33",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-33",
+   "riesgo_canonico": "Consulta interna autorizada",
+   "requisito_verificado": [
+    "B04-RF-30"
+   ],
+   "familia_pdp": [
+    "F01"
+   ],
+   "metrica_y_umbral": [
+    "B04-M15"
+   ],
+   "datos_sinteticos": [
+    "DEC-003"
+   ],
+   "consulta": "[interna B05] evidencia de límite de gasto",
+   "modo": "M1",
+   "proposito": "ensamblar_contexto_b05",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "DEC-003"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Hereda propósito, permisos, ámbito y operation_id.",
+   "orden_esperado": [
+    "DEC-003"
+   ],
+   "explicacion_esperada": "operation_id heredado y registrado; sin búsqueda de fondo",
+   "etapa_esperada": "E1",
+   "parada_esperada": "S1",
+   "cardinalidad": "EXACTA",
+   "criticidad": "IMPORTANTE",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Búsqueda de fondo sin causa o alcance.",
+   "traza_red": [
+    "RED-027"
+   ]
+  },
+  {
+   "id": "N1-34",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-34",
+   "riesgo_canonico": "Handoff de criticidad",
+   "requisito_verificado": [
+    "B04-RF-23",
+    "B04-RF-27"
+   ],
+   "familia_pdp": [
+    "F14"
+   ],
+   "metrica_y_umbral": [
+    "B04-M19"
+   ],
+   "datos_sinteticos": [
+    "MEM-014",
+    "MEM-016",
+    "DEC-003"
+   ],
+   "consulta": "Prepara el contexto de planificación de Alfa.",
+   "modo": "M1",
+   "proposito": "ensamblar_contexto_b05",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "MEM-014",
+    "MEM-016",
+    "DEC-003"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "B05 recibe marca/razón; no puede recortar críticos silenciosamente.",
+   "orden_esperado": null,
+   "explicacion_esperada": "nivel, razón, fuente y regla de criticidad intactos en la frontera",
+   "etapa_esperada": "E5",
+   "parada_esperada": "S1",
+   "cardinalidad": "ACOTADA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "La criticidad desaparece en la frontera.",
+   "traza_red": [
+    "RED-030"
+   ]
+  },
+  {
+   "id": "N1-35",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-35",
+   "riesgo_canonico": "Fallback marcado no usar",
+   "requisito_verificado": [
+    "B04-RF-11"
+   ],
+   "familia_pdp": [
+    "F12"
+   ],
+   "metrica_y_umbral": [
+    "B04-M12"
+   ],
+   "datos_sinteticos": [
+    "MEM-021",
+    "MSG-012"
+   ],
+   "consulta": "¿Qué nota interna hay sobre la prueba?",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [],
+   "candidatos_prohibidos": [
+    "MEM-021",
+    "MSG-012"
+   ],
+   "resultado_esperado": "M1 fallback lo excluye; M3 puede inspeccionarlo si se pide.",
+   "orden_esperado": [],
+   "explicacion_esperada": "marca «no usar como memoria» aplicada también en el fallback E4",
+   "etapa_esperada": "E4",
+   "parada_esperada": "S5",
+   "cardinalidad": "EXACTA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Resucita y orienta el trabajo.",
+   "traza_red": [
+    "RED-025"
+   ]
+  },
+  {
+   "id": "N1-36",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-36",
+   "riesgo_canonico": "Ausencias diferenciadas",
+   "requisito_verificado": [
+    "B04-RF-25"
+   ],
+   "familia_pdp": [
+    "F23"
+   ],
+   "metrica_y_umbral": [
+    "B04-M09"
+   ],
+   "datos_sinteticos": [
+    "DEC-002",
+    "MEM-007",
+    "MEM-018"
+   ],
+   "consulta": "Variantes de la misma pregunta con dato histórico, candidata y fuera de ámbito.",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [],
+   "candidatos_prohibidos": [
+    "DEC-002",
+    "MEM-007",
+    "MEM-018"
+   ],
+   "resultado_esperado": "Cada caso obtiene estado seguro distinto y opción de ampliar.",
+   "orden_esperado": [],
+   "explicacion_esperada": "SOLO_HISTORICO, SOLO_CANDIDATA y FUERA_DE_AMBITO como estados internos distintos",
+   "etapa_esperada": "E4",
+   "parada_esperada": "S5",
+   "cardinalidad": "EXHAUSTIVA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Todos devuelven «no hay nada».",
+   "traza_red": [
+    "RED-031"
+   ]
+  },
+  {
+   "id": "N1-37",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-37",
+   "riesgo_canonico": "No revelación por traza",
+   "requisito_verificado": [
+    "B04-RF-26"
+   ],
+   "familia_pdp": [
+    "F11"
+   ],
+   "metrica_y_umbral": [
+    "B04-M20"
+   ],
+   "datos_sinteticos": [
+    "MEM-010"
+   ],
+   "consulta": "¿Hay algo sobre el tema sensible del titular?",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "NO_AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [],
+   "candidatos_prohibidos": [
+    "MEM-010"
+   ],
+   "resultado_esperado": "Traza visible no menciona conteo/categoría; estado no reportable.",
+   "orden_esperado": [],
+   "explicacion_esperada": "traza segura sin conteo ni categoría de excluidos",
+   "etapa_esperada": "E0",
+   "parada_esperada": "S2",
+   "cardinalidad": "EXACTA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "«1 excluido por restricción».",
+   "traza_red": [
+    "RED-032"
+   ]
+  },
+  {
+   "id": "N1-38",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-38",
+   "riesgo_canonico": "Límite duro",
+   "requisito_verificado": [
+    "B04-RF-24"
+   ],
+   "familia_pdp": [
+    "F14"
+   ],
+   "metrica_y_umbral": [
+    "B04-M01",
+    "B04-M21"
+   ],
+   "datos_sinteticos": [
+    "MEM-101",
+    "MEM-102",
+    "MEM-103",
+    "MEM-104",
+    "MEM-105",
+    "MEM-106",
+    "MEM-107",
+    "MEM-108",
+    "MEM-109",
+    "MEM-110",
+    "MEM-111",
+    "MEM-112"
+   ],
+   "consulta": "Dame las restricciones esenciales, máximo 10.",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "MEM-101",
+    "MEM-102",
+    "MEM-103",
+    "MEM-104",
+    "MEM-105",
+    "MEM-106",
+    "MEM-107",
+    "MEM-108",
+    "MEM-109",
+    "MEM-110"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Devuelve hasta 10, marca incompleto y 2 críticos pendientes sin revelar contenido; solicita ampliar.",
+   "orden_esperado": null,
+   "explicacion_esperada": "límite duro respetado, PARCIAL visible y dos críticos contabilizados",
+   "etapa_esperada": "E5",
+   "parada_esperada": "S4",
+   "cardinalidad": "ACOTADA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Supera límite o oculta omisión.",
+   "traza_red": [
+    "RED-030"
+   ]
+  },
+  {
+   "id": "N1-39",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-39",
+   "riesgo_canonico": "Neutralidad de arnés",
+   "requisito_verificado": [
+    "B04-RF-31"
+   ],
+   "familia_pdp": [
+    "F22"
+   ],
+   "metrica_y_umbral": [
+    "B04-M16"
+   ],
+   "datos_sinteticos": [
+    "MEM-001",
+    "DEC-003",
+    "MEM-014"
+   ],
+   "consulta": "Ejecuta el mismo corpus con dos implementaciones distintas.",
+   "modo": "M1",
+   "proposito": "verificar_neutralidad",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "MEM-001",
+    "DEC-003",
+    "MEM-014"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Mismos IDs elegibles, estados, criticidad y suficiencia dentro de tolerancias de orden.",
+   "orden_esperado": null,
+   "explicacion_esperada": "equivalencia observable a través de un puerto común, no de una biblioteca",
+   "etapa_esperada": "E5",
+   "parada_esperada": "S5",
+   "cardinalidad": "EXHAUSTIVA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "SI",
+   "requiere_t1_t4": false,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "El contrato exige un motor concreto o cambia semántica.",
+   "traza_red": [
+    "RED-033"
+   ]
+  },
+  {
+   "id": "N1-40",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-40",
+   "riesgo_canonico": "Parada tras etapa suficiente",
+   "requisito_verificado": [
+    "B04-RF-14",
+    "B04-RF-29"
+   ],
+   "familia_pdp": [
+    "F01",
+    "F24"
+   ],
+   "metrica_y_umbral": [
+    "B04-M21",
+    "B04-M15"
+   ],
+   "datos_sinteticos": [
+    "DEC-003"
+   ],
+   "consulta": "¿Cuál es el presupuesto vigente de Alfa?",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "DEC-003"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Se detiene en E1 con S1; no consulta etapas posteriores.",
+   "orden_esperado": [
+    "DEC-003"
+   ],
+   "explicacion_esperada": "S1 aplicado tras control de críticos pendientes = 0; E2-E4 no ejecutadas",
+   "etapa_esperada": "E1",
+   "parada_esperada": "S1",
+   "cardinalidad": "EXACTA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "SI_FALLO_DURO",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Usa S1 sin control de críticos o ejecuta etapas innecesarias.",
+   "traza_red": [
+    "RED-029"
+   ]
+  },
+  {
+   "id": "N1-41",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-41",
+   "riesgo_canonico": "Expansión léxica controlada",
+   "requisito_verificado": [
+    "B04-RF-16"
+   ],
+   "familia_pdp": [
+    "F01",
+    "F07"
+   ],
+   "metrica_y_umbral": [
+    "B04-M02"
+   ],
+   "datos_sinteticos": [
+    "MEM-022"
+   ],
+   "consulta": "¿Cada cuánto se revisa el coche de empresa?",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "MEM-022"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "E1 insuficiente, E2 recupera el dato y se detiene; traza muestra alias.",
+   "orden_esperado": [
+    "MEM-022"
+   ],
+   "explicacion_esperada": "alias autorizado coche→automóvil aplicado en E2 tras insuficiencia de E1",
+   "etapa_esperada": "E2",
+   "parada_esperada": "S1",
+   "cardinalidad": "EXACTA",
+   "criticidad": "ORDINARIO",
+   "ejecutable_por_t0": "SI_CON_FALLO_PARCIAL",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Falso vacío o salto directo a historial.",
+   "traza_red": [
+    "RED-029"
+   ]
+  },
+  {
+   "id": "N1-42",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-42",
+   "riesgo_canonico": "Expansión semántica con polaridad",
+   "requisito_verificado": [
+    "B04-RF-17",
+    "B04-RF-19"
+   ],
+   "familia_pdp": [
+    "F15"
+   ],
+   "metrica_y_umbral": [
+    "B04-M17"
+   ],
+   "datos_sinteticos": [
+    "DEC-010"
+   ],
+   "consulta": "¿Usar PostgreSQL?",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "DEC-010"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "E3 preserva negación y devuelve la restricción, no una recomendación positiva.",
+   "orden_esperado": [
+    "DEC-010"
+   ],
+   "explicacion_esperada": "validación de polaridad en E3, exigida por RF-17",
+   "etapa_esperada": "E3",
+   "parada_esperada": "S1",
+   "cardinalidad": "EXACTA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "SI_FALLO_DURO",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Similitud invierte el significado.",
+   "traza_red": [
+    "RED-029"
+   ]
+  },
+  {
+   "id": "N1-43",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-43",
+   "riesgo_canonico": "Coordinación intra-etapa acotada",
+   "requisito_verificado": [
+    "B04-RF-14"
+   ],
+   "familia_pdp": [
+    "F01"
+   ],
+   "metrica_y_umbral": [
+    "B04-M15"
+   ],
+   "datos_sinteticos": [
+    "MEM-023",
+    "MEM-024"
+   ],
+   "consulta": "¿Quién valida los entregables de calidad?",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "MEM-023",
+    "MEM-024"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Se combinan dentro de E3 sin abrir E4 ni consultar otros espacios.",
+   "orden_esperado": null,
+   "explicacion_esperada": "dos señales del mismo espacio y familia de E3; B04-D15 respetado",
+   "etapa_esperada": "E3",
+   "parada_esperada": "S1",
+   "cardinalidad": "EXACTA",
+   "criticidad": "IMPORTANTE",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Coordina globalmente o adelanta una etapa posterior.",
+   "traza_red": [
+    "RED-029"
+   ]
+  },
+  {
+   "id": "N1-44",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-44",
+   "riesgo_canonico": "Parada reproducible por límite",
+   "requisito_verificado": [
+    "B04-RF-24",
+    "B04-RF-29"
+   ],
+   "familia_pdp": [
+    "F14",
+    "F24"
+   ],
+   "metrica_y_umbral": [
+    "B04-M21"
+   ],
+   "datos_sinteticos": [
+    "MEM-101",
+    "MEM-102",
+    "MEM-103",
+    "MEM-104",
+    "MEM-105",
+    "MEM-106"
+   ],
+   "consulta": "Restricciones esenciales, máximo duro 5.",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "MEM-101",
+    "MEM-102",
+    "MEM-103",
+    "MEM-104",
+    "MEM-105"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Aplica desempate estable registrado; entrega 5, parcial y crítico pendiente. Si el empate material persiste, no inventa preferencia.",
+   "orden_esperado": null,
+   "explicacion_esperada": "desempate por criticidad, autoridad, ajuste temporal, apoyo directo e ID estable",
+   "etapa_esperada": "E5",
+   "parada_esperada": "S4",
+   "cardinalidad": "ACOTADA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Supera límite, oculta omisión o desempata de forma variable.",
+   "traza_red": [
+    "RED-030"
+   ]
+  },
+  {
+   "id": "N1-45",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-45",
+   "riesgo_canonico": "Fallback anterior a sustitución",
+   "requisito_verificado": [
+    "B04-RF-18"
+   ],
+   "familia_pdp": [
+    "F10",
+    "F04"
+   ],
+   "metrica_y_umbral": [
+    "B04-M12"
+   ],
+   "datos_sinteticos": [
+    "MSG-010",
+    "DEC-002",
+    "DEC-003"
+   ],
+   "consulta": "¿Cuál es el presupuesto que manejamos?",
+   "modo": "M1",
+   "proposito": "responder_al_usuario",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "DEC-003",
+    "MSG-010"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "E4 marca el fragmento «anterior a sustitución», enlaza la vigente y no orienta el trabajo como actual.",
+   "orden_esperado": [
+    "DEC-003",
+    "MSG-010"
+   ],
+   "explicacion_esperada": "fragmento histórico cotejado con la afirmación vigente y clasificado",
+   "etapa_esperada": "E4",
+   "parada_esperada": "S1",
+   "cardinalidad": "EXACTA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Devuelve 2.000 € como evidencia neutral o vigente.",
+   "traza_red": [
+    "RED-029"
+   ]
+  },
+  {
+   "id": "N1-46",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-46",
+   "riesgo_canonico": "Propósito no autorizado",
+   "requisito_verificado": [
+    "B04-RF-02"
+   ],
+   "familia_pdp": [
+    "F11"
+   ],
+   "metrica_y_umbral": [
+    "B04-M13"
+   ],
+   "datos_sinteticos": [
+    "MEM-026"
+   ],
+   "consulta": "[interna] datos de nómina del equipo Beta",
+   "modo": "M1",
+   "proposito": "planificar_entrega",
+   "permiso": "NO_AUTORIZADO",
+   "ambito": "PRJ-BETA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [],
+   "candidatos_prohibidos": [
+    "MEM-026"
+   ],
+   "resultado_esperado": "B04-RF-02 bloquea antes de candidatos y registra motivo seguro.",
+   "orden_esperado": [],
+   "explicacion_esperada": "bloqueo en E0 por propósito; motivo registrado sin revelar existencia",
+   "etapa_esperada": "E0",
+   "parada_esperada": "S2",
+   "cardinalidad": "EXACTA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Recupera o revela que el dato existe.",
+   "traza_red": [
+    "RED-027"
+   ]
+  },
+  {
+   "id": "N1-47",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-47",
+   "riesgo_canonico": "Fecha de evento distinta",
+   "requisito_verificado": [
+    "B04-RF-07",
+    "B04-RF-08"
+   ],
+   "familia_pdp": [
+    "F02",
+    "F03"
+   ],
+   "metrica_y_umbral": [
+    "B04-M11"
+   ],
+   "datos_sinteticos": [
+    "DEC-011"
+   ],
+   "consulta": "Consultas por occurred_at, valid_time y recorded_at.",
+   "modo": "M2",
+   "proposito": "revisar_historial",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-BETA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": "2026-02-15T00:00:00Z",
+   "candidatos_elegibles": [
+    "DEC-011"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Consultas por occurred_at, valid_time y recorded_at devuelven resultados distintos y correctos.",
+   "orden_esperado": [
+    "DEC-011"
+   ],
+   "explicacion_esperada": "los tres ejes temporales separados: evento enero, validez febrero, registro marzo",
+   "etapa_esperada": "E1",
+   "parada_esperada": "S5",
+   "cardinalidad": "EXHAUSTIVA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Colapsa las tres fechas en «más reciente».",
+   "traza_red": [
+    "RED-028"
+   ]
+  },
+  {
+   "id": "N1-48",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-48",
+   "riesgo_canonico": "Canal lateral diferencial",
+   "requisito_verificado": [
+    "B04-RF-26"
+   ],
+   "familia_pdp": [
+    "F11"
+   ],
+   "metrica_y_umbral": [
+    "B04-M20"
+   ],
+   "datos_sinteticos": [
+    "MEM-010"
+   ],
+   "consulta": "Par diferencial: misma consulta, dos propósitos.",
+   "modo": "M1",
+   "proposito": "par_diferencial",
+   "permiso": "PAREADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [],
+   "candidatos_prohibidos": [
+    "MEM-010"
+   ],
+   "resultado_esperado": "La variante no autorizada y una ausencia real comparten estado, conteo, redacción y latencia dentro de tolerancia.",
+   "orden_esperado": [],
+   "explicacion_esperada": "SIN_RESULTADO_UTILIZABLE idéntico en ambas ramas; banda temporal de TOL-201",
+   "etapa_esperada": "E0",
+   "parada_esperada": "S2",
+   "cardinalidad": "EXACTA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "La salida permite inferir existencia protegida.",
+   "traza_red": [
+    "RED-032"
+   ]
+  },
+  {
+   "id": "N1-49",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-49",
+   "riesgo_canonico": "Fallback enlaza candidata",
+   "requisito_verificado": [
+    "B04-RF-18"
+   ],
+   "familia_pdp": [
+    "F05",
+    "F10"
+   ],
+   "metrica_y_umbral": [
+    "B04-M12"
+   ],
+   "datos_sinteticos": [
+    "MSG-020",
+    "MEM-007",
+    "REL-007"
+   ],
+   "consulta": "¿Hay algo sobre mi preferencia de reuniones?",
+   "modo": "M3",
+   "proposito": "verificar_fuente",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "MSG-020"
+   ],
+   "candidatos_prohibidos": [
+    "MEM-007"
+   ],
+   "resultado_esperado": "E4 devuelve evidencia no canónica y enlace a la candidata; no la activa ni la usa como vigente.",
+   "orden_esperado": [
+    "MSG-020"
+   ],
+   "explicacion_esperada": "enlace explícito a la candidata pendiente sin consolidarla",
+   "etapa_esperada": "E4",
+   "parada_esperada": "S1",
+   "cardinalidad": "EXACTA",
+   "criticidad": "IMPORTANTE",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Pierde el enlace o consolida implícitamente.",
+   "traza_red": [
+    "RED-029"
+   ]
+  },
+  {
+   "id": "N1-50",
+   "nivel": 1,
+   "identificador_canonico": "B04-CA-50",
+   "riesgo_canonico": "Auto-marcado crítico controlado",
+   "requisito_verificado": [
+    "B04-RF-23"
+   ],
+   "familia_pdp": [
+    "F14"
+   ],
+   "metrica_y_umbral": [
+    "B04-M19"
+   ],
+   "datos_sinteticos": [
+    "MEM-025"
+   ],
+   "consulta": "¿Qué condiciones de acceso al almacén hay?",
+   "modo": "M1",
+   "proposito": "planificar_entrega",
+   "permiso": "AUTORIZADO",
+   "ambito": "PRJ-ALFA",
+   "tiempo_objetivo": "2026-06-15T00:00:00Z",
+   "corte_registro": null,
+   "candidatos_elegibles": [
+    "MEM-025"
+   ],
+   "candidatos_prohibidos": [],
+   "resultado_esperado": "Registra regla, evidencia y razón; la marca puede corregirse y cruza a B05.",
+   "orden_esperado": [
+    "MEM-025"
+   ],
+   "explicacion_esperada": "marca crítica con regla CRIT-07 identificada, evidencia y razón corregible",
+   "etapa_esperada": "E1",
+   "parada_esperada": "S1",
+   "cardinalidad": "EXACTA",
+   "criticidad": "CRITICO",
+   "ejecutable_por_t0": "NO_EXPRESABLE",
+   "requiere_t1_t4": true,
+   "evidencia_minima": [
+    "petición efectiva y operation_id",
+    "modo adjudicado y puertas aplicadas",
+    "etapas recorridas y condición de insuficiencia de cada transición",
+    "resultado obtenido, esperado, veredicto y razón",
+    "por resultado: por qué entró y por qué ocupa esa posición",
+    "prohibidos que aparecieron y por qué no fueron excluidos",
+    "suficiencia adjudicada y razón de la parada"
+   ],
+   "fallo_observable": "Marca por intuición, sin regla, o B05 la elimina por presupuesto ordinario.",
+   "traza_red": [
+    "RED-030"
+   ]
+  }
+ ],
+ "nivel_2": [
+  {
+   "id": "ARQ-CA-01",
+   "titulo": "Borrado y regeneración completos de todo índice derivado",
+   "justificacion_nivel2": "Ningún CA canónico cubre el ciclo físico del índice: B04 es producto y excluye almacenamiento (§3).",
+   "rf": [
+    "ADR-001 c.2",
+    "ADR-001 c.3"
+   ],
+   "fam": [
+    "F13"
+   ],
+   "m": [
+    "ADR002-TOL-105",
+    "ADR002-TOL-106",
+    "ADR002-TOL-203"
+   ],
+   "esperado": "El índice y todas sus estructuras auxiliares desaparecen y se reconstruyen desde el canon, 30/30.",
+   "puerta": "puerta 5 de ADR-002",
+   "t0": "SI"
+  },
+  {
+   "id": "ARQ-CA-02",
+   "titulo": "Purga física del derivado sin fragmento recuperable",
+   "justificacion_nivel2": "ADR-001 c.3 y c.4 son obligaciones de modelo físico; ningún CA de B04 las prueba.",
+   "rf": [
+    "ADR-001 c.3",
+    "ADR-001 c.4"
+   ],
+   "fam": [
+    "F13",
+    "F21"
+   ],
+   "m": [
+    "ADR002-TOL-206"
+   ],
+   "esperado": "Tras checkpoint, journal y VACUUM no queda fragmento recuperable en .db, -wal, -shm ni -journal.",
+   "puerta": "puerta 5 de ADR-002",
+   "t0": "NO_EJECUTADO_EN_ESTA_RONDA"
+  },
+  {
+   "id": "ARQ-CA-03",
+   "titulo": "Estabilidad de orden y conjunto ante entradas idénticas",
+   "justificacion_nivel2": "CA-39 cubre equivalencia entre implementaciones; esta mide repetición de la misma implementación.",
+   "rf": [
+    "B04-RF-22"
+   ],
+   "fam": [
+    "F22"
+   ],
+   "m": [
+    "ADR002-TOL-103",
+    "ADR002-TOL-107"
+   ],
+   "esperado": "1 orden y 1 conjunto en n>=30 intra-sesión y en >=5 sesiones independientes.",
+   "puerta": "puerta 4 de ADR-002",
+   "t0": "SI"
+  },
+  {
+   "id": "ARQ-CA-04",
+   "titulo": "Declaración congelada de tamaño y ciclo de todo índice adicional",
+   "justificacion_nivel2": "Obligación de ADR002-TOL-104A y TOL-203; no existe en B04.",
+   "rf": [
+    "ADR002-TOL-104A",
+    "ADR002-TOL-203"
+   ],
+   "fam": [
+    "F22"
+   ],
+   "m": [
+    "ADR002-TOL-207"
+   ],
+   "esperado": "Ficha de candidato completa y congelada antes de la primera ejecución, con límite por magnitud.",
+   "puerta": "puerta 7 de ADR-002",
+   "t0": "NO_APLICA"
+  },
+  {
+   "id": "ARQ-CA-05",
+   "titulo": "Coste incremental declarado por etapa E0-E5",
+   "justificacion_nivel2": "ADR002-TOL-202; B04 fija las etapas pero no su coste.",
+   "rf": [
+    "B04-RF-14",
+    "ADR002-TOL-202"
+   ],
+   "fam": [
+    "F22"
+   ],
+   "m": [
+    "ADR002-TOL-202",
+    "ADR002-TOL-102C"
+   ],
+   "esperado": "Coste local y externo separados por etapa; la suma explica el extremo a extremo declarado.",
+   "puerta": "puerta 7 de ADR-002",
+   "t0": "NO_EXPRESABLE"
+  }
+ ],
+ "nivel_3": [
+  {
+   "id": "AB-0",
+   "desactiva": "Nada — línea base congelada de 0.1",
+   "aisla": "Punto de referencia",
+   "fam": [
+    "F25"
+   ]
+  },
+  {
+   "id": "AB-1",
+   "desactiva": "Todo salvo E0/E1 estructurado y exacto",
+   "aisla": "Aportación de la recuperación exacta sola"
+  },
+  {
+   "id": "AB-2",
+   "desactiva": "Etapa léxica de RF-16",
+   "aisla": "Aportación de variantes y alias"
+  },
+  {
+   "id": "AB-3",
+   "desactiva": "Etapa de significado/relaciones de RF-17",
+   "aisla": "Aportación de la señal tardía"
+  },
+  {
+   "id": "AB-4",
+   "desactiva": "Validación de polaridad, condición y tiempo de RF-17, manteniendo la señal",
+   "aisla": "Aportación específica de la validación frente a la señal cruda"
+  },
+  {
+   "id": "AB-5",
+   "desactiva": "Puertas G1-G12 desactivadas de una en una",
+   "aisla": "Que ninguna puerta enmascare el efecto de otra"
+  },
+  {
+   "id": "AB-6",
+   "desactiva": "Orden aleatorizado con semilla fija",
+   "aisla": "Suelo de comparación"
+  }
+ ]
+}
