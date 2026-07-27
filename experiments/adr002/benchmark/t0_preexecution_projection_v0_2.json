@@ -1,0 +1,867 @@
+{
+ "documento": "Previsión de expresabilidad frente a T0 · ADR-002",
+ "version": "0.2",
+ "version_contrato": "0.4",
+ "estado": "NO_NORMATIVO_NO_CONGELABLE",
+ "normativo": false,
+ "congelable": false,
+ "sustituible_por": "la ejecución real de T0. Este fichero se sustituye ÍNTEGRAMENTE por el resultado medido; ninguna de sus previsiones sobrevive a la medición.",
+ "regla": "Previsión, nunca veredicto. El criterio se aplica automáticamente a todos los casos funcionales, no a una lista escrita a mano. Las reglas de protocolo del arnés no aparecen aquí: no reciben previsión frente a T0.",
+ "criterio": {
+  "fuente_de_los_estados": "SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4",
+  "orden_de_aplicacion": [
+   "1. si el caso exige dos realizaciones distintas -> NO_EJECUTABLE_CON_UNA_SOLA_IMPLEMENTACION",
+   "2. si alguna dimensión requerida es AUSENTE -> NO_EXPRESABLE_PREVISTO",
+   "3. si alguna es PARCIAL -> PARCIALMENTE_EXPRESABLE_PREVISTO",
+   "4. en otro caso -> EXPRESABLE_PREVISTO"
+  ]
+ },
+ "conteos": {
+  "casos_funcionales_proyectados": 52,
+  "reglas_de_arnes_proyectadas": 0,
+  "casos_no_proyectados": 12
+ },
+ "no_proyectados": [
+  {
+   "caso": "ARQ-CA-01",
+   "motivo": "El criterio de previsión se define sobre el estado medido de B04-RF-01-32. Este caso no traza a ningún B04-RF: proyectarlo exigiría inventar un estado que nadie ha medido.",
+   "estado_t0": "NO_MEDIDO"
+  },
+  {
+   "caso": "ARQ-CA-02",
+   "motivo": "El criterio de previsión se define sobre el estado medido de B04-RF-01-32. Este caso no traza a ningún B04-RF: proyectarlo exigiría inventar un estado que nadie ha medido.",
+   "estado_t0": "NO_MEDIDO"
+  },
+  {
+   "caso": "ARQ-CA-03",
+   "motivo": "El criterio de previsión se define sobre el estado medido de B04-RF-01-32. Este caso no traza a ningún B04-RF: proyectarlo exigiría inventar un estado que nadie ha medido.",
+   "estado_t0": "NO_MEDIDO"
+  },
+  {
+   "caso": "ARQ-CA-04",
+   "motivo": "El criterio de previsión se define sobre el estado medido de B04-RF-01-32. Este caso no traza a ningún B04-RF: proyectarlo exigiría inventar un estado que nadie ha medido.",
+   "estado_t0": "NO_MEDIDO"
+  },
+  {
+   "caso": "ARQ-CA-05",
+   "motivo": "El criterio de previsión se define sobre el estado medido de B04-RF-01-32. Este caso no traza a ningún B04-RF: proyectarlo exigiría inventar un estado que nadie ha medido.",
+   "estado_t0": "NO_MEDIDO"
+  },
+  {
+   "caso": "AB-0",
+   "motivo": "El criterio de previsión se define sobre el estado medido de B04-RF-01-32. Este caso no traza a ningún B04-RF: proyectarlo exigiría inventar un estado que nadie ha medido.",
+   "estado_t0": "NO_MEDIDO"
+  },
+  {
+   "caso": "AB-1",
+   "motivo": "El criterio de previsión se define sobre el estado medido de B04-RF-01-32. Este caso no traza a ningún B04-RF: proyectarlo exigiría inventar un estado que nadie ha medido.",
+   "estado_t0": "NO_MEDIDO"
+  },
+  {
+   "caso": "AB-2",
+   "motivo": "El criterio de previsión se define sobre el estado medido de B04-RF-01-32. Este caso no traza a ningún B04-RF: proyectarlo exigiría inventar un estado que nadie ha medido.",
+   "estado_t0": "NO_MEDIDO"
+  },
+  {
+   "caso": "AB-3",
+   "motivo": "El criterio de previsión se define sobre el estado medido de B04-RF-01-32. Este caso no traza a ningún B04-RF: proyectarlo exigiría inventar un estado que nadie ha medido.",
+   "estado_t0": "NO_MEDIDO"
+  },
+  {
+   "caso": "AB-4",
+   "motivo": "El criterio de previsión se define sobre el estado medido de B04-RF-01-32. Este caso no traza a ningún B04-RF: proyectarlo exigiría inventar un estado que nadie ha medido.",
+   "estado_t0": "NO_MEDIDO"
+  },
+  {
+   "caso": "AB-5",
+   "motivo": "El criterio de previsión se define sobre el estado medido de B04-RF-01-32. Este caso no traza a ningún B04-RF: proyectarlo exigiría inventar un estado que nadie ha medido.",
+   "estado_t0": "NO_MEDIDO"
+  },
+  {
+   "caso": "AB-6",
+   "motivo": "El criterio de previsión se define sobre el estado medido de B04-RF-01-32. Este caso no traza a ningún B04-RF: proyectarlo exigiría inventar un estado que nadie ha medido.",
+   "estado_t0": "NO_MEDIDO"
+  }
+ ],
+ "reparto": {
+  "EXPRESABLE_PREVISTO": [
+   "B04-CA-03",
+   "B04-CA-20",
+   "B04-CA-21",
+   "B04-CA-25",
+   "B04-CA-43"
+  ],
+  "NO_EJECUTABLE_CON_UNA_SOLA_IMPLEMENTACION": [
+   "B04-CA-39",
+   "PDP-CA-09",
+   "PDP-CA-22"
+  ],
+  "NO_EXPRESABLE_PREVISTO": [
+   "B04-CA-01",
+   "B04-CA-04",
+   "B04-CA-05",
+   "B04-CA-06",
+   "B04-CA-07",
+   "B04-CA-09",
+   "B04-CA-10",
+   "B04-CA-12",
+   "B04-CA-14",
+   "B04-CA-15",
+   "B04-CA-17",
+   "B04-CA-19",
+   "B04-CA-22",
+   "B04-CA-23",
+   "B04-CA-29",
+   "B04-CA-31",
+   "B04-CA-32",
+   "B04-CA-33",
+   "B04-CA-34",
+   "B04-CA-35",
+   "B04-CA-36",
+   "B04-CA-37",
+   "B04-CA-40",
+   "B04-CA-41",
+   "B04-CA-42",
+   "B04-CA-44",
+   "B04-CA-46",
+   "B04-CA-47",
+   "B04-CA-48",
+   "B04-CA-50"
+  ],
+  "PARCIALMENTE_EXPRESABLE_PREVISTO": [
+   "B04-CA-02",
+   "B04-CA-08",
+   "B04-CA-11",
+   "B04-CA-13",
+   "B04-CA-16",
+   "B04-CA-18",
+   "B04-CA-24",
+   "B04-CA-26",
+   "B04-CA-27",
+   "B04-CA-28",
+   "B04-CA-30",
+   "B04-CA-38",
+   "B04-CA-45",
+   "B04-CA-49"
+  ]
+ },
+ "proyecciones": [
+  {
+   "caso": "N1-01",
+   "identificador_canonico": "B04-CA-01",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-01 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-01": "AUSENTE",
+    "B04-RF-15": "PARCIAL",
+    "B04-RF-22": "PARCIAL"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-02",
+   "identificador_canonico": "B04-CA-02",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "PARCIALMENTE_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones presentes de forma incompleta: B04-RF-09 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-06": "INSEGURO",
+    "B04-RF-09": "PARCIAL"
+   },
+   "ejes_inseguros_medidos": [
+    "B04-RF-06"
+   ],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-03",
+   "identificador_canonico": "B04-CA-03",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Todas las dimensiones requeridas existen en la línea base según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-06": "INSEGURO"
+   },
+   "ejes_inseguros_medidos": [
+    "B04-RF-06"
+   ],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-04",
+   "identificador_canonico": "B04-CA-04",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-12 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-12": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-05",
+   "identificador_canonico": "B04-CA-05",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-08 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-08": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-06",
+   "identificador_canonico": "B04-CA-06",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-07 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-07": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-07",
+   "identificador_canonico": "B04-CA-07",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-04, B04-RF-07 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-04": "AUSENTE",
+    "B04-RF-07": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-08",
+   "identificador_canonico": "B04-CA-08",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "PARCIALMENTE_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones presentes de forma incompleta: B04-RF-21 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-21": "PARCIAL"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-09",
+   "identificador_canonico": "B04-CA-09",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-03, B04-RF-12 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-03": "AUSENTE",
+    "B04-RF-12": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-10",
+   "identificador_canonico": "B04-CA-10",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-12 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-12": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-11",
+   "identificador_canonico": "B04-CA-11",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "PARCIALMENTE_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones presentes de forma incompleta: B04-RF-10 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-10": "PARCIAL"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-12",
+   "identificador_canonico": "B04-CA-12",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-12 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-12": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-13",
+   "identificador_canonico": "B04-CA-13",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "PARCIALMENTE_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones presentes de forma incompleta: B04-RF-05 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-05": "PARCIAL"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-14",
+   "identificador_canonico": "B04-CA-14",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-04 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-04": "AUSENTE",
+    "B04-RF-05": "PARCIAL"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-15",
+   "identificador_canonico": "B04-CA-15",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-03 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-03": "AUSENTE",
+    "B04-RF-18": "PARCIAL"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-16",
+   "identificador_canonico": "B04-CA-16",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "PARCIALMENTE_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones presentes de forma incompleta: B04-RF-18 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-18": "PARCIAL"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-17",
+   "identificador_canonico": "B04-CA-17",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-25 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-25": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-18",
+   "identificador_canonico": "B04-CA-18",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "PARCIALMENTE_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones presentes de forma incompleta: B04-RF-32 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-32": "PARCIAL"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-19",
+   "identificador_canonico": "B04-CA-19",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-20 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-20": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-20",
+   "identificador_canonico": "B04-CA-20",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Todas las dimensiones requeridas existen en la línea base según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-19": "INSEGURO"
+   },
+   "ejes_inseguros_medidos": [
+    "B04-RF-19"
+   ],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-21",
+   "identificador_canonico": "B04-CA-21",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Todas las dimensiones requeridas existen en la línea base según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-19": "INSEGURO"
+   },
+   "ejes_inseguros_medidos": [
+    "B04-RF-19"
+   ],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-22",
+   "identificador_canonico": "B04-CA-22",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-08 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-08": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-23",
+   "identificador_canonico": "B04-CA-23",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-08 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-08": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-24",
+   "identificador_canonico": "B04-CA-24",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "PARCIALMENTE_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones presentes de forma incompleta: B04-RF-10 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-10": "PARCIAL"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-25",
+   "identificador_canonico": "B04-CA-25",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Todas las dimensiones requeridas existen en la línea base según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-06": "INSEGURO"
+   },
+   "ejes_inseguros_medidos": [
+    "B04-RF-06"
+   ],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-26",
+   "identificador_canonico": "B04-CA-26",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "PARCIALMENTE_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones presentes de forma incompleta: B04-RF-24 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-24": "PARCIAL"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-27",
+   "identificador_canonico": "B04-CA-27",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "PARCIALMENTE_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones presentes de forma incompleta: B04-RF-21 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-21": "PARCIAL"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-28",
+   "identificador_canonico": "B04-CA-28",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "PARCIALMENTE_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones presentes de forma incompleta: B04-RF-10 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-10": "PARCIAL"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-29",
+   "identificador_canonico": "B04-CA-29",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-13 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-13": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-30",
+   "identificador_canonico": "B04-CA-30",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "PARCIALMENTE_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones presentes de forma incompleta: B04-RF-28 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-28": "PARCIAL"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-31",
+   "identificador_canonico": "B04-CA-31",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-23 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-23": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-32",
+   "identificador_canonico": "B04-CA-32",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-08 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-08": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-33",
+   "identificador_canonico": "B04-CA-33",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-30 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-30": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-34",
+   "identificador_canonico": "B04-CA-34",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-23 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-23": "AUSENTE",
+    "B04-RF-27": "PARCIAL"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-35",
+   "identificador_canonico": "B04-CA-35",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-11 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-11": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-36",
+   "identificador_canonico": "B04-CA-36",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-25 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-25": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-37",
+   "identificador_canonico": "B04-CA-37",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-26 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-26": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-38",
+   "identificador_canonico": "B04-CA-38",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "PARCIALMENTE_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones presentes de forma incompleta: B04-RF-24 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-24": "PARCIAL"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-39",
+   "identificador_canonico": "B04-CA-39",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EJECUTABLE_CON_UNA_SOLA_IMPLEMENTACION",
+   "fundamento_de_prevision": "El enunciado canónico exige dos realizaciones distintas sobre el mismo corpus. T0 es una sola realización: la comparación no existe.",
+   "estado_por_requisito": {
+    "B04-RF-31": "EXISTENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-40",
+   "identificador_canonico": "B04-CA-40",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-29 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-14": "INSEGURO",
+    "B04-RF-29": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [
+    "B04-RF-14"
+   ],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-41",
+   "identificador_canonico": "B04-CA-41",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-16 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-16": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-42",
+   "identificador_canonico": "B04-CA-42",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-17 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-17": "AUSENTE",
+    "B04-RF-19": "INSEGURO"
+   },
+   "ejes_inseguros_medidos": [
+    "B04-RF-19"
+   ],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-43",
+   "identificador_canonico": "B04-CA-43",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Todas las dimensiones requeridas existen en la línea base según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-14": "INSEGURO"
+   },
+   "ejes_inseguros_medidos": [
+    "B04-RF-14"
+   ],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-44",
+   "identificador_canonico": "B04-CA-44",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-29 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-24": "PARCIAL",
+    "B04-RF-29": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-45",
+   "identificador_canonico": "B04-CA-45",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "PARCIALMENTE_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones presentes de forma incompleta: B04-RF-18 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-18": "PARCIAL"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-46",
+   "identificador_canonico": "B04-CA-46",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-02 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-02": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-47",
+   "identificador_canonico": "B04-CA-47",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-07, B04-RF-08 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-07": "AUSENTE",
+    "B04-RF-08": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-48",
+   "identificador_canonico": "B04-CA-48",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-26 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-26": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-49",
+   "identificador_canonico": "B04-CA-49",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "PARCIALMENTE_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones presentes de forma incompleta: B04-RF-18 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-18": "PARCIAL"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-50",
+   "identificador_canonico": "B04-CA-50",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EXPRESABLE_PREVISTO",
+   "fundamento_de_prevision": "Dimensiones requeridas inexistentes en la línea base: B04-RF-23 según SIRIUS_0.2_ADR_002_INVENTARIO_NORMATIVO_v0.2_PROPUESTO.md §4.",
+   "estado_por_requisito": {
+    "B04-RF-23": "AUSENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-PDP-01",
+   "identificador_canonico": "PDP-CA-09",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EJECUTABLE_CON_UNA_SOLA_IMPLEMENTACION",
+   "fundamento_de_prevision": "El enunciado canónico exige dos realizaciones distintas sobre el mismo corpus. T0 es una sola realización: la comparación no existe.",
+   "estado_por_requisito": {
+    "B04-RF-31": "EXISTENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  },
+  {
+   "caso": "N1-PDP-02",
+   "identificador_canonico": "PDP-CA-22",
+   "clase": "CASO_FUNCIONAL",
+   "estado_t0": "NO_MEDIDO",
+   "expresabilidad_prevista": "NO_EJECUTABLE_CON_UNA_SOLA_IMPLEMENTACION",
+   "fundamento_de_prevision": "El enunciado canónico exige dos realizaciones distintas sobre el mismo corpus. T0 es una sola realización: la comparación no existe.",
+   "estado_por_requisito": {
+    "B04-RF-31": "EXISTENTE"
+   },
+   "ejes_inseguros_medidos": [],
+   "no_es_veredicto": true
+  }
+ ],
+ "hereda_de": "t0_preexecution_projection_v0_1.json",
+ "congelables_excluidos": {
+  "regla": "Este fichero NO pertenece a CONGELABLES_V0_4. Es no normativo, no congelable y se sustituye íntegramente por la ejecución real de T0.",
+  "congelables": [
+   "conformance_corpus_v0_4.json",
+   "cases_v0_4.json",
+   "references_v0_4.json",
+   "pdp_cases_v0_3.json",
+   "pdp_harness_rules_v0_2.json",
+   "performance_corpus_v0_2.json",
+   "benchmark_manifest_v0_4.json"
+  ]
+ }
+}
