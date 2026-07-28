@@ -14,7 +14,9 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -614,6 +616,10 @@ def test_inventario_hard_link_contado_una_vez(tmp_path: Path) -> None:
     assert inventario["inodos"] == 1
     assert inventario["bytes_asignados"] < 2 * _MIB
     assert inventario["bytes_asignados"] >= _MIB
+    assert inventario["inventario_completo"] is True
+    assert inventario["numero_errores"] == 0
+    assert inventario["errores_inventario"] == []
+    assert inventario["rutas_no_contabilizadas"] == []
 
 
 def test_inventario_copias_fisicas_contadas_cada_una(tmp_path: Path) -> None:
@@ -650,6 +656,11 @@ def test_muestreador_registra_intervalos_reales(tmp_path: Path) -> None:
     assert resumen["n_muestras"] >= SS.MINIMO_INTERVALOS_OPERACION + 1
     assert resumen["periodo_solicitado_ns"] == SS.PERIODO_MUESTREO_NS
     assert resumen["intervalo_maximo_ns"] >= resumen["intervalo_medio_ns"]
+    assert resumen["hilo_finalizado"] is True
+    assert resumen["hilo_vivo_tras_timeout"] is False
+    assert resumen["error_hilo"] is None
+    assert resumen["muestras_con_inventario_incompleto"] == 0
+    assert resumen["muestreador_valido"] is True
     tiempos = [m["t_monotonico_ns"] for m in muestreador.muestras]
     assert tiempos == sorted(tiempos)
     pico = max(m["inventario_bytes_asignados"] for m in muestreador.muestras)
@@ -657,10 +668,11 @@ def test_muestreador_registra_intervalos_reales(tmp_path: Path) -> None:
 
 
 def test_contabilidad_de_operacion_con_checkpoints(tmp_path: Path) -> None:
+    """Reconstrucción válida: checkpoints materiales completos y ordenados."""
     atribuible = tmp_path / "candidato"
     atribuible.mkdir()
     contabilidad = SA.ContabilidadOperacion(
-        tmp_path, [atribuible], duracion_ventana_inactiva_ns=50_000_000
+        tmp_path, [atribuible], "reconstruccion", duracion_ventana_inactiva_ns=50_000_000
     )
     contabilidad.iniciar()
     viejo = atribuible / "indice_viejo.bin"
@@ -678,12 +690,24 @@ def test_contabilidad_de_operacion_con_checkpoints(tmp_path: Path) -> None:
     viejo.unlink()
     contabilidad.checkpoint("antes_de_borrar_temporales")
     resultado = contabilidad.cerrar(cotas_deterministas_bytes=[cota])
+    assert resultado["tipo_operacion"] == "reconstruccion"
     assert resultado["validez"]["resultado"] == "VALIDO"
     assert resultado["pico"]["resultado"] == "VALIDO"
     assert resultado["pico"]["pico_publicado_bytes"] >= cota
-    assert "antes_de_la_operacion" in resultado["checkpoints"]
-    assert "final" in resultado["checkpoints"]
+    assert resultado["checkpoints"] == [
+        "antes_de_la_operacion",
+        "despues_de_crear_temporales",
+        "antes_de_intercambiar_viejo_nuevo",
+        "antes_de_borrar_temporales",
+        "final",
+    ]
     assert resultado["doble_contabilidad"]["banda_ruido"]["n_observaciones"] > 0
+    assert resultado["doble_contabilidad"]["medida_valida"] is True
+    assert resultado["atribuibilidad"]["rutas_atribuibles"] is True
+    assert resultado["atribuibilidad"]["inventarios_completos"] is True
+    assert resultado["muestreo"]["hilo_finalizado"] is True
+    assert resultado["muestreo"]["error_hilo"] is None
+    assert resultado["muestreo"]["muestras_con_inventario_incompleto"] == 0
 
 
 def test_doble_contabilidad_registra_escritura_externa() -> None:
@@ -702,8 +726,18 @@ def test_negativa_operacion_mas_rapida_que_la_observacion() -> None:
         "intervalo_medio_ns": 5_000_000,
         "intervalo_maximo_ns": 5_000_000,
     }
-    validez = SA.evaluar_validez_pico(resumen, 8_000_000, ["antes", "final"], True, True)
+    validez = SA.evaluar_validez_pico(
+        resumen,
+        8_000_000,
+        ["antes_de_la_operacion", "final"],
+        True,
+        True,
+        tipo_operacion="borrado",
+        doble_contabilidad_valida=True,
+        inventarios_completos=True,
+    )
     assert validez["resultado"] == SS.NO_EVALUABLE
+    assert any("tres intervalos reales" in motivo for motivo in validez["motivos"])
     publicado = SA.publicar_pico(12 * _MIB, [], validez)
     assert publicado["resultado"] == SS.NO_EVALUABLE
     assert publicado["pico_publicado_bytes"] is None
@@ -715,7 +749,16 @@ def test_negativa_muestreo_solicitado_5ms_intervalos_largos() -> None:
         "intervalo_medio_ns": 500_000_000,
         "intervalo_maximo_ns": 500_000_000,
     }
-    validez = SA.evaluar_validez_pico(resumen, 100_000_000, ["antes", "final"], True, True)
+    validez = SA.evaluar_validez_pico(
+        resumen,
+        100_000_000,
+        ["antes_de_la_operacion", "final"],
+        True,
+        True,
+        tipo_operacion="borrado",
+        doble_contabilidad_valida=True,
+        inventarios_completos=True,
+    )
     assert validez["resultado"] == SS.NO_EVALUABLE
     assert any("pausa maxima" in motivo for motivo in validez["motivos"])
 
@@ -726,9 +769,19 @@ def test_negativa_operacion_sin_checkpoints_ni_observacion() -> None:
         "intervalo_medio_ns": 5_000_000,
         "intervalo_maximo_ns": 6_000_000,
     }
-    validez = SA.evaluar_validez_pico(resumen, 500_000_000, [], True, True)
+    validez = SA.evaluar_validez_pico(
+        resumen,
+        500_000_000,
+        [],
+        True,
+        True,
+        tipo_operacion="borrado",
+        doble_contabilidad_valida=True,
+        inventarios_completos=True,
+    )
     assert validez["resultado"] == SS.NO_EVALUABLE
     assert any("sin observacion ni checkpoint" in motivo for motivo in validez["motivos"])
+    assert any("checkpoints materiales ausentes" in motivo for motivo in validez["motivos"])
 
 
 def test_negativa_rutas_no_atribuibles_o_sin_cota() -> None:
@@ -737,10 +790,31 @@ def test_negativa_rutas_no_atribuibles_o_sin_cota() -> None:
         "intervalo_medio_ns": 5_000_000,
         "intervalo_maximo_ns": 6_000_000,
     }
-    sin_rutas = SA.evaluar_validez_pico(resumen, 500_000_000, ["antes"], False, True)
+    completos = ["antes_de_la_operacion", "final"]
+    sin_rutas = SA.evaluar_validez_pico(
+        resumen,
+        500_000_000,
+        completos,
+        False,
+        True,
+        tipo_operacion="borrado",
+        doble_contabilidad_valida=True,
+        inventarios_completos=True,
+    )
     assert sin_rutas["resultado"] == SS.NO_EVALUABLE
-    sin_cota = SA.evaluar_validez_pico(resumen, 500_000_000, ["antes"], True, False)
+    assert any("rutas no atribuibles" in motivo for motivo in sin_rutas["motivos"])
+    sin_cota = SA.evaluar_validez_pico(
+        resumen,
+        500_000_000,
+        completos,
+        True,
+        False,
+        tipo_operacion="borrado",
+        doble_contabilidad_valida=True,
+        inventarios_completos=True,
+    )
     assert sin_cota["resultado"] == SS.NO_EVALUABLE
+    assert any("cota determinista" in motivo for motivo in sin_cota["motivos"])
 
 
 def test_negativa_viejo_mas_nuevo_no_sumados() -> None:
@@ -757,6 +831,379 @@ def test_pico_nunca_sustituye_un_maximo_por_una_muestra_inferior() -> None:
     publicado = SA.publicar_pico(20 * _MIB, [12 * _MIB], validez)
     assert publicado["pico_publicado_bytes"] == 20 * _MIB
     assert publicado["fuente"] == "muestreo"
+
+
+# ===========================================================================
+# Checkpoints materiales por tipo de operación · anexo §3
+# ===========================================================================
+
+
+def test_checkpoints_materiales_derivados_del_anexo() -> None:
+    assert set(SA.CHECKPOINTS_MATERIALES_POR_TIPO) == set(SA.TIPOS_OPERACION)
+    for tipo, requeridos in SA.CHECKPOINTS_MATERIALES_POR_TIPO.items():
+        assert requeridos[0] == "antes_de_la_operacion"
+        assert requeridos[-1] == "final"
+        assert all(c in SA.CHECKPOINTS_CANONICOS for c in requeridos)
+        assert SA.fallos_checkpoints_materiales(tipo, list(requeridos)) == []
+
+
+def test_negativa_lista_no_vacia_no_basta_como_checkpoints() -> None:
+    fallos = SA.fallos_checkpoints_materiales("reconstruccion", ["antes_de_la_operacion", "final"])
+    assert any("checkpoints materiales ausentes" in fallo for fallo in fallos)
+
+
+def test_negativa_checkpoints_en_orden_incompatible() -> None:
+    fallos = SA.fallos_checkpoints_materiales(
+        "reconstruccion",
+        [
+            "antes_de_la_operacion",
+            "antes_de_intercambiar_viejo_nuevo",
+            "despues_de_crear_temporales",
+            "antes_de_borrar_temporales",
+            "final",
+        ],
+    )
+    assert any("orden incompatible" in fallo for fallo in fallos)
+
+
+def test_negativa_tipo_de_operacion_no_contemplado() -> None:
+    fallos = SA.fallos_checkpoints_materiales("compactacion", ["antes_de_la_operacion", "final"])
+    assert fallos == ["tipo de operacion no contemplado: 'compactacion'"]
+
+
+def test_negativa_cero_intervalos_observados_es_no_evaluable() -> None:
+    """Regresión: cero intervalos reales nunca es resolución válida (§5.1)."""
+    resumen = {
+        "n_muestras": 1,
+        "intervalos_reales_ns": [],
+        "intervalo_medio_ns": 0,
+        "intervalo_maximo_ns": 0,
+        "hilo_finalizado": True,
+        "hilo_vivo_tras_timeout": False,
+        "error_hilo": None,
+        "muestras_con_inventario_incompleto": 0,
+    }
+    validez = SA.evaluar_validez_pico(
+        resumen,
+        2_000_000,
+        ["antes_de_la_operacion", "final"],
+        True,
+        True,
+        tipo_operacion="borrado",
+        doble_contabilidad_valida=True,
+        inventarios_completos=True,
+    )
+    assert validez["resultado"] == SS.NO_EVALUABLE
+    assert any("tres intervalos reales" in motivo for motivo in validez["motivos"])
+    publicado = SA.publicar_pico(4096, [8192], validez)
+    assert publicado["resultado"] == SS.NO_EVALUABLE
+    assert publicado["pico_publicado_bytes"] is None
+    assert publicado["cota_determinista_bytes"] == 8192  # único dato utilizable
+
+
+def test_inventario_decide_el_descenso_con_el_lstat_ya_obtenido(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regresión: sin segunda stat (is_dir/is_symlink) que trague OSError."""
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    (sub / "oculto.bin").write_bytes(b"O" * _MIB)
+
+    def segunda_stat_prohibida(self: Path) -> bool:
+        raise AssertionError("is_dir/is_symlink no deben consultarse: segunda stat")
+
+    monkeypatch.setattr(Path, "is_dir", segunda_stat_prohibida)
+    monkeypatch.setattr(Path, "is_symlink", segunda_stat_prohibida)
+    inventario = SA.inventario_por_inode([tmp_path])
+    assert inventario["inventario_completo"] is True
+    assert inventario["numero_errores"] == 0
+    assert inventario["inodos"] == 3
+    assert inventario["bytes_asignados"] >= _MIB
+
+
+def test_negativa_tipo_de_operacion_no_declarado() -> None:
+    resumen = {
+        "intervalos_reales_ns": [5_000_000] * 100,
+        "intervalo_medio_ns": 5_000_000,
+        "intervalo_maximo_ns": 6_000_000,
+    }
+    validez = SA.evaluar_validez_pico(
+        resumen,
+        500_000_000,
+        ["antes_de_la_operacion", "final"],
+        True,
+        True,
+        doble_contabilidad_valida=True,
+        inventarios_completos=True,
+    )
+    assert validez["resultado"] == SS.NO_EVALUABLE
+    assert any("tipo de operacion no declarado" in motivo for motivo in validez["motivos"])
+
+
+# ===========================================================================
+# Orquestador · pruebas adversariales de B-1 (fail-closed extremo a extremo)
+# ===========================================================================
+
+
+def _operacion_en(
+    tmp_path: Path, tipo_operacion: str, **kwargs: Any
+) -> tuple[SA.ContabilidadOperacion, Path]:
+    atribuible = tmp_path / "candidato"
+    atribuible.mkdir()
+    contabilidad = SA.ContabilidadOperacion(
+        tmp_path,
+        [atribuible],
+        tipo_operacion,
+        duracion_ventana_inactiva_ns=50_000_000,
+        **kwargs,
+    )
+    return contabilidad, atribuible
+
+
+def _sin_pico_valido(resultado: dict[str, Any]) -> None:
+    assert resultado["validez"]["resultado"] == SS.NO_EVALUABLE
+    assert resultado["pico"]["resultado"] == SS.NO_EVALUABLE
+    assert resultado["pico"]["pico_publicado_bytes"] is None
+
+
+def test_negativa_orquestador_escritura_externa_invalida_el_pico(tmp_path: Path) -> None:
+    """B-1: la invalidez de la doble contabilidad invalida el veredicto y el pico."""
+    contabilidad, _atribuible = _operacion_en(tmp_path, "borrado")
+    externo = tmp_path / "externo"
+    externo.mkdir()
+    contabilidad.iniciar()
+    with open(externo / "externo.bin", "wb") as fh:
+        fh.write(b"X" * (64 * _MIB))
+        fh.flush()
+        os.fsync(fh.fileno())
+    time.sleep(0.05)
+    resultado = contabilidad.cerrar(cotas_deterministas_bytes=[_MIB])
+    assert resultado["doble_contabilidad"]["medida_valida"] is False
+    assert resultado["doble_contabilidad"]["escritura_externa_bytes"] >= 60 * _MIB
+    _sin_pico_valido(resultado)
+    assert any("doble contabilidad invalida" in m for m in resultado["validez"]["motivos"])
+    assert resultado["pico"]["cota_determinista_bytes"] == _MIB  # solo diagnóstico
+    assert resultado["atribuibilidad"]["rutas_atribuibles"] is False
+
+
+def test_negativa_orquestador_checkpoints_insuficientes(tmp_path: Path) -> None:
+    """Reconstrucción con temporal efímero y solo inicio/final: NO_EVALUABLE."""
+    contabilidad, atribuible = _operacion_en(tmp_path, "reconstruccion")
+    contabilidad.iniciar()
+    temporal = atribuible / "temporal.bin"
+    with open(temporal, "wb") as fh:
+        fh.write(b"T" * (8 * _MIB))
+        fh.flush()
+        os.fsync(fh.fileno())
+    temporal.unlink()
+    time.sleep(0.05)
+    resultado = contabilidad.cerrar(cotas_deterministas_bytes=[1024])
+    assert resultado["checkpoints"] == ["antes_de_la_operacion", "final"]
+    _sin_pico_valido(resultado)
+    assert any("checkpoints materiales ausentes" in m for m in resultado["validez"]["motivos"])
+
+
+def test_negativa_orquestador_checkpoint_arbitrario(tmp_path: Path) -> None:
+    contabilidad, _atribuible = _operacion_en(tmp_path, "borrado")
+    contabilidad.iniciar()
+    contabilidad.checkpoint("checkpoint_inventado")
+    time.sleep(0.06)
+    resultado = contabilidad.cerrar(cotas_deterministas_bytes=[4096])
+    _sin_pico_valido(resultado)
+    assert any("vocabulario canonico" in m for m in resultado["validez"]["motivos"])
+
+
+def test_inventario_fail_closed_fichero_desaparecido(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "estable.bin").write_bytes(b"E" * _MIB)
+    (tmp_path / "volatil.bin").write_bytes(b"V" * _MIB)
+    lstat_original = Path.lstat
+
+    def lstat_con_carrera(self: Path) -> os.stat_result:
+        if self.name == "volatil.bin":
+            raise FileNotFoundError(2, "desaparecido durante el recorrido", str(self))
+        return lstat_original(self)
+
+    monkeypatch.setattr(Path, "lstat", lstat_con_carrera)
+    inventario = SA.inventario_por_inode([tmp_path])
+    assert inventario["inventario_completo"] is False
+    assert inventario["numero_errores"] == 1
+    assert inventario["errores_inventario"][0]["tipo"] == "FileNotFoundError"
+    assert any(r.endswith("volatil.bin") for r in inventario["rutas_no_contabilizadas"])
+    assert inventario["bytes_asignados"] >= _MIB  # el parcial queda solo como diagnóstico
+
+
+def test_negativa_orquestador_inventario_fichero_desaparecido(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    contabilidad, atribuible = _operacion_en(tmp_path, "borrado")
+    (atribuible / "fantasma.bin").write_bytes(b"F" * _MIB)
+    lstat_original = Path.lstat
+
+    def lstat_con_carrera(self: Path) -> os.stat_result:
+        if self.name == "fantasma.bin":
+            raise FileNotFoundError(2, "desaparecido durante el recorrido", str(self))
+        return lstat_original(self)
+
+    monkeypatch.setattr(Path, "lstat", lstat_con_carrera)
+    contabilidad.iniciar()
+    time.sleep(0.06)
+    resultado = contabilidad.cerrar(cotas_deterministas_bytes=[4096])
+    _sin_pico_valido(resultado)
+    assert resultado["atribuibilidad"]["inventarios_completos"] is False
+    assert resultado["atribuibilidad"]["errores_inventario_checkpoints"] >= 2
+    assert resultado["atribuibilidad"]["rutas_atribuibles"] is False
+    assert any("inventario" in m for m in resultado["validez"]["motivos"])
+
+
+def test_negativa_orquestador_directorio_inaccesible(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """OSError determinista vía monkeypatch: no depende de permisos Unix reales."""
+    contabilidad, atribuible = _operacion_en(tmp_path, "borrado")
+    opaco = atribuible / "opaco"
+    opaco.mkdir()
+    (opaco / "oculto.bin").write_bytes(b"O" * _MIB)
+    iterdir_original = Path.iterdir
+
+    def iterdir_denegado(self: Path) -> Any:
+        if self.name == "opaco":
+            raise PermissionError(13, "acceso denegado simulado", str(self))
+        return iterdir_original(self)
+
+    monkeypatch.setattr(Path, "iterdir", iterdir_denegado)
+    contabilidad.iniciar()
+    time.sleep(0.06)
+    resultado = contabilidad.cerrar(cotas_deterministas_bytes=[4096])
+    _sin_pico_valido(resultado)
+    assert resultado["atribuibilidad"]["inventarios_completos"] is False
+    assert any("inventario" in m for m in resultado["validez"]["motivos"])
+
+
+def test_negativa_orquestador_excepcion_en_hilo_del_muestreador(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    contabilidad, _atribuible = _operacion_en(tmp_path, "borrado")
+    muestra_original = contabilidad._muestreador._muestra
+    llamadas = {"n": 0}
+
+    def muestra_explosiva() -> dict[str, Any]:
+        llamadas["n"] += 1
+        if llamadas["n"] >= 2:
+            raise RuntimeError("fallo inyectado en el hilo del muestreador")
+        return muestra_original()
+
+    monkeypatch.setattr(contabilidad._muestreador, "_muestra", muestra_explosiva)
+    contabilidad.iniciar()
+    time.sleep(0.06)
+    resultado = contabilidad.cerrar(cotas_deterministas_bytes=[4096])
+    assert resultado["muestreo"]["error_hilo"] == {
+        "tipo": "RuntimeError",
+        "mensaje": "fallo inyectado en el hilo del muestreador",
+        "origen": "hilo",
+    }
+    assert resultado["muestreo"]["hilo_finalizado"] is True
+    assert resultado["muestreo"]["muestreador_valido"] is False
+    _sin_pico_valido(resultado)
+    assert any("excepcion en el hilo" in m for m in resultado["validez"]["motivos"])
+
+
+def test_negativa_orquestador_hilo_vivo_tras_timeout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    contabilidad, _atribuible = _operacion_en(tmp_path, "borrado", timeout_join_s=0.2)
+    bloqueo = threading.Event()
+    muestra_original = contabilidad._muestreador._muestra
+
+    def muestra_bloqueada() -> dict[str, Any]:
+        if threading.current_thread().name == "muestreador-tol207" and not bloqueo.is_set():
+            bloqueo.wait(5)  # bloqueo acotado: el hilo nunca queda residual
+        return muestra_original()
+
+    monkeypatch.setattr(contabilidad._muestreador, "_muestra", muestra_bloqueada)
+    contabilidad.iniciar()
+    time.sleep(0.05)
+    resultado = contabilidad.cerrar(cotas_deterministas_bytes=[4096])
+    assert resultado["muestreo"]["hilo_vivo_tras_timeout"] is True
+    assert resultado["muestreo"]["hilo_finalizado"] is False
+    _sin_pico_valido(resultado)
+    assert any("vivo tras el timeout" in m for m in resultado["validez"]["motivos"])
+    bloqueo.set()
+    contabilidad._muestreador._hilo.join(timeout=5)
+    assert contabilidad._muestreador._hilo.is_alive() is False
+
+
+def test_negativa_orquestador_muestra_con_inventario_incompleto(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    contabilidad, _atribuible = _operacion_en(tmp_path, "borrado")
+    muestra_original = contabilidad._muestreador._muestra
+
+    def muestra_incompleta() -> dict[str, Any]:
+        muestra = muestra_original()
+        if threading.current_thread().name == "muestreador-tol207":
+            muestra["inventario_completo"] = False
+            muestra["inventario_numero_errores"] = 1
+        return muestra
+
+    monkeypatch.setattr(contabilidad._muestreador, "_muestra", muestra_incompleta)
+    contabilidad.iniciar()
+    time.sleep(0.06)
+    resultado = contabilidad.cerrar(cotas_deterministas_bytes=[4096])
+    assert resultado["muestreo"]["muestras_con_inventario_incompleto"] >= 1
+    _sin_pico_valido(resultado)
+    assert any("muestras del muestreador" in m for m in resultado["validez"]["motivos"])
+    assert resultado["atribuibilidad"]["inventarios_completos"] is False
+
+
+def test_negativa_orquestador_wal_abierto_y_desvinculado(tmp_path: Path) -> None:
+    """El pathname desaparece pero los bloques siguen asignados: doble contabilidad."""
+    contabilidad, atribuible = _operacion_en(tmp_path, "borrado")
+    contabilidad.iniciar()
+    wal = atribuible / "indice-wal"
+    fd = os.open(wal, os.O_CREAT | os.O_WRONLY)
+    try:
+        os.write(fd, b"W" * (16 * _MIB))
+        os.fsync(fd)
+        time.sleep(0.05)
+        wal.unlink()  # abierto y desvinculado: invisible para el inventario
+        time.sleep(0.05)
+        resultado = contabilidad.cerrar(cotas_deterministas_bytes=[1024])
+    finally:
+        os.close(fd)
+    assert resultado["doble_contabilidad"]["medida_valida"] is False
+    assert resultado["doble_contabilidad"]["escritura_externa_bytes"] >= 15 * _MIB
+    _sin_pico_valido(resultado)
+    assert any("doble contabilidad invalida" in m for m in resultado["validez"]["motivos"])
+
+
+def test_orquestador_vacuum_valido_publica_el_mayor_valor(tmp_path: Path) -> None:
+    atribuible = tmp_path / "candidato"
+    atribuible.mkdir()
+    original = atribuible / "base.db"
+    original.write_bytes(b"B" * (4 * _MIB))
+    contabilidad = SA.ContabilidadOperacion(
+        tmp_path, [atribuible], "vacuum", duracion_ventana_inactiva_ns=50_000_000
+    )
+    contabilidad.iniciar()
+    time.sleep(0.05)
+    contabilidad.checkpoint("antes_de_vacuum")
+    copia = atribuible / "base.db-vacuum"
+    copia.write_bytes(b"C" * (4 * _MIB))
+    time.sleep(0.05)
+    cota = SA.cota_determinista_reconstruccion(
+        SA.inventario_por_inode([original])["bytes_asignados"],
+        SA.inventario_por_inode([copia])["bytes_asignados"],
+    )
+    resultado = contabilidad.cerrar(cotas_deterministas_bytes=[cota])
+    assert resultado["checkpoints"] == ["antes_de_la_operacion", "antes_de_vacuum", "final"]
+    assert resultado["validez"]["resultado"] == "VALIDO"
+    assert resultado["pico"]["resultado"] == "VALIDO"
+    pico_muestreado = resultado["pico"]["pico_muestreado_bytes"]
+    assert resultado["pico"]["pico_publicado_bytes"] == max(cota, pico_muestreado)
+    assert resultado["pico"]["pico_publicado_bytes"] >= cota
+    assert resultado["doble_contabilidad"]["medida_valida"] is True
 
 
 # ===========================================================================
