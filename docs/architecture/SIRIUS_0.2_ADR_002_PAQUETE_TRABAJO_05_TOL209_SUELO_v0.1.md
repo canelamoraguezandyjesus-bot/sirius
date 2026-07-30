@@ -162,6 +162,19 @@ m   = 1
 
 El criterio relativo se evalúa en **aritmética entera exacta** —`5 × (máx − mín) ≤ mín`— para que ningún resultado dependa de la representación binaria de un `float`.
 
+### 3.1 Constantes operativas preinscritas
+
+Fijadas en `floor_protocol.py` antes de medir; cambiarlas obliga a nueva versión del paquete y a repetir lo ejecutado bajo la anterior:
+
+| Constante | Valor | Para qué |
+|---|---|---|
+| `RONDAS_ROUND_ROBIN` | `10` | Cada proceso reparte las `n = 100` repeticiones de cada sonda de `F` en 10 rondas intercaladas (tramos de 10), nunca en bloque |
+| `VUELTAS_BUSY_SPIN` | `10.000` | Trabajo fijo y declarado del busy-spin de diagnóstico |
+| `TOLERANCIA_DUPLICACION` | `3/10` | Comprobación 1×/2×: `|p50_2x − 2·p50_1x| × 10 ≤ 2·p50_1x × 3` |
+| `TOLERANCIA_DERIVA` | `3/10` | Deriva del busy-spin: inestable si el P50 crece de forma **estrictamente monótona** entre inicio, mitad y final **y** `(final − inicio) × 10 > inicio × 3` |
+
+La **media** exigida por el §7 punto 6 del protocolo se publica como `media_truncada_ns`: suma entera dividida (división entera) entre `n`. Truncada y declarada así para no introducir coma flotante en la cadena normativa.
+
 ---
 
 ## 4. Orden de evaluación y régimen por percentil
@@ -248,7 +261,7 @@ Todos **bloqueantes**. Falla cerrado: un control ausente cuenta como fallido.
 | `duplicacion_1x_2x` | El tiempo medido escala con el trabajo dentro de la tolerancia preinscrita |
 | `vectores_crudos_completos` | Vector íntegro por sonda y proceso, con `n` coherente |
 | `sin_filtrado` | Ningún outlier eliminado, recortado ni winsorizado |
-| `warmup_separado` | Warm-up ejecutado y descartado íntegro |
+| `warmup_separado` | Warm-up ejecutado y descartado íntegro. **Se recomputa** contra el valor preinscrito: un proceso que declare otro número no supera el control, aunque su propio flag afirme lo contrario |
 | `sin_redondeo_previo` | Nanosegundos sin redondear |
 | `captura_ambiental_presente` | Entorno capturado y adjunto |
 | `custodia_verificada` | Cadena A→D del §9 satisfecha |
@@ -284,6 +297,7 @@ Se declara, en términos propios:
 5. **La composición de `F` determina la clasificación resultante.** Si `F` es mucho más barata y estable que una consulta FTS5 real, `B` saldrá pequeño, `U` saldrá pequeño y parte de la capa FTS5 podría caer en régimen relativo, donde el Registro dice que no debe caer. **Ese riesgo queda aceptado y divulgado, no eliminado**: que no se reproduzca la clasificación histórica **debe explicarse, no corregirse a posteriori**.
 6. **Sigue siendo una sola máquina y un solo sistema operativo.** La corrida medirá por primera vez el ruido entre procesos, lo que **reduce pero no elimina** la laguna que motiva no fijar el límite duro de TOL-107.
 7. **El sesgo residual del ≤20 % por encima de `U`** permanece (decisión 5).
+8. **El filtrado silencioso de un proceso no es detectable con certeza.** Un worker que recortara la cola y repadease el vector produciría muestras indistinguibles de un suelo cuantizado por la resolución del reloj: un vector es un vector. Se recomputa todo lo que **sí** es comprobable —longitud, tipos, signo, warm-up contra el preinscrito, percentiles nearest-rank, derivación completa— y se **publica la forma del vector** (`valores_distintos`, `repeticion_maxima`) por sonda y proceso, para que un auditor lo evalúe. **Deliberadamente no se convierte en umbral automático**: cualquier corte elegido daría falsos positivos sobre un suelo legítimamente cuantizado, y el §6.4 del protocolo prohíbe inventar cifras. La garantía real de que el worker es el preinscrito la aporta la custodia por blobs del §9.3, no una heurística sobre las muestras.
 
 ---
 
@@ -306,9 +320,80 @@ Sin los pasos 3 a 8, los dos commits darían ordenación temporal pero **no inte
 
 ### 9.1 Precondiciones de la ejecución futura
 
-`run_floor.py` **no ejecuta nada al importarse** y **no mide sin `--execute`**. La medición exige además `--preinscription-commit <SHA_A>` y `--output <ruta>`, y antes de abrir cualquier ventana comprueba: árbol de trabajo limpio · `HEAD` exactamente igual a `SHA_A` · `SHA_A` existente · los seis blobs coincidentes con el árbol · protocolo aprobado intacto · blobs congelados intactos · ruta de salida inexistente.
+`run_floor.py` **no ejecuta nada al importarse** y **no mide sin `--execute`** — la guarda cubre también al worker interno. La medición exige además `--preinscription-commit <SHA_A>` y `--output <ruta>`, y antes de abrir cualquier ventana comprueba: árbol de trabajo limpio · `HEAD` exactamente igual a `SHA_A` · `SHA_A` existente · los seis blobs coincidentes con el árbol · protocolo aprobado intacto · blobs congelados intactos · ruta de salida inexistente.
 
-La ejecución futura debe rechazar además: menos de cinco PIDs distintos · árbol sucio · HEAD distinto · cambio de código preinscrito · salida existente · warm-up mezclado · vectores incompletos · redondeo previo · ausencia de captura ambiental.
+La ejecución rechaza además, fallando cerrado y sin publicar valor alguno: menos de cinco PIDs distintos · árbol sucio · HEAD distinto · cambio de código preinscrito · salida existente · warm-up mezclado · vectores incompletos · redondeo previo · ausencia de captura ambiental.
+
+### 9.2 Recorrido implementado de la fase D
+
+El recorrido completo queda **implementado y congelado en esta preinscripción**, de modo que la fase D pueda producir el JSON válido **sin volver a modificar el código**:
+
+```
+precondiciones (custodia y entorno)
+→ captura ambiental inicial
+→ lanzamiento de ≥5 procesos independientes del sistema operativo
+   (cada uno: base propia construida con la cadena canónica de Alembic,
+    corpus propio, warm-up propio, sondas de F en round-robin por rondas,
+    reloj, busy-spin inicio/mitad/final, comprobación 1×/2×, puerto)
+→ captura ambiental final
+→ verificación de forma de cada resultado
+→ evaluación de los doce controles bloqueantes DESDE los datos crudos
+   (los flags que declara cada proceso se cruzan, nunca se aceptan solos)
+→ derivación: SM, B50, B95, B = max(B50,B95), U = 5×B, m = 1
+→ clasificación diagnóstica de la línea base versionada
+→ construcción del documento completo
+→ validación con schema_floor_v0_1
+→ escritura ATÓMICA (fichero temporal en el mismo directorio + fsync + rename)
+→ relectura del JSON escrito y REVALIDACIÓN con el mismo esquema
+```
+
+Si cualquier paso falla, **no queda ningún artefacto**: la validación previa impide escribir, y una revalidación fallida elimina el fichero. La escritura atómica garantiza que nunca exista un JSON parcial.
+
+Las dependencias externas —custodia Git, ejecutor de procesos, captura de entorno, carga de la línea base— son **inyectables** (`DependenciasCorrida`): la prueba extremo a extremo de `test_adr002_floor.py` recorre este mismo camino de producción con dobles controlados, sin ejecutar la medición real. El ejecutor real lanza cada proceso hijo con `--execute --worker`; el worker mide y devuelve su resultado por stdout, **no escribe ningún artefacto**.
+
+**Decisión técnica declarada:** todo el recorrido vive en `run_floor.py` para no ampliar el conjunto de seis ficheros preinscritos ni la custodia que los protege.
+
+### 9.3 Custodia reverificada tras medir
+
+La custodia **no se comprueba solo antes de medir**. Entre la medición y la publicación se repite íntegra: árbol limpio, `HEAD` igual a `SHA_A`, blobs de los seis ficheros y del corpus congelado, protocolo intacto. Su resultado alimenta el control bloqueante `custodia_verificada`, de modo que un `HEAD` movido, un árbol ensuciado o un blob alterado **durante** la corrida impiden publicar.
+
+El esquema lo hace cumplir de forma independiente: exige `custodia.reverificada_tras_medir` y compara `custodia.head` y `preinscripcion.head_en_ejecucion` contra `preinscripcion.commit_a`. Un artefacto cuyo `HEAD` de publicación no sea el commit de preinscripción es inválido, porque el código medido no sería el preinscrito.
+
+**La comparación de blobs no es tautológica.** El árbol de trabajo se compara contra **lo que el commit `SHA_A` registra** para cada ruta (`git rev-parse <SHA_A>:<ruta>`), no contra un blob recalculado del mismo árbol. Sin esa fuente de verdad independiente, leer el árbol y compararlo consigo mismo coincidiría siempre y no detectaría ninguna alteración. Una ruta que el commit de preinscripción no registre también es fallo.
+
+### 9.4 Publicación sin sobrescribir ni destruir
+
+La escritura usa `os.link` en lugar de `os.replace`: si la ruta de salida apareciese entre la precondición «salida inexistente» y la publicación, `link` falla con `FileExistsError` en vez de destruir el fichero existente.
+
+Y la limpieza **solo puede alcanzar un fichero que esta corrida haya creado**. Escritura y relectura están separadas: si `link` rehúsa, se bloquea **sin tocar nada**; el borrado de limpieza únicamente actúa tras un `link` exitoso, cuando la revalidación no respalda lo escrito. Cerrar la ventana TOCTOU no puede convertirse en «destruir en silencio» lo que se acababa de proteger. La serialización usa `allow_nan=False`: `NaN` e `Infinity` no son JSON estándar y no entran en evidencia normativa.
+
+### 9.5 Recomputación obligatoria, tipos y validador total
+
+El validador **recomputa** `SM`, `B50`, `B95`, `B`, `U` y la descomposición desde las propias sondas publicadas. Si las sondas no permiten recomputar —campo ausente o de tipo manipulado— eso **no es conformidad, es fallo**: el artefacto no puede publicar derivación. Los campos normativos (`pid`, `n`, warm-up, percentiles, mínimo, máximo, media truncada) se validan como enteros **antes** de usarlos, y todo control bloqueante debe ser exactamente `True`; un `0`, `None` o cadena vacía cuenta como fallido.
+
+**`fallos_suelo_medicion` es total por contrato: nunca lanza.** Un validador que lanzase ante un valor JSON legal —`NaN`, cadena donde se espera entero, lista donde se espera objeto— dejaría de ser una guarda: quien lo invoca no obtendría veredicto y un artefacto manipulado podría quedar sin evaluar. Cualquier fallo interno inesperado se convierte en un fallo de validación explícito.
+
+Toda dependencia externa del recorrido —custodia, captura de entorno, ejecutor, línea base, escritura, relectura— se invoca dentro de una guarda. Una excepción nunca escapa de `main` como traza: siempre se convierte en `CODIGO_BLOQUEADO` con su motivo.
+
+### 9.6 El régimen publicado se recomputa; `NO_EVALUABLE` no es comodín
+
+El régimen declarado para cada percentil **no se acepta**: se recomputa aplicando `U` a los mínimos publicados. Un régimen que no salga de esa regla invalida el artefacto — sin esta comprobación bastaba con declarar el régimen conveniente.
+
+La **guarda `SM` se verifica también a nivel de artefacto**: una magnitud cuyo `mín P95` quede por debajo de `SM` está obligada a declararse `NO_EVALUABLE`, y una que se declare `NO_EVALUABLE` sin estar por debajo de `SM` es inválida. Y `NO_EVALUABLE` **no exime de nada**: el invariante `mín P95 ≥ mín P50` y la prohibición de publicar régimen se comprueban igualmente, porque el §4.1 es incondicional.
+
+### 9.7 Otras guardas de fallo cerrado
+
+| Guarda | Motivo |
+|---|---|
+| **Muestras no negativas** | Una duración medida con reloj monotónico no puede ser negativa: si lo es, el reloj retrocedió o el vector se manipuló |
+| **Incidencias bloqueantes** | Una incidencia observada por la propia corrida —por ejemplo una sonda SQLite que no devolvió la forma declarada— **impide publicar `B` y `U`**. Registrarla como nota informativa sería fail-open contra el §2.2 y la condición 40 de la matriz |
+| **`custodia.head` y `head_en_ejecucion` obligatorios** | Un valor ausente o nulo no puede ser más permisivo que un valor distinto: sin ellos el artefacto no queda ligado al commit preinscrito |
+| **Identidad por igualdad estricta** | `version_esquema`, `protocolo` y `blob_protocolo` se comparan con igualdad, no con «ausente o igual». Publicar `null` no absuelve: la clave existe, así que la comprobación de secciones no la ve ausente |
+| **Veredicto no vaciable** | `regimenes_por_percentil` debe tener al menos una entrada, y `clasificacion_diagnostica_linea_base.magnitudes` debe ser una lista no vacía. Vaciarlas borraría la divulgación que exige la condición 38 sin dejar rastro |
+| **Warm-up coherente con el plan** | Una sonda de `F` debe declarar exactamente el warm-up preinscrito. Un artefacto que declare otro se contradice con su propio `plan` |
+| **Residuos denunciados, nunca silenciados** | Todo borrado de limpieza —temporal de escritura, artefacto retirado por revalidación fallida— **verifica el estado del disco**. Si el fichero sobrevive, se informa explícitamente en lugar de seguir afirmando que no se publicó nada: un residuo con JSON válido y valores derivados sería evidencia publicada por una corrida que se declara bloqueada |
+
+**Ordinal del percentil sin coma flotante.** `resolucion_percentil` deriva el ordinal con la misma aritmética entera de techo que `percentil_ns`. Con `floor(0.99 × n)` había un off-by-one para todo `n` múltiplo de 100 —precisamente los tamaños preinscritos—, y el artefacto afirmaba que su P99 era el máximo observado cuando era la segunda peor muestra.
 
 ---
 
@@ -402,6 +487,8 @@ Transcrita íntegra desde la auditoría aprobada. Ninguna condición ha sido añ
 `experiments/adr002/tolerances/test_adr002_floor.py` cubre, con datos sintéticos y dobles controlados y **sin ejecutar la corrida real**:
 
 nearest-rank sin interpolación · `SM`, `B50`, `B95`, `B` y `U` exactos · `m` fijo igual a 1 · continuidad en `U` · `F` con exactamente tres sondas · diagnósticos excluidos de `F` · SQL permitido por clave primaria · rechazo de `LIKE`, `MATCH`, FTS, sombras, `JOIN`, `ORDER BY` y agregación · menos de cinco procesos · PIDs repetidos · warm-up mezclado · muestras redondeadas · muestras filtradas o `n` incoherente · ausencia de carga o entorno · cambio de `boot_id` · control busy-spin fallido · comprobación 1×/2× fallida · guarda `SM` anterior al régimen · régimen separado para P50 y P95 · invariante `mín P95 ≥ mín P50` · combinación P50 relativo / P95 absoluto rechazada · `B` única con diagnóstico `B50`/`B95` · `U` distinta de `5B` rechazada · `B` ajustada por clasificación histórica rechazada · FTS5 nunca afecta `B` ni `U` · puerto fuera de `F` · excepción → `NO_EVALUABLE` · control bloqueante → ningún valor publicado · commit de preinscripción inexistente · `SHA_A` no ancestro · blob preinscrito alterado · `harness.py` alterado · blob congelado alterado · diff A..D no vacío · importación sin efectos secundarios · ejecución sin `--execute` rechazada · árbol sucio rechazado · salida existente rechazada.
+
+Y además, la **prueba extremo a extremo sintética** del §9.2: `main() --execute` con dependencias inyectadas recorre el camino de producción completo —precondiciones, ejecutor, sondas, controles, derivación, documento, validación, escritura atómica, relectura y revalidación— y produce un JSON que el esquema valida sin fallos; sus variantes negativas comprueban que cuatro procesos, PIDs repetidos, duplicación fallida, deriva monótona del busy-spin, cambio de `boot_id`, vector redondeado, vector incompleto, resultado sin clave obligatoria, ejecutor que lanza o salida existente **bloquean sin escribir nada**, y que con árbol sucio **el ejecutor ni siquiera llega a invocarse**. La derivación publicada se recomputa además **desde las propias sondas publicadas** dentro del validador: una derivación incoherente con sus vectores invalida el artefacto.
 
 **No se crean snapshots temporales dentro del repositorio.**
 

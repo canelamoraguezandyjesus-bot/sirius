@@ -246,8 +246,8 @@ class ResultadoDuplicacion:
 def diagnostico_duplicacion(
     *,
     vueltas: int,
-    tolerancia_num: int = 3,
-    tolerancia_den: int = 10,
+    tolerancia_num: int = fp.TOLERANCIA_DUPLICACION_NUM,
+    tolerancia_den: int = fp.TOLERANCIA_DUPLICACION_DEN,
     n: int = fp.N_DIAGNOSTICO,
     warmup: int = fp.WARMUP_DIAGNOSTICO,
 ) -> ResultadoDuplicacion:
@@ -274,8 +274,8 @@ def escala_con_el_trabajo(
     p50_1x: int,
     p50_2x: int,
     *,
-    tolerancia_num: int = 3,
-    tolerancia_den: int = 10,
+    tolerancia_num: int = fp.TOLERANCIA_DUPLICACION_NUM,
+    tolerancia_den: int = fp.TOLERANCIA_DUPLICACION_DEN,
 ) -> bool:
     """``p50_2x`` debe acercarse a ``2 * p50_1x`` dentro de la tolerancia.
 

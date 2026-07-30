@@ -23,7 +23,6 @@ cadena que produce una cifra normativa.
 from __future__ import annotations
 
 import hashlib
-import math
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -35,6 +34,7 @@ from typing import Final
 
 VERSION_ESQUEMA: Final = "suelo-0.1"
 ESTADO: Final = "PROPUESTO · PREINSCRIPCION"
+ESTADO_EVIDENCIA: Final = "PROPUESTO · SUELO MEDIDO — NO APRUEBA TOL-209"
 PAQUETE: Final = "SIRIUS_0.2_ADR_002_PAQUETE_TRABAJO_05_TOL209_SUELO_v0.1"
 PROTOCOLO: Final = "SIRIUS_0.2_ADR_002_PROTOCOLO_MEDICION_v0.1_PROPUESTO.md"
 
@@ -132,6 +132,24 @@ PROCESOS_MINIMOS: Final = 5
 #: §5.3: sin aleatoriedad no sembrada. Semilla del corpus de rendimiento congelado.
 SEMILLA: Final = 20260726
 
+#: §5.2 aplicado a sondas: cada proceso reparte las n repeticiones de cada
+#: sonda de F en RONDAS_ROUND_ROBIN rondas intercaladas, nunca en bloque.
+RONDAS_ROUND_ROBIN: Final = 10
+
+#: Trabajo fijo y declarado del busy-spin de diagnostico.
+VUELTAS_BUSY_SPIN: Final = 10_000
+
+#: Tolerancia preinscrita de la comprobacion 1x/2x, como fraccion entera:
+#: |p50_2x - 2*p50_1x| * DEN <= 2*p50_1x * NUM.
+TOLERANCIA_DUPLICACION_NUM: Final = 3
+TOLERANCIA_DUPLICACION_DEN: Final = 10
+
+#: Tolerancia preinscrita de deriva del busy-spin entre inicio, mitad y
+#: final de un proceso: inestable si el P50 crece de forma estrictamente
+#: monotona Y (final - inicio) * DEN > inicio * NUM.
+TOLERANCIA_DERIVA_NUM: Final = 3
+TOLERANCIA_DERIVA_DEN: Final = 10
+
 # --------------------------------------------------------------------------
 # Formulas vinculantes
 # --------------------------------------------------------------------------
@@ -198,13 +216,23 @@ def p99_ns(muestras: Sequence[int]) -> int:
 
 
 def resolucion_percentil(n: int) -> str:
-    """Que puede afirmar honestamente un percentil con ``n`` muestras (§4.3, §4.4)."""
-    if n < 100:
+    """Que puede afirmar honestamente un percentil con ``n`` muestras (§4.3, §4.4).
+
+    El ordinal se deriva con la MISMA aritmetica entera que ``percentil_ns``
+    (techo exacto, sin coma flotante). Usar ``floor(0.99 * n)`` producia un
+    off-by-one para todo ``n`` multiplo de 100 —justamente los tamanos
+    preinscritos— y el artefacto afirmaba ser el maximo sin serlo.
+    """
+    if n <= 0:
+        msg = "n debe ser positivo"
+        raise ValueError(msg)
+    rango = max(1, -(-99 * n // 100))
+    peores = n - rango + 1
+    if peores <= 1:
         return (
             f"con n={n}, el P99 por rango mas cercano coincide con el maximo observado; "
             f"acota la cola, no la caracteriza"
         )
-    peores = max(1, n - math.floor(0.99 * n))
     return f"con n={n}, el P99 corresponde a la {peores}.a peor muestra observada"
 
 
@@ -286,6 +314,40 @@ def calcular_u(b: int) -> int:
         msg = "B no puede ser negativa"
         raise ValueError(msg)
     return FACTOR_U * b
+
+
+def descomposicion_b(medidas: Sequence[MedidaSonda]) -> dict[str, dict[str, int]]:
+    """B50 y B95 por sonda, para que un auditor vea que domina la banda.
+
+    Es diagnostico obligatorio del artefacto (matriz 37); la banda
+    normativa sigue siendo la unica B = max(B50, B95) global.
+    """
+    _comprobar_f(medidas)
+    resultado: dict[str, dict[str, int]] = {}
+    for sonda in F_NORMATIVO:
+        p50s = _valores(medidas, sonda, "p50")
+        p95s = _valores(medidas, sonda, "p95")
+        resultado[sonda] = {
+            "b50_ns": max(p50s) - min(p50s),
+            "b95_ns": max(p95s) - min(p95s),
+        }
+    return resultado
+
+
+def busy_spin_estable(p50_inicio: int, p50_mitad: int, p50_final: int) -> bool:
+    """Criterio preinscrito de deriva o throttling dentro de un proceso.
+
+    Inestable si el P50 del trabajo fijo crece de forma estrictamente
+    monotona entre inicio, mitad y final Y el crecimiento total supera la
+    tolerancia preinscrita. Aritmetica entera exacta.
+    """
+    if min(p50_inicio, p50_mitad, p50_final) <= 0:
+        return False
+    monotono = p50_inicio < p50_mitad < p50_final
+    crecimiento_excesivo = (
+        p50_final - p50_inicio
+    ) * TOLERANCIA_DERIVA_DEN > p50_inicio * TOLERANCIA_DERIVA_NUM
+    return not (monotono and crecimiento_excesivo)
 
 
 @dataclass(frozen=True, slots=True)
@@ -500,7 +562,14 @@ def blob_git(contenido: bytes) -> str:
 
 @dataclass(frozen=True, slots=True)
 class EntornoCustodia:
-    """Operaciones inyectadas para poder probar la custodia sin repositorio real."""
+    """Operaciones inyectadas para poder probar la custodia sin repositorio real.
+
+    ``blob_en_commit`` es imprescindible: sin una fuente de verdad
+    INDEPENDIENTE del arbol de trabajo, comparar el blob del arbol contra
+    un blob calculado del mismo arbol seria tautologico y nunca detectaria
+    una alteracion. Devuelve el blob que el commit dado registra para esa
+    ruta, o ``None`` si no la registra.
+    """
 
     leer_bytes: Callable[[str], bytes]
     es_ancestro: Callable[[str, str], bool]
@@ -508,6 +577,7 @@ class EntornoCustodia:
     head: Callable[[], str]
     arbol_limpio: Callable[[], bool]
     diff_vacio: Callable[[str, str, Sequence[str]], bool]
+    blob_en_commit: Callable[[str, str], str | None]
 
 
 def verificar_custodia(
@@ -546,10 +616,32 @@ def verificar_custodia(
         if observado != esperado:
             fallos.append(f"{etiqueta} alterado: {ruta} ({observado} != {esperado})")
 
+    def _comparar_contra_commit(ruta: str, etiqueta: str) -> None:
+        """El arbol de trabajo debe coincidir con lo que registra el commit A.
+
+        Fuente de verdad independiente: sin esto, comparar el blob del arbol
+        contra un blob calculado del mismo arbol seria tautologico.
+        """
+        try:
+            observado = blob_git(entorno.leer_bytes(ruta))
+        except OSError:
+            fallos.append(f"{etiqueta} ilegible: {ruta}")
+            return
+        registrado = entorno.blob_en_commit(sha_a, ruta)
+        if registrado is None:
+            fallos.append(f"{etiqueta} no registrado en el commit de preinscripcion: {ruta}")
+        elif observado != registrado:
+            fallos.append(
+                f"{etiqueta} difiere del commit de preinscripcion: {ruta} "
+                f"(arbol {observado} != commit {registrado})"
+            )
+
     for ruta, esperado in blobs_preinscritos.items():
         _comparar(ruta, esperado, "blob preinscrito")
+        _comparar_contra_commit(ruta, "blob preinscrito")
 
     _comparar(ARCHIVO_ARNES_HEREDADO, blob_arnes, "arnes heredado")
+    _comparar_contra_commit(ARCHIVO_ARNES_HEREDADO, "arnes heredado")
 
     for ruta, esperado in congelados.items():
         _comparar(ruta, esperado, "blob congelado")

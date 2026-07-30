@@ -75,6 +75,7 @@ CAMPOS_MEDIDA_SONDA: Final[tuple[str, ...]] = (
     "p99_ns",
     "min_ns",
     "max_ns",
+    "media_truncada_ns",
     "resolucion_percentil",
 )
 
@@ -119,7 +120,10 @@ def _fallos_preinscripcion(doc: Mapping[str, Any]) -> list[str]:
     elif "blobs_corpus_congelado" in pre:
         fallos.append("blobs_corpus_congelado debe ser un mapa ruta -> blob")
 
-    if pre.get("blob_protocolo") not in (None, fp.BLOB_PROTOCOLO_APROBADO):
+    # Comparacion ESTRICTA: un `None` explicito no puede ser mas permisivo
+    # que un valor distinto. La clave existe, asi que `_fallos_secciones` no
+    # la ve ausente; sin igualdad estricta, publicar `null` la absolvia.
+    if pre.get("blob_protocolo") != fp.BLOB_PROTOCOLO_APROBADO:
         fallos.append("el blob del protocolo aprobado no coincide")
 
     return fallos
@@ -143,11 +147,29 @@ def _fallos_una_medida(medida: Mapping[str, Any], indice: int) -> list[str]:
     if not all(_es_entero(x) for x in muestras):
         fallos.append(f"{etiqueta}: las muestras deben ser enteros en nanosegundos")
         return fallos
+    # Una duracion medida con reloj monotonico no puede ser negativa: si lo
+    # es, el reloj retrocedio o el vector se manipulo. Falla cerrado.
+    if any(int(x) < 0 for x in muestras):
+        fallos.append(f"{etiqueta}: hay muestras negativas; una duracion no puede serlo")
+        return fallos
+
+    # El TIPO de cada campo normativo se valida ANTES de usarlo. Sin esta
+    # guarda previa, un campo no entero (pid como cadena, min_ns como NaN)
+    # o desactivaba en silencio la recomputacion de la derivacion, o hacia
+    # que el validador lanzase excepcion en vez de devolver un fallo.
+    enteros = ("pid", "n", "warmup_descartado", "p50_ns", "p95_ns", "p99_ns", "min_ns", "max_ns")
+    for campo in (*enteros, "media_truncada_ns"):
+        if not _es_entero(medida[campo]):
+            fallos.append(f"{etiqueta}: {campo} debe ser un entero en nanosegundos")
+    if not isinstance(medida["sonda"], str):
+        fallos.append(f"{etiqueta}: sonda debe ser una cadena")
+    if fallos:
+        return fallos
 
     valores = [int(x) for x in muestras]
-    n_declarado = medida["n"]
-    if not _es_entero(n_declarado) or int(n_declarado) != len(valores):
-        fallos.append(f"{etiqueta}: n declarado ({n_declarado!r}) != longitud del vector")
+    n_declarado = int(medida["n"])
+    if n_declarado != len(valores):
+        fallos.append(f"{etiqueta}: n declarado ({n_declarado}) != longitud del vector")
 
     # Redondeo previo: multiplos exactos de 100 ns en todo el vector es la
     # firma del ``round(..., 4)`` en milisegundos del arnes historico.
@@ -161,6 +183,7 @@ def _fallos_una_medida(medida: Mapping[str, Any], indice: int) -> list[str]:
         "p99_ns": fp.percentil_ns(ordenadas, 99, 100),
         "min_ns": ordenadas[0],
         "max_ns": ordenadas[-1],
+        "media_truncada_ns": sum(ordenadas) // len(ordenadas),
     }
     for campo, esperado in esperados.items():
         if medida[campo] != esperado:
@@ -168,12 +191,18 @@ def _fallos_una_medida(medida: Mapping[str, Any], indice: int) -> list[str]:
                 f"{etiqueta}: {campo} publicado {medida[campo]!r} != nearest-rank {esperado}"
             )
 
-    if medida["sonda"] in fp.F_NORMATIVO and int(n_declarado) < fp.N_SONDA_F:
+    if medida["sonda"] in fp.F_NORMATIVO and n_declarado < fp.N_SONDA_F:
         fallos.append(f"{etiqueta}: n={n_declarado} por debajo del minimo {fp.N_SONDA_F}")
 
-    warmup = medida["warmup_descartado"]
-    if not _es_entero(warmup) or int(warmup) < 0:
+    warmup = int(medida["warmup_descartado"])
+    if warmup < 0:
         fallos.append(f"{etiqueta}: warmup_descartado invalido")
+    # El warm-up preinscrito no es orientativo: un artefacto que declare
+    # otro numero para una sonda de F se contradice con su propio plan.
+    elif medida["sonda"] in fp.F_NORMATIVO and warmup != fp.WARMUP_SONDA_F:
+        fallos.append(
+            f"{etiqueta}: warmup_descartado={warmup} difiere del preinscrito {fp.WARMUP_SONDA_F}"
+        )
 
     return fallos
 
@@ -197,7 +226,12 @@ def _fallos_sondas(doc: Mapping[str, Any]) -> list[str]:
         fallos.append(f"faltan sondas normativas: {faltan}")
 
     for sonda in fp.F_NORMATIVO:
-        pids = {m.get("pid") for m in medidas if m.get("sonda") == sonda}
+        # Solo los pid enteros cuentan: un pid no hashable (lista, dict) no
+        # puede entrar en un conjunto, y su tipo invalido ya lo reporta
+        # ``_fallos_una_medida``.
+        pids = {
+            int(m["pid"]) for m in medidas if m.get("sonda") == sonda and _es_entero(m.get("pid"))
+        }
         if 0 < len(pids) < fp.PROCESOS_MINIMOS:
             fallos.append(
                 f"{sonda}: {len(pids)} procesos distintos; el minimo es {fp.PROCESOS_MINIMOS}"
@@ -248,7 +282,123 @@ def _fallos_derivacion(doc: Mapping[str, Any]) -> list[str]:
     if "banda_absoluta_secundaria" in der or "b_p50_normativa" in der:
         fallos.append("dos bandas normativas separadas: solo se admite una banda B")
 
+    fallos.extend(_fallos_derivacion_recomputada(doc, der))
+
     return fallos
+
+
+def _medidas_desde_sondas(doc: Mapping[str, Any]) -> list[fp.MedidaSonda] | None:
+    """Reconstruye las medidas desde la seccion ``sondas`` publicada.
+
+    Devuelve ``None`` SOLO si la seccion es irreconstruible. Quien llama
+    debe tratar ese ``None`` como fallo, nunca como conformidad: de lo
+    contrario un campo con tipo manipulado desactivaria la recomputacion.
+    """
+    sondas = doc.get("sondas")
+    if not isinstance(sondas, Sequence) or isinstance(sondas, str | bytes):
+        return None
+    medidas: list[fp.MedidaSonda] = []
+    for entrada in sondas:
+        if not isinstance(entrada, Mapping):
+            return None
+        enteros = (
+            "pid",
+            "n",
+            "warmup_descartado",
+            "p50_ns",
+            "p95_ns",
+            "p99_ns",
+            "min_ns",
+            "max_ns",
+            "media_truncada_ns",
+        )
+        if "sonda" not in entrada or any(c not in entrada for c in enteros):
+            return None
+        # TODO campo se comprueba antes de convertir: ningun valor JSON legal
+        # (NaN, cadena, lista) puede hacer que esta funcion lance.
+        if not all(_es_entero(entrada[c]) for c in enteros):
+            return None
+        if not isinstance(entrada["sonda"], str):
+            return None
+        medidas.append(
+            fp.MedidaSonda(
+                sonda=entrada["sonda"],
+                pid=int(entrada["pid"]),
+                n=int(entrada["n"]),
+                warmup_descartado=int(entrada["warmup_descartado"]),
+                p50=int(entrada["p50_ns"]),
+                p95=int(entrada["p95_ns"]),
+                p99=int(entrada["p99_ns"]),
+                minimo=int(entrada["min_ns"]),
+                maximo=int(entrada["max_ns"]),
+                media_truncada=int(entrada["media_truncada_ns"]),
+            )
+        )
+    return medidas
+
+
+def _fallos_derivacion_recomputada(doc: Mapping[str, Any], der: Mapping[str, Any]) -> list[str]:
+    """La derivacion publicada debe salir EXACTAMENTE de las sondas publicadas.
+
+    Sin esta recomputacion, un artefacto podria publicar una derivacion
+    incoherente con sus propios vectores sin que el validador lo detecte.
+
+    Falla cerrado: si las sondas no permiten recomputar, o la recomputacion
+    no es aplicable, el artefacto NO puede publicar derivacion.
+    """
+    medidas = _medidas_desde_sondas(doc)
+    if medidas is None:
+        return [
+            "derivacion no verificable: las sondas publicadas no permiten recomputarla "
+            "(campos ausentes o de tipo invalido)"
+        ]
+    try:
+        esperada = fp.derivar(medidas)
+        descomposicion_esperada = fp.descomposicion_b(medidas)
+    except (fp.SondaFueraDeFError, fp.ProcesosInsuficientesError) as exc:
+        return [f"derivacion no verificable desde las sondas publicadas: {exc}"]
+
+    fallos: list[str] = []
+    publicados = {
+        "sm_ns": esperada.sm,
+        "b50_ns": esperada.b50,
+        "b95_ns": esperada.b95,
+        "b_ns": esperada.b,
+        "u_ns": esperada.u,
+    }
+    for campo, valor_esperado in publicados.items():
+        if der.get(campo) != valor_esperado:
+            fallos.append(
+                f"derivacion.{campo} publicado {der.get(campo)!r} no coincide con la "
+                f"recomputacion desde las sondas publicadas ({valor_esperado})"
+            )
+
+    descomposicion = der.get("descomposicion_b")
+    if isinstance(descomposicion, Mapping):
+        for sonda, valores in descomposicion_esperada.items():
+            entrada = descomposicion.get(sonda)
+            if isinstance(entrada, Mapping) and (
+                entrada.get("b50_ns") != valores["b50_ns"]
+                or entrada.get("b95_ns") != valores["b95_ns"]
+            ):
+                fallos.append(
+                    f"descomposicion_b[{sonda}] no coincide con la recomputacion "
+                    f"desde las sondas publicadas"
+                )
+    return fallos
+
+
+def _umbral_y_guarda(doc: Mapping[str, Any]) -> tuple[int, int] | None:
+    """``(U, SM)`` publicados, si ambos son enteros. None si no lo son."""
+    der = doc.get("derivacion")
+    if not isinstance(der, Mapping):
+        return None
+    u, sm = der.get("u_ns"), der.get("sm_ns")
+    if isinstance(u, bool) or isinstance(sm, bool):
+        return None
+    if not isinstance(u, int) or not isinstance(sm, int):
+        return None
+    return u, sm
 
 
 def _fallos_regimenes(doc: Mapping[str, Any]) -> list[str]:
@@ -257,24 +407,84 @@ def _fallos_regimenes(doc: Mapping[str, Any]) -> list[str]:
     if not isinstance(regimenes, Sequence) or isinstance(regimenes, str | bytes):
         return ["regimenes_por_percentil ausente o con forma invalida"]
 
+    # Una lista vacia no puede pasar: vaciarla borraria el veredicto y la
+    # divulgacion exigida por la condicion bloqueante 38 sin dejar rastro.
+    if not regimenes:
+        return ["regimenes_por_percentil vacio: el artefacto debe publicar su veredicto"]
+
+    umbrales = _umbral_y_guarda(doc)
+    validos = {fp.REGIMEN_RELATIVO, fp.REGIMEN_ABSOLUTO}
+
     for indice, entrada in enumerate(regimenes):
         if not isinstance(entrada, Mapping):
             fallos.append(f"regimenes_por_percentil[{indice}] debe ser un objeto")
             continue
         etiqueta = f"regimenes_por_percentil[{indice}]"
-        if entrada.get("resultado") == fp.NO_EVALUABLE:
+
+        crudo50 = entrada.get("min_p50_ns")
+        crudo95 = entrada.get("min_p95_ns")
+        if (
+            not isinstance(crudo50, int)
+            or isinstance(crudo50, bool)
+            or not isinstance(crudo95, int)
+            or isinstance(crudo95, bool)
+        ):
+            fallos.append(f"{etiqueta}: min_p50_ns y min_p95_ns deben ser enteros")
             continue
+        min50, min95 = crudo50, crudo95
+
+        # El invariante y la combinacion imposible se comprueban SIEMPRE:
+        # declarar `resultado: NO_EVALUABLE` no puede ser un comodin que
+        # desactive las guardas (§4.1 es incondicional).
+        if min95 < min50:
+            fallos.append(f"{etiqueta}: invariante violado min_s P95 < min_s P50")
+
+        no_evaluable = entrada.get("resultado") == fp.NO_EVALUABLE
+
+        if umbrales is not None:
+            u, sm = umbrales
+            dominada = min95 < sm
+            if dominada and not no_evaluable:
+                fallos.append(
+                    f"{etiqueta}: min_s P95 ({min95}) < SM ({sm}) pero no se declaro "
+                    f"{fp.NO_EVALUABLE}: la guarda de dominancia se eludio"
+                )
+            if no_evaluable and not dominada:
+                fallos.append(
+                    f"{etiqueta}: se declaro {fp.NO_EVALUABLE} sin que min_s P95 ({min95}) "
+                    f"quede por debajo de SM ({sm})"
+                )
+
+        if no_evaluable:
+            # Una magnitud dominada por el instrumento no publica regimen.
+            if entrada.get("p50") is not None or entrada.get("p95") is not None:
+                fallos.append(
+                    f"{etiqueta}: {fp.NO_EVALUABLE} no puede publicar regimen por percentil"
+                )
+            continue
+
         r50, r95 = entrada.get("p50"), entrada.get("p95")
-        validos = {fp.REGIMEN_RELATIVO, fp.REGIMEN_ABSOLUTO}
+        if not isinstance(r50, str) or not isinstance(r95, str):
+            fallos.append(f"{etiqueta}: regimen por percentil ausente o invalido")
+            continue
         if r50 not in validos or r95 not in validos:
             fallos.append(f"{etiqueta}: regimen por percentil ausente o invalido")
             continue
         if r50 == fp.REGIMEN_RELATIVO and r95 == fp.REGIMEN_ABSOLUTO:
             fallos.append(f"{etiqueta}: combinacion imposible P50 relativo / P95 absoluto")
-        min50 = entrada.get("min_p50_ns")
-        min95 = entrada.get("min_p95_ns")
-        if isinstance(min50, int) and isinstance(min95, int) and min95 < min50:
-            fallos.append(f"{etiqueta}: invariante violado min_s P95 < min_s P50")
+
+        # RECOMPUTACION del regimen: un regimen declarado que no salga de
+        # aplicar U a los minimos publicados invalida el artefacto. Sin
+        # esto, bastaba con declarar el regimen conveniente.
+        if umbrales is not None:
+            u = umbrales[0]
+            for nombre, minimo, declarado in (("P50", min50, r50), ("P95", min95, r95)):
+                esperado = fp.regimen_de_percentil(minimo, u)
+                if declarado != esperado:
+                    fallos.append(
+                        f"{etiqueta}: {nombre} declarado '{declarado}' pero con min={minimo} "
+                        f"y U={u} corresponde '{esperado}'"
+                    )
 
     return fallos
 
@@ -287,7 +497,11 @@ def _fallos_controles(doc: Mapping[str, Any]) -> list[str]:
     fallos = [
         f"control bloqueante ausente: {c}" for c in fp.CONTROLES_BLOQUEANTES if c not in controles
     ]
-    fallidos = [c for c in fp.CONTROLES_BLOQUEANTES if controles.get(c) is False]
+    # Cualquier valor que no sea exactamente True cuenta como fallido: un 0,
+    # None o cadena vacia no puede colarse como control satisfecho.
+    fallidos = [
+        c for c in fp.CONTROLES_BLOQUEANTES if c in controles and controles.get(c) is not True
+    ]
     if fallidos and "derivacion" in doc:
         fallos.append(
             f"se publicaron valores con controles bloqueantes fallidos: {sorted(fallidos)}"
@@ -316,8 +530,23 @@ def _fallos_diagnosticos(doc: Mapping[str, Any]) -> list[str]:
     for nombre in fp.DIAGNOSTICOS:
         if nombre not in diagnosticos:
             fallos.append(f"diagnostico ausente: {nombre}")
+
+    # No basta con que la clave exista: `null` o una lista de magnitudes
+    # vacia borraria la divulgacion de la condicion bloqueante 38.
+    clasificacion = doc.get("clasificacion_diagnostica_linea_base")
     if "clasificacion_diagnostica_linea_base" not in doc:
         fallos.append("falta la clasificacion diagnostica de la linea base")
+    elif not isinstance(clasificacion, Mapping):
+        fallos.append("clasificacion_diagnostica_linea_base debe ser un objeto")
+    else:
+        magnitudes = clasificacion.get("magnitudes")
+        if not isinstance(magnitudes, Sequence) or isinstance(magnitudes, str | bytes):
+            fallos.append("clasificacion_diagnostica_linea_base.magnitudes debe ser una lista")
+        elif not magnitudes:
+            fallos.append(
+                "clasificacion_diagnostica_linea_base.magnitudes vacia: la divulgacion "
+                "de la clasificacion de la linea base es obligatoria"
+            )
     return fallos
 
 
@@ -341,22 +570,49 @@ def _fallos_entorno_y_procesos(doc: Mapping[str, Any]) -> list[str]:
     if not isinstance(procesos, Sequence) or isinstance(procesos, str | bytes):
         fallos.append("procesos ausente o con forma invalida")
     else:
-        pids = [p.get("pid") for p in procesos if isinstance(p, Mapping)]
-        if len(pids) < fp.PROCESOS_MINIMOS:
-            fallos.append(f"{len(pids)} procesos; el minimo es {fp.PROCESOS_MINIMOS}")
-        if len(set(pids)) != len(pids):
+        entradas = [p for p in procesos if isinstance(p, Mapping)]
+        if len(entradas) != len(procesos):
+            fallos.append("cada entrada de procesos debe ser un objeto")
+        pids = [p.get("pid") for p in entradas]
+        if any(not _es_entero(p) for p in pids):
+            fallos.append("procesos: cada pid debe ser un entero")
+        enteros: list[int] = []
+        for pid in pids:
+            if isinstance(pid, int) and not isinstance(pid, bool):
+                enteros.append(pid)
+        if len(enteros) < fp.PROCESOS_MINIMOS:
+            fallos.append(f"{len(enteros)} procesos; el minimo es {fp.PROCESOS_MINIMOS}")
+        if len(set(enteros)) != len(enteros):
             fallos.append("PIDs repetidos: los procesos no son independientes")
 
     return fallos
 
 
 def fallos_suelo_medicion(doc: Mapping[str, Any]) -> list[str]:
-    """Valida el artefacto completo. Lista vacia significa conforme."""
+    """Valida el artefacto completo. Lista vacia significa conforme.
+
+    **Total por contrato: nunca lanza.** Un validador que lanzase ante un
+    valor JSON legal (``NaN``, cadena donde se espera entero, lista donde
+    se espera objeto) dejaria de ser una guarda: quien lo invoca no
+    obtendria fallos sino una excepcion, y un artefacto manipulado podria
+    quedar sin veredicto. Cualquier fallo interno inesperado se convierte
+    en un fallo de validacion explicito.
+    """
+    try:
+        return _fallos_suelo_medicion(doc)
+    except Exception as exc:
+        return [f"validacion abortada por documento malformado: {type(exc).__name__}: {exc}"]
+
+
+def _fallos_suelo_medicion(doc: Mapping[str, Any]) -> list[str]:
+    if not isinstance(doc, Mapping):
+        return ["el documento debe ser un objeto JSON"]
     fallos = _fallos_secciones(doc)
 
-    if doc.get("version_esquema") not in (None, VERSION_ESQUEMA):
+    # Igualdad estricta, no `not in (None, X)`: publicar `null` no absuelve.
+    if doc.get("version_esquema") != VERSION_ESQUEMA:
         fallos.append(f"version_esquema debe ser {VERSION_ESQUEMA}")
-    if doc.get("protocolo") not in (None, fp.PROTOCOLO):
+    if doc.get("protocolo") != fp.PROTOCOLO:
         fallos.append("el protocolo declarado no es el aprobado")
     if "clasificacion_entorno" in doc:
         fallos.append(
@@ -379,7 +635,44 @@ def fallos_suelo_medicion(doc: Mapping[str, Any]) -> list[str]:
             fallos.append("custodia: el diff en los ficheros preinscritos no esta vacio")
         if custodia.get("sha_a_es_ancestro") is not True:
             fallos.append("custodia: el commit de preinscripcion no es ancestro de HEAD")
+        if custodia.get("reverificada_tras_medir") is not True:
+            fallos.append("custodia: no se reverifico despues de medir y antes de publicar")
+
+        # El vinculo HEAD<->commit_a es OBLIGATORIO, no opcional: si la clave
+        # falta o es nula, el artefacto no queda ligado al commit preinscrito
+        # y por tanto no es valido. Un ausente no puede ser mas permisivo que
+        # un valor distinto.
+        pre = doc.get("preinscripcion")
+        commit_a = pre.get("commit_a") if isinstance(pre, Mapping) else None
+        head_final = custodia.get("head")
+        if not isinstance(head_final, str) or not head_final:
+            fallos.append("custodia: falta el HEAD de publicacion")
+        elif isinstance(commit_a, str) and commit_a and commit_a != head_final:
+            fallos.append(
+                f"custodia: HEAD al publicar ({head_final!r}) difiere del commit de "
+                f"preinscripcion ({commit_a!r}): el codigo medido no es el preinscrito"
+            )
+        if isinstance(pre, Mapping):
+            en_ejecucion = pre.get("head_en_ejecucion")
+            if not isinstance(en_ejecucion, str) or not en_ejecucion:
+                fallos.append("preinscripcion: falta head_en_ejecucion")
+            elif en_ejecucion != commit_a:
+                fallos.append("preinscripcion: head_en_ejecucion difiere de commit_a")
     elif "custodia" in doc:
         fallos.append("custodia con forma invalida")
+
+    # Una incidencia observada por la propia corrida (por ejemplo una sonda
+    # SQLite que no devolvio la forma declarada) no puede quedar como nota
+    # informativa mientras se publican B y U: falla cerrado.
+    entorno = doc.get("entorno")
+    if isinstance(entorno, Mapping):
+        incidencias = entorno.get("incidencias")
+        if isinstance(incidencias, Sequence) and not isinstance(incidencias, str | bytes):
+            if incidencias and "derivacion" in doc:
+                fallos.append(
+                    f"se publicaron valores con incidencias registradas: {list(incidencias)}"
+                )
+        elif "incidencias" in entorno:
+            fallos.append("entorno.incidencias debe ser una lista")
 
     return list(dict.fromkeys(fallos))
