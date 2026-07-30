@@ -474,18 +474,21 @@ La v0.2 fijaba «suma de derivados ≤ 50 % del fichero» como **límite duro co
 | **Dato observado** | **Orden y conjunto: 0 variación** en las cinco sesiones. Latencia `rank()`: **2,8–10,6 % en P50, 12,3–15,8 % en P95**. Latencia FTS5: **13,4–29,3 % en P50, 32,9–36,4 % en P95**. **Peor global: 36,4 %** |
 | **Objetivo — orden y conjunto** | **0 variación. Sin margen.** Trasladable |
 | **Objetivo — régimen relativo (v0.4)** | **≤ 20 %** en P50 y P95, aplicable **solo por encima del umbral de conmutación** |
-| **Objetivo — régimen absoluto (v0.4)** | Por **debajo** del umbral de conmutación, la variación se evalúa **en valor absoluto** contra una **banda absoluta** congelada con el protocolo y el entorno. La variación relativa **no se usa** en ese régimen |
-| **Umbral de conmutación (v0.4)** | Se congela **con el protocolo de medición y el entorno, antes del benchmark**, nunca después de ver candidatos. Su fundamento debe ser el **suelo de medición medido del entorno**, no una preferencia. **No se fija aquí un número: la evidencia disponible no basta y no se inventa** |
+| **Objetivo — régimen absoluto (v0.5)** | Por **debajo** del umbral de conmutación, la variación se evalúa **en valor absoluto** contra una **banda `B(M)` dependiente de la magnitud**, derivada de la **envolvente monótona** del suelo medido: `E(s_i) = máx(D(s_1), …, D(s_i))` y `B(M) = E(s_j)` con `s_j` el **menor escalón ≥ M** (dirección conservadora). `B` **nunca decrece** al crecer la magnitud. La variación relativa **no se usa** en este régimen. *Sustituye a la banda global única de la v0.4; ver el acta* `SIRIUS_0.2_ADR_002_TOL_107_BANDA_DEPENDIENTE_APROBACION_v1.0.md` |
+| **Umbral de conmutación (v0.5)** | Es el **cruce exacto** `B(M) = 0,20 · M`, es decir `U = 5 · E(s_k)` sobre el menor escalón `k` que sostiene `5·E(s_k) ≤ s_k` **y todos los superiores**. De ahí `m · B(U) = U/5 = 0,20·U`: la **continuidad en `U` es exacta y derivada**, y `m = 1` deja de ser una elección. **`U` no queda restringido a un escalón medido** y no se asume igualdad con ninguno. Se congela **con el protocolo de medición y el entorno, antes del benchmark**, nunca después de ver candidatos, y su fundamento es el **suelo de medición medido del entorno**. **`NO_EVALUABLE`** si no hay cruce sostenido, si el cruce cae en el tramo del último escalón medido, o si ninguna escala medida posterior confirma el régimen relativo |
 | **Límite duro** | **Orden: 0, sin margen.** **Latencia: `REGLA_CONFIRMADA_VALOR_ENTORNO` — no se fija** |
 | **Margen** | ×1,89 sobre el peor P50 y ×1,27 sobre el peor P95 de `rank()`. **Para FTS5 no se propone objetivo relativo**: con magnitudes de 0,14–1,0 ms, un 36 % son 0,27 ms absolutos — es el suelo de medición, no inestabilidad del sistema. **A esa escala la comparación debe hacerse en valor absoluto** |
 | **Por qué hacen falta dos regímenes (v0.4)** | El objetivo del ≤20 % está anclado en magnitudes de ~120 ms de `rank()`, de las cuales el **99,85 % es el barrido que RF-14 prohíbe**. Un candidato conforme **no tendrá esa capa** y vivirá en el régimen donde este mismo Registro declara que la variación relativa es suelo de medición. Un objetivo relativo único penalizaría a los candidatos **más rápidos** por serlo |
-| **Punto de congelación** | Objetivo relativo, umbral de conmutación y banda absoluta: **antes del benchmark**, con el protocolo y el entorno. Límite duro: **con el entorno de ejecución** |
+| **Punto de congelación (v0.5)** | Objetivo relativo, umbral de conmutación y **envolvente de la que se deriva `B(M)`**: **antes del benchmark**, con el protocolo y el entorno. Límite duro: **con el entorno de ejecución** |
+| **Medición que sustenta la banda (v0.5)** | Escalera nominal preinscrita **hasta 1 s** —de modo que el cruce tenga escalas posteriores que lo confirmen— y **once sesiones independientes**, por encima del mínimo de cinco del §3.3 del protocolo: con banda dependiente de la magnitud, la **curva entera** es normativa y cada escalón ruidoso sería una tolerancia ruidosa |
 | **Estado** | `PROPUESTA` (objetivos y umbral de conmutación, `LAB-LINUX`) · **`REGLA_CONFIRMADA_VALOR_ENTORNO`** (límite duro) |
 | **Consecuencia de fallo — orden** | Descarta por la puerta 4 |
 | **Consecuencia de fallo — latencia (v0.4)** | La comparación entre candidatos **no es válida** y **se repite una única vez** en condiciones controladas conforme al protocolo. **Si vuelve a fallar, el candidato queda `NO EVALUABLE` en rendimiento** y así se registra: no se descarta por inestabilidad del entorno, pero **tampoco se abre un bucle ilimitado de repeticiones**. Un candidato `NO EVALUABLE` en rendimiento no puede ser recomendado apoyándose en cifras de rendimiento |
 | **Por qué no se fija el límite duro** | Las cinco sesiones son independientes **dentro del mismo proceso**, en una máquina cuya carga no se controla. **Acotan la variación intra-proceso, no la variación entre procesos, entre máquinas ni entre sistemas operativos.** Fijar un techo defendible para otro entorno con esta evidencia sería inventarlo, y **el §4 del paquete 02B lo prohíbe expresamente** |
 
 *Nota de corrección, restaurada desde la v0.2:* la v0.1 proponía objetivo 25 % y límite duro 50 % **sobre dos ejecuciones que dieron 9,5 %**. El peor valor real es **36,4 %**. La cifra del v0.1 no se rebaja para que encaje: se sustituye por un objetivo acotado a `rank()` y un límite duro que se declara **no fijable** con la evidencia disponible.
+
+*Nota de corrección v0.4 → v0.5, sobre la forma de la banda absoluta:* la v0.4 exigía **una** banda absoluta congelada cuyo fundamento fuese el suelo medido del entorno. Dos paquetes de medición demostraron que ambas cosas no pueden cumplirse a la vez, porque el suelo **crece con la magnitud**: el paquete 05 obtuvo `B = 9,76 µs`, inalcanzable por debajo del milisegundo, y el paquete 06 obtuvo `B = 20 ms`, prácticamente no vinculante a esa misma escala. Una banda global sólo puede ser correcta en un punto de la curva. La v0.5 sustituye el número por una **función de la magnitud** derivada de la envolvente monótona, y con ello el umbral pasa a ser el cruce exacto entre ambas curvas. **No se rebaja ni se endurece ningún objetivo:** el 20 % relativo por encima de `U`, el 0 de orden y conjunto y el carácter no fijable del límite duro se mantienen intactos. La evidencia de los paquetes 05 y 06 se conserva y se cita; lo que se corrige es el método, no las observaciones.
 
 ### 5.6 Regla de neutralidad del eje léxico — nueva en la v0.4
 
@@ -651,7 +654,7 @@ Sin cambios respecto de la v0.2 y la v0.3.
 
 **Antes de que el benchmark pueda comenzar** — puertas de arranque, sin margen ni excepción: **`SRC-ADR002-01`**, **TOL-207**, **TOL-208**, **TOL-209** y **TOL-210**.
 
-**Antes del benchmark**, comunes a todos los candidatos: **TOL-103**, **TOL-106**, **TOL-206** en su forma, el **objetivo relativo, el umbral de conmutación y la banda absoluta** de **TOL-107**, más todas las filas `CANÓNICA` y la `DERIVADA_CANÓNICA` **TOL-204**.
+**Antes del benchmark**, comunes a todos los candidatos: **TOL-103**, **TOL-106**, **TOL-206** en su forma, el **objetivo relativo, el umbral de conmutación y la envolvente de la que se deriva `B(M)`** de **TOL-107** (v0.5), más todas las filas `CANÓNICA` y la `DERIVADA_CANÓNICA` **TOL-204**.
 
 **Antes del benchmark, solo para los candidatos cuyo sustrato léxico sea el FTS5 medido** (T1 y T2): **TOL-101L**, **TOL-104L** y los tiempos de **TOL-105**.
 
@@ -682,7 +685,7 @@ Sin cambios respecto de la v0.2 y la v0.3.
 |---|---|
 | `CANÓNICA` | TOL-001, TOL-002, TOL-005 (y TOL-003, TOL-004, TOL-006 como dependencia) · B04-M01–M21 |
 | `DERIVADA_CANÓNICA` | ADR002-TOL-204 |
-| `PROPUESTA` | ADR002-TOL-**101L**, **103**, **104L**, **105**, **106**, **206** · objetivos, umbral de conmutación y banda absoluta de **107** |
+| `PROPUESTA` | ADR002-TOL-**101L**, **103**, **104L**, **105**, **106**, **206** · objetivos, umbral de conmutación y envolvente de **107** (v0.5) |
 | `COMPARATIVA_LINEA_BASE` | ADR002-TOL-**102B** |
 | `REGLA_CONFIRMADA_VALOR_CANDIDATO` | ADR002-TOL-**104A**, **201**, **202**, **203** |
 | `REGLA_CONFIRMADA_VALOR_CANDIDATO_Y_ENTORNO` | ADR002-TOL-**101A**, **102C** |
