@@ -23,7 +23,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QSize, Qt, Signal
 from PySide6.QtGui import QFont, QResizeEvent, QTextDocument
 from PySide6.QtWidgets import (
     QApplication,
@@ -32,6 +32,8 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QSizePolicy,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -47,6 +49,15 @@ _MARKDOWN_FEATURES = (
 # next literal ```. Inline code (single backtick) never matches this and
 # stays inside the surrounding prose, rendered by B8a's safe Markdown.
 _FENCED_CODE_BLOCK = re.compile(r"```[^\n`]*\n(.*?)```", re.DOTALL)
+
+# Holgura vertical para que la última línea no quede pegada al borde. No es un
+# límite de altura: la altura sale siempre del alto real del documento.
+_VERTICAL_PADDING = 8
+
+# Ancho de reflujo provisional mientras el widget aún no tiene ancho real (no
+# está dentro de la lista todavía). En cuanto lo tiene, ``resizeEvent``
+# recalcula y ``height_changed`` propaga la altura verdadera.
+_PROVISIONAL_WIDTH = 400
 
 
 @dataclass(frozen=True)
@@ -84,15 +95,25 @@ def _segment_message(text: str) -> list[_Segment]:
 class _MessageBody(QTextEdit):
     """Área de texto de solo lectura que ajusta su alto al contenido."""
 
+    # Emitida cada vez que la altura fija realmente cambia (construcción con
+    # ancho todavía no real, primer reflow con el ancho real de la columna,
+    # o un resize posterior de la ventana) — quien contenga este widget debe
+    # volver a pedir su tamaño y propagarlo al QListWidgetItem, porque Qt no
+    # hace eso automáticamente por sí solo.
+    height_changed = Signal()
+
     def __init__(self) -> None:
         super().__init__()
         self.setReadOnly(True)
         self.setFrameShape(QFrame.Shape.NoFrame)
+        # Sin barras propias: el alto del widget siempre iguala al del
+        # documento, así que nunca hay contenido que quede fuera de la vista.
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setStyleSheet("background: transparent; border: none;")
+        self._content_height = 0
 
     def set_markdown_content(self, text: str) -> None:
         self.document().setMarkdown(text, _MARKDOWN_FEATURES)
@@ -106,12 +127,28 @@ class _MessageBody(QTextEdit):
         super().resizeEvent(event)
         self._sync_height()
 
+    def sizeHint(self) -> QSize:
+        """El alto pedido es el alto real del documento, nunca un valor fijo."""
+        hint = super().sizeHint()
+        if self._content_height:
+            return QSize(hint.width(), self._content_height)
+        return hint
+
+    def minimumSizeHint(self) -> QSize:
+        """Impide que el layout comprima el cuerpo y esconda líneas."""
+        hint = super().minimumSizeHint()
+        if self._content_height:
+            return QSize(0, self._content_height)
+        return hint
+
     def _sync_height(self) -> None:
-        width = self.viewport().width() or self.width() or 400
+        width = self.viewport().width() or self.width() or _PROVISIONAL_WIDTH
         self.document().setTextWidth(width)
-        height = int(self.document().size().height()) + 8
-        if self.height() != height:
-            self.setFixedHeight(height)
+        height = int(self.document().size().height()) + _VERTICAL_PADDING
+        if self._content_height != height:
+            self._content_height = height
+            self.updateGeometry()
+            self.height_changed.emit()
 
 
 class _CodeBlockWidget(QWidget):
@@ -153,8 +190,47 @@ class _CodeBlockWidget(QWidget):
             clipboard.setText(self._code)
 
 
+class MessageItemDelegate(QStyledItemDelegate):
+    """Evita que la lista pinte además el texto plano del item.
+
+    ``QListWidgetItem.text()`` se conserva íntegro porque es el contrato de
+    accesibilidad de B8a/RF-008: es lo que lee un lector de pantalla. El
+    problema es que el delegate por defecto lo pintaba TAMBIÉN sobre la fila,
+    en una sola línea y recortado con puntos suspensivos (``ElideRight`` es el
+    valor por omisión de ``QListView``), justo debajo del ``MessageItemWidget``,
+    que es transparente. El resultado visible eran dos textos superpuestos en
+    el mismo rectángulo y una elipsis en mensajes que en realidad estaban
+    completos.
+
+    Aquí se sigue pintando el fondo y el estado de la fila, pero no el texto:
+    el contenido visible lo aporta únicamente el widget.
+
+    El vaciado se hace en ``initStyleOption`` y NO en ``paint``. Es
+    imprescindible: ``QStyledItemDelegate.paint`` copia la opción que recibe y
+    vuelve a llamar a ``initStyleOption`` sobre esa copia, de modo que
+    cualquier texto borrado antes de delegar en ``super().paint`` reaparece.
+    Como ``initStyleOption`` es virtual, vaciarlo aquí sí alcanza al pintado
+    real.
+    """
+
+    def initStyleOption(
+        self,
+        option: QStyleOptionViewItem,
+        index: QModelIndex | QPersistentModelIndex,
+    ) -> None:
+        super().initStyleOption(option, index)
+        option.text = ""
+
+
 class MessageItemWidget(QWidget):
     """Un mensaje completo (prefijo "Tú"/"Sirius" + cuerpo) para un item de la lista."""
+
+    # Emitida cada vez que el tamaño real de este widget puede haber
+    # cambiado (contenido nuevo o reflow tardío de algún segmento interno).
+    # ``MainWindow`` la conecta a ``item.setSizeHint(widget.sizeHint())``
+    # para que la fila reservada en el QListWidget nunca quede más baja de
+    # lo que el contenido necesita.
+    size_changed = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -180,10 +256,12 @@ class MessageItemWidget(QWidget):
         for segment in _segment_message(body_text):
             if segment.is_code:
                 block = _CodeBlockWidget(segment.text)
+                block.body.height_changed.connect(self._on_segment_height_changed)
                 self._content_layout.addWidget(block)
                 self._segment_bodies.append(block.body)
             else:
                 prose = _MessageBody()
+                prose.height_changed.connect(self._on_segment_height_changed)
                 prose.set_markdown_content(segment.text)
                 self._content_layout.addWidget(prose)
                 self._segment_bodies.append(prose)
@@ -195,6 +273,7 @@ class MessageItemWidget(QWidget):
         self._set_prefix(prefix, bold=bold)
         self._clear_content()
         plain = _MessageBody()
+        plain.height_changed.connect(self._on_segment_height_changed)
         plain.set_plain_content(body_text)
         self._content_layout.addWidget(plain)
         self._segment_bodies.append(plain)
@@ -235,6 +314,10 @@ class MessageItemWidget(QWidget):
                 widget.deleteLater()
         self._segment_bodies = []
 
+    def _on_segment_height_changed(self) -> None:
+        self._sync_size()
+
     def _sync_size(self) -> None:
         self.adjustSize()
         self.updateGeometry()
+        self.size_changed.emit()

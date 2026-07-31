@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSplitter,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -78,10 +79,23 @@ from sirius.presentation.conversation_worker import SendMessageWorker
 from sirius.presentation.error_messages import failed_send_message
 from sirius.presentation.export_worker import ExportWorker
 from sirius.presentation.knowledge_widget import KnowledgeWidget
-from sirius.presentation.message_view import MessageItemWidget
+from sirius.presentation.message_view import MessageItemDelegate, MessageItemWidget
 from sirius.presentation.project_continuity_widget import ProjectContinuityWidget
 
 _logger = get_logger(__name__)
+
+# Reparto inicial de la pestaña de conversación. La conversación es la
+# superficie principal de Sirius, así que arranca con una proporción claramente
+# mayor y con un ancho mínimo por debajo del cual no se la puede estrechar; la
+# columna lateral tiene un tope razonable y el usuario puede plegarla.
+_CONVERSATION_MINIMUM_WIDTH = 420
+_CONVERSATION_INITIAL_WIDTH = 760
+_SIDE_PANEL_INITIAL_WIDTH = 300
+_SIDE_PANEL_MAXIMUM_WIDTH = 420
+
+# Margen para considerar que la vista está «al final» del historial: el usuario
+# que está leyendo el último mensaje no siempre queda en el píxel exacto.
+_AT_BOTTOM_TOLERANCE_PX = 8
 
 
 class MainWindow(QMainWindow):
@@ -180,6 +194,9 @@ class MainWindow(QMainWindow):
         self._active_operation_id: str | None = None
         self._streaming_item: QListWidgetItem | None = None
         self._streaming_text = ""
+        # El historial arranca siguiendo el final: al abrir, lo útil es lo
+        # último dicho. Deja de seguirlo si el usuario se desplaza hacia arriba.
+        self._follow_history_bottom = True
         # B7b: text of the in-flight send (for _on_crashed, which has no
         # SendMessageResult to read it back from) and, once a send ends in
         # FAILED/crashed, the text "Reintentar" resends unchanged (RF-007).
@@ -265,7 +282,36 @@ class MainWindow(QMainWindow):
         )
 
         self.message_list = QListWidget()
+        # Bugfix (historial solapado): con el modo por defecto (Fixed), Qt no
+        # vuelve a calcular la posición/tamaño de los itemWidget cuando la
+        # columna cambia de ancho (p. ej. al redimensionar la ventana), lo
+        # que deja obsoleto el ancho de reflow usado por cada mensaje.
+        self.message_list.setResizeMode(QListWidget.ResizeMode.Adjust)
+        # Bugfix (mensajes recortados con puntos suspensivos): el delegate por
+        # omisión pintaba el texto del item en una sola línea recortada bajo el
+        # widget transparente del mensaje. Con este delegate el texto del item
+        # sigue existiendo para accesibilidad pero ya no se pinta.
+        self.message_list.setItemDelegate(MessageItemDelegate(self.message_list))
+        # Defensa adicional: si algún camino futuro volviera a pintar texto de
+        # item, que no lo recorte.
+        self.message_list.setTextElideMode(Qt.TextElideMode.ElideNone)
+        self.message_list.setWordWrap(True)
+        # Desplazamiento por píxeles: con el modo por item, un mensaje más alto
+        # que el viewport no se puede recorrer por dentro.
+        self.message_list.setVerticalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
+        # Separación vertical explícita entre mensajes.
+        self.message_list.setSpacing(4)
         self.message_list.setAccessibleName("Historial de la conversación")
+
+        # Seguimiento del final del historial, dirigido por señales (sin
+        # temporizadores ni sondeo): ``rangeChanged`` avisa cuando el contenido
+        # crece —incluido el primer cálculo real de geometría, que ocurre
+        # después de construir la ventana— y ``valueChanged`` recuerda si el
+        # usuario se ha ido hacia arriba a leer, caso en el que no se le mueve
+        # la vista.
+        history_scrollbar = self.message_list.verticalScrollBar()
+        history_scrollbar.rangeChanged.connect(self._on_history_range_changed)
+        history_scrollbar.valueChanged.connect(self._on_history_scrolled)
 
         self.message_input = QLineEdit()
         self.message_input.setPlaceholderText("Escribe un mensaje para Sirius")
@@ -299,15 +345,51 @@ class MainWindow(QMainWindow):
         self.budget_warning_label.setStyleSheet("color: #8a6d00;")
         self.budget_warning_label.setWordWrap(True)
 
+        # La conversación es la superficie principal de Sirius: ocupa su propia
+        # columna, con el historial como único elemento que crece. Antes esta
+        # columna compartía un QVBoxLayout con el bloque de continuidad y el
+        # panel de contexto, que se llevaban la mayor parte del alto y dejaban
+        # el historial reducido a una franja donde nada se podía leer.
+        conversation_column = QWidget()
+        conversation_layout = QVBoxLayout(conversation_column)
+        conversation_layout.setContentsMargins(0, 0, 0, 0)
+        conversation_layout.addWidget(self.message_list, 1)
+        conversation_layout.addLayout(input_row)
+        conversation_layout.addWidget(self.status_label)
+        conversation_layout.addWidget(self.error_label)
+        conversation_layout.addWidget(self.budget_warning_label)
+        conversation_column.setMinimumWidth(_CONVERSATION_MINIMUM_WIDTH)
+
+        # Proyecto, contexto, recuerdos y decisiones son secundarios: van a una
+        # columna lateral con su propio desplazamiento, para que su alto no
+        # empuje nunca al historial.
+        side_column = QWidget()
+        side_layout = QVBoxLayout(side_column)
+        side_layout.setContentsMargins(0, 0, 0, 0)
+        side_layout.addWidget(self.project_continuity_widget)
+        side_layout.addWidget(self.context_panel_widget)
+        side_layout.addStretch(1)
+
+        self.side_panel_scroll = QScrollArea()
+        self.side_panel_scroll.setWidgetResizable(True)
+        self.side_panel_scroll.setWidget(side_column)
+        self.side_panel_scroll.setMaximumWidth(_SIDE_PANEL_MAXIMUM_WIDTH)
+
+        self.conversation_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.conversation_splitter.addWidget(conversation_column)
+        self.conversation_splitter.addWidget(self.side_panel_scroll)
+        # La conversación se queda con el espacio que sobra al redimensionar.
+        self.conversation_splitter.setStretchFactor(0, 3)
+        self.conversation_splitter.setStretchFactor(1, 1)
+        # El usuario puede plegar la columna lateral por completo arrastrando.
+        self.conversation_splitter.setChildrenCollapsible(True)
+        self.conversation_splitter.setSizes(
+            [_CONVERSATION_INITIAL_WIDTH, _SIDE_PANEL_INITIAL_WIDTH]
+        )
+
         container = QWidget()
         layout = QVBoxLayout(container)
-        layout.addWidget(self.project_continuity_widget)
-        layout.addWidget(self.context_panel_widget)
-        layout.addWidget(self.message_list)
-        layout.addLayout(input_row)
-        layout.addWidget(self.status_label)
-        layout.addWidget(self.error_label)
-        layout.addWidget(self.budget_warning_label)
+        layout.addWidget(self.conversation_splitter)
         return container
 
     def _build_knowledge_tab(self) -> QWidget:
@@ -373,6 +455,34 @@ class MainWindow(QMainWindow):
         for message in messages:
             self._append_message_item(message.role, message.content, message.status)
 
+        # Al abrir o recargar, el punto útil del historial es el final: lo
+        # último dicho. Sin esto la vista se queda arriba y el usuario cree que
+        # falta la conversación reciente.
+        self._scroll_history_to_bottom()
+
+    def _is_history_at_bottom(self) -> bool:
+        scrollbar = self.message_list.verticalScrollBar()
+        if scrollbar.maximum() == 0:
+            return True
+        return scrollbar.value() >= scrollbar.maximum() - _AT_BOTTOM_TOLERANCE_PX
+
+    def _scroll_history_to_bottom(self) -> None:
+        scrollbar = self.message_list.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+
+    def _on_history_range_changed(self, _minimum: int, _maximum: int) -> None:
+        """El historial creció (mensaje nuevo, streaming o reflujo por ancho).
+
+        Solo se sigue el final si el usuario ya estaba ahí; si se había
+        desplazado hacia arriba a leer, moverle la vista sería el salto
+        errático que hay que evitar.
+        """
+        if self._follow_history_bottom:
+            self._scroll_history_to_bottom()
+
+    def _on_history_scrolled(self, _value: int) -> None:
+        self._follow_history_bottom = self._is_history_at_bottom()
+
     def _append_message_item(
         self,
         role: MessageRole,
@@ -393,12 +503,29 @@ class MainWindow(QMainWindow):
         # affect QListWidgetItem.text()).
         prefix = "Tú" if role is MessageRole.USER else "Sirius"
         widget = MessageItemWidget()
+        # Bugfix (historial solapado): el ancho real de la columna solo
+        # existe una vez que el widget está dentro de la lista, así que la
+        # altura calculada en la construcción puede quedar corta. size_changed
+        # se conecta antes de poblar contenido para capturar también el
+        # reflow tardío (ancho real, streaming, o un resize posterior) y
+        # mantener el sizeHint del item siempre al día con la altura real.
+        widget.size_changed.connect(lambda: self._sync_item_height(item, widget))
+        self.message_list.setItemWidget(item, widget)
         widget.set_message(
             prefix, self._compose_markdown_body(content, status), bold=role is MessageRole.SIRIUS
         )
         item.setSizeHint(widget.sizeHint())
-        self.message_list.setItemWidget(item, widget)
         return item
+
+    def _sync_item_height(self, item: QListWidgetItem, widget: MessageItemWidget) -> None:
+        """Mantiene el sizeHint de la fila igual al alto real del widget.
+
+        Se dispara en cada reflujo: cuando el widget recibe por fin el ancho
+        real de la columna, mientras crece en streaming y cada vez que cambia
+        el ancho disponible al redimensionar la ventana. El seguimiento del
+        final lo resuelve ``rangeChanged``, no hace falta tocar el scroll aquí.
+        """
+        item.setSizeHint(widget.sizeHint())
 
     @staticmethod
     def _set_item_text(
@@ -500,7 +627,7 @@ class MainWindow(QMainWindow):
         widget = self.message_list.itemWidget(self._streaming_item)
         if isinstance(widget, MessageItemWidget):
             widget.set_streaming_text("Sirius", self._streaming_text, bold=True)
-            self._streaming_item.setSizeHint(widget.sizeHint())
+            self._sync_item_height(self._streaming_item, widget)
 
     def _on_finished(self, result: SendMessageResult) -> None:
         # ``result.sirius_message`` is the row SendMessageUseCase actually
@@ -526,7 +653,7 @@ class MainWindow(QMainWindow):
                     ),
                     bold=True,
                 )
-                self._streaming_item.setSizeHint(widget.sizeHint())
+                self._sync_item_height(self._streaming_item, widget)
 
         operation_id = result.sirius_message.operation_id
         if result.outcome is MessageStatus.CANCELLED:
