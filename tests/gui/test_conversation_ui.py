@@ -4,8 +4,14 @@ from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QRect
-from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QRect, Qt
+from PySide6.QtGui import QPainter
+from PySide6.QtWidgets import (
+    QApplication,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
+    QTextEdit,
+)
 from pytestqt.qtbot import QtBot
 
 from sirius.adapters.llm.fake import FakeLLMProvider
@@ -45,7 +51,7 @@ from sirius.ports.llm import (
 )
 from sirius.presentation.error_messages import describe_error
 from sirius.presentation.main_window import MainWindow
-from sirius.presentation.message_view import MessageItemWidget
+from sirius.presentation.message_view import MessageItemDelegate, MessageItemWidget
 
 
 @pytest.fixture(autouse=True)
@@ -1181,8 +1187,13 @@ def test_streaming_final_result_segments_code_block_with_copy_button(
     assert "```" not in final_rendered
 
 
-# --- Bugfix: el historial no debe solaparse (defecto ALTO, ejecutable
-# empaquetado) ---
+# --- Bugfix: el historial debe poder leerse por completo (defecto ALTO,
+# reproducido en el ejecutable empaquetado) ---
+#
+# Cubre los seis defectos reportados: mensajes solapados, texto oculto,
+# mensajes recortados con puntos suspensivos, tener que copiar el texto fuera
+# de Sirius para leerlo, el chat reducido a una franja por los paneles
+# secundarios, y el historial ilegible tras cerrar y reabrir.
 
 
 def _wait_for_real_layout(qtbot: QtBot, window: MainWindow) -> None:
@@ -1391,4 +1402,259 @@ def test_failed_message_and_its_retry_remain_legible_and_do_not_overlap(
     assert window.message_list.item(1).text() == "Sirius:  (fallido)"
     assert window.message_list.item(2).text() == "Tú: hola"
     assert window.message_list.item(3).text() == "Sirius: Respuesta simulada de Sirius."
+    _assert_rows_do_not_overlap_in_chronological_order(window)
+
+
+def _body_of(window: MainWindow, index: int) -> QTextEdit:
+    """El primer cuerpo de texto del mensaje en ``index``."""
+    bodies = _widget_at(window, index)._segment_bodies
+    assert bodies, "el mensaje no tiene ningún cuerpo de texto"
+    return bodies[0]
+
+
+def _document_height(window: MainWindow, index: int) -> int:
+    return int(_body_of(window, index).document().size().height())
+
+
+@pytest.mark.gui
+def test_a_long_message_shows_all_of_its_content(qtbot: QtBot, tmp_path: Path) -> None:
+    """Defecto 2: parte del texto quedaba oculta.
+
+    El alto asignado a la fila debe cubrir el alto real del documento, y el
+    texto renderizado debe contener tanto el principio como el final.
+    """
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    content = "PRINCIPIO. " + ("relleno intermedio. " * 300) + "FINAL."
+    conversation_repository.append_message(conversation.id, MessageRole.SIRIUS, content)
+
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    _wait_for_real_layout(qtbot, window)
+
+    rendered = _widget_at(window, 0).rendered_plain_text()
+    assert "PRINCIPIO." in rendered
+    assert "FINAL." in rendered
+
+    body = _body_of(window, 0)
+    assert body.height() >= _document_height(window, 0)
+    assert window.message_list.item(0).sizeHint().height() >= _document_height(window, 0)
+
+
+@pytest.mark.gui
+def test_no_ellipsis_or_artificial_truncation_is_rendered(qtbot: QtBot, tmp_path: Path) -> None:
+    """Defecto 3: los mensajes salían recortados con puntos suspensivos.
+
+    La causa era el delegate por omisión, que pintaba el texto del item en una
+    sola línea recortada (``ElideRight``) bajo el widget transparente. El texto
+    del item se conserva para accesibilidad, pero ya no se pinta.
+    """
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    content = "frase larga sin cortes " * 200
+    conversation_repository.append_message(conversation.id, MessageRole.SIRIUS, content)
+
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    _wait_for_real_layout(qtbot, window)
+
+    delegate = window.message_list.itemDelegate()
+    assert isinstance(delegate, MessageItemDelegate)
+    assert window.message_list.textElideMode() is Qt.TextElideMode.ElideNone
+
+    rendered = _widget_at(window, 0).rendered_plain_text()
+    assert "…" not in rendered
+    assert "..." not in rendered
+    # El texto del item sigue completo: es el contrato de accesibilidad.
+    assert len(window.message_list.item(0).text()) > 1000
+
+    # La fila SÍ lleva texto asociado (de ahí venía la elipsis)...
+    index = window.message_list.model().index(0, 0)
+    option = QStyleOptionViewItem()
+    delegate.initStyleOption(option, index)
+    assert option.text != ""
+
+    # ...pero lo que el delegate manda pintar ya viene sin texto.
+    painted: list[str] = []
+    original_paint = QStyledItemDelegate.paint
+
+    def _capture(
+        _self: QStyledItemDelegate,
+        _painter: QPainter,
+        painted_option: QStyleOptionViewItem,
+        _index: QModelIndex | QPersistentModelIndex,
+    ) -> None:
+        painted.append(painted_option.text)
+
+    QStyledItemDelegate.paint = _capture  # type: ignore[method-assign]
+    try:
+        delegate.paint(QPainter(), option, index)
+    finally:
+        QStyledItemDelegate.paint = original_paint  # type: ignore[method-assign]
+    assert painted == [""]
+
+
+@pytest.mark.gui
+def test_resizing_the_window_recomputes_widths_and_heights(qtbot: QtBot, tmp_path: Path) -> None:
+    """Un chat más estrecho necesita más líneas para el mismo texto."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    conversation_repository.append_message(
+        conversation.id, MessageRole.SIRIUS, "texto que reflui" + "r" * 20 + " " + "palabra " * 200
+    )
+
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    window.resize(1200, 700)
+    window.show()
+    qtbot.waitUntil(lambda: window.message_list.viewport().width() > 0, timeout=5000)
+    QApplication.processEvents()
+
+    wide_width = window.message_list.viewport().width()
+    wide_height = window.message_list.item(0).sizeHint().height()
+
+    window.resize(700, 700)
+    QApplication.processEvents()
+    qtbot.waitUntil(lambda: window.message_list.viewport().width() < wide_width, timeout=5000)
+    QApplication.processEvents()
+
+    narrow_width = window.message_list.viewport().width()
+    narrow_height = window.message_list.item(0).sizeHint().height()
+
+    assert narrow_width < wide_width
+    assert narrow_height > wide_height
+    assert narrow_height >= _document_height(window, 0)
+    _assert_rows_do_not_overlap_in_chronological_order(window)
+
+
+@pytest.mark.gui
+def test_conversation_starts_with_more_space_than_the_side_panel(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Defecto 5: la conversación es la superficie principal de Sirius."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    _wait_for_real_layout(qtbot, window)
+
+    sizes = window.conversation_splitter.sizes()
+    assert len(sizes) == 2
+    conversation_width, side_width = sizes
+    assert conversation_width > side_width
+    assert conversation_width > sum(sizes) / 2
+    # El panel lateral no puede volver a comerse la columna del chat.
+    assert window.side_panel_scroll.maximumWidth() <= 420
+
+
+@pytest.mark.gui
+def test_shrinking_the_side_panel_gives_the_chat_more_room(qtbot: QtBot, tmp_path: Path) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    _wait_for_real_layout(qtbot, window)
+
+    before = window.message_list.width()
+    total = sum(window.conversation_splitter.sizes())
+    window.conversation_splitter.setSizes([total, 0])
+    QApplication.processEvents()
+
+    assert window.message_list.width() > before
+
+
+@pytest.mark.gui
+def test_a_long_reply_can_be_read_in_full_without_copying_it_out(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Defecto 4: para leer una respuesta había que copiarla fuera de Sirius.
+
+    Con el historial desplazado hasta el final, la última línea de una
+    respuesta extensa tiene que quedar dentro del viewport, y el recorrido
+    entre el principio y el final del mensaje debe ser posible sin salir de la
+    aplicación.
+    """
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    content = "PRIMERA LINEA.\n\n" + ("parrafo intermedio. " * 400) + "\n\nULTIMA LINEA."
+    conversation_repository.append_message(conversation.id, MessageRole.SIRIUS, content)
+
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    _wait_for_real_layout(qtbot, window)
+
+    # Todo el texto está en el widget, no hace falta copiarlo a ningún sitio.
+    rendered = _widget_at(window, 0).rendered_plain_text()
+    assert "PRIMERA LINEA." in rendered
+    assert "ULTIMA LINEA." in rendered
+
+    # El cuerpo no tiene barra propia: su alto iguala al del documento, así que
+    # nada queda recortado dentro del mensaje.
+    body = _body_of(window, 0)
+    assert body.verticalScrollBarPolicy() is Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+    assert body.height() >= _document_height(window, 0)
+
+    # El historial sí permite recorrer el mensaje de arriba abajo.
+    scrollbar = window.message_list.verticalScrollBar()
+    assert scrollbar.maximum() > 0
+    scrollbar.setValue(scrollbar.maximum())
+    QApplication.processEvents()
+    row = window.message_list.visualItemRect(window.message_list.item(0))
+    viewport = window.message_list.viewport().rect()
+    assert row.bottom() <= viewport.bottom() + 1
+    scrollbar.setValue(0)
+    QApplication.processEvents()
+    assert window.message_list.verticalScrollBar().value() == 0
+
+
+@pytest.mark.gui
+def test_opening_the_history_starts_at_the_last_message(qtbot: QtBot, tmp_path: Path) -> None:
+    """Defecto 6: al reabrir, la conversación reciente parecía no estar."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    for index in range(25):
+        role = MessageRole.USER if index % 2 == 0 else MessageRole.SIRIUS
+        conversation_repository.append_message(conversation.id, role, f"mensaje {index}")
+
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    _wait_for_real_layout(qtbot, window)
+
+    scrollbar = window.message_list.verticalScrollBar()
+    assert scrollbar.maximum() > 0
+    assert scrollbar.value() >= scrollbar.maximum() - 8
+    _assert_rows_do_not_overlap_in_chronological_order(window)
+
+
+@pytest.mark.gui
+def test_scrolling_up_stops_the_history_from_following_new_messages(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """El seguimiento del final no debe robarle la vista a quien está leyendo."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    for index in range(25):
+        conversation_repository.append_message(
+            conversation.id, MessageRole.USER, f"mensaje {index}"
+        )
+
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    _wait_for_real_layout(qtbot, window)
+
+    window.message_list.verticalScrollBar().setValue(0)
+    QApplication.processEvents()
+    assert window._follow_history_bottom is False
+
+    _swap_send_message_use_case(window, database_path, FakeLLMProvider())
+    window.message_input.setText("hola")
+    window.send_button.click()
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+
+    # La vista sigue arriba: no se le ha movido al usuario.
+    assert window.message_list.verticalScrollBar().value() == 0
     _assert_rows_do_not_overlap_in_chronological_order(window)
