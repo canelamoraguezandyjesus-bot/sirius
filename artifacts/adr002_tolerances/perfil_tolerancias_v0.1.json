@@ -1,0 +1,526 @@
+{
+ "documento": "Perfil de tolerancias P50/P95 LAB-LINUX para ADR002-TOL-107",
+ "version_esquema": "perfil-tolerancias-0.1",
+ "estado": "PROPUESTO · PERFIL DERIVADO — NO APRUEBA TOL-209",
+ "acta": "SIRIUS_0.2_ADR_002_TOL_107_PERFIL_P50_P95_APROBACION_v1.0.md",
+ "protocolo": "SIRIUS_0.2_ADR_002_PROTOCOLO_MEDICION_v0.2_PROPUESTO.md",
+ "registro": "SIRIUS_0.2_REGISTRO_TOLERANCIAS_v0.5_PROPUESTO.md",
+ "paquete": "SIRIUS_0.2_ADR_002_PAQUETE_TRABAJO_08_TOL209_PERFIL_TOLERANCIAS_v0.1",
+ "derivado_no_medido": true,
+ "fuente": {
+  "ruta": "artifacts/adr002_tolerances/suelo_medicion_v0.3.json",
+  "blob": "7273264879ec0d45861160066555c1f08b5882bc",
+  "commit": "561b47c9084122efad4fe256242caaced34e7518",
+  "sesiones": 11,
+  "escalera_ns": [
+   10000,
+   20000,
+   50000,
+   100000,
+   200000,
+   500000,
+   1000000,
+   2000000,
+   5000000,
+   10000000,
+   20000000,
+   50000000,
+   100000000,
+   200000000,
+   500000000,
+   1000000000
+  ],
+  "familias": [
+   "cpu",
+   "canon"
+  ],
+  "nota": "no se ha realizado ninguna medicion nueva: el perfil se deriva de los vectores crudos de esta evidencia, con los percentiles recomputados"
+ },
+ "metodo": {
+  "nombre": "perfil de tolerancias con P50 y P95 separados",
+  "p50": "objetivo relativo <= 20 % por encima de U50; banda B50(M) = E50(escalon superior) por debajo; sin afirmacion de latencia por debajo de SM",
+  "p95": "sin objetivo relativo; banda B95(M) = E95(escalon superior) en todo el rango cubierto; NO_EVALUABLE por debajo de SM o por encima de la mayor escala medida",
+  "envolvente": "E_p(s_i) = max(D_p(s_1), ..., D_p(s_i)), monotona no decreciente",
+  "consulta_de_banda": "M es el minimo entre sesiones del MISMO percentil que se evalua: B50 en min_s P50 y B95 en min_s P95",
+  "sesiones": "exactamente 11 sesiones para construir las bandas y para evaluar candidatos; no se comparan rangos de tamanos de muestra distintos",
+  "continuidad": "m * B50(U50) = U50 / 5 = 0,20 U50, exacta y derivada",
+  "agregacion": "basta que uno de los dos percentiles falle para que la magnitud falle; para que sea VALIDA hacen falta los dos evaluables y validos. Un percentil NO_EVALUABLE deja la magnitud NO_EVALUABLE: no se emite afirmacion positiva sobre una magnitud cuya cola no se evaluo",
+  "hereda_de": [
+   "experiments/adr002/tolerances/envelope_protocol.py"
+  ],
+  "no_sustituye_evidencia": true
+ },
+ "sesiones_exigidas": 11,
+ "sm_ns": 17405,
+ "p50": {
+  "objetivo_relativo": "1/5",
+  "factor_u": 5,
+  "m": 1,
+  "u50_ns": 2685,
+  "b50_en_u50_ns": 537,
+  "indice_escalon_del_cruce": 0,
+  "escalon_del_cruce_ns": 10000,
+  "intervalo_del_cruce_ns": [
+   0,
+   10000
+  ],
+  "motivo_no_evaluable": null,
+  "curva": [
+   {
+    "escala_ns": 10000,
+    "dispersion_ns": 537,
+    "envolvente_ns": 537,
+    "banda_ns": 537,
+    "razon_dispersion_por_mil": 53,
+    "razon_envolvente_por_mil": 53,
+    "sostenible": true
+   },
+   {
+    "escala_ns": 20000,
+    "dispersion_ns": 1462,
+    "envolvente_ns": 1462,
+    "banda_ns": 1462,
+    "razon_dispersion_por_mil": 73,
+    "razon_envolvente_por_mil": 73,
+    "sostenible": true
+   },
+   {
+    "escala_ns": 50000,
+    "dispersion_ns": 4081,
+    "envolvente_ns": 4081,
+    "banda_ns": 4081,
+    "razon_dispersion_por_mil": 81,
+    "razon_envolvente_por_mil": 81,
+    "sostenible": true
+   },
+   {
+    "escala_ns": 100000,
+    "dispersion_ns": 15777,
+    "envolvente_ns": 15777,
+    "banda_ns": 15777,
+    "razon_dispersion_por_mil": 157,
+    "razon_envolvente_por_mil": 157,
+    "sostenible": true
+   },
+   {
+    "escala_ns": 200000,
+    "dispersion_ns": 23784,
+    "envolvente_ns": 23784,
+    "banda_ns": 23784,
+    "razon_dispersion_por_mil": 118,
+    "razon_envolvente_por_mil": 118,
+    "sostenible": true
+   },
+   {
+    "escala_ns": 500000,
+    "dispersion_ns": 43543,
+    "envolvente_ns": 43543,
+    "banda_ns": 43543,
+    "razon_dispersion_por_mil": 87,
+    "razon_envolvente_por_mil": 87,
+    "sostenible": true
+   },
+   {
+    "escala_ns": 1000000,
+    "dispersion_ns": 60044,
+    "envolvente_ns": 60044,
+    "banda_ns": 60044,
+    "razon_dispersion_por_mil": 60,
+    "razon_envolvente_por_mil": 60,
+    "sostenible": true
+   },
+   {
+    "escala_ns": 2000000,
+    "dispersion_ns": 206469,
+    "envolvente_ns": 206469,
+    "banda_ns": 206469,
+    "razon_dispersion_por_mil": 103,
+    "razon_envolvente_por_mil": 103,
+    "sostenible": true
+   },
+   {
+    "escala_ns": 5000000,
+    "dispersion_ns": 579360,
+    "envolvente_ns": 579360,
+    "banda_ns": 579360,
+    "razon_dispersion_por_mil": 115,
+    "razon_envolvente_por_mil": 115,
+    "sostenible": true
+   },
+   {
+    "escala_ns": 10000000,
+    "dispersion_ns": 539701,
+    "envolvente_ns": 579360,
+    "banda_ns": 579360,
+    "razon_dispersion_por_mil": 53,
+    "razon_envolvente_por_mil": 57,
+    "sostenible": true
+   },
+   {
+    "escala_ns": 20000000,
+    "dispersion_ns": 1799022,
+    "envolvente_ns": 1799022,
+    "banda_ns": 1799022,
+    "razon_dispersion_por_mil": 89,
+    "razon_envolvente_por_mil": 89,
+    "sostenible": true
+   },
+   {
+    "escala_ns": 50000000,
+    "dispersion_ns": 3154646,
+    "envolvente_ns": 3154646,
+    "banda_ns": 3154646,
+    "razon_dispersion_por_mil": 63,
+    "razon_envolvente_por_mil": 63,
+    "sostenible": true
+   },
+   {
+    "escala_ns": 100000000,
+    "dispersion_ns": 6600294,
+    "envolvente_ns": 6600294,
+    "banda_ns": 6600294,
+    "razon_dispersion_por_mil": 66,
+    "razon_envolvente_por_mil": 66,
+    "sostenible": true
+   },
+   {
+    "escala_ns": 200000000,
+    "dispersion_ns": 11324952,
+    "envolvente_ns": 11324952,
+    "banda_ns": 11324952,
+    "razon_dispersion_por_mil": 56,
+    "razon_envolvente_por_mil": 56,
+    "sostenible": true
+   },
+   {
+    "escala_ns": 500000000,
+    "dispersion_ns": 27006310,
+    "envolvente_ns": 27006310,
+    "banda_ns": 27006310,
+    "razon_dispersion_por_mil": 54,
+    "razon_envolvente_por_mil": 54,
+    "sostenible": true
+   },
+   {
+    "escala_ns": 1000000000,
+    "dispersion_ns": 48791690,
+    "envolvente_ns": 48791690,
+    "banda_ns": 48791690,
+    "razon_dispersion_por_mil": 48,
+    "razon_envolvente_por_mil": 48,
+    "sostenible": true
+   }
+  ]
+ },
+ "p95": {
+  "sin_umbral_relativo": true,
+  "objetivo_relativo_aplicable": false,
+  "rango_cubierto_ns": [
+   17405,
+   1000000000
+  ],
+  "curva": [
+   {
+    "escala_ns": 10000,
+    "dispersion_ns": 11000,
+    "envolvente_ns": 11000,
+    "banda_ns": 11000,
+    "razon_dispersion_por_mil": 1100,
+    "razon_envolvente_por_mil": 1100
+   },
+   {
+    "escala_ns": 20000,
+    "dispersion_ns": 26939,
+    "envolvente_ns": 26939,
+    "banda_ns": 26939,
+    "razon_dispersion_por_mil": 1346,
+    "razon_envolvente_por_mil": 1346
+   },
+   {
+    "escala_ns": 50000,
+    "dispersion_ns": 30558,
+    "envolvente_ns": 30558,
+    "banda_ns": 30558,
+    "razon_dispersion_por_mil": 611,
+    "razon_envolvente_por_mil": 611
+   },
+   {
+    "escala_ns": 100000,
+    "dispersion_ns": 95953,
+    "envolvente_ns": 95953,
+    "banda_ns": 95953,
+    "razon_dispersion_por_mil": 959,
+    "razon_envolvente_por_mil": 959
+   },
+   {
+    "escala_ns": 200000,
+    "dispersion_ns": 155066,
+    "envolvente_ns": 155066,
+    "banda_ns": 155066,
+    "razon_dispersion_por_mil": 775,
+    "razon_envolvente_por_mil": 775
+   },
+   {
+    "escala_ns": 500000,
+    "dispersion_ns": 332895,
+    "envolvente_ns": 332895,
+    "banda_ns": 332895,
+    "razon_dispersion_por_mil": 665,
+    "razon_envolvente_por_mil": 665
+   },
+   {
+    "escala_ns": 1000000,
+    "dispersion_ns": 971628,
+    "envolvente_ns": 971628,
+    "banda_ns": 971628,
+    "razon_dispersion_por_mil": 971,
+    "razon_envolvente_por_mil": 971
+   },
+   {
+    "escala_ns": 2000000,
+    "dispersion_ns": 1497366,
+    "envolvente_ns": 1497366,
+    "banda_ns": 1497366,
+    "razon_dispersion_por_mil": 748,
+    "razon_envolvente_por_mil": 748
+   },
+   {
+    "escala_ns": 5000000,
+    "dispersion_ns": 2195694,
+    "envolvente_ns": 2195694,
+    "banda_ns": 2195694,
+    "razon_dispersion_por_mil": 439,
+    "razon_envolvente_por_mil": 439
+   },
+   {
+    "escala_ns": 10000000,
+    "dispersion_ns": 3973044,
+    "envolvente_ns": 3973044,
+    "banda_ns": 3973044,
+    "razon_dispersion_por_mil": 397,
+    "razon_envolvente_por_mil": 397
+   },
+   {
+    "escala_ns": 20000000,
+    "dispersion_ns": 8894142,
+    "envolvente_ns": 8894142,
+    "banda_ns": 8894142,
+    "razon_dispersion_por_mil": 444,
+    "razon_envolvente_por_mil": 444
+   },
+   {
+    "escala_ns": 50000000,
+    "dispersion_ns": 22662076,
+    "envolvente_ns": 22662076,
+    "banda_ns": 22662076,
+    "razon_dispersion_por_mil": 453,
+    "razon_envolvente_por_mil": 453
+   },
+   {
+    "escala_ns": 100000000,
+    "dispersion_ns": 25197279,
+    "envolvente_ns": 25197279,
+    "banda_ns": 25197279,
+    "razon_dispersion_por_mil": 251,
+    "razon_envolvente_por_mil": 251
+   },
+   {
+    "escala_ns": 200000000,
+    "dispersion_ns": 187831392,
+    "envolvente_ns": 187831392,
+    "banda_ns": 187831392,
+    "razon_dispersion_por_mil": 939,
+    "razon_envolvente_por_mil": 939
+   },
+   {
+    "escala_ns": 500000000,
+    "dispersion_ns": 165166235,
+    "envolvente_ns": 187831392,
+    "banda_ns": 187831392,
+    "razon_dispersion_por_mil": 330,
+    "razon_envolvente_por_mil": 375
+   },
+   {
+    "escala_ns": 1000000000,
+    "dispersion_ns": 256936311,
+    "envolvente_ns": 256936311,
+    "banda_ns": 256936311,
+    "razon_dispersion_por_mil": 256,
+    "razon_envolvente_por_mil": 256
+   }
+  ]
+ },
+ "preinscripcion": {
+  "commit_a": "7fc028fef243babeeb524fce94b7de724942a057",
+  "head_en_derivacion": "7fc028fef243babeeb524fce94b7de724942a057",
+  "blobs_preinscritos": {
+   "docs/architecture/SIRIUS_0.2_ADR_002_PAQUETE_TRABAJO_08_TOL209_PERFIL_TOLERANCIAS_v0.1.md": "c66fe5f6784c3e198206adede2bc7e2393d02499",
+   "docs/architecture/SIRIUS_0.2_ADR_002_PROTOCOLO_MEDICION_v0.2_PROPUESTO.md": "cf65d67458b616d1f095a307c01ee1b6a590e0e2",
+   "docs/architecture/SIRIUS_0.2_ADR_002_TOL_107_PERFIL_P50_P95_APROBACION_v1.0.md": "e681debc741afbdddfdbc55e41b4c238c1bf80f6",
+   "docs/architecture/SIRIUS_0.2_REGISTRO_TOLERANCIAS_v0.5_PROPUESTO.md": "a3dd91ffc74d2fb518998b89996e0d4c221f6394",
+   "experiments/adr002/tolerances/derive_profile.py": "dd80885224a9055423e35d4e8588c37aadd7f431",
+   "experiments/adr002/tolerances/profile_protocol.py": "6b0ca8a32021065b98fc0561ec495ff302180640",
+   "experiments/adr002/tolerances/schema_profile_v0_1.py": "b8b406cba1efc31ec761c52536eca3161f423768",
+   "experiments/adr002/tolerances/test_adr002_profile.py": "e5b8ab8c3acf2e046a3280d98be9d5d055768d2d"
+  },
+  "blobs_heredados": {
+   "experiments/adr002/tolerances/envelope_protocol.py": "afa4a7fe0191c9bc20e283d9f3ab297869c8faad"
+  },
+  "blob_fuente": "7273264879ec0d45861160066555c1f08b5882bc",
+  "blob_linea_base": "f9f051332d9833fb7e10b27f4820849f00b6fe6c",
+  "blobs_evidencias_anteriores": {
+   "artifacts/adr002_tolerances/suelo_medicion_v0.1.json": "899ecee82bf0c62408b43c732fbbb49304eea119",
+   "artifacts/adr002_tolerances/INFORME_SUELO_MEDICION_v0.1_PROPUESTO.md": "e2b075499f89f71a49c33325298ae9f4bc1f7076",
+   "artifacts/adr002_tolerances/suelo_medicion_v0.2.json": "1d73fa363d6ca8e612e55adb270fbbf3e7540147",
+   "artifacts/adr002_tolerances/INFORME_SUELO_MEDICION_v0.2_PROPUESTO.md": "33f312dda5ba4e8dfea5d24acf5f0158ad7b4a64",
+   "artifacts/adr002_tolerances/suelo_medicion_v0.3.json": "7273264879ec0d45861160066555c1f08b5882bc",
+   "artifacts/adr002_tolerances/INFORME_SUELO_MEDICION_v0.3_PROPUESTO.md": "2c4da11a2254db923c307f3449988892643d7d9e"
+  },
+  "blob_protocolo_anterior": "c298a6b804309a78062f79b6341adfea2374ce56",
+  "blob_registro_anterior": "b499b573e2bb9918961248b05d6faa1b342c552b"
+ },
+ "controles_internos": {
+  "fuente_intacta": true,
+  "fuente_con_once_sesiones": true,
+  "escalera_completa": true,
+  "percentiles_recomputados": true,
+  "envolventes_monotonas": true,
+  "envolventes_cubren_el_suelo": true,
+  "bandas_no_decrecientes": true,
+  "continuidad_p50_exacta": true,
+  "p95_no_mas_estable_que_p50": true,
+  "sin_umbral_relativo_para_p95": true,
+  "guarda_de_sesiones_activa": true,
+  "evidencias_anteriores_intactas": true,
+  "documentos_de_gobierno_intactos": true,
+  "derivacion_determinista": true,
+  "custodia_verificada": true
+ },
+ "contraste_no_comparable": {
+  "fuente": "artifacts/adr002_tolerances/mediciones_linea_base_v0.2.json",
+  "sesiones": 5,
+  "sesiones_exigidas": 11,
+  "nota": "la linea base se midio con cinco sesiones; la regla 5 de TOL-107 prohibe comparar rangos obtenidos con numeros distintos de sesiones. Sus cifras se publican para que la asimetria entre P50 y P95 sea auditable, y NUNCA como veredicto",
+  "magnitudes": [
+   {
+    "magnitud": "cero_resultados.recuperacion_completa_rank",
+    "fuente": "artifacts/adr002_tolerances/mediciones_linea_base_v0.2.json",
+    "sesiones": 5,
+    "sesiones_exigidas": 11,
+    "min_p50_ns": 116286300,
+    "max_p50_ns": 128586400,
+    "dispersion_p50_ns": 12300100,
+    "min_p95_ns": 125809200,
+    "max_p95_ns": 145663000,
+    "dispersion_p95_ns": 19853800,
+    "resultado": "NO_COMPARABLE",
+    "motivo": "numero_de_sesiones_distinto_del_exigido",
+    "registro": "NO_COMPARABLE",
+    "banda_p50_que_le_corresponderia_ns": null,
+    "banda_p95_que_le_corresponderia_ns": null
+   },
+   {
+    "magnitud": "cero_resultados.solo_indice_fts5",
+    "fuente": "artifacts/adr002_tolerances/mediciones_linea_base_v0.2.json",
+    "sesiones": 5,
+    "sesiones_exigidas": 11,
+    "min_p50_ns": 140700,
+    "max_p50_ns": 181900,
+    "dispersion_p50_ns": 41200,
+    "min_p95_ns": 188400,
+    "max_p95_ns": 254500,
+    "dispersion_p95_ns": 66100,
+    "resultado": "NO_COMPARABLE",
+    "motivo": "numero_de_sesiones_distinto_del_exigido",
+    "registro": "NO_COMPARABLE",
+    "banda_p50_que_le_corresponderia_ns": null,
+    "banda_p95_que_le_corresponderia_ns": null
+   },
+   {
+    "magnitud": "un_resultado_exacto.recuperacion_completa_rank",
+    "fuente": "artifacts/adr002_tolerances/mediciones_linea_base_v0.2.json",
+    "sesiones": 5,
+    "sesiones_exigidas": 11,
+    "min_p50_ns": 115518500,
+    "max_p50_ns": 127762700,
+    "dispersion_p50_ns": 12244200,
+    "min_p95_ns": 127777300,
+    "max_p95_ns": 143538100,
+    "dispersion_p95_ns": 15760800,
+    "resultado": "NO_COMPARABLE",
+    "motivo": "numero_de_sesiones_distinto_del_exigido",
+    "registro": "NO_COMPARABLE",
+    "banda_p50_que_le_corresponderia_ns": null,
+    "banda_p95_que_le_corresponderia_ns": null
+   },
+   {
+    "magnitud": "un_resultado_exacto.solo_indice_fts5",
+    "fuente": "artifacts/adr002_tolerances/mediciones_linea_base_v0.2.json",
+    "sesiones": 5,
+    "sesiones_exigidas": 11,
+    "min_p50_ns": 155800,
+    "max_p50_ns": 190100,
+    "dispersion_p50_ns": 34300,
+    "min_p95_ns": 216900,
+    "max_p95_ns": 288200,
+    "dispersion_p95_ns": 71300,
+    "resultado": "NO_COMPARABLE",
+    "motivo": "numero_de_sesiones_distinto_del_exigido",
+    "registro": "NO_COMPARABLE",
+    "banda_p50_que_le_corresponderia_ns": null,
+    "banda_p95_que_le_corresponderia_ns": null
+   },
+   {
+    "magnitud": "muchos_candidatos.recuperacion_completa_rank",
+    "fuente": "artifacts/adr002_tolerances/mediciones_linea_base_v0.2.json",
+    "sesiones": 5,
+    "sesiones_exigidas": 11,
+    "min_p50_ns": 117817400,
+    "max_p50_ns": 121151400,
+    "dispersion_p50_ns": 3334000,
+    "min_p95_ns": 127499800,
+    "max_p95_ns": 147176400,
+    "dispersion_p95_ns": 19676600,
+    "resultado": "NO_COMPARABLE",
+    "motivo": "numero_de_sesiones_distinto_del_exigido",
+    "registro": "NO_COMPARABLE",
+    "banda_p50_que_le_corresponderia_ns": null,
+    "banda_p95_que_le_corresponderia_ns": null
+   },
+   {
+    "magnitud": "muchos_candidatos.solo_indice_fts5",
+    "fuente": "artifacts/adr002_tolerances/mediciones_linea_base_v0.2.json",
+    "sesiones": 5,
+    "sesiones_exigidas": 11,
+    "min_p50_ns": 596200,
+    "max_p50_ns": 675900,
+    "dispersion_p50_ns": 79700,
+    "min_p95_ns": 735700,
+    "max_p95_ns": 1003800,
+    "dispersion_p95_ns": 268100,
+    "resultado": "NO_COMPARABLE",
+    "motivo": "numero_de_sesiones_distinto_del_exigido",
+    "registro": "NO_COMPARABLE",
+    "banda_p50_que_le_corresponderia_ns": null,
+    "banda_p95_que_le_corresponderia_ns": null
+   }
+  ]
+ },
+ "custodia": {
+  "sha_a_es_ancestro": true,
+  "diff_preinscritos_vacio": true,
+  "evidencias_anteriores_intactas": true,
+  "documentos_de_gobierno_intactos": true,
+  "head": "7fc028fef243babeeb524fce94b7de724942a057"
+ },
+ "no_autoriza": {
+  "aprobacion_tol_209": false,
+  "limite_duro_tol_107": false,
+  "sustitucion_evidencias_anteriores": false,
+  "medicion_nueva": false,
+  "t0": false,
+  "candidatos": false,
+  "benchmark": false,
+  "merge_pr_117": false
+ }
+}
