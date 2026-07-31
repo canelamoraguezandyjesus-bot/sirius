@@ -70,6 +70,7 @@ REGISTRO: Final = pp.REGISTRO
 PROTOCOLO: Final = pp.PROTOCOLO
 ACTA_TOL_209: Final = "SIRIUS_0.2_ADR_002_TOL_209_APROBACION_v1.0.md"
 ACTA_TOL_207: Final = "SIRIUS_0.2_ADR_002_TOL_207_APROBACION_v1.0.md"
+ACTA_TOL_210: Final = "SIRIUS_0.2_ADR_002_TOL_210_APROBACION_v1.0.md"
 
 #: Las plantillas anteriores se conservan sin modificar. Sus blobs los citan
 #: el Registro, el paquete 02D y la Resolucion de la particion de candidatos:
@@ -240,7 +241,15 @@ CAMPOS_IDENTIDAD: Final[tuple[str, ...]] = (
     "motivo_de_sustitucion",
 )
 
-CAMPOS_CONGELACION: Final[tuple[str, ...]] = ("commit", "huella", "ruta")
+#: ``commit_de_referencia`` NO es el commit que contiene esta ficha: seria
+#: autorreferencial e imposible de rellenar, porque el SHA de un commit
+#: depende del contenido que lo incluye. Es el commit del acto de gobierno
+#: bajo el que la ficha se congela, que ya existe cuando se escribe.
+#:
+#: Cuando la ficha entro realmente en el repositorio lo dice Git, no la ficha:
+#: ``primer_commit_con_blob`` lo busca en el historial. Un dato observado no
+#: se declara.
+CAMPOS_CONGELACION: Final[tuple[str, ...]] = ("commit_de_referencia", "huella", "ruta")
 
 CAMPOS_ARQUITECTURA: Final[tuple[str, ...]] = (
     "alternativa_minima",
@@ -599,12 +608,18 @@ class ReferenciaEjecucion:
 
 @dataclass(frozen=True, slots=True)
 class FichaConfirmada:
-    """Una ficha ya confirmada en el repositorio, con su blob y su commit."""
+    """Una ficha ya confirmada en el repositorio.
+
+    ``commit_de_entrada`` es el primer commit del historial en que la ficha
+    aparece con este contenido exacto. Lo **observa** el verificador; la ficha
+    no lo declara, porque una ficha no puede conocer el SHA del commit que la
+    contiene.
+    """
 
     candidato: str
     version: int
     huella: str
-    commit: str
+    commit_de_entrada: str
     estado: str
 
 
@@ -637,9 +652,12 @@ def admisibilidad(
 
     1. existe una ficha confirmada de ese candidato y esa version;
     2. su huella coincide con la citada por la ejecucion;
-    3. su commit es ancestro **estricto** del commit que ejecuta.
+    3. el commit en que **entro** al repositorio es ancestro **estricto** del
+       commit que ejecuta.
 
-    La tercera es la que convierte «congelada antes» en algo comprobable.
+    La tercera es la que convierte «congelada antes» en algo comprobable, y
+    se apoya en un commit **observado en el historial**, no declarado por la
+    propia ficha.
     Igualdad de commits no basta: la ficha tiene que existir ya cuando la
     ejecucion empieza, no aparecer en el mismo acto.
     """
@@ -661,9 +679,9 @@ def admisibilidad(
     if ficha.huella != referencia.huella:
         return Veredicto(resultado=NO_UTILIZABLE, motivo=MOTIVO_HUELLA_DISTINTA)
 
-    if ficha.commit == referencia.commit_de_ejecucion:
+    if ficha.commit_de_entrada == referencia.commit_de_ejecucion:
         return Veredicto(resultado=NO_UTILIZABLE, motivo=MOTIVO_FICHA_POSTERIOR)
-    if not es_ancestro(ficha.commit, referencia.commit_de_ejecucion):
+    if not es_ancestro(ficha.commit_de_entrada, referencia.commit_de_ejecucion):
         return Veredicto(resultado=NO_UTILIZABLE, motivo=MOTIVO_FICHA_POSTERIOR)
 
     return Veredicto(resultado=ADMISIBLE, motivo=None)

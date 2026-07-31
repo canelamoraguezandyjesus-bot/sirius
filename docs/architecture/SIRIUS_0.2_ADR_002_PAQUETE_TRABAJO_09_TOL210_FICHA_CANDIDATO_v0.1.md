@@ -40,8 +40,10 @@ Repetirlo un nivel más arriba habría sido el mismo error con mejor letra: una 
 
 La congelación deja de ser una fecha y pasa a ser una **relación en el grafo de Git**:
 
-1. el fichero coincide con su versión **confirmada** en el commit que declara;
-2. ese commit es **ancestro estricto** del commit que ejecuta.
+1. el fichero está **confirmado** en el repositorio con ese contenido exacto;
+2. el commit en que **entró** es **ancestro estricto** del commit que ejecuta.
+
+**Y el commit de entrada se observa, no se declara.** Una ficha no puede declarar el SHA del commit que la contiene: ese SHA depende del contenido que la incluye, así que el campo sería imposible de rellenar. Es la misma autorreferencia que obliga a excluir la huella de sí misma, y el primer diseño de este paquete la tenía en los dos sitios. Lo que la ficha declara es su **commit de referencia** —el del acto de gobierno bajo el que se congela—; cuándo entró lo busca el verificador en el historial.
 
 **Estricto** importa. Aparecer en el mismo commit que la ejecución no es haber congelado antes: es haber aparecido a la vez. Una fecha se escribe; un ancestro, no.
 

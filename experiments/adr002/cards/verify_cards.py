@@ -15,13 +15,21 @@ Lo que hace cumplir, en este orden y fallando cerrado:
 
 1. las **plantillas anteriores** siguen intactas —se versionan, no se editan—;
 2. cada ficha cumple el **contenido minimo** de TOL-210;
-3. la **huella declarada** coincide con el blob real de la ficha;
-4. la ficha esta **confirmada** en el commit que declara;
-5. ese commit es **ancestro estricto** del commit que ejecuta.
+3. la **huella declarada** recomputa sobre el contenido normativo;
+4. el **commit de referencia** que la ficha declara existe y es ancestro;
+5. el commit en que la ficha **entro** al repositorio con ese contenido
+   —observado en el historial, no declarado— es **ancestro estricto** del
+   commit que ejecuta.
 
 El punto 5 es el que convierte «congelada antes de la primera ejecucion» en
 algo comprobable. Una fecha escrita en el documento no prueba anterioridad;
 una relacion de ancestro en el grafo de Git, si.
+
+Y se **observa** en vez de declararse por una razon aritmetica: una ficha no
+puede declarar el SHA del commit que la contiene, porque ese SHA depende del
+contenido que la incluye. Lo que la ficha declara es su **commit de
+referencia**, el del acto de gobierno bajo el que se congela, que ya existe
+cuando se escribe.
 """
 
 from __future__ import annotations
@@ -64,6 +72,9 @@ class DependenciasVerificacion:
     listar_fichas: Callable[[], Sequence[str]]
     leer_ficha: Callable[[str], bytes]
     blob_en_commit: Callable[[str, str], str | None]
+    #: Primer commit del historial en que ``ruta`` tiene el blob dado, o
+    #: ``None`` si la ficha todavia no ha entrado con ese contenido.
+    primer_commit_con_blob: Callable[[str, str], str | None]
 
 
 def _rc(orden: Sequence[str], raiz: Path) -> bool:
@@ -121,11 +132,33 @@ def dependencias_reales(raiz: Path | None = None) -> DependenciasVerificacion:
         ),
         blob_en_commit=blob_en_commit,
     )
+
+    def primer_commit_con_blob(ruta: str, blob: str) -> str | None:
+        """Busca en el historial el commit MAS ANTIGUO con ese contenido.
+
+        Es el dato que acredita cuando la ficha entro de verdad. Se recorre
+        del mas antiguo al mas nuevo y se devuelve el primero que coincide.
+        """
+        completado = subprocess.run(
+            ["git", "log", "--format=%H", "--reverse", "--", ruta],
+            cwd=str(destino),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if completado.returncode != 0:
+            return None
+        for sha in completado.stdout.split():
+            if blob_en_commit(sha, ruta) == blob:
+                return sha
+        return None
+
     return DependenciasVerificacion(
         entorno_custodia=entorno,
         listar_fichas=listar_fichas,
         leer_ficha=leer_bytes,
         blob_en_commit=blob_en_commit,
+        primer_commit_con_blob=primer_commit_con_blob,
     )
 
 
@@ -142,6 +175,8 @@ class FichaExaminada:
     documento: Mapping[str, Any] | None
     blob_real: str
     fallos: tuple[str, ...]
+    #: Observado en el historial de Git, nunca declarado por la ficha.
+    commit_de_entrada: str | None = None
 
     @property
     def conforme(self) -> bool:
@@ -149,7 +184,11 @@ class FichaExaminada:
 
 
 def examinar_ficha(
-    ruta: str, crudo: bytes, *, blob_en_commit: Callable[[str, str], str | None]
+    ruta: str,
+    crudo: bytes,
+    *,
+    existe_commit: Callable[[str], bool],
+    primer_commit_con_blob: Callable[[str, str], str | None],
 ) -> FichaExaminada:
     """Valida una ficha y comprueba su congelacion. Falla cerrado."""
     blob_real = cp.blob_git(crudo)
@@ -168,6 +207,7 @@ def examinar_ficha(
         )
 
     fallos = [f"{ruta}: {f}" for f in esquema.fallos_ficha(documento)]
+    entrada: str | None = None
 
     congelacion = documento.get("congelacion")
     if isinstance(congelacion, Mapping):
@@ -183,20 +223,26 @@ def examinar_ficha(
             )
         if congelacion.get("ruta") != ruta:
             fallos.append(f"{ruta}: congelacion.ruta declara otra ubicacion")
-        commit = congelacion.get("commit")
-        if isinstance(commit, str):
-            registrado = blob_en_commit(commit, ruta)
-            if registrado is None:
-                fallos.append(
-                    f"{ruta}: la ficha no esta confirmada en el commit que declara ({commit})"
-                )
-            elif registrado != blob_real:
-                fallos.append(
-                    f"{ruta}: la ficha difiere de su version confirmada en {commit} "
-                    f"(arbol {blob_real} != commit {registrado})"
-                )
+        referencia = congelacion.get("commit_de_referencia")
+        if isinstance(referencia, str) and not existe_commit(referencia):
+            fallos.append(f"{ruta}: el commit de referencia declarado no existe ({referencia})")
+        # Cuando la ficha entro de verdad lo dice Git, no la ficha: un dato
+        # observado no se declara, y el SHA del commit que la contiene seria
+        # autorreferencial de todos modos.
+        entrada = primer_commit_con_blob(ruta, blob_real)
+        if entrada is None:
+            fallos.append(
+                f"{ruta}: la ficha no esta confirmada en el repositorio con este contenido; "
+                f"una ficha sin confirmar no congela nada"
+            )
 
-    return FichaExaminada(ruta=ruta, documento=documento, blob_real=blob_real, fallos=tuple(fallos))
+    return FichaExaminada(
+        ruta=ruta,
+        documento=documento,
+        blob_real=blob_real,
+        fallos=tuple(fallos),
+        commit_de_entrada=entrada,
+    )
 
 
 def confirmadas_desde(examinadas: Sequence[FichaExaminada]) -> list[cp.FichaConfirmada]:
@@ -205,6 +251,8 @@ def confirmadas_desde(examinadas: Sequence[FichaExaminada]) -> list[cp.FichaConf
     for ficha in examinadas:
         if not ficha.conforme or ficha.documento is None:
             continue
+        if ficha.commit_de_entrada is None:
+            continue
         identidad = ficha.documento["identidad"]
         congelacion = ficha.documento["congelacion"]
         salida.append(
@@ -212,7 +260,7 @@ def confirmadas_desde(examinadas: Sequence[FichaExaminada]) -> list[cp.FichaConf
                 candidato=str(identidad["candidato"]),
                 version=int(identidad["version"]),
                 huella=str(congelacion["huella"]),
-                commit=str(congelacion["commit"]),
+                commit_de_entrada=ficha.commit_de_entrada,
                 estado=str(ficha.documento["estado"]),
             )
         )
@@ -335,7 +383,14 @@ def verificar(
         except OSError:
             fallos.append(f"{ruta}: ilegible")
             continue
-        examinadas.append(examinar_ficha(ruta, crudo, blob_en_commit=dependencias.blob_en_commit))
+        examinadas.append(
+            examinar_ficha(
+                ruta,
+                crudo,
+                existe_commit=entorno.existe_commit,
+                primer_commit_con_blob=dependencias.primer_commit_con_blob,
+            )
+        )
 
     for ficha in examinadas:
         fallos.extend(ficha.fallos)

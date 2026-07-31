@@ -30,7 +30,7 @@ Por eso la ficha pasa a tener una **forma JSON normativa** validada por contrato
 | Punto | v0.2 | **v0.3** |
 |---|---|---|
 | Forma normativa | Markdown rellenado a mano | **JSON** validado por `schema_card_v0_1`; esta plantilla es su lectura humana |
-| Congelación | «commit de confirmación» y «fecha», escritos | **Huella canónica** + fichero confirmado en su commit + **ancestro estricto** del commit que ejecuta |
+| Congelación | «commit de confirmación» y «fecha», escritos | **Huella canónica** + **commit de entrada observado en el historial** + **ancestro estricto** del commit que ejecuta |
 | §2.5 protocolo | `PROTOCOLO_MEDICION_v‹›` | **v0.2**, el aprobado, sin alternativa |
 | §2.11 presupuesto | `‹›` a rellenar | **`1610612736 B`**, citado del acta de TOL-207 |
 | §2.12 sesiones | «`‹≥5›`» | **`11`, exactamente** |
@@ -43,7 +43,7 @@ Por eso la ficha pasa a tener una **forma JSON normativa** validada por contrato
 ## 1. Reglas de uso
 
 1. **Una ficha por candidato.** `ADR002-A`, `ADR002-B`, `ADR002-C` y `ADR002-D` tienen fichas distintas. **`T0` tiene la suya**, marcada como control de falsación, y no es candidato.
-2. **Confirmada antes de la primera ejecución.** No basta declararlo: el commit que confirma la ficha debe ser **ancestro estricto** del commit que ejecuta. Aparecer en el mismo commit **no** es haber congelado antes.
+2. **Confirmada antes de la primera ejecución.** No basta declararlo: el commit en que la ficha **entró** al repositorio —observado en el historial, no declarado por ella— debe ser **ancestro estricto** del commit que ejecuta. Aparecer en el mismo commit **no** es haber congelado antes.
 3. **Completa o inexistente.** Un campo vacío o «pendiente» invalida la ficha. Si un valor no puede declararse, se declara **por qué**, y esa imposibilidad se congela igual.
 4. **Versionada, y de una en una.** Las versiones crecen `1 → 2 → 3`, nunca saltan ni retroceden. Una sucesora declara **a quién sustituye y por qué**, y obliga a **repetir** las ejecuciones hechas bajo la anterior (Registro v0.5 §9 reglas 2 y 10).
 5. **Una sola ficha `CONGELADA` por candidato.** Publicar una sucesora obliga a marcar `SUSTITUIDA` la anterior.
@@ -58,7 +58,7 @@ La huella de una ficha es el **blob Git de su forma canónica excluido el propio
 
 Se excluye por necesidad aritmética, no por comodidad: una huella que se incluyese a sí misma **no tendría punto fijo**, porque escribirla cambia el contenido que la produce. Excluirla no debilita nada, porque el campo excluido es justo el que se comprueba.
 
-La huella dice **qué** se congeló. **Cuándo** lo dice otra comprobación distinta: que el fichero coincida con su versión confirmada en el commit declarado, y que ese commit preceda a la ejecución. Ninguna de las dos sustituye a la otra.
+La huella dice **qué** se congeló. **Cuándo** lo dice otra comprobación distinta: que el commit en que la ficha entró al repositorio con ese contenido —observado en el historial— preceda estrictamente a la ejecución. Ninguna de las dos sustituye a la otra.
 
 ---
 
@@ -80,9 +80,13 @@ La forma normativa es el JSON descrito por `experiments/adr002/cards/schema_card
 
 | Campo | Valor |
 |---|---|
-| **Commit** | sha del commit que confirma esta ficha |
+| **Commit de referencia** | sha del **acto de gobierno** bajo el que la ficha se congela |
 | **Huella** | huella canónica, §1.1 |
 | **Ruta** | `artifacts/adr002_cards/ficha_‹ID›_v‹N›.json` |
+
+**La ficha no declara el commit que la contiene, y no puede hacerlo.** El SHA de un commit depende del contenido que lo incluye, de modo que ese campo sería autorreferencial e imposible de rellenar — la misma aritmética que obliga a excluir la huella de sí misma (§1.1).
+
+Lo que la ficha declara es su **commit de referencia**: el del acto de gobierno bajo el que se congela, que ya existe cuando se escribe. **Cuándo entró la ficha de verdad lo dice Git**, no la ficha: el verificador busca en el historial el commit más antiguo en que ese fichero aparece con ese contenido exacto. Un dato observado no se declara.
 
 ### 2.3 Arquitectura declarada · `arquitectura`
 
@@ -247,8 +251,8 @@ Y comprueba, fallando cerrado:
 1. las **plantillas anteriores** siguen intactas;
 2. cada ficha cumple el **contenido mínimo**, con los conjuntos de campos cerrados;
 3. la **huella declarada** recomputa sobre el contenido normativo;
-4. el fichero coincide con su versión **confirmada** en el commit que declara;
-5. ese commit es **ancestro estricto** del commit que ejecuta;
+4. el **commit de referencia** declarado existe;
+5. el commit en que la ficha **entró** al repositorio es **ancestro estricto** del commit que ejecuta;
 6. hay **una sola** ficha `CONGELADA` por candidato;
 7. las **cinco puertas de arranque** están satisfechas: `SRC-ADR002-01`, TOL-207, TOL-208, TOL-209, TOL-210.
 

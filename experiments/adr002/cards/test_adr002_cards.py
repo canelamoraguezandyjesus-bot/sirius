@@ -64,7 +64,7 @@ def ficha_conforme() -> dict[str, Any]:
             "motivo_de_sustitucion": None,
         },
         "congelacion": {
-            "commit": SHA_FICHA,
+            "commit_de_referencia": SHA_FICHA,
             "huella": "0" * 40,
             "ruta": "artifacts/adr002_cards/ficha_ADR002-B_v1.json",
         },
@@ -545,7 +545,7 @@ def _confirmada(**cambios: Any) -> cp.FichaConfirmada:
         "candidato": "ADR002-B",
         "version": 1,
         "huella": "0" * 40,
-        "commit": SHA_FICHA,
+        "commit_de_entrada": SHA_FICHA,
         "estado": cp.ESTADO_CONGELADA,
     }
     base.update(cambios)
@@ -666,6 +666,8 @@ def _dependencias(
     *,
     registrado: Mapping[str, str] | None = None,
     ancestro: bool = True,
+    confirmadas_en_git: bool = True,
+    commit_existe: bool = True,
 ) -> verificacion.DependenciasVerificacion:
     def leer_bytes(ruta: str) -> bytes:
         if ruta in fichas:
@@ -680,17 +682,24 @@ def _dependencias(
     entorno = cp.EntornoCustodia(
         leer_bytes=leer_bytes,
         es_ancestro=lambda a, b: ancestro,
-        existe_commit=lambda sha: True,
+        existe_commit=lambda sha: commit_existe,
         head=lambda: SHA_EJECUCION,
         arbol_limpio=lambda: True,
         diff_vacio=lambda desde, hasta, rutas: True,
         blob_en_commit=blob_en_commit,
     )
+
+    def primer_commit_con_blob(ruta: str, blob: str) -> str | None:
+        if not confirmadas_en_git:
+            return None
+        return SHA_FICHA if ruta in fichas and cp.blob_git(fichas[ruta]) == blob else None
+
     return verificacion.DependenciasVerificacion(
         entorno_custodia=entorno,
         listar_fichas=lambda: tuple(fichas),
         leer_ficha=leer_bytes,
         blob_en_commit=blob_en_commit,
+        primer_commit_con_blob=primer_commit_con_blob,
     )
 
 
@@ -728,18 +737,35 @@ def test_una_huella_que_no_recomputa_bloquea() -> None:
     assert any("no recomputa sobre el contenido normativo" in f for f in resultado.fallos)
 
 
-def test_una_ficha_no_confirmada_en_su_commit_bloquea() -> None:
+def test_una_ficha_sin_confirmar_en_el_repositorio_bloquea() -> None:
+    """Una ficha que solo existe en el arbol de trabajo no congela nada."""
     ruta = "artifacts/adr002_cards/ficha_ADR002-B_v1.json"
     crudo = _con_huella_real(ficha_conforme(), ruta)
-    resultado = verificacion.verificar(_dependencias({ruta: crudo}, registrado={}))
-    assert any("no esta confirmada en el commit" in f for f in resultado.fallos)
+    resultado = verificacion.verificar(_dependencias({ruta: crudo}, confirmadas_en_git=False))
+    assert any("no esta confirmada en el repositorio" in f for f in resultado.fallos)
+    assert resultado.confirmadas == ()
 
 
-def test_una_ficha_que_difiere_de_su_version_confirmada_bloquea() -> None:
+def test_un_commit_de_referencia_inexistente_bloquea() -> None:
     ruta = "artifacts/adr002_cards/ficha_ADR002-B_v1.json"
     crudo = _con_huella_real(ficha_conforme(), ruta)
-    resultado = verificacion.verificar(_dependencias({ruta: crudo}, registrado={ruta: "e" * 40}))
-    assert any("difiere de su version confirmada" in f for f in resultado.fallos)
+    resultado = verificacion.verificar(_dependencias({ruta: crudo}, commit_existe=False))
+    assert any("commit de referencia declarado no existe" in f for f in resultado.fallos)
+
+
+def test_la_ficha_no_declara_el_commit_que_la_contiene() -> None:
+    """Seria autorreferencial: el SHA depende del contenido que lo incluye.
+
+    La ficha declara su **commit de referencia** —el del acto de gobierno bajo
+    el que se congela, que ya existe cuando se escribe— y el commit en que
+    entro de verdad lo **observa** el verificador en el historial.
+    """
+    assert "commit" not in cp.CAMPOS_CONGELACION
+    assert "commit_de_referencia" in cp.CAMPOS_CONGELACION
+    ruta = "artifacts/adr002_cards/ficha_ADR002-B_v1.json"
+    crudo = _con_huella_real(ficha_conforme(), ruta)
+    resultado = verificacion.verificar(_dependencias({ruta: crudo}))
+    assert resultado.confirmadas[0].commit_de_entrada == SHA_FICHA
 
 
 def test_dos_fichas_congeladas_del_mismo_candidato_bloquean() -> None:
@@ -777,7 +803,7 @@ def test_el_recorrido_denuncia_una_ficha_no_anterior() -> None:
     huella = json.loads(crudo)["congelacion"]["huella"]
     resultado = verificacion.verificar(
         _dependencias({ruta: crudo}, ancestro=False),
-        referencia=_referencia(huella=huella),
+        referencia=_referencia(huella=huella, version=1),
     )
     assert resultado.veredicto is not None
     assert resultado.veredicto.motivo == cp.MOTIVO_FICHA_POSTERIOR
@@ -827,7 +853,7 @@ def test_el_fixture_no_es_la_ficha_de_ningun_candidato_real() -> None:
     """Ninguna ficha sintetica de estas pruebas vive en el repositorio."""
     carpeta = RAIZ / verificacion.DIRECTORIO_FICHAS
     assert not carpeta.exists() or not list(carpeta.glob("*.json"))
-    assert deepcopy(ficha_conforme())["congelacion"]["commit"] == SHA_FICHA
+    assert deepcopy(ficha_conforme())["congelacion"]["commit_de_referencia"] == SHA_FICHA
 
 
 def test_el_estado_de_las_puertas_se_deriva_de_las_actas_que_existen() -> None:
@@ -894,6 +920,7 @@ def test_un_documento_de_particion_ausente_bloquea() -> None:
         listar_fichas=lambda: (),
         leer_ficha=_leer,
         blob_en_commit=entorno_roto.blob_en_commit,
+        primer_commit_con_blob=entorno_roto.primer_commit_con_blob,
     )
     resultado = verificacion.verificar(deps)
     assert any("documento de particion ausente" in f for f in resultado.fallos)

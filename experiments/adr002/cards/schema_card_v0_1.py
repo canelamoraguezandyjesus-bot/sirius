@@ -138,8 +138,11 @@ def _fallos_congelacion(doc: Mapping[str, Any]) -> list[str]:
     if fallos:
         return fallos
     fallos.extend(_campos_ajenos(congelacion, cp.CAMPOS_CONGELACION, "congelacion"))
-    if not _es_sha(congelacion["commit"]):
-        fallos.append("congelacion.commit no tiene forma de SHA de commit")
+    if not _es_sha(congelacion["commit_de_referencia"]):
+        fallos.append(
+            "congelacion.commit_de_referencia no tiene forma de SHA de commit: es el commit "
+            "del acto de gobierno bajo el que la ficha se congela, no el que la contiene"
+        )
     if not _es_sha(congelacion["huella"]):
         fallos.append("congelacion.huella no tiene forma de blob Git")
     if not cp.es_declaracion(congelacion["ruta"]):
