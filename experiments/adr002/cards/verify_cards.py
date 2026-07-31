@@ -44,6 +44,7 @@ from typing import Any, Final
 
 from experiments.adr002.cards import card_protocol as cp
 from experiments.adr002.cards import schema_card_v0_1 as esquema
+from experiments.adr002.cards import schema_card_v0_2 as esquema_v2
 
 RAIZ_REPOSITORIO: Final = Path(__file__).resolve().parents[3]
 
@@ -206,7 +207,19 @@ def examinar_ficha(
             ruta=ruta, documento=None, blob_real=blob_real, fallos=(f"{ruta}: no es un objeto",)
         )
 
-    fallos = [f"{ruta}: {f}" for f in esquema.fallos_ficha(documento)]
+    # El contrato se despacha por la version que la propia ficha declara:
+    # v0.1 valida con el esquema congelado por el acta de TOL-210; v0.2 con
+    # el del acto sucesor 01. Una version desconocida no se adivina: bloquea.
+    version = documento.get("version_esquema")
+    if version == esquema.VERSION_ESQUEMA:
+        fallos = [f"{ruta}: {f}" for f in esquema.fallos_ficha(documento)]
+    elif version == esquema_v2.VERSION_ESQUEMA:
+        fallos = [f"{ruta}: {f}" for f in esquema_v2.fallos_ficha(documento)]
+    else:
+        fallos = [
+            f"{ruta}: version de esquema desconocida ({version!r}); las admitidas son "
+            f"{esquema.VERSION_ESQUEMA} y {esquema_v2.VERSION_ESQUEMA}"
+        ]
     entrada: str | None = None
 
     congelacion = documento.get("congelacion")
@@ -373,6 +386,23 @@ def verificar(
     """Recorrido completo. Falla cerrado y no modifica nada."""
     entorno = dependencias.entorno_custodia
     fallos_plantillas = cp.fallos_plantillas_anteriores(entorno)
+    # La v0.3 paso a intangible con el acto sucesor 01: su blob lo cita el
+    # acta de TOL-210 y reescribirla invalidaria esa acta.
+    for nombre, esperado in esquema_v2.PLANTILLAS_INTANGIBLES_ADICIONALES.items():
+        ruta_plantilla = f"docs/architecture/{nombre}"
+        try:
+            observado = cp.blob_git(entorno.leer_bytes(ruta_plantilla))
+        except OSError:
+            fallos_plantillas = (
+                *fallos_plantillas,
+                f"plantilla anterior ilegible: {ruta_plantilla}",
+            )
+            continue
+        if observado != esperado:
+            fallos_plantillas = (
+                *fallos_plantillas,
+                f"plantilla anterior alterada: {ruta_plantilla} ({observado} != {esperado})",
+            )
     fallos_particion = cp.fallos_documentos_de_particion(entorno)
     fallos = [*fallos_plantillas, *fallos_particion]
 
