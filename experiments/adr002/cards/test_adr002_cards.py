@@ -835,19 +835,27 @@ def test_execution_exige_los_tres_datos_de_la_referencia() -> None:
     )
 
 
-def test_el_repositorio_tiene_exactamente_la_ficha_congelada_de_t0() -> None:
-    """Estado tras el acto sucesor 01: la unica ficha real es la del control.
+def test_las_fichas_congeladas_son_las_esperadas() -> None:
+    """El estado sigue al repositorio, y cada ficha nueva se declara aqui.
 
-    Esta prueba afirmaba «cero fichas» hasta el commit `95d00a1`, que congelo
-    la ficha de `T0-control` bajo el acto sucesor. El acta de autorizacion de
-    T0 §3 registra la evolucion: cambia el estado esperado, no el criterio, y
-    sigue fallando cerrado ante cualquier ficha inesperada o no conforme.
+    Afirmo «cero fichas» hasta `95d00a1`, que congelo la del control; despues
+    solo la del control, hasta que el paquete 11 congelo la de `ADR002-A`. El
+    criterio no cambia —toda ficha presente debe ser conforme y estar
+    declarada—: cambia la lista, y una ficha inesperada sigue fallando.
     """
     resultado = verificacion.verificar(verificacion.dependencias_reales(RAIZ))
     assert resultado.conforme, resultado.fallos
     assert [(f.candidato, f.version, f.estado) for f in resultado.confirmadas] == [
-        (cp.CONTROL, 1, cp.ESTADO_CONGELADA)
+        ("ADR002-A", 1, cp.ESTADO_CONGELADA),
+        (cp.CONTROL, 1, cp.ESTADO_CONGELADA),
     ]
+
+
+def test_una_sola_ficha_congelada_por_candidato() -> None:
+    """Regla 5 de TOL-210: publicar una sucesora obliga a sustituir la anterior."""
+    resultado = verificacion.verificar(verificacion.dependencias_reales(RAIZ))
+    congeladas = [f.candidato for f in resultado.confirmadas if f.estado == cp.ESTADO_CONGELADA]
+    assert len(congeladas) == len(set(congeladas))
 
 
 def test_el_recorrido_real_sobre_el_repositorio_no_escribe(tmp_path: Path) -> None:
