@@ -291,8 +291,15 @@ class PuertoDeRecuperacion(Protocol):
         """Coincidencia del indice lexico medido (``E1``/``E2``)."""
         ...
 
-    def por_entidad(self, entity_ids: Sequence[str]) -> tuple[ItemCanonico, ...]:
-        """Items relacionados con entidades resueltas, desde el canon (``E3``)."""
+    def por_prefijo_de_sujeto(self, prefijos: Sequence[str]) -> tuple[ItemCanonico, ...]:
+        """Items cuya clave de sujeto empieza por un prefijo concreto (``E3``).
+
+        Sustituye a un ``por_entidad`` que recibia identificadores de proyecto:
+        el ambito es una **puerta de seguridad**, no un generador de
+        candidatos, y enumerar un proyecto entero para filtrar despues era el
+        barrido que ``B04-RF-14`` prohibe. Un prefijo de sujeto es una
+        relacion que el canon ya materializa y se consulta dirigida.
+        """
         ...
 
     def historial_y_fuentes(self, terminos: Sequence[str]) -> tuple[ItemCanonico, ...]:
@@ -311,12 +318,20 @@ class ContextoDeEtapa:
 
     Incluye lo ya recuperado para que el candidato **no repita** trabajo, pero
     no le permite decidir si continua: eso lo adjudica el motor.
+
+    ``semillas`` son las candidatas admitidas en etapas anteriores. Sin ellas,
+    una etapa tardia solo podria expandir desde la consulta —lo que ya hace
+    ``E2``— o enumerar un espacio entero y filtrar despues, que es el barrido
+    que ``B04-RF-14`` prohibe. Entregarlas permite expandir **desde lo
+    recuperado** con consultas dirigidas, y esta disponible por igual para
+    cualquier candidato.
     """
 
     peticion: Peticion
     puerto: PuertoDeRecuperacion
     etapa: Etapa
     ya_recuperados: frozenset[str]
+    semillas: tuple[Candidata, ...] = ()
 
 
 @runtime_checkable

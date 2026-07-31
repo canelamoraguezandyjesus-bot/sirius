@@ -45,12 +45,22 @@ DEFINICION_CANONICA: Final = (
     "expansion escalonada solo lexica/estructurada en todas las etapas E0-E5."
 )
 
+#: Cotas de la expansion de ``E3``. Acotan el trabajo **antes** de pedirlo:
+#: son el numero de terminos y prefijos concretos que se consultan, no un tope
+#: aplicado a un resultado ya materializado.
+TERMINOS_PUENTE_MAXIMOS: Final = 8
+FAMILIAS_MAXIMAS: Final = 4
+PREFIJO_MINIMO: Final = 3
+
 #: Medios con los que este candidato satisface cada etapa. Se declaran aqui y
 #: la ficha los cita: el mecanismo no puede cambiar en silencio.
 MEDIOS_POR_ETAPA: Final[dict[Etapa, str]] = {
     Etapa.E1: "clave de sujeto normalizada y coincidencia literal del indice lexico medido",
     Etapa.E2: "variantes morfologicas por recorte de sufijo flexivo y raiz compartida",
-    Etapa.E3: "raices compartidas, claves de sujeto emparentadas y relaciones del canon",
+    Etapa.E3: (
+        "expansion desde lo ya recuperado: terminos puente de las semillas y familias de "
+        "sujeto por prefijo, ambos consultados de forma dirigida"
+    ),
     Etapa.E4: "historial y fuentes como evidencia atribuida, cotejada con lo vigente",
 }
 
@@ -170,42 +180,96 @@ class CandidatoA:
     def _e3(self, contexto: ContextoDeEtapa, terminos: Sequence[str]) -> list[Candidata]:
         """``E3`` semantica y relacional, **por medios lexico-estructurados**.
 
-        Tres senales, ninguna vectorial:
+        La diferencia con ``E2`` es de **origen de la expansion**, y es lo que
+        hace de ``E3`` una etapa propia en vez de un segundo intento:
 
-        1. **parafrasis y dependencias** por raiz compartida entre la consulta
-           y el texto del item;
-        2. **relaciones** que el canon ya materializa —ambito del item—, sin
-           construir ningun indice derivado;
-        3. **apoyo y refutacion** conservados: la polaridad se lee item a item
-           y el motor no fusiona posturas distintas.
+        - ``E2`` expande **la consulta**: variantes morfologicas de lo que el
+          usuario escribio. Nunca alcanza un item que no comparta forma con la
+          consulta.
+        - ``E3`` expande **desde lo ya recuperado**: toma las candidatas
+          admitidas en las etapas anteriores y busca lo que se relaciona con
+          ellas. Asi alcanza parafrasis y dependencias que no comparten ni una
+          palabra con la consulta original.
+
+        Dos senales dirigidas, ninguna vectorial:
+
+        1. **terminos puente**: vocabulario discriminante que aparece en las
+           semillas y **no** en la consulta ni en sus variantes. Buscarlos en
+           el indice lexico recupera lo que depende de lo ya encontrado.
+        2. **familias de sujeto**: prefijos estructurales de las claves de las
+           semillas, consultados por prefijo concreto. Es la relacion que el
+           canon **ya materializa**; no se construye ningun indice derivado.
+
+        **Ninguna enumera un espacio.** No se pide el proyecto, ni el canon, ni
+        una consulta amplia que despues se filtre: se piden terminos y
+        prefijos **concretos**, derivados de lo recuperado, y el puerto los
+        ejecuta con su propia cota. El ambito no genera candidatos: filtra en
+        ``G4``, que es su papel.
 
         La validacion de sujeto, polaridad, condicion y tiempo se aplica a
         **todo** lo que esta etapa propone, que es lo que ``B04-RF-17`` exige.
         """
-        raices = lexical.ordenar_estable(lexical.raiz(t) for t in terminos)
-        por_raiz = contexto.puerto.por_termino_lexico(raices)
-        relacionados: list[ItemCanonico] = []
-        if contexto.peticion.ambito.proyectos:
-            relacionados = list(contexto.puerto.por_entidad(contexto.peticion.ambito.proyectos))
+        if not contexto.semillas:
+            # Sin nada recuperado no hay de donde expandir. Inventar un punto
+            # de partida seria volver a la consulta, que es trabajo de E2.
+            return []
+
+        puente = self._terminos_puente(contexto, terminos)
+        familias = self._familias_de_sujeto(contexto)
+        if not puente and not familias:
+            return []
+
+        por_puente = contexto.puerto.por_termino_lexico(puente) if puente else ()
+        por_familia = contexto.puerto.por_prefijo_de_sujeto(familias) if familias else ()
 
         vistos: set[str] = set()
         seleccion: list[ItemCanonico] = []
-        for item in [*por_raiz, *relacionados]:
-            if item.id in vistos:
+        for item in [*por_puente, *por_familia]:
+            if item.id in vistos or item.id in contexto.ya_recuperados:
                 continue
-            # Solo entra lo que comparte raiz con la consulta o clave de
-            # sujeto emparentada: sin este filtro, E3 seria un barrido.
-            comparte = bool(lexical.solapamiento(terminos, item.texto))
-            emparentado = any(lexical.comparten_estructura(item.subject_key, t) for t in terminos)
-            if comparte or emparentado:
-                vistos.add(item.id)
-                seleccion.append(item)
+            vistos.add(item.id)
+            seleccion.append(item)
         return self._construir(
             seleccion,
             contexto,
             senal=MEDIOS_POR_ETAPA[Etapa.E3],
-            razon="parafrasis o dependencia por raiz compartida, o relacion del canon",
+            razon="dependencia con lo ya recuperado por termino puente o familia de sujeto",
         )
+
+    def _terminos_puente(self, contexto: ContextoDeEtapa, terminos: Sequence[str]) -> list[str]:
+        """Vocabulario de las semillas que la consulta **no** contiene.
+
+        Un termino que ya esta en la consulta —o entre sus variantes— no es un
+        puente: lo habrian recuperado ``E1`` o ``E2``. El puente es lo que
+        conecta un item recuperado con otro que la consulta no nombra.
+        """
+        de_la_consulta = set(terminos)
+        for termino in terminos:
+            de_la_consulta.update(lexical.variantes(termino))
+        raices_consulta = {lexical.raiz(t) for t in terminos}
+
+        puente: list[str] = []
+        for semilla in contexto.semillas:
+            for token in lexical.terminos_significativos(semilla.item.texto):
+                if token in de_la_consulta or lexical.raiz(token) in raices_consulta:
+                    continue
+                if token not in puente:
+                    puente.append(token)
+        return sorted(puente)[:TERMINOS_PUENTE_MAXIMOS]
+
+    def _familias_de_sujeto(self, contexto: ContextoDeEtapa) -> list[str]:
+        """Prefijos estructurales de las claves de sujeto de las semillas.
+
+        ``faro-costa`` y ``faro-niebla`` pertenecen a la familia ``faro``: una
+        relacion que el canon ya materializa en la propia clave. Se consulta
+        por prefijo concreto, no enumerando sujetos.
+        """
+        familias: list[str] = []
+        for semilla in contexto.semillas:
+            prefijo = lexical.plegar(semilla.item.subject_key).split("-")[0]
+            if len(prefijo) >= PREFIJO_MINIMO and prefijo not in familias:
+                familias.append(prefijo)
+        return sorted(familias)[:FAMILIAS_MAXIMAS]
 
     def _e4(self, contexto: ContextoDeEtapa, terminos: Sequence[str]) -> list[Candidata]:
         """``E4`` fuentes e historial: **evidencia atribuida**, nunca canonica.

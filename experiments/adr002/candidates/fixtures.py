@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+from experiments.adr002.candidates.common import derived
+
 from sirius.adapters.persistence.migrations import upgrade_to_head
 
 _TS: Final = "2026-06-01T00:00:00"
@@ -52,8 +54,16 @@ _MEMORIAS: Final[tuple[tuple[str, str, bool, bool, str], ...]] = (
     ("faro-futuro", "el faro nuevo iluminara el nuevo canal", True, True, _TS_TARDIO),
     # Variante morfologica: solo alcanzable por E2 desde "iluminar".
     ("senal-iluminacion", "la iluminacion del muelle depende del generador", True, True, _TS),
-    # Parafrasis por raiz compartida con "canal": alcanzable en E3.
+    # Parafrasis por raiz compartida con "canal": alcanzable ya en E2.
     ("dragado-canales", "los canales dragados admiten mayor calado", True, True, _TS),
+    # SOLO E3. Su texto no contiene "faro" ni ninguna variante morfologica de
+    # "faro", de modo que ni E1 ni E2 pueden alcanzarlo desde esa consulta.
+    # Comparte con la semilla "faro-costa" el termino puente "costa".
+    ("abrigo-costa", "el puerto abriga la costa durante el temporal", True, True, _TS),
+    # CONTROL NEGATIVO. Mismo proyecto que las semillas, pero sin relacion
+    # lexica ni estructural: si apareciera con la consulta "faro", E3 estaria
+    # enumerando el proyecto en vez de expandir desde lo recuperado.
+    ("inventario-almacen", "el almacen guarda repuestos de maquinaria pesada", True, True, _TS),
 )
 
 #: (subject, texto, aprobada, proyecto_activo)
@@ -156,49 +166,79 @@ def construir(destino: Path) -> Fixture:
     return Fixture(ruta=destino, textos=textos)
 
 
-def borrar_derivado(ruta: Path) -> None:
-    """Elimina el derivado del canon: triggers y tablas del FTS5."""
+def objetos_derivados(ruta: Path) -> derived.Inventario:
+    """Inventario de lo derivado en la base: tablas, sombras y triggers."""
     conexion = sqlite3.connect(str(ruta))
     try:
-        for fila in conexion.execute(
-            "SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE '%fts%'"
-        ).fetchall():
-            conexion.execute(f"DROP TRIGGER IF EXISTS {fila[0]}")
-        for tabla in ("knowledge_fts", "message_fts"):
-            conexion.execute(f"DROP TABLE IF EXISTS {tabla}")
-        conexion.commit()
+        return derived.inventariar(conexion)
     finally:
         conexion.close()
 
 
-def regenerar_derivado(ruta: Path) -> None:
-    """Reconstruye el derivado **desde el canon**, no desde si mismo.
+def borrar_derivado(ruta: Path) -> None:
+    """Elimina el derivado ENTERO usando el mecanismo canonico comun."""
+    conexion = sqlite3.connect(str(ruta))
+    try:
+        derived.borrar_derivado(conexion)
+    finally:
+        conexion.close()
 
-    Es la garantia de que el derivado es regenerable y no autoritativo: se
-    recrea con el mismo DDL de la cadena canonica y se rellena leyendo las
-    revisiones vigentes, nunca una copia del propio indice.
+
+def regenerar_derivado(ruta: Path, ddl: derived.DdlCanonico) -> None:
+    """Reconstruye tablas, triggers y contenido desde el canon.
+
+    El DDL se lee del propio esquema **antes** de borrar y se pasa aqui: no se
+    copia a mano, de modo que la reconstruccion use exactamente lo que creo la
+    migracion canonica. Sin los triggers no habria reconstruccion, solo una
+    foto que nadie mantiene.
     """
     conexion = sqlite3.connect(str(ruta))
     try:
-        conexion.execute(
-            "CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts "
-            "USING fts5(kind UNINDEXED, item_id UNINDEXED, content)"
+        derived.reconstruir_derivado(conexion, ddl)
+    finally:
+        conexion.close()
+
+
+def leer_ddl(ruta: Path) -> derived.DdlCanonico:
+    """DDL canonico del derivado, leido del esquema de esta base."""
+    conexion = sqlite3.connect(str(ruta))
+    try:
+        return derived.leer_ddl_canonico(conexion)
+    finally:
+        conexion.close()
+
+
+def anadir_memoria(ruta: Path, clave: str, texto: str, *, activo: bool = True) -> int:
+    """Inserta una memoria vigente. Sirve para comprobar la resincronizacion.
+
+    Si los triggers se reconstruyeron de verdad, este item aparece en el
+    indice sin tocarlo; si solo se repoblaron filas, no aparecera.
+    """
+    conexion = sqlite3.connect(str(ruta))
+    try:
+        cursor = conexion.cursor()
+        cursor.execute(
+            "INSERT INTO memories (status, created_at, updated_at, subject_key, project_id) "
+            "VALUES ('current', ?, ?, ?, ?)",
+            (_TS, _TS, clave, int(PROYECTO_ACTIVO) if activo else int(PROYECTO_AJENO)),
         )
-        conexion.execute("CREATE VIRTUAL TABLE IF NOT EXISTS message_fts USING fts5(content)")
-        conexion.execute("DELETE FROM knowledge_fts")
-        conexion.execute("DELETE FROM message_fts")
-        conexion.execute(
-            "INSERT INTO knowledge_fts(rowid, kind, item_id, content) "
-            "SELECT memory_id * 2, 'memory', memory_id, content FROM memory_revisions "
-            "WHERE is_current = 1 AND content IS NOT NULL"
+        memory_id = int(cursor.lastrowid or 0)
+        cursor.execute(
+            "INSERT INTO memory_revisions (memory_id, version, content, origin, is_current, "
+            "created_at, source_event_id) VALUES (?, 1, ?, 'fixture', 1, ?, NULL)",
+            (memory_id, texto, _TS),
         )
-        conexion.execute(
-            "INSERT INTO knowledge_fts(rowid, kind, item_id, content) "
-            "SELECT decision_id * 2 + 1, 'decision', decision_id, content "
-            "FROM decision_revisions WHERE is_current = 1 AND content IS NOT NULL"
-        )
-        conexion.execute("INSERT INTO message_fts(rowid, content) SELECT id, content FROM messages")
         conexion.commit()
+        return memory_id
+    finally:
+        conexion.close()
+
+
+def filas_indexadas(ruta: Path) -> dict[str, int]:
+    """Filas del derivado, para comparar antes y despues."""
+    conexion = sqlite3.connect(str(ruta))
+    try:
+        return derived.filas_indexadas(conexion)
     finally:
         conexion.close()
 
@@ -207,7 +247,11 @@ __all__ = [
     "PROYECTO_ACTIVO",
     "PROYECTO_AJENO",
     "Fixture",
+    "anadir_memoria",
     "borrar_derivado",
     "construir",
+    "filas_indexadas",
+    "leer_ddl",
+    "objetos_derivados",
     "regenerar_derivado",
 ]

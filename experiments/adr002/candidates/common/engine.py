@@ -147,7 +147,10 @@ def recuperar(
             parada = bloqueo
             break
 
-        contexto = ContextoDeEtapa(peticion, puerto, etapa, frozenset(ya))
+        # Las semillas son lo admitido hasta aqui. Entregarlas permite a una
+        # etapa tardia expandir DESDE lo recuperado con consultas dirigidas,
+        # en vez de enumerar un espacio entero y filtrar despues.
+        contexto = ContextoDeEtapa(peticion, puerto, etapa, frozenset(ya), tuple(admitidas))
         aportadas = list(candidato.candidatas(contexto))
 
         filtrado = gates.aplicar_previas(aportadas, peticion)

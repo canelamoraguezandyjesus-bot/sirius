@@ -115,9 +115,21 @@ def test_el_puerto_no_ofrece_ningun_barrido_completo() -> None:
     assert metodos == {
         "por_clave_exacta",
         "por_termino_lexico",
-        "por_entidad",
+        "por_prefijo_de_sujeto",
         "historial_y_fuentes",
     }
+
+
+def test_el_puerto_no_admite_identificadores_de_proyecto_como_generador() -> None:
+    """Defecto 2: el ambito filtra en G4; no genera candidatos.
+
+    ``por_entidad(project_ids)`` enumeraba el proyecto y filtraba despues. El
+    metodo ya no existe, y su sustituto consulta prefijos de sujeto concretos.
+    """
+    assert not hasattr(contracts.PuertoDeRecuperacion, "por_entidad")
+    codigo = (RAIZ / "experiments/adr002/candidates/adr002_a/candidate.py").read_text("utf-8")
+    assert "por_entidad" not in codigo
+    assert "ambito.proyectos" not in codigo
 
 
 def test_el_ambito_aisla_por_construccion() -> None:

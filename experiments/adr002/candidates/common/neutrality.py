@@ -33,6 +33,7 @@ from typing import Final
 #: inventario. La exclusion es exactamente una y esta escrita aqui.
 MODULOS_COMUNES: Final[tuple[str, ...]] = (
     "contracts.py",
+    "derived.py",
     "engine.py",
     "gates.py",
     "port.py",
