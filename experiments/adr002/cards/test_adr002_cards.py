@@ -840,13 +840,16 @@ def test_las_fichas_congeladas_son_las_esperadas() -> None:
 
     Afirmo «cero fichas» hasta `95d00a1`, que congelo la del control; despues
     solo la del control, hasta que el paquete 11 congelo la de `ADR002-A`. El
-    criterio no cambia —toda ficha presente debe ser conforme y estar
-    declarada—: cambia la lista, y una ficha inesperada sigue fallando.
+    paquete de correccion 01 emite la v2 de `ADR002-A` y **sustituye** la v1,
+    que sigue presente: una ficha sustituida no se borra, se marca. El criterio
+    no cambia —toda ficha presente debe ser conforme y estar declarada—: cambia
+    la lista, y una ficha inesperada sigue fallando.
     """
     resultado = verificacion.verificar(verificacion.dependencias_reales(RAIZ))
     assert resultado.conforme, resultado.fallos
     assert [(f.candidato, f.version, f.estado) for f in resultado.confirmadas] == [
-        ("ADR002-A", 1, cp.ESTADO_CONGELADA),
+        ("ADR002-A", 1, cp.ESTADO_SUSTITUIDA),
+        ("ADR002-A", 2, cp.ESTADO_CONGELADA),
         (cp.CONTROL, 1, cp.ESTADO_CONGELADA),
     ]
 

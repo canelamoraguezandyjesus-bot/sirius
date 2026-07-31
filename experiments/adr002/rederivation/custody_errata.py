@@ -102,10 +102,23 @@ HASHES_NO_ALMACENADOS: Final[Mapping[str, str]] = {
         "no buscandola en el repositorio"
     ),
     "00571890294bcd18748e2ee600eb43bad1b92f80": (
-        "huella canonica de la ficha ADR002-A v1: misma naturaleza que la anterior "
-        "—SHA-1 de una forma canonica que nunca se escribe como fichero— y misma "
-        "verificacion, recomputarla. Toda ficha congelada anade una entrada aqui, y "
-        "una prueba comprueba que ninguna queda sin declarar"
+        "huella canonica que la ficha ADR002-A v1 tuvo mientras estuvo CONGELADA: "
+        "misma naturaleza que la anterior —SHA-1 de una forma canonica que nunca se "
+        "escribe como fichero— y misma verificacion, recomputarla. Se conserva "
+        "inventariada porque el paquete de correccion 01 la cita como la huella de la "
+        "ficha que declara defectuosa, y esa cita es historia que no se reescribe"
+    ),
+    "8d8c21b6afd1d32ee612dd14199ab9c5605bfb96": (
+        "huella canonica de la ficha ADR002-A v1 ya SUSTITUIDA. El estado forma parte "
+        "de la forma canonica, de modo que marcarla sustituida —lo que el contrato "
+        "obliga a hacer al emitir una sucesora— recomputa su huella. Ningun limite y "
+        "ninguna declaracion de la v1 cambiaron: el contenido original sigue siendo el "
+        "blob 1a96f535250bce643e8ccf2edb0362b3ec9320fe del commit b96e6ea"
+    ),
+    "4ed820fab545dd9154ce078349c214f870baecd1": (
+        "huella canonica de la ficha ADR002-A v2, la vigente: misma naturaleza y misma "
+        "verificacion que las anteriores. Toda ficha congelada anade una entrada aqui, "
+        "y una prueba comprueba que ninguna queda sin declarar"
     ),
     "b57ad7b24c7f0232d45540cde73294e2d68e02ef": (
         "captura de entorno de ADR-001: HEAD observado de la rama historica "

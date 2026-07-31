@@ -1,7 +1,7 @@
 {
-  "documento": "Ficha de candidato ADR002-A, version 1",
+  "documento": "Ficha de candidato ADR002-A, version 2",
   "version_esquema": "ficha-candidato-0.2",
-  "estado": "SUSTITUIDA",
+  "estado": "CONGELADA",
   "plantilla": "SIRIUS_0.2_ADR_002_FICHA_CANDIDATO_TEMPLATE_v0.4_PROPUESTO.md",
   "registro": "SIRIUS_0.2_REGISTRO_TOLERANCIAS_v0.5_PROPUESTO.md",
   "protocolo": "SIRIUS_0.2_ADR_002_PROTOCOLO_MEDICION_v0.2_PROPUESTO.md",
@@ -14,45 +14,45 @@
   "identidad": {
     "candidato": "ADR002-A",
     "papel": "CANDIDATO",
-    "version": 1,
-    "sustituye_a": null,
-    "motivo_de_sustitucion": null
+    "version": 2,
+    "sustituye_a": 1,
+    "motivo_de_sustitucion": "sustituye a la v1 por los tres defectos bloqueantes del paquete de correccion 01: (1) la prueba de E3 admitia que el resultado procediera de E1 o E2 y el caso elegido lo alcanzaba E2, de modo que E3 no quedaba demostrada; (2) E3 llamaba al puerto con los identificadores de proyecto del ambito, que el puerto interpretaba como project_id y materializaba hasta 512 memorias y 512 decisiones por proyecto antes de filtrar, lo que podia degenerar en barrido y dejaba no demostrada la declaracion no_invoca_el_barrido_de_t0; (3) la regeneracion del derivado recreaba tablas y filas pero no los triggers, de modo que no acreditaba ni la reconstruccion completa ni la resincronizacion posterior del canon. Los seis limites por etapa se revisan uno a uno contra el trabajo posible que el registro de consultas hace ahora contable: cinco se conservan porque su trabajo posible se redujo y el de E3 sube de 5 a 8 ms porque su camino cambio de tipo; ninguno se reutiliza de la v1 sin revisar"
   },
   "congelacion": {
-    "commit_de_referencia": "c01f23fc2652ddb038cdccc59fca3cd19c9a5b28",
-    "huella": "8d8c21b6afd1d32ee612dd14199ab9c5605bfb96",
-    "ruta": "artifacts/adr002_cards/ficha_ADR002-A_v1.json"
+    "commit_de_referencia": "f6dae77590fbc3cf95fca36b8f6bc9921935bd82",
+    "huella": "4ed820fab545dd9154ce078349c214f870baecd1",
+    "ruta": "artifacts/adr002_cards/ficha_ADR002-A_v2.json"
   },
   "arquitectura": {
     "alternativa_minima": "ADR002-A",
     "definicion_canonica_que_asume": "expansion escalonada solo lexica/estructurada en todas las etapas E0-E5.",
     "sustrato_lexico": "FTS5 medido de Sirius 0.1 (unicode61, remove_diacritics 2), sin alternativa",
-    "materializacion_de_relaciones": "desde el canon: ambito de proyecto y clave de sujeto ya materializados en el esquema de Sirius 0.1; ningun indice relacional derivado",
-    "puerto_de_acceso": "PuertoDeRecuperacion de la capa comun, equivalente a KnowledgeSearchRepository; el motor nunca abre SQLite por su cuenta (B04-RF-31)",
+    "materializacion_de_relaciones": "desde el canon, por CLAVE DE SUJETO consultada por prefijo concreto. El ambito de proyecto NO materializa relaciones: filtra en G4 como puerta de seguridad. Ningun indice relacional derivado",
+    "puerto_de_acceso": "PuertoDeRecuperacion de la capa comun, equivalente a KnowledgeSearchRepository; rechaza en ejecucion cualquier consulta sin predicado y registra cada sentencia ejecutada con su cota y sus filas (B04-RF-31)",
     "etapas_implementadas": {
       "E0": "preparacion segura: resuelve proposito, modo, ambito, tiempo, cardinalidad y limites, y parametriza G1-G10; no genera candidatos. Transicion a E1 siempre: E0 no recupera",
       "E1": "estructurada exacta por clave de sujeto normalizada y coincidencia literal del indice medido. Insuficiencia: la cardinalidad no queda satisfecha tras aplicar las puertas",
       "E2": "lexica y alias: variantes morfologicas por recorte de sufijo flexivo, sin asumir equivalencia semantica. Insuficiencia: idem, y el modo autoriza E3",
-      "E3": "semantica y relacional por medios lexico-estructurados: raices compartidas para parafrasis y dependencias, claves de sujeto emparentadas y relaciones del canon; valida sujeto, polaridad, condicion y tiempo item a item. Insuficiencia: idem",
+      "E3": "semantica y relacional expandiendo DESDE LO YA RECUPERADO, no desde la consulta: terminos puente presentes en las semillas y ausentes de la consulta y sus variantes, y familias de sujeto por prefijo concreto. Ambas consultas son dirigidas y acotadas antes de pedirlas; ninguna enumera un espacio. Valida sujeto, polaridad, condicion y tiempo item a item. Insuficiencia: idem",
       "E4": "fuentes e historial como evidencia atribuida no canonica, marcada como tal por el puerto. Insuficiencia: agotada, se adjudica S5",
       "E5": "adjudicacion: agrupa duplicados solo con ambito y postura coincidentes, ordena con desempate estable, aplica G12 y limite, y emite traza y suficiencia"
     },
     "puertas_previas_comunes": {
-      "aislamiento_de_ambito": "G4 sobre el ambito declarado; fuera de ambito no contamina (B04-RF-06)",
+      "aislamiento_de_ambito": "G4 sobre el ambito declarado; fuera de ambito no contamina. El ambito NO genera candidatos en ninguna etapa (B04-RF-06)",
       "expansion_escalonada_sin_salto": "el motor comun posee el bucle E0-E5 y solo avanza por insuficiencia explicita; el candidato no controla el orden (B04-RF-14)",
       "validacion_de_sujeto_polaridad_condicion_y_tiempo": "lectura semantica por item con marcadores lexicos de negacion y condicion, clave de sujeto del canon y marca temporal (B04-RF-17, RF-19)",
-      "borrado_y_regeneracion_desde_el_canon": "no existe derivado propio; el unico derivado es el FTS5 del canon, reconstruible por la cadena canonica sin DDL adicional",
+      "borrado_y_regeneracion_desde_el_canon": "el modulo comun derived.py inventaria tablas, sombras y triggers, lee el DDL de sqlite_master —el que creo la migracion canonica—, borra el derivado entero y lo reconstruye con tablas Y TRIGGERS, repoblando desde el canon y nunca desde el propio indice",
       "peticion_completa_y_operacion_activa": "la peticion exige operation_id, proposito, modo, ambito, tiempo, cardinalidad y limites; sin proposito no se ejecuta recuperacion (B04-RF-01, RF-30)",
-      "plan_reproducible_y_explicacion_por_resultado": "traza minimizada con puertas, etapas, causas de transicion y parada (RF-29) y explicacion de siete campos por resultado (RF-28)"
+      "plan_reproducible_y_explicacion_por_resultado": "traza minimizada con puertas, etapas, causas de transicion y parada (RF-29), explicacion de siete campos por resultado (RF-28) y registro de cada sentencia SQL ejecutada con su cota y sus filas"
     }
   },
   "senal_tardia": {
     "habilitada": "ninguna_adicional",
     "coherente_con_la_alternativa": true,
-    "como_satisface_e3": "por medios lexico-estructurados: raiz compartida entre consulta e item para parafrasis y dependencias, claves de sujeto emparentadas por prefijo estructural, y relaciones que el canon ya materializa por ambito. Apoyo y refutacion se conservan porque la polaridad se lee item a item y el motor no fusiona posturas distintas",
+    "como_satisface_e3": "expandiendo desde lo ya recuperado por medios lexico-estructurados: terminos puente —vocabulario discriminante de las semillas que la consulta no contiene, ni siquiera entre sus variantes— y familias de sujeto por prefijo estructural del canon. Asi alcanza parafrasis y dependencias que no comparten forma con la consulta, que es justo lo que E1 y E2 no pueden hacer. Apoyo y refutacion se conservan porque la polaridad se lee item a item y el motor no fusiona posturas distintas",
     "validacion_en_e3": "marcadores lexicos cerrados de negacion y de condicion, clave de sujeto del canon y marca temporal del item; la validacion no se hereda de ninguna senal y se aplica a todo lo que E3 propone",
     "orden_de_las_etapas_tardias": "no aplica: sin senal tardia adicional. El orden E3 -> E4 lo fija el motor comun y es el mismo para todos los candidatos",
-    "condicion_de_insuficiencia_por_transicion": "E0->E1 siempre, porque E0 no recupera; E1->E2, E2->E3 y E3->E4 solo si la cardinalidad no queda satisfecha tras las puertas y quedan criticos pendientes, y solo si el modo autoriza el siguiente espacio; en otro caso se adjudica S1, S2 o S4"
+    "condicion_de_insuficiencia_por_transicion": "E0->E1 siempre, porque E0 no recupera; E1->E2, E2->E3 y E3->E4 solo si la cardinalidad no queda satisfecha tras las puertas y quedan criticos pendientes, y solo si el modo autoriza el siguiente espacio; en otro caso se adjudica S1, S2 o S4. E3 ademas exige semillas: sin nada recuperado antes, no aporta nada"
   },
   "restriccion_d": {
     "aplica": false,
@@ -86,15 +86,23 @@
       "version": "no aplica",
       "origen": "no aplica",
       "acopla_a_proveedor": false,
-      "ruta_de_sustitucion": "las relaciones se leen del canon; no hay indice derivado que sustituir"
+      "ruta_de_sustitucion": "las relaciones se leen del canon por clave de sujeto; no hay indice derivado que sustituir"
     },
     {
       "papel": "motor de recuperacion",
       "nombre": "infraestructura comun de la primera ronda",
-      "version": "arbol c3d5aec0a340096a6365480e19e9fd7e638551fe",
+      "version": "arbol 94e387507ae66947fd97316fa46a66b3a4ca2219",
       "origen": "experiments/adr002/candidates/common",
       "acopla_a_proveedor": false,
       "ruta_de_sustitucion": "comun a A/B/C/D y neutral por construccion, comprobado por controles fail-closed; sustituirla afectaria a todos por igual"
+    },
+    {
+      "papel": "regeneracion del derivado",
+      "nombre": "derived.py de la capa comun",
+      "version": "arbol 94e387507ae66947fd97316fa46a66b3a4ca2219",
+      "origen": "DDL leido de sqlite_master, creado por la migracion 61be4bb269bf",
+      "acopla_a_proveedor": false,
+      "ruta_de_sustitucion": "no copia DDL a mano: si la migracion canonica cambiara, la reconstruccion cambiaria con ella sin tocar este modulo"
     }
   ],
   "corpus": {
@@ -140,7 +148,7 @@
       },
       "reconstruccion": {
         "limite": 44512400,
-        "fundamento": "P99 de la reconstruccion desde el canon del mismo FTS5, medido 30 veces en el paquete 02B",
+        "fundamento": "P99 de la reconstruccion desde el canon del mismo FTS5, medido 30 veces en el paquete 02B. La reconstruccion de ADR002-A restaura ademas los triggers, que el mismo DDL canonico incluye",
         "ejecutable_treinta_veces": true,
         "motivo_de_no_ejecutabilidad": null,
         "evidencia_alternativa": null
@@ -153,8 +161,8 @@
         "evidencia_alternativa": null
       }
     },
-    "reconstruccion_desde_el_canon": "el unico derivado es el FTS5 del canon; se reconstruye ejecutando la cadena canonica de Alembic, sin DDL escrito a mano y sin estructura propia del candidato",
-    "desaparicion_completa": "borrar el derivado elimina tablas sombra y triggers del FTS5; ADR002-A no deja ningun artefacto adicional que pudiera sobrevivir",
+    "reconstruccion_desde_el_canon": "el unico derivado es el FTS5 del canon; se reconstruye con el DDL leido de sqlite_master —tablas Y triggers— y se repuebla desde memory_revisions, decision_revisions y messages, nunca desde la tabla de contenido del propio indice",
+    "desaparicion_completa": "borrar el derivado elimina triggers, tablas virtuales y sus tablas sombra; el inventario posterior queda vacio y se comprueba objeto a objeto",
     "tasa_de_exito_del_cien_por_cien": "el paquete 02B observo 100 % en borrado completo, ausencia de sombras, filas identicas tras construccion y reconstruccion e integrity-check, en 30 repeticiones",
     "purga_fisica_sin_fragmento": "la purga cubre .db, -wal, -shm y -journal con el modelo de amenaza de ADR-001; el candidato no anade fichero alguno al conjunto a purgar"
   },
@@ -164,55 +172,55 @@
         "etapa": "E0",
         "coste_local_objetivo_ns": 25000,
         "coste_local_limite_ns": 50000,
-        "operaciones_locales": "validacion de peticion y parametrizacion de G1-G10; sin consulta al canon",
+        "operaciones_locales": "cero sentencias SQL: validacion de peticion y parametrizacion de G1-G10",
         "coste_externo_declarado": "ninguno: ADR002-A no invoca servicios externos ni red en ninguna etapa"
       },
       {
         "etapa": "E1",
         "coste_local_objetivo_ns": 1500000,
         "coste_local_limite_ns": 3000000,
-        "operaciones_locales": "dos consultas acotadas: clave exacta y termino literal",
+        "operaciones_locales": "hasta 37 sentencias dirigidas: <=16 claves exactas x 2 SELECT acotados y una MATCH de FTS5, mas sus materializaciones",
         "coste_externo_declarado": "ninguno: ADR002-A no invoca servicios externos ni red en ninguna etapa"
       },
       {
         "etapa": "E2",
         "coste_local_objetivo_ns": 1500000,
         "coste_local_limite_ns": 3000000,
-        "operaciones_locales": "una consulta acotada con variantes morfologicas",
+        "operaciones_locales": "hasta 3 sentencias dirigidas: una MATCH de FTS5 con las variantes morfologicas y sus materializaciones",
         "coste_externo_declarado": "ninguno: ADR002-A no invoca servicios externos ni red en ninguna etapa"
       },
       {
         "etapa": "E3",
-        "coste_local_objetivo_ns": 2500000,
-        "coste_local_limite_ns": 5000000,
-        "operaciones_locales": "hasta dos consultas acotadas: raices y relacion del canon",
+        "coste_local_objetivo_ns": 4000000,
+        "coste_local_limite_ns": 8000000,
+        "operaciones_locales": "hasta 13 sentencias dirigidas: una MATCH de FTS5 con los terminos puente y hasta cuatro prefijos de sujeto x 2 SELECT acotados a 64 filas, mas sus materializaciones",
         "coste_externo_declarado": "ninguno: ADR002-A no invoca servicios externos ni red en ninguna etapa"
       },
       {
         "etapa": "E4",
         "coste_local_objetivo_ns": 2000000,
         "coste_local_limite_ns": 4000000,
-        "operaciones_locales": "una consulta acotada al indice de historial",
+        "operaciones_locales": "una sentencia dirigida acotada sobre el indice de historial",
         "coste_externo_declarado": "ninguno: ADR002-A no invoca servicios externos ni red en ninguna etapa"
       },
       {
         "etapa": "E5",
         "coste_local_objetivo_ns": 2500000,
         "coste_local_limite_ns": 5000000,
-        "operaciones_locales": "agrupacion, orden y limite en memoria sobre <=512 candidatas",
+        "operaciones_locales": "cero sentencias SQL: agrupacion, orden y limite en memoria sobre el conjunto ya acotado por las cotas de fila del puerto",
         "coste_externo_declarado": "ninguno: ADR002-A no invoca servicios externos ni red en ninguna etapa"
       }
     ],
-    "coste_de_la_senal_de_consulta": "la senal de consulta es lexica y se computa en memoria: tokenizacion, pliegue de diacriticos y recorte de sufijos sobre el texto de la consulta, sin modelo ni servicio; su coste queda dentro del limite local de cada etapa que la usa",
-    "coste_local_total_ns": 20050000,
+    "coste_de_la_senal_de_consulta": "la senal de consulta es lexica y se computa en memoria: tokenizacion, pliegue de diacriticos y recorte de sufijos sobre el texto de la consulta y sobre el de las semillas, sin modelo ni servicio; su coste queda dentro del limite local de cada etapa que la usa",
+    "coste_local_total_ns": 23050000,
     "coste_externo_total": "ninguno. TOL-202 prohibe sumar coste externo al local, y aqui no hay coste externo que declarar: cero red, cero servicios",
-    "coste_extremo_a_extremo_ns": 20050000
+    "coste_extremo_a_extremo_ns": 23050000
   },
   "extremo_a_extremo": {
     "objetivo_p95_ns": 12000000,
-    "limite_duro_p99_ns": 20050000,
+    "limite_duro_p99_ns": 23050000,
     "percentil_y_n": "P95 y P99 sobre 100 repeticiones por magnitud en cada una de las 11 sesiones exigidas, conforme al protocolo v0.2",
-    "fundamento": "el limite duro es la suma de los limites locales por etapa del §2.9, que a su vez proceden del analisis estatico del prototipo: numero de consultas acotadas al puerto por etapa, cada una limitada a 512 filas, sobre el sustrato FTS5 medido. El objetivo P95 se fija en 12 ms, holgadamente por debajo del limite duro, porque el camino tipico se detiene por S1 en E1 o E2 sin llegar a E3 ni E4",
+    "fundamento": "el limite duro es la suma de los limites locales por etapa del §2.9. Para la v2 se revisaron los seis: cinco se conservan y solo cambia el de E3. Se conservan porque el registro de consultas del puerto hace contable el trabajo posible y ese trabajo se redujo —el tope de argumentos paso de 512 a 16 y las consultas por clave llevan ahora LIMIT explicito—, de modo que un limite valido para mas trabajo posible sigue siendolo para menos. E3 sube de 5 a 8 ms porque su camino cambio de tipo: donde habia dos llamadas —una capaz de materializar 512 memorias y 512 decisiones por proyecto— hay ahora hasta trece sentencias dirigidas, una MATCH de FTS5 y hasta ocho recorridos por prefijo acotados a 64 filas sobre columnas que la cadena canonica no indexa: menos filas candidatas, mas sentencias y de clase mas cara que las de igualdad. El aumento procede de este analisis estatico y de ninguna medicion, porque no existe ninguna. El objetivo P95 se mantiene en 12 ms porque el camino tipico se detiene por S1 en E1 o E2 sin llegar a E3",
     "no_deriva_de_tol_102b": true,
     "no_invoca_el_barrido_de_t0": true
   },
@@ -242,27 +250,27 @@
     "no_hereda_la_indistinguibilidad_de_la_linea_base": true
   },
   "purga": {
-    "secuencia": "cerrar conexiones, borrar el derivado del canon, eliminar el fichero de base y sus ficheros asociados, y verificar la desaparicion antes de declarar la purga",
+    "secuencia": "cerrar conexiones, borrar el derivado entero —triggers, tablas virtuales y sombras—, eliminar el fichero de base y sus ficheros asociados, y verificar la desaparicion objeto a objeto antes de declarar la purga",
     "ficheros_cubiertos": [
       ".db",
       "-wal",
       "-shm",
       "-journal"
     ],
-    "payload_reversible_en_el_derivado": "el FTS5 conserva el texto vigente indexado, que es representacion reversible del canon; ADR002-A no anade ningun derivado adicional con payload propio",
+    "payload_reversible_en_el_derivado": "el FTS5 conserva el texto vigente indexado en sus tablas sombra, que es representacion reversible del canon; ADR002-A no anade ningun derivado adicional",
     "modelo_de_amenaza": "no mas debil que el de ADR-001: se asume adversario con acceso posterior al soporte fisico, y por eso el derivado se destruye explicitamente en vez de confiarse al borrado logico",
     "comprobacion_propuesta": "tras la purga, inspeccion de los cuatro ficheros y busqueda del payload literal en el soporte; la comprobacion se ejecuta bajo autorizacion de benchmark, no aqui"
   },
   "huella_candidato": {
-    "commit_del_prototipo": "e37c0d1773a4df629b20f0943f5331e3b7ee4e13",
-    "hash_del_arbol_de_fuentes": "arbol Git c3d5aec0a340096a6365480e19e9fd7e638551fe de experiments/adr002/candidates en el commit del prototipo",
-    "migraciones_o_ddl": "ninguna: ADR002-A usa la cadena canonica de Alembic hasta 61be4bb269bf sin anadir migraciones ni DDL, y el puerto no ejecuta sentencias de definicion",
+    "commit_del_prototipo": "97c9977609e6244547d1e0aa2f495e7a3f99273d",
+    "hash_del_arbol_de_fuentes": "arbol Git 94e387507ae66947fd97316fa46a66b3a4ca2219 de experiments/adr002/candidates en el commit del prototipo corregido",
+    "migraciones_o_ddl": "ninguna: ADR002-A usa la cadena canonica de Alembic hasta 61be4bb269bf sin anadir migraciones ni DDL. La reconstruccion del derivado reutiliza el DDL que esa migracion creo, leido de sqlite_master",
     "artefactos_y_su_hash": "ninguno generado por adelantado: el candidato no persiste indices ni caches",
     "reproduccion": "uv run pytest experiments/adr002/candidates -q; la ejecucion sobre el corpus oficial exige una autorizacion de benchmark que no existe"
   },
   "declaracion_de_congelacion": {
-    "texto": "Declaro que los valores de esta ficha se han fijado antes de la primera ejecucion de este candidato, que no proceden de ningun resultado observado del propio candidato, y que cualquier modificacion posterior obligara a nueva version de ficha y a repetir las ejecuciones ya realizadas.",
-    "responsable": "Usuario / Proyecto Sirius («venga siguiente»)",
+    "texto": "Declaro que los valores de esta ficha se han fijado antes de la primera ejecucion del prototipo corregido, que no proceden de ningun resultado observado del propio candidato, y que cualquier modificacion posterior obligara a nueva version de ficha y a repetir las ejecuciones ya realizadas.",
+    "responsable": "Usuario / Proyecto Sirius",
     "fecha": "2026-07-31",
     "valores_anteriores_a_la_primera_ejecucion": true
   },
