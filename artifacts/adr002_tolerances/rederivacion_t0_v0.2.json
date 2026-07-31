@@ -1,0 +1,274 @@
+{
+ "documento": "Repeticion unica controlada (§6.8) de la rederivacion de la linea base sobre el corpus congelado v0.4 (ADR002-TOL-208)",
+ "version_esquema": "rederivacion-linea-base-0.1",
+ "estado": "EVIDENCIA",
+ "paquete": "SIRIUS_0.2_ADR_002_PAQUETE_TRABAJO_10_TOL208_REDERIVACION_T0_v0.1",
+ "protocolo": "SIRIUS_0.2_ADR_002_PROTOCOLO_MEDICION_v0.2_PROPUESTO.md",
+ "registro": "SIRIUS_0.2_REGISTRO_TOLERANCIAS_v0.5_PROPUESTO.md",
+ "candidato": "T0-control",
+ "head_de_esquema": "61be4bb269bf",
+ "corpus": {
+  "acta": "SIRIUS_0.2_ADR_002_CONGELACION_CORPUS_v0.4_APROBADA.md",
+  "blobs": {
+   "experiments/adr002/benchmark/conformance_corpus_v0_4.json": "c21b702cbe613d70ce76b6a8b2e72baf2d4e8a48",
+   "experiments/adr002/benchmark/performance_corpus_v0_2.json": "4e9e2746e49b158a43eda7826b47c78c41b36e90"
+  }
+ },
+ "plan": {
+  "sesiones": 11,
+  "repeticiones": 100,
+  "escenarios": [
+   "cero_resultados",
+   "un_resultado_exacto",
+   "muchos_candidatos"
+  ],
+  "capas": [
+   "solo_indice_fts5",
+   "recuperacion_completa_rank"
+  ]
+ },
+ "linea_base_historica": {
+  "ruta": "artifacts/adr002_tolerances/mediciones_linea_base_v0.2.json",
+  "blob": "f9f051332d9833fb7e10b27f4820849f00b6fe6c",
+  "sesiones": 5,
+  "nota": "medida con cinco sesiones sobre el corpus 5000/500; la regla 3.3.b del protocolo la declara NO_COMPARABLE frente a las bandas de once sesiones, y por eso el paso 3 ordena rederivar sobre el corpus definitivo. Se conserva congelada con su head y sus ficheros",
+  "sustituida": false
+ },
+ "magnitudes": [
+  {
+   "magnitud": "cero_resultados.solo_indice_fts5",
+   "p50_por_sesion_ns": [
+    125787,
+    125974,
+    119713,
+    149250,
+    133215,
+    155286,
+    117172,
+    124446,
+    144807,
+    186931,
+    127366
+   ],
+   "p95_por_sesion_ns": [
+    208396,
+    196112,
+    177331,
+    208435,
+    186052,
+    224353,
+    168142,
+    213106,
+    241919,
+    236673,
+    214663
+   ],
+   "min_p50_ns": 117172,
+   "max_p50_ns": 186931,
+   "min_p95_ns": 168142,
+   "max_p95_ns": 241919,
+   "resultado": "INVALIDA",
+   "motivo": null,
+   "registro": "P50: relativo · P95: absoluto"
+  },
+  {
+   "magnitud": "cero_resultados.recuperacion_completa_rank",
+   "p50_por_sesion_ns": [
+    49993085,
+    48070317,
+    49587467,
+    53734243,
+    53692922,
+    51334491,
+    50284559,
+    49474576,
+    54242550,
+    53020360,
+    52487309
+   ],
+   "p95_por_sesion_ns": [
+    62548688,
+    53924638,
+    54915685,
+    62534177,
+    68277773,
+    59200768,
+    61819730,
+    56242821,
+    60203366,
+    62115760,
+    65803383
+   ],
+   "min_p50_ns": 48070317,
+   "max_p50_ns": 54242550,
+   "min_p95_ns": 53924638,
+   "max_p95_ns": 68277773,
+   "resultado": "VALIDA",
+   "motivo": null,
+   "registro": "P50: relativo · P95: absoluto"
+  },
+  {
+   "magnitud": "un_resultado_exacto.solo_indice_fts5",
+   "p50_por_sesion_ns": [
+    146278,
+    133317,
+    127571,
+    151172,
+    149169,
+    134745,
+    140577,
+    156521,
+    143865,
+    134320,
+    158021
+   ],
+   "p95_por_sesion_ns": [
+    223370,
+    205063,
+    201936,
+    209845,
+    193865,
+    260309,
+    205949,
+    229848,
+    246306,
+    240457,
+    233652
+   ],
+   "min_p50_ns": 127571,
+   "max_p50_ns": 158021,
+   "min_p95_ns": 193865,
+   "max_p95_ns": 260309,
+   "resultado": "INVALIDA",
+   "motivo": null,
+   "registro": "P50: relativo · P95: absoluto"
+  },
+  {
+   "magnitud": "un_resultado_exacto.recuperacion_completa_rank",
+   "p50_por_sesion_ns": [
+    49266917,
+    49477557,
+    48779234,
+    50156282,
+    47823585,
+    52608357,
+    50801280,
+    46521786,
+    50848308,
+    49550604,
+    50943131
+   ],
+   "p95_por_sesion_ns": [
+    64776644,
+    56972080,
+    54711436,
+    57411454,
+    53508944,
+    65885001,
+    61853241,
+    52530588,
+    57163305,
+    55777197,
+    60226638
+   ],
+   "min_p50_ns": 46521786,
+   "max_p50_ns": 52608357,
+   "min_p95_ns": 52530588,
+   "max_p95_ns": 65885001,
+   "resultado": "VALIDA",
+   "motivo": null,
+   "registro": "P50: relativo · P95: absoluto"
+  },
+  {
+   "magnitud": "muchos_candidatos.solo_indice_fts5",
+   "p50_por_sesion_ns": [
+    531704,
+    543876,
+    562220,
+    972899,
+    591655,
+    636851,
+    550289,
+    525704,
+    524398,
+    554194,
+    597422
+   ],
+   "p95_por_sesion_ns": [
+    658263,
+    661615,
+    866691,
+    1097890,
+    811547,
+    1147894,
+    704017,
+    578426,
+    584368,
+    662582,
+    799820
+   ],
+   "min_p50_ns": 524398,
+   "max_p50_ns": 972899,
+   "min_p95_ns": 578426,
+   "max_p95_ns": 1147894,
+   "resultado": "INVALIDA",
+   "motivo": null,
+   "registro": "P50: relativo · P95: absoluto"
+  },
+  {
+   "magnitud": "muchos_candidatos.recuperacion_completa_rank",
+   "p50_por_sesion_ns": [
+    47639626,
+    48198117,
+    49474504,
+    49533428,
+    52469729,
+    54387254,
+    50256598,
+    47451503,
+    51051115,
+    52207487,
+    52803671
+   ],
+   "p95_por_sesion_ns": [
+    53573403,
+    54537245,
+    53667229,
+    57171905,
+    59634539,
+    62082443,
+    56037274,
+    52070373,
+    57408373,
+    62629480,
+    60296214
+   ],
+   "min_p50_ns": 47451503,
+   "max_p50_ns": 54387254,
+   "min_p95_ns": 52070373,
+   "max_p95_ns": 62629480,
+   "resultado": "VALIDA",
+   "motivo": null,
+   "registro": "P50: relativo · P95: absoluto"
+  }
+ ],
+ "controles_internos": {
+  "autorizacion_expresa_presente": true,
+  "actas_de_puerta_presentes": true,
+  "corpus_congelado_intacto": true,
+  "linea_base_historica_intacta": true,
+  "ficha_de_t0_congelada_y_anterior": true,
+  "once_sesiones_completas": true,
+  "repeticiones_suficientes": true,
+  "percentiles_por_rango_mas_cercano": true,
+  "escenarios_y_capas_identicos_a_la_linea_base": true,
+  "veredictos_delegados_al_perfil_aprobado": true,
+  "sin_sustituir_la_linea_base_historica": true
+ },
+ "no_autoriza": {
+  "sustitucion_de_la_linea_base_historica": false,
+  "candidatos": false,
+  "benchmark": false,
+  "merge_pr_117": false
+ }
+}
