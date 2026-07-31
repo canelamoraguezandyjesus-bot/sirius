@@ -56,12 +56,20 @@ def _ficha_t0() -> cp.FichaConfirmada:
 # --------------------------------------------------------------------------
 
 
-def test_hoy_la_rederivacion_esta_bloqueada_por_falta_de_autorizacion() -> None:
-    """Ejecutar T0 exige un acta que no existe. La ausencia es la guarda."""
-    assert not (RAIZ / "docs/architecture" / rp.ACTA_DE_AUTORIZACION).exists()
-    fallos = rp.fallos_de_autorizacion(_entorno())
+def test_la_guarda_de_autorizacion_responde_solo_al_acta() -> None:
+    """Sin acta se bloquea, con acta no. El documento ES la guarda.
+
+    La prueba afirmaba «el acta no existe» hasta que el usuario la aprobo
+    («Apruebo y autorizo»); su §3 registra la evolucion. La direccion
+    bloqueante se conserva comprobada con un entorno sin acta: la guarda no
+    depende del estado del repositorio para saber bloquear.
+    """
+    sin_acta = _entorno(ausentes=(f"docs/architecture/{rp.ACTA_DE_AUTORIZACION}",))
+    fallos = rp.fallos_de_autorizacion(sin_acta)
     assert fallos
     assert rp.MOTIVO_SIN_AUTORIZACION in fallos[0]
+    presente = (RAIZ / "docs/architecture" / rp.ACTA_DE_AUTORIZACION).is_file()
+    assert rp.fallos_de_autorizacion(_entorno()) == (() if presente else fallos)
 
 
 def test_la_autorizacion_no_es_una_bandera_de_linea_de_ordenes() -> None:
@@ -72,7 +80,8 @@ def test_la_autorizacion_no_es_una_bandera_de_linea_de_ordenes() -> None:
 
 def test_las_precondiciones_no_cortocircuitan() -> None:
     """Quien prepare la ejecucion debe ver TODO lo que le falta, de una vez."""
-    precondiciones = rp.comprobar_precondiciones(_entorno(), fichas_congeladas=[])
+    sin_acta = _entorno(ausentes=(f"docs/architecture/{rp.ACTA_DE_AUTORIZACION}",))
+    precondiciones = rp.comprobar_precondiciones(sin_acta, fichas_congeladas=[])
     assert not precondiciones.permite_ejecutar
     assert any(rp.MOTIVO_SIN_AUTORIZACION in f for f in precondiciones.fallos)
     assert any(rp.MOTIVO_SIN_FICHA in f for f in precondiciones.fallos)
@@ -309,17 +318,48 @@ def test_el_plan_no_ejecuta_nada() -> None:
     assert recorrido.main(["--plan"]) == recorrido.CODIGO_OK
 
 
-def test_el_recorrido_real_bloquea_y_no_escribe(tmp_path: Path) -> None:
+def _acta_de_autorizacion_presente() -> bool:
+    return (RAIZ / "docs/architecture" / rp.ACTA_DE_AUTORIZACION).is_file()
+
+
+def test_el_recorrido_real_responde_al_estado_y_nunca_escribe(tmp_path: Path) -> None:
+    """La guarda responde al estado observado del repositorio.
+
+    Sin acta de autorizacion, ``--check`` se bloquea; con ella —el estado que
+    el acta de autorizacion de T0 §3 registra—, todas las precondiciones
+    deben cumplirse. En AMBOS estados el recorrido no escribe nada: esa
+    garantia no depende del estado.
+    """
     antes = sorted(p.name for p in (RAIZ / "artifacts/adr002_tolerances").iterdir())
-    assert recorrido.main(["--check"]) == recorrido.CODIGO_BLOQUEADO
+    esperado = (
+        recorrido.CODIGO_OK if _acta_de_autorizacion_presente() else recorrido.CODIGO_BLOQUEADO
+    )
+    assert recorrido.main(["--check"]) == esperado
     assert sorted(p.name for p in (RAIZ / "artifacts/adr002_tolerances").iterdir()) == antes
-    assert not (RAIZ / recorrido.SALIDA_PREVISTA).exists()
     assert list(tmp_path.iterdir()) == []
 
 
-def test_el_artefacto_previsto_no_existe_todavia() -> None:
-    """Preparado no es ejecutado."""
-    assert not (RAIZ / recorrido.SALIDA_PREVISTA).exists()
+def test_el_artefacto_previsto_solo_existe_autorizado_y_valida() -> None:
+    """Preparado no es ejecutado, y ejecutado exige acta y esquema.
+
+    Tres estados legales, fallando cerrado en cualquier otro: sin acta no hay
+    artefacto; con acta y sin artefacto, autorizado pero no ejecutado; con
+    artefacto, el acta debe existir y el artefacto debe validar INTEGRO
+    contra el esquema congelado con el perfil aprobado reconstruido.
+    """
+    artefacto = RAIZ / recorrido.SALIDA_PREVISTA
+    if not _acta_de_autorizacion_presente():
+        assert not artefacto.exists(), "artefacto sin acta de autorizacion"
+        return
+    if not artefacto.exists():
+        return  # autorizado pero aun no ejecutado
+    import json
+
+    from experiments.adr002.rederivation import execute_rederivation as ejecutor
+
+    documento = json.loads(artefacto.read_text(encoding="utf-8"))
+    perfil = ejecutor.perfil_aprobado(RAIZ)
+    assert esquema.fallos_rederivacion(documento, perfil=perfil) == []
 
 
 def test_ningun_modulo_del_paquete_mide() -> None:

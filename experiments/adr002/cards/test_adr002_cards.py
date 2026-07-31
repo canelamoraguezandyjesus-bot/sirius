@@ -835,11 +835,19 @@ def test_execution_exige_los_tres_datos_de_la_referencia() -> None:
     )
 
 
-def test_el_repositorio_no_tiene_todavia_ninguna_ficha() -> None:
-    """No hay candidato autorizado que fichar, y este paquete no lo autoriza."""
+def test_el_repositorio_tiene_exactamente_la_ficha_congelada_de_t0() -> None:
+    """Estado tras el acto sucesor 01: la unica ficha real es la del control.
+
+    Esta prueba afirmaba «cero fichas» hasta el commit `95d00a1`, que congelo
+    la ficha de `T0-control` bajo el acto sucesor. El acta de autorizacion de
+    T0 §3 registra la evolucion: cambia el estado esperado, no el criterio, y
+    sigue fallando cerrado ante cualquier ficha inesperada o no conforme.
+    """
     resultado = verificacion.verificar(verificacion.dependencias_reales(RAIZ))
     assert resultado.conforme, resultado.fallos
-    assert resultado.confirmadas == ()
+    assert [(f.candidato, f.version, f.estado) for f in resultado.confirmadas] == [
+        (cp.CONTROL, 1, cp.ESTADO_CONGELADA)
+    ]
 
 
 def test_el_recorrido_real_sobre_el_repositorio_no_escribe(tmp_path: Path) -> None:
@@ -850,10 +858,18 @@ def test_el_recorrido_real_sobre_el_repositorio_no_escribe(tmp_path: Path) -> No
 
 
 def test_el_fixture_no_es_la_ficha_de_ningun_candidato_real() -> None:
-    """Ninguna ficha sintetica de estas pruebas vive en el repositorio."""
+    """Ninguna ficha sintetica de estas pruebas vive en el repositorio.
+
+    Con fichas reales presentes, la garantia se comprueba ficha a ficha: el
+    commit de referencia sintetico no aparece en ninguna real.
+    """
+    sintetica = deepcopy(ficha_conforme())
+    assert sintetica["congelacion"]["commit_de_referencia"] == SHA_FICHA
     carpeta = RAIZ / verificacion.DIRECTORIO_FICHAS
-    assert not carpeta.exists() or not list(carpeta.glob("*.json"))
-    assert deepcopy(ficha_conforme())["congelacion"]["commit_de_referencia"] == SHA_FICHA
+    for ruta in sorted(carpeta.glob("*.json")) if carpeta.exists() else []:
+        real = json.loads(ruta.read_text(encoding="utf-8"))
+        assert real != sintetica
+        assert real["congelacion"]["commit_de_referencia"] != SHA_FICHA
 
 
 def test_el_estado_de_las_puertas_se_deriva_de_las_actas_que_existen() -> None:
