@@ -274,7 +274,8 @@ def test_supersede_decision_rejects_a_non_approved_superseded_decision(tmp_path:
 
 
 @pytest.mark.integration
-def test_supersede_decision_rejects_a_non_proposed_substitute(tmp_path: Path) -> None:
+def test_supersede_decision_accepts_an_already_approved_substitute(tmp_path: Path) -> None:
+    """Reproduce el caso manual que falló: las dos decisiones ya aprobadas."""
     database_path = tmp_path / "sirius.db"
     repository = _build_repository(database_path)
     project_id = _project_id(database_path)
@@ -283,8 +284,30 @@ def test_supersede_decision_rejects_a_non_proposed_substitute(tmp_path: Path) ->
     other = repository.create_proposal("Motor de persistencia", project_id, "Otra alternativa")
     repository.approve_decision(other.id)
 
-    with pytest.raises(ValueError, match="Only a PROPOSED decision can supersede"):
-        repository.supersede_decision(original.id, other.id)
+    result = repository.supersede_decision(original.id, other.id)
+
+    assert result.status is DecisionStatus.APPROVED
+    assert result.supersedes_decision_id == original.id
+    assert repository.get_decision(original.id).status is DecisionStatus.SUPERSEDED
+    assert [decision.id for decision in repository.list_current_decisions()] == [other.id]
+
+
+@pytest.mark.integration
+def test_supersede_decision_rejects_an_already_superseded_substitute(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    project_id = _project_id(database_path)
+    first = repository.create_proposal("Motor de persistencia", project_id, "Usar SQLite local")
+    repository.approve_decision(first.id)
+    second = repository.create_proposal("Motor de persistencia", project_id, "Otra alternativa")
+    repository.approve_decision(second.id)
+    repository.supersede_decision(first.id, second.id)
+    third = repository.create_proposal("Motor de persistencia", project_id, "Una tercera")
+    repository.approve_decision(third.id)
+
+    # ``first`` ya está SUSTITUIDA: no puede volver a ser la sustituta vigente.
+    with pytest.raises(ValueError, match="PROPOSED or APPROVED decision can supersede"):
+        repository.supersede_decision(third.id, first.id)
 
 
 @pytest.mark.integration

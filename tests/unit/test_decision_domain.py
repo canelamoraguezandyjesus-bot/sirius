@@ -103,11 +103,26 @@ def test_ensure_can_supersede_rejects_a_superseded_decision_that_is_not_approved
         ensure_can_supersede(superseded, superseding)
 
 
-def test_ensure_can_supersede_rejects_a_superseding_decision_that_is_not_proposed() -> None:
+def test_ensure_can_supersede_accepts_an_already_approved_superseding_decision() -> None:
+    """Antes se rechazaba, y ese rechazo ERA el defecto: si el usuario aprobaba
+    la decisión nueva antes de ordenar la sustitución, las dos se quedaban
+    vigentes con el mismo peso y sin vínculo."""
     superseded = _decision(DecisionStatus.APPROVED, decision_id=1)
     superseding = _decision(DecisionStatus.APPROVED, decision_id=2)
 
-    with pytest.raises(ValueError, match="Only a PROPOSED decision can supersede"):
+    ensure_can_supersede(superseded, superseding)
+
+
+@pytest.mark.parametrize("status", [DecisionStatus.SUPERSEDED, DecisionStatus.ARCHIVED])
+def test_ensure_can_supersede_rejects_a_superseding_decision_that_is_not_current(
+    status: DecisionStatus,
+) -> None:
+    """Ni una decisión ya sustituida ni una archivada son vigentes, así que
+    ninguna puede pasar a ser la sustituta."""
+    superseded = _decision(DecisionStatus.APPROVED, decision_id=1)
+    superseding = _decision(status, decision_id=2)
+
+    with pytest.raises(ValueError, match="PROPOSED or APPROVED decision can supersede"):
         ensure_can_supersede(superseded, superseding)
 
 

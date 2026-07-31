@@ -164,7 +164,11 @@ class _DeleteMemoryDialog(QDialog):
 
 
 class _ChooseSupersedingDecisionDialog(QDialog):
-    """Modal dialog picking which PROPOSED decision supersedes an APPROVED one."""
+    """Modal dialog picking which decision supersedes an APPROVED one.
+
+    Las candidatas pueden estar PROPOSED o ya APPROVED: el usuario puede haber
+    aprobado la decisión nueva antes de ordenar la sustitución.
+    """
 
     def __init__(self, candidates: Sequence[Decision], parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -182,7 +186,7 @@ class _ChooseSupersedingDecisionDialog(QDialog):
         buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Elige la decisión propuesta que sustituirá a la vigente:"))
+        layout.addWidget(QLabel("Elige la decisión que sustituirá a la vigente:"))
         layout.addWidget(self.combo)
         layout.addWidget(buttons)
 
@@ -537,17 +541,21 @@ class KnowledgeWidget(QGroupBox):
             return
         if self._overview is None:
             return
+        # Las candidatas incluyen las decisiones ya APROBADAS del mismo asunto,
+        # no solo las propuestas: antes solo se ofrecían las propuestas, así que
+        # si el usuario ya había aprobado la decisión nueva no aparecía ninguna
+        # candidata y las dos se quedaban vigentes con el mismo peso.
         candidates = [
             decision
-            for decision in self._overview.proposed_decisions
-            if is_same_subject_and_project(decision, superseded)
+            for decision in (*self._overview.proposed_decisions, *self._overview.current_decisions)
+            if decision.id != superseded.id and is_same_subject_and_project(decision, superseded)
         ]
         superseding = self._choose_superseding_decision(candidates)
         if superseding is None:
             if not candidates:
                 self._show_warning(
                     "No se pudo sustituir la decisión",
-                    "No hay ninguna decisión propuesta con el mismo asunto y proyecto.",
+                    "No hay ninguna otra decisión con el mismo asunto y proyecto.",
                 )
             return
         if not self._confirm_action(
