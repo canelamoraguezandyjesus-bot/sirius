@@ -23,8 +23,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont, QResizeEvent, QTextDocument
+from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QSize, Qt, Signal
+from PySide6.QtGui import QFont, QPainter, QResizeEvent, QTextDocument
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -32,6 +32,8 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QSizePolicy,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -47,6 +49,15 @@ _MARKDOWN_FEATURES = (
 # next literal ```. Inline code (single backtick) never matches this and
 # stays inside the surrounding prose, rendered by B8a's safe Markdown.
 _FENCED_CODE_BLOCK = re.compile(r"```[^\n`]*\n(.*?)```", re.DOTALL)
+
+# Holgura vertical para que la última línea no quede pegada al borde. No es un
+# límite de altura: la altura sale siempre del alto real del documento.
+_VERTICAL_PADDING = 8
+
+# Ancho de reflujo provisional mientras el widget aún no tiene ancho real (no
+# está dentro de la lista todavía). En cuanto lo tiene, ``resizeEvent``
+# recalcula y ``height_changed`` propaga la altura verdadera.
+_PROVISIONAL_WIDTH = 400
 
 
 @dataclass(frozen=True)
@@ -95,11 +106,14 @@ class _MessageBody(QTextEdit):
         super().__init__()
         self.setReadOnly(True)
         self.setFrameShape(QFrame.Shape.NoFrame)
+        # Sin barras propias: el alto del widget siempre iguala al del
+        # documento, así que nunca hay contenido que quede fuera de la vista.
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setStyleSheet("background: transparent; border: none;")
+        self._content_height = 0
 
     def set_markdown_content(self, text: str) -> None:
         self.document().setMarkdown(text, _MARKDOWN_FEATURES)
@@ -113,12 +127,27 @@ class _MessageBody(QTextEdit):
         super().resizeEvent(event)
         self._sync_height()
 
+    def sizeHint(self) -> QSize:
+        """El alto pedido es el alto real del documento, nunca un valor fijo."""
+        hint = super().sizeHint()
+        if self._content_height:
+            return QSize(hint.width(), self._content_height)
+        return hint
+
+    def minimumSizeHint(self) -> QSize:
+        """Impide que el layout comprima el cuerpo y esconda líneas."""
+        hint = super().minimumSizeHint()
+        if self._content_height:
+            return QSize(0, self._content_height)
+        return hint
+
     def _sync_height(self) -> None:
-        width = self.viewport().width() or self.width() or 400
+        width = self.viewport().width() or self.width() or _PROVISIONAL_WIDTH
         self.document().setTextWidth(width)
-        height = int(self.document().size().height()) + 8
-        if self.height() != height:
-            self.setFixedHeight(height)
+        height = int(self.document().size().height()) + _VERTICAL_PADDING
+        if self._content_height != height:
+            self._content_height = height
+            self.updateGeometry()
             self.height_changed.emit()
 
 
@@ -159,6 +188,34 @@ class _CodeBlockWidget(QWidget):
         clipboard = QApplication.clipboard()
         if clipboard is not None:
             clipboard.setText(self._code)
+
+
+class MessageItemDelegate(QStyledItemDelegate):
+    """Evita que la lista pinte además el texto plano del item.
+
+    ``QListWidgetItem.text()`` se conserva íntegro porque es el contrato de
+    accesibilidad de B8a/RF-008: es lo que lee un lector de pantalla. El
+    problema es que el delegate por defecto lo pintaba TAMBIÉN sobre la fila,
+    en una sola línea y recortado con puntos suspensivos (``ElideRight`` es el
+    valor por omisión de ``QListView``), justo debajo del ``MessageItemWidget``,
+    que es transparente. El resultado visible eran dos textos superpuestos en
+    el mismo rectángulo y una elipsis en mensajes que en realidad estaban
+    completos.
+
+    Aquí se sigue pintando el fondo y el estado de la fila, pero no el texto:
+    el contenido visible lo aporta únicamente el widget.
+    """
+
+    def paint(
+        self,
+        painter: QPainter,
+        option: QStyleOptionViewItem,
+        index: QModelIndex | QPersistentModelIndex,
+    ) -> None:
+        without_text = QStyleOptionViewItem(option)
+        self.initStyleOption(without_text, index)
+        without_text.text = ""
+        super().paint(painter, without_text, index)
 
 
 class MessageItemWidget(QWidget):
