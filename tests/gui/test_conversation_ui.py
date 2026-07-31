@@ -4,12 +4,10 @@ from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QRect, Qt
-from PySide6.QtGui import QPainter
+from PySide6.QtCore import QRect, Qt
 from PySide6.QtWidgets import (
     QApplication,
     QStyledItemDelegate,
-    QStyleOptionViewItem,
     QTextEdit,
 )
 from pytestqt.qtbot import QtBot
@@ -1416,6 +1414,35 @@ def _document_height(window: MainWindow, index: int) -> int:
     return int(_body_of(window, index).document().size().height())
 
 
+def _ink_in_row_without_widget(window: MainWindow, index: int) -> int:
+    """Píxeles distintos del fondo que pinta la FILA, sin contar su widget.
+
+    Oculta momentáneamente el ``MessageItemWidget`` y cuenta lo que queda
+    dibujado en el rectángulo de la fila. Es la única forma de comprobar de
+    verdad que la lista no está pintando además el texto del item por debajo
+    del widget transparente, que era el origen del texto duplicado y de la
+    elipsis.
+    """
+    message_list = window.message_list
+    item = message_list.item(index)
+    widget = message_list.itemWidget(item)
+    widget.setVisible(False)
+    QApplication.processEvents()
+    try:
+        image = message_list.viewport().grab().toImage()
+        rect = message_list.visualItemRect(item)
+        background = image.pixel(1, 1)
+        ink = 0
+        for y in range(max(0, rect.top()), min(image.height(), rect.bottom())):
+            for x in range(max(0, rect.left()), min(image.width(), rect.right())):
+                if image.pixel(x, y) != background:
+                    ink += 1
+        return ink
+    finally:
+        widget.setVisible(True)
+        QApplication.processEvents()
+
+
 @pytest.mark.gui
 def test_a_long_message_shows_all_of_its_content(qtbot: QtBot, tmp_path: Path) -> None:
     """Defecto 2: parte del texto quedaba oculta.
@@ -1470,30 +1497,17 @@ def test_no_ellipsis_or_artificial_truncation_is_rendered(qtbot: QtBot, tmp_path
     # El texto del item sigue completo: es el contrato de accesibilidad.
     assert len(window.message_list.item(0).text()) > 1000
 
-    # La fila SÍ lleva texto asociado (de ahí venía la elipsis)...
-    index = window.message_list.model().index(0, 0)
-    option = QStyleOptionViewItem()
-    delegate.initStyleOption(option, index)
-    assert option.text != ""
+    # Y sobre todo: la fila no pinta NADA de ese texto. Se mide en píxeles
+    # reales, no en el valor intermedio de la opción de estilo: la primera
+    # versión de este arreglo vaciaba option.text y llamaba a super().paint(),
+    # que vuelve a llamar a initStyleOption y repuebla el texto, así que
+    # aparentaba funcionar sin funcionar.
+    assert _ink_in_row_without_widget(window, 0) == 0
 
-    # ...pero lo que el delegate manda pintar ya viene sin texto.
-    painted: list[str] = []
-    original_paint = QStyledItemDelegate.paint
-
-    def _capture(
-        _self: QStyledItemDelegate,
-        _painter: QPainter,
-        painted_option: QStyleOptionViewItem,
-        _index: QModelIndex | QPersistentModelIndex,
-    ) -> None:
-        painted.append(painted_option.text)
-
-    QStyledItemDelegate.paint = _capture  # type: ignore[method-assign]
-    try:
-        delegate.paint(QPainter(), option, index)
-    finally:
-        QStyledItemDelegate.paint = original_paint  # type: ignore[method-assign]
-    assert painted == [""]
+    # Contraprueba: con el delegate por omisión, ese mismo texto sí se pinta.
+    window.message_list.setItemDelegate(QStyledItemDelegate(window.message_list))
+    QApplication.processEvents()
+    assert _ink_in_row_without_widget(window, 0) > 0
 
 
 @pytest.mark.gui

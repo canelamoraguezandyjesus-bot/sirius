@@ -24,7 +24,7 @@ import re
 from dataclasses import dataclass
 
 from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QSize, Qt, Signal
-from PySide6.QtGui import QFont, QPainter, QResizeEvent, QTextDocument
+from PySide6.QtGui import QFont, QResizeEvent, QTextDocument
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -204,18 +204,22 @@ class MessageItemDelegate(QStyledItemDelegate):
 
     Aquí se sigue pintando el fondo y el estado de la fila, pero no el texto:
     el contenido visible lo aporta únicamente el widget.
+
+    El vaciado se hace en ``initStyleOption`` y NO en ``paint``. Es
+    imprescindible: ``QStyledItemDelegate.paint`` copia la opción que recibe y
+    vuelve a llamar a ``initStyleOption`` sobre esa copia, de modo que
+    cualquier texto borrado antes de delegar en ``super().paint`` reaparece.
+    Como ``initStyleOption`` es virtual, vaciarlo aquí sí alcanza al pintado
+    real.
     """
 
-    def paint(
+    def initStyleOption(
         self,
-        painter: QPainter,
         option: QStyleOptionViewItem,
         index: QModelIndex | QPersistentModelIndex,
     ) -> None:
-        without_text = QStyleOptionViewItem(option)
-        self.initStyleOption(without_text, index)
-        without_text.text = ""
-        super().paint(painter, without_text, index)
+        super().initStyleOption(option, index)
+        option.text = ""
 
 
 class MessageItemWidget(QWidget):
