@@ -4,9 +4,17 @@ RF-023 "Sustituir: Relacionar la decisión vigente con la sustituida." PA-013
 "Aprobar una decisión que reemplaza otra: solo la nueva entra en contexto y
 existe enlace de sustitución." Substitution and the approval it requires
 happen together, in one explicit call: the decision being replaced must
-already be APPROVED, and the decision replacing it must still be PROPOSED —
-this use case is what turns the latter into APPROVED while marking the
-former SUPERSEDED and recording the persistent link between them.
+already be APPROVED, and the decision replacing it must be PROPOSED or
+already APPROVED — this use case leaves the latter APPROVED while marking
+the former SUPERSEDED and recording the persistent link between them.
+
+Admitir una sustituta ya APPROVED es deliberado y corrige un defecto real:
+si el usuario aprobaba primero la decisión nueva y ordenaba la sustitución
+después, la operación se rechazaba y las dos decisiones se quedaban
+vigentes, con el mismo peso y sin vínculo entre ellas. Aceptar ambos
+estados de partida no relaja nada más: la sustitución sigue exigiendo una
+orden explícita del usuario, y una simple contradicción entre decisiones no
+sustituye nunca por su cuenta.
 
 Nothing in the ordinary conversation flow (``SendMessageUseCase``) calls
 this — the absence of any automatic call site is what keeps free-form
@@ -100,6 +108,8 @@ class SupersedeDecisionUseCase:
             except ValueError as exc:
                 raise InvalidDecisionSupersessionError(str(exc)) from exc
 
+            self._ensure_no_cycle(uow, superseded, superseding)
+
             uow.event_repository.append(
                 event_type=DECISION_SUPERSEDED_EVENT_TYPE,
                 actor=USER_ACTOR,
@@ -111,3 +121,30 @@ class SupersedeDecisionUseCase:
             uow.commit()
 
         return result
+
+    @staticmethod
+    def _ensure_no_cycle(uow: UnitOfWork, superseded: Decision, superseding: Decision) -> None:
+        """Rechaza la sustitución si cerraría un ciclo en la cadena de enlaces.
+
+        Enlazar ``superseding -> superseded`` cierra un ciclo si ``superseding``
+        ya es alcanzable siguiendo los enlaces de sustitución desde
+        ``superseded``. La monotonía de estados ya lo hace inalcanzable en la
+        práctica, pero se comprueba de forma explícita porque
+        ``ensure_can_supersede`` solo ve el par y no la cadena, y porque un
+        ciclo dejaría el historial imposible de recorrer.
+
+        El recorrido lleva registro de lo visitado, así que termina incluso si
+        los datos ya contuvieran un ciclo previo.
+        """
+        visited: set[int] = set()
+        current_id: int | None = superseded.supersedes_decision_id
+        while current_id is not None and current_id not in visited:
+            if current_id == superseding.id:
+                msg = (
+                    "Esa sustitución crearía un ciclo: la decisión sustituta ya figura como "
+                    "sustituida en la cadena de la decisión que se quiere sustituir."
+                )
+                raise InvalidDecisionSupersessionError(msg)
+            visited.add(current_id)
+            ancestor = uow.decision_repository.get_decision(current_id)
+            current_id = ancestor.supersedes_decision_id

@@ -310,10 +310,15 @@ def test_supersede_a_decision_that_is_not_approved_fails_safely_without_writing_
     assert unit_of_work.rollback_count == 1
 
 
-def test_supersede_with_a_superseding_decision_that_is_not_proposed_fails_safely() -> None:
+@pytest.mark.parametrize("status", [DecisionStatus.SUPERSEDED, DecisionStatus.ARCHIVED])
+def test_supersede_with_a_superseding_decision_that_is_not_current_fails_safely(
+    status: DecisionStatus,
+) -> None:
+    """Una sustituta APPROVED sí se admite (era el defecto); una ya sustituida
+    o archivada no, porque ninguna de las dos es vigente."""
     decisions = {
         1: _decision(1, DecisionStatus.APPROVED),
-        2: _decision(2, DecisionStatus.APPROVED),
+        2: _decision(2, status),
     }
     use_case, decision_repository, unit_of_work = _use_case(decisions)
 
@@ -414,5 +419,70 @@ def test_supersede_after_a_failed_attempt_can_still_succeed_with_a_fresh_transac
     result = use_case.supersede(1, 2, confirmed=True)
 
     assert unit_of_work.enter_count == 2
+    assert unit_of_work.committed is True
+    assert result.status is DecisionStatus.APPROVED
+
+
+def _linked_decision(decision_id: int, status: DecisionStatus, supersedes: int | None) -> Decision:
+    """Una decisión con su enlace de sustitución ya fijado."""
+    base = _decision(decision_id, status)
+    return Decision(
+        id=base.id,
+        subject=base.subject,
+        project_id=base.project_id,
+        status=base.status,
+        current_revision=base.current_revision,
+        created_at=base.created_at,
+        updated_at=base.updated_at,
+        supersedes_decision_id=supersedes,
+    )
+
+
+def test_supersede_rejects_a_supersession_that_would_close_a_cycle() -> None:
+    """1 ya sustituyó a 2, así que enlazar 2 -> 1 cerraría el ciclo.
+
+    La monotonía de estados lo hace inalcanzable con datos sanos, pero el
+    guardia es explícito: un ciclo dejaría la cadena histórica imposible de
+    recorrer.
+    """
+    decisions = {
+        1: _linked_decision(1, DecisionStatus.APPROVED, supersedes=2),
+        2: _linked_decision(2, DecisionStatus.APPROVED, supersedes=None),
+    }
+    use_case, decision_repository, unit_of_work = _use_case(decisions)
+
+    with pytest.raises(InvalidDecisionSupersessionError, match="ciclo"):
+        use_case.supersede(1, 2, confirmed=True)
+
+    assert unit_of_work.committed is False
+    assert decision_repository.supersede_calls == []
+
+
+def test_supersede_accepts_an_already_approved_substitute() -> None:
+    """El defecto corregido: la sustituta ya estaba aprobada."""
+    decisions = {
+        1: _decision(1, DecisionStatus.APPROVED),
+        2: _decision(2, DecisionStatus.APPROVED),
+    }
+    use_case, decision_repository, unit_of_work = _use_case(decisions)
+
+    result = use_case.supersede(1, 2, confirmed=True)
+
+    assert unit_of_work.committed is True
+    assert decision_repository.supersede_calls == [(1, 2)]
+    assert result.status is DecisionStatus.APPROVED
+
+
+def test_supersede_stops_walking_a_chain_that_already_contains_a_cycle() -> None:
+    """Con datos ya corruptos el recorrido termina en vez de colgarse."""
+    decisions = {
+        1: _linked_decision(1, DecisionStatus.APPROVED, supersedes=3),
+        2: _decision(2, DecisionStatus.APPROVED),
+        3: _linked_decision(3, DecisionStatus.SUPERSEDED, supersedes=1),
+    }
+    use_case, _decision_repository, unit_of_work = _use_case(decisions)
+
+    result = use_case.supersede(1, 2, confirmed=True)
+
     assert unit_of_work.committed is True
     assert result.status is DecisionStatus.APPROVED

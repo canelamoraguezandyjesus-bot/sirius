@@ -406,6 +406,65 @@ def test_supersede_decision_replaces_the_approved_one(qtbot: QtBot, tmp_path: Pa
 
 
 @pytest.mark.gui
+def test_supersede_decision_offers_an_already_approved_decision_as_candidate(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """El caso manual que falló, ejercido por el panel real de la interfaz.
+
+    Antes el selector se poblaba solo con decisiones PROPUESTAS, así que si el
+    usuario ya había aprobado la decisión nueva no aparecía ninguna candidata,
+    salía un aviso y las dos se quedaban vigentes con el mismo peso.
+    """
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    project_id = dependencies.project_continuity_use_case.get_summary().project_id
+    original = dependencies.propose_decision_use_case.propose(
+        "Día de la reunión", project_id, "La reunión es los martes"
+    )
+    dependencies.approve_decision_use_case.approve(original.id, confirmed=True)
+    substitute = dependencies.propose_decision_use_case.propose(
+        "Día de la reunión", project_id, "La reunión es los jueves"
+    )
+    dependencies.approve_decision_use_case.approve(substitute.id, confirmed=True)
+
+    offered: list[list[int]] = []
+
+    def _pick_substitute(candidates: Sequence[Decision]) -> Decision:
+        offered.append([candidate.id for candidate in candidates])
+        return next(candidate for candidate in candidates if candidate.id == substitute.id)
+
+    recorder = _Recorder()
+    widget = _build_widget(
+        dependencies,
+        recorder,
+        confirm_action=True,
+        choose_superseding_decision=_pick_substitute,
+    )
+    qtbot.addWidget(widget)
+    original_row = next(
+        row
+        for row in range(widget.decisions_list.count())
+        if f"#{original.id} " in widget.decisions_list.item(row).text()
+    )
+    widget.decisions_list.setCurrentRow(original_row)
+
+    widget.supersede_decision_button.click()
+
+    # La decisión ya aprobada se ofreció como candidata, y la seleccionada
+    # nunca se ofrece a sí misma.
+    assert offered == [[substitute.id]]
+    assert recorder.warnings == []
+
+    # El panel observable ya solo muestra la nueva como vigente.
+    texts = [widget.decisions_list.item(row).text() for row in range(widget.decisions_list.count())]
+    assert not any(f"#{original.id} " in text for text in texts)
+    assert any(f"#{substitute.id} " in text and "(approved)" in text for text in texts)
+
+    # Y el estado persistido es el correcto, con su vínculo.
+    stored = dependencies.get_knowledge_overview_use_case.get_overview()
+    assert [decision.id for decision in stored.current_decisions] == [substitute.id]
+
+
+@pytest.mark.gui
 def test_archive_decision_moves_it_out_of_current(qtbot: QtBot, tmp_path: Path) -> None:
     dependencies = _bootstrapped_dependencies(tmp_path)
     project_id = dependencies.project_continuity_use_case.get_summary().project_id

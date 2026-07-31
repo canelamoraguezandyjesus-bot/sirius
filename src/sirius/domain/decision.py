@@ -115,20 +115,34 @@ def ensure_can_approve(decision: Decision) -> None:
         raise ValueError(msg)
 
 
+#: Estados desde los que una decisión puede pasar a ser la sustituta vigente.
+#: PROPOSED es el caso original de B4c (sustituir aprueba a la vez). APPROVED
+#: se admite porque el usuario puede haber aprobado ya la decisión nueva antes
+#: de ordenar la sustitución: exigir PROPOSED dejaba las dos vigentes con el
+#: mismo peso y sin vínculo, que era exactamente el defecto observado. SUPERSEDED
+#: y ARCHIVED quedan fuera: ninguna de las dos es vigente, y de SUPERSEDED no
+#: hay camino de vuelta.
+SUPERSEDING_STATUSES: frozenset[DecisionStatus] = frozenset(
+    {DecisionStatus.PROPOSED, DecisionStatus.APPROVED}
+)
+
+
 def ensure_can_supersede(superseded: Decision, superseding: Decision) -> None:
     """Validate that ``superseding`` may explicitly supersede ``superseded``
     (RF-023, PA-013).
 
-    Only an APPROVED decision can be superseded, and only by a still-PROPOSED
-    decision (substitution and approval happen together, see
-    ``SupersedeDecisionUseCase``) of the same conceptual subject and project
-    — never by itself. A decision can never move back to PROPOSED once
-    APPROVED or SUPERSEDED, so no chain of valid supersessions can loop back
-    on itself: a decision that has ever superseded another can never again
-    become PROPOSED, so it can never later be used as the ``superseding``
-    side of a call against one of its own ancestors. This function does not
-    need a separate cycle check as a result — the ``superseding.status``
-    check below already rejects any such attempt.
+    Solo una decisión APPROVED puede ser sustituida, y solo por una decisión
+    PROPOSED o APPROVED (ver ``SUPERSEDING_STATUSES``) del mismo asunto y
+    proyecto, nunca por sí misma. Una contradicción entre dos decisiones no
+    basta: la sustitución la ordena el usuario de forma explícita, y esta
+    función solo valida que el par sea legal.
+
+    Los estados no vuelven atrás (de APPROVED o SUPERSEDED no se regresa a
+    PROPOSED, y de SUPERSEDED no se regresa a APPROVED), de modo que la
+    monotonía de estados ya impide por sí sola que una cadena de sustituciones
+    válidas se cierre sobre sí misma. Aun así, ``SupersedeDecisionUseCase``
+    recorre la cadena y rechaza el ciclo de forma explícita, porque esta
+    función solo ve dos decisiones y no puede comprobar la cadena completa.
     """
     if superseded.id == superseding.id:
         msg = "A decision cannot supersede itself."
@@ -136,9 +150,9 @@ def ensure_can_supersede(superseded: Decision, superseding: Decision) -> None:
     if superseded.status is not DecisionStatus.APPROVED:
         msg = f"Cannot supersede a decision with status '{superseded.status.value}'."
         raise ValueError(msg)
-    if superseding.status is not DecisionStatus.PROPOSED:
+    if superseding.status not in SUPERSEDING_STATUSES:
         msg = (
-            "Only a PROPOSED decision can supersede another; got status "
+            "Only a PROPOSED or APPROVED decision can supersede another; got status "
             f"'{superseding.status.value}'."
         )
         raise ValueError(msg)
