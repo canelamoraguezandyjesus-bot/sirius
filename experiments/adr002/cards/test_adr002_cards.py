@@ -863,9 +863,9 @@ def test_el_estado_de_las_puertas_se_deriva_de_las_actas_que_existen() -> None:
     assert puertas["ADR002-TOL-207"] is True
     assert puertas["ADR002-TOL-209"] is True
     assert puertas["SRC-ADR002-01"] is True
-    # Las dos que siguen pendientes, y este paquete no las aprueba.
+    assert puertas["ADR002-TOL-210"] is True
+    # La unica que sigue pendiente: sus pasos 2 y 3 exigen ejecutar T0.
     assert puertas["ADR002-TOL-208"] is False
-    assert puertas["ADR002-TOL-210"] is False
     assert not cp.puertas_de_arranque_satisfechas(puertas)
 
 

@@ -150,7 +150,7 @@ ACTAS_QUE_SATISFACEN: Final[Mapping[str, str | None]] = {
     "ADR002-TOL-207": ACTA_TOL_207,
     "ADR002-TOL-208": None,
     "ADR002-TOL-209": ACTA_TOL_209,
-    "ADR002-TOL-210": None,
+    "ADR002-TOL-210": ACTA_TOL_210,
 }
 
 #: Documentos que fijan el universo de fichas. Se comprueba que existen: sin
