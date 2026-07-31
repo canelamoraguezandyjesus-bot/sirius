@@ -873,15 +873,37 @@ def test_el_fixture_no_es_la_ficha_de_ningun_candidato_real() -> None:
 
 
 def test_el_estado_de_las_puertas_se_deriva_de_las_actas_que_existen() -> None:
-    """Una puerta sin acta no esta satisfecha, por mucho trabajo hecho que haya."""
+    """El estado sigue al repositorio: una puerta vale lo que su acta.
+
+    Esta prueba afirmaba `ADR002-TOL-208` en `False` hasta que su acta de
+    aprobacion existio; su §5 registra la evolucion. El criterio no cambia
+    —una puerta sin acta no esta satisfecha—, y la direccion bloqueante se
+    conserva comprobada abajo con un entorno sin ninguna acta.
+    """
     deps = verificacion.dependencias_reales(RAIZ)
     puertas = cp.estado_de_las_puertas(deps.entorno_custodia)
-    assert puertas["ADR002-TOL-207"] is True
-    assert puertas["ADR002-TOL-209"] is True
-    assert puertas["SRC-ADR002-01"] is True
-    assert puertas["ADR002-TOL-210"] is True
-    # La unica que sigue pendiente: sus pasos 2 y 3 exigen ejecutar T0.
-    assert puertas["ADR002-TOL-208"] is False
+    for puerta in cp.PUERTAS_DE_ARRANQUE:
+        assert puertas[puerta] is True, puerta
+    assert cp.puertas_de_arranque_satisfechas(puertas)
+
+
+def test_una_puerta_sin_su_acta_no_esta_satisfecha() -> None:
+    """La direccion bloqueante no depende del estado del repositorio."""
+
+    def sin_actas(_ruta: str) -> bytes:
+        raise OSError(_ruta)
+
+    entorno = cp.EntornoCustodia(
+        leer_bytes=sin_actas,
+        es_ancestro=lambda a, b: True,
+        existe_commit=lambda sha: True,
+        head=lambda: "0" * 40,
+        arbol_limpio=lambda: True,
+        diff_vacio=lambda desde, hasta, rutas: True,
+        blob_en_commit=lambda sha, ruta: None,
+    )
+    puertas = cp.estado_de_las_puertas(entorno)
+    assert all(estado is False for estado in puertas.values())
     assert not cp.puertas_de_arranque_satisfechas(puertas)
 
 

@@ -71,6 +71,7 @@ PROTOCOLO: Final = pp.PROTOCOLO
 ACTA_TOL_209: Final = "SIRIUS_0.2_ADR_002_TOL_209_APROBACION_v1.0.md"
 ACTA_TOL_207: Final = "SIRIUS_0.2_ADR_002_TOL_207_APROBACION_v1.0.md"
 ACTA_TOL_210: Final = "SIRIUS_0.2_ADR_002_TOL_210_APROBACION_v1.0.md"
+ACTA_TOL_208: Final = "SIRIUS_0.2_ADR_002_TOL_208_APROBACION_v1.0.md"
 
 #: Las plantillas anteriores se conservan sin modificar. Sus blobs los citan
 #: el Registro, el paquete 02D y la Resolucion de la particion de candidatos:
@@ -148,7 +149,7 @@ PUERTAS_DE_ARRANQUE: Final[tuple[str, ...]] = (
 ACTAS_QUE_SATISFACEN: Final[Mapping[str, str | None]] = {
     "SRC-ADR002-01": ACTA_TOL_207,
     "ADR002-TOL-207": ACTA_TOL_207,
-    "ADR002-TOL-208": None,
+    "ADR002-TOL-208": ACTA_TOL_208,
     "ADR002-TOL-209": ACTA_TOL_209,
     "ADR002-TOL-210": ACTA_TOL_210,
 }
@@ -558,8 +559,9 @@ def estado_de_las_puertas(entorno: EntornoCustodia) -> dict[str, bool]:
     """Deriva que puertas estan satisfechas de las actas que EXISTEN.
 
     No se declara: se comprueba. Una puerta sin acta no esta satisfecha por
-    mucho que su trabajo tecnico este hecho, y por eso ``ADR002-TOL-208`` y
-    ``ADR002-TOL-210`` salen en ``False`` mientras no las apruebe la suya.
+    mucho que su trabajo tecnico este hecho, y una puerta cuya acta se
+    borrase volveria a ``False`` sola. El estado sigue al repositorio, nunca
+    al reves.
     """
     estado: dict[str, bool] = {}
     for puerta, acta in ACTAS_QUE_SATISFACEN.items():

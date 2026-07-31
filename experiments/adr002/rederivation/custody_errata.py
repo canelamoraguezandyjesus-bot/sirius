@@ -78,6 +78,10 @@ ERRATAS: Final[tuple[ErrataDeIdentidad, ...]] = (
             f"docs/architecture/{FE_DE_ERRATAS}",
             "artifacts/adr002_tolerances/INFORME_REDERIVACION_T0_v0.2.1_PROPUESTO.md",
             "experiments/adr002/rederivation/custody_errata.py",
+            # El acta de aprobacion de TOL-208 cita la errata para dejar
+            # constancia de que se corrigio: una aprobacion que no dijera QUE
+            # cita era erronea obligaria a salir del acta para entenderla.
+            "docs/architecture/SIRIUS_0.2_ADR_002_TOL_208_APROBACION_v1.0.md",
         ),
         motivo=(
             "transcripcion humana del SHA completo del commit de ejecucion de la "
