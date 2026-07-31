@@ -234,6 +234,38 @@ def anadir_memoria(ruta: Path, clave: str, texto: str, *, activo: bool = True) -
         conexion.close()
 
 
+def actualizar_memoria(ruta: Path, memory_id: int, texto: str) -> None:
+    """Cambia el texto vigente de una memoria del canon.
+
+    Complementa a ``anadir_memoria``: el trigger de alta demuestra que el
+    indice recibe lo nuevo, y el de actualizacion que ademas **retira lo
+    viejo**. Una reconstruccion que solo repoblase filas fallaria las dos.
+    """
+    conexion = sqlite3.connect(str(ruta))
+    try:
+        conexion.execute(
+            "UPDATE memory_revisions SET content = ? WHERE memory_id = ? AND is_current = 1",
+            (texto, memory_id),
+        )
+        conexion.commit()
+    finally:
+        conexion.close()
+
+
+def contenido_del_proyecto(ruta: Path, project_id: str) -> int:
+    """Elementos canonicos del proyecto: con que comparar «no es un barrido»."""
+    conexion = sqlite3.connect(str(ruta))
+    try:
+        fila = conexion.execute(
+            "SELECT (SELECT count(*) FROM memories WHERE project_id = ?) "
+            "+ (SELECT count(*) FROM decisions WHERE project_id = ?)",
+            (int(project_id), int(project_id)),
+        ).fetchone()
+        return int(fila[0])
+    finally:
+        conexion.close()
+
+
 def filas_indexadas(ruta: Path) -> dict[str, int]:
     """Filas del derivado, para comparar antes y despues."""
     conexion = sqlite3.connect(str(ruta))
@@ -247,9 +279,11 @@ __all__ = [
     "PROYECTO_ACTIVO",
     "PROYECTO_AJENO",
     "Fixture",
+    "actualizar_memoria",
     "anadir_memoria",
     "borrar_derivado",
     "construir",
+    "contenido_del_proyecto",
     "filas_indexadas",
     "leer_ddl",
     "objetos_derivados",
