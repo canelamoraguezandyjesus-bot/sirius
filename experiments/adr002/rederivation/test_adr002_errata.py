@@ -160,11 +160,18 @@ def test_los_hashes_no_almacenados_estan_justificados_uno_a_uno() -> None:
         assert len(motivo.strip()) > 40, sha
 
 
-def test_la_huella_de_la_ficha_esta_entre_los_no_almacenados() -> None:
-    """Y sigue siendo la de la ficha real: la excepcion no la desancla."""
+def test_toda_huella_de_ficha_congelada_esta_inventariada() -> None:
+    """Ninguna ficha nueva puede colar su huella sin declararla.
+
+    Una huella canonica no resuelve a ningun objeto Git por construccion, de
+    modo que sin inventario el control de identidad fallaria en cuanto se
+    congelase una ficha. Inventariarla es la unica salida honesta, y esta
+    prueba impide que la excepcion se conceda en silencio.
+    """
     import json
 
-    ficha = json.loads(
-        (RAIZ / "artifacts/adr002_cards/ficha_T0-control_v1.json").read_text(encoding="utf-8")
-    )
-    assert ficha["congelacion"]["huella"] in ce.HASHES_NO_ALMACENADOS
+    fichas = sorted((RAIZ / "artifacts/adr002_cards").glob("ficha_*.json"))
+    assert fichas, "no hay fichas congeladas que comprobar"
+    for ruta in fichas:
+        huella = json.loads(ruta.read_text(encoding="utf-8"))["congelacion"]["huella"]
+        assert huella in ce.HASHES_NO_ALMACENADOS, ruta.name

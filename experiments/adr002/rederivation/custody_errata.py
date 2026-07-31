@@ -101,6 +101,12 @@ HASHES_NO_ALMACENADOS: Final[Mapping[str, str]] = {
         "nunca se escribe como fichero. Su correccion se comprueba recomputandola, "
         "no buscandola en el repositorio"
     ),
+    "00571890294bcd18748e2ee600eb43bad1b92f80": (
+        "huella canonica de la ficha ADR002-A v1: misma naturaleza que la anterior "
+        "—SHA-1 de una forma canonica que nunca se escribe como fichero— y misma "
+        "verificacion, recomputarla. Toda ficha congelada anade una entrada aqui, y "
+        "una prueba comprueba que ninguna queda sin declarar"
+    ),
     "b57ad7b24c7f0232d45540cde73294e2d68e02ef": (
         "captura de entorno de ADR-001: HEAD observado de la rama historica "
         "fix/chat-history-layout al ejecutar los spikes, registrado como "
