@@ -446,6 +446,22 @@ class _CandidatoDePrueba:
         ]
 
 
+def test_a_no_invoca_la_materializacion_por_identidad(base: fixtures.Fixture) -> None:
+    """La operacion nueva del puerto existe y A no la llama.
+
+    Es la comprobacion que la ficha v3 promete: el paquete de correccion 02
+    extendio la capa comun, pero el trabajo de A es el mismo, y eso se
+    observa sobre el registro de consultas de una ejecucion completa, no se
+    declara.
+    """
+    peticion = _peticion("faro", cardinalidad=Cardinalidad.EXHAUSTIVA)
+    with PuertoSqlite(base.ruta) as puerto:
+        recuperacion = engine.recuperar(peticion, puerto, candidato())
+        operaciones = {consulta.operacion for consulta in puerto.registro.consultas}
+    assert recuperacion.resultados
+    assert not any(operacion.startswith("por_identidad") for operacion in operaciones)
+
+
 def test_el_motor_funciona_con_un_candidato_ajeno(base: fixtures.Fixture) -> None:
     """El cuarto control de neutralidad, el que exige ejecutar."""
     peticion = _peticion("faro", cardinalidad=Cardinalidad.EXHAUSTIVA)

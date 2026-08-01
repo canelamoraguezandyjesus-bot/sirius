@@ -218,6 +218,64 @@ def identificador_de(ruta: Path, clave: str) -> str:
         conexion.close()
 
 
+def anadir_memoria(ruta: Path, clave: str | None, texto: str, *, activo: bool = True) -> int:
+    """Inserta una memoria vigente y devuelve su id canonico numerico.
+
+    ``clave`` admite ``None``: el canon real contiene memorias sin clave de
+    sujeto, y las pruebas del paquete de correccion 02 necesitan exactamente
+    ese caso para demostrar que una clave vacia ya no pierde coincidencias.
+    """
+    conexion = sqlite3.connect(str(ruta))
+    try:
+        cursor = conexion.cursor()
+        cursor.execute(
+            "INSERT INTO memories (status, created_at, updated_at, subject_key, project_id) "
+            "VALUES ('current', ?, ?, ?, ?)",
+            (_TS, _TS, clave, int(PROYECTO_ACTIVO) if activo else int(PROYECTO_AJENO)),
+        )
+        memory_id = int(cursor.lastrowid or 0)
+        cursor.execute(
+            "INSERT INTO memory_revisions (memory_id, version, content, origin, is_current, "
+            "created_at, source_event_id) VALUES (?, 1, ?, 'fixture', 1, ?, NULL)",
+            (memory_id, texto, _TS),
+        )
+        conexion.commit()
+        return memory_id
+    finally:
+        conexion.close()
+
+
+def anadir_memorias_en_bloque(ruta: Path, clave: str, textos: list[str]) -> list[int]:
+    """Inserta muchas memorias vigentes con la MISMA clave de sujeto.
+
+    Es el fixture del limite de 512 filas por clave: el objetivo se situa
+    despues de las primeras 512 por orden estable de id, que era exactamente
+    lo que la materializacion por clave perdia sin traza.
+    """
+    conexion = sqlite3.connect(str(ruta))
+    try:
+        cursor = conexion.cursor()
+        identificadores: list[int] = []
+        for texto in textos:
+            cursor.execute(
+                "INSERT INTO memories (status, created_at, updated_at, subject_key, "
+                "project_id) VALUES ('current', ?, ?, ?, ?)",
+                (_TS, _TS, clave, int(PROYECTO_ACTIVO)),
+            )
+            memory_id = int(cursor.lastrowid or 0)
+            cursor.execute(
+                "INSERT INTO memory_revisions (memory_id, version, content, origin, "
+                "is_current, created_at, source_event_id) VALUES (?, 1, ?, 'fixture', 1, "
+                "?, NULL)",
+                (memory_id, texto, _TS),
+            )
+            identificadores.append(memory_id)
+        conexion.commit()
+        return identificadores
+    finally:
+        conexion.close()
+
+
 def anadir_memoria_inerte(ruta: Path, clave: str, texto: str) -> int:
     """Inserta una memoria vigente de tokens irrelevantes (df=1).
 
@@ -250,7 +308,9 @@ __all__ = [
     "PROYECTO_ACTIVO",
     "PROYECTO_AJENO",
     "FixtureB",
+    "anadir_memoria",
     "anadir_memoria_inerte",
+    "anadir_memorias_en_bloque",
     "construir_base",
     "construir_sidecar",
     "identificador_de",
