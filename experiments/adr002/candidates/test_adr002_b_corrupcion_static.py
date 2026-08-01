@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import inspect
 import re
+import subprocess
 from pathlib import Path
 from typing import Final
 
@@ -109,9 +110,14 @@ def test_el_mensaje_de_la_defensa_es_literal_y_minimizado() -> None:
 _INTERPOLACION: Final = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)")
 
 #: Los unicos nombres que un mensaje de corrupcion puede interpolar: la tabla
-#: (literal propio), el tipo de defecto (literal propio), la posicion ordinal
-#: y el nombre del metadato de conteo (literal propio). Jamas una celda.
-_NOMBRES_PERMITIDOS: Final = frozenset({"tabla", "defecto", "posicion", "clave_de_conteo"})
+#: (literal propio), el tipo de defecto (literal propio), la posicion ordinal,
+#: el nombre del metadato de conteo (literal propio) y la lista de tablas que
+#: faltan (diferencia de conjuntos sobre TABLAS_DEL_SIDECAR, de modo que solo
+#: puede contener constantes nuestras). Jamas una celda del sidecar, jamas el
+#: texto de una excepcion interna, jamas un dato del entorno.
+_NOMBRES_PERMITIDOS: Final = frozenset(
+    {"tabla", "defecto", "posicion", "clave_de_conteo", "faltan"}
+)
 
 
 def _nombres_interpolados(fuente: str) -> frozenset[str]:
@@ -139,6 +145,101 @@ def test_los_conteos_de_metadatos_no_interpolan_la_celda() -> None:
     assert "{declarado" not in apertura
     assert "no es un entero canonico" in apertura
     assert "excede el vocabulario maximo" in apertura
+
+
+def test_la_apertura_solo_interpola_nombres_permitidos() -> None:
+    """Auditoria COMPLETA del paquete 04: ninguna interpolacion de la
+    apertura procede de una celda, de una excepcion interna ni del entorno."""
+    nombres = _nombres_interpolados(inspect.getsource(vectores.LectorVectorial.__init__))
+    assert nombres <= _NOMBRES_PERMITIDOS, nombres
+
+
+def test_la_apertura_no_reproduce_la_huella_ni_el_error_fisico() -> None:
+    """Las dos fugas del paquete 04, fijadas por nombre."""
+    apertura = inspect.getsource(vectores.LectorVectorial.__init__)
+    for fuga in (
+        "{metadatos.get('huella_del_canon')}",
+        '{metadatos.get("huella_del_canon")}',
+        "{declarada",
+        "{actual",
+        "{error",
+        "{ruta_sidecar",
+        "{ruta_canon",
+    ):
+        assert fuga not in apertura, fuga
+
+
+def test_el_error_fisico_de_apertura_conserva_la_causa_sin_reproducirla() -> None:
+    apertura = inspect.getsource(vectores.LectorVectorial.__init__)
+    assert "except sqlite3.DatabaseError as error:" in apertura
+    assert 'msg = "el sidecar no es una base legible"' in apertura
+    assert "raise IndiceCorruptoError(msg) from error" in apertura
+    assert "except Exception" not in apertura
+
+
+def test_los_mensajes_de_apertura_son_literales_salvo_dos_justificados() -> None:
+    """Todo ``msg =`` de la apertura es una cadena literal salvo dos, y las
+    dos interpolan constantes propias: el nombre fijo del metadato de conteo
+    y la lista de tablas ausentes."""
+    apertura = inspect.getsource(vectores.LectorVectorial.__init__)
+    efes = [linea for linea in apertura.splitlines() if "msg = f" in linea]
+    assert len(efes) == 2
+    assert any("clave_de_conteo" in linea for linea in efes)
+    assert any("{faltan}" in linea for linea in efes)
+
+
+def test_la_lista_de_tablas_ausentes_solo_puede_contener_constantes_propias() -> None:
+    """``faltan`` es ``sorted(set(TABLAS_DEL_SIDECAR) - presentes)``: una
+    diferencia de conjuntos sobre nuestra constante, de modo que jamas puede
+    contener un nombre leido del sidecar."""
+    apertura = inspect.getsource(vectores.LectorVectorial.__init__)
+    assert "faltan = sorted(set(TABLAS_DEL_SIDECAR) - presentes)" in apertura
+    for presentes in (set(), {"metadatos"}, {"tabla_intrusa", "metadatos"}):
+        assert set(vectores.TABLAS_DEL_SIDECAR) - presentes <= set(vectores.TABLAS_DEL_SIDECAR)
+
+
+# --------------------------------------------------------------------------
+# Huella persistida: validador cerrado, corrupcion frente a desfase
+# --------------------------------------------------------------------------
+
+
+def test_existe_un_validador_cerrado_de_sha256_persistido() -> None:
+    assert vectores._FORMATO_DE_HUELLA_PERSISTIDA.pattern == r"[0-9a-f]{64}"
+    assert ".fullmatch(" in inspect.getsource(vectores._huella_persistida_valida)
+
+
+def test_el_validador_acepta_solo_sesenta_y_cuatro_hexadecimales_minusculos() -> None:
+    valida = "0" * 63 + "f"
+    assert vectores._huella_persistida_valida(valida)
+    for invalida in (
+        "",
+        "0" * 63,
+        "0" * 65,
+        "F" * 64,
+        "0" * 63 + "G",
+        " " + "0" * 63,
+        "0" * 63 + " ",
+        "0" * 64 + "\n",
+        "\n" + "0" * 64,
+        "sha256:" + "0" * 64,
+    ):
+        assert not vectores._huella_persistida_valida(invalida), invalida
+    for no_cadena in (None, 12345, True, b"0" * 64):
+        assert not vectores._huella_persistida_valida(no_cadena)
+
+
+def test_el_formato_invalido_es_corrupcion_y_el_valor_distinto_es_desfase() -> None:
+    """Las dos causas son distinguibles por tipo, y el formato se valida
+    ANTES de recomputar la huella del canon."""
+    apertura = inspect.getsource(vectores.LectorVectorial.__init__)
+    validacion = apertura.index("_huella_persistida_valida")
+    recomputo = apertura.index("huella_del_canon(ruta_canon)")
+    comparacion = apertura.index("raise IndiceDesfasadoError")
+    assert validacion < recomputo < comparacion
+    corrupcion = apertura[validacion:recomputo]
+    assert "raise IndiceCorruptoError" in corrupcion
+    assert "formato canonico de SHA-256" in corrupcion
+    assert apertura.count("raise IndiceDesfasadoError(msg)") == 1
 
 
 # --------------------------------------------------------------------------
@@ -217,4 +318,56 @@ def test_la_jerarquia_de_errores_no_crece() -> None:
         "IndiceCorruptoError",
         "IndiceDesfasadoError",
         "IndiceInconsistenteError",
+    }
+
+
+# --------------------------------------------------------------------------
+# Alcance del paquete 04: nada fuera de adr002_b, ningun limite movido
+# --------------------------------------------------------------------------
+
+
+def _git(*argumentos: str) -> str:
+    return subprocess.run(
+        ["git", *argumentos],
+        cwd=str(RAIZ_CANDIDATOS.parents[2]),
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.strip()
+
+
+def test_common_y_adr002_a_permanecen_en_sus_arboles_exactos() -> None:
+    """Se comprueba SIEMPRE, tambien mientras las funcionales estan
+    suspendidas: la regla de parada del paquete 04 no admite tocarlos."""
+    assert (
+        _git("rev-parse", "HEAD:experiments/adr002/candidates/common")
+        == "a83539e3c8b5396371b355619a29478cad054834"
+    )
+    assert (
+        _git("rev-parse", "HEAD:experiments/adr002/candidates/adr002_a")
+        == "2d90b551445db340458278a5accad55372995b76"
+    )
+
+
+def test_los_limites_de_consulta_y_almacenamiento_no_se_movieron() -> None:
+    """El paquete 04 no toca ``consultar``: mismas tres sentencias dirigidas
+    al sidecar y mismos parametros congelados."""
+    validando = inspect.getsource(vectores.LectorVectorial._consultar_validando)
+    assert validando.count("self._conexion.execute(") == 3
+    assert vectores.ALMACENAMIENTO_MAXIMO_SIDECAR_B == 33_554_432
+    assert vectores.ELEMENTOS_EXAMINADOS_MAXIMOS == 4096
+    assert vectores.TOP_K == 8
+    assert vectores.SOLAPAMIENTO_MINIMO == 2
+    assert vectores.CONSULTA_TERMINOS_MAXIMOS == 16
+    assert vectores.VOCABULARIO_MAXIMO == 4096
+    assert vectores.PARAMETROS_CONGELADOS == {
+        "vocabulario_maximo": 4096,
+        "frecuencia_documental_minima": 2,
+        "tokens_por_elemento_maximos": 64,
+        "dimensiones_maximas_por_vector": 256,
+        "escala_fija": 1_000_000,
+        "consulta_terminos_maximos": 16,
+        "top_k": 8,
+        "solapamiento_minimo": 2,
+        "elementos_examinados_maximos": 4096,
     }

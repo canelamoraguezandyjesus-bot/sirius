@@ -351,6 +351,12 @@ _FORMATO_DE_IDENTIDAD_PERSISTIDA: Final = re.compile(
     rf"({'|'.join(re.escape(clase.value) for clase in Clase)}):([1-9][0-9]*)"
 )
 
+#: Formato canonico exacto de la huella del canon persistida en metadatos:
+#: el hexdigest de un SHA-256, 64 caracteres, minusculas, sin nada mas. Se
+#: aplica con ``fullmatch`` y sin anclas, por la misma razon que el anterior
+#: (paquete de correccion 04).
+_FORMATO_DE_HUELLA_PERSISTIDA: Final = re.compile(r"[0-9a-f]{64}")
+
 
 def _es_entero_real(valor: object) -> TypeGuard[int]:
     """``int`` exacto: ``bool`` es subtipo de ``int`` y no es un entero real."""
@@ -361,6 +367,15 @@ def _identidad_persistida_valida(valor: object) -> bool:
     """Cadena completa con clase real, ``:`` unico y entero ASCII positivo
     sin ceros iniciales, sin espacios y sin contenido adicional."""
     return type(valor) is str and _FORMATO_DE_IDENTIDAD_PERSISTIDA.fullmatch(valor) is not None
+
+
+def _huella_persistida_valida(valor: object) -> bool:
+    """Hexdigest SHA-256 canonico: 64 caracteres de ``[0-9a-f]``, nada mas.
+
+    Una celda que no lo cumpla no es una huella y no puede compararse con
+    ninguna: el indice esta CORRUPTO, no desfasado (paquete 04).
+    """
+    return type(valor) is str and _FORMATO_DE_HUELLA_PERSISTIDA.fullmatch(valor) is not None
 
 
 def _pares_de_vector_validados(
@@ -492,7 +507,11 @@ class LectorVectorial:
 
     def __init__(self, ruta_canon: Path, ruta_sidecar: Path) -> None:
         if not ruta_sidecar.is_file():
-            msg = f"no existe el indice vectorial: {ruta_sidecar}"
+            # Sin la ruta: quien construye el lector se la paso y ya la tiene,
+            # el rastreo conserva el sitio de la llamada, y asi NINGUNA
+            # interpolacion de esta apertura procede de una celda, de una
+            # excepcion interna ni del entorno (paquete de correccion 04).
+            msg = "no existe el indice vectorial en la ruta declarada"
             raise IndiceInexistenteError(msg)
         self.registro = RegistroVectorial()
         self._conexion = sqlite3.connect(str(ruta_sidecar))
@@ -514,7 +533,9 @@ class LectorVectorial:
             metadatos = dict(self._conexion.execute("SELECT clave, valor FROM metadatos"))
         except sqlite3.DatabaseError as error:
             self._conexion.close()
-            msg = f"el sidecar no es una base legible: {error}"
+            # El texto del error fisico puede arrastrar fragmentos del
+            # contenido de la base: se conserva como CAUSA, no se reproduce.
+            msg = "el sidecar no es una base legible"
             raise IndiceCorruptoError(msg) from error
         except IndiceCorruptoError:
             self._conexion.close()
@@ -549,13 +570,17 @@ class LectorVectorial:
             raise IndiceCorruptoError(msg)
         #: Cota superior del rango de dimensiones que valida cada consulta.
         self._terminos_totales = conteos["terminos"]
-        actual = huella_del_canon(ruta_canon)
-        if metadatos.get("huella_del_canon") != actual:
+        # El formato se valida ANTES de recomputar la huella del canon: una
+        # celda que no es una huella no puede compararse con ninguna, y asi
+        # el caso corrupto ni siquiera lee el canon entero (paquete 04).
+        declarada = metadatos.get("huella_del_canon")
+        if not _huella_persistida_valida(declarada):
             self._conexion.close()
-            msg = (
-                "el canon cambio desde que se construyo el indice: "
-                f"{metadatos.get('huella_del_canon')} != {actual}"
-            )
+            msg = "metadatos: la huella del canon no tiene el formato canonico de SHA-256"
+            raise IndiceCorruptoError(msg)
+        if declarada != huella_del_canon(ruta_canon):
+            self._conexion.close()
+            msg = "el canon cambio desde que se construyo el indice"
             raise IndiceDesfasadoError(msg)
 
     def close(self) -> None:

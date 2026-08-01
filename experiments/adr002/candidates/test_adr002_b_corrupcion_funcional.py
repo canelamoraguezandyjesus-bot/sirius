@@ -1,8 +1,8 @@
 """Pruebas funcionales de la corrupcion LOGICA del sidecar (paquete 03).
 
-**Solo despues de la ficha B v3.** El paquete de correccion 03 cambio las
-fuentes de la huella de `ADR002-B`; estas pruebas exigen que los commits de
-entrada de `ficha_ADR002-A_v3.json` y `ficha_ADR002-B_v3.json` sean ancestros
+**Solo despues de la ficha B vigente.** Los paquetes de correccion 03 y 04
+cambiaron las fuentes de la huella de `ADR002-B`; estas pruebas exigen que los commits de
+entrada de `ficha_ADR002-A_v3.json` y `ficha_ADR002-B_v4.json` sean ancestros
 estrictos, y quedan suspendidas mientras no lo sean.
 
 Lo que se demuestra, seccion a seccion, siempre sobre sidecars construidos
@@ -63,7 +63,7 @@ from experiments.adr002.candidates.common.port import (
 RAIZ = Path(__file__).resolve().parents[3]
 FICHAS_SUCESORAS: Final = (
     "artifacts/adr002_cards/ficha_ADR002-A_v3.json",
-    "artifacts/adr002_cards/ficha_ADR002-B_v3.json",
+    "artifacts/adr002_cards/ficha_ADR002-B_v4.json",
 )
 
 #: La consulta de control: en el fixture, "faro" comparte dimensiones con
@@ -99,7 +99,7 @@ def _es_ancestro_estricto(ruta: str) -> bool:
 pytestmark = pytest.mark.skipif(
     not all(_es_ancestro_estricto(ficha) for ficha in FICHAS_SUCESORAS),
     reason=(
-        "las fichas ADR002-A v3 y ADR002-B v3 aun no son ancestros estrictos: "
+        "las fichas ADR002-A v3 y ADR002-B v4 aun no son ancestros estrictos: "
         "ejecutar ahora produciria evidencia no utilizable (TOL-210, regla 3)"
     ),
 )
