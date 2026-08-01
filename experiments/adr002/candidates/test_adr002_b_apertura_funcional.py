@@ -474,3 +474,74 @@ def test_estas_pruebas_no_miden_rendimiento() -> None:
         assert prohibido not in cuerpo, prohibido
     assert "performance_corpus" not in cuerpo
     assert "conformance_corpus" not in cuerpo
+
+
+# --------------------------------------------------------------------------
+# K. Fe de erratas 04: ninguna excepcion sin tipar escapa del candidato
+# --------------------------------------------------------------------------
+
+
+def test_un_conteo_de_miles_de_digitos_es_corrupcion_tipada(
+    indexada: fixtures_b.FixtureB, conexiones: list[_ConexionVigilada]
+) -> None:
+    """Antes: ValueError desnuda del limite de conversion de CPython, que
+    ademas revelaba cuantos digitos tenia la celda."""
+    for clave in ("elementos", "terminos"):
+        _manipular(
+            indexada,
+            "UPDATE metadatos SET valor = ? WHERE clave = ?",
+            ("9" * 5000, clave),
+        )
+        with pytest.raises(vectores.IndiceNoUtilizableError) as caso:
+            _abrir(indexada)
+        assert type(caso.value) is vectores.IndiceCorruptoError
+        mensaje = str(caso.value)
+        assert "no es un entero canonico" in mensaje
+        assert "5000" not in mensaje
+        assert "9999" not in mensaje
+        assert _todo_cerrado(conexiones)
+
+
+def test_un_vector_con_anidamiento_profundo_es_corrupcion_tipada(
+    indexada: fixtures_b.FixtureB,
+) -> None:
+    """Antes: RecursionError desnuda, que no es subtipo de ValueError y
+    escapaba del validador central y de los dos except de consultar."""
+    for tabla in ("vectores_de_termino", "vectores_de_elemento"):
+        _manipular(
+            indexada,
+            f"UPDATE {tabla} SET dimensiones = ?",
+            ("[" * 100000 + "]" * 100000,),
+        )
+        lector = _abrir(indexada)
+        with pytest.raises(vectores.IndiceNoUtilizableError) as caso:
+            lector.consultar(("faro",))
+        assert type(caso.value) is vectores.IndiceCorruptoError
+        assert "longitud superior a la maxima" in str(caso.value)
+
+
+def test_una_identidad_no_representable_no_llega_al_puerto(
+    indexada: fixtures_b.FixtureB,
+) -> None:
+    """Antes: el lector la aceptaba y SQLite lanzaba OverflowError desnuda a
+    traves de la frontera con el puerto."""
+    gigante = "MEMORIA:" + "9" * 4000
+    assert not vectores._identidad_persistida_valida(gigante)
+    _manipular(indexada, "UPDATE posting SET elemento = ?", (gigante,))
+    lector = _abrir(indexada)
+    with pytest.raises(vectores.IndiceNoUtilizableError) as caso:
+        lector.consultar(("faro",))
+    assert type(caso.value) is vectores.IndiceCorruptoError
+    assert "identidad con formato no canonico" in str(caso.value)
+    assert "9999" not in str(caso.value)
+
+
+def test_el_canon_ilegible_ya_no_filtra_la_conexion_del_sidecar(
+    indexada: fixtures_b.FixtureB, conexiones: list[_ConexionVigilada]
+) -> None:
+    """La limitacion 2 de la fe de erratas 03 se CONSERVA: el escape sigue sin
+    tipar. Lo que se corrigio es la fuga del descriptor."""
+    indexada.ruta.unlink()
+    with pytest.raises(sqlite3.OperationalError):
+        _abrir(indexada)
+    assert _todo_cerrado(conexiones)

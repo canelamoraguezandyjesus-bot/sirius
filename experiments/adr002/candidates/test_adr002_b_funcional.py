@@ -69,7 +69,7 @@ FICHA: Final = "artifacts/adr002_cards/ficha_ADR002-B_v5.json"
 #: Se fija al congelar la v4; si quedara desactualizada, la cita fallaria.
 #: Mientras la suite este suspendida por la guarda de anterioridad, este
 #: centinela no se compara con nada.
-HUELLA_FICHA_B_V5: Final = "pendiente-de-congelacion-de-la-ficha-v5"
+HUELLA_FICHA_B_V5: Final = "b27866b1278f37473fa6151ab7f26df7386bcd81"
 
 CONSULTA: Final = "faro"
 OBJETIVO: Final = fixtures_b.OBJETIVO_SOLO_B
