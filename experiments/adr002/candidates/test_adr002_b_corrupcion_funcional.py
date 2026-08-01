@@ -209,7 +209,10 @@ def test_tras_la_corrupcion_el_lector_no_queda_parcialmente_valido(
     lector = _lector(indexada)
     with pytest.raises(vectores.IndiceCorruptoError):
         lector.consultar(TERMINOS)
-    with pytest.raises(sqlite3.ProgrammingError):
+    # La conexion quedo cerrada: el intento de reuso tampoco entrega nada y
+    # sigue fallando cerrado y tipado (el error de conexion cerrada de
+    # sqlite3 es DatabaseError y se traduce igual que el resto).
+    with pytest.raises(vectores.IndiceCorruptoError):
         lector.consultar(TERMINOS)
 
 
