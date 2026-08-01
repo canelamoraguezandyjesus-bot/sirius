@@ -116,9 +116,11 @@ HASHES_NO_ALMACENADOS: Final[Mapping[str, str]] = {
         "blob 1a96f535250bce643e8ccf2edb0362b3ec9320fe del commit b96e6ea"
     ),
     "4ed820fab545dd9154ce078349c214f870baecd1": (
-        "huella canonica de la ficha ADR002-A v2, la vigente: misma naturaleza y misma "
-        "verificacion que las anteriores. Toda ficha congelada anade una entrada aqui, "
-        "y una prueba comprueba que ninguna queda sin declarar"
+        "huella canonica que la ficha ADR002-A v2 tuvo mientras estuvo CONGELADA: "
+        "misma naturaleza y misma verificacion que las anteriores. La v2 quedo "
+        "SUSTITUIDA por el paquete de correccion 02 y la vigente de ADR002-A es la "
+        "v3; esta entrada se conserva porque el acta historica de preparacion de la "
+        "v2 la cita, y esa cita es historia que no se reescribe"
     ),
     "c1ca17a7f5345b4cec2a0ea63dac6c8b1bb6e5fd": (
         "huella canonica que la ficha ADR002-B v1 tuvo mientras estuvo CONGELADA: SHA-1 "

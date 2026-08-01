@@ -414,14 +414,23 @@ def test_ningun_mensaje_de_apertura_arrastra_texto_protegido(
     indexada: fixtures_b.FixtureB,
 ) -> None:
     """Barrido final: se planta el mismo texto protegido en cada celda de
-    metadatos, una por una, y ningun mensaje lo reproduce."""
+    metadatos, UNA POR UNA, y ningun mensaje lo reproduce.
+
+    El sidecar se restaura entre iteraciones: sin restaurar, la primera celda
+    corrupta cortocircuitaria todas las demas y el barrido solo ejerceria una
+    rama repetida —el defecto que la auditoria adversarial encontro en la
+    primera version de esta prueba—.
+    """
+    intacto = indexada.sidecar.read_bytes()
     for clave in (
         "version_del_algoritmo",
+        "version_de_tokenizacion",
         "parametros",
         "elementos",
         "terminos",
         "huella_del_canon",
     ):
+        indexada.sidecar.write_bytes(intacto)
         _manipular(
             indexada,
             "UPDATE metadatos SET valor = ? WHERE clave = ?",
@@ -431,6 +440,16 @@ def test_ningun_mensaje_de_apertura_arrastra_texto_protegido(
             _abrir(indexada)
         assert TEXTO_PROTEGIDO_LARGO not in str(caso.value), clave
         assert "faro de poniente" not in str(caso.value), clave
+        # Y cada celda ejerce SU rama, no la de la primera corrupcion.
+        esperado = {
+            "version_del_algoritmo": "versiones incompatibles",
+            "version_de_tokenizacion": "versiones incompatibles",
+            "parametros": "otros parametros congelados",
+            "elementos": "el conteo 'elementos'",
+            "terminos": "el conteo 'terminos'",
+            "huella_del_canon": "formato canonico de SHA-256",
+        }[clave]
+        assert esperado in str(caso.value), (clave, str(caso.value))
 
 
 # --------------------------------------------------------------------------
@@ -486,7 +505,9 @@ def test_un_conteo_de_miles_de_digitos_es_corrupcion_tipada(
 ) -> None:
     """Antes: ValueError desnuda del limite de conversion de CPython, que
     ademas revelaba cuantos digitos tenia la celda."""
+    intacto = indexada.sidecar.read_bytes()
     for clave in ("elementos", "terminos"):
+        indexada.sidecar.write_bytes(intacto)  # sin restaurar, solo se probaria la primera
         _manipular(
             indexada,
             "UPDATE metadatos SET valor = ? WHERE clave = ?",
@@ -496,7 +517,7 @@ def test_un_conteo_de_miles_de_digitos_es_corrupcion_tipada(
             _abrir(indexada)
         assert type(caso.value) is vectores.IndiceCorruptoError
         mensaje = str(caso.value)
-        assert "no es un entero canonico" in mensaje
+        assert f"el conteo {clave!r} no es un entero canonico" in mensaje
         assert "5000" not in mensaje
         assert "9999" not in mensaje
         assert _todo_cerrado(conexiones)
@@ -507,7 +528,9 @@ def test_un_vector_con_anidamiento_profundo_es_corrupcion_tipada(
 ) -> None:
     """Antes: RecursionError desnuda, que no es subtipo de ValueError y
     escapaba del validador central y de los dos except de consultar."""
+    intacto = indexada.sidecar.read_bytes()
     for tabla in ("vectores_de_termino", "vectores_de_elemento"):
+        indexada.sidecar.write_bytes(intacto)
         _manipular(
             indexada,
             f"UPDATE {tabla} SET dimensiones = ?",

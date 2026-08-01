@@ -182,10 +182,12 @@ def test_los_mensajes_de_apertura_son_literales_salvo_dos_justificados() -> None
     dos interpolan constantes propias: el nombre fijo del metadato de conteo
     y la lista de tablas ausentes."""
     apertura = inspect.getsource(vectores.LectorVectorial.__init__)
-    efes = [linea for linea in apertura.splitlines() if "msg = f" in linea]
-    assert len(efes) == 2
-    assert any("clave_de_conteo" in linea for linea in efes)
-    assert any("{faltan}" in linea for linea in efes)
+    # Recuento sobre TODO el fuente, no por linea: la fuga que el paquete 04
+    # corrigio era una f-string multilinea entre parentesis y un recuento por
+    # linea no la habria visto (hallazgo de la auditoria adversarial).
+    assert apertura.count('f"') == 2
+    assert 'f"metadatos: el conteo {clave_de_conteo!r}' in apertura
+    assert 'f"el sidecar no contiene las tablas esperadas: faltan {faltan}"' in apertura
 
 
 def test_la_lista_de_tablas_ausentes_solo_puede_contener_constantes_propias() -> None:
@@ -194,8 +196,13 @@ def test_la_lista_de_tablas_ausentes_solo_puede_contener_constantes_propias() ->
     contener un nombre leido del sidecar."""
     apertura = inspect.getsource(vectores.LectorVectorial.__init__)
     assert "faltan = sorted(set(TABLAS_DEL_SIDECAR) - presentes)" in apertura
-    for presentes in (set(), {"metadatos"}, {"tabla_intrusa", "metadatos"}):
-        assert set(vectores.TABLAS_DEL_SIDECAR) - presentes <= set(vectores.TABLAS_DEL_SIDECAR)
+    # Lo que importa no es la identidad de conjuntos —que seria tautologica—
+    # sino que un nombre LEIDO DEL SIDECAR jamas puede aparecer en el mensaje:
+    # con una tabla intrusa presente, el resultado no la contiene.
+    presentes = {"metadatos", "tabla_intrusa_con_nombre_hostil"}
+    faltan = sorted(set(vectores.TABLAS_DEL_SIDECAR) - presentes)
+    assert "tabla_intrusa_con_nombre_hostil" not in faltan
+    assert set(faltan) < set(vectores.TABLAS_DEL_SIDECAR)
 
 
 # --------------------------------------------------------------------------
