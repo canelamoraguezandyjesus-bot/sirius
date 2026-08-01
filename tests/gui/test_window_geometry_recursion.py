@@ -22,10 +22,12 @@ a contradecir.
 from __future__ import annotations
 
 import itertools
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
 from pytestqt.qtbot import QtBot
 
@@ -228,26 +230,34 @@ def test_maximize_restore_and_minimize_still_work(qtbot: QtBot, tmp_path: Path) 
 
 @pytest.mark.gui
 @pytest.mark.parametrize("scale_factor", ["1", "1.25", "1.5"])
-def test_the_window_opens_under_windows_style_scaling(
-    qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, scale_factor: str
-) -> None:
-    """El caso real ocurrió al 125 %; el arranque no puede depender de la escala.
+def test_the_window_reflows_under_real_qt_scale_factors(scale_factor: str) -> None:
+    """El caso real ocurrió al 125 %; la geometría no puede depender de la escala.
 
-    Solo se comprueba que la escala no rompe la construcción ni la geometría;
-    la causa del cierre no era el escalado.
+    Por SUBPROCESO obligatoriamente: ``QT_SCALE_FACTOR`` se lee una sola vez
+    al crear ``QApplication``, y pytest-qt comparte una única aplicación para
+    toda la sesión, así que cambiar la variable dentro de una prueba no prueba
+    nada — la versión anterior de esta prueba ejecutaba tres veces la escala
+    1.0. La sonda verifica primero que el proceso hijo corre de verdad al
+    factor pedido (``devicePixelRatio``) y después el reflujo completo:
+    el cuerpo sigue el ancho, el alto sube al estrechar y baja al ensanchar,
+    y el proceso termina limpiamente.
     """
-    monkeypatch.setenv("QT_SCALE_FACTOR", scale_factor)
-    database_path = _bootstrapped_database(tmp_path / "sirius.db")
-    repository = build_sqlite_conversation_repository(database_path)
-    conversation = repository.get_or_create_main_conversation()
-    repository.append_message(conversation.id, MessageRole.SIRIUS, LONG_MESSAGE)
+    probe = Path(__file__).resolve().parent / "_scale_probe.py"
+    environment = dict(os.environ)
+    environment["QT_SCALE_FACTOR"] = scale_factor
+    environment["QT_QPA_PLATFORM"] = "offscreen"
 
-    window = _build_window(database_path)
-    qtbot.addWidget(window)
-    window.resize(900, 600)
-    window.show()
-    qtbot.waitUntil(lambda: window.message_list.viewport().width() > 0, timeout=5000)
+    completed = subprocess.run(
+        [sys.executable, str(probe), scale_factor],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
 
-    assert window.message_list.count() == 1
-    assert window.message_list.item(0).sizeHint().height() > 0
-    assert window.conversation_splitter.orientation() is Qt.Orientation.Horizontal
+    assert completed.returncode == 0, (
+        f"la sonda de escala {scale_factor} falló (código {completed.returncode}):\n"
+        f"stdout: {completed.stdout}\nstderr: {completed.stderr}"
+    )
+    assert "OK escala=" in completed.stdout

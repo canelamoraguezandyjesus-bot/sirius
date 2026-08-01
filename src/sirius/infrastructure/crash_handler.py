@@ -20,12 +20,27 @@ línea en el registro. Este manejador corrige las tres cosas:
 - **Se da margen de pila.** Antes de formatear sube temporalmente el límite de
   recursión, que es justo lo que le faltaba al manejador por omisión, y además
   recorta la traza a las últimas llamadas, que son las que interesan.
-- **No depende de stderr.** El destino primario es el registro rotatorio; a
-  ``stderr`` solo se escribe si existe y es utilizable.
+- **No depende de stderr.** ``stderr`` es solo una salida secundaria de mejor
+  esfuerzo: se escribe únicamente si existe y es utilizable.
 
-No oculta nada: todo lo que llega aquí se registra. Tampoco sustituye al
-manejo de errores de cada operación, que sigue siendo el camino normal; esto
-es la última red antes de que el proceso muera.
+Contrato exacto — lo que este módulo garantiza y lo que no:
+
+- **Después de ``configure_logging``**, el destino principal de un fallo no
+  capturado es el registro rotatorio ``logs/application.log``.
+- **Antes de configurar el registro** (la ventana entre el arranque del
+  proceso y la resolución del directorio de datos), el logger de Sirius aún
+  no tiene manejador de fichero: la persistencia NO está garantizada y solo
+  queda el mejor esfuerzo sobre ``stderr``, si existe.
+- Los fallos del propio logging y las reentradas se cortan deliberadamente
+  para impedir una segunda recursión; en esos casos el informe puede
+  perderse. Este manejador NO garantiza que todo fallo imaginable quede
+  persistido: garantiza que informar de un fallo nunca tumba el proceso por
+  segunda vez ni deja el doble error ``Error in sys.excepthook`` /
+  ``lost sys.stderr``.
+
+No oculta nada de lo que puede registrar. Tampoco sustituye al manejo de
+errores de cada operación, que sigue siendo el camino normal; esto es la
+última red antes de que el proceso muera.
 """
 
 from __future__ import annotations
@@ -44,8 +59,12 @@ __all__ = ["format_crash", "install_crash_handler"]
 #: ``RecursionError`` sin volver a agotarla.
 _RECURSION_HEADROOM = 500
 
-#: Últimas llamadas que se conservan de la traza. Una recursión desbocada
-#: produce cientos de marcos idénticos que no aportan nada.
+#: Cuántos marcos FINALES de la traza se conservan (los más recientes, los
+#: más cercanos al punto del fallo). ``traceback.format_exception`` con
+#: límite positivo conserva los N primeros marcos —los más antiguos—, así
+#: que hay que pasarlo en negativo; con el signo equivocado, una recursión
+#: desbocada mostraría solo el arranque de la aplicación y ni un marco del
+#: ciclo que la causó.
 _MAX_TRACEBACK_FRAMES = 40
 
 _reporting = threading.local()
@@ -60,12 +79,19 @@ def format_crash(
     exc_value: BaseException,
     exc_traceback: TracebackType | None,
 ) -> str:
-    """Formatea la traza sin poder agotar la pila por segunda vez."""
+    """Formatea la traza sin poder agotar la pila por segunda vez.
+
+    Conserva los últimos ``_MAX_TRACEBACK_FRAMES`` marcos —los más cercanos
+    al fallo—, que en una recursión desbocada son los únicos que enseñan el
+    ciclo. El límite se pasa en NEGATIVO: en positivo,
+    ``traceback.format_exception`` conserva los primeros marcos (los más
+    antiguos) y descarta justo la parte útil.
+    """
     previous_limit = sys.getrecursionlimit()
     try:
         sys.setrecursionlimit(previous_limit + _RECURSION_HEADROOM)
         lines = traceback.format_exception(
-            exc_type, exc_value, exc_traceback, limit=_MAX_TRACEBACK_FRAMES
+            exc_type, exc_value, exc_traceback, limit=-_MAX_TRACEBACK_FRAMES
         )
         return "".join(lines)
     except Exception:

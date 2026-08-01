@@ -206,7 +206,10 @@ def _build_first_window(
 def main() -> int:
     """Start the Sirius desktop application."""
     # Antes de crear nada: si algo escapa del bucle de eventos, que quede
-    # registrado en vez de cerrar Sirius sin dejar rastro.
+    # registrado en vez de cerrar Sirius sin dejar rastro. La persistencia en
+    # logs/application.log solo está garantizada a partir de configure_logging
+    # (tras resolver el directorio de datos); en la ventana anterior el
+    # manejador solo puede intentar stderr, si existe.
     install_crash_handler()
 
     app = QApplication.instance()
