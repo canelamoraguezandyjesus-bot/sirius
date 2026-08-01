@@ -200,7 +200,9 @@ def test_una_huella_malformada_es_corrupcion_minimizada(
     mensaje = str(caso.value)
     assert "formato canonico de SHA-256" in mensaje
     # Ni entera ni por fragmentos: ningun trozo no trivial de la celda sale.
-    assert celda not in mensaje
+    # (La celda vacia se excluye de la contencion: "" esta en toda cadena.)
+    if celda:
+        assert celda not in mensaje
     for trozo in (celda[:16], celda[-16:], celda.strip()):
         if len(trozo) >= 4:
             assert trozo not in mensaje, trozo
@@ -222,9 +224,26 @@ def test_la_huella_malformada_no_llega_a_recomputar_el_canon(
     """La validacion precede al recomputo: con la celda corrupta, el canon
     NO se abre —solo hay una conexion, la del propio sidecar—."""
     _plantar_huella(indexada, "no-soy-una-huella")
+    # Se mide el DELTA de la apertura: la vigilancia tambien registra las
+    # conexiones que la propia prueba abrio para manipular el sidecar.
+    antes = len(conexiones)
     with pytest.raises(vectores.IndiceCorruptoError):
         _abrir(indexada)
-    assert len(conexiones) == 1
+    abiertas_por_la_apertura = len(conexiones) - antes
+    assert abiertas_por_la_apertura == 1, "el canon NO debe abrirse con la huella corrupta"
+    assert _todo_cerrado(conexiones)
+
+
+def test_una_huella_canonica_si_obliga_a_recomputar_el_canon(
+    indexada: fixtures_b.FixtureB, conexiones: list[_ConexionVigilada]
+) -> None:
+    """Contraste del control anterior: con la huella bien formada, el canon
+    SI se abre —dos conexiones—, de modo que la prueba de ahorro discrimina."""
+    _plantar_huella(indexada, HUELLA_CANONICA_AJENA)
+    antes = len(conexiones)
+    with pytest.raises(vectores.IndiceDesfasadoError):
+        _abrir(indexada)
+    assert len(conexiones) - antes == 2
     assert _todo_cerrado(conexiones)
 
 
