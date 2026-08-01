@@ -114,6 +114,12 @@ class _MessageBody(QTextEdit):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setStyleSheet("background: transparent; border: none;")
         self._content_height = 0
+        # Un reajuste de alto puede provocar, por la cadena de señales, otro
+        # cambio de geometría que vuelva a entrar aquí dentro de la misma
+        # pila. En Windows eso ocurre de verdad: al acoplar la ventana el
+        # sistema entrega WM_SIZE de forma síncrona durante SetWindowPos, así
+        # que resizeEvent se reejecuta sin pasar por el bucle de eventos.
+        self._syncing_height = False
 
     def set_markdown_content(self, text: str) -> None:
         self.document().setMarkdown(text, _MARKDOWN_FEATURES)
@@ -142,12 +148,28 @@ class _MessageBody(QTextEdit):
         return hint
 
     def _sync_height(self) -> None:
-        width = self.viewport().width() or self.width() or _PROVISIONAL_WIDTH
-        self.document().setTextWidth(width)
-        height = int(self.document().size().height()) + _VERTICAL_PADDING
-        if self._content_height != height:
-            self._content_height = height
-            self.updateGeometry()
+        """Recalcula el alto pedido a partir del ancho disponible.
+
+        El guardia protege el CÁLCULO, no el aviso. Mientras se mide no se
+        puede volver a medir —ahí es donde se realimentaba—, pero la señal se
+        emite ya fuera del guardia: lo que ocurra después es un recálculo
+        legítimo con la geometría nueva, y suprimirlo dejaría alturas obsoletas.
+        """
+        if self._syncing_height:
+            return
+        self._syncing_height = True
+        try:
+            width = self.viewport().width() or self.width() or _PROVISIONAL_WIDTH
+            self.document().setTextWidth(width)
+            height = int(self.document().size().height()) + _VERTICAL_PADDING
+            changed = self._content_height != height
+            if changed:
+                self._content_height = height
+                self.updateGeometry()
+        finally:
+            self._syncing_height = False
+
+        if changed:
             self.height_changed.emit()
 
 
@@ -247,6 +269,11 @@ class MessageItemWidget(QWidget):
         layout.addWidget(self._content_container)
 
         self._segment_bodies: list[_MessageBody] = []
+        # Mismo motivo que en ``_MessageBody``: la cadena de señales puede
+        # volver a entrar aquí dentro de la misma pila.
+        self._syncing_size = False
+        # Último tamaño anunciado: solo se avisa cuando cambia de verdad.
+        self._last_hint = QSize()
 
     def set_message(self, prefix: str, body_text: str, *, bold: bool) -> None:
         """Renderiza el contenido final consolidado, segmentado en prosa Markdown
@@ -318,6 +345,54 @@ class MessageItemWidget(QWidget):
         self._sync_size()
 
     def _sync_size(self) -> None:
-        self.adjustSize()
-        self.updateGeometry()
-        self.size_changed.emit()
+        """Avisa de que el alto pedido cambió. NO impone geometría propia.
+
+        Antes esto llamaba a ``adjustSize()``, y esa llamada era el motor del
+        bucle: ``adjustSize`` redimensiona el widget al ancho de su propio
+        sizeHint, pero quien manda sobre su geometría es el contenedor (la
+        lista, o el layout que lo aloja), que acto seguido le reimpone el ancho
+        de la columna. Cada ida y vuelta reflui el texto a un alto distinto,
+        que dispara otro ``height_changed``, que vuelve a llamar aquí. Además
+        de realimentarse, se veía: con el contenedor a 900 px el cuerpo se
+        quedaba clavado en 256, el ancho que ``adjustSize`` le imponía.
+
+        El alto correcto llega igualmente al contenedor por ``sizeHint()``,
+        que sí refleja el alto real del documento; no hace falta forzar
+        ninguna geometría desde aquí.
+        """
+        if self._syncing_size:
+            return
+        self._syncing_size = True
+        try:
+            # Recalcular el layout SIN redimensionar el widget: ``activate()``
+            # refresca el sizeHint que el contenedor va a leer, que es lo único
+            # que hacía falta de ``adjustSize``, pero no toca la geometría, que
+            # es lo que realimentaba el bucle.
+            # ``invalidate()`` tira la caché de sizeHint; ``activate()`` la
+            # recalcula. Hay que hacerlo en los DOS niveles: los cuerpos viven
+            # en ``_content_layout``, dentro de ``_content_container``, y si
+            # solo se invalida el layout exterior el contenedor sigue
+            # devolviendo el alto del ancho ANTERIOR. Ese desfase de un paso
+            # era lo que ``adjustSize`` tapaba, al coste de pelearse con la
+            # geometría y realimentar el bucle.
+            self._content_layout.invalidate()
+            self._content_container.updateGeometry()
+            layout = self.layout()
+            if layout is not None:
+                layout.invalidate()
+                layout.activate()
+            self.updateGeometry()
+            hint = self.sizeHint()
+            changed = hint != self._last_hint
+            if changed:
+                self._last_hint = hint
+        finally:
+            self._syncing_size = False
+
+        # El aviso va fuera del guardia, para que el recálculo legítimo que
+        # provoque no quede suprimido; y solo se emite si el tamaño pedido
+        # cambió de verdad. Esa condición es la que hace converger la cadena:
+        # cuando la medida se estabiliza, deja de haber avisos y el ciclo
+        # termina solo, en vez de rebotar indefinidamente.
+        if changed:
+            self.size_changed.emit()
