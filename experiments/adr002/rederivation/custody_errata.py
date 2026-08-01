@@ -154,8 +154,20 @@ HASHES_NO_ALMACENADOS: Final[Mapping[str, str]] = {
         "el; el contenido congelado original permanece integro en el historial"
     ),
     "ef2bfb137c5d67450e7ade7b4a934e0a42744800": (
-        "huella canonica de la ficha ADR002-B v3, la vigente tras la validacion "
-        "logica del sidecar del paquete de correccion 03: misma naturaleza y misma "
+        "huella canonica que la ficha ADR002-B v3 tuvo mientras estuvo CONGELADA, "
+        "tras la validacion logica del sidecar: se conserva inventariada porque el "
+        "paquete de correccion 04 la cita como la huella de la ficha cuyo defecto "
+        "de minimizacion declara; esa cita es historia que no se reescribe"
+    ),
+    "1c639d37ca6af5d5d6921c4695ba049325f01270": (
+        "huella canonica de la ficha ADR002-B v3 ya SUSTITUIDA por el paquete de "
+        "correccion 04: solo su campo de estado cambio y la huella se recomputa de "
+        "el; el contenido congelado original permanece integro en el historial"
+    ),
+    "5c9eab540e74b4290635dc7c6d0b79daf76d86aa": (
+        "huella canonica de la ficha ADR002-B v4, la vigente tras la minimizacion "
+        "de los mensajes de apertura y la validacion canonica de la huella "
+        "persistida del paquete de correccion 04: misma naturaleza y misma "
         "verificacion que las anteriores, recomputarla sobre la forma canonica"
     ),
     "b57ad7b24c7f0232d45540cde73294e2d68e02ef": (
