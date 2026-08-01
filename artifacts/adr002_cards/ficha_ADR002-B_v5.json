@@ -1,7 +1,7 @@
 {
-  "documento": "Ficha de candidato ADR002-B, version 4",
+  "documento": "Ficha de candidato ADR002-B, version 5",
   "version_esquema": "ficha-candidato-0.2",
-  "estado": "SUSTITUIDA",
+  "estado": "CONGELADA",
   "plantilla": "SIRIUS_0.2_ADR_002_FICHA_CANDIDATO_TEMPLATE_v0.4_PROPUESTO.md",
   "registro": "SIRIUS_0.2_REGISTRO_TOLERANCIAS_v0.5_PROPUESTO.md",
   "protocolo": "SIRIUS_0.2_ADR_002_PROTOCOLO_MEDICION_v0.2_PROPUESTO.md",
@@ -14,14 +14,14 @@
   "identidad": {
     "candidato": "ADR002-B",
     "papel": "CANDIDATO",
-    "version": 4,
-    "sustituye_a": 3,
-    "motivo_de_sustitucion": "sustituye a la v3 por el paquete de correccion 04: exposicion del valor persistido de huella y del texto interno de SQLite en los mensajes de apertura. La v3 declaraba mensajes minimizados de tabla, defecto y posicion, pero LectorVectorial.__init__ interpolaba la celda metadatos.huella_del_canon y la huella recomputada del canon al detectar desfase, y copiaba el texto del DatabaseError de SQLite al mensaje externo; un sidecar manipulado podia colocar en esa celda texto protegido, saltos de linea o contenido arbitrario, y ese contenido salia integro en la excepcion. Ahora la celda se valida contra el formato canonico exacto del hexdigest SHA-256 (fullmatch de 64 caracteres [0-9a-f], sin espacios, saltos, prefijos ni contenido adicional) ANTES de recomputar la huella del canon, de modo que una celda que no es una huella es IndiceCorruptoError y solo una huella canonica distinta es IndiceDesfasadoError: las dos causas quedan distinguibles por tipo y ningun mensaje reproduce ninguna de las dos huellas. El error fisico de apertura conserva el texto de SQLite como CAUSA con raise from y no lo reproduce, y el mensaje de indice inexistente deja de interpolar la ruta del entorno, que el llamante ya posee y el rastreo conserva. El invariante resultante es comprobable: ninguna interpolacion de la apertura procede de una celda, de una excepcion interna ni del entorno; las dos que quedan son el nombre fijo del metadato de conteo y la lista de tablas ausentes, una diferencia de conjuntos sobre la constante propia TABLAS_DEL_SIDECAR. Los limites se revisan uno a uno y se conservan con fundamento estatico: ninguna sentencia nueva, un fullmatch sobre 64 caracteres en la apertura ya amortizada, y el caso corrupto deja ademas de leer el canon entero. IndiceInconsistenteError conserva intacto su contrato de la correccion 02. Las limitaciones de la fe de erratas 03 que este paquete no corrige siguen vigentes y declaradas. Ninguna cifra procede de medicion"
+    "version": 5,
+    "sustituye_a": 4,
+    "motivo_de_sustitucion": "sustituye a la v4 por la fe de erratas 04: cuatro caminos reproducibles en los que ADR002-B lanzaba una excepcion que NO es subtipo de IndiceNoUtilizableError, lo que falsificaba la declaracion congelada de fallo cerrado y tipado. (1) Un conteo de metadatos sin cota de longitud hacia que int() topara con el limite de conversion de CPython y lanzara ValueError, revelando ademas cuantos digitos tenia la celda; ahora el conteo se acota a 19 digitos antes de convertirlo. (2) Un vector con anidamiento profundo hacia que el decodificador lanzara RecursionError, que no es subtipo de ValueError y escapaba del validador central y de los dos except de consultar; ahora la celda se acota a 16384 caracteres ANTES de deserializar —un vector conforme no llega a 6700— y RecursionError se traduce ademas junto a ValueError. (3) El formato de identidad persistida no acotaba el numero, de modo que una identidad de miles de digitos pasaba la validacion del lector y hacia que SQLite lanzara OverflowError a traves de la frontera con el puerto; ahora la identidad se acota a 19 digitos y se exige que su valor sea representable, de modo que el lector no puede entregar al puerto lo que el puerto no puede representar. (4) La recomputacion de la huella del canon estaba fuera de todo try y filtraba el descriptor del sidecar; ahora la conexion se cierra antes de propagar. El escape SIN TIPAR del canon ilegible se CONSERVA a proposito: es la limitacion 2 de la fe de erratas 03 y esta ficha no afirma haberla corregido. Se corrigen ademas dos inexactitudes del texto de la v4: la afirmacion universal de que ningun mensaje reproduce celdas se acota a los mensajes de corrupcion y apertura, porque IndiceInconsistenteError reproduce identidades canonicas acotadas por su contrato explicito de la correccion 02, y se declara expresamente el cierre de conexion que el paquete 04 preinscribio. Los limites se conservan con fundamento estatico reforzado: todas las correcciones son comparaciones de cota sobre datos ya leidos, sin sentencia nueva, y el camino patologico hace ahora MENOS trabajo. Ninguna cifra procede de medicion"
   },
   "congelacion": {
-    "commit_de_referencia": "32b2bf2e427a1d40646ffa8c1e18fdac6536d492",
-    "huella": "28017d9502ce9850071426329f0b2e75e2bd7826",
-    "ruta": "artifacts/adr002_cards/ficha_ADR002-B_v4.json"
+    "commit_de_referencia": "317ad5fc406012c5a8684b57f8e53d61ff9fd7c0",
+    "huella": "b27866b1278f37473fa6151ab7f26df7386bcd81",
+    "ruta": "artifacts/adr002_cards/ficha_ADR002-B_v5.json"
   },
   "arquitectura": {
     "alternativa_minima": "ADR002-B",
@@ -75,7 +75,7 @@
     {
       "papel": "representacion semantica",
       "nombre": "vectores distribucionales dispersos PPMI documental en punto fijo (experiments/adr002/candidates/adr002_b/vectores.py)",
-      "version": "algoritmo ppmi-documental-disperso-v1; tokenizacion adr002_a.lexical-v1; parametros congelados del paquete 12; formato persistido normativo y validacion logica del paquete de correccion 03; validacion canonica de la huella persistida y mensajes de apertura minimizados del paquete de correccion 04",
+      "version": "algoritmo ppmi-documental-disperso-v1; tokenizacion adr002_a.lexical-v1; parametros congelados del paquete 12; formato persistido normativo y validacion logica del paquete 03; validacion canonica de la huella persistida y mensajes de apertura minimizados del paquete 04; cotas de longitud y representabilidad de la fe de erratas 04",
       "origen": "derivada exclusivamente del canon vigente: memorias vigentes y decisiones aprobadas con su revision canonica vigente; sin red, sin API, sin modelo descargado, sin proveedor, sin datos del benchmark",
       "acopla_a_proveedor": false,
       "ruta_de_sustitucion": "es la realizacion EXPERIMENTAL de ADR002-B: el benchmark decidira si aporta mejora material, y su seleccion no aprueba embeddings, proveedor ni almacenamiento para produccion; sustituirla exige nueva version de ficha (B04-RF-31, ARQ-00 §23)"
@@ -107,7 +107,7 @@
     {
       "papel": "regeneracion del derivado",
       "nombre": "derived.py de la capa comun + vectores.py de adr002_b",
-      "version": "arboles a83539e3c8b5396371b355619a29478cad054834 y 0337929d4347a81281dfcd115a8e1fa1397fb36e",
+      "version": "arboles a83539e3c8b5396371b355619a29478cad054834 y 43eaa374d6eef827599472588a54494be9704565",
       "origen": "FTS5: DDL leido de sqlite_master, creado por la migracion 61be4bb269bf; sidecar: reconstruccion completa desde el canon con huella de origen",
       "acopla_a_proveedor": false,
       "ruta_de_sustitucion": "ninguna pieza copia DDL a mano ni repuebla desde el propio indice; si el canon cambiara, la reconstruccion cambiaria con el"
@@ -143,7 +143,7 @@
       "tipo": "termino-contexto PPMI por coocurrencia documental, punto fijo x10^6, similitud coseno con solapamiento estructural minimo",
       "datos_canonicos_que_cubre": "memorias vigentes y decisiones aprobadas con su revision canonica vigente; la clave de sujeto es parte declarada de la representacion. No incorpora mensajes como verdad canonica, ni resultados esperados, ni identificadores de casos, ni adjudicaciones, ni etiquetas de candidato, ni datos personales reales, ni datos externos",
       "numero_de_elementos": 550,
-      "estructura": "fichero SQLite sidecar SEPARADO del canon con tablas metadatos, vocabulario, vectores_de_termino, vectores_de_elemento y posting; la consulta devuelve identificadores, claves de sujeto y similitudes, nunca contenido; el contenido lo materializa el puerto canonico por IDENTIDAD EXACTA (por_identificadores), y una identidad ausente del canon falla cerrada. Todo dato consumido se valida contra el formato persistido normativo del paquete de correccion 03 (identidades canonicas, vectores de pares de enteros con pesos estrictamente positivos en orden canonico, normas iguales exactas a la suma de cuadrados, referencias posting-vector coherentes, coseno dentro del intervalo permitido) y la huella persistida se valida en la apertura contra el formato canonico del hexdigest SHA-256 (paquete 04): la corrupcion logica de un SQLite estructuralmente valido falla cerrada como IndiceCorruptoError, el desfase como IndiceDesfasadoError, y NINGUN mensaje reproduce celdas, texto de excepciones internas ni datos del entorno. No es una segunda fuente de verdad",
+      "estructura": "fichero SQLite sidecar SEPARADO del canon con tablas metadatos, vocabulario, vectores_de_termino, vectores_de_elemento y posting; la consulta devuelve identificadores, claves de sujeto y similitudes, nunca contenido; el contenido lo materializa el puerto canonico por IDENTIDAD EXACTA (por_identificadores). Todo dato consumido se valida contra el formato persistido normativo, con COTAS de longitud y de representabilidad (fe de erratas 04) que impiden que ninguna excepcion ajena a IndiceNoUtilizableError escape del candidato: conteos de <=19 digitos, celdas de vector de <=16384 caracteres validadas antes de deserializar, identidades de <=19 digitos con valor representable por SQLite. Los mensajes de CORRUPCION y de APERTURA no reproducen celdas, texto de excepciones internas ni datos del entorno; IndiceInconsistenteError si reproduce identidades canonicas ACOTADAS, por su contrato explicito de la correccion 02, y ningun otro contenido. Toda deteccion cierra la conexion antes de propagar. No es una segunda fuente de verdad",
       "precision": "enteros de punto fijo a escala 10^6; ningun flotante persistido; determinismo comprobable por igualdad de volcado logico",
       "bytes_totales": 33554432,
       "bytes_por_elemento": 61008,
@@ -156,7 +156,7 @@
         "elementos_5500_b_proyectado": 335544320,
         "cota_superior": "el bloque de vectores de termino esta acotado por vocabulario x dimensiones y no crece sin limite con el corpus"
       },
-      "construccion_y_reconstruccion": "borrado previo y reconstruccion COMPLETA desde el canon (nunca desde el propio indice), con huella SHA-256 del canon de origen registrada en los metadatos y validada al abrir contra su formato canonico exacto; determinista: mismo canon y mismos parametros producen exactamente los mismos enteros, y los pares cuyo peso redondea a cero se descartan para que el formato persistido exija pesos estrictamente positivos. Indice inexistente, corrupto —fisica o logicamente, incluida una huella persistida que no tiene formato de SHA-256—, desfasado o que cite identidades que el canon no contiene -> fallo cerrado tipado, sin degradacion silenciosa y con mensajes que no reproducen celdas",
+      "construccion_y_reconstruccion": "borrado previo y reconstruccion COMPLETA desde el canon (nunca desde el propio indice), con huella SHA-256 del canon de origen registrada en los metadatos y validada al abrir contra su formato canonico exacto; determinista: mismo canon y mismos parametros producen exactamente los mismos enteros, y los pares cuyo peso redondea a cero se descartan. Indice inexistente, corrupto —fisica o logicamente, incluida una huella persistida sin formato de SHA-256 y toda celda que exceda las cotas de la fe de erratas 04—, desfasado o que cite identidades que el canon no contiene -> fallo cerrado TIPADO como subtipo de IndiceNoUtilizableError, con la conexion cerrada, sin degradacion silenciosa y con mensajes minimizados. Unica excepcion declarada y NO corregida: un canon ilegible durante la recomputacion de la huella puede escapar sin el error tipado especifico (limitacion 2 de la fe de erratas 03), si bien ya no filtra la conexion del sidecar",
       "limites_por_magnitud": {
         "construccion_ns": 5000000000,
         "borrado_ns": 200000000,
@@ -242,7 +242,7 @@
         "etapa": "E3",
         "coste_local_objetivo_ns": 10000000,
         "coste_local_limite_ns": 20000000,
-        "operaciones_locales": "hasta 13 sentencias dirigidas de la base lexico-estructurada, mas a lo sumo 2 sentencias de materializacion por identidad (WHERE id IN por clase, clave primaria), mas 3 sentencias dirigidas al sidecar (la de candidatos como LEFT JOIN con columna de solapamiento) y la puntuacion entera acotada (<=4096 elementos x <=512 operaciones) con validacion logica lineal en los datos ya deserializados (<=16 filas de vocabulario, <=16 vectores de termino y <=4096 filas candidatas por consulta), mas la primera activacion amortizada (verificacion del sidecar, conteos de metadatos, formato canonico de la huella persistida y huella del canon sobre <=550 filas)",
+        "operaciones_locales": "hasta 13 sentencias dirigidas de la base lexico-estructurada, mas a lo sumo 2 sentencias de materializacion por identidad (WHERE id IN por clase, clave primaria), mas 3 sentencias dirigidas al sidecar (la de candidatos como LEFT JOIN con columna de solapamiento) y la puntuacion entera acotada (<=4096 elementos x <=512 operaciones) con validacion logica lineal en los datos ya deserializados (<=16 filas de vocabulario, <=16 vectores de termino y <=4096 filas candidatas por consulta, cada celda acotada a 16384 caracteres antes de deserializar), mas la primera activacion amortizada (verificacion del sidecar, conteos de metadatos acotados, formato canonico de la huella persistida y huella del canon sobre <=550 filas)",
         "coste_externo_declarado": "ninguno: ADR002-B no invoca servicios externos ni red en ninguna etapa; la senal vectorial es local y sin proveedor"
       },
       {
@@ -269,7 +269,7 @@
     "objetivo_p95_ns": 12000000,
     "limite_duro_p99_ns": 35050000,
     "percentil_y_n": "P95 y P99 sobre 100 repeticiones por magnitud en cada una de las 11 sesiones exigidas, conforme al protocolo v0.2",
-    "fundamento": "el limite duro es la suma de los limites locales por etapa del §2.9. Para la v4 se revisaron los seis: cinco etapas no cambian porque su camino es el de la base por composicion, y E3 CONSERVA su limite de 20 ms tras revision porque el paquete de correccion 04 no anade ninguna sentencia ni toca la consulta —solo valida la huella persistida con un fullmatch sobre 64 caracteres dentro de la apertura ya amortizada— y ademas coloca esa validacion ANTES de recomputar la huella del canon, de modo que el caso corrupto deja de leer el canon entero: el trabajo maximo no crece y el del caso corrupto disminuye. Todo procede de analisis estatico y de ninguna medicion, porque no existe ninguna. El objetivo P95 se mantiene en 12 ms porque el camino tipico se detiene por S1 en E1 o E2 sin abrir jamas el indice vectorial",
+    "fundamento": "el limite duro es la suma de los limites locales por etapa del §2.9. Para la v5 se revisaron los seis: cinco etapas no cambian porque su camino es el de la base por composicion, y E3 CONSERVA su limite de 20 ms tras revision porque la fe de erratas 04 no anade ninguna sentencia SQL ni lee ningun dato adicional: todas sus correcciones son comparaciones de cota sobre datos ya leidos (longitud de una cadena, numero de digitos, valor de un entero), y la cota de longitud previa a json.loads AHORRA el trabajo de deserializar celdas patologicas, de modo que el camino peor hace menos trabajo que en la v4, no mas. Todo procede de analisis estatico y de ninguna medicion, porque no existe ninguna. El objetivo P95 se mantiene en 12 ms porque el camino tipico se detiene por S1 en E1 o E2 sin abrir jamas el indice vectorial",
     "no_deriva_de_tol_102b": true,
     "no_invoca_el_barrido_de_t0": true
   },
@@ -311,14 +311,14 @@
     "comprobacion_propuesta": "tras la purga, inspeccion de los ficheros del canon y del sidecar y busqueda del payload literal en el soporte; la comprobacion se ejecuta bajo autorizacion de benchmark, no aqui"
   },
   "huella_candidato": {
-    "commit_del_prototipo": "ca478ce1ec2af8fe00548f3bce426c203f95297b",
-    "hash_del_arbol_de_fuentes": "arbol Git 14fcec054b0b5b4ba062cf2af0add50da32cff4a de experiments/adr002/candidates en el commit de la correccion 04; incluye las fuentes de las que ADR002-B depende: a83539e3c8b5396371b355619a29478cad054834 (common, sin cambios en este paquete ni en el anterior), 2d90b551445db340458278a5accad55372995b76 (adr002_a, la base por composicion, sin cambios) y 0337929d4347a81281dfcd115a8e1fa1397fb36e (adr002_b, con los mensajes de apertura minimizados)",
+    "commit_del_prototipo": "575378bb0fc454ae01643c8360be52fb3cc13f1b",
+    "hash_del_arbol_de_fuentes": "arbol Git 6dff5d99a627320e8f88bfef39d5acea152cf275 de experiments/adr002/candidates en el commit de la fe de erratas 04; incluye las fuentes de las que ADR002-B depende: a83539e3c8b5396371b355619a29478cad054834 (common, sin cambios desde el paquete 02), 2d90b551445db340458278a5accad55372995b76 (adr002_a, la base por composicion, sin cambios) y 43eaa374d6eef827599472588a54494be9704565 (adr002_b, con las cotas contra los escapes sin tipar)",
     "migraciones_o_ddl": "ninguna sobre el canon: ADR002-B usa la cadena canonica de Alembic hasta 61be4bb269bf sin anadir migraciones ni DDL al canon. El unico DDL nuevo es el del sidecar experimental declarado en el §2.11, creado en un fichero separado y descartable",
     "artefactos_y_su_hash": "ninguno generado por adelantado: el sidecar se construye desde el canon cuando se necesita, registra la huella SHA-256 de su canon de origen en sus metadatos y no se versiona en el repositorio",
     "reproduccion": "uv run pytest experiments/adr002/candidates -q; la ejecucion sobre el corpus oficial exige una autorizacion de benchmark que no existe"
   },
   "declaracion_de_congelacion": {
-    "texto": "Declaro que los valores de esta ficha se han fijado antes de la primera ejecucion del prototipo corregido por el paquete 04 y antes de construir ningun indice sobre fixture alguno bajo esta ficha, que no proceden de ningun resultado observado del propio candidato, y que cualquier modificacion posterior obligara a nueva version de ficha y a repetir las ejecuciones ya realizadas.",
+    "texto": "Declaro que los valores de esta ficha se han fijado antes de la primera ejecucion del prototipo corregido por la fe de erratas 04 y antes de construir ningun indice sobre fixture alguno bajo esta ficha, que no proceden de ningun resultado observado del propio candidato, y que cualquier modificacion posterior obligara a nueva version de ficha y a repetir las ejecuciones ya realizadas.",
     "responsable": "Usuario / Proyecto Sirius",
     "fecha": "2026-08-01",
     "valores_anteriores_a_la_primera_ejecucion": true
