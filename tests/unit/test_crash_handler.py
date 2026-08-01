@@ -11,11 +11,13 @@ from __future__ import annotations
 import logging
 import sys
 import threading
+from pathlib import Path
 
 import pytest
 
 from sirius.infrastructure import crash_handler
 from sirius.infrastructure.crash_handler import format_crash, install_crash_handler
+from sirius.infrastructure.logging import configure_logging
 
 
 def _recursion_error() -> RecursionError:
@@ -57,6 +59,72 @@ def test_format_crash_truncates_a_runaway_traceback() -> None:
     text = format_crash(type(error), error, error.__traceback__)
 
     assert len(text.splitlines()) < 200
+
+
+def _distinguishable_deep_error() -> ValueError:
+    """Una cadena de llamadas con extremos reconocibles: los marcos antiguos
+    y el marco final tienen nombres únicos, con 80 niveles anónimos en medio,
+    para poder afirmar QUÉ extremo de la traza sobrevive al recorte."""
+
+    def marco_antiguo_origen() -> None:
+        marco_antiguo_segundo()
+
+    def marco_antiguo_segundo() -> None:
+        descender(0)
+
+    def descender(depth: int) -> None:
+        if depth < 80:
+            descender(depth + 1)
+            return
+        marco_reciente_del_fallo()
+
+    def marco_reciente_del_fallo() -> None:
+        raise ValueError("fallo al fondo de la cadena")
+
+    try:
+        marco_antiguo_origen()
+    except ValueError as exc:
+        return exc
+    raise AssertionError("no se produjo el ValueError esperado")
+
+
+def test_format_crash_keeps_the_most_recent_frames_and_drops_the_oldest() -> None:
+    """El contrato dice «los últimos 40 marcos», y tiene que ser verdad.
+
+    Con límite positivo, ``traceback.format_exception`` conserva los marcos
+    MÁS ANTIGUOS: esta prueba fallaría, porque el marco del fallo desaparece
+    y el arranque de la cadena sobrevive. El límite debe ir en negativo.
+    """
+    error = _distinguishable_deep_error()
+    limit_before = sys.getrecursionlimit()
+
+    text = format_crash(type(error), error, error.__traceback__)
+
+    # Los marcos más recientes permanecen: el del fallo y el propio mensaje.
+    assert "marco_reciente_del_fallo" in text
+    assert "fallo al fondo de la cadena" in text
+    # Los más antiguos se truncan: la cadena tiene ~84 marcos y se conservan 40.
+    assert "marco_antiguo_origen" not in text
+    assert "marco_antiguo_segundo" not in text
+    # La traza sigue limitada.
+    assert len(text.splitlines()) < 200
+    # Y el límite de recursión queda restaurado.
+    assert sys.getrecursionlimit() == limit_before
+
+
+def test_reporting_a_distinguishable_crash_never_propagates(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Informar nunca lanza, y lo registrado enseña el extremo útil."""
+    install_crash_handler()
+    error = _distinguishable_deep_error()
+
+    with caplog.at_level(logging.CRITICAL, logger="sirius.infrastructure.crash_handler"):
+        sys.excepthook(type(error), error, error.__traceback__)  # no debe lanzar
+
+    logged = " ".join(record.getMessage() for record in caplog.records)
+    assert "marco_reciente_del_fallo" in logged
+    assert "marco_antiguo_origen" not in logged
 
 
 def test_format_crash_never_raises_even_if_formatting_fails(
@@ -161,3 +229,28 @@ def test_the_thread_hook_ignores_system_exit() -> None:
     thread = threading.Thread(target=_quit, name="hilo-que-sale")
     thread.start()
     thread.join()  # no debe registrar nada ni lanzar
+
+
+def test_after_configure_logging_a_crash_persists_to_the_rotating_file_without_stderr(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """El contrato principal, de punta a punta y sin dobles.
+
+    Después de ``configure_logging`` (es decir, una vez resuelto el directorio
+    de datos), una excepción no capturada tiene que quedar en el fichero
+    rotatorio real ``application.log`` aunque ``sys.stderr`` sea ``None``,
+    como en el ejecutable de Windows sin consola. Antes de ese punto la
+    persistencia NO está garantizada: esa ventana es mejor esfuerzo.
+    """
+    logs_dir = tmp_path / "logs"
+    configure_logging(logs_dir)
+    install_crash_handler()
+    monkeypatch.setattr(sys, "stderr", None)
+    error = _distinguishable_deep_error()
+
+    sys.excepthook(type(error), error, error.__traceback__)  # no debe lanzar
+
+    written = (logs_dir / "application.log").read_text(encoding="utf-8")
+    assert "Excepción no capturada" in written
+    assert "marco_reciente_del_fallo" in written
+    assert "fallo al fondo de la cadena" in written
