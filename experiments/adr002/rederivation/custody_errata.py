@@ -143,8 +143,19 @@ HASHES_NO_ALMACENADOS: Final[Mapping[str, str]] = {
         "el contenido congelado original permanece integro en el historial"
     ),
     "c98ef457273055f1362d2939d48bba096f62cdc2": (
-        "huella canonica de la ficha ADR002-B v2, la vigente tras la correccion de la "
-        "materializacion por identidad canonica exacta: misma naturaleza y misma "
+        "huella canonica que la ficha ADR002-B v2 tuvo mientras estuvo CONGELADA, "
+        "tras la correccion de la materializacion por identidad: se conserva "
+        "inventariada porque el acta de reaprobacion de A v3 y el paquete de "
+        "correccion 03 la citan; esa cita es historia que no se reescribe"
+    ),
+    "11b2a881a1126e77fcd6196ba7837274ee426918": (
+        "huella canonica de la ficha ADR002-B v2 ya SUSTITUIDA por el paquete de "
+        "correccion 03: solo su campo de estado cambio y la huella se recomputa de "
+        "el; el contenido congelado original permanece integro en el historial"
+    ),
+    "ef2bfb137c5d67450e7ade7b4a934e0a42744800": (
+        "huella canonica de la ficha ADR002-B v3, la vigente tras la validacion "
+        "logica del sidecar del paquete de correccion 03: misma naturaleza y misma "
         "verificacion que las anteriores, recomputarla sobre la forma canonica"
     ),
     "b57ad7b24c7f0232d45540cde73294e2d68e02ef": (

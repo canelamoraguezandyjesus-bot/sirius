@@ -1,7 +1,7 @@
 {
-  "documento": "Ficha de candidato ADR002-B, version 2",
+  "documento": "Ficha de candidato ADR002-B, version 3",
   "version_esquema": "ficha-candidato-0.2",
-  "estado": "SUSTITUIDA",
+  "estado": "CONGELADA",
   "plantilla": "SIRIUS_0.2_ADR_002_FICHA_CANDIDATO_TEMPLATE_v0.4_PROPUESTO.md",
   "registro": "SIRIUS_0.2_REGISTRO_TOLERANCIAS_v0.5_PROPUESTO.md",
   "protocolo": "SIRIUS_0.2_ADR_002_PROTOCOLO_MEDICION_v0.2_PROPUESTO.md",
@@ -14,14 +14,14 @@
   "identidad": {
     "candidato": "ADR002-B",
     "papel": "CANDIDATO",
-    "version": 2,
-    "sustituye_a": 1,
-    "motivo_de_sustitucion": "sustituye a la v1 por el paquete de correccion 02: la ruta vectorial materializaba por claves de sujeto lo que el sidecar identificaba por id, y perdia sin traza las claves vacias, las duplicadas cuya fila exacta no volviera y todo lo situado tras el limite de 512 filas por clave. Ahora materializa exactamente los identificadores devueltos por el sidecar mediante la operacion comun por_identificadores, y una identidad que el canon no contenga falla cerrada y tipada (IndiceInconsistenteError) en vez de perderse callada. Los limites se revisan uno a uno: cinco etapas no cambian y E3 conserva su limite porque el camino nuevo ejecuta menos sentencias y mas baratas (la materializacion pasa de hasta 18 sentencias por clave a lo sumo 2 por identidad sobre clave primaria), y un limite valido para mas trabajo posible sigue siendolo para menos. Ninguna cifra procede de medicion"
+    "version": 3,
+    "sustituye_a": 2,
+    "motivo_de_sustitucion": "sustituye a la v2 por el paquete de correccion 03: validacion logica incompleta de un SQLite estructuralmente valido. El lector comprobaba existencia, quick_check, tablas, versiones, parametros y huella del canon, pero consumia sin validar los valores logicos almacenados (identidades, JSON de vectores, dimensiones, pesos y norma cuadrada), de modo que un sidecar que supera quick_check podia escapar como error generico de programacion o entregar al puerto una identidad manipulada cuyo mensaje de rechazo reproduce hasta 64 caracteres del valor. Ahora todo dato consumido se valida contra el formato persistido normativo (identidad canonica por fullmatch desde las clases del contrato comun; vector como lista de pares de enteros reales con dimensiones en rango, pesos estrictamente positivos representables, sin repetidos, en orden canonico y con cardinalidad acotada; norma cuadrada entera, positiva, representable e igual exacta a la suma de cuadrados; referencias posting-vector coherentes via LEFT JOIN con columna de solapamiento; coseno finito dentro del intervalo permitido con tolerancia explicita de evaluacion), toda violacion es IndiceCorruptoError con mensaje minimizado (tabla, defecto y posicion; jamas la celda) y cierre de conexion, la frontera con el puerto traduce IdentificadorInvalidoError a corrupcion tipada con causa preservada y sin reproducir el valor, y el constructor descarta pesos que redondean a cero para que el invariante sea real. La referencia documental de la composicion pasa de A v2 a A v3. Los limites se revisan uno a uno y se conservan con fundamento estatico: mismas 3 sentencias dirigidas al sidecar y validacion lineal en los datos ya deserializados. Las limitaciones de la fe de erratas 03 que este paquete no corrige siguen vigentes y declaradas. Ninguna cifra procede de medicion"
   },
   "congelacion": {
-    "commit_de_referencia": "13ffae552b76089fee7119264a2502d166ef97dd",
-    "huella": "11b2a881a1126e77fcd6196ba7837274ee426918",
-    "ruta": "artifacts/adr002_cards/ficha_ADR002-B_v2.json"
+    "commit_de_referencia": "ce31c78354e3163d61cbf35ab452e3da4f66f2c5",
+    "huella": "ef2bfb137c5d67450e7ade7b4a934e0a42744800",
+    "ruta": "artifacts/adr002_cards/ficha_ADR002-B_v3.json"
   },
   "arquitectura": {
     "alternativa_minima": "ADR002-B",
@@ -75,7 +75,7 @@
     {
       "papel": "representacion semantica",
       "nombre": "vectores distribucionales dispersos PPMI documental en punto fijo (experiments/adr002/candidates/adr002_b/vectores.py)",
-      "version": "algoritmo ppmi-documental-disperso-v1; tokenizacion adr002_a.lexical-v1; parametros congelados del paquete 12",
+      "version": "algoritmo ppmi-documental-disperso-v1; tokenizacion adr002_a.lexical-v1; parametros congelados del paquete 12; formato persistido normativo y validacion logica del paquete de correccion 03",
       "origen": "derivada exclusivamente del canon vigente: memorias vigentes y decisiones aprobadas con su revision canonica vigente; sin red, sin API, sin modelo descargado, sin proveedor, sin datos del benchmark",
       "acopla_a_proveedor": false,
       "ruta_de_sustitucion": "es la realizacion EXPERIMENTAL de ADR002-B: el benchmark decidira si aporta mejora material, y su seleccion no aprueba embeddings, proveedor ni almacenamiento para produccion; sustituirla exige nueva version de ficha (B04-RF-31, ARQ-00 §23)"
@@ -107,7 +107,7 @@
     {
       "papel": "regeneracion del derivado",
       "nombre": "derived.py de la capa comun + vectores.py de adr002_b",
-      "version": "arboles a83539e3c8b5396371b355619a29478cad054834 y 464ce49c2653426d3175e891b11dde137a5abf37",
+      "version": "arboles a83539e3c8b5396371b355619a29478cad054834 y 74f048cc434e38c9e2d7b5d691bb9ac0caa8ff90",
       "origen": "FTS5: DDL leido de sqlite_master, creado por la migracion 61be4bb269bf; sidecar: reconstruccion completa desde el canon con huella de origen",
       "acopla_a_proveedor": false,
       "ruta_de_sustitucion": "ninguna pieza copia DDL a mano ni repuebla desde el propio indice; si el canon cambiara, la reconstruccion cambiaria con el"
@@ -143,7 +143,7 @@
       "tipo": "termino-contexto PPMI por coocurrencia documental, punto fijo x10^6, similitud coseno con solapamiento estructural minimo",
       "datos_canonicos_que_cubre": "memorias vigentes y decisiones aprobadas con su revision canonica vigente; la clave de sujeto es parte declarada de la representacion. No incorpora mensajes como verdad canonica, ni resultados esperados, ni identificadores de casos, ni adjudicaciones, ni etiquetas de candidato, ni datos personales reales, ni datos externos",
       "numero_de_elementos": 550,
-      "estructura": "fichero SQLite sidecar SEPARADO del canon con tablas metadatos, vocabulario, vectores_de_termino, vectores_de_elemento y posting; la consulta devuelve identificadores, claves de sujeto y similitudes, nunca contenido; el contenido lo materializa el puerto canonico por IDENTIDAD EXACTA (por_identificadores), y una identidad ausente del canon falla cerrada. No es una segunda fuente de verdad",
+      "estructura": "fichero SQLite sidecar SEPARADO del canon con tablas metadatos, vocabulario, vectores_de_termino, vectores_de_elemento y posting; la consulta devuelve identificadores, claves de sujeto y similitudes, nunca contenido; el contenido lo materializa el puerto canonico por IDENTIDAD EXACTA (por_identificadores), y una identidad ausente del canon falla cerrada. Todo dato consumido se valida contra el formato persistido normativo del paquete de correccion 03 (identidades canonicas, vectores de pares de enteros con pesos estrictamente positivos en orden canonico, normas iguales exactas a la suma de cuadrados, referencias posting-vector coherentes, coseno dentro del intervalo permitido): la corrupcion logica de un SQLite estructuralmente valido falla cerrada como IndiceCorruptoError con mensaje minimizado, sin reproducir celdas. No es una segunda fuente de verdad",
       "precision": "enteros de punto fijo a escala 10^6; ningun flotante persistido; determinismo comprobable por igualdad de volcado logico",
       "bytes_totales": 33554432,
       "bytes_por_elemento": 61008,
@@ -156,7 +156,7 @@
         "elementos_5500_b_proyectado": 335544320,
         "cota_superior": "el bloque de vectores de termino esta acotado por vocabulario x dimensiones y no crece sin limite con el corpus"
       },
-      "construccion_y_reconstruccion": "borrado previo y reconstruccion COMPLETA desde el canon (nunca desde el propio indice), con huella SHA-256 del canon de origen registrada en los metadatos; determinista: mismo canon y mismos parametros producen exactamente los mismos enteros. Indice inexistente, corrupto o desfasado -> fallo cerrado tipado, sin degradacion silenciosa",
+      "construccion_y_reconstruccion": "borrado previo y reconstruccion COMPLETA desde el canon (nunca desde el propio indice), con huella SHA-256 del canon de origen registrada en los metadatos; determinista: mismo canon y mismos parametros producen exactamente los mismos enteros, y los pares cuyo peso redondea a cero se descartan para que el formato persistido exija pesos estrictamente positivos. Indice inexistente, corrupto —fisica o logicamente—, desfasado o que cite identidades que el canon no contiene -> fallo cerrado tipado, sin degradacion silenciosa",
       "limites_por_magnitud": {
         "construccion_ns": 5000000000,
         "borrado_ns": 200000000,
@@ -242,7 +242,7 @@
         "etapa": "E3",
         "coste_local_objetivo_ns": 10000000,
         "coste_local_limite_ns": 20000000,
-        "operaciones_locales": "hasta 13 sentencias dirigidas de la base lexico-estructurada, mas a lo sumo 2 sentencias de materializacion por identidad (WHERE id IN por clase, clave primaria), mas 3 sentencias dirigidas al sidecar y la puntuacion entera acotada (<=4096 elementos x <=512 operaciones), mas la primera activacion amortizada (verificacion del sidecar y huella del canon sobre <=550 filas)",
+        "operaciones_locales": "hasta 13 sentencias dirigidas de la base lexico-estructurada, mas a lo sumo 2 sentencias de materializacion por identidad (WHERE id IN por clase, clave primaria), mas 3 sentencias dirigidas al sidecar (la de candidatos como LEFT JOIN con columna de solapamiento) y la puntuacion entera acotada (<=4096 elementos x <=512 operaciones) con validacion logica lineal en los datos ya deserializados (<=16 filas de vocabulario, <=16 vectores de termino y <=4096 filas candidatas por consulta), mas la primera activacion amortizada (verificacion del sidecar, conteos de metadatos y huella del canon sobre <=550 filas)",
         "coste_externo_declarado": "ninguno: ADR002-B no invoca servicios externos ni red en ninguna etapa; la senal vectorial es local y sin proveedor"
       },
       {
@@ -269,7 +269,7 @@
     "objetivo_p95_ns": 12000000,
     "limite_duro_p99_ns": 35050000,
     "percentil_y_n": "P95 y P99 sobre 100 repeticiones por magnitud en cada una de las 11 sesiones exigidas, conforme al protocolo v0.2",
-    "fundamento": "el limite duro es la suma de los limites locales por etapa del §2.9. Para la v2 se revisaron los seis: cinco etapas no cambian porque su camino es el de la base por composicion, y E3 CONSERVA su limite de 20 ms tras revision porque el camino nuevo ejecuta estrictamente menos sentencias y mas baratas que el de la v1 —la materializacion vectorial pasa de hasta 18 sentencias por clave a lo sumo 2 por identidad sobre clave primaria (<=18 sentencias dirigidas en total frente a <=34)—, y un limite valido para mas trabajo posible sigue siendolo para menos. El aumento original de E3 y este mantenimiento proceden de analisis estatico y de ninguna medicion, porque no existe ninguna. El objetivo P95 se mantiene en 12 ms porque el camino tipico se detiene por S1 en E1 o E2 sin abrir jamas el indice vectorial",
+    "fundamento": "el limite duro es la suma de los limites locales por etapa del §2.9. Para la v3 se revisaron los seis: cinco etapas no cambian porque su camino es el de la base por composicion, y E3 CONSERVA su limite de 20 ms tras revision porque la validacion logica del paquete 03 no anade ninguna sentencia (las mismas 3 al sidecar, con el JOIN interno convertido en LEFT JOIN de coste equivalente y la columna de solapamiento ya agregada) y su trabajo es lineal en los datos ya deserializados, un factor constante pequeno sobre la deserializacion JSON que el limite ya contenia como termino dominante; la apertura amortizada solo anade dos conversiones de cadena a entero sobre metadatos ya leidos. Todo procede de analisis estatico y de ninguna medicion, porque no existe ninguna. El objetivo P95 se mantiene en 12 ms porque el camino tipico se detiene por S1 en E1 o E2 sin abrir jamas el indice vectorial",
     "no_deriva_de_tol_102b": true,
     "no_invoca_el_barrido_de_t0": true
   },
@@ -311,14 +311,14 @@
     "comprobacion_propuesta": "tras la purga, inspeccion de los ficheros del canon y del sidecar y busqueda del payload literal en el soporte; la comprobacion se ejecuta bajo autorizacion de benchmark, no aqui"
   },
   "huella_candidato": {
-    "commit_del_prototipo": "9ccec61f0f005987aabedfce265d7654ff1588dc",
-    "hash_del_arbol_de_fuentes": "arbol Git c65e4ab14ec3bd4e459e185836c7f83e7da8dc19 de experiments/adr002/candidates en el commit de la correccion 02; incluye las fuentes de las que ADR002-B depende: a83539e3c8b5396371b355619a29478cad054834 (common, extendido por el paquete 02), 2d90b551445db340458278a5accad55372995b76 (adr002_a, la base por composicion) y 464ce49c2653426d3175e891b11dde137a5abf37 (adr002_b, corregido)",
+    "commit_del_prototipo": "1d9aa8ddbd9b8583fb0ac5329e6b964358db5074",
+    "hash_del_arbol_de_fuentes": "arbol Git 4526b618745d33d7fd4b12e4a48c14f581525eb2 de experiments/adr002/candidates en el commit de la correccion 03; incluye las fuentes de las que ADR002-B depende: a83539e3c8b5396371b355619a29478cad054834 (common, sin cambios en este paquete), 2d90b551445db340458278a5accad55372995b76 (adr002_a, la base por composicion, sin cambios) y 74f048cc434e38c9e2d7b5d691bb9ac0caa8ff90 (adr002_b, con la validacion logica del sidecar)",
     "migraciones_o_ddl": "ninguna sobre el canon: ADR002-B usa la cadena canonica de Alembic hasta 61be4bb269bf sin anadir migraciones ni DDL al canon. El unico DDL nuevo es el del sidecar experimental declarado en el §2.11, creado en un fichero separado y descartable",
     "artefactos_y_su_hash": "ninguno generado por adelantado: el sidecar se construye desde el canon cuando se necesita, registra la huella SHA-256 de su canon de origen en sus metadatos y no se versiona en el repositorio",
     "reproduccion": "uv run pytest experiments/adr002/candidates -q; la ejecucion sobre el corpus oficial exige una autorizacion de benchmark que no existe"
   },
   "declaracion_de_congelacion": {
-    "texto": "Declaro que los valores de esta ficha se han fijado antes de la primera ejecucion del prototipo corregido por el paquete 02 y antes de construir ningun indice sobre fixture alguno bajo esta ficha, que no proceden de ningun resultado observado del propio candidato, y que cualquier modificacion posterior obligara a nueva version de ficha y a repetir las ejecuciones ya realizadas.",
+    "texto": "Declaro que los valores de esta ficha se han fijado antes de la primera ejecucion del prototipo corregido por el paquete 03 y antes de construir ningun indice sobre fixture alguno bajo esta ficha, que no proceden de ningun resultado observado del propio candidato, y que cualquier modificacion posterior obligara a nueva version de ficha y a repetir las ejecuciones ya realizadas.",
     "responsable": "Usuario / Proyecto Sirius",
     "fecha": "2026-08-01",
     "valores_anteriores_a_la_primera_ejecucion": true
