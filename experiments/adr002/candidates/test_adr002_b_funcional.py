@@ -67,7 +67,7 @@ RAIZ = Path(__file__).resolve().parents[3]
 FICHA: Final = "artifacts/adr002_cards/ficha_ADR002-B_v2.json"
 
 #: Se fija al congelar la v2; si quedara desactualizada, la cita fallaria.
-HUELLA_FICHA_B_V2: Final = "PENDIENTE-DE-CONGELACION"
+HUELLA_FICHA_B_V2: Final = "c98ef457273055f1362d2939d48bba096f62cdc2"
 
 CONSULTA: Final = "faro"
 OBJETIVO: Final = fixtures_b.OBJETIVO_SOLO_B

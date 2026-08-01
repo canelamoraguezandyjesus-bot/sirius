@@ -121,10 +121,31 @@ HASHES_NO_ALMACENADOS: Final[Mapping[str, str]] = {
         "y una prueba comprueba que ninguna queda sin declarar"
     ),
     "c1ca17a7f5345b4cec2a0ea63dac6c8b1bb6e5fd": (
-        "huella canonica de la ficha ADR002-B v1, congelada por el paquete 12 antes de "
-        "toda ejecucion funcional del candidato: SHA-1 del blob de la forma canonica de "
-        "la ficha excluido el propio campo de huella, un contenido que nunca se escribe "
-        "como fichero. Su correccion se comprueba recomputandola"
+        "huella canonica que la ficha ADR002-B v1 tuvo mientras estuvo CONGELADA: SHA-1 "
+        "del blob de la forma canonica excluido el propio campo de huella. Se conserva "
+        "inventariada porque el paquete de correccion 02 y la fe de erratas 03 la citan "
+        "como la huella de la ficha cuyo defecto declaran; esa cita es historia"
+    ),
+    "95be1370e8279eea76fd92ade2db0545e5a417dc": (
+        "huella canonica de la ficha ADR002-A v2 ya SUSTITUIDA por el paquete de "
+        "correccion 02: el estado forma parte de la forma canonica y marcarla "
+        "sustituida recomputa la huella. Ningun limite ni declaracion de la v2 cambio; "
+        "su contenido congelado sigue integro en el historial del repositorio"
+    ),
+    "427905a06f6c12666a09c73b8720e229f17eeef3": (
+        "huella canonica de la ficha ADR002-A v3, la vigente tras la extension neutral "
+        "del puerto comun del paquete de correccion 02: misma naturaleza y misma "
+        "verificacion que las anteriores, recomputarla sobre la forma canonica"
+    ),
+    "351413b91dcb0d7b37d184bd7779fb2f6a56d0a5": (
+        "huella canonica de la ficha ADR002-B v1 ya SUSTITUIDA por el paquete de "
+        "correccion 02: solo su campo de estado cambio y la huella se recomputa de el; "
+        "el contenido congelado original permanece integro en el historial"
+    ),
+    "c98ef457273055f1362d2939d48bba096f62cdc2": (
+        "huella canonica de la ficha ADR002-B v2, la vigente tras la correccion de la "
+        "materializacion por identidad canonica exacta: misma naturaleza y misma "
+        "verificacion que las anteriores, recomputarla sobre la forma canonica"
     ),
     "b57ad7b24c7f0232d45540cde73294e2d68e02ef": (
         "captura de entorno de ADR-001: HEAD observado de la rama historica "

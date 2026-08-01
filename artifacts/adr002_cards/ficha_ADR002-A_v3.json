@@ -1,7 +1,7 @@
 {
-  "documento": "Ficha de candidato ADR002-A, version 2",
+  "documento": "Ficha de candidato ADR002-A, version 3",
   "version_esquema": "ficha-candidato-0.2",
-  "estado": "SUSTITUIDA",
+  "estado": "CONGELADA",
   "plantilla": "SIRIUS_0.2_ADR_002_FICHA_CANDIDATO_TEMPLATE_v0.4_PROPUESTO.md",
   "registro": "SIRIUS_0.2_REGISTRO_TOLERANCIAS_v0.5_PROPUESTO.md",
   "protocolo": "SIRIUS_0.2_ADR_002_PROTOCOLO_MEDICION_v0.2_PROPUESTO.md",
@@ -14,21 +14,21 @@
   "identidad": {
     "candidato": "ADR002-A",
     "papel": "CANDIDATO",
-    "version": 2,
-    "sustituye_a": 1,
-    "motivo_de_sustitucion": "sustituye a la v1 por los tres defectos bloqueantes del paquete de correccion 01: (1) la prueba de E3 admitia que el resultado procediera de E1 o E2 y el caso elegido lo alcanzaba E2, de modo que E3 no quedaba demostrada; (2) E3 llamaba al puerto con los identificadores de proyecto del ambito, que el puerto interpretaba como project_id y materializaba hasta 512 memorias y 512 decisiones por proyecto antes de filtrar, lo que podia degenerar en barrido y dejaba no demostrada la declaracion no_invoca_el_barrido_de_t0; (3) la regeneracion del derivado recreaba tablas y filas pero no los triggers, de modo que no acreditaba ni la reconstruccion completa ni la resincronizacion posterior del canon. Los seis limites por etapa se revisan uno a uno contra el trabajo posible que el registro de consultas hace ahora contable: cinco se conservan porque su trabajo posible se redujo y el de E3 sube de 5 a 8 ms porque su camino cambio de tipo; ninguno se reutiliza de la v1 sin revisar"
+    "version": 3,
+    "sustituye_a": 2,
+    "motivo_de_sustitucion": "sustituye a la v2 por la extension neutral del puerto comun del paquete de correccion 02: la capa comun anade la operacion publica por_identificadores (materializacion dirigida por identidad canonica, WHERE id IN por clase, con formato cerrado, cota previa y ausencia declarada), que entra en la huella del candidato aunque ADR002-A no la invoque en ninguna etapa. El comportamiento funcional propio de A no cambia: su codigo es identico byte a byte, los metodos existentes del puerto conservan comportamiento y firma, y los seis limites por etapa se conservan tras revision porque el trabajo posible de A no varia. La aprobacion historica de la v2 como preparado para benchmark permanece en su acta y NO se traslada a esta version: la vigencia queda pendiente de reaprobacion"
   },
   "congelacion": {
-    "commit_de_referencia": "f6dae77590fbc3cf95fca36b8f6bc9921935bd82",
-    "huella": "95be1370e8279eea76fd92ade2db0545e5a417dc",
-    "ruta": "artifacts/adr002_cards/ficha_ADR002-A_v2.json"
+    "commit_de_referencia": "13ffae552b76089fee7119264a2502d166ef97dd",
+    "huella": "427905a06f6c12666a09c73b8720e229f17eeef3",
+    "ruta": "artifacts/adr002_cards/ficha_ADR002-A_v3.json"
   },
   "arquitectura": {
     "alternativa_minima": "ADR002-A",
     "definicion_canonica_que_asume": "expansion escalonada solo lexica/estructurada en todas las etapas E0-E5.",
     "sustrato_lexico": "FTS5 medido de Sirius 0.1 (unicode61, remove_diacritics 2), sin alternativa",
     "materializacion_de_relaciones": "desde el canon, por CLAVE DE SUJETO consultada por prefijo concreto. El ambito de proyecto NO materializa relaciones: filtra en G4 como puerta de seguridad. Ningun indice relacional derivado",
-    "puerto_de_acceso": "PuertoDeRecuperacion de la capa comun, equivalente a KnowledgeSearchRepository; rechaza en ejecucion cualquier consulta sin predicado y registra cada sentencia ejecutada con su cota y sus filas (B04-RF-31)",
+    "puerto_de_acceso": "PuertoDeRecuperacion de la capa comun, equivalente a KnowledgeSearchRepository; rechaza en ejecucion cualquier consulta sin predicado y registra cada sentencia ejecutada con su cota y sus filas (B04-RF-31). Desde el paquete de correccion 02 ofrece ademas la materializacion dirigida por identidad canonica (por_identificadores), neutral y disponible para todos los candidatos; ADR002-A no la invoca: sus etapas materializan por clave, termino y prefijo, como declara el §2.5, y la regresion funcional lo comprueba sobre el registro de consultas",
     "etapas_implementadas": {
       "E0": "preparacion segura: resuelve proposito, modo, ambito, tiempo, cardinalidad y limites, y parametriza G1-G10; no genera candidatos. Transicion a E1 siempre: E0 no recupera",
       "E1": "estructurada exacta por clave de sujeto normalizada y coincidencia literal del indice medido. Insuficiencia: la cardinalidad no queda satisfecha tras aplicar las puertas",
@@ -91,7 +91,7 @@
     {
       "papel": "motor de recuperacion",
       "nombre": "infraestructura comun de la primera ronda",
-      "version": "arbol 94e387507ae66947fd97316fa46a66b3a4ca2219",
+      "version": "arbol a83539e3c8b5396371b355619a29478cad054834",
       "origen": "experiments/adr002/candidates/common",
       "acopla_a_proveedor": false,
       "ruta_de_sustitucion": "comun a A/B/C/D y neutral por construccion, comprobado por controles fail-closed; sustituirla afectaria a todos por igual"
@@ -99,7 +99,7 @@
     {
       "papel": "regeneracion del derivado",
       "nombre": "derived.py de la capa comun",
-      "version": "arbol 94e387507ae66947fd97316fa46a66b3a4ca2219",
+      "version": "arbol a83539e3c8b5396371b355619a29478cad054834",
       "origen": "DDL leido de sqlite_master, creado por la migracion 61be4bb269bf",
       "acopla_a_proveedor": false,
       "ruta_de_sustitucion": "no copia DDL a mano: si la migracion canonica cambiara, la reconstruccion cambiaria con ella sin tocar este modulo"
@@ -220,7 +220,7 @@
     "objetivo_p95_ns": 12000000,
     "limite_duro_p99_ns": 23050000,
     "percentil_y_n": "P95 y P99 sobre 100 repeticiones por magnitud en cada una de las 11 sesiones exigidas, conforme al protocolo v0.2",
-    "fundamento": "el limite duro es la suma de los limites locales por etapa del §2.9. Para la v2 se revisaron los seis: cinco se conservan y solo cambia el de E3. Se conservan porque el registro de consultas del puerto hace contable el trabajo posible y ese trabajo se redujo —el tope de argumentos paso de 512 a 16 y las consultas por clave llevan ahora LIMIT explicito—, de modo que un limite valido para mas trabajo posible sigue siendolo para menos. E3 sube de 5 a 8 ms porque su camino cambio de tipo: donde habia dos llamadas —una capaz de materializar 512 memorias y 512 decisiones por proyecto— hay ahora hasta trece sentencias dirigidas, una MATCH de FTS5 y hasta ocho recorridos por prefijo acotados a 64 filas sobre columnas que la cadena canonica no indexa: menos filas candidatas, mas sentencias y de clase mas cara que las de igualdad. El aumento procede de este analisis estatico y de ninguna medicion, porque no existe ninguna. El objetivo P95 se mantiene en 12 ms porque el camino tipico se detiene por S1 en E1 o E2 sin llegar a E3",
+    "fundamento": "el limite duro es la suma de los limites locales por etapa del §2.9. Los seis se conservan de la v2 tras revisarlos uno a uno: el codigo propio de ADR002-A es identico byte a byte al cubierto por la v2, los metodos del puerto que A usa conservan comportamiento y firma, y la operacion nueva del puerto no es invocada por A en ninguna etapa, de modo que su trabajo posible por etapa no varia. Ninguna medicion existe ni se uso. El objetivo P95 se mantiene en 12 ms porque el camino tipico se detiene por S1 en E1 o E2 sin llegar a E3",
     "no_deriva_de_tol_102b": true,
     "no_invoca_el_barrido_de_t0": true
   },
@@ -262,16 +262,16 @@
     "comprobacion_propuesta": "tras la purga, inspeccion de los cuatro ficheros y busqueda del payload literal en el soporte; la comprobacion se ejecuta bajo autorizacion de benchmark, no aqui"
   },
   "huella_candidato": {
-    "commit_del_prototipo": "97c9977609e6244547d1e0aa2f495e7a3f99273d",
-    "hash_del_arbol_de_fuentes": "arbol Git 94e387507ae66947fd97316fa46a66b3a4ca2219 de experiments/adr002/candidates en el commit del prototipo corregido",
+    "commit_del_prototipo": "9ccec61f0f005987aabedfce265d7654ff1588dc",
+    "hash_del_arbol_de_fuentes": "arbol Git c65e4ab14ec3bd4e459e185836c7f83e7da8dc19 de experiments/adr002/candidates en el commit de la correccion 02; subarboles: a83539e3c8b5396371b355619a29478cad054834 (common, extendido por el paquete 02) y 2d90b551445db340458278a5accad55372995b76 (adr002_a, sin cambios desde la v2)",
     "migraciones_o_ddl": "ninguna: ADR002-A usa la cadena canonica de Alembic hasta 61be4bb269bf sin anadir migraciones ni DDL. La reconstruccion del derivado reutiliza el DDL que esa migracion creo, leido de sqlite_master",
     "artefactos_y_su_hash": "ninguno generado por adelantado: el candidato no persiste indices ni caches",
     "reproduccion": "uv run pytest experiments/adr002/candidates -q; la ejecucion sobre el corpus oficial exige una autorizacion de benchmark que no existe"
   },
   "declaracion_de_congelacion": {
-    "texto": "Declaro que los valores de esta ficha se han fijado antes de la primera ejecucion del prototipo corregido, que no proceden de ningun resultado observado del propio candidato, y que cualquier modificacion posterior obligara a nueva version de ficha y a repetir las ejecuciones ya realizadas.",
+    "texto": "Declaro que los valores de esta ficha se han fijado antes de la primera ejecucion del candidato bajo la capa comun extendida por el paquete de correccion 02, que no proceden de ningun resultado observado del propio candidato, y que cualquier modificacion posterior obligara a nueva version de ficha y a repetir las ejecuciones ya realizadas.",
     "responsable": "Usuario / Proyecto Sirius",
-    "fecha": "2026-07-31",
+    "fecha": "2026-08-01",
     "valores_anteriores_a_la_primera_ejecucion": true
   },
   "no_contiene_resultados": true

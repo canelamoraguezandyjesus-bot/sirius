@@ -1,7 +1,7 @@
 {
-  "documento": "Ficha de candidato ADR002-B, version 1",
+  "documento": "Ficha de candidato ADR002-B, version 2",
   "version_esquema": "ficha-candidato-0.2",
-  "estado": "SUSTITUIDA",
+  "estado": "CONGELADA",
   "plantilla": "SIRIUS_0.2_ADR_002_FICHA_CANDIDATO_TEMPLATE_v0.4_PROPUESTO.md",
   "registro": "SIRIUS_0.2_REGISTRO_TOLERANCIAS_v0.5_PROPUESTO.md",
   "protocolo": "SIRIUS_0.2_ADR_002_PROTOCOLO_MEDICION_v0.2_PROPUESTO.md",
@@ -14,26 +14,26 @@
   "identidad": {
     "candidato": "ADR002-B",
     "papel": "CANDIDATO",
-    "version": 1,
-    "sustituye_a": null,
-    "motivo_de_sustitucion": null
+    "version": 2,
+    "sustituye_a": 1,
+    "motivo_de_sustitucion": "sustituye a la v1 por el paquete de correccion 02: la ruta vectorial materializaba por claves de sujeto lo que el sidecar identificaba por id, y perdia sin traza las claves vacias, las duplicadas cuya fila exacta no volviera y todo lo situado tras el limite de 512 filas por clave. Ahora materializa exactamente los identificadores devueltos por el sidecar mediante la operacion comun por_identificadores, y una identidad que el canon no contenga falla cerrada y tipada (IndiceInconsistenteError) en vez de perderse callada. Los limites se revisan uno a uno: cinco etapas no cambian y E3 conserva su limite porque el camino nuevo ejecuta menos sentencias y mas baratas (la materializacion pasa de hasta 18 sentencias por clave a lo sumo 2 por identidad sobre clave primaria), y un limite valido para mas trabajo posible sigue siendolo para menos. Ninguna cifra procede de medicion"
   },
   "congelacion": {
-    "commit_de_referencia": "d2cebcb8591293bacaa94e0b56b6e667b5e86f00",
-    "huella": "351413b91dcb0d7b37d184bd7779fb2f6a56d0a5",
-    "ruta": "artifacts/adr002_cards/ficha_ADR002-B_v1.json"
+    "commit_de_referencia": "13ffae552b76089fee7119264a2502d166ef97dd",
+    "huella": "c98ef457273055f1362d2939d48bba096f62cdc2",
+    "ruta": "artifacts/adr002_cards/ficha_ADR002-B_v2.json"
   },
   "arquitectura": {
     "alternativa_minima": "ADR002-B",
     "definicion_canonica_que_asume": "expansion escalonada lexica/estructurada con senal semantica vectorial unicamente en etapas tardias tras fallar la puerta de suficiencia.",
     "sustrato_lexico": "FTS5 medido de Sirius 0.1 (unicode61, remove_diacritics 2), sin alternativa",
-    "materializacion_de_relaciones": "las de la base ADR002-A v2 por composicion: clave de sujeto consultada por prefijo concreto, con el ambito de proyecto filtrando en G4 como puerta de seguridad. La senal vectorial materializa por CLAVE EXACTA via el puerto: el indice entrega identificadores y el contenido lo trae siempre el canon. Ningun indice relacional derivado",
-    "puerto_de_acceso": "PuertoDeRecuperacion de la capa comun, equivalente a KnowledgeSearchRepository; rechaza en ejecucion cualquier consulta sin predicado y registra cada sentencia con su cota y sus filas. El sidecar vectorial NO es un puerto: devuelve identificadores y similitudes, nunca contenido (B04-RF-31)",
+    "materializacion_de_relaciones": "las de la base ADR002-A por composicion: clave de sujeto consultada por prefijo concreto, con el ambito de proyecto filtrando en G4 como puerta de seguridad. La senal vectorial materializa por IDENTIDAD CANONICA EXACTA via por_identificadores del puerto: la clave de sujeto sigue siendo parte de la representacion y de las senales estructurales, pero ya no decide que fila se recupera. Ningun indice relacional derivado",
+    "puerto_de_acceso": "PuertoDeRecuperacion de la capa comun, equivalente a KnowledgeSearchRepository; rechaza en ejecucion cualquier consulta sin predicado y registra cada sentencia con su cota y sus filas. La senal vectorial materializa con por_identificadores (WHERE id IN por clase, formato cerrado, cota previa, ausencia declarada). El sidecar NO es un puerto: devuelve identificadores y similitudes, nunca contenido (B04-RF-31)",
     "etapas_implementadas": {
       "E0": "la de la base A por composicion: preparacion segura, parametriza G1-G10, no genera candidatos. Transicion a E1 siempre: E0 no recupera",
       "E1": "la de la base A por composicion: estructurada exacta por clave normalizada y coincidencia literal del indice medido. El indice vectorial no se abre. Insuficiencia: la cardinalidad no queda satisfecha tras las puertas",
       "E2": "la de la base A por composicion: variantes morfologicas por recorte de sufijo flexivo, sin asumir equivalencia semantica. El indice vectorial no se abre. Insuficiencia: idem, y el modo autoriza E3",
-      "E3": "la expansion lexico-estructurada de la base A (terminos puente y familias de sujeto) UNIDA a la senal semantica vectorial: PPMI documental disperso en punto fijo, coseno con solapamiento estructural minimo de 2 dimensiones, top-8 identificadores materializados por clave exacta via el puerto. El origen de cada candidata queda registrado por separado. La similitud no se convierte en identidad: valida sujeto, polaridad, condicion y tiempo item a item con la misma lectura que la base. Insuficiencia: idem",
+      "E3": "la expansion lexico-estructurada de la base A (terminos puente y familias de sujeto) UNIDA a la senal semantica vectorial: PPMI documental disperso en punto fijo, coseno con solapamiento estructural minimo de 2 dimensiones, top-8 identificadores materializados por IDENTIDAD CANONICA EXACTA via por_identificadores del puerto; una identidad que el canon no contenga falla cerrada y tipada (IndiceInconsistenteError), sin recuperacion parcial. El origen de cada candidata queda registrado por separado. La similitud no se convierte en identidad: valida sujeto, polaridad, condicion y tiempo item a item con la misma lectura que la base. Insuficiencia: idem",
       "E4": "la de la base A por composicion: fuentes e historial como evidencia atribuida no canonica. Insuficiencia: agotada, se adjudica S5",
       "E5": "adjudicacion del motor comun: agrupa duplicados solo con ambito y postura coincidentes, ordena con desempate estable, aplica G12 y limite, y emite traza y suficiencia"
     },
@@ -43,13 +43,13 @@
       "validacion_de_sujeto_polaridad_condicion_y_tiempo": "lectura semantica por item con los mismos marcadores lexicos de la base, clave de sujeto del canon y marca temporal, aplicada a TODO lo que E3 propone, tambien a lo vectorial (B04-RF-17, RF-19)",
       "borrado_y_regeneracion_desde_el_canon": "el FTS5 se borra y regenera con derived.py (tablas Y triggers, DDL de sqlite_master); el sidecar vectorial se borra entero (.db, -wal, -shm, -journal) y se reconstruye desde el canon con verificacion de huella de origen; ninguno se repuebla desde si mismo",
       "peticion_completa_y_operacion_activa": "la peticion exige operation_id, proposito, modo, ambito, tiempo, cardinalidad y limites; sin proposito no se ejecuta recuperacion (B04-RF-01, RF-30)",
-      "plan_reproducible_y_explicacion_por_resultado": "traza minimizada con puertas, etapas, causas y parada (RF-29), explicacion de siete campos por resultado (RF-28) con el origen de cada senal —lexico-estructurada o vectorial en banda— y registro de cada sentencia SQL del puerto y de cada consulta al sidecar con sus conteos"
+      "plan_reproducible_y_explicacion_por_resultado": "traza minimizada con puertas, etapas, causas y parada (RF-29), explicacion de siete campos por resultado (RF-28) con el origen de cada senal —lexico-estructurada o vectorial en banda— y registro de cada sentencia SQL del puerto (incluidas las de materializacion por identidad, con solicitados, encontrados y ausentes declarados) y de cada consulta al sidecar con sus conteos"
     }
   },
   "senal_tardia": {
     "habilitada": "semantica_vectorial",
     "coherente_con_la_alternativa": true,
-    "como_satisface_e3": "con la base lexico-estructurada de ADR002-A v2 mas una senal vectorial distribucional de segundo orden: vectores PPMI termino-contexto por coocurrencia documental del canon vigente, en punto fijo; el vector de consulta usa el mismo vocabulario y la misma transformacion; son candidatas solo quienes comparten >=2 dimensiones positivas con la consulta, ordenadas por coseno con desempate estable y materializadas por clave exacta via el puerto. Asi alcanza parafrasis que no comparten NI UNA forma con la consulta ni con lo recuperado —dos terminos que nunca coocurren pueden ser similares si comparten contextos—, que es lo que la base lexica no puede hacer. Apoyo y refutacion se conservan porque la polaridad se lee item a item y el motor no fusiona posturas distintas",
+    "como_satisface_e3": "con la base lexico-estructurada de ADR002-A mas una senal vectorial distribucional de segundo orden: vectores PPMI termino-contexto por coocurrencia documental del canon vigente, en punto fijo; el vector de consulta usa el mismo vocabulario y la misma transformacion; son candidatas solo quienes comparten >=2 dimensiones positivas con la consulta, ordenadas por coseno con desempate estable y materializadas por IDENTIDAD CANONICA EXACTA via el puerto —una clave de sujeto vacia, duplicada o desbordada no puede perder una coincidencia—. Asi alcanza parafrasis que no comparten NI UNA forma con la consulta ni con lo recuperado, que es lo que la base lexica no puede hacer. Apoyo y refutacion se conservan porque la polaridad se lee item a item y el motor no fusiona posturas distintas",
     "validacion_en_e3": "marcadores lexicos cerrados de negacion y condicion, clave de sujeto del canon y marca temporal del item, con la MISMA lectura de la base aplicada a todo lo que E3 propone, vectorial incluido; la similitud jamas sustituye esa validacion ni se presenta como identidad o verdad",
     "orden_de_las_etapas_tardias": "una sola senal tardia, en E3 exactamente; el orden E3 -> E4 lo fija el motor comun y es el mismo para todos los candidatos. Sin coordinacion de senales: B04-D15 no se roza",
     "condicion_de_insuficiencia_por_transicion": "E0->E1 siempre, porque E0 no recupera; E1->E2, E2->E3 y E3->E4 solo si la cardinalidad no queda satisfecha tras las puertas y el modo autoriza el siguiente espacio; en otro caso se adjudica S1, S2 o S4. La senal vectorial solo actua dentro de E3: si E1 o E2 satisfacen, el sidecar no se abre, no se lee y no se verifica (cero invocaciones, comprobable por instrumentacion). La insuficiencia con cero resultados tambien es insuficiencia: sin semillas, la senal actua desde el vector de consulta"
@@ -91,15 +91,15 @@
     {
       "papel": "motor de recuperacion",
       "nombre": "infraestructura comun de la primera ronda",
-      "version": "arbol 9ada666e0e044758107f4089e7585bb47aabbbf0",
+      "version": "arbol a83539e3c8b5396371b355619a29478cad054834",
       "origen": "experiments/adr002/candidates/common",
       "acopla_a_proveedor": false,
       "ruta_de_sustitucion": "comun a A/B/C/D y neutral por construccion, comprobado por controles fail-closed; sustituirla afectaria a todos por igual"
     },
     {
       "papel": "base funcional lexico-estructurada",
-      "nombre": "ADR002-A v2, por composicion",
-      "version": "arbol 2d90b551445db340458278a5accad55372995b76 de adr002_a; ficha vigente con huella 4ed820fab545dd9154ce078349c214f870baecd1",
+      "nombre": "ADR002-A vigente (v3), por composicion",
+      "version": "arbol 2d90b551445db340458278a5accad55372995b76 de adr002_a (sin cambios desde la v2 de A); ficha vigente A v3 con huella 427905a06f6c12666a09c73b8720e229f17eeef3",
       "origen": "experiments/adr002/candidates/adr002_a, sin copiar ni alterar",
       "acopla_a_proveedor": false,
       "ruta_de_sustitucion": "CandidatoB contiene a CandidatoA y delega en el; si la base cambiara, cambiaria la huella de esta ficha y obligaria a version sucesora"
@@ -107,7 +107,7 @@
     {
       "papel": "regeneracion del derivado",
       "nombre": "derived.py de la capa comun + vectores.py de adr002_b",
-      "version": "arboles 9ada666e0e044758107f4089e7585bb47aabbbf0 y e374f21918961f71cc7b80fc817e8637031733bd",
+      "version": "arboles a83539e3c8b5396371b355619a29478cad054834 y 464ce49c2653426d3175e891b11dde137a5abf37",
       "origen": "FTS5: DDL leido de sqlite_master, creado por la migracion 61be4bb269bf; sidecar: reconstruccion completa desde el canon con huella de origen",
       "acopla_a_proveedor": false,
       "ruta_de_sustitucion": "ninguna pieza copia DDL a mano ni repuebla desde el propio indice; si el canon cambiara, la reconstruccion cambiaria con el"
@@ -143,7 +143,7 @@
       "tipo": "termino-contexto PPMI por coocurrencia documental, punto fijo x10^6, similitud coseno con solapamiento estructural minimo",
       "datos_canonicos_que_cubre": "memorias vigentes y decisiones aprobadas con su revision canonica vigente; la clave de sujeto es parte declarada de la representacion. No incorpora mensajes como verdad canonica, ni resultados esperados, ni identificadores de casos, ni adjudicaciones, ni etiquetas de candidato, ni datos personales reales, ni datos externos",
       "numero_de_elementos": 550,
-      "estructura": "fichero SQLite sidecar SEPARADO del canon con tablas metadatos, vocabulario, vectores_de_termino, vectores_de_elemento y posting; la consulta devuelve identificadores, claves de sujeto y similitudes, nunca contenido; el contenido lo materializa el puerto canonico por clave exacta. No es una segunda fuente de verdad",
+      "estructura": "fichero SQLite sidecar SEPARADO del canon con tablas metadatos, vocabulario, vectores_de_termino, vectores_de_elemento y posting; la consulta devuelve identificadores, claves de sujeto y similitudes, nunca contenido; el contenido lo materializa el puerto canonico por IDENTIDAD EXACTA (por_identificadores), y una identidad ausente del canon falla cerrada. No es una segunda fuente de verdad",
       "precision": "enteros de punto fijo a escala 10^6; ningun flotante persistido; determinismo comprobable por igualdad de volcado logico",
       "bytes_totales": 33554432,
       "bytes_por_elemento": 61008,
@@ -242,7 +242,7 @@
         "etapa": "E3",
         "coste_local_objetivo_ns": 10000000,
         "coste_local_limite_ns": 20000000,
-        "operaciones_locales": "hasta 13 sentencias dirigidas de la base lexico-estructurada, mas hasta 18 del puerto para materializar lo vectorial (<=8 claves x 2 SELECT y <=2 materializaciones), mas 3 sentencias dirigidas al sidecar y la puntuacion entera acotada (<=4096 elementos x <=512 operaciones), mas la primera activacion amortizada (verificacion del sidecar y huella del canon sobre <=550 filas)",
+        "operaciones_locales": "hasta 13 sentencias dirigidas de la base lexico-estructurada, mas a lo sumo 2 sentencias de materializacion por identidad (WHERE id IN por clase, clave primaria), mas 3 sentencias dirigidas al sidecar y la puntuacion entera acotada (<=4096 elementos x <=512 operaciones), mas la primera activacion amortizada (verificacion del sidecar y huella del canon sobre <=550 filas)",
         "coste_externo_declarado": "ninguno: ADR002-B no invoca servicios externos ni red en ninguna etapa; la senal vectorial es local y sin proveedor"
       },
       {
@@ -269,7 +269,7 @@
     "objetivo_p95_ns": 12000000,
     "limite_duro_p99_ns": 35050000,
     "percentil_y_n": "P95 y P99 sobre 100 repeticiones por magnitud en cada una de las 11 sesiones exigidas, conforme al protocolo v0.2",
-    "fundamento": "el limite duro es la suma de los limites locales por etapa del §2.9. Cinco etapas conservan los limites de la ficha ADR002-A v2 porque la base es exactamente A por composicion —sus arboles estan fijados por blob y su trabajo posible por etapa no cambia—. E3 sube de 8 a 20 ms porque su camino anade la senal vectorial: hasta 18 sentencias mas del puerto para materializar por clave exacta, 3 sentencias dirigidas al sidecar, la puntuacion entera acotada y la primera activacion amortizada. El aumento procede de ese analisis estatico y de ninguna medicion, porque no existe ninguna. El objetivo P95 se mantiene en 12 ms porque el camino tipico se detiene por S1 en E1 o E2 sin abrir jamas el indice vectorial",
+    "fundamento": "el limite duro es la suma de los limites locales por etapa del §2.9. Para la v2 se revisaron los seis: cinco etapas no cambian porque su camino es el de la base por composicion, y E3 CONSERVA su limite de 20 ms tras revision porque el camino nuevo ejecuta estrictamente menos sentencias y mas baratas que el de la v1 —la materializacion vectorial pasa de hasta 18 sentencias por clave a lo sumo 2 por identidad sobre clave primaria (<=18 sentencias dirigidas en total frente a <=34)—, y un limite valido para mas trabajo posible sigue siendolo para menos. El aumento original de E3 y este mantenimiento proceden de analisis estatico y de ninguna medicion, porque no existe ninguna. El objetivo P95 se mantiene en 12 ms porque el camino tipico se detiene por S1 en E1 o E2 sin abrir jamas el indice vectorial",
     "no_deriva_de_tol_102b": true,
     "no_invoca_el_barrido_de_t0": true
   },
@@ -311,14 +311,14 @@
     "comprobacion_propuesta": "tras la purga, inspeccion de los ficheros del canon y del sidecar y busqueda del payload literal en el soporte; la comprobacion se ejecuta bajo autorizacion de benchmark, no aqui"
   },
   "huella_candidato": {
-    "commit_del_prototipo": "2b159cec7f19dec64f4b170a090b888bc8a642f4",
-    "hash_del_arbol_de_fuentes": "arbol Git f2a2baa6a59f5ca13418df00da8465d8c6fc4c62 de experiments/adr002/candidates en el commit del prototipo; incluye las fuentes de las que ADR002-B depende: 9ada666e0e044758107f4089e7585bb47aabbbf0 (common), 2d90b551445db340458278a5accad55372995b76 (adr002_a, la base por composicion) y e374f21918961f71cc7b80fc817e8637031733bd (adr002_b)",
+    "commit_del_prototipo": "9ccec61f0f005987aabedfce265d7654ff1588dc",
+    "hash_del_arbol_de_fuentes": "arbol Git c65e4ab14ec3bd4e459e185836c7f83e7da8dc19 de experiments/adr002/candidates en el commit de la correccion 02; incluye las fuentes de las que ADR002-B depende: a83539e3c8b5396371b355619a29478cad054834 (common, extendido por el paquete 02), 2d90b551445db340458278a5accad55372995b76 (adr002_a, la base por composicion) y 464ce49c2653426d3175e891b11dde137a5abf37 (adr002_b, corregido)",
     "migraciones_o_ddl": "ninguna sobre el canon: ADR002-B usa la cadena canonica de Alembic hasta 61be4bb269bf sin anadir migraciones ni DDL al canon. El unico DDL nuevo es el del sidecar experimental declarado en el §2.11, creado en un fichero separado y descartable",
     "artefactos_y_su_hash": "ninguno generado por adelantado: el sidecar se construye desde el canon cuando se necesita, registra la huella SHA-256 de su canon de origen en sus metadatos y no se versiona en el repositorio",
     "reproduccion": "uv run pytest experiments/adr002/candidates -q; la ejecucion sobre el corpus oficial exige una autorizacion de benchmark que no existe"
   },
   "declaracion_de_congelacion": {
-    "texto": "Declaro que los valores de esta ficha se han fijado antes de la primera ejecucion del prototipo de ADR002-B y antes de construir ningun indice vectorial sobre fixture alguno, que no proceden de ningun resultado observado del propio candidato, y que cualquier modificacion posterior obligara a nueva version de ficha y a repetir las ejecuciones ya realizadas.",
+    "texto": "Declaro que los valores de esta ficha se han fijado antes de la primera ejecucion del prototipo corregido por el paquete 02 y antes de construir ningun indice sobre fixture alguno bajo esta ficha, que no proceden de ningun resultado observado del propio candidato, y que cualquier modificacion posterior obligara a nueva version de ficha y a repetir las ejecuciones ya realizadas.",
     "responsable": "Usuario / Proyecto Sirius",
     "fecha": "2026-08-01",
     "valores_anteriores_a_la_primera_ejecucion": true

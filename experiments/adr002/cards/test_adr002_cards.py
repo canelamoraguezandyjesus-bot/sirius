@@ -850,8 +850,10 @@ def test_las_fichas_congeladas_son_las_esperadas() -> None:
     assert resultado.conforme, resultado.fallos
     assert [(f.candidato, f.version, f.estado) for f in resultado.confirmadas] == [
         ("ADR002-A", 1, cp.ESTADO_SUSTITUIDA),
-        ("ADR002-A", 2, cp.ESTADO_CONGELADA),
-        ("ADR002-B", 1, cp.ESTADO_CONGELADA),
+        ("ADR002-A", 2, cp.ESTADO_SUSTITUIDA),
+        ("ADR002-A", 3, cp.ESTADO_CONGELADA),
+        ("ADR002-B", 1, cp.ESTADO_SUSTITUIDA),
+        ("ADR002-B", 2, cp.ESTADO_CONGELADA),
         (cp.CONTROL, 1, cp.ESTADO_CONGELADA),
     ]
 
