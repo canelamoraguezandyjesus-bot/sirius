@@ -12,6 +12,7 @@ from sirius.application.data_location import DataLocationUseCase, LocationFileCo
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
 from sirius.config.llm_provider_settings import LLMProviderKind, resolve_openai_provider_settings
 from sirius.infrastructure.bootstrap_location_store import build_bootstrap_location_store
+from sirius.infrastructure.crash_handler import install_crash_handler
 from sirius.infrastructure.data_path_validator import build_data_path_validator
 from sirius.infrastructure.logging import configure_logging, get_logger
 from sirius.infrastructure.paths import resolve_paths
@@ -204,6 +205,10 @@ def _build_first_window(
 
 def main() -> int:
     """Start the Sirius desktop application."""
+    # Antes de crear nada: si algo escapa del bucle de eventos, que quede
+    # registrado en vez de cerrar Sirius sin dejar rastro.
+    install_crash_handler()
+
     app = QApplication.instance()
     owns_app = app is None
     if app is None:

@@ -197,6 +197,7 @@ class MainWindow(QMainWindow):
         # El historial arranca siguiendo el final: al abrir, lo útil es lo
         # último dicho. Deja de seguirlo si el usuario se desplaza hacia arriba.
         self._follow_history_bottom = True
+        self._scrolling_history = False
         # B7b: text of the in-flight send (for _on_crashed, which has no
         # SendMessageResult to read it back from) and, once a send ends in
         # FAILED/crashed, the text "Reintentar" resends unchanged (RF-007).
@@ -467,8 +468,22 @@ class MainWindow(QMainWindow):
         return scrollbar.value() >= scrollbar.maximum() - _AT_BOTTOM_TOLERANCE_PX
 
     def _scroll_history_to_bottom(self) -> None:
-        scrollbar = self.message_list.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+        """Lleva la vista al final, sin poder reentrar.
+
+        ``setValue`` puede provocar que la lista recalcule geometría y vuelva
+        a emitir ``rangeChanged``, que llama otra vez aquí. Sin el guardia esa
+        ida y vuelta se realimenta; con entrega síncrona de eventos, como la
+        de Windows al acoplar la ventana, se realimenta dentro de la misma
+        pila.
+        """
+        if self._scrolling_history:
+            return
+        self._scrolling_history = True
+        try:
+            scrollbar = self.message_list.verticalScrollBar()
+            scrollbar.setValue(scrollbar.maximum())
+        finally:
+            self._scrolling_history = False
 
     def _on_history_range_changed(self, _minimum: int, _maximum: int) -> None:
         """El historial creció (mensaje nuevo, streaming o reflujo por ancho).
