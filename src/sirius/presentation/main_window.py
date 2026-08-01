@@ -7,8 +7,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QRunnable, Qt, QThreadPool, Signal
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtCore import QPoint, QRunnable, Qt, QThreadPool, QTimer, QUrl, Signal
+from PySide6.QtGui import QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -97,6 +97,32 @@ _SIDE_PANEL_MAXIMUM_WIDTH = 420
 # que está leyendo el último mensaje no siempre queda en el píxel exacto.
 _AT_BOTTOM_TOLERANCE_PX = 8
 
+# Estados con los que termina cualquier operación de copia de seguridad. Se
+# guardan además en la propiedad ``siriusBackupState`` de la etiqueta que los
+# muestra: el texto es para la persona, la propiedad es el estado en sí, que ni
+# depende de la redacción ni se pierde al reescribir un mensaje.
+BACKUP_STATE_IN_PROGRESS = "en curso"
+BACKUP_STATE_CREATED = "creada"
+BACKUP_STATE_VALIDATED = "validada"
+BACKUP_STATE_RESTORED = "restaurada"
+BACKUP_STATE_CANCELLED = "cancelada"
+BACKUP_STATE_REJECTED = "rechazada"
+
+#: Nombre de la propiedad Qt donde vive el estado, legible desde las pruebas.
+BACKUP_STATE_PROPERTY = "siriusBackupState"
+
+# Cada estado se distingue también por color, no solo por el texto: en curso y
+# cancelada son neutros (nada ha cambiado), creada/validada/restaurada
+# confirman, y rechazada avisa.
+_BACKUP_STATE_STYLES = {
+    BACKUP_STATE_IN_PROGRESS: "color: #444444;",
+    BACKUP_STATE_CREATED: "color: #1b7f3b; font-weight: bold;",
+    BACKUP_STATE_VALIDATED: "color: #1b7f3b; font-weight: bold;",
+    BACKUP_STATE_RESTORED: "color: #1b7f3b; font-weight: bold;",
+    BACKUP_STATE_CANCELLED: "color: #8a6d00; font-weight: bold;",
+    BACKUP_STATE_REJECTED: "color: #b3261e; font-weight: bold;",
+}
+
 
 class MainWindow(QMainWindow):
     """Ventana principal de Sirius: conversación y configuración.
@@ -145,6 +171,7 @@ class MainWindow(QMainWindow):
         show_information: Callable[[str, str], None] | None = None,
         confirm_restore: Callable[[str, str], bool] | None = None,
         choose_backup_file: Callable[[str], str] | None = None,
+        open_containing_folder: Callable[[Path], None] | None = None,
         confirm_export: Callable[[str, str], bool] | None = None,
         choose_export_directory: Callable[[str], str] | None = None,
     ) -> None:
@@ -183,6 +210,9 @@ class MainWindow(QMainWindow):
         self._show_information = show_information or self._default_show_information
         self._confirm_restore = confirm_restore or self._default_confirm_restore
         self._choose_backup_file = choose_backup_file or self._default_choose_backup_file
+        self._open_containing_folder = (
+            open_containing_folder or self._default_open_containing_folder
+        )
         self._confirm_export = confirm_export or self._default_confirm_export
         self._choose_export_directory = (
             choose_export_directory or self._default_choose_export_directory
@@ -191,6 +221,13 @@ class MainWindow(QMainWindow):
         self._is_backup_busy = False
         self._is_export_busy = False
         self._close_requested = False
+        # Ruta de la última copia creada en esta sesión. Es lo que permite
+        # abrir su carpeta, reutilizarla sin volver a buscarla a mano y
+        # arrancar el selector de archivos donde de verdad está la copia.
+        self._last_backup_path: Path | None = None
+        # Etiqueta cuyo desplazamiento está pendiente de que el diseño
+        # termine de converger (ver _scroll_settings_to).
+        self._pending_feedback_label: QLabel | None = None
         self._active_operation_id: str | None = None
         self._streaming_item: QListWidgetItem | None = None
         self._streaming_text = ""
@@ -242,10 +279,19 @@ class MainWindow(QMainWindow):
         return answer == QMessageBox.StandardButton.Yes
 
     def _default_choose_backup_file(self, title: str) -> str:
+        # Arranca en la carpeta de la última copia creada en esta sesión: sin
+        # esto el selector abre en un directorio cualquiera y encontrar la
+        # copia recién hecha depende de que la persona recuerde su ruta.
+        start_directory = ""
+        if self._last_backup_path is not None:
+            start_directory = str(self._last_backup_path.parent)
         path_text, _ = QFileDialog.getOpenFileName(
-            self, title, "", "Copias de Sirius (*.siriusbackup)"
+            self, title, start_directory, "Copias de Sirius (*.siriusbackup)"
         )
         return path_text
+
+    def _default_open_containing_folder(self, path: Path) -> None:
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.parent)))
 
     def _default_confirm_export(self, title: str, text: str) -> bool:
         answer = QMessageBox.question(
@@ -809,6 +855,11 @@ class MainWindow(QMainWindow):
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setWidget(container)
+        # Guardado porque el resultado de una operación de copia se escribe en
+        # etiquetas que están al final de la pestaña, fuera del área visible
+        # con la ventana a su tamaño por omisión: sin desplazar hasta ellas, el
+        # mensaje se escribe donde nadie lo ve y la operación parece muda.
+        self._settings_scroll_area = scroll_area
         return scroll_area
 
     # --- Copia de seguridad y restauración --------------------------------
@@ -836,12 +887,39 @@ class MainWindow(QMainWindow):
         self.create_backup_button.clicked.connect(self._handle_create_backup_clicked)
 
         self.create_backup_status_label = QLabel("")
+        self.create_backup_status_label.setWordWrap(True)
+
+        # La ruta completa, siempre a la vista y seleccionable con el ratón:
+        # un aviso modal que se cierra no deja rastro de dónde quedó la copia.
+        self.create_backup_path_label = QLabel("")
+        self.create_backup_path_label.setWordWrap(True)
+        self.create_backup_path_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+
+        self.open_backup_folder_button = QPushButton("Abrir carpeta")
+        self.open_backup_folder_button.clicked.connect(self._handle_open_backup_folder_clicked)
+        self.use_last_backup_button = QPushButton("Usar esta copia")
+        self.use_last_backup_button.setToolTip(
+            "Pone la ruta de esta copia en los campos de validar y restaurar."
+        )
+        self.use_last_backup_button.clicked.connect(self._handle_use_last_backup_clicked)
+        # Sin copia creada todavía no hay carpeta que abrir ni ruta que reusar.
+        self.open_backup_folder_button.setEnabled(False)
+        self.use_last_backup_button.setEnabled(False)
+
+        last_backup_row = QHBoxLayout()
+        last_backup_row.addWidget(self.open_backup_folder_button)
+        last_backup_row.addWidget(self.use_last_backup_button)
+        last_backup_row.addStretch()
 
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.addLayout(form)
         layout.addWidget(self.create_backup_button)
         layout.addWidget(self.create_backup_status_label)
+        layout.addWidget(self.create_backup_path_label)
+        layout.addLayout(last_backup_row)
         return container
 
     def _build_validate_backup_section(self) -> QWidget:
@@ -922,6 +1000,87 @@ class MainWindow(QMainWindow):
         self.restore_backup_browse_button.setEnabled(enabled)
         self.restore_backup_path_input.setEnabled(enabled)
         self.restore_backup_password_input.setEnabled(enabled)
+        # Estos dos solo tienen sentido si ya hay una copia creada; mientras
+        # una operación está en curso se apagan como todos los demás.
+        has_last_backup = enabled and self._last_backup_path is not None
+        self.open_backup_folder_button.setEnabled(has_last_backup)
+        self.use_last_backup_button.setEnabled(has_last_backup)
+
+    def _set_backup_feedback(self, label: QLabel, state: str, detail: str) -> None:
+        """Escribe el resultado de una operación de copia y lo hace visible.
+
+        El estado viaja en la propiedad ``siriusBackupState`` además de en el
+        texto: ``validada``, ``restaurada``, ``cancelada`` y ``rechazada`` son
+        cuatro desenlaces distintos, y distinguirlos no puede depender de cómo
+        esté redactada la frase.
+
+        Desplazar hasta la etiqueta es parte del trabajo, no un adorno: estas
+        etiquetas están al final de una pestaña más alta que la ventana, así
+        que sin esto el mensaje queda fuera del área visible y la operación se
+        percibe como que «no pasa nada».
+        """
+        label.setProperty(BACKUP_STATE_PROPERTY, state)
+        label.setStyleSheet(_BACKUP_STATE_STYLES[state])
+        label.setText(detail)
+        self._scroll_settings_to(label)
+
+    def _scroll_settings_to(self, label: QLabel) -> None:
+        """Desplaza la pestaña hasta dejar la etiqueta ENTERA a la vista.
+
+        En dos tiempos, y el segundo no sobra. ``setText`` solo encola el
+        recálculo, y una etiqueta con ajuste de línea no llega a su altura
+        final de una vez: medido en la pestaña real, la confirmación de una
+        copia válida pasa por 14, 32, 44 y 70 px conforme el diseño converge,
+        porque su propio ancho cambia según aparezca o no la barra de
+        desplazamiento. El primer desplazamiento deja el mensaje a la vista
+        de inmediato; el segundo, ya en el bucle de eventos, corrige la
+        posición con el diseño terminado. Se pasa ``self`` como contexto para
+        que Qt descarte la llamada si la ventana se cierra antes de disparar.
+        """
+        self._ensure_label_visible(label)
+        self._pending_feedback_label = label
+        QTimer.singleShot(0, self, self._ensure_pending_feedback_visible)
+
+    def _ensure_pending_feedback_visible(self) -> None:
+        label = self._pending_feedback_label
+        self._pending_feedback_label = None
+        if label is not None:
+            self._ensure_label_visible(label)
+
+    def _ensure_label_visible(self, label: QLabel) -> None:
+        """Deja la etiqueta entera dentro del área visible de Configuración.
+
+        No usa ``ensureWidgetVisible``: ese método trabaja con el alto que la
+        etiqueta tiene AHORA, y mientras el diseño converge ese alto se queda
+        corto, con lo que el final del mensaje sigue asomando por debajo del
+        borde (medido: 6 px de recorte con una confirmación de cinco líneas).
+        Aquí se activa el diseño del contenido y se cuenta con el alto que la
+        etiqueta va a tener con su ancho actual —``heightForWidth``—, que es
+        el dato que no depende de en qué pasada de diseño estemos.
+        """
+        scroll_area = self._settings_scroll_area
+        content = scroll_area.widget()
+        if content is not None:
+            layout = content.layout()
+            if layout is not None:
+                layout.activate()
+
+        viewport_height = scroll_area.viewport().height()
+        top = label.mapTo(scroll_area.viewport(), QPoint(0, 0)).y()
+        height = max(label.height(), label.heightForWidth(label.width()))
+        scrollbar = scroll_area.verticalScrollBar()
+
+        overflow = top + height - viewport_height
+        if overflow > 0:
+            scrollbar.setValue(scrollbar.value() + overflow)
+        elif top < 0:
+            scrollbar.setValue(scrollbar.value() + top)
+
+    @staticmethod
+    def _clear_backup_feedback(label: QLabel) -> None:
+        label.setProperty(BACKUP_STATE_PROPERTY, None)
+        label.setStyleSheet("")
+        label.setText("")
 
     def _start_backup_operation(self) -> None:
         self._is_backup_busy = True
@@ -980,7 +1139,9 @@ class MainWindow(QMainWindow):
             return
 
         self._start_backup_operation()
-        self.create_backup_status_label.setText("Creando copia cifrada...")
+        self._set_backup_feedback(
+            self.create_backup_status_label, BACKUP_STATE_IN_PROGRESS, "Creando copia cifrada..."
+        )
 
         worker = CreateBackupWorker(self._create_backup_use_case, password)
         worker.signals.succeeded.connect(self._on_create_backup_succeeded)
@@ -993,20 +1154,51 @@ class MainWindow(QMainWindow):
         # pending close must not pop up a new dialog once the window is on
         # its way out.
         should_notify = not self._close_requested
+        # Antes de _finish_backup_operation(), que es quien decide si «Abrir
+        # carpeta» y «Usar esta copia» pueden encenderse.
+        self._last_backup_path = result.path
         self._finish_backup_operation()
-        self.create_backup_status_label.setText("")
+        self._set_backup_feedback(
+            self.create_backup_status_label,
+            BACKUP_STATE_CREATED,
+            "Copia cifrada creada correctamente.",
+        )
+        self.create_backup_path_label.setText(f"Archivo: {result.path}")
         if should_notify:
             self._show_information(
                 "Copia creada",
-                f"Copia cifrada creada correctamente en:\n{result.path}",
+                f"Copia cifrada creada correctamente en:\n{result.path}\n\n"
+                'La ruta queda escrita en la pestaña "Configuración", con los '
+                'botones "Abrir carpeta" y "Usar esta copia".',
             )
 
     def _on_create_backup_failed(self, message: str) -> None:
         should_notify = not self._close_requested
         self._finish_backup_operation()
-        self.create_backup_status_label.setText("")
+        self._set_backup_feedback(
+            self.create_backup_status_label,
+            BACKUP_STATE_REJECTED,
+            f"No se pudo crear la copia. {message}",
+        )
         if should_notify:
             self._show_warning("No se pudo crear la copia", message)
+
+    def _handle_open_backup_folder_clicked(self) -> None:
+        if self._last_backup_path is None:
+            return
+        self._open_containing_folder(self._last_backup_path)
+
+    def _handle_use_last_backup_clicked(self) -> None:
+        """Lleva la ruta de la última copia a validar y a restaurar.
+
+        Es la alternativa directa a volver a buscar a mano, en un selector de
+        archivos, la copia que Sirius acaba de crear.
+        """
+        if self._last_backup_path is None:
+            return
+        path_text = str(self._last_backup_path)
+        self.validate_backup_path_input.setText(path_text)
+        self.restore_backup_path_input.setText(path_text)
 
     # --- Validar copia -------------------------------------------------------
 
@@ -1031,7 +1223,9 @@ class MainWindow(QMainWindow):
             return
 
         self._start_backup_operation()
-        self.validate_backup_result_label.setText("Validando copia...")
+        self._set_backup_feedback(
+            self.validate_backup_result_label, BACKUP_STATE_IN_PROGRESS, "Validando copia..."
+        )
 
         worker = ValidateBackupWorker(self._validate_backup_use_case, Path(path_text), password)
         worker.signals.succeeded.connect(self._on_validate_backup_succeeded)
@@ -1040,14 +1234,31 @@ class MainWindow(QMainWindow):
         self._thread_pool.start(worker)
 
     def _on_validate_backup_succeeded(self, result: BackupValidationResult) -> None:
+        should_notify = not self._close_requested
         self._finish_backup_operation()
-        self.validate_backup_result_label.setText(
-            self._format_backup_summary(result.manifest, result.size_bytes)
+        summary = self._format_backup_summary(result.manifest, result.size_bytes)
+        # El resumen por sí solo no dice si la copia sirve: enumera fecha,
+        # versión y tamaño, y ante esos datos no se distingue «válida» de
+        # «no he hecho nada». La confirmación tiene que ser explícita.
+        confirmation = "Copia validada: la contraseña es correcta y el archivo está íntegro."
+        self._set_backup_feedback(
+            self.validate_backup_result_label,
+            BACKUP_STATE_VALIDATED,
+            f"{confirmation}\n{summary}",
         )
+        if should_notify:
+            self._show_information("Copia validada", f"{confirmation}\n\n{summary}")
 
     def _on_validate_backup_failed(self, message: str) -> None:
+        should_notify = not self._close_requested
         self._finish_backup_operation()
-        self.validate_backup_result_label.setText(message)
+        self._set_backup_feedback(
+            self.validate_backup_result_label,
+            BACKUP_STATE_REJECTED,
+            f"Copia rechazada: {message}",
+        )
+        if should_notify:
+            self._show_warning("Copia rechazada", message)
 
     # --- Restaurar copia -----------------------------------------------------
 
@@ -1072,8 +1283,10 @@ class MainWindow(QMainWindow):
             return
 
         self._start_backup_operation()
-        self.restore_backup_status_label.setText("Validando copia...")
-        self.restore_backup_feedback_label.setText("")
+        self._set_backup_feedback(
+            self.restore_backup_status_label, BACKUP_STATE_IN_PROGRESS, "Validando copia..."
+        )
+        self._clear_backup_feedback(self.restore_backup_feedback_label)
 
         backup_path = Path(path_text)
         worker = ValidateBackupWorker(self._validate_backup_use_case, backup_path, password)
@@ -1087,7 +1300,7 @@ class MainWindow(QMainWindow):
     def _on_restore_validation_succeeded(
         self, result: BackupValidationResult, backup_path: Path, password: str
     ) -> None:
-        self.restore_backup_status_label.setText("")
+        self._clear_backup_feedback(self.restore_backup_status_label)
 
         # A close was requested while the pre-validation was still running:
         # honor it instead of popping up a destructive confirmation dialog
@@ -1113,10 +1326,16 @@ class MainWindow(QMainWindow):
         )
         if not confirmed:
             self._finish_backup_operation()
-            self.restore_backup_feedback_label.setText("Restauración cancelada.")
+            self._set_backup_feedback(
+                self.restore_backup_feedback_label,
+                BACKUP_STATE_CANCELLED,
+                "Restauración cancelada. No se ha modificado ningún dato.",
+            )
             return
 
-        self.restore_backup_status_label.setText("Restaurando...")
+        self._set_backup_feedback(
+            self.restore_backup_status_label, BACKUP_STATE_IN_PROGRESS, "Restaurando..."
+        )
         # Must run before RestoreBackupUseCase: this window's own pooled
         # connections to sirius.db would otherwise block the atomic file
         # replace on Windows (confirmed empirically; see PLAN.md). If this
@@ -1130,10 +1349,8 @@ class MainWindow(QMainWindow):
                 type(exc).__name__,
             )
             self._finish_backup_operation()
-            self.restore_backup_status_label.setText("")
-            self.restore_backup_feedback_label.setText(
-                "No se pudo preparar la restauración. Inténtalo de nuevo."
-            )
+            self._clear_backup_feedback(self.restore_backup_status_label)
+            self._reject_restore("No se pudo preparar la restauración. Inténtalo de nuevo.")
             return
 
         worker = RestoreBackupWorker(self._restore_backup_use_case, backup_path, password)
@@ -1142,10 +1359,29 @@ class MainWindow(QMainWindow):
         self._active_backup_worker = worker
         self._thread_pool.start(worker)
 
+    def _reject_restore(self, message: str) -> None:
+        """Deja constancia visible de que la restauración NO se ha hecho.
+
+        Que la restauración no se ejecute ante una contraseña incorrecta es lo
+        correcto; hacerlo en silencio no lo es. Aviso modal y estado
+        ``rechazada`` en la etiqueta, que es lo que queda después de cerrarlo.
+        """
+        should_notify = not self._close_requested
+        self._set_backup_feedback(
+            self.restore_backup_feedback_label,
+            BACKUP_STATE_REJECTED,
+            f"Restauración rechazada: {message}\nNo se ha modificado ningún dato.",
+        )
+        if should_notify:
+            self._show_warning(
+                "No se pudo restaurar",
+                f"{message}\n\nNo se ha modificado ningún dato.",
+            )
+
     def _on_restore_validation_failed(self, message: str) -> None:
         self._finish_backup_operation()
-        self.restore_backup_status_label.setText("")
-        self.restore_backup_feedback_label.setText(message)
+        self._clear_backup_feedback(self.restore_backup_status_label)
+        self._reject_restore(message)
 
     def _on_restore_backup_succeeded(self, result: BackupRestoreResult) -> None:
         # Deliberately not `_finish_backup_operation()`: the window is about
@@ -1155,7 +1391,12 @@ class MainWindow(QMainWindow):
         self.project_continuity_widget.set_external_busy(False)
         self.knowledge_widget.set_external_busy(False)
         self.context_panel_widget.set_external_busy(False)
-        self.restore_backup_status_label.setText("")
+        self._clear_backup_feedback(self.restore_backup_status_label)
+        self._set_backup_feedback(
+            self.restore_backup_feedback_label,
+            BACKUP_STATE_RESTORED,
+            "Copia restaurada correctamente.",
+        )
         message = "Los datos se restauraron correctamente."
         if result.safety_backup_path is not None:
             message += (
@@ -1172,8 +1413,8 @@ class MainWindow(QMainWindow):
         # because RestoreBackupUseCase guarantees the file on disk is left
         # either untouched or correctly rolled back.
         self._finish_backup_operation()
-        self.restore_backup_status_label.setText("")
-        self.restore_backup_feedback_label.setText(message)
+        self._clear_backup_feedback(self.restore_backup_status_label)
+        self._reject_restore(message)
 
     # --- Exportación (B9b/S12.1/RF-031/PA-020) --------------------------
 

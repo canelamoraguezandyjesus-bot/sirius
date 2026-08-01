@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QPushButton
@@ -68,6 +69,7 @@ class ValidatedMainWindow(MainWindow):
         show_information: Callable[[str, str], None] | None = None,
         confirm_restore: Callable[[str, str], bool] | None = None,
         choose_backup_file: Callable[[str], str] | None = None,
+        open_containing_folder: Callable[[Path], None] | None = None,
         confirm_export: Callable[[str, str], bool] | None = None,
         choose_export_directory: Callable[[str], str] | None = None,
     ) -> None:
@@ -103,6 +105,7 @@ class ValidatedMainWindow(MainWindow):
             show_information=show_information,
             confirm_restore=confirm_restore,
             choose_backup_file=choose_backup_file,
+            open_containing_folder=open_containing_folder,
             confirm_export=confirm_export,
             choose_export_directory=choose_export_directory,
         )
