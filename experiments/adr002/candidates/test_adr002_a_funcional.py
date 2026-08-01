@@ -46,7 +46,7 @@ from experiments.adr002.candidates.common.contracts import (
 from experiments.adr002.candidates.common.port import PuertoSqlite
 
 RAIZ = Path(__file__).resolve().parents[3]
-FICHA = "artifacts/adr002_cards/ficha_ADR002-A_v2.json"
+FICHA = "artifacts/adr002_cards/ficha_ADR002-A_v3.json"
 
 
 # --------------------------------------------------------------------------
@@ -58,6 +58,41 @@ def _git(*argumentos: str) -> str:
     return subprocess.run(
         ["git", *argumentos], cwd=str(RAIZ), capture_output=True, text=True, check=False
     ).stdout.strip()
+
+
+def _la_ficha_vigente_es_ancestro_estricto() -> bool:
+    """Suspension de TOL-210: sin ficha sucesora anterior, no se ejecuta.
+
+    El paquete de correccion 02 cambio fuentes de la huella de A (la capa
+    comun), de modo que ejecutar bajo la v2 produciria evidencia no
+    utilizable. Estas pruebas SE REPITEN enteras bajo la v3; mientras su
+    commit de entrada no sea ancestro estricto, quedan suspendidas y el
+    motivo esta escrito aqui.
+    """
+    entrada = _git("log", "--format=%H", "--diff-filter=A", "--", FICHA)
+    if not entrada:
+        return False
+    commit_de_entrada = entrada.splitlines()[-1]
+    if commit_de_entrada == _git("rev-parse", "HEAD"):
+        return False
+    return (
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", commit_de_entrada, "HEAD"],
+            cwd=str(RAIZ),
+            capture_output=True,
+            check=False,
+        ).returncode
+        == 0
+    )
+
+
+pytestmark = pytest.mark.skipif(
+    not _la_ficha_vigente_es_ancestro_estricto(),
+    reason=(
+        "la ficha ADR002-A v3 aun no es ancestro estricto: ejecutar ahora "
+        "produciria evidencia no utilizable (TOL-210, regla 3)"
+    ),
+)
 
 
 def test_la_ficha_es_anterior_estricta_a_esta_ejecucion() -> None:

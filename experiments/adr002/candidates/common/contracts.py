@@ -273,6 +273,34 @@ ESTADO_EXTERNO_SIN_RESULTADO: Final = "SIN_RESULTADO_UTILIZABLE"
 # --------------------------------------------------------------------------
 
 
+@dataclass(frozen=True, slots=True)
+class MaterializacionPorIdentidad:
+    """Resultado cerrado de materializar identificadores canonicos exactos.
+
+    Distingue lo pedido, lo encontrado y lo ausente sin que ningun candidato
+    tenga que reconstruir esa diferencia a mano: un identificador ausente no
+    es un error de formato ni una consulta sin resultados, y confundir esos
+    tres casos fue el defecto que el paquete de correccion 02 elimina.
+    """
+
+    #: Entradas recibidas, duplicados incluidos.
+    pedidos: int
+    #: Identificadores normalizados, unicos y en orden canonico.
+    solicitados: tuple[str, ...]
+    #: Los solicitados que existen en el canon, en orden canonico estable.
+    items: tuple[ItemCanonico, ...]
+    #: Los solicitados que el canon no contiene. Declarados, nunca callados.
+    ausentes: tuple[str, ...]
+
+    @property
+    def encontrados(self) -> int:
+        return len(self.items)
+
+    @property
+    def completa(self) -> bool:
+        return not self.ausentes
+
+
 @runtime_checkable
 class PuertoDeRecuperacion(Protocol):
     """Interfaz estrecha sobre el canon y su indice lexico.
@@ -299,6 +327,19 @@ class PuertoDeRecuperacion(Protocol):
         candidatos, y enumerar un proyecto entero para filtrar despues era el
         barrido que ``B04-RF-14`` prohibe. Un prefijo de sujeto es una
         relacion que el canon ya materializa y se consulta dirigida.
+        """
+        ...
+
+    def por_identificadores(self, identificadores: Sequence[str]) -> MaterializacionPorIdentidad:
+        """Materializacion dirigida por identidad canonica exacta.
+
+        Acepta unicamente identificadores cerrados construidos desde los
+        valores reales de ``Clase`` (``MEMORIA:<n>``, ``DECISION:<n>``, con
+        ``n`` entero positivo sin ceros a la izquierda). El formato invalido,
+        la entrada vacia y el exceso de cota fallan tipados **antes** de
+        consultar; un identificador valido pero inexistente no es un error de
+        formato: queda declarado en ``ausentes``. El trabajo depende de
+        cuantos identificadores se piden, nunca del tamano del canon.
         """
         ...
 
@@ -377,6 +418,7 @@ __all__ = [
     "Explicacion",
     "ItemCanonico",
     "LecturaSemantica",
+    "MaterializacionPorIdentidad",
     "Modo",
     "Peticion",
     "Polaridad",

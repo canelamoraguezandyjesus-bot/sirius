@@ -51,17 +51,20 @@ def test_la_capa_comun_sigue_neutral_con_b_presente() -> None:
 
 
 def test_la_base_de_a_no_cambio_ni_un_byte() -> None:
-    """Los blobs de ``adr002_a`` y ``common`` son los del acta de preparacion.
+    """Los blobs de ``adr002_a`` y ``common`` son los preinscritos vigentes.
 
-    Es la regla de parada del paquete 12 hecha maquina: si implementar B
-    hubiera exigido tocar la base, este control lo denunciaria en vez de
-    dejarlo pasar como un cambio silencioso.
+    Es la regla de parada hecha maquina: si un candidato exigiera tocar la
+    base en silencio, este control lo denunciaria. El paquete de correccion
+    02 SI toco ``contracts.py`` y ``port.py`` —por eso existen las fichas
+    sucesoras A v3 y B v2—, y sus blobs quedan fijados aqui de nuevo: el
+    proximo cambio silencioso volvera a fallar. El codigo propio de
+    ``adr002_a`` sigue intacto desde el acta de preparacion.
     """
     import subprocess
 
     fijados = {
         "experiments/adr002/candidates/common/contracts.py": (
-            "11f6b89049e291a200550b061624fb8b2b4dc1bb"
+            "a13946b923b1ee6adf77ab46ed2fda4fb89ef64f"
         ),
         "experiments/adr002/candidates/common/engine.py": (
             "95cb4a4f62bbbd55f2c417a0a9b94ba21c111038"
@@ -73,7 +76,7 @@ def test_la_base_de_a_no_cambio_ni_un_byte() -> None:
             "f63712159626bb0249d727ba9f6519e074179f5f"
         ),
         "experiments/adr002/candidates/common/port.py": (
-            "3a0ed12fdfc69833a51e91cc3bc9efee631017c8"
+            "72041ab76d28de53d161e98172ea20c0ef1a0e2a"
         ),
         "experiments/adr002/candidates/common/trace.py": (
             "6e0a0822ad3536b06fdc8735c7def3a34ee934d6"
@@ -186,6 +189,20 @@ def test_el_ambito_no_es_generador_tampoco_en_b() -> None:
     codigo = _codigo("candidate.py") + _codigo("vectores.py")
     assert "por_entidad" not in codigo
     assert "ambito.proyectos" not in codigo
+
+
+def test_b_materializa_por_identidad_y_nunca_por_clave() -> None:
+    """El defecto del paquete de correccion 02 no puede reaparecer.
+
+    La ruta vectorial pide al puerto exactamente los identificadores que el
+    sidecar devolvio; la clave de sujeto ya no decide que fila se recupera, y
+    una identidad ausente falla cerrada en vez de perderse callada.
+    """
+    codigo = _codigo("candidate.py")
+    assert "por_identificadores" in codigo
+    assert "por_clave_exacta" not in codigo
+    assert "materializacion.ausentes" in codigo
+    assert "IndiceInconsistenteError" in codigo
 
 
 # --------------------------------------------------------------------------

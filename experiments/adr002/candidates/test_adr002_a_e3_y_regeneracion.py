@@ -51,7 +51,7 @@ from experiments.adr002.candidates.common.port import (
 )
 
 RAIZ = Path(__file__).resolve().parents[3]
-FICHA_VIGENTE: Final = "artifacts/adr002_cards/ficha_ADR002-A_v2.json"
+FICHA_VIGENTE: Final = "artifacts/adr002_cards/ficha_ADR002-A_v3.json"
 
 #: El item que **solo** ``E3`` puede alcanzar desde la consulta ``faro``: su
 #: texto no contiene ``faro`` ni ninguna variante morfologica suya.
@@ -68,7 +68,7 @@ E1_E3: Final = frozenset({Etapa.E1, Etapa.E2, Etapa.E3})
 
 
 # --------------------------------------------------------------------------
-# Guarda de anterioridad: la ficha vigente es la v2, y es anterior
+# Guarda de anterioridad: la ficha vigente es la v3, y es anterior
 # --------------------------------------------------------------------------
 
 
@@ -78,14 +78,44 @@ def _git(*argumentos: str) -> str:
     ).stdout.strip()
 
 
-def test_la_ficha_v2_es_anterior_estricta_a_esta_ejecucion() -> None:
+def _la_ficha_vigente_es_ancestro_estricto() -> bool:
+    """Suspension de TOL-210: el paquete 02 cambio la capa comun de la huella
+    de A, y estas pruebas se repiten enteras bajo la v3 o no se ejecutan."""
+    entrada = _git("log", "--format=%H", "--diff-filter=A", "--", FICHA_VIGENTE)
+    if not entrada:
+        return False
+    commit_de_entrada = entrada.splitlines()[-1]
+    if commit_de_entrada == _git("rev-parse", "HEAD"):
+        return False
+    return (
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", commit_de_entrada, "HEAD"],
+            cwd=str(RAIZ),
+            capture_output=True,
+            check=False,
+        ).returncode
+        == 0
+    )
+
+
+pytestmark = pytest.mark.skipif(
+    not _la_ficha_vigente_es_ancestro_estricto(),
+    reason=(
+        "la ficha ADR002-A v3 aun no es ancestro estricto: ejecutar ahora "
+        "produciria evidencia no utilizable (TOL-210, regla 3)"
+    ),
+)
+
+
+def test_la_ficha_v3_es_anterior_estricta_a_esta_ejecucion() -> None:
     """``TOL-210``: sin ficha previa, la ejecucion no es utilizable.
 
-    Y tiene que ser la **v2**: el prototipo cambio, de modo que ejecutar bajo
-    la v1 produciria evidencia que la propia regla de custodia invalida.
+    Y tiene que ser la **v3**: el paquete de correccion 02 cambio la capa
+    comun incluida en la huella, de modo que ejecutar bajo la v2 produciria
+    evidencia que la propia regla de custodia invalida.
     """
     entrada = _git("log", "--format=%H", "--diff-filter=A", "--", FICHA_VIGENTE)
-    assert entrada, "la ficha v2 de ADR002-A no esta confirmada en el repositorio"
+    assert entrada, "la ficha v3 de ADR002-A no esta confirmada en el repositorio"
     commit_de_entrada = entrada.splitlines()[-1]
     head = _git("rev-parse", "HEAD")
     assert commit_de_entrada != head, "la ficha debe entrar ANTES del commit que ejecuta"
@@ -95,21 +125,25 @@ def test_la_ficha_v2_es_anterior_estricta_a_esta_ejecucion() -> None:
         capture_output=True,
         check=False,
     )
-    assert ancestro.returncode == 0, "el commit de entrada de la ficha v2 no es ancestro de HEAD"
+    assert ancestro.returncode == 0, "el commit de entrada de la ficha v3 no es ancestro de HEAD"
 
 
-def test_la_ficha_v1_sigue_presente_y_marcada_como_sustituida() -> None:
-    """La v1 no se borra: se marca. Ocultarla escondería que existio."""
+def test_las_fichas_anteriores_siguen_presentes_y_marcadas() -> None:
+    """Ni la v1 ni la v2 se borran: se marcan. Ocultarlas escondería historia."""
     import json
 
     v1 = json.loads(
         (RAIZ / "artifacts/adr002_cards/ficha_ADR002-A_v1.json").read_text(encoding="utf-8")
     )
-    v2 = json.loads((RAIZ / FICHA_VIGENTE).read_text(encoding="utf-8"))
+    v2 = json.loads(
+        (RAIZ / "artifacts/adr002_cards/ficha_ADR002-A_v2.json").read_text(encoding="utf-8")
+    )
+    v3 = json.loads((RAIZ / FICHA_VIGENTE).read_text(encoding="utf-8"))
     assert v1["estado"] == "SUSTITUIDA"
-    assert v2["estado"] == "CONGELADA"
-    assert v2["identidad"]["sustituye_a"] == 1
-    assert v2["no_contiene_resultados"] is True
+    assert v2["estado"] == "SUSTITUIDA"
+    assert v3["estado"] == "CONGELADA"
+    assert v3["identidad"]["sustituye_a"] == 2
+    assert v3["no_contiene_resultados"] is True
 
 
 # --------------------------------------------------------------------------

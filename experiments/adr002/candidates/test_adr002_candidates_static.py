@@ -116,6 +116,7 @@ def test_el_puerto_no_ofrece_ningun_barrido_completo() -> None:
         "por_clave_exacta",
         "por_termino_lexico",
         "por_prefijo_de_sujeto",
+        "por_identificadores",
         "historial_y_fuentes",
     }
 

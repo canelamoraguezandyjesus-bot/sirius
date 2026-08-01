@@ -123,6 +123,16 @@ class IndiceDesfasadoError(IndiceNoUtilizableError):
     """El canon cambio desde que el indice se construyo."""
 
 
+class IndiceInconsistenteError(IndiceNoUtilizableError):
+    """El indice cita identidades que el canon no contiene.
+
+    Un derivado que afirma la existencia de elementos inexistentes no es
+    evidencia utilizable: se falla cerrado, sin recuperacion parcial y sin
+    degradar a la base lexico-estructurada. El mensaje contiene solo
+    identificadores y clases, jamas contenido.
+    """
+
+
 # --------------------------------------------------------------------------
 # Huella del canon de origen: la que detecta el desfase
 # --------------------------------------------------------------------------
@@ -516,6 +526,7 @@ __all__ = [
     "ConsultaVectorialRegistrada",
     "IndiceCorruptoError",
     "IndiceDesfasadoError",
+    "IndiceInconsistenteError",
     "IndiceInexistenteError",
     "IndiceNoUtilizableError",
     "LectorVectorial",

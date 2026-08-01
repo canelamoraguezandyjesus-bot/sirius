@@ -22,6 +22,7 @@ la cadena de Alembic, sin DDL adicional, sin indices nuevos y sin escrituras.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -33,6 +34,7 @@ from experiments.adr002.candidates.common.contracts import (
     ClaseDeEvidencia,
     Criticidad,
     ItemCanonico,
+    MaterializacionPorIdentidad,
 )
 
 #: Vigencia y disponibilidad tal como las representa el esquema de Sirius 0.1.
@@ -65,6 +67,14 @@ LIMITE_POR_PREFIJO: Final = 64
 #: esta cota, pedir "todos los terminos del corpus" seria un barrido escrito
 #: de otra forma.
 ARGUMENTOS_MAXIMOS: Final = 16
+
+#: Formato cerrado de la identidad canonica: una clase REAL de ``Clase`` y un
+#: entero positivo sin ceros a la izquierda. Nada mas: los ceros iniciales
+#: serian codificaciones duplicadas de la misma identidad, y una cadena
+#: paralela divergente seria una segunda nocion de identidad.
+_FORMATO_DE_IDENTIDAD: Final = re.compile(
+    rf"^({'|'.join(re.escape(clase.value) for clase in Clase)}):([1-9][0-9]*)$"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +116,15 @@ class RegistroDeConsultas:
 
 class ConsultaNoDirigidaError(RuntimeError):
     """Se intento una consulta sin predicado o con demasiados argumentos."""
+
+
+class IdentificadorInvalidoError(ValueError):
+    """Identificador canonico malformado, entrada vacia o cota excedida.
+
+    Se lanza ANTES de ejecutar SQL alguno. Un identificador sintacticamente
+    valido pero inexistente NO es este error: aparece como ausente en el
+    resultado, porque no existir no es estar mal escrito.
+    """
 
 
 class PuertoSqlite:
@@ -164,6 +183,23 @@ class PuertoSqlite:
 
     # -- Lectura de items -------------------------------------------------
 
+    @staticmethod
+    def _item_de_fila(clase: Clase, fila: sqlite3.Row) -> ItemCanonico:
+        return ItemCanonico(
+            id=f"{clase.value}:{fila[0]}",
+            clase=clase,
+            project_id=(None if fila["project_id"] is None else str(fila["project_id"])),
+            texto=str(fila["content"] or ""),
+            subject_key=str(fila[1] or ""),
+            vigente=(str(fila["status"]) == _ESTADO_VIGENTE)
+            if clase is Clase.MEMORIA
+            else (str(fila["status"]) == "approved"),
+            disponible=str(fila["status"]) not in ("deleted", "purged"),
+            created_at=str(fila["created_at"]),
+            clase_de_evidencia=ClaseDeEvidencia.CANONICA,
+            criticidad=Criticidad.ORDINARIA,
+        )
+
     def _items(self, clase: Clase, ids: Sequence[int]) -> list[ItemCanonico]:
         if not ids:
             return []
@@ -173,23 +209,7 @@ class PuertoSqlite:
         filas = self._ejecutar(
             f"materializar:{clase.value}", sql, acotados, cota=LIMITE_POR_CONSULTA
         )
-        items = [
-            ItemCanonico(
-                id=f"{clase.value}:{fila[0]}",
-                clase=clase,
-                project_id=(None if fila["project_id"] is None else str(fila["project_id"])),
-                texto=str(fila["content"] or ""),
-                subject_key=str(fila[1] or ""),
-                vigente=(str(fila["status"]) == _ESTADO_VIGENTE)
-                if clase is Clase.MEMORIA
-                else (str(fila["status"]) == "approved"),
-                disponible=str(fila["status"]) not in ("deleted", "purged"),
-                created_at=str(fila["created_at"]),
-                clase_de_evidencia=ClaseDeEvidencia.CANONICA,
-                criticidad=Criticidad.ORDINARIA,
-            )
-            for fila in filas
-        ]
+        items = [self._item_de_fila(clase, fila) for fila in filas]
         return sorted(items, key=lambda i: i.id)
 
     def _por_ids_mixtos(self, pares: Sequence[tuple[str, int]]) -> tuple[ItemCanonico, ...]:
@@ -241,6 +261,65 @@ class PuertoSqlite:
             )
         ]
         return self._por_ids_mixtos(pares)
+
+    def por_identificadores(self, identificadores: Sequence[str]) -> MaterializacionPorIdentidad:
+        """Materializacion dirigida por identidad canonica exacta.
+
+        La unica pregunta que responde es «¿existen exactamente ESTOS?». No
+        mira claves de sujeto, ni proyectos, ni el indice lexico: cada clase
+        se consulta con un unico ``WHERE id IN (...)`` sobre su clave
+        primaria, de modo que el trabajo depende de cuantos identificadores
+        se piden y nunca del tamano del canon. Lo ausente se declara en el
+        resultado; callarlo fue el defecto del paquete de correccion 02.
+        """
+        if not identificadores:
+            msg = "por_identificadores: entrada vacia; materializar nada no es una consulta"
+            raise IdentificadorInvalidoError(msg)
+        analizados: set[tuple[str, int]] = set()
+        for crudo in identificadores:
+            forma = _FORMATO_DE_IDENTIDAD.match(str(crudo))
+            if forma is None:
+                msg = (
+                    f"identificador canonico invalido: {str(crudo)[:64]!r}; el formato "
+                    f"cerrado es <clase de Clase>:<entero positivo sin ceros iniciales>"
+                )
+                raise IdentificadorInvalidoError(msg)
+            analizados.add((forma.group(1), int(forma.group(2))))
+        if len(analizados) > ARGUMENTOS_MAXIMOS:
+            msg = (
+                f"por_identificadores: {len(analizados)} identificadores unicos sobre la "
+                f"cota de {ARGUMENTOS_MAXIMOS}; la cota rechaza, no trunca"
+            )
+            raise IdentificadorInvalidoError(msg)
+        ordenados = sorted(analizados)
+        solicitados = tuple(f"{clase}:{numero}" for clase, numero in ordenados)
+
+        items: list[ItemCanonico] = []
+        for clase in (Clase.MEMORIA, Clase.DECISION):
+            numeros = [numero for nombre, numero in ordenados if nombre == clase.value]
+            if not numeros:
+                continue
+            marcas = ",".join("?" * len(numeros))
+            sql = (_SQL_MEMORIAS if clase is Clase.MEMORIA else _SQL_DECISIONES).format(
+                marcas=marcas
+            )
+            filas = self._ejecutar(
+                f"por_identidad:{clase.value}", sql, numeros, cota=ARGUMENTOS_MAXIMOS
+            )
+            items.extend(self._item_de_fila(clase, fila) for fila in filas)
+
+        def _orden_canonico(item: ItemCanonico) -> tuple[str, int]:
+            nombre, _, numero = item.id.partition(":")
+            return (nombre, int(numero))
+
+        encontrados = tuple(sorted(items, key=_orden_canonico))
+        presentes = {item.id for item in encontrados}
+        return MaterializacionPorIdentidad(
+            pedidos=len(identificadores),
+            solicitados=solicitados,
+            items=encontrados,
+            ausentes=tuple(s for s in solicitados if s not in presentes),
+        )
 
     def por_prefijo_de_sujeto(self, prefijos: Sequence[str]) -> tuple[ItemCanonico, ...]:
         """``E3``: familia de sujetos por prefijo estructural, dirigida.
@@ -348,6 +427,7 @@ __all__ = [
     "LIMITE_POR_PREFIJO",
     "ConsultaNoDirigidaError",
     "ConsultaRegistrada",
+    "IdentificadorInvalidoError",
     "PuertoSqlite",
     "RegistroDeConsultas",
     "fallos_de_barrido",

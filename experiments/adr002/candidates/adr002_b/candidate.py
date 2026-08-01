@@ -117,11 +117,19 @@ class CandidatoB:
     def _vectoriales(
         self, contexto: ContextoDeEtapa, ids_de_la_base: frozenset[str]
     ) -> list[Candidata]:
-        """La senal vectorial: identificadores del indice, contenido del puerto.
+        """La senal vectorial: identidades del indice, contenido del puerto.
 
         La apertura del lector ocurre AQUI, en la primera consulta real, y en
         ningun otro sitio: si el indice falta, esta corrupto o esta desfasado,
         el fallo es cerrado y tipado. No hay degradacion a «sin vector».
+
+        La materializacion es **por identidad canonica exacta**: se piden al
+        puerto los mismos identificadores que el sidecar devolvio, nunca sus
+        claves de sujeto —una clave vacia, duplicada o con mas de 512 filas
+        no puede perder una coincidencia, porque la clave ya no decide que
+        fila se recupera (paquete de correccion 02)—. Si el canon no contiene
+        alguna de esas identidades, el derivado esta inconsistente y se falla
+        cerrado: ninguna recuperacion parcial, ninguna continuacion callada.
         """
         self.invocaciones_vectoriales += 1
         if self._lector is None:
@@ -133,25 +141,27 @@ class CandidatoB:
         )
         if not coincidencias:
             return []
-        claves = lexical.ordenar_estable(c.clave_de_sujeto for c in coincidencias)
-        materializados = {item.id: item for item in contexto.puerto.por_clave_exacta(claves)}
-        candidatas: list[Candidata] = []
-        for coincidencia in coincidencias:
-            item = materializados.get(coincidencia.elemento)
-            if item is None:
-                continue
-            candidatas.append(
-                Candidata(
-                    item=item,
-                    etapa=contexto.etapa,
-                    lectura=self.leer(item, contexto.peticion.consulta),
-                    razon=(
-                        f"similitud distribucional con la consulta en banda {coincidencia.banda}"
-                    ),
-                    senal=f"semantica_vectorial: coseno ppmi en banda {coincidencia.banda}",
-                )
+        materializacion = contexto.puerto.por_identificadores(
+            tuple(coincidencia.elemento for coincidencia in coincidencias)
+        )
+        if materializacion.ausentes:
+            msg = (
+                "el indice vectorial cita identidades que el canon no contiene: "
+                f"{', '.join(materializacion.ausentes)}; un derivado que afirma "
+                "elementos inexistentes no es utilizable"
             )
-        return candidatas
+            raise vectores.IndiceInconsistenteError(msg)
+        por_identidad = {item.id: item for item in materializacion.items}
+        return [
+            Candidata(
+                item=por_identidad[coincidencia.elemento],
+                etapa=contexto.etapa,
+                lectura=self.leer(por_identidad[coincidencia.elemento], contexto.peticion.consulta),
+                razon=(f"similitud distribucional con la consulta en banda {coincidencia.banda}"),
+                senal=f"semantica_vectorial: coseno ppmi en banda {coincidencia.banda}",
+            )
+            for coincidencia in coincidencias
+        ]
 
 
 def candidato(
