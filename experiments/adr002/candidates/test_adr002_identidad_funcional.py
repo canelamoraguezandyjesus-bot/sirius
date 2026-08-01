@@ -1,9 +1,10 @@
 """Pruebas funcionales de la materializacion por identidad canonica exacta.
 
 **Solo despues de las fichas sucesoras.** El paquete de correccion 02 cambio
-fuentes de las huellas de `ADR002-A` y `ADR002-B`; estas pruebas exigen que
-los commits de entrada de `ficha_ADR002-A_v3.json` y `ficha_ADR002-B_v2.json`
-sean ancestros estrictos, y quedan suspendidas mientras no lo sean.
+fuentes de las huellas de `ADR002-A` y `ADR002-B`, y el paquete de correccion
+03 volvio a cambiar las de B; estas pruebas exigen que los commits de entrada
+de `ficha_ADR002-A_v3.json` y `ficha_ADR002-B_v3.json` sean ancestros
+estrictos, y quedan suspendidas mientras no lo sean.
 
 Lo que se demuestra, seccion a seccion:
 
@@ -52,7 +53,7 @@ from experiments.adr002.candidates.common.port import PuertoSqlite, fallos_de_ba
 RAIZ = Path(__file__).resolve().parents[3]
 FICHAS_SUCESORAS: Final = (
     "artifacts/adr002_cards/ficha_ADR002-A_v3.json",
-    "artifacts/adr002_cards/ficha_ADR002-B_v2.json",
+    "artifacts/adr002_cards/ficha_ADR002-B_v3.json",
 )
 
 CONSULTA: Final = "faro"
@@ -85,7 +86,7 @@ def _es_ancestro_estricto(ruta: str) -> bool:
 pytestmark = pytest.mark.skipif(
     not all(_es_ancestro_estricto(ficha) for ficha in FICHAS_SUCESORAS),
     reason=(
-        "las fichas ADR002-A v3 y ADR002-B v2 aun no son ancestros estrictos: "
+        "las fichas ADR002-A v3 y ADR002-B v3 aun no son ancestros estrictos: "
         "ejecutar ahora produciria evidencia no utilizable (TOL-210, regla 3)"
     ),
 )

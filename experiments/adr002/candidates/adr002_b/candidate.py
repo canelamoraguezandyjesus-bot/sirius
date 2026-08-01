@@ -5,7 +5,7 @@ Definicion canonica que asume (``ARQ-00 §23``):
     expansion escalonada lexica/estructurada con senal semantica vectorial
     unicamente en etapas tardias tras fallar la puerta de suficiencia.
 
-**`ADR002-B` = `ADR002-A` v2 + senal vectorial tardia, por composicion.** Este
+**`ADR002-B` = `ADR002-A` v3 + senal vectorial tardia, por composicion.** Este
 candidato **contiene** a ``CandidatoA`` y delega en el todas las etapas: la
 ``E1`` exacta, la ``E2`` morfologica, la expansion lexico-estructurada de
 ``E3``, la ``E4`` atribuida y la lectura de sujeto, polaridad, condicion y
@@ -41,6 +41,7 @@ from experiments.adr002.candidates.common.contracts import (
     ItemCanonico,
     LecturaSemantica,
 )
+from experiments.adr002.candidates.common.port import IdentificadorInvalidoError
 
 IDENTIFICADOR: Final = "ADR002-B"
 
@@ -141,9 +142,23 @@ class CandidatoB:
         )
         if not coincidencias:
             return []
-        materializacion = contexto.puerto.por_identificadores(
-            tuple(coincidencia.elemento for coincidencia in coincidencias)
-        )
+        try:
+            materializacion = contexto.puerto.por_identificadores(
+                tuple(coincidencia.elemento for coincidencia in coincidencias)
+            )
+        except IdentificadorInvalidoError as error:
+            # Defensa en profundidad (paquete de correccion 03): el lector ya
+            # valida el formato de toda identidad persistida, asi que llegar
+            # aqui exige un fallo previo. Se traduce a corrupcion de indice
+            # con mensaje generico minimizado —el del puerto reproduce parte
+            # del valor y NO debe salir de B— y causa preservada. Sin
+            # recuperacion parcial, sin degradar a la base, sin fabricar S7.
+            msg = (
+                "el indice vectorial entrego identidades que el puerto "
+                "canonico rechaza; un indice que cita identidades no "
+                "canonicas no es utilizable"
+            )
+            raise vectores.IndiceCorruptoError(msg) from error
         if materializacion.ausentes:
             msg = (
                 "el indice vectorial cita identidades que el canon no contiene: "

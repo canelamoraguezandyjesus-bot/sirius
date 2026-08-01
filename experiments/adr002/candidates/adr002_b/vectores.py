@@ -25,7 +25,12 @@ Como funciona, entero, local y sin red:
    similitudes: **nunca contenido**; el contenido lo materializa despues el
    puerto canonico con una consulta dirigida.
 5. **Fail closed.** Indice inexistente, corrupto o cuya huella de canon ya no
-   coincide -> excepcion tipada. Ninguna degradacion silenciosa.
+   coincide -> excepcion tipada. Ninguna degradacion silenciosa. La
+   corrupcion LOGICA —un SQLite que supera quick_check pero cuyos valores
+   violan el formato persistido normativo— tambien falla cerrada: identidades,
+   vectores JSON, normas y aritmetica de similitud se validan sobre los datos
+   realmente consumidos por cada consulta, con mensajes minimizados que jamas
+   reproducen celdas del sidecar (paquete de correccion 03).
 
 Las dos lecturas directas del canon de este modulo —construir y recomputar la
 huella de origen— son **ciclo de vida del derivado**, la misma naturaleza que
@@ -37,13 +42,15 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 import sqlite3
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Final
+from typing import Final, TypeGuard
 
 from experiments.adr002.candidates.adr002_a import lexical
+from experiments.adr002.candidates.common.contracts import Clase
 
 # --------------------------------------------------------------------------
 # Version y parametros congelados por el paquete de trabajo 12, antes de
@@ -217,7 +224,14 @@ def construir(ruta_canon: Path, ruta_sidecar: Path) -> None:
         ppmi = math.log((conjunta * total) / (frecuencia[admitidos[t]] * frecuencia[admitidos[c]]))
         if ppmi <= 0:
             continue
-        vectores_de_termino.setdefault(t, []).append((c, round(ppmi * ESCALA_FIJA)))
+        peso = round(ppmi * ESCALA_FIJA)
+        if peso <= 0:
+            # El formato persistido exige pesos estrictamente positivos
+            # (paquete de correccion 03): un ppmi minusculo que redondea a
+            # cero no se persiste, porque un peso cero no aporta candidatura
+            # ni producto y romperia el invariante que valida el lector.
+            continue
+        vectores_de_termino.setdefault(t, []).append((c, peso))
     vectores_de_termino = {t: _podar(dims) for t, dims in vectores_de_termino.items()}
 
     filas_de_elemento: list[tuple[str, str, str, int]] = []
@@ -227,7 +241,7 @@ def construir(ruta_canon: Path, ruta_sidecar: Path) -> None:
         for termino in sorted(tokens_por_elemento[elemento]):
             for dimension, valor in vectores_de_termino.get(dimension_de.get(termino, -1), []):
                 acumulado[dimension] = acumulado.get(dimension, 0) + valor
-        dims = _podar(acumulado.items())
+        dims = _podar((d, v) for d, v in acumulado.items() if v > 0)
         if not dims:
             continue
         norma_cuadrada = sum(valor * valor for _d, valor in dims)
@@ -308,6 +322,122 @@ def volcado_logico(
         return tuple(volcado)
     finally:
         conexion.close()
+
+
+# --------------------------------------------------------------------------
+# Validacion logica del formato persistido (paquete de correccion 03)
+#
+# quick_check garantiza paginas SQLite integras, no valores logicos validos.
+# Todo dato consumido por una consulta se valida aqui antes de usarse, y toda
+# violacion es IndiceCorruptoError con mensaje minimizado: tabla, tipo de
+# defecto y posicion ordinal en el alcance consumido; jamas la celda.
+# --------------------------------------------------------------------------
+
+#: Tolerancia exclusiva para el error de evaluacion en coma flotante del
+#: coseno: con la norma igual exacta a la suma de cuadrados, Cauchy-Schwarz
+#: acota el cociente a 1 en aritmetica exacta y el error de evaluacion ronda
+#: 1e-15; por encima de esta holgura solo hay corrupcion.
+_TOLERANCIA_DE_COSENO: Final = 1e-9
+
+#: El maximo INTEGER que SQLite declara almacenar; por encima, la celda ya no
+#: es un entero exacto y el punto fijo deja de ser representable.
+_ENTERO_MAXIMO_DE_SQLITE: Final = 2**63 - 1
+
+#: Formato canonico exacto de una identidad persistida en el sidecar. Las
+#: clases proceden del contrato comun (unica fuente de nombres); usarlas no
+#: modifica la capa comun. Se aplica con ``fullmatch`` y sin anclas: un salto
+#: de linea final o cualquier apendice invalida, sin la ambiguedad de ``$``.
+_FORMATO_DE_IDENTIDAD_PERSISTIDA: Final = re.compile(
+    rf"({'|'.join(re.escape(clase.value) for clase in Clase)}):([1-9][0-9]*)"
+)
+
+
+def _es_entero_real(valor: object) -> TypeGuard[int]:
+    """``int`` exacto: ``bool`` es subtipo de ``int`` y no es un entero real."""
+    return type(valor) is int
+
+
+def _identidad_persistida_valida(valor: object) -> bool:
+    """Cadena completa con clase real, ``:`` unico y entero ASCII positivo
+    sin ceros iniciales, sin espacios y sin contenido adicional."""
+    return type(valor) is str and _FORMATO_DE_IDENTIDAD_PERSISTIDA.fullmatch(valor) is not None
+
+
+def _pares_de_vector_validados(
+    celda: object, *, tabla: str, posicion: int, terminos_totales: int
+) -> list[tuple[int, int]]:
+    """La UNICA deserializacion admitida de un vector persistido.
+
+    Un vector valido es exactamente: lista JSON de pares de longitud dos;
+    dimension entera real en ``[0, terminos_totales)``; peso entero real
+    estrictamente positivo y representable; sin dimensiones repetidas; en
+    orden canonico ascendente; con a lo sumo
+    ``DIMENSIONES_MAXIMAS_POR_VECTOR`` pares. Nada mas. ``JSONDecodeError``,
+    ``TypeError`` y ``ValueError`` no escapan: aqui se traducen.
+    """
+
+    def _corrupto(defecto: str) -> IndiceCorruptoError:
+        msg = (
+            f"{tabla}: vector persistido invalido "
+            f"({defecto}; fila {posicion} del alcance consumido)"
+        )
+        return IndiceCorruptoError(msg)
+
+    if type(celda) is not str:
+        raise _corrupto("la celda no es texto")
+    try:
+        crudo = json.loads(celda)
+    except ValueError as error:  # JSONDecodeError es subtipo de ValueError
+        raise _corrupto("no es JSON valido") from error
+    if type(crudo) is not list:
+        raise _corrupto("la raiz no es una lista")
+    if len(crudo) > DIMENSIONES_MAXIMAS_POR_VECTOR:
+        raise _corrupto("cardinalidad superior a la maxima")
+    pares: list[tuple[int, int]] = []
+    anterior = -1
+    for par in crudo:
+        if type(par) is not list or len(par) != 2:
+            raise _corrupto("entrada que no es un par de longitud dos")
+        dimension, peso = par
+        if not _es_entero_real(dimension):
+            raise _corrupto("dimension que no es un entero real")
+        if not _es_entero_real(peso):
+            raise _corrupto("peso que no es un entero real")
+        if dimension < 0 or dimension >= terminos_totales:
+            raise _corrupto("dimension fuera del vocabulario")
+        if peso <= 0:
+            raise _corrupto("peso no estrictamente positivo")
+        if peso > _ENTERO_MAXIMO_DE_SQLITE:
+            raise _corrupto("peso no representable")
+        if dimension <= anterior:
+            raise _corrupto("dimensiones repetidas o fuera del orden canonico")
+        anterior = dimension
+        pares.append((dimension, peso))
+    return pares
+
+
+def _norma_cuadrada_validada(celda: object, pares: list[tuple[int, int]], *, posicion: int) -> int:
+    """Entera real, estrictamente positiva, representable e IGUAL exacta a la
+    suma de los cuadrados de los pesos validados. Una discrepancia es
+    corrupcion logica: con esto no hay division por cero, ni raiz de
+    negativo, ni coseno no finito por datos del sidecar."""
+
+    def _corrupto(defecto: str) -> IndiceCorruptoError:
+        msg = (
+            "vectores_de_elemento: norma cuadrada invalida "
+            f"({defecto}; fila {posicion} del alcance consumido)"
+        )
+        return IndiceCorruptoError(msg)
+
+    if not _es_entero_real(celda):
+        raise _corrupto("no es un entero real")
+    if celda <= 0:
+        raise _corrupto("no es estrictamente positiva")
+    if celda > _ENTERO_MAXIMO_DE_SQLITE:
+        raise _corrupto("no es representable")
+    if celda != sum(peso * peso for _dimension, peso in pares):
+        raise _corrupto("no coincide con la suma de cuadrados de los pesos validados")
+    return celda
 
 
 # --------------------------------------------------------------------------
@@ -400,6 +530,25 @@ class LectorVectorial:
             self._conexion.close()
             msg = "el sidecar se construyo con otros parametros congelados"
             raise IndiceCorruptoError(msg)
+        conteos: dict[str, int] = {}
+        for clave_de_conteo in ("elementos", "terminos"):
+            declarado = metadatos.get(clave_de_conteo)
+            if (
+                type(declarado) is not str
+                or not declarado.isascii()
+                or not declarado.isdigit()
+                or (len(declarado) > 1 and declarado.startswith("0"))
+            ):
+                self._conexion.close()
+                msg = f"metadatos: el conteo {clave_de_conteo!r} no es un entero canonico"
+                raise IndiceCorruptoError(msg)
+            conteos[clave_de_conteo] = int(declarado)
+        if conteos["terminos"] > VOCABULARIO_MAXIMO:
+            self._conexion.close()
+            msg = "metadatos: el conteo 'terminos' excede el vocabulario maximo"
+            raise IndiceCorruptoError(msg)
+        #: Cota superior del rango de dimensiones que valida cada consulta.
+        self._terminos_totales = conteos["terminos"]
         actual = huella_del_canon(ruta_canon)
         if metadatos.get("huella_del_canon") != actual:
             self._conexion.close()
@@ -418,31 +567,66 @@ class LectorVectorial:
         """Top-K por coseno entre quienes comparten dimensiones con la consulta.
 
         Tres sentencias dirigidas al sidecar: vocabulario de los terminos,
-        vectores de esos terminos, y candidatos con su vector en una sola
-        consulta con la condicion de solapamiento. Devuelve identificadores;
-        los ``excluidos`` —lo ya recuperado— no consumen plazas del top-K.
+        vectores de esos terminos, y candidatos de ``posting`` con su vector
+        en una sola sentencia (LEFT JOIN con la columna de solapamiento, para
+        que una referencia huerfana aparezca en vez de desaparecer). Devuelve
+        identificadores; los ``excluidos`` no consumen plazas del top-K.
+
+        Todo dato consumido se valida (paquete de correccion 03) y toda
+        corrupcion —logica o fisica— cierra la conexion y propaga
+        ``IndiceCorruptoError``: un lector que entrego corrupcion no queda
+        parcialmente valido.
         """
+        try:
+            return self._consultar_validando(terminos, excluidos)
+        except IndiceCorruptoError:
+            self._conexion.close()
+            raise
+        except sqlite3.DatabaseError as error:
+            self._conexion.close()
+            msg = "el sidecar fallo fisicamente durante la consulta"
+            raise IndiceCorruptoError(msg) from error
+
+    def _consultar_validando(
+        self, terminos: Sequence[str], excluidos: frozenset[str]
+    ) -> tuple[CoincidenciaVectorial, ...]:
         acotados = sorted(set(terminos))[:CONSULTA_TERMINOS_MAXIMOS]
         dimensiones_de_terminos: list[int] = []
         if acotados:
             marcas = ",".join("?" * len(acotados))
-            dimensiones_de_terminos = [
-                int(fila[0])
-                for fila in self._conexion.execute(
+            for posicion, fila in enumerate(
+                self._conexion.execute(
                     f"SELECT dimension FROM vocabulario WHERE termino IN ({marcas}) "
                     f"ORDER BY dimension",
                     acotados,
                 )
-            ]
+            ):
+                dimension = fila[0]
+                if (
+                    not _es_entero_real(dimension)
+                    or dimension < 0
+                    or dimension >= self._terminos_totales
+                ):
+                    msg = f"vocabulario: dimension invalida (fila {posicion} del alcance consumido)"
+                    raise IndiceCorruptoError(msg)
+                dimensiones_de_terminos.append(dimension)
         consulta: dict[int, int] = {}
         if dimensiones_de_terminos:
             marcas = ",".join("?" * len(dimensiones_de_terminos))
-            for fila in self._conexion.execute(
-                f"SELECT dimensiones FROM vectores_de_termino WHERE dimension IN ({marcas}) "
-                f"ORDER BY dimension",
-                dimensiones_de_terminos,
+            for posicion, fila in enumerate(
+                self._conexion.execute(
+                    f"SELECT dimensiones FROM vectores_de_termino WHERE dimension IN ({marcas}) "
+                    f"ORDER BY dimension",
+                    dimensiones_de_terminos,
+                )
             ):
-                for dimension, valor in json.loads(fila[0]):
+                pares_de_termino = _pares_de_vector_validados(
+                    fila[0],
+                    tabla="vectores_de_termino",
+                    posicion=posicion,
+                    terminos_totales=self._terminos_totales,
+                )
+                for dimension, valor in pares_de_termino:
                     consulta[dimension] = consulta.get(dimension, 0) + valor
         dims = _podar(consulta.items())
         if not dims:
@@ -460,12 +644,13 @@ class LectorVectorial:
         vector_consulta = dict(dims)
         marcas = ",".join("?" * len(dims))
         filas = self._conexion.execute(
-            "SELECT v.elemento, v.clave_de_sujeto, v.dimensiones, v.norma_cuadrada "
-            "FROM vectores_de_elemento AS v JOIN ("
+            "SELECT c.elemento, c.solapamiento, v.elemento, v.clave_de_sujeto, "
+            "v.dimensiones, v.norma_cuadrada FROM ("
             f"SELECT elemento, count(*) AS solapamiento FROM posting "
             f"WHERE dimension IN ({marcas}) GROUP BY elemento "
             f"HAVING solapamiento >= ? ORDER BY elemento LIMIT ?"
-            ") AS c ON c.elemento = v.elemento ORDER BY v.elemento",
+            ") AS c LEFT JOIN vectores_de_elemento AS v ON v.elemento = c.elemento "
+            "ORDER BY c.elemento",
             (
                 *[dimension for dimension, _v in dims],
                 SOLAPAMIENTO_MINIMO,
@@ -475,20 +660,68 @@ class LectorVectorial:
 
         norma_consulta = math.sqrt(sum(valor * valor for valor in vector_consulta.values()))
         puntuadas: list[CoincidenciaVectorial] = []
-        for elemento, clave, dimensiones, norma_cuadrada in filas:
-            if str(elemento) in excluidos:
+        for posicion, fila_candidata in enumerate(filas):
+            citado, solapamiento_citado, presente, clave, dimensiones, norma_cuadrada = (
+                fila_candidata
+            )
+            if not _identidad_persistida_valida(citado):
+                msg = (
+                    "posting: identidad con formato no canonico "
+                    f"(fila {posicion} del alcance consumido)"
+                )
+                raise IndiceCorruptoError(msg)
+            if citado in excluidos:
+                # De una fila excluida solo se consume la identidad, que ya
+                # quedo validada: su vector no participa en nada.
                 continue
-            pares = json.loads(dimensiones)
-            producto = sum(vector_consulta.get(d, 0) * v for d, v in pares)
+            if presente is None:
+                msg = (
+                    "posting: referencia huerfana a un elemento sin vector "
+                    f"(fila {posicion} del alcance consumido)"
+                )
+                raise IndiceCorruptoError(msg)
+            if type(clave) is not str:
+                msg = (
+                    "vectores_de_elemento: clave de sujeto de tipo invalido "
+                    f"(fila {posicion} del alcance consumido)"
+                )
+                raise IndiceCorruptoError(msg)
+            pares = _pares_de_vector_validados(
+                dimensiones,
+                tabla="vectores_de_elemento",
+                posicion=posicion,
+                terminos_totales=self._terminos_totales,
+            )
+            norma = _norma_cuadrada_validada(norma_cuadrada, pares, posicion=posicion)
             solapamiento = sum(1 for d, _v in pares if d in vector_consulta)
-            if producto <= 0 or solapamiento < SOLAPAMIENTO_MINIMO:
-                continue
-            coseno = producto / (norma_consulta * math.sqrt(norma_cuadrada))
+            if solapamiento_citado != solapamiento:
+                msg = (
+                    "posting: solapamiento incoherente con el vector del elemento "
+                    f"(fila {posicion} del alcance consumido)"
+                )
+                raise IndiceCorruptoError(msg)
+            producto = sum(vector_consulta.get(d, 0) * v for d, v in pares)
+            if producto <= 0:
+                # Imposible con pares validados y solapamiento >= 2: pesos
+                # estrictamente positivos en ambos lados. Si ocurre, es
+                # corrupcion, no un caso a saltar en silencio.
+                msg = (
+                    "vectores_de_elemento: producto escalar no positivo con "
+                    f"solapamiento declarado (fila {posicion} del alcance consumido)"
+                )
+                raise IndiceCorruptoError(msg)
+            coseno = producto / (norma_consulta * math.sqrt(norma))
+            if not math.isfinite(coseno) or coseno > 1.0 + _TOLERANCIA_DE_COSENO:
+                msg = (
+                    "vectores_de_elemento: coseno fuera del intervalo permitido "
+                    f"(fila {posicion} del alcance consumido)"
+                )
+                raise IndiceCorruptoError(msg)
             puntuadas.append(
                 CoincidenciaVectorial(
-                    elemento=str(elemento),
-                    clave_de_sujeto=str(clave),
-                    similitud_fija=round(coseno * ESCALA_FIJA),
+                    elemento=citado,
+                    clave_de_sujeto=clave,
+                    similitud_fija=min(round(coseno * ESCALA_FIJA), ESCALA_FIJA),
                     solapamiento=solapamiento,
                 )
             )

@@ -176,12 +176,20 @@ def test_la_ruta_vectorial_solo_puede_activarse_en_e3() -> None:
 
 
 def test_el_candidato_no_traga_los_fallos_del_indice() -> None:
-    """Fail closed: sin un solo ``except`` en el candidato.
+    """Fail closed: el candidato no captura para degradar.
 
     Capturar el error tipado del indice para degradar a «sin vector» seria
-    exactamente la degradacion silenciosa que el paquete 12 prohibe.
+    exactamente la degradacion silenciosa que el paquete 12 prohibe. El UNICO
+    ``except`` admitido es la defensa de frontera del paquete de correccion
+    03: captura exclusivamente el error tipado del puerto y lo RE-LANZA como
+    corrupcion de indice con la causa preservada; no traga nada.
     """
-    assert "except" not in _codigo("candidate.py")
+    codigo = _codigo("candidate.py")
+    assert codigo.count("except ") == 1
+    assert "except IdentificadorInvalidoError as error:" in codigo
+    assert "raise vectores.IndiceCorruptoError(msg) from error" in codigo
+    for tragado in ("except Exception", "except vectores.", "except Indice"):
+        assert tragado not in codigo
 
 
 def test_el_ambito_no_es_generador_tampoco_en_b() -> None:

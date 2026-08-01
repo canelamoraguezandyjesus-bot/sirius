@@ -64,10 +64,12 @@ from experiments.adr002.candidates.common.contracts import (
 from experiments.adr002.candidates.common.port import PuertoSqlite
 
 RAIZ = Path(__file__).resolve().parents[3]
-FICHA: Final = "artifacts/adr002_cards/ficha_ADR002-B_v2.json"
+FICHA: Final = "artifacts/adr002_cards/ficha_ADR002-B_v3.json"
 
-#: Se fija al congelar la v2; si quedara desactualizada, la cita fallaria.
-HUELLA_FICHA_B_V2: Final = "c98ef457273055f1362d2939d48bba096f62cdc2"
+#: Se fija al congelar la v3; si quedara desactualizada, la cita fallaria.
+#: Mientras la suite este suspendida por la guarda de anterioridad, este
+#: centinela no se compara con nada.
+HUELLA_FICHA_B_V3: Final = "pendiente-de-congelacion-de-la-ficha-v3"
 
 CONSULTA: Final = "faro"
 OBJETIVO: Final = fixtures_b.OBJETIVO_SOLO_B
@@ -85,9 +87,9 @@ def _git(*argumentos: str) -> str:
 
 
 def _la_ficha_vigente_es_ancestro_estricto() -> bool:
-    """Suspension de TOL-210: el paquete de correccion 02 cambio la ruta de
-    materializacion de B, y estas pruebas se repiten enteras bajo la v2 o no
-    se ejecutan."""
+    """Suspension de TOL-210: el paquete de correccion 03 cambio la
+    validacion logica del sidecar de B, y estas pruebas se repiten enteras
+    bajo la v3 o no se ejecutan."""
     entrada = _git("log", "--format=%H", "--diff-filter=A", "--", FICHA)
     if not entrada:
         return False
@@ -108,7 +110,7 @@ def _la_ficha_vigente_es_ancestro_estricto() -> bool:
 pytestmark = pytest.mark.skipif(
     not _la_ficha_vigente_es_ancestro_estricto(),
     reason=(
-        "la ficha ADR002-B v2 aun no es ancestro estricto: ejecutar ahora "
+        "la ficha ADR002-B v3 aun no es ancestro estricto: ejecutar ahora "
         "produciria evidencia no utilizable (TOL-210, regla 3)"
     ),
 )
@@ -117,7 +119,7 @@ pytestmark = pytest.mark.skipif(
 def test_la_ficha_b_es_anterior_estricta_a_esta_ejecucion() -> None:
     """``TOL-210``: sin ficha previa, la ejecucion no es utilizable."""
     entrada = _git("log", "--format=%H", "--diff-filter=A", "--", FICHA)
-    assert entrada, "la ficha v2 de ADR002-B no esta confirmada en el repositorio"
+    assert entrada, "la ficha v3 de ADR002-B no esta confirmada en el repositorio"
     commit_de_entrada = entrada.splitlines()[-1]
     head = _git("rev-parse", "HEAD")
     assert commit_de_entrada != head, "la ficha debe entrar ANTES del commit que ejecuta"
@@ -131,22 +133,26 @@ def test_la_ficha_b_es_anterior_estricta_a_esta_ejecucion() -> None:
 
 
 def test_la_ejecucion_cita_la_version_y_la_huella_correctas() -> None:
-    """Una sola ficha CONGELADA de B —la v2— y la v1 conservada, marcada."""
+    """Una sola ficha CONGELADA de B —la v3— y la v1 y la v2 conservadas."""
     fichas_de_b = sorted((RAIZ / "artifacts/adr002_cards").glob("ficha_ADR002-B_*.json"))
     assert [ruta.name for ruta in fichas_de_b] == [
         "ficha_ADR002-B_v1.json",
         "ficha_ADR002-B_v2.json",
+        "ficha_ADR002-B_v3.json",
     ]
-    v1 = json.loads(
-        (RAIZ / "artifacts/adr002_cards/ficha_ADR002-B_v1.json").read_text(encoding="utf-8")
-    )
-    assert v1["estado"] == "SUSTITUIDA"
+    for anterior in ("v1", "v2"):
+        conservada = json.loads(
+            (RAIZ / f"artifacts/adr002_cards/ficha_ADR002-B_{anterior}.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert conservada["estado"] == "SUSTITUIDA"
     ficha = json.loads((RAIZ / FICHA).read_text(encoding="utf-8"))
     assert ficha["identidad"]["candidato"] == "ADR002-B"
-    assert ficha["identidad"]["version"] == 2
-    assert ficha["identidad"]["sustituye_a"] == 1
+    assert ficha["identidad"]["version"] == 3
+    assert ficha["identidad"]["sustituye_a"] == 2
     assert ficha["estado"] == "CONGELADA"
-    assert ficha["congelacion"]["huella"] == HUELLA_FICHA_B_V2
+    assert ficha["congelacion"]["huella"] == HUELLA_FICHA_B_V3
     assert ficha["senal_tardia"]["habilitada"] == "semantica_vectorial"
     assert ficha["no_contiene_resultados"] is True
 
