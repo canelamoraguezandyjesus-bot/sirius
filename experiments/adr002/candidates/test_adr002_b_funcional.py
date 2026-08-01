@@ -354,6 +354,7 @@ def test_una_similitud_maxima_no_supera_el_ambito_g4(indexada: fixtures_b.Fixtur
         coincidencias = {c.clave_de_sujeto: c for c in lector.consultar((CONSULTA,))}
     finally:
         lector.close()
+    assert coincidencias["baliza-forastera"].similitud_fija == vectores.ESCALA_FIJA
     assert coincidencias["baliza-forastera"].banda == "alta"
 
     b = candidato(indexada.ruta, indexada.sidecar)

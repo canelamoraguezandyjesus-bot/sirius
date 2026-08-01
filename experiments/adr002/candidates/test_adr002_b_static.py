@@ -224,12 +224,19 @@ def test_el_sidecar_declara_versiones() -> None:
 
 
 def test_las_cotas_de_b_respetan_las_de_la_infraestructura() -> None:
-    """Las cotas nuevas son de la misma familia que las existentes."""
+    """Las cotas nuevas son de la misma familia que las existentes.
+
+    La segunda asercion no es decorativa: la materializacion por clave exacta
+    solo es correcta mientras ``TOP_K`` quepa en los argumentos que el puerto
+    admite; si alguien subiera ``TOP_K`` por encima, ``_acotar`` truncaria
+    claves en silencio y se perderian coincidencias.
+    """
+    from experiments.adr002.candidates.adr002_a import candidate as a
     from experiments.adr002.candidates.common import port
 
     assert vectores.CONSULTA_TERMINOS_MAXIMOS == port.ARGUMENTOS_MAXIMOS
-    assert vectores.TOP_K * 2 <= port.ARGUMENTOS_MAXIMOS * 2
     assert vectores.TOP_K <= port.ARGUMENTOS_MAXIMOS
+    assert vectores.TOP_K == a.TERMINOS_PUENTE_MAXIMOS
     assert vectores.DIMENSIONES_MAXIMAS_POR_VECTOR * 2 == port.LIMITE_POR_CONSULTA
 
 
