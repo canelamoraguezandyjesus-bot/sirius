@@ -2,7 +2,7 @@
 
 **Solo despues de la ficha B v4.** El paquete de correccion 04 cambio las
 fuentes de la huella de `ADR002-B`; estas pruebas exigen que los commits de
-entrada de `ficha_ADR002-A_v3.json` y `ficha_ADR002-B_v4.json` sean ancestros
+entrada de `ficha_ADR002-A_v3.json` y `ficha_ADR002-B_v5.json` sean ancestros
 estrictos, y quedan suspendidas mientras no lo sean.
 
 Lo que se demuestra, seccion a seccion, sobre sidecars construidos por el
@@ -43,7 +43,7 @@ from experiments.adr002.candidates.adr002_b import vectores
 RAIZ = Path(__file__).resolve().parents[3]
 FICHAS_SUCESORAS: Final = (
     "artifacts/adr002_cards/ficha_ADR002-A_v3.json",
-    "artifacts/adr002_cards/ficha_ADR002-B_v4.json",
+    "artifacts/adr002_cards/ficha_ADR002-B_v5.json",
 )
 
 #: Un hexdigest SHA-256 canonico que no es el del fixture: sirve para separar
@@ -85,7 +85,7 @@ def _es_ancestro_estricto(ruta: str) -> bool:
 pytestmark = pytest.mark.skipif(
     not all(_es_ancestro_estricto(ficha) for ficha in FICHAS_SUCESORAS),
     reason=(
-        "las fichas ADR002-A v3 y ADR002-B v4 aun no son ancestros estrictos: "
+        "las fichas ADR002-A v3 y ADR002-B v5 aun no son ancestros estrictos: "
         "ejecutar ahora produciria evidencia no utilizable (TOL-210, regla 3)"
     ),
 )

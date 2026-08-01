@@ -277,6 +277,52 @@ def test_las_cotas_del_validador_son_las_congeladas() -> None:
     assert vectores._ENTERO_MAXIMO_DE_SQLITE == 2**63 - 1
     assert vectores._TOLERANCIA_DE_COSENO == 1e-9
     assert vectores.ESCALA_FIJA == 1_000_000
+    # Cotas anadidas por la fe de erratas 04 contra los escapes sin tipar.
+    assert vectores._DIGITOS_MAXIMOS_DE_ENTERO == 19
+    assert vectores._LONGITUD_MAXIMA_DE_VECTOR == 16384
+
+
+# --------------------------------------------------------------------------
+# Fe de erratas 04: ninguna excepcion sin tipar puede escapar
+# --------------------------------------------------------------------------
+
+
+def test_el_conteo_se_acota_en_digitos_antes_de_convertirlo() -> None:
+    """Sin la cota, int() lanzaba ValueError sin tipar (limite de CPython)."""
+    apertura = inspect.getsource(vectores.LectorVectorial.__init__)
+    cota = apertura.index("_DIGITOS_MAXIMOS_DE_ENTERO")
+    conversion = apertura.index("int(declarado)")
+    assert cota < conversion
+
+
+def test_el_vector_se_acota_en_longitud_antes_de_deserializar() -> None:
+    """Sin la cota, el decodificador podia lanzar RecursionError sin tipar."""
+    validador = inspect.getsource(vectores._pares_de_vector_validados)
+    cota = validador.index("_LONGITUD_MAXIMA_DE_VECTOR")
+    deserializacion = validador.index("json.loads(")
+    assert cota < deserializacion
+    assert "except RecursionError as error:" in validador
+    assert "anidamiento no admisible" in validador
+
+
+def test_la_identidad_persistida_es_representable_por_el_puerto() -> None:
+    """Sin la cota, una identidad de miles de digitos hacia estallar a SQLite
+    con OverflowError, un escape sin tipar desde E3."""
+    assert vectores._identidad_persistida_valida("MEMORIA:1")
+    assert vectores._identidad_persistida_valida(f"MEMORIA:{2**63 - 1}")
+    assert not vectores._identidad_persistida_valida("MEMORIA:" + "9" * 4000)
+    assert not vectores._identidad_persistida_valida(f"MEMORIA:{2**63}")
+    assert not vectores._identidad_persistida_valida("MEMORIA:" + "9" * 19)
+
+
+def test_la_recomputacion_del_canon_cierra_la_conexion_al_fallar() -> None:
+    """La limitacion 2 (canon ilegible sin tipar) se CONSERVA declarada; lo
+    que se corrige es la fuga del descriptor del sidecar."""
+    apertura = inspect.getsource(vectores.LectorVectorial.__init__)
+    bloque = apertura[apertura.index("vigente = huella_del_canon") :]
+    assert "except BaseException:" in bloque
+    assert "self._conexion.close()" in bloque
+    assert "raise\n" in bloque
 
 
 def test_la_puntuacion_fija_queda_recortada_a_la_escala() -> None:

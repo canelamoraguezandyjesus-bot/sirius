@@ -343,13 +343,29 @@ _TOLERANCIA_DE_COSENO: Final = 1e-9
 #: es un entero exacto y el punto fijo deja de ser representable.
 _ENTERO_MAXIMO_DE_SQLITE: Final = 2**63 - 1
 
+#: Digitos de un entero con signo de 64 bits: la cota que hace representable
+#: todo numero que este lector acepta (fe de erratas 04).
+_DIGITOS_MAXIMOS_DE_ENTERO: Final = 19
+
 #: Formato canonico exacto de una identidad persistida en el sidecar. Las
 #: clases proceden del contrato comun (unica fuente de nombres); usarlas no
 #: modifica la capa comun. Se aplica con ``fullmatch`` y sin anclas: un salto
 #: de linea final o cualquier apendice invalida, sin la ambiguedad de ``$``.
+#: El numero esta ACOTADO en digitos (fe de erratas 04): sin cota, una
+#: identidad de miles de digitos pasaba la validacion y hacia estallar al
+#: puerto con OverflowError, un escape sin tipar.
 _FORMATO_DE_IDENTIDAD_PERSISTIDA: Final = re.compile(
-    rf"({'|'.join(re.escape(clase.value) for clase in Clase)}):([1-9][0-9]*)"
+    rf"({'|'.join(re.escape(clase.value) for clase in Clase)}):"
+    rf"([1-9][0-9]{{0,{_DIGITOS_MAXIMOS_DE_ENTERO - 1}}})"
 )
+
+#: Longitud maxima de la celda de un vector persistido. Un vector conforme
+#: tiene a lo sumo 256 pares de la forma ``[dimension,peso]`` con dimension de
+#: <=4 digitos y peso de <=19, es decir menos de 6 700 caracteres con sus
+#: separadores; 16 KiB deja holgura amplia. Acotar ANTES de deserializar evita
+#: el trabajo de analizar celdas patologicas —y con el, el RecursionError sin
+#: tipar del decodificador ante anidamiento profundo (fe de erratas 04).
+_LONGITUD_MAXIMA_DE_VECTOR: Final = 16384
 
 #: Formato canonico exacto de la huella del canon persistida en metadatos:
 #: el hexdigest de un SHA-256, 64 caracteres, minusculas, sin nada mas. Se
@@ -365,8 +381,16 @@ def _es_entero_real(valor: object) -> TypeGuard[int]:
 
 def _identidad_persistida_valida(valor: object) -> bool:
     """Cadena completa con clase real, ``:`` unico y entero ASCII positivo
-    sin ceros iniciales, sin espacios y sin contenido adicional."""
-    return type(valor) is str and _FORMATO_DE_IDENTIDAD_PERSISTIDA.fullmatch(valor) is not None
+    sin ceros iniciales, sin espacios y sin contenido adicional.
+
+    El numero debe ser ademas REPRESENTABLE: el formato lo acota en digitos y
+    aqui se comprueba el valor, de modo que ninguna identidad que este lector
+    acepte pueda desbordar al puerto canonico (fe de erratas 04).
+    """
+    if type(valor) is not str:
+        return False
+    forma = _FORMATO_DE_IDENTIDAD_PERSISTIDA.fullmatch(valor)
+    return forma is not None and int(forma.group(2)) <= _ENTERO_MAXIMO_DE_SQLITE
 
 
 def _huella_persistida_valida(valor: object) -> bool:
@@ -400,10 +424,18 @@ def _pares_de_vector_validados(
 
     if type(celda) is not str:
         raise _corrupto("la celda no es texto")
+    if len(celda) > _LONGITUD_MAXIMA_DE_VECTOR:
+        # Cota ANTES de deserializar: un vector conforme cabe de sobra, y una
+        # celda patologica no llega siquiera al decodificador.
+        raise _corrupto("longitud superior a la maxima")
     try:
         crudo = json.loads(celda)
     except ValueError as error:  # JSONDecodeError es subtipo de ValueError
         raise _corrupto("no es JSON valido") from error
+    except RecursionError as error:
+        # RecursionError NO es subtipo de ValueError: sin esta rama escapaba
+        # sin tipar del validador y de los dos except de consultar.
+        raise _corrupto("anidamiento no admisible") from error
     if type(crudo) is not list:
         raise _corrupto("la raiz no es una lista")
     if len(crudo) > DIMENSIONES_MAXIMAS_POR_VECTOR:
@@ -559,6 +591,10 @@ class LectorVectorial:
                 or not declarado.isascii()
                 or not declarado.isdigit()
                 or (len(declarado) > 1 and declarado.startswith("0"))
+                # Cota de longitud ANTES de convertir (fe de erratas 04): sin
+                # ella, una celda de miles de digitos hacia que int() lanzara
+                # ValueError sin tipar —y revelando cuantos digitos tenia—.
+                or len(declarado) > _DIGITOS_MAXIMOS_DE_ENTERO
             ):
                 self._conexion.close()
                 msg = f"metadatos: el conteo {clave_de_conteo!r} no es un entero canonico"
@@ -578,7 +614,16 @@ class LectorVectorial:
             self._conexion.close()
             msg = "metadatos: la huella del canon no tiene el formato canonico de SHA-256"
             raise IndiceCorruptoError(msg)
-        if declarada != huella_del_canon(ruta_canon):
+        try:
+            vigente = huella_del_canon(ruta_canon)
+        except BaseException:
+            # El canon ilegible sigue escapando SIN TIPAR: es la limitacion 2
+            # de la fe de erratas 03, conservada a proposito y no corregida
+            # aqui. Lo que se corrige (fe de erratas 04) es la fuga: la
+            # conexion del sidecar se cierra antes de que el error propague.
+            self._conexion.close()
+            raise
+        if declarada != vigente:
             self._conexion.close()
             msg = "el canon cambio desde que se construyo el indice"
             raise IndiceDesfasadoError(msg)
