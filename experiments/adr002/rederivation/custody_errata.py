@@ -120,6 +120,12 @@ HASHES_NO_ALMACENADOS: Final[Mapping[str, str]] = {
         "verificacion que las anteriores. Toda ficha congelada anade una entrada aqui, "
         "y una prueba comprueba que ninguna queda sin declarar"
     ),
+    "c1ca17a7f5345b4cec2a0ea63dac6c8b1bb6e5fd": (
+        "huella canonica de la ficha ADR002-B v1, congelada por el paquete 12 antes de "
+        "toda ejecucion funcional del candidato: SHA-1 del blob de la forma canonica de "
+        "la ficha excluido el propio campo de huella, un contenido que nunca se escribe "
+        "como fichero. Su correccion se comprueba recomputandola"
+    ),
     "b57ad7b24c7f0232d45540cde73294e2d68e02ef": (
         "captura de entorno de ADR-001: HEAD observado de la rama historica "
         "fix/chat-history-layout al ejecutar los spikes, registrado como "
