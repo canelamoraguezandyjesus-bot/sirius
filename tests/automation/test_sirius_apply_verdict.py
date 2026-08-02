@@ -293,7 +293,13 @@ def test_reviewer_review_approved_with_matching_head(tmp_path: Path) -> None:
     )
     _seed_pr(env, 9, head="c4d482267d9a")
     vf = _verdict_file(
-        tmp_path, {"verdict": "REVIEW_APPROVED", "summary": "aprobado", "observations": []}
+        tmp_path,
+        {
+            "verdict": "REVIEW_APPROVED",
+            "summary": "aprobado",
+            "reviewed_head_sha": "c4d482267d9a",
+            "observations": [],
+        },
     )
     r = _run(env, "reviewer", vf)
     assert r.returncode == 0, r.stdout + r.stderr
@@ -315,7 +321,13 @@ def test_reviewer_review_approved_with_stale_head_stops_safely(tmp_path: Path) -
     )
     _seed_pr(env, 9, head="bbbbbbbbbbbb")  # la PR avanzo despues del ultimo CI verde
     vf = _verdict_file(
-        tmp_path, {"verdict": "REVIEW_APPROVED", "summary": "aprobado", "observations": []}
+        tmp_path,
+        {
+            "verdict": "REVIEW_APPROVED",
+            "summary": "aprobado",
+            "reviewed_head_sha": "bbbbbbbbbbbb",
+            "observations": [],
+        },
     )
     r = _run(env, "reviewer", vf)
     assert r.returncode != 0
@@ -323,10 +335,87 @@ def test_reviewer_review_approved_with_stale_head_stops_safely(tmp_path: Path) -
     assert "head-inconsistente" in _comments(env)
 
 
+def test_reviewer_review_approved_without_reviewed_head_stops_safely(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(
+        env,
+        ["sirius:reviewing"],
+        comments=(
+            "QUALITY_SUCCESS\n- Head SHA: `c4d482267d9a`\n"
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+        ),
+    )
+    _seed_pr(env, 9, head="c4d482267d9a")
+    vf = _verdict_file(
+        tmp_path, {"verdict": "REVIEW_APPROVED", "summary": "aprobado", "observations": []}
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode != 0
+    assert "sirius:failed-safely" in _labels(env)
+    assert "sin-reviewed-head" in _comments(env)
+
+
+def test_reviewer_review_approved_with_foreign_reviewed_head_stops_safely(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(
+        env,
+        ["sirius:reviewing"],
+        comments=(
+            "QUALITY_SUCCESS\n- Head SHA: `c4d482267d9a`\n"
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+        ),
+    )
+    _seed_pr(env, 9, head="c4d482267d9a")
+    vf = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "REVIEW_APPROVED",
+            "summary": "aprobado",
+            "reviewed_head_sha": "dddddddddddd",  # el revisor declara otra version
+            "observations": [],
+        },
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode != 0
+    assert "sirius:failed-safely" in _labels(env)
+    assert "reviewed-head-distinto" in _comments(env)
+
+
+def test_reviewer_review_approved_accepts_reviewed_head_prefix(tmp_path: Path) -> None:
+    full_head = "c4d482267d9a00112233445566778899aabbccdd"
+    env = _setup(tmp_path)
+    _seed_issue(
+        env,
+        ["sirius:reviewing"],
+        comments=(
+            f"QUALITY_SUCCESS\n- Head SHA: `{full_head}`\n"
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+        ),
+    )
+    _seed_pr(env, 9, head=full_head)
+    vf = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "REVIEW_APPROVED",
+            "summary": "aprobado",
+            "reviewed_head_sha": full_head[:12],  # abreviatura no ambigua
+            "observations": [],
+        },
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "sirius:ready-for-merge" in _labels(env)
+
+
 def test_reviewer_changes_requested_with_observations(tmp_path: Path) -> None:
     env = _setup(tmp_path)
     _seed_issue(
-        env, ["sirius:reviewing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
+        env,
+        ["sirius:reviewing"],
+        comments=(
+            "QUALITY_SUCCESS\n- Head SHA: `c4d482267d9a`\n"
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+        ),
     )
     _seed_pr(env, 9, head="c4d482267d9a")
     vf = _verdict_file(
@@ -334,6 +423,7 @@ def test_reviewer_changes_requested_with_observations(tmp_path: Path) -> None:
         {
             "verdict": "CHANGES_REQUESTED",
             "summary": "hay defectos",
+            "reviewed_head_sha": "c4d482267d9a",
             "observations": [
                 {
                     "id": "R1",
@@ -355,6 +445,142 @@ def test_reviewer_changes_requested_with_observations(tmp_path: Path) -> None:
     comments = _comments(env)
     assert "OBSERVACIONES_ESTRUCTURADAS" in comments
     assert "R1" in comments
+
+
+def test_reviewer_changes_requested_is_idempotent(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(
+        env,
+        ["sirius:reviewing"],
+        comments=(
+            "QUALITY_SUCCESS\n- Head SHA: `c4d482267d9a`\n"
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+        ),
+    )
+    _seed_pr(env, 9, head="c4d482267d9a")
+    vf = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "CHANGES_REQUESTED",
+            "summary": "hay defectos",
+            "reviewed_head_sha": "c4d482267d9a",
+            "observations": [
+                {
+                    "id": "R1",
+                    "severidad": "alta",
+                    "archivo": "src/x.py",
+                    "problema": "no valida entrada",
+                    "criterio_esperado": "debe validar",
+                    "prueba": "test_x_invalid",
+                    "limites_correccion": "solo src/x.py",
+                }
+            ],
+        },
+    )
+    r1 = _run(env, "reviewer", vf)
+    assert r1.returncode == 0, r1.stdout + r1.stderr
+    r2 = _run(env, "reviewer", vf)
+    assert r2.returncode == 0, r2.stdout + r2.stderr
+    assert _comments(env).count("sirius-verdict:reviewer:changes:") == 1
+
+
+def test_reviewer_changes_requested_on_stale_head_stops_safely(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(
+        env,
+        ["sirius:reviewing"],
+        comments=(
+            "QUALITY_SUCCESS\n- Head SHA: `aaaaaaaaaaaa`\n"
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+        ),
+    )
+    _seed_pr(env, 9, head="bbbbbbbbbbbb")  # head nuevo sin Quality en verde
+    vf = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "CHANGES_REQUESTED",
+            "summary": "hay defectos",
+            "reviewed_head_sha": "bbbbbbbbbbbb",
+            "observations": [
+                {
+                    "id": "R1",
+                    "severidad": "alta",
+                    "archivo": "src/x.py",
+                    "problema": "no valida entrada",
+                    "criterio_esperado": "debe validar",
+                    "prueba": "test_x_invalid",
+                    "limites_correccion": "solo src/x.py",
+                }
+            ],
+        },
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode != 0
+    assert "sirius:failed-safely" in _labels(env)
+    assert "head-inconsistente" in _comments(env)
+
+
+def test_reviewer_changes_requested_without_reviewed_head_stops_safely(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(
+        env,
+        ["sirius:reviewing"],
+        comments=(
+            "QUALITY_SUCCESS\n- Head SHA: `c4d482267d9a`\n"
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+        ),
+    )
+    _seed_pr(env, 9, head="c4d482267d9a")
+    vf = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "CHANGES_REQUESTED",
+            "summary": "hay defectos",
+            "observations": [
+                {
+                    "id": "R1",
+                    "severidad": "alta",
+                    "archivo": "src/x.py",
+                    "problema": "no valida entrada",
+                    "criterio_esperado": "debe validar",
+                    "prueba": "test_x_invalid",
+                    "limites_correccion": "solo src/x.py",
+                }
+            ],
+        },
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode != 0
+    assert "sirius:failed-safely" in _labels(env)
+    assert "sin-reviewed-head" in _comments(env)
+
+
+def test_reviewer_changes_requested_without_pr_stops_safely(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:reviewing"], comments="sin URL de PR")
+    vf = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "CHANGES_REQUESTED",
+            "summary": "hay defectos",
+            "reviewed_head_sha": "c4d482267d9a",
+            "observations": [
+                {
+                    "id": "R1",
+                    "severidad": "alta",
+                    "archivo": "src/x.py",
+                    "problema": "no valida entrada",
+                    "criterio_esperado": "debe validar",
+                    "prueba": "test_x_invalid",
+                    "limites_correccion": "solo src/x.py",
+                }
+            ],
+        },
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode != 0
+    assert "sirius:failed-safely" in _labels(env)
+    assert "sin-pr" in _comments(env)
 
 
 def test_reviewer_changes_requested_without_observations_stops_safely(tmp_path: Path) -> None:

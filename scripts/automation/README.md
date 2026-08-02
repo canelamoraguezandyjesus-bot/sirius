@@ -37,6 +37,31 @@ Funciones principales:
 
 Requisitos en ejecución: `gh`, `jq`, `python3`.
 
+## `sirius_codex_review.py`
+
+Disparador y recolector de la revisión nativa de Codex para la revisión dual
+(contrato operativo §4.1, bandera `SIRIUS_CODEX_REVIEW_ENABLED`). `trigger`
+publica (o reutiliza de forma idempotente) el comentario `@codex review` con un
+marcador oculto por head; `collect` espera el resultado del conector oficial
+(allowlist `SIRIUS_CODEX_ALLOWED_AUTHORS`), verifica que la revisión
+corresponde exactamente al head esperado (`commit_id` o marcador
+`Reviewed commit:`), reconoce la aprobación explícita (revisión `APPROVED` o
+reacción `+1` del conector sobre el disparador; `eyes` solo indica
+procesamiento) y escribe un JSON normalizado. Timeout configurable
+(`SIRIUS_CODEX_REVIEW_TIMEOUT_SECONDS`, 1200 s por defecto); cualquier caso no
+identificable con seguridad termina en `FAILED_SAFELY`. No usa la API de
+OpenAI y nunca modifica código.
+
+## `sirius_aggregate_reviews.py`
+
+Agregador determinista de la revisión dual: combina el JSON del revisor Claude
+y el JSON normalizado de Codex en un único veredicto compatible con
+`sirius_apply_verdict.sh`, con reglas fijas de precedencia (inválido → fallo
+seguro; SHA no demostrable → fallo seguro; fallo de cualquiera → fallo seguro;
+bloqueo de Claude; cambios de cualquiera; aprobación solo si ambos aprueban el
+mismo SHA), deduplicación solo de duplicados exactos y procedencia conservada
+con prefijos `CLAUDE-`/`CODEX-`.
+
 ## `validate_issue_body.py`
 
 Validador estructural puro (sin red) del cuerpo de una incidencia de trabajo. Se

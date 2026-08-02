@@ -1,15 +1,15 @@
 # SIRIUS - Contrato operativo de automatización
 
-**Versión:** 1.3  
-**Fecha:** 20 de julio de 2026  
-**Estado:** VIGENTE (§8, §9 y §0 actualizadas; ver §10)  
+**Versión:** 1.4  
+**Fecha:** 3 de agosto de 2026  
+**Estado:** VIGENTE (§4 actualizada; ver §10.3)  
 **Autoridad:** Operativa para el desarrollo automatizado de Sirius 0.1  
-**Sustituye:** versión 1.2 del 20 de julio de 2026  
+**Sustituye:** versión 1.3 del 20 de julio de 2026  
 **No modifica:** Producto, Arquitectura Técnica, ATD, requisitos ni alcance de Sirius 0.1
 
 ## 0. Propósito
 
-Este contrato autoriza y regula un flujo permanente, secuencial y dirigido por eventos para Sirius 0.1. Su motor son tres workflows de GitHub Actions que ejecutan Claude Code real (implementador, revisor, corrector) — ver el mecanismo concreto en `SIRIUS_GENERIC_ROUTINES_0.1.md` §6 — y GitHub como canal operativo único. ChatGPT, si el usuario lo usa, queda limitado a crear la incidencia inicial y aplicar la etiqueta de arranque; no ejecuta ninguno de los tres roles ni el merge (§8).
+Este contrato autoriza y regula un flujo permanente, secuencial y dirigido por eventos para Sirius 0.1. Su motor son tres workflows de GitHub Actions que ejecutan Claude Code real (implementador, revisor, corrector) — ver el mecanismo concreto en `SIRIUS_GENERIC_ROUTINES_0.1.md` §6 — y GitHub como canal operativo único. Cuando la revisión dual está activada (§4.1), Codex participa además como segundo revisor independiente de solo lectura, mediante su integración nativa con GitHub incluida en ChatGPT Business (sin API de OpenAI). ChatGPT, si el usuario lo usa, queda limitado a crear la incidencia inicial y aplicar la etiqueta de arranque; no ejecuta ninguno de los tres roles ni el merge (§8).
 
 Su finalidad es que el usuario pueda escribir una orden breve, por ejemplo `Implementa B4e`, y que el sistema prepare la tarea, implemente, valide, revise, corrija de forma limitada y notifique el resultado sin copiar ni pegar prompts manualmente.
 
@@ -95,6 +95,61 @@ Resultados permitidos:
 - `CHANGES_REQUESTED` -> `sirius:repair-requested`
 - `BLOCKED_BY_DECISION` -> `sirius:blocked-decision`
 - `FAILED_SAFELY` -> `sirius:failed-safely`
+
+### 4.1 Revisión dual Claude + Codex (bandera de repositorio)
+
+La variable de repositorio `SIRIUS_CODEX_REVIEW_ENABLED` gobierna el modo de
+revisión dentro de `review-sirius-work.yml`:
+
+- **ausente o distinta de `true`:** revisión solo con Claude, el comportamiento
+  vigente antes de esta versión;
+- **`true`:** revisión dual obligatoria. Tras Quality en verde sobre el head
+  registrado, esa misma versión es revisada por dos revisores independientes:
+  el revisor Claude actual y Codex mediante su integración nativa con GitHub
+  (incluida en ChatGPT Business; sin API de OpenAI, sin claves nuevas y sin
+  costes nuevos).
+
+Reglas del modo dual:
+
+- El workflow publica de forma idempotente un único comentario disparador
+  `@codex review` por PR y head, con un marcador oculto estable
+  (`<!-- sirius-codex-review:<head> -->`), mediante el paso determinista
+  (`scripts/automation/sirius_codex_review.py`). La revisión automática del
+  panel de Codex permanece apagada: el disparo ocurre solo después de Quality.
+- Codex actúa únicamente como segundo revisor de solo lectura: la
+  automatización nunca le pide corregir, comitear, hacer push ni fusionar.
+- Ambos revisores deben revisar exactamente el mismo SHA que superó Quality.
+  El recolector solo acepta resultados del conector oficial de Codex
+  (allowlist), posteriores al disparador y demostrablemente referidos a ese
+  SHA (`commit_id` de la revisión o el marcador `Reviewed commit:`). La
+  ausencia de comentarios no es aprobación: la aprobación exige una revisión
+  formal `APPROVED` o una reacción `+1` del conector sobre el disparador.
+- Un agregador determinista (`scripts/automation/sirius_aggregate_reviews.py`)
+  combina ambos resultados sin votos ni arbitraje de otro modelo, con esta
+  precedencia: JSON inválido de un revisor obligatorio → `FAILED_SAFELY`; SHA
+  distinto o no demostrable → `FAILED_SAFELY`; `FAILED_SAFELY` de cualquiera →
+  `FAILED_SAFELY`; `BLOCKED_BY_DECISION` de Claude → `BLOCKED_BY_DECISION`;
+  `CHANGES_REQUESTED` de cualquiera → `CHANGES_REQUESTED`; solo si ambos
+  aprueban el mismo SHA → `REVIEW_APPROVED`.
+- Con la revisión dual activada Codex es obligatorio: timeout
+  (`SIRIUS_CODEX_REVIEW_TIMEOUT_SECONDS`, 1200 s por defecto), respuesta sobre
+  otro SHA, autor no autorizado o resultado ambiguo terminan la ronda en
+  `FAILED_SAFELY`, nunca en aprobación silenciosa ni en degradación automática
+  a revisión solo Claude.
+- Las observaciones combinadas conservan su procedencia (prefijos `CLAUDE-` y
+  `CODEX-`), se deduplican solo cuando son duplicados exactos y llegan al
+  corrector en la misma lista estructurada única (`OBSERVACIONES_ESTRUCTURADAS`)
+  de una sola ronda. Claude sigue siendo el único corrector y se conserva el
+  máximo de dos ciclos (§5).
+- El veredicto de revisión (de Claude o agregado) debe declarar
+  `reviewed_head_sha`; `sirius_apply_verdict.sh` exige para `REVIEW_APPROVED`
+  y `CHANGES_REQUESTED` una PR única, abierta y no borrador, y la coincidencia
+  exacta entre el head actual de la PR, el último head que superó Quality y el
+  `reviewed_head_sha` declarado. Cualquier divergencia detiene la incidencia
+  de forma segura.
+- Desactivar la bandera devuelve inmediatamente el flujo a revisión solo
+  Claude sin revertir commits. La activación estable solo se decidirá tras un
+  piloto controlado posterior al merge de esta implementación.
 
 ## 5. Corrección automática limitada
 
@@ -235,4 +290,43 @@ Está prohibido:
 - **Pendiente de la primera ejecución real:** el secreto `CLAUDE_CODE_OAUTH_TOKEN` (o `ANTHROPIC_API_KEY`) debe añadirse a los secretos del repositorio antes de que estos workflows puedan completar su trabajo; sin él, la puerta de activación y las comprobaciones deterministas siguen funcionando, pero el paso de Claude Code fallará y la incidencia terminará en `sirius:failed-safely`.
 - **Entrada en vigor:** cuando la PR que introduce estos tres workflows sea revisada, tenga CI verde y sea fusionada por autorización explícita del usuario.
 
-El historial de las versiones 1.0, 1.1 y 1.2 permanece disponible en Git y no se reescribe retrospectivamente.
+### 10.3 Versión 1.4 — revisión dual Claude + Codex tras Quality
+
+- **Decisión:** aprobada por el usuario el 3 de agosto de 2026. Después de que
+  Quality termine en verde sobre un head concreto, esa misma versión es
+  revisada por dos revisores independientes: Claude (el revisor actual) y
+  Codex mediante su integración nativa con GitHub incluida en ChatGPT
+  Business. Un agregador determinista combina ambos resultados en un único
+  veredicto; Claude sigue siendo el implementador, uno de los dos revisores y
+  el único corrector.
+- **Motivo:** añadir una segunda revisión independiente real sin introducir la
+  API de OpenAI, claves nuevas, servicios de pago ni un segundo flujo: la
+  prueba manual en la PR #122 confirmó que el comentario `@codex review`
+  activa una revisión formal, con comentarios por archivo y línea, sin
+  modificar el código.
+- **Alcance:** exclusivamente el mecanismo de revisión
+  (`review-sirius-work.yml`, `sirius_codex_review.py`,
+  `sirius_aggregate_reviews.py`, el endurecimiento de
+  `sirius_apply_verdict.sh` y `prompts/reviewer.md`) y la redacción de §4 de
+  este contrato. No cambia la implementación, la corrección (mismo corrector
+  Claude, mismas `OBSERVACIONES_ESTRUCTURADAS`, máximo de dos ciclos), la
+  máquina de estados ni el mecanismo de merge (§8): `fusiona` sigue siendo la
+  única autorización humana de merge.
+- **Mantiene:** mismo head exacto para CI, ambos revisores y el veredicto;
+  fallo seguro obligatorio si Codex no responde, responde sobre otro SHA o su
+  resultado no es identificable; Codex sin ningún permiso de escritura;
+  reversibilidad total mediante `SIRIUS_CODEX_REVIEW_ENABLED` sin revertir
+  commits.
+- **Pendiente del piloto posterior al merge:** que un comentario publicado
+  automáticamente con el token de los workflows active la integración de
+  Codex es una dependencia externa aún no verificada. La bandera queda
+  desactivada por defecto; tras el merge se realizará un piloto controlado
+  (una PR pequeña, bandera activada, verificación de disparador único, SHA
+  correcto, veredicto único y rollback) y solo entonces se decidirá su
+  activación estable.
+- **Entrada en vigor:** cuando la PR que introduce la revisión dual sea
+  revisada, tenga CI verde y sea fusionada por autorización explícita del
+  usuario. La activación de la bandera queda fuera de esa entrada en vigor y
+  requiere el piloto.
+
+El historial de las versiones 1.0, 1.1, 1.2 y 1.3 permanece disponible en Git y no se reescribe retrospectivamente.

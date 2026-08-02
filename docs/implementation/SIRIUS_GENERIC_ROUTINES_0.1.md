@@ -210,6 +210,17 @@ para correr Claude Code de verdad dentro del propio runner:
 - `.github/workflows/review-sirius-work.yml` — `sirius:review-requested`.
 - `.github/workflows/repair-sirius-work.yml` — `sirius:repair-requested`.
 
+El workflow de revisión admite además el modo de revisión dual (contrato
+operativo §4.1, bandera `SIRIUS_CODEX_REVIEW_ENABLED`): con la bandera en
+`true`, el mismo workflow publica de forma idempotente el comentario
+`@codex review` para el head exacto que superó Quality
+(`scripts/automation/sirius_codex_review.py`), ejecuta al revisor Claude
+mientras Codex trabaja, recoge y normaliza el resultado de Codex y agrega
+ambos veredictos de forma determinista
+(`scripts/automation/sirius_aggregate_reviews.py`) antes de aplicar un único
+veredicto. Codex es un segundo revisor de solo lectura: nunca corrige, comitea
+ni fusiona, y su fallo o silencio termina la ronda en `FAILED_SAFELY`.
+
 Todo el mecanismo vive en este repositorio y es inspeccionable: no hay
 ninguna interfaz externa que registrar. La única acción pendiente fuera del
 repositorio, y solo una vez, es añadir el secreto de autenticación de Claude

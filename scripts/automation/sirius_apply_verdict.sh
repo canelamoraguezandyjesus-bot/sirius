@@ -11,6 +11,13 @@
 # afirme. Un veredicto ausente, corrupto o fuera del conjunto permitido para
 # el rol se trata como un fallo seguro, nunca como éxito silencioso.
 #
+# Para los resultados de revisión (REVIEW_APPROVED y CHANGES_REQUESTED) el
+# veredicto debe declarar además `reviewed_head_sha`, y se exige coincidencia
+# exacta entre tres valores: ese SHA declarado, el head actual de la PR y el
+# último head que superó Quality registrado en la incidencia (contrato §4,
+# v1.4). En el modo de revisión dual el JSON puede venir del agregador
+# determinista (sirius_aggregate_reviews.py) en lugar del revisor Claude.
+#
 # Uso: sirius_apply_verdict.sh <owner/repo> <issue> <role> <verdict_file> [cycle]
 #   role: implementer | reviewer | corrector
 #   cycle: solo corrector; número de ciclo de reparación que se está cerrando.
@@ -150,6 +157,53 @@ resolve_pr() {
   head_sha="$field3"
 }
 
+# sha_matches <sha-completo> <candidato> — 0 solo si el candidato resuelve sin
+# ambigüedad al SHA completo: igual, o una abreviatura hexadecimal de al menos
+# 7 caracteres que sea prefijo exacto. Nunca acepta cadenas vacías o no hex.
+sha_matches() {
+  local full cand
+  full="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  cand="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
+  case "$cand" in
+    '' | *[!0-9a-f]*) return 1 ;;
+  esac
+  if [ "${#cand}" -lt 7 ] || [ "${#cand}" -gt 40 ]; then
+    return 1
+  fi
+  case "$full" in
+    "$cand"*) return 0 ;;
+  esac
+  return 1
+}
+
+# require_reviewed_head — endurecimiento de la revisión (contrato §4, v1.4):
+# cualquier resultado de revisión (aprobación O cambios solicitados) debe
+# demostrar sobre qué versión se pronunció. Exige que el JSON declare
+# `reviewed_head_sha`, que coincida con el head actual de la PR (pr_number/
+# head_sha ya resueltos por resolve_pr) y que ese head siga siendo el último
+# que superó Quality según la incidencia. Si cualquiera de los tres difiere,
+# parada segura: nunca se aplica un veredicto sobre una versión distinta.
+require_reviewed_head() {
+  local reviewed_sha scan_file last_ci_sha
+  reviewed_sha="$(jq -r '.reviewed_head_sha // empty' "$VERDICT_FILE" 2>/dev/null)"
+  if [ -z "$reviewed_sha" ]; then
+    stop_safely "sin-reviewed-head" \
+      "El veredicto \`${verdict}\` no declara \`reviewed_head_sha\`. Sin esa declaración no puedo demostrar qué versión se revisó, así que no aplico el resultado."
+  fi
+  if ! sha_matches "$head_sha" "$reviewed_sha"; then
+    stop_safely "reviewed-head-distinto" \
+      "El veredicto \`${verdict}\` declara haber revisado \`${reviewed_sha}\`, pero el head actual de la PR es \`${head_sha}\`. No aplico un resultado de revisión sobre otra versión."
+  fi
+  scan_file="$(mktemp)"
+  sirius_scan_text "$REPO" "$ISSUE" "$scan_file"
+  last_ci_sha="$(sirius_extract_sha "$scan_file")"
+  rm -f "$scan_file"
+  if [ "$last_ci_sha" = "no-head" ] || [ "$last_ci_sha" != "$head_sha" ]; then
+    stop_safely "head-inconsistente" \
+      "El veredicto es \`${verdict}\`, pero el head actual de la PR (\`${head_sha}\`) no coincide con el último head que superó Quality (\`${last_ci_sha}\`). El resultado sería sobre una versión obsoleta; descarto la ronda de forma segura."
+  fi
+}
+
 case "$verdict" in
   READY_FOR_REVIEW | FIXED)
     resolve_pr
@@ -180,14 +234,7 @@ case "$verdict" in
 
   REVIEW_APPROVED)
     resolve_pr
-    scan_file="$(mktemp)"
-    sirius_scan_text "$REPO" "$ISSUE" "$scan_file"
-    last_ci_sha="$(sirius_extract_sha "$scan_file")"
-    rm -f "$scan_file"
-    if [ "$last_ci_sha" = "no-head" ] || [ "$last_ci_sha" != "$head_sha" ]; then
-      stop_safely "head-inconsistente" \
-        "El revisor aprobó, pero el head actual de la PR (\`${head_sha}\`) no coincide con el último head que superó Quality (\`${last_ci_sha}\`). No aprobar sin volver a ejecutar CI sobre el head exacto."
-    fi
+    require_reviewed_head
     pr_url="https://github.com/${REPO}/pull/${pr_number}"
     marker="<!-- sirius-verdict:reviewer:approved:${head_sha} -->"
     body_file="$(mktemp)"
@@ -210,17 +257,17 @@ case "$verdict" in
       stop_safely "sin-observaciones" \
         "El revisor pidió \`CHANGES_REQUESTED\` sin ninguna observación estructurada; no hay nada concreto que corregir."
     fi
+    # Mismo endurecimiento que la aprobación (contrato §4, v1.4): tampoco se
+    # solicita corrección a partir de una revisión hecha sobre otra versión.
+    resolve_pr
+    require_reviewed_head
     readable="$(printf '%s' "$observations" | jq -r '.[] | "- **\(.id // "?")** (\(.severidad // "?")) \(.archivo // "?"): \(.problema // "?")\n  - Criterio esperado: \(.criterio_esperado // "?")\n  - Prueba: \(.prueba // "?")\n  - Límites de corrección: \(.limites_correccion // "?")"')"
-    pr_hint=""
-    mapfile -t pr_numbers < <(sirius_find_pr_for_issue "$REPO" "$ISSUE")
-    if [ "${#pr_numbers[@]}" -eq 1 ]; then
-      pr_hint="https://github.com/${REPO}/pull/${pr_numbers[0]}"
-    fi
+    pr_hint="https://github.com/${REPO}/pull/${pr_number}"
     marker="<!-- sirius-verdict:reviewer:changes:$(printf '%s' "$observations" | sha256sum | cut -c1-16) -->"
     body_file="$(mktemp)"
     {
       printf '%s\n\n%s\n' "$marker" "## CHANGES_REQUESTED"
-      [ -n "$pr_hint" ] && printf '- PR: %s\n' "$pr_hint"
+      printf '- PR: %s\n' "$pr_hint"
       printf '%s\n\n%s\n\n## OBSERVACIONES_ESTRUCTURADAS\n```json\n%s\n```\n' "${summary}" "${readable}" "${observations}"
     } >"$body_file"
     if ! transition "$marker" "$body_file" "sirius:repair-requested" "FBCA04" "Evento consumible: corregir observaciones técnicas registradas"; then

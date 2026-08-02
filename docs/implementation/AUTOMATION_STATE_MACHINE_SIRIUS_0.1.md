@@ -122,6 +122,14 @@ La revisora publica uno de estos resultados:
 - `BLOCKED_BY_DECISION -> blocked-decision`;
 - `FAILED_SAFELY -> failed-safely`.
 
+Con la variable de repositorio `SIRIUS_CODEX_REVIEW_ENABLED=true` (contrato
+operativo §4.1), la ronda de revisión es dual: el mismo workflow solicita
+además la revisión nativa de Codex sobre el mismo head exacto y un agregador
+determinista combina ambos resultados en un único veredicto de la lista
+anterior. Los estados y transiciones no cambian; solo se llega a
+`ready-for-merge` si ambos revisores aprueban el mismo SHA, y un fallo o
+timeout de Codex termina en `failed-safely`, nunca en aprobación silenciosa.
+
 ### 4.5 Corrección
 
 `repair-requested -> repairing -> ci-pending`
