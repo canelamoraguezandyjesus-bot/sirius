@@ -432,6 +432,15 @@ if ($exeWritten -lt $compileStart) {
 }
 Write-Ok "Compilacion correcta en $compileSeconds s. Log: $BuildLog"
 
+# pyside6-deploy intenta purgar su directorio intermedio, pero se traga el
+# PermissionError y solo avisa, asi que puede dejar mas de 1 GB de restos DENTRO
+# de src/. Eso ensucia el arbol de Git y, peor, deja archivos module.*.c rancios
+# que hacen fallar la siguiente compilacion con "assert not os.path.isfile(...)".
+# Se limpia aqui de forma explicita y con reintentos. Si la compilacion hubiera
+# fallado no se llega a este punto, y el scratch se conserva para diagnostico.
+Remove-Tree $NuitkaScratch
+Write-Ok "Directorio intermedio de Nuitka eliminado de src/ (el arbol de Git queda limpio)."
+
 # --------------------------------------------------------------------------
 Write-Step "9/13 Montaje del artefacto"
 

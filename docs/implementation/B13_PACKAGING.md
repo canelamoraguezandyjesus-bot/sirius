@@ -104,6 +104,17 @@ build/packaging/build-<marca temporal>.log                       log completo
 `build/` y `dist/` están ignorados por Git: **ni el binario, ni el ZIP, ni los
 logs se confirman en el repositorio**.
 
+`pyside6-deploy` impone además su propio directorio intermedio en
+`src/sirius/deployment/` (no es configurable: lo deriva del archivo de entrada).
+Intenta purgarlo al terminar, pero se traga el `PermissionError` y solo avisa,
+de modo que puede dejar más de 1 GB dentro de `src/` — lo que ensucia el árbol
+de Git y, peor, deja archivos `module.*.c` rancios que hacen fallar la siguiente
+compilación con `assert not os.path.isfile(...)`. Por eso
+`build_windows.ps1` lo elimina explícitamente y con reintentos, tanto antes de
+construir como después de una compilación correcta. Si la compilación falla, ese
+directorio se conserva a propósito para diagnóstico y lo limpia la siguiente
+ejecución.
+
 ## Estructura del artefacto
 
 ```
