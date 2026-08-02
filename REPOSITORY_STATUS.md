@@ -220,7 +220,13 @@ No se considera iniciada la aceptación formal con proveedor real.
 La ventana con proveedor real permanece bloqueada hasta que:
 
 - estén resueltos D-01, D-02, D-03, D-04, D-05, D-08, D-11 y A-01;
-- exista un ejecutable reproducible;
+- ~~exista un ejecutable reproducible~~ — **cumplido en B13**: `scripts/build_windows.ps1`
+  produce una distribución portátil STANDALONE para Windows 11 x64, verificada por
+  `scripts/verify_windows_package.ps1` sobre un artefacto real (arranque sin Python
+  ni uv, ruta con espacios, migraciones hasta el head de Alembic,
+  `PRAGMA integrity_check` = `ok`, segundo arranque sin duplicar el esquema).
+  Detalle en `docs/implementation/B13_PACKAGING.md`. Esto no desbloquea por sí solo
+  la ventana con proveedor real: el resto de condiciones sigue pendiente;
 - la suite automática y FakeLLM estén verdes sobre la integración exacta;
 - Credential Manager haya sido comprobado con un valor señuelo;
 - copia y restauración hayan sido verificadas en el ejecutable;

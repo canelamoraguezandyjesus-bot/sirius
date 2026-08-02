@@ -87,7 +87,7 @@ Debe cumplirse:
 | D-11 | Contexto pertinente y limitado | RNF-008; SP-03; ATD-007 | Sí | Sí | Abierto | B6 |
 | A-01 | Política de acciones fuera de alcance | RF-035; PA-024 | Sí | Sí | Cerrado en su parte automatizable (B10 implementado) | B10 |
 | A-02 | Recuperación tras cierre forzado | RNF-005/006; PA-019 | No | Sí | Cerrado en su parte automatizable (B11 implementado) | B11 |
-| A-03 | Empaquetado reproducible | ATD-011 | Sí, como puerta | Sí | Abierto | B13 |
+| A-03 | Empaquetado reproducible | ATD-011 | Sí, como puerta | Sí | Cerrado en su parte automatizable (B13 implementado y verificado sobre un artefacto real) | B13 |
 | A-04 | Evidencia de aceptación trazada | Plan de Pruebas | No, por sí sola | Sí | Abierto | B12/B16 |
 
 Cualquier defecto nuevo debe vincularse a un requisito ya aprobado. Si no puede hacerse, debe detenerse el trabajo y solicitar decisión.
@@ -108,7 +108,7 @@ Cualquier defecto nuevo debe vincularse a un requisito ya aprobado. Si no puede 
 | B10 | Política de acciones fuera de alcance | Completo (política RF-035 añadida a la semilla canónica de identidad y renderizada en las instrucciones; A-01 cerrado en su parte automatizable) |
 | B11 | Recuperación tras cierre forzado | Completo (prueba de integración que simula un cierre forzado —repositorios abandonados sin `close()` ordenado— sobre SQLite real migrado con Alembic, demostrando que el estado confirmado sobrevive íntegro, `PRAGMA integrity_check` es `ok`, un turno interrumpido a mitad de streaming deja el historial coherente sin fila parcial, y la reapertura es idempotente; `PRAGMA synchronous=FULL` afirma la durabilidad explícitamente; A-02 cerrado en su parte automatizable) |
 | B12 | Suite PA/SP automática, rendimiento y evidencia | Pendiente |
-| B13 | Empaquetado reproducible | Pendiente (groundwork: `sirius.adapters.persistence.migrations._resource_root` resuelve `alembic.ini`/`migrations/` junto al ejecutable cuando la app corre congelada —PyInstaller `sys.frozen` o Nuitka `__compiled__`— y desde la raíz del repositorio en desarrollo, sin cambios de comportamiento; cubierto por prueba unitaria con modo empaquetado simulado. El build real con Nuitka en Windows sigue pendiente) |
+| B13 | Empaquetado reproducible | Completo (proceso canónico `scripts/build_windows.ps1` y verificación `scripts/verify_windows_package.ps1`; distribución portátil STANDALONE construida y verificada de verdad en Windows 11 x64 con Nuitka 4.1.3 + MSVC, sin instalador, sin firma, sin autoactualización y sin onefile. El artefacto arranca sin Python ni uv en `PATH`, desde una ruta con espacios y con un directorio de trabajo ajeno; aplica las migraciones hasta el head de Alembic junto al ejecutable, `PRAGMA integrity_check` devuelve `ok` y un segundo arranque no duplica ni corrompe el esquema. Ver `docs/implementation/B13_PACKAGING.md`. B14, B15 y B16 siguen pendientes) |
 | B14 | Windows sin clave | Bloqueado |
 | B15 | Ventana compacta con proveedor real | Bloqueado |
 | B16 | PA-E2E-01, regresión y cierre | Bloqueado |

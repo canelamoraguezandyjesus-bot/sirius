@@ -37,6 +37,15 @@ dev = [
   "pytest-qt>=4.5",
   "ruff>=0.12",
 ]
+# B13: toolchain de empaquetado para Windows. Deliberadamente fuera de las
+# dependencias de ejecución y del grupo `dev`: solo `scripts/build_windows.ps1`
+# lo sincroniza (`uv sync --frozen --group packaging`), de modo que ni el
+# entorno de desarrollo normal ni el artefacto final arrastran Nuitka.
+packaging = [
+  "nuitka==4.1.3",
+  "ordered-set",
+  "zstandard",
+]
 
 [tool.uv]
 default-groups = ["dev"]
