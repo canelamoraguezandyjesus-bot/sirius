@@ -3,10 +3,16 @@
     B13 - Verificacion automatica del paquete portatil de Sirius para Windows.
 
 .DESCRIPTION
-    Comprueba, sobre el artefacto realmente construido:
+    Verifica EL ZIP QUE SE VA A DISTRIBUIR, no la carpeta de trabajo de dist.
+    El orden importa: primero se comprueba el SHA-256 del ZIP, despues se
+    extrae ese mismo ZIP a una ruta temporal con espacios, y todas las demas
+    comprobaciones -inventario de hashes, contaminacion y arranques- se hacen
+    sobre la copia extraida. La afirmacion final queda limitada al ZIP cuyo
+    hash se verifico.
 
-      A. Estructura, inventario de hashes, ZIP y ausencia de datos o secretos.
-      B. Independencia del repositorio: se ejecuta desde una copia temporal en
+      A. SHA-256 del ZIP, extraccion, estructura, inventario de hashes y
+         ausencia de datos o secretos, todo sobre lo extraido.
+      B. Independencia del repositorio: se ejecuta desde la copia extraida en
          una ruta con espacios y con un directorio de trabajo distinto del
          repositorio, del ejecutable y de los datos.
       C. Independencia de Python y uv: el proceso se lanza con un PATH reducido
@@ -19,6 +25,15 @@
       F. Rutas con espacios.
       G. Rechaza ejecutarse con PowerShell elevado.
 
+    Limite conocido y declarado: redirigir variables de entorno de sistema de
+    archivos NO aisla Windows Credential Manager. La credencial vive en la
+    sesion del usuario de Windows, no en %LOCALAPPDATA%. Por eso, antes de los
+    arranques, se comprueba la PRECONDICION de que la credencial de Sirius no
+    existe en esta sesion. Si existe, la prueba de onboarding sin clave se
+    OMITE de forma explicita y no se declara superada. La comprobacion usa el
+    puerto de aplicacion y solo obtiene un booleano: nunca lee, imprime,
+    exporta, modifica ni borra el valor.
+
     Esta prueba termina el proceso a proposito. Es una comprobacion tecnica
     desechable y NO sustituye a la PA-019 manual.
 
@@ -26,7 +41,7 @@
     .\scripts\verify_windows_package.ps1
 
 .EXAMPLE
-    .\scripts\verify_windows_package.ps1 -ArtifactPath dist\windows\Sirius-0.1.0.dev0-abc1234-windows-x64
+    .\scripts\verify_windows_package.ps1 -ArtifactPath dist\windows\Sirius-0.1.0.dev0-abc1234-windows-x64.zip
 #>
 
 [CmdletBinding()]
@@ -42,7 +57,13 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $DistRoot = Join-Path $RepoRoot "dist\windows"
 $VenvPython = Join-Path $RepoRoot ".venv\Scripts\python.exe"
 
+# Titulo de la ventana del flujo SIN clave (OnboardingWindow). Se compara un
+# fragmento ASCII a proposito: el titulo real lleva raya y tilde, y no merece
+# la pena que esta verificacion dependa de la codificacion de este archivo.
+$OnboardingTitleFragment = "Primera configuraci"
+
 $script:Failures = New-Object System.Collections.Generic.List[string]
+$script:Skipped = New-Object System.Collections.Generic.List[string]
 $script:Checks = 0
 
 function Write-Step { param([string]$Text) Write-Host "`n=== $Text ===" -ForegroundColor Cyan }
@@ -62,6 +83,12 @@ function Test-Check {
     }
 }
 
+function Add-Skip {
+    param([string]$Name, [string]$Reason)
+    Write-Host "  [OMITIDA] $Name -> $Reason" -ForegroundColor Yellow
+    $script:Skipped.Add("$Name -> $Reason")
+}
+
 # --------------------------------------------------------------------------
 Write-Step "G. Privilegios"
 
@@ -76,32 +103,120 @@ if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))
 Write-Host "  [ok] PowerShell sin elevar." -ForegroundColor Green
 
 # --------------------------------------------------------------------------
-Write-Step "A. Localizacion y estructura del artefacto"
+Write-Step "A. Localizacion del ZIP a verificar"
 
+# El sujeto de la verificacion es el ZIP. La carpeta de dist solo sirve para
+# encontrarlo: nada de lo que se prueba despues sale de ella.
 if ([string]::IsNullOrWhiteSpace($ArtifactPath)) {
     if (-not (Test-Path -LiteralPath $DistRoot)) {
         throw "No existe dist\windows. Ejecuta antes .\scripts\build_windows.ps1"
     }
-    $candidates = @(Get-ChildItem -LiteralPath $DistRoot -Directory |
-        Where-Object { $_.Name -like "Sirius-*-windows-x64" } |
+    $candidates = @(Get-ChildItem -LiteralPath $DistRoot -File |
+        Where-Object { $_.Name -like "Sirius-*-windows-x64.zip" } |
         Sort-Object LastWriteTime -Descending)
     if ($candidates.Count -eq 0) {
-        throw "No se encontro ningun artefacto de B13 en dist\windows. Ejecuta antes .\scripts\build_windows.ps1"
+        throw "No se encontro ningun ZIP de B13 en dist\windows. Ejecuta antes .\scripts\build_windows.ps1"
     }
-    $ArtifactDir = $candidates[0].FullName
+    $ZipPath = $candidates[0].FullName
 }
 else {
     if (-not (Test-Path -LiteralPath $ArtifactPath)) { throw "No existe la ruta indicada: $ArtifactPath" }
-    $ArtifactDir = (Resolve-Path -LiteralPath $ArtifactPath).Path
+    $resolved = (Resolve-Path -LiteralPath $ArtifactPath).Path
+    if ($resolved.ToLower().EndsWith(".zip")) { $ZipPath = $resolved }
+    else { $ZipPath = "$resolved.zip" }
+    if (-not (Test-Path -LiteralPath $ZipPath)) {
+        throw "No existe el ZIP correspondiente: $ZipPath. La verificacion de B13 se hace sobre el ZIP distribuido."
+    }
 }
-$ArtifactName = Split-Path -Leaf $ArtifactDir
-Write-Info "Artefacto: $ArtifactDir"
 
-$exeInArtifact = Join-Path $ArtifactDir "Sirius.exe"
-$iniInArtifact = Join-Path $ArtifactDir "alembic.ini"
-$migrationsInArtifact = Join-Path $ArtifactDir "migrations"
-$buildManifestPath = Join-Path $ArtifactDir "BUILD-MANIFEST.json"
-$fileManifestPath = Join-Path $ArtifactDir "FILE-MANIFEST.sha256"
+$ArtifactName = [System.IO.Path]::GetFileNameWithoutExtension($ZipPath)
+$ZipShaPath = "$ZipPath.sha256"
+Write-Info "ZIP a verificar: $ZipPath"
+
+# --------------------------------------------------------------------------
+Write-Step "A. SHA-256 del ZIP (antes de extraer nada)"
+
+Test-Check "Existe el ZIP" (Test-Path -LiteralPath $ZipPath)
+Test-Check "Existe el .zip.sha256" (Test-Path -LiteralPath $ZipShaPath)
+if ($script:Failures.Count -gt 0) {
+    throw "Falta el ZIP o su hash registrado. Verificacion detenida."
+}
+
+$recordedHash = ((Get-Content -LiteralPath $ZipShaPath -Raw).Trim() -split "\s+")[0].ToLower()
+$VerifiedZipHash = (Get-FileHash -LiteralPath $ZipPath -Algorithm SHA256).Hash.ToLower()
+Test-Check "El SHA-256 registrado coincide con el ZIP" ($recordedHash -eq $VerifiedZipHash) "registrado $recordedHash / real $VerifiedZipHash"
+if ($script:Failures.Count -gt 0) {
+    throw "El ZIP no coincide con su hash registrado. No se extrae nada. Verificacion detenida."
+}
+Write-Info "SHA-256 verificado: $VerifiedZipHash"
+Write-Info "Tamano del ZIP    : $([math]::Round((Get-Item -LiteralPath $ZipPath).Length / 1MB, 1)) MB"
+
+# --------------------------------------------------------------------------
+Write-Step "A/F. Extraccion del ZIP verificado en una ruta con espacios"
+
+$SmokeRoot = Join-Path $env:TEMP "Sirius Packaging Smoke Test"
+if (Test-Path -LiteralPath $SmokeRoot) { Remove-Item -LiteralPath $SmokeRoot -Recurse -Force }
+
+$ExtractRoot = Join-Path $SmokeRoot "Paquete Extraido Del Zip"
+$IsolatedHome = Join-Path $SmokeRoot "Perfil De Usuario"
+$IsolatedData = Join-Path $SmokeRoot "Datos De Sirius"
+$IsolatedTemp = Join-Path $SmokeRoot "Temporal Aislado"
+$WorkingDirectory = Join-Path $SmokeRoot "Directorio De Trabajo"
+$LocalAppData = Join-Path $IsolatedHome "AppData\Local"
+$RoamingAppData = Join-Path $IsolatedHome "AppData\Roaming"
+
+foreach ($dir in @($ExtractRoot, $IsolatedHome, $IsolatedData, $IsolatedTemp, $WorkingDirectory, $LocalAppData, $RoamingAppData)) {
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+}
+
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+# Antes de extraer: la raiz del ZIP tiene que ser exactamente una carpeta, y
+# tiene que llamarse como el artefacto. Un ZIP plano, o con dos raices, o con
+# una raiz distinta, no es el paquete que este verificador sabe validar.
+$zipRoots = New-Object System.Collections.Generic.HashSet[string]
+$zipEntryCount = 0
+$archive = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
+try {
+    foreach ($entry in $archive.Entries) {
+        $segments = $entry.FullName -split "/"
+        [void]$zipRoots.Add($segments[0])
+        if (-not [string]::IsNullOrEmpty($entry.Name)) { $zipEntryCount++ }
+    }
+}
+finally {
+    $archive.Dispose()
+}
+
+$rootList = @($zipRoots)
+Test-Check "El ZIP tiene exactamente una raiz" ($rootList.Count -eq 1) ("raices: " + ($rootList -join ", "))
+Test-Check "La raiz del ZIP es '$ArtifactName'" ($rootList.Count -eq 1 -and $rootList[0] -eq $ArtifactName) ("encontrado: " + ($rootList -join ", "))
+if ($script:Failures.Count -gt 0) {
+    throw "La estructura del ZIP no es la esperada. Verificacion detenida."
+}
+
+[System.IO.Compression.ZipFile]::ExtractToDirectory($ZipPath, $ExtractRoot)
+
+$PackageRoot = Join-Path $ExtractRoot $ArtifactName
+Test-Check "La extraccion produjo la raiz del paquete" (Test-Path -LiteralPath $PackageRoot)
+Test-Check "La ruta del paquete extraido contiene espacios" ($PackageRoot.Contains(" "))
+if ($script:Failures.Count -gt 0) {
+    throw "No se pudo extraer el paquete. Verificacion detenida."
+}
+Write-Info "Paquete extraido en: $PackageRoot"
+Write-Info "Entradas de archivo en el ZIP: $zipEntryCount"
+
+# A partir de aqui NADA vuelve a mirar dist\windows: todo se comprueba y se
+# ejecuta sobre $PackageRoot, que es el contenido real del ZIP verificado.
+
+# --------------------------------------------------------------------------
+Write-Step "A. Estructura del paquete extraido"
+
+$exeInArtifact = Join-Path $PackageRoot "Sirius.exe"
+$iniInArtifact = Join-Path $PackageRoot "alembic.ini"
+$migrationsInArtifact = Join-Path $PackageRoot "migrations"
+$buildManifestPath = Join-Path $PackageRoot "BUILD-MANIFEST.json"
+$fileManifestPath = Join-Path $PackageRoot "FILE-MANIFEST.sha256"
 
 Test-Check "Existe Sirius.exe" (Test-Path -LiteralPath $exeInArtifact)
 Test-Check "Existe alembic.ini junto al ejecutable" (Test-Path -LiteralPath $iniInArtifact)
@@ -110,7 +225,7 @@ Test-Check "Existe BUILD-MANIFEST.json" (Test-Path -LiteralPath $buildManifestPa
 Test-Check "Existe FILE-MANIFEST.sha256" (Test-Path -LiteralPath $fileManifestPath)
 
 if ($script:Failures.Count -gt 0) {
-    throw "El artefacto no tiene la estructura minima. Verificacion detenida."
+    throw "El paquete extraido no tiene la estructura minima. Verificacion detenida."
 }
 
 Test-Check "migrations/env.py presente" (Test-Path -LiteralPath (Join-Path $migrationsInArtifact "env.py"))
@@ -123,9 +238,9 @@ $ExpectedAlembicHead = $buildManifest.alembic_head
 Write-Info "Commit de origen: $($buildManifest.source_commit_short)   |   head de Alembic esperado: $ExpectedAlembicHead"
 
 # --------------------------------------------------------------------------
-Write-Step "A. Inventario de hashes"
+Write-Step "A. Inventario de hashes sobre el contenido extraido"
 
-$prefixLength = $ArtifactDir.Length + 1
+$prefixLength = $PackageRoot.Length + 1
 $manifestEntries = @{}
 foreach ($line in (Get-Content -LiteralPath $fileManifestPath)) {
     if ([string]::IsNullOrWhiteSpace($line)) { continue }
@@ -133,13 +248,13 @@ foreach ($line in (Get-Content -LiteralPath $fileManifestPath)) {
     if ($parts.Count -eq 2) { $manifestEntries[$parts[1].Trim()] = $parts[0].Trim().ToLower() }
 }
 
-$actualFiles = @(Get-ChildItem -LiteralPath $ArtifactDir -Recurse -Force -File |
+$actualFiles = @(Get-ChildItem -LiteralPath $PackageRoot -Recurse -Force -File |
     Where-Object { $_.FullName -ne $fileManifestPath })
 
 $mismatched = 0
 $missing = 0
 foreach ($entry in $manifestEntries.GetEnumerator()) {
-    $target = Join-Path $ArtifactDir ($entry.Key.Replace("/", "\"))
+    $target = Join-Path $PackageRoot ($entry.Key.Replace("/", "\"))
     if (-not (Test-Path -LiteralPath $target)) { $missing++; continue }
     $actual = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLower()
     if ($actual -ne $entry.Value) { $mismatched++ }
@@ -151,34 +266,21 @@ foreach ($file in $actualFiles) {
 }
 
 Test-Check "FILE-MANIFEST.sha256 cubre $($manifestEntries.Count) archivos" ($manifestEntries.Count -gt 0)
-Test-Check "Ningun archivo del manifiesto falta" ($missing -eq 0) "faltan $missing"
-Test-Check "Ningun hash discrepa" ($mismatched -eq 0) "discrepan $mismatched"
-Test-Check "Ningun archivo fuera del manifiesto" ($unlisted -eq 0) "sin listar $unlisted"
+Test-Check "Ningun archivo del manifiesto falta en el ZIP" ($missing -eq 0) "faltan $missing"
+Test-Check "Ningun hash del ZIP discrepa del manifiesto" ($mismatched -eq 0) "discrepan $mismatched"
+Test-Check "El ZIP no trae ningun archivo fuera del manifiesto" ($unlisted -eq 0) "sin listar $unlisted"
+# El manifiesto no se lista a si mismo: el ZIP debe traer exactamente los
+# archivos del manifiesto mas ese unico archivo.
+Test-Check "El recuento del ZIP cuadra con el manifiesto" ($zipEntryCount -eq ($manifestEntries.Count + 1)) "zip $zipEntryCount / manifiesto+1 $($manifestEntries.Count + 1)"
 
 # --------------------------------------------------------------------------
-Write-Step "A. ZIP y su SHA-256"
-
-$zipPath = Join-Path $DistRoot "$ArtifactName.zip"
-$zipShaPath = "$zipPath.sha256"
-Test-Check "Existe el ZIP" (Test-Path -LiteralPath $zipPath)
-Test-Check "Existe el .zip.sha256" (Test-Path -LiteralPath $zipShaPath)
-
-if ((Test-Path -LiteralPath $zipPath) -and (Test-Path -LiteralPath $zipShaPath)) {
-    $recordedHash = ((Get-Content -LiteralPath $zipShaPath -Raw).Trim() -split "\s+")[0].ToLower()
-    $actualZipHash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLower()
-    Test-Check "El SHA-256 registrado coincide con el ZIP" ($recordedHash -eq $actualZipHash) "registrado $recordedHash / real $actualZipHash"
-    Write-Info "SHA-256 del ZIP: $actualZipHash"
-    Write-Info "Tamano del ZIP : $([math]::Round((Get-Item -LiteralPath $zipPath).Length / 1MB, 1)) MB"
-}
-
-# --------------------------------------------------------------------------
-Write-Step "A. Datos y secretos dentro del artefacto"
+Write-Step "A. Datos y secretos dentro del paquete extraido"
 
 $forbiddenNames = @("*.db", "*.db-wal", "*.db-shm", ".env", ".env.*", "settings.json",
     "data_location.json", "application.log", "*.pfx", "*.p12", "*.keystore", "*.jks")
 $dirtyItems = New-Object System.Collections.Generic.List[string]
 foreach ($pattern in $forbiddenNames) {
-    foreach ($hit in @(Get-ChildItem -LiteralPath $ArtifactDir -Recurse -Force -File -Filter $pattern -ErrorAction SilentlyContinue)) {
+    foreach ($hit in @(Get-ChildItem -LiteralPath $PackageRoot -Recurse -Force -File -Filter $pattern -ErrorAction SilentlyContinue)) {
         $dirtyItems.Add($hit.FullName.Substring($prefixLength))
     }
 }
@@ -192,7 +294,7 @@ foreach ($certificate in @($actualFiles | Where-Object { @(".pem", ".crt", ".cer
     }
 }
 foreach ($dirName in @("logs", "backups", "exports")) {
-    foreach ($hit in @(Get-ChildItem -LiteralPath $ArtifactDir -Recurse -Force -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq $dirName })) {
+    foreach ($hit in @(Get-ChildItem -LiteralPath $PackageRoot -Recurse -Force -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq $dirName })) {
         $dirtyItems.Add($hit.FullName.Substring($prefixLength))
     }
 }
@@ -201,6 +303,7 @@ $secretPattern = "(?<![A-Za-z0-9])sk-[A-Za-z0-9_\-]{20,}"
 foreach ($file in @($actualFiles | Where-Object { $textExtensions -contains $_.Extension.ToLower() -and $_.Length -lt 2MB })) {
     $content = Get-Content -LiteralPath $file.FullName -Raw -ErrorAction SilentlyContinue
     if ($null -ne $content -and $content -match $secretPattern) {
+        # Se informa la RUTA, nunca la coincidencia.
         $dirtyItems.Add("posible clave en " + $file.FullName.Substring($prefixLength))
     }
 }
@@ -208,35 +311,19 @@ Test-Check "Sin bases de datos, registros, copias, exportaciones ni secretos" ($
 Test-Check "Sin __pycache__ ni .pyc en migrations/" (@(Get-ChildItem -LiteralPath $migrationsInArtifact -Recurse -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq "__pycache__" -or $_.Extension -eq ".pyc" }).Count -eq 0)
 
 # --------------------------------------------------------------------------
-Write-Step "B/F. Copia temporal en una ruta con espacios"
+Write-Step "B/F. Aislamiento de rutas"
 
-$SmokeRoot = Join-Path $env:TEMP "Sirius Packaging Smoke Test"
-if (Test-Path -LiteralPath $SmokeRoot) { Remove-Item -LiteralPath $SmokeRoot -Recurse -Force }
-$PackageCopy = Join-Path $SmokeRoot "Paquete Portatil\$ArtifactName"
-$IsolatedHome = Join-Path $SmokeRoot "Perfil De Usuario"
-$IsolatedData = Join-Path $SmokeRoot "Datos De Sirius"
-$IsolatedTemp = Join-Path $SmokeRoot "Temporal Aislado"
-$WorkingDirectory = Join-Path $SmokeRoot "Directorio De Trabajo"
-$LocalAppData = Join-Path $IsolatedHome "AppData\Local"
-$RoamingAppData = Join-Path $IsolatedHome "AppData\Roaming"
-
-foreach ($dir in @($PackageCopy, $IsolatedHome, $IsolatedData, $IsolatedTemp, $WorkingDirectory, $LocalAppData, $RoamingAppData)) {
-    New-Item -ItemType Directory -Force -Path $dir | Out-Null
-}
-# Entrada por entrada: un comodin con -LiteralPath no se expande y copiaria cero archivos.
-foreach ($item in @(Get-ChildItem -LiteralPath $ArtifactDir -Force)) {
-    Copy-Item -LiteralPath $item.FullName -Destination $PackageCopy -Recurse -Force
-}
-
-$ExeCopy = Join-Path $PackageCopy "Sirius.exe"
-Test-Check "La copia contiene Sirius.exe" (Test-Path -LiteralPath $ExeCopy)
-Test-Check "La ruta de la copia contiene espacios" ($PackageCopy.Contains(" "))
+$ExeCopy = Join-Path $PackageRoot "Sirius.exe"
+Test-Check "El ejecutable a probar sale del ZIP extraido" ($ExeCopy.StartsWith($ExtractRoot))
+Test-Check "El ejecutable a probar NO sale de dist\windows" (-not $ExeCopy.StartsWith($DistRoot))
 Test-Check "La ruta de datos contiene espacios" ($IsolatedData.Contains(" "))
 Test-Check "El directorio de trabajo no es el repositorio, ni el del ejecutable, ni el de datos" (
-    ($WorkingDirectory -ne $RepoRoot) -and ($WorkingDirectory -ne $PackageCopy) -and ($WorkingDirectory -ne $IsolatedData))
-Write-Info "Copia    : $PackageCopy"
-Write-Info "Trabajo  : $WorkingDirectory"
-Write-Info "Datos    : $IsolatedData"
+    ($WorkingDirectory -ne $RepoRoot) -and ($WorkingDirectory -ne $PackageRoot) -and ($WorkingDirectory -ne $IsolatedData))
+Test-Check "El directorio de trabajo queda FUERA de la carpeta extraida" (-not $WorkingDirectory.StartsWith($ExtractRoot))
+Test-Check "Los datos quedan FUERA de la carpeta extraida" (-not $IsolatedData.StartsWith($ExtractRoot))
+Write-Info "Ejecutable: $ExeCopy"
+Write-Info "Trabajo   : $WorkingDirectory"
+Write-Info "Datos     : $IsolatedData"
 
 # --------------------------------------------------------------------------
 Write-Step "D. Entorno aislado y desechable"
@@ -248,7 +335,7 @@ New-Item -ItemType Directory -Force -Path $configDir | Out-Null
 $locationPayload = [ordered]@{ version = 1; data_dir = $IsolatedData }
 $locationJson = $locationPayload | ConvertTo-Json
 [System.IO.File]::WriteAllText((Join-Path $configDir "data_location.json"), $locationJson, (New-Object System.Text.UTF8Encoding($false)))
-Write-Info "data_location.json escrito en $configDir"
+Write-Info "data_location.json de prueba escrito en $configDir"
 
 # Deliberadamente SIN %SystemRoot% a secas: el lanzador de Python (py.exe) se
 # instala ahi, y su presencia debilitaria la afirmacion de que el proceso
@@ -291,6 +378,88 @@ $IsolatedEnv = @{
 foreach ($banned in @("VIRTUAL_ENV", "PYTHONPATH", "PYTHONHOME", "UV_PROJECT_ENVIRONMENT")) {
     Test-Check "C. La variable $banned no se pasa al proceso" (-not $IsolatedEnv.ContainsKey($banned))
 }
+
+# --------------------------------------------------------------------------
+Write-Step "D. Precondicion: Windows Credential Manager"
+
+# Redirigir LOCALAPPDATA/APPDATA/USERPROFILE NO aisla Credential Manager: la
+# credencial pertenece a la sesion del usuario de Windows. Si la credencial
+# real de Sirius existe, el ejecutable seguira el camino CON clave y esta
+# verificacion no puede afirmar que probo el onboarding sin clave.
+#
+# La consulta usa el puerto de aplicacion (ApiKeySettingsUseCase.has_key), que
+# por contrato devuelve un booleano y nunca el valor. No se lee, imprime,
+# exporta, modifica ni borra nada. No se usa cmdkey.
+$CredentialProbe = Join-Path $SmokeRoot "probe_credential_presence.py"
+$credentialProbeSource = @'
+"""Precondicion de B13: SOLO existencia de la credencial de Sirius.
+
+Usa el puerto de aplicacion, que por contrato nunca devuelve el valor de la
+clave. Imprime unicamente PRESENT, ABSENT o ERROR <TipoDeExcepcion>. Este
+script no escribe, no borra y no muestra ningun secreto.
+"""
+
+import sys
+
+try:
+    from sirius.adapters.secrets.keyring_store import KeyringSecretStore
+    from sirius.application.api_key_settings import ApiKeySettingsError, ApiKeySettingsUseCase
+except Exception as exc:  # noqa: BLE001 - solo se reporta el tipo
+    print("ERROR " + type(exc).__name__)
+    sys.exit(0)
+
+try:
+    print("PRESENT" if ApiKeySettingsUseCase(KeyringSecretStore()).has_key() else "ABSENT")
+except ApiKeySettingsError as exc:
+    print("ERROR " + type(exc).__name__)
+except Exception as exc:  # noqa: BLE001 - solo se reporta el tipo
+    print("ERROR " + type(exc).__name__)
+'@
+[System.IO.File]::WriteAllText($CredentialProbe, $credentialProbeSource, (New-Object System.Text.UTF8Encoding($false)))
+
+$CredentialState = "ERROR NoProbe"
+if (Test-Path -LiteralPath $VenvPython) {
+    $probeOutput = (& $VenvPython $CredentialProbe 2>&1 | Out-String).Trim()
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($probeOutput)) {
+        $CredentialState = ($probeOutput -split "`n")[-1].Trim()
+    }
+}
+Write-Info "Credencial de Sirius en esta sesion de Windows (servicio 'Sirius', clave 'openai_api_key'): $CredentialState"
+
+$NoKeyPreconditionMet = ($CredentialState -eq "ABSENT")
+Test-Check "La precondicion de Credential Manager se pudo evaluar" ($CredentialState -eq "ABSENT" -or $CredentialState -eq "PRESENT") $CredentialState
+
+if (-not $NoKeyPreconditionMet) {
+    Write-Host "  La credencial de Sirius EXISTE en esta sesion de Windows (o no se pudo consultar)." -ForegroundColor Yellow
+    Write-Host "  Redirigir variables de entorno no aisla Credential Manager, asi que el flujo" -ForegroundColor Yellow
+    Write-Host "  sin clave NO puede comprobarse aqui. Para ejecutarlo, usa una cuenta de Windows" -ForegroundColor Yellow
+    Write-Host "  sin la credencial de Sirius: ver docs/implementation/B13_PACKAGING.md," -ForegroundColor Yellow
+    Write-Host "  seccion 'Prueba de onboarding sin clave'. No se toca la credencial real." -ForegroundColor Yellow
+}
+
+# --------------------------------------------------------------------------
+Write-Step "D. Estado previo del data_location.json real del usuario"
+
+# Se resuelve con el MISMO criterio que la aplicacion: su propio resolve_paths.
+$RealConfigDir = ""
+if (Test-Path -LiteralPath $VenvPython) {
+    $RealConfigDir = (& $VenvPython -c "from sirius.infrastructure.paths import resolve_paths; print(resolve_paths().config_dir)" 2>&1 | Out-String).Trim()
+}
+if ([string]::IsNullOrWhiteSpace($RealConfigDir) -or $RealConfigDir.Contains("Traceback")) {
+    # Reserva: el mismo destino que usa platformdirs en Windows.
+    $RealConfigDir = Join-Path $env:LOCALAPPDATA "sirius"
+    Write-Info "resolve_paths no disponible; se usa la ruta de reserva."
+}
+$RealPointer = Join-Path $RealConfigDir "data_location.json"
+
+$RealPointerExistedBefore = Test-Path -LiteralPath $RealPointer
+$RealPointerHashBefore = ""
+if ($RealPointerExistedBefore) {
+    $RealPointerHashBefore = (Get-FileHash -LiteralPath $RealPointer -Algorithm SHA256).Hash.ToLower()
+}
+Write-Info "Puntero real: $RealPointer"
+Write-Info "Antes de arrancar -> existe: $RealPointerExistedBefore   hash: $(if ($RealPointerHashBefore) { $RealPointerHashBefore } else { '(no aplica)' })"
+Test-Check "El puntero real del usuario NO esta dentro del entorno de prueba" (-not $RealPointer.StartsWith($SmokeRoot))
 
 # --------------------------------------------------------------------------
 # Utilidades de lanzamiento y consulta
@@ -416,6 +585,19 @@ function Invoke-SmokeLaunch {
     Test-Check "$Label - hay una ventana superior visible de Sirius" $sawWindow ("titulos: " + ($titles -join " | "))
     if ($titles.Count -gt 0) { Write-Info "Ventana: '$($titles -join "' | '")'" }
 
+    # No basta con que exista "una ventana": tiene que ser la del flujo sin
+    # clave. Solo se afirma si la precondicion de Credential Manager se cumple.
+    $titleText = ($titles -join " | ")
+    if ($NoKeyPreconditionMet) {
+        Test-Check "$Label - la ventana es la del onboarding sin clave" (
+            $titleText -like "*$OnboardingTitleFragment*") ("titulos: " + $titleText)
+    }
+    else {
+        Add-Skip "$Label - la ventana es la del onboarding sin clave" (
+            "la credencial de Sirius existe en esta sesion de Windows (estado: $CredentialState); " +
+            "el flujo sin clave no es observable aqui")
+    }
+
     Stop-IsolatedSirius -Process $process
 
     Test-Check "$Label - se creo sirius.db" (Test-Path -LiteralPath $databasePath)
@@ -445,7 +627,7 @@ function Invoke-SmokeLaunch {
 }
 
 # --------------------------------------------------------------------------
-Write-Step "E. Primer arranque aislado"
+Write-Step "E. Primer arranque aislado, desde el ZIP extraido"
 
 $DatabasePath = Invoke-SmokeLaunch -Label "1er arranque"
 
@@ -491,26 +673,53 @@ if (Test-Path -LiteralPath $DatabasePath) {
 # --------------------------------------------------------------------------
 Write-Step "D. La configuracion real del usuario no se toco"
 
-$realConfig = Join-Path $env:LOCALAPPDATA "sirius"
-$realPointer = Join-Path $realConfig "data_location.json"
-$realPointerHash = ""
-if (Test-Path -LiteralPath $realPointer) {
-    $realPointerHash = (Get-FileHash -LiteralPath $realPointer -Algorithm SHA256).Hash
+$RealPointerExistsAfter = Test-Path -LiteralPath $RealPointer
+$RealPointerHashAfter = ""
+if ($RealPointerExistsAfter) {
+    $RealPointerHashAfter = (Get-FileHash -LiteralPath $RealPointer -Algorithm SHA256).Hash.ToLower()
 }
+Write-Info "Despues de arrancar -> existe: $RealPointerExistsAfter   hash: $(if ($RealPointerHashAfter) { $RealPointerHashAfter } else { '(no aplica)' })"
+
+# Comprobaciones reales, no un mensaje informativo: si el ejecutable hubiera
+# escrito el puntero del usuario pese al entorno redirigido, esto falla.
+Test-Check "La existencia del data_location.json real no cambio" (
+    $RealPointerExistedBefore -eq $RealPointerExistsAfter) (
+    "antes $RealPointerExistedBefore / ahora $RealPointerExistsAfter")
+if ($RealPointerExistedBefore -and $RealPointerExistsAfter) {
+    Test-Check "El SHA-256 del data_location.json real es identico" (
+        $RealPointerHashBefore -eq $RealPointerHashAfter) (
+        "antes $RealPointerHashBefore / ahora $RealPointerHashAfter")
+}
+elseif (-not $RealPointerExistedBefore -and -not $RealPointerExistsAfter) {
+    Test-Check "El data_location.json real sigue sin existir" $true
+}
+
 Test-Check "Los datos de prueba viven bajo la raiz temporal aislada" ($IsolatedData.StartsWith($SmokeRoot))
 Test-Check "No se escribio ninguna clave en el entorno de prueba" (
     -not (Test-Path -LiteralPath (Join-Path $configDir "settings.json")) -or
     -not ((Get-Content -LiteralPath (Join-Path $configDir "settings.json") -Raw -ErrorAction SilentlyContinue) -match "sk-"))
-Write-Info "Puntero real del usuario: $(if ($realPointerHash) { 'presente, intacto' } else { 'no existe' })"
+
+# La credencial real solo se consulto por existencia; nunca se modifico.
+$CredentialStateAfter = "ERROR NoProbe"
+if (Test-Path -LiteralPath $VenvPython) {
+    $probeOutputAfter = (& $VenvPython $CredentialProbe 2>&1 | Out-String).Trim()
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($probeOutputAfter)) {
+        $CredentialStateAfter = ($probeOutputAfter -split "`n")[-1].Trim()
+    }
+}
+Test-Check "La credencial de Windows sigue en el mismo estado que antes" (
+    $CredentialStateAfter -eq $CredentialState) "antes $CredentialState / ahora $CredentialStateAfter"
 
 # --------------------------------------------------------------------------
 Write-Step "Resultado"
 
 Write-Host ""
-if ($script:Failures.Count -eq 0) {
+if ($script:Failures.Count -eq 0 -and $script:Skipped.Count -eq 0) {
     Write-Host "================ B13: verificacion SUPERADA ================" -ForegroundColor Green
-    Write-Host "  Artefacto : $ArtifactName"
-    Write-Host "  Pruebas   : $($script:Checks) comprobaciones, 0 fallos"
+    Write-Host "  ZIP       : $ArtifactName.zip"
+    Write-Host "  SHA-256   : $VerifiedZipHash"
+    Write-Host "  Probado   : la copia EXTRAIDA de ese ZIP, no dist\windows"
+    Write-Host "  Pruebas   : $($script:Checks) comprobaciones, 0 fallos, 0 omitidas"
     Write-Host "  Entorno   : sin Python, sin uv, sin .venv, ruta con espacios, sin administrador"
     Write-Host "  Nota      : terminar el proceso es una prueba tecnica desechable;"
     Write-Host "              NO sustituye a la PA-019 manual."
@@ -518,11 +727,26 @@ if ($script:Failures.Count -eq 0) {
     Write-Host "`n  Entorno temporal conservado para inspeccion: $SmokeRoot" -ForegroundColor DarkGray
     exit 0
 }
+elseif ($script:Failures.Count -eq 0) {
+    Write-Host "========= B13: verificacion SUPERADA CON RESERVAS =========" -ForegroundColor Yellow
+    Write-Host "  ZIP       : $ArtifactName.zip"
+    Write-Host "  SHA-256   : $VerifiedZipHash"
+    Write-Host "  Probado   : la copia EXTRAIDA de ese ZIP, no dist\windows"
+    Write-Host "  Pruebas   : $($script:Checks) comprobaciones, 0 fallos, $($script:Skipped.Count) OMITIDAS"
+    Write-Host "  NO se ha demostrado:" -ForegroundColor Yellow
+    foreach ($skip in $script:Skipped) { Write-Host "   - $skip" -ForegroundColor Yellow }
+    Write-Host "  Para cubrirlo, ver docs/implementation/B13_PACKAGING.md," -ForegroundColor Yellow
+    Write-Host "  seccion 'Prueba de onboarding sin clave'." -ForegroundColor Yellow
+    Write-Host "===========================================================" -ForegroundColor Yellow
+    Write-Host "`n  Entorno temporal conservado para inspeccion: $SmokeRoot" -ForegroundColor DarkGray
+    exit 0
+}
 else {
     Write-Host "================ B13: verificacion NO SUPERADA ================" -ForegroundColor Red
-    Write-Host "  Artefacto : $ArtifactName"
-    Write-Host "  Pruebas   : $($script:Checks) comprobaciones, $($script:Failures.Count) fallos"
+    Write-Host "  ZIP       : $ArtifactName.zip"
+    Write-Host "  Pruebas   : $($script:Checks) comprobaciones, $($script:Failures.Count) fallos, $($script:Skipped.Count) omitidas"
     foreach ($failure in $script:Failures) { Write-Host "   - $failure" -ForegroundColor Red }
+    foreach ($skip in $script:Skipped) { Write-Host "   - (omitida) $skip" -ForegroundColor Yellow }
     Write-Host "==============================================================" -ForegroundColor Red
     Write-Host "`n  Entorno temporal conservado para diagnostico: $SmokeRoot" -ForegroundColor DarkGray
     exit 1

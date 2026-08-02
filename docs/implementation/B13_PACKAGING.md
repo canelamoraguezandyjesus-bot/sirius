@@ -228,13 +228,25 @@ versionado ni ensucie el árbol de Git.
 
 ## Qué comprueba la verificación
 
-- **A. Estructura**: `Sirius.exe`, `alembic.ini`, `migrations/`,
-  `BUILD-MANIFEST.json`, `FILE-MANIFEST.sha256`; todos los hashes del inventario;
-  ZIP y su SHA-256; ausencia de datos y secretos.
-- **B. Independencia del repositorio**: la distribución se copia a una ruta
-  temporal y se ejecuta con un directorio de trabajo distinto del repositorio,
-  del ejecutable y de los datos. La localización de Alembic no puede depender del
-  directorio actual.
+**Lo verificado es el ZIP que se distribuye, no la carpeta de trabajo de
+`dist/`.** El orden es deliberado: primero se comprueba el SHA-256 del ZIP;
+después se extrae ese mismo ZIP a una ruta temporal con espacios; y todo lo
+demás —inventario de hashes, contaminación y los dos arranques— se hace sobre
+la copia extraída. Si el ZIP no coincide con su hash, no se extrae nada y la
+verificación se detiene. La afirmación final queda limitada al ZIP cuyo hash se
+verificó.
+
+- **A. ZIP y estructura**: SHA-256 del ZIP frente a su `.zip.sha256`; el ZIP
+  debe tener exactamente una raíz y llamarse como el artefacto; tras extraer,
+  `Sirius.exe`, `alembic.ini`, `migrations/`, `BUILD-MANIFEST.json` y
+  `FILE-MANIFEST.sha256`; todos los hashes del inventario contra los archivos
+  extraídos; ningún archivo del manifiesto ausente, ninguno de más, y el
+  recuento de entradas del ZIP cuadrando con el manifiesto; ausencia de datos y
+  secretos.
+- **B. Independencia del repositorio**: se ejecuta el `Sirius.exe` extraído del
+  ZIP, con un directorio de trabajo distinto del repositorio, del ejecutable y
+  de los datos, y con datos y directorio de trabajo fuera de la carpeta
+  extraída. La localización de Alembic no puede depender del directorio actual.
 - **C. Independencia de Python y uv**: el proceso se lanza con un `PATH` reducido
   a componentes básicos de Windows, sin Python, sin uv, sin `.venv` y sin
   variables del repositorio. No se desinstala nada del equipo.
@@ -246,10 +258,67 @@ versionado ni ensucie el árbol de Git.
   sin `RecursionError`, sin `Traceback` no controlado) y segundo arranque
   reutilizando el mismo entorno (sin duplicar ni corromper el esquema,
   `PRAGMA integrity_check` = `ok`, revisión de Alembic estable).
-- **F. Rutas con espacios**: tanto la copia del paquete como el directorio de
-  datos contienen espacios.
+- **F. Rutas con espacios**: tanto la extracción del paquete como el directorio
+  de datos contienen espacios.
 - **G. Sin administrador**: si PowerShell está elevado, la verificación se
   detiene y **no** se declara superada.
+- **Integridad del `data_location.json` real**: antes del primer arranque se
+  anota si existe y, si existe, su SHA-256; después del segundo arranque se
+  comparan existencia y hash como comprobaciones reales. Si el ejecutable
+  hubiera creado, borrado o modificado el puntero del usuario pese al entorno
+  redirigido, la verificación falla. La ruta se resuelve con el mismo criterio
+  que la aplicación (`resolve_paths().config_dir`).
+
+## Prueba de onboarding sin clave
+
+Redirigir `LOCALAPPDATA`, `APPDATA` y `USERPROFILE` **no aísla Windows
+Credential Manager**. La credencial pertenece a la sesión del usuario de
+Windows, no al sistema de archivos: al arrancar, el ejecutable construye el
+adaptador real de `keyring` y `main.py::_build_initial_window` llama a
+`has_key()`, que consulta la credencial del usuario que ejecuta la prueba.
+
+En una máquina que ya tiene guardada la clave real, el ejecutable seguiría el
+camino **con** clave, y una verificación que solo comprobase «hay una ventana»
+pasaría igualmente sin haber probado el onboarding.
+
+Por eso la verificación evalúa antes una **precondición**:
+
+- consulta solo la **existencia** mediante el puerto de aplicación
+  (`ApiKeySettingsUseCase.has_key()`), que por contrato devuelve un booleano y
+  nunca el valor;
+- no lee, imprime, exporta, modifica ni borra la credencial, y no usa `cmdkey`;
+- identificador consultado: servicio `Sirius`, clave `openai_api_key`
+  (`src/sirius/config/secrets_config.py`).
+
+Si la credencial **existe**, la comprobación de que la ventana corresponde al
+flujo sin clave se marca `[OMITIDA]`, el resto de la verificación continúa y el
+resultado final es **SUPERADA CON RESERVAS**, enumerando expresamente lo que no
+se ha demostrado. La credencial real no se toca en ningún caso.
+
+Si la credencial **no existe**, se comprueba además que el título de la ventana
+es el de `OnboardingWindow` (`Sirius 0.1 — Primera configuración`), no
+simplemente que exista alguna ventana de Sirius.
+
+### Cómo ejecutar esta prueba de forma reproducible
+
+Hace falta una sesión de Windows sin la credencial de Sirius. En orden de
+preferencia:
+
+1. **Cuenta local de Windows dedicada a pruebas.** Crea una cuenta estándar
+   (Configuración → Cuentas → Otros usuarios), inicia sesión con ella, clona o
+   copia el repositorio y ejecuta ahí `.\scripts\verify_windows_package.ps1`.
+   Su bóveda de credenciales es independiente, así que la precondición se
+   cumple sin tocar la credencial de tu cuenta habitual.
+2. **Máquina virtual o equipo limpio de Windows 11 x64.** Equivalente a lo
+   anterior y además valida la portabilidad real del paquete.
+3. **Retirada temporal en tu propia cuenta.** Solo si aceptas volver a
+   introducir la clave después: elimínala **desde la propia interfaz de
+   Sirius** (Configuración → «Eliminar clave»), ejecuta la verificación y
+   vuelve a guardarla. No se documenta ningún procedimiento con `cmdkey` ni con
+   la interfaz de Credential Manager, porque manipular la bóveda a mano queda
+   fuera de lo que Sirius debe pedir a nadie.
+
+La opción 1 es la recomendada: no altera ningún estado y es repetible.
 
 ## Limitaciones
 
