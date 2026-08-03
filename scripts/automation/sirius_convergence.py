@@ -168,43 +168,56 @@ def parse_round_records(text: str) -> list[dict[str, Any]]:
 def _has_progress(previous: dict[str, Any], current: dict[str, Any]) -> tuple[bool, str]:
     """¿Hubo progreso real entre dos rondas consecutivas?
 
-    Progreso es cualquiera de estas condiciones, medidas sobre datos y no sobre
-    apariencia: menos hallazgos pendientes, menor gravedad agregada, o la
-    desaparición de al menos un hallazgo concreto **sin regresión material**.
-    Un cambio cosmético no altera ninguna de las tres, porque la huella no
-    depende del identificador correlativo ni del formato.
+    Progreso es una disminución estricta del par ``(pendientes, gravedad
+    agregada)`` en el **orden producto**: al menos una de las dos magnitudes
+    baja y **ninguna sube**. Nada más cuenta.
 
-    La condición de regresión es lo que garantiza la terminación. Sin ella,
-    resolver el defecto A introduciendo B y C contaría como progreso y el ciclo
-    podría continuar indefinidamente mientras el estado empeora: ninguna
-    magnitud decrecería. Con ella, cada ronda que continúa o reduce los
-    pendientes, o reduce la gravedad, o al menos no empeora ninguna de las dos
-    — y ambas son enteros no negativos, así que la secuencia no puede
-    prolongarse sin fin sin caer en las condiciones de bloqueo.
+    Esa definición es lo que garantiza la terminación, y es más estricta que
+    las dos tentaciones naturales:
+
+    - Mirar cada magnitud por separado no basta. Si bastara con que bajen los
+      pendientes *o* baje la gravedad, una secuencia de 1 P0, luego 2 P3, luego 1 P0 otra vez
+      alternaría para siempre: cada ronda mejora una magnitud empeorando la
+      otra, con huellas y heads nuevos, sin activar reaparición, oscilación ni
+      dos rondas sin progreso.
+    - Inferir progreso de que "desapareció una huella" tampoco basta. La huella
+      incluye el texto del problema, así que reformular el mismo defecto con
+      otras palabras produce otra huella: el ciclo continuaría indefinidamente
+      sobre un trabajo que no avanza. Además el contrato §5.1 excluye
+      explícitamente "sustituir un fallo por otro equivalente".
+
+    Con el orden producto sobre ℕ² —bien fundado— cada ronda que continúa por
+    progreso decrece estrictamente una cantidad que no puede decrecer sin fin;
+    las rondas sin progreso se agotan por la regla de dos consecutivas. La
+    terminación deja de ser una expectativa y pasa a ser una propiedad.
     """
-    resolved = previous["fingerprints"] - current["fingerprints"]
-    worse_pending = current["pending"] > previous["pending"]
-    worse_severity = current["severity_total"] > previous["severity_total"]
-    if current["pending"] < previous["pending"]:
+    pending_down = current["pending"] < previous["pending"]
+    pending_up = current["pending"] > previous["pending"]
+    severity_down = current["severity_total"] < previous["severity_total"]
+    severity_up = current["severity_total"] > previous["severity_total"]
+
+    if pending_down and not severity_up:
         return (
             True,
-            f"los hallazgos pendientes bajaron de {previous['pending']} a {current['pending']}",
+            f"los hallazgos pendientes bajaron de {previous['pending']} a "
+            f"{current['pending']} sin aumentar la gravedad",
         )
-    if current["severity_total"] < previous["severity_total"]:
+    if severity_down and not pending_up:
         return True, (
             f"la gravedad agregada bajó de {previous['severity_total']} a "
-            f"{current['severity_total']}"
+            f"{current['severity_total']} sin aumentar los pendientes"
         )
-    if resolved and not worse_pending and not worse_severity:
-        return True, f"se resolvieron {len(resolved)} hallazgo(s) concreto(s) de la ronda anterior"
-    if resolved:
+    if pending_down or severity_down:
         return False, (
-            f"se resolvieron {len(resolved)} hallazgo(s), pero el estado empeoró "
-            f"(pendientes {previous['pending']} → {current['pending']}, gravedad "
-            f"{previous['severity_total']} → {current['severity_total']}): sustituir un "
-            "defecto por otros no es progreso"
+            f"una magnitud mejoró a costa de la otra (pendientes "
+            f"{previous['pending']} → {current['pending']}, gravedad "
+            f"{previous['severity_total']} → {current['severity_total']}): "
+            "no es una disminución del par, así que no garantiza avance"
         )
-    return False, "no bajaron los pendientes, ni la gravedad, ni se resolvió ningún hallazgo"
+    return False, (
+        f"ni los pendientes ({previous['pending']} → {current['pending']}) ni la gravedad "
+        f"({previous['severity_total']} → {current['severity_total']}) disminuyeron"
+    )
 
 
 def decide(records: list[dict[str, Any]]) -> dict[str, Any]:

@@ -191,13 +191,18 @@ La corrección automática continúa mientras se cumplan todas estas condiciones
 
 Cada ronda de `CHANGES_REQUESTED` publica en la incidencia un registro estructurado (`<!-- sirius-round:N -->` con un bloque `## RONDA_HALLAZGOS`) que contiene, por hallazgo, una huella estable, su severidad y su procedencia, además del head de la ronda y los totales. La huella no depende del identificador correlativo, de modo que un mismo defecto conserva su huella entre rondas.
 
-`scripts/automation/sirius_convergence.py` decide de forma determinista a partir de ese historial. Hay **progreso** cuando, sin regresión material, ocurre alguna de estas condiciones:
+`scripts/automation/sirius_convergence.py` decide de forma determinista a partir de ese historial. Hay **progreso** cuando el par `(hallazgos pendientes, severidad agregada)` **disminuye estrictamente en el orden producto**: al menos una de las dos magnitudes baja y ninguna sube. Nada más cuenta.
 
-- disminuye el número de hallazgos pendientes;
-- disminuye la severidad agregada;
-- se resuelve al menos un hallazgo concreto de la ronda anterior.
+Esa definición es lo que convierte la terminación en una propiedad demostrable y no en una expectativa. Dos alternativas más laxas fallan:
 
-No cuentan como progreso los cambios cosméticos, los renombrados, los cambios de comentario, la renumeración de identificadores, la sustitución de un fallo por otro equivalente ni el silenciamiento de pruebas: ninguno altera las huellas ni los totales.
+- Mirar cada magnitud por separado permitiría alternar indefinidamente entre estados que mejoran una a costa de la otra (un hallazgo P0, luego dos P3, luego un P0 otra vez), sin activar nunca reaparición, oscilación ni dos rondas sin progreso.
+- Inferir progreso de que "desapareció una huella" permitiría mantener el ciclo abierto para siempre reformulando el mismo defecto con otras palabras, porque la huella incluye el texto del problema.
+
+Con el orden producto sobre ℕ² —bien fundado— cada ronda que continúa por progreso decrece estrictamente una cantidad que no puede decrecer sin fin, y las rondas sin progreso se agotan por la regla de dos consecutivas.
+
+No cuentan como progreso los cambios cosméticos, los renombrados, los cambios de comentario, la renumeración de identificadores, la reformulación de un hallazgo persistente, la sustitución de un fallo por otro equivalente ni el silenciamiento de pruebas: ninguno hace disminuir el par.
+
+Los registros de ronda son autoritativos solo si los publicó la propia automatización: la lectura acepta únicamente comentarios del propietario del repositorio —misma frontera de confianza que el `fusiona` del §8— o del bot de Actions, y exige el marcador `<!-- sirius-round:N -->` en el mismo comentario que el bloque. El número de ronda autoritativo es el del marcador, no un campo del JSON.
 
 El ciclo pasa a `sirius:blocked-decision`, con el motivo exacto registrado, únicamente cuando:
 

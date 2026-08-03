@@ -905,6 +905,34 @@ def test_collect_clamps_timeout_above_the_hard_cap(tmp_path: Path) -> None:
     assert result["reason"] == "timeout"
 
 
+def test_collect_cap_cannot_be_raised_above_the_absolute_limit(tmp_path: Path) -> None:
+    # Un "tope" que se leyera solo de una variable de repositorio no sería un
+    # tope: configurando espera y máximo a la vez, el recolector esperaría más
+    # que el timeout del paso y Actions lo cancelaría antes de escribir su
+    # FAILED_SAFELY. El absoluto en código no se puede subir.
+    env = _setup(tmp_path)
+    env["SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS"] = "3600"
+    _write_state(tmp_path, trigger_at=_stamp(-7200), quality_at=_stamp(-7300))
+    r = _run_collect(env, tmp_path, timeout="3600")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "se aplica el absoluto" in r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "FAILED_SAFELY"
+    assert result["reason"] == "timeout"
+
+
+def test_collect_rejects_non_finite_or_negative_env_values(tmp_path: Path) -> None:
+    # `float()` acepta "inf" y "-1": un infinito convertiría cualquier tope en
+    # ausencia de tope y un negativo daría un plazo sin sentido.
+    env = _setup(tmp_path)
+    env["SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS"] = "inf"
+    _write_state(tmp_path, trigger_at=_stamp(-7200), quality_at=_stamp(-7300))
+    r = _run_collect(env, tmp_path, timeout="0")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "finito y no negativo" in r.stderr
+    assert _result(tmp_path)["status"] == "FAILED_SAFELY"
+
+
 def test_collect_survives_transient_github_error(tmp_path: Path) -> None:
     env = _setup(tmp_path)
     _write_state(tmp_path)

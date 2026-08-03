@@ -135,14 +135,21 @@ sirius_read_issue_comments() {
 # un bloque legítimo, pero no publicar uno propio en un comentario aparte, que
 # además ganaría por ser el más reciente. Solo se aceptan comentarios del
 # propietario del repositorio (identidad del PAT de la automatización; misma
-# frontera de confianza que el `fusiona` del §8), de un miembro, o del bot de
-# Actions, cuyo login no es suplantable.
-SIRIUS_TRUSTED_AUTHOR_JQ='select(.author_association == "OWNER" or .author_association == "MEMBER" or (.user.login // "") == "github-actions[bot]")'
+# frontera de confianza que el `fusiona` del §8) o del bot de Actions, cuyo
+# login no es suplantable.
+#
+# Deliberadamente NO se acepta `MEMBER`. En un repositorio de organización esa
+# asociación la tiene cualquier miembro de la organización, incluidos los que
+# solo pueden leer y comentar: bastaría con que uno sembrara marcadores
+# `sirius-round` con números altos para gobernar si arranca el corrector, que
+# corre con el PAT y permisos de escritura. El alcance de confianza se limita a
+# quien ya podía autorizar un merge.
+SIRIUS_TRUSTED_AUTHOR_JQ='select(.author_association == "OWNER" or (.user.login // "") == "github-actions[bot]")'
 # Mismo filtro para la vía de respaldo GraphQL, que nombra los campos de otra
 # forma (`authorAssociation`, `author.login`). El respaldo conserva así la
 # garantía en vez de degradarla: un error transitorio de REST no puede abrir la
 # puerta a un historial sembrado por un tercero.
-SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ='select(.authorAssociation == "OWNER" or .authorAssociation == "MEMBER" or ((.author.login // "") | ltrimstr("app/")) == "github-actions")'
+SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ='select(.authorAssociation == "OWNER" or ((.author.login // "") | ltrimstr("app/")) == "github-actions")'
 
 _sirius_comments_newest_first() {
   gh api --paginate "repos/${1}/issues/${2}/comments?per_page=100" \

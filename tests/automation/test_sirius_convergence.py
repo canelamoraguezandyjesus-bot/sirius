@@ -138,12 +138,74 @@ def test_lower_aggregate_severity_is_progress() -> None:
     assert "gravedad" in result["detail"]
 
 
-def test_resolving_a_concrete_finding_is_progress_even_with_same_count() -> None:
+def test_swapping_one_finding_for_another_is_not_progress() -> None:
+    # Mismo número de hallazgos y misma gravedad, con un defecto distinto: es
+    # exactamente la "sustitución de un fallo por otro equivalente" que el
+    # contrato §5.1 excluye. Si contara como progreso, bastaría con reformular
+    # un defecto persistente para mantener el ciclo abierto indefinidamente.
     first = _round_comment(1, HEAD_A, [_observation("CODEX-001", problema="Defecto uno")])
     second = _round_comment(2, HEAD_B, [_observation("CODEX-001", problema="Defecto dos")])
     result = _decide([first, second])
-    assert result["decision"] == "CONTINUE"
-    assert result["reason"] == "progreso"
+    assert result["decision"] == "CONTINUE"  # primera vez sin progreso: se tolera
+    assert result["reason"] == "sin-progreso-aislado"
+
+
+def test_rephrasing_a_persistent_finding_does_not_keep_the_cycle_open() -> None:
+    # Cuatro paráfrasis del mismo defecto, mismo archivo, misma severidad y
+    # mismo recuento. La huella cambia con la redacción, así que inferir
+    # "resuelto" de que desapareció una huella mantendría el ciclo abierto para
+    # siempre. Debe bloquear.
+    parafrasis = [
+        "No valida la entrada.",
+        "La entrada no se valida.",
+        "Falta validación de la entrada.",
+        "La validación de la entrada no existe.",
+    ]
+    heads = [HEAD_A, HEAD_B, HEAD_C, HEAD_D]
+    rounds = [
+        _round_comment(index + 1, heads[index], [_observation("CODEX-001", problema=texto)])
+        for index, texto in enumerate(parafrasis)
+    ]
+    result = _decide(rounds)
+    assert result["decision"] == "BLOCK"
+    assert result["reason"] == "sin-progreso"
+
+
+def test_alternating_between_metrics_does_not_continue_forever() -> None:
+    # 1 P0 (pendientes 1, gravedad 4) → 2 P3 (2, 2) → 1 P0 (1, 4) → ...
+    # Cada ronda mejora una magnitud empeorando la otra, con huellas y heads
+    # nuevos. Sin exigir disminución del PAR, alternaría indefinidamente.
+    heads = [f"{index:040x}" for index in range(1, 12)]
+    rounds = []
+    for index in range(6):
+        if index % 2 == 0:
+            observations = [_observation("CODEX-001", f"src/a{index}.py:1", f"Grave {index}", "P0")]
+        else:
+            observations = [
+                _observation("CODEX-001", f"src/b{index}.py:1", f"Leve {index}a", "P3"),
+                _observation("CODEX-002", f"src/c{index}.py:1", f"Leve {index}b", "P3"),
+            ]
+        rounds.append(_round_comment(index + 1, heads[index], observations))
+    result = _decide(rounds)
+    assert result["decision"] == "BLOCK"
+    assert result["reason"] == "sin-progreso"
+
+
+def test_improving_one_metric_while_worsening_the_other_is_not_progress() -> None:
+    module = _module()
+    previous = {"pending": 1, "severity_total": 4, "fingerprints": {"aaa"}}
+    current = {"pending": 2, "severity_total": 2, "fingerprints": {"bbb", "ccc"}}
+    progressed, why = module._has_progress(previous, current)
+    assert progressed is False
+    assert "a costa de la otra" in why
+
+
+def test_reducing_pending_without_raising_severity_is_progress() -> None:
+    module = _module()
+    previous = {"pending": 3, "severity_total": 6, "fingerprints": {"a", "b", "c"}}
+    current = {"pending": 2, "severity_total": 4, "fingerprints": {"a", "b"}}
+    progressed, _ = module._has_progress(previous, current)
+    assert progressed is True
 
 
 def test_many_rounds_with_progress_are_allowed() -> None:
@@ -283,7 +345,8 @@ def test_replacing_one_finding_with_more_is_not_progress() -> None:
     result = _decide([first, second])
     assert result["decision"] == "CONTINUE"  # todavía es la primera vez sin progreso
     assert result["reason"] == "sin-progreso-aislado"
-    assert "sustituir un defecto por otros no es progreso" in result["detail"]
+    # Ni los pendientes ni la gravedad disminuyeron: el par no mejoró.
+    assert "no muestra progreso" in result["detail"]
 
 
 def test_a_worsening_run_of_rounds_terminates() -> None:

@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import subprocess
@@ -55,14 +56,18 @@ from typing import Any
 DEFAULT_ALLOWED_AUTHORS = "chatgpt-codex-connector,chatgpt-codex-connector[bot]"
 
 DEFAULT_TIMEOUT_SECONDS = 1200
-# Tope duro de la espera. El paso del workflow que ejecuta `collect` tiene su
-# propio `timeout-minutes` (mayor que este valor) y el job cubre además la
-# duración máxima del revisor Claude. Limitar aquí la espera configurada
-# garantiza que el recolector SIEMPRE llegue a escribir su FAILED_SAFELY
-# determinista antes de que el paso o el job lo maten: una variable de
-# repositorio con un valor excesivo no puede convertir el fallo seguro
-# estructurado en una cancelación sin resultado.
+# Tope por defecto de la espera, ajustable a la baja con
+# SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS.
 DEFAULT_MAX_TIMEOUT_SECONDS = 1500
+# Tope ABSOLUTO e inmutable, por debajo del `timeout-minutes` del paso que
+# ejecuta `collect` (30 min). Ninguna variable de entorno puede superarlo.
+#
+# Un tope que se leyera solo de una variable de repositorio no sería un tope:
+# configurando a la vez la espera y su "máximo" a 3600 s, el recolector
+# esperaría una hora y Actions cancelaría el paso a los 30 minutos, justo antes
+# de escribir el FAILED_SAFELY estructurado que el contrato promete. Con este
+# límite en código, el resultado determinista se escribe siempre.
+ABSOLUTE_MAX_TIMEOUT_SECONDS = 1500
 DEFAULT_POLL_SECONDS = 30
 MAX_PAGES = 50
 
@@ -97,20 +102,33 @@ class GhError(RuntimeError):
 
 
 def _env_number(name: str, default: float) -> float:
-    """Valor numérico de una variable de entorno; el valor por defecto cubre
-    también la variable presente pero vacía (p. ej. una variable de repositorio
-    sin definir interpolada por Actions) o no numérica."""
+    """Valor numérico de una variable de entorno, saneado.
+
+    El valor por defecto cubre la variable ausente, presente pero vacía (p. ej.
+    una variable de repositorio sin definir interpolada por Actions) o no
+    numérica. Se rechazan además los valores no finitos (``inf``, ``nan``) y los
+    negativos: `float()` los aceptaría, y un ``inf`` convertiría cualquier tope
+    en ausencia de tope.
+    """
     raw = os.environ.get(name, "").strip()
     if not raw:
         return default
     try:
-        return float(raw)
+        value = float(raw)
     except ValueError:
         print(
             f"sirius_codex_review: valor no numérico en {name}={raw!r}; se usa {default}.",
             file=sys.stderr,
         )
         return default
+    if not math.isfinite(value) or value < 0:
+        print(
+            f"sirius_codex_review: valor no utilizable en {name}={raw!r} "
+            f"(debe ser finito y no negativo); se usa {default}.",
+            file=sys.stderr,
+        )
+        return default
+    return value
 
 
 def _retry_settings() -> tuple[int, float]:
@@ -694,15 +712,24 @@ def cmd_collect(args: argparse.Namespace) -> int:
     trigger_at = _parse_timestamp(state.get("trigger_created_at"))
     assert trigger_at is not None  # garantizado por _load_state
     poll_seconds = _env_number("SIRIUS_CODEX_POLL_SECONDS", DEFAULT_POLL_SECONDS)
-    max_timeout = _env_number(
+    # El tope efectivo nunca puede superar el absoluto en código: una variable
+    # de repositorio solo puede bajarlo, jamás subirlo.
+    configured_max = _env_number(
         "SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS", DEFAULT_MAX_TIMEOUT_SECONDS
     )
-    timeout = args.timeout
+    max_timeout = min(configured_max, ABSOLUTE_MAX_TIMEOUT_SECONDS)
+    if configured_max > ABSOLUTE_MAX_TIMEOUT_SECONDS:
+        print(
+            f"sirius_codex_review: el tope configurado ({configured_max:.0f} s) supera el "
+            f"absoluto en código ({ABSOLUTE_MAX_TIMEOUT_SECONDS:.0f} s), que garantiza escribir "
+            "un resultado antes de que expire el paso; se aplica el absoluto.",
+            file=sys.stderr,
+        )
+    timeout = max(args.timeout, 0.0)
     if timeout > max_timeout:
         print(
             f"sirius_codex_review: la espera configurada ({timeout:.0f} s) supera el tope "
-            f"({max_timeout:.0f} s) que garantiza escribir un resultado antes de que el paso "
-            "expire; se limita al tope.",
+            f"({max_timeout:.0f} s); se limita al tope.",
             file=sys.stderr,
         )
         timeout = max_timeout
