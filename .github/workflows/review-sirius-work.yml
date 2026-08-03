@@ -51,14 +51,19 @@ jobs:
     name: Revisar con Claude Code (y Codex si está activado)
     if: github.event.label.name == 'sirius:review-requested'
     runs-on: ubuntu-latest
-    # Presupuesto de tiempo explícito, para que un timeout de Codex SIEMPRE se
-    # traduzca en un resultado estructurado y no en una cancelación del job:
-    #   revisor Claude (paso acotado a 30 min)
-    # + recolección de Codex (paso acotado a 30 min; la espera interna está
-    #   limitada a SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS, 1500 s = 25 min,
-    #   así que el recolector escribe su FAILED_SAFELY con margen sobrado)
-    # + margen para el resto de pasos deterministas.
-    timeout-minutes: 70
+    # Presupuesto de tiempo explícito y verificado por pruebas estructurales.
+    # Cada paso que puede tardar declara su propio `timeout-minutes`, y el del
+    # job cubre la SUMA de todos ellos más margen para los pasos deterministas
+    # cortos (checkout, gate, etiquetas, disparador). Así, un timeout de Codex
+    # siempre se traduce en un resultado estructurado y nunca en una
+    # cancelación del job, y la agregación y la aplicación del veredicto
+    # tienen margen garantizado, no meramente probable:
+    #   revisor Claude 30 + recolección de Codex 30 + agregación 5 +
+    #   aplicación 10 = 75, dentro de los 85 del job.
+    # La espera interna del recolector está además limitada a
+    # SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS (1500 s = 25 min), por debajo de
+    # los 30 de su paso.
+    timeout-minutes: 85
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -269,6 +274,7 @@ jobs:
         if: steps.gate.outputs.valid == 'true' && steps.gate.outputs.dual == 'true'
         id: aggregate
         continue-on-error: true
+        timeout-minutes: 5
         shell: bash --noprofile --norc {0}
         env:
           HEAD_SHA: ${{ steps.gate.outputs.head_sha }}
@@ -283,6 +289,7 @@ jobs:
 
       - name: Aplicar el veredicto
         if: always() && steps.gate.outputs.valid == 'true'
+        timeout-minutes: 10
         shell: bash --noprofile --norc {0}
         env:
           # Este paso NO es Claude, es el script determinista. Si el veredicto es

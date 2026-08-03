@@ -93,14 +93,24 @@ def test_concurrency_group_prevents_parallel_rounds() -> None:
     assert concurrency["cancel-in-progress"] is False
 
 
-def test_job_timeout_covers_claude_plus_codex_wait() -> None:
-    # El presupuesto del job debe cubrir la duración máxima del revisor Claude
-    # MÁS la espera completa de Codex: si el job muriera durante la espera, el
-    # recolector no llegaría a emitir su FAILED_SAFELY determinista.
+def test_job_timeout_covers_every_bounded_step_plus_margin() -> None:
+    # El presupuesto del job debe cubrir la SUMA de todos los pasos acotados —
+    # revisor Claude, recolección de Codex, agregación y aplicación — más
+    # margen para los pasos deterministas cortos. Si el job muriera durante la
+    # espera, el recolector no llegaría a emitir su FAILED_SAFELY; si muriera
+    # después, el veredicto agregado no llegaría a aplicarse.
     doc = _load()
-    claude = _step(doc, "Ejecutar Claude Code")["timeout-minutes"]
-    collect = _step(doc, "Recoger el resultado")["timeout-minutes"]
-    assert _job(doc)["timeout-minutes"] >= claude + collect
+    bounded = [step["timeout-minutes"] for step in _steps(doc) if "timeout-minutes" in step]
+    assert len(bounded) == 4, "los cuatro pasos que pueden tardar deben declarar su timeout"
+    assert _job(doc)["timeout-minutes"] >= sum(bounded) + 5
+
+
+def test_aggregation_and_application_have_a_guaranteed_budget() -> None:
+    # Margen garantizado, no meramente probable: ambos pasos declaran su propio
+    # timeout y quedan dentro del presupuesto del job.
+    doc = _load()
+    assert _step(doc, "Agregar los veredictos")["timeout-minutes"] >= 5
+    assert _step(doc, "Aplicar el veredicto")["timeout-minutes"] >= 5
 
 
 def test_collect_step_timeout_exceeds_the_collector_hard_cap() -> None:
