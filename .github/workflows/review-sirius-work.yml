@@ -9,8 +9,10 @@ name: Revisar bloque Sirius
 # Dos modos, gobernados por la variable de repositorio
 # SIRIUS_CODEX_REVIEW_ENABLED (contrato operativo §4, v1.4):
 #
-#   - ausente o distinta de `true`: revisión solo con Claude, el comportamiento
-#     vigente antes de la revisión dual;
+#   - ausente o distinta de `true`: revisión solo con Claude, como antes de la
+#     revisión dual (el gate de verificación de head y el reviewed_head_sha
+#     obligatorio aplican en ambos modos: son parte del contrato v1.4, no de
+#     la bandera);
 #   - `true`: revisión dual obligatoria. Se solicita primero la revisión nativa
 #     de Codex (comentario `@codex review` publicado por el paso determinista),
 #     se ejecuta el revisor Claude mientras Codex trabaja, se recoge el
