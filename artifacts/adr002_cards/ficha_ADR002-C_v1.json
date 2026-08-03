@@ -20,7 +20,7 @@
   },
   "congelacion": {
     "commit_de_referencia": "cefd252fa7958d3c282e40df187e9a6825f47835",
-    "huella": "249dba886786230445592e2809e885585ba9b241",
+    "huella": "5d5e13eb702b1ffeb4403d7a5441f4da3c65b66b",
     "ruta": "artifacts/adr002_cards/ficha_ADR002-C_v1.json"
   },
   "arquitectura": {
@@ -225,10 +225,10 @@
     "coste_extremo_a_extremo_ns": 23050000
   },
   "extremo_a_extremo": {
-    "objetivo_p95_ns": 12000000,
-    "limite_duro_p99_ns": 35050000,
+    "objetivo_p95_ns": 10000000,
+    "limite_duro_p99_ns": 23050000,
     "percentil_y_n": "P95 y P99 sobre 100 repeticiones por magnitud en cada una de las 11 sesiones exigidas, conforme al protocolo v0.2",
-    "fundamento": "el limite duro es la suma de los limites locales por etapa del §2.9. Para la v5 se revisaron los seis: cinco etapas no cambian porque su camino es el de la base por composicion, y E3 CONSERVA su limite de 20 ms tras revision porque la fe de erratas 04 no anade ninguna sentencia SQL ni lee ningun dato adicional: todas sus correcciones son comparaciones de cota sobre datos ya leidos (longitud de una cadena, numero de digitos, valor de un entero), y la cota de longitud previa a json.loads AHORRA el trabajo de deserializar celdas patologicas, de modo que el camino peor hace menos trabajo que en la v4, no mas. Todo procede de analisis estatico y de ninguna medicion, porque no existe ninguna. El objetivo P95 se mantiene en 12 ms porque el camino tipico se detiene por S1 en E1 o E2 sin abrir jamas el indice vectorial",
+    "fundamento": "el limite duro es la suma de los limites locales por etapa del §2.9. Cinco etapas conservan el limite de la base por composicion porque su camino es el suyo sin cambio; E3 sube de 3 ms a 8 ms porque ADR002-C anade sobre la expansion de la base UNA consulta de aristas salientes acotada a 16 semillas y 64 aristas, mas la materializacion por identidad de sus destinos, que el puerto ya acota. El objetivo P95 se fija por debajo del limite y no procede de ninguna medicion: no existe ninguna",
     "no_deriva_de_tol_102b": true,
     "no_invoca_el_barrido_de_t0": true
   },
@@ -282,6 +282,5 @@
     "fecha": "2026-08-03",
     "valores_anteriores_a_la_primera_ejecucion": true
   },
-  "no_contiene_resultados": true,
-  "coste_externo_total": "ninguno. TOL-202 prohibe sumar coste externo al local, y aqui no hay coste externo que declarar: cero red, cero servicios, cero proveedores"
+  "no_contiene_resultados": true
 }
