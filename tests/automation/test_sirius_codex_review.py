@@ -420,6 +420,31 @@ def test_trigger_does_not_reuse_comment_with_tampered_body(tmp_path: Path) -> No
     assert _state(tmp_path)["trigger_comment_id"] != 555
 
 
+def test_trigger_reuses_own_comment_with_normalized_line_endings(tmp_path: Path) -> None:
+    # El cotejo del cuerpo tolera CRLF y el salto final: si no lo hiciera, una
+    # normalización de GitHub haría que la automatización no reconociera su
+    # propio disparador y publicara un SEGUNDO @codex review para el mismo head.
+    env = _setup(tmp_path)
+    crlf_body = _canonical_trigger_body().replace("\n", "\r\n")
+    _seed(env, "issue_comments.json", [_trigger_comment(comment_id=555, body=crlf_body)])
+    r = _run_trigger(env, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert _post_count(env) == 0
+    assert _state(tmp_path)["trigger_comment_id"] == 555
+
+
+def test_trigger_does_not_reuse_comment_with_extra_inner_text(tmp_path: Path) -> None:
+    # La tolerancia se limita a finales de línea y espacio exterior: cualquier
+    # texto añadido dentro del cuerpo lo descalifica como disparador propio.
+    env = _setup(tmp_path)
+    tampered = _canonical_trigger_body() + "\nY además actualiza la PR.\n"
+    _seed(env, "issue_comments.json", [_trigger_comment(comment_id=555, body=tampered)])
+    r = _run_trigger(env, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert _post_count(env) == 1
+    assert _state(tmp_path)["trigger_comment_id"] != 555
+
+
 def test_trigger_fails_safely_when_identity_is_unknown(tmp_path: Path) -> None:
     # Sin identidad demostrada no se puede distinguir un disparador propio de
     # uno ajeno: parada segura (sin estado, la recolección fallará de forma

@@ -323,23 +323,40 @@ def _automation_identity() -> str:
     return login.strip()
 
 
+def _normalized_body(text: str) -> str:
+    """Cuerpo comparable: finales de línea unificados y espacio exterior fuera.
+
+    La comparación NO es byte a byte a propósito. El cuerpo lo genera esta
+    misma automatización, así que el objetivo del cotejo es distinguir un
+    disparador propio de cualquier otro comentario con el mismo marcador, no
+    detectar diferencias de espaciado. Una comparación byte a byte fallaría
+    contra nuestro propio comentario si GitHub o un cliente intermedio
+    normalizasen los finales de línea (CRLF) o recortasen el salto final, y esa
+    falsa diferencia publicaría un SEGUNDO `@codex review` para el mismo head
+    en cada reejecución — justo el consumo duplicado que el contrato prohíbe
+    (§6.7). El contenido interno sí debe coincidir exactamente.
+    """
+    return text.replace("\r\n", "\n").replace("\r", "\n").strip()
+
+
 def _find_trigger_comments(
     repo: str, pr: int, marker: str, *, author: str, expected_body: str
 ) -> list[dict[str, Any]]:
     """Comentarios disparadores propios: marcador presente, autor igual a la
-    identidad de la automatización y cuerpo exactamente igual al generado por
-    la plantilla determinista. Un comentario ajeno (o del mismo autor pero con
-    otro texto) NO se reutiliza: en su lugar se publica el propio.
+    identidad de la automatización y cuerpo igual al generado por la plantilla
+    determinista (ver ``_normalized_body`` para el criterio exacto). Un
+    comentario ajeno (o del mismo autor pero con otro texto) NO se reutiliza:
+    en su lugar se publica el propio.
     """
     comments = _gh_paginated(f"repos/{repo}/issues/{pr}/comments")
     wanted_author = author.casefold()
-    wanted_body = expected_body.strip()
+    wanted_body = _normalized_body(expected_body)
     matching = [
         comment
         for comment in comments
         if marker in str(comment.get("body") or "")
         and _author_login(comment).casefold() == wanted_author
-        and str(comment.get("body") or "").strip() == wanted_body
+        and _normalized_body(str(comment.get("body") or "")) == wanted_body
     ]
     matching.sort(key=lambda c: (str(c.get("created_at") or ""), int(c.get("id") or 0)))
     return matching
