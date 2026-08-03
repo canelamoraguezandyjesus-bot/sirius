@@ -1,10 +1,10 @@
 # SIRIUS - Contrato operativo de automatización
 
-**Versión:** 1.4  
+**Versión:** 1.5  
 **Fecha:** 3 de agosto de 2026  
-**Estado:** VIGENTE (§4 actualizada; ver §10.3)  
+**Estado:** VIGENTE (§4 y §5 actualizadas; ver §10.3 y §10.4)  
 **Autoridad:** Operativa para el desarrollo automatizado de Sirius 0.1  
-**Sustituye:** versión 1.3 del 20 de julio de 2026  
+**Sustituye:** versión 1.4 del 3 de agosto de 2026  
 **No modifica:** Producto, Arquitectura Técnica, ATD, requisitos ni alcance de Sirius 0.1
 
 ## 0. Propósito
@@ -157,8 +157,8 @@ Reglas del modo dual:
 - Las observaciones combinadas conservan su procedencia (prefijos `CLAUDE-` y
   `CODEX-`), se deduplican solo cuando son duplicados exactos y llegan al
   corrector en la misma lista estructurada única (`OBSERVACIONES_ESTRUCTURADAS`)
-  de una sola ronda. Claude sigue siendo el único corrector y se conserva el
-  máximo de dos ciclos (§5).
+  de una sola ronda. Claude sigue siendo el único corrector, sujeto a la
+  política de convergencia del §5.
 - El veredicto de revisión (de Claude o agregado) debe declarar
   `reviewed_head_sha`; `sirius_apply_verdict.sh` exige para `REVIEW_APPROVED`
   y `CHANGES_REQUESTED` una PR única, abierta y no borrador, y la coincidencia
@@ -177,7 +177,38 @@ Puede corregir defectos de implementación, pruebas insuficientes, lint, tipos, 
 
 Debe detenerse ante cambios de producto, arquitectura, ATD, seguridad no definida, migraciones destructivas, pérdida de datos, nuevos costes, credenciales reales o datos personales.
 
-Se permiten como máximo dos ciclos de revisión-corrección. Si no converge, el estado final es `sirius:blocked-decision`.
+### 5.1 Convergencia técnica en vez de un tope fijo de ciclos
+
+No existe un límite total fijo de ciclos de revisión-corrección. El tope anterior de dos ciclos era arbitrario y detenía trabajos que seguían siendo puramente técnicos y que progresaban ronda a ronda.
+
+La corrección automática continúa mientras se cumplan todas estas condiciones:
+
+- los fallos siguen siendo técnicos;
+- permanecen dentro del alcance aprobado;
+- hay progreso comprobable;
+- no aparece una decisión humana real;
+- no hay oscilación ni repetición sin progreso.
+
+Cada ronda de `CHANGES_REQUESTED` publica en la incidencia un registro estructurado (`<!-- sirius-round:N -->` con un bloque `## RONDA_HALLAZGOS`) que contiene, por hallazgo, una huella estable, su severidad y su procedencia, además del head de la ronda y los totales. La huella no depende del identificador correlativo, de modo que un mismo defecto conserva su huella entre rondas.
+
+`scripts/automation/sirius_convergence.py` decide de forma determinista a partir de ese historial. Hay **progreso** cuando, sin regresión material, ocurre alguna de estas condiciones:
+
+- disminuye el número de hallazgos pendientes;
+- disminuye la severidad agregada;
+- se resuelve al menos un hallazgo concreto de la ronda anterior.
+
+No cuentan como progreso los cambios cosméticos, los renombrados, los cambios de comentario, la renumeración de identificadores, la sustitución de un fallo por otro equivalente ni el silenciamiento de pruebas: ninguno altera las huellas ni los totales.
+
+El ciclo pasa a `sirius:blocked-decision`, con el motivo exacto registrado, únicamente cuando:
+
+- no hay progreso neto en dos rondas consecutivas;
+- un hallazgo dado por resuelto reaparece en una ronda posterior;
+- el conjunto de hallazgos oscila entre estados anteriores;
+- el head no avanzó entre dos rondas (no hubo corrección efectiva que revisar);
+- el historial de rondas no se puede leer;
+- o concurre cualquiera de las causas de parada del párrafo tercero de este apartado (producto, arquitectura, alcance, credenciales, permisos, costes, datos reales u operaciones irreversibles).
+
+Un problema técnico corregible nunca se convierte automáticamente en una decisión humana.
 
 ## 6. Idempotencia y protección contra bucles
 
@@ -347,4 +378,12 @@ Está prohibido:
   usuario. La activación de la bandera queda fuera de esa entrada en vigor y
   requiere el piloto.
 
-El historial de las versiones 1.0, 1.1, 1.2 y 1.3 permanece disponible en Git y no se reescribe retrospectivamente.
+### 10.4 Versión 1.5 — convergencia técnica en lugar del tope de dos ciclos
+
+- **Decisión:** aprobada por el usuario el 3 de agosto de 2026. Se elimina el límite absoluto de dos ciclos de revisión-corrección y se sustituye por la política de convergencia demostrable del §5.1: la automatización sigue corrigiendo mientras haya progreso comprobable y se detiene, con motivo exacto, en cuanto deja de haberlo.
+- **Motivo:** el tope fijo era arbitrario. Bloqueaba trabajos que seguían siendo puramente técnicos, estaban dentro del alcance aprobado y avanzaban ronda a ronda, obligando a una intervención humana que no decidía nada: solo autorizaba a continuar.
+- **Alcance:** exclusivamente el mecanismo de continuación del ciclo de corrección — `scripts/automation/sirius_convergence.py` (nuevo), el registro de ronda que publica `sirius_apply_verdict.sh`, la puerta de `repair-sirius-work.yml`, `prompts/corrector.md` y la redacción de §5 de este contrato y de los documentos operativos que citaban el tope. No cambia el contrato de estados, la revisión dual (§4), la verificación de head ni el mecanismo de merge (§8).
+- **Mantiene:** la incidencia como fuente de verdad; una sola máquina de estados; Claude como implementador y único corrector; Claude y Codex como revisores cuando la bandera está activa; fallo seguro; verificación del SHA; Quality antes de la revisión; merge exclusivamente humano mediante `fusiona`; y reversibilidad. La terminación del ciclo la garantizan las condiciones de bloqueo, no un contador.
+- **Entrada en vigor:** cuando la PR que introduce la política de convergencia sea revisada, tenga CI verde y sea fusionada por autorización explícita del usuario.
+
+El historial de las versiones 1.0, 1.1, 1.2, 1.3 y 1.4 permanece disponible en Git y no se reescribe retrospectivamente.

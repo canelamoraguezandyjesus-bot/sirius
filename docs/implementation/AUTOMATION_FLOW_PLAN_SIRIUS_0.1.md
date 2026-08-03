@@ -102,7 +102,7 @@ Cuando exista `CHANGES_REQUESTED`, la Routine correctora:
 - registra el nuevo head;
 - vuelve a `sirius:ci-pending`.
 
-Se permiten como máximo dos ciclos. Si no converge, pasa a `sirius:blocked-decision`.
+No hay un tope fijo de ciclos: la corrección continúa mientras haya progreso comprobable y pasa a `sirius:blocked-decision` en cuanto deja de converger (contrato §5.1).
 
 ### 4.6 Aprobación y notificación
 

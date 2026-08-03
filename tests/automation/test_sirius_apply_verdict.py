@@ -448,6 +448,88 @@ def test_reviewer_changes_requested_with_observations(tmp_path: Path) -> None:
     assert "R1" in comments
 
 
+def test_reviewer_changes_requested_publishes_the_round_record(tmp_path: Path) -> None:
+    # El registro de ronda sustituye al contador ciego de ciclos: es lo que
+    # permite a la puerta del corrector medir progreso real entre rondas.
+    env = _setup(tmp_path)
+    _seed_issue(
+        env,
+        ["sirius:reviewing"],
+        comments=(
+            "QUALITY_SUCCESS\n- Head SHA: `c4d482267d9a`\n"
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+        ),
+    )
+    _seed_pr(env, 9, head="c4d482267d9a")
+    vf = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "CHANGES_REQUESTED",
+            "summary": "hay defectos",
+            "reviewed_head_sha": "c4d482267d9a",
+            "observations": [
+                {
+                    "id": "CODEX-001",
+                    "severidad": "P2",
+                    "archivo": "src/x.py:10",
+                    "problema": "no valida entrada",
+                    "criterio_esperado": "debe validar",
+                    "prueba": "test_x_invalid",
+                    "limites_correccion": "solo src/x.py",
+                }
+            ],
+        },
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    comments = _comments(env)
+    assert "<!-- sirius-round:1 -->" in comments
+    blocks = re.findall(r"## RONDA_HALLAZGOS\s*```json\s*(.*?)\s*```", comments, re.DOTALL)
+    assert len(blocks) == 1
+    record = json.loads(blocks[0])
+    assert record["round"] == 1
+    assert record["head"] == "c4d482267d9a"
+    assert record["pending"] == 1
+    assert record["findings"][0]["source"] == "CODEX"
+    assert len(record["findings"][0]["fingerprint"]) == 16
+
+
+def test_reviewer_changes_requested_increments_the_round_number(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(
+        env,
+        ["sirius:reviewing"],
+        comments=(
+            "QUALITY_SUCCESS\n- Head SHA: `c4d482267d9a`\n"
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+            "<!-- sirius-round:1 -->\n<!-- sirius-round:2 -->\n"
+        ),
+    )
+    _seed_pr(env, 9, head="c4d482267d9a")
+    vf = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "CHANGES_REQUESTED",
+            "summary": "hay defectos",
+            "reviewed_head_sha": "c4d482267d9a",
+            "observations": [
+                {
+                    "id": "CLAUDE-R1",
+                    "severidad": "alta",
+                    "archivo": "src/y.py:3",
+                    "problema": "otro defecto",
+                    "criterio_esperado": "debe hacer",
+                    "prueba": "test_y",
+                    "limites_correccion": "solo src/y.py",
+                }
+            ],
+        },
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "<!-- sirius-round:3 -->" in _comments(env)
+
+
 def test_reviewer_changes_requested_is_idempotent(tmp_path: Path) -> None:
     env = _setup(tmp_path)
     _seed_issue(

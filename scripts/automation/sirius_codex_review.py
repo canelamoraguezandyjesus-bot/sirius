@@ -42,7 +42,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 # Autores aceptados de la integración nativa de Codex, observados en la prueba
@@ -62,7 +62,13 @@ DEFAULT_MAX_TIMEOUT_SECONDS = 1500
 DEFAULT_POLL_SECONDS = 30
 MAX_PAGES = 50
 
-TRIGGER_MARKER_TEMPLATE = "<!-- sirius-codex-review:{head} -->"
+# El marcador identifica la ronda, no solo el head: `<head>:<ronda>`. La ronda
+# es estable ante reejecuciones del MISMO run de Actions (GITHUB_RUN_ID no
+# cambia al reintentar), así que la idempotencia se conserva; pero una ronda
+# nueva sobre el mismo head (por ejemplo, tras una parada segura y una nueva
+# aplicación de la etiqueta) obtiene su propio disparador y NUNCA puede quedar
+# satisfecha por una revisión pedida en la ronda anterior.
+TRIGGER_MARKER_TEMPLATE = "<!-- sirius-codex-review:{head}:{round_id} -->"
 
 # Solicitud de revisión: únicamente orientación de revisión, jamás instrucciones
 # de corrección (el conector también entiende órdenes que modifican la PR y
@@ -184,13 +190,32 @@ def _is_allowed_author(item: dict[str, Any]) -> bool:
     return _author_login(item).casefold() in _allowed_authors()
 
 
+def _utcnow() -> datetime:
+    """Instante actual con zona horaria explícita (UTC).
+
+    Las marcas de GitHub llegan con zona (``...Z``); comparar contra un
+    ``datetime`` ingenuo lanzaría ``TypeError``, así que aquí nunca se produce
+    uno sin zona.
+    """
+    return datetime.now(UTC)
+
+
 def _parse_timestamp(value: object) -> datetime | None:
+    """Marca temporal de GitHub como ``datetime`` con zona horaria.
+
+    Se asume UTC cuando la cadena no la declara, para que todas las
+    comparaciones del recolector sean homogéneas y nunca mezclen instantes
+    ingenuos con instantes con zona.
+    """
     if not isinstance(value, str) or not value:
         return None
     try:
-        return datetime.fromisoformat(value)
+        parsed = datetime.fromisoformat(value)
     except ValueError:
         return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed
 
 
 def _sha_matches(expected_full: str, candidate: str) -> bool:
@@ -340,35 +365,71 @@ def _normalized_body(text: str) -> str:
 
 
 def _find_trigger_comments(
-    repo: str, pr: int, marker: str, *, author: str, expected_body: str
+    repo: str,
+    pr: int,
+    marker: str,
+    *,
+    author: str,
+    expected_body: str,
+    not_before: datetime,
 ) -> list[dict[str, Any]]:
     """Comentarios disparadores propios: marcador presente, autor igual a la
     identidad de la automatización y cuerpo igual al generado por la plantilla
     determinista (ver ``_normalized_body`` para el criterio exacto). Un
     comentario ajeno (o del mismo autor pero con otro texto) NO se reutiliza:
     en su lugar se publica el propio.
+
+    ``not_before`` es el instante en que Quality terminó sobre este head: un
+    comentario anterior a esa marca no pertenece a la ronda posterior a Quality
+    y se descarta aunque cumpla todo lo demás. Sin esa condición, un comentario
+    sembrado antes de que CI terminara podría anclar la ronda a una revisión de
+    Codex previa a la validación.
     """
     comments = _gh_paginated(f"repos/{repo}/issues/{pr}/comments")
     wanted_author = author.casefold()
     wanted_body = _normalized_body(expected_body)
-    matching = [
-        comment
-        for comment in comments
-        if marker in str(comment.get("body") or "")
-        and _author_login(comment).casefold() == wanted_author
-        and _normalized_body(str(comment.get("body") or "")) == wanted_body
-    ]
+    matching = []
+    for comment in comments:
+        if marker not in str(comment.get("body") or ""):
+            continue
+        if _author_login(comment).casefold() != wanted_author:
+            continue
+        if _normalized_body(str(comment.get("body") or "")) != wanted_body:
+            continue
+        created_at = _parse_timestamp(comment.get("created_at"))
+        if created_at is None or created_at < not_before:
+            print(
+                f"sirius_codex_review: se descarta el comentario {comment.get('id')}: "
+                "no es posterior al final de Quality sobre este head.",
+                file=sys.stderr,
+            )
+            continue
+        matching.append(comment)
     matching.sort(key=lambda c: (str(c.get("created_at") or ""), int(c.get("id") or 0)))
     return matching
 
 
 def cmd_trigger(args: argparse.Namespace) -> int:
-    marker = TRIGGER_MARKER_TEMPLATE.format(head=args.head)
+    marker = TRIGGER_MARKER_TEMPLATE.format(head=args.head, round_id=args.round_id)
     body = TRIGGER_BODY_TEMPLATE.format(marker=marker, head=args.head)
+    quality_at = _parse_timestamp(args.quality_completed_at)
+    if quality_at is None:
+        print(
+            "sirius_codex_review: no se pudo interpretar el instante en que Quality "
+            f"terminó ({args.quality_completed_at!r}); sin esa marca no puedo demostrar "
+            "que el disparador pertenece a la ronda posterior a Quality. Parada segura.",
+            file=sys.stderr,
+        )
+        return 1
     try:
         author = _automation_identity()
         existing = _find_trigger_comments(
-            args.repo, args.pr, marker, author=author, expected_body=body
+            args.repo,
+            args.pr,
+            marker,
+            author=author,
+            expected_body=body,
+            not_before=quality_at,
         )
         if existing:
             chosen = existing[0]
@@ -401,7 +462,12 @@ def cmd_trigger(args: argparse.Namespace) -> int:
             # tanto tras una carrera improbable como tras un POST de resultado
             # ambiguo (aplicado en el servidor pero con la respuesta perdida).
             refreshed = _find_trigger_comments(
-                args.repo, args.pr, marker, author=author, expected_body=body
+                args.repo,
+                args.pr,
+                marker,
+                author=author,
+                expected_body=body,
+                not_before=quality_at,
             )
             chosen = refreshed[0] if refreshed else posted
             if not isinstance(chosen, dict):
@@ -416,10 +482,12 @@ def cmd_trigger(args: argparse.Namespace) -> int:
         "repo": args.repo,
         "pr": args.pr,
         "head_sha": args.head,
+        "round_id": args.round_id,
         "marker": marker,
         "trigger_comment_id": chosen.get("id"),
         "trigger_created_at": chosen.get("created_at"),
         "trigger_author": _author_login(chosen) or author,
+        "quality_completed_at": args.quality_completed_at,
     }
     with open(args.state_file, "w", encoding="utf-8") as handle:
         json.dump(state, handle, ensure_ascii=False, indent=2)
@@ -459,6 +527,18 @@ def _load_state(args: argparse.Namespace) -> tuple[dict[str, Any] | None, CodexR
                 f"({args.head}); no se reutilizan resultados de otro head."
             ),
         )
+    if str(state.get("round_id") or "") != str(args.round_id):
+        # La ronda es parte de la identidad del disparador: un estado de otra
+        # ronda podría anclar la espera a una revisión ya consumida.
+        return None, CodexResult(
+            status="FAILED_SAFELY",
+            reason="disparador-de-otra-ronda",
+            summary=(
+                "El disparador registrado pertenece a otra ronda de revisión "
+                f"({state.get('round_id')!r} en vez de {args.round_id!r}); no se "
+                "reutilizan resultados de una ronda anterior."
+            ),
+        )
     trigger_id = state.get("trigger_comment_id")
     trigger_at = _parse_timestamp(state.get("trigger_created_at"))
     if not isinstance(trigger_id, int) or trigger_at is None:
@@ -466,6 +546,18 @@ def _load_state(args: argparse.Namespace) -> tuple[dict[str, Any] | None, CodexR
             status="FAILED_SAFELY",
             reason="disparador-invalido",
             summary="El estado del disparador de Codex es incompleto; parada segura.",
+        )
+    quality_at = _parse_timestamp(state.get("quality_completed_at"))
+    if quality_at is None or trigger_at < quality_at:
+        return None, CodexResult(
+            status="FAILED_SAFELY",
+            reason="disparador-anterior-a-quality",
+            trigger_comment_id=trigger_id,
+            summary=(
+                "No puedo demostrar que el disparador sea posterior al final de "
+                "Quality sobre este head; la ronda no es identificable con "
+                "seguridad. Parada segura."
+            ),
         )
     return state, None
 
@@ -610,10 +702,29 @@ def cmd_collect(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         timeout = max_timeout
-    deadline = time.monotonic() + timeout
+
+    # El plazo de Codex es ABSOLUTO y empieza en el instante real del
+    # disparador, no cuando arranca este paso. Codex trabaja en paralelo a
+    # Claude desde que se publica la solicitud, así que el tiempo que tarde
+    # Claude ya consume ese plazo: si el revisor Claude agotó la ventana, aquí
+    # NO se concede un plazo nuevo completo. Lo que queda es la diferencia, y
+    # nunca menos de cero.
+    elapsed_since_trigger = (_utcnow() - trigger_at).total_seconds()
+    remaining = timeout - elapsed_since_trigger
+    if remaining < timeout:
+        print(
+            f"sirius_codex_review: han transcurrido {elapsed_since_trigger:.0f} s desde el "
+            f"disparador; del plazo absoluto de {timeout:.0f} s quedan "
+            f"{max(remaining, 0):.0f} s.",
+            file=sys.stderr,
+        )
+    deadline = time.monotonic() + max(remaining, 0.0)
 
     result: CodexResult | None = None
     while True:
+        # Siempre se hace al menos una pasada de sondeo, incluso con el plazo
+        # absoluto ya agotado: si Codex respondió mientras Claude trabajaba, su
+        # resultado debe recogerse en vez de declararse un timeout falso.
         try:
             result = _check_reviews(args.repo, args.pr, args.head, trigger_at, trigger_id)
             if result is None:
@@ -631,9 +742,10 @@ def cmd_collect(args: argparse.Namespace) -> int:
                 reason="timeout",
                 trigger_comment_id=trigger_id,
                 summary=(
-                    f"Codex no entregó un resultado identificable para `{args.head}` en "
-                    f"{timeout:.0f} segundos; la ronda termina en fallo seguro. No se "
-                    "publica un segundo disparador para el mismo head."
+                    f"Codex no entregó un resultado identificable para `{args.head}` dentro "
+                    f"del plazo absoluto de {timeout:.0f} segundos contados desde el "
+                    "disparador; la ronda termina en fallo seguro. No se publica un segundo "
+                    "disparador para el mismo head y ronda."
                 ),
             )
             break
@@ -659,6 +771,16 @@ def _full_sha(value: str) -> str:
     return value.strip().casefold()
 
 
+def _round_id(value: str) -> str:
+    """Identificador de ronda: no vacío y sin caracteres que rompan el marcador."""
+    cleaned = value.strip()
+    if not cleaned or not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", cleaned):
+        raise argparse.ArgumentTypeError(
+            f"identificador de ronda inválido: {value!r} (se esperaba [A-Za-z0-9._-]{{1,64}})"
+        )
+    return cleaned
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -668,9 +790,23 @@ def _build_parser() -> argparse.ArgumentParser:
     common.add_argument("--pr", required=True, type=int, help="número de la PR")
     common.add_argument("--head", required=True, type=_full_sha, help="SHA completo esperado")
     common.add_argument("--state-file", required=True, help="archivo de estado del disparador")
+    common.add_argument(
+        "--round-id",
+        required=True,
+        type=_round_id,
+        help=(
+            "identificador estable de la ronda de revisión (el run de Actions): "
+            "igual en las reejecuciones del mismo run, distinto en una ronda nueva"
+        ),
+    )
 
     trigger = subparsers.add_parser(
         "trigger", parents=[common], help="publica o reutiliza el disparador de Codex"
+    )
+    trigger.add_argument(
+        "--quality-completed-at",
+        required=True,
+        help="instante RFC3339 en que Quality terminó sobre este head",
     )
     trigger.set_defaults(func=cmd_trigger)
 

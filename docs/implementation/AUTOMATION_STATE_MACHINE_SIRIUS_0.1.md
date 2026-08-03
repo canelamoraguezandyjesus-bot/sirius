@@ -143,7 +143,10 @@ La correctora:
 - registra el nuevo head;
 - vuelve a CI.
 
-Máximo dos ciclos. Si no converge:
+No hay un tope fijo de ciclos: la corrección continúa mientras haya progreso
+comprobable (contrato §5.1). Si el ciclo deja de converger — sin progreso neto
+en dos rondas consecutivas, reaparición de un hallazgo resuelto, oscilación o
+head sin avanzar:
 
 `repairing -> blocked-decision`
 

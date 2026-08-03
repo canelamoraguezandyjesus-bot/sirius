@@ -127,9 +127,21 @@ jobs:
             exit 0
           fi
 
+          # Instante autoritativo en que Quality terminó sobre este head, leido
+          # de la API de check-runs (no de un texto de la incidencia, que es
+          # editable). Ancla la ronda: el disparador de Codex debe ser
+          # posterior a esta marca para pertenecer a la ronda posterior a CI.
+          quality_completed_at="$(sirius_retry gh api "repos/${GH_REPO}/commits/${pr_head}/check-runs" \
+            --jq '[.check_runs[] | select(.name == "quality" and .conclusion == "success") | .completed_at] | sort | last // empty')"
+          if [ -z "${quality_completed_at:-}" ]; then
+            stop_gate "quality-sin-marca" "No he podido leer el instante en que Quality terminó en verde sobre \`${pr_head}\`. Sin esa marca no puedo demostrar que la solicitud de revisión pertenece a la ronda posterior a CI."
+            exit 0
+          fi
+
           echo "valid=true" >> "$GITHUB_OUTPUT"
           echo "pr_number=${pr_number}" >> "$GITHUB_OUTPUT"
           echo "head_sha=${pr_head}" >> "$GITHUB_OUTPUT"
+          echo "quality_completed_at=${quality_completed_at}" >> "$GITHUB_OUTPUT"
 
       - name: Consumir el evento y marcar en curso
         if: steps.gate.outputs.valid == 'true'
@@ -162,12 +174,19 @@ jobs:
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
           HEAD_SHA: ${{ steps.gate.outputs.head_sha }}
+          QUALITY_COMPLETED_AT: ${{ steps.gate.outputs.quality_completed_at }}
+          # Identificador de ronda: el run de Actions. Estable en las
+          # reejecuciones del mismo run (idempotencia), distinto en una ronda
+          # nueva sobre el mismo head (no reutiliza revisiones anteriores).
+          ROUND_ID: ${{ github.run_id }}
         run: |
           set -uo pipefail
           python3 scripts/automation/sirius_codex_review.py trigger \
             --repo "$GH_REPO" \
             --pr "$PR_NUMBER" \
             --head "$HEAD_SHA" \
+            --round-id "$ROUND_ID" \
+            --quality-completed-at "$QUALITY_COMPLETED_AT" \
             --state-file "${RUNNER_TEMP}/sirius_codex_state.json"
 
       - name: Preparar instrucciones para Claude Code
@@ -233,6 +252,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
           HEAD_SHA: ${{ steps.gate.outputs.head_sha }}
+          ROUND_ID: ${{ github.run_id }}
           SIRIUS_CODEX_REVIEW_TIMEOUT_SECONDS: ${{ vars.SIRIUS_CODEX_REVIEW_TIMEOUT_SECONDS }}
           SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS: ${{ vars.SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS }}
         run: |
@@ -241,6 +261,7 @@ jobs:
             --repo "$GH_REPO" \
             --pr "$PR_NUMBER" \
             --head "$HEAD_SHA" \
+            --round-id "$ROUND_ID" \
             --state-file "${RUNNER_TEMP}/sirius_codex_state.json" \
             --output "${RUNNER_TEMP}/sirius_codex_review.json"
 

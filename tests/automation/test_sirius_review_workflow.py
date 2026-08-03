@@ -232,6 +232,28 @@ def test_codex_scripts_receive_expected_head_and_state_file() -> None:
         assert "sirius_codex_review.py" in step["run"]
         assert "sirius_codex_state.json" in step["run"]
         assert '--head "$HEAD_SHA"' in step["run"]
+        # La ronda forma parte de la identidad del disparador en ambos pasos.
+        assert '--round-id "$ROUND_ID"' in step["run"]
+        assert step["env"]["ROUND_ID"] == "${{ github.run_id }}"
     assert "sirius_aggregate_reviews.py" in aggregate["run"]
     assert "--mode dual" in aggregate["run"]
     assert '--expected-head "$HEAD_SHA"' in aggregate["run"]
+
+
+def test_gate_reads_the_authoritative_quality_completion_mark() -> None:
+    # El instante en que Quality terminó se lee de la API de check-runs, no de
+    # un texto de la incidencia (editable): es lo que ancla la ronda.
+    doc = _load()
+    gate = _step(doc, "Localizar la PR")
+    assert "check-runs" in gate["run"]
+    assert "quality_completed_at=" in gate["run"]
+    assert "quality-sin-marca" in gate["run"]
+
+
+def test_trigger_step_receives_the_quality_completion_mark() -> None:
+    doc = _load()
+    trigger = _step(doc, "Solicitar la revisión de Codex")
+    assert trigger["env"]["QUALITY_COMPLETED_AT"] == (
+        "${{ steps.gate.outputs.quality_completed_at }}"
+    )
+    assert '--quality-completed-at "$QUALITY_COMPLETED_AT"' in trigger["run"]

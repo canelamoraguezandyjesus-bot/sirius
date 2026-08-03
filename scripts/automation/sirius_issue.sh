@@ -152,6 +152,38 @@ if m:
   return 0
 }
 
+# sirius_dump_comments <repo> <issue> <out_file> — vuelca los comentarios en
+# orden cronológico (del más antiguo al más reciente) para analizarlos. Pagina
+# igual que el resto de lecturas. Best-effort: deja el archivo vacío si no se
+# puede leer, y devuelve !=0 para que el llamador decida.
+sirius_dump_comments() {
+  local repo="$1" num="$2" out="$3" body=""
+  : >"$out"
+  if body="$(sirius_retry gh api --paginate --slurp "repos/${repo}/issues/${num}/comments?per_page=100" --jq 'add | .[].body')"; then
+    printf '%s\n' "$body" >>"$out"
+    return 0
+  fi
+  if body="$(sirius_retry gh issue view "$num" --repo "$repo" --json comments --jq '.comments[].body')"; then
+    printf '%s\n' "$body" >>"$out"
+    return 0
+  fi
+  echo "sirius_dump_comments: no se pudieron leer los comentarios de #${num}" >&2
+  return 1
+}
+
+# sirius_next_round_number <repo> <issue> — número de la siguiente ronda de
+# revisión-corrección: el mayor `<!-- sirius-round:N -->` publicado más uno. Si
+# no hay ninguno (o no se pueden leer los comentarios) devuelve 1: una ronda
+# nueva nunca se numera hacia atrás.
+sirius_next_round_number() {
+  local repo="$1" num="$2" dump="" highest=""
+  dump="$(mktemp)"
+  sirius_dump_comments "$repo" "$num" "$dump" >/dev/null 2>&1 || true
+  highest="$(grep -oE '<!-- sirius-round:[0-9]+ -->' "$dump" 2>/dev/null | grep -oE '[0-9]+' | sort -n | tail -1)"
+  rm -f "$dump"
+  printf '%s' "$(( ${highest:-0} + 1 ))"
+}
+
 # --- Validación estructural ---------------------------------------------------
 
 # sirius_body_is_complete <file> — 0 si el cuerpo del archivo contiene todas las

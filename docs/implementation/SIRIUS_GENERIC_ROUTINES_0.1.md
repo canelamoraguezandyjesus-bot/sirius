@@ -53,7 +53,8 @@ Comprobaciones obligatorias antes de actuar:
 - rama base y alcance definidos;
 - PR y head SHA coherentes cuando existan;
 - ninguna ejecución equivalente activa;
-- máximo de dos ciclos de corrección;
+- convergencia del ciclo de corrección demostrable (contrato §5.1): sin tope
+  fijo de rondas, pero con progreso comprobable ronda a ronda;
 - merge automático prohibido.
 
 Toda ejecución registra en la incidencia:
@@ -177,7 +178,7 @@ Cada observación corregible incluye identificador, severidad, archivo o compone
 - decisión real necesaria → `sirius:blocked-decision`;
 - fallo no corregible de forma segura → `sirius:failed-safely`.
 
-Tras dos ciclos sin convergencia se elimina cualquier evento de reparación y se aplica `sirius:blocked-decision`.
+Cuando la política de convergencia (contrato §5.1) determina que el ciclo ha dejado de avanzar — sin progreso neto en dos rondas consecutivas, reaparición de un hallazgo resuelto, oscilación entre estados anteriores o head sin avanzar — se elimina cualquier evento de reparación y se aplica `sirius:blocked-decision`, registrando el motivo exacto. No hay un tope fijo de rondas.
 
 ## 5. Notificación al usuario
 

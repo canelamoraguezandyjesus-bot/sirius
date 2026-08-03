@@ -67,6 +67,18 @@ bloqueo de Claude; cambios de cualquiera; aprobación solo si ambos aprueban el
 mismo SHA), deduplicación solo de duplicados exactos y procedencia conservada
 con prefijos `CLAUDE-`/`CODEX-`.
 
+## `sirius_convergence.py`
+
+Política de convergencia del ciclo revisión-corrección (contrato §5.1), que
+sustituye al tope fijo de dos ciclos. `record` emite el registro de una ronda
+(huella estable por hallazgo, severidad, procedencia, head y totales), que
+`sirius_apply_verdict.sh` publica en la incidencia bajo
+`## RONDA_HALLAZGOS`. `decide` lee ese historial y determina si la corrección
+puede continuar (`CONTINUE`) o debe pasar a decisión humana (`BLOCK`) por falta
+de progreso en dos rondas consecutivas, reaparición de un hallazgo resuelto,
+oscilación entre estados anteriores, head sin avanzar o historial ilegible.
+Módulo puro, sin red.
+
 ## `validate_issue_body.py`
 
 Validador estructural puro (sin red) del cuerpo de una incidencia de trabajo. Se

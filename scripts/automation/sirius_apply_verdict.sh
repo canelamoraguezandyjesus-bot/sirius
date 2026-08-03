@@ -290,12 +290,33 @@ case "$verdict" in
     fi
     readable="$(printf '%s' "$observations" | jq -r '.[] | "- **\(.id // "?")** (\(.severidad // "?")) \(.archivo // "?"): \(.problema // "?")\n  - Criterio esperado: \(.criterio_esperado // "?")\n  - Prueba: \(.prueba // "?")\n  - Límites de corrección: \(.limites_correccion // "?")"')"
     pr_hint="https://github.com/${REPO}/pull/${pr_number}"
+
+    # Registro de convergencia (contrato §5, v1.5). Sustituye al contador ciego
+    # de ciclos: publica las huellas estables de los hallazgos de esta ronda
+    # para que la puerta del corrector pueda medir progreso real entre rondas
+    # en vez de detenerse en un número fijo.
+    round_number="$(sirius_next_round_number "$REPO" "$ISSUE")"
+    round_verdict="$(mktemp)"
+    round_record="$(mktemp)"
+    jq -n --argjson obs "$observations" '{observations: $obs}' >"$round_verdict"
+    if ! python3 "${SIRIUS_VERDICT_DIR}/sirius_convergence.py" record \
+      --verdict-file "$round_verdict" --round "$round_number" \
+      --head "$head_sha" --output "$round_record"; then
+      rm -f "$round_verdict" "$round_record"
+      stop_safely "registro-de-ronda-fallido" \
+        "No se pudo construir el registro de convergencia de esta ronda; sin él la puerta del corrector no puede medir progreso y me detengo de forma segura."
+    fi
+    round_json="$(cat "$round_record")"
+    rm -f "$round_verdict" "$round_record"
+
     marker="<!-- sirius-verdict:reviewer:changes:$(printf '%s' "$observations" | sha256sum | cut -c1-16) -->"
     body_file="$(mktemp)"
     {
       printf '%s\n\n%s\n' "$marker" "## CHANGES_REQUESTED"
       printf '- PR: %s\n' "$pr_hint"
       printf '%s\n\n%s\n\n## OBSERVACIONES_ESTRUCTURADAS\n```json\n%s\n```\n' "${summary}" "${readable}" "${observations}"
+      printf '\n<!-- sirius-round:%s -->\n\n## RONDA_HALLAZGOS\n```json\n%s\n```\n' \
+        "${round_number}" "${round_json}"
     } >"$body_file"
     if ! transition "$marker" "$body_file" "sirius:repair-requested" "FBCA04" "Evento consumible: corregir observaciones técnicas registradas"; then
       rm -f "$body_file"

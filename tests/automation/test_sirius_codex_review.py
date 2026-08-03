@@ -15,6 +15,7 @@ import os
 import shutil
 import subprocess
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -27,13 +28,31 @@ REPO = "owner/repo"
 PR = 9
 HEAD = "1234567890abcdef1234567890abcdef12345678"
 OTHER_HEAD = "feedfacefeedfacefeedfacefeedfacefeedface"
-MARKER = f"<!-- sirius-codex-review:{HEAD} -->"
+ROUND_ID = "770001"
+OTHER_ROUND_ID = "770002"
+MARKER = f"<!-- sirius-codex-review:{HEAD}:{ROUND_ID} -->"
 CONNECTOR = "chatgpt-codex-connector[bot]"
 # Identidad simulada del token que publica el disparador (endpoint `user`).
 AUTOMATION_LOGIN = "canelamoraguezandyjesus-bot"
-TRIGGER_AT = "2026-08-03T10:00:00Z"
-AFTER_TRIGGER = "2026-08-03T10:05:00Z"
-BEFORE_TRIGGER = "2026-08-03T09:00:00Z"
+
+
+def _stamp(offset_seconds: int) -> str:
+    """Marca RFC3339 relativa a ahora.
+
+    El recolector mide el plazo de Codex desde el instante REAL del disparador,
+    así que las marcas fijas de un día concreto harían que el resultado de las
+    pruebas dependiera del reloj de la máquina. Relativas, cada prueba controla
+    con precisión cuánto plazo queda.
+    """
+    moment = datetime.now(UTC) + timedelta(seconds=offset_seconds)
+    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+# Quality terminó antes del disparador; el disparador, antes de la revisión.
+QUALITY_AT = _stamp(-120)
+TRIGGER_AT = _stamp(-60)
+AFTER_TRIGGER = _stamp(-30)
+BEFORE_TRIGGER = _stamp(-300)
 
 
 def _bash_works() -> bool:
@@ -132,7 +151,7 @@ if m and method == "POST":
     new = {
         "id": 9000 + len(comments),
         "body": body,
-        "created_at": "2026-08-03T10:00:00Z",
+        "created_at": os.environ.get("GH_MOCK_POST_CREATED_AT", "2026-08-03T10:00:00Z"),
         "user": {"login": "canelamoraguezandyjesus-bot"},
     }
     comments.append(new)
@@ -180,6 +199,7 @@ def _setup(tmp_path: Path) -> dict[str, str]:
     env["SIRIUS_RETRY_BASE_DELAY"] = "0"
     env["SIRIUS_RETRY_ATTEMPTS"] = "2"
     env["SIRIUS_CODEX_POLL_SECONDS"] = "0"
+    env["GH_MOCK_POST_CREATED_AT"] = TRIGGER_AT
     return env
 
 
@@ -206,7 +226,7 @@ def _script_module() -> Any:
     return module
 
 
-def _canonical_trigger_body(head: str = HEAD) -> str:
+def _canonical_trigger_body(head: str = HEAD, round_id: str = ROUND_ID) -> str:
     """Cuerpo exacto que genera el script, tomado del propio módulo.
 
     Las pruebas de reutilización deben usar el texto canónico: el disparador
@@ -215,7 +235,7 @@ def _canonical_trigger_body(head: str = HEAD) -> str:
     """
     module = _script_module()
     template: str = module.TRIGGER_BODY_TEMPLATE
-    marker: str = module.TRIGGER_MARKER_TEMPLATE.format(head=head)
+    marker: str = module.TRIGGER_MARKER_TEMPLATE.format(head=head, round_id=round_id)
     return template.format(marker=marker, head=head)
 
 
@@ -225,10 +245,11 @@ def _trigger_comment(
     created_at: str = TRIGGER_AT,
     author: str = AUTOMATION_LOGIN,
     body: str | None = None,
+    round_id: str = ROUND_ID,
 ) -> dict[str, Any]:
     return {
         "id": comment_id,
-        "body": body if body is not None else _canonical_trigger_body(head),
+        "body": body if body is not None else _canonical_trigger_body(head, round_id),
         "created_at": created_at,
         "user": {"login": author},
     }
@@ -268,7 +289,11 @@ def _review_comment(
 
 
 def _run_trigger(
-    env: dict[str, str], tmp_path: Path, head: str = HEAD
+    env: dict[str, str],
+    tmp_path: Path,
+    head: str = HEAD,
+    round_id: str = ROUND_ID,
+    quality_at: str = QUALITY_AT,
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [
@@ -281,6 +306,10 @@ def _run_trigger(
             str(PR),
             "--head",
             head,
+            "--round-id",
+            round_id,
+            "--quality-completed-at",
+            quality_at,
             "--state-file",
             str(tmp_path / "state.json"),
         ],
@@ -292,7 +321,12 @@ def _run_trigger(
 
 
 def _run_collect(
-    env: dict[str, str], tmp_path: Path, *, timeout: str = "0", head: str = HEAD
+    env: dict[str, str],
+    tmp_path: Path,
+    *,
+    timeout: str = "0",
+    head: str = HEAD,
+    round_id: str = ROUND_ID,
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [
@@ -305,6 +339,8 @@ def _run_collect(
             str(PR),
             "--head",
             head,
+            "--round-id",
+            round_id,
             "--state-file",
             str(tmp_path / "state.json"),
             "--output",
@@ -324,16 +360,26 @@ def _state(tmp_path: Path) -> dict[str, Any]:
     return data
 
 
-def _write_state(tmp_path: Path, head: str = HEAD, comment_id: int = 500) -> None:
+def _write_state(
+    tmp_path: Path,
+    head: str = HEAD,
+    comment_id: int = 500,
+    round_id: str = ROUND_ID,
+    trigger_at: str = TRIGGER_AT,
+    quality_at: str = QUALITY_AT,
+) -> None:
     (tmp_path / "state.json").write_text(
         json.dumps(
             {
                 "repo": REPO,
                 "pr": PR,
                 "head_sha": head,
-                "marker": f"<!-- sirius-codex-review:{head} -->",
+                "round_id": round_id,
+                "marker": f"<!-- sirius-codex-review:{head}:{round_id} -->",
                 "trigger_comment_id": comment_id,
-                "trigger_created_at": TRIGGER_AT,
+                "trigger_created_at": trigger_at,
+                "trigger_author": AUTOMATION_LOGIN,
+                "quality_completed_at": quality_at,
             }
         ),
         encoding="utf-8",
@@ -443,6 +489,110 @@ def test_trigger_does_not_reuse_comment_with_extra_inner_text(tmp_path: Path) ->
     assert r.returncode == 0, r.stdout + r.stderr
     assert _post_count(env) == 1
     assert _state(tmp_path)["trigger_comment_id"] != 555
+
+
+def test_trigger_does_not_reuse_a_trigger_from_another_round(tmp_path: Path) -> None:
+    # Una ronda nueva sobre el mismo head debe pedir su propia revisión: si
+    # reutilizara el disparador de la ronda anterior, una revisión ya consumida
+    # quedaría "posterior al disparador" y satisfaría la ronda nueva.
+    env = _setup(tmp_path)
+    _seed(
+        env,
+        "issue_comments.json",
+        [_trigger_comment(comment_id=555, round_id=OTHER_ROUND_ID)],
+    )
+    r = _run_trigger(env, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert _post_count(env) == 1
+    state = _state(tmp_path)
+    assert state["trigger_comment_id"] != 555
+    assert state["round_id"] == ROUND_ID
+
+
+def test_trigger_ignores_a_comment_created_before_quality_finished(tmp_path: Path) -> None:
+    # Un comentario con el marcador correcto pero anterior al final de Quality
+    # no pertenece a la ronda posterior a CI: no ancla la ronda.
+    env = _setup(tmp_path)
+    _seed(
+        env,
+        "issue_comments.json",
+        [_trigger_comment(comment_id=555, created_at=BEFORE_TRIGGER)],
+    )
+    r = _run_trigger(env, tmp_path, quality_at=_stamp(-120))
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert _post_count(env) == 1
+    assert _state(tmp_path)["trigger_comment_id"] != 555
+
+
+def test_trigger_records_the_round_and_quality_marks(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    r = _run_trigger(env, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    state = _state(tmp_path)
+    assert state["round_id"] == ROUND_ID
+    assert state["quality_completed_at"] == QUALITY_AT
+    assert state["trigger_author"] == AUTOMATION_LOGIN
+    # El marcador identifica head Y ronda.
+    comments = json.loads((_md(env) / "issue_comments.json").read_text(encoding="utf-8"))
+    assert MARKER in comments[0]["body"]
+
+
+def test_trigger_fails_safely_when_quality_mark_is_unusable(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    r = _run_trigger(env, tmp_path, quality_at="no-es-una-fecha")
+    assert r.returncode != 0
+    assert _post_count(env) == 0
+    assert not (tmp_path / "state.json").exists()
+
+
+def test_collect_rejects_state_of_another_round(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _write_state(tmp_path, round_id=OTHER_ROUND_ID)
+    _seed(env, "reviews.json", [_review(state="APPROVED")])
+    r = _run_collect(env, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "FAILED_SAFELY"
+    assert result["reason"] == "disparador-de-otra-ronda"
+
+
+def test_collect_rejects_a_trigger_older_than_quality(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    # Disparador anterior al final de Quality: la ronda no es demostrable.
+    _write_state(tmp_path, trigger_at=_stamp(-300), quality_at=_stamp(-120))
+    _seed(env, "reviews.json", [_review(state="APPROVED")])
+    r = _run_collect(env, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "FAILED_SAFELY"
+    assert result["reason"] == "disparador-anterior-a-quality"
+
+
+def test_collect_deadline_runs_from_the_trigger_not_from_this_step(tmp_path: Path) -> None:
+    # Codex trabaja en paralelo a Claude: si el revisor Claude consumió toda la
+    # ventana, aquí NO se concede un plazo nuevo completo. Con un disparador de
+    # hace 600 s y un plazo de 300 s, el plazo absoluto ya venció.
+    env = _setup(tmp_path)
+    _write_state(tmp_path, trigger_at=_stamp(-600), quality_at=_stamp(-700))
+    r = _run_collect(env, tmp_path, timeout="300")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "quedan 0 s" in r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "FAILED_SAFELY"
+    assert result["reason"] == "timeout"
+
+
+def test_collect_still_polls_once_when_the_absolute_deadline_expired(tmp_path: Path) -> None:
+    # Aunque el plazo absoluto haya vencido, si Codex respondió mientras Claude
+    # trabajaba su resultado debe recogerse: sería un timeout falso perderlo.
+    env = _setup(tmp_path)
+    _write_state(tmp_path, trigger_at=_stamp(-600), quality_at=_stamp(-700))
+    _seed(env, "reviews.json", [_review(state="APPROVED", submitted_at=_stamp(-500))])
+    r = _run_collect(env, tmp_path, timeout="300")
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "APPROVED"
+    assert result["reviewed_head_sha"] == HEAD
 
 
 def test_trigger_fails_safely_when_identity_is_unknown(tmp_path: Path) -> None:

@@ -17,6 +17,12 @@ independiente de una PR de Sirius 0.1 ya existente.
   producto, arquitectura, ATD, seguridad no definida, una migración
   destructiva, pérdida de datos, un coste nuevo, credenciales reales o datos
   personales.
+- No hay un tope fijo de rondas de corrección. El ciclo continúa mientras haya
+  progreso comprobable y se detiene solo cuando deja de haberlo: menos
+  hallazgos pendientes, menor gravedad agregada o la resolución de hallazgos
+  concretos. Corrige la causa raíz, no el síntoma: un defecto que se declara
+  resuelto y reaparece en una ronda posterior detiene el ciclo para decisión
+  humana, igual que dos rondas consecutivas sin avance.
 - Ejecuta todas las validaciones obligatorias (`uv run ruff format --check .`,
   `uv run ruff check .`, `uv run mypy src tests`, `uv run pytest`) antes de
   dar por terminado el trabajo. No las omitas ni las debilites.
