@@ -225,6 +225,11 @@ HASHES_NO_ALMACENADOS: Final[Mapping[str, str]] = {
         "aprobada del paso 5: B contiene a A y delega en el, de modo que el "
         "cambio de la base comun obliga a version sucesora"
     ),
+    "5d5e13eb702b1ffeb4403d7a5441f4da3c65b66b": (
+        "huella canonica de la ficha ADR002-C v1, la primera del candidato "
+        "relacional explicito: se congela antes de su primera ejecucion y no "
+        "procede de ningun resultado observado"
+    ),
     "b57ad7b24c7f0232d45540cde73294e2d68e02ef": (
         "captura de entorno de ADR-001: HEAD observado de la rama historica "
         "fix/chat-history-layout al ejecutar los spikes, registrado como "
