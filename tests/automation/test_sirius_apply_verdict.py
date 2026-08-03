@@ -118,6 +118,21 @@ exit 0
 """
 
 
+#: Variables con las que el script productivo compone su marcador de run:
+#: ``SIRIUS_RUN_TAG="${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1}"``.
+#: Heredarlas del proceso de pytest hace que el marcador dependa de DONDE corre
+#: la suite en vez de que lo decida el caso: cuando GitHub Actions **reejecuta**
+#: un workflow aporta ``GITHUB_RUN_ATTEMPT=2``, y un caso que solo fija el
+#: ``GITHUB_RUN_ID`` recibiria ``<run>-2`` en lugar de ``<run>-1``. Se sanean
+#: aqui, y cada caso declara lo que necesita.
+_VARIABLES_DEL_MARCADOR_DE_RUN: tuple[str, ...] = ("GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT")
+
+#: Intento base que las pruebas asumen salvo que el caso diga otra cosa. Fijarlo
+#: —en vez de dejarlo al valor por defecto del script— es lo que hace el entorno
+#: hermetico: el marcador no cambia entre local, primer intento y reintento.
+INTENTO_BASE = "1"
+
+
 def _setup(tmp_path: Path) -> dict[str, str]:
     mock_dir = tmp_path / "mock"
     bin_dir = tmp_path / "bin"
@@ -127,6 +142,9 @@ def _setup(tmp_path: Path) -> dict[str, str]:
     gh.write_text(_GH_MOCK, encoding="utf-8")
     gh.chmod(0o755)
     env = dict(os.environ)
+    for variable in _VARIABLES_DEL_MARCADOR_DE_RUN:
+        env.pop(variable, None)
+    env["GITHUB_RUN_ATTEMPT"] = INTENTO_BASE
     env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
     env["GH_MOCK_DIR"] = str(mock_dir)
     env["SIRIUS_RETRY_BASE_DELAY"] = "0"
@@ -467,3 +485,122 @@ def test_failed_safely_same_run_is_idempotent(tmp_path: Path) -> None:
     _run(env, "implementer", vf)
     # Reintento del MISMO run (mismo RUN_ID/ATTEMPT): no duplica el comentario.
     assert _comments(env).count("sirius-verdict:implementer:FAILED_SAFELY:2001-1") == 1
+
+
+# --------------------------------------------------------------------------- #
+# Marcador de run: identidad exacta por (RUN_ID, RUN_ATTEMPT)
+#
+# El script compone ``${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1}``. Estas
+# pruebas fijan las dos variables explicitamente y comprueban el marcador
+# COMPLETO, nunca un prefijo ni un sufijo tolerante: si el arnes dejase de ser
+# hermetico, o si el script cambiase la composicion, tienen que fallar.
+# --------------------------------------------------------------------------- #
+
+
+def _marcador_de(tmp_path: Path, run_id: str | None, intento: str | None) -> str:
+    """Publica un ``FAILED_SAFELY`` con el run declarado y devuelve los comentarios."""
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:implementing"])
+    if run_id is None:
+        env.pop("GITHUB_RUN_ID", None)
+    else:
+        env["GITHUB_RUN_ID"] = run_id
+    if intento is None:
+        env.pop("GITHUB_RUN_ATTEMPT", None)
+    else:
+        env["GITHUB_RUN_ATTEMPT"] = intento
+    vf = _verdict_file(tmp_path, {"verdict": "FAILED_SAFELY", "summary": "motivo"})
+    resultado = _run(env, "implementer", vf)
+    assert resultado.returncode == 0, resultado.stdout + resultado.stderr
+    return _comments(env)
+
+
+def test_run_tag_uses_run_id_and_attempt_one(tmp_path: Path) -> None:
+    assert "sirius-verdict:implementer:FAILED_SAFELY:1001-1" in _marcador_de(tmp_path, "1001", "1")
+
+
+def test_run_tag_uses_run_id_and_attempt_two(tmp_path: Path) -> None:
+    assert "sirius-verdict:implementer:FAILED_SAFELY:1001-2" in _marcador_de(tmp_path, "1001", "2")
+
+
+def test_run_tag_without_environment_is_manual_attempt_one(tmp_path: Path) -> None:
+    """Ejecucion manual: sin ninguna de las dos variables el marcador es ``manual-1``."""
+    comentarios = _marcador_de(tmp_path, None, None)
+    assert "sirius-verdict:implementer:FAILED_SAFELY:manual-1" in comentarios
+
+
+def test_run_tag_same_run_and_attempt_posts_once(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:implementing"])
+    env["GITHUB_RUN_ID"] = "3001"
+    env["GITHUB_RUN_ATTEMPT"] = "1"
+    vf = _verdict_file(tmp_path, {"verdict": "FAILED_SAFELY", "summary": "motivo"})
+    _run(env, "implementer", vf)
+    _run(env, "implementer", vf)
+    assert _comments(env).count("sirius-verdict:implementer:FAILED_SAFELY:3001-1") == 1
+
+
+def test_run_tag_same_run_distinct_attempts_post_twice(tmp_path: Path) -> None:
+    """Reintento del MISMO run: el intento lo distingue, de modo que ambos son visibles."""
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:implementing"])
+    vf = _verdict_file(tmp_path, {"verdict": "FAILED_SAFELY", "summary": "motivo"})
+
+    intento1 = dict(env)
+    intento1["GITHUB_RUN_ID"] = "4001"
+    intento1["GITHUB_RUN_ATTEMPT"] = "1"
+    _run(intento1, "implementer", vf)
+
+    intento2 = dict(env)
+    intento2["GITHUB_RUN_ID"] = "4001"
+    intento2["GITHUB_RUN_ATTEMPT"] = "2"
+    _run(intento2, "implementer", vf)
+
+    comentarios = _comments(env)
+    assert "sirius-verdict:implementer:FAILED_SAFELY:4001-1" in comentarios
+    assert "sirius-verdict:implementer:FAILED_SAFELY:4001-2" in comentarios
+
+
+def test_run_tag_distinct_run_ids_post_twice(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:implementing"])
+    vf = _verdict_file(tmp_path, {"verdict": "FAILED_SAFELY", "summary": "motivo"})
+
+    primero = dict(env)
+    primero["GITHUB_RUN_ID"] = "5001"
+    _run(primero, "implementer", vf)
+
+    segundo = dict(env)
+    segundo["GITHUB_RUN_ID"] = "5002"
+    _run(segundo, "implementer", vf)
+
+    comentarios = _comments(env)
+    assert "sirius-verdict:implementer:FAILED_SAFELY:5001-1" in comentarios
+    assert "sirius-verdict:implementer:FAILED_SAFELY:5002-1" in comentarios
+
+
+def test_setup_is_hermetic_against_a_rerun_of_actions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """El arnes no hereda el intento del runner.
+
+    Es la regresion exacta del fallo: al REEJECUTAR un workflow, GitHub Actions
+    aporta ``GITHUB_RUN_ATTEMPT=2`` al proceso de pytest. Sin sanear, los casos
+    que solo fijan el ``GITHUB_RUN_ID`` recibirian ``<run>-2``.
+    """
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "2")
+    monkeypatch.setenv("GITHUB_RUN_ID", "999999")
+
+    env = _setup(tmp_path)
+    assert env["GITHUB_RUN_ATTEMPT"] == INTENTO_BASE
+    assert "GITHUB_RUN_ID" not in env
+
+    _seed_issue(env, ["sirius:implementing"])
+    env["GITHUB_RUN_ID"] = "6001"
+    vf = _verdict_file(tmp_path, {"verdict": "FAILED_SAFELY", "summary": "motivo"})
+    _run(env, "implementer", vf)
+
+    comentarios = _comments(env)
+    assert "sirius-verdict:implementer:FAILED_SAFELY:6001-1" in comentarios
+    assert "6001-2" not in comentarios
+    assert "999999" not in comentarios
