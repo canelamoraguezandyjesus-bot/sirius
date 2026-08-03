@@ -1,0 +1,241 @@
+{
+ "documento": "Plano comun seguro de criticidad aplicada",
+ "version": "0.1",
+ "version_contrato": "0.5",
+ "estado": "PROPUESTO_NO_CONGELADO",
+ "generador": "experiments/adr002/benchmark/build_corpus_v0_5.py",
+ "indexado_por": "identidad canonica del item",
+ "campos": [
+  "nivel",
+  "razon_segura",
+  "fuente_de_politica",
+  "regla_de_politica"
+ ],
+ "plano_privado_que_no_cruza": "criticidad.fuente",
+ "usos_permitidos": [
+  "G12",
+  "tratamiento previo al limite",
+  "desempate estable y registrado",
+  "explicacion autorizada",
+  "estado PARCIAL por desbordamiento critico",
+  "handoff integro a B05"
+ ],
+ "usos_prohibidos": [
+  "generar candidatas",
+  "alterar similitud",
+  "saltar etapas",
+  "rescatar un elemento que no paso las puertas",
+  "favorecer a un candidato"
+ ],
+ "censo": {
+  "items": 97,
+  "sin_criticidad": 78,
+  "con_criticidad": 19,
+  "distribucion_por_nivel": {
+   "CRITICO": 18,
+   "IMPORTANTE": 1
+  },
+  "fuentes_de_politica": {
+   "ACTO_EXPLICITO": 4,
+   "ETIQUETA_DE_ESCENARIO": 12,
+   "REGLA_OPERATIVA_APROBADA": 1,
+   "REQUISITO_O_DECISION_APROBADA": 2
+  },
+  "razones_seguras_distintas": 8,
+  "reglas_de_politica_distintas": 7
+ },
+ "valores": {
+  "DEC-001": null,
+  "DEC-002": null,
+  "DEC-003": {
+   "nivel": "CRITICO",
+   "razon_segura": "Límite de gasto vigente; su omisión causa decisión errónea.",
+   "fuente_de_politica": "REQUISITO_O_DECISION_APROBADA",
+   "regla_de_politica": "CRIT-03"
+  },
+  "DEC-004": null,
+  "DEC-005": null,
+  "DEC-006": null,
+  "DEC-007": null,
+  "DEC-008": null,
+  "DEC-009": null,
+  "DEC-010": {
+   "nivel": "CRITICO",
+   "razon_segura": "Restricción tecnológica aprobada; invertirla rompe la decisión.",
+   "fuente_de_politica": "REQUISITO_O_DECISION_APROBADA",
+   "regla_de_politica": "CRIT-07"
+  },
+  "DEC-011": null,
+  "DEC-012": null,
+  "DEC-013": null,
+  "DEC-014": null,
+  "DEC-015": null,
+  "DEC-016": null,
+  "MEM-001": {
+   "nivel": "IMPORTANTE",
+   "razon_segura": "Requisito de redacción declarado explícitamente por el usuario.",
+   "fuente_de_politica": "ACTO_EXPLICITO",
+   "regla_de_politica": "CRIT-01"
+  },
+  "MEM-002": {
+   "nivel": "CRITICO",
+   "razon_segura": "Restricción esencial del viaje; omitirla cambia la planificación.",
+   "fuente_de_politica": "ACTO_EXPLICITO",
+   "regla_de_politica": "CRIT-02"
+  },
+  "MEM-003": null,
+  "MEM-004": null,
+  "MEM-005": null,
+  "MEM-006": null,
+  "MEM-007": null,
+  "MEM-008": null,
+  "MEM-009": null,
+  "MEM-010": null,
+  "MEM-011": null,
+  "MEM-012": null,
+  "MEM-013": null,
+  "MEM-014": {
+   "nivel": "CRITICO",
+   "razon_segura": "Restricción explícita de viaje; invertirla cambia el resultado.",
+   "fuente_de_politica": "ACTO_EXPLICITO",
+   "regla_de_politica": "CRIT-04"
+  },
+  "MEM-015": null,
+  "MEM-016": {
+   "nivel": "CRITICO",
+   "razon_segura": "Condición material; recuperarla sin condición invierte el sentido.",
+   "fuente_de_politica": "ACTO_EXPLICITO",
+   "regla_de_politica": "CRIT-05"
+  },
+  "MEM-017": null,
+  "MEM-018": null,
+  "MEM-019": null,
+  "MEM-020": null,
+  "MEM-021": null,
+  "MEM-022": null,
+  "MEM-023": null,
+  "MEM-024": null,
+  "MEM-025": {
+   "nivel": "CRITICO",
+   "razon_segura": "Restricción esencial detectada por regla operativa aprobada.",
+   "fuente_de_politica": "REGLA_OPERATIVA_APROBADA",
+   "regla_de_politica": "CRIT-07"
+  },
+  "MEM-026": null,
+  "MEM-027": null,
+  "MEM-101": {
+   "nivel": "CRITICO",
+   "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+   "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+   "regla_de_politica": "CRIT-06"
+  },
+  "MEM-102": {
+   "nivel": "CRITICO",
+   "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+   "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+   "regla_de_politica": "CRIT-06"
+  },
+  "MEM-103": {
+   "nivel": "CRITICO",
+   "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+   "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+   "regla_de_politica": "CRIT-06"
+  },
+  "MEM-104": {
+   "nivel": "CRITICO",
+   "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+   "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+   "regla_de_politica": "CRIT-06"
+  },
+  "MEM-105": {
+   "nivel": "CRITICO",
+   "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+   "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+   "regla_de_politica": "CRIT-06"
+  },
+  "MEM-106": {
+   "nivel": "CRITICO",
+   "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+   "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+   "regla_de_politica": "CRIT-06"
+  },
+  "MEM-107": {
+   "nivel": "CRITICO",
+   "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+   "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+   "regla_de_politica": "CRIT-06"
+  },
+  "MEM-108": {
+   "nivel": "CRITICO",
+   "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+   "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+   "regla_de_politica": "CRIT-06"
+  },
+  "MEM-109": {
+   "nivel": "CRITICO",
+   "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+   "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+   "regla_de_politica": "CRIT-06"
+  },
+  "MEM-110": {
+   "nivel": "CRITICO",
+   "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+   "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+   "regla_de_politica": "CRIT-06"
+  },
+  "MEM-111": {
+   "nivel": "CRITICO",
+   "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+   "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+   "regla_de_politica": "CRIT-06"
+  },
+  "MEM-112": {
+   "nivel": "CRITICO",
+   "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+   "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+   "regla_de_politica": "CRIT-06"
+  },
+  "MEM-901": null,
+  "MEM-902": null,
+  "MEM-903": null,
+  "MEM-904": null,
+  "MEM-905": null,
+  "MEM-906": null,
+  "MEM-907": null,
+  "MEM-908": null,
+  "MEM-909": null,
+  "MEM-910": null,
+  "MEM-911": null,
+  "MEM-912": null,
+  "MEM-913": null,
+  "MEM-914": null,
+  "MEM-915": null,
+  "MEM-916": null,
+  "MEM-917": null,
+  "MEM-918": null,
+  "MEM-919": null,
+  "MEM-920": null,
+  "MEM-921": null,
+  "MEM-922": null,
+  "MEM-923": null,
+  "MEM-924": null,
+  "MEM-925": null,
+  "MEM-926": null,
+  "MEM-927": null,
+  "MEM-928": null,
+  "MEM-929": null,
+  "MEM-930": null,
+  "MEM-931": null,
+  "MEM-932": null,
+  "MEM-933": null,
+  "MEM-934": null,
+  "MEM-935": null,
+  "MEM-936": null,
+  "MEM-937": null,
+  "MEM-938": null,
+  "MEM-939": null,
+  "MEM-940": null,
+  "MEM-950": null,
+  "MEM-951": null
+ }
+}
