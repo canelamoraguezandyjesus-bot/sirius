@@ -103,7 +103,9 @@ LOCATION_LINE_RE = re.compile(r":\d+(?:-\d+)?$")
 # —contar intentos, no medir progreso—, porque un fallo de CI no tiene
 # "hallazgos pendientes" ni "gravedad" que comparar, y mezclarlo con las rondas
 # de revisión falsearía la mejor marca histórica de estas.
-CI_FAILURE_MARKER_RE = re.compile(r"<!--\s*sirius-quality:[0-9a-fA-F]+:(?:failure|timed_out)\s*-->")
+CI_FAILURE_MARKER_RE = re.compile(
+    r"<!--\s*sirius-quality:([0-9a-fA-F]+):(?:failure|timed_out)\s*-->"
+)
 CI_SUCCESS_MARKER_RE = re.compile(r"<!--\s*sirius-quality:[0-9a-fA-F]+:success\s*-->")
 
 # Intentos consecutivos de corrección motivados por un fallo de Quality, sin un
@@ -114,16 +116,31 @@ MAX_CI_FAILURE_STREAK = 3
 
 
 def ci_failure_streak(text: str) -> int:
-    """Fallos de Quality consecutivos desde el último Quality en verde.
+    """Intentos de corrección consecutivos que Quality tumbó, desde el último verde.
 
     ``text`` es el historial de la incidencia en orden cronológico. Un Quality
     en verde reinicia la cuenta: significa que la construcción volvió a estar
     sana y que el ciclo avanza por el otro motor, el de las rondas de revisión.
+
+    Se cuentan **heads distintos**, no marcadores. Lo que esta cota mide son
+    intentos de corrección, y cada intento es forzosamente un commit nuevo: dos
+    marcadores sobre el MISMO head siguen siendo un único intento. Contar
+    marcadores gastaba presupuesto sin que el corrector hubiera vuelto a probar
+    nada, y eso ocurre de verdad, no en teoría: basta con que Quality se
+    reejecute sobre el mismo head y cambie de conclusión (``failure`` la primera
+    vez, ``timed_out`` la siguiente) para que un solo intento consumiera dos
+    tercios del margen. Una prueba intermitente —que este repositorio ya tiene—
+    hace de esa reejecución la norma, no la excepción.
     """
     last_success = -1
     for match in CI_SUCCESS_MARKER_RE.finditer(text):
         last_success = match.end()
-    return sum(1 for match in CI_FAILURE_MARKER_RE.finditer(text) if match.start() > last_success)
+    heads = {
+        match.group(1).casefold()
+        for match in CI_FAILURE_MARKER_RE.finditer(text)
+        if match.start() > last_success
+    }
+    return len(heads)
 
 
 def _normalize_text(value: object) -> str:

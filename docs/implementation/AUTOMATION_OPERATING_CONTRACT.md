@@ -275,8 +275,12 @@ El ciclo pasa a `sirius:blocked-decision`, con el motivo exacto registrado, úni
 - un hallazgo dado por resuelto reaparece en una ronda posterior;
 - el conjunto de hallazgos oscila entre estados anteriores;
 - el head no avanzó entre dos rondas (no hubo corrección efectiva que revisar);
-- Quality falla `MAX_CI_FAILURE_STREAK` veces seguidas (3) sin un verde de por
-  medio;
+- Quality tumba `MAX_CI_FAILURE_STREAK` intentos de corrección seguidos (3) sin un verde de por
+  medio. La cuenta es de **heads distintos**, no de marcadores: cada intento del corrector es
+  forzosamente un commit nuevo, así que dos resultados de Quality sobre el mismo head —una
+  reejecución que pase de `failure` a `timed_out`, cosa que una prueba intermitente vuelve
+  rutinaria— siguen siendo un solo intento y no pueden gastar el margen sin que el corrector
+  haya vuelto a probar nada;
 - el historial de rondas no se puede leer, o se puede leer pero la ronda no se puede numerar (numerar a ciegas repetiría un número ya usado, colaría la ronda nueva al principio del historial ordenado y falsearía la medida);
 - o concurre cualquiera de las causas de parada del párrafo tercero de este apartado (producto, arquitectura, alcance, credenciales, permisos, costes, datos reales u operaciones irreversibles).
 

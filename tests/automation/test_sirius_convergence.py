@@ -827,3 +827,39 @@ def test_the_template_only_names_stops_that_the_gate_can_emit() -> None:
     assert named, "la plantilla ya no cita ningún motivo de parada: la prueba pasaría en vacío"
     unknown = named - emitted
     assert not unknown, f"la plantilla cita motivos de parada inexistentes: {sorted(unknown)}"
+
+
+def test_repeated_quality_runs_on_one_head_are_a_single_attempt() -> None:
+    # La cota cuenta INTENTOS de corrección, y cada intento es un commit nuevo.
+    # Quality puede reejecutarse sobre el mismo head y cambiar de conclusión
+    # (una prueba intermitente basta); eso no es un intento nuevo del corrector,
+    # así que no puede gastar presupuesto.
+    module = _module()
+    history = "\n".join(
+        [
+            _ci("a" * 12, "failure"),
+            _ci("a" * 12, "timed_out"),
+            _ci("a" * 12, "failure"),
+        ]
+    )
+    assert module.ci_failure_streak(history) == 1
+    result = module.decide(module.parse_round_records(history), ci_failures=1)
+    assert result["decision"] == "CONTINUE"
+
+
+def test_distinct_heads_still_accumulate_toward_the_bound() -> None:
+    # La otra mitad: ignorar repeticiones no puede desactivar la cota. Tres
+    # intentos reales (tres commits) siguen bloqueando.
+    module = _module()
+    history = "\n".join(
+        [
+            _ci("a" * 12, "failure"),
+            _ci("a" * 12, "timed_out"),
+            _ci("b" * 12, "failure"),
+            _ci("c" * 12, "failure"),
+        ]
+    )
+    assert module.ci_failure_streak(history) == module.MAX_CI_FAILURE_STREAK
+    result = module.decide(module.parse_round_records(history), ci_failures=3)
+    assert result["decision"] == "BLOCK"
+    assert result["reason"] == "ci-sin-arreglo"
