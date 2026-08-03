@@ -111,28 +111,37 @@ def _dedupe(observations: list[dict[str, str]]) -> list[dict[str, str]]:
     severidad y límites). Sin deduplicación semántica: dos hallazgos que
     difieren en cualquier campo se conservan ambos.
 
-    Al construir la clave se neutralizan las URL. En los hallazgos de Codex el
-    campo ``prueba`` es el permalink del comentario que lo reportó, distinto
-    para cada comentario aunque el defecto sea literalmente el mismo: si el
-    conector publica el mismo hallazgo en dos revisiones —caso que el
-    recolector contempla al unir todas las revisiones de la ronda—, la clave
-    diferiría solo en ese enlace y el duplicado no se eliminaría nunca. El
-    corrector recibiría el defecto repetido y, peor, ``pending`` y
-    ``severity_total`` contarían comentarios en vez de defectos, falseando la
-    medida de convergencia. Neutralizar la URL corrige eso sin perder poder de
-    discriminación: el ``prueba`` del revisor Claude es el nombre de una prueba,
-    no un enlace, y sigue distinguiendo. El permalink de la primera aparición se
-    conserva en la observación que sobrevive.
+    Al construir la clave se neutralizan las URL de ``prueba``, y SOLO de ese
+    campo. En los hallazgos de Codex ``prueba`` es el permalink del comentario
+    que lo reportó, distinto para cada comentario aunque el defecto sea
+    literalmente el mismo: si el conector publica el mismo hallazgo en dos
+    revisiones —caso que el recolector contempla al unir todas las revisiones de
+    la ronda—, la clave diferiría solo en ese enlace y el duplicado no se
+    eliminaría nunca. El corrector recibiría el defecto repetido y, peor,
+    ``pending`` y ``severity_total`` contarían comentarios en vez de defectos,
+    falseando la medida de convergencia.
+
+    Neutralizar las URL de TODOS los campos corregiría eso pero abriría un daño
+    mayor y en la dirección contraria: dos hallazgos cuyo ``problema`` se
+    distingue precisamente por una URL —dos advisories, dos endpoints, dos
+    referencias distintas descritas con la misma frase— se fusionarían y uno se
+    perdería. Borrar un hallazgo real es peor que conservar dos parecidos, así
+    que la neutralización se limita al único campo que se sabe portador de
+    metadato del canal. El ``prueba`` del revisor Claude es el nombre de una
+    prueba, no un enlace, y sigue distinguiendo. El permalink de la primera
+    aparición se conserva en la observación que sobrevive.
     """
 
-    def key_value(value: str) -> str:
-        return re.sub(r"\s+", " ", URL_RE.sub("<url>", value)).strip().casefold()
+    def key_value(field: str, value: str) -> str:
+        if field == "prueba":
+            value = URL_RE.sub("<url>", value)
+        return re.sub(r"\s+", " ", value).strip().casefold()
 
     seen: set[tuple[str, ...]] = set()
     unique: list[dict[str, str]] = []
     for observation in observations:
         source = observation["id"].split("-", 1)[0]
-        key = (source, *(key_value(observation[field]) for field in OBSERVATION_KEYS[1:]))
+        key = (source, *(key_value(field, observation[field]) for field in OBSERVATION_KEYS[1:]))
         if key in seen:
             continue
         seen.add(key)

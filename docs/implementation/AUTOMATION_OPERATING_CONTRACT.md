@@ -164,13 +164,24 @@ Reglas del modo dual:
   comentario dejaría fuera las posteriores y el corrector recibiría una lista
   incompleta con apariencia de completa. La ventana está acotada por el plazo
   absoluto: al vencer este se entrega lo observado, nunca un timeout falso
-  teniendo hallazgos a la vista. Una parada segura no espera.
-- La deduplicación de observaciones neutraliza las URL al construir su clave.
-  En los hallazgos de Codex el campo `prueba` es el permalink del comentario que
-  lo reportó, distinto para cada comentario aunque el defecto sea el mismo: con
-  el enlace dentro de la clave, un hallazgo repetido en dos revisiones no se
-  dedupararía nunca y `pending` y `severity_total` contarían comentarios en vez
-  de defectos, falseando la medida de convergencia.
+  teniendo hallazgos a la vista. Una parada segura no espera. Si una pasada
+  posterior deja de ser interpretable —típicamente porque apareció una revisión
+  formal sin comentarios visibles—, el resultado que se estaba estabilizando se
+  **descarta**: conservarlo permitiría aprobar el head pese a una revisión
+  pendiente que el propio recolector declara ambigua. Un fallo de transporte no
+  descarta nada: no es evidencia de ambigüedad, solo de que no se pudo mirar.
+  Cada pausa de sondeo se acota al plazo absoluto (y al cierre de la ventana),
+  para que el plazo prometido sea exacto y no aproximado.
+- La deduplicación de observaciones neutraliza las URL de `prueba`, y solo de
+  ese campo, al construir su clave. En los hallazgos de Codex `prueba` es el
+  permalink del comentario que lo reportó, distinto para cada comentario aunque
+  el defecto sea el mismo: con el enlace dentro de la clave, un hallazgo
+  repetido en dos revisiones no se dedupararía nunca y `pending` y
+  `severity_total` contarían comentarios en vez de defectos, falseando la medida
+  de convergencia. La neutralización NO se extiende al resto de campos: dos
+  hallazgos cuyo `problema` se distingue precisamente por una URL —dos
+  advisories, dos endpoints— se fusionarían y uno se perdería, y borrar un
+  hallazgo real es peor que conservar dos parecidos.
 - Un agregador determinista (`scripts/automation/sirius_aggregate_reviews.py`)
   combina ambos resultados sin votos ni arbitraje de otro modelo, con esta
   precedencia: JSON inválido de un revisor obligatorio → `FAILED_SAFELY`; SHA

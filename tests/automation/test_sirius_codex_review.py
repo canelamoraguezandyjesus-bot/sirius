@@ -180,6 +180,17 @@ if m:
         seen += 1
         with open(calls_path, "w", encoding="utf-8") as fh:
             fh.write(str(seen))
+    # `fail_calls.txt` enumera qué llamadas al endpoint de revisiones deben
+    # fallar (1-indexadas). Permite tumbar una pasada de sondeo COMPLETA —sus
+    # dos reintentos— dejando intactas la anterior y la siguiente, que es lo que
+    # distingue "no se pudo mirar" de "no hay nada que mirar".
+    fail_calls_path = os.path.join(d, "fail_calls.txt")
+    if os.path.exists(fail_calls_path):
+        with open(fail_calls_path, encoding="utf-8") as fh:
+            failing = {int(x) for x in fh.read().replace(",", " ").split()}
+        if seen in failing:
+            sys.stderr.write("HTTP 503 simulado en la pasada de revisiones\\n")
+            sys.exit(1)
     late = os.path.join(d, "reviews_late.json")
     threshold = 2
     threshold_path = os.path.join(d, "reviews_late_after.txt")
@@ -1187,3 +1198,77 @@ def test_a_stable_result_is_delivered_after_the_window(tmp_path: Path) -> None:
     assert r.returncode == 0, r.stdout + r.stderr
     assert _result(tmp_path)["status"] == "APPROVED"
     assert "se reinicia la espera" not in r.stderr
+
+
+def test_a_late_ambiguous_review_invalidates_a_stabilizing_result(tmp_path: Path) -> None:
+    # Codex aprueba y, mientras la ventana se estabiliza, abre una revisión
+    # formal cuyos comentarios todavía no son visibles. Conservar la aprobación
+    # dejaría que al vencer el plazo se aprobara el head pese a una revisión
+    # pendiente que el propio recolector declara ambigua. La ambigüedad debe
+    # descartar lo que se estaba estabilizando y terminar en fallo seguro.
+    env = _setup(tmp_path)
+    _write_state(tmp_path, trigger_at=_stamp(-2))
+    _seed(
+        env,
+        "reviews.json",
+        [_review(review_id=700, state="APPROVED", submitted_at=_stamp(-1))],
+    )
+    _seed(
+        env,
+        "reviews_late.json",
+        [
+            _review(review_id=700, state="APPROVED", submitted_at=_stamp(-1)),
+            _review(review_id=701, state="COMMENTED", submitted_at=_stamp(-1)),
+        ],
+    )
+    _seed(env, "review_comments_701.json", [])  # sin comentarios inline visibles
+
+    r = _run_collect(env, tmp_path, timeout="3")
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "FAILED_SAFELY", "no puede aprobarse con una revisión ambigua"
+    assert result["reason"] == "timeout"
+    assert "ha dejado de ser interpretable" in r.stderr
+
+
+def test_a_failed_poll_pass_does_not_invalidate_a_stabilizing_result(tmp_path: Path) -> None:
+    # Un error de transporte no es evidencia de ambigüedad: solo de que no se
+    # pudo mirar. No debe descartar hallazgos ya observados.
+    env = _setup(tmp_path)
+    env["SIRIUS_CODEX_SETTLE_SECONDS"] = "1"
+    _write_state(tmp_path, trigger_at=_stamp(-2))
+    _seed(env, "reviews.json", [_review(review_id=700, submitted_at=_stamp(-1))])
+    _seed(env, "review_comments_700.json", [_review_comment(801)])
+    # Falla la SEGUNDA pasada por completo: con SIRIUS_RETRY_ATTEMPTS=2, sus dos
+    # reintentos son las llamadas 2 y 3. La 1 y la 4 sí responden.
+    (_md(env) / "fail_calls.txt").write_text("2,3", encoding="utf-8")
+
+    r = _run_collect(env, tmp_path, timeout="60")
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "CHANGES_REQUESTED"
+    assert len(result["observations"]) == 1
+    assert "ha dejado de ser interpretable" not in r.stderr
+
+
+def test_the_poll_pause_never_overshoots_the_deadline(tmp_path: Path) -> None:
+    # Con un intervalo de sondeo mayor que el plazo restante, dormir el
+    # intervalo completo hacía que el recolector terminara mucho después del
+    # plazo que promete. La pausa se acota al tiempo que queda.
+    import time as _time
+
+    env = _setup(tmp_path)
+    env["SIRIUS_CODEX_POLL_SECONDS"] = "120"
+    _write_state(tmp_path, trigger_at=_stamp(-2))
+    _seed(env, "reviews.json", [])  # nada que recoger: se agota el plazo
+
+    started = _time.monotonic()
+    r = _run_collect(env, tmp_path, timeout="3")
+    elapsed = _time.monotonic() - started
+
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert _result(tmp_path)["reason"] == "timeout"
+    assert elapsed < 60, (
+        f"el recolector tardó {elapsed:.0f} s con un plazo restante de ~1 s: "
+        "la pausa no se está acotando al plazo"
+    )

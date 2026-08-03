@@ -396,3 +396,30 @@ def test_claude_findings_still_discriminate_by_their_test(tmp_path: Path) -> Non
         _codex("APPROVED"),
     )
     assert len(result["observations"]) == 2
+
+
+def test_two_findings_that_differ_only_by_a_url_in_the_problem_are_both_kept(
+    tmp_path: Path,
+) -> None:
+    # Dos hallazgos del mismo archivo y línea cuyo `problema` se distingue
+    # precisamente por una URL — dos advisories, dos endpoints — son distintos.
+    # Neutralizar las URL de TODOS los campos los fusionaría y perdería uno;
+    # borrar un hallazgo real es peor que conservar dos parecidos, así que la
+    # neutralización se limita a `prueba`, el único campo que se sabe portador
+    # de metadato del canal.
+    primero = _codex_observation(
+        id="CODEX-001",
+        problema="Dependencia vulnerable: ver https://example.test/advisory/AAA",
+        prueba="https://github.com/o/r/pull/9#discussion_r111",
+    )
+    segundo = _codex_observation(
+        id="CODEX-002",
+        problema="Dependencia vulnerable: ver https://example.test/advisory/BBB",
+        prueba="https://github.com/o/r/pull/9#discussion_r222",
+    )
+    result = _run(
+        tmp_path,
+        _claude("REVIEW_APPROVED"),
+        _codex("CHANGES_REQUESTED", observations=[primero, segundo]),
+    )
+    assert len(result["observations"]) == 2, "dos advisories distintos no son el mismo hallazgo"

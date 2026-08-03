@@ -858,6 +858,8 @@ def cmd_collect(args: argparse.Namespace) -> int:
         # Siempre se hace al menos una pasada de sondeo, incluso con el plazo
         # absoluto ya agotado: si Codex respondió mientras Claude trabajaba, su
         # resultado debe recogerse en vez de declararse un timeout falso.
+        observed: CodexResult | None = None
+        poll_failed = False
         try:
             observed, has_reviews = _check_reviews(
                 args.repo, args.pr, args.head, trigger_at, trigger_id
@@ -868,7 +870,7 @@ def cmd_collect(args: argparse.Namespace) -> int:
             # Error transitorio ya reintentado: se sigue sondeando hasta el
             # timeout; nunca se degrada a aprobación ni se aborta sin resultado.
             print(f"sirius_codex_review: pasada de sondeo fallida: {exc}", file=sys.stderr)
-            observed = None
+            poll_failed = True
 
         if observed is not None:
             if observed.status == "FAILED_SAFELY":
@@ -893,6 +895,26 @@ def cmd_collect(args: argparse.Namespace) -> int:
                 # el definitivo de la ronda.
                 result = settling
                 break
+        elif not poll_failed and settling is not None:
+            # La pasada SÍ se completó y ya no hay nada interpretable. Eso NO es
+            # "sigue valiendo lo anterior": significa que apareció una revisión
+            # formal que todavía no se puede leer y que vuelve ambigua la ronda
+            # entera. Conservar el resultado que se estaba estabilizando dejaría
+            # que, al vencer el plazo, se entregara un valor obsoleto — y en el
+            # peor caso se aprobara el head pese a una revisión pendiente que el
+            # propio código declara ambigua. Se descarta: si la ambigüedad no se
+            # aclara antes del plazo, la ronda termina en fallo seguro.
+            #
+            # Una pasada fallida por error de transporte (`poll_failed`) no
+            # invalida nada: no es evidencia de ambigüedad, solo de que no se
+            # pudo mirar.
+            print(
+                "sirius_codex_review: el resultado que se estaba estabilizando ha dejado de "
+                "ser interpretable (probablemente una revisión formal sin comentarios "
+                "visibles); se descarta y la ronda vuelve a esperar.",
+                file=sys.stderr,
+            )
+            settling, settling_signature = None, None
 
         if time.monotonic() >= deadline:
             if settling is not None:
@@ -918,7 +940,19 @@ def cmd_collect(args: argparse.Namespace) -> int:
                 ),
             )
             break
-        time.sleep(max(poll_seconds, 0))
+
+        # La pausa se acota al primer instante en que hay algo que decidir: el
+        # plazo absoluto o, si hay un resultado estabilizándose, el cierre de su
+        # ventana. Dormir el intervalo completo hacía que un remanente menor que
+        # `SIRIUS_CODEX_POLL_SECONDS` (30 s por defecto) se pasara de largo: el
+        # recolector terminaba hasta medio minuto después del plazo que promete,
+        # y el resultado se entregaba más tarde de lo necesario al cerrarse la
+        # ventana. El plazo absoluto deja de ser aproximado.
+        now = time.monotonic()
+        wake_at = deadline
+        if settling is not None and settle_until < wake_at:
+            wake_at = settle_until
+        time.sleep(max(min(poll_seconds, wake_at - now), 0.0))
 
     _write_result(args.output, result)
     print(
