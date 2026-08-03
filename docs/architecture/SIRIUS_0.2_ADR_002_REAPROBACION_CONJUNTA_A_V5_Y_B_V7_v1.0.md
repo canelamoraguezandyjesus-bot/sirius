@@ -103,3 +103,21 @@ Es una aserción de disposición Qt sensible al entorno, propiedad de `main`. Co
 - **No** aprueba `C` ni `D`.
 - **No** traslada las aprobaciones históricas de `A v3` ni de `B v5`, que permanecen en sus propias actas referidas a sus propias versiones.
 - **No** fusiona `PR #117` ni toca `main`.
+
+---
+
+## 8. Confirmación del acto de aprobación, con sus condiciones
+
+El usuario confirmó la reaprobación en el chat de trabajo con tres precisiones, que se recogen aquí porque son hechos de gobierno y no de implementación:
+
+1. **La regla vigente de `G9` se mantiene tal cual.** No se introduce ninguna autorización nueva para levantar la protección superior: lo declarado `RESTRINGIDA` sigue siendo inspeccionable únicamente por los modos `M3` y `M4`, que es la excepción literal que `G3` fija y que `G9` hereda. Ninguna otra vía la abre.
+2. **No se emiten `A v6` ni `B v8`.** Las versiones aprobadas son exactamente `A v5` y `B v7`; ningún cambio posterior a esta acta las sustituye salvo que una decisión aprobada lo exija.
+3. **La aprobación quedó condicionada a Quality verde sobre el HEAD de reaprobación**, y la condición está cumplida:
+
+| HEAD | Run | Resultado |
+|---|---|---|
+| `decf73e` — HEAD de reaprobación | 305, intento 2 | **verde** |
+| `ecb89af` — commit de esta acta | 307 | **verde** |
+| `35a7c710` — HEAD tras implementar `C` | 308 | **verde** |
+
+El intento 1 del run 305 falló en una única prueba de interfaz ajena a ADR-002, cuya adjudicación consta en §5.1: entró en `main` a mitad de sesión, la rama no toca `src/` ni `tests/`, y el intento 2 sobre el mismo commit de fusión pasó entero.
