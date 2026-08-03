@@ -13,8 +13,9 @@ name: Corregir bloque Sirius
 # estables de los hallazgos de cada ronda publicadas por
 # `sirius_apply_verdict.sh` y decide de forma determinista:
 #
-#   - CONTINUE mientras haya progreso comprobable (menos hallazgos pendientes,
-#     menor gravedad agregada o resolución de hallazgos concretos);
+#   - CONTINUE mientras haya progreso comprobable: el par (hallazgos
+#     pendientes, gravedad agregada) queda estrictamente por debajo de la mejor
+#     marca histórica —ninguna magnitud la supera y al menos una la mejora—;
 #   - BLOCK, con motivo exacto, cuando no hay progreso neto en dos rondas
 #     consecutivas, un hallazgo dado por resuelto reaparece, el conjunto de
 #     hallazgos oscila entre estados anteriores, el head no avanzó o el

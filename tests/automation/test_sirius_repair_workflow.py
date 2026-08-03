@@ -149,3 +149,18 @@ def test_apply_step_always_runs() -> None:
     apply_step = _step(_load(), "Aplicar el veredicto")
     assert apply_step["if"] == "always() && steps.gate.outputs.valid == 'true'"
     assert "sirius_apply_verdict.sh" in apply_step["run"]
+
+
+def test_the_corrector_prompt_states_the_rule_the_gate_implements() -> None:
+    # El prompt describía el progreso como una disyunción que incluía "la
+    # resolución de hallazgos concretos", regla que la puerta ya no implementa:
+    # el corrector podía creer que sustituir un defecto por otro contaba como
+    # avance y encontrarse la ronda bloqueada sin entender por qué. El prompt y
+    # la política deben decir lo mismo.
+    prompt = (REPO_ROOT / "scripts" / "automation" / "prompts" / "corrector.md").read_text(
+        encoding="utf-8"
+    )
+    assert "mejor marca histórica" in prompt
+    assert "menor gravedad agregada o la resolución de hallazgos concretos" not in prompt
+    # Y el encabezado del workflow tampoco puede describir la regla antigua.
+    assert "menor gravedad agregada o resolución de hallazgos concretos" not in _source()

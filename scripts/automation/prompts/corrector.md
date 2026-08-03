@@ -18,11 +18,16 @@ independiente de una PR de Sirius 0.1 ya existente.
   destructiva, pérdida de datos, un coste nuevo, credenciales reales o datos
   personales.
 - No hay un tope fijo de rondas de corrección. El ciclo continúa mientras haya
-  progreso comprobable y se detiene solo cuando deja de haberlo: menos
-  hallazgos pendientes, menor gravedad agregada o la resolución de hallazgos
-  concretos. Corrige la causa raíz, no el síntoma: un defecto que se declara
-  resuelto y reaparece en una ronda posterior detiene el ciclo para decisión
-  humana, igual que dos rondas consecutivas sin avance.
+  progreso comprobable y se detiene en cuanto deja de haberlo. Hay progreso
+  cuando el par `(hallazgos pendientes, gravedad agregada)` queda estrictamente
+  por debajo de la **mejor marca histórica** —el mínimo de cada magnitud sobre
+  todas las rondas anteriores—: ninguna de las dos la supera y al menos una la
+  mejora. Resolver un hallazgo no basta por sí solo si aparecen otros que dejan
+  el par igual o peor: sustituir un defecto por otro equivalente no es avance,
+  y reformular el mismo defecto con otras palabras tampoco. Corrige la causa
+  raíz, no el síntoma: un defecto que se declara resuelto y reaparece en una
+  ronda posterior detiene el ciclo para decisión humana, igual que dos rondas
+  consecutivas sin avance.
 - Ejecuta todas las validaciones obligatorias (`uv run ruff format --check .`,
   `uv run ruff check .`, `uv run mypy src tests`, `uv run pytest`) antes de
   dar por terminado el trabajo. No las omitas ni las debilites.
