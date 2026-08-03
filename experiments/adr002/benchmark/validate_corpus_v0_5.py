@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Any
 
 from experiments.adr002.benchmark import schema_v0_5 as S5
+from experiments.adr002.benchmark import schema_v0_6 as S6
 
 AQUI = Path(__file__).resolve().parent
 RAIZ = AQUI.parents[2]
@@ -510,8 +511,13 @@ def _inaccesibilidad(inf: Informe) -> None:
     nombres = {f.name for f in fields(ItemCanonico)}
     inf.check(
         "los atributos entregados a un candidato estan contenidos en la lista blanca",
-        nombres <= S5.ATRIBUTOS_PERMITIDOS_AL_CANDIDATO,
-        sorted(nombres - S5.ATRIBUTOS_PERMITIDOS_AL_CANDIDATO),
+        # La comprobación es sobre el ``ItemCanonico`` **vivo**, no sobre un
+        # artefacto congelado, de modo que la lista contra la que contiene es la
+        # de la familia **vigente**. La de la v0.5 quedó dentro de su manifiesto
+        # y no puede crecer sin alterar un congelado; la de la v0.6 la contiene
+        # entera y sólo añade.
+        nombres <= S6.ATRIBUTOS_PERMITIDOS_AL_CANDIDATO,
+        sorted(nombres - S6.ATRIBUTOS_PERMITIDOS_AL_CANDIDATO),
     )
     inf.check(
         "ningun atributo vetado viaja en la estructura que recibe un candidato",

@@ -132,11 +132,33 @@ CONSULTA_DELTA: Final = S5.CONSULTA_DELTA
 DOMINIOS_RECALCULADOS: Final = S5.DOMINIOS_RECALCULADOS
 
 
+# ---------------------------------------------------------------------------
+# Lista blanca sucesora · append-only sobre la de la v0.5
+# ---------------------------------------------------------------------------
+
+#: La v0.5 congeló su lista blanca **dentro de su manifiesto**, de modo que la
+#: constante de `schema_v0_5` no puede cambiar sin alterar un artefacto
+#: congelado. La ampliación aprobada del paso 5 añade `ejes` a `ItemCanonico`,
+#: y §5.7 clasifica esos ejes `ENTRADA_DE_CANDIDATO` —«candidatos y common |
+#: recuperación»—, de modo que su lectura está autorizada.
+#:
+#: La extensión vive aquí, en la familia **vigente**, y es estrictamente
+#: aditiva: contiene la lista de la v0.5 entera y no retira ninguna entrada.
+ATRIBUTOS_PERMITIDOS_AL_CANDIDATO: Final[frozenset[str]] = S5.ATRIBUTOS_PERMITIDOS_AL_CANDIDATO | {
+    "ejes"
+}
+
+#: Lo vetado no cambia: nada de lo que la v0.5 prohibió se permite ahora.
+ATRIBUTOS_VETADOS_AL_CANDIDATO: Final[frozenset[str]] = S5.ATRIBUTOS_VETADOS_AL_CANDIDATO
+
+
 class ContratoFamiliaV06Error(AssertionError):
     """Violación del contrato de la familia sucesora de conformidad v0.6."""
 
 
 __all__ = [
+    "ATRIBUTOS_PERMITIDOS_AL_CANDIDATO",
+    "ATRIBUTOS_VETADOS_AL_CANDIDATO",
     "BLOBS_V0_4",
     "BLOBS_V0_5",
     "CASO_CORREGIDO",
