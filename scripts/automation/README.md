@@ -62,8 +62,12 @@ procesamiento) y escribe un JSON normalizado. Timeout configurable
 (`SIRIUS_CODEX_REVIEW_TIMEOUT_SECONDS`, 1200 s por defecto) y limitado por
 `SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS` (1500 s) para que el resultado se
 escriba siempre antes de que expire el paso del workflow; cualquier caso no
-identificable con seguridad termina en `FAILED_SAFELY`. No usa la API de
-OpenAI y nunca modifica código.
+identificable con seguridad termina en `FAILED_SAFELY`. Un resultado no se
+entrega al verlo por primera vez: hay que observarlo dos veces igual con una
+ventana de estabilidad de por medio (`SIRIUS_CODEX_SETTLE_SECONDS`, 60 s), que
+cualquier hallazgo nuevo reinicia, porque el conector puede publicar en varias
+tandas; la ventana está acotada por el plazo absoluto. No usa la API de OpenAI
+y nunca modifica código.
 
 ## `sirius_aggregate_reviews.py`
 

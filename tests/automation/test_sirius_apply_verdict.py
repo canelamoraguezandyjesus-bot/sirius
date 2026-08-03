@@ -144,6 +144,10 @@ def _setup(tmp_path: Path) -> dict[str, str]:
     env["GH_MOCK_DIR"] = str(mock_dir)
     env["SIRIUS_RETRY_BASE_DELAY"] = "0"
     env["SIRIUS_RETRY_ATTEMPTS"] = "2"
+    # El entorno hereda `os.environ`, que en el runner trae las variables de
+    # Actions; `conftest.py` las retira antes de cada prueba (ver allí el motivo:
+    # gobiernan los marcadores y hacían que una reejecución del mismo commit
+    # diera rojo). Las pruebas que necesitan un run concreto lo fijan ellas.
     return env
 
 
