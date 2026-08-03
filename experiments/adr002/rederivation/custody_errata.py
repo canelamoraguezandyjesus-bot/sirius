@@ -230,6 +230,12 @@ HASHES_NO_ALMACENADOS: Final[Mapping[str, str]] = {
         "relacional explicito: se congela antes de su primera ejecucion y no "
         "procede de ningun resultado observado"
     ),
+    "2472615eef2159fe22a2accd053db3b58df21e50": (
+        "huella canonica de la ficha ADR002-C v1 ya SUSTITUIDA: la v1 se derivo de "
+        "la ficha de ADR002-B y arrastro texto vectorial ajeno, y citaba A v3 "
+        "cuando la base aprobada es A v5. El defecto era documental; la "
+        "implementacion de C no cambio"
+    ),
     "b57ad7b24c7f0232d45540cde73294e2d68e02ef": (
         "captura de entorno de ADR-001: HEAD observado de la rama historica "
         "fix/chat-history-layout al ejecutar los spikes, registrado como "
