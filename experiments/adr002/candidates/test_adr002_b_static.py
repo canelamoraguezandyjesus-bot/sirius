@@ -59,6 +59,11 @@ def test_la_base_de_a_no_cambio_ni_un_byte() -> None:
     sucesoras A v3 y B v2—, y sus blobs quedan fijados aqui de nuevo: el
     proximo cambio silencioso volvera a fallar.
 
+    La ampliacion aprobada en chat del paso 5 alcanza ademas a las cinco
+    puertas que leian el estado colapsado —``G3``, ``G4``, ``G6``, ``G7`` y
+    ``G9``—: ahora leen los ejes P2 que el sustrato declara, y degradan
+    dejandolo constar cuando no los hay.
+
     El **paso 5 del plan aprobado** —«corregir `common` una sola vez»— toco
     los siete modulos comunes, anadio ``grouping.py`` y alcanzo a ``adr002_a``
     en los dos puntos donde leia la clave de sujeto como cadena. Los blobs se
@@ -69,19 +74,19 @@ def test_la_base_de_a_no_cambio_ni_un_byte() -> None:
 
     fijados = {
         "experiments/adr002/candidates/common/contracts.py": (
-            "3cfa7bc75268e68a3e368c93625bf7d71d3e51d0"
+            "c93b441de907952db2518d982229736c0d8b1331"
         ),
         "experiments/adr002/candidates/common/engine.py": (
             "991c68d5f04b48521e2d1450ff071aa7497f3744"
         ),
         "experiments/adr002/candidates/common/gates.py": (
-            "8e6f0e57850658f763d10277dc0574bd6c78fcbb"
+            "c4b55f0cbff58e76752fb801eb4cbde8f85246b2"
         ),
         "experiments/adr002/candidates/common/stops.py": (
             "b1f737efd91e140c9af691c6a7e2323c84d54c4c"
         ),
         "experiments/adr002/candidates/common/port.py": (
-            "90d5d043ef128cb795f6613953ee0fea6acfb825"
+            "7613da0d051689bc6033bd06f12db2e2a8f8b596"
         ),
         "experiments/adr002/candidates/common/trace.py": (
             "01d97bbc5244774caf6bce687d17c4b4e620d4aa"

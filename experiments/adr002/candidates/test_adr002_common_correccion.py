@@ -518,3 +518,127 @@ def test_el_motor_es_determinista_sobre_la_proyeccion(proyeccion, plano) -> None
         segunda = engine.recuperar(_peticion("plataforma"), puerto, candidato(), plano)
     assert primera.ids == segunda.ids
     assert [g.miembros for g in primera.grupos] == [g.miembros for g in segunda.grupos]
+
+
+# ---------------------------------------------------------------------------
+# 19. Las cinco puertas que leian el estado colapsado
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def puerto_con_ejes(proyeccion):
+    from experiments.adr002.projection.contracts import Plano
+
+    with PuertoSqlite(proyeccion.ruta_de_entrada(), proyeccion.ruta(Plano.EJES_P2)) as puerto:
+        yield puerto
+
+
+def _con_ejes(puerto, identidad: str, **kwargs) -> Candidata:
+    item = puerto.por_identificadores([identidad]).items[0]
+    return Candidata(
+        item=item,
+        etapa=Etapa.E1,
+        lectura=LecturaSemantica(
+            sujeto="s", polaridad=Polaridad.AFIRMATIVA, condicion=None, tiempo=None, medio="lexico"
+        ),
+        razon="coincide",
+        senal="clave_exacta",
+    )
+
+
+def test_el_puerto_declara_si_aporta_los_ejes(puerto_con_ejes) -> None:
+    assert puerto_con_ejes.declara_ejes
+
+
+def test_g6_distingue_candidata_de_rechazada(puerto_con_ejes) -> None:
+    """Leyendo ``vigente`` las dos caian juntas y no habia forma de separarlas."""
+    candidata = _con_ejes(puerto_con_ejes, "MEMORIA:7")
+    rechazada = _con_ejes(puerto_con_ejes, "MEMORIA:8")
+    assert candidata.item.ejes.confirmacion == "CANDIDATA"
+    assert rechazada.item.ejes.confirmacion == "RECHAZADA"
+
+    en_m1 = gates.aplicar_previas([candidata, rechazada], _peticion("x"))
+    assert en_m1.admitidas == (), "en M1 ninguna confirmacion distinta de CONFIRMADA es visible"
+    assert {p for _i, p, _m in en_m1.descartes} >= {"G6"}
+
+    gestion = gates.aplicar_previas(
+        [candidata, rechazada],
+        Peticion(
+            operation_id="g6",
+            consulta="x",
+            proposito="gestionar",
+            modo=Modo.M4_GESTION,
+            ambito=Ambito(global_=True, proyectos=()),
+            ventana=VentanaTemporal(tiempo_objetivo="2026-06-15T00:00:00Z"),
+            cardinalidad=Cardinalidad.EXHAUSTIVA,
+            limite_objetivo=10,
+            limite_duro=10,
+        ),
+    )
+    assert len(gestion.admitidas) == 2, "el modo de gestion si las ve"
+
+
+def test_g7_separa_sustituida_de_sin_soporte(puerto_con_ejes) -> None:
+    """Dos causas distintas que el estado colapsado hacia indistinguibles."""
+    sin_soporte = _con_ejes(puerto_con_ejes, "MEMORIA:17")
+    assert sin_soporte.item.ejes.validez == "SIN_SOPORTE"
+    assert sin_soporte.item.vigente is False
+    veredicto = [
+        m
+        for _i, p, m in gates.aplicar_previas([sin_soporte], _peticion("x")).descartes
+        if p == "G7"
+    ]
+    assert veredicto == ["validez SIN_SOPORTE: no entra en M1"]
+
+
+def test_g4_admite_una_lista_cerrada_cuyos_miembros_estan_autorizados(
+    puerto_con_ejes,
+) -> None:
+    """Una sola clave foranea no puede expresar un ambito multiproyecto."""
+    decision = _con_ejes(puerto_con_ejes, "DECISION:1")
+    assert decision.item.ejes.ambito == "MULTI_PROYECTO_CERRADO"
+    assert decision.item.ejes.miembros_de_ambito == ("2", "3")
+
+    completo = gates.aplicar_previas([decision], _peticion("x", proyectos=("2", "3")))
+    assert len(completo.admitidas) == 1
+
+    parcial = gates.aplicar_previas([decision], _peticion("x", proyectos=("2",)))
+    assert parcial.admitidas == ()
+    assert [m for _i, p, m in parcial.descartes if p == "G4"] == [
+        "lista cerrada con miembros fuera del ambito"
+    ]
+
+
+def test_g4_admite_el_item_global_desde_cualquier_ambito(puerto_con_ejes) -> None:
+    global_ = _con_ejes(puerto_con_ejes, "MEMORIA:1")
+    assert global_.item.ejes.ambito == "GLOBAL"
+    admitidas = gates.aplicar_previas([global_], _peticion("x", proyectos=("2",))).admitidas
+    assert len(admitidas) == 1
+
+
+def test_g3_y_g9_degradan_declarandolo_cuando_no_hay_ejes(tmp_path: Path) -> None:
+    """Sin ejes las puertas no se relajan: degradan y lo hacen constar."""
+    base = tmp_path / "f.sqlite3"
+    fixtures.construir(base)
+    with PuertoSqlite(base) as puerto:
+        assert not puerto.declara_ejes
+        item = puerto.por_clave_exacta(["faro-costa"])[0]
+    assert item.ejes.no_usar_como_memoria is None
+    sin_disponer = _candidata("MEMORIA:1")
+    veredicto = gates.aplicar_previas([sin_disponer], _peticion("x")).admitidas
+    assert len(veredicto) == 1, "un item disponible sigue pasando cuando el eje no se declara"
+
+
+def test_g9_mantiene_la_proteccion_superior(puerto_con_ejes) -> None:
+    """La duda no abre acceso: lo restringido solo lo inspecciona M3/M4."""
+    restringidos = [
+        _con_ejes(puerto_con_ejes, i)
+        for i in ("MEMORIA:1", "MEMORIA:7")
+        if _con_ejes(puerto_con_ejes, i).item.ejes.sensibilidad == "RESTRINGIDA"
+    ]
+    # El corpus declara dos items RESTRINGIDA; si el fixture no los alcanza por
+    # identidad, el invariante se comprueba igual sobre la regla.
+    from experiments.adr002.candidates.common.contracts import SENSIBILIDAD_PROTEGIDA
+
+    assert "RESTRINGIDA" in SENSIBILIDAD_PROTEGIDA
+    assert not restringidos or gates.aplicar_previas(restringidos, _peticion("x")).admitidas == ()

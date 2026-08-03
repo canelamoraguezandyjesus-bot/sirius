@@ -188,6 +188,54 @@ class Peticion:
 
 
 @dataclass(frozen=True, slots=True)
+class EjesDeclarados:
+    """Los ejes P2 que el esquema canonico de Sirius 0.1 **no puede sostener**.
+
+    ``memories.status`` tiene tres valores y ``decisions.status`` cuatro; el
+    corpus declara confirmacion, validez y disponibilidad por separado, mas
+    sensibilidad, autoridad, ambito y las dos marcas de no uso. Colapsarlos en
+    un estado hacia que ``G3``, ``G6``, ``G7`` y ``G9`` leyesen los mismos dos
+    booleanos y no pudieran distinguir una memoria candidata de una rechazada,
+    ni una sustituida de una purgada.
+
+    Un eje a ``None`` significa **el sustrato no lo declara**, y la puerta que
+    lo necesita degrada al estado colapsado dejando constancia. No significa
+    que el eje sea permisivo.
+    """
+
+    confirmacion: str | None = None
+    validez: str | None = None
+    disponibilidad: str | None = None
+    sensibilidad: str | None = None
+    autoridad: str | None = None
+    ambito: str | None = None
+    no_usar_como_memoria: bool | None = None
+    no_consolidable: bool | None = None
+    procedencia: tuple[str, ...] = ()
+    #: Proyectos que una lista cerrada abarca. Una sola clave foranea no puede
+    #: expresar un ambito multiproyecto, y ``G4`` necesita los miembros.
+    miembros_de_ambito: tuple[str, ...] = ()
+
+    @property
+    def declarados(self) -> bool:
+        """Si el sustrato aporto ejes. Sin ellos, las puertas degradan."""
+        return self.confirmacion is not None or self.validez is not None
+
+
+#: Ejes ausentes: el sustrato no los declara y las puertas degradan al estado.
+SIN_EJES: Final = EjesDeclarados()
+
+#: Vocabularios P2 que las puertas comparan. Se declaran aqui, en la capa
+#: comun, porque las puertas los aplican; su **asignacion** a cada item es de
+#: la proyeccion, que es quien conoce el corpus.
+CONFIRMACION_VISIBLE_SIEMPRE: Final = "CONFIRMADA"
+VALIDEZ_QUE_NO_ENTRA_EN_M1: Final[frozenset[str]] = frozenset({"SUSTITUIDA", "SIN_SOPORTE"})
+SENSIBILIDAD_PROTEGIDA: Final[frozenset[str]] = frozenset({"RESTRINGIDA"})
+AMBITO_GLOBAL: Final = "GLOBAL"
+AMBITO_MULTIPROYECTO: Final = "MULTI_PROYECTO_CERRADO"
+
+
+@dataclass(frozen=True, slots=True)
 class ItemCanonico:
     """Un elemento del canon, tal como el puerto lo entrega.
 
@@ -218,6 +266,9 @@ class ItemCanonico:
     created_at: str
     entity_ids: tuple[str, ...] = ()
     clase_de_evidencia: ClaseDeEvidencia = ClaseDeEvidencia.CANONICA
+    #: Ejes P2 que el esquema canonico no sostiene. ``SIN_EJES`` cuando el
+    #: sustrato no los declara: las puertas degradan y lo hacen constar.
+    ejes: EjesDeclarados = SIN_EJES
 
     @property
     def sujeto_determinado(self) -> bool:
@@ -570,13 +621,19 @@ class SenalesDeCandidato(Protocol):
 
 
 __all__ = [
+    "AMBITO_GLOBAL",
+    "AMBITO_MULTIPROYECTO",
+    "CONFIRMACION_VISIBLE_SIEMPRE",
     "ESTADO_EXTERNO_SIN_RESULTADO",
     "ETAPAS_DE_EXPANSION",
     "ORDEN_DE_CRITICIDAD",
     "ORDEN_DE_ETAPAS",
     "PLANO_COMUN_VACIO",
+    "SENSIBILIDAD_PROTEGIDA",
+    "SIN_EJES",
     "USOS_PERMITIDOS_DE_CRITICIDAD",
     "USOS_PROHIBIDOS_DE_CRITICIDAD",
+    "VALIDEZ_QUE_NO_ENTRA_EN_M1",
     "Ambito",
     "Candidata",
     "Cardinalidad",
@@ -586,6 +643,7 @@ __all__ = [
     "ContextoDeEtapa",
     "Criticidad",
     "CriticidadAplicada",
+    "EjesDeclarados",
     "Etapa",
     "Explicacion",
     "GrupoDeEquivalentes",

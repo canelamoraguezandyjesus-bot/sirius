@@ -25,13 +25,16 @@ from __future__ import annotations
 import re
 import sqlite3
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Final
 
 from experiments.adr002.candidates.common.contracts import (
+    AMBITO_MULTIPROYECTO,
+    SIN_EJES,
     Clase,
     ClaseDeEvidencia,
+    EjesDeclarados,
     ItemCanonico,
     MaterializacionPorIdentidad,
 )
@@ -144,14 +147,28 @@ class PuertoSqlite:
     ejecuciones sobre la misma base devuelven el mismo orden.
     """
 
-    def __init__(self, database_path: Path) -> None:
+    def __init__(self, database_path: Path, ejes_path: Path | None = None) -> None:
         self._conexion = sqlite3.connect(str(database_path))
         self._conexion.execute("PRAGMA foreign_keys=ON")
         self._conexion.row_factory = sqlite3.Row
         self.registro = RegistroDeConsultas()
+        # Los ejes P2 viven en un fichero aparte porque el esquema canonico no
+        # puede sostenerlos y anadirlos aqui romperia la garantia de que el
+        # puerto lee ese esquema intacto. Sin ruta, las puertas degradan.
+        self._ejes: sqlite3.Connection | None = None
+        if ejes_path is not None:
+            self._ejes = sqlite3.connect(f"file:{ejes_path}?mode=ro", uri=True)
+            self._ejes.row_factory = sqlite3.Row
+
+    @property
+    def declara_ejes(self) -> bool:
+        """Si el sustrato aporta los ejes P2 o las puertas tendran que degradar."""
+        return self._ejes is not None
 
     def close(self) -> None:
         self._conexion.close()
+        if self._ejes is not None:
+            self._ejes.close()
 
     def __enter__(self) -> PuertoSqlite:
         return self
@@ -231,6 +248,113 @@ class PuertoSqlite:
             clase_de_evidencia=ClaseDeEvidencia.CANONICA,
         )
 
+    def _leer_ejes(self, identidades: Sequence[str]) -> dict[str, EjesDeclarados]:
+        """Ejes P2 de identidades **concretas**. Dirigida, acotada y anotada.
+
+        No hay ruta que cargue la tabla entera: el trabajo depende de cuantas
+        identidades se materializaron, nunca del tamano del plano.
+        """
+        if self._ejes is None or not identidades:
+            return {}
+        acotadas = sorted(set(identidades))[:LIMITE_POR_CONSULTA]
+        marcas = ",".join("?" * len(acotadas))
+        sql = (
+            "SELECT identidad, confirmacion, validez, disponibilidad, sensibilidad, "
+            "autoridad, ambito, no_usar_como_memoria, no_consolidable, ambito_declarado "
+            f"FROM ejes_del_item WHERE identidad IN ({marcas})"
+        )
+        filas = self._ejes.execute(sql, tuple(acotadas)).fetchall()
+        self.registro.anotar(
+            ConsultaRegistrada(
+                operacion="ejes_p2",
+                sql=" ".join(sql.split()),
+                parametros=tuple(acotadas),
+                cota=LIMITE_POR_CONSULTA,
+                filas=len(filas),
+            )
+        )
+        listas = {
+            str(f["ambito_declarado"]) for f in filas if str(f["ambito"]) == AMBITO_MULTIPROYECTO
+        }
+        miembros = self._miembros_de_listas(sorted(listas))
+        procedencias = self._procedencias(acotadas)
+        return {
+            str(f["identidad"]): EjesDeclarados(
+                confirmacion=str(f["confirmacion"]),
+                validez=str(f["validez"]),
+                disponibilidad=str(f["disponibilidad"]),
+                sensibilidad=str(f["sensibilidad"]),
+                autoridad=str(f["autoridad"]),
+                ambito=str(f["ambito"]),
+                no_usar_como_memoria=bool(f["no_usar_como_memoria"]),
+                no_consolidable=bool(f["no_consolidable"]),
+                procedencia=procedencias.get(str(f["identidad"]), ()),
+                miembros_de_ambito=miembros.get(str(f["ambito_declarado"]), ()),
+            )
+            for f in filas
+        }
+
+    def _miembros_de_listas(self, listas: Sequence[str]) -> dict[str, tuple[str, ...]]:
+        """Miembros de cada lista cerrada, ya traducidos a la clave del canon.
+
+        ``G4`` compara contra los identificadores que la peticion autoriza, que
+        son los del canon; devolver los del corpus obligaria a la puerta a
+        conocer dos espacios de identidad.
+        """
+        if self._ejes is None or not listas:
+            return {}
+        marcas = ",".join("?" * len(listas))
+        sql = (
+            "SELECT m.lista, p.numero FROM miembros_de_lista_cerrada AS m "
+            "JOIN proyectos AS p ON p.id = m.miembro "
+            f"WHERE m.lista IN ({marcas}) ORDER BY m.lista, p.numero"
+        )
+        filas = self._ejes.execute(sql, tuple(listas)).fetchall()
+        self.registro.anotar(
+            ConsultaRegistrada(
+                operacion="miembros_de_lista_cerrada",
+                sql=" ".join(sql.split()),
+                parametros=tuple(listas),
+                cota=LIMITE_POR_CONSULTA,
+                filas=len(filas),
+            )
+        )
+        agrupados: dict[str, list[str]] = {}
+        for fila in filas:
+            agrupados.setdefault(str(fila["lista"]), []).append(str(fila["numero"]))
+        return {lista: tuple(valores) for lista, valores in agrupados.items()}
+
+    def _procedencias(self, identidades: Sequence[str]) -> dict[str, tuple[str, ...]]:
+        """``G10``: fuente y transformacion suficientes, por identidad."""
+        if self._ejes is None or not identidades:
+            return {}
+        marcas = ",".join("?" * len(identidades))
+        sql = (
+            "SELECT identidad, referencia FROM procedencias "
+            f"WHERE identidad IN ({marcas}) ORDER BY identidad, orden"
+        )
+        filas = self._ejes.execute(sql, tuple(identidades)).fetchall()
+        self.registro.anotar(
+            ConsultaRegistrada(
+                operacion="procedencias",
+                sql=" ".join(sql.split()),
+                parametros=tuple(identidades),
+                cota=LIMITE_POR_CONSULTA,
+                filas=len(filas),
+            )
+        )
+        agrupadas: dict[str, list[str]] = {}
+        for fila in filas:
+            agrupadas.setdefault(str(fila["identidad"]), []).append(str(fila["referencia"]))
+        return {i: tuple(v) for i, v in agrupadas.items()}
+
+    def _con_ejes(self, items: Sequence[ItemCanonico]) -> list[ItemCanonico]:
+        """Adjunta los ejes declarados; deja ``SIN_EJES`` donde no los haya."""
+        if self._ejes is None or not items:
+            return list(items)
+        ejes = self._leer_ejes([i.id for i in items])
+        return [replace(i, ejes=ejes.get(i.id, SIN_EJES)) for i in items]
+
     def _items(self, clase: Clase, ids: Sequence[int]) -> list[ItemCanonico]:
         if not ids:
             return []
@@ -240,7 +364,7 @@ class PuertoSqlite:
         filas = self._ejecutar(
             f"materializar:{clase.value}", sql, acotados, cota=LIMITE_POR_CONSULTA
         )
-        items = [self._item_de_fila(clase, fila) for fila in filas]
+        items = self._con_ejes([self._item_de_fila(clase, fila) for fila in filas])
         return sorted(items, key=lambda i: i.id)
 
     def _por_ids_mixtos(self, pares: Sequence[tuple[str, int]]) -> tuple[ItemCanonico, ...]:
@@ -342,7 +466,7 @@ class PuertoSqlite:
             filas = self._ejecutar(
                 f"por_identidad:{clase.value}", sql, numeros, cota=ARGUMENTOS_MAXIMOS
             )
-            items.extend(self._item_de_fila(clase, fila) for fila in filas)
+            items.extend(self._con_ejes([self._item_de_fila(clase, fila) for fila in filas]))
 
         def _orden_canonico(item: ItemCanonico) -> tuple[str, int]:
             nombre, _, numero = item.id.partition(":")

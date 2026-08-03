@@ -1,7 +1,7 @@
 # SIRIUS 0.2 — ADR-002 · Corrección única de `common`
 
-**Versión:** 1.0
-**Estado:** **APLICADA**
+**Versión:** 1.1
+**Estado:** **APLICADA** · ampliada en la v1.1 con las cinco puertas, por orden expresa del usuario en la solicitud de reaprobación
 **Fecha:** 3 de agosto de 2026
 **Rama:** `evidence/adr001-spikes` · **PR:** #117, **abierto y sin fusionar**
 
@@ -71,11 +71,21 @@ La única traducción de vocabulario entre el corpus y el contrato común —`CR
 
 ---
 
-## 4. Lo que esta corrección **no** hace, y por qué
+## 4. Ampliación aprobada: las cinco puertas que leían el estado colapsado
 
-**Las puertas `G3`, `G6`, `G7` y `G9` siguen leyendo el estado colapsado.** El acta de congelación de la proyección declara que los tres ejes verdaderos —confirmación, validez, disponibilidad— viajan intactos en `ejes_p2` y que esas puertas deberían leerlos de ahí. No se hace aquí porque **no está en la lista aprobada del paso 5**, y ampliarla por iniciativa propia sería rediseñar el contrato sin acto que lo autorice. Queda declarado como pendiente real, no como olvido.
+La v1.0 de este acta declaró como pendiente que `G3`, `G4`, `G6`, `G7` y `G9` seguían leyendo el estado colapsado en vez de los ejes verdaderos. **El usuario amplió el alcance del paso 5 en la solicitud de reaprobación y ordenó corregirlas antes de reaprobar A y B.** Queda hecho.
 
-Lo mismo vale para `G4` y el ámbito multiproyecto cerrado: la lista y sus miembros están materializados en `ejes_p2`; la puerta todavía compara una sola clave foránea.
+`ItemCanonico` gana `ejes: EjesDeclarados`, con confirmación, validez, disponibilidad, sensibilidad, autoridad, ámbito, las dos marcas de no uso, la procedencia y los miembros de una lista cerrada. El puerto los resuelve del plano `ejes_p2` **con consultas dirigidas y anotadas** —`WHERE identidad IN (...)`—, de modo que la garantía de ausencia de barrido no se debilita: el trabajo depende de cuántas identidades se materializaron, nunca del tamaño del plano.
+
+| Puerta | Qué leía | Qué lee | Qué era imposible antes |
+|---|---|---|---|
+| `G3` | `not disponible` | `no_usar_como_memoria`, con la excepción literal de `M3`/`M4` | era un duplicado exacto de `G2`: ningún ítem marcado que siguiera disponible caía |
+| `G4` | una sola clave foránea | las **tres** clases de ámbito, con los miembros de la lista cerrada | un ítem multiproyecto caía aunque la petición autorizase a todos sus miembros |
+| `G6` | `vigente` | `confirmacion` de tres valores, visible según modo | candidata y rechazada caían o pasaban juntas |
+| `G7` | `vigente` | `validez`: sustituida y sin soporte son **dos causas** | indistinguibles entre sí y de cualquier otra no vigencia |
+| `G9` | `disponible` | `sensibilidad`, protección superior mantenida | la restricción no existía como eje |
+
+**`None` no es permisivo.** Un eje que el sustrato no declara hace que la puerta **degrade al estado colapsado y lo diga en el motivo del descarte**: «eje no declarado: degradado a disponibilidad». Los fixtures técnicos, que no traen plano de ejes, siguen comportándose como antes y ahora lo declaran.
 
 ---
 
