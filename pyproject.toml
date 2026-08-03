@@ -69,7 +69,13 @@ line-ending = "lf"
 python_version = "3.14"
 strict = true
 warn_unused_configs = true
+# scripts/ contiene helpers de empaquetado invocados desde PowerShell.
+# mypy_path es imprescindible, y no basta con "files": scripts/check.ps1 y la
+# comprobacion de calidad ejecutan "mypy src tests" con rutas explicitas, y en
+# ese caso mypy ignora "files" y no sabria resolver "zip_package_inspector"
+# desde tests/.
 files = ["src", "tests", "scripts"]
+mypy_path = "scripts"
 exclude = ["migrations/versions"]
 
 [[tool.mypy.overrides]]
