@@ -1207,28 +1207,38 @@ def test_a_late_ambiguous_review_invalidates_a_stabilizing_result(tmp_path: Path
     # pendiente que el propio recolector declara ambigua. La ambigüedad debe
     # descartar lo que se estaba estabilizando y terminar en fallo seguro.
     env = _setup(tmp_path)
-    _write_state(tmp_path, trigger_at=_stamp(-2))
+    # El escenario exige que ocurran AL MENOS DOS pasadas antes de que venza el
+    # plazo: la primera ve la aprobación y la segunda la revisión ambigua. Con
+    # un disparador de hace 2 s y un plazo de 3 s el margen quedaba por debajo
+    # del segundo —`_stamp` trunca a segundos enteros—, así que en un runner
+    # lento solo daba tiempo a una pasada y la prueba aprobaba: verde en local y
+    # roja en CI sobre el mismo commit. El plazo se fija con holgura suficiente
+    # para que el número de pasadas no dependa de la máquina.
+    _write_state(tmp_path, trigger_at=_stamp(0))
     _seed(
         env,
         "reviews.json",
-        [_review(review_id=700, state="APPROVED", submitted_at=_stamp(-1))],
+        [_review(review_id=700, state="APPROVED", submitted_at=_stamp(0))],
     )
     _seed(
         env,
         "reviews_late.json",
         [
-            _review(review_id=700, state="APPROVED", submitted_at=_stamp(-1)),
-            _review(review_id=701, state="COMMENTED", submitted_at=_stamp(-1)),
+            _review(review_id=700, state="APPROVED", submitted_at=_stamp(0)),
+            _review(review_id=701, state="COMMENTED", submitted_at=_stamp(0)),
         ],
     )
     _seed(env, "review_comments_701.json", [])  # sin comentarios inline visibles
 
-    r = _run_collect(env, tmp_path, timeout="3")
+    r = _run_collect(env, tmp_path, timeout="4")
     assert r.returncode == 0, r.stdout + r.stderr
+    # Primero la evidencia de que el escenario se ejercitó de verdad: si solo
+    # hubiera ocurrido una pasada, este mensaje no estaría y el fallo sería
+    # ambiguo.
+    assert "ha dejado de ser interpretable" in r.stderr
     result = _result(tmp_path)
     assert result["status"] == "FAILED_SAFELY", "no puede aprobarse con una revisión ambigua"
     assert result["reason"] == "timeout"
-    assert "ha dejado de ser interpretable" in r.stderr
 
 
 def test_a_failed_poll_pass_does_not_invalidate_a_stabilizing_result(tmp_path: Path) -> None:
