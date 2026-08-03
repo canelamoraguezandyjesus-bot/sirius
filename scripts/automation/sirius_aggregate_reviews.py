@@ -127,13 +127,20 @@ def _dedupe(observations: list[dict[str, str]]) -> list[dict[str, str]]:
     referencias distintas descritas con la misma frase— se fusionarían y uno se
     perdería. Borrar un hallazgo real es peor que conservar dos parecidos, así
     que la neutralización se limita al único campo que se sabe portador de
-    metadato del canal. El ``prueba`` del revisor Claude es el nombre de una
-    prueba, no un enlace, y sigue distinguiendo. El permalink de la primera
+    metadato del canal, y **solo para la procedencia ``CODEX``**, que es donde
+    se sabe qué contiene ese campo porque lo genera el propio recolector.
+
+    Restringirlo por campo pero no por procedencia seguía siendo demasiado
+    amplio: daba por supuesto que el ``prueba`` del revisor Claude nunca es un
+    enlace, y eso es una suposición sobre la salida de un modelo, no una
+    garantía. Dos observaciones de Claude por lo demás iguales cuya evidencia
+    apunte a URL distintas —dos ejecuciones, dos casos, dos informes— son
+    hallazgos distintos y deben conservarse ambos. El permalink de la primera
     aparición se conserva en la observación que sobrevive.
     """
 
-    def key_value(field: str, value: str) -> str:
-        if field == "prueba":
+    def key_value(source: str, field: str, value: str) -> str:
+        if source == "CODEX" and field == "prueba":
             value = URL_RE.sub("<url>", value)
         return re.sub(r"\s+", " ", value).strip().casefold()
 
@@ -141,7 +148,10 @@ def _dedupe(observations: list[dict[str, str]]) -> list[dict[str, str]]:
     unique: list[dict[str, str]] = []
     for observation in observations:
         source = observation["id"].split("-", 1)[0]
-        key = (source, *(key_value(field, observation[field]) for field in OBSERVATION_KEYS[1:]))
+        key = (
+            source,
+            *(key_value(source, field, observation[field]) for field in OBSERVATION_KEYS[1:]),
+        )
         if key in seen:
             continue
         seen.add(key)

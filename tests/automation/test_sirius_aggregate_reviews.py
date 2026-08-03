@@ -423,3 +423,19 @@ def test_two_findings_that_differ_only_by_a_url_in_the_problem_are_both_kept(
         _codex("CHANGES_REQUESTED", observations=[primero, segundo]),
     )
     assert len(result["observations"]) == 2, "dos advisories distintos no son el mismo hallazgo"
+
+
+def test_claude_findings_keep_their_url_evidence_in_the_key(tmp_path: Path) -> None:
+    # La neutralización del permalink solo se conoce válida para Codex, donde el
+    # campo lo genera el propio recolector. Suponer que el `prueba` de Claude
+    # nunca es un enlace es una suposición sobre la salida de un modelo, no una
+    # garantía: dos observaciones cuya evidencia apunta a ejecuciones o casos
+    # distintos son hallazgos distintos.
+    primero = _claude_observation(id="R1", prueba="https://ci.test/run/111")
+    segundo = _claude_observation(id="R2", prueba="https://ci.test/run/222")
+    result = _run(
+        tmp_path,
+        _claude("CHANGES_REQUESTED", observations=[primero, segundo]),
+        _codex("APPROVED"),
+    )
+    assert len(result["observations"]) == 2

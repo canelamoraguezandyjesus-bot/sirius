@@ -151,6 +151,12 @@ Reglas del modo dual:
   demuestre el SHA esperado para detener la ronda. Quedarse con la última
   descartaría en silencio los hallazgos de las anteriores y, si la última fuera
   aprobatoria, la ronda aprobaría un head con defectos ya reportados.
+- La unión solo se acepta cuando **cada** revisión formal no aprobatoria es
+  interpretable. Basta una sin comentarios inline visibles para que la ronda
+  siga sin interpretar, aunque otras ya hayan aportado hallazgos: entregar la
+  lista parcial dejaría que la ventana de estabilidad cerrara sobre ella —el
+  mismo resultado se repite pasada tras pasada— y los hallazgos que faltan no
+  llegarían nunca al corrector, con apariencia de lista completa.
 - La reacción `+1` solo decide cuando **no** hay ninguna revisión formal
   posterior al disparador. Con una revisión formal en curso pero todavía no
   interpretable, la reacción no la resuelve: se sigue esperando y, si no se
@@ -172,8 +178,8 @@ Reglas del modo dual:
   descarta nada: no es evidencia de ambigüedad, solo de que no se pudo mirar.
   Cada pausa de sondeo se acota al plazo absoluto (y al cierre de la ventana),
   para que el plazo prometido sea exacto y no aproximado.
-- La deduplicación de observaciones neutraliza las URL de `prueba`, y solo de
-  ese campo, al construir su clave. En los hallazgos de Codex `prueba` es el
+- La deduplicación de observaciones neutraliza las URL de `prueba`, solo de ese
+  campo y solo para la procedencia `CODEX`, al construir su clave. En los hallazgos de Codex `prueba` es el
   permalink del comentario que lo reportó, distinto para cada comentario aunque
   el defecto sea el mismo: con el enlace dentro de la clave, un hallazgo
   repetido en dos revisiones no se dedupararía nunca y `pending` y
@@ -181,7 +187,9 @@ Reglas del modo dual:
   de convergencia. La neutralización NO se extiende al resto de campos: dos
   hallazgos cuyo `problema` se distingue precisamente por una URL —dos
   advisories, dos endpoints— se fusionarían y uno se perdería, y borrar un
-  hallazgo real es peor que conservar dos parecidos.
+  hallazgo real es peor que conservar dos parecidos. Tampoco se extiende a la
+  procedencia `CLAUDE`: dar por supuesto que su `prueba` nunca es un enlace
+  sería una suposición sobre la salida de un modelo, no una garantía.
 - Un agregador determinista (`scripts/automation/sirius_aggregate_reviews.py`)
   combina ambos resultados sin votos ni arbitraje de otro modelo, con esta
   precedencia: JSON inválido de un revisor obligatorio → `FAILED_SAFELY`; SHA

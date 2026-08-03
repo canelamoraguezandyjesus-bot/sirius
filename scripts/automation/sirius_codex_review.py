@@ -671,7 +671,7 @@ def _check_reviews(
     # Hallazgos de TODAS las revisiones con comentarios, numerados de forma
     # global y determinista (el orden lo fija `_observations_from_comments`).
     inline_comments: list[dict[str, Any]] = []
-    pending_states = False
+    unclear_review_id = 0
     approved_review_id = 0
     for _, review in candidates:
         review_id = int(review.get("id") or 0)
@@ -680,10 +680,31 @@ def _check_reviews(
             approved_review_id = approved_review_id or review_id
             continue
         if state in {"COMMENTED", "CHANGES_REQUESTED"}:
-            pending_states = True
-            inline_comments.extend(
-                _gh_paginated(f"repos/{repo}/pulls/{pr}/reviews/{review_id}/comments")
-            )
+            comments = _gh_paginated(f"repos/{repo}/pulls/{pr}/reviews/{review_id}/comments")
+            if not comments:
+                unclear_review_id = unclear_review_id or review_id
+            inline_comments.extend(comments)
+
+    if unclear_review_id:
+        # CADA revisión formal no aprobatoria debe ser interpretable antes de
+        # aceptar la unión, no solo el conjunto. Basta una sin comentarios
+        # inline visibles para que la ronda entera siga sin interpretar: si se
+        # devolvieran los hallazgos de las demás, la ventana de estabilidad
+        # cerraría sobre una lista incompleta —el resultado se repite igual
+        # pasada tras pasada— y los hallazgos de esa revisión no llegarían nunca
+        # al corrector. Peor aún, la lista llegaría con apariencia de completa.
+        #
+        # Comprobarlo por conjunto (¿hay ALGUNA observación?) no basta:
+        # enmascara justamente el caso en que una revisión trae hallazgos y otra
+        # todavía no se puede leer.
+        print(
+            f"sirius_codex_review: la revisión {unclear_review_id} aún no muestra sus "
+            "comentarios inline; la ronda sigue sin interpretar aunque otras revisiones "
+            "ya hayan aportado hallazgos.",
+            file=sys.stderr,
+        )
+        return None, True
+
     observations = _observations_from_comments(inline_comments)
     reported_review_id = int(candidates[-1][1].get("id") or 0)
 
@@ -702,13 +723,6 @@ def _check_reviews(
             ),
             True,
         )
-    if pending_states:
-        # Revisión formal sin comentarios inline todavía visibles: ambigua. Se
-        # sigue esperando —aunque haya además una aprobación— porque no se puede
-        # aprobar un head sobre el que hay una revisión sin interpretar. Si no
-        # se materializa nada antes del timeout, la ronda termina en
-        # FAILED_SAFELY, nunca en aprobación implícita.
-        return None, True
     if approved_review_id:
         return (
             CodexResult(

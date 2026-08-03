@@ -1282,3 +1282,59 @@ def test_the_poll_pause_never_overshoots_the_deadline(tmp_path: Path) -> None:
         f"el recolector tardó {elapsed:.0f} s con un plazo restante de ~1 s: "
         "la pausa no se está acotando al plazo"
     )
+
+
+def test_one_uninterpretable_review_blocks_the_union_of_the_others(tmp_path: Path) -> None:
+    # Una revisión trae hallazgos y otra, formal y no aprobatoria, todavía no
+    # muestra sus comentarios inline. Devolver los hallazgos de la primera
+    # dejaría que la ventana de estabilidad cerrara sobre una lista incompleta
+    # —el mismo resultado se repite pasada tras pasada— y los hallazgos de la
+    # segunda no llegarían nunca al corrector, con apariencia de lista completa.
+    env = _setup(tmp_path)
+    _write_state(tmp_path, trigger_at=_stamp(0))
+    _seed(
+        env,
+        "reviews.json",
+        [
+            _review(review_id=700, state="COMMENTED", submitted_at=_stamp(0)),
+            _review(review_id=701, state="COMMENTED", submitted_at=_stamp(0)),
+        ],
+    )
+    _seed(env, "review_comments_700.json", [_review_comment(801, "src/a.py", 1)])
+    _seed(env, "review_comments_701.json", [])  # aún sin comentarios visibles
+
+    r = _run_collect(env, tmp_path, timeout="4")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "aún no muestra sus comentarios inline" in r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "FAILED_SAFELY", (
+        "no puede entregarse una lista parcial mientras una revisión siga sin interpretar"
+    )
+    assert result["reason"] == "timeout"
+
+
+def test_the_union_is_delivered_once_every_review_is_interpretable(tmp_path: Path) -> None:
+    # Y en cuanto la revisión que faltaba muestra sus comentarios, la unión
+    # completa se entrega: la exigencia no puede convertirse en un bloqueo
+    # permanente.
+    env = _setup(tmp_path)
+    _write_state(tmp_path, trigger_at=_stamp(0))
+    _seed(
+        env,
+        "reviews.json",
+        [
+            _review(review_id=700, state="COMMENTED", submitted_at=_stamp(0)),
+            _review(review_id=701, state="COMMENTED", submitted_at=_stamp(0)),
+        ],
+    )
+    _seed(env, "review_comments_700.json", [_review_comment(801, "src/a.py", 1)])
+    _seed(env, "review_comments_701.json", [_review_comment(802, "src/b.py", 2)])
+
+    r = _run_collect(env, tmp_path, timeout="30")
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "CHANGES_REQUESTED"
+    assert sorted(item["archivo"] for item in result["observations"]) == [
+        "src/a.py:1",
+        "src/b.py:2",
+    ]
