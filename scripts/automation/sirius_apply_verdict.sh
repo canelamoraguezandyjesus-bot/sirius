@@ -14,8 +14,8 @@
 # Para los resultados de revisión (REVIEW_APPROVED y CHANGES_REQUESTED) el
 # veredicto debe declarar además `reviewed_head_sha`, y se exige coincidencia
 # exacta entre tres valores: ese SHA declarado, el head actual de la PR y el
-# último head que superó Quality registrado en la incidencia (contrato §4,
-# v1.4). En el modo de revisión dual el JSON puede venir del agregador
+# último head que superó Quality registrado en la incidencia (contrato
+# §4.1). En el modo de revisión dual el JSON puede venir del agregador
 # determinista (sirius_aggregate_reviews.py) en lugar del revisor Claude.
 #
 # Uso: sirius_apply_verdict.sh <owner/repo> <issue> <role> <verdict_file> [cycle]
@@ -194,7 +194,7 @@ sha_matches() {
   return 1
 }
 
-# require_reviewed_head — endurecimiento de la revisión (contrato §4, v1.4):
+# require_reviewed_head — endurecimiento de la revisión (contrato §4.1):
 # cualquier resultado de revisión (aprobación O cambios solicitados) debe
 # demostrar sobre qué versión se pronunció. Exige que el JSON declare
 # `reviewed_head_sha`, que coincida con el head actual de la PR (pr_number/
@@ -275,7 +275,7 @@ case "$verdict" in
       stop_safely "sin-observaciones" \
         "El revisor pidió \`CHANGES_REQUESTED\` sin ninguna observación estructurada; no hay nada concreto que corregir."
     fi
-    # Mismo endurecimiento que la aprobación (contrato §4, v1.4): tampoco se
+    # Mismo endurecimiento que la aprobación (contrato §4.1): tampoco se
     # solicita corrección a partir de una revisión hecha sobre otra versión.
     resolve_pr
     require_reviewed_head

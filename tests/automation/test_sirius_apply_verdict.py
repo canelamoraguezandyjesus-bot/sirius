@@ -65,7 +65,14 @@ case "$sub" in
       cat "$D/labels_${n}.txt" 2>/dev/null; exit 0
     fi
     if printf '%s' "$args" | grep -q '/comments'; then
-      if printf '%s' "$args" | grep -q 'reverse'; then
+      if printf '%s' "$args" | grep -q '@json'; then
+        python3 -c '
+import json, sys
+raw = open(sys.argv[1], encoding="utf-8").read() if len(sys.argv) > 1 else ""
+for line in raw.splitlines():
+    sys.stdout.write(json.dumps({"body": line}) + "\n")
+' "$D/comments_${n}.txt" 2>/dev/null
+      elif printf '%s' "$args" | grep -q 'reverse'; then
         tac "$D/comments_${n}.txt" 2>/dev/null
       else
         cat "$D/comments_${n}.txt" 2>/dev/null

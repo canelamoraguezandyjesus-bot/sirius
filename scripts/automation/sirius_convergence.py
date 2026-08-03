@@ -192,11 +192,13 @@ def decide(records: list[dict[str, Any]]) -> dict[str, Any]:
     # Se compara la ronda actual contra TODAS las anteriores, no solo la
     # inmediata: un defecto que desaparece y regresa indica que la corrección
     # anterior no atacó la causa raíz.
-    for index in range(rounds - 1):
+    # El par (index, index+1) debe ser ANTERIOR a la ronda actual: un hallazgo
+    # solo "reaparece" si desapareció en una ronda intermedia y volvió después.
+    for index in range(rounds - 2):
         older = records[index]
         disappeared = older["fingerprints"] - records[index + 1]["fingerprints"]
         reappeared = disappeared & current["fingerprints"]
-        if reappeared and index + 1 < rounds - 1:
+        if reappeared:
             return {
                 "decision": "BLOCK",
                 "reason": "reaparicion",

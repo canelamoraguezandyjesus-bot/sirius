@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Sirius — disparador y recolector de la revisión nativa de Codex en GitHub.
 
-Segundo revisor del flujo de revisión dual (contrato operativo §4, v1.4). Este
+Segundo revisor del flujo de revisión dual (contrato operativo §4.1). Este
 componente NO usa la API de OpenAI: se apoya exclusivamente en la integración
 nativa de Codex con GitHub (ChatGPT Business), que se activa publicando un
 comentario ``@codex review`` en la PR. Codex actúa aquí como revisor de solo
@@ -10,11 +10,15 @@ lectura; este script jamás modifica código ni responde a los comentarios.
 Dos subórdenes:
 
 ``trigger``
-    Publica (o reutiliza de forma idempotente) el comentario disparador para un
-    head concreto. El comentario lleva un marcador oculto estable por head
-    (``<!-- sirius-codex-review:<sha> -->``): un solo disparador por PR + head,
-    aunque el workflow se reejecute. Guarda en un archivo de estado el ID del
-    comentario, su fecha de creación y el SHA esperado.
+    Publica (o reutiliza de forma idempotente) el comentario disparador de una
+    ronda concreta. El comentario lleva un marcador oculto estable por head y
+    ronda (``<!-- sirius-codex-review:<sha>:<ronda> -->``): un solo disparador
+    por PR + head + ronda, aunque el workflow se reejecute. Solo se reutiliza
+    un comentario propio — autor igual a la identidad real del token, cuerpo
+    igual al canónico y posterior al final de Quality sobre ese head —, de modo
+    que ni un tercero ni una prueba manual pueden anclar la ronda. Guarda en un
+    archivo de estado el ID del comentario, su fecha de creación, su autor, la
+    ronda, el SHA esperado y la marca de Quality.
 
 ``collect``
     Espera el resultado de Codex consultando GitHub periódicamente y escribe un

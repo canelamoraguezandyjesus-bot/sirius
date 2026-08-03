@@ -4,7 +4,7 @@
 Combina el veredicto del revisor Claude y el resultado normalizado de Codex en
 un único JSON compatible con ``sirius_apply_verdict.sh`` (rol ``reviewer``).
 No hay votos, promedios ni arbitraje por otro modelo: solo reglas fijas, en
-este orden de precedencia (contrato operativo §4, v1.4):
+este orden de precedencia (contrato operativo §4.1):
 
 1. JSON ausente o inválido de cualquier revisor obligatorio → ``FAILED_SAFELY``.
 2. SHA revisado distinto del esperado o no demostrable → ``FAILED_SAFELY``.

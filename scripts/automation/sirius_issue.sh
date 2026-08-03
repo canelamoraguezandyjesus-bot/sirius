@@ -115,12 +115,38 @@ sirius_read_issue_comments() {
 # comentarios más antiguos y el "reverse" nunca vería los recientes, así que a
 # partir de ~30 comentarios el SHA extraído sería uno viejo y las verificaciones
 # de head fallarían en falso (parada head-obsoleto/head-inconsistente con un
-# head correcto). --slurp agrupa las páginas en una lista de listas y `add` las
-# aplana antes de invertir el orden.
+# head correcto).
+#
+# _sirius_comments_newest_first <repo> <issue> — cuerpos de los comentarios del
+# más reciente al más antiguo, con TODAS las páginas. Deliberadamente NO usa
+# `gh api --slurp` (opción relativamente reciente cuya ausencia degradaría la
+# paginación en silencio): con `--paginate --jq` el filtro se aplica por página
+# y las salidas se concatenan, así que cada comentario sale como un JSON
+# compacto por línea y python3 —requisito ya declarado de esta biblioteca—
+# invierte el orden y emite los cuerpos íntegros. Invertir líneas de texto
+# plano no serviría: los cuerpos son multilínea.
+_sirius_comments_newest_first() {
+  gh api --paginate "repos/${1}/issues/${2}/comments?per_page=100" --jq '.[] | @json' \
+    | python3 -c '
+import json, sys
+bodies = []
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    try:
+        bodies.append(json.loads(line).get("body") or "")
+    except json.JSONDecodeError:
+        continue
+for body in reversed(bodies):
+    sys.stdout.write(body + "\n")
+'
+}
+
 sirius_scan_text() {
   local repo="$1" num="$2" out="$3" comments="" body=""
   : >"$out"
-  if comments="$(sirius_retry gh api --paginate --slurp "repos/${repo}/issues/${num}/comments?per_page=100" --jq 'add | reverse | .[].body')"; then
+  if comments="$(sirius_retry _sirius_comments_newest_first "$repo" "$num")"; then
     printf '%s\n' "$comments" >>"$out"
   elif comments="$(sirius_retry gh issue view "$num" --repo "$repo" --json comments --jq '[.comments[].body] | reverse | .[]')"; then
     printf '%s\n' "$comments" >>"$out"
@@ -139,7 +165,7 @@ sirius_extract_observations() {
   # Igual que sirius_scan_text: la lectura REST pagina para que el bloque de la
   # ronda más reciente sea visible también en incidencias con muchos comentarios.
   local repo="$1" num="$2" comments=""
-  comments="$(sirius_retry gh api --paginate --slurp "repos/${repo}/issues/${num}/comments?per_page=100" --jq 'add | reverse | .[].body' 2>/dev/null)" \
+  comments="$(sirius_retry _sirius_comments_newest_first "$repo" "$num" 2>/dev/null)" \
     || comments="$(sirius_retry gh issue view "$num" --repo "$repo" --json comments --jq '[.comments[].body] | reverse | .[]' 2>/dev/null)" \
     || comments=""
   printf '%s' "$comments" | python3 -c '
@@ -157,9 +183,12 @@ if m:
 # igual que el resto de lecturas. Best-effort: deja el archivo vacío si no se
 # puede leer, y devuelve !=0 para que el llamador decida.
 sirius_dump_comments() {
+  # Orden cronológico natural: con `--paginate --jq` el filtro se aplica por
+  # página y las salidas se concatenan en orden, así que aquí no hace falta
+  # invertir nada ni depender de `--slurp`.
   local repo="$1" num="$2" out="$3" body=""
   : >"$out"
-  if body="$(sirius_retry gh api --paginate --slurp "repos/${repo}/issues/${num}/comments?per_page=100" --jq 'add | .[].body')"; then
+  if body="$(sirius_retry gh api --paginate "repos/${repo}/issues/${num}/comments?per_page=100" --jq '.[].body')"; then
     printf '%s\n' "$body" >>"$out"
     return 0
   fi

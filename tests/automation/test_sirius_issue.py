@@ -90,7 +90,17 @@ case "$sub" in
     fi
     if printf '%s' "$args" | grep -q '/comments'; then
       if should_fail comments_fail; then echo "503 comments" >&2; exit 1; fi
-      if printf '%s' "$args" | grep -q 'reverse'; then
+      if printf '%s' "$args" | grep -q '@json'; then
+        # Igual que `gh api --paginate --jq '.[] | @json'`: un objeto JSON
+        # compacto por comentario, del más antiguo al más reciente. El bloque
+        # en blanco separa comentarios en el fichero simulado.
+        python3 -c '
+import json, sys
+raw = open(sys.argv[1], encoding="utf-8").read() if len(sys.argv) > 1 else ""
+for chunk in [c for c in raw.split("\n\n") if c.strip()]:
+    sys.stdout.write(json.dumps({"body": chunk}) + "\n")
+' "$comments_file" 2>/dev/null
+      elif printf '%s' "$args" | grep -q 'reverse'; then
         awk 'BEGIN{RS="";ORS="\n\n"} {a[NR]=$0} END{for(i=NR;i>=1;i--) print a[i]}' \
           "$comments_file" 2>/dev/null
       else
