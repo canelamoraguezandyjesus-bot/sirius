@@ -51,6 +51,14 @@ from typing import Any
 DEFAULT_ALLOWED_AUTHORS = "chatgpt-codex-connector,chatgpt-codex-connector[bot]"
 
 DEFAULT_TIMEOUT_SECONDS = 1200
+# Tope duro de la espera. El paso del workflow que ejecuta `collect` tiene su
+# propio `timeout-minutes` (mayor que este valor) y el job cubre además la
+# duración máxima del revisor Claude. Limitar aquí la espera configurada
+# garantiza que el recolector SIEMPRE llegue a escribir su FAILED_SAFELY
+# determinista antes de que el paso o el job lo maten: una variable de
+# repositorio con un valor excesivo no puede convertir el fallo seguro
+# estructurado en una cancelación sin resultado.
+DEFAULT_MAX_TIMEOUT_SECONDS = 1500
 DEFAULT_POLL_SECONDS = 30
 MAX_PAGES = 50
 
@@ -298,26 +306,61 @@ def _observations_from_comments(comments: list[dict[str, Any]]) -> list[dict[str
 # --------------------------------------------------------------------------- #
 
 
-def _find_trigger_comments(repo: str, pr: int, marker: str) -> list[dict[str, Any]]:
+def _automation_identity() -> str:
+    """Login real del token con el que se publica el disparador.
+
+    Necesario para no reutilizar como disparador un comentario ajeno: el
+    marcador es predecible (deriva del head), así que cualquiera con acceso a
+    comentar podría sembrarlo. Si además la revisión automática del panel de
+    Codex estuviera encendida, una revisión NO solicitada por el workflow
+    quedaría "posterior" a ese comentario y satisfaría la ronda sin que la
+    automatización hubiera pedido nada después de Quality.
+    """
+    identity = _gh_api("user")
+    login = identity.get("login") if isinstance(identity, dict) else None
+    if not isinstance(login, str) or not login.strip():
+        raise GhError("no se pudo determinar la identidad del token que publica el disparador")
+    return login.strip()
+
+
+def _find_trigger_comments(
+    repo: str, pr: int, marker: str, *, author: str, expected_body: str
+) -> list[dict[str, Any]]:
+    """Comentarios disparadores propios: marcador presente, autor igual a la
+    identidad de la automatización y cuerpo exactamente igual al generado por
+    la plantilla determinista. Un comentario ajeno (o del mismo autor pero con
+    otro texto) NO se reutiliza: en su lugar se publica el propio.
+    """
     comments = _gh_paginated(f"repos/{repo}/issues/{pr}/comments")
-    matching = [comment for comment in comments if marker in str(comment.get("body") or "")]
+    wanted_author = author.casefold()
+    wanted_body = expected_body.strip()
+    matching = [
+        comment
+        for comment in comments
+        if marker in str(comment.get("body") or "")
+        and _author_login(comment).casefold() == wanted_author
+        and str(comment.get("body") or "").strip() == wanted_body
+    ]
     matching.sort(key=lambda c: (str(c.get("created_at") or ""), int(c.get("id") or 0)))
     return matching
 
 
 def cmd_trigger(args: argparse.Namespace) -> int:
     marker = TRIGGER_MARKER_TEMPLATE.format(head=args.head)
+    body = TRIGGER_BODY_TEMPLATE.format(marker=marker, head=args.head)
     try:
-        existing = _find_trigger_comments(args.repo, args.pr, marker)
+        author = _automation_identity()
+        existing = _find_trigger_comments(
+            args.repo, args.pr, marker, author=author, expected_body=body
+        )
         if existing:
             chosen = existing[0]
             print(
-                f"sirius_codex_review: disparador ya existente para {args.head}; "
-                f"se reutiliza el comentario {chosen.get('id')}.",
+                f"sirius_codex_review: disparador propio ya existente para {args.head}; "
+                f"se reutiliza el comentario {chosen.get('id')} de {author}.",
                 file=sys.stderr,
             )
         else:
-            body = TRIGGER_BODY_TEMPLATE.format(marker=marker, head=args.head)
             payload_path = f"{args.state_file}.payload"
             with open(payload_path, "w", encoding="utf-8") as handle:
                 json.dump({"body": body}, handle, ensure_ascii=False)
@@ -337,10 +380,12 @@ def cmd_trigger(args: argparse.Namespace) -> int:
             except GhError as exc:
                 post_error = exc
             os.unlink(payload_path)
-            # Relectura defensiva: converge en el comentario más antiguo tanto
-            # tras una carrera improbable como tras un POST de resultado
+            # Relectura defensiva: converge en el comentario propio más antiguo
+            # tanto tras una carrera improbable como tras un POST de resultado
             # ambiguo (aplicado en el servidor pero con la respuesta perdida).
-            refreshed = _find_trigger_comments(args.repo, args.pr, marker)
+            refreshed = _find_trigger_comments(
+                args.repo, args.pr, marker, author=author, expected_body=body
+            )
             chosen = refreshed[0] if refreshed else posted
             if not isinstance(chosen, dict):
                 if post_error is not None:
@@ -357,6 +402,7 @@ def cmd_trigger(args: argparse.Namespace) -> int:
         "marker": marker,
         "trigger_comment_id": chosen.get("id"),
         "trigger_created_at": chosen.get("created_at"),
+        "trigger_author": _author_login(chosen) or author,
     }
     with open(args.state_file, "w", encoding="utf-8") as handle:
         json.dump(state, handle, ensure_ascii=False, indent=2)
@@ -535,7 +581,19 @@ def cmd_collect(args: argparse.Namespace) -> int:
     trigger_at = _parse_timestamp(state.get("trigger_created_at"))
     assert trigger_at is not None  # garantizado por _load_state
     poll_seconds = _env_number("SIRIUS_CODEX_POLL_SECONDS", DEFAULT_POLL_SECONDS)
-    deadline = time.monotonic() + args.timeout
+    max_timeout = _env_number(
+        "SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS", DEFAULT_MAX_TIMEOUT_SECONDS
+    )
+    timeout = args.timeout
+    if timeout > max_timeout:
+        print(
+            f"sirius_codex_review: la espera configurada ({timeout:.0f} s) supera el tope "
+            f"({max_timeout:.0f} s) que garantiza escribir un resultado antes de que el paso "
+            "expire; se limita al tope.",
+            file=sys.stderr,
+        )
+        timeout = max_timeout
+    deadline = time.monotonic() + timeout
 
     result: CodexResult | None = None
     while True:
@@ -557,7 +615,7 @@ def cmd_collect(args: argparse.Namespace) -> int:
                 trigger_comment_id=trigger_id,
                 summary=(
                     f"Codex no entregó un resultado identificable para `{args.head}` en "
-                    f"{args.timeout} segundos; la ronda termina en fallo seguro. No se "
+                    f"{timeout:.0f} segundos; la ronda termina en fallo seguro. No se "
                     "publica un segundo disparador para el mismo head."
                 ),
             )

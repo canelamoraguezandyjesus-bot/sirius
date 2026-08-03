@@ -12,6 +12,8 @@ modo dual está activo.
 
 from __future__ import annotations
 
+import importlib.util
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +21,21 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "review-sirius-work.yml"
+COLLECTOR = REPO_ROOT / "scripts" / "automation" / "sirius_codex_review.py"
+
+
+def _collector_module() -> Any:
+    """Importa el recolector para contrastar sus topes con los del workflow."""
+    name = "sirius_codex_review_for_workflow_tests"
+    cached = sys.modules.get(name)
+    if cached is not None:
+        return cached
+    spec = importlib.util.spec_from_file_location(name, COLLECTOR)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def _load() -> dict[Any, Any]:
@@ -77,8 +94,23 @@ def test_concurrency_group_prevents_parallel_rounds() -> None:
 
 
 def test_job_timeout_covers_claude_plus_codex_wait() -> None:
+    # El presupuesto del job debe cubrir la duración máxima del revisor Claude
+    # MÁS la espera completa de Codex: si el job muriera durante la espera, el
+    # recolector no llegaría a emitir su FAILED_SAFELY determinista.
     doc = _load()
-    assert _job(doc)["timeout-minutes"] >= 45
+    claude = _step(doc, "Ejecutar Claude Code")["timeout-minutes"]
+    collect = _step(doc, "Recoger el resultado")["timeout-minutes"]
+    assert _job(doc)["timeout-minutes"] >= claude + collect
+
+
+def test_collect_step_timeout_exceeds_the_collector_hard_cap() -> None:
+    # El tope interno de espera del recolector (25 min por defecto) debe caber
+    # holgadamente dentro del timeout del paso, para que el resultado
+    # estructurado se escriba siempre antes de que el paso expire.
+    doc = _load()
+    module = _collector_module()
+    cap_minutes = module.DEFAULT_MAX_TIMEOUT_SECONDS / 60
+    assert _step(doc, "Recoger el resultado")["timeout-minutes"] > cap_minutes
 
 
 def test_gate_reads_flag_from_repository_variable() -> None:

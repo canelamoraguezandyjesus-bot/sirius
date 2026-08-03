@@ -120,6 +120,20 @@ Reglas del modo dual:
   (`<!-- sirius-codex-review:<head> -->`), mediante el paso determinista
   (`scripts/automation/sirius_codex_review.py`). La revisión automática del
   panel de Codex permanece apagada: el disparo ocurre solo después de Quality.
+- Un disparador solo se reutiliza si lo emitió la propia automatización: se
+  verifica que el autor del comentario es la identidad real del token y que su
+  cuerpo coincide exactamente con la plantilla determinista. El marcador es
+  predecible, así que un comentario ajeno que lo contuviera podría, si no, hacer
+  que una revisión de Codex no solicitada por el workflow quedara «posterior al
+  disparador» y satisficiera la ronda. Si no puede demostrarse la identidad, la
+  ronda se detiene de forma segura.
+- El presupuesto de tiempo es explícito: el revisor Claude y la recolección de
+  Codex están acotados por paso, el job cubre la suma de ambos y la espera
+  configurada se limita a `SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS` (1500 s por
+  defecto), de modo que el recolector siempre llega a escribir su resultado
+  estructurado antes de que el paso expire; un valor excesivo en la variable de
+  repositorio no puede convertir el fallo seguro en una cancelación sin
+  veredicto.
 - Codex actúa únicamente como segundo revisor de solo lectura: la
   automatización nunca le pide corregir, comitear, hacer push ni fusionar.
 - Ambos revisores deben revisar exactamente el mismo SHA que superó Quality.

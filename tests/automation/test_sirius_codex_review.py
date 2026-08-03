@@ -9,6 +9,7 @@ POSIX funcional para los ejecutables simulados en ``PATH``).
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -28,6 +29,8 @@ HEAD = "1234567890abcdef1234567890abcdef12345678"
 OTHER_HEAD = "feedfacefeedfacefeedfacefeedfacefeedface"
 MARKER = f"<!-- sirius-codex-review:{HEAD} -->"
 CONNECTOR = "chatgpt-codex-connector[bot]"
+# Identidad simulada del token que publica el disparador (endpoint `user`).
+AUTOMATION_LOGIN = "canelamoraguezandyjesus-bot"
 TRIGGER_AT = "2026-08-03T10:00:00Z"
 AFTER_TRIGGER = "2026-08-03T10:05:00Z"
 BEFORE_TRIGGER = "2026-08-03T09:00:00Z"
@@ -100,6 +103,13 @@ def out(obj):
     json.dump(obj, sys.stdout)
     sys.exit(0)
 
+
+if base == "user":
+    if os.path.exists(os.path.join(d, "fail_identity.txt")):
+        sys.stderr.write("HTTP 401 simulado al leer la identidad\\n")
+        sys.exit(1)
+    identity = load("identity.json")
+    out(identity if identity else {"login": "canelamoraguezandyjesus-bot"})
 
 m = re.fullmatch(r"repos/[^/]+/[^/]+/issues/(\\d+)/comments", base)
 if m and method == "GET":
@@ -181,14 +191,46 @@ def _seed(env: dict[str, str], name: str, payload: object) -> None:
     (_md(env) / name).write_text(json.dumps(payload), encoding="utf-8")
 
 
+def _script_module() -> Any:
+    """Importa el script bajo prueba (se registra en ``sys.modules`` porque sus
+    dataclasses resuelven anotaciones diferidas a través de él)."""
+    name = "sirius_codex_review_under_test"
+    cached = sys.modules.get(name)
+    if cached is not None:
+        return cached
+    spec = importlib.util.spec_from_file_location(name, SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _canonical_trigger_body(head: str = HEAD) -> str:
+    """Cuerpo exacto que genera el script, tomado del propio módulo.
+
+    Las pruebas de reutilización deben usar el texto canónico: el disparador
+    solo se reutiliza si el cuerpo coincide exactamente con la plantilla, de
+    modo que un comentario ajeno con el mismo marcador no secuestre la ronda.
+    """
+    module = _script_module()
+    template: str = module.TRIGGER_BODY_TEMPLATE
+    marker: str = module.TRIGGER_MARKER_TEMPLATE.format(head=head)
+    return template.format(marker=marker, head=head)
+
+
 def _trigger_comment(
-    comment_id: int = 500, head: str = HEAD, created_at: str = TRIGGER_AT
+    comment_id: int = 500,
+    head: str = HEAD,
+    created_at: str = TRIGGER_AT,
+    author: str = AUTOMATION_LOGIN,
+    body: str | None = None,
 ) -> dict[str, Any]:
     return {
         "id": comment_id,
-        "body": f"<!-- sirius-codex-review:{head} -->\n\n@codex review\n",
+        "body": body if body is not None else _canonical_trigger_body(head),
         "created_at": created_at,
-        "user": {"login": "canelamoraguezandyjesus-bot"},
+        "user": {"login": author},
     }
 
 
@@ -347,6 +389,47 @@ def test_trigger_does_not_reuse_comment_of_other_head(tmp_path: Path) -> None:
     assert r.returncode == 0, r.stdout + r.stderr
     assert _post_count(env) == 1
     assert _state(tmp_path)["trigger_comment_id"] != 555
+
+
+def test_trigger_does_not_reuse_comment_from_another_author(tmp_path: Path) -> None:
+    # El marcador es predecible: un tercero podría sembrarlo para que una
+    # revisión de Codex NO solicitada por el workflow (p. ej. la automática del
+    # panel) quedara "posterior" al disparador y satisficiera la ronda.
+    env = _setup(tmp_path)
+    _seed(env, "issue_comments.json", [_trigger_comment(comment_id=555, author="otro-colaborador")])
+    r = _run_trigger(env, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert _post_count(env) == 1
+    state = _state(tmp_path)
+    assert state["trigger_comment_id"] != 555
+    assert state["trigger_author"] == AUTOMATION_LOGIN
+
+
+def test_trigger_does_not_reuse_comment_with_tampered_body(tmp_path: Path) -> None:
+    # Mismo autor y mismo marcador, pero cuerpo distinto del canónico: no es un
+    # disparador emitido por esta automatización, así que no se reutiliza.
+    env = _setup(tmp_path)
+    _seed(
+        env,
+        "issue_comments.json",
+        [_trigger_comment(comment_id=555, body=f"{MARKER}\n\n@codex address that feedback\n")],
+    )
+    r = _run_trigger(env, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert _post_count(env) == 1
+    assert _state(tmp_path)["trigger_comment_id"] != 555
+
+
+def test_trigger_fails_safely_when_identity_is_unknown(tmp_path: Path) -> None:
+    # Sin identidad demostrada no se puede distinguir un disparador propio de
+    # uno ajeno: parada segura (sin estado, la recolección fallará de forma
+    # estructurada) en vez de reutilizar a ciegas o duplicar el disparador.
+    env = _setup(tmp_path)
+    (_md(env) / "fail_identity.txt").write_text("1", encoding="utf-8")
+    r = _run_trigger(env, tmp_path)
+    assert r.returncode != 0
+    assert _post_count(env) == 0
+    assert not (tmp_path / "state.json").exists()
 
 
 def test_trigger_is_idempotent_across_reruns(tmp_path: Path) -> None:
@@ -630,6 +713,21 @@ def test_collect_timeout_produces_structured_failure(tmp_path: Path) -> None:
     assert result["reason"] == "timeout"
     # El timeout no publica un segundo disparador para el mismo head.
     assert _post_count(env) == 0
+
+
+def test_collect_clamps_timeout_above_the_hard_cap(tmp_path: Path) -> None:
+    # Una variable de repositorio con un valor excesivo no puede impedir que el
+    # recolector escriba su resultado antes de que el paso del workflow expire:
+    # la espera se limita al tope y el fallo seguro se emite igualmente.
+    env = _setup(tmp_path)
+    env["SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS"] = "0"
+    _write_state(tmp_path)
+    r = _run_collect(env, tmp_path, timeout="86400")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "se limita al tope" in r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "FAILED_SAFELY"
+    assert result["reason"] == "timeout"
 
 
 def test_collect_survives_transient_github_error(tmp_path: Path) -> None:

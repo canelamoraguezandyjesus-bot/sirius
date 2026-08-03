@@ -42,13 +42,18 @@ Requisitos en ejecución: `gh`, `jq`, `python3`.
 Disparador y recolector de la revisión nativa de Codex para la revisión dual
 (contrato operativo §4.1, bandera `SIRIUS_CODEX_REVIEW_ENABLED`). `trigger`
 publica (o reutiliza de forma idempotente) el comentario `@codex review` con un
-marcador oculto por head; `collect` espera el resultado del conector oficial
+marcador oculto por head; solo reutiliza un disparador **propio** (autor igual a
+la identidad real del token y cuerpo idéntico a la plantilla), para que un
+comentario ajeno con el mismo marcador no pueda hacer valer una revisión no
+solicitada por el workflow; `collect` espera el resultado del conector oficial
 (allowlist `SIRIUS_CODEX_ALLOWED_AUTHORS`), verifica que la revisión
 corresponde exactamente al head esperado (`commit_id` o marcador
 `Reviewed commit:`), reconoce la aprobación explícita (revisión `APPROVED` o
 reacción `+1` del conector sobre el disparador; `eyes` solo indica
 procesamiento) y escribe un JSON normalizado. Timeout configurable
-(`SIRIUS_CODEX_REVIEW_TIMEOUT_SECONDS`, 1200 s por defecto); cualquier caso no
+(`SIRIUS_CODEX_REVIEW_TIMEOUT_SECONDS`, 1200 s por defecto) y limitado por
+`SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS` (1500 s) para que el resultado se
+escriba siempre antes de que expire el paso del workflow; cualquier caso no
 identificable con seguridad termina en `FAILED_SAFELY`. No usa la API de
 OpenAI y nunca modifica código.
 
