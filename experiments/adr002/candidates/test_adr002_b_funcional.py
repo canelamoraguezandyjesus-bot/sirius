@@ -63,12 +63,12 @@ from experiments.adr002.candidates.common.contracts import (
 from experiments.adr002.candidates.common.port import PuertoSqlite
 
 RAIZ = Path(__file__).resolve().parents[3]
-FICHA: Final = "artifacts/adr002_cards/ficha_ADR002-B_v5.json"
+FICHA: Final = "artifacts/adr002_cards/ficha_ADR002-B_v6.json"
 
 #: Se fija al congelar la v4; si quedara desactualizada, la cita fallaria.
 #: Mientras la suite este suspendida por la guarda de anterioridad, este
 #: centinela no se compara con nada.
-HUELLA_FICHA_B_V5: Final = "b27866b1278f37473fa6151ab7f26df7386bcd81"
+HUELLA_FICHA_B_V6: Final = "44596f4e60162c11886cf045132ac4f5440284e9"
 
 CONSULTA: Final = "faro"
 OBJETIVO: Final = fixtures_b.OBJETIVO_SOLO_B
@@ -139,7 +139,7 @@ def test_la_ejecucion_cita_la_version_y_la_huella_correctas() -> None:
         "ficha_ADR002-B_v2.json",
         "ficha_ADR002-B_v3.json",
         "ficha_ADR002-B_v4.json",
-        "ficha_ADR002-B_v5.json",
+        "ficha_ADR002-B_v6.json",
     ]
     for anterior in ("v1", "v2", "v3", "v4"):
         conservada = json.loads(
@@ -153,7 +153,7 @@ def test_la_ejecucion_cita_la_version_y_la_huella_correctas() -> None:
     assert ficha["identidad"]["version"] == 5
     assert ficha["identidad"]["sustituye_a"] == 4
     assert ficha["estado"] == "CONGELADA"
-    assert ficha["congelacion"]["huella"] == HUELLA_FICHA_B_V5
+    assert ficha["congelacion"]["huella"] == HUELLA_FICHA_B_V6
     assert ficha["senal_tardia"]["habilitada"] == "semantica_vectorial"
     assert ficha["no_contiene_resultados"] is True
 

@@ -183,6 +183,28 @@ HASHES_NO_ALMACENADOS: Final[Mapping[str, str]] = {
         "de la fe de erratas 04: misma naturaleza y misma verificacion que las "
         "anteriores, recomputarla sobre la forma canonica"
     ),
+    "5660dc4c7023bed6be1c7a87354efc5c45e478f1": (
+        "huella canonica de la ficha ADR002-A v3 ya SUSTITUIDA por la correccion "
+        "unica de common del paso 5 del plan aprobado: solo su campo de estado "
+        "cambio y la huella se recomputa de el; el contenido congelado original "
+        "permanece integro en el historial"
+    ),
+    "fac352de997de8ba907a9e26cda9e34d96eff80d": (
+        "huella canonica de la ficha ADR002-A v4, la vigente tras la correccion "
+        "unica de common y la identidad real del sustrato lexico rectificada por "
+        "la fe de erratas 05: misma naturaleza y misma verificacion que las "
+        "anteriores, recomputarla sobre la forma canonica"
+    ),
+    "1ab53646dec59311e20dcae3c5bfdecd239e4325": (
+        "huella canonica de la ficha ADR002-B v5 ya SUSTITUIDA por la correccion "
+        "unica de common: solo su campo de estado cambio y la huella se recomputa "
+        "de el; el contenido congelado original permanece integro en el historial"
+    ),
+    "44596f4e60162c11886cf045132ac4f5440284e9": (
+        "huella canonica de la ficha ADR002-B v6, la vigente tras la correccion "
+        "unica de common: B contiene a A y delega en el, de modo que el cambio de "
+        "la base obliga a version sucesora aunque su codigo propio no cambie"
+    ),
     "b57ad7b24c7f0232d45540cde73294e2d68e02ef": (
         "captura de entorno de ADR-001: HEAD observado de la rama historica "
         "fix/chat-history-layout al ejecutar los spikes, registrado como "
