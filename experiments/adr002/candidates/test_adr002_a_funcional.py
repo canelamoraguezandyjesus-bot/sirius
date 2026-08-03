@@ -46,7 +46,7 @@ from experiments.adr002.candidates.common.contracts import (
 from experiments.adr002.candidates.common.port import PuertoSqlite
 
 RAIZ = Path(__file__).resolve().parents[3]
-FICHA = "artifacts/adr002_cards/ficha_ADR002-A_v4.json"
+FICHA = "artifacts/adr002_cards/ficha_ADR002-A_v5.json"
 
 
 # --------------------------------------------------------------------------

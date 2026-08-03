@@ -1,7 +1,7 @@
 {
-  "documento": "Ficha de candidato ADR002-A, version 4",
+  "documento": "Ficha de candidato ADR002-A, version 5",
   "version_esquema": "ficha-candidato-0.2",
-  "estado": "SUSTITUIDA",
+  "estado": "CONGELADA",
   "plantilla": "SIRIUS_0.2_ADR_002_FICHA_CANDIDATO_TEMPLATE_v0.4_PROPUESTO.md",
   "registro": "SIRIUS_0.2_REGISTRO_TOLERANCIAS_v0.5_PROPUESTO.md",
   "protocolo": "SIRIUS_0.2_ADR_002_PROTOCOLO_MEDICION_v0.2_PROPUESTO.md",
@@ -14,14 +14,14 @@
   "identidad": {
     "candidato": "ADR002-A",
     "papel": "CANDIDATO",
-    "version": 4,
-    "sustituye_a": 3,
-    "motivo_de_sustitucion": "sustituye a la v3 por la correccion unica de la capa comun del paso 5 del plan aprobado, y por la identidad real del sustrato lexico que la fe de erratas 05 rectifico. La capa comun cambia en los siete modulos y anade grouping.py: separa deduplicacion exacta de agrupacion de equivalentes, conserva la ausencia de sujeto como nula, retira la criticidad de ItemCanonico y la traslada a un plano comun que ningun candidato recibe, aplica G12 sobre todos los miembros y distingue cardinalidad semantica de documental. El codigo propio de ADR002-A cambia en dos puntos, los dos por la nulabilidad del sujeto: sujeto_estructural acepta None y la familia de E3 pliega subject_key or ''. Ninguna senal de A cambia, y su alcance sobre el fixture tecnico es identico. La aprobacion historica de la v3 permanece en su acta y NO se traslada: la vigencia queda pendiente de reaprobacion"
+    "version": 5,
+    "sustituye_a": 4,
+    "motivo_de_sustitucion": "sustituye a la v4 por la ampliacion aprobada del paso 5 que el usuario ordeno en la solicitud de reaprobacion: las cinco puertas que leian el estado colapsado —G3, G4, G6, G7 y G9— pasan a leer los ejes P2 que el sustrato declara. ItemCanonico gana el campo ejes y el puerto los resuelve del plano ejes_p2 con consultas dirigidas, acotadas y anotadas, de modo que la ausencia de barrido no se debilita. Un eje no declarado no es permisivo: la puerta degrada al estado colapsado y lo hace constar. El codigo propio de ADR002-A no cambia respecto de la v4: su arbol adr002_a permanece byte a byte en ceb4247c9fee913ae86d5203f199b19341f1c833, y ninguna senal de A cambia. La v4 nunca llego a reaprobarse; esta version la sustituye antes de que ninguna aprobacion la ampare"
   },
   "congelacion": {
-    "commit_de_referencia": "353da0be9b95d718976a81023e140a4dede34f6f",
-    "huella": "1af946adca41f43d083379af2d81b7f6e2dd6231",
-    "ruta": "artifacts/adr002_cards/ficha_ADR002-A_v4.json"
+    "commit_de_referencia": "4bb58c7a96f21ea601c28ff57caf67e4ee002a89",
+    "huella": "b5549a5a8e0f2fa4e791f64fbdb1c769938949be",
+    "ruta": "artifacts/adr002_cards/ficha_ADR002-A_v5.json"
   },
   "arquitectura": {
     "alternativa_minima": "ADR002-A",
@@ -91,7 +91,7 @@
     {
       "papel": "motor de recuperacion",
       "nombre": "infraestructura comun de la primera ronda",
-      "version": "arbol 6ac613c83578e351ad5734290290ce74c5df3e33",
+      "version": "arbol 30984c1f054fc47b12f708fad23ddf617a46645c",
       "origen": "experiments/adr002/candidates/common",
       "acopla_a_proveedor": false,
       "ruta_de_sustitucion": "comun a A/B/C/D y neutral por construccion, comprobado por controles fail-closed; sustituirla afectaria a todos por igual"
@@ -99,7 +99,7 @@
     {
       "papel": "regeneracion del derivado",
       "nombre": "derived.py de la capa comun",
-      "version": "arbol 6ac613c83578e351ad5734290290ce74c5df3e33",
+      "version": "arbol 30984c1f054fc47b12f708fad23ddf617a46645c",
       "origen": "DDL leido de sqlite_master, creado por la migracion 61be4bb269bf",
       "acopla_a_proveedor": false,
       "ruta_de_sustitucion": "no copia DDL a mano: si la migracion canonica cambiara, la reconstruccion cambiaria con ella sin tocar este modulo"
@@ -262,14 +262,14 @@
     "comprobacion_propuesta": "tras la purga, inspeccion de los cuatro ficheros y busqueda del payload literal en el soporte; la comprobacion se ejecuta bajo autorizacion de benchmark, no aqui"
   },
   "huella_candidato": {
-    "commit_del_prototipo": "353da0be9b95d718976a81023e140a4dede34f6f",
-    "hash_del_arbol_de_fuentes": "arbol Git ffc0f75c99c5636201e7a7c820b00881e435e08a de experiments/adr002/candidates en el commit de la correccion unica de common; subarboles: 6ac613c83578e351ad5734290290ce74c5df3e33 (common, corregido por el paso 5 del plan aprobado) y ceb4247c9fee913ae86d5203f199b19341f1c833 (adr002_a, alcanzado en dos puntos por el sujeto nulo)",
+    "commit_del_prototipo": "4bb58c7a96f21ea601c28ff57caf67e4ee002a89",
+    "hash_del_arbol_de_fuentes": "arbol Git 92df027fdefe048f574d20acb1305657ec97f113 de experiments/adr002/candidates en el commit de la correccion unica de common; subarboles: 30984c1f054fc47b12f708fad23ddf617a46645c (common, corregido por el paso 5 del plan aprobado) y ceb4247c9fee913ae86d5203f199b19341f1c833 (adr002_a, sin cambios desde la v4)",
     "migraciones_o_ddl": "ninguna: ADR002-A usa la cadena canonica de Alembic hasta 61be4bb269bf sin anadir migraciones ni DDL. La reconstruccion del derivado reutiliza el DDL que esa migracion creo, leido de sqlite_master",
     "artefactos_y_su_hash": "ninguno generado por adelantado: el candidato no persiste indices ni caches",
     "reproduccion": "uv run pytest experiments/adr002/candidates -q; la ejecucion sobre el corpus oficial exige una autorizacion de benchmark que no existe"
   },
   "declaracion_de_congelacion": {
-    "texto": "Declaro que los valores de esta ficha se han fijado antes de la primera ejecucion del candidato bajo la capa comun corregida por el paso 5 del plan aprobado y bajo la proyeccion experimental v0.1, que no proceden de ningun resultado observado del propio candidato, y que cualquier modificacion posterior obligara a nueva version de ficha y a repetir las ejecuciones ya realizadas.",
+    "texto": "Declaro que los valores de esta ficha se han fijado antes de la primera ejecucion del candidato bajo la capa comun corregida por el paso 5 del plan aprobado con su ampliacion de puertas, y bajo la proyeccion experimental v0.1; que no proceden de ningun resultado observado del propio candidato; y que cualquier modificacion posterior obligara a nueva version de ficha y a repetir las ejecuciones ya realizadas.",
     "responsable": "Usuario / Proyecto Sirius",
     "fecha": "2026-08-03",
     "valores_anteriores_a_la_primera_ejecucion": true

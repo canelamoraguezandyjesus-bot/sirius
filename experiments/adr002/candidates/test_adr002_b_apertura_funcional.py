@@ -2,7 +2,7 @@
 
 **Solo despues de la ficha B v4.** El paquete de correccion 04 cambio las
 fuentes de la huella de `ADR002-B`; estas pruebas exigen que los commits de
-entrada de `ficha_ADR002-A_v4.json` y `ficha_ADR002-B_v6.json` sean ancestros
+entrada de `ficha_ADR002-A_v5.json` y `ficha_ADR002-B_v7.json` sean ancestros
 estrictos, y quedan suspendidas mientras no lo sean.
 
 Lo que se demuestra, seccion a seccion, sobre sidecars construidos por el
@@ -42,8 +42,8 @@ from experiments.adr002.candidates.adr002_b import vectores
 
 RAIZ = Path(__file__).resolve().parents[3]
 FICHAS_SUCESORAS: Final = (
-    "artifacts/adr002_cards/ficha_ADR002-A_v4.json",
-    "artifacts/adr002_cards/ficha_ADR002-B_v6.json",
+    "artifacts/adr002_cards/ficha_ADR002-A_v5.json",
+    "artifacts/adr002_cards/ficha_ADR002-B_v7.json",
 )
 
 #: Un hexdigest SHA-256 canonico que no es el del fixture: sirve para separar
@@ -85,7 +85,7 @@ def _es_ancestro_estricto(ruta: str) -> bool:
 pytestmark = pytest.mark.skipif(
     not all(_es_ancestro_estricto(ficha) for ficha in FICHAS_SUCESORAS),
     reason=(
-        "las fichas ADR002-A v4 y ADR002-B v6 aun no son ancestros estrictos: "
+        "las fichas ADR002-A v5 y ADR002-B v7 aun no son ancestros estrictos: "
         "ejecutar ahora produciria evidencia no utilizable (TOL-210, regla 3)"
     ),
 )
@@ -460,7 +460,7 @@ def test_ningun_mensaje_de_apertura_arrastra_texto_protegido(
 def test_common_y_adr002_a_permanecen_intactos_por_arboles() -> None:
     assert (
         _git("rev-parse", "HEAD:experiments/adr002/candidates/common")
-        == "6ac613c83578e351ad5734290290ce74c5df3e33"
+        == "30984c1f054fc47b12f708fad23ddf617a46645c"
     )
     assert (
         _git("rev-parse", "HEAD:experiments/adr002/candidates/adr002_a")
@@ -470,8 +470,8 @@ def test_common_y_adr002_a_permanecen_intactos_por_arboles() -> None:
 
 def test_la_ficha_y_el_acta_de_a_v4_son_las_congeladas() -> None:
     assert (
-        _git("rev-parse", "HEAD:artifacts/adr002_cards/ficha_ADR002-A_v4.json")
-        == "da265b83e3b73538842ef82446f42ff313c1e011"
+        _git("rev-parse", "HEAD:artifacts/adr002_cards/ficha_ADR002-A_v5.json")
+        == "19660d4285e11bfdaa4e4e8ff82968a8105be3c7"
     )
     acta = (
         "docs/architecture/SIRIUS_0.2_ADR_002_ADR002_A_V3_PREPARADO_BENCHMARK_REAPROBACION_v1.0.md"

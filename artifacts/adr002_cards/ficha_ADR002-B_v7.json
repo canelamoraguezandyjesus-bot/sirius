@@ -1,7 +1,7 @@
 {
-  "documento": "Ficha de candidato ADR002-B, version 6",
+  "documento": "Ficha de candidato ADR002-B, version 7",
   "version_esquema": "ficha-candidato-0.2",
-  "estado": "SUSTITUIDA",
+  "estado": "CONGELADA",
   "plantilla": "SIRIUS_0.2_ADR_002_FICHA_CANDIDATO_TEMPLATE_v0.4_PROPUESTO.md",
   "registro": "SIRIUS_0.2_REGISTRO_TOLERANCIAS_v0.5_PROPUESTO.md",
   "protocolo": "SIRIUS_0.2_ADR_002_PROTOCOLO_MEDICION_v0.2_PROPUESTO.md",
@@ -14,14 +14,14 @@
   "identidad": {
     "candidato": "ADR002-B",
     "papel": "CANDIDATO",
-    "version": 6,
-    "sustituye_a": 5,
-    "motivo_de_sustitucion": "sustituye a la v5 por la correccion unica de la capa comun del paso 5 del plan aprobado y por la identidad real del sustrato lexico rectificada por la fe de erratas 05. B contiene a A y delega en el, de modo que el cambio de la base obliga a version sucesora aunque el codigo propio de ADR002-B no cambie: su arbol adr002_b permanece byte a byte en 43eaa374d6eef827599472588a54494be9704565. La senal vectorial tardia, sus validadores logicos, la minimizacion de sus mensajes de apertura y el presupuesto de su sidecar se conservan sin cambio. La aprobacion historica de la v5 permanece en su acta y NO se traslada: la vigencia queda pendiente de reaprobacion"
+    "version": 7,
+    "sustituye_a": 6,
+    "motivo_de_sustitucion": "sustituye a la v6 por la ampliacion aprobada del paso 5: las cinco puertas que leian el estado colapsado pasan a leer los ejes P2 declarados. B contiene a A y delega en el, de modo que el cambio de la base comun obliga a version sucesora aunque el codigo propio de ADR002-B no cambie: su arbol adr002_b permanece byte a byte en 43eaa374d6eef827599472588a54494be9704565 desde la v5. La senal vectorial tardia, sus validadores logicos, la minimizacion de sus mensajes de apertura y el presupuesto de su sidecar se conservan sin cambio. La v6 nunca llego a reaprobarse; esta version la sustituye antes de que ninguna aprobacion la ampare"
   },
   "congelacion": {
-    "commit_de_referencia": "353da0be9b95d718976a81023e140a4dede34f6f",
-    "huella": "103961938f60ffb71bbafb423cdbed3e1f72ba38",
-    "ruta": "artifacts/adr002_cards/ficha_ADR002-B_v6.json"
+    "commit_de_referencia": "4bb58c7a96f21ea601c28ff57caf67e4ee002a89",
+    "huella": "33a7617dc8713d7dc29fce1877b7c41d689f25d7",
+    "ruta": "artifacts/adr002_cards/ficha_ADR002-B_v7.json"
   },
   "arquitectura": {
     "alternativa_minima": "ADR002-B",
@@ -91,7 +91,7 @@
     {
       "papel": "motor de recuperacion",
       "nombre": "infraestructura comun de la primera ronda",
-      "version": "arbol 6ac613c83578e351ad5734290290ce74c5df3e33",
+      "version": "arbol 30984c1f054fc47b12f708fad23ddf617a46645c",
       "origen": "experiments/adr002/candidates/common",
       "acopla_a_proveedor": false,
       "ruta_de_sustitucion": "comun a A/B/C/D y neutral por construccion, comprobado por controles fail-closed; sustituirla afectaria a todos por igual"
@@ -107,7 +107,7 @@
     {
       "papel": "regeneracion del derivado",
       "nombre": "derived.py de la capa comun + vectores.py de adr002_b",
-      "version": "arboles 6ac613c83578e351ad5734290290ce74c5df3e33 y 43eaa374d6eef827599472588a54494be9704565",
+      "version": "arboles 30984c1f054fc47b12f708fad23ddf617a46645c y 43eaa374d6eef827599472588a54494be9704565",
       "origen": "FTS5: DDL leido de sqlite_master, creado por la migracion 61be4bb269bf; sidecar: reconstruccion completa desde el canon con huella de origen",
       "acopla_a_proveedor": false,
       "ruta_de_sustitucion": "ninguna pieza copia DDL a mano ni repuebla desde el propio indice; si el canon cambiara, la reconstruccion cambiaria con el"
@@ -311,14 +311,14 @@
     "comprobacion_propuesta": "tras la purga, inspeccion de los ficheros del canon y del sidecar y busqueda del payload literal en el soporte; la comprobacion se ejecuta bajo autorizacion de benchmark, no aqui"
   },
   "huella_candidato": {
-    "commit_del_prototipo": "353da0be9b95d718976a81023e140a4dede34f6f",
-    "hash_del_arbol_de_fuentes": "arbol Git ffc0f75c99c5636201e7a7c820b00881e435e08a de experiments/adr002/candidates en el commit de la correccion unica de common; subarboles: 6ac613c83578e351ad5734290290ce74c5df3e33 (common, corregido por el paso 5 del plan aprobado) y 43eaa374d6eef827599472588a54494be9704565 (adr002_b, sin cambios desde la v5)",
+    "commit_del_prototipo": "4bb58c7a96f21ea601c28ff57caf67e4ee002a89",
+    "hash_del_arbol_de_fuentes": "arbol Git 92df027fdefe048f574d20acb1305657ec97f113 de experiments/adr002/candidates en el commit de la correccion unica de common; subarboles: 30984c1f054fc47b12f708fad23ddf617a46645c (common, corregido por el paso 5 del plan aprobado) y 43eaa374d6eef827599472588a54494be9704565 (adr002_b, sin cambios desde la v5)",
     "migraciones_o_ddl": "ninguna sobre el canon: ADR002-B usa la cadena canonica de Alembic hasta 61be4bb269bf sin anadir migraciones ni DDL al canon. El unico DDL nuevo es el del sidecar experimental declarado en el §2.11, creado en un fichero separado y descartable",
     "artefactos_y_su_hash": "ninguno generado por adelantado: el sidecar se construye desde el canon cuando se necesita, registra la huella SHA-256 de su canon de origen en sus metadatos y no se versiona en el repositorio",
     "reproduccion": "uv run pytest experiments/adr002/candidates -q; la ejecucion sobre el corpus oficial exige una autorizacion de benchmark que no existe"
   },
   "declaracion_de_congelacion": {
-    "texto": "Declaro que los valores de esta ficha se han fijado antes de la primera ejecucion del candidato bajo la capa comun corregida por el paso 5 del plan aprobado y bajo la proyeccion experimental v0.1, que no proceden de ningun resultado observado del propio candidato, y que cualquier modificacion posterior obligara a nueva version de ficha y a repetir las ejecuciones ya realizadas.",
+    "texto": "Declaro que los valores de esta ficha se han fijado antes de la primera ejecucion del candidato bajo la capa comun corregida por el paso 5 del plan aprobado con su ampliacion de puertas, y bajo la proyeccion experimental v0.1; que no proceden de ningun resultado observado del propio candidato; y que cualquier modificacion posterior obligara a nueva version de ficha y a repetir las ejecuciones ya realizadas.",
     "responsable": "Usuario / Proyecto Sirius",
     "fecha": "2026-08-03",
     "valores_anteriores_a_la_primera_ejecucion": true

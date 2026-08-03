@@ -205,6 +205,26 @@ HASHES_NO_ALMACENADOS: Final[Mapping[str, str]] = {
         "unica de common: B contiene a A y delega en el, de modo que el cambio de "
         "la base obliga a version sucesora aunque su codigo propio no cambie"
     ),
+    "1af946adca41f43d083379af2d81b7f6e2dd6231": (
+        "huella canonica de la ficha ADR002-A v4 ya SUSTITUIDA por la ampliacion "
+        "de puertas del paso 5: la v4 nunca llego a reaprobarse y la v5 la "
+        "sustituye antes de que ninguna aprobacion la ampare"
+    ),
+    "b5549a5a8e0f2fa4e791f64fbdb1c769938949be": (
+        "huella canonica de la ficha ADR002-A v5, la vigente tras la ampliacion "
+        "aprobada del paso 5 que hace leer a G3, G4, G6, G7 y G9 los ejes P2 "
+        "declarados en vez del estado colapsado"
+    ),
+    "103961938f60ffb71bbafb423cdbed3e1f72ba38": (
+        "huella canonica de la ficha ADR002-B v6 ya SUSTITUIDA por la ampliacion "
+        "de puertas del paso 5: solo su campo de estado cambio y la huella se "
+        "recomputa de el"
+    ),
+    "33a7617dc8713d7dc29fce1877b7c41d689f25d7": (
+        "huella canonica de la ficha ADR002-B v7, la vigente tras la ampliacion "
+        "aprobada del paso 5: B contiene a A y delega en el, de modo que el "
+        "cambio de la base comun obliga a version sucesora"
+    ),
     "b57ad7b24c7f0232d45540cde73294e2d68e02ef": (
         "captura de entorno de ADR-001: HEAD observado de la rama historica "
         "fix/chat-history-layout al ejecutar los spikes, registrado como "

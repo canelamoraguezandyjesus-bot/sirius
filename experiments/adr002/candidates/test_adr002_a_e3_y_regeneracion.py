@@ -51,7 +51,7 @@ from experiments.adr002.candidates.common.port import (
 )
 
 RAIZ = Path(__file__).resolve().parents[3]
-FICHA_VIGENTE: Final = "artifacts/adr002_cards/ficha_ADR002-A_v4.json"
+FICHA_VIGENTE: Final = "artifacts/adr002_cards/ficha_ADR002-A_v5.json"
 
 #: El item que **solo** ``E3`` puede alcanzar desde la consulta ``faro``: su
 #: texto no contiene ``faro`` ni ninguna variante morfologica suya.
@@ -141,13 +141,17 @@ def test_las_fichas_anteriores_siguen_presentes_y_marcadas() -> None:
     v3 = json.loads(
         (RAIZ / "artifacts/adr002_cards/ficha_ADR002-A_v3.json").read_text(encoding="utf-8")
     )
-    v4 = json.loads((RAIZ / FICHA_VIGENTE).read_text(encoding="utf-8"))
+    v4 = json.loads(
+        (RAIZ / "artifacts/adr002_cards/ficha_ADR002-A_v4.json").read_text(encoding="utf-8")
+    )
+    v5 = json.loads((RAIZ / FICHA_VIGENTE).read_text(encoding="utf-8"))
     assert v1["estado"] == "SUSTITUIDA"
     assert v2["estado"] == "SUSTITUIDA"
     assert v3["estado"] == "SUSTITUIDA"
-    assert v4["estado"] == "CONGELADA"
-    assert v4["identidad"]["sustituye_a"] == 3
-    assert v4["no_contiene_resultados"] is True
+    assert v4["estado"] == "SUSTITUIDA"
+    assert v5["estado"] == "CONGELADA"
+    assert v5["identidad"]["sustituye_a"] == 4
+    assert v5["no_contiene_resultados"] is True
 
 
 # --------------------------------------------------------------------------
