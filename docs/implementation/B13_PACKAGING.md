@@ -115,6 +115,16 @@ construir como después de una compilación correcta. Si la compilación falla, 
 directorio se conserva a propósito para diagnóstico y lo limpia la siguiente
 ejecución.
 
+Ese directorio **no** está en `.gitignore` (a diferencia de `build/` y `dist/`),
+así que es la única ruta que se descuenta al decidir si el árbol está sucio. Sin
+ese descuento, conservarlo y rechazar el árbol sucio se contradicen: tras una
+compilación fallida, la siguiente ejecución vería `?? src/sirius/deployment/`,
+abortaría, y no llegaría nunca a la limpieza que existe precisamente para
+resolver ese estado — el reintento quedaría bloqueado por el único estado del que
+tiene que poder recuperarse. Se descuenta solo ese prefijo, se avisa por pantalla
+cuando aparece, y cualquier otro cambio, rastreado o no, sigue abortando el
+empaquetado.
+
 ## Estructura del artefacto
 
 ```
@@ -235,6 +245,19 @@ demás —inventario de hashes, contaminación y los dos arranques— se hace so
 la copia extraída. Si el ZIP no coincide con su hash, no se extrae nada y la
 verificación se detiene. La afirmación final queda limitada al ZIP cuyo hash se
 verificó.
+
+La inspección de las entradas del ZIP —separadores, raíz única y rechazo de
+rutas que escaparían de la carpeta de extracción— **no** vive en el `.ps1`, sino
+en `scripts/zip_package_inspector.py`, que el verificador invoca y cuyo JSON
+consume. El motivo es concreto: ahí vivió un fallo real que convivió con la
+comprobación de calidad en verde, porque `ZipFile.CreateFromDirectory` de .NET
+Framework escribe los nombres con `\` y el lector partía solo por `/`, y ninguna
+prueba podía detectarlo estando la lógica dentro de PowerShell. Ahora la cubre
+`tests/unit/test_zip_package_inspector.py` (18 casos: ambos separadores,
+mezclados, entradas de directorio, ZIP plano, dos raíces, y rutas absolutas,
+unidad, UNC y tres formas de `..`). Se prueba exactamente lo que se ejecuta, no
+una copia. Las rutas se juzgan con `ntpath`, de modo que la semántica es la de
+Windows aunque las pruebas corran en Ubuntu.
 
 - **A. ZIP y estructura**: SHA-256 del ZIP frente a su `.zip.sha256`; el ZIP
   debe tener exactamente una raíz y llamarse como el artefacto; tras extraer,

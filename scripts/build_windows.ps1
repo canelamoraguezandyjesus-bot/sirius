@@ -121,7 +121,31 @@ try {
     $branchRaw = (& git rev-parse --abbrev-ref HEAD | Out-String).Trim()
     $SourceBranch = $branchRaw
 
-    $status = (& git status --porcelain | Out-String).Trim()
+    # El unico camino que se descuenta del arbol sucio es el borrador que
+    # pyside6-deploy impone en src\sirius\deployment. No es codigo fuente y no
+    # esta en .gitignore (a diferencia de build/ y dist/), pero este script es
+    # su dueno: lo borra antes de compilar y despues de una compilacion buena, y
+    # lo conserva a proposito cuando Nuitka falla, para poder diagnosticar.
+    #
+    # Sin este descuento la conservacion y el rechazo se contradicen: tras un
+    # build fallido, la siguiente ejecucion veria "?? src/sirius/deployment/",
+    # abortaria por arbol sucio y no llegaria nunca a la limpieza que existe
+    # justo para resolver ese estado. El reintento quedaria bloqueado por el
+    # unico estado del que tiene que poder recuperarse.
+    #
+    # Solo se descuenta ESE prefijo. Cualquier otro cambio, rastreado o no,
+    # sigue rechazando el empaquetado.
+    $NuitkaScratchRelative = "src/sirius/deployment"
+    $statusLines = @(& git status --porcelain | Where-Object {
+            -not [string]::IsNullOrWhiteSpace($_)
+        })
+    $ScratchOnlyLines = @($statusLines | Where-Object {
+            $_.Substring(2).Trim().Trim('"').Replace("\", "/").StartsWith($NuitkaScratchRelative)
+        })
+    $sourceStatusLines = @($statusLines | Where-Object {
+            -not $_.Substring(2).Trim().Trim('"').Replace("\", "/").StartsWith($NuitkaScratchRelative)
+        })
+    $status = ($sourceStatusLines -join "`n").Trim()
     $SourceDirty = -not [string]::IsNullOrWhiteSpace($status)
 
     & git rev-parse --verify --quiet "refs/remotes/origin/main" > $null 2>$null
@@ -173,6 +197,10 @@ if ($SourceDirty) {
         "Todo artefacto valido de B13 lleva source_dirty=false.")
 }
 Write-Ok "Arbol de trabajo limpio."
+if ($ScratchOnlyLines.Count -gt 0) {
+    Write-Warn2 ("Queda el borrador de una compilacion anterior en src\sirius\deployment " +
+        "($($ScratchOnlyLines.Count) entradas). No cuenta como arbol sucio y se limpia mas adelante.")
+}
 
 # --------------------------------------------------------------------------
 Write-Step "3/13 Entorno de compilacion MSVC x64"
