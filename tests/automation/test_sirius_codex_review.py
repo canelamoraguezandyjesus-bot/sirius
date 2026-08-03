@@ -166,7 +166,28 @@ if m and method == "POST":
 
 m = re.fullmatch(r"repos/[^/]+/[^/]+/pulls/(\\d+)/reviews", base)
 if m:
-    out([] if page > 1 else load("reviews.json"))
+    # `reviews_late.json` modela al conector publicando en varias tandas: a
+    # partir de la pasada indicada en `reviews_late_after.txt` (por defecto la
+    # segunda) la lista devuelta es la tardía. Sin esto no se puede distinguir
+    # un recolector que espera a que Codex termine de uno que se queda con lo
+    # primero que ve.
+    calls_path = os.path.join(d, "reviews_calls.txt")
+    seen = 0
+    if os.path.exists(calls_path):
+        with open(calls_path, encoding="utf-8") as fh:
+            seen = int(fh.read().strip() or "0")
+    if page == 1:
+        seen += 1
+        with open(calls_path, "w", encoding="utf-8") as fh:
+            fh.write(str(seen))
+    late = os.path.join(d, "reviews_late.json")
+    threshold = 2
+    threshold_path = os.path.join(d, "reviews_late_after.txt")
+    if os.path.exists(threshold_path):
+        with open(threshold_path, encoding="utf-8") as fh:
+            threshold = int(fh.read().strip() or "2")
+    name = "reviews_late.json" if (os.path.exists(late) and seen >= threshold) else "reviews.json"
+    out([] if page > 1 else load(name))
 
 m = re.fullmatch(r"repos/[^/]+/[^/]+/pulls/(\\d+)", base)
 if m:
@@ -199,6 +220,9 @@ def _setup(tmp_path: Path) -> dict[str, str]:
     env["SIRIUS_RETRY_BASE_DELAY"] = "0"
     env["SIRIUS_RETRY_ATTEMPTS"] = "2"
     env["SIRIUS_CODEX_POLL_SECONDS"] = "0"
+    # Ventana de estabilidad desactivada salvo en las pruebas que la ejercitan:
+    # con ella activa, cada prueba esperaría su duración completa.
+    env["SIRIUS_CODEX_SETTLE_SECONDS"] = "0"
     env["GH_MOCK_POST_CREATED_AT"] = TRIGGER_AT
     return env
 
@@ -1071,3 +1095,95 @@ def test_a_reaction_still_approves_when_there_is_no_formal_review(tmp_path: Path
     r = _run_collect(env, tmp_path, timeout="0")
     assert r.returncode == 0, r.stdout + r.stderr
     assert _result(tmp_path)["status"] == "APPROVED"
+
+
+# --------------------------------------------------------------------------- #
+# Ventana de estabilidad: esperar a que Codex termine de publicar
+# --------------------------------------------------------------------------- #
+
+
+def test_collect_waits_for_a_review_published_after_the_first_pass(tmp_path: Path) -> None:
+    # El conector publica en dos tandas. Devolver el resultado en cuanto la
+    # primera revisión visible trae un comentario cerraría el sondeo y la
+    # segunda revisión no se consultaría nunca: la unión perdería hallazgos y el
+    # corrector recibiría una lista incompleta que parece completa.
+    env = _setup(tmp_path)
+    env["SIRIUS_CODEX_SETTLE_SECONDS"] = "0"
+    _write_state(tmp_path, trigger_at=_stamp(-2))
+    _seed(env, "reviews.json", [_review(review_id=700, submitted_at=_stamp(-1))])
+    _seed(
+        env,
+        "reviews_late.json",
+        [
+            _review(review_id=700, submitted_at=_stamp(-1)),
+            _review(review_id=701, submitted_at=_stamp(-1)),
+        ],
+    )
+    _seed(env, "review_comments_700.json", [_review_comment(801, "src/a.py", 1)])
+    _seed(env, "review_comments_701.json", [_review_comment(802, "src/b.py", 2)])
+
+    r = _run_collect(env, tmp_path, timeout="120")
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "CHANGES_REQUESTED"
+    archivos = sorted(item["archivo"] for item in result["observations"])
+    assert archivos == ["src/a.py:1", "src/b.py:2"], (
+        "el hallazgo de la segunda tanda debe recogerse, no perderse"
+    )
+    assert "se reinicia la espera" in r.stderr
+
+
+def test_collect_delivers_what_it_has_when_the_deadline_beats_the_window(
+    tmp_path: Path,
+) -> None:
+    # Con hallazgos a la vista y la ventana sin cerrar, vencer el plazo absoluto
+    # debe entregar lo observado. Declarar un timeout perdiendo hallazgos ya
+    # recogidos sería estrictamente peor.
+    env = _setup(tmp_path)
+    env["SIRIUS_CODEX_SETTLE_SECONDS"] = "900"
+    _write_state(tmp_path)  # disparador hace 60 s
+    _seed(env, "reviews.json", [_review(review_id=700)])
+    _seed(env, "review_comments_700.json", [_review_comment(801)])
+
+    r = _run_collect(env, tmp_path, timeout="5")  # plazo absoluto ya agotado
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "CHANGES_REQUESTED"
+    assert len(result["observations"]) == 1
+    assert "venció antes de cerrar la ventana" in r.stderr
+
+
+def test_a_failed_safely_result_is_not_delayed_by_the_window(tmp_path: Path) -> None:
+    # Una parada segura por SHA no mejora esperando: el motivo ya es definitivo.
+    env = _setup(tmp_path)
+    env["SIRIUS_CODEX_SETTLE_SECONDS"] = "900"
+    _write_state(tmp_path, trigger_at=_stamp(-2))
+    _seed(
+        env,
+        "reviews.json",
+        [_review(review_id=700, commit_id=OTHER_HEAD, submitted_at=_stamp(-1))],
+    )
+
+    r = _run_collect(env, tmp_path, timeout="120")
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "FAILED_SAFELY"
+    assert result["reason"] == "sha-distinto"
+
+
+def test_a_stable_result_is_delivered_after_the_window(tmp_path: Path) -> None:
+    # Si nada cambia, el resultado se entrega en cuanto la ventana se cierra:
+    # la espera no puede volverse indefinida.
+    env = _setup(tmp_path)
+    env["SIRIUS_CODEX_SETTLE_SECONDS"] = "1"
+    _write_state(tmp_path, trigger_at=_stamp(-2))
+    _seed(
+        env,
+        "reviews.json",
+        [_review(review_id=700, state="APPROVED", submitted_at=_stamp(-1))],
+    )
+
+    r = _run_collect(env, tmp_path, timeout="120")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert _result(tmp_path)["status"] == "APPROVED"
+    assert "se reinicia la espera" not in r.stderr

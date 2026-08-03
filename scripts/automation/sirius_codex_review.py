@@ -71,6 +71,22 @@ ABSOLUTE_MAX_TIMEOUT_SECONDS = 1500
 DEFAULT_POLL_SECONDS = 30
 MAX_PAGES = 50
 
+# Ventana de estabilidad, en segundos, antes de dar por cerrado un resultado.
+#
+# El conector puede publicar sus hallazgos en VARIAS revisiones sucesivas — es
+# justamente el caso que `_check_reviews` contempla al unirlas todas. Pero unir
+# solo sirve si se han publicado ya: devolver el resultado en cuanto la primera
+# revisión visible trae un comentario cierra el sondeo, y cualquier revisión
+# posterior no se consulta nunca. La unión perdería hallazgos y el corrector
+# recibiría una lista incompleta, que es peor que no unir, porque parece
+# completa.
+#
+# Por eso un resultado no se entrega en cuanto aparece: se exige verlo dos veces
+# IGUAL con esta ventana de por medio. Cualquier hallazgo nuevo reinicia la
+# ventana. La espera está acotada por el plazo absoluto: al vencer este, se
+# entrega lo que haya —nunca un timeout falso teniendo hallazgos a la vista—.
+DEFAULT_SETTLE_SECONDS = 60
+
 # El marcador identifica la ronda, no solo el head: `<head>:<ronda>`. La ronda
 # es estable ante reejecuciones del MISMO run de Actions (GITHUB_RUN_ID no
 # cambia al reintentar), así que la idempotencia se conserva; pero una ronda
@@ -754,6 +770,30 @@ def _check_reactions(repo: str, pr: int, head: str, trigger_id: int) -> CodexRes
     return None
 
 
+def _result_signature(result: CodexResult) -> tuple[Any, ...]:
+    """Huella de lo observado en una pasada, para detectar que ya no cambia.
+
+    Depende del contenido sustantivo de los hallazgos —no de identificadores
+    correlativos ni de qué revisión los trajo—, para que dos pasadas que ven
+    exactamente lo mismo produzcan la misma huella y una pasada que ve un
+    hallazgo nuevo produzca otra.
+    """
+    return (
+        result.status,
+        result.reviewed_head_sha,
+        tuple(
+            sorted(
+                (
+                    str(observation.get("archivo") or ""),
+                    str(observation.get("severidad") or ""),
+                    str(observation.get("problema") or ""),
+                )
+                for observation in result.observations
+            )
+        ),
+    )
+
+
 def cmd_collect(args: argparse.Namespace) -> int:
     state, failure = _load_state(args)
     if failure is not None or state is None:
@@ -807,25 +847,65 @@ def cmd_collect(args: argparse.Namespace) -> int:
         )
     deadline = time.monotonic() + max(remaining, 0.0)
 
+    settle_seconds = max(_env_number("SIRIUS_CODEX_SETTLE_SECONDS", DEFAULT_SETTLE_SECONDS), 0.0)
+
     result: CodexResult | None = None
+    # Último resultado observado y su huella, a la espera de estabilizarse.
+    settling: CodexResult | None = None
+    settling_signature: tuple[Any, ...] | None = None
+    settle_until = 0.0
     while True:
         # Siempre se hace al menos una pasada de sondeo, incluso con el plazo
         # absoluto ya agotado: si Codex respondió mientras Claude trabajaba, su
         # resultado debe recogerse en vez de declararse un timeout falso.
         try:
-            result, has_reviews = _check_reviews(
+            observed, has_reviews = _check_reviews(
                 args.repo, args.pr, args.head, trigger_at, trigger_id
             )
-            if result is None and not has_reviews:
-                result = _check_reactions(args.repo, args.pr, args.head, trigger_id)
+            if observed is None and not has_reviews:
+                observed = _check_reactions(args.repo, args.pr, args.head, trigger_id)
         except GhError as exc:
             # Error transitorio ya reintentado: se sigue sondeando hasta el
             # timeout; nunca se degrada a aprobación ni se aborta sin resultado.
             print(f"sirius_codex_review: pasada de sondeo fallida: {exc}", file=sys.stderr)
-            result = None
-        if result is not None:
-            break
+            observed = None
+
+        if observed is not None:
+            if observed.status == "FAILED_SAFELY":
+                # Una parada segura no mejora esperando: el motivo (SHA
+                # distinto o no demostrable) ya es definitivo para esta ronda.
+                result = observed
+                break
+            signature = _result_signature(observed)
+            now = time.monotonic()
+            if signature != settling_signature:
+                # Estado nuevo: Codex sigue publicando. Se reinicia la ventana.
+                if settling_signature is not None:
+                    print(
+                        "sirius_codex_review: el resultado de Codex cambió durante la ventana "
+                        "de estabilidad; se reinicia la espera para no perder hallazgos.",
+                        file=sys.stderr,
+                    )
+                settling, settling_signature = observed, signature
+                settle_until = now + settle_seconds
+            elif now >= settle_until and settling is not None:
+                # La ventana se cerró sin que nada cambiara: el resultado ya es
+                # el definitivo de la ronda.
+                result = settling
+                break
+
         if time.monotonic() >= deadline:
+            if settling is not None:
+                # Hay un resultado a la vista pero la ventana no llegó a
+                # cerrarse: se entrega lo observado. Perder hallazgos ya
+                # recogidos por declarar un timeout sería estrictamente peor.
+                print(
+                    "sirius_codex_review: el plazo absoluto venció antes de cerrar la ventana "
+                    "de estabilidad; se entrega el último resultado observado.",
+                    file=sys.stderr,
+                )
+                result = settling
+                break
             result = CodexResult(
                 status="FAILED_SAFELY",
                 reason="timeout",

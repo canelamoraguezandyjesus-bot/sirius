@@ -39,6 +39,11 @@ CLAUDE_STATUSES = {
 }
 CODEX_STATUSES = {"APPROVED", "CHANGES_REQUESTED", "FAILED_SAFELY"}
 
+# Cualquier URL dentro de un campo de contenido. Se neutraliza al construir la
+# clave de deduplicación: identifica al comentario que reportó el hallazgo, no
+# al hallazgo (ver `_dedupe`).
+URL_RE = re.compile(r"https?://\S+")
+
 OBSERVATION_KEYS = (
     "id",
     "severidad",
@@ -105,16 +110,29 @@ def _dedupe(observations: list[dict[str, str]]) -> list[dict[str, str]]:
     TODO el contenido normalizado idéntico (archivo, problema, criterio, prueba,
     severidad y límites). Sin deduplicación semántica: dos hallazgos que
     difieren en cualquier campo se conservan ambos.
+
+    Al construir la clave se neutralizan las URL. En los hallazgos de Codex el
+    campo ``prueba`` es el permalink del comentario que lo reportó, distinto
+    para cada comentario aunque el defecto sea literalmente el mismo: si el
+    conector publica el mismo hallazgo en dos revisiones —caso que el
+    recolector contempla al unir todas las revisiones de la ronda—, la clave
+    diferiría solo en ese enlace y el duplicado no se eliminaría nunca. El
+    corrector recibiría el defecto repetido y, peor, ``pending`` y
+    ``severity_total`` contarían comentarios en vez de defectos, falseando la
+    medida de convergencia. Neutralizar la URL corrige eso sin perder poder de
+    discriminación: el ``prueba`` del revisor Claude es el nombre de una prueba,
+    no un enlace, y sigue distinguiendo. El permalink de la primera aparición se
+    conserva en la observación que sobrevive.
     """
 
-    def norm(value: str) -> str:
-        return re.sub(r"\s+", " ", value).strip().casefold()
+    def key_value(value: str) -> str:
+        return re.sub(r"\s+", " ", URL_RE.sub("<url>", value)).strip().casefold()
 
     seen: set[tuple[str, ...]] = set()
     unique: list[dict[str, str]] = []
     for observation in observations:
         source = observation["id"].split("-", 1)[0]
-        key = (source, *(norm(observation[field]) for field in OBSERVATION_KEYS[1:]))
+        key = (source, *(key_value(observation[field]) for field in OBSERVATION_KEYS[1:]))
         if key in seen:
             continue
         seen.add(key)

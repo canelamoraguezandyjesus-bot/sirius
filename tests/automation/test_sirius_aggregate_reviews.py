@@ -344,3 +344,55 @@ def test_solo_mode_changes_requested_keeps_claude_observations(tmp_path: Path) -
     )
     assert result["verdict"] == "CHANGES_REQUESTED"
     assert [o["id"] for o in result["observations"]] == ["CLAUDE-R1"]
+
+
+def test_the_same_finding_reported_twice_dedupes_despite_distinct_permalinks(
+    tmp_path: Path,
+) -> None:
+    # Cuando el conector publica el mismo hallazgo en dos revisiones de la misma
+    # ronda, el recolector las une y cada comentario llega con su propio
+    # permalink en `prueba`. Si el enlace entrara en la clave, el duplicado no
+    # se eliminaría nunca: el corrector recibiría el defecto repetido y
+    # `pending`/`severity_total` contarían comentarios en vez de defectos,
+    # falseando la medida de convergencia.
+    primero = _codex_observation(
+        id="CODEX-001", prueba="https://github.com/o/r/pull/9#discussion_r111"
+    )
+    segundo = _codex_observation(
+        id="CODEX-002", prueba="https://github.com/o/r/pull/9#discussion_r222"
+    )
+    result = _run(
+        tmp_path,
+        _claude("REVIEW_APPROVED"),
+        _codex("CHANGES_REQUESTED", observations=[primero, segundo]),
+    )
+    assert result["verdict"] == "CHANGES_REQUESTED"
+    assert len(result["observations"]) == 1
+    # Se conserva el permalink de la primera aparición como metadato.
+    assert result["observations"][0]["prueba"] == "https://github.com/o/r/pull/9#discussion_r111"
+
+
+def test_two_findings_that_differ_in_content_are_both_kept(tmp_path: Path) -> None:
+    # Neutralizar la URL no puede fusionar hallazgos distintos: la clave sigue
+    # dependiendo de todo el contenido sustantivo.
+    primero = _codex_observation(id="CODEX-001", problema="Comprueba mal el límite superior.")
+    segundo = _codex_observation(id="CODEX-002", problema="Comprueba mal el límite inferior.")
+    result = _run(
+        tmp_path,
+        _claude("REVIEW_APPROVED"),
+        _codex("CHANGES_REQUESTED", observations=[primero, segundo]),
+    )
+    assert len(result["observations"]) == 2
+
+
+def test_claude_findings_still_discriminate_by_their_test(tmp_path: Path) -> None:
+    # El campo `prueba` del revisor Claude es el nombre de una prueba, no un
+    # enlace: sigue distinguiendo dos observaciones por lo demás iguales.
+    primero = _claude_observation(id="R1", prueba="test_limite_superior")
+    segundo = _claude_observation(id="R2", prueba="test_limite_inferior")
+    result = _run(
+        tmp_path,
+        _claude("CHANGES_REQUESTED", observations=[primero, segundo]),
+        _codex("APPROVED"),
+    )
+    assert len(result["observations"]) == 2

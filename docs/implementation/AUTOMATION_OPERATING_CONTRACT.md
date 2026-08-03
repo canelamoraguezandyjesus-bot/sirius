@@ -156,6 +156,21 @@ Reglas del modo dual:
   interpretable, la reacción no la resuelve: se sigue esperando y, si no se
   aclara, la ronda termina en fallo seguro. Una reacción es una señal más débil
   que una revisión y no puede convertir una ambigüedad en aprobación.
+- El resultado no se entrega en cuanto aparece: se exige observarlo **dos veces
+  igual**, con una ventana de estabilidad de por medio
+  (`SIRIUS_CODEX_SETTLE_SECONDS`, 60 s por defecto), y cualquier hallazgo nuevo
+  reinicia esa ventana. Unir todas las revisiones de la ronda solo sirve si se
+  han publicado ya: cerrar el sondeo en cuanto la primera revisión trae un
+  comentario dejaría fuera las posteriores y el corrector recibiría una lista
+  incompleta con apariencia de completa. La ventana está acotada por el plazo
+  absoluto: al vencer este se entrega lo observado, nunca un timeout falso
+  teniendo hallazgos a la vista. Una parada segura no espera.
+- La deduplicación de observaciones neutraliza las URL al construir su clave.
+  En los hallazgos de Codex el campo `prueba` es el permalink del comentario que
+  lo reportó, distinto para cada comentario aunque el defecto sea el mismo: con
+  el enlace dentro de la clave, un hallazgo repetido en dos revisiones no se
+  dedupararía nunca y `pending` y `severity_total` contarían comentarios en vez
+  de defectos, falseando la medida de convergencia.
 - Un agregador determinista (`scripts/automation/sirius_aggregate_reviews.py`)
   combina ambos resultados sin votos ni arbitraje de otro modelo, con esta
   precedencia: JSON inválido de un revisor obligatorio → `FAILED_SAFELY`; SHA
