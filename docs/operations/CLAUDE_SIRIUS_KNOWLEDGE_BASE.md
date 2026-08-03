@@ -93,7 +93,7 @@ Puede sin escalar: detalles ordinarios de implementación dentro del contrato de
 
 ## 20. Criterios de parada
 
-`READY_FOR_REVIEW`, `BLOCKED_BY_DECISION`, `FAILED_SAFELY`, `USAGE_LIMIT_REACHED`. Máximo 2 ciclos de corrección por PR; si no converge → `BLOCKED_BY_DECISION`. Nunca declarar terminado sin evidencia; nunca declarar superadas pruebas manuales/reales.
+`READY_FOR_REVIEW`, `BLOCKED_BY_DECISION`, `FAILED_SAFELY`, `USAGE_LIMIT_REACHED`. Sin tope fijo de ciclos de corrección: rige la política de convergencia (`AUTOMATION_OPERATING_CONTRACT.md` §5.1). Se corrige mientras el par `(hallazgos pendientes, severidad agregada)` mejore estrictamente respecto al mejor resultado previo; en cuanto deja de mejorar —o Quality encadena fallos sin arreglo— se detiene con motivo exacto → `BLOCKED_BY_DECISION`. Nunca declarar terminado sin evidencia; nunca declarar superadas pruebas manuales/reales.
 
 ## 21. Riesgos abiertos (a fecha de auditoría)
 

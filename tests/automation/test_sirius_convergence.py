@@ -11,10 +11,13 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "automation" / "sirius_convergence.py"
@@ -764,3 +767,63 @@ def test_ci_failures_do_not_contaminate_the_progress_measure() -> None:
     result = module.decide(records, ci_failures=module.ci_failure_streak(history))
     assert result["decision"] == "CONTINUE"
     assert result["reason"] == "progreso"
+
+
+# --------------------------------------------------------------------------- #
+# Coherencia con los documentos que declaran la política vigente
+# --------------------------------------------------------------------------- #
+
+# La incidencia es la fuente de verdad del trabajo: si su plantilla sigue
+# exigiendo un tope numérico de ciclos, a partir del tercer intento la
+# automatización ejecuta más correcciones de las que el propio work item
+# autoriza. El comportamiento y el contrato que lo describe tienen que cambiar
+# juntos, así que aquí se ata uno al otro.
+WORK_ITEM_TEMPLATE = REPO_ROOT / ".github" / "ISSUE_TEMPLATE" / "sirius-work-item.yml"
+
+DOCUMENTS_STATING_CURRENT_POLICY = (
+    WORK_ITEM_TEMPLATE,
+    REPO_ROOT / "docs" / "operations" / "CLAUDE_SIRIUS_KNOWLEDGE_BASE.md",
+    REPO_ROOT / "scripts" / "automation" / "prompts" / "corrector.md",
+)
+
+# "Máximo 2 ciclos", "máx. 2 ciclos", "máximo de 2 ciclos". Deliberadamente NO
+# se rastrean los registros históricos (`docs/audits/**` y el changelog §10 del
+# contrato): describen lo que era cierto cuando se escribieron y reescribirlos
+# falsearía el historial.
+OBSOLETE_CAP_RE = re.compile(r"m[áa]x(?:imo)?\.?\s*(?:de\s+)?\d+\s*ciclos", re.IGNORECASE)
+
+
+@pytest.mark.parametrize("document", DOCUMENTS_STATING_CURRENT_POLICY, ids=lambda path: path.name)
+def test_no_current_document_declares_a_fixed_cycle_cap(document: Path) -> None:
+    if not document.exists():
+        pytest.skip(f"{document.name} no existe en este árbol")
+    offenders = OBSOLETE_CAP_RE.findall(document.read_text(encoding="utf-8"))
+    assert not offenders, (
+        f"{document.name} sigue declarando un tope fijo de ciclos {offenders}; "
+        "la política vigente es la convergencia del §5.1, sin máximo numérico"
+    )
+
+
+def test_the_work_item_template_defers_to_the_convergence_policy() -> None:
+    template = WORK_ITEM_TEMPLATE.read_text(encoding="utf-8")
+    assert "max_cycles" not in template, (
+        "el campo obsoleto del tope de ciclos sigue en la plantilla"
+    )
+    assert "convergencia" in template.lower(), (
+        "la plantilla debe remitir a la política de convergencia que sí gobierna el ciclo"
+    )
+
+
+def test_the_template_only_names_stops_that_the_gate_can_emit() -> None:
+    # Evita la deriva inversa: que la plantilla prometa motivos de parada que el
+    # código nunca produce. Los identificadores en `kebab-case` que cita la
+    # plantilla deben existir de verdad.
+    emitted = set(re.findall(r'"reason":\s*"([a-z-]+)"', SCRIPT.read_text(encoding="utf-8")))
+    # Paradas seguras que aplican los workflows, no la puerta de convergencia.
+    emitted |= {"ronda-innumerable", "historial-de-rondas-ilegible"}
+
+    template = WORK_ITEM_TEMPLATE.read_text(encoding="utf-8")
+    named = set(re.findall(r"`([a-z]+(?:-[a-z]+)+)`", template))
+    assert named, "la plantilla ya no cita ningún motivo de parada: la prueba pasaría en vacío"
+    unknown = named - emitted
+    assert not unknown, f"la plantilla cita motivos de parada inexistentes: {sorted(unknown)}"

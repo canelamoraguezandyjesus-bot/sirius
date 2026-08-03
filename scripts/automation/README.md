@@ -21,7 +21,9 @@ Funciones principales:
 - `sirius_read_issue_body <repo> <n>` — cuerpo por REST con reintentos y respaldo
   GraphQL.
 - `sirius_read_issue_comments <repo> <n>` — comentarios por REST con respaldo
-  GraphQL.
+  GraphQL. Ambas vías filtran por autor de confianza (propietario o
+  `github-actions[bot]`), igual que `sirius_dump_comments` y `sirius_scan_text`:
+  ninguna lectura de comentarios de esta biblioteca ve texto de terceros.
 - `sirius_read_workitem_body <repo> <n> <archivo>` — lee de forma robusta y solo
   acepta el cuerpo si contiene todas las secciones obligatorias del contrato
   (rechaza respuestas truncadas).

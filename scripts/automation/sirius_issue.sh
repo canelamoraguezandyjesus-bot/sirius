@@ -51,6 +51,51 @@ sirius_retry() {
   done
 }
 
+# --- Frontera de confianza de los comentarios ---------------------------------
+
+# Filtro jq de autor de confianza. Los bloques estructurados que la
+# automatización vuelve a leer de la incidencia — `## OBSERVACIONES_ESTRUCTURADAS`
+# (dirige al corrector, que empuja commits con el PAT), `## RONDA_HALLAZGOS`
+# (gobierna la convergencia) y los marcadores `Head SHA:` (gobiernan la
+# verificación de head) — son instrucciones de facto para pasos con permisos de
+# escritura. Sin filtro, cualquiera con permiso de comentar podría sembrarlos:
+# el saneado en banda de sirius_apply_verdict.sh impide falsificarlos DENTRO de
+# un bloque legítimo, pero no publicar uno propio en un comentario aparte, que
+# además ganaría por ser el más reciente. Solo se aceptan comentarios del
+# propietario del repositorio (identidad del PAT de la automatización; misma
+# frontera de confianza que el `fusiona` del §8) o del bot de Actions, cuyo
+# login no es suplantable.
+#
+# Deliberadamente NO se acepta `MEMBER`. En un repositorio de organización esa
+# asociación la tiene cualquier miembro de la organización, incluidos los que
+# solo pueden leer y comentar: bastaría con que uno sembrara marcadores
+# `sirius-round` con números altos para gobernar si arranca el corrector, que
+# corre con el PAT y permisos de escritura. El alcance de confianza se limita a
+# quien ya podía autorizar un merge.
+SIRIUS_TRUSTED_AUTHOR_JQ='select(.author_association == "OWNER" or (.user.login // "") == "github-actions[bot]")'
+# Mismo filtro para la vía de respaldo GraphQL, que nombra los campos de otra
+# forma (`authorAssociation`, `author.login`). El respaldo conserva así la
+# garantía en vez de degradarla: un error transitorio de REST no puede abrir la
+# puerta a un historial sembrado por un tercero.
+SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ='select(.authorAssociation == "OWNER" or ((.author.login // "") | ltrimstr("app/")) == "github-actions")'
+
+# El filtro se aplica en TODAS las vías de lectura de comentarios, sin excepción.
+# Dejar una sola vía sin filtrar reintroduce el problema por la puerta de atrás:
+# `sirius_comment_once` y `sirius_transition` deciden si ya publicaron un
+# comentario buscando su marcador de idempotencia en el historial, y esos
+# marcadores son predecibles (`sirius-quality:<head>:failure` se deriva del SHA
+# público de la PR). Con una lectura sin filtrar, un tercero que publicase el
+# marcador ANTES que el flujo conseguía que la transición se diera por hecha y
+# omitiera su propio comentario: la etiqueta se aplicaba, pero el registro
+# oficial (`## CI_FAILURE`) no llegaba a existir. Como el resto de lecturas sí
+# filtra por autor, ese comentario ajeno tampoco se contaba después, así que el
+# fallo de Quality quedaba invisible para `ci_failure_streak` y el tope de
+# `MAX_CI_FAILURE_STREAK` podía eludirse indefinidamente, manteniendo vivo al
+# corrector —que corre con permisos de escritura— sin cota. Filtrando también
+# aquí, un marcador ajeno simplemente no existe para la automatización: el
+# comentario oficial se publica siempre y la deduplicación sigue operando entre
+# comentarios propios, que es lo único que prueba que el paso ya se ejecutó.
+
 # --- Vías de lectura de bajo nivel (una sola llamada, sin reintento) ----------
 
 _sirius_body_rest() {
@@ -64,11 +109,13 @@ _sirius_body_graphql() {
 }
 
 _sirius_comments_rest() {
-  gh api --paginate "repos/${1}/issues/${2}/comments" --jq '.[].body'
+  gh api --paginate "repos/${1}/issues/${2}/comments" \
+    --jq "[.[] | ${SIRIUS_TRUSTED_AUTHOR_JQ}] | .[].body"
 }
 
 _sirius_comments_graphql() {
-  gh issue view "${2}" --repo "${1}" --json comments --jq '.comments[].body'
+  gh issue view "${2}" --repo "${1}" \
+    --json comments --jq "[.comments[] | ${SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ}] | .[].body"
 }
 
 # --- Lectura robusta ----------------------------------------------------------
@@ -92,6 +139,10 @@ sirius_read_issue_body() {
 
 # sirius_read_issue_comments <repo> <issue> — imprime los cuerpos de comentarios,
 # REST con reintentos y respaldo GraphQL. !=0 solo si todas las vías fallan.
+# Solo comentarios de autor de confianza, por las dos vías (ver la frontera de
+# confianza más arriba): lo que devuelve esta función gobierna la idempotencia
+# de las transiciones y la localización de la PR, así que un comentario ajeno
+# no puede figurar en él.
 sirius_read_issue_comments() {
   local repo="$1" num="$2" out=""
   if out="$(sirius_retry _sirius_comments_rest "$repo" "$num")"; then
@@ -125,31 +176,6 @@ sirius_read_issue_comments() {
 # compacto por línea y python3 —requisito ya declarado de esta biblioteca—
 # invierte el orden y emite los cuerpos íntegros. Invertir líneas de texto
 # plano no serviría: los cuerpos son multilínea.
-# Filtro jq de autor de confianza. Los bloques estructurados que la
-# automatización vuelve a leer de la incidencia — `## OBSERVACIONES_ESTRUCTURADAS`
-# (dirige al corrector, que empuja commits con el PAT), `## RONDA_HALLAZGOS`
-# (gobierna la convergencia) y los marcadores `Head SHA:` (gobiernan la
-# verificación de head) — son instrucciones de facto para pasos con permisos de
-# escritura. Sin filtro, cualquiera con permiso de comentar podría sembrarlos:
-# el saneado en banda de sirius_apply_verdict.sh impide falsificarlos DENTRO de
-# un bloque legítimo, pero no publicar uno propio en un comentario aparte, que
-# además ganaría por ser el más reciente. Solo se aceptan comentarios del
-# propietario del repositorio (identidad del PAT de la automatización; misma
-# frontera de confianza que el `fusiona` del §8) o del bot de Actions, cuyo
-# login no es suplantable.
-#
-# Deliberadamente NO se acepta `MEMBER`. En un repositorio de organización esa
-# asociación la tiene cualquier miembro de la organización, incluidos los que
-# solo pueden leer y comentar: bastaría con que uno sembrara marcadores
-# `sirius-round` con números altos para gobernar si arranca el corrector, que
-# corre con el PAT y permisos de escritura. El alcance de confianza se limita a
-# quien ya podía autorizar un merge.
-SIRIUS_TRUSTED_AUTHOR_JQ='select(.author_association == "OWNER" or (.user.login // "") == "github-actions[bot]")'
-# Mismo filtro para la vía de respaldo GraphQL, que nombra los campos de otra
-# forma (`authorAssociation`, `author.login`). El respaldo conserva así la
-# garantía en vez de degradarla: un error transitorio de REST no puede abrir la
-# puerta a un historial sembrado por un tercero.
-SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ='select(.authorAssociation == "OWNER" or ((.author.login // "") | ltrimstr("app/")) == "github-actions")'
 
 _sirius_comments_newest_first() {
   # La lectura y la transformación van SEPARADAS a propósito. Encadenadas en una
@@ -440,6 +466,10 @@ sirius_close_issue() {
 # sirius_comment_once <repo> <issue> <marker> <body_file> — publica el comentario
 # solo si el marcador no existe ya. 0 si publica o si ya existia; !=0 si falla al
 # publicar.
+#
+# "Ya existe" significa que lo publico una identidad de confianza: la busqueda
+# usa sirius_read_issue_comments, que filtra por autor. Un marcador ajeno no
+# suprime el comentario oficial (ver la frontera de confianza).
 sirius_comment_once() {
   local repo="$1" num="$2" marker="$3" file="$4" existing=""
   existing="$(sirius_read_issue_comments "$repo" "$num" 2>/dev/null)"

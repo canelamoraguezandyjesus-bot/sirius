@@ -848,6 +848,78 @@ def test_graphql_fallback_keeps_the_trusted_author_filter(tmp_path: Path) -> Non
     assert json.loads(r.stdout) == [{"id": "DE-LA-AUTOMATIZACION"}]
 
 
+def test_untrusted_marker_does_not_suppress_the_official_comment(tmp_path: Path) -> None:
+    # Los marcadores de idempotencia son PREDECIBLES: `sirius-quality:<head>:failure`
+    # se deriva del SHA público de la PR. Si la deduplicación mirase comentarios
+    # de cualquier autor, un tercero que publicara el marcador antes que el flujo
+    # conseguiría que la transición se diera por hecha y omitiese su propio
+    # comentario. Solo un marcador de identidad confiable puede suprimirlo.
+    env = _setup(tmp_path)
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    (_mock_dir(env) / "comments.txt").write_text(
+        f"@@untrusted\n{marker}\ncomentario ajeno que se adelanta\n\n", encoding="utf-8"
+    )
+    body = _write_body(env, marker)
+    r = _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
+    assert r.returncode == 0, r.stderr
+    assert "COMMENT" in _actions(env)
+    assert "## SIRIUS_COMPLETED" in _comments(env)
+
+
+def test_trusted_marker_still_suppresses_a_duplicate_comment(tmp_path: Path) -> None:
+    # La otra mitad de la garantía: filtrar por autor no debe romper la
+    # idempotencia real. Un marcador propio sigue impidiendo el duplicado.
+    env = _setup(tmp_path)
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    (_mock_dir(env) / "comments.txt").write_text(
+        f"{marker}\nregistro oficial ya publicado\n\n", encoding="utf-8"
+    )
+    body = _write_body(env, marker)
+    r = _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
+    assert r.returncode == 0, r.stderr
+    assert "COMMENT" not in _actions(env)
+
+
+def test_untrusted_marker_does_not_blind_the_ci_failure_count(tmp_path: Path) -> None:
+    # Escenario completo del defecto. `ci_failure_streak` cuenta sobre el volcado
+    # de comentarios, que filtra por autor: si un marcador ajeno hubiera bastado
+    # para saltarse la publicación del registro oficial, el fallo de Quality no
+    # habría existido para la cota y `MAX_CI_FAILURE_STREAK` sería eludible
+    # indefinidamente, manteniendo vivo al corrector (que escribe) sin límite.
+    env = _setup(tmp_path)
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    (_mock_dir(env) / "comments.txt").write_text(
+        f"@@untrusted\n{marker}\nadelantado por un tercero\n\n", encoding="utf-8"
+    )
+    body = _mock_dir(env).parent / "ci.md"
+    body.write_text(f"{marker}\n\n## CI_FAILURE\n- Quality en rojo\n", encoding="utf-8")
+    dump = tmp_path / "dump.txt"
+    r = _run(
+        f'sirius_comment_once owner/repo 55 "{marker}" "{body}" '
+        f'&& sirius_dump_comments owner/repo 55 "{dump}"',
+        env,
+    )
+    assert r.returncode == 0, r.stderr
+    # El volcado de confianza contiene el fallo exactamente una vez: el ajeno se
+    # descarta y el oficial sí llega a publicarse.
+    assert dump.read_text(encoding="utf-8").count(marker) == 1
+    assert "## CI_FAILURE" in dump.read_text(encoding="utf-8")
+
+
+def test_untrusted_marker_does_not_skip_a_transition_record(tmp_path: Path) -> None:
+    # `sirius_transition` comparte la búsqueda del marcador. Con un marcador
+    # ajeno debe comportarse como si no existiera: aplicar la etiqueta Y dejar
+    # su propio registro.
+    env = _setup(tmp_path)
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    (_mock_dir(env) / "comments.txt").write_text(f"@@untrusted\n{marker}\n\n", encoding="utf-8")
+    body = _write_body(env, marker)
+    r = _run(_transition_call(marker, body), env)
+    assert r.returncode == 0, r.stderr
+    assert "COMMENT" in _actions(env)
+    assert "## SIRIUS_COMPLETED" in _comments(env)
+
+
 # --------------------------------------------------------------------------- #
 # Numeración de rondas
 # --------------------------------------------------------------------------- #
