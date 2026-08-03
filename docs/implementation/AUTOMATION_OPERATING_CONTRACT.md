@@ -101,8 +101,12 @@ Resultados permitidos:
 La variable de repositorio `SIRIUS_CODEX_REVIEW_ENABLED` gobierna el modo de
 revisión dentro de `review-sirius-work.yml`:
 
-- **ausente o distinta de `true`:** revisión solo con Claude, el comportamiento
-  vigente antes de esta versión;
+- **ausente o distinta de `true`:** revisión solo con Claude, como antes de
+  esta versión. El endurecimiento común de la verificación de head — el gate
+  del workflow que exige que el head actual coincida con el último que superó
+  Quality, y el `reviewed_head_sha` obligatorio en el paso determinista —
+  aplica en ambos modos: es parte de esta versión del contrato, no de la
+  bandera;
 - **`true`:** revisión dual obligatoria. Tras Quality en verde sobre el head
   registrado, esa misma versión es revisada por dos revisores independientes:
   el revisor Claude actual y Codex mediante su integración nativa con GitHub

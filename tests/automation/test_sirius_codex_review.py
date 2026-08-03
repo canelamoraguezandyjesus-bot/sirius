@@ -105,6 +105,17 @@ m = re.fullmatch(r"repos/[^/]+/[^/]+/issues/(\\d+)/comments", base)
 if m and method == "GET":
     out([] if page > 1 else load("issue_comments.json"))
 if m and method == "POST":
+    fail_post = os.path.join(d, "fail_post.txt")
+    if os.path.exists(fail_post):
+        with open(fail_post, encoding="utf-8") as fh:
+            n = int(fh.read().strip() or "0")
+        if n > 0:
+            with open(fail_post, "w", encoding="utf-8") as fh:
+                fh.write(str(n - 1))
+            with open(os.path.join(d, "actions.log"), "a", encoding="utf-8") as fh:
+                fh.write("POST attempt failed\\n")
+            sys.stderr.write("HTTP 502 simulado en POST\\n")
+            sys.exit(1)
     comments = load("issue_comments.json")
     with open(input_file, encoding="utf-8") as fh:
         body = json.load(fh)["body"]
@@ -119,11 +130,19 @@ if m and method == "POST":
         json.dump(comments, fh)
     with open(os.path.join(d, "actions.log"), "a", encoding="utf-8") as fh:
         fh.write(f"POST comment {new['id']}\\n")
+    if os.path.exists(os.path.join(d, "post_ghost.txt")):
+        sys.stderr.write("comentario aplicado pero respuesta perdida (simulado)\\n")
+        sys.exit(1)
     out(new)
 
 m = re.fullmatch(r"repos/[^/]+/[^/]+/pulls/(\\d+)/reviews", base)
 if m:
     out([] if page > 1 else load("reviews.json"))
+
+m = re.fullmatch(r"repos/[^/]+/[^/]+/pulls/(\\d+)", base)
+if m:
+    pr_data = load("pr.json")
+    out(pr_data if pr_data else {"head": {"sha": ""}})
 
 m = re.fullmatch(r"repos/[^/]+/[^/]+/pulls/(\\d+)/reviews/(\\d+)/comments", base)
 if m:
@@ -345,6 +364,34 @@ def test_trigger_rejects_abbreviated_head(tmp_path: Path) -> None:
     assert not (tmp_path / "state.json").exists()
 
 
+def test_trigger_post_is_never_retried(tmp_path: Path) -> None:
+    # El POST del disparador no es idempotente: un reintento a ciegas podría
+    # publicar dos @codex review. Ante el fallo se falla limpio, sin duplicar.
+    env = _setup(tmp_path)
+    env["SIRIUS_RETRY_ATTEMPTS"] = "3"
+    (_md(env) / "fail_post.txt").write_text("3", encoding="utf-8")
+    r = _run_trigger(env, tmp_path)
+    assert r.returncode != 0
+    log = (_md(env) / "actions.log").read_text(encoding="utf-8")
+    assert log.count("POST attempt failed") == 1
+    assert _post_count(env) == 0
+    assert not (tmp_path / "state.json").exists()
+
+
+def test_trigger_recovers_when_post_applied_but_response_lost(tmp_path: Path) -> None:
+    # El servidor aplicó el comentario pero la respuesta se perdió: la relectura
+    # posterior encuentra el marcador y la ronda continúa sin duplicados.
+    env = _setup(tmp_path)
+    (_md(env) / "post_ghost.txt").write_text("1", encoding="utf-8")
+    r = _run_trigger(env, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert _post_count(env) == 1
+    state = _state(tmp_path)
+    comments = json.loads((_md(env) / "issue_comments.json").read_text(encoding="utf-8"))
+    assert len(comments) == 1
+    assert state["trigger_comment_id"] == comments[0]["id"]
+
+
 # --------------------------------------------------------------------------- #
 # Recolector: aprobaciones explícitas
 # --------------------------------------------------------------------------- #
@@ -367,6 +414,7 @@ def test_collect_formal_approved_review(tmp_path: Path) -> None:
 def test_collect_thumbs_up_from_connector_is_approval(tmp_path: Path) -> None:
     env = _setup(tmp_path)
     _write_state(tmp_path)
+    _seed(env, "pr.json", {"head": {"sha": HEAD}})
     _seed(env, "reactions_500.json", [{"content": "+1", "user": {"login": CONNECTOR}}])
     r = _run_collect(env, tmp_path)
     assert r.returncode == 0, r.stdout + r.stderr
@@ -374,6 +422,20 @@ def test_collect_thumbs_up_from_connector_is_approval(tmp_path: Path) -> None:
     assert result["status"] == "APPROVED"
     assert result["reviewed_head_sha"] == HEAD
     assert result["trigger_comment_id"] == 500
+
+
+def test_collect_thumbs_up_with_moved_head_fails_safely(tmp_path: Path) -> None:
+    # La reacción +1 no lleva commit: solo se acepta si el head actual de la PR
+    # sigue siendo el esperado. Un head movido durante la ronda es fallo seguro.
+    env = _setup(tmp_path)
+    _write_state(tmp_path)
+    _seed(env, "pr.json", {"head": {"sha": OTHER_HEAD}})
+    _seed(env, "reactions_500.json", [{"content": "+1", "user": {"login": CONNECTOR}}])
+    r = _run_collect(env, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "FAILED_SAFELY"
+    assert result["reason"] == "head-cambiado"
 
 
 def test_collect_thumbs_up_from_unknown_user_is_ignored(tmp_path: Path) -> None:

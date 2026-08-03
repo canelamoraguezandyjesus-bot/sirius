@@ -110,10 +110,17 @@ sirius_read_issue_comments() {
 # sirius_scan_text <repo> <issue> <out_file> — escribe, en out_file, texto para
 # escanear un SHA: primero los comentarios más recientes y después el cuerpo.
 # Best-effort y no bloqueante (siempre devuelve 0); REST con respaldo GraphQL.
+#
+# La lectura REST DEBE paginar: sin --paginate la API devuelve solo los 30
+# comentarios más antiguos y el "reverse" nunca vería los recientes, así que a
+# partir de ~30 comentarios el SHA extraído sería uno viejo y las verificaciones
+# de head fallarían en falso (parada head-obsoleto/head-inconsistente con un
+# head correcto). --slurp agrupa las páginas en una lista de listas y `add` las
+# aplana antes de invertir el orden.
 sirius_scan_text() {
   local repo="$1" num="$2" out="$3" comments="" body=""
   : >"$out"
-  if comments="$(sirius_retry gh api "repos/${repo}/issues/${num}/comments" --jq 'reverse | .[].body')"; then
+  if comments="$(sirius_retry gh api --paginate --slurp "repos/${repo}/issues/${num}/comments?per_page=100" --jq 'add | reverse | .[].body')"; then
     printf '%s\n' "$comments" >>"$out"
   elif comments="$(sirius_retry gh issue view "$num" --repo "$repo" --json comments --jq '[.comments[].body] | reverse | .[]')"; then
     printf '%s\n' "$comments" >>"$out"
@@ -129,8 +136,10 @@ sirius_scan_text() {
 # bajo "## OBSERVACIONES_ESTRUCTURADAS" en un CHANGES_REQUESTED), o nada si no
 # hay ninguna. Best-effort: nunca falla por sí sola.
 sirius_extract_observations() {
+  # Igual que sirius_scan_text: la lectura REST pagina para que el bloque de la
+  # ronda más reciente sea visible también en incidencias con muchos comentarios.
   local repo="$1" num="$2" comments=""
-  comments="$(sirius_retry gh api "repos/${repo}/issues/${num}/comments" --jq 'reverse | .[].body' 2>/dev/null)" \
+  comments="$(sirius_retry gh api --paginate --slurp "repos/${repo}/issues/${num}/comments?per_page=100" --jq 'add | reverse | .[].body' 2>/dev/null)" \
     || comments="$(sirius_retry gh issue view "$num" --repo "$repo" --json comments --jq '[.comments[].body] | reverse | .[]' 2>/dev/null)" \
     || comments=""
   printf '%s' "$comments" | python3 -c '

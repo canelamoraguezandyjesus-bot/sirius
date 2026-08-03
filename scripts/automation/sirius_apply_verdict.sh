@@ -94,7 +94,25 @@ if ! verdict="$(jq -r '.verdict // empty' "$VERDICT_FILE" 2>/dev/null)" || [ -z 
   stop_safely "veredicto-invalido" \
     "El archivo de veredicto del rol \`${ROLE}\` no es JSON válido o no tiene el campo \`verdict\`."
 fi
-summary="$(jq -r '.summary // "(sin resumen)"' "$VERDICT_FILE" 2>/dev/null)"
+
+# sanitize_untrusted_text — neutraliza, en texto que procede de un agente o de
+# Codex (y que puede arrastrar contenido de la PR), las DOS secuencias que los
+# escáneres deterministas de la incidencia reinterpretan al releer comentarios:
+#   - las vallas ``` (podrían cerrar antes de tiempo o falsificar el bloque
+#     "## OBSERVACIONES_ESTRUCTURADAS ```json ... ```" que consume el gate del
+#     corrector mediante sirius_extract_observations);
+#   - los marcadores "Head SHA:"/"Merge SHA:" (envenenarían sirius_extract_sha
+#     en verificaciones de head posteriores).
+# El contenido sigue siendo legible y fiel; solo se desactivan los marcadores.
+# (\u0027 es una comilla simple, escapada para no cerrar la cadena del programa jq.)
+sanitize_untrusted_text() {
+  jq -Rrs 'gsub("```"; "\u0027\u0027\u0027") | gsub("(?<p>[Hh][Ee][Aa][Dd]|[Mm][Ee][Rr][Gg][Ee])(\\s+[Ss][Hh][Aa]\\s*:)"; "\(.p)-sha:")'
+}
+sanitize_untrusted_json() {
+  jq -c 'walk(if type == "string" then gsub("```"; "\u0027\u0027\u0027") | gsub("(?<p>[Hh][Ee][Aa][Dd]|[Mm][Ee][Rr][Gg][Ee])(\\s+[Ss][Hh][Aa]\\s*:)"; "\(.p)-sha:") else . end)'
+}
+
+summary="$(jq -r '.summary // "(sin resumen)"' "$VERDICT_FILE" 2>/dev/null | sanitize_untrusted_text)"
 
 case "$ROLE" in
   implementer) allowed="READY_FOR_REVIEW BLOCKED_BY_DECISION FAILED_SAFELY USAGE_LIMIT_REACHED" ;;
@@ -261,6 +279,15 @@ case "$verdict" in
     # solicita corrección a partir de una revisión hecha sobre otra versión.
     resolve_pr
     require_reviewed_head
+    # Las observaciones arrastran texto no confiable (hallazgos de Codex,
+    # contenido de la PR): se neutralizan sus marcadores ANTES de incrustarlas
+    # en el comentario, para que el bloque OBSERVACIONES_ESTRUCTURADAS que el
+    # gate del corrector re-extrae no pueda romperse ni falsificarse.
+    observations="$(printf '%s' "$observations" | sanitize_untrusted_json)"
+    if [ -z "$observations" ] || [ "$observations" = "[]" ]; then
+      stop_safely "sanitizacion-fallida" \
+        "No se pudieron sanear las observaciones estructuradas antes de publicarlas; me detengo para no entregar al corrector un bloque corrupto."
+    fi
     readable="$(printf '%s' "$observations" | jq -r '.[] | "- **\(.id // "?")** (\(.severidad // "?")) \(.archivo // "?"): \(.problema // "?")\n  - Criterio esperado: \(.criterio_esperado // "?")\n  - Prueba: \(.prueba // "?")\n  - Límites de corrección: \(.limites_correccion // "?")"')"
     pr_hint="https://github.com/${REPO}/pull/${pr_number}"
     marker="<!-- sirius-verdict:reviewer:changes:$(printf '%s' "$observations" | sha256sum | cut -c1-16) -->"

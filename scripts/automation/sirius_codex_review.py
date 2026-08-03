@@ -101,14 +101,25 @@ def _retry_settings() -> tuple[int, float]:
     return max(attempts, 1), max(base_delay, 0.0)
 
 
-def _gh_api(path: str, *, method: str | None = None, input_file: str | None = None) -> Any:
+def _gh_api(
+    path: str,
+    *,
+    method: str | None = None,
+    input_file: str | None = None,
+    attempts_override: int | None = None,
+) -> Any:
     """Llama ``gh api`` con reintentos limitados y espera creciente.
 
     Devuelve el JSON decodificado. Lanza ``GhError`` si todas las tentativas
     fallan (el llamador decide si eso es fatal o solo el fin de una pasada de
-    sondeo).
+    sondeo). ``attempts_override`` permite desactivar los reintentos en
+    operaciones NO idempotentes (el POST del disparador: reintentar a ciegas
+    podría publicar el comentario dos veces si la primera respuesta se perdió
+    después de haberse aplicado en el servidor).
     """
     attempts, delay = _retry_settings()
+    if attempts_override is not None:
+        attempts = attempts_override
     cmd = ["gh", "api", path]
     if method:
         cmd += ["-X", method]
@@ -310,17 +321,30 @@ def cmd_trigger(args: argparse.Namespace) -> int:
             payload_path = f"{args.state_file}.payload"
             with open(payload_path, "w", encoding="utf-8") as handle:
                 json.dump({"body": body}, handle, ensure_ascii=False)
-            posted = _gh_api(
-                f"repos/{args.repo}/issues/{args.pr}/comments",
-                method="POST",
-                input_file=payload_path,
-            )
+            # El POST NO se reintenta a ciegas: si la respuesta se pierde
+            # después de que el servidor aplicara el comentario, un reintento
+            # publicaría un segundo @codex review para el mismo head. Ante un
+            # fallo se relee la PR: si el marcador ya está, se reutiliza.
+            posted: Any = None
+            post_error: GhError | None = None
+            try:
+                posted = _gh_api(
+                    f"repos/{args.repo}/issues/{args.pr}/comments",
+                    method="POST",
+                    input_file=payload_path,
+                    attempts_override=1,
+                )
+            except GhError as exc:
+                post_error = exc
             os.unlink(payload_path)
-            # Relectura defensiva: si dos ejecuciones compitieran pese al grupo
-            # de concurrencia, ambas convergen en el comentario más antiguo.
+            # Relectura defensiva: converge en el comentario más antiguo tanto
+            # tras una carrera improbable como tras un POST de resultado
+            # ambiguo (aplicado en el servidor pero con la respuesta perdida).
             refreshed = _find_trigger_comments(args.repo, args.pr, marker)
             chosen = refreshed[0] if refreshed else posted
             if not isinstance(chosen, dict):
+                if post_error is not None:
+                    raise post_error
                 raise GhError("el comentario disparador publicado no es legible")
     except GhError as exc:
         print(f"sirius_codex_review: no se pudo asegurar el disparador: {exc}", file=sys.stderr)
@@ -458,17 +482,40 @@ def _check_reviews(
 
 def _check_reactions(repo: str, pr: int, head: str, trigger_id: int) -> CodexResult | None:
     """Aprobación explícita sin hallazgos: reacción ``+1`` del conector sobre el
-    disparador. La reacción ``eyes`` solo indica procesamiento y se ignora."""
+    disparador. La reacción ``eyes`` solo indica procesamiento y se ignora.
+
+    A diferencia de una revisión formal, la reacción no lleva ``commit_id``:
+    para no fabricar un ``reviewed_head_sha`` indemostrable, la aprobación solo
+    se acepta si el head actual de la PR sigue siendo exactamente el esperado
+    (Codex revisa el head vigente al recibir el disparador). Si el head cambió
+    durante la ronda, el resultado es un fallo seguro, nunca una aprobación.
+    """
     reactions = _gh_paginated(f"repos/{repo}/issues/comments/{trigger_id}/reactions")
     for reaction in reactions:
         if reaction.get("content") == "+1" and _is_allowed_author(reaction):
+            pr_data = _gh_api(f"repos/{repo}/pulls/{pr}")
+            current_head = ""
+            if isinstance(pr_data, dict) and isinstance(pr_data.get("head"), dict):
+                current_head = str(pr_data["head"].get("sha") or "")
+            if current_head.casefold() != head.casefold():
+                return CodexResult(
+                    status="FAILED_SAFELY",
+                    reason="head-cambiado",
+                    trigger_comment_id=trigger_id,
+                    summary=(
+                        "El conector de Codex marcó 👍 el disparador, pero el head actual "
+                        f"de la PR (`{current_head or 'ilegible'}`) ya no es el esperado "
+                        f"(`{head}`); no puedo demostrar qué versión aprobó. Parada segura."
+                    ),
+                )
             return CodexResult(
                 status="APPROVED",
                 reviewed_head_sha=head,
                 trigger_comment_id=trigger_id,
                 summary=(
                     "El conector de Codex marcó 👍 el comentario disparador: aprobación "
-                    f"explícita sin hallazgos para el head `{head}`."
+                    f"explícita sin hallazgos para el head `{head}` (verificado que sigue "
+                    "siendo el head actual de la PR)."
                 ),
             )
     return None

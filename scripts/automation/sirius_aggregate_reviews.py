@@ -101,15 +101,20 @@ def _normalized_observations(raw: object, prefix: str) -> list[dict[str, str]] |
 
 
 def _dedupe(observations: list[dict[str, str]]) -> list[dict[str, str]]:
-    """Elimina solo duplicados inequívocos: misma procedencia (prefijo del ID),
-    mismo archivo y mismo cuerpo normalizado. Sin deduplicación semántica."""
-    seen: set[tuple[str, str, str]] = set()
+    """Elimina solo duplicados inequívocos: misma procedencia (prefijo del ID) y
+    TODO el contenido normalizado idéntico (archivo, problema, criterio, prueba,
+    severidad y límites). Sin deduplicación semántica: dos hallazgos que
+    difieren en cualquier campo se conservan ambos.
+    """
+
+    def norm(value: str) -> str:
+        return re.sub(r"\s+", " ", value).strip().casefold()
+
+    seen: set[tuple[str, ...]] = set()
     unique: list[dict[str, str]] = []
     for observation in observations:
         source = observation["id"].split("-", 1)[0]
-        body = re.sub(r"\s+", " ", observation["problema"]).strip().casefold()
-        archivo = observation["archivo"].strip().casefold()
-        key = (source, archivo, body)
+        key = (source, *(norm(observation[field]) for field in OBSERVATION_KEYS[1:]))
         if key in seen:
             continue
         seen.add(key)

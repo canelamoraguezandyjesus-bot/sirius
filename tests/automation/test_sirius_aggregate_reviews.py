@@ -264,6 +264,21 @@ def test_exact_duplicates_within_source_are_removed(tmp_path: Path) -> None:
     assert [o["id"] for o in result["observations"]] == ["CLAUDE-R1"]
 
 
+def test_same_problem_with_different_criteria_is_not_deduplicated(tmp_path: Path) -> None:
+    # Mismo archivo y mismo problema, pero criterio esperado distinto: NO son
+    # duplicados exactos y deben conservarse ambos.
+    observations = [
+        _claude_observation(id="R1"),
+        _claude_observation(id="R2", criterio_esperado="Un criterio distinto."),
+    ]
+    result = _run(
+        tmp_path,
+        _claude("CHANGES_REQUESTED", observations=observations),
+        _codex(),
+    )
+    assert [o["id"] for o in result["observations"]] == ["CLAUDE-R1", "CLAUDE-R2"]
+
+
 def test_similar_but_not_identical_observations_are_kept(tmp_path: Path) -> None:
     similar = [
         _claude_observation(id="R1", problema="No valida la entrada."),
