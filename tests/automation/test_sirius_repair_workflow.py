@@ -87,8 +87,40 @@ def test_a_failed_decision_defaults_to_block() -> None:
     # Si la decisión no se puede leer, el valor por defecto es BLOCK: nunca se
     # continúa corrigiendo sin haber demostrado convergencia.
     run = _step(_load(), "Evaluar la convergencia")["run"]
-    assert '.decision // "BLOCK"' in run
-    assert "|| echo BLOCK" in run
+    assert 'decision="${decision:-BLOCK}"' in run
+    assert '[ "$decision" != "CONTINUE" ]' in run
+
+
+def test_the_defaults_survive_an_empty_decision_file() -> None:
+    # El respaldo de jq (`// "BLOCK"`) no cubre el archivo VACÍO: sobre una
+    # entrada vacía jq no emite nada y sale con 0, así que ni el operador de
+    # jq ni el `||` actúan y la variable queda vacía. El bloqueo seguiría
+    # siendo seguro, pero se publicaría sin motivo ni detalle. El respaldo se
+    # aplica sobre la variable ya expandida, que sí cubre los tres casos.
+    run = _step(_load(), "Evaluar la convergencia")["run"]
+    for name, fallback in (
+        ("decision", "BLOCK"),
+        ("reason", "indeterminado"),
+        ("rounds", "0"),
+    ):
+        assert f'{name}="${{{name}:-{fallback}}}"' in run
+    assert 'detail="${detail:-' in run
+
+
+def test_the_round_number_comes_from_the_history_already_read() -> None:
+    # Releer el historial para numerar la ronda abre una ventana en la que la
+    # segunda lectura falla y la ronda se numeraría a ciegas.
+    run = _step(_load(), "Evaluar la convergencia")["run"]
+    assert 'sirius_next_round_number "$GH_REPO" "$ISSUE_NUMBER" "$comments_file"' in run
+    # Y la numeración ocurre DESPUÉS de comprobar que el volcado se pudo leer.
+    assert run.index("sirius_dump_comments") < run.index("sirius_next_round_number")
+
+
+def test_an_unnumberable_round_stops_safely() -> None:
+    run = _step(_load(), "Evaluar la convergencia")["run"]
+    assert 'if [ -z "${next_cycle:-}" ]; then' in run
+    assert "ronda-innumerable" in run
+    assert "sirius:failed-safely" in run
 
 
 def test_blocking_never_invokes_claude() -> None:

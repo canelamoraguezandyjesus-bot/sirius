@@ -55,6 +55,17 @@ esac
 # head SHA o al hash del contenido, que ya los hace únicos y estables.
 SIRIUS_RUN_TAG="${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1}"
 
+# Identificador de RONDA (sin el número de reintento). El marcador de
+# CHANGES_REQUESTED arrastra el registro de convergencia, y ese registro debe
+# publicarse UNA sola vez por ronda: con el sufijo por intento, reejecutar el
+# mismo run de Actions (attempt 2) generaba un marcador distinto, no dedupaba y
+# publicaba un SEGUNDO registro con el mismo head. La ronda siguiente veía dos
+# registros consecutivos sobre el mismo head y bloqueaba por `head-sin-avance`
+# un trabajo que sí había avanzado. Con el run como identificador, una
+# reejecución es idempotente y una ronda nueva —que siempre es un run nuevo—
+# sigue registrándose por separado.
+SIRIUS_ROUND_TAG="${GITHUB_RUN_ID:-manual}"
+
 # transition <marker> <body_file> <add_label> <color> <desc>
 transition() {
   local marker="$1" body_file="$2" add="$3" color="$4" desc="$5"
@@ -295,7 +306,10 @@ case "$verdict" in
     # de ciclos: publica las huellas estables de los hallazgos de esta ronda
     # para que la puerta del corrector pueda medir progreso real entre rondas
     # en vez de detenerse en un número fijo.
-    round_number="$(sirius_next_round_number "$REPO" "$ISSUE")"
+    if ! round_number="$(sirius_next_round_number "$REPO" "$ISSUE")"; then
+      stop_safely "historial-de-rondas-ilegible" \
+        "No he podido leer el historial de rondas de esta incidencia, así que no puedo numerar esta ronda sin arriesgarme a repetir un número ya usado y corromper la medida de convergencia. Me detengo de forma segura."
+    fi
     round_verdict="$(mktemp)"
     round_record="$(mktemp)"
     jq -n --argjson obs "$observations" '{observations: $obs}' >"$round_verdict"
@@ -317,7 +331,8 @@ case "$verdict" in
     # `head-sin-avance` no podrían dispararse nunca: justo el escenario que debe
     # terminar sería el único que no termina. Con head + run, una reejecución del
     # mismo run sigue siendo idempotente y una ronda nueva siempre se registra.
-    marker="<!-- sirius-verdict:reviewer:changes:${head_sha}:${SIRIUS_RUN_TAG} -->"
+    # El sufijo es el de RONDA (run sin intento): ver SIRIUS_ROUND_TAG.
+    marker="<!-- sirius-verdict:reviewer:changes:${head_sha}:${SIRIUS_ROUND_TAG} -->"
     body_file="$(mktemp)"
     {
       printf '%s\n\n%s\n' "$marker" "## CHANGES_REQUESTED"

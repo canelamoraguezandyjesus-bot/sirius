@@ -68,13 +68,10 @@ jobs:
           set -uo pipefail
           source scripts/automation/sirius_issue.sh
 
-          # Numeración de la ronda: el mayor marcador `<!-- sirius-round:N -->`
-          # publicado por el revisor. El marcador heredado
-          # `<!-- sirius-repair-cycle:N -->` sigue emitiéndose para trazabilidad
-          # histórica, pero ya no gobierna ninguna decisión.
-          next_cycle="$(sirius_next_round_number "$GH_REPO" "$ISSUE_NUMBER")"
-
-          # Decisión de convergencia sobre el historial completo de rondas.
+          # Decisión de convergencia sobre el historial completo de rondas. El
+          # volcado se lee UNA vez y se reutiliza para numerar la ronda: leerlo
+          # dos veces abriría una ventana en la que la segunda lectura falla y
+          # la ronda se numera a ciegas.
           comments_file="$(mktemp)"
           decision_file="$(mktemp)"
           if ! sirius_dump_comments "$GH_REPO" "$ISSUE_NUMBER" "$comments_file"; then
@@ -91,13 +88,44 @@ jobs:
             exit 0
           fi
 
+          # Numeración de la ronda: el mayor marcador `<!-- sirius-round:N -->`
+          # publicado por el revisor, sobre el volcado que ya se ha leído. El
+          # marcador heredado `<!-- sirius-repair-cycle:N -->` sigue emitiéndose
+          # para trazabilidad histórica, pero ya no gobierna ninguna decisión.
+          next_cycle="$(sirius_next_round_number "$GH_REPO" "$ISSUE_NUMBER" "$comments_file")"
+
           python3 scripts/automation/sirius_convergence.py decide \
             --comments-file "$comments_file" --output "$decision_file" || true
-          decision="$(jq -r '.decision // "BLOCK"' "$decision_file" 2>/dev/null || echo BLOCK)"
-          reason="$(jq -r '.reason // "indeterminado"' "$decision_file" 2>/dev/null || echo indeterminado)"
-          detail="$(jq -r '.detail // "No se pudo evaluar la convergencia."' "$decision_file" 2>/dev/null || echo "No se pudo evaluar la convergencia.")"
-          rounds="$(jq -r '.rounds // 0' "$decision_file" 2>/dev/null || echo 0)"
+          # Los valores por defecto de jq (`// "BLOCK"`) NO cubren el archivo
+          # vacío: sobre una entrada vacía jq no emite nada y sale con 0, así
+          # que la sustitución `||` tampoco actúa y la variable queda vacía. La
+          # decisión seguiría siendo segura (vacío != CONTINUE), pero el motivo
+          # y el detalle se perderían y el bloqueo se publicaría sin
+          # diagnóstico. Se aplica el respaldo sobre la variable ya expandida,
+          # que sí cubre los tres casos: archivo ausente, vacío o ilegible.
+          decision="$(jq -r '.decision // empty' "$decision_file" 2>/dev/null || true)"
+          reason="$(jq -r '.reason // empty' "$decision_file" 2>/dev/null || true)"
+          detail="$(jq -r '.detail // empty' "$decision_file" 2>/dev/null || true)"
+          rounds="$(jq -r '.rounds // empty' "$decision_file" 2>/dev/null || true)"
+          decision="${decision:-BLOCK}"
+          reason="${reason:-indeterminado}"
+          detail="${detail:-No se pudo evaluar la convergencia; el analizador no entregó una decisión legible.}"
+          rounds="${rounds:-0}"
           rm -f "$comments_file" "$decision_file"
+
+          if [ -z "${next_cycle:-}" ]; then
+            marker="<!-- sirius-verdict:corrector:precheck:ronda-innumerable:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
+            body_file="$(mktemp)"
+            printf '%s\n\n%s\n\n%s\n' \
+              "$marker" "🔴 **Me he detenido de forma segura**" \
+              "He leído el historial de rondas pero no he podido numerar la ronda siguiente. Me detengo en vez de corregir con una numeración que falsearía la medida de convergencia." >"$body_file"
+            sirius_transition "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+              "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
+              "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar la parada segura (ronda-innumerable)."
+            rm -f "$body_file"
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           if [ "$decision" != "CONTINUE" ]; then
             # Sufijo por run, igual que el resto de paradas: sin él, un

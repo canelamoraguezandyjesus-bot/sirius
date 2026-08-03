@@ -75,8 +75,23 @@ SEVERITY_WEIGHTS: dict[str, int] = {
 DEFAULT_SEVERITY_WEIGHT = 2
 
 
+# Sufijo de línea (o rango de líneas) que el recolector añade al archivo de una
+# observación: `scripts/x.py:120`, `scripts/x.py:120-134`. Se recorta al calcular
+# la huella porque la línea NO identifica al defecto: cualquier corrección en
+# otra parte del mismo archivo desplaza la numeración, y con la línea dentro de
+# la huella el mismo defecto sin tocar aparecería como uno resuelto más uno
+# nuevo. Eso falsea las dos medidas a la vez —el detector de reaparición y el de
+# progreso— justo en las rondas en las que más importa acertar.
+LOCATION_LINE_RE = re.compile(r":\d+(?:-\d+)?$")
+
+
 def _normalize_text(value: object) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip().casefold()
+
+
+def _normalize_location(value: object) -> str:
+    """Ubicación estable de una observación: archivo sin el sufijo de línea."""
+    return LOCATION_LINE_RE.sub("", _normalize_text(value))
 
 
 def severity_weight(value: object) -> int:
@@ -86,17 +101,19 @@ def severity_weight(value: object) -> int:
 def fingerprint(observation: dict[str, Any]) -> str:
     """Huella estable de una observación.
 
-    Depende solo del contenido sustantivo — procedencia, archivo/línea y cuerpo
-    del problema — y NO del identificador correlativo (``CODEX-001``), que
-    cambia de una ronda a otra aunque el defecto sea el mismo. Así, un hallazgo
-    que persiste conserva su huella y el detector de progreso lo reconoce.
+    Depende solo del contenido sustantivo — procedencia, archivo y cuerpo del
+    problema — y NO del identificador correlativo (``CODEX-001``), que cambia de
+    una ronda a otra aunque el defecto sea el mismo, ni del número de línea, que
+    se desplaza en cuanto se edita cualquier punto anterior del archivo. Así, un
+    hallazgo que persiste conserva su huella y el detector de progreso lo
+    reconoce.
     """
     identifier = str(observation.get("id") or "")
     source = identifier.split("-", 1)[0].upper() if "-" in identifier else "SIN-FUENTE"
     payload = "\x1f".join(
         (
             source,
-            _normalize_text(observation.get("archivo")),
+            _normalize_location(observation.get("archivo")),
             _normalize_text(observation.get("problema")),
         )
     )
@@ -159,64 +176,105 @@ def parse_round_records(text: str) -> list[dict[str, Any]]:
             str(item.get("fingerprint") or "") for item in normalized if item.get("fingerprint")
         }
         record["pending"] = len(normalized)
-        record["severity_total"] = sum(severity_weight(item.get("severity")) for item in normalized)
         records.append(record)
     records.sort(key=lambda item: int(item["round"]))
+    _apply_sticky_severity(records)
     return records
 
 
-def _has_progress(previous: dict[str, Any], current: dict[str, Any]) -> tuple[bool, str]:
-    """¿Hubo progreso real entre dos rondas consecutivas?
+def _apply_sticky_severity(records: list[dict[str, Any]]) -> None:
+    """Fija la gravedad de cada huella a la peor jamás observada para ella.
 
-    Progreso es una disminución estricta del par ``(pendientes, gravedad
-    agregada)`` en el **orden producto**: al menos una de las dos magnitudes
-    baja y **ninguna sube**. Nada más cuenta.
+    Sin esto, la gravedad agregada baja sola cuando un revisor omite la etiqueta
+    de un hallazgo que sigue ahí: un P0 (peso 4) que reaparece sin insignia pasa
+    a contar como `sin-clasificar` (peso 2) y el par (pendientes, gravedad)
+    "mejora" sin que se haya corregido absolutamente nada. Esa mejora fantasma
+    basta para superar la comprobación de progreso y mantener abierto un ciclo
+    estancado. Una vez que una huella se ha visto como P0, cuenta como P0
+    mientras siga pendiente: la gravedad de un defecto no la decide el formato
+    del comentario que lo describe.
 
-    Esa definición es lo que garantiza la terminación, y es más estricta que
-    las dos tentaciones naturales:
-
-    - Mirar cada magnitud por separado no basta. Si bastara con que bajen los
-      pendientes *o* baje la gravedad, una secuencia de 1 P0, luego 2 P3, luego 1 P0 otra vez
-      alternaría para siempre: cada ronda mejora una magnitud empeorando la
-      otra, con huellas y heads nuevos, sin activar reaparición, oscilación ni
-      dos rondas sin progreso.
-    - Inferir progreso de que "desapareció una huella" tampoco basta. La huella
-      incluye el texto del problema, así que reformular el mismo defecto con
-      otras palabras produce otra huella: el ciclo continuaría indefinidamente
-      sobre un trabajo que no avanza. Además el contrato §5.1 excluye
-      explícitamente "sustituir un fallo por otro equivalente".
-
-    Con el orden producto sobre ℕ² —bien fundado— cada ronda que continúa por
-    progreso decrece estrictamente una cantidad que no puede decrecer sin fin;
-    las rondas sin progreso se agotan por la regla de dos consecutivas. La
-    terminación deja de ser una expectativa y pasa a ser una propiedad.
+    Se aplica en orden de ronda y sobre TODAS las rondas —también las que sirven
+    de mejor marca histórica—, así que el listón y la ronda medida usan la misma
+    escala. La corrección solo puede subir el peso de una ronda respecto de sus
+    propias etiquetas, nunca bajarlo, y el par sigue viviendo en ℕ²: la prueba
+    de terminación no se ve afectada.
     """
-    pending_down = current["pending"] < previous["pending"]
-    pending_up = current["pending"] > previous["pending"]
-    severity_down = current["severity_total"] < previous["severity_total"]
-    severity_up = current["severity_total"] > previous["severity_total"]
+    worst: dict[str, int] = {}
+    for record in records:
+        total = 0
+        for item in record["findings"]:
+            weight = severity_weight(item.get("severity"))
+            fingerprint_value = str(item.get("fingerprint") or "")
+            if fingerprint_value:
+                weight = max(weight, worst.get(fingerprint_value, 0))
+                worst[fingerprint_value] = weight
+            total += weight
+        record["severity_total"] = total
 
-    if pending_down and not severity_up:
-        return (
-            True,
-            f"los hallazgos pendientes bajaron de {previous['pending']} a "
-            f"{current['pending']} sin aumentar la gravedad",
-        )
-    if severity_down and not pending_up:
+
+def _best_so_far(history: list[dict[str, Any]]) -> tuple[int, int]:
+    """Mejor marca histórica: mínimo de cada magnitud sobre TODAS las rondas.
+
+    Es un vector que solo puede bajar. Ese "solo puede bajar" es la clave de la
+    terminación: sirve de listón que una regresión no puede elevar.
+    """
+    return (
+        min(record["pending"] for record in history),
+        min(record["severity_total"] for record in history),
+    )
+
+
+def _has_progress(history: list[dict[str, Any]], current: dict[str, Any]) -> tuple[bool, str]:
+    """¿Hubo progreso real en la ronda ``current``?
+
+    Progreso es que el par ``(pendientes, gravedad agregada)`` quede
+    estrictamente por debajo, en el **orden producto**, de la **mejor marca
+    histórica** — el mínimo de cada magnitud sobre todas las rondas previas —:
+    ninguna de las dos supera esa marca y al menos una la mejora.
+
+    Compararse con la mejor marca, y no con la ronda inmediata, es lo que hace
+    la terminación demostrable. Tres definiciones más laxas fallan, y las tres
+    se han visto fallar en este mismo trabajo:
+
+    - Mirar cada magnitud por separado permite alternar para siempre entre
+      estados que mejoran una a costa de la otra (un P0, luego dos P3, luego un
+      P0 otra vez).
+    - Inferir progreso de que "desapareció una huella" permite mantener el
+      ciclo abierto reformulando el mismo defecto con otras palabras, porque la
+      huella incluye el texto del problema.
+    - Comparar solo con la ronda inmediata permite que una regresión aislada
+      **eleve el listón** y que la ronda siguiente reinicie el contador con una
+      mejora meramente local: la secuencia (1,2) → (2,4) → (2,3) → (3,5) →
+      (3,4) → … alterna regresión tolerada y "progreso" mientras el estado
+      global crece sin fin.
+
+    Con la mejor marca histórica el listón nunca sube. Cada ronda con progreso
+    decrece estrictamente un vector de ℕ², que es bien fundado, así que solo
+    puede haber un número finito de ellas; y entre dos progresos se tolera como
+    mucho una ronda sin progreso. La terminación deja de ser una expectativa y
+    pasa a ser una propiedad.
+    """
+    best_pending, best_severity = _best_so_far(history)
+    pending = current["pending"]
+    severity = current["severity_total"]
+
+    within = pending <= best_pending and severity <= best_severity
+    improves = pending < best_pending or severity < best_severity
+    if within and improves:
         return True, (
-            f"la gravedad agregada bajó de {previous['severity_total']} a "
-            f"{current['severity_total']} sin aumentar los pendientes"
+            f"el par (pendientes, gravedad) mejora la mejor marca histórica "
+            f"({best_pending}, {best_severity}) hasta ({pending}, {severity})"
         )
-    if pending_down or severity_down:
+    if improves:
         return False, (
-            f"una magnitud mejoró a costa de la otra (pendientes "
-            f"{previous['pending']} → {current['pending']}, gravedad "
-            f"{previous['severity_total']} → {current['severity_total']}): "
-            "no es una disminución del par, así que no garantiza avance"
+            f"una magnitud mejora la mejor marca histórica ({best_pending}, {best_severity}) "
+            f"pero la otra la empeora: ({pending}, {severity}). No es una disminución del "
+            "par, así que no garantiza avance"
         )
     return False, (
-        f"ni los pendientes ({previous['pending']} → {current['pending']}) ni la gravedad "
-        f"({previous['severity_total']} → {current['severity_total']}) disminuyeron"
+        f"el par ({pending}, {severity}) no mejora la mejor marca histórica "
+        f"({best_pending}, {best_severity})"
     )
 
 
@@ -296,26 +354,29 @@ def decide(records: list[dict[str, Any]]) -> dict[str, Any]:
             "rounds": rounds,
         }
 
-    progressed, why = _has_progress(previous, current)
+    # Cada ronda se mide contra la MEJOR MARCA HISTÓRICA de las anteriores, no
+    # contra la ronda inmediata: si se comparase solo con la inmediata, una
+    # regresión aislada elevaría el listón y la ronda siguiente reiniciaría el
+    # contador con una mejora meramente local, indefinidamente.
+    progressed, why = _has_progress(records[:-1], current)
     if progressed:
         return {
             "decision": "CONTINUE",
             "reason": "progreso",
-            "detail": f"Hay progreso entre las dos últimas rondas: {why}.",
+            "detail": f"Hay progreso respecto de la mejor marca histórica: {why}.",
             "rounds": rounds,
         }
 
     # --- Sin progreso neto en dos rondas consecutivas -------------------------
     if rounds >= 3:
-        older = records[-3]
-        older_progressed, _ = _has_progress(older, previous)
+        older_progressed, _ = _has_progress(records[:-2], previous)
         if not older_progressed:
             return {
                 "decision": "BLOCK",
                 "reason": "sin-progreso",
                 "detail": (
                     f"No hay progreso neto en dos rondas consecutivas "
-                    f"({older.get('round')} → {previous.get('round')} → "
+                    f"({records[-3].get('round')} → {previous.get('round')} → "
                     f"{current.get('round')}): {why}. Se requiere una decisión humana."
                 ),
                 "rounds": rounds,

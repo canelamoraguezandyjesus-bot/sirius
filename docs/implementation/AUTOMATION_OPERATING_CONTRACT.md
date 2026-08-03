@@ -106,7 +106,11 @@ revisión dentro de `review-sirius-work.yml`:
   del workflow que exige que el head actual coincida con el último que superó
   Quality, y el `reviewed_head_sha` obligatorio en el paso determinista —
   aplica en ambos modos: es parte de esta versión del contrato, no de la
-  bandera;
+  bandera. En cambio, la lectura del instante en que Quality terminó
+  (`check-runs`), que solo consume el disparador de Codex, se exige únicamente
+  en modo dual: exigirla con la bandera apagada dejaría que un 403 sobre ese
+  endpoint matara una ronda solo-Claude y la bandera dejaría de ser reversible
+  de verdad;
 - **`true`:** revisión dual obligatoria. Tras Quality en verde sobre el head
   registrado, esa misma versión es revisada por dos revisores independientes:
   el revisor Claude actual y Codex mediante su integración nativa con GitHub
@@ -142,6 +146,16 @@ Reglas del modo dual:
   SHA (`commit_id` de la revisión o el marcador `Reviewed commit:`). La
   ausencia de comentarios no es aprobación: la aprobación exige una revisión
   formal `APPROVED` o una reacción `+1` del conector sobre el disparador.
+- Se consideran **todas** las revisiones del conector posteriores al
+  disparador, no solo la última: sus hallazgos se unen y basta una que no
+  demuestre el SHA esperado para detener la ronda. Quedarse con la última
+  descartaría en silencio los hallazgos de las anteriores y, si la última fuera
+  aprobatoria, la ronda aprobaría un head con defectos ya reportados.
+- La reacción `+1` solo decide cuando **no** hay ninguna revisión formal
+  posterior al disparador. Con una revisión formal en curso pero todavía no
+  interpretable, la reacción no la resuelve: se sigue esperando y, si no se
+  aclara, la ronda termina en fallo seguro. Una reacción es una señal más débil
+  que una revisión y no puede convertir una ambigüedad en aprobación.
 - Un agregador determinista (`scripts/automation/sirius_aggregate_reviews.py`)
   combina ambos resultados sin votos ni arbitraje de otro modelo, con esta
   precedencia: JSON inválido de un revisor obligatorio → `FAILED_SAFELY`; SHA
@@ -189,7 +203,11 @@ La corrección automática continúa mientras se cumplan todas estas condiciones
 - no aparece una decisión humana real;
 - no hay oscilación ni repetición sin progreso.
 
-Cada ronda de `CHANGES_REQUESTED` publica en la incidencia un registro estructurado (`<!-- sirius-round:N -->` con un bloque `## RONDA_HALLAZGOS`) que contiene, por hallazgo, una huella estable, su severidad y su procedencia, además del head de la ronda y los totales. La huella no depende del identificador correlativo, de modo que un mismo defecto conserva su huella entre rondas.
+Cada ronda de `CHANGES_REQUESTED` publica en la incidencia un registro estructurado (`<!-- sirius-round:N -->` con un bloque `## RONDA_HALLAZGOS`) que contiene, por hallazgo, una huella estable, su severidad y su procedencia, además del head de la ronda y los totales. La huella no depende ni del identificador correlativo (`CODEX-001`, que cambia entre rondas) ni del número de línea (que se desplaza en cuanto se edita cualquier punto anterior del archivo), de modo que un mismo defecto conserva su huella entre rondas.
+
+La severidad de una huella es **pegajosa**: cuenta siempre la peor jamás observada para ella mientras siga pendiente. Sin esa regla, un revisor que omitiera la insignia de un hallazgo P0 que sigue ahí haría bajar la severidad agregada por sí sola, y esa mejora fantasma bastaría para superar la comprobación de progreso sin haber corregido nada.
+
+El marcador del comentario que arrastra el registro depende del head y del **run** de Actions, no del intento: una reejecución del mismo run es idempotente —no duplica el registro— y una ronda nueva, que siempre es un run nuevo, siempre se registra.
 
 `scripts/automation/sirius_convergence.py` decide de forma determinista a partir de ese historial. Hay **progreso** cuando el par `(hallazgos pendientes, severidad agregada)` **disminuye estrictamente en el orden producto**: al menos una de las dos magnitudes baja y ninguna sube. Nada más cuenta.
 
@@ -210,7 +228,7 @@ El ciclo pasa a `sirius:blocked-decision`, con el motivo exacto registrado, úni
 - un hallazgo dado por resuelto reaparece en una ronda posterior;
 - el conjunto de hallazgos oscila entre estados anteriores;
 - el head no avanzó entre dos rondas (no hubo corrección efectiva que revisar);
-- el historial de rondas no se puede leer;
+- el historial de rondas no se puede leer, o se puede leer pero la ronda no se puede numerar (numerar a ciegas repetiría un número ya usado, colaría la ronda nueva al principio del historial ordenado y falsearía la medida);
 - o concurre cualquiera de las causas de parada del párrafo tercero de este apartado (producto, arquitectura, alcance, credenciales, permisos, costes, datos reales u operaciones irreversibles).
 
 Un problema técnico corregible nunca se convierte automáticamente en una decisión humana.

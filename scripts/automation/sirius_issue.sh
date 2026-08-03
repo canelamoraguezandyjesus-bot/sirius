@@ -152,9 +152,17 @@ SIRIUS_TRUSTED_AUTHOR_JQ='select(.author_association == "OWNER" or (.user.login 
 SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ='select(.authorAssociation == "OWNER" or ((.author.login // "") | ltrimstr("app/")) == "github-actions")'
 
 _sirius_comments_newest_first() {
-  gh api --paginate "repos/${1}/issues/${2}/comments?per_page=100" \
-    --jq "[.[] | ${SIRIUS_TRUSTED_AUTHOR_JQ}] | .[] | @json" \
-    | python3 -c '
+  # La lectura y la transformación van SEPARADAS a propósito. Encadenadas en una
+  # tubería, el estado de salida sería el de `python3` —que siempre acierta— y
+  # el de `gh` se perdería salvo que el llamador tuviera `pipefail` activo: un
+  # 503 se convertiría en "no hay comentarios" en vez de en un fallo, el
+  # respaldo GraphQL nunca se intentaría y el corrector vería una incidencia sin
+  # observaciones. Esta biblioteca no debe depender de las opciones de shell del
+  # llamador para algo de lo que dependen decisiones.
+  local raw=""
+  raw="$(gh api --paginate "repos/${1}/issues/${2}/comments?per_page=100" \
+    --jq "[.[] | ${SIRIUS_TRUSTED_AUTHOR_JQ}] | .[] | @json")" || return 1
+  printf '%s\n' "$raw" | python3 -c '
 import json, sys
 bodies = []
 for line in sys.stdin:
@@ -228,16 +236,36 @@ sirius_dump_comments() {
   return 1
 }
 
-# sirius_next_round_number <repo> <issue> — número de la siguiente ronda de
-# revisión-corrección: el mayor `<!-- sirius-round:N -->` publicado más uno. Si
-# no hay ninguno (o no se pueden leer los comentarios) devuelve 1: una ronda
-# nueva nunca se numera hacia atrás.
+# sirius_next_round_number <repo> <issue> [dump_file] — número de la siguiente
+# ronda de revisión-corrección: el mayor `<!-- sirius-round:N -->` publicado más
+# uno. Si no hay ninguno devuelve 1.
+#
+# Devuelve !=0 y NO imprime número cuando el historial no se puede leer. Antes
+# devolvía 1 en ese caso, y eso corrompía el historial en silencio: con rondas
+# 1..3 ya publicadas, una lectura fallida numeraba la ronda siguiente como 1
+# otra vez. `parse_round_records` ordena por el número del marcador, así que esa
+# ronda nueva se colaba al PRINCIPIO del historial; la política de convergencia
+# medía progreso contra una secuencia falsa y podía tanto bloquear un trabajo
+# que progresaba como dejar correr uno estancado. Numerar a ciegas es peor que
+# detenerse: el llamador convierte el fallo en parada segura.
+#
+# `dump_file` opcional evita una segunda lectura de la API cuando el llamador ya
+# tiene un volcado válido de los comentarios.
 sirius_next_round_number() {
-  local repo="$1" num="$2" dump="" highest=""
-  dump="$(mktemp)"
-  sirius_dump_comments "$repo" "$num" "$dump" >/dev/null 2>&1 || true
+  local repo="$1" num="$2" provided="${3:-}" dump="" highest="" owned=0
+  if [ -n "$provided" ]; then
+    dump="$provided"
+  else
+    dump="$(mktemp)"
+    owned=1
+    if ! sirius_dump_comments "$repo" "$num" "$dump" >/dev/null 2>&1; then
+      rm -f "$dump"
+      echo "sirius_next_round_number: historial ilegible para #${num}; no numero una ronda a ciegas" >&2
+      return 1
+    fi
+  fi
   highest="$(grep -oE '<!-- sirius-round:[0-9]+ -->' "$dump" 2>/dev/null | grep -oE '[0-9]+' | sort -n | tail -1)"
-  rm -f "$dump"
+  [ "$owned" -eq 1 ] && rm -f "$dump"
   printf '%s' "$(( ${highest:-0} + 1 ))"
 }
 

@@ -41,11 +41,12 @@ permissions:
   issues: write
   pull-requests: read
   # El gate lee `commits/<sha>/check-runs` para obtener el instante autoritativo
-  # en que Quality terminó sobre el head. Declarar un bloque `permissions`
+  # en que Quality terminó sobre el head (solo en modo dual: es el ancla
+  # temporal del disparador de Codex). Declarar un bloque `permissions`
   # explícito deja en `none` todo alcance no listado, así que sin esta línea esa
-  # lectura daría 403 y TODA ronda de revisión —en ambos modos— moriría en la
-  # parada segura `quality-sin-marca`. Mismo alcance que ya declaran
-  # merge-sirius-work.yml y reconcile-sirius-states.yml para el mismo endpoint.
+  # lectura daría 403 y toda ronda de revisión dual moriría en la parada segura
+  # `quality-sin-marca`. Mismo alcance que ya declaran merge-sirius-work.yml y
+  # reconcile-sirius-states.yml para el mismo endpoint.
   checks: read
   id-token: write
 
@@ -143,11 +144,22 @@ jobs:
           # de la API de check-runs (no de un texto de la incidencia, que es
           # editable). Ancla la ronda: el disparador de Codex debe ser
           # posterior a esta marca para pertenecer a la ronda posterior a CI.
-          quality_completed_at="$(sirius_retry gh api "repos/${GH_REPO}/commits/${pr_head}/check-runs" \
-            --jq '[.check_runs[] | select(.name == "quality" and .conclusion == "success") | .completed_at] | sort | last // empty')"
-          if [ -z "${quality_completed_at:-}" ]; then
-            stop_gate "quality-sin-marca" "No he podido leer el instante en que Quality terminó en verde sobre \`${pr_head}\`. Sin esa marca no puedo demostrar que la solicitud de revisión pertenece a la ronda posterior a CI."
-            exit 0
+          #
+          # Solo se exige en modo dual. Es un dato que únicamente consume el
+          # disparador de Codex, así que exigirlo también con la bandera apagada
+          # dejaba que un 403 o un cambio de nombre del check matara una ronda
+          # de revisión solo-Claude que antes de esta funcionalidad habría
+          # funcionado: la bandera dejaría de ser reversible de verdad. La
+          # verificación de head —que sí es del contrato §4.1 y aplica a ambos
+          # modos— ya se ha hecho justo arriba.
+          quality_completed_at=""
+          if [ "$dual" = "true" ]; then
+            quality_completed_at="$(sirius_retry gh api "repos/${GH_REPO}/commits/${pr_head}/check-runs" \
+              --jq '[.check_runs[] | select(.name == "quality" and .conclusion == "success") | .completed_at] | sort | last // empty')"
+            if [ -z "${quality_completed_at:-}" ]; then
+              stop_gate "quality-sin-marca" "No he podido leer el instante en que Quality terminó en verde sobre \`${pr_head}\`. Sin esa marca no puedo demostrar que la solicitud de revisión de Codex pertenece a la ronda posterior a CI."
+              exit 0
+            fi
           fi
 
           echo "valid=true" >> "$GITHUB_OUTPUT"

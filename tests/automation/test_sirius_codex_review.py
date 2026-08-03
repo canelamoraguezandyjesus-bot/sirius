@@ -933,11 +933,141 @@ def test_collect_rejects_non_finite_or_negative_env_values(tmp_path: Path) -> No
     assert _result(tmp_path)["status"] == "FAILED_SAFELY"
 
 
-def test_collect_survives_transient_github_error(tmp_path: Path) -> None:
+def test_collect_survives_a_transient_error_inside_one_gh_call(tmp_path: Path) -> None:
+    # Un fallo aislado lo absorbe la capa de reintentos de `_gh_api`
+    # (SIRIUS_RETRY_ATTEMPTS = 2 en estas pruebas): la pasada de sondeo ni se
+    # entera.
     env = _setup(tmp_path)
     _write_state(tmp_path)
     _seed(env, "reviews.json", [_review(state="APPROVED")])
     (_md(env) / "fail_remaining.txt").write_text("1", encoding="utf-8")
     r = _run_collect(env, tmp_path, timeout="5")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert _result(tmp_path)["status"] == "APPROVED"
+    assert "pasada de sondeo fallida" not in r.stderr
+
+
+def test_collect_survives_a_whole_failed_poll_pass(tmp_path: Path) -> None:
+    # Lo que esta prueba sí ejercita —y la anterior no podía— es el `except
+    # GhError` del bucle de sondeo: agotados los reintentos, la pasada ENTERA
+    # falla. El recolector no debe abortar ni degradar a aprobación: debe
+    # reintentar en la pasada siguiente. Requisitos para llegar ahí: agotar los
+    # reintentos (fallos >= SIRIUS_RETRY_ATTEMPTS) y que quede plazo absoluto
+    # para una segunda pasada (disparador reciente y timeout amplio).
+    env = _setup(tmp_path)
+    _write_state(tmp_path, trigger_at=_stamp(-5))
+    _seed(env, "reviews.json", [_review(state="APPROVED", submitted_at=_stamp(-1))])
+    (_md(env) / "fail_remaining.txt").write_text("2", encoding="utf-8")
+    r = _run_collect(env, tmp_path, timeout="120")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "pasada de sondeo fallida" in r.stderr
+    assert _result(tmp_path)["status"] == "APPROVED"
+
+
+# --------------------------------------------------------------------------- #
+# Varias revisiones posteriores al disparador
+# --------------------------------------------------------------------------- #
+
+
+def test_collect_unions_findings_from_every_review_after_the_trigger(tmp_path: Path) -> None:
+    # Codex puede publicar más de una revisión (una tanda de comentarios y
+    # después otra). Quedarse con la última descartaría en silencio los
+    # hallazgos de las anteriores.
+    env = _setup(tmp_path)
+    _write_state(tmp_path)
+    _seed(
+        env,
+        "reviews.json",
+        [
+            _review(review_id=700, state="COMMENTED", submitted_at=_stamp(-40)),
+            _review(review_id=701, state="COMMENTED", submitted_at=_stamp(-30)),
+        ],
+    )
+    _seed(env, "review_comments_700.json", [_review_comment(801, "src/a.py", 1)])
+    _seed(env, "review_comments_701.json", [_review_comment(802, "src/b.py", 2)])
+    r = _run_collect(env, tmp_path, timeout="5")
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "CHANGES_REQUESTED"
+    archivos = sorted(item["archivo"] for item in result["observations"])
+    assert archivos == ["src/a.py:1", "src/b.py:2"]
+    # La numeración es global y determinista sobre la unión.
+    assert [item["id"] for item in result["observations"]] == ["CODEX-001", "CODEX-002"]
+
+
+def test_a_later_approval_cannot_bury_earlier_findings(tmp_path: Path) -> None:
+    # El caso peligroso: una revisión con hallazgos y, después, una aprobación.
+    # Con "solo la última" la ronda aprobaría un head con defectos ya
+    # reportados.
+    env = _setup(tmp_path)
+    _write_state(tmp_path)
+    _seed(
+        env,
+        "reviews.json",
+        [
+            _review(review_id=700, state="CHANGES_REQUESTED", submitted_at=_stamp(-40)),
+            _review(review_id=701, state="APPROVED", submitted_at=_stamp(-20)),
+        ],
+    )
+    _seed(env, "review_comments_700.json", [_review_comment(801, "src/a.py", 1)])
+    r = _run_collect(env, tmp_path, timeout="5")
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "CHANGES_REQUESTED"
+    assert len(result["observations"]) == 1
+
+
+def test_any_review_on_another_sha_stops_the_round(tmp_path: Path) -> None:
+    # Basta una revisión que no demuestre haber auditado el head esperado: no
+    # se puede saber si sus hallazgos (o su ausencia) se refieren a esta versión.
+    env = _setup(tmp_path)
+    _write_state(tmp_path)
+    _seed(
+        env,
+        "reviews.json",
+        [
+            _review(review_id=700, state="APPROVED", submitted_at=_stamp(-40)),
+            _review(
+                review_id=701,
+                state="COMMENTED",
+                commit_id=OTHER_HEAD,
+                submitted_at=_stamp(-20),
+            ),
+        ],
+    )
+    r = _run_collect(env, tmp_path, timeout="5")
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "FAILED_SAFELY"
+    assert result["reason"] == "sha-distinto"
+
+
+def test_a_reaction_cannot_resolve_an_uninterpretable_review(tmp_path: Path) -> None:
+    # Una revisión formal sin comentarios inline visibles es ambigua. Antes, al
+    # devolver "seguir esperando", se consultaba la reacción 👍 del disparador y
+    # esa señal —mucho más débil— convertía la ambigüedad en aprobación. Con una
+    # revisión formal en curso, el 👍 no decide: se espera y, si no se aclara,
+    # la ronda termina en fallo seguro.
+    env = _setup(tmp_path)
+    _write_state(tmp_path)
+    _seed(env, "reviews.json", [_review(review_id=700, state="COMMENTED")])
+    _seed(env, "review_comments_700.json", [])
+    _seed(env, "reactions_500.json", [{"content": "+1", "user": {"login": CONNECTOR}}])
+    r = _run_collect(env, tmp_path, timeout="0")
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "FAILED_SAFELY"
+    assert result["reason"] == "timeout"
+
+
+def test_a_reaction_still_approves_when_there_is_no_formal_review(tmp_path: Path) -> None:
+    # El camino de la reacción sigue vivo para su caso legítimo: Codex no abrió
+    # revisión formal porque no encontró nada.
+    env = _setup(tmp_path)
+    _write_state(tmp_path)
+    _seed(env, "reviews.json", [])
+    _seed(env, "pr.json", {"head": {"sha": HEAD}})
+    _seed(env, "reactions_500.json", [{"content": "+1", "user": {"login": CONNECTOR}}])
+    r = _run_collect(env, tmp_path, timeout="0")
     assert r.returncode == 0, r.stdout + r.stderr
     assert _result(tmp_path)["status"] == "APPROVED"

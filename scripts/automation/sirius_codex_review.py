@@ -586,8 +586,23 @@ def _load_state(args: argparse.Namespace) -> tuple[dict[str, Any] | None, CodexR
 
 def _check_reviews(
     repo: str, pr: int, head: str, trigger_at: datetime, trigger_id: int
-) -> CodexResult | None:
-    """Una pasada sobre las revisiones de la PR. ``None`` si hay que seguir esperando."""
+) -> tuple[CodexResult | None, bool]:
+    """Una pasada sobre las revisiones de la PR.
+
+    Devuelve ``(resultado, hay_revisiones)``. ``resultado`` es ``None`` si hay
+    que seguir esperando; ``hay_revisiones`` indica si el conector ya publicó
+    alguna revisión formal posterior al disparador, aunque todavía no sea
+    interpretable — el llamador lo necesita para NO caer al camino de la
+    reacción 👍 cuando existe una revisión formal en curso.
+
+    Se consideran TODAS las revisiones posteriores al disparador, no solo la
+    última. Codex puede publicar más de una (por ejemplo, una tanda de
+    comentarios y después un resumen), y quedarse con la última descartaría en
+    silencio los hallazgos de las anteriores; en el peor caso, una revisión
+    aprobatoria posterior enterraría los cambios pedidos por la primera y la
+    ronda aprobaría un head con defectos ya reportados. Los hallazgos se unen y
+    cualquier ambigüedad de SHA en cualquiera de ellas detiene la ronda.
+    """
     reviews = _gh_paginated(f"repos/{repo}/pulls/{pr}/reviews")
     candidates = []
     for review in reviews:
@@ -599,67 +614,108 @@ def _check_reviews(
             continue
         candidates.append((submitted_at, review))
     if not candidates:
-        return None
+        return None, False
     candidates.sort(key=lambda pair: (pair[0], int(pair[1].get("id") or 0)))
-    latest = candidates[-1][1]
-    review_id = int(latest.get("id") or 0)
-    declared_sha = _resolve_review_sha(latest)
-    if declared_sha is None:
-        return CodexResult(
-            status="FAILED_SAFELY",
-            reason="sha-no-demostrable",
-            trigger_comment_id=trigger_id,
-            review_id=review_id,
-            summary=(
-                "Codex respondió después del disparador, pero su revisión no declara "
-                "de forma demostrable qué commit revisó; parada segura."
+
+    # Toda revisión candidata debe demostrar que auditó el head esperado. Basta
+    # una que no lo demuestre para detener la ronda: no se puede saber si sus
+    # hallazgos (o su ausencia) se refieren a esta versión.
+    for _, review in candidates:
+        review_id = int(review.get("id") or 0)
+        declared_sha = _resolve_review_sha(review)
+        if declared_sha is None:
+            return (
+                CodexResult(
+                    status="FAILED_SAFELY",
+                    reason="sha-no-demostrable",
+                    trigger_comment_id=trigger_id,
+                    review_id=review_id,
+                    summary=(
+                        "Codex respondió después del disparador, pero su revisión no declara "
+                        "de forma demostrable qué commit revisó; parada segura."
+                    ),
+                ),
+                True,
+            )
+        if not _sha_matches(head, declared_sha):
+            return (
+                CodexResult(
+                    status="FAILED_SAFELY",
+                    reason="sha-distinto",
+                    trigger_comment_id=trigger_id,
+                    review_id=review_id,
+                    summary=(
+                        f"Codex revisó el commit `{declared_sha}`, que no es el head esperado "
+                        f"`{head}`; parada segura sin aprobar ni pedir cambios."
+                    ),
+                ),
+                True,
+            )
+
+    # Hallazgos de TODAS las revisiones con comentarios, numerados de forma
+    # global y determinista (el orden lo fija `_observations_from_comments`).
+    inline_comments: list[dict[str, Any]] = []
+    pending_states = False
+    approved_review_id = 0
+    for _, review in candidates:
+        review_id = int(review.get("id") or 0)
+        state = str(review.get("state") or "").upper()
+        if state == "APPROVED":
+            approved_review_id = approved_review_id or review_id
+            continue
+        if state in {"COMMENTED", "CHANGES_REQUESTED"}:
+            pending_states = True
+            inline_comments.extend(
+                _gh_paginated(f"repos/{repo}/pulls/{pr}/reviews/{review_id}/comments")
+            )
+    observations = _observations_from_comments(inline_comments)
+    reported_review_id = int(candidates[-1][1].get("id") or 0)
+
+    if observations:
+        return (
+            CodexResult(
+                status="CHANGES_REQUESTED",
+                reviewed_head_sha=head,
+                trigger_comment_id=trigger_id,
+                review_id=reported_review_id,
+                summary=(
+                    f"Codex revisó el commit `{head}` y reportó "
+                    f"{len(observations)} hallazgo(s) concreto(s)."
+                ),
+                observations=observations,
             ),
+            True,
         )
-    if not _sha_matches(head, declared_sha):
-        return CodexResult(
-            status="FAILED_SAFELY",
-            reason="sha-distinto",
-            trigger_comment_id=trigger_id,
-            review_id=review_id,
-            summary=(
-                f"Codex revisó el commit `{declared_sha}`, que no es el head esperado "
-                f"`{head}`; parada segura sin aprobar ni pedir cambios."
+    if pending_states:
+        # Revisión formal sin comentarios inline todavía visibles: ambigua. Se
+        # sigue esperando —aunque haya además una aprobación— porque no se puede
+        # aprobar un head sobre el que hay una revisión sin interpretar. Si no
+        # se materializa nada antes del timeout, la ronda termina en
+        # FAILED_SAFELY, nunca en aprobación implícita.
+        return None, True
+    if approved_review_id:
+        return (
+            CodexResult(
+                status="APPROVED",
+                reviewed_head_sha=head,
+                trigger_comment_id=trigger_id,
+                review_id=approved_review_id,
+                summary=f"Codex aprobó formalmente la revisión del commit `{head}` sin hallazgos.",
             ),
+            True,
         )
-    state = str(latest.get("state") or "").upper()
-    if state == "APPROVED":
-        return CodexResult(
-            status="APPROVED",
-            reviewed_head_sha=head,
-            trigger_comment_id=trigger_id,
-            review_id=review_id,
-            summary=f"Codex aprobó formalmente la revisión del commit `{head}` sin hallazgos.",
-        )
-    if state in {"COMMENTED", "CHANGES_REQUESTED"}:
-        comments = _gh_paginated(f"repos/{repo}/pulls/{pr}/reviews/{review_id}/comments")
-        observations = _observations_from_comments(comments)
-        if not observations:
-            # Revisión formal sin comentarios inline todavía visibles: ambigua.
-            # Se sigue esperando; si no se materializa nada antes del timeout,
-            # la ronda termina en FAILED_SAFELY (nunca aprobación implícita).
-            return None
-        return CodexResult(
-            status="CHANGES_REQUESTED",
-            reviewed_head_sha=head,
-            trigger_comment_id=trigger_id,
-            review_id=review_id,
-            summary=(
-                f"Codex revisó el commit `{head}` y reportó "
-                f"{len(observations)} hallazgo(s) concreto(s)."
-            ),
-            observations=observations,
-        )
-    return None
+    return None, True
 
 
 def _check_reactions(repo: str, pr: int, head: str, trigger_id: int) -> CodexResult | None:
     """Aprobación explícita sin hallazgos: reacción ``+1`` del conector sobre el
     disparador. La reacción ``eyes`` solo indica procesamiento y se ignora.
+
+    Solo se consulta cuando NO existe ninguna revisión formal posterior al
+    disparador. Una reacción es una señal mucho más débil que una revisión: si
+    Codex ya publicó una revisión que todavía no es interpretable, dejar que el
+    👍 decidiera convertiría esa ambigüedad en una aprobación, que es
+    exactamente lo que la ronda no debe hacer nunca.
 
     A diferencia de una revisión formal, la reacción no lleva ``commit_id``:
     para no fabricar un ``reviewed_head_sha`` indemostrable, la aprobación solo
@@ -757,8 +813,10 @@ def cmd_collect(args: argparse.Namespace) -> int:
         # absoluto ya agotado: si Codex respondió mientras Claude trabajaba, su
         # resultado debe recogerse en vez de declararse un timeout falso.
         try:
-            result = _check_reviews(args.repo, args.pr, args.head, trigger_at, trigger_id)
-            if result is None:
+            result, has_reviews = _check_reviews(
+                args.repo, args.pr, args.head, trigger_at, trigger_id
+            )
+            if result is None and not has_reviews:
                 result = _check_reactions(args.repo, args.pr, args.head, trigger_id)
         except GhError as exc:
             # Error transitorio ya reintentado: se sigue sondeando hasta el

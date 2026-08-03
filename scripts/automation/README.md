@@ -37,6 +37,14 @@ Funciones principales:
 
 Requisitos en ejecución: `gh`, `jq`, `python3`.
 
+Los workflows invocan estos scripts con `python3` a secas y sin
+`actions/setup-python`: se ejecutan con el intérprete del sistema del runner
+`ubuntu-latest` (hoy 3.12), no con el 3.14 del entorno de desarrollo. La
+sintaxis nueva pasa Quality y revienta en producción, así que
+`tests/automation/test_sirius_runner_python_compat.py` analiza cada script con
+la versión de lenguaje del runner. Si los workflows pasan a fijar el intérprete,
+`RUNNER_PYTHON` debe subir en el mismo cambio.
+
 ## `sirius_codex_review.py`
 
 Disparador y recolector de la revisión nativa de Codex para la revisión dual

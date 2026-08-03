@@ -193,18 +193,111 @@ def test_alternating_between_metrics_does_not_continue_forever() -> None:
 
 def test_improving_one_metric_while_worsening_the_other_is_not_progress() -> None:
     module = _module()
-    previous = {"pending": 1, "severity_total": 4, "fingerprints": {"aaa"}}
+    history = [{"pending": 1, "severity_total": 4, "fingerprints": {"aaa"}}]
     current = {"pending": 2, "severity_total": 2, "fingerprints": {"bbb", "ccc"}}
-    progressed, why = module._has_progress(previous, current)
+    progressed, why = module._has_progress(history, current)
     assert progressed is False
-    assert "a costa de la otra" in why
+    assert "la otra la empeora" in why
+
+
+def test_progress_is_measured_against_the_best_historical_mark() -> None:
+    # La mejor marca histórica es el mínimo de CADA magnitud sobre todo el
+    # historial, no el estado de la ronda inmediata: así una regresión aislada
+    # no puede elevar el listón para la ronda siguiente.
+    module = _module()
+    history = [
+        {"pending": 1, "severity_total": 2, "fingerprints": set()},  # mejor marca
+        {"pending": 5, "severity_total": 9, "fingerprints": set()},  # regresión
+    ]
+    # Mejora respecto de la ronda inmediata (5, 9) pero NO respecto de (1, 2).
+    progressed, why = module._has_progress(history, {"pending": 4, "severity_total": 8})
+    assert progressed is False
+    assert "(1, 2)" in why
+
+
+def test_the_cycle_always_terminates_even_with_tolerated_regressions() -> None:
+    """La terminación es una propiedad, no una expectativa.
+
+    Esta prueba explora el ciclo COMPLETO, no solo las cadenas de progresos
+    consecutivos. Esa distinción importa: una versión anterior de esta prueba
+    solo encadenaba progresos y por eso no detectó que una regresión aislada
+    —tolerada por la regla de "dos rondas consecutivas"— podía elevar el listón
+    y permitir que la ronda siguiente reiniciara el contador con una mejora
+    local, indefinidamente. Aquí se modela también esa alternancia.
+
+    La búsqueda es un recorrido en anchura sobre estados
+    ``(mejor marca histórica, hubo progreso en la última ronda)``: si existiera
+    una secuencia infinita de `CONTINUE`, algún estado se repetiría y el
+    conjunto alcanzable no se cerraría en un número finito de pasos.
+    """
+    module = _module()
+    pesos = {"P0": 4, "P1": 3, "P2": 2, "P3": 1, "P4": 1}
+    # Estados alcanzables por una ronda real: n hallazgos de una severidad.
+    posibles = sorted({(n, n * pesos[sev]) for n in range(1, 6) for sev in pesos})
+
+    def progresa(mejor: tuple[int, int], siguiente: tuple[int, int]) -> bool:
+        resultado: bool = module._has_progress(
+            [{"pending": mejor[0], "severity_total": mejor[1], "fingerprints": set()}],
+            {"pending": siguiente[0], "severity_total": siguiente[1], "fingerprints": set()},
+        )[0]
+        return resultado
+
+    # Estado del ciclo: (mejor marca histórica, si la última ronda progresó).
+    # Una ronda sin progreso con la anterior también sin progreso bloquea, así
+    # que ese estado es terminal y no se expande.
+    inicial = {(estado, True) for estado in posibles}
+    alcanzables: set[tuple[tuple[int, int], bool]] = set()
+    frontera = set(inicial)
+    pasos = 0
+    while frontera:
+        pasos += 1
+        assert pasos <= 200, "el conjunto alcanzable no se cierra: hay un ciclo infinito"
+        siguiente_frontera = set()
+        for mejor, ultima_progreso in frontera:
+            if (mejor, ultima_progreso) in alcanzables:
+                continue
+            alcanzables.add((mejor, ultima_progreso))
+            for candidato in posibles:
+                if progresa(mejor, candidato):
+                    nueva_mejor = (min(mejor[0], candidato[0]), min(mejor[1], candidato[1]))
+                    siguiente_frontera.add((nueva_mejor, True))
+                elif ultima_progreso:
+                    # Regresión tolerada: NO puede empeorar la mejor marca.
+                    nueva_mejor = (min(mejor[0], candidato[0]), min(mejor[1], candidato[1]))
+                    siguiente_frontera.add((nueva_mejor, False))
+                # Si la última tampoco progresó, el ciclo bloquea: estado terminal.
+        frontera = siguiente_frontera - alcanzables
+
+    # Que la exploración termine ya demuestra la ausencia de ciclos infinitos.
+    assert alcanzables, "debería haber estados alcanzables"
+
+
+def test_an_isolated_regression_cannot_raise_the_bar() -> None:
+    # La secuencia (1,2) → (2,4) → (2,3) → (3,5) → (3,4) → … alterna regresión
+    # tolerada y mejora local mientras el estado global crece sin fin. Debe
+    # bloquear, no continuar.
+    pesos_por_par = [(1, 2), (2, 4), (2, 3), (3, 5), (3, 4), (4, 6)]
+    heads = [f"{index:040x}" for index in range(1, 12)]
+    rounds = []
+    decisions = []
+    module = _module()
+    for index, (pendientes, _gravedad) in enumerate(pesos_por_par):
+        # `pendientes` hallazgos P2 dan gravedad 2*pendientes; para obtener los
+        # pares exactos se mezcla una severidad menor cuando hace falta.
+        observations = [
+            _observation(f"CODEX-{n:03d}", f"src/r{index}_{n}.py:1", f"Defecto {index}-{n}", "P2")
+            for n in range(pendientes)
+        ]
+        rounds.append(_round_comment(index + 1, heads[index], observations))
+        decisions.append(module.decide(module.parse_round_records("\n".join(rounds)))["decision"])
+    assert "BLOCK" in decisions, f"la secuencia debe bloquear en algún punto: {decisions}"
 
 
 def test_reducing_pending_without_raising_severity_is_progress() -> None:
     module = _module()
-    previous = {"pending": 3, "severity_total": 6, "fingerprints": {"a", "b", "c"}}
+    history = [{"pending": 3, "severity_total": 6, "fingerprints": {"a", "b", "c"}}]
     current = {"pending": 2, "severity_total": 4, "fingerprints": {"a", "b"}}
-    progressed, _ = module._has_progress(previous, current)
+    progressed, _ = module._has_progress(history, current)
     assert progressed is True
 
 
@@ -263,7 +356,11 @@ def test_reappearance_of_a_resolved_finding_blocks() -> None:
     assert result["reason"] == "reaparicion"
 
 
-def test_oscillation_between_previous_states_blocks() -> None:
+def test_returning_to_an_earlier_state_blocks_by_reappearance() -> None:
+    # X -> Y -> X. Los hallazgos de X se dieron por resueltos en la ronda 2 y
+    # vuelven en la 3: la reaparición es el diagnóstico correcto y tiene
+    # prioridad sobre la oscilación, porque señala la causa (la corrección no
+    # atacó la raíz) y no solo la forma del ciclo.
     state_x = [_observation("CODEX-001", "src/x.py:1", "Defecto X")]
     state_y = [
         _observation("CODEX-001", "src/y.py:1", "Defecto Y"),
@@ -277,7 +374,32 @@ def test_oscillation_between_previous_states_blocks() -> None:
         ]
     )
     assert result["decision"] == "BLOCK"
-    assert result["reason"] in {"oscilacion", "reaparicion"}
+    assert result["reason"] == "reaparicion"
+
+
+def test_oscillation_between_previous_states_blocks() -> None:
+    # Oscilación PURA, sin reaparición de por medio: {A} -> {A, B} -> {A}. A
+    # nunca desaparece (la ronda 2 lo contiene), así que el detector de
+    # reaparición no se dispara y quien debe hablar es el de oscilación. La
+    # versión anterior de esta prueba aceptaba `oscilacion` O `reaparicion`, y
+    # con el escenario que usaba siempre ganaba la reaparición: la rama de
+    # oscilación no llegaba a ejecutarse nunca y podía romperse sin que ninguna
+    # prueba lo notara.
+    state_a = [_observation("CODEX-001", "src/a.py:1", "Defecto A")]
+    state_ab = [
+        _observation("CODEX-001", "src/a.py:1", "Defecto A"),
+        _observation("CODEX-002", "src/b.py:1", "Defecto B"),
+    ]
+    result = _decide(
+        [
+            _round_comment(1, HEAD_A, state_a),
+            _round_comment(2, HEAD_B, state_ab),
+            _round_comment(3, HEAD_C, state_a),
+        ]
+    )
+    assert result["decision"] == "BLOCK"
+    assert result["reason"] == "oscilacion"
+    assert "ronda 1" in result["detail"]
 
 
 def test_same_head_in_two_rounds_blocks() -> None:
@@ -457,3 +579,93 @@ def test_cli_decide_blocks_when_history_is_unreadable(tmp_path: Path) -> None:
     decision = json.loads(output.read_text(encoding="utf-8"))
     assert decision["decision"] == "BLOCK"
     assert decision["reason"] == "historial-ilegible"
+
+
+# --------------------------------------------------------------------------- #
+# Estabilidad de la huella y de la gravedad
+# --------------------------------------------------------------------------- #
+
+
+def test_fingerprint_ignores_the_line_number() -> None:
+    # Corregir cualquier punto anterior del archivo desplaza la numeración. Si
+    # la línea entrara en la huella, el mismo defecto sin tocar aparecería como
+    # uno resuelto más uno nuevo: el detector de reaparición se dispararía en
+    # falso y el de progreso mediría una sustitución donde no la hay.
+    module = _module()
+    assert module.fingerprint(_observation(archivo="src/x.py:10")) == module.fingerprint(
+        _observation(archivo="src/x.py:143")
+    )
+    # También con rango de líneas.
+    assert module.fingerprint(_observation(archivo="src/x.py:10")) == module.fingerprint(
+        _observation(archivo="src/x.py:120-134")
+    )
+
+
+def test_fingerprint_still_distinguishes_files() -> None:
+    module = _module()
+    assert module.fingerprint(_observation(archivo="src/x.py:10")) != module.fingerprint(
+        _observation(archivo="src/y.py:10")
+    )
+
+
+def test_losing_a_severity_label_does_not_simulate_progress() -> None:
+    # El MISMO hallazgo (misma huella) reportado en la ronda 2 sin su insignia
+    # P0. Sin gravedad pegajosa pasaría a pesar como `sin-clasificar` (2 en vez
+    # de 4), el par (pendientes, gravedad) "mejoraría" de (1, 4) a (1, 2) y el
+    # ciclo seguiría corrigiendo un trabajo en el que no se ha resuelto nada.
+    critico = _observation("CODEX-001", "src/x.py:10", "Fuga de credenciales", "P0")
+    sin_etiqueta = _observation(
+        "CODEX-001", "src/x.py:10", "Fuga de credenciales", "sin-clasificar"
+    )
+    dos_rondas = _decide(
+        [
+            _round_comment(1, HEAD_A, [critico]),
+            _round_comment(2, HEAD_B, [sin_etiqueta]),
+        ]
+    )
+    # `sin-progreso-aislado` es la tolerancia de una sola ronda: lo relevante es
+    # que NO se ha clasificado como `progreso`, que es lo que ocurría antes.
+    assert dos_rondas["reason"] == "sin-progreso-aislado"
+
+    # Y sin nada resuelto, la ronda siguiente ya no se tolera.
+    tres_rondas = _decide(
+        [
+            _round_comment(1, HEAD_A, [critico]),
+            _round_comment(2, HEAD_B, [sin_etiqueta]),
+            _round_comment(3, HEAD_C, [sin_etiqueta]),
+        ]
+    )
+    assert tres_rondas["decision"] == "BLOCK"
+    assert tres_rondas["reason"] == "sin-progreso"
+
+
+def test_sticky_severity_keeps_the_worst_weight_seen() -> None:
+    module = _module()
+    critico = _observation("CODEX-001", "src/x.py:10", "Fuga de credenciales", "P0")
+    sin_etiqueta = _observation(
+        "CODEX-001", "src/x.py:10", "Fuga de credenciales", "sin-clasificar"
+    )
+    records = module.parse_round_records(
+        "\n".join(
+            [
+                _round_comment(1, HEAD_A, [critico]),
+                _round_comment(2, HEAD_B, [sin_etiqueta]),
+            ]
+        )
+    )
+    assert [record["severity_total"] for record in records] == [4, 4]
+
+
+def test_resolving_the_critical_finding_still_counts_as_progress() -> None:
+    # La gravedad pegajosa no puede convertirse en un bloqueo permanente: si el
+    # hallazgo P0 desaparece de verdad, su peso desaparece con él.
+    critico = _observation("CODEX-001", "src/x.py:10", "Fuga de credenciales", "P0")
+    menor = _observation("CODEX-002", "src/y.py:4", "Nombre poco claro", "P4")
+    result = _decide(
+        [
+            _round_comment(1, HEAD_A, [critico, menor]),
+            _round_comment(2, HEAD_B, [menor]),
+        ]
+    )
+    assert result["decision"] == "CONTINUE"
+    assert result["reason"] == "progreso"

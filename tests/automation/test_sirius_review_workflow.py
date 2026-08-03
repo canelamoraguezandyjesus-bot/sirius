@@ -279,3 +279,25 @@ def test_trigger_step_receives_the_quality_completion_mark() -> None:
         "${{ steps.gate.outputs.quality_completed_at }}"
     )
     assert '--quality-completed-at "$QUALITY_COMPLETED_AT"' in trigger["run"]
+
+
+def test_the_quality_mark_is_only_required_in_dual_mode() -> None:
+    # La marca de Quality solo la consume el disparador de Codex. Exigirla
+    # también con la bandera apagada dejaba que un 403 sobre `check-runs` —o un
+    # cambio de nombre del check— matara una ronda de revisión solo-Claude que
+    # antes de esta funcionalidad habría funcionado: la bandera dejaría de ser
+    # reversible de verdad, que es la garantía por la que existe.
+    run = _step(_load(), "Localizar la PR")["run"]
+    quality_block = run[run.index("quality_completed_at=") :]
+    guard = run.rindex('if [ "$dual" = "true" ]; then', 0, run.index("quality-sin-marca"))
+    assert guard > 0
+    assert "quality-sin-marca" in quality_block
+    # La verificación de head, que sí es del contrato §4.1, queda FUERA del
+    # condicional: aplica a los dos modos.
+    assert run.index("head-obsoleto") < guard
+
+
+def test_the_checks_scope_is_declared_for_the_check_runs_read() -> None:
+    # Un bloque `permissions` explícito deja en `none` todo alcance no listado.
+    doc = _load()
+    assert doc["permissions"]["checks"] == "read"

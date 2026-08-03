@@ -65,6 +65,9 @@ case "$sub" in
       cat "$D/labels_${n}.txt" 2>/dev/null; exit 0
     fi
     if printf '%s' "$args" | grep -q '/comments'; then
+      # Historial ilegible por ambas vías: permite comprobar que numerar una
+      # ronda a ciegas se convierte en parada segura y no en un número repetido.
+      if [ "${GH_MOCK_HISTORY_UNREADABLE:-0}" = "1" ]; then echo "503 comments" >&2; exit 1; fi
       if printf '%s' "$args" | grep -q '@json'; then
         python3 -c '
 import json, sys
@@ -88,7 +91,9 @@ for line in raw.splitlines():
     for a in "$@"; do case "$a" in [0-9]*) num="$a"; break;; esac; done
     case "$action" in
       view)
-        if printf '%s' "$*" | grep -q comments; then cat "$D/comments_${num}.txt" 2>/dev/null
+        if printf '%s' "$*" | grep -q comments; then
+          if [ "${GH_MOCK_HISTORY_UNREADABLE:-0}" = "1" ]; then echo "503 graphql" >&2; exit 1; fi
+          cat "$D/comments_${num}.txt" 2>/dev/null
         else cat "$D/body_${num}.txt" 2>/dev/null; fi
         exit 0;;
       edit)
@@ -916,3 +921,103 @@ def test_failed_safely_same_run_is_idempotent(tmp_path: Path) -> None:
     _run(env, "implementer", vf)
     # Reintento del MISMO run (mismo RUN_ID/ATTEMPT): no duplica el comentario.
     assert _comments(env).count("sirius-verdict:implementer:FAILED_SAFELY:2001-1") == 1
+
+
+def test_a_rerun_of_the_same_round_does_not_duplicate_its_record(tmp_path: Path) -> None:
+    # Reejecutar el mismo run de Actions (attempt 2) debe ser idempotente. Con
+    # el número de intento dentro del marcador, la reejecución publicaba un
+    # SEGUNDO registro de ronda con el mismo head; la ronda siguiente veía dos
+    # registros consecutivos sobre el mismo head y bloqueaba por
+    # `head-sin-avance` un trabajo que sí había avanzado.
+    env = _setup(tmp_path)
+    observations = [
+        {
+            "id": "CODEX-001",
+            "severidad": "P2",
+            "archivo": "src/x.py:10",
+            "problema": "no valida entrada",
+            "criterio_esperado": "debe validar",
+            "prueba": "test_x_invalid",
+            "limites_correccion": "solo src/x.py",
+        }
+    ]
+    _seed_issue(
+        env,
+        ["sirius:reviewing"],
+        comments=(
+            "QUALITY_SUCCESS\n- Head SHA: `aaaaaaaaaaaa`\n"
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+        ),
+    )
+    _seed_pr(env, 9, head="aaaaaaaaaaaa")
+    verdict = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "CHANGES_REQUESTED",
+            "summary": "hay defectos",
+            "reviewed_head_sha": "aaaaaaaaaaaa",
+            "observations": observations,
+        },
+    )
+
+    first = dict(env)
+    first["GITHUB_RUN_ID"] = "6001"
+    first["GITHUB_RUN_ATTEMPT"] = "1"
+    r1 = _run(first, "reviewer", verdict)
+    assert r1.returncode == 0, r1.stdout + r1.stderr
+
+    # Reejecución del MISMO run: mismo estado de partida, distinto intento.
+    (_md(env) / f"labels_{ISSUE}.txt").write_text("sirius:reviewing\n", encoding="utf-8")
+    second = dict(env)
+    second["GITHUB_RUN_ID"] = "6001"
+    second["GITHUB_RUN_ATTEMPT"] = "2"
+    r2 = _run(second, "reviewer", verdict)
+    assert r2.returncode == 0, r2.stdout + r2.stderr
+
+    comments = _comments(env)
+    assert re.findall(r"<!-- sirius-round:(\d+) -->", comments) == ["1"]
+
+
+def test_changes_requested_stops_safely_when_the_history_is_unreadable(tmp_path: Path) -> None:
+    # Sin historial legible no se puede numerar la ronda sin arriesgarse a
+    # repetir un número ya usado, lo que colaría la ronda nueva al principio del
+    # historial ordenado y falsearía la medida de convergencia.
+    env = _setup(tmp_path)
+    # La PR y el head del último Quality se siembran en el CUERPO de la
+    # incidencia: así las comprobaciones previas (localizar la PR y verificar el
+    # head) siguen pasando y lo único que falla es la lectura del historial de
+    # rondas, que es lo que esta prueba quiere aislar.
+    _seed_issue(
+        env,
+        ["sirius:reviewing"],
+        comments="",
+        body=(
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+            "QUALITY_SUCCESS\n- Head SHA: `aaaaaaaaaaaa`\n"
+        ),
+    )
+    _seed_pr(env, 9, head="aaaaaaaaaaaa")
+    verdict = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "CHANGES_REQUESTED",
+            "summary": "hay defectos",
+            "reviewed_head_sha": "aaaaaaaaaaaa",
+            "observations": [
+                {
+                    "id": "CODEX-001",
+                    "severidad": "P2",
+                    "archivo": "src/x.py:10",
+                    "problema": "no valida entrada",
+                    "criterio_esperado": "debe validar",
+                    "prueba": "test_x_invalid",
+                    "limites_correccion": "solo src/x.py",
+                }
+            ],
+        },
+    )
+    env["GH_MOCK_HISTORY_UNREADABLE"] = "1"
+    r = _run(env, "reviewer", verdict)
+    assert r.returncode != 0
+    assert "sirius:failed-safely" in _labels(env)
+    assert "historial-de-rondas-ilegible" in _comments(env)
