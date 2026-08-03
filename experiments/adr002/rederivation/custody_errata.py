@@ -225,6 +225,11 @@ HASHES_NO_ALMACENADOS: Final[Mapping[str, str]] = {
         "aprobada del paso 5: B contiene a A y delega en el, de modo que el "
         "cambio de la base comun obliga a version sucesora"
     ),
+    "5e034078eb1d01ef6485cfd10707ce30f92ed7e5": (
+        "huella canonica de la ficha ADR002-C v2, la vigente: se deriva de A v5, "
+        "que es la base real de C, en vez de la de ADR002-B, y no arrastra ningun "
+        "contenido de senal vectorial"
+    ),
     "5d5e13eb702b1ffeb4403d7a5441f4da3c65b66b": (
         "huella canonica de la ficha ADR002-C v1, la primera del candidato "
         "relacional explicito: se congela antes de su primera ejecucion y no "
