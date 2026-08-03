@@ -51,9 +51,14 @@ jobs:
     name: Revisar con Claude Code (y Codex si está activado)
     if: github.event.label.name == 'sirius:review-requested'
     runs-on: ubuntu-latest
-    # Debe cubrir la revisión de Claude más la espera del resultado de Codex
-    # (SIRIUS_CODEX_REVIEW_TIMEOUT_SECONDS, 1200 s por defecto).
-    timeout-minutes: 45
+    # Presupuesto de tiempo explícito, para que un timeout de Codex SIEMPRE se
+    # traduzca en un resultado estructurado y no en una cancelación del job:
+    #   revisor Claude (paso acotado a 30 min)
+    # + recolección de Codex (paso acotado a 30 min; la espera interna está
+    #   limitada a SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS, 1500 s = 25 min,
+    #   así que el recolector escribe su FAILED_SAFELY con margen sobrado)
+    # + margen para el resto de pasos deterministas.
+    timeout-minutes: 70
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -193,6 +198,9 @@ jobs:
         if: steps.gate.outputs.valid == 'true'
         id: claude
         continue-on-error: true
+        # Acotado explícitamente para que la duración de Claude no pueda comerse
+        # el presupuesto reservado a la espera de Codex (ver timeout del job).
+        timeout-minutes: 30
         uses: anthropics/claude-code-action@v1
         env:
           GH_TOKEN: ${{ github.token }}
@@ -213,6 +221,11 @@ jobs:
         # siquiera se puede escribir ese archivo, la agregación fallará y el
         # veredicto ausente detendrá la incidencia de forma segura.
         continue-on-error: true
+        # Mayor que el tope interno de espera del recolector
+        # (SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS, 25 min por defecto): el
+        # recolector siempre llega a escribir su resultado determinista antes
+        # de que este paso expire.
+        timeout-minutes: 30
         shell: bash --noprofile --norc {0}
         env:
           # Solo lectura: recoger el resultado no necesita el PAT.
@@ -221,6 +234,7 @@ jobs:
           PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
           HEAD_SHA: ${{ steps.gate.outputs.head_sha }}
           SIRIUS_CODEX_REVIEW_TIMEOUT_SECONDS: ${{ vars.SIRIUS_CODEX_REVIEW_TIMEOUT_SECONDS }}
+          SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS: ${{ vars.SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS }}
         run: |
           set -uo pipefail
           python3 scripts/automation/sirius_codex_review.py collect \
