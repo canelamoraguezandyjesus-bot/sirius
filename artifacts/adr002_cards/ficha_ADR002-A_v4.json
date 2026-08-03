@@ -1,7 +1,7 @@
 {
-  "documento": "Ficha de candidato ADR002-A, version 3",
+  "documento": "Ficha de candidato ADR002-A, version 4",
   "version_esquema": "ficha-candidato-0.2",
-  "estado": "SUSTITUIDA",
+  "estado": "CONGELADA",
   "plantilla": "SIRIUS_0.2_ADR_002_FICHA_CANDIDATO_TEMPLATE_v0.4_PROPUESTO.md",
   "registro": "SIRIUS_0.2_REGISTRO_TOLERANCIAS_v0.5_PROPUESTO.md",
   "protocolo": "SIRIUS_0.2_ADR_002_PROTOCOLO_MEDICION_v0.2_PROPUESTO.md",
@@ -14,19 +14,19 @@
   "identidad": {
     "candidato": "ADR002-A",
     "papel": "CANDIDATO",
-    "version": 3,
-    "sustituye_a": 2,
-    "motivo_de_sustitucion": "sustituye a la v2 por la extension neutral del puerto comun del paquete de correccion 02: la capa comun anade la operacion publica por_identificadores (materializacion dirigida por identidad canonica, WHERE id IN por clase, con formato cerrado, cota previa y ausencia declarada), que entra en la huella del candidato aunque ADR002-A no la invoque en ninguna etapa. El comportamiento funcional propio de A no cambia: su codigo es identico byte a byte, los metodos existentes del puerto conservan comportamiento y firma, y los seis limites por etapa se conservan tras revision porque el trabajo posible de A no varia. La aprobacion historica de la v2 como preparado para benchmark permanece en su acta y NO se traslada a esta version: la vigencia queda pendiente de reaprobacion"
+    "version": 4,
+    "sustituye_a": 3,
+    "motivo_de_sustitucion": "sustituye a la v3 por la correccion unica de la capa comun del paso 5 del plan aprobado, y por la identidad real del sustrato lexico que la fe de erratas 05 rectifico. La capa comun cambia en los siete modulos y anade grouping.py: separa deduplicacion exacta de agrupacion de equivalentes, conserva la ausencia de sujeto como nula, retira la criticidad de ItemCanonico y la traslada a un plano comun que ningun candidato recibe, aplica G12 sobre todos los miembros y distingue cardinalidad semantica de documental. El codigo propio de ADR002-A cambia en dos puntos, los dos por la nulabilidad del sujeto: sujeto_estructural acepta None y la familia de E3 pliega subject_key or ''. Ninguna senal de A cambia, y su alcance sobre el fixture tecnico es identico. La aprobacion historica de la v3 permanece en su acta y NO se traslada: la vigencia queda pendiente de reaprobacion"
   },
   "congelacion": {
-    "commit_de_referencia": "13ffae552b76089fee7119264a2502d166ef97dd",
-    "huella": "5660dc4c7023bed6be1c7a87354efc5c45e478f1",
-    "ruta": "artifacts/adr002_cards/ficha_ADR002-A_v3.json"
+    "commit_de_referencia": "353da0be9b95d718976a81023e140a4dede34f6f",
+    "huella": "fac352de997de8ba907a9e26cda9e34d96eff80d",
+    "ruta": "artifacts/adr002_cards/ficha_ADR002-A_v4.json"
   },
   "arquitectura": {
     "alternativa_minima": "ADR002-A",
     "definicion_canonica_que_asume": "expansion escalonada solo lexica/estructurada en todas las etapas E0-E5.",
-    "sustrato_lexico": "FTS5 medido de Sirius 0.1 (unicode61, remove_diacritics 2), sin alternativa",
+    "sustrato_lexico": "FTS5 medido de Sirius 0.1: tabla knowledge_fts creada por la migracion 61be4bb269bf sin clausula tokenize, de modo que rige el tokenizador por defecto unicode61 con remove_diacritics 1. Sin alternativa ni indice adicional. Corrige la identidad declarada por las versiones anteriores —items_fts y remove_diacritics 2—, inexacta y rectificada por la fe de erratas 05",
     "materializacion_de_relaciones": "desde el canon, por CLAVE DE SUJETO consultada por prefijo concreto. El ambito de proyecto NO materializa relaciones: filtra en G4 como puerta de seguridad. Ningun indice relacional derivado",
     "puerto_de_acceso": "PuertoDeRecuperacion de la capa comun, equivalente a KnowledgeSearchRepository; rechaza en ejecucion cualquier consulta sin predicado y registra cada sentencia ejecutada con su cota y sus filas (B04-RF-31). Desde el paquete de correccion 02 ofrece ademas la materializacion dirigida por identidad canonica (por_identificadores), neutral y disponible para todos los candidatos; ADR002-A no la invoca: sus etapas materializan por clave, termino y prefijo, como declara el §2.5, y la regresion funcional lo comprueba sobre el registro de consultas",
     "etapas_implementadas": {
@@ -66,7 +66,7 @@
   "componentes": [
     {
       "papel": "sustrato lexico",
-      "nombre": "SQLite FTS5 (unicode61, remove_diacritics 2)",
+      "nombre": "SQLite FTS5 (unicode61, remove_diacritics 1)",
       "version": "la de la biblioteca estandar de Python del entorno LAB-LINUX",
       "origen": "cadena canonica de Alembic de Sirius 0.1, head 61be4bb269bf",
       "acopla_a_proveedor": false,
@@ -91,7 +91,7 @@
     {
       "papel": "motor de recuperacion",
       "nombre": "infraestructura comun de la primera ronda",
-      "version": "arbol a83539e3c8b5396371b355619a29478cad054834",
+      "version": "arbol 6ac613c83578e351ad5734290290ce74c5df3e33",
       "origen": "experiments/adr002/candidates/common",
       "acopla_a_proveedor": false,
       "ruta_de_sustitucion": "comun a A/B/C/D y neutral por construccion, comprobado por controles fail-closed; sustituirla afectaria a todos por igual"
@@ -99,7 +99,7 @@
     {
       "papel": "regeneracion del derivado",
       "nombre": "derived.py de la capa comun",
-      "version": "arbol a83539e3c8b5396371b355619a29478cad054834",
+      "version": "arbol 6ac613c83578e351ad5734290290ce74c5df3e33",
       "origen": "DDL leido de sqlite_master, creado por la migracion 61be4bb269bf",
       "acopla_a_proveedor": false,
       "ruta_de_sustitucion": "no copia DDL a mano: si la migracion canonica cambiara, la reconstruccion cambiaria con ella sin tocar este modulo"
@@ -262,16 +262,16 @@
     "comprobacion_propuesta": "tras la purga, inspeccion de los cuatro ficheros y busqueda del payload literal en el soporte; la comprobacion se ejecuta bajo autorizacion de benchmark, no aqui"
   },
   "huella_candidato": {
-    "commit_del_prototipo": "9ccec61f0f005987aabedfce265d7654ff1588dc",
-    "hash_del_arbol_de_fuentes": "arbol Git c65e4ab14ec3bd4e459e185836c7f83e7da8dc19 de experiments/adr002/candidates en el commit de la correccion 02; subarboles: a83539e3c8b5396371b355619a29478cad054834 (common, extendido por el paquete 02) y 2d90b551445db340458278a5accad55372995b76 (adr002_a, sin cambios desde la v2)",
+    "commit_del_prototipo": "353da0be9b95d718976a81023e140a4dede34f6f",
+    "hash_del_arbol_de_fuentes": "arbol Git ffc0f75c99c5636201e7a7c820b00881e435e08a de experiments/adr002/candidates en el commit de la correccion unica de common; subarboles: 6ac613c83578e351ad5734290290ce74c5df3e33 (common, corregido por el paso 5 del plan aprobado) y ceb4247c9fee913ae86d5203f199b19341f1c833 (adr002_a, alcanzado en dos puntos por el sujeto nulo)",
     "migraciones_o_ddl": "ninguna: ADR002-A usa la cadena canonica de Alembic hasta 61be4bb269bf sin anadir migraciones ni DDL. La reconstruccion del derivado reutiliza el DDL que esa migracion creo, leido de sqlite_master",
     "artefactos_y_su_hash": "ninguno generado por adelantado: el candidato no persiste indices ni caches",
     "reproduccion": "uv run pytest experiments/adr002/candidates -q; la ejecucion sobre el corpus oficial exige una autorizacion de benchmark que no existe"
   },
   "declaracion_de_congelacion": {
-    "texto": "Declaro que los valores de esta ficha se han fijado antes de la primera ejecucion del candidato bajo la capa comun extendida por el paquete de correccion 02, que no proceden de ningun resultado observado del propio candidato, y que cualquier modificacion posterior obligara a nueva version de ficha y a repetir las ejecuciones ya realizadas.",
+    "texto": "Declaro que los valores de esta ficha se han fijado antes de la primera ejecucion del candidato bajo la capa comun corregida por el paso 5 del plan aprobado y bajo la proyeccion experimental v0.1, que no proceden de ningun resultado observado del propio candidato, y que cualquier modificacion posterior obligara a nueva version de ficha y a repetir las ejecuciones ya realizadas.",
     "responsable": "Usuario / Proyecto Sirius",
-    "fecha": "2026-08-01",
+    "fecha": "2026-08-03",
     "valores_anteriores_a_la_primera_ejecucion": true
   },
   "no_contiene_resultados": true

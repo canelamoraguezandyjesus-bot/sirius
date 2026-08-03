@@ -1,7 +1,7 @@
 {
-  "documento": "Ficha de candidato ADR002-B, version 5",
+  "documento": "Ficha de candidato ADR002-B, version 6",
   "version_esquema": "ficha-candidato-0.2",
-  "estado": "SUSTITUIDA",
+  "estado": "CONGELADA",
   "plantilla": "SIRIUS_0.2_ADR_002_FICHA_CANDIDATO_TEMPLATE_v0.4_PROPUESTO.md",
   "registro": "SIRIUS_0.2_REGISTRO_TOLERANCIAS_v0.5_PROPUESTO.md",
   "protocolo": "SIRIUS_0.2_ADR_002_PROTOCOLO_MEDICION_v0.2_PROPUESTO.md",
@@ -14,19 +14,19 @@
   "identidad": {
     "candidato": "ADR002-B",
     "papel": "CANDIDATO",
-    "version": 5,
-    "sustituye_a": 4,
-    "motivo_de_sustitucion": "sustituye a la v4 por la fe de erratas 04: cuatro caminos reproducibles en los que ADR002-B lanzaba una excepcion que NO es subtipo de IndiceNoUtilizableError, lo que falsificaba la declaracion congelada de fallo cerrado y tipado. (1) Un conteo de metadatos sin cota de longitud hacia que int() topara con el limite de conversion de CPython y lanzara ValueError, revelando ademas cuantos digitos tenia la celda; ahora el conteo se acota a 19 digitos antes de convertirlo. (2) Un vector con anidamiento profundo hacia que el decodificador lanzara RecursionError, que no es subtipo de ValueError y escapaba del validador central y de los dos except de consultar; ahora la celda se acota a 16384 caracteres ANTES de deserializar —un vector conforme no llega a 6700— y RecursionError se traduce ademas junto a ValueError. (3) El formato de identidad persistida no acotaba el numero, de modo que una identidad de miles de digitos pasaba la validacion del lector y hacia que SQLite lanzara OverflowError a traves de la frontera con el puerto; ahora la identidad se acota a 19 digitos y se exige que su valor sea representable, de modo que el lector no puede entregar al puerto lo que el puerto no puede representar. (4) La recomputacion de la huella del canon estaba fuera de todo try y filtraba el descriptor del sidecar; ahora la conexion se cierra antes de propagar. El escape SIN TIPAR del canon ilegible se CONSERVA a proposito: es la limitacion 2 de la fe de erratas 03 y esta ficha no afirma haberla corregido. Se corrigen ademas dos inexactitudes del texto de la v4: la afirmacion universal de que ningun mensaje reproduce celdas se acota a los mensajes de corrupcion y apertura, porque IndiceInconsistenteError reproduce identidades canonicas acotadas por su contrato explicito de la correccion 02, y se declara expresamente el cierre de conexion que el paquete 04 preinscribio. Los limites se conservan con fundamento estatico reforzado: todas las correcciones son comparaciones de cota sobre datos ya leidos, sin sentencia nueva, y el camino patologico hace ahora MENOS trabajo. Ninguna cifra procede de medicion"
+    "version": 6,
+    "sustituye_a": 5,
+    "motivo_de_sustitucion": "sustituye a la v5 por la correccion unica de la capa comun del paso 5 del plan aprobado y por la identidad real del sustrato lexico rectificada por la fe de erratas 05. B contiene a A y delega en el, de modo que el cambio de la base obliga a version sucesora aunque el codigo propio de ADR002-B no cambie: su arbol adr002_b permanece byte a byte en 43eaa374d6eef827599472588a54494be9704565. La senal vectorial tardia, sus validadores logicos, la minimizacion de sus mensajes de apertura y el presupuesto de su sidecar se conservan sin cambio. La aprobacion historica de la v5 permanece en su acta y NO se traslada: la vigencia queda pendiente de reaprobacion"
   },
   "congelacion": {
-    "commit_de_referencia": "317ad5fc406012c5a8684b57f8e53d61ff9fd7c0",
-    "huella": "1ab53646dec59311e20dcae3c5bfdecd239e4325",
-    "ruta": "artifacts/adr002_cards/ficha_ADR002-B_v5.json"
+    "commit_de_referencia": "353da0be9b95d718976a81023e140a4dede34f6f",
+    "huella": "44596f4e60162c11886cf045132ac4f5440284e9",
+    "ruta": "artifacts/adr002_cards/ficha_ADR002-B_v6.json"
   },
   "arquitectura": {
     "alternativa_minima": "ADR002-B",
     "definicion_canonica_que_asume": "expansion escalonada lexica/estructurada con senal semantica vectorial unicamente en etapas tardias tras fallar la puerta de suficiencia.",
-    "sustrato_lexico": "FTS5 medido de Sirius 0.1 (unicode61, remove_diacritics 2), sin alternativa",
+    "sustrato_lexico": "FTS5 medido de Sirius 0.1: tabla knowledge_fts creada por la migracion 61be4bb269bf sin clausula tokenize, de modo que rige el tokenizador por defecto unicode61 con remove_diacritics 1. Sin alternativa ni indice adicional. Corrige la identidad declarada por las versiones anteriores —items_fts y remove_diacritics 2—, inexacta y rectificada por la fe de erratas 05",
     "materializacion_de_relaciones": "las de la base ADR002-A por composicion: clave de sujeto consultada por prefijo concreto, con el ambito de proyecto filtrando en G4 como puerta de seguridad. La senal vectorial materializa por IDENTIDAD CANONICA EXACTA via por_identificadores del puerto: la clave de sujeto sigue siendo parte de la representacion y de las senales estructurales, pero ya no decide que fila se recupera. Ningun indice relacional derivado",
     "puerto_de_acceso": "PuertoDeRecuperacion de la capa comun, equivalente a KnowledgeSearchRepository; rechaza en ejecucion cualquier consulta sin predicado y registra cada sentencia con su cota y sus filas. La senal vectorial materializa con por_identificadores (WHERE id IN por clase, formato cerrado, cota previa, ausencia declarada). El sidecar NO es un puerto: devuelve identificadores y similitudes, nunca contenido (B04-RF-31)",
     "etapas_implementadas": {
@@ -66,7 +66,7 @@
   "componentes": [
     {
       "papel": "sustrato lexico",
-      "nombre": "SQLite FTS5 (unicode61, remove_diacritics 2)",
+      "nombre": "SQLite FTS5 (unicode61, remove_diacritics 1)",
       "version": "la de la biblioteca estandar de Python del entorno LAB-LINUX",
       "origen": "cadena canonica de Alembic de Sirius 0.1, head 61be4bb269bf",
       "acopla_a_proveedor": false,
@@ -91,7 +91,7 @@
     {
       "papel": "motor de recuperacion",
       "nombre": "infraestructura comun de la primera ronda",
-      "version": "arbol a83539e3c8b5396371b355619a29478cad054834",
+      "version": "arbol 6ac613c83578e351ad5734290290ce74c5df3e33",
       "origen": "experiments/adr002/candidates/common",
       "acopla_a_proveedor": false,
       "ruta_de_sustitucion": "comun a A/B/C/D y neutral por construccion, comprobado por controles fail-closed; sustituirla afectaria a todos por igual"
@@ -99,7 +99,7 @@
     {
       "papel": "base funcional lexico-estructurada",
       "nombre": "ADR002-A vigente (v3), por composicion",
-      "version": "arbol 2d90b551445db340458278a5accad55372995b76 de adr002_a (sin cambios desde la v2 de A); ficha vigente A v3 con huella 427905a06f6c12666a09c73b8720e229f17eeef3",
+      "version": "arbol ceb4247c9fee913ae86d5203f199b19341f1c833 de adr002_a (sin cambios desde la v2 de A); ficha vigente A v3 con huella 427905a06f6c12666a09c73b8720e229f17eeef3",
       "origen": "experiments/adr002/candidates/adr002_a, sin copiar ni alterar",
       "acopla_a_proveedor": false,
       "ruta_de_sustitucion": "CandidatoB contiene a CandidatoA y delega en el; si la base cambiara, cambiaria la huella de esta ficha y obligaria a version sucesora"
@@ -107,7 +107,7 @@
     {
       "papel": "regeneracion del derivado",
       "nombre": "derived.py de la capa comun + vectores.py de adr002_b",
-      "version": "arboles a83539e3c8b5396371b355619a29478cad054834 y 43eaa374d6eef827599472588a54494be9704565",
+      "version": "arboles 6ac613c83578e351ad5734290290ce74c5df3e33 y 43eaa374d6eef827599472588a54494be9704565",
       "origen": "FTS5: DDL leido de sqlite_master, creado por la migracion 61be4bb269bf; sidecar: reconstruccion completa desde el canon con huella de origen",
       "acopla_a_proveedor": false,
       "ruta_de_sustitucion": "ninguna pieza copia DDL a mano ni repuebla desde el propio indice; si el canon cambiara, la reconstruccion cambiaria con el"
@@ -311,16 +311,16 @@
     "comprobacion_propuesta": "tras la purga, inspeccion de los ficheros del canon y del sidecar y busqueda del payload literal en el soporte; la comprobacion se ejecuta bajo autorizacion de benchmark, no aqui"
   },
   "huella_candidato": {
-    "commit_del_prototipo": "575378bb0fc454ae01643c8360be52fb3cc13f1b",
-    "hash_del_arbol_de_fuentes": "arbol Git 6dff5d99a627320e8f88bfef39d5acea152cf275 de experiments/adr002/candidates en el commit de la fe de erratas 04; incluye las fuentes de las que ADR002-B depende: a83539e3c8b5396371b355619a29478cad054834 (common, sin cambios desde el paquete 02), 2d90b551445db340458278a5accad55372995b76 (adr002_a, la base por composicion, sin cambios) y 43eaa374d6eef827599472588a54494be9704565 (adr002_b, con las cotas contra los escapes sin tipar)",
+    "commit_del_prototipo": "353da0be9b95d718976a81023e140a4dede34f6f",
+    "hash_del_arbol_de_fuentes": "arbol Git ffc0f75c99c5636201e7a7c820b00881e435e08a de experiments/adr002/candidates en el commit de la correccion unica de common; subarboles: 6ac613c83578e351ad5734290290ce74c5df3e33 (common, corregido por el paso 5 del plan aprobado) y 43eaa374d6eef827599472588a54494be9704565 (adr002_b, sin cambios desde la v5)",
     "migraciones_o_ddl": "ninguna sobre el canon: ADR002-B usa la cadena canonica de Alembic hasta 61be4bb269bf sin anadir migraciones ni DDL al canon. El unico DDL nuevo es el del sidecar experimental declarado en el §2.11, creado en un fichero separado y descartable",
     "artefactos_y_su_hash": "ninguno generado por adelantado: el sidecar se construye desde el canon cuando se necesita, registra la huella SHA-256 de su canon de origen en sus metadatos y no se versiona en el repositorio",
     "reproduccion": "uv run pytest experiments/adr002/candidates -q; la ejecucion sobre el corpus oficial exige una autorizacion de benchmark que no existe"
   },
   "declaracion_de_congelacion": {
-    "texto": "Declaro que los valores de esta ficha se han fijado antes de la primera ejecucion del prototipo corregido por la fe de erratas 04 y antes de construir ningun indice sobre fixture alguno bajo esta ficha, que no proceden de ningun resultado observado del propio candidato, y que cualquier modificacion posterior obligara a nueva version de ficha y a repetir las ejecuciones ya realizadas.",
+    "texto": "Declaro que los valores de esta ficha se han fijado antes de la primera ejecucion del candidato bajo la capa comun corregida por el paso 5 del plan aprobado y bajo la proyeccion experimental v0.1, que no proceden de ningun resultado observado del propio candidato, y que cualquier modificacion posterior obligara a nueva version de ficha y a repetir las ejecuciones ya realizadas.",
     "responsable": "Usuario / Proyecto Sirius",
-    "fecha": "2026-08-01",
+    "fecha": "2026-08-03",
     "valores_anteriores_a_la_primera_ejecucion": true
   },
   "no_contiene_resultados": true
