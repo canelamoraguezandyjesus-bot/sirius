@@ -625,8 +625,15 @@ def _check_reviews(
         if not _is_allowed_author(review):
             continue
         submitted_at = _parse_timestamp(review.get("submitted_at"))
-        if submitted_at is None or submitted_at < trigger_at:
-            # Revisiones históricas, anteriores a este disparador: no cuentan.
+        if submitted_at is None or submitted_at <= trigger_at:
+            # Revisiones históricas: no cuentan. La comparación es ESTRICTA a
+            # propósito. `submitted_at` tiene resolución de segundo, así que una
+            # revisión enviada en el mismo segundo que el disparador no puede
+            # demostrarse posterior a él; aceptarla dejaría que una revisión
+            # automática del panel, o una manual previa, satisficiera la ronda
+            # sin que Codex haya respondido al comentario posterior a Quality.
+            # Descartar un empate solo cuesta esperar a la revisión real —Codex
+            # tarda minutos, no milisegundos—; aceptarlo cuesta la garantía.
             continue
         candidates.append((submitted_at, review))
     if not candidates:
@@ -681,26 +688,40 @@ def _check_reviews(
             continue
         if state in {"COMMENTED", "CHANGES_REQUESTED"}:
             comments = _gh_paginated(f"repos/{repo}/pulls/{pr}/reviews/{review_id}/comments")
-            if not comments:
+            # "Sin comentarios inline" NO significa "todavía no materializada".
+            # El conector publica también revisiones cuyo contenido vive
+            # entero en el `body` — el resumen «Codex Review» —, y esas están
+            # completas: su endpoint de comentarios está vacío para siempre.
+            # Tratarlas como ambiguas convertiría CADA ronda legítima con
+            # resumen en un timeout, que es peor que el defecto que esta
+            # comprobación vino a corregir: rompería el camino normal en vez de
+            # un caso límite.
+            #
+            # El discriminante es tener algo que leer: una revisión sin cuerpo
+            # Y sin comentarios no ha entregado nada todavía. Si una revisión
+            # con cuerpo publica sus comentarios más tarde, de eso se encarga la
+            # ventana de estabilidad — el resultado cambia y la espera se
+            # reinicia —, que es exactamente para lo que existe.
+            if not comments and not str(review.get("body") or "").strip():
                 unclear_review_id = unclear_review_id or review_id
             inline_comments.extend(comments)
 
     if unclear_review_id:
-        # CADA revisión formal no aprobatoria debe ser interpretable antes de
-        # aceptar la unión, no solo el conjunto. Basta una sin comentarios
-        # inline visibles para que la ronda entera siga sin interpretar: si se
-        # devolvieran los hallazgos de las demás, la ventana de estabilidad
-        # cerraría sobre una lista incompleta —el resultado se repite igual
-        # pasada tras pasada— y los hallazgos de esa revisión no llegarían nunca
-        # al corrector. Peor aún, la lista llegaría con apariencia de completa.
+        # CADA revisión formal no aprobatoria debe haber entregado algo antes de
+        # aceptar la unión, no solo el conjunto. Basta una que no haya entregado
+        # nada para que la ronda entera siga sin interpretar: si se devolvieran
+        # los hallazgos de las demás, la ventana de estabilidad cerraría sobre
+        # una lista incompleta —el resultado se repite igual pasada tras pasada—
+        # y los hallazgos de esa revisión no llegarían nunca al corrector. Peor
+        # aún, la lista llegaría con apariencia de completa.
         #
         # Comprobarlo por conjunto (¿hay ALGUNA observación?) no basta:
         # enmascara justamente el caso en que una revisión trae hallazgos y otra
         # todavía no se puede leer.
         print(
-            f"sirius_codex_review: la revisión {unclear_review_id} aún no muestra sus "
-            "comentarios inline; la ronda sigue sin interpretar aunque otras revisiones "
-            "ya hayan aportado hallazgos.",
+            f"sirius_codex_review: la revisión {unclear_review_id} no ha entregado todavía "
+            "ni cuerpo ni comentarios inline; la ronda sigue sin interpretar aunque otras "
+            "revisiones ya hayan aportado hallazgos.",
             file=sys.stderr,
         )
         return None, True

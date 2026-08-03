@@ -1218,17 +1218,20 @@ def test_a_late_ambiguous_review_invalidates_a_stabilizing_result(tmp_path: Path
     _seed(
         env,
         "reviews.json",
-        [_review(review_id=700, state="APPROVED", submitted_at=_stamp(0))],
+        [_review(review_id=700, state="APPROVED", submitted_at=_stamp(1))],
     )
     _seed(
         env,
         "reviews_late.json",
         [
-            _review(review_id=700, state="APPROVED", submitted_at=_stamp(0)),
-            _review(review_id=701, state="COMMENTED", submitted_at=_stamp(0)),
+            _review(review_id=700, state="APPROVED", submitted_at=_stamp(1)),
+            # Ni cuerpo ni comentarios: no ha entregado nada todavía. Un resumen
+            # con cuerpo sí estaría completo y no debe bloquear (ver
+            # `test_a_summary_only_review_does_not_block_the_round`).
+            _review(review_id=701, state="COMMENTED", submitted_at=_stamp(1), body=""),
         ],
     )
-    _seed(env, "review_comments_701.json", [])  # sin comentarios inline visibles
+    _seed(env, "review_comments_701.json", [])
 
     r = _run_collect(env, tmp_path, timeout="4")
     assert r.returncode == 0, r.stdout + r.stderr
@@ -1296,16 +1299,17 @@ def test_one_uninterpretable_review_blocks_the_union_of_the_others(tmp_path: Pat
         env,
         "reviews.json",
         [
-            _review(review_id=700, state="COMMENTED", submitted_at=_stamp(0)),
-            _review(review_id=701, state="COMMENTED", submitted_at=_stamp(0)),
+            _review(review_id=700, state="COMMENTED", submitted_at=_stamp(1)),
+            _review(review_id=701, state="COMMENTED", submitted_at=_stamp(1), body=""),
         ],
     )
     _seed(env, "review_comments_700.json", [_review_comment(801, "src/a.py", 1)])
-    _seed(env, "review_comments_701.json", [])  # aún sin comentarios visibles
+    # Ni cuerpo ni comentarios: la revisión no ha entregado nada todavía.
+    _seed(env, "review_comments_701.json", [])
 
     r = _run_collect(env, tmp_path, timeout="4")
     assert r.returncode == 0, r.stdout + r.stderr
-    assert "aún no muestra sus comentarios inline" in r.stderr
+    assert "no ha entregado todavía ni cuerpo ni comentarios inline" in r.stderr
     result = _result(tmp_path)
     assert result["status"] == "FAILED_SAFELY", (
         "no puede entregarse una lista parcial mientras una revisión siga sin interpretar"
@@ -1323,8 +1327,8 @@ def test_the_union_is_delivered_once_every_review_is_interpretable(tmp_path: Pat
         env,
         "reviews.json",
         [
-            _review(review_id=700, state="COMMENTED", submitted_at=_stamp(0)),
-            _review(review_id=701, state="COMMENTED", submitted_at=_stamp(0)),
+            _review(review_id=700, state="COMMENTED", submitted_at=_stamp(1)),
+            _review(review_id=701, state="COMMENTED", submitted_at=_stamp(1)),
         ],
     )
     _seed(env, "review_comments_700.json", [_review_comment(801, "src/a.py", 1)])
@@ -1338,3 +1342,62 @@ def test_the_union_is_delivered_once_every_review_is_interpretable(tmp_path: Pat
         "src/a.py:1",
         "src/b.py:2",
     ]
+
+
+def test_a_summary_only_review_does_not_block_the_round(tmp_path: Path) -> None:
+    # El conector publica también revisiones cuyo contenido vive entero en el
+    # `body` (el resumen «Codex Review»): su endpoint de comentarios está vacío
+    # PARA SIEMPRE. Tratar "sin comentarios inline" como "todavía no
+    # materializada" convertiría cada ronda legítima con resumen en un timeout,
+    # que es peor que el defecto que la comprobación vino a corregir: rompería
+    # el camino normal en vez de un caso límite.
+    env = _setup(tmp_path)
+    _write_state(tmp_path, trigger_at=_stamp(0))
+    _seed(
+        env,
+        "reviews.json",
+        [
+            _review(review_id=700, state="COMMENTED", submitted_at=_stamp(1)),
+            _review(
+                review_id=701,
+                state="COMMENTED",
+                submitted_at=_stamp(1),
+                body="### Codex Review\n\nResumen sin comentarios inline.",
+            ),
+        ],
+    )
+    _seed(env, "review_comments_700.json", [_review_comment(801, "src/a.py", 1)])
+    _seed(env, "review_comments_701.json", [])  # el resumen no tiene inline
+
+    r = _run_collect(env, tmp_path, timeout="30")
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "CHANGES_REQUESTED", (
+        "un resumen formal completo no puede bloquear la ronda"
+    )
+    assert [item["archivo"] for item in result["observations"]] == ["src/a.py:1"]
+
+
+def test_a_review_submitted_in_the_same_second_as_the_trigger_is_historical(
+    tmp_path: Path,
+) -> None:
+    # `submitted_at` tiene resolución de segundo: una revisión enviada en el
+    # mismo segundo que el disparador no puede demostrarse posterior a él.
+    # Aceptarla dejaría que una revisión automática del panel, o una manual
+    # previa, satisficiera la ronda sin que Codex haya respondido al comentario
+    # posterior a Quality.
+    env = _setup(tmp_path)
+    _write_state(tmp_path, trigger_at=_stamp(0))
+    _seed(
+        env,
+        "reviews.json",
+        [_review(review_id=700, state="APPROVED", submitted_at=_stamp(0))],
+    )
+
+    r = _run_collect(env, tmp_path, timeout="3")
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "FAILED_SAFELY", (
+        "un empate de marca temporal no demuestra que la revisión sea posterior"
+    )
+    assert result["reason"] == "timeout"

@@ -151,12 +151,23 @@ Reglas del modo dual:
   demuestre el SHA esperado para detener la ronda. Quedarse con la última
   descartaría en silencio los hallazgos de las anteriores y, si la última fuera
   aprobatoria, la ronda aprobaría un head con defectos ya reportados.
-- La unión solo se acepta cuando **cada** revisión formal no aprobatoria es
-  interpretable. Basta una sin comentarios inline visibles para que la ronda
-  siga sin interpretar, aunque otras ya hayan aportado hallazgos: entregar la
-  lista parcial dejaría que la ventana de estabilidad cerrara sobre ella —el
-  mismo resultado se repite pasada tras pasada— y los hallazgos que faltan no
-  llegarían nunca al corrector, con apariencia de lista completa.
+- La unión solo se acepta cuando **cada** revisión formal no aprobatoria ha
+  entregado algo. Basta una que no haya entregado ni cuerpo ni comentarios
+  inline para que la ronda siga sin interpretar, aunque otras ya hayan aportado
+  hallazgos: entregar la lista parcial dejaría que la ventana de estabilidad
+  cerrara sobre ella —el mismo resultado se repite pasada tras pasada— y los
+  hallazgos que faltan no llegarían nunca al corrector, con apariencia de lista
+  completa. El discriminante es haber entregado algo, no tener comentarios
+  inline: el conector publica también resúmenes cuyo contenido vive entero en el
+  cuerpo, y esos están completos —su endpoint de comentarios queda vacío para
+  siempre—, así que exigirles comentarios convertiría cada ronda legítima con
+  resumen en un timeout. De los comentarios que lleguen tarde se encarga la
+  ventana de estabilidad.
+- Una revisión solo cuenta si es **estrictamente posterior** al disparador.
+  `submitted_at` tiene resolución de segundo, así que un empate no demuestra el
+  orden causal: aceptarlo dejaría que una revisión automática del panel, o una
+  manual previa, satisficiera la ronda sin que Codex haya respondido al
+  comentario posterior a Quality.
 - La reacción `+1` solo decide cuando **no** hay ninguna revisión formal
   posterior al disparador. Con una revisión formal en curso pero todavía no
   interpretable, la reacción no la resuelve: se sigue esperando y, si no se
