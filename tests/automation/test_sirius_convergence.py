@@ -669,3 +669,20 @@ def test_resolving_the_critical_finding_still_counts_as_progress() -> None:
     )
     assert result["decision"] == "CONTINUE"
     assert result["reason"] == "progreso"
+
+
+def test_sticky_severity_does_not_depend_on_the_order_within_a_round() -> None:
+    # Una misma huella puede aparecer dos veces en la misma ronda con etiquetas
+    # distintas. Si el máximo se actualizara mientras se suma, el total
+    # dependería del orden de llegada y la decisión dejaría de ser función solo
+    # del contenido del historial.
+    module = _module()
+    grave = _observation("CODEX-001", "src/x.py:10", "Mismo defecto", "P0")
+    leve = _observation("CODEX-002", "src/x.py:99", "Mismo defecto", "P4")
+    assert module.fingerprint(grave) == module.fingerprint(leve)
+
+    primero_grave = module.parse_round_records(_round_comment(1, HEAD_A, [grave, leve]))
+    primero_leve = module.parse_round_records(_round_comment(1, HEAD_A, [leve, grave]))
+    assert primero_grave[0]["severity_total"] == primero_leve[0]["severity_total"]
+    # Y el peso aplicado es el peor observado, no el medio ni el último.
+    assert primero_grave[0]["severity_total"] == 8

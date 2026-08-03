@@ -202,14 +202,26 @@ def _apply_sticky_severity(records: list[dict[str, Any]]) -> None:
     """
     worst: dict[str, int] = {}
     for record in records:
-        total = 0
+        # Primero se consolida el peor peso de la RONDA por huella y solo
+        # después se suma. Actualizar el máximo mientras se suma haría depender
+        # el total del orden de llegada cuando una misma huella aparece dos
+        # veces en la ronda con etiquetas distintas (P4 antes que P0 daría un
+        # total y al revés otro), y la decisión debe ser función únicamente del
+        # contenido del historial.
         for item in record["findings"]:
-            weight = severity_weight(item.get("severity"))
             fingerprint_value = str(item.get("fingerprint") or "")
             if fingerprint_value:
-                weight = max(weight, worst.get(fingerprint_value, 0))
-                worst[fingerprint_value] = weight
-            total += weight
+                worst[fingerprint_value] = max(
+                    worst.get(fingerprint_value, 0), severity_weight(item.get("severity"))
+                )
+        total = 0
+        for item in record["findings"]:
+            fingerprint_value = str(item.get("fingerprint") or "")
+            total += (
+                worst[fingerprint_value]
+                if fingerprint_value
+                else severity_weight(item.get("severity"))
+            )
         record["severity_total"] = total
 
 
