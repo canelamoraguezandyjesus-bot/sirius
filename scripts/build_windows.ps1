@@ -35,8 +35,27 @@ $DistRoot = Join-Path $RepoRoot "dist\windows"
 $VersionedSpec = Join-Path $RepoRoot "pysidedeploy.spec"
 $WorkingSpec = Join-Path $PackagingDir "pysidedeploy.spec"
 $DryRunFile = Join-Path $PackagingDir "pyside6-deploy-dry-run.txt"
-$VenvPython = Join-Path $RepoRoot ".venv\Scripts\python.exe"
-$VenvDeploy = Join-Path $RepoRoot ".venv\Scripts\pyside6-deploy.exe"
+# Entorno dedicado EXCLUSIVAMENTE al empaquetado. No es la .venv del
+# repositorio, y este script no la lee, no la sincroniza y no borra nada de ella.
+#
+# El motivo es un fallo real, dos veces seguidas en Windows antes de llegar a
+# compilar: "Acceso denegado" al eliminar
+# .venv\Lib\site-packages\ast_serialize-...\sboms y
+# .venv\Lib\site-packages\coverage-...\licenses. La causa no era el permiso, era
+# el diseno: check.ps1 deja en .venv los grupos normales y dev, y el build
+# ejecutaba "uv sync --no-default-groups --group packaging" sobre esa MISMA
+# .venv, asi que uv hacia lo que se le pedia -desinstalar las herramientas de
+# desarrollo-, y bajo OneDrive borrar esos arboles falla. Reintentar habria sido
+# insistir en destruir el entorno de desarrollo con mas paciencia.
+#
+# La ruta va bajo LOCALAPPDATA: fuera del checkout, fuera de OneDrive, y de
+# Sirius. Nunca aparece en pysidedeploy.spec versionado ni en el artefacto.
+if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+    throw "No esta definida LOCALAPPDATA; no se puede ubicar el entorno de empaquetado."
+}
+$PackagingVenv = Join-Path $env:LOCALAPPDATA "Sirius\packaging-venv"
+$VenvPython = Join-Path $PackagingVenv "Scripts\python.exe"
+$VenvDeploy = Join-Path $PackagingVenv "Scripts\pyside6-deploy.exe"
 
 $BuildStart = Get-Date
 
@@ -291,6 +310,13 @@ try {
     # que documenta B13. No es teorico: en la construccion registrada Nuitka
     # llego a arrastrar mypy por importacion estatica. El aislamiento se
     # consigue no instalando el grupo, no tapandolo con exclusiones de Nuitka.
+    # UV_PROJECT_ENVIRONMENT es el mecanismo soportado para que uv use un entorno
+    # de proyecto distinto del ".venv" por omision. Comprobado empiricamente
+    # contra uv 0.8.17: crea el entorno en la ruta indicada, instala solo las
+    # dependencias normales mas el grupo pedido, y deja intacta la .venv del
+    # proyecto (una dependencia de 'dev' instalada alli sigue estando despues).
+    $env:UV_PROJECT_ENVIRONMENT = $PackagingVenv
+    Write-Ok "Entorno de empaquetado: $PackagingVenv"
     Invoke-Native "uv" @("sync", "--frozen", "--no-default-groups", "--group", "packaging") `
         "uv sync --frozen --no-default-groups --group packaging" | Out-Null
     Write-Ok "Entorno sincronizado desde uv.lock: grupo 'packaging', sin los grupos por omision."
@@ -301,6 +327,17 @@ finally {
 
 if (-not (Test-Path -LiteralPath $VenvPython)) { throw "No existe el interprete del entorno: $VenvPython" }
 if (-not (Test-Path -LiteralPath $VenvDeploy)) { throw "No existe pyside6-deploy en el entorno: $VenvDeploy" }
+
+# El entorno de empaquetado tiene que estar de verdad fuera del checkout. Si
+# alguien reapuntara $PackagingVenv dentro del repositorio, el sync volveria a
+# destruir la .venv de desarrollo y a ensuciar el arbol.
+$packagingVenvFull = [System.IO.Path]::GetFullPath($PackagingVenv)
+$repoRootFull = [System.IO.Path]::GetFullPath($RepoRoot).TrimEnd("\") + "\"
+if ($packagingVenvFull.StartsWith($repoRootFull, [StringComparison]::OrdinalIgnoreCase)) {
+    throw ("El entorno de empaquetado ($packagingVenvFull) esta dentro del repositorio. " +
+        "Debe vivir fuera del checkout para no tocar la .venv de desarrollo.")
+}
+Write-Ok "El entorno de empaquetado esta fuera del checkout y no toca la .venv de desarrollo."
 
 # El aislamiento se comprueba, no se supone: el entorno debe traer lo normal del
 # proyecto y lo de packaging, y NO las herramientas exclusivas de desarrollo.

@@ -51,6 +51,50 @@ Lo que B13 sí garantiza:
 | Hash del entregable | `<artefacto>.zip.sha256` |
 | Sin pasos manuales ocultos | El script carga MSVC por sí mismo |
 
+## Entorno de empaquetado
+
+El build **no** usa la `.venv` del repositorio. Tiene su propio entorno en:
+
+```
+%LOCALAPPDATA%\Sirius\packaging-venv
+```
+
+seleccionado con `UV_PROJECT_ENVIRONMENT`, que es el mecanismo soportado por uv
+para usar un entorno de proyecto distinto del `.venv` por omisión. Verificado
+contra uv 0.8.17: crea el entorno en la ruta indicada, instala solo las
+dependencias normales más el grupo pedido, y **deja intacta** la `.venv` del
+proyecto.
+
+El motivo es un fallo real, dos veces seguidas en Windows antes de llegar a
+compilar:
+
+```
+Acceso denegado al eliminar .venv\Lib\site-packages\ast_serialize-0.6.0.dist-info\sboms
+Acceso denegado al eliminar .venv\Lib\site-packages\coverage-7.15.0.dist-info\licenses
+```
+
+La causa no era el permiso, era el diseño. `check.ps1` deja en `.venv` los grupos
+normales y `dev`; el build ejecutaba `uv sync --no-default-groups --group
+packaging` **sobre esa misma `.venv`**, así que uv hacía exactamente lo que se le
+pedía: desinstalar las herramientas de desarrollo. Bajo OneDrive, borrar esos
+árboles falla. Reintentar habría sido insistir en destruir el entorno de
+desarrollo con más paciencia.
+
+Consecuencias, todas comprobadas por `tests/unit/test_packaging_environment_isolation.py`:
+
+- el build no lee, no sincroniza y no borra nada dentro de `<repo>\.venv`;
+- la ruta está fuera del checkout y fuera de OneDrive, y el script aborta si
+  alguien la reapunta dentro del repositorio;
+- el inventario del entorno sigue exigiendo PySide6, Nuitka, Alembic, SQLAlchemy
+  y keyring, y la ausencia de mypy, pytest, Ruff, pytest-qt y pytest-cov;
+- esa ruta no aparece en `pysidedeploy.spec` versionado ni en el artefacto; el
+  propio build rechaza un spec que contenga `.venv`, una unidad, `$env:`,
+  `%TEMP%` o `%USERPROFILE%`.
+
+El **verificador** sí usa la `.venv` de desarrollo, pero solo para leer: necesita
+un intérprete con `sirius` importable para consultar SQLite, resolver
+`resolve_paths()` y evaluar la precondición de credencial. No la sincroniza.
+
 ## Prerrequisitos externos
 
 Deben estar instalados en el equipo que construye. El script **no** los instala:
@@ -83,7 +127,19 @@ Verificar (desde PowerShell **sin elevar**):
 .\scripts\verify_windows_package.ps1
 ```
 
-La verificación toma por omisión el artefacto más reciente de `dist\windows`.
+La verificación **no** toma «el más reciente»: busca exclusivamente el ZIP cuyo
+nombre corresponde a la versión actual y al SHA corto del `HEAD` actual, y tras
+extraerlo compara `source_commit` y `source_commit_short` del
+`BUILD-MANIFEST.json` con el `HEAD` real. Si el artefacto no existe, o procede de
+otro commit, la verificación falla y lo dice.
+
+Esto también nace de un caso real: las dos construcciones de `f9b68d5` fallaron y
+no dejaron artefacto, pero el verificador encontró el ZIP de `a82972f` de una
+ronda anterior, lo validó y terminó como *SUPERADA CON RESERVAS*, acreditando un
+commit que no era el del repositorio. Una verificación de B13 no puede acreditar
+el artefacto de otro commit. La lógica vive en `scripts/package_provenance.py`,
+cubierta por `tests/unit/test_package_provenance.py`.
+
 También acepta uno explícito:
 
 ```powershell

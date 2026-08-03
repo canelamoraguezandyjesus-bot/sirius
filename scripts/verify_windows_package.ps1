@@ -114,17 +114,47 @@ Write-Step "A. Localizacion del ZIP a verificar"
 
 # El sujeto de la verificacion es el ZIP. La carpeta de dist solo sirve para
 # encontrarlo: nada de lo que se prueba despues sale de ella.
+#
+# Y se elige por NOMBRE EXACTO, nunca "el mas reciente". Ese atajo produjo
+# evidencia falsa: las dos construcciones de f9b68d5 fallaron y no dejaron
+# artefacto, el verificador encontro el ZIP de a82972f de una ronda anterior, lo
+# valido, y termino como SUPERADA CON RESERVAS acreditando un commit que no era
+# el de HEAD. La seleccion y la comprobacion de procedencia viven en
+# scripts/package_provenance.py, cubierto por pruebas.
+$RepoHead = (& git -C $RepoRoot rev-parse HEAD | Out-String).Trim()
+$RepoHeadShort = (& git -C $RepoRoot rev-parse --short HEAD | Out-String).Trim()
+if ([string]::IsNullOrWhiteSpace($RepoHead) -or [string]::IsNullOrWhiteSpace($RepoHeadShort)) {
+    throw "No se pudo determinar el HEAD del repositorio."
+}
+$AppVersion = ""
+foreach ($line in (Get-Content -LiteralPath (Join-Path $RepoRoot "pyproject.toml"))) {
+    if ($line -match '^\s*version\s*=\s*"([^"]+)"') { $AppVersion = $Matches[1]; break }
+}
+if ([string]::IsNullOrWhiteSpace($AppVersion)) {
+    throw "No se pudo leer la version del proyecto en pyproject.toml."
+}
+Write-Info "HEAD del repositorio: $RepoHead ($RepoHeadShort)   |   version: $AppVersion"
+
+$provenanceScript = Join-Path $PSScriptRoot "package_provenance.py"
+if (-not (Test-Path -LiteralPath $provenanceScript)) {
+    throw "No existe $provenanceScript, necesario para elegir el artefacto."
+}
+if (-not (Test-Path -LiteralPath $VenvPython)) {
+    throw ("No existe el interprete del entorno en $VenvPython. Ejecuta " +
+        "'uv sync' en el repositorio antes de verificar el paquete.")
+}
+
 if ([string]::IsNullOrWhiteSpace($ArtifactPath)) {
-    if (-not (Test-Path -LiteralPath $DistRoot)) {
-        throw "No existe dist\windows. Ejecuta antes .\scripts\build_windows.ps1"
+    $selectionRaw = (& $VenvPython $provenanceScript "select" $DistRoot $AppVersion $RepoHeadShort | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($selectionRaw)) {
+        throw "La seleccion del artefacto fallo (codigo $LASTEXITCODE): $selectionRaw"
     }
-    $candidates = @(Get-ChildItem -LiteralPath $DistRoot -File |
-        Where-Object { $_.Name -like "Sirius-*-windows-x64.zip" } |
-        Sort-Object LastWriteTime -Descending)
-    if ($candidates.Count -eq 0) {
-        throw "No se encontro ningun ZIP de B13 en dist\windows. Ejecuta antes .\scripts\build_windows.ps1"
+    $selection = $selectionRaw | ConvertFrom-Json
+    if ($null -ne $selection.error) {
+        throw $selection.error
     }
-    $ZipPath = $candidates[0].FullName
+    $ZipPath = $selection.zip_path
+    Write-Info "Artefacto esperado para este commit: $($selection.expected_name).zip"
 }
 else {
     if (-not (Test-Path -LiteralPath $ArtifactPath)) { throw "No existe la ruta indicada: $ArtifactPath" }
@@ -194,12 +224,6 @@ $inspectorScript = Join-Path $PSScriptRoot "zip_package_inspector.py"
 if (-not (Test-Path -LiteralPath $inspectorScript)) {
     throw "No existe $inspectorScript, necesario para inspeccionar el ZIP."
 }
-# El interprete del entorno hace falta aqui y mas adelante (consultas a SQLite y
-# precondicion de credencial). Se comprueba una vez, con un mensaje util.
-if (-not (Test-Path -LiteralPath $VenvPython)) {
-    throw ("No existe el interprete del entorno en $VenvPython. Ejecuta " +
-        "'uv sync' en el repositorio antes de verificar el paquete.")
-}
 $inspectionRaw = (& $VenvPython $inspectorScript $ZipPath $ExtractRoot | Out-String).Trim()
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($inspectionRaw)) {
     throw "La inspeccion del ZIP fallo (codigo $LASTEXITCODE): $inspectionRaw"
@@ -255,6 +279,22 @@ Test-Check "migrations/versions contiene revisiones ($($versionFiles.Count))" ($
 
 $buildManifest = Get-Content -LiteralPath $buildManifestPath -Raw | ConvertFrom-Json
 Test-Check "El manifiesto declara packaging_mode = standalone" ($buildManifest.packaging_mode -eq "standalone") $buildManifest.packaging_mode
+
+# Procedencia, sobre el manifiesto YA EXTRAIDO. El nombre del ZIP se puede
+# renombrar a mano; el manifiesto es lo que dice de que commit salio el binario,
+# asi que se comparan las dos formas, completa y corta, contra el HEAD real.
+$provenanceRaw = (& $VenvPython $provenanceScript "verify" $buildManifestPath $RepoHead $RepoHeadShort | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($provenanceRaw)) {
+    throw "La comprobacion de procedencia fallo (codigo $LASTEXITCODE): $provenanceRaw"
+}
+$provenance = $provenanceRaw | ConvertFrom-Json
+Test-Check "El artefacto procede del HEAD actual ($RepoHeadShort)" ([bool]$provenance.ok) (
+    @($provenance.errors) -join "; ")
+if (-not $provenance.ok) {
+    throw ("El artefacto no procede del commit actual, asi que esta verificacion no puede " +
+        "acreditarlo. Construye desde el HEAD actual y vuelve a verificar.")
+}
+
 $ExpectedAlembicHead = $buildManifest.alembic_head
 Write-Info "Commit de origen: $($buildManifest.source_commit_short)   |   head de Alembic esperado: $ExpectedAlembicHead"
 
