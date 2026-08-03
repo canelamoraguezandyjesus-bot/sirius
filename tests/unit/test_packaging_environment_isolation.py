@@ -105,7 +105,9 @@ def test_the_environment_inventory_is_still_enforced(build_implementation: str) 
     for required in ("PySide6", "nuitka", "alembic", "SQLAlchemy", "keyring"):
         assert required in build_implementation, f"falta la comprobacion de {required}"
     for forbidden in ("mypy", "pytest", "ruff", "pytest-qt", "pytest-cov"):
-        assert forbidden in build_implementation, f"falta la comprobacion de ausencia de {forbidden}"
+        assert forbidden in build_implementation, (
+            f"falta la comprobacion de ausencia de {forbidden}"
+        )
 
 
 def test_the_versioned_deploy_spec_never_names_an_environment_path() -> None:
