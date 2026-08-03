@@ -43,8 +43,16 @@ import re
 import sys
 from typing import Any
 
-ROUND_MARKER_RE = re.compile(r"<!--\s*sirius-round:(\d+)\s*-->")
-ROUND_BLOCK_RE = re.compile(r"##\s*RONDA_HALLAZGOS\s*```json\s*(.*?)\s*```", re.DOTALL)
+# Un registro de ronda solo cuenta si va precedido de su marcador oculto en el
+# MISMO comentario: `<!-- sirius-round:N -->` seguido del bloque. Exigir el par
+# completo evita que un bloque suelto —copiado, citado o publicado aparte— se
+# cuele como ronda. La lectura previa ya filtra por autor de confianza
+# (`sirius_dump_comments`), así que esto es la segunda barrera, no la única.
+ROUND_RECORD_RE = re.compile(
+    r"<!--\s*sirius-round:(\d+)\s*-->\s*"
+    r"##\s*RONDA_HALLAZGOS\s*```json\s*(.*?)\s*```",
+    re.DOTALL,
+)
 
 # Peso de cada severidad para medir la gravedad agregada de una ronda. Cubre la
 # escala de Codex (P0..P4) y las etiquetas en español del revisor Claude. Un
@@ -128,7 +136,7 @@ def parse_round_records(text: str) -> list[dict[str, Any]]:
     análisis: la decisión se toma con los registros que sí son válidos.
     """
     records: list[dict[str, Any]] = []
-    for raw in ROUND_BLOCK_RE.findall(text):
+    for marker_round, raw in ROUND_RECORD_RE.findall(text):
         try:
             record = json.loads(raw)
         except json.JSONDecodeError:
@@ -140,13 +148,20 @@ def parse_round_records(text: str) -> list[dict[str, Any]]:
             continue
         normalized = [item for item in findings if isinstance(item, dict)]
         record["findings"] = normalized
+        # El número de ronda autoritativo es el del MARCADOR, no el del cuerpo
+        # del JSON: el marcador es lo que la automatización numera y lo que
+        # `sirius_next_round_number` cuenta. Así un campo `round` ausente, no
+        # numérico o manipulado no puede reordenar el historial ni provocar una
+        # excepción al ordenar (que dejaría la decisión vacía y bloquearía toda
+        # ronda posterior).
+        record["round"] = int(marker_round)
         record["fingerprints"] = {
             str(item.get("fingerprint") or "") for item in normalized if item.get("fingerprint")
         }
         record["pending"] = len(normalized)
         record["severity_total"] = sum(severity_weight(item.get("severity")) for item in normalized)
         records.append(record)
-    records.sort(key=lambda item: int(item.get("round") or 0))
+    records.sort(key=lambda item: int(item["round"]))
     return records
 
 
@@ -155,11 +170,21 @@ def _has_progress(previous: dict[str, Any], current: dict[str, Any]) -> tuple[bo
 
     Progreso es cualquiera de estas condiciones, medidas sobre datos y no sobre
     apariencia: menos hallazgos pendientes, menor gravedad agregada, o la
-    desaparición de al menos un hallazgo concreto de la ronda anterior. Un
-    cambio cosmético no altera ninguna de las tres, porque la huella no depende
-    del identificador correlativo ni del formato.
+    desaparición de al menos un hallazgo concreto **sin regresión material**.
+    Un cambio cosmético no altera ninguna de las tres, porque la huella no
+    depende del identificador correlativo ni del formato.
+
+    La condición de regresión es lo que garantiza la terminación. Sin ella,
+    resolver el defecto A introduciendo B y C contaría como progreso y el ciclo
+    podría continuar indefinidamente mientras el estado empeora: ninguna
+    magnitud decrecería. Con ella, cada ronda que continúa o reduce los
+    pendientes, o reduce la gravedad, o al menos no empeora ninguna de las dos
+    — y ambas son enteros no negativos, así que la secuencia no puede
+    prolongarse sin fin sin caer en las condiciones de bloqueo.
     """
     resolved = previous["fingerprints"] - current["fingerprints"]
+    worse_pending = current["pending"] > previous["pending"]
+    worse_severity = current["severity_total"] > previous["severity_total"]
     if current["pending"] < previous["pending"]:
         return (
             True,
@@ -170,8 +195,15 @@ def _has_progress(previous: dict[str, Any], current: dict[str, Any]) -> tuple[bo
             f"la gravedad agregada bajó de {previous['severity_total']} a "
             f"{current['severity_total']}"
         )
-    if resolved:
+    if resolved and not worse_pending and not worse_severity:
         return True, f"se resolvieron {len(resolved)} hallazgo(s) concreto(s) de la ronda anterior"
+    if resolved:
+        return False, (
+            f"se resolvieron {len(resolved)} hallazgo(s), pero el estado empeoró "
+            f"(pendientes {previous['pending']} → {current['pending']}, gravedad "
+            f"{previous['severity_total']} → {current['severity_total']}): sustituir un "
+            "defecto por otros no es progreso"
+        )
     return False, "no bajaron los pendientes, ni la gravedad, ni se resolvió ningún hallazgo"
 
 

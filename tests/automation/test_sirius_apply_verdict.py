@@ -501,6 +501,82 @@ def test_reviewer_changes_requested_publishes_the_round_record(tmp_path: Path) -
     assert len(record["findings"][0]["fingerprint"]) == 16
 
 
+def test_identical_findings_in_a_new_round_still_publish_their_record(tmp_path: Path) -> None:
+    # El caso de estancamiento exacto —dos rondas con los MISMOS hallazgos— es
+    # justo el que la política de convergencia existe para detectar. Si el
+    # marcador dependiera solo del contenido, la segunda ronda se deduparía, el
+    # historial se congelaría en una sola ronda y `sin-progreso` no podría
+    # dispararse nunca: el ciclo no terminaría.
+    env = _setup(tmp_path)
+    observations = [
+        {
+            "id": "CODEX-001",
+            "severidad": "P2",
+            "archivo": "src/x.py:10",
+            "problema": "no valida entrada",
+            "criterio_esperado": "debe validar",
+            "prueba": "test_x_invalid",
+            "limites_correccion": "solo src/x.py",
+        }
+    ]
+
+    _seed_issue(
+        env,
+        ["sirius:reviewing"],
+        comments=(
+            "QUALITY_SUCCESS\n- Head SHA: `aaaaaaaaaaaa`\n"
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+        ),
+    )
+    _seed_pr(env, 9, head="aaaaaaaaaaaa")
+    vf1 = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "CHANGES_REQUESTED",
+            "summary": "hay defectos",
+            "reviewed_head_sha": "aaaaaaaaaaaa",
+            "observations": observations,
+        },
+    )
+    env_round1 = dict(env)
+    env_round1["GITHUB_RUN_ID"] = "5001"
+    r1 = _run(env_round1, "reviewer", vf1)
+    assert r1.returncode == 0, r1.stdout + r1.stderr
+
+    # El corrector empuja un head nuevo, Quality pasa y la revisión vuelve a
+    # encontrar EXACTAMENTE el mismo defecto: es una ronda distinta.
+    md = _md(env)
+    (md / f"comments_{ISSUE}.txt").write_text(
+        (md / f"comments_{ISSUE}.txt").read_text(encoding="utf-8")
+        + "QUALITY_SUCCESS\n- Head SHA: `bbbbbbbbbbbb`\n",
+        encoding="utf-8",
+    )
+    (md / f"labels_{ISSUE}.txt").write_text("sirius:reviewing\n", encoding="utf-8")
+    _seed_pr(env, 9, head="bbbbbbbbbbbb")
+    vf2 = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "CHANGES_REQUESTED",
+            "summary": "hay defectos",
+            "reviewed_head_sha": "bbbbbbbbbbbb",
+            "observations": observations,
+        },
+    )
+    env_round2 = dict(env)
+    env_round2["GITHUB_RUN_ID"] = "5002"
+    r2 = _run(env_round2, "reviewer", vf2)
+    assert r2.returncode == 0, r2.stdout + r2.stderr
+
+    comments = _comments(env)
+    rounds = re.findall(r"<!-- sirius-round:(\d+) -->", comments)
+    assert rounds == ["1", "2"], f"ambas rondas deben quedar registradas, no {rounds}"
+    heads = [
+        json.loads(block)["head"]
+        for block in re.findall(r"## RONDA_HALLAZGOS\s*```json\s*(.*?)\s*```", comments, re.DOTALL)
+    ]
+    assert heads == ["aaaaaaaaaaaa", "bbbbbbbbbbbb"]
+
+
 def test_reviewer_changes_requested_increments_the_round_number(tmp_path: Path) -> None:
     env = _setup(tmp_path)
     _seed_issue(

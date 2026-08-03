@@ -86,6 +86,18 @@ def test_reviewer_job_keeps_read_only_contents_permission() -> None:
     assert doc["permissions"]["pull-requests"] == "read"
 
 
+def test_job_declares_every_scope_its_gate_actually_uses() -> None:
+    # Declarar un bloque `permissions` explícito deja en `none` todo alcance no
+    # listado. El gate lee `commits/<sha>/check-runs`, que exige `checks: read`:
+    # sin esa línea la lectura da 403 y TODA ronda —en ambos modos— muere en la
+    # parada segura `quality-sin-marca`.
+    doc = _load()
+    permissions = doc["permissions"]
+    gate_run = _step(doc, "Localizar la PR")["run"]
+    if "check-runs" in gate_run:
+        assert permissions.get("checks") == "read"
+
+
 def test_concurrency_group_prevents_parallel_rounds() -> None:
     doc = _load()
     concurrency = doc["concurrency"]

@@ -100,7 +100,11 @@ jobs:
           rm -f "$comments_file" "$decision_file"
 
           if [ "$decision" != "CONTINUE" ]; then
-            marker="<!-- sirius-verdict:corrector:precheck:convergencia-${reason} -->"
+            # Sufijo por run, igual que el resto de paradas: sin él, un
+            # segundo bloqueo con el mismo motivo compartiría marcador, se
+            # deduparía y la incidencia volveria a blocked-decision SIN
+            # publicar el diagnostico (incidencia #66).
+            marker="<!-- sirius-verdict:corrector:precheck:convergencia-${reason}:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
             body_file="$(mktemp)"
             printf '%s\n\n%s\n\n%s\n\n%s\n' \
               "$marker" \

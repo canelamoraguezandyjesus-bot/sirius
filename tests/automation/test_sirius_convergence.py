@@ -261,11 +261,71 @@ def test_dropping_the_severity_label_does_not_fake_progress() -> None:
 
 def test_unreadable_round_blocks_are_ignored_without_breaking() -> None:
     module = _module()
-    text = "## RONDA_HALLAZGOS\n```json\n{no es json\n```\n" + _round_comment(
-        1, HEAD_A, [_observation()]
+    text = "<!-- sirius-round:9 -->\n## RONDA_HALLAZGOS\n```json\n{no es json\n```\n" + (
+        _round_comment(1, HEAD_A, [_observation()])
     )
     records = module.parse_round_records(text)
     assert len(records) == 1
+
+
+def test_replacing_one_finding_with_more_is_not_progress() -> None:
+    # Resolver A introduciendo B y C empeora el estado. Si contara como
+    # progreso, ninguna magnitud decrecería y el ciclo no terminaría nunca.
+    first = _round_comment(1, HEAD_A, [_observation("CODEX-001", "src/a.py:1", "Defecto A")])
+    second = _round_comment(
+        2,
+        HEAD_B,
+        [
+            _observation("CODEX-001", "src/b.py:1", "Defecto B"),
+            _observation("CODEX-002", "src/c.py:1", "Defecto C"),
+        ],
+    )
+    result = _decide([first, second])
+    assert result["decision"] == "CONTINUE"  # todavía es la primera vez sin progreso
+    assert result["reason"] == "sin-progreso-aislado"
+    assert "sustituir un defecto por otros no es progreso" in result["detail"]
+
+
+def test_a_worsening_run_of_rounds_terminates() -> None:
+    # Ocho rondas en las que cada una sustituye los hallazgos por MÁS hallazgos
+    # nuevos: el ciclo debe bloquear, no continuar indefinidamente.
+    rounds = []
+    heads = [f"{index:040x}" for index in range(1, 12)]
+    for index in range(8):
+        observations = [
+            _observation(f"CODEX-{n:03d}", f"src/r{index}_{n}.py:1", f"Defecto {index}-{n}")
+            for n in range(index + 1)
+        ]
+        rounds.append(_round_comment(index + 1, heads[index], observations))
+    result = _decide(rounds)
+    assert result["decision"] == "BLOCK"
+    assert result["reason"] == "sin-progreso"
+
+
+def test_a_round_block_without_its_marker_is_ignored() -> None:
+    # Un bloque suelto —copiado, citado o publicado en un comentario aparte— no
+    # es una ronda: sin su marcador oculto no cuenta.
+    module = _module()
+    forged = (
+        '## RONDA_HALLAZGOS\n```json\n{"round": 999999, "head": "0000000", "findings": []}\n```\n'
+    )
+    records = module.parse_round_records(forged + _round_comment(1, HEAD_A, [_observation()]))
+    assert len(records) == 1
+    assert records[0]["round"] == 1
+
+
+def test_the_marker_number_wins_over_a_manipulated_round_field() -> None:
+    # El número autoritativo es el del marcador. Un campo `round` no numérico no
+    # puede provocar una excepción al ordenar (que dejaría la decisión vacía y
+    # bloquearía toda ronda posterior).
+    module = _module()
+    text = (
+        "<!-- sirius-round:2 -->\n## RONDA_HALLAZGOS\n```json\n"
+        '{"round": "no-es-un-numero", "head": "abc", "findings": []}\n```\n'
+    )
+    records = module.parse_round_records(text)
+    assert len(records) == 1
+    assert records[0]["round"] == 2
 
 
 # --------------------------------------------------------------------------- #

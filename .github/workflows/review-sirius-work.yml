@@ -40,6 +40,13 @@ permissions:
   contents: read
   issues: write
   pull-requests: read
+  # El gate lee `commits/<sha>/check-runs` para obtener el instante autoritativo
+  # en que Quality terminó sobre el head. Declarar un bloque `permissions`
+  # explícito deja en `none` todo alcance no listado, así que sin esta línea esa
+  # lectura daría 403 y TODA ronda de revisión —en ambos modos— moriría en la
+  # parada segura `quality-sin-marca`. Mismo alcance que ya declaran
+  # merge-sirius-work.yml y reconcile-sirius-states.yml para el mismo endpoint.
+  checks: read
   id-token: write
 
 concurrency:

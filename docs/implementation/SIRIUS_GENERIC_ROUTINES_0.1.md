@@ -157,7 +157,7 @@ Cada observación corregible incluye identificador, severidad, archivo o compone
 - observaciones estructuradas existentes;
 - rama y PR registradas y abiertas;
 - head SHA vigente;
-- contador de ciclos inferior a dos;
+- decisión de convergencia `CONTINUE` sobre el historial de rondas (contrato §5.1);
 - ningún cambio de producto, arquitectura, seguridad no definida o alcance requerido.
 
 ### Ejecución
@@ -167,7 +167,7 @@ Cada observación corregible incluye identificador, severidad, archivo o compone
 3. Corrige exclusivamente las observaciones registradas.
 4. Trabaja en la misma rama y PR.
 5. Ejecuta todas las validaciones obligatorias.
-6. Incrementa el contador de ciclo.
+6. Registra la ronda con las huellas de sus hallazgos (contrato §5.1).
 7. Registra el nuevo head SHA.
 8. Retira `sirius:repairing` y aplica `sirius:ci-pending`.
 9. Se detiene sin merge.
@@ -263,16 +263,19 @@ del conjunto permitido para el rol se trata siempre como un fallo seguro.
   push aunque lo intentara. La instrucción de "no modificar código en la
   primera pasada" no depende solo de que el modelo la respete.
 
-### Single-flight y límite de reparación
+### Single-flight y convergencia de la reparación
 
 Los tres workflows comparten el mismo grupo de concurrencia
 (`sirius-work-<numero-de-incidencia>`), así que nunca hay dos ejecuciones
 simultáneas sobre la misma incidencia — esto es lo que faltaba en el diseño
-anterior y causó el incidente de PRs duplicadas (#52/#53). El corrector
-cuenta los ciclos ya completados mediante los marcadores
-`<!-- sirius-repair-cycle:N -->` que deja `sirius_apply_verdict.sh`; al llegar
-al tercer intento se aplica `sirius:blocked-decision` sin siquiera invocar a
-Claude.
+anterior y causó el incidente de PRs duplicadas (#52/#53). La puerta del
+corrector ya no cuenta ciclos contra un tope fijo: consulta
+`scripts/automation/sirius_convergence.py` sobre los registros de ronda
+(`<!-- sirius-round:N -->` con su bloque `## RONDA_HALLAZGOS`) que deja
+`sirius_apply_verdict.sh`, y aplica `sirius:blocked-decision` —sin siquiera
+invocar a Claude— en cuanto el ciclo deja de converger (contrato §5.1). El
+marcador heredado `<!-- sirius-repair-cycle:N -->` se sigue emitiendo para
+trazabilidad histórica, pero ya no gobierna ninguna decisión.
 
 Después de configurar el secreto, el usuario no copia prompts ni interactúa
 con estas Routines directamente: crea la incidencia (a mano o pidiéndoselo a

@@ -309,7 +309,15 @@ case "$verdict" in
     round_json="$(cat "$round_record")"
     rm -f "$round_verdict" "$round_record"
 
-    marker="<!-- sirius-verdict:reviewer:changes:$(printf '%s' "$observations" | sha256sum | cut -c1-16) -->"
+    # El marcador incluye head Y run: NO puede depender solo del contenido. Si
+    # dos rondas distintas encontraran exactamente los mismos hallazgos —el caso
+    # de estancamiento que la política de convergencia existe para detectar—, un
+    # marcador por contenido se deduparía y la segunda ronda no publicaría su
+    # registro. El historial se congelaría en una sola ronda y `sin-progreso` y
+    # `head-sin-avance` no podrían dispararse nunca: justo el escenario que debe
+    # terminar sería el único que no termina. Con head + run, una reejecución del
+    # mismo run sigue siendo idempotente y una ronda nueva siempre se registra.
+    marker="<!-- sirius-verdict:reviewer:changes:${head_sha}:${SIRIUS_RUN_TAG} -->"
     body_file="$(mktemp)"
     {
       printf '%s\n\n%s\n' "$marker" "## CHANGES_REQUESTED"

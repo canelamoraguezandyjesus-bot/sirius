@@ -125,8 +125,28 @@ sirius_read_issue_comments() {
 # compacto por línea y python3 —requisito ya declarado de esta biblioteca—
 # invierte el orden y emite los cuerpos íntegros. Invertir líneas de texto
 # plano no serviría: los cuerpos son multilínea.
+# Filtro jq de autor de confianza. Los bloques estructurados que la
+# automatización vuelve a leer de la incidencia — `## OBSERVACIONES_ESTRUCTURADAS`
+# (dirige al corrector, que empuja commits con el PAT), `## RONDA_HALLAZGOS`
+# (gobierna la convergencia) y los marcadores `Head SHA:` (gobiernan la
+# verificación de head) — son instrucciones de facto para pasos con permisos de
+# escritura. Sin filtro, cualquiera con permiso de comentar podría sembrarlos:
+# el saneado en banda de sirius_apply_verdict.sh impide falsificarlos DENTRO de
+# un bloque legítimo, pero no publicar uno propio en un comentario aparte, que
+# además ganaría por ser el más reciente. Solo se aceptan comentarios del
+# propietario del repositorio (identidad del PAT de la automatización; misma
+# frontera de confianza que el `fusiona` del §8), de un miembro, o del bot de
+# Actions, cuyo login no es suplantable.
+SIRIUS_TRUSTED_AUTHOR_JQ='select(.author_association == "OWNER" or .author_association == "MEMBER" or (.user.login // "") == "github-actions[bot]")'
+# Mismo filtro para la vía de respaldo GraphQL, que nombra los campos de otra
+# forma (`authorAssociation`, `author.login`). El respaldo conserva así la
+# garantía en vez de degradarla: un error transitorio de REST no puede abrir la
+# puerta a un historial sembrado por un tercero.
+SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ='select(.authorAssociation == "OWNER" or .authorAssociation == "MEMBER" or ((.author.login // "") | ltrimstr("app/")) == "github-actions")'
+
 _sirius_comments_newest_first() {
-  gh api --paginate "repos/${1}/issues/${2}/comments?per_page=100" --jq '.[] | @json' \
+  gh api --paginate "repos/${1}/issues/${2}/comments?per_page=100" \
+    --jq "[.[] | ${SIRIUS_TRUSTED_AUTHOR_JQ}] | .[] | @json" \
     | python3 -c '
 import json, sys
 bodies = []
@@ -148,7 +168,7 @@ sirius_scan_text() {
   : >"$out"
   if comments="$(sirius_retry _sirius_comments_newest_first "$repo" "$num")"; then
     printf '%s\n' "$comments" >>"$out"
-  elif comments="$(sirius_retry gh issue view "$num" --repo "$repo" --json comments --jq '[.comments[].body] | reverse | .[]')"; then
+  elif comments="$(sirius_retry gh issue view "$num" --repo "$repo" --json comments --jq "[.comments[] | ${SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ}] | reverse | .[].body")"; then
     printf '%s\n' "$comments" >>"$out"
   fi
   if body="$(sirius_read_issue_body "$repo" "$num")"; then
@@ -166,7 +186,7 @@ sirius_extract_observations() {
   # ronda más reciente sea visible también en incidencias con muchos comentarios.
   local repo="$1" num="$2" comments=""
   comments="$(sirius_retry _sirius_comments_newest_first "$repo" "$num" 2>/dev/null)" \
-    || comments="$(sirius_retry gh issue view "$num" --repo "$repo" --json comments --jq '[.comments[].body] | reverse | .[]' 2>/dev/null)" \
+    || comments="$(sirius_retry gh issue view "$num" --repo "$repo" --json comments --jq "[.comments[] | ${SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ}] | reverse | .[].body" 2>/dev/null)" \
     || comments=""
   printf '%s' "$comments" | python3 -c '
 import re, sys
@@ -188,14 +208,15 @@ sirius_dump_comments() {
   # invertir nada ni depender de `--slurp`.
   local repo="$1" num="$2" out="$3" body=""
   : >"$out"
-  if body="$(sirius_retry gh api --paginate "repos/${repo}/issues/${num}/comments?per_page=100" --jq '.[].body')"; then
+  if body="$(sirius_retry gh api --paginate "repos/${repo}/issues/${num}/comments?per_page=100" --jq "[.[] | ${SIRIUS_TRUSTED_AUTHOR_JQ}] | .[].body")"; then
     printf '%s\n' "$body" >>"$out"
     return 0
   fi
-  if body="$(sirius_retry gh issue view "$num" --repo "$repo" --json comments --jq '.comments[].body')"; then
+  if body="$(sirius_retry gh issue view "$num" --repo "$repo" --json comments --jq "[.comments[] | ${SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ}] | .[].body")"; then
     printf '%s\n' "$body" >>"$out"
     return 0
   fi
+  echo "sirius_dump_comments: ninguna via pudo leer los comentarios de #${num}" >&2
   echo "sirius_dump_comments: no se pudieron leer los comentarios de #${num}" >&2
   return 1
 }
