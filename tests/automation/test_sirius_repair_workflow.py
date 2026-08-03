@@ -164,3 +164,11 @@ def test_the_corrector_prompt_states_the_rule_the_gate_implements() -> None:
     assert "menor gravedad agregada o la resolución de hallazgos concretos" not in prompt
     # Y el encabezado del workflow tampoco puede describir la regla antigua.
     assert "menor gravedad agregada o resolución de hallazgos concretos" not in _source()
+
+
+def test_the_gate_reports_the_ci_failure_streak() -> None:
+    # El bloqueo por fallos de Quality debe llegar a la incidencia con su motivo
+    # y su cuenta, no diluido en el genérico de convergencia.
+    run = _step(_load(), "Evaluar la convergencia")["run"]
+    assert 'ci_failures="$(jq -r' in run
+    assert "convergencia-${reason}" in run

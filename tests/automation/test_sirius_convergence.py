@@ -686,3 +686,81 @@ def test_sticky_severity_does_not_depend_on_the_order_within_a_round() -> None:
     assert primero_grave[0]["severity_total"] == primero_leve[0]["severity_total"]
     # Y el peso aplicado es el peor observado, no el medio ni el último.
     assert primero_grave[0]["severity_total"] == 8
+
+
+# --------------------------------------------------------------------------- #
+# El otro motor del ciclo: los fallos de Quality
+# --------------------------------------------------------------------------- #
+#
+# `advance-sirius-after-quality.yml` vuelve a aplicar `sirius:repair-requested`
+# cuando Quality falla, pero ese camino publica `## CI_FAILURE`, no un registro
+# de ronda. El historial de rondas no cambia, así que la medida de progreso no
+# puede verlo: sin una cota propia, `CONTINUE` se repetiría indefinidamente. El
+# tope fijo de dos ciclos que esta versión elimina acotaba los dos motores a la
+# vez; sustituirlo por una medida que solo mira las rondas dejaría este sin cota.
+
+
+def _ci(sha: str, result: str) -> str:
+    return f"<!-- sirius-quality:{sha}:{result} -->\n\n## CI_{result.upper()}\n"
+
+
+def test_repeated_quality_failures_block_even_without_round_records() -> None:
+    module = _module()
+    history = "\n".join(
+        [_ci("a" * 12, "failure"), _ci("b" * 12, "failure"), _ci("c" * 12, "failure")]
+    )
+    assert module.ci_failure_streak(history) == 3
+    result = module.decide(module.parse_round_records(history), ci_failures=3)
+    assert result["decision"] == "BLOCK"
+    assert result["reason"] == "ci-sin-arreglo"
+
+
+def test_a_green_quality_resets_the_failure_streak() -> None:
+    # Un verde significa que la construcción volvió a estar sana: el ciclo pasa
+    # a avanzar por el otro motor y la cuenta de intentos empieza de nuevo.
+    module = _module()
+    history = "\n".join(
+        [
+            _ci("a" * 12, "failure"),
+            _ci("b" * 12, "failure"),
+            _ci("c" * 12, "success"),
+            _ci("d" * 12, "failure"),
+        ]
+    )
+    assert module.ci_failure_streak(history) == 1
+    result = module.decide(module.parse_round_records(history), ci_failures=1)
+    assert result["decision"] == "CONTINUE"
+
+
+def test_a_timed_out_quality_counts_as_a_failure() -> None:
+    module = _module()
+    history = "\n".join(
+        [_ci("a" * 12, "failure"), _ci("b" * 12, "timed_out"), _ci("c" * 12, "failure")]
+    )
+    assert module.ci_failure_streak(history) == 3
+
+
+def test_ci_failures_do_not_contaminate_the_progress_measure() -> None:
+    # La cota de los fallos de CI es SEPARADA a propósito: un fallo de CI no
+    # tiene hallazgos ni gravedad que comparar, y contarlo como ronda falsearía
+    # la mejor marca histórica de las rondas de revisión.
+    module = _module()
+    history = "\n".join(
+        [
+            _round_comment(
+                1,
+                HEAD_A,
+                [_observation("CODEX-001"), _observation("CODEX-002", "src/y.py:1", "Otro")],
+            ),
+            _ci("f" * 12, "failure"),
+            _ci("g" * 12, "success"),
+            _round_comment(2, HEAD_B, [_observation("CODEX-001")]),
+        ]
+    )
+    records = module.parse_round_records(history)
+    assert [record["pending"] for record in records] == [2, 1], (
+        "los bloques de CI no pueden colarse como rondas"
+    )
+    result = module.decide(records, ci_failures=module.ci_failure_streak(history))
+    assert result["decision"] == "CONTINUE"
+    assert result["reason"] == "progreso"

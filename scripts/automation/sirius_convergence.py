@@ -85,6 +85,47 @@ DEFAULT_SEVERITY_WEIGHT = 2
 LOCATION_LINE_RE = re.compile(r":\d+(?:-\d+)?$")
 
 
+# Marcadores que `advance-sirius-after-quality.yml` publica según el resultado
+# de Quality sobre un head. Son la ÚNICA huella del otro motor del ciclo de
+# corrección, y por eso hacen falta aquí.
+#
+# El ciclo tiene dos motores, no uno. Uno son las rondas de revisión, que
+# publican `RONDA_HALLAZGOS` y que la política de progreso mide. El otro son los
+# fallos de Quality: cuando la corrección rompe la construcción, el avance
+# vuelve a aplicar `sirius:repair-requested` publicando `## CI_FAILURE`, que NO
+# es un registro de ronda. Para ese camino el historial de rondas no cambia, la
+# decisión de convergencia es siempre la misma y `CONTINUE` se repetiría sin fin.
+#
+# El tope fijo de dos ciclos que esta versión elimina acotaba los DOS motores a
+# la vez. Sustituirlo por una medida que solo mira las rondas de revisión dejaría
+# el segundo sin cota: un corrector incapaz de arreglar la construcción podría
+# reintentar indefinidamente. La cota de este motor es deliberadamente separada
+# —contar intentos, no medir progreso—, porque un fallo de CI no tiene
+# "hallazgos pendientes" ni "gravedad" que comparar, y mezclarlo con las rondas
+# de revisión falsearía la mejor marca histórica de estas.
+CI_FAILURE_MARKER_RE = re.compile(r"<!--\s*sirius-quality:[0-9a-fA-F]+:(?:failure|timed_out)\s*-->")
+CI_SUCCESS_MARKER_RE = re.compile(r"<!--\s*sirius-quality:[0-9a-fA-F]+:success\s*-->")
+
+# Intentos consecutivos de corrección motivados por un fallo de Quality, sin un
+# Quality en verde de por medio, antes de pasar a decisión humana. Tres da
+# margen a un arreglo de construcción real —el primero puede ser un diagnóstico
+# equivocado— sin permitir un bucle indefinido.
+MAX_CI_FAILURE_STREAK = 3
+
+
+def ci_failure_streak(text: str) -> int:
+    """Fallos de Quality consecutivos desde el último Quality en verde.
+
+    ``text`` es el historial de la incidencia en orden cronológico. Un Quality
+    en verde reinicia la cuenta: significa que la construcción volvió a estar
+    sana y que el ciclo avanza por el otro motor, el de las rondas de revisión.
+    """
+    last_success = -1
+    for match in CI_SUCCESS_MARKER_RE.finditer(text):
+        last_success = match.end()
+    return sum(1 for match in CI_FAILURE_MARKER_RE.finditer(text) if match.start() > last_success)
+
+
 def _normalize_text(value: object) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip().casefold()
 
@@ -290,8 +331,27 @@ def _has_progress(history: list[dict[str, Any]], current: dict[str, Any]) -> tup
     )
 
 
-def decide(records: list[dict[str, Any]]) -> dict[str, Any]:
-    """Decisión determinista sobre si la siguiente corrección puede continuar."""
+def decide(records: list[dict[str, Any]], ci_failures: int = 0) -> dict[str, Any]:
+    """Decisión determinista sobre si la siguiente corrección puede continuar.
+
+    ``ci_failures`` son los intentos consecutivos motivados por un fallo de
+    Quality desde el último Quality en verde. Se comprueban ANTES que nada: son
+    el otro motor del ciclo y el único que la medida de progreso no puede ver,
+    porque ese camino no publica registros de ronda.
+    """
+    if ci_failures >= MAX_CI_FAILURE_STREAK:
+        return {
+            "decision": "BLOCK",
+            "reason": "ci-sin-arreglo",
+            "detail": (
+                f"Quality ha fallado {ci_failures} veces seguidas sin un verde de por medio. "
+                "La corrección automática no está consiguiendo arreglar la construcción, y "
+                "seguir reintentando no es progreso: se requiere una decisión humana."
+            ),
+            "rounds": len(records),
+            "ci_failures": ci_failures,
+        }
+
     if not records:
         return {
             "decision": "CONTINUE",
@@ -445,7 +505,7 @@ def cmd_decide(args: argparse.Namespace) -> int:
             "rounds": 0,
         }
     else:
-        result = decide(parse_round_records(text))
+        result = decide(parse_round_records(text), ci_failures=ci_failure_streak(text))
     with open(args.output, "w", encoding="utf-8") as handle:
         json.dump(result, handle, ensure_ascii=False, indent=2)
         handle.write("\n")

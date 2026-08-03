@@ -273,6 +273,8 @@ El ciclo pasa a `sirius:blocked-decision`, con el motivo exacto registrado, úni
 - un hallazgo dado por resuelto reaparece en una ronda posterior;
 - el conjunto de hallazgos oscila entre estados anteriores;
 - el head no avanzó entre dos rondas (no hubo corrección efectiva que revisar);
+- Quality falla `MAX_CI_FAILURE_STREAK` veces seguidas (3) sin un verde de por
+  medio;
 - el historial de rondas no se puede leer, o se puede leer pero la ronda no se puede numerar (numerar a ciegas repetiría un número ya usado, colaría la ronda nueva al principio del historial ordenado y falsearía la medida);
 - o concurre cualquiera de las causas de parada del párrafo tercero de este apartado (producto, arquitectura, alcance, credenciales, permisos, costes, datos reales u operaciones irreversibles).
 

@@ -108,10 +108,17 @@ jobs:
           reason="$(jq -r '.reason // empty' "$decision_file" 2>/dev/null || true)"
           detail="$(jq -r '.detail // empty' "$decision_file" 2>/dev/null || true)"
           rounds="$(jq -r '.rounds // empty' "$decision_file" 2>/dev/null || true)"
+          # Intentos consecutivos motivados por un fallo de Quality. Es el otro
+          # motor del ciclo —`advance-sirius-after-quality.yml` reaplica
+          # `sirius:repair-requested` sin publicar registro de ronda—, así que
+          # su cuenta se registra aparte para que el bloqueo diga cuál de los
+          # dos se agotó.
+          ci_failures="$(jq -r '.ci_failures // empty' "$decision_file" 2>/dev/null || true)"
           decision="${decision:-BLOCK}"
           reason="${reason:-indeterminado}"
           detail="${detail:-No se pudo evaluar la convergencia; el analizador no entregó una decisión legible.}"
           rounds="${rounds:-0}"
+          ci_failures="${ci_failures:-0}"
           rm -f "$comments_file" "$decision_file"
 
           if [ -z "${next_cycle:-}" ]; then
@@ -138,7 +145,7 @@ jobs:
             printf '%s\n\n%s\n\n%s\n\n%s\n' \
               "$marker" \
               "🟡 **Necesito una decisión**" \
-              "El ciclo de revisión-corrección ha dejado de converger tras ${rounds} ronda(s) registrada(s), así que me detengo en vez de seguir corrigiendo." \
+              "El ciclo de revisión-corrección ha dejado de converger tras ${rounds} ronda(s) registrada(s) y ${ci_failures} fallo(s) de Quality consecutivo(s), así que me detengo en vez de seguir corrigiendo." \
               "Motivo (\`${reason}\`): ${detail}" >"$body_file"
             sirius_transition "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
               "sirius:blocked-decision" "D4C5F9" "Estado: requiere una decisión humana" \
