@@ -118,7 +118,7 @@ pytestmark = pytest.mark.skipif(
 def test_la_ficha_b_es_anterior_estricta_a_esta_ejecucion() -> None:
     """``TOL-210``: sin ficha previa, la ejecucion no es utilizable."""
     entrada = _git("log", "--format=%H", "--diff-filter=A", "--", FICHA)
-    assert entrada, "la ficha v5 de ADR002-B no esta confirmada en el repositorio"
+    assert entrada, "la ficha v6 de ADR002-B no esta confirmada en el repositorio"
     commit_de_entrada = entrada.splitlines()[-1]
     head = _git("rev-parse", "HEAD")
     assert commit_de_entrada != head, "la ficha debe entrar ANTES del commit que ejecuta"
@@ -132,16 +132,17 @@ def test_la_ficha_b_es_anterior_estricta_a_esta_ejecucion() -> None:
 
 
 def test_la_ejecucion_cita_la_version_y_la_huella_correctas() -> None:
-    """Una sola ficha CONGELADA de B —la v5— y v1..v4 conservadas."""
+    """Una sola ficha CONGELADA de B —la v6— y v1..v5 conservadas."""
     fichas_de_b = sorted((RAIZ / "artifacts/adr002_cards").glob("ficha_ADR002-B_*.json"))
     assert [ruta.name for ruta in fichas_de_b] == [
         "ficha_ADR002-B_v1.json",
         "ficha_ADR002-B_v2.json",
         "ficha_ADR002-B_v3.json",
         "ficha_ADR002-B_v4.json",
+        "ficha_ADR002-B_v5.json",
         "ficha_ADR002-B_v6.json",
     ]
-    for anterior in ("v1", "v2", "v3", "v4"):
+    for anterior in ("v1", "v2", "v3", "v4", "v5"):
         conservada = json.loads(
             (RAIZ / f"artifacts/adr002_cards/ficha_ADR002-B_{anterior}.json").read_text(
                 encoding="utf-8"
@@ -150,8 +151,8 @@ def test_la_ejecucion_cita_la_version_y_la_huella_correctas() -> None:
         assert conservada["estado"] == "SUSTITUIDA"
     ficha = json.loads((RAIZ / FICHA).read_text(encoding="utf-8"))
     assert ficha["identidad"]["candidato"] == "ADR002-B"
-    assert ficha["identidad"]["version"] == 5
-    assert ficha["identidad"]["sustituye_a"] == 4
+    assert ficha["identidad"]["version"] == 6
+    assert ficha["identidad"]["sustituye_a"] == 5
     assert ficha["estado"] == "CONGELADA"
     assert ficha["congelacion"]["huella"] == HUELLA_FICHA_B_V6
     assert ficha["senal_tardia"]["habilitada"] == "semantica_vectorial"
