@@ -30,9 +30,16 @@
     sesion del usuario de Windows, no en %LOCALAPPDATA%. Por eso, antes de los
     arranques, se comprueba la PRECONDICION de que la credencial de Sirius no
     existe en esta sesion. Si existe, la prueba de onboarding sin clave se
-    OMITE de forma explicita y no se declara superada. La comprobacion usa el
-    puerto de aplicacion y solo obtiene un booleano: nunca lee, imprime,
-    exporta, modifica ni borra el valor.
+    OMITE de forma explicita y no se declara superada.
+
+    Precision sobre esa comprobacion: SI consulta Credential Manager. Usa el
+    puerto de aplicacion, y ApiKeySettingsUseCase.has_key() obtiene por dentro
+    el valor a traves de SecretStore.get_secret() para reducirlo a un booleano,
+    de modo que el secreto si entra en memoria del proceso de la sonda. Lo que
+    se garantiza es mas concreto: la sonda solo devuelve PRESENT, ABSENT o
+    ERROR; el valor no se imprime, no se devuelve, no se registra en ningun
+    archivo, y la credencial no se modifica ni se elimina. Es exactamente el
+    mismo acceso que hace Sirius al arrancar, ni mas ni menos.
 
     Esta prueba termina el proceso a proposito. Es una comprobacion tecnica
     desechable y NO sustituye a la PA-019 manual.
@@ -177,10 +184,45 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $zipRoots = New-Object System.Collections.Generic.HashSet[string]
 $zipEntryCount = 0
 $archive = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
+$unsafeEntries = New-Object System.Collections.Generic.List[string]
+$extractRootFull = [System.IO.Path]::GetFullPath($ExtractRoot).TrimEnd("\") + "\"
 try {
     foreach ($entry in $archive.Entries) {
-        $segments = $entry.FullName -split "/"
+        # El separador del ZIP no se puede dar por supuesto. La especificacion
+        # pide "/", pero System.IO.Compression.ZipFile.CreateFromDirectory de
+        # .NET Framework —el que corre bajo Windows PowerShell 5.1, que es con
+        # el que se construye— escribe los nombres con "\". Partiendo solo por
+        # "/", cada ruta completa quedaba como un unico segmento y por tanto
+        # como una raiz distinta, de modo que un ZIP perfectamente correcto
+        # daba 109 raices en vez de una. Se normaliza antes de analizar.
+        $normalized = $entry.FullName.Replace("\", "/")
+
+        # Endurecimiento frente a zip-slip. Nada de esto puede salir de un ZIP
+        # que produzca build_windows.ps1; si aparece, el ZIP no es el nuestro.
+        if ($normalized.StartsWith("/") -or [System.IO.Path]::IsPathRooted($entry.FullName) -or
+            $normalized -match "^[A-Za-z]:") {
+            $unsafeEntries.Add("ruta absoluta o con unidad: " + $entry.FullName)
+            continue
+        }
+
+        $segments = @($normalized -split "/" | Where-Object { $_ -ne "" })
+        if ($segments.Count -eq 0) { continue }
+        if ($segments -contains "..") {
+            $unsafeEntries.Add("segmento '..': " + $entry.FullName)
+            continue
+        }
+
+        # Y, por encima de las reglas anteriores, la comprobacion que de verdad
+        # importa: el destino resuelto tiene que quedar dentro de ExtractRoot.
+        $destination = [System.IO.Path]::GetFullPath((Join-Path $ExtractRoot ($segments -join "\")))
+        if (-not $destination.StartsWith($extractRootFull, [StringComparison]::OrdinalIgnoreCase)) {
+            $unsafeEntries.Add("escaparia de la carpeta de extraccion: " + $entry.FullName)
+            continue
+        }
+
         [void]$zipRoots.Add($segments[0])
+        # Las entradas de directorio terminan en separador y tienen Name vacio;
+        # solo cuentan los archivos.
         if (-not [string]::IsNullOrEmpty($entry.Name)) { $zipEntryCount++ }
     }
 }
@@ -188,6 +230,7 @@ finally {
     $archive.Dispose()
 }
 
+Test-Check "Ninguna entrada del ZIP es insegura" ($unsafeEntries.Count -eq 0) ($unsafeEntries -join "; ")
 $rootList = @($zipRoots)
 Test-Check "El ZIP tiene exactamente una raiz" ($rootList.Count -eq 1) ("raices: " + ($rootList -join ", "))
 Test-Check "La raiz del ZIP es '$ArtifactName'" ($rootList.Count -eq 1 -and $rootList[0] -eq $ArtifactName) ("encontrado: " + ($rootList -join ", "))
@@ -388,15 +431,22 @@ Write-Step "D. Precondicion: Windows Credential Manager"
 # verificacion no puede afirmar que probo el onboarding sin clave.
 #
 # La consulta usa el puerto de aplicacion (ApiKeySettingsUseCase.has_key), que
-# por contrato devuelve un booleano y nunca el valor. No se lee, imprime,
-# exporta, modifica ni borra nada. No se usa cmdkey.
+# DEVUELVE un booleano; por dentro, SecretStore.get_secret() si obtiene el
+# valor para reducirlo a ese booleano, asi que Credential Manager se consulta
+# de verdad y el secreto entra en memoria del proceso de la sonda. Lo que se
+# garantiza: la sonda solo emite PRESENT, ABSENT o ERROR; el valor no se
+# imprime, no se devuelve, no se registra, y la credencial no se modifica ni
+# se elimina. No se usa cmdkey.
 $CredentialProbe = Join-Path $SmokeRoot "probe_credential_presence.py"
 $credentialProbeSource = @'
-"""Precondicion de B13: SOLO existencia de la credencial de Sirius.
+"""Precondicion de B13: existencia de la credencial de Sirius.
 
-Usa el puerto de aplicacion, que por contrato nunca devuelve el valor de la
-clave. Imprime unicamente PRESENT, ABSENT o ERROR <TipoDeExcepcion>. Este
-script no escribe, no borra y no muestra ningun secreto.
+Consulta Credential Manager a traves del puerto de aplicacion. has_key()
+devuelve un booleano, pero por dentro obtiene el valor para calcularlo, asi
+que el secreto si entra en memoria de ESTE proceso; es el mismo acceso que
+hace Sirius al arrancar. Lo que este script garantiza es la salida: imprime
+unicamente PRESENT, ABSENT o ERROR <TipoDeExcepcion>. No devuelve el valor,
+no lo imprime, no lo registra, no escribe y no borra la credencial.
 """
 
 import sys

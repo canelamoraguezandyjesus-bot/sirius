@@ -283,12 +283,24 @@ pasaría igualmente sin haber probado el onboarding.
 
 Por eso la verificación evalúa antes una **precondición**:
 
-- consulta solo la **existencia** mediante el puerto de aplicación
-  (`ApiKeySettingsUseCase.has_key()`), que por contrato devuelve un booleano y
-  nunca el valor;
-- no lee, imprime, exporta, modifica ni borra la credencial, y no usa `cmdkey`;
+- consulta la **existencia** mediante el puerto de aplicación
+  (`ApiKeySettingsUseCase.has_key()`), que **devuelve** un booleano;
 - identificador consultado: servicio `Sirius`, clave `openai_api_key`
   (`src/sirius/config/secrets_config.py`).
+
+Conviene ser exacto sobre lo que esto hace y lo que no. **Credential Manager sí
+se consulta**, y `has_key()` obtiene por dentro el valor mediante
+`SecretStore.get_secret()` para reducirlo a un booleano, de modo que el secreto
+**sí entra en memoria** del proceso de la sonda. Es el mismo acceso que hace
+Sirius en cada arranque, ni más ni menos. Sería falso afirmar que la credencial
+«nunca se lee» o que el almacén no se consulta.
+
+Lo que sí se garantiza, y es comprobable leyendo la sonda:
+
+- solo emite `PRESENT`, `ABSENT` o `ERROR <TipoDeExcepción>`;
+- el valor no se imprime, no se devuelve y no se registra en ningún archivo;
+- la credencial no se modifica ni se elimina;
+- no se usa `cmdkey` ni ninguna manipulación directa de la bóveda.
 
 Si la credencial **existe**, la comprobación de que la ventana corresponde al
 flujo sin clave se marca `[OMITIDA]`, el resto de la verificación continúa y el

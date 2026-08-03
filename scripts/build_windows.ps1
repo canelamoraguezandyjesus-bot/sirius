@@ -151,11 +151,28 @@ else {
     Write-Warn2 "El commit de origen NO desciende de origin/main. Queda registrado en el manifiesto."
 }
 if ($SourceDirty) {
-    Write-Warn2 "El arbol de trabajo tiene cambios sin confirmar. Queda registrado como source_dirty=true."
+    # Se aborta, no se avisa. El artefacto se nombra con el sha corto de HEAD y
+    # el manifiesto declara source_commit = HEAD, pero lo que Nuitka compila es
+    # el arbol de trabajo. Con cambios sin confirmar esas dos cosas dejan de ser
+    # la misma: dos ejecutables materialmente distintos podrian repartirse con
+    # la misma procedencia, y una edicion local sin revisar viajaria bajo un SHA
+    # revisado. Un paquete no puede atribuirse a HEAD si su contenido real no es
+    # el de HEAD, asi que aqui no hay nada que registrar: hay que parar.
+    #
+    # Antes de MSVC, de uv y de compilar, para no dejar a medias un entorno ni
+    # gastar varios minutos en un artefacto que no seria atribuible.
+    Write-Host ""
+    Write-Host "  El arbol de trabajo tiene cambios sin confirmar:" -ForegroundColor Red
+    foreach ($line in ($status -split "`n")) {
+        if (-not [string]::IsNullOrWhiteSpace($line)) { Write-Host "    $($line.TrimEnd())" -ForegroundColor Red }
+    }
+    Write-Host ""
+    throw ("El empaquetado exige un arbol limpio. El artefacto se nombraria con $SourceCommitShort y " +
+        "el manifiesto declararia source_commit=$SourceCommit, pero se compilaria el arbol de trabajo, " +
+        "que no coincide con ese commit. Confirma o descarta los cambios y vuelve a construir. " +
+        "Todo artefacto valido de B13 lleva source_dirty=false.")
 }
-else {
-    Write-Ok "Arbol de trabajo limpio."
-}
+Write-Ok "Arbol de trabajo limpio."
 
 # --------------------------------------------------------------------------
 Write-Step "3/13 Entorno de compilacion MSVC x64"
@@ -240,8 +257,15 @@ Push-Location $RepoRoot
 try {
     Invoke-Native "uv" @("lock", "--check") "uv lock --check" | Out-Null
     Write-Ok "uv.lock coherente con pyproject.toml."
-    Invoke-Native "uv" @("sync", "--frozen", "--group", "packaging") "uv sync --frozen --group packaging" | Out-Null
-    Write-Ok "Entorno sincronizado desde uv.lock con el grupo 'packaging'."
+    # --no-default-groups es imprescindible: pyproject.toml declara
+    # default-groups = ["dev"], asi que "uv sync --frozen --group packaging"
+    # instalaba dev ADEMAS de packaging, justo lo contrario del entorno aislado
+    # que documenta B13. No es teorico: en la construccion registrada Nuitka
+    # llego a arrastrar mypy por importacion estatica. El aislamiento se
+    # consigue no instalando el grupo, no tapandolo con exclusiones de Nuitka.
+    Invoke-Native "uv" @("sync", "--frozen", "--no-default-groups", "--group", "packaging") `
+        "uv sync --frozen --no-default-groups --group packaging" | Out-Null
+    Write-Ok "Entorno sincronizado desde uv.lock: grupo 'packaging', sin los grupos por omision."
 }
 finally {
     Pop-Location
@@ -249,6 +273,48 @@ finally {
 
 if (-not (Test-Path -LiteralPath $VenvPython)) { throw "No existe el interprete del entorno: $VenvPython" }
 if (-not (Test-Path -LiteralPath $VenvDeploy)) { throw "No existe pyside6-deploy en el entorno: $VenvDeploy" }
+
+# El aislamiento se comprueba, no se supone: el entorno debe traer lo normal del
+# proyecto y lo de packaging, y NO las herramientas exclusivas de desarrollo.
+$RequiredDistributions = @("PySide6", "nuitka", "alembic", "SQLAlchemy", "keyring")
+$ForbiddenDistributions = @("mypy", "pytest", "ruff", "pytest-qt", "pytest-cov")
+$probeSource = @'
+"""Inventario del entorno de empaquetado. No instala ni modifica nada."""
+
+import importlib.metadata as metadata
+import sys
+
+required = [name for name in sys.argv[1].split(",") if name]
+forbidden = [name for name in sys.argv[2].split(",") if name]
+absent, present = [], []
+for name in required:
+    try:
+        metadata.version(name)
+    except metadata.PackageNotFoundError:
+        absent.append(name)
+for name in forbidden:
+    try:
+        metadata.version(name)
+        present.append(name)
+    except metadata.PackageNotFoundError:
+        pass
+print("FALTAN=" + ",".join(absent))
+print("SOBRAN=" + ",".join(present))
+'@
+$probePath = Join-Path $PackagingDir "probe-environment.py"
+Write-Utf8NoBom -Path $probePath -Content $probeSource
+$probeOutput = (Invoke-Native $VenvPython @($probePath, ($RequiredDistributions -join ","), ($ForbiddenDistributions -join ",")) "inventario del entorno" | Out-String)
+$absentRequired = (($probeOutput -split "`n" | Where-Object { $_ -like "FALTAN=*" }) -join "").Replace("FALTAN=", "").Trim()
+$presentForbidden = (($probeOutput -split "`n" | Where-Object { $_ -like "SOBRAN=*" }) -join "").Replace("SOBRAN=", "").Trim()
+
+if (-not [string]::IsNullOrWhiteSpace($absentRequired)) {
+    throw "El entorno de empaquetado no tiene dependencias necesarias: $absentRequired"
+}
+if (-not [string]::IsNullOrWhiteSpace($presentForbidden)) {
+    throw ("El entorno de empaquetado contiene herramientas exclusivas de desarrollo: $presentForbidden. " +
+        "Debe sincronizarse con --no-default-groups para que el grupo 'dev' no entre.")
+}
+Write-Ok "Entorno aislado: estan $($RequiredDistributions -join ', '); no esta ninguna de $($ForbiddenDistributions -join ', ')."
 
 $PythonVersion = (Invoke-Native $VenvPython @("-c", "import platform; print(platform.python_version())") "python --version").Trim()
 if ($PythonVersion -notmatch "^3\.14\.") {
