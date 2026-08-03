@@ -221,7 +221,9 @@ def test_una_clave_vacia_no_pierde_la_coincidencia(base: fixtures_b.FixtureB) ->
     por_id = {r.item.id: r for r in recuperacion.resultados}
     assert identidad in por_id, "la clave vacia volvio a perder la coincidencia"
     resultado = por_id[identidad]
-    assert resultado.item.subject_key == ""
+    # La ausencia de clave se conserva como ausencia: ``None``, no cadena
+    # vacia. Colapsarlas hacia que dos ausencias distintas se agrupasen.
+    assert resultado.item.subject_key is None
     assert resultado.etapa_de_origen is Etapa.E3
     assert "semantica_vectorial" in resultado.explicacion.coincidencia
     assert resultado.lectura.sujeto == "baliza"
@@ -262,7 +264,7 @@ def test_una_clave_duplicada_no_cambia_la_identidad(base: fixtures_b.FixtureB) -
     assert str(gemela) not in pedidos_por_identidad
     resultado = next(r for r in recuperacion.resultados if r.item.id == f"MEMORIA:{objetivo}")
     assert resultado.item.subject_key == "puesto-gemelo"
-    assert "MEMORIA del canon" in resultado.explicacion.procedencia
+    assert any("MEMORIA del canon" in p for p in resultado.explicacion.procedencias)
 
 
 # --------------------------------------------------------------------------

@@ -57,41 +57,49 @@ def test_la_base_de_a_no_cambio_ni_un_byte() -> None:
     base en silencio, este control lo denunciaria. El paquete de correccion
     02 SI toco ``contracts.py`` y ``port.py`` —por eso existen las fichas
     sucesoras A v3 y B v2—, y sus blobs quedan fijados aqui de nuevo: el
-    proximo cambio silencioso volvera a fallar. El codigo propio de
-    ``adr002_a`` sigue intacto desde el acta de preparacion.
+    proximo cambio silencioso volvera a fallar.
+
+    El **paso 5 del plan aprobado** —«corregir `common` una sola vez»— toco
+    los siete modulos comunes, anadio ``grouping.py`` y alcanzo a ``adr002_a``
+    en los dos puntos donde leia la clave de sujeto como cadena. Los blobs se
+    vuelven a fijar aqui: la regla no se levanta, se reancla, y el proximo
+    cambio no autorizado seguira fallando.
     """
     import subprocess
 
     fijados = {
         "experiments/adr002/candidates/common/contracts.py": (
-            "a13946b923b1ee6adf77ab46ed2fda4fb89ef64f"
+            "3cfa7bc75268e68a3e368c93625bf7d71d3e51d0"
         ),
         "experiments/adr002/candidates/common/engine.py": (
-            "95cb4a4f62bbbd55f2c417a0a9b94ba21c111038"
+            "991c68d5f04b48521e2d1450ff071aa7497f3744"
         ),
         "experiments/adr002/candidates/common/gates.py": (
-            "b4361fc87f6a08a65700fe4495a692ef64e4bd48"
+            "8e6f0e57850658f763d10277dc0574bd6c78fcbb"
         ),
         "experiments/adr002/candidates/common/stops.py": (
-            "f63712159626bb0249d727ba9f6519e074179f5f"
+            "b1f737efd91e140c9af691c6a7e2323c84d54c4c"
         ),
         "experiments/adr002/candidates/common/port.py": (
-            "72041ab76d28de53d161e98172ea20c0ef1a0e2a"
+            "90d5d043ef128cb795f6613953ee0fea6acfb825"
         ),
         "experiments/adr002/candidates/common/trace.py": (
-            "6e0a0822ad3536b06fdc8735c7def3a34ee934d6"
+            "01d97bbc5244774caf6bce687d17c4b4e620d4aa"
         ),
         "experiments/adr002/candidates/common/derived.py": (
             "996e353b44fe16af035689912a6a69520ee8097e"
         ),
+        "experiments/adr002/candidates/common/grouping.py": (
+            "12ec4f89273b75dae5ede4d686b8e0d2c16f483b"
+        ),
         "experiments/adr002/candidates/common/neutrality.py": (
-            "d549444f424be8c697cacd2e34fc7dc44d742830"
+            "a7828c5d17902a8abc7ec90407607fcc29da75cf"
         ),
         "experiments/adr002/candidates/adr002_a/candidate.py": (
-            "9e8205b817ef23a03338e295d2f4b71fe4a307d4"
+            "d057c12a9be4df15b2d3bfe50b986cbc57403273"
         ),
         "experiments/adr002/candidates/adr002_a/lexical.py": (
-            "549922cb61c4c8c9a067ca6bae2b6f485c107eb3"
+            "7e88de4cfb07384bc99034e10aab44c801dd4796"
         ),
     }
     for ruta, blob in fijados.items():

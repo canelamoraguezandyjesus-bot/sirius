@@ -14,11 +14,12 @@ mediria quien esquiva mejor el contrato, no quien recupera mejor.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Final
 
 from experiments.adr002.candidates.common.contracts import (
+    ORDEN_DE_CRITICIDAD,
     Candidata,
     Criticidad,
     Modo,
@@ -199,28 +200,60 @@ def conflictos_de_polaridad(candidatas: Sequence[Candidata]) -> tuple[str, ...]:
 
 @dataclass(frozen=True, slots=True)
 class ResultadoG12:
-    """Lo que ``G12`` deja pasar y lo que obliga a declarar."""
+    """Lo que ``G12`` deja pasar y lo que obliga a declarar.
+
+    Dos desbordamientos, no uno. Recortar elementos ordinarios **es**
+    desbordamiento y hay que decirlo; recortar criticos es ademas lo que
+    ``RF-24`` prohibe ocultar. Un solo indicador confundia «se entrego menos de
+    lo elegible» con «cayo un critico», y el segundo es materialmente distinto.
+    """
 
     dentro_del_limite: tuple[Candidata, ...]
     desbordamiento_declarado: bool
+    desbordamiento_critico: bool
     criticos_omitidos: tuple[str, ...]
+    #: Miembros de grupo que el limite dejo fuera. **Se cuentan y se declaran**;
+    #: el grupo no es atomico frente al limite, pero omitir en silencio si esta
+    #: prohibido.
+    miembros_omitidos: tuple[str, ...]
 
 
-def aplicar_g12(candidatas: Sequence[Candidata], peticion: Peticion) -> ResultadoG12:
-    """Criticidad y limite, **antes** del handoff.
+def aplicar_g12(
+    candidatas: Sequence[Candidata],
+    peticion: Peticion,
+    criticidad_de: Callable[[str], Criticidad] | None = None,
+    pertenece_a_grupo: Callable[[str], bool] | None = None,
+) -> ResultadoG12:
+    """Criticidad y limite, **antes** del handoff, sobre **todos** los miembros.
 
-    Los criticos elegibles se preservan; si el limite duro obliga a recortar,
-    el desbordamiento **se declara** y los criticos omitidos se nombran. Nunca
-    se ocultan: ocultarlos es el fallo que ``B04-RF-24`` persigue.
+    Recibe la lista completa —representantes y miembros por igual—, de modo que
+    un critico no queda oculto por pertenecer a un grupo. Que antes se aplicase
+    despues de agrupar y solo viese representantes hacia inalcanzable la regla
+    3 de ``§7.7``.
+
+    ``criticidad_de`` viene del plano comun. Sin el, nada es critico: ninguna
+    etapa puede crear un nivel, y la ausencia de canal lateral no es permiso
+    para inventarlo.
     """
-    criticas = [c for c in candidatas if c.item.criticidad is Criticidad.CRITICA]
-    ordinarias = [c for c in candidatas if c.item.criticidad is not Criticidad.CRITICA]
-    # Los criticos van primero: el limite recorta ordinarias antes que criticos.
-    priorizadas = [*criticas, *ordinarias]
+    nivel = criticidad_de if criticidad_de is not None else (lambda _id: Criticidad.ORDINARIA)
+    # Mayor criticidad primero; el limite recorta por abajo. El orden dentro de
+    # cada nivel es el que trae la lista, que el motor ya dejo ordenado.
+    por_nivel = sorted(
+        range(len(candidatas)),
+        key=lambda i: (-ORDEN_DE_CRITICIDAD.index(nivel(candidatas[i].item.id)), i),
+    )
+    priorizadas = [candidatas[i] for i in por_nivel]
     dentro = priorizadas[: peticion.limite_duro]
     fuera = priorizadas[peticion.limite_duro :]
-    omitidos = tuple(c.item.id for c in fuera if c.item.criticidad is Criticidad.CRITICA)
-    return ResultadoG12(tuple(dentro), bool(fuera), omitidos)
+    omitidos = tuple(c.item.id for c in fuera if nivel(c.item.id) is Criticidad.CRITICA)
+    en_grupo = pertenece_a_grupo if pertenece_a_grupo is not None else (lambda _id: False)
+    return ResultadoG12(
+        dentro_del_limite=tuple(dentro),
+        desbordamiento_declarado=bool(fuera),
+        desbordamiento_critico=bool(omitidos),
+        criticos_omitidos=omitidos,
+        miembros_omitidos=tuple(c.item.id for c in fuera if en_grupo(c.item.id)),
+    )
 
 
 __all__ = [

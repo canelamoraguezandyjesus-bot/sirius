@@ -52,7 +52,6 @@ from experiments.adr002.candidates.common.contracts import (
     Cardinalidad,
     Clase,
     ClaseDeEvidencia,
-    Criticidad,
     Etapa,
     ItemCanonico,
     Modo,
@@ -379,7 +378,6 @@ def test_la_lectura_semantica_de_b_es_la_de_a() -> None:
         disponible=True,
         created_at="2026-06-01T00:00:00",
         clase_de_evidencia=ClaseDeEvidencia.CANONICA,
-        criticidad=Criticidad.ORDINARIA,
     )
     b = candidato(Path("no-importa.db"), Path("no-importa.vectores.db"))
     assert b.leer(item, CONSULTA) == candidato_a().leer(item, CONSULTA)
@@ -628,10 +626,13 @@ def test_la_similitud_se_publica_en_bandas_y_no_como_verdad(
     for resultado in vectoriales:
         assert "banda" in resultado.explicacion.coincidencia
         assert "similitud distribucional" in resultado.explicacion.razon_de_orden
-        for campo in ("coincidencia", "razon_de_orden", "procedencia"):
-            texto = str(getattr(resultado.explicacion, campo))
+        campos = [
+            str(getattr(resultado.explicacion, campo))
+            for campo in ("coincidencia", "razon_de_orden")
+        ] + list(resultado.explicacion.procedencias)
+        for texto in campos:
             assert re.search(r"0[.,]\d+", texto) is None, "puntuacion cruda en la explicacion"
-        assert "del canon" in resultado.explicacion.procedencia
+        assert any("del canon" in p for p in resultado.explicacion.procedencias)
     serializada = repr(recuperacion.traza.como_dict())
     assert re.search(r"0[.,]\d{3,}", serializada) is None, "puntuacion cruda en la traza"
 

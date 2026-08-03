@@ -276,4 +276,6 @@ def test_el_motor_expone_una_sola_entrada() -> None:
     publicas = [n for n in engine.__all__ if not n.startswith("_")]
     assert "recuperar" in publicas
     firma = inspect.signature(engine.recuperar)
-    assert list(firma.parameters) == ["peticion", "puerto", "candidato"]
+    # ``plano`` es el canal lateral de la capa comun. Entra por la firma del
+    # motor y **no** por el contexto de etapa: asi ningun candidato lo alcanza.
+    assert list(firma.parameters) == ["peticion", "puerto", "candidato", "plano"]

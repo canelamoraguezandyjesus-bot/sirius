@@ -291,7 +291,11 @@ def test_el_puerto_no_ofrece_ninguna_ruta_de_barrido(base: fixtures.Fixture) -> 
         assert puerto.por_termino_lexico([]) == ()
         assert puerto.por_clave_exacta([]) == ()
         assert puerto.por_prefijo_de_sujeto([]) == ()
-        assert puerto.registro.consultas == []
+        # Ninguna toco SQLite; las tres dejan constancia de que NO se pregunto,
+        # que es distinto de preguntar y no encontrar nada.
+        assert [c for c in puerto.registro.consultas if c.ejecutada] == []
+        assert len(puerto.registro.consultas) == 3
+        assert all(c.filas == 0 for c in puerto.registro.consultas)
 
 
 def test_toda_sentencia_ejecutada_es_dirigida_y_respeta_su_cota(

@@ -36,6 +36,7 @@ MODULOS_COMUNES: Final[tuple[str, ...]] = (
     "derived.py",
     "engine.py",
     "gates.py",
+    "grouping.py",
     "port.py",
     "stops.py",
     "trace.py",

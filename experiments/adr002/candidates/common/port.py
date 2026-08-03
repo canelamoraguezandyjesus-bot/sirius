@@ -32,7 +32,6 @@ from typing import Final
 from experiments.adr002.candidates.common.contracts import (
     Clase,
     ClaseDeEvidencia,
-    Criticidad,
     ItemCanonico,
     MaterializacionPorIdentidad,
 )
@@ -68,6 +67,10 @@ LIMITE_POR_PREFIJO: Final = 64
 #: de otra forma.
 ARGUMENTOS_MAXIMOS: Final = 16
 
+#: Marca de las anotaciones que registran que **no se pregunto**. Llevan sufijo
+#: propio para que ninguna auditoria de barrido las confunda con una consulta.
+_SUFIJO_SIN_CONSULTA: Final = ":sin_consulta"
+
 #: Formato cerrado de la identidad canonica: una clase REAL de ``Clase`` y un
 #: entero positivo sin ceros a la izquierda. Nada mas: los ceros iniciales
 #: serian codificaciones duplicadas de la misma identidad, y una cadena
@@ -88,8 +91,15 @@ class ConsultaRegistrada:
     filas: int
 
     @property
+    def ejecutada(self) -> bool:
+        """Si llego a tocar SQLite. Lo que no se ejecuto no puede ser barrido."""
+        return not self.operacion.endswith(_SUFIJO_SIN_CONSULTA)
+
+    @property
     def dirigida(self) -> bool:
         """Una consulta sin predicado no esta dirigida: es un barrido."""
+        if not self.ejecutada:
+            return True
         sql = " ".join(self.sql.split()).upper()
         return " WHERE " in sql or " MATCH " in sql
 
@@ -176,6 +186,23 @@ class PuertoSqlite:
         )
         return filas
 
+    def _anotar_sin_consulta(self, operacion: str, motivo: str) -> None:
+        """Registra que **no se pregunto**, y por que.
+
+        «No pregunte» y «pregunte y no hay» daban los dos una tupla vacia y
+        ninguna huella en el registro, de modo que una ruta que descartase
+        todos sus argumentos era indistinguible de una consulta sin resultados.
+        """
+        self.registro.anotar(
+            ConsultaRegistrada(
+                operacion=f"{operacion}{_SUFIJO_SIN_CONSULTA}",
+                sql=f"-- {motivo}",
+                parametros=(),
+                cota=0,
+                filas=0,
+            )
+        )
+
     @staticmethod
     def _acotar(valores: Sequence[str], limite: int = ARGUMENTOS_MAXIMOS) -> list[str]:
         """Argumentos ordenados y acotados: pedir "todo" no es una consulta."""
@@ -185,19 +212,23 @@ class PuertoSqlite:
 
     @staticmethod
     def _item_de_fila(clase: Clase, fila: sqlite3.Row) -> ItemCanonico:
+        # Ausencia y cadena vacia dejan de colapsar: el canon admite sujeto
+        # nulo, y confundirlo con un sujeto en blanco hacia que dos ausencias
+        # distintas se agrupasen entre si.
+        bruto = fila[1]
+        sujeto = None if bruto is None or not str(bruto).strip() else str(bruto)
         return ItemCanonico(
             id=f"{clase.value}:{fila[0]}",
             clase=clase,
             project_id=(None if fila["project_id"] is None else str(fila["project_id"])),
             texto=str(fila["content"] or ""),
-            subject_key=str(fila[1] or ""),
+            subject_key=sujeto,
             vigente=(str(fila["status"]) == _ESTADO_VIGENTE)
             if clase is Clase.MEMORIA
             else (str(fila["status"]) == "approved"),
             disponible=str(fila["status"]) not in ("deleted", "purged"),
             created_at=str(fila["created_at"]),
             clase_de_evidencia=ClaseDeEvidencia.CANONICA,
-            criticidad=Criticidad.ORDINARIA,
         )
 
     def _items(self, clase: Clase, ids: Sequence[int]) -> list[ItemCanonico]:
@@ -223,7 +254,11 @@ class PuertoSqlite:
     def por_clave_exacta(self, claves: Sequence[str]) -> tuple[ItemCanonico, ...]:
         """``E1``: coincidencia literal sobre claves normalizadas."""
         encontrados: list[tuple[str, int]] = []
-        for clave in self._acotar(claves):
+        utiles = self._acotar(claves)
+        if not utiles:
+            self._anotar_sin_consulta("clave_exacta", "ninguna clave util: todas vacias")
+            return ()
+        for clave in utiles:
             for fila in self._ejecutar(
                 "clave_exacta:memoria",
                 "SELECT id FROM memories WHERE subject_key = ? ORDER BY id LIMIT ?",
@@ -249,6 +284,7 @@ class PuertoSqlite:
         """
         limpios = self._acotar([self._sanear(t) for t in terminos])
         if not limpios:
+            self._anotar_sin_consulta("termino_lexico", "ningun termino util tras sanear")
             return ()
         consulta = " OR ".join(f'"{t}"' for t in limpios)
         pares = [
@@ -331,8 +367,15 @@ class PuertoSqlite:
         aqui.
         """
         encontrados: list[tuple[str, int]] = []
-        for prefijo in self._acotar(prefijos):
+        utiles = self._acotar(prefijos)
+        if not utiles:
+            self._anotar_sin_consulta("prefijo_de_sujeto", "ningun prefijo util: todos vacios")
+            return ()
+        for prefijo in utiles:
             if len(prefijo) < 3:
+                self._anotar_sin_consulta(
+                    "prefijo_de_sujeto", f"prefijo de {len(prefijo)} caracteres: seria un barrido"
+                )
                 # Un prefijo de una o dos letras seleccionaria media base: no
                 # es una relacion, es un barrido con otro nombre.
                 continue
@@ -362,6 +405,7 @@ class PuertoSqlite:
         """
         limpios = self._acotar([self._sanear(t) for t in terminos])
         if not limpios:
+            self._anotar_sin_consulta("historial", "ningun termino util tras sanear")
             return ()
         consulta = " OR ".join(f'"{t}"' for t in limpios)
         filas = self._ejecutar(
@@ -378,12 +422,16 @@ class PuertoSqlite:
                 clase=Clase.MEMORIA,
                 project_id=None,
                 texto=str(fila[1] or ""),
-                subject_key=f"mensaje-{fila[0]}",
+                # **Sin sujeto fabricado.** Un mensaje no tiene clave de sujeto
+                # en el canon; inventarle una —``mensaje-<n>``— creaba un sujeto
+                # sintetico unico por mensaje que ninguna consulta por clave ni
+                # por prefijo podia alcanzar y que ademas mentia al decir que el
+                # canon lo declaraba.
+                subject_key=None,
                 vigente=False,
                 disponible=True,
                 created_at=str(fila[2]),
                 clase_de_evidencia=ClaseDeEvidencia.ATRIBUIDA,
-                criticidad=Criticidad.ORDINARIA,
             )
             for fila in filas
         )
@@ -403,6 +451,8 @@ def fallos_de_barrido(registro: RegistroDeConsultas, *, universo: int) -> list[s
     """
     fallos: list[str] = []
     for consulta in registro.consultas:
+        if not consulta.ejecutada:
+            continue
         if not consulta.dirigida:
             fallos.append(f"{consulta.operacion}: consulta sin predicado")
         if consulta.filas > consulta.cota:

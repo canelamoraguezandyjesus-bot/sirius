@@ -266,7 +266,7 @@ class CandidatoA:
         """
         familias: list[str] = []
         for semilla in contexto.semillas:
-            prefijo = lexical.plegar(semilla.item.subject_key).split("-")[0]
+            prefijo = lexical.plegar(semilla.item.subject_key or "").split("-")[0]
             if len(prefijo) >= PREFIJO_MINIMO and prefijo not in familias:
                 familias.append(prefijo)
         return sorted(familias)[:FAMILIAS_MAXIMAS]

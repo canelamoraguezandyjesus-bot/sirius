@@ -98,10 +98,27 @@ class ClaseDeEvidencia(StrEnum):
 
 
 class Criticidad(StrEnum):
-    """``B04-RF-23``: se propaga con su razon; nunca se auto-marca libremente."""
+    """``B04-RF-23``: se propaga con su razon; nunca se auto-marca libremente.
+
+    **Tres niveles, no dos.** Con dos, ``IMPORTANTE`` era indistinguible de
+    ``ORDINARIA`` y los 19 items del corpus que declaran nivel se aplastaban en
+    dos clases: el nivel llegaba a ``B05`` reinterpretado, que es exactamente lo
+    que el traspaso integro prohibe.
+    """
 
     ORDINARIA = "ORDINARIA"
+    IMPORTANTE = "IMPORTANTE"
     CRITICA = "CRITICA"
+
+
+#: De menor a mayor. El orden es dato, no convencion: el desempate y la
+#: preservacion bajo limite lo recorren, y una comparacion por literal de
+#: cadena —el defecto que esto elimina— no puede expresarlo.
+ORDEN_DE_CRITICIDAD: Final[tuple[Criticidad, ...]] = (
+    Criticidad.ORDINARIA,
+    Criticidad.IMPORTANTE,
+    Criticidad.CRITICA,
+)
 
 
 # --------------------------------------------------------------------------
@@ -175,22 +192,113 @@ class ItemCanonico:
     """Un elemento del canon, tal como el puerto lo entrega.
 
     Contiene **lo que el canon sabe**: identidad, clase, ambito, texto vigente,
-    vigencia, marcas temporales y sensibilidad. No contiene polaridad ni
-    condicion: derivarlas es trabajo del candidato, y como las derive es
-    justamente parte de la alternativa que se pone a prueba.
+    vigencia y marcas temporales. No contiene polaridad ni condicion: derivarlas
+    es trabajo del candidato, y como las derive es justamente parte de la
+    alternativa que se pone a prueba.
+
+    **Tampoco contiene criticidad.** La criticidad aplicada es ``HANDOFF_A_B05``
+    y su lectura por un candidato esta prohibida por la clasificacion aprobada:
+    tenerla aqui la ponia al alcance de cualquiera que recibiese un item, y un
+    candidato podria haberla usado para generar candidatas o alterar similitud.
+    Vive en el plano comun, indexada por identidad, y solo el motor la consulta.
+
+    ``subject_key`` es **opcional de verdad**. ``None`` significa que el canon
+    no declara sujeto; la cadena vacia significaba lo mismo y ademas se
+    confundia con un sujeto en blanco, de modo que dos ausencias distintas
+    acababan agrupadas entre si.
     """
 
     id: str
     clase: Clase
     project_id: str | None
     texto: str
-    subject_key: str
+    subject_key: str | None
     vigente: bool
     disponible: bool
     created_at: str
     entity_ids: tuple[str, ...] = ()
     clase_de_evidencia: ClaseDeEvidencia = ClaseDeEvidencia.CANONICA
-    criticidad: Criticidad = Criticidad.ORDINARIA
+
+    @property
+    def sujeto_determinado(self) -> bool:
+        """Un sujeto ausente o en blanco **no esta determinado**: no agrupa."""
+        return bool(self.subject_key and self.subject_key.strip())
+
+
+@dataclass(frozen=True, slots=True)
+class CriticidadAplicada:
+    """Los cuatro campos seguros que llegan **integros** hasta ``B05``.
+
+    ``B04-Q21`` pide procedencia de politica «con ID y evidencia»: el ID es
+    ``regla_de_politica`` y la evidencia es ``razon_segura``. La fuente bruta
+    del arnes no viaja: porta identificadores de caso del banco, y transportarla
+    convertiria el traspaso en una filtracion del oraculo.
+
+    Se asigna **antes de ejecutar**. Ninguna etapa puede crear un nivel: sin
+    entrada en el plano comun, el elemento es ordinario, que es lo que
+    «cero auto-marcados sin regla» significa.
+    """
+
+    nivel: Criticidad
+    razon_segura: str
+    fuente_de_politica: str
+    regla_de_politica: str
+
+
+#: Lo que el motor puede hacer con la criticidad aplicada, y lo que no. La lista
+#: no es decorativa: la prueba de neutralidad la recorre.
+USOS_PERMITIDOS_DE_CRITICIDAD: Final[tuple[str, ...]] = (
+    "G12",
+    "tratamiento previo al limite",
+    "desempate estable y registrado",
+    "explicacion autorizada",
+    "estado PARCIAL por desbordamiento critico",
+    "handoff integro a B05",
+)
+USOS_PROHIBIDOS_DE_CRITICIDAD: Final[tuple[str, ...]] = (
+    "generar candidatas",
+    "alterar similitud",
+    "saltar etapas",
+    "rescatar un elemento que no paso las puertas",
+    "favorecer a un candidato",
+)
+
+
+@runtime_checkable
+class PlanoComun(Protocol):
+    """Canal lateral que **solo la capa comun** abre, indexado por identidad.
+
+    Ningun candidato lo recibe. No es una prohibicion escrita: el motor lo toma
+    como parametro propio y nunca lo pasa a ``candidatas()`` ni a ``leer()``,
+    de modo que un candidato no tiene por donde alcanzarlo.
+    """
+
+    def property_key(self, identidad: str) -> str | None:
+        """Clave de propiedad, o ``None`` si el canal no la determina."""
+        ...
+
+    def criticidad_aplicada(self, identidad: str) -> CriticidadAplicada | None:
+        """Criticidad congelada del elemento, o ``None`` si no tiene."""
+        ...
+
+
+class PlanoComunVacio:
+    """Plano sin canal lateral: **nada esta determinado**.
+
+    No es un plano permisivo. Sin ``property_key`` no se agrupa —la duda no
+    fusiona— y sin criticidad aplicada nada es critico, que es justamente lo
+    que «ninguna etapa crea un nivel» exige. Es el valor por defecto para los
+    sustratos que no declaran canal lateral.
+    """
+
+    def property_key(self, identidad: str) -> str | None:
+        return None
+
+    def criticidad_aplicada(self, identidad: str) -> CriticidadAplicada | None:
+        return None
+
+
+PLANO_COMUN_VACIO: Final = PlanoComunVacio()
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,26 +339,84 @@ class Candidata:
 
 @dataclass(frozen=True, slots=True)
 class Explicacion:
-    """``B04-RF-28``: explicacion minima **por resultado**."""
+    """``B04-RF-28``: explicacion minima **por resultado**.
+
+    ``procedencias`` es plural porque un grupo de equivalentes aporta las de
+    todos sus miembros: con una sola, las procedencias adicionales que el
+    contrato de salida exige se perdian al elegir representante.
+    """
 
     item_id: str
     coincidencia: str
     ambito: str
     tiempo: str
     estado: str
-    procedencia: str
+    procedencias: tuple[str, ...]
     criticidad: str
     razon_de_orden: str
+    #: Grupo al que pertenece, si pertenece a alguno. Vacio si va suelto.
+    grupo: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class GrupoDeEquivalentes:
+    """``B04-Q13``: identidades **distintas** que responden a una necesidad.
+
+    Conserva a todos sus miembros. El representante **no los reemplaza ni los
+    elimina**: encabeza el grupo, y cada miembro sigue siendo citable, contable
+    e inspeccionable por ``G12``. Un grupo que borrase a sus miembros seria una
+    deduplicacion disfrazada, y perderia justo lo que ``RF-20`` manda conservar.
+    """
+
+    identificador: str
+    representante: str
+    miembros: tuple[str, ...]
+    procedencias_adicionales: tuple[str, ...]
+    diferencias_materiales: tuple[str, ...]
+    relaciones_entre_miembros: tuple[str, ...]
+    razon_del_representante: str
+    estado_historico_por_miembro: tuple[tuple[str, str], ...]
+    #: Ejes que decidieron la pertenencia. Sin esto la agrupacion es opaca.
+    ejes: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.representante not in self.miembros:
+            msg = f"{self.identificador}: el representante no esta entre sus miembros"
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True, slots=True)
 class Resultado:
-    """Un elegible ordenado, con su explicacion."""
+    """Un elegible ordenado, con su explicacion y su grupo si lo tiene."""
 
     item: ItemCanonico
     etapa_de_origen: Etapa
     lectura: LecturaSemantica
     explicacion: Explicacion
+    posicion: int = 0
+    grupo: GrupoDeEquivalentes | None = None
+    criticidad: CriticidadAplicada | None = None
+
+    @property
+    def es_representante(self) -> bool:
+        return self.grupo is not None and self.grupo.representante == self.item.id
+
+
+@dataclass(frozen=True, slots=True)
+class Cardinalidades:
+    """Los **dos** contadores de ``§7.5``, que no son intercambiables.
+
+    - **Semantica**: necesidades distintas. Un grupo de equivalentes cuenta
+      **una vez**, porque sus miembros sirven a una sola necesidad.
+    - **Documental**: elementos entregables. Un grupo cuenta **tantos como
+      miembros entregados**, porque el limite duro se aplica sobre resultados.
+
+    Confundirlos permitia satisfacer una cuota de necesidades semanticas
+    distintas repitiendo equivalentes, que es lo que la regla 7 prohibe.
+    """
+
+    semantica: int
+    documental: int
 
 
 class Suficiencia(StrEnum):
@@ -406,21 +572,30 @@ class SenalesDeCandidato(Protocol):
 __all__ = [
     "ESTADO_EXTERNO_SIN_RESULTADO",
     "ETAPAS_DE_EXPANSION",
+    "ORDEN_DE_CRITICIDAD",
     "ORDEN_DE_ETAPAS",
+    "PLANO_COMUN_VACIO",
+    "USOS_PERMITIDOS_DE_CRITICIDAD",
+    "USOS_PROHIBIDOS_DE_CRITICIDAD",
     "Ambito",
     "Candidata",
     "Cardinalidad",
+    "Cardinalidades",
     "Clase",
     "ClaseDeEvidencia",
     "ContextoDeEtapa",
     "Criticidad",
+    "CriticidadAplicada",
     "Etapa",
     "Explicacion",
+    "GrupoDeEquivalentes",
     "ItemCanonico",
     "LecturaSemantica",
     "MaterializacionPorIdentidad",
     "Modo",
     "Peticion",
+    "PlanoComun",
+    "PlanoComunVacio",
     "Polaridad",
     "PuertoDeRecuperacion",
     "Resultado",

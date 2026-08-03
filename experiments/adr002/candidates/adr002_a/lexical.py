@@ -224,13 +224,13 @@ def condicion_declarada(texto: str) -> str | None:
     return None
 
 
-def sujeto_estructural(subject_key: str, texto: str) -> str:
+def sujeto_estructural(subject_key: str | None, texto: str) -> str:
     """Sujeto del item: su clave estructural si existe; si no, su primer termino.
 
     El canon ya materializa el sujeto en ``subject_key``; usarlo es preferible
     a inferirlo, y recurrir al texto solo cuando falta evita inventar sujetos.
     """
-    if subject_key.strip():
+    if subject_key and subject_key.strip():
         return subject_key.strip()
     significativos = terminos_significativos(texto)
     return significativos[0] if significativos else ""

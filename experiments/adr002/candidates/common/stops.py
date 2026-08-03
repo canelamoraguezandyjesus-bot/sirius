@@ -11,7 +11,7 @@ cuota; debe agotar los espacios autorizados o terminar por ``S2-S7``.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Final
 
@@ -54,30 +54,65 @@ def s1_disponible(cardinalidad: Cardinalidad) -> bool:
     return cardinalidad is not Cardinalidad.EXHAUSTIVA
 
 
-def hay_criticos_pendientes(pendientes: Sequence[Candidata]) -> bool:
-    """Control interno de criticos: ``S1`` exige que sea cero."""
-    return any(c.item.criticidad is Criticidad.CRITICA for c in pendientes)
+def hay_criticos_pendientes(
+    pendientes: Sequence[Candidata],
+    criticidad_de: Callable[[str], Criticidad] | None = None,
+) -> bool:
+    """Control interno de criticos: ``S1`` exige que sea cero.
+
+    La criticidad **no vive en el item**: la trae el plano comun. Mientras
+    vivio en el item, el puerto la codificaba siempre a ``ORDINARIA`` y esta
+    funcion era codigo muerto en cualquier ejecucion real.
+    """
+    nivel = criticidad_de if criticidad_de is not None else (lambda _id: Criticidad.ORDINARIA)
+    return any(nivel(c.item.id) is Criticidad.CRITICA for c in pendientes)
 
 
 def evaluar_suficiencia(
-    admitidas: Sequence[Candidata], peticion: Peticion, *, pendientes: Sequence[Candidata] = ()
+    admitidas: Sequence[Candidata],
+    peticion: Peticion,
+    *,
+    pendientes: Sequence[Candidata] = (),
+    criticidad_de: Callable[[str], Criticidad] | None = None,
+    cardinalidad_semantica: int | None = None,
+    grupo_truncado: bool = False,
 ) -> Parada | None:
     """Adjudica ``S1`` si —y solo si— la cardinalidad lo permite y se cumple.
 
-    Devuelve ``None`` cuando no procede parar: el motor entonces continua a la
-    etapa siguiente si esta autorizada, o adjudica otra parada.
+    Tres condiciones, y la tercera es la que ``§7.7`` regla 9 anade: ``S1``
+    **no puede** adjudicarse si el limite impide entregar integro un grupo que
+    compute en la cuota. Prevalece ``S4`` con estado ``PARCIAL``, porque
+    declarar suficiencia mientras se recorta un grupo diria que la necesidad
+    quedo cubierta cuando parte de su evidencia no se entrego.
+
+    El conteo es **semantico**: un grupo de equivalentes cuenta una vez, porque
+    sus miembros sirven a una unica necesidad. Contarlos por separado permitiria
+    satisfacer la cuota repitiendo equivalentes.
     """
     if not s1_disponible(peticion.cardinalidad):
         return None
-    if hay_criticos_pendientes(pendientes):
+    if hay_criticos_pendientes(pendientes, criticidad_de):
         return None
+    if grupo_truncado:
+        return None
+    contadas = len(admitidas) if cardinalidad_semantica is None else cardinalidad_semantica
     if peticion.cardinalidad is Cardinalidad.EXACTA:
-        if len(admitidas) >= peticion.objetivos:
-            return Parada("S1", f"objetivos resueltos: {len(admitidas)}/{peticion.objetivos}")
+        if contadas >= peticion.objetivos:
+            return Parada("S1", f"objetivos resueltos: {contadas}/{peticion.objetivos}")
         return None
-    if len(admitidas) >= peticion.limite_objetivo:
-        return Parada("S1", f"cuota cumplida: {len(admitidas)}/{peticion.limite_objetivo}")
+    if contadas >= peticion.limite_objetivo:
+        return Parada("S1", f"cuota cumplida: {contadas}/{peticion.limite_objetivo}")
     return None
+
+
+def parada_por_grupo_truncado(grupo: str, omitidos: int) -> Parada:
+    """``S4`` con causa: el limite parte un grupo y el estado sera ``PARCIAL``.
+
+    El grupo **no es atomico** frente al limite duro —``CA-44`` ordena entregar
+    lo que quepa—, pero los omitidos se cuentan y se declaran. Nunca se amplia
+    el limite duro y nunca se omite en silencio.
+    """
+    return Parada("S4", f"limite duro parte el grupo {grupo}: {omitidos} miembros no entregados")
 
 
 def parada_por_modo(siguiente: Etapa, peticion: Peticion) -> Parada | None:
@@ -129,6 +164,7 @@ __all__ = [
     "parada_por_agotamiento",
     "parada_por_ambiguedad",
     "parada_por_fuente_inaccesible",
+    "parada_por_grupo_truncado",
     "parada_por_limite_duro",
     "parada_por_modo",
     "parada_por_riesgo_semantico",

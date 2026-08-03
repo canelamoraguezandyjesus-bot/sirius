@@ -321,10 +321,16 @@ def test_una_property_key_nula_no_hace_inelegible_al_elemento(
 
 
 def test_el_sujeto_ausente_no_se_fabrica(proyeccion: P.ProyeccionExperimental) -> None:
-    """Fabricarlo seria ``P-SUJETO-01``, la proyeccion expresamente descartada."""
+    """Fabricarlo seria ``P-SUJETO-01``, la proyeccion expresamente descartada.
+
+    La proyeccion escribe cadena vacia porque ``decisions.subject`` es
+    ``NOT NULL``; el puerto corregido la vuelve a leer como ``None``, de modo
+    que la ausencia llega al motor **como ausencia** y no como sujeto en blanco.
+    """
     with PuertoSqlite(proyeccion.ruta_de_entrada()) as puerto:
         sin_sujeto = puerto.por_identificadores(["MEMORIA:1"]).items
-        assert sin_sujeto[0].subject_key == ""
+        assert sin_sujeto[0].subject_key is None
+        assert not sin_sujeto[0].sujeto_determinado
         # Y una clave vacia no alcanza nada ni por clave exacta ni por prefijo.
         assert puerto.por_clave_exacta([""]) == ()
         assert puerto.por_prefijo_de_sujeto([""]) == ()
