@@ -14,13 +14,13 @@ _VERIFY_PARTS = (
     _SCRIPTS / "verify_windows_package_05_execute.ps1",
 )
 _FIRST_LAUNCH = '$DatabasePath = Invoke-SmokeLaunch -Label "1er arranque"'
-_FAILURE_GATE = 'if ($script:Failures.Count -gt 0)'
+_FAILURE_GATE = "if ($script:Failures.Count -gt 0)"
 _STATIC_GATE = (
     'throw ("El paquete extraido no supera las comprobaciones estaticas de '
     'estructura, "'
 )
-_LOOP_START = '    while ((Get-Date) -lt $deadline) {'
-_LOOP_END = '    $stillAlive = -not $process.HasExited'
+_LOOP_START = "    while ((Get-Date) -lt $deadline) {"
+_LOOP_END = "    $stillAlive = -not $process.HasExited"
 
 
 def _script() -> str:
