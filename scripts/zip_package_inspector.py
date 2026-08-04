@@ -175,9 +175,7 @@ def inspect_zip(
 
     with zipfile.ZipFile(zip_path) as archive:
         infos = archive.infolist()
-        names = inspect_entry_names(
-            (info.filename for info in infos), extract_root=extract_root
-        )
+        names = inspect_entry_names((info.filename for info in infos), extract_root=extract_root)
         unsafe = list(names.unsafe)
         size_violations: list[str] = []
         seen_destinations: set[str] = set()
