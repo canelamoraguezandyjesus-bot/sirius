@@ -100,6 +100,7 @@ function Invoke-SmokeLaunch {
     param([string]$Label)
 
     $process = $null
+    $processCleanupFailure = ""
     $databasePath = Join-Path $IsolatedData "sirius.db"
     try {
         $process = Start-IsolatedSirius `
@@ -153,16 +154,15 @@ function Invoke-SmokeLaunch {
     }
     finally {
         # Ninguna excepcion de sondeo, ventana o comprobacion puede dejar el
-        # ejecutable del paquete activo. Los fallos de parada se registran sin
-        # tapar la excepcion original que haya provocado este finally.
+        # ejecutable del paquete activo. Si el cierre normal falla se intenta
+        # Kill una vez mas; solo se permite continuar cuando HasExited es cierto.
         if ($null -ne $process) {
+            $stopDetail = ""
             try {
                 Stop-IsolatedSirius -Process $process
-                Test-Check "$Label - el proceso aislado termino al cerrar la prueba" $process.HasExited
             }
             catch {
-                Test-Check "$Label - el proceso aislado termino al cerrar la prueba" $false (
-                    $_.Exception.Message)
+                $stopDetail = $_.Exception.Message
                 try {
                     if (-not $process.HasExited) {
                         $process.Kill()
@@ -170,14 +170,24 @@ function Invoke-SmokeLaunch {
                     }
                 }
                 catch {
-                    [Console]::Error.WriteLine(
-                        "B13 PROCESS CLEANUP ERROR: $($_.Exception.Message)")
+                    $stopDetail = "$stopDetail | Kill final: $($_.Exception.Message)"
+                    [Console]::Error.WriteLine("B13 PROCESS CLEANUP ERROR: $stopDetail")
                 }
             }
-            finally {
-                $process.Dispose()
+
+            $terminated = $false
+            try { $terminated = $process.HasExited }
+            catch { $stopDetail = "$stopDetail | Estado final: $($_.Exception.Message)" }
+            Test-Check "$Label - el proceso aislado termino al cerrar la prueba" $terminated $stopDetail
+            if (-not $terminated) {
+                $processCleanupFailure = "No se pudo terminar el proceso aislado: $stopDetail"
             }
+            $process.Dispose()
         }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($processCleanupFailure)) {
+        throw $processCleanupFailure
     }
 
     Test-Check "$Label - se creo sirius.db" (Test-Path -LiteralPath $databasePath)
