@@ -41,7 +41,9 @@ class ManifestEntry:
         return {"sha256": self.sha256, "path": self.path}
 
 
-def _normalize_relative_path(raw_path: str, *, package_root: str, line_number: int) -> str:
+def _normalize_relative_path(
+    raw_path: str, *, package_root: str, line_number: int
+) -> str:
     path = raw_path.strip()
     if not path:
         raise ManifestValidationError(f"linea {line_number}: ruta vacia")
@@ -70,7 +72,9 @@ def _normalize_relative_path(raw_path: str, *, package_root: str, line_number: i
     return "/".join(segments)
 
 
-def validate_manifest_lines(lines: list[str], *, package_root: str) -> tuple[ManifestEntry, ...]:
+def validate_manifest_lines(
+    lines: list[str], *, package_root: str
+) -> tuple[ManifestEntry, ...]:
     """Valida y normaliza todas las entradas antes de tocar sus destinos."""
 
     entries: list[ManifestEntry] = []
@@ -108,7 +112,9 @@ def validate_manifest_lines(lines: list[str], *, package_root: str) -> tuple[Man
     return tuple(entries)
 
 
-def validate_manifest(manifest_path: str, *, package_root: str) -> tuple[ManifestEntry, ...]:
+def validate_manifest(
+    manifest_path: str, *, package_root: str
+) -> tuple[ManifestEntry, ...]:
     """Lee un manifiesto UTF-8 y devuelve solo entradas ya confinadas."""
 
     text = Path(manifest_path).read_text(encoding="utf-8")
@@ -117,7 +123,10 @@ def validate_manifest(manifest_path: str, *, package_root: str) -> tuple[Manifes
 
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
-        print("uso: file_manifest.py <FILE-MANIFEST.sha256> <raiz-del-paquete>", file=sys.stderr)
+        print(
+            "uso: file_manifest.py <FILE-MANIFEST.sha256> <raiz-del-paquete>",
+            file=sys.stderr,
+        )
         return 2
 
     try:
