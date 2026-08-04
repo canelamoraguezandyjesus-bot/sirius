@@ -75,7 +75,7 @@ def test_window_observation_does_not_end_liveness_monitoring() -> None:
     assert "$sawWindow = $true" in loop
     assert "$titles = $visibleTitles" in loop
     break_lines = [line.strip() for line in loop.splitlines() if "break" in line]
-    assert break_lines == ['if ($process.HasExited) { break }']
+    assert break_lines == ["if ($process.HasExited) { break }"]
 
 
 def test_liveness_is_sampled_only_after_the_monitoring_deadline_loop() -> None:
