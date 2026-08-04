@@ -7,7 +7,15 @@ from pathlib import Path
 
 import pytest
 
-from file_manifest import ManifestValidationError, main, validate_manifest_lines
+from file_manifest import (
+    MAX_MANIFEST_BYTES,
+    MAX_MANIFEST_ENTRIES,
+    MAX_MANIFEST_LINE_CHARS,
+    ManifestValidationError,
+    main,
+    validate_manifest,
+    validate_manifest_lines,
+)
 
 PACKAGE_ROOT = r"C:\Temp\Sirius Packaging Smoke Test\Paquete Extraido\Sirius"
 HASH_A = "a" * 64
@@ -74,6 +82,28 @@ def test_duplicates_are_rejected_after_case_and_separator_normalization() -> Non
 def test_empty_manifest_is_rejected() -> None:
     with pytest.raises(ManifestValidationError, match="no contiene archivos"):
         _validate()
+
+
+def test_manifest_entry_count_is_bounded_before_parsing() -> None:
+    lines = [f"{HASH_A}  file-{index}.txt" for index in range(MAX_MANIFEST_ENTRIES + 1)]
+
+    with pytest.raises(ManifestValidationError, match="demasiadas entradas"):
+        validate_manifest_lines(lines, package_root=PACKAGE_ROOT)
+
+
+def test_manifest_line_length_is_bounded_before_path_processing() -> None:
+    path = "x" * MAX_MANIFEST_LINE_CHARS
+
+    with pytest.raises(ManifestValidationError, match="longitud excesiva"):
+        _validate(f"{HASH_A}  {path}")
+
+
+def test_manifest_file_size_is_bounded_before_decoding(tmp_path: Path) -> None:
+    manifest = tmp_path / "FILE-MANIFEST.sha256"
+    manifest.write_bytes(b"x" * (MAX_MANIFEST_BYTES + 1))
+
+    with pytest.raises(ManifestValidationError, match="demasiado grande"):
+        validate_manifest(str(manifest), package_root=PACKAGE_ROOT)
 
 
 def test_command_emits_only_validated_entries_for_powershell(
