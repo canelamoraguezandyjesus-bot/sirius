@@ -113,3 +113,38 @@ def test_liveness_is_sampled_only_after_the_monitoring_deadline_loop() -> None:
 
     assert "$StartupTimeoutSeconds s" in script[liveness_check : liveness_check + 200]
     assert loop_start < loop_end < liveness_check
+
+
+def test_user_state_postconditions_run_from_finally_after_launch_failures() -> None:
+    execute = _VERIFY_PARTS[-1].read_text(encoding="utf-8")
+    first_launch = execute.index('Invoke-SmokeLaunch -Label "1er arranque"')
+    sqlite_check = execute.index("SELECT version_num FROM alembic_version", first_launch)
+    catch = execute.index("catch {", sqlite_check)
+    finally_block = execute.index("finally {", catch)
+    pointer_check = execute.index(
+        "La existencia del data_location.json real no cambio", finally_block
+    )
+    credential_check = execute.index(
+        "La credencial de Sirius sigue ausente despues de los arranques", finally_block
+    )
+    result = execute.index('Write-Step "Resultado"', credential_check)
+
+    assert first_launch < sqlite_check < catch < finally_block
+    assert finally_block < pointer_check < credential_check < result
+    assert "$ExecutionFailure = $_" in execute[catch:finally_block]
+
+
+def test_launch_or_sqlite_exception_becomes_a_reported_failure_after_postchecks() -> None:
+    execute = _VERIFY_PARTS[-1].read_text(encoding="utf-8")
+    finally_block = execute.index("finally {")
+    finally_end = execute.index("if ($null -ne $ExecutionFailure)", finally_block)
+    execution_failure = execute.index(
+        "Los dos arranques y las validaciones SQLite terminaron sin excepciones",
+        finally_end,
+    )
+    result = execute.index('Write-Step "Resultado"', execution_failure)
+
+    assert "throw" not in execute[finally_block:finally_end]
+    assert finally_block < finally_end < execution_failure < result
+    assert 'Test-Check "Se pudo comprobar el data_location.json real' in execute
+    assert 'Test-Check "Se pudo comprobar la credencial de Sirius' in execute
