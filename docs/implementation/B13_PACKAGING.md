@@ -135,8 +135,14 @@ destino final. Antes de publicar, el build elimina el scratch legítimo de
 Nuitka, vuelve a exigir que el worktree apunte al mismo SHA y que Git no muestre
 ningún archivo rastreado modificado ni archivo inesperado sin rastrear. Una
 discrepancia aborta sin publicar; la publicación recupera el estado anterior si
-falla a medias. Un bloque `finally` elimina siempre el worktree y su raíz
-temporal, tanto tras éxito como tras error.
+falla a medias.
+
+Un bloque `finally` elimina siempre el worktree y su raíz temporal. Antes de esa
+limpieza, si la construcción falla y existen diagnósticos de compilación, el
+controlador copia fuera del snapshot únicamente el log `build-*.log`, el informe
+`nuitka-crash-report-*.xml`, el dry-run de Nuitka y un `failure.txt`. Se guardan
+bajo `build/packaging-diagnostics/` del checkout original; un fallo al copiarlos
+se informa sin ocultar la excepción original.
 
 Verificar (desde PowerShell **sin elevar**):
 
@@ -171,13 +177,16 @@ dist/windows/Sirius-<versión>-<sha corto>-windows-x64.zip        entregable
 dist/windows/Sirius-<versión>-<sha corto>-windows-x64.zip.sha256 hash del ZIP
 <snapshot temporal>/build/deploy/Sirius.dist/                    salida intermedia
 <snapshot temporal>/build/packaging/pyside6-deploy-dry-run.txt   comando Nuitka efectivo
-<snapshot temporal>/build/packaging/build-<marca temporal>.log   log completo
+<snapshot temporal>/build/packaging/build-<marca temporal>.log   log completo temporal
+build/packaging-diagnostics/<sha>/<ejecución>/                   diagnóstico persistente solo si falla
 ```
 
-Las tres rutas bajo `<snapshot temporal>` son salidas de trabajo efímeras, no
-resultados persistentes: sirven únicamente mientras se ejecuta el build y se
-eliminan junto con el worktree al terminar, tanto en éxito como en error. Los
-únicos resultados publicados son los tres elementos bajo `dist/windows/`.
+Las rutas bajo `<snapshot temporal>` son salidas de trabajo efímeras y se
+eliminan junto con el worktree al terminar. En una construcción correcta, los
+únicos resultados publicados son los tres elementos bajo `dist/windows/`. En
+una construcción fallida, el controlador conserva antes de limpiar una copia
+selectiva de los diagnósticos técnicos bajo `build/packaging-diagnostics/`; no
+publica artefactos parciales ni copia volcados completos del entorno.
 
 `build/` y `dist/` están ignorados por Git: **ni el binario, ni el ZIP, ni los
 logs se confirman en el repositorio**.
@@ -188,7 +197,8 @@ Intenta purgarlo al terminar, pero se traga el `PermissionError` y solo avisa.
 Por eso el build lo elimina explícitamente y con reintentos antes de construir y
 después de una compilación correcta. Vive únicamente dentro del worktree
 temporal: nunca ensucia el checkout original y, incluso si la compilación falla,
-la limpieza final elimina el worktree completo.
+la limpieza final elimina el worktree completo después de conservar los
+diagnósticos seleccionados.
 
 ## Estructura del artefacto
 
@@ -307,32 +317,33 @@ de trabajo de `dist/` ni el ZIP original mientras puede seguir cambiando.** El
 orden real es deliberado:
 
 1. localiza el ZIP original y su `.sha256`;
-2. crea una raíz temporal privada y única;
-3. copia el ZIP a una copia congelada dentro de esa raíz;
-4. calcula el hash de la copia congelada y lo compara con el valor esperado;
-5. inspecciona únicamente la copia congelada;
-6. extrae únicamente la copia congelada;
-7. vuelve a calcular su hash después de inspeccionarla y extraerla;
-8. aborta si ese hash cambió;
-9. ejecuta las comprobaciones y arranques únicamente sobre lo extraído de esa
-   copia.
+2. valida que el archivo de hash sea pequeño y contenga un SHA-256 válido;
+3. crea una raíz temporal privada y única;
+4. copia el ZIP en bloques a una copia congelada, con un límite de 1 GiB
+   comprobado antes de crear el destino y durante la escritura; cualquier copia
+   parcial se elimina;
+5. calcula el hash de la copia congelada y lo compara con el valor esperado;
+6. inspecciona únicamente la copia congelada;
+7. extrae únicamente la copia congelada;
+8. vuelve a calcular su hash después de inspeccionarla y extraerla;
+9. aborta si ese hash cambió;
+10. ejecuta las comprobaciones y arranques únicamente sobre lo extraído de esa
+    copia.
 
-Si la copia congelada no coincide con el hash esperado, no se extrae nada. La
-afirmación final queda limitada a sus bytes verificados; en ningún momento se
+Si la copia acotada falla o no coincide con el hash esperado, no se extrae nada.
+La afirmación final queda limitada a sus bytes verificados; en ningún momento se
 inspecciona ni se extrae directamente el ZIP original.
 
-La inspección de las entradas del ZIP —separadores, raíz única y rechazo de
-rutas que escaparían de la carpeta de extracción— **no** vive en el `.ps1`, sino
-en `scripts/zip_package_inspector.py`, que el verificador invoca y cuyo JSON
-consume. El motivo es concreto: ahí vivió un fallo real que convivió con la
-comprobación de calidad en verde, porque `ZipFile.CreateFromDirectory` de .NET
-Framework escribe los nombres con `\` y el lector partía solo por `/`, y ninguna
-prueba podía detectarlo estando la lógica dentro de PowerShell. Ahora la cubre
-`tests/unit/test_zip_package_inspector.py` (18 casos: ambos separadores,
-mezclados, entradas de directorio, ZIP plano, dos raíces, y rutas absolutas,
-unidad, UNC y tres formas de `..`). Se prueba exactamente lo que se ejecuta, no
-una copia. Las rutas se juzgan con `ntpath`, de modo que la semántica es la de
-Windows aunque las pruebas corran en Ubuntu.
+La congelación, inspección y extracción del ZIP **no** viven duplicadas en el
+`.ps1`, sino en `scripts/zip_package_inspector.py`, que el verificador invoca y
+cuyo JSON consume. El motivo es concreto: en el parser vivió un fallo que
+convivió con la comprobación de calidad en verde, porque
+`ZipFile.CreateFromDirectory` de .NET Framework escribe los nombres con `\` y el
+lector partía solo por `/`. Las pruebas ejercitan exactamente el helper que se
+ejecuta y cubren ambos separadores, rutas inseguras, destinos duplicados,
+enlaces, límites de tamaño y entradas, copia congelada acotada y eliminación de
+salidas parciales. Las rutas se juzgan con `ntpath`, de modo que la semántica es
+la de Windows aunque las pruebas corran en Ubuntu.
 
 - **A. ZIP y estructura**: SHA-256 del ZIP frente a su `.zip.sha256`; el ZIP
   debe tener exactamente una raíz y llamarse como el artefacto; tras extraer,
@@ -355,17 +366,21 @@ Windows aunque las pruebas corran en Ubuntu.
   `sirius.db` creado, esquema en el head de Alembic, sin error de migraciones,
   sin `RecursionError`, sin `Traceback` no controlado) y segundo arranque
   reutilizando el mismo entorno (sin duplicar ni corromper el esquema,
-  `PRAGMA integrity_check` = `ok`, revisión de Alembic estable).
+  `PRAGMA integrity_check` = `ok`, revisión de Alembic estable). Cada proceso se
+  termina desde un `finally`, incluso si falla el sondeo de ventanas o una
+  comprobación intermedia.
 - **F. Rutas con espacios**: tanto la extracción del paquete como el directorio
   de datos contienen espacios.
 - **G. Sin administrador**: si PowerShell está elevado, la verificación se
   detiene y **no** se declara superada.
 - **Integridad del `data_location.json` real**: antes del primer arranque se
-  anota si existe y, si existe, su SHA-256; después del segundo arranque se
-  comparan existencia y hash como comprobaciones reales. Si el ejecutable
-  hubiera creado, borrado o modificado el puntero del usuario pese al entorno
-  redirigido, la verificación falla. La ruta se resuelve con el mismo criterio
-  que la aplicación (`resolve_paths().config_dir`).
+  anota si existe y, si existe, su SHA-256; después de los arranques se comparan
+  existencia y hash como comprobaciones reales. Estas postcondiciones, junto con
+  la de Credential Manager, se ejecutan desde un `finally` aunque fallen el
+  arranque o las consultas SQLite. Si el ejecutable hubiera creado, borrado o
+  modificado el puntero del usuario pese al entorno redirigido, la verificación
+  falla. La ruta se resuelve con el mismo criterio que la aplicación
+  (`resolve_paths().config_dir`).
 
 ## Prueba de onboarding sin clave
 
@@ -448,13 +463,15 @@ La opción 1 es la recomendada: no altera ningún estado y es repetible.
 
 ## Diagnosticar un fallo sin exponer datos
 
-1. El log completo de la última construcción está en
-   `build/packaging/build-<marca temporal>.log`, y el comando efectivo de Nuitka
-   en `build/packaging/pyside6-deploy-dry-run.txt`. Ambos están bajo `build/`,
-   ignorado por Git.
+1. Si la construcción falla después de generar diagnósticos, el controlador los
+   copia antes de limpiar el snapshot a
+   `build/packaging-diagnostics/<sha>/<ejecución>/`. Puede contener el log
+   `build-*.log`, el dry-run efectivo, un informe de fallo de Nuitka y
+   `failure.txt`. La ruta se imprime como `B13 DIAGNOSTICS`.
 2. Al compartir un log, revísalo antes: contiene rutas locales del equipo que
    construye. No incluye claves ni datos de Sirius, porque el artefacto no los
-   contiene y la construcción se detiene si aparecen.
+   contiene y la construcción se detiene si aparecen. El controlador no copia
+   `msvc-env.txt` ni un volcado general del entorno.
 3. Para un fallo de arranque, el registro de la aplicación está en
    `<directorio de datos>/logs/application.log`. Ese archivo **sí** pertenece al
    usuario: no lo adjuntes entero; extrae únicamente la traza relevante. El
