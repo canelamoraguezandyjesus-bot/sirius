@@ -4,13 +4,33 @@ from __future__ import annotations
 
 from pathlib import Path
 
-_VERIFY_SCRIPT = (
-    Path(__file__).resolve().parents[2] / "scripts" / "verify_windows_package.ps1"
+_SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
+_VERIFY_WRAPPER = _SCRIPTS / "verify_windows_package.ps1"
+_VERIFY_PARTS = tuple(
+    _SCRIPTS / name
+    for name in (
+        "verify_windows_package_01_locate_extract.ps1",
+        "verify_windows_package_02_static_checks.ps1",
+        "verify_windows_package_03_preconditions.ps1",
+        "verify_windows_package_04_runtime.ps1",
+        "verify_windows_package_05_execute.ps1",
+    )
 )
 
 
 def _script() -> str:
-    return _VERIFY_SCRIPT.read_text(encoding="utf-8")
+    return "\n".join(path.read_text(encoding="utf-8") for path in _VERIFY_PARTS)
+
+
+def test_the_canonical_wrapper_loads_every_phase_in_order() -> None:
+    wrapper = _VERIFY_WRAPPER.read_text(encoding="utf-8")
+
+    assert _VERIFY_WRAPPER.is_file()
+    for part in _VERIFY_PARTS:
+        assert part.is_file()
+
+    positions = [wrapper.index(part.name) for part in _VERIFY_PARTS]
+    assert positions == sorted(positions)
 
 
 def test_static_package_failures_abort_before_any_package_launch() -> None:
