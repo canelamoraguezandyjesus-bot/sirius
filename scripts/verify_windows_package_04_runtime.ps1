@@ -90,60 +90,95 @@ function Stop-IsolatedSirius {
     [void]$Process.CloseMainWindow()
     if (-not $Process.WaitForExit(4000)) {
         $Process.Kill()
-        [void]$Process.WaitForExit(5000)
+        if (-not $Process.WaitForExit(5000)) {
+            throw "El proceso aislado no termino despues de Kill()."
+        }
     }
 }
 
 function Invoke-SmokeLaunch {
     param([string]$Label)
 
-    $process = Start-IsolatedSirius -ExePath $ExeCopy -WorkDir $WorkingDirectory -Environment $IsolatedEnv
+    $process = $null
     $databasePath = Join-Path $IsolatedData "sirius.db"
-    $deadline = (Get-Date).AddSeconds($StartupTimeoutSeconds)
-    $titles = @()
-    $sawWindow = $false
+    try {
+        $process = Start-IsolatedSirius `
+            -ExePath $ExeCopy `
+            -WorkDir $WorkingDirectory `
+            -Environment $IsolatedEnv
+        $deadline = (Get-Date).AddSeconds($StartupTimeoutSeconds)
+        $titles = @()
+        $sawWindow = $false
 
-    while ((Get-Date) -lt $deadline) {
-        Start-Sleep -Milliseconds 500
-        if ($process.HasExited) { break }
-        $visibleTitles = @([SiriusWindowProbe]::VisibleTitles([uint32]$process.Id))
-        if ($visibleTitles.Count -gt 0) {
-            $sawWindow = $true
-            $titles = $visibleTitles
+        while ((Get-Date) -lt $deadline) {
+            Start-Sleep -Milliseconds 500
+            if ($process.HasExited) { break }
+            $visibleTitles = @([SiriusWindowProbe]::VisibleTitles([uint32]$process.Id))
+            if ($visibleTitles.Count -gt 0) {
+                $sawWindow = $true
+                $titles = $visibleTitles
+            }
+        }
+
+        # Ver una ventana demuestra que la interfaz llego a mostrarse, pero no
+        # que el proceso sobrevivio al intervalo de observacion. Se sigue
+        # vigilando hasta el plazo completo o hasta una salida real del proceso.
+        $stillAlive = -not $process.HasExited
+        if ($stillAlive) {
+            $visibleTitles = @([SiriusWindowProbe]::VisibleTitles([uint32]$process.Id))
+            if ($visibleTitles.Count -gt 0) {
+                $sawWindow = $true
+                $titles = $visibleTitles
+            }
+        }
+
+        Test-Check "$Label - el proceso sigue vivo tras $StartupTimeoutSeconds s" $stillAlive (
+            $(if ($process.HasExited) { "salio con codigo $($process.ExitCode)" } else { "" }))
+        Test-Check "$Label - hay una ventana superior visible de Sirius" $sawWindow (
+            "titulos: " + ($titles -join " | "))
+        if ($titles.Count -gt 0) { Write-Info "Ventana: '$($titles -join "' | '")'" }
+
+        # No basta con que exista "una ventana": tiene que ser la del flujo sin
+        # clave. Solo se afirma si la precondicion de Credential Manager se cumple.
+        $titleText = ($titles -join " | ")
+        if ($NoKeyPreconditionMet) {
+            Test-Check "$Label - la ventana es la del onboarding sin clave" (
+                $titleText -like "*$OnboardingTitleFragment*") ("titulos: " + $titleText)
+        }
+        else {
+            Add-Skip "$Label - la ventana es la del onboarding sin clave" (
+                "la credencial de Sirius existe en esta sesion de Windows (estado: $CredentialState); " +
+                "el flujo sin clave no es observable aqui")
         }
     }
-
-    # Ver una ventana demuestra que la interfaz llego a mostrarse, pero no que
-    # el proceso sobrevivio al intervalo de observacion. Se sigue vigilando
-    # hasta el plazo completo o hasta una salida real del proceso.
-    $stillAlive = -not $process.HasExited
-    if ($stillAlive) {
-        $visibleTitles = @([SiriusWindowProbe]::VisibleTitles([uint32]$process.Id))
-        if ($visibleTitles.Count -gt 0) {
-            $sawWindow = $true
-            $titles = $visibleTitles
+    finally {
+        # Ninguna excepcion de sondeo, ventana o comprobacion puede dejar el
+        # ejecutable del paquete activo. Los fallos de parada se registran sin
+        # tapar la excepcion original que haya provocado este finally.
+        if ($null -ne $process) {
+            try {
+                Stop-IsolatedSirius -Process $process
+                Test-Check "$Label - el proceso aislado termino al cerrar la prueba" $process.HasExited
+            }
+            catch {
+                Test-Check "$Label - el proceso aislado termino al cerrar la prueba" $false (
+                    $_.Exception.Message)
+                try {
+                    if (-not $process.HasExited) {
+                        $process.Kill()
+                        [void]$process.WaitForExit(5000)
+                    }
+                }
+                catch {
+                    [Console]::Error.WriteLine(
+                        "B13 PROCESS CLEANUP ERROR: $($_.Exception.Message)")
+                }
+            }
+            finally {
+                $process.Dispose()
+            }
         }
     }
-
-    Test-Check "$Label - el proceso sigue vivo tras $StartupTimeoutSeconds s" $stillAlive (
-        $(if ($process.HasExited) { "salio con codigo $($process.ExitCode)" } else { "" }))
-    Test-Check "$Label - hay una ventana superior visible de Sirius" $sawWindow ("titulos: " + ($titles -join " | "))
-    if ($titles.Count -gt 0) { Write-Info "Ventana: '$($titles -join "' | '")'" }
-
-    # No basta con que exista "una ventana": tiene que ser la del flujo sin
-    # clave. Solo se afirma si la precondicion de Credential Manager se cumple.
-    $titleText = ($titles -join " | ")
-    if ($NoKeyPreconditionMet) {
-        Test-Check "$Label - la ventana es la del onboarding sin clave" (
-            $titleText -like "*$OnboardingTitleFragment*") ("titulos: " + $titleText)
-    }
-    else {
-        Add-Skip "$Label - la ventana es la del onboarding sin clave" (
-            "la credencial de Sirius existe en esta sesion de Windows (estado: $CredentialState); " +
-            "el flujo sin clave no es observable aqui")
-    }
-
-    Stop-IsolatedSirius -Process $process
 
     Test-Check "$Label - se creo sirius.db" (Test-Path -LiteralPath $databasePath)
 
