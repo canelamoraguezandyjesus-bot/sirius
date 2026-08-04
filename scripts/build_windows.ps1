@@ -62,6 +62,23 @@ function Invoke-JsonController {
     return $result
 }
 
+function Get-PublicationMutexName {
+    <# Deriva un nombre estable y seguro a partir del destino fisico compartido.
+       El mutex es local a la sesion de Windows y coordina procesos distintos. #>
+    param([string]$DestinationRoot)
+
+    $identity = [System.IO.Path]::GetFullPath($DestinationRoot).TrimEnd("\").ToUpperInvariant()
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $digest = $sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($identity))
+    }
+    finally {
+        $sha256.Dispose()
+    }
+    $token = -join ($digest | ForEach-Object { $_.ToString("x2") })
+    return "Local\Sirius-B13-Publish-$token"
+}
+
 function Preserve-FailedBuildDiagnostics {
     <# Copia solo diagnosticos tecnicos conocidos fuera del snapshot antes de
        eliminarlo. Nunca copia el volcado completo de entorno ni el artefacto. #>
@@ -147,6 +164,36 @@ $snapshotGuard = Invoke-JsonController $GuardScript @($ControllerRoot, $Snapshot
 Write-Host "  [ok] Ruta de empaquetado validada: $($packagingGuard.packaging_path)" -ForegroundColor Green
 Write-Host "  [ok] Ruta temporal del snapshot validada: $($snapshotGuard.packaging_path)" -ForegroundColor Green
 
+# Una sola construccion puede usar este destino de publicacion a la vez. El
+# bloqueo cubre el build completo, la publicacion, cualquier rollback y la
+# limpieza final. Se rechaza inmediatamente una segunda ejecucion para impedir
+# que dos transacciones del mismo dist/windows se pisen o restauren backups
+# sobre resultados que otra ejecucion ya declaro correctos.
+$PublishDestinationRoot = Join-Path $ControllerRoot "dist\windows"
+$PublicationMutexName = Get-PublicationMutexName $PublishDestinationRoot
+$PublicationMutex = [System.Threading.Mutex]::new($false, $PublicationMutexName)
+$PublicationLockAcquired = $false
+try {
+    try {
+        $PublicationLockAcquired = $PublicationMutex.WaitOne(0)
+    }
+    catch [System.Threading.AbandonedMutexException] {
+        # El propietario anterior termino sin liberar el mutex. Windows ya ha
+        # transferido la propiedad a este proceso; se puede continuar de forma
+        # segura porque cada publicacion usa staging y rollback transaccional.
+        $PublicationLockAcquired = $true
+    }
+    if (-not $PublicationLockAcquired) {
+        throw ("Ya hay otra construccion de B13 usando el destino '$PublishDestinationRoot'. " +
+            "La publicacion concurrente se rechaza para no mezclar ni restaurar artefactos de otra ejecucion.")
+    }
+}
+catch {
+    $PublicationMutex.Dispose()
+    throw
+}
+Write-Host "  [ok] Bloqueo exclusivo de publicacion adquirido para: $PublishDestinationRoot" -ForegroundColor Green
+
 $BuildFailure = $null
 try {
     New-Item -ItemType Directory -Path $SnapshotContainer | Out-Null
@@ -213,6 +260,22 @@ finally {
         $CleanupFailures.Add("No se pudo eliminar la raiz temporal '$SnapshotContainer': $($_.Exception.Message)")
     }
 
+    # El mutex se libera despues de publicar, hacer rollback y limpiar el
+    # snapshot. Su liberacion tambien es independiente: nunca se omite por un
+    # fallo anterior y cualquier error queda agregado al diagnostico final.
+    try {
+        if ($PublicationLockAcquired) {
+            $PublicationMutex.ReleaseMutex()
+            $PublicationLockAcquired = $false
+        }
+    }
+    catch {
+        $CleanupFailures.Add("No se pudo liberar el bloqueo exclusivo de publicacion: $($_.Exception.Message)")
+    }
+    finally {
+        $PublicationMutex.Dispose()
+    }
+
     if ($CleanupFailures.Count -gt 0) {
         foreach ($cleanupFailure in $CleanupFailures) {
             # Console.Error deja evidencia clara sin convertirse en una excepcion
@@ -220,7 +283,7 @@ finally {
             [Console]::Error.WriteLine("B13 CLEANUP ERROR: $cleanupFailure")
         }
         if ($null -eq $BuildFailure) {
-            throw ("La construccion termino, pero fallo la limpieza del snapshot: " +
+            throw ("La construccion termino, pero fallo la limpieza del snapshot o del bloqueo: " +
                 ($CleanupFailures -join " | "))
         }
     }
