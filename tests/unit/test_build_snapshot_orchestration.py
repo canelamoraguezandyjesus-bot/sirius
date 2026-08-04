@@ -107,6 +107,31 @@ def test_successful_rollback_rethrows_original_and_cleanup_cannot_mask_it() -> N
     assert "else {\n                    throw" in transaction[cleanup_error:]
 
 
+def test_shared_packaging_environment_lock_covers_sync_and_compilation() -> None:
+    wrapper = _WRAPPER.read_text(encoding="utf-8")
+    guard = wrapper.index("$packagingGuard = Invoke-JsonController $GuardScript")
+    lock_root = wrapper.index("$PackagingLockRoot = Split-Path -Parent $PackagingVenv")
+    lock_path = wrapper.index(
+        '$PackagingLockPath = Join-Path $PackagingLockRoot ".b13-packaging-venv.lock"',
+        lock_root,
+    )
+    acquire = wrapper.index("$PackagingLockStream = [System.IO.File]::Open(", lock_path)
+    no_share = wrapper.index("[System.IO.FileShare]::None", acquire)
+    publication_acquire = wrapper.index(
+        "$PublicationLockStream = [System.IO.File]::Open(", no_share
+    )
+    add_worktree = wrapper.index("worktree add --detach $SnapshotRoot $SourceCommit")
+    invoke = wrapper.index("& $SnapshotImplementation", add_worktree)
+    finally_block = wrapper.index("finally {", wrapper.index("$BuildFailure = $null"))
+    packaging_dispose = wrapper.index("$PackagingLockStream.Dispose()", finally_block)
+
+    assert guard < lock_root < lock_path < acquire < no_share
+    assert no_share < publication_acquire < add_worktree < invoke < finally_block
+    assert invoke < packaging_dispose
+    assert "entorno compartido" in wrapper[acquire:publication_acquire]
+    assert "uv sync cambie dependencias" in wrapper[acquire:publication_acquire]
+
+
 def test_exclusive_publication_lock_covers_build_and_cleanup() -> None:
     wrapper = _WRAPPER.read_text(encoding="utf-8")
     destination = wrapper.index(
@@ -132,7 +157,7 @@ def test_exclusive_publication_lock_covers_build_and_cleanup() -> None:
     assert "catch [System.IO.IOException]" in wrapper[acquire:add_worktree]
 
 
-def test_wrapper_always_attempts_registry_physical_and_file_lock_cleanup() -> None:
+def test_wrapper_attempts_all_cleanup_and_both_lock_releases() -> None:
     wrapper = _WRAPPER.read_text(encoding="utf-8")
     orchestration_start = wrapper.index("$BuildFailure = $null")
     finally_start = wrapper.index("finally {", orchestration_start)
@@ -141,14 +166,29 @@ def test_wrapper_always_attempts_registry_physical_and_file_lock_cleanup() -> No
     physical_remove = finally_block.index(
         "Remove-Item -LiteralPath $SnapshotContainer -Recurse -Force -ErrorAction Stop"
     )
-    dispose = finally_block.index("$PublicationLockStream.Dispose()")
+    publication_dispose = finally_block.index("$PublicationLockStream.Dispose()")
+    packaging_dispose = finally_block.index("$PackagingLockStream.Dispose()")
 
-    assert unregister < physical_remove < dispose
+    assert unregister < physical_remove < publication_dispose < packaging_dispose
     assert "catch {" in finally_block[unregister:physical_remove]
     assert "Write-Error" not in finally_block
     assert "$CleanupFailures.Add" in finally_block[unregister:physical_remove]
-    assert "$CleanupFailures.Add" in finally_block[physical_remove:dispose]
-    assert "No se pudo liberar el bloqueo exclusivo de publicacion" in finally_block[dispose:]
+    assert "$CleanupFailures.Add" in finally_block[physical_remove:publication_dispose]
+    assert "No se pudo liberar el bloqueo exclusivo de publicacion" in finally_block
+    assert "No se pudo liberar el bloqueo exclusivo del entorno" in finally_block
+
+
+def test_publication_lock_failure_releases_packaging_lock_without_masking() -> None:
+    wrapper = _WRAPPER.read_text(encoding="utf-8")
+    publication_acquire = wrapper.index("$PublicationLockStream = [System.IO.File]::Open(")
+    io_catch = wrapper.index("catch [System.IO.IOException]", publication_acquire)
+    general_catch = wrapper.index("catch {", io_catch)
+    build_start = wrapper.index("$BuildFailure = $null", general_catch)
+    failure_region = wrapper[io_catch:build_start]
+
+    assert "$PackagingLockStream.Dispose()" in failure_region
+    assert "B13 LOCK CLEANUP ERROR" in failure_region
+    assert "throw" in failure_region
 
 
 def test_cleanup_preserves_build_failure_and_fails_a_successful_build() -> None:
@@ -214,14 +254,15 @@ def test_complete_process_environment_is_restored_before_cleanup() -> None:
     assert "if ($null -eq $BuildFailure)" in script[finally_block:]
 
 
-def test_localappdata_guard_still_precedes_file_lock_worktree_and_build() -> None:
+def test_localappdata_guard_precedes_locks_worktree_and_build() -> None:
     script = _WRAPPER.read_text(encoding="utf-8")
     guard = script.index("$packagingGuard = Invoke-JsonController $GuardScript")
-    acquire = script.index("$PublicationLockStream = [System.IO.File]::Open(")
+    packaging_acquire = script.index("$PackagingLockStream = [System.IO.File]::Open(")
+    publication_acquire = script.index("$PublicationLockStream = [System.IO.File]::Open(")
     add = script.index("worktree add --detach")
     invoke = script.index("& $SnapshotImplementation")
 
-    assert guard < acquire < add < invoke
+    assert guard < packaging_acquire < publication_acquire < add < invoke
     assert 'Join-Path $env:LOCALAPPDATA "Sirius\\packaging-venv"' in script
     assert "packaging_path_guard.py" in script
 
