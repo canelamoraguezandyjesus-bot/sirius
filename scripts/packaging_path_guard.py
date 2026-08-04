@@ -90,7 +90,7 @@ def _resolve_existing_windows_components(path: str) -> str:
             if not leaf or parent == current:
                 raise PackagingPathError(
                     f"no existe ningun ancestro resoluble para la ruta: {path}"
-                )
+                ) from None
             missing_tail.append(leaf)
             current = parent
         except OSError as exc:
