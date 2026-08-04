@@ -408,8 +408,8 @@ PY
 # sirius_ensure_label <repo> <name> <color> <description> — idempotente.
 # `gh label create --force` es un "upsert": crea la etiqueta si no existe y, si ya
 # existe, actualiza su color y descripcion. NO se usa `gh label view` (subcomando
-# inexistente en gh: su fallo hacia caer en `gh label create`, que a su vez fallaba
-# con "already exists" para una etiqueta existente y detenia la transicion).
+# inexistente que hacia caer en `gh label create`, que a su vez fallaba con
+# "already exists" para una etiqueta existente y detenia la transicion).
 sirius_ensure_label() {
   local repo="$1" name="$2" color="$3" description="$4"
   sirius_retry gh label create "$name" --repo "$repo" \
@@ -465,14 +465,19 @@ sirius_close_issue() {
 
 # sirius_comment_once <repo> <issue> <marker> <body_file> — publica el comentario
 # solo si el marcador no existe ya. 0 si publica o si ya existia; !=0 si falla al
-# publicar.
+# leer el historial autoritativo o al publicar.
 #
 # "Ya existe" significa que lo publico una identidad de confianza: la busqueda
 # usa sirius_read_issue_comments, que filtra por autor. Un marcador ajeno no
-# suprime el comentario oficial (ver la frontera de confianza).
+# suprime el comentario oficial (ver la frontera de confianza). Si ninguna vía
+# puede leer los comentarios, NO se interpreta como historial vacío: se falla de
+# forma segura para no publicar un duplicado autoritativo a ciegas.
 sirius_comment_once() {
   local repo="$1" num="$2" marker="$3" file="$4" existing=""
-  existing="$(sirius_read_issue_comments "$repo" "$num" 2>/dev/null)"
+  if ! existing="$(sirius_read_issue_comments "$repo" "$num")"; then
+    echo "sirius_comment_once: historial ilegible para #${num}; no publico ${marker} a ciegas" >&2
+    return 1
+  fi
   if printf '%s' "$existing" | grep -Fq "$marker"; then
     echo "sirius_comment_once: marcador ya presente en #${num} (${marker})" >&2
     return 0
@@ -498,8 +503,16 @@ sirius_transition() {
   # dejaba ese estado atascado para siempre. Si el marcador existe, se verifica
   # el estado final real: si ya esta aplicado, no se repite nada; si falta, se
   # completa la transicion SIN publicar un comentario duplicado.
+  #
+  # Esta lectura es autoritativa. Si falla REST y también GraphQL, la transición
+  # se detiene ANTES de mutar etiquetas o cierre: tratar el fallo como una lista
+  # vacía permitiría que una reejecución publicase una segunda ronda con el mismo
+  # marcador de run y corrompiese el historial de convergencia.
   local existing="" marker_present=0
-  existing="$(sirius_read_issue_comments "$repo" "$num" 2>/dev/null)"
+  if ! existing="$(sirius_read_issue_comments "$repo" "$num")"; then
+    echo "::error::No se pudo leer el historial de comentarios de #${num}; transicion detenida antes de mutar estado." >&2
+    return 1
+  fi
   if printf '%s' "$existing" | grep -Fq "$marker"; then
     marker_present=1
     local verified=1 labels_now="" state_now=""
