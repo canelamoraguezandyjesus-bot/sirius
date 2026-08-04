@@ -1,14 +1,16 @@
-"""Inspección y extracción acotada del ZIP de B13.
+"""Inspección, congelación y extracción acotada del ZIP de B13.
 
 La misma implementación que usa ``verify_windows_package.ps1`` queda cubierta
 por ``tests/unit/test_zip_package_inspector.py``. Las rutas se juzgan con
 semántica Windows mediante ``ntpath`` aunque las pruebas se ejecuten en Ubuntu.
-Además de impedir zip-slip, el módulo limita el número de entradas, los tamaños
-declarados, la expansión total y el ratio de compresión antes de extraer, y
-vuelve a imponer los límites mientras copia cada archivo.
+Además de impedir zip-slip, el módulo limita el tamaño del ZIP de origen, el
+número de entradas, los tamaños declarados, la expansión total y el ratio de
+compresión. Los límites se vuelven a imponer mientras se congelan y extraen los
+bytes.
 
 Uso desde PowerShell::
 
+    python scripts/zip_package_inspector.py freeze <zip-origen> <zip-congelado>
     python scripts/zip_package_inspector.py <zip> <raiz-de-extraccion>
     python scripts/zip_package_inspector.py extract <zip> <raiz-de-extraccion>
 """
@@ -28,10 +30,12 @@ from typing import IO
 __all__ = [
     "DEFAULT_LIMITS",
     "ExtractionResult",
+    "FrozenCopyResult",
     "ZipInspection",
     "ZipLimits",
     "ZipSafetyError",
     "copy_bounded",
+    "freeze_zip",
     "inspect_entry_names",
     "inspect_zip",
     "main",
@@ -45,6 +49,7 @@ _MIB = 1024 * 1024
 class ZipLimits:
     """Límites conservadores para un paquete standalone de Sirius."""
 
+    max_source_bytes: int = 1024 * _MIB
     max_entries: int = 4096
     max_entry_uncompressed_bytes: int = 512 * _MIB
     max_total_uncompressed_bytes: int = 2 * 1024 * _MIB
@@ -56,7 +61,18 @@ DEFAULT_LIMITS = ZipLimits()
 
 
 class ZipSafetyError(ValueError):
-    """El ZIP no puede inspeccionarse o extraerse de forma segura."""
+    """El ZIP no puede congelarse, inspeccionarse o extraerse de forma segura."""
+
+
+@dataclass(frozen=True, slots=True)
+class FrozenCopyResult:
+    """Resultado verificable de la copia privada y acotada del ZIP."""
+
+    bytes_written: int
+    ok: bool = True
+
+    def as_dict(self) -> dict[str, object]:
+        return {"ok": self.ok, "bytes_written": self.bytes_written}
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,6 +141,59 @@ def _compression_ratio(info: zipfile.ZipInfo, limits: ZipLimits) -> float:
 def _is_symlink(info: zipfile.ZipInfo) -> bool:
     unix_mode = (info.external_attr >> 16) & 0o170000
     return unix_mode == 0o120000
+
+
+def freeze_zip(
+    source_path: str,
+    *,
+    frozen_path: str,
+    limits: ZipLimits = DEFAULT_LIMITS,
+) -> FrozenCopyResult:
+    """Copia el ZIP a una ruta privada sin superar el límite de origen.
+
+    El tamaño se comprueba antes de crear el destino y se vuelve a imponer sobre
+    los bytes realmente leídos. Si el origen cambia de longitud durante la
+    copia, o cualquier operación falla, la copia parcial se elimina.
+    """
+
+    source = Path(source_path)
+    target = Path(frozen_path)
+    if source.resolve() == target.resolve():
+        raise ZipSafetyError("el ZIP de origen y la copia congelada son la misma ruta")
+    if target.exists():
+        raise ZipSafetyError("la ruta de la copia congelada ya existe")
+
+    expected_bytes = source.stat().st_size
+    if expected_bytes > limits.max_source_bytes:
+        raise ZipSafetyError(
+            "ZIP de origen demasiado grande "
+            f"({expected_bytes} bytes; limite {limits.max_source_bytes})"
+        )
+
+    bytes_written = 0
+    try:
+        with source.open("rb") as reader, target.open("xb") as writer:
+            while True:
+                chunk = reader.read(limits.copy_chunk_bytes)
+                if not chunk:
+                    break
+                bytes_written += len(chunk)
+                if bytes_written > limits.max_source_bytes:
+                    raise ZipSafetyError(
+                        "el ZIP de origen supero el limite durante la copia congelada"
+                    )
+                writer.write(chunk)
+
+        if bytes_written != expected_bytes:
+            raise ZipSafetyError(
+                "el ZIP de origen cambio de longitud durante la copia "
+                f"(inicial {expected_bytes}, copiado {bytes_written})"
+            )
+    except Exception:
+        target.unlink(missing_ok=True)
+        raise
+
+    return FrozenCopyResult(bytes_written=bytes_written)
 
 
 def inspect_entry_names(entry_names: Iterable[str], *, extract_root: str) -> ZipInspection:
@@ -331,6 +400,10 @@ def safe_extract_zip(
 
 def main(argv: list[str]) -> int:
     try:
+        if len(argv) == 4 and argv[1] == "freeze":
+            result = freeze_zip(argv[2], frozen_path=argv[3])
+            print(json.dumps(result.as_dict()))
+            return 0
         if len(argv) == 3:
             inspection = inspect_zip(argv[1], extract_root=argv[2])
             print(json.dumps(inspection.as_dict()))
@@ -344,7 +417,8 @@ def main(argv: list[str]) -> int:
         return 2
 
     print(
-        "uso: zip_package_inspector.py [extract] <ruta-del-zip> <raiz-de-extraccion>",
+        "uso: zip_package_inspector.py freeze <origen> <copia> | "
+        "[extract] <ruta-del-zip> <raiz-de-extraccion>",
         file=sys.stderr,
     )
     return 2
