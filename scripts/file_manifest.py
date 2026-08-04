@@ -100,6 +100,8 @@ def validate_manifest_lines(lines: list[str], *, package_root: str) -> tuple[Man
             raise ManifestValidationError(f"linea {line_number}: entrada vacia")
 
         parts = line.split(maxsplit=1)
+        if len(parts) == 1 and _SHA256_RE.fullmatch(parts[0]):
+            raise ManifestValidationError(f"linea {line_number}: ruta vacia")
         if len(parts) != 2:
             raise ManifestValidationError(f"linea {line_number}: se esperaba '<sha256>  <ruta>'")
         digest, raw_path = parts
