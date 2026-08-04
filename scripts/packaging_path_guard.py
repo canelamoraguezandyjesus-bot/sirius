@@ -13,6 +13,8 @@ import sys
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 
+_DEVICE_NAMESPACE_PREFIXES = ("\\\\?\\", "\\\\.\\", "\\??\\")
+
 
 class PackagingPathError(ValueError):
     """La ruta propuesta no puede usarse como entorno de empaquetado."""
@@ -34,7 +36,13 @@ def canonical_windows_path(value: str) -> str:
     if not raw:
         raise PackagingPathError("la ruta no puede estar vacia")
 
-    normalized = ntpath.normcase(ntpath.normpath(raw.replace("/", "\\")))
+    windows_raw = raw.replace("/", "\\")
+    if windows_raw.startswith(_DEVICE_NAMESPACE_PREFIXES):
+        raise PackagingPathError(
+            "no se permiten rutas de espacio de nombres extendido o de dispositivo"
+        )
+
+    normalized = ntpath.normcase(ntpath.normpath(windows_raw))
     if not ntpath.isabs(normalized):
         raise PackagingPathError(f"la ruta debe ser absoluta: {value!r}")
 
@@ -50,17 +58,28 @@ def canonical_windows_path(value: str) -> str:
 def validate_packaging_path(repo_root: str, packaging_path: str) -> PackagingPathValidation:
     """Rechaza el checkout y cualquiera de sus descendientes.
 
-    Una ruta hermana con prefijo textual común es válida. Una ruta de otra unidad
-    también es válida porque no puede ser descendiente del checkout.
+    Una ruta hermana con prefijo textual común es válida. Una ruta ordinaria de
+    otra unidad también es válida porque no puede ser descendiente del checkout.
+    Cualquier ambigüedad al comparar rutas de la misma unidad se rechaza.
     """
 
     canonical_repo = canonical_windows_path(repo_root)
     canonical_packaging = canonical_windows_path(packaging_path)
 
+    repo_drive, _ = ntpath.splitdrive(canonical_repo)
+    packaging_drive, _ = ntpath.splitdrive(canonical_packaging)
+    if repo_drive != packaging_drive:
+        return PackagingPathValidation(
+            repo_root=canonical_repo,
+            packaging_path=canonical_packaging,
+        )
+
     try:
         common = ntpath.commonpath((canonical_repo, canonical_packaging))
-    except ValueError:
-        common = ""
+    except ValueError as exc:
+        raise PackagingPathError(
+            "las rutas no se pueden comparar de forma segura; se rechaza el entorno"
+        ) from exc
 
     if common == canonical_repo:
         if canonical_packaging == canonical_repo:

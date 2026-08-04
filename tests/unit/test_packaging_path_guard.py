@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import ntpath
 from pathlib import Path
 
 import pytest
@@ -34,6 +35,38 @@ def test_rejects_mixed_separators_and_case_variants() -> None:
             r"C:\Work\Sirius",
             r"c:/work/SIRIUS\Packaging-Venv",
         )
+
+
+@pytest.mark.parametrize(
+    "alias",
+    [
+        r"\\?\C:\work\sirius\packaging-venv",
+        r"\\.\C:\work\sirius\packaging-venv",
+        r"\??\C:\work\sirius\packaging-venv",
+    ],
+)
+def test_rejects_extended_and_device_namespace_aliases(alias: str) -> None:
+    with pytest.raises(PackagingPathError, match="espacio de nombres"):
+        validate_packaging_path(r"C:\work\sirius", alias)
+
+
+def test_rejects_an_extended_namespace_alias_for_the_checkout() -> None:
+    with pytest.raises(PackagingPathError, match="espacio de nombres"):
+        validate_packaging_path(
+            r"\\?\C:\work\sirius",
+            r"C:\packaging\venv",
+        )
+
+
+def test_commonpath_errors_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    def raise_value_error(paths: tuple[str, str]) -> str:
+        del paths
+        raise ValueError("incomparable")
+
+    monkeypatch.setattr(ntpath, "commonpath", raise_value_error)
+
+    with pytest.raises(PackagingPathError, match="comparar de forma segura"):
+        validate_packaging_path(r"C:\work\sirius", r"C:\packaging\venv")
 
 
 def test_accepts_a_sibling_with_a_common_textual_prefix() -> None:
