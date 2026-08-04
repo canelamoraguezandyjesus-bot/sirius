@@ -47,14 +47,68 @@ def test_provenance_is_rechecked_before_any_publication() -> None:
     assert "Publish-ValidatedArtifact `" not in script[:verify]
 
 
-def test_publication_rolls_back_and_wrapper_always_attempts_both_cleanups() -> None:
-    implementation = _IMPLEMENTATION.read_text(encoding="utf-8")
-    wrapper = _WRAPPER.read_text(encoding="utf-8")
+def test_publication_tracks_backups_and_new_results_separately() -> None:
+    script = _IMPLEMENTATION.read_text(encoding="utf-8")
+    transaction = script[
+        script.index("function Publish-ValidatedArtifact") : script.index(
+            'Write-Step "1/13 Entorno del sistema"'
+        )
+    ]
 
-    transaction = implementation[implementation.index("function Publish-ValidatedArtifact") :]
-    assert "catch {" in transaction
-    assert "Remove-Item -LiteralPath $destination" in transaction
-    assert "Move-Item -LiteralPath $saved -Destination $destination" in transaction
+    backup_move = transaction.index("$backedUp.Add($itemName)")
+    publish_move = transaction.index("$published.Add($itemName)")
+    rollback = transaction.index("catch {", publish_move)
+    remove_new = transaction.index("foreach ($itemName in $published)", rollback)
+    restore_old = transaction.index("foreach ($itemName in $backedUp)", remove_new)
+
+    assert backup_move < publish_move < rollback < remove_new < restore_old
+    assert "$rollbackFailures.Add" in transaction[rollback:]
+    assert "-ErrorAction Stop" in transaction[:rollback]
+
+
+def test_incomplete_publication_rollback_preserves_backups_and_reports_both_errors() -> None:
+    script = _IMPLEMENTATION.read_text(encoding="utf-8")
+    transaction = script[
+        script.index("function Publish-ValidatedArtifact") : script.index(
+            'Write-Step "1/13 Entorno del sistema"'
+        )
+    ]
+
+    incomplete = transaction.index("if ($rollbackFailures.Count -gt 0)")
+    preserve = transaction.index("$preserveTransaction = $true", incomplete)
+    aggregate = transaction.index("Errores de rollback", preserve)
+    finally_block = transaction.index("finally {", aggregate)
+    guarded_cleanup = transaction.index(
+        "if (-not $preserveTransaction -and (Test-Path -LiteralPath $transaction))",
+        finally_block,
+    )
+
+    assert incomplete < preserve < aggregate < finally_block < guarded_cleanup
+    assert "Error original: $originalDetail" in transaction[incomplete:finally_block]
+    assert "B13 PUBLISH ROLLBACK ERROR" in transaction[incomplete:finally_block]
+    assert "transaccion con los backups se conserva" in transaction[incomplete:finally_block]
+
+
+def test_successful_rollback_rethrows_original_and_cleanup_cannot_mask_it() -> None:
+    script = _IMPLEMENTATION.read_text(encoding="utf-8")
+    transaction = script[
+        script.index("function Publish-ValidatedArtifact") : script.index(
+            'Write-Step "1/13 Entorno del sistema"'
+        )
+    ]
+
+    incomplete = transaction.index("if ($rollbackFailures.Count -gt 0)")
+    rethrow = transaction.index("throw\n    }", incomplete)
+    finally_block = transaction.index("finally {", rethrow)
+    cleanup_error = transaction.index("B13 PUBLISH CLEANUP ERROR", finally_block)
+
+    assert incomplete < rethrow < finally_block < cleanup_error
+    assert "if ($null -ne $operationFailure)" in transaction[finally_block:cleanup_error]
+    assert "else {\n                    throw" in transaction[cleanup_error:]
+
+
+def test_wrapper_always_attempts_registry_and_physical_snapshot_cleanup() -> None:
+    wrapper = _WRAPPER.read_text(encoding="utf-8")
     finally_block = wrapper[wrapper.index("finally {") :]
     unregister = finally_block.index("worktree remove --force $SnapshotRoot")
     physical_remove = finally_block.index(
