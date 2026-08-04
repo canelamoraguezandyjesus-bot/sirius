@@ -114,6 +114,31 @@ def test_directory_and_file_collision_is_rejected_before_extraction(tmp_path: Pa
     assert not extract_root.exists()
 
 
+@pytest.mark.parametrize(
+    "entry_names",
+    [
+        ("Sirius/node", "Sirius/node/child.txt"),
+        ("Sirius/node/child.txt", "Sirius/node"),
+        ("Sirius/node/", "Sirius/node/child.txt", "Sirius/node"),
+    ],
+)
+def test_file_ancestor_collisions_are_rejected_before_extraction(
+    tmp_path: Path, entry_names: tuple[str, ...]
+) -> None:
+    archive_path = tmp_path / "ancestor-collision.zip"
+    extract_root = tmp_path / "extraido"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        for index, name in enumerate(entry_names):
+            archive.writestr(name, b"" if name.endswith("/") else str(index).encode())
+
+    inspection = inspect_zip(str(archive_path), extract_root=EXTRACT_ROOT)
+
+    assert any("colisiona" in issue or "directorio" in issue for issue in inspection.unsafe)
+    with pytest.raises(ZipSafetyError):
+        safe_extract_zip(str(archive_path), extract_root=str(extract_root))
+    assert not extract_root.exists()
+
+
 def test_directory_symlink_is_rejected_before_extraction(tmp_path: Path) -> None:
     archive_path = tmp_path / "symlink.zip"
     extract_root = tmp_path / "extraido"
