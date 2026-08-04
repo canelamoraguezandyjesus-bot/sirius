@@ -34,18 +34,20 @@ def test_the_canonical_wrapper_loads_every_phase_in_order() -> None:
     assert positions == sorted(positions)
 
 
-def test_verifier_freezes_zip_before_hashing_inspecting_and_extracting() -> None:
+def test_verifier_bounds_and_freezes_zip_before_hashing_inspecting_and_extracting() -> None:
     script = _script()
-    freeze = script.index("Copy-Item -LiteralPath $ZipPath -Destination $FrozenZipPath")
+    freeze = script.index('$inspectorScript "freeze" $ZipPath $FrozenZipPath')
     frozen_hash = script.index("Get-FileHash -LiteralPath $FrozenZipPath")
     inspection = script.index("$inspectorScript $FrozenZipPath $ExtractRoot")
     extraction = script.index('$inspectorScript "extract" $FrozenZipPath $ExtractRoot')
     first_launch = script.index("Invoke-SmokeLaunch -Label")
 
     assert freeze < frozen_hash < inspection < extraction < first_launch
+    assert "Copy-Item -LiteralPath $ZipPath -Destination $FrozenZipPath" not in script
     assert "$inspectorScript $ZipPath $ExtractRoot" not in script
     assert '$inspectorScript "extract" $ZipPath $ExtractRoot' not in script
     assert '[guid]::NewGuid().ToString("N")' in script
+    assert "1 GiB" in script[:frozen_hash]
 
 
 def test_static_package_failures_abort_before_any_package_launch() -> None:
@@ -113,6 +115,19 @@ def test_liveness_is_sampled_only_after_the_monitoring_deadline_loop() -> None:
 
     assert "$StartupTimeoutSeconds s" in script[liveness_check : liveness_check + 200]
     assert loop_start < loop_end < liveness_check
+
+
+def test_isolated_process_is_stopped_from_finally_on_every_launch_path() -> None:
+    runtime = _VERIFY_PARTS[-2].read_text(encoding="utf-8")
+    function_start = runtime.index("function Invoke-SmokeLaunch")
+    start = runtime.index("Start-IsolatedSirius `", function_start)
+    finally_block = runtime.index("finally {", start)
+    stop = runtime.index("Stop-IsolatedSirius -Process $process", finally_block)
+    dispose = runtime.index("$process.Dispose()", stop)
+    database_checks = runtime.index('Test-Check "$Label - se creo sirius.db"', dispose)
+
+    assert function_start < start < finally_block < stop < dispose < database_checks
+    assert "B13 PROCESS CLEANUP ERROR" in runtime[finally_block:database_checks]
 
 
 def test_user_state_postconditions_run_from_finally_after_launch_failures() -> None:
