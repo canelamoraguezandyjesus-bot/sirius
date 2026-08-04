@@ -23,7 +23,7 @@ import zipfile
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO
+from typing import IO
 
 __all__ = [
     "DEFAULT_LIMITS",
@@ -227,8 +227,8 @@ def inspect_zip(
 
 
 def copy_bounded(
-    source: BinaryIO,
-    target: BinaryIO,
+    source: IO[bytes],
+    target: IO[bytes],
     *,
     expected_bytes: int,
     total_before: int,
