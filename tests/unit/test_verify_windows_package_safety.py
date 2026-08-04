@@ -50,6 +50,20 @@ def test_verifier_bounds_and_freezes_zip_before_use() -> None:
     assert "1 GiB" in script[:frozen_hash]
 
 
+def test_build_manifest_is_size_capped_before_json_parsing() -> None:
+    static = _VERIFY_PARTS[1].read_text(encoding="utf-8")
+    limit = static.index("$MaxBuildManifestBytes = 1MB")
+    size = static.index("Get-Item -LiteralPath $buildManifestPath", limit)
+    gate = static.index("BUILD-MANIFEST.json supera el limite permitido", size)
+    parse = static.index(
+        "$buildManifest = Get-Content -LiteralPath $buildManifestPath -Raw", gate
+    )
+
+    assert limit < size < gate < parse
+    assert "if ($script:Failures.Count -gt 0)" in static[size:gate]
+    assert "Verificacion detenida antes de leerlo" in static[size:parse]
+
+
 def test_manifest_paths_are_validated_before_manifest_file_access() -> None:
     static = _VERIFY_PARTS[1].read_text(encoding="utf-8")
     helper = static.index('$manifestValidator = Join-Path $PSScriptRoot "file_manifest.py"')
