@@ -62,6 +62,75 @@ function Invoke-JsonController {
     return $result
 }
 
+function Preserve-FailedBuildDiagnostics {
+    <# Copia solo diagnosticos tecnicos conocidos fuera del snapshot antes de
+       eliminarlo. Nunca copia el volcado completo de entorno ni el artefacto. #>
+    param(
+        [string]$Snapshot,
+        [string]$Controller,
+        [string]$CommitShort,
+        [string]$FailureText
+    )
+
+    $source = Join-Path $Snapshot "build\packaging"
+    if (-not (Test-Path -LiteralPath $source -PathType Container)) { return "" }
+
+    $candidates = @(Get-ChildItem -LiteralPath $source -File -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.Name -like "build-*.log" -or
+            $_.Name -like "nuitka-crash-report-*.xml" -or
+            $_.Name -eq "pyside6-deploy-dry-run.txt"
+        })
+    if ($candidates.Count -eq 0) { return "" }
+
+    $stamp = (Get-Date).ToString("yyyyMMdd-HHmmss")
+    $destination = Join-Path $Controller (
+        "build\packaging-diagnostics\$CommitShort\$stamp-" + [guid]::NewGuid().ToString("N"))
+    $copyFailures = New-Object System.Collections.Generic.List[string]
+    $copied = 0
+
+    try {
+        New-Item -ItemType Directory -Path $destination -Force -ErrorAction Stop | Out-Null
+    }
+    catch {
+        [Console]::Error.WriteLine(
+            "B13 DIAGNOSTICS ERROR: no se pudo crear '$destination': $($_.Exception.Message)")
+        return ""
+    }
+
+    foreach ($candidate in $candidates) {
+        try {
+            Copy-Item -LiteralPath $candidate.FullName -Destination $destination -Force -ErrorAction Stop
+            $copied++
+        }
+        catch {
+            $copyFailures.Add("$($candidate.Name): $($_.Exception.Message)")
+        }
+    }
+
+    try {
+        $failurePath = Join-Path $destination "failure.txt"
+        [System.IO.File]::WriteAllText(
+            $failurePath,
+            $FailureText + [Environment]::NewLine,
+            (New-Object System.Text.UTF8Encoding($false)))
+        $copied++
+    }
+    catch {
+        $copyFailures.Add("failure.txt: $($_.Exception.Message)")
+    }
+
+    foreach ($copyFailure in $copyFailures) {
+        [Console]::Error.WriteLine("B13 DIAGNOSTICS ERROR: $copyFailure")
+    }
+    if ($copied -eq 0) {
+        try { Remove-Item -LiteralPath $destination -Recurse -Force -ErrorAction Stop }
+        catch { [Console]::Error.WriteLine("B13 DIAGNOSTICS ERROR: $($_.Exception.Message)") }
+        return ""
+    }
+    return $destination
+}
+
 # El commit y los unicos metadatos de Git que necesita el manifiesto se capturan
 # mientras el checkout original todavia es la unica fuente disponible.
 $source = Invoke-JsonController $SnapshotHelper @("capture", $ControllerRoot) "Captura del checkout"
@@ -106,9 +175,18 @@ try {
         -DescendsFromOriginMain $DescendsFromOriginMain
 }
 catch {
-    # El throw desnudo conserva la excepcion original. El finally registra sus
-    # propios fallos sin lanzar nada cuando ya existe este error de build.
+    # Antes de eliminar el snapshot se copian fuera de el los diagnosticos de
+    # compilacion disponibles. Un fallo al preservarlos se registra, pero nunca
+    # sustituye ni oculta la excepcion original del build.
     $BuildFailure = $_
+    $diagnostics = Preserve-FailedBuildDiagnostics `
+        -Snapshot $SnapshotRoot `
+        -Controller $ControllerRoot `
+        -CommitShort $SourceCommitShort `
+        -FailureText $BuildFailure.ToString()
+    if (-not [string]::IsNullOrWhiteSpace($diagnostics)) {
+        [Console]::Error.WriteLine("B13 DIAGNOSTICS: conservados en '$diagnostics'.")
+    }
     throw
 }
 finally {
