@@ -35,9 +35,10 @@ HASH = "a" * 64
 def test_safe_windows_paths_have_one_unambiguous_component_sequence(
     raw_path: str, expected: tuple[str, ...]
 ) -> None:
-    assert split_safe_windows_relative_path(
-        raw_path, directory_entry=raw_path.endswith(("/", "\\"))
-    ) == expected
+    assert (
+        split_safe_windows_relative_path(raw_path, directory_entry=raw_path.endswith(("/", "\\")))
+        == expected
+    )
 
 
 def test_directory_separator_is_only_accepted_for_a_directory_entry() -> None:
