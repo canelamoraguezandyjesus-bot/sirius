@@ -2,11 +2,11 @@
 
 La misma implementación que usa ``verify_windows_package.ps1`` queda cubierta
 por ``tests/unit/test_zip_package_inspector.py``. Las rutas se juzgan con
-semántica Windows mediante el validador común aunque las pruebas se ejecuten en
-Ubuntu. Además de impedir zip-slip, ADS y alias Win32, el módulo limita el
-tamaño del ZIP de origen, el número de entradas, los tamaños declarados, la
-expansión total y el ratio de compresión. Los límites se vuelven a imponer
-mientras se congelan y extraen los bytes.
+semántica Windows aunque las pruebas se ejecuten en Ubuntu. Además de impedir
+zip-slip y alias Win32, el módulo limita el tamaño del ZIP de origen, el número
+de entradas, los tamaños declarados, la expansión total y el ratio de
+compresión. Los límites se vuelven a imponer mientras se congelan y extraen los
+bytes.
 
 Uso desde PowerShell::
 
@@ -18,7 +18,6 @@ Uso desde PowerShell::
 from __future__ import annotations
 
 import json
-import ntpath
 import shutil
 import sys
 import zipfile
@@ -123,13 +122,17 @@ def _is_directory_entry(name: str) -> bool:
     return name.endswith("/") or name.endswith("\\")
 
 
-def _segments(original_name: str) -> list[str]:
-    normalized = original_name.replace("\\", "/")
-    return [segment for segment in normalized.split("/") if segment != ""]
+def _segments(original_name: str, *, directory_entry: bool) -> tuple[str, ...]:
+    return split_safe_windows_relative_path(
+        original_name,
+        directory_entry=directory_entry,
+    )
 
 
-def _normalized_entry_key(original_name: str) -> str:
-    return "/".join(_segments(original_name)).casefold()
+def _normalized_entry_key(original_name: str, *, directory_entry: bool) -> str:
+    return "/".join(
+        _segments(original_name, directory_entry=directory_entry)
+    ).casefold()
 
 
 def _compression_ratio(info: zipfile.ZipInfo, limits: ZipLimits) -> float:
@@ -199,9 +202,9 @@ def freeze_zip(
 
 
 def inspect_entry_names(entry_names: Iterable[str], *, extract_root: str) -> ZipInspection:
-    """Analiza nombres de entrada sin tocar el disco."""
+    """Analiza nombres de entrada con semántica Windows sin tocar el disco."""
 
-    boundary = ntpath.normpath(extract_root).rstrip("\\") + "\\"
+    del extract_root  # La API conserva el parámetro; las rutas se confinan por componentes.
     roots: set[str] = set()
     unsafe: list[str] = []
     file_count = 0
@@ -209,24 +212,15 @@ def inspect_entry_names(entry_names: Iterable[str], *, extract_root: str) -> Zip
 
     for original_name in entry_names:
         entry_count += 1
+        directory_entry = _is_directory_entry(original_name)
         try:
-            segments = list(
-                split_safe_windows_relative_path(
-                    original_name,
-                    directory_entry=_is_directory_entry(original_name),
-                )
-            )
+            segments = _segments(original_name, directory_entry=directory_entry)
         except WindowsPathError as exc:
-            unsafe.append(f"ruta Windows no segura ({exc}): {original_name}")
-            continue
-
-        destination = ntpath.normpath(ntpath.join(extract_root, "\\".join(segments)))
-        if not destination.casefold().startswith(boundary.casefold()):
-            unsafe.append(f"escaparia de la carpeta de extraccion: {original_name}")
+            unsafe.append(f"{exc}: {original_name}")
             continue
 
         roots.add(segments[0])
-        if not _is_directory_entry(original_name):
+        if not directory_entry:
             file_count += 1
 
     return ZipInspection(
@@ -261,16 +255,24 @@ def inspect_zip(
             )
 
         for info in infos:
-            if info.is_dir() or _is_directory_entry(info.filename):
+            directory_entry = info.is_dir() or _is_directory_entry(info.filename)
+            try:
+                key = _normalized_entry_key(
+                    info.filename,
+                    directory_entry=directory_entry,
+                )
+            except WindowsPathError:
+                # inspect_entry_names ya dejó el diagnóstico exacto.
                 continue
 
-            key = _normalized_entry_key(info.filename)
             if key in seen_destinations:
                 unsafe.append(f"destino duplicado: {info.filename}")
             seen_destinations.add(key)
 
             if _is_symlink(info):
                 unsafe.append(f"enlace simbolico no permitido: {info.filename}")
+            if directory_entry:
+                continue
 
             total_uncompressed += info.file_size
             max_entry = max(max_entry, info.file_size)
@@ -341,7 +343,7 @@ def safe_extract_zip(
     extract_root: str,
     limits: ZipLimits = DEFAULT_LIMITS,
 ) -> ExtractionResult:
-    """Extrae el ZIP sin permitir escapes, sobreescrituras ni expansión excesiva."""
+    """Extrae el ZIP sin permitir escapes, alias ni expansión excesiva."""
 
     inspection = inspect_zip(zip_path, extract_root=extract_root, limits=limits)
     problems = (*inspection.unsafe, *inspection.size_violations)
@@ -364,17 +366,27 @@ def safe_extract_zip(
 
             root.mkdir(parents=True, exist_ok=True)
             for info in infos:
-                segments = _segments(info.filename)
-                if not segments:
-                    continue
+                directory_entry = info.is_dir() or _is_directory_entry(info.filename)
+                try:
+                    segments = _segments(
+                        info.filename,
+                        directory_entry=directory_entry,
+                    )
+                except WindowsPathError as exc:
+                    raise ZipSafetyError(
+                        f"entrada insegura: {info.filename}: {exc}"
+                    ) from exc
+
                 destination = root.joinpath(*segments)
-                if info.is_dir() or _is_directory_entry(info.filename):
+                if directory_entry:
                     destination.mkdir(parents=True, exist_ok=True)
                     continue
 
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 if destination.exists():
-                    raise ZipSafetyError(f"destino duplicado durante extraccion: {info.filename}")
+                    raise ZipSafetyError(
+                        f"destino duplicado durante extraccion: {info.filename}"
+                    )
                 with archive.open(info, "r") as source, destination.open("xb") as target:
                     written = copy_bounded(
                         source,
