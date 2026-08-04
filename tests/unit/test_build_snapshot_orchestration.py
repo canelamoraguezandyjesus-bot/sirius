@@ -79,6 +79,28 @@ def test_cleanup_preserves_build_failure_and_fails_a_successful_build() -> None:
     assert "B13 CLEANUP ERROR" in orchestration
 
 
+def test_failed_build_diagnostics_are_copied_before_snapshot_cleanup() -> None:
+    wrapper = _WRAPPER.read_text(encoding="utf-8")
+    invoke = wrapper.index("& $SnapshotImplementation")
+    catch = wrapper.index("catch {", invoke)
+    preserve = wrapper.index("Preserve-FailedBuildDiagnostics `", catch)
+    rethrow = wrapper.index("throw\n}", preserve)
+    finally_block = wrapper.index("finally {", rethrow)
+    cleanup = wrapper.index("worktree remove --force $SnapshotRoot", finally_block)
+
+    assert catch < preserve < rethrow < finally_block < cleanup
+    assert "build\\packaging-diagnostics\\$CommitShort" in wrapper
+    assert '$_ .Name -like "build-*.log"'.replace(" ", "") not in wrapper.replace(" ", "")
+    assert '$_ .Name -like "nuitka-crash-report-*.xml"'.replace(" ", "") not in wrapper.replace(
+        " ", ""
+    )
+    assert '$_ .Name -eq "pyside6-deploy-dry-run.txt"'.replace(" ", "") not in wrapper.replace(
+        " ", ""
+    )
+    assert '$_ .Name -eq "msvc-env.txt"'.replace(" ", "") not in wrapper.replace(" ", "")
+    assert "B13 DIAGNOSTICS: conservados" in wrapper[catch:finally_block]
+
+
 def test_localappdata_guard_still_precedes_worktree_and_build() -> None:
     script = _WRAPPER.read_text(encoding="utf-8")
     guard = script.index("$packagingGuard = Invoke-JsonController $GuardScript")
