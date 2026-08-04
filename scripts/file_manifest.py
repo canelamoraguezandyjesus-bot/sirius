@@ -16,6 +16,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 __all__ = [
+    "MAX_MANIFEST_BYTES",
+    "MAX_MANIFEST_ENTRIES",
+    "MAX_MANIFEST_LINE_CHARS",
     "ManifestEntry",
     "ManifestValidationError",
     "main",
@@ -23,6 +26,9 @@ __all__ = [
     "validate_manifest_lines",
 ]
 
+MAX_MANIFEST_BYTES = 4 * 1024 * 1024
+MAX_MANIFEST_ENTRIES = 4096
+MAX_MANIFEST_LINE_CHARS = 4096
 _SHA256_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
@@ -73,10 +79,22 @@ def _normalize_relative_path(raw_path: str, *, package_root: str, line_number: i
 def validate_manifest_lines(lines: list[str], *, package_root: str) -> tuple[ManifestEntry, ...]:
     """Valida y normaliza todas las entradas antes de tocar sus destinos."""
 
+    if len(lines) > MAX_MANIFEST_ENTRIES:
+        raise ManifestValidationError(
+            "el manifiesto contiene demasiadas entradas "
+            f"({len(lines)}; limite {MAX_MANIFEST_ENTRIES})"
+        )
+
     entries: list[ManifestEntry] = []
     seen: set[str] = set()
 
     for line_number, raw_line in enumerate(lines, start=1):
+        if len(raw_line) > MAX_MANIFEST_LINE_CHARS:
+            raise ManifestValidationError(
+                f"linea {line_number}: longitud excesiva "
+                f"({len(raw_line)}; limite {MAX_MANIFEST_LINE_CHARS})"
+            )
+
         line = raw_line.rstrip("\r\n")
         if not line.strip():
             raise ManifestValidationError(f"linea {line_number}: entrada vacia")
@@ -107,9 +125,17 @@ def validate_manifest_lines(lines: list[str], *, package_root: str) -> tuple[Man
 
 
 def validate_manifest(manifest_path: str, *, package_root: str) -> tuple[ManifestEntry, ...]:
-    """Lee un manifiesto UTF-8 y devuelve solo entradas ya confinadas."""
+    """Lee un manifiesto UTF-8 acotado y devuelve entradas ya confinadas."""
 
-    text = Path(manifest_path).read_text(encoding="utf-8")
+    path = Path(manifest_path)
+    manifest_bytes = path.stat().st_size
+    if manifest_bytes > MAX_MANIFEST_BYTES:
+        raise ManifestValidationError(
+            "el manifiesto es demasiado grande "
+            f"({manifest_bytes} bytes; limite {MAX_MANIFEST_BYTES})"
+        )
+
+    text = path.read_text(encoding="utf-8")
     return validate_manifest_lines(text.splitlines(), package_root=package_root)
 
 
