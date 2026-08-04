@@ -4,11 +4,11 @@
 
 .DESCRIPTION
     Verifica EL ZIP QUE SE VA A DISTRIBUIR, no la carpeta de trabajo de dist.
-    El orden importa: primero se comprueba el SHA-256 del ZIP, despues se
-    inspecciona y extrae ese mismo ZIP con limites de expansion a una ruta
-    temporal con espacios, y todas las demas comprobaciones se hacen sobre la
-    copia extraida. La afirmacion final queda limitada al ZIP cuyo hash se
-    verifico.
+    El orden importa: primero se copia el ZIP a una ruta temporal privada, se
+    comprueba el SHA-256 de esa copia congelada y despues se inspecciona y extrae
+    exclusivamente esa misma copia con limites de expansion. Todas las demas
+    comprobaciones se hacen sobre lo extraido, y la afirmacion final queda
+    limitada a los bytes cuyo hash se verifico.
 
       A. SHA-256 del ZIP, extraccion, estructura, inventario de hashes y
          ausencia de datos o secretos, todo sobre lo extraido.
@@ -159,8 +159,14 @@ $ArtifactName = [System.IO.Path]::GetFileNameWithoutExtension($ZipPath)
 $ZipShaPath = "$ZipPath.sha256"
 Write-Info "ZIP a verificar: $ZipPath"
 
+# Una ruta unica evita reutilizar una copia anterior y saca los bytes de dist y
+# de cualquier sincronizacion de OneDrive antes de calcular el hash acreditado.
+$SmokeRoot = Join-Path $env:TEMP ("Sirius Packaging Smoke Test " + [guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Path $SmokeRoot | Out-Null
+$FrozenZipPath = Join-Path $SmokeRoot "$ArtifactName.zip"
+
 # --------------------------------------------------------------------------
-Write-Step "A. SHA-256 del ZIP (antes de extraer nada)"
+Write-Step "A. Copia congelada y SHA-256 del ZIP (antes de extraer nada)"
 
 Test-Check "Existe el ZIP" (Test-Path -LiteralPath $ZipPath)
 Test-Check "Existe el .zip.sha256" (Test-Path -LiteralPath $ZipShaPath)
@@ -169,19 +175,24 @@ if ($script:Failures.Count -gt 0) {
 }
 
 $recordedHash = ((Get-Content -LiteralPath $ZipShaPath -Raw).Trim() -split "\s+")[0].ToLower()
-$VerifiedZipHash = (Get-FileHash -LiteralPath $ZipPath -Algorithm SHA256).Hash.ToLower()
-Test-Check "El SHA-256 registrado coincide con el ZIP" ($recordedHash -eq $VerifiedZipHash) "registrado $recordedHash / real $VerifiedZipHash"
+Copy-Item -LiteralPath $ZipPath -Destination $FrozenZipPath
+Test-Check "El ZIP se congelo en una copia temporal privada" (Test-Path -LiteralPath $FrozenZipPath)
 if ($script:Failures.Count -gt 0) {
-    throw "El ZIP no coincide con su hash registrado. No se extrae nada. Verificacion detenida."
+    throw "No se pudo congelar el ZIP antes de verificarlo. Verificacion detenida."
+}
+
+$VerifiedZipHash = (Get-FileHash -LiteralPath $FrozenZipPath -Algorithm SHA256).Hash.ToLower()
+Test-Check "El SHA-256 registrado coincide con la copia congelada" (
+    $recordedHash -eq $VerifiedZipHash) "registrado $recordedHash / copia $VerifiedZipHash"
+if ($script:Failures.Count -gt 0) {
+    throw "La copia congelada no coincide con el hash registrado. No se extrae nada. Verificacion detenida."
 }
 Write-Info "SHA-256 verificado: $VerifiedZipHash"
-Write-Info "Tamano del ZIP    : $([math]::Round((Get-Item -LiteralPath $ZipPath).Length / 1MB, 1)) MB"
+Write-Info "Copia congelada    : $FrozenZipPath"
+Write-Info "Tamano del ZIP     : $([math]::Round((Get-Item -LiteralPath $FrozenZipPath).Length / 1MB, 1)) MB"
 
 # --------------------------------------------------------------------------
-Write-Step "A/F. Extraccion acotada del ZIP verificado en una ruta con espacios"
-
-$SmokeRoot = Join-Path $env:TEMP "Sirius Packaging Smoke Test"
-if (Test-Path -LiteralPath $SmokeRoot) { Remove-Item -LiteralPath $SmokeRoot -Recurse -Force }
+Write-Step "A/F. Extraccion acotada de la copia congelada en una ruta con espacios"
 
 $ExtractRoot = Join-Path $SmokeRoot "Paquete Extraido Del Zip"
 $IsolatedHome = Join-Path $SmokeRoot "Perfil De Usuario"
@@ -195,15 +206,16 @@ foreach ($dir in @($ExtractRoot, $IsolatedHome, $IsolatedData, $IsolatedTemp, $W
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
 }
 
-# La misma implementacion Python inspecciona y extrae. Antes de escribir rechaza
-# zip-slip, destinos duplicados, enlaces, entradas mayores de 512 MiB, expansion
-# total mayor de 2 GiB y ratios superiores a 200:1. Durante la copia vuelve a
-# imponer los limites individual y acumulado sobre los bytes realmente escritos.
+# La misma implementacion Python inspecciona y extrae la copia congelada. Antes
+# de escribir rechaza zip-slip, destinos duplicados, enlaces, mas de 4096
+# entradas, entradas mayores de 512 MiB, expansion total mayor de 2 GiB y ratios
+# superiores a 200:1. Durante la copia vuelve a imponer los limites individual y
+# acumulado sobre los bytes realmente escritos.
 $inspectorScript = Join-Path $PSScriptRoot "zip_package_inspector.py"
 if (-not (Test-Path -LiteralPath $inspectorScript)) {
     throw "No existe $inspectorScript, necesario para inspeccionar y extraer el ZIP."
 }
-$inspectionRaw = (& $VenvPython $inspectorScript $ZipPath $ExtractRoot | Out-String).Trim()
+$inspectionRaw = (& $VenvPython $inspectorScript $FrozenZipPath $ExtractRoot | Out-String).Trim()
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($inspectionRaw)) {
     throw "La inspeccion del ZIP fallo (codigo $LASTEXITCODE): $inspectionRaw"
 }
@@ -212,22 +224,25 @@ $rootList = @($inspection.roots)
 $unsafeEntries = @($inspection.unsafe)
 $sizeViolations = @($inspection.size_violations)
 $zipEntryCount = [int]$inspection.file_count
+$zipTotalEntryCount = [int]$inspection.entry_count
 $declaredExpandedBytes = [long]$inspection.total_uncompressed_bytes
 $maxEntryBytes = [long]$inspection.max_entry_uncompressed_bytes
 $maxCompressionRatio = [double]$inspection.max_compression_ratio
 
 Test-Check "Ninguna entrada del ZIP es insegura" ($unsafeEntries.Count -eq 0) ($unsafeEntries -join "; ")
-Test-Check "La expansion declarada del ZIP respeta los limites" ($sizeViolations.Count -eq 0) ($sizeViolations -join "; ")
+Test-Check "La expansion y el numero de entradas respetan los limites" (
+    $sizeViolations.Count -eq 0) ($sizeViolations -join "; ")
 Test-Check "El ZIP tiene exactamente una raiz" ($rootList.Count -eq 1) ("raices: " + ($rootList -join ", "))
 Test-Check "La raiz del ZIP es '$ArtifactName'" ($rootList.Count -eq 1 -and $rootList[0] -eq $ArtifactName) ("encontrado: " + ($rootList -join ", "))
 if ($script:Failures.Count -gt 0) {
     throw "La estructura o expansion del ZIP no es segura. Verificacion detenida antes de extraer."
 }
+Write-Info "Entradas totales   : $zipTotalEntryCount"
 Write-Info "Expansion declarada: $([math]::Round($declaredExpandedBytes / 1MB, 1)) MB"
 Write-Info "Entrada mayor      : $([math]::Round($maxEntryBytes / 1MB, 1)) MB"
 Write-Info "Ratio maximo       : $([math]::Round($maxCompressionRatio, 1)):1"
 
-$extractionRaw = (& $VenvPython $inspectorScript "extract" $ZipPath $ExtractRoot | Out-String).Trim()
+$extractionRaw = (& $VenvPython $inspectorScript "extract" $FrozenZipPath $ExtractRoot | Out-String).Trim()
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($extractionRaw)) {
     throw "La extraccion acotada del ZIP fallo (codigo $LASTEXITCODE): $extractionRaw"
 }
@@ -235,8 +250,19 @@ $extraction = $extractionRaw | ConvertFrom-Json
 if (-not [bool]$extraction.ok) {
     throw "La extraccion acotada del ZIP fue rechazada: $($extraction.error)"
 }
-Test-Check "La extraccion escribio todas las entradas declaradas" ([int]$extraction.file_count -eq $zipEntryCount) ("esperadas $zipEntryCount / escritas $($extraction.file_count)")
-Test-Check "Los bytes extraidos coinciden con el total declarado" ([long]$extraction.total_uncompressed_bytes -eq $declaredExpandedBytes) ("declarados $declaredExpandedBytes / escritos $($extraction.total_uncompressed_bytes)")
+Test-Check "La extraccion escribio todas las entradas de archivo declaradas" (
+    [int]$extraction.file_count -eq $zipEntryCount) (
+    "esperadas $zipEntryCount / escritas $($extraction.file_count)")
+Test-Check "Los bytes extraidos coinciden con el total declarado" (
+    [long]$extraction.total_uncompressed_bytes -eq $declaredExpandedBytes) (
+    "declarados $declaredExpandedBytes / escritos $($extraction.total_uncompressed_bytes)")
+
+$FrozenZipHashAfterExtraction = (
+    Get-FileHash -LiteralPath $FrozenZipPath -Algorithm SHA256
+).Hash.ToLower()
+Test-Check "La copia congelada no cambio durante inspeccion y extraccion" (
+    $FrozenZipHashAfterExtraction -eq $VerifiedZipHash) (
+    "antes $VerifiedZipHash / despues $FrozenZipHashAfterExtraction")
 
 $PackageRoot = Join-Path $ExtractRoot $ArtifactName
 Test-Check "La extraccion produjo la raiz del paquete" (Test-Path -LiteralPath $PackageRoot)
@@ -248,6 +274,7 @@ Write-Info "Paquete extraido en: $PackageRoot"
 Write-Info "Entradas de archivo en el ZIP: $zipEntryCount"
 
 # A partir de aqui NADA vuelve a mirar dist\windows: todo se comprueba y se
-# ejecuta sobre $PackageRoot, que es el contenido real del ZIP verificado.
+# ejecuta sobre $PackageRoot, extraido de la copia congelada cuyo hash se
+# verifico.
 
 # --------------------------------------------------------------------------
