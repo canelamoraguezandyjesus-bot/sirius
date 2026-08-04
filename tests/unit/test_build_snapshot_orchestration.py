@@ -184,11 +184,29 @@ def test_publication_lock_failure_releases_packaging_lock_without_masking() -> N
     io_catch = wrapper.index("catch [System.IO.IOException]", publication_acquire)
     general_catch = wrapper.index("catch {", io_catch)
     build_start = wrapper.index("$BuildFailure = $null", general_catch)
-    failure_region = wrapper[io_catch:build_start]
+    failure_region = wrapper[general_catch:build_start]
 
+    publication_dispose = failure_region.index("$PublicationLockStream.Dispose()")
+    publication_catch = failure_region.index("catch {", publication_dispose)
+    publication_failure = failure_region.index(
+        "No se pudo liberar el bloqueo exclusivo de publicacion", publication_catch
+    )
+    packaging_dispose = failure_region.index("$PackagingLockStream.Dispose()")
+    packaging_catch = failure_region.index("catch {", packaging_dispose)
+    packaging_failure = failure_region.index(
+        "No se pudo liberar el bloqueo exclusivo del entorno", packaging_catch
+    )
+    report = failure_region.index("B13 LOCK CLEANUP ERROR", packaging_failure)
+    bare_throw = failure_region.rindex("throw")
+
+    assert publication_dispose < publication_catch < publication_failure
+    assert publication_failure < packaging_dispose < packaging_catch < packaging_failure
+    assert packaging_failure < report < bare_throw
+    assert "foreach ($lockCleanupFailure in $LockCleanupFailures)" in failure_region
+    assert failure_region[bare_throw:].strip() == "throw\n}"
+    assert "finally" not in failure_region
     assert "$PackagingLockStream.Dispose()" in failure_region
     assert "B13 LOCK CLEANUP ERROR" in failure_region
-    assert "throw" in failure_region
 
 
 def test_cleanup_preserves_build_failure_and_fails_a_successful_build() -> None:
