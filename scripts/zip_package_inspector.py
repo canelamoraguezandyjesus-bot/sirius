@@ -135,6 +135,35 @@ def _normalized_entry_key(original_name: str, *, directory_entry: bool) -> str:
     ).casefold()
 
 
+def _register_destination(
+    key: str,
+    *,
+    directory_entry: bool,
+    original_name: str,
+    destinations: dict[str, bool],
+) -> str | None:
+    """Detecta colisiones exactas y jerárquicas de destinos Win32."""
+
+    if key in destinations:
+        return f"destino duplicado: {original_name}"
+
+    components = key.split("/")
+    for index in range(1, len(components)):
+        ancestor = "/".join(components[:index])
+        if ancestor in destinations and not destinations[ancestor]:
+            destinations[key] = directory_entry
+            return f"un archivo se usaria como directorio: {original_name}"
+
+    if not directory_entry:
+        prefix = key + "/"
+        if any(existing.startswith(prefix) for existing in destinations):
+            destinations[key] = directory_entry
+            return f"un archivo colisiona con un descendiente: {original_name}"
+
+    destinations[key] = directory_entry
+    return None
+
+
 def _compression_ratio(info: zipfile.ZipInfo, limits: ZipLimits) -> float:
     if info.file_size == 0:
         return 0.0
@@ -237,14 +266,14 @@ def inspect_zip(
     extract_root: str,
     limits: ZipLimits = DEFAULT_LIMITS,
 ) -> ZipInspection:
-    """Inspecciona nombres y expansión declarada antes de extraer."""
+    """Inspecciona nombres, destinos y expansión declarada antes de extraer."""
 
     with zipfile.ZipFile(zip_path) as archive:
         infos = archive.infolist()
         names = inspect_entry_names((info.filename for info in infos), extract_root=extract_root)
         unsafe = list(names.unsafe)
         size_violations: list[str] = []
-        seen_destinations: set[str] = set()
+        destinations: dict[str, bool] = {}
         total_uncompressed = 0
         max_entry = 0
         max_ratio = 0.0
@@ -265,9 +294,14 @@ def inspect_zip(
                 # inspect_entry_names ya dejó el diagnóstico exacto.
                 continue
 
-            if key in seen_destinations:
-                unsafe.append(f"destino duplicado: {info.filename}")
-            seen_destinations.add(key)
+            collision = _register_destination(
+                key,
+                directory_entry=directory_entry,
+                original_name=info.filename,
+                destinations=destinations,
+            )
+            if collision is not None:
+                unsafe.append(collision)
 
             if _is_symlink(info):
                 unsafe.append(f"enlace simbolico no permitido: {info.filename}")
