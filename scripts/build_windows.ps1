@@ -38,19 +38,19 @@ foreach ($required in @($GuardScript, $SnapshotHelper)) {
     }
 }
 
-$PythonCommand = Get-Command python.exe -ErrorAction SilentlyContinue
-$PythonPrefix = @()
-if ($null -eq $PythonCommand) {
-    $PythonCommand = Get-Command py.exe -ErrorAction SilentlyContinue
-    $PythonPrefix = @("-3.14")
+# uv es el unico prerrequisito Python del comando canonico. Ejecuta los helpers
+# stdlib con un Python 3.14 administrado por uv, sin descubrir ni cargar el
+# proyecto y sin depender de python.exe o py.exe instalados globalmente.
+$UvCommand = Get-Command uv.exe -ErrorAction SilentlyContinue
+if ($null -eq $UvCommand) {
+    throw "BLOCKED_EXTERNAL_TOOLCHAIN: no se encontro uv.exe para ejecutar las guardas."
 }
-if ($null -eq $PythonCommand) {
-    throw "BLOCKED_EXTERNAL_TOOLCHAIN: no se encontro python.exe ni py.exe para ejecutar las guardas."
-}
+$PythonCommand = $UvCommand.Source
+$PythonPrefix = @("run", "--no-project", "--managed-python", "--python", "3.14", "python")
 
 function Invoke-JsonController {
     param([string]$Script, [string[]]$Arguments, [string]$What)
-    $raw = (& $PythonCommand.Source @PythonPrefix $Script @Arguments | Out-String).Trim()
+    $raw = (& $PythonCommand @PythonPrefix $Script @Arguments | Out-String).Trim()
     $exitCode = $LASTEXITCODE
     if ([string]::IsNullOrWhiteSpace($raw)) { throw "$What no produjo un resultado verificable." }
     try { $result = $raw | ConvertFrom-Json }
@@ -60,6 +60,48 @@ function Invoke-JsonController {
         throw "$What fallo: $detail"
     }
     return $result
+}
+
+function Get-ProcessEnvironmentSnapshot {
+    $snapshot = @{}
+    foreach ($item in @(Get-ChildItem Env:)) {
+        $snapshot[$item.Name] = [string]$item.Value
+    }
+    return $snapshot
+}
+
+function Restore-ProcessEnvironment {
+    <# Restaura el entorno completo sin detenerse en el primer fallo. El build
+       importa variables de VsDevCmd.bat en este mismo proceso de PowerShell. #>
+    param(
+        [hashtable]$Snapshot,
+        [System.Collections.Generic.List[string]]$Failures
+    )
+
+    foreach ($item in @(Get-ChildItem Env:)) {
+        if ($Snapshot.ContainsKey($item.Name)) { continue }
+        try {
+            [System.Environment]::SetEnvironmentVariable(
+                $item.Name, $null, [System.EnvironmentVariableTarget]::Process)
+        }
+        catch {
+            $Failures.Add(
+                "No se pudo eliminar la variable de entorno nueva '$($item.Name)': $($_.Exception.Message)")
+        }
+    }
+
+    foreach ($name in @($Snapshot.Keys)) {
+        try {
+            [System.Environment]::SetEnvironmentVariable(
+                [string]$name,
+                [string]$Snapshot[$name],
+                [System.EnvironmentVariableTarget]::Process)
+        }
+        catch {
+            $Failures.Add(
+                "No se pudo restaurar la variable de entorno '$name': $($_.Exception.Message)")
+        }
+    }
 }
 
 function Preserve-FailedBuildDiagnostics {
@@ -175,6 +217,8 @@ catch {
 Write-Host "  [ok] Bloqueo exclusivo de publicacion adquirido: $PublicationLockPath" -ForegroundColor Green
 
 $BuildFailure = $null
+$EnvironmentBeforeBuild = @{}
+$EnvironmentCaptured = $false
 try {
     New-Item -ItemType Directory -Path $SnapshotContainer | Out-Null
     & git -C $ControllerRoot worktree add --detach $SnapshotRoot $SourceCommit
@@ -189,6 +233,12 @@ try {
     if (-not (Test-Path -LiteralPath $SnapshotImplementation -PathType Leaf)) {
         throw "El snapshot no contiene la implementacion versionada del build."
     }
+
+    # La implementacion importa el entorno de MSVC al proceso actual. Se toma la
+    # instantanea completa justo antes de delegar y el finally la restaura tanto
+    # en exito como en error.
+    $EnvironmentBeforeBuild = Get-ProcessEnvironmentSnapshot
+    $EnvironmentCaptured = $true
 
     # Desde aqui toda fuente, configuracion, modulo y salida intermedia procede
     # del snapshot. El checkout vivo solo se comunica como destino de publicacion.
@@ -218,6 +268,15 @@ catch {
 }
 finally {
     $CleanupFailures = New-Object System.Collections.Generic.List[string]
+
+    # Se restaura antes de ejecutar herramientas de limpieza. Cada variable se
+    # intenta de forma independiente y cualquier fallo se agrega sin ocultar la
+    # excepcion original del build.
+    if ($EnvironmentCaptured) {
+        Restore-ProcessEnvironment `
+            -Snapshot $EnvironmentBeforeBuild `
+            -Failures $CleanupFailures
+    }
 
     # Cada limpieza tiene su propio try/catch: la retirada fallida del registro
     # nunca impide intentar borrar fisicamente la raiz temporal.
@@ -260,7 +319,8 @@ finally {
             [Console]::Error.WriteLine("B13 CLEANUP ERROR: $cleanupFailure")
         }
         if ($null -eq $BuildFailure) {
-            throw ("La construccion termino, pero fallo la limpieza del snapshot o del bloqueo: " +
+            throw ("La construccion termino, pero fallo la restauracion del entorno, " +
+                "la limpieza del snapshot o la liberacion del bloqueo: " +
                 ($CleanupFailures -join " | "))
         }
     }
