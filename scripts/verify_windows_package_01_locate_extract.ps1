@@ -5,10 +5,10 @@
 .DESCRIPTION
     Verifica EL ZIP QUE SE VA A DISTRIBUIR, no la carpeta de trabajo de dist.
     El orden importa: primero se comprueba el SHA-256 del ZIP, despues se
-    extrae ese mismo ZIP a una ruta temporal con espacios, y todas las demas
-    comprobaciones -inventario de hashes, contaminacion y arranques- se hacen
-    sobre la copia extraida. La afirmacion final queda limitada al ZIP cuyo
-    hash se verifico.
+    inspecciona y extrae ese mismo ZIP con limites de expansion a una ruta
+    temporal con espacios, y todas las demas comprobaciones se hacen sobre la
+    copia extraida. La afirmacion final queda limitada al ZIP cuyo hash se
+    verifico.
 
       A. SHA-256 del ZIP, extraccion, estructura, inventario de hashes y
          ausencia de datos o secretos, todo sobre lo extraido.
@@ -25,21 +25,10 @@
       F. Rutas con espacios.
       G. Rechaza ejecutarse con PowerShell elevado.
 
-    Limite conocido y declarado: redirigir variables de entorno de sistema de
-    archivos NO aisla Windows Credential Manager. La credencial vive en la
-    sesion del usuario de Windows, no en %LOCALAPPDATA%. Por eso, antes de los
-    arranques, se comprueba la PRECONDICION de que la credencial de Sirius no
-    existe en esta sesion. Si existe, la prueba de onboarding sin clave se
-    OMITE de forma explicita y no se declara superada.
-
-    Precision sobre esa comprobacion: SI consulta Credential Manager. Usa el
-    puerto de aplicacion, y ApiKeySettingsUseCase.has_key() obtiene por dentro
-    el valor a traves de SecretStore.get_secret() para reducirlo a un booleano,
-    de modo que el secreto si entra en memoria del proceso de la sonda. Lo que
-    se garantiza es mas concreto: la sonda solo devuelve PRESENT, ABSENT o
-    ERROR; el valor no se imprime, no se devuelve, no se registra en ningun
-    archivo, y la credencial no se modifica ni se elimina. Es exactamente el
-    mismo acceso que hace Sirius al arrancar, ni mas ni menos.
+    Redirigir variables de entorno NO aisla Windows Credential Manager. Por eso
+    la credencial de Sirius debe estar AUSENTE antes de ejecutar el paquete. Si
+    la sonda devuelve PRESENT o ERROR, la verificacion aborta antes de ejecutar
+    Sirius.exe y no manipula la credencial.
 
     Esta prueba termina el proceso a proposito. Es una comprobacion tecnica
     desechable y NO sustituye a la PA-019 manual.
@@ -189,7 +178,7 @@ Write-Info "SHA-256 verificado: $VerifiedZipHash"
 Write-Info "Tamano del ZIP    : $([math]::Round((Get-Item -LiteralPath $ZipPath).Length / 1MB, 1)) MB"
 
 # --------------------------------------------------------------------------
-Write-Step "A/F. Extraccion del ZIP verificado en una ruta con espacios"
+Write-Step "A/F. Extraccion acotada del ZIP verificado en una ruta con espacios"
 
 $SmokeRoot = Join-Path $env:TEMP "Sirius Packaging Smoke Test"
 if (Test-Path -LiteralPath $SmokeRoot) { Remove-Item -LiteralPath $SmokeRoot -Recurse -Force }
@@ -206,23 +195,13 @@ foreach ($dir in @($ExtractRoot, $IsolatedHome, $IsolatedData, $IsolatedTemp, $W
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
 }
 
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-
-# Antes de extraer: la raiz del ZIP tiene que ser exactamente una carpeta, y
-# tiene que llamarse como el artefacto. Un ZIP plano, o con dos raices, o con
-# una raiz distinta, no es el paquete que este verificador sabe validar.
-#
-# El analisis NO se hace aqui, sino en scripts/zip_package_inspector.py. Aqui
-# vivio un fallo real que convivio con la comprobacion de calidad en verde:
-# ZipFile.CreateFromDirectory de .NET Framework escribe los nombres de entrada
-# con "\", no con "/", y partiendo solo por "/" cada ruta completa quedaba como
-# una raiz distinta. Ninguna prueba podia detectarlo porque la logica estaba
-# dentro de este .ps1. Al vivir en un modulo de Python, la cubre
-# tests/unit/test_zip_package_inspector.py, y lo que se prueba es exactamente
-# lo que se ejecuta.
+# La misma implementacion Python inspecciona y extrae. Antes de escribir rechaza
+# zip-slip, destinos duplicados, enlaces, entradas mayores de 512 MiB, expansion
+# total mayor de 2 GiB y ratios superiores a 200:1. Durante la copia vuelve a
+# imponer los limites individual y acumulado sobre los bytes realmente escritos.
 $inspectorScript = Join-Path $PSScriptRoot "zip_package_inspector.py"
 if (-not (Test-Path -LiteralPath $inspectorScript)) {
-    throw "No existe $inspectorScript, necesario para inspeccionar el ZIP."
+    throw "No existe $inspectorScript, necesario para inspeccionar y extraer el ZIP."
 }
 $inspectionRaw = (& $VenvPython $inspectorScript $ZipPath $ExtractRoot | Out-String).Trim()
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($inspectionRaw)) {
@@ -231,22 +210,39 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($inspectionRaw)) {
 $inspection = $inspectionRaw | ConvertFrom-Json
 $rootList = @($inspection.roots)
 $unsafeEntries = @($inspection.unsafe)
+$sizeViolations = @($inspection.size_violations)
 $zipEntryCount = [int]$inspection.file_count
+$declaredExpandedBytes = [long]$inspection.total_uncompressed_bytes
+$maxEntryBytes = [long]$inspection.max_entry_uncompressed_bytes
+$maxCompressionRatio = [double]$inspection.max_compression_ratio
 
 Test-Check "Ninguna entrada del ZIP es insegura" ($unsafeEntries.Count -eq 0) ($unsafeEntries -join "; ")
+Test-Check "La expansion declarada del ZIP respeta los limites" ($sizeViolations.Count -eq 0) ($sizeViolations -join "; ")
 Test-Check "El ZIP tiene exactamente una raiz" ($rootList.Count -eq 1) ("raices: " + ($rootList -join ", "))
 Test-Check "La raiz del ZIP es '$ArtifactName'" ($rootList.Count -eq 1 -and $rootList[0] -eq $ArtifactName) ("encontrado: " + ($rootList -join ", "))
 if ($script:Failures.Count -gt 0) {
-    throw "La estructura del ZIP no es la esperada. Verificacion detenida."
+    throw "La estructura o expansion del ZIP no es segura. Verificacion detenida antes de extraer."
 }
+Write-Info "Expansion declarada: $([math]::Round($declaredExpandedBytes / 1MB, 1)) MB"
+Write-Info "Entrada mayor      : $([math]::Round($maxEntryBytes / 1MB, 1)) MB"
+Write-Info "Ratio maximo       : $([math]::Round($maxCompressionRatio, 1)):1"
 
-[System.IO.Compression.ZipFile]::ExtractToDirectory($ZipPath, $ExtractRoot)
+$extractionRaw = (& $VenvPython $inspectorScript "extract" $ZipPath $ExtractRoot | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($extractionRaw)) {
+    throw "La extraccion acotada del ZIP fallo (codigo $LASTEXITCODE): $extractionRaw"
+}
+$extraction = $extractionRaw | ConvertFrom-Json
+if (-not [bool]$extraction.ok) {
+    throw "La extraccion acotada del ZIP fue rechazada: $($extraction.error)"
+}
+Test-Check "La extraccion escribio todas las entradas declaradas" ([int]$extraction.file_count -eq $zipEntryCount) ("esperadas $zipEntryCount / escritas $($extraction.file_count)")
+Test-Check "Los bytes extraidos coinciden con el total declarado" ([long]$extraction.total_uncompressed_bytes -eq $declaredExpandedBytes) ("declarados $declaredExpandedBytes / escritos $($extraction.total_uncompressed_bytes)")
 
 $PackageRoot = Join-Path $ExtractRoot $ArtifactName
 Test-Check "La extraccion produjo la raiz del paquete" (Test-Path -LiteralPath $PackageRoot)
 Test-Check "La ruta del paquete extraido contiene espacios" ($PackageRoot.Contains(" "))
 if ($script:Failures.Count -gt 0) {
-    throw "No se pudo extraer el paquete. Verificacion detenida."
+    throw "No se pudo extraer el paquete de forma segura. Verificacion detenida."
 }
 Write-Info "Paquete extraido en: $PackageRoot"
 Write-Info "Entradas de archivo en el ZIP: $zipEntryCount"
