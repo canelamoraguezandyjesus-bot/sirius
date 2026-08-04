@@ -4,11 +4,11 @@
 
 .DESCRIPTION
     Verifica EL ZIP QUE SE VA A DISTRIBUIR, no la carpeta de trabajo de dist.
-    El orden importa: primero se copia el ZIP a una ruta temporal privada, se
-    comprueba el SHA-256 de esa copia congelada y despues se inspecciona y extrae
-    exclusivamente esa misma copia con limites de expansion. Todas las demas
-    comprobaciones se hacen sobre lo extraido, y la afirmacion final queda
-    limitada a los bytes cuyo hash se verifico.
+    El orden importa: primero se copia el ZIP de forma acotada a una ruta
+    temporal privada, se comprueba el SHA-256 de esa copia congelada y despues
+    se inspecciona y extrae exclusivamente esa misma copia con limites de
+    expansion. Todas las demas comprobaciones se hacen sobre lo extraido, y la
+    afirmacion final queda limitada a los bytes cuyo hash se verifico.
 
       A. SHA-256 del ZIP, extraccion, estructura, inventario de hashes y
          ausencia de datos o secretos, todo sobre lo extraido.
@@ -128,6 +128,10 @@ $provenanceScript = Join-Path $PSScriptRoot "package_provenance.py"
 if (-not (Test-Path -LiteralPath $provenanceScript)) {
     throw "No existe $provenanceScript, necesario para elegir el artefacto."
 }
+$inspectorScript = Join-Path $PSScriptRoot "zip_package_inspector.py"
+if (-not (Test-Path -LiteralPath $inspectorScript)) {
+    throw "No existe $inspectorScript, necesario para congelar, inspeccionar y extraer el ZIP."
+}
 if (-not (Test-Path -LiteralPath $VenvPython)) {
     throw ("No existe el interprete del entorno en $VenvPython. Ejecuta " +
         "'uv sync' en el repositorio antes de verificar el paquete.")
@@ -168,15 +172,43 @@ $FrozenZipPath = Join-Path $SmokeRoot "$ArtifactName.zip"
 # --------------------------------------------------------------------------
 Write-Step "A. Copia congelada y SHA-256 del ZIP (antes de extraer nada)"
 
-Test-Check "Existe el ZIP" (Test-Path -LiteralPath $ZipPath)
-Test-Check "Existe el .zip.sha256" (Test-Path -LiteralPath $ZipShaPath)
+Test-Check "Existe el ZIP" (Test-Path -LiteralPath $ZipPath -PathType Leaf)
+Test-Check "Existe el .zip.sha256" (Test-Path -LiteralPath $ZipShaPath -PathType Leaf)
 if ($script:Failures.Count -gt 0) {
     throw "Falta el ZIP o su hash registrado. Verificacion detenida."
 }
 
+$hashFileBytes = (Get-Item -LiteralPath $ZipShaPath).Length
+Test-Check "El .zip.sha256 tiene un tamano razonable" ($hashFileBytes -le 4096) (
+    "tamano $hashFileBytes bytes / limite 4096")
+if ($script:Failures.Count -gt 0) {
+    throw "El archivo de hash no es valido. Verificacion detenida antes de copiar el ZIP."
+}
+
 $recordedHash = ((Get-Content -LiteralPath $ZipShaPath -Raw).Trim() -split "\s+")[0].ToLower()
-Copy-Item -LiteralPath $ZipPath -Destination $FrozenZipPath
-Test-Check "El ZIP se congelo en una copia temporal privada" (Test-Path -LiteralPath $FrozenZipPath)
+Test-Check "El .zip.sha256 contiene un SHA-256 valido" (
+    $recordedHash -match '^[0-9a-f]{64}$') "valor no valido"
+if ($script:Failures.Count -gt 0) {
+    throw "El archivo de hash no contiene un SHA-256 valido. Verificacion detenida."
+}
+
+# La copia congelada se escribe en bloques y nunca puede superar 1 GiB. El
+# helper comprueba el tamano antes de crear el destino, vuelve a limitar los
+# bytes realmente leidos y elimina cualquier copia parcial si el origen cambia
+# o la operacion falla.
+$freezeRaw = (& $VenvPython $inspectorScript "freeze" $ZipPath $FrozenZipPath | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($freezeRaw)) {
+    throw "La copia acotada del ZIP fallo (codigo $LASTEXITCODE): $freezeRaw"
+}
+$freeze = $freezeRaw | ConvertFrom-Json
+if (-not [bool]$freeze.ok) {
+    throw "La copia acotada del ZIP fue rechazada: $($freeze.error)"
+}
+Test-Check "El ZIP se congelo en una copia temporal privada" (
+    Test-Path -LiteralPath $FrozenZipPath -PathType Leaf)
+Test-Check "La copia congelada tiene exactamente los bytes acreditados por el helper" (
+    (Get-Item -LiteralPath $FrozenZipPath).Length -eq [long]$freeze.bytes_written) (
+    "helper $($freeze.bytes_written) / disco $((Get-Item -LiteralPath $FrozenZipPath).Length)")
 if ($script:Failures.Count -gt 0) {
     throw "No se pudo congelar el ZIP antes de verificarlo. Verificacion detenida."
 }
@@ -189,7 +221,7 @@ if ($script:Failures.Count -gt 0) {
 }
 Write-Info "SHA-256 verificado: $VerifiedZipHash"
 Write-Info "Copia congelada    : $FrozenZipPath"
-Write-Info "Tamano del ZIP     : $([math]::Round((Get-Item -LiteralPath $FrozenZipPath).Length / 1MB, 1)) MB"
+Write-Info "Tamano del ZIP     : $([math]::Round([long]$freeze.bytes_written / 1MB, 1)) MB"
 
 # --------------------------------------------------------------------------
 Write-Step "A/F. Extraccion acotada de la copia congelada en una ruta con espacios"
@@ -211,10 +243,6 @@ foreach ($dir in @($ExtractRoot, $IsolatedHome, $IsolatedData, $IsolatedTemp, $W
 # entradas, entradas mayores de 512 MiB, expansion total mayor de 2 GiB y ratios
 # superiores a 200:1. Durante la copia vuelve a imponer los limites individual y
 # acumulado sobre los bytes realmente escritos.
-$inspectorScript = Join-Path $PSScriptRoot "zip_package_inspector.py"
-if (-not (Test-Path -LiteralPath $inspectorScript)) {
-    throw "No existe $inspectorScript, necesario para inspeccionar y extraer el ZIP."
-}
 $inspectionRaw = (& $VenvPython $inspectorScript $FrozenZipPath $ExtractRoot | Out-String).Trim()
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($inspectionRaw)) {
     throw "La inspeccion del ZIP fallo (codigo $LASTEXITCODE): $inspectionRaw"
