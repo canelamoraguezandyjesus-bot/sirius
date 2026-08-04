@@ -189,6 +189,32 @@ $snapshotGuard = Invoke-JsonController $GuardScript @($ControllerRoot, $Snapshot
 Write-Host "  [ok] Ruta de empaquetado validada: $($packagingGuard.packaging_path)" -ForegroundColor Green
 Write-Host "  [ok] Ruta temporal del snapshot validada: $($snapshotGuard.packaging_path)" -ForegroundColor Green
 
+# Todos los clones de Sirius bajo la misma cuenta comparten PackagingVenv. Este
+# bloqueo vive junto al entorno compartido, no en el checkout, y cubre uv sync,
+# inventario, Nuitka y la limpieza. Impide que otro build cambie dependencias
+# mientras esta construccion las usa o las registra en el manifiesto.
+$PackagingLockRoot = Split-Path -Parent $PackagingVenv
+$PackagingLockPath = Join-Path $PackagingLockRoot ".b13-packaging-venv.lock"
+$PackagingLockStream = $null
+try {
+    New-Item -ItemType Directory -Path $PackagingLockRoot -Force -ErrorAction Stop | Out-Null
+    $PackagingLockStream = [System.IO.File]::Open(
+        $PackagingLockPath,
+        [System.IO.FileMode]::OpenOrCreate,
+        [System.IO.FileAccess]::ReadWrite,
+        [System.IO.FileShare]::None)
+}
+catch [System.IO.IOException] {
+    throw ("Ya hay otra construccion de B13 usando el entorno compartido '$PackagingVenv', " +
+        "o no se pudo adquirir su bloqueo exclusivo '$PackagingLockPath'. " +
+        "Se rechaza la ejecucion para impedir que uv sync cambie dependencias durante otra compilacion.")
+}
+catch {
+    if ($null -ne $PackagingLockStream) { $PackagingLockStream.Dispose() }
+    throw
+}
+Write-Host "  [ok] Bloqueo exclusivo del entorno de empaquetado adquirido: $PackagingLockPath" -ForegroundColor Green
+
 # Una sola construccion puede usar este destino de publicacion a la vez. El
 # FileStream con FileShare.None coordina procesos y sesiones de Windows mediante
 # el propio sistema de archivos. El archivo marcador puede quedar tras cerrar el
@@ -206,12 +232,33 @@ try {
         [System.IO.FileShare]::None)
 }
 catch [System.IO.IOException] {
+    try {
+        if ($null -ne $PackagingLockStream) {
+            $PackagingLockStream.Dispose()
+            $PackagingLockStream = $null
+        }
+    }
+    catch {
+        [Console]::Error.WriteLine(
+            "B13 LOCK CLEANUP ERROR: no se pudo liberar el bloqueo del entorno: $($_.Exception.Message)")
+    }
     throw ("Ya hay otra construccion de B13 usando el destino '$PublishDestinationRoot', " +
         "o no se pudo adquirir su bloqueo exclusivo '$PublicationLockPath'. " +
         "La publicacion concurrente se rechaza para no mezclar ni restaurar artefactos de otra ejecucion.")
 }
 catch {
-    if ($null -ne $PublicationLockStream) { $PublicationLockStream.Dispose() }
+    try {
+        if ($null -ne $PublicationLockStream) {
+            $PublicationLockStream.Dispose()
+            $PublicationLockStream = $null
+        }
+    }
+    finally {
+        if ($null -ne $PackagingLockStream) {
+            $PackagingLockStream.Dispose()
+            $PackagingLockStream = $null
+        }
+    }
     throw
 }
 Write-Host "  [ok] Bloqueo exclusivo de publicacion adquirido: $PublicationLockPath" -ForegroundColor Green
@@ -299,9 +346,8 @@ finally {
         $CleanupFailures.Add("No se pudo eliminar la raiz temporal '$SnapshotContainer': $($_.Exception.Message)")
     }
 
-    # El handle se cierra despues de publicar, hacer rollback y limpiar el
-    # snapshot. Dispose se intenta siempre; un fallo queda agregado sin ocultar
-    # la excepcion original del build.
+    # Ambos handles se cierran despues de compilar, publicar, hacer rollback y
+    # limpiar el snapshot. Cada Dispose se intenta de forma independiente.
     try {
         if ($null -ne $PublicationLockStream) {
             $PublicationLockStream.Dispose()
@@ -312,6 +358,16 @@ finally {
         $CleanupFailures.Add("No se pudo liberar el bloqueo exclusivo de publicacion: $($_.Exception.Message)")
     }
 
+    try {
+        if ($null -ne $PackagingLockStream) {
+            $PackagingLockStream.Dispose()
+            $PackagingLockStream = $null
+        }
+    }
+    catch {
+        $CleanupFailures.Add("No se pudo liberar el bloqueo exclusivo del entorno de empaquetado: $($_.Exception.Message)")
+    }
+
     if ($CleanupFailures.Count -gt 0) {
         foreach ($cleanupFailure in $CleanupFailures) {
             # Console.Error deja evidencia clara sin convertirse en una excepcion
@@ -320,7 +376,7 @@ finally {
         }
         if ($null -eq $BuildFailure) {
             throw ("La construccion termino, pero fallo la restauracion del entorno, " +
-                "la limpieza del snapshot o la liberacion del bloqueo: " +
+                "la limpieza del snapshot o la liberacion de un bloqueo: " +
                 ($CleanupFailures -join " | "))
         }
     }
