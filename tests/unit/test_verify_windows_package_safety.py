@@ -34,6 +34,20 @@ def test_the_canonical_wrapper_loads_every_phase_in_order() -> None:
     assert positions == sorted(positions)
 
 
+def test_verifier_freezes_zip_before_hashing_inspecting_and_extracting() -> None:
+    script = _script()
+    freeze = script.index("Copy-Item -LiteralPath $ZipPath -Destination $FrozenZipPath")
+    frozen_hash = script.index("Get-FileHash -LiteralPath $FrozenZipPath")
+    inspection = script.index("$inspectorScript $FrozenZipPath $ExtractRoot")
+    extraction = script.index('$inspectorScript "extract" $FrozenZipPath $ExtractRoot')
+    first_launch = script.index("Invoke-SmokeLaunch -Label")
+
+    assert freeze < frozen_hash < inspection < extraction < first_launch
+    assert "$inspectorScript $ZipPath $ExtractRoot" not in script
+    assert '$inspectorScript "extract" $ZipPath $ExtractRoot' not in script
+    assert '[guid]::NewGuid().ToString("N")' in script
+
+
 def test_static_package_failures_abort_before_any_package_launch() -> None:
     script = _script()
     contamination = script.index("Sin bases de datos, registros, copias")
