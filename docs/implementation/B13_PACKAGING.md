@@ -124,10 +124,19 @@ Construir:
 Ese sigue siendo el único comando operativo. El controlador comprueba primero
 que el checkout original está completamente limpio, captura su SHA exacto y los
 metadatos mínimos del manifiesto, y valida tanto la ruta del entorno bajo
-`LOCALAPPDATA` como una raíz temporal privada y única fuera del checkout. Después
-crea en esa raíz un `git worktree add --detach` del SHA capturado.
+`LOCALAPPDATA` como una raíz temporal privada y única fuera del checkout.
 
-La implementación versionada se invoca desde ese worktree: código,
+Antes de crear el worktree abre `dist/windows/.b13-publish.lock` con un handle
+exclusivo (`FileShare.None`) y lo conserva durante **toda** la construcción, la
+publicación, cualquier rollback y la limpieza final. El bloqueo se apoya en el
+sistema de archivos, por lo que coordina procesos y sesiones de Windows que
+comparten ese destino. Una segunda ejecución concurrente se rechaza antes de
+compilar. El archivo marcador puede permanecer después: no representa un
+bloqueo obsoleto, porque la exclusividad depende del handle abierto y Windows lo
+libera automáticamente cuando el proceso termina.
+
+Después crea en la raíz temporal un `git worktree add --detach` del SHA
+capturado. La implementación versionada se invoca desde ese worktree: código,
 `pyproject.toml`, `uv.lock`, `pysidedeploy.spec`, migraciones, versión, head de
 Alembic, módulos importados, entradas de Nuitka y montaje del contenido proceden
 exclusivamente del snapshot. El checkout original ya solo es controlador y
@@ -146,9 +155,10 @@ carpeta `.publish-<guid>` se conserva bajo `dist/windows/` con los backups aún
 disponibles, y el error informa tanto del fallo original como de cada fallo de
 restauración y de la ruta exacta para recuperación manual.
 
-Un bloque `finally` elimina siempre el worktree y su raíz temporal. Antes de esa
-limpieza, si la construcción falla y existen diagnósticos de compilación, el
-controlador copia fuera del snapshot únicamente el log `build-*.log`, el informe
+Un bloque `finally` elimina siempre el worktree y su raíz temporal y libera el
+handle del bloqueo de publicación. Antes de esa limpieza, si la construcción
+falla y existen diagnósticos de compilación, el controlador copia fuera del
+snapshot únicamente el log `build-*.log`, el informe
 `nuitka-crash-report-*.xml`, el dry-run de Nuitka y un `failure.txt`. Se guardan
 bajo `build/packaging-diagnostics/` del checkout original; un fallo al copiarlos
 se informa sin ocultar la excepción original.
@@ -181,6 +191,7 @@ También acepta uno explícito:
 ## Rutas de salida
 
 ```
+dist/windows/.b13-publish.lock                                 marcador del bloqueo; puede persistir sin estar bloqueado
 dist/windows/Sirius-<versión>-<sha corto>-windows-x64/          carpeta portátil
 dist/windows/Sirius-<versión>-<sha corto>-windows-x64.zip        entregable
 dist/windows/Sirius-<versión>-<sha corto>-windows-x64.zip.sha256 hash del ZIP
@@ -194,7 +205,9 @@ build/packaging-diagnostics/<sha>/<ejecución>/                   diagnóstico p
 Las rutas bajo `<snapshot temporal>` son salidas de trabajo efímeras y se
 eliminan junto con el worktree al terminar. En una construcción correcta, los
 únicos resultados publicados son los tres elementos normales bajo
-`dist/windows/`. La carpeta `.publish-<guid>` no queda tras éxito ni tras un
+`dist/windows/`. El marcador `.b13-publish.lock` puede persistir vacío y no debe
+interpretarse como una construcción activa; solo un handle exclusivo abierto lo
+convierte en bloqueo. La carpeta `.publish-<guid>` no queda tras éxito ni tras un
 rollback completo; solo se conserva cuando una restauración falla, precisamente
 para no destruir sus backups. En una construcción fallida, el controlador
 conserva antes de limpiar una copia selectiva de los diagnósticos técnicos bajo
