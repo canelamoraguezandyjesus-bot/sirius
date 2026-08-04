@@ -134,8 +134,17 @@ exclusivamente del snapshot. El checkout original ya solo es controlador y
 destino final. Antes de publicar, el build elimina el scratch legítimo de
 Nuitka, vuelve a exigir que el worktree apunte al mismo SHA y que Git no muestre
 ningún archivo rastreado modificado ni archivo inesperado sin rastrear. Una
-discrepancia aborta sin publicar; la publicación recupera el estado anterior si
-falla a medias.
+discrepancia aborta sin publicar.
+
+La publicación trata la carpeta portátil, el ZIP y su `.sha256` como una sola
+transacción. Los resultados anteriores se mueven primero a una carpeta privada
+`.publish-<guid>/backup`, y los nuevos se registran separadamente conforme se
+publican. Si una operación falla, se intentan **todas** las retiradas y
+restauraciones, aunque falle alguna intermedia. La transacción solo se elimina
+cuando el rollback ha terminado por completo. Si el rollback también falla, la
+carpeta `.publish-<guid>` se conserva bajo `dist/windows/` con los backups aún
+disponibles, y el error informa tanto del fallo original como de cada fallo de
+restauración y de la ruta exacta para recuperación manual.
 
 Un bloque `finally` elimina siempre el worktree y su raíz temporal. Antes de esa
 limpieza, si la construcción falla y existen diagnósticos de compilación, el
@@ -175,6 +184,7 @@ También acepta uno explícito:
 dist/windows/Sirius-<versión>-<sha corto>-windows-x64/          carpeta portátil
 dist/windows/Sirius-<versión>-<sha corto>-windows-x64.zip        entregable
 dist/windows/Sirius-<versión>-<sha corto>-windows-x64.zip.sha256 hash del ZIP
+dist/windows/.publish-<guid>/                                    recuperación solo si el rollback de publicación falla
 <snapshot temporal>/build/deploy/Sirius.dist/                    salida intermedia
 <snapshot temporal>/build/packaging/pyside6-deploy-dry-run.txt   comando Nuitka efectivo
 <snapshot temporal>/build/packaging/build-<marca temporal>.log   log completo temporal
@@ -183,10 +193,12 @@ build/packaging-diagnostics/<sha>/<ejecución>/                   diagnóstico p
 
 Las rutas bajo `<snapshot temporal>` son salidas de trabajo efímeras y se
 eliminan junto con el worktree al terminar. En una construcción correcta, los
-únicos resultados publicados son los tres elementos bajo `dist/windows/`. En
-una construcción fallida, el controlador conserva antes de limpiar una copia
-selectiva de los diagnósticos técnicos bajo `build/packaging-diagnostics/`; no
-publica artefactos parciales ni copia volcados completos del entorno.
+únicos resultados publicados son los tres elementos normales bajo
+`dist/windows/`. La carpeta `.publish-<guid>` no queda tras éxito ni tras un
+rollback completo; solo se conserva cuando una restauración falla, precisamente
+para no destruir sus backups. En una construcción fallida, el controlador
+conserva antes de limpiar una copia selectiva de los diagnósticos técnicos bajo
+`build/packaging-diagnostics/`; no copia volcados completos del entorno.
 
 `build/` y `dist/` están ignorados por Git: **ni el binario, ni el ZIP, ni los
 logs se confirman en el repositorio**.
@@ -468,17 +480,22 @@ La opción 1 es la recomendada: no altera ningún estado y es repetible.
    `build/packaging-diagnostics/<sha>/<ejecución>/`. Puede contener el log
    `build-*.log`, el dry-run efectivo, un informe de fallo de Nuitka y
    `failure.txt`. La ruta se imprime como `B13 DIAGNOSTICS`.
-2. Al compartir un log, revísalo antes: contiene rutas locales del equipo que
+2. Si aparece `B13 PUBLISH ROLLBACK ERROR`, no borres la carpeta
+   `dist/windows/.publish-<guid>/` indicada en el mensaje: contiene los backups
+   que no pudieron restaurarse. El mismo mensaje conserva el error original y
+   todas las restauraciones fallidas. No ejecutes otro build hasta recuperar o
+   descartar conscientemente esos tres resultados.
+3. Al compartir un log, revísalo antes: contiene rutas locales del equipo que
    construye. No incluye claves ni datos de Sirius, porque el artefacto no los
    contiene y la construcción se detiene si aparecen. El controlador no copia
    `msvc-env.txt` ni un volcado general del entorno.
-3. Para un fallo de arranque, el registro de la aplicación está en
+4. Para un fallo de arranque, el registro de la aplicación está en
    `<directorio de datos>/logs/application.log`. Ese archivo **sí** pertenece al
    usuario: no lo adjuntes entero; extrae únicamente la traza relevante. El
    registro aplica además un filtro de redacción para valores con forma de clave.
-4. La verificación conserva su entorno temporal completo bajo
+5. La verificación conserva su entorno temporal completo bajo
    `%TEMP%\Sirius Packaging Smoke Test` para inspección. Son datos de prueba
    desechables, nunca los del usuario.
-5. Distingue siempre las tres causas al informar: fallo del código de Sirius,
+6. Distingue siempre las tres causas al informar: fallo del código de Sirius,
    fallo de configuración del empaquetado, o dependencia externa ausente
    (compilador o SDK).
