@@ -72,9 +72,7 @@ def test_credential_absence_is_a_hard_prelaunch_requirement() -> None:
 
 def test_credential_must_still_be_absent_after_launches() -> None:
     script = _script()
-    postcheck = script.index(
-        "La credencial de Sirius sigue ausente despues de los arranques"
-    )
+    postcheck = script.index("La credencial de Sirius sigue ausente despues de los arranques")
     postcheck_region = script[postcheck : postcheck + 400]
 
     assert '$CredentialStateAfter -eq "ABSENT"' in postcheck_region

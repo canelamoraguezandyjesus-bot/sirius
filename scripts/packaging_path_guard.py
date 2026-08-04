@@ -120,7 +120,9 @@ def resolved_windows_path(value: str, *, resolver: PathResolver | None = None) -
     """Normaliza y resuelve la identidad física de los componentes existentes."""
 
     canonical = canonical_windows_path(value)
-    selected_resolver = _resolve_existing_windows_components if resolver is None else resolver
+    selected_resolver = (
+        _resolve_existing_windows_components if resolver is None else resolver
+    )
     try:
         resolved = selected_resolver(canonical)
     except PackagingPathError:

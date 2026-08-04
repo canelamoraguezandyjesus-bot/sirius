@@ -71,9 +71,7 @@ def test_commonpath_errors_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_rejects_a_filesystem_alias_that_resolves_inside_the_checkout() -> None:
     def resolve_alias(path: str) -> str:
-        aliases = {
-            r"c:\short\packaging-venv": r"c:\work\sirius\hidden\packaging-venv"
-        }
+        aliases = {r"c:\short\packaging-venv": r"c:\work\sirius\hidden\packaging-venv"}
         return aliases.get(path, path)
 
     with pytest.raises(PackagingPathError, match="dentro del checkout"):
