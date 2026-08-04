@@ -65,6 +65,17 @@ contra uv 0.8.17: crea el entorno en la ruta indicada, instala solo las
 dependencias normales más el grupo pedido, y **deja intacta** la `.venv` del
 proyecto.
 
+El acceso a ese entorno compartido se serializa con un bloqueo global:
+
+```
+%LOCALAPPDATA%\Sirius\.b13-packaging-venv.lock
+```
+
+El handle exclusivo se comparte entre todos los clones que construyan bajo la
+misma cuenta de Windows y cubre `uv sync`, el inventario del entorno, Nuitka y
+la limpieza. El archivo marcador puede persistir después de terminar; solo un
+handle exclusivo abierto indica que una construcción sigue activa.
+
 El motivo es un fallo real, dos veces seguidas en Windows antes de llegar a
 compilar:
 
@@ -141,8 +152,14 @@ que el checkout original está completamente limpio, captura su SHA exacto y los
 metadatos mínimos del manifiesto, y valida tanto la ruta del entorno bajo
 `LOCALAPPDATA` como una raíz temporal privada y única fuera del checkout.
 
-Antes de crear el worktree abre `dist/windows/.b13-publish.lock` con un handle
-exclusivo (`FileShare.None`) y lo conserva durante **toda** la construcción, la
+Después de esas guardas y antes de abrir el bloqueo de publicación o crear el
+worktree, abre `%LOCALAPPDATA%\Sirius\.b13-packaging-venv.lock` con un handle
+exclusivo. Lo conserva durante `uv sync`, el inventario del entorno, Nuitka y la
+limpieza, de modo que dos clones de la misma cuenta no pueden sincronizar ni
+usar simultáneamente el entorno global de empaquetado.
+
+Después abre `dist/windows/.b13-publish.lock` con un handle exclusivo
+(`FileShare.None`) y lo conserva durante **toda** la construcción, la
 publicación, cualquier rollback y la limpieza final. El bloqueo se apoya en el
 sistema de archivos, por lo que coordina procesos y sesiones de Windows que
 comparten ese destino. Una segunda ejecución concurrente se rechaza antes de
@@ -178,12 +195,12 @@ disponibles, y el error informa tanto del fallo original como de cada fallo de
 restauración y de la ruta exacta para recuperación manual.
 
 Ese mismo bloque `finally` elimina siempre el worktree y su raíz temporal y
-libera el handle del bloqueo de publicación. Antes de esa limpieza, si la
-construcción falla y existen diagnósticos de compilación, el controlador copia
-fuera del snapshot únicamente el log `build-*.log`, el informe
-`nuitka-crash-report-*.xml`, el dry-run de Nuitka y un `failure.txt`. Se guardan
-bajo `build/packaging-diagnostics/` del checkout original; un fallo al copiarlos
-se informa sin ocultar la excepción original.
+libera los handles de los bloqueos de publicación y del entorno compartido.
+Antes de esa limpieza, si la construcción falla y existen diagnósticos de
+compilación, el controlador copia fuera del snapshot únicamente el log
+`build-*.log`, el informe `nuitka-crash-report-*.xml`, el dry-run de Nuitka y un
+`failure.txt`. Se guardan bajo `build/packaging-diagnostics/` del checkout
+original; un fallo al copiarlos se informa sin ocultar la excepción original.
 
 Verificar (desde PowerShell **sin elevar**):
 
@@ -213,6 +230,7 @@ También acepta uno explícito:
 ## Rutas de salida
 
 ```
+%LOCALAPPDATA%/Sirius/.b13-packaging-venv.lock                  marcador global del entorno; puede persistir sin estar bloqueado
 dist/windows/.b13-publish.lock                                 marcador del bloqueo; puede persistir sin estar bloqueado
 dist/windows/Sirius-<versión>-<sha corto>-windows-x64/          carpeta portátil
 dist/windows/Sirius-<versión>-<sha corto>-windows-x64.zip        entregable
@@ -227,12 +245,16 @@ build/packaging-diagnostics/<sha>/<ejecución>/                   diagnóstico p
 Las rutas bajo `<snapshot temporal>` son salidas de trabajo efímeras y se
 eliminan junto con el worktree al terminar. En una construcción correcta, los
 únicos resultados publicados son los tres elementos normales bajo
-`dist/windows/`. El marcador `.b13-publish.lock` puede persistir vacío y no debe
-interpretarse como una construcción activa; solo un handle exclusivo abierto lo
-convierte en bloqueo. La carpeta `.publish-<guid>` no queda tras éxito ni tras un
-rollback completo; solo se conserva cuando una restauración falla, precisamente
-para no destruir sus backups. En una construcción fallida, el controlador
-conserva antes de limpiar una copia selectiva de los diagnósticos técnicos bajo
+`dist/windows/`. Los marcadores `.b13-publish.lock` y
+`%LOCALAPPDATA%\Sirius\.b13-packaging-venv.lock` pueden persistir vacíos y no
+deben interpretarse como construcciones activas: en ambos casos solo el handle
+exclusivo abierto representa el bloqueo. El primero serializa la publicación
+del destino y el segundo protege el entorno compartido durante `uv sync`,
+inventario, Nuitka y limpieza entre todos los clones de la misma cuenta. La
+carpeta `.publish-<guid>` no queda tras éxito ni tras un rollback completo; solo
+se conserva cuando una restauración falla, precisamente para no destruir sus
+backups. En una construcción fallida, el controlador conserva antes de limpiar
+una copia selectiva de los diagnósticos técnicos bajo
 `build/packaging-diagnostics/`; no copia volcados completos del entorno.
 
 `build/` y `dist/` están ignorados por Git: **ni el binario, ni el ZIP, ni los
