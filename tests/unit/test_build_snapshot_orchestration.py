@@ -1,0 +1,95 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+_ROOT = Path(__file__).resolve().parents[2]
+_WRAPPER = _ROOT / "scripts" / "build_windows.ps1"
+_IMPLEMENTATION = _ROOT / "scripts" / "build_windows_impl.ps1"
+
+
+def test_canonical_command_builds_from_a_distinct_detached_worktree() -> None:
+    script = _WRAPPER.read_text(encoding="utf-8")
+    capture = script.index('@("capture", $ControllerRoot)')
+    add = script.index("worktree add --detach $SnapshotRoot $SourceCommit")
+    invoke = script.index("& $SnapshotImplementation")
+
+    assert capture < add < invoke
+    assert '$SnapshotRoot = Join-Path $SnapshotContainer "snapshot"' in script
+    assert "$SnapshotRoot $SourceCommit" in script
+    assert "-SnapshotRoot $SnapshotRoot" in script
+    assert "-PublishRoot $ControllerRoot" in script
+
+
+def test_sensitive_build_inputs_are_resolved_only_from_snapshot() -> None:
+    script = _IMPLEMENTATION.read_text(encoding="utf-8")
+    assert "$RepoRoot = (Resolve-Path -LiteralPath $SnapshotRoot).Path" in script
+    assert "$ControllerRoot" not in script
+    for sensitive in (
+        "pyproject.toml",
+        "uv.lock",
+        "pysidedeploy.spec",
+        "src\\sirius\\__main__.py",
+        "alembic.ini",
+        "git ls-files migrations",
+    ):
+        assert sensitive in script
+    assert "Push-Location $RepoRoot" in script
+    assert 'cd /d "$RepoRoot"' in script
+
+
+def test_provenance_is_rechecked_before_any_publication() -> None:
+    script = _IMPLEMENTATION.read_text(encoding="utf-8")
+    verify = script.index('$SnapshotHelper "verify" $RepoRoot $SourceCommit')
+    publish = script.index("Publish-ValidatedArtifact `", verify)
+
+    assert verify < publish
+    assert "Snapshot aun detached, limpio" in script[verify:publish]
+    assert "Publish-ValidatedArtifact `" not in script[:verify]
+
+
+def test_publication_rolls_back_and_wrapper_always_attempts_both_cleanups() -> None:
+    implementation = _IMPLEMENTATION.read_text(encoding="utf-8")
+    wrapper = _WRAPPER.read_text(encoding="utf-8")
+
+    transaction = implementation[implementation.index("function Publish-ValidatedArtifact") :]
+    assert "catch {" in transaction
+    assert "Remove-Item -LiteralPath $destination" in transaction
+    assert "Move-Item -LiteralPath $saved -Destination $destination" in transaction
+    finally_block = wrapper[wrapper.index("finally {") :]
+    unregister = finally_block.index("worktree remove --force $SnapshotRoot")
+    physical_remove = finally_block.index(
+        "Remove-Item -LiteralPath $SnapshotContainer -Recurse -Force -ErrorAction Stop"
+    )
+
+    assert unregister < physical_remove
+    assert "catch {" in finally_block[unregister:physical_remove]
+    assert "Write-Error" not in finally_block
+    assert "$CleanupFailures.Add" in finally_block[unregister:physical_remove]
+    assert "$CleanupFailures.Add" in finally_block[physical_remove:]
+
+
+def test_cleanup_preserves_build_failure_and_fails_a_successful_build() -> None:
+    wrapper = _WRAPPER.read_text(encoding="utf-8")
+    orchestration = wrapper[wrapper.index("$BuildFailure = $null") :]
+
+    assert "$BuildFailure = $_" in orchestration
+    assert "catch {" in orchestration
+    assert "throw\n}" in orchestration
+    assert "if ($null -eq $BuildFailure)" in orchestration
+    assert "B13 CLEANUP ERROR" in orchestration
+
+
+def test_localappdata_guard_still_precedes_worktree_and_build() -> None:
+    script = _WRAPPER.read_text(encoding="utf-8")
+    guard = script.index("$packagingGuard = Invoke-JsonController $GuardScript")
+    add = script.index("worktree add --detach")
+    invoke = script.index("& $SnapshotImplementation")
+
+    assert guard < add < invoke
+    assert 'Join-Path $env:LOCALAPPDATA "Sirius\\packaging-venv"' in script
+    assert "packaging_path_guard.py" in script
+
+
+def test_user_facing_build_command_remains_the_canonical_wrapper() -> None:
+    implementation = _IMPLEMENTATION.read_text(encoding="utf-8")
+    assert '$BuildCommand = ".\\scripts\\build_windows.ps1"' in implementation

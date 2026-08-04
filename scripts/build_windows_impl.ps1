@@ -22,16 +22,26 @@
 #>
 
 [CmdletBinding()]
-param()
+param(
+    [Parameter(Mandatory = $true)][string]$SnapshotRoot,
+    [Parameter(Mandatory = $true)][string]$PublishRoot,
+    [Parameter(Mandatory = $true)][string]$SourceCommit,
+    [Parameter(Mandatory = $true)][string]$SourceCommitShort,
+    [Parameter(Mandatory = $true)][string]$SourceBranch,
+    [Parameter(Mandatory = $true)][string]$OriginMainCommit,
+    [Parameter(Mandatory = $true)][bool]$DescendsFromOriginMain
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$RepoRoot = (Resolve-Path -LiteralPath $SnapshotRoot).Path
+$PublishRoot = (Resolve-Path -LiteralPath $PublishRoot).Path
 $BuildDir = Join-Path $RepoRoot "build"
 $PackagingDir = Join-Path $BuildDir "packaging"
 $DeployDir = Join-Path $BuildDir "deploy"
 $DistRoot = Join-Path $RepoRoot "dist\windows"
+$PublishDistRoot = Join-Path $PublishRoot "dist\windows"
 $VersionedSpec = Join-Path $RepoRoot "pysidedeploy.spec"
 $WorkingSpec = Join-Path $PackagingDir "pysidedeploy.spec"
 $DryRunFile = Join-Path $PackagingDir "pyside6-deploy-dry-run.txt"
@@ -109,6 +119,62 @@ function Remove-Tree {
     }
 }
 
+function Publish-ValidatedArtifact {
+    <# Publica los tres resultados como una pequena transaccion recuperable.
+       Si cualquier movimiento falla, elimina lo nuevo y restaura lo anterior;
+       nunca deja una mezcla parcial acreditada como salida de esta ejecucion. #>
+    param(
+        [string]$SourceDirectory,
+        [string]$SourceZip,
+        [string]$SourceHash,
+        [string]$DestinationRoot,
+        [string]$Name
+    )
+    New-Item -ItemType Directory -Force -Path $DestinationRoot | Out-Null
+    $transaction = Join-Path $DestinationRoot (".publish-" + [guid]::NewGuid().ToString("N"))
+    $incoming = Join-Path $transaction "incoming"
+    $backup = Join-Path $transaction "backup"
+    $names = @($Name, "$Name.zip", "$Name.zip.sha256")
+    $sources = @($SourceDirectory, $SourceZip, $SourceHash)
+
+    try {
+        New-Item -ItemType Directory -Path $incoming, $backup | Out-Null
+        for ($index = 0; $index -lt $names.Count; $index++) {
+            Copy-Item -LiteralPath $sources[$index] -Destination (Join-Path $incoming $names[$index]) -Recurse
+        }
+
+        try {
+            foreach ($itemName in $names) {
+                $destination = Join-Path $DestinationRoot $itemName
+                if (Test-Path -LiteralPath $destination) {
+                    Move-Item -LiteralPath $destination -Destination (Join-Path $backup $itemName)
+                }
+            }
+            foreach ($itemName in $names) {
+                Move-Item -LiteralPath (Join-Path $incoming $itemName) -Destination (Join-Path $DestinationRoot $itemName)
+            }
+        }
+        catch {
+            foreach ($itemName in $names) {
+                $destination = Join-Path $DestinationRoot $itemName
+                $saved = Join-Path $backup $itemName
+                $pending = Join-Path $incoming $itemName
+                if (Test-Path -LiteralPath $saved) {
+                    if (Test-Path -LiteralPath $destination) { Remove-Item -LiteralPath $destination -Recurse -Force }
+                    Move-Item -LiteralPath $saved -Destination $destination
+                }
+                elseif (-not (Test-Path -LiteralPath $pending) -and (Test-Path -LiteralPath $destination)) {
+                    Remove-Item -LiteralPath $destination -Recurse -Force
+                }
+            }
+            throw
+        }
+    }
+    finally {
+        if (Test-Path -LiteralPath $transaction) { Remove-Tree $transaction }
+    }
+}
+
 # --------------------------------------------------------------------------
 Write-Step "1/13 Entorno del sistema"
 
@@ -135,51 +201,14 @@ Write-Step "2/13 Estado del repositorio"
 
 Push-Location $RepoRoot
 try {
-    $SourceCommit = (Invoke-Native "git" @("rev-parse", "HEAD") "git rev-parse HEAD").Trim()
-    $SourceCommitShort = (Invoke-Native "git" @("rev-parse", "--short", "HEAD") "git rev-parse --short HEAD").Trim()
-    $branchRaw = (& git rev-parse --abbrev-ref HEAD | Out-String).Trim()
-    $SourceBranch = $branchRaw
-
-    # El unico camino que se descuenta del arbol sucio es el borrador que
-    # pyside6-deploy impone en src\sirius\deployment. No es codigo fuente y no
-    # esta en .gitignore (a diferencia de build/ y dist/), pero este script es
-    # su dueno: lo borra antes de compilar y despues de una compilacion buena, y
-    # lo conserva a proposito cuando Nuitka falla, para poder diagnosticar.
-    #
-    # Sin este descuento la conservacion y el rechazo se contradicen: tras un
-    # build fallido, la siguiente ejecucion veria "?? src/sirius/deployment/",
-    # abortaria por arbol sucio y no llegaria nunca a la limpieza que existe
-    # justo para resolver ese estado. El reintento quedaria bloqueado por el
-    # unico estado del que tiene que poder recuperarse.
-    #
-    # Solo se descuenta ESE prefijo. Cualquier otro cambio, rastreado o no,
-    # sigue rechazando el empaquetado.
-    $NuitkaScratchRelative = "src/sirius/deployment"
-    $statusLines = @(& git status --porcelain | Where-Object {
-            -not [string]::IsNullOrWhiteSpace($_)
-        })
-    $ScratchOnlyLines = @($statusLines | Where-Object {
-            $_.Substring(2).Trim().Trim('"').Replace("\", "/").StartsWith($NuitkaScratchRelative)
-        })
-    $sourceStatusLines = @($statusLines | Where-Object {
-            -not $_.Substring(2).Trim().Trim('"').Replace("\", "/").StartsWith($NuitkaScratchRelative)
-        })
-    $status = ($sourceStatusLines -join "`n").Trim()
-    $SourceDirty = -not [string]::IsNullOrWhiteSpace($status)
-
-    & git rev-parse --verify --quiet "refs/remotes/origin/main" > $null 2>$null
-    $hasOriginMain = ($LASTEXITCODE -eq 0)
-    $OriginMainCommit = ""
-    $DescendsFromOriginMain = $false
-    if ($hasOriginMain) {
-        $OriginMainCommit = (Invoke-Native "git" @("rev-parse", "origin/main") "git rev-parse origin/main").Trim()
-        & git merge-base --is-ancestor $OriginMainCommit $SourceCommit
-        $DescendsFromOriginMain = ($LASTEXITCODE -eq 0)
+    $snapshotCommit = (Invoke-Native "git" @("rev-parse", "HEAD") "git rev-parse HEAD del snapshot").Trim()
+    if ($snapshotCommit -ne $SourceCommit) {
+        throw "El snapshot apunta a $snapshotCommit, no al commit capturado $SourceCommit."
     }
-    else {
-        throw "No existe la referencia origin/main. Ejecuta 'git fetch origin' antes de construir."
-    }
+    $snapshotBranch = (Invoke-Native "git" @("rev-parse", "--abbrev-ref", "HEAD") "rama del snapshot").Trim()
+    if ($snapshotBranch -ne "HEAD") { throw "El snapshot no es un worktree detached." }
 }
+
 finally {
     Pop-Location
 }
@@ -193,33 +222,8 @@ if ($DescendsFromOriginMain) {
 else {
     Write-Warn2 "El commit de origen NO desciende de origin/main. Queda registrado en el manifiesto."
 }
-if ($SourceDirty) {
-    # Se aborta, no se avisa. El artefacto se nombra con el sha corto de HEAD y
-    # el manifiesto declara source_commit = HEAD, pero lo que Nuitka compila es
-    # el arbol de trabajo. Con cambios sin confirmar esas dos cosas dejan de ser
-    # la misma: dos ejecutables materialmente distintos podrian repartirse con
-    # la misma procedencia, y una edicion local sin revisar viajaria bajo un SHA
-    # revisado. Un paquete no puede atribuirse a HEAD si su contenido real no es
-    # el de HEAD, asi que aqui no hay nada que registrar: hay que parar.
-    #
-    # Antes de MSVC, de uv y de compilar, para no dejar a medias un entorno ni
-    # gastar varios minutos en un artefacto que no seria atribuible.
-    Write-Host ""
-    Write-Host "  El arbol de trabajo tiene cambios sin confirmar:" -ForegroundColor Red
-    foreach ($line in ($status -split "`n")) {
-        if (-not [string]::IsNullOrWhiteSpace($line)) { Write-Host "    $($line.TrimEnd())" -ForegroundColor Red }
-    }
-    Write-Host ""
-    throw ("El empaquetado exige un arbol limpio. El artefacto se nombraria con $SourceCommitShort y " +
-        "el manifiesto declararia source_commit=$SourceCommit, pero se compilaria el arbol de trabajo, " +
-        "que no coincide con ese commit. Confirma o descarta los cambios y vuelve a construir. " +
-        "Todo artefacto valido de B13 lleva source_dirty=false.")
-}
-Write-Ok "Arbol de trabajo limpio."
-if ($ScratchOnlyLines.Count -gt 0) {
-    Write-Warn2 ("Queda el borrador de una compilacion anterior en src\sirius\deployment " +
-        "($($ScratchOnlyLines.Count) entradas). No cuenta como arbol sucio y se limpia mas adelante.")
-}
+$SourceDirty = $false
+Write-Ok "Snapshot detached acreditado antes de construir."
 
 # --------------------------------------------------------------------------
 Write-Step "3/13 Entorno de compilacion MSVC x64"
@@ -776,14 +780,39 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $zipHash = (Get-FileHash -LiteralPath $ZipPath -Algorithm SHA256).Hash.ToLower()
 Write-Utf8NoBom -Path $ZipShaPath -Content ("$zipHash  $ArtifactName.zip`n")
 
+# El build puede crear scratch ignorado bajo build/ y dist/, pero toda entrada
+# potencial de fuente debe seguir coincidiendo con el commit. El scratch de
+# Nuitka ya se elimino. Esta es la ultima operacion antes de tocar el checkout
+# original y usa el helper versionado procedente del propio snapshot.
+$SnapshotHelper = Join-Path $RepoRoot "scripts\package_snapshot.py"
+$provenanceRaw = (& $VenvPython $SnapshotHelper "verify" $RepoRoot $SourceCommit | Out-String).Trim()
+$provenanceExit = $LASTEXITCODE
+if ([string]::IsNullOrWhiteSpace($provenanceRaw)) {
+    throw "La comprobacion final de procedencia no produjo resultado; no se publica nada."
+}
+$provenance = $provenanceRaw | ConvertFrom-Json
+if ($provenanceExit -ne 0 -or -not [bool]$provenance.ok) {
+    $detail = if ($null -ne $provenance.error) { [string]$provenance.error } else { "procedencia no demostrada" }
+    throw "La procedencia del snapshot cambio durante el build: $detail. No se publica nada."
+}
+Write-Ok "Snapshot aun detached, limpio y exactamente en $SourceCommit."
+
+Publish-ValidatedArtifact `
+    -SourceDirectory $ArtifactDir `
+    -SourceZip $ZipPath `
+    -SourceHash $ZipShaPath `
+    -DestinationRoot $PublishDistRoot `
+    -Name $ArtifactName
+Write-Ok "Artefactos validados publicados en $PublishDistRoot."
+
 $distBytes = ($allFiles | Measure-Object -Property Length -Sum).Sum
 $zipBytes = (Get-Item -LiteralPath $ZipPath).Length
 $totalSeconds = [math]::Round(((Get-Date) - $BuildStart).TotalSeconds, 1)
 
 Write-Host ""
 Write-Host "================ B13: construccion completada ================" -ForegroundColor Green
-Write-Host "  Artefacto     : dist\windows\$ArtifactName"
-Write-Host "  ZIP           : dist\windows\$ArtifactName.zip"
+Write-Host "  Artefacto     : $PublishDistRoot\$ArtifactName"
+Write-Host "  ZIP           : $PublishDistRoot\$ArtifactName.zip"
 Write-Host "  SHA-256 ZIP   : $zipHash"
 Write-Host "  Tamano dist   : $([math]::Round($distBytes / 1MB, 1)) MB en $($allFiles.Count) archivos"
 Write-Host "  Tamano ZIP    : $([math]::Round($zipBytes / 1MB, 1)) MB"

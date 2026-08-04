@@ -33,8 +33,8 @@ def test_the_canonical_wrapper_and_internal_implementation_exist() -> None:
 
 
 def test_the_path_guard_runs_before_the_internal_build(build_wrapper: str) -> None:
-    guard_call = build_wrapper.index("$guardOutput = (&")
-    implementation_call = build_wrapper.index("& $ImplementationScript")
+    guard_call = build_wrapper.index("$packagingGuard = Invoke-JsonController")
+    implementation_call = build_wrapper.index("& $SnapshotImplementation")
 
     assert guard_call < implementation_call
     assert "packaging_path_guard.py" in build_wrapper
@@ -43,7 +43,7 @@ def test_the_path_guard_runs_before_the_internal_build(build_wrapper: str) -> No
 
 
 def test_no_packaging_executable_is_derived_before_the_guard(build_wrapper: str) -> None:
-    guard_call = build_wrapper.index("$guardOutput = (&")
+    guard_call = build_wrapper.index("$packagingGuard = Invoke-JsonController")
     pre_guard = build_wrapper[:guard_call]
 
     assert "$VenvPython" not in pre_guard

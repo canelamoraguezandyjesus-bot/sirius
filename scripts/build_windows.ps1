@@ -3,10 +3,10 @@
     B13 - Entrada canonica y segura del empaquetado de Sirius 0.1 para Windows.
 
 .DESCRIPTION
-    Valida que el entorno dedicado de empaquetado quede fuera del checkout antes
-    de derivar ejecutables del entorno, asignar UV_PROJECT_ENVIRONMENT, crear
-    directorios o ejecutar uv sync. Solo despues delega en la implementacion
-    interna del build.
+    Acredita el checkout limpio, valida las rutas peligrosas, crea un worktree
+    temporal detached del commit capturado y delega toda la construccion en esa
+    instantanea. El checkout original solo controla el proceso y recibe al final
+    los artefactos ya validados.
 #>
 
 [CmdletBinding()]
@@ -15,24 +15,27 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$ControllerRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $GuardScript = Join-Path $PSScriptRoot "packaging_path_guard.py"
-$ImplementationScript = Join-Path $PSScriptRoot "build_windows_impl.ps1"
+$SnapshotHelper = Join-Path $PSScriptRoot "package_snapshot.py"
 
 if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
     throw "No esta definida LOCALAPPDATA; no se puede ubicar el entorno de empaquetado."
 }
-
-# Esta es la unica derivacion permitida antes de la guarda. No se crean rutas,
-# no se deriva ningun ejecutable, no se asigna UV_PROJECT_ENVIRONMENT y no se
-# invoca uv hasta que packaging_path_guard.py confirme la contencion.
-$PackagingVenv = Join-Path $env:LOCALAPPDATA "Sirius\packaging-venv"
-
-if (-not (Test-Path -LiteralPath $GuardScript -PathType Leaf)) {
-    throw "Falta el validador de ruta de empaquetado: $GuardScript"
+if ([string]::IsNullOrWhiteSpace($env:TEMP)) {
+    throw "No esta definida TEMP; no se puede crear el snapshot privado."
 }
-if (-not (Test-Path -LiteralPath $ImplementationScript -PathType Leaf)) {
-    throw "Falta la implementacion interna del build: $ImplementationScript"
+
+# Solo se derivan rutas. No se crea nada, no se invoca uv y no se obtiene ningun
+# ejecutable del entorno de packaging antes de que ambas rutas sean validadas.
+$PackagingVenv = Join-Path $env:LOCALAPPDATA "Sirius\packaging-venv"
+$SnapshotContainer = Join-Path $env:TEMP ("Sirius-B13-" + [guid]::NewGuid().ToString("N"))
+$SnapshotRoot = Join-Path $SnapshotContainer "snapshot"
+
+foreach ($required in @($GuardScript, $SnapshotHelper)) {
+    if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+        throw "Falta un controlador necesario del build: $required"
+    }
 }
 
 $PythonCommand = Get-Command python.exe -ErrorAction SilentlyContinue
@@ -42,30 +45,105 @@ if ($null -eq $PythonCommand) {
     $PythonPrefix = @("-3.14")
 }
 if ($null -eq $PythonCommand) {
-    throw "BLOCKED_EXTERNAL_TOOLCHAIN: no se encontro python.exe ni py.exe para ejecutar la guarda de ruta."
+    throw "BLOCKED_EXTERNAL_TOOLCHAIN: no se encontro python.exe ni py.exe para ejecutar las guardas."
 }
 
-$guardOutput = (& $PythonCommand.Source @PythonPrefix $GuardScript $RepoRoot $PackagingVenv | Out-String).Trim()
-$guardExit = $LASTEXITCODE
-if ([string]::IsNullOrWhiteSpace($guardOutput)) {
-    throw "La guarda de ruta no produjo un resultado verificable."
+function Invoke-JsonController {
+    param([string]$Script, [string[]]$Arguments, [string]$What)
+    $raw = (& $PythonCommand.Source @PythonPrefix $Script @Arguments | Out-String).Trim()
+    $exitCode = $LASTEXITCODE
+    if ([string]::IsNullOrWhiteSpace($raw)) { throw "$What no produjo un resultado verificable." }
+    try { $result = $raw | ConvertFrom-Json }
+    catch { throw "$What devolvio una respuesta no valida: $raw" }
+    if ($exitCode -ne 0 -or -not [bool]$result.ok) {
+        $detail = if ($null -ne $result.error) { [string]$result.error } else { "comprobacion rechazada" }
+        throw "$What fallo: $detail"
+    }
+    return $result
 }
 
+# El commit y los unicos metadatos de Git que necesita el manifiesto se capturan
+# mientras el checkout original todavia es la unica fuente disponible.
+$source = Invoke-JsonController $SnapshotHelper @("capture", $ControllerRoot) "Captura del checkout"
+$SourceCommit = [string]$source.commit
+$SourceCommitShort = [string]$source.commit_short
+$SourceBranch = [string]$source.branch
+$OriginMainCommit = [string]$source.origin_main
+$DescendsFromOriginMain = [bool]$source.descends_from_origin_main
+
+# Se conserva y se aplica primero la guarda de LOCALAPPDATA. La misma guarda
+# impide ademas que el worktree temporal caiga dentro del checkout vivo.
+$packagingGuard = Invoke-JsonController $GuardScript @($ControllerRoot, $PackagingVenv) "Guarda de LOCALAPPDATA"
+$snapshotGuard = Invoke-JsonController $GuardScript @($ControllerRoot, $SnapshotRoot) "Guarda del snapshot"
+Write-Host "  [ok] Ruta de empaquetado validada: $($packagingGuard.packaging_path)" -ForegroundColor Green
+Write-Host "  [ok] Ruta temporal del snapshot validada: $($snapshotGuard.packaging_path)" -ForegroundColor Green
+
+$BuildFailure = $null
 try {
-    $guardResult = $guardOutput | ConvertFrom-Json
+    New-Item -ItemType Directory -Path $SnapshotContainer | Out-Null
+    & git -C $ControllerRoot worktree add --detach $SnapshotRoot $SourceCommit
+    if ($LASTEXITCODE -ne 0) { throw "git worktree add fallo con codigo $LASTEXITCODE." }
+
+    $actualSnapshotCommit = (& git -C $SnapshotRoot rev-parse HEAD | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or $actualSnapshotCommit -ne $SourceCommit) {
+        throw "El worktree no corresponde exactamente al commit capturado $SourceCommit."
+    }
+
+    $SnapshotImplementation = Join-Path $SnapshotRoot "scripts\build_windows_impl.ps1"
+    if (-not (Test-Path -LiteralPath $SnapshotImplementation -PathType Leaf)) {
+        throw "El snapshot no contiene la implementacion versionada del build."
+    }
+
+    # Desde aqui toda fuente, configuracion, modulo y salida intermedia procede
+    # del snapshot. El checkout vivo solo se comunica como destino de publicacion.
+    & $SnapshotImplementation `
+        -SnapshotRoot $SnapshotRoot `
+        -PublishRoot $ControllerRoot `
+        -SourceCommit $SourceCommit `
+        -SourceCommitShort $SourceCommitShort `
+        -SourceBranch $SourceBranch `
+        -OriginMainCommit $OriginMainCommit `
+        -DescendsFromOriginMain $DescendsFromOriginMain
 }
 catch {
-    throw "La guarda de ruta devolvio una respuesta no valida: $guardOutput"
+    # El throw desnudo conserva la excepcion original. El finally registra sus
+    # propios fallos sin lanzar nada cuando ya existe este error de build.
+    $BuildFailure = $_
+    throw
 }
+finally {
+    $CleanupFailures = New-Object System.Collections.Generic.List[string]
 
-if ($guardExit -ne 0 -or -not [bool]$guardResult.ok) {
-    $guardMessage = if ($null -ne $guardResult.error) { [string]$guardResult.error } else { "ruta rechazada" }
-    throw "Entorno de empaquetado no permitido: $guardMessage"
+    # Cada limpieza tiene su propio try/catch: la retirada fallida del registro
+    # nunca impide intentar borrar fisicamente la raiz temporal.
+    try {
+        & git -C $ControllerRoot worktree remove --force $SnapshotRoot
+        if ($LASTEXITCODE -ne 0) {
+            $CleanupFailures.Add("git worktree remove fallo con codigo $LASTEXITCODE para '$SnapshotRoot'.")
+        }
+    }
+    catch {
+        $CleanupFailures.Add("git worktree remove no pudo ejecutarse para '$SnapshotRoot': $($_.Exception.Message)")
+    }
+
+    try {
+        if (Test-Path -LiteralPath $SnapshotContainer) {
+            Remove-Item -LiteralPath $SnapshotContainer -Recurse -Force -ErrorAction Stop
+        }
+    }
+    catch {
+        $CleanupFailures.Add("No se pudo eliminar la raiz temporal '$SnapshotContainer': $($_.Exception.Message)")
+    }
+
+    if ($CleanupFailures.Count -gt 0) {
+        foreach ($cleanupFailure in $CleanupFailures) {
+            # Console.Error deja evidencia clara sin convertirse en una excepcion
+            # terminante que tape el fallo original o salte otra limpieza.
+            [Console]::Error.WriteLine("B13 CLEANUP ERROR: $cleanupFailure")
+        }
+        if ($null -eq $BuildFailure) {
+            throw ("La construccion termino, pero fallo la limpieza del snapshot: " +
+                ($CleanupFailures -join " | "))
+        }
+    }
 }
-
-Write-Host "  [ok] Ruta de empaquetado validada antes de cualquier sincronizacion: $($guardResult.packaging_path)" -ForegroundColor Green
-
-# La implementacion contiene la carga de MSVC, la sincronizacion de dependencias,
-# Nuitka, el montaje, los manifiestos y el ZIP. Al llegar aqui la precondicion
-# peligrosa ya esta cerrada.
-& $ImplementationScript

@@ -40,7 +40,7 @@ Lo que B13 sí garantiza:
 
 | Garantía | Dónde se sostiene |
 |---|---|
-| Mismos archivos fuente y mismo commit | `source_commit` en `BUILD-MANIFEST.json` |
+| Mismos archivos fuente y mismo commit | worktree temporal detached, comprobación final de Git y `source_commit` en `BUILD-MANIFEST.json` |
 | Dependencias bloqueadas | `uv.lock`, con `uv lock --check` y `uv sync --frozen` |
 | Configuración de despliegue versionada | `pysidedeploy.spec` en la raíz |
 | Un único comando canónico | `.\scripts\build_windows.ps1` |
@@ -121,6 +121,23 @@ Construir:
 .\scripts\build_windows.ps1
 ```
 
+Ese sigue siendo el único comando operativo. El controlador comprueba primero
+que el checkout original está completamente limpio, captura su SHA exacto y los
+metadatos mínimos del manifiesto, y valida tanto la ruta del entorno bajo
+`LOCALAPPDATA` como una raíz temporal privada y única fuera del checkout. Después
+crea en esa raíz un `git worktree add --detach` del SHA capturado.
+
+La implementación versionada se invoca desde ese worktree: código,
+`pyproject.toml`, `uv.lock`, `pysidedeploy.spec`, migraciones, versión, head de
+Alembic, módulos importados, entradas de Nuitka y montaje del contenido proceden
+exclusivamente del snapshot. El checkout original ya solo es controlador y
+destino final. Antes de publicar, el build elimina el scratch legítimo de
+Nuitka, vuelve a exigir que el worktree apunte al mismo SHA y que Git no muestre
+ningún archivo rastreado modificado ni archivo inesperado sin rastrear. Una
+discrepancia aborta sin publicar; la publicación recupera el estado anterior si
+falla a medias. Un bloque `finally` elimina siempre el worktree y su raíz
+temporal, tanto tras éxito como tras error.
+
 Verificar (desde PowerShell **sin elevar**):
 
 ```powershell
@@ -152,34 +169,26 @@ También acepta uno explícito:
 dist/windows/Sirius-<versión>-<sha corto>-windows-x64/          carpeta portátil
 dist/windows/Sirius-<versión>-<sha corto>-windows-x64.zip        entregable
 dist/windows/Sirius-<versión>-<sha corto>-windows-x64.zip.sha256 hash del ZIP
-build/deploy/Sirius.dist/                                        salida intermedia
-build/packaging/pyside6-deploy-dry-run.txt                       comando Nuitka efectivo
-build/packaging/build-<marca temporal>.log                       log completo
+<snapshot temporal>/build/deploy/Sirius.dist/                    salida intermedia
+<snapshot temporal>/build/packaging/pyside6-deploy-dry-run.txt   comando Nuitka efectivo
+<snapshot temporal>/build/packaging/build-<marca temporal>.log   log completo
 ```
+
+Las tres rutas bajo `<snapshot temporal>` son salidas de trabajo efímeras, no
+resultados persistentes: sirven únicamente mientras se ejecuta el build y se
+eliminan junto con el worktree al terminar, tanto en éxito como en error. Los
+únicos resultados publicados son los tres elementos bajo `dist/windows/`.
 
 `build/` y `dist/` están ignorados por Git: **ni el binario, ni el ZIP, ni los
 logs se confirman en el repositorio**.
 
 `pyside6-deploy` impone además su propio directorio intermedio en
 `src/sirius/deployment/` (no es configurable: lo deriva del archivo de entrada).
-Intenta purgarlo al terminar, pero se traga el `PermissionError` y solo avisa,
-de modo que puede dejar más de 1 GB dentro de `src/` — lo que ensucia el árbol
-de Git y, peor, deja archivos `module.*.c` rancios que hacen fallar la siguiente
-compilación con `assert not os.path.isfile(...)`. Por eso
-`build_windows.ps1` lo elimina explícitamente y con reintentos, tanto antes de
-construir como después de una compilación correcta. Si la compilación falla, ese
-directorio se conserva a propósito para diagnóstico y lo limpia la siguiente
-ejecución.
-
-Ese directorio **no** está en `.gitignore` (a diferencia de `build/` y `dist/`),
-así que es la única ruta que se descuenta al decidir si el árbol está sucio. Sin
-ese descuento, conservarlo y rechazar el árbol sucio se contradicen: tras una
-compilación fallida, la siguiente ejecución vería `?? src/sirius/deployment/`,
-abortaría, y no llegaría nunca a la limpieza que existe precisamente para
-resolver ese estado — el reintento quedaría bloqueado por el único estado del que
-tiene que poder recuperarse. Se descuenta solo ese prefijo, se avisa por pantalla
-cuando aparece, y cualquier otro cambio, rastreado o no, sigue abortando el
-empaquetado.
+Intenta purgarlo al terminar, pero se traga el `PermissionError` y solo avisa.
+Por eso el build lo elimina explícitamente y con reintentos antes de construir y
+después de una compilación correcta. Vive únicamente dentro del worktree
+temporal: nunca ensucia el checkout original y, incluso si la compilación falla,
+la limpieza final elimina el worktree completo.
 
 ## Estructura del artefacto
 
@@ -280,7 +289,6 @@ comprobación automáticamente, y además verifica archivo por archivo contra
 git clone <url> sirius
 cd sirius
 git switch --detach <commit>
-uv sync --frozen --group packaging
 .\scripts\build_windows.ps1
 .\scripts\verify_windows_package.ps1
 ```
@@ -294,13 +302,24 @@ versionado ni ensucie el árbol de Git.
 
 ## Qué comprueba la verificación
 
-**Lo verificado es el ZIP que se distribuye, no la carpeta de trabajo de
-`dist/`.** El orden es deliberado: primero se comprueba el SHA-256 del ZIP;
-después se extrae ese mismo ZIP a una ruta temporal con espacios; y todo lo
-demás —inventario de hashes, contaminación y los dos arranques— se hace sobre
-la copia extraída. Si el ZIP no coincide con su hash, no se extrae nada y la
-verificación se detiene. La afirmación final queda limitada al ZIP cuyo hash se
-verificó.
+**Lo verificado es una copia congelada del ZIP que se distribuye, no la carpeta
+de trabajo de `dist/` ni el ZIP original mientras puede seguir cambiando.** El
+orden real es deliberado:
+
+1. localiza el ZIP original y su `.sha256`;
+2. crea una raíz temporal privada y única;
+3. copia el ZIP a una copia congelada dentro de esa raíz;
+4. calcula el hash de la copia congelada y lo compara con el valor esperado;
+5. inspecciona únicamente la copia congelada;
+6. extrae únicamente la copia congelada;
+7. vuelve a calcular su hash después de inspeccionarla y extraerla;
+8. aborta si ese hash cambió;
+9. ejecuta las comprobaciones y arranques únicamente sobre lo extraído de esa
+   copia.
+
+Si la copia congelada no coincide con el hash esperado, no se extrae nada. La
+afirmación final queda limitada a sus bytes verificados; en ningún momento se
+inspecciona ni se extrae directamente el ZIP original.
 
 La inspección de las entradas del ZIP —separadores, raíz única y rechazo de
 rutas que escaparían de la carpeta de extracción— **no** vive en el `.ps1`, sino
