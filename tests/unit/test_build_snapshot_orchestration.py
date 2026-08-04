@@ -66,7 +66,7 @@ def test_publication_tracks_backups_and_new_results_separately() -> None:
     assert "-ErrorAction Stop" in transaction[:rollback]
 
 
-def test_incomplete_publication_rollback_preserves_backups_and_reports_both_errors() -> None:
+def test_incomplete_rollback_preserves_backups_and_reports_errors() -> None:
     script = _IMPLEMENTATION.read_text(encoding="utf-8")
     transaction = script[
         script.index("function Publish-ValidatedArtifact") : script.index(
@@ -107,9 +107,11 @@ def test_successful_rollback_rethrows_original_and_cleanup_cannot_mask_it() -> N
     assert "else {\n                    throw" in transaction[cleanup_error:]
 
 
-def test_exclusive_publication_file_lock_covers_build_transaction_and_cleanup() -> None:
+def test_exclusive_publication_lock_covers_build_and_cleanup() -> None:
     wrapper = _WRAPPER.read_text(encoding="utf-8")
-    destination = wrapper.index('$PublishDestinationRoot = Join-Path $ControllerRoot "dist\\windows"')
+    destination = wrapper.index(
+        '$PublishDestinationRoot = Join-Path $ControllerRoot "dist\\windows"'
+    )
     lock_path = wrapper.index(
         '$PublicationLockPath = Join-Path $PublishDestinationRoot ".b13-publish.lock"',
         destination,
@@ -119,7 +121,9 @@ def test_exclusive_publication_file_lock_covers_build_transaction_and_cleanup() 
     concurrent_rejection = wrapper.index("La publicacion concurrente se rechaza", no_share)
     add_worktree = wrapper.index("worktree add --detach $SnapshotRoot $SourceCommit", acquire)
     invoke = wrapper.index("& $SnapshotImplementation", add_worktree)
-    orchestration_finally = wrapper.index("finally {", wrapper.index("$BuildFailure = $null"))
+    orchestration_finally = wrapper.index(
+        "finally {", wrapper.index("$BuildFailure = $null")
+    )
     remove_snapshot = wrapper.index("worktree remove --force $SnapshotRoot", orchestration_finally)
     dispose = wrapper.index("$PublicationLockStream.Dispose()", remove_snapshot)
 
@@ -178,7 +182,7 @@ def test_failed_build_diagnostics_are_copied_before_snapshot_cleanup() -> None:
     assert "B13 DIAGNOSTICS: conservados" in wrapper[catch:finally_block]
 
 
-def test_controller_uses_uv_managed_python_without_a_global_interpreter() -> None:
+def test_controller_uses_uv_managed_python_without_global_interpreter() -> None:
     script = _WRAPPER.read_text(encoding="utf-8")
     uv_lookup = script.index("Get-Command uv.exe")
     controller = script.index("function Invoke-JsonController", uv_lookup)
