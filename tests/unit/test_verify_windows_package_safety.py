@@ -55,9 +55,7 @@ def test_build_manifest_is_size_capped_before_json_parsing() -> None:
     limit = static.index("$MaxBuildManifestBytes = 1MB")
     size = static.index("Get-Item -LiteralPath $buildManifestPath", limit)
     gate = static.index("BUILD-MANIFEST.json supera el limite permitido", size)
-    parse = static.index(
-        "$buildManifest = Get-Content -LiteralPath $buildManifestPath -Raw", gate
-    )
+    parse = static.index("$buildManifest = Get-Content -LiteralPath $buildManifestPath -Raw", gate)
 
     assert limit < size < gate < parse
     assert "if ($script:Failures.Count -gt 0)" in static[size:gate]
