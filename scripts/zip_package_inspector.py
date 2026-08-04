@@ -2,11 +2,11 @@
 
 La misma implementación que usa ``verify_windows_package.ps1`` queda cubierta
 por ``tests/unit/test_zip_package_inspector.py``. Las rutas se juzgan con
-semántica Windows mediante ``ntpath`` aunque las pruebas se ejecuten en Ubuntu.
-Además de impedir zip-slip, el módulo limita el tamaño del ZIP de origen, el
-número de entradas, los tamaños declarados, la expansión total y el ratio de
-compresión. Los límites se vuelven a imponer mientras se congelan y extraen los
-bytes.
+semántica Windows mediante el validador común aunque las pruebas se ejecuten en
+Ubuntu. Además de impedir zip-slip, ADS y alias Win32, el módulo limita el
+tamaño del ZIP de origen, el número de entradas, los tamaños declarados, la
+expansión total y el ratio de compresión. Los límites se vuelven a imponer
+mientras se congelan y extraen los bytes.
 
 Uso desde PowerShell::
 
@@ -26,6 +26,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import IO
+
+from windows_path_safety import WindowsPathError, split_safe_windows_relative_path
 
 __all__ = [
     "DEFAULT_LIMITS",
@@ -207,20 +209,15 @@ def inspect_entry_names(entry_names: Iterable[str], *, extract_root: str) -> Zip
 
     for original_name in entry_names:
         entry_count += 1
-        normalized = original_name.replace("\\", "/")
-        if (
-            normalized.startswith("/")
-            or ntpath.isabs(original_name)
-            or ntpath.splitdrive(original_name)[0] != ""
-        ):
-            unsafe.append(f"ruta absoluta o con unidad: {original_name}")
-            continue
-
-        segments = _segments(original_name)
-        if not segments:
-            continue
-        if ".." in segments:
-            unsafe.append(f"segmento '..': {original_name}")
+        try:
+            segments = list(
+                split_safe_windows_relative_path(
+                    original_name,
+                    directory_entry=_is_directory_entry(original_name),
+                )
+            )
+        except WindowsPathError as exc:
+            unsafe.append(f"ruta Windows no segura ({exc}): {original_name}")
             continue
 
         destination = ntpath.normpath(ntpath.join(extract_root, "\\".join(segments)))
