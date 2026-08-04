@@ -169,9 +169,7 @@ def test_inspection_rejects_an_entry_over_the_individual_limit(tmp_path: Path) -
     with zipfile.ZipFile(archive_path, "w") as archive:
         archive.writestr(BACKSLASH_ENTRIES[0], b"x" * 11)
 
-    inspection = inspect_zip(
-        str(archive_path), extract_root=EXTRACT_ROOT, limits=_limits(entry=10)
-    )
+    inspection = inspect_zip(str(archive_path), extract_root=EXTRACT_ROOT, limits=_limits(entry=10))
 
     assert len(inspection.size_violations) == 1
     assert "entrada demasiado grande" in inspection.size_violations[0]
@@ -183,9 +181,7 @@ def test_inspection_rejects_excessive_total_expansion(tmp_path: Path) -> None:
         archive.writestr(BACKSLASH_ENTRIES[0], b"a" * 6)
         archive.writestr(BACKSLASH_ENTRIES[1], b"b" * 6)
 
-    inspection = inspect_zip(
-        str(archive_path), extract_root=EXTRACT_ROOT, limits=_limits(total=10)
-    )
+    inspection = inspect_zip(str(archive_path), extract_root=EXTRACT_ROOT, limits=_limits(total=10))
 
     assert inspection.total_uncompressed_bytes == 12
     assert any("tamano total expandido" in issue for issue in inspection.size_violations)
@@ -301,9 +297,7 @@ def test_the_extract_command_emits_json_for_powershell(
     with zipfile.ZipFile(archive_path, "w") as archive:
         archive.writestr(BACKSLASH_ENTRIES[0], b"contenido")
 
-    exit_code = main(
-        ["zip_package_inspector.py", "extract", str(archive_path), str(extract_root)]
-    )
+    exit_code = main(["zip_package_inspector.py", "extract", str(archive_path), str(extract_root)])
 
     assert exit_code == 0
     payload = json.loads(capsys.readouterr().out)
