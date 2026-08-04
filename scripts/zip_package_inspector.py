@@ -130,9 +130,7 @@ def _segments(original_name: str, *, directory_entry: bool) -> tuple[str, ...]:
 
 
 def _normalized_entry_key(original_name: str, *, directory_entry: bool) -> str:
-    return "/".join(
-        _segments(original_name, directory_entry=directory_entry)
-    ).casefold()
+    return "/".join(_segments(original_name, directory_entry=directory_entry)).casefold()
 
 
 def _register_destination(
@@ -407,9 +405,7 @@ def safe_extract_zip(
                         directory_entry=directory_entry,
                     )
                 except WindowsPathError as exc:
-                    raise ZipSafetyError(
-                        f"entrada insegura: {info.filename}: {exc}"
-                    ) from exc
+                    raise ZipSafetyError(f"entrada insegura: {info.filename}: {exc}") from exc
 
                 destination = root.joinpath(*segments)
                 if directory_entry:
@@ -418,9 +414,7 @@ def safe_extract_zip(
 
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 if destination.exists():
-                    raise ZipSafetyError(
-                        f"destino duplicado durante extraccion: {info.filename}"
-                    )
+                    raise ZipSafetyError(f"destino duplicado durante extraccion: {info.filename}")
                 with archive.open(info, "r") as source, destination.open("xb") as target:
                     written = copy_bounded(
                         source,
