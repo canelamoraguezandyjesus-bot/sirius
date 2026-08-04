@@ -107,19 +107,43 @@ def test_successful_rollback_rethrows_original_and_cleanup_cannot_mask_it() -> N
     assert "else {\n                    throw" in transaction[cleanup_error:]
 
 
-def test_wrapper_always_attempts_registry_and_physical_snapshot_cleanup() -> None:
+def test_exclusive_publication_mutex_covers_build_transaction_and_cleanup() -> None:
     wrapper = _WRAPPER.read_text(encoding="utf-8")
-    finally_block = wrapper[wrapper.index("finally {") :]
+    destination = wrapper.index('$PublishDestinationRoot = Join-Path $ControllerRoot "dist\\windows"')
+    mutex_name = wrapper.index("Get-PublicationMutexName $PublishDestinationRoot", destination)
+    acquire = wrapper.index("$PublicationMutex.WaitOne(0)", mutex_name)
+    concurrent_rejection = wrapper.index("La publicacion concurrente se rechaza", acquire)
+    add_worktree = wrapper.index("worktree add --detach $SnapshotRoot $SourceCommit", acquire)
+    invoke = wrapper.index("& $SnapshotImplementation", add_worktree)
+    orchestration_finally = wrapper.index("finally {", wrapper.index("$BuildFailure = $null"))
+    remove_snapshot = wrapper.index("worktree remove --force $SnapshotRoot", orchestration_finally)
+    release = wrapper.index("$PublicationMutex.ReleaseMutex()", remove_snapshot)
+    dispose = wrapper.index("$PublicationMutex.Dispose()", release)
+
+    assert destination < mutex_name < acquire < concurrent_rejection < add_worktree < invoke
+    assert invoke < orchestration_finally < remove_snapshot < release < dispose
+    assert "catch [System.Threading.AbandonedMutexException]" in wrapper[acquire:add_worktree]
+    assert 'return "Local\\Sirius-B13-Publish-$token"' in wrapper
+
+
+def test_wrapper_always_attempts_registry_physical_and_mutex_cleanup() -> None:
+    wrapper = _WRAPPER.read_text(encoding="utf-8")
+    orchestration_start = wrapper.index("$BuildFailure = $null")
+    finally_start = wrapper.index("finally {", orchestration_start)
+    finally_block = wrapper[finally_start:]
     unregister = finally_block.index("worktree remove --force $SnapshotRoot")
     physical_remove = finally_block.index(
         "Remove-Item -LiteralPath $SnapshotContainer -Recurse -Force -ErrorAction Stop"
     )
+    release = finally_block.index("$PublicationMutex.ReleaseMutex()")
+    dispose = finally_block.index("$PublicationMutex.Dispose()", release)
 
-    assert unregister < physical_remove
+    assert unregister < physical_remove < release < dispose
     assert "catch {" in finally_block[unregister:physical_remove]
     assert "Write-Error" not in finally_block
     assert "$CleanupFailures.Add" in finally_block[unregister:physical_remove]
-    assert "$CleanupFailures.Add" in finally_block[physical_remove:]
+    assert "$CleanupFailures.Add" in finally_block[physical_remove:release]
+    assert "$CleanupFailures.Add" in finally_block[release:dispose]
 
 
 def test_cleanup_preserves_build_failure_and_fails_a_successful_build() -> None:
@@ -151,13 +175,14 @@ def test_failed_build_diagnostics_are_copied_before_snapshot_cleanup() -> None:
     assert "B13 DIAGNOSTICS: conservados" in wrapper[catch:finally_block]
 
 
-def test_localappdata_guard_still_precedes_worktree_and_build() -> None:
+def test_localappdata_guard_still_precedes_mutex_worktree_and_build() -> None:
     script = _WRAPPER.read_text(encoding="utf-8")
     guard = script.index("$packagingGuard = Invoke-JsonController $GuardScript")
+    acquire = script.index("$PublicationMutex.WaitOne(0)")
     add = script.index("worktree add --detach")
     invoke = script.index("& $SnapshotImplementation")
 
-    assert guard < add < invoke
+    assert guard < acquire < add < invoke
     assert 'Join-Path $env:LOCALAPPDATA "Sirius\\packaging-venv"' in script
     assert "packaging_path_guard.py" in script
 
