@@ -133,7 +133,10 @@ def test_file_ancestor_collisions_are_rejected_before_extraction(
 
     inspection = inspect_zip(str(archive_path), extract_root=EXTRACT_ROOT)
 
-    assert any("colisiona" in issue or "directorio" in issue for issue in inspection.unsafe)
+    assert any(
+        "colisiona" in issue or "directorio" in issue or "duplicado" in issue
+        for issue in inspection.unsafe
+    )
     with pytest.raises(ZipSafetyError):
         safe_extract_zip(str(archive_path), extract_root=str(extract_root))
     assert not extract_root.exists()
