@@ -106,9 +106,7 @@ def _resolve_existing_windows_components(path: str) -> str:
         ) from exc
 
     if not resolved:
-        raise PackagingPathError(
-            f"no se pudo resolver de forma segura la identidad de: {path}"
-        )
+        raise PackagingPathError(f"no se pudo resolver de forma segura la identidad de: {path}")
 
     resolved = _strip_runtime_extended_prefix(resolved)
     for component in reversed(missing_tail):
@@ -120,9 +118,7 @@ def resolved_windows_path(value: str, *, resolver: PathResolver | None = None) -
     """Normaliza y resuelve la identidad física de los componentes existentes."""
 
     canonical = canonical_windows_path(value)
-    selected_resolver = (
-        _resolve_existing_windows_components if resolver is None else resolver
-    )
+    selected_resolver = _resolve_existing_windows_components if resolver is None else resolver
     try:
         resolved = selected_resolver(canonical)
     except PackagingPathError:
