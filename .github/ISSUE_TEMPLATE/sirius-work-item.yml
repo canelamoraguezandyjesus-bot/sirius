@@ -94,16 +94,18 @@ body:
       label: Política del ciclo de corrección
       description: >-
         No hay un tope numérico de ciclos. La incidencia autoriza a corregir mientras haya
-        progreso demostrable y a detenerse en cuanto deje de haberlo, con el motivo exacto.
+        progreso demostrable, tolera una única ronda aislada sin progreso y se detiene
+        cuando se acumulan dos rondas consecutivas sin progreso, con el motivo exacto.
       value: |
         - Sin máximo fijo de ciclos: rige la política de convergencia de
           `AUTOMATION_OPERATING_CONTRACT.md` §5.1, que decide de forma determinista a partir
           del historial de rondas publicado en esta incidencia.
         - Hay progreso cuando el par `(hallazgos pendientes, severidad agregada)` disminuye
           estrictamente en el orden producto respecto al mejor resultado alcanzado hasta ahora.
-        - El ciclo se detiene, con motivo exacto, ante una ronda sin progreso
-          (`sin-progreso`), una racha de fallos de Quality sin arreglo (`ci-sin-arreglo`),
-          una ronda innumerable o un historial de rondas ilegible.
+        - Una primera ronda aislada sin progreso se tolera y el ciclo continúa. Solo se
+          detiene con `sin-progreso` cuando hay dos rondas consecutivas sin progreso.
+        - El ciclo también se detiene, con motivo exacto, ante una racha de fallos de Quality
+          sin arreglo (`ci-sin-arreglo`), una ronda innumerable o un historial de rondas ilegible.
     validations:
       required: true
 
