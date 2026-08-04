@@ -6,11 +6,23 @@ name: Corregir bloque Sirius
 # mecanismo y el aviso sobre verificar la interfaz de
 # `anthropics/claude-code-action`.
 #
-# Máximo dos ciclos de corrección (contrato §5): el número de ciclo se cuenta
-# a partir de los marcadores `<!-- sirius-repair-cycle:N -->` que deja
-# sirius_apply_verdict.sh en cada corrección aplicada. Al llegar al tercer
-# intento se fuerza sirius:blocked-decision SIN invocar a Claude — ni siquiera
-# se gasta una ejecución en comprobarlo.
+# Convergencia técnica en vez de un tope fijo de ciclos (contrato §5, v1.5).
+# El límite anterior de dos ciclos era arbitrario: detenía trabajos que seguían
+# siendo puramente técnicos y que progresaban ronda a ronda. Ahora la puerta
+# consulta `scripts/automation/sirius_convergence.py`, que compara las huellas
+# estables de los hallazgos de cada ronda publicadas por
+# `sirius_apply_verdict.sh` y decide de forma determinista:
+#
+#   - CONTINUE mientras haya progreso comprobable: el par (hallazgos
+#     pendientes, gravedad agregada) queda estrictamente por debajo de la mejor
+#     marca histórica —ninguna magnitud la supera y al menos una la mejora—;
+#   - BLOCK, con motivo exacto, cuando no hay progreso neto en dos rondas
+#     consecutivas, un hallazgo dado por resuelto reaparece, el conjunto de
+#     hallazgos oscila entre estados anteriores, el head no avanzó o el
+#     historial no se puede leer.
+#
+# El bloqueo sigue aplicando sirius:blocked-decision SIN invocar a Claude: no
+# se gasta una ejecución cuando la decisión ya es humana.
 
 on:
   issues:
@@ -46,7 +58,7 @@ jobs:
           # revisión→corrección→revisión no cerraría.
           token: ${{ secrets.SIRIUS_BOT_TOKEN }}
 
-      - name: Comprobar el contador de ciclos y localizar la PR
+      - name: Evaluar la convergencia y localizar la PR
         id: gate
         shell: bash --noprofile --norc {0}
         env:
@@ -57,21 +69,87 @@ jobs:
           set -uo pipefail
           source scripts/automation/sirius_issue.sh
 
-          previous_cycle="$(sirius_retry gh api "repos/${GH_REPO}/issues/${ISSUE_NUMBER}/comments" --jq '.[].body' \
-            | grep -oE '<!-- sirius-repair-cycle:[0-9]+ -->' | grep -oE '[0-9]+' | sort -n | tail -1)"
-          previous_cycle="${previous_cycle:-0}"
-          next_cycle=$((previous_cycle + 1))
-
-          if [ "$previous_cycle" -ge 2 ]; then
-            marker="<!-- sirius-verdict:corrector:precheck:limite-ciclos -->"
+          # Decisión de convergencia sobre el historial completo de rondas. El
+          # volcado se lee UNA vez y se reutiliza para numerar la ronda: leerlo
+          # dos veces abriría una ventana en la que la segunda lectura falla y
+          # la ronda se numera a ciegas.
+          comments_file="$(mktemp)"
+          decision_file="$(mktemp)"
+          if ! sirius_dump_comments "$GH_REPO" "$ISSUE_NUMBER" "$comments_file"; then
+            marker="<!-- sirius-verdict:corrector:precheck:historial-ilegible:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
             body_file="$(mktemp)"
             printf '%s\n\n%s\n\n%s\n' \
+              "$marker" "🔴 **Me he detenido de forma segura**" \
+              "No he podido leer el historial de rondas de esta incidencia, así que no puedo demostrar que la corrección siga progresando. Me detengo en vez de corregir a ciegas." >"$body_file"
+            sirius_transition "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+              "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
+              "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar la parada segura (historial-ilegible)."
+            rm -f "$body_file" "$comments_file" "$decision_file"
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Numeración de la ronda: el mayor marcador `<!-- sirius-round:N -->`
+          # publicado por el revisor, sobre el volcado que ya se ha leído. El
+          # marcador heredado `<!-- sirius-repair-cycle:N -->` sigue emitiéndose
+          # para trazabilidad histórica, pero ya no gobierna ninguna decisión.
+          next_cycle="$(sirius_next_round_number "$GH_REPO" "$ISSUE_NUMBER" "$comments_file")"
+
+          python3 scripts/automation/sirius_convergence.py decide \
+            --comments-file "$comments_file" --output "$decision_file" || true
+          # Los valores por defecto de jq (`// "BLOCK"`) NO cubren el archivo
+          # vacío: sobre una entrada vacía jq no emite nada y sale con 0, así
+          # que la sustitución `||` tampoco actúa y la variable queda vacía. La
+          # decisión seguiría siendo segura (vacío != CONTINUE), pero el motivo
+          # y el detalle se perderían y el bloqueo se publicaría sin
+          # diagnóstico. Se aplica el respaldo sobre la variable ya expandida,
+          # que sí cubre los tres casos: archivo ausente, vacío o ilegible.
+          decision="$(jq -r '.decision // empty' "$decision_file" 2>/dev/null || true)"
+          reason="$(jq -r '.reason // empty' "$decision_file" 2>/dev/null || true)"
+          detail="$(jq -r '.detail // empty' "$decision_file" 2>/dev/null || true)"
+          rounds="$(jq -r '.rounds // empty' "$decision_file" 2>/dev/null || true)"
+          # Intentos consecutivos motivados por un fallo de Quality. Es el otro
+          # motor del ciclo —`advance-sirius-after-quality.yml` reaplica
+          # `sirius:repair-requested` sin publicar registro de ronda—, así que
+          # su cuenta se registra aparte para que el bloqueo diga cuál de los
+          # dos se agotó.
+          ci_failures="$(jq -r '.ci_failures // empty' "$decision_file" 2>/dev/null || true)"
+          decision="${decision:-BLOCK}"
+          reason="${reason:-indeterminado}"
+          detail="${detail:-No se pudo evaluar la convergencia; el analizador no entregó una decisión legible.}"
+          rounds="${rounds:-0}"
+          ci_failures="${ci_failures:-0}"
+          rm -f "$comments_file" "$decision_file"
+
+          if [ -z "${next_cycle:-}" ]; then
+            marker="<!-- sirius-verdict:corrector:precheck:ronda-innumerable:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
+            body_file="$(mktemp)"
+            printf '%s\n\n%s\n\n%s\n' \
+              "$marker" "🔴 **Me he detenido de forma segura**" \
+              "He leído el historial de rondas pero no he podido numerar la ronda siguiente. Me detengo en vez de corregir con una numeración que falsearía la medida de convergencia." >"$body_file"
+            sirius_transition "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+              "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
+              "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar la parada segura (ronda-innumerable)."
+            rm -f "$body_file"
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$decision" != "CONTINUE" ]; then
+            # Sufijo por run, igual que el resto de paradas: sin él, un
+            # segundo bloqueo con el mismo motivo compartiría marcador, se
+            # deduparía y la incidencia volveria a blocked-decision SIN
+            # publicar el diagnostico (incidencia #66).
+            marker="<!-- sirius-verdict:corrector:precheck:convergencia-${reason}:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
+            body_file="$(mktemp)"
+            printf '%s\n\n%s\n\n%s\n\n%s\n' \
               "$marker" \
               "🟡 **Necesito una decisión**" \
-              "Ya se completaron ${previous_cycle} ciclos de revisión-corrección sin converger. El contrato permite un máximo de dos; se detiene para que decidas el siguiente paso." >"$body_file"
+              "El ciclo de revisión-corrección ha dejado de converger tras ${rounds} ronda(s) registrada(s) y ${ci_failures} fallo(s) de Quality consecutivo(s), así que me detengo en vez de seguir corrigiendo." \
+              "Motivo (\`${reason}\`): ${detail}" >"$body_file"
             sirius_transition "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
               "sirius:blocked-decision" "D4C5F9" "Estado: requiere una decisión humana" \
-              "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar el limite de ciclos."
+              "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar el bloqueo por convergencia."
             rm -f "$body_file"
             echo "valid=false" >> "$GITHUB_OUTPUT"
             exit 0
@@ -148,7 +226,7 @@ jobs:
             echo "- Repositorio: ${GH_REPO}"
             echo "- Incidencia de trabajo: #${ISSUE_NUMBER}"
             echo "- Pull Request a corregir: #${PR_NUMBER}"
-            echo "- Ciclo de corrección: ${CYCLE} de 2 como máximo"
+            echo "- Ronda de corrección: ${CYCLE}. No hay un tope fijo de rondas: el ciclo continúa mientras haya progreso comprobable y se detiene en cuanto deja de haberlo."
             echo "- Las observaciones estructuradas están en la ruta exacta de la variable de entorno SIRIUS_OBSERVATIONS_FILE."
             echo "- El archivo de veredicto debe escribirse en la ruta exacta de la variable de entorno SIRIUS_VERDICT_FILE."
             echo "SIRIUS_PROMPT_EOF"

@@ -89,13 +89,19 @@ case "$sub" in
       exit 0
     fi
     if printf '%s' "$args" | grep -q '/comments'; then
+      if [ "${GH_MOCK_COMMENTS_ALWAYS_FAIL:-0}" = "1" ]; then echo "503 comments" >&2; exit 1; fi
       if should_fail comments_fail; then echo "503 comments" >&2; exit 1; fi
-      if printf '%s' "$args" | grep -q 'reverse'; then
-        awk 'BEGIN{RS="";ORS="\n\n"} {a[NR]=$0} END{for(i=NR;i>=1;i--) print a[i]}' \
-          "$comments_file" 2>/dev/null
-      else
-        cat "$comments_file" 2>/dev/null
-      fi
+      # La carga se construye con la MISMA forma que devuelve la API REST
+      # (`body`, `author_association`, `user.login`) y el filtro `--jq` que trae
+      # la llamada se aplica con jq de verdad. Así el filtro de autoría de
+      # confianza queda realmente ejercitado: un simulador que devolviera solo
+      # los cuerpos haría indistinguible un historial firmado por el
+      # propietario de uno sembrado por un tercero, que es exactamente la
+      # diferencia que ese filtro existe para detectar.
+      filter=""; prev=""
+      for a in "$@"; do [ "$prev" = "--jq" ] && filter="$a"; prev="$a"; done
+      [ -n "$filter" ] || filter='.[].body'
+      python3 "$D/build_comments.py" rest "$comments_file" 2>/dev/null | jq -r "$filter" 2>/dev/null
       exit 0
     fi
     if printf '%s' "$args" | grep -q '/labels'; then
@@ -131,12 +137,16 @@ case "$sub" in
     case "$action" in
       view)
         if printf '%s' "$*" | grep -q 'comments'; then
-          if printf '%s' "$*" | grep -q 'reverse'; then
-            awk 'BEGIN{RS="";ORS="\n\n"} {a[NR]=$0} END{for(i=NR;i>=1;i--) print a[i]}' \
-              "$comments_file" 2>/dev/null
-          else
-            cat "$comments_file" 2>/dev/null
-          fi
+          if [ "${GH_MOCK_GRAPHQL_ALWAYS_FAIL:-0}" = "1" ]; then echo "503 graphql" >&2; exit 1; fi
+          # Vía de respaldo GraphQL: nombres de campo distintos
+          # (`authorAssociation`, `author.login` con prefijo `app/`) y el mismo
+          # tratamiento honesto del filtro, para que el respaldo no pueda
+          # degradar la garantía sin que una prueba lo note.
+          filter=""; prev=""
+          for a in "$@"; do [ "$prev" = "--jq" ] && filter="$a"; prev="$a"; done
+          [ -n "$filter" ] || filter='.comments[].body'
+          python3 "$D/build_comments.py" graphql "$comments_file" 2>/dev/null \
+            | jq -r "$filter" 2>/dev/null
         else
           if should_fail graphql_fail; then echo "503 graphql" >&2; exit 1; fi
           cat "$D/body_graphql.txt" 2>/dev/null
@@ -207,6 +217,48 @@ esac
 exit 0
 """
 
+# Constructor de la carga de comentarios del `gh` simulado. Cada bloque de
+# comments.txt (separados por una línea en blanco) es un comentario. Una primera
+# línea `@@untrusted`, `@@collaborator`, `@@member` o `@@bot` fija su autoría;
+# sin directiva, el comentario lo firma el propietario de la incidencia.
+_BUILD_COMMENTS = """#!/usr/bin/env python3
+import json
+import sys
+
+shape = sys.argv[1]
+try:
+    with open(sys.argv[2], encoding="utf-8") as handle:
+        raw = handle.read()
+except OSError:
+    raw = ""
+
+# (author_association, login REST, login GraphQL)
+AUTHORS = {
+    "@@untrusted": ("NONE", "tercero-cualquiera", "tercero-cualquiera"),
+    "@@collaborator": ("COLLABORATOR", "colaborador", "colaborador"),
+    "@@member": ("MEMBER", "miembro", "miembro"),
+    "@@bot": ("NONE", "github-actions[bot]", "app/github-actions"),
+}
+
+rest = []
+graphql = []
+for chunk in [c for c in raw.split("\\n\\n") if c.strip()]:
+    association, login, graphql_login = "OWNER", "propietario", "propietario"
+    lines = chunk.split("\\n")
+    if lines and lines[0].strip() in AUTHORS:
+        association, login, graphql_login = AUTHORS[lines[0].strip()]
+        chunk = "\\n".join(lines[1:])
+    # Los cuerpos reales terminan en salto de línea; conservarlo mantiene la
+    # separación por línea en blanco que usa el fichero simulado.
+    body = chunk + "\\n"
+    rest.append({"body": body, "author_association": association, "user": {"login": login}})
+    graphql.append(
+        {"body": body, "authorAssociation": association, "author": {"login": graphql_login}}
+    )
+
+json.dump(rest if shape == "rest" else {"comments": graphql}, sys.stdout)
+"""
+
 _COMPLETE_BODY = (
     "## Work ID\nSIRIUS-B4F-001\n\n## Bloque\nB4f\n\n## Objetivo\n"
     + ("Integración observable y cierre de B4. " * 8)
@@ -230,6 +282,7 @@ def _setup(tmp_path: Path) -> dict[str, str]:
     gh = bin_dir / "gh"
     gh.write_text(_GH_MOCK, encoding="utf-8")
     gh.chmod(0o755)
+    (mock_dir / "build_comments.py").write_text(_BUILD_COMMENTS, encoding="utf-8")
 
     env = dict(os.environ)
     env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
@@ -682,3 +735,241 @@ def test_extract_observations_uses_most_recent_round(tmp_path: Path) -> None:
     r = _run("sirius_extract_observations owner/repo 55", env)
     assert r.returncode == 0, r.stderr
     assert json.loads(r.stdout) == [{"id": "R2-new"}]
+
+
+# --------------------------------------------------------------------------- #
+# Filtro de autoría de confianza
+# --------------------------------------------------------------------------- #
+#
+# Toda lectura del historial que gobierna una decisión (observaciones a
+# corregir, head que superó Quality, registros de convergencia) pasa por
+# `SIRIUS_TRUSTED_AUTHOR_JQ`. Sin estas pruebas el filtro era invisible: el `gh`
+# simulado devolvía cuerpos sin autoría, así que un comentario del propietario y
+# uno sembrado por un tercero eran indistinguibles y el filtro podía romperse
+# —o desaparecer— sin que ninguna prueba se enterara. El simulador aplica ahora
+# el filtro real con jq sobre cargas con la forma de la API, de modo que lo que
+# se comprueba aquí es el filtro de producción, no una imitación.
+
+
+def test_untrusted_comment_is_ignored_when_extracting_observations(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "comments.txt").write_text(
+        '## OBSERVACIONES_ESTRUCTURADAS\n```json\n[{"id": "LEGITIMA"}]\n```\n\n'
+        "@@untrusted\n"
+        '## OBSERVACIONES_ESTRUCTURADAS\n```json\n[{"id": "INYECTADA"}]\n```\n\n',
+        encoding="utf-8",
+    )
+    r = _run("sirius_extract_observations owner/repo 55", env)
+    assert r.returncode == 0, r.stderr
+    # El bloque más reciente es el del tercero: si el filtro no actuara, sería
+    # el que ganaría y el corrector trabajaría sobre observaciones inyectadas.
+    assert json.loads(r.stdout) == [{"id": "LEGITIMA"}]
+
+
+def test_bot_comment_is_trusted_when_extracting_observations(tmp_path: Path) -> None:
+    # La automatización publica como `github-actions[bot]`, cuyo
+    # author_association NO es OWNER: el filtro debe aceptarlo explícitamente o
+    # el flujo no podría leer sus propias publicaciones.
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "comments.txt").write_text(
+        '@@bot\n## OBSERVACIONES_ESTRUCTURADAS\n```json\n[{"id": "DE-LA-AUTOMATIZACION"}]\n```\n\n',
+        encoding="utf-8",
+    )
+    r = _run("sirius_extract_observations owner/repo 55", env)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout) == [{"id": "DE-LA-AUTOMATIZACION"}]
+
+
+@pytest.mark.parametrize("directive", ["@@collaborator", "@@member"])
+def test_collaborator_and_member_comments_are_not_trusted(tmp_path: Path, directive: str) -> None:
+    # COLLABORATOR y MEMBER pueden comentar sin poder autorizar un merge: el
+    # alcance de confianza se limita a quien ya podía autorizarlo.
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "comments.txt").write_text(
+        f'{directive}\n## OBSERVACIONES_ESTRUCTURADAS\n```json\n[{{"id": "AJENA"}}]\n```\n\n',
+        encoding="utf-8",
+    )
+    r = _run("sirius_extract_observations owner/repo 55", env)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == ""
+
+
+def test_untrusted_comment_cannot_forge_the_quality_head(tmp_path: Path) -> None:
+    # `sirius_scan_text` alimenta `sirius_extract_sha`, que decide qué head se
+    # considera revisado. Un tercero no puede fijarlo.
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "body_rest.txt").write_text("cuerpo sin head", encoding="utf-8")
+    (_mock_dir(env) / "comments.txt").write_text(
+        "Head SHA: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n\n"
+        "@@untrusted\n"
+        "Head SHA: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n\n",
+        encoding="utf-8",
+    )
+    out = tmp_path / "scan.txt"
+    r = _run(
+        f'sirius_scan_text owner/repo 55 "{out}"; sirius_extract_sha "{out}"',
+        env,
+    )
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "a" * 40
+
+
+def test_untrusted_round_record_is_ignored_when_numbering_rounds(tmp_path: Path) -> None:
+    # Un tercero no puede empujar la numeración de rondas hacia adelante (ni
+    # hacia atrás): el historial de convergencia solo lo escriben el propietario
+    # y la propia automatización.
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "comments.txt").write_text(
+        "<!-- sirius-round:1 -->\n\n@@untrusted\n<!-- sirius-round:99 -->\n\n",
+        encoding="utf-8",
+    )
+    r = _run("sirius_next_round_number owner/repo 55", env)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "2"
+
+
+def test_graphql_fallback_keeps_the_trusted_author_filter(tmp_path: Path) -> None:
+    # Si REST falla y se cae al respaldo GraphQL, la garantía debe seguir en
+    # pie: un fallo transitorio no puede abrir la puerta a un historial ajeno.
+    env = _setup(tmp_path)
+    # Falla la vía REST de COMENTARIOS (no la del cuerpo): es la que obliga a
+    # caer al respaldo. Sin esta bandera la prueba pasaría por el camino REST y
+    # no comprobaría nada del respaldo.
+    env["GH_MOCK_COMMENTS_ALWAYS_FAIL"] = "1"
+    (_mock_dir(env) / "comments.txt").write_text(
+        "@@bot\n"
+        '## OBSERVACIONES_ESTRUCTURADAS\n```json\n[{"id": "DE-LA-AUTOMATIZACION"}]\n```\n\n'
+        "@@untrusted\n"
+        '## OBSERVACIONES_ESTRUCTURADAS\n```json\n[{"id": "INYECTADA"}]\n```\n\n',
+        encoding="utf-8",
+    )
+    r = _run("sirius_extract_observations owner/repo 55", env)
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout) == [{"id": "DE-LA-AUTOMATIZACION"}]
+
+
+def test_untrusted_marker_does_not_suppress_the_official_comment(tmp_path: Path) -> None:
+    # Los marcadores de idempotencia son PREDECIBLES: `sirius-quality:<head>:failure`
+    # se deriva del SHA público de la PR. Si la deduplicación mirase comentarios
+    # de cualquier autor, un tercero que publicara el marcador antes que el flujo
+    # conseguiría que la transición se diera por hecha y omitiese su propio
+    # comentario. Solo un marcador de identidad confiable puede suprimirlo.
+    env = _setup(tmp_path)
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    (_mock_dir(env) / "comments.txt").write_text(
+        f"@@untrusted\n{marker}\ncomentario ajeno que se adelanta\n\n", encoding="utf-8"
+    )
+    body = _write_body(env, marker)
+    r = _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
+    assert r.returncode == 0, r.stderr
+    assert "COMMENT" in _actions(env)
+    assert "## SIRIUS_COMPLETED" in _comments(env)
+
+
+def test_trusted_marker_still_suppresses_a_duplicate_comment(tmp_path: Path) -> None:
+    # La otra mitad de la garantía: filtrar por autor no debe romper la
+    # idempotencia real. Un marcador propio sigue impidiendo el duplicado.
+    env = _setup(tmp_path)
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    (_mock_dir(env) / "comments.txt").write_text(
+        f"{marker}\nregistro oficial ya publicado\n\n", encoding="utf-8"
+    )
+    body = _write_body(env, marker)
+    r = _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
+    assert r.returncode == 0, r.stderr
+    assert "COMMENT" not in _actions(env)
+
+
+def test_untrusted_marker_does_not_blind_the_ci_failure_count(tmp_path: Path) -> None:
+    # Escenario completo del defecto. `ci_failure_streak` cuenta sobre el volcado
+    # de comentarios, que filtra por autor: si un marcador ajeno hubiera bastado
+    # para saltarse la publicación del registro oficial, el fallo de Quality no
+    # habría existido para la cota y `MAX_CI_FAILURE_STREAK` sería eludible
+    # indefinidamente, manteniendo vivo al corrector (que escribe) sin límite.
+    env = _setup(tmp_path)
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    (_mock_dir(env) / "comments.txt").write_text(
+        f"@@untrusted\n{marker}\nadelantado por un tercero\n\n", encoding="utf-8"
+    )
+    body = _mock_dir(env).parent / "ci.md"
+    body.write_text(f"{marker}\n\n## CI_FAILURE\n- Quality en rojo\n", encoding="utf-8")
+    dump = tmp_path / "dump.txt"
+    r = _run(
+        f'sirius_comment_once owner/repo 55 "{marker}" "{body}" '
+        f'&& sirius_dump_comments owner/repo 55 "{dump}"',
+        env,
+    )
+    assert r.returncode == 0, r.stderr
+    # El volcado de confianza contiene el fallo exactamente una vez: el ajeno se
+    # descarta y el oficial sí llega a publicarse.
+    assert dump.read_text(encoding="utf-8").count(marker) == 1
+    assert "## CI_FAILURE" in dump.read_text(encoding="utf-8")
+
+
+def test_untrusted_marker_does_not_skip_a_transition_record(tmp_path: Path) -> None:
+    # `sirius_transition` comparte la búsqueda del marcador. Con un marcador
+    # ajeno debe comportarse como si no existiera: aplicar la etiqueta Y dejar
+    # su propio registro.
+    env = _setup(tmp_path)
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    (_mock_dir(env) / "comments.txt").write_text(f"@@untrusted\n{marker}\n\n", encoding="utf-8")
+    body = _write_body(env, marker)
+    r = _run(_transition_call(marker, body), env)
+    assert r.returncode == 0, r.stderr
+    assert "COMMENT" in _actions(env)
+    assert "## SIRIUS_COMPLETED" in _comments(env)
+
+
+# --------------------------------------------------------------------------- #
+# Numeración de rondas
+# --------------------------------------------------------------------------- #
+
+
+def test_next_round_number_starts_at_one_without_history(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "comments.txt").write_text("sin rondas todavia\n", encoding="utf-8")
+    r = _run("sirius_next_round_number owner/repo 55", env)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "1"
+
+
+def test_next_round_number_fails_when_history_is_unreadable(tmp_path: Path) -> None:
+    # Antes devolvía 1 en este caso: con rondas 1..3 ya publicadas, la ronda
+    # siguiente se numeraba otra vez como 1, se colaba al principio del
+    # historial ordenado y falseaba la medida de convergencia. Numerar a ciegas
+    # es peor que detenerse.
+    env = _setup(tmp_path)
+    env["GH_MOCK_COMMENTS_ALWAYS_FAIL"] = "1"
+    env["GH_MOCK_GRAPHQL_ALWAYS_FAIL"] = "1"
+    r = _run("sirius_next_round_number owner/repo 55", env)
+    assert r.returncode != 0
+    assert r.stdout.strip() == ""
+
+
+def test_next_round_number_reuses_a_provided_dump(tmp_path: Path) -> None:
+    # El llamador que ya leyó el historial no debe releerlo: una segunda lectura
+    # abre una ventana en la que falla y la ronda se numeraría a ciegas.
+    env = _setup(tmp_path)
+    dump = tmp_path / "dump.txt"
+    dump.write_text("<!-- sirius-round:4 -->\n", encoding="utf-8")
+    env["GH_MOCK_COMMENTS_ALWAYS_FAIL"] = "1"
+    env["GH_MOCK_GRAPHQL_ALWAYS_FAIL"] = "1"
+    r = _run(f'sirius_next_round_number owner/repo 55 "{dump}"', env)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "5"
+
+
+def test_comment_read_failure_is_reported_without_pipefail(tmp_path: Path) -> None:
+    # `_sirius_comments_newest_first` lee y transforma en dos pasos, no en una
+    # tubería: encadenados, el estado de salida sería el de `python3` (que
+    # siempre acierta) y un 503 de `gh` se convertiría en "no hay comentarios"
+    # salvo que el llamador tuviera `pipefail`. Aquí se ejecuta a propósito SIN
+    # `pipefail` y con ambas vías caídas: debe fallar, no fingir un historial
+    # vacío.
+    env = _setup(tmp_path)
+    env["GH_MOCK_COMMENTS_ALWAYS_FAIL"] = "1"
+    env["GH_MOCK_GRAPHQL_ALWAYS_FAIL"] = "1"
+    dump = tmp_path / "dump.txt"
+    r = _run(f'sirius_dump_comments owner/repo 55 "{dump}"', env)
+    assert r.returncode != 0
+    assert "no se pudieron leer los comentarios" in r.stderr
