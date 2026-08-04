@@ -52,15 +52,9 @@ def test_verifier_bounds_and_freezes_zip_before_use() -> None:
 
 def test_manifest_paths_are_validated_before_manifest_file_access() -> None:
     static = _VERIFY_PARTS[1].read_text(encoding="utf-8")
-    helper = static.index(
-        '$manifestValidator = Join-Path $PSScriptRoot "file_manifest.py"'
-    )
-    invoke = static.index(
-        "$VenvPython $manifestValidator $fileManifestPath $PackageRoot", helper
-    )
-    accepted = static.index(
-        "foreach ($validatedEntry in @($manifestValidation.entries))", invoke
-    )
+    helper = static.index('$manifestValidator = Join-Path $PSScriptRoot "file_manifest.py"')
+    invoke = static.index("$VenvPython $manifestValidator $fileManifestPath $PackageRoot", helper)
+    accepted = static.index("foreach ($validatedEntry in @($manifestValidation.entries))", invoke)
     manifest_join = static.index(
         '$target = Join-Path $PackageRoot ($entry.Key.Replace("/", "\\"))', accepted
     )
@@ -137,9 +131,7 @@ def test_credential_absence_is_a_hard_prelaunch_requirement() -> None:
 
 def test_credential_must_still_be_absent_after_launches() -> None:
     script = _script()
-    postcheck = script.index(
-        "La credencial de Sirius sigue ausente despues de los arranques"
-    )
+    postcheck = script.index("La credencial de Sirius sigue ausente despues de los arranques")
     postcheck_region = script[postcheck : postcheck + 400]
 
     assert '$CredentialStateAfter -eq "ABSENT"' in postcheck_region
