@@ -1,87 +1,121 @@
-Write-Step "E. Primer arranque aislado, desde el ZIP extraido"
+$ExecutionFailure = $null
+$DatabasePath = ""
+$script:TablesAfterFirst = @()
 
-$DatabasePath = Invoke-SmokeLaunch -Label "1er arranque"
+try {
+    Write-Step "E. Primer arranque aislado, desde el ZIP extraido"
 
-if (Test-Path -LiteralPath $DatabasePath) {
-    $versionRows = Invoke-SqliteQuery -DatabasePath $DatabasePath -Sql "SELECT version_num FROM alembic_version"
-    $revisions = @($versionRows | ForEach-Object { $_[0] })
-    Test-Check "El esquema alcanzo el head de Alembic ($ExpectedAlembicHead)" (
-        $revisions.Count -eq 1 -and $revisions[0] -eq $ExpectedAlembicHead) ("encontrado: " + ($revisions -join ","))
+    $DatabasePath = Invoke-SmokeLaunch -Label "1er arranque"
 
-    $tableRows = Invoke-SqliteQuery -DatabasePath $DatabasePath -Sql "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-    $script:TablesAfterFirst = @($tableRows | ForEach-Object { $_[0] })
-    Write-Info "Tablas creadas: $($script:TablesAfterFirst.Count)"
+    if (Test-Path -LiteralPath $DatabasePath) {
+        $versionRows = Invoke-SqliteQuery -DatabasePath $DatabasePath -Sql "SELECT version_num FROM alembic_version"
+        $revisions = @($versionRows | ForEach-Object { $_[0] })
+        Test-Check "El esquema alcanzo el head de Alembic ($ExpectedAlembicHead)" (
+            $revisions.Count -eq 1 -and $revisions[0] -eq $ExpectedAlembicHead) ("encontrado: " + ($revisions -join ","))
 
-    $integrity = Invoke-SqliteQuery -DatabasePath $DatabasePath -Sql "PRAGMA integrity_check"
-    Test-Check "PRAGMA integrity_check devuelve ok" ($integrity[0][0] -eq "ok") $integrity[0][0]
-}
-else {
-    $script:TablesAfterFirst = @()
-}
+        $tableRows = Invoke-SqliteQuery -DatabasePath $DatabasePath -Sql "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+        $script:TablesAfterFirst = @($tableRows | ForEach-Object { $_[0] })
+        Write-Info "Tablas creadas: $($script:TablesAfterFirst.Count)"
 
-# --------------------------------------------------------------------------
-Write-Step "E. Segundo arranque, reutilizando el mismo entorno temporal"
+        $integrity = Invoke-SqliteQuery -DatabasePath $DatabasePath -Sql "PRAGMA integrity_check"
+        Test-Check "PRAGMA integrity_check devuelve ok" ($integrity[0][0] -eq "ok") $integrity[0][0]
+    }
 
-$null = Invoke-SmokeLaunch -Label "2do arranque"
+    # ----------------------------------------------------------------------
+    Write-Step "E. Segundo arranque, reutilizando el mismo entorno temporal"
 
-if (Test-Path -LiteralPath $DatabasePath) {
-    $versionRows = Invoke-SqliteQuery -DatabasePath $DatabasePath -Sql "SELECT version_num FROM alembic_version"
-    $revisions = @($versionRows | ForEach-Object { $_[0] })
-    Test-Check "La revision de Alembic sigue siendo el head esperado" (
-        $revisions.Count -eq 1 -and $revisions[0] -eq $ExpectedAlembicHead) ("encontrado: " + ($revisions -join ","))
-    Test-Check "El esquema no se duplico (una sola fila en alembic_version)" ($revisions.Count -eq 1) "filas: $($revisions.Count)"
+    $null = Invoke-SmokeLaunch -Label "2do arranque"
 
-    $tableRows = Invoke-SqliteQuery -DatabasePath $DatabasePath -Sql "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-    $tablesAfterSecond = @($tableRows | ForEach-Object { $_[0] })
-    Test-Check "El inventario de tablas es identico al del primer arranque" (
-        ($tablesAfterSecond -join ",") -eq ($script:TablesAfterFirst -join ",")) (
-        "antes $($script:TablesAfterFirst.Count) / ahora $($tablesAfterSecond.Count)")
+    if (Test-Path -LiteralPath $DatabasePath) {
+        $versionRows = Invoke-SqliteQuery -DatabasePath $DatabasePath -Sql "SELECT version_num FROM alembic_version"
+        $revisions = @($versionRows | ForEach-Object { $_[0] })
+        Test-Check "La revision de Alembic sigue siendo el head esperado" (
+            $revisions.Count -eq 1 -and $revisions[0] -eq $ExpectedAlembicHead) ("encontrado: " + ($revisions -join ","))
+        Test-Check "El esquema no se duplico (una sola fila en alembic_version)" ($revisions.Count -eq 1) "filas: $($revisions.Count)"
 
-    $integrity = Invoke-SqliteQuery -DatabasePath $DatabasePath -Sql "PRAGMA integrity_check"
-    Test-Check "PRAGMA integrity_check sigue devolviendo ok" ($integrity[0][0] -eq "ok") $integrity[0][0]
-}
+        $tableRows = Invoke-SqliteQuery -DatabasePath $DatabasePath -Sql "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+        $tablesAfterSecond = @($tableRows | ForEach-Object { $_[0] })
+        Test-Check "El inventario de tablas es identico al del primer arranque" (
+            ($tablesAfterSecond -join ",") -eq ($script:TablesAfterFirst -join ",")) (
+            "antes $($script:TablesAfterFirst.Count) / ahora $($tablesAfterSecond.Count)")
 
-# --------------------------------------------------------------------------
-Write-Step "D. La configuracion real del usuario no se toco"
-
-$RealPointerExistsAfter = Test-Path -LiteralPath $RealPointer
-$RealPointerHashAfter = ""
-if ($RealPointerExistsAfter) {
-    $RealPointerHashAfter = (Get-FileHash -LiteralPath $RealPointer -Algorithm SHA256).Hash.ToLower()
-}
-Write-Info "Despues de arrancar -> existe: $RealPointerExistsAfter   hash: $(if ($RealPointerHashAfter) { $RealPointerHashAfter } else { '(no aplica)' })"
-
-# Comprobaciones reales, no un mensaje informativo: si el ejecutable hubiera
-# escrito el puntero del usuario pese al entorno redirigido, esto falla.
-Test-Check "La existencia del data_location.json real no cambio" (
-    $RealPointerExistedBefore -eq $RealPointerExistsAfter) (
-    "antes $RealPointerExistedBefore / ahora $RealPointerExistsAfter")
-if ($RealPointerExistedBefore -and $RealPointerExistsAfter) {
-    Test-Check "El SHA-256 del data_location.json real es identico" (
-        $RealPointerHashBefore -eq $RealPointerHashAfter) (
-        "antes $RealPointerHashBefore / ahora $RealPointerHashAfter")
-}
-elseif (-not $RealPointerExistedBefore -and -not $RealPointerExistsAfter) {
-    Test-Check "El data_location.json real sigue sin existir" $true
-}
-
-Test-Check "Los datos de prueba viven bajo la raiz temporal aislada" ($IsolatedData.StartsWith($SmokeRoot))
-Test-Check "No se escribio ninguna clave en el entorno de prueba" (
-    -not (Test-Path -LiteralPath (Join-Path $configDir "settings.json")) -or
-    -not ((Get-Content -LiteralPath (Join-Path $configDir "settings.json") -Raw -ErrorAction SilentlyContinue) -match "sk-"))
-
-# B13 solo ejecuta el paquete cuando la credencial estaba ausente. Volver a
-# obtener ABSENT demuestra que el paquete no dejo una credencial persistente en
-# la sesion real de Windows, sin leer, copiar ni comparar ningun valor secreto.
-$CredentialStateAfter = "ERROR NoProbe"
-if (Test-Path -LiteralPath $VenvPython) {
-    $probeOutputAfter = (& $VenvPython $CredentialProbe 2>&1 | Out-String).Trim()
-    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($probeOutputAfter)) {
-        $CredentialStateAfter = ($probeOutputAfter -split "`n")[-1].Trim()
+        $integrity = Invoke-SqliteQuery -DatabasePath $DatabasePath -Sql "PRAGMA integrity_check"
+        Test-Check "PRAGMA integrity_check sigue devolviendo ok" ($integrity[0][0] -eq "ok") $integrity[0][0]
     }
 }
-Test-Check "La credencial de Sirius sigue ausente despues de los arranques" (
-    $CredentialStateAfter -eq "ABSENT") "antes $CredentialState / ahora $CredentialStateAfter"
+catch {
+    # No se relanza aqui: el finally debe comprobar siempre el estado real del
+    # usuario. La excepcion original se registra despues como fallo verificable.
+    $ExecutionFailure = $_
+}
+finally {
+    # Estas postcondiciones protegen estado real del usuario y deben ejecutarse
+    # aunque falle un arranque o cualquier consulta SQLite. Cada bloque contiene
+    # sus propios errores para que una comprobacion rota no impida las restantes
+    # ni oculte la excepcion original de ejecucion.
+    Write-Step "D. La configuracion real del usuario no se toco"
+
+    try {
+        $RealPointerExistsAfter = Test-Path -LiteralPath $RealPointer
+        $RealPointerHashAfter = ""
+        if ($RealPointerExistsAfter) {
+            $RealPointerHashAfter = (Get-FileHash -LiteralPath $RealPointer -Algorithm SHA256).Hash.ToLower()
+        }
+        Write-Info "Despues de arrancar -> existe: $RealPointerExistsAfter   hash: $(if ($RealPointerHashAfter) { $RealPointerHashAfter } else { '(no aplica)' })"
+
+        Test-Check "La existencia del data_location.json real no cambio" (
+            $RealPointerExistedBefore -eq $RealPointerExistsAfter) (
+            "antes $RealPointerExistedBefore / ahora $RealPointerExistsAfter")
+        if ($RealPointerExistedBefore -and $RealPointerExistsAfter) {
+            Test-Check "El SHA-256 del data_location.json real es identico" (
+                $RealPointerHashBefore -eq $RealPointerHashAfter) (
+                "antes $RealPointerHashBefore / ahora $RealPointerHashAfter")
+        }
+        elseif (-not $RealPointerExistedBefore -and -not $RealPointerExistsAfter) {
+            Test-Check "El data_location.json real sigue sin existir" $true
+        }
+    }
+    catch {
+        Test-Check "Se pudo comprobar el data_location.json real despues de los arranques" $false $_.Exception.Message
+    }
+
+    try {
+        Test-Check "Los datos de prueba viven bajo la raiz temporal aislada" ($IsolatedData.StartsWith($SmokeRoot))
+        $settingsPath = Join-Path $configDir "settings.json"
+        $settingsContainKey = (Test-Path -LiteralPath $settingsPath) -and (
+            (Get-Content -LiteralPath $settingsPath -Raw -ErrorAction SilentlyContinue) -match "sk-")
+        Test-Check "No se escribio ninguna clave en el entorno de prueba" (-not $settingsContainKey)
+    }
+    catch {
+        Test-Check "Se pudo comprobar que el entorno temporal no contiene una clave" $false $_.Exception.Message
+    }
+
+    try {
+        # B13 solo ejecuta el paquete cuando la credencial estaba ausente. Volver
+        # a obtener ABSENT demuestra que el paquete no dejo una credencial
+        # persistente en la sesion real de Windows, sin comparar ningun valor.
+        $CredentialStateAfter = "ERROR NoProbe"
+        if (Test-Path -LiteralPath $VenvPython) {
+            $probeOutputAfter = (& $VenvPython $CredentialProbe 2>&1 | Out-String).Trim()
+            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($probeOutputAfter)) {
+                $CredentialStateAfter = ($probeOutputAfter -split "`n")[-1].Trim()
+            }
+        }
+        Test-Check "La credencial de Sirius sigue ausente despues de los arranques" (
+            $CredentialStateAfter -eq "ABSENT") "antes $CredentialState / ahora $CredentialStateAfter"
+    }
+    catch {
+        Test-Check "Se pudo comprobar la credencial de Sirius despues de los arranques" $false $_.Exception.Message
+    }
+}
+
+if ($null -ne $ExecutionFailure) {
+    $executionDetail = $ExecutionFailure.Exception.Message
+    if ([string]::IsNullOrWhiteSpace($executionDetail)) {
+        $executionDetail = $ExecutionFailure.ToString()
+    }
+    Test-Check "Los dos arranques y las validaciones SQLite terminaron sin excepciones" $false $executionDetail
+}
 
 # --------------------------------------------------------------------------
 Write-Step "Resultado"
