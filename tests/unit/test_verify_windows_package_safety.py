@@ -15,10 +15,7 @@ _VERIFY_PARTS = (
 )
 _FIRST_LAUNCH = '$DatabasePath = Invoke-SmokeLaunch -Label "1er arranque"'
 _FAILURE_GATE = "if ($script:Failures.Count -gt 0)"
-_STATIC_GATE = (
-    'throw ("El paquete extraido no supera las comprobaciones estaticas de '
-    'estructura, "'
-)
+_STATIC_GATE = 'throw ("El paquete extraido no supera las comprobaciones estaticas de estructura, "'
 _LOOP_START = "    while ((Get-Date) -lt $deadline) {"
 _LOOP_END = "    $stillAlive = -not $process.HasExited"
 
