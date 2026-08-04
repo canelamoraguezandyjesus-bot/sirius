@@ -34,7 +34,7 @@ def test_the_canonical_wrapper_loads_every_phase_in_order() -> None:
     assert positions == sorted(positions)
 
 
-def test_verifier_bounds_and_freezes_zip_before_hashing_inspecting_and_extracting() -> None:
+def test_verifier_bounds_and_freezes_zip_before_use() -> None:
     script = _script()
     freeze = script.index('$inspectorScript "freeze" $ZipPath $FrozenZipPath')
     frozen_hash = script.index("Get-FileHash -LiteralPath $FrozenZipPath")
@@ -50,13 +50,17 @@ def test_verifier_bounds_and_freezes_zip_before_hashing_inspecting_and_extractin
     assert "1 GiB" in script[:frozen_hash]
 
 
-def test_file_manifest_paths_are_validated_before_any_manifest_driven_file_access() -> None:
+def test_manifest_paths_are_validated_before_manifest_file_access() -> None:
     static = _VERIFY_PARTS[1].read_text(encoding="utf-8")
-    helper = static.index('$manifestValidator = Join-Path $PSScriptRoot "file_manifest.py"')
+    helper = static.index(
+        '$manifestValidator = Join-Path $PSScriptRoot "file_manifest.py"'
+    )
     invoke = static.index(
         "$VenvPython $manifestValidator $fileManifestPath $PackageRoot", helper
     )
-    accepted = static.index("foreach ($validatedEntry in @($manifestValidation.entries))", invoke)
+    accepted = static.index(
+        "foreach ($validatedEntry in @($manifestValidation.entries))", invoke
+    )
     manifest_join = static.index(
         '$target = Join-Path $PackageRoot ($entry.Key.Replace("/", "\\"))', accepted
     )
@@ -68,7 +72,7 @@ def test_file_manifest_paths_are_validated_before_any_manifest_driven_file_acces
     assert "No se leera ningun destino declarado" in static[invoke:accepted]
 
 
-def test_smoke_profile_home_variables_are_derived_only_from_isolated_home() -> None:
+def test_smoke_profile_home_variables_are_derived_from_isolated_home() -> None:
     preconditions = _VERIFY_PARTS[2].read_text(encoding="utf-8")
     derive_root = preconditions.index(
         "$IsolatedHomeRoot = [System.IO.Path]::GetPathRoot($IsolatedHome)"
@@ -84,11 +88,10 @@ def test_smoke_profile_home_variables_are_derived_only_from_isolated_home() -> N
         "HOMEDRIVE y HOMEPATH reconstruyen el USERPROFILE aislado", derive_path
     )
     environment = preconditions.index("$IsolatedEnv = @{", coherence)
+    banned = preconditions.index("foreach ($banned", environment)
+    isolated_region = preconditions[environment:banned]
 
     assert derive_root < derive_drive < derive_path < coherence < environment
-    isolated_region = preconditions[environment : preconditions.index(
-        "foreach ($banned", environment
-    )]
     assert '"USERPROFILE"            = $IsolatedHome' in isolated_region
     assert '"HOMEDRIVE"              = $IsolatedHomeDrive' in isolated_region
     assert '"HOMEPATH"               = $IsolatedHomePath' in isolated_region
@@ -134,7 +137,9 @@ def test_credential_absence_is_a_hard_prelaunch_requirement() -> None:
 
 def test_credential_must_still_be_absent_after_launches() -> None:
     script = _script()
-    postcheck = script.index("La credencial de Sirius sigue ausente despues de los arranques")
+    postcheck = script.index(
+        "La credencial de Sirius sigue ausente despues de los arranques"
+    )
     postcheck_region = script[postcheck : postcheck + 400]
 
     assert '$CredentialStateAfter -eq "ABSENT"' in postcheck_region
@@ -153,7 +158,7 @@ def test_window_observation_does_not_end_liveness_monitoring() -> None:
     assert break_lines == ["if ($process.HasExited) { break }"]
 
 
-def test_liveness_is_sampled_only_after_the_monitoring_deadline_loop() -> None:
+def test_liveness_is_sampled_after_the_monitoring_deadline_loop() -> None:
     script = _script()
     loop_start = script.index("while ((Get-Date) -lt $deadline)")
     loop_end = script.index("$stillAlive = -not $process.HasExited", loop_start)
@@ -163,7 +168,7 @@ def test_liveness_is_sampled_only_after_the_monitoring_deadline_loop() -> None:
     assert loop_start < loop_end < liveness_check
 
 
-def test_isolated_process_is_stopped_from_finally_on_every_launch_path() -> None:
+def test_isolated_process_is_stopped_from_finally_on_every_path() -> None:
     runtime = _VERIFY_PARTS[-2].read_text(encoding="utf-8")
     function_start = runtime.index("function Invoke-SmokeLaunch")
     start = runtime.index("Start-IsolatedSirius `", function_start)
@@ -176,7 +181,7 @@ def test_isolated_process_is_stopped_from_finally_on_every_launch_path() -> None
     assert "B13 PROCESS CLEANUP ERROR" in runtime[finally_block:database_checks]
 
 
-def test_user_state_postconditions_run_from_finally_after_launch_failures() -> None:
+def test_user_state_postconditions_run_after_launch_failures() -> None:
     execute = _VERIFY_PARTS[-1].read_text(encoding="utf-8")
     first_launch = execute.index('Invoke-SmokeLaunch -Label "1er arranque"')
     sqlite_check = execute.index("SELECT version_num FROM alembic_version", first_launch)
@@ -195,7 +200,7 @@ def test_user_state_postconditions_run_from_finally_after_launch_failures() -> N
     assert "$ExecutionFailure = $_" in execute[catch:finally_block]
 
 
-def test_launch_or_sqlite_exception_becomes_a_reported_failure_after_postchecks() -> None:
+def test_launch_exception_is_reported_after_user_state_checks() -> None:
     execute = _VERIFY_PARTS[-1].read_text(encoding="utf-8")
     finally_block = execute.index("finally {")
     finally_end = execute.index("if ($null -ne $ExecutionFailure)", finally_block)
