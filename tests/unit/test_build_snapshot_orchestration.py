@@ -121,9 +121,7 @@ def test_exclusive_publication_lock_covers_build_and_cleanup() -> None:
     concurrent_rejection = wrapper.index("La publicacion concurrente se rechaza", no_share)
     add_worktree = wrapper.index("worktree add --detach $SnapshotRoot $SourceCommit", acquire)
     invoke = wrapper.index("& $SnapshotImplementation", add_worktree)
-    orchestration_finally = wrapper.index(
-        "finally {", wrapper.index("$BuildFailure = $null")
-    )
+    orchestration_finally = wrapper.index("finally {", wrapper.index("$BuildFailure = $null"))
     remove_snapshot = wrapper.index("worktree remove --force $SnapshotRoot", orchestration_finally)
     dispose = wrapper.index("$PublicationLockStream.Dispose()", remove_snapshot)
 
