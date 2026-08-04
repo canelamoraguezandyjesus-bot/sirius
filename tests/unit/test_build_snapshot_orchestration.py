@@ -178,6 +178,40 @@ def test_failed_build_diagnostics_are_copied_before_snapshot_cleanup() -> None:
     assert "B13 DIAGNOSTICS: conservados" in wrapper[catch:finally_block]
 
 
+def test_controller_uses_uv_managed_python_without_a_global_interpreter() -> None:
+    script = _WRAPPER.read_text(encoding="utf-8")
+    uv_lookup = script.index("Get-Command uv.exe")
+    controller = script.index("function Invoke-JsonController", uv_lookup)
+    capture = script.index('@("capture", $ControllerRoot)', controller)
+    add = script.index("worktree add --detach", capture)
+
+    assert uv_lookup < controller < capture < add
+    assert '"--no-project"' in script[uv_lookup:controller]
+    assert '"--managed-python"' in script[uv_lookup:controller]
+    assert '"--python", "3.14"' in script[uv_lookup:controller]
+    assert "Get-Command python.exe" not in script
+    assert "Get-Command py.exe" not in script
+    assert "& $PythonCommand @PythonPrefix $Script @Arguments" in script
+
+
+def test_complete_process_environment_is_restored_before_cleanup() -> None:
+    script = _WRAPPER.read_text(encoding="utf-8")
+    capture = script.index("$EnvironmentBeforeBuild = Get-ProcessEnvironmentSnapshot")
+    invoke = script.index("& $SnapshotImplementation", capture)
+    finally_block = script.index("finally {", invoke)
+    restore = script.index("Restore-ProcessEnvironment `", finally_block)
+    cleanup = script.index("worktree remove --force $SnapshotRoot", restore)
+
+    assert capture < invoke < finally_block < restore < cleanup
+    assert "foreach ($item in @(Get-ChildItem Env:))" in script
+    assert "$Snapshot.ContainsKey($item.Name)" in script
+    assert "$item.Name, $null" in script
+    assert "foreach ($name in @($Snapshot.Keys))" in script
+    assert "[string]$Snapshot[$name]" in script
+    assert "-Failures $CleanupFailures" in script[restore:cleanup]
+    assert "if ($null -eq $BuildFailure)" in script[finally_block:]
+
+
 def test_localappdata_guard_still_precedes_file_lock_worktree_and_build() -> None:
     script = _WRAPPER.read_text(encoding="utf-8")
     guard = script.index("$packagingGuard = Invoke-JsonController $GuardScript")
