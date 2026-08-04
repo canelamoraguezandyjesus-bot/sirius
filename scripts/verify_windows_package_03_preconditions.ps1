@@ -40,6 +40,21 @@ foreach ($entry in ($MinimalPath -split ";")) {
 Test-Check "C. El PATH reducido no contiene Python, py ni uv" (-not $pathHasInterpreter)
 Test-Check "C. El PATH reducido no contiene ningun .venv" (-not ($MinimalPath -match "\.venv"))
 
+# USERPROFILE por si solo no aisla el perfil: algunas librerias reconstruyen la
+# ruta desde HOMEDRIVE + HOMEPATH. Ambos valores se derivan exclusivamente de la
+# raiz temporal, nunca de las variables reales de la sesion del usuario.
+$IsolatedHome = [System.IO.Path]::GetFullPath($IsolatedHome)
+$IsolatedHomeRoot = [System.IO.Path]::GetPathRoot($IsolatedHome)
+if ([string]::IsNullOrWhiteSpace($IsolatedHomeRoot)) {
+    throw "No se pudo derivar la raiz del perfil temporal aislado: $IsolatedHome"
+}
+$IsolatedHomeDrive = $IsolatedHomeRoot.TrimEnd([char[]]"\")
+$IsolatedHomePath = $IsolatedHome.Substring($IsolatedHomeDrive.Length)
+$ReconstructedIsolatedHome = $IsolatedHomeDrive + $IsolatedHomePath
+Test-Check "D. HOMEDRIVE y HOMEPATH reconstruyen el USERPROFILE aislado" (
+    $ReconstructedIsolatedHome -eq $IsolatedHome) (
+    "reconstruido $ReconstructedIsolatedHome / esperado $IsolatedHome")
+
 $IsolatedEnv = @{
     "SystemRoot"             = $env:SystemRoot
     "windir"                 = $env:windir
@@ -50,8 +65,8 @@ $IsolatedEnv = @{
     "LOCALAPPDATA"           = $LocalAppData
     "APPDATA"                = $RoamingAppData
     "USERPROFILE"            = $IsolatedHome
-    "HOMEDRIVE"              = $env:HOMEDRIVE
-    "HOMEPATH"               = $env:HOMEPATH
+    "HOMEDRIVE"              = $IsolatedHomeDrive
+    "HOMEPATH"               = $IsolatedHomePath
     "TEMP"                   = $IsolatedTemp
     "TMP"                    = $IsolatedTemp
     "PROCESSOR_ARCHITECTURE" = $env:PROCESSOR_ARCHITECTURE
