@@ -90,14 +90,10 @@ def test_failed_build_diagnostics_are_copied_before_snapshot_cleanup() -> None:
 
     assert catch < preserve < rethrow < finally_block < cleanup
     assert "build\\packaging-diagnostics\\$CommitShort" in wrapper
-    assert '$_ .Name -like "build-*.log"'.replace(" ", "") not in wrapper.replace(" ", "")
-    assert '$_ .Name -like "nuitka-crash-report-*.xml"'.replace(" ", "") not in wrapper.replace(
-        " ", ""
-    )
-    assert '$_ .Name -eq "pyside6-deploy-dry-run.txt"'.replace(" ", "") not in wrapper.replace(
-        " ", ""
-    )
-    assert '$_ .Name -eq "msvc-env.txt"'.replace(" ", "") not in wrapper.replace(" ", "")
+    assert '$_.Name -like "build-*.log"' in wrapper
+    assert '$_.Name -like "nuitka-crash-report-*.xml"' in wrapper
+    assert '$_.Name -eq "pyside6-deploy-dry-run.txt"' in wrapper
+    assert '$_.Name -eq "msvc-env.txt"' not in wrapper
     assert "B13 DIAGNOSTICS: conservados" in wrapper[catch:finally_block]
 
 
