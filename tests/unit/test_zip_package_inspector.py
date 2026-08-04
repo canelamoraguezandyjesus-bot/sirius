@@ -1,4 +1,4 @@
-"""Regresión del lector y extractor acotado del ZIP de B13."""
+"""Regresión del lector, congelador y extractor acotado del ZIP de B13."""
 
 from __future__ import annotations
 
@@ -6,15 +6,18 @@ import io
 import json
 import zipfile
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from zip_package_inspector import (
     ExtractionResult,
+    FrozenCopyResult,
     ZipInspection,
     ZipLimits,
     ZipSafetyError,
     copy_bounded,
+    freeze_zip,
     inspect_entry_names,
     inspect_zip,
     main,
@@ -42,6 +45,7 @@ def _inspect(entry_names: list[str]) -> ZipInspection:
 
 def _limits(
     *,
+    source: int = 8192,
     entries: int = 128,
     entry: int = 1024,
     total: int = 4096,
@@ -49,6 +53,7 @@ def _limits(
     chunk: int = 4,
 ) -> ZipLimits:
     return ZipLimits(
+        max_source_bytes=source,
         max_entries=entries,
         max_entry_uncompressed_bytes=entry,
         max_total_uncompressed_bytes=total,
@@ -150,6 +155,58 @@ def test_a_sibling_directory_that_shares_the_prefix_is_rejected() -> None:
     )
 
     assert len(inspection.unsafe) == 1
+
+
+def test_freeze_zip_copies_the_source_within_the_limit(tmp_path: Path) -> None:
+    source = tmp_path / "source.zip"
+    frozen = tmp_path / "private" / "frozen.zip"
+    frozen.parent.mkdir()
+    source.write_bytes(b"package")
+
+    result = freeze_zip(str(source), frozen_path=str(frozen), limits=_limits(source=8))
+
+    assert result == FrozenCopyResult(bytes_written=7)
+    assert frozen.read_bytes() == b"package"
+
+
+def test_freeze_zip_rejects_an_oversized_source_before_creating_output(tmp_path: Path) -> None:
+    source = tmp_path / "oversized.zip"
+    frozen = tmp_path / "frozen.zip"
+    source.write_bytes(b"x" * 11)
+
+    with pytest.raises(ZipSafetyError, match="ZIP de origen demasiado grande"):
+        freeze_zip(str(source), frozen_path=str(frozen), limits=_limits(source=10))
+
+    assert not frozen.exists()
+
+
+def test_freeze_zip_removes_partial_output_if_source_grows_during_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "growing.zip"
+    frozen = tmp_path / "frozen.zip"
+    source.write_bytes(b"12345")
+    original_open = Path.open
+    grew = False
+
+    def open_after_growth(path: Path, *args: Any, **kwargs: Any) -> Any:
+        nonlocal grew
+        if path == source and args and args[0] == "rb" and not grew:
+            grew = True
+            with original_open(source, "ab") as appender:
+                appender.write(b"678901")
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", open_after_growth)
+
+    with pytest.raises(ZipSafetyError, match="supero el limite durante la copia"):
+        freeze_zip(
+            str(source),
+            frozen_path=str(frozen),
+            limits=_limits(source=10, chunk=4),
+        )
+
+    assert not frozen.exists()
 
 
 def test_inspect_zip_reads_a_real_archive(tmp_path: Path) -> None:
@@ -309,6 +366,21 @@ def test_safe_extract_zip_refuses_too_many_entries_before_writing(tmp_path: Path
         )
 
     assert not extract_root.exists()
+
+
+def test_the_freeze_command_emits_json_for_powershell(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "paquete.zip"
+    frozen = tmp_path / "congelado.zip"
+    source.write_bytes(b"contenido")
+
+    exit_code = main(["zip_package_inspector.py", "freeze", str(source), str(frozen)])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {"ok": True, "bytes_written": 9}
+    assert frozen.read_bytes() == b"contenido"
 
 
 def test_the_inspection_command_emits_json_for_powershell(
