@@ -3,9 +3,9 @@
 La misma implementación que usa ``verify_windows_package.ps1`` queda cubierta
 por ``tests/unit/test_zip_package_inspector.py``. Las rutas se juzgan con
 semántica Windows mediante ``ntpath`` aunque las pruebas se ejecuten en Ubuntu.
-Además de impedir zip-slip, el módulo limita tamaños declarados, expansión total
-y ratio de compresión antes de extraer, y vuelve a imponer los límites mientras
-copia cada archivo.
+Además de impedir zip-slip, el módulo limita el número de entradas, los tamaños
+declarados, la expansión total y el ratio de compresión antes de extraer, y
+vuelve a imponer los límites mientras copia cada archivo.
 
 Uso desde PowerShell::
 
@@ -45,6 +45,7 @@ _MIB = 1024 * 1024
 class ZipLimits:
     """Límites conservadores para un paquete standalone de Sirius."""
 
+    max_entries: int = 4096
     max_entry_uncompressed_bytes: int = 512 * _MIB
     max_total_uncompressed_bytes: int = 2 * 1024 * _MIB
     max_compression_ratio: float = 200.0
@@ -65,6 +66,7 @@ class ZipInspection:
     roots: tuple[str, ...]
     unsafe: tuple[str, ...]
     file_count: int
+    entry_count: int = 0
     total_uncompressed_bytes: int = 0
     max_entry_uncompressed_bytes: int = 0
     max_compression_ratio: float = 0.0
@@ -75,6 +77,7 @@ class ZipInspection:
             "roots": list(self.roots),
             "unsafe": list(self.unsafe),
             "file_count": self.file_count,
+            "entry_count": self.entry_count,
             "total_uncompressed_bytes": self.total_uncompressed_bytes,
             "max_entry_uncompressed_bytes": self.max_entry_uncompressed_bytes,
             "max_compression_ratio": self.max_compression_ratio,
@@ -131,8 +134,10 @@ def inspect_entry_names(entry_names: Iterable[str], *, extract_root: str) -> Zip
     roots: set[str] = set()
     unsafe: list[str] = []
     file_count = 0
+    entry_count = 0
 
     for original_name in entry_names:
+        entry_count += 1
         normalized = original_name.replace("\\", "/")
         if (
             normalized.startswith("/")
@@ -162,6 +167,7 @@ def inspect_entry_names(entry_names: Iterable[str], *, extract_root: str) -> Zip
         roots=tuple(sorted(roots)),
         unsafe=tuple(unsafe),
         file_count=file_count,
+        entry_count=entry_count,
     )
 
 
@@ -182,6 +188,11 @@ def inspect_zip(
         total_uncompressed = 0
         max_entry = 0
         max_ratio = 0.0
+
+        if names.entry_count > limits.max_entries:
+            size_violations.append(
+                f"demasiadas entradas ({names.entry_count}; limite {limits.max_entries})"
+            )
 
         for info in infos:
             if info.is_dir() or _is_directory_entry(info.filename):
@@ -219,6 +230,7 @@ def inspect_zip(
             roots=names.roots,
             unsafe=tuple(unsafe),
             file_count=names.file_count,
+            entry_count=names.entry_count,
             total_uncompressed_bytes=total_uncompressed,
             max_entry_uncompressed_bytes=max_entry,
             max_compression_ratio=max_ratio,
@@ -273,13 +285,19 @@ def safe_extract_zip(
     root = Path(extract_root)
     if root.exists() and any(root.iterdir()):
         raise ZipSafetyError("la raiz de extraccion no esta vacia")
-    root.mkdir(parents=True, exist_ok=True)
 
     total_written = 0
     files_written = 0
     try:
         with zipfile.ZipFile(zip_path) as archive:
-            for info in archive.infolist():
+            infos = archive.infolist()
+            if len(infos) > limits.max_entries:
+                raise ZipSafetyError(
+                    f"demasiadas entradas ({len(infos)}; limite {limits.max_entries})"
+                )
+
+            root.mkdir(parents=True, exist_ok=True)
+            for info in infos:
                 segments = _segments(info.filename)
                 if not segments:
                     continue
