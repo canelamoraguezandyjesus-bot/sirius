@@ -247,17 +247,29 @@ catch [System.IO.IOException] {
         "La publicacion concurrente se rechaza para no mezclar ni restaurar artefactos de otra ejecucion.")
 }
 catch {
+    $LockCleanupFailures = New-Object System.Collections.Generic.List[string]
     try {
         if ($null -ne $PublicationLockStream) {
             $PublicationLockStream.Dispose()
             $PublicationLockStream = $null
         }
     }
-    finally {
+    catch {
+        $LockCleanupFailures.Add(
+            "No se pudo liberar el bloqueo exclusivo de publicacion: $($_.Exception.Message)")
+    }
+    try {
         if ($null -ne $PackagingLockStream) {
             $PackagingLockStream.Dispose()
             $PackagingLockStream = $null
         }
+    }
+    catch {
+        $LockCleanupFailures.Add(
+            "No se pudo liberar el bloqueo exclusivo del entorno: $($_.Exception.Message)")
+    }
+    foreach ($lockCleanupFailure in $LockCleanupFailures) {
+        [Console]::Error.WriteLine("B13 LOCK CLEANUP ERROR: $lockCleanupFailure")
     }
     throw
 }
