@@ -16,6 +16,7 @@ _VERIFY_PARTS = (
 
 
 def _script() -> str:
+    # Reproduce el mismo orden de fases que carga el wrapper canonico.
     chunks = [path.read_text(encoding="utf-8") for path in _VERIFY_PARTS]
     return "\n".join(chunks)
 
