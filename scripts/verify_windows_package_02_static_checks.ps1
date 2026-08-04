@@ -20,6 +20,18 @@ Test-Check "migrations/env.py presente" (Test-Path -LiteralPath (Join-Path $migr
 $versionFiles = @(Get-ChildItem -LiteralPath (Join-Path $migrationsInArtifact "versions") -Filter "*.py" -File -ErrorAction SilentlyContinue)
 Test-Check "migrations/versions contiene revisiones ($($versionFiles.Count))" ($versionFiles.Count -gt 0)
 
+# BUILD-MANIFEST.json procede del ZIP y no se considera confiable. Se limita
+# antes de leerlo o pasarlo al parser JSON para que un artefacto manipulado no
+# pueda consumir memoria sin cota durante la verificacion.
+$MaxBuildManifestBytes = 1MB
+$buildManifestBytes = (Get-Item -LiteralPath $buildManifestPath).Length
+Test-Check "BUILD-MANIFEST.json tiene un tamano razonable" (
+    $buildManifestBytes -le $MaxBuildManifestBytes) (
+    "tamano $buildManifestBytes bytes / limite $MaxBuildManifestBytes")
+if ($script:Failures.Count -gt 0) {
+    throw "BUILD-MANIFEST.json supera el limite permitido. Verificacion detenida antes de leerlo."
+}
+
 $buildManifest = Get-Content -LiteralPath $buildManifestPath -Raw | ConvertFrom-Json
 Test-Check "El manifiesto declara packaging_mode = standalone" ($buildManifest.packaging_mode -eq "standalone") $buildManifest.packaging_mode
 
