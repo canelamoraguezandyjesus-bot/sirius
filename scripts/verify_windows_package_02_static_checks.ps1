@@ -44,12 +44,40 @@ Write-Info "Commit de origen: $($buildManifest.source_commit_short)   |   head d
 # --------------------------------------------------------------------------
 Write-Step "A. Inventario de hashes sobre el contenido extraido"
 
+# El manifiesto forma parte del ZIP y por tanto no se considera confiable hasta
+# validar todas sus rutas. La validacion usa semantica Windows aunque Quality
+# corra en Ubuntu y termina antes de cualquier Join-Path o Get-FileHash basado
+# en una entrada declarada por el propio manifiesto.
+$manifestValidator = Join-Path $PSScriptRoot "file_manifest.py"
+if (-not (Test-Path -LiteralPath $manifestValidator -PathType Leaf)) {
+    throw "No existe $manifestValidator, necesario para confinar FILE-MANIFEST.sha256."
+}
+$manifestRaw = (& $VenvPython $manifestValidator $fileManifestPath $PackageRoot 2>&1 | Out-String).Trim()
+$manifestExit = $LASTEXITCODE
+if ([string]::IsNullOrWhiteSpace($manifestRaw)) {
+    throw "La validacion de FILE-MANIFEST.sha256 no produjo un resultado verificable."
+}
+try {
+    $manifestValidation = $manifestRaw | ConvertFrom-Json
+}
+catch {
+    throw "La validacion de FILE-MANIFEST.sha256 devolvio una respuesta no valida: $manifestRaw"
+}
+if ($manifestExit -ne 0 -or -not [bool]$manifestValidation.ok) {
+    $manifestError = if ($null -ne $manifestValidation.error) {
+        [string]$manifestValidation.error
+    }
+    else {
+        "manifiesto rechazado"
+    }
+    throw ("FILE-MANIFEST.sha256 contiene una ruta o un hash no seguro: " +
+        "$manifestError. No se leera ningun destino declarado.")
+}
+
 $prefixLength = $PackageRoot.Length + 1
 $manifestEntries = @{}
-foreach ($line in (Get-Content -LiteralPath $fileManifestPath)) {
-    if ([string]::IsNullOrWhiteSpace($line)) { continue }
-    $parts = $line -split "\s+", 2
-    if ($parts.Count -eq 2) { $manifestEntries[$parts[1].Trim()] = $parts[0].Trim().ToLower() }
+foreach ($validatedEntry in @($manifestValidation.entries)) {
+    $manifestEntries[[string]$validatedEntry.path] = [string]$validatedEntry.sha256
 }
 
 $actualFiles = @(Get-ChildItem -LiteralPath $PackageRoot -Recurse -Force -File |
