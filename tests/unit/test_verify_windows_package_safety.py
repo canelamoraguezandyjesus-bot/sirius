@@ -50,6 +50,52 @@ def test_verifier_bounds_and_freezes_zip_before_hashing_inspecting_and_extractin
     assert "1 GiB" in script[:frozen_hash]
 
 
+def test_file_manifest_paths_are_validated_before_any_manifest_driven_file_access() -> None:
+    static = _VERIFY_PARTS[1].read_text(encoding="utf-8")
+    helper = static.index('$manifestValidator = Join-Path $PSScriptRoot "file_manifest.py"')
+    invoke = static.index(
+        "$VenvPython $manifestValidator $fileManifestPath $PackageRoot", helper
+    )
+    accepted = static.index("foreach ($validatedEntry in @($manifestValidation.entries))", invoke)
+    manifest_join = static.index(
+        '$target = Join-Path $PackageRoot ($entry.Key.Replace("/", "\\"))', accepted
+    )
+    manifest_hash = static.index("Get-FileHash -LiteralPath $target", manifest_join)
+
+    assert (_SCRIPTS / "file_manifest.py").is_file()
+    assert helper < invoke < accepted < manifest_join < manifest_hash
+    assert "ruta o un hash no seguro" in static[invoke:accepted]
+    assert "No se leera ningun destino declarado" in static[invoke:accepted]
+
+
+def test_smoke_profile_home_variables_are_derived_only_from_isolated_home() -> None:
+    preconditions = _VERIFY_PARTS[2].read_text(encoding="utf-8")
+    derive_root = preconditions.index(
+        "$IsolatedHomeRoot = [System.IO.Path]::GetPathRoot($IsolatedHome)"
+    )
+    derive_drive = preconditions.index(
+        "$IsolatedHomeDrive = $IsolatedHomeRoot.TrimEnd", derive_root
+    )
+    derive_path = preconditions.index(
+        "$IsolatedHomePath = $IsolatedHome.Substring($IsolatedHomeDrive.Length)",
+        derive_drive,
+    )
+    coherence = preconditions.index(
+        "HOMEDRIVE y HOMEPATH reconstruyen el USERPROFILE aislado", derive_path
+    )
+    environment = preconditions.index("$IsolatedEnv = @{", coherence)
+
+    assert derive_root < derive_drive < derive_path < coherence < environment
+    isolated_region = preconditions[environment : preconditions.index(
+        "foreach ($banned", environment
+    )]
+    assert '"USERPROFILE"            = $IsolatedHome' in isolated_region
+    assert '"HOMEDRIVE"              = $IsolatedHomeDrive' in isolated_region
+    assert '"HOMEPATH"               = $IsolatedHomePath' in isolated_region
+    assert "$env:HOMEDRIVE" not in isolated_region
+    assert "$env:HOMEPATH" not in isolated_region
+
+
 def test_static_package_failures_abort_before_any_package_launch() -> None:
     script = _script()
     contamination = script.index("Sin bases de datos, registros, copias")
