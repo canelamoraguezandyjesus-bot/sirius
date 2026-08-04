@@ -401,16 +401,16 @@ def safe_extract_zip(
 def main(argv: list[str]) -> int:
     try:
         if len(argv) == 4 and argv[1] == "freeze":
-            result = freeze_zip(argv[2], frozen_path=argv[3])
-            print(json.dumps(result.as_dict()))
+            frozen_result = freeze_zip(argv[2], frozen_path=argv[3])
+            print(json.dumps(frozen_result.as_dict()))
             return 0
         if len(argv) == 3:
             inspection = inspect_zip(argv[1], extract_root=argv[2])
             print(json.dumps(inspection.as_dict()))
             return 0
         if len(argv) == 4 and argv[1] == "extract":
-            result = safe_extract_zip(argv[2], extract_root=argv[3])
-            print(json.dumps(result.as_dict()))
+            extraction_result = safe_extract_zip(argv[2], extract_root=argv[3])
+            print(json.dumps(extraction_result.as_dict()))
             return 0
     except (OSError, ValueError, zipfile.BadZipFile) as exc:
         print(json.dumps({"ok": False, "error": str(exc)}))
