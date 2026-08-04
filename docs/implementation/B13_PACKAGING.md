@@ -356,39 +356,28 @@ Windows, no al sistema de archivos: al arrancar, el ejecutable construye el
 adaptador real de `keyring` y `main.py::_build_initial_window` llama a
 `has_key()`, que consulta la credencial del usuario que ejecuta la prueba.
 
-En una máquina que ya tiene guardada la clave real, el ejecutable seguiría el
-camino **con** clave, y una verificación que solo comprobase «hay una ventana»
-pasaría igualmente sin haber probado el onboarding.
+Por eso `ABSENT` es una **precondición obligatoria** antes de ejecutar
+`Sirius.exe`. La sonda consulta el servicio `Sirius` y la clave
+`openai_api_key` mediante `ApiKeySettingsUseCase.has_key()`:
 
-Por eso la verificación evalúa antes una **precondición**:
+- si devuelve `ABSENT`, el verificador puede continuar con los dos arranques;
+- si devuelve `PRESENT` o `ERROR`, el verificador aborta antes de ejecutar
+  código del paquete y no manipula Credential Manager.
 
-- consulta la **existencia** mediante el puerto de aplicación
-  (`ApiKeySettingsUseCase.has_key()`), que **devuelve** un booleano;
-- identificador consultado: servicio `Sirius`, clave `openai_api_key`
-  (`src/sirius/config/secrets_config.py`).
+Conviene ser exacto sobre la sonda. **Credential Manager sí se consulta**, y
+`has_key()` obtiene internamente el valor mediante `SecretStore.get_secret()`
+para reducirlo a un booleano; por tanto, el secreto entra brevemente en memoria
+del proceso, igual que durante un arranque normal de Sirius. Lo que se garantiza
+es que la sonda solo emite `PRESENT`, `ABSENT` o `ERROR <TipoDeExcepción>`: no
+imprime, devuelve, compara ni registra el valor secreto, y no modifica ni
+elimina la credencial.
 
-Conviene ser exacto sobre lo que esto hace y lo que no. **Credential Manager sí
-se consulta**, y `has_key()` obtiene por dentro el valor mediante
-`SecretStore.get_secret()` para reducirlo a un booleano, de modo que el secreto
-**sí entra en memoria** del proceso de la sonda. Es el mismo acceso que hace
-Sirius en cada arranque, ni más ni menos. Sería falso afirmar que la credencial
-«nunca se lee» o que el almacén no se consulta.
-
-Lo que sí se garantiza, y es comprobable leyendo la sonda:
-
-- solo emite `PRESENT`, `ABSENT` o `ERROR <TipoDeExcepción>`;
-- el valor no se imprime, no se devuelve y no se registra en ningún archivo;
-- la credencial no se modifica ni se elimina;
-- no se usa `cmdkey` ni ninguna manipulación directa de la bóveda.
-
-Si la credencial **existe**, la comprobación de que la ventana corresponde al
-flujo sin clave se marca `[OMITIDA]`, el resto de la verificación continúa y el
-resultado final es **SUPERADA CON RESERVAS**, enumerando expresamente lo que no
-se ha demostrado. La credencial real no se toca en ningún caso.
-
-Si la credencial **no existe**, se comprueba además que el título de la ventana
-es el de `OnboardingWindow` (`Sirius 0.1 — Primera configuración`), no
-simplemente que exista alguna ventana de Sirius.
+Cuando la precondición se cumple, el verificador exige que la ventana visible
+sea la de `OnboardingWindow` (`Sirius 0.1 — Primera configuración`), no
+simplemente cualquier ventana de Sirius. Después de los dos arranques vuelve a
+consultar Credential Manager y exige que el estado continúe siendo `ABSENT`.
+Esto demuestra que el paquete no dejó una credencial persistente en la sesión
+real de Windows sin comparar, imprimir ni registrar valores secretos.
 
 ### Cómo ejecutar esta prueba de forma reproducible
 
