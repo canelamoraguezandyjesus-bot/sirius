@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-_VERIFY_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "verify_windows_package.ps1"
+_VERIFY_SCRIPT = (
+    Path(__file__).resolve().parents[2] / "scripts" / "verify_windows_package.ps1"
+)
 
 
 def _script() -> str:
