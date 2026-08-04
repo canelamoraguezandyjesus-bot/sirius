@@ -44,29 +44,9 @@ case "$ROLE" in
     ;;
 esac
 
-# Identificador único de esta ejecución. Los veredictos de parada (FAILED_SAFELY,
-# BLOCKED_BY_DECISION y las paradas precheck de este script) llevaban antes un
-# marcador fijo por rol; dos paradas seguidas compartían marcador y la segunda
-# se dedupaba, ocultando su motivo (incidencia observada en el piloto sobre #66).
-# Con este sufijo por run cada parada publica su propio comentario con su
-# diagnóstico, sin perder la idempotencia dentro del mismo run (reintentos del
-# mismo run conservan RUN_ID y RUN_ATTEMPT). Los veredictos de avance
-# (READY_FOR_REVIEW/FIXED/REVIEW_APPROVED/CHANGES_REQUESTED) siguen anclados al
-# head SHA o al hash del contenido, que ya los hace únicos y estables.
 SIRIUS_RUN_TAG="${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1}"
-
-# Identificador de RONDA (sin el número de reintento). El marcador de
-# CHANGES_REQUESTED arrastra el registro de convergencia, y ese registro debe
-# publicarse UNA sola vez por ronda: con el sufijo por intento, reejecutar el
-# mismo run de Actions (attempt 2) generaba un marcador distinto, no dedupaba y
-# publicaba un SEGUNDO registro con el mismo head. La ronda siguiente veía dos
-# registros consecutivos sobre el mismo head y bloqueaba por `head-sin-avance`
-# un trabajo que sí había avanzado. Con el run como identificador, una
-# reejecución es idempotente y una ronda nueva —que siempre es un run nuevo—
-# sigue registrándose por separado.
 SIRIUS_ROUND_TAG="${GITHUB_RUN_ID:-manual}"
 
-# transition <marker> <body_file> <add_label> <color> <desc>
 transition() {
   local marker="$1" body_file="$2" add="$3" color="$4" desc="$5"
   sirius_transition "$REPO" "$ISSUE" "$marker" "$body_file" \
@@ -74,12 +54,6 @@ transition() {
 }
 
 stop_safely() {
-  # stop_safely <reason-slug> <explicacion> — parada segura determinista
-  # (no depende del veredicto del agente: el propio script detectó algo
-  # inconsistente y no continúa). Siempre termina el script con estado !=0:
-  # es una anomalía que debe quedar visible como fallo del job (igual que
-  # los casos de ambigüedad de advance-sirius-after-quality.yml), no un
-  # rechazo esperado como el de la puerta de activación.
   local reason="$1" why="$2"
   local marker="<!-- sirius-verdict:${ROLE}:precheck:${reason}:${SIRIUS_RUN_TAG} -->"
   local body_file
@@ -90,25 +64,24 @@ stop_safely() {
     "$why" >"$body_file"
   if ! transition "$marker" "$body_file" "sirius:failed-safely" "D93F0B" \
     "Estado temporal: fallo operativo detenido de forma segura"; then
-    # La propia causa de la parada puede ser que el historial de comentarios no
-    # se pueda leer. En ese caso `sirius_transition` se niega correctamente a
-    # publicar un marcador a ciegas, pero la incidencia debe quedar igualmente
-    # marcada como fallo seguro. Aplicamos solo el estado verificable (etiqueta
-    # terminal y retirada de la etiqueta en curso), sin comentario ni marcador;
-    # la ejecución sigue terminando !=0 y el siguiente intento podrá volver a
-    # publicar el diagnóstico cuando la lectura se recupere.
-    echo "::warning::No se pudo registrar el comentario de parada segura (${reason}) para #${ISSUE}; aplicando solo la etiqueta de fallo seguro." >&2
+    # Si el historial es ilegible, la transición no puede deduplicar y se
+    # detiene antes de mutar estado. El aviso de parada no es un registro de
+    # ronda ni gobierna la convergencia y su marcador incluye el run, por lo que
+    # publicarlo directamente conserva trazabilidad sin crear una ronda falsa.
+    echo "::warning::No se pudo registrar la parada segura (${reason}) mediante la transición verificada; aplicando el estado y el aviso de diagnóstico." >&2
     if ! sirius_ensure_label "$REPO" "sirius:failed-safely" "D93F0B" \
       "Estado temporal: fallo operativo detenido de forma segura" \
       || ! sirius_set_issue_labels "$REPO" "$ISSUE" "sirius:failed-safely" "$IN_PROGRESS_LABEL"; then
-      echo "::error::No se pudo aplicar ni siquiera la etiqueta de parada segura (${reason}) para #${ISSUE}; reintentable." >&2
+      echo "::error::No se pudo aplicar la etiqueta de parada segura (${reason}) para #${ISSUE}; reintentable." >&2
+    fi
+    if ! sirius_retry gh issue comment "$ISSUE" --repo "$REPO" --body-file "$body_file"; then
+      echo "::error::No se pudo publicar el diagnóstico de parada segura (${reason}) para #${ISSUE}; reintentable." >&2
     fi
   fi
   rm -f "$body_file"
   exit 1
 }
 
-# --- 1) El veredicto debe existir y ser JSON válido con "verdict" -------------
 if [ ! -s "$VERDICT_FILE" ]; then
   stop_safely "sin-veredicto" \
     "El rol \`${ROLE}\` no escribió ningún veredicto. Sin un resultado estructurado no puedo saber en qué quedó el trabajo."
