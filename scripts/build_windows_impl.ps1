@@ -120,9 +120,12 @@ function Remove-Tree {
 }
 
 function Publish-ValidatedArtifact {
-    <# Publica los tres resultados como una pequena transaccion recuperable.
-       Si cualquier movimiento falla, elimina lo nuevo y restaura lo anterior;
-       nunca deja una mezcla parcial acreditada como salida de esta ejecucion. #>
+    <# Publica los tres resultados como una transaccion recuperable. Los nombres
+       movidos a backup y los nombres nuevos publicados se registran por separado.
+       Ante un fallo se intentan TODAS las restauraciones. La transaccion solo se
+       elimina si el rollback completo termino bien; si no, se conserva con los
+       backups para recuperacion manual y se informan el error original y todos
+       los errores de rollback. #>
     param(
         [string]$SourceDirectory,
         [string]$SourceZip,
@@ -136,42 +139,125 @@ function Publish-ValidatedArtifact {
     $backup = Join-Path $transaction "backup"
     $names = @($Name, "$Name.zip", "$Name.zip.sha256")
     $sources = @($SourceDirectory, $SourceZip, $SourceHash)
+    $backedUp = New-Object System.Collections.Generic.List[string]
+    $published = New-Object System.Collections.Generic.List[string]
+    $operationFailure = $null
+    $preserveTransaction = $false
 
     try {
-        New-Item -ItemType Directory -Path $incoming, $backup | Out-Null
+        New-Item -ItemType Directory -Path $incoming, $backup -ErrorAction Stop | Out-Null
         for ($index = 0; $index -lt $names.Count; $index++) {
-            Copy-Item -LiteralPath $sources[$index] -Destination (Join-Path $incoming $names[$index]) -Recurse
+            Copy-Item `
+                -LiteralPath $sources[$index] `
+                -Destination (Join-Path $incoming $names[$index]) `
+                -Recurse `
+                -ErrorAction Stop
         }
 
-        try {
-            foreach ($itemName in $names) {
-                $destination = Join-Path $DestinationRoot $itemName
-                if (Test-Path -LiteralPath $destination) {
-                    Move-Item -LiteralPath $destination -Destination (Join-Path $backup $itemName)
-                }
-            }
-            foreach ($itemName in $names) {
-                Move-Item -LiteralPath (Join-Path $incoming $itemName) -Destination (Join-Path $DestinationRoot $itemName)
+        foreach ($itemName in $names) {
+            $destination = Join-Path $DestinationRoot $itemName
+            if (Test-Path -LiteralPath $destination) {
+                Move-Item `
+                    -LiteralPath $destination `
+                    -Destination (Join-Path $backup $itemName) `
+                    -ErrorAction Stop
+                $backedUp.Add($itemName)
             }
         }
-        catch {
-            foreach ($itemName in $names) {
-                $destination = Join-Path $DestinationRoot $itemName
-                $saved = Join-Path $backup $itemName
-                $pending = Join-Path $incoming $itemName
-                if (Test-Path -LiteralPath $saved) {
-                    if (Test-Path -LiteralPath $destination) { Remove-Item -LiteralPath $destination -Recurse -Force }
-                    Move-Item -LiteralPath $saved -Destination $destination
-                }
-                elseif (-not (Test-Path -LiteralPath $pending) -and (Test-Path -LiteralPath $destination)) {
-                    Remove-Item -LiteralPath $destination -Recurse -Force
-                }
-            }
-            throw
+        foreach ($itemName in $names) {
+            Move-Item `
+                -LiteralPath (Join-Path $incoming $itemName) `
+                -Destination (Join-Path $DestinationRoot $itemName) `
+                -ErrorAction Stop
+            $published.Add($itemName)
         }
     }
+    catch {
+        $operationFailure = $_
+        $rollbackFailures = New-Object System.Collections.Generic.List[string]
+
+        # Primero se retiran solo los elementos nuevos cuyo movimiento se
+        # completo. Los originales que nunca se tocaron no entran en esta lista.
+        foreach ($itemName in $published) {
+            $destination = Join-Path $DestinationRoot $itemName
+            try {
+                if (Test-Path -LiteralPath $destination) {
+                    Remove-Item `
+                        -LiteralPath $destination `
+                        -Recurse `
+                        -Force `
+                        -ErrorAction Stop
+                }
+            }
+            catch {
+                $rollbackFailures.Add(
+                    "no se pudo retirar el resultado nuevo '$destination': $($_.Exception.Message)")
+            }
+        }
+
+        # Despues se intentan restaurar TODOS los originales movidos a backup.
+        # Cada nombre tiene su propio try/catch para que un fallo no salte el
+        # resto de restauraciones.
+        foreach ($itemName in $backedUp) {
+            $destination = Join-Path $DestinationRoot $itemName
+            $saved = Join-Path $backup $itemName
+            try {
+                if (Test-Path -LiteralPath $destination) {
+                    Remove-Item `
+                        -LiteralPath $destination `
+                        -Recurse `
+                        -Force `
+                        -ErrorAction Stop
+                }
+                Move-Item `
+                    -LiteralPath $saved `
+                    -Destination $destination `
+                    -ErrorAction Stop
+            }
+            catch {
+                $rollbackFailures.Add(
+                    "no se pudo restaurar '$saved' en '$destination': $($_.Exception.Message)")
+            }
+        }
+
+        if ($rollbackFailures.Count -gt 0) {
+            $preserveTransaction = $true
+            $originalDetail = $operationFailure.Exception.Message
+            if ([string]::IsNullOrWhiteSpace($originalDetail)) {
+                $originalDetail = $operationFailure.ToString()
+            }
+            $rollbackDetail = $rollbackFailures -join " | "
+            [Console]::Error.WriteLine(
+                "B13 PUBLISH ROLLBACK ERROR: transaccion conservada en '$transaction'. " +
+                "Error original: $originalDetail. Rollback: $rollbackDetail")
+            throw (
+                "La publicacion fallo y el rollback fue incompleto. " +
+                "La transaccion con los backups se conserva en '$transaction'. " +
+                "Error original: $originalDetail. Errores de rollback: $rollbackDetail")
+        }
+
+        # El rollback completo termino bien. Se conserva la excepcion original;
+        # el finally puede eliminar ya la transaccion sin destruir backups.
+        throw
+    }
     finally {
-        if (Test-Path -LiteralPath $transaction) { Remove-Tree $transaction }
+        if (-not $preserveTransaction -and (Test-Path -LiteralPath $transaction)) {
+            try {
+                Remove-Tree $transaction
+            }
+            catch {
+                if ($null -ne $operationFailure) {
+                    # No se oculta el fallo original. La ruta residual se deja
+                    # indicada para que el operador pueda eliminarla despues.
+                    [Console]::Error.WriteLine(
+                        "B13 PUBLISH CLEANUP ERROR: no se pudo eliminar '$transaction' " +
+                        "despues del rollback: $($_.Exception.Message)")
+                }
+                else {
+                    throw
+                }
+            }
+        }
     }
 }
 
@@ -208,7 +294,6 @@ try {
     $snapshotBranch = (Invoke-Native "git" @("rev-parse", "--abbrev-ref", "HEAD") "rama del snapshot").Trim()
     if ($snapshotBranch -ne "HEAD") { throw "El snapshot no es un worktree detached." }
 }
-
 finally {
     Pop-Location
 }
@@ -717,33 +802,33 @@ Write-Step "11/13 Manifiesto de construccion"
 
 $BuildCommand = ".\scripts\build_windows.ps1"
 $manifest = [ordered]@{
-    product                 = "Sirius"
-    app_version             = $AppVersion
-    source_commit           = $SourceCommit
-    source_commit_short     = $SourceCommitShort
-    source_branch           = $SourceBranch
-    source_dirty            = $SourceDirty
-    source_origin_main      = $OriginMainCommit
-    descends_from_origin_main = $DescendsFromOriginMain
-    built_at_utc            = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-    windows_version         = $WindowsVersion
-    architecture            = "x64"
-    python_version          = $PythonVersion
-    uv_version              = $UvVersion
-    pyside6_version         = $PySide6Version
-    qt_version              = $QtVersion
-    pyside6_deploy_version  = "incluido en PySide6 $PySide6Version"
-    nuitka_version          = $NuitkaVersion
-    compiler                = "MSVC (Visual Studio Build Tools 2022, Hostx64/x64)"
-    compiler_version        = "cl $CompilerVersion (toolset MSVC $VcToolsVersion)"
-    windows_sdk             = $WindowsSdk
-    packaging_mode          = "standalone"
-    entrypoint              = "src/sirius/__main__.py"
-    artifact_directory      = "dist/windows/$ArtifactName"
-    alembic_head            = $AlembicHead
-    build_command           = $BuildCommand
-    verification_status     = "pendiente: ejecuta .\scripts\verify_windows_package.ps1"
-    reproducibility_note    = "No se afirma reproducibilidad binaria bit a bit. Dos construcciones del mismo commit NO tienen por que producir binarios ni ZIP con el mismo hash: la compilacion incorpora marcas temporales y rutas de construccion. Lo que B13 garantiza es el mismo commit de origen, dependencias bloqueadas por uv.lock, configuracion de despliegue versionada, un unico comando canonico, el mismo modo de Nuitka, la misma estructura de artefacto y las versiones exactas del toolchain registradas aqui."
+    product                    = "Sirius"
+    app_version                = $AppVersion
+    source_commit              = $SourceCommit
+    source_commit_short        = $SourceCommitShort
+    source_branch              = $SourceBranch
+    source_dirty               = $SourceDirty
+    source_origin_main         = $OriginMainCommit
+    descends_from_origin_main  = $DescendsFromOriginMain
+    built_at_utc               = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    windows_version            = $WindowsVersion
+    architecture               = "x64"
+    python_version             = $PythonVersion
+    uv_version                 = $UvVersion
+    pyside6_version            = $PySide6Version
+    qt_version                 = $QtVersion
+    pyside6_deploy_version     = "incluido en PySide6 $PySide6Version"
+    nuitka_version             = $NuitkaVersion
+    compiler                   = "MSVC (Visual Studio Build Tools 2022, Hostx64/x64)"
+    compiler_version           = "cl $CompilerVersion (toolset MSVC $VcToolsVersion)"
+    windows_sdk                = $WindowsSdk
+    packaging_mode             = "standalone"
+    entrypoint                 = "src/sirius/__main__.py"
+    artifact_directory         = "dist/windows/$ArtifactName"
+    alembic_head               = $AlembicHead
+    build_command              = $BuildCommand
+    verification_status        = "pendiente: ejecuta .\scripts\verify_windows_package.ps1"
+    reproducibility_note       = "No se afirma reproducibilidad binaria bit a bit. Dos construcciones del mismo commit NO tienen por que producir binarios ni ZIP con el mismo hash: la compilacion incorpora marcas temporales y rutas de construccion. Lo que B13 garantiza es el mismo commit de origen, dependencias bloqueadas por uv.lock, configuracion de despliegue versionada, un unico comando canonico, el mismo modo de Nuitka, la misma estructura de artefacto y las versiones exactas del toolchain registradas aqui."
 }
 $manifestPath = Join-Path $ArtifactDir "BUILD-MANIFEST.json"
 Write-Utf8NoBom -Path $manifestPath -Content (($manifest | ConvertTo-Json -Depth 5) + "`n")
