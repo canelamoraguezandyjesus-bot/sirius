@@ -70,7 +70,9 @@ Test-Check "No se escribio ninguna clave en el entorno de prueba" (
     -not (Test-Path -LiteralPath (Join-Path $configDir "settings.json")) -or
     -not ((Get-Content -LiteralPath (Join-Path $configDir "settings.json") -Raw -ErrorAction SilentlyContinue) -match "sk-"))
 
-# La credencial real solo se consulto por existencia; nunca se modifico.
+# B13 solo ejecuta el paquete cuando la credencial estaba ausente. Volver a
+# obtener ABSENT demuestra que el paquete no dejo una credencial persistente en
+# la sesion real de Windows, sin leer, copiar ni comparar ningun valor secreto.
 $CredentialStateAfter = "ERROR NoProbe"
 if (Test-Path -LiteralPath $VenvPython) {
     $probeOutputAfter = (& $VenvPython $CredentialProbe 2>&1 | Out-String).Trim()
@@ -78,8 +80,8 @@ if (Test-Path -LiteralPath $VenvPython) {
         $CredentialStateAfter = ($probeOutputAfter -split "`n")[-1].Trim()
     }
 }
-Test-Check "La credencial de Windows sigue en el mismo estado que antes" (
-    $CredentialStateAfter -eq $CredentialState) "antes $CredentialState / ahora $CredentialStateAfter"
+Test-Check "La credencial de Sirius sigue ausente despues de los arranques" (
+    $CredentialStateAfter -eq "ABSENT") "antes $CredentialState / ahora $CredentialStateAfter"
 
 # --------------------------------------------------------------------------
 Write-Step "Resultado"

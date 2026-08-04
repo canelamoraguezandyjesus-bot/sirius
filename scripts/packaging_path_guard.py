@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import json
 import ntpath
+import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
 
 _DEVICE_NAMESPACE_PREFIXES = ("\\\\?\\", "\\\\.\\", "\\??\\")
+PathResolver = Callable[[str], str]
 
 
 class PackagingPathError(ValueError):
@@ -30,7 +32,7 @@ class PackagingPathValidation:
 
 
 def canonical_windows_path(value: str) -> str:
-    """Normaliza una ruta absoluta con reglas de Windows y sin tocar el disco."""
+    """Normaliza una ruta absoluta con reglas de Windows."""
 
     raw = value.strip()
     if not raw:
@@ -55,44 +57,129 @@ def canonical_windows_path(value: str) -> str:
     return normalized
 
 
-def validate_packaging_path(repo_root: str, packaging_path: str) -> PackagingPathValidation:
-    """Rechaza el checkout y cualquiera de sus descendientes.
+def _strip_runtime_extended_prefix(value: str) -> str:
+    """Convierte el prefijo interno que puede devolver Windows a una ruta normal."""
+
+    upper = value.upper()
+    if upper.startswith("\\\\?\\UNC\\"):
+        return "\\\\" + value[8:]
+    if upper.startswith("\\\\?\\"):
+        return value[4:]
+    return value
+
+
+def _resolve_existing_windows_components(path: str) -> str:
+    """Resuelve junctions, enlaces y nombres 8.3 sin crear ninguna ruta.
+
+    El destino completo puede no existir todavía. Se localiza el ancestro más
+    profundo que sí existe, se resuelve mediante la implementación nativa de
+    ``realpath`` de Windows y se vuelven a añadir los componentes pendientes.
+    """
+
+    if sys.platform != "win32":
+        return path
+
+    current = path
+    missing_tail: list[str] = []
+    while True:
+        try:
+            _ = os.lstat(current)
+            break
+        except FileNotFoundError:
+            parent, leaf = ntpath.split(current)
+            if not leaf or parent == current:
+                raise PackagingPathError(
+                    f"no existe ningun ancestro resoluble para la ruta: {path}"
+                )
+            missing_tail.append(leaf)
+            current = parent
+        except OSError as exc:
+            raise PackagingPathError(
+                f"no se pudo inspeccionar de forma segura la identidad de: {path}"
+            ) from exc
+
+    try:
+        resolved = os.path.realpath(current, strict=True)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise PackagingPathError(
+            f"no se pudo resolver de forma segura la identidad de: {path}"
+        ) from exc
+
+    if not resolved:
+        raise PackagingPathError(
+            f"no se pudo resolver de forma segura la identidad de: {path}"
+        )
+
+    resolved = _strip_runtime_extended_prefix(resolved)
+    for component in reversed(missing_tail):
+        resolved = ntpath.join(resolved, component)
+    return resolved
+
+
+def resolved_windows_path(value: str, *, resolver: PathResolver | None = None) -> str:
+    """Normaliza y resuelve la identidad física de los componentes existentes."""
+
+    canonical = canonical_windows_path(value)
+    selected_resolver = _resolve_existing_windows_components if resolver is None else resolver
+    try:
+        resolved = selected_resolver(canonical)
+    except PackagingPathError:
+        raise
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise PackagingPathError(
+            f"no se pudo resolver de forma segura la identidad de: {canonical}"
+        ) from exc
+
+    if not resolved:
+        raise PackagingPathError(
+            f"no se pudo resolver de forma segura la identidad de: {canonical}"
+        )
+    return canonical_windows_path(_strip_runtime_extended_prefix(resolved))
+
+
+def validate_packaging_path(
+    repo_root: str,
+    packaging_path: str,
+    *,
+    resolver: PathResolver | None = None,
+) -> PackagingPathValidation:
+    """Rechaza el checkout y cualquiera de sus descendientes físicos.
 
     Una ruta hermana con prefijo textual común es válida. Una ruta ordinaria de
     otra unidad también es válida porque no puede ser descendiente del checkout.
-    Cualquier ambigüedad al comparar rutas de la misma unidad se rechaza.
+    Cualquier ambigüedad al resolver o comparar se rechaza.
     """
 
-    canonical_repo = canonical_windows_path(repo_root)
-    canonical_packaging = canonical_windows_path(packaging_path)
+    resolved_repo = resolved_windows_path(repo_root, resolver=resolver)
+    resolved_packaging = resolved_windows_path(packaging_path, resolver=resolver)
 
-    repo_drive, _ = ntpath.splitdrive(canonical_repo)
-    packaging_drive, _ = ntpath.splitdrive(canonical_packaging)
+    repo_drive, _ = ntpath.splitdrive(resolved_repo)
+    packaging_drive, _ = ntpath.splitdrive(resolved_packaging)
     if repo_drive != packaging_drive:
         return PackagingPathValidation(
-            repo_root=canonical_repo,
-            packaging_path=canonical_packaging,
+            repo_root=resolved_repo,
+            packaging_path=resolved_packaging,
         )
 
     try:
-        common = ntpath.commonpath((canonical_repo, canonical_packaging))
+        common = ntpath.commonpath((resolved_repo, resolved_packaging))
     except ValueError as exc:
         raise PackagingPathError(
             "las rutas no se pueden comparar de forma segura; se rechaza el entorno"
         ) from exc
 
-    if common == canonical_repo:
-        if canonical_packaging == canonical_repo:
+    if common == resolved_repo:
+        if resolved_packaging == resolved_repo:
             detail = "coincide con el checkout"
         else:
             detail = "esta dentro del checkout"
         raise PackagingPathError(
-            f"{canonical_packaging} {detail}; el entorno debe vivir fuera del repositorio"
+            f"{resolved_packaging} {detail}; el entorno debe vivir fuera del repositorio"
         )
 
     return PackagingPathValidation(
-        repo_root=canonical_repo,
-        packaging_path=canonical_packaging,
+        repo_root=resolved_repo,
+        packaging_path=resolved_packaging,
     )
 
 

@@ -69,6 +69,64 @@ def test_commonpath_errors_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
         validate_packaging_path(r"C:\work\sirius", r"C:\packaging\venv")
 
 
+def test_rejects_a_filesystem_alias_that_resolves_inside_the_checkout() -> None:
+    def resolve_alias(path: str) -> str:
+        aliases = {
+            r"c:\short\packaging-venv": r"c:\work\sirius\hidden\packaging-venv"
+        }
+        return aliases.get(path, path)
+
+    with pytest.raises(PackagingPathError, match="dentro del checkout"):
+        validate_packaging_path(
+            r"C:\work\sirius",
+            r"C:\SHORT\packaging-venv",
+            resolver=resolve_alias,
+        )
+
+
+def test_rejects_a_short_name_alias_for_the_checkout() -> None:
+    def resolve_alias(path: str) -> str:
+        aliases = {r"c:\work\sirius~1": r"c:\work\sirius"}
+        return aliases.get(path, path)
+
+    with pytest.raises(PackagingPathError, match="coincide con el checkout"):
+        validate_packaging_path(
+            r"C:\work\sirius",
+            r"C:\work\SIRIUS~1",
+            resolver=resolve_alias,
+        )
+
+
+def test_resolution_errors_fail_closed() -> None:
+    def fail_resolution(path: str) -> str:
+        raise OSError(f"no se puede resolver {path}")
+
+    with pytest.raises(PackagingPathError, match="resolver de forma segura"):
+        validate_packaging_path(
+            r"C:\work\sirius",
+            r"C:\packaging\venv",
+            resolver=fail_resolution,
+        )
+
+
+def test_accepts_a_resolved_sibling_with_a_common_textual_prefix() -> None:
+    def resolve_alias(path: str) -> str:
+        aliases = {
+            r"c:\shortrepo": r"c:\work\sirius",
+            r"c:\shortpack": r"c:\work\sirius-packaging\venv",
+        }
+        return aliases.get(path, path)
+
+    result = validate_packaging_path(
+        r"C:\SHORTREPO",
+        r"C:\SHORTPACK",
+        resolver=resolve_alias,
+    )
+
+    assert result.ok is True
+    assert result.packaging_path == r"c:\work\sirius-packaging\venv"
+
+
 def test_accepts_a_sibling_with_a_common_textual_prefix() -> None:
     result = validate_packaging_path(
         r"C:\work\sirius",

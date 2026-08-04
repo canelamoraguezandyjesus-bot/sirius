@@ -10,6 +10,7 @@ _VERIFY_PARTS = (
     _SCRIPTS / "verify_windows_package_01_locate_extract.ps1",
     _SCRIPTS / "verify_windows_package_02_static_checks.ps1",
     _SCRIPTS / "verify_windows_package_03_preconditions.ps1",
+    _SCRIPTS / "verify_windows_package_035_credential_gate.ps1",
     _SCRIPTS / "verify_windows_package_04_runtime.ps1",
     _SCRIPTS / "verify_windows_package_05_execute.ps1",
 )
@@ -52,6 +53,32 @@ def test_all_remaining_preconditions_abort_before_first_launch() -> None:
     assert prelaunch_gate < first_launch
     assert "if ($script:Failures.Count -gt 0)" in script[:prelaunch_gate]
     assert "No se ejecutara codigo del paquete" in script[prelaunch_gate:first_launch]
+
+
+def test_credential_absence_is_a_hard_prelaunch_requirement() -> None:
+    script = _script()
+    absence_check = script.index(
+        "La credencial de Sirius esta ausente antes de ejecutar el paquete"
+    )
+    credential_gate = script.index(
+        "La verificacion exige una sesion de Windows sin la credencial de Sirius"
+    )
+    first_launch = script.index("Invoke-SmokeLaunch -Label")
+
+    assert absence_check < credential_gate < first_launch
+    assert '$CredentialState -eq "ABSENT"' in script[:absence_check]
+    assert "No se ejecutara codigo del paquete" in script[credential_gate:first_launch]
+
+
+def test_credential_must_still_be_absent_after_launches() -> None:
+    script = _script()
+    postcheck = script.index(
+        "La credencial de Sirius sigue ausente despues de los arranques"
+    )
+    postcheck_region = script[postcheck : postcheck + 400]
+
+    assert '$CredentialStateAfter -eq "ABSENT"' in postcheck_region
+    assert "$CredentialStateAfter -eq $CredentialState" not in script
 
 
 def test_window_observation_does_not_end_liveness_monitoring() -> None:

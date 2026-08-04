@@ -20,6 +20,7 @@ $parts = @(
     "verify_windows_package_01_locate_extract.ps1",
     "verify_windows_package_02_static_checks.ps1",
     "verify_windows_package_03_preconditions.ps1",
+    "verify_windows_package_035_credential_gate.ps1",
     "verify_windows_package_04_runtime.ps1",
     "verify_windows_package_05_execute.ps1"
 )
