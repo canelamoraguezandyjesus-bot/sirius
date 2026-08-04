@@ -2,7 +2,7 @@
 
 El verificador de Windows consume este modulo antes de combinar una ruta
 declarada por el manifiesto con la raiz del paquete. Las rutas se juzgan con
-semantica Windows mediante :mod:`ntpath`, incluso cuando las regresiones se
+semantica Windows mediante el validador comun, incluso cuando las regresiones se
 ejecutan en Ubuntu.
 """
 
@@ -14,6 +14,8 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+from windows_path_safety import WindowsPathError, split_safe_windows_relative_path
 
 __all__ = [
     "MAX_MANIFEST_BYTES",
@@ -52,18 +54,10 @@ def _normalize_relative_path(raw_path: str, *, package_root: str, line_number: i
     if not path:
         raise ManifestValidationError(f"linea {line_number}: ruta vacia")
 
-    normalized = path.replace("\\", "/")
-    drive, _ = ntpath.splitdrive(path)
-    if normalized.startswith("/") or drive or ntpath.isabs(path):
-        raise ManifestValidationError(
-            f"linea {line_number}: ruta absoluta, UNC o con unidad: {path}"
-        )
-
-    segments = normalized.split("/")
-    if any(segment in {"", ".", ".."} for segment in segments):
-        raise ManifestValidationError(
-            f"linea {line_number}: segmento vacio, '.' o '..' no permitido: {path}"
-        )
+    try:
+        segments = split_safe_windows_relative_path(path)
+    except WindowsPathError as exc:
+        raise ManifestValidationError(f"linea {line_number}: {exc}: {path}") from exc
 
     root = ntpath.normpath(package_root)
     boundary = root.rstrip("\\/") + "\\"
