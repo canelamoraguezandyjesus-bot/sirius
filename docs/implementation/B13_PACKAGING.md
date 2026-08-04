@@ -106,6 +106,21 @@ Deben estar instalados en el equipo que construye. El script **no** los instala:
   - Windows 11 SDK.
 - **uv** en el `PATH`.
 
+No hace falta instalar `python.exe` ni `py.exe` globalmente. El controlador
+arranca sus helpers, que usan solo la biblioteca estándar, con Python 3.14
+administrado por uv mediante:
+
+```powershell
+uv run --no-project --managed-python --python 3.14 python
+```
+
+`uv` sigue siendo el único prerrequisito Python del comando canónico. La opción
+`--no-project` impide descubrir o cargar el proyecto antes de ejecutar las
+guardas; `--managed-python` evita depender de una instalación global. Si ese
+runtime no existe todavía, uv puede provisionarlo en su caché mediante su
+mecanismo normal de Python administrado, sin convertirlo en una dependencia del
+artefacto ni usar la `.venv` del repositorio.
+
 No hace falta abrir una «Developer PowerShell»: `build_windows.ps1` localiza la
 instalación con `vswhere.exe` y carga `VsDevCmd.bat -arch=x64` por sí mismo.
 
@@ -145,6 +160,13 @@ Nuitka, vuelve a exigir que el worktree apunte al mismo SHA y que Git no muestre
 ningún archivo rastreado modificado ni archivo inesperado sin rastrear. Una
 discrepancia aborta sin publicar.
 
+Antes de delegar en `build_windows_impl.ps1`, el wrapper captura una instantánea
+completa del entorno del proceso. En un `finally`, elimina todas las variables
+creadas por la implementación y restaura todos los valores previos, incluidos
+`PATH`, `UV_PROJECT_ENVIRONMENT` y los importados por `VsDevCmd.bat`. Cada
+restauración se intenta de forma independiente; sus fallos se agregan y quedan
+visibles sin ocultar una excepción original de la construcción.
+
 La publicación trata la carpeta portátil, el ZIP y su `.sha256` como una sola
 transacción. Los resultados anteriores se mueven primero a una carpeta privada
 `.publish-<guid>/backup`, y los nuevos se registran separadamente conforme se
@@ -155,10 +177,10 @@ carpeta `.publish-<guid>` se conserva bajo `dist/windows/` con los backups aún
 disponibles, y el error informa tanto del fallo original como de cada fallo de
 restauración y de la ruta exacta para recuperación manual.
 
-Un bloque `finally` elimina siempre el worktree y su raíz temporal y libera el
-handle del bloqueo de publicación. Antes de esa limpieza, si la construcción
-falla y existen diagnósticos de compilación, el controlador copia fuera del
-snapshot únicamente el log `build-*.log`, el informe
+Ese mismo bloque `finally` elimina siempre el worktree y su raíz temporal y
+libera el handle del bloqueo de publicación. Antes de esa limpieza, si la
+construcción falla y existen diagnósticos de compilación, el controlador copia
+fuera del snapshot únicamente el log `build-*.log`, el informe
 `nuitka-crash-report-*.xml`, el dry-run de Nuitka y un `failure.txt`. Se guardan
 bajo `build/packaging-diagnostics/` del checkout original; un fallo al copiarlos
 se informa sin ocultar la excepción original.
@@ -370,6 +392,15 @@ enlaces, límites de tamaño y entradas, copia congelada acotada y eliminación 
 salidas parciales. Las rutas se juzgan con `ntpath`, de modo que la semántica es
 la de Windows aunque las pruebas corran en Ubuntu.
 
+Antes de combinar cualquier ruta declarada por `FILE-MANIFEST.sha256` con
+`$PackageRoot`, `scripts/file_manifest.py` valida el archivo completo con
+semántica Windows. Impone límites de 4 MiB, 4096 entradas y 4096 caracteres por
+línea; rechaza hashes inválidos, rutas vacías, absolutas, con unidad o UNC,
+segmentos vacíos, `.` o `..`, escapes de la raíz y destinos duplicados después
+de normalizar separadores y mayúsculas. Solo las entradas ya confinadas llegan
+a `Join-Path` y `Get-FileHash`: una entrada rechazada no provoca lectura ni hash
+de un destino externo.
+
 - **A. ZIP y estructura**: SHA-256 del ZIP frente a su `.zip.sha256`; el ZIP
   debe tener exactamente una raíz y llamarse como el artefacto; tras extraer,
   `Sirius.exe`, `alembic.ini`, `migrations/`, `BUILD-MANIFEST.json` y
@@ -386,7 +417,10 @@ la de Windows aunque las pruebas corran en Ubuntu.
   variables del repositorio. No se desinstala nada del equipo.
 - **D. Datos desechables**: `LOCALAPPDATA`, `APPDATA`, `USERPROFILE`, `TEMP` y
   `TMP` apuntan a una raíz temporal aislada, con un `data_location.json` mínimo
-  válido. Nunca se usa la configuración real ni se introduce clave alguna.
+  válido. `HOMEDRIVE` y `HOMEPATH` se derivan únicamente de ese `USERPROFILE`, y
+  el verificador exige que ambos lo reconstruyan exactamente; no se pasan los
+  valores reales del usuario. Nunca se usa la configuración real ni se
+  introduce clave alguna.
 - **E. Smoke test**: primer arranque (proceso vivo, ventana superior visible,
   `sirius.db` creado, esquema en el head de Alembic, sin error de migraciones,
   sin `RecursionError`, sin `Traceback` no controlado) y segundo arranque
