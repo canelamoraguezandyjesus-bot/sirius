@@ -42,12 +42,14 @@ def _inspect(entry_names: list[str]) -> ZipInspection:
 
 def _limits(
     *,
+    entries: int = 128,
     entry: int = 1024,
     total: int = 4096,
     ratio: float = 100.0,
     chunk: int = 4,
 ) -> ZipLimits:
     return ZipLimits(
+        max_entries=entries,
         max_entry_uncompressed_bytes=entry,
         max_total_uncompressed_bytes=total,
         max_compression_ratio=ratio,
@@ -110,6 +112,7 @@ def test_empty_archive_has_no_roots() -> None:
 
     assert inspection.roots == ()
     assert inspection.file_count == 0
+    assert inspection.entry_count == 0
     assert inspection.unsafe == ()
 
 
@@ -159,6 +162,7 @@ def test_inspect_zip_reads_a_real_archive(tmp_path: Path) -> None:
 
     assert inspection.roots == (ARTIFACT,)
     assert inspection.file_count == 7
+    assert inspection.entry_count == 7
     assert inspection.total_uncompressed_bytes == 63
     assert inspection.unsafe == ()
     assert inspection.size_violations == ()
@@ -198,6 +202,22 @@ def test_inspection_rejects_an_excessive_compression_ratio(tmp_path: Path) -> No
 
     assert inspection.max_compression_ratio > 2.0
     assert any("ratio de compresion excesivo" in issue for issue in inspection.size_violations)
+
+
+def test_inspection_rejects_too_many_zero_byte_entries(tmp_path: Path) -> None:
+    archive_path = tmp_path / "too-many-entries.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr(ARTIFACT + "\\", b"")
+        archive.writestr(rf"{ARTIFACT}\empty-one.txt", b"")
+        archive.writestr(rf"{ARTIFACT}\empty-two.txt", b"")
+
+    inspection = inspect_zip(
+        str(archive_path), extract_root=EXTRACT_ROOT, limits=_limits(entries=2)
+    )
+
+    assert inspection.entry_count == 3
+    assert inspection.total_uncompressed_bytes == 0
+    assert any("demasiadas entradas" in issue for issue in inspection.size_violations)
 
 
 def test_duplicate_destinations_are_rejected_case_insensitively(tmp_path: Path) -> None:
@@ -273,6 +293,24 @@ def test_safe_extract_zip_refuses_size_violations_before_writing(tmp_path: Path)
     assert not extract_root.exists()
 
 
+def test_safe_extract_zip_refuses_too_many_entries_before_writing(tmp_path: Path) -> None:
+    archive_path = tmp_path / "too-many-entries.zip"
+    extract_root = tmp_path / "extraido"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr(ARTIFACT + "\\", b"")
+        archive.writestr(rf"{ARTIFACT}\empty-one.txt", b"")
+        archive.writestr(rf"{ARTIFACT}\empty-two.txt", b"")
+
+    with pytest.raises(ZipSafetyError, match="demasiadas entradas"):
+        safe_extract_zip(
+            str(archive_path),
+            extract_root=str(extract_root),
+            limits=_limits(entries=2),
+        )
+
+    assert not extract_root.exists()
+
+
 def test_the_inspection_command_emits_json_for_powershell(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -286,6 +324,7 @@ def test_the_inspection_command_emits_json_for_powershell(
     payload = json.loads(capsys.readouterr().out)
     assert payload["roots"] == [ARTIFACT]
     assert payload["file_count"] == 1
+    assert payload["entry_count"] == 1
     assert payload["size_violations"] == []
 
 
