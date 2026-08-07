@@ -1151,12 +1151,21 @@ def test_the_link_honours_the_server_of_the_installation(tmp_path: Path) -> None
 
 def test_without_actions_variables_the_stop_message_is_unchanged(tmp_path: Path) -> None:
     # Fuera de Actions no hay ejecución a la que enlazar: no se inventa una.
+    #
+    # Se compara el cuerpo ENTERO, no la ausencia de `actions/runs`. Buscar solo
+    # ese fragmento dejaba pasar el residuo que de verdad importa: una línea
+    # `- Registro de esta ejecución:` con destino vacío, que no contiene
+    # `actions/runs` ni casa con `_stop_link` —su `(\S+)` no encuentra nada— y
+    # aun así publica una promesa rota. La propiedad anunciada es que el mensaje
+    # queda sin cambios, así que se afirma exactamente eso.
     env = _setup(tmp_path)
     _seed_issue(env, ["sirius:repairing"])
     r = _run(env, "corrector", tmp_path / "no-existe.json")
     assert r.returncode != 0
-    comentarios = _comments(env)
-    assert "actions/runs" not in comentarios
-    assert _stop_link(comentarios) == ""
-    # Y la parada sigue publicándose: no enlazar no puede costar el diagnóstico.
-    assert "sin-veredicto" in comentarios
+    esperado = (
+        "<!-- sirius-verdict:corrector:precheck:sin-veredicto:manual-1 -->\n\n"
+        "🔴 **Me he detenido de forma segura**\n\n"
+        "El rol `corrector` no escribió ningún veredicto. Sin un resultado "
+        "estructurado no puedo saber en qué quedó el trabajo.\n"
+    )
+    assert _comments(env).strip() == esperado.strip()

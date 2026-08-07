@@ -190,11 +190,28 @@ def test_there_is_no_measured_diagnosis_step() -> None:
     Además podía volver rojo el job que venía a diagnosticar, porque `always()`
     garantiza que un paso se ejecute pero no que su fallo no cuente.
 
-    Lo que sobrevive es un HECHO sin medida: el enlace al job en la parada
-    segura. Si alguien vuelve a añadir aquí un paso que mida, que sea con la
-    decisión tomada de nuevo y no por inercia.
+    Lo que sobrevive es un HECHO sin medida: el enlace a la ejecución en la
+    parada segura. Si alguien vuelve a añadir aquí un paso que mida, que sea con
+    la decisión tomada de nuevo y no por inercia.
+
+    La comprobación es una LISTA BLANCA de pasos, no una lista negra de nombres.
+    Buscar la palabra «diagnóstico» en `name` era vacuo: reintroducir el paso
+    entero bajo un nombre como «Medir estado del corrector» restauraba justo el
+    comportamiento que esta prueba dice impedir. Fijando los pasos permitidos,
+    CUALQUIER paso nuevo falla aquí y obliga a tomar la decisión de nuevo, que
+    es exactamente lo que se quería.
     """
     doc = _load()
-    nombres = [str(step.get("name") or "").lower() for step in _steps(doc)]
-    assert not any("diagnostico" in n or "diagnóstico" in n for n in nombres)
-    assert "SIRIUS_STOP_CONTEXT" not in _source()
+    assert [str(step.get("name") or "") for step in _steps(doc)] == [
+        "Checkout",
+        "Evaluar la convergencia y localizar la PR",
+        "Consumir el evento y marcar en curso",
+        "Preparar instrucciones para Claude Code",
+        "Ejecutar Claude Code (corrector)",
+        "Aplicar el veredicto",
+    ]
+    # Y ninguna medida del trabajo del corrector sobrevive en el guion, se llame
+    # como se llame el paso que la contenga.
+    fuente = _source()
+    for medida in ("git log", "git status", "git rev-parse", "SIRIUS_STOP_CONTEXT"):
+        assert medida not in fuente, f"vuelve a medirse el trabajo del corrector: {medida}"
