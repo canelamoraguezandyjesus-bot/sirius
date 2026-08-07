@@ -240,6 +240,7 @@ exit 0
 # sin directiva, el comentario lo firma el propietario de la incidencia.
 _BUILD_COMMENTS = """#!/usr/bin/env python3
 import json
+import os
 import sys
 
 shape = sys.argv[1]
@@ -257,9 +258,16 @@ AUTHORS = {
     "@@bot": ("NONE", "github-actions[bot]", "app/github-actions"),
 }
 
+chunks = [c for c in raw.split("\\n\\n") if c.strip()]
+# Consistencia eventual: la escritura ya ocurrio pero la lectura todavia no la
+# refleja. Es el caso que distingue "no llego" de "aun no lo veo", y sin el no se
+# puede probar que la recuperacion no republique apoyandose en una ausencia.
+if os.environ.get("GH_MOCK_COMMENTS_HIDE_LAST") == "1" and chunks:
+    chunks = chunks[:-1]
+
 rest = []
 graphql = []
-for chunk in [c for c in raw.split("\\n\\n") if c.strip()]:
+for chunk in chunks:
     association, login, graphql_login = "OWNER", "propietario", "propietario"
     lines = chunk.split("\\n")
     if lines and lines[0].strip() in AUTHORS:
@@ -958,38 +966,83 @@ def test_ambiguous_post_failure_does_not_duplicate_the_comment(tmp_path: Path) -
     assert _comments(env).count(marker) == 1, "el comentario se ha publicado dos veces"
 
 
-def test_clean_post_failure_is_retried_because_nothing_was_published(tmp_path: Path) -> None:
-    # La otra mitad: si el historial CONFIRMA que no llegó, reintentar es seguro
-    # y necesario. Sin esto, evitar duplicados costaría perder comentarios ante
-    # cualquier fallo transitorio.
+def test_post_that_landed_but_is_not_visible_yet_is_not_republished(tmp_path: Path) -> None:
+    # El caso profundo: el POST expira en el cliente mientras GitHub lo sigue
+    # procesando, o la lectura no refleja aún la escritura. La relectura devuelve
+    # legítimamente un historial SIN marcador, y esa ausencia no prueba "no
+    # llegó": solo dice "aún no lo veo". Republicar apoyándose en ella crea dos
+    # comentarios autoritativos y vuelve a falsear rondas y racha de CI.
     env = _setup(tmp_path)
-    (_mock_dir(env) / "comment_clean").write_text("2", encoding="utf-8")
+    (_mock_dir(env) / "comment_ambiguous").write_text("1", encoding="utf-8")
+    env["GH_MOCK_COMMENTS_HIDE_LAST"] = "1"
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    # Cuerpo de un solo bloque: el simulador separa comentarios por líneas en
+    # blanco, así que un cuerpo con una dentro contaría como dos comentarios y
+    # "ocultar el último" solo ocultaría media parte.
+    body = _mock_dir(env).parent / "ci.md"
+    body.write_text(f"{marker}\n## CI_FAILURE\n", encoding="utf-8")
+    r = _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
+    assert r.returncode != 0, "sin poder demostrar que llegó, debe fallar de forma segura"
+    assert _actions(env).count("COMMENT") == 1, (
+        "se ha publicado un segundo comentario apoyándose en una ausencia que no "
+        "demuestra nada: es justo el duplicado autoritativo que se quiere evitar"
+    )
+
+
+def test_clean_post_failure_fails_safely_without_republishing(tmp_path: Path) -> None:
+    # Un fallo limpio —la petición no llegó— es indistinguible de uno ambiguo
+    # desde aquí, así que recibe el mismo trato: parada segura, sin repetir. El
+    # precio es deliberado: un fallo transitorio cuesta una ejecución en vez de
+    # absorberse. `sirius_transition` publica su comentario como último paso, así
+    # que reejecutar rehace la deduplicación y no duplica nada.
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "comment_clean").write_text("1", encoding="utf-8")
     marker = "<!-- sirius-quality:5b7a0f2:failure -->"
     body = _write_body(env, marker)
     r = _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
-    assert r.returncode == 0, r.stderr
-    assert _comments(env).count(marker) == 1
+    assert r.returncode != 0
+    assert _comments(env).count(marker) == 0
+    assert "no republico" in r.stderr
 
 
-def test_post_failure_with_unreadable_history_does_not_retry(tmp_path: Path) -> None:
-    # Sin poder releer no se puede saber si el POST llegó. Reintentar a ciegas es
-    # justo el riesgo que este diseño evita, así que se falla de forma segura y
-    # el llamador decide.
+def test_post_failure_with_unreadable_history_does_not_republish(tmp_path: Path) -> None:
+    # Sin poder releer tampoco se puede confirmar nada. Mismo trato.
     env = _setup(tmp_path)
     marker = "<!-- sirius-quality:5b7a0f2:failure -->"
     body = _write_body(env, marker)
     # La primera lectura (deduplicación) funciona; a partir de ahí caen todas,
-    # así que la RELECTURA posterior al POST fallido es la que no se puede hacer.
+    # así que la relectura posterior al POST fallido es la que no se puede hacer.
     (_mock_dir(env) / "comment_clean").write_text("9", encoding="utf-8")
     env["GH_MOCK_COMMENTS_FAIL_AFTER"] = "1"
     env["GH_MOCK_GRAPHQL_ALWAYS_FAIL"] = "1"
     r = _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
     assert r.returncode != 0
     assert _comments(env).count(marker) == 0
-    assert "no puedo releer el historial" in r.stderr, (
+    assert "no puedo demostrar que llegara" in r.stderr, (
         "la prueba debe ejercitar el POST fallido con relectura imposible, no la "
         "deduplicación inicial: sin esto pasaría en vacío"
     )
+
+
+def test_the_post_is_never_attempted_twice(tmp_path: Path) -> None:
+    # Invariante transversal, independiente de por qué falle: esta función no
+    # emite un segundo POST bajo ninguna combinación. Es lo que hace acotado el
+    # tiempo —una deduplicación y una relectura como mucho, frente a los ~154 s
+    # de peor caso que sumaban los reintentos anidados— en jobs de 5 minutos.
+    for flag, extra in (
+        ("comment_ambiguous", {}),
+        ("comment_clean", {}),
+        ("comment_ambiguous", {"GH_MOCK_COMMENTS_HIDE_LAST": "1"}),
+    ):
+        caso = tmp_path / f"caso-{flag}-{len(extra)}"
+        caso.mkdir(parents=True, exist_ok=True)
+        env = _setup(caso)
+        (_mock_dir(env) / flag).write_text("9", encoding="utf-8")
+        env.update(extra)
+        marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+        body = _write_body(env, marker)
+        _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
+        assert _actions(env).count("COMMENT") <= 1, f"segundo POST con {flag} {extra}"
 
 
 # --------------------------------------------------------------------------- #

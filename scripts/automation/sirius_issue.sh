@@ -483,49 +483,49 @@ sirius_comment_once() {
     return 0
   fi
 
-  # El POST NO se reintenta a ciegas. `gh issue comment` no es idempotente, así
-  # que un `sirius_retry` alrededor convierte cada fallo AMBIGUO —GitHub acepta
-  # la petición y la respuesta se pierde por un timeout o un 502 de salida— en
-  # un comentario duplicado, y encima uno autoritativo: lo firma la
-  # automatización, así que pasa el filtro de autor y los escáneres
-  # deterministas lo cuentan. Es el mismo motivo por el que el disparador de
-  # `sirius_codex_review.py` tampoco reintenta su POST.
+  # El POST se intenta UNA sola vez y no se repite JAMÁS dentro de esta misma
+  # invocación. `gh issue comment` no es idempotente, y tras un fallo no existe
+  # forma de demostrar que la petición no llegó: el cliente puede haber expirado
+  # mientras GitHub la seguía procesando, o la lectura puede no reflejar todavía
+  # la escritura. Una relectura sin marcador NO prueba "no llegó"; solo dice "aún
+  # no lo veo". Republicar apoyándose en esa ausencia es precisamente lo que
+  # produce dos comentarios autoritativos, y un registro de ronda duplicado sobre
+  # el mismo head hace que la puerta siguiente bloquee por `head-sin-avance` un
+  # trabajo que sí avanzaba.
   #
-  # La recuperación es por RELECTURA, que es lo único que distingue "no llegó"
-  # de "llegó y no me enteré": tras un fallo se vuelve a leer el historial y se
-  # busca el marcador, que va dentro del propio cuerpo. Si aparece, el POST sí
-  # había llegado y esto termina bien sin publicar nada más. Si no aparece, se
-  # puede reintentar sabiendo que no hay duplicado. Y si la relectura tampoco
-  # se puede hacer, no se reintenta: sin poder confirmar el estado, publicar
-  # otra vez es exactamente el riesgo que este bloque existe para evitar.
-  local attempts="${SIRIUS_RETRY_ATTEMPTS:-4}"
-  local delay="${SIRIUS_RETRY_BASE_DELAY:-2}"
-  local n=1 after=""
-  while true; do
-    if gh issue comment "$num" --repo "$repo" --body-file "$file"; then
-      return 0
-    fi
-    if ! after="$(sirius_read_issue_comments "$repo" "$num")"; then
-      echo "sirius_comment_once: el POST falló en #${num} y no puedo releer el historial;" \
-        "no reintento para no arriesgar un duplicado (${marker})" >&2
-      return 1
-    fi
-    if printf '%s' "$after" | grep -Fq "$marker"; then
-      echo "sirius_comment_once: el POST devolvió error pero el comentario sí llegó a" \
-        "#${num} (${marker}); no se republica" >&2
-      return 0
-    fi
-    if [ "$n" -ge "$attempts" ]; then
-      echo "sirius_comment_once: no se pudo publicar ${marker} en #${num} tras" \
-        "${attempts} intento(s); el historial confirma que no llegó" >&2
-      return 1
-    fi
-    echo "sirius_comment_once: intento ${n}/${attempts} fallo y el historial confirma que" \
-      "no llegó; reintento en ${delay}s" >&2
-    sleep "$delay"
-    n=$((n + 1))
-    delay=$((delay * 2))
-  done
+  # Así que la relectura sirve para lo contrario de lo que parece: para CONFIRMAR
+  # el éxito, nunca para autorizar una repetición. Si el marcador aparece, el POST
+  # llegó y esto termina bien. Si no aparece, se falla de forma segura y decide el
+  # llamador; `sirius_transition` publica su comentario como último paso, así que
+  # reejecutar rehace la deduplicación y, si el comentario sí había llegado, lo
+  # encuentra y no duplica nada.
+  #
+  # El precio es deliberado: un fallo transitorio del POST cuesta una ejecución en
+  # vez de absorberse con reintentos. Se cambia un duplicado que corrompe una
+  # medida por una parada reintentable, que es el sentido del fallo seguro.
+  #
+  # Y acota el tiempo, que era el otro problema de reintentar aquí: como mucho una
+  # lectura de deduplicación y una relectura. Con reintentos anidados —cuatro POST,
+  # cada uno con su relectura completa de REST más GraphQL— el peor caso sumaba
+  # ~154 s solo de esperas exponenciales, y los workflows que llaman aquí
+  # (`advance-sirius-after-quality`, `complete-sirius-after-merge`,
+  # `notify-sirius-state`) corren en jobs de `timeout-minutes: 5` que además
+  # gastan tiempo en sus propias lecturas y mutaciones: el job podía morir antes
+  # de que este script llegara a emitir su parada controlada.
+  if gh issue comment "$num" --repo "$repo" --body-file "$file"; then
+    return 0
+  fi
+  local after=""
+  if after="$(sirius_read_issue_comments "$repo" "$num")" \
+    && printf '%s' "$after" | grep -Fq "$marker"; then
+    echo "sirius_comment_once: el POST devolvio error pero el comentario si llego a" \
+      "#${num} (${marker}); no se republica" >&2
+    return 0
+  fi
+  echo "sirius_comment_once: el POST fallo en #${num} y no puedo demostrar que llegara" \
+    "(${marker}); no republico, porque un duplicado autoritativo falsearia las medidas." \
+    "Reintentable en la ejecucion siguiente." >&2
+  return 1
 }
 
 # sirius_transition <repo> <issue> <marker> <body_file> <add_label> <color>

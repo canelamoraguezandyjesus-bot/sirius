@@ -31,12 +31,14 @@ Funciones principales:
   origen truncados, respalda el cuerpo anterior, escribe de una sola vez por REST
   y verifica por relectura (longitud + hash).
 - `sirius_comment_once <repo> <n> <marcador> <archivo>` — publica el comentario
-  solo si el marcador no está ya, y **no reintenta el POST a ciegas**: `gh issue
-  comment` no es idempotente, así que un fallo ambiguo —GitHub acepta y la
-  respuesta se pierde— duplicaría un comentario autoritativo. Tras un fallo
-  relee el historial y busca el marcador: si aparece, el POST sí llegó y termina
-  sin republicar; si no aparece, reintenta sabiendo que no hay duplicado; si no
-  puede releer, se detiene en vez de arriesgarlo.
+  solo si el marcador no está ya, e intenta el POST **una sola vez**. `gh issue
+  comment` no es idempotente y tras un fallo no hay forma de demostrar que la
+  petición no llegó: el cliente pudo expirar mientras GitHub la procesaba, o la
+  lectura puede no reflejar aún la escritura. Por eso la relectura posterior solo
+  sirve para **confirmar el éxito**, nunca para autorizar una repetición: si el
+  marcador aparece, termina bien; si no, falla de forma segura y decide el
+  llamador. Un fallo transitorio cuesta una ejecución reintentable en vez de un
+  comentario duplicado, que sí corrompería las medidas de convergencia y de CI.
 - `sirius_ensure_label <repo> <nombre> <color> <descripcion>` — etiqueta
   idempotente.
 - `sirius_scan_text` / `sirius_extract_sha` — extracción robusta de Head/Merge SHA
