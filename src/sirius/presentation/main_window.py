@@ -54,6 +54,7 @@ from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageResult, SendMessageUseCase
+from sirius.application.studio_capture import CaptureFeedback, StudioCaptureUseCase
 from sirius.application.studio_voice import (
     ListeningStarted,
     NothingToSay,
@@ -72,7 +73,7 @@ from sirius.config.llm_provider_settings import (
 )
 from sirius.config.settings import load_settings, save_settings
 from sirius.domain.conversation import MessageRole, MessageStatus
-from sirius.domain.model_studio import StudioInteractionState
+from sirius.domain.model_studio import StudioCaptureState, StudioInteractionState
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.backup import (
     BackupManifest,
@@ -93,7 +94,7 @@ from sirius.presentation.knowledge_widget import KnowledgeWidget
 from sirius.presentation.message_view import MessageItemDelegate, MessageItemWidget
 from sirius.presentation.model_studio.studio_page import StudioPage
 from sirius.presentation.project_continuity_widget import ProjectContinuityWidget
-from sirius.presentation.studio_workers import SpeakWorker, TranscribeWorker
+from sirius.presentation.studio_workers import CaptureWorker, SpeakWorker, TranscribeWorker
 
 _logger = get_logger(__name__)
 
@@ -186,6 +187,7 @@ class MainWindow(QMainWindow):
         close_database_connections: Callable[[], None],
         *,
         studio_voice_use_case: StudioVoiceUseCase | None = None,
+        studio_capture_use_case: StudioCaptureUseCase | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
         confirm_restore: Callable[[str, str], bool] | None = None,
@@ -223,8 +225,11 @@ class MainWindow(QMainWindow):
         # blocked by this window's own pooled connections.
         self._close_database_connections = close_database_connections
         self._studio_voice_use_case = studio_voice_use_case
+        self._studio_capture_use_case = studio_capture_use_case
         self._last_spoken_text: str | None = None
         self._active_voice_worker: QRunnable | None = None
+        self._active_capture_worker: QRunnable | None = None
+        self._capture_busy = False
         # Dialogs are shown only through these seams: production defaults to
         # real Qt dialogs, but tests inject recording/no-op doubles so
         # scripts/check.ps1 never opens a real window on the desktop.
@@ -389,7 +394,126 @@ class MainWindow(QMainWindow):
             self._studio_voice_use_case is not None,
             "todavía no disponible",
         )
+
+        self.studio_page.capture_panel_toggled.connect(self._handle_capture_panel_toggled)
+        self.studio_page.emergency_stop_clicked.connect(self._handle_emergency_stop)
+        self.studio_page.capture_panel.record_clicked.connect(self._handle_record_clicked)
+        self.studio_page.capture_panel.stop_clicked.connect(self._handle_stop_recording_clicked)
+        self.studio_page.capture_panel.pause_clicked.connect(self._handle_pause_clicked)
+        self.studio_page.capture_panel.resume_clicked.connect(self._handle_resume_clicked)
+        self.studio_page.capture_panel.mark_clicked.connect(self._handle_mark_clicked)
+        self.studio_page.capture_panel.scene_selected.connect(self._handle_scene_selected)
+        self.studio_page.set_capture_available(
+            self._studio_capture_use_case is not None,
+            "todavía no disponible",
+        )
+        if self._studio_capture_use_case is not None:
+            self.studio_page.capture_panel.set_scenes(
+                [
+                    (scene.scene_id, scene.display_name)
+                    for scene in self._studio_capture_use_case.authorized_scenes()
+                ]
+            )
         return self.studio_page
+
+    # --- Captura de Model Studio ------------------------------------------
+
+    def _handle_capture_panel_toggled(self, opened: bool) -> None:
+        """Abrir el panel enciende el módulo; cerrarlo lo apaga y desconecta.
+
+        Encenderlo no es grabar: solo conecta y pregunta el estado. Y apagarlo
+        no detiene nada de lo que ya estuviera grabando.
+        """
+        if self._studio_capture_use_case is None:
+            return
+        use_case = self._studio_capture_use_case
+        self._run_capture(use_case.enable if opened else use_case.disable)
+
+    def _handle_record_clicked(self) -> None:
+        self._run_capture_command("start_recording")
+
+    def _handle_stop_recording_clicked(self) -> None:
+        self._run_capture_command("stop_recording")
+
+    def _handle_pause_clicked(self) -> None:
+        self._run_capture_command("pause_recording")
+
+    def _handle_resume_clicked(self) -> None:
+        self._run_capture_command("resume_recording")
+
+    def _handle_mark_clicked(self) -> None:
+        self._run_capture_command("mark_moment")
+
+    def _handle_scene_selected(self, scene_id: str) -> None:
+        if self._studio_capture_use_case is None:
+            return
+        use_case = self._studio_capture_use_case
+        self._run_capture(lambda: use_case.switch_scene(scene_id))
+
+    def _handle_emergency_stop(self) -> None:
+        """Corta la grabación de inmediato, sin preguntar nada antes."""
+        if self._studio_capture_use_case is None:
+            return
+        self._run_capture(self._studio_capture_use_case.emergency_stop)
+
+    def _run_capture_command(self, name: str) -> None:
+        if self._studio_capture_use_case is None:
+            return
+        self._run_capture(getattr(self._studio_capture_use_case, name))
+
+    def _run_capture(self, command: Callable[[], CaptureFeedback]) -> None:
+        """Ejecuta una orden de captura, de una en una.
+
+        Dos órdenes a la vez pueden terminar en orden distinto al que se
+        pidieron y dejar el módulo en un estado que nadie eligió —encender y
+        apagar deprisa es lo fácil de hacer sin querer—. Mientras hay una en
+        vuelo, las nuevas se descartan; al terminar, ``_sync_capture_module``
+        comprueba si el módulo quedó como el usuario pidió y lo corrige.
+        """
+        if self._capture_busy:
+            return
+        self._capture_busy = True
+        worker = CaptureWorker(command)
+        worker.signals.finished.connect(self._on_capture_finished)
+        worker.signals.crashed.connect(self._on_capture_crashed)
+        self._active_capture_worker = worker
+        self._thread_pool.start(worker)
+
+    def _on_capture_finished(self, feedback: object) -> None:
+        self._active_capture_worker = None
+        self._capture_busy = False
+        if not isinstance(feedback, CaptureFeedback):
+            return
+        # El estado que se pinta es el que devolvió el backend, nunca uno
+        # supuesto: por eso se adopta tal cual y no se corrige aquí.
+        self.studio_page.set_capture_state(feedback.state)
+        self.studio_page.capture_panel.set_elapsed(feedback.recording_seconds)
+        self.studio_page.capture_panel.set_message(feedback.message)
+        if feedback.scene_id is not None:
+            self.studio_page.capture_panel.set_active_scene(feedback.scene_id)
+        self._sync_capture_module()
+
+    def _sync_capture_module(self) -> None:
+        """Corrige el módulo si quedó al revés de lo que el usuario pidió.
+
+        Pasa cuando se abre y se cierra el panel más deprisa de lo que tarda
+        una orden: la segunda se descartó, y aquí se vuelve a emitir.
+        """
+        if self._studio_capture_use_case is None or self._capture_busy:
+            return
+        wanted = self.studio_page.capture_panel_open
+        if wanted == self._studio_capture_use_case.is_enabled:
+            return
+        use_case = self._studio_capture_use_case
+        self._run_capture(use_case.enable if wanted else use_case.disable)
+
+    def _on_capture_crashed(self, error_message: str) -> None:
+        del error_message  # el mensaje al usuario es seguro y genérico
+        self._capture_busy = False
+        self.studio_page.set_capture_state(StudioCaptureState.INCIERTO)
+        self.studio_page.capture_panel.set_message(
+            "No sé cómo ha quedado la grabación. Vuelve a abrir el panel para comprobarlo."
+        )
 
     # --- Voz de Model Studio ---------------------------------------------
 

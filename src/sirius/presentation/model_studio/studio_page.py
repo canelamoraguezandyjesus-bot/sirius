@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 from sirius.domain.conversation import MessageRole, MessageStatus
 from sirius.domain.model_studio import StudioCaptureState, StudioInteractionState
 from sirius.presentation.model_studio import theme
+from sirius.presentation.model_studio.capture_panel import StudioCapturePanel
 from sirius.presentation.model_studio.icons import studio_icon
 from sirius.presentation.model_studio.presence_widget import PresenceWidget
 
@@ -192,6 +193,8 @@ class StudioPage(QWidget):
     stop_voice_clicked = Signal()
     repeat_clicked = Signal()
     mute_toggled = Signal(bool)
+    capture_panel_toggled = Signal(bool)
+    emergency_stop_clicked = Signal()
 
     def __init__(self, parent: QWidget | None = None, *, animated: bool = True) -> None:
         super().__init__(parent)
@@ -204,6 +207,8 @@ class StudioPage(QWidget):
         self._follow_bottom = True
         self._clean_mode = False
         self._voice_available = False
+        self._capture_available = False
+        self._capture_panel_open = False
 
         self.presence = PresenceWidget(animated=animated)
 
@@ -339,6 +344,9 @@ class StudioPage(QWidget):
         scrollbar.rangeChanged.connect(self._on_history_range_changed)
         scrollbar.valueChanged.connect(self._on_history_scrolled)
 
+        self.capture_panel = StudioCapturePanel()
+        self.capture_panel.setVisible(False)
+
         self.error_label = QLabel("")
         self.error_label.setObjectName("studioError")
         self.error_label.setWordWrap(True)
@@ -366,6 +374,7 @@ class StudioPage(QWidget):
         )
         layout.setSpacing(14)
         layout.addWidget(self.history_scroll, 1)
+        layout.addWidget(self.capture_panel)
         layout.addWidget(self.error_label)
         layout.addLayout(input_row)
         return column
@@ -391,6 +400,19 @@ class StudioPage(QWidget):
         self.capture_button = self._icon_button(
             "capture", "Grabación, escenas y cámaras", enabled=False
         )
+        self.capture_button.setCheckable(True)
+        self.capture_button.toggled.connect(self._handle_capture_toggled)
+
+        # La parada de emergencia NO vive en el panel: el criterio 11 exige que
+        # esté accesible durante una grabación, y tener que abrir un panel para
+        # encontrarla no lo es. Aparece en la barra en cuanto se graba.
+        self.emergency_stop_button = QPushButton("PARADA DE EMERGENCIA")
+        self.emergency_stop_button.setObjectName("studioEmergencyStop")
+        self.emergency_stop_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.emergency_stop_button.setAccessibleName("Parada de emergencia de la grabación")
+        self.emergency_stop_button.setToolTip("Detener la grabación inmediatamente")
+        self.emergency_stop_button.clicked.connect(self.emergency_stop_clicked.emit)
+        self.emergency_stop_button.setVisible(False)
         self.settings_button = self._icon_button(
             "settings", "Ajustes rápidos de Model Studio", enabled=False
         )
@@ -408,6 +430,7 @@ class StudioPage(QWidget):
         layout.addWidget(self.repeat_button)
         layout.addWidget(self.read_all_button)
         layout.addStretch(1)
+        layout.addWidget(self.emergency_stop_button)
         layout.addWidget(self.capture_button)
         layout.addWidget(self.settings_button)
         layout.addWidget(self.fullscreen_button)
@@ -498,6 +521,18 @@ class StudioPage(QWidget):
         QLabel#studioError {{
             color: {theme.ERROR_TEXT};
         }}
+        QPushButton#studioEmergencyStop {{
+            background-color: transparent;
+            border: 1px solid {theme.RECORDING};
+            border-radius: 8px;
+            padding: 6px 14px;
+            color: {theme.RECORDING};
+            font-weight: bold;
+        }}
+        QPushButton#studioEmergencyStop:hover {{
+            background-color: {theme.RECORDING};
+            color: {theme.BACKGROUND};
+        }}
         """
 
     # --- Datos que entran ------------------------------------------------
@@ -539,6 +574,21 @@ class StudioPage(QWidget):
 
     def set_capture_state(self, state: StudioCaptureState) -> None:
         self._capture_state = state
+        self.capture_panel.set_state(state)
+        # La parada de emergencia aparece en cuanto hay algo que parar, sin
+        # tener que abrir ningún panel (criterio de aceptación 11). También
+        # durante INICIANDO y CAMBIANDO: son justo los momentos en los que
+        # puede haber una grabación en marcha sin confirmar todavía.
+        self.emergency_stop_button.setVisible(
+            state
+            in (
+                StudioCaptureState.INICIANDO,
+                StudioCaptureState.GRABANDO,
+                StudioCaptureState.PAUSADO,
+                StudioCaptureState.CAMBIANDO,
+                StudioCaptureState.INCIERTO,
+            )
+        )
         self._refresh_state_labels()
 
     @property
@@ -582,6 +632,37 @@ class StudioPage(QWidget):
         cursor.movePosition(cursor.MoveOperation.End)
         self.input.setTextCursor(cursor)
         self.input.setFocus()
+
+    def set_capture_available(self, available: bool, unavailable_reason: str = "") -> None:
+        """Enciende el acceso al panel de captura, o dice por qué está apagado."""
+        self._capture_available = available
+        self.capture_button.setEnabled(available)
+        self.capture_button.setToolTip(
+            "Grabación, escenas y cámaras"
+            if available
+            else f"Grabación, escenas y cámaras · {unavailable_reason}"
+        )
+        if not available:
+            self.capture_button.setChecked(False)
+
+    @property
+    def capture_available(self) -> bool:
+        return self._capture_available
+
+    @property
+    def capture_panel_open(self) -> bool:
+        """Si el panel está desplegado.
+
+        Es estado propio y no ``isVisible()``: un widget cuya ventana todavía
+        no se ha mostrado responde que no es visible aunque esté desplegado, y
+        aquí lo que importa es lo que el usuario pidió.
+        """
+        return self._capture_panel_open
+
+    def _handle_capture_toggled(self, checked: bool) -> None:
+        self._capture_panel_open = checked
+        self.capture_panel.setVisible(checked)
+        self.capture_panel_toggled.emit(checked)
 
     def set_error(self, message: str) -> None:
         self.error_label.setText(message)

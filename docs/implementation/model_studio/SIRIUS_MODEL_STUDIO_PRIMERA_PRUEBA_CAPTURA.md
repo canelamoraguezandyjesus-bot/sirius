@@ -63,6 +63,12 @@ el sitio por el que empezar. Hay tres caminos, de más a menos recomendable:
    móviles recientes suelen permitir usar el teléfono como cámara conectándolo
    por USB, sin instalar nada. Es lo más estable y lo que menos retraso mete.
    Conviene mirar primero si el móvil concreto lo admite.
+
+   > **Con iPhone y Windows.** La función que trae el propio iPhone para hacer
+   > de cámara está pensada para ordenadores Apple, así que con Windows hará
+   > falta una aplicación de terceros. Antes de instalar nada conviene
+   > comprobar si la marca del ordenador o el propio Windows ya ofrecen algo, y
+   > probar siempre por cable antes que por Wi-Fi.
 2. **Con una aplicación de cámara por USB.** Existen aplicaciones que convierten
    el móvil en webcam por cable. Las hay gratuitas con marca de agua y de pago
    sin ella. Por cable siempre; ver el punto siguiente.

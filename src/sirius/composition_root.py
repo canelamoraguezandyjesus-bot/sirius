@@ -28,6 +28,7 @@ from sirius.adapters.audio.unconfigured import (
     UnconfiguredTextToSpeech,
 )
 from sirius.adapters.backup.sqlite_backup_service import build_sqlite_backup_service
+from sirius.adapters.capture.obs_websocket import ObsWebSocketBackend
 from sirius.adapters.clock.system_clock import build_system_clock
 from sirius.adapters.export.filesystem_export_service import build_filesystem_export_service
 from sirius.adapters.llm.budget import BudgetPolicy, BudgetTracker
@@ -80,6 +81,7 @@ from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseC
 from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageUseCase
+from sirius.application.studio_capture import StudioCaptureUseCase
 from sirius.application.studio_voice import StudioVoiceUseCase, VoiceSettings
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
@@ -92,6 +94,7 @@ from sirius.config.llm_provider_settings import (
     resolve_provider_kind,
 )
 from sirius.config.settings import load_settings, save_settings
+from sirius.domain.capture import build_scene_registry
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.llm import LLMProvider
 from sirius.ports.secrets import SecretStore
@@ -153,6 +156,7 @@ class ConversationDependencies:
     restore_backup_use_case: RestoreBackupUseCase
     export_structured_use_case: ExportStructuredUseCase
     studio_voice_use_case: StudioVoiceUseCase
+    studio_capture_use_case: StudioCaptureUseCase
     close_database_connections: Callable[[], None]
     activate_configured_llm_provider: Callable[[], None]
 
@@ -284,6 +288,31 @@ def _build_studio_voice_use_case(
     )
 
 
+def _build_studio_capture_use_case() -> StudioCaptureUseCase:
+    """Construye el Módulo Captura, siempre desactivado al arrancar.
+
+    #127 exige que abrir Sirius no conecte con nada ni grabe nada: hay que
+    encenderlo a propósito. Por eso aquí no se conecta, solo se prepara.
+
+    La lista blanca de escenas y la contraseña del sistema de captura son
+    configuración del usuario; mientras no exista, el módulo se construye sin
+    escenas y no se puede encender, que es lo correcto: sin escenas
+    autorizadas no hay nada que se pueda activar de forma segura.
+    """
+    settings = load_settings()
+    capture_settings = settings.get("model_studio_capture", {})
+    if not isinstance(capture_settings, dict):
+        capture_settings = {}
+
+    scenes = build_scene_registry(capture_settings.get("scenes"))
+    backend = ObsWebSocketBackend(
+        password=str(capture_settings.get("password", "")),
+        host=str(capture_settings.get("host", "127.0.0.1")),
+        port=int(capture_settings.get("port", 4455)),
+    )
+    return StudioCaptureUseCase(backend=backend, scenes=scenes, enabled=False)
+
+
 def build_conversation_dependencies(
     database_path: Path,
     backups_dir: Path,
@@ -355,6 +384,8 @@ def build_conversation_dependencies(
     studio_voice_use_case = _build_studio_voice_use_case(
         database_path, secret_store, llm_usage_repository=llm_usage_repository
     )
+
+    studio_capture_use_case = _build_studio_capture_use_case()
 
     backup_service = build_sqlite_backup_service(database_path, backups_dir)
     export_service = build_filesystem_export_service(build_system_clock())
@@ -436,5 +467,6 @@ def build_conversation_dependencies(
         ),
         close_database_connections=close_database_connections,
         studio_voice_use_case=studio_voice_use_case,
+        studio_capture_use_case=studio_capture_use_case,
         activate_configured_llm_provider=activate_configured_llm_provider,
     )

@@ -104,3 +104,44 @@ class SceneRegistry:
     def contains_backend_name(self, backend_name: str) -> bool:
         """Si el sistema de captura reporta una escena que sí está autorizada."""
         return any(scene.backend_name == backend_name for scene in self.scenes)
+
+
+def build_scene_registry(configured: object) -> SceneRegistry:
+    """Construye la lista blanca a partir de la configuración del usuario.
+
+    Es deliberadamente estricta: una entrada mal escrita **se descarta**, no se
+    intenta arreglar. Una escena a medias en la lista blanca sería una escena
+    que se puede activar sin que nadie la haya autorizado del todo.
+
+    Sin configuración válida devuelve una lista vacía, y con una lista vacía el
+    Módulo Captura no se puede encender. Es el estado correcto de partida.
+    """
+    if not isinstance(configured, list):
+        return SceneRegistry()
+
+    scenes: list[Scene] = []
+    seen: set[str] = set()
+    for entry in configured:
+        if not isinstance(entry, dict):
+            continue
+        scene_id = str(entry.get("id", "")).strip()
+        backend_name = str(entry.get("backend_name", "")).strip()
+        if not scene_id or not backend_name or scene_id in seen:
+            continue
+        raw_aliases = entry.get("aliases", [])
+        aliases = (
+            tuple(str(alias) for alias in raw_aliases if str(alias).strip())
+            if isinstance(raw_aliases, list)
+            else ()
+        )
+        scenes.append(
+            Scene(
+                scene_id=scene_id,
+                display_name=str(entry.get("name", "")).strip() or backend_name,
+                backend_name=backend_name,
+                aliases=aliases,
+                is_fallback=bool(entry.get("fallback", False)),
+            )
+        )
+        seen.add(scene_id)
+    return SceneRegistry(tuple(scenes))
