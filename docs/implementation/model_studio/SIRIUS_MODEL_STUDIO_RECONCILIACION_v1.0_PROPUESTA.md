@@ -3,31 +3,40 @@
 ## RECONCILIACIÓN DE ALCANCE, ESTADOS Y ETAPAS
 
 **Documento:** SIRIUS-MODEL-STUDIO-REC-001
-**Versión:** 1.0
-**Estado:** **PROPUESTA — REQUIERE APROBACIÓN EXPLÍCITA DEL USUARIO**
+**Versión:** 1.1
+**Estado:** **APROBADA POR EL USUARIO el 7 de agosto de 2026**, salvo R-11
 **Fecha:** 7 de agosto de 2026
 **Base:** `main` en `a017b6f`
 **Origen:** hallazgos MS-A01 a MS-A11 de `docs/audits/SIRIUS_AUDITORIA_MODEL_STUDIO_2026-08.md`
 **Piezas que reconcilia:** #126 (`SIRIUS-EXP-VOICE-002`), #127 (`SIRIUS-MODEL-STUDIO-003`), PR #128 (`SIRIUS-MODEL-STUDIO-UI-001 v1.0`)
 
 > **Qué es y qué no es este documento**
-> Registra propuestas de corrección para que tres piezas escritas por separado dejen de contradecirse. No aprueba alcance, no autoriza implementación, no modifica documentos canónicos y no sustituye a `SIRIUS-MODEL-STUDIO-UI-001`, cuya dirección de diseño visual se conserva íntegra. Cada punto marcado `PROPUESTO` necesita aprobación antes de ejecutarse.
+> Reconcilia tres piezas escritas por separado que se contradecían. El usuario aprobó R-01 a R-10 el 7 de agosto de 2026; R-11 sigue pendiente de su decisión. No modifica documentos canónicos y no sustituye a `SIRIUS-MODEL-STUDIO-UI-001`, cuya dirección de diseño se conserva salvo en la presencia visual, que el propio usuario redefinió ese mismo día (véase el cuadro).
+>
+> La versión 1.0 registraba propuestas. Esta 1.1 registra además qué se ha construido de verdad y qué no, para que nadie tenga que deducirlo del código.
 
 ## 1. Cuadro de decisiones
 
 | # | Decisión | Estado | Hallazgo |
 |---|---|---|---|
-| R-01 | Nombre único de la vertical: **Model Studio** | PROPUESTO | MS-A08 |
-| R-02 | La captura de voz se inicia y se detiene por acción discreta | **DECIDIDO por el usuario (7-ago-2026)** | MS-A05 |
-| R-03 | Model Studio vive como página conmutable dentro de la ventana actual | PROPUESTO | MS-A01 |
-| R-04 | Máquina de estados unificada de interacción y de captura | PROPUESTO | MS-A06 |
-| R-05 | Abrir incidencia propia para la interfaz (`SIRIUS-MODEL-STUDIO-UI-002`) | PROPUESTO | MS-A03 |
-| R-06 | QtMultimedia se importa de forma perezosa; `libpulse0` se añade a Quality | PROPUESTO | MS-A02 |
-| R-07 | `BudgetTracker` se amplía para registrar coste de audio, sin migración | PROPUESTO | MS-A04 |
-| R-08 | La voz de síntesis se verifica antes de fijarse en documento | PROPUESTO | MS-A09 |
-| R-09 | Ejecución en tres etapas: E1 concha grabable, E2 voz, E3 captura | PROPUESTO | MS-A01, §5 auditoría |
-| R-10 | Fusionar #128 antes de abrir cualquier implementación | PROPUESTO | MS-A07 |
+| R-01 | Nombre único de la vertical: **Model Studio** | APROBADO · **implementado** | MS-A08 |
+| R-02 | La captura de voz se inicia y se detiene por acción discreta | APROBADO · **implementado** | MS-A05 |
+| R-03 | Model Studio vive como página conmutable dentro de la ventana actual | APROBADO · **implementado** | MS-A01 |
+| R-04 | Máquina de estados unificada de interacción y de captura | APROBADO · **implementado** | MS-A06 |
+| R-05 | Abrir incidencia propia para la interfaz (`SIRIUS-MODEL-STUDIO-UI-002`) | APROBADO · incidencia abierta | MS-A03 |
+| R-06 | QtMultimedia se importa de forma perezosa; `libpulse0` se añade a Quality | APROBADO · **implementado y vigilado por prueba** | MS-A02 |
+| R-07 | `BudgetTracker` se amplía para registrar coste de audio, sin migración | APROBADO · **implementado** | MS-A04 |
+| R-08 | La voz de síntesis se verifica antes de fijarse en documento | APROBADO · **verificado: `cedar` NO existe en el endpoint autorizado** | MS-A09 |
+| R-09 | Ejecución en tres etapas: E1 concha grabable, E2 voz, E3 captura | APROBADO · E1 y E2 entregadas, E3 sin empezar | MS-A01 |
+| R-10 | Fusionar #128 antes de abrir cualquier implementación | APROBADO · **pendiente de que el usuario lo fusione** | MS-A07 |
 | R-11 | Envolvente de gasto de Model Studio | **PENDIENTE DE DECISIÓN DEL USUARIO** | MS-A10 |
+
+> **Decisiones visuales tomadas por el usuario el 7 de agosto de 2026, sobre prototipo renderizado**
+>
+> - Sirius abre en la interfaz técnica, con un botón arriba para pasar a Model Studio.
+> - El cuerpo de la conversación es algo mayor que el normal de escritorio, pensado para leerse al ver el vídeo en un móvil.
+> - La columna izquierda muestra proyecto y contexto pegados bajo la presencia, con el hueco de notas rápidas reservado.
+> - **La presencia no es un rostro.** Es una entidad digital abstracta y geométrica: ojos robóticos que parpadean y cambian de tamaño de forma sutil e irregular, boca de barras verticales tipo ecualizador, y cuatro marcas de esquina que la encuadran como interfaz. Sin sincronización labial y sin análisis de audio: la agitación es continua y nace de un pulso constante.
 
 ## 2. R-01 · Nombre único
 
@@ -226,13 +235,34 @@ Lo que sí conviene decidir antes de E2, con independencia de la opción: agotar
 - La prohibición de merge automático en las tres piezas.
 - La puerta G-MS-01 a G-MS-06 previa a Sirius 0.2.
 
-## 14. Acciones que requieren aprobación antes de ejecutarse
+## 14. Estado de ejecución al 7 de agosto de 2026
 
-1. Aprobar o corregir R-01, R-03 a R-10.
-2. Decidir R-11.
-3. Editar el cuerpo de #126 con las correcciones de §3, §4, §7, §8 y §9, y retirar conscientemente `sirius:failed-safely` antes de cualquier reactivación.
-4. Editar `SIRIUS-MODEL-STUDIO-UI-001` con la máquina de estados de §5 y el ciclo de voz de §3.
-5. Abrir `SIRIUS-MODEL-STUDIO-UI-002` (R-05).
-6. Fusionar #128 (R-10).
+Lo que existe de verdad en la rama `claude/model-estudio-review-qpbknq`, verificado con la suite completa (1605 pruebas en verde), Ruff y mypy.
 
-Ninguna de estas acciones se ha ejecutado. Este documento solo las registra.
+### E1 · Concha grabable — ENTREGADA
+
+- Superficie conmutable con la interfaz técnica intacta en la página 0.
+- Presencia geométrica animada, determinista, que se detiene cuando no está a la vista.
+- Conversación existente conectada, con streaming, historial y persistencia compartidos.
+- Caja única expandible, barra de iconos dibujados en código, modo limpio.
+
+### E2 · Voz — ENTREGADA EN CÓDIGO, SIN PRUEBA REAL
+
+- Los cuatro puertos, el orquestador, los adaptadores de Qt y de OpenAI, y los simulados.
+- Ciclo completo: pulsar, hablar, pulsar, revisar, corregir, enviar, oír.
+- Detener, silenciar y repetir.
+- Presupuesto de audio contabilizado en el mismo total mensual.
+
+> **Lo que todavía NO está demostrado**
+> Ninguna prueba automática usa micrófono, altavoces, red ni clave real: todas van con dobles. Que la voz se oiga bien, que el micrófono capte en Windows y que la latencia sea aceptable **solo puede confirmarlo la prueba manual del usuario**. Hasta entonces, E2 no puede declararse APTA.
+
+### E3 · Captura y cámaras — SIN EMPEZAR
+
+Ni una línea de código. La investigación técnica previa que el propio #127 exige está registrada en `SIRIUS_MODEL_STUDIO_CAPTURA_INVESTIGACION.md`, y no sustituye a la prueba real.
+
+## 15. Lo que sigue pendiente
+
+1. **R-11**, el envolvente de gasto: única decisión de este documento que sigue sin tomarse.
+2. **Fusionar #128**, para que la especificación de interfaz exista en `main`.
+3. **Prueba manual de la voz en Windows 11** con clave real: elegir voz entre las que sí existen, comprobar latencia y confirmar que no queda audio en disco ni en registros.
+4. **Decidir el backend de captura** a partir de la investigación, y verificarlo antes de escribir código.
