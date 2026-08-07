@@ -366,18 +366,29 @@ def test_lo_que_no_es_del_canon_se_aparta_y_se_declara(
 # F. Los resultados publicados, recomputables desde su evidencia
 # ---------------------------------------------------------------------------
 
-ARTEFACTO: Final = RAIZ / "artifacts/adr002_round/ronda_primaria_v0.1.json"
-EVIDENCIA: Final = RAIZ / "artifacts/adr002_round/ronda_primaria_v0.1_evidencia.json"
+#: Las dos corridas publicadas. La `v0.1` es la de antes de corregir la capa
+#: común y **no se sobrescribe**: sin ella el contraste no sería comprobable.
+CORRIDAS: Final[tuple[str, ...]] = ("v0.1", "v0.2")
 
 
-@pytest.fixture(scope="module")
-def publicado() -> tuple[dict[str, object], dict[str, object]]:
+def _publicado(version: str) -> tuple[dict[str, object], dict[str, object]]:
     import json
 
+    base = RAIZ / "artifacts/adr002_round"
     return (
-        json.loads(ARTEFACTO.read_text(encoding="utf-8")),
-        json.loads(EVIDENCIA.read_text(encoding="utf-8")),
+        json.loads((base / f"ronda_primaria_{version}.json").read_text(encoding="utf-8")),
+        json.loads((base / f"ronda_primaria_{version}_evidencia.json").read_text(encoding="utf-8")),
     )
+
+
+@pytest.fixture(scope="module", params=CORRIDAS)
+def publicado(request: pytest.FixtureRequest) -> tuple[dict[str, object], dict[str, object]]:
+    """Cada control de recómputo se ejecuta sobre **las dos** corridas.
+
+    Una corrida vieja que dejara de recomputarse sería evidencia corrompida, y
+    conservarla sin comprobarla no la conserva: la abandona.
+    """
+    return _publicado(str(request.param))
 
 
 def test_las_cifras_publicadas_se_recomputan_desde_la_evidencia(
@@ -449,3 +460,54 @@ def test_la_ronda_no_eligio_ninguna_alternativa(
     conformidad = artefacto["conformidad"]
     assert isinstance(conformidad, dict)
     assert not any(r["pasa_las_puertas"] for r in conformidad.values())
+
+
+# ---------------------------------------------------------------------------
+# G. El contraste entre las dos corridas
+# ---------------------------------------------------------------------------
+
+
+def test_la_correccion_dejo_la_puerta_de_polaridad_en_verde() -> None:
+    """Lo que el paquete de corrección prometió, medido en las dos corridas."""
+    antes, _ = _publicado("v0.1")
+    despues, _ = _publicado("v0.2")
+    for candidato in ("ADR002-A", "ADR002-B", "ADR002-C", "ADR002-D"):
+        previo = antes["conformidad"][candidato]  # type: ignore[index]
+        actual = despues["conformidad"][candidato]  # type: ignore[index]
+        assert previo["confusion_de_polaridad_total"] == 38, candidato
+        assert actual["confusion_de_polaridad_total"] == 0, candidato
+        assert actual["polaridad_mal_leida_total"] == 0, candidato
+        assert previo["puertas"]["confusion_de_polaridad_cero"] is False, candidato
+        assert actual["puertas"]["confusion_de_polaridad_cero"] is True, candidato
+
+
+def test_el_control_no_se_movio_entre_las_dos_corridas() -> None:
+    """`T0` no usa la capa corregida, así que sus cifras **no pueden** cambiar.
+
+    Es la comprobación de que la corrección no se filtró al control. Si `T0`
+    hubiera cambiado, habría que sospechar del arnés antes que de nadie.
+    """
+    antes, _ = _publicado("v0.1")
+    despues, _ = _publicado("v0.2")
+    assert antes["conformidad"]["T0-control"] == despues["conformidad"]["T0-control"]  # type: ignore[index]
+
+
+def test_las_dos_corridas_usan_fichas_distintas_y_lo_declaran() -> None:
+    """Medir dos veces bajo la misma ficha no habría medido la corrección."""
+    antes, _ = _publicado("v0.1")
+    despues, _ = _publicado("v0.2")
+    for candidato in ("ADR002-A", "ADR002-B", "ADR002-C", "ADR002-D"):
+        previa = antes["fichas_vigentes"][candidato]  # type: ignore[index]
+        actual = despues["fichas_vigentes"][candidato]  # type: ignore[index]
+        assert actual["version"] == previa["version"] + 1, candidato
+        assert actual["huella"] != previa["huella"], candidato
+    assert antes["fichas_vigentes"]["T0-control"] == despues["fichas_vigentes"]["T0-control"]  # type: ignore[index]
+
+
+def test_la_corrida_anterior_se_conserva_intacta() -> None:
+    """La `v0.2` no escribe sobre la `v0.1`: son dos ficheros, no uno."""
+    from experiments.adr002.round import execute_round as ex
+
+    assert ex.SALIDA_v0_1 != ex.SALIDA
+    assert (RAIZ / ex.SALIDA).exists()
+    assert (RAIZ / ex.SALIDA_v0_1).exists()
