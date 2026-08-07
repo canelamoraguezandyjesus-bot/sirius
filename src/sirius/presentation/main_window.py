@@ -54,6 +54,14 @@ from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageResult, SendMessageUseCase
+from sirius.application.studio_voice import (
+    ListeningStarted,
+    NothingToSay,
+    SpeechStarted,
+    StudioVoiceUseCase,
+    TranscriptReady,
+    VoiceFailure,
+)
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
 from sirius.config.llm_provider_settings import (
@@ -85,6 +93,7 @@ from sirius.presentation.knowledge_widget import KnowledgeWidget
 from sirius.presentation.message_view import MessageItemDelegate, MessageItemWidget
 from sirius.presentation.model_studio.studio_page import StudioPage
 from sirius.presentation.project_continuity_widget import ProjectContinuityWidget
+from sirius.presentation.studio_workers import SpeakWorker, TranscribeWorker
 
 _logger = get_logger(__name__)
 
@@ -176,6 +185,7 @@ class MainWindow(QMainWindow):
         export_structured_use_case: ExportStructuredUseCase,
         close_database_connections: Callable[[], None],
         *,
+        studio_voice_use_case: StudioVoiceUseCase | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
         confirm_restore: Callable[[str, str], bool] | None = None,
@@ -212,6 +222,9 @@ class MainWindow(QMainWindow):
         # right before RestoreBackupUseCase so the atomic file replace is not
         # blocked by this window's own pooled connections.
         self._close_database_connections = close_database_connections
+        self._studio_voice_use_case = studio_voice_use_case
+        self._last_spoken_text: str | None = None
+        self._active_voice_worker: QRunnable | None = None
         # Dialogs are shown only through these seams: production defaults to
         # real Qt dialogs, but tests inject recording/no-op doubles so
         # scripts/check.ps1 never opens a real window on the desktop.
@@ -368,7 +381,127 @@ class MainWindow(QMainWindow):
         self.studio_page.send_requested.connect(self._handle_studio_send)
         self.studio_page.cancel_requested.connect(self._handle_cancel_clicked)
         self.studio_page.exit_requested.connect(self.close_model_studio)
+        self.studio_page.microphone_clicked.connect(self._handle_microphone_clicked)
+        self.studio_page.stop_voice_clicked.connect(self._handle_stop_voice_clicked)
+        self.studio_page.repeat_clicked.connect(self._handle_repeat_clicked)
+        self.studio_page.mute_toggled.connect(self._handle_mute_toggled)
+        self.studio_page.set_voice_available(
+            self._studio_voice_use_case is not None,
+            "todavía no disponible",
+        )
         return self.studio_page
+
+    # --- Voz de Model Studio ---------------------------------------------
+
+    def _handle_microphone_clicked(self) -> None:
+        """Un clic empieza a escuchar; otro para y transcribe.
+
+        No hay que mantener nada pulsado (decisión del usuario del 7 de agosto
+        de 2026): grabando el montaje de HEAD-R1 no se tiene una mano libre
+        para sujetar el ratón.
+        """
+        if self._studio_voice_use_case is None or self._is_sending:
+            return
+        if self._studio_voice_use_case.is_listening:
+            self._stop_listening_and_transcribe()
+            return
+
+        outcome = self._studio_voice_use_case.start_listening()
+        if isinstance(outcome, VoiceFailure):
+            self._report_voice_failure(outcome)
+            return
+        if isinstance(outcome, ListeningStarted):
+            self.studio_page.set_error("")
+            self._mirror_studio_state(StudioInteractionState.ESCUCHANDO)
+
+    def _stop_listening_and_transcribe(self) -> None:
+        if self._studio_voice_use_case is None:
+            return
+        self._mirror_studio_state(StudioInteractionState.TRANSCRIBIENDO)
+        worker = TranscribeWorker(self._studio_voice_use_case)
+        worker.signals.finished.connect(self._on_transcribed)
+        worker.signals.crashed.connect(self._on_voice_crashed)
+        self._active_voice_worker = worker
+        self._thread_pool.start(worker)
+
+    def _on_transcribed(self, outcome: object) -> None:
+        self._active_voice_worker = None
+        if isinstance(outcome, VoiceFailure):
+            self._report_voice_failure(outcome)
+            return
+        if not isinstance(outcome, TranscriptReady):
+            return
+
+        # Nada se persiste todavía: el texto va a la caja para que el usuario
+        # lo corrija, lo cancele o lo envíe. Solo al enviar entra en la
+        # conversación.
+        self.studio_page.set_input_text(outcome.text)
+        self._mirror_studio_state(StudioInteractionState.REVISANDO)
+        self.studio_page.set_error(
+            "Se alcanzó el máximo de grabación; revisa el texto antes de enviarlo."
+            if outcome.stopped_by_limit
+            else ""
+        )
+
+    def _speak_if_studio_is_open(self, text: str | None, status: MessageStatus) -> None:
+        """Lee la respuesta en voz alta, solo dentro de Model Studio.
+
+        En la interfaz técnica no se habla: nadie espera que un chat de trabajo
+        empiece a sonar solo.
+        """
+        if self._studio_voice_use_case is None or not self.model_studio_open:
+            return
+        if not text or status is not MessageStatus.COMPLETED:
+            return
+        self._last_spoken_text = text
+        self._start_speaking(text, status)
+
+    def _start_speaking(self, text: str, status: MessageStatus) -> None:
+        if self._studio_voice_use_case is None:
+            return
+        self._mirror_studio_state(StudioInteractionState.SINTETIZANDO)
+        worker = SpeakWorker(self._studio_voice_use_case, text, status)
+        worker.signals.finished.connect(self._on_spoken)
+        worker.signals.crashed.connect(self._on_voice_crashed)
+        self._active_voice_worker = worker
+        self._thread_pool.start(worker)
+
+    def _on_spoken(self, outcome: object) -> None:
+        self._active_voice_worker = None
+        if isinstance(outcome, VoiceFailure):
+            self._report_voice_failure(outcome)
+            return
+        if isinstance(outcome, SpeechStarted):
+            self._mirror_studio_state(StudioInteractionState.HABLANDO)
+            return
+        if isinstance(outcome, NothingToSay):
+            self._mirror_studio_state(StudioInteractionState.PREPARADO)
+
+    def _handle_stop_voice_clicked(self) -> None:
+        if self._studio_voice_use_case is None:
+            return
+        self._studio_voice_use_case.stop_speaking()
+        self._mirror_studio_state(StudioInteractionState.PREPARADO)
+
+    def _handle_repeat_clicked(self) -> None:
+        if self._studio_voice_use_case is None or self._last_spoken_text is None:
+            return
+        self._start_speaking(self._last_spoken_text, MessageStatus.COMPLETED)
+
+    def _handle_mute_toggled(self, muted: bool) -> None:
+        if self._studio_voice_use_case is None:
+            return
+        self._studio_voice_use_case.set_muted(muted)
+
+    def _report_voice_failure(self, failure: VoiceFailure) -> None:
+        """Un fallo de voz se cuenta y se sigue: el chat escrito no se toca."""
+        self.studio_page.set_error(failure.message)
+        self._mirror_studio_state(StudioInteractionState.ERROR)
+
+    def _on_voice_crashed(self, error_message: str) -> None:
+        del error_message  # no se muestra literal: el mensaje al usuario es seguro y genérico
+        self.studio_page.set_error("La voz ha fallado, pero la conversación sigue igual.")
+        self._mirror_studio_state(StudioInteractionState.ERROR)
 
     @property
     def model_studio_open(self) -> bool:
@@ -381,10 +514,23 @@ class MainWindow(QMainWindow):
         self.studio_page.input.setFocus()
 
     def close_model_studio(self) -> None:
-        """Vuelve a la interfaz técnica, saliendo antes del modo limpio."""
+        """Vuelve a la interfaz técnica, saliendo antes del modo limpio.
+
+        Salir corta la voz y el micrófono: nada puede seguir escuchando ni
+        sonando en una superficie que ya no está a la vista.
+        """
         if self.studio_page.clean_mode:
             self.studio_page.toggle_clean_mode()
+        self._silence_voice()
         self._pages.setCurrentIndex(TECHNICAL_PAGE_INDEX)
+
+    def _silence_voice(self) -> None:
+        """Cierra micrófono y reproducción. Idempotente."""
+        if self._studio_voice_use_case is None:
+            return
+        self._studio_voice_use_case.cancel_listening()
+        self._studio_voice_use_case.stop_speaking()
+        self._mirror_studio_state(StudioInteractionState.PREPARADO)
 
     def _handle_studio_send(self, text: str) -> None:
         """Envío pedido desde Model Studio.
@@ -848,6 +994,9 @@ class MainWindow(QMainWindow):
             self._last_failed_text = self._active_send_text
         self._refresh_budget_warning()
         self._finish_sending()
+        # Después de _finish_sending, que es quien devuelve el estado a
+        # PREPARADO: si se hablara antes, ese reajuste borraría SINTETIZANDO.
+        self._speak_if_studio_is_open(result.sirius_message.content, result.sirius_message.status)
 
     def _on_crashed(self, error_message: str) -> None:
         del error_message  # not shown verbatim: keep the user-facing message safe and generic
@@ -888,13 +1037,16 @@ class MainWindow(QMainWindow):
             self.close()
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        """Request cancellation and defer closing instead of blocking.
+        """Cierra micrófono y voz, y luego aplica el cierre diferido de siempre.
+
+        Un temporal de audio no puede sobrevivir al cierre de la ventana.
 
         The worker keeps running to completion on its own thread; once it
         finishes, ``_finish_sending``/``_finish_backup_operation`` notices the
         pending request and closes the window from the main thread. Nothing
         is killed and no write is left half-done.
         """
+        self._silence_voice()
         if self._is_sending:
             self._close_requested = True
             if self._active_operation_id is not None:

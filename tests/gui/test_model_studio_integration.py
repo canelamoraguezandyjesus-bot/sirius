@@ -15,6 +15,12 @@ import pytest
 from PySide6.QtWidgets import QTabWidget
 from pytestqt.qtbot import QtBot
 
+from sirius.adapters.audio.fake import (
+    FakeAudioCapture,
+    FakeAudioPlayback,
+    FakeSpeechToText,
+    FakeTextToSpeech,
+)
 from sirius.adapters.llm.fake import FakeLLMProvider
 from sirius.adapters.llm.token_counter import CharacterHeuristicTokenCounter
 from sirius.adapters.persistence.migrations import upgrade_to_head
@@ -33,9 +39,11 @@ from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.context import ContextBuilder
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.application.send_message import SendMessageUseCase
+from sirius.application.studio_voice import StudioVoiceUseCase, VoiceSettings
 from sirius.composition_root import build_conversation_dependencies
 from sirius.domain.conversation import MessageRole
 from sirius.domain.model_studio import StudioCaptureState, StudioInteractionState
+from sirius.ports.audio_capture import AudioCaptureError, AudioCaptureErrorKind
 from sirius.ports.llm import LLMError, LLMErrorKind, LLMProvider, LLMRequest, LLMStreamEvent
 from sirius.presentation.main_window import (
     MODEL_STUDIO_PAGE_INDEX,
@@ -67,7 +75,9 @@ def _bootstrapped_database(database_path: Path) -> Path:
     return database_path
 
 
-def _build_window(database_path: Path) -> MainWindow:
+def _build_window(
+    database_path: Path, studio_voice_use_case: StudioVoiceUseCase | None = None
+) -> MainWindow:
     dependencies = build_conversation_dependencies(
         database_path, database_path.parent / "backups", secret_store=FakeSecretStore()
     )
@@ -95,6 +105,7 @@ def _build_window(database_path: Path) -> MainWindow:
         restore_backup_use_case=dependencies.restore_backup_use_case,
         export_structured_use_case=dependencies.export_structured_use_case,
         close_database_connections=dependencies.close_database_connections,
+        studio_voice_use_case=studio_voice_use_case,
         show_warning=lambda title, text: None,
         show_information=lambda title, text: None,
     )
@@ -341,3 +352,183 @@ def test_capture_stays_deactivated(qtbot: QtBot, tmp_path: Path) -> None:
     assert window.studio_page.capture_state is StudioCaptureState.DESACTIVADO
     assert not window.studio_page.capture_button.isEnabled()
     assert not window.studio_page.microphone_button.isEnabled()
+
+
+# --- Voz dentro de la ventana real --------------------------------------
+
+
+def _voice_use_case(tmp_path: Path, **kwargs: object) -> StudioVoiceUseCase:
+    directory = tmp_path / "audio"
+    directory.mkdir(exist_ok=True)
+    return StudioVoiceUseCase(
+        audio_capture=kwargs.get("capture") or FakeAudioCapture(directory),  # type: ignore[arg-type]
+        speech_to_text=kwargs.get("speech_to_text") or FakeSpeechToText(),  # type: ignore[arg-type]
+        text_to_speech=kwargs.get("text_to_speech") or FakeTextToSpeech(directory),  # type: ignore[arg-type]
+        audio_playback=kwargs.get("playback") or FakeAudioPlayback(),  # type: ignore[arg-type]
+        settings=VoiceSettings(voice="onyx"),
+    )
+
+
+@pytest.mark.gui
+def test_without_voice_the_microphone_says_why_it_is_off(qtbot: QtBot, tmp_path: Path) -> None:
+    """Un control apagado sin explicación hace pensar que está roto."""
+    window = _build_window(_bootstrapped_database(tmp_path / "sirius.db"))
+    qtbot.addWidget(window)
+
+    assert not window.studio_page.voice_available
+    assert not window.studio_page.microphone_button.isEnabled()
+    assert window.studio_page.microphone_button.toolTip()
+
+
+@pytest.mark.gui
+def test_one_click_listens_and_the_next_one_transcribes(qtbot: QtBot, tmp_path: Path) -> None:
+    """Sin mantener nada pulsado: un clic empieza y otro para."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    voice = _voice_use_case(tmp_path, speech_to_text=FakeSpeechToText("enciende el led"))
+    window = _build_window(database_path, studio_voice_use_case=voice)
+    qtbot.addWidget(window)
+    window.open_model_studio()
+
+    window.studio_page.microphone_button.click()
+    assert window.studio_page.interaction_state is StudioInteractionState.ESCUCHANDO
+    assert voice.is_listening
+
+    window.studio_page.microphone_button.click()
+    qtbot.waitUntil(
+        lambda: window.studio_page.interaction_state is StudioInteractionState.REVISANDO,
+        timeout=5000,
+    )
+
+    # El texto queda para revisar: nada se ha guardado todavía.
+    assert window.studio_page.input.toPlainText() == "enciende el led"
+    assert window.studio_page.message_count == 0
+    assert window.message_list.count() == 0
+
+
+@pytest.mark.gui
+def test_the_reviewed_text_only_enters_the_conversation_when_sent(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    voice = _voice_use_case(tmp_path, speech_to_text=FakeSpeechToText("hola"))
+    window = _build_window(database_path, studio_voice_use_case=voice)
+    qtbot.addWidget(window)
+    _swap_provider(window, database_path, FakeLLMProvider(("Dime.",)))
+    window.open_model_studio()
+
+    window.studio_page.microphone_button.click()
+    window.studio_page.microphone_button.click()
+    qtbot.waitUntil(
+        lambda: window.studio_page.interaction_state is StudioInteractionState.REVISANDO,
+        timeout=5000,
+    )
+    # El usuario corrige antes de enviar.
+    window.studio_page.set_input_text("hola Sirius")
+    window.studio_page.send_button.click()
+    _wait_idle(qtbot, window)
+
+    assert window.studio_page.message_bodies()[0] == (MessageRole.USER, "hola Sirius")
+
+
+@pytest.mark.gui
+def test_a_microphone_failure_leaves_the_written_chat_usable(qtbot: QtBot, tmp_path: Path) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    directory = tmp_path / "audio"
+    directory.mkdir(exist_ok=True)
+    voice = _voice_use_case(
+        tmp_path,
+        capture=FakeAudioCapture(
+            directory,
+            start_error=AudioCaptureError(AudioCaptureErrorKind.NO_DEVICE, "sin micro"),
+        ),
+    )
+    window = _build_window(database_path, studio_voice_use_case=voice)
+    qtbot.addWidget(window)
+    _swap_provider(window, database_path, FakeLLMProvider(("Vale.",)))
+    window.open_model_studio()
+
+    window.studio_page.microphone_button.click()
+
+    assert window.studio_page.interaction_state is StudioInteractionState.ERROR
+    assert window.studio_page.error_label.text()
+
+    # Y aun así se puede seguir escribiendo.
+    window.studio_page.input.setPlainText("sigo escribiendo")
+    window.studio_page.send_button.click()
+    _wait_idle(qtbot, window)
+
+    assert window.studio_page.message_bodies()[-1] == (MessageRole.SIRIUS, "Vale.")
+
+
+@pytest.mark.gui
+def test_sirius_speaks_a_completed_answer_inside_model_studio(qtbot: QtBot, tmp_path: Path) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    directory = tmp_path / "audio"
+    directory.mkdir(exist_ok=True)
+    text_to_speech = FakeTextToSpeech(directory)
+    voice = _voice_use_case(tmp_path, text_to_speech=text_to_speech)
+    window = _build_window(database_path, studio_voice_use_case=voice)
+    qtbot.addWidget(window)
+    _swap_provider(window, database_path, FakeLLMProvider(("Monta el Uno.",)))
+    window.open_model_studio()
+
+    window.studio_page.input.setPlainText("¿por dónde empiezo?")
+    window.studio_page.send_button.click()
+    qtbot.waitUntil(lambda: len(text_to_speech.requests) == 1, timeout=5000)
+
+    assert "Monta el Uno." in text_to_speech.requests[0].text
+
+
+@pytest.mark.gui
+def test_sirius_stays_quiet_in_the_technical_interface(qtbot: QtBot, tmp_path: Path) -> None:
+    """Nadie espera que un chat de trabajo empiece a sonar solo."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    directory = tmp_path / "audio"
+    directory.mkdir(exist_ok=True)
+    text_to_speech = FakeTextToSpeech(directory)
+    voice = _voice_use_case(tmp_path, text_to_speech=text_to_speech)
+    window = _build_window(database_path, studio_voice_use_case=voice)
+    qtbot.addWidget(window)
+    _swap_provider(window, database_path, FakeLLMProvider(("Vale.",)))
+
+    window.message_input.setText("desde la interfaz técnica")
+    window.send_button.click()
+    _wait_idle(qtbot, window)
+
+    assert text_to_speech.requests == []
+
+
+@pytest.mark.gui
+def test_leaving_model_studio_closes_the_microphone(qtbot: QtBot, tmp_path: Path) -> None:
+    """Nada puede seguir escuchando en una superficie que ya no se ve."""
+    voice = _voice_use_case(tmp_path)
+    window = _build_window(
+        _bootstrapped_database(tmp_path / "sirius.db"), studio_voice_use_case=voice
+    )
+    qtbot.addWidget(window)
+    window.open_model_studio()
+    window.studio_page.microphone_button.click()
+    assert voice.is_listening
+
+    window.close_model_studio()
+
+    assert not voice.is_listening
+
+
+@pytest.mark.gui
+def test_muting_and_stopping_reach_the_use_case(qtbot: QtBot, tmp_path: Path) -> None:
+    voice = _voice_use_case(tmp_path)
+    window = _build_window(
+        _bootstrapped_database(tmp_path / "sirius.db"), studio_voice_use_case=voice
+    )
+    qtbot.addWidget(window)
+    window.open_model_studio()
+
+    window.studio_page.mute_button.setChecked(True)
+    assert voice.is_muted
+
+    window.studio_page.mute_button.setChecked(False)
+    assert not voice.is_muted
+
+    window.studio_page.stop_voice_button.click()
+    assert not voice.is_speaking

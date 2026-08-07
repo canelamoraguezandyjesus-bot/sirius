@@ -188,6 +188,10 @@ class StudioPage(QWidget):
     send_requested = Signal(str)
     cancel_requested = Signal()
     exit_requested = Signal()
+    microphone_clicked = Signal()
+    stop_voice_clicked = Signal()
+    repeat_clicked = Signal()
+    mute_toggled = Signal(bool)
 
     def __init__(self, parent: QWidget | None = None, *, animated: bool = True) -> None:
         super().__init__(parent)
@@ -199,6 +203,7 @@ class StudioPage(QWidget):
         self._messages: list[_MessageWidget] = []
         self._follow_bottom = True
         self._clean_mode = False
+        self._voice_available = False
 
         self.presence = PresenceWidget(animated=animated)
 
@@ -346,6 +351,7 @@ class StudioPage(QWidget):
         self.send_button.clicked.connect(self._handle_submit)
 
         self.microphone_button = self._icon_button("microphone", "Hablar con Sirius", enabled=False)
+        self.microphone_button.clicked.connect(self.microphone_clicked.emit)
 
         input_row = QHBoxLayout()
         input_row.setContentsMargins(0, 0, 0, 0)
@@ -373,8 +379,14 @@ class StudioPage(QWidget):
         self.cancel_button.clicked.connect(self.cancel_requested.emit)
 
         self.stop_voice_button = self._icon_button("stop", "Detener voz", enabled=False)
+        self.stop_voice_button.clicked.connect(self.stop_voice_clicked.emit)
+
         self.mute_button = self._icon_button("mute", "Silenciar salida hablada", enabled=False)
+        self.mute_button.setCheckable(True)
+        self.mute_button.toggled.connect(self.mute_toggled.emit)
+
         self.repeat_button = self._icon_button("repeat", "Repetir última respuesta", enabled=False)
+        self.repeat_button.clicked.connect(self.repeat_clicked.emit)
         self.read_all_button = self._icon_button("read_all", "Leer todo", enabled=False)
         self.capture_button = self._icon_button(
             "capture", "Grabación, escenas y cámaras", enabled=False
@@ -504,6 +516,25 @@ class StudioPage(QWidget):
         self.input.setEnabled(state.accepts_typing)
         self.send_button.setEnabled(state.accepts_typing)
         self.cancel_button.setEnabled(state is StudioInteractionState.PENSANDO)
+        if self._voice_available:
+            # Mientras escucha, el micrófono sigue activo porque es el botón
+            # con el que se para. Mientras transcribe, no: volver a pulsarlo no
+            # haría nada y solo confundiría.
+            self.microphone_button.setEnabled(
+                state
+                in (
+                    StudioInteractionState.PREPARADO,
+                    StudioInteractionState.ESCUCHANDO,
+                    StudioInteractionState.REVISANDO,
+                    StudioInteractionState.HABLANDO,
+                    StudioInteractionState.ERROR,
+                )
+            )
+            self.microphone_button.setToolTip(
+                "Dejar de hablar y transcribir"
+                if state is StudioInteractionState.ESCUCHANDO
+                else "Hablar con Sirius"
+            )
         self._refresh_state_labels()
 
     def set_capture_state(self, state: StudioCaptureState) -> None:
@@ -517,6 +548,40 @@ class StudioPage(QWidget):
     @property
     def capture_state(self) -> StudioCaptureState:
         return self._capture_state
+
+    def set_voice_available(self, available: bool, unavailable_reason: str = "") -> None:
+        """Enciende o apaga los controles de voz, diciendo por qué si están apagados.
+
+        Un control apagado sin explicación es lo que hace pensar que la
+        aplicación está rota; con el motivo en el tooltip, se entiende.
+        """
+        self._voice_available = available
+        for button, label in (
+            (self.microphone_button, "Hablar con Sirius"),
+            (self.stop_voice_button, "Detener voz"),
+            (self.mute_button, "Silenciar salida hablada"),
+            (self.repeat_button, "Repetir última respuesta"),
+        ):
+            button.setEnabled(available)
+            button.setToolTip(label if available else f"{label} · {unavailable_reason}")
+
+    @property
+    def voice_available(self) -> bool:
+        return self._voice_available
+
+    def set_muted(self, muted: bool) -> None:
+        """Refleja el silencio sin volver a emitir la señal."""
+        was_blocked = self.mute_button.blockSignals(True)
+        self.mute_button.setChecked(muted)
+        self.mute_button.blockSignals(was_blocked)
+
+    def set_input_text(self, text: str) -> None:
+        """Escribe la transcripción en la caja, para revisarla antes de enviar."""
+        self.input.setPlainText(text)
+        cursor = self.input.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        self.input.setTextCursor(cursor)
+        self.input.setFocus()
 
     def set_error(self, message: str) -> None:
         self.error_label.setText(message)
