@@ -198,6 +198,36 @@ def test_the_corrector_writes_a_provisional_verdict_before_working() -> None:
     assert "--max-turns" in str(claude["with"]["claude_args"])
 
 
+def test_job_timeout_covers_every_bounded_step_plus_margin() -> None:
+    """El corrector no puede consumir el presupuesto entero del job.
+
+    El veredicto provisional del prompt cubre el corte por `--max-turns`, pero
+    no el otro camino: si el corrector agota los minutos del JOB, GitHub lo
+    cancela y el paso que aplica el veredicto no llega a leer nada. La
+    incidencia se quedaba en `sirius:repairing` sin parada ni diagnóstico —la
+    #135 otra vez, y una regla que no se puede cumplir porque alguien tiene que
+    llegar a leerla—.
+
+    Misma regla que `review-sirius-work.yml`: cada paso que puede tardar declara
+    su tope, y el del job cubre la suma más margen para los pasos deterministas
+    cortos. Así, agotar el tiempo del corrector se traduce SIEMPRE en un
+    veredicto aplicado, nunca en una cancelación.
+    """
+    doc = _load()
+    acotados = [step["timeout-minutes"] for step in _steps(doc) if "timeout-minutes" in step]
+    assert len(acotados) == 2, "el corrector y la aplicación del veredicto declaran su tope"
+    assert doc["jobs"]["repair"]["timeout-minutes"] >= sum(acotados) + 5
+
+    corrector = _step(doc, "Ejecutar Claude Code")["timeout-minutes"]
+    aplicar = _step(doc, "Aplicar el veredicto")["timeout-minutes"]
+    # El del corrector tiene que ser ESTRICTAMENTE menor que el del job: si
+    # coincidieran, el job podría caducar durante ese mismo paso.
+    assert corrector < doc["jobs"]["repair"]["timeout-minutes"]
+    # Y aplicar el veredicto necesita margen propio: es el paso que convierte
+    # cualquier desenlace en un estado visible de la incidencia.
+    assert aplicar >= 5
+
+
 def test_the_gate_reports_the_ci_failure_streak() -> None:
     # El bloqueo por fallos de Quality debe llegar a la incidencia con su motivo
     # y su cuenta, no diluido en el genérico de convergencia.

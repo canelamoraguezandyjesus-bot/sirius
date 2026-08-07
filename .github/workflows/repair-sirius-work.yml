@@ -43,6 +43,19 @@ jobs:
     name: Corregir con Claude Code
     if: github.event.label.name == 'sirius:repair-requested'
     runs-on: ubuntu-latest
+    # Presupuesto de tiempo explícito y verificado por pruebas estructurales,
+    # con la misma regla que `review-sirius-work.yml`: cada paso que puede
+    # tardar declara su propio `timeout-minutes`, y el del job cubre la SUMA
+    # de todos ellos más margen para los pasos deterministas cortos
+    # (checkout, puerta, etiquetas, preparación del prompt).
+    #
+    # Sin esto, el corrector podía consumir los 45 minutos enteros: GitHub
+    # cancelaba el job y el paso que aplica el veredicto no llegaba a leerlo.
+    # La incidencia quedaba en `sirius:repairing` sin parada ni diagnóstico,
+    # que es exactamente lo que la #135 vino a evitar — y lo que el veredicto
+    # provisional del prompt NO puede evitar por sí solo, porque alguien
+    # tiene que llegar a leerlo.
+    #   corrector 30 + aplicación 5 = 35, dentro de los 45 del job.
     timeout-minutes: 45
     steps:
       - name: Checkout
@@ -236,6 +249,7 @@ jobs:
         if: steps.gate.outputs.valid == 'true'
         id: claude
         continue-on-error: true
+        timeout-minutes: 30
         uses: anthropics/claude-code-action@v1
         env:
           GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
@@ -254,6 +268,7 @@ jobs:
 
       - name: Aplicar el veredicto
         if: always() && steps.gate.outputs.valid == 'true'
+        timeout-minutes: 5
         shell: bash --noprofile --norc {0}
         env:
           GH_TOKEN: ${{ github.token }}
