@@ -299,13 +299,18 @@ class StudioPage(QWidget):
         aside_layout.addWidget(self.context_block)
         aside_layout.addWidget(self.notes_block)
 
+        # La presencia manda arriba y el contexto va pegado debajo; el espacio
+        # que sobra se acumula al final de la columna en vez de abrirse un
+        # hueco entre las dos cosas. La presencia es cuadrada (heightForWidth),
+        # así que ocupa exactamente el ancho de la columna y nada más.
         layout = QVBoxLayout(column)
         layout.setContentsMargins(
             theme.CONTENT_MARGIN, theme.CONTENT_MARGIN, theme.CONTENT_MARGIN, theme.CONTENT_MARGIN
         )
-        layout.setSpacing(20)
-        layout.addWidget(self.presence, 1)
+        layout.setSpacing(24)
+        layout.addWidget(self.presence)
         layout.addWidget(self.aside)
+        layout.addStretch(1)
         return column
 
     def _build_right_column(self) -> QWidget:
