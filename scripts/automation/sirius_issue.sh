@@ -512,6 +512,11 @@ sirius_comment_once() {
   # `notify-sirius-state`) corren en jobs de `timeout-minutes: 5` que además
   # gastan tiempo en sus propias lecturas y mutaciones: el job podía morir antes
   # de que este script llegara a emitir su parada controlada.
+  #
+  # Si alguna vez se reintroduce aquí cualquier repetición del POST, hay que
+  # recuperar con ella una cota TOTAL compartida entre el POST y las lecturas: el
+  # defecto no era el número de intentos, sino reutilizar el mismo número en dos
+  # niveles anidados, que multiplica el presupuesto en vez de acotarlo.
   if gh issue comment "$num" --repo "$repo" --body-file "$file"; then
     return 0
   fi
