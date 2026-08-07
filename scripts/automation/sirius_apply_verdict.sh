@@ -101,14 +101,23 @@ stop_safely() {
     # historial: sin lectura no hay deduplicación, y mutar a ciegas es lo que
     # 6e02b30 cerró. Pero perder el diagnóstico de una parada segura es peor que
     # arriesgar un duplicado, así que aquí se aplica el estado y se publica el
-    # aviso por la vía directa. Es seguro justamente para ESTE marcador: lleva
-    # SIRIUS_RUN_TAG (run + intento), así que un duplicado exigiría que el mismo
-    # intento del mismo run corriera dos veces; y no lo cuenta ninguna medida,
-    # porque `parse_round_records` exige `<!-- sirius-round:N -->` con su bloque
+    # aviso por la vía directa.
+    #
+    # El duplicado es un riesgo REAL dentro de UNA SOLA ejecución, y conviene no
+    # minimizarlo: el POST de `gh issue comment` no es idempotente y
+    # `sirius_retry` lo repite, así que un resultado ambiguo —GitHub acepta la
+    # petición y la respuesta se pierde— ya deja una copia publicada; si además
+    # se agotan los reintentos, `sirius_comment_once` devuelve fallo y esta vía
+    # publica otra. El marcador acota las ejecuciones DISTINTAS; no elimina los
+    # resultados ambiguos del POST.
+    #
+    # Es tolerable para ESTE marcador porque no lo cuenta ninguna medida:
+    # `parse_round_records` exige `<!-- sirius-round:N -->` con su bloque
     # `## RONDA_HALLAZGOS` y `ci_failure_streak` exige marcadores
-    # `sirius-quality:`. Un aviso `precheck` no puede falsear la convergencia ni
-    # la racha de CI. NO se generalice a los registros de ronda, donde publicar
-    # sin deduplicar sí falsearía la medida.
+    # `sirius-quality:`. Un aviso `precheck` repetido es ruido en la incidencia,
+    # no puede falsear la convergencia ni la racha de CI, y perder el
+    # diagnóstico sí sería un fallo silencioso. NO se generalice a los registros
+    # de ronda, donde publicar sin deduplicar sí falsearía la medida.
     echo "::warning::No se pudo registrar la parada segura (${reason}) mediante la transición verificada; aplicando el estado y el aviso de diagnóstico." >&2
     if ! sirius_ensure_label "$REPO" "sirius:failed-safely" "D93F0B" \
       "Estado temporal: fallo operativo detenido de forma segura" \
