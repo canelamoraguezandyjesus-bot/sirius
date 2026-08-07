@@ -504,10 +504,16 @@ def test_las_dos_corridas_usan_fichas_distintas_y_lo_declaran() -> None:
     assert antes["fichas_vigentes"]["T0-control"] == despues["fichas_vigentes"]["T0-control"]  # type: ignore[index]
 
 
-def test_la_corrida_anterior_se_conserva_intacta() -> None:
-    """La `v0.2` no escribe sobre la `v0.1`: son dos ficheros, no uno."""
+def test_las_corridas_anteriores_se_conservan_intactas() -> None:
+    """Ninguna corrida escribe sobre otra: son ficheros distintos.
+
+    Y no es higiene de ficheros. La `v0.2` es el término contra el que se
+    comprueba que el paquete de cierre **no movió la recuperación**; borrarla
+    habría borrado la comprobación, no solo el dato.
+    """
     from experiments.adr002.round import execute_round as ex
 
-    assert ex.SALIDA_v0_1 != ex.SALIDA
-    assert (RAIZ / ex.SALIDA).exists()
-    assert (RAIZ / ex.SALIDA_v0_1).exists()
+    salidas = (ex.SALIDA_v0_1, ex.SALIDA_v0_2, ex.SALIDA)
+    assert len(set(salidas)) == 3, salidas
+    for salida in salidas:
+        assert (RAIZ / salida).exists(), salida
