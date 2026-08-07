@@ -824,6 +824,33 @@ def test_la_criticidad_no_genera_candidatas(completa: fixtures_d.FixtureD) -> No
     assert recuperacion.handoff_a_b05 == {}
 
 
+def test_el_paquete_de_d_no_abre_red_ni_usa_proveedor() -> None:
+    """Sobre el fuente crudo: ninguna de las dos senales sale de la maquina."""
+    prohibidos = (
+        *neutrality.EFECTOS_PROHIBIDOS,
+        *neutrality.IMPORTS_PROHIBIDOS,
+        "openai",
+        "http",
+    )
+    for ruta in sorted((RAIZ / "experiments/adr002/candidates/adr002_d").glob("*.py")):
+        codigo = ruta.read_text(encoding="utf-8")
+        for prohibido in prohibidos:
+            assert prohibido not in codigo, f"{ruta.name}: {prohibido}"
+
+
+_MARCADOR_DEL_CONTROL = "def test_estas_pruebas_no_miden_rendimiento"
+
+
+def test_estas_pruebas_no_miden_rendimiento() -> None:
+    """Medir `ADR002-D` exige una autorizacion de benchmark que no existe."""
+    codigo = Path(__file__).read_text(encoding="utf-8")
+    cuerpo = codigo.split(_MARCADOR_DEL_CONTROL)[0]
+    for prohibido in ("perf_counter", "timeit", "time.time", "p95", "percentil", "latencia"):
+        assert prohibido not in cuerpo, prohibido
+    assert "performance_corpus" not in cuerpo
+    assert "conformance_corpus" not in cuerpo
+
+
 # --------------------------------------------------------------------------
 # Utilidad: construir un contexto de etapa para las pruebas de coordinacion
 # --------------------------------------------------------------------------
