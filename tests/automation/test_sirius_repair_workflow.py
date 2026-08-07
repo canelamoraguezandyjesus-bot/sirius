@@ -166,6 +166,38 @@ def test_the_corrector_prompt_states_the_rule_the_gate_implements() -> None:
     assert "menor gravedad agregada o resolución de hallazgos concretos" not in _source()
 
 
+def test_the_corrector_writes_a_provisional_verdict_before_working() -> None:
+    """El tope duro de turnos hace inalcanzable una regla de «última acción».
+
+    El prompt exigía escribir el veredicto como última acción. Pero el workflow
+    acota al corrector con `--max-turns`, y agotarlo trabajando lo corta a mitad:
+    no hay última acción, el archivo no existe y sale la parada `sin-veredicto`
+    que la regla venía a evitar —la incidencia #135 otra vez—.
+
+    Por eso el veredicto se escribe DOS veces: un `FAILED_SAFELY` provisional al
+    empezar y el definitivo al terminar. Lo escribe el corrector, no el
+    workflow: un veredicto sembrado por el envoltorio se publicaría como suyo
+    sin que lo hubiera emitido, que es el defecto que esta automatización lleva
+    trece hallazgos corrigiendo.
+    """
+    prompt = (REPO_ROOT / "scripts" / "automation" / "prompts" / "corrector.md").read_text(
+        encoding="utf-8"
+    )
+    assert "PRIMERA acción" in prompt
+    assert "ÚLTIMA acción" in prompt
+    assert "--max-turns" in prompt
+    # El provisional es una parada, nunca un éxito: si el corte llega antes de
+    # sustituirlo, la incidencia se detiene en vez de declarar trabajo hecho.
+    provisional = prompt[prompt.index("PRIMERA acción") : prompt.index("ÚLTIMA acción")]
+    assert '"verdict": "FAILED_SAFELY"' in provisional, "el provisional debe ser una parada"
+    for exito in ('"verdict": "FIXED"', "READY_FOR_REVIEW"):
+        assert exito not in provisional, f"el provisional no puede declarar éxito: {exito}"
+    # Y el tope de turnos existe de verdad en el workflow: si desapareciera, esta
+    # regla quedaría explicando una restricción imaginaria.
+    claude = _step(_load(), "Ejecutar Claude Code")
+    assert "--max-turns" in str(claude["with"]["claude_args"])
+
+
 def test_the_gate_reports_the_ci_failure_streak() -> None:
     # El bloqueo por fallos de Quality debe llegar a la incidencia con su motivo
     # y su cuenta, no diluido en el genérico de convergencia.
