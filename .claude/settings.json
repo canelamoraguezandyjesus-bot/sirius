@@ -162,5 +162,28 @@
       "Edit(./**/*.pfx)",
       "Edit(./**/secrets/**)"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run python .claude/hooks/exigir_evidencia_push.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run python .claude/hooks/recordar_parada.py"
+          }
+        ]
+      }
+    ]
   }
 }
