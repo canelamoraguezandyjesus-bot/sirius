@@ -67,3 +67,14 @@ Escribe un único archivo JSON en la ruta exacta de la variable de entorno
 Si no escribes ese archivo, o no es JSON válido, o `verdict` no es uno de los
 valores anteriores, el paso siguiente lo tratará como un fallo y detendrá la
 incidencia de forma segura para revisión humana.
+
+**Escribirlo es tu ÚLTIMA acción, siempre.** No termines el turno sin haberlo
+hecho, pase lo que pase antes: hayas corregido todo, parte, o nada. Cada uno de
+esos desenlaces tiene su valor de `verdict`, así que ninguno es motivo para
+callarse.
+
+Esto no es una formalidad: ya ha ocurrido (incidencia #135) que una ronda
+trabajase durante decenas de turnos y terminase sin escribirlo. Ese trabajo se
+perdió entero y la incidencia quedó detenida esperando a una persona, que es
+justo lo que este paso existe para evitar. Un veredicto `FAILED_SAFELY` con un
+diagnóstico honesto vale infinitamente más que ningún veredicto.

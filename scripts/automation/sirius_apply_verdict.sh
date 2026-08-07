@@ -135,6 +135,17 @@ stop_safely() {
     "$marker" \
     "🔴 **Me he detenido de forma segura**" \
     "$why" >"$body_file"
+  # Contexto observable que el llamador haya recogido (incidencia #135). Una
+  # parada que solo dice "no escribió veredicto" obliga a bucear en el log del
+  # job para saber si el agente llegó a tocar algo; con estos hechos —si hubo
+  # commits, si el árbol quedó sucio, si el archivo existía y con qué tamaño— la
+  # incidencia sola ya distingue "trabajó y no lo declaró" de "no hizo nada".
+  # Se sanea igual que el resto: lo publica la automatización, así que cae del
+  # lado confiable del filtro de autor y lo leen los escáneres deterministas.
+  if [ -n "${SIRIUS_STOP_CONTEXT:-}" ]; then
+    printf '\n%s\n' "$(printf '%s' "$SIRIUS_STOP_CONTEXT" | sanitize_untrusted_text)" \
+      >>"$body_file"
+  fi
   if ! transition "$marker" "$body_file" "sirius:failed-safely" "D93F0B" \
     "Estado temporal: fallo operativo detenido de forma segura"; then
     # La transición verificada se niega a actuar cuando no puede leer el

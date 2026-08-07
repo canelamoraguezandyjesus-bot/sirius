@@ -252,6 +252,42 @@ jobs:
           prompt: ${{ steps.build_prompt.outputs.prompt }}
           claude_args: '--dangerously-skip-permissions --allowedTools "Bash,Read,Write,Edit,Grep,Glob" --max-turns 120'
 
+      # Incidencia #135: el corrector puede terminar "con exito" sin escribir su
+      # veredicto, y entonces la parada segura solo dice "sin-veredicto". Este
+      # paso recoge los hechos que distinguen "trabajo y no lo declaro" de "no
+      # hizo nada", para que la incidencia los lleve escritos y no haya que
+      # bucear en el log del job. Es solo observacion: no decide nada ni puede
+      # volver rojo el flujo.
+      - name: Recoger diagnostico del corrector
+        if: always() && steps.gate.outputs.valid == 'true'
+        id: diagnostico
+        shell: bash --noprofile --norc {0}
+        env:
+          VERDICT_FILE: ${{ runner.temp }}/sirius_verdict.json
+          HEAD_AL_EMPEZAR: ${{ steps.gate.outputs.head_sha }}
+        run: |
+          set -uo pipefail
+          tamano="ausente"
+          [ -f "$VERDICT_FILE" ] && tamano="$(wc -c <"$VERDICT_FILE" | tr -d ' ') bytes"
+          head_ahora="$(git rev-parse HEAD 2>/dev/null || echo desconocido)"
+          sucio="limpio"
+          [ -n "$(git status --porcelain 2>/dev/null)" ] && sucio="con cambios sin confirmar"
+          commits="$(git log --oneline "${HEAD_AL_EMPEZAR}..HEAD" 2>/dev/null | wc -l | tr -d ' ')"
+          {
+            echo "contexto<<FIN_DIAGNOSTICO"
+            echo "<details><summary>Diagnostico del corrector</summary>"
+            echo
+            echo "- Archivo de veredicto: ${tamano}"
+            echo "- Head al empezar: \`${HEAD_AL_EMPEZAR}\`"
+            echo "- Head al terminar: \`${head_ahora}\`"
+            echo "- Commits nuevos en la rama: ${commits}"
+            echo "- Arbol de trabajo: ${sucio}"
+            echo "- Registro del job: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo
+            echo "</details>"
+            echo "FIN_DIAGNOSTICO"
+          } >>"$GITHUB_OUTPUT"
+
       - name: Aplicar el veredicto
         if: always() && steps.gate.outputs.valid == 'true'
         shell: bash --noprofile --norc {0}
@@ -260,6 +296,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           CYCLE: ${{ steps.gate.outputs.cycle }}
+          SIRIUS_STOP_CONTEXT: ${{ steps.diagnostico.outputs.contexto }}
         run: |
           set -uo pipefail
           bash scripts/automation/sirius_apply_verdict.sh \

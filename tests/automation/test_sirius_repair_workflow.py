@@ -172,3 +172,46 @@ def test_the_gate_reports_the_ci_failure_streak() -> None:
     run = _step(_load(), "Evaluar la convergencia")["run"]
     assert 'ci_failures="$(jq -r' in run
     assert "convergencia-${reason}" in run
+
+
+# --------------------------------------------------------------------------- #
+# Diagnóstico de la parada del corrector (incidencia #135)
+# --------------------------------------------------------------------------- #
+
+
+def test_the_diagnosis_runs_after_claude_and_before_applying_the_verdict() -> None:
+    # El orden es lo que hace útil al diagnóstico: tiene que medir el estado que
+    # dejó el corrector y llegar a tiempo de acompañar a la parada segura.
+    doc = _load()
+    nombres = [str(step.get("name") or "") for step in _steps(doc)]
+    claude = next(i for i, n in enumerate(nombres) if "Claude Code" in n)
+    diagnostico = next(i for i, n in enumerate(nombres) if "diagnostico" in n.lower())
+    veredicto = next(i for i, n in enumerate(nombres) if "Aplicar el veredicto" in n)
+    assert claude < diagnostico < veredicto
+
+
+def test_the_diagnosis_never_turns_the_flow_red() -> None:
+    # Es observación, no decisión: si fallara y cortara el job, se perdería la
+    # parada segura que existe justamente para dejar constancia.
+    doc = _load()
+    paso = _step(doc, "diagnostico")
+    assert "always()" in str(paso.get("if") or "")
+
+
+def test_the_diagnosis_reports_what_distinguishes_working_from_doing_nothing() -> None:
+    doc = _load()
+    guion = str(_step(doc, "diagnostico")["run"])
+    # Sin estos hechos, "sin-veredicto" no permite saber si hubo trabajo.
+    assert "git rev-parse HEAD" in guion
+    assert "git status --porcelain" in guion
+    assert "git log --oneline" in guion
+    assert "VERDICT_FILE" in guion
+
+
+def test_the_verdict_step_receives_the_diagnosis() -> None:
+    # Recogerlo sin pasarlo dejaría el diagnóstico solo en el log del job, que
+    # es exactamente el sitio donde no se mira.
+    doc = _load()
+    entorno = _step(doc, "Aplicar el veredicto")["env"]
+    assert "SIRIUS_STOP_CONTEXT" in entorno
+    assert "diagnostico" in str(entorno["SIRIUS_STOP_CONTEXT"])
