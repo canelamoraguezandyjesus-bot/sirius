@@ -82,8 +82,8 @@ def _fichas(**sustituciones: cp.FichaConfirmada) -> list[cp.FichaConfirmada]:
 # --------------------------------------------------------------------------
 
 
-def test_no_queda_ninguna_precondicion_pendiente() -> None:
-    """La comprobación central, ahora del otro lado de la autorización.
+def test_la_unica_precondicion_pendiente_es_la_reaprobacion() -> None:
+    """La comprobación central, otra vez del lado del bloqueo.
 
     Mientras el acta no existía, esta prueba exigía que la **única**
     precondición pendiente fuese la autorización: ni una menos —la guarda no
@@ -94,16 +94,27 @@ def test_no_queda_ninguna_precondicion_pendiente() -> None:
 
     Lo que **no** cambió es lo que vigila: que no falte nada. Comprobar sigue
     sin ser ejecutar.
+
+    Y volvió a faltar algo. El paquete de corrección cambió lo que los cuatro
+    candidatos hacen, de modo que sus fichas emitieron sucesora, y una ficha
+    nueva necesita un acto de gobierno nuevo: congelar es técnico, aprobar no.
+    La única precondición pendiente es esa reaprobación, y lo será hasta que
+    exista.
     """
     resultado = run_round.comprobar(run_round.dependencias_reales(RAIZ))
-    assert resultado.fallos == ()
-    assert resultado.puede_ejecutar is True
+    assert [f.split(":")[0] for f in resultado.fallos] == [rp.MOTIVO_ACTA_PENDIENTE] * 4
+    assert resultado.puede_ejecutar is False
 
 
-def test_con_el_acta_presente_no_queda_ninguna_precondicion() -> None:
-    """Fingir el acta desbloquea, y sólo eso: el documento **es** la guarda."""
+def test_con_las_actas_presentes_no_queda_ninguna_precondicion() -> None:
+    """Fingir las actas desbloquea, y sólo eso: los documentos **son** la guarda."""
     precondiciones = rp.comprobar_precondiciones(
-        _entorno(presentes=[ACTA_DE_AUTORIZACION]),
+        _entorno(
+            presentes=[
+                ACTA_DE_AUTORIZACION,
+                *(f"docs/architecture/{a}" for a in set(rp.ACTAS_DE_PREPARACION.values())),
+            ]
+        ),
         fichas_congeladas=_fichas(),
     )
     assert precondiciones.fallos == ()
@@ -150,14 +161,22 @@ def test_el_recorrido_devuelve_bloqueo_si_falta_el_acta() -> None:
     assert run_round.main(["--check"], dependencias=dependencias) == run_round.CODIGO_BLOQUEADO
 
 
-def test_el_recorrido_pasa_las_precondiciones_pero_no_ejecuta() -> None:
+def test_con_todo_en_su_sitio_el_recorrido_pasa_pero_no_ejecuta() -> None:
     """Preparado nunca es ejecutado: comprobar no abre una sola ventana.
 
-    El código de salida dice que se puede medir; que no se haya medido lo dice
-    `test_la_salida_prevista_no_existe_todavia`, que sigue en verde.
+    Se finge lo único que falta —la reaprobación— para poder comprobar que,
+    cuando no falte, el recorrido **sigue sin medir**. Que no haya medido lo
+    dice `test_comprobar_no_crea_nada`, que sigue en verde.
     """
-    codigo = run_round.main(["--check"], dependencias=run_round.dependencias_reales(RAIZ))
-    assert codigo == run_round.CODIGO_OK
+    dependencias = run_round.DependenciasRonda(
+        entorno_custodia=_entorno(
+            presentes=[f"docs/architecture/{a}" for a in set(rp.ACTAS_DE_PREPARACION.values())]
+        ),
+        fichas_congeladas=_fichas(),
+        neutralidad=(),
+        aislamiento={},
+    )
+    assert run_round.main(["--check"], dependencias=dependencias) == run_round.CODIGO_OK
 
 
 def test_no_hay_bandera_que_salte_la_guarda() -> None:
@@ -197,8 +216,12 @@ def test_cada_candidato_tiene_acta_de_preparacion_y_el_control_no() -> None:
     """Congelar es un acto técnico; preparar es un acto de gobierno."""
     assert set(rp.ACTAS_DE_PREPARACION) == set(cp.ALTERNATIVAS)
     assert cp.CONTROL not in rp.ACTAS_DE_PREPARACION
-    for acta in set(rp.ACTAS_DE_PREPARACION.values()):
-        assert (RAIZ / "docs/architecture" / acta).exists(), acta
+    #: El acta pendiente **no** se exige aquí a propósito: su ausencia es lo que
+    #: `test_la_unica_precondicion_pendiente_es_la_reaprobacion` mide, y exigirla
+    #: en dos sitios haría que un solo hecho fallase dos veces diciendo lo mismo.
+    assert set(rp.VERSION_APROBADA_POR_ACTA) == set(cp.ALTERNATIVAS)
+    for candidato, version in rp.VERSION_APROBADA_POR_ACTA.items():
+        assert rp.FICHAS_VIGENTES[candidato][0] == version, candidato
 
 
 def test_una_acta_de_preparacion_ausente_bloquea() -> None:

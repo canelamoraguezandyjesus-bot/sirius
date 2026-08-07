@@ -71,20 +71,32 @@ PARTICIPANTES: Final[tuple[str, ...]] = cp.CANDIDATOS
 #: (`ADR002-TOL-210`).
 FICHAS_VIGENTES: Final[Mapping[str, tuple[int, str]]] = {
     "T0-control": (1, "d47a767e61b30729e15f48c9924413f6fddc9429"),
-    "ADR002-A": (5, "b5549a5a8e0f2fa4e791f64fbdb1c769938949be"),
-    "ADR002-B": (7, "33a7617dc8713d7dc29fce1877b7c41d689f25d7"),
-    "ADR002-C": (2, "5e034078eb1d01ef6485cfd10707ce30f92ed7e5"),
-    "ADR002-D": (2, "7cc6ccc9afab331322cc45da17215def2566beae"),
+    "ADR002-A": (6, "d305073ce5bb21a07e8523969752a9f06a966d01"),
+    "ADR002-B": (8, "b7ea269da379fc0de324efa5ca2da7baa616d112"),
+    "ADR002-C": (3, "a794f0b216c24c2211e98369e6b824cc509016fb"),
+    "ADR002-D": (3, "13f4fc9c6ae7c1bb1d6b747597e584af0845f8a7"),
+}
+
+#: Version que el acta de preparacion de cada candidato aprueba. Sin esto, la
+#: comprobacion solo miraba que el acta **existiera**, y un acta que aprobo la
+#: v5 dejaba correr la v6: la ronda habria medido bajo una ficha que nadie
+#: aprobo. Congelar es tecnico, preparar es de gobierno, y el gobierno se
+#: pronuncia sobre **una** version, no sobre un nombre de candidato.
+VERSION_APROBADA_POR_ACTA: Final[Mapping[str, int]] = {
+    "ADR002-A": 6,
+    "ADR002-B": 8,
+    "ADR002-C": 3,
+    "ADR002-D": 3,
 }
 
 #: Actas de gobierno que declaran preparado a cada participante. El control no
 #: tiene acta de preparación: la suya es la de autorización de `T0` bajo
 #: TOL-208, que ya se ejecutó, y su ficha basta.
 ACTAS_DE_PREPARACION: Final[Mapping[str, str]] = {
-    "ADR002-A": "SIRIUS_0.2_ADR_002_REAPROBACION_CONJUNTA_A_V5_Y_B_V7_v1.0.md",
-    "ADR002-B": "SIRIUS_0.2_ADR_002_REAPROBACION_CONJUNTA_A_V5_Y_B_V7_v1.0.md",
-    "ADR002-C": "SIRIUS_0.2_ADR_002_ADR002_C_V2_PREPARADO_BENCHMARK_APROBACION_v1.0.md",
-    "ADR002-D": "SIRIUS_0.2_ADR_002_ADR002_D_V2_PREPARADO_BENCHMARK_APROBACION_v1.0.md",
+    "ADR002-A": "SIRIUS_0.2_ADR_002_REAPROBACION_SUCESORAS_TRAS_CORRECCION_v1.0.md",
+    "ADR002-B": "SIRIUS_0.2_ADR_002_REAPROBACION_SUCESORAS_TRAS_CORRECCION_v1.0.md",
+    "ADR002-C": "SIRIUS_0.2_ADR_002_REAPROBACION_SUCESORAS_TRAS_CORRECCION_v1.0.md",
+    "ADR002-D": "SIRIUS_0.2_ADR_002_REAPROBACION_SUCESORAS_TRAS_CORRECCION_v1.0.md",
 }
 
 # --------------------------------------------------------------------------
@@ -483,6 +495,7 @@ __all__ = [
     "EVIDENCIA_PROPIA_DE_D",
     "FAMILIA_DE_CONFORMIDAD",
     "FICHAS_VIGENTES",
+    "VERSION_APROBADA_POR_ACTA",
     "LINEA_BASE_REDERIVADA",
     "PARTICIPANTES",
     "PERFIL_Y_SUELO",
