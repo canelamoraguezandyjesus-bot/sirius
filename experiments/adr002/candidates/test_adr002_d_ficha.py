@@ -1,6 +1,6 @@
 """``ADR002-D``: que la ficha diga lo que el codigo hace, y en ese orden.
 
-Se ejecutan **solo despues** de que ``ficha_ADR002-D_v1.json`` sea ancestro
+Se ejecutan **solo despues** de que ``ficha_ADR002-D_v2.json`` sea ancestro
 estricto del commit que las corre, que es la regla 3 de ``TOL-210``: una
 ejecucion que no venga precedida por su ficha no es evidencia utilizable.
 
@@ -33,12 +33,15 @@ from experiments.adr002.candidates.adr002_d.candidate import (
 from experiments.adr002.cards import card_protocol as cp
 
 RAIZ = Path(__file__).resolve().parents[3]
-FICHA: Final = "artifacts/adr002_cards/ficha_ADR002-D_v1.json"
+FICHA: Final = "artifacts/adr002_cards/ficha_ADR002-D_v2.json"
 IMPLEMENTACION: Final = "experiments/adr002/candidates/adr002_d/candidate.py"
 ACTA: Final = f"docs/architecture/{ACTA_DEL_ORDEN}"
 
-#: Se fija al congelar la v1; si quedara desactualizada, la cita fallaria.
-HUELLA_FICHA_D_V1: Final = "21ce3848472eb44162794ab66254b8b541d870ce"
+#: Se fija al congelar la v2; si quedara desactualizada, la cita fallaria.
+HUELLA_FICHA_D_V2: Final = "e1eab1089241fbda7494e33d3362f79dd596168e"
+
+#: La v1, conservada y marcada, con la huella que la sustitucion recomputo.
+HUELLA_FICHA_D_V1_SUSTITUIDA: Final = "0ca203f07ebc550a4e37f956f92aa1723f927572"
 
 HUELLA_A_V5: Final = "b5549a5a8e0f2fa4e791f64fbdb1c769938949be"
 HUELLA_B_V7: Final = "33a7617dc8713d7dc29fce1877b7c41d689f25d7"
@@ -77,7 +80,7 @@ def _la_ficha_es_ancestro_estricto() -> bool:
 pytestmark = pytest.mark.skipif(
     not _la_ficha_es_ancestro_estricto(),
     reason=(
-        "la ficha ADR002-D v1 aun no es ancestro estricto: ejecutar ahora "
+        "la ficha ADR002-D v2 aun no es ancestro estricto: ejecutar ahora "
         "produciria evidencia no utilizable (TOL-210, regla 3)"
     ),
 )
@@ -95,7 +98,7 @@ def ficha() -> dict:
 
 def test_la_ficha_d_es_anterior_estricta_a_esta_ejecucion() -> None:
     entrada = _commit_de_entrada(FICHA)
-    assert entrada, "la ficha v1 de ADR002-D no esta confirmada en el repositorio"
+    assert entrada, "la ficha v2 de ADR002-D no esta confirmada en el repositorio"
     assert _es_ancestro(entrada, _git("rev-parse", "HEAD"))
 
 
@@ -122,10 +125,10 @@ def test_el_orden_se_congelo_antes_que_la_ficha() -> None:
 def test_la_ficha_declara_la_identidad_correcta(ficha: dict) -> None:
     assert ficha["identidad"]["candidato"] == "ADR002-D"
     assert ficha["identidad"]["papel"] == cp.PAPEL_CANDIDATO
-    assert ficha["identidad"]["version"] == 1
-    assert ficha["identidad"]["sustituye_a"] is None
+    assert ficha["identidad"]["version"] == 2
+    assert ficha["identidad"]["sustituye_a"] == 1
     assert ficha["estado"] == cp.ESTADO_CONGELADA
-    assert ficha["congelacion"]["huella"] == HUELLA_FICHA_D_V1
+    assert ficha["congelacion"]["huella"] == HUELLA_FICHA_D_V2
     assert ficha["no_contiene_resultados"] is True
 
 
@@ -134,9 +137,19 @@ def test_la_huella_declarada_se_recomputa(ficha: dict) -> None:
     assert cp.huella_canonica(ficha) == ficha["congelacion"]["huella"]
 
 
-def test_es_la_unica_ficha_de_d_y_esta_congelada() -> None:
+def test_la_v1_se_conserva_marcada_y_la_v2_es_la_unica_congelada() -> None:
+    """Una ficha sustituida se marca, no se borra ni se reescribe."""
     fichas = sorted((RAIZ / "artifacts/adr002_cards").glob("ficha_ADR002-D_*.json"))
-    assert [ruta.name for ruta in fichas] == ["ficha_ADR002-D_v1.json"]
+    assert [ruta.name for ruta in fichas] == [
+        "ficha_ADR002-D_v1.json",
+        "ficha_ADR002-D_v2.json",
+    ]
+    v1 = json.loads(
+        (RAIZ / "artifacts/adr002_cards/ficha_ADR002-D_v1.json").read_text(encoding="utf-8")
+    )
+    assert v1["estado"] == cp.ESTADO_SUSTITUIDA
+    assert v1["congelacion"]["huella"] == HUELLA_FICHA_D_V1_SUSTITUIDA
+    assert cp.huella_canonica(v1) == HUELLA_FICHA_D_V1_SUSTITUIDA
 
 
 # --------------------------------------------------------------------------

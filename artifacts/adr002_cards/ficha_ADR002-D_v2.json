@@ -1,7 +1,7 @@
 {
-  "documento": "Ficha de candidato ADR002-D, version 1",
+  "documento": "Ficha de candidato ADR002-D, version 2",
   "version_esquema": "ficha-candidato-0.2",
-  "estado": "SUSTITUIDA",
+  "estado": "CONGELADA",
   "plantilla": "SIRIUS_0.2_ADR_002_FICHA_CANDIDATO_TEMPLATE_v0.4_PROPUESTO.md",
   "registro": "SIRIUS_0.2_REGISTRO_TOLERANCIAS_v0.5_PROPUESTO.md",
   "protocolo": "SIRIUS_0.2_ADR_002_PROTOCOLO_MEDICION_v0.2_PROPUESTO.md",
@@ -14,13 +14,13 @@
   "identidad": {
     "candidato": "ADR002-D",
     "papel": "CANDIDATO",
-    "version": 1,
-    "sustituye_a": null,
-    "motivo_de_sustitucion": null
+    "version": 2,
+    "sustituye_a": 1,
+    "motivo_de_sustitucion": "sustituye a la v1 por dos defectos del coordinador que la revision independiente de Codex encontro sobre el HEAD 85a21c5, ambos reproducidos antes de corregirlos. PRIMERO: el orden observado se acumulaba durante toda la vida del objeto, de modo que reutilizar la misma instancia abortaba la SEGUNDA recuperacion como si repitiese una senal; el protocolo de medicion exige 100 repeticiones por magnitud, asi que el defecto habria roto el benchmark entero. Ahora el orden observado tiene alcance de ronda, y una ronda empieza cuando la etapa preguntada no avanza. SEGUNDO: la tabla de despacho era un diccionario, y Final solo prohibe reasignar el nombre; escribir la senal vectorial en E3 bastaba para que el despachador la ejecutase alli y la comprobacion de orden llegase cuando el sidecar ya estaba abierto y consultado. Ahora es una vista inmutable y esa escritura es un TypeError. Ademas, el orden se comprueba ANTES de ejecutar la senal y no despues: para una restriccion que existe para que una senal no actue fuera de su etapa, abortar tarde es no cumplirla. La semantica declarada por la v1 NO cambia: mismas dos senales, mismas dos etapas, mismo orden congelado E3 relacional y despues E4 vectorial, mismas cotas y mismos limites. La v1 nunca llego a aprobarse; esta version la sustituye antes de que ninguna aprobacion la ampare"
   },
   "congelacion": {
-    "commit_de_referencia": "bfaa8c973b4622feae3b0c72be6f5a2bd3dda9bb",
-    "huella": "0ca203f07ebc550a4e37f956f92aa1723f927572",
+    "commit_de_referencia": "0f7417b5045f4d80c9b36a902626eec677838565",
+    "huella": "e1eab1089241fbda7494e33d3362f79dd596168e",
     "ruta": "artifacts/adr002_cards/ficha_ADR002-D_v1.json"
   },
   "arquitectura": {
@@ -115,7 +115,7 @@
     {
       "papel": "coordinador de senales tardias",
       "nombre": "despachador por etapa de ADR002-D (experiments/adr002/candidates/adr002_d/candidate.py)",
-      "version": "arbol 2c2d22621e6860140b4141c1c3619511e4e745b5 de adr002_d; orden congelado por SIRIUS_0.2_ADR_002_ORDEN_CONGELADO_DE_LAS_ETAPAS_TARDIAS_DE_ADR002_D_v1.0.md",
+      "version": "arbol 066c18b607cc58c3ed2d0cc278decfd65bd2219a de adr002_d; orden congelado por SIRIUS_0.2_ADR_002_ORDEN_CONGELADO_DE_LAS_ETAPAS_TARDIAS_DE_ADR002_D_v1.0.md",
       "origen": "propio de ADR002-D: no existe en A, B ni C, y es lo unico que este candidato anade sobre las piezas que reutiliza",
       "acopla_a_proveedor": false,
       "ruta_de_sustitucion": "es la realizacion EXPERIMENTAL de la separacion que ARQ-00 §23 pone a prueba; cambiar el orden o permitir dos senales en una etapa dejaria de ser ADR002-D y exigiria decision aprobada y ficha sucesora"
@@ -319,8 +319,8 @@
     "comprobacion_propuesta": "tras la purga, inspeccion de los ficheros del canon y del sidecar y busqueda del payload literal en el soporte; la comprobacion se ejecuta bajo autorizacion de benchmark, no aqui"
   },
   "huella_candidato": {
-    "commit_del_prototipo": "bfaa8c973b4622feae3b0c72be6f5a2bd3dda9bb",
-    "hash_del_arbol_de_fuentes": "arbol Git 230f5d5ecebbea6f7f6d89e6dca772329f4266d1 de experiments/adr002/candidates en el commit que implementa ADR002-D; subarboles: 30984c1f054fc47b12f708fad23ddf617a46645c (common, sin cambios), ceb4247c9fee913ae86d5203f199b19341f1c833 (adr002_a, sin cambios), 43eaa374d6eef827599472588a54494be9704565 (adr002_b, sin cambios), 6767fb9f3bc276fe0361174c300634dc0cef4860 (adr002_c, sin cambios) y 2c2d22621e6860140b4141c1c3619511e4e745b5 (adr002_d, propio de este candidato)",
+    "commit_del_prototipo": "0f7417b5045f4d80c9b36a902626eec677838565",
+    "hash_del_arbol_de_fuentes": "arbol Git 2f80c0800cfe6d8463d847b078e78a00ce83502b de experiments/adr002/candidates en el commit que implementa ADR002-D; subarboles: 30984c1f054fc47b12f708fad23ddf617a46645c (common, sin cambios), ceb4247c9fee913ae86d5203f199b19341f1c833 (adr002_a, sin cambios), 43eaa374d6eef827599472588a54494be9704565 (adr002_b, sin cambios), 6767fb9f3bc276fe0361174c300634dc0cef4860 (adr002_c, sin cambios) y 066c18b607cc58c3ed2d0cc278decfd65bd2219a (adr002_d, propio de este candidato)",
     "migraciones_o_ddl": "ninguna sobre el canon: ADR002-D usa la cadena canonica de Alembic hasta 61be4bb269bf sin anadir migraciones ni DDL al canon. El unico DDL nuevo es el del sidecar vectorial declarado en el §2.11, creado en un fichero separado y descartable; el plano relacional no es derivado y no lo crea este candidato",
     "artefactos_y_su_hash": "ninguno generado por adelantado: el sidecar se construye desde el canon cuando se necesita, registra la huella SHA-256 de su canon de origen en sus metadatos y no se versiona en el repositorio; el plano relacional lo materializa la proyeccion experimental v0.1, de huella logica 755cbdfea35969dc570ac9a94a23581f8e433c3575220d344e85c6cb2c47e33d",
     "reproduccion": "uv run pytest experiments/adr002/candidates -q; la ejecucion sobre el corpus oficial exige una autorizacion de benchmark que no existe"

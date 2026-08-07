@@ -231,10 +231,20 @@ HASHES_NO_ALMACENADOS: Final[Mapping[str, str]] = {
         "contenido de senal vectorial"
     ),
     "21ce3848472eb44162794ab66254b8b541d870ce": (
-        "huella canonica de la ficha ADR002-D v1, la primera del candidato de dos "
-        "senales tardias separadas: se congela despues del acta que congelo el orden "
-        "de sus etapas y antes de su primera ejecucion oficial, y no procede de "
-        "ningun resultado observado"
+        "huella canonica que la ficha ADR002-D v1 tuvo mientras estuvo CONGELADA. La "
+        "sustituyo la v2 al corregir los dos defectos del coordinador que la revision "
+        "independiente encontro, y marcarla SUSTITUIDA recomputo su huella; se conserva "
+        "inventariada porque el acta de la correccion la cita, y esa cita es historia"
+    ),
+    "0ca203f07ebc550a4e37f956f92aa1723f927572": (
+        "huella canonica de la ficha ADR002-D v1 ya SUSTITUIDA: el estado forma parte de "
+        "la forma canonica, de modo que marcarla sustituida —lo que el contrato obliga a "
+        "hacer al emitir una sucesora— la recomputo. Ninguna declaracion de la v1 cambio"
+    ),
+    "e1eab1089241fbda7494e33d3362f79dd596168e": (
+        "huella canonica de la ficha ADR002-D v2, la vigente: corrige el alcance del orden "
+        "observado y la inmutabilidad de la tabla de despacho, sin cambiar ni una de las "
+        "declaraciones semanticas de la v1"
     ),
     "5d5e13eb702b1ffeb4403d7a5441f4da3c65b66b": (
         "huella canonica de la ficha ADR002-C v1, la primera del candidato "
