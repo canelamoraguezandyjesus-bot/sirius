@@ -241,7 +241,7 @@ HASHES_NO_ALMACENADOS: Final[Mapping[str, str]] = {
         "la forma canonica, de modo que marcarla sustituida —lo que el contrato obliga a "
         "hacer al emitir una sucesora— la recomputo. Ninguna declaracion de la v1 cambio"
     ),
-    "e1eab1089241fbda7494e33d3362f79dd596168e": (
+    "7cc6ccc9afab331322cc45da17215def2566beae": (
         "huella canonica de la ficha ADR002-D v2, la vigente: corrige el alcance del orden "
         "observado y la inmutabilidad de la tabla de despacho, sin cambiar ni una de las "
         "declaraciones semanticas de la v1"

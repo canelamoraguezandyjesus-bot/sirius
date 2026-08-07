@@ -20,8 +20,8 @@
   },
   "congelacion": {
     "commit_de_referencia": "0f7417b5045f4d80c9b36a902626eec677838565",
-    "huella": "e1eab1089241fbda7494e33d3362f79dd596168e",
-    "ruta": "artifacts/adr002_cards/ficha_ADR002-D_v1.json"
+    "huella": "7cc6ccc9afab331322cc45da17215def2566beae",
+    "ruta": "artifacts/adr002_cards/ficha_ADR002-D_v2.json"
   },
   "arquitectura": {
     "alternativa_minima": "ADR002-D",

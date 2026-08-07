@@ -38,7 +38,7 @@ IMPLEMENTACION: Final = "experiments/adr002/candidates/adr002_d/candidate.py"
 ACTA: Final = f"docs/architecture/{ACTA_DEL_ORDEN}"
 
 #: Se fija al congelar la v2; si quedara desactualizada, la cita fallaria.
-HUELLA_FICHA_D_V2: Final = "e1eab1089241fbda7494e33d3362f79dd596168e"
+HUELLA_FICHA_D_V2: Final = "7cc6ccc9afab331322cc45da17215def2566beae"
 
 #: La v1, conservada y marcada, con la huella que la sustitucion recomputo.
 HUELLA_FICHA_D_V1_SUSTITUIDA: Final = "0ca203f07ebc550a4e37f956f92aa1723f927572"
