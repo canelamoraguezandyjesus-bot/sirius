@@ -2,10 +2,9 @@ import threading
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import pytest
-from PySide6.QtWidgets import QTabWidget
 from pytestqt.qtbot import QtBot
 
 from sirius.adapters.llm.token_counter import CharacterHeuristicTokenCounter
@@ -162,7 +161,9 @@ def test_main_window_shows_the_project_continuity_widget_in_the_conversation_tab
     window = _build_window(database_path)
     qtbot.addWidget(window)
 
-    tabs = cast(QTabWidget, window.centralWidget())
+    # El widget central es el conmutador entre la interfaz técnica y Model
+    # Studio; las pestañas siguen existiendo igual, ahora con acceso directo.
+    tabs = window.tabs
     assert tabs.count() == 3
     assert tabs.tabText(0) == "Conversación"
     assert tabs.tabText(1) == "Memoria y decisiones"

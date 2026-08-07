@@ -507,7 +507,7 @@ def test_settings_tab_is_a_resizable_scroll_area_reaching_the_restore_section(
     assert window.size().width() == 900
     assert window.size().height() == 620
 
-    tabs = window.centralWidget()
+    tabs = window.tabs
     assert isinstance(tabs, QTabWidget)
     assert tabs.tabText(2) == "Configuración"
     settings_page = tabs.widget(2)
@@ -1000,7 +1000,7 @@ def _shown_settings_window(qtbot: QtBot, window: MainWindow) -> MainWindow:
     """La ventana real, a su tamaño por omisión, con Configuración delante."""
     qtbot.addWidget(window)
     window.show()
-    tabs = window.centralWidget()
+    tabs = window.tabs
     assert isinstance(tabs, QTabWidget)
     tabs.setCurrentIndex(2)
     qtbot.waitUntil(lambda: window.validate_backup_button.width() > 0, timeout=5000)

@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSplitter,
+    QStackedWidget,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -47,6 +48,7 @@ from sirius.application.get_conversation_history import (
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
 from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.project_continuity import ProjectContinuityUseCase
+from sirius.application.project_errors import ProjectContinuityError
 from sirius.application.project_lifecycle import ProjectLifecycleUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
@@ -62,6 +64,7 @@ from sirius.config.llm_provider_settings import (
 )
 from sirius.config.settings import load_settings, save_settings
 from sirius.domain.conversation import MessageRole, MessageStatus
+from sirius.domain.model_studio import StudioInteractionState
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.backup import (
     BackupManifest,
@@ -80,6 +83,7 @@ from sirius.presentation.error_messages import failed_send_message
 from sirius.presentation.export_worker import ExportWorker
 from sirius.presentation.knowledge_widget import KnowledgeWidget
 from sirius.presentation.message_view import MessageItemDelegate, MessageItemWidget
+from sirius.presentation.model_studio.studio_page import StudioPage
 from sirius.presentation.project_continuity_widget import ProjectContinuityWidget
 
 _logger = get_logger(__name__)
@@ -96,6 +100,11 @@ _SIDE_PANEL_MAXIMUM_WIDTH = 420
 # Margen para considerar que la vista está «al final» del historial: el usuario
 # que está leyendo el último mensaje no siempre queda en el píxel exacto.
 _AT_BOTTOM_TOLERANCE_PX = 8
+
+# Páginas del widget central. Model Studio no sustituye la interfaz técnica:
+# convive con ella y se conmuta.
+TECHNICAL_PAGE_INDEX = 0
+MODEL_STUDIO_PAGE_INDEX = 1
 
 # Estados con los que termina cualquier operación de copia de seguridad. Se
 # guardan además en la propiedad ``siriusBackupState`` de la etiqueta que los
@@ -255,13 +264,23 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Sirius 0.1")
         self.resize(900, 620)
 
-        tabs = QTabWidget()
-        tabs.addTab(self._build_conversation_tab(), "Conversación")
-        tabs.addTab(self._build_knowledge_tab(), "Memoria y decisiones")
-        tabs.addTab(self._build_settings_tab(), "Configuración")
-        self.setCentralWidget(tabs)
+        self.tabs = QTabWidget()
+        self.tabs.addTab(self._build_conversation_tab(), "Conversación")
+        self.tabs.addTab(self._build_knowledge_tab(), "Memoria y decisiones")
+        self.tabs.addTab(self._build_settings_tab(), "Configuración")
+
+        # Model Studio es una página conmutable de esta misma ventana, no una
+        # segunda aplicación (SIRIUS-MODEL-STUDIO-UI-001 §2): mismo proceso,
+        # misma base de datos y los mismos casos de uso. La interfaz técnica
+        # queda intacta en la página 0 y conmutar oculta por completo la barra
+        # de pestañas, que es lo que da el modo limpio de §9.1 sin trucos.
+        self._pages = QStackedWidget()
+        self._pages.addWidget(self._build_technical_page())
+        self._pages.addWidget(self._build_studio_page())
+        self.setCentralWidget(self._pages)
 
         self._load_history()
+        self._refresh_studio_context()
 
     def _default_show_warning(self, title: str, text: str) -> None:
         QMessageBox.warning(self, title, text)
@@ -308,6 +327,95 @@ class MainWindow(QMainWindow):
         return QFileDialog.getExistingDirectory(self, title)
 
     # --- Conversación --------------------------------------------------
+
+    # --- Model Studio ----------------------------------------------------
+
+    def _build_technical_page(self) -> QWidget:
+        """Página 0: la interfaz de siempre, con el acceso a Model Studio arriba.
+
+        El contenido no cambia en nada; solo se le antepone el botón que abre
+        la superficie de grabación.
+        """
+        self.open_studio_button = QPushButton("Model Studio")
+        self.open_studio_button.setToolTip(
+            "Abrir la superficie audiovisual de Sirius, pensada para grabar."
+        )
+        self.open_studio_button.setAccessibleName("Abrir Model Studio")
+        self.open_studio_button.clicked.connect(self.open_model_studio)
+
+        header = QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
+        header.addStretch(1)
+        header.addWidget(self.open_studio_button)
+
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(6, 6, 6, 0)
+        layout.setSpacing(6)
+        layout.addLayout(header)
+        layout.addWidget(self.tabs, 1)
+        return page
+
+    def _build_studio_page(self) -> QWidget:
+        """Página 1: Model Studio.
+
+        La página es solo una vista: recibe la conversación ya resuelta por
+        esta ventana y devuelve intenciones por señales. No conoce casos de
+        uso ni proveedores, así que conectar después la voz o la captura no
+        obliga a tocarla.
+        """
+        self.studio_page = StudioPage()
+        self.studio_page.send_requested.connect(self._handle_studio_send)
+        self.studio_page.cancel_requested.connect(self._handle_cancel_clicked)
+        self.studio_page.exit_requested.connect(self.close_model_studio)
+        return self.studio_page
+
+    @property
+    def model_studio_open(self) -> bool:
+        return self._pages.currentIndex() == MODEL_STUDIO_PAGE_INDEX
+
+    def open_model_studio(self) -> None:
+        """Conmuta a la superficie de grabación. Idempotente."""
+        self._pages.setCurrentIndex(MODEL_STUDIO_PAGE_INDEX)
+        self._refresh_studio_context()
+        self.studio_page.input.setFocus()
+
+    def close_model_studio(self) -> None:
+        """Vuelve a la interfaz técnica, saliendo antes del modo limpio."""
+        if self.studio_page.clean_mode:
+            self.studio_page.toggle_clean_mode()
+        self._pages.setCurrentIndex(TECHNICAL_PAGE_INDEX)
+
+    def _handle_studio_send(self, text: str) -> None:
+        """Envío pedido desde Model Studio.
+
+        Pasa por el mismo ``_start_send`` que la interfaz técnica —y por tanto
+        por el mismo ``SendMessageUseCase``, la misma identidad, la misma
+        memoria y el mismo historial—, con los mismos bloqueos.
+        """
+        if not text.strip():
+            return
+        if self._is_sending or self._is_backup_busy or self._is_export_busy:
+            return
+        self._start_send(text)
+
+    def _refresh_studio_context(self) -> None:
+        """Alimenta la columna izquierda con el proyecto activo y su contexto.
+
+        Un proyecto sin configurar no es un error que deba verse al grabar:
+        la columna lo dice en lenguaje claro y la conversación sigue igual.
+        """
+        try:
+            summary = self._project_continuity_use_case.get_summary()
+        except ProjectContinuityError:
+            self.studio_page.set_project_name("")
+            self.studio_page.set_context_summary("")
+            return
+        self.studio_page.set_project_name(summary.name)
+        self.studio_page.set_context_summary(summary.current_state)
+
+    def _mirror_studio_state(self, state: StudioInteractionState) -> None:
+        self.studio_page.set_interaction_state(state)
 
     def _build_conversation_tab(self) -> QWidget:
         self.project_continuity_widget = ProjectContinuityWidget(
@@ -492,6 +600,7 @@ class MainWindow(QMainWindow):
         afterwards) stays, because it is really there.
         """
         self.message_list.clear()
+        self.studio_page.clear_history()
         self._streaming_item = None
         try:
             messages = self._get_history_use_case.get_history()
@@ -576,6 +685,11 @@ class MainWindow(QMainWindow):
             prefix, self._compose_markdown_body(content, status), bold=role is MessageRole.SIRIUS
         )
         item.setSizeHint(widget.sizeHint())
+
+        # Model Studio es una segunda vista de la MISMA conversación: se
+        # alimenta desde aquí en vez de repetir la lógica de envío, historial
+        # y streaming, que sigue viviendo en un solo sitio.
+        self.studio_page.append_message(role, content, status)
         return item
 
     def _sync_item_height(self, item: QListWidgetItem, widget: MessageItemWidget) -> None:
@@ -645,6 +759,8 @@ class MainWindow(QMainWindow):
         self.context_panel_widget.set_external_busy(True)
         self.status_label.setText("Sirius está pensando...")
         self.error_label.setText("")
+        self.studio_page.set_error("")
+        self._mirror_studio_state(StudioInteractionState.PENSANDO)
         self._update_retry_button()
 
         self._append_message_item(MessageRole.USER, text)
@@ -689,6 +805,7 @@ class MainWindow(QMainWindow):
         if isinstance(widget, MessageItemWidget):
             widget.set_streaming_text("Sirius", self._streaming_text, bold=True)
             self._sync_item_height(self._streaming_item, widget)
+        self.studio_page.update_last_message(self._streaming_text, MessageStatus.COMPLETED)
 
     def _on_finished(self, result: SendMessageResult) -> None:
         # ``result.sirius_message`` is the row SendMessageUseCase actually
@@ -715,12 +832,17 @@ class MainWindow(QMainWindow):
                     bold=True,
                 )
                 self._sync_item_height(self._streaming_item, widget)
+            self.studio_page.update_last_message(
+                result.sirius_message.content, result.sirius_message.status
+            )
 
         operation_id = result.sirius_message.operation_id
         if result.outcome is MessageStatus.CANCELLED:
             self.error_label.setText("Envío cancelado.")
+            self.studio_page.set_error("Envío cancelado.")
         elif result.outcome is MessageStatus.FAILED:
             self.error_label.setText(failed_send_message(result.error_kind, operation_id))
+            self.studio_page.set_error(failed_send_message(result.error_kind, operation_id))
             # Only a genuine failure offers "Reintentar" (D-05/B7b): a
             # CANCELLED outcome is a deliberate stop and never sets this.
             self._last_failed_text = self._active_send_text
@@ -732,6 +854,7 @@ class MainWindow(QMainWindow):
         operation_id = self._active_operation_id
         self._replace_history_with_authoritative_state()
         self.error_label.setText(failed_send_message(None, operation_id))
+        self.studio_page.set_error(failed_send_message(None, operation_id))
         self._last_failed_text = self._active_send_text
         self._finish_sending()
 
@@ -751,6 +874,14 @@ class MainWindow(QMainWindow):
         self.project_continuity_widget.set_external_busy(False)
         self.knowledge_widget.set_external_busy(False)
         self.context_panel_widget.set_external_busy(False)
+        # Un fallo deja el estado en ERROR y el motivo a la vista; un envío
+        # normal vuelve a PREPARADO. En ninguno de los dos casos la superficie
+        # se queda colgada en PENSANDO.
+        self._mirror_studio_state(
+            StudioInteractionState.ERROR
+            if self._last_failed_text is not None
+            else StudioInteractionState.PREPARADO
+        )
         self._update_retry_button()
         if self._close_requested:
             self._close_requested = False
