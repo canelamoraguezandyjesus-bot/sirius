@@ -48,9 +48,14 @@ esac
 # BLOCKED_BY_DECISION y las paradas precheck de este script) llevaban antes un
 # marcador fijo por rol; dos paradas seguidas compartían marcador y la segunda
 # se dedupaba, ocultando su motivo (incidencia observada en el piloto sobre #66).
-# Con este sufijo por run cada parada publica su propio comentario con su
-# diagnóstico, sin perder la idempotencia dentro del mismo run (reintentos del
-# mismo run conservan RUN_ID y RUN_ATTEMPT). De los veredictos de avance,
+# Con este sufijo cada parada publica su propio comentario con su diagnóstico,
+# sin perder la idempotencia dentro del mismo INTENTO. El alcance importa y es
+# estrecho: SIRIUS_RUN_TAG incluye GITHUB_RUN_ATTEMPT, así que solo dedupa entre
+# invocaciones que conservan run E intento. Reejecutar el workflow incrementa el
+# intento, cambia el marcador y publica una parada nueva; eso es deliberado
+# —cada reejecución merece su propio diagnóstico— y es justamente el motivo de
+# que el registro de convergencia necesite OTRO sufijo, sin el intento (ver
+# SIRIUS_ROUND_TAG, debajo). De los veredictos de avance,
 # READY_FOR_REVIEW, FIXED y REVIEW_APPROVED van anclados SOLO al head SHA, que
 # ya los hace únicos y estables.
 #
