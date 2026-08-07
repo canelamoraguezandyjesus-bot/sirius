@@ -75,6 +75,11 @@ should_fail() {
   return 1
 }
 
+# Llamada que se queda esperando la respuesta de GitHub. Es el caso que ningun
+# plazo comprobado ENTRE llamadas puede acotar, y el unico que distingue un
+# limite real por proceso de uno decorativo.
+[ -n "${GH_MOCK_HANG_SECONDS:-}" ] && sleep "$GH_MOCK_HANG_SECONDS"
+
 case "$sub" in
   api)
     args="$*"
@@ -1031,6 +1036,27 @@ def test_the_wait_never_overshoots_the_remaining_budget(tmp_path: Path) -> None:
     # que se comprueba es que no se duerman los 2+4+8… completos por encima del
     # plazo, no una precisión de reloj.
     assert transcurrido < 15, f"la funcion ha rebasado el plazo con creces: {transcurrido:.1f}s"
+
+
+def test_a_hung_call_cannot_outlive_the_budget(tmp_path: Path) -> None:
+    # Ni `gh issue comment` ni las lecturas paginadas tienen límite propio, y `gh`
+    # no expone ninguno configurable, así que una llamada bloqueada consumía el
+    # resto del job —los workflows que llaman aquí corren con `timeout-minutes: 5`—
+    # y la transición se cancelaba antes de la parada controlada. El corte tiene
+    # que venir de fuera del proceso.
+    env = _setup(tmp_path)
+    env["GH_MOCK_HANG_SECONDS"] = "60"
+    env["SIRIUS_COMMENT_BUDGET_SECONDS"] = "3"
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    body = _write_body(env, marker)
+    inicio = time.monotonic()
+    r = _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
+    transcurrido = time.monotonic() - inicio
+    assert r.returncode != 0
+    assert transcurrido < 30, (
+        f"una llamada colgada ha sobrevivido al plazo: {transcurrido:.1f}s con 3s de "
+        "presupuesto; el limite por proceso no esta actuando"
+    )
 
 
 # --------------------------------------------------------------------------- #

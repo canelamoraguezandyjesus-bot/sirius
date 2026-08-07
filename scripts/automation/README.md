@@ -39,8 +39,12 @@ Funciones principales:
   ronda por número y `ci_failure_streak` cuenta heads distintos—: un duplicado es
   ruido en la incidencia, nunca una medida falseada. Siendo inocuo el duplicado,
   reintenta hasta agotar un **plazo total** (`SIRIUS_COMMENT_BUDGET_SECONDS`,
-  90 s), comprobado antes de cada llamada y con la espera recortada a lo que
-  queda; perder el registro sí hace daño, porque `complete-sirius-after-merge`
+  90 s) que se aplica en tres sitios, porque fallar en cualquiera lo vacía de
+  contenido: se comprueba antes de cada llamada, la espera se recorta a lo que
+  queda, y cada proceso `gh` se lanza con el tiempo restante como límite —`gh` no
+  expone ninguno configurable, así que una llamada bloqueada esperando a GitHub
+  consumiría el resto del job—. Perder el registro sí hace daño, porque
+  `complete-sirius-after-merge`
   cierra la incidencia antes de publicar y luego solo busca las abiertas. Tras un
   fallo relee: si el marcador aparece, termina sin republicar.
 - `sirius_ensure_label <repo> <nombre> <color> <descripcion>` — etiqueta

@@ -108,13 +108,31 @@ _sirius_body_graphql() {
   gh issue view "${2}" --repo "${1}" --json body --jq '.body // ""'
 }
 
+# _sirius_gh <args...> — invoca `gh` acotando su duración cuando el llamador ha
+# fijado SIRIUS_GH_TIMEOUT_SECONDS. Un plazo comprobado ENTRE llamadas no acota
+# nada si una llamada se queda esperando la respuesta de GitHub: ni el POST ni
+# las lecturas paginadas tienen límite propio, y los reintentos solo avanzan
+# cuando cada llamada retorna. `gh` no expone ningún límite HTTP configurable,
+# así que el corte tiene que venir de fuera del proceso.
+#
+# Sin la variable, el comportamiento es el de siempre (sin límite): esto solo se
+# activa donde hay un presupuesto que respetar.
+_sirius_gh() {
+  local limit="${SIRIUS_GH_TIMEOUT_SECONDS:-0}"
+  if [ "$limit" -gt 0 ] && command -v timeout >/dev/null 2>&1; then
+    timeout "$limit" gh "$@"
+    return $?
+  fi
+  gh "$@"
+}
+
 _sirius_comments_rest() {
-  gh api --paginate "repos/${1}/issues/${2}/comments" \
+  _sirius_gh api --paginate "repos/${1}/issues/${2}/comments" \
     --jq "[.[] | ${SIRIUS_TRUSTED_AUTHOR_JQ}] | .[].body"
 }
 
 _sirius_comments_graphql() {
-  gh issue view "${2}" --repo "${1}" \
+  _sirius_gh issue view "${2}" --repo "${1}" \
     --json comments --jq "[.comments[] | ${SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ}] | .[].body"
 }
 
@@ -474,7 +492,16 @@ sirius_close_issue() {
 # forma segura para no publicar un duplicado autoritativo a ciegas.
 sirius_comment_once() {
   local repo="$1" num="$2" marker="$3" file="$4" existing=""
-  if ! existing="$(sirius_read_issue_comments "$repo" "$num")"; then
+
+  # El presupuesto arranca ANTES de la lectura de deduplicación: también es una
+  # llamada a la API y también puede quedarse esperando.
+  local budget="${SIRIUS_COMMENT_BUDGET_SECONDS:-90}"
+  local deadline=$(( SECONDS + budget ))
+  local delay="${SIRIUS_RETRY_BASE_DELAY:-2}"
+  local after="" remaining=0
+
+  remaining=$(( deadline - SECONDS ))
+  if ! existing="$(SIRIUS_GH_TIMEOUT_SECONDS="$remaining" sirius_read_issue_comments "$repo" "$num")"; then
     echo "sirius_comment_once: historial ilegible para #${num}; no publico ${marker} a ciegas" >&2
     return 1
   fi
@@ -493,8 +520,7 @@ sirius_comment_once() {
   # Por eso la garantía vive en los LECTORES, que sí están en nuestra mano: un
   # duplicado no significa nada distinto de un original. `parse_round_records`
   # cuenta una ronda por número aunque su registro aparezca repetido, y
-  # `ci_failure_streak` cuenta heads distintos, no marcadores. Con eso, un
-  # duplicado es ruido en la incidencia y nunca una medida falseada.
+  # `ci_failure_streak` cuenta heads distintos, no marcadores.
   #
   # Siendo el duplicado inocuo, reintentar vuelve a ser lo correcto: perder el
   # registro sí hace daño. `complete-sirius-after-merge` cierra la incidencia
@@ -505,31 +531,27 @@ sirius_comment_once() {
   # La relectura se conserva para no duplicar gratuitamente: si confirma que el
   # comentario llegó, se termina sin republicar.
   #
-  # La cota es un PLAZO TOTAL, no un número de intentos por nivel. Reutilizar el
-  # mismo número de intentos en el POST y en las lecturas multiplicaba el
-  # presupuesto —hasta ~154 s de esperas— y los workflows que llaman aquí corren
-  # en jobs de `timeout-minutes: 5`: el job moría antes de que el script emitiera
-  # su parada controlada. Con un plazo compartido, el peor caso está acotado
-  # aunque cambien los reintentos de las lecturas.
-  local budget="${SIRIUS_COMMENT_BUDGET_SECONDS:-90}"
-  local deadline=$(( SECONDS + budget ))
-  local delay="${SIRIUS_RETRY_BASE_DELAY:-2}"
-  local after="" remaining=0
+  # La cota es un PLAZO TOTAL y se aplica en TRES sitios, porque fallar en
+  # cualquiera de ellos lo vacía de contenido: se comprueba antes de cada
+  # llamada, la espera se recorta a lo que queda, y cada proceso `gh` se lanza
+  # con el tiempo restante como límite (ver _sirius_gh). Sin lo tercero, una
+  # llamada bloqueada esperando a GitHub consumía el resto del job —los
+  # workflows que llaman aquí corren con `timeout-minutes: 5`— y la transición se
+  # cancelaba antes de que este script emitiera su parada controlada.
   while true; do
-    # El plazo se comprueba ANTES de cada llamada, no solo entre esperas. Con la
-    # comprobación al final del ciclo, una espera exponencial ya iniciada se
-    # consumía entera: con 90 s de plazo el reloj se miraba a los 62 s, dormía 64
-    # más hasta 126 y todavía lanzaba otro POST y otra relectura. El "plazo total"
-    # no acotaba nada, que era justo lo que se quería arreglar.
-    if [ "$SECONDS" -ge "$deadline" ]; then
+    remaining=$(( deadline - SECONDS ))
+    if [ "$remaining" -le 0 ]; then
       echo "sirius_comment_once: agotado el plazo de ${budget}s publicando ${marker} en" \
         "#${num}; parada reintentable" >&2
       return 1
     fi
-    if gh issue comment "$num" --repo "$repo" --body-file "$file"; then
+    if SIRIUS_GH_TIMEOUT_SECONDS="$remaining" _sirius_gh issue comment "$num" --repo "$repo" \
+      --body-file "$file"; then
       return 0
     fi
-    if after="$(sirius_read_issue_comments "$repo" "$num")" \
+    remaining=$(( deadline - SECONDS ))
+    if [ "$remaining" -gt 0 ] \
+      && after="$(SIRIUS_GH_TIMEOUT_SECONDS="$remaining" sirius_read_issue_comments "$repo" "$num")" \
       && printf '%s' "$after" | grep -Fq "$marker"; then
       echo "sirius_comment_once: el POST devolvio error pero el comentario si llego a" \
         "#${num} (${marker}); no se republica" >&2
@@ -541,7 +563,6 @@ sirius_comment_once() {
         "#${num}; parada reintentable" >&2
       return 1
     fi
-    # La espera nunca puede rebasar lo que queda de plazo.
     [ "$delay" -gt "$remaining" ] && delay="$remaining"
     echo "sirius_comment_once: no he podido confirmar la publicacion de ${marker} en" \
       "#${num}; reintento en ${delay}s (quedan ${remaining}s de plazo)" >&2
