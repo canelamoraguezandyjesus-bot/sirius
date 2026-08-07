@@ -23,7 +23,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QSize, Qt, Signal
+from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QFont, QResizeEvent, QTextDocument
 from PySide6.QtWidgets import (
     QApplication,
@@ -292,7 +292,7 @@ class MessageItemWidget(QWidget):
                 prose.set_markdown_content(segment.text)
                 self._content_layout.addWidget(prose)
                 self._segment_bodies.append(prose)
-        self._sync_size()
+        self._sync_size_when_laid_out()
 
     def set_streaming_text(self, prefix: str, body_text: str, *, bold: bool) -> None:
         """Renderiza el texto parcial en streaming como texto plano, en un único
@@ -304,7 +304,7 @@ class MessageItemWidget(QWidget):
         plain.set_plain_content(body_text)
         self._content_layout.addWidget(plain)
         self._segment_bodies.append(plain)
-        self._sync_size()
+        self._sync_size_when_laid_out()
 
     def rendered_plain_text(self) -> str:
         """The concatenated plain text of every segment, prose and code alike,
@@ -340,9 +340,41 @@ class MessageItemWidget(QWidget):
                 widget.setParent(None)
                 widget.deleteLater()
         self._segment_bodies = []
+        # El alto pedido que se recuerda pertenecía al contenido que se acaba
+        # de tirar, así que deja de ser una referencia válida y hay que
+        # olvidarlo. Conservarlo suprimía el aviso que corrige la fila:
+        # `_sync_size` solo emite `size_changed` cuando el tamaño pedido
+        # CAMBIA, y al consolidar un mensaje de streaming el contenido nuevo
+        # acaba pidiendo el mismo alto que pedía el anterior. Con `_last_hint`
+        # todavía en ese valor, la comparación daba "sin cambios" y no se
+        # emitía nada —pero para entonces `MainWindow` ya había sincronizado la
+        # fila con un `sizeHint` prematuro, medido antes de que el cuerpo nuevo
+        # recibiera el ancho real de la columna—. La fila se quedaba con aquel
+        # alto corto (24 px con un contenido que necesita 54) y el mensaje
+        # aparecía recortado justo al terminar de escribirse.
+        self._last_hint = QSize()
 
     def _on_segment_height_changed(self) -> None:
         self._sync_size()
+
+    def _sync_size_when_laid_out(self) -> None:
+        """Vuelve a medir en cuanto el layout haya colocado el contenido nuevo.
+
+        Medir justo después de reconstruir el contenido da un tamaño prematuro:
+        los cuerpos se rellenan ANTES de entrar en el layout, así que miden con
+        el ancho provisional y no vuelven a avisar si el ancho real da el mismo
+        alto. El `sizeHint` del widget sí cambia después, por su cuenta y sin
+        señal, cuando Qt coloca los hijos — y para entonces `MainWindow` ya ha
+        sincronizado la fila con el valor prematuro.
+
+        Ese era el mensaje recortado al terminar de escribirse: la fila se
+        quedaba en 24 px con un contenido que pedía 54. Una segunda pasada en
+        el turno siguiente del bucle de eventos compara ya el tamaño asentado y
+        emite el aviso que corrige la fila. No es una espera arbitraria: es el
+        primer instante en que la medida es válida.
+        """
+        self._sync_size()
+        QTimer.singleShot(0, self._sync_size)
 
     def _sync_size(self) -> None:
         """Avisa de que el alto pedido cambió. NO impone geometría propia.

@@ -1672,3 +1672,47 @@ def test_scrolling_up_stops_the_history_from_following_new_messages(
     # La vista sigue arriba: no se le ha movido al usuario.
     assert window.message_list.verticalScrollBar().value() == 0
     _assert_rows_do_not_overlap_in_chronological_order(window)
+
+
+@pytest.mark.gui
+def test_finished_message_row_is_as_tall_as_its_widget_asks(qtbot: QtBot, tmp_path: Path) -> None:
+    """Al consolidar un mensaje de streaming, la fila debe medir lo que el
+    widget pide. Si se queda corta, el mensaje aparece recortado justo al
+    terminar de escribirse.
+
+    Esta prueba mira el invariante directamente —alto de la fila contra alto
+    pedido por el widget— en vez de comparar dos medidas de la misma fila. La
+    que existía comparaba el alto a mitad de stream con el final, y eso la hacía
+    dependiente del orden: dentro de la suite ambas medidas salían igual de
+    obsoletas (24 y 24) y pasaba con el defecto delante; en solitario la primera
+    era correcta (54) y solo entonces fallaba.
+    """
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    _wait_for_real_layout(qtbot, window)
+    provider = _BlockingUntilReleasedProvider()
+    _swap_send_message_use_case(window, database_path, provider)
+
+    window.message_input.setText("hola")
+    window.send_button.click()
+    qtbot.waitUntil(lambda: window.message_list.count() == 2, timeout=5000)
+    qtbot.waitUntil(lambda: _widget_at(window, 1).rendered_plain_text() == "parcial", timeout=5000)
+
+    provider.release()
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+    qtbot.waitUntil(
+        lambda: (
+            window.message_list.item(1).sizeHint().height()
+            >= _widget_at(window, 1).sizeHint().height()
+        ),
+        timeout=5000,
+    )
+
+    item_height = window.message_list.item(1).sizeHint().height()
+    widget_height = _widget_at(window, 1).sizeHint().height()
+    assert item_height >= widget_height, (
+        f"la fila mide {item_height} px y el widget pide {widget_height}: el "
+        "mensaje se está recortando al consolidarse"
+    )
+    _assert_rows_do_not_overlap_in_chronological_order(window)
