@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 
 import pytest
+from _powershell_text import executable_text
 
 _SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 _BUILD_WRAPPER = _SCRIPTS / "build_windows.ps1"
@@ -33,13 +34,34 @@ def test_the_canonical_wrapper_and_internal_implementation_exist() -> None:
 
 
 def test_the_path_guard_runs_before_the_internal_build(build_wrapper: str) -> None:
+    """Entre la guarda y la delegacion no puede EJECUTARSE nada del entorno.
+
+    Se mira solo el texto ejecutable. Buscar la subcadena "uv sync" a secas
+    tambien encontraba el comentario que explica que el bloqueo cubre uv sync y
+    el mensaje de error que lo menciona, de modo que la prueba fallaba por lo
+    que el script *dice* en vez de por lo que *hace*. El wrapper no invoca uv
+    sync: la unica invocacion real es Invoke-Native "uv" @("sync", ...) y vive
+    en build_windows_impl.ps1, ya dentro del snapshot.
+    """
     guard_call = build_wrapper.index("$packagingGuard = Invoke-JsonController")
     implementation_call = build_wrapper.index("& $SnapshotImplementation")
 
     assert guard_call < implementation_call
     assert "packaging_path_guard.py" in build_wrapper
-    assert "UV_PROJECT_ENVIRONMENT" not in build_wrapper[guard_call:implementation_call]
-    assert "uv sync" not in build_wrapper[guard_call:implementation_call]
+
+    region = build_wrapper[guard_call:implementation_call]
+    executable = executable_text(region)
+
+    # La forma concreta con la que este repositorio invoca uv. Se busca en el
+    # texto CRUDO a proposito: "uv" y "sync" son literales de cadena, y
+    # executable_text los vacia, asi que buscarlos ahi no encontraria nunca una
+    # invocacion real. Los falsos positivos que rompian esta prueba -un
+    # comentario y un mensaje de error- no contienen esta forma.
+    assert not re.search(r'Invoke-Native\s+"uv"', region)
+    # Y la forma suelta, como comando, que si tiene sentido buscar en lo
+    # ejecutable porque ahi no habria comillas que vaciar.
+    assert not re.search(r"^\s*(&\s*)?uv\s+sync\b", executable, re.MULTILINE)
+    assert "UV_PROJECT_ENVIRONMENT" not in executable
 
 
 def test_no_packaging_executable_is_derived_before_the_guard(build_wrapper: str) -> None:

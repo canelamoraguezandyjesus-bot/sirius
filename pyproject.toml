@@ -87,7 +87,9 @@ minversion = "8.0"
 testpaths = ["tests"]
 # scripts/ contiene helpers de empaquetado invocados desde PowerShell; se anaden
 # al path para que sus pruebas los importen como modulos normales.
-pythonpath = ["scripts"]
+# scripts/: helpers de empaquetado invocados desde PowerShell.
+# tests/unit: ayudantes compartidos entre pruebas (tests/ no es un paquete).
+pythonpath = ["scripts", "tests/unit"]
 addopts = [
   "--import-mode=importlib",
   "--strict-config",

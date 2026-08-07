@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from _powershell_text import block_after
+
 _ROOT = Path(__file__).resolve().parents[2]
 _WRAPPER = _ROOT / "scripts" / "build_windows.ps1"
 _IMPLEMENTATION = _ROOT / "scripts" / "build_windows_impl.ps1"
@@ -182,9 +184,17 @@ def test_publication_lock_failure_releases_packaging_lock_without_masking() -> N
     wrapper = _WRAPPER.read_text(encoding="utf-8")
     publication_acquire = wrapper.index("$PublicationLockStream = [System.IO.File]::Open(")
     io_catch = wrapper.index("catch [System.IO.IOException]", publication_acquire)
-    general_catch = wrapper.index("catch {", io_catch)
-    build_start = wrapper.index("$BuildFailure = $null", general_catch)
-    failure_region = wrapper[general_catch:build_start]
+    # El catch general es el que sigue al bloque de IOException, no el catch
+    # anidado que este contiene: hay que saltarse el bloque entero.
+    io_block = block_after(wrapper, "catch [System.IO.IOException]", start=publication_acquire)
+    after_io = io_catch + len(io_block)
+    # La region es EXACTAMENTE ese bloque, delimitado por su llave de cierre.
+    # Antes se extendia hasta un ancla lejana ($BuildFailure = $null), asi que
+    # cualquier linea anadida despues del catch entraba en la region y rompia la
+    # afirmacion de que el throw desnudo es lo ultimo del bloque, sin que el
+    # bloque hubiera cambiado. Y el ancla de inicio caia en el catch anidado del
+    # handler de IOException, no en el general.
+    failure_region = block_after(wrapper, "catch {", start=after_io)
 
     publication_dispose = failure_region.index("$PublicationLockStream.Dispose()")
     publication_catch = failure_region.index("catch {", publication_dispose)
@@ -203,6 +213,8 @@ def test_publication_lock_failure_releases_packaging_lock_without_masking() -> N
     assert publication_failure < packaging_dispose < packaging_catch < packaging_failure
     assert packaging_failure < report < bare_throw
     assert "foreach ($lockCleanupFailure in $LockCleanupFailures)" in failure_region
+    # Lo ultimo del bloque es un throw desnudo: se reporta la limpieza y se
+    # relanza el error original, sin enmascararlo con uno nuevo.
     assert failure_region[bare_throw:].strip() == "throw\n}"
     assert "finally" not in failure_region
     assert "$PackagingLockStream.Dispose()" in failure_region
