@@ -63,6 +63,22 @@ jobs:
     #   checkout 5 + puerta 8 + evento 3 + prompt 2 + corrector 30 +
     #   aplicación 5 = 53, con 7 de margen sobre los 60 del job.
     timeout-minutes: 60
+    #
+    # LO QUE ESTO NO GARANTIZA, dicho aqui para que nadie lo lea de mas.
+    #
+    # Todas las defensas de este workflow —topes de paso, plazo interno de la
+    # puerta, veredicto provisional del corrector— viven DENTRO del run. Un
+    # proceso que muere no puede informar de su propia muerte: si el checkout
+    # cae, si el runner desaparece o si alguien cancela el job, no queda ni
+    # etiqueta terminal ni diagnostico, y `sirius:repair-requested` sigue
+    # puesta. Como `issues: labeled` no vuelve a dispararse con una etiqueta ya
+    # aplicada, la incidencia queda ATASCADA hasta que una persona la quita y
+    # la vuelve a poner, o ejecuta `reconcile-sirius-states.yml` a mano.
+    #
+    # Eso no se arregla desde aqui: solo lo cierra un observador EXTERNO, y el
+    # contrato operativo prohibe hoy programarlo (ver el encabezado de
+    # `reconcile-sirius-states.yml`). Queda registrado como decision pendiente,
+    # no como defecto olvidado.
     steps:
       - name: Checkout
         timeout-minutes: 5
