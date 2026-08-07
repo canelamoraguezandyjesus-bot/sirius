@@ -432,6 +432,72 @@ def test_una_senal_repetida_en_la_misma_ejecucion_rompe_el_invariante(
     assert d.orden_respetado is False
 
 
+def test_la_tabla_de_despacho_no_se_puede_modificar() -> None:
+    """``Final`` solo prohibe reasignar el nombre; la tabla debe ser inmutable.
+
+    Con un diccionario, escribir la senal vectorial en ``E3`` bastaria para que
+    el despachador la ejecutase alli, y la comprobacion de orden llegaria
+    cuando ya hubiera abierto y consultado el sidecar.
+    """
+    with pytest.raises(TypeError):
+        SENAL_DE_LA_ETAPA[Etapa.E3] = SENAL_VECTORIAL  # type: ignore[index]
+    with pytest.raises(TypeError):
+        del SENAL_DE_LA_ETAPA[Etapa.E4]  # type: ignore[attr-defined]
+    assert SENAL_DE_LA_ETAPA[Etapa.E3] == SENAL_RELACIONAL
+    assert SENAL_DE_LA_ETAPA[Etapa.E4] == SENAL_VECTORIAL
+
+
+def test_la_misma_instancia_sirve_para_varias_recuperaciones(
+    completa: fixtures_d.FixtureD,
+) -> None:
+    """El protocolo exige 100 repeticiones por magnitud: reusar debe ser legal.
+
+    Acumular el orden observado entre rondas convertia la segunda en una
+    violacion del orden congelado y abortaba una ejecucion perfectamente legal.
+    """
+    d = _d(completa)
+    primera = _recuperar(completa, d)
+    orden_de_la_primera = d.orden_observado
+    segunda = _recuperar(completa, d)
+    assert primera.ids == segunda.ids
+    assert d.orden_observado == orden_de_la_primera == ORDEN_CONGELADO
+    assert d.orden_respetado is True
+    tercera = _recuperar(completa, d)
+    assert tercera.ids == primera.ids
+    d.cerrar()
+
+
+def test_una_ronda_que_para_pronto_no_hereda_el_orden_de_la_anterior(
+    completa: fixtures_d.FixtureD,
+) -> None:
+    """El orden observado es de la ronda en curso, no de la vida del objeto."""
+    d = _d(completa)
+    _recuperar(completa, d)
+    assert d.orden_observado == ORDEN_CONGELADO
+    _recuperar(completa, d, _peticion(cardinalidad=Cardinalidad.ACOTADA, limite_objetivo=1))
+    assert d.orden_observado == (), "una ronda que para en E1 no ejecuto ninguna senal tardia"
+    d.cerrar()
+
+
+def test_la_senal_prohibida_no_llega_a_actuar_antes_de_abortar(
+    completa: fixtures_d.FixtureD,
+) -> None:
+    """El orden se comprueba ANTES de ejecutar, no despues.
+
+    Si se comprobara despues, la senal ya habria abierto su fuente y
+    consultado: para una restriccion que existe para que no actue fuera de su
+    etapa, abortar tarde es no cumplirla.
+    """
+    d = _d(completa)
+    d._orden_observado = [(Etapa.E4, SENAL_VECTORIAL)]
+    with PuertoSqlite(completa.ruta) as puerto:
+        contexto = _contexto(puerto, Etapa.E3)
+        with pytest.raises(OrdenDeSenalesVioladoError, match="orden de etapas tardias violado"):
+            d._tardias(SENAL_RELACIONAL, contexto, frozenset())
+    assert d.invocaciones_relacionales == 0
+    assert d.plano_abierto is False
+
+
 def test_lo_aportado_por_las_dos_senales_no_se_duplica(completa: fixtures_d.FixtureD) -> None:
     recuperacion = _recuperar(completa, _d(completa))
     assert len(recuperacion.ids) == len(set(recuperacion.ids))

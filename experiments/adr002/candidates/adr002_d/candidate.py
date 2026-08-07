@@ -35,8 +35,9 @@ ser prefijo del orden congelado: si no lo fuera, la ejecucion no seria de
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+from types import MappingProxyType
 from typing import Final
 
 from experiments.adr002.candidates.adr002_a import lexical
@@ -44,6 +45,7 @@ from experiments.adr002.candidates.adr002_a.candidate import CandidatoA
 from experiments.adr002.candidates.adr002_b import vectores
 from experiments.adr002.candidates.adr002_c import relaciones
 from experiments.adr002.candidates.common.contracts import (
+    ETAPAS_DE_EXPANSION,
     Candidata,
     ContextoDeEtapa,
     Etapa,
@@ -72,10 +74,17 @@ ORDEN_CONGELADO: Final[tuple[tuple[Etapa, str], ...]] = (
     (Etapa.E4, SENAL_VECTORIAL),
 )
 
-#: La misma tabla, indexada por etapa. Que sea un diccionario construido
-#: **desde** ``ORDEN_CONGELADO`` es lo que garantiza que no puedan discrepar:
-#: una etapa tiene a lo sumo una senal tardia, y es la del orden.
-SENAL_DE_LA_ETAPA: Final[dict[Etapa, str]] = dict(ORDEN_CONGELADO)
+#: La misma tabla, indexada por etapa. Que se construya **desde**
+#: ``ORDEN_CONGELADO`` es lo que garantiza que no puedan discrepar: una etapa
+#: tiene a lo sumo una senal tardia, y es la del orden.
+#:
+#: Es una vista **inmutable**, no un diccionario. ``Final`` solo prohibe
+#: reasignar el nombre; un diccionario seguiria admitiendo que alguien
+#: escribiese la senal vectorial en ``E3``, y entonces el despachador la habria
+#: ejecutado antes de que ninguna comprobacion posterior pudiera abortar. Con
+#: ``MappingProxyType`` esa escritura es un ``TypeError``, y el orden congelado
+#: deja de depender de que nadie lo toque.
+SENAL_DE_LA_ETAPA: Final[Mapping[Etapa, str]] = MappingProxyType(dict(ORDEN_CONGELADO))
 
 #: Documento que congelo el orden, antes de que existiera este modulo.
 ACTA_DEL_ORDEN: Final = (
@@ -128,9 +137,16 @@ class CandidatoD:
         self._lector: vectores.LectorVectorial | None = None
         #: Guardia de la restriccion 3: nombre de la senal tardia en curso.
         self._senal_en_curso: str | None = None
-        #: ``(etapa, senal)`` de cada senal tardia realmente ejecutada, en el
-        #: orden en que ocurrio. La restriccion se demuestra sobre esto.
+        #: ``(etapa, senal)`` de cada senal tardia ejecutada **en la
+        #: recuperacion en curso**, en el orden en que ocurrio. La restriccion
+        #: se demuestra sobre esto, y por eso su alcance es la ronda y no la
+        #: vida del objeto: el protocolo exige 100 repeticiones por magnitud,
+        #: y acumular entre rondas convertiria la segunda en una violacion.
         self._orden_observado: list[tuple[Etapa, str]] = []
+        #: Posicion de la ultima etapa preguntada. El motor recorre las etapas
+        #: hacia delante y nunca vuelve atras dentro de una recuperacion, de
+        #: modo que una etapa que no avanza es una ronda nueva.
+        self._ultima_posicion: int | None = None
         #: Cuantas veces se consulto cada ruta tardia. La activacion tardia se
         #: demuestra sobre estos contadores, no se promete.
         self.invocaciones_relacionales = 0
@@ -144,7 +160,7 @@ class CandidatoD:
 
     @property
     def orden_observado(self) -> tuple[tuple[Etapa, str], ...]:
-        """Lo que esta ejecucion hizo de verdad, en su orden real."""
+        """Lo que la **recuperacion en curso** hizo de verdad, en su orden real."""
         return tuple(self._orden_observado)
 
     @property
@@ -213,12 +229,30 @@ class CandidatoD:
         entradas para una misma etapa: el diccionario se construye desde el
         orden congelado.
         """
+        self._abrir_ronda_si_procede(contexto.etapa)
         de_la_base = list(self._base.candidatas(contexto))
         senal = SENAL_DE_LA_ETAPA.get(contexto.etapa)
         if senal is None:
             return de_la_base
         ya = frozenset(c.item.id for c in de_la_base) | contexto.ya_recuperados
         return [*de_la_base, *self._tardias(senal, contexto, ya)]
+
+    def _abrir_ronda_si_procede(self, etapa: Etapa) -> None:
+        """Empieza una ronda nueva cuando la etapa no avanza respecto a la anterior.
+
+        El motor comun recorre ``ETAPAS_DE_EXPANSION`` hacia delante y nunca
+        vuelve atras dentro de una misma recuperacion, de modo que ver una
+        etapa que no avanza solo puede significar que empezo otra. Es lo que
+        permite reutilizar la instancia —igual que ``A``, ``B`` y ``C``— sin
+        que el orden observado de la ronda anterior contamine la siguiente.
+        """
+        if etapa not in ETAPAS_DE_EXPANSION:
+            return
+        posicion = ETAPAS_DE_EXPANSION.index(etapa)
+        if self._ultima_posicion is None or posicion <= self._ultima_posicion:
+            self._orden_observado = []
+            self._senal_en_curso = None
+        self._ultima_posicion = posicion
 
     def _tardias(
         self, senal: str, contexto: ContextoDeEtapa, ya: frozenset[str]
@@ -245,23 +279,30 @@ class CandidatoD:
                 f"prohibe coordinarlas"
             )
             raise OrdenDeSenalesVioladoError(msg)
+
+        # El orden se comprueba ANTES de ejecutar, sobre lo que esta llamada
+        # dejaria observado. Comprobarlo despues abortaria igual, pero la senal
+        # prohibida ya habria abierto su fuente y consultado: para una
+        # restriccion que existe para que NO actue fuera de su etapa, llegar
+        # tarde es no cumplirla.
+        prospectivo = (*self._orden_observado, (contexto.etapa, senal))
+        if not _es_subsecuencia(prospectivo, ORDEN_CONGELADO):
+            msg = (
+                f"orden de etapas tardias violado: {senal} en {contexto.etapa.value} daria "
+                f"{prospectivo}, y el orden congelado por {ACTA_DEL_ORDEN} es {ORDEN_CONGELADO}"
+            )
+            raise OrdenDeSenalesVioladoError(msg)
+
+        self._orden_observado.append((contexto.etapa, senal))
         self._senal_en_curso = senal
         try:
-            aportadas = (
+            return (
                 self._relacionales(contexto, ya)
                 if senal == SENAL_RELACIONAL
                 else self._vectoriales(contexto, ya)
             )
         finally:
             self._senal_en_curso = None
-        self._orden_observado.append((contexto.etapa, senal))
-        if not self.orden_respetado:
-            msg = (
-                f"orden de etapas tardias violado: se observo {self.orden_observado} y el "
-                f"orden congelado por {ACTA_DEL_ORDEN} es {ORDEN_CONGELADO}"
-            )
-            raise OrdenDeSenalesVioladoError(msg)
-        return aportadas
 
     # -- Primera senal tardia: relacional explicita, en E3 ------------------
 
