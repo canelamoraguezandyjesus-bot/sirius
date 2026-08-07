@@ -1083,6 +1083,36 @@ def test_retries_stop_sleeping_once_the_deadline_passed(tmp_path: Path) -> None:
     assert transcurrido < 5, f"se han dormido esperas tras vencer el plazo: {transcurrido:.1f}s"
 
 
+def test_eventual_consistency_may_duplicate_and_that_is_the_accepted_outcome(
+    tmp_path: Path,
+) -> None:
+    # Publicación aceptada + primera lectura obsoleta. Es el caso que el
+    # simulador sabe reproducir (`GH_MOCK_COMMENTS_HIDE_LAST`) y que hasta ahora
+    # ninguna prueba activaba: la capacidad existía sin ejercitarse, así que la
+    # suite habría pasado igual si se rompiera.
+    #
+    # El resultado ESPERADO aquí no es "no duplica". Publicar contra la API no
+    # puede ser exactamente-una-vez, y con la escritura invisible para la
+    # relectura no hay forma de saber que llegó: se republica. Lo que se fija es
+    # que el duplicado ocurre y se acepta, porque la idempotencia vive en los
+    # lectores —`parse_round_records` cuenta una ronda por número y
+    # `ci_failure_streak` cuenta heads distintos— y no en la publicación.
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "comment_ambiguous").write_text("1", encoding="utf-8")
+    env["GH_MOCK_COMMENTS_HIDE_LAST"] = "1"
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    # Cuerpo de un solo bloque: el simulador separa comentarios por líneas en
+    # blanco, así que uno con una dentro contaría como dos.
+    body = _mock_dir(env).parent / "ci.md"
+    body.write_text(f"{marker}\n## CI_FAILURE\n", encoding="utf-8")
+    r = _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
+    assert r.returncode == 0, r.stderr
+    assert _comments(env).count(marker) == 2, (
+        "sin poder confirmar la publicación se republica; si aquí hubiera una "
+        "sola copia, el simulador no estaría reproduciendo la lectura obsoleta"
+    )
+
+
 def test_the_deadline_does_not_leak_to_later_calls(tmp_path: Path) -> None:
     # El plazo se exporta; si sobreviviera a la función, acotaría llamadas
     # posteriores con un instante ya vencido y las haría fallar sin motivo.
