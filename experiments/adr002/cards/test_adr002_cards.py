@@ -863,6 +863,7 @@ def test_las_fichas_congeladas_son_las_esperadas() -> None:
         ("ADR002-B", 7, cp.ESTADO_CONGELADA),
         ("ADR002-C", 1, cp.ESTADO_SUSTITUIDA),
         ("ADR002-C", 2, cp.ESTADO_CONGELADA),
+        ("ADR002-D", 1, cp.ESTADO_CONGELADA),
         (cp.CONTROL, 1, cp.ESTADO_CONGELADA),
     ]
 

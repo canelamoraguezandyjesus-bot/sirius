@@ -1,0 +1,335 @@
+{
+  "documento": "Ficha de candidato ADR002-D, version 1",
+  "version_esquema": "ficha-candidato-0.2",
+  "estado": "CONGELADA",
+  "plantilla": "SIRIUS_0.2_ADR_002_FICHA_CANDIDATO_TEMPLATE_v0.4_PROPUESTO.md",
+  "registro": "SIRIUS_0.2_REGISTRO_TOLERANCIAS_v0.5_PROPUESTO.md",
+  "protocolo": "SIRIUS_0.2_ADR_002_PROTOCOLO_MEDICION_v0.2_PROPUESTO.md",
+  "actas_de_puerta": [
+    "SIRIUS_0.2_ADR_002_TOL_207_APROBACION_v1.0.md",
+    "SIRIUS_0.2_ADR_002_TOL_209_APROBACION_v1.0.md",
+    "SIRIUS_0.2_ADR_002_TOL_210_APROBACION_v1.0.md",
+    "SIRIUS_0.2_ADR_002_TOL_210_ACTO_SUCESOR_01_EXENCION_T0_v1.0.md"
+  ],
+  "identidad": {
+    "candidato": "ADR002-D",
+    "papel": "CANDIDATO",
+    "version": 1,
+    "sustituye_a": null,
+    "motivo_de_sustitucion": null
+  },
+  "congelacion": {
+    "commit_de_referencia": "bfaa8c973b4622feae3b0c72be6f5a2bd3dda9bb",
+    "huella": "21ce3848472eb44162794ab66254b8b541d870ce",
+    "ruta": "artifacts/adr002_cards/ficha_ADR002-D_v1.json"
+  },
+  "arquitectura": {
+    "alternativa_minima": "ADR002-D",
+    "definicion_canonica_que_asume": "ambas senales en etapas tardias distintas, con orden predefinido y sin coordinacion simultanea fuera de la etapa autorizada.",
+    "sustrato_lexico": "FTS5 medido de Sirius 0.1: tabla knowledge_fts creada por la migracion 61be4bb269bf sin clausula tokenize, de modo que rige el tokenizador por defecto unicode61 con remove_diacritics 1. Sin alternativa ni indice adicional. Corrige la identidad declarada por las versiones anteriores —items_fts y remove_diacritics 2—, inexacta y rectificada por la fe de erratas 05",
+    "materializacion_de_relaciones": "dos vias distintas, en dos etapas distintas, y ninguna de las dos construye indice derivado nuevo. En E3, las relaciones EXPLICITAS declaradas del corpus, leidas del plano ejes_p2 de la proyeccion experimental v0.1 sin su nota, que la clasificacion aprobada marca oraculo prohibido: un solo salto, una sola direccion de origen a destino, seis de los ocho tipos expanden y SUSTITUYE_A y CONFLICTO_CON no, porque los adjudican G7 y S6. En E4, la senal vectorial materializa por IDENTIDAD CANONICA EXACTA via por_identificadores del puerto. Se conserva ademas la clave de sujeto por prefijo concreto de la base A. ADR002-D NO construye indice relacional derivado: las relaciones ya son entrada declarada, disponible por igual para los cuatro candidatos",
+    "puerto_de_acceso": "PuertoDeRecuperacion de la capa comun, equivalente a KnowledgeSearchRepository; rechaza en ejecucion cualquier consulta sin predicado y registra cada sentencia ejecutada con su cota y sus filas (B04-RF-31). Las DOS senales tardias materializan con por_identificadores (WHERE id IN por clase, formato cerrado, cota previa y ausencia declarada), nunca por clave de sujeto. Ni el plano relacional ni el sidecar vectorial son puertos: el primero devuelve aristas y el segundo identificadores y similitudes, y ninguno devuelve contenido",
+    "etapas_implementadas": {
+      "E0": "la de la base A por composicion: preparacion segura, parametriza G1-G10, no genera candidatos. Ninguna senal tardia se abre. Transicion a E1 siempre: E0 no recupera",
+      "E1": "la de la base A por composicion: estructurada exacta por clave normalizada y coincidencia literal del indice medido. Ninguna senal tardia se abre. Insuficiencia: la cardinalidad no queda satisfecha tras las puertas",
+      "E2": "la de la base A por composicion: variantes morfologicas por recorte de sufijo flexivo, sin asumir equivalencia semantica. Ninguna senal tardia se abre. Insuficiencia: idem, y el modo autoriza E3",
+      "E3": "PRIMERA senal tardia del orden congelado: la expansion lexico-estructurada de la base A UNIDA a la senal RELACIONAL EXPLICITA, y a ninguna otra. Un salto desde las semillas ya admitidas por sus aristas salientes, dirigido y acotado a 16 semillas y 64 aristas, con los destinos materializados por identidad canonica exacta via el puerto. El sidecar vectorial NO se abre en esta etapa: su apertura es perezosa y ocurre unicamente en E4. La relacion no se convierte en verdad: valida sujeto, polaridad, condicion y tiempo item a item con la misma lectura que la base. Insuficiencia: idem",
+      "E4": "SEGUNDA senal tardia del orden congelado: la E4 de la base A —fuentes e historial como evidencia atribuida no canonica— UNIDA a la senal SEMANTICA VECTORIAL, y a ninguna otra. PPMI documental disperso en punto fijo, coseno con solapamiento estructural minimo de 2 dimensiones, top-8 identificadores materializados por IDENTIDAD CANONICA EXACTA; una identidad que el canon no contenga falla cerrada y tipada, sin recuperacion parcial. La senal relacional ya termino en E3 y no vuelve: las dos nunca estan activas a la vez. Consecuencia declarada: al materializar por identidad canonica, E4 puede aportar en ADR002-D elementos del canon y no solo evidencia atribuida. Insuficiencia: agotada, se adjudica S5",
+      "E5": "adjudicacion del motor comun: agrupa duplicados solo con ambito y postura coincidentes, ordena con desempate estable, aplica G12 y limite, y emite traza y suficiencia"
+    },
+    "puertas_previas_comunes": {
+      "aislamiento_de_ambito": "G4 sobre el ambito declarado; fuera de ambito no contamina. Ni una arista explicita ni una similitud alta superan G4: el ambito no genera candidatos y filtra todo lo que CUALQUIERA de las dos senales proponga (B04-RF-06)",
+      "expansion_escalonada_sin_salto": "el motor comun posee el bucle E0-E5 y solo avanza por insuficiencia explicita; el candidato no controla el orden. Ninguna de las dos senales puede adelantarse: cada una se despacha por la tabla derivada del orden congelado y abre su fuente de forma perezosa dentro de su etapa. Si E3 satisface, el sidecar vectorial no se abre, no se lee y no se verifica (B04-RF-14)",
+      "validacion_de_sujeto_polaridad_condicion_y_tiempo": "lectura semantica por item con los mismos marcadores lexicos de la base, clave de sujeto del canon y marca temporal, aplicada a TODO lo que E3 y E4 proponen, relacional y vectorial incluidas, con la MISMA funcion (B04-RF-17, RF-19)",
+      "borrado_y_regeneracion_desde_el_canon": "el FTS5 se borra y regenera con derived.py (tablas Y triggers, DDL de sqlite_master); el sidecar vectorial se borra entero (.db, -wal, -shm, -journal) y se reconstruye desde el canon con verificacion de huella de origen; ninguno se repuebla desde si mismo. El plano relacional no es derivado y no se regenera: es entrada declarada del corpus",
+      "peticion_completa_y_operacion_activa": "la peticion exige operation_id, proposito, modo, ambito, tiempo, cardinalidad y limites; sin proposito no se ejecuta recuperacion (B04-RF-01, RF-30)",
+      "plan_reproducible_y_explicacion_por_resultado": "traza minimizada con puertas, etapas, causas y parada (RF-29), explicacion de siete campos por resultado (RF-28) que nombra la etapa Y la senal que aporto cada elemento —lexico-estructurada, relacional explicita por su arista, o vectorial en banda—, y registro de cada sentencia SQL del puerto, de cada consulta de aristas y de cada consulta al sidecar con sus conteos"
+    }
+  },
+  "senal_tardia": {
+    "habilitada": "ambas_en_etapas_distintas",
+    "coherente_con_la_alternativa": true,
+    "como_satisface_e3": "E3 la satisface la PRIMERA senal del orden congelado, la relacional explicita, sobre la base lexico-estructurada de ADR002-A: desde cada semilla ya admitida se siguen sus aristas salientes de los seis tipos que expanden, se conservan el tipo y la direccion, y los destinos se materializan por identidad canonica exacta via el puerto. Asi alcanza elementos que no comparten NI UNA forma con la consulta ni con lo recuperado, y lo hace por una arista nombrada y auditable. La segunda senal NO participa en E3: no se abre, no se lee y no se verifica alli, y el contador de invocaciones lo demuestra. Apoyo y refutacion se conservan porque la polaridad se lee item a item y el motor no fusiona posturas distintas",
+    "validacion_en_e3": "marcadores lexicos cerrados de negacion y condicion, clave de sujeto del canon y marca temporal del item, con la MISMA lectura de la base aplicada a todo lo que E3 propone, relacional incluido, y aplicada igual en E4 a lo vectorial; ni la relacion ni la similitud sustituyen esa validacion ni se presentan como identidad o verdad",
+    "orden_de_las_etapas_tardias": "DOS senales tardias en DOS etapas distintas, en el orden congelado por SIRIUS_0.2_ADR_002_ORDEN_CONGELADO_DE_LAS_ETAPAS_TARDIAS_DE_ADR002_D_v1.0.md en un commit anterior al de la implementacion y al de esta ficha: E3 relacional_explicita, despues E4 semantica_vectorial. El orden se derivo del canon y no de ningun resultado: B04 §15.1 nombra las relaciones ya en E1, la etapa de maxima autoridad, describe E4 como fallback controlado, y el desempate del motor comun hace E3 mas autoritativa que E4. Partir E3 en dos subpasos quedo descartado porque B04 CA-43 llama a eso coordinacion intra-etapa, que es justo lo que esta alternativa existe para evitar. El orden no es configurable en ejecucion: los unicos interruptores son los de ablacion, que APAGAN una senal y jamas la mueven de etapa",
+    "condicion_de_insuficiencia_por_transicion": "E0->E1 siempre, porque E0 no recupera; E1->E2, E2->E3 y E3->E4 solo si la cardinalidad no queda satisfecha tras las puertas y el modo autoriza el siguiente espacio; en otro caso se adjudica S1, S2 o S4. La senal relacional solo actua dentro de E3 y la vectorial solo dentro de E4: si E1 o E2 satisfacen, ninguna de las dos se abre; si E3 satisface, la vectorial tampoco. Sin semillas admitidas no hay aristas que seguir, porque la senal relacional expande desde lo recuperado y nunca desde la consulta; la vectorial, en cambio, actua desde el vector de consulta y no necesita semillas"
+  },
+  "restriccion_d": {
+    "aplica": true,
+    "motivo_de_no_aplicacion": null,
+    "senales_en_etapas_distintas": "relacional_explicita en E3 y semantica_vectorial en E4, que son las DOS unicas etapas tardias que el contrato B04 §15.1 define. Es estructural y no una promesa: un unico despachador consulta una tabla derivada del orden congelado, de modo que una etapa tiene a lo sumo UNA senal tardia, y pedir una senal en una etapa que no es la suya aborta con error tipado",
+    "orden_predefinido": "congelado por SIRIUS_0.2_ADR_002_ORDEN_CONGELADO_DE_LAS_ETAPAS_TARDIAS_DE_ADR002_D_v1.0.md, cuyo commit es ancestro ESTRICTO del commit que implementa ADR002-D y del que congela esta ficha. El orden no se eligio mirando resultados: se derivo de B04 §15, §15.1 y RF-14 y de la escala de autoridad del motor comun, y el acta lo razona punto por punto antes de que existiera una sola linea de codigo del candidato",
+    "sin_coordinacion_simultanea": "las dos senales NUNCA estan activas a la vez. Ademas de la separacion estructural por etapa, un guardia de reentrada aborta con error tipado si una senal llegara a pedirse con otra todavia en curso. ADR002-D no coordina sus dos senales en ninguna etapa, ni siquiera en la que B04 CA-43 autorizaria: la restriccion se cumple de forma mas estricta que su enunciado",
+    "como_se_demuestra_en_cada_ejecucion": "cada ejecucion acumula su propio orden observado, un par (etapa, senal) por cada senal tardia realmente ejecutada, y el invariante exige que sea SUBSECUENCIA del orden congelado. Subsecuencia y no igualdad porque una senal puede faltar por dos razones legitimas —la politica escalonada paro antes, o una ablacion la apago— y ninguna de las dos reordena nada; lo unico que el invariante prohibe es alterar el orden relativo. Si dejara de cumplirse, la ejecucion aborta en vez de entregarse. La explicacion por resultado publica ademas la etapa y la senal de cada elemento, de modo que la separacion es auditable desde la salida y no solo desde el codigo",
+    "traza_a_b04_d15": "B04-D15 limita la coordinacion a senales del mismo espacio y familia de la etapa activa y prohibe adelantar espacios posteriores. ADR002-D no adelanta ningun espacio —el motor comun posee el bucle y cada senal abre su fuente perezosamente dentro de su etapa— y no coordina nada, porque nunca tiene dos senales en la misma etapa. Es exactamente lo que la Resolucion de la particion §7 exige para que la politica escalonada no derive hacia la alternativa C de B04 §14.1, RESERVA TECNICA y no politica principal"
+  },
+  "componentes": [
+    {
+      "papel": "sustrato lexico",
+      "nombre": "SQLite FTS5 (unicode61, remove_diacritics 1)",
+      "version": "la de la biblioteca estandar de Python del entorno LAB-LINUX",
+      "origen": "cadena canonica de Alembic de Sirius 0.1, head 61be4bb269bf",
+      "acopla_a_proveedor": false,
+      "ruta_de_sustitucion": "el motor accede solo por PuertoDeRecuperacion: sustituir el sustrato exige reimplementar el puerto, no el motor ni el candidato (B04-RF-31)"
+    },
+    {
+      "papel": "representacion semantica",
+      "nombre": "vectores distribucionales dispersos PPMI documental en punto fijo (experiments/adr002/candidates/adr002_b/vectores.py)",
+      "version": "algoritmo ppmi-documental-disperso-v1; tokenizacion adr002_a.lexical-v1; parametros congelados del paquete 12; formato persistido normativo y validacion logica del paquete 03; validacion canonica de la huella persistida y mensajes de apertura minimizados del paquete 04; cotas de longitud y representabilidad de la fe de erratas 04",
+      "origen": "derivada exclusivamente del canon vigente: memorias vigentes y decisiones aprobadas con su revision canonica vigente; sin red, sin API, sin modelo descargado, sin proveedor, sin datos del benchmark",
+      "acopla_a_proveedor": false,
+      "ruta_de_sustitucion": "es la realizacion EXPERIMENTAL de la senal vectorial, tomada de ADR002-B vigente (v7) sin copiarla ni alterarla: arbol 43eaa374d6eef827599472588a54494be9704565 de adr002_b, ficha B v7 con huella 33a7617dc8713d7dc29fce1877b7c41d689f25d7. En ADR002-D actua en E4 y no en E3, que es la unica diferencia. El benchmark decidira si aporta mejora material, y su seleccion no aprueba embeddings, proveedor ni almacenamiento para produccion (B04-RF-31, ARQ-00 §23)"
+    },
+    {
+      "papel": "indice relacional",
+      "nombre": "ninguno derivado: relaciones declaradas del plano ejes_p2",
+      "version": "proyeccion experimental v0.1, huella logica 755cbdfea35969dc570ac9a94a23581f8e433c3575220d344e85c6cb2c47e33d",
+      "origen": "corpus de conformidad v0.6, bloque relaciones, sin su nota",
+      "acopla_a_proveedor": false,
+      "ruta_de_sustitucion": "las relaciones son entrada declarada y estan disponibles por igual para los cuatro candidatos; ADR002-D no construye ni persiste indice relacional derivado alguno, de modo que no hay indice que sustituir. La fuente es la de ADR002-C vigente (v2), usada sin copiarla ni alterarla: arbol 6767fb9f3bc276fe0361174c300634dc0cef4860 de adr002_c, ficha C v2 con huella 5e034078eb1d01ef6485cfd10707ce30f92ed7e5"
+    },
+    {
+      "papel": "motor de recuperacion",
+      "nombre": "infraestructura comun de la primera ronda",
+      "version": "arbol 30984c1f054fc47b12f708fad23ddf617a46645c",
+      "origen": "experiments/adr002/candidates/common",
+      "acopla_a_proveedor": false,
+      "ruta_de_sustitucion": "comun a A/B/C/D y neutral por construccion, comprobado por controles fail-closed; sustituirla afectaria a todos por igual"
+    },
+    {
+      "papel": "base funcional lexico-estructurada",
+      "nombre": "ADR002-A vigente (v5), por composicion",
+      "version": "arbol ceb4247c9fee913ae86d5203f199b19341f1c833 de adr002_a (sin cambios desde la v2 de A); ficha vigente A v5 con huella b5549a5a8e0f2fa4e791f64fbdb1c769938949be. La fe de erratas 06 declara que la ficha B v7 nombra a A v3 como vigente por un residuo de su emision, y que el arbol que cita es este mismo",
+      "origen": "experiments/adr002/candidates/adr002_a, sin copiar ni alterar",
+      "acopla_a_proveedor": false,
+      "ruta_de_sustitucion": "CandidatoD contiene a CandidatoA UNA sola vez y delega en el las cuatro etapas y la lectura semantica; si la base cambiara, cambiaria la huella de esta ficha y obligaria a version sucesora"
+    },
+    {
+      "papel": "regeneracion del derivado",
+      "nombre": "derived.py de la capa comun + vectores.py de adr002_b",
+      "version": "arboles 30984c1f054fc47b12f708fad23ddf617a46645c y 43eaa374d6eef827599472588a54494be9704565",
+      "origen": "FTS5: DDL leido de sqlite_master, creado por la migracion 61be4bb269bf; sidecar: reconstruccion completa desde el canon con huella de origen",
+      "acopla_a_proveedor": false,
+      "ruta_de_sustitucion": "ninguna pieza copia DDL a mano ni repuebla desde el propio indice; si el canon cambiara, la reconstruccion cambiaria con el"
+    },
+    {
+      "papel": "coordinador de senales tardias",
+      "nombre": "despachador por etapa de ADR002-D (experiments/adr002/candidates/adr002_d/candidate.py)",
+      "version": "arbol 2c2d22621e6860140b4141c1c3619511e4e745b5 de adr002_d; orden congelado por SIRIUS_0.2_ADR_002_ORDEN_CONGELADO_DE_LAS_ETAPAS_TARDIAS_DE_ADR002_D_v1.0.md",
+      "origen": "propio de ADR002-D: no existe en A, B ni C, y es lo unico que este candidato anade sobre las piezas que reutiliza",
+      "acopla_a_proveedor": false,
+      "ruta_de_sustitucion": "es la realizacion EXPERIMENTAL de la separacion que ARQ-00 §23 pone a prueba; cambiar el orden o permitir dos senales en una etapa dejaria de ser ADR002-D y exigiria decision aprobada y ficha sucesora"
+    }
+  ],
+  "corpus": {
+    "version": "v0.4 congelada (performance_corpus_v0_2.json, version interna 0.2)",
+    "mensajes": 5000,
+    "recuerdos": 500,
+    "decisiones": 50,
+    "proyectos": 2,
+    "longitud_media_y_distribucion": "las declaradas por los metadatos congelados del propio corpus; no se regeneran",
+    "commit": "d27352b9f03dfc6a4d939b855474ce0ad1c2fc86",
+    "head_de_esquema": "61be4bb269bf",
+    "t0_rederivada_sobre_este_corpus": true,
+    "referencia_de_la_rederivacion": "artifacts/adr002_tolerances/rederivacion_t0_v0.1.json y su repeticion unica controlada rederivacion_t0_v0.2.json, aprobadas por el acta de ADR002-TOL-208"
+  },
+  "protocolo_aplicado": {
+    "protocolo": "SIRIUS_0.2_ADR_002_PROTOCOLO_MEDICION_v0.2_PROPUESTO.md",
+    "desviaciones": "ninguna",
+    "entorno": "LAB-LINUX: contenedor Linux del repositorio, carga declarada",
+    "semilla": "20260726, la congelada en los metadatos del corpus v0.4; el candidato no introduce aleatoriedad: la construccion del indice y la consulta son deterministas por enteros de punto fijo, orden total y desempate explicito",
+    "repeticiones_por_magnitud": 100
+  },
+  "sustrato_lexico": {
+    "es_el_fts5_medido": true,
+    "motivo": "primera ronda: todos los candidatos comparten el sustrato lexico FTS5 medido, de modo que EJE-1 y EJE-2 no se abren y rigen TOL-101L, TOL-104L y TOL-105. Ninguna de las dos senales tardias sustituye al sustrato lexico: la relacional se anade en E3 y la vectorial en E4",
+    "magnitudes": []
+  },
+  "indices_no_lexicos": [
+    {
+      "nombre": "indice vectorial distribucional disperso (sidecar SQLite)",
+      "tipo": "termino-contexto PPMI por coocurrencia documental, punto fijo x10^6, similitud coseno con solapamiento estructural minimo; consultado UNICAMENTE en E4, la segunda etapa del orden congelado",
+      "datos_canonicos_que_cubre": "memorias vigentes y decisiones aprobadas con su revision canonica vigente; la clave de sujeto es parte declarada de la representacion. No incorpora mensajes como verdad canonica, ni resultados esperados, ni identificadores de casos, ni adjudicaciones, ni etiquetas de candidato, ni datos personales reales, ni datos externos",
+      "numero_de_elementos": 550,
+      "estructura": "fichero SQLite sidecar SEPARADO del canon con tablas metadatos, vocabulario, vectores_de_termino, vectores_de_elemento y posting; la consulta devuelve identificadores, claves de sujeto y similitudes, nunca contenido; el contenido lo materializa el puerto canonico por IDENTIDAD EXACTA (por_identificadores). Todo dato consumido se valida contra el formato persistido normativo, con COTAS de longitud y de representabilidad (fe de erratas 04) que impiden que ninguna excepcion ajena a IndiceNoUtilizableError escape del candidato: conteos de <=19 digitos, celdas de vector de <=16384 caracteres validadas antes de deserializar, identidades de <=19 digitos con valor representable por SQLite. Los mensajes de CORRUPCION y de APERTURA no reproducen celdas, texto de excepciones internas ni datos del entorno; IndiceInconsistenteError si reproduce identidades canonicas ACOTADAS, por su contrato explicito de la correccion 02, y ningun otro contenido. Toda deteccion cierra la conexion antes de propagar. No es una segunda fuente de verdad",
+      "precision": "enteros de punto fijo a escala 10^6; ningun flotante persistido; determinismo comprobable por igualdad de volcado logico",
+      "bytes_totales": 33554432,
+      "bytes_por_elemento": 61008,
+      "ratio_sobre_el_canon": 30567,
+      "porcentaje_del_fichero": 1000,
+      "crecimiento_por_escala": {
+        "modelo": "lineal en elementos canonicos vigentes, con techo por vocabulario (4096) y dimensiones por vector (256)",
+        "metrica_de_ajuste": "bytes por elemento a la escala de referencia",
+        "elementos_550_b_techo": 33554432,
+        "elementos_5500_b_proyectado": 335544320,
+        "cota_superior": "el bloque de vectores de termino esta acotado por vocabulario x dimensiones y no crece sin limite con el corpus"
+      },
+      "construccion_y_reconstruccion": "borrado previo y reconstruccion COMPLETA desde el canon (nunca desde el propio indice), con huella SHA-256 del canon de origen registrada en los metadatos y validada al abrir contra su formato canonico exacto; determinista: mismo canon y mismos parametros producen exactamente los mismos enteros, y los pares cuyo peso redondea a cero se descartan. Indice inexistente, corrupto —fisica o logicamente, incluida una huella persistida sin formato de SHA-256 y toda celda que exceda las cotas de la fe de erratas 04—, desfasado o que cite identidades que el canon no contiene -> fallo cerrado TIPADO como subtipo de IndiceNoUtilizableError, con la conexion cerrada, sin degradacion silenciosa y con mensajes minimizados. Unica excepcion declarada y NO corregida: un canon ilegible durante la recomputacion de la huella puede escapar sin el error tipado especifico (limitacion 2 de la fe de erratas 03), si bien ya no filtra la conexion del sidecar",
+      "limites_por_magnitud": {
+        "construccion_ns": 5000000000,
+        "borrado_ns": 200000000,
+        "almacenamiento_b": 33554432,
+        "vocabulario_maximo": 4096,
+        "dimensiones_maximas_por_vector": 256,
+        "top_k": 8,
+        "solapamiento_minimo": 2,
+        "elementos_examinados_maximos": 4096,
+        "consulta_dentro_del_limite_de_e4_ns": 20000000
+      },
+      "comportamiento_de_borrado": "el fichero sidecar y sus -wal, -shm y -journal se eliminan enteros y la desaparicion se comprueba fichero a fichero; el canon no se toca",
+      "escala_comun": {
+        "elementos_canonicos_indexables": 550,
+        "mensajes": 5000,
+        "recuerdos": 500,
+        "decisiones": 50,
+        "proyectos": 2,
+        "unidades_logicas_primarias_tol207": 5670
+      }
+    }
+  ],
+  "ciclo_de_indice": {
+    "operaciones": {
+      "tamano": {
+        "limite": 33918976,
+        "fundamento": "origen mixto declarado: 364544 B del FTS5 medido por dbstat en el paquete 02 (ADR002-B no altera su DDL) + 33554432 B de techo ESTATICO del sidecar segun la aritmetica del paquete 12 (vectores de termino <=4096x256 dims, de elemento <=550x256, posting e indices); del sidecar no existe medicion alguna",
+        "ejecutable_treinta_veces": true,
+        "motivo_de_no_ejecutabilidad": null,
+        "evidencia_alternativa": null
+      },
+      "construccion": {
+        "limite": 5102571300,
+        "fundamento": "origen mixto declarado: P99 de construccion del FTS5 medido 30 veces en el paquete 02B + techo ESTATICO de 5e9 ns del sidecar, dominado por <=149442 filas insertadas x 20000 ns mas el conteo de coocurrencias (<=550x64x64) y el PPMI sobre los pares; sin medicion del candidato",
+        "ejecutable_treinta_veces": true,
+        "motivo_de_no_ejecutabilidad": null,
+        "evidencia_alternativa": null
+      },
+      "reconstruccion": {
+        "limite": 5044512400,
+        "fundamento": "origen mixto declarado: P99 de reconstruccion del FTS5 medido en el paquete 02B + el mismo techo estatico del sidecar, porque su reconstruccion es borrado mas construccion completa desde el canon",
+        "ejecutable_treinta_veces": true,
+        "motivo_de_no_ejecutabilidad": null,
+        "evidencia_alternativa": null
+      },
+      "borrado": {
+        "limite": 322865200,
+        "fundamento": "origen mixto declarado: P99 del borrado completo del FTS5 medido en el paquete 02B + techo estatico de 2e8 ns para eliminar los cuatro ficheros del sidecar",
+        "ejecutable_treinta_veces": true,
+        "motivo_de_no_ejecutabilidad": null,
+        "evidencia_alternativa": null
+      }
+    },
+    "reconstruccion_desde_el_canon": "dos derivados, un mismo contrato: el FTS5 se reconstruye con el DDL leido de sqlite_master —tablas Y triggers— y se repuebla desde memory_revisions, decision_revisions y messages; el sidecar vectorial se reconstruye entero desde memorias vigentes y decisiones aprobadas con verificacion de huella de origen. Ninguno se repuebla desde si mismo ni desde el otro",
+    "desaparicion_completa": "borrar el FTS5 elimina triggers, tablas virtuales y sombras; borrar el sidecar elimina .db, -wal, -shm y -journal; ambas desapariciones se comprueban objeto a objeto y fichero a fichero",
+    "tasa_de_exito_del_cien_por_cien": "el paquete 02B observo 100 % en el ciclo del FTS5 en 30 repeticiones; para el sidecar la igualdad de volcado logico tras reconstruir es criterio de las pruebas tecnicas posteriores a esta ficha, y el benchmark debera observar 100 % en sus 30 repeticiones",
+    "purga_fisica_sin_fragmento": "la purga cubre .db, -wal, -shm y -journal del fichero canonico Y del sidecar vectorial, con el modelo de amenaza de ADR-001; el sidecar contiene representacion parcialmente reversible del canon y por eso se destruye explicitamente"
+  },
+  "coste_por_etapa": {
+    "etapas": [
+      {
+        "etapa": "E0",
+        "coste_local_objetivo_ns": 25000,
+        "coste_local_limite_ns": 50000,
+        "operaciones_locales": "cero sentencias SQL: validacion de peticion y parametrizacion de G1-G10",
+        "coste_externo_declarado": "ninguno: ADR002-D no invoca servicios externos ni red en ninguna etapa; sus dos senales son locales y sin proveedor"
+      },
+      {
+        "etapa": "E1",
+        "coste_local_objetivo_ns": 1500000,
+        "coste_local_limite_ns": 3000000,
+        "operaciones_locales": "hasta 37 sentencias dirigidas: <=16 claves exactas x 2 SELECT acotados y una MATCH de FTS5, mas sus materializaciones",
+        "coste_externo_declarado": "ninguno: ADR002-D no invoca servicios externos ni red en ninguna etapa; sus dos senales son locales y sin proveedor"
+      },
+      {
+        "etapa": "E2",
+        "coste_local_objetivo_ns": 1500000,
+        "coste_local_limite_ns": 3000000,
+        "operaciones_locales": "hasta 3 sentencias dirigidas: una MATCH de FTS5 con las variantes morfologicas y sus materializaciones",
+        "coste_externo_declarado": "ninguno: ADR002-D no invoca servicios externos ni red en ninguna etapa; sus dos senales son locales y sin proveedor"
+      },
+      {
+        "etapa": "E3",
+        "coste_local_objetivo_ns": 4000000,
+        "coste_local_limite_ns": 8000000,
+        "operaciones_locales": "hasta 15 sentencias dirigidas: las hasta 13 de la expansion lexico-estructurada de la base A mas UNA consulta de aristas salientes acotada a 16 semillas y 64 aristas y UNA materializacion por identidad de sus destinos. El sidecar vectorial no se consulta en esta etapa",
+        "coste_externo_declarado": "ninguno: ADR002-D no invoca servicios externos ni red en ninguna etapa; sus dos senales son locales y sin proveedor"
+      },
+      {
+        "etapa": "E4",
+        "coste_local_objetivo_ns": 8000000,
+        "coste_local_limite_ns": 16000000,
+        "operaciones_locales": "una sentencia dirigida acotada sobre el indice de historial, mas las tres sentencias dirigidas al sidecar vectorial —vocabulario, vectores de termino y candidatos de posting— y UNA materializacion por identidad de sus top-8. El plano relacional no se consulta en esta etapa",
+        "coste_externo_declarado": "ninguno: ADR002-D no invoca servicios externos ni red en ninguna etapa; sus dos senales son locales y sin proveedor"
+      },
+      {
+        "etapa": "E5",
+        "coste_local_objetivo_ns": 2500000,
+        "coste_local_limite_ns": 5000000,
+        "operaciones_locales": "cero sentencias SQL: deduplicacion, agrupacion, orden, G12, limite y traza en memoria",
+        "coste_externo_declarado": "ninguno: ADR002-D no invoca servicios externos ni red en ninguna etapa; sus dos senales son locales y sin proveedor"
+      }
+    ],
+    "coste_de_la_senal_de_consulta": "la senal de consulta de E3 es lexica y se computa en memoria: tokenizacion, pliegue de diacriticos y recorte de sufijos, sin modelo ni servicio. La de E4 es el vector de consulta, construido con el mismo vocabulario y la misma transformacion en punto fijo del indice, tambien en memoria y sin proveedor. Las dos quedan dentro del limite local de su etapa",
+    "coste_local_total_ns": 35050000,
+    "coste_externo_total": "ninguno. TOL-202 prohibe sumar coste externo al local, y aqui no hay coste externo que declarar: cero red, cero servicios",
+    "coste_extremo_a_extremo_ns": 35050000
+  },
+  "extremo_a_extremo": {
+    "objetivo_p95_ns": 12000000,
+    "limite_duro_p99_ns": 35050000,
+    "percentil_y_n": "P95 y P99 sobre 100 repeticiones por magnitud en cada una de las 11 sesiones exigidas, conforme al protocolo v0.2",
+    "fundamento": "el limite duro es la suma de los limites locales por etapa del §2.9. Cuatro etapas conservan el limite de la base por composicion porque su camino es el suyo sin cambio. E3 se mantiene en los 8 ms de la base: ADR002-D anade alli dos sentencias dirigidas y acotadas sobre las hasta trece que la base ya ejecuta, y las absorbe dentro de ese presupuesto, exactamente como ADR002-C. E4 sube de 4 ms a 16 ms porque recibe la senal vectorial completa: son los mismos 12 ms de holgura que ADR002-B declaro para ella cuando la situaba en E3, trasladados a la etapa que el orden congelado le asigna. Por eso el limite duro de ADR002-D coincide exactamente con el de ADR002-B: mover una senal de etapa no anade trabajo, solo lo cambia de sitio. Todo procede de analisis estatico y de ninguna medicion, porque no existe ninguna. El objetivo P95 se fija en 12 ms porque el camino tipico se detiene por S1 en E1 o E2 sin abrir ninguna de las dos senales",
+    "no_deriva_de_tol_102b": true,
+    "no_invoca_el_barrido_de_t0": true
+  },
+  "almacenamiento": {
+    "presupuesto_absoluto_b": 1610612736,
+    "consumo_declarado_b": 35016704,
+    "porcentaje_por_mil": 21,
+    "proyeccion_50000_b": 350167040,
+    "cabe": true
+  },
+  "estabilidad": {
+    "sesiones_previstas": 11,
+    "sm_ns": 17405,
+    "u50_ns": 2685,
+    "regimen_p50": "relativo <= 20 % por encima de U50; B50(M) por debajo; sin afirmacion bajo SM",
+    "regimen_p95": "absoluto contra B95(M) en todo el rango cubierto; NO_EVALUABLE bajo SM o por encima de la mayor escala medida",
+    "sin_umbral_relativo_para_p95": true,
+    "consulta_de_banda": "M es el minimo entre sesiones del mismo percentil que se evalua",
+    "repeticion_unica_y_no_evaluable": "si la comparacion resulta invalida por variacion se repite una unica vez (§6.8); si vuelve a fallar, el candidato queda NO EVALUABLE en rendimiento (§6.9)"
+  },
+  "banda_temporal": {
+    "equivalencia_externa": "ausencia y no reportable comparten el estado externo unico SIN_RESULTADO_UTILIZABLE, emitido por el motor comun sin ramificar por la causa; la senal vectorial no anade ningun estado externo distinguible",
+    "fraccion_de_signo_pareada": "el motor recorre las mismas etapas autorizadas y aplica las mismas puertas en ambos casos; la diferencia queda en el estado interno, no en el trabajo observable",
+    "ausencia_de_separacion_material": "la salida externa no distingue ausencia real de no reportable: misma redaccion, mismo conteo y misma clase de estado (B04-RF-26)",
+    "repeticion_en_sesion_independiente": "la comprobacion diferencial se ejecuta en sesiones independientes conforme al protocolo v0.2, no dentro de la misma sesion",
+    "modelo_de_amenaza": "observador que emite consultas y mide tiempo y forma de la respuesta, sin acceso al proceso ni al fichero; no se asume observador con acceso local privilegiado",
+    "no_hereda_la_indistinguibilidad_de_la_linea_base": true
+  },
+  "purga": {
+    "secuencia": "cerrar conexiones, borrar el derivado FTS5 entero —triggers, tablas virtuales y sombras—, borrar el sidecar vectorial entero —fichero, wal, shm y journal—, eliminar el fichero de base y sus asociados, y verificar la desaparicion objeto a objeto y fichero a fichero antes de declarar la purga",
+    "ficheros_cubiertos": [
+      ".db",
+      "-wal",
+      "-shm",
+      "-journal"
+    ],
+    "payload_reversible_en_el_derivado": "el FTS5 conserva el texto vigente indexado en sus tablas sombra y el sidecar conserva el vocabulario en claro, las claves de sujeto y los pesos derivados del texto vigente: ambos son representacion parcialmente reversible del canon y ambos se destruyen explicitamente en la purga",
+    "modelo_de_amenaza": "no mas debil que el de ADR-001: se asume adversario con acceso posterior al soporte fisico, y por eso ambos derivados se destruyen explicitamente en vez de confiarse al borrado logico",
+    "comprobacion_propuesta": "tras la purga, inspeccion de los ficheros del canon y del sidecar y busqueda del payload literal en el soporte; la comprobacion se ejecuta bajo autorizacion de benchmark, no aqui"
+  },
+  "huella_candidato": {
+    "commit_del_prototipo": "bfaa8c973b4622feae3b0c72be6f5a2bd3dda9bb",
+    "hash_del_arbol_de_fuentes": "arbol Git 230f5d5ecebbea6f7f6d89e6dca772329f4266d1 de experiments/adr002/candidates en el commit que implementa ADR002-D; subarboles: 30984c1f054fc47b12f708fad23ddf617a46645c (common, sin cambios), ceb4247c9fee913ae86d5203f199b19341f1c833 (adr002_a, sin cambios), 43eaa374d6eef827599472588a54494be9704565 (adr002_b, sin cambios), 6767fb9f3bc276fe0361174c300634dc0cef4860 (adr002_c, sin cambios) y 2c2d22621e6860140b4141c1c3619511e4e745b5 (adr002_d, propio de este candidato)",
+    "migraciones_o_ddl": "ninguna sobre el canon: ADR002-D usa la cadena canonica de Alembic hasta 61be4bb269bf sin anadir migraciones ni DDL al canon. El unico DDL nuevo es el del sidecar vectorial declarado en el §2.11, creado en un fichero separado y descartable; el plano relacional no es derivado y no lo crea este candidato",
+    "artefactos_y_su_hash": "ninguno generado por adelantado: el sidecar se construye desde el canon cuando se necesita, registra la huella SHA-256 de su canon de origen en sus metadatos y no se versiona en el repositorio; el plano relacional lo materializa la proyeccion experimental v0.1, de huella logica 755cbdfea35969dc570ac9a94a23581f8e433c3575220d344e85c6cb2c47e33d",
+    "reproduccion": "uv run pytest experiments/adr002/candidates -q; la ejecucion sobre el corpus oficial exige una autorizacion de benchmark que no existe"
+  },
+  "declaracion_de_congelacion": {
+    "texto": "Declaro que los valores de esta ficha se han fijado antes de la primera ejecucion oficial del candidato; que el orden de sus dos senales tardias quedo congelado por SIRIUS_0.2_ADR_002_ORDEN_CONGELADO_DE_LAS_ETAPAS_TARDIAS_DE_ADR002_D_v1.0.md en un commit anterior al de la implementacion y al de esta ficha; que ninguno de estos valores procede de resultado observado alguno del propio candidato; y que cualquier modificacion posterior obligara a nueva version de ficha y a repetir las ejecuciones ya realizadas.",
+    "responsable": "Usuario / Proyecto Sirius",
+    "fecha": "2026-08-07",
+    "valores_anteriores_a_la_primera_ejecucion": true
+  },
+  "no_contiene_resultados": true
+}

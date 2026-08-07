@@ -230,6 +230,12 @@ HASHES_NO_ALMACENADOS: Final[Mapping[str, str]] = {
         "que es la base real de C, en vez de la de ADR002-B, y no arrastra ningun "
         "contenido de senal vectorial"
     ),
+    "21ce3848472eb44162794ab66254b8b541d870ce": (
+        "huella canonica de la ficha ADR002-D v1, la primera del candidato de dos "
+        "senales tardias separadas: se congela despues del acta que congelo el orden "
+        "de sus etapas y antes de su primera ejecucion oficial, y no procede de "
+        "ningun resultado observado"
+    ),
     "5d5e13eb702b1ffeb4403d7a5441f4da3c65b66b": (
         "huella canonica de la ficha ADR002-C v1, la primera del candidato "
         "relacional explicito: se congela antes de su primera ejecucion y no "
