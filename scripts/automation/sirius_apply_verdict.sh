@@ -146,9 +146,21 @@ stop_safely() {
   # venía a diagnosticar. Un diagnóstico al que se le cree tiene que decir solo
   # lo que sostiene, y aquí lo único que se sostiene sin medir es dónde mirar.
   if [ -n "${GITHUB_RUN_ID:-}" ] && [ -n "${GITHUB_REPOSITORY:-}" ]; then
-    printf '\n- Registro del job: %s/%s/actions/runs/%s\n' \
-      "${GITHUB_SERVER_URL:-https://github.com}" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" \
-      >>"$body_file"
+    # El intento forma parte de la dirección; no es un adorno. `/actions/runs/ID`
+    # resuelve SIEMPRE al último intento, y SIRIUS_RUN_TAG incluye el intento a
+    # propósito para que cada reejecución publique su propia parada. Sin
+    # `/attempts/N`, la parada del intento 1 enlazaría al registro del intento 2:
+    # un enlace que promete «esta ejecución» y entrega otra. Es exactamente el
+    # defecto que retiró al diagnóstico medido —afirmar más de lo que el dato
+    # sostiene— y aquí se evita sin medir nada, componiendo la dirección con los
+    # identificadores que Actions ya da por ciertos.
+    local run_url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+    if [ -n "${GITHUB_RUN_ATTEMPT:-}" ]; then
+      run_url="${run_url}/attempts/${GITHUB_RUN_ATTEMPT}"
+    fi
+    # «Ejecución», no «job»: la dirección apunta al run, que puede contener
+    # varios jobs. Decir «job» ya sería afirmar de más.
+    printf '\n- Registro de esta ejecución: %s\n' "$run_url" >>"$body_file"
   fi
 
   if ! transition "$marker" "$body_file" "sirius:failed-safely" "D93F0B" \

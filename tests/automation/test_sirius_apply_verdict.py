@@ -1084,7 +1084,13 @@ def test_stop_diagnostic_cannot_forge_scanner_markers(
 # --------------------------------------------------------------------------- #
 
 
-def test_the_stop_points_at_the_job_log(tmp_path: Path) -> None:
+def _stop_link(comments: str) -> str:
+    """Devuelve la dirección publicada por la parada, o `""` si no hay ninguna."""
+    encontrado = re.search(r"- Registro de esta ejecución: (\S+)", comments)
+    return encontrado.group(1) if encontrado else ""
+
+
+def test_the_stop_points_at_the_run_log(tmp_path: Path) -> None:
     # Una parada que solo dice "no escribió veredicto" obliga a buscar a mano
     # dónde mirar. El enlace es un hecho: no se mide ni se interpreta nada, así
     # que no puede ser falso — a diferencia del diagnóstico medido que se
@@ -1093,15 +1099,64 @@ def test_the_stop_points_at_the_job_log(tmp_path: Path) -> None:
     _seed_issue(env, ["sirius:repairing"])
     env["GITHUB_RUN_ID"] = "12345"
     env["GITHUB_REPOSITORY"] = REPO
+    env["GITHUB_SERVER_URL"] = "https://github.com"
     r = _run(env, "corrector", tmp_path / "no-existe.json")
     assert r.returncode != 0
-    assert "actions/runs/12345" in _comments(env)
+    assert _stop_link(_comments(env)) == f"https://github.com/{REPO}/actions/runs/12345"
+
+
+def test_the_link_identifies_the_attempt_that_stopped(tmp_path: Path) -> None:
+    # `/actions/runs/ID` resuelve SIEMPRE al último intento. Y este script
+    # publica una parada POR INTENTO a propósito (SIRIUS_RUN_TAG lleva el
+    # intento), así que sin `/attempts/N` la parada del intento 1 quedaría
+    # enlazando al registro del 2: un enlace que promete "esta ejecución" y
+    # entrega otra. Sería el mismo defecto —afirmar más de lo que el dato
+    # sostiene— que obligó a retirar el diagnóstico medido.
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:repairing"])
+    env["GITHUB_RUN_ID"] = "6001"
+    env["GITHUB_REPOSITORY"] = REPO
+    env["GITHUB_SERVER_URL"] = "https://github.com"
+
+    primero = dict(env)
+    primero["GITHUB_RUN_ATTEMPT"] = "1"
+    assert _run(primero, "corrector", tmp_path / "no-existe.json").returncode != 0
+    enlace_1 = _stop_link(_comments(env))
+
+    # Reejecución del MISMO run: publica su propia parada (marcador distinto).
+    (_md(env) / f"labels_{ISSUE}.txt").write_text("sirius:repairing\n", encoding="utf-8")
+    segundo = dict(env)
+    segundo["GITHUB_RUN_ATTEMPT"] = "2"
+    assert _run(segundo, "corrector", tmp_path / "no-existe.json").returncode != 0
+
+    enlaces = re.findall(r"- Registro de esta ejecución: (\S+)", _comments(env))
+    assert len(enlaces) == 2, f"cada intento publica su parada: {enlaces}"
+    assert enlace_1 == f"https://github.com/{REPO}/actions/runs/6001/attempts/1"
+    assert enlaces[1] == f"https://github.com/{REPO}/actions/runs/6001/attempts/2"
+    assert enlaces[0] != enlaces[1], "las dos paradas enlazan al mismo registro"
+
+
+def test_the_link_honours_the_server_of_the_installation(tmp_path: Path) -> None:
+    # En GitHub Enterprise el servidor no es github.com. Componer la dirección a
+    # mano con el dominio público daría un enlace roto justo cuando hace falta.
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:repairing"])
+    env["GITHUB_RUN_ID"] = "77"
+    env["GITHUB_REPOSITORY"] = REPO
+    env["GITHUB_SERVER_URL"] = "https://ghe.example.org"
+    r = _run(env, "corrector", tmp_path / "no-existe.json")
+    assert r.returncode != 0
+    assert _stop_link(_comments(env)).startswith("https://ghe.example.org/")
 
 
 def test_without_actions_variables_the_stop_message_is_unchanged(tmp_path: Path) -> None:
-    # Fuera de Actions no hay job al que enlazar: no se inventa uno.
+    # Fuera de Actions no hay ejecución a la que enlazar: no se inventa una.
     env = _setup(tmp_path)
     _seed_issue(env, ["sirius:repairing"])
     r = _run(env, "corrector", tmp_path / "no-existe.json")
     assert r.returncode != 0
-    assert "actions/runs" not in _comments(env)
+    comentarios = _comments(env)
+    assert "actions/runs" not in comentarios
+    assert _stop_link(comentarios) == ""
+    # Y la parada sigue publicándose: no enlazar no puede costar el diagnóstico.
+    assert "sin-veredicto" in comentarios
