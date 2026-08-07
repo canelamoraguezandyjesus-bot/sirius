@@ -1,6 +1,6 @@
 """``ADR002-D``: que la ficha diga lo que el codigo hace, y en ese orden.
 
-Se ejecutan **solo despues** de que ``ficha_ADR002-D_v3.json`` sea ancestro
+Se ejecutan **solo despues** de que ``ficha_ADR002-D_v4.json`` sea ancestro
 estricto del commit que las corre, que es la regla 3 de ``TOL-210``: una
 ejecucion que no venga precedida por su ficha no es evidencia utilizable.
 
@@ -33,7 +33,7 @@ from experiments.adr002.candidates.adr002_d.candidate import (
 from experiments.adr002.cards import card_protocol as cp
 
 RAIZ = Path(__file__).resolve().parents[3]
-FICHA: Final = "artifacts/adr002_cards/ficha_ADR002-D_v3.json"
+FICHA: Final = "artifacts/adr002_cards/ficha_ADR002-D_v4.json"
 IMPLEMENTACION: Final = "experiments/adr002/candidates/adr002_d/candidate.py"
 ACTA: Final = f"docs/architecture/{ACTA_DEL_ORDEN}"
 
@@ -43,9 +43,9 @@ HUELLA_FICHA_D_V2: Final = "5ca687f88a7d194a922ca39eb32778c0ab02608c"
 #: La v1, conservada y marcada, con la huella que la sustitucion recomputo.
 HUELLA_FICHA_D_V1_SUSTITUIDA: Final = "0ca203f07ebc550a4e37f956f92aa1723f927572"
 
-HUELLA_A_VIGENTE: Final = "d305073ce5bb21a07e8523969752a9f06a966d01"
-HUELLA_B_VIGENTE: Final = "b7ea269da379fc0de324efa5ca2da7baa616d112"
-HUELLA_C_VIGENTE: Final = "ef71f944536ffc07dd18b39278ba43da2776232c"
+HUELLA_A_VIGENTE: Final = "653f216f67d389fdf0472159eea896366e623484"
+HUELLA_B_VIGENTE: Final = "93b9cf6c3a49ccd2ad0ef455ddf4a880c78a6d05"
+HUELLA_C_VIGENTE: Final = "5801987de7574c0b416c7b9c74acc6b527652f79"
 
 
 def _git(*argumentos: str) -> str:
@@ -125,7 +125,7 @@ def test_el_orden_se_congelo_antes_que_la_ficha() -> None:
 def test_la_ficha_declara_la_identidad_correcta(ficha: dict) -> None:
     assert ficha["identidad"]["candidato"] == "ADR002-D"
     assert ficha["identidad"]["papel"] == cp.PAPEL_CANDIDATO
-    assert ficha["identidad"]["version"] == 3
+    assert ficha["identidad"]["version"] == 4
     assert ficha["identidad"]["sustituye_a"] == 2
     assert ficha["estado"] == cp.ESTADO_CONGELADA
     assert ficha["congelacion"]["huella"] == HUELLA_FICHA_D_V2
@@ -143,7 +143,7 @@ def test_la_v1_se_conserva_marcada_y_la_v2_es_la_unica_congelada() -> None:
     assert [ruta.name for ruta in fichas] == [
         "ficha_ADR002-D_v1.json",
         "ficha_ADR002-D_v2.json",
-        "ficha_ADR002-D_v3.json",
+        "ficha_ADR002-D_v4.json",
     ]
     v1 = json.loads(
         (RAIZ / "artifacts/adr002_cards/ficha_ADR002-D_v1.json").read_text(encoding="utf-8")
@@ -218,9 +218,9 @@ def test_la_ficha_cita_las_versiones_vigentes_de_sus_dependencias(ficha: dict) -
 @pytest.mark.parametrize(
     ("huella", "ruta"),
     [
-        (HUELLA_A_VIGENTE, "artifacts/adr002_cards/ficha_ADR002-A_v6.json"),
-        (HUELLA_B_VIGENTE, "artifacts/adr002_cards/ficha_ADR002-B_v8.json"),
-        (HUELLA_C_VIGENTE, "artifacts/adr002_cards/ficha_ADR002-C_v3.json"),
+        (HUELLA_A_VIGENTE, "artifacts/adr002_cards/ficha_ADR002-A_v7.json"),
+        (HUELLA_B_VIGENTE, "artifacts/adr002_cards/ficha_ADR002-B_v9.json"),
+        (HUELLA_C_VIGENTE, "artifacts/adr002_cards/ficha_ADR002-C_v4.json"),
     ],
 )
 def test_las_huellas_citadas_son_las_reales(huella: str, ruta: str) -> None:
@@ -299,10 +299,10 @@ def test_e3_conserva_el_limite_de_la_base_y_e4_recibe_la_senal_vectorial(
     """La aritmetica que el orden congelado obliga, comprobada contra A y B."""
     por_etapa = {e["etapa"]: e["coste_local_limite_ns"] for e in ficha["coste_por_etapa"]["etapas"]}
     a5 = json.loads(
-        (RAIZ / "artifacts/adr002_cards/ficha_ADR002-A_v6.json").read_text(encoding="utf-8")
+        (RAIZ / "artifacts/adr002_cards/ficha_ADR002-A_v7.json").read_text(encoding="utf-8")
     )
     b7 = json.loads(
-        (RAIZ / "artifacts/adr002_cards/ficha_ADR002-B_v8.json").read_text(encoding="utf-8")
+        (RAIZ / "artifacts/adr002_cards/ficha_ADR002-B_v9.json").read_text(encoding="utf-8")
     )
     de_a = {e["etapa"]: e["coste_local_limite_ns"] for e in a5["coste_por_etapa"]["etapas"]}
     de_b = {e["etapa"]: e["coste_local_limite_ns"] for e in b7["coste_por_etapa"]["etapas"]}

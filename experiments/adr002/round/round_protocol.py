@@ -71,10 +71,10 @@ PARTICIPANTES: Final[tuple[str, ...]] = cp.CANDIDATOS
 #: (`ADR002-TOL-210`).
 FICHAS_VIGENTES: Final[Mapping[str, tuple[int, str]]] = {
     "T0-control": (1, "d47a767e61b30729e15f48c9924413f6fddc9429"),
-    "ADR002-A": (6, "d305073ce5bb21a07e8523969752a9f06a966d01"),
-    "ADR002-B": (8, "b7ea269da379fc0de324efa5ca2da7baa616d112"),
-    "ADR002-C": (3, "ef71f944536ffc07dd18b39278ba43da2776232c"),
-    "ADR002-D": (3, "5ca687f88a7d194a922ca39eb32778c0ab02608c"),
+    "ADR002-A": (7, "653f216f67d389fdf0472159eea896366e623484"),
+    "ADR002-B": (9, "93b9cf6c3a49ccd2ad0ef455ddf4a880c78a6d05"),
+    "ADR002-C": (4, "5801987de7574c0b416c7b9c74acc6b527652f79"),
+    "ADR002-D": (4, "eed670548216aef2fef23e435ad639d2fab72011"),
 }
 
 #: Version que el acta de preparacion de cada candidato aprueba. Sin esto, la
@@ -83,20 +83,20 @@ FICHAS_VIGENTES: Final[Mapping[str, tuple[int, str]]] = {
 #: aprobo. Congelar es tecnico, preparar es de gobierno, y el gobierno se
 #: pronuncia sobre **una** version, no sobre un nombre de candidato.
 VERSION_APROBADA_POR_ACTA: Final[Mapping[str, int]] = {
-    "ADR002-A": 6,
-    "ADR002-B": 8,
-    "ADR002-C": 3,
-    "ADR002-D": 3,
+    "ADR002-A": 7,
+    "ADR002-B": 9,
+    "ADR002-C": 4,
+    "ADR002-D": 4,
 }
 
 #: Actas de gobierno que declaran preparado a cada participante. El control no
 #: tiene acta de preparación: la suya es la de autorización de `T0` bajo
 #: TOL-208, que ya se ejecutó, y su ficha basta.
 ACTAS_DE_PREPARACION: Final[Mapping[str, str]] = {
-    "ADR002-A": "SIRIUS_0.2_ADR_002_REAPROBACION_SUCESORAS_TRAS_CORRECCION_v1.0.md",
-    "ADR002-B": "SIRIUS_0.2_ADR_002_REAPROBACION_SUCESORAS_TRAS_CORRECCION_v1.0.md",
-    "ADR002-C": "SIRIUS_0.2_ADR_002_REAPROBACION_SUCESORAS_TRAS_CORRECCION_v1.0.md",
-    "ADR002-D": "SIRIUS_0.2_ADR_002_REAPROBACION_SUCESORAS_TRAS_CORRECCION_v1.0.md",
+    "ADR002-A": "SIRIUS_0.2_ADR_002_APROBACION_SUCESORAS_DEL_CIERRE_v1.0.md",
+    "ADR002-B": "SIRIUS_0.2_ADR_002_APROBACION_SUCESORAS_DEL_CIERRE_v1.0.md",
+    "ADR002-C": "SIRIUS_0.2_ADR_002_APROBACION_SUCESORAS_DEL_CIERRE_v1.0.md",
+    "ADR002-D": "SIRIUS_0.2_ADR_002_APROBACION_SUCESORAS_DEL_CIERRE_v1.0.md",
 }
 
 # --------------------------------------------------------------------------
