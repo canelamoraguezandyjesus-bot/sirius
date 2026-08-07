@@ -454,9 +454,22 @@ def test_un_fallo_de_aislamiento_bloquea() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_la_salida_prevista_no_existe_todavia() -> None:
-    """Comprobar no produce artefacto: ejecutar es otro acto, y no ha ocurrido."""
-    assert not (RAIZ / run_round.SALIDA_PREVISTA).exists()
+def test_la_salida_la_escribio_la_ejecucion_y_no_la_comprobacion() -> None:
+    """El artefacto existe, y lo escribió el otro acto.
+
+    Mientras la ronda no se había ejecutado, esta prueba exigía que la salida
+    **no** existiera. La ronda se ejecutó, de modo que ahora existe y lo que hay
+    que seguir vigilando es lo mismo por el otro lado: que la escribiera la
+    ejecución. Su estado lo dice —`EVIDENCIA`—, y `test_comprobar_no_crea_nada`
+    demuestra que comprobar no la habría creado.
+    """
+    salida = RAIZ / run_round.SALIDA_PREVISTA
+    assert salida.exists()
+    artefacto = json.loads(salida.read_text(encoding="utf-8"))
+    assert artefacto["estado"] == "EVIDENCIA"
+    assert artefacto["acta_de_autorizacion"] == rp.ACTA_DE_AUTORIZACION
+    assert artefacto["plan"]["sesiones"] == rp.SESIONES_EXIGIDAS
+    assert sorted(artefacto["conformidad"]) == sorted(rp.PARTICIPANTES)
 
 
 def test_comprobar_no_crea_nada(tmp_path: Path) -> None:

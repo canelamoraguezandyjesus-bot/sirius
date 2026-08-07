@@ -360,3 +360,92 @@ def test_lo_que_no_es_del_canon_se_aparta_y_se_declara(
     for caso in casos:
         for identidad in (*caso.resultado_esperado, *caso.prohibidos, *caso.elegibles):
             assert identidad.split(":")[0] in ("MEMORIA", "DECISION"), identidad
+
+
+# ---------------------------------------------------------------------------
+# F. Los resultados publicados, recomputables desde su evidencia
+# ---------------------------------------------------------------------------
+
+ARTEFACTO: Final = RAIZ / "artifacts/adr002_round/ronda_primaria_v0.1.json"
+EVIDENCIA: Final = RAIZ / "artifacts/adr002_round/ronda_primaria_v0.1_evidencia.json"
+
+
+@pytest.fixture(scope="module")
+def publicado() -> tuple[dict[str, object], dict[str, object]]:
+    import json
+
+    return (
+        json.loads(ARTEFACTO.read_text(encoding="utf-8")),
+        json.loads(EVIDENCIA.read_text(encoding="utf-8")),
+    )
+
+
+def test_las_cifras_publicadas_se_recomputan_desde_la_evidencia(
+    publicado: tuple[dict[str, object], dict[str, object]],
+) -> None:
+    """Una cifra que no se recomputa desde su evidencia no es evidencia.
+
+    Es la comprobación que impide que el resumen y el detalle se separen: si
+    alguien tocara uno de los dos, esto lo delata.
+    """
+    artefacto, evidencia = publicado
+    conformidad = artefacto["conformidad"]
+    veredictos = evidencia["veredictos"]
+    assert isinstance(conformidad, dict) and isinstance(veredictos, dict)
+    for participante, resumen in conformidad.items():
+        detalle = [v for v in veredictos[participante] if v["adjudicable"]]
+        assert resumen["casos_adjudicados"] == len(detalle), participante
+        assert resumen["contaminacion_total"] == sum(len(v["contaminacion"]) for v in detalle), (
+            participante
+        )
+        assert resumen["fuga_de_ambito_total"] == sum(len(v["fuga_de_ambito"]) for v in detalle), (
+            participante
+        )
+        assert resumen["confusion_de_polaridad_total"] == sum(
+            len(v["confusion_de_polaridad"]) for v in detalle
+        ), participante
+        assert resumen["casos_con_resultado_exacto"] == sum(
+            1 for v in detalle if v["resultado_exacto"]
+        ), participante
+
+
+def test_los_percentiles_publicados_se_recomputan_de_las_muestras(
+    publicado: tuple[dict[str, object], dict[str, object]],
+) -> None:
+    """`P50` y `P95` por rango más cercano, nunca interpolados (§2.4)."""
+    from experiments.adr002.tolerances import profile_protocol as pp
+
+    artefacto, evidencia = publicado
+    rendimiento = artefacto["rendimiento"]
+    sesiones = evidencia["sesiones"]
+    assert isinstance(rendimiento, dict) and isinstance(sesiones, list)
+    assert len(sesiones) == rp.SESIONES_EXIGIDAS
+    for participante, cifras in rendimiento.items():
+        vectores = [list(s["muestras_ns"][participante]) for s in sesiones]
+        assert all(len(v) == rp.REPETICIONES for v in vectores), participante
+        assert cifras["p50_por_sesion_ns"] == [pp.p50_ns(v) for v in vectores], participante
+        assert cifras["p95_por_sesion_ns"] == [pp.p95_ns(v) for v in vectores], participante
+        assert cifras["n"] == rp.SESIONES_EXIGIDAS * rp.REPETICIONES
+
+
+def test_las_once_sesiones_corrieron_en_procesos_distintos(
+    publicado: tuple[dict[str, object], dict[str, object]],
+) -> None:
+    """Once sesiones **independientes**: once procesos, no once bucles."""
+    _, evidencia = publicado
+    sesiones = evidencia["sesiones"]
+    assert isinstance(sesiones, list)
+    pids = [s["pid"] for s in sesiones]
+    assert len(set(pids)) == rp.SESIONES_EXIGIDAS
+
+
+def test_la_ronda_no_eligio_ninguna_alternativa(
+    publicado: tuple[dict[str, object], dict[str, object]],
+) -> None:
+    """El artefacto publica cifras y veredictos; elegir es otro acto."""
+    artefacto, _ = publicado
+    assert "no_elige" in artefacto
+    assert "ganador" not in artefacto
+    conformidad = artefacto["conformidad"]
+    assert isinstance(conformidad, dict)
+    assert not any(r["pasa_las_puertas"] for r in conformidad.values())
