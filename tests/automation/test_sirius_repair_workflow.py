@@ -201,14 +201,36 @@ def test_the_diagnosis_never_turns_the_flow_red() -> None:
     assert "always()" in str(paso.get("if") or "")
 
 
+def test_the_starting_head_comes_from_the_api_not_the_local_tree() -> None:
+    # Este workflow hace checkout de `main` a propósito, así que `git rev-parse
+    # HEAD` devuelve el head de main, no el de la PR. Compararlo después contaba
+    # los commits en que la PR diverge de main: un número positivo y creíble
+    # aunque el corrector no hubiera tocado nada.
+    guion = str(_step(_load(), "head de la PR antes de corregir")["run"])
+    assert "gh api" in guion and "head.sha" in guion
+    assert "git rev-parse" not in guion
+
+
 def test_the_diagnosis_reports_what_distinguishes_working_from_doing_nothing() -> None:
-    doc = _load()
-    guion = str(_step(doc, "diagnostico")["run"])
-    # Sin estos hechos, "sin-veredicto" no permite saber si hubo trabajo.
-    assert "git rev-parse HEAD" in guion
-    assert "git status --porcelain" in guion
-    assert "git log --oneline" in guion
+    guion = str(_step(_load(), "diagnostico")["run"])
+    # La pregunta útil es si el head de la PR se movió, no cuántos commits hay:
+    # se responde con dos lecturas de la misma fuente, sin rangos de git.
+    assert "gh api" in guion and "head.sha" in guion
+    assert "git log" not in guion
     assert "VERDICT_FILE" in guion
+    assert "git status --porcelain" in guion
+
+
+def test_no_measurement_is_published_when_its_command_failed() -> None:
+    # `git log | wc -l` emite 0 aunque git falle, y con `pipefail` sin `errexit`
+    # la asignación no lo detecta: ese 0 se leería como "no hizo nada". Cada
+    # medida comprueba su estado y cae a `indeterminado`.
+    guion = str(_step(_load(), "diagnostico")["run"])
+    for medida in ("tamano", "head_ahora", "avance", "sucio"):
+        assert f'{medida}="indeterminado"' in guion or f'{medida}="ausente"' in guion, medida
+    # Y las lecturas van dentro de un `if` que comprueba el estado del comando.
+    assert 'if estado="$(git status --porcelain 2>/dev/null)"; then' in guion
+    assert 'if leido="$(gh api' in guion
 
 
 def test_the_verdict_step_receives_the_diagnosis() -> None:
@@ -243,7 +265,7 @@ def test_the_starting_head_is_captured_before_the_corrector_runs() -> None:
     # commit, y el head de partida sería el de llegada.
     doc = _load()
     nombres = [str(s.get("name") or "") for s in _steps(doc)]
-    antes = next(i for i, n in enumerate(nombres) if "head antes de corregir" in n)
+    antes = next(i for i, n in enumerate(nombres) if "head de la PR antes de corregir" in n)
     # "Claude Code" a secas también casa con "Preparar instrucciones para
     # Claude Code", que va antes: hay que anclar al paso que de verdad ejecuta.
     claude = next(i for i, n in enumerate(nombres) if "Ejecutar Claude Code" in n)
