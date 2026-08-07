@@ -1,0 +1,123 @@
+{
+ "documento": "Adjudicacion de cierre de ADR-002",
+ "version_esquema": "cierre-adr002-0.1",
+ "estado": "ADJUDICACION",
+ "fuentes": {
+  "ronda": "artifacts/adr002_round/ronda_primaria_v0.4.json",
+  "ronda_evidencia": "artifacts/adr002_round/ronda_primaria_v0.4_evidencia.json",
+  "ronda_previa": "artifacts/adr002_round/ronda_primaria_v0.2.json",
+  "readjudicacion": "artifacts/adr002_round/ronda_primaria_v0.3_readjudicada.json",
+  "discriminante": "artifacts/adr002_round/discriminante_relacional_v0.1.json",
+  "niveles_2_y_3": "artifacts/adr002_round/niveles_2_y_3_v0.2.json",
+  "marcado_m2": "artifacts/adr002_round/marcado_de_m2_v0.2.json"
+ },
+ "no_mide": "esta adjudicacion no ejecuta ninguna consulta ni recalcula ninguna cifra: lee lo medido y le aplica los umbrales que la norma fija",
+ "obligacion_adjudicada_por_primera_vez": {
+  "identificador": "B04-M01",
+  "cita": "B04-M01 · Recall critico: «Criticos recuperados / criticos elegibles», umbral «100% por caso». §14 R1 · Cobertura critica: «Puerta: una omision critica reproducible elimina la alternativa». §11 G12: «Todos los criticos elegibles se preservan o se declara desbordamiento bajo limite duro; nunca se ocultan»",
+  "por_que_no_estaba": "las cinco puertas booleanas de la ronda no incluyen el recall critico: su cifra se publicaba en criticos_pendientes_total y nadie decia si pasaba. Es el mismo hueco que tenia el marcado de M2, y se cierra igual: comparando una cifra ya medida con el umbral que su propia norma fija"
+ },
+ "por_participante": {
+  "T0-control": {
+   "conforme": false,
+   "incumple": [
+    "contaminacion_cero",
+    "fuga_de_ambito_cero",
+    "confusion_de_polaridad_cero",
+    "conformidad_de_etapa",
+    "recall_critico_B04_M01",
+    "marcado_de_M2"
+   ],
+   "omisiones_criticas": 21,
+   "casos_con_omision_critica": [
+    "N1-02",
+    "N1-21",
+    "N1-31",
+    "N1-33",
+    "N1-38",
+    "N1-44"
+   ],
+   "marcado_de_m2_completo": false
+  },
+  "ADR002-A": {
+   "conforme": false,
+   "incumple": [
+    "conformidad_de_etapa",
+    "recall_critico_B04_M01"
+   ],
+   "omisiones_criticas": 16,
+   "casos_con_omision_critica": [
+    "N1-02",
+    "N1-30",
+    "N1-31",
+    "N1-33",
+    "N1-34",
+    "N1-44"
+   ],
+   "marcado_de_m2_completo": true
+  },
+  "ADR002-B": {
+   "conforme": false,
+   "incumple": [
+    "conformidad_de_etapa",
+    "recall_critico_B04_M01"
+   ],
+   "omisiones_criticas": 16,
+   "casos_con_omision_critica": [
+    "N1-02",
+    "N1-30",
+    "N1-31",
+    "N1-33",
+    "N1-34",
+    "N1-44"
+   ],
+   "marcado_de_m2_completo": true
+  },
+  "ADR002-C": {
+   "conforme": false,
+   "incumple": [
+    "conformidad_de_etapa",
+    "recall_critico_B04_M01"
+   ],
+   "omisiones_criticas": 16,
+   "casos_con_omision_critica": [
+    "N1-02",
+    "N1-30",
+    "N1-31",
+    "N1-33",
+    "N1-34",
+    "N1-44"
+   ],
+   "marcado_de_m2_completo": true
+  },
+  "ADR002-D": {
+   "conforme": false,
+   "incumple": [
+    "conformidad_de_etapa",
+    "recall_critico_B04_M01"
+   ],
+   "omisiones_criticas": 16,
+   "casos_con_omision_critica": [
+    "N1-02",
+    "N1-30",
+    "N1-31",
+    "N1-33",
+    "N1-34",
+    "N1-44"
+   ],
+   "marcado_de_m2_completo": true
+  }
+ },
+ "incumplimientos_comunes_a_los_cuatro": [
+  "conformidad_de_etapa",
+  "recall_critico_B04_M01"
+ ],
+ "que_significa_lo_comun": "una obligacion que los cuatro incumplen por igual no separa alternativas: no es un defecto que elegir otra evitaria, sino una condicion de cierre de ADR-002 que cualquiera arrastraria",
+ "ninguno_conforme": true,
+ "contraste_con_la_corrida_previa": {
+  "conformidad_identica": true,
+  "diferencias": {},
+  "por_que_importa": "el paquete de cierre solo cambio lo que se PUBLICA; si hubiera cambiado lo que se recupera, alguna cifra de conformidad se habria movido"
+ },
+ "no_elige": "esta adjudicacion no elige alternativa: dice quien es conforme, y si ninguno lo es, ADR-002 no puede cerrarse eligiendo"
+}
