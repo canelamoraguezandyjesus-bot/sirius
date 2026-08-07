@@ -21,12 +21,21 @@ from typing import Protocol
 
 @dataclass(frozen=True, slots=True)
 class BudgetPolicy:
-    """Pricing and thresholds from DR-018 (subject to external revision)."""
+    """Pricing and thresholds from DR-018 (subject to external revision).
+
+    Las dos tarifas de audio se añaden para Model Studio: una sesión de
+    grabación suma una transcripción y una síntesis por turno además del coste
+    de texto. Sin ellas el gasto de audio no se apuntaría en ninguna parte y el
+    tope mensual dejaría de proteger de verdad (hallazgo MS-A04). El precio
+    vive aquí, en un solo sitio, y no repartido por cada adaptador.
+    """
 
     monthly_limit_usd: float = 20.0
     warn_threshold_usd: float = 15.0
     input_cost_usd_per_million_tokens: float = 2.50
     output_cost_usd_per_million_tokens: float = 15.0
+    transcription_cost_usd_per_minute: float = 0.003
+    speech_cost_usd_per_million_characters: float = 15.0
 
 
 class LLMUsageRepository(Protocol):
@@ -75,12 +84,32 @@ class BudgetTracker:
 
     def record_usage(self, input_tokens: int, output_tokens: int) -> None:
         """Record the real usage of a completed request against the budget."""
-        cost = (
+        self._record_cost(
             input_tokens / 1_000_000 * self._policy.input_cost_usd_per_million_tokens
             + output_tokens / 1_000_000 * self._policy.output_cost_usd_per_million_tokens
         )
+
+    def record_transcription(self, audio_seconds: float) -> None:
+        """Apunta el coste de transcribir ``audio_seconds`` de voz.
+
+        Suma al MISMO total mensual que el texto, sin tabla nueva ni migración:
+        el repositorio guarda dólares por mes y es indiferente a su origen. Por
+        eso ``has_remaining_budget()`` no cambia y el bloqueo previo al envío
+        pasa a cubrir también el audio.
+        """
+        minutes = max(0.0, audio_seconds) / 60.0
+        self._record_cost(minutes * self._policy.transcription_cost_usd_per_minute)
+
+    def record_speech(self, character_count: int) -> None:
+        """Apunta el coste de sintetizar ``character_count`` caracteres."""
+        characters = max(0, character_count)
+        self._record_cost(
+            characters / 1_000_000 * self._policy.speech_cost_usd_per_million_characters
+        )
+
+    def _record_cost(self, cost_usd: float) -> None:
         if self._usage_repository is None:
             with self._lock:
-                self._in_memory_spent_usd += cost
+                self._in_memory_spent_usd += cost_usd
             return
-        self._usage_repository.add_spent_usd(_current_year_month(), cost)
+        self._usage_repository.add_spent_usd(_current_year_month(), cost_usd)
