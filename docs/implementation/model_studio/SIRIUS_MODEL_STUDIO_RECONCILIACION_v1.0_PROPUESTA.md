@@ -23,7 +23,7 @@
 | R-02 | La captura de voz se inicia y se detiene por acción discreta | APROBADO · **implementado** | MS-A05 |
 | R-03 | Model Studio vive como página conmutable dentro de la ventana actual | APROBADO · **implementado** | MS-A01 |
 | R-04 | Máquina de estados unificada de interacción y de captura | APROBADO · **implementado** | MS-A06 |
-| R-05 | Abrir incidencia propia para la interfaz (`SIRIUS-MODEL-STUDIO-UI-002`) | APROBADO · incidencia abierta | MS-A03 |
+| R-05 | Abrir incidencia propia para la interfaz (`SIRIUS-MODEL-STUDIO-UI-002`) | APROBADO · **abierta como #134** | MS-A03 |
 | R-06 | QtMultimedia se importa de forma perezosa; `libpulse0` se añade a Quality | APROBADO · **implementado y vigilado por prueba** | MS-A02 |
 | R-07 | `BudgetTracker` se amplía para registrar coste de audio, sin migración | APROBADO · **implementado** | MS-A04 |
 | R-08 | La voz de síntesis se verifica antes de fijarse en documento | APROBADO · **verificado: `cedar` NO existe en el endpoint autorizado** | MS-A09 |
@@ -143,7 +143,7 @@ Independientes de los de interacción y mostrados por separado, conforme a #128 
 
 ## 6. R-05 · Incidencia que falta
 
-**Propuesta.** Abrir **`SIRIUS-MODEL-STUDIO-UI-002` — Model Studio · Módulo Interfaz**, con `main` como rama base y el cuerpo completo que exige el validador (work id, bloque, objetivo, base y dependencias, alcance permitido, fuera de alcance, requisitos y pruebas, validaciones, rama base, condiciones de parada, salvaguardas).
+**Hecho el 7 de agosto de 2026: incidencia #134.** Se abrió **`SIRIUS-MODEL-STUDIO-UI-002` — Model Studio · Módulo Interfaz**, con `main` como rama base y el cuerpo completo que exige el validador (work id, bloque, objetivo, base y dependencias, alcance permitido, fuera de alcance, requisitos y pruebas, validaciones, rama base, condiciones de parada, salvaguardas).
 
 Contenido propuesto, resumido:
 
