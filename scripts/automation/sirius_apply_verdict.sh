@@ -135,17 +135,22 @@ stop_safely() {
     "$marker" \
     "🔴 **Me he detenido de forma segura**" \
     "$why" >"$body_file"
-  # Contexto observable que el llamador haya recogido (incidencia #135). Una
-  # parada que solo dice "no escribió veredicto" obliga a bucear en el log del
-  # job para saber si el agente llegó a tocar algo; con estos hechos —si hubo
-  # commits, si el árbol quedó sucio, si el archivo existía y con qué tamaño— la
-  # incidencia sola ya distingue "trabajó y no lo declaró" de "no hizo nada".
-  # Se sanea igual que el resto: lo publica la automatización, así que cae del
-  # lado confiable del filtro de autor y lo leen los escáneres deterministas.
-  if [ -n "${SIRIUS_STOP_CONTEXT:-}" ]; then
-    printf '\n%s\n' "$(printf '%s' "$SIRIUS_STOP_CONTEXT" | sanitize_untrusted_text)" \
+  # Enlace al job (incidencia #135). Una parada que solo dice "no escribió
+  # veredicto" obliga a buscar a mano dónde mirar. Esto es un HECHO, no una
+  # medida: no se calcula ni se interpreta nada, así que no puede ser falso.
+  #
+  # Hubo un intento anterior de publicar aquí un diagnóstico medido —commits
+  # nuevos, si el head avanzó, estado del árbol—. Se retiró: cinco rondas de
+  # revisión encontraron siete defectos en él, TODOS de la misma familia (una
+  # afirmación que el dato no sostenía), y además podía volver rojo el job que
+  # venía a diagnosticar. Un diagnóstico al que se le cree tiene que decir solo
+  # lo que sostiene, y aquí lo único que se sostiene sin medir es dónde mirar.
+  if [ -n "${GITHUB_RUN_ID:-}" ] && [ -n "${GITHUB_REPOSITORY:-}" ]; then
+    printf '\n- Registro del job: %s/%s/actions/runs/%s\n' \
+      "${GITHUB_SERVER_URL:-https://github.com}" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" \
       >>"$body_file"
   fi
+
   if ! transition "$marker" "$body_file" "sirius:failed-safely" "D93F0B" \
     "Estado temporal: fallo operativo detenido de forma segura"; then
     # La transición verificada se niega a actuar cuando no puede leer el

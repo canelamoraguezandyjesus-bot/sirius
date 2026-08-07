@@ -232,31 +232,6 @@ jobs:
             echo "SIRIUS_PROMPT_EOF"
           } >> "$GITHUB_OUTPUT"
 
-      # El head de la PR ANTES de que el corrector toque nada.
-      #
-      # Se pregunta a la API, NO al arbol local: este workflow hace checkout de
-      # `main` a proposito, asi que `git rev-parse HEAD` aqui devuelve el head de
-      # main. Compararlo despues habria contado los commits en que la PR diverge
-      # de main —un numero positivo y creible aunque el corrector no hubiera
-      # tocado nada—, que es peor que no medir: un valor plausible y falso se
-      # cree, mientras que un error se investiga.
-      - name: Registrar el head de la PR antes de corregir
-        if: steps.gate.outputs.valid == 'true'
-        id: antes
-        shell: bash --noprofile --norc {0}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
-          # Nunca se cuenta a ciegas: sin este dato el diagnostico lo dira.
-        run: |
-          set -uo pipefail
-          head=""
-          if leido="$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}" --jq '.head.sha' 2>/dev/null)"; then
-            head="$leido"
-          fi
-          echo "head=${head}" >> "$GITHUB_OUTPUT"
-
       - name: Ejecutar Claude Code (corrector)
         if: steps.gate.outputs.valid == 'true'
         id: claude
@@ -277,94 +252,6 @@ jobs:
           prompt: ${{ steps.build_prompt.outputs.prompt }}
           claude_args: '--dangerously-skip-permissions --allowedTools "Bash,Read,Write,Edit,Grep,Glob" --max-turns 120'
 
-      # Incidencia #135: el corrector puede terminar "con exito" sin escribir su
-      # veredicto, y entonces la parada segura solo dice "sin-veredicto". Este
-      # paso recoge los hechos que distinguen "trabajo y no lo declaro" de "no
-      # hizo nada", para que la incidencia los lleve escritos y no haya que
-      # bucear en el log del job. Es solo observacion: no decide nada ni puede
-      # volver rojo el flujo.
-      # Incidencia #135: el corrector puede terminar "con exito" sin escribir su
-      # veredicto, y entonces la parada segura solo dice "sin-veredicto". Este
-      # paso recoge los hechos que distinguen "trabajo y no lo declaro" de "no
-      # hizo nada", para que la incidencia los lleve escritos.
-      #
-      # Regla de este paso: NINGUNA medida se publica si su comando fallo. Un
-      # `git log | wc -l` emite 0 aunque git falle, y con `pipefail` sin
-      # `errexit` la asignacion no lo detecta: ese 0 se leeria como "no hizo
-      # nada". Cada medida comprueba su propio estado y cae a `indeterminado`.
-      - name: Recoger diagnostico del corrector
-        if: always() && steps.gate.outputs.valid == 'true'
-        id: diagnostico
-        shell: bash --noprofile --norc {0}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
-          VERDICT_FILE: ${{ runner.temp }}/sirius_verdict.json
-          HEAD_AL_EMPEZAR: ${{ steps.antes.outputs.head }}
-        run: |
-          set -uo pipefail
-
-          tamano="indeterminado"
-          if [ ! -f "$VERDICT_FILE" ]; then
-            tamano="ausente"
-          elif bytes="$(wc -c <"$VERDICT_FILE" 2>/dev/null)"; then
-            tamano="$(printf '%s' "$bytes" | tr -d ' ') bytes"
-          fi
-
-          head_ahora="indeterminado"
-          if leido="$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}" --jq '.head.sha' 2>/dev/null)" \
-            && [ -n "$leido" ]; then
-            head_ahora="$leido"
-          fi
-
-          # Este paso informa HECHOS y no saca conclusiones. Las cuatro rondas de
-          # revision de esta PR encontraron el mismo defecto una y otra vez, y
-          # siempre en la capa de interpretacion que se le anadia encima —contar
-          # commits, atribuir el push al corrector—, nunca en los hechos crudos.
-          #
-          # Que las dos lecturas difieran demuestra que el head cambio durante el
-          # job; no demuestra QUIEN lo cambio (una persona u otro bot pueden
-          # empujar durante los 45 minutos que dura) ni que el commit nuevo
-          # descienda del anterior (un force-push no lo garantiza). Decir "hubo
-          # push del corrector" era afirmar las dos cosas sin evidencia.
-          #
-          # Un diagnostico al que se le cree tiene que decir solo lo que sostiene.
-          cambio="indeterminado"
-          if [ -n "${HEAD_AL_EMPEZAR:-}" ] && [ "$head_ahora" != "indeterminado" ]; then
-            if [ "$HEAD_AL_EMPEZAR" = "$head_ahora" ]; then
-              cambio="NO"
-            else
-              cambio="SI"
-            fi
-          fi
-
-          sucio="indeterminado"
-          if estado="$(git status --porcelain 2>/dev/null)"; then
-            if [ -n "$estado" ]; then
-              sucio="con cambios sin confirmar"
-            else
-              sucio="limpio"
-            fi
-          fi
-
-          {
-            echo "contexto<<FIN_DIAGNOSTICO"
-            echo "<details><summary>Diagnostico del corrector</summary>"
-            echo
-            echo "- Archivo de veredicto: ${tamano}"
-            echo "- Head de la PR al empezar: \`${HEAD_AL_EMPEZAR:-indeterminado}\`"
-            echo "- Head de la PR al terminar: \`${head_ahora}\`"
-            echo "- El head de la PR cambio durante el job: ${cambio}"
-            echo "  (que cambiara no atribuye el cambio a nadie: cualquiera con"
-            echo "  permiso pudo empujar mientras el job corria)"
-            echo "- Arbol de trabajo del job: ${sucio}"
-            echo "- Registro del job: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-            echo
-            echo "</details>"
-            echo "FIN_DIAGNOSTICO"
-          } >>"$GITHUB_OUTPUT"
-
       - name: Aplicar el veredicto
         if: always() && steps.gate.outputs.valid == 'true'
         shell: bash --noprofile --norc {0}
@@ -373,7 +260,6 @@ jobs:
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           CYCLE: ${{ steps.gate.outputs.cycle }}
-          SIRIUS_STOP_CONTEXT: ${{ steps.diagnostico.outputs.contexto }}
         run: |
           set -uo pipefail
           bash scripts/automation/sirius_apply_verdict.sh \

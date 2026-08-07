@@ -9,7 +9,6 @@ sin degradar a una corrección a ciegas.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any
 
@@ -176,124 +175,26 @@ def test_the_gate_reports_the_ci_failure_streak() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Diagnóstico de la parada del corrector (incidencia #135)
+# El paso de diagnóstico se retiró (incidencia #135)
 # --------------------------------------------------------------------------- #
 
 
-def test_the_diagnosis_runs_after_claude_and_before_applying_the_verdict() -> None:
-    # El orden es lo que hace útil al diagnóstico: tiene que medir el estado que
-    # dejó el corrector y llegar a tiempo de acompañar a la parada segura.
+def test_there_is_no_measured_diagnosis_step() -> None:
+    """El paso que medía el trabajo del corrector se retiró, no se arregló.
+
+    Cinco rondas de revisión encontraron siete defectos en él y TODOS eran de la
+    misma familia: una afirmación que el dato no sostenía —contar commits sobre
+    un rango inexistente, tomar el head de `main` por el de la PR, publicar un 0
+    fabricado cuando el comando fallaba, atribuir el push al corrector, y afirmar
+    que el head no cambió cuando dos muestras solo prueban que coinciden—.
+    Además podía volver rojo el job que venía a diagnosticar, porque `always()`
+    garantiza que un paso se ejecute pero no que su fallo no cuente.
+
+    Lo que sobrevive es un HECHO sin medida: el enlace al job en la parada
+    segura. Si alguien vuelve a añadir aquí un paso que mida, que sea con la
+    decisión tomada de nuevo y no por inercia.
+    """
     doc = _load()
-    nombres = [str(step.get("name") or "") for step in _steps(doc)]
-    # "Claude Code" a secas también casa con "Preparar instrucciones para
-    # Claude Code", que va antes: hay que anclar al paso que de verdad ejecuta.
-    claude = next(i for i, n in enumerate(nombres) if "Ejecutar Claude Code" in n)
-    diagnostico = next(i for i, n in enumerate(nombres) if "diagnostico" in n.lower())
-    veredicto = next(i for i, n in enumerate(nombres) if "Aplicar el veredicto" in n)
-    assert claude < diagnostico < veredicto
-
-
-def test_the_diagnosis_never_turns_the_flow_red() -> None:
-    # Es observación, no decisión: si fallara y cortara el job, se perdería la
-    # parada segura que existe justamente para dejar constancia.
-    doc = _load()
-    paso = _step(doc, "diagnostico")
-    assert "always()" in str(paso.get("if") or "")
-
-
-def test_the_starting_head_comes_from_the_api_not_the_local_tree() -> None:
-    # Este workflow hace checkout de `main` a propósito, así que `git rev-parse
-    # HEAD` devuelve el head de main, no el de la PR. Compararlo después contaba
-    # los commits en que la PR diverge de main: un número positivo y creíble
-    # aunque el corrector no hubiera tocado nada.
-    guion = str(_step(_load(), "head de la PR antes de corregir")["run"])
-    assert "gh api" in guion and "head.sha" in guion
-    assert "git rev-parse" not in guion
-
-
-def test_the_diagnosis_reports_what_distinguishes_working_from_doing_nothing() -> None:
-    guion = str(_step(_load(), "diagnostico")["run"])
-    # La pregunta útil es si el head de la PR se movió, no cuántos commits hay:
-    # se responde con dos lecturas de la misma fuente, sin rangos de git.
-    assert "gh api" in guion and "head.sha" in guion
-    assert "git log" not in guion
-    assert "VERDICT_FILE" in guion
-    assert "git status --porcelain" in guion
-
-
-def test_the_diagnosis_states_facts_and_draws_no_conclusions() -> None:
-    # Las cuatro rondas de revisión de esta PR encontraron el mismo defecto —un
-    # valor creíble pero falso— y siempre en la capa de interpretación que se le
-    # añadía encima: contar commits, atribuir el push al corrector. Los hechos
-    # crudos nunca fallaron. Se retiró la interpretación, no el diagnóstico:
-    # sin conclusiones no puede haber conclusiones falsas.
-    #
-    # Que las dos lecturas del head difieran demuestra que cambió durante el
-    # job; no demuestra quién lo cambió —cualquiera con permiso pudo empujar en
-    # los 45 minutos que dura— ni que el commit nuevo descienda del anterior.
-    guion = str(_step(_load(), "diagnostico")["run"])
-    # El bloque publicado es lo que va ENTRE los dos marcadores, no lo anterior
-    # al primero: extraerlo mal dejaba la prueba pasando en vacío.
-    inicio = guion.index('contexto<<FIN_DIAGNOSTICO"') + len('contexto<<FIN_DIAGNOSTICO"')
-    publicado = guion[inicio : guion.index('echo "FIN_DIAGNOSTICO"')]
-    assert "Head de la PR al empezar" in publicado, "la extracción no captura el bloque"
-    for atribucion in ("push del corrector", "avanzo", "avance"):
-        assert atribucion not in publicado, f"el diagnóstico vuelve a atribuir: {atribucion}"
-
-
-def test_no_measurement_is_published_when_its_command_failed() -> None:
-    # `git log | wc -l` emite 0 aunque git falle, y con `pipefail` sin `errexit`
-    # la asignación no lo detecta: ese 0 se leería como "no hizo nada". Cada
-    # medida comprueba su estado y cae a `indeterminado`.
-    guion = str(_step(_load(), "diagnostico")["run"])
-    for medida in ("tamano", "head_ahora", "cambio", "sucio"):
-        assert f'{medida}="indeterminado"' in guion or f'{medida}="ausente"' in guion, medida
-    # Y las lecturas van dentro de un `if` que comprueba el estado del comando.
-    assert 'if estado="$(git status --porcelain 2>/dev/null)"; then' in guion
-    assert 'if leido="$(gh api' in guion
-
-
-def test_the_verdict_step_receives_the_diagnosis() -> None:
-    # Recogerlo sin pasarlo dejaría el diagnóstico solo en el log del job, que
-    # es exactamente el sitio donde no se mira.
-    doc = _load()
-    entorno = _step(doc, "Aplicar el veredicto")["env"]
-    assert "SIRIUS_STOP_CONTEXT" in entorno
-    assert "diagnostico" in str(entorno["SIRIUS_STOP_CONTEXT"])
-
-
-def test_the_diagnosis_only_reads_outputs_that_some_step_actually_writes() -> None:
-    # El defecto que motivó esta prueba: el diagnóstico leía
-    # `steps.gate.outputs.head_sha`, que la puerta NUNCA escribe. La variable
-    # llegaba vacía, el rango `..HEAD` equivale a `HEAD..HEAD` y el recuento
-    # salía 0 en silencio — la conclusión contraria a la verdadera justo en el
-    # caso que el diagnóstico existe para detectar.
-    doc = _load()
-    paso = _step(doc, "diagnostico")
-    referencias = re.findall(r"steps\.([A-Za-z0-9_-]+)\.outputs\.([A-Za-z0-9_-]+)", str(paso))
-    assert referencias, "el diagnóstico debe leer al menos una salida de otro paso"
-    fuente = _source()
-    for step_id, nombre in referencias:
-        assert any(s.get("id") == step_id for s in _steps(doc)), f"paso inexistente: {step_id}"
-        assert f'echo "{nombre}=' in fuente, (
-            f"ningún paso escribe la salida `{nombre}` que el diagnóstico lee"
-        )
-
-
-def test_the_starting_head_is_captured_before_the_corrector_runs() -> None:
-    # Medirlo después no sirve: para entonces el corrector ya pudo haber hecho
-    # commit, y el head de partida sería el de llegada.
-    doc = _load()
-    nombres = [str(s.get("name") or "") for s in _steps(doc)]
-    antes = next(i for i, n in enumerate(nombres) if "head de la PR antes de corregir" in n)
-    # "Claude Code" a secas también casa con "Preparar instrucciones para
-    # Claude Code", que va antes: hay que anclar al paso que de verdad ejecuta.
-    claude = next(i for i, n in enumerate(nombres) if "Ejecutar Claude Code" in n)
-    assert antes < claude
-
-
-def test_without_a_starting_head_the_count_is_not_faked() -> None:
-    # Un 0 silencioso se leería como "no hizo nada". Si falta el punto de
-    # partida hay que decirlo, no inventar un recuento.
-    guion = str(_step(_load(), "diagnostico")["run"])
-    assert "indeterminado" in guion
+    nombres = [str(step.get("name") or "").lower() for step in _steps(doc)]
+    assert not any("diagnostico" in n or "diagnóstico" in n for n in nombres)
+    assert "SIRIUS_STOP_CONTEXT" not in _source()
