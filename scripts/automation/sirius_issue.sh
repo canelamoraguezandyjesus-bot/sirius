@@ -112,12 +112,12 @@ SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ='select(.authorAssociation == "OWNER" or ((.aut
 
 _sirius_body_rest() {
   # Vía principal: GitHub REST directo.
-  gh api "repos/${1}/issues/${2}" --jq '.body // ""'
+  _sirius_gh api "repos/${1}/issues/${2}" --jq '.body // ""'
 }
 
 _sirius_body_graphql() {
   # Vía de respaldo independiente.
-  gh issue view "${2}" --repo "${1}" --json body --jq '.body // ""'
+  _sirius_gh issue view "${2}" --repo "${1}" --json body --jq '.body // ""'
 }
 
 # _sirius_now — segundos absolutos. `EPOCHSECONDS` es un builtin de Bash 5 y
@@ -240,7 +240,7 @@ _sirius_comments_newest_first() {
   # observaciones. Esta biblioteca no debe depender de las opciones de shell del
   # llamador para algo de lo que dependen decisiones.
   local raw=""
-  raw="$(gh api --paginate "repos/${1}/issues/${2}/comments?per_page=100" \
+  raw="$(_sirius_gh api --paginate "repos/${1}/issues/${2}/comments?per_page=100" \
     --jq "[.[] | ${SIRIUS_TRUSTED_AUTHOR_JQ}] | .[] | @json")" || return 1
   printf '%s\n' "$raw" | python3 -c '
 import json, sys
@@ -263,7 +263,7 @@ sirius_scan_text() {
   : >"$out"
   if comments="$(sirius_retry _sirius_comments_newest_first "$repo" "$num")"; then
     printf '%s\n' "$comments" >>"$out"
-  elif comments="$(sirius_retry gh issue view "$num" --repo "$repo" --json comments --jq "[.comments[] | ${SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ}] | reverse | .[].body")"; then
+  elif comments="$(sirius_retry _sirius_gh issue view "$num" --repo "$repo" --json comments --jq "[.comments[] | ${SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ}] | reverse | .[].body")"; then
     printf '%s\n' "$comments" >>"$out"
   fi
   if body="$(sirius_read_issue_body "$repo" "$num")"; then
@@ -281,7 +281,7 @@ sirius_extract_observations() {
   # ronda más reciente sea visible también en incidencias con muchos comentarios.
   local repo="$1" num="$2" comments=""
   comments="$(sirius_retry _sirius_comments_newest_first "$repo" "$num" 2>/dev/null)" \
-    || comments="$(sirius_retry gh issue view "$num" --repo "$repo" --json comments --jq "[.comments[] | ${SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ}] | reverse | .[].body" 2>/dev/null)" \
+    || comments="$(sirius_retry _sirius_gh issue view "$num" --repo "$repo" --json comments --jq "[.comments[] | ${SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ}] | reverse | .[].body" 2>/dev/null)" \
     || comments=""
   printf '%s' "$comments" | python3 -c '
 import re, sys
@@ -303,11 +303,11 @@ sirius_dump_comments() {
   # invertir nada ni depender de `--slurp`.
   local repo="$1" num="$2" out="$3" body=""
   : >"$out"
-  if body="$(sirius_retry gh api --paginate "repos/${repo}/issues/${num}/comments?per_page=100" --jq "[.[] | ${SIRIUS_TRUSTED_AUTHOR_JQ}] | .[].body")"; then
+  if body="$(sirius_retry _sirius_gh api --paginate "repos/${repo}/issues/${num}/comments?per_page=100" --jq "[.[] | ${SIRIUS_TRUSTED_AUTHOR_JQ}] | .[].body")"; then
     printf '%s\n' "$body" >>"$out"
     return 0
   fi
-  if body="$(sirius_retry gh issue view "$num" --repo "$repo" --json comments --jq "[.comments[] | ${SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ}] | .[].body")"; then
+  if body="$(sirius_retry _sirius_gh issue view "$num" --repo "$repo" --json comments --jq "[.comments[] | ${SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ}] | .[].body")"; then
     printf '%s\n' "$body" >>"$out"
     return 0
   fi
@@ -417,7 +417,7 @@ sirius_write_issue_body() {
     return 1
   fi
 
-  if ! sirius_retry gh api -X PATCH "repos/${repo}/issues/${num}" --input "$payload" >/dev/null; then
+  if ! sirius_retry _sirius_gh api -X PATCH "repos/${repo}/issues/${num}" --input "$payload" >/dev/null; then
     echo "sirius_write_issue_body: fallo al escribir el cuerpo de #${num}" >&2
     rm -f "$payload"
     return 1
@@ -466,7 +466,7 @@ PY
 # "already exists" para una etiqueta existente y detenia la transicion).
 sirius_ensure_label() {
   local repo="$1" name="$2" color="$3" description="$4"
-  sirius_retry gh label create "$name" --repo "$repo" \
+  sirius_retry _sirius_gh label create "$name" --repo "$repo" \
     --color "$color" --description "$description" --force >/dev/null
 }
 
@@ -478,15 +478,15 @@ sirius_set_issue_labels() {
   local repo="$1" num="$2" add="$3"
   shift 3
   local removes=("$@")
-  sirius_retry gh issue edit "$num" --repo "$repo" --add-label "$add" >/dev/null 2>&1 || true
+  sirius_retry _sirius_gh issue edit "$num" --repo "$repo" --add-label "$add" >/dev/null 2>&1 || true
   local r
   for r in "${removes[@]}"; do
     [ -z "${r:-}" ] && continue
-    sirius_retry gh issue edit "$num" --repo "$repo" --remove-label "$r" >/dev/null 2>&1 || true
+    sirius_retry _sirius_gh issue edit "$num" --repo "$repo" --remove-label "$r" >/dev/null 2>&1 || true
   done
   # Verificacion autoritativa del estado final.
   local labels=""
-  if ! labels="$(sirius_retry gh api "repos/${repo}/issues/${num}/labels" --jq '.[].name')"; then
+  if ! labels="$(sirius_retry _sirius_gh api "repos/${repo}/issues/${num}/labels" --jq '.[].name')"; then
     echo "sirius_set_issue_labels: no se pudo verificar las etiquetas de #${num}" >&2
     return 1
   fi
@@ -508,11 +508,11 @@ sirius_set_issue_labels() {
 # estaba cerrada; !=0 si no se pudo dejar cerrada.
 sirius_close_issue() {
   local repo="$1" num="$2"
-  if sirius_retry gh issue close "$num" --repo "$repo" --reason completed >/dev/null 2>&1; then
+  if sirius_retry _sirius_gh issue close "$num" --repo "$repo" --reason completed >/dev/null 2>&1; then
     return 0
   fi
   local state=""
-  state="$(sirius_retry gh api "repos/${repo}/issues/${num}" --jq '.state')" || return 1
+  state="$(sirius_retry _sirius_gh api "repos/${repo}/issues/${num}" --jq '.state')" || return 1
   [ "$state" = "closed" ] && return 0
   return 1
 }
@@ -653,10 +653,10 @@ sirius_transition() {
   if printf '%s' "$existing" | grep -Fq "$marker"; then
     marker_present=1
     local verified=1 labels_now="" state_now=""
-    labels_now="$(sirius_retry gh api "repos/${repo}/issues/${num}/labels" --jq '.[].name' 2>/dev/null)" || verified=0
+    labels_now="$(sirius_retry _sirius_gh api "repos/${repo}/issues/${num}/labels" --jq '.[].name' 2>/dev/null)" || verified=0
     printf '%s\n' "$labels_now" | grep -Fxq "$add" || verified=0
     if [ "$close_flag" = "close" ] && [ "$verified" -eq 1 ]; then
-      state_now="$(sirius_retry gh api "repos/${repo}/issues/${num}" --jq '.state' 2>/dev/null)" || verified=0
+      state_now="$(sirius_retry _sirius_gh api "repos/${repo}/issues/${num}" --jq '.state' 2>/dev/null)" || verified=0
       [ "$state_now" = "closed" ] || verified=0
     fi
     if [ "$verified" -eq 1 ]; then
@@ -730,7 +730,7 @@ sirius_find_pr_for_issue() {
   local pr_json=""
   for pr in $candidates; do
     [ -z "$pr" ] && continue
-    pr_json="$(sirius_retry gh api "repos/${repo}/pulls/${pr}" 2>/dev/null || true)"
+    pr_json="$(sirius_retry _sirius_gh api "repos/${repo}/pulls/${pr}" 2>/dev/null || true)"
     state="$(printf '%s' "$pr_json" | jq -r '.state // empty' 2>/dev/null || true)"
     if [ "$state" = "open" ]; then
       printf '%s\n' "$pr"

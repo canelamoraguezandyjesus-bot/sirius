@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -1184,3 +1185,45 @@ def test_comment_read_failure_is_reported_without_pipefail(tmp_path: Path) -> No
     r = _run(f'sirius_dump_comments owner/repo 55 "{dump}"', env)
     assert r.returncode != 0
     assert "no se pudieron leer los comentarios" in r.stderr
+
+
+# --------------------------------------------------------------------------- #
+# Toda llamada a `gh` pasa por la puerta acotada
+# --------------------------------------------------------------------------- #
+
+
+def test_every_gh_call_goes_through_the_bounded_wrapper() -> None:
+    """`_sirius_gh` es la única puerta por la que se invoca `gh`.
+
+    `SIRIUS_GH_DEADLINE` solo acota lo que pasa por `_sirius_gh`, que envuelve
+    la llamada en `timeout`. `sirius_retry` comprueba el plazo ENTRE intentos,
+    después de que el comando haya vuelto: si el comando se cuelga, no vuelve
+    nunca y el plazo no llega a mirarse. Con las lecturas llamando a `gh` a
+    pelo, un plazo interno acotaba una secuencia lenta pero NO un cuelgue, que
+    es justo el caso para el que se puso.
+
+    Esta prueba fija la propiedad, no las grafías: cualquier `gh` nuevo escrito
+    directamente vuelve a abrir el agujero, se llame como se llame la función
+    que lo contenga.
+    """
+    fuente = LIB.read_text(encoding="utf-8")
+    # El cuerpo de `_sirius_gh` es el único sitio donde `gh` se invoca a pelo:
+    # es la puerta, y envolverla en sí misma sería un bucle.
+    inicio = fuente.index("_sirius_gh() {")
+    fin = fuente.index("\n}\n", inicio) + len("\n}\n")
+    resto = fuente[:inicio] + fuente[fin:]
+
+    # El detector busca el TOKEN `gh`, no unas cuantas posiciones donde suele
+    # aparecer. El primer intento enumeraba prefijos (inicio de línea, `$(`,
+    # `|`, `;`) y dejaba pasar `sirius_retry gh api ...`, que es justo la forma
+    # más común aquí: la prueba habría dado la propiedad por cerrada sin
+    # cerrarla. El `lookbehind` excluye `_sirius_gh` sin enumerar nada.
+    crudas = [
+        (numero, linea.strip())
+        for numero, linea in enumerate(resto.splitlines(), 1)
+        if not linea.lstrip().startswith("#") and re.search(r"(?<![\w-])gh\s", linea)
+    ]
+    assert not crudas, f"llamadas a `gh` fuera de la puerta acotada: {crudas}"
+    # Y la puerta sigue siendo la que acota: si dejara de usar `timeout`, el
+    # encaminado no serviría de nada.
+    assert 'timeout "$remaining" gh "$@"' in fuente[inicio:fin]
