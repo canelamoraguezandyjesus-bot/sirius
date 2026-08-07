@@ -122,7 +122,19 @@ python3 scripts/automation/validate_issue_body.py cuerpo.md
 
 ## Pruebas
 
-`tests/automation/` ejercita ambas utilidades con un `gh` simulado (sin red):
+`tests/automation/` ejercita estas utilidades con un `gh` simulado (sin red):
 lectura correcta, 502/503 seguido de éxito por REST, respaldo GraphQL, cuerpo
 truncado o incompleto rechazado, todas las vías fallan → parada segura, escritura
 verificada y detección de escritura corrupta, e idempotencia de etiquetas.
+
+El simulador reproduce además tres condiciones que no son visibles desde fuera y
+sin las cuales varias garantías quedarían sin probar aunque las pruebas pasaran:
+
+- **autoría real** de cada comentario (`author_association`, `user.login`), para
+  que el filtro de autor de confianza se ejercite de verdad en REST y en el
+  respaldo GraphQL;
+- **fallo ambiguo** de una publicación —GitHub acepta la petición y la respuesta
+  se pierde— frente a un fallo limpio, que es lo único que distingue una
+  recuperación por relectura de un reintento ciego;
+- **consistencia eventual**: la escritura ya ocurrió pero la lectura todavía no
+  la refleja.
