@@ -36,6 +36,7 @@ from sirius.application.archive_decision import ArchiveDecisionUseCase
 from sirius.application.archive_memory import ArchiveMemoryUseCase
 from sirius.application.budget_status import GetBudgetStatusUseCase
 from sirius.application.capture_commands import CaptureCommand, CaptureIntent, interpret
+from sirius.application.capture_replies import spoken_confirmation
 from sirius.application.correct_memory import CorrectMemoryUseCase
 from sirius.application.create_backup import CreateBackupUseCase
 from sirius.application.decision_origin import GetDecisionOriginUseCase
@@ -55,6 +56,7 @@ from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageResult, SendMessageUseCase
+from sirius.application.studio_brief import MODEL_STUDIO_BRIEF
 from sirius.application.studio_capture import CaptureFeedback, StudioCaptureUseCase
 from sirius.application.studio_voice import (
     ListeningStarted,
@@ -232,6 +234,8 @@ class MainWindow(QMainWindow):
         self._active_voice_worker: QRunnable | None = None
         self._active_capture_worker: QRunnable | None = None
         self._capture_busy = False
+        self._capture_turn = 0
+        self._pending_capture_command: CaptureCommand | None = None
         # Dialogs are shown only through these seams: production defaults to
         # real Qt dialogs, but tests inject recording/no-op doubles so
         # scripts/check.ps1 never opens a real window on the desktop.
@@ -503,6 +507,7 @@ class MainWindow(QMainWindow):
             # La orden vino hablada o escrita: el usuario espera respuesta.
             self._mirror_studio_state(StudioInteractionState.PREPARADO)
             self._announce_capture(feedback)
+            self._capture_turn += 1
         self._sync_capture_module()
 
     def _announce_capture(self, feedback: CaptureFeedback) -> None:
@@ -512,7 +517,11 @@ class MainWindow(QMainWindow):
         una frase compuesta por el modelo. Es la diferencia entre informar y
         afirmar algo que nadie ha confirmado.
         """
-        spoken = feedback.message or feedback.state.label
+        spoken = (
+            spoken_confirmation(self._pending_capture_command, feedback, self._capture_turn)
+            if self._pending_capture_command is not None
+            else feedback.message or feedback.state.label
+        )
         if not feedback.succeeded:
             self.studio_page.set_error(spoken)
         self._speak_if_studio_is_open(spoken, MessageStatus.COMPLETED)
@@ -699,7 +708,9 @@ class MainWindow(QMainWindow):
         if intent is not None:
             self._execute_capture_intent(intent)
             return
-        self._start_send(text)
+        # Grabando, una explicación de tres párrafos es un vídeo que nadie
+        # termina de ver (#126). La indicación es efímera: no se guarda.
+        self._start_send(text, extra_instructions=MODEL_STUDIO_BRIEF)
 
     def _capture_intent(self, text: str) -> CaptureIntent | None:
         """Qué orden de captura es esta frase, si es que es alguna.
@@ -725,6 +736,7 @@ class MainWindow(QMainWindow):
         self.studio_page.input.clear()
         self.studio_page.set_error("")
         self.studio_page.capture_panel.set_message("")
+        self._pending_capture_command = intent.command
         self._mirror_studio_state(StudioInteractionState.EJECUTANDO)
 
         if intent.command is CaptureCommand.SWITCH_SCENE and intent.scene_id is not None:
@@ -1082,7 +1094,7 @@ class MainWindow(QMainWindow):
 
         self._start_send(self._last_failed_text)
 
-    def _start_send(self, text: str) -> None:
+    def _start_send(self, text: str, *, extra_instructions: str = "") -> None:
         self._is_sending = True
         self._active_operation_id = str(uuid.uuid4())
         self._active_send_text = text
@@ -1106,7 +1118,12 @@ class MainWindow(QMainWindow):
 
         self._append_message_item(MessageRole.USER, text)
 
-        worker = SendMessageWorker(self._send_message_use_case, text, self._active_operation_id)
+        worker = SendMessageWorker(
+            self._send_message_use_case,
+            text,
+            self._active_operation_id,
+            extra_instructions=extra_instructions,
+        )
         worker.signals.delta.connect(self._on_delta)
         worker.signals.finished.connect(self._on_finished)
         worker.signals.crashed.connect(self._on_crashed)
