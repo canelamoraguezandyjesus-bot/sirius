@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from experiments.adr002 import custodia_t0
 from experiments.adr002.candidates.adr002_a.candidate import candidato
 from experiments.adr002.candidates.common import engine
 from experiments.adr002.candidates.common.contracts import (
@@ -70,9 +71,16 @@ def _peticion(consulta: str, proyectos: tuple[str, ...] = ("2",)) -> Peticion:
 # ---------------------------------------------------------------------------
 
 
-def test_la_proyeccion_no_toca_el_arbol_de_fuentes() -> None:
+def test_la_proyeccion_no_toca_lo_que_t0_ejecuta() -> None:
+    """Mismo control que el arnes de T0, y por el mismo motivo: comparar el
+    arbol entero en HEAD ponia rojo la proyeccion cuando ``main`` avanzaba, sin
+    que ninguna pieza medida hubiera cambiado. Ver la fe de erratas 07."""
+    assert custodia_t0.fallos_de_custodia_de_t0(RAIZ_DEL_REPOSITORIO) == []
+
+
+def test_la_proyeccion_no_altera_el_arbol_congelado_de_su_commit() -> None:
     observado = subprocess.run(
-        ["git", "rev-parse", "HEAD:src/sirius"],
+        ["git", "rev-parse", f"{custodia_t0.COMMIT_DEL_PROTOTIPO}:src/sirius"],
         cwd=RAIZ_DEL_REPOSITORIO,
         capture_output=True,
         text=True,

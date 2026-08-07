@@ -14,6 +14,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from experiments.adr002 import custodia_t0
 from experiments.adr002.candidates import fixtures
 from experiments.adr002.candidates.adr002_a.candidate import candidato
 from experiments.adr002.candidates.common import engine
@@ -60,10 +61,26 @@ def _peticion(consulta: str = "faro") -> Peticion:
 # ---------------------------------------------------------------------------
 
 
-def test_el_arnes_no_toca_el_arbol_de_fuentes_de_t0() -> None:
-    """La huella de T0 es el arbol de ``src/sirius``. Este arnes vive fuera."""
+def test_el_arnes_no_toca_lo_que_t0_ejecuta() -> None:
+    """La cadena de Alembic y cada modulo que T0 ejecuta, byte a byte.
+
+    Antes se comparaba el arbol entero de ``src/sirius`` en HEAD, y eso hacia
+    que un avance de ``main`` —ajeno a ADR-002— pusiera rojo un control que
+    vigila otra cosa. Lo que hay que garantizar es que T0 siga siendo T0, y eso
+    se comprueba sobre lo que T0 de verdad ejecuta. Ver la fe de erratas 07.
+    """
+    assert custodia_t0.fallos_de_custodia_de_t0(RAIZ) == []
+
+
+def test_la_excepcion_declarada_conserva_su_estructura() -> None:
+    """``domain/decision.py`` cambio en ``main``; ``Decision`` no."""
+    assert custodia_t0.fallos_de_la_excepcion_declarada(RAIZ) == []
+
+
+def test_la_ficha_de_t0_sigue_declarando_el_arbol_de_su_commit() -> None:
+    """La afirmacion literal de la ficha, comprobada donde la ficha la hace."""
     observado = subprocess.run(
-        ["git", "rev-parse", "HEAD:src/sirius"],
+        ["git", "rev-parse", f"{custodia_t0.COMMIT_DEL_PROTOTIPO}:src/sirius"],
         cwd=RAIZ,
         capture_output=True,
         text=True,
