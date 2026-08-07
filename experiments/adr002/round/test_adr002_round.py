@@ -288,6 +288,23 @@ def test_ningun_participante_ocupa_siempre_la_primera_posicion() -> None:
         assert set(reparto.values()) == {rp.REPETICIONES // len(rp.PARTICIPANTES)}
 
 
+def test_cada_participante_ocupa_cada_posicion_el_mismo_numero_de_veces() -> None:
+    """No basta con repartir la primera posición: hay que repartirlas todas.
+
+    La segunda posición mide detrás de un candidato concreto, y la última mide
+    con el entorno más caliente. Si el reparto sólo equilibrase la cabeza, esas
+    ventajas seguirían siendo de alguien fijo.
+    """
+    reparto_esperado = rp.REPETICIONES // len(rp.PARTICIPANTES)
+    for sesion in range(1, rp.SESIONES_EXIGIDAS + 1):
+        veces: dict[tuple[str, int], int] = {}
+        for repeticion in range(1, rp.REPETICIONES + 1):
+            for posicion, participante in enumerate(rp.orden_de_ejecucion(sesion, repeticion)):
+                veces[participante, posicion] = veces.get((participante, posicion), 0) + 1
+        assert len(veces) == len(rp.PARTICIPANTES) ** 2, sesion
+        assert set(veces.values()) == {reparto_esperado}, sesion
+
+
 def test_la_numeracion_empieza_en_uno() -> None:
     for sesion, repeticion in ((0, 1), (1, 0), (-1, 3)):
         with pytest.raises(ValueError, match="se numeran desde 1"):
