@@ -609,6 +609,40 @@ def test_la_ablacion_no_cambia_la_etapa_de_la_senal_que_queda(
     d.cerrar()
 
 
+def _senales_por_item(recuperacion: engine.Recuperacion, marca: str) -> dict[str, str]:
+    """``item -> senal``, sin el prefijo de etapa, de lo aportado por una senal."""
+    por_item: dict[str, str] = {}
+    for resultado in recuperacion.resultados:
+        _etapa, _por, senal = resultado.explicacion.coincidencia.partition(" por ")
+        if senal.startswith(marca):
+            por_item[resultado.item.id] = senal
+    return por_item
+
+
+def test_la_senal_relacional_de_d_aporta_exactamente_lo_que_aporta_c(
+    completa: fixtures_d.FixtureD,
+) -> None:
+    """`adr002_d` reescribe las dos senales en vez de importar sus metodos
+    privados, porque ni `adr002_b` ni `adr002_c` pueden tocarse sin obligar a
+    ficha sucesora. La garantia de que esa reescritura no las altero no es una
+    promesa: es esta igualdad, item a item y con su razon."""
+    en_c = _senales_por_item(_recuperar(completa, candidato_c(completa.plano)), SENAL_RELACIONAL)
+    en_d = _senales_por_item(_recuperar(completa, _d(completa)), SENAL_RELACIONAL)
+    assert en_c == en_d
+    assert en_d, "la senal relacional debe haber aportado algo, o la igualdad es vacua"
+
+
+def test_la_senal_vectorial_de_d_aporta_exactamente_lo_que_aporta_b(
+    completa: fixtures_d.FixtureD,
+) -> None:
+    en_b = _senales_por_item(
+        _recuperar(completa, candidato_b(completa.ruta, completa.sidecar)), SENAL_VECTORIAL
+    )
+    en_d = _senales_por_item(_recuperar(completa, _d(completa)), SENAL_VECTORIAL)
+    assert en_b == en_d
+    assert en_d, "la senal vectorial debe haber aportado algo, o la igualdad es vacua"
+
+
 def test_la_misma_senal_vectorial_rankea_despues_en_d_que_en_b(
     completa: fixtures_d.FixtureD,
 ) -> None:
