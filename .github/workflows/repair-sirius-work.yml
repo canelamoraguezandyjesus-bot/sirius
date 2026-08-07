@@ -318,15 +318,24 @@ jobs:
             head_ahora="$leido"
           fi
 
-          # La pregunta util no es cuantos commits hay, sino si el corrector
-          # movio el head de la PR. Se responde comparando dos lecturas de la
-          # misma fuente, sin depender del arbol local ni de rangos de git.
-          avance="indeterminado"
+          # Este paso informa HECHOS y no saca conclusiones. Las cuatro rondas de
+          # revision de esta PR encontraron el mismo defecto una y otra vez, y
+          # siempre en la capa de interpretacion que se le anadia encima —contar
+          # commits, atribuir el push al corrector—, nunca en los hechos crudos.
+          #
+          # Que las dos lecturas difieran demuestra que el head cambio durante el
+          # job; no demuestra QUIEN lo cambio (una persona u otro bot pueden
+          # empujar durante los 45 minutos que dura) ni que el commit nuevo
+          # descienda del anterior (un force-push no lo garantiza). Decir "hubo
+          # push del corrector" era afirmar las dos cosas sin evidencia.
+          #
+          # Un diagnostico al que se le cree tiene que decir solo lo que sostiene.
+          cambio="indeterminado"
           if [ -n "${HEAD_AL_EMPEZAR:-}" ] && [ "$head_ahora" != "indeterminado" ]; then
             if [ "$HEAD_AL_EMPEZAR" = "$head_ahora" ]; then
-              avance="NO: el head de la PR no se movio"
+              cambio="NO"
             else
-              avance="SI: el head de la PR avanzo"
+              cambio="SI"
             fi
           fi
 
@@ -346,7 +355,9 @@ jobs:
             echo "- Archivo de veredicto: ${tamano}"
             echo "- Head de la PR al empezar: \`${HEAD_AL_EMPEZAR:-indeterminado}\`"
             echo "- Head de la PR al terminar: \`${head_ahora}\`"
-            echo "- Hubo push del corrector: ${avance}"
+            echo "- El head de la PR cambio durante el job: ${cambio}"
+            echo "  (que cambiara no atribuye el cambio a nadie: cualquiera con"
+            echo "  permiso pudo empujar mientras el job corria)"
             echo "- Arbol de trabajo del job: ${sucio}"
             echo "- Registro del job: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             echo

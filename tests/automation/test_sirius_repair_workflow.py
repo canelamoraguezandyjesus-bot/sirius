@@ -221,12 +221,32 @@ def test_the_diagnosis_reports_what_distinguishes_working_from_doing_nothing() -
     assert "git status --porcelain" in guion
 
 
+def test_the_diagnosis_states_facts_and_draws_no_conclusions() -> None:
+    # Las cuatro rondas de revisión de esta PR encontraron el mismo defecto —un
+    # valor creíble pero falso— y siempre en la capa de interpretación que se le
+    # añadía encima: contar commits, atribuir el push al corrector. Los hechos
+    # crudos nunca fallaron. Se retiró la interpretación, no el diagnóstico:
+    # sin conclusiones no puede haber conclusiones falsas.
+    #
+    # Que las dos lecturas del head difieran demuestra que cambió durante el
+    # job; no demuestra quién lo cambió —cualquiera con permiso pudo empujar en
+    # los 45 minutos que dura— ni que el commit nuevo descienda del anterior.
+    guion = str(_step(_load(), "diagnostico")["run"])
+    # El bloque publicado es lo que va ENTRE los dos marcadores, no lo anterior
+    # al primero: extraerlo mal dejaba la prueba pasando en vacío.
+    inicio = guion.index('contexto<<FIN_DIAGNOSTICO"') + len('contexto<<FIN_DIAGNOSTICO"')
+    publicado = guion[inicio : guion.index('echo "FIN_DIAGNOSTICO"')]
+    assert "Head de la PR al empezar" in publicado, "la extracción no captura el bloque"
+    for atribucion in ("push del corrector", "avanzo", "avance"):
+        assert atribucion not in publicado, f"el diagnóstico vuelve a atribuir: {atribucion}"
+
+
 def test_no_measurement_is_published_when_its_command_failed() -> None:
     # `git log | wc -l` emite 0 aunque git falle, y con `pipefail` sin `errexit`
     # la asignación no lo detecta: ese 0 se leería como "no hizo nada". Cada
     # medida comprueba su estado y cae a `indeterminado`.
     guion = str(_step(_load(), "diagnostico")["run"])
-    for medida in ("tamano", "head_ahora", "avance", "sucio"):
+    for medida in ("tamano", "head_ahora", "cambio", "sucio"):
         assert f'{medida}="indeterminado"' in guion or f'{medida}="ausente"' in guion, medida
     # Y las lecturas van dentro de un `if` que comprueba el estado del comando.
     assert 'if estado="$(git status --porcelain 2>/dev/null)"; then' in guion
