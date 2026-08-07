@@ -483,54 +483,58 @@ sirius_comment_once() {
     return 0
   fi
 
-  # El POST se intenta UNA sola vez y no se repite JAMÁS dentro de esta misma
-  # invocación. `gh issue comment` no es idempotente, y tras un fallo no existe
-  # forma de demostrar que la petición no llegó: el cliente puede haber expirado
-  # mientras GitHub la seguía procesando, o la lectura puede no reflejar todavía
-  # la escritura. Una relectura sin marcador NO prueba "no llegó"; solo dice "aún
-  # no lo veo". Republicar apoyándose en esa ausencia es precisamente lo que
-  # produce dos comentarios autoritativos, y un registro de ronda duplicado sobre
-  # el mismo head hace que la puerta siguiente bloquee por `head-sin-avance` un
-  # trabajo que sí avanzaba.
+  # Publicar contra la API de GitHub NO puede ser exactamente-una-vez: el POST de
+  # `gh issue comment` no es idempotente y no hay clave de idempotencia del lado
+  # del servidor. Un resultado ambiguo —GitHub acepta y la respuesta se pierde—
+  # deja el comentario publicado sin que esta ejecución pueda saberlo, y tampoco
+  # la siguiente si la lectura aún no lo refleja. Cualquier diseño que persiga la
+  # unicidad SOLO aquí acota la ventana; no la cierra.
   #
-  # Así que la relectura sirve para lo contrario de lo que parece: para CONFIRMAR
-  # el éxito, nunca para autorizar una repetición. Si el marcador aparece, el POST
-  # llegó y esto termina bien. Si no aparece, se falla de forma segura y decide el
-  # llamador; `sirius_transition` publica su comentario como último paso, así que
-  # reejecutar rehace la deduplicación y, si el comentario sí había llegado, lo
-  # encuentra y no duplica nada.
+  # Por eso la garantía vive en los LECTORES, que sí están en nuestra mano: un
+  # duplicado no significa nada distinto de un original. `parse_round_records`
+  # cuenta una ronda por número aunque su registro aparezca repetido, y
+  # `ci_failure_streak` cuenta heads distintos, no marcadores. Con eso, un
+  # duplicado es ruido en la incidencia y nunca una medida falseada.
   #
-  # El precio es deliberado: un fallo transitorio del POST cuesta una ejecución en
-  # vez de absorberse con reintentos. Se cambia un duplicado que corrompe una
-  # medida por una parada reintentable, que es el sentido del fallo seguro.
+  # Siendo el duplicado inocuo, reintentar vuelve a ser lo correcto: perder el
+  # registro sí hace daño. `complete-sirius-after-merge` cierra la incidencia
+  # ANTES de publicar y después solo busca incidencias abiertas, así que un único
+  # 5xx sin reintento dejaba la incidencia cerrada y sin su registro, de forma
+  # irrecuperable: reejecutar ya no la encuentra.
   #
-  # Y acota el tiempo, que era el otro problema de reintentar aquí: como mucho una
-  # lectura de deduplicación y una relectura. Con reintentos anidados —cuatro POST,
-  # cada uno con su relectura completa de REST más GraphQL— el peor caso sumaba
-  # ~154 s solo de esperas exponenciales, y los workflows que llaman aquí
-  # (`advance-sirius-after-quality`, `complete-sirius-after-merge`,
-  # `notify-sirius-state`) corren en jobs de `timeout-minutes: 5` que además
-  # gastan tiempo en sus propias lecturas y mutaciones: el job podía morir antes
-  # de que este script llegara a emitir su parada controlada.
+  # La relectura se conserva para no duplicar gratuitamente: si confirma que el
+  # comentario llegó, se termina sin republicar.
   #
-  # Si alguna vez se reintroduce aquí cualquier repetición del POST, hay que
-  # recuperar con ella una cota TOTAL compartida entre el POST y las lecturas: el
-  # defecto no era el número de intentos, sino reutilizar el mismo número en dos
-  # niveles anidados, que multiplica el presupuesto en vez de acotarlo.
-  if gh issue comment "$num" --repo "$repo" --body-file "$file"; then
-    return 0
-  fi
+  # La cota es un PLAZO TOTAL, no un número de intentos por nivel. Reutilizar el
+  # mismo número de intentos en el POST y en las lecturas multiplicaba el
+  # presupuesto —hasta ~154 s de esperas— y los workflows que llaman aquí corren
+  # en jobs de `timeout-minutes: 5`: el job moría antes de que el script emitiera
+  # su parada controlada. Con un plazo compartido, el peor caso está acotado
+  # aunque cambien los reintentos de las lecturas.
+  local budget="${SIRIUS_COMMENT_BUDGET_SECONDS:-90}"
+  local deadline=$(( SECONDS + budget ))
+  local delay="${SIRIUS_RETRY_BASE_DELAY:-2}"
   local after=""
-  if after="$(sirius_read_issue_comments "$repo" "$num")" \
-    && printf '%s' "$after" | grep -Fq "$marker"; then
-    echo "sirius_comment_once: el POST devolvio error pero el comentario si llego a" \
-      "#${num} (${marker}); no se republica" >&2
-    return 0
-  fi
-  echo "sirius_comment_once: el POST fallo en #${num} y no puedo demostrar que llegara" \
-    "(${marker}); no republico, porque un duplicado autoritativo falsearia las medidas." \
-    "Reintentable en la ejecucion siguiente." >&2
-  return 1
+  while true; do
+    if gh issue comment "$num" --repo "$repo" --body-file "$file"; then
+      return 0
+    fi
+    if after="$(sirius_read_issue_comments "$repo" "$num")" \
+      && printf '%s' "$after" | grep -Fq "$marker"; then
+      echo "sirius_comment_once: el POST devolvio error pero el comentario si llego a" \
+        "#${num} (${marker}); no se republica" >&2
+      return 0
+    fi
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      echo "sirius_comment_once: agotado el plazo de ${budget}s publicando ${marker} en" \
+        "#${num}; parada reintentable" >&2
+      return 1
+    fi
+    echo "sirius_comment_once: no he podido confirmar la publicacion de ${marker} en" \
+      "#${num}; reintento en ${delay}s (quedan $(( deadline - SECONDS ))s de plazo)" >&2
+    sleep "$delay"
+    delay=$(( delay * 2 ))
+  done
 }
 
 # sirius_transition <repo> <issue> <marker> <body_file> <add_label> <color>

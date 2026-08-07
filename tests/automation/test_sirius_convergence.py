@@ -863,3 +863,45 @@ def test_distinct_heads_still_accumulate_toward_the_bound() -> None:
     result = module.decide(module.parse_round_records(history), ci_failures=3)
     assert result["decision"] == "BLOCK"
     assert result["reason"] == "ci-sin-arreglo"
+
+
+# --------------------------------------------------------------------------- #
+# Los lectores son idempotentes: un duplicado no es un hecho nuevo
+# --------------------------------------------------------------------------- #
+
+
+def test_a_duplicated_round_record_counts_once() -> None:
+    # Publicar contra la API de GitHub no puede ser exactamente-una-vez: el POST
+    # no es idempotente y no hay clave de idempotencia del servidor. La garantía
+    # tiene que vivir aquí. Sin esto, dos copias del registro de la ronda N se
+    # leían como dos rondas consecutivas sobre el mismo head y la puerta
+    # bloqueaba por `head-sin-avance` un trabajo que sí avanzaba.
+    module = _module()
+    registro = _round_comment(1, HEAD_A, [_observation("CODEX-001")])
+    records = module.parse_round_records("\n".join([registro, registro]))
+    assert [record["round"] for record in records] == [1]
+
+
+def test_a_duplicated_record_does_not_fake_head_sin_avance() -> None:
+    module = _module()
+    ronda1 = _round_comment(1, HEAD_A, [_observation("CODEX-001"), _observation("CODEX-002")])
+    ronda2 = _round_comment(2, HEAD_B, [_observation("CODEX-001")])
+    # La copia tiene que ser de la ÚLTIMA ronda: es la que deja dos registros
+    # consecutivos con el mismo head y dispara `head-sin-avance`. Duplicando una
+    # ronda anterior, las dos últimas siguen teniendo heads distintos y la prueba
+    # pasaría sin ejercitar nada.
+    history = "\n".join([ronda1, ronda2, ronda2])
+    result = module.decide(module.parse_round_records(history))
+    assert result["decision"] == "CONTINUE"
+    assert result["reason"] == "progreso"
+
+
+def test_a_legible_copy_wins_over_a_corrupt_one() -> None:
+    # La deduplicación se aplica tras validar el JSON, así que una primera copia
+    # ilegible no consume el hueco de la ronda.
+    module = _module()
+    corrupta = "<!-- sirius-round:1 -->\n## RONDA_HALLAZGOS\n```json\n{no es json\n```\n"
+    buena = _round_comment(1, HEAD_A, [_observation("CODEX-001")])
+    records = module.parse_round_records("\n".join([corrupta, buena]))
+    assert [record["round"] for record in records] == [1]
+    assert records[0]["pending"] == 1
