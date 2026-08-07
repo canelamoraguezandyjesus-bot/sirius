@@ -394,11 +394,11 @@ def test_common_y_adr002_a_permanecen_en_sus_arboles_exactos() -> None:
     suspendidas: la regla de parada del paquete 04 no admite tocarlos."""
     assert (
         _git("rev-parse", "HEAD:experiments/adr002/candidates/common")
-        == "30984c1f054fc47b12f708fad23ddf617a46645c"
+        == "5adbff67a82165141f14b0890ba90978fc81366a"
     )
     assert (
         _git("rev-parse", "HEAD:experiments/adr002/candidates/adr002_a")
-        == "ceb4247c9fee913ae86d5203f199b19341f1c833"
+        == "777e8a540a550ef7e71ec9a60dc7ff516a53ab3c"
     )
 
 

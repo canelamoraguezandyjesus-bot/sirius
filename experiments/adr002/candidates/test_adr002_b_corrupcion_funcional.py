@@ -468,28 +468,28 @@ def test_el_candidato_traduce_el_rechazo_del_puerto_a_corrupcion(
 def test_common_y_adr002_a_permanecen_intactos_por_arboles() -> None:
     assert (
         _git("rev-parse", "HEAD:experiments/adr002/candidates/common")
-        == "30984c1f054fc47b12f708fad23ddf617a46645c"
+        == "5adbff67a82165141f14b0890ba90978fc81366a"
     )
     assert (
         _git("rev-parse", "HEAD:experiments/adr002/candidates/adr002_a")
-        == "ceb4247c9fee913ae86d5203f199b19341f1c833"
+        == "777e8a540a550ef7e71ec9a60dc7ff516a53ab3c"
     )
 
 
-def test_la_ficha_y_el_acta_de_a_v4_son_las_congeladas() -> None:
+def test_la_ficha_vigente_de_a_y_su_acta_son_las_congeladas() -> None:
     assert (
-        _git("rev-parse", "HEAD:artifacts/adr002_cards/ficha_ADR002-A_v5.json")
-        == "19660d4285e11bfdaa4e4e8ff82968a8105be3c7"
+        _git("rev-parse", "HEAD:artifacts/adr002_cards/ficha_ADR002-A_v6.json")
+        == "691514cf5becd2d8ece50035de58a84426498b71"
     )
     acta = (
         "docs/architecture/SIRIUS_0.2_ADR_002_ADR002_A_V3_PREPARADO_BENCHMARK_REAPROBACION_v1.0.md"
     )
     assert _git("rev-parse", f"HEAD:{acta}") == "f2babe06a8c883924a464df6fc96d14f52da367d"
     ficha = json.loads(
-        (RAIZ / "artifacts/adr002_cards/ficha_ADR002-A_v5.json").read_text(encoding="utf-8")
+        (RAIZ / "artifacts/adr002_cards/ficha_ADR002-A_v6.json").read_text(encoding="utf-8")
     )
     assert ficha["estado"] == "CONGELADA"
-    assert ficha["congelacion"]["huella"] == "b5549a5a8e0f2fa4e791f64fbdb1c769938949be"
+    assert ficha["congelacion"]["huella"] == "d305073ce5bb21a07e8523969752a9f06a966d01"
 
 
 # --------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 """``ADR002-D``: que la ficha diga lo que el codigo hace, y en ese orden.
 
-Se ejecutan **solo despues** de que ``ficha_ADR002-D_v2.json`` sea ancestro
+Se ejecutan **solo despues** de que ``ficha_ADR002-D_v3.json`` sea ancestro
 estricto del commit que las corre, que es la regla 3 de ``TOL-210``: una
 ejecucion que no venga precedida por su ficha no es evidencia utilizable.
 
@@ -33,19 +33,19 @@ from experiments.adr002.candidates.adr002_d.candidate import (
 from experiments.adr002.cards import card_protocol as cp
 
 RAIZ = Path(__file__).resolve().parents[3]
-FICHA: Final = "artifacts/adr002_cards/ficha_ADR002-D_v2.json"
+FICHA: Final = "artifacts/adr002_cards/ficha_ADR002-D_v3.json"
 IMPLEMENTACION: Final = "experiments/adr002/candidates/adr002_d/candidate.py"
 ACTA: Final = f"docs/architecture/{ACTA_DEL_ORDEN}"
 
 #: Se fija al congelar la v2; si quedara desactualizada, la cita fallaria.
-HUELLA_FICHA_D_V2: Final = "7cc6ccc9afab331322cc45da17215def2566beae"
+HUELLA_FICHA_D_V2: Final = "5ca687f88a7d194a922ca39eb32778c0ab02608c"
 
 #: La v1, conservada y marcada, con la huella que la sustitucion recomputo.
 HUELLA_FICHA_D_V1_SUSTITUIDA: Final = "0ca203f07ebc550a4e37f956f92aa1723f927572"
 
-HUELLA_A_V5: Final = "b5549a5a8e0f2fa4e791f64fbdb1c769938949be"
-HUELLA_B_V7: Final = "33a7617dc8713d7dc29fce1877b7c41d689f25d7"
-HUELLA_C_V2: Final = "5e034078eb1d01ef6485cfd10707ce30f92ed7e5"
+HUELLA_A_VIGENTE: Final = "d305073ce5bb21a07e8523969752a9f06a966d01"
+HUELLA_B_VIGENTE: Final = "b7ea269da379fc0de324efa5ca2da7baa616d112"
+HUELLA_C_VIGENTE: Final = "ef71f944536ffc07dd18b39278ba43da2776232c"
 
 
 def _git(*argumentos: str) -> str:
@@ -125,8 +125,8 @@ def test_el_orden_se_congelo_antes_que_la_ficha() -> None:
 def test_la_ficha_declara_la_identidad_correcta(ficha: dict) -> None:
     assert ficha["identidad"]["candidato"] == "ADR002-D"
     assert ficha["identidad"]["papel"] == cp.PAPEL_CANDIDATO
-    assert ficha["identidad"]["version"] == 2
-    assert ficha["identidad"]["sustituye_a"] == 1
+    assert ficha["identidad"]["version"] == 3
+    assert ficha["identidad"]["sustituye_a"] == 2
     assert ficha["estado"] == cp.ESTADO_CONGELADA
     assert ficha["congelacion"]["huella"] == HUELLA_FICHA_D_V2
     assert ficha["no_contiene_resultados"] is True
@@ -143,6 +143,7 @@ def test_la_v1_se_conserva_marcada_y_la_v2_es_la_unica_congelada() -> None:
     assert [ruta.name for ruta in fichas] == [
         "ficha_ADR002-D_v1.json",
         "ficha_ADR002-D_v2.json",
+        "ficha_ADR002-D_v3.json",
     ]
     v1 = json.loads(
         (RAIZ / "artifacts/adr002_cards/ficha_ADR002-D_v1.json").read_text(encoding="utf-8")
@@ -209,17 +210,17 @@ def test_la_ficha_asigna_cada_senal_a_una_etapa_distinta(ficha: dict) -> None:
 
 def test_la_ficha_cita_las_versiones_vigentes_de_sus_dependencias(ficha: dict) -> None:
     documento = json.dumps(ficha, ensure_ascii=False)
-    assert HUELLA_A_V5 in documento, "debe citar A v5, la base vigente"
-    assert HUELLA_B_V7 in documento, "debe citar B v7, de donde toma la senal vectorial"
-    assert HUELLA_C_V2 in documento, "debe citar C v2, de donde toma la senal relacional"
+    assert HUELLA_A_VIGENTE in documento, "debe citar A v6, la base vigente"
+    assert HUELLA_B_VIGENTE in documento, "debe citar B v8, de donde toma la senal vectorial"
+    assert HUELLA_C_VIGENTE in documento, "debe citar C v3, de donde toma la senal relacional"
 
 
 @pytest.mark.parametrize(
     ("huella", "ruta"),
     [
-        (HUELLA_A_V5, "artifacts/adr002_cards/ficha_ADR002-A_v5.json"),
-        (HUELLA_B_V7, "artifacts/adr002_cards/ficha_ADR002-B_v7.json"),
-        (HUELLA_C_V2, "artifacts/adr002_cards/ficha_ADR002-C_v2.json"),
+        (HUELLA_A_VIGENTE, "artifacts/adr002_cards/ficha_ADR002-A_v6.json"),
+        (HUELLA_B_VIGENTE, "artifacts/adr002_cards/ficha_ADR002-B_v8.json"),
+        (HUELLA_C_VIGENTE, "artifacts/adr002_cards/ficha_ADR002-C_v3.json"),
     ],
 )
 def test_las_huellas_citadas_son_las_reales(huella: str, ruta: str) -> None:
@@ -298,10 +299,10 @@ def test_e3_conserva_el_limite_de_la_base_y_e4_recibe_la_senal_vectorial(
     """La aritmetica que el orden congelado obliga, comprobada contra A y B."""
     por_etapa = {e["etapa"]: e["coste_local_limite_ns"] for e in ficha["coste_por_etapa"]["etapas"]}
     a5 = json.loads(
-        (RAIZ / "artifacts/adr002_cards/ficha_ADR002-A_v5.json").read_text(encoding="utf-8")
+        (RAIZ / "artifacts/adr002_cards/ficha_ADR002-A_v6.json").read_text(encoding="utf-8")
     )
     b7 = json.loads(
-        (RAIZ / "artifacts/adr002_cards/ficha_ADR002-B_v7.json").read_text(encoding="utf-8")
+        (RAIZ / "artifacts/adr002_cards/ficha_ADR002-B_v8.json").read_text(encoding="utf-8")
     )
     de_a = {e["etapa"]: e["coste_local_limite_ns"] for e in a5["coste_por_etapa"]["etapas"]}
     de_b = {e["etapa"]: e["coste_local_limite_ns"] for e in b7["coste_por_etapa"]["etapas"]}

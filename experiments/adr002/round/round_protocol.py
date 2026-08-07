@@ -73,8 +73,8 @@ FICHAS_VIGENTES: Final[Mapping[str, tuple[int, str]]] = {
     "T0-control": (1, "d47a767e61b30729e15f48c9924413f6fddc9429"),
     "ADR002-A": (6, "d305073ce5bb21a07e8523969752a9f06a966d01"),
     "ADR002-B": (8, "b7ea269da379fc0de324efa5ca2da7baa616d112"),
-    "ADR002-C": (3, "a794f0b216c24c2211e98369e6b824cc509016fb"),
-    "ADR002-D": (3, "13f4fc9c6ae7c1bb1d6b747597e584af0845f8a7"),
+    "ADR002-C": (3, "ef71f944536ffc07dd18b39278ba43da2776232c"),
+    "ADR002-D": (3, "5ca687f88a7d194a922ca39eb32778c0ab02608c"),
 }
 
 #: Version que el acta de preparacion de cada candidato aprueba. Sin esto, la

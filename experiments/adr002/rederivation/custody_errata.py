@@ -95,6 +95,54 @@ ERRATAS: Final[tuple[ErrataDeIdentidad, ...]] = (
 #: Hashes citados que NO son objetos del repositorio por construccion, con el
 #: motivo por el que su ausencia es correcta y no una errata.
 HASHES_NO_ALMACENADOS: Final[Mapping[str, str]] = {
+    "d305073ce5bb21a07e8523969752a9f06a966d01": (
+        "huella canonica de la ficha ADR002-A v6, emitida por el paquete de "
+        "correccion de la capa comun posterior a la ronda primaria. Como todas "
+        "las huellas de ficha, no resuelve a ningun objeto Git: se comprueba "
+        "recomputandola"
+    ),
+    "b7ea269da379fc0de324efa5ca2da7baa616d112": (
+        "huella canonica de la ficha ADR002-B v8, emitida por el paquete de "
+        "correccion de la capa comun posterior a la ronda primaria. Como todas "
+        "las huellas de ficha, no resuelve a ningun objeto Git: se comprueba "
+        "recomputandola"
+    ),
+    "ef71f944536ffc07dd18b39278ba43da2776232c": (
+        "huella canonica de la ficha ADR002-C v3, emitida por el paquete de "
+        "correccion de la capa comun posterior a la ronda primaria. Como todas "
+        "las huellas de ficha, no resuelve a ningun objeto Git: se comprueba "
+        "recomputandola"
+    ),
+    "5ca687f88a7d194a922ca39eb32778c0ab02608c": (
+        "huella canonica de la ficha ADR002-D v3, emitida por el paquete de "
+        "correccion de la capa comun posterior a la ronda primaria. Como todas "
+        "las huellas de ficha, no resuelve a ningun objeto Git: se comprueba "
+        "recomputandola"
+    ),
+    "3ccdcc0374905c0e9fd506813846590d6eab9f39": (
+        "huella canonica de la ficha ADR002-A v5 (SUSTITUIDA), emitida por el paquete de "
+        "correccion de la capa comun posterior a la ronda primaria. Como todas "
+        "las huellas de ficha, no resuelve a ningun objeto Git: se comprueba "
+        "recomputandola"
+    ),
+    "9608bd217d5a388567ec4939e4d37fc771a14c06": (
+        "huella canonica de la ficha ADR002-B v7 (SUSTITUIDA), emitida por el paquete de "
+        "correccion de la capa comun posterior a la ronda primaria. Como todas "
+        "las huellas de ficha, no resuelve a ningun objeto Git: se comprueba "
+        "recomputandola"
+    ),
+    "f86ed4c59533e61f2aed5928bee5c2b14b3483ad": (
+        "huella canonica de la ficha ADR002-C v2 (SUSTITUIDA), emitida por el paquete de "
+        "correccion de la capa comun posterior a la ronda primaria. Como todas "
+        "las huellas de ficha, no resuelve a ningun objeto Git: se comprueba "
+        "recomputandola"
+    ),
+    "97db72c8863ca34cdc06d3970c63c81f81d25230": (
+        "huella canonica de la ficha ADR002-D v2 (SUSTITUIDA), emitida por el paquete de "
+        "correccion de la capa comun posterior a la ronda primaria. Como todas "
+        "las huellas de ficha, no resuelve a ningun objeto Git: se comprueba "
+        "recomputandola"
+    ),
     "d47a767e61b30729e15f48c9924413f6fddc9429": (
         "huella canonica de la ficha T0-control v1: SHA-1 del blob de la forma "
         "canonica de la ficha excluido el propio campo de huella, un contenido que "

@@ -63,12 +63,12 @@ from experiments.adr002.candidates.common.contracts import (
 from experiments.adr002.candidates.common.port import PuertoSqlite
 
 RAIZ = Path(__file__).resolve().parents[3]
-FICHA: Final = "artifacts/adr002_cards/ficha_ADR002-B_v7.json"
+FICHA: Final = "artifacts/adr002_cards/ficha_ADR002-B_v8.json"
 
 #: Se fija al congelar la v4; si quedara desactualizada, la cita fallaria.
 #: Mientras la suite este suspendida por la guarda de anterioridad, este
 #: centinela no se compara con nada.
-HUELLA_FICHA_B_V7: Final = "33a7617dc8713d7dc29fce1877b7c41d689f25d7"
+HUELLA_FICHA_B_VIGENTE: Final = "b7ea269da379fc0de324efa5ca2da7baa616d112"
 
 CONSULTA: Final = "faro"
 OBJETIVO: Final = fixtures_b.OBJETIVO_SOLO_B
@@ -132,7 +132,7 @@ def test_la_ficha_b_es_anterior_estricta_a_esta_ejecucion() -> None:
 
 
 def test_la_ejecucion_cita_la_version_y_la_huella_correctas() -> None:
-    """Una sola ficha CONGELADA de B —la v6— y v1..v5 conservadas."""
+    """Una sola ficha CONGELADA de B —la v8— y v1..v7 conservadas."""
     fichas_de_b = sorted((RAIZ / "artifacts/adr002_cards").glob("ficha_ADR002-B_*.json"))
     assert [ruta.name for ruta in fichas_de_b] == [
         "ficha_ADR002-B_v1.json",
@@ -142,8 +142,9 @@ def test_la_ejecucion_cita_la_version_y_la_huella_correctas() -> None:
         "ficha_ADR002-B_v5.json",
         "ficha_ADR002-B_v6.json",
         "ficha_ADR002-B_v7.json",
+        "ficha_ADR002-B_v8.json",
     ]
-    for anterior in ("v1", "v2", "v3", "v4", "v5", "v6"):
+    for anterior in ("v1", "v2", "v3", "v4", "v5", "v6", "v7"):
         conservada = json.loads(
             (RAIZ / f"artifacts/adr002_cards/ficha_ADR002-B_{anterior}.json").read_text(
                 encoding="utf-8"
@@ -152,10 +153,10 @@ def test_la_ejecucion_cita_la_version_y_la_huella_correctas() -> None:
         assert conservada["estado"] == "SUSTITUIDA"
     ficha = json.loads((RAIZ / FICHA).read_text(encoding="utf-8"))
     assert ficha["identidad"]["candidato"] == "ADR002-B"
-    assert ficha["identidad"]["version"] == 7
-    assert ficha["identidad"]["sustituye_a"] == 6
+    assert ficha["identidad"]["version"] == 8
+    assert ficha["identidad"]["sustituye_a"] == 7
     assert ficha["estado"] == "CONGELADA"
-    assert ficha["congelacion"]["huella"] == HUELLA_FICHA_B_V7
+    assert ficha["congelacion"]["huella"] == HUELLA_FICHA_B_VIGENTE
     assert ficha["senal_tardia"]["habilitada"] == "semantica_vectorial"
     assert ficha["no_contiene_resultados"] is True
 
