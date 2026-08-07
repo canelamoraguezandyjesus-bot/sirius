@@ -30,6 +30,23 @@ Funciones principales:
 - `sirius_write_issue_body <repo> <n> <archivo> [respaldo]` — rechaza cuerpos de
   origen truncados, respalda el cuerpo anterior, escribe de una sola vez por REST
   y verifica por relectura (longitud + hash).
+- `sirius_comment_once <repo> <n> <marcador> <archivo>` — publica el comentario
+  solo si el marcador no está ya. Publicar contra la API **no puede ser
+  exactamente-una-vez**: `gh issue comment` no es idempotente y no hay clave de
+  idempotencia del servidor, así que un resultado ambiguo (GitHub acepta y la
+  respuesta se pierde) deja el comentario publicado sin que se pueda demostrar.
+  Por eso la garantía vive en los **lectores** —`parse_round_records` cuenta una
+  ronda por número y `ci_failure_streak` cuenta heads distintos—: un duplicado es
+  ruido en la incidencia, nunca una medida falseada. Siendo inocuo el duplicado,
+  reintenta hasta agotar un **plazo total** (`SIRIUS_COMMENT_BUDGET_SECONDS`,
+  90 s) que se aplica en tres sitios, porque fallar en cualquiera lo vacía de
+  contenido: se comprueba antes de cada llamada, la espera se recorta a lo que
+  queda, y cada proceso `gh` se lanza con el tiempo restante como límite —`gh` no
+  expone ninguno configurable, así que una llamada bloqueada esperando a GitHub
+  consumiría el resto del job—. Perder el registro sí hace daño, porque
+  `complete-sirius-after-merge`
+  cierra la incidencia antes de publicar y luego solo busca las abiertas. Tras un
+  fallo relee: si el marcador aparece, termina sin republicar.
 - `sirius_ensure_label <repo> <nombre> <color> <descripcion>` — etiqueta
   idempotente.
 - `sirius_scan_text` / `sirius_extract_sha` — extracción robusta de Head/Merge SHA
