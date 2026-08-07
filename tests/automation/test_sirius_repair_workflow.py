@@ -194,15 +194,30 @@ def test_there_is_no_measured_diagnosis_step() -> None:
     parada segura. Si alguien vuelve a añadir aquí un paso que mida, que sea con
     la decisión tomada de nuevo y no por inercia.
 
-    La comprobación es una LISTA BLANCA de pasos, no una lista negra de nombres.
-    Buscar la palabra «diagnóstico» en `name` era vacuo: reintroducir el paso
-    entero bajo un nombre como «Medir estado del corrector» restauraba justo el
-    comportamiento que esta prueba dice impedir. Fijando los pasos permitidos,
-    CUALQUIER paso nuevo falla aquí y obliga a tomar la decisión de nuevo, que
-    es exactamente lo que se quería.
+    Cómo se comprueba, y por qué así. Han hecho falta dos intentos:
+
+    1. Buscar «diagnóstico» en `name` era vacuo: reintroducir el paso entero
+       bajo otro nombre —«Medir estado del corrector»— restauraba el
+       comportamiento con la prueba en verde.
+    2. Añadir un veto de comandos (`git log`, `git status`…) tampoco bastaba:
+       una lista negra prohíbe grafías, no comportamientos, y la misma medida
+       cabía con `gh api` o `git show` dentro de un paso ya permitido.
+
+    Ninguna prueba puede decidir «este guion no mide nada»: es una propiedad
+    semántica de shell arbitrario. Lo que sí es decidible, y basta, es cerrar
+    el CANAL. Medir el trabajo del corrector exige correr DESPUÉS de él, y
+    después de él solo corre un paso: el que aplica el veredicto. Ese paso
+    recibía la medida por una variable de entorno (`SIRIUS_STOP_CONTEXT`) y la
+    pasaba al comentario de la parada. Fijando su entorno completo y su guion
+    completo, no queda por dónde entrar: cualquier medida nueva —con el comando
+    que sea— tiene que tocar algo que esta prueba fija, y entonces falla.
+
+    Lo que esta prueba NO afirma: que ningún paso calcule nada. Afirma que nada
+    calculado puede llegar al comentario de la parada. Es lo que se quería.
     """
     doc = _load()
-    assert [str(step.get("name") or "") for step in _steps(doc)] == [
+    nombres = [str(step.get("name") or "") for step in _steps(doc)]
+    assert nombres == [
         "Checkout",
         "Evaluar la convergencia y localizar la PR",
         "Consumir el evento y marcar en curso",
@@ -210,8 +225,18 @@ def test_there_is_no_measured_diagnosis_step() -> None:
         "Ejecutar Claude Code (corrector)",
         "Aplicar el veredicto",
     ]
-    # Y ninguna medida del trabajo del corrector sobrevive en el guion, se llame
-    # como se llame el paso que la contenga.
-    fuente = _source()
-    for medida in ("git log", "git status", "git rev-parse", "SIRIUS_STOP_CONTEXT"):
-        assert medida not in fuente, f"vuelve a medirse el trabajo del corrector: {medida}"
+    # Después del corrector solo corre el paso que aplica el veredicto. Si
+    # apareciera otro detrás, mediría sin que nada de lo de abajo lo notase.
+    assert nombres.index("Ejecutar Claude Code (corrector)") == len(nombres) - 2
+
+    aplicar = _step(doc, "Aplicar el veredicto")
+    # El entorno COMPLETO: era el canal por el que la medida llegaba al
+    # comentario. Cualquier variable nueva obliga a pasar por aquí.
+    assert sorted(aplicar["env"]) == ["CYCLE", "GH_REPO", "GH_TOKEN", "ISSUE_NUMBER"]
+    # Y el guion COMPLETO: es la invocación y nada más, así que tampoco cabe
+    # medir aquí mismo antes de llamar al script.
+    assert [linea.strip() for linea in str(aplicar["run"]).strip().splitlines()] == [
+        "set -uo pipefail",
+        "bash scripts/automation/sirius_apply_verdict.sh \\",
+        '"$GH_REPO" "$ISSUE_NUMBER" "corrector" "${RUNNER_TEMP}/sirius_verdict.json" "$CYCLE"',
+    ]
