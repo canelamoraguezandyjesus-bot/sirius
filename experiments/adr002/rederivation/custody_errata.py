@@ -95,6 +95,46 @@ ERRATAS: Final[tuple[ErrataDeIdentidad, ...]] = (
 #: Hashes citados que NO son objetos del repositorio por construccion, con el
 #: motivo por el que su ausencia es correcta y no una errata.
 HASHES_NO_ALMACENADOS: Final[Mapping[str, str]] = {
+    "5c56014e928d33d9e28bad5ece3a2be05400f3be": (
+        "huella canonica de la ficha ADR002-A v6 (SUSTITUIDA), emitida por el "
+        "paquete de cierre de ADR-002. Como todas las huellas de ficha, no "
+        "resuelve a ningun objeto Git: se comprueba recomputandola"
+    ),
+    "653f216f67d389fdf0472159eea896366e623484": (
+        "huella canonica de la ficha ADR002-A v7, emitida por el "
+        "paquete de cierre de ADR-002. Como todas las huellas de ficha, no "
+        "resuelve a ningun objeto Git: se comprueba recomputandola"
+    ),
+    "99a769d47b787fdb9097556d687ab356d1da5f93": (
+        "huella canonica de la ficha ADR002-B v8 (SUSTITUIDA), emitida por el "
+        "paquete de cierre de ADR-002. Como todas las huellas de ficha, no "
+        "resuelve a ningun objeto Git: se comprueba recomputandola"
+    ),
+    "93b9cf6c3a49ccd2ad0ef455ddf4a880c78a6d05": (
+        "huella canonica de la ficha ADR002-B v9, emitida por el "
+        "paquete de cierre de ADR-002. Como todas las huellas de ficha, no "
+        "resuelve a ningun objeto Git: se comprueba recomputandola"
+    ),
+    "08e43b71c01339f3663b5b9c3e7ecba11fe5b801": (
+        "huella canonica de la ficha ADR002-C v3 (SUSTITUIDA), emitida por el "
+        "paquete de cierre de ADR-002. Como todas las huellas de ficha, no "
+        "resuelve a ningun objeto Git: se comprueba recomputandola"
+    ),
+    "5801987de7574c0b416c7b9c74acc6b527652f79": (
+        "huella canonica de la ficha ADR002-C v4, emitida por el "
+        "paquete de cierre de ADR-002. Como todas las huellas de ficha, no "
+        "resuelve a ningun objeto Git: se comprueba recomputandola"
+    ),
+    "452493cd0007fadc418d6a5650cc821214dc91c9": (
+        "huella canonica de la ficha ADR002-D v3 (SUSTITUIDA), emitida por el "
+        "paquete de cierre de ADR-002. Como todas las huellas de ficha, no "
+        "resuelve a ningun objeto Git: se comprueba recomputandola"
+    ),
+    "35074ebdac69426a50a72a78c3726fb3b47e91bd": (
+        "huella canonica de la ficha ADR002-D v4, emitida por el "
+        "paquete de cierre de ADR-002. Como todas las huellas de ficha, no "
+        "resuelve a ningun objeto Git: se comprueba recomputandola"
+    ),
     "d305073ce5bb21a07e8523969752a9f06a966d01": (
         "huella canonica de la ficha ADR002-A v6, emitida por el paquete de "
         "correccion de la capa comun posterior a la ronda primaria. Como todas "

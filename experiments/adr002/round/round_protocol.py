@@ -74,7 +74,7 @@ FICHAS_VIGENTES: Final[Mapping[str, tuple[int, str]]] = {
     "ADR002-A": (7, "653f216f67d389fdf0472159eea896366e623484"),
     "ADR002-B": (9, "93b9cf6c3a49ccd2ad0ef455ddf4a880c78a6d05"),
     "ADR002-C": (4, "5801987de7574c0b416c7b9c74acc6b527652f79"),
-    "ADR002-D": (4, "eed670548216aef2fef23e435ad639d2fab72011"),
+    "ADR002-D": (4, "35074ebdac69426a50a72a78c3726fb3b47e91bd"),
 }
 
 #: Version que el acta de preparacion de cada candidato aprueba. Sin esto, la

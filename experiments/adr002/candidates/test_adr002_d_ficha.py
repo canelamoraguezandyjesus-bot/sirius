@@ -38,7 +38,7 @@ IMPLEMENTACION: Final = "experiments/adr002/candidates/adr002_d/candidate.py"
 ACTA: Final = f"docs/architecture/{ACTA_DEL_ORDEN}"
 
 #: Se fija al congelar la v2; si quedara desactualizada, la cita fallaria.
-HUELLA_FICHA_D_V2: Final = "5ca687f88a7d194a922ca39eb32778c0ab02608c"
+HUELLA_FICHA_D_V2: Final = "35074ebdac69426a50a72a78c3726fb3b47e91bd"
 
 #: La v1, conservada y marcada, con la huella que la sustitucion recomputo.
 HUELLA_FICHA_D_V1_SUSTITUIDA: Final = "0ca203f07ebc550a4e37f956f92aa1723f927572"
@@ -126,7 +126,7 @@ def test_la_ficha_declara_la_identidad_correcta(ficha: dict) -> None:
     assert ficha["identidad"]["candidato"] == "ADR002-D"
     assert ficha["identidad"]["papel"] == cp.PAPEL_CANDIDATO
     assert ficha["identidad"]["version"] == 4
-    assert ficha["identidad"]["sustituye_a"] == 2
+    assert ficha["identidad"]["sustituye_a"] == 3
     assert ficha["estado"] == cp.ESTADO_CONGELADA
     assert ficha["congelacion"]["huella"] == HUELLA_FICHA_D_V2
     assert ficha["no_contiene_resultados"] is True
@@ -143,6 +143,7 @@ def test_la_v1_se_conserva_marcada_y_la_v2_es_la_unica_congelada() -> None:
     assert [ruta.name for ruta in fichas] == [
         "ficha_ADR002-D_v1.json",
         "ficha_ADR002-D_v2.json",
+        "ficha_ADR002-D_v3.json",
         "ficha_ADR002-D_v4.json",
     ]
     v1 = json.loads(

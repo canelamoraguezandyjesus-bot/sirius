@@ -155,7 +155,7 @@ def test_la_ejecucion_cita_la_version_y_la_huella_correctas() -> None:
     ficha = json.loads((RAIZ / FICHA).read_text(encoding="utf-8"))
     assert ficha["identidad"]["candidato"] == "ADR002-B"
     assert ficha["identidad"]["version"] == 9
-    assert ficha["identidad"]["sustituye_a"] == 7
+    assert ficha["identidad"]["sustituye_a"] == 8
     assert ficha["estado"] == "CONGELADA"
     assert ficha["congelacion"]["huella"] == HUELLA_FICHA_B_VIGENTE
     assert ficha["senal_tardia"]["habilitada"] == "semantica_vectorial"

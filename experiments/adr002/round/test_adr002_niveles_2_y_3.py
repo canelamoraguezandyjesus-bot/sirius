@@ -244,7 +244,14 @@ def test_la_exencion_del_control_no_se_convierte_en_aprobado() -> None:
 
 
 def test_una_ficha_de_candidato_completa_pasa_los_dos_casos_de_gobierno() -> None:
-    for nombre, version in (("ADR002-A", 6), ("ADR002-B", 8), ("ADR002-C", 3), ("ADR002-D", 3)):
+    """Las versiones salen del protocolo, no escritas otra vez aquí.
+
+    Duplicarlas obligaba a tocar esta prueba en cada sucesión y, peor, permitía
+    que juzgase una ficha que la ronda ya no usa.
+    """
+    for nombre, version in el.VERSIONES_VIGENTES.items():
+        if nombre == "T0-control":
+            continue
         ficha = _ficha(nombre, version)
         for caso, funcion in (("ARQ-CA-04", lv.arq_ca_04), ("ARQ-CA-05", lv.arq_ca_05)):
             veredicto, detalle = funcion(ficha)
@@ -252,7 +259,7 @@ def test_una_ficha_de_candidato_completa_pasa_los_dos_casos_de_gobierno() -> Non
 
 
 def test_una_ficha_sin_congelar_no_pasa_arq_ca_04() -> None:
-    ficha = dict(_ficha("ADR002-B", 8))
+    ficha = dict(_ficha("ADR002-B", el.VERSIONES_VIGENTES["ADR002-B"]))
     ficha["estado"] = "PROPUESTA"
     veredicto, detalle = lv.arq_ca_04(ficha)
     assert veredicto is lv.Veredicto.FALLA
@@ -261,7 +268,7 @@ def test_una_ficha_sin_congelar_no_pasa_arq_ca_04() -> None:
 
 def test_un_indice_sin_limite_por_magnitud_no_pasa_arq_ca_04() -> None:
     """La puerta 7 pide el límite, no la mención del índice."""
-    ficha = json.loads(json.dumps(_ficha("ADR002-B", 8)))
+    ficha = json.loads(json.dumps(_ficha("ADR002-B", el.VERSIONES_VIGENTES["ADR002-B"])))
     del ficha["indices_no_lexicos"][0]["limites_por_magnitud"]
     veredicto, detalle = lv.arq_ca_04(ficha)
     assert veredicto is lv.Veredicto.FALLA
@@ -270,7 +277,7 @@ def test_un_indice_sin_limite_por_magnitud_no_pasa_arq_ca_04() -> None:
 
 def test_un_coste_por_etapa_que_no_suma_no_pasa_arq_ca_05() -> None:
     """Si la suma no explica el total, la declaración no dice nada."""
-    ficha = json.loads(json.dumps(_ficha("ADR002-B", 8)))
+    ficha = json.loads(json.dumps(_ficha("ADR002-B", el.VERSIONES_VIGENTES["ADR002-B"])))
     ficha["coste_por_etapa"]["etapas"][0]["coste_local_limite_ns"] += 1
     veredicto, detalle = lv.arq_ca_05(ficha)
     assert veredicto is lv.Veredicto.FALLA
@@ -279,7 +286,7 @@ def test_un_coste_por_etapa_que_no_suma_no_pasa_arq_ca_05() -> None:
 
 def test_una_etapa_sin_coste_externo_separado_no_pasa_arq_ca_05() -> None:
     """`TOL-202` prohíbe sumarlos: separarlos es la obligación."""
-    ficha = json.loads(json.dumps(_ficha("ADR002-B", 8)))
+    ficha = json.loads(json.dumps(_ficha("ADR002-B", el.VERSIONES_VIGENTES["ADR002-B"])))
     ficha["coste_por_etapa"]["etapas"][2]["coste_externo_declarado"] = ""
     veredicto, detalle = lv.arq_ca_05(ficha)
     assert veredicto is lv.Veredicto.FALLA
