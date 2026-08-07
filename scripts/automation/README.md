@@ -31,14 +31,18 @@ Funciones principales:
   origen truncados, respalda el cuerpo anterior, escribe de una sola vez por REST
   y verifica por relectura (longitud + hash).
 - `sirius_comment_once <repo> <n> <marcador> <archivo>` — publica el comentario
-  solo si el marcador no está ya, e intenta el POST **una sola vez**. `gh issue
-  comment` no es idempotente y tras un fallo no hay forma de demostrar que la
-  petición no llegó: el cliente pudo expirar mientras GitHub la procesaba, o la
-  lectura puede no reflejar aún la escritura. Por eso la relectura posterior solo
-  sirve para **confirmar el éxito**, nunca para autorizar una repetición: si el
-  marcador aparece, termina bien; si no, falla de forma segura y decide el
-  llamador. Un fallo transitorio cuesta una ejecución reintentable en vez de un
-  comentario duplicado, que sí corrompería las medidas de convergencia y de CI.
+  solo si el marcador no está ya. Publicar contra la API **no puede ser
+  exactamente-una-vez**: `gh issue comment` no es idempotente y no hay clave de
+  idempotencia del servidor, así que un resultado ambiguo (GitHub acepta y la
+  respuesta se pierde) deja el comentario publicado sin que se pueda demostrar.
+  Por eso la garantía vive en los **lectores** —`parse_round_records` cuenta una
+  ronda por número y `ci_failure_streak` cuenta heads distintos—: un duplicado es
+  ruido en la incidencia, nunca una medida falseada. Siendo inocuo el duplicado,
+  reintenta hasta agotar un **plazo total** (`SIRIUS_COMMENT_BUDGET_SECONDS`,
+  90 s), comprobado antes de cada llamada y con la espera recortada a lo que
+  queda; perder el registro sí hace daño, porque `complete-sirius-after-merge`
+  cierra la incidencia antes de publicar y luego solo busca las abiertas. Tras un
+  fallo relee: si el marcador aparece, termina sin republicar.
 - `sirius_ensure_label <repo> <nombre> <color> <descripcion>` — etiqueta
   idempotente.
 - `sirius_scan_text` / `sirius_extract_sha` — extracción robusta de Head/Merge SHA

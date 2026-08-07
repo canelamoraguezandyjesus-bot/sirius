@@ -20,6 +20,7 @@ import shutil
 import subprocess
 import sys
 import textwrap
+import time
 from pathlib import Path
 
 import pytest
@@ -1007,6 +1008,29 @@ def test_the_publication_budget_is_a_total_deadline(tmp_path: Path) -> None:
     assert r.returncode != 0
     assert "agotado el plazo" in r.stderr
     assert _actions(env).count("COMMENT") <= 1
+
+
+def test_the_wait_never_overshoots_the_remaining_budget(tmp_path: Path) -> None:
+    # El plazo se comprobaba solo entre esperas, así que una espera exponencial
+    # ya iniciada se consumía entera: con 90 s el reloj se miraba a los 62 s,
+    # dormía 64 más hasta 126 y aún lanzaba otro POST. El plazo no acotaba nada.
+    # Aquí el presupuesto da para una espera corta y la siguiente se recorta, así
+    # que el tiempo real no puede rebasarlo de forma apreciable.
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "comment_clean").write_text("99", encoding="utf-8")
+    env["SIRIUS_COMMENT_BUDGET_SECONDS"] = "3"
+    env["SIRIUS_RETRY_BASE_DELAY"] = "2"
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    body = _write_body(env, marker)
+    inicio = time.monotonic()
+    r = _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
+    transcurrido = time.monotonic() - inicio
+    assert r.returncode != 0
+    assert "agotado el plazo" in r.stderr
+    # Margen generoso para el arranque de bash y las llamadas al simulador; lo
+    # que se comprueba es que no se duerman los 2+4+8… completos por encima del
+    # plazo, no una precisión de reloj.
+    assert transcurrido < 15, f"la funcion ha rebasado el plazo con creces: {transcurrido:.1f}s"
 
 
 # --------------------------------------------------------------------------- #

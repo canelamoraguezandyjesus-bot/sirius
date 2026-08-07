@@ -514,8 +514,18 @@ sirius_comment_once() {
   local budget="${SIRIUS_COMMENT_BUDGET_SECONDS:-90}"
   local deadline=$(( SECONDS + budget ))
   local delay="${SIRIUS_RETRY_BASE_DELAY:-2}"
-  local after=""
+  local after="" remaining=0
   while true; do
+    # El plazo se comprueba ANTES de cada llamada, no solo entre esperas. Con la
+    # comprobación al final del ciclo, una espera exponencial ya iniciada se
+    # consumía entera: con 90 s de plazo el reloj se miraba a los 62 s, dormía 64
+    # más hasta 126 y todavía lanzaba otro POST y otra relectura. El "plazo total"
+    # no acotaba nada, que era justo lo que se quería arreglar.
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      echo "sirius_comment_once: agotado el plazo de ${budget}s publicando ${marker} en" \
+        "#${num}; parada reintentable" >&2
+      return 1
+    fi
     if gh issue comment "$num" --repo "$repo" --body-file "$file"; then
       return 0
     fi
@@ -525,13 +535,16 @@ sirius_comment_once() {
         "#${num} (${marker}); no se republica" >&2
       return 0
     fi
-    if [ "$SECONDS" -ge "$deadline" ]; then
+    remaining=$(( deadline - SECONDS ))
+    if [ "$remaining" -le 0 ]; then
       echo "sirius_comment_once: agotado el plazo de ${budget}s publicando ${marker} en" \
         "#${num}; parada reintentable" >&2
       return 1
     fi
+    # La espera nunca puede rebasar lo que queda de plazo.
+    [ "$delay" -gt "$remaining" ] && delay="$remaining"
     echo "sirius_comment_once: no he podido confirmar la publicacion de ${marker} en" \
-      "#${num}; reintento en ${delay}s (quedan $(( deadline - SECONDS ))s de plazo)" >&2
+      "#${num}; reintento en ${delay}s (quedan ${remaining}s de plazo)" >&2
     sleep "$delay"
     delay=$(( delay * 2 ))
   done
