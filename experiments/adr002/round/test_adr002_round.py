@@ -111,7 +111,15 @@ def test_sin_el_acta_se_bloquea() -> None:
 
 
 def test_el_acta_de_autorizacion_no_existe_en_el_repositorio() -> None:
-    """Si algún día existiera sin decisión del usuario, esto lo delata."""
+    """Si algún día existiera sin decisión del usuario, esto lo delata.
+
+    Esta prueba y `test_la_unica_precondicion_pendiente_es_la_autorizacion`
+    están escritas para **caducar**, y no en silencio: el día que llegue la
+    autorización, ambas fallarán y habrá que reescribirlas en el mismo commit
+    que materialice el acta. Eso es lo que se busca. Cambiarlas antes, o
+    borrarlas, sería quitar el único control que hoy distingue «preparado» de
+    «autorizado».
+    """
     assert not (RAIZ / ACTA_DE_AUTORIZACION).exists()
 
 
