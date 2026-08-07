@@ -50,9 +50,16 @@ esac
 # se dedupaba, ocultando su motivo (incidencia observada en el piloto sobre #66).
 # Con este sufijo por run cada parada publica su propio comentario con su
 # diagnóstico, sin perder la idempotencia dentro del mismo run (reintentos del
-# mismo run conservan RUN_ID y RUN_ATTEMPT). Los veredictos de avance
-# (READY_FOR_REVIEW/FIXED/REVIEW_APPROVED/CHANGES_REQUESTED) siguen anclados al
-# head SHA o al hash del contenido, que ya los hace únicos y estables.
+# mismo run conservan RUN_ID y RUN_ATTEMPT). De los veredictos de avance,
+# READY_FOR_REVIEW, FIXED y REVIEW_APPROVED van anclados SOLO al head SHA, que
+# ya los hace únicos y estables.
+#
+# CHANGES_REQUESTED es la excepción y no debe alinearse con ellos «por
+# coherencia»: su marcador es head + run (ver SIRIUS_ROUND_TAG, justo debajo).
+# Arrastra el registro de convergencia, así que anclarlo solo al head o al
+# contenido haría que dos rondas con los mismos hallazgos sobre el mismo head se
+# dedupasen, congelando el historial justo en el escenario de estancamiento que
+# la política de convergencia existe para detectar.
 SIRIUS_RUN_TAG="${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1}"
 
 # Identificador de RONDA (sin el número de reintento). El marcador de
@@ -190,9 +197,11 @@ locate_verified_pr() {
   printf 'OK\t%s\t%s\n' "$pr" "$pr_head"
 }
 
-# resolve_pr <verdict-actual> — ejecuta locate_verified_pr, aplica
-# stop_safely si falló (esto sí corre en el shell principal) y deja
-# pr_number/head_sha listos. Termina el script si falla.
+# resolve_pr — SIN argumentos: opera sobre globales, no sobre parámetros. Lee
+# `verdict` (a través de locate_verified_pr, que lo usa en sus mensajes) y deja
+# escritos `pr_number` y `head_sha`. Ejecuta locate_verified_pr y aplica
+# stop_safely si falló (esto sí corre en el shell principal, no en la subshell).
+# Termina el script si falla.
 resolve_pr() {
   local result status field2 field3
   result="$(locate_verified_pr)"
