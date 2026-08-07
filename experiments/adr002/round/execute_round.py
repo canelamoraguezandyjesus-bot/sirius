@@ -71,8 +71,16 @@ CODIGO_BLOQUEADO: Final = 2
 CODIGO_SIN_EXECUTE: Final = 3
 CODIGO_NO_EVALUABLE: Final = 4
 
-SALIDA: Final = recorrido.SALIDA_PREVISTA
-SALIDA_EVIDENCIA: Final = "artifacts/adr002_round/ronda_primaria_v0.1_evidencia.json"
+#: La corrida original y la repetición **no comparten fichero**. La `v0.1` es
+#: evidencia de lo que se midió antes de corregir la capa común y se conserva
+#: íntegra: sobrescribirla borraría justamente el término de comparación que
+#: hace comprobable la corrección.
+SALIDA: Final = "artifacts/adr002_round/ronda_primaria_v0.2.json"
+SALIDA_EVIDENCIA: Final = "artifacts/adr002_round/ronda_primaria_v0.2_evidencia.json"
+
+#: Corrida original, previa a la corrección. Se cita para contrastar y **no se
+#: toca**: este recorrido no la abre siquiera.
+SALIDA_v0_1: Final = recorrido.SALIDA_PREVISTA
 
 #: Repetición única del §6.8: una, y ninguna más (§6.9).
 CORRIDAS_MAXIMAS: Final = 2

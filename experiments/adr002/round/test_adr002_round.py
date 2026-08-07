@@ -82,8 +82,8 @@ def _fichas(**sustituciones: cp.FichaConfirmada) -> list[cp.FichaConfirmada]:
 # --------------------------------------------------------------------------
 
 
-def test_la_unica_precondicion_pendiente_es_la_reaprobacion() -> None:
-    """La comprobación central, otra vez del lado del bloqueo.
+def test_no_queda_ninguna_precondicion_pendiente() -> None:
+    """La comprobación central, del lado de poder medir.
 
     Mientras el acta no existía, esta prueba exigía que la **única**
     precondición pendiente fuese la autorización: ni una menos —la guarda no
@@ -95,15 +95,19 @@ def test_la_unica_precondicion_pendiente_es_la_reaprobacion() -> None:
     Lo que **no** cambió es lo que vigila: que no falte nada. Comprobar sigue
     sin ser ejecutar.
 
-    Y volvió a faltar algo. El paquete de corrección cambió lo que los cuatro
-    candidatos hacen, de modo que sus fichas emitieron sucesora, y una ficha
-    nueva necesita un acto de gobierno nuevo: congelar es técnico, aprobar no.
-    La única precondición pendiente es esa reaprobación, y lo será hasta que
-    exista.
+    Volvió a faltar algo una vez más: el paquete de corrección cambió lo que
+    los cuatro candidatos hacen, sus fichas emitieron sucesora, y una ficha
+    nueva necesita un acto de gobierno nuevo —congelar es técnico, aprobar no—.
+    Esa reaprobación existe desde
+    `SIRIUS_0.2_ADR_002_REAPROBACION_SUCESORAS_TRAS_CORRECCION_v1.0.md`, y la
+    lista volvió a quedar vacía.
+
+    La prueba ha ido y venido tres veces, y las tres decían lo mismo: **lo que
+    falta es exactamente lo que falta**. Ni uno menos ni uno más.
     """
     resultado = run_round.comprobar(run_round.dependencias_reales(RAIZ))
-    assert [f.split(":")[0] for f in resultado.fallos] == [rp.MOTIVO_ACTA_PENDIENTE] * 4
-    assert resultado.puede_ejecutar is False
+    assert resultado.fallos == ()
+    assert resultado.puede_ejecutar is True
 
 
 def test_con_las_actas_presentes_no_queda_ninguna_precondicion() -> None:
@@ -164,19 +168,11 @@ def test_el_recorrido_devuelve_bloqueo_si_falta_el_acta() -> None:
 def test_con_todo_en_su_sitio_el_recorrido_pasa_pero_no_ejecuta() -> None:
     """Preparado nunca es ejecutado: comprobar no abre una sola ventana.
 
-    Se finge lo único que falta —la reaprobación— para poder comprobar que,
-    cuando no falte, el recorrido **sigue sin medir**. Que no haya medido lo
-    dice `test_comprobar_no_crea_nada`, que sigue en verde.
+    El código de salida dice que se puede medir; que comprobar no mida lo dice
+    `test_comprobar_no_crea_nada`, que sigue en verde a su lado.
     """
-    dependencias = run_round.DependenciasRonda(
-        entorno_custodia=_entorno(
-            presentes=[f"docs/architecture/{a}" for a in set(rp.ACTAS_DE_PREPARACION.values())]
-        ),
-        fichas_congeladas=_fichas(),
-        neutralidad=(),
-        aislamiento={},
-    )
-    assert run_round.main(["--check"], dependencias=dependencias) == run_round.CODIGO_OK
+    codigo = run_round.main(["--check"], dependencias=run_round.dependencias_reales(RAIZ))
+    assert codigo == run_round.CODIGO_OK
 
 
 def test_no_hay_bandera_que_salte_la_guarda() -> None:
@@ -216,9 +212,8 @@ def test_cada_candidato_tiene_acta_de_preparacion_y_el_control_no() -> None:
     """Congelar es un acto técnico; preparar es un acto de gobierno."""
     assert set(rp.ACTAS_DE_PREPARACION) == set(cp.ALTERNATIVAS)
     assert cp.CONTROL not in rp.ACTAS_DE_PREPARACION
-    #: El acta pendiente **no** se exige aquí a propósito: su ausencia es lo que
-    #: `test_la_unica_precondicion_pendiente_es_la_reaprobacion` mide, y exigirla
-    #: en dos sitios haría que un solo hecho fallase dos veces diciendo lo mismo.
+    for acta in set(rp.ACTAS_DE_PREPARACION.values()):
+        assert (RAIZ / "docs/architecture" / acta).exists(), acta
     assert set(rp.VERSION_APROBADA_POR_ACTA) == set(cp.ALTERNATIVAS)
     for candidato, version in rp.VERSION_APROBADA_POR_ACTA.items():
         assert rp.FICHAS_VIGENTES[candidato][0] == version, candidato
