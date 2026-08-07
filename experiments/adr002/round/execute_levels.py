@@ -14,11 +14,17 @@ QUÉ SE EJECUTA DE VERDAD
 - **`ARQ-CA-03`** corre `5` sesiones en **procesos distintos**, `30` repeticiones
   cada una, sobre los casos ejecutables completos.
 - **`ARQ-CA-04`** y **`ARQ-CA-05`** leen la ficha congelada. No miden.
-- **`AB-1`, `AB-2`, `AB-3`, `AB-6`** corren los casos ejecutables enteros.
+- **`AB-1`, `AB-3`, `AB-4`, `AB-6`** corren los casos ejecutables enteros.
 
-`AB-0` es la línea base congelada de `0.1` —es `T0`, ya medido— y `AB-4` y `AB-5`
-no son ejecutables sobre los candidatos congelados, con el motivo declarado en
-``levels.ABLACIONES_NO_EJECUTABLES``.
+`AB-0` es la línea base congelada de `0.1` —es `T0`, ya medido—. `AB-2` y `AB-5`
+no se ejecutan, con el motivo declarado en ``levels.ABLACIONES_NO_EJECUTABLES``:
+la primera porque `RF-14` prohíbe el salto de etapa que exige, la segunda porque
+el motor no admite máscara de puertas.
+
+`AB-4` **sí se ejecuta desde el paquete de corrección de la capa común**, que
+añadió ``con_validacion_semantica`` al lector base que los cuatro comparten. La
+señal sigue encendida y lo que se apaga es la lectura de polaridad, condición y
+tiempo, que es la separación exacta que la ablación mide.
 
 POR QUÉ LA ESTABILIDAD SE MIDE EN PROCESOS DISTINTOS
 ====================================================
@@ -58,7 +64,7 @@ VERSIONES_VIGENTES: Final[Mapping[str, int]] = {
 #: Las ablaciones que sí se ejecutan, con lo que apagan.
 #: Las que se corren **sobre cada participante**. `AB-6` no está aquí porque no
 #: depende del participante: es el azar, y se emite una vez por lectura.
-ABLACIONES_EJECUTABLES: Final[tuple[str, ...]] = ("AB-1", "AB-3")
+ABLACIONES_EJECUTABLES: Final[tuple[str, ...]] = ("AB-1", "AB-3", "AB-4")
 
 
 # --------------------------------------------------------------------------
@@ -114,12 +120,36 @@ def exactos(
 # --------------------------------------------------------------------------
 
 
+def _puertas_de_polaridad(
+    participante: Any, casos: Sequence[cs.CasoEjecutable], polaridades: Mapping[str, Any]
+) -> tuple[int, int]:
+    """Fusiones y lecturas invertidas, con la métrica publicada de la ronda.
+
+    Es lo que hace informativa a `AB-4`: la ablación no mueve **ni un**
+    resultado, y sin embargo rompe una puerta de fallo duro. Medir solo
+    aciertos exactos habría concluido «la validación no aporta nada».
+    """
+    from experiments.adr002.round import metrics as mt
+
+    fusiones = invertidas = 0
+    for caso in casos:
+        observacion = participante.responder(caso.peticion)
+        fusiones += len(
+            mt.confusion_de_polaridad(observacion.ids, observacion.polaridad_leida, polaridades)
+        )
+        invertidas += len(
+            mt.polaridad_mal_leida(observacion.ids, observacion.polaridad_leida, polaridades)
+        )
+    return fusiones, invertidas
+
+
 def ablaciones(
     proyeccion: Any, casos: Sequence[cs.CasoEjecutable], trabajo: Path
 ) -> list[lv.ResultadoDeAblacion]:
     """Las cuatro ejecutables sobre los cinco, más las dos que no lo son."""
     resultados: list[lv.ResultadoDeAblacion] = []
 
+    polaridades = pt.polaridades_del_canon(build.cargar_familia()["conformance_corpus_v0_6.json"])
     completos: dict[str, tuple[str, ...]] = {}
     for identificador in rp.PARTICIPANTES:
         directorio = trabajo / f"completa-{identificador}"
@@ -171,6 +201,7 @@ def ablaciones(
     for ablacion in ABLACIONES_EJECUTABLES:
         for identificador in rp.PARTICIPANTES:
             directorio = trabajo / f"{ablacion}-{identificador}"
+            fusiones = invertidas = None
             if ablacion == "AB-3":
                 participante = pt.construir(
                     identificador,
@@ -181,6 +212,18 @@ def ablaciones(
                 )
                 try:
                     aciertos_n, total, aciertos = exactos(_respuestas(participante, casos), casos)
+                finally:
+                    participante.close()
+            elif ablacion == "AB-4":
+                #: La señal **sigue encendida**; lo que se apaga es su
+                #: validación. Es lo contrario de `AB-3`, y por eso no comparten
+                #: rama: confundirlas mediría dos veces lo mismo.
+                participante = pt.construir(
+                    identificador, proyeccion, directorio, con_validacion_semantica=False
+                )
+                try:
+                    aciertos_n, total, aciertos = exactos(_respuestas(participante, casos), casos)
+                    fusiones, invertidas = _puertas_de_polaridad(participante, casos, polaridades)
                 finally:
                     participante.close()
             else:
@@ -202,6 +245,8 @@ def ablaciones(
                     casos=total,
                     perdidos_respecto_de_la_completa=lv.perdido(completos[identificador], aciertos),
                     ganados_respecto_de_la_completa=lv.perdido(aciertos, completos[identificador]),
+                    fusiones_de_polaridad=fusiones,
+                    polaridad_mal_leida=invertidas,
                 )
             )
 

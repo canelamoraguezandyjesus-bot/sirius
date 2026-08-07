@@ -70,8 +70,9 @@ class CandidatoB:
         ruta_sidecar: Path,
         *,
         con_senal_vectorial: bool = True,
+        con_validacion_semantica: bool = True,
     ) -> None:
-        self._base = CandidatoA()
+        self._base = CandidatoA(con_validacion_semantica=con_validacion_semantica)
         self._ruta_canon = ruta_canon
         self._ruta_sidecar = ruta_sidecar
         self._con_senal_vectorial = con_senal_vectorial
@@ -180,11 +181,20 @@ class CandidatoB:
 
 
 def candidato(
-    ruta_canon: Path, ruta_sidecar: Path, *, con_senal_vectorial: bool = True
+    ruta_canon: Path,
+    ruta_sidecar: Path,
+    *,
+    con_senal_vectorial: bool = True,
+    con_validacion_semantica: bool = True,
 ) -> CandidatoB:
     """Instancia del candidato. Su unica configuracion son las dos rutas y el
     interruptor de ablacion, y las tres estan declaradas."""
-    return CandidatoB(ruta_canon, ruta_sidecar, con_senal_vectorial=con_senal_vectorial)
+    return CandidatoB(
+        ruta_canon,
+        ruta_sidecar,
+        con_senal_vectorial=con_senal_vectorial,
+        con_validacion_semantica=con_validacion_semantica,
+    )
 
 
 __all__ = [

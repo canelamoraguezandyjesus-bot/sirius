@@ -74,10 +74,23 @@ class CandidatoA:
 
     identificador: Final = IDENTIFICADOR
 
+    def __init__(self, *, con_validacion_semantica: bool = True) -> None:
+        """El interruptor de ``AB-4``, apagado por defecto.
+
+        Encendido —lo normal— este candidato se comporta exactamente como
+        siempre, y por eso la ablacion no altera ninguna medida que no la pida.
+        """
+        self._con_validacion_semantica = con_validacion_semantica
+
     @property
     def senal_tardia_habilitada(self) -> str:
         """``ninguna_adicional``: sin senal vectorial ni indice relacional."""
         return SENAL_TARDIA
+
+    @property
+    def con_validacion_semantica(self) -> bool:
+        """Si ``RF-17`` se valida. Falso solo bajo la ablacion ``AB-4``."""
+        return self._con_validacion_semantica
 
     # -- Lectura semantica -------------------------------------------------
 
@@ -87,7 +100,25 @@ class CandidatoA:
         La validacion **no se hereda de ninguna senal**: se calcula aqui, item
         a item, y por eso ``ADR002-A`` puede satisfacer ``E3`` sin recurrir a
         similitud vectorial.
+
+        Apagada la validacion —``AB-4``— la senal **sigue proponiendo los
+        mismos elementos** y lo que desaparece es la lectura de polaridad,
+        condicion y tiempo. Esa es exactamente la separacion que la ablacion
+        viene a medir: cuanto de lo que aporta una senal lo aporta la senal y
+        cuanto el filtro que la limpia. Que sea el mismo metodo el que las dos
+        variantes recorren es lo que impide medir dos cosas distintas.
         """
+        if not self._con_validacion_semantica:
+            return LecturaSemantica(
+                #: El sujeto **no** es polaridad, condicion ni tiempo, y ``AB-4``
+                #: solo nombra esos tres. Retirarlo tambien habria roto la
+                #: agrupacion por equivalencia y medido una ablacion distinta.
+                sujeto=lexical.sujeto_estructural(item.subject_key, item.texto),
+                polaridad=Polaridad.AFIRMATIVA,
+                condicion=None,
+                tiempo=None,
+                medio="senal cruda (AB-4): sin validacion de polaridad, condicion ni tiempo",
+            )
         return LecturaSemantica(
             sujeto=lexical.sujeto_estructural(item.subject_key, item.texto),
             polaridad=(
@@ -286,9 +317,10 @@ class CandidatoA:
         )
 
 
-def candidato() -> CandidatoA:
-    """Instancia del candidato. Sin estado ni configuracion oculta."""
-    return CandidatoA()
+def candidato(*, con_validacion_semantica: bool = True) -> CandidatoA:
+    """Instancia del candidato. Su unica configuracion es la ablacion ``AB-4``,
+    y esta declarada: apagada, el comportamiento es el de siempre."""
+    return CandidatoA(con_validacion_semantica=con_validacion_semantica)
 
 
 __all__ = [

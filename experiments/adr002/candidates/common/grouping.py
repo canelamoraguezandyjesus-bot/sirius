@@ -30,6 +30,7 @@ from experiments.adr002.candidates.common.contracts import (
     Candidata,
     GrupoDeEquivalentes,
 )
+from experiments.adr002.candidates.common.trace import estado_publicado
 
 #: Los ejes que deben estar **todos** determinados y coincidir. Que sean
 #: constantes con nombre y no una tupla anonima dentro de una funcion es lo que
@@ -213,8 +214,12 @@ def agrupar_equivalentes(
                     else ()
                 ),
                 razon_del_representante=razon,
+                #: La **misma** marca que la explicacion por resultado, y por la
+                #: misma funcion: si el representante dijera «sustituido» y el
+                #: grupo dijese «no vigente» a secas, la respuesta se
+                #: contradiria a si misma sobre el mismo elemento.
                 estado_historico_por_miembro=tuple(
-                    (c.item.id, "vigente" if c.item.vigente else "no vigente")
+                    (c.item.id, estado_publicado(c.item))
                     for c in sorted(miembros, key=lambda c: c.item.id)
                 ),
                 ejes=EJES_DE_EQUIVALENCIA,

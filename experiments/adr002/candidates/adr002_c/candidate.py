@@ -62,8 +62,9 @@ class CandidatoC:
         ruta_plano_relacional: Path,
         *,
         con_senal_relacional: bool = True,
+        con_validacion_semantica: bool = True,
     ) -> None:
-        self._base = CandidatoA()
+        self._base = CandidatoA(con_validacion_semantica=con_validacion_semantica)
         self._ruta_plano = ruta_plano_relacional
         self._con_senal_relacional = con_senal_relacional
         self._fuente: relaciones.FuenteRelacional | None = None
@@ -160,10 +161,19 @@ class CandidatoC:
         ]
 
 
-def candidato(ruta_plano_relacional: Path, *, con_senal_relacional: bool = True) -> CandidatoC:
+def candidato(
+    ruta_plano_relacional: Path,
+    *,
+    con_senal_relacional: bool = True,
+    con_validacion_semantica: bool = True,
+) -> CandidatoC:
     """Instancia del candidato. Su unica configuracion son la ruta del plano y
     el interruptor de ablacion, y las dos estan declaradas."""
-    return CandidatoC(ruta_plano_relacional, con_senal_relacional=con_senal_relacional)
+    return CandidatoC(
+        ruta_plano_relacional,
+        con_senal_relacional=con_senal_relacional,
+        con_validacion_semantica=con_validacion_semantica,
+    )
 
 
 __all__ = [

@@ -221,6 +221,7 @@ def construir(
     *,
     con_senal_relacional: bool = True,
     con_senal_vectorial: bool = True,
+    con_validacion_semantica: bool = True,
 ) -> Participante:
     """El participante pedido, con lo suyo ya preparado.
 
@@ -235,10 +236,14 @@ def construir(
     if identificador == t0.IDENTIFICADOR:
         return _Control(entrada)
     if identificador == ca.IDENTIFICADOR:
-        return _Candidato(identificador, proyeccion, ca.candidato())
+        de_a = ca.candidato(con_validacion_semantica=con_validacion_semantica)
+        return _Candidato(identificador, proyeccion, de_a)
     if identificador == cb.IDENTIFICADOR:
         de_b = cb.candidato(
-            entrada, _preparar_sidecar(proyeccion, trabajo), con_senal_vectorial=con_senal_vectorial
+            entrada,
+            _preparar_sidecar(proyeccion, trabajo),
+            con_senal_vectorial=con_senal_vectorial,
+            con_validacion_semantica=con_validacion_semantica,
         )
         return _Candidato(
             identificador,
@@ -247,7 +252,11 @@ def construir(
             etapa_por_senal_tardia={cb.SENAL_TARDIA: "E4"} if con_senal_vectorial else {},
         )
     if identificador == cc.IDENTIFICADOR:
-        de_c = cc.candidato(relacional, con_senal_relacional=con_senal_relacional)
+        de_c = cc.candidato(
+            relacional,
+            con_senal_relacional=con_senal_relacional,
+            con_validacion_semantica=con_validacion_semantica,
+        )
         return _Candidato(
             identificador,
             proyeccion,
@@ -261,6 +270,7 @@ def construir(
             relacional,
             con_senal_relacional=con_senal_relacional,
             con_senal_vectorial=con_senal_vectorial,
+            con_validacion_semantica=con_validacion_semantica,
         )
         #: Las dos etapas salen del **orden congelado** del candidato, no de
         #: una lista escrita aquí: duplicarla permitiría que divergieran.

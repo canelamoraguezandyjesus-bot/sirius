@@ -9,17 +9,21 @@ La readjudicación dejó esto escrito como `pendiente_de_medir` y así se quedó
 una **obligación canónica sin control**, y cerrar `ADR-002` sin ella sería cerrar
 sobre una puerta que nunca se abrió. Este módulo la abre.
 
-POR QUÉ SE PUEDE MEDIR SIN DESCONGELAR NADA
-===========================================
+POR QUÉ MEDIRLO NO EXIGIÓ DESCONGELAR NADA
+==========================================
 
-Porque la marca **ya sale**: ``trace.py`` rellena ``Explicacion.estado`` con
-«vigente» o «no vigente» para cada resultado, y ``Explicacion.tiempo`` con el
-tiempo objetivo y el de registro. No hay que añadir nada a los candidatos ni
-emitir fichas sucesoras: hay que **leer** lo que ya publican y contrastarlo con
-lo que el corpus declara.
+Porque la marca **ya salía**: ``trace.py`` rellena ``Explicacion.estado`` y
+``Explicacion.tiempo`` en cada resultado. Medir fue **leer** lo publicado y
+contrastarlo con lo que el corpus declara, sin tocar candidatos ni fichas.
 
-Eso separa esta medición de `AB-4` o `AB-5`, que sí exigirían tocar código
-congelado. Aquí no se toca: se observa.
+Eso importa por el orden en que ocurrieron las cosas: primero se midió sin tocar
+nada —y `M2.1` y `M2.2` salieron verdes, `M2.3` roja—, y **solo después**, con el
+defecto medido y publicado, se corrigió ``trace.py`` para que publicase cuál de
+los tres estados es cada elemento. La medición no se diseñó sabiendo el arreglo:
+el arreglo se hizo sabiendo la medición.
+
+La lectura previa, con `M2.3` en rojo, sigue en ``SALIDA_PREVIA``. Sobrescribirla
+habría borrado la prueba de que el defecto existía.
 
 LAS TRES OBLIGACIONES, POR SEPARADO
 ===================================
@@ -50,7 +54,11 @@ from pathlib import Path
 from typing import Any, Final
 
 RAIZ_REPOSITORIO: Final = Path(__file__).resolve().parents[3]
-SALIDA: Final = "artifacts/adr002_round/marcado_de_m2_v0.1.json"
+#: La `v0.1` midio el marcado ANTES de corregirlo y dejo `M2.3` en rojo; esta
+#: mide el mismo marcado DESPUES. Las dos conviven: sobrescribir la primera
+#: habria borrado la prueba de que el defecto existia.
+SALIDA: Final = "artifacts/adr002_round/marcado_de_m2_v0.2.json"
+SALIDA_PREVIA: Final = "artifacts/adr002_round/marcado_de_m2_v0.1.json"
 
 #: Lo que el canon **no** considera vigente, por cada eje del corpus. Sale del
 #: corpus congelado, no de una lista escrita a mano aquí.
@@ -281,6 +289,11 @@ def documento(
         "documento": "Marcado de M2 en la ronda de ADR-002",
         "version_esquema": "marcado-m2-adr002-0.1",
         "estado": "EVIDENCIA",
+        "mide_despues_de_la_correccion": (
+            f"la lectura previa vive en {SALIDA_PREVIA} y dejo M2.3 en rojo para los "
+            "cuatro; esta observa el mismo marcado despues de que trace.py publique "
+            "cual de los tres estados historicos es cada elemento no vigente"
+        ),
         "cita_del_canon": CITA_DEL_CANON,
         "por_que_faltaba": (
             "la readjudicacion lo dejo escrito como pendiente_de_medir: una obligacion "

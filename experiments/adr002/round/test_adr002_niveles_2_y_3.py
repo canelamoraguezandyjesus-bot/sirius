@@ -4,9 +4,10 @@ Estas pruebas vigilan tres cosas distintas:
 
 1. que los casos arquitectónicos **fallen cerrado** —una ficha incompleta no
    pasa por descuido, y una exención no se convierte en aprobado—;
-2. que las dos ablaciones declaradas **no ejecutables** lo sigan siendo por la
-   razón escrita, de modo que si alguien añadiese el interruptor que falta la
-   prueba lo diga en vez de dejar la declaración envejecer en un comentario;
+2. que las ablaciones declaradas **no ejecutables** lo sigan siendo por la razón
+   escrita, de modo que si alguien añadiese lo que falta la prueba lo diga en vez
+   de dejar la declaración envejecer en un comentario. Con `AB-4` pasó
+   exactamente eso: la prueba fallo el dia que se añadio el interruptor;
 3. que el suelo de `AB-6` sea un suelo, y no el oráculo prestado al azar.
 
 La tercera está escrita como el defecto que fue: la primera versión sorteaba
@@ -77,19 +78,43 @@ def test_ab_5_sigue_sin_ser_ejecutable_porque_no_hay_mascara_de_puertas() -> Non
     assert "AB-5" in lv.ABLACIONES_NO_EJECUTABLES
 
 
-def test_ab_4_sigue_sin_ser_ejecutable_porque_los_interruptores_apagan_la_senal() -> None:
-    """`AB-4` necesita señal encendida y validación apagada. No existe tal cosa.
+def test_ab_4_ya_es_ejecutable_y_apaga_la_validacion_sin_apagar_la_senal() -> None:
+    """El interruptor que faltaba existe, y hace lo que `AB-4` pide.
 
-    Los únicos dos interruptores que los candidatos exponen apagan la señal
-    **entera**, que es justo lo contrario de lo que `AB-4` pide.
+    Esta prueba nació diciendo lo contrario —«`AB-4` no es ejecutable, y si
+    alguien añade el interruptor esta prueba lo dira»— y **lo dijo**: falló en
+    cuanto el paquete de corrección lo añadió. Ahora afirma lo que hay, y lo que
+    vigila es que la ablación siga separando la señal de su validación en vez de
+    apagar las dos, que es en lo que degeneraría si alguien la simplificase.
     """
     firma = inspect.signature(pt.construir).parameters
-    interruptores = {n for n in firma if n.startswith("con_")}
-    assert interruptores == {"con_senal_relacional", "con_senal_vectorial"}, (
-        "aparecio un interruptor nuevo: si separa la senal de su validacion, AB-4 "
-        "ha pasado a ser ejecutable y su declaracion miente"
+    assert "con_validacion_semantica" in firma
+    assert "AB-4" not in lv.ABLACIONES_NO_EJECUTABLES
+
+    from experiments.adr002.candidates.adr002_a import candidate as ca
+    from experiments.adr002.candidates.common.contracts import Clase, ItemCanonico, Polaridad
+
+    item = ItemCanonico(
+        id="MEMORIA:1",
+        clase=Clase.MEMORIA,
+        project_id="1",
+        texto="No usar PostgreSQL en este proyecto.",
+        subject_key=None,
+        vigente=True,
+        disponible=True,
+        created_at="2026-01-01",
     )
-    assert "AB-4" in lv.ABLACIONES_NO_EJECUTABLES
+    con = ca.candidato().leer(item, "PostgreSQL")
+    sin = ca.candidato(con_validacion_semantica=False).leer(item, "PostgreSQL")
+
+    #: La validacion encendida LEE la negacion; apagada, no. Eso es lo que la
+    #: ablacion aisla.
+    assert con.polaridad is Polaridad.NEGATIVA
+    assert sin.polaridad is Polaridad.AFIRMATIVA
+    assert con.tiempo is not None and sin.tiempo is None
+    #: Y el sujeto sobrevive a las dos: `AB-4` no lo nombra, y retirarlo habria
+    #: roto la agrupacion y medido otra ablacion.
+    assert con.sujeto == sin.sujeto
 
 
 def test_ab_2_no_es_ejecutable_porque_saltar_una_etapa_incumple_rf_14() -> None:
@@ -134,7 +159,7 @@ def test_el_motor_trunca_en_la_etapa_no_autorizada_en_vez_de_saltarla() -> None:
 
 def test_la_declaracion_de_no_ejecutables_dice_por_que_y_no_solo_que() -> None:
     """Una carencia sin motivo es una excusa; con motivo es un dato."""
-    assert set(lv.ABLACIONES_NO_EJECUTABLES) == {"AB-2", "AB-4", "AB-5"}
+    assert set(lv.ABLACIONES_NO_EJECUTABLES) == {"AB-2", "AB-5"}
     for ablacion, motivo in lv.ABLACIONES_NO_EJECUTABLES.items():
         assert len(motivo) > 120, ablacion
         assert any(razon in motivo for razon in ("gobierno", "capa comun", "RF-14")), ablacion
@@ -289,13 +314,13 @@ def test_quien_no_construye_indice_propio_no_aplica_a_la_purga(tmp_path: Path) -
 # ---------------------------------------------------------------------------
 
 
-def test_el_artefacto_publica_las_tres_ablaciones_que_no_se_ejecutaron() -> None:
+def test_el_artefacto_publica_las_ablaciones_que_no_se_ejecutaron() -> None:
     documento = json.loads((RAIZ / lv.SALIDA).read_text(encoding="utf-8"))
-    assert set(documento["ablaciones_no_ejecutables"]) == {"AB-2", "AB-4", "AB-5"}
+    assert set(documento["ablaciones_no_ejecutables"]) == {"AB-2", "AB-5"}
     no_ejecutadas = {a["ablacion"] for a in documento["ablaciones"] if not a["ejecutada"]}
-    assert no_ejecutadas == {"AB-2", "AB-4", "AB-5"}
+    assert no_ejecutadas == {"AB-2", "AB-5"}
     ejecutadas = {a["ablacion"] for a in documento["ablaciones"] if a["ejecutada"]}
-    assert ejecutadas == {"AB-1", "AB-3", "AB-6"}, (
+    assert ejecutadas == {"AB-1", "AB-3", "AB-4", "AB-6"}, (
         "AB-2 no puede aparecer como ejecutada: seria AB-1 con otro nombre"
     )
     for fila in documento["ablaciones"]:

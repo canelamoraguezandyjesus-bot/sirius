@@ -126,8 +126,9 @@ class CandidatoD:
         *,
         con_senal_relacional: bool = True,
         con_senal_vectorial: bool = True,
+        con_validacion_semantica: bool = True,
     ) -> None:
-        self._base = CandidatoA()
+        self._base = CandidatoA(con_validacion_semantica=con_validacion_semantica)
         self._ruta_canon = ruta_canon
         self._ruta_sidecar = ruta_sidecar
         self._ruta_plano = ruta_plano_relacional
@@ -420,16 +421,18 @@ def candidato(
     *,
     con_senal_relacional: bool = True,
     con_senal_vectorial: bool = True,
+    con_validacion_semantica: bool = True,
 ) -> CandidatoD:
     """Instancia del candidato. Sus unicas configuraciones son las tres rutas y
-    los dos interruptores de ablacion, que **apagan** una senal pero jamas la
-    mueven de etapa: el orden no es configurable."""
+    los tres interruptores de ablacion, que **apagan** una senal o su validacion
+    pero jamas mueven nada de etapa: el orden no es configurable."""
     return CandidatoD(
         ruta_canon,
         ruta_sidecar,
         ruta_plano_relacional,
         con_senal_relacional=con_senal_relacional,
         con_senal_vectorial=con_senal_vectorial,
+        con_validacion_semantica=con_validacion_semantica,
     )
 
 

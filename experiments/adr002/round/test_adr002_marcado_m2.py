@@ -147,11 +147,17 @@ def test_una_sola_marca_de_no_vigencia_no_distingue_tres_estados() -> None:
     assert "M3 y M4" in razon
 
 
-def test_el_incumplimiento_de_m2_3_es_identico_en_los_cuatro() -> None:
-    """No separa alternativas: es de la capa común, no de ningún candidato.
+def test_m2_3_da_lo_mismo_en_los_cuatro_porque_es_de_la_capa_comun() -> None:
+    """Lo que vigila esta prueba no es el valor, es que sea **el mismo**.
 
-    Importa para el cierre: si el defecto fuese de un candidato, elegir otro lo
-    evitaría. Siendo de la capa compartida, lo arrastraría cualquiera.
+    Nació afirmando `False` en los cuatro, y esa uniformidad era el argumento:
+    el defecto no era de ningún candidato, sino de la marca que construye
+    ``trace.py``, de modo que elegir otra alternativa no lo habría evitado.
+
+    Corregido `trace.py`, los cuatro pasan a `True` **a la vez**, y eso confirma
+    lo mismo desde el otro lado: la marca la pone la capa compartida. Si algún
+    día un candidato divergiera de los otros tres, esta prueba lo diría, y
+    significaría que uno se ha construido su propia marca por su cuenta.
     """
     artefacto = _artefacto()
     medibles = {
@@ -160,7 +166,12 @@ def test_el_incumplimiento_de_m2_3_es_identico_en_los_cuatro() -> None:
         if r["medible"]
     }
     assert len(medibles) == 4
-    assert set(medibles.values()) == {False}
+    assert len(set(medibles.values())) == 1, (
+        f"los cuatro deberian coincidir por construccion: {medibles}"
+    )
+    assert set(medibles.values()) == {True}, (
+        "la correccion de trace.py deberia haberla puesto en verde"
+    )
 
 
 def test_el_control_no_se_puede_medir_y_se_dice_por_que() -> None:

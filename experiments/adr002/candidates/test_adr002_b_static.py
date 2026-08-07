@@ -76,6 +76,22 @@ def test_la_base_de_a_no_cambio_ni_un_byte() -> None:
     ``adr002_a/lexical.py`` pasa a mirar el alcance de la negacion en vez de su
     presencia. Los otros siete quedan **byte a byte**, y que sigan asi es parte
     de lo que se afirma: la correccion es quirurgica o no lo es.
+
+    El **paquete de cierre** reancla tres, y ninguno cambia que se recupera:
+
+    * ``trace.py`` publica **cual** de los tres estados historicos es un elemento
+      no vigente en vez de un binario, que es lo que ``B04 M2`` exige y ninguna
+      metrica comprobaba;
+    * ``grouping.py`` usa esa misma marca para los miembros de un grupo, porque
+      dos marcas distintas del mismo elemento serian una respuesta que se
+      contradice a si misma;
+    * ``adr002_a/candidate.py`` gana ``con_validacion_semantica``, el interruptor
+      que hace ejecutable ``AB-4``, **apagado por defecto**.
+
+    Los tres son quirurgicos y ninguno toca elegibilidad: ``G2`` y ``G8`` siguen
+    decidiendo con los mismos ejes y no pasan por la marca publicada. Que la
+    conformidad de la ronda no se mueva ni un caso es la comprobacion de eso, y
+    se hace al repetirla.
     """
     import subprocess
 
@@ -96,19 +112,19 @@ def test_la_base_de_a_no_cambio_ni_un_byte() -> None:
             "3199d504d2284ff55e411404245a21417a07abec"
         ),
         "experiments/adr002/candidates/common/trace.py": (
-            "01d97bbc5244774caf6bce687d17c4b4e620d4aa"
+            "2202f736a4b9f2fda3299a4bf8a3695edeec7cb2"
         ),
         "experiments/adr002/candidates/common/derived.py": (
             "996e353b44fe16af035689912a6a69520ee8097e"
         ),
         "experiments/adr002/candidates/common/grouping.py": (
-            "12ec4f89273b75dae5ede4d686b8e0d2c16f483b"
+            "455fc1c435468ada002562206414c26f5d214f33"
         ),
         "experiments/adr002/candidates/common/neutrality.py": (
             "a7828c5d17902a8abc7ec90407607fcc29da75cf"
         ),
         "experiments/adr002/candidates/adr002_a/candidate.py": (
-            "d057c12a9be4df15b2d3bfe50b986cbc57403273"
+            "3d2199ad54d08edfa0fcfc70b629943de0d8fb71"
         ),
         "experiments/adr002/candidates/adr002_a/lexical.py": (
             "5b6b8faa59fe71671b97ca24b4f5c9d7834a13ed"
@@ -165,7 +181,10 @@ def test_el_indice_es_perezoso_y_no_se_abre_al_construir() -> None:
 def test_la_composicion_delega_en_a_y_no_copia_su_logica() -> None:
     """``ADR002-B = ADR002-A v2 + senal vectorial``: contiene, no duplica."""
     codigo = _codigo("candidate.py")
-    assert "CandidatoA()" in codigo
+    #: ``CandidatoA(`` y no ``CandidatoA()``: la base admite desde el paquete de
+    #: `AB-4` el interruptor de validacion, y comprobar el parentesis vacio
+    #: habria confundido «compone a A» con «compone a A sin argumentos».
+    assert "CandidatoA(" in codigo
     assert "self._base.candidatas(contexto)" in codigo
     assert "self._base.leer(item, consulta)" in codigo
     for duplicado in (

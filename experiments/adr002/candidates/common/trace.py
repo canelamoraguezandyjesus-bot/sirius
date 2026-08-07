@@ -25,6 +25,7 @@ from experiments.adr002.candidates.common.contracts import (
     Etapa,
     Explicacion,
     GrupoDeEquivalentes,
+    ItemCanonico,
     Peticion,
     Resultado,
 )
@@ -37,6 +38,53 @@ EJES_DE_ORDEN_DECLARADOS: Final[tuple[str, ...]] = (
     "clave de sujeto",
     "identidad estable",
 )
+
+#: Marca base cuando el elemento es actual.
+MARCA_VIGENTE: Final = "vigente"
+
+#: Marca base cuando no lo es y el sustrato **no** declara por que. `B04 M2`
+#: exige que lo no actual vuelva marcado; esta es la marca minima que cumple esa
+#: obligacion cuando no hay eje que la precise.
+MARCA_NO_VIGENTE: Final = "no vigente"
+
+#: Los tres estados historicos que ``B04 M2`` nombra, con el eje P2 que los
+#: distingue. `M2` no pide solo que lo viejo vuelva marcado: pide que **permita
+#: archivado, sustituido y finalizado**, y `M3` y `M4` necesitan saber cual de
+#: los tres es cada elemento. Una marca binaria los hacia indistinguibles.
+ESTADO_POR_EJE: Final[tuple[tuple[str, str, str], ...]] = (
+    ("disponibilidad", "ARCHIVADA", "archivado"),
+    ("validez", "SUSTITUIDA", "sustituido"),
+    ("validez", "SIN_SOPORTE", "finalizado"),
+)
+
+
+def estado_publicado(item: ItemCanonico) -> str:
+    """La marca de vigencia de un item, con **cual** cuando el eje lo dice.
+
+    Tres reglas, en este orden:
+
+    1. lo actual se marca actual;
+    2. lo no actual se marca no actual —``M2`` lo exige y es innegociable—;
+    3. y si los ejes `P2` dicen **cual** de los tres estados historicos es, se
+       nombra.
+
+    Cuando el sustrato no declara ejes se devuelve la marca binaria y no se
+    inventa un estado: ``EjesDeclarados`` documenta que un eje a ``None``
+    significa «el sustrato no lo declara», nunca «es permisivo». Degradar en
+    silencio a «sustituido» habria convertido una ausencia de dato en una
+    afirmacion sobre el elemento.
+
+    Solo cambia **lo que se publica**. La elegibilidad la deciden ``G2`` y
+    ``G8`` leyendo los mismos ejes, y no pasan por aqui: esta funcion no puede
+    admitir ni descartar a nadie.
+    """
+    if item.vigente and item.disponible:
+        return MARCA_VIGENTE
+    ejes = item.ejes
+    for campo, valor, nombre in ESTADO_POR_EJE:
+        if getattr(ejes, campo, None) == valor:
+            return f"{MARCA_NO_VIGENTE}: {nombre}"
+    return MARCA_NO_VIGENTE
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,7 +245,7 @@ def explicar(
         coincidencia=f"{candidata.etapa.value} por {candidata.senal}",
         ambito=("global" if item.project_id is None else f"proyecto {item.project_id}"),
         tiempo=f"aplicable a {peticion.ventana.tiempo_objetivo}; registrado {item.created_at}",
-        estado=("vigente" if item.vigente else "no vigente"),
+        estado=estado_publicado(item),
         procedencias=tuple(procedencias),
         criticidad=(
             f"{criticidad.nivel.value} por {criticidad.regla_de_politica}: "

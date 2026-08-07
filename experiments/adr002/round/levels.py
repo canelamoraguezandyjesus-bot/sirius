@@ -36,11 +36,10 @@ el sidecar; inventario, DDL y filas para el `FTS5`—, que es lo que la puerta
 pregunta: que el derivado se reconstruya **desde el canon**, no que el fichero
 salga idéntico byte a byte.
 
-TRES ABLACIONES NO SE EJECUTAN, Y SE DICE POR QUÉ
-=================================================
+DOS ABLACIONES NO SE EJECUTAN, Y SE DICE POR QUÉ
+================================================
 
-`AB-2`, `AB-4` y `AB-5` **no son ejecutables sobre los candidatos congelados**, y
-esto se comprobó contra el código, no se supuso. Las razones no son la misma:
+`AB-2` y `AB-5` no se ejecutan, y por razones **distintas**:
 
 - **`AB-2`** —«desactivar la etapa léxica de `RF-16`»— pide quitar `E2` y seguir
   por `E3`. Eso es **un salto de etapa, y `B04-RF-14` lo prohíbe**. El motor lo
@@ -48,24 +47,34 @@ esto se comprobó contra el código, no se supuso. Las razones no son la misma:
   devuelve `S2` y el bucle de ``engine.py`` **rompe**. De modo que
   ``espacios_autorizados`` autoriza **un prefijo**, no un conjunto al que se le
   pueda quitar una etapa de en medio. No es una carencia del arnés: es que la
-  norma prohíbe la ablación que el banco describe.
-- **`AB-4`** —desactivar la validación de polaridad, condición y tiempo
-  **manteniendo la señal**— necesita un interruptor que no existe: los dos que los
-  candidatos exponen, ``con_senal_relacional`` y ``con_senal_vectorial``, apagan
-  **la señal entera**, que es justo lo contrario.
+  norma prohíbe la ablación que el banco describe, y solo un motor que
+  incumpliese `RF-14` podría correrla.
 - **`AB-5`** —`G1-G12` de una en una— necesita una máscara que el motor no tiene:
   ``gates.aplicar_previas`` encadena `G1-G10` en orden fijo, y ni ``aplicar_g11``
   ni ``aplicar_g12`` aceptan selección.
-
-Las dos últimas exigirían modificar código congelado y emitir fichas sucesoras, y
-eso es un acto de gobierno, no una decisión de este módulo. Fingir cualquiera de
-las tres con un sucedáneo sería peor que no correrlas: daría una cifra donde no
-hay medición.
 
 `AB-2` estuvo **mal ejecutada** en la primera versión de este módulo: se le pasó
 ``{E1, E3, E4}`` creyendo que `E2` se saltaría, y lo que hizo el motor fue parar
 en `E2`. El resultado era idéntico al de `AB-1` porque **era** `AB-1` con otro
 nombre. Se corrigió en cuanto la coincidencia exacta de las dos cifras lo delató.
+
+`AB-4` YA SE EJECUTA
+====================
+
+En la primera versión de este módulo `AB-4` se declaró no ejecutable, y era
+cierto entonces: los candidatos solo exponían ``con_senal_relacional`` y
+``con_senal_vectorial``, que apagan **la señal entera** —lo contrario de lo que
+`AB-4` pide—. Como era «la ablación más informativa del conjunto», no correrla se
+declaró carencia real.
+
+El paquete de corrección de la capa común añadió el interruptor que faltaba,
+``con_validacion_semantica``, en el **lector base** que los cuatro comparten: con
+él la señal sigue proponiendo los mismos elementos y lo que desaparece es la
+lectura de polaridad, condición y tiempo. Esa es exactamente la separación entre
+«señal cruda» y «validación» que `AB-4` viene a medir.
+
+El interruptor está **apagado por defecto**, de modo que ninguna medida que no
+pida la ablación cambia por su existencia.
 
 `AB-4` importa más que las otras, y por eso la carencia se declara y no se
 disimula: es la única que separa **la señal** de **su validación**, y sin ella no
@@ -89,7 +98,10 @@ from experiments.adr002.candidates.common import derived
 from experiments.adr002.candidates.common.contracts import Etapa
 
 RAIZ_REPOSITORIO: Final = Path(__file__).resolve().parents[3]
-SALIDA: Final = "artifacts/adr002_round/niveles_2_y_3_v0.1.json"
+#: La `v0.1` corrio sin `AB-4`, que entonces no era ejecutable. Esta la incluye.
+#: La primera no se sobrescribe: declaraba la carencia y sigue siendo su prueba.
+SALIDA: Final = "artifacts/adr002_round/niveles_2_y_3_v0.2.json"
+SALIDA_PREVIA: Final = "artifacts/adr002_round/niveles_2_y_3_v0.1.json"
 
 #: `ARQ-CA-01` exige 30 ciclos completos, no uno.
 CICLOS_DE_REGENERACION: Final = 30
@@ -126,16 +138,6 @@ ABLACIONES_NO_EJECUTABLES: Final[Mapping[str, str]] = {
         "que se pueda quitar una etapa intermedia. No es una carencia del arnes: "
         "es que la norma prohibe la ablacion que el banco describe, y ejecutarla "
         "exigiria un motor que incumpliese RF-14"
-    ),
-    "AB-4": (
-        "desactivar la validacion de polaridad, condicion y tiempo MANTENIENDO la "
-        "senal exige un interruptor que ningun candidato congelado tiene: los dos "
-        "que exponen (con_senal_relacional y con_senal_vectorial) apagan la senal "
-        "entera, que es justo lo contrario. Ejecutarla obligaria a modificar los "
-        "cuatro candidatos y emitir fichas sucesoras: es un acto de gobierno, no de "
-        "este modulo. Es ademas la unica ablacion que separa la senal de su "
-        "validacion, de modo que no poder correrla es una carencia real de esta "
-        "ronda y se declara como tal"
     ),
     "AB-5": (
         "desactivar G1-G12 de una en una exige una mascara de puertas que el motor "
@@ -192,6 +194,13 @@ class ResultadoDeAblacion:
     #: Qué lectura de la ablación produjo esta fila, cuando el banco admite más
     #: de una. Vacío cuando solo hay una.
     lectura: str = ""
+    #: Fusiones de polaridad y lecturas invertidas bajo la ablación. Solo se
+    #: rellenan donde significan algo —`AB-4`—, porque son justo lo que esa
+    #: ablación viene a aislar: una ablación que no cambia **ni un resultado**
+    #: puede estar rompiendo una puerta de fallo duro, y contar solo aciertos
+    #: exactos no lo vería.
+    fusiones_de_polaridad: int | None = None
+    polaridad_mal_leida: int | None = None
 
 
 # --------------------------------------------------------------------------
@@ -563,6 +572,11 @@ def documento(
         "documento": "Niveles 2 y 3 del banco de ADR-002",
         "version_esquema": "niveles-2-y-3-adr002-0.1",
         "estado": "EVIDENCIA",
+        "que_anade_sobre_la_v0_1": (
+            f"la corrida previa vive en {SALIDA_PREVIA} y declaraba AB-4 no ejecutable; "
+            "el paquete de cierre anadio el interruptor con_validacion_semantica al "
+            "lector base y aqui AB-4 SI se ejecuta"
+        ),
         "por_que_faltaban": (
             "la ronda primaria ejecutaba el nivel 1 y nada mas; el nivel 4 se recupero "
             "en discriminante_relacional_v0.1.json y estos dos, aqui"
@@ -593,6 +607,8 @@ def documento(
                 "ganados_respecto_de_la_completa": list(a.ganados_respecto_de_la_completa),
                 "motivo_si_no_se_ejecuta": a.motivo_si_no_se_ejecuta,
                 "lectura": a.lectura,
+                "fusiones_de_polaridad": a.fusiones_de_polaridad,
+                "polaridad_mal_leida": a.polaridad_mal_leida,
             }
             for a in ablaciones
         ],
