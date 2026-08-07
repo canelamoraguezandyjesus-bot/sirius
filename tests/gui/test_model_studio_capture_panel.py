@@ -359,3 +359,136 @@ def test_closing_the_panel_does_not_stop_an_ongoing_recording(qtbot: QtBot, tmp_
     qtbot.waitUntil(lambda: not backend.is_connected(), timeout=5000)
 
     assert "stop_recording" not in backend.commands
+
+
+# --- MS-017: decirlo y pulsarlo son la misma orden ----------------------
+
+
+def _connected_capture() -> tuple[StudioCaptureUseCase, FakeCaptureBackend]:
+    backend = FakeCaptureBackend(scene_names=("Pantalla", "Cámara cenital"))
+    capture = StudioCaptureUseCase(backend, _SCENES, enabled=True)
+    backend.connect()
+    return capture, backend
+
+
+@pytest.mark.gui
+def test_saying_graba_starts_recording_without_touching_the_conversation(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Una orden se ejecuta; no se guarda en el historial ni va al modelo."""
+    capture, backend = _connected_capture()
+    window = _window(tmp_path, capture)
+    qtbot.addWidget(window)
+    window.open_model_studio()
+
+    window.studio_page.input.setPlainText("graba")
+    window.studio_page.send_button.click()
+    qtbot.waitUntil(lambda: "start_recording" in backend.commands, timeout=5000)
+
+    assert window.studio_page.message_count == 0
+    assert window.message_list.count() == 0
+    assert window.studio_page.input.toPlainText() == ""
+
+
+@pytest.mark.gui
+def test_saying_para_stops_the_recording(qtbot: QtBot, tmp_path: Path) -> None:
+    capture, backend = _connected_capture()
+    capture.start_recording()
+    window = _window(tmp_path, capture)
+    qtbot.addWidget(window)
+    window.open_model_studio()
+
+    window.studio_page.input.setPlainText("para")
+    window.studio_page.send_button.click()
+    qtbot.waitUntil(lambda: "stop_recording" in backend.commands, timeout=5000)
+
+    assert backend.commands.count("stop_recording") == 1
+
+
+@pytest.mark.gui
+def test_saying_a_camera_switches_the_scene(qtbot: QtBot, tmp_path: Path) -> None:
+    capture, backend = _connected_capture()
+    window = _window(tmp_path, capture)
+    qtbot.addWidget(window)
+    window.open_model_studio()
+
+    window.studio_page.input.setPlainText("cámbiate a la cámara cenital")
+    window.studio_page.send_button.click()
+    qtbot.waitUntil(lambda: "switch_scene:Cámara cenital" in backend.commands, timeout=5000)
+
+    assert window.studio_page.message_count == 0
+
+
+@pytest.mark.gui
+def test_speaking_and_clicking_produce_the_same_command(qtbot: QtBot, tmp_path: Path) -> None:
+    """MS-017: la voz y la interfaz llaman al mismo controlador."""
+    spoken_capture, spoken_backend = _connected_capture()
+    (tmp_path / "hablado").mkdir()
+    spoken_window = _window(tmp_path / "hablado", spoken_capture)
+    qtbot.addWidget(spoken_window)
+    spoken_window.open_model_studio()
+    spoken_window.studio_page.input.setPlainText("cambia a la cenital")
+    spoken_window.studio_page.send_button.click()
+    qtbot.waitUntil(
+        lambda: any(c.startswith("switch_scene") for c in spoken_backend.commands), timeout=5000
+    )
+
+    clicked_capture, clicked_backend = _connected_capture()
+    (tmp_path / "pulsado").mkdir()
+    clicked_window = _window(tmp_path / "pulsado", clicked_capture)
+    qtbot.addWidget(clicked_window)
+    clicked_window.open_model_studio()
+    clicked_window.studio_page.capture_panel.scene_selected.emit("cenital")
+    qtbot.waitUntil(
+        lambda: any(c.startswith("switch_scene") for c in clicked_backend.commands), timeout=5000
+    )
+
+    spoken = [c for c in spoken_backend.commands if c.startswith("switch_scene")]
+    clicked = [c for c in clicked_backend.commands if c.startswith("switch_scene")]
+    assert spoken == clicked == ["switch_scene:Cámara cenital"]
+
+
+@pytest.mark.gui
+def test_a_normal_question_still_goes_to_the_conversation(qtbot: QtBot, tmp_path: Path) -> None:
+    """Hablar de una cámara no puede cambiar de plano."""
+    capture, backend = _connected_capture()
+    window = _window(tmp_path, capture)
+    qtbot.addWidget(window)
+    window.open_model_studio()
+
+    window.studio_page.input.setPlainText("¿qué cámara me recomiendas para el cenital?")
+    window.studio_page.send_button.click()
+    qtbot.waitUntil(lambda: window.studio_page.message_count > 0, timeout=5000)
+
+    assert not any(command.startswith("switch_scene") for command in backend.commands)
+
+
+@pytest.mark.gui
+def test_without_a_capture_module_orders_are_just_messages(qtbot: QtBot, tmp_path: Path) -> None:
+    window = _window(tmp_path)
+    qtbot.addWidget(window)
+    window.open_model_studio()
+
+    window.studio_page.input.setPlainText("graba")
+    window.studio_page.send_button.click()
+    qtbot.waitUntil(lambda: window.studio_page.message_count > 0, timeout=5000)
+
+    assert window.studio_page.message_bodies()[0][1] == "graba"
+
+
+@pytest.mark.gui
+def test_an_unauthorized_camera_never_switches_and_is_reported(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """No se adivina la escena más parecida: se rechaza y se dice."""
+    capture, backend = _connected_capture()
+    window = _window(tmp_path, capture)
+    qtbot.addWidget(window)
+    window.open_model_studio()
+    window.studio_page.capture_panel.scene_selected.emit("la del salón")
+    qtbot.waitUntil(
+        lambda: bool(window.studio_page.capture_panel.message_label.text()), timeout=5000
+    )
+
+    assert not any(command.startswith("switch_scene") for command in backend.commands)
+    assert "no está autorizada" in window.studio_page.capture_panel.message_label.text()

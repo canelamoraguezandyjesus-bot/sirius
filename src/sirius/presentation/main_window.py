@@ -35,6 +35,7 @@ from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.archive_decision import ArchiveDecisionUseCase
 from sirius.application.archive_memory import ArchiveMemoryUseCase
 from sirius.application.budget_status import GetBudgetStatusUseCase
+from sirius.application.capture_commands import CaptureCommand, CaptureIntent, interpret
 from sirius.application.correct_memory import CorrectMemoryUseCase
 from sirius.application.create_backup import CreateBackupUseCase
 from sirius.application.decision_origin import GetDecisionOriginUseCase
@@ -72,6 +73,7 @@ from sirius.config.llm_provider_settings import (
     resolve_provider_kind,
 )
 from sirius.config.settings import load_settings, save_settings
+from sirius.domain.capture import SceneRegistry
 from sirius.domain.conversation import MessageRole, MessageStatus
 from sirius.domain.model_studio import StudioCaptureState, StudioInteractionState
 from sirius.infrastructure.logging import get_logger
@@ -426,6 +428,8 @@ class MainWindow(QMainWindow):
         """
         if self._studio_capture_use_case is None:
             return
+        # Abrir el panel es empezar de cero: se limpia lo que quedara dicho.
+        self.studio_page.capture_panel.set_message("")
         use_case = self._studio_capture_use_case
         self._run_capture(use_case.enable if opened else use_case.disable)
 
@@ -488,10 +492,30 @@ class MainWindow(QMainWindow):
         # supuesto: por eso se adopta tal cual y no se corrige aquí.
         self.studio_page.set_capture_state(feedback.state)
         self.studio_page.capture_panel.set_elapsed(feedback.recording_seconds)
-        self.studio_page.capture_panel.set_message(feedback.message)
+        if feedback.message:
+            # Solo se pisa el mensaje si hay algo nuevo que decir. La orden
+            # correctora de _sync_capture_module no trae mensaje, y sin este
+            # guardia borraría un rechazo justo después de enseñarlo.
+            self.studio_page.capture_panel.set_message(feedback.message)
         if feedback.scene_id is not None:
             self.studio_page.capture_panel.set_active_scene(feedback.scene_id)
+        if self.studio_page.interaction_state is StudioInteractionState.EJECUTANDO:
+            # La orden vino hablada o escrita: el usuario espera respuesta.
+            self._mirror_studio_state(StudioInteractionState.PREPARADO)
+            self._announce_capture(feedback)
         self._sync_capture_module()
+
+    def _announce_capture(self, feedback: CaptureFeedback) -> None:
+        """Cuenta cómo quedó la orden: en pantalla y, si hay voz, en voz alta.
+
+        Lo que se anuncia es el estado que devolvió el sistema de captura, no
+        una frase compuesta por el modelo. Es la diferencia entre informar y
+        afirmar algo que nadie ha confirmado.
+        """
+        spoken = feedback.message or feedback.state.label
+        if not feedback.succeeded:
+            self.studio_page.set_error(spoken)
+        self._speak_if_studio_is_open(spoken, MessageStatus.COMPLETED)
 
     def _sync_capture_module(self) -> None:
         """Corrige el módulo si quedó al revés de lo que el usuario pidió.
@@ -667,7 +691,54 @@ class MainWindow(QMainWindow):
             return
         if self._is_sending or self._is_backup_busy or self._is_export_busy:
             return
+
+        # Una orden de captura no es conversación: se ejecuta y no se guarda en
+        # el historial. Lo que confirma que se está grabando es el estado que
+        # devuelve el sistema de captura, no una frase del modelo.
+        intent = self._capture_intent(text)
+        if intent is not None:
+            self._execute_capture_intent(intent)
+            return
         self._start_send(text)
+
+    def _capture_intent(self, text: str) -> CaptureIntent | None:
+        """Qué orden de captura es esta frase, si es que es alguna.
+
+        Sin Módulo Captura no hay órdenes que reconocer: todo va a la
+        conversación, que es lo que el usuario espera.
+        """
+        if self._studio_capture_use_case is None:
+            return None
+        return interpret(text, SceneRegistry(self._studio_capture_use_case.authorized_scenes()))
+
+    def _execute_capture_intent(self, intent: CaptureIntent) -> None:
+        """Ejecuta la orden reconocida, por la misma vía que los botones.
+
+        MS-017: decirlo en voz alta y pulsar el botón producen exactamente el
+        mismo comando interno, con las mismas comprobaciones y la misma lista
+        blanca. Aquí no hay un camino paralelo.
+        """
+        use_case = self._studio_capture_use_case
+        if use_case is None:
+            return
+
+        self.studio_page.input.clear()
+        self.studio_page.set_error("")
+        self.studio_page.capture_panel.set_message("")
+        self._mirror_studio_state(StudioInteractionState.EJECUTANDO)
+
+        if intent.command is CaptureCommand.SWITCH_SCENE and intent.scene_id is not None:
+            scene_id = intent.scene_id
+            self._run_capture(lambda: use_case.switch_scene(scene_id))
+            return
+        if intent.command is CaptureCommand.MARK_MOMENT:
+            label = intent.label or ""
+            self._run_capture(lambda: use_case.mark_moment(label))
+            return
+        if intent.command is CaptureCommand.GET_STATUS:
+            self._run_capture(use_case.refresh_status)
+            return
+        self._run_capture(getattr(use_case, intent.command.value))
 
     def _refresh_studio_context(self) -> None:
         """Alimenta la columna izquierda con el proyecto activo y su contexto.
