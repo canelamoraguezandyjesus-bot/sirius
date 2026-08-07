@@ -9,6 +9,7 @@ sin degradar a una corrección a ciegas.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -184,7 +185,9 @@ def test_the_diagnosis_runs_after_claude_and_before_applying_the_verdict() -> No
     # dejó el corrector y llegar a tiempo de acompañar a la parada segura.
     doc = _load()
     nombres = [str(step.get("name") or "") for step in _steps(doc)]
-    claude = next(i for i, n in enumerate(nombres) if "Claude Code" in n)
+    # "Claude Code" a secas también casa con "Preparar instrucciones para
+    # Claude Code", que va antes: hay que anclar al paso que de verdad ejecuta.
+    claude = next(i for i, n in enumerate(nombres) if "Ejecutar Claude Code" in n)
     diagnostico = next(i for i, n in enumerate(nombres) if "diagnostico" in n.lower())
     veredicto = next(i for i, n in enumerate(nombres) if "Aplicar el veredicto" in n)
     assert claude < diagnostico < veredicto
@@ -215,3 +218,40 @@ def test_the_verdict_step_receives_the_diagnosis() -> None:
     entorno = _step(doc, "Aplicar el veredicto")["env"]
     assert "SIRIUS_STOP_CONTEXT" in entorno
     assert "diagnostico" in str(entorno["SIRIUS_STOP_CONTEXT"])
+
+
+def test_the_diagnosis_only_reads_outputs_that_some_step_actually_writes() -> None:
+    # El defecto que motivó esta prueba: el diagnóstico leía
+    # `steps.gate.outputs.head_sha`, que la puerta NUNCA escribe. La variable
+    # llegaba vacía, el rango `..HEAD` equivale a `HEAD..HEAD` y el recuento
+    # salía 0 en silencio — la conclusión contraria a la verdadera justo en el
+    # caso que el diagnóstico existe para detectar.
+    doc = _load()
+    paso = _step(doc, "diagnostico")
+    referencias = re.findall(r"steps\.([A-Za-z0-9_-]+)\.outputs\.([A-Za-z0-9_-]+)", str(paso))
+    assert referencias, "el diagnóstico debe leer al menos una salida de otro paso"
+    fuente = _source()
+    for step_id, nombre in referencias:
+        assert any(s.get("id") == step_id for s in _steps(doc)), f"paso inexistente: {step_id}"
+        assert f'echo "{nombre}=' in fuente, (
+            f"ningún paso escribe la salida `{nombre}` que el diagnóstico lee"
+        )
+
+
+def test_the_starting_head_is_captured_before_the_corrector_runs() -> None:
+    # Medirlo después no sirve: para entonces el corrector ya pudo haber hecho
+    # commit, y el head de partida sería el de llegada.
+    doc = _load()
+    nombres = [str(s.get("name") or "") for s in _steps(doc)]
+    antes = next(i for i, n in enumerate(nombres) if "head antes de corregir" in n)
+    # "Claude Code" a secas también casa con "Preparar instrucciones para
+    # Claude Code", que va antes: hay que anclar al paso que de verdad ejecuta.
+    claude = next(i for i, n in enumerate(nombres) if "Ejecutar Claude Code" in n)
+    assert antes < claude
+
+
+def test_without_a_starting_head_the_count_is_not_faked() -> None:
+    # Un 0 silencioso se leería como "no hizo nada". Si falta el punto de
+    # partida hay que decirlo, no inventar un recuento.
+    guion = str(_step(_load(), "diagnostico")["run"])
+    assert "indeterminado" in guion

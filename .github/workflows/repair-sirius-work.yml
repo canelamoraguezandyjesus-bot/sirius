@@ -232,6 +232,20 @@ jobs:
             echo "SIRIUS_PROMPT_EOF"
           } >> "$GITHUB_OUTPUT"
 
+      # El head ANTES de que el corrector toque nada. Sin esto no hay forma de
+      # contar lo que anadio: la puerta no publica ningun head, y un rango de git
+      # con el extremo izquierdo vacio (`..HEAD`) equivale a `HEAD..HEAD`, asi
+      # que el recuento habria salido 0 —en silencio— justo en el caso que este
+      # diagnostico existe para detectar: que el corrector trabajase y no lo
+      # declarase.
+      - name: Registrar el head antes de corregir
+        if: steps.gate.outputs.valid == 'true'
+        id: antes
+        shell: bash --noprofile --norc {0}
+        run: |
+          set -uo pipefail
+          echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Ejecutar Claude Code (corrector)
         if: steps.gate.outputs.valid == 'true'
         id: claude
@@ -264,7 +278,7 @@ jobs:
         shell: bash --noprofile --norc {0}
         env:
           VERDICT_FILE: ${{ runner.temp }}/sirius_verdict.json
-          HEAD_AL_EMPEZAR: ${{ steps.gate.outputs.head_sha }}
+          HEAD_AL_EMPEZAR: ${{ steps.antes.outputs.head }}
         run: |
           set -uo pipefail
           tamano="ausente"
@@ -272,13 +286,18 @@ jobs:
           head_ahora="$(git rev-parse HEAD 2>/dev/null || echo desconocido)"
           sucio="limpio"
           [ -n "$(git status --porcelain 2>/dev/null)" ] && sucio="con cambios sin confirmar"
-          commits="$(git log --oneline "${HEAD_AL_EMPEZAR}..HEAD" 2>/dev/null | wc -l | tr -d ' ')"
+          # Sin head de partida NO se cuenta: un 0 silencioso se leeria como
+          # "no hizo nada", que es la conclusion contraria a la verdadera.
+          commits="indeterminado (sin head de partida)"
+          if [ -n "${HEAD_AL_EMPEZAR:-}" ]; then
+            commits="$(git log --oneline "${HEAD_AL_EMPEZAR}..HEAD" 2>/dev/null | wc -l | tr -d ' ')"
+          fi
           {
             echo "contexto<<FIN_DIAGNOSTICO"
             echo "<details><summary>Diagnostico del corrector</summary>"
             echo
             echo "- Archivo de veredicto: ${tamano}"
-            echo "- Head al empezar: \`${HEAD_AL_EMPEZAR}\`"
+            echo "- Head al empezar: \`${HEAD_AL_EMPEZAR:-desconocido}\`"
             echo "- Head al terminar: \`${head_ahora}\`"
             echo "- Commits nuevos en la rama: ${commits}"
             echo "- Arbol de trabajo: ${sucio}"
