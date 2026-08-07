@@ -36,25 +36,36 @@ el sidecar; inventario, DDL y filas para el `FTS5`—, que es lo que la puerta
 pregunta: que el derivado se reconstruya **desde el canon**, no que el fichero
 salga idéntico byte a byte.
 
-DOS ABLACIONES NO SE EJECUTAN, Y SE DICE POR QUÉ
-================================================
+TRES ABLACIONES NO SE EJECUTAN, Y SE DICE POR QUÉ
+=================================================
 
-`AB-4` —desactivar la validación de polaridad, condición y tiempo **manteniendo
-la señal**— y `AB-5` —desactivar las puertas `G1-G12` de una en una— **no son
-ejecutables sobre los candidatos congelados**, y esto se comprobó contra el
-código, no se supuso:
+`AB-2`, `AB-4` y `AB-5` **no son ejecutables sobre los candidatos congelados**, y
+esto se comprobó contra el código, no se supuso. Las razones no son la misma:
 
-- los candidatos exponen exactamente dos interruptores, ``con_senal_relacional``
-  y ``con_senal_vectorial``, y los dos apagan **la señal entera**. `AB-4` exige
-  lo contrario: señal encendida, validación apagada. No hay tal interruptor;
-- ``gates.aplicar_previas`` aplica `G1-G10` en cascada fija y no acepta máscara,
-  como tampoco ``aplicar_g11`` ni ``aplicar_g12``.
+- **`AB-2`** —«desactivar la etapa léxica de `RF-16`»— pide quitar `E2` y seguir
+  por `E3`. Eso es **un salto de etapa, y `B04-RF-14` lo prohíbe**. El motor lo
+  hace cumplir: en cuanto una etapa no está autorizada, ``stops.parada_por_modo``
+  devuelve `S2` y el bucle de ``engine.py`` **rompe**. De modo que
+  ``espacios_autorizados`` autoriza **un prefijo**, no un conjunto al que se le
+  pueda quitar una etapa de en medio. No es una carencia del arnés: es que la
+  norma prohíbe la ablación que el banco describe.
+- **`AB-4`** —desactivar la validación de polaridad, condición y tiempo
+  **manteniendo la señal**— necesita un interruptor que no existe: los dos que los
+  candidatos exponen, ``con_senal_relacional`` y ``con_senal_vectorial``, apagan
+  **la señal entera**, que es justo lo contrario.
+- **`AB-5`** —`G1-G12` de una en una— necesita una máscara que el motor no tiene:
+  ``gates.aplicar_previas`` encadena `G1-G10` en orden fijo, y ni ``aplicar_g11``
+  ni ``aplicar_g12`` aceptan selección.
 
-Añadir cualquiera de las dos exigiría modificar código congelado y emitir fichas
-sucesoras, y eso es un acto de gobierno, no una decisión de este módulo. Se
-declaran **no ejecutables con la maquinaria actual** y se dice qué haría falta.
-Fingirlas con un sucedáneo sería peor que no correrlas: daría una cifra donde no
+Las dos últimas exigirían modificar código congelado y emitir fichas sucesoras, y
+eso es un acto de gobierno, no una decisión de este módulo. Fingir cualquiera de
+las tres con un sucedáneo sería peor que no correrlas: daría una cifra donde no
 hay medición.
+
+`AB-2` estuvo **mal ejecutada** en la primera versión de este módulo: se le pasó
+``{E1, E3, E4}`` creyendo que `E2` se saltaría, y lo que hizo el motor fue parar
+en `E2`. El resultado era idéntico al de `AB-1` porque **era** `AB-1` con otro
+nombre. Se corrigió en cuanto la coincidencia exacta de las dos cifras lo delató.
 
 `AB-4` importa más que las otras, y por eso la carencia se declara y no se
 disimula: es la única que separa **la señal** de **su validación**, y sin ella no
@@ -106,6 +117,16 @@ EXENCIONES_DEL_CONTROL: Final[Mapping[str, tuple[str, ...]]] = {
 }
 
 ABLACIONES_NO_EJECUTABLES: Final[Mapping[str, str]] = {
+    "AB-2": (
+        "desactivar la etapa lexica MANTENIENDO las posteriores exigiria saltar de "
+        "E1 a E3, y B04-RF-14 prohibe exactamente ese salto. El motor lo hace "
+        "cumplir: engine.py rompe el bucle en cuanto una etapa no esta autorizada "
+        "(stops.parada_por_modo devuelve S2 y el for hace break), de modo que "
+        "espacios_autorizados es una autorizacion por PREFIJO y no un conjunto del "
+        "que se pueda quitar una etapa intermedia. No es una carencia del arnes: "
+        "es que la norma prohibe la ablacion que el banco describe, y ejecutarla "
+        "exigiria un motor que incumpliese RF-14"
+    ),
     "AB-4": (
         "desactivar la validacion de polaridad, condicion y tiempo MANTENIENDO la "
         "senal exige un interruptor que ningun candidato congelado tiene: los dos "
@@ -462,10 +483,9 @@ def arq_ca_05(ficha: Mapping[str, Any]) -> tuple[Veredicto, str]:
 #: Espacios que cada ablación deja autorizados. `AB-0` no se parametriza así:
 #: es `T0`, la línea base congelada de 0.1, y ya está medida.
 ESPACIOS_POR_ABLACION: Final[Mapping[str, frozenset[Etapa]]] = {
-    #: «Todo salvo E0/E1 estructurado y exacto».
+    #: «Todo salvo E0/E1 estructurado y exacto». Es un **prefijo**, y por eso
+    #: sí se puede pedir: se recorre `E1` y se para.
     "AB-1": frozenset({Etapa.E1}),
-    #: «Etapa léxica de RF-16»: cae `E2`, siguen las demás.
-    "AB-2": frozenset({Etapa.E1, Etapa.E3, Etapa.E4}),
 }
 
 #: `AB-3` —«etapa de significado/relaciones de RF-17»— **no** se hace quitando

@@ -348,85 +348,6 @@
    "lectura": ""
   },
   {
-   "ablacion": "AB-2",
-   "participante": "T0-control",
-   "ejecutada": true,
-   "exactos": 1,
-   "casos": 47,
-   "perdidos_respecto_de_la_completa": [],
-   "ganados_respecto_de_la_completa": [],
-   "motivo_si_no_se_ejecuta": "",
-   "lectura": ""
-  },
-  {
-   "ablacion": "AB-2",
-   "participante": "ADR002-A",
-   "ejecutada": true,
-   "exactos": 24,
-   "casos": 47,
-   "perdidos_respecto_de_la_completa": [
-    "N1-38"
-   ],
-   "ganados_respecto_de_la_completa": [
-    "N1-14",
-    "N1-25"
-   ],
-   "motivo_si_no_se_ejecuta": "",
-   "lectura": ""
-  },
-  {
-   "ablacion": "AB-2",
-   "participante": "ADR002-B",
-   "ejecutada": true,
-   "exactos": 24,
-   "casos": 47,
-   "perdidos_respecto_de_la_completa": [
-    "N1-38"
-   ],
-   "ganados_respecto_de_la_completa": [
-    "N1-08",
-    "N1-14",
-    "N1-25",
-    "N1-27"
-   ],
-   "motivo_si_no_se_ejecuta": "",
-   "lectura": ""
-  },
-  {
-   "ablacion": "AB-2",
-   "participante": "ADR002-C",
-   "ejecutada": true,
-   "exactos": 24,
-   "casos": 47,
-   "perdidos_respecto_de_la_completa": [
-    "N1-38"
-   ],
-   "ganados_respecto_de_la_completa": [
-    "N1-14",
-    "N1-25"
-   ],
-   "motivo_si_no_se_ejecuta": "",
-   "lectura": ""
-  },
-  {
-   "ablacion": "AB-2",
-   "participante": "ADR002-D",
-   "ejecutada": true,
-   "exactos": 24,
-   "casos": 47,
-   "perdidos_respecto_de_la_completa": [
-    "N1-38"
-   ],
-   "ganados_respecto_de_la_completa": [
-    "N1-08",
-    "N1-14",
-    "N1-25",
-    "N1-27"
-   ],
-   "motivo_si_no_se_ejecuta": "",
-   "lectura": ""
-  },
-  {
    "ablacion": "AB-3",
    "participante": "T0-control",
    "ejecutada": true,
@@ -485,6 +406,61 @@
     "N1-27"
    ],
    "motivo_si_no_se_ejecuta": "",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-2",
+   "participante": "T0-control",
+   "ejecutada": false,
+   "exactos": 0,
+   "casos": 0,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "desactivar la etapa lexica MANTENIENDO las posteriores exigiria saltar de E1 a E3, y B04-RF-14 prohibe exactamente ese salto. El motor lo hace cumplir: engine.py rompe el bucle en cuanto una etapa no esta autorizada (stops.parada_por_modo devuelve S2 y el for hace break), de modo que espacios_autorizados es una autorizacion por PREFIJO y no un conjunto del que se pueda quitar una etapa intermedia. No es una carencia del arnes: es que la norma prohibe la ablacion que el banco describe, y ejecutarla exigiria un motor que incumpliese RF-14",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-2",
+   "participante": "ADR002-A",
+   "ejecutada": false,
+   "exactos": 0,
+   "casos": 0,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "desactivar la etapa lexica MANTENIENDO las posteriores exigiria saltar de E1 a E3, y B04-RF-14 prohibe exactamente ese salto. El motor lo hace cumplir: engine.py rompe el bucle en cuanto una etapa no esta autorizada (stops.parada_por_modo devuelve S2 y el for hace break), de modo que espacios_autorizados es una autorizacion por PREFIJO y no un conjunto del que se pueda quitar una etapa intermedia. No es una carencia del arnes: es que la norma prohibe la ablacion que el banco describe, y ejecutarla exigiria un motor que incumpliese RF-14",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-2",
+   "participante": "ADR002-B",
+   "ejecutada": false,
+   "exactos": 0,
+   "casos": 0,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "desactivar la etapa lexica MANTENIENDO las posteriores exigiria saltar de E1 a E3, y B04-RF-14 prohibe exactamente ese salto. El motor lo hace cumplir: engine.py rompe el bucle en cuanto una etapa no esta autorizada (stops.parada_por_modo devuelve S2 y el for hace break), de modo que espacios_autorizados es una autorizacion por PREFIJO y no un conjunto del que se pueda quitar una etapa intermedia. No es una carencia del arnes: es que la norma prohibe la ablacion que el banco describe, y ejecutarla exigiria un motor que incumpliese RF-14",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-2",
+   "participante": "ADR002-C",
+   "ejecutada": false,
+   "exactos": 0,
+   "casos": 0,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "desactivar la etapa lexica MANTENIENDO las posteriores exigiria saltar de E1 a E3, y B04-RF-14 prohibe exactamente ese salto. El motor lo hace cumplir: engine.py rompe el bucle en cuanto una etapa no esta autorizada (stops.parada_por_modo devuelve S2 y el for hace break), de modo que espacios_autorizados es una autorizacion por PREFIJO y no un conjunto del que se pueda quitar una etapa intermedia. No es una carencia del arnes: es que la norma prohibe la ablacion que el banco describe, y ejecutarla exigiria un motor que incumpliese RF-14",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-2",
+   "participante": "ADR002-D",
+   "ejecutada": false,
+   "exactos": 0,
+   "casos": 0,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "desactivar la etapa lexica MANTENIENDO las posteriores exigiria saltar de E1 a E3, y B04-RF-14 prohibe exactamente ese salto. El motor lo hace cumplir: engine.py rompe el bucle en cuanto una etapa no esta autorizada (stops.parada_por_modo devuelve S2 y el for hace break), de modo que espacios_autorizados es una autorizacion por PREFIJO y no un conjunto del que se pueda quitar una etapa intermedia. No es una carencia del arnes: es que la norma prohibe la ablacion que el banco describe, y ejecutarla exigiria un motor que incumpliese RF-14",
    "lectura": ""
   },
   {
@@ -599,6 +575,7 @@
   }
  ],
  "ablaciones_no_ejecutables": {
+  "AB-2": "desactivar la etapa lexica MANTENIENDO las posteriores exigiria saltar de E1 a E3, y B04-RF-14 prohibe exactamente ese salto. El motor lo hace cumplir: engine.py rompe el bucle en cuanto una etapa no esta autorizada (stops.parada_por_modo devuelve S2 y el for hace break), de modo que espacios_autorizados es una autorizacion por PREFIJO y no un conjunto del que se pueda quitar una etapa intermedia. No es una carencia del arnes: es que la norma prohibe la ablacion que el banco describe, y ejecutarla exigiria un motor que incumpliese RF-14",
   "AB-4": "desactivar la validacion de polaridad, condicion y tiempo MANTENIENDO la senal exige un interruptor que ningun candidato congelado tiene: los dos que exponen (con_senal_relacional y con_senal_vectorial) apagan la senal entera, que es justo lo contrario. Ejecutarla obligaria a modificar los cuatro candidatos y emitir fichas sucesoras: es un acto de gobierno, no de este modulo. Es ademas la unica ablacion que separa la senal de su validacion, de modo que no poder correrla es una carencia real de esta ronda y se declara como tal",
   "AB-5": "desactivar G1-G12 de una en una exige una mascara de puertas que el motor comun no tiene: gates.aplicar_previas encadena G1-G10 en orden fijo y no acepta parametro de seleccion, y lo mismo aplicar_g11 y aplicar_g12. Anadirla tocaria la capa comun, congelada y fijada por blob en la custodia de las fichas"
  },

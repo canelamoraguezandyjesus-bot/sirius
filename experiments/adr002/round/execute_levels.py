@@ -58,7 +58,7 @@ VERSIONES_VIGENTES: Final[Mapping[str, int]] = {
 #: Las ablaciones que sí se ejecutan, con lo que apagan.
 #: Las que se corren **sobre cada participante**. `AB-6` no está aquí porque no
 #: depende del participante: es el azar, y se emite una vez por lectura.
-ABLACIONES_EJECUTABLES: Final[tuple[str, ...]] = ("AB-1", "AB-2", "AB-3")
+ABLACIONES_EJECUTABLES: Final[tuple[str, ...]] = ("AB-1", "AB-3")
 
 
 # --------------------------------------------------------------------------

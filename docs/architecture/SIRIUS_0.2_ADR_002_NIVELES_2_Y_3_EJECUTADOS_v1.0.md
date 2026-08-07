@@ -19,12 +19,12 @@ El banco tiene cuatro niveles. La ronda primaria ejecutaba **uno**:
 | Nivel | Qué es | Cuándo se ejecutó |
 |---|---|---|
 | 1 | 50 casos canónicos `B04-CA-01..50` | las corridas `v0.1` y `v0.2` |
-| 2 | 5 casos arquitectónicos `ARQ-CA-01..05` | **aquí** |
-| 3 | 7 ablaciones `AB-0..AB-6` | **aquí** (cinco de siete) |
+| 2 | 5 casos arquitectónicos `ARQ-CA-01..05` | **aquí**, los cinco |
+| 3 | 7 ablaciones `AB-0..AB-6` | **aquí**, cuatro de siete |
 | 4 | 1 discriminante relacional `N4-01` | el documento anterior |
 
-Con esto el banco queda ejecutado salvo dos ablaciones que **no son ejecutables
-sobre los candidatos congelados**, y el §6 dice exactamente por qué.
+Con esto el banco queda ejecutado salvo **tres ablaciones**. Una de ellas,
+`AB-2`, no es que no se pueda: es que **la norma la prohíbe**. El §6 lo explica.
 
 ---
 
@@ -68,7 +68,6 @@ cuatro candidatos, medidas y no supuestas.
 |---|---|---|---|---|---|---|
 | — | *nada (corridas publicadas)* | 1 | **23** | 21 | **23** | 21 |
 | `AB-1` | todo salvo `E0`/`E1` | 1 | **24** | **24** | **24** | **24** |
-| `AB-2` | la etapa léxica `E2` | 1 | **24** | **24** | **24** | **24** |
 | `AB-3` | la señal tardía | 1 | 23 | **23** | 23 | **23** |
 
 (aciertos exactos sobre los 47 casos adjudicables)
@@ -182,10 +181,27 @@ Nada de lo ejecutado aquí abre la puerta que falta:
 
 ---
 
-## 6. Las dos ablaciones que no se ejecutaron, y por qué
+## 6. Las tres ablaciones que no se ejecutaron, y por qué
 
 No se fingieron. Se comprobó **contra el código**, y las pruebas lo fijan para que
-la declaración no envejezca en un comentario:
+la declaración no envejezca en un comentario. Las razones no son la misma:
+
+### 6.1 `AB-2` — la norma prohíbe la ablación que el banco pide
+
+`AB-2` manda «desactivar la etapa léxica de `RF-16`» **conservando las
+posteriores**. Eso obliga a saltar de `E1` a `E3`, y **`B04-RF-14` prohíbe
+exactamente ese salto**.
+
+El motor lo hace cumplir: en cuanto una etapa no está autorizada,
+`stops.parada_por_modo` devuelve `S2` y el bucle de `engine.py` **rompe**. Por
+tanto `espacios_autorizados` autoriza **un prefijo** —«recorre hasta aquí»—, no un
+conjunto al que quitarle una etapa de en medio.
+
+De modo que `AB-2` no es una carencia del arnés: es una ablación que **solo podría
+ejecutar un motor que incumpliese `RF-14`**. `AB-1`, en cambio, sí es un prefijo
+—`E0`/`E1` y parar— y por eso sí se ejecuta.
+
+### 6.2 `AB-4` y `AB-5` — falta maquinaria, y añadirla es un acto de gobierno
 
 - **`AB-4`** —«desactivar la validación de polaridad, condición y tiempo
   **manteniendo la señal**»— necesita un interruptor que ningún candidato
@@ -196,9 +212,10 @@ la declaración no envejezca en un comentario:
   orden fijo, y `aplicar_g11` y `aplicar_g12` tampoco aceptan selección.
 
 Ejecutarlas exigiría **modificar código congelado y emitir fichas sucesoras**, y
-eso es un acto de gobierno, no una decisión del arnés. Dos pruebas vigilan las
-firmas: si alguien añadiese el interruptor o la máscara, fallarían y dirían que la
-declaración ha dejado de ser cierta.
+eso es un acto de gobierno, no una decisión del arnés. Cuatro pruebas vigilan las
+firmas y el `break` del motor: si alguien añadiese el interruptor, la máscara, o
+hiciera que el motor saltara etapas, fallarían y dirían que la declaración ha
+dejado de ser cierta.
 
 **`AB-4` es la carencia que más pesa.** Es la única que separa lo que aporta una
 señal de lo que aporta el filtro que la limpia. Sin ella no puede afirmarse cuál
@@ -206,7 +223,9 @@ de las dos cosas produce el resultado de `C` en el discriminante.
 
 ---
 
-## 7. Un defecto propio, corregido antes de publicar
+## 7. Dos defectos propios, corregidos antes de cerrar
+
+### 7.1 El suelo tenía prestado el oráculo
 
 La primera versión del suelo `AB-6` sorteaba entre los **elegibles del caso**. Como
 el banco define para `EXHAUSTIVA` que `resultado_esperado == elegibles_semanticos`,
@@ -214,8 +233,21 @@ sacar `n` de `n` devolvía la respuesta **siempre**: el azar acertaba **47 de 47
 
 Un suelo del 100 % habría hecho parecer que los candidatos no superan al azar,
 cuando lo que pasaba es que al azar se le había prestado el oráculo. Se corrigió
-—el universo es el canon entero— y el defecto quedó escrito como prueba, no como
-nota.
+—el universo es el canon entero— y el defecto quedó escrito como prueba.
+
+### 7.2 `AB-2` era `AB-1` con otro nombre
+
+La primera versión pedía `AB-2` con `espacios_autorizados = {E1, E3, E4}`, creyendo
+que `E2` se saltaría. Lo que hace el motor es **parar** en `E2`. `AB-2` y `AB-1`
+publicaron por eso la misma cifra exacta —`24/47`— y los mismos casos ganados y
+perdidos, uno por uno.
+
+**La coincidencia exacta fue lo que lo delató**, y conviene decirlo porque el
+número no era absurdo: `24/47` es perfectamente creíble, y de no haber estado
+`AB-1` al lado para compararlo, la cifra habría pasado como un resultado. Lo
+descubierto al investigarla —que `espacios_autorizados` es un prefijo porque
+`RF-14` prohíbe el salto— resultó ser más informativo que la ablación que se
+pretendía correr.
 
 ---
 

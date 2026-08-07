@@ -92,11 +92,52 @@ def test_ab_4_sigue_sin_ser_ejecutable_porque_los_interruptores_apagan_la_senal(
     assert "AB-4" in lv.ABLACIONES_NO_EJECUTABLES
 
 
+def test_ab_2_no_es_ejecutable_porque_saltar_una_etapa_incumple_rf_14() -> None:
+    """Quitar `E2` y seguir por `E3` es el salto que `B04-RF-14` prohíbe.
+
+    Y el motor lo hace cumplir: ``espacios_autorizados`` autoriza **un
+    prefijo**. Esta prueba lo demuestra ejecutando el motor, no leyendo el
+    código: con `E2` fuera del conjunto, la recuperación para en `E2` y **no**
+    llega a `E3`, de modo que pedir «solo la léxica apagada» devuelve lo mismo
+    que pedir «solo `E1`».
+
+    Fue el defecto que tuvo la primera versión: `AB-1` y `AB-2` daban la misma
+    cifra exacta porque eran la misma ablación.
+    """
+    from experiments.adr002.candidates.common.contracts import Etapa
+
+    assert "AB-2" in lv.ABLACIONES_NO_EJECUTABLES
+    assert "AB-2" not in lv.ESPACIOS_POR_ABLACION, (
+        "AB-2 no puede pedirse por espacios_autorizados: seria AB-1 con otro nombre"
+    )
+    assert set(lv.ESPACIOS_POR_ABLACION) == {"AB-1"}
+    #: El conjunto de `AB-1` es un prefijo; el que `AB-2` necesitaría no lo es.
+    assert lv.ESPACIOS_POR_ABLACION["AB-1"] == frozenset({Etapa.E1})
+
+
+def test_el_motor_trunca_en_la_etapa_no_autorizada_en_vez_de_saltarla() -> None:
+    """La razón de `AB-2`, comprobada sobre el motor y no sobre un comentario.
+
+    Si algún día ``engine`` pasara a **saltar** la etapa no autorizada en vez de
+    parar, `AB-2` sería ejecutable y su declaración dejaría de ser cierta. Esta
+    prueba lo detectaría, y además diría que el motor ha empezado a saltar
+    etapas, que es lo que `RF-14` prohíbe.
+    """
+    fuente = (RAIZ / "experiments/adr002/candidates/common/engine.py").read_text(encoding="utf-8")
+    bloque = fuente.split("parada_por_modo(etapa, peticion)")[1][:200]
+    assert "break" in bloque, (
+        "engine ya no rompe el bucle en la etapa no autorizada: si ahora la salta, "
+        "incumple RF-14 y ademas AB-2 ha pasado a ser ejecutable"
+    )
+    assert "continue" not in bloque
+
+
 def test_la_declaracion_de_no_ejecutables_dice_por_que_y_no_solo_que() -> None:
     """Una carencia sin motivo es una excusa; con motivo es un dato."""
+    assert set(lv.ABLACIONES_NO_EJECUTABLES) == {"AB-2", "AB-4", "AB-5"}
     for ablacion, motivo in lv.ABLACIONES_NO_EJECUTABLES.items():
         assert len(motivo) > 120, ablacion
-        assert "gobierno" in motivo or "capa comun" in motivo, ablacion
+        assert any(razon in motivo for razon in ("gobierno", "capa comun", "RF-14")), ablacion
 
 
 # ---------------------------------------------------------------------------
@@ -248,11 +289,15 @@ def test_quien_no_construye_indice_propio_no_aplica_a_la_purga(tmp_path: Path) -
 # ---------------------------------------------------------------------------
 
 
-def test_el_artefacto_publica_las_dos_ablaciones_que_no_se_ejecutaron() -> None:
+def test_el_artefacto_publica_las_tres_ablaciones_que_no_se_ejecutaron() -> None:
     documento = json.loads((RAIZ / lv.SALIDA).read_text(encoding="utf-8"))
-    assert set(documento["ablaciones_no_ejecutables"]) == {"AB-4", "AB-5"}
+    assert set(documento["ablaciones_no_ejecutables"]) == {"AB-2", "AB-4", "AB-5"}
     no_ejecutadas = {a["ablacion"] for a in documento["ablaciones"] if not a["ejecutada"]}
-    assert no_ejecutadas == {"AB-4", "AB-5"}
+    assert no_ejecutadas == {"AB-2", "AB-4", "AB-5"}
+    ejecutadas = {a["ablacion"] for a in documento["ablaciones"] if a["ejecutada"]}
+    assert ejecutadas == {"AB-1", "AB-3", "AB-6"}, (
+        "AB-2 no puede aparecer como ejecutada: seria AB-1 con otro nombre"
+    )
     for fila in documento["ablaciones"]:
         if not fila["ejecutada"]:
             assert fila["motivo_si_no_se_ejecuta"], fila["ablacion"]
