@@ -75,8 +75,13 @@ CODIGO_NO_EVALUABLE: Final = 4
 #: evidencia de lo que se midió antes de corregir la capa común y se conserva
 #: íntegra: sobrescribirla borraría justamente el término de comparación que
 #: hace comprobable la corrección.
-SALIDA: Final = "artifacts/adr002_round/ronda_primaria_v0.2.json"
-SALIDA_EVIDENCIA: Final = "artifacts/adr002_round/ronda_primaria_v0.2_evidencia.json"
+#: Corrida del paquete de cierre. La `v0.2` se conserva intacta: es el termino
+#: de comparacion que hace comprobable que la correccion **no cambio nada de lo
+#: que se recupera**, y sobrescribirla habria borrado esa comprobacion. La `v0.3`
+#: es la readjudicacion, que no midio: por eso esta es la `v0.4`.
+SALIDA: Final = "artifacts/adr002_round/ronda_primaria_v0.4.json"
+SALIDA_EVIDENCIA: Final = "artifacts/adr002_round/ronda_primaria_v0.4_evidencia.json"
+SALIDA_v0_2: Final = "artifacts/adr002_round/ronda_primaria_v0.2.json"
 
 #: Corrida original, previa a la corrección. Se cita para contrastar y **no se
 #: toca**: este recorrido no la abre siquiera.
