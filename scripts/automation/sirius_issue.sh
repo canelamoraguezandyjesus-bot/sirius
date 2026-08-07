@@ -44,6 +44,18 @@ sirius_retry() {
       echo "sirius_retry: fallo tras ${attempts} intento(s): $*" >&2
       return "$status"
     fi
+    # Un plazo absoluto del llamador manda sobre el número de intentos: sin esto,
+    # los reintentos de una lectura seguían gastando tiempo (y esperas) despues
+    # de que el presupuesto se hubiera agotado.
+    local remaining=0
+    if [ "${SIRIUS_GH_DEADLINE:-0}" -gt 0 ]; then
+      remaining=$(( SIRIUS_GH_DEADLINE - $(_sirius_now) ))
+      if [ "$remaining" -le 0 ]; then
+        echo "sirius_retry: plazo agotado; no reintento: $*" >&2
+        return "$status"
+      fi
+      [ "$delay" -gt "$remaining" ] && delay="$remaining"
+    fi
     echo "sirius_retry: intento ${n}/${attempts} fallo (status ${status}); reintento en ${delay}s" >&2
     sleep "$delay"
     n=$((n + 1))
@@ -108,20 +120,44 @@ _sirius_body_graphql() {
   gh issue view "${2}" --repo "${1}" --json body --jq '.body // ""'
 }
 
-# _sirius_gh <args...> — invoca `gh` acotando su duración cuando el llamador ha
-# fijado SIRIUS_GH_TIMEOUT_SECONDS. Un plazo comprobado ENTRE llamadas no acota
-# nada si una llamada se queda esperando la respuesta de GitHub: ni el POST ni
-# las lecturas paginadas tienen límite propio, y los reintentos solo avanzan
-# cuando cada llamada retorna. `gh` no expone ningún límite HTTP configurable,
-# así que el corte tiene que venir de fuera del proceso.
+# _sirius_now — segundos absolutos. `EPOCHSECONDS` es un builtin de Bash 5 y
+# evita un fork por llamada; `date` es el respaldo.
+_sirius_now() {
+  if [ -n "${EPOCHSECONDS:-}" ]; then
+    printf '%s' "$EPOCHSECONDS"
+  else
+    date +%s
+  fi
+}
+
+# _sirius_gh <args...> — invoca `gh` acotado por SIRIUS_GH_DEADLINE, un instante
+# ABSOLUTO, no una duración.
 #
-# Sin la variable, el comportamiento es el de siempre (sin límite): esto solo se
+# La diferencia importa y fue un defecto real: con una duración fija, cada
+# reintento de una lectura la heredaba entera, así que `timeout` acotaba cada
+# invocación pero no el conjunto —`timeout` mata la invocación que lanza, no
+# comparte plazo entre procesos— y una lectura con sus cuatro intentos REST más
+# los cuatro de GraphQL podía multiplicar el presupuesto por seis o más. Con un
+# instante absoluto, cada llamada recalcula lo que queda y el conjunto no puede
+# rebasarlo.
+#
+# Sin la variable el comportamiento es el de siempre (sin límite): esto solo se
 # activa donde hay un presupuesto que respetar.
 _sirius_gh() {
-  local limit="${SIRIUS_GH_TIMEOUT_SECONDS:-0}"
-  if [ "$limit" -gt 0 ] && command -v timeout >/dev/null 2>&1; then
-    timeout "$limit" gh "$@"
-    return $?
+  local deadline="${SIRIUS_GH_DEADLINE:-0}" remaining=0
+  if [ "$deadline" -gt 0 ]; then
+    remaining=$(( deadline - $(_sirius_now) ))
+    if [ "$remaining" -le 0 ]; then
+      echo "_sirius_gh: plazo agotado; no lanzo la llamada" >&2
+      return 124
+    fi
+    if command -v timeout >/dev/null 2>&1; then
+      timeout "$remaining" gh "$@"
+      return $?
+    fi
+    # Degradar en silencio dejaría la llamada sin acotar justo donde el llamador
+    # pidió acotarla; al menos queda dicho en el registro del job.
+    echo "_sirius_gh: 'timeout' no disponible; la llamada NO queda acotada" >&2
   fi
   gh "$@"
 }
@@ -491,17 +527,32 @@ sirius_close_issue() {
 # puede leer los comentarios, NO se interpreta como historial vacío: se falla de
 # forma segura para no publicar un duplicado autoritativo a ciegas.
 sirius_comment_once() {
+  # El plazo se EXPORTA para que lo vean `_sirius_gh` y `sirius_retry`, así que
+  # tiene que retirarse en TODAS las salidas: si se escapara, acotaría llamadas
+  # posteriores de la misma shell con un instante ya vencido y las haría fallar
+  # sin motivo. Un envoltorio lo garantiza mejor que recordar hacerlo en cada
+  # `return`, que es justo la clase de olvido que esta sesión ya ha cometido.
+  local status=0
+  _sirius_comment_once_bounded "$@" || status=$?
+  unset SIRIUS_GH_DEADLINE
+  return "$status"
+}
+
+_sirius_comment_once_bounded() {
   local repo="$1" num="$2" marker="$3" file="$4" existing=""
 
   # El presupuesto arranca ANTES de la lectura de deduplicación: también es una
   # llamada a la API y también puede quedarse esperando.
   local budget="${SIRIUS_COMMENT_BUDGET_SECONDS:-90}"
-  local deadline=$(( SECONDS + budget ))
+  # Instante ABSOLUTO, compartido con `_sirius_gh` y con `sirius_retry`: es lo
+  # que hace que el plazo acote el CONJUNTO y no cada llamada por separado.
+  local deadline=$(( $(_sirius_now) + budget ))
+  export SIRIUS_GH_DEADLINE="$deadline"
   local delay="${SIRIUS_RETRY_BASE_DELAY:-2}"
   local after="" remaining=0
 
-  remaining=$(( deadline - SECONDS ))
-  if ! existing="$(SIRIUS_GH_TIMEOUT_SECONDS="$remaining" sirius_read_issue_comments "$repo" "$num")"; then
+  remaining=$(( deadline - $(_sirius_now) ))
+  if ! existing="$(sirius_read_issue_comments "$repo" "$num")"; then
     echo "sirius_comment_once: historial ilegible para #${num}; no publico ${marker} a ciegas" >&2
     return 1
   fi
@@ -539,25 +590,25 @@ sirius_comment_once() {
   # workflows que llaman aquí corren con `timeout-minutes: 5`— y la transición se
   # cancelaba antes de que este script emitiera su parada controlada.
   while true; do
-    remaining=$(( deadline - SECONDS ))
+    remaining=$(( deadline - $(_sirius_now) ))
     if [ "$remaining" -le 0 ]; then
       echo "sirius_comment_once: agotado el plazo de ${budget}s publicando ${marker} en" \
         "#${num}; parada reintentable" >&2
       return 1
     fi
-    if SIRIUS_GH_TIMEOUT_SECONDS="$remaining" _sirius_gh issue comment "$num" --repo "$repo" \
+    if _sirius_gh issue comment "$num" --repo "$repo" \
       --body-file "$file"; then
       return 0
     fi
-    remaining=$(( deadline - SECONDS ))
+    remaining=$(( deadline - $(_sirius_now) ))
     if [ "$remaining" -gt 0 ] \
-      && after="$(SIRIUS_GH_TIMEOUT_SECONDS="$remaining" sirius_read_issue_comments "$repo" "$num")" \
+      && after="$(sirius_read_issue_comments "$repo" "$num")" \
       && printf '%s' "$after" | grep -Fq "$marker"; then
       echo "sirius_comment_once: el POST devolvio error pero el comentario si llego a" \
         "#${num} (${marker}); no se republica" >&2
       return 0
     fi
-    remaining=$(( deadline - SECONDS ))
+    remaining=$(( deadline - $(_sirius_now) ))
     if [ "$remaining" -le 0 ]; then
       echo "sirius_comment_once: agotado el plazo de ${budget}s publicando ${marker} en" \
         "#${num}; parada reintentable" >&2

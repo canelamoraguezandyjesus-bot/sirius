@@ -1011,8 +1011,10 @@ def test_the_publication_budget_is_a_total_deadline(tmp_path: Path) -> None:
     body = _write_body(env, marker)
     r = _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
     assert r.returncode != 0
-    assert "agotado el plazo" in r.stderr
-    assert _actions(env).count("COMMENT") <= 1
+    # Con el plazo ya vencido para en la primera llamada, que ahora es la lectura
+    # de deduplicación: el presupuesto la cubre también, y ese es el arreglo.
+    assert "plazo agotado" in r.stderr
+    assert _actions(env).count("COMMENT") == 0
 
 
 def test_the_wait_never_overshoots_the_remaining_budget(tmp_path: Path) -> None:
@@ -1053,10 +1055,50 @@ def test_a_hung_call_cannot_outlive_the_budget(tmp_path: Path) -> None:
     r = _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
     transcurrido = time.monotonic() - inicio
     assert r.returncode != 0
-    assert transcurrido < 30, (
+    # Umbral ajustado al presupuesto, no holgado: con `< 30` esta prueba pasaba
+    # tardando 18,3 s —seis llamadas de 3 s— porque el límite se calculaba una
+    # vez y lo heredaba cada reintento. El aserto flojo ocultaba el defecto que
+    # decía cubrir.
+    assert transcurrido < 12, (
         f"una llamada colgada ha sobrevivido al plazo: {transcurrido:.1f}s con 3s de "
-        "presupuesto; el limite por proceso no esta actuando"
+        "presupuesto; el limite no acota el CONJUNTO de llamadas"
     )
+
+
+def test_retries_stop_sleeping_once_the_deadline_passed(tmp_path: Path) -> None:
+    # Con el plazo vencido, `_sirius_gh` ya no lanza la llamada — pero sin una
+    # guarda en `sirius_retry` el bucle seguiría durmiendo sus esperas
+    # exponenciales entre intentos inútiles: 2+4+8 por REST y otro tanto por
+    # GraphQL, ~28 s gastados DESPUÉS de agotado el presupuesto. Las demás
+    # pruebas no lo ven porque fijan la espera base en 0.
+    env = _setup(tmp_path)
+    env["SIRIUS_RETRY_BASE_DELAY"] = "2"
+    inicio = time.monotonic()
+    r = _run(
+        "export SIRIUS_GH_DEADLINE=1; sirius_read_issue_comments owner/repo 55",
+        env,
+    )
+    transcurrido = time.monotonic() - inicio
+    assert r.returncode != 0
+    assert transcurrido < 5, f"se han dormido esperas tras vencer el plazo: {transcurrido:.1f}s"
+
+
+def test_the_deadline_does_not_leak_to_later_calls(tmp_path: Path) -> None:
+    # El plazo se exporta; si sobreviviera a la función, acotaría llamadas
+    # posteriores con un instante ya vencido y las haría fallar sin motivo.
+    env = _setup(tmp_path)
+    env["SIRIUS_COMMENT_BUDGET_SECONDS"] = "1"
+    (_mock_dir(env) / "comment_clean").write_text("99", encoding="utf-8")
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    body = _write_body(env, marker)
+    r = _run(
+        f'sirius_comment_once owner/repo 55 "{marker}" "{body}" >/dev/null 2>&1; '
+        f'echo "plazo=[${{SIRIUS_GH_DEADLINE:-}}]"; '
+        f'sirius_read_issue_comments owner/repo 55 >/dev/null && echo "lectura-posterior-ok"',
+        env,
+    )
+    assert "plazo=[]" in r.stdout, f"el plazo se ha escapado: {r.stdout}"
+    assert "lectura-posterior-ok" in r.stdout, "una lectura posterior ha quedado acotada de más"
 
 
 # --------------------------------------------------------------------------- #
