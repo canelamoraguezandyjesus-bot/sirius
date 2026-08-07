@@ -482,7 +482,50 @@ sirius_comment_once() {
     echo "sirius_comment_once: marcador ya presente en #${num} (${marker})" >&2
     return 0
   fi
-  sirius_retry gh issue comment "$num" --repo "$repo" --body-file "$file"
+
+  # El POST NO se reintenta a ciegas. `gh issue comment` no es idempotente, así
+  # que un `sirius_retry` alrededor convierte cada fallo AMBIGUO —GitHub acepta
+  # la petición y la respuesta se pierde por un timeout o un 502 de salida— en
+  # un comentario duplicado, y encima uno autoritativo: lo firma la
+  # automatización, así que pasa el filtro de autor y los escáneres
+  # deterministas lo cuentan. Es el mismo motivo por el que el disparador de
+  # `sirius_codex_review.py` tampoco reintenta su POST.
+  #
+  # La recuperación es por RELECTURA, que es lo único que distingue "no llegó"
+  # de "llegó y no me enteré": tras un fallo se vuelve a leer el historial y se
+  # busca el marcador, que va dentro del propio cuerpo. Si aparece, el POST sí
+  # había llegado y esto termina bien sin publicar nada más. Si no aparece, se
+  # puede reintentar sabiendo que no hay duplicado. Y si la relectura tampoco
+  # se puede hacer, no se reintenta: sin poder confirmar el estado, publicar
+  # otra vez es exactamente el riesgo que este bloque existe para evitar.
+  local attempts="${SIRIUS_RETRY_ATTEMPTS:-4}"
+  local delay="${SIRIUS_RETRY_BASE_DELAY:-2}"
+  local n=1 after=""
+  while true; do
+    if gh issue comment "$num" --repo "$repo" --body-file "$file"; then
+      return 0
+    fi
+    if ! after="$(sirius_read_issue_comments "$repo" "$num")"; then
+      echo "sirius_comment_once: el POST falló en #${num} y no puedo releer el historial;" \
+        "no reintento para no arriesgar un duplicado (${marker})" >&2
+      return 1
+    fi
+    if printf '%s' "$after" | grep -Fq "$marker"; then
+      echo "sirius_comment_once: el POST devolvió error pero el comentario sí llegó a" \
+        "#${num} (${marker}); no se republica" >&2
+      return 0
+    fi
+    if [ "$n" -ge "$attempts" ]; then
+      echo "sirius_comment_once: no se pudo publicar ${marker} en #${num} tras" \
+        "${attempts} intento(s); el historial confirma que no llegó" >&2
+      return 1
+    fi
+    echo "sirius_comment_once: intento ${n}/${attempts} fallo y el historial confirma que" \
+      "no llegó; reintento en ${delay}s" >&2
+    sleep "$delay"
+    n=$((n + 1))
+    delay=$((delay * 2))
+  done
 }
 
 # sirius_transition <repo> <issue> <marker> <body_file> <add_label> <color>

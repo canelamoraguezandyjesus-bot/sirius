@@ -91,6 +91,16 @@ case "$sub" in
     if printf '%s' "$args" | grep -q '/comments'; then
       if [ "${GH_MOCK_COMMENTS_ALWAYS_FAIL:-0}" = "1" ]; then echo "503 comments" >&2; exit 1; fi
       if should_fail comments_fail; then echo "503 comments" >&2; exit 1; fi
+      # Falla SOLO a partir de la lectura n+1. Un contador decreciente no sirve
+      # para esto: hace fallar las primeras, y aqui hace falta lo contrario —que
+      # la deduplicacion inicial funcione y sea la RELECTURA posterior al POST la
+      # que caiga—. Sin esta forma, la prueba del caso "no puedo confirmar si el
+      # POST llego" pasaria en vacio por la rama de historial ilegible.
+      if [ -n "${GH_MOCK_COMMENTS_FAIL_AFTER:-}" ]; then
+        cnt=0; [ -f "$D/comments_calls" ] && cnt="$(cat "$D/comments_calls")"
+        cnt=$((cnt+1)); echo "$cnt" > "$D/comments_calls"
+        if [ "$cnt" -gt "$GH_MOCK_COMMENTS_FAIL_AFTER" ]; then echo "503 comments" >&2; exit 1; fi
+      fi
       # La carga se construye con la MISMA forma que devuelve la API REST
       # (`body`, `author_association`, `user.login`) y el filtro `--jq` que trae
       # la llamada se aplica con jq de verdad. Así el filtro de autoría de
@@ -180,6 +190,8 @@ case "$sub" in
         exit 0
         ;;
       comment)
+        # Fallo LIMPIO: la peticion no llega a GitHub, no se escribe nada.
+        if should_fail comment_clean; then echo "503 sin aceptar" >&2; exit 1; fi
         bf=""; btext=""; prev=""
         for a in "$@"; do
           [ "$prev" = "--body-file" ] && bf="$a"
@@ -192,6 +204,11 @@ case "$sub" in
           printf '%s\n' "$btext" >> "$comments_file"
         fi
         echo "COMMENT" >> "$D/actions.log"
+        # Fallo AMBIGUO: GitHub ya ha aceptado la peticion (el comentario queda
+        # escrito, arriba) pero la respuesta se pierde y `gh` devuelve error. Es
+        # el caso que un reintento ciego convierte en duplicado, y el unico que
+        # distingue una recuperacion por relectura de un `sirius_retry`.
+        if should_fail comment_ambiguous; then echo "502 tras aceptar" >&2; exit 1; fi
         exit 0
         ;;
       *)
@@ -918,6 +935,61 @@ def test_untrusted_marker_does_not_skip_a_transition_record(tmp_path: Path) -> N
     assert r.returncode == 0, r.stderr
     assert "COMMENT" in _actions(env)
     assert "## SIRIUS_COMPLETED" in _comments(env)
+
+
+# --------------------------------------------------------------------------- #
+# El POST no es idempotente: recuperación por relectura, no reintento ciego
+# --------------------------------------------------------------------------- #
+
+
+def test_ambiguous_post_failure_does_not_duplicate_the_comment(tmp_path: Path) -> None:
+    # El caso que un `sirius_retry` alrededor del POST convertía en duplicado:
+    # GitHub acepta la petición —el comentario queda publicado— y la respuesta se
+    # pierde, así que `gh` devuelve error. Reintentar publica una segunda copia,
+    # y encima autoritativa: la firma la automatización, pasa el filtro de autor
+    # y los escáneres deterministas la cuentan. La relectura distingue "no llegó"
+    # de "llegó y no me enteré".
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "comment_ambiguous").write_text("1", encoding="utf-8")
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    body = _write_body(env, marker)
+    r = _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
+    assert r.returncode == 0, r.stderr
+    assert _comments(env).count(marker) == 1, "el comentario se ha publicado dos veces"
+
+
+def test_clean_post_failure_is_retried_because_nothing_was_published(tmp_path: Path) -> None:
+    # La otra mitad: si el historial CONFIRMA que no llegó, reintentar es seguro
+    # y necesario. Sin esto, evitar duplicados costaría perder comentarios ante
+    # cualquier fallo transitorio.
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "comment_clean").write_text("2", encoding="utf-8")
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    body = _write_body(env, marker)
+    r = _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
+    assert r.returncode == 0, r.stderr
+    assert _comments(env).count(marker) == 1
+
+
+def test_post_failure_with_unreadable_history_does_not_retry(tmp_path: Path) -> None:
+    # Sin poder releer no se puede saber si el POST llegó. Reintentar a ciegas es
+    # justo el riesgo que este diseño evita, así que se falla de forma segura y
+    # el llamador decide.
+    env = _setup(tmp_path)
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    body = _write_body(env, marker)
+    # La primera lectura (deduplicación) funciona; a partir de ahí caen todas,
+    # así que la RELECTURA posterior al POST fallido es la que no se puede hacer.
+    (_mock_dir(env) / "comment_clean").write_text("9", encoding="utf-8")
+    env["GH_MOCK_COMMENTS_FAIL_AFTER"] = "1"
+    env["GH_MOCK_GRAPHQL_ALWAYS_FAIL"] = "1"
+    r = _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
+    assert r.returncode != 0
+    assert _comments(env).count(marker) == 0
+    assert "no puedo releer el historial" in r.stderr, (
+        "la prueba debe ejercitar el POST fallido con relectura imposible, no la "
+        "deduplicación inicial: sin esto pasaría en vacío"
+    )
 
 
 # --------------------------------------------------------------------------- #

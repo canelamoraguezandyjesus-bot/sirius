@@ -30,6 +30,13 @@ Funciones principales:
 - `sirius_write_issue_body <repo> <n> <archivo> [respaldo]` — rechaza cuerpos de
   origen truncados, respalda el cuerpo anterior, escribe de una sola vez por REST
   y verifica por relectura (longitud + hash).
+- `sirius_comment_once <repo> <n> <marcador> <archivo>` — publica el comentario
+  solo si el marcador no está ya, y **no reintenta el POST a ciegas**: `gh issue
+  comment` no es idempotente, así que un fallo ambiguo —GitHub acepta y la
+  respuesta se pierde— duplicaría un comentario autoritativo. Tras un fallo
+  relee el historial y busca el marcador: si aparece, el POST sí llegó y termina
+  sin republicar; si no aparece, reintenta sabiendo que no hay duplicado; si no
+  puede releer, se detiene en vez de arriesgarlo.
 - `sirius_ensure_label <repo> <nombre> <color> <descripcion>` — etiqueta
   idempotente.
 - `sirius_scan_text` / `sirius_extract_sha` — extracción robusta de Head/Merge SHA
