@@ -107,6 +107,8 @@ def _lineas_del_plan() -> list[str]:
         f"  warm-up           : {rp.WARMUP}, declarado y descartado integro",
         f"  semilla           : {rp.SEMILLA}",
         f"  reloj             : {rp.RELOJ}",
+        f"  sustrato          : {rp.SUSTRATO}  (los cinco sobre el MISMO fichero)",
+        f"  origen del sustrato: {rp.SUSTRATO_ORIGEN}",
         f"  salida prevista   : {SALIDA_PREVISTA}",
         "",
         "  fichas vigentes preinscritas:",

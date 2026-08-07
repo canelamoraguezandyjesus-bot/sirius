@@ -113,6 +113,47 @@ LINEA_BASE_REDERIVADA: Final[Mapping[str, str]] = {
     ),
 }
 
+#: Familia de conformidad **vigente**, congelada por su acta v0.6, con los
+#: cuatro congelables propios y los tres que hereda por blob. Es la entrada que
+#: la ronda lee de verdad: de ella sale la proyección sobre la que se mide.
+#:
+#: El cierre previo fijaba el corpus de rendimiento pero no esta familia, y era
+#: un hueco: la ronda habría medido sobre una entrada sin verificar. Se tapa
+#: **antes** de medir, que es cuando se puede tapar sin sospecha —añadir un
+#: control que bloquea más no favorece a ningún participante—.
+FAMILIA_DE_CONFORMIDAD: Final[Mapping[str, str]] = {
+    "experiments/adr002/benchmark/conformance_corpus_v0_6.json": (
+        "561d9dee8f215e4692d22f194c5972b09b5d3027"
+    ),
+    "experiments/adr002/benchmark/subject_keys_v0_2.json": (
+        "f6c0f49b4f084d8b5d364d7ec6e1ba7562a5e302"
+    ),
+    "experiments/adr002/benchmark/property_keys_v0_2.json": (
+        "321383be53dc65859000cf557b5b78e8dafc1901"
+    ),
+    "experiments/adr002/benchmark/benchmark_manifest_v0_6.json": (
+        "c709ecabe493ef4c6f6514edf31f9726823e1508"
+    ),
+    "experiments/adr002/benchmark/applied_criticality_v0_1.json": (
+        "7dcbba0031e76d4f0763e0d0b853e59584fe3077"
+    ),
+    "experiments/adr002/benchmark/cases_v0_5.json": ("26919e1016c414697664f93455258cb6492ca48c"),
+    "experiments/adr002/benchmark/references_v0_5.json": (
+        "4694ef3bba3a87cae0412895da992ce5e2b54f45"
+    ),
+}
+
+#: El fichero sobre el que miden **los cinco**. No es «el mismo corpus»: es el
+#: mismo fichero, y por eso el §5.4 se cumple en su forma más estricta.
+#:
+#: Lleva el esquema canónico de Sirius 0.1 sin DDL adicional, de modo que `T0`
+#: —que es Sirius 0.1— corre sobre él igual que los candidatos. El corpus de
+#: rendimiento no puede alojarlos: sus identificadores no pasan la biyección de
+#: identidad canónica y no tiene canales de sujeto ni de propiedad. Ver el §3.1
+#: del acta de autorización.
+SUSTRATO: Final = "entrada.sqlite3"
+SUSTRATO_ORIGEN: Final = "experiments/adr002/benchmark/conformance_corpus_v0_6.json"
+
 #: Perfil de tolerancias y suelo del instrumento, de los que salen las bandas y
 #: `SM`. El protocolo §6.6 exige que estén congelados **antes** del benchmark.
 PERFIL_Y_SUELO: Final[Mapping[str, str]] = {
@@ -208,6 +249,7 @@ MOTIVO_ACTA_PENDIENTE: Final = "acta_de_preparacion_ausente"
 MOTIVO_CORPUS_ALTERADO: Final = "corpus_congelado_alterado"
 MOTIVO_LINEA_BASE_ALTERADA: Final = "linea_base_rederivada_alterada"
 MOTIVO_PERFIL_ALTERADO: Final = "perfil_o_suelo_alterado"
+MOTIVO_FAMILIA_ALTERADA: Final = "familia_de_conformidad_alterada"
 MOTIVO_FICHA: Final = "ficha_de_participante_no_utilizable"
 MOTIVO_REDUCCION: Final = "ronda_reducida"
 MOTIVO_NEUTRALIDAD: Final = "capa_comun_no_neutral"
@@ -303,6 +345,15 @@ def fallos_de_perfil(entorno: EntornoCustodia) -> tuple[str, ...]:
     return _fallos_de_blobs(entorno, PERFIL_Y_SUELO, MOTIVO_PERFIL_ALTERADO)
 
 
+def fallos_de_familia(entorno: EntornoCustodia) -> tuple[str, ...]:
+    """La familia de conformidad vigente, byte a byte.
+
+    Es la entrada de la que sale el sustrato: medir sobre una familia alterada
+    sería medir otra cosa y llamarla lo mismo.
+    """
+    return _fallos_de_blobs(entorno, FAMILIA_DE_CONFORMIDAD, MOTIVO_FAMILIA_ALTERADA)
+
+
 def fallos_de_fichas(fichas_congeladas: Sequence[cp.FichaConfirmada]) -> tuple[str, ...]:
     """Una sola ficha CONGELADA por participante, con la huella declarada.
 
@@ -389,6 +440,7 @@ def comprobar_precondiciones(
     fallos.extend(fallos_de_corpus(entorno))
     fallos.extend(fallos_de_linea_base(entorno))
     fallos.extend(fallos_de_perfil(entorno))
+    fallos.extend(fallos_de_familia(entorno))
     fallos.extend(fallos_de_fichas(fichas_congeladas))
     fallos.extend(fallos_de_reduccion(participantes))
     fallos.extend(fallos_de_neutralidad(neutralidad, aislamiento or {}))
@@ -406,6 +458,8 @@ CONTROLES_BLOQUEANTES: Final[tuple[str, ...]] = (
     "corpus_congelado_intacto",
     "linea_base_rederivada_intacta",
     "perfil_y_suelo_congelados",
+    "familia_de_conformidad_intacta",
+    "los_cinco_sobre_el_mismo_fichero",
     "una_sola_ficha_congelada_por_participante",
     "huellas_declaradas_iguales_a_las_del_repositorio",
     "ronda_sin_reduccion",
@@ -427,6 +481,7 @@ __all__ = [
     "CORPUS_CONGELADO",
     "EVIDENCIA_MINIMA",
     "EVIDENCIA_PROPIA_DE_D",
+    "FAMILIA_DE_CONFORMIDAD",
     "FICHAS_VIGENTES",
     "LINEA_BASE_REDERIVADA",
     "PARTICIPANTES",
@@ -435,6 +490,8 @@ __all__ = [
     "REPETICIONES",
     "SEMILLA",
     "SESIONES_EXIGIDAS",
+    "SUSTRATO",
+    "SUSTRATO_ORIGEN",
     "WARMUP",
     "EntornoCustodia",
     "Precondiciones",
@@ -442,6 +499,7 @@ __all__ = [
     "comprobar_precondiciones",
     "fallos_de_autorizacion",
     "fallos_de_corpus",
+    "fallos_de_familia",
     "fallos_de_fichas",
     "fallos_de_linea_base",
     "fallos_de_neutralidad",

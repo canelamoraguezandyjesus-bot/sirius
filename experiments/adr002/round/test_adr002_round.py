@@ -82,15 +82,22 @@ def _fichas(**sustituciones: cp.FichaConfirmada) -> list[cp.FichaConfirmada]:
 # --------------------------------------------------------------------------
 
 
-def test_la_unica_precondicion_pendiente_es_la_autorizacion() -> None:
-    """La comprobación central de la fase previa al benchmark.
+def test_no_queda_ninguna_precondicion_pendiente() -> None:
+    """La comprobación central, ahora del otro lado de la autorización.
 
-    Sobre el repositorio real: todo lo demás está en su sitio, y lo único que
-    falta es el acto de gobierno. Si esta prueba empezara a listar más fallos,
-    la fase no estaría cerrada.
+    Mientras el acta no existía, esta prueba exigía que la **única**
+    precondición pendiente fuese la autorización: ni una menos —la guarda no
+    guardaría nada— ni una más —la fase previa no estaría cerrada—. El acta
+    existe desde `SIRIUS_0.2_ADR_002_AUTORIZACION_RONDA_PRIMARIA_v1.0.md`, de
+    modo que la lista correcta pasó a ser la vacía, y se reescribió en el
+    commit que materializó el acta, como su docstring anunciaba.
+
+    Lo que **no** cambió es lo que vigila: que no falte nada. Comprobar sigue
+    sin ser ejecutar.
     """
     resultado = run_round.comprobar(run_round.dependencias_reales(RAIZ))
-    assert [f.split(":")[0] for f in resultado.fallos] == [rp.MOTIVO_SIN_AUTORIZACION]
+    assert resultado.fallos == ()
+    assert resultado.puede_ejecutar is True
 
 
 def test_con_el_acta_presente_no_queda_ninguna_precondicion() -> None:
@@ -110,22 +117,47 @@ def test_sin_el_acta_se_bloquea() -> None:
     assert any(rp.MOTIVO_SIN_AUTORIZACION in fallo for fallo in precondiciones.fallos)
 
 
-def test_el_acta_de_autorizacion_no_existe_en_el_repositorio() -> None:
-    """Si algún día existiera sin decisión del usuario, esto lo delata.
+def test_el_acta_de_autorizacion_existe_y_es_la_que_la_ronda_exige() -> None:
+    """El acta llegó, y es exactamente la que la guarda nombra.
 
-    Esta prueba y `test_la_unica_precondicion_pendiente_es_la_autorizacion`
-    están escritas para **caducar**, y no en silencio: el día que llegue la
-    autorización, ambas fallarán y habrá que reescribirlas en el mismo commit
-    que materialice el acta. Eso es lo que se busca. Cambiarlas antes, o
-    borrarlas, sería quitar el único control que hoy distingue «preparado» de
-    «autorizado».
+    Esta prueba caducó como anunciaba su versión anterior: comprobaba que el
+    acta **no** existía, y se reescribió en el mismo commit que la materializó.
+    Sigue comprobando lo mismo por el otro lado —que la guarda responde al
+    documento y no a otra cosa—, y por eso exige además que el acta cite la
+    autorización literal en vez de limitarse a existir con el nombre correcto.
     """
-    assert not (RAIZ / ACTA_DE_AUTORIZACION).exists()
+    acta = RAIZ / ACTA_DE_AUTORIZACION
+    assert acta.exists()
+    texto = acta.read_text(encoding="utf-8")
+    assert "AUTORIZADA" in texto
+    assert "Sí, autorizo la ronda" in texto
 
 
-def test_el_recorrido_devuelve_codigo_de_bloqueo() -> None:
+def test_el_recorrido_devuelve_bloqueo_si_falta_el_acta() -> None:
+    """La guarda sigue viva: quitar el acta vuelve a bloquear el recorrido.
+
+    Antes de la autorización esto se comprobaba sobre el repositorio real, que
+    era el caso bloqueado. Ahora el repositorio real es el caso desbloqueado,
+    de modo que el bloqueo se provoca fingiendo la ausencia del acta —que es
+    la única forma de seguir demostrando que la guarda guarda—.
+    """
+    dependencias = run_round.DependenciasRonda(
+        entorno_custodia=_entorno(ausentes=[ACTA_DE_AUTORIZACION]),
+        fichas_congeladas=_fichas(),
+        neutralidad=(),
+        aislamiento={},
+    )
+    assert run_round.main(["--check"], dependencias=dependencias) == run_round.CODIGO_BLOQUEADO
+
+
+def test_el_recorrido_pasa_las_precondiciones_pero_no_ejecuta() -> None:
+    """Preparado nunca es ejecutado: comprobar no abre una sola ventana.
+
+    El código de salida dice que se puede medir; que no se haya medido lo dice
+    `test_la_salida_prevista_no_existe_todavia`, que sigue en verde.
+    """
     codigo = run_round.main(["--check"], dependencias=run_round.dependencias_reales(RAIZ))
-    assert codigo == run_round.CODIGO_BLOQUEADO
+    assert codigo == run_round.CODIGO_OK
 
 
 def test_no_hay_bandera_que_salte_la_guarda() -> None:
@@ -253,6 +285,70 @@ def test_alterar_un_artefacto_congelado_bloquea(
 ) -> None:
     ruta = next(iter(artefactos))
     assert comprobacion(_entorno(alterados=[ruta])) != ()
+
+
+def test_la_familia_de_conformidad_esta_intacta() -> None:
+    """La entrada que la ronda lee de verdad, byte a byte.
+
+    El cierre previo fijaba el corpus de rendimiento y no esta familia, y era
+    un hueco: la proyección sobre la que se mide sale de aquí.
+    """
+    assert rp.fallos_de_familia(_entorno()) == ()
+
+
+def test_alterar_la_familia_de_conformidad_bloquea() -> None:
+    ruta = next(iter(rp.FAMILIA_DE_CONFORMIDAD))
+    fallos = rp.fallos_de_familia(_entorno(alterados=[ruta]))
+    assert fallos and rp.MOTIVO_FAMILIA_ALTERADA in fallos[0]
+
+
+def test_la_familia_pinada_es_la_que_el_esquema_v0_6_declara() -> None:
+    """Los blobs no se copiaron a mano: son los que la familia ya declaraba.
+
+    Si la ronda declarase blobs propios, tendríamos dos verdades sobre la misma
+    familia y ninguna forma de saber cuál manda.
+    """
+    from experiments.adr002.benchmark import schema_v0_6 as s6
+
+    for nombre in ("cases_v0_5.json", "references_v0_5.json", "applied_criticality_v0_1.json"):
+        ruta = f"experiments/adr002/benchmark/{nombre}"
+        assert rp.FAMILIA_DE_CONFORMIDAD[ruta] == s6.HEREDADOS_V0_6[nombre], nombre
+    for nombre in s6.CONGELABLES_V0_6:
+        assert f"experiments/adr002/benchmark/{nombre}" in rp.FAMILIA_DE_CONFORMIDAD, nombre
+
+
+def test_el_corpus_de_rendimiento_no_puede_alojar_a_los_candidatos() -> None:
+    """El motivo del sustrato, comprobado en vez de afirmado.
+
+    El §3.1 del acta de autorización dice que la proyección no es construible
+    sobre el corpus de rendimiento por dos hechos del repositorio. Aquí se
+    comprueban los dos: si alguno dejara de ser cierto, la razón declarada
+    para medir sobre la familia de conformidad se habría evaporado y habría
+    que rehacer la declaración, no seguir apoyándose en ella.
+    """
+    from experiments.adr002.projection import contracts as pc
+
+    rendimiento = json.loads(
+        (RAIZ / "experiments/adr002/benchmark/performance_corpus_v0_2.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    canales = json.loads(
+        (RAIZ / "experiments/adr002/benchmark/subject_keys_v0_2.json").read_text(encoding="utf-8")
+    )["valores"]
+
+    identificadores = [str(item["id"]) for item in rendimiento["items"]]
+    assert identificadores, "el corpus de rendimiento no tiene items"
+    for identificador in identificadores[:5]:
+        assert pc.referencia_canonica(identificador) is None, identificador
+    assert not set(identificadores) & set(canales)
+
+
+def test_los_cinco_miden_sobre_el_mismo_fichero() -> None:
+    """No es «el mismo corpus»: es el mismo fichero, y por eso §5.4 se cumple."""
+    assert rp.SUSTRATO == "entrada.sqlite3"
+    assert rp.SUSTRATO_ORIGEN in rp.FAMILIA_DE_CONFORMIDAD
+    assert "los_cinco_sobre_el_mismo_fichero" in rp.CONTROLES_BLOQUEANTES
 
 
 def test_las_cinco_puertas_de_arranque_estan_satisfechas() -> None:
@@ -387,13 +483,23 @@ def test_estas_pruebas_no_miden_rendimiento() -> None:
     protocolo obliga a fijar antes de medir. Prohibir la palabra obligaría a
     borrar la declaración para pasar el control, que es lo contrario de lo que
     se quiere.
+
+    La primera versión prohibía además **nombrar** los dos corpus, como proxy
+    de «aquí no se ejecuta un banco de pruebas». El proxy dio un falso positivo
+    en cuanto una prueba tuvo que **leer** el corpus de rendimiento para
+    demostrar que la proyección no es construible sobre él —que es la razón
+    declarada del sustrato, y comprobarla es justamente lo que evita que sea
+    una afirmación de palabra—. Leer un fichero como dato no es medirlo, así
+    que el proxy se sustituye por lo que de verdad convertiría a estas pruebas
+    en una medición: el cronómetro, el arnés de muestreo y el lanzador de
+    sesiones. Es más estrecho y más exacto, no más permisivo.
     """
     codigo = Path(__file__).read_text(encoding="utf-8")
     cuerpo = codigo.split(_MARCADOR_DE_LOS_INVENTARIOS)[0]
     for prohibido in ("perf_counter(", "monotonic(", "timeit", "time.time(", "latencia"):
         assert prohibido not in cuerpo, prohibido
-    assert "performance_corpus" not in cuerpo
-    assert "conformance_corpus" not in cuerpo
+    for prohibido in ("medir_ns", "construir_base_de_referencia", "ejecutor_sesiones"):
+        assert prohibido not in cuerpo, prohibido
 
 
 _MODULOS: Final[tuple[str, ...]] = ("round_protocol.py", "run_round.py")
@@ -410,9 +516,19 @@ def test_el_paquete_no_cronometra(modulo: str) -> None:
 
 @pytest.mark.parametrize("modulo", _MODULOS)
 def test_el_paquete_no_escribe(modulo: str) -> None:
+    """Ni escribe ficheros ni abre bases. Persigue **actos**, no palabras.
+
+    Buscar el desnudo ``sqlite3`` era demasiado grueso: el protocolo tiene que
+    poder **nombrar** el fichero sobre el que se mide —`entrada.sqlite3`— sin
+    que nombrarlo cuente como abrirlo. Lo que convierte a un módulo en escritor
+    o en cliente de base de datos es importar el módulo y llamar a ``connect``,
+    y eso es lo que se persigue.
+    """
     codigo = (RAIZ / "experiments/adr002/round" / modulo).read_text(encoding="utf-8")
     sin_comentarios = re.sub(r'"""(?:.|\n)*?"""', "", codigo)
-    for prohibido in ("write_text", "write_bytes", "open(", "mkdir", "sqlite3"):
+    for prohibido in ("write_text", "write_bytes", "open(", "mkdir"):
+        assert prohibido not in sin_comentarios, f"{modulo}: {prohibido}"
+    for prohibido in ("import sqlite3", "sqlite3.connect"):
         assert prohibido not in sin_comentarios, f"{modulo}: {prohibido}"
 
 
