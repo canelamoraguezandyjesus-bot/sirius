@@ -90,6 +90,46 @@ jobs:
           set -uo pipefail
           source scripts/automation/sirius_issue.sh
 
+          # Plazo interno de la puerta, con margen bajo su `timeout-minutes`.
+          #
+          # El tope del paso corta desde FUERA: mata la shell sin que llegue a
+          # escribir `valid=false` ni a publicar una parada segura. Y como el
+          # paso que aplica el veredicto exige `valid == 'true'`, tampoco corre:
+          # la incidencia se quedaria sin diagnostico, que es justo lo que la
+          # incidencia #135 vino a evitar. Un plazo INTERNO convierte ese corte
+          # en un desenlace controlado: las lecturas fallan solas y caen en las
+          # paradas seguras que ya existen mas abajo.
+          #
+          # 5 minutos para leer, dentro de los 8 del paso. Los 3 restantes son
+          # para publicar la parada, que tambien necesita `gh`.
+          gate_deadline=$(( $(_sirius_now) + 300 ))
+          export SIRIUS_GH_DEADLINE="$gate_deadline"
+
+          # Publicar no puede heredar un plazo ya agotado: seria exigirle a la
+          # parada segura que ocurra en el tiempo que ya se acabo.
+          parada() { unset SIRIUS_GH_DEADLINE; sirius_transition "$@"; }
+
+          # Sin tiempo, una lectura vacia NO significa "no hay nada": significa
+          # que no se llego a mirar. `sirius_find_pr_for_issue` y
+          # `sirius_extract_observations` se tragan los fallos de `gh` y
+          # devuelven vacio, asi que interpretar ese vacio publicaria "no
+          # encuentro ninguna PR" o "no hay observaciones" siendo falso. Se
+          # comprueba el plazo ANTES de interpretar.
+          sin_tiempo() {
+            local marker body_file
+            marker="<!-- sirius-verdict:corrector:precheck:puerta-sin-tiempo:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
+            body_file="$(mktemp)"
+            printf '%s\n\n%s\n\n%s\n' \
+              "$marker" "🔴 **Me he detenido de forma segura**" \
+              "Se me agoto el plazo de lectura antes de poder decidir si la correccion procede. No se si hay trabajo pendiente ni si el ciclo converge, asi que no continuo." >"$body_file"
+            parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+              "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
+              "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar la parada segura (puerta-sin-tiempo)."
+            rm -f "$body_file"
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+
           # Decisión de convergencia sobre el historial completo de rondas. El
           # volcado se lee UNA vez y se reutiliza para numerar la ronda: leerlo
           # dos veces abriría una ventana en la que la segunda lectura falla y
@@ -102,7 +142,7 @@ jobs:
             printf '%s\n\n%s\n\n%s\n' \
               "$marker" "🔴 **Me he detenido de forma segura**" \
               "No he podido leer el historial de rondas de esta incidencia, así que no puedo demostrar que la corrección siga progresando. Me detengo en vez de corregir a ciegas." >"$body_file"
-            sirius_transition "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+            parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
               "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
               "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar la parada segura (historial-ilegible)."
             rm -f "$body_file" "$comments_file" "$decision_file"
@@ -148,7 +188,7 @@ jobs:
             printf '%s\n\n%s\n\n%s\n' \
               "$marker" "🔴 **Me he detenido de forma segura**" \
               "He leído el historial de rondas pero no he podido numerar la ronda siguiente. Me detengo en vez de corregir con una numeración que falsearía la medida de convergencia." >"$body_file"
-            sirius_transition "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+            parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
               "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
               "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar la parada segura (ronda-innumerable)."
             rm -f "$body_file"
@@ -168,7 +208,7 @@ jobs:
               "🟡 **Necesito una decisión**" \
               "El ciclo de revisión-corrección ha dejado de converger tras ${rounds} ronda(s) registrada(s) y ${ci_failures} fallo(s) de Quality consecutivo(s), así que me detengo en vez de seguir corrigiendo." \
               "Motivo (\`${reason}\`): ${detail}" >"$body_file"
-            sirius_transition "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+            parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
               "sirius:blocked-decision" "D4C5F9" "Estado: requiere una decisión humana" \
               "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar el bloqueo por convergencia."
             rm -f "$body_file"
@@ -177,6 +217,7 @@ jobs:
           fi
 
           mapfile -t pr_numbers < <(sirius_find_pr_for_issue "$GH_REPO" "$ISSUE_NUMBER")
+          [ "$(_sirius_now)" -lt "$gate_deadline" ] || sin_tiempo
           if [ "${#pr_numbers[@]}" -ne 1 ]; then
             reason="sin-pr"
             why="No encuentro ninguna PR asociada a esta incidencia; no hay nada que corregir."
@@ -187,7 +228,7 @@ jobs:
             marker="<!-- sirius-verdict:corrector:precheck:${reason} -->"
             body_file="$(mktemp)"
             printf '%s\n\n%s\n\n%s\n' "$marker" "🔴 **Me he detenido de forma segura**" "$why" >"$body_file"
-            sirius_transition "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+            parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
               "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
               "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar la parada segura (${reason})."
             rm -f "$body_file"
@@ -196,13 +237,14 @@ jobs:
           fi
 
           observations="$(sirius_extract_observations "$GH_REPO" "$ISSUE_NUMBER")"
+          [ "$(_sirius_now)" -lt "$gate_deadline" ] || sin_tiempo
           if [ -z "$observations" ]; then
             marker="<!-- sirius-verdict:corrector:precheck:sin-observaciones -->"
             body_file="$(mktemp)"
             printf '%s\n\n%s\n\n%s\n' \
               "$marker" "🔴 **Me he detenido de forma segura**" \
               "No encuentro ninguna observación estructurada que corregir en esta incidencia." >"$body_file"
-            sirius_transition "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+            parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
               "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
               "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar la parada segura (sin-observaciones)."
             rm -f "$body_file"

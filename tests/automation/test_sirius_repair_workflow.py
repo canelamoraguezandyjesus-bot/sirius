@@ -198,6 +198,54 @@ def test_the_corrector_writes_a_provisional_verdict_before_working() -> None:
     assert "--max-turns" in str(claude["with"]["claude_args"])
 
 
+def test_the_gate_stops_itself_before_its_step_timeout_kills_it() -> None:
+    """Un tope de paso mata desde fuera; no produce un desenlace.
+
+    `timeout-minutes: 8` corta la shell sin que llegue a escribir `valid=false`
+    ni a publicar una parada segura. Y como aplicar el veredicto exige
+    `valid == 'true'`, ese paso tampoco corre: la incidencia se queda sin
+    diagnóstico —la #135 otra vez—. El plazo interno convierte el corte en un
+    desenlace: las lecturas fallan solas y caen en las paradas que ya existen.
+
+    Y hay una trampa que el plazo por sí solo empeoraría.
+    `sirius_find_pr_for_issue` y `sirius_extract_observations` se tragan los
+    fallos de `gh` y devuelven vacío. Con el plazo agotado, ese vacío se
+    interpretaría como «no hay ninguna PR» o «no hay observaciones» y la
+    incidencia publicaría una afirmación falsa. Por eso el plazo se comprueba
+    ANTES de interpretar, y por eso publicar no puede heredarlo: exigirle a la
+    parada segura que ocurra en el tiempo que ya se acabó la dejaría muda.
+    """
+    doc = _load()
+    gate = _step(doc, "Evaluar la convergencia")
+    run = str(gate["run"])
+
+    # El plazo interno existe y deja margen bajo el tope del paso.
+    assert 'export SIRIUS_GH_DEADLINE="$gate_deadline"' in run
+    margen = gate["timeout-minutes"] * 60 - 300
+    assert margen >= 120, f"solo {margen}s para publicar la parada tras agotar el plazo"
+
+    # Publicar suelta el plazo: todas las transiciones de la puerta pasan por
+    # `parada`, y ninguna llama ya a `sirius_transition` directamente.
+    assert "parada() { unset SIRIUS_GH_DEADLINE; sirius_transition" in run
+    assert 'sirius_transition "$GH_REPO"' not in run
+    assert run.count('parada "$GH_REPO"') >= 5
+
+    # Y el plazo se comprueba antes de interpretar un vacío como un hecho. La
+    # guardia tiene que ir en la línea INMEDIATAMENTE posterior a cada lectura:
+    # buscarla "en algún sitio después" dejaría pasar una guardia colocada tras
+    # la interpretación, que es justo lo que no sirve.
+    guardia = '[ "$(_sirius_now)" -lt "$gate_deadline" ] || sin_tiempo'
+    for llamada in (
+        "mapfile -t pr_numbers < <(sirius_find_pr_for_issue",
+        'observations="$(sirius_extract_observations',
+    ):
+        siguiente = run.index("\n", run.index(llamada)) + 1
+        assert run[siguiente:].startswith(guardia), (
+            f"un vacío de `{llamada}` se interpretaría como un hecho sin comprobar el plazo"
+        )
+    assert "puerta-sin-tiempo" in run
+
+
 def test_job_timeout_covers_every_bounded_step_plus_margin() -> None:
     """El corrector no puede consumir el presupuesto entero del job.
 
