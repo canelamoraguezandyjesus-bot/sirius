@@ -1090,19 +1090,43 @@ def _stop_link(comments: str) -> str:
     return encontrado.group(1) if encontrado else ""
 
 
-def test_the_stop_points_at_the_run_log(tmp_path: Path) -> None:
-    # Una parada que solo dice "no escribió veredicto" obliga a buscar a mano
-    # dónde mirar. El enlace es un hecho: no se mide ni se interpreta nada, así
-    # que no puede ser falso — a diferencia del diagnóstico medido que se
-    # intentó antes y se retiró tras siete defectos de la misma familia.
+def _cuerpo_de_parada(enlace: str, *, run_tag: str) -> str:
+    """El cuerpo COMPLETO de una parada por veredicto ausente del corrector."""
+    cuerpo = (
+        f"<!-- sirius-verdict:corrector:precheck:sin-veredicto:{run_tag} -->\n\n"
+        "🔴 **Me he detenido de forma segura**\n\n"
+        "El rol `corrector` no escribió ningún veredicto. Sin un resultado "
+        "estructurado no puedo saber en qué quedó el trabajo.\n"
+    )
+    return cuerpo if not enlace else f"{cuerpo}\n- Registro de esta ejecución: {enlace}\n"
+
+
+def test_the_stop_publishes_the_link_and_nothing_else(tmp_path: Path) -> None:
+    """Bajo Actions, el cuerpo de la parada es EXACTAMENTE marcador + motivo + enlace.
+
+    Comparar solo el enlace dejaba abierto el agujero que motivó todo esto: el
+    diagnóstico medido podía volver, esta vez dentro del propio publicador y no
+    del workflow, añadiendo su línea junto al enlace. `_stop_link` la ignoraría
+    y la prueba seguiría verde. Fuera de Actions ya se comparaba el cuerpo
+    entero; faltaba hacerlo también con enlace, que es el camino real.
+
+    Esta prueba es la mitad del cierre del canal; la otra la fija
+    `test_there_is_no_measured_diagnosis_step` sobre el workflow. Ninguna de las
+    dos basta sola: el workflow no puede inyectar texto, y el publicador no
+    puede añadirlo por su cuenta.
+    """
     env = _setup(tmp_path)
     _seed_issue(env, ["sirius:repairing"])
     env["GITHUB_RUN_ID"] = "12345"
+    env["GITHUB_RUN_ATTEMPT"] = "3"
     env["GITHUB_REPOSITORY"] = REPO
     env["GITHUB_SERVER_URL"] = "https://github.com"
     r = _run(env, "corrector", tmp_path / "no-existe.json")
     assert r.returncode != 0
-    assert _stop_link(_comments(env)) == f"https://github.com/{REPO}/actions/runs/12345"
+    esperado = _cuerpo_de_parada(
+        f"https://github.com/{REPO}/actions/runs/12345/attempts/3", run_tag="12345-3"
+    )
+    assert _comments(env).strip() == esperado.strip()
 
 
 def test_the_link_identifies_the_attempt_that_stopped(tmp_path: Path) -> None:
@@ -1162,10 +1186,4 @@ def test_without_actions_variables_the_stop_message_is_unchanged(tmp_path: Path)
     _seed_issue(env, ["sirius:repairing"])
     r = _run(env, "corrector", tmp_path / "no-existe.json")
     assert r.returncode != 0
-    esperado = (
-        "<!-- sirius-verdict:corrector:precheck:sin-veredicto:manual-1 -->\n\n"
-        "🔴 **Me he detenido de forma segura**\n\n"
-        "El rol `corrector` no escribió ningún veredicto. Sin un resultado "
-        "estructurado no puedo saber en qué quedó el trabajo.\n"
-    )
-    assert _comments(env).strip() == esperado.strip()
+    assert _comments(env).strip() == _cuerpo_de_parada("", run_tag="manual-1").strip()

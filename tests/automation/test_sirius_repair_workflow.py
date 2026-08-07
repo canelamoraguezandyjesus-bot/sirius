@@ -212,8 +212,14 @@ def test_there_is_no_measured_diagnosis_step() -> None:
     completo, no queda por dónde entrar: cualquier medida nueva —con el comando
     que sea— tiene que tocar algo que esta prueba fija, y entonces falla.
 
-    Lo que esta prueba NO afirma: que ningún paso calcule nada. Afirma que nada
-    calculado puede llegar al comentario de la parada. Es lo que se quería.
+    Lo que esta prueba NO afirma: que ningún paso calcule nada, ni que el
+    publicador se comporte. Afirma exactamente una cosa: que EL WORKFLOW no
+    puede inyectar texto en el comentario de la parada. La otra mitad —que el
+    publicador tampoco lo añada por su cuenta— la fija
+    `test_the_stop_publishes_the_link_and_nothing_else`, que compara el cuerpo
+    entero de una parada bajo Actions. Hicieron falta las dos: fijar solo este
+    lado dejaba reintroducir la medida dentro de `sirius_apply_verdict.sh`,
+    que es quien construye el comentario.
     """
     doc = _load()
     nombres = [str(step.get("name") or "") for step in _steps(doc)]
