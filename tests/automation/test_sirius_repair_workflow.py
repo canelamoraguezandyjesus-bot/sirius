@@ -212,20 +212,29 @@ def test_job_timeout_covers_every_bounded_step_plus_margin() -> None:
     su tope, y el del job cubre la suma más margen para los pasos deterministas
     cortos. Así, agotar el tiempo del corrector se traduce SIEMPRE en un
     veredicto aplicado, nunca en una cancelación.
+
+    Y el presupuesto solo es real si TODOS los pasos están acotados. Con solo
+    dos topes la cuenta salía —30 + 5 sobre 45— pero no reservaba nada: la
+    puerta lee comentarios, localiza la PR y extrae las observaciones con
+    varios `gh` y sus reintentos, sin `SIRIUS_GH_DEADLINE` ni tope de paso, así
+    que podía comerse el margen y dejar que el job caducara durante el
+    corrector exactamente igual que antes.
     """
     doc = _load()
-    acotados = [step["timeout-minutes"] for step in _steps(doc) if "timeout-minutes" in step]
-    assert len(acotados) == 2, "el corrector y la aplicación del veredicto declaran su tope"
-    assert doc["jobs"]["repair"]["timeout-minutes"] >= sum(acotados) + 5
+    pasos = _steps(doc)
+    sin_tope = [str(s.get("name")) for s in pasos if "timeout-minutes" not in s]
+    assert not sin_tope, f"un paso sin tope puede comerse el margen de los demás: {sin_tope}"
 
-    corrector = _step(doc, "Ejecutar Claude Code")["timeout-minutes"]
-    aplicar = _step(doc, "Aplicar el veredicto")["timeout-minutes"]
+    job = doc["jobs"]["repair"]["timeout-minutes"]
+    acotados = [s["timeout-minutes"] for s in pasos]
+    assert job >= sum(acotados) + 5, f"suma {sum(acotados)} sin margen bajo el job {job}"
+
     # El del corrector tiene que ser ESTRICTAMENTE menor que el del job: si
     # coincidieran, el job podría caducar durante ese mismo paso.
-    assert corrector < doc["jobs"]["repair"]["timeout-minutes"]
+    assert _step(doc, "Ejecutar Claude Code")["timeout-minutes"] < job
     # Y aplicar el veredicto necesita margen propio: es el paso que convierte
     # cualquier desenlace en un estado visible de la incidencia.
-    assert aplicar >= 5
+    assert _step(doc, "Aplicar el veredicto")["timeout-minutes"] >= 5
 
 
 def test_the_gate_reports_the_ci_failure_streak() -> None:

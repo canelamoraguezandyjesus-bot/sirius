@@ -55,10 +55,17 @@ jobs:
     # que es exactamente lo que la #135 vino a evitar — y lo que el veredicto
     # provisional del prompt NO puede evitar por sí solo, porque alguien
     # tiene que llegar a leerlo.
-    #   corrector 30 + aplicación 5 = 35, dentro de los 45 del job.
-    timeout-minutes: 45
+    # El presupuesto solo es real si TODOS los pasos están acotados. Con solo
+    # dos topes, la puerta —que lee comentarios, localiza la PR y extrae las
+    # observaciones con varios `gh` y sus reintentos, sin `SIRIUS_GH_DEADLINE`
+    # ni tope propio— podía comerse el margen que los otros reservaban, y el
+    # job caducaba durante el corrector igual que antes.
+    #   checkout 5 + puerta 8 + evento 3 + prompt 2 + corrector 30 +
+    #   aplicación 5 = 53, con 7 de margen sobre los 60 del job.
+    timeout-minutes: 60
     steps:
       - name: Checkout
+        timeout-minutes: 5
         uses: actions/checkout@v6
         with:
           ref: main
@@ -72,6 +79,7 @@ jobs:
           token: ${{ secrets.SIRIUS_BOT_TOKEN }}
 
       - name: Evaluar la convergencia y localizar la PR
+        timeout-minutes: 8
         id: gate
         shell: bash --noprofile --norc {0}
         env:
@@ -208,6 +216,7 @@ jobs:
           echo "cycle=${next_cycle}" >> "$GITHUB_OUTPUT"
 
       - name: Consumir el evento y marcar en curso
+        timeout-minutes: 3
         if: steps.gate.outputs.valid == 'true'
         shell: bash --noprofile --norc {0}
         env:
@@ -221,6 +230,7 @@ jobs:
             "sirius:repairing" "sirius:repair-requested"
 
       - name: Preparar instrucciones para Claude Code
+        timeout-minutes: 2
         if: steps.gate.outputs.valid == 'true'
         id: build_prompt
         shell: bash --noprofile --norc {0}
