@@ -22,6 +22,7 @@ from experiments.adr002.candidates.common.contracts import (
     AMBITO_GLOBAL,
     AMBITO_MULTIPROYECTO,
     CONFIRMACION_VISIBLE_SIEMPRE,
+    DISPONIBILIDAD_QUE_NO_ENTRA_EN_MODOS_ORDINARIOS,
     ORDEN_DE_CRITICIDAD,
     SENSIBILIDAD_PROTEGIDA,
     VALIDEZ_QUE_NO_ENTRA_EN_M1,
@@ -44,7 +45,11 @@ _MODOS_QUE_VEN_NO_CONFIRMADAS: Final[tuple[Modo, ...]] = (Modo.M4_GESTION, Modo.
 #: Identificadores y regla de cada puerta, en orden canonico.
 PUERTAS: Final[tuple[tuple[str, str], ...]] = (
     ("G1", "proposito y permiso: la operacion activa debe autorizar dato, espacio y explicacion"),
-    ("G2", "no persistencia: eliminado, no guardado o purgado no es recuperable ni reconstruible"),
+    (
+        "G2",
+        "persistencia y disponibilidad: lo borrado no es recuperable y lo archivado "
+        "no entra en modos ordinarios",
+    ),
     ("G3", "marcas de no uso: excluyen M1 y el fallback; solo M3/M4 autorizado inspecciona"),
     (
         "G4",
@@ -97,13 +102,30 @@ def _g1(candidata: Candidata, peticion: Peticion) -> VeredictoDePuerta:
     return VeredictoDePuerta("G1", autorizada, "" if autorizada else "proposito no declarado")
 
 
-def _g2(candidata: Candidata, _peticion: Peticion) -> VeredictoDePuerta:
-    # Un item no disponible no es recuperable NI reconstruible: no se degrada
-    # a "visible en otro modo", desaparece.
-    disponible = candidata.item.disponible
-    return VeredictoDePuerta(
-        "G2", disponible, "" if disponible else "eliminado, no guardado o purgado"
-    )
+def _g2(candidata: Candidata, peticion: Peticion) -> VeredictoDePuerta:
+    """Persistencia y disponibilidad, con el eje real cuando el sustrato lo da.
+
+    Dos cosas distintas y las dos de esta puerta:
+
+    - lo **borrado** —eliminado, no guardado, purgado— no es recuperable ni
+      reconstruible: no se degrada a «visible en otro modo», desaparece;
+    - lo **archivado** sigue existiendo pero no es material de un modo
+      ordinario. Mientras solo se leyó ``item.disponible``, el archivado
+      pasaba: el colapso de estado de Sirius 0.1 lo marca ``archived`` y
+      ``disponible`` solo cae para lo borrado, de modo que nadie preguntaba por
+      el eje. El eje verdadero viaja intacto en ``ejes_p2`` —para eso existe
+      ese plano— y aquí se lee.
+    """
+    if not candidata.item.disponible:
+        return VeredictoDePuerta("G2", False, "eliminado, no guardado o purgado")
+    disponibilidad = candidata.item.ejes.disponibilidad
+    if (
+        disponibilidad in DISPONIBILIDAD_QUE_NO_ENTRA_EN_MODOS_ORDINARIOS
+        and peticion.modo not in _MODOS_QUE_INSPECCIONAN_MARCAS
+        and not peticion.admite_no_vigentes
+    ):
+        return VeredictoDePuerta("G2", False, f"disponibilidad {disponibilidad}: no entra")
+    return VeredictoDePuerta("G2", True, "")
 
 
 def _g3(candidata: Candidata, peticion: Peticion) -> VeredictoDePuerta:
@@ -204,11 +226,33 @@ def _g7(candidata: Candidata, peticion: Peticion) -> VeredictoDePuerta:
 
 
 def _g8(candidata: Candidata, peticion: Peticion) -> VeredictoDePuerta:
-    # La aplicabilidad se evalua contra el tiempo objetivo; el corte de
-    # registro, cuando existe, acota lo que Sirius podia saber entonces.
+    """Tiempo: **aplicabilidad** y corte de registro. Son dos, no una.
+
+    `RF-07` y `RF-08` separan el tiempo objetivo del corte de registro
+    precisamente porque preguntan cosas distintas: qué era aplicable **en** ese
+    instante, y qué podía Sirius **saber** hasta entonces. Mientras esta puerta
+    solo miró el corte, la primera mitad no se comprobaba y un elemento que
+    todavía no había entrado en vigor pasaba sin que nadie preguntase desde
+    cuándo existía.
+
+    La ventana se lee de los ejes `P2`, que la materializan; sin ellos la
+    puerta degrada al corte, como antes, y lo hace constar.
+
+    **Lo que aún no está en vigor no entra nunca**, ni siquiera en los modos que
+    admiten no vigentes: consultar el pasado no permite recuperar algo que aún
+    no había empezado. **Lo ya expirado** sí entra en esos modos, que es lo que
+    «admite no vigentes» significa.
+    """
     corte = peticion.ventana.corte_de_registro
     if corte is not None and candidata.item.created_at > corte:
         return VeredictoDePuerta("G8", False, "posterior al corte de registro")
+
+    objetivo = peticion.ventana.tiempo_objetivo
+    ejes = candidata.item.ejes
+    if ejes.valid_from is not None and ejes.valid_from > objetivo:
+        return VeredictoDePuerta("G8", False, "aun no vigente en el tiempo objetivo")
+    if ejes.valid_to is not None and ejes.valid_to <= objetivo and not peticion.admite_no_vigentes:
+        return VeredictoDePuerta("G8", False, "vigencia expirada en el tiempo objetivo")
     return VeredictoDePuerta("G8", True, "")
 
 

@@ -207,9 +207,70 @@ def variantes(termino: str) -> tuple[str, ...]:
     return tuple(sorted(t for t in generadas if len(t) >= 2))
 
 
+#: Preposiciones que introducen un complemento. Un marcador de negacion dentro
+#: de uno de ellos —«sin adornos»— **modifica**; no niega la afirmacion.
+_INTRODUCEN_COMPLEMENTO: Final[frozenset[str]] = frozenset({"sin", "con", "de", "en", "por"})
+
+#: Conjunciones tras las que empieza una subordinada. Un marcador que aparece
+#: detras niega **esa** clausula, no la principal: «se renovo, pero no consta
+#: desde cuando» afirma la renovacion.
+_ABREN_SUBORDINADA: Final[frozenset[str]] = frozenset(
+    {"pero", "aunque", "mientras", "cuando", "si", "salvo", "excepto", "que", "porque"}
+)
+
+
 def polaridad_negativa(texto: str) -> bool:
-    """Detecta negacion por marcador lexico (``B04-RF-19``)."""
-    return any(token in MARCADORES_NEGACION for token in tokenizar(texto))
+    """Negacion de la **afirmacion principal** (``B04-RF-19``).
+
+    Antes bastaba con que el texto **contuviera** un marcador, estuviera donde
+    estuviera. Sobre el banco de conformidad eso invertia sesenta y seis
+    lecturas, todas de afirmativa a negativa, y de ahi salian las fusiones que
+    la ronda primaria midio: en cuanto una respuesta llevaba a la vez una
+    afirmacion mal marcada y una negacion real, las dos llegaban con la misma
+    marca y dejaban de distinguirse.
+
+    Lo que se mira ahora es **que** niega el marcador, con tres reglas que un
+    candidato lexico-estructurado puede aplicar sin diccionario ni modelo:
+
+    1. ``sin`` como preposicion introduce un complemento y **modifica**: «en
+       tono directo y sin adornos» sigue siendo una preferencia afirmada;
+    2. un marcador **detras de una conjuncion subordinante** niega la
+       subordinada: «se renovo, pero no consta desde cuando» afirma que se
+       renovo;
+    3. un marcador en la principal **antes de que aparezca subordinada alguna**
+       si la niega: «No uses opciones de vuelo con escala.»
+
+    La regla 1 se aplica solo a ``sin``, que es la unica de la lista que es
+    preposicion; ``no``, ``ni``, ``nunca``, ``jamas``, ``tampoco`` y las formas
+    de ``ninguno`` niegan alla donde estan, y por eso solo las libra la regla 2.
+
+    Hay una cuarta, y es de las tres la que menos parece una regla de forma:
+    **lo que sigue a dos puntos es contenido citado**, y la polaridad de la
+    afirmacion es la de lo que va delante. «Nota marcada por el usuario: no uses
+    esto como memoria.» **afirma** que la nota esta marcada; el imperativo que
+    reproduce es lo marcado, no lo afirmado. No es una lectura inventada para
+    que cuadre una cifra: el corpus declara ese elemento ``AFIRMATIVA`` **y**
+    ``no_usar_como_memoria = True``, mientras que otro con el mismo imperativo y
+    sin dos puntos lo declara ``NEGATIVA`` y sin marca. La marca viaja en su
+    propio eje —el que ``G3`` lee— precisamente para no tener que expresarse
+    como polaridad.
+    """
+    principal, _, _citado = texto.partition(":")
+    subordinada_abierta = False
+    for token in tokenizar(principal):
+        if token in _ABREN_SUBORDINADA:
+            subordinada_abierta = True
+            continue
+        if token not in MARCADORES_NEGACION:
+            continue
+        if token in _INTRODUCEN_COMPLEMENTO:
+            # Preposicion: introduce un complemento, no niega la afirmacion.
+            continue
+        if subordinada_abierta:
+            # Niega la subordinada; la principal sigue afirmada.
+            continue
+        return True
+    return False
 
 
 def condicion_declarada(texto: str) -> str | None:

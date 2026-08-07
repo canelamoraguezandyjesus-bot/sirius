@@ -69,24 +69,31 @@ def test_la_base_de_a_no_cambio_ni_un_byte() -> None:
     en los dos puntos donde leia la clave de sujeto como cadena. Los blobs se
     vuelven a fijar aqui: la regla no se levanta, se reancla, y el proximo
     cambio no autorizado seguira fallando.
+
+    El **paquete de correccion de la capa comun**, autorizado tras la ronda
+    primaria, reancla cuatro y **solo cuatro**: ``contracts.py`` gana los ejes
+    temporales, ``port.py`` los lee, ``gates.py`` los usa en ``G2`` y ``G8``, y
+    ``adr002_a/lexical.py`` pasa a mirar el alcance de la negacion en vez de su
+    presencia. Los otros siete quedan **byte a byte**, y que sigan asi es parte
+    de lo que se afirma: la correccion es quirurgica o no lo es.
     """
     import subprocess
 
     fijados = {
         "experiments/adr002/candidates/common/contracts.py": (
-            "c93b441de907952db2518d982229736c0d8b1331"
+            "ab2be75d09cf69e112c1de10c2e8e9b661ba4824"
         ),
         "experiments/adr002/candidates/common/engine.py": (
             "991c68d5f04b48521e2d1450ff071aa7497f3744"
         ),
         "experiments/adr002/candidates/common/gates.py": (
-            "c4b55f0cbff58e76752fb801eb4cbde8f85246b2"
+            "63a1040971c12fe27ea01f1cdee5da5e52a93b36"
         ),
         "experiments/adr002/candidates/common/stops.py": (
             "b1f737efd91e140c9af691c6a7e2323c84d54c4c"
         ),
         "experiments/adr002/candidates/common/port.py": (
-            "7613da0d051689bc6033bd06f12db2e2a8f8b596"
+            "3199d504d2284ff55e411404245a21417a07abec"
         ),
         "experiments/adr002/candidates/common/trace.py": (
             "01d97bbc5244774caf6bce687d17c4b4e620d4aa"
@@ -104,7 +111,7 @@ def test_la_base_de_a_no_cambio_ni_un_byte() -> None:
             "d057c12a9be4df15b2d3bfe50b986cbc57403273"
         ),
         "experiments/adr002/candidates/adr002_a/lexical.py": (
-            "7e88de4cfb07384bc99034e10aab44c801dd4796"
+            "5b6b8faa59fe71671b97ca24b4f5c9d7834a13ed"
         ),
     }
     for ruta, blob in fijados.items():

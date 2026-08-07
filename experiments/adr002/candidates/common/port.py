@@ -260,7 +260,8 @@ class PuertoSqlite:
         marcas = ",".join("?" * len(acotadas))
         sql = (
             "SELECT identidad, confirmacion, validez, disponibilidad, sensibilidad, "
-            "autoridad, ambito, no_usar_como_memoria, no_consolidable, ambito_declarado "
+            "autoridad, ambito, no_usar_como_memoria, no_consolidable, ambito_declarado, "
+            "valid_from, valid_to "
             f"FROM ejes_del_item WHERE identidad IN ({marcas})"
         )
         filas = self._ejes.execute(sql, tuple(acotadas)).fetchall()
@@ -283,6 +284,8 @@ class PuertoSqlite:
                 confirmacion=str(f["confirmacion"]),
                 validez=str(f["validez"]),
                 disponibilidad=str(f["disponibilidad"]),
+                valid_from=None if f["valid_from"] is None else str(f["valid_from"]),
+                valid_to=None if f["valid_to"] is None else str(f["valid_to"]),
                 sensibilidad=str(f["sensibilidad"]),
                 autoridad=str(f["autoridad"]),
                 ambito=str(f["ambito"]),

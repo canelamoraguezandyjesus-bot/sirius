@@ -206,6 +206,12 @@ class EjesDeclarados:
     confirmacion: str | None = None
     validez: str | None = None
     disponibilidad: str | None = None
+    #: Ventana de vigencia declarada. `RF-07` separa el tiempo objetivo del
+    #: corte de registro, y sin estos dos ejes `G8` solo podia comprobar el
+    #: segundo: un elemento que **aun no habia entrado en vigor** pasaba la
+    #: puerta porque nadie preguntaba desde cuando existia.
+    valid_from: str | None = None
+    valid_to: str | None = None
     sensibilidad: str | None = None
     autoridad: str | None = None
     ambito: str | None = None
@@ -231,6 +237,11 @@ SIN_EJES: Final = EjesDeclarados()
 CONFIRMACION_VISIBLE_SIEMPRE: Final = "CONFIRMADA"
 VALIDEZ_QUE_NO_ENTRA_EN_M1: Final[frozenset[str]] = frozenset({"SUSTITUIDA", "SIN_SOPORTE"})
 SENSIBILIDAD_PROTEGIDA: Final[frozenset[str]] = frozenset({"RESTRINGIDA"})
+
+#: Disponibilidad que existe pero no es material de un modo ordinario. No es lo
+#: mismo que lo borrado —que desaparece— ni que lo no vigente: un archivado
+#: sigue ahí y sigue siendo inspeccionable por quien está autorizado.
+DISPONIBILIDAD_QUE_NO_ENTRA_EN_MODOS_ORDINARIOS: Final[frozenset[str]] = frozenset({"ARCHIVADA"})
 AMBITO_GLOBAL: Final = "GLOBAL"
 AMBITO_MULTIPROYECTO: Final = "MULTI_PROYECTO_CERRADO"
 
@@ -624,6 +635,7 @@ __all__ = [
     "AMBITO_GLOBAL",
     "AMBITO_MULTIPROYECTO",
     "CONFIRMACION_VISIBLE_SIEMPRE",
+    "DISPONIBILIDAD_QUE_NO_ENTRA_EN_MODOS_ORDINARIOS",
     "ESTADO_EXTERNO_SIN_RESULTADO",
     "ETAPAS_DE_EXPANSION",
     "ORDEN_DE_CRITICIDAD",
