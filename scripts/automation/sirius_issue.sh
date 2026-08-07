@@ -51,6 +51,51 @@ sirius_retry() {
   done
 }
 
+# --- Frontera de confianza de los comentarios ---------------------------------
+
+# Filtro jq de autor de confianza. Los bloques estructurados que la
+# automatización vuelve a leer de la incidencia — `## OBSERVACIONES_ESTRUCTURADAS`
+# (dirige al corrector, que empuja commits con el PAT), `## RONDA_HALLAZGOS`
+# (gobierna la convergencia) y los marcadores `Head SHA:` (gobiernan la
+# verificación de head) — son instrucciones de facto para pasos con permisos de
+# escritura. Sin filtro, cualquiera con permiso de comentar podría sembrarlos:
+# el saneado en banda de sirius_apply_verdict.sh impide falsificarlos DENTRO de
+# un bloque legítimo, pero no publicar uno propio en un comentario aparte, que
+# además ganaría por ser el más reciente. Solo se aceptan comentarios del
+# propietario del repositorio (identidad del PAT de la automatización; misma
+# frontera de confianza que el `fusiona` del §8) o del bot de Actions, cuyo
+# login no es suplantable.
+#
+# Deliberadamente NO se acepta `MEMBER`. En un repositorio de organización esa
+# asociación la tiene cualquier miembro de la organización, incluidos los que
+# solo pueden leer y comentar: bastaría con que uno sembrara marcadores
+# `sirius-round` con números altos para gobernar si arranca el corrector, que
+# corre con el PAT y permisos de escritura. El alcance de confianza se limita a
+# quien ya podía autorizar un merge.
+SIRIUS_TRUSTED_AUTHOR_JQ='select(.author_association == "OWNER" or (.user.login // "") == "github-actions[bot]")'
+# Mismo filtro para la vía de respaldo GraphQL, que nombra los campos de otra
+# forma (`authorAssociation`, `author.login`). El respaldo conserva así la
+# garantía en vez de degradarla: un error transitorio de REST no puede abrir la
+# puerta a un historial sembrado por un tercero.
+SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ='select(.authorAssociation == "OWNER" or ((.author.login // "") | ltrimstr("app/")) == "github-actions")'
+
+# El filtro se aplica en TODAS las vías de lectura de comentarios, sin excepción.
+# Dejar una sola vía sin filtrar reintroduce el problema por la puerta de atrás:
+# `sirius_comment_once` y `sirius_transition` deciden si ya publicaron un
+# comentario buscando su marcador de idempotencia en el historial, y esos
+# marcadores son predecibles (`sirius-quality:<head>:failure` se deriva del SHA
+# público de la PR). Con una lectura sin filtrar, un tercero que publicase el
+# marcador ANTES que el flujo conseguía que la transición se diera por hecha y
+# omitiera su propio comentario: la etiqueta se aplicaba, pero el registro
+# oficial (`## CI_FAILURE`) no llegaba a existir. Como el resto de lecturas sí
+# filtra por autor, ese comentario ajeno tampoco se contaba después, así que el
+# fallo de Quality quedaba invisible para `ci_failure_streak` y el tope de
+# `MAX_CI_FAILURE_STREAK` podía eludirse indefinidamente, manteniendo vivo al
+# corrector —que corre con permisos de escritura— sin cota. Filtrando también
+# aquí, un marcador ajeno simplemente no existe para la automatización: el
+# comentario oficial se publica siempre y la deduplicación sigue operando entre
+# comentarios propios, que es lo único que prueba que el paso ya se ejecutó.
+
 # --- Vías de lectura de bajo nivel (una sola llamada, sin reintento) ----------
 
 _sirius_body_rest() {
@@ -64,11 +109,13 @@ _sirius_body_graphql() {
 }
 
 _sirius_comments_rest() {
-  gh api --paginate "repos/${1}/issues/${2}/comments" --jq '.[].body'
+  gh api --paginate "repos/${1}/issues/${2}/comments" \
+    --jq "[.[] | ${SIRIUS_TRUSTED_AUTHOR_JQ}] | .[].body"
 }
 
 _sirius_comments_graphql() {
-  gh issue view "${2}" --repo "${1}" --json comments --jq '.comments[].body'
+  gh issue view "${2}" --repo "${1}" \
+    --json comments --jq "[.comments[] | ${SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ}] | .[].body"
 }
 
 # --- Lectura robusta ----------------------------------------------------------
@@ -92,6 +139,10 @@ sirius_read_issue_body() {
 
 # sirius_read_issue_comments <repo> <issue> — imprime los cuerpos de comentarios,
 # REST con reintentos y respaldo GraphQL. !=0 solo si todas las vías fallan.
+# Solo comentarios de autor de confianza, por las dos vías (ver la frontera de
+# confianza más arriba): lo que devuelve esta función gobierna la idempotencia
+# de las transiciones y la localización de la PR, así que un comentario ajeno
+# no puede figurar en él.
 sirius_read_issue_comments() {
   local repo="$1" num="$2" out=""
   if out="$(sirius_retry _sirius_comments_rest "$repo" "$num")"; then
@@ -110,12 +161,55 @@ sirius_read_issue_comments() {
 # sirius_scan_text <repo> <issue> <out_file> — escribe, en out_file, texto para
 # escanear un SHA: primero los comentarios más recientes y después el cuerpo.
 # Best-effort y no bloqueante (siempre devuelve 0); REST con respaldo GraphQL.
+#
+# La lectura REST DEBE paginar: sin --paginate la API devuelve solo los 30
+# comentarios más antiguos y el "reverse" nunca vería los recientes, así que a
+# partir de ~30 comentarios el SHA extraído sería uno viejo y las verificaciones
+# de head fallarían en falso (parada head-obsoleto/head-inconsistente con un
+# head correcto).
+#
+# _sirius_comments_newest_first <repo> <issue> — cuerpos de los comentarios del
+# más reciente al más antiguo, con TODAS las páginas. Deliberadamente NO usa
+# `gh api --slurp` (opción relativamente reciente cuya ausencia degradaría la
+# paginación en silencio): con `--paginate --jq` el filtro se aplica por página
+# y las salidas se concatenan, así que cada comentario sale como un JSON
+# compacto por línea y python3 —requisito ya declarado de esta biblioteca—
+# invierte el orden y emite los cuerpos íntegros. Invertir líneas de texto
+# plano no serviría: los cuerpos son multilínea.
+
+_sirius_comments_newest_first() {
+  # La lectura y la transformación van SEPARADAS a propósito. Encadenadas en una
+  # tubería, el estado de salida sería el de `python3` —que siempre acierta— y
+  # el de `gh` se perdería salvo que el llamador tuviera `pipefail` activo: un
+  # 503 se convertiría en "no hay comentarios" en vez de en un fallo, el
+  # respaldo GraphQL nunca se intentaría y el corrector vería una incidencia sin
+  # observaciones. Esta biblioteca no debe depender de las opciones de shell del
+  # llamador para algo de lo que dependen decisiones.
+  local raw=""
+  raw="$(gh api --paginate "repos/${1}/issues/${2}/comments?per_page=100" \
+    --jq "[.[] | ${SIRIUS_TRUSTED_AUTHOR_JQ}] | .[] | @json")" || return 1
+  printf '%s\n' "$raw" | python3 -c '
+import json, sys
+bodies = []
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    try:
+        bodies.append(json.loads(line).get("body") or "")
+    except json.JSONDecodeError:
+        continue
+for body in reversed(bodies):
+    sys.stdout.write(body + "\n")
+'
+}
+
 sirius_scan_text() {
   local repo="$1" num="$2" out="$3" comments="" body=""
   : >"$out"
-  if comments="$(sirius_retry gh api "repos/${repo}/issues/${num}/comments" --jq 'reverse | .[].body')"; then
+  if comments="$(sirius_retry _sirius_comments_newest_first "$repo" "$num")"; then
     printf '%s\n' "$comments" >>"$out"
-  elif comments="$(sirius_retry gh issue view "$num" --repo "$repo" --json comments --jq '[.comments[].body] | reverse | .[]')"; then
+  elif comments="$(sirius_retry gh issue view "$num" --repo "$repo" --json comments --jq "[.comments[] | ${SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ}] | reverse | .[].body")"; then
     printf '%s\n' "$comments" >>"$out"
   fi
   if body="$(sirius_read_issue_body "$repo" "$num")"; then
@@ -129,9 +223,11 @@ sirius_scan_text() {
 # bajo "## OBSERVACIONES_ESTRUCTURADAS" en un CHANGES_REQUESTED), o nada si no
 # hay ninguna. Best-effort: nunca falla por sí sola.
 sirius_extract_observations() {
+  # Igual que sirius_scan_text: la lectura REST pagina para que el bloque de la
+  # ronda más reciente sea visible también en incidencias con muchos comentarios.
   local repo="$1" num="$2" comments=""
-  comments="$(sirius_retry gh api "repos/${repo}/issues/${num}/comments" --jq 'reverse | .[].body' 2>/dev/null)" \
-    || comments="$(sirius_retry gh issue view "$num" --repo "$repo" --json comments --jq '[.comments[].body] | reverse | .[]' 2>/dev/null)" \
+  comments="$(sirius_retry _sirius_comments_newest_first "$repo" "$num" 2>/dev/null)" \
+    || comments="$(sirius_retry gh issue view "$num" --repo "$repo" --json comments --jq "[.comments[] | ${SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ}] | reverse | .[].body" 2>/dev/null)" \
     || comments=""
   printf '%s' "$comments" | python3 -c '
 import re, sys
@@ -141,6 +237,62 @@ if m:
     sys.stdout.write(m.group(1))
 '
   return 0
+}
+
+# sirius_dump_comments <repo> <issue> <out_file> — vuelca los comentarios en
+# orden cronológico (del más antiguo al más reciente) para analizarlos. Pagina
+# igual que el resto de lecturas. Best-effort: deja el archivo vacío si no se
+# puede leer, y devuelve !=0 para que el llamador decida.
+sirius_dump_comments() {
+  # Orden cronológico natural: con `--paginate --jq` el filtro se aplica por
+  # página y las salidas se concatenan en orden, así que aquí no hace falta
+  # invertir nada ni depender de `--slurp`.
+  local repo="$1" num="$2" out="$3" body=""
+  : >"$out"
+  if body="$(sirius_retry gh api --paginate "repos/${repo}/issues/${num}/comments?per_page=100" --jq "[.[] | ${SIRIUS_TRUSTED_AUTHOR_JQ}] | .[].body")"; then
+    printf '%s\n' "$body" >>"$out"
+    return 0
+  fi
+  if body="$(sirius_retry gh issue view "$num" --repo "$repo" --json comments --jq "[.comments[] | ${SIRIUS_TRUSTED_AUTHOR_GRAPHQL_JQ}] | .[].body")"; then
+    printf '%s\n' "$body" >>"$out"
+    return 0
+  fi
+  echo "sirius_dump_comments: ninguna via pudo leer los comentarios de #${num}" >&2
+  echo "sirius_dump_comments: no se pudieron leer los comentarios de #${num}" >&2
+  return 1
+}
+
+# sirius_next_round_number <repo> <issue> [dump_file] — número de la siguiente
+# ronda de revisión-corrección: el mayor `<!-- sirius-round:N -->` publicado más
+# uno. Si no hay ninguno devuelve 1.
+#
+# Devuelve !=0 y NO imprime número cuando el historial no se puede leer. Antes
+# devolvía 1 en ese caso, y eso corrompía el historial en silencio: con rondas
+# 1..3 ya publicadas, una lectura fallida numeraba la ronda siguiente como 1
+# otra vez. `parse_round_records` ordena por el número del marcador, así que esa
+# ronda nueva se colaba al PRINCIPIO del historial; la política de convergencia
+# medía progreso contra una secuencia falsa y podía tanto bloquear un trabajo
+# que progresaba como dejar correr uno estancado. Numerar a ciegas es peor que
+# detenerse: el llamador convierte el fallo en parada segura.
+#
+# `dump_file` opcional evita una segunda lectura de la API cuando el llamador ya
+# tiene un volcado válido de los comentarios.
+sirius_next_round_number() {
+  local repo="$1" num="$2" provided="${3:-}" dump="" highest="" owned=0
+  if [ -n "$provided" ]; then
+    dump="$provided"
+  else
+    dump="$(mktemp)"
+    owned=1
+    if ! sirius_dump_comments "$repo" "$num" "$dump" >/dev/null 2>&1; then
+      rm -f "$dump"
+      echo "sirius_next_round_number: historial ilegible para #${num}; no numero una ronda a ciegas" >&2
+      return 1
+    fi
+  fi
+  highest="$(grep -oE '<!-- sirius-round:[0-9]+ -->' "$dump" 2>/dev/null | grep -oE '[0-9]+' | sort -n | tail -1)"
+  [ "$owned" -eq 1 ] && rm -f "$dump"
+  printf '%s' "$(( ${highest:-0} + 1 ))"
 }
 
 # --- Validación estructural ---------------------------------------------------
@@ -256,8 +408,8 @@ PY
 # sirius_ensure_label <repo> <name> <color> <description> — idempotente.
 # `gh label create --force` es un "upsert": crea la etiqueta si no existe y, si ya
 # existe, actualiza su color y descripcion. NO se usa `gh label view` (subcomando
-# inexistente en gh: su fallo hacia caer en `gh label create`, que a su vez fallaba
-# con "already exists" para una etiqueta existente y detenia la transicion).
+# inexistente que hacia caer en `gh label create`, que a su vez fallaba con
+# "already exists" para una etiqueta existente y detenia la transicion).
 sirius_ensure_label() {
   local repo="$1" name="$2" color="$3" description="$4"
   sirius_retry gh label create "$name" --repo "$repo" \
@@ -313,10 +465,19 @@ sirius_close_issue() {
 
 # sirius_comment_once <repo> <issue> <marker> <body_file> — publica el comentario
 # solo si el marcador no existe ya. 0 si publica o si ya existia; !=0 si falla al
-# publicar.
+# leer el historial autoritativo o al publicar.
+#
+# "Ya existe" significa que lo publico una identidad de confianza: la busqueda
+# usa sirius_read_issue_comments, que filtra por autor. Un marcador ajeno no
+# suprime el comentario oficial (ver la frontera de confianza). Si ninguna vía
+# puede leer los comentarios, NO se interpreta como historial vacío: se falla de
+# forma segura para no publicar un duplicado autoritativo a ciegas.
 sirius_comment_once() {
   local repo="$1" num="$2" marker="$3" file="$4" existing=""
-  existing="$(sirius_read_issue_comments "$repo" "$num" 2>/dev/null)"
+  if ! existing="$(sirius_read_issue_comments "$repo" "$num")"; then
+    echo "sirius_comment_once: historial ilegible para #${num}; no publico ${marker} a ciegas" >&2
+    return 1
+  fi
   if printf '%s' "$existing" | grep -Fq "$marker"; then
     echo "sirius_comment_once: marcador ya presente en #${num} (${marker})" >&2
     return 0
@@ -342,8 +503,16 @@ sirius_transition() {
   # dejaba ese estado atascado para siempre. Si el marcador existe, se verifica
   # el estado final real: si ya esta aplicado, no se repite nada; si falta, se
   # completa la transicion SIN publicar un comentario duplicado.
+  #
+  # Esta lectura es autoritativa. Si falla REST y también GraphQL, la transición
+  # se detiene ANTES de mutar etiquetas o cierre: tratar el fallo como una lista
+  # vacía permitiría que una reejecución publicase una segunda ronda con el mismo
+  # marcador de run y corrompiese el historial de convergencia.
   local existing="" marker_present=0
-  existing="$(sirius_read_issue_comments "$repo" "$num" 2>/dev/null)"
+  if ! existing="$(sirius_read_issue_comments "$repo" "$num")"; then
+    echo "::error::No se pudo leer el historial de comentarios de #${num}; transicion detenida antes de mutar estado." >&2
+    return 1
+  fi
   if printf '%s' "$existing" | grep -Fq "$marker"; then
     marker_present=1
     local verified=1 labels_now="" state_now=""

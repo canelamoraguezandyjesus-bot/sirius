@@ -1,15 +1,15 @@
 # SIRIUS - Contrato operativo de automatización
 
-**Versión:** 1.3  
-**Fecha:** 20 de julio de 2026  
-**Estado:** VIGENTE (§8, §9 y §0 actualizadas; ver §10)  
+**Versión:** 1.5  
+**Fecha:** 3 de agosto de 2026  
+**Estado:** VIGENTE (§4 y §5 actualizadas; ver §10.3 y §10.4)  
 **Autoridad:** Operativa para el desarrollo automatizado de Sirius 0.1  
-**Sustituye:** versión 1.2 del 20 de julio de 2026  
+**Sustituye:** versión 1.4 del 3 de agosto de 2026  
 **No modifica:** Producto, Arquitectura Técnica, ATD, requisitos ni alcance de Sirius 0.1
 
 ## 0. Propósito
 
-Este contrato autoriza y regula un flujo permanente, secuencial y dirigido por eventos para Sirius 0.1. Su motor son tres workflows de GitHub Actions que ejecutan Claude Code real (implementador, revisor, corrector) — ver el mecanismo concreto en `SIRIUS_GENERIC_ROUTINES_0.1.md` §6 — y GitHub como canal operativo único. ChatGPT, si el usuario lo usa, queda limitado a crear la incidencia inicial y aplicar la etiqueta de arranque; no ejecuta ninguno de los tres roles ni el merge (§8).
+Este contrato autoriza y regula un flujo permanente, secuencial y dirigido por eventos para Sirius 0.1. Su motor son tres workflows de GitHub Actions que ejecutan Claude Code real (implementador, revisor, corrector) — ver el mecanismo concreto en `SIRIUS_GENERIC_ROUTINES_0.1.md` §6 — y GitHub como canal operativo único. Cuando la revisión dual está activada (§4.1), Codex participa además como segundo revisor independiente de solo lectura, mediante su integración nativa con GitHub incluida en ChatGPT Business (sin API de OpenAI). ChatGPT, si el usuario lo usa, queda limitado a crear la incidencia inicial y aplicar la etiqueta de arranque; no ejecuta ninguno de los tres roles ni el merge (§8).
 
 Su finalidad es que el usuario pueda escribir una orden breve, por ejemplo `Implementa B4e`, y que el sistema prepare la tarea, implemente, valide, revise, corrija de forma limitada y notifique el resultado sin copiar ni pegar prompts manualmente.
 
@@ -96,6 +96,138 @@ Resultados permitidos:
 - `BLOCKED_BY_DECISION` -> `sirius:blocked-decision`
 - `FAILED_SAFELY` -> `sirius:failed-safely`
 
+### 4.1 Revisión dual Claude + Codex (bandera de repositorio)
+
+La variable de repositorio `SIRIUS_CODEX_REVIEW_ENABLED` gobierna el modo de
+revisión dentro de `review-sirius-work.yml`:
+
+- **ausente o distinta de `true`:** revisión solo con Claude, como antes de
+  esta versión. El endurecimiento común de la verificación de head — el gate
+  del workflow que exige que el head actual coincida con el último que superó
+  Quality, y el `reviewed_head_sha` obligatorio en el paso determinista —
+  aplica en ambos modos: es parte de esta versión del contrato, no de la
+  bandera. En cambio, la lectura del instante en que Quality terminó
+  (`check-runs`), que solo consume el disparador de Codex, se exige únicamente
+  en modo dual: exigirla con la bandera apagada dejaría que un 403 sobre ese
+  endpoint matara una ronda solo-Claude y la bandera dejaría de ser reversible
+  de verdad;
+- **`true`:** revisión dual obligatoria. Tras Quality en verde sobre el head
+  registrado, esa misma versión es revisada por dos revisores independientes:
+  el revisor Claude actual y Codex mediante su integración nativa con GitHub
+  (incluida en ChatGPT Business; sin API de OpenAI, sin claves nuevas y sin
+  costes nuevos).
+
+Reglas del modo dual:
+
+- El workflow publica de forma idempotente un único comentario disparador
+  `@codex review` por PR y head, con un marcador oculto estable
+  (`<!-- sirius-codex-review:<head> -->`), mediante el paso determinista
+  (`scripts/automation/sirius_codex_review.py`). La revisión automática del
+  panel de Codex permanece apagada: el disparo ocurre solo después de Quality.
+- Un disparador solo se reutiliza si lo emitió la propia automatización: se
+  verifica que el autor del comentario es la identidad real del token y que su
+  cuerpo coincide exactamente con la plantilla determinista. El marcador es
+  predecible, así que un comentario ajeno que lo contuviera podría, si no, hacer
+  que una revisión de Codex no solicitada por el workflow quedara «posterior al
+  disparador» y satisficiera la ronda. Si no puede demostrarse la identidad, la
+  ronda se detiene de forma segura.
+- El presupuesto de tiempo es explícito: el revisor Claude y la recolección de
+  Codex están acotados por paso, el job cubre la suma de ambos y la espera
+  configurada se limita a `SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS` (1500 s por
+  defecto), de modo que el recolector siempre llega a escribir su resultado
+  estructurado antes de que el paso expire; un valor excesivo en la variable de
+  repositorio no puede convertir el fallo seguro en una cancelación sin
+  veredicto.
+- Codex actúa únicamente como segundo revisor de solo lectura: la
+  automatización nunca le pide corregir, comitear, hacer push ni fusionar.
+- Ambos revisores deben revisar exactamente el mismo SHA que superó Quality.
+  El recolector solo acepta resultados del conector oficial de Codex
+  (allowlist), posteriores al disparador y demostrablemente referidos a ese
+  SHA (`commit_id` de la revisión o el marcador `Reviewed commit:`). La
+  ausencia de comentarios no es aprobación: la aprobación exige una revisión
+  formal `APPROVED` o una reacción `+1` del conector sobre el disparador.
+- Se consideran **todas** las revisiones del conector posteriores al
+  disparador, no solo la última: sus hallazgos se unen y basta una que no
+  demuestre el SHA esperado para detener la ronda. Quedarse con la última
+  descartaría en silencio los hallazgos de las anteriores y, si la última fuera
+  aprobatoria, la ronda aprobaría un head con defectos ya reportados.
+- La unión solo se acepta cuando **cada** revisión formal no aprobatoria ha
+  entregado algo. Basta una que no haya entregado ni cuerpo ni comentarios
+  inline para que la ronda siga sin interpretar, aunque otras ya hayan aportado
+  hallazgos: entregar la lista parcial dejaría que la ventana de estabilidad
+  cerrara sobre ella —el mismo resultado se repite pasada tras pasada— y los
+  hallazgos que faltan no llegarían nunca al corrector, con apariencia de lista
+  completa. El discriminante es haber entregado algo, no tener comentarios
+  inline: el conector publica también resúmenes cuyo contenido vive entero en el
+  cuerpo, y esos están completos —su endpoint de comentarios queda vacío para
+  siempre—, así que exigirles comentarios convertiría cada ronda legítima con
+  resumen en un timeout. De los comentarios que lleguen tarde se encarga la
+  ventana de estabilidad.
+- Una revisión solo cuenta si es **estrictamente posterior** al disparador.
+  `submitted_at` tiene resolución de segundo, así que un empate no demuestra el
+  orden causal: aceptarlo dejaría que una revisión automática del panel, o una
+  manual previa, satisficiera la ronda sin que Codex haya respondido al
+  comentario posterior a Quality.
+- La reacción `+1` solo decide cuando **no** hay ninguna revisión formal
+  posterior al disparador. Con una revisión formal en curso pero todavía no
+  interpretable, la reacción no la resuelve: se sigue esperando y, si no se
+  aclara, la ronda termina en fallo seguro. Una reacción es una señal más débil
+  que una revisión y no puede convertir una ambigüedad en aprobación.
+- El resultado no se entrega en cuanto aparece: se exige observarlo **dos veces
+  igual**, con una ventana de estabilidad de por medio
+  (`SIRIUS_CODEX_SETTLE_SECONDS`, 60 s por defecto), y cualquier hallazgo nuevo
+  reinicia esa ventana. Unir todas las revisiones de la ronda solo sirve si se
+  han publicado ya: cerrar el sondeo en cuanto la primera revisión trae un
+  comentario dejaría fuera las posteriores y el corrector recibiría una lista
+  incompleta con apariencia de completa. La ventana está acotada por el plazo
+  absoluto: al vencer este se entrega lo observado, nunca un timeout falso
+  teniendo hallazgos a la vista. Una parada segura no espera. Si una pasada
+  posterior deja de ser interpretable —típicamente porque apareció una revisión
+  formal sin comentarios visibles—, el resultado que se estaba estabilizando se
+  **descarta**: conservarlo permitiría aprobar el head pese a una revisión
+  pendiente que el propio recolector declara ambigua. Un fallo de transporte no
+  descarta nada: no es evidencia de ambigüedad, solo de que no se pudo mirar.
+  Cada pausa de sondeo se acota al plazo absoluto (y al cierre de la ventana),
+  para que el plazo prometido sea exacto y no aproximado.
+- La deduplicación de observaciones neutraliza las URL de `prueba`, solo de ese
+  campo y solo para la procedencia `CODEX`, al construir su clave. En los hallazgos de Codex `prueba` es el
+  permalink del comentario que lo reportó, distinto para cada comentario aunque
+  el defecto sea el mismo: con el enlace dentro de la clave, un hallazgo
+  repetido en dos revisiones no se dedupararía nunca y `pending` y
+  `severity_total` contarían comentarios en vez de defectos, falseando la medida
+  de convergencia. La neutralización NO se extiende al resto de campos: dos
+  hallazgos cuyo `problema` se distingue precisamente por una URL —dos
+  advisories, dos endpoints— se fusionarían y uno se perdería, y borrar un
+  hallazgo real es peor que conservar dos parecidos. Tampoco se extiende a la
+  procedencia `CLAUDE`: dar por supuesto que su `prueba` nunca es un enlace
+  sería una suposición sobre la salida de un modelo, no una garantía.
+- Un agregador determinista (`scripts/automation/sirius_aggregate_reviews.py`)
+  combina ambos resultados sin votos ni arbitraje de otro modelo, con esta
+  precedencia: JSON inválido de un revisor obligatorio → `FAILED_SAFELY`; SHA
+  distinto o no demostrable → `FAILED_SAFELY`; `FAILED_SAFELY` de cualquiera →
+  `FAILED_SAFELY`; `BLOCKED_BY_DECISION` de Claude → `BLOCKED_BY_DECISION`;
+  `CHANGES_REQUESTED` de cualquiera → `CHANGES_REQUESTED`; solo si ambos
+  aprueban el mismo SHA → `REVIEW_APPROVED`.
+- Con la revisión dual activada Codex es obligatorio: timeout
+  (`SIRIUS_CODEX_REVIEW_TIMEOUT_SECONDS`, 1200 s por defecto), respuesta sobre
+  otro SHA, autor no autorizado o resultado ambiguo terminan la ronda en
+  `FAILED_SAFELY`, nunca en aprobación silenciosa ni en degradación automática
+  a revisión solo Claude.
+- Las observaciones combinadas conservan su procedencia (prefijos `CLAUDE-` y
+  `CODEX-`), se deduplican solo cuando son duplicados exactos y llegan al
+  corrector en la misma lista estructurada única (`OBSERVACIONES_ESTRUCTURADAS`)
+  de una sola ronda. Claude sigue siendo el único corrector, sujeto a la
+  política de convergencia del §5.
+- El veredicto de revisión (de Claude o agregado) debe declarar
+  `reviewed_head_sha`; `sirius_apply_verdict.sh` exige para `REVIEW_APPROVED`
+  y `CHANGES_REQUESTED` una PR única, abierta y no borrador, y la coincidencia
+  exacta entre el head actual de la PR, el último head que superó Quality y el
+  `reviewed_head_sha` declarado. Cualquier divergencia detiene la incidencia
+  de forma segura.
+- Desactivar la bandera devuelve inmediatamente el flujo a revisión solo
+  Claude sin revertir commits. La activación estable solo se decidirá tras un
+  piloto controlado posterior al merge de esta implementación.
+
 ## 5. Corrección automática limitada
 
 La Routine correctora solo puede resolver observaciones técnicas concretas y estructuradas en la misma rama y PR.
@@ -104,7 +236,55 @@ Puede corregir defectos de implementación, pruebas insuficientes, lint, tipos, 
 
 Debe detenerse ante cambios de producto, arquitectura, ATD, seguridad no definida, migraciones destructivas, pérdida de datos, nuevos costes, credenciales reales o datos personales.
 
-Se permiten como máximo dos ciclos de revisión-corrección. Si no converge, el estado final es `sirius:blocked-decision`.
+### 5.1 Convergencia técnica en vez de un tope fijo de ciclos
+
+No existe un límite total fijo de ciclos de revisión-corrección. El tope anterior de dos ciclos era arbitrario y detenía trabajos que seguían siendo puramente técnicos y que progresaban ronda a ronda.
+
+La corrección automática continúa mientras se cumplan todas estas condiciones:
+
+- los fallos siguen siendo técnicos;
+- permanecen dentro del alcance aprobado;
+- hay progreso comprobable;
+- no aparece una decisión humana real;
+- no hay oscilación ni repetición sin progreso.
+
+Cada ronda de `CHANGES_REQUESTED` publica en la incidencia un registro estructurado (`<!-- sirius-round:N -->` con un bloque `## RONDA_HALLAZGOS`) que contiene, por hallazgo, una huella estable, su severidad y su procedencia, además del head de la ronda y los totales. La huella no depende ni del identificador correlativo (`CODEX-001`, que cambia entre rondas) ni del número de línea (que se desplaza en cuanto se edita cualquier punto anterior del archivo), de modo que un mismo defecto conserva su huella entre rondas.
+
+La severidad de una huella es **pegajosa**: cuenta siempre la peor jamás observada para ella mientras siga pendiente. Sin esa regla, un revisor que omitiera la insignia de un hallazgo P0 que sigue ahí haría bajar la severidad agregada por sí sola, y esa mejora fantasma bastaría para superar la comprobación de progreso sin haber corregido nada.
+
+El marcador del comentario que arrastra el registro depende del head y del **run** de Actions, no del intento: una reejecución del mismo run es idempotente —no duplica el registro— y una ronda nueva, que siempre es un run nuevo, siempre se registra.
+
+La deduplicación por marcador solo reconoce marcadores de **autor de confianza** (propietario o `github-actions[bot]`), igual que el resto de lecturas de comentarios. Los marcadores son predecibles —`sirius-quality:<head>:failure` se deriva del SHA público de la PR—, así que una deduplicación ciega al autor sería un interruptor abierto: bastaba con publicar el marcador antes que el flujo para que la transición se diera por hecha y omitiera su propio comentario. La etiqueta se aplicaba, pero el registro oficial no llegaba a existir y, como las cuentas sí filtran por autor, ese fallo de Quality quedaba invisible para la racha del §5.1 y su cota podía eludirse indefinidamente. Con el filtro, un marcador ajeno sencillamente no existe para la automatización: el registro oficial se publica siempre y la deduplicación sigue operando entre comentarios propios, que es lo único que prueba que el paso ya se ejecutó.
+
+`scripts/automation/sirius_convergence.py` decide de forma determinista a partir de ese historial. Hay **progreso** cuando el par `(hallazgos pendientes, severidad agregada)` **disminuye estrictamente en el orden producto**: al menos una de las dos magnitudes baja y ninguna sube. Nada más cuenta.
+
+Esa definición es lo que convierte la terminación en una propiedad demostrable y no en una expectativa. Dos alternativas más laxas fallan:
+
+- Mirar cada magnitud por separado permitiría alternar indefinidamente entre estados que mejoran una a costa de la otra (un hallazgo P0, luego dos P3, luego un P0 otra vez), sin activar nunca reaparición, oscilación ni dos rondas sin progreso.
+- Inferir progreso de que "desapareció una huella" permitiría mantener el ciclo abierto para siempre reformulando el mismo defecto con otras palabras, porque la huella incluye el texto del problema.
+
+Con el orden producto sobre ℕ² —bien fundado— cada ronda que continúa por progreso decrece estrictamente una cantidad que no puede decrecer sin fin, y las rondas sin progreso se agotan por la regla de dos consecutivas.
+
+No cuentan como progreso los cambios cosméticos, los renombrados, los cambios de comentario, la renumeración de identificadores, la reformulación de un hallazgo persistente, la sustitución de un fallo por otro equivalente ni el silenciamiento de pruebas: ninguno hace disminuir el par.
+
+Los registros de ronda son autoritativos solo si los publicó la propia automatización: la lectura acepta únicamente comentarios del propietario del repositorio —misma frontera de confianza que el `fusiona` del §8— o del bot de Actions, y exige el marcador `<!-- sirius-round:N -->` en el mismo comentario que el bloque. El número de ronda autoritativo es el del marcador, no un campo del JSON.
+
+El ciclo pasa a `sirius:blocked-decision`, con el motivo exacto registrado, únicamente cuando:
+
+- no hay progreso neto en dos rondas consecutivas;
+- un hallazgo dado por resuelto reaparece en una ronda posterior;
+- el conjunto de hallazgos oscila entre estados anteriores;
+- el head no avanzó entre dos rondas (no hubo corrección efectiva que revisar);
+- Quality tumba `MAX_CI_FAILURE_STREAK` intentos de corrección seguidos (3) sin un verde de por
+  medio. La cuenta es de **heads distintos**, no de marcadores: cada intento del corrector es
+  forzosamente un commit nuevo, así que dos resultados de Quality sobre el mismo head —una
+  reejecución que pase de `failure` a `timed_out`, cosa que una prueba intermitente vuelve
+  rutinaria— siguen siendo un solo intento y no pueden gastar el margen sin que el corrector
+  haya vuelto a probar nada;
+- el historial de rondas no se puede leer, o se puede leer pero la ronda no se puede numerar (numerar a ciegas repetiría un número ya usado, colaría la ronda nueva al principio del historial ordenado y falsearía la medida);
+- o concurre cualquiera de las causas de parada del párrafo tercero de este apartado (producto, arquitectura, alcance, credenciales, permisos, costes, datos reales u operaciones irreversibles).
+
+Un problema técnico corregible nunca se convierte automáticamente en una decisión humana.
 
 ## 6. Idempotencia y protección contra bucles
 
@@ -235,4 +415,51 @@ Está prohibido:
 - **Pendiente de la primera ejecución real:** el secreto `CLAUDE_CODE_OAUTH_TOKEN` (o `ANTHROPIC_API_KEY`) debe añadirse a los secretos del repositorio antes de que estos workflows puedan completar su trabajo; sin él, la puerta de activación y las comprobaciones deterministas siguen funcionando, pero el paso de Claude Code fallará y la incidencia terminará en `sirius:failed-safely`.
 - **Entrada en vigor:** cuando la PR que introduce estos tres workflows sea revisada, tenga CI verde y sea fusionada por autorización explícita del usuario.
 
-El historial de las versiones 1.0, 1.1 y 1.2 permanece disponible en Git y no se reescribe retrospectivamente.
+### 10.3 Versión 1.4 — revisión dual Claude + Codex tras Quality
+
+- **Decisión:** aprobada por el usuario el 3 de agosto de 2026. Después de que
+  Quality termine en verde sobre un head concreto, esa misma versión es
+  revisada por dos revisores independientes: Claude (el revisor actual) y
+  Codex mediante su integración nativa con GitHub incluida en ChatGPT
+  Business. Un agregador determinista combina ambos resultados en un único
+  veredicto; Claude sigue siendo el implementador, uno de los dos revisores y
+  el único corrector.
+- **Motivo:** añadir una segunda revisión independiente real sin introducir la
+  API de OpenAI, claves nuevas, servicios de pago ni un segundo flujo: la
+  prueba manual en la PR #122 confirmó que el comentario `@codex review`
+  activa una revisión formal, con comentarios por archivo y línea, sin
+  modificar el código.
+- **Alcance:** exclusivamente el mecanismo de revisión
+  (`review-sirius-work.yml`, `sirius_codex_review.py`,
+  `sirius_aggregate_reviews.py`, el endurecimiento de
+  `sirius_apply_verdict.sh` y `prompts/reviewer.md`) y la redacción de §4 de
+  este contrato. No cambia la implementación, la corrección (mismo corrector
+  Claude, mismas `OBSERVACIONES_ESTRUCTURADAS`, máximo de dos ciclos), la
+  máquina de estados ni el mecanismo de merge (§8): `fusiona` sigue siendo la
+  única autorización humana de merge.
+- **Mantiene:** mismo head exacto para CI, ambos revisores y el veredicto;
+  fallo seguro obligatorio si Codex no responde, responde sobre otro SHA o su
+  resultado no es identificable; Codex sin ningún permiso de escritura;
+  reversibilidad total mediante `SIRIUS_CODEX_REVIEW_ENABLED` sin revertir
+  commits.
+- **Pendiente del piloto posterior al merge:** que un comentario publicado
+  automáticamente con el token de los workflows active la integración de
+  Codex es una dependencia externa aún no verificada. La bandera queda
+  desactivada por defecto; tras el merge se realizará un piloto controlado
+  (una PR pequeña, bandera activada, verificación de disparador único, SHA
+  correcto, veredicto único y rollback) y solo entonces se decidirá su
+  activación estable.
+- **Entrada en vigor:** cuando la PR que introduce la revisión dual sea
+  revisada, tenga CI verde y sea fusionada por autorización explícita del
+  usuario. La activación de la bandera queda fuera de esa entrada en vigor y
+  requiere el piloto.
+
+### 10.4 Versión 1.5 — convergencia técnica en lugar del tope de dos ciclos
+
+- **Decisión:** aprobada por el usuario el 3 de agosto de 2026. Se elimina el límite absoluto de dos ciclos de revisión-corrección y se sustituye por la política de convergencia demostrable del §5.1: la automatización sigue corrigiendo mientras haya progreso comprobable y se detiene, con motivo exacto, en cuanto deja de haberlo.
+- **Motivo:** el tope fijo era arbitrario. Bloqueaba trabajos que seguían siendo puramente técnicos, estaban dentro del alcance aprobado y avanzaban ronda a ronda, obligando a una intervención humana que no decidía nada: solo autorizaba a continuar.
+- **Alcance:** exclusivamente el mecanismo de continuación del ciclo de corrección — `scripts/automation/sirius_convergence.py` (nuevo), el registro de ronda que publica `sirius_apply_verdict.sh`, la puerta de `repair-sirius-work.yml`, `prompts/corrector.md`, la plantilla de work item (`.github/ISSUE_TEMPLATE/sirius-work-item.yml`, que declaraba el tope como campo obligatorio y por tanto autorizaba menos ciclos de los que la política ejecuta) y la redacción de §5 de este contrato y de los documentos operativos que citaban el tope. No cambia el contrato de estados, la revisión dual (§4), la verificación de head ni el mecanismo de merge (§8).
+- **Mantiene:** la incidencia como fuente de verdad; una sola máquina de estados; Claude como implementador y único corrector; Claude y Codex como revisores cuando la bandera está activa; fallo seguro; verificación del SHA; Quality antes de la revisión; merge exclusivamente humano mediante `fusiona`; y reversibilidad. La terminación del ciclo la garantizan las condiciones de bloqueo, no un contador.
+- **Entrada en vigor:** cuando la PR que introduce la política de convergencia sea revisada, tenga CI verde y sea fusionada por autorización explícita del usuario.
+
+El historial de las versiones 1.0, 1.1, 1.2, 1.3 y 1.4 permanece disponible en Git y no se reescribe retrospectivamente.

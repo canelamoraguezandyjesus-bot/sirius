@@ -53,7 +53,8 @@ Comprobaciones obligatorias antes de actuar:
 - rama base y alcance definidos;
 - PR y head SHA coherentes cuando existan;
 - ninguna ejecución equivalente activa;
-- máximo de dos ciclos de corrección;
+- convergencia del ciclo de corrección demostrable (contrato §5.1): sin tope
+  fijo de rondas, pero con progreso comprobable ronda a ronda;
 - merge automático prohibido.
 
 Toda ejecución registra en la incidencia:
@@ -156,7 +157,7 @@ Cada observación corregible incluye identificador, severidad, archivo o compone
 - observaciones estructuradas existentes;
 - rama y PR registradas y abiertas;
 - head SHA vigente;
-- contador de ciclos inferior a dos;
+- decisión de convergencia `CONTINUE` sobre el historial de rondas (contrato §5.1);
 - ningún cambio de producto, arquitectura, seguridad no definida o alcance requerido.
 
 ### Ejecución
@@ -166,7 +167,7 @@ Cada observación corregible incluye identificador, severidad, archivo o compone
 3. Corrige exclusivamente las observaciones registradas.
 4. Trabaja en la misma rama y PR.
 5. Ejecuta todas las validaciones obligatorias.
-6. Incrementa el contador de ciclo.
+6. Registra la ronda con las huellas de sus hallazgos (contrato §5.1).
 7. Registra el nuevo head SHA.
 8. Retira `sirius:repairing` y aplica `sirius:ci-pending`.
 9. Se detiene sin merge.
@@ -177,7 +178,7 @@ Cada observación corregible incluye identificador, severidad, archivo o compone
 - decisión real necesaria → `sirius:blocked-decision`;
 - fallo no corregible de forma segura → `sirius:failed-safely`.
 
-Tras dos ciclos sin convergencia se elimina cualquier evento de reparación y se aplica `sirius:blocked-decision`.
+Cuando la política de convergencia (contrato §5.1) determina que el ciclo ha dejado de avanzar — sin progreso neto en dos rondas consecutivas, reaparición de un hallazgo resuelto, oscilación entre estados anteriores o head sin avanzar — se elimina cualquier evento de reparación y se aplica `sirius:blocked-decision`, registrando el motivo exacto. No hay un tope fijo de rondas.
 
 ## 5. Notificación al usuario
 
@@ -209,6 +210,17 @@ para correr Claude Code de verdad dentro del propio runner:
 - `.github/workflows/implement-sirius-work.yml` — `sirius:implement-requested`.
 - `.github/workflows/review-sirius-work.yml` — `sirius:review-requested`.
 - `.github/workflows/repair-sirius-work.yml` — `sirius:repair-requested`.
+
+El workflow de revisión admite además el modo de revisión dual (contrato
+operativo §4.1, bandera `SIRIUS_CODEX_REVIEW_ENABLED`): con la bandera en
+`true`, el mismo workflow publica de forma idempotente el comentario
+`@codex review` para el head exacto que superó Quality
+(`scripts/automation/sirius_codex_review.py`), ejecuta al revisor Claude
+mientras Codex trabaja, recoge y normaliza el resultado de Codex y agrega
+ambos veredictos de forma determinista
+(`scripts/automation/sirius_aggregate_reviews.py`) antes de aplicar un único
+veredicto. Codex es un segundo revisor de solo lectura: nunca corrige, comitea
+ni fusiona, y su fallo o silencio termina la ronda en `FAILED_SAFELY`.
 
 Todo el mecanismo vive en este repositorio y es inspeccionable: no hay
 ninguna interfaz externa que registrar. La única acción pendiente fuera del
@@ -251,16 +263,19 @@ del conjunto permitido para el rol se trata siempre como un fallo seguro.
   push aunque lo intentara. La instrucción de "no modificar código en la
   primera pasada" no depende solo de que el modelo la respete.
 
-### Single-flight y límite de reparación
+### Single-flight y convergencia de la reparación
 
 Los tres workflows comparten el mismo grupo de concurrencia
 (`sirius-work-<numero-de-incidencia>`), así que nunca hay dos ejecuciones
 simultáneas sobre la misma incidencia — esto es lo que faltaba en el diseño
-anterior y causó el incidente de PRs duplicadas (#52/#53). El corrector
-cuenta los ciclos ya completados mediante los marcadores
-`<!-- sirius-repair-cycle:N -->` que deja `sirius_apply_verdict.sh`; al llegar
-al tercer intento se aplica `sirius:blocked-decision` sin siquiera invocar a
-Claude.
+anterior y causó el incidente de PRs duplicadas (#52/#53). La puerta del
+corrector ya no cuenta ciclos contra un tope fijo: consulta
+`scripts/automation/sirius_convergence.py` sobre los registros de ronda
+(`<!-- sirius-round:N -->` con su bloque `## RONDA_HALLAZGOS`) que deja
+`sirius_apply_verdict.sh`, y aplica `sirius:blocked-decision` —sin siquiera
+invocar a Claude— en cuanto el ciclo deja de converger (contrato §5.1). El
+marcador heredado `<!-- sirius-repair-cycle:N -->` se sigue emitiendo para
+trazabilidad histórica, pero ya no gobierna ninguna decisión.
 
 Después de configurar el secreto, el usuario no copia prompts ni interactúa
 con estas Routines directamente: crea la incidencia (a mano o pidiéndoselo a

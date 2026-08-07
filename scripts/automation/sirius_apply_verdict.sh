@@ -11,6 +11,13 @@
 # afirme. Un veredicto ausente, corrupto o fuera del conjunto permitido para
 # el rol se trata como un fallo seguro, nunca como éxito silencioso.
 #
+# Para los resultados de revisión (REVIEW_APPROVED y CHANGES_REQUESTED) el
+# veredicto debe declarar además `reviewed_head_sha`, y se exige coincidencia
+# exacta entre tres valores: ese SHA declarado, el head actual de la PR y el
+# último head que superó Quality registrado en la incidencia (contrato
+# §4.1). En el modo de revisión dual el JSON puede venir del agregador
+# determinista (sirius_aggregate_reviews.py) en lugar del revisor Claude.
+#
 # Uso: sirius_apply_verdict.sh <owner/repo> <issue> <role> <verdict_file> [cycle]
 #   role: implementer | reviewer | corrector
 #   cycle: solo corrector; número de ciclo de reparación que se está cerrando.
@@ -37,18 +44,9 @@ case "$ROLE" in
     ;;
 esac
 
-# Identificador único de esta ejecución. Los veredictos de parada (FAILED_SAFELY,
-# BLOCKED_BY_DECISION y las paradas precheck de este script) llevaban antes un
-# marcador fijo por rol; dos paradas seguidas compartían marcador y la segunda
-# se dedupaba, ocultando su motivo (incidencia observada en el piloto sobre #66).
-# Con este sufijo por run cada parada publica su propio comentario con su
-# diagnóstico, sin perder la idempotencia dentro del mismo run (reintentos del
-# mismo run conservan RUN_ID y RUN_ATTEMPT). Los veredictos de avance
-# (READY_FOR_REVIEW/FIXED/REVIEW_APPROVED/CHANGES_REQUESTED) siguen anclados al
-# head SHA o al hash del contenido, que ya los hace únicos y estables.
 SIRIUS_RUN_TAG="${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1}"
+SIRIUS_ROUND_TAG="${GITHUB_RUN_ID:-manual}"
 
-# transition <marker> <body_file> <add_label> <color> <desc>
 transition() {
   local marker="$1" body_file="$2" add="$3" color="$4" desc="$5"
   sirius_transition "$REPO" "$ISSUE" "$marker" "$body_file" \
@@ -56,12 +54,6 @@ transition() {
 }
 
 stop_safely() {
-  # stop_safely <reason-slug> <explicacion> — parada segura determinista
-  # (no depende del veredicto del agente: el propio script detectó algo
-  # inconsistente y no continúa). Siempre termina el script con estado !=0:
-  # es una anomalía que debe quedar visible como fallo del job (igual que
-  # los casos de ambigüedad de advance-sirius-after-quality.yml), no un
-  # rechazo esperado como el de la puerta de activación.
   local reason="$1" why="$2"
   local marker="<!-- sirius-verdict:${ROLE}:precheck:${reason}:${SIRIUS_RUN_TAG} -->"
   local body_file
@@ -72,13 +64,24 @@ stop_safely() {
     "$why" >"$body_file"
   if ! transition "$marker" "$body_file" "sirius:failed-safely" "D93F0B" \
     "Estado temporal: fallo operativo detenido de forma segura"; then
-    echo "::error::No se pudo aplicar la parada segura (${reason}) para #${ISSUE}; reintentable." >&2
+    # Si el historial es ilegible, la transición no puede deduplicar y se
+    # detiene antes de mutar estado. El aviso de parada no es un registro de
+    # ronda ni gobierna la convergencia y su marcador incluye el run, por lo que
+    # publicarlo directamente conserva trazabilidad sin crear una ronda falsa.
+    echo "::warning::No se pudo registrar la parada segura (${reason}) mediante la transición verificada; aplicando el estado y el aviso de diagnóstico." >&2
+    if ! sirius_ensure_label "$REPO" "sirius:failed-safely" "D93F0B" \
+      "Estado temporal: fallo operativo detenido de forma segura" \
+      || ! sirius_set_issue_labels "$REPO" "$ISSUE" "sirius:failed-safely" "$IN_PROGRESS_LABEL"; then
+      echo "::error::No se pudo aplicar la etiqueta de parada segura (${reason}) para #${ISSUE}; reintentable." >&2
+    fi
+    if ! sirius_retry gh issue comment "$ISSUE" --repo "$REPO" --body-file "$body_file"; then
+      echo "::error::No se pudo publicar el diagnóstico de parada segura (${reason}) para #${ISSUE}; reintentable." >&2
+    fi
   fi
   rm -f "$body_file"
   exit 1
 }
 
-# --- 1) El veredicto debe existir y ser JSON válido con "verdict" -------------
 if [ ! -s "$VERDICT_FILE" ]; then
   stop_safely "sin-veredicto" \
     "El rol \`${ROLE}\` no escribió ningún veredicto. Sin un resultado estructurado no puedo saber en qué quedó el trabajo."
@@ -87,7 +90,15 @@ if ! verdict="$(jq -r '.verdict // empty' "$VERDICT_FILE" 2>/dev/null)" || [ -z 
   stop_safely "veredicto-invalido" \
     "El archivo de veredicto del rol \`${ROLE}\` no es JSON válido o no tiene el campo \`verdict\`."
 fi
-summary="$(jq -r '.summary // "(sin resumen)"' "$VERDICT_FILE" 2>/dev/null)"
+
+sanitize_untrusted_text() {
+  jq -Rrs 'gsub("```"; "\u0027\u0027\u0027") | gsub("(?<p>[Hh][Ee][Aa][Dd]|[Mm][Ee][Rr][Gg][Ee])(\\s+[Ss][Hh][Aa]\\s*:)"; "\(.p)-sha:")'
+}
+sanitize_untrusted_json() {
+  jq -c 'walk(if type == "string" then gsub("```"; "\u0027\u0027\u0027") | gsub("(?<p>[Hh][Ee][Aa][Dd]|[Mm][Ee][Rr][Gg][Ee])(\\s+[Ss][Hh][Aa]\\s*:)"; "\(.p)-sha:") else . end)'
+}
+
+summary="$(jq -r '.summary // "(sin resumen)"' "$VERDICT_FILE" 2>/dev/null | sanitize_untrusted_text)"
 
 case "$ROLE" in
   implementer) allowed="READY_FOR_REVIEW BLOCKED_BY_DECISION FAILED_SAFELY USAGE_LIMIT_REACHED" ;;
@@ -99,14 +110,7 @@ if ! printf '%s\n' "$allowed" | tr ' ' '\n' | grep -Fxq "$verdict"; then
     "El rol \`${ROLE}\` devolvió el veredicto \`${verdict}\`, que no es uno de los permitidos para ese rol (\`${allowed}\`)."
 fi
 
-# --- 2) Veredictos que exigen localizar y verificar la PR ----------------------
-# `locate_verified_pr` NUNCA llama a `stop_safely` ni a `exit` directamente:
-# se invoca mediante sustitución de comandos (`$(...)`), que corre en una
-# subshell, así que un `exit` ahí dentro solo mataría la subshell y el script
-# principal seguiría con variables vacías sin que nadie lo notara. En su
-# lugar imprime un resultado con tabuladores que el llamador interpreta.
 locate_verified_pr() {
-  # Salida: "OK\t<pr>\t<head>" o "FAIL\t<motivo-slug>\t<explicacion>".
   mapfile -t pr_numbers < <(sirius_find_pr_for_issue "$REPO" "$ISSUE")
   if [ "${#pr_numbers[@]}" -eq 0 ]; then
     printf 'FAIL\tsin-pr\tEl rol `%s` reporto `%s`, pero no encuentro ninguna PR asociada a esta incidencia (falta el comentario con su URL).\n' "$ROLE" "$verdict"
@@ -134,9 +138,6 @@ locate_verified_pr() {
   printf 'OK\t%s\t%s\n' "$pr" "$pr_head"
 }
 
-# resolve_pr <verdict-actual> — ejecuta locate_verified_pr, aplica
-# stop_safely si falló (esto sí corre en el shell principal) y deja
-# pr_number/head_sha listos. Termina el script si falla.
 resolve_pr() {
   local result status field2 field3
   result="$(locate_verified_pr)"
@@ -148,6 +149,43 @@ resolve_pr() {
   fi
   pr_number="$field2"
   head_sha="$field3"
+}
+
+sha_matches() {
+  local full cand
+  full="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  cand="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
+  case "$cand" in
+    '' | *[!0-9a-f]*) return 1 ;;
+  esac
+  if [ "${#cand}" -lt 7 ] || [ "${#cand}" -gt 40 ]; then
+    return 1
+  fi
+  case "$full" in
+    "$cand"*) return 0 ;;
+  esac
+  return 1
+}
+
+require_reviewed_head() {
+  local reviewed_sha scan_file last_ci_sha
+  reviewed_sha="$(jq -r '.reviewed_head_sha // empty' "$VERDICT_FILE" 2>/dev/null)"
+  if [ -z "$reviewed_sha" ]; then
+    stop_safely "sin-reviewed-head" \
+      "El veredicto \`${verdict}\` no declara \`reviewed_head_sha\`. Sin esa declaración no puedo demostrar qué versión se revisó, así que no aplico el resultado."
+  fi
+  if ! sha_matches "$head_sha" "$reviewed_sha"; then
+    stop_safely "reviewed-head-distinto" \
+      "El veredicto \`${verdict}\` declara haber revisado \`${reviewed_sha}\`, pero el head actual de la PR es \`${head_sha}\`. No aplico un resultado de revisión sobre otra versión."
+  fi
+  scan_file="$(mktemp)"
+  sirius_scan_text "$REPO" "$ISSUE" "$scan_file"
+  last_ci_sha="$(sirius_extract_sha "$scan_file")"
+  rm -f "$scan_file"
+  if [ "$last_ci_sha" = "no-head" ] || [ "$last_ci_sha" != "$head_sha" ]; then
+    stop_safely "head-inconsistente" \
+      "El veredicto es \`${verdict}\`, pero el head actual de la PR (\`${head_sha}\`) no coincide con el último head que superó Quality (\`${last_ci_sha}\`). El resultado sería sobre una versión obsoleta; descarto la ronda de forma segura."
+  fi
 }
 
 case "$verdict" in
@@ -180,14 +218,7 @@ case "$verdict" in
 
   REVIEW_APPROVED)
     resolve_pr
-    scan_file="$(mktemp)"
-    sirius_scan_text "$REPO" "$ISSUE" "$scan_file"
-    last_ci_sha="$(sirius_extract_sha "$scan_file")"
-    rm -f "$scan_file"
-    if [ "$last_ci_sha" = "no-head" ] || [ "$last_ci_sha" != "$head_sha" ]; then
-      stop_safely "head-inconsistente" \
-        "El revisor aprobó, pero el head actual de la PR (\`${head_sha}\`) no coincide con el último head que superó Quality (\`${last_ci_sha}\`). No aprobar sin volver a ejecutar CI sobre el head exacto."
-    fi
+    require_reviewed_head
     pr_url="https://github.com/${REPO}/pull/${pr_number}"
     marker="<!-- sirius-verdict:reviewer:approved:${head_sha} -->"
     body_file="$(mktemp)"
@@ -210,18 +241,41 @@ case "$verdict" in
       stop_safely "sin-observaciones" \
         "El revisor pidió \`CHANGES_REQUESTED\` sin ninguna observación estructurada; no hay nada concreto que corregir."
     fi
-    readable="$(printf '%s' "$observations" | jq -r '.[] | "- **\(.id // "?")** (\(.severidad // "?")) \(.archivo // "?"): \(.problema // "?")\n  - Criterio esperado: \(.criterio_esperado // "?")\n  - Prueba: \(.prueba // "?")\n  - Límites de corrección: \(.limites_correccion // "?")"')"
-    pr_hint=""
-    mapfile -t pr_numbers < <(sirius_find_pr_for_issue "$REPO" "$ISSUE")
-    if [ "${#pr_numbers[@]}" -eq 1 ]; then
-      pr_hint="https://github.com/${REPO}/pull/${pr_numbers[0]}"
+    resolve_pr
+    require_reviewed_head
+    observations="$(printf '%s' "$observations" | sanitize_untrusted_json)"
+    if [ -z "$observations" ] || [ "$observations" = "[]" ]; then
+      stop_safely "sanitizacion-fallida" \
+        "No se pudieron sanear las observaciones estructuradas antes de publicarlas; me detengo para no entregar al corrector un bloque corrupto."
     fi
-    marker="<!-- sirius-verdict:reviewer:changes:$(printf '%s' "$observations" | sha256sum | cut -c1-16) -->"
+    readable="$(printf '%s' "$observations" | jq -r '.[] | "- **\(.id // "?")** (\(.severidad // "?")) \(.archivo // "?"): \(.problema // "?")\n  - Criterio esperado: \(.criterio_esperado // "?")\n  - Prueba: \(.prueba // "?")\n  - Límites de corrección: \(.limites_correccion // "?")"')"
+    pr_hint="https://github.com/${REPO}/pull/${pr_number}"
+
+    if ! round_number="$(sirius_next_round_number "$REPO" "$ISSUE")"; then
+      stop_safely "historial-de-rondas-ilegible" \
+        "No he podido leer el historial de rondas de esta incidencia, así que no puedo numerar esta ronda sin arriesgarme a repetir un número ya usado y corromper la medida de convergencia. Me detengo de forma segura."
+    fi
+    round_verdict="$(mktemp)"
+    round_record="$(mktemp)"
+    jq -n --argjson obs "$observations" '{observations: $obs}' >"$round_verdict"
+    if ! python3 "${SIRIUS_VERDICT_DIR}/sirius_convergence.py" record \
+      --verdict-file "$round_verdict" --round "$round_number" \
+      --head "$head_sha" --output "$round_record"; then
+      rm -f "$round_verdict" "$round_record"
+      stop_safely "registro-de-ronda-fallido" \
+        "No se pudo construir el registro de convergencia de esta ronda; sin él la puerta del corrector no puede medir progreso y me detengo de forma segura."
+    fi
+    round_json="$(cat "$round_record")"
+    rm -f "$round_verdict" "$round_record"
+
+    marker="<!-- sirius-verdict:reviewer:changes:${head_sha}:${SIRIUS_ROUND_TAG} -->"
     body_file="$(mktemp)"
     {
       printf '%s\n\n%s\n' "$marker" "## CHANGES_REQUESTED"
-      [ -n "$pr_hint" ] && printf '- PR: %s\n' "$pr_hint"
+      printf '- PR: %s\n' "$pr_hint"
       printf '%s\n\n%s\n\n## OBSERVACIONES_ESTRUCTURADAS\n```json\n%s\n```\n' "${summary}" "${readable}" "${observations}"
+      printf '\n<!-- sirius-round:%s -->\n\n## RONDA_HALLAZGOS\n```json\n%s\n```\n' \
+        "${round_number}" "${round_json}"
     } >"$body_file"
     if ! transition "$marker" "$body_file" "sirius:repair-requested" "FBCA04" "Evento consumible: corregir observaciones técnicas registradas"; then
       rm -f "$body_file"

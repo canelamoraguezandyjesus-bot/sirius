@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication, QLabel, QScrollArea, QTabWidget, QWidget
 from pytestqt.qtbot import QtBot
 
 from sirius.adapters.persistence.migrations import upgrade_to_head
@@ -39,7 +41,15 @@ from sirius.ports.backup import (
     BackupValidationError,
     BackupValidationResult,
 )
-from sirius.presentation.main_window import MainWindow
+from sirius.presentation.main_window import (
+    BACKUP_STATE_CANCELLED,
+    BACKUP_STATE_CREATED,
+    BACKUP_STATE_PROPERTY,
+    BACKUP_STATE_REJECTED,
+    BACKUP_STATE_RESTORED,
+    BACKUP_STATE_VALIDATED,
+    MainWindow,
+)
 
 _PASSWORD = "correct horse battery staple"
 
@@ -62,6 +72,7 @@ def _bootstrapped_database(database_path: Path) -> Path:
     Windows that stray open handle makes the atomic replace fail with
     ``PermissionError: [WinError 5] Acceso denegado``.
     """
+    database_path.parent.mkdir(parents=True, exist_ok=True)
     upgrade_to_head(database_path)
 
     conversation_repository = build_sqlite_conversation_repository(database_path)
@@ -250,6 +261,7 @@ def _build_window(
     show_information: Any = None,
     confirm_restore: Any = None,
     choose_backup_file: Any = None,
+    open_containing_folder: Any = None,
 ) -> MainWindow:
     dependencies = build_conversation_dependencies(
         database_path, database_path.parent / "backups", secret_store=FakeSecretStore()
@@ -285,6 +297,7 @@ def _build_window(
         # inject this must not accidentally exercise the confirmed path.
         confirm_restore=confirm_restore or (lambda title, text: False),
         choose_backup_file=choose_backup_file or (lambda title: ""),
+        open_containing_folder=open_containing_folder or (lambda path: None),
     )
 
 
@@ -487,9 +500,6 @@ def test_settings_tab_is_a_resizable_scroll_area_reaching_the_restore_section(
     unreliable — often outright unavailable — for an unfocused/offscreen
     window in headless CI), and no event-loop timeout.
     """
-    from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QScrollArea, QTabWidget, QWidget
-
     database_path = _bootstrapped_database(tmp_path / "sirius.db")
     window = _build_window(database_path)
     qtbot.addWidget(window)
@@ -960,7 +970,396 @@ def test_create_then_validate_then_restore_a_real_backup_end_to_end(
     window.restore_backup_button.click()
 
     qtbot.waitUntil(lambda: not window.isVisible(), timeout=30000)
-    # infos[0] is "Copia creada" from the create step; the restore success
-    # message (with the safety-backup path) is the last one shown.
-    assert len(infos) == 2
+    # Un aviso por paso, en orden: la copia creada (con su ruta), la copia
+    # validada y la restauración terminada.
+    assert [title for title, _text in infos] == [
+        "Copia creada",
+        "Copia validada",
+        "Restauración completada",
+    ]
+    assert str(backup_path) in infos[0][1]
     assert "cerrará" in infos[-1][1].lower()
+
+
+# --- Feedback visible de las copias -----------------------------------------
+#
+# El defecto: "Validar copia" no confirmaba nada con la contraseña correcta ni
+# avisaba con la incorrecta, y "Restaurar copia" rechazaba la contraseña
+# equivocada en silencio. Las etiquetas SÍ se escribían; lo que fallaba es que
+# están al final de una pestaña más alta que la ventana (900x620), de modo que
+# el resultado de validar quedaba cortado por la mitad en el borde inferior y
+# el de restaurar caía entero fuera del área visible. Medido antes de la
+# corrección: la etiqueta de restauración tenía la región visible VACÍA.
+#
+# Por eso estas pruebas comprueban dos cosas distintas y las dos importan: que
+# el estado del desenlace sea el correcto y esté diferenciado, y que el texto
+# se pueda ver de verdad sin que la persona tenga que desplazarse a buscarlo.
+
+
+def _shown_settings_window(qtbot: QtBot, window: MainWindow) -> MainWindow:
+    """La ventana real, a su tamaño por omisión, con Configuración delante."""
+    qtbot.addWidget(window)
+    window.show()
+    tabs = window.centralWidget()
+    assert isinstance(tabs, QTabWidget)
+    tabs.setCurrentIndex(2)
+    qtbot.waitUntil(lambda: window.validate_backup_button.width() > 0, timeout=5000)
+    return window
+
+
+def _is_fully_visible(label: QLabel) -> bool:
+    """¿Se ve la etiqueta ENTERA, sin que nadie tenga que desplazarse?
+
+    ``visibleRegion`` devuelve la parte del widget que no está recortada por
+    sus ancestros —aquí, el área de desplazamiento de la pestaña—. Vacía
+    significa "fuera de la vista"; más baja que el widget, "cortada".
+    """
+    QApplication.processEvents()
+    region = label.visibleRegion()
+    return not region.isEmpty() and region.boundingRect().height() >= label.height()
+
+
+@pytest.mark.gui
+def test_a_valid_backup_is_confirmed_explicitly_and_the_confirmation_is_visible(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """El resumen por sí solo no confirma nada: enumera fecha, versión y
+    tamaño, datos ante los cuales no se distingue "válida" de "no ha pasado
+    nada". Hace falta decirlo, y que se vea.
+    """
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    backup_path = tmp_path / "b.siriusbackup"
+    infos: list[tuple[str, str]] = []
+    window = _shown_settings_window(
+        qtbot,
+        _build_window(
+            database_path,
+            validate_backup_use_case=_FakeValidateBackupUseCase(
+                result=_fake_validation_result(backup_path)
+            ),
+            show_information=lambda title, text: infos.append((title, text)),
+        ),
+    )
+
+    window.validate_backup_path_input.setText(str(backup_path))
+    window.validate_backup_password_input.setText(_PASSWORD)
+    window.validate_backup_button.click()
+
+    label = window.validate_backup_result_label
+    qtbot.waitUntil(lambda: label.property(BACKUP_STATE_PROPERTY) == BACKUP_STATE_VALIDATED)
+
+    assert "validada" in label.text().lower()
+    # El resumen sigue estando: la confirmación se añade, no sustituye.
+    assert "0.1.0.dev0" in label.text()
+    assert "abc123" in label.text()
+    assert _is_fully_visible(label), (
+        "la confirmación se escribió fuera del área visible: es exactamente el "
+        "defecto por el que validar parecía no hacer nada"
+    )
+    assert len(infos) == 1
+    assert "validada" in infos[0][0].lower()
+
+
+@pytest.mark.gui
+def test_a_wrong_password_when_validating_is_reported_as_rejected_and_is_visible(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    warnings: list[tuple[str, str]] = []
+    window = _shown_settings_window(
+        qtbot,
+        _build_window(
+            database_path,
+            validate_backup_use_case=_FakeValidateBackupUseCase(
+                error=BackupValidationError("la contraseña es incorrecta o la copia está dañada")
+            ),
+            show_warning=lambda title, text: warnings.append((title, text)),
+        ),
+    )
+
+    window.validate_backup_path_input.setText(str(tmp_path / "b.siriusbackup"))
+    window.validate_backup_password_input.setText("clave-incorrecta")
+    window.validate_backup_button.click()
+
+    label = window.validate_backup_result_label
+    qtbot.waitUntil(lambda: label.property(BACKUP_STATE_PROPERTY) == BACKUP_STATE_REJECTED)
+
+    assert "incorrecta" in label.text()
+    assert _is_fully_visible(label)
+    assert len(warnings) == 1
+    assert "incorrecta" in warnings[0][1]
+
+
+@pytest.mark.gui
+def test_validating_never_leaves_success_and_failure_looking_the_same(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """El síntoma literal del informe: "el comportamiento visible es idéntico
+    en ambos casos". Aquí se comparan los dos desenlaces uno contra otro.
+    """
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    backup_path = tmp_path / "b.siriusbackup"
+
+    valid_window = _shown_settings_window(
+        qtbot,
+        _build_window(
+            database_path,
+            validate_backup_use_case=_FakeValidateBackupUseCase(
+                result=_fake_validation_result(backup_path)
+            ),
+        ),
+    )
+    valid_window.validate_backup_path_input.setText(str(backup_path))
+    valid_window.validate_backup_password_input.setText(_PASSWORD)
+    valid_window.validate_backup_button.click()
+    valid_label = valid_window.validate_backup_result_label
+    qtbot.waitUntil(lambda: valid_label.property(BACKUP_STATE_PROPERTY) == BACKUP_STATE_VALIDATED)
+
+    rejected_window = _shown_settings_window(
+        qtbot,
+        _build_window(
+            _bootstrapped_database(tmp_path / "otra" / "sirius.db"),
+            validate_backup_use_case=_FakeValidateBackupUseCase(
+                error=BackupValidationError("la contraseña es incorrecta")
+            ),
+        ),
+    )
+    rejected_window.validate_backup_path_input.setText(str(backup_path))
+    rejected_window.validate_backup_password_input.setText("mal")
+    rejected_window.validate_backup_button.click()
+    rejected_label = rejected_window.validate_backup_result_label
+    qtbot.waitUntil(lambda: rejected_label.property(BACKUP_STATE_PROPERTY) == BACKUP_STATE_REJECTED)
+
+    assert valid_label.text() != rejected_label.text()
+    assert valid_label.property(BACKUP_STATE_PROPERTY) != rejected_label.property(
+        BACKUP_STATE_PROPERTY
+    )
+    # Ni siquiera el color coincide: se distinguen sin leer.
+    assert valid_label.styleSheet() != rejected_label.styleSheet()
+
+
+@pytest.mark.gui
+def test_a_wrong_password_when_restoring_warns_instead_of_doing_nothing(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Que la restauración no se ejecute es correcto; hacerlo en silencio no.
+
+    Antes de la corrección el mensaje se escribía en una etiqueta cuya región
+    visible estaba vacía: la persona solo percibía que "no pasa nada".
+    """
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    restore_use_case = _FakeRestoreBackupUseCase()
+    warnings: list[tuple[str, str]] = []
+    window = _shown_settings_window(
+        qtbot,
+        _build_window(
+            database_path,
+            validate_backup_use_case=_FakeValidateBackupUseCase(
+                error=BackupValidationError("la contraseña es incorrecta o la copia está dañada")
+            ),
+            restore_backup_use_case=restore_use_case,
+            show_warning=lambda title, text: warnings.append((title, text)),
+        ),
+    )
+
+    window.restore_backup_path_input.setText(str(tmp_path / "b.siriusbackup"))
+    window.restore_backup_password_input.setText("clave-incorrecta")
+    window.restore_backup_button.click()
+
+    label = window.restore_backup_feedback_label
+    qtbot.waitUntil(lambda: label.property(BACKUP_STATE_PROPERTY) == BACKUP_STATE_REJECTED)
+
+    assert restore_use_case.calls == []
+    assert "incorrecta" in label.text()
+    assert _is_fully_visible(label), (
+        "el aviso quedó fuera del área visible: es el defecto por el que "
+        "restaurar con la contraseña equivocada parecía no hacer nada"
+    )
+    assert len(warnings) == 1
+    assert "incorrecta" in warnings[0][1]
+
+
+@pytest.mark.gui
+def test_the_four_backup_outcomes_stay_distinguishable(qtbot: QtBot, tmp_path: Path) -> None:
+    """validada, restaurada, cancelada y rechazada son cuatro cosas distintas.
+
+    Se recogen los cuatro estados tal y como los deja la interfaz y se exige
+    que no se solapen: sin esto, "cancelada" y "rechazada" acaban contándose
+    como el mismo "no se hizo nada".
+    """
+    backup_path = tmp_path / "b.siriusbackup"
+    observed: dict[str, str] = {}
+
+    validating = _shown_settings_window(
+        qtbot,
+        _build_window(
+            _bootstrapped_database(tmp_path / "validar" / "sirius.db"),
+            validate_backup_use_case=_FakeValidateBackupUseCase(
+                result=_fake_validation_result(backup_path)
+            ),
+        ),
+    )
+    validating.validate_backup_path_input.setText(str(backup_path))
+    validating.validate_backup_password_input.setText(_PASSWORD)
+    validating.validate_backup_button.click()
+    qtbot.waitUntil(
+        lambda: (
+            validating.validate_backup_result_label.property(BACKUP_STATE_PROPERTY)
+            == BACKUP_STATE_VALIDATED
+        )
+    )
+    observed["validada"] = validating.validate_backup_result_label.text()
+
+    cancelling = _shown_settings_window(
+        qtbot,
+        _build_window(
+            _bootstrapped_database(tmp_path / "cancelar" / "sirius.db"),
+            validate_backup_use_case=_FakeValidateBackupUseCase(
+                result=_fake_validation_result(backup_path)
+            ),
+            restore_backup_use_case=_FakeRestoreBackupUseCase(),
+            confirm_restore=lambda title, text: False,
+        ),
+    )
+    cancelling.restore_backup_path_input.setText(str(backup_path))
+    cancelling.restore_backup_password_input.setText(_PASSWORD)
+    cancelling.restore_backup_button.click()
+    cancelled_label = cancelling.restore_backup_feedback_label
+    qtbot.waitUntil(
+        lambda: cancelled_label.property(BACKUP_STATE_PROPERTY) == BACKUP_STATE_CANCELLED
+    )
+    observed["cancelada"] = cancelled_label.text()
+    assert _is_fully_visible(cancelled_label)
+
+    rejecting = _shown_settings_window(
+        qtbot,
+        _build_window(
+            _bootstrapped_database(tmp_path / "rechazar" / "sirius.db"),
+            validate_backup_use_case=_FakeValidateBackupUseCase(
+                error=BackupValidationError("la contraseña es incorrecta")
+            ),
+            restore_backup_use_case=_FakeRestoreBackupUseCase(),
+        ),
+    )
+    rejecting.restore_backup_path_input.setText(str(backup_path))
+    rejecting.restore_backup_password_input.setText("mal")
+    rejecting.restore_backup_button.click()
+    rejected_label = rejecting.restore_backup_feedback_label
+    qtbot.waitUntil(lambda: rejected_label.property(BACKUP_STATE_PROPERTY) == BACKUP_STATE_REJECTED)
+    observed["rechazada"] = rejected_label.text()
+
+    restoring = _shown_settings_window(
+        qtbot,
+        _build_window(
+            _bootstrapped_database(tmp_path / "restaurar" / "sirius.db"),
+            validate_backup_use_case=_FakeValidateBackupUseCase(
+                result=_fake_validation_result(backup_path)
+            ),
+            restore_backup_use_case=_FakeRestoreBackupUseCase(
+                result=_fake_restore_result(backup_path, None)
+            ),
+            confirm_restore=lambda title, text: True,
+        ),
+    )
+    restored_label = restoring.restore_backup_feedback_label
+    restoring.restore_backup_path_input.setText(str(backup_path))
+    restoring.restore_backup_password_input.setText(_PASSWORD)
+    restoring.restore_backup_button.click()
+    qtbot.waitUntil(lambda: restored_label.property(BACKUP_STATE_PROPERTY) == BACKUP_STATE_RESTORED)
+    observed["restaurada"] = restored_label.text()
+
+    assert set(observed) == {"validada", "cancelada", "rechazada", "restaurada"}
+    assert len(set(observed.values())) == 4, f"desenlaces indistinguibles: {observed}"
+    for state, text in observed.items():
+        assert state in text.lower(), f"el texto de «{state}» no dice en qué estado quedó: {text!r}"
+
+
+# --- La ruta de la copia creada ---------------------------------------------
+
+
+@pytest.mark.gui
+def test_creating_a_backup_shows_its_full_path_and_offers_the_folder_and_reuse(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    backup_path = tmp_path / "backups" / "sirius-20260701.siriusbackup"
+    opened: list[Path] = []
+    window = _shown_settings_window(
+        qtbot,
+        _build_window(
+            database_path,
+            create_backup_use_case=_FakeCreateBackupUseCase(
+                result=_fake_backup_result(backup_path)
+            ),
+            open_containing_folder=opened.append,
+        ),
+    )
+
+    # Sin copia creada todavía no hay carpeta que abrir ni ruta que reusar.
+    assert window.open_backup_folder_button.isEnabled() is False
+    assert window.use_last_backup_button.isEnabled() is False
+
+    window.create_backup_password_input.setText(_PASSWORD)
+    window.create_backup_password_repeat_input.setText(_PASSWORD)
+    window.create_backup_button.click()
+
+    status = window.create_backup_status_label
+    qtbot.waitUntil(lambda: status.property(BACKUP_STATE_PROPERTY) == BACKUP_STATE_CREATED)
+
+    assert str(backup_path) in window.create_backup_path_label.text()
+    assert _is_fully_visible(window.create_backup_path_label)
+    assert window.open_backup_folder_button.isEnabled() is True
+    assert window.use_last_backup_button.isEnabled() is True
+
+    window.open_backup_folder_button.click()
+    assert opened == [backup_path]
+
+    window.use_last_backup_button.click()
+    assert window.validate_backup_path_input.text() == str(backup_path)
+    assert window.restore_backup_path_input.text() == str(backup_path)
+
+
+@pytest.mark.gui
+def test_the_created_path_stays_selectable_so_it_can_be_copied(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """El aviso modal se cierra; la ruta tiene que seguir ahí y poder copiarse."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    backup_path = tmp_path / "backups" / "sirius-20260701.siriusbackup"
+    window = _shown_settings_window(
+        qtbot,
+        _build_window(
+            database_path,
+            create_backup_use_case=_FakeCreateBackupUseCase(
+                result=_fake_backup_result(backup_path)
+            ),
+        ),
+    )
+
+    window.create_backup_password_input.setText(_PASSWORD)
+    window.create_backup_password_repeat_input.setText(_PASSWORD)
+    window.create_backup_button.click()
+    status = window.create_backup_status_label
+    qtbot.waitUntil(lambda: status.property(BACKUP_STATE_PROPERTY) == BACKUP_STATE_CREATED)
+
+    flags = window.create_backup_path_label.textInteractionFlags()
+    assert flags & Qt.TextInteractionFlag.TextSelectableByMouse
+
+
+@pytest.mark.gui
+def test_opening_the_folder_does_nothing_before_any_backup_exists(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """El botón está apagado, pero el manejador tampoco puede caerse si se
+    invoca por teclado o por programa sin ruta guardada.
+    """
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    opened: list[Path] = []
+    window = _build_window(database_path, open_containing_folder=opened.append)
+    qtbot.addWidget(window)
+
+    window._handle_open_backup_folder_clicked()
+    window._handle_use_last_backup_clicked()
+
+    assert opened == []
+    assert window.validate_backup_path_input.text() == ""
