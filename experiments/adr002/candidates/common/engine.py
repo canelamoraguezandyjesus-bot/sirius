@@ -16,6 +16,9 @@ Reglas que el motor hace cumplir por construccion:
 - **Cada transicion registra su causa.** Una transicion sin causa es un fallo.
 - **Puertas antes que ranking.** ``G1-G10`` filtran lo que cada etapa aporta;
   ``G11`` valida antes de ordenar; ``G12`` protege criticidad y limite.
+- **Ningun critico recuperado desaparece en silencio.** ``RF-24`` no admite
+  omision callada: si ``G12`` deja un critico fuera por limite, lo declara, y el
+  motor comprueba esa igualdad antes de entregar.
 - **Una parada, siempre.** Ninguna ejecucion termina sin adjudicar ``S1-S7``.
 - **Determinismo.** Mismo puerto y misma peticion producen el mismo orden: el
   desempate es estable y explicito, nunca el del diccionario.
@@ -195,6 +198,20 @@ def recuperar(
         traza.registrar_etapa(PasoDeEtapa(etapa, causa, len(aportadas), len(nuevas), suficiente))
 
         # --- S1: suficiencia por cardinalidad, si la cardinalidad la admite.
+        #
+        # **``pendientes`` va vacio, y eso es una limitacion declarada, no un
+        # descuido.** ``§15.2`` pide no adjudicar ``S1`` mientras queden criticos
+        # elegibles pendientes, y para saberlo habria que enumerar los criticos
+        # del ambito. Enumerarlos y entregarlos se implemento y se midio: entrega
+        # los cinco criticos del proyecto ante cualquier pregunta sobre el, y el
+        # banco lo refuta expresamente —``B04-CA-05`` declara ``DECISION:3``,
+        # critico de su mismo proyecto, entre los **prohibidos** de su caso—. De
+        # modo que «pendiente» no es «critico del ambito», y con lo que hay en el
+        # plano no se puede distinguir cual toca.
+        #
+        # Lo que si se garantiza esta abajo: ningun critico **recuperado** cae
+        # sin declararse. La guarda de ``stops`` sigue viva en sus pruebas y
+        # disponible para un motor que pueda resolver esa distincion.
         if (
             fin := stops.evaluar_suficiencia(
                 admitidas,
@@ -248,6 +265,21 @@ def recuperar(
     traza.miembros_omitidos = g12.miembros_omitidos
 
     entregados = {c.item.id for c in g12.dentro_del_limite}
+
+    # Invariante de ``RF-24``: un critico elegible solo desaparece por
+    # **desbordamiento declarado**. Elegible es el que paso todas las puertas
+    # —por eso se cuenta sobre lo admitido tras ``G11``, no sobre lo aportado—,
+    # y si falta alguno que ``G12`` no declaro, el motor no puede entregar: la
+    # alternativa a fallar seria una omision critica silenciosa, que es
+    # exactamente lo que ``§14 R1`` sanciona.
+    criticos_elegibles = {
+        c.item.id for c in unicas if criticidad_de(c.item.id) is Criticidad.CRITICA
+    }
+    perdidos = sorted(criticos_elegibles - entregados - set(g12.criticos_omitidos))
+    if perdidos:
+        msg = f"criticos elegibles perdidos sin declarar desbordamiento: {', '.join(perdidos)}"
+        raise RecuperacionInvalidaError(msg)
+
     grupos_truncados = tuple(
         g.identificador for g in agrupacion.grupos if not set(g.miembros) <= entregados
     )

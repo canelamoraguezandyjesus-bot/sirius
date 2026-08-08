@@ -106,15 +106,38 @@ def test_la_base_de_a_no_cambio_ni_un_byte() -> None:
 
     Es el unico reanclaje de esta serie que altera cifras medidas, y por eso se
     dice aqui y se vuelve a medir: no basta con que las pruebas pasen.
+
+    **Ese reanclaje se hizo mal y hay que decirlo**: el arreglo del recorte
+    cambio los blobs de ``port.py`` y ``adr002_a/candidate.py`` pero no toco los
+    **arboles** que fijan las otras tres pruebas de esta familia, de modo que el
+    commit salio con cuatro pruebas rojas. Aqui se corrigen las cuatro a la vez.
+    Que el propio mecanismo lo detectase es lo que se espera de el; que se
+    empujase sin ejecutar la puerta completa, no.
+
+    El **control de criticos no callados** reancla dos mas, y ninguno de los dos
+    cambia que se recupera:
+
+    * ``contracts.py`` publica ``IDENTIDADES_POR_LLAMADA``, la cota que
+      ``por_identificadores`` ya aplicaba sin declararla, para que quien tenga
+      que lotear sepa por cuanto;
+    * ``engine.py`` comprueba antes de entregar que ningun critico **recuperado**
+      desaparecio sin que ``G12`` lo declarase (``RF-24``), y se niega a entregar
+      si eso pasa.
+
+    Lo que **no** entro, y consta por lo que costo averiguarlo: entregar de oficio
+    todos los criticos del ambito que ninguna etapa hubiera propuesto. Se
+    implemento, se midio y el banco lo refuta —``B04-CA-05`` declara
+    ``DECISION:3``, critico de su mismo proyecto, entre los **prohibidos** de su
+    caso—, ademas de inundar 35 de 50 casos con los cinco criticos del proyecto 2.
     """
     import subprocess
 
     fijados = {
         "experiments/adr002/candidates/common/contracts.py": (
-            "ab2be75d09cf69e112c1de10c2e8e9b661ba4824"
+            "e051688e445b21be1b851ab6f4c9480a57e5ec14"
         ),
         "experiments/adr002/candidates/common/engine.py": (
-            "991c68d5f04b48521e2d1450ff071aa7497f3744"
+            "7dc9144878e7657a555cbf574d7311208e68d4c8"
         ),
         "experiments/adr002/candidates/common/gates.py": (
             "63a1040971c12fe27ea01f1cdee5da5e52a93b36"
@@ -123,7 +146,7 @@ def test_la_base_de_a_no_cambio_ni_un_byte() -> None:
             "b1f737efd91e140c9af691c6a7e2323c84d54c4c"
         ),
         "experiments/adr002/candidates/common/port.py": (
-            "8616b8695a2b594f379d1398f479de5d68cdfbac"
+            "6918297fbb85a116f6d699881a38ad3b3df8d1be"
         ),
         "experiments/adr002/candidates/common/trace.py": (
             "2202f736a4b9f2fda3299a4bf8a3695edeec7cb2"

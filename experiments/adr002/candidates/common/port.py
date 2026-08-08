@@ -68,6 +68,13 @@ LIMITE_POR_PREFIJO: Final = 64
 #: Numero maximo de terminos o prefijos admitidos en una sola llamada. Sin
 #: esta cota, pedir "todos los terminos del corpus" seria un barrido escrito
 #: de otra forma.
+#:
+#: Coincide con ``IDENTIDADES_POR_LLAMADA``, que es la cota **del contrato**
+#: para ``por_identificadores``. Se declaran por separado a proposito: son dos
+#: obligaciones distintas —una acota argumentos de busqueda, la otra acota una
+#: materializacion dirigida— y atarlas a la misma constante haria que cambiar
+#: una moviese la otra sin que nadie lo pidiera. Lo que si esta atado es el
+#: comportamiento, y hay una prueba que lo comprueba sobre el puerto real.
 ARGUMENTOS_MAXIMOS: Final = 16
 
 #: Marca de las anotaciones que registran que **no se pregunto**. Llevan sufijo

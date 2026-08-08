@@ -529,6 +529,16 @@ class MaterializacionPorIdentidad:
         return not self.ausentes
 
 
+#: Identidades que ``por_identificadores`` admite en **una sola llamada**.
+#:
+#: Es parte del contrato, no de una implementacion concreta: quien pide mas de
+#: estas tiene que lotear, y para lotear necesita saber por cuanto. La cota
+#: **rechaza, no trunca**, de modo que pedir de mas no devuelve menos criticos
+#: en silencio: falla. Esa eleccion es la que descubrio que el control interno
+#: pedia 18 identidades de golpe.
+IDENTIDADES_POR_LLAMADA: Final = 16
+
+
 @runtime_checkable
 class PuertoDeRecuperacion(Protocol):
     """Interfaz estrecha sobre el canon y su indice lexico.
@@ -638,6 +648,7 @@ __all__ = [
     "DISPONIBILIDAD_QUE_NO_ENTRA_EN_MODOS_ORDINARIOS",
     "ESTADO_EXTERNO_SIN_RESULTADO",
     "ETAPAS_DE_EXPANSION",
+    "IDENTIDADES_POR_LLAMADA",
     "ORDEN_DE_CRITICIDAD",
     "ORDEN_DE_ETAPAS",
     "PLANO_COMUN_VACIO",
