@@ -367,18 +367,15 @@ class MainWindow(QMainWindow):
         self.open_studio_button.setAccessibleName("Abrir Model Studio")
         self.open_studio_button.clicked.connect(self.open_model_studio)
 
-        header = QHBoxLayout()
-        header.setContentsMargins(0, 0, 0, 0)
-        header.addStretch(1)
-        header.addWidget(self.open_studio_button)
-
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(6, 6, 6, 0)
-        layout.setSpacing(6)
-        layout.addLayout(header)
-        layout.addWidget(self.tabs, 1)
-        return page
+        # No añadimos una fila vertical a la interfaz técnica: #134 exige
+        # conservar sus pestañas y su comportamiento sin cambios. El acceso
+        # a Model Studio vive en la propia barra de pestañas y no roba altura
+        # al contenido existente.
+        self.tabs.setCornerWidget(
+            self.open_studio_button,
+            Qt.Corner.TopRightCorner,
+        )
+        return self.tabs
 
     def _build_studio_page(self) -> QWidget:
         """Página 1: Model Studio.

@@ -16,10 +16,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import textwrap
+import time
 from pathlib import Path
 
 import pytest
@@ -74,6 +76,11 @@ should_fail() {
   return 1
 }
 
+# Llamada que se queda esperando la respuesta de GitHub. Es el caso que ningun
+# plazo comprobado ENTRE llamadas puede acotar, y el unico que distingue un
+# limite real por proceso de uno decorativo.
+[ -n "${GH_MOCK_HANG_SECONDS:-}" ] && sleep "$GH_MOCK_HANG_SECONDS"
+
 case "$sub" in
   api)
     args="$*"
@@ -91,6 +98,16 @@ case "$sub" in
     if printf '%s' "$args" | grep -q '/comments'; then
       if [ "${GH_MOCK_COMMENTS_ALWAYS_FAIL:-0}" = "1" ]; then echo "503 comments" >&2; exit 1; fi
       if should_fail comments_fail; then echo "503 comments" >&2; exit 1; fi
+      # Falla SOLO a partir de la lectura n+1. Un contador decreciente no sirve
+      # para esto: hace fallar las primeras, y aqui hace falta lo contrario —que
+      # la deduplicacion inicial funcione y sea la RELECTURA posterior al POST la
+      # que caiga—. Sin esta forma, la prueba del caso "no puedo confirmar si el
+      # POST llego" pasaria en vacio por la rama de historial ilegible.
+      if [ -n "${GH_MOCK_COMMENTS_FAIL_AFTER:-}" ]; then
+        cnt=0; [ -f "$D/comments_calls" ] && cnt="$(cat "$D/comments_calls")"
+        cnt=$((cnt+1)); echo "$cnt" > "$D/comments_calls"
+        if [ "$cnt" -gt "$GH_MOCK_COMMENTS_FAIL_AFTER" ]; then echo "503 comments" >&2; exit 1; fi
+      fi
       # La carga se construye con la MISMA forma que devuelve la API REST
       # (`body`, `author_association`, `user.login`) y el filtro `--jq` que trae
       # la llamada se aplica con jq de verdad. Así el filtro de autoría de
@@ -180,6 +197,8 @@ case "$sub" in
         exit 0
         ;;
       comment)
+        # Fallo LIMPIO: la peticion no llega a GitHub, no se escribe nada.
+        if should_fail comment_clean; then echo "503 sin aceptar" >&2; exit 1; fi
         bf=""; btext=""; prev=""
         for a in "$@"; do
           [ "$prev" = "--body-file" ] && bf="$a"
@@ -192,6 +211,11 @@ case "$sub" in
           printf '%s\n' "$btext" >> "$comments_file"
         fi
         echo "COMMENT" >> "$D/actions.log"
+        # Fallo AMBIGUO: GitHub ya ha aceptado la peticion (el comentario queda
+        # escrito, arriba) pero la respuesta se pierde y `gh` devuelve error. Es
+        # el caso que un reintento ciego convierte en duplicado, y el unico que
+        # distingue una recuperacion por relectura de un `sirius_retry`.
+        if should_fail comment_ambiguous; then echo "502 tras aceptar" >&2; exit 1; fi
         exit 0
         ;;
       *)
@@ -223,6 +247,7 @@ exit 0
 # sin directiva, el comentario lo firma el propietario de la incidencia.
 _BUILD_COMMENTS = """#!/usr/bin/env python3
 import json
+import os
 import sys
 
 shape = sys.argv[1]
@@ -240,9 +265,16 @@ AUTHORS = {
     "@@bot": ("NONE", "github-actions[bot]", "app/github-actions"),
 }
 
+chunks = [c for c in raw.split("\\n\\n") if c.strip()]
+# Consistencia eventual: la escritura ya ocurrio pero la lectura todavia no la
+# refleja. Es el caso que distingue "no llego" de "aun no lo veo", y sin el no se
+# puede probar que la recuperacion no republique apoyandose en una ausencia.
+if os.environ.get("GH_MOCK_COMMENTS_HIDE_LAST") == "1" and chunks:
+    chunks = chunks[:-1]
+
 rest = []
 graphql = []
-for chunk in [c for c in raw.split("\\n\\n") if c.strip()]:
+for chunk in chunks:
     association, login, graphql_login = "OWNER", "propietario", "propietario"
     lines = chunk.split("\\n")
     if lines and lines[0].strip() in AUTHORS:
@@ -921,6 +953,186 @@ def test_untrusted_marker_does_not_skip_a_transition_record(tmp_path: Path) -> N
 
 
 # --------------------------------------------------------------------------- #
+# El POST no es idempotente: recuperación por relectura, no reintento ciego
+# --------------------------------------------------------------------------- #
+
+
+def test_ambiguous_post_failure_does_not_duplicate_the_comment(tmp_path: Path) -> None:
+    # El caso que un `sirius_retry` alrededor del POST convertía en duplicado:
+    # GitHub acepta la petición —el comentario queda publicado— y la respuesta se
+    # pierde, así que `gh` devuelve error. Reintentar publica una segunda copia,
+    # y encima autoritativa: la firma la automatización, pasa el filtro de autor
+    # y los escáneres deterministas la cuentan. La relectura distingue "no llegó"
+    # de "llegó y no me enteré".
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "comment_ambiguous").write_text("1", encoding="utf-8")
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    body = _write_body(env, marker)
+    r = _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
+    assert r.returncode == 0, r.stderr
+    assert _comments(env).count(marker) == 1, "el comentario se ha publicado dos veces"
+
+
+def test_ambiguous_post_failure_is_confirmed_by_reread(tmp_path: Path) -> None:
+    # El POST llegó y la relectura lo ve: se termina sin republicar. La relectura
+    # sirve para confirmar el éxito, que es lo único que puede demostrar.
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "comment_ambiguous").write_text("1", encoding="utf-8")
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    body = _write_body(env, marker)
+    r = _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
+    assert r.returncode == 0, r.stderr
+    assert _actions(env).count("COMMENT") == 1
+
+
+def test_a_transient_post_failure_does_not_lose_the_record(tmp_path: Path) -> None:
+    # `complete-sirius-after-merge` cierra la incidencia ANTES de publicar y
+    # después solo busca incidencias abiertas: un único 5xx sin reintento dejaba
+    # la incidencia cerrada y sin registro de forma irrecuperable, porque
+    # reejecutar ya no la encuentra. Siendo el duplicado inocuo para los lectores,
+    # perder el registro es el daño real y reintentar es lo correcto.
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "comment_clean").write_text("2", encoding="utf-8")
+    marker = "<!-- sirius-completed:abc1234 -->"
+    body = _write_body(env, marker)
+    r = _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
+    assert r.returncode == 0, r.stderr
+    assert _comments(env).count(marker) == 1
+
+
+def test_the_publication_budget_is_a_total_deadline(tmp_path: Path) -> None:
+    # La cota es un plazo TOTAL, no un número de intentos por nivel: reutilizar
+    # el mismo número en el POST y en las lecturas multiplicaba el presupuesto
+    # (~154 s) contra jobs de `timeout-minutes: 5`. Con plazo agotado se para de
+    # inmediato, sin depender de cuántos reintentos gasten las lecturas.
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "comment_clean").write_text("99", encoding="utf-8")
+    env["SIRIUS_COMMENT_BUDGET_SECONDS"] = "0"
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    body = _write_body(env, marker)
+    r = _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
+    assert r.returncode != 0
+    # Con el plazo ya vencido para en la primera llamada, que ahora es la lectura
+    # de deduplicación: el presupuesto la cubre también, y ese es el arreglo.
+    assert "plazo agotado" in r.stderr
+    assert _actions(env).count("COMMENT") == 0
+
+
+def test_the_wait_never_overshoots_the_remaining_budget(tmp_path: Path) -> None:
+    # El plazo se comprobaba solo entre esperas, así que una espera exponencial
+    # ya iniciada se consumía entera: con 90 s el reloj se miraba a los 62 s,
+    # dormía 64 más hasta 126 y aún lanzaba otro POST. El plazo no acotaba nada.
+    # Aquí el presupuesto da para una espera corta y la siguiente se recorta, así
+    # que el tiempo real no puede rebasarlo de forma apreciable.
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "comment_clean").write_text("99", encoding="utf-8")
+    env["SIRIUS_COMMENT_BUDGET_SECONDS"] = "3"
+    env["SIRIUS_RETRY_BASE_DELAY"] = "2"
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    body = _write_body(env, marker)
+    inicio = time.monotonic()
+    r = _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
+    transcurrido = time.monotonic() - inicio
+    assert r.returncode != 0
+    assert "agotado el plazo" in r.stderr
+    # Margen generoso para el arranque de bash y las llamadas al simulador; lo
+    # que se comprueba es que no se duerman los 2+4+8… completos por encima del
+    # plazo, no una precisión de reloj.
+    assert transcurrido < 15, f"la funcion ha rebasado el plazo con creces: {transcurrido:.1f}s"
+
+
+def test_a_hung_call_cannot_outlive_the_budget(tmp_path: Path) -> None:
+    # Ni `gh issue comment` ni las lecturas paginadas tienen límite propio, y `gh`
+    # no expone ninguno configurable, así que una llamada bloqueada consumía el
+    # resto del job —los workflows que llaman aquí corren con `timeout-minutes: 5`—
+    # y la transición se cancelaba antes de la parada controlada. El corte tiene
+    # que venir de fuera del proceso.
+    env = _setup(tmp_path)
+    env["GH_MOCK_HANG_SECONDS"] = "60"
+    env["SIRIUS_COMMENT_BUDGET_SECONDS"] = "3"
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    body = _write_body(env, marker)
+    inicio = time.monotonic()
+    r = _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
+    transcurrido = time.monotonic() - inicio
+    assert r.returncode != 0
+    # Umbral ajustado al presupuesto, no holgado: con `< 30` esta prueba pasaba
+    # tardando 18,3 s —seis llamadas de 3 s— porque el límite se calculaba una
+    # vez y lo heredaba cada reintento. El aserto flojo ocultaba el defecto que
+    # decía cubrir.
+    assert transcurrido < 12, (
+        f"una llamada colgada ha sobrevivido al plazo: {transcurrido:.1f}s con 3s de "
+        "presupuesto; el limite no acota el CONJUNTO de llamadas"
+    )
+
+
+def test_retries_stop_sleeping_once_the_deadline_passed(tmp_path: Path) -> None:
+    # Con el plazo vencido, `_sirius_gh` ya no lanza la llamada — pero sin una
+    # guarda en `sirius_retry` el bucle seguiría durmiendo sus esperas
+    # exponenciales entre intentos inútiles: 2+4+8 por REST y otro tanto por
+    # GraphQL, ~28 s gastados DESPUÉS de agotado el presupuesto. Las demás
+    # pruebas no lo ven porque fijan la espera base en 0.
+    env = _setup(tmp_path)
+    env["SIRIUS_RETRY_BASE_DELAY"] = "2"
+    inicio = time.monotonic()
+    r = _run(
+        "export SIRIUS_GH_DEADLINE=1; sirius_read_issue_comments owner/repo 55",
+        env,
+    )
+    transcurrido = time.monotonic() - inicio
+    assert r.returncode != 0
+    assert transcurrido < 5, f"se han dormido esperas tras vencer el plazo: {transcurrido:.1f}s"
+
+
+def test_eventual_consistency_may_duplicate_and_that_is_the_accepted_outcome(
+    tmp_path: Path,
+) -> None:
+    # Publicación aceptada + primera lectura obsoleta. Es el caso que el
+    # simulador sabe reproducir (`GH_MOCK_COMMENTS_HIDE_LAST`) y que hasta ahora
+    # ninguna prueba activaba: la capacidad existía sin ejercitarse, así que la
+    # suite habría pasado igual si se rompiera.
+    #
+    # El resultado ESPERADO aquí no es "no duplica". Publicar contra la API no
+    # puede ser exactamente-una-vez, y con la escritura invisible para la
+    # relectura no hay forma de saber que llegó: se republica. Lo que se fija es
+    # que el duplicado ocurre y se acepta, porque la idempotencia vive en los
+    # lectores —`parse_round_records` cuenta una ronda por número y
+    # `ci_failure_streak` cuenta heads distintos— y no en la publicación.
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "comment_ambiguous").write_text("1", encoding="utf-8")
+    env["GH_MOCK_COMMENTS_HIDE_LAST"] = "1"
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    # Cuerpo de un solo bloque: el simulador separa comentarios por líneas en
+    # blanco, así que uno con una dentro contaría como dos.
+    body = _mock_dir(env).parent / "ci.md"
+    body.write_text(f"{marker}\n## CI_FAILURE\n", encoding="utf-8")
+    r = _run(f'sirius_comment_once owner/repo 55 "{marker}" "{body}"', env)
+    assert r.returncode == 0, r.stderr
+    assert _comments(env).count(marker) == 2, (
+        "sin poder confirmar la publicación se republica; si aquí hubiera una "
+        "sola copia, el simulador no estaría reproduciendo la lectura obsoleta"
+    )
+
+
+def test_the_deadline_does_not_leak_to_later_calls(tmp_path: Path) -> None:
+    # El plazo se exporta; si sobreviviera a la función, acotaría llamadas
+    # posteriores con un instante ya vencido y las haría fallar sin motivo.
+    env = _setup(tmp_path)
+    env["SIRIUS_COMMENT_BUDGET_SECONDS"] = "1"
+    (_mock_dir(env) / "comment_clean").write_text("99", encoding="utf-8")
+    marker = "<!-- sirius-quality:5b7a0f2:failure -->"
+    body = _write_body(env, marker)
+    r = _run(
+        f'sirius_comment_once owner/repo 55 "{marker}" "{body}" >/dev/null 2>&1; '
+        f'echo "plazo=[${{SIRIUS_GH_DEADLINE:-}}]"; '
+        f'sirius_read_issue_comments owner/repo 55 >/dev/null && echo "lectura-posterior-ok"',
+        env,
+    )
+    assert "plazo=[]" in r.stdout, f"el plazo se ha escapado: {r.stdout}"
+    assert "lectura-posterior-ok" in r.stdout, "una lectura posterior ha quedado acotada de más"
+
+
+# --------------------------------------------------------------------------- #
 # Numeración de rondas
 # --------------------------------------------------------------------------- #
 
@@ -973,3 +1185,45 @@ def test_comment_read_failure_is_reported_without_pipefail(tmp_path: Path) -> No
     r = _run(f'sirius_dump_comments owner/repo 55 "{dump}"', env)
     assert r.returncode != 0
     assert "no se pudieron leer los comentarios" in r.stderr
+
+
+# --------------------------------------------------------------------------- #
+# Toda llamada a `gh` pasa por la puerta acotada
+# --------------------------------------------------------------------------- #
+
+
+def test_every_gh_call_goes_through_the_bounded_wrapper() -> None:
+    """`_sirius_gh` es la única puerta por la que se invoca `gh`.
+
+    `SIRIUS_GH_DEADLINE` solo acota lo que pasa por `_sirius_gh`, que envuelve
+    la llamada en `timeout`. `sirius_retry` comprueba el plazo ENTRE intentos,
+    después de que el comando haya vuelto: si el comando se cuelga, no vuelve
+    nunca y el plazo no llega a mirarse. Con las lecturas llamando a `gh` a
+    pelo, un plazo interno acotaba una secuencia lenta pero NO un cuelgue, que
+    es justo el caso para el que se puso.
+
+    Esta prueba fija la propiedad, no las grafías: cualquier `gh` nuevo escrito
+    directamente vuelve a abrir el agujero, se llame como se llame la función
+    que lo contenga.
+    """
+    fuente = LIB.read_text(encoding="utf-8")
+    # El cuerpo de `_sirius_gh` es el único sitio donde `gh` se invoca a pelo:
+    # es la puerta, y envolverla en sí misma sería un bucle.
+    inicio = fuente.index("_sirius_gh() {")
+    fin = fuente.index("\n}\n", inicio) + len("\n}\n")
+    resto = fuente[:inicio] + fuente[fin:]
+
+    # El detector busca el TOKEN `gh`, no unas cuantas posiciones donde suele
+    # aparecer. El primer intento enumeraba prefijos (inicio de línea, `$(`,
+    # `|`, `;`) y dejaba pasar `sirius_retry gh api ...`, que es justo la forma
+    # más común aquí: la prueba habría dado la propiedad por cerrada sin
+    # cerrarla. El `lookbehind` excluye `_sirius_gh` sin enumerar nada.
+    crudas = [
+        (numero, linea.strip())
+        for numero, linea in enumerate(resto.splitlines(), 1)
+        if not linea.lstrip().startswith("#") and re.search(r"(?<![\w-])gh\s", linea)
+    ]
+    assert not crudas, f"llamadas a `gh` fuera de la puerta acotada: {crudas}"
+    # Y la puerta sigue siendo la que acota: si dejara de usar `timeout`, el
+    # encaminado no serviría de nada.
+    assert 'timeout "$remaining" gh "$@"' in fuente[inicio:fin]
