@@ -222,8 +222,30 @@ class PuertoSqlite:
 
     @staticmethod
     def _acotar(valores: Sequence[str], limite: int = ARGUMENTOS_MAXIMOS) -> list[str]:
-        """Argumentos ordenados y acotados: pedir "todo" no es una consulta."""
-        return sorted({v for v in valores if v})[:limite]
+        """Argumentos acotados **conservando el orden en que llegaron**.
+
+        La version anterior hacia ``sorted(...)[:limite]``, y eso no acotaba:
+        **elegia por alfabeto**. Con la consulta «Restricciones esenciales,
+        maximo duro 5» salian 25 variantes, la cota era 16, y las 16 primeras
+        del alfabeto eran todas de «duro», «esencial» y «maximo»: **todas las de
+        «restriccion» se caian**, porque la erre va detras de la de, la e y la
+        eme. Lo que llegaba al indice eran solo formas inventadas por el
+        generador de variantes, no coincidia con nada, y la etapa devolvia cero
+        **sin error, sin aviso y con aspecto de haber funcionado**.
+
+        Acotar por orden de llegada no es un capricho: quien llama decide la
+        prioridad y aqui se respeta. Cuando ese orden reparte entre los terminos
+        de la consulta —que es lo que hace ``E2``—, ninguna palabra del usuario
+        puede quedarse sin ninguna variante.
+
+        Se conserva el deduplicado, que si era correcto: pedir dos veces lo
+        mismo no es pedir mas.
+        """
+        vistos: dict[str, None] = {}
+        for valor in valores:
+            if valor and valor not in vistos:
+                vistos[valor] = None
+        return list(vistos)[:limite]
 
     # -- Lectura de items -------------------------------------------------
 

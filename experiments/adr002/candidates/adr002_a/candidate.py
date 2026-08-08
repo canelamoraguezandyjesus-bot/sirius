@@ -194,10 +194,22 @@ class CandidatoA:
         Cubre vocabulario **sin asumir equivalencia semantica**: una variante
         es la misma palabra flexionada, no un sinonimo inferido.
         """
-        expandidos = lexical.ordenar_estable(
-            variante for termino in terminos for variante in lexical.variantes(termino)
-        )
-        nuevos = [t for t in expandidos if t not in terminos]
+        #: **Repartidas entre los terminos, no amontonadas por el primero.**
+        #: El puerto acota los argumentos; si se le entregan todas las variantes
+        #: de una palabra antes que ninguna de la siguiente, la cota se agota con
+        #: la primera y las demas palabras de la consulta **desaparecen de la
+        #: busqueda**. Repartir por rondas garantiza que cada termino conserve al
+        #: menos su primera variante mientras quepa alguna.
+        por_termino = [
+            [v for v in lexical.ordenar_estable(lexical.variantes(termino)) if v not in terminos]
+            for termino in terminos
+        ]
+        nuevos = [
+            variantes[ronda]
+            for ronda in range(max((len(v) for v in por_termino), default=0))
+            for variantes in por_termino
+            if ronda < len(variantes)
+        ]
         if not nuevos:
             return []
         items = contexto.puerto.por_termino_lexico(nuevos)

@@ -92,6 +92,20 @@ def test_la_base_de_a_no_cambio_ni_un_byte() -> None:
     decidiendo con los mismos ejes y no pasan por la marca publicada. Que la
     conformidad de la ronda no se mueva ni un caso es la comprobacion de eso, y
     se hace al repetirla.
+
+    El **arreglo del recorte de terminos** reancla dos, y este SI cambia lo que
+    se recupera —a mejor, y es el punto—:
+
+    * ``port.py`` deja de elegir por alfabeto los argumentos que acota. Hacia
+      ``sorted(...)[:16]``, de modo que en «Restricciones esenciales, maximo
+      duro» sobrevivian las variantes de «duro», «esencial» y «maximo» y
+      **desaparecian todas las de «restriccion»**. La etapa lexica devolvia cero
+      sin error ni aviso;
+    * ``adr002_a/candidate.py`` reparte en ``E2`` las variantes entre los
+      terminos, para que la cota no se agote con la primera palabra.
+
+    Es el unico reanclaje de esta serie que altera cifras medidas, y por eso se
+    dice aqui y se vuelve a medir: no basta con que las pruebas pasen.
     """
     import subprocess
 
@@ -109,7 +123,7 @@ def test_la_base_de_a_no_cambio_ni_un_byte() -> None:
             "b1f737efd91e140c9af691c6a7e2323c84d54c4c"
         ),
         "experiments/adr002/candidates/common/port.py": (
-            "3199d504d2284ff55e411404245a21417a07abec"
+            "8616b8695a2b594f379d1398f479de5d68cdfbac"
         ),
         "experiments/adr002/candidates/common/trace.py": (
             "2202f736a4b9f2fda3299a4bf8a3695edeec7cb2"
@@ -124,7 +138,7 @@ def test_la_base_de_a_no_cambio_ni_un_byte() -> None:
             "a7828c5d17902a8abc7ec90407607fcc29da75cf"
         ),
         "experiments/adr002/candidates/adr002_a/candidate.py": (
-            "3d2199ad54d08edfa0fcfc70b629943de0d8fb71"
+            "37410fd92902dc9eef0a3a1e28b952c3707ae5e5"
         ),
         "experiments/adr002/candidates/adr002_a/lexical.py": (
             "5b6b8faa59fe71671b97ca24b4f5c9d7834a13ed"
