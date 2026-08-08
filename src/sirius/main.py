@@ -62,6 +62,8 @@ def _build_main_window(
         restore_backup_use_case=dependencies.restore_backup_use_case,
         export_structured_use_case=dependencies.export_structured_use_case,
         close_database_connections=dependencies.close_database_connections,
+        studio_voice_use_case=dependencies.studio_voice_use_case,
+        studio_capture_use_case=dependencies.studio_capture_use_case,
     )
     main_window.project_completed.connect(_on_project_completed)
     return main_window
