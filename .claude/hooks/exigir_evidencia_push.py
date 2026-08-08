@@ -50,7 +50,9 @@ from __future__ import annotations
 
 import json
 import os
+import pathlib
 import re
+import shlex
 import subprocess
 import sys
 
@@ -73,6 +75,45 @@ def _git(*args: str) -> tuple[int, str]:
     except Exception:
         return 1, ""
     return proceso.returncode, proceso.stdout.strip()
+
+
+def _es_un_push(comando: str) -> bool:
+    """¿Este comando EJECUTA un push, o solo menciona la palabra?
+
+    Buscar «git … push» en el texto crudo bloqueaba `rg 'git push' .`,
+    `git log --grep='git push'`, un `echo` a documentación y hasta
+    `git commit -m 'no hagas push'`: fricción pura, que es el motivo número uno
+    por el que estos montajes se desactivan a las dos semanas.
+
+    Ojo con lo que esto NO es: no vuelve el parseo de refspecs que se retiró.
+    Aquella pregunta —«¿QUÉ rama publica?»— no tiene respuesta fiable en el
+    texto y costó doce defectos. Esta —«¿el subcomando es `push`?»— sí la
+    tiene, porque git la resuelve igual: el primer operando que no es opción.
+    """
+    for tramo in re.split(r"(?:\|\||&&|[|;\n])", comando):
+        try:
+            piezas = shlex.split(tramo)
+        except ValueError:
+            # Comillas sin cerrar: no se sabe qué es. No se bloquea a ciegas,
+            # coherente con el resto de la puerta (y declarado como evadible).
+            continue
+        # Asignaciones de entorno previas al programa: `GIT_DIR=x git push`.
+        while piezas and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", piezas[0]):
+            piezas.pop(0)
+        if not piezas or pathlib.PurePath(piezas[0]).name not in ("git", "git.exe"):
+            continue
+        resto = piezas[1:]
+        while resto:
+            actual = resto.pop(0)
+            if not actual.startswith("-"):
+                # Primer operando que no es opción: el subcomando de git.
+                if actual == "push":
+                    return True
+                break
+            # Opciones globales cuyo valor viaja en el token siguiente.
+            if actual in ("-c", "-C", "--git-dir", "--work-tree", "--namespace") and resto:
+                resto.pop(0)
+    return False
 
 
 def _rama_actual() -> str:
@@ -114,7 +155,8 @@ def _hay_evidencia(rama: str) -> tuple[bool, str]:
     if not base:
         return False, (
             "no encuentro una base con la que comparar (ni origin/main, ni main, "
-            "ni origin/HEAD). Ejecuta `git fetch origin main` y repite"
+            "ni origin/HEAD). Ejecuta `git fetch origin "
+            "main:refs/remotes/origin/main` y repite"
         )
     codigo, salida = _git("diff", "--name-only", f"{base}...HEAD")
     if codigo != 0:
@@ -144,9 +186,7 @@ def main() -> int:
         return 0
     entrada = carga.get("tool_input")
     comando = str(entrada.get("command") or "") if isinstance(entrada, dict) else ""
-    # Lo único que se le pregunta al comando es "¿es un push?". Nada más: cada
-    # pregunta adicional al texto fue un defecto (ver la cabecera del archivo).
-    if not re.search(r"\bgit\b[^\n]*\bpush\b", comando):
+    if not _es_un_push(comando):
         return 0
     rama = _rama_actual()
     if rama in ("", "main"):

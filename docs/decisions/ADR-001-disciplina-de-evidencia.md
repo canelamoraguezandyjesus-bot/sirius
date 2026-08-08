@@ -115,6 +115,20 @@ participantes.
   devolver el parseo de refspecs, quitar el umbral de sustancia, aceptar la
   nota de otra rama y devolver la vía `isfile`. Las cinco hacen fallar su
   prueba; el hook real cumple los cinco escenarios.
+- **Tercera ronda de revisión**: dos defectos más en la misma pieza, ninguno
+  en la propiedad central —la puerta no dejaba pasar nada sin evidencia—, los
+  dos en su superficie. El mensaje de bloqueo prescribía `git fetch origin
+  main`, que en un clon `--single-branch` actualiza `FETCH_HEAD` pero no crea
+  ninguna de las tres referencias: seguir la instrucción dejaba el mismo
+  bloqueo para siempre (familia A, en el texto de ayuda). Y el detector
+  buscaba «git … push» en el texto crudo, así que bloqueaba `rg 'git push' .`,
+  `git log --grep=…`, un `echo` a documentación y hasta
+  `git commit -m 'no hagas push'`: fricción sin motivo, el modo número uno de
+  abandono de estos montajes. Corregidos con una salida verificada por la
+  prueba (que ejecuta lo que el mensaje manda) y un detector que distingue
+  ejecutar de mencionar. Eso NO reabre el parseo retirado: «¿qué rama publica?»
+  no tiene respuesta fiable en el texto; «¿el subcomando es `push`?» sí, porque
+  git la resuelve igual.
 - Sintaxis de los hooks portable a intérpretes anteriores a 3.14 (verificado
   compilando con 3.11): una sintaxis exclusiva de 3.14 habría degradado a
   pase silencioso en cualquier entorno con otro Python.

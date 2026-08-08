@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -237,7 +239,51 @@ def test_a_single_branch_clone_fails_closed(tmp_path: Path, repo: Path) -> None:
 
     r = _run_hook(HOOK_PUSH, PUSH_ACTUAL, clon)
     assert r.returncode == 2, "sin base fiable la puerta debe cerrarse, no abrirse"
-    assert "git fetch origin main" in r.stderr, "el bloqueo debe decir cómo salir"
+
+    # Y la salida prescrita tiene que FUNCIONAR. La primera versión decía
+    # `git fetch origin main`, que en un clon --single-branch actualiza
+    # FETCH_HEAD pero no crea ninguna de las tres referencias: seguir la
+    # instrucción dejaba el mismo bloqueo para siempre. Un mensaje de ayuda que
+    # no ayuda es de la misma familia que el resto —afirmar lo que no se
+    # sostiene—, así que la prueba ejecuta lo que el mensaje manda.
+    prescrito = re.search(r"Ejecuta `([^`]+)`", r.stderr)
+    assert prescrito, "el bloqueo debe decir cómo salir"
+    subprocess.run(
+        shlex.split(prescrito.group(1)), cwd=clon, check=True, capture_output=True, timeout=60
+    )
+    _confirma(clon, ".claude/evidencia/nueva.md", NOTA)
+    assert _run_hook(HOOK_PUSH, PUSH_ACTUAL, clon).returncode == 0, (
+        "tras seguir la instrucción prescrita la puerta debe poder abrirse"
+    )
+
+
+def test_mentioning_a_push_is_not_executing_one(repo: Path) -> None:
+    """Buscar la palabra en el texto crudo bloqueaba trabajo cotidiano.
+
+    Sin evidencia en la rama, un buscador, un `git log --grep`, un `echo` a
+    documentación y hasta un `git commit` cuyo mensaje contiene «push» caían
+    bloqueados. La fricción sin motivo es el modo número uno por el que estos
+    montajes acaban desactivados, así que se distingue ejecutar de mencionar.
+    """
+    for comando in (
+        "rg 'git push' .",
+        "git log --grep='git push'",
+        "echo 'usa git push para publicar' > doc.md",
+        "git commit -m 'no hagas push'",
+        "grep -rn 'git push' docs/",
+    ):
+        r = _run_hook(HOOK_PUSH, {"tool_input": {"command": comando}}, repo)
+        assert r.returncode == 0, f"mencionar un push no es ejecutarlo: {comando}"
+
+    # Y las formas que SÍ ejecutan un push siguen bloqueando sin evidencia.
+    for comando in (
+        "git push",
+        "git -c core.pager=cat push",
+        "GIT_TRACE=1 git push",
+        "uv run pytest && git push",
+    ):
+        r = _run_hook(HOOK_PUSH, {"tool_input": {"command": comando}}, repo)
+        assert r.returncode == 2, f"esto sí ejecuta un push: {comando}"
 
 
 def test_the_gate_asks_the_command_only_whether_it_is_a_push(repo: Path) -> None:
