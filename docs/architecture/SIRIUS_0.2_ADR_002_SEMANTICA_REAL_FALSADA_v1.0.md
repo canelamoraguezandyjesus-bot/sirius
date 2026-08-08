@@ -35,6 +35,13 @@ La columna que decide es **omisiones: 11 en las dieciocho filas**. La señal no
 recupera ninguno de los elementos que faltaban. Lo único que varía es cuánto
 ruido añade.
 
+**Precisión sobre el alcance del barrido:** las dieciocho filas se midieron con
+`es_core_news_lg`, que es el mejor de los tres modelos en la prueba de ranking.
+El transformer se midió **solo a nivel de ranking**, donde queda claramente por
+debajo —1 de 19 en top-5 frente a 6 de 19—, y por eso no se llevó al banco
+completo. Es una limitación declarada: lo falsado con el banco entero es el
+modelo mejor situado, y el peor no se rescató por no haberlo intentado.
+
 **Por tanto no se materializa `ADR002-D`.** La instrucción era explícita —«solo
 si la señal semántica demuestra utilidad»— y la puerta queda cerrada con
 medición, no con opinión.
