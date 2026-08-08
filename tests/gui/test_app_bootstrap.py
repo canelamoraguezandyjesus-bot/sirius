@@ -479,7 +479,7 @@ def test_full_fresh_install_chain_reaches_the_main_window_in_one_run(
 # entran por el mismo camino que el arranque real.
 
 
-def _real_main_window(tmp_path: Path, qtbot: QtBot) -> QMainWindow:
+def _real_main_window(tmp_path: Path, qtbot: QtBot) -> ValidatedMainWindow:
     """La ventana tal como la construye ``main.py``, sin atajos."""
     from sirius.main import _build_main_window
 
@@ -494,6 +494,9 @@ def _real_main_window(tmp_path: Path, qtbot: QtBot) -> QMainWindow:
     )
     window = _build_main_window(dependencies, [])
     qtbot.addWidget(window)
+    # _build_main_window devuelve QMainWindow por contrato; aquí interesa la
+    # ventana concreta, que es la que tiene Model Studio.
+    assert isinstance(window, ValidatedMainWindow)
     return window
 
 
@@ -530,4 +533,6 @@ def test_the_real_app_starts_with_capture_off(qtbot: QtBot, tmp_path: Path) -> N
 
     assert window.studio_page.capture_available
     assert not window.studio_page.capture_panel_open
-    assert not window._studio_capture_use_case.is_enabled  # type: ignore[union-attr]
+    capture = window._studio_capture_use_case
+    assert capture is not None
+    assert not capture.is_enabled
