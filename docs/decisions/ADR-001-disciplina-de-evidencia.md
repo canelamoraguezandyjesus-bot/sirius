@@ -79,15 +79,29 @@ participantes.
 ## Comprobación que la sostiene
 
 - Puerta del push probada contra este mismo repositorio antes de publicarla:
-  bloqueó el push de esta propia rama hasta que este ADR existió (rc=2 con el
-  mensaje completo; rc=0 con comando inocuo, bajo Actions y con entrada
-  ilegible).
-- `tests/automation/test_evidence_hooks.py`: la propiedad central es
-  anti-vacua por construcción —un ADR ya fusionado en `main` NO abre la puerta
-  de otra rama— y las pruebas se verificaron por mutación en las dos
-  direcciones.
-- Auditoría adversarial multi-lente previa a la publicación (resultados en la
-  PR que introduce este ADR).
+  bloqueó el push de esta propia rama hasta que este ADR existió.
+- **Auditoría adversarial de seis lentes con refutación por hallazgo**, previa
+  a publicar. Confirmó ocho defectos, cinco de ellos la misma familia en la
+  misma pieza: la puerta preguntaba «¿existe el archivo?» y aceptaba como
+  evidencia una nota vacía, una nota sin confirmar, el README de la carpeta,
+  la nota de otra rama y una nota heredada de `main` por reutilizar el nombre
+  de rama. Además juzgaba la rama actual en vez de la que el comando publica,
+  y moría en clones sin `origin/main`.
+- **Se aplicó la regla de las dos rondas al propio instrumental**: cinco
+  defectos de una familia no se parchean cinco veces. La puerta se rehízo
+  sobre una sola propiedad —*cuenta como evidencia solo lo que un revisor
+  vería en la PR*: confirmada, de esta rama y con sustancia—, que cierra los
+  cinco a la vez.
+- `tests/automation/test_evidence_hooks.py` (23 pruebas) fija cada escenario
+  reproducido por la auditoría. **Siete mutaciones verificadas en las dos
+  direcciones**: devolver la vía `isfile`, quitar el umbral de sustancia,
+  aceptar cualquier `.md` de la carpeta, aceptar la nota de otra rama, la
+  puerta global por herencia, juzgar la rama actual y fijar la base en
+  `origin/main`. Las siete hacen fallar su prueba; el hook real cumple los
+  siete escenarios.
+- Sintaxis de los hooks portable a intérpretes anteriores a 3.14 (verificado
+  compilando con 3.11): una sintaxis exclusiva de 3.14 habría degradado a
+  pase silencioso en cualquier entorno con otro Python.
 
 ## Consecuencias
 
@@ -95,7 +109,17 @@ Lo que esto NO garantiza, escrito antes de estrenarlo:
 
 - No impide un error de razonamiento; instrumenta su detección temprana.
 - No aplica fuera de Claude Code (pushes manuales del propietario).
-- Es evadible a propósito; protege del descuido, no del dolo.
+- Es evadible a propósito —`git -C`, alias, refspecs exóticos—; protege del
+  descuido, no del dolo.
+- **Si el lanzador no arranca, el push pasa.** El comando del hook es
+  `uv run python ...`: sin `uv` en el PATH o con el entorno sin sincronizar, el
+  hook no llega a ejecutarse y no hay bloqueo. Esa degradación no se puede
+  cerrar desde dentro —es el observador dentro de lo observado, incidencia
+  #138— y por eso se dice aquí en vez de prometer lo contrario. La exención de
+  Actions vive dentro del guion, así que comparte esa suerte: si el guion no
+  arranca en un runner, tampoco bloquea nada.
+- No juzga la calidad de la evidencia, solo que exista y no sea un esbozo
+  (tres líneas útiles y 120 caracteres). Un texto largo y vacío la pasa.
 - El hook `Stop` es un empujón y no una garantía: vive dentro del proceso que
   puede morir (familia B si se prometiera más).
 - La skill puede no auto-cargarse si la petición no encaja con su descripción;

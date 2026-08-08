@@ -33,7 +33,8 @@ def _git(*args: str) -> tuple[int, str]:
         proceso = subprocess.run(
             ["git", *args], capture_output=True, text=True, timeout=30, check=False
         )
-    except OSError, subprocess.SubprocessError:
+    # git ausente, sin permisos o colgado: todo se resuelve igual, "no sé".
+    except Exception:
         return 1, ""
     return proceso.returncode, proceso.stdout.strip()
 
@@ -47,24 +48,45 @@ def _sanear(rama: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]", "-", rama)
 
 
+def _base() -> str:
+    for ref in ("origin/main", "main", "origin/HEAD"):
+        if _git("rev-parse", "--verify", "--quiet", ref)[0] == 0:
+            return ref
+    codigo, salida = _git("rev-list", "--max-parents=0", "HEAD")
+    return salida.splitlines()[0] if codigo == 0 and salida else ""
+
+
 def _hay_evidencia(rama: str) -> bool:
-    if os.path.isfile(os.path.join(".claude", "evidencia", _sanear(rama) + ".md")):
-        return True
-    codigo, salida = _git("diff", "--name-only", "origin/main...HEAD")
+    """Mismo criterio que la puerta del push: confirmada, de esta rama y con
+    sustancia. Un criterio más laxo aquí callaría el empujón justo cuando la
+    puerta va a bloquear, que es cuando el aviso más falta hace."""
+    base = _base()
+    if not base:
+        return False
+    codigo, salida = _git("diff", "--name-only", f"{base}...HEAD")
     if codigo != 0:
         return False
-    return any(
-        ruta.startswith("docs/decisions/ADR-")
-        or (ruta.startswith(".claude/evidencia/") and ruta.endswith(".md"))
-        for ruta in salida.splitlines()
-    )
+    nota = f".claude/evidencia/{_sanear(rama)}.md"
+    for ruta in salida.splitlines():
+        if ruta != nota and not (ruta.startswith("docs/decisions/ADR-") and ruta.endswith(".md")):
+            continue
+        codigo, contenido = _git("show", f"HEAD:{ruta}")
+        if codigo != 0:
+            continue
+        utiles = [linea for linea in contenido.splitlines() if linea.strip()]
+        if len(utiles) >= 3 and len(contenido.strip()) >= 120:
+            return True
+    return False
 
 
 def _hay_trabajo() -> bool:
     codigo, sucio = _git("status", "--porcelain")
     if codigo == 0 and sucio:
         return True
-    codigo, diff = _git("diff", "--name-only", "origin/main...HEAD")
+    base = _base()
+    if not base:
+        return False
+    codigo, diff = _git("diff", "--name-only", f"{base}...HEAD")
     return codigo == 0 and bool(diff)
 
 
@@ -73,7 +95,8 @@ def main() -> int:
         return 0
     try:
         carga = json.load(sys.stdin)
-    except json.JSONDecodeError, UnicodeDecodeError, OSError:
+    # Sin entrada legible no hay nada que decidir.
+    except Exception:
         return 0
     if not isinstance(carga, dict) or carga.get("stop_hook_active"):
         return 0
@@ -103,8 +126,8 @@ def main() -> int:
                     "escribe la evidencia (criterio de parada, afirmación y "
                     "comprobación) en docs/decisions/ o en "
                     f".claude/evidencia/{_sanear(rama)}.md, o di explícitamente "
-                    "al usuario por qué este trabajo no la necesita. Este aviso "
-                    "no se repetirá en esta rama."
+                    "al usuario por qué este trabajo no la necesita. No repetiré este "
+                    "aviso para esta rama en este entorno."
                 ),
             }
         )

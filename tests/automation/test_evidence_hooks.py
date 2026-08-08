@@ -29,6 +29,8 @@ HOOK_PUSH = REPO_ROOT / ".claude" / "hooks" / "exigir_evidencia_push.py"
 HOOK_STOP = REPO_ROOT / ".claude" / "hooks" / "recordar_parada.py"
 
 PUSH = {"tool_input": {"command": "git push -u origin trabajo"}}
+# Sin refspec: la puerta juzga la rama actual, sea cual sea.
+PUSH_ACTUAL = {"tool_input": {"command": "git push"}}
 
 
 def _run_hook(
@@ -119,14 +121,96 @@ def test_under_actions_the_gate_steps_aside(repo: Path) -> None:
     assert r.returncode == 0
 
 
+NOTA = (
+    "# Nota de arranque\n\n"
+    "Criterio de parada: si la segunda ronda trae la misma familia, se para.\n"
+    "Afirmación: la puerta solo acepta evidencia que un revisor vería en la PR.\n"
+    "Comprobación: pruebas de este módulo, verificadas por mutación.\n"
+)
+
+
 def test_the_branch_note_opens_the_gate(repo: Path) -> None:
-    _confirma(repo, ".claude/evidencia/trabajo.md", "criterio de parada: ...\n")
+    _confirma(repo, ".claude/evidencia/trabajo.md", NOTA)
     assert _run_hook(HOOK_PUSH, PUSH, repo).returncode == 0
 
 
 def test_an_adr_committed_on_the_branch_opens_the_gate(repo: Path) -> None:
-    _confirma(repo, "docs/decisions/ADR-099-prueba.md")
+    _confirma(repo, "docs/decisions/ADR-099-prueba.md", NOTA)
     assert _run_hook(HOOK_PUSH, PUSH, repo).returncode == 0
+
+
+# --------------------------------------------------------------------------- #
+# Lo que NO es evidencia (auditoría adversarial del ADR-001)
+#
+# La primera versión de la puerta preguntaba «¿existe el archivo?». La auditoría
+# reprodujo cinco formas de pasar sin evidencia real, todas de la misma familia,
+# así que la puerta se rehízo en vez de parchearse cinco veces: cuenta SOLO lo
+# que un revisor vería en la PR —confirmado, de esta rama y con sustancia—.
+# --------------------------------------------------------------------------- #
+
+
+def test_an_uncommitted_note_is_not_evidence(repo: Path) -> None:
+    # `touch` de un archivo suelto era el camino de mínimo esfuerzo del propio
+    # remedio que la puerta recomienda: abría sin que nada llegara a la PR.
+    destino = repo / ".claude" / "evidencia" / "trabajo.md"
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_text(NOTA, encoding="utf-8")
+    r = _run_hook(HOOK_PUSH, PUSH, repo)
+    assert r.returncode == 2, "una nota sin confirmar no viaja en la PR"
+
+
+def test_an_empty_note_is_not_evidence(repo: Path) -> None:
+    _confirma(repo, ".claude/evidencia/trabajo.md", "")
+    r = _run_hook(HOOK_PUSH, PUSH, repo)
+    assert r.returncode == 2
+    assert "vacía o es un esbozo" in r.stderr
+
+
+def test_touching_the_evidence_readme_is_not_evidence(repo: Path) -> None:
+    # Simétrico exacto del caso ya cubierto en docs/decisions: un retoque de
+    # documentación de la carpeta no es una nota de arranque.
+    _confirma(repo, ".claude/evidencia/README.md", NOTA)
+    assert _run_hook(HOOK_PUSH, PUSH, repo).returncode == 2
+
+
+def test_another_branchs_committed_note_is_not_evidence(repo: Path) -> None:
+    # En ramas encadenadas, la nota confirmada de otra rama viaja en el diff.
+    _confirma(repo, ".claude/evidencia/otra-rama.md", NOTA)
+    r = _run_hook(HOOK_PUSH, PUSH, repo)
+    assert r.returncode == 2
+    assert ".claude/evidencia/trabajo.md" in r.stderr
+
+
+def test_a_note_inherited_from_main_does_not_open_a_reused_branch(repo: Path) -> None:
+    # Las notas se fusionan a main, así que reutilizar un nombre de rama hacía
+    # nacer la puerta abierta: la misma «puerta global» por la vía del archivo.
+    _git(repo, "checkout", "main")
+    _confirma(repo, ".claude/evidencia/ciclo.md", NOTA)
+    _git(repo, "push", "origin", "main")
+    _git(repo, "checkout", "-b", "ciclo")
+    _confirma(repo, "cambio2.txt")
+    assert _run_hook(HOOK_PUSH, PUSH_ACTUAL, repo).returncode == 2
+
+
+def test_the_gate_judges_the_branch_the_command_publishes(repo: Path) -> None:
+    # Juzgar la rama ACTUAL dejaba publicar otra sin evidencia, y bloqueaba la
+    # que sí la tenía. Ambos sentidos, sobre el mismo repositorio.
+    _confirma(repo, ".claude/evidencia/trabajo.md", NOTA)
+    empuja_otra = {"tool_input": {"command": "git push origin sin-evidencia"}}
+    assert _run_hook(HOOK_PUSH, empuja_otra, repo).returncode == 2
+
+    _git(repo, "checkout", "-b", "sin-nota")
+    empuja_la_buena = {"tool_input": {"command": "git push origin trabajo"}}
+    assert _run_hook(HOOK_PUSH, empuja_la_buena, repo).returncode == 0
+
+
+def test_without_origin_main_the_adr_route_still_works(repo: Path) -> None:
+    # En un clon `--single-branch` no existe origin/main: la vía del ADR
+    # quedaba muerta mientras el mensaje seguía ofreciéndola como salida.
+    _confirma(repo, "docs/decisions/ADR-099-prueba.md", NOTA)
+    _git(repo, "remote", "remove", "origin")
+    r = _run_hook(HOOK_PUSH, PUSH, repo)
+    assert r.returncode == 0, "sin origin/main la evidencia real sigue contando"
 
 
 def test_an_adr_already_merged_in_main_does_not_open_another_branch(repo: Path) -> None:
@@ -140,11 +224,11 @@ def test_an_adr_already_merged_in_main_does_not_open_another_branch(repo: Path) 
     # de esta prueba creaba la rama ANTES del ADR y no distinguía entre ambas
     # puertas: la mutación global la pasaba. La cazó la mutación, no el ojo.
     _git(repo, "checkout", "main")
-    _confirma(repo, "docs/decisions/ADR-050-previa.md")
+    _confirma(repo, "docs/decisions/ADR-050-previa.md", NOTA)
     _git(repo, "push", "origin", "main")
     _git(repo, "checkout", "-b", "heredera")
     _confirma(repo, "src_cambio.txt")
-    r = _run_hook(HOOK_PUSH, PUSH, repo)
+    r = _run_hook(HOOK_PUSH, PUSH_ACTUAL, repo)
     assert r.returncode == 2, "un ADR heredado de main no puede abrir la puerta de otra rama"
     assert ".claude/evidencia/heredera.md" in r.stderr
 
@@ -155,7 +239,7 @@ def test_another_branchs_note_does_not_open_this_one(repo: Path) -> None:
     # por la vía del diff; se retira de la rama para aislar la vía del archivo.
     _git(repo, "checkout", "main")
     _git(repo, "checkout", "-b", "sin-nota")
-    r = _run_hook(HOOK_PUSH, PUSH, repo)
+    r = _run_hook(HOOK_PUSH, PUSH_ACTUAL, repo)
     assert r.returncode == 2
     assert ".claude/evidencia/sin-nota.md" in r.stderr
 
@@ -208,7 +292,7 @@ def test_work_without_evidence_nudges_exactly_once(repo: Path) -> None:
 
 
 def test_with_evidence_the_nudge_stays_silent(repo: Path) -> None:
-    _confirma(repo, ".claude/evidencia/trabajo.md", "nota\n")
+    _confirma(repo, ".claude/evidencia/trabajo.md", NOTA)
     r = _run_hook(HOOK_STOP, {}, repo)
     assert not _hay_bloqueo(r)
 
