@@ -83,3 +83,23 @@ realidad medía la máquina.
 
 Antídoto: los laboratorios de prueba fijan su propia identidad, rutas y
 configuración; nada se hereda del entorno sin declararlo.
+
+## Corregir un exceso conservándolo dentro (PR #139, 2026-08)
+
+Al anotar en un ADR que una afirmación había sido desmentida, la propia
+anotación repitió el exceso: decía que la puerta «sí podía observar el fallo,
+pero...». No podía. Un hook `PreToolUse` recibe el TEXTO de un comando, no el
+hecho de ejecutarlo; reconocía un subconjunto de textos.
+
+La corrección heredó la premisa que venía a corregir. Antídoto: al escribir un
+desmentido, comprobar la afirmación original **entera**, no solo la parte que
+saltó a la vista.
+
+## Afirmaciones que caducan al retirar lo que describían (PR #139, 2026-08)
+
+El ADR decía «23 pruebas, cinco mutaciones verificadas». Tras retirar la pieza,
+el archivo tenía 7 y ninguna de esas mutaciones. La frase era cierta cuando se
+escribió y falsa en el árbol revisado, así que un lector no podía reproducirla.
+
+Antídoto: al retirar algo, buscar toda afirmación que lo contara como evidencia
+y o marcarla como histórica o sustituirla por lo comprobable hoy.

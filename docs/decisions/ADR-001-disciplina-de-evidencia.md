@@ -35,10 +35,14 @@ final»); están marcados donde corresponde.
    repositorio, que se carga en todas las futuras. La puerta intercepta la
    **acción de publicar**, no la intención, así que sí puede observar el fallo
    que corrige mientras la sesión está viva.
-   → **Desmentido en parte por el desenlace**: la puerta sí podía observar el
-   fallo, pero para hacerlo tenía que deducir del texto de un comando si ese
-   comando publicaría algo, y eso resultó irresoluble. La parte que se sostuvo
-   es la primera: el arreglo vive en el repositorio, no en la sesión.
+   → **Desmentido por el desenlace, y la primera corrección de esta línea
+   también afirmaba de más.** Escribí que «la puerta sí podía observar el
+   fallo»; no podía. Un hook `PreToolUse` recibe el TEXTO de un comando antes
+   de ejecutarlo, no el hecho de publicar: reconocía un subconjunto de textos,
+   y las formas que se le escapaban —`(git push)`, `$(git push)`, la
+   continuación de línea— son la prueba de que el hecho quedaba fuera de su
+   alcance. Lo que sí se sostuvo del punto 1 es lo primero: el arreglo vive en
+   el repositorio, no en la sesión.
 2. *¿Qué NO garantiza?* Ver «Consecuencias».
 3. *Criterio de parada*: si la auditoría adversarial previa a publicar
    encuentra defectos de las familias A o B en este instrumental, se corrigen
@@ -121,13 +125,18 @@ participantes.
   main`, porque comparar contra el raíz metía en el diff todo ADR fusionado en
   la historia. Lo que la puerta ya no cubre —publicar otra rama, `--all`— queda
   escrito abajo en vez de fingido en el código.
-- `tests/automation/test_evidence_hooks.py` (23 pruebas) fija cada escenario
-  reproducido en las dos rondas, incluido un **clon `--single-branch` de
-  verdad** en sustitución de la prueba vacua. **Mutaciones verificadas en las
-  dos direcciones** sobre la versión final: devolver el respaldo al raíz,
-  devolver el parseo de refspecs, quitar el umbral de sustancia, aceptar la
-  nota de otra rama y devolver la vía `isfile`. Las cinco hacen fallar su
-  prueba; el hook real cumple los cinco escenarios.
+- **Histórico, ya no reproducible en este árbol**: mientras la puerta existió,
+  `test_evidence_hooks.py` llegó a tener 23 pruebas —una por escenario
+  reproducido— y cinco mutaciones verificadas en las dos direcciones. Esas
+  pruebas se fueron con la puerta. Se deja constancia de que la verificación
+  existió, no como evidencia del código actual: **un lector no puede
+  reproducirla aquí, y decir lo contrario sería el defecto que este ADR
+  documenta**.
+- **Comprobable hoy**: `tests/automation/test_evidence_hooks.py` tiene **7
+  pruebas**, todas del empujón de cierre y del cableado — que la exención bajo
+  Actions funciona, que `stop_hook_active` deja terminar el turno, que el aviso
+  es uno por rama y entorno, que calla con evidencia, sin trabajo y en `main`,
+  y que los settings declaran solo el hook que existe.
 - **Tercera ronda**: dos defectos, ninguno en la propiedad central, los dos en
   la superficie de la puerta —el mensaje prescribía `git fetch origin main`,
   que en un clon `--single-branch` no crea ninguna referencia, y el detector
@@ -181,6 +190,11 @@ Lo que esto NO garantiza, escrito sin adornos:
   el respaldo son las líneas de `CLAUDE.md`, que se cargan siempre.
 - El empujón avisa una vez por rama **y por entorno**: el marcador es local y
   no sobrevive a un contenedor efímero.
+- **El empujón calla si no hay base de comparación.** En un clon
+  `--single-branch` sin `origin/main`, `main` ni `origin/HEAD`, no puede saber
+  qué trabajo es de esta rama, así que trabajo ya confirmado con el árbol
+  limpio no produce aviso (verificado). Se documenta en vez de inventar una
+  heurística: adivinar sin base es exactamente lo que costó quince defectos.
 - Mantenimiento: `patrones.md` admite solo patrones que mordieron dos veces y
   se poda trimestralmente; si en un mes hay más de tres ADR de trámite
   (creados solo por inercia, sin comprobación real), se afloja la expectativa.

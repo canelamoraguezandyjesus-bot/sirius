@@ -76,7 +76,9 @@ mordido dos veces; se poda lo que lleve un trimestre sin usarse.
 ## Sobre lo mecánico
 
 Solo hay un hook: el que empuja al cerrar el turno si la rama tiene trabajo sin
-evidencia. Hubo también una puerta que bloqueaba `git push`, y se retiró tras
+evidencia — **y ni siquiera eso lo garantiza**: si no encuentra base de
+comparación (un clon `--single-branch` sin `origin/main`, `main` ni
+`origin/HEAD`) no puede distinguir qué trabajo es de esta rama y calla. Hubo también una puerta que bloqueaba `git push`, y se retiró tras
 quince defectos: decidir desde el texto de un comando si ejecutará un push
 exige un intérprete de shell entero (ADR-001). **Este método no lo sostiene un
 mecanismo, lo sostienes tú**; lo que ata de verdad es publicar el criterio
