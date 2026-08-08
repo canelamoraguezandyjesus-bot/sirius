@@ -48,6 +48,58 @@ SPEECH_VOICES: tuple[str, ...] = (
     "verse",
 )
 
+TEMPORARY_PREFIX = "sirius-voz-"
+
+_RIFF = b"RIFF"
+_WAVE = b"WAVE"
+_DATA = b"data"
+_HEADER = 12
+_CHUNK_HEADER = 8
+
+
+def repair_wav_sizes(payload: bytes) -> bytes:
+    """Reescribe los tamaños del encabezado WAV cuando llegan como marcador.
+
+    El proveedor genera el audio mientras lo envía, así que escribe los tamaños
+    de ``RIFF`` y de ``data`` antes de saber cuánto va a durar y los deja con un
+    valor de relleno. Un reproductor que se fíe del encabezado puede cortar
+    antes de tiempo o rechazar el archivo; FFmpeg avisa por consola —*«Ignoring
+    maximum wav data size, file may be invalid»*, *«Packet corrupt»*— y estima
+    la duración por el bitrate, que es justo lo que no se quiere de un audio que
+    hay que oír entero. Aquí se sustituyen por los bytes que de verdad llegaron.
+
+    Solo se toca lo que es imposible: un tamaño de cero o mayor que el archivo.
+    Un encabezado coherente se deja intacto, porque tras ``data`` puede venir
+    otro trozo legítimo y recortarlo sería estropear un audio correcto. Si el
+    contenido no es un WAV reconocible se devuelve tal cual: este adaptador
+    traduce, no descarta.
+    """
+    if len(payload) < _HEADER or payload[:4] != _RIFF or payload[8:_HEADER] != _WAVE:
+        return payload
+
+    buffer = bytearray(payload)
+    offset = _HEADER
+    while offset + _CHUNK_HEADER <= len(buffer):
+        chunk_id = bytes(buffer[offset : offset + 4])
+        declared = int.from_bytes(buffer[offset + 4 : offset + _CHUNK_HEADER], "little")
+        available = len(buffer) - (offset + _CHUNK_HEADER)
+
+        if chunk_id == _DATA:
+            if declared != 0 and declared <= available:
+                return payload
+            buffer[offset + 4 : offset + _CHUNK_HEADER] = available.to_bytes(4, "little")
+            buffer[4:8] = (len(buffer) - 8).to_bytes(4, "little")
+            return bytes(buffer)
+
+        if declared == 0 or declared > available:
+            # Encabezado que no se puede recorrer: se deja el archivo intacto
+            # antes que adivinar dónde empieza el audio.
+            return payload
+        # Los trozos ocupan un número par de bytes: uno impar lleva relleno.
+        offset += _CHUNK_HEADER + declared + (declared % 2)
+
+    return payload
+
 
 def _classify(exc: Exception) -> SpeechErrorKind:
     if isinstance(exc, openai.AuthenticationError):
@@ -93,7 +145,7 @@ class OpenAISpeech:
 
         self._directory.mkdir(parents=True, exist_ok=True)
         self._counter += 1
-        destination = self._directory / f"sirius-voz-{self._counter}.wav"
+        destination = self._directory / f"{TEMPORARY_PREFIX}{self._counter}.wav"
 
         try:
             response = self._client.audio.speech.create(
@@ -103,7 +155,7 @@ class OpenAISpeech:
                 instructions=request.instructions,
                 response_format="wav",
             )
-            destination.write_bytes(response.read())
+            destination.write_bytes(repair_wav_sizes(response.read()))
         except Exception as exc:  # traducido a un error tipado; nunca se relanza
             kind = _classify(exc)
             # Ni el texto ni la clave llegan al registro: solo el tipo de fallo.

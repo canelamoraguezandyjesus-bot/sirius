@@ -400,6 +400,8 @@ class MainWindow(QMainWindow):
             self._studio_voice_use_case is not None,
             "todavía no disponible",
         )
+        if self._studio_voice_use_case is not None:
+            self._studio_voice_use_case.set_speech_finished_callback(self._on_speech_finished)
 
         self.studio_page.capture_panel_toggled.connect(self._handle_capture_panel_toggled)
         self.studio_page.emergency_stop_clicked.connect(self._handle_emergency_stop)
@@ -632,6 +634,16 @@ class MainWindow(QMainWindow):
             self._mirror_studio_state(StudioInteractionState.HABLANDO)
             return
         if isinstance(outcome, NothingToSay):
+            self._mirror_studio_state(StudioInteractionState.PREPARADO)
+
+    def _on_speech_finished(self) -> None:
+        """La voz terminó sola: se vuelve a PREPARADO.
+
+        Solo desde ``HABLANDO``. Si mientras sonaba ya se estaba pensando otra
+        respuesta o escuchando el micrófono, ese estado es el que manda: el
+        final de un audio no puede pisar algo que empezó después.
+        """
+        if self.studio_page.interaction_state is StudioInteractionState.HABLANDO:
             self._mirror_studio_state(StudioInteractionState.PREPARADO)
 
     def _handle_stop_voice_clicked(self) -> None:

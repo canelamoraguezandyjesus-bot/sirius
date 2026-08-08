@@ -47,6 +47,15 @@ SAMPLE_WIDTH_BYTES = 2
 
 TEMPORARY_PREFIX = "sirius-captura-"
 
+ORPHAN_PATTERN = "sirius-*.wav"
+"""Qué se considera basura al arrancar.
+
+La carpeta es exclusivamente de audio temporal de Sirius y guarda dos cosas: lo
+que entra por el micrófono y la voz ya sintetizada. Las dos hay que barrerlas.
+La voz, además, puede quedarse porque Windows tiene el archivo abierto un
+instante más cuando se intentó borrar; al arrancar ya no lo tiene nadie.
+"""
+
 
 def _build_format() -> Any:
     from PySide6.QtMultimedia import QAudioFormat
@@ -152,7 +161,17 @@ class QtAudioCapture(QObject):
         return self._source is not None
 
     def discard(self, audio_path: Path) -> None:
-        audio_path.unlink(missing_ok=True)
+        """Borra un temporal. No falla nunca por no poder borrarlo.
+
+        En Windows el reproductor puede tener el archivo abierto un instante
+        más después de pararlo, y ahí borrar da error. Perder un temporal es
+        molesto; que la voz reviente por no poder borrarlo, no.
+        ``cleanup_orphans`` lo recoge en el siguiente arranque.
+        """
+        try:
+            audio_path.unlink(missing_ok=True)
+        except OSError:
+            _logger.warning("audio temporal todavía en uso; se borrará al arrancar")
 
     # --- Limpieza --------------------------------------------------------
 
@@ -165,8 +184,11 @@ class QtAudioCapture(QObject):
         if not self._directory.exists():
             return 0
         removed = 0
-        for orphan in self._directory.glob(f"{TEMPORARY_PREFIX}*.wav"):
-            orphan.unlink(missing_ok=True)
+        for orphan in self._directory.glob(ORPHAN_PATTERN):
+            try:
+                orphan.unlink(missing_ok=True)
+            except OSError:
+                continue
             removed += 1
         return removed
 

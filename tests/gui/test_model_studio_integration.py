@@ -532,3 +532,85 @@ def test_muting_and_stopping_reach_the_use_case(qtbot: QtBot, tmp_path: Path) ->
 
     window.studio_page.stop_voice_button.click()
     assert not voice.is_speaking
+
+
+@pytest.mark.gui
+def test_the_surface_stops_saying_hablando_when_the_voice_ends(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Empezar a hablar lo sabe la ventana; terminar, solo el reproductor.
+
+    Sin el aviso de vuelta, la superficie se quedaba anunciando «HABLANDO»
+    indefinidamente después de que dejara de sonar.
+    """
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    playback = FakeAudioPlayback()
+    voice = _voice_use_case(tmp_path, playback=playback)
+    window = _build_window(database_path, studio_voice_use_case=voice)
+    qtbot.addWidget(window)
+    _swap_provider(window, database_path, FakeLLMProvider(("Monta el Uno.",)))
+    window.open_model_studio()
+
+    window.studio_page.input.setPlainText("¿por dónde empiezo?")
+    window.studio_page.send_button.click()
+    qtbot.waitUntil(
+        lambda: window.studio_page.interaction_state is StudioInteractionState.HABLANDO,
+        timeout=5000,
+    )
+
+    playback.finish()
+
+    assert window.studio_page.interaction_state is StudioInteractionState.PREPARADO
+
+
+@pytest.mark.gui
+def test_the_end_of_the_voice_never_overrides_a_later_state(qtbot: QtBot, tmp_path: Path) -> None:
+    """Si mientras sonaba ya se estaba escuchando, ese estado manda."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    playback = FakeAudioPlayback()
+    voice = _voice_use_case(tmp_path, playback=playback)
+    window = _build_window(database_path, studio_voice_use_case=voice)
+    qtbot.addWidget(window)
+    _swap_provider(window, database_path, FakeLLMProvider(("Monta el Uno.",)))
+    window.open_model_studio()
+
+    window.studio_page.input.setPlainText("¿por dónde empiezo?")
+    window.studio_page.send_button.click()
+    qtbot.waitUntil(
+        lambda: window.studio_page.interaction_state is StudioInteractionState.HABLANDO,
+        timeout=5000,
+    )
+    window.studio_page.microphone_button.click()
+    assert window.studio_page.interaction_state is StudioInteractionState.ESCUCHANDO
+
+    playback.finish()
+
+    assert window.studio_page.interaction_state is StudioInteractionState.ESCUCHANDO
+
+
+@pytest.mark.gui
+def test_the_speaker_icon_says_whether_there_is_sound(qtbot: QtBot, tmp_path: Path) -> None:
+    """Un altavoz tachado permanente se lee como «no hay sonido».
+
+    Es exactamente lo que ocurrió en la primera prueba real: el icono decía qué
+    hacía el botón, no cómo estaba la voz. Ahora dice lo segundo.
+    """
+    voice = _voice_use_case(tmp_path)
+    window = _build_window(
+        _bootstrapped_database(tmp_path / "sirius.db"), studio_voice_use_case=voice
+    )
+    qtbot.addWidget(window)
+    window.open_model_studio()
+    button = window.studio_page.mute_button
+
+    assert "Silenciar" in button.toolTip()
+    sounding = button.icon().pixmap(24, 24).toImage()
+
+    button.setChecked(True)
+
+    assert "activar" in button.toolTip()
+    assert button.icon().pixmap(24, 24).toImage() != sounding
+
+    button.setChecked(False)
+
+    assert button.icon().pixmap(24, 24).toImage() == sounding

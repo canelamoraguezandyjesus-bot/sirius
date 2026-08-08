@@ -207,6 +207,7 @@ class StudioPage(QWidget):
         self._follow_bottom = True
         self._clean_mode = False
         self._voice_available = False
+        self._voice_unavailable_reason = ""
         self._capture_available = False
         self._capture_panel_open = False
 
@@ -390,9 +391,9 @@ class StudioPage(QWidget):
         self.stop_voice_button = self._icon_button("stop", "Detener voz", enabled=False)
         self.stop_voice_button.clicked.connect(self.stop_voice_clicked.emit)
 
-        self.mute_button = self._icon_button("mute", "Silenciar salida hablada", enabled=False)
+        self.mute_button = self._icon_button("sound_on", "Silenciar salida hablada", enabled=False)
         self.mute_button.setCheckable(True)
-        self.mute_button.toggled.connect(self.mute_toggled.emit)
+        self.mute_button.toggled.connect(self._handle_mute_toggled)
 
         self.repeat_button = self._icon_button("repeat", "Repetir última respuesta", enabled=False)
         self.repeat_button.clicked.connect(self.repeat_clicked.emit)
@@ -606,14 +607,18 @@ class StudioPage(QWidget):
         aplicación está rota; con el motivo en el tooltip, se entiende.
         """
         self._voice_available = available
+        self._voice_unavailable_reason = unavailable_reason
         for button, label in (
             (self.microphone_button, "Hablar con Sirius"),
             (self.stop_voice_button, "Detener voz"),
-            (self.mute_button, "Silenciar salida hablada"),
             (self.repeat_button, "Repetir última respuesta"),
         ):
             button.setEnabled(available)
             button.setToolTip(label if available else f"{label} · {unavailable_reason}")
+        # El del silencio va aparte: su icono y su texto dependen además de si
+        # está silenciado ahora mismo.
+        self.mute_button.setEnabled(available)
+        self._refresh_mute_button()
 
     @property
     def voice_available(self) -> bool:
@@ -624,6 +629,28 @@ class StudioPage(QWidget):
         was_blocked = self.mute_button.blockSignals(True)
         self.mute_button.setChecked(muted)
         self.mute_button.blockSignals(was_blocked)
+        self._refresh_mute_button()
+
+    def _handle_mute_toggled(self, muted: bool) -> None:
+        self._refresh_mute_button()
+        self.mute_toggled.emit(muted)
+
+    def _refresh_mute_button(self) -> None:
+        """El icono dice cómo está la voz; el texto, qué pasa si lo pulsas.
+
+        Con el altavoz tachado dibujado siempre, mirar la barra hace pensar que
+        el sonido está cortado aunque no lo esté. Ahora el altavoz suena cuando
+        se oye y aparece tachado solo cuando de verdad está en silencio.
+        """
+        muted = self.mute_button.isChecked()
+        self.mute_button.setIcon(
+            studio_icon("mute" if muted else "sound_on", theme.TEXT_SECONDARY, theme.ICON_PIXELS)
+        )
+        label = "Volver a activar la voz" if muted else "Silenciar salida hablada"
+        self.mute_button.setAccessibleName(label)
+        self.mute_button.setToolTip(
+            label if self._voice_available else f"{label} · {self._voice_unavailable_reason}"
+        )
 
     def set_input_text(self, text: str) -> None:
         """Escribe la transcripción en la caja, para revisarla antes de enviar."""

@@ -66,7 +66,7 @@ def _draw_stop(painter: QPainter, color: QColor) -> None:
     painter.drawRoundedRect(QRectF(6.5, 6.5, 11.0, 11.0), 1.8, 1.8)
 
 
-def _draw_mute(painter: QPainter, color: QColor) -> None:
+def _draw_speaker_body(painter: QPainter, color: QColor) -> None:
     _pen(painter, color)
     path = QPainterPath(QPointF(4.0, 9.5))
     path.lineTo(QPointF(7.5, 9.5))
@@ -76,8 +76,28 @@ def _draw_mute(painter: QPainter, color: QColor) -> None:
     path.lineTo(QPointF(4.0, 14.5))
     path.closeSubpath()
     painter.drawPath(path)
+
+
+def _draw_mute(painter: QPainter, color: QColor) -> None:
+    _draw_speaker_body(painter, color)
     painter.drawLine(QPointF(15.5, 9.5), QPointF(20.5, 14.5))
     painter.drawLine(QPointF(20.5, 9.5), QPointF(15.5, 14.5))
+
+
+def _draw_sound_on(painter: QPainter, color: QColor) -> None:
+    """El altavoz con ondas: la voz está activa.
+
+    Existe porque el altavoz tachado dibujado siempre se lee como «no hay
+    sonido» aunque el botón sea el que silencia. El icono tiene que decir cómo
+    está la voz, no qué pasa si lo pulsas.
+    """
+    _draw_speaker_body(painter, color)
+    for radius in (4.5, 8.0):
+        wave = QRectF(12.0 - radius, 12.0 - radius, radius * 2.0, radius * 2.0)
+        path = QPainterPath()
+        path.arcMoveTo(wave, -55.0)
+        path.arcTo(wave, -55.0, 110.0)
+        painter.drawPath(path)
 
 
 def _draw_repeat(painter: QPainter, color: QColor) -> None:
@@ -153,6 +173,7 @@ _PAINTERS: dict[str, Callable[[QPainter, QColor], None]] = {
     "cancel": _draw_cancel,
     "stop": _draw_stop,
     "mute": _draw_mute,
+    "sound_on": _draw_sound_on,
     "repeat": _draw_repeat,
     "read_all": _draw_read_all,
     "fullscreen": _draw_fullscreen,

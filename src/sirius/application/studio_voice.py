@@ -13,6 +13,7 @@ usa para enviar mensajes, igual que ``SendMessageUseCase``. Aquí no hay hilos.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
@@ -202,6 +203,19 @@ class StudioVoiceUseCase:
         self._settings = settings
         self._budget = budget_guard
         self._spoken_audio: Path | None = None
+        self._speech_finished: Callable[[], None] | None = None
+
+    def set_speech_finished_callback(self, callback: Callable[[], None] | None) -> None:
+        """Avisa cuando la voz termina **sola**, no cuando se la detiene.
+
+        Sin esto la interfaz se queda en ``HABLANDO`` para siempre: sabe cuándo
+        empieza a sonar porque lo pidió ella, pero el final solo lo conoce el
+        reproductor. Quien detiene a propósito ya sabe que ha detenido y ajusta
+        su estado sin que nadie se lo diga.
+
+        Se invoca en el hilo del reproductor, que es el de la interfaz.
+        """
+        self._speech_finished = callback
 
     # --- Escuchar --------------------------------------------------------
 
@@ -327,6 +341,8 @@ class StudioVoiceUseCase:
 
     def _on_playback_finished(self) -> None:
         self._discard_spoken_audio()
+        if self._speech_finished is not None:
+            self._speech_finished()
 
     def _discard_spoken_audio(self) -> None:
         if self._spoken_audio is None:

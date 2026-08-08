@@ -416,3 +416,50 @@ def test_voice_spends_from_the_same_monthly_pocket_as_text(temporary_audio: Path
 
     assert spent_after_transcription > 0.0
     assert tracker.spent_usd > spent_after_transcription
+
+
+# --- El final de la voz: sin aviso, la interfaz se queda en HABLANDO -----
+
+
+def test_the_end_of_the_speech_is_announced(temporary_audio: Path) -> None:
+    """Empezar a hablar lo sabe quien lo pide; terminar, solo el reproductor.
+
+    Sin este aviso la superficie se queda anunciando «HABLANDO» para siempre,
+    aunque haga rato que dejó de sonar.
+    """
+    playback = FakeAudioPlayback()
+    use_case = _use_case(temporary_audio, playback=playback)
+    endings: list[None] = []
+    use_case.set_speech_finished_callback(lambda: endings.append(None))
+
+    use_case.speak("Hola.", MessageStatus.COMPLETED)
+    assert endings == []
+
+    playback.finish()
+
+    assert endings == [None]
+    assert not list(temporary_audio.glob("voz-*.wav"))
+
+
+def test_stopping_on_purpose_does_not_announce_an_ending(temporary_audio: Path) -> None:
+    """Quien detiene ya sabe que ha detenido y ajusta su estado él mismo."""
+    playback = FakeAudioPlayback()
+    use_case = _use_case(temporary_audio, playback=playback)
+    endings: list[None] = []
+    use_case.set_speech_finished_callback(lambda: endings.append(None))
+
+    use_case.speak("Hola.", MessageStatus.COMPLETED)
+    use_case.stop_speaking()
+
+    assert endings == []
+
+
+def test_without_a_callback_the_ending_still_cleans_the_temporary(temporary_audio: Path) -> None:
+    """Avisar es opcional; borrar el temporal, nunca."""
+    playback = FakeAudioPlayback()
+    use_case = _use_case(temporary_audio, playback=playback)
+
+    use_case.speak("Hola.", MessageStatus.COMPLETED)
+    playback.finish()
+
+    assert not list(temporary_audio.glob("voz-*.wav"))
