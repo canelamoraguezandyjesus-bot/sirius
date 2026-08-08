@@ -24,6 +24,7 @@ Contra el modo de abandono número uno (la fricción):
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -48,7 +49,20 @@ def _rama_actual() -> str:
 
 
 def _sanear(rama: str) -> str:
+    """Nombre de archivo legible para la nota de arranque de una rama."""
     return re.sub(r"[^A-Za-z0-9._-]", "-", rama)
+
+
+def _clave(rama: str) -> str:
+    """Clave del marcador, inyectiva sobre el nombre real de la rama.
+
+    Saneando a secas, `feature/a` y `feature-a` comparten marcador: avisar en
+    una silenciaba la otra para siempre, rompiendo el «una vez por rama» que
+    este hook promete. El sufijo es un resumen del nombre ORIGINAL, así que
+    dos ramas distintas no pueden compartir clave.
+    """
+    resumen = hashlib.sha256(rama.encode("utf-8")).hexdigest()[:12]
+    return f"{_sanear(rama)}-{resumen}"
 
 
 def _base() -> str:
@@ -109,7 +123,7 @@ def main() -> int:
     rama = _rama_actual()
     if rama in ("", "main"):
         return 0
-    marcador = os.path.join(".claude", "evidencia", f".empujon-{_sanear(rama)}")
+    marcador = os.path.join(".claude", "evidencia", f".empujon-{_clave(rama)}")
     if os.path.exists(marcador):
         return 0
     if not _hay_trabajo() or _hay_evidencia(rama):
