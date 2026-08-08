@@ -4,12 +4,15 @@
 Cuando la sesión va a terminar su turno con trabajo en la rama y sin evidencia
 de arranque, pide UNA vez que se escriba, o que se diga por qué no hace falta.
 
-Es un empujón, no una garantía, y la diferencia está decidida a propósito
-(ADR-001): un hook ``Stop`` vive dentro del proceso que puede morir, así que
-no puede prometer nada sobre sesiones cortadas —la garantía viviría donde no
-puede cumplirse, que es la familia B de la PR #136—. La garantía dura está en
-la puerta del push (``exigir_evidencia_push.py``), que intercepta una acción y
-por tanto solo actúa sobre sesiones vivas.
+Es un empujón, y **no hay ninguna garantía dura detrás**. Hubo una: una puerta
+que bloqueaba ``git push`` sin evidencia. Se retiró tras quince defectos en
+cuatro rondas, todos con la misma raíz —decidir desde el TEXTO de un comando
+si ejecutará un push exige un intérprete de shell completo (ADR-001)—.
+
+Así que este hook es lo único mecánico que queda, y conviene saber qué NO es:
+vive dentro del proceso que puede morir, de modo que una sesión cortada no lo
+dispara. Prometer más sería la familia B de la PR #136. Sobrevivió a la
+retirada porque no parsea comandos: solo consulta git y el estado de la rama.
 
 Contra el modo de abandono número uno (la fricción):
 

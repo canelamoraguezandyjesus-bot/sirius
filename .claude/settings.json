@@ -8,7 +8,6 @@
       "Edit(./tests/**)",
       "Edit(./migrations/**)",
       "Edit(./docs/implementation/**)",
-
       "Bash(git status)",
       "Bash(git status *)",
       "Bash(git diff)",
@@ -29,7 +28,6 @@
       "PowerShell(git show *)",
       "PowerShell(git branch --show-current)",
       "PowerShell(git rev-parse --abbrev-ref HEAD)",
-
       "PowerShell(scripts/check.ps1*)",
       "PowerShell(./scripts/check.ps1*)",
       "PowerShell(.\\scripts\\check.ps1*)",
@@ -38,7 +36,6 @@
       "Bash(pwsh -File scripts/check.ps1*)",
       "Bash(powershell -File scripts/check.ps1*)",
       "Bash(powershell.exe -File scripts/check.ps1*)",
-
       "PowerShell(scripts/format.ps1*)",
       "PowerShell(./scripts/format.ps1*)",
       "PowerShell(.\\scripts\\format.ps1*)",
@@ -47,18 +44,15 @@
       "Bash(pwsh -File scripts/format.ps1*)",
       "Bash(powershell -File scripts/format.ps1*)",
       "Bash(powershell.exe -File scripts/format.ps1*)",
-
       "Bash(uv run ruff *)",
       "Bash(uv run mypy *)",
       "Bash(uv run pytest*)",
       "PowerShell(uv run ruff *)",
       "PowerShell(uv run mypy *)",
       "PowerShell(uv run pytest*)",
-
       "Bash(python scripts/read_docx.py *)",
       "PowerShell(python scripts/read_docx.py *)",
       "PowerShell(python .\\scripts\\read_docx.py *)",
-
       "Bash(gh issue view*)",
       "Bash(gh issue list*)",
       "Bash(gh issue comment*)",
@@ -69,12 +63,10 @@
       "Bash(gh pr diff*)",
       "Bash(gh label *)",
       "Bash(gh api*)",
-
       "Write(./src/**)",
       "Write(./tests/**)",
       "Write(./migrations/**)",
       "Write(./docs/implementation/**)",
-
       "Bash(git checkout*)",
       "Bash(git switch*)",
       "Bash(git add*)",
@@ -105,7 +97,6 @@
       "PowerShell(git merge*)",
       "Bash(git rebase*)",
       "PowerShell(git rebase*)",
-
       "Bash(rm -rf*)",
       "Bash(rm -fr*)",
       "Bash(rm -r -f*)",
@@ -114,20 +105,17 @@
       "PowerShell(ri -Recurse -Force*)",
       "PowerShell(rm -Recurse -Force*)",
       "PowerShell(del -Recurse -Force*)",
-
       "Bash(cmdkey*)",
       "PowerShell(cmdkey*)",
       "Bash(vaultcmd*)",
       "PowerShell(vaultcmd*)",
       "PowerShell(*StoredCredential*)",
       "PowerShell(*CredentialManager*)",
-
       "Read(.env)",
       "Read(.env.*)",
       "Read(**/*.pem)",
       "Read(**/*.pfx)",
       "Read(**/secrets/**)",
-
       "WebFetch",
       "WebSearch",
       "Bash(curl*)",
@@ -136,7 +124,6 @@
       "PowerShell(iwr*)",
       "PowerShell(Invoke-WebRequest*)",
       "PowerShell(Invoke-RestMethod*)",
-
       "Bash(gh pr merge*)",
       "PowerShell(gh pr merge*)",
       "Bash(gh repo *)",
@@ -147,7 +134,6 @@
       "PowerShell(gh auth*)",
       "Bash(gh workflow *)",
       "PowerShell(gh workflow *)",
-
       "Edit(./.claude/**)",
       "Edit(./.github/**)",
       "Edit(./.gitignore)",
@@ -164,17 +150,6 @@
     ]
   },
   "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash|PowerShell",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "uv run python .claude/hooks/exigir_evidencia_push.py"
-          }
-        ]
-      }
-    ],
     "Stop": [
       {
         "hooks": [

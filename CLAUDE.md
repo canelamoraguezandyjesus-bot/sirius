@@ -10,5 +10,5 @@ Nada se afirma sin la comprobación que lo sostiene. Antes del primer commit:
 nota de arranque publicada (cuatro preguntas y criterio de parada, decididos
 ANTES de ver resultados). Dos rondas de revisión con defectos de la misma
 familia → parar y buscar la raíz, no seguir parcheando. Toda decisión deja un
-ADR en `docs/decisions/`. Método completo en la skill `disciplina-evidencia`;
-puertas mecánicas en `.claude/hooks/` (ADR-001).
+ADR en `docs/decisions/`. Método completo en la skill `disciplina-evidencia`
+(ADR-001).

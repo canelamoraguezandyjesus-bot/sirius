@@ -1,4 +1,4 @@
-# ADR-001 — Instrumentar la disciplina de evidencia con una skill, dos hooks y este registro
+# ADR-001 — Instrumentar la disciplina de evidencia con una skill, un empujón y este registro
 
 - Estado: PROPUESTO
 - Fecha: 2026-08-07
@@ -59,13 +59,13 @@ propietario antes de implementar y repetido aquí.
 La opción 2, con cinco adaptaciones que el contraste con el repositorio
 impuso a la investigación de origen:
 
-- **Evidencia POR RAMA, no global**: «existe algún ADR» es una puerta que el
-  primer ADR deja abierta para siempre (familia A en el diseño de origen,
-  cazada antes de implementar).
+- **Sin puerta mecánica sobre el push.** Se construyó, se revisó cuatro veces
+  y se retiró; el recuento y el porqué están abajo. Lo mecánico que queda es
+  el empujón de cierre, que no parsea comandos.
 - **Exención bajo `GITHUB_ACTIONS`**: los settings del repositorio se cargan
   también en el corrector de la automatización, que publica sin ADR; sin la
   exención la puerta tumbaba la tubería que ya funciona.
-- **Hooks en Python** (`uv run python`): el propietario trabaja en Windows
+- **Hook en Python** (`uv run python`): el propietario trabaja en Windows
   (PowerShell) y las sesiones remotas en Linux; bash+jq no sirve en ambos.
 - **`docs/decisions/` existente** con su convención `ADR-NNN-titulo.md`, no un
   directorio paralelo; la plantilla añade la sección «Criterio de parada».
@@ -115,48 +115,65 @@ participantes.
   devolver el parseo de refspecs, quitar el umbral de sustancia, aceptar la
   nota de otra rama y devolver la vía `isfile`. Las cinco hacen fallar su
   prueba; el hook real cumple los cinco escenarios.
-- **Tercera ronda de revisión**: dos defectos más en la misma pieza, ninguno
-  en la propiedad central —la puerta no dejaba pasar nada sin evidencia—, los
-  dos en su superficie. El mensaje de bloqueo prescribía `git fetch origin
-  main`, que en un clon `--single-branch` actualiza `FETCH_HEAD` pero no crea
-  ninguna de las tres referencias: seguir la instrucción dejaba el mismo
-  bloqueo para siempre (familia A, en el texto de ayuda). Y el detector
-  buscaba «git … push» en el texto crudo, así que bloqueaba `rg 'git push' .`,
-  `git log --grep=…`, un `echo` a documentación y hasta
-  `git commit -m 'no hagas push'`: fricción sin motivo, el modo número uno de
-  abandono de estos montajes. Corregidos con una salida verificada por la
-  prueba (que ejecuta lo que el mensaje manda) y un detector que distingue
-  ejecutar de mencionar. Eso NO reabre el parseo retirado: «¿qué rama publica?»
-  no tiene respuesta fiable en el texto; «¿el subcomando es `push`?» sí, porque
-  git la resuelve igual.
-- Sintaxis de los hooks portable a intérpretes anteriores a 3.14 (verificado
-  compilando con 3.11): una sintaxis exclusiva de 3.14 habría degradado a
-  pase silencioso en cualquier entorno con otro Python.
+- **Tercera ronda**: dos defectos, ninguno en la propiedad central, los dos en
+  la superficie de la puerta —el mensaje prescribía `git fetch origin main`,
+  que en un clon `--single-branch` no crea ninguna referencia, y el detector
+  bloqueaba `rg 'git push' .` o `git commit -m 'no hagas push'`—. Corregidos.
+- **Cuarta ronda: la puerta se retira.** El arreglo del detector partía el
+  comando con una expresión regular ANTES de que `shlex` respetara las
+  comillas, así que `echo "before; git push; after" > doc.md` volvía a ser un
+  falso positivo, y perdía pushes reales en `(git push)`, `$(git push)` o con
+  continuación de línea. Además, una prueba de esa ronda hacía `git commit` en
+  un clon sin identidad git configurada: pasaba en local y tumbó Quality.
+
+### Recuento y decisión final
+
+| Pieza | Defectos en cuatro rondas |
+|---|---|
+| Skill, `patrones.md`, ADR, plantilla | **0** |
+| Hook `Stop` (empujón) | 1, corregido |
+| **Puerta del push** | **15** |
+
+Quince defectos y ninguno repetido: refspecs, `--all`, operandos de opciones,
+comillas, subshells, sustitución de comandos, continuaciones de línea. No eran
+quince problemas. Decidir, a partir del **texto** de un comando de shell, si
+ese comando ejecutará un push exige un intérprete de shell completo, y
+escribirlo a trozos es una carrera que se pierde ronda a ronda.
+
+Es la incidencia #138 con otro disfraz: un proceso que muere no informa de su
+muerte, y **un texto de shell no dice qué va a ejecutar sin un shell que lo
+interprete**. En ambos casos el error fue reconstruir por fuera una decisión
+que solo el sistema dueño puede tomar.
+
+El criterio de parada de la ronda 4 se publicó **antes** de ver sus resultados
+y se cumplió al pie de la letra: la puerta se retira. Queda la skill que se
+auto-carga, el catálogo de patrones, este registro y el empujón de cierre —lo
+que acumula cero defectos en cuatro rondas—.
+
+**La consecuencia honesta: este método no lo sostiene un mecanismo.** Lo
+sostiene quien trabaja, y lo que ata es publicar el criterio donde el humano lo
+ve. Eso es exactamente lo que funcionó en la PR #136 y lo que ha funcionado
+aquí: el criterio publicado ha forzado dos decisiones difíciles —replantear en
+la ronda 2, retirar en la ronda 4— contra la inercia de seguir parcheando.
 
 ## Consecuencias
 
-Lo que esto NO garantiza, escrito antes de estrenarlo:
+Lo que esto NO garantiza, escrito sin adornos:
 
+- **No hay ninguna garantía mecánica.** El empujón de cierre vive dentro del
+  proceso que puede morir: una sesión cortada no lo dispara. Nada impide
+  publicar sin evidencia, ni dentro ni fuera de Claude Code.
 - No impide un error de razonamiento; instrumenta su detección temprana.
-- No aplica fuera de Claude Code (pushes manuales del propietario).
-- Es evadible a propósito —`git -C`, alias, refspecs exóticos—; protege del
-  descuido, no del dolo.
-- **Si el lanzador no arranca, el push pasa.** El comando del hook es
-  `uv run python ...`: sin `uv` en el PATH o con el entorno sin sincronizar, el
-  hook no llega a ejecutarse y no hay bloqueo. Esa degradación no se puede
-  cerrar desde dentro —es el observador dentro de lo observado, incidencia
-  #138— y por eso se dice aquí en vez de prometer lo contrario. La exención de
-  Actions vive dentro del guion, así que comparte esa suerte: si el guion no
-  arranca en un runner, tampoco bloquea nada.
-- No juzga la calidad de la evidencia, solo que exista y no sea un esbozo
-  (tres líneas útiles y 120 caracteres). Un texto largo y vacío la pasa.
-- El hook `Stop` es un empujón y no una garantía: vive dentro del proceso que
-  puede morir (familia B si se prometiera más).
 - La skill puede no auto-cargarse si la petición no encaja con su descripción;
   el respaldo son las líneas de `CLAUDE.md`, que se cargan siempre.
+- El empujón avisa una vez por rama **y por entorno**: el marcador es local y
+  no sobrevive a un contenedor efímero.
 - Mantenimiento: `patrones.md` admite solo patrones que mordieron dos veces y
   se poda trimestralmente; si en un mes hay más de tres ADR de trámite
-  (creados solo para pasar la puerta), la puerta se afloja a nota ligera.
+  (creados solo por inercia, sin comprobación real), se afloja la expectativa.
+- **Queda por ver si sin puerta la disciplina se mantiene.** Si en unas semanas
+  aparecen ramas publicadas sin evidencia, se replantea con casos reales en la
+  mano en vez de con la corazonada de que hacía falta un candado.
 
 ## Alternativas descartadas y por qué
 
@@ -168,6 +185,9 @@ Lo que esto NO garantiza, escrito antes de estrenarlo:
 - **Output styles**: retirados aguas arriba y solo cambian formato.
 - **JSON estructurado para papeleo**: da sensación de control; un ADR con
   secciones fijas hace el mismo trabajo y lo lee un humano.
+- **Insistir con la puerta del push**: cuarta versión, tras quince defectos.
+  Cubrir bien el caso exige preguntarle a git en vez de adivinar de un texto;
+  si alguna vez hace falta, ese es el camino, y no un parser a trozos.
 - **Sembrar el artefacto desde el envoltorio** (workflow o hook escribiéndolo
   por el agente): publicaría como del agente una evidencia que nunca emitió —
   exactamente la familia A que esto viene a corregir.

@@ -55,3 +55,31 @@ opinión de parche.
 
 Antídoto: la regla de las dos rondas, y desde la ronda 2 cambiar la pregunta
 («¿está mal el enfoque?»).
+
+## Reconstruir desde fuera la semántica de otro sistema (PR #139, 15 defectos, 2026-08)
+
+La puerta de evidencia intentaba decidir, a partir del TEXTO de un comando de
+shell, si ese comando ejecutaría un `git push` y qué rama publicaría. Cuatro
+rondas de revisión encontraron quince defectos y ninguno se repitió: refspecs,
+`--all`, operandos de opciones, comillas, subshells, sustitución de comandos,
+continuaciones de línea. Cada arreglo destapaba otra forma.
+
+No eran quince problemas: responder esa pregunta exige un intérprete de shell
+completo, y escribir uno a trozos es una carrera que se pierde ronda a ronda.
+Es la incidencia #138 con otro disfraz —un proceso que muere no informa de su
+muerte; **un texto de shell no dice qué va a ejecutar sin un shell que lo
+interprete**—.
+
+Pregunta que lo caza antes de escribir nada: **¿estoy reimplementando por fuera
+una decisión que solo el sistema dueño puede tomar?** Si sí, o se le pregunta a
+ese sistema, o se elige una propiedad que no dependa de su semántica.
+
+## Pruebas que dependen del entorno del que las escribe (PR #139, 2026-08)
+
+Una prueba hacía `git commit` en un repositorio recién clonado. Pasó en local
+—donde `user.email` y `user.name` están en la configuración global— y tumbó
+Quality, donde no lo están. La prueba afirmaba algo sobre el código y en
+realidad medía la máquina.
+
+Antídoto: los laboratorios de prueba fijan su propia identidad, rutas y
+configuración; nada se hereda del entorno sin declararlo.
