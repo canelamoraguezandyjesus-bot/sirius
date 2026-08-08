@@ -170,6 +170,26 @@ después el congelado —que ya no procede—.
 | Elegir el mejor punto del barrido | se publica **la curva entera**; quedarse con el mejor tras ver los resultados es lo que `§8.1` prohíbe |
 | Abrir un ADR nuevo | prohibido explícitamente |
 | Fusionar el PR #117 | prohibido explícitamente |
+| **Medir coste y latencia de `B-SEM`** | ver abajo |
+
+### Coste y latencia: no medidos, y por qué
+
+El encargo pedía que un candidato superviviente conservara también **coste y
+latencia**. **No los he medido**, y es una omisión deliberada que conviene dejar
+escrita en vez de que se note por su ausencia:
+
+* `B-SEM` **no sobrevive** al primer filtro —cierra cero omisiones y degrada
+  exactitud—, y la condición era medir eso *después* de sobrevivir;
+* la latencia de esta ronda se mide con el protocolo del `§6.8`: once sesiones
+  independientes, cien repeticiones y un orden rotado congelado. Ejecutarlo
+  contra un candidato ya descartado gastaría el presupuesto de medición en algo
+  cuya conclusión no cambiaría.
+
+Lo que sí puede afirmarse sin cronómetro, porque es estructural: el índice
+semántico ocupa **196 KiB** para los 97 elementos y su construcción exige cargar
+un modelo de 500 000 vectores —**568 MiB** en disco— que hoy ninguno de los
+cuatro candidatos necesita. Ese coste es real y habría que contarlo si la
+hipótesis se reabriera.
 
 ---
 
