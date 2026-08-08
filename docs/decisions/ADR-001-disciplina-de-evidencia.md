@@ -24,13 +24,21 @@ pedía opinión de parche.
 
 ## Nota de arranque de este mismo trabajo
 
-Aplicada a su propia construcción, antes del primer commit:
+Aplicada a su propia construcción, antes del primer commit. **Se conserva tal
+como se escribió**, incluido lo que el desenlace desmintió: un registro que se
+reescribe a posteriori deja de ser evidencia de nada. Los puntos 1 y 4 hablan
+de una puerta mecánica que finalmente se retiró (ver «Recuento y decisión
+final»); están marcados donde corresponde.
 
 1. *¿Dónde vive el fallo y dónde va el arreglo?* El fallo vive en el método de
    cada sesión; el arreglo vive fuera de la sesión individual: en el
    repositorio, que se carga en todas las futuras. La puerta intercepta la
    **acción de publicar**, no la intención, así que sí puede observar el fallo
    que corrige mientras la sesión está viva.
+   → **Desmentido en parte por el desenlace**: la puerta sí podía observar el
+   fallo, pero para hacerlo tenía que deducir del texto de un comando si ese
+   comando publicaría algo, y eso resultó irresoluble. La parte que se sostuvo
+   es la primera: el arreglo vive en el repositorio, no en la sesión.
 2. *¿Qué NO garantiza?* Ver «Consecuencias».
 3. *Criterio de parada*: si la auditoría adversarial previa a publicar
    encuentra defectos de las familias A o B en este instrumental, se corrigen
@@ -40,6 +48,10 @@ Aplicada a su propia construcción, antes del primer commit:
 4. *¿Qué haría el fallo imposible?* Nada: instrucciones se pueden racionalizar
    y hooks se pueden evadir a propósito. Lo más cercano es la puerta mecánica
    sobre el push con evidencia por rama, y se eligió eso.
+   → **Desmentido por el desenlace**: la puerta se retiró tras quince defectos.
+   La respuesta correcta a esta pregunta acabó siendo la que ya insinuaba su
+   primera línea —*nada*—, y de ahí la consecuencia que cierra este ADR: el
+   método no lo sostiene un mecanismo.
 
 ## Criterio de parada (escrito ANTES de decidir)
 
@@ -50,14 +62,15 @@ propietario antes de implementar y repetido aquí.
 
 1. Slash command / instrucciones en el prompt (estado previo de facto).
 2. Skill auto-cargable + hook de push + hook de cierre + ADR (investigación
-   externa contrastada contra el repositorio).
+   externa contrastada contra el repositorio). Es la que se adoptó, **menos el
+   hook de push**, que se construyó y se retiró.
 3. Plugin empaquetado, subagente revisor propio, servidor MCP, output styles.
 4. Veredictos JSON estructurados para el trabajo que no es código.
 
 ## Decisión
 
-La opción 2, con cinco adaptaciones que el contraste con el repositorio
-impuso a la investigación de origen:
+La opción 2 **sin el hook de push**, con las adaptaciones que el contraste con
+el repositorio —y después la revisión— impusieron a la investigación de origen:
 
 - **Sin puerta mecánica sobre el push.** Se construyó, se revisó cuatro veces
   y se retiró; el recuento y el porqué están abajo. Lo mecánico que queda es
