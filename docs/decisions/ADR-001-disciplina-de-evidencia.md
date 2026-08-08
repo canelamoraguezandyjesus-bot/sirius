@@ -87,18 +87,34 @@ participantes.
   la nota de otra rama y una nota heredada de `main` por reutilizar el nombre
   de rama. Además juzgaba la rama actual en vez de la que el comando publica,
   y moría en clones sin `origin/main`.
-- **Se aplicó la regla de las dos rondas al propio instrumental**: cinco
-  defectos de una familia no se parchean cinco veces. La puerta se rehízo
-  sobre una sola propiedad —*cuenta como evidencia solo lo que un revisor
-  vería en la PR*: confirmada, de esta rama y con sustancia—, que cierra los
-  cinco a la vez.
+- **Segunda ronda (revisión de Codex sobre la PR #139)**: cuatro defectos más,
+  los cuatro reproducidos, y otra vez la misma familia en la misma pieza. El
+  respaldo al commit raíz abría la puerta en un clon `--single-branch` real; la
+  rama publicada se identificaba pero la evidencia se seguía leyendo de `HEAD`;
+  `--all` publicaba todas mirando una; un operando de opción (`-o ci.skip`) se
+  tomaba por el nombre de la rama y bloqueaba trabajo legítimo. Y la prueba que
+  cubría el primero era **vacua**: quitaba `origin` pero dejaba `main` local,
+  así que nunca ejercitaba el respaldo.
+- **El criterio de parada se cumplió y se honró.** Doce defectos en dos rondas,
+  todos en el mismo punto: la puerta reconstruía la semántica de `git push`
+  parseando su línea de comandos. `git push` admite `--all`, `--mirror`,
+  refspecs múltiples, `HEAD:rama`, opciones con operandos y alias; enumerar sus
+  formas es una carrera que se pierde ronda a ronda. No eran doce problemas
+  sino uno: **la puerta adivinaba en vez de comprobar**.
+- **Replanteamiento (decisión del propietario)**: se retiró el parseo entero.
+  Al comando solo se le pregunta «¿es un push?»; la propiedad comprobada es que
+  **el `HEAD` actual** lleve evidencia. Y el respaldo al commit raíz desapareció
+  de ambos hooks: sin base fiable se falla CERRADO indicando `git fetch origin
+  main`, porque comparar contra el raíz metía en el diff todo ADR fusionado en
+  la historia. Lo que la puerta ya no cubre —publicar otra rama, `--all`— queda
+  escrito abajo en vez de fingido en el código.
 - `tests/automation/test_evidence_hooks.py` (23 pruebas) fija cada escenario
-  reproducido por la auditoría. **Siete mutaciones verificadas en las dos
-  direcciones**: devolver la vía `isfile`, quitar el umbral de sustancia,
-  aceptar cualquier `.md` de la carpeta, aceptar la nota de otra rama, la
-  puerta global por herencia, juzgar la rama actual y fijar la base en
-  `origin/main`. Las siete hacen fallar su prueba; el hook real cumple los
-  siete escenarios.
+  reproducido en las dos rondas, incluido un **clon `--single-branch` de
+  verdad** en sustitución de la prueba vacua. **Mutaciones verificadas en las
+  dos direcciones** sobre la versión final: devolver el respaldo al raíz,
+  devolver el parseo de refspecs, quitar el umbral de sustancia, aceptar la
+  nota de otra rama y devolver la vía `isfile`. Las cinco hacen fallar su
+  prueba; el hook real cumple los cinco escenarios.
 - Sintaxis de los hooks portable a intérpretes anteriores a 3.14 (verificado
   compilando con 3.11): una sintaxis exclusiva de 3.14 habría degradado a
   pase silencioso en cualquier entorno con otro Python.

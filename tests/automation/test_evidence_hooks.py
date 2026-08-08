@@ -192,25 +192,73 @@ def test_a_note_inherited_from_main_does_not_open_a_reused_branch(repo: Path) ->
     assert _run_hook(HOOK_PUSH, PUSH_ACTUAL, repo).returncode == 2
 
 
-def test_the_gate_judges_the_branch_the_command_publishes(repo: Path) -> None:
-    # Juzgar la rama ACTUAL dejaba publicar otra sin evidencia, y bloqueaba la
-    # que sí la tenía. Ambos sentidos, sobre el mismo repositorio.
+def test_a_single_branch_clone_fails_closed(tmp_path: Path, repo: Path) -> None:
+    """Sin base fiable la puerta se cierra; NUNCA cae al commit raíz.
+
+    Este es el defecto que costó la tercera versión de la puerta, y la prueba
+    que lo cubría era vacua: quitaba `origin` pero dejaba `main` local, así que
+    pasaba por `main` y jamás ejercitaba el respaldo. Aquí se clona de verdad
+    con `--single-branch`, donde no existe ni `origin/main`, ni `main`, ni
+    `origin/HEAD`. Comparar contra el commit raíz metía en el diff todo ADR
+    fusionado en la historia: cualquier rama nacía con evidencia ajena.
+    """
+    _git(repo, "checkout", "main")
+    _confirma(repo, "docs/decisions/ADR-050-vieja.md", NOTA)
+    _git(repo, "push", "origin", "main")
+    _git(repo, "checkout", "-b", "nueva")
+    _confirma(repo, "codigo.txt")
+    _git(repo, "push", "origin", "nueva")
+
+    clon = tmp_path / "clon"
+    subprocess.run(
+        [
+            "git",
+            "clone",
+            "--single-branch",
+            "--branch",
+            "nueva",
+            str(tmp_path / "origen.git"),
+            str(clon),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    for ref in ("origin/main", "main", "origin/HEAD"):
+        ausente = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", ref],
+            cwd=clon,
+            capture_output=True,
+            check=False,
+            timeout=60,
+        )
+        assert ausente.returncode != 0, f"el laboratorio no reproduce el clon: {ref} existe"
+
+    r = _run_hook(HOOK_PUSH, PUSH_ACTUAL, clon)
+    assert r.returncode == 2, "sin base fiable la puerta debe cerrarse, no abrirse"
+    assert "git fetch origin main" in r.stderr, "el bloqueo debe decir cómo salir"
+
+
+def test_the_gate_asks_the_command_only_whether_it_is_a_push(repo: Path) -> None:
+    # El parseo de refspecs se retiró: era la fuente de los doce defectos. La
+    # contrapartida es que formas como `-o ci.skip` ya no confunden a la puerta,
+    # porque no se le pregunta nada más al texto que "¿es un push?".
     _confirma(repo, ".claude/evidencia/trabajo.md", NOTA)
-    empuja_otra = {"tool_input": {"command": "git push origin sin-evidencia"}}
-    assert _run_hook(HOOK_PUSH, empuja_otra, repo).returncode == 2
+    for comando in (
+        "git push",
+        "git push -u origin trabajo",
+        "git push -o ci.skip origin trabajo",
+        "git push --all origin",
+    ):
+        r = _run_hook(HOOK_PUSH, {"tool_input": {"command": comando}}, repo)
+        assert r.returncode == 0, f"con evidencia en HEAD no debe bloquear: {comando}"
 
     _git(repo, "checkout", "-b", "sin-nota")
-    empuja_la_buena = {"tool_input": {"command": "git push origin trabajo"}}
-    assert _run_hook(HOOK_PUSH, empuja_la_buena, repo).returncode == 0
-
-
-def test_without_origin_main_the_adr_route_still_works(repo: Path) -> None:
-    # En un clon `--single-branch` no existe origin/main: la vía del ADR
-    # quedaba muerta mientras el mensaje seguía ofreciéndola como salida.
-    _confirma(repo, "docs/decisions/ADR-099-prueba.md", NOTA)
-    _git(repo, "remote", "remove", "origin")
-    r = _run_hook(HOOK_PUSH, PUSH, repo)
-    assert r.returncode == 0, "sin origin/main la evidencia real sigue contando"
+    _confirma(repo, "otro.txt")
+    for comando in ("git push", "git push -o ci.skip origin sin-nota"):
+        r = _run_hook(HOOK_PUSH, {"tool_input": {"command": comando}}, repo)
+        assert r.returncode == 2, f"sin evidencia en HEAD debe bloquear: {comando}"
 
 
 def test_an_adr_already_merged_in_main_does_not_open_another_branch(repo: Path) -> None:

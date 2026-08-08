@@ -1,35 +1,49 @@
 #!/usr/bin/env python3
 """Puerta de evidencia para publicar (hook PreToolUse de Claude Code).
 
-Bloquea ``git push`` cuando la rama que se va a publicar no lleva evidencia de
-arranque CONFIRMADA y con sustancia: su nota ``.claude/evidencia/<rama>.md`` o
-un ADR de ``docs/decisions/``. Nació del ADR-001: en la PR #136 el método falló
-ocho rondas seguidas y lo único que ató de verdad fue la evidencia publicada
-donde el humano podía verla.
+Bloquea ``git push`` cuando **el commit que tienes delante** —``HEAD``— no lleva
+evidencia de arranque confirmada y con sustancia: su nota
+``.claude/evidencia/<rama>.md`` o un ADR de ``docs/decisions/``.
 
-La propiedad, dicha con precisión, porque la primera versión de este archivo
-afirmaba de más y una auditoría adversarial lo demostró con cinco escenarios
-reproducidos:
+Por qué esta puerta es tan simple, que es su única virtud
+=========================================================
 
-    cuenta como evidencia SOLO lo que un revisor vería en la PR.
+La versión anterior intentaba deducir de la línea de comandos QUÉ publica
+``git push`` para juzgar esa rama. Dos rondas de revisión encontraron doce
+defectos, todos de la misma familia y todos en ese punto: el fallback de base
+abría la puerta en clones ``--single-branch``; la rama se identificaba pero la
+evidencia se seguía leyendo de ``HEAD``; ``--all`` publicaba todas y solo se
+miraba una; un operando de opción (``-o ci.skip``) se tomaba por el nombre de
+la rama y bloqueaba trabajo legítimo.
 
-Es decir: confirmado en la rama (no un archivo suelto del árbol de trabajo),
-perteneciente a esa rama (no la nota de otra ni un README de la carpeta), y con
-contenido sustantivo (no un archivo vacío). Preguntar «¿existe el archivo?» era
-la misma puerta global que el diseño decía haber cazado —el primer archivo la
-deja abierta para siempre— reintroducida por otra vía.
+No eran doce problemas: era uno. ``git push`` admite ``--all``, ``--mirror``,
+refspecs múltiples, ``HEAD:rama``, opciones con operandos, alias y ``-C``.
+Reconstruir su semántica parseando texto es una carrera que se pierde ronda a
+ronda, y la revisión tiene razón en todas. Así que la puerta dejó de adivinar.
 
-Lo que esta puerta NO garantiza, escrito aquí para que nadie lo lea de más:
+La propiedad que comprueba, entera:
 
-- No aplica fuera de Claude Code: un push desde otra terminal no la ve.
-- Es evadible a propósito (``git -C``, alias, refspecs exóticos). Protege del
-  descuido, no del dolo.
-- Si el intérprete no arranca (``uv`` ausente, entorno sin sincronizar), el
-  hook no se ejecuta y el push pasa. Esa degradación NO se puede cerrar desde
-  dentro: es el observador dentro de lo observado (incidencia #138). Por eso
-  el arranque se hace lo más corto posible y sin dependencias del proyecto.
-- Bajo ``GITHUB_ACTIONS`` se exime a propósito: los agentes de la
-  automatización publican correcciones sin ADR y esta puerta los tumbaría.
+    el HEAD actual lleva evidencia que un revisor vería en la PR
+
+Confirmada en el árbol (no un archivo suelto), perteneciente a esta rama (no la
+nota de otra ni un README de la carpeta) y con contenido sustantivo (no un
+esbozo para pasar el trámite).
+
+Lo que NO cubre, dicho aquí en vez de fingido en el código
+=========================================================
+
+- **Publicar una rama distinta de la actual** (``git push origin otra``,
+  ``--all``, ``--mirror``, refspecs múltiples). El parseo era la fuente de los
+  doce defectos y se retiró entero; cubrir estos casos exige preguntarle a git,
+  no adivinar, y eso queda para cuando haya un caso real que lo justifique.
+- **Pushes fuera de Claude Code**, ``git -C`` y alias: la puerta no los ve.
+- **Si el lanzador no arranca** (``uv`` ausente, entorno sin sincronizar), el
+  hook no se ejecuta y el push pasa. Esa degradación no se puede cerrar desde
+  dentro: es el observador dentro de lo observado (incidencia #138).
+- **La calidad** de la evidencia. Se comprueba que exista y no sea un esbozo.
+
+Protege del descuido, no del dolo. Bajo ``GITHUB_ACTIONS`` se exime a
+propósito: los agentes de la automatización publican correcciones sin ADR.
 """
 
 from __future__ import annotations
@@ -72,44 +86,19 @@ def _nota_de(rama: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]", "-", rama) + ".md"
 
 
-def _rama_publicada(comando: str, actual: str) -> str:
-    """Qué rama publica este comando, que no siempre es la rama actual.
-
-    `git push origin otra-rama` desde una rama con nota publicaba la otra sin
-    evidencia, y el caso inverso bloqueaba una rama que sí la tenía: la puerta
-    juzgaba a quien no iba a viajar. Se lee el destino del comando; ante
-    cualquier forma que no se sepa leer se cae a la rama actual, que es el
-    caso mayoritario.
-    """
-    piezas = comando.split()
-    try:
-        inicio = piezas.index("push") + 1
-    except ValueError:
-        return actual
-    # `git push [opciones] [remoto] [refspec]`: los posicionales, en orden.
-    posicionales = [p for p in piezas[inicio:] if not p.startswith("-")]
-    if len(posicionales) < 2:
-        return actual
-    origen = posicionales[1].split(":", 1)[0].strip("+")
-    if not origen or origen == "HEAD":
-        return actual
-    return origen
-
-
 def _base_de_comparacion() -> str:
-    """Contra qué se compara la rama.
+    """Contra qué se compara el HEAD, o cadena vacía si no hay base fiable.
 
-    Un clon `--single-branch` no tiene `origin/main`, y entonces la vía del ADR
-    quedaba muerta mientras el mensaje seguía ofreciéndola: la puerta bloqueaba
-    aunque hubiera evidencia real. Se prueban las referencias en orden y, si
-    ninguna existe, se cae al commit raíz, que siempre existe.
+    NO existe respaldo al commit raíz. Lo hubo, y abría la puerta de par en par
+    en un clon `--single-branch`: comparar contra el raíz mete en el diff todo
+    ADR fusionado en la historia, así que cualquier rama nacía con evidencia
+    ajena. Sin base fiable esta puerta falla CERRADA y dice qué hacer.
     """
     for ref in ("origin/main", "main", "origin/HEAD"):
         codigo, _ = _git("rev-parse", "--verify", "--quiet", ref)
         if codigo == 0:
             return ref
-    codigo, salida = _git("rev-list", "--max-parents=0", "HEAD")
-    return salida.splitlines()[0] if codigo == 0 and salida else ""
+    return ""
 
 
 def _tiene_sustancia(ruta: str) -> bool:
@@ -123,7 +112,10 @@ def _tiene_sustancia(ruta: str) -> bool:
 def _hay_evidencia(rama: str) -> tuple[bool, str]:
     base = _base_de_comparacion()
     if not base:
-        return False, "no he podido situar la base de comparación de esta rama"
+        return False, (
+            "no encuentro una base con la que comparar (ni origin/main, ni main, "
+            "ni origin/HEAD). Ejecuta `git fetch origin main` y repite"
+        )
     codigo, salida = _git("diff", "--name-only", f"{base}...HEAD")
     if codigo != 0:
         return False, f"no he podido leer el diff frente a {base}"
@@ -152,26 +144,26 @@ def main() -> int:
         return 0
     entrada = carga.get("tool_input")
     comando = str(entrada.get("command") or "") if isinstance(entrada, dict) else ""
-    # Amplio a propósito: un falso positivo se desbloquea escribiendo la nota;
-    # un falso negativo deja pasar un push sin evidencia, que es lo que no puede
-    # pasar. `git -C` queda fuera por diseño (ver "lo que NO garantiza").
+    # Lo único que se le pregunta al comando es "¿es un push?". Nada más: cada
+    # pregunta adicional al texto fue un defecto (ver la cabecera del archivo).
     if not re.search(r"\bgit\b[^\n]*\bpush\b", comando):
         return 0
-    rama = _rama_publicada(comando, _rama_actual())
-    if rama in ("", "main", "HEAD"):
+    rama = _rama_actual()
+    if rama in ("", "main"):
         return 0
     evidencia, detalle = _hay_evidencia(rama)
     if evidencia:
         return 0
     print(
         "PUERTA DE EVIDENCIA - git push bloqueado.\n"
-        f"Rama a publicar: {rama}. Motivo: {detalle}.\n"
+        f"Rama actual: {rama}. Motivo: {detalle}.\n"
         "Solo cuenta como evidencia lo que un revisor vería en la PR: confirmada en\n"
         "esta rama, de esta rama, y con contenido de verdad. Dos salidas:\n"
         "  1) añade o modifica un ADR en docs/decisions/ y confírmalo en esta rama, o\n"
         f"  2) escribe la nota de arranque en .claude/evidencia/{_nota_de(rama)} —criterio\n"
         "     de parada, afirmación y comprobación— y confírmala.\n"
         "Método completo: skill disciplina-evidencia (ADR-001).\n"
+        "Esta puerta juzga el HEAD actual; no cubre publicar otra rama ni --all.\n"
         "Exención automática únicamente bajo GITHUB_ACTIONS.",
         file=sys.stderr,
     )

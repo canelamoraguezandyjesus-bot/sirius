@@ -49,11 +49,14 @@ def _sanear(rama: str) -> str:
 
 
 def _base() -> str:
+    """Sin respaldo al commit raíz: comparar contra él mete en el diff todo ADR
+    fusionado en la historia y daría por documentada cualquier rama nueva. Sin
+    base fiable, este empujón calla en vez de mentir en cualquiera de los dos
+    sentidos."""
     for ref in ("origin/main", "main", "origin/HEAD"):
         if _git("rev-parse", "--verify", "--quiet", ref)[0] == 0:
             return ref
-    codigo, salida = _git("rev-list", "--max-parents=0", "HEAD")
-    return salida.splitlines()[0] if codigo == 0 and salida else ""
+    return ""
 
 
 def _hay_evidencia(rama: str) -> bool:
