@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from PySide6.QtWidgets import QPushButton
 from pytestqt.qtbot import QtBot
 
 from sirius.adapters.capture.fake import FakeCaptureBackend
@@ -20,6 +21,7 @@ from sirius.adapters.persistence.sqlite_conversation_repository import (
 from sirius.adapters.persistence.sqlite_identity_repository import build_sqlite_identity_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.adapters.secrets.fake import FakeSecretStore
+from sirius.application.capture_commands import CaptureCommand, interpret
 from sirius.application.studio_capture import StudioCaptureUseCase
 from sirius.composition_root import build_conversation_dependencies
 from sirius.domain.capture import Scene, SceneRegistry
@@ -492,3 +494,50 @@ def test_an_unauthorized_camera_never_switches_and_is_reported(
 
     assert not any(command.startswith("switch_scene") for command in backend.commands)
     assert "no está autorizada" in window.studio_page.capture_panel.message_label.text()
+
+
+# --- Lo que la interfaz enseña, el sistema lo tiene que entender ---------
+
+
+_BOTON_Y_ORDEN = (
+    ("record_button", CaptureCommand.START_RECORDING),
+    ("stop_button", CaptureCommand.STOP_RECORDING),
+    ("pause_button", CaptureCommand.PAUSE_RECORDING),
+    ("resume_button", CaptureCommand.RESUME_RECORDING),
+    ("mark_button", CaptureCommand.MARK_MOMENT),
+)
+
+
+@pytest.mark.gui
+def test_every_button_label_works_as_a_typed_order(qtbot: QtBot) -> None:
+    """Escribir lo que pone en un botón tiene que hacer lo que hace el botón.
+
+    Parece obvio y no lo era: el botón de parar pone «Detener», y «detener» no
+    se reconocía —solo «para»—, así que quien leía el botón y lo escribía no
+    conseguía nada y no tenía forma de saber por qué. Una palabra que la
+    interfaz enseña y el sistema no entiende es peor que una que no se enseña,
+    porque parece que el sistema está roto.
+    """
+    panel = StudioCapturePanel()
+    qtbot.addWidget(panel)
+
+    for atributo, orden in _BOTON_Y_ORDEN:
+        etiqueta = getattr(panel, atributo).text()
+        intencion = interpret(etiqueta, _SCENES)
+
+        assert intencion is not None, f"«{etiqueta}» está escrito en un botón y no se reconoce"
+        assert intencion.command is orden, f"«{etiqueta}» hace otra cosa distinta a su botón"
+
+
+@pytest.mark.gui
+def test_every_scene_button_can_also_be_asked_for_by_name(qtbot: QtBot) -> None:
+    """Lo mismo con las escenas: el nombre que se ve es el que se puede decir."""
+    panel = StudioCapturePanel()
+    qtbot.addWidget(panel)
+    panel.set_scenes([(escena.scene_id, escena.display_name) for escena in _SCENES.scenes])
+
+    for boton in panel.scenes_container.findChildren(QPushButton):
+        intencion = interpret(f"cambia a {boton.text()}", _SCENES)
+
+        assert intencion is not None, f"«{boton.text()}» se ve en pantalla y no se puede pedir"
+        assert intencion.command is CaptureCommand.SWITCH_SCENE

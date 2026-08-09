@@ -50,6 +50,12 @@ class CaptureIntent:
 
 
 # Frases que son la orden entera. Se comparan sin acentos ni mayúsculas.
+#
+# **Lo que está escrito en un botón tiene que estar aquí.** Parece obvio y no lo
+# era: el botón de parar pone «Detener», y «detener» no se reconocía —solo
+# «para»—, así que quien leía el botón y lo escribía no conseguía nada. Una
+# palabra que la interfaz enseña y el sistema no entiende es peor que una que no
+# se enseña. ``test_model_studio_capture_panel.py`` lo vigila.
 _EXACT_PHRASES: dict[str, CaptureCommand] = {
     # Empezar
     "graba": CaptureCommand.START_RECORDING,
@@ -59,6 +65,10 @@ _EXACT_PHRASES: dict[str, CaptureCommand] = {
     "comienza a grabar": CaptureCommand.START_RECORDING,
     "dale a grabar": CaptureCommand.START_RECORDING,
     "ponte a grabar": CaptureCommand.START_RECORDING,
+    "empezar a grabar": CaptureCommand.START_RECORDING,
+    "inicia la grabacion": CaptureCommand.START_RECORDING,
+    "iniciar grabacion": CaptureCommand.START_RECORDING,
+    "iniciar la grabacion": CaptureCommand.START_RECORDING,
     # Parar
     "para": CaptureCommand.STOP_RECORDING,
     "parar": CaptureCommand.STOP_RECORDING,
@@ -69,11 +79,19 @@ _EXACT_PHRASES: dict[str, CaptureCommand] = {
     "para la grabacion": CaptureCommand.STOP_RECORDING,
     "corta": CaptureCommand.STOP_RECORDING,
     "corta la grabacion": CaptureCommand.STOP_RECORDING,
+    "deten": CaptureCommand.STOP_RECORDING,
+    "detenlo": CaptureCommand.STOP_RECORDING,
+    "detener": CaptureCommand.STOP_RECORDING,
+    "detener grabacion": CaptureCommand.STOP_RECORDING,
+    "detener la grabacion": CaptureCommand.STOP_RECORDING,
+    "paralo": CaptureCommand.STOP_RECORDING,
     # Pausar
     "pausa": CaptureCommand.PAUSE_RECORDING,
     "pausar": CaptureCommand.PAUSE_RECORDING,
     "haz una pausa": CaptureCommand.PAUSE_RECORDING,
     "pausa la grabacion": CaptureCommand.PAUSE_RECORDING,
+    "pausar la grabacion": CaptureCommand.PAUSE_RECORDING,
+    "pon en pausa": CaptureCommand.PAUSE_RECORDING,
     # Reanudar
     "sigue": CaptureCommand.RESUME_RECORDING,
     "seguimos": CaptureCommand.RESUME_RECORDING,
@@ -81,11 +99,18 @@ _EXACT_PHRASES: dict[str, CaptureCommand] = {
     "continuamos": CaptureCommand.RESUME_RECORDING,
     "reanuda": CaptureCommand.RESUME_RECORDING,
     "reanudar": CaptureCommand.RESUME_RECORDING,
+    "reanudar la grabacion": CaptureCommand.RESUME_RECORDING,
     "sigue grabando": CaptureCommand.RESUME_RECORDING,
+    "continuar": CaptureCommand.RESUME_RECORDING,
+    "seguir": CaptureCommand.RESUME_RECORDING,
     # Marcar
     "marca": CaptureCommand.MARK_MOMENT,
     "marca esto": CaptureCommand.MARK_MOMENT,
     "marca este momento": CaptureCommand.MARK_MOMENT,
+    "marca el momento": CaptureCommand.MARK_MOMENT,
+    "marcar": CaptureCommand.MARK_MOMENT,
+    "marcar momento": CaptureCommand.MARK_MOMENT,
+    "marcar este momento": CaptureCommand.MARK_MOMENT,
     "apunta esto": CaptureCommand.MARK_MOMENT,
     "toma nota de esto": CaptureCommand.MARK_MOMENT,
     # Emergencia
