@@ -65,6 +65,23 @@ contra uv 0.8.17: crea el entorno en la ruta indicada, instala solo las
 dependencias normales más el grupo pedido, y **deja intacta** la `.venv` del
 proyecto.
 
+La sincronización se hace además con `UV_LINK_MODE=copy`. Por omisión uv enlaza
+(hardlink) desde su caché al entorno destino, y eso no sobrevive a OneDrive: los
+archivos de la caché ya tienen enlaces permanentes hacia la `.venv` del
+proyecto, que está sujeta al filtro de nube, así que crear otro enlace hacia
+ellos falla. Ocurrió de verdad, en el paso 4/13, instalando PySide6 6.11.1:
+
+```
+error: Failed to install: pyside6-6.11.1-cp310-abi3-win_amd64.whl
+  Caused by: failed to hardlink file ...
+    La operación de nube no se puede realizar en un archivo con vínculos
+    permanentes incompatibles. (os error 396)
+```
+
+Pausar la sincronización de OneDrive no basta, porque el filtro sigue montado.
+Copiar es el remedio que documenta el propio uv; no cambia qué se instala
+—mismas ruedas, mismo `uv.lock`— y solo cuesta disco en un entorno desechable.
+
 El acceso a ese entorno compartido se serializa con un bloqueo global:
 
 ```

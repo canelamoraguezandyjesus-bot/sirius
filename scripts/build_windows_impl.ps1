@@ -405,6 +405,16 @@ try {
     # dependencias normales mas el grupo pedido, y deja intacta la .venv del
     # proyecto (una dependencia de 'dev' instalada alli sigue estando despues).
     $env:UV_PROJECT_ENVIRONMENT = $PackagingVenv
+    # uv enlaza por omision (hardlink) desde su cache al entorno destino. Cuando
+    # el checkout vive bajo OneDrive, esos archivos de cache ya tienen enlaces
+    # hacia la .venv del proyecto, que esta sujeta al filtro de nube; crear otro
+    # enlace hacia ellos falla con el error 396 de Windows, "la operacion de nube
+    # no se puede realizar en un archivo con vinculos permanentes incompatibles".
+    # Ocurrio de verdad, en el paso 4/13, instalando pyside6 6.11.1. Pausar la
+    # sincronizacion no basta: el filtro sigue montado. Copiar es el remedio que
+    # documenta el propio uv, no cambia que se instala -mismas ruedas, mismo
+    # uv.lock- y solo cuesta disco en un entorno que es desechable.
+    $env:UV_LINK_MODE = "copy"
     Write-Ok "Entorno de empaquetado: $PackagingVenv"
     Invoke-Native "uv" @("sync", "--frozen", "--no-default-groups", "--group", "packaging") `
         "uv sync --frozen --no-default-groups --group packaging" | Out-Null

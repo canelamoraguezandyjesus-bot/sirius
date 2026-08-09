@@ -118,6 +118,24 @@ def test_the_dedicated_environment_is_selected_through_uv(
     assert "UV_PROJECT_ENVIRONMENT" in build_implementation
 
 
+def test_the_sync_copies_instead_of_hardlinking(build_implementation: str) -> None:
+    """El enlazado por omision de uv no sobrevive a OneDrive.
+
+    En la primera construccion real desde un arbol limpio en 60a7e9d, uv sync
+    fallo en el paso 4/13 instalando pyside6 6.11.1: los archivos de su cache ya
+    tenian enlaces permanentes hacia la .venv del proyecto, que vive bajo
+    OneDrive, y crear otro enlace hacia ellos es una operacion que el filtro de
+    nube rechaza con el error 396 de Windows. Pausar la sincronizacion no basta,
+    porque el filtro sigue montado. Copiar es el remedio que documenta el propio
+    uv y no cambia que se instala.
+    """
+    assignment = re.search(r'\$env:UV_LINK_MODE\s*=\s*"copy"', build_implementation)
+    assert assignment is not None, "el build no fuerza el modo de enlace de uv"
+
+    sync_call = build_implementation.index('Invoke-Native "uv" @("sync"')
+    assert assignment.start() < sync_call, "UV_LINK_MODE se define despues del sync: llega tarde"
+
+
 def test_the_sync_still_excludes_default_groups(build_implementation: str) -> None:
     assert "--no-default-groups" in build_implementation
     assert "--frozen" in build_implementation
