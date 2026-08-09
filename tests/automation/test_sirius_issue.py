@@ -62,6 +62,9 @@ pytestmark = pytest.mark.skipif(
 _GH_MOCK = r"""#!/usr/bin/env bash
 D="$GH_MOCK_DIR"
 echo "$*" >> "$D/calls.log"
+# El plazo vigente en el momento de la llamada: es lo que de verdad acota, y lo
+# unico que distingue una cota compuesta de una que la capa de abajo amplia.
+echo "${SIRIUS_GH_DEADLINE:-VACIO}" >> "$D/deadlines.txt"
 sub="$1"; shift || true
 
 labels_file="$D/labels.txt"
@@ -1227,3 +1230,94 @@ def test_every_gh_call_goes_through_the_bounded_wrapper() -> None:
     # Y la puerta sigue siendo la que acota: si dejara de usar `timeout`, el
     # encaminado no serviría de nada.
     assert 'timeout "$remaining" gh "$@"' in fuente[inicio:fin]
+
+
+# --------------------------------------------------------------------------- #
+# Los plazos se componen: la capa de abajo no puede ampliar el de arriba
+# --------------------------------------------------------------------------- #
+
+
+def test_a_stricter_inherited_deadline_wins_over_the_comment_budget(tmp_path: Path) -> None:
+    """`sirius_comment_once` no puede concederse más tiempo del que le dan.
+
+    Se daba `now + 90` ignorando el plazo heredado, así que un llamador que
+    reservaba 120s para publicar veía cómo esta función se tomaba 90s MÁS por su
+    cuenta: hasta 210s, con el presupuesto del paso que lo envolvía desbordado.
+    Una cota que la capa de abajo puede ampliar no es una cota.
+
+    La prueba mide el plazo que ve `gh`, que es quien acaba respetándolo.
+    """
+    env = _setup(tmp_path)
+    apretado = int(time.time()) + 5
+    env["SIRIUS_GH_DEADLINE"] = str(apretado)
+    env["SIRIUS_COMMENT_BUDGET_SECONDS"] = "900"
+
+    cuerpo = tmp_path / "cuerpo.md"
+    cuerpo.write_text("hola\n", encoding="utf-8")
+    _run(f'sirius_comment_once owner/repo 7 "<!-- m -->" "{cuerpo}"', env)
+
+    visto = Path(env["GH_MOCK_DIR"]) / "deadlines.txt"
+    assert visto.exists(), "el mock no registró ningún plazo: la prueba no mide nada"
+    for linea in visto.read_text(encoding="utf-8").split():
+        assert int(linea) <= apretado, (
+            f"la publicación se concedió {linea}, más allá del plazo heredado {apretado}"
+        )
+
+
+def test_without_an_inherited_deadline_the_budget_applies(tmp_path: Path) -> None:
+    # Sin plazo heredado el comportamiento es el de siempre: su propio
+    # presupuesto. Acotar por debajo no puede convertirse en no acotar.
+    env = _setup(tmp_path)
+    env.pop("SIRIUS_GH_DEADLINE", None)
+    env["SIRIUS_COMMENT_BUDGET_SECONDS"] = "900"
+    antes = int(time.time())
+
+    cuerpo = tmp_path / "cuerpo.md"
+    cuerpo.write_text("hola\n", encoding="utf-8")
+    _run(f'sirius_comment_once owner/repo 7 "<!-- m -->" "{cuerpo}"', env)
+
+    visto = Path(env["GH_MOCK_DIR"]) / "deadlines.txt"
+    assert visto.exists()
+    plazos = [int(x) for x in visto.read_text(encoding="utf-8").split()]
+    assert plazos and all(p > antes + 100 for p in plazos), (
+        f"sin plazo heredado debe usarse el presupuesto propio: {plazos}"
+    )
+
+
+def test_a_laxer_inherited_deadline_does_not_widen_the_comment_budget(tmp_path: Path) -> None:
+    """El heredado manda solo si es MÁS ESTRICTO, no siempre.
+
+    Sin este caso, la mutación «el heredado gana siempre» sobrevivía: un
+    llamador con un plazo holgado haría que esta función renunciara a su propio
+    presupuesto y publicara sin cota efectiva. Componer plazos es quedarse con
+    el mínimo, no con el de fuera.
+    """
+    env = _setup(tmp_path)
+    holgado = int(time.time()) + 100_000
+    env["SIRIUS_GH_DEADLINE"] = str(holgado)
+    env["SIRIUS_COMMENT_BUDGET_SECONDS"] = "90"
+
+    cuerpo = tmp_path / "cuerpo.md"
+    cuerpo.write_text("hola\n", encoding="utf-8")
+    _run(f'sirius_comment_once owner/repo 7 "<!-- m -->" "{cuerpo}"', env)
+
+    visto = Path(env["GH_MOCK_DIR"]) / "deadlines.txt"
+    assert visto.exists(), "el mock no registró ningún plazo: la prueba no mide nada"
+    for linea in visto.read_text(encoding="utf-8").split():
+        assert int(linea) < holgado, (
+            f"se adoptó el plazo holgado {linea} en vez del presupuesto propio"
+        )
+
+
+def test_the_deadline_is_released_on_the_way_out(tmp_path: Path) -> None:
+    # El plazo se exporta, así que escaparse de esta función acotaría llamadas
+    # posteriores de la misma shell con un instante ya vencido.
+    env = _setup(tmp_path)
+    cuerpo = tmp_path / "cuerpo.md"
+    cuerpo.write_text("hola\n", encoding="utf-8")
+    r = _run(
+        f'sirius_comment_once owner/repo 7 "<!-- m -->" "{cuerpo}"; '
+        'printf "TRAS=%s\\n" "${SIRIUS_GH_DEADLINE:-VACIO}"',
+        env,
+    )
+    assert "TRAS=VACIO" in r.stdout, r.stdout

@@ -73,10 +73,20 @@ conserva íntegro el trabajo sobre código de producto, que es su caso normal.
 ## Consecuencias
 
 - El ciclo autónomo **no puede cerrar por sí solo** las incidencias que tocan
-  workflows. Se detendrá en `BLOCKED_BY_DECISION`, que es el comportamiento
-  correcto y no un fallo.
-- Al abrir una incidencia conviene mirar si su alcance toca `.github/workflows/`
-  y, en ese caso, resolverla en sesión desde el principio en vez de activarla.
+  workflows: el push será rechazado.
+- **Cómo se detenga NO está garantizado por el repositorio.** En la #140 salió
+  `BLOCKED_BY_DECISION`, que es el desenlace correcto, pero fue una elección del
+  agente y no una regla impuesta: la puerta de activación comprueba estado,
+  etiquetas y completitud del cuerpo, y ni ella ni el prompt reconocen el
+  alcance «toca workflows». Otro intento podría acabar en `FAILED_SAFELY` o sin
+  veredicto. Decirlo de otro modo sería prometer un determinismo que el código
+  no da.
+- Por eso lo que sigue es un **procedimiento operativo manual**, no una
+  garantía: al abrir una incidencia, mirar si su alcance toca
+  `.github/workflows/` y, en ese caso, resolverla en sesión en vez de activarla.
+  Si el olvido llega a ser frecuente, la corrección de raíz es que la puerta de
+  activación reconozca ese alcance y rechace antes de arrancar; queda anotado
+  como trabajo pendiente, no como algo ya hecho.
 - Lo que esto **no** hace: no reduce lo que la automatización puede hacer sobre
   código de producto, ni cambia el contrato operativo, ni afecta a la revisión
   dual.
