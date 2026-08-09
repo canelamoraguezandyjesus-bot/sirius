@@ -4,11 +4,23 @@
 
 **Documento:** SIRIUS-MODEL-STUDIO-CAP-INV-001
 **Versión:** 1.0
-**Estado:** **INVESTIGACIÓN DOCUMENTAL — NADA VERIFICADO EN LA PRÁCTICA**
+**Estado:** **INVESTIGACIÓN DOCUMENTAL — VERIFICADA EN LA PRÁCTICA EL 9-08-2026**
 **Fecha:** 7 de agosto de 2026
 **Responde a:** #127 (`SIRIUS-MODEL-STUDIO-003`), que exige *"investigación técnica breve antes de activar implementación"*
 
-> ## Advertencia que condiciona todo este documento
+> ## Verificación realizada el 9 de agosto de 2026
+>
+> Este documento se escribió sin haber probado nada, y su advertencia original se conserva más abajo porque explica cómo se tomaron las decisiones. **Lo que ya no es cierto es que no haya evidencia.**
+>
+> Contra **OBS Studio 32.2.1 en Windows 11**, con dos escenas reales —captura de pantalla y webcam USB—, se ha comprobado: conexión y autenticación por el servidor WebSocket local en el puerto 4455, lectura de la lista de escenas, cambio de plano y vuelta al anterior, y una grabación real de tres segundos con el archivo resultante en disco. Después, las mismas órdenes desde Model Studio: `graba`, `cambia a cara` y `para`, con confirmación hablada.
+>
+> **Lo que la verificación corrigió:** OBS responde «recibido» y ejecuta después. Preguntar el estado en la línea siguiente devolvía el anterior, y con eso Sirius daba por fallida una grabación que sí estaba en marcha. Las órdenes que cambian el estado esperan ahora a que OBS lo confirme.
+>
+> **Lo que sigue sin verificarse:** varias cámaras simultáneas, el móvil como segunda cámara, sesiones largas, y la reconexión tras cerrar OBS a mitad de una grabación.
+>
+> ---
+>
+> ## Advertencia original, de cuando se redactó
 >
 > **No se ha probado nada.** El entorno donde se ha redactado no tiene acceso a internet ni a Windows, así que no se ha instalado ningún programa, no se ha abierto ningún puerto, no se ha conectado ninguna cámara y no se ha ejecutado ninguna llamada.
 >

@@ -8,18 +8,21 @@ Autenticación: OBS manda una sal y un desafío, y espera de vuelta un resumen
 SHA-256 encadenado. Se calcula con la biblioteca estándar y **la contraseña
 nunca se registra ni aparece en ningún mensaje de error**.
 
-> ## Sin verificar contra OBS real
+> ## Verificado contra OBS real
 >
-> Este adaptador se ha escrito a partir de la descripción del protocolo, no de
-> una sesión real: el entorno donde se programó no tiene ni internet ni Windows
-> ni OBS. Lo que sí está probado es el cliente WebSocket que hay debajo, contra
-> un servidor de mentira.
+> Se escribió a partir de la descripción del protocolo, sin OBS delante, y por
+> eso llevó durante un tiempo la advertencia contraria. El 9 de agosto de 2026
+> se ejecutó la verificación contra **OBS Studio 32.2.1 en Windows**: saludo,
+> autenticación, lista de escenas, cambio de plano, grabación y parada, con el
+> archivo resultante en disco.
 >
-> #127 exige *"no afirmar que OBS, una API, una cámara o un protocolo funcionan
-> sin prueba real"*. Hasta que se ejecute el plan de verificación de
-> `SIRIUS_MODEL_STUDIO_CAPTURA_INVESTIGACION.md`, **este archivo es una
-> hipótesis ejecutable, no una función demostrada**. Es previsible que los
-> nombres exactos de alguna petición haya que ajustarlos con OBS delante.
+> Lo que la verificación cambió: OBS acepta la orden y la ejecuta después, así
+> que consultar el estado en la línea siguiente devuelve el anterior. Las
+> órdenes que cambian el estado ahora esperan a que OBS lo confirme —y si no
+> llega la confirmación, se dice lo que OBS diga, no lo que convendría—.
+>
+> Lo que la verificación **no** cubre: varias cámaras a la vez, sesiones
+> largas, ni la reconexión después de cerrar OBS a mitad de una grabación.
 """
 
 from __future__ import annotations
