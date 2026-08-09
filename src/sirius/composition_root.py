@@ -27,6 +27,7 @@ from sirius.adapters.audio.unconfigured import (
     UnconfiguredSpeechToText,
     UnconfiguredTextToSpeech,
 )
+from sirius.adapters.audio.winsound_playback import WinsoundAudioPlayback, winsound_is_available
 from sirius.adapters.backup.sqlite_backup_service import build_sqlite_backup_service
 from sirius.adapters.capture.obs_websocket import ObsWebSocketBackend
 from sirius.adapters.clock.system_clock import build_system_clock
@@ -96,6 +97,7 @@ from sirius.config.llm_provider_settings import (
 from sirius.config.settings import load_settings, save_settings
 from sirius.domain.capture import build_scene_registry
 from sirius.infrastructure.logging import get_logger
+from sirius.ports.audio_playback import AudioPlayback
 from sirius.ports.llm import LLMProvider
 from sirius.ports.secrets import SecretStore
 
@@ -218,6 +220,23 @@ def _build_llm_provider(
     )
 
 
+def build_audio_playback() -> AudioPlayback:
+    """Elige por qué camino suena la voz en esta máquina.
+
+    En Windows manda ``winsound``, que es el reproductor del propio sistema y
+    viene con Python. No es una preferencia: el motor multimedia de Qt allí
+    descodifica con FFmpeg, y con el WAV del proveedor de voz respondía
+    ``Packet corrupt`` y se quedaba callado —sin sonido y sin error—. Una capa
+    menos por el camino es una cosa menos que puede tragarse el audio.
+
+    Fuera de Windows sigue mandando Qt, que es lo único que hay. Los dos
+    cumplen el mismo puerto, así que cambiar de uno a otro no toca nada más.
+    """
+    if winsound_is_available():
+        return WinsoundAudioPlayback()
+    return QtAudioPlayback()
+
+
 def _build_studio_voice_use_case(
     database_path: Path,
     secret_store: SecretStore,
@@ -237,6 +256,8 @@ def _build_studio_voice_use_case(
     """
     temporary_audio_dir = database_path.parent / "audio-temporal"
     capture = QtAudioCapture(temporary_audio_dir)
+    playback = build_audio_playback()
+    _logger.info("Reproductor de voz elegido: %s", type(playback).__name__)
     # Un cierre forzado durante una grabación no puede dejar la voz del usuario
     # tirada en el disco: se limpia al arrancar.
     orphans = capture.cleanup_orphans()
@@ -263,7 +284,7 @@ def _build_studio_voice_use_case(
             audio_capture=capture,
             speech_to_text=UnconfiguredSpeechToText(reason),
             text_to_speech=UnconfiguredTextToSpeech(reason),
-            audio_playback=QtAudioPlayback(),
+            audio_playback=playback,
             settings=VoiceSettings(voice=DEFAULT_VOICE),
         )
 
@@ -282,7 +303,7 @@ def _build_studio_voice_use_case(
         audio_capture=capture,
         speech_to_text=OpenAITranscription(client),
         text_to_speech=OpenAISpeech(client, temporary_audio_dir),
-        audio_playback=QtAudioPlayback(),
+        audio_playback=playback,
         settings=VoiceSettings(voice=DEFAULT_VOICE),
         budget_guard=budget_tracker,
     )

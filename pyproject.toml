@@ -22,6 +22,7 @@ dependencies = [
 
 [project.scripts]
 sirius = "sirius.main:main"
+sirius-voz = "sirius.voice_doctor:main"
 
 [build-system]
 requires = ["uv_build>=0.11.28,<0.12"]
