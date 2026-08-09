@@ -126,28 +126,53 @@ def test_all_remaining_preconditions_abort_before_first_launch() -> None:
     assert "No se ejecutara codigo del paquete" in script[prelaunch_gate:first_launch]
 
 
-def test_credential_absence_is_a_hard_prelaunch_requirement() -> None:
+def test_a_present_credential_does_not_abort_the_verification() -> None:
+    """Tener la credencial guardada no puede impedir verificar B13.
+
+    La puerta anterior abortaba si Credential Manager tenia la credencial de
+    Sirius. Eso hacia imposible verificar el paquete en la unica maquina donde
+    se construye -la del desarrollador, que usa Sirius y por tanto la tiene-, y
+    ademas exigia el escenario que el propio B13 declara fuera de su alcance:
+    "Windows sin clave" es B14. La verificacion moria despues de haber pasado ya
+    la procedencia, el inventario y el aislamiento, sin nada malo en el paquete.
+    """
+    # Se mira la fase suelta, no la concatenacion: entre esta puerta y el primer
+    # arranque esta 04_runtime, cuyos throw son del helper de lanzamiento y no
+    # tienen nada que ver con la credencial.
+    gate_script = _VERIFY_PARTS[3].read_text(encoding="utf-8")
+
+    assert 'Write-Step "D. Cobertura del escenario sin clave"' in gate_script
+    assert "throw" not in gate_script, "la credencial presente vuelve a abortar la verificacion"
+    assert "Add-Skip" in gate_script, "la falta de cobertura tiene que quedar registrada"
+
+
+def test_a_present_credential_is_reported_as_an_uncovered_scenario() -> None:
+    """No cubrirlo es aceptable; ocultarlo no.
+
+    El veredicto ya distingue SUPERADA de SUPERADA CON RESERVAS y enumera lo que
+    no se ha demostrado. Registrar la omision es lo que impide que una
+    verificacion con la credencial presente se lea como si hubiera probado el
+    arranque sin clave.
+    """
+    gate_script = _VERIFY_PARTS[3].read_text(encoding="utf-8")
+
+    assert 'Add-Skip "El arranque sin clave"' in gate_script
+    assert "B14" in gate_script, "la omision no dice a que bloque pertenece el escenario"
+
+
+def test_the_launches_must_not_change_the_credential_state() -> None:
+    """Lo que hay que demostrar es que el paquete no altero la boveda.
+
+    Exigir ABSENT despues de los arranques solo era correcto mientras una puerta
+    anterior garantizase ABSENT antes. Sin esa puerta, exigirlo convertiria la
+    credencial legitima del usuario en un fallo del paquete.
+    """
     script = _script()
-    absence_check = script.index(
-        "La credencial de Sirius esta ausente antes de ejecutar el paquete"
-    )
-    credential_gate = script.index(
-        "La verificacion exige una sesion de Windows sin la credencial de Sirius"
-    )
-    first_launch = script.index("Invoke-SmokeLaunch -Label")
-
-    assert absence_check < credential_gate < first_launch
-    assert '$CredentialState -eq "ABSENT"' in script[:absence_check]
-    assert "No se ejecutara codigo del paquete" in script[credential_gate:first_launch]
-
-
-def test_credential_must_still_be_absent_after_launches() -> None:
-    script = _script()
-    postcheck = script.index("La credencial de Sirius sigue ausente despues de los arranques")
+    postcheck = script.index("La credencial de Sirius no cambio de estado con los arranques")
     postcheck_region = script[postcheck : postcheck + 400]
 
-    assert '$CredentialStateAfter -eq "ABSENT"' in postcheck_region
-    assert "$CredentialStateAfter -eq $CredentialState" not in script
+    assert "$CredentialStateAfter -eq $CredentialState" in postcheck_region
+    assert '$CredentialStateAfter -eq "ABSENT"' not in script
 
 
 def test_window_observation_does_not_end_liveness_monitoring() -> None:
@@ -195,7 +220,7 @@ def test_user_state_postconditions_run_after_launch_failures() -> None:
         "La existencia del data_location.json real no cambio", finally_block
     )
     credential_check = execute.index(
-        "La credencial de Sirius sigue ausente despues de los arranques", finally_block
+        "La credencial de Sirius no cambio de estado con los arranques", finally_block
     )
     result = execute.index('Write-Step "Resultado"', credential_check)
 

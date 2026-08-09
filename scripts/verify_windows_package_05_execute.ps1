@@ -91,9 +91,15 @@ finally {
     }
 
     try {
-        # B13 solo ejecuta el paquete cuando la credencial estaba ausente. Volver
-        # a obtener ABSENT demuestra que el paquete no dejo una credencial
-        # persistente en la sesion real de Windows, sin comparar ningun valor.
+        # Lo que hay que demostrar es que el paquete no ALTERO la boveda: ni creo
+        # una credencial donde no la habia, ni borro la que habia. Se compara el
+        # estado con el de antes de arrancar, nunca el valor.
+        #
+        # Antes se exigia ABSENT a secas, que solo era correcto porque una puerta
+        # anterior abortaba si la credencial existia. Esa puerta hacia imposible
+        # verificar B13 en una sesion con Sirius configurado; al quitarla, exigir
+        # ABSENT aqui habria convertido la credencial legitima del usuario en un
+        # fallo del paquete.
         $CredentialStateAfter = "ERROR NoProbe"
         if (Test-Path -LiteralPath $VenvPython) {
             $probeOutputAfter = (& $VenvPython $CredentialProbe 2>&1 | Out-String).Trim()
@@ -101,8 +107,8 @@ finally {
                 $CredentialStateAfter = ($probeOutputAfter -split "`n")[-1].Trim()
             }
         }
-        Test-Check "La credencial de Sirius sigue ausente despues de los arranques" (
-            $CredentialStateAfter -eq "ABSENT") "antes $CredentialState / ahora $CredentialStateAfter"
+        Test-Check "La credencial de Sirius no cambio de estado con los arranques" (
+            $CredentialStateAfter -eq $CredentialState) "antes $CredentialState / ahora $CredentialStateAfter"
     }
     catch {
         Test-Check "Se pudo comprobar la credencial de Sirius despues de los arranques" $false $_.Exception.Message

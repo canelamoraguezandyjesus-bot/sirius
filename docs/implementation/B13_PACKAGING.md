@@ -488,13 +488,30 @@ Windows, no al sistema de archivos: al arrancar, el ejecutable construye el
 adaptador real de `keyring` y `main.py::_build_initial_window` llama a
 `has_key()`, que consulta la credencial del usuario que ejecuta la prueba.
 
-Por eso `ABSENT` es una **precondición obligatoria** antes de ejecutar
-`Sirius.exe`. La sonda consulta el servicio `Sirius` y la clave
-`openai_api_key` mediante `ApiKeySettingsUseCase.has_key()`:
+La sonda consulta el servicio `Sirius` y la clave `openai_api_key` mediante
+`ApiKeySettingsUseCase.has_key()`:
 
-- si devuelve `ABSENT`, el verificador puede continuar con los dos arranques;
-- si devuelve `PRESENT` o `ERROR`, el verificador aborta antes de ejecutar
-  código del paquete y no manipula Credential Manager.
+- si devuelve `ABSENT`, el arranque sin clave **sí** es observable y el
+  verificador exige que la ventana visible sea la de `OnboardingWindow`;
+- si devuelve `PRESENT`, ese escenario **no** es observable aquí. El verificador
+  lo registra como omitido y continúa, y el veredicto pasa a *SUPERADA CON
+  RESERVAS* enumerando exactamente lo que no se ha demostrado;
+- si devuelve `ERROR`, el verificador aborta: no saber en qué estado está la
+  bóveda no es lo mismo que saber que la credencial existe.
+
+`PRESENT` **no** puede abortar la verificación, y que lo hiciera fue un error de
+diseño con consecuencias reales: la máquina donde se construye es la del
+desarrollador, que usa Sirius y por tanto tiene la credencial guardada, así que
+la verificación moría siempre —después de haber pasado ya la procedencia, el
+inventario, los hashes y el aislamiento— sin que hubiera nada malo en el
+paquete. Además exigía justo lo que este documento declara fuera de alcance:
+«Windows sin clave» es **B14**, no B13.
+
+Ejecutar el paquete con la credencial presente no gasta nada. El arranque
+construye el cliente del proveedor y no realiza ninguna llamada: no hay ni una
+en la raíz de composición, y la prueba cierra el proceso a los pocos segundos.
+Lo que sí ocurre —y conviene decirlo— es que el binario lee la credencial en su
+memoria, exactamente igual que en un arranque normal de Sirius.
 
 Conviene ser exacto sobre la sonda. **Credential Manager sí se consulta**, y
 `has_key()` obtiene internamente el valor mediante `SecretStore.get_secret()`
@@ -504,17 +521,16 @@ es que la sonda solo emite `PRESENT`, `ABSENT` o `ERROR <TipoDeExcepción>`: no
 imprime, devuelve, compara ni registra el valor secreto, y no modifica ni
 elimina la credencial.
 
-Cuando la precondición se cumple, el verificador exige que la ventana visible
-sea la de `OnboardingWindow` (`Sirius 0.1 — Primera configuración`), no
-simplemente cualquier ventana de Sirius. Después de los dos arranques vuelve a
-consultar Credential Manager y exige que el estado continúe siendo `ABSENT`.
-Esto demuestra que el paquete no dejó una credencial persistente en la sesión
-real de Windows sin comparar, imprimir ni registrar valores secretos.
+Después de los dos arranques, el verificador vuelve a consultar Credential
+Manager y exige que el estado **no haya cambiado**: ni una credencial nueva
+donde no la había, ni la desaparición de la que estaba. Eso es lo que demuestra
+que el paquete no altera la bóveda, y se sostiene igual con `ABSENT` que con
+`PRESENT`, sin comparar, imprimir ni registrar valores secretos.
 
-### Cómo ejecutar esta prueba de forma reproducible
+### Cómo cubrir el escenario sin clave
 
-Hace falta una sesión de Windows sin la credencial de Sirius. En orden de
-preferencia:
+Es opcional para B13 y obligatorio para B14. Hace falta una sesión de Windows
+sin la credencial de Sirius. En orden de preferencia:
 
 1. **Cuenta local de Windows dedicada a pruebas.** Crea una cuenta estándar
    (Configuración → Cuentas → Otros usuarios), inicia sesión con ella, clona o
