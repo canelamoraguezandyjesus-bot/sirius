@@ -20,30 +20,22 @@ from __future__ import annotations
 import platform
 import sys
 import wave
-from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
+
+from sirius.console_report import (
+    Paso,
+    cabecera,
+    contar_fallo_inesperado,
+    preguntar,
+    resumen,
+)
 
 FRASE_DE_PRUEBA = "Uno, dos, tres. Si oyes esto, la voz funciona."
 """Corta a propósito: la prueba tiene que durar poco y costar menos."""
 
-_SEPARADOR = "=" * 62
-
 AUDIO_ILEGIBLE = OSError, wave.Error, EOFError
 """Un archivo cortado a medias lanza ``EOFError``, que no es un ``OSError``."""
-
-
-@dataclass(frozen=True, slots=True)
-class Paso:
-    """El resultado de una comprobación, listo para imprimir y para copiar."""
-
-    titulo: str
-    correcto: bool
-    detalle: str
-
-    def linea(self) -> str:
-        marca = "OK  " if self.correcto else "FALLA"
-        return f"[{marca}] {self.titulo}\n        {self.detalle}"
 
 
 # --- 1. Qué versión se está ejecutando -----------------------------------
@@ -255,7 +247,7 @@ def probar_con_windows(audio: Path) -> Paso:
     stop_all_sounds()
     return Paso(
         "Sonar por el reproductor de Windows",
-        correcto=_preguntar("  ¿Has oído la frase por los altavoces?"),
+        correcto=preguntar("  ¿Has oído la frase por los altavoces?"),
         detalle="Respuesta del usuario.",
     )
 
@@ -288,7 +280,7 @@ def probar_con_qt(audio: Path) -> Paso:
     reproductor.stop()
     return Paso(
         "Sonar por el reproductor de Qt",
-        correcto=_preguntar("  ¿Has oído la frase por los altavoces?"),
+        correcto=preguntar("  ¿Has oído la frase por los altavoces?"),
         detalle="Respuesta del usuario.",
     )
 
@@ -302,21 +294,6 @@ def _esperar(segundos: float) -> None:
     bucle.exec()
 
 
-def _preguntar(pregunta: str) -> bool:
-    """Pregunta y da por no oído si nadie contesta.
-
-    Sin la salvaguarda, ejecutar esto con la entrada redirigida lanzaría
-    ``EOFError`` y se llevaría por delante el resumen, que es lo único que de
-    verdad importa de todo el recorrido.
-    """
-    try:
-        respuesta = input(f"{pregunta} (s/n): ").strip().lower()
-    except EOFError:
-        print("  (sin respuesta: se anota como no oído)")
-        return False
-    return respuesta.startswith("s")
-
-
 # --- Recorrido completo ---------------------------------------------------
 
 
@@ -325,11 +302,7 @@ def main() -> int:
     try:
         return _recorrer()
     except Exception as error:  # frontera del programa: se cuenta, no se escupe
-        print(
-            f"\n[FALLA] La prueba se ha interrumpido: {type(error).__name__}: {error}\n"
-            "Copia esta línea y mándamela: dice exactamente dónde se paró."
-        )
-        return 1
+        return contar_fallo_inesperado(error)
 
 
 def _recorrer() -> int:
@@ -340,7 +313,7 @@ def _recorrer() -> int:
     aplicacion = QApplication.instance() or QApplication(sys.argv)
     del aplicacion
 
-    print(f"\n{_SEPARADOR}\nSIRIUS · PRUEBA DE VOZ\n{_SEPARADOR}\n")
+    cabecera("SIRIUS · PRUEBA DE VOZ")
 
     pasos: list[Paso] = [comprobar_version(), comprobar_sistema()]
     for paso in pasos:
@@ -373,17 +346,7 @@ def _recorrer() -> int:
 
 
 def _resumen(pasos: list[Paso]) -> int:
-    print(f"\n{_SEPARADOR}\nRESUMEN · copia esto entero y mándamelo\n{_SEPARADOR}")
-    for paso in pasos:
-        marca = "OK  " if paso.correcto else "FALLA"
-        print(f"[{marca}] {paso.titulo} — {paso.detalle}")
-
-    fallos = [paso for paso in pasos if not paso.correcto]
-    if not fallos:
-        print("\nTodo correcto: la voz funciona por los dos caminos.")
-        return 0
-    print(f"\nPrimer punto que falla: {fallos[0].titulo}.")
-    return 1
+    return resumen(pasos, "Todo correcto: la voz funciona por los dos caminos.")
 
 
 if __name__ == "__main__":

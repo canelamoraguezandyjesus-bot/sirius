@@ -122,6 +122,33 @@ Terminada la fase 0, en Sirius hay que introducir dos datos: **puerto** y
 **contraseña** del servidor de OBS. A partir de ahí, Sirius se conecta y
 pregunta el estado; no supone nada.
 
+### Cómo se hace, en un comando
+
+```
+python -m sirius.capture_setup
+```
+
+Pregunta el puerto y la contraseña —la contraseña no se ve al teclearla ni
+aparece impresa en ninguna línea—, se conecta y hace por sí solo lo que esta
+guía plantea a mano:
+
+1. Se conecta y autentica (V-01, V-02).
+2. Lee las escenas que existen en OBS y **escribe la lista blanca**, con un
+   identificador estable por escena y los alias con los que se la puede llamar
+   hablando. Un alias que valdría para dos escenas se descarta de las dos:
+   ante una orden ambigua el registro no elige ninguna, así que dejarlo escrito
+   sería configurar una orden que nunca funcionaría.
+3. Cambia de plano y vuelve al que estaba (V-05).
+4. **Graba tres segundos de verdad** y dice dónde quedó el archivo (V-03, V-04).
+5. Termina enseñando las frases exactas que ya se pueden decir en voz alta.
+
+Se puede repetir tantas veces como haga falta: cada ejecución vuelve a leer las
+escenas de OBS y reescribe la lista. Es lo que hay que hacer después de crear,
+renombrar o borrar una escena.
+
+Si OBS ya está grabando cuando se lanza, **no toca esa grabación**: lo dice y
+se detiene. Una prueba no puede llevarse por delante una toma real.
+
 Conviene tener presentes tres comportamientos que están construidos a propósito:
 
 - **Si OBS está cerrado, Sirius lo dice y sigue funcionando.** La conversación
