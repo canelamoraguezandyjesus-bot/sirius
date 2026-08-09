@@ -93,26 +93,64 @@ Baja las omisiones de **11 a 4** —ninguna otra vía se acerca— pero:
 * cuesta exactitud (24 → 18 fundido, 24 → 21 tardío);
 * baja la conformidad de etapa (32 → 28 / 27).
 
-### El defecto, identificado
+### El defecto, identificado — **y mi primer diagnóstico era falso**
 
-**Las etiquetas genéricas hacen daño.** El corpus tiene 40 notas de relleno del
-tipo «Nota ordinaria 17 sobre logística de almacén sin valor crítico», y el
-agente las etiquetó a todas casi igual: *«apunte rutinario, movimiento de
-mercancía, gestión del depósito, relleno sin relevancia»*. Resultado: cualquier
-pregunta que roce «almacén» arrastra quince notas inútiles.
+Escribí aquí que el problema eran las etiquetas genéricas: el corpus tiene 40
+notas de relleno y el agente las etiquetó a todas casi igual, así que parecía
+evidente que inundaban. **Se midió y no era eso.**
 
-Etiquetar lo distintivo ayuda. Etiquetar lo genérico **inunda**.
+Se filtraron las etiquetas por **especificidad** —la noción clásica de frecuencia
+documental inversa: un término que comparten `K` o más elementos se descarta— y se
+barrió el umbral entero:
 
-### Qué haría falta antes de reintentarlo
+| cota | elementos etiquetados | exactos | omisiones | fuga | etapa |
+|---|---|---|---|---|---|
+| sin etiquetas | 0 | 26/47 | 7 | 0 | 32/46 |
+| < 2 (solo términos únicos) | 55 | 22/47 | 5 | 0 | 27/46 |
+| < 3 | 55 | 22/47 | 5 | 0 | 27/46 |
+| < 5 | 61 | 22/47 | 5 | 0 | 27/46 |
+| < 10 | 73 | 22/47 | 5 | 0 | 27/46 |
+| < 20 | 95 | 22/47 | 5 | 0 | 27/46 |
+| sin filtrar | 95 | 22/47 | 5 | 0 | 27/46 |
 
-1. **Etiquetar selectivamente**, no todo: solo lo que tiene contenido propio.
-2. **Pesar por especificidad**: una etiqueta que comparten quince elementos no
-   distingue nada y debería valer menos que una que solo tiene uno.
-3. Y volver a medir con el mismo arnés.
+**Idéntico en las siete filas.** Descartar cuarenta elementos del etiquetado no
+cambia ni un caso. La hipótesis quedó falsada por completo.
 
-**No lo he intentado una tercera vez a propósito.** La regla de trabajo acordada
-dice parar tras dos intentos fallidos seguidos, y este documento existe para que
-el tercero se haga con el defecto ya identificado en vez de a ciegas.
+### El defecto real
+
+Mirando **qué** casos se pierden, el patrón es inequívoco:
+
+| caso | pregunta | antes | con etiquetas |
+|---|---|---|---|
+| `N1-11` | «¿Qué sabes del expediente retirado?» | no devolvía nada — **correcto** | devuelve `MEMORIA:11` |
+| `N1-18` | «¿Qué dice el anexo técnico requerido?» | no devolvía nada — **correcto** | devuelve dos |
+| `N1-24` | «¿Cada cuánto revisamos el alcance?» | no devolvía nada | devuelve uno |
+| `N1-36` | variantes fuera de ámbito | no devolvía nada | devuelve tres |
+| `N1-48` | — | zanjado antes de expandir | devuelve uno |
+
+**Las etiquetas le quitan a Sirius la capacidad de decir «no tengo eso».** Cada
+nota lleva seis etiquetas abstractas —«dato confidencial», «información
+incompleta», «norma de proceso»— y con ese vocabulario **cualquier** pregunta
+encuentra algo plausible.
+
+Eso no es un problema de precisión: es peor que no encontrar. `RF-25` y `RF-26`
+obligan a declarar la ausencia cuando la ausencia es real, y una memoria que
+siempre contesta algo está inventando.
+
+### La causa técnica, y por qué no hay cuarto intento esta noche
+
+`FTS5 MATCH` **no puntúa**: o casa o no casa. No hay umbral de relevancia que
+permita decir «esto casa, pero tan flojo que no cuenta». Con texto real eso rara
+vez importa porque casar es difícil; con seis etiquetas abstractas por elemento,
+casar es trivial y todo pasa el corte.
+
+El cuarto diseño tendría que **puntuar** la coincidencia de etiquetas —`bm25()`
+de FTS5, o similitud vectorial sobre las etiquetas— y exigir un mínimo. Eso ya no
+es un ajuste: es otra pieza.
+
+**Tres intentos, tres medidos, y el tercero además falsó mi propia explicación
+del segundo.** Se para aquí y queda escrito con el defecto correcto, que es
+bastante más útil que el que yo había supuesto.
 
 ---
 
