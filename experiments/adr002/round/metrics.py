@@ -131,13 +131,44 @@ def fuga_de_ambito(
     Se comprueba contra el **proyecto real** de cada resultado, no contra la
     lista de señuelos: los señuelos son los casos que la referencia previó, y
     una fuga que nadie previó sigue siendo una fuga.
+
+    UN ELEMENTO GLOBAL NO ES UNA FUGA
+    =================================
+
+    Un elemento de ámbito global —proyecto nulo, que es como la proyección
+    codifica «no pertenece a ningún proyecto»— es visible desde cualquier
+    ámbito, y por eso `G4` lo admite sin condición. Contarlo aquí como fuga
+    hacía que **la puerta y el corrector discreparan sobre el mismo elemento**:
+    el candidato hacía lo correcto y la medición lo marcaba con un fallo duro
+    del §6.1.
+
+    No es teoría. En el canon hay exactamente un elemento así, `MEMORIA:1`, y
+    ninguna de las corridas publicadas llegó a entregarlo en un caso acotado a
+    proyecto, de modo que el desacuerdo nunca afloró. Al medir la señal
+    semántica real sí aflora: es una memoria de tono, próxima a casi cualquier
+    consulta, y apareció en tres puntos del barrido marcando fuga donde no la
+    había.
+
+    IDENTIDAD DESCONOCIDA SIGUE SIENDO FUGA
+    =======================================
+
+    Ausente del mapa **no** es lo mismo que sin proyecto. De una identidad que
+    el canon no reconoce no se puede afirmar que esté dentro de ámbito, así que
+    se cuenta. Distinguir los dos casos evita que la corrección de arriba
+    abriera un agujero por el que pasaría cualquier identidad inventada.
     """
     ambito = caso.peticion.ambito
-    return tuple(
-        identidad
-        for identidad in obtenido
-        if not ambito.autoriza(proyecto_por_identidad.get(identidad))
-    )
+    fugas: list[str] = []
+    for identidad in obtenido:
+        if identidad not in proyecto_por_identidad:
+            fugas.append(identidad)
+            continue
+        proyecto = proyecto_por_identidad[identidad]
+        if proyecto is None:
+            continue
+        if not ambito.autoriza(proyecto):
+            fugas.append(identidad)
+    return tuple(fugas)
 
 
 def confusion_de_polaridad(

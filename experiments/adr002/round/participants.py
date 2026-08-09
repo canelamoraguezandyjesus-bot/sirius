@@ -322,8 +322,26 @@ def polaridades_del_canon(corpus: Mapping[str, object]) -> dict[str, Polaridad]:
     return declaradas
 
 
+#: Valor del eje de ámbito que el corpus usa para «no pertenece a proyecto».
+#: Es el mismo texto que consulta la proyección al escribir el canon, y por eso
+#: se lee de ahí y no del identificador del proyecto: el corpus lista
+#: `PRJ-GLOBAL` entre sus proyectos como cualquier otro, de modo que mirar el
+#: identificador da un proyecto donde no lo hay.
+AMBITO_SIN_PROYECTO: Final = "GLOBAL"
+
+
 def proyectos_del_canon(corpus: Mapping[str, object]) -> dict[str, str | None]:
-    """Proyecto real de cada elemento, numerado como la proyección lo numera."""
+    """Proyecto real de cada elemento, numerado como la proyección lo numera.
+
+    **Nulo significa ámbito global**, que es exactamente como lo codifica la
+    proyección al escribir el canon: `project_id` nulo para el elemento cuyo
+    eje de ámbito es `GLOBAL`. Antes esta función miraba solo el identificador
+    del proyecto declarado, y como el corpus lista `PRJ-GLOBAL` entre sus
+    proyectos, le asignaba el número 1 y lo convertía en un elemento de
+    proyecto. El resultado era que `G4` y el corrector discrepaban sobre el
+    mismo elemento: la puerta lo admitía en cualquier ámbito, por serlo, y la
+    medición lo contaba como fuga.
+    """
     from experiments.adr002.projection import contracts as pc
 
     proyectos = corpus.get("proyectos")
@@ -342,6 +360,9 @@ def proyectos_del_canon(corpus: Mapping[str, object]) -> dict[str, str | None]:
             continue
         identidad = pc.referencia_canonica(str(item.get("id")))
         if identidad is None:
+            continue
+        if str(item.get("ambito")) == AMBITO_SIN_PROYECTO:
+            por_identidad[identidad] = None
             continue
         declarado = item.get("project_id")
         numero = numeros.get(str(declarado)) if declarado is not None else None

@@ -1,0 +1,38 @@
+{
+  "que_es": "correccion de una contradiccion interna del arnes de medicion de ADR-002: la puerta G4 y el corrector de fuga de ambito decian cosas opuestas sobre el mismo elemento",
+  "no_reescribe": "ronda_primaria_v0.4.json y los demas artefactos congelados quedan tal cual; este fichero registra la diferencia para quien compare cifras antiguas con nuevas",
+  "el_desacuerdo": {
+    "elemento": "MEMORIA:1 (MEM-001, 'El usuario prefiere que redactes en tono directo y sin adornos')",
+    "el_corpus_declara": "ambito GLOBAL, y ademas project_id PRJ-GLOBAL, que el corpus lista entre sus proyectos como cualquier otro",
+    "la_proyeccion_hace": "project_id nulo, porque su regla es 'ambito == GLOBAL -> sin proyecto' (projection/build.py)",
+    "la_puerta_G4_hace": "lo admite en cualquier ambito sin condicion: 'un item global es visible desde cualquier ambito: no pertenece a uno'",
+    "el_corrector_hacia": "numeraba los proyectos del corpus por posicion; PRJ-GLOBAL ocupa la primera, asi que le asignaba el proyecto '1' y lo contaba fuera de ambito en toda consulta acotada a otro proyecto",
+    "consecuencia": "un candidato que hacia lo correcto recibia un fallo duro del §6.1"
+  },
+  "por_que_no_afloro_en_la_ronda_publicada": "ningun candidato llego a entregar el elemento global en un caso acotado a proyecto; T0 si lo entregaba, pero su puerta de fuga ya estaba en falso por otras mil fugas y nadie miro de que estaba compuesta la cifra",
+  "como_afloro": "al medir la senal semantica real con text-embedding-3-small: es una memoria de tono, proxima a casi cualquier consulta, y aparecio en tres de los diecisiete puntos del barrido marcando fuga donde no la habia",
+  "la_correccion": {
+    "donde": [
+      "round/participants.py: proyectos_del_canon usa el eje de ambito del corpus, no el identificador del proyecto, de modo que codifica lo global igual que la proyeccion (nulo)",
+      "round/metrics.py: fuga_de_ambito no cuenta como fuga un elemento sin proyecto, y sigue contando como fuga una identidad que el canon no reconoce"
+    ],
+    "lo_que_NO_se_toco": "Ambito.autoriza, la puerta G4, el corpus, los casos, el resultado_esperado y ningun artefacto congelado",
+    "pruebas": "round/test_adr002_ambito_global.py, cinco, incluidas dos de control negativo: un elemento de otro proyecto sigue siendo fuga, y una identidad inventada tambien"
+  },
+  "efecto_sobre_las_cifras_publicadas": {
+    "metodo": "repeticion de los 50 casos con los cinco participantes, recontando con el corrector viejo y con el nuevo sobre las MISMAS respuestas",
+    "ADR002-A": {"viejo": 0, "nuevo": 0, "veredicto": "sin cambio"},
+    "ADR002-B": {"viejo": 0, "nuevo": 0, "veredicto": "sin cambio"},
+    "ADR002-C": {"viejo": 0, "nuevo": 0, "veredicto": "sin cambio"},
+    "ADR002-D": {"viejo": 0, "nuevo": 0, "veredicto": "sin cambio"},
+    "T0-control": {
+      "viejo": 1351,
+      "nuevo": 1317,
+      "diferencia": 34,
+      "de_que_se_compone_la_diferencia": "las 34 son la misma identidad, MEMORIA:1; la correccion no anadio ni una fuga nueva en ninguno de los 50 casos",
+      "veredicto": "sin cambio: su puerta de fuga cero seguia y sigue en falso, porque le quedan 1317 fugas reales",
+      "nota_de_honestidad": "la ronda publicada declara 1289 para T0, no 1351; esta repeticion no reproduce el protocolo exacto de la ronda (rotacion y repeticiones), asi que el numero absoluto no es comparable. Lo comparable es la diferencia entre los dos correctores sobre las mismas respuestas, que es lo que se mide aqui"
+    }
+  },
+  "conclusion": "ninguna puerta cambia de estado y ningun veredicto se mueve. La correccion no salva a nadie ni hunde a nadie: deja de cobrar un fallo que no existia, y hace que la puerta y el corrector digan por fin lo mismo del mismo elemento"
+}
