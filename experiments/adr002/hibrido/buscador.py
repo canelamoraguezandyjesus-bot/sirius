@@ -8,21 +8,44 @@ la lectura de polaridad, la materializacion por identidad, el fallo cerrado—
 queda identico, de modo que cualquier diferencia observable es atribuible a la
 fusion y a nada mas.
 
-POR QUE ANADIR DETRAS NO ES NEUTRO
-==================================
+CORRECCION MEDIDA: EN ESTE BANCO LA FUSION NO CAMBIA NADA
+=========================================================
 
-El contrato del puerto entrega como mucho ``IDENTIDADES_POR_LLAMADA``
-identidades, y ``G12`` recorta al limite pedido. Anadir detras significa que la
-senal semantica ocupa **siempre las ultimas posiciones**: si la via lexica ya
-llena el cupo, lo que la semantica proponga se recorta antes de que ninguna
-puerta lo mire. Medido asi, un acierto semantico y la ausencia total de senal
-semantica **son indistinguibles**, y el eje que ``ARQ-00 §23`` queria poner a
-prueba no llega a medirse.
+Este modulo se escribio sobre una razon que la medida **refuto**, y la razon
+refutada se queda escrita aqui porque borrarla dejaria el modulo pareciendo
+mejor justificado de lo que esta.
 
-Fusionar cambia eso sin tocar ni las puertas ni el limite: un elemento en el
-que las dos vias coinciden sube por encima de uno que solo una propone, que es
-justo lo que se le pide a una fusion. El limite sigue siendo el mismo; lo que
-cambia es **que queda dentro de el**.
+Lo que se afirmo al crearlo: el contrato del puerto entrega como mucho
+``IDENTIDADES_POR_LLAMADA`` identidades y ``G12`` recorta al limite pedido, asi
+que anadir detras condena a la senal semantica a las ultimas posiciones y la
+recorta antes de que ninguna puerta la mire; fusionar la rescataria.
+
+Lo que se midio despues sobre el banco real:
+
+* 45 de los 50 casos **no declaran limite**: su limite duro es el canon entero,
+  97. De los cinco que si, dos lo fijan al numero exacto de elementos que su
+  propia respuesta espera;
+* solo 21 casos llegan a recorrer ``E3``, y ahi ``E3`` propone 5 candidatas de
+  media;
+* en **cero** de esos 21 casos una candidata anadida al final caeria fuera del
+  limite duro.
+
+De modo que concatenar no pierde nada en este banco, y por tanto fusionar no
+puede ganar nada en este banco. Se comprobo tambien por el otro lado: con senal
+activa —umbrales de coseno de 0.25 a 0.65— concatenar y fusionar dan cifras
+identicas en los cinco puntos del barrido, y salidas identicas caso a caso.
+
+QUE SE CONSERVA, ENTONCES
+=========================
+
+El mecanismo, porque es correcto y no cuesta nada: con senal nula la salida es
+identica a la de la linea base en los 47 casos, luego la fusion no introduce
+ruido propio. Y porque la premisa refutada es **del banco**, no de la fusion:
+en cuanto un limite ate de verdad —un canon grande, una peticion acotada, una
+interfaz que pida cinco resultados— el recorte vuelve a morder y el orden pasa
+a decidir que sobrevive. Lo que no se puede es seguir presentando la fusion
+como la solucion al problema medido en ``ADR-002``: no lo es, y lo unico que
+mueve ese problema es que el codificador encuentre o no encuentre.
 
 DONDE SE FUSIONA, Y POR QUE AHI
 ===============================
