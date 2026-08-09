@@ -176,3 +176,48 @@ def test_the_user_is_shown_a_phrase_that_really_works() -> None:
     for frase in frases_de_voz(propuestas):
         orden = frase.split("»")[0].removeprefix("«")
         assert interpret(orden, escenas) is not None, f"la frase enseñada no funciona: {orden}"
+
+
+# --- La contraseña, cuando pegarla a ciegas no funciona -------------------
+
+
+def test_the_password_can_come_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pegar en un campo que no muestra nada no confirma que haya entrado.
+
+    Sin esta salida, quien no consigue pegar la contraseña se queda sin poder
+    conectar OBS y sin saber si el problema es la consola o él.
+    """
+    from sirius.capture_setup import VARIABLE_CONTRASENA, _preguntar_datos
+
+    monkeypatch.setenv(VARIABLE_CONTRASENA, "la-de-obs")
+    monkeypatch.setattr("builtins.input", lambda *_: "")
+
+    _, _, contrasena = _preguntar_datos()
+
+    assert contrasena == "la-de-obs"
+
+
+def test_typing_the_password_still_works(monkeypatch: pytest.MonkeyPatch) -> None:
+    """La variable es una salida, no un sustituto: sin ella se sigue tecleando."""
+    from sirius.capture_setup import VARIABLE_CONTRASENA, _preguntar_datos
+
+    monkeypatch.delenv(VARIABLE_CONTRASENA, raising=False)
+    monkeypatch.setattr("builtins.input", lambda *_: "")
+    monkeypatch.setattr("sirius.capture_setup.getpass", lambda *_: "tecleada")
+
+    _, _, contrasena = _preguntar_datos()
+
+    assert contrasena == "tecleada"
+
+
+def test_the_environment_password_is_never_echoed(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from sirius.capture_setup import VARIABLE_CONTRASENA, _preguntar_datos
+
+    monkeypatch.setenv(VARIABLE_CONTRASENA, "secretisima")
+    monkeypatch.setattr("builtins.input", lambda *_: "")
+
+    _preguntar_datos()
+
+    assert "secretisima" not in capsys.readouterr().out

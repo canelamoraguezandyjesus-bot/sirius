@@ -16,10 +16,14 @@ sección ``model_studio_capture`` de la configuración local, y no toca la base
 de datos, la conversación ni la identidad.
 
 La contraseña no se muestra al teclearla ni aparece en ninguna línea impresa.
+Cuando el campo en blanco estorba —pegar en una consola sin ver nada no da
+ninguna señal de que haya funcionado— se puede pasar por la variable de
+entorno ``SIRIUS_OBS_PASSWORD``, que se escribe a la vista y se pega bien.
 """
 
 from __future__ import annotations
 
+import os
 import re
 import time
 from collections.abc import Callable, Sequence
@@ -39,6 +43,14 @@ from sirius.ports.capture_backend import BackendScene, CaptureError
 AJUSTE = "model_studio_capture"
 PUERTO_POR_DEFECTO = 4455
 ANFITRION_POR_DEFECTO = "127.0.0.1"
+VARIABLE_CONTRASENA = "SIRIUS_OBS_PASSWORD"
+"""Alternativa a teclear la contraseña a ciegas.
+
+Un campo que no muestra ni un asterisco tampoco confirma que el pegado haya
+entrado, y eso deja atascado a quien no sabe si el problema es la consola o
+él. Con la variable la contraseña se ve al escribirla, que es peor para la
+confidencialidad y mucho mejor para poder seguir; se elige quien la usa.
+"""
 SEGUNDOS_DE_PRUEBA = 3.0
 
 _PREFIJOS_QUE_SOBRAN = ("camara ", "escena ", "plano ", "vista ", "toma ")
@@ -397,8 +409,12 @@ def _preguntar_datos() -> tuple[str, int, str]:
     puerto = int(escrito) if escrito.isdigit() else puerto_previo
 
     anfitrion = str(guardado.get("host", ANFITRION_POR_DEFECTO))
-    # No se muestra al teclearla, y no vuelve a aparecer en ninguna línea.
-    contrasena = _leer(lambda: getpass("Contraseña del servidor WebSocket de OBS: "))
+    contrasena = os.environ.get(VARIABLE_CONTRASENA, "").strip()
+    if contrasena:
+        print(f"  (contraseña tomada de {VARIABLE_CONTRASENA})")
+    else:
+        # No se muestra al teclearla, y no vuelve a aparecer en ninguna línea.
+        contrasena = _leer(lambda: getpass("Contraseña del servidor WebSocket de OBS: "))
     if not contrasena:
         contrasena = str(guardado.get("password", ""))
         if contrasena:
