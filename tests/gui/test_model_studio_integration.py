@@ -43,6 +43,7 @@ from sirius.application.studio_voice import StudioVoiceUseCase, VoiceSettings
 from sirius.composition_root import build_conversation_dependencies
 from sirius.domain.conversation import MessageRole
 from sirius.domain.model_studio import StudioCaptureState, StudioInteractionState
+from sirius.main import _build_main_window
 from sirius.ports.audio_capture import AudioCaptureError, AudioCaptureErrorKind
 from sirius.ports.llm import LLMError, LLMErrorKind, LLMProvider, LLMRequest, LLMStreamEvent
 from sirius.presentation.main_window import (
@@ -154,6 +155,23 @@ def _swap_provider(window: MainWindow, database_path: Path, llm_provider: LLMPro
 
 def _wait_idle(qtbot: QtBot, window: MainWindow) -> None:
     qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+
+
+@pytest.mark.gui
+def test_production_builder_wires_model_studio_voice(qtbot: QtBot, tmp_path: Path) -> None:
+    """El arranque real no puede perder la voz construida por composition_root."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    dependencies = build_conversation_dependencies(
+        database_path,
+        database_path.parent / "backups",
+        secret_store=FakeSecretStore(),
+    )
+
+    window = _build_main_window(dependencies, [])
+    qtbot.addWidget(window)
+
+    assert window._studio_voice_use_case is dependencies.studio_voice_use_case
+    assert window.studio_page.voice_available
 
 
 # --- Conmutación ---------------------------------------------------------
