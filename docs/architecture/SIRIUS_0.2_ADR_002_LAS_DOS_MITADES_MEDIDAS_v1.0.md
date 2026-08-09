@@ -137,20 +137,63 @@ Eso no es un problema de precisión: es peor que no encontrar. `RF-25` y `RF-26`
 obligan a declarar la ausencia cuando la ausencia es real, y una memoria que
 siempre contesta algo está inventando.
 
-### La causa técnica, y por qué no hay cuarto intento esta noche
+### La causa técnica
 
-`FTS5 MATCH` **no puntúa**: o casa o no casa. No hay umbral de relevancia que
-permita decir «esto casa, pero tan flojo que no cuenta». Con texto real eso rara
-vez importa porque casar es difícil; con seis etiquetas abstractas por elemento,
-casar es trivial y todo pasa el corte.
+`FTS5 MATCH` **no puntúa**: o casa o no casa. Con texto real eso rara vez importa
+porque casar es difícil; con seis etiquetas abstractas por elemento, casar es
+trivial y todo pasa el corte.
 
-El cuarto diseño tendría que **puntuar** la coincidencia de etiquetas —`bm25()`
-de FTS5, o similitud vectorial sobre las etiquetas— y exigir un mínimo. Eso ya no
-es un ajuste: es otra pieza.
+### Cuarto diseño: puntuar con `bm25()` y exigir un mínimo — **falsación definitiva**
 
-**Tres intentos, tres medidos, y el tercero además falsó mi propia explicación
-del segundo.** Se para aquí y queda escrito con el defecto correcto, que es
-bastante más útil que el que yo había supuesto.
+`bm25()` sí puntúa. Se ordenó por puntuación, se exigió un mínimo, y se barrió el
+umbral entero:
+
+| mínimo exigido | exactos | omisiones | contam. | fuga | etapa | **acierta la ausencia** |
+|---|---|---|---|---|---|---|
+| **sin etiquetas** | **26/47** | **7** | 3 | 0 | **32/46** | **38/47** |
+| ≥ 0 | 23/47 | 7 | 3 | 0 | 28/46 | 35/47 |
+| ≥ 2 | 23/47 | 7 | 3 | 0 | 28/46 | 35/47 |
+| ≥ 4 | 25/47 | 7 | 3 | 0 | 31/46 | 37/47 |
+| ≥ 6 | 26/47 | 7 | 3 | 0 | 32/46 | 38/47 |
+| ≥ 8 | 26/47 | 7 | 3 | 0 | 32/46 | 38/47 |
+| ≥ 10 | 26/47 | 7 | 3 | 0 | 32/46 | 38/47 |
+| ≥ 14 | 26/47 | 7 | 3 | 0 | 32/46 | 38/47 |
+
+El arreglo **funciona exactamente como se diseñó**: puntuar y exigir un mínimo
+elimina el daño, y a partir de 6 la columna de ausencia vuelve a 38/47.
+
+Pero elimina el daño **eliminando las etiquetas**. De 6 en adelante las cifras
+son idénticas, columna por columna, a no tenerlas: ninguna etiqueta llega a
+dispararse nunca. Y en el otro extremo, cuando sí se disparan, hacen daño.
+
+**Y la columna que decide: las omisiones se quedan en 7 en las ocho filas.** Las
+etiquetas no cierran **ni una sola** omisión adicional en **ningún** punto de
+operación. No hay compromiso que buscar: no hay nada que ganar.
+
+### Veredicto: el etiquetado como señal de recuperación queda **falsado**
+
+Cuatro diseños, los cuatro medidos con el banco entero y las puertas reales:
+
+| diseño | resultado |
+|---|---|
+| ① fundido con el texto indexado | rompe el aislamiento de ámbito (fuga 3) |
+| ② señal tardía | cuesta exactitud, fuga 1 |
+| ③ filtrado por especificidad | idéntico a ②; **falsó mi diagnóstico del defecto** |
+| ④ puntuado con `bm25` y mínimo exigido | o daña, o es inerte; **cero omisiones cerradas en toda la curva** |
+
+Y hay que decir la parte incómoda: **el mecanismo sí funciona** —el agente ciego
+escribió «límite de gasto» para «El presupuesto máximo es 1.500 €» sin haber
+visto la pregunta—. Lo que no funciona es **usarlo para buscar**. La etiqueta
+correcta existe; el buscador no sabe distinguir cuándo esa etiqueta significa
+algo y cuándo es ruido, porque la etiqueta no tiene con qué compararse.
+
+Eso apunta a que su sitio, si lo tiene, no es la recuperación sino otro lado
+—decidir qué mostrar, o agrupar—, y eso es una pregunta distinta que no se abre
+aquí.
+
+**Se para. Cuatro intentos, cuatro medidos, y el tercero además falsó mi propia
+explicación del segundo.** Queda escrito para que nadie lo reintente creyendo que
+es cuestión de afinar un parámetro: se barrieron todos.
 
 ---
 
