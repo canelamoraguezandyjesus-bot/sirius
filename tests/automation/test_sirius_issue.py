@@ -1232,6 +1232,11 @@ def test_every_gh_call_goes_through_the_bounded_wrapper() -> None:
     assert 'timeout "$remaining" gh "$@"' in fuente[inicio:fin]
 
 
+# Margen para el segundo que puede pasar entre que la prueba mira el reloj y
+# lo mira el guion: sin él la aserción sería intermitente por un desfase de 1s.
+_TOLERANCIA_RELOJ = 2
+
+
 # --------------------------------------------------------------------------- #
 # Los plazos se componen: la capa de abajo no puede ampliar el de arriba
 # --------------------------------------------------------------------------- #
@@ -1251,6 +1256,7 @@ def test_a_stricter_inherited_deadline_wins_over_the_comment_budget(tmp_path: Pa
     apretado = int(time.time()) + 5
     env["SIRIUS_GH_DEADLINE"] = str(apretado)
     env["SIRIUS_COMMENT_BUDGET_SECONDS"] = "900"
+    inicio = int(time.time())
 
     cuerpo = tmp_path / "cuerpo.md"
     cuerpo.write_text("hola\n", encoding="utf-8")
@@ -1262,6 +1268,9 @@ def test_a_stricter_inherited_deadline_wins_over_the_comment_budget(tmp_path: Pa
         assert int(linea) <= apretado, (
             f"la publicación se concedió {linea}, más allá del plazo heredado {apretado}"
         )
+        assert int(linea) <= inicio + 900 + _TOLERANCIA_RELOJ, (
+            f"el plazo {linea} desborda incluso el presupuesto propio"
+        )
 
 
 def test_without_an_inherited_deadline_the_budget_applies(tmp_path: Path) -> None:
@@ -1269,7 +1278,8 @@ def test_without_an_inherited_deadline_the_budget_applies(tmp_path: Path) -> Non
     # presupuesto. Acotar por debajo no puede convertirse en no acotar.
     env = _setup(tmp_path)
     env.pop("SIRIUS_GH_DEADLINE", None)
-    env["SIRIUS_COMMENT_BUDGET_SECONDS"] = "900"
+    presupuesto = 900
+    env["SIRIUS_COMMENT_BUDGET_SECONDS"] = str(presupuesto)
     antes = int(time.time())
 
     cuerpo = tmp_path / "cuerpo.md"
@@ -1279,9 +1289,13 @@ def test_without_an_inherited_deadline_the_budget_applies(tmp_path: Path) -> Non
     visto = Path(env["GH_MOCK_DIR"]) / "deadlines.txt"
     assert visto.exists()
     plazos = [int(x) for x in visto.read_text(encoding="utf-8").split()]
-    assert plazos and all(p > antes + 100 for p in plazos), (
-        f"sin plazo heredado debe usarse el presupuesto propio: {plazos}"
-    )
+    assert plazos, "el mock no registró ningún plazo: la prueba no mide nada"
+    for plazo in plazos:
+        # Las dos cotas: ni menos que el presupuesto, ni más. Solo la inferior
+        # dejaba pasar un presupuesto ampliado en silencio.
+        assert antes + 100 < plazo <= antes + presupuesto + _TOLERANCIA_RELOJ, (
+            f"sin plazo heredado debe usarse EXACTAMENTE el presupuesto propio: {plazo}"
+        )
 
 
 def test_a_laxer_inherited_deadline_does_not_widen_the_comment_budget(tmp_path: Path) -> None:
@@ -1293,12 +1307,14 @@ def test_a_laxer_inherited_deadline_does_not_widen_the_comment_budget(tmp_path: 
     el mínimo, no con el de fuera.
     """
     env = _setup(tmp_path)
+    presupuesto = 90
     holgado = int(time.time()) + 100_000
     env["SIRIUS_GH_DEADLINE"] = str(holgado)
-    env["SIRIUS_COMMENT_BUDGET_SECONDS"] = "90"
+    env["SIRIUS_COMMENT_BUDGET_SECONDS"] = str(presupuesto)
 
     cuerpo = tmp_path / "cuerpo.md"
     cuerpo.write_text("hola\n", encoding="utf-8")
+    inicio = int(time.time())
     _run(f'sirius_comment_once owner/repo 7 "<!-- m -->" "{cuerpo}"', env)
 
     visto = Path(env["GH_MOCK_DIR"]) / "deadlines.txt"
@@ -1306,6 +1322,12 @@ def test_a_laxer_inherited_deadline_does_not_widen_the_comment_budget(tmp_path: 
     for linea in visto.read_text(encoding="utf-8").split():
         assert int(linea) < holgado, (
             f"se adoptó el plazo holgado {linea} en vez del presupuesto propio"
+        )
+        # Y el propio presupuesto tiene que RESPETARSE, no solo ganar: sin esta
+        # cota superior, un `now + 10 * budget` pasaba las tres pruebas de
+        # composición, porque todas comprobaban cuál gana y ninguna cuánto vale.
+        assert int(linea) <= inicio + presupuesto + _TOLERANCIA_RELOJ, (
+            f"el plazo {linea} desborda el presupuesto de {presupuesto}s"
         )
 
 
