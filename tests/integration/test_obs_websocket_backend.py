@@ -44,6 +44,7 @@ class _FakeObsServer:
         scene: str = "Pantalla",
         reject_requests: bool = False,
         never_identify: bool = False,
+        consultas_hasta_confirmar: int = 0,
     ) -> None:
         self._password = password
         self.recording = recording
@@ -51,6 +52,10 @@ class _FakeObsServer:
         self.scene = scene
         self._reject = reject_requests
         self._never_identify = never_identify
+        # OBS acepta la orden y tarda en ejecutarla: durante unas cuantas
+        # consultas sigue informando del estado anterior.
+        self._consultas_hasta_confirmar = consultas_hasta_confirmar
+        self._pendientes = 0
         self.received: list[str] = []
 
         self._listener = socket.socket()
@@ -141,11 +146,15 @@ class _FakeObsServer:
             return
 
         if request_type == "GetRecordStatus":
+            grabando = self.recording
+            if self._pendientes > 0:
+                self._pendientes -= 1
+                grabando = not self.recording  # todavía no ha cambiado de verdad
             self._respond(
                 connection,
                 request_type,
                 response={
-                    "outputActive": self.recording,
+                    "outputActive": grabando,
                     "outputPaused": self.paused,
                     "outputDuration": 95_000,
                 },
@@ -156,9 +165,11 @@ class _FakeObsServer:
             )
         elif request_type == "StartRecord":
             self.recording = True
+            self._pendientes = self._consultas_hasta_confirmar
             self._respond(connection, request_type)
         elif request_type == "StopRecord":
             self.recording = False
+            self._pendientes = self._consultas_hasta_confirmar
             self._respond(connection, request_type, response={"outputPath": "C:/videos/toma-1.mkv"})
         elif request_type == "PauseRecord":
             self.paused = True
@@ -516,3 +527,58 @@ def test_the_password_never_travels_in_an_error_message() -> None:
     finally:
         backend.disconnect()
         server.close()
+
+
+# --- OBS acepta la orden y la ejecuta después ---------------------------
+
+
+def test_a_recording_that_takes_a_moment_to_start_is_still_confirmed() -> None:
+    """El fallo visto contra OBS real: «aceptó la orden pero dice CAPTURA LISTA».
+
+    Entre aceptar y grabar, OBS inicializa el codificador y abre el archivo.
+    Preguntar en ese hueco devuelve el estado anterior, y creérselo hace que
+    Sirius dé por fallida una grabación que sí está en marcha.
+    """
+    server = _FakeObsServer(consultas_hasta_confirmar=3)
+    backend = ObsWebSocketBackend(port=server.port, settle_timeout_seconds=5.0)
+    backend.connect()
+
+    resultado = backend.start_recording()
+
+    assert isinstance(resultado, CaptureStatus)
+    assert resultado.state is StudioCaptureState.GRABANDO
+    backend.disconnect()
+    server.close()
+
+
+def test_a_stop_that_takes_a_moment_is_also_waited_for() -> None:
+    """Y el archivo resultante no se pierde por el camino."""
+    server = _FakeObsServer(recording=True, consultas_hasta_confirmar=3)
+    backend = ObsWebSocketBackend(port=server.port, settle_timeout_seconds=5.0)
+    backend.connect()
+
+    resultado = backend.stop_recording()
+
+    assert isinstance(resultado, CaptureStatus)
+    assert resultado.state is StudioCaptureState.PREPARADO
+    assert resultado.output_path == "C:/videos/toma-1.mkv"
+    backend.disconnect()
+    server.close()
+
+
+def test_when_obs_never_confirms_nothing_is_invented() -> None:
+    """Agotada la espera se dice lo que OBS diga, no lo que convendría.
+
+    Es la mitad importante de la regla: esperar no puede convertirse en dar
+    por buena una grabación que nunca arrancó.
+    """
+    server = _FakeObsServer(consultas_hasta_confirmar=10_000)
+    backend = ObsWebSocketBackend(port=server.port, settle_timeout_seconds=0.3)
+    backend.connect()
+
+    resultado = backend.start_recording()
+
+    assert isinstance(resultado, CaptureStatus)
+    assert resultado.state is StudioCaptureState.PREPARADO
+    backend.disconnect()
+    server.close()

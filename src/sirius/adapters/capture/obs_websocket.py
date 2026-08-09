@@ -26,6 +26,8 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import time
+from collections.abc import Callable
 from typing import Any
 
 from sirius.adapters.capture.websocket_client import (
@@ -58,6 +60,17 @@ _OP_REQUEST_RESPONSE = 7
 _RPC_VERSION = 1
 _REQUEST_ID = "sirius"
 
+SETTLE_TIMEOUT_SECONDS = 5.0
+"""Cuánto se espera a que OBS confirme un cambio que ya ha aceptado.
+
+OBS responde «recibido» y ejecuta después: entre las dos cosas inicializa el
+codificador y abre el archivo. Preguntar en ese hueco devuelve el estado
+anterior, y creérselo es justo el accidente que #127 prohíbe —dar por buena una
+grabación que no ha empezado, o darla por parada mientras sigue—.
+"""
+
+SETTLE_INTERVAL_SECONDS = 0.1
+
 _MAXIMUM_HANDSHAKE_MESSAGES = 8
 """Cuántos mensajes se aceptan antes de rendirse en el saludo: evita quedarse
 esperando para siempre si el servidor manda eventos y nunca se identifica."""
@@ -71,15 +84,23 @@ def _authentication_response(password: str, salt: str, challenge: str) -> str:
     )
 
 
+def _grabando(record_status: dict[str, Any]) -> bool:
+    return bool(record_status.get("outputActive", False))
+
+
+def _pausado(record_status: dict[str, Any]) -> bool:
+    return bool(record_status.get("outputPaused", False))
+
+
 def _state_from(record_status: dict[str, Any]) -> StudioCaptureState:
     """Traduce lo que OBS dice a un estado de Model Studio.
 
     Solo ``outputActive`` puede llevar a ``GRABANDO``. Ninguna otra señal vale:
     ese es el requisito duro de #127.
     """
-    if not record_status.get("outputActive", False):
+    if not _grabando(record_status):
         return StudioCaptureState.PREPARADO
-    if record_status.get("outputPaused", False):
+    if _pausado(record_status):
         return StudioCaptureState.PAUSADO
     return StudioCaptureState.GRABANDO
 
@@ -93,10 +114,12 @@ class ObsWebSocketBackend:
         host: str = DEFAULT_HOST,
         port: int = DEFAULT_PORT,
         timeout_seconds: float = 5.0,
+        settle_timeout_seconds: float = SETTLE_TIMEOUT_SECONDS,
     ) -> None:
         self._password = password
         self._client = WebSocketClient(host, port, timeout_seconds)
         self._identified = False
+        self._settle_timeout = settle_timeout_seconds
 
     # --- Conexión --------------------------------------------------------
 
@@ -207,8 +230,42 @@ class ObsWebSocketBackend:
             self.disconnect()
             return CaptureError(CaptureErrorKind.UNKNOWN, "se perdió la conexión")
 
+    def _settle(self, confirmado: Callable[[dict[str, Any]], bool]) -> CaptureStatus:
+        """Pregunta hasta que OBS confirme el cambio, o hasta agotar la espera.
+
+        Al agotarse **no se miente**: se devuelve el estado que OBS diga en ese
+        momento, sea el que sea. Quien llama ya sabe distinguir «no ha
+        empezado» de «no lo sé», y ninguna de las dos cosas se arregla
+        inventando la que interesa.
+        """
+        limite = time.monotonic() + self._settle_timeout
+        while True:
+            record = self._request("GetRecordStatus")
+            if confirmado(record) or time.monotonic() >= limite:
+                return self._status_from(record)
+            time.sleep(SETTLE_INTERVAL_SECONDS)
+
+    def _commanded(
+        self, request_type: str, confirmado: Callable[[dict[str, Any]], bool]
+    ) -> CaptureOutcome:
+        """Como ``_guarded``, pero esperando a que el cambio sea real."""
+        try:
+            self._request(request_type)
+            return self._settle(confirmado)
+        except _NotConnected:
+            return CaptureError(CaptureErrorKind.NOT_CONNECTED, "sin conexión")
+        except _Rejected:
+            return CaptureError(CaptureErrorKind.REJECTED, "orden rechazada")
+        except TimeoutWebSocketError:
+            return CaptureError(CaptureErrorKind.TIMEOUT, "sin respuesta")
+        except WebSocketError:
+            self.disconnect()
+            return CaptureError(CaptureErrorKind.UNKNOWN, "se perdió la conexión")
+
     def _status(self) -> CaptureStatus:
-        record = self._request("GetRecordStatus")
+        return self._status_from(self._request("GetRecordStatus"))
+
+    def _status_from(self, record: dict[str, Any]) -> CaptureStatus:
         scene = self._request("GetCurrentProgramScene")
         active = scene.get("currentProgramSceneName") or scene.get("sceneName")
         seconds = record.get("outputDuration")
@@ -236,10 +293,10 @@ class ObsWebSocketBackend:
             return CaptureError(CaptureErrorKind.UNKNOWN, "se perdió la conexión")
 
     def start_recording(self) -> CaptureOutcome:
-        return self._guarded("StartRecord")
+        return self._commanded("StartRecord", _grabando)
 
     def pause_recording(self) -> CaptureOutcome:
-        outcome = self._guarded("PauseRecord")
+        outcome = self._commanded("PauseRecord", _pausado)
         if isinstance(outcome, CaptureError) and outcome.kind is CaptureErrorKind.REJECTED:
             # OBS rechaza pausar cuando el formato de salida no lo admite. No es
             # una avería, y #127 acepta declararlo explícitamente (MS-007).
@@ -250,7 +307,9 @@ class ObsWebSocketBackend:
         return outcome
 
     def resume_recording(self) -> CaptureOutcome:
-        return self._guarded("ResumeRecord")
+        return self._commanded(
+            "ResumeRecord", lambda record: _grabando(record) and not _pausado(record)
+        )
 
     def stop_recording(self) -> CaptureOutcome:
         try:
@@ -268,9 +327,17 @@ class ObsWebSocketBackend:
         # El archivo solo lo sabe la respuesta de la parada: si se consultara el
         # estado después, ya no estaría, y la grabación quedaría sin identificar.
         output_path = response.get("outputPath")
-        status = self.get_status()
-        if isinstance(status, CaptureError):
-            return status
+        try:
+            # Parar tampoco es instantáneo: OBS cierra el archivo después de
+            # aceptar la orden.
+            status = self._settle(lambda record: not _grabando(record))
+        except _NotConnected:
+            return CaptureError(CaptureErrorKind.NOT_CONNECTED, "sin conexión")
+        except TimeoutWebSocketError:
+            return CaptureError(CaptureErrorKind.TIMEOUT, "sin respuesta")
+        except WebSocketError:
+            self.disconnect()
+            return CaptureError(CaptureErrorKind.UNKNOWN, "se perdió la conexión")
         return CaptureStatus(
             state=status.state,
             active_scene_name=status.active_scene_name,
