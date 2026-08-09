@@ -136,6 +136,45 @@ def test_the_sync_copies_instead_of_hardlinking(build_implementation: str) -> No
     assert assignment.start() < sync_call, "UV_LINK_MODE se define despues del sync: llega tarde"
 
 
+def test_pyside6_deploy_is_told_which_environment_it_runs_in(
+    build_implementation: str,
+) -> None:
+    """Ejecutarlo DESDE el entorno no basta: hay que decirselo.
+
+    La deteccion de pyside6-deploy es solo ``bool(os.environ.get("VIRTUAL_ENV"))``;
+    no mira ``sys.prefix``. Sin la variable se cree fuera de todo entorno y
+    pregunta por teclado si puede instalar paquetes. Como la salida esta
+    redirigida al log, la pregunta no se ve y la construccion se queda esperando:
+    50 minutos parada en el paso 8/13 con 173 bytes de log y cero CPU. Antes
+    funcionaba por accidente, con la variable heredada de la .venv activada.
+    """
+    for invocation in ("--dry-run", '-c "$WorkingSpec" -v'):
+        position = build_implementation.index(invocation)
+        preceding = build_implementation[:position]
+        block_start = preceding.rindex("@echo off")
+        assert 'set "VIRTUAL_ENV=$PackagingVenv"' in build_implementation[block_start:position], (
+            f"la invocacion con {invocation} no declara VIRTUAL_ENV"
+        )
+
+
+def test_pyside6_deploy_runs_without_a_console_to_ask_on(
+    build_implementation: str,
+) -> None:
+    """Ninguna pregunta puede volver a colgar el build.
+
+    Sin entrada, ``input()`` lanza ``EOFError``, el proceso termina con codigo
+    distinto de cero y el fallo sale con su log. Un build desatendido no puede
+    depender de que alguien este mirando la pantalla.
+    """
+    for invocation in ("--dry-run", "-v"):
+        line = next(
+            candidate
+            for candidate in build_implementation.splitlines()
+            if "$VenvDeploy" in candidate and invocation in candidate
+        )
+        assert "< NUL" in line, f"la invocacion con {invocation} deja la entrada abierta: {line}"
+
+
 def test_the_sync_still_excludes_default_groups(build_implementation: str) -> None:
     assert "--no-default-groups" in build_implementation
     assert "--frozen" in build_implementation

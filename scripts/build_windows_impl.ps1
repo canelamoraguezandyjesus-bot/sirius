@@ -559,11 +559,14 @@ Write-Ok "Salidas anteriores eliminadas (solo rutas propias de este script)."
 # --------------------------------------------------------------------------
 Write-Step "7/13 Dry-run de pyside6-deploy"
 
+# VIRTUAL_ENV y la entrada cerrada: el motivo esta explicado entero en el paso
+# 8/13, que es donde la falta de ambas cosas colgaba la construccion.
 $dryRunCmdFile = Join-Path $PackagingDir "run-dry-run.cmd"
 $dryRunBody = @"
 @echo off
 cd /d "$RepoRoot"
-"$VenvDeploy" -c "$WorkingSpec" --dry-run > "$DryRunFile" 2>&1
+set "VIRTUAL_ENV=$PackagingVenv"
+"$VenvDeploy" -c "$WorkingSpec" --dry-run < NUL > "$DryRunFile" 2>&1
 exit /b %errorlevel%
 "@
 Write-Utf8NoBom -Path $dryRunCmdFile -Content $dryRunBody
@@ -609,11 +612,31 @@ Write-Step "8/13 Compilacion con Nuitka (standalone)"
 
 $stamp = (Get-Date).ToString("yyyyMMdd-HHmmss")
 $BuildLog = Join-Path $PackagingDir "build-$stamp.log"
+# VIRTUAL_ENV hay que ponerla, aunque pyside6-deploy se ejecute DESDE el entorno
+# de empaquetado. Su deteccion es literalmente esto:
+#
+#     @staticmethod
+#     def is_venv():
+#         venv = os.environ.get("VIRTUAL_ENV")
+#         return bool(venv)
+#
+# No mira sys.prefix. Sin la variable se cree fuera de todo entorno y pregunta
+# por teclado si puede instalar paquetes; la pregunta se va al log redirigido y
+# la construccion se queda esperando una respuesta que nadie ve. Ocurrio: 50
+# minutos parada en el paso 8/13, 173 bytes de log y cero CPU. Las veces
+# anteriores funciono por accidente, porque la shell tenia activada la .venv de
+# desarrollo y la variable estaba puesta -apuntando a otro sitio, pero puesta-.
+#
+# La entrada se cierra con "< NUL" para que ninguna pregunta futura pueda volver
+# a colgar el build: sin entrada, input() lanza EOFError, el proceso termina con
+# codigo distinto de cero y el fallo sale con su log en vez de esperar para
+# siempre. Un build desatendido no puede depender de que alguien mire.
 $deployCmdFile = Join-Path $PackagingDir "run-deploy.cmd"
 $deployBody = @"
 @echo off
 cd /d "$RepoRoot"
-"$VenvDeploy" -c "$WorkingSpec" -v > "$BuildLog" 2>&1
+set "VIRTUAL_ENV=$PackagingVenv"
+"$VenvDeploy" -c "$WorkingSpec" -v < NUL > "$BuildLog" 2>&1
 exit /b %errorlevel%
 "@
 Write-Utf8NoBom -Path $deployCmdFile -Content $deployBody
