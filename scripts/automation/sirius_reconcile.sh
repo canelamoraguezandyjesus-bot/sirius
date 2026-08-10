@@ -318,7 +318,11 @@ for issue in "${open_issues[@]:-}"; do
     if [ "$reactivar" = "$lbl" ]; then
       como_hacerlo="quitar \`${lbl}\` y volver a ponerla: es la misma etiqueta."
     else
-      lista="$(printf '\`%s\`, ' $reactivar)"
+      # Dentro de comillas SIMPLES la tilde invertida es literal: escaparla
+      # publica el backslash tal cual y el aviso sale con `\`etiqueta\`` en vez
+      # de código. Las otras líneas van entre comillas DOBLES, donde sí hay que
+      # escaparla; el mismo carácter necesita cosas distintas en cada contexto.
+      lista="$(printf '`%s`, ' $reactivar)"
       como_hacerlo="quitar \`${lbl}\` y aplicar, en este orden: ${lista%, }."
     fi
     marker="<!-- sirius-stuck:${lbl}:${evento_id} -->"

@@ -836,3 +836,29 @@ def test_recon_stuck_011_la_salvedad_del_aviso_es_cierta() -> None:
     assert "def test_a_rejection_without_diagnosis_keeps_the_label" in activacion, (
         "sin esa prueba, la promesa del aviso no la sostiene nada"
     )
+
+
+def test_recon_stuck_012_el_aviso_publicado_se_lee_bien(tmp_path: Path) -> None:
+    """Se mira el texto PUBLICADO, no el guion que lo construye.
+
+    La secuencia de etiquetas se arma con `printf` dentro de comillas simples,
+    donde la tilde invertida es literal. Escaparla —como sí hay que hacer en las
+    otras líneas, que van entre comillas dobles— publicaba `\\`sirius:planned\\``
+    con las barras a la vista, y el aviso se leía roto justo en el paso que el
+    usuario tiene que ejecutar.
+
+    Ninguna prueba sobre el guion lo habría visto: el escapado es correcto en un
+    contexto e incorrecto en el otro, y ambos son el mismo carácter. Por eso esta
+    prueba renderiza el aviso de verdad y lo lee.
+    """
+    env = _setup(tmp_path)
+    _seed_issue(env, 21, ["sirius:implementing"])
+    _seed_events(env, 21, [_evento("labeled", "sirius:implementing", _iso(2000), 7)])
+
+    assert _run_reconcile(env).returncode == 0
+    publicado = (_md(env) / "comments_21.txt").read_text(encoding="utf-8")
+
+    assert "\\`" not in publicado, f"el aviso publica barras invertidas a la vista: {publicado!r}"
+    assert "`sirius:planned`, `sirius:implement-requested`" in publicado, (
+        f"la secuencia no se lee como código: {publicado!r}"
+    )
