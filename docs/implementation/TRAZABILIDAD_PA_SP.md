@@ -58,7 +58,7 @@ qué está demostrado por máquina, que es una cosa distinta y menor.
 | PA-022 | Copia inválida | automática | — | `tests/integration/test_sqlite_backup_validation.py::test_validate_backup_rejects_a_tampered_ciphertext`<br>`tests/integration/test_sqlite_backup_restore.py::test_restore_backup_rejects_a_tampered_backup_without_modifying_data` |
 | PA-023 | Sin telemetría | manual | windows-real | hueco |
 | PA-024 | Sin acciones externas | automática | — | `tests/unit/test_identity_domain.py::test_canonical_seed_includes_the_external_actions_policy`<br>`tests/unit/test_render_instructions.py::test_render_instructions_includes_the_external_actions_policy_from_the_canonical_seed` |
-| PA-025 | Rendimiento local | automática | — | hueco |
+| PA-025 | Rendimiento local | parcial | windows-real | `tests/integration/test_local_performance.py::test_el_conjunto_de_referencia_tiene_el_tamano_que_fija_el_plan`<br>`tests/integration/test_local_performance.py::test_el_inicio_local_cumple_el_limite_aprobado`<br>`tests/integration/test_local_performance.py::test_las_operaciones_locales_no_se_disparan`<br>`tests/integration/test_local_performance.py::test_listar_decisiones_vigentes_cumple_el_limite_aprobado` |
 | PA-E2E-01 | Proyecto real durante varias sesiones | manual | evaluación-humana | hueco |
 
 ## Suite de personalidad
@@ -95,13 +95,25 @@ Lo que esta matriz deja al descubierto, que es para lo que sirve:
 
 | Hueco | Qué falta | Dónde se cierra |
 |---|---|---|
-| PA-025 | No existe ninguna medición de rendimiento. El plan exige inicio ≤3 s P95 y operaciones locales ≤300 ms P95, y hoy no se mide nada | B12c |
 | PA-009, PA-E2E-01, PS-01 a PS-07 | Evaluación humana, imposible de automatizar por definición | V8.4 |
 | PA-023 | Monitorización de tráfico real en Windows | B14 |
 
-Los tres primeros de la columna `parcial` (PA-001, PA-002, PA-008) y SP-01 y
-PA-021 **no** son huecos: su parte automatizable está cubierta y lo que falta
-es la ejecución formal, que pertenece a V8.3 y V8.4.
+Las entradas `parcial` (PA-001, PA-002, PA-008, PA-021, PA-025 y SP-01) **no**
+son huecos: su parte automatizable está cubierta y lo que falta es la ejecución
+formal, que pertenece a V8.3 y V8.4.
+
+### Un riesgo abierto que la medición destapó (PA-025)
+
+B12c midió el rendimiento sobre el conjunto de referencia del plan y encontró
+que **construir el contexto consume entre el 89 % y el 100 % de sus 300 ms** en
+tres pasadas del mismo código. El término dominante está localizado:
+`list_current_memories()` ejecuta 501 consultas para 500 recuerdos, porque
+`_load_memory()` pide la revisión vigente una por una.
+
+No es un hueco de trazabilidad: es un riesgo de producto sobre una prueba de
+aceptación que todavía no se ha ejecutado en la máquina real. Corregirlo exige
+tocar código productivo y espera decisión del propietario. El detalle y las
+cifras están en ADR-007.
 
 ## Lo que esta matriz no dice
 
