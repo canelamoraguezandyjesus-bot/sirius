@@ -116,9 +116,19 @@ jobs:
           # en un desenlace controlado: las lecturas fallan solas y caen en las
           # paradas seguras que ya existen mas abajo.
           #
+          # Ese tope externo es ABSOLUTO: cuenta desde que arranca el paso, no
+          # desde cada llamada. Un plazo RELATIVO (`ahora + N`) no protege de
+          # el, porque "ahora" ya se ha corrido mientras tanto. Por eso el
+          # instante inicial se guarda UNA vez y todo lo demas se acota contra
+          # el, en vez de repartir ventanas relativas capa por capa.
+          #
           # 5 minutos para leer, dentro de los 8 del paso. Los 3 restantes son
           # para publicar la parada, que tambien necesita `gh`.
-          gate_deadline=$(( $(_sirius_now) + 300 ))
+          arranque=$(_sirius_now)
+          PRESUPUESTO_PASO=480  # `timeout-minutes: 8`; GATE-003 lo ata al YAML
+          MARGEN_PASO=30        # para escribir `valid=false` y salir vivos
+          tope_paso=$(( arranque + PRESUPUESTO_PASO - MARGEN_PASO ))
+          gate_deadline=$(( arranque + 300 ))
           export SIRIUS_GH_DEADLINE="$gate_deadline"
 
           # Publicar no puede heredar un plazo ya agotado: seria exigirle a la
@@ -131,11 +141,25 @@ jobs:
           # soltarlo la deja COLGADA, que es peor: al menos la muda falla
           # rapido y visible.
           #
-          # Se le da un plazo NUEVO y propio, independiente del de lectura:
-          #   lectura 300 + publicacion 120 = 420s, dentro de los 480 del paso.
+          # Se le da un plazo NUEVO y propio, PERO acotado por el tope del
+          # paso. Sin ese minimo, `parada()` se concedia 120s "desde ahora"
+          # aunque "ahora" ya se hubiera comido el presupuesto: entre agotarse
+          # la lectura y llegar aqui corren `sirius_next_round_number`,
+          # `sirius_convergence.py` y varios `jq`, que NO consultan
+          # `SIRIUS_GH_DEADLINE` y por tanto no los acota nadie. El maximo real
+          # era `300 + proceso local + 120`, no 420. Hallazgo P2 de Codex en la
+          # PR #142; misma familia que el de `_sirius_comment_once_bounded`:
+          # una cota que otra capa puede ampliar no es una cota.
+          #
+          # Si al llegar aqui ya no queda margen, el plazo sale vencido y la
+          # publicacion falla RAPIDO —`_sirius_gh` devuelve 124 sin llegar a
+          # lanzar la llamada—: muda, pero viva para escribir `valid=false`.
           PLAZO_PUBLICACION=120
           parada() {
-            export SIRIUS_GH_DEADLINE=$(( $(_sirius_now) + PLAZO_PUBLICACION ))
+            local plazo
+            plazo=$(( $(_sirius_now) + PLAZO_PUBLICACION ))
+            [ "$plazo" -le "$tope_paso" ] || plazo="$tope_paso"
+            export SIRIUS_GH_DEADLINE="$plazo"
             sirius_transition "$@"
           }
 

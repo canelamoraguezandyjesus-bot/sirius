@@ -63,12 +63,12 @@ conserva íntegro el trabajo sobre código de producto, que es su caso normal.
   con el diagnóstico completo, que es exactamente la propiedad que la PR #136
   vino a garantizar.
 - El arreglo técnico de la #140 acompaña a este ADR, hecho en sesión según la
-  decisión que aquí se registra: `parada()` fija ahora un plazo propio
-  (`_sirius_now() + 120`) en lugar de soltar el que tenía, y cuatro pruebas
-  (GATE-001..004) lo fijan ejecutando la función **extraída del YAML**, no una
-  copia. Verificadas por mutación en las dos direcciones: devolver el `unset`,
-  desbordar el presupuesto y publicar con el plazo heredado hacen fallar cada
-  una su prueba.
+  decisión que aquí se registra: `parada()` fija ahora un plazo propio en lugar
+  de soltar el que tenía, acotado además por el presupuesto del paso. Seis
+  pruebas (GATE-001..006) lo fijan ejecutando la función **extraída del YAML**,
+  no una copia, y verificadas por mutación en las dos direcciones. El porqué de
+  la segunda mitad —el mínimo contra el tope absoluto— está en ADR-003; llegó
+  como hallazgo de Codex sobre la primera versión de este mismo arreglo.
 
 ## Consecuencias
 
