@@ -1,0 +1,88 @@
+{
+  "que_es": "reencuadre del problema de ADR-002: separar lo que no encontramos de lo que encontramos de mas, y mirar QUE es exactamente lo que sobra",
+  "por_que_importa": "la cifra que veniamos publicando -24/47 conjuntos exactos- mezcla dos fallos distintos que necesitan herramientas distintas. Separados, la mitad grande no es la que creiamos",
+
+  "la_separacion": {
+    "casos_adjudicables_con_respuesta_esperada": 31,
+    "sin_ampliacion": {
+      "conjunto_exacto": "16/31",
+      "contiene_todo_lo_esperado": "24/31",
+      "elementos_esperados_hallados": "64/81 (79%)",
+      "elementos_entregados_de_mas": 29
+    },
+    "con_ampliacion": {
+      "conjunto_exacto": "18/31",
+      "contiene_todo_lo_esperado": "26/31",
+      "elementos_esperados_hallados": "68/81 (84%)",
+      "elementos_entregados_de_mas": 38
+    },
+    "lectura": "ya encontramos el 84% de lo que hay que encontrar, y en 26 de 31 casos tenemos TODO lo esperado dentro. En 8 de esos 26 el conjunto no es exacto solo porque ademas entregamos ruido. El problema es mas de precision que de cobertura",
+    "sobre_la_ampliacion": "sube la cobertura (79% a 84%) y empeora el ruido (29 a 38 elementos de mas). Es el compromiso clasico de la ampliacion de consulta, y hasta ahora solo se habia publicado la mitad buena"
+  },
+
+  "que_es_exactamente_lo_que_sobra": {
+    "metodo": "los 8 casos que contienen todo lo esperado y ademas entregan de mas, con el texto y la etapa de origen de cada sobrante",
+    "categorias": [
+      {
+        "nombre": "relleno del propio banco que casa con una palabra del tema",
+        "ejemplo": "N1-50 '¿Que condiciones de acceso al almacen hay?' entrega 5 notas cuyo texto literal dice 'Nota ordinaria N sobre logistica de almacen sin valor critico'",
+        "sobrantes": 5,
+        "etapa": "E1",
+        "lo_arregla": "un reordenador que lea pregunta y candidato juntos hunde esto de inmediato"
+      },
+      {
+        "nombre": "expansion demasiado ancha desde las semillas",
+        "ejemplo": "N1-14 '¿De que se ocupa Juan?' arrastra 4 elementos por familia de sujeto; N1-25 'Atlas' arrastra 2 companeros de proyecto",
+        "sobrantes": 6,
+        "etapa": "E3",
+        "lo_arregla": "es una perilla nuestra -la anchura de E3-, no hace falta modelo"
+      },
+      {
+        "nombre": "palabra funcional que discrimina poco",
+        "ejemplo": "N1-20 '¿Puedo usar vuelos con escala?' trae 'No usar PostgreSQL en este proyecto' porque coincide el verbo 'usar'",
+        "sobrantes": 2,
+        "etapa": "E1",
+        "lo_arregla": "reordenador, o una lista de vacias mejor calibrada"
+      },
+      {
+        "nombre": "discriminacion temporal",
+        "ejemplo": "N1-05 '¿Que decision de presupuesto usabamos ANTES?' entrega tambien la vigente",
+        "sobrantes": 1,
+        "etapa": "E1",
+        "lo_arregla": "es trabajo de puertas G7/G8, no de recuperacion"
+      },
+      {
+        "nombre": "relacionado pero no preguntado",
+        "ejemplo": "N1-40 '¿presupuesto vigente de Alfa?' trae el identificador interno del proyecto; N1-43 '¿quien valida?' trae quien es el responsable",
+        "sobrantes": 2,
+        "etapa": "E1",
+        "lo_arregla": "reordenador; y alguno merece revision de adjudicacion"
+      },
+      {
+        "nombre": "polaridad sobre el mismo tema",
+        "ejemplo": "N1-21 '¿Acepto escalas?' entrega la afirmativa y la negativa",
+        "sobrantes": 1,
+        "etapa": "E2",
+        "lo_arregla": "RF-19 ya lo contempla: recuperarlas marcadas y distinguidas es correcto, fundirlas es fallo"
+      }
+    ],
+    "reparto": "de unos 17 sobrantes en los 8 casos, 11 caen en las dos primeras categorias: relleno que casa por tema y expansion demasiado ancha"
+  },
+
+  "lo_que_esto_cambia": {
+    "antes": "se buscaba mejorar la cobertura: ampliacion de consulta, embeddings, fusion. Todo apuntaba a encontrar mas",
+    "ahora": "la cobertura ya es 84% y en 26 de 31 casos esta todo dentro. La herramienta que faltaba es la de precision: reordenar y cortar",
+    "la_tecnica_que_nunca_tocamos": "reranking con cross-encoder, que es la segunda etapa estandar de cualquier buscador de produccion y ataca directamente las tres categorias mayores de ruido",
+    "correccion_de_mi_recomendacion_anterior": "habia recomendado HyDE primero. Con esta separacion, HyDE ataca la mitad pequena. Reranking primero"
+  },
+
+  "una_advertencia_sobre_el_tamano_del_banco": {
+    "casos_con_contenido": 31,
+    "diferencias_sobre_las_que_se_ha_venido_decidiendo": "dos casos (24 contra 26 exactos)",
+    "elementos_del_canon": 97,
+    "problema": "31 casos no distinguen arquitecturas: una diferencia de dos casos no es senal. Y con 97 elementos el canon entero cabe en el contexto de un modelo -del orden de 1.500 unidades de texto-, de modo que a esta escala la recuperacion todavia no es el problema que sera a diez mil elementos",
+    "consecuencia": "cualquier conclusion de arquitectura sacada de este banco es provisional por construccion, y conviene que este escrito antes de que alguien la cite como firme"
+  },
+
+  "lo_que_no_se_puede_hacer_aqui": "no hay modelo de reordenacion disponible en este entorno -la descarga de modelos esta bloqueada-, de modo que la comprobacion de que el reranking arregla estas categorias queda pendiente de una maquina con red"
+}
