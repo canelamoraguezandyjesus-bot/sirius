@@ -122,8 +122,22 @@ jobs:
           export SIRIUS_GH_DEADLINE="$gate_deadline"
 
           # Publicar no puede heredar un plazo ya agotado: seria exigirle a la
-          # parada segura que ocurra en el tiempo que ya se acabo.
-          parada() { unset SIRIUS_GH_DEADLINE; sirius_transition "$@"; }
+          # parada segura que ocurra en el tiempo que ya se acabo. Pero SOLTAR
+          # el plazo es peor que heredarlo agotado (incidencia #140): sin cota,
+          # la lectura del historial y las etiquetas de `sirius_transition`
+          # pueden colgarse hasta que el tope externo del paso mate la shell,
+          # y entonces no se escribe `valid=false` ni se publica ninguna
+          # transicion terminal. Heredar un plazo agotado deja la parada MUDA;
+          # soltarlo la deja COLGADA, que es peor: al menos la muda falla
+          # rapido y visible.
+          #
+          # Se le da un plazo NUEVO y propio, independiente del de lectura:
+          #   lectura 300 + publicacion 120 = 420s, dentro de los 480 del paso.
+          PLAZO_PUBLICACION=120
+          parada() {
+            export SIRIUS_GH_DEADLINE=$(( $(_sirius_now) + PLAZO_PUBLICACION ))
+            sirius_transition "$@"
+          }
 
           # Sin tiempo, una lectura vacia NO significa "no hay nada": significa
           # que no se llego a mirar. `sirius_find_pr_for_issue` y

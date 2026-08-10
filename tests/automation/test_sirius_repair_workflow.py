@@ -9,6 +9,10 @@ sin degradar a una corrección a ciegas.
 
 from __future__ import annotations
 
+import os
+import re
+import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -224,9 +228,13 @@ def test_the_gate_stops_itself_before_its_step_timeout_kills_it() -> None:
     margen = gate["timeout-minutes"] * 60 - 300
     assert margen >= 120, f"solo {margen}s para publicar la parada tras agotar el plazo"
 
-    # Publicar suelta el plazo: todas las transiciones de la puerta pasan por
-    # `parada`, y ninguna llama ya a `sirius_transition` directamente.
-    assert "parada() { unset SIRIUS_GH_DEADLINE; sirius_transition" in run
+    # Publicar lleva su PROPIO plazo, no el de lectura ya agotado ni ninguno:
+    # todas las transiciones de la puerta pasan por `parada`, y ninguna llama ya
+    # a `sirius_transition` directamente. Esta aserción fijaba antes el `unset`
+    # que causó la incidencia #140, así que fijaba el defecto en vez de la
+    # propiedad; ver los casos GATE-001..004 al final del módulo.
+    assert "export SIRIUS_GH_DEADLINE=$(( $(_sirius_now) + PLAZO_PUBLICACION ))" in run
+    assert "unset SIRIUS_GH_DEADLINE" not in run
     assert 'sirius_transition "$GH_REPO"' not in run
     assert run.count('parada "$GH_REPO"') >= 5
 
@@ -365,3 +373,115 @@ def test_there_is_no_measured_diagnosis_step() -> None:
         "bash scripts/automation/sirius_apply_verdict.sh \\",
         '"$GH_REPO" "$ISSUE_NUMBER" "corrector" "${RUNNER_TEMP}/sirius_verdict.json" "$CYCLE"',
     ]
+
+
+# --------------------------------------------------------------------------- #
+# La parada segura publica ACOTADA (incidencia #140)
+# --------------------------------------------------------------------------- #
+
+# `parada()` hacía `unset SIRIUS_GH_DEADLINE` antes de publicar. El razonamiento
+# original era correcto a medias —publicar no puede heredar un plazo agotado—
+# pero la conclusión no: heredar un plazo agotado deja la parada MUDA, mientras
+# que soltarlo la deja COLGADA hasta que el tope externo del paso mata la shell
+# sin escribir `valid=false` ni publicar transición alguna. Es peor: al menos la
+# muda falla rápido y visible. Tocaba fijar un plazo NUEVO, no quitar la cota.
+
+_SIMULADOR_GH = """#!/usr/bin/env bash
+printf '%s\\n' "${SIRIUS_GH_DEADLINE:-VACIO}" >>"$SIRIUS_TEST_PLAZOS"
+exit 0
+"""
+
+_LIBRETO = """set -uo pipefail
+_sirius_now() {{ date +%s; }}
+sirius_transition() {{ gh api /simulado >/dev/null; }}
+{bloque}
+export SIRIUS_GH_DEADLINE={plazo_previo}
+parada repo 1 marcador cuerpo etiqueta color desc noclose previa
+"""
+
+
+def _guion_de_la_puerta() -> str:
+    return str(_step(_load(), "Evaluar la convergencia")["run"])
+
+
+def _bloque_de_parada() -> str:
+    """Extrae del YAML la `parada()` REAL, en vez de copiarla aquí.
+
+    Una copia se queda vieja en silencio y la prueba pasaría a medir un texto
+    que ya no se ejecuta: es la forma más común de prueba vacua en este
+    repositorio.
+    """
+    guion = _guion_de_la_puerta()
+    inicio = guion.index("PLAZO_PUBLICACION=")
+    fin = guion.index("\n\n", guion.index("parada() {"))
+    return guion[inicio:fin]
+
+
+def _ejecuta_parada(tmp_path: Path, plazo_previo: str) -> list[str]:
+    """Ejecuta la parada real con un `gh` simulado; devuelve los plazos vistos."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    gh = bin_dir / "gh"
+    gh.write_text(_SIMULADOR_GH, encoding="utf-8")
+    gh.chmod(0o755)
+
+    plazos = tmp_path / "plazos.txt"
+    libreto = tmp_path / "correr.sh"
+    libreto.write_text(
+        _LIBRETO.format(bloque=_bloque_de_parada(), plazo_previo=plazo_previo),
+        encoding="utf-8",
+    )
+
+    entorno = dict(os.environ)
+    entorno["PATH"] = f"{bin_dir}{os.pathsep}{entorno['PATH']}"
+    entorno["SIRIUS_TEST_PLAZOS"] = str(plazos)
+    resultado = subprocess.run(
+        ["bash", str(libreto)],
+        capture_output=True,
+        text=True,
+        env=entorno,
+        check=False,
+        timeout=60,
+    )
+    assert resultado.returncode == 0, resultado.stderr
+    return plazos.read_text(encoding="utf-8").split() if plazos.exists() else []
+
+
+def test_gate_001_la_parada_publica_con_el_plazo_de_lectura_agotado(tmp_path: Path) -> None:
+    # El caso que motiva la incidencia: el plazo de lectura ya expiró y aun así
+    # la parada tiene que llegar a publicar.
+    assert _ejecuta_parada(tmp_path, plazo_previo="1"), (
+        "la parada no llegó a invocar gh: no se publicó nada"
+    )
+
+
+def test_gate_002_la_publicacion_nunca_corre_sin_cota(tmp_path: Path) -> None:
+    ahora = int(time.time())
+    for plazo in _ejecuta_parada(tmp_path, plazo_previo="1"):
+        assert plazo != "VACIO", "la parada publicó sin ninguna cota de tiempo"
+        assert int(plazo) > ahora, "la parada publicó con un plazo ya expirado"
+
+
+def test_gate_003_el_plazo_de_publicacion_cabe_bajo_el_tope_del_paso() -> None:
+    puerta = _step(_load(), "Evaluar la convergencia")
+    guion = str(puerta["run"])
+    lectura_m = re.search(r"gate_deadline=\$\(\( \$\(_sirius_now\) \+ (\d+) \)\)", guion)
+    publicacion_m = re.search(r"PLAZO_PUBLICACION=(\d+)", guion)
+    # Sin los dos plazos la comparación no mide nada: se falla diciéndolo, en
+    # vez de reventar con un AttributeError que oculta la causa.
+    assert lectura_m and publicacion_m, "no encuentro los dos plazos en el guion de la puerta"
+    lectura = int(lectura_m.group(1))
+    publicacion = int(publicacion_m.group(1))
+    tope = puerta["timeout-minutes"] * 60
+    assert lectura + publicacion <= tope - 30, (
+        f"lectura {lectura}s + publicación {publicacion}s no cabe con margen en {tope}s"
+    )
+
+
+def test_gate_004_la_parada_no_suelta_el_plazo() -> None:
+    # El patrón exacto que causó el defecto no puede volver por inercia.
+    guion = _guion_de_la_puerta()
+    assert "unset SIRIUS_GH_DEADLINE" not in guion, (
+        "soltar el plazo deja la publicación sin cota (incidencia #140)"
+    )
+    assert "export SIRIUS_GH_DEADLINE=$(( $(_sirius_now) + PLAZO_PUBLICACION ))" in guion
