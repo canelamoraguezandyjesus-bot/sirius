@@ -47,6 +47,8 @@ Lo que B13 sí garantiza:
 | Mismo modo de Nuitka | `mode = standalone`, verificado en el dry-run |
 | Misma estructura de artefacto | Montaje explícito, verificado por el script de verificación |
 | Versiones exactas del toolchain | `BUILD-MANIFEST.json` |
+| Nada interpuesto en el compilador | `--disable-cache=ccache` en `pysidedeploy.spec` |
+| Salida de MSVC en el idioma que Nuitka lee | `VSLANG=1033` al invocar `pyside6-deploy` |
 | Inventario íntegro | `FILE-MANIFEST.sha256` |
 | Hash del entregable | `<artefacto>.zip.sha256` |
 | Sin pasos manuales ocultos | El script carga MSVC por sí mismo |

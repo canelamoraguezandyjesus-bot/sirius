@@ -566,6 +566,7 @@ $dryRunBody = @"
 @echo off
 cd /d "$RepoRoot"
 set "VIRTUAL_ENV=$PackagingVenv"
+set "VSLANG=1033"
 "$VenvDeploy" -c "$WorkingSpec" --dry-run < NUL > "$DryRunFile" 2>&1
 exit /b %errorlevel%
 "@
@@ -635,7 +636,18 @@ $deployCmdFile = Join-Path $PackagingDir "run-deploy.cmd"
 $deployBody = @"
 @echo off
 cd /d "$RepoRoot"
+# VSLANG=1033 obliga a MSVC a emitir sus mensajes en ingles. Nuitka lo pide en
+# el propio log de la construccion:
+#
+#     Nuitka-Scons:WARNING: Support language of Nuitka is English.
+#     Please install the English language pack for Visual Studio.
+#
+# Su capa de scons lee la salida de cl.exe, y en un Windows en espanol la lee mal.
+# La variable es el mecanismo de Microsoft para fijar el idioma por LCID, asi que
+# no hace falta instalar ningun paquete de idioma en el equipo. No cambia una coma
+# del artefacto: solo el idioma de los mensajes del compilador.
 set "VIRTUAL_ENV=$PackagingVenv"
+set "VSLANG=1033"
 "$VenvDeploy" -c "$WorkingSpec" -v < NUL > "$BuildLog" 2>&1
 exit /b %errorlevel%
 "@

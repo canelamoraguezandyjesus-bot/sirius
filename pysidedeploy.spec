@@ -102,7 +102,26 @@ mode = standalone
 #                                  el contenido del paquete a una dependencia del
 #                                  grupo `dev`. Sirius no importa mypy en tiempo
 #                                  de ejecucion.
-extra_args = --quiet --noinclude-qt-translations --windows-console-mode=disable --output-filename=Sirius.exe --msvc=latest --assume-yes-for-downloads --include-module=logging.config --include-package=alembic --nofollow-import-to=mypy
+# --disable-cache=ccache          desactiva la copia interna de clcache que
+#                                 Nuitka interpone entre scons y cl.exe cuando
+#                                 compila con MSVC:
+#
+#                                     if env.msvc_mode and not env.disable_ccache:
+#                                         enableClcache(...)
+#
+#                                 No hay que instalarlo: viene dentro de Nuitka
+#                                 y se activa solo. En la construccion de
+#                                 e9d51c7 fallo en las 15 unidades que intento,
+#                                 desde la primera, con "clcache: preprocessor
+#                                 failed", y dejo la compilacion muerta a los
+#                                 cinco minutos. Es una CACHE: quitarla no
+#                                 cambia el contenido del artefacto, solo el
+#                                 tiempo de compilacion. Un envoltorio que se
+#                                 mete en medio del compilador, que se enciende
+#                                 por su cuenta y que puede fallar segun el
+#                                 idioma de MSVC es justo la variabilidad que
+#                                 B13 existe para quitar.
+extra_args = --quiet --noinclude-qt-translations --windows-console-mode=disable --output-filename=Sirius.exe --msvc=latest --assume-yes-for-downloads --disable-cache=ccache --include-module=logging.config --include-package=alembic --nofollow-import-to=mypy
 
 [buildozer]
 

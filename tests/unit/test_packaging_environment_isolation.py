@@ -197,3 +197,42 @@ def test_the_versioned_deploy_spec_never_names_an_environment_path() -> None:
     assert "localappdata" not in lowered
     assert "packaging-venv" not in lowered
     assert "c:\\users" not in lowered
+
+
+def test_nuitka_compiles_without_the_inline_compiler_cache() -> None:
+    """Nada se interpone entre scons y cl.exe.
+
+    Nuitka trae su propia copia de clcache y la enciende sola en MSVC::
+
+        if env.msvc_mode and not env.disable_ccache:
+            enableClcache(...)
+
+    En la construccion de e9d51c7 fallo en las 15 unidades que intento, desde la
+    primera, con "clcache: preprocessor failed", y dejo la compilacion muerta a
+    los cinco minutos. Es una cache: quitarla no cambia el contenido del
+    artefacto, solo el tiempo de compilacion.
+    """
+    spec = (_SCRIPTS.parent / "pysidedeploy.spec").read_text(encoding="utf-8")
+
+    extra_args = next(line for line in spec.splitlines() if line.startswith("extra_args ="))
+
+    assert "--disable-cache=ccache" in extra_args, (
+        "Nuitka volveria a interponer su copia interna de clcache"
+    )
+
+
+def test_msvc_speaks_english_to_nuitka(build_implementation: str) -> None:
+    """La capa de scons de Nuitka lee la salida de cl.exe, y solo en ingles.
+
+    Lo pide en el log de la propia construccion: "Support language of Nuitka is
+    English. Please install the English language pack for Visual Studio." VSLANG
+    es el mecanismo de Microsoft para fijar el idioma por LCID, asi que no hace
+    falta instalar nada en el equipo. No cambia el artefacto: solo el idioma de
+    los mensajes del compilador.
+    """
+    for invocation in ("--dry-run", '-c "$WorkingSpec" -v'):
+        position = build_implementation.index(invocation)
+        block_start = build_implementation[:position].rindex("@echo off")
+        assert 'set "VSLANG=1033"' in build_implementation[block_start:position], (
+            f"la invocacion con {invocation} deja a MSVC hablando en el idioma del sistema"
+        )
