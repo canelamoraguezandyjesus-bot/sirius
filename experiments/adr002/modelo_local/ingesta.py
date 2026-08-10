@@ -1,4 +1,4 @@
-"""La ingesta: al guardar un dato, el modelo escribe las preguntas que responde.
+"""Tarea 2: al guardar un dato, el modelo escribe las preguntas que responde.
 
 POR QUE ESTO Y NO AMPLIAR LA CONSULTA
 =====================================
@@ -17,6 +17,15 @@ Es la tecnica publicada como expansion de documento, con dos diferencias que
 importan aqui: el modelo es **local**, de modo que guardar no cuesta dinero ni
 red, y lo generado es **derivado**, de modo que se borra y se regenera entero
 desde el canon como exige `TOL-207`.
+
+Y VA PRIMERO, NO DESPUES
+========================
+
+Medido: la busqueda entrega una mediana de **dos** candidatos por pregunta, y en
+12 de 47 casos no entrega ninguno. Un filtro sobre una lista de dos elementos no
+tiene margen para mejorar la precision; su unico efecto posible es perder
+aciertos. Esta tarea es la que ensancha la lista; la del filtro la estrecha.
+Medir el filtro antes de esto seria medir el vacio.
 
 LO QUE SE GENERA NO ES CONTENIDO
 ================================
@@ -48,135 +57,173 @@ Lo que se hace en su lugar es lo que la tecnica publicada hace de verdad: juzgar
 la **pertinencia**. Se le devuelven al modelo sus propias preguntas y se le
 pregunta cuales responde el dato realmente. Una pregunta alucinada —«¿cuanto
 cuesta el vuelo?» para un dato de presupuesto— no supera su propio examen; una
-parafrasis legitima si. Cuesta una segunda llamada local por dato, en la ingesta
-y una sola vez.
+parafrasis legitima si. Cuesta una segunda llamada local por dato, al guardar y
+una sola vez.
 """
 
 from __future__ import annotations
 
-import json
-from collections.abc import Sequence
-from typing import Final
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
+from typing import Any, Final
 
 from experiments.adr002.modelo_local.puerto import (
-    ModeloLocal,
+    ESPERA_PREGUNTAS,
+    InfoModelo,
     ModeloNoDisponibleError,
-    numeros_de,
+    ProveedorIA,
+    RespuestaInvalidaError,
+    enteros_validos,
 )
 
 #: Cuantas preguntas se guardan por dato. Pocas y buenas: cada una es
 #: vocabulario que puede traer el dato en busquedas que no le tocaban.
 PREGUNTAS_MAXIMAS: Final = 4
 
+ESQUEMA_GENERAR: Final[Mapping[str, Any]] = {
+    "type": "object",
+    "properties": {"preguntas": {"type": "array", "items": {"type": "string"}}},
+    "required": ["preguntas"],
+}
+
+ESQUEMA_CRIBA: Final[Mapping[str, Any]] = {
+    "type": "object",
+    "properties": {"responden": {"type": "array", "items": {"type": "integer"}}},
+    "required": ["responden"],
+}
+
 INSTRUCCION: Final = (
-    "Recibes un dato guardado en la memoria personal de alguien. Escribes las "
+    "Recibes un DATO guardado en la memoria personal de alguien. Escribes las "
     "preguntas que ese dato responde, tal como las haria esa persona.\n\n"
     "Reglas:\n"
-    "- Entre 2 y 4 preguntas, cortas y naturales.\n"
+    "- Entre 2 y 4 preguntas, cortas y naturales, en espanol.\n"
     "- Usa las palabras con las que una persona pediria esto, no las del dato: "
-    "si el dato dice 'presupuesto maximo', una pregunta puede decir 'limite de "
-    "gasto'.\n"
+    "si el dato dice «presupuesto maximo», una pregunta puede decir «limite de "
+    "gasto».\n"
+    "- Al menos dos preguntas deben usar palabras que NO aparecen en el dato.\n"
     "- Si el dato es una restriccion, una obligacion o un limite, incluye una "
     "pregunta que use esas palabras.\n"
-    "- No inventes informacion que no este en el dato.\n"
-    "- No expliques nada.\n\n"
-    'Responde solo con un objeto JSON: {"preguntas": ["...", "..."]}'
+    "- No inventes informacion que no este en el dato."
 )
 
-#: El examen que cada pregunta generada tiene que pasar. Es el equivalente al
-#: filtro de pertinencia de la tecnica publicada, y lo aplica el mismo modelo.
+#: El examen que cada pregunta generada tiene que pasar, aplicado por el mismo
+#: modelo. Es el filtro de pertinencia de la tecnica publicada.
 INSTRUCCION_DE_CRIBA: Final = (
-    "Recibes un dato guardado y una lista numerada de preguntas. Dices cuales "
+    "Recibes un DATO guardado y una lista numerada de PREGUNTAS. Dices cuales "
     "de esas preguntas responde el dato de verdad.\n\n"
     "Reglas:\n"
-    "- Una pregunta sobre el mismo tema que el dato NO responde no cuenta.\n"
-    "- Una pregunta que dice lo mismo con otras palabras SI cuenta.\n"
-    "- Fijate en la negacion: un dato que prohibe algo no responde a una "
-    "pregunta sobre lo que si se permite.\n"
-    "- No expliques nada.\n\n"
-    'Responde solo con un objeto JSON: {"responden": [1, 3]}'
+    "- Una pregunta sobre el mismo tema que el dato no responde no cuenta.\n"
+    "- Una pregunta que dice lo mismo con otras palabras si cuenta.\n"
+    "- Respeta la negacion: un dato que prohibe algo no responde a una pregunta "
+    "sobre lo que si se permite."
 )
 
 
-def _generar(texto: str, modelo: ModeloLocal) -> list[str]:
-    try:
-        respuesta = modelo.preguntar(INSTRUCCION, texto)
-    except ModeloNoDisponibleError:
-        return []
-    try:
-        crudo = json.loads(respuesta[respuesta.index("{") : respuesta.rindex("}") + 1])
-    except ValueError, json.JSONDecodeError:
-        return []
+@dataclass(frozen=True, slots=True)
+class PreguntasGeneradas:
+    """Lo generado para un dato, **con de donde salio**.
+
+    La procedencia no es burocracia: `TOL-207` exige que todo derivado se pueda
+    borrar y regenerar desde la fuente. Sin saber que modelo y que pesos lo
+    escribieron, al cambiar de modelo no se sabe que hay que regenerar, y se
+    acaba con un indice mezclando derivados de dos cerebros distintos.
+    """
+
+    preguntas: tuple[str, ...]
+    vocabulario_de_categoria: tuple[str, ...] = ()
+    info_modelo: InfoModelo | None = None
+    #: Vacio si todo fue bien. Con texto, dice por que no se genero nada.
+    razon: str = ""
+    aportes_descartados: tuple[str, ...] = field(default_factory=tuple)
+
+    @property
+    def texto_para_indexar(self) -> str:
+        """Lo que se anade al indice de busqueda junto al dato."""
+        return " ".join([*self.vocabulario_de_categoria, *self.preguntas])
+
+    @property
+    def procedencia(self) -> dict[str, str]:
+        """Con que se genero esto. Va al artefacto de resultados tal cual."""
+        if self.info_modelo is None:
+            return {"proveedor": "", "modelo": "", "huella": ""}
+        return {
+            "proveedor": self.info_modelo.proveedor,
+            "modelo": self.info_modelo.modelo,
+            "huella": self.info_modelo.huella,
+        }
+
+
+def _generar(texto: str, proveedor: ProveedorIA, espera: float) -> list[str]:
+    crudo = proveedor.responder_json(INSTRUCCION, texto, ESQUEMA_GENERAR, espera=espera)
     preguntas = crudo.get("preguntas")
     if not isinstance(preguntas, list):
         return []
     salida: list[str] = []
     for pregunta in preguntas:
-        if isinstance(pregunta, str) and pregunta.strip() and pregunta.strip() not in salida:
-            salida.append(pregunta.strip())
+        limpia = pregunta.strip() if isinstance(pregunta, str) else ""
+        if limpia and limpia not in salida:
+            salida.append(limpia)
     return salida[:PREGUNTAS_MAXIMAS]
 
 
-def _cribar(texto: str, preguntas: Sequence[str], modelo: ModeloLocal) -> tuple[str, ...]:
-    """Las preguntas que el dato responde de verdad, segun el propio modelo.
+def _cribar(
+    texto: str, preguntas: Sequence[str], proveedor: ProveedorIA, espera: float
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Las que el dato responde de verdad, y las que se descartan.
 
-    Si la criba no se puede hacer —modelo caido, respuesta ilegible— se
-    devuelven **cero** preguntas, no todas. Aqui fallar cerrado si es lo
-    correcto, al reves que en el filtro de busqueda: no ampliar un dato lo deja
-    como estaba, mientras que indexar preguntas sin cribar mete vocabulario
-    alucinado en el indice y contamina busquedas que no tenian nada que ver.
+    Devolver tambien las descartadas permite auditar el examen: sin ellas, un
+    modelo que tirase todo y un modelo que no generase nada se verian iguales.
     """
     if not preguntas:
-        return ()
+        return (), ()
     numeradas = "\n".join(f"{n}. {p}" for n, p in enumerate(preguntas, start=1))
     entrada = f"Dato: {texto}\n\nPreguntas:\n{numeradas}"
-    try:
-        respuesta = modelo.preguntar(INSTRUCCION_DE_CRIBA, entrada)
-    except ModeloNoDisponibleError:
-        return ()
-    elegidas = numeros_de(respuesta, tope=len(preguntas))
+    crudo = proveedor.responder_json(INSTRUCCION_DE_CRIBA, entrada, ESQUEMA_CRIBA, espera=espera)
+    elegidas = enteros_validos(crudo, "responden", tope=len(preguntas))
     if elegidas is None:
-        return ()
-    return tuple(preguntas[n - 1] for n in elegidas)
+        return (), tuple(preguntas)
+    aprobadas = tuple(preguntas[n - 1] for n in sorted(elegidas))
+    return aprobadas, tuple(p for p in preguntas if p not in aprobadas)
 
 
-def preguntas_que_responde(texto: str, modelo: ModeloLocal) -> tuple[str, ...]:
-    """Preguntas que este dato responde, ya cribadas, para indexarlas junto a el.
-
-    Devuelve vacio, sin levantar, si el modelo no esta disponible: no poder
-    ampliar un dato al guardarlo deja el sistema exactamente como estaba, y la
-    construccion del indice puede reintentarlo despues sin que nada se haya
-    corrompido. Es un derivado; su ausencia no rompe nada.
-    """
-    return _cribar(texto, _generar(texto, modelo), modelo)
-
-
-def terminos_para_indexar(
+def preguntas_que_responde(
     texto: str,
-    modelo: ModeloLocal,
+    proveedor: ProveedorIA,
     *,
     vocabulario_de_categoria: Sequence[str] = (),
-) -> str:
-    """El texto que se anade al indice de busqueda junto al dato.
+    espera: float = ESPERA_PREGUNTAS,
+) -> PreguntasGeneradas:
+    """Preguntas cribadas para indexar junto al dato, con su procedencia.
+
+    Falla **cerrado**, al reves que el filtro de busqueda, y a proposito: no
+    ampliar un dato lo deja exactamente como estaba y se puede reintentar
+    despues sin que nada se haya corrompido, mientras que indexar preguntas sin
+    cribar mete vocabulario alucinado en el indice y contamina busquedas que no
+    tenian nada que ver.
 
     ``vocabulario_de_categoria`` son las palabras que nombran la categoria del
     dato —«esencial», «restriccion»— cuando el canon lo marca como critico. Se
     pasan **de fuera** y no las inventa el modelo: quien sabe si un dato es
-    critico es el canon.
-
-    Medido sobre el banco, ese vocabulario solo ya sube de 24 a 26 los casos en
-    que lo correcto entra entero, y del 79% al 86% los elementos hallados: hay
-    cinco casos que piden literalmente «restricciones esenciales» y esperan
-    justo los marcados como criticos de su ambito.
+    critico es el canon. Por eso sobreviven aunque el modelo no responda: medido
+    sobre el banco, ese vocabulario solo ya sube de 24 a 26 los casos en que lo
+    correcto entra entero, y del 79% al 86% los elementos hallados.
     """
-    partes = [*vocabulario_de_categoria, *preguntas_que_responde(texto, modelo)]
-    return " ".join(partes)
+    categoria = tuple(vocabulario_de_categoria)
+    try:
+        generadas = _generar(texto, proveedor, espera)
+        aprobadas, descartadas = _cribar(texto, generadas, proveedor, espera)
+        info = proveedor.info_modelo()
+    except (ModeloNoDisponibleError, RespuestaInvalidaError) as fallo:
+        return PreguntasGeneradas((), categoria, None, f"no se genero nada: {fallo}")
+    return PreguntasGeneradas(aprobadas, categoria, info, "", descartadas)
 
 
 __all__ = [
+    "ESQUEMA_CRIBA",
+    "ESQUEMA_GENERAR",
     "INSTRUCCION",
     "INSTRUCCION_DE_CRIBA",
     "PREGUNTAS_MAXIMAS",
+    "PreguntasGeneradas",
     "preguntas_que_responde",
-    "terminos_para_indexar",
 ]

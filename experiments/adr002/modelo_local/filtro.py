@@ -1,4 +1,4 @@
-"""El filtro: el modelo lee la pregunta y los candidatos, y dice cuales responden.
+"""Tarea 1: el modelo lee la pregunta y los candidatos, y dice cuales responden.
 
 QUE ARREGLA, MEDIDO SOBRE EL BANCO
 ==================================
@@ -19,42 +19,46 @@ no es exacto, la basura tiene cinco formas contadas:
 Un medidor de parecido ataca 1, 2, 3 y 5. **No puede con la 4**, porque el texto
 vigente se parece mas a la pregunta que el derogado. Y tampoco con la polaridad:
 «no uses escalas» y «acepta escala si ahorra 200 €» se parecen los dos
-muchisimo a «¿acepto escalas?».
-
-Quien lee si distingue las dos. Por eso el filtro es un modelo.
+muchisimo a «¿acepto escalas?». Quien lee si distingue las dos.
 
 FALLA ABIERTO, Y ESO NO ES UN DESCUIDO
 ======================================
 
-Si el modelo no responde, tarda de mas o devuelve algo que no se entiende, este
+Si el modelo no responde, tarda de mas o devuelve algo que no encaja, este
 filtro **devuelve los candidatos intactos**. No descarta nada.
 
 Es deliberado y va contra el instinto de «fallar cerrado». Aqui lo que se
 protege es distinto: `B04-RF-24` prohibe perder un elemento critico en silencio,
 y este modulo solo puede quitar. Un fallo que quita de mas produce exactamente
 la perdida que la norma prohibe; un fallo que no quita nada deja el sistema como
-estaba, ruidoso pero completo. Entre entregar de mas y perder algo, se entrega
-de mas, y queda anotado que el filtro no actuo.
+estaba, ruidoso pero completo.
+
+Y por eso mismo ``actuo`` y ``razon`` **no son decoracion**: una corrida en la
+que el servidor va lento produce «el filtro no daña», que a simple vista se lee
+igual que «el filtro es prudente». Sin contar cuantas veces actuo de verdad, la
+medida no distingue un filtro cuidadoso de un filtro apagado. Quien agregue
+estas cifras tiene la obligacion de publicar las dos.
 
 EL MODELO NO PUEDE ANADIR
 =========================
 
-Devuelve numeros de una lista que se le da. Cualquier numero fuera de rango se
-descarta al leerlo. No hay forma de que el modelo introduzca una identidad que
-no estuviera ya entre los candidatos, ni de que escriba contenido: lo que este
-modulo entrega es siempre un subconjunto de lo que recibio.
+Devuelve numeros de una lista que se le da, y el esquema del servidor le obliga
+a devolver solo eso. Cualquier numero fuera de rango se descarta al leerlo: la
+salida es siempre un subconjunto de la entrada.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Final
+from typing import Any, Final
 
 from experiments.adr002.modelo_local.puerto import (
-    ModeloLocal,
+    ESPERA_FILTRO,
     ModeloNoDisponibleError,
-    numeros_de,
+    ProveedorIA,
+    RespuestaInvalidaError,
+    enteros_validos,
 )
 
 #: Cuantos candidatos se le dan como mucho. Mas de esto no cabe comodo en la
@@ -62,39 +66,47 @@ from experiments.adr002.modelo_local.puerto import (
 #: lista, que es un efecto conocido y medido.
 CANDIDATOS_MAXIMOS: Final = 30
 
+#: El esquema que el servidor impone a la respuesta. Con esto, un JSON invalido
+#: deja de ser improbable y pasa a ser imposible.
+ESQUEMA: Final[Mapping[str, Any]] = {
+    "type": "object",
+    "properties": {"responden": {"type": "array", "items": {"type": "integer"}}},
+    "required": ["responden"],
+}
+
 #: La instruccion, entera y literal en el codigo. Quien audite esto tiene que
-#: poder leer de una vez todo lo que se le dice al modelo.
+#: poder leer de una vez todo lo que se le dice al modelo; repartirla entre un
+#: fichero de configuracion y el codigo haria que nadie la viera completa.
 INSTRUCCION: Final = (
-    "Eres el filtro de una memoria personal. Recibes una pregunta y una lista "
-    "numerada de datos guardados. Dices cuales responden a la pregunta.\n\n"
+    "Eres el filtro de relevancia de una memoria personal. Recibes una PREGUNTA "
+    "y una lista numerada de FRASES guardadas. Dices cuales responden a la "
+    "pregunta.\n\n"
     "Reglas:\n"
-    "- Responde SOLO con los numeros de los datos que responden a la pregunta.\n"
-    "- Fijate en la negacion: 'no se alquila coche' NO responde a una pregunta "
-    "sobre lo que si se hace, y al reves.\n"
-    "- Fijate en el tiempo: si preguntan por lo ANTERIOR o lo DEROGADO, lo "
+    "- Devuelve solo los numeros de las frases que responden a la pregunta.\n"
+    "- Respeta la negacion: una frase que niega o prohibe algo no responde a "
+    "una pregunta sobre lo que si se hace o se permite, y al reves.\n"
+    "- Respeta el tiempo: si preguntan por lo ANTERIOR o lo derogado, lo "
     "vigente no responde; si preguntan por lo vigente, lo derogado no responde.\n"
-    "- Un dato que habla del mismo tema pero no responde a la pregunta NO "
+    "- Una frase que habla del mismo tema pero no responde a la pregunta no "
     "cuenta.\n"
-    "- Ante la duda, INCLUYELO. Es peor perder algo importante que sobrar.\n"
-    "- No expliques nada. No inventes datos. No anadas numeros que no esten en "
-    "la lista.\n\n"
-    'Responde solo con un objeto JSON: {"responden": [1, 4, 7]}'
+    "- Si ninguna frase responde, devuelve la lista vacia.\n"
+    "- Ante duda razonable, incluyela: es peor perder algo importante que "
+    "entregar de mas."
 )
 
 
 @dataclass(frozen=True, slots=True)
 class Filtrado:
-    """Lo que el filtro hizo. Descriptivo, para poder explicarlo despues."""
+    """Lo que el filtro hizo. Descriptivo: no juzga si estuvo bien.
+
+    ``actuo`` en falso significa que el modelo **no decidio**, por la razon que
+    diga ``razon``. Quien agregue muchos filtrados tiene que contar esos casos
+    aparte o la cifra resultante no significa nada.
+    """
 
     identidades: tuple[str, ...]
-    #: Si el modelo llego a actuar. Falso cuando fallo o no habia nada que hacer.
     actuo: bool
-    #: Por que no actuo, cuando no actuo. Vacio si actuo.
     razon: str = ""
-
-    @property
-    def descartadas(self) -> int:
-        return 0
 
 
 def _lista(candidatos: Sequence[tuple[str, str]]) -> str:
@@ -104,46 +116,42 @@ def _lista(candidatos: Sequence[tuple[str, str]]) -> str:
 def filtrar(
     consulta: str,
     candidatos: Sequence[tuple[str, str]],
-    modelo: ModeloLocal,
+    proveedor: ProveedorIA,
     *,
     tope: int = CANDIDATOS_MAXIMOS,
+    espera: float = ESPERA_FILTRO,
 ) -> Filtrado:
     """Los candidatos que responden, segun el modelo. Siempre un subconjunto.
 
     ``candidatos`` son pares ``(identidad, texto)`` en el orden en que los
-    entrego la busqueda. Se conserva ese orden en la salida: el filtro decide
-    **que sale**, no en que orden, y mezclar las dos cosas haria inatribuible
-    cualquier medida.
+    entrego la busqueda, y ese orden se conserva en la salida: el filtro decide
+    **que sale**, no en que orden. Si el modelo pudiera reordenar, una medida de
+    orden dejaria de ser atribuible a nadie.
     """
     if not candidatos:
         return Filtrado((), False, "no habia candidatos")
-    if len(candidatos) > tope:
-        # Se filtran los primeros y el resto pasa intacto: recortar aqui seria
-        # descartar sin que nadie lo mirase, que es lo que este modulo existe
-        # para no hacer.
-        cabeza = filtrar(consulta, candidatos[:tope], modelo, tope=tope)
-        cola = tuple(ident for ident, _ in candidatos[tope:])
-        return Filtrado(cabeza.identidades + cola, cabeza.actuo, cabeza.razon)
-
-    entrada = f"Pregunta: {consulta}\n\nDatos guardados:\n{_lista(candidatos)}"
     todas = tuple(ident for ident, _ in candidatos)
-    try:
-        respuesta = modelo.preguntar(INSTRUCCION, entrada)
-    except ModeloNoDisponibleError as fallo:
-        return Filtrado(todas, False, f"el modelo no respondio: {fallo}")
+    if len(candidatos) > tope:
+        # Los primeros se filtran y **la cola pasa intacta**: recortarla aqui
+        # seria descartar sin que nadie lo mirase, que es lo que este modulo
+        # existe para no hacer.
+        cabeza = filtrar(consulta, candidatos[:tope], proveedor, tope=tope, espera=espera)
+        return Filtrado(cabeza.identidades + todas[tope:], cabeza.actuo, cabeza.razon)
 
-    elegidos = numeros_de(respuesta, tope=len(candidatos))
+    entrada = f"Pregunta: {consulta}\n\nFrases guardadas:\n{_lista(candidatos)}"
+    try:
+        crudo = proveedor.responder_json(INSTRUCCION, entrada, ESQUEMA, espera=espera)
+    except (ModeloNoDisponibleError, RespuestaInvalidaError) as fallo:
+        return Filtrado(todas, False, f"el modelo no decidio: {fallo}")
+
+    elegidos = enteros_validos(crudo, "responden", tope=len(candidatos))
     if elegidos is None:
-        return Filtrado(todas, False, "no se entendio la respuesta del modelo")
+        return Filtrado(todas, False, "la respuesta no traia una lista de numeros")
     if not elegidos:
         # El modelo dice que ninguno responde. Es una respuesta legitima y hay
         # que respetarla: es como Sirius llega a decir «no tengo eso».
         return Filtrado((), True)
-    # Se ordena por la posicion que traian de la busqueda, **no** por el orden
-    # en que el modelo los nombro. El filtro decide que sale; quien ordena es la
-    # busqueda y despues las puertas. Si el modelo pudiera reordenar, una medida
-    # de orden dejaria de ser atribuible a nadie.
     return Filtrado(tuple(todas[n - 1] for n in sorted(elegidos)), True)
 
 
-__all__ = ["CANDIDATOS_MAXIMOS", "INSTRUCCION", "Filtrado", "filtrar"]
+__all__ = ["CANDIDATOS_MAXIMOS", "ESQUEMA", "INSTRUCCION", "Filtrado", "filtrar"]
