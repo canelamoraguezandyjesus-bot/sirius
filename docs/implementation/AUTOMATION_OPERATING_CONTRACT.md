@@ -425,8 +425,20 @@ Consecuencia que conviene decir en voz alta: el **caso B** del reconciliador
 supervisión**, y esa reparación despierta al revisor. No es trabajo nuevo: es
 exactamente lo que `advance-sirius-after-quality.yml` habría hecho si el evento
 no se hubiera perdido. Pero antes ocurría solo cuando una persona lo pedía, y
-ahora puede ocurrir de madrugada. Está dentro del límite 2 del §9.1 —repara un
-estado que ya estaba mal— y es reversible quitando el `schedule:`.
+ahora puede ocurrir de madrugada.
+
+Para que eso siga dentro de los límites 2 y 5 hace falta una condición que la
+primera versión de esta excepción no tenía: el caso B **solo repara si el estado
+`ci-pending` lleva puesto más de `STUCK_MINUTES`**. Sin ella, un cron que se
+dispare justo después de que Quality se ponga verde —con
+`advance-sirius-after-quality.yml` encolado o corriendo— transiciona antes que
+él: eso no es reparar un estado roto, es **sustituir al productor del evento y
+avanzar un ciclo sano**, exactamente lo que los límites 2 y 5 prohíben.
+
+Desde fuera no hay forma de distinguir «la transición se perdió» de «la
+transición está en vuelo» salvo por el tiempo transcurrido. La condición se
+aplica también a las ejecuciones manuales: la distinción no depende de quién
+dispare. Todo esto es reversible quitando el `schedule:`.
 
 Lo que esta excepción **no** resuelve: no detecta que un run murió —eso solo lo
 sabe el run—, sino que un estado dejó de avanzar, que es lo único observable

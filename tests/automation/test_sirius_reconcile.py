@@ -55,6 +55,24 @@ issue_from() { printf '%s' "$1" | grep -oE 'issues/[0-9]+' | head -1 | cut -d/ -
 case "$sub" in
   api)
     args="$*"
+    # `gh api` usa GET por defecto, pero cambia a POST en cuanto se le pasa un
+    # parametro con `-f`. Todas las llamadas de este script son LECTURAS, asi
+    # que un POST es un error del llamador y aqui se comporta como el `gh` real:
+    # falla. Sin esto, el simulado devolvia datos alegremente a una peticion que
+    # en produccion habria dado 404, y la prueba no medía nada (hallazgo P1 de
+    # Codex en la PR #143).
+    metodo=""; tiene_f=0; prev=""
+    for a in "$@"; do
+      [ "$prev" = "-X" ] && metodo="$a"
+      case "$a" in -f|--raw-field|-F|--field) tiene_f=1;; esac
+      prev="$a"
+    done
+    [ -z "$metodo" ] && [ "$tiene_f" = 1 ] && metodo="POST"
+    [ -z "$metodo" ] && metodo="GET"
+    if [ "$metodo" != "GET" ]; then
+      echo "gh: HTTP 404 (metodo $metodo sobre un endpoint de solo lectura)" >&2
+      exit 1
+    fi
     if printf '%s' "$args" | grep -qE 'issues\?|issues -f|repos/[^ ]+/issues($| -f)'; then
       cat "$D/open_issues.txt" 2>/dev/null; exit 0
     fi
@@ -70,12 +88,22 @@ case "$sub" in
     if printf '%s' "$args" | grep -q '/events'; then
       raw="$D/events_${n}.txt"
       [ -f "$raw" ] || exit 1
+      # El archivo guarda un array de PAGINAS. `gh --paginate` emite un
+      # documento JSON por pagina, y `--slurp` emite un unico array con todas.
+      # Modelar eso importa: con `--paginate` a secas, `--jq` se aplica a cada
+      # pagina por separado y `last` da el ultimo de CADA una (hallazgo P2).
+      if printf '%s' "$args" | grep -q -- '--slurp'; then
+        entrada="$(cat "$raw")"
+      else
+        entrada="$(jq -c '.[]' "$raw")"
+      fi
       # Se aplica el `--jq` REAL del llamador. Si el simulado devolviera la
       # linea ya filtrada, el filtro —que es donde puede estar el defecto— no
       # quedaria medido por ninguna prueba.
       jqprog=""; prev=""
       for a in "$@"; do [ "$prev" = "--jq" ] && jqprog="$a"; prev="$a"; done
-      if [ -n "$jqprog" ]; then jq -r "$jqprog" "$raw"; else cat "$raw"; fi
+      if [ -n "$jqprog" ]; then printf '%s' "$entrada" | jq -r "$jqprog"
+      else printf '%s' "$entrada"; fi
       exit 0
     fi
     if printf '%s' "$args" | grep -q '/labels'; then
@@ -234,7 +262,7 @@ def test_reconcile_ambiguous_completed_marker_not_fixed(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def _seed_ci_pending(env: dict[str, str], conclusion: str) -> None:
+def _seed_ci_pending(env: dict[str, str], conclusion: str, edad_min: int = 1000) -> None:
     md = _md(env)
     _seed_issue(
         env,
@@ -242,6 +270,10 @@ def _seed_ci_pending(env: dict[str, str], conclusion: str) -> None:
         ["sirius:ci-pending"],
         comments="READY https://github.com/owner/repo/pull/57\n",
     )
+    # El caso B ya no repara sin saber que la transición se PERDIÓ: si
+    # `ci-pending` acaba de ponerse, el productor del evento todavía puede
+    # actuar. Por eso hay que fechar el estado.
+    _seed_events(env, 55, [_evento("labeled", "sirius:ci-pending", _iso(edad_min), 77)])
     (md / "pr_57.json").write_text('{"state":"open","head":"c4d482267d9a"}', encoding="utf-8")
     (md / "checks_c4d482267d9a.txt").write_text(conclusion, encoding="utf-8")
 
@@ -378,9 +410,17 @@ def _iso(minutos_atras: int) -> str:
     return momento.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _seed_events(env: dict[str, str], num: int, eventos: list[dict[str, object]]) -> None:
-    """Siembra el historial de eventos que devuelve la API de GitHub."""
-    (_md(env) / f"events_{num}.txt").write_text(json.dumps(eventos), encoding="utf-8")
+def _seed_events(
+    env: dict[str, str], num: int, eventos: list[dict[str, object]], por_pagina: int = 100
+) -> None:
+    """Siembra el historial de eventos, repartido en páginas como hace GitHub.
+
+    Se guarda siempre como array de páginas, aunque haya una sola: el simulado
+    reproduce a partir de ahí las dos formas en que `gh` entrega los resultados
+    (un documento por página, o uno solo con `--slurp`).
+    """
+    paginas = [eventos[i : i + por_pagina] for i in range(0, len(eventos), por_pagina)] or [[]]
+    (_md(env) / f"events_{num}.txt").write_text(json.dumps(paginas), encoding="utf-8")
 
 
 def _evento(nombre: str, etiqueta: str | None, cuando: str, ident: int) -> dict[str, object]:
@@ -540,3 +580,105 @@ def test_recon_stuck_007_el_reconciliador_esta_programado_y_sigue_siendo_manual(
         "sirius:implement-requested"
         not in texto.split("MACHINE_LABELS=")[0].split("STATE_LABELS=")[0]
     ), "el reconciliador no puede iniciar bloques"
+
+
+def test_recon_stuck_008_el_ultimo_evento_sale_del_conjunto_no_de_una_pagina(
+    tmp_path: Path,
+) -> None:
+    """Con más de una página, `last` no puede aplicarse a cada página aparte.
+
+    `gh --paginate` emite un documento JSON POR PÁGINA, así que un `--jq` con
+    `last` devuelve una línea por página. El llamador tomaba la fecha del primer
+    trozo y el id del último: una etiqueta reaplicada en la última página se
+    habría fechado con la primera, y el marcador de deduplicación habría
+    mezclado ambas. Hallazgo P2 de Codex en la PR #143.
+
+    Aquí hay 150 eventos en dos páginas y la reaplicación buena es la última.
+    """
+    env = _setup(tmp_path)
+    _seed_issue(env, 14, ["sirius:repair-requested"])
+    vieja, reciente = _iso(9999), _iso(1000)
+    ruido: list[dict[str, object]] = [
+        _evento("commented", None, _iso(9000 - i), 1000 + i) for i in range(148)
+    ]
+    eventos = [
+        _evento("labeled", "sirius:repair-requested", vieja, 111),
+        *ruido,
+        _evento("labeled", "sirius:repair-requested", reciente, 999),
+    ]
+    _seed_events(env, 14, eventos, por_pagina=100)
+
+    r = _run_reconcile(env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    publicado = (_md(env) / "comments_14.txt").read_text(encoding="utf-8")
+    assert "<!-- sirius-stuck:sirius:repair-requested:999 -->" in publicado, (
+        f"el marcador debe salir del ÚLTIMO evento del conjunto: {publicado!r}"
+    )
+    # La FECHA es lo que de verdad se mezclaba: sin `--slurp`, el id salía de la
+    # última página y la fecha de la primera. Comprobar solo el marcador dejaba
+    # pasar la mutación —verificado— porque el id ya venía de la página buena.
+    assert reciente in publicado, (
+        f"la fecha publicada debe ser la de la última aplicación ({reciente}): {publicado!r}"
+    )
+    assert vieja not in publicado, (
+        f"se fechó por la primera página ({vieja}), que es el defecto: {publicado!r}"
+    )
+    edad = int(re.search(r"lleva (\d+) minutos", publicado).group(1))  # type: ignore[union-attr]
+    assert 990 <= edad <= 1010, f"la antigüedad publicada ({edad}) no es la del último evento"
+
+
+def test_recon_stuck_009_las_lecturas_no_pueden_convertirse_en_post(
+    tmp_path: Path,
+) -> None:
+    """`gh api` pasa a POST en cuanto hay un `-f`, salvo `-X GET` explícito.
+
+    `/issues/{n}/events` solo existe en GET, así que sin `-X GET` toda lectura
+    fallaba, el estado no se podía fechar y la rama de fallo seguro impedía
+    publicar un solo aviso: la detección entera habría estado muerta en
+    producción. Hallazgo P1 de Codex en la PR #143.
+
+    El simulado modela ahora esa regla y falla igual que el `gh` real, así que
+    esta prueba cae si alguien quita el `-X GET`.
+    """
+    env = _setup(tmp_path)
+    _seed_issue(env, 15, ["sirius:repairing"])
+    _seed_events(env, 15, [_evento("labeled", "sirius:repairing", _iso(1000), 5)])
+
+    r = _run_reconcile(env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "sirius-stuck:sirius:repairing:5" in (_md(env) / "comments_15.txt").read_text(
+        encoding="utf-8"
+    ), "sin `-X GET` la lectura de eventos falla y no se publica nada"
+
+
+def test_recon_case_b_does_not_overtake_a_healthy_cycle(tmp_path: Path) -> None:
+    """Reparar mientras el productor del evento aún puede actuar es adelantarlo.
+
+    Quality acaba de ponerse verde y `advance-sirius-after-quality` puede estar
+    encolado. Transicionar ahí no arregla un estado roto: avanza un ciclo sano,
+    que es justo lo que los límites 2 y 5 del §9.1 prohíben. Hallazgo P1 de
+    Codex en la PR #143.
+    """
+    env = _setup(tmp_path)
+    _seed_ci_pending(env, "success", edad_min=10)
+
+    r = _run_reconcile(env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "aún puede avanzarlo" in r.stdout, r.stdout
+    assert "CORREGIDO" not in r.stdout, r.stdout
+    labels = (_md(env) / "labels_55.txt").read_text(encoding="utf-8")
+    assert "sirius:ci-pending" in labels
+    assert "sirius:review-requested" not in labels
+
+
+def test_recon_case_b_without_a_datable_state_does_not_repair(tmp_path: Path) -> None:
+    # Sin poder fechar `ci-pending` no se sabe si la transición se perdió o está
+    # en vuelo. Reparar a ciegas sería inventárselo.
+    env = _setup(tmp_path)
+    _seed_ci_pending(env, "success")
+    (_md(env) / "events_55.txt").unlink()
+
+    r = _run_reconcile(env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "no reparo a ciegas" in r.stdout, r.stdout
+    assert "sirius:review-requested" not in (_md(env) / "labels_55.txt").read_text(encoding="utf-8")

@@ -106,13 +106,48 @@ abre no es una detección; un comentario en la incidencia sí llega a una person
 - Diez mutaciones en las dos direcciones, todas con el resultado predicho antes
   de ejecutarlas.
 
+## Revisión: tres defectos que la primera versión sí tenía
+
+Codex encontró tres, y los tres eran ciertos. Vale la pena que queden escritos
+porque **dos son el mismo error**: dar por supuesto el comportamiento de otro
+sistema en vez de comprobarlo.
+
+1. **P1 — `gh api` pasaba a POST.** `label_applied_at` llamaba a
+   `/issues/{n}/events` con `-f per_page=100` y sin `-X GET`. `gh` usa GET por
+   defecto pero cambia a POST en cuanto hay un `-f`, y ese endpoint solo existe
+   en GET: **toda** lectura fallaba, el estado nunca se podía fechar y la rama
+   de fallo seguro impedía publicar un solo aviso. La red de seguridad habría
+   estado muerta en producción sin que nada lo delatara. La otra llamada
+   paginada del mismo script ya usaba `-X GET`: la regla estaba escrita al lado.
+2. **P2 — `--paginate` emite un documento por página.** El `--jq` con `last` se
+   aplicaba a cada página por separado, así que con más de 100 eventos salía una
+   línea por página y el llamador tomaba la fecha de una y el id de otra.
+   Corregido con `--slurp` y `add`.
+3. **P1 — el caso B podía adelantar a un ciclo sano.** Descrito arriba.
+
+**La raíz de (1) y (2) no está en el script, está en las pruebas**: el `gh`
+simulado no modelaba `gh`. Devolvía datos a peticiones que en producción habrían
+dado 404, e ignoraba la diferencia entre `--paginate` y `--slurp`. Con un
+simulado permisivo, cualquier suposición sobre `gh` pasaba sin verificar.
+
+El arreglo de fondo es ese: el simulado **falla ahora igual que `gh`** ante una
+lectura convertida en POST, y reproduce las dos formas en que entrega páginas.
+Verificado por mutación: con el simulado permisivo, la prueba que fija el
+`-X GET` vuelve a pasar aunque se quite el `-X GET` —es decir, se vuelve vacua—,
+que es exactamente lo que ocurría antes de esta revisión.
+
+Una prueba propia también salió vacua y hubo que rehacerla: comprobaba que el
+marcador de deduplicación saliera del último evento, pero no la **fecha**, que
+es lo que de verdad se mezclaba entre páginas. Pasaba con la mutación puesta.
+
 ## Consecuencias
 
 - El **caso B** del reconciliador (`ci-pending` con Quality en verde) pasa a
   repararse **sin supervisión**, y esa reparación despierta al revisor. No es
   trabajo nuevo —es lo que el flujo por eventos habría hecho de no perderse la
   transición— pero antes solo ocurría a petición y ahora puede ocurrir de
-  madrugada.
+  madrugada. Para no adelantarse al productor del evento, solo repara si
+  `ci-pending` lleva más de `STUCK_MINUTES` puesto; ver la revisión de abajo.
 - **Lo que esto NO hace**, y conviene que no se lea de más:
   - no repara los estados atascados: avisa a una persona;
   - no detecta un run muerto, sino un estado que no avanza;

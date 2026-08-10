@@ -60,10 +60,36 @@ trigger_transition() {
 # la mueve— y ese es exactamente el error que abrió esta incidencia. Si la
 # lectura falla, no se imprime nada: sin dato no se afirma antigüedad.
 label_applied_at() {
-  sirius_retry gh api "repos/${1}/issues/${2}/events" -f per_page=100 --paginate \
-    --jq "[.[] | select(.event == \"labeled\" and .label.name == \"${3}\")] \
+  # `-X GET` es OBLIGATORIO. `gh api` usa GET por defecto pero cambia a POST en
+  # cuanto se le añade un parámetro con `-f`, y `/issues/{n}/events` solo
+  # existe en GET: sin esto TODA lectura fallaba, `marca` salía vacía y la rama
+  # de fallo seguro impedía publicar un solo aviso. La detección entera habría
+  # estado muerta en producción sin que ninguna prueba lo notara. Hallazgo P1
+  # de Codex en la PR #143; la otra llamada paginada de este script ya lo hacía
+  # bien, así que la regla estaba escrita aquí al lado.
+  #
+  # `--slurp` es igual de obligatorio. Con `--paginate` a secas, `gh` emite un
+  # array JSON POR PÁGINA y `--jq` se aplica a cada uno por separado: `last`
+  # daría el último de CADA página, una línea por página, y el llamador acabaría
+  # cogiendo la fecha de una y el id de otra. Con `--slurp` llega un solo array
+  # de páginas, y `add` las aplana en una sola lista. Hallazgo P2 de Codex.
+  sirius_retry gh api -X GET "repos/${1}/issues/${2}/events" -f per_page=100 \
+    --paginate --slurp \
+    --jq "(add // []) | [.[] | select(.event == \"labeled\" and .label.name == \"${3}\")] \
           | if length == 0 then empty else (last | \"\(.created_at) \(.id)\") end" \
     2>/dev/null
+}
+
+# stale_minutes <repo> <issue> <etiqueta> — minutos que la etiqueta lleva
+# puesta, o nada si no se puede saber. Sin dato no se afirma antigüedad.
+stale_minutes() {
+  local marca desde epoch
+  marca="$(label_applied_at "$1" "$2" "$3")"
+  [ -n "$marca" ] || return 0
+  desde="${marca%% *}"
+  epoch="$(date -u -d "$desde" +%s 2>/dev/null || true)"
+  [ -n "$epoch" ] || return 0
+  printf '%s' $(( ( $(_sirius_now) - epoch ) / 60 ))
 }
 
 REPO="${1:?uso: sirius_reconcile.sh <owner/repo>}"
@@ -149,6 +175,28 @@ for issue in "${open_issues[@]:-}"; do
 
   # --- Caso B: ci-pending con Quality ya resuelto -----------------------------
   if printf '%s\n' "$sirius_labels" | grep -Fxq "sirius:ci-pending"; then
+    # Antes de reparar hay que saber que la transición se PERDIÓ, no que está
+    # en camino. Quality acaba de ponerse verde y `advance-sirius-after-quality`
+    # puede estar encolado o corriendo ahora mismo: reparar en esa ventana no es
+    # arreglar un estado roto, es adelantarse al productor del evento y avanzar
+    # un ciclo sano. Eso viola los límites 2 y 5 del §9.1 del contrato, que esta
+    # misma PR declara. Hallazgo P1 de Codex en la PR #143.
+    #
+    # Desde fuera no hay forma de distinguir "perdido" de "en vuelo" salvo por
+    # el tiempo, así que se exige la misma antigüedad que para declarar un
+    # atasco. Se aplica también a las ejecuciones manuales: la distinción no
+    # depende de quién dispare, sino de si el productor tuvo tiempo de actuar.
+    edad_ci="$(stale_minutes "$REPO" "$issue" "sirius:ci-pending")"
+    if [ -z "$edad_ci" ]; then
+      report AVISO "#${issue}: ci-pending; no pude fechar el estado, así que no reparo a ciegas."
+      rm -f "$comments_file" "$body_file"
+      continue
+    fi
+    if [ "$edad_ci" -lt "$STUCK_MINUTES" ]; then
+      report EN-CURSO "#${issue}: ci-pending desde hace ${edad_ci} min; el flujo por eventos aún puede avanzarlo."
+      rm -f "$comments_file" "$body_file"
+      continue
+    fi
     mapfile -t pr_urls < <(
       cat "$body_file" "$comments_file" \
         | grep -oE "https://github\.com/${REPO}/pull/[0-9]+" | sort -u
