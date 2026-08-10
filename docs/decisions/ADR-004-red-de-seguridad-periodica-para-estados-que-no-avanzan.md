@@ -261,3 +261,45 @@ Lo que esto sigue **sin** garantizar, dicho para que no se lea de más: que la
 secuencia prescrita baste siempre. Garantiza que reponga lo que el consumo
 retiró y que, si no basta, quien lo sepa lo diga. Prometer más sería repetir el
 error tres veces.
+
+## Cuarta ronda: la promesa era falsa, y el patrón es mío
+
+El aviso decía que la puerta «no se queda en silencio». Codex demostró que sí
+puede: `reject()` registraba el fallo de `sirius_comment_once` y **retiraba la
+etiqueta igualmente**. La incidencia quedaba solo en `sirius:planned`, sin
+comentario y sin ningún evento que la reviva — y encima **invisible para este
+mismo reconciliador**, porque `planned` es un estado de reposo legítimo y no
+está en `MACHINE_LABELS`.
+
+Es la clase exacta de fallo que esta incidencia vino a eliminar, un callejón
+mudo, reintroducida por la puerta que debía protegerla.
+
+**Arreglo:** sin diagnóstico publicado no se retira la etiqueta. Conservándola
+se pierde tiempo, no la incidencia: el estado queda como estaba y el próximo
+intento vuelve a rechazar. No hay bucle, porque `issues: labeled` solo dispara
+al aplicar la etiqueta.
+
+### El patrón, que no está en el código
+
+Tres veces en esta misma PR una prueba de **grafía** se hizo pasar por una de
+**comportamiento**:
+
+| Prueba | Qué afirmaba | Qué medía |
+|---|---|---|
+| RECON-STUCK-007 | «el reconciliador no inicia bloques» | que cierta cadena no apareciera en el archivo |
+| RECON-STUCK-010 (1ª versión) | «la etiqueta propuesta arranca el trabajo» | que estuviera en un conjunto demasiado amplio |
+| RECON-STUCK-011 (1ª versión) | «la puerta no se queda en silencio» | que dos cadenas existieran en la puerta |
+
+Las tres pasaban con el defecto puesto. Y la tercera se escribió **justo
+después** de corregir la primera, que era el mismo error.
+
+Un `grep` puede fijar que un patrón concreto no reaparezca por inercia —para eso
+sirve— pero no puede sostener una afirmación sobre lo que el sistema hace. Para
+eso hay que ejecutarlo. La regla que sale de aquí, y que las tres pruebas
+cumplen ya: **si la frase empieza por «el sistema hace X», la prueba tiene que
+hacer que lo haga.**
+
+`test_a_rejection_without_diagnosis_keeps_the_label` corre la puerta con la
+publicación rota y comprueba que la etiqueta sobrevive. Cuatro mutaciones, todas
+con el resultado predicho, incluida la que rompe el simulado para confirmar que
+la prueba no pasa por vacuidad.

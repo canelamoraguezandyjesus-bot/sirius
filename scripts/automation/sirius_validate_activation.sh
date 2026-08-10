@@ -62,8 +62,20 @@ reject() {
     "@${OWNER_LOGIN}" >"$body_file"
   local rc=0
   if ! sirius_comment_once "$REPO" "$ISSUE" "$marker" "$body_file"; then
-    echo "::warning::No se pudo publicar el comentario de rechazo en #${ISSUE}." >&2
-    rc=1
+    # Sin diagnostico NO se retira la etiqueta. Retirarla igualmente dejaba la
+    # incidencia solo en `sirius:planned`, sin comentario y sin ningun evento
+    # que la reviva: un callejon MUDO, y encima invisible para el reconciliador,
+    # porque `planned` es un estado de reposo legitimo y no esta en
+    # MACHINE_LABELS. Es exactamente la clase de fallo que la incidencia #138
+    # vino a eliminar, reintroducida por la puerta que debia protegerla.
+    #
+    # Conservandola, el estado queda como estaba y el proximo intento vuelve a
+    # rechazar: se pierde tiempo, no se pierde la incidencia. Y no hay bucle,
+    # porque `issues: labeled` solo dispara al APLICAR la etiqueta.
+    # Hallazgo P2 de Codex en la PR #146.
+    echo "::error::No se pudo publicar el comentario de rechazo en #${ISSUE}; se CONSERVA sirius:implement-requested para no dejar la incidencia muda." >&2
+    rm -f "$body_file"
+    return 1
   fi
   rm -f "$body_file"
   # Retirar el evento y verificar que quedo retirado (estado limpio, reintentable).

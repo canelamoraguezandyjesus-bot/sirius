@@ -809,23 +809,30 @@ def test_recon_stuck_010_la_reactivacion_repone_lo_que_el_consumo_retiro() -> No
         assert estado in disparadoras, f"`{estado}` no dispara ningún trabajo"
 
 
-def test_recon_stuck_011_el_aviso_no_promete_ser_completo() -> None:
-    """La prescripción vale hoy; la puerta es la autoridad, y hay que decirlo.
+def test_recon_stuck_011_la_salvedad_del_aviso_es_cierta() -> None:
+    """La tercera línea del aviso promete algo; hay que comprobar que se cumple.
 
-    Dos rondas seguidas demostraron que el reconciliador no puede reconstruir
-    desde fuera todas las condiciones de admisión de otro sistema. Así que el
-    aviso deja de fingir que las conoce todas y nombra a quien sí las conoce: la
-    puerta de activación, que ante un rechazo publica el motivo y retira la
-    etiqueta en vez de callarse.
+    La versión anterior de esta prueba buscaba las cadenas `Siguiente acción:` y
+    `--remove-label` en la puerta y daba la promesa por buena. Eso es una prueba
+    de grafía haciéndose pasar por una de comportamiento, y **no vio** que
+    `reject()` retiraba la etiqueta aunque el comentario fallara: la incidencia
+    quedaba muda y la promesa era falsa. Hallazgo P2 de Codex en la PR #146, y
+    tercera vez en esta PR que un `grep` sustituye a una comprobación real.
 
-    Se comprueba que esa promesa es cierta, no solo que esté escrita.
+    Ahora la propiedad se fija donde ocurre y ejecutándola:
+    `test_a_rejection_without_diagnosis_keeps_the_label`, en
+    `test_sirius_activation.py`, corre la puerta con la publicación rota y
+    comprueba que la etiqueta sobrevive. Aquí solo queda la parte que sí es de
+    este módulo: que el aviso no vuelva a presentarse como receta completa.
     """
     guion = RECONCILE.read_text(encoding="utf-8")
     assert "la puerta de activación lo dirá en un comentario" in guion, (
         "el aviso volvería a presentarse como una receta completa"
     )
-    puerta = (REPO_ROOT / "scripts" / "automation" / "sirius_validate_activation.sh").read_text(
+    # Y la promesa la sostiene una prueba que EJECUTA el camino, no un grep.
+    activacion = (REPO_ROOT / "tests" / "automation" / "test_sirius_activation.py").read_text(
         encoding="utf-8"
     )
-    assert "Siguiente acción:" in puerta, "la puerta no publica qué hacer; la promesa sería falsa"
-    assert "--remove-label" in puerta, "la puerta no retira la etiqueta al rechazar"
+    assert "def test_a_rejection_without_diagnosis_keeps_the_label" in activacion, (
+        "sin esa prueba, la promesa del aviso no la sostiene nada"
+    )
