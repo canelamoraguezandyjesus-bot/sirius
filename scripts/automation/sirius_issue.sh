@@ -547,6 +547,15 @@ _sirius_comment_once_bounded() {
   # Instante ABSOLUTO, compartido con `_sirius_gh` y con `sirius_retry`: es lo
   # que hace que el plazo acote el CONJUNTO y no cada llamada por separado.
   local deadline=$(( $(_sirius_now) + budget ))
+  # Un plazo HEREDADO más estricto manda sobre el propio. Sin esto los plazos no
+  # se componen: cada capa se concedía el suyo ignorando el de arriba, así que
+  # un llamador que reservaba 120s para publicar veía cómo esta función se daba
+  # 90s MÁS por su cuenta —hasta 210s en total— y el presupuesto del paso que
+  # lo envolvía se desbordaba. Una cota que la capa de abajo puede ampliar no
+  # es una cota.
+  if [ "${SIRIUS_GH_DEADLINE:-0}" -gt 0 ] && [ "$SIRIUS_GH_DEADLINE" -lt "$deadline" ]; then
+    deadline="$SIRIUS_GH_DEADLINE"
+  fi
   export SIRIUS_GH_DEADLINE="$deadline"
   local delay="${SIRIUS_RETRY_BASE_DELAY:-2}"
   local after="" remaining=0
