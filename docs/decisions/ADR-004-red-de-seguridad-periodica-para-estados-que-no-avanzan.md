@@ -171,3 +171,53 @@ es lo que de verdad se mezclaba entre páginas. Pasaba con la mutación puesta.
   poner para redisparar el evento): reintentaría también sobre runs vivos, porque
   desde fuera no puede saber si lo están. Sustituiría un fallo silencioso por
   ejecuciones duplicadas.
+
+## Segunda ronda de revisión: el aviso mandaba a hacer algo que no funciona
+
+Codex revisó `c4e0a25` —el commit ya fusionado en `main`— y encontró un cuarto
+defecto, esta vez en el propio aviso.
+
+El texto decía: *«quitar `sirius:repairing` y volver a ponerla: eso vuelve a
+disparar el evento»*. Y es verdad que dispara `issues: labeled`. Lo que no dice
+es que `repair-sirius-work.yml` arranca con
+`if: github.event.label.name == 'sirius:repair-requested'`, así que el job se
+salta y la incidencia queda igual de atascada. Lo mismo con `implementing` y
+`reviewing`: para los **tres** estados en curso, el aviso ofrecía como única
+salida una acción que no hace nada.
+
+Es la forma más incómoda de este defecto: la detección funcionaba, avisaba a
+tiempo, y después daba una salida falsa. Quien la siguiera no habría visto ningún
+error —solo que no pasa nada—.
+
+**Arreglo:** `reactivation_label` traduce cada estado a la etiqueta que de verdad
+arranca su workflow. La tabla es explícita; derivarla quitando el sufijo «ing»
+funcionaría hoy por coincidencia de las tres palabras, y eso es reconstruir desde
+fuera una correspondencia ajena, que es el patrón que ya costó dos hallazgos en
+la primera ronda.
+
+**RECON-STUCK-010** lee los `if:` reales de los tres workflows que hacen el
+trabajo y exige que la etiqueta propuesta esté entre ellos, ejecutando la función
+extraída del script. Cuatro mutaciones, todas con el resultado predicho.
+
+Dos pruebas propias salieron defectuosas y se rehicieron:
+
+- La primera versión de RECON-STUCK-010 miraba «etiquetas que disparan **algún**
+  workflow». Ese conjunto incluye `sirius:implementing`, que dispara
+  notificaciones, así que **pasaba con el defecto puesto**.
+- RECON-STUCK-007 afirmaba que el reconciliador no inicia bloques comprobando que
+  cierta cadena no apareciera en el archivo. Eso es una prueba de grafía: rompía
+  porque el aviso *nombra* la etiqueta que debe aplicar el usuario, y a cambio no
+  habría notado un `--add-label` escrito de otra forma.
+
+### Nota de método, para que conste
+
+**Este trabajo no llevó nota de arranque.** Salió directamente de un hallazgo de
+revisión y me puse a corregir sin escribir antes la afirmación ni el criterio de
+parada, que es lo que ADR-001 exige. No la escribo ahora a posteriori: un
+criterio redactado después de ver los resultados no es un criterio, y fingir lo
+contrario vacía de sentido la propia disciplina.
+
+Lo que sí hay, y sostiene el cambio, es lo de siempre: el mecanismo verificado
+contra los workflows reales antes de aceptar el hallazgo, pruebas que fallan al
+revertir el arreglo, y las dos pruebas vacuas propias detectadas y corregidas
+antes de subir nada.
