@@ -1,11 +1,11 @@
 # SIRIUS - Contrato operativo de automatización
 
-**Versión:** 1.5  
-**Fecha:** 3 de agosto de 2026  
-**Estado:** VIGENTE (§4 y §5 actualizadas; ver §10.3 y §10.4)  
-**Autoridad:** Operativa para el desarrollo automatizado de Sirius 0.1  
-**Sustituye:** versión 1.4 del 3 de agosto de 2026  
-**No modifica:** Producto, Arquitectura Técnica, ATD, requisitos ni alcance de Sirius 0.1
+- **Versión:** 1.6
+- **Fecha:** 10 de agosto de 2026
+- **Estado:** VIGENTE (§4, §5 y §9 actualizadas; ver §10.3, §10.4 y §10.5)
+- **Autoridad:** Operativa para el desarrollo automatizado de Sirius 0.1
+- **Sustituye:** versión 1.5 del 3 de agosto de 2026
+- **No modifica:** Producto, Arquitectura Técnica, ATD, requisitos ni alcance de Sirius 0.1
 
 ## 0. Propósito
 
@@ -387,8 +387,50 @@ Está prohibido:
 - usar secretos reales o datos personales en pruebas automáticas;
 - cambiar Producto, Arquitectura Técnica, ATD o documentos canónicos sin decisión explícita;
 - convertir una idea exploratoria en una decisión aprobada;
-- usar vigilancia horaria como motor del flujo;
+- usar vigilancia periódica como **motor** del flujo (excepción acotada en §9.1);
 - iniciar bloques sucesivos sin orden del usuario o cola expresamente aprobada.
+
+### 9.1 Excepción: red de seguridad periódica que no es motor
+
+La prohibición anterior existe para que el flujo lo dirijan los eventos y no una
+tarea que sondea. Esa razón no alcanza a un caso: **un proceso que muere no
+puede informar de su propia muerte**, y `issues: labeled` no vuelve a dispararse
+con una etiqueta ya aplicada. Cuando una ejecución muere a mitad, la incidencia
+queda en un estado que ningún evento futuro puede mover, y el flujo por eventos
+—por construcción— no puede notarlo.
+
+Queda permitida, por tanto, **una** ejecución periódica, sujeta a todo lo
+siguiente. Si un cambio futuro rompe cualquiera de estos límites, deja de estar
+amparado por esta excepción y necesita una decisión nueva:
+
+1. **No inicia trabajo.** No aplica `sirius:implement-requested` ni ninguna otra
+   etiqueta que arranque un bloque.
+2. **No avanza un ciclo sano.** Solo repara estados inequívocos que ya estaban
+   mal (los casos A y B de `scripts/automation/sirius_reconcile.sh`), y esos
+   mismos casos son reparables hoy a mano sin esta excepción.
+3. **No fusiona.** El merge sigue siendo humano y exige el comentario de §8.
+4. **Ante la duda, informa y no toca.** Un estado que no puede fechar o cuya
+   situación es ambigua produce un aviso, nunca una acción.
+5. **No sustituye a ningún productor de eventos.** Si el flujo por eventos
+   funciona, esta ejecución no hace nada.
+
+Hoy la implementa `.github/workflows/reconcile-sirius-states.yml` con cadencia de
+seis horas. La cadencia es parte de la excepción, no un detalle: cada hora
+costaría ~720 minutos de Actions al mes sobre los 2000 gratuitos del repositorio
+privado, y seis horas cuestan ~120. Acortarla es un cambio de coste y se decide
+como tal.
+
+Consecuencia que conviene decir en voz alta: el **caso B** del reconciliador
+—`sirius:ci-pending` con Quality ya en verde— pasa a repararse **sin
+supervisión**, y esa reparación despierta al revisor. No es trabajo nuevo: es
+exactamente lo que `advance-sirius-after-quality.yml` habría hecho si el evento
+no se hubiera perdido. Pero antes ocurría solo cuando una persona lo pedía, y
+ahora puede ocurrir de madrugada. Está dentro del límite 2 del §9.1 —repara un
+estado que ya estaba mal— y es reversible quitando el `schedule:`.
+
+Lo que esta excepción **no** resuelve: no detecta que un run murió —eso solo lo
+sabe el run—, sino que un estado dejó de avanzar, que es lo único observable
+desde fuera. Y no repara ese estado: avisa a una persona. Ver ADR-004.
 
 ## 10. Entrada en vigor y cambio registrado
 
@@ -462,4 +504,12 @@ Está prohibido:
 - **Mantiene:** la incidencia como fuente de verdad; una sola máquina de estados; Claude como implementador y único corrector; Claude y Codex como revisores cuando la bandera está activa; fallo seguro; verificación del SHA; Quality antes de la revisión; merge exclusivamente humano mediante `fusiona`; y reversibilidad. La terminación del ciclo la garantizan las condiciones de bloqueo, no un contador.
 - **Entrada en vigor:** cuando la PR que introduce la política de convergencia sea revisada, tenga CI verde y sea fusionada por autorización explícita del usuario.
 
-El historial de las versiones 1.0, 1.1, 1.2, 1.3 y 1.4 permanece disponible en Git y no se reescribe retrospectivamente.
+### 10.5 Versión 1.6 — red de seguridad periódica que no es motor del flujo
+
+- **Decisión:** acotar la prohibición de vigilancia periódica a lo que de verdad prohibía —usarla como motor— y permitir una sola ejecución programada como red de seguridad, con los cinco límites del §9.1. Incidencia #138.
+- **Motivo:** la única pieza capaz de notar una incidencia atascada por un run muerto (`reconcile-sirius-states.yml`) solo arrancaba si una persona pulsaba un botón, es decir, dependía de que un humano notara primero justo aquello que la automatización debía notar por él. Siete correcciones consecutivas fallaron por vivir dentro del run que puede morir; la octava habría fallado igual.
+- **Alcance:** `reconcile-sirius-states.yml` (añade `schedule:`), `scripts/automation/sirius_reconcile.sh` (avisa en la incidencia cuando un estado de máquina lleva más de `STUCK_MINUTES` sin avanzar) y la redacción de §9. No cambia estados, ni la revisión dual (§4), ni la convergencia (§5), ni el merge (§8).
+- **Mantiene:** que ninguna automatización fusione, inicie bloques ni avance un ciclo sano por sondeo; que ante la duda se informe en vez de actuar; y la reversibilidad —quitar el `schedule:` devuelve el comportamiento anterior sin tocar nada más—.
+- **Entrada en vigor:** cuando la PR que introduce el `schedule:` sea revisada, tenga CI verde y sea fusionada por autorización explícita del usuario.
+
+El historial de las versiones 1.0, 1.1, 1.2, 1.3, 1.4 y 1.5 permanece disponible en Git y no se reescribe retrospectivamente.

@@ -8,13 +8,17 @@ mismas razones documentadas en ``test_sirius_issue.py``.
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import shutil
 import subprocess
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RECONCILE = REPO_ROOT / "scripts" / "automation" / "sirius_reconcile.sh"
@@ -63,6 +67,17 @@ case "$sub" in
       cat "$D/pr_${pr}.json" 2>/dev/null || exit 1; exit 0
     fi
     n="$(issue_from "$args")"
+    if printf '%s' "$args" | grep -q '/events'; then
+      raw="$D/events_${n}.txt"
+      [ -f "$raw" ] || exit 1
+      # Se aplica el `--jq` REAL del llamador. Si el simulado devolviera la
+      # linea ya filtrada, el filtro —que es donde puede estar el defecto— no
+      # quedaria medido por ninguna prueba.
+      jqprog=""; prev=""
+      for a in "$@"; do [ "$prev" = "--jq" ] && jqprog="$a"; prev="$a"; done
+      if [ -n "$jqprog" ]; then jq -r "$jqprog" "$raw"; else cat "$raw"; fi
+      exit 0
+    fi
     if printf '%s' "$args" | grep -q '/labels'; then
       cat "$D/labels_${n}.txt" 2>/dev/null; exit 0
     fi
@@ -342,3 +357,186 @@ def test_transition_verified_marker_short_circuits(tmp_path: Path) -> None:
     assert r.returncode == 0, r.stderr
     actions = (md / "actions.log").read_text() if (md / "actions.log").exists() else ""
     assert "COMMENT" not in actions and "CLOSE" not in actions
+
+
+# --------------------------------------------------------------------------- #
+# Estados de máquina que dejan de avanzar (incidencia #138)
+# --------------------------------------------------------------------------- #
+
+# Un run que muere no puede informar de su propia muerte. Lo único observable
+# desde fuera es que el ESTADO no avanza, y como `issues: labeled` no vuelve a
+# dispararse con una etiqueta ya aplicada, nada lo moverá nunca. El
+# reconciliador no repara eso —no puede saber si el run murió— pero sí lo hace
+# VISIBLE: un resumen de job que nadie abre no es una detección.
+
+REPO_ROOT_WF = REPO_ROOT / ".github" / "workflows"
+RECONCILE_WF = REPO_ROOT_WF / "reconcile-sirius-states.yml"
+
+
+def _iso(minutos_atras: int) -> str:
+    momento = datetime.now(UTC) - timedelta(minutes=minutos_atras)
+    return momento.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _seed_events(env: dict[str, str], num: int, eventos: list[dict[str, object]]) -> None:
+    """Siembra el historial de eventos que devuelve la API de GitHub."""
+    (_md(env) / f"events_{num}.txt").write_text(json.dumps(eventos), encoding="utf-8")
+
+
+def _evento(nombre: str, etiqueta: str | None, cuando: str, ident: int) -> dict[str, object]:
+    ev: dict[str, object] = {"event": nombre, "created_at": cuando, "id": ident}
+    if etiqueta is not None:
+        ev["label"] = {"name": etiqueta}
+    return ev
+
+
+def _numero_del_reconciliador(patron: str) -> int:
+    m = re.search(patron, RECONCILE.read_text(encoding="utf-8"))
+    assert m, f"no encuentro `{patron}` en el reconciliador: la prueba no mediría nada"
+    return int(m.group(1))
+
+
+def test_recon_stuck_001_un_estado_de_maquina_viejo_se_avisa_en_la_incidencia(
+    tmp_path: Path,
+) -> None:
+    """El historial lleva ruido a propósito: el filtro tiene que elegir bien.
+
+    Hay eventos que no son `labeled`, etiquetas distintas, y DOS aplicaciones de
+    la misma etiqueta. La fecha buena es la de la última, no la de la primera:
+    con la primera, un estado reaplicado hace un minuto se denunciaría como
+    atascado desde ayer.
+    """
+    env = _setup(tmp_path)
+    _seed_issue(env, 7, ["sirius:repair-requested"])
+    _seed_events(
+        env,
+        7,
+        [
+            _evento("labeled", "sirius:repair-requested", _iso(5000), 111),
+            _evento("unlabeled", "sirius:repair-requested", _iso(4000), 222),
+            _evento("commented", None, _iso(3000), 333),
+            _evento("labeled", "sirius:ci-pending", _iso(2000), 444),
+            _evento("labeled", "sirius:repair-requested", _iso(1000), 555),
+        ],
+    )
+
+    r = _run_reconcile(env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "ATASCO" in r.stdout, r.stdout
+    assert "sin avanzar" in r.stdout, r.stdout
+
+    publicado = (_md(env) / "comments_7.txt").read_text(encoding="utf-8")
+    assert "<!-- sirius-stuck:sirius:repair-requested:555 -->" in publicado, (
+        f"el marcador debe llevar el id de la ÚLTIMA aplicación: {publicado!r}"
+    )
+    assert "111" not in publicado.split("-->")[0], "se fechó por la primera aplicación"
+    assert "no ha reparado nada" in publicado
+
+
+def test_recon_stuck_002_un_estado_reciente_no_se_denuncia(tmp_path: Path) -> None:
+    # El revisor puede tardar 85 minutos legítimamente. Avisar antes del umbral
+    # convertiría un ciclo vivo en una falsa alarma en la incidencia.
+    env = _setup(tmp_path)
+    _seed_issue(env, 8, ["sirius:reviewing"])
+    _seed_events(env, 8, [_evento("labeled", "sirius:reviewing", _iso(10), 9)])
+
+    r = _run_reconcile(env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "dentro de lo normal" in r.stdout, r.stdout
+    assert "ATASCO" not in r.stdout, r.stdout
+    assert "sirius-stuck" not in (_md(env) / "comments_8.txt").read_text(encoding="utf-8")
+
+
+def test_recon_stuck_003_sin_poder_fechar_no_se_afirma_nada(tmp_path: Path) -> None:
+    # Sin historial legible NO se sabe la antigüedad. Interpretar el fallo de
+    # lectura como "lleva mucho" publicaría una acusación falsa: es exactamente
+    # el patrón de la puerta del corrector, un vacío leído como un hecho.
+    env = _setup(tmp_path)
+    _seed_issue(env, 9, ["sirius:implement-requested"])
+    # No se siembra events_9.txt: la lectura falla.
+
+    r = _run_reconcile(env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "no pude fechar" in r.stdout, r.stdout
+    assert "ATASCO" not in r.stdout, r.stdout
+    assert "sirius-stuck" not in (_md(env) / "comments_9.txt").read_text(encoding="utf-8")
+
+
+def test_recon_stuck_004_el_aviso_no_se_repite_en_cada_pasada(tmp_path: Path) -> None:
+    # Programado cada 6 horas, un aviso sin deduplicar llenaría la incidencia de
+    # copias hasta hacerla ilegible, que es otra forma de no avisar.
+    env = _setup(tmp_path)
+    _seed_issue(env, 10, ["sirius:repairing"])
+    _seed_events(env, 10, [_evento("labeled", "sirius:repairing", _iso(1000), 42)])
+
+    for _ in range(2):
+        assert _run_reconcile(env).returncode == 0
+
+    publicado = (_md(env) / "comments_10.txt").read_text(encoding="utf-8")
+    assert publicado.count("<!-- sirius-stuck:sirius:repairing:42 -->") == 1, publicado
+
+
+def test_recon_stuck_005_los_estados_que_esperan_a_un_humano_no_se_denuncian(
+    tmp_path: Path,
+) -> None:
+    # `blocked-decision`, `failed-safely` y `ready-for-merge` esperan a una
+    # persona por diseño: llevar semanas ahí es lo correcto, no un atasco.
+    for num, etiqueta in (
+        (11, "sirius:blocked-decision"),
+        (12, "sirius:failed-safely"),
+        (13, "sirius:ready-for-merge"),
+    ):
+        caso = tmp_path / f"caso{num}"
+        caso.mkdir()
+        env = _setup(caso)
+        _seed_issue(env, num, [etiqueta])
+        _seed_events(env, num, [_evento("labeled", etiqueta, _iso(100000), num)])
+
+        r = _run_reconcile(env)
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert "HUMANO" in r.stdout, r.stdout
+        assert "ATASCO" not in r.stdout, r.stdout
+        assert "sirius-stuck" not in (_md(env) / f"comments_{num}.txt").read_text(encoding="utf-8")
+
+
+def test_recon_stuck_006_el_umbral_supera_al_job_mas_largo_de_verdad() -> None:
+    """El umbral es un número escrito a mano; atarlo al YAML impide que mienta.
+
+    Si alguien sube el revisor de 85 a 200 minutos y nadie toca el umbral, el
+    reconciliador empezaría a denunciar como muertas ejecuciones perfectamente
+    vivas. Esta prueba lee los `timeout-minutes` REALES de todos los workflows,
+    no una copia.
+    """
+    umbral = _numero_del_reconciliador(r'STUCK_MINUTES="\$\{SIRIUS_STUCK_MINUTES:-(\d+)\}"')
+    topes: list[int] = []
+    for wf in sorted(REPO_ROOT_WF.glob("*.yml")):
+        doc = yaml.safe_load(wf.read_text(encoding="utf-8"))
+        for job in (doc.get("jobs") or {}).values():
+            if isinstance(job, dict) and isinstance(job.get("timeout-minutes"), int):
+                topes.append(job["timeout-minutes"])
+    assert topes, "no encontré ningún tope de job: la comparación no mediría nada"
+    mas_largo = max(topes)
+    assert umbral >= mas_largo * 2, (
+        f"umbral {umbral} min no deja holgura sobre el job más largo ({mas_largo} min): "
+        "una ejecución viva se denunciaría como muerta"
+    )
+
+
+def test_recon_stuck_007_el_reconciliador_esta_programado_y_sigue_siendo_manual() -> None:
+    doc = yaml.safe_load(RECONCILE_WF.read_text(encoding="utf-8"))
+    disparo = doc.get("on") or doc.get(True)
+    assert "schedule" in disparo, "sin `schedule:` la detección sigue dependiendo de un humano"
+    assert "workflow_dispatch" in disparo, "quitar el disparo manual sería una regresión"
+    crons = [e["cron"] for e in disparo["schedule"]]
+    assert crons == ["17 */6 * * *"], crons
+    # Y sigue sin poder fusionar ni iniciar bloques: la excepción del contrato
+    # v1.6 §9.1 se apoya en que este workflow NO es el motor del flujo.
+    permisos = doc["permissions"]
+    assert permisos["contents"] == "read", permisos
+    assert "pull-requests" not in permisos or permisos["pull-requests"] == "read", permisos
+    texto = RECONCILE.read_text(encoding="utf-8")
+    assert "gh pr merge" not in texto
+    assert (
+        "sirius:implement-requested"
+        not in texto.split("MACHINE_LABELS=")[0].split("STATE_LABELS=")[0]
+    ), "el reconciliador no puede iniciar bloques"

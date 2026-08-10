@@ -1,13 +1,28 @@
 name: Reconciliar estados de Sirius
 
-# Reconciliador manual de estados atascados. SOLO se ejecuta bajo demanda
-# (workflow_dispatch): el contrato operativo prohíbe la vigilancia horaria como
-# motor del flujo, así que este workflow no se programa. Repara únicamente
-# estados inequívocos (ver scripts/automation/sirius_reconcile.sh) e informa
-# del resto en el resumen del run. Nunca hace merge ni inicia bloques.
+# Red de seguridad de estados atascados. Repara únicamente estados inequívocos
+# (ver scripts/automation/sirius_reconcile.sh), avisa en la incidencia cuando un
+# estado que solo la máquina puede mover lleva demasiado tiempo puesto, e
+# informa del resto en el resumen del run. Nunca hace merge ni inicia bloques.
+#
+# Se programa desde la incidencia #138, bajo la excepción del contrato v1.6
+# §9.1. La prohibición que había antes aquí —«el contrato prohíbe la vigilancia
+# horaria como motor del flujo»— sigue en pie en lo que decía de verdad: esto no
+# es el motor. No inicia bloques, no avanza un ciclo sano y no fusiona; solo
+# observa estados que ningún evento puede ya revivir, porque `issues: labeled`
+# no vuelve a dispararse con una etiqueta ya aplicada.
+#
+# Cadencia: cada 6 horas. El coste es el argumento, no la comodidad: el job dura
+# menos de un minuto y GitHub factura por minuto empezado, así que 4 ejecuciones
+# al día son ~120 min/mes de los 2000 gratuitos del repositorio privado. Cada
+# hora serían ~720 min/mes, y la latencia de detección no vale ese precio para
+# un repositorio de una sola persona. El minuto :17 evita la congestión de las
+# horas en punto, donde GitHub retrasa las tareas programadas.
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
 
 permissions:
   contents: read

@@ -229,8 +229,9 @@ Permanecen bajo control humano:
 
 ## 8. Prohibiciones
 
-- tareas horarias como motor;
-- vigilancia periódica de PR;
+- tareas horarias como **motor** (una red de seguridad periódica que no es
+  motor sí está permitida: contrato v1.6 §9.1);
+- vigilancia periódica de PR como forma de dirigir el ciclo;
 - fusionar sin el comentario explícito de autorización del propietario descrito en §4.7;
 - cambios directos en `main`;
 - bucles ilimitados;
