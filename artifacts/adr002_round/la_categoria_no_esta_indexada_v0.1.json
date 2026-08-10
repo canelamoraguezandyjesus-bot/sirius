@@ -1,0 +1,55 @@
+{
+  "que_es": "hallazgo posterior a las tres investigaciones: los casos que no se resuelven no piden palabras, piden una CATEGORIA, y la categoria vive en un campo del canon que nadie hizo buscable",
+
+  "de_donde_sale": "de mirar, uno a uno, los casos donde el dato correcto NO llega a entrar en la lista de candidatos",
+
+  "lo_que_se_vio": {
+    "N1-29": "tiene TRES palabras en comun con el dato que falta (plazo, legal, entrega) y aun asi falla: no es problema de vocabulario, es de puertas -el dato es de procedencia atribuida-",
+    "N1-30_N1-31_N1-33_N1-34": "CERO palabras en comun, en todos los datos que faltan",
+    "la_forma_de_esas_preguntas": "no piden palabras, piden una categoria: 'Dame todas las restricciones esenciales que debo respetar', 'Prepara el contexto de planificacion de Alfa'"
+  },
+
+  "el_hallazgo": {
+    "casos_donde_TODO_lo_esperado_esta_marcado_como_critico": ["N1-26 (11/11)", "N1-30 (3/3)", "N1-31 (5/5)", "N1-38 (10/10)", "N1-44 (5/5)"],
+    "lo_que_piden_literalmente": "cuatro de los cinco contienen la frase 'restricciones esenciales' en la consulta",
+    "lo_que_esperan": "exactamente los elementos marcados como criticos de su ambito, ni uno mas",
+    "conclusion": "la palabra 'esencial' no esta en el texto de ningun dato guardado: esta en un CAMPO. El usuario nombra la categoria y el buscador busca esas palabras en el texto, cuando lo que tenia que hacer era leerlas como 'los marcados como criticos'",
+    "por_que_no_es_fuga_del_oraculo": "el marcado de criticidad es una propiedad del canon que la puerta G12 ya lee; no se usa razon_segura ni ninguna anotacion sobre cual es la respuesta"
+  },
+
+  "lo_que_se_probo": {
+    "que": "indexar en la ingesta las palabras que NOMBRAN la categoria, no solo el texto del dato. Es doc2query hecho desde la estructura, sin modelo y sin red",
+    "palabras": ["esencial", "restriccion", "critica", "obligatoria", "imprescindible"],
+    "cuando_se_fijaron": "antes de medir, y quedan escritas",
+    "medido_sobre": "HEAD 43d48a9, arbol limpio, commit impreso dentro de la propia corrida"
+  },
+
+  "resultado": {
+    "sin_categoria_indexada": {
+      "conjunto_exacto": "16/31",
+      "lo_correcto_entra_entero": "24/31",
+      "elementos_hallados": "64/81 (79%)",
+      "basura": 29
+    },
+    "con_categoria_indexada": {
+      "conjunto_exacto": "15/31",
+      "lo_correcto_entra_entero": "26/31",
+      "elementos_hallados": "70/81 (86%)",
+      "basura": 37
+    },
+    "lectura_honesta": "mete dentro lo que faltaba -que era el problema- y a cambio ensucia. El conjunto exacto BAJA en uno porque falta la segunda etapa. Es exactamente el comportamiento que la investigacion describe: la expansion mete el candidato en la lista, el reordenador es quien limpia. Sin reordenador solo se ve la mitad mala del intercambio"
+  },
+
+  "por_que_esto_valida_el_diseno_decidido": {
+    "primera_etapa": "que lo correcto ENTRE. Medido: 24/31 pasa a 26/31 y 79% a 86%",
+    "segunda_etapa": "que la basura SALGA. No se puede medir aqui: no hay modelo de reordenacion alcanzable desde este entorno",
+    "prediccion_comprobable": "si el reordenador funciona sobre estos candidatos, el conjunto exacto tiene que subir claramente por encima de 18/31. Si no sube, el diseno esta mal y hay que decirlo"
+  },
+
+  "lo_que_esto_descarta_definitivamente": {
+    "stemming_en_espanol": "recomendado por la investigacion por ser gratis, pero aqui es inerte: ya se midio que la expansion morfologica da exactamente la linea base, y ademas no puede crear una palabra comun donde hay CERO palabras comunes",
+    "cualquier_mejora_de_busqueda_por_palabras_sola": "'restricciones esenciales' contra 'No usar PostgreSQL en este proyecto' no se salva con ninguna tecnica lexica"
+  },
+
+  "lo_que_queda_pendiente_y_no_se_puede_hacer_aqui": "el reordenador (bge-reranker-v2-m3, Apache-2.0, corre en CPU segun la investigacion). La descarga de modelos esta bloqueada en este entorno"
+}
