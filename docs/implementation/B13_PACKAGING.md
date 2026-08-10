@@ -550,6 +550,57 @@ sin la credencial de Sirius. En orden de preferencia:
 
 La opción 1 es la recomendada: no altera ningún estado y es repetible.
 
+## Evidencia de la ejecución del 2026-08-10
+
+Commit `3432253ff216e8dd3af34e5e03e8577dfe5c6552`, dos construcciones y dos
+verificaciones desde un checkout limpio en `C:\dev\sirius`, fuera de OneDrive.
+
+| | Construcción 1 | Construcción 2 |
+|---|---|---|
+| Compilación | 1125.2 s | 1036.6 s |
+| Archivos del artefacto | 109 | 109 |
+| Tamaño de `dist` | 211.8 MB | 211.8 MB |
+| Tamaño del ZIP | 74.8 MB | 74.8 MB |
+| SHA-256 del ZIP | `988613c02325db028231dfc28d80613ae662aad262abfc88e58e341ed7bb56d1` | `2a1e8d9e9653bf470235b05696af48f4aa472f1a9f901ee0aaaddbfc55a2a1e8` |
+| Verificación | 77 comprobaciones, 0 fallos, 3 omitidas | 77 comprobaciones, 0 fallos, 3 omitidas |
+
+**Inventario relativo idéntico** entre las dos construcciones: las 109 rutas de
+cada `FILE-MANIFEST.sha256`, comparadas una a una, no presentan ninguna
+diferencia. El hash del ZIP sí difiere, exactamente como declara este documento.
+
+Toolchain: Windows 11 Pro 10.0.26200.0, PowerShell 5.1.26100.8972, MSVC `cl`
+19.44.35228 (toolset 14.44.35207), Windows SDK 10.0.26100.0, Python 3.14.6 x64,
+uv 0.11.28, PySide6/Qt 6.11.1, Nuitka 4.1.3, head de Alembic `61be4bb269bf`,
+24 tablas.
+
+El paquete se ejecutó de verdad: dos arranques con ventana visible («Sirius 0.1 —
+Primer proyecto»), 14 migraciones aplicadas, `PRAGMA integrity_check` = `ok`, y un
+segundo arranque que no duplicó el esquema. El `data_location.json` real del
+usuario salió con el mismo SHA-256 con el que entró, y el estado de la credencial
+no cambió.
+
+Las **3 omisiones son la misma cosa**: el arranque sin clave no es observable en
+una sesión de Windows que tiene la credencial de Sirius guardada. Es de B14.
+
+### Defectos del proceso corregidos en esta ejecución
+
+Los cuatro estaban tapados por accidentes del entorno anterior y salieron a la luz
+precisamente al construir en limpio.
+
+| Commit | Defecto |
+|---|---|
+| `7a96c1a` | uv enlazaba en vez de copiar y el filtro de nube de OneDrive lo rechazaba (error 396 de Windows) al instalar PySide6. |
+| `839d6ff` | La puerta de credencial abortaba la verificación en la única máquina donde se construye, exigiendo el escenario que este documento declara fuera de alcance. |
+| `e9d51c7` | `pyside6-deploy` pedía permiso por teclado y colgaba el build 50 minutos sin decir nada, porque no se le declaraba `VIRTUAL_ENV`. |
+| `3432253` | La copia interna de clcache de Nuitka fallaba en las 15 unidades de compilación que intentó. |
+
+Después de la evidencia solo se cambió una cosa: mover unas líneas de comentario
+que se habían escrito **dentro** del here-string que genera `run-deploy.cmd`, y que
+por eso aparecían como `'"#" no se reconoce como un comando'` diez veces en la
+salida de las dos construcciones. No puede afectar al artefacto —el `.cmd`
+ejecutaba la misma orden, y las dos construcciones dieron inventario idéntico—,
+pero un archivo generado no debe llevar comentarios del lenguaje que lo genera.
+
 ## Limitaciones
 
 - **Sin reproducibilidad binaria bit a bit.** Ver arriba.

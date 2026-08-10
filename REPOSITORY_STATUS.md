@@ -225,6 +225,12 @@ La ventana con proveedor real permanece bloqueada hasta que:
   `scripts/verify_windows_package.ps1` sobre un artefacto real (arranque sin Python
   ni uv, ruta con espacios, migraciones hasta el head de Alembic,
   `PRAGMA integrity_check` = `ok`, segundo arranque sin duplicar el esquema).
+  Reejecutado de extremo a extremo el 2026-08-10 sobre el commit `3432253`, desde un
+  checkout fuera de OneDrive: dos construcciones y dos verificaciones, 77
+  comprobaciones y 0 fallos cada una, con inventario relativo idéntico entre las dos
+  construcciones. Las 3 comprobaciones omitidas son la misma: el arranque **sin
+  clave** no es observable en una sesión de Windows que tiene la credencial de Sirius
+  guardada, y ese escenario pertenece a **B14**.
   Detalle en `docs/implementation/B13_PACKAGING.md`. Esto no desbloquea por sí solo
   la ventana con proveedor real: el resto de condiciones sigue pendiente;
 - la suite automática y FakeLLM estén verdes sobre la integración exacta;

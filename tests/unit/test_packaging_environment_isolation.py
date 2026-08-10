@@ -175,6 +175,28 @@ def test_pyside6_deploy_runs_without_a_console_to_ask_on(
         assert "< NUL" in line, f"la invocacion con {invocation} deja la entrada abierta: {line}"
 
 
+def test_the_generated_batch_files_carry_no_powershell_comments(
+    build_implementation: str,
+) -> None:
+    """Dentro de un here-string, ``#`` no comenta: es una linea del .cmd.
+
+    Un comentario que explicaba VSLANG se escribio dentro del cuerpo de
+    ``run-deploy.cmd``, y las dos construcciones de 3432253 escupieron diez veces
+    ``'"#" no se reconoce como un comando interno o externo'``. No afecto al
+    artefacto -los inventarios de las dos salieron identicos-, pero un archivo
+    generado no puede llevar comentarios del lenguaje que lo genera.
+    """
+    here_strings = re.findall(r'@"\r?\n(.*?)\r?\n"@', build_implementation, re.DOTALL)
+    batch_bodies = [body for body in here_strings if body.lstrip().startswith("@echo off")]
+
+    assert batch_bodies, "no se encontro ningun cuerpo de .cmd generado que revisar"
+    for body in batch_bodies:
+        offending = [line for line in body.splitlines() if line.lstrip().startswith("#")]
+        assert offending == [], "un .cmd generado lleva comentarios de PowerShell: " + "; ".join(
+            offending
+        )
+
+
 def test_the_sync_still_excludes_default_groups(build_implementation: str) -> None:
     assert "--no-default-groups" in build_implementation
     assert "--frozen" in build_implementation

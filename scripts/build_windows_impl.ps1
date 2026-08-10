@@ -632,10 +632,6 @@ $BuildLog = Join-Path $PackagingDir "build-$stamp.log"
 # a colgar el build: sin entrada, input() lanza EOFError, el proceso termina con
 # codigo distinto de cero y el fallo sale con su log en vez de esperar para
 # siempre. Un build desatendido no puede depender de que alguien mire.
-$deployCmdFile = Join-Path $PackagingDir "run-deploy.cmd"
-$deployBody = @"
-@echo off
-cd /d "$RepoRoot"
 # VSLANG=1033 obliga a MSVC a emitir sus mensajes en ingles. Nuitka lo pide en
 # el propio log de la construccion:
 #
@@ -646,6 +642,15 @@ cd /d "$RepoRoot"
 # La variable es el mecanismo de Microsoft para fijar el idioma por LCID, asi que
 # no hace falta instalar ningun paquete de idioma en el equipo. No cambia una coma
 # del artefacto: solo el idioma de los mensajes del compilador.
+#
+# Estos comentarios van AQUI, fuera del here-string. Dentro, "#" no es un
+# comentario: es una linea mas del archivo .cmd generado, y cmd.exe intenta
+# ejecutarla. Las dos construcciones de 3432253 escupieron diez veces
+# '"#" no se reconoce como un comando interno o externo' por esto mismo.
+$deployCmdFile = Join-Path $PackagingDir "run-deploy.cmd"
+$deployBody = @"
+@echo off
+cd /d "$RepoRoot"
 set "VIRTUAL_ENV=$PackagingVenv"
 set "VSLANG=1033"
 "$VenvDeploy" -c "$WorkingSpec" -v < NUL > "$BuildLog" 2>&1
