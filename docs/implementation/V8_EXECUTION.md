@@ -2,6 +2,12 @@
 
 Este documento es el registro operativo único de V8. No sustituye el Producto, el Plan de Pruebas, la Arquitectura, las ATD ni `docs/implementation/PLAN.md`.
 
+Por ADR-005, es además el **único sitio del repositorio donde se declara el
+estado** de un bloque de V8 o de un defecto del catálogo. `PLAN.md` describe el
+plan; `REPOSITORY_STATUS.md` describe qué hay construido; ninguno de los dos
+dice en qué punto está. Si un documento contradice a este en materia de estado,
+manda este.
+
 ## Estado
 
 - V8.1 — Corrección documental y automatizada: **ACTIVA**.
@@ -9,6 +15,12 @@ Este documento es el registro operativo único de V8. No sustituye el Producto, 
 - V8.3 — Proveedor real: **BLOQUEADA**.
 - V8.4 — PA-E2E-01 y cierre: **BLOQUEADA**.
 - Sirius 0.1: **NO ACEPTADO** y **NO TERMINADO**.
+
+Lo único que queda de V8.1 sin hacer es **B12** (suite PA/SP automática,
+rendimiento y evidencia). B1 a B11 están completos y B13 está cerrado por
+declaración del propietario, con la salvedad escrita en su fila. Lo que
+bloquea V8.2 y V8.3 ya no es trabajo automatizable: es Windows real y una
+clave real, y ambas cosas exigen al propietario.
 
 No se crea una fase canónica adicional denominada `Preparación V8`.
 
@@ -72,35 +84,54 @@ Debe cumplirse:
 
 ## Catálogo cerrado de trabajo
 
-| ID | Resumen | Fuente principal | Bloquea proveedor real | Bloquea cierre | Estado | Bloque |
-|---|---|---|---:|---:|---|---|
-| D-01 | Onboarding y validación de credencial | RF-001/002; PA-001/002 | Sí | Sí | Abierto | B2 |
-| D-02 | Proyecto operable | RF-014–018; PA-006–009 | Sí | Sí | Abierto | B3 |
-| D-03 | Eventos, memoria y decisiones | RF-019–026; PA-010–016 | Sí | Sí | Abierto | B4 |
-| D-04 | Panel de contexto | Producto §9.1 | Sí | Sí | Abierto | B5 |
-| D-05 | Reintento sin reescribir | RF-007; PA-003/017 | Sí | Sí | Abierto | B7 |
-| D-06 | Markdown seguro y código copiable | RF-008; SP-07 | No | Sí | Abierto | B8 |
-| D-07 | Exportación estructurada | RF-031; PA-020; ATD-009 | No | Sí | Cerrado (B9a y B9b implementados) | B9 |
-| D-08 | Errores accionables | RF-028; RNF-018 | Sí | Sí | Abierto | B7 |
-| D-09 | Aviso de presupuesto | RF-030; PA-018 | No | Sí | Abierto | B7 |
-| D-10 | Ruta de datos y activación clara | Producto §5.1 | No | Sí | Abierto | B2 |
-| D-11 | Contexto pertinente y limitado | RNF-008; SP-03; ATD-007 | Sí | Sí | Abierto | B6 |
-| A-01 | Política de acciones fuera de alcance | RF-035; PA-024 | Sí | Sí | Cerrado en su parte automatizable (B10 implementado) | B10 |
-| A-02 | Recuperación tras cierre forzado | RNF-005/006; PA-019 | No | Sí | Cerrado en su parte automatizable (B11 implementado) | B11 |
-| A-03 | Empaquetado reproducible | ATD-011 | Sí, como puerta | Sí | Abierto | B13 |
-| A-04 | Evidencia de aceptación trazada | Plan de Pruebas | No, por sí sola | Sí | Abierto | B12/B16 |
+Este catálogo **no declara estado**. Cada defecto lo cierra un bloque, y el
+estado se lee en la tabla de bloques de la sección siguiente, que es la única
+autoritativa (ADR-005). Tener el mismo hecho en dos tablas fue lo que las
+dejó contradiciéndose entre sí.
+
+| ID | Resumen | Fuente principal | Bloquea proveedor real | Bloquea cierre | Lo cierra |
+|---|---|---|---:|---:|---|
+| D-01 | Onboarding y validación de credencial | RF-001/002; PA-001/002 | Sí | Sí | B2 |
+| D-02 | Proyecto operable | RF-014–018; PA-006–009 | Sí | Sí | B3 y B4 |
+| D-03 | Eventos, memoria y decisiones | RF-019–026; PA-010–016 | Sí | Sí | B4 |
+| D-04 | Panel de contexto | Producto §9.1 | Sí | Sí | B5 |
+| D-05 | Reintento sin reescribir | RF-007; PA-003/017 | Sí | Sí | B7 |
+| D-06 | Markdown seguro y código copiable | RF-008; SP-07 | No | Sí | B8 |
+| D-07 | Exportación estructurada | RF-031; PA-020; ATD-009 | No | Sí | B9 |
+| D-08 | Errores accionables | RF-028; RNF-018 | Sí | Sí | B7 |
+| D-09 | Aviso de presupuesto | RF-030; PA-018 | No | Sí | B7 |
+| D-10 | Ruta de datos y activación clara | Producto §5.1 | No | Sí | B2 y B14 |
+| D-11 | Contexto pertinente y limitado | RNF-008; SP-03; ATD-007 | Sí | Sí | B6 |
+| A-01 | Política de acciones fuera de alcance | RF-035; PA-024 | Sí | Sí | B10 |
+| A-02 | Recuperación tras cierre forzado | RNF-005/006; PA-019 | No | Sí | B11 |
+| A-03 | Empaquetado reproducible | ATD-011 | Sí, como puerta | Sí | B13 |
+| A-04 | Evidencia de aceptación trazada | Plan de Pruebas | No, por sí sola | Sí | B12 y B16 |
 
 Cualquier defecto nuevo debe vincularse a un requisito ya aprobado. Si no puede hacerse, debe detenerse el trabajo y solicitar decisión.
 
+### Qué significa «cerrado» aquí
+
+Un defecto **cerrado en su parte automatizable** tiene su comportamiento
+implementado y cubierto por pruebas automáticas con dobles deterministas. No
+significa que su prueba de aceptación formal esté superada: las PA que exigen
+proveedor real, Windows real o evaluación humana permanecen sin declarar hasta
+V8.3 y V8.4. Esta distinción es la que separa infraestructura de aceptación, y
+no debe borrarse al resumir.
+
 ## Bloques operativos
+
+**Esta tabla es el único registro autoritativo del estado de V8 (ADR-005).**
+Ningún otro documento del repositorio declara el estado de un bloque o de un
+defecto; `PLAN.md` y `REPOSITORY_STATUS.md` enlazan aquí. Un bloque que se
+fusiona actualiza esta tabla y nada más.
 
 | Bloque | Entrega | Estado |
 |---|---|---|
-| B1 | Reconciliación documental y trazabilidad | En curso |
-| B2 | Onboarding, credencial, ruta y activación | En curso (RF-002, B2a y B2b implementados y cubiertos automáticamente; activación real en Windows pendiente) |
-| B3 | Proyecto mínimo y ciclo de vida | En curso (B3a, B3b y B3c implementados y cubiertos automáticamente; decisiones (B4) pendientes) |
-| B4 | Eventos, recuerdos, decisiones y conflictos | En curso (B4a a B4e fusionados en `main`; B4f implementado, PR pendiente de revisión y merge; parte automatizable de RF-019 a RF-026/PA-010 a PA-016 completa) |
-| B5 | Panel de contexto | Pendiente |
+| B1 | Reconciliación documental y trazabilidad | Completo (ADR-005: el estado de V8 vive solo en esta tabla; `PLAN.md` y `REPOSITORY_STATUS.md` dejan de copiarlo y `tests/unit/test_documentation_single_source.py` falla si vuelven a hacerlo) |
+| B2 | Onboarding, credencial, ruta y activación | Completo en su parte automatizable (RF-001 y RF-002 implementados y cubiertos: `OnboardingWindow`, `ValidateAndSaveApiKeyUseCase`, `ValidatedMainWindow`; B2b resuelve, valida y persiste la ruta local antes de SQLite, logging y composición. D-01 cerrado en su parte automatizable; PA-001 y PA-002 exigen proveedor real (V8.3). D-10 pendiente solo de la comprobación real en Windows, que pertenece a B14) |
+| B3 | Proyecto mínimo y ciclo de vida | Completo (B3a, B3b y B3c implementados y cubiertos automáticamente: saludo inicial y primer proyecto utilizable, continuidad observable —estado, bloqueos, siguiente paso, resumen al retomar— y ciclo de vida versionado con `project_revisions` inmutables; RF-014 a RF-018 cubiertos. D-02 cerrado en su parte automatizable junto con B4; PA-008 y PA-009 exigen decisión registrada evaluada con proveedor real) |
+| B4 | Eventos, recuerdos, decisiones y conflictos | Completo (B4a a B4f fusionados en `main`: guardado manual con origen consultable, decisiones con aprobación explícita, corrección versionada y sustitución, archivo/eliminación con redacción de origen, precedencia y detección determinista de conflictos, y la pestaña «Memoria y decisiones» que lo integra con `GetKnowledgeOverviewUseCase`. RF-019 a RF-026 y PA-010 a PA-016 cubiertos automáticamente con proveedor simulado; D-03 cerrado en su parte automatizable) |
+| B5 | Panel de contexto | Completo (PR #79, squash `7370a19`, incidencia #60: `ContextPanelWidget` integra en la pestaña «Conversación» un panel de solo lectura con el proyecto activo y su siguiente paso, las decisiones APPROVED vigentes y los recuerdos vigentes, con consulta de origen y actualización local bajo demanda; sin repositorios, modelos, migraciones ni red nuevos. D-04 cerrado) |
 | B6 | Selección y presupuesto de contexto | Completo (B6a, B6b, B6c y B6d implementados y cubiertos automáticamente: índices FTS5, su sincronización transaccional, recuperación/ordenación de relevancia comprobable, presupuesto/recorte determinista con `TokenCounter` estimador local, y su cableado dentro de `ContextBuilder` con la sección de decisiones vigentes relacionadas; D-11 cerrado) |
 | B7 | Reintento, errores y presupuesto | Completo (B7a, B7b y B7c implementados y cubiertos automáticamente: mapeo `LLMErrorKind` -> mensaje accionable, "Reintentar" para un envío `FAILED`/crasheado que reenvía el mismo texto con un `operation_id` nuevo sin reescribir, y aviso no bloqueante al acercarse al límite mensual de presupuesto (`GetBudgetStatusUseCase`); D-05, D-08 y D-09 cerrados en su parte automatizable; B7 completo) |
 | B8 | Markdown seguro y copia de código | Completo (B8a y B8b implementados y cubiertos automáticamente: mensajes renderizados como Markdown seguro con el motor nativo de Qt, sin HTML activo, y cada bloque de código cercado con su propio botón "Copiar" que coloca el código exacto en el portapapeles; D-06 cerrado en su parte automatizable) |
@@ -108,7 +139,7 @@ Cualquier defecto nuevo debe vincularse a un requisito ya aprobado. Si no puede 
 | B10 | Política de acciones fuera de alcance | Completo (política RF-035 añadida a la semilla canónica de identidad y renderizada en las instrucciones; A-01 cerrado en su parte automatizable) |
 | B11 | Recuperación tras cierre forzado | Completo (prueba de integración que simula un cierre forzado —repositorios abandonados sin `close()` ordenado— sobre SQLite real migrado con Alembic, demostrando que el estado confirmado sobrevive íntegro, `PRAGMA integrity_check` es `ok`, un turno interrumpido a mitad de streaming deja el historial coherente sin fila parcial, y la reapertura es idempotente; `PRAGMA synchronous=FULL` afirma la durabilidad explícitamente; A-02 cerrado en su parte automatizable) |
 | B12 | Suite PA/SP automática, rendimiento y evidencia | Pendiente |
-| B13 | Empaquetado reproducible | Pendiente (groundwork: `sirius.adapters.persistence.migrations._resource_root` resuelve `alembic.ini`/`migrations/` junto al ejecutable cuando la app corre congelada —PyInstaller `sys.frozen` o Nuitka `__compiled__`— y desde la raíz del repositorio en desarrollo, sin cambios de comportamiento; cubierto por prueba unitaria con modo empaquetado simulado. El build real con Nuitka en Windows sigue pendiente) |
+| B13 | Empaquetado reproducible | Completo **por declaración del propietario** el 10 de agosto de 2026: declara ejecutados los builds de Windows que faltaban. Implementado y cubierto: el proceso de empaquetado, los scripts de build y verificación y `_resource_root`, que resuelve `alembic.ini`/`migrations/` junto al ejecutable cuando la app corre congelada (PyInstaller `sys.frozen` o Nuitka `__compiled__`) y desde la raíz en desarrollo. **Sin evidencia escrita en el repositorio**: no hay salida de build ni de verify adjunta, así que A-03 —que es puerta de V8.3— queda cerrado sobre la palabra del propietario y no sobre una comprobación registrada. La PR #122 sigue abierta. Ver la nota de A-03 en el registro de evidencia |
 | B14 | Windows sin clave | Bloqueado |
 | B15 | Ventana compacta con proveedor real | Bloqueado |
 | B16 | PA-E2E-01, regresión y cierre | Bloqueado |
@@ -167,43 +198,58 @@ Añadir una fila por resultado verificable. No registrar secretos ni contenido s
 
 Tipos permitidos: `automática`, `CI`, `manual-Windows`, `proveedor-real`, `evaluación-humana`, `documental`.
 
+### Asientos correctores (2026-08-10)
+
+Las filas de este registro son evidencia fechada y no se reescriben. Lo que
+cambió después se apunta aquí debajo, que es como se corrige un libro de
+registro.
+
+- Las filas del 22 de julio de B8a, B8b, B9a, B9b, B10 y B11 dicen «PR
+  pendiente». Las seis se fusionaron: B8a en la PR #101 (`35659a3`), B8b en la
+  #103 (`135a032`), B9a en la #105 (`3221553`), B9b en la #107 (`cf9688a`),
+  B10 en la #109 (`586438b`) y B11 en la #111 (`cbebcbd`).
+- **A-03 (empaquetado reproducible) — cerrado sin evidencia registrada.** El
+  propietario declaró el 10 de agosto de 2026 que las ejecuciones de build y
+  verify en Windows ya están hechas, y autorizó darlo por bueno sin adjuntar
+  su salida. No hay, por tanto, ninguna fila de tipo `manual-Windows` que lo
+  sostenga: A-03 es una puerta de V8.3 y hoy está cerrada sobre una
+  declaración, no sobre una comprobación. Queda escrito para que quien abra
+  V8.3 sepa exactamente qué respalda esa puerta.
+
 ## Estado de pruebas de aceptación
 
 Estados permitidos: `no preparada`, `preparada`, `automática superada`, `manual pendiente`, `superada`, `fallida`, `bloqueada`.
 
 | Grupo | Estado | Dependencia principal |
 |---|---|---|
-| PA-001 a PA-025 | Bloqueada | D-01 a D-11 y A-01/A-02 según prueba |
+| PA-001 a PA-025 | Bloqueada | Su trazado formal es B12, que está pendiente. D-01 a D-11 ya no las bloquean: están cerrados en su parte automatizable |
 | PS-01 a PS-07 | Bloqueada | Proveedor real y evaluación humana |
-| SP-01 a SP-07 | Bloqueada parcialmente | D-03, D-06, D-11, Windows y proveedor real |
-| PA-E2E-01 | Bloqueada | B2 a B15 |
+| SP-01 a SP-07 | Bloqueada parcialmente | Windows real y proveedor real. D-03, D-06 y D-11 ya no las bloquean |
+| PA-E2E-01 | Bloqueada | B12, B14, B15 y B16 |
 
-## Próximo trabajo autorizado
+Que un comportamiento esté cubierto por pruebas automáticas **no** convierte su
+PA en superada. Hoy solo 15 de los 127 archivos de prueba mencionan un
+identificador PA o SP: el trazado requisito–prueba está incompleto, y
+completarlo es exactamente el contenido de B12.
 
-B1 (reconciliación documental) integrado. B2 está en curso: RF-002 (validación de
-credencial antes de guardar), B2a (primera configuración básica, PR #24, squash
-`f7134ca`) y B2b (selección y persistencia de la ruta local de datos, PR #26,
-squash `2c60afc`) ya están fusionados en `main`. B3 está en curso: B3a (saludo y
-creación del primer proyecto, PR #27, squash `882ab62`) y B3b (continuidad
-observable del proyecto activo, PR #28, squash `a2f74df`) ya están fusionados en
-`main`. B3c (ciclo de vida y versionado del proyecto: historial de revisiones
-inmutable, completar el proyecto activo sin borrar su historial, habilitar un
-proyecto posterior solo tras completar el actual) ya está implementado y
-cubierto automáticamente — PR #29.
+## Anexo histórico: fichas de bloque hasta B3c
 
-B4 (eventos, recuerdos, decisiones y conflictos) está en curso, dividido
-operativamente en B4a-B4f (ver `docs/implementation/B4_EXECUTION.md`). B4a
-(origen consultable y guardado manual, PR #36), B4b (decisiones y aprobación
-explícita, PR #37), B4c (corrección y sustitución, PR #39) y B4e (precedencia
-y conflictos, PR #52) ya están **fusionados en `main`**. B4d (archivo,
-eliminación y redacción de origen) también quedó fusionado — a diferencia de
-B4b y B4c, esa PR **no** activó la revisión automática por incidencia
-`agent-review-requested`: esa autorización puntual no se extendió a B4d (ver
-`AUTOMATION_OPERATING_CONTRACT.md` §2/§10). B4f (integración observable y
-cierre de B4) ya está implementado — PR pendiente de revisión y merge; con
-B4a-B4f completos, RF-019 a RF-026 y PA-010 a PA-016 quedan implementados y
-cubiertos automáticamente en su parte automatizable. No se ha iniciado B5 ni
-B6.
+**Este anexo no es estado.** Es el detalle congelado de los bloques que se
+ficharon uno a uno entre B2a y B3c, conservado por su valor de registro. Se
+detiene en B3c porque a partir de B4 el detalle dejó de fichar aquí; el estado
+vigente de todos los bloques está en la tabla de bloques operativos, que es la
+única autoritativa (ADR-005). No añadir fichas nuevas a este anexo.
+
+Las PR que fusionaron cada subbloque: B2a #24 (`f7134ca`), B2b #26 (`2c60afc`),
+B3a #27 (`882ab62`), B3b #28 (`a2f74df`), B3c #29, B4a #36, B4b #37, B4c #39,
+B4d, B4e #52, B4f, B5 #79 (`7370a19`), B6a #82, B6b #84, B6c #86, B6d #91,
+B7a #93, B7b #97, B7c #99, B8a #101, B8b #103, B9a #105, B9b #107, B10 #109,
+B11 #111.
+
+Una nota que conviene no perder: la PR de B4d **no** activó la revisión
+automática por incidencia `agent-review-requested`, a diferencia de las de B4b
+y B4c. Aquella autorización puntual no se extendió a B4d (ver
+`AUTOMATION_OPERATING_CONTRACT.md` §2/§10).
 
 ### B2a — Primera configuración básica — FUSIONADA (PR #24, squash `f7134ca658e6343779ee6bfe89ad05dd2f0a8ba3`)
 
