@@ -16,11 +16,15 @@ manda este.
 - V8.4 — PA-E2E-01 y cierre: **BLOQUEADA**.
 - Sirius 0.1: **NO ACEPTADO** y **NO TERMINADO**.
 
-Lo único que queda de V8.1 sin hacer es **B12** (suite PA/SP automática,
-rendimiento y evidencia). B1 a B11 están completos y B13 está cerrado por
-declaración del propietario, con la salvedad escrita en su fila. Lo que
-bloquea V8.2 y V8.3 ya no es trabajo automatizable: es Windows real y una
-clave real, y ambas cosas exigen al propietario.
+**V8.1 no tiene ya trabajo automatizable pendiente.** B1 a B12 están completos
+en su parte automatizable y B13 está cerrado por declaración del propietario,
+con la salvedad escrita en su fila. Lo que bloquea V8.2 y V8.3 no es código:
+es Windows real y una clave real, y ambas cosas exigen al propietario.
+
+Queda una decisión de producto abierta que la medición de B12c destapó:
+construir el contexto consume entre el 89 % y el 100 % de los 300 ms que le
+concede RNF-003, y la causa está localizada. Ver la sección de rendimiento y
+ADR-007.
 
 No se crea una fase canónica adicional denominada `Preparación V8`.
 
@@ -138,7 +142,7 @@ fusiona actualiza esta tabla y nada más.
 | B9 | Exportación estructurada | Completo (B9a y B9b implementados y cubiertos automáticamente: `ExportService`/`ExportStructuredUseCase` y la acción "Exportar" en la interfaz, con aviso previo y ejecución en segundo plano; D-07 cerrado) |
 | B10 | Política de acciones fuera de alcance | Completo (política RF-035 añadida a la semilla canónica de identidad y renderizada en las instrucciones; A-01 cerrado en su parte automatizable) |
 | B11 | Recuperación tras cierre forzado | Completo (prueba de integración que simula un cierre forzado —repositorios abandonados sin `close()` ordenado— sobre SQLite real migrado con Alembic, demostrando que el estado confirmado sobrevive íntegro, `PRAGMA integrity_check` es `ok`, un turno interrumpido a mitad de streaming deja el historial coherente sin fila parcial, y la reapertura es idempotente; `PRAGMA synchronous=FULL` afirma la durabilidad explícitamente; A-02 cerrado en su parte automatizable) |
-| B12 | Suite PA/SP automática, rendimiento y evidencia | En curso. **B12a completo** (ADR-006): `docs/implementation/TRAZABILIDAD_PA_SP.md` enlaza los 40 identificadores del Plan de Pruebas con las pruebas que cubren su parte automatizable, y `tests/unit/test_pa_sp_traceability.py` comprueba por máquina que cada prueba nombrada exista y que toda cobertura parcial o manual declare su motivo. El hueco era de trazabilidad, no de cobertura: 28 de los 40 identificadores no se citaban en ninguna prueba, pero el comportamiento sí estaba probado. Pendientes **B12b** (cerrar los huecos automatizables que la matriz destapa), **B12c** (PA-025: medición de rendimiento local, inicio ≤3 s P95 y operaciones ≤300 ms P95, hoy inexistente) y **B12d** (consolidación de evidencia) |
+| B12 | Suite PA/SP automática, rendimiento y evidencia | Completo en su parte automatizable. **B12a** (ADR-006): `docs/implementation/TRAZABILIDAD_PA_SP.md` enlaza los 40 identificadores del Plan de Pruebas con las pruebas que cubren su parte automatizable, y `tests/unit/test_pa_sp_traceability.py` comprueba por máquina que cada prueba nombrada exista. El hueco era de trazabilidad, no de cobertura: 28 de 40 no se citaban en ninguna prueba, pero el comportamiento sí estaba probado. **B12c completo** (ADR-007): `tests/integration/test_local_performance.py` mide P50/P95 sobre el conjunto de referencia del plan (5.000 mensajes, 500 recuerdos, 100 decisiones, 10 proyectos; 30 repeticiones), afirma el límite aprobado donde hay un orden de magnitud de holgura —inicio, 30 ms frente a 3.000— y vigila el resto con un guardarraíl declarado. **Destapó un riesgo de producto: construir el contexto consume entre el 89 % y el 100 % de sus 300 ms**, por 501 consultas para 500 recuerdos en `list_current_memories()`; corregirlo es código productivo y espera decisión. **B12d completo**: evidencia consolidada en el registro de este archivo. B12b queda sin contenido: tras B12a el único hueco automatizable era PA-025, que cierra B12c |
 | B13 | Empaquetado reproducible | Completo **por declaración del propietario** el 10 de agosto de 2026: declara ejecutados los builds de Windows que faltaban. Implementado y cubierto: el proceso de empaquetado, los scripts de build y verificación y `_resource_root`, que resuelve `alembic.ini`/`migrations/` junto al ejecutable cuando la app corre congelada (PyInstaller `sys.frozen` o Nuitka `__compiled__`) y desde la raíz en desarrollo. **Sin evidencia escrita en el repositorio**: no hay salida de build ni de verify adjunta, así que A-03 —que es puerta de V8.3— queda cerrado sobre la palabra del propietario y no sobre una comprobación registrada. La PR #122 sigue abierta. Ver la nota de A-03 en el registro de evidencia |
 | B14 | Windows sin clave | Bloqueado |
 | B15 | Ventana compacta con proveedor real | Bloqueado |
@@ -196,7 +200,34 @@ Añadir una fila por resultado verificable. No registrar secretos ni contenido s
 | 2026-07-22 | B10 | rama `feature/b10-external-actions-policy`, PR pendiente | automática | `test_identity_domain.py` (nuevo caso: la semilla canónica de personalidad incluye, en su texto exacto, el rechazo de acciones externas de RF-035); `test_render_instructions.py` (nuevo caso: instanciando la identidad con la semilla canónica real `INITIAL_PERSONALITY_INSTRUCTIONS`, `render_instructions()` sobre ese contexto contiene esa misma política, verificando que llega íntegra a las instrucciones renderizadas para el proveedor) | Superada | Ruff format, Ruff lint y mypy estricto correctos; 1191 pytest (1189 previas + 2 nuevas) | Política RF-035 "Sin acciones externas" (A-01, parte automatizable de PA-024). `INITIAL_PERSONALITY_INSTRUCTIONS` (`sirius.domain.identity`) gana un párrafo final con redacción tomada literalmente del canónico de Producto (S3/S5 "Límite de ayuda" + S10 RF-035, sin texto inventado): "Sirius ayuda mediante conversación, razonamiento, planificación, revisión y registro; no ejecuta acciones externas y rechaza las solicitudes de ejecutar archivos, comandos, web o automatizaciones, por estar fuera del alcance de 0.1." La política queda dentro de las reglas de la identidad (SIRIUS-ARQ-0.1 S6.1) y se renderiza sin cambios de contrato porque `render_instructions()` ya emitía `personality_instructions` verbatim. No se añadió ninguna guardia de ejecución: Sirius 0.1 no tiene ruta de código capaz de ejecutar archivos, comandos, web ni automatizaciones, así que RNF-024 se mantiene cumplido estructuralmente, sin nueva superficie. No se tocó `send_message.py` más allá de lo derivado del texto de identidad, ni el modelo de datos, ni `docs/canonical/**`. La prueba formal de que el modelo declina en runtime (PA-024 con proveedor real) queda expresamente fuera de alcance, para V8.3. Sin clave real ni red; sin merge |
 | 2026-07-22 | B11 | rama `feature/b11-forced-shutdown-recovery-test`, PR pendiente | automática | `test_forced_shutdown_recovery.py` (nuevo, contra SQLite real migrado con Alembic: escribe estado confirmado —conversación con mensajes COMPLETED de ambos roles, proyecto activo con su revisión vigente, un recuerdo manual— y un turno interrumpido a mitad de streaming (mensaje USER `COMPLETED` sin fila SIRIUS, porque `send_message.py` solo la escribe al terminar el streaming), abandona esos repositorios y sus motores sin `close()` ordenado en vez de cerrarlos, y reabre con repositorios nuevos + `initialize_persistence()`: la conversación principal, la identidad y el proyecto activo no se duplican; los mensajes confirmados y el recuerdo sobreviven con su contenido exacto; el turno interrumpido deja únicamente su fila USER, sin fila SIRIUS parcial ni corrupta; `PRAGMA integrity_check` devuelve `ok`; una segunda reapertura tras la primera sigue sin duplicar nada) | Superada | Ruff format, Ruff lint y mypy estricto correctos; 1192 pytest (1191 previas + 1 nueva) | Cierre de B11, último bloque de código de V8.1 (A-02; RNF-005/006; parte automatizable de PA-019). La recuperación tras cierre forzado ya estaba cubierta por diseño desde antes de este bloque —cada escritura de repositorio se confirma en su propia transacción SQLite vía `session_scope`, los mensajes de Sirius se persisten enteros solo al terminar el streaming (nunca una fila parcial), e `initialize_persistence()` ya recargaba el estado de forma idempotente al arrancar—, pero no existía ninguna prueba que lo demostrara ni una afirmación explícita de la durabilidad; B11 añade ambas sin cambiar ese diseño. La única línea de producción tocada es `build_engine` (`adapters/persistence/database.py`): el listener `connect` ya existente que fija `PRAGMA foreign_keys=ON` ahora también fija `PRAGMA synchronous=FULL` junto a él, para afirmar la durabilidad explícitamente en vez de depender de un valor por defecto implícito de SQLite — cambio conservador que no altera ningún comportamiento observable (ninguna prueba existente cambió) y no toca el modo de journal (sigue el rollback journal por defecto; WAL queda fuera de alcance, ver la incidencia). La prueba nueva simula el cierre forzado abandonando deliberadamente cada repositorio/motor sin llamar a `close()`/`dispose()` en vez de cerrarlos de forma ordenada, tal como haría un proceso realmente matado, y reabre con instancias completamente nuevas contra el mismo fichero. No se tocó `send_message.py`, el modelo de datos, migraciones destructivas, el proveedor, Producto, Arquitectura ni ATD. La prueba manual PA-019 (matar el proceso de verdad en Windows) queda fuera de alcance, para V8.2. Sin clave real ni red; sin merge |
 
+| 2026-08-10 | B1 | `b0beab4` (PR #144) | documental | `test_documentation_single_source.py` | Superada | CI verde, 1527 pruebas | ADR-005: el estado de V8 pasa a vivir solo en la tabla de bloques de este archivo. Cuatro mutaciones verificadas |
+| 2026-08-10 | B12a | `03bede4` (PR #145) | automática | `test_pa_sp_traceability.py` | Superada | CI verde, 1649 pruebas | ADR-006: los 40 identificadores del plan quedan enlazados y comprobados por máquina. Siete mutaciones verificadas, incluida el renombrado de una prueba real |
+| 2026-08-10 | B12c | rama `claude/ciclo-pendientes-prs-issues-qm4t8x` | automática | `test_local_performance.py` | Superada con hallazgo | 1653 pruebas en verde; cifras en la sección de rendimiento de arriba | ADR-007. **No declara PA-025 superada.** Destapa que construir el contexto usa entre el 89 % y el 100 % de sus 300 ms; causa localizada en `list_current_memories()`. Cinco mutaciones verificadas |
+
 Tipos permitidos: `automática`, `CI`, `manual-Windows`, `proveedor-real`, `evaluación-humana`, `documental`.
+
+### Rendimiento local sobre el conjunto de referencia (2026-08-10, B12c)
+
+30 repeticiones por operación sobre 5.000 mensajes, 500 recuerdos, 100
+decisiones versionadas y 10 proyectos con uno activo. Tres pasadas del mismo
+código en la misma máquina. Runner de CI (Linux), **no** el Windows del
+usuario: esto no declara PA-025 superada.
+
+| Operación | P95 pasada 1 | pasada 2 | pasada 3 | Límite |
+|---|---|---|---|---|
+| inicio (rutas, migraciones, repositorios) | 30,3 ms | — | — | 3.000 ms |
+| listar decisiones vigentes | 25,4 ms | 22,8 ms | 25,8 ms | 300 ms |
+| cargar historial completo | 99,1 ms | 123,1 ms | 120,1 ms | 300 ms |
+| listar recuerdos vigentes | 117,4 ms | 122,5 ms | 115,3 ms | 300 ms |
+| resumen de conocimiento | 154,5 ms | 132,0 ms | 136,3 ms | 300 ms |
+| **construir contexto** | **266,4 ms** | **286,6 ms** | **298,6 ms** | **300 ms** |
+
+**Riesgo abierto para PA-025.** Construir el contexto usa entre el 89 % y el
+100 % de su presupuesto. Causa localizada en el código:
+`SqliteMemoryRepository.list_current_memories()` ejecuta 501 consultas para 500
+recuerdos porque `_load_memory()` pide la revisión vigente una por una.
+Corregirlo es un cambio de código productivo, fuera del alcance de B12c, y
+espera decisión del propietario. Ver ADR-007.
 
 ### Asientos correctores (2026-08-10)
 
