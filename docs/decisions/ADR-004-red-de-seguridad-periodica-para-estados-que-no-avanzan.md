@@ -221,3 +221,43 @@ Lo que sí hay, y sostiene el cambio, es lo de siempre: el mecanismo verificado
 contra los workflows reales antes de aceptar el hallazgo, pruebas que fallan al
 revertir el arreglo, y las dos pruebas vacuas propias detectadas y corregidas
 antes de subir nada.
+
+## Tercera ronda: dos veces el mismo defecto, así que cambia el enfoque
+
+Codex volvió sobre el arreglo anterior y encontró que **seguía sin funcionar**,
+un nivel más abajo. Para `sirius:implementing`, aplicar solo
+`sirius:implement-requested` dispara el workflow pero
+`sirius_validate_activation.sh` lo **rechaza** por falta de `sirius:planned` —que
+el paso «Consumir el evento» había retirado— y vuelve a quitar la etiqueta.
+
+Verificado: `implement-sirius-work.yml` retira `implement-requested` **y**
+`planned`; la puerta exige `planned` y sin ella rechaza. `reviewing` y
+`repairing` no tienen ese problema: su consumo solo retira la disparadora.
+
+Dos rondas con defectos de la misma familia —«el aviso manda a hacer algo que no
+funciona»— son la señal de parar de parchear (ADR-001). **La raíz es la misma
+que la de los otros tres hallazgos de esta PR**: el reconciliador reconstruía
+desde fuera las condiciones de admisión de otro sistema. Añadir `planned` a la
+tabla habría sido el tercer parche de la misma forma, y el cuarto habría llegado
+con la siguiente precondición.
+
+Dos cambios de enfoque, y hacen falta los dos:
+
+1. **La regla se deriva de los workflows, no se escribe a mano.** Lo que hay que
+   reponer es *exactamente lo que el paso de consumo retiró*, con la etiqueta
+   disparadora en último lugar para que la puerta encuentre el resto ya puesto.
+   **RECON-STUCK-010** lee ese paso del YAML real y compara; si un workflow
+   empieza a consumir otra etiqueta, la prueba falla sin que nadie se acuerde.
+2. **El aviso deja de presentarse como una receta completa.** Añade una tercera
+   línea: si faltara alguna condición más, la puerta lo dirá en un comentario y
+   retirará la etiqueta —no se queda en silencio—. **RECON-STUCK-011** comprueba
+   que esa promesa es cierta contra la puerta real, no solo que esté escrita.
+
+Seis mutaciones, todas con el resultado predicho: olvidar `planned`, volver a
+proponer la etiqueta en curso, invertir el orden, cambiar lo que consume el
+workflow sin tocar la tabla, dejar muda a la puerta, y quitar la salvedad.
+
+Lo que esto sigue **sin** garantizar, dicho para que no se lea de más: que la
+secuencia prescrita baste siempre. Garantiza que reponga lo que el consumo
+retiró y que, si no basta, quien lo sepa lo diga. Prometer más sería repetir el
+error tres veces.

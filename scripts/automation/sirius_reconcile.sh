@@ -80,23 +80,28 @@ label_applied_at() {
     2>/dev/null
 }
 
-# reactivation_label <etiqueta> — la etiqueta que hay que APLICAR para que el
-# ciclo vuelva a arrancar desde ese estado.
+# reactivation_labels <etiqueta> — las etiquetas que hay que APLICAR, en orden,
+# para que el ciclo vuelva a arrancar desde ese estado.
 #
-# Para los estados `*-requested` es la misma: quitarla y reponerla vuelve a
-# disparar `issues: labeled`. Para los `*ing` NO lo es, y ese era el defecto:
-# el aviso decía «quita `sirius:repairing` y vuelve a ponerla», pero
-# `repair-sirius-work.yml` arranca con `if: label.name == 'sirius:repair-requested'`,
-# así que reponer la etiqueta en curso crea una ejecución cuyo job se salta y
-# deja la incidencia igual de atascada. Hallazgo P2 de Codex en la PR #143.
+# Segunda ronda del mismo defecto, así que aquí se cambia el enfoque en vez de
+# poner otro parche (regla de las dos rondas, ADR-001).
 #
-# La tabla es explícita a propósito. Derivarla quitando el sufijo «ing»
-# funcionaría hoy por coincidencia de las tres palabras, y eso es reconstruir
-# desde fuera una correspondencia que no es nuestra. RECON-STUCK-010 comprueba
-# contra los workflows REALES que la etiqueta propuesta dispara algo.
-reactivation_label() {
+#   Ronda 1: el aviso decía «quita `sirius:repairing` y vuelve a ponerla». Eso
+#   dispara `issues: labeled` pero no pasa el `if:` del workflow.
+#   Ronda 2: proponer solo la etiqueta del `if:` TAMPOCO basta para
+#   `implementing`. El paso «Consumir el evento» de `implement-sirius-work.yml`
+#   retira `sirius:implement-requested` Y `sirius:planned`, y
+#   `sirius_validate_activation.sh` exige `planned`: sin ella rechaza la
+#   activación y retira la etiqueta otra vez.
+#
+# La raíz de las dos es la misma: el reconciliador estaba reconstruyendo desde
+# fuera las condiciones de admisión de otro sistema. La regla que sí se sostiene
+# —y que las pruebas leen de los propios workflows— es que **hay que reponer lo
+# que el paso de consumo retiró**, con la etiqueta disparadora en último lugar
+# para que la puerta encuentre el resto ya puesto.
+reactivation_labels() {
   case "$1" in
-    sirius:implementing) printf 'sirius:implement-requested' ;;
+    sirius:implementing) printf 'sirius:planned sirius:implement-requested' ;;
     sirius:reviewing)    printf 'sirius:review-requested' ;;
     sirius:repairing)    printf 'sirius:repair-requested' ;;
     *)                   printf '%s' "$1" ;;
@@ -309,9 +314,13 @@ for issue in "${open_issues[@]:-}"; do
     # Marcador por APLICACIÓN de etiqueta, no por etiqueta: si el estado se
     # vuelve a poner más tarde es un atasco nuevo y merece aviso nuevo, pero la
     # misma aplicación no puede avisar en cada pasada programada.
-    reactivar="$(reactivation_label "$lbl")"
-    misma_nota=""
-    [ "$reactivar" = "$lbl" ] && misma_nota=" Es la misma etiqueta: quitarla y reponerla basta."
+    reactivar="$(reactivation_labels "$lbl")"
+    if [ "$reactivar" = "$lbl" ]; then
+      como_hacerlo="quitar \`${lbl}\` y volver a ponerla: es la misma etiqueta."
+    else
+      lista="$(printf '\`%s\`, ' $reactivar)"
+      como_hacerlo="quitar \`${lbl}\` y aplicar, en este orden: ${lista%, }."
+    fi
     marker="<!-- sirius-stuck:${lbl}:${evento_id} -->"
     stuck_file="$(mktemp)"
     printf '%s\n\n%s\n\n%s\n\n%s\n\n%s\n%s\n' \
@@ -320,7 +329,8 @@ for issue in "${open_issues[@]:-}"; do
       "Sigue en \`${lbl}\` desde ${desde}. Ese estado solo lo mueve la automatización, y una etiqueta ya aplicada no vuelve a disparar \`issues: labeled\`: si la ejecución que debía moverlo murió, no hay nada que lo mueva." \
       "El reconciliador **no ha reparado nada**. No puede saber si esa ejecución murió o sigue viva, y decidirlo desde fuera sería inventárselo." \
       "1. Mirar en Actions si queda alguna ejecución viva para esta incidencia." \
-      "2. Si no queda ninguna, quitar \`${lbl}\` y aplicar \`${reactivar}\`: esa es la etiqueta con la que arranca el workflow correspondiente.${misma_nota}" >"$stuck_file"
+      "2. Si no queda ninguna, ${como_hacerlo}" \
+      "3. Si aun así faltara alguna condición, la puerta de activación lo dirá en un comentario aquí mismo y retirará la etiqueta. No se queda en silencio, así que no hace falta acertar a la primera." >"$stuck_file"
     if sirius_comment_once "$REPO" "$issue" "$marker" "$stuck_file"; then
       report AVISADO "#${issue}: aviso de atasco publicado (o ya estaba)."
     else

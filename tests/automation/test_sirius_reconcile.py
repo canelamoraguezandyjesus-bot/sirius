@@ -712,69 +712,120 @@ _WORKFLOWS_DE_TRABAJO = (
 )
 
 
-def _etiquetas_que_arrancan_trabajo() -> set[str]:
-    etiquetas: set[str] = set()
+def _consumo_de_los_workflows() -> dict[str, tuple[str, list[str]]]:
+    """Qué etiqueta pone y cuáles retira el paso «Consumir el evento», por workflow.
+
+    Se lee del YAML REAL. Es la fuente correcta: lo que hay que reponer para
+    volver a armar el ciclo es exactamente lo que el consumo retiró, ni más ni
+    menos. Deducirlo de otra parte —o escribirlo a mano en la prueba— sería
+    reconstruir desde fuera lo que estos workflows ya dicen de sí mismos, que es
+    la raíz de los dos defectos que esta prueba viene a cerrar.
+    """
+    consumo: dict[str, tuple[str, list[str]]] = {}
     for nombre in _WORKFLOWS_DE_TRABAJO:
         texto = (REPO_ROOT / ".github" / "workflows" / nombre).read_text(encoding="utf-8")
-        for m in re.finditer(r"github\.event\.label\.name == '([^']+)'", texto):
-            etiquetas.add(m.group(1))
-    return etiquetas
+        m = re.search(
+            r'sirius_set_issue_labels "\$GH_REPO" "\$ISSUE_NUMBER" *\\\n\s*((?:"sirius:[^"]+" *)+)',
+            texto,
+        )
+        assert m, f"no encuentro el paso de consumo en {nombre}"
+        etiquetas = re.findall(r'"(sirius:[^"]+)"', m.group(1))
+        assert len(etiquetas) >= 2, f"consumo inesperado en {nombre}: {etiquetas}"
+        disparadora = re.search(r"github\.event\.label\.name == '([^']+)'", texto)
+        assert disparadora, f"no encuentro el disparador de {nombre}"
+        # etiquetas[0] es la que se PONE (el estado en curso); el resto se retiran.
+        consumo[etiquetas[0]] = (disparadora.group(1), etiquetas[1:])
+    return consumo
 
 
-def _reactivacion(etiqueta: str) -> str:
-    """Ejecuta la `reactivation_label` REAL, extraída del script.
+def _reactivacion(etiqueta: str) -> list[str]:
+    """Ejecuta la `reactivation_labels` REAL, extraída del script.
 
     No se puede hacer `source` del reconciliador: al cargarlo se ejecuta y exige
     el repositorio como argumento. Y copiar la tabla aquí la dejaría vieja en
     silencio, que es la forma más común de prueba vacua en este repositorio.
     """
     guion = RECONCILE.read_text(encoding="utf-8")
-    inicio = guion.index("reactivation_label() {")
+    inicio = guion.index("reactivation_labels() {")
     fin = guion.index("\n}\n", inicio) + len("\n}\n")
     bloque = guion[inicio:fin]
-    return subprocess.run(
-        ["bash", "-c", f'{bloque}\nreactivation_label "{etiqueta}"'],
+    salida = subprocess.run(
+        ["bash", "-c", f'{bloque}\nreactivation_labels "{etiqueta}"'],
         capture_output=True,
         text=True,
         check=False,
     ).stdout.strip()
+    return salida.split()
 
 
-def test_recon_stuck_010_la_etiqueta_propuesta_arranca_el_trabajo_de_verdad() -> None:
-    """El aviso debe proponer una etiqueta que ARRANQUE el ciclo.
+def test_recon_stuck_010_la_reactivacion_repone_lo_que_el_consumo_retiro() -> None:
+    """El aviso debe prescribir una secuencia que ARRANQUE el trabajo de verdad.
 
-    Decía «quita `sirius:repairing` y vuelve a ponerla», pero
-    `repair-sirius-work.yml` arranca con
-    `if: github.event.label.name == 'sirius:repair-requested'`: reponer la
-    etiqueta en curso crea una ejecución cuyo job se salta, y la incidencia se
-    queda igual de atascada. El aviso mandaba a hacer algo que no funciona.
-    Hallazgo P2 de Codex en la PR #143.
+    Dos rondas de revisión con el mismo defecto, y por eso esta prueba no
+    comprueba una lista escrita a mano sino una REGLA leída de los workflows:
 
-    La comprobación no usa la tabla del script como referencia —sería
-    circular—: lee los `if:` REALES de los tres workflows que hacen el trabajo.
+    - Ronda 1: el aviso decía «quita `sirius:repairing` y vuelve a ponerla».
+      Dispara `issues: labeled`, pero no pasa el `if:` del job.
+    - Ronda 2: proponer solo la etiqueta del `if:` tampoco basta para
+      `implementing`: el consumo retira además `sirius:planned`, y
+      `sirius_validate_activation.sh` la exige. Sin ella la puerta rechaza la
+      activación y retira la etiqueta otra vez.
+
+    La regla que sí se sostiene: **hay que reponer exactamente lo que el paso de
+    consumo retiró**, con la disparadora en último lugar para que la puerta
+    encuentre el resto ya puesto. Eso se lee del YAML, no de la tabla del
+    script, así que la prueba no es circular y notará cualquier cambio futuro en
+    lo que esos pasos consumen.
     """
-    arrancan = _etiquetas_que_arrancan_trabajo()
-    assert len(arrancan) == 3, f"esperaba tres etiquetas de arranque, encontré {arrancan}"
+    consumo = _consumo_de_los_workflows()
+    assert len(consumo) == 3, f"esperaba tres estados en curso, encontré {sorted(consumo)}"
 
     guion = RECONCILE.read_text(encoding="utf-8")
     maquina = re.search(r'MACHINE_LABELS="([^"]+)"', guion)
     assert maquina, "no encuentro MACHINE_LABELS: la prueba no mediría nada"
+    estados = maquina.group(1).split()
 
-    en_curso = [x for x in maquina.group(1).split() if x.endswith("ing")]
-    assert en_curso, "no hay estados en curso: la prueba no mediría el caso del defecto"
-
-    for etiqueta in maquina.group(1).split():
-        propuesta = _reactivacion(etiqueta)
-        assert propuesta in arrancan, (
-            f"para `{etiqueta}` el aviso propone `{propuesta}`, que no arranca "
-            f"ningún trabajo: la incidencia seguiría atascada. Arrancan: {sorted(arrancan)}"
+    for en_curso, (disparadora, retiradas) in consumo.items():
+        assert en_curso in estados, f"`{en_curso}` no está en MACHINE_LABELS"
+        prescrito = _reactivacion(en_curso)
+        assert sorted(prescrito) == sorted(retiradas), (
+            f"para `{en_curso}` el aviso prescribe {prescrito}, pero el consumo "
+            f"retira {retiradas}: la incidencia no arrancaría"
+        )
+        assert prescrito[-1] == disparadora, (
+            f"para `{en_curso}` la etiqueta disparadora `{disparadora}` debe ir la "
+            f"ÚLTIMA para que la puerta encuentre el resto ya puesto; va {prescrito}"
         )
 
-    # Y el defecto exacto: proponer la propia etiqueta en curso no vale.
-    for etiqueta in en_curso:
-        assert etiqueta not in arrancan, (
-            f"`{etiqueta}` no debería arrancar trabajo; si lo hace, esta prueba sobra"
+    # Y los `*-requested`: reponer la misma etiqueta sí funciona, porque son
+    # justamente las disparadoras.
+    disparadoras = {d for d, _ in consumo.values()}
+    for estado in estados:
+        if estado in consumo:
+            continue
+        assert _reactivacion(estado) == [estado], (
+            f"para `{estado}` basta con reponerla; el aviso prescribe otra cosa"
         )
-        assert _reactivacion(etiqueta) != etiqueta, (
-            f"el aviso propondría reponer `{etiqueta}`, que no arranca nada"
-        )
+        assert estado in disparadoras, f"`{estado}` no dispara ningún trabajo"
+
+
+def test_recon_stuck_011_el_aviso_no_promete_ser_completo() -> None:
+    """La prescripción vale hoy; la puerta es la autoridad, y hay que decirlo.
+
+    Dos rondas seguidas demostraron que el reconciliador no puede reconstruir
+    desde fuera todas las condiciones de admisión de otro sistema. Así que el
+    aviso deja de fingir que las conoce todas y nombra a quien sí las conoce: la
+    puerta de activación, que ante un rechazo publica el motivo y retira la
+    etiqueta en vez de callarse.
+
+    Se comprueba que esa promesa es cierta, no solo que esté escrita.
+    """
+    guion = RECONCILE.read_text(encoding="utf-8")
+    assert "la puerta de activación lo dirá en un comentario" in guion, (
+        "el aviso volvería a presentarse como una receta completa"
+    )
+    puerta = (REPO_ROOT / "scripts" / "automation" / "sirius_validate_activation.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "Siguiente acción:" in puerta, "la puerta no publica qué hacer; la promesa sería falsa"
+    assert "--remove-label" in puerta, "la puerta no retira la etiqueta al rechazar"
