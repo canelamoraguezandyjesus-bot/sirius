@@ -80,6 +80,29 @@ label_applied_at() {
     2>/dev/null
 }
 
+# reactivation_label <etiqueta> — la etiqueta que hay que APLICAR para que el
+# ciclo vuelva a arrancar desde ese estado.
+#
+# Para los estados `*-requested` es la misma: quitarla y reponerla vuelve a
+# disparar `issues: labeled`. Para los `*ing` NO lo es, y ese era el defecto:
+# el aviso decía «quita `sirius:repairing` y vuelve a ponerla», pero
+# `repair-sirius-work.yml` arranca con `if: label.name == 'sirius:repair-requested'`,
+# así que reponer la etiqueta en curso crea una ejecución cuyo job se salta y
+# deja la incidencia igual de atascada. Hallazgo P2 de Codex en la PR #143.
+#
+# La tabla es explícita a propósito. Derivarla quitando el sufijo «ing»
+# funcionaría hoy por coincidencia de las tres palabras, y eso es reconstruir
+# desde fuera una correspondencia que no es nuestra. RECON-STUCK-010 comprueba
+# contra los workflows REALES que la etiqueta propuesta dispara algo.
+reactivation_label() {
+  case "$1" in
+    sirius:implementing) printf 'sirius:implement-requested' ;;
+    sirius:reviewing)    printf 'sirius:review-requested' ;;
+    sirius:repairing)    printf 'sirius:repair-requested' ;;
+    *)                   printf '%s' "$1" ;;
+  esac
+}
+
 # stale_minutes <repo> <issue> <etiqueta> — minutos que la etiqueta lleva
 # puesta, o nada si no se puede saber. Sin dato no se afirma antigüedad.
 stale_minutes() {
@@ -286,6 +309,9 @@ for issue in "${open_issues[@]:-}"; do
     # Marcador por APLICACIÓN de etiqueta, no por etiqueta: si el estado se
     # vuelve a poner más tarde es un atasco nuevo y merece aviso nuevo, pero la
     # misma aplicación no puede avisar en cada pasada programada.
+    reactivar="$(reactivation_label "$lbl")"
+    misma_nota=""
+    [ "$reactivar" = "$lbl" ] && misma_nota=" Es la misma etiqueta: quitarla y reponerla basta."
     marker="<!-- sirius-stuck:${lbl}:${evento_id} -->"
     stuck_file="$(mktemp)"
     printf '%s\n\n%s\n\n%s\n\n%s\n\n%s\n%s\n' \
@@ -294,7 +320,7 @@ for issue in "${open_issues[@]:-}"; do
       "Sigue en \`${lbl}\` desde ${desde}. Ese estado solo lo mueve la automatización, y una etiqueta ya aplicada no vuelve a disparar \`issues: labeled\`: si la ejecución que debía moverlo murió, no hay nada que lo mueva." \
       "El reconciliador **no ha reparado nada**. No puede saber si esa ejecución murió o sigue viva, y decidirlo desde fuera sería inventárselo." \
       "1. Mirar en Actions si queda alguna ejecución viva para esta incidencia." \
-      "2. Si no queda ninguna, quitar \`${lbl}\` y volver a ponerla: eso vuelve a disparar el evento." >"$stuck_file"
+      "2. Si no queda ninguna, quitar \`${lbl}\` y aplicar \`${reactivar}\`: esa es la etiqueta con la que arranca el workflow correspondiente.${misma_nota}" >"$stuck_file"
     if sirius_comment_once "$REPO" "$issue" "$marker" "$stuck_file"; then
       report AVISADO "#${issue}: aviso de atasco publicado (o ya estaba)."
     else

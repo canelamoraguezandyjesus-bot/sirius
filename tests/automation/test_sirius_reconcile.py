@@ -576,10 +576,26 @@ def test_recon_stuck_007_el_reconciliador_esta_programado_y_sigue_siendo_manual(
     assert "pull-requests" not in permisos or permisos["pull-requests"] == "read", permisos
     texto = RECONCILE.read_text(encoding="utf-8")
     assert "gh pr merge" not in texto
-    assert (
-        "sirius:implement-requested"
-        not in texto.split("MACHINE_LABELS=")[0].split("STATE_LABELS=")[0]
-    ), "el reconciliador no puede iniciar bloques"
+
+    # «No inicia bloques» es no APLICAR `sirius:implement-requested`, no dejar
+    # de nombrarla. La versión anterior de esta aserción prohibía que la cadena
+    # apareciera en el archivo, y eso es una prueba de grafía: rompía en cuanto
+    # el aviso al usuario mencionaba la etiqueta que tiene que aplicar ÉL, y a
+    # cambio no habría notado un `--add-label` escrito de otra forma.
+    escrituras = (
+        "sirius_transition",
+        "trigger_transition",
+        "sirius_set_issue_labels",
+        "--add-label",
+    )
+    for numero, linea in enumerate(texto.splitlines(), start=1):
+        if "sirius:implement-requested" not in linea:
+            continue
+        for escritura in escrituras:
+            assert escritura not in linea, (
+                f"línea {numero}: el reconciliador aplicaría "
+                f"`sirius:implement-requested` vía `{escritura}`, e iniciaría un bloque"
+            )
 
 
 def test_recon_stuck_008_el_ultimo_evento_sale_del_conjunto_no_de_una_pagina(
@@ -682,3 +698,83 @@ def test_recon_case_b_without_a_datable_state_does_not_repair(tmp_path: Path) ->
     assert r.returncode == 0, r.stdout + r.stderr
     assert "no reparo a ciegas" in r.stdout, r.stdout
     assert "sirius:review-requested" not in (_md(env) / "labels_55.txt").read_text(encoding="utf-8")
+
+
+# Los tres workflows que hacen el TRABAJO. Cualquier otra etiqueta puede
+# disparar notificaciones —`sirius:implementing` lo hace— sin mover el ciclo,
+# así que mirar «etiquetas que disparan algún workflow» sería demasiado amplio
+# y la prueba pasaría con el defecto puesto. Verificado: con ese conjunto,
+# `sirius:implementing` figuraba como disparadora.
+_WORKFLOWS_DE_TRABAJO = (
+    "implement-sirius-work.yml",
+    "review-sirius-work.yml",
+    "repair-sirius-work.yml",
+)
+
+
+def _etiquetas_que_arrancan_trabajo() -> set[str]:
+    etiquetas: set[str] = set()
+    for nombre in _WORKFLOWS_DE_TRABAJO:
+        texto = (REPO_ROOT / ".github" / "workflows" / nombre).read_text(encoding="utf-8")
+        for m in re.finditer(r"github\.event\.label\.name == '([^']+)'", texto):
+            etiquetas.add(m.group(1))
+    return etiquetas
+
+
+def _reactivacion(etiqueta: str) -> str:
+    """Ejecuta la `reactivation_label` REAL, extraída del script.
+
+    No se puede hacer `source` del reconciliador: al cargarlo se ejecuta y exige
+    el repositorio como argumento. Y copiar la tabla aquí la dejaría vieja en
+    silencio, que es la forma más común de prueba vacua en este repositorio.
+    """
+    guion = RECONCILE.read_text(encoding="utf-8")
+    inicio = guion.index("reactivation_label() {")
+    fin = guion.index("\n}\n", inicio) + len("\n}\n")
+    bloque = guion[inicio:fin]
+    return subprocess.run(
+        ["bash", "-c", f'{bloque}\nreactivation_label "{etiqueta}"'],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.strip()
+
+
+def test_recon_stuck_010_la_etiqueta_propuesta_arranca_el_trabajo_de_verdad() -> None:
+    """El aviso debe proponer una etiqueta que ARRANQUE el ciclo.
+
+    Decía «quita `sirius:repairing` y vuelve a ponerla», pero
+    `repair-sirius-work.yml` arranca con
+    `if: github.event.label.name == 'sirius:repair-requested'`: reponer la
+    etiqueta en curso crea una ejecución cuyo job se salta, y la incidencia se
+    queda igual de atascada. El aviso mandaba a hacer algo que no funciona.
+    Hallazgo P2 de Codex en la PR #143.
+
+    La comprobación no usa la tabla del script como referencia —sería
+    circular—: lee los `if:` REALES de los tres workflows que hacen el trabajo.
+    """
+    arrancan = _etiquetas_que_arrancan_trabajo()
+    assert len(arrancan) == 3, f"esperaba tres etiquetas de arranque, encontré {arrancan}"
+
+    guion = RECONCILE.read_text(encoding="utf-8")
+    maquina = re.search(r'MACHINE_LABELS="([^"]+)"', guion)
+    assert maquina, "no encuentro MACHINE_LABELS: la prueba no mediría nada"
+
+    en_curso = [x for x in maquina.group(1).split() if x.endswith("ing")]
+    assert en_curso, "no hay estados en curso: la prueba no mediría el caso del defecto"
+
+    for etiqueta in maquina.group(1).split():
+        propuesta = _reactivacion(etiqueta)
+        assert propuesta in arrancan, (
+            f"para `{etiqueta}` el aviso propone `{propuesta}`, que no arranca "
+            f"ningún trabajo: la incidencia seguiría atascada. Arrancan: {sorted(arrancan)}"
+        )
+
+    # Y el defecto exacto: proponer la propia etiqueta en curso no vale.
+    for etiqueta in en_curso:
+        assert etiqueta not in arrancan, (
+            f"`{etiqueta}` no debería arrancar trabajo; si lo hace, esta prueba sobra"
+        )
+        assert _reactivacion(etiqueta) != etiqueta, (
+            f"el aviso propondría reponer `{etiqueta}`, que no arranca nada"
+        )
