@@ -162,9 +162,17 @@ class FakeCaptureJournal:
     def __init__(self) -> None:
         self.entries: list[tuple[str, str, str]] = []
         self.marks: list[tuple[str, float]] = []
+        self.takes_started = 0
+        self.takes_ended: list[str | None] = []
 
     def record(self, command: str, result: str, detail: str = "") -> None:
         self.entries.append((command, result, detail))
 
     def record_mark(self, label: str, elapsed_seconds: float) -> None:
         self.marks.append((label, elapsed_seconds))
+
+    def begin_take(self) -> None:
+        self.takes_started += 1
+
+    def end_take(self, output_path: str | None) -> None:
+        self.takes_ended.append(output_path)

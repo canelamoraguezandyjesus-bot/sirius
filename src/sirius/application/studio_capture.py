@@ -42,6 +42,23 @@ class CaptureJournal(Protocol):
 
     def record_mark(self, label: str, elapsed_seconds: float) -> None: ...
 
+    def begin_take(self) -> None:
+        """Empieza una toma nueva.
+
+        Las marcas sueltas no sirven de nada: hay que poder pegarlas a un vídeo
+        concreto, y saber dónde empieza y acaba cada toma es lo único que lo
+        permite.
+        """
+        ...
+
+    def end_take(self, output_path: str | None) -> None:
+        """Cierra la toma, con el archivo que el sistema de captura haya dicho.
+
+        ``None`` cuando no lo ha dicho: es información que falta, no un motivo
+        para tirar las marcas.
+        """
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class MomentMark:
@@ -99,6 +116,9 @@ class StudioCaptureUseCase:
         self._backend = backend
         self._scenes = scenes
         self._journal = journal
+        # Se lleva aparte del estado general porque ese pasa por INICIANDO y
+        # DETENIENDO, que son órdenes en vuelo y no tomas.
+        self._take_open = False
         # Desactivado por omisión: #127 exige que abrir Sirius no conecte ni
         # grabe nada, y que haga falta encenderlo a propósito.
         self._enabled = enabled
@@ -344,9 +364,30 @@ class StudioCaptureUseCase:
             )
         return None
 
+    _ACTIVE_STATES = frozenset({StudioCaptureState.GRABANDO, StudioCaptureState.PAUSADO})
+    """Una toma sigue abierta en pausa: pausar no cierra el archivo."""
+
+    def _announce_take(self, status: CaptureStatus) -> None:
+        """Avisa al diario del principio y el final de cada toma.
+
+        Se guía solo por estados confirmados por el backend, nunca por los de
+        una orden en vuelo, y es idempotente: repetir la misma confirmación no
+        abre ni cierra una toma dos veces.
+        """
+        if self._journal is None:
+            return
+        activo = status.state in self._ACTIVE_STATES
+        if activo and not self._take_open:
+            self._take_open = True
+            self._journal.begin_take()
+        elif not activo and self._take_open:
+            self._take_open = False
+            self._journal.end_take(status.output_path)
+
     def _accept(self, status: CaptureStatus, command: str) -> CaptureFeedback:
         """Adopta el estado que dice el backend. Único camino a ``GRABANDO``."""
         self._last_known_state = status.state
+        self._announce_take(status)
         scene = (
             self._scene_id_for(status.active_scene_name)
             if status.active_scene_name is not None

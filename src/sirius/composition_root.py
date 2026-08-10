@@ -29,6 +29,7 @@ from sirius.adapters.audio.unconfigured import (
 )
 from sirius.adapters.audio.winsound_playback import WinsoundAudioPlayback, winsound_is_available
 from sirius.adapters.backup.sqlite_backup_service import build_sqlite_backup_service
+from sirius.adapters.capture.file_journal import build_file_capture_journal
 from sirius.adapters.capture.obs_websocket import ObsWebSocketBackend
 from sirius.adapters.clock.system_clock import build_system_clock
 from sirius.adapters.export.filesystem_export_service import build_filesystem_export_service
@@ -309,7 +310,7 @@ def _build_studio_voice_use_case(
     )
 
 
-def _build_studio_capture_use_case() -> StudioCaptureUseCase:
+def _build_studio_capture_use_case(working_directory: Path) -> StudioCaptureUseCase:
     """Construye el Módulo Captura, siempre desactivado al arrancar.
 
     #127 exige que abrir Sirius no conecte con nada ni grabe nada: hay que
@@ -331,7 +332,11 @@ def _build_studio_capture_use_case() -> StudioCaptureUseCase:
         host=str(capture_settings.get("host", "127.0.0.1")),
         port=int(capture_settings.get("port", 4455)),
     )
-    return StudioCaptureUseCase(backend=backend, scenes=scenes, enabled=False)
+    # Las marcas acaban junto al vídeo, y el diario de órdenes en la carpeta de
+    # Sirius. Sin esto, «marca esto como el primer led» no llegaba a ninguna
+    # parte y la confirmación hablada prometía algo que no ocurría.
+    journal = build_file_capture_journal(working_directory / "capturas", build_system_clock())
+    return StudioCaptureUseCase(backend=backend, scenes=scenes, enabled=False, journal=journal)
 
 
 def build_conversation_dependencies(
@@ -406,7 +411,7 @@ def build_conversation_dependencies(
         database_path, secret_store, llm_usage_repository=llm_usage_repository
     )
 
-    studio_capture_use_case = _build_studio_capture_use_case()
+    studio_capture_use_case = _build_studio_capture_use_case(database_path.parent)
 
     backup_service = build_sqlite_backup_service(database_path, backups_dir)
     export_service = build_filesystem_export_service(build_system_clock())

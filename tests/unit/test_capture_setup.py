@@ -148,13 +148,13 @@ def test_saving_keeps_the_rest_of_the_configuration() -> None:
     assert len(guardado[AJUSTE]["scenes"]) == 1
 
 
-def test_what_is_saved_is_what_sirius_reads_at_startup() -> None:
+def test_what_is_saved_is_what_sirius_reads_at_startup(tmp_path: Path) -> None:
     """La comprobación que evita el fallo silencioso: escribir algo inservible."""
     from sirius.composition_root import _build_studio_capture_use_case
 
     guardar_configuracion(proponer_escenas(["Cara", "Mesa"]), "127.0.0.1", 4455, "secreta")
 
-    caso_de_uso = _build_studio_capture_use_case()
+    caso_de_uso = _build_studio_capture_use_case(tmp_path)
 
     assert [escena.scene_id for escena in caso_de_uso.authorized_scenes()] == ["cara", "mesa"]
 
