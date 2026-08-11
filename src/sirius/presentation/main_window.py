@@ -1132,13 +1132,17 @@ class MainWindow(QMainWindow):
         clears a label.
         """
         status = self._get_budget_status_use_case.get_status()
-        if status.is_near_limit:
-            self.budget_warning_label.setText(
-                f"Aviso: llevas {status.spent_usd:.2f} USD de "
-                f"{status.monthly_limit_usd:.2f} USD de gasto este mes."
-            )
-        else:
-            self.budget_warning_label.setText("")
+        aviso = (
+            f"Aviso: llevas {status.spent_usd:.2f} USD de "
+            f"{status.monthly_limit_usd:.2f} USD de gasto este mes."
+            if status.is_near_limit
+            else ""
+        )
+        self.budget_warning_label.setText(aviso)
+        # También en Model Studio: quedarse sin presupuesto grabando es el peor
+        # momento para enterarse, y hasta ahora el aviso solo se veía en la
+        # interfaz técnica, que es justo donde no se está mirando.
+        self.studio_page.set_budget_notice(aviso)
 
     def _replace_history_with_authoritative_state(self) -> None:
         """Rebuild the visible list from GetConversationHistoryUseCase.

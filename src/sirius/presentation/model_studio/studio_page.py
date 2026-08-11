@@ -267,6 +267,14 @@ class StudioPage(QWidget):
         self.interaction_state_label.setFont(state_font)
         self.capture_state_label.setFont(state_font)
 
+        # El aviso de gasto vive aquí y no abajo: quedarse sin presupuesto a
+        # mitad de una grabación es un fallo visible, y el aviso que lo evita
+        # solo sirve si está donde se está mirando.
+        self.budget_label = QLabel("")
+        self.budget_label.setObjectName("studioBudgetNotice")
+        self.budget_label.setAccessibleName("Aviso de gasto del mes")
+        self.budget_label.setVisible(False)
+
         self.exit_button = self._icon_button(
             "exit_studio", "Volver a la interfaz de Sirius", enabled=True
         )
@@ -279,6 +287,7 @@ class StudioPage(QWidget):
         layout.addWidget(separator)
         layout.addWidget(self.project_label)
         layout.addStretch(1)
+        layout.addWidget(self.budget_label)
         layout.addWidget(self.interaction_state_label)
         layout.addWidget(self.capture_state_label)
         layout.addWidget(self.exit_button)
@@ -478,6 +487,9 @@ class StudioPage(QWidget):
         QWidget#studioLeftColumn,
         QWidget#studioRightColumn {{
             background-color: {theme.BACKGROUND};
+        }}
+        QLabel#studioBudgetNotice {{
+            color: {theme.WARNING};
         }}
         QFrame#studioTopBar {{
             background-color: {theme.SURFACE_RAISED};
@@ -698,6 +710,11 @@ class StudioPage(QWidget):
         self._capture_panel_open = checked
         self.capture_panel.setVisible(checked)
         self.capture_panel_toggled.emit(checked)
+
+    def set_budget_notice(self, message: str) -> None:
+        """Aviso de gasto, visible sin salir de la superficie de grabación."""
+        self.budget_label.setText(message)
+        self.budget_label.setVisible(bool(message))
 
     def set_error(self, message: str) -> None:
         self.error_label.setText(message)

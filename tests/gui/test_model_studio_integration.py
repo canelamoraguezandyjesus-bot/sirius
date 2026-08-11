@@ -813,3 +813,37 @@ def test_cancelling_shuts_the_voice_up(qtbot: QtBot, tmp_path: Path) -> None:
     assert playback.stops >= 1, "la voz tiene que callarse"
     qtbot.wait(200)
     assert len(text_to_speech.requests) == dichas, "no se lee el resto de algo cancelado"
+
+
+@pytest.mark.gui
+def test_the_budget_warning_is_visible_while_recording(qtbot: QtBot, tmp_path: Path) -> None:
+    """Quedarse sin presupuesto grabando es el peor momento para enterarse.
+
+    El aviso existía desde B7c, pero vivía en la columna de la interfaz
+    técnica: justo donde no se está mirando cuando se graba.
+    """
+    window = _build_window(_bootstrapped_database(tmp_path / "sirius.db"))
+    qtbot.addWidget(window)
+    window.open_model_studio()
+
+    window.studio_page.set_budget_notice("Aviso: llevas 16.00 USD de 20.00 USD este mes.")
+
+    assert window.studio_page.budget_label.isVisibleTo(window.studio_page)
+    assert "16.00" in window.studio_page.budget_label.text()
+
+    window.studio_page.set_budget_notice("")
+
+    assert not window.studio_page.budget_label.isVisibleTo(window.studio_page)
+
+
+@pytest.mark.gui
+def test_the_budget_warning_reaches_model_studio_from_the_window(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Y llega solo, por el mismo camino que el de la interfaz técnica."""
+    window = _build_window(_bootstrapped_database(tmp_path / "sirius.db"))
+    qtbot.addWidget(window)
+
+    window._refresh_budget_warning()
+
+    assert window.studio_page.budget_label.text() == window.budget_warning_label.text()

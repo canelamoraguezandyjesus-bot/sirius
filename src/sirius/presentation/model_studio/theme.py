@@ -32,6 +32,9 @@ ACCENT: Final = "#4c9bff"
 """Azul de acento: etiqueta SIRIUS, foco y estados activos."""
 
 RECORDING: Final = "#ff3b30"
+
+WARNING: Final = "#e0a200"
+"""Ámbar de aviso: se lee sobre negro sin gritar como el rojo de grabación."""
 """Rojo del indicador de grabación. Solo lo enciende ``GRABANDO`` confirmado."""
 
 ERROR_TEXT: Final = "#ff8a80"
