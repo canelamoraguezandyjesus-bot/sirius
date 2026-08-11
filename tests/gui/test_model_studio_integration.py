@@ -41,7 +41,7 @@ from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseC
 from sirius.application.send_message import SendMessageUseCase
 from sirius.application.studio_voice import StudioVoiceUseCase, VoiceSettings
 from sirius.composition_root import build_conversation_dependencies
-from sirius.domain.conversation import MessageRole
+from sirius.domain.conversation import MessageRole, MessageStatus
 from sirius.domain.model_studio import StudioCaptureState, StudioInteractionState
 from sirius.ports.audio_capture import AudioCaptureError, AudioCaptureErrorKind
 from sirius.ports.llm import LLMError, LLMErrorKind, LLMProvider, LLMRequest, LLMStreamEvent
@@ -689,3 +689,127 @@ def test_a_voice_the_provider_does_not_have_is_ignored(qtbot: QtBot, tmp_path: P
     voice.set_voice("una-que-no-existe")
 
     assert voice.voice == anterior
+
+
+# --- Empezar a hablar sin esperar a terminar de escribir -----------------
+
+
+_RESPUESTA_LARGA = (
+    "Empieza por el pin trece, que es el que lleva el led integrado. "
+    "Luego conecta la resistencia de doscientos veinte ohmios en serie. "
+    "Y por último comprueba la continuidad antes de soldar nada."
+)
+
+
+@pytest.mark.gui
+def test_sirius_starts_talking_before_finishing_the_answer(qtbot: QtBot, tmp_path: Path) -> None:
+    """Grabando, dos esperas seguidas mirando a la cámara son una de más.
+
+    La primera frase se sintetiza mientras el resto todavía se escribe, así que
+    las dos esperas se solapan en vez de sumarse.
+    """
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    directory = tmp_path / "audio"
+    directory.mkdir(exist_ok=True)
+    text_to_speech = FakeTextToSpeech(directory)
+    playback = FakeAudioPlayback()
+    voice = _voice_use_case(tmp_path, text_to_speech=text_to_speech, playback=playback)
+    window = _build_window(database_path, studio_voice_use_case=voice)
+    qtbot.addWidget(window)
+    _swap_provider(window, database_path, FakeLLMProvider((_RESPUESTA_LARGA,)))
+    window.open_model_studio()
+
+    window.studio_page.input.setPlainText("¿por dónde empiezo?")
+    window.studio_page.send_button.click()
+    qtbot.waitUntil(lambda: len(text_to_speech.requests) >= 1, timeout=5000)
+
+    primera = text_to_speech.requests[0].text
+    assert primera.startswith("Empieza por el pin trece")
+    assert "resistencia" not in primera, "no puede llevarse media respuesta de golpe"
+
+
+@pytest.mark.gui
+def test_nothing_is_said_twice(qtbot: QtBot, tmp_path: Path) -> None:
+    """Lo ya leído no se repite al llegar el final: se lee solo lo que falta."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    directory = tmp_path / "audio"
+    directory.mkdir(exist_ok=True)
+    text_to_speech = FakeTextToSpeech(directory)
+    playback = FakeAudioPlayback()
+    voice = _voice_use_case(tmp_path, text_to_speech=text_to_speech, playback=playback)
+    window = _build_window(database_path, studio_voice_use_case=voice)
+    qtbot.addWidget(window)
+    _swap_provider(window, database_path, FakeLLMProvider((_RESPUESTA_LARGA,)))
+    window.open_model_studio()
+
+    window.studio_page.input.setPlainText("¿por dónde empiezo?")
+    window.studio_page.send_button.click()
+    qtbot.waitUntil(lambda: len(text_to_speech.requests) >= 1, timeout=5000)
+    playback.finish()  # el primer trozo termina de sonar
+    qtbot.waitUntil(lambda: len(text_to_speech.requests) == 2, timeout=5000)
+
+    dicho = " ".join(peticion.text for peticion in text_to_speech.requests)
+    assert dicho.count("pin trece") == 1
+    assert "resistencia" in dicho
+    assert "continuidad" in dicho
+
+
+@pytest.mark.gui
+def test_the_second_piece_waits_for_the_first_to_finish(qtbot: QtBot, tmp_path: Path) -> None:
+    """El audio tiene que sonar en el orden en que se escribió.
+
+    Sintetizar el segundo trozo mientras suena el primero podría hacerlos
+    solapar, y dos voces de Sirius a la vez es lo peor que puede oírse.
+    """
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    directory = tmp_path / "audio"
+    directory.mkdir(exist_ok=True)
+    text_to_speech = FakeTextToSpeech(directory)
+    playback = FakeAudioPlayback()
+    voice = _voice_use_case(tmp_path, text_to_speech=text_to_speech, playback=playback)
+    window = _build_window(database_path, studio_voice_use_case=voice)
+    qtbot.addWidget(window)
+    _swap_provider(window, database_path, FakeLLMProvider((_RESPUESTA_LARGA,)))
+    window.open_model_studio()
+
+    window.studio_page.input.setPlainText("¿por dónde empiezo?")
+    window.studio_page.send_button.click()
+    qtbot.waitUntil(lambda: len(text_to_speech.requests) >= 1, timeout=5000)
+    _wait_idle(qtbot, window)
+
+    qtbot.wait(200)
+    assert len(text_to_speech.requests) == 1, "el segundo trozo no puede adelantarse"
+
+    playback.finish()
+    qtbot.waitUntil(lambda: len(text_to_speech.requests) == 2, timeout=5000)
+
+
+@pytest.mark.gui
+def test_cancelling_shuts_the_voice_up(qtbot: QtBot, tmp_path: Path) -> None:
+    """La contrapartida de hablar antes, y su compensación.
+
+    Hablar sin terminar significa que una respuesta cancelada puede haber
+    sonado en parte. Lo que no puede pasar es que siga sonando: interrumpir a
+    alguien es que deje de hablar, no que termine la frase.
+    """
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    directory = tmp_path / "audio"
+    directory.mkdir(exist_ok=True)
+    text_to_speech = FakeTextToSpeech(directory)
+    playback = FakeAudioPlayback()
+    voice = _voice_use_case(tmp_path, text_to_speech=text_to_speech, playback=playback)
+    window = _build_window(database_path, studio_voice_use_case=voice)
+    qtbot.addWidget(window)
+    _swap_provider(window, database_path, FakeLLMProvider((_RESPUESTA_LARGA,)))
+    window.open_model_studio()
+
+    window.studio_page.input.setPlainText("¿por dónde empiezo?")
+    window.studio_page.send_button.click()
+    qtbot.waitUntil(lambda: len(text_to_speech.requests) >= 1, timeout=5000)
+    dichas = len(text_to_speech.requests)
+
+    window._speak_if_studio_is_open(_RESPUESTA_LARGA, MessageStatus.CANCELLED)
+
+    assert playback.stops >= 1, "la voz tiene que callarse"
+    qtbot.wait(200)
+    assert len(text_to_speech.requests) == dichas, "no se lee el resto de algo cancelado"

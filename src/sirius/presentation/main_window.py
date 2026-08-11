@@ -128,6 +128,21 @@ Corta y con números: lo que distingue una voz de otra al oírlas seguidas es la
 entonación de una frase normal, no un párrafo.
 """
 
+EARLY_SPEECH_MINIMUM_CHARACTERS = 60
+"""Cuánto tiene que haber escrito Sirius para empezar a hablar sin terminar.
+
+Grabando, esperar a la respuesta entera y encima a que se fabrique la voz son
+dos esperas seguidas mirando a la cámara. Con esto la primera se solapa con la
+segunda.
+
+Sesenta caracteres, y siempre cortando en final de frase: un trozo más corto
+suele ser un «Sí.» suelto que no gana nada, y partir a mitad de frase sonaría
+a corte. Se parte **una sola vez** por respuesta: el resto va entero al acabar,
+así que son dos peticiones y no diez, y el coste total no cambia.
+"""
+
+_SENTENCE_ENDINGS = (". ", "! ", "? ", ".\n", "!\n", "?\n")
+
 CAPTURE_HEARTBEAT_MILLISECONDS = 5_000
 """Cada cuánto se le pregunta a OBS cómo está mientras el panel está abierto.
 
@@ -161,6 +176,23 @@ _BACKUP_STATE_STYLES = {
     BACKUP_STATE_CANCELLED: "color: #8a6d00; font-weight: bold;",
     BACKUP_STATE_REJECTED: "color: #b3261e; font-weight: bold;",
 }
+
+
+def _first_sentence_end(text: str) -> int | None:
+    """Dónde acaba la primera frase, si ya hay bastante como para hablar.
+
+    Devuelve ``None`` mientras no haya un final de frase pasado el mínimo:
+    partir a mitad de frase sonaría a corte, y adelantar tres palabras no
+    ahorra ninguna espera.
+    """
+    if len(text) < EARLY_SPEECH_MINIMUM_CHARACTERS:
+        return None
+    cortes = [
+        text.find(final, EARLY_SPEECH_MINIMUM_CHARACTERS - 1) + len(final)
+        for final in _SENTENCE_ENDINGS
+        if text.find(final, EARLY_SPEECH_MINIMUM_CHARACTERS - 1) != -1
+    ]
+    return min(cortes) if cortes else None
 
 
 class MainWindow(QMainWindow):
@@ -249,6 +281,13 @@ class MainWindow(QMainWindow):
         self._studio_capture_use_case = studio_capture_use_case
         self._last_spoken_text: str | None = None
         self._voice_before_preview: str | None = None
+        # Cola de voz: el audio tiene que sonar en el orden en que se escribió,
+        # así que solo se sintetiza un trozo a la vez y el siguiente espera a
+        # que el anterior termine de sonar.
+        self._speech_queue: list[tuple[str, bool]] = []
+        self._speech_busy = False
+        self._spoken_prefix_length = 0
+        self._early_speech_used = False
         # La voz elegida tiene que sobrevivir al cierre: la raíz de composición
         # pasa cómo guardarla, porque la ventana no toca la configuración.
         self._save_studio_voice = save_studio_voice
@@ -659,11 +698,41 @@ class MainWindow(QMainWindow):
         empiece a sonar solo.
         """
         if self._studio_voice_use_case is None or not self.model_studio_open:
+            self._reset_speech_stream()
             return
         if not text or status is not MessageStatus.COMPLETED:
+            # Cancelada o fallida: si ya se había empezado a leer, se calla.
+            self._silence_pending_speech()
             return
         self._last_spoken_text = text
-        self._start_speaking(text, status)
+        pendiente = text[self._spoken_prefix_length :] if self._early_speech_used else text
+        self._reset_speech_stream()
+        if pendiente.strip():
+            self._enqueue_speech(pendiente)
+
+    def _reset_speech_stream(self) -> None:
+        self._spoken_prefix_length = 0
+        self._early_speech_used = False
+
+    def _silence_pending_speech(self) -> None:
+        """Deja de leer una respuesta que se canceló o falló a mitad."""
+        self._speech_queue.clear()
+        self._reset_speech_stream()
+        if self._studio_voice_use_case is not None:
+            self._studio_voice_use_case.stop_speaking()
+        self._speech_busy = False
+
+    def _enqueue_speech(self, text: str, *, read_code: bool = False) -> None:
+        self._speech_queue.append((text, read_code))
+        self._pump_speech()
+
+    def _pump_speech(self) -> None:
+        """Saca el siguiente trozo, solo si no hay ninguno sonando."""
+        if self._speech_busy or not self._speech_queue:
+            return
+        text, read_code = self._speech_queue.pop(0)
+        self._speech_busy = True
+        self._start_speaking(text, MessageStatus.COMPLETED, read_code=read_code)
 
     def _start_speaking(self, text: str, status: MessageStatus, *, read_code: bool = False) -> None:
         if self._studio_voice_use_case is None:
@@ -678,13 +747,20 @@ class MainWindow(QMainWindow):
     def _on_spoken(self, outcome: object) -> None:
         self._active_voice_worker = None
         if isinstance(outcome, VoiceFailure):
+            # Un fallo de voz no puede dejar la cola atascada para siempre.
+            self._speech_busy = False
+            self._speech_queue.clear()
             self._report_voice_failure(outcome)
             return
         if isinstance(outcome, SpeechStarted):
             self._mirror_studio_state(StudioInteractionState.HABLANDO)
             return
         if isinstance(outcome, NothingToSay):
-            self._mirror_studio_state(StudioInteractionState.PREPARADO)
+            # Nada que decir de este trozo: el siguiente no tiene que esperar.
+            self._speech_busy = False
+            self._pump_speech()
+            if not self._speech_busy:
+                self._mirror_studio_state(StudioInteractionState.PREPARADO)
 
     def _on_speech_finished(self) -> None:
         """La voz terminó sola: se vuelve a PREPARADO.
@@ -693,6 +769,12 @@ class MainWindow(QMainWindow):
         respuesta o escuchando el micrófono, ese estado es el que manda: el
         final de un audio no puede pisar algo que empezó después.
         """
+        self._speech_busy = False
+        if self._speech_queue:
+            # Queda respuesta por leer: enlaza sin volver a PREPARADO, para que
+            # la barra no parpadee entre trozo y trozo.
+            self._pump_speech()
+            return
         if self.studio_page.interaction_state is StudioInteractionState.HABLANDO:
             self._mirror_studio_state(StudioInteractionState.PREPARADO)
 
@@ -1262,6 +1344,8 @@ class MainWindow(QMainWindow):
             return
         self.cancel_button.setEnabled(False)
         self.status_label.setText("Cancelando...")
+        # Interrumpir es interrumpir: si ya estaba leyendo, deja de leer.
+        self._silence_pending_speech()
         self._send_message_use_case.cancel(self._active_operation_id)
 
     def _on_delta(self, text: str) -> None:
@@ -1278,6 +1362,30 @@ class MainWindow(QMainWindow):
             widget.set_streaming_text("Sirius", self._streaming_text, bold=True)
             self._sync_item_height(self._streaming_item, widget)
         self.studio_page.update_last_message(self._streaming_text, MessageStatus.COMPLETED)
+        self._speak_first_sentence_early()
+
+    def _speak_first_sentence_early(self) -> None:
+        """Empieza a hablar en cuanto hay una primera frase entera.
+
+        Se corta en final de frase y una sola vez por respuesta. Lo que se dice
+        es literalmente lo que ya está escrito en pantalla, no un adelanto ni
+        un resumen.
+
+        **Contrapartida asumida:** hablar antes de terminar significa que una
+        respuesta cancelada a mitad puede haber sonado en parte. Se compensa
+        cortando la voz en seco al cancelar o fallar, que es lo que pasa cuando
+        interrumpes a alguien: deja de hablar, no sigue.
+        """
+        if self._early_speech_used or self._studio_voice_use_case is None:
+            return
+        if not self.model_studio_open:
+            return
+        corte = _first_sentence_end(self._streaming_text)
+        if corte is None:
+            return
+        self._early_speech_used = True
+        self._spoken_prefix_length = corte
+        self._enqueue_speech(self._streaming_text[:corte])
 
     def _on_finished(self, result: SendMessageResult) -> None:
         # ``result.sirius_message`` is the row SendMessageUseCase actually
