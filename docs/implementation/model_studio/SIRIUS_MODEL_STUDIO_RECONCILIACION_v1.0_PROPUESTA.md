@@ -4,14 +4,14 @@
 
 **Documento:** SIRIUS-MODEL-STUDIO-REC-001
 **Versión:** 1.1
-**Estado:** **APROBADA POR EL USUARIO el 7 de agosto de 2026**, salvo R-11
+**Estado:** **APROBADA POR EL USUARIO** · R-01 a R-10 el 7 de agosto de 2026, R-11 el 9 de agosto de 2026
 **Fecha:** 7 de agosto de 2026
 **Base:** `main` en `a017b6f`
 **Origen:** hallazgos MS-A01 a MS-A11 de `docs/audits/SIRIUS_AUDITORIA_MODEL_STUDIO_2026-08.md`
 **Piezas que reconcilia:** #126 (`SIRIUS-EXP-VOICE-002`), #127 (`SIRIUS-MODEL-STUDIO-003`), PR #128 (`SIRIUS-MODEL-STUDIO-UI-001 v1.0`)
 
 > **Qué es y qué no es este documento**
-> Reconcilia tres piezas escritas por separado que se contradecían. El usuario aprobó R-01 a R-10 el 7 de agosto de 2026; R-11 sigue pendiente de su decisión. No modifica documentos canónicos y no sustituye a `SIRIUS-MODEL-STUDIO-UI-001`, cuya dirección de diseño se conserva salvo en la presencia visual, que el propio usuario redefinió ese mismo día (véase el cuadro).
+> Reconcilia tres piezas escritas por separado que se contradecían. El usuario aprobó R-01 a R-10 el 7 de agosto de 2026 y R-11 el 9 de agosto de 2026. No queda ninguna decisión abierta. No modifica documentos canónicos y no sustituye a `SIRIUS-MODEL-STUDIO-UI-001`, cuya dirección de diseño se conserva salvo en la presencia visual, que el propio usuario redefinió ese mismo día (véase el cuadro).
 >
 > La versión 1.0 registraba propuestas. Esta 1.1 registra además qué se ha construido de verdad y qué no, para que nadie tenga que deducirlo del código.
 
@@ -29,7 +29,7 @@
 | R-08 | La voz de síntesis se verifica antes de fijarse en documento | APROBADO · **verificado: `cedar` NO existe en el endpoint autorizado** | MS-A09 |
 | R-09 | Ejecución en tres etapas: E1 concha grabable, E2 voz, E3 captura | APROBADO · E1 y E2 entregadas, E3 sin empezar | MS-A01 |
 | R-10 | Fusionar #128 antes de abrir cualquier implementación | APROBADO · **pendiente de que el usuario lo fusione** | MS-A07 |
-| R-11 | Envolvente de gasto de Model Studio | **PENDIENTE DE DECISIÓN DEL USUARIO** | MS-A10 |
+| R-11 | Envolvente de gasto de Model Studio | APROBADO · **opción 1, sin cambiar DR-018** | MS-A10 |
 
 > **Decisiones visuales tomadas por el usuario el 7 de agosto de 2026, sobre prototipo renderizado**
 >
@@ -214,17 +214,36 @@ Comprobación de coste prácticamente nulo que evita descubrir en mitad de la pu
 
 El merge sigue exigiendo la autorización explícita prevista por el contrato operativo; esta propuesta no lo automatiza ni lo presupone.
 
-## 12. R-11 · Envolvente de gasto — pendiente de decisión
+## 12. R-11 · Envolvente de gasto — DECIDIDO el 9 de agosto de 2026
 
 DR-018 fija 20 USD/mes con aviso a 15. Ese envolvente se dimensionó para conversación escrita; una sesión de grabación añade transcripción y síntesis por turno.
 
-Tres opciones, **ninguna propuesta como preferente** porque afecta a una decisión canónica que solo el usuario puede tomar:
+Se ofrecieron tres opciones, sin preferente, por tratarse de una decisión canónica del usuario:
 
 1. Mantener 20 USD/mes y aceptar que Model Studio consume del mismo bolsillo.
 2. Mantener el total y asignar a Model Studio un sublímite propio dentro de él.
 3. Revisar DR-018 al alza, lo que exige decisión canónica expresa.
 
-Lo que sí conviene decidir antes de E2, con independencia de la opción: agotar el presupuesto a mitad de una grabación es un fallo visible, y el aviso proactivo ya existente (B7c) debería cubrir también el gasto de audio.
+**Decisión: opción 1. DR-018 no se toca.**
+
+### Por qué, con los números que la sostienen
+
+Coste medido sobre la política vigente (`BudgetPolicy`), por turno de conversación grabando:
+
+| Concepto | Coste aproximado |
+|---|---|
+| Contexto enviado (identidad, memoria, historial) | 0,010 USD |
+| Respuesta generada | 0,001 USD |
+| Transcripción de lo dicho | 0,0005 USD |
+| Síntesis de la voz | 0,004 USD |
+| **Total por turno** | **≈ 0,015 USD** |
+
+Una sesión de una hora con cuarenta intervenciones ronda **0,60 USD**. Grabando tres horas por semana, **unos 7 USD al mes** más el uso escrito. El envolvente actual sobra con holgura, y subirlo sin evidencia sería mover una decisión canónica por precaución en vez de por dato. Si algún mes salta el aviso de los 15 USD, eso sí es evidencia y entonces se revisa con motivo escrito.
+
+Dos observaciones que la decisión deja registradas:
+
+- **Lo que domina el coste es el contexto enviado, no la voz.** La voz es en torno a una cuarta parte del turno. Cualquier ajuste futuro rinde más ahí.
+- **Lo que hacía insegura cualquier cifra ya está corregido.** El aviso proactivo de B7c existía pero vivía en la columna de la interfaz técnica, que no está a la vista mientras se graba: se encendía a los 15 USD y el primer síntoma real habría sido quedarse sin presupuesto a mitad de una toma. Desde el 9 de agosto aparece también en la barra superior de Model Studio, con el mismo texto y el mismo momento de cálculo.
 
 ## 13. Qué queda sin tocar
 
