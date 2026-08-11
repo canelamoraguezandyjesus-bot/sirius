@@ -334,7 +334,7 @@ for issue in "${open_issues[@]:-}"; do
       "El reconciliador **no ha reparado nada**. No puede saber si esa ejecución murió o sigue viva, y decidirlo desde fuera sería inventárselo." \
       "1. Mirar en Actions si queda alguna ejecución viva para esta incidencia." \
       "2. Si no queda ninguna, ${como_hacerlo}" \
-      "3. Si aun así faltara alguna condición, la puerta de activación lo dirá en un comentario aquí mismo y retirará la etiqueta. No se queda en silencio, así que no hace falta acertar a la primera." >"$stuck_file"
+      "Si tras eso el bloque sigue sin arrancar, la ejecución de Actions dice por qué: es el único sitio donde consta siempre." >"$stuck_file"
     if sirius_comment_once "$REPO" "$issue" "$marker" "$stuck_file"; then
       report AVISADO "#${issue}: aviso de atasco publicado (o ya estaba)."
     else

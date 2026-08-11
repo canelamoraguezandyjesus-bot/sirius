@@ -303,3 +303,43 @@ hacer que lo haga.**
 publicación rota y comprueba que la etiqueta sobrevive. Cuatro mutaciones, todas
 con el resultado predicho, incluida la que rompe el simulado para confirmar que
 la prueba no pasa por vacuidad.
+
+## Quinta ronda: se retira la promesa en vez de parchear el tercer camino
+
+Codex encontró un camino **más** en el que la salvedad del aviso era falsa: en
+`reviewing` y `repairing` una precondición inválida no pasa por `reject()` sino
+por `sirius_transition`, que aplica el estado terminal y retira la etiqueta
+**antes** de publicar; y los llamadores se tragan el error con `|| echo`.
+
+Arreglar ese tercer camino habría sido el cuarto parche de la misma forma. **La
+afirmación se retira.** El reconciliador sabe lo que el paso de consumo retiró
+—eso lo lee del YAML— pero no las garantías de publicación de tres puertas
+distintas, y prometerlas era hablar por ellas. Lo que sí puede decir sin mentir
+es dónde consta siempre el motivo: el registro de Actions.
+
+Es la misma lección que el resto de esta PR, aplicada a una frase en vez de a un
+cálculo: **no afirmes por otro sistema.**
+
+### Y la tercera versión de la misma prueba de grafía
+
+RECON-STUCK-007 seguía siendo textual: solo detectaba una escritura si el nombre
+de la función y la etiqueta caían en la **misma línea**. Pero el estilo del
+propio repositorio parte estas llamadas en dos:
+
+```bash
+sirius_set_issue_labels "$GH_REPO" "$ISSUE_NUMBER" \
+  "sirius:implementing" "sirius:implement-requested" "sirius:planned"
+```
+
+Una llamada así habría iniciado un bloque con la prueba en verde, y una etiqueta
+pasada por variable también. Van **tres** versiones de esta aserción y las tres
+medían texto.
+
+Ahora ejecuta: siembra una incidencia por cada estado de `MACHINE_LABELS`, corre
+el reconciliador y comprueba qué etiquetas quedaron escritas. Verificado por
+mutación con una llamada partida en dos líneas —el caso exacto que la versión
+anterior no veía—: falla.
+
+Esa es la forma definitiva de la regla, y el motivo de que hicieran falta tres
+intentos para llegar a ella: un `grep` no puede sostener una afirmación sobre lo
+que un sistema hace, ni siquiera cuando parece que sí.

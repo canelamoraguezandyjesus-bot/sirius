@@ -562,7 +562,9 @@ def test_recon_stuck_006_el_umbral_supera_al_job_mas_largo_de_verdad() -> None:
     )
 
 
-def test_recon_stuck_007_el_reconciliador_esta_programado_y_sigue_siendo_manual() -> None:
+def test_recon_stuck_007_el_reconciliador_esta_programado_y_sigue_siendo_manual(
+    tmp_path: Path,
+) -> None:
     doc = yaml.safe_load(RECONCILE_WF.read_text(encoding="utf-8"))
     disparo = doc.get("on") or doc.get(True)
     assert "schedule" in disparo, "sin `schedule:` la detección sigue dependiendo de un humano"
@@ -577,25 +579,39 @@ def test_recon_stuck_007_el_reconciliador_esta_programado_y_sigue_siendo_manual(
     texto = RECONCILE.read_text(encoding="utf-8")
     assert "gh pr merge" not in texto
 
-    # «No inicia bloques» es no APLICAR `sirius:implement-requested`, no dejar
-    # de nombrarla. La versión anterior de esta aserción prohibía que la cadena
-    # apareciera en el archivo, y eso es una prueba de grafía: rompía en cuanto
-    # el aviso al usuario mencionaba la etiqueta que tiene que aplicar ÉL, y a
-    # cambio no habría notado un `--add-label` escrito de otra forma.
-    escrituras = (
-        "sirius_transition",
-        "trigger_transition",
-        "sirius_set_issue_labels",
-        "--add-label",
-    )
-    for numero, linea in enumerate(texto.splitlines(), start=1):
-        if "sirius:implement-requested" not in linea:
-            continue
-        for escritura in escrituras:
-            assert escritura not in linea, (
-                f"línea {numero}: el reconciliador aplicaría "
-                f"`sirius:implement-requested` vía `{escritura}`, e iniciaría un bloque"
-            )
+    # «No inicia bloques» se comprueba EJECUTANDO el reconciliador y mirando qué
+    # etiquetas escribe, no leyendo su código.
+    #
+    # Van dos versiones fallidas de esta misma aserción, y las dos eran de
+    # grafía: la primera prohibía que la cadena apareciera en el archivo —rompía
+    # porque el aviso NOMBRA la etiqueta que debe aplicar el usuario—, y la
+    # segunda solo miraba dentro de una línea, cuando el estilo del propio
+    # repositorio parte estas llamadas en dos:
+    #
+    #     sirius_set_issue_labels "$GH_REPO" "$ISSUE_NUMBER" \\
+    #       "sirius:implementing" "sirius:implement-requested" "sirius:planned"
+    #
+    # Una llamada así habría iniciado un bloque con la prueba en verde. Y una
+    # etiqueta pasada por variable también. Hallazgo P2 de Codex en la PR #146.
+    maquina = re.search(r'MACHINE_LABELS="([^"]+)"', texto)
+    assert maquina, "no encuentro MACHINE_LABELS: la prueba no mediría nada"
+    estados = maquina.group(1).split()
+
+    env = _setup(tmp_path)
+    for numero, etiqueta in enumerate(estados, start=40):
+        _seed_issue(env, numero, [etiqueta])
+        _seed_events(env, numero, [_evento("labeled", etiqueta, _iso(5000), numero)])
+
+    assert _run_reconcile(env).returncode == 0
+
+    for numero, etiqueta in enumerate(estados, start=40):
+        finales = (_md(env) / f"labels_{numero}.txt").read_text(encoding="utf-8").split()
+        if etiqueta == "sirius:implement-requested":
+            continue  # ya la tenía puesta; no la aplicó el reconciliador
+        assert "sirius:implement-requested" not in finales, (
+            f"partiendo de `{etiqueta}`, el reconciliador aplicó "
+            f"`sirius:implement-requested` e inició un bloque: {finales}"
+        )
 
 
 def test_recon_stuck_008_el_ultimo_evento_sale_del_conjunto_no_de_una_pagina(
@@ -809,32 +825,27 @@ def test_recon_stuck_010_la_reactivacion_repone_lo_que_el_consumo_retiro() -> No
         assert estado in disparadoras, f"`{estado}` no dispara ningún trabajo"
 
 
-def test_recon_stuck_011_la_salvedad_del_aviso_es_cierta() -> None:
-    """La tercera línea del aviso promete algo; hay que comprobar que se cumple.
+def test_recon_stuck_011_el_aviso_no_promete_lo_que_no_puede_garantizar() -> None:
+    """El aviso no puede afirmar que ninguna puerta se quedará muda.
 
-    La versión anterior de esta prueba buscaba las cadenas `Siguiente acción:` y
-    `--remove-label` en la puerta y daba la promesa por buena. Eso es una prueba
-    de grafía haciéndose pasar por una de comportamiento, y **no vio** que
-    `reject()` retiraba la etiqueta aunque el comentario fallara: la incidencia
-    quedaba muda y la promesa era falsa. Hallazgo P2 de Codex en la PR #146, y
-    tercera vez en esta PR que un `grep` sustituye a una comprobación real.
+    Tres rondas de revisión seguidas encontraron un camino distinto en el que
+    era falso: `reject()` retiraba la etiqueta sin comentario; y en `reviewing` y
+    `repairing` la precondición inválida no pasa por `reject()` sino por
+    `sirius_transition`, que aplica el estado terminal y retira la etiqueta antes
+    de publicar, con los llamadores tragándose el error con `|| echo`.
 
-    Ahora la propiedad se fija donde ocurre y ejecutándola:
-    `test_a_rejection_without_diagnosis_keeps_the_label`, en
-    `test_sirius_activation.py`, corre la puerta con la publicación rota y
-    comprueba que la etiqueta sobrevive. Aquí solo queda la parte que sí es de
-    este módulo: que el aviso no vuelva a presentarse como receta completa.
+    Arreglar cada camino era el cuarto parche de la misma forma. La afirmación
+    se retira: el reconciliador conoce lo que el consumo retiró —eso lo lee— pero
+    no las garantías de publicación de tres puertas distintas. Lo que sí puede
+    decir sin mentir es dónde consta siempre el motivo: el registro de Actions.
     """
     guion = RECONCILE.read_text(encoding="utf-8")
-    assert "la puerta de activación lo dirá en un comentario" in guion, (
-        "el aviso volvería a presentarse como una receta completa"
-    )
-    # Y la promesa la sostiene una prueba que EJECUTA el camino, no un grep.
-    activacion = (REPO_ROOT / "tests" / "automation" / "test_sirius_activation.py").read_text(
-        encoding="utf-8"
-    )
-    assert "def test_a_rejection_without_diagnosis_keeps_the_label" in activacion, (
-        "sin esa prueba, la promesa del aviso no la sostiene nada"
+    for promesa in ("No se queda en silencio", "lo dirá en un comentario"):
+        assert promesa not in guion, (
+            f"el aviso vuelve a garantizar algo que no controla: {promesa!r}"
+        )
+    assert "la ejecución de Actions dice por qué" in guion, (
+        "el aviso debe seguir diciendo dónde mirar cuando no arranque"
     )
 
 
