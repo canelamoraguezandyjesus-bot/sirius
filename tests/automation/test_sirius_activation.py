@@ -81,6 +81,7 @@ case "$sub" in
         fi
         exit 0;;
       comment)
+        if [ "${MOCK_FAIL_COMMENT:-0}" = "1" ]; then echo "comment fail" >&2; exit 1; fi
         bf=""; prev=""
         for a in "$@"; do [ "$prev" = "--body-file" ] && bf="$a"; prev="$a"; done
         if [ -n "$bf" ]; then
@@ -274,3 +275,38 @@ def test_pull_request_is_ignored(tmp_path: Path) -> None:
     assert r.returncode == 0
     assert "sirius:implement-requested" in _labels(env)
     assert _comments(env) == ""
+
+
+def test_a_rejection_without_diagnosis_keeps_the_label(tmp_path: Path) -> None:
+    """Sin diagnóstico publicado, la etiqueta NO se retira.
+
+    `reject()` registraba el fallo de `sirius_comment_once` y seguía retirando
+    `sirius:implement-requested` igualmente. La incidencia quedaba solo en
+    `sirius:planned`: sin comentario, sin etiqueta de evento y sin nada que la
+    reviva. Y además invisible para el reconciliador, porque `planned` es un
+    estado de reposo legítimo y no está en `MACHINE_LABELS`.
+
+    Es la clase de fallo que la incidencia #138 vino a eliminar —un callejón
+    mudo— reintroducida por la puerta que debía protegerla. Hallazgo P2 de Codex
+    en la PR #146.
+
+    Conservando la etiqueta se pierde tiempo, no la incidencia: el estado queda
+    como estaba y el próximo intento vuelve a rechazar, con diagnóstico si la
+    publicación ya funciona.
+    """
+    env = _setup(tmp_path)
+    env["MOCK_FAIL_COMMENT"] = "1"
+    # Sin `sirius:planned`: la puerta rechaza, y al rechazar no podrá comentar.
+    _seed(env, ["sirius:implement-requested"])
+
+    r = _run(env)
+
+    assert r.returncode != 0, "un rechazo sin diagnóstico tiene que ser visible y reintentable"
+    etiquetas = (_md(env) / "labels.txt").read_text(encoding="utf-8")
+    assert "sirius:implement-requested" in etiquetas, (
+        "se retiró la etiqueta sin dejar diagnóstico: la incidencia queda muda "
+        f"y nada la revive. Etiquetas: {etiquetas!r}"
+    )
+    assert "sirius-activation:rejected" not in (_md(env) / "comments.txt").read_text(
+        encoding="utf-8"
+    ), "la prueba no está ejercitando el fallo de publicación"

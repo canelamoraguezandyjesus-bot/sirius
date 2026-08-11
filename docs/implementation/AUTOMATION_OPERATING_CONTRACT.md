@@ -403,14 +403,32 @@ Queda permitida, por tanto, **una** ejecución periódica, sujeta a todo lo
 siguiente. Si un cambio futuro rompe cualquiera de estos límites, deja de estar
 amparado por esta excepción y necesita una decisión nueva:
 
-1. **No inicia trabajo.** No aplica `sirius:implement-requested` ni ninguna otra
-   etiqueta que arranque un bloque.
+1. **No inicia trabajo.** No aplica **nunca** `sirius:implement-requested`, que
+   es la etiqueta que arranca un bloque nuevo. La redacción anterior decía «ni
+   ninguna otra etiqueta que arranque un bloque», y **era falsa**: el caso B
+   aplica `sirius:review-requested` para reparar una transición perdida. Eso no
+   inicia un bloque —el bloque ya estaba en marcha— pero sí despierta al
+   revisor, así que queda bajo el límite 2 y no bajo este. Es la única etiqueta
+   disparadora que este workflow escribe, y solo desde `sirius:ci-pending`.
+   Lo comprueban ejecutando dos pruebas, no una: RECON-STUCK-007 recorre todos
+   los demás caminos y exige que no se escriba ninguna disparadora, y
+   RECON-STUCK-013 exige que desde `ci-pending` con Quality verde se escriba
+   `review-requested` y solo esa. Ambas miran CADA escritura de etiqueta, no el
+   estado final: retirar y volver a poner deja el mismo estado y dispara un
+   evento nuevo.
 2. **No avanza un ciclo sano.** Solo repara estados inequívocos que ya estaban
    mal (los casos A y B de `scripts/automation/sirius_reconcile.sh`), y esos
    mismos casos son reparables hoy a mano sin esta excepción.
 3. **No fusiona.** El merge sigue siendo humano y exige el comentario de §8.
 4. **Ante la duda, informa y no toca.** Un estado que no puede fechar o cuya
-   situación es ambigua produce un aviso, nunca una acción.
+   situación es ambigua produce un aviso, nunca una acción. «Duda» incluye **no
+   haber podido leer**: si las etiquetas, los comentarios o el cuerpo de una
+   incidencia fallan en todas sus vías, esa incidencia se omite entera en esa
+   pasada —sin comprobarla y sin comentario— y consta en el resumen del job.
+   Un fichero vacío por un 503 es byte a byte el de una incidencia sana, así que
+   usarlo como dato era afirmar hechos que nadie había leído. Lo comprueban
+   ejecutando RECON-AUD-011 a RECON-AUD-016, una por cada lectura y por cada
+   afirmación que se derivaba de ella.
 5. **No sustituye a ningún productor de eventos.** Si el flujo por eventos
    funciona, esta ejecución no hace nada.
 

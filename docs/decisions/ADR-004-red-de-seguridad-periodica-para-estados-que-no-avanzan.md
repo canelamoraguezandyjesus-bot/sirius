@@ -171,3 +171,387 @@ es lo que de verdad se mezclaba entre páginas. Pasaba con la mutación puesta.
   poner para redisparar el evento): reintentaría también sobre runs vivos, porque
   desde fuera no puede saber si lo están. Sustituiría un fallo silencioso por
   ejecuciones duplicadas.
+
+## Segunda ronda de revisión: el aviso mandaba a hacer algo que no funciona
+
+Codex revisó `c4e0a25` —el commit ya fusionado en `main`— y encontró un cuarto
+defecto, esta vez en el propio aviso.
+
+El texto decía: *«quitar `sirius:repairing` y volver a ponerla: eso vuelve a
+disparar el evento»*. Y es verdad que dispara `issues: labeled`. Lo que no dice
+es que `repair-sirius-work.yml` arranca con
+`if: github.event.label.name == 'sirius:repair-requested'`, así que el job se
+salta y la incidencia queda igual de atascada. Lo mismo con `implementing` y
+`reviewing`: para los **tres** estados en curso, el aviso ofrecía como única
+salida una acción que no hace nada.
+
+Es la forma más incómoda de este defecto: la detección funcionaba, avisaba a
+tiempo, y después daba una salida falsa. Quien la siguiera no habría visto ningún
+error —solo que no pasa nada—.
+
+**Arreglo:** `reactivation_label` traduce cada estado a la etiqueta que de verdad
+arranca su workflow. La tabla es explícita; derivarla quitando el sufijo «ing»
+funcionaría hoy por coincidencia de las tres palabras, y eso es reconstruir desde
+fuera una correspondencia ajena, que es el patrón que ya costó dos hallazgos en
+la primera ronda.
+
+**RECON-STUCK-010** lee los `if:` reales de los tres workflows que hacen el
+trabajo y exige que la etiqueta propuesta esté entre ellos, ejecutando la función
+extraída del script. Cuatro mutaciones, todas con el resultado predicho.
+
+Dos pruebas propias salieron defectuosas y se rehicieron:
+
+- La primera versión de RECON-STUCK-010 miraba «etiquetas que disparan **algún**
+  workflow». Ese conjunto incluye `sirius:implementing`, que dispara
+  notificaciones, así que **pasaba con el defecto puesto**.
+- RECON-STUCK-007 afirmaba que el reconciliador no inicia bloques comprobando que
+  cierta cadena no apareciera en el archivo. Eso es una prueba de grafía: rompía
+  porque el aviso *nombra* la etiqueta que debe aplicar el usuario, y a cambio no
+  habría notado un `--add-label` escrito de otra forma.
+
+### Nota de método, para que conste
+
+**Este trabajo no llevó nota de arranque.** Salió directamente de un hallazgo de
+revisión y me puse a corregir sin escribir antes la afirmación ni el criterio de
+parada, que es lo que ADR-001 exige. No la escribo ahora a posteriori: un
+criterio redactado después de ver los resultados no es un criterio, y fingir lo
+contrario vacía de sentido la propia disciplina.
+
+Lo que sí hay, y sostiene el cambio, es lo de siempre: el mecanismo verificado
+contra los workflows reales antes de aceptar el hallazgo, pruebas que fallan al
+revertir el arreglo, y las dos pruebas vacuas propias detectadas y corregidas
+antes de subir nada.
+
+## Tercera ronda: dos veces el mismo defecto, así que cambia el enfoque
+
+Codex volvió sobre el arreglo anterior y encontró que **seguía sin funcionar**,
+un nivel más abajo. Para `sirius:implementing`, aplicar solo
+`sirius:implement-requested` dispara el workflow pero
+`sirius_validate_activation.sh` lo **rechaza** por falta de `sirius:planned` —que
+el paso «Consumir el evento» había retirado— y vuelve a quitar la etiqueta.
+
+Verificado: `implement-sirius-work.yml` retira `implement-requested` **y**
+`planned`; la puerta exige `planned` y sin ella rechaza. `reviewing` y
+`repairing` no tienen ese problema: su consumo solo retira la disparadora.
+
+Dos rondas con defectos de la misma familia —«el aviso manda a hacer algo que no
+funciona»— son la señal de parar de parchear (ADR-001). **La raíz es la misma
+que la de los otros tres hallazgos de esta PR**: el reconciliador reconstruía
+desde fuera las condiciones de admisión de otro sistema. Añadir `planned` a la
+tabla habría sido el tercer parche de la misma forma, y el cuarto habría llegado
+con la siguiente precondición.
+
+Dos cambios de enfoque, y hacen falta los dos:
+
+1. **La regla se deriva de los workflows, no se escribe a mano.** Lo que hay que
+   reponer es *exactamente lo que el paso de consumo retiró*, con la etiqueta
+   disparadora en último lugar para que la puerta encuentre el resto ya puesto.
+   **RECON-STUCK-010** lee ese paso del YAML real y compara; si un workflow
+   empieza a consumir otra etiqueta, la prueba falla sin que nadie se acuerde.
+2. **El aviso deja de presentarse como una receta completa.** Añade una tercera
+   línea: si faltara alguna condición más, la puerta lo dirá en un comentario y
+   retirará la etiqueta —no se queda en silencio—. **RECON-STUCK-011** comprueba
+   que esa promesa es cierta contra la puerta real, no solo que esté escrita.
+
+Seis mutaciones, todas con el resultado predicho: olvidar `planned`, volver a
+proponer la etiqueta en curso, invertir el orden, cambiar lo que consume el
+workflow sin tocar la tabla, dejar muda a la puerta, y quitar la salvedad.
+
+Lo que esto sigue **sin** garantizar, dicho para que no se lea de más: que la
+secuencia prescrita baste siempre. Garantiza que reponga lo que el consumo
+retiró y que, si no basta, quien lo sepa lo diga. Prometer más sería repetir el
+error tres veces.
+
+## Cuarta ronda: la promesa era falsa, y el patrón es mío
+
+El aviso decía que la puerta «no se queda en silencio». Codex demostró que sí
+puede: `reject()` registraba el fallo de `sirius_comment_once` y **retiraba la
+etiqueta igualmente**. La incidencia quedaba solo en `sirius:planned`, sin
+comentario y sin ningún evento que la reviva — y encima **invisible para este
+mismo reconciliador**, porque `planned` es un estado de reposo legítimo y no
+está en `MACHINE_LABELS`.
+
+Es la clase exacta de fallo que esta incidencia vino a eliminar, un callejón
+mudo, reintroducida por la puerta que debía protegerla.
+
+**Arreglo:** sin diagnóstico publicado no se retira la etiqueta. Conservándola
+se pierde tiempo, no la incidencia: el estado queda como estaba y el próximo
+intento vuelve a rechazar. No hay bucle, porque `issues: labeled` solo dispara
+al aplicar la etiqueta.
+
+### El patrón, que no está en el código
+
+Tres veces en esta misma PR una prueba de **grafía** se hizo pasar por una de
+**comportamiento**:
+
+| Prueba | Qué afirmaba | Qué medía |
+|---|---|---|
+| RECON-STUCK-007 | «el reconciliador no inicia bloques» | que cierta cadena no apareciera en el archivo |
+| RECON-STUCK-010 (1ª versión) | «la etiqueta propuesta arranca el trabajo» | que estuviera en un conjunto demasiado amplio |
+| RECON-STUCK-011 (1ª versión) | «la puerta no se queda en silencio» | que dos cadenas existieran en la puerta |
+
+Las tres pasaban con el defecto puesto. Y la tercera se escribió **justo
+después** de corregir la primera, que era el mismo error.
+
+Un `grep` puede fijar que un patrón concreto no reaparezca por inercia —para eso
+sirve— pero no puede sostener una afirmación sobre lo que el sistema hace. Para
+eso hay que ejecutarlo. La regla que sale de aquí, y que las tres pruebas
+cumplen ya: **si la frase empieza por «el sistema hace X», la prueba tiene que
+hacer que lo haga.**
+
+`test_a_rejection_without_diagnosis_keeps_the_label` corre la puerta con la
+publicación rota y comprueba que la etiqueta sobrevive. Cuatro mutaciones, todas
+con el resultado predicho, incluida la que rompe el simulado para confirmar que
+la prueba no pasa por vacuidad.
+
+## Quinta ronda: se retira la promesa en vez de parchear el tercer camino
+
+Codex encontró un camino **más** en el que la salvedad del aviso era falsa: en
+`reviewing` y `repairing` una precondición inválida no pasa por `reject()` sino
+por `sirius_transition`, que aplica el estado terminal y retira la etiqueta
+**antes** de publicar; y los llamadores se tragan el error con `|| echo`.
+
+Arreglar ese tercer camino habría sido el cuarto parche de la misma forma. **La
+afirmación se retira.** El reconciliador sabe lo que el paso de consumo retiró
+—eso lo lee del YAML— pero no las garantías de publicación de tres puertas
+distintas, y prometerlas era hablar por ellas. Lo que sí puede decir sin mentir
+es dónde consta siempre el motivo: el registro de Actions.
+
+Es la misma lección que el resto de esta PR, aplicada a una frase en vez de a un
+cálculo: **no afirmes por otro sistema.**
+
+### Y la tercera versión de la misma prueba de grafía
+
+RECON-STUCK-007 seguía siendo textual: solo detectaba una escritura si el nombre
+de la función y la etiqueta caían en la **misma línea**. Pero el estilo del
+propio repositorio parte estas llamadas en dos:
+
+```bash
+sirius_set_issue_labels "$GH_REPO" "$ISSUE_NUMBER" \
+  "sirius:implementing" "sirius:implement-requested" "sirius:planned"
+```
+
+Una llamada así habría iniciado un bloque con la prueba en verde, y una etiqueta
+pasada por variable también. Van **tres** versiones de esta aserción y las tres
+medían texto.
+
+Ahora ejecuta: siembra una incidencia por cada estado de `MACHINE_LABELS`, corre
+el reconciliador y comprueba qué etiquetas quedaron escritas. Verificado por
+mutación con una llamada partida en dos líneas —el caso exacto que la versión
+anterior no veía—: falla.
+
+Esa es la forma definitiva de la regla, y el motivo de que hicieran falta tres
+intentos para llegar a ella: un `grep` no puede sostener una afirmación sobre lo
+que un sistema hace, ni siquiera cuando parece que sí.
+
+## Sexta ronda: la prueba copiaba una afirmación del contrato que ya era falsa
+
+Codex encontró que RECON-STUCK-007 —cuarta versión— seguía sin sostener lo que
+decía: miraba el **estado final** y solo prohibía `sirius:implement-requested`.
+Un «retirar y volver a poner» deja el estado idéntico y sin embargo dispara
+`issues: labeled`, que es arrancar trabajo. Y aplicar `review-requested` o
+`repair-requested` desde cualquier otro caso también pasaba en verde.
+
+Al verificarlo apareció la causa de por qué la prueba miraba una sola etiqueta:
+**el §9.1 decía algo falso**. Su límite 1 afirmaba «no aplica
+`sirius:implement-requested` ni ninguna otra etiqueta que arranque un bloque»,
+pero el caso B aplica `sirius:review-requested`. La prueba no estaba mal por
+descuido: copiaba fielmente una afirmación que ya estaba mal.
+
+Corregido el texto para que diga lo que de verdad ocurre —nunca
+`implement-requested`; la única disparadora que escribe es `review-requested`, y
+solo desde `ci-pending`, bajo el límite 2— y las pruebas lo fijan **ejecutando**:
+
+- El `gh` simulado registra **cada** adición de etiqueta, no el estado final.
+- **RECON-STUCK-007**: desde un estado atascado no se escribe ninguna de las
+  tres disparadoras.
+- **RECON-STUCK-013**: desde `ci-pending` con Quality verde se escribe
+  `review-requested` y ninguna otra.
+
+Tres mutaciones, todas con el resultado predicho: reaplicar la etiqueta en curso,
+aplicar otra disparadora distinta, y que el caso B deje de aplicar la suya.
+
+### Cuatro versiones de la misma aserción
+
+| Versión | Qué medía | Cómo se la saltaba el defecto |
+|---|---|---|
+| 1ª | que una cadena no estuviera en el archivo | el aviso nombra la etiqueta que aplica el usuario |
+| 2ª | que no cayera en la misma línea | el repositorio parte esas llamadas en dos |
+| 3ª | el estado final tras ejecutar | «retirar y volver a poner» no cambia el estado |
+| 4ª | cada escritura, contra las tres disparadoras | — |
+
+La lección no es «ejecuta en vez de leer», que ya estaba escrita en la ronda
+anterior. Es que **una prueba no puede ser más correcta que la afirmación que
+copia**: mientras el contrato dijo una cosa falsa, cada versión de la prueba
+heredó el error aunque cambiara de técnica. Antes de medir hay que comprobar que
+lo que se va a medir es cierto.
+
+## Séptima ronda: auditoría adversarial en paralelo, ocho defectos más
+
+Tras ocho hallazgos externos consecutivos, la revisión dejó de ser suficiente
+como único filtro: cada ronda encontraba uno, se corregía, y aparecía otro. Se
+montó una **auditoría adversarial de seis lentes independientes** sobre el
+cambio —afirmaciones contra realidad, vacuidad de pruebas, corrección del shell,
+semántica de `gh`, coherencia con la máquina de estados, y el aviso tal como lo
+lee una persona— con cada hallazgo pasando por un refutador cuyo trabajo era
+tumbarlo ejecutándolo.
+
+Once hallazgos en bruto → **ocho defectos distintos**, todos confirmados
+ejecutando. Dos de gravedad alta, y uno era una **regresión introducida en la
+ronda anterior**.
+
+| | Defecto | Por qué importaba |
+|---|---|---|
+| D1 | `mapfile < <(...)` descartaba el fallo del listado | un 503 apagaba las cuatro pasadas diarias **con aspecto de éxito**: resumen vacío, `rc=0`, idéntico a un repositorio sano |
+| D2 | `planned` + `implement-requested` caía en CONTRADICCION | es el **único** estado en que `implement-requested` existe en producción sana; una activación muerta no recibía aviso nunca, y encima se la acusaba de incoherente en cada pasada |
+| D3 | `2>/dev/null` sobre la llamada entera | un 403 por límite de tasa salía **idéntico** a «no hay evento»: la detección podía estar apagada del todo sin una sola señal |
+| D4 | el caso B no miraba `draft` | `advance-…` se niega a mover una PR en borrador y `quality.yml` sí corre en ella: el reconciliador arrancaba 85 min de revisión sobre algo que una persona aparcó a propósito |
+| D5 | `ci-pending` nunca recibía aviso | su motor es `on: workflow_run`, un evento de un solo uso: con Quality en rojo y ese run muerto, callejón cerrado — y la cabecera afirmaba que **todos** los estados de máquina reciben aviso |
+| D6 | §9.1 citaba RECON-STUCK-007 para más de lo que cubre | una escritura insertada en el caso A pasaba **25/25** del fichero |
+| D7 | RECON-STUCK-011 hacía `grep` sobre el guion | su aserción positiva quedaba satisfecha por un **comentario de shell** mientras el aviso publicado ya no contenía la frase |
+| D8 | `printf` con seis `%s` y siete argumentos | `printf` reutiliza el formato: la última línea salía pegada al punto 2 —en Markdown, dentro del ítem— con diez líneas en blanco detrás |
+
+Y dos defectos más aparecieron **al arreglar los anteriores**, los dos por la
+misma causa que ya había producido tres: **un simulado más permisivo que la
+herramienta real**. El `gh` simulado no aplicaba el `--jq` a `/pulls/`, así que
+devolvía `draft` aunque el guion dejara de pedirlo —la prueba pasaba con el
+defecto puesto— y aceptaba una siembra con `head` como cadena cuando la API
+devuelve un objeto con `sha`. Corregido el simulado, la siembra irreal falló
+sola.
+
+**Once mutaciones**, todas con el resultado predicho antes de ejecutarlas.
+
+### Lo que esta ronda enseña, y no es «revisar más»
+
+Los ocho hallazgos externos anteriores salieron de un revisor que miraba **con
+otra cabeza**. Estos ocho salieron de seis cabezas mirando **a la vez, con
+lentes distintas y con la lista de patrones ya conocidos por delante**. La
+diferencia no es cantidad de repasos: es que un solo revisor —humano, modelo o
+yo— comparte sesgo consigo mismo entre rondas, y por eso las rondas encuentran
+de una en una.
+
+La regla operativa que sale: **cuando una pieza acumula dos rondas de hallazgos,
+deja de revisarse en serie y se audita en paralelo con lentes explícitas**. Y la
+lente que más rinde es siempre la misma: coger cada frase declarativa y
+preguntar qué comprobación la sostiene.
+
+## Octava ronda: el aviso nuevo repetía el error del aviso viejo
+
+Codex revisó el head salido de la auditoría y encontró dos defectos, los dos en
+el aviso de `ci-pending` **escrito en esa misma ronda**:
+
+1. **Prescribía `sirius:repair-requested` sin comprobar si el corrector podría
+   trabajar.** Su puerta exige un bloque de observaciones estructuradas; sin él
+   se detiene con `sin-observaciones` y aplica `failed-safely`. En el escenario
+   exacto en que el aviso aparece —Quality falló y la transición se perdió— no
+   hay observaciones, así que el único desatasco ofrecido no desatascaba nada.
+2. **Se emitía para cualquier conclusión distinta de `success`.** El productor
+   real solo encamina `failure|timed_out` al corrector; `cancelled`, `skipped`,
+   `neutral`, `stale` y `action_required` van a `failed-safely`. Prescribir una
+   corrección en esos casos autoriza trabajo sin causa técnica demostrada y
+   esquiva la parada segura de la máquina de estados.
+
+Es la **cuarta vez** que una recomendación escrita en este guion no funciona, y
+siempre por lo mismo: redactarla sin leer las condiciones de admisión de quien
+la recibe. La regla ya estaba escrita en la sexta ronda —derivar del workflow, no
+inventar— y se aplicó a `reactivation_labels`; el aviso de `ci-pending`, escrito
+después, no la heredó.
+
+**Arreglo:** el reconciliador deja de adivinar y **comprueba**. Mira el volcado
+de comentarios que ya ha leído y prescribe una cosa u otra según haya bloque de
+observaciones o no; y solo ofrece corrección para las conclusiones que el
+productor real considera corregibles, leídas de su `case`.
+
+Cuatro mutaciones con el resultado predicho: prescribir a ciegas, no prescribir
+nunca, y tratar `cancelled` como corregible.
+
+### Lo que esto añade al método
+
+La auditoría en paralelo encontró ocho defectos que la revisión en serie no
+había encontrado en ocho rondas. Pero **no encontró estos dos**, y la razón es
+instructiva: sus seis lentes miraban el código *existente*, y este aviso nació
+en la propia ronda de corrección. **El código escrito para arreglar algo no pasa
+por el filtro que encontró ese algo.**
+
+De ahí la regla que cierra este ADR: *toda recomendación dirigida a una persona
+se deriva de las precondiciones reales del sistema que la va a recibir, o no se
+escribe.* Cuatro rondas costó, y la cuarta la escribí después de enunciar la
+regla.
+
+## Novena ronda: una lectura que falla no es un hecho sobre la incidencia
+
+Codex encontró, sobre `b0d6ad0`, que el aviso de `ci-pending` afirmaba «esta
+incidencia **no** tiene observaciones estructuradas» a partir de un `grep` sobre
+un fichero que podía estar vacío **porque la lectura había fallado**. Cierto y
+verificado: `sirius_reconcile.sh` leía así, una vez por incidencia:
+
+```bash
+sirius_read_issue_comments "$REPO" "$issue" >"$comments_file" 2>/dev/null || true
+sirius_read_issue_body     "$REPO" "$issue" >"$body_file"     2>/dev/null || true
+```
+
+El `|| true` descartaba el estado de salida, y el `2>/dev/null`, el motivo. Con
+todas las vías caídas —REST y su respaldo GraphQL— los ficheros quedaban vacíos,
+y **un fichero vacío es byte a byte el de una incidencia sana sin comentarios.**
+
+### Uno visible y dos que no lo eran
+
+Codex vio el consumidor que estaba en el diff. Aplicando la misma lente al resto
+del bucle aparecieron **cuatro más**, todos de la misma frase — *«no lo he
+leído» contado como «no lo hay»*:
+
+| | Dónde | Qué afirmaba sin haberlo leído |
+|---|---|---|
+| 1 | marcador `sirius-completed` | nada: **callaba**. El caso A no reparaba y la pasada terminaba sin mencionar la incidencia |
+| 2 | URLs de PR en cuerpo + comentarios | «ci-pending sin PR abierta referenciada; requiere revisión humana» |
+| 3 | bloque de observaciones | «no tiene observaciones, hace falta resolver a mano» — **publicado en la incidencia** (el de Codex) |
+| 4 | `gh api /pulls/N` con `\|\| continue` | la PR ilegible desaparecía del recuento y caía en el mensaje 2 |
+| 5 | `gh api /check-runs` con `\|\| conclusion="none"` | «Quality aún sin resultado; nada que reconciliar» |
+
+El quinto es el más discreto de todos los defectos de esta PR: convierte un 503
+en el mensaje que **más se parece a una espera normal**, así que la red de
+seguridad se apagaba sobre esa incidencia sin que el texto delatara nada.
+
+### Por qué no se parchea el consumidor
+
+Con el listado (D1) y los eventos (D3) van **tres rondas** con la misma familia,
+lo que por ADR-001 obliga a parar y buscar la raíz. La raíz no es el `grep`: es
+que el resultado de una lectura y el hecho que se deriva de ella se estaban
+tratando como la misma cosa. Arreglar el consumidor de Codex habría dejado los
+otros cuatro vivos y habría traído una décima ronda con el siguiente.
+
+**Regla:** *ninguna lectura fallida entra en una afirmación.* O se comprueba el
+estado de salida y se dice que no se pudo leer, o no se dice nada de eso.
+
+Implementación: las lecturas de comentarios y cuerpo pasan a tener guardia —si
+fallan, se avisa y **se omite la incidencia entera en esa pasada**—, con la misma
+forma que la de etiquetas que ya la tenía ocho líneas más arriba; la lectura de
+cada PR anota `pr_ilegible` y basta una para no afirmar nada del conjunto; y la
+de `check-runs` distingue vacío (fallo) de `none` (leído y sin resultado). Se
+quitan los `2>/dev/null` que tapaban el motivo.
+
+El coste está dicho en el encabezado del guion y en el §9.1 límite 4, porque es
+real: en una pasada con esas lecturas caídas, la incidencia no recibe **ninguna**
+comprobación, ni siquiera las que solo necesitan etiquetas. Se prefiere a tres
+condicionales más —tres sitios más donde volver a equivocarse en lo mismo— y no
+es silencioso: sale en el resumen del job en cada pasada mientras dure.
+
+### Lo que enseñó la mutación, que no es lo que yo esperaba
+
+Trece mutaciones con el resultado predicho. Y **dos que no**:
+
+- Una falló por estar **mal escrita**: al «invertir» dos ramas dejé la cadena
+  `if/elif` rota, y el fallo consiguiente no decía nada del código. Anotado
+  porque el reflejo natural era leerlo como un defecto real y ponerse a arreglar
+  lo que no estaba roto.
+- La otra era mía y de verdad: **quitar entero el guardia de la lectura de
+  etiquetas dejaba la suite en verde.** Ese guardia existía desde la primera
+  versión y ninguna prueba lo cubría; y yo acababa de escribir encima un
+  comentario afirmando que el motivo del fallo queda en el registro. Una
+  afirmación nueva sin nada que la sostuviera, en la misma ronda dedicada a
+  quitarlas. RECON-AUD-016 la sostiene ahora.
+
+Eso segundo es la lección de método de esta ronda, y afina la de la octava. No
+basta con mutar **lo que se ha cambiado**: hay que mutar también **lo que se ha
+dado por bueno al pasar por delante**. Un guardia que lleva ocho rondas ahí
+parece comprobado por el mero hecho de seguir vivo, y no lo estaba.
