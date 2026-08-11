@@ -29,6 +29,14 @@
 # etiqueta ya aplicada, así que si la ejecución que debía moverlo murió, nada lo
 # moverá nunca; y un resumen de job que nadie abre no es una detección.
 #
+# Con una excepción que hay que decir, porque la introduce este mismo guion: si
+# alguna lectura de una incidencia —etiquetas, comentarios o cuerpo— falla en
+# TODAS sus vías, esa incidencia se omite entera en esa pasada, sin comprobarla
+# y sin comentario. Consta en el resumen del job y la pasada siguiente vuelve a
+# intentarlo. Se prefiere a la alternativa: un fichero vacío por un 503 es byte
+# a byte el de una incidencia sana, así que usarlo era afirmar hechos que nadie
+# había leído.
+#
 # Nunca hace merge, nunca inicia bloques y nunca decide producto.
 #
 # Uso: sirius_reconcile.sh <owner/repo>
@@ -165,7 +173,11 @@ mapfile -t open_issues <<<"$open_list"
 for issue in "${open_issues[@]:-}"; do
   [ -z "${issue:-}" ] && continue
 
-  labels="$(sirius_retry gh api "repos/${REPO}/issues/${issue}/labels" --jq '.[].name' 2>/dev/null)" || {
+  # Sin `2>/dev/null`: aqui el estado SI se comprueba, pero taparle la salida de
+  # error a la llamada dejaba el motivo fuera del registro, que es lo mismo que
+  # ya costo un hallazgo en la lectura de eventos. Que se omita se dice; por que,
+  # tambien.
+  labels="$(sirius_retry gh api "repos/${REPO}/issues/${issue}/labels" --jq '.[].name')" || {
     report AVISO "No se pudieron leer las etiquetas de #${issue}; se omite."
     continue
   }
@@ -173,8 +185,42 @@ for issue in "${open_issues[@]:-}"; do
 
   comments_file="$(mktemp)"
   body_file="$(mktemp)"
-  sirius_read_issue_comments "$REPO" "$issue" >"$comments_file" 2>/dev/null || true
-  sirius_read_issue_body "$REPO" "$issue" >"$body_file" 2>/dev/null || true
+  # El `|| true` descartaba el estado de salida de las dos lecturas, y el
+  # `2>/dev/null` tambien el motivo. Cuando fallaban TODAS las vias —REST y su
+  # respaldo GraphQL— los ficheros quedaban vacios, y un fichero vacio es
+  # exactamente lo que devuelve una incidencia sana sin comentarios. A partir de
+  # ahi, TRES consumidores distintos convertian ese vacio en un hecho positivo:
+  #
+  #   1. el marcador de completado no aparecia, asi que el caso A no reparaba
+  #      una incidencia fusionada a medias y ademas no decia que no la habia
+  #      mirado;
+  #   2. la busqueda de PR no encontraba ninguna, y el guion afirmaba
+  #      "ci-pending sin PR abierta referenciada; requiere revision humana";
+  #   3. el bloque de observaciones no aparecia, y el aviso afirmaba —PUBLICADO
+  #      en la incidencia— que no las tiene y que hay que resolver a mano.
+  #
+  # Los tres son la misma frase: "no lo he leido" contada como "no lo hay".
+  # Codex vio el tercero; los otros dos salen de la misma linea. Y es la tercera
+  # vez en esta PR que una lectura fallida se hace pasar por un hecho —el
+  # listado y los eventos fueron las otras dos—, asi que aqui no se parchea al
+  # consumidor: se arregla la lectura, con la misma forma que la de etiquetas
+  # ocho lineas mas arriba.
+  #
+  # El coste queda dicho porque es real: en una pasada con esas lecturas caidas,
+  # la incidencia no recibe NINGUNA comprobacion, ni siquiera las que solo
+  # necesitan etiquetas. Se prefiere a la alternativa —tres condicionales, tres
+  # sitios mas donde volver a equivocarse en lo mismo— y no es silencioso: sale
+  # en el resumen del job en cada pasada mientras dure. Hallazgo de Codex en #146.
+  if ! sirius_read_issue_comments "$REPO" "$issue" >"$comments_file"; then
+    report AVISO "No se pudieron leer los comentarios de #${issue}; se omite (esta pasada NO la ha comprobado)."
+    rm -f "$comments_file" "$body_file"
+    continue
+  fi
+  if ! sirius_read_issue_body "$REPO" "$issue" >"$body_file"; then
+    report AVISO "No se pudo leer el cuerpo de #${issue}; se omite (esta pasada NO la ha comprobado)."
+    rm -f "$comments_file" "$body_file"
+    continue
+  fi
 
   completed_marker="$(grep -oE '<!-- sirius-completed:[0-9a-fA-F]{7,40} -->' "$comments_file" | head -n 1 || true)"
 
@@ -250,7 +296,7 @@ for issue in "${open_issues[@]:-}"; do
       cat "$body_file" "$comments_file" \
         | grep -oE "https://github\.com/${REPO}/pull/[0-9]+" | sort -u
     )
-    open_pr="" open_head="" open_draft=""
+    open_pr="" open_head="" open_draft="" pr_ilegible=""
     for url in "${pr_urls[@]:-}"; do
       [ -z "${url:-}" ] && continue
       prnum="${url##*/}"
@@ -260,7 +306,14 @@ for issue in "${open_issues[@]:-}"; do
       # decidido no hacer —arrancar al revisor sobre algo que una persona dejo
       # aparcado a proposito—, contra los limites 2 y 5 del §9.1. Es el error de
       # siempre: decidir por otro sistema sin leer su predicado. Auditoria #146.
-      prjson="$(sirius_retry gh api "repos/${REPO}/pulls/${prnum}" --jq '{state: .state, head: .head.sha, draft: (.draft // false)}' 2>/dev/null)" || continue
+      # Un fallo al leer ESTA PR no dice nada sobre ella. Saltarla en silencio la
+      # borraba del recuento, y si era la unica el guion afirmaba despues "sin PR
+      # abierta referenciada": la cuarta vez en este fichero que una lectura
+      # caida se cuenta como un hecho. Se anota y se decide al salir del bucle.
+      if ! prjson="$(sirius_retry gh api "repos/${REPO}/pulls/${prnum}" --jq '{state: .state, head: .head.sha, draft: (.draft // false)}')"; then
+        pr_ilegible="si"
+        continue
+      fi
       if [ "$(printf '%s' "$prjson" | jq -r '.state')" = "open" ]; then
         if [ -n "$open_pr" ]; then open_pr="AMBIGUA"; break; fi
         open_pr="$prnum"
@@ -268,15 +321,32 @@ for issue in "${open_issues[@]:-}"; do
         open_draft="$(printf '%s' "$prjson" | jq -r '.draft')"
       fi
     done
-    if [ -z "$open_pr" ]; then
+    # Basta con que UNA sea ilegible para no afirmar nada del conjunto, aunque
+    # otra si se haya leido y este abierta: la que falto podria estar abierta
+    # tambien, y entonces esto no seria "la PR", seria una de dos sin detectar la
+    # ambiguedad. Se prefiere no decidir a decidir sobre lo que no se ha leido.
+    if [ -n "$pr_ilegible" ]; then
+      report AVISO "#${issue}: ci-pending; no se pudo leer alguna de las PR referenciadas, asi que no afirmo cuales hay abiertas."
+    elif [ -z "$open_pr" ]; then
       report AVISO "#${issue}: ci-pending sin PR abierta referenciada; requiere revisión humana."
     elif [ "$open_pr" = "AMBIGUA" ]; then
       report CONTRADICCION "#${issue}: ci-pending con varias PR abiertas referenciadas; requiere revisión humana."
     else
+      # `|| conclusion="none"` convertia un 503 en "Quality aun sin resultado",
+      # que es una afirmacion sobre Quality hecha sin haberlo leido —y ademas la
+      # que mas se parece a una espera normal, asi que no llamaba la atencion de
+      # nadie—. Quinta y ultima de la misma familia en este fichero. Con exito el
+      # `jq` siempre imprime algo (`// "none"`), asi que vacio solo puede ser el
+      # fallo.
       conclusion="$(sirius_retry gh api "repos/${REPO}/commits/${open_head}/check-runs" \
-        --jq '[.check_runs[] | select(.name == "quality")] | (first.conclusion // "none")' 2>/dev/null)" || conclusion="none"
+        --jq '[.check_runs[] | select(.name == "quality")] | (first.conclusion // "none")')" || conclusion=""
+      # El borrador va PRIMERO a proposito: es un hecho que si se ha leido, y
+      # manda por si solo —en borrador no se transiciona, quede Quality como
+      # quede—, asi que da el motivo mas util aunque ademas falle la lectura.
       if [ "$open_draft" = "true" ]; then
         report AVISO "#${issue}: ci-pending con la PR #${open_pr} en borrador; el productor del evento tampoco la avanzaria, no se transiciona."
+      elif [ -z "$conclusion" ]; then
+        report AVISO "#${issue}: ci-pending; no se pudo leer el resultado de Quality para ${open_head}, no afirmo en que quedo."
       elif [ "$conclusion" = "success" ]; then
         report ATASCO "#${issue}: ci-pending pero Quality esta en verde para ${open_head}; se reintenta la transicion."
         marker="<!-- sirius-quality:${open_head}:success -->"

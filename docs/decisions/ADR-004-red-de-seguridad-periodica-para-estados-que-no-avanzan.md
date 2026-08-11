@@ -477,3 +477,81 @@ De ahí la regla que cierra este ADR: *toda recomendación dirigida a una person
 se deriva de las precondiciones reales del sistema que la va a recibir, o no se
 escribe.* Cuatro rondas costó, y la cuarta la escribí después de enunciar la
 regla.
+
+## Novena ronda: una lectura que falla no es un hecho sobre la incidencia
+
+Codex encontró, sobre `b0d6ad0`, que el aviso de `ci-pending` afirmaba «esta
+incidencia **no** tiene observaciones estructuradas» a partir de un `grep` sobre
+un fichero que podía estar vacío **porque la lectura había fallado**. Cierto y
+verificado: `sirius_reconcile.sh` leía así, una vez por incidencia:
+
+```bash
+sirius_read_issue_comments "$REPO" "$issue" >"$comments_file" 2>/dev/null || true
+sirius_read_issue_body     "$REPO" "$issue" >"$body_file"     2>/dev/null || true
+```
+
+El `|| true` descartaba el estado de salida, y el `2>/dev/null`, el motivo. Con
+todas las vías caídas —REST y su respaldo GraphQL— los ficheros quedaban vacíos,
+y **un fichero vacío es byte a byte el de una incidencia sana sin comentarios.**
+
+### Uno visible y dos que no lo eran
+
+Codex vio el consumidor que estaba en el diff. Aplicando la misma lente al resto
+del bucle aparecieron **cuatro más**, todos de la misma frase — *«no lo he
+leído» contado como «no lo hay»*:
+
+| | Dónde | Qué afirmaba sin haberlo leído |
+|---|---|---|
+| 1 | marcador `sirius-completed` | nada: **callaba**. El caso A no reparaba y la pasada terminaba sin mencionar la incidencia |
+| 2 | URLs de PR en cuerpo + comentarios | «ci-pending sin PR abierta referenciada; requiere revisión humana» |
+| 3 | bloque de observaciones | «no tiene observaciones, hace falta resolver a mano» — **publicado en la incidencia** (el de Codex) |
+| 4 | `gh api /pulls/N` con `\|\| continue` | la PR ilegible desaparecía del recuento y caía en el mensaje 2 |
+| 5 | `gh api /check-runs` con `\|\| conclusion="none"` | «Quality aún sin resultado; nada que reconciliar» |
+
+El quinto es el más discreto de todos los defectos de esta PR: convierte un 503
+en el mensaje que **más se parece a una espera normal**, así que la red de
+seguridad se apagaba sobre esa incidencia sin que el texto delatara nada.
+
+### Por qué no se parchea el consumidor
+
+Con el listado (D1) y los eventos (D3) van **tres rondas** con la misma familia,
+lo que por ADR-001 obliga a parar y buscar la raíz. La raíz no es el `grep`: es
+que el resultado de una lectura y el hecho que se deriva de ella se estaban
+tratando como la misma cosa. Arreglar el consumidor de Codex habría dejado los
+otros cuatro vivos y habría traído una décima ronda con el siguiente.
+
+**Regla:** *ninguna lectura fallida entra en una afirmación.* O se comprueba el
+estado de salida y se dice que no se pudo leer, o no se dice nada de eso.
+
+Implementación: las lecturas de comentarios y cuerpo pasan a tener guardia —si
+fallan, se avisa y **se omite la incidencia entera en esa pasada**—, con la misma
+forma que la de etiquetas que ya la tenía ocho líneas más arriba; la lectura de
+cada PR anota `pr_ilegible` y basta una para no afirmar nada del conjunto; y la
+de `check-runs` distingue vacío (fallo) de `none` (leído y sin resultado). Se
+quitan los `2>/dev/null` que tapaban el motivo.
+
+El coste está dicho en el encabezado del guion y en el §9.1 límite 4, porque es
+real: en una pasada con esas lecturas caídas, la incidencia no recibe **ninguna**
+comprobación, ni siquiera las que solo necesitan etiquetas. Se prefiere a tres
+condicionales más —tres sitios más donde volver a equivocarse en lo mismo— y no
+es silencioso: sale en el resumen del job en cada pasada mientras dure.
+
+### Lo que enseñó la mutación, que no es lo que yo esperaba
+
+Trece mutaciones con el resultado predicho. Y **dos que no**:
+
+- Una falló por estar **mal escrita**: al «invertir» dos ramas dejé la cadena
+  `if/elif` rota, y el fallo consiguiente no decía nada del código. Anotado
+  porque el reflejo natural era leerlo como un defecto real y ponerse a arreglar
+  lo que no estaba roto.
+- La otra era mía y de verdad: **quitar entero el guardia de la lectura de
+  etiquetas dejaba la suite en verde.** Ese guardia existía desde la primera
+  versión y ninguna prueba lo cubría; y yo acababa de escribir encima un
+  comentario afirmando que el motivo del fallo queda en el registro. Una
+  afirmación nueva sin nada que la sostuviera, en la misma ronda dedicada a
+  quitarlas. RECON-AUD-016 la sostiene ahora.
+
+Eso segundo es la lección de método de esta ronda, y afina la de la octava. No
+basta con mutar **lo que se ha cambiado**: hay que mutar también **lo que se ha
+dado por bueno al pasar por delante**. Un guardia que lleva ocho rondas ahí
+parece comprobado por el mero hecho de seguir vivo, y no lo estaba.

@@ -52,6 +52,24 @@ sub="$1"; shift || true
 
 issue_from() { printf '%s' "$1" | grep -oE 'issues/[0-9]+' | head -1 | cut -d/ -f2; }
 
+# `MOCK_FAIL_COMMENTS=N` / `MOCK_FAIL_BODY=N` fallan los N primeros INTENTOS de
+# esa lectura —REST y su respaldo GraphQL cuentan por separado— y a partir de
+# ahi responden con normalidad.
+#
+# Transitorio a proposito: es el UNICO escenario en el que el defecto se ve. Si
+# la API siguiera caida tambien al publicar, el aviso falso no llegaria a salir
+# y la prueba pasaria por la razon equivocada, con el defecto puesto.
+fallo_transitorio() {
+  local nombre="$1" tope="$2" c=0
+  [ "${tope:-0}" = "0" ] && return 1
+  [ -f "$D/fallos_${nombre}" ] && c="$(cat "$D/fallos_${nombre}")"
+  if [ "$c" -lt "$tope" ]; then
+    echo $(( c + 1 )) > "$D/fallos_${nombre}"
+    return 0
+  fi
+  return 1
+}
+
 case "$sub" in
   api)
     args="$*"
@@ -82,10 +100,16 @@ case "$sub" in
       cat "$D/open_issues.txt" 2>/dev/null; exit 0
     fi
     if printf '%s' "$args" | grep -q '/check-runs'; then
+      if [ "${MOCK_FAIL_CHECKS:-0}" = "1" ]; then
+        echo "gh: HTTP 503 (check-runs)" >&2; exit 1
+      fi
       sha="$(printf '%s' "$args" | grep -oE 'commits/[0-9a-f]+' | cut -d/ -f2)"
       cat "$D/checks_${sha}.txt" 2>/dev/null || echo "none"; exit 0
     fi
     if printf '%s' "$args" | grep -q '/pulls/'; then
+      if [ "${MOCK_FAIL_PR:-0}" = "1" ]; then
+        echo "gh: HTTP 503 (lectura de PR)" >&2; exit 1
+      fi
       pr="$(printf '%s' "$args" | grep -oE 'pulls/[0-9]+' | cut -d/ -f2)"
       [ -f "$D/pr_${pr}.json" ] || exit 1
       # Se aplica el `--jq` REAL, igual que con /events. Devolver el fichero
@@ -124,13 +148,22 @@ case "$sub" in
       exit 0
     fi
     if printf '%s' "$args" | grep -q '/labels'; then
+      if [ "${MOCK_FAIL_LABELS:-0}" = "1" ]; then
+        echo "gh: HTTP 503 (etiquetas)" >&2; exit 1
+      fi
       cat "$D/labels_${n}.txt" 2>/dev/null; exit 0
     fi
     if printf '%s' "$args" | grep -q '/comments'; then
+      if fallo_transitorio comentarios "${MOCK_FAIL_COMMENTS:-0}"; then
+        echo "gh: HTTP 503 (comentarios, REST)" >&2; exit 1
+      fi
       cat "$D/comments_${n}.txt" 2>/dev/null; exit 0
     fi
     if printf '%s' "$args" | grep -q '[.]state'; then
       cat "$D/state_${n}.txt" 2>/dev/null || echo open; exit 0
+    fi
+    if fallo_transitorio cuerpo "${MOCK_FAIL_BODY:-0}"; then
+      echo "gh: HTTP 503 (cuerpo, REST)" >&2; exit 1
     fi
     cat "$D/body_${n}.txt" 2>/dev/null; exit 0
     ;;
@@ -140,8 +173,21 @@ case "$sub" in
     for a in "$@"; do case "$a" in [0-9]*) num="$a"; break;; esac; done
     case "$action" in
       view)
-        if printf '%s' "$*" | grep -q comments; then cat "$D/comments_${num}.txt" 2>/dev/null
-        else cat "$D/body_${num}.txt" 2>/dev/null; fi
+        # Esta es la via de RESPALDO de `sirius_read_issue_comments` y de
+        # `sirius_read_issue_body`. Si solo se pudiera romper la de REST, la
+        # lectura nunca fallaria del todo y el camino que se quiere medir
+        # —"todas las vias fallaron"— no se podria alcanzar.
+        if printf '%s' "$*" | grep -q comments; then
+          if fallo_transitorio comentarios "${MOCK_FAIL_COMMENTS:-0}"; then
+            echo "gh: HTTP 503 (comentarios, GraphQL)" >&2; exit 1
+          fi
+          cat "$D/comments_${num}.txt" 2>/dev/null
+        else
+          if fallo_transitorio cuerpo "${MOCK_FAIL_BODY:-0}"; then
+            echo "gh: HTTP 503 (cuerpo, GraphQL)" >&2; exit 1
+          fi
+          cat "$D/body_${num}.txt" 2>/dev/null
+        fi
         exit 0;;
       edit)
         add=""; rem=""; prev=""
@@ -1232,3 +1278,164 @@ def test_recon_aud_010_solo_se_prescribe_correccion_para_lo_corregible(
     assert "sirius:repair-requested" not in (_md(env) / "comments_55.txt").read_text(
         encoding="utf-8"
     ), "se prescribió una corrección para una conclusión que no la admite"
+
+
+# --------------------------------------------------------------------------- #
+# RECON-AUD-011..013 — una lectura que falla NO es un hecho sobre la incidencia
+#
+# Tercera vez en esta PR que un fallo de lectura se hace pasar por un dato: el
+# listado (D1) y los eventos (D3) fueron las otras dos. Aquí el `|| true` de las
+# dos lecturas por incidencia alimentaba a TRES consumidores, y cada uno
+# convertía el fichero vacío en una afirmación distinta. Una prueba por
+# consumidor, porque el arreglo es común pero los daños no.
+# --------------------------------------------------------------------------- #
+
+
+# Dos vías (REST y respaldo GraphQL) por `SIRIUS_RETRY_ATTEMPTS=2` intentos.
+# Agotarlas es lo que hace que la lectura falle DE VERDAD; que este número esté
+# bien calibrado no se afirma, se demuestra por mutación: con el defecto puesto
+# las tres pruebas fallan, y eso solo puede pasar si la lectura llegó a fallar.
+_INTENTOS_HASTA_AGOTAR_LA_LECTURA = "4"
+
+
+def test_recon_aud_011_una_lectura_caida_no_es_ausencia_de_observaciones(
+    tmp_path: Path,
+) -> None:
+    """El aviso afirmaba «no tiene observaciones» sin haber podido leerlas.
+
+    Escenario de Codex: la lectura falla, la API se recupera para publicar, y en
+    la incidencia queda escrito que hay que resolver a mano algo que el corrector
+    sí podía coger. La incidencia SÍ tiene el bloque; lo que falló fue mirarlo.
+    """
+    env = _setup(tmp_path)
+    _seed_ci_pending(env, "failure", edad_min=5000)
+    md = _md(env)
+    # La URL va en el CUERPO: si fuera solo a los comentarios, el defecto se
+    # quedaría antes —sin PR que mirar— y nunca llegaría a redactar el aviso.
+    (md / "body_55.txt").write_text(
+        "Bloque READY https://github.com/owner/repo/pull/57\n", encoding="utf-8"
+    )
+    (md / "comments_55.txt").write_text(
+        '## OBSERVACIONES_ESTRUCTURADAS\n```json\n{"hallazgos": []}\n```\n', encoding="utf-8"
+    )
+    env["MOCK_FAIL_COMMENTS"] = _INTENTOS_HASTA_AGOTAR_LA_LECTURA
+
+    r = _run_reconcile(env)
+
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "No se pudieron leer los comentarios de #55" in r.stdout, r.stdout
+    assert "ATASCO" not in r.stdout, "se diagnosticó un atasco sin haber leído la incidencia"
+    publicado = (md / "comments_55.txt").read_text(encoding="utf-8")
+    assert "no arrancaria nada" not in publicado, (
+        f"se publicó que la incidencia no tiene observaciones, y sí las tiene: {publicado!r}"
+    )
+
+
+def test_recon_aud_012_una_lectura_caida_no_es_ausencia_de_pr(tmp_path: Path) -> None:
+    """«ci-pending sin PR abierta referenciada» era la segunda afirmación falsa.
+
+    Sale de la misma línea que la anterior, por el otro fichero. La PR existe y
+    está referenciada; lo que no se pudo fue leer el cuerpo donde consta.
+    """
+    env = _setup(tmp_path)
+    _seed_ci_pending(env, "failure", edad_min=5000)
+    md = _md(env)
+    (md / "body_55.txt").write_text(
+        "Bloque READY https://github.com/owner/repo/pull/57\n", encoding="utf-8"
+    )
+    (md / "comments_55.txt").write_text("sin enlaces aqui\n", encoding="utf-8")
+    env["MOCK_FAIL_BODY"] = _INTENTOS_HASTA_AGOTAR_LA_LECTURA
+
+    r = _run_reconcile(env)
+
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "No se pudo leer el cuerpo de #55" in r.stdout, r.stdout
+    assert "sin PR abierta referenciada" not in r.stdout, (
+        "se afirmó que no hay PR referenciada sin haber podido leer dónde consta"
+    )
+
+
+def test_recon_aud_013_una_lectura_caida_no_deja_la_pasada_muda(tmp_path: Path) -> None:
+    """El tercer consumidor no mentía: callaba, que para una red de seguridad es peor.
+
+    Con el marcador de completado ilegible, el caso A no reparaba Y la pasada
+    terminaba sin decir una palabra de esa incidencia: mismo `rc`, mismo resumen
+    que un repositorio sano. Es el desenlace que D1 ya había prohibido para el
+    listado, repetido una capa más abajo.
+    """
+    env = _setup(tmp_path)
+    _seed_issue(env, 50, [], comments="<!-- sirius-completed:b649c92faf98 -->\n")
+    env["MOCK_FAIL_COMMENTS"] = _INTENTOS_HASTA_AGOTAR_LA_LECTURA
+
+    r = _run_reconcile(env)
+
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "#50" in r.stdout, f"la incidencia no comprobada no aparece en el resumen: {r.stdout!r}"
+    assert (md := _md(env)) and (md / "state_50.txt").read_text(
+        encoding="utf-8"
+    ).strip() == "open", "se cerró una incidencia cuyo marcador no se pudo leer"
+
+
+def test_recon_aud_014_una_pr_ilegible_no_es_una_pr_inexistente(tmp_path: Path) -> None:
+    """Cuarta de la misma familia, encontrada aplicando la lente al propio arreglo.
+
+    El `|| continue` del bucle de PR borraba del recuento la que no se pudo leer.
+    Si era la única, el guion afirmaba después «ci-pending sin PR abierta
+    referenciada; requiere revisión humana» — y la PR estaba ahí, abierta.
+    """
+    env = _setup(tmp_path)
+    _seed_ci_pending(env, "failure", edad_min=5000)
+    env["MOCK_FAIL_PR"] = "1"
+
+    r = _run_reconcile(env)
+
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "no se pudo leer alguna de las PR" in r.stdout, r.stdout
+    assert "sin PR abierta referenciada" not in r.stdout, (
+        "se afirmó que no hay PR abierta sin haber podido leerla"
+    )
+
+
+def test_recon_aud_015_quality_ilegible_no_es_quality_sin_resultado(tmp_path: Path) -> None:
+    """Quinta, y la más discreta: `|| conclusion="none"`.
+
+    Un 503 se convertía en «Quality aún sin resultado; nada que reconciliar», que
+    es justo el mensaje que más se parece a una espera normal. La red de seguridad
+    se apagaba sobre esa incidencia sin que el texto lo delatara.
+    """
+    env = _setup(tmp_path)
+    _seed_ci_pending(env, "failure", edad_min=5000)
+    env["MOCK_FAIL_CHECKS"] = "1"
+
+    r = _run_reconcile(env)
+
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "no se pudo leer el resultado de Quality" in r.stdout, r.stdout
+    assert "aun sin resultado" not in r.stdout, (
+        "se afirmó que Quality no ha terminado sin haber podido leerlo"
+    )
+
+
+def test_recon_aud_016_el_motivo_de_una_lectura_de_etiquetas_caida_llega_al_registro(
+    tmp_path: Path,
+) -> None:
+    """Este guardia existía desde el principio y NINGUNA prueba lo cubría.
+
+    Se descubrió por mutación mientras se comprobaban las otras: quitarlo entero
+    dejaba la suite en verde. Y encima el comentario recién escrito ahí afirmaba
+    que el motivo del fallo queda en el registro, sin nada que lo sostuviera.
+    """
+    env = _setup(tmp_path)
+    _seed_issue(env, 55, ["sirius:ci-pending"])
+    env["MOCK_FAIL_LABELS"] = "1"
+
+    r = _run_reconcile(env)
+
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "No se pudieron leer las etiquetas de #55" in r.stdout, r.stdout
+    # Sin el guardia, `labels` queda vacío y la incidencia sigue adelante como si
+    # no tuviera ninguna etiqueta: ni contradicción, ni caso B, ni aviso.
+    assert "ci-pending" not in r.stdout.replace("sirius:ci-pending", ""), (
+        f"se siguió trabajando sobre una incidencia cuyas etiquetas no se leyeron: {r.stdout!r}"
+    )
+    assert "503" in r.stderr, f"el motivo del fallo no llega a ninguna parte: {r.stderr!r}"
