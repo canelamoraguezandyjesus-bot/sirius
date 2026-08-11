@@ -149,3 +149,31 @@ por exigir un cambio de esquema no autorizado por el alcance de la
 incidencia, no por ser peor en rendimiento — de hecho sería equivalente o
 mejor. Queda anotada aquí como la opción a revisar si en el futuro se
 autoriza tocar `models.py`.
+
+## Corrección de ronda 2 (revisión CODEX-001)
+
+La revisión independiente de la PR señaló que el `IN (...)` elegido no tenía
+límite de tamaño: si una categoría acumula más recuerdos o decisiones que
+`SQLITE_LIMIT_VARIABLE_NUMBER` de la conexión (32766 desde SQLite 3.32, 999
+antes), `list_current_memories()`/`list_archived_memories()` y sus pares de
+decisión fallarían con `OperationalError: too many SQL variables` en vez de
+devolver la lista.
+
+Arreglo, sin ampliar el alcance ni tocar esquema, orden o contenido
+devuelto: `_load_memories()`/`_load_decisions()` trocean ahora los ids en
+lotes de tamaño `sqlite_variable_limit(session)` (nuevo helper en
+`database.py`, que lee `SQLITE_LIMIT_VARIABLE_NUMBER` de la conexión activa
+vía la API de `sqlite3.Connection.getlimit`) y ejecutan un `IN (...)` por
+lote, fusionando los resultados en el mismo diccionario por id que ya
+existía. Con un único lote (el caso normal, muy por debajo del límite) esto
+sigue siendo exactamente una consulta, igual que antes.
+
+Prueba, con mutación: `tests/integration/test_memory_decision_list_sqlite_variable_limit.py`
+fuerza `SQLITE_LIMIT_VARIABLE_NUMBER=20` en la conexión (por encima de las 12
+columnas del `INSERT` más ancho que el propio montaje de la prueba necesita,
+para no romper el propio montaje) y crea 21 recuerdos/decisiones —uno más
+que el límite— comprobando que `list_current_memories()`/
+`list_current_decisions()` no fallan y devuelven los 21. Mutación verificada
+restaurando el `IN` sin trocear (`git stash` sobre los dos ficheros de
+repositorio, dejando la prueba nueva intacta): ambas aserciones fallan con
+`OperationalError: too many SQL variables`; con el arreglo, pasan.

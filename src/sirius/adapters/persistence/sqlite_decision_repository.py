@@ -13,7 +13,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from sirius.adapters.persistence.database import (
     build_engine,
     build_session_factory,
+    chunked,
     session_scope,
+    sqlite_variable_limit,
 )
 from sirius.adapters.persistence.models import DecisionModel, DecisionRevisionModel
 from sirius.domain.decision import (
@@ -75,22 +77,28 @@ def _load_decision(session: Session, model: DecisionModel) -> Decision:
 
 
 def _load_decisions(session: Session, models: Sequence[DecisionModel]) -> list[Decision]:
-    """Load the current revision of every model in a single query.
+    """Load the current revision of every model in a bounded number of queries.
 
     ``_load_decision`` issues one query per model; called from a list method
     that turns into N+1 queries for N models. This loads every current
-    revision the set needs in one ``IN (...)`` query instead.
+    revision the set needs via ``IN (...)`` queries instead, batched to the
+    connection's ``SQLITE_LIMIT_VARIABLE_NUMBER`` so a large set doesn't blow
+    past SQLite's bound-parameter limit in a single statement.
     """
     if not models:
         return []
     decision_ids = [model.id for model in models]
-    revision_models = session.scalars(
-        select(DecisionRevisionModel).where(
-            DecisionRevisionModel.decision_id.in_(decision_ids),
-            DecisionRevisionModel.is_current.is_(True),
+    revisions_by_decision_id: dict[int, DecisionRevisionModel] = {}
+    for batch in chunked(decision_ids, sqlite_variable_limit(session)):
+        revision_models = session.scalars(
+            select(DecisionRevisionModel).where(
+                DecisionRevisionModel.decision_id.in_(batch),
+                DecisionRevisionModel.is_current.is_(True),
+            )
+        ).all()
+        revisions_by_decision_id.update(
+            (revision.decision_id, revision) for revision in revision_models
         )
-    ).all()
-    revisions_by_decision_id = {revision.decision_id: revision for revision in revision_models}
     decisions = []
     for model in models:
         revision_model = revisions_by_decision_id.get(model.id)
