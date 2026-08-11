@@ -21,10 +21,12 @@ en su parte automatizable y B13 está cerrado por declaración del propietario,
 con la salvedad escrita en su fila. Lo que bloquea V8.2 y V8.3 no es código:
 es Windows real y una clave real, y ambas cosas exigen al propietario.
 
-Queda una decisión de producto abierta que la medición de B12c destapó:
-construir el contexto consume entre el 89 % y el 100 % de los 300 ms que le
-concede RNF-003, y la causa está localizada. Ver la sección de rendimiento y
-ADR-007.
+**B12e cierra el riesgo que B12c destapó** (ADR-008): `list_current_memories()`,
+`list_archived_memories()`, `list_current_decisions()` y
+`list_archived_decisions()` cargan ahora la revisión vigente del conjunto en
+una sola consulta en vez de una por elemento. Construir el contexto pasa de
+usar entre el 89 % y el 100 % de los 300 ms de RNF-003 a usar el 40 %. Ver la
+sección de rendimiento y ADR-008.
 
 No se crea una fase canónica adicional denominada `Preparación V8`.
 
@@ -142,7 +144,7 @@ fusiona actualiza esta tabla y nada más.
 | B9 | Exportación estructurada | Completo (B9a y B9b implementados y cubiertos automáticamente: `ExportService`/`ExportStructuredUseCase` y la acción "Exportar" en la interfaz, con aviso previo y ejecución en segundo plano; D-07 cerrado) |
 | B10 | Política de acciones fuera de alcance | Completo (política RF-035 añadida a la semilla canónica de identidad y renderizada en las instrucciones; A-01 cerrado en su parte automatizable) |
 | B11 | Recuperación tras cierre forzado | Completo (prueba de integración que simula un cierre forzado —repositorios abandonados sin `close()` ordenado— sobre SQLite real migrado con Alembic, demostrando que el estado confirmado sobrevive íntegro, `PRAGMA integrity_check` es `ok`, un turno interrumpido a mitad de streaming deja el historial coherente sin fila parcial, y la reapertura es idempotente; `PRAGMA synchronous=FULL` afirma la durabilidad explícitamente; A-02 cerrado en su parte automatizable) |
-| B12 | Suite PA/SP automática, rendimiento y evidencia | Completo en su parte automatizable. **B12a** (ADR-006): `docs/implementation/TRAZABILIDAD_PA_SP.md` enlaza los 40 identificadores del Plan de Pruebas con las pruebas que cubren su parte automatizable, y `tests/unit/test_pa_sp_traceability.py` comprueba por máquina que cada prueba nombrada exista. El hueco era de trazabilidad, no de cobertura: 28 de 40 no se citaban en ninguna prueba, pero el comportamiento sí estaba probado. **B12c completo** (ADR-007): `tests/integration/test_local_performance.py` mide P50/P95 sobre el conjunto de referencia del plan (5.000 mensajes, 500 recuerdos, 100 decisiones, 10 proyectos; 30 repeticiones), afirma el límite aprobado donde hay un orden de magnitud de holgura —inicio, 30 ms frente a 3.000— y vigila el resto con un guardarraíl declarado. **Destapó un riesgo de producto: construir el contexto consume entre el 89 % y el 100 % de sus 300 ms**, por 501 consultas para 500 recuerdos en `list_current_memories()`; corregirlo es código productivo y espera decisión. **B12d completo**: evidencia consolidada en el registro de este archivo. B12b queda sin contenido: tras B12a el único hueco automatizable era PA-025, que cierra B12c |
+| B12 | Suite PA/SP automática, rendimiento y evidencia | Completo en su parte automatizable. **B12a** (ADR-006): `docs/implementation/TRAZABILIDAD_PA_SP.md` enlaza los 40 identificadores del Plan de Pruebas con las pruebas que cubren su parte automatizable, y `tests/unit/test_pa_sp_traceability.py` comprueba por máquina que cada prueba nombrada exista. El hueco era de trazabilidad, no de cobertura: 28 de 40 no se citaban en ninguna prueba, pero el comportamiento sí estaba probado. **B12c completo** (ADR-007): `tests/integration/test_local_performance.py` mide P50/P95 sobre el conjunto de referencia del plan (5.000 mensajes, 500 recuerdos, 100 decisiones, 10 proyectos; 30 repeticiones), afirma el límite aprobado donde hay un orden de magnitud de holgura —inicio, 30 ms frente a 3.000— y vigila el resto con un guardarraíl declarado. **Destapó un riesgo de producto: construir el contexto consume entre el 89 % y el 100 % de sus 300 ms**, por 501 consultas para 500 recuerdos en `list_current_memories()`; corregirlo es código productivo y espera decisión. **B12d completo**: evidencia consolidada en el registro de este archivo. B12b queda sin contenido: tras B12a el único hueco automatizable era PA-025, que cierra B12c. **B12e completo** (ADR-008, corte correctivo sobre lo que B12c midió, incidencia #148): `SqliteMemoryRepository.list_current_memories()`/`list_archived_memories()` y `SqliteDecisionRepository.list_current_decisions()`/`list_archived_decisions()` cargan la revisión vigente del conjunto en una única consulta `IN (...)` en vez de una por elemento, sin cambiar qué devuelven. `tests/integration/test_memory_decision_list_query_count.py` fija por prueba que el número de consultas de los cuatro métodos no crece con el número de elementos, verificada por mutación. Construir el contexto baja de 239,8 ms a 120,9 ms P95 sobre el mismo conjunto de referencia y la misma máquina; PA-025 sigue sin declararse superada |
 | B13 | Empaquetado reproducible | Completo **por declaración del propietario** el 10 de agosto de 2026: declara ejecutados los builds de Windows que faltaban. Implementado y cubierto: el proceso de empaquetado, los scripts de build y verificación y `_resource_root`, que resuelve `alembic.ini`/`migrations/` junto al ejecutable cuando la app corre congelada (PyInstaller `sys.frozen` o Nuitka `__compiled__`) y desde la raíz en desarrollo. **Sin evidencia escrita en el repositorio**: no hay salida de build ni de verify adjunta, así que A-03 —que es puerta de V8.3— queda cerrado sobre la palabra del propietario y no sobre una comprobación registrada. La PR #122 sigue abierta. Ver la nota de A-03 en el registro de evidencia |
 | B14 | Windows sin clave | Bloqueado |
 | B15 | Ventana compacta con proveedor real | Bloqueado |
@@ -203,6 +205,7 @@ Añadir una fila por resultado verificable. No registrar secretos ni contenido s
 | 2026-08-10 | B1 | `b0beab4` (PR #144) | documental | `test_documentation_single_source.py` | Superada | CI verde, 1527 pruebas | ADR-005: el estado de V8 pasa a vivir solo en la tabla de bloques de este archivo. Cuatro mutaciones verificadas |
 | 2026-08-10 | B12a | `03bede4` (PR #145) | automática | `test_pa_sp_traceability.py` | Superada | CI verde, 1649 pruebas | ADR-006: los 40 identificadores del plan quedan enlazados y comprobados por máquina. Siete mutaciones verificadas, incluida el renombrado de una prueba real |
 | 2026-08-10 | B12c | rama `claude/ciclo-pendientes-prs-issues-qm4t8x` | automática | `test_local_performance.py` | Superada con hallazgo | 1653 pruebas en verde; cifras en la sección de rendimiento de arriba | ADR-007. **No declara PA-025 superada.** Destapa que construir el contexto usa entre el 89 % y el 100 % de sus 300 ms; causa localizada en `list_current_memories()`. Cinco mutaciones verificadas |
+| 2026-08-11 | B12e | rama `fix/b12e-sqlite-list-n-plus-1` (incidencia #148) | automática | `test_memory_decision_list_query_count.py`; `test_local_performance.py` | Superada | CI verde, 1657 pruebas (1653 previas + 4 nuevas); cifras antes/después en la sección de rendimiento de abajo | ADR-008. Corrige el N+1 que ADR-007 localizó, sin cambiar lo que devuelven los cuatro métodos. Cuatro mutaciones verificadas: con el N+1 restaurado, las cuatro pruebas de conteo fallan; restaurado el arreglo, pasan |
 
 Tipos permitidos: `automática`, `CI`, `manual-Windows`, `proveedor-real`, `evaluación-humana`, `documental`.
 
@@ -228,6 +231,36 @@ usuario: esto no declara PA-025 superada.
 recuerdos porque `_load_memory()` pide la revisión vigente una por una.
 Corregirlo es un cambio de código productivo, fuera del alcance de B12c, y
 espera decisión del propietario. Ver ADR-007.
+
+### Rendimiento local sobre el conjunto de referencia (2026-08-11, B12e)
+
+Mismo conjunto de referencia, misma máquina, mismo runner de CI (Linux) que la
+medición de B12c. Una pasada antes del arreglo (código de `main` en
+`97676e1`) y una después, 30 repeticiones por operación:
+
+| Operación | P95 antes (B12c, `main`) | P95 después (B12e) | Límite |
+|---|---|---|---|
+| listar recuerdos vigentes | 104,7 ms | 9,3 ms | 300 ms |
+| listar decisiones vigentes | 20,3 ms | 2,2 ms | 300 ms |
+| resumen de conocimiento | 125,4 ms | 12,6 ms | 300 ms |
+| cargar historial completo | 87,9 ms | 94,2 ms | 300 ms |
+| **construir contexto** | **239,8 ms** | **120,9 ms** | **300 ms** |
+
+Construir el contexto pasa del 80 % al 40 % de su presupuesto de 300 ms.
+`listar recuerdos vigentes` y `listar decisiones vigentes` —las dos
+operaciones que tenían la forma N+1 (`list_archived_memories()` y
+`list_archived_decisions()` la comparten, pero el conjunto de referencia no
+tiene elementos archivados que medir aquí)— caen a menos del 10 % del límite.
+
+**No cambia qué devuelven los cuatro métodos corregidos.**
+`test_sqlite_memory_repository.py`, `test_sqlite_decision_repository.py`,
+`test_memory_archive_delete_lifecycle.py`, `test_decision_lifecycle.py` y
+`test_decision_archive_lifecycle.py` —que no se tocaron— siguen en verde y son
+la prueba de ello.
+
+**PA-025 sigue sin declararse superada.** Este runner es Linux compartido, no
+el Windows del usuario; el criterio de ADR-007 sobre cuándo se afirma el
+límite del plan en CI no cambia con B12e.
 
 ### Asientos correctores (2026-08-10)
 
