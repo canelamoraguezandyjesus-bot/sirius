@@ -135,6 +135,11 @@ case "$sub" in
         done
         lf="$D/labels_${num}.txt"
         if [ -n "$add" ]; then
+          # Se registra CADA adicion, no solo el estado final: retirar y volver
+          # a poner una etiqueta genera un evento nuevo —arranca trabajo— y deja
+          # el estado final identico. Mirando solo el resultado, invisible
+          # (hallazgo P2 de Codex en la PR #146).
+          echo "${num} ${add}" >> "$D/added_labels.log"
           grep -Fxq "$add" "$lf" 2>/dev/null || echo "$add" >> "$lf"
         fi
         if [ -n "$rem" ] && [ -f "$lf" ]; then
@@ -562,6 +567,30 @@ def test_recon_stuck_006_el_umbral_supera_al_job_mas_largo_de_verdad() -> None:
     )
 
 
+def _etiquetas_disparadoras() -> set[str]:
+    """Las etiquetas con las que arranca cada workflow de trabajo, leídas del YAML."""
+    etiquetas: set[str] = set()
+    for nombre in _WORKFLOWS_DE_TRABAJO:
+        texto = (REPO_ROOT / ".github" / "workflows" / nombre).read_text(encoding="utf-8")
+        for m in re.finditer(r"github\.event\.label\.name == '([^']+)'", texto):
+            etiquetas.add(m.group(1))
+    return etiquetas
+
+
+def _etiquetas_escritas(env: dict[str, str]) -> set[str]:
+    """Toda etiqueta que el reconciliador APLICÓ, incluidas las reaplicaciones.
+
+    El estado final no basta: retirar y volver a poner deja el mismo resultado y
+    sin embargo dispara `issues: labeled`, que es arrancar trabajo.
+    """
+    registro = _md(env) / "added_labels.log"
+    if not registro.exists():
+        return set()
+    return {
+        linea.split()[1] for linea in registro.read_text(encoding="utf-8").splitlines() if linea
+    }
+
+
 def test_recon_stuck_007_el_reconciliador_esta_programado_y_sigue_siendo_manual(
     tmp_path: Path,
 ) -> None:
@@ -579,20 +608,23 @@ def test_recon_stuck_007_el_reconciliador_esta_programado_y_sigue_siendo_manual(
     texto = RECONCILE.read_text(encoding="utf-8")
     assert "gh pr merge" not in texto
 
-    # «No inicia bloques» se comprueba EJECUTANDO el reconciliador y mirando qué
-    # etiquetas escribe, no leyendo su código.
+    # «No inicia bloques» se comprueba EJECUTANDO y mirando CADA escritura de
+    # etiqueta, no el estado final.
     #
-    # Van dos versiones fallidas de esta misma aserción, y las dos eran de
-    # grafía: la primera prohibía que la cadena apareciera en el archivo —rompía
-    # porque el aviso NOMBRA la etiqueta que debe aplicar el usuario—, y la
-    # segunda solo miraba dentro de una línea, cuando el estilo del propio
-    # repositorio parte estas llamadas en dos:
+    # Van cuatro versiones de esta aserción. Las tres primeras medían texto o
+    # resultado: (a) que la cadena no apareciera en el archivo; (b) que no
+    # cayera en la misma línea que una función de escritura —el repositorio
+    # parte esas llamadas en dos—; (c) el estado final, que no ve un «retirar y
+    # volver a poner», y esa reaplicación genera un evento nuevo, es decir,
+    # arranca trabajo. Las tres pasaban con el defecto puesto.
     #
-    #     sirius_set_issue_labels "$GH_REPO" "$ISSUE_NUMBER" \\
-    #       "sirius:implementing" "sirius:implement-requested" "sirius:planned"
-    #
-    # Una llamada así habría iniciado un bloque con la prueba en verde. Y una
-    # etiqueta pasada por variable también. Hallazgo P2 de Codex en la PR #146.
+    # Y había algo peor debajo: el §9.1 decía «no aplica ninguna etiqueta que
+    # arranque un bloque», y era FALSO —el caso B aplica `review-requested`—.
+    # Por eso la prueba solo miraba una etiqueta: copiaba una afirmación que ya
+    # estaba mal. Corregido el texto, esto comprueba lo que ahora dice.
+    disparadoras = _etiquetas_disparadoras()
+    assert len(disparadoras) == 3, f"esperaba tres disparadoras: {sorted(disparadoras)}"
+
     maquina = re.search(r'MACHINE_LABELS="([^"]+)"', texto)
     assert maquina, "no encuentro MACHINE_LABELS: la prueba no mediría nada"
     estados = maquina.group(1).split()
@@ -604,14 +636,34 @@ def test_recon_stuck_007_el_reconciliador_esta_programado_y_sigue_siendo_manual(
 
     assert _run_reconcile(env).returncode == 0
 
-    for numero, etiqueta in enumerate(estados, start=40):
-        finales = (_md(env) / f"labels_{numero}.txt").read_text(encoding="utf-8").split()
-        if etiqueta == "sirius:implement-requested":
-            continue  # ya la tenía puesta; no la aplicó el reconciliador
-        assert "sirius:implement-requested" not in finales, (
-            f"partiendo de `{etiqueta}`, el reconciliador aplicó "
-            f"`sirius:implement-requested` e inició un bloque: {finales}"
-        )
+    escritas = _etiquetas_escritas(env)
+    prohibidas = sorted(escritas & disparadoras)
+    assert not prohibidas, (
+        f"desde un estado atascado el reconciliador escribió {prohibidas}, que "
+        "arrancan trabajo; el §9.1 dice que no lo hace"
+    )
+
+
+def test_recon_stuck_013_la_unica_disparadora_que_escribe_es_review_requested(
+    tmp_path: Path,
+) -> None:
+    """El §9.1 afirma que la única disparadora que escribe es `review-requested`.
+
+    La redacción anterior decía «ninguna», y era falsa: el caso B la aplica para
+    reparar una transición de Quality perdida. Corregido el texto, esta prueba lo
+    fija ejecutando: desde `ci-pending` con Quality en verde se escribe esa y
+    solo esa, y `implement-requested` no se escribe nunca desde ningún estado.
+    """
+    env = _setup(tmp_path)
+    _seed_ci_pending(env, "success")
+
+    assert _run_reconcile(env).returncode == 0
+
+    escritas = _etiquetas_escritas(env) & _etiquetas_disparadoras()
+    assert escritas == {"sirius:review-requested"}, (
+        f"el caso B debe escribir `sirius:review-requested` y ninguna otra "
+        f"disparadora; escribió {sorted(escritas)}"
+    )
 
 
 def test_recon_stuck_008_el_ultimo_evento_sale_del_conjunto_no_de_una_pagina(

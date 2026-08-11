@@ -403,8 +403,14 @@ Queda permitida, por tanto, **una** ejecución periódica, sujeta a todo lo
 siguiente. Si un cambio futuro rompe cualquiera de estos límites, deja de estar
 amparado por esta excepción y necesita una decisión nueva:
 
-1. **No inicia trabajo.** No aplica `sirius:implement-requested` ni ninguna otra
-   etiqueta que arranque un bloque.
+1. **No inicia trabajo.** No aplica **nunca** `sirius:implement-requested`, que
+   es la etiqueta que arranca un bloque nuevo. La redacción anterior decía «ni
+   ninguna otra etiqueta que arranque un bloque», y **era falsa**: el caso B
+   aplica `sirius:review-requested` para reparar una transición perdida. Eso no
+   inicia un bloque —el bloque ya estaba en marcha— pero sí despierta al
+   revisor, así que queda bajo el límite 2 y no bajo este. Es la única etiqueta
+   disparadora que este workflow escribe, y solo desde `sirius:ci-pending`;
+   RECON-STUCK-007 lo comprueba ejecutando.
 2. **No avanza un ciclo sano.** Solo repara estados inequívocos que ya estaban
    mal (los casos A y B de `scripts/automation/sirius_reconcile.sh`), y esos
    mismos casos son reparables hoy a mano sin esta excepción.

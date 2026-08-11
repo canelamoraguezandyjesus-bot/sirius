@@ -343,3 +343,45 @@ anterior no veía—: falla.
 Esa es la forma definitiva de la regla, y el motivo de que hicieran falta tres
 intentos para llegar a ella: un `grep` no puede sostener una afirmación sobre lo
 que un sistema hace, ni siquiera cuando parece que sí.
+
+## Sexta ronda: la prueba copiaba una afirmación del contrato que ya era falsa
+
+Codex encontró que RECON-STUCK-007 —cuarta versión— seguía sin sostener lo que
+decía: miraba el **estado final** y solo prohibía `sirius:implement-requested`.
+Un «retirar y volver a poner» deja el estado idéntico y sin embargo dispara
+`issues: labeled`, que es arrancar trabajo. Y aplicar `review-requested` o
+`repair-requested` desde cualquier otro caso también pasaba en verde.
+
+Al verificarlo apareció la causa de por qué la prueba miraba una sola etiqueta:
+**el §9.1 decía algo falso**. Su límite 1 afirmaba «no aplica
+`sirius:implement-requested` ni ninguna otra etiqueta que arranque un bloque»,
+pero el caso B aplica `sirius:review-requested`. La prueba no estaba mal por
+descuido: copiaba fielmente una afirmación que ya estaba mal.
+
+Corregido el texto para que diga lo que de verdad ocurre —nunca
+`implement-requested`; la única disparadora que escribe es `review-requested`, y
+solo desde `ci-pending`, bajo el límite 2— y las pruebas lo fijan **ejecutando**:
+
+- El `gh` simulado registra **cada** adición de etiqueta, no el estado final.
+- **RECON-STUCK-007**: desde un estado atascado no se escribe ninguna de las
+  tres disparadoras.
+- **RECON-STUCK-013**: desde `ci-pending` con Quality verde se escribe
+  `review-requested` y ninguna otra.
+
+Tres mutaciones, todas con el resultado predicho: reaplicar la etiqueta en curso,
+aplicar otra disparadora distinta, y que el caso B deje de aplicar la suya.
+
+### Cuatro versiones de la misma aserción
+
+| Versión | Qué medía | Cómo se la saltaba el defecto |
+|---|---|---|
+| 1ª | que una cadena no estuviera en el archivo | el aviso nombra la etiqueta que aplica el usuario |
+| 2ª | que no cayera en la misma línea | el repositorio parte esas llamadas en dos |
+| 3ª | el estado final tras ejecutar | «retirar y volver a poner» no cambia el estado |
+| 4ª | cada escritura, contra las tres disparadoras | — |
+
+La lección no es «ejecuta en vez de leer», que ya estaba escrita en la ronda
+anterior. Es que **una prueba no puede ser más correcta que la afirmación que
+copia**: mientras el contrato dijo una cosa falsa, cada versión de la prueba
+heredó el error aunque cambiara de técnica. Antes de medir hay que comprobar que
+lo que se va a medir es cierto.
