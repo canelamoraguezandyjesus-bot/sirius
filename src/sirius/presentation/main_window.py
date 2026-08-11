@@ -120,6 +120,14 @@ _AT_BOTTOM_TOLERANCE_PX = 8
 TECHNICAL_PAGE_INDEX = 0
 MODEL_STUDIO_PAGE_INDEX = 1
 
+CAPTURE_HEARTBEAT_MILLISECONDS = 5_000
+"""Cada cuánto se le pregunta a OBS cómo está mientras el panel está abierto.
+
+Cinco segundos es el compromiso: lo bastante corto para que un OBS cerrado se
+note enseguida —y no veinte minutos después—, y lo bastante largo para que no
+sea un goteo constante de peticiones mientras se graba.
+"""
+
 # Estados con los que termina cualquier operación de copia de seguridad. Se
 # guardan además en la propiedad ``siriusBackupState`` de la etiqueta que los
 # muestra: el texto es para la persona, la propiedad es el estado en sí, que ni
@@ -236,6 +244,12 @@ class MainWindow(QMainWindow):
         self._capture_busy = False
         self._capture_turn = 0
         self._pending_capture_command: CaptureCommand | None = None
+        # Latido del Módulo Captura: preguntarle a OBS cada pocos segundos es
+        # lo único que permite enterarse de que se ha caído sin esperar a la
+        # siguiente orden. Solo corre con el panel abierto.
+        self._capture_heartbeat = QTimer(self)
+        self._capture_heartbeat.setInterval(CAPTURE_HEARTBEAT_MILLISECONDS)
+        self._capture_heartbeat.timeout.connect(self._poll_capture_state)
         # Dialogs are shown only through these seams: production defaults to
         # real Qt dialogs, but tests inject recording/no-op doubles so
         # scripts/check.ps1 never opens a real window on the desktop.
@@ -438,6 +452,27 @@ class MainWindow(QMainWindow):
         self.studio_page.capture_panel.set_message("")
         use_case = self._studio_capture_use_case
         self._run_capture(use_case.enable if opened else use_case.disable)
+        if opened:
+            self._capture_heartbeat.start()
+        else:
+            self._capture_heartbeat.stop()
+
+    def _poll_capture_state(self) -> None:
+        """Le pregunta a OBS cómo está, sin que nadie haya dado una orden.
+
+        Sin esto, Sirius solo se entera de que OBS se ha caído la próxima vez
+        que le mandas algo: si cierras OBS sin querer y sigues hablando, la
+        barra seguiría diciendo GRABANDO durante veinte minutos. #127 lo dice
+        con todas las letras —el sistema de captura es la autoridad—, y una
+        autoridad a la que no se pregunta no manda nada.
+
+        Se salta sola si ya hay una orden en vuelo: la respuesta de esa orden
+        trae el estado igualmente y preguntar dos veces no aporta.
+        """
+        use_case = self._studio_capture_use_case
+        if use_case is None or self._capture_busy or not use_case.is_enabled:
+            return
+        self._run_capture(use_case.refresh_status)
 
     def _handle_record_clicked(self) -> None:
         self._run_capture_command("start_recording")
@@ -691,6 +726,9 @@ class MainWindow(QMainWindow):
         if self.studio_page.clean_mode:
             self.studio_page.toggle_clean_mode()
         self._silence_voice()
+        # Fuera de Model Studio no hay a quién enseñarle el estado, así que
+        # tampoco hay motivo para seguir preguntándoselo a OBS.
+        self._capture_heartbeat.stop()
         self._pages.setCurrentIndex(TECHNICAL_PAGE_INDEX)
 
     def _silence_voice(self) -> None:
@@ -1271,6 +1309,7 @@ class MainWindow(QMainWindow):
         is killed and no write is left half-done.
         """
         self._silence_voice()
+        self._capture_heartbeat.stop()
         if self._is_sending:
             self._close_requested = True
             if self._active_operation_id is not None:

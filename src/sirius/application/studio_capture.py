@@ -160,11 +160,21 @@ class StudioCaptureUseCase:
     def refresh_status(self) -> CaptureFeedback:
         """Pregunta al backend. Es la reconciliación de #127.
 
-        Se llama al encender, tras un timeout, tras una desconexión y al
-        arrancar Sirius si quedó una grabación abierta.
+        Se llama al encender, tras un timeout, tras una desconexión, cada pocos
+        segundos mientras el panel está abierto, y al arrancar Sirius si quedó
+        una grabación abierta.
+
+        **Reconecta si hace falta.** Cerrar OBS y volver a abrirlo es lo normal
+        mientras se trabaja; si preguntar el estado no recuperara la conexión,
+        Sirius se quedaría diciendo que no sabe nada hasta que alguien apagara
+        y encendiera el módulo a mano.
         """
         if not self._enabled:
             return CaptureFeedback(StudioCaptureState.DESACTIVADO)
+        if not self._backend.is_connected():
+            error = self._backend.connect()
+            if error is not None:
+                return self._fail(error, "get_status")
         outcome = self._backend.get_status()
         if isinstance(outcome, CaptureError):
             return self._fail(outcome, "get_status")

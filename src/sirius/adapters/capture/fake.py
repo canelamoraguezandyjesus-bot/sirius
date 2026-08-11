@@ -62,6 +62,22 @@ class FakeCaptureBackend:
     def is_connected(self) -> bool:
         return self._connected
 
+    def simulate_shutdown(self) -> None:
+        """Como si alguien hubiera cerrado el programa de captura sin avisar.
+
+        No es lo mismo que ``disconnect()``: ahí se va Sirius, aquí se va el
+        otro. Después de esto ni siquiera se puede volver a conectar, que es
+        justo lo que hace un OBS cerrado.
+        """
+        self._connected = False
+        self._connect_error = CaptureError(
+            CaptureErrorKind.NOT_CONNECTED, "el sistema de captura no está abierto"
+        )
+
+    def simulate_reopening(self) -> None:
+        """Como si lo hubieran vuelto a abrir. Conectar vuelve a funcionar."""
+        self._connect_error = None
+
     # --- Estado ----------------------------------------------------------
 
     def get_status(self) -> CaptureOutcome:

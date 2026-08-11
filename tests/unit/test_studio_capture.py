@@ -10,6 +10,9 @@ Todo va con un sistema de captura simulado: sin red, sin puertos y sin OBS.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from pathlib import Path
+
 import pytest
 
 from sirius.adapters.capture.fake import FakeCaptureBackend, FakeCaptureJournal
@@ -476,3 +479,71 @@ def test_an_ambiguous_alias_resolves_to_nothing() -> None:
     )
 
     assert registry.resolve("camara") is None
+
+
+# --- Que cierren OBS a mitad de una grabación ---------------------------
+
+
+def test_a_capture_system_that_disappears_leaves_the_state_uncertain() -> None:
+    """No saber no es lo mismo que saber que no se está grabando.
+
+    Si OBS se cierra mientras se graba, puede que el archivo se haya quedado a
+    medias o puede que no. Decir DETENIDO ahí sería afirmar algo que nadie ha
+    comprobado.
+    """
+    backend = FakeCaptureBackend()
+    use_case = _use_case(backend)
+    use_case.enable()
+    use_case.start_recording()
+
+    backend.simulate_shutdown()
+    feedback = use_case.refresh_status()
+
+    assert feedback.state is StudioCaptureState.INCIERTO
+    assert not feedback.succeeded
+    assert "No sé si se está grabando" in feedback.message
+
+
+def test_reopening_the_capture_system_recovers_on_its_own() -> None:
+    """Cerrar y volver a abrir OBS es lo normal mientras se trabaja.
+
+    Sin esto, Sirius se quedaría diciendo que no sabe nada hasta que alguien
+    apagara y encendiera el módulo a mano, que es justo lo que nadie va a
+    acordarse de hacer en mitad de una grabación.
+    """
+    backend = FakeCaptureBackend()
+    use_case = _use_case(backend)
+    use_case.enable()
+    backend.simulate_shutdown()
+    assert use_case.refresh_status().state is StudioCaptureState.INCIERTO
+
+    backend.simulate_reopening()
+    feedback = use_case.refresh_status()
+
+    assert feedback.state is StudioCaptureState.PREPARADO
+    assert backend.is_connected()
+
+
+def test_the_marks_of_an_interrupted_take_are_not_lost(tmp_path: Path) -> None:
+    """Se pierda o no el vídeo, lo que el usuario marcó no se tira."""
+    from sirius.adapters.capture.file_journal import FileCaptureJournal
+
+    class _Reloj:
+        def utc_now(self) -> datetime:
+            return datetime(2026, 8, 9, 18, 51, 23, tzinfo=UTC)
+
+    backend = FakeCaptureBackend()
+    use_case = StudioCaptureUseCase(
+        backend=backend,
+        scenes=_SCENES,
+        journal=FileCaptureJournal(tmp_path / "capturas", _Reloj()),
+    )
+    use_case.enable()
+    use_case.start_recording()
+    use_case.mark_moment("justo antes del desastre")
+
+    backend.simulate_shutdown()
+    use_case.refresh_status()
+
+    en_curso = (tmp_path / "capturas" / "marcas-en-curso.txt").read_text(encoding="utf-8")
+    assert "justo antes del desastre" in en_curso

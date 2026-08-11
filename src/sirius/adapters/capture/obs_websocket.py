@@ -231,7 +231,7 @@ class ObsWebSocketBackend:
             return CaptureError(CaptureErrorKind.TIMEOUT, "sin respuesta")
         except WebSocketError:
             self.disconnect()
-            return CaptureError(CaptureErrorKind.UNKNOWN, "se perdió la conexión")
+            return CaptureError(CaptureErrorKind.NOT_CONNECTED, "se perdió la conexión")
 
     def _settle(self, confirmado: Callable[[dict[str, Any]], bool]) -> CaptureStatus:
         """Pregunta hasta que OBS confirme el cambio, o hasta agotar la espera.
@@ -263,7 +263,7 @@ class ObsWebSocketBackend:
             return CaptureError(CaptureErrorKind.TIMEOUT, "sin respuesta")
         except WebSocketError:
             self.disconnect()
-            return CaptureError(CaptureErrorKind.UNKNOWN, "se perdió la conexión")
+            return CaptureError(CaptureErrorKind.NOT_CONNECTED, "se perdió la conexión")
 
     def _status(self) -> CaptureStatus:
         return self._status_from(self._request("GetRecordStatus"))
@@ -293,7 +293,7 @@ class ObsWebSocketBackend:
             return CaptureError(CaptureErrorKind.TIMEOUT, "sin respuesta")
         except WebSocketError:
             self.disconnect()
-            return CaptureError(CaptureErrorKind.UNKNOWN, "se perdió la conexión")
+            return CaptureError(CaptureErrorKind.NOT_CONNECTED, "se perdió la conexión")
 
     def start_recording(self) -> CaptureOutcome:
         return self._commanded("StartRecord", _grabando)
@@ -325,7 +325,7 @@ class ObsWebSocketBackend:
             return CaptureError(CaptureErrorKind.TIMEOUT, "sin respuesta")
         except WebSocketError:
             self.disconnect()
-            return CaptureError(CaptureErrorKind.UNKNOWN, "se perdió la conexión")
+            return CaptureError(CaptureErrorKind.NOT_CONNECTED, "se perdió la conexión")
 
         # El archivo solo lo sabe la respuesta de la parada: si se consultara el
         # estado después, ya no estaría, y la grabación quedaría sin identificar.
@@ -340,7 +340,7 @@ class ObsWebSocketBackend:
             return CaptureError(CaptureErrorKind.TIMEOUT, "sin respuesta")
         except WebSocketError:
             self.disconnect()
-            return CaptureError(CaptureErrorKind.UNKNOWN, "se perdió la conexión")
+            return CaptureError(CaptureErrorKind.NOT_CONNECTED, "se perdió la conexión")
         return CaptureStatus(
             state=status.state,
             active_scene_name=status.active_scene_name,
@@ -359,7 +359,7 @@ class ObsWebSocketBackend:
             return CaptureError(CaptureErrorKind.TIMEOUT, "sin respuesta")
         except WebSocketError:
             self.disconnect()
-            return CaptureError(CaptureErrorKind.UNKNOWN, "se perdió la conexión")
+            return CaptureError(CaptureErrorKind.NOT_CONNECTED, "se perdió la conexión")
 
         current = response.get("currentProgramSceneName")
         scenes = response.get("scenes", [])

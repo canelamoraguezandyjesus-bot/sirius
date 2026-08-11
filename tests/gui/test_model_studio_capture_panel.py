@@ -541,3 +541,55 @@ def test_every_scene_button_can_also_be_asked_for_by_name(qtbot: QtBot) -> None:
 
         assert intencion is not None, f"«{boton.text()}» se ve en pantalla y no se puede pedir"
         assert intencion.command is CaptureCommand.SWITCH_SCENE
+
+
+# --- El latido: enterarse sin que nadie pregunte -------------------------
+
+
+@pytest.mark.gui
+def test_the_window_asks_obs_on_its_own_while_the_panel_is_open(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Sin latido, Sirius solo se entera al dar la siguiente orden.
+
+    Y si cierras OBS sin querer y sigues hablando, la barra seguiría diciendo
+    GRABANDO durante veinte minutos. #127 dice que el sistema de captura es la
+    autoridad, y a una autoridad a la que no se pregunta no se le hace caso.
+    """
+    backend = FakeCaptureBackend()
+    capture = StudioCaptureUseCase(backend=backend, scenes=_SCENES)
+    window = _window(tmp_path, capture)
+    qtbot.addWidget(window)
+    window.open_model_studio()
+    window.studio_page.capture_button.setChecked(True)
+    qtbot.waitUntil(
+        lambda: window.studio_page.capture_state is StudioCaptureState.PREPARADO, timeout=3000
+    )
+
+    backend.simulate_shutdown()
+    window._poll_capture_state()
+
+    qtbot.waitUntil(
+        lambda: window.studio_page.capture_state is StudioCaptureState.INCIERTO, timeout=3000
+    )
+    assert "No sé si se está grabando" in window.studio_page.capture_panel.message_label.text()
+
+
+@pytest.mark.gui
+def test_the_heartbeat_only_runs_with_the_panel_open(qtbot: QtBot, tmp_path: Path) -> None:
+    """Cerrado el panel no hay a quién enseñarle el estado, ni a quién preguntar."""
+    capture = StudioCaptureUseCase(backend=FakeCaptureBackend(), scenes=_SCENES)
+    window = _window(tmp_path, capture)
+    qtbot.addWidget(window)
+    window.open_model_studio()
+    assert not window._capture_heartbeat.isActive()
+
+    window.studio_page.capture_button.setChecked(True)
+    assert window._capture_heartbeat.isActive()
+
+    window.studio_page.capture_button.setChecked(False)
+    assert not window._capture_heartbeat.isActive()
+
+    window.studio_page.capture_button.setChecked(True)
+    window.close_model_studio()
+    assert not window._capture_heartbeat.isActive(), "salir de Model Studio también lo para"
