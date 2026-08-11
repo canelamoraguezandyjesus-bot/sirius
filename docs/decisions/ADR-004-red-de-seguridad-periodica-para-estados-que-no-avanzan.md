@@ -434,3 +434,46 @@ La regla operativa que sale: **cuando una pieza acumula dos rondas de hallazgos,
 deja de revisarse en serie y se audita en paralelo con lentes explícitas**. Y la
 lente que más rinde es siempre la misma: coger cada frase declarativa y
 preguntar qué comprobación la sostiene.
+
+## Octava ronda: el aviso nuevo repetía el error del aviso viejo
+
+Codex revisó el head salido de la auditoría y encontró dos defectos, los dos en
+el aviso de `ci-pending` **escrito en esa misma ronda**:
+
+1. **Prescribía `sirius:repair-requested` sin comprobar si el corrector podría
+   trabajar.** Su puerta exige un bloque de observaciones estructuradas; sin él
+   se detiene con `sin-observaciones` y aplica `failed-safely`. En el escenario
+   exacto en que el aviso aparece —Quality falló y la transición se perdió— no
+   hay observaciones, así que el único desatasco ofrecido no desatascaba nada.
+2. **Se emitía para cualquier conclusión distinta de `success`.** El productor
+   real solo encamina `failure|timed_out` al corrector; `cancelled`, `skipped`,
+   `neutral`, `stale` y `action_required` van a `failed-safely`. Prescribir una
+   corrección en esos casos autoriza trabajo sin causa técnica demostrada y
+   esquiva la parada segura de la máquina de estados.
+
+Es la **cuarta vez** que una recomendación escrita en este guion no funciona, y
+siempre por lo mismo: redactarla sin leer las condiciones de admisión de quien
+la recibe. La regla ya estaba escrita en la sexta ronda —derivar del workflow, no
+inventar— y se aplicó a `reactivation_labels`; el aviso de `ci-pending`, escrito
+después, no la heredó.
+
+**Arreglo:** el reconciliador deja de adivinar y **comprueba**. Mira el volcado
+de comentarios que ya ha leído y prescribe una cosa u otra según haya bloque de
+observaciones o no; y solo ofrece corrección para las conclusiones que el
+productor real considera corregibles, leídas de su `case`.
+
+Cuatro mutaciones con el resultado predicho: prescribir a ciegas, no prescribir
+nunca, y tratar `cancelled` como corregible.
+
+### Lo que esto añade al método
+
+La auditoría en paralelo encontró ocho defectos que la revisión en serie no
+había encontrado en ocho rondas. Pero **no encontró estos dos**, y la razón es
+instructiva: sus seis lentes miraban el código *existente*, y este aviso nació
+en la propia ronda de corrección. **El código escrito para arreglar algo no pasa
+por el filtro que encontró ese algo.**
+
+De ahí la regla que cierra este ADR: *toda recomendación dirigida a una persona
+se deriva de las precondiciones reales del sistema que la va a recibir, o no se
+escribe.* Cuatro rondas costó, y la cuarta la escribí después de enunciar la
+regla.

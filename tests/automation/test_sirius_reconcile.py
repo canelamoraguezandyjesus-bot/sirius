@@ -1157,6 +1157,10 @@ def test_recon_aud_007_ci_pending_atascado_tambien_recibe_aviso(tmp_path: Path) 
     assert "sirius:repair-requested" in publicado, (
         "el aviso debe decir qué etiqueta aplica una persona para desatascarlo"
     )
+    assert "no** tiene observaciones" in publicado, (
+        "sin observaciones estructuradas el corrector se detiene con "
+        f"`sin-observaciones`; el aviso no puede callarlo: {publicado!r}"
+    )
     assert "sirius:repair-requested" not in _etiquetas_escritas(env), (
         "el reconciliador no puede aplicarla él: eso sería decidir que la corrección procede"
     )
@@ -1172,3 +1176,59 @@ def test_recon_aud_008_ci_pending_reciente_no_se_denuncia(tmp_path: Path) -> Non
     assert "EN-CURSO" in r.stdout, r.stdout
     assert "ATASCO" not in r.stdout, r.stdout
     assert "sirius-stuck" not in (_md(env) / "comments_55.txt").read_text(encoding="utf-8")
+
+
+def test_recon_aud_009_con_observaciones_si_se_prescribe_la_correccion(
+    tmp_path: Path,
+) -> None:
+    """Con observaciones estructuradas, el corrector sí puede trabajar.
+
+    La puerta de `repair-sirius-work.yml` EXIGE ese bloque: sin él se detiene
+    con `sin-observaciones` y aplica `failed-safely`. Prescribir
+    `repair-requested` a ciegas mandaba a una persona a hacer algo que en la
+    mitad de los casos no arranca nada. El reconciliador lo COMPRUEBA.
+    """
+    env = _setup(tmp_path)
+    _seed_ci_pending(env, "failure", edad_min=5000)
+    (_md(env) / "comments_55.txt").write_text(
+        "READY https://github.com/owner/repo/pull/57\n"
+        '## OBSERVACIONES_ESTRUCTURADAS\n```json\n{"hallazgos": []}\n```\n',
+        encoding="utf-8",
+    )
+
+    assert _run_reconcile(env).returncode == 0
+    publicado = (_md(env) / "comments_55.txt").read_text(encoding="utf-8")
+    assert "ya tiene un bloque de observaciones" in publicado, publicado
+    assert "no arrancaria nada" not in publicado, publicado
+
+
+def test_recon_aud_010_solo_se_prescribe_correccion_para_lo_corregible(
+    tmp_path: Path,
+) -> None:
+    """`cancelled` no es un fallo corregible, y el productor real lo sabe.
+
+    `advance-sirius-after-quality.yml` solo manda `failure|timed_out` al
+    corrector; cualquier otra conclusión va a `failed-safely`. Avisar en todas
+    prescribía una corrección sin causa técnica demostrada y esquivaba la parada
+    segura de la máquina de estados. Hallazgo de Codex en la PR #146.
+
+    Las conclusiones corregibles se leen del workflow REAL, no de una lista
+    escrita aquí.
+    """
+    productor = (
+        REPO_ROOT / ".github" / "workflows" / "advance-sirius-after-quality.yml"
+    ).read_text(encoding="utf-8")
+    assert "failure|timed_out)" in productor, (
+        "el productor ya no encamina `failure|timed_out` al corrector; esta "
+        "prueba asume que sí y habría que revisarla"
+    )
+
+    env = _setup(tmp_path)
+    _seed_ci_pending(env, "cancelled", edad_min=5000)
+
+    r = _run_reconcile(env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "no es un fallo corregible" in r.stdout, r.stdout
+    assert "sirius:repair-requested" not in (_md(env) / "comments_55.txt").read_text(
+        encoding="utf-8"
+    ), "se prescribió una corrección para una conclusión que no la admite"

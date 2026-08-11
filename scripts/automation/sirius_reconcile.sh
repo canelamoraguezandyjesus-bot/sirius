@@ -301,7 +301,16 @@ for issue in "${open_issues[@]:-}"; do
         report AVISO "#${issue}: ci-pending y Quality aun sin resultado para ${open_head}; nada que reconciliar."
       else
         report AVISO "#${issue}: ci-pending con Quality '${conclusion}' para ${open_head}; aqui no se transiciona."
-        avisar_ci_atascado="si"
+        # Solo `failure` y `timed_out` son corregibles: es lo que
+        # `advance-sirius-after-quality.yml` manda al corrector, y cualquier otra
+        # conclusion —`cancelled`, `skipped`, `neutral`, `stale`,
+        # `action_required`— la manda a `failed-safely`. Avisar en todas
+        # prescribiria una correccion sin causa tecnica demostrada y esquivaria
+        # la parada segura de la maquina de estados. Hallazgo de Codex en #146.
+        case "$conclusion" in
+          failure|timed_out) avisar_ci_atascado="si" ;;
+          *) report HUMANO "#${issue}: ci-pending con Quality '${conclusion}'; no es un fallo corregible, espera una accion humana." ;;
+        esac
       fi
     fi
 
@@ -332,6 +341,26 @@ for issue in "${open_issues[@]:-}"; do
             report EN-CURSO "#${issue}: ci-pending desde hace ${edad_ci} min; dentro de lo normal."
           else
             report ATASCO "#${issue}: ci-pending lleva ${edad_ci} min con Quality ya resuelto; se avisa en la incidencia."
+            # La puerta del corrector EXIGE un bloque de observaciones
+            # estructuradas: sin el se detiene con `sin-observaciones` y aplica
+            # `failed-safely`. Prescribir `repair-requested` a ciegas mandaba a
+            # una persona a hacer algo que en la mitad de los casos no arranca
+            # nada — cuarta vez que escribo una receta sin leer las condiciones
+            # de quien la recibe. Aqui no se adivina: se comprueba. Hallazgo de
+            # Codex en la PR #146.
+            # Se mira el volcado que este bucle YA leyo, en vez de pedir los
+            # comentarios otra vez: la respuesta es la misma y ahorra una
+            # llamada dentro del presupuesto de la pasada.
+            #
+            # Comprueba la PRESENCIA del bloque, que es un hecho verificable. Un
+            # bloque presente pero mal formado seguiria sin servirle al
+            # corrector; el aviso por eso afirma que existe, no que vaya a
+            # funcionar seguro.
+            if grep -q '^## OBSERVACIONES_ESTRUCTURADAS' "$comments_file"; then
+              que_hacer="2. Esta incidencia ya tiene un bloque de observaciones estructuradas, que es lo que la puerta del corrector exige: quitar \`sirius:ci-pending\` y aplicar \`sirius:repair-requested\`."
+            else
+              que_hacer="2. Esta incidencia **no** tiene observaciones estructuradas, asi que aplicar \`sirius:repair-requested\` no arrancaria nada: el corrector se detendria con \`sin-observaciones\`. Hace falta una ronda de revision que las publique, o resolver el fallo de Quality a mano."
+            fi
             marker_ci="<!-- sirius-stuck:sirius:ci-pending:${evento_ci} -->"
             ci_file="$(mktemp)"
             printf '%s\n\n%s\n\n%s\n\n%s\n\n%s\n%s\n\n%s\n' \
@@ -340,7 +369,7 @@ for issue in "${open_issues[@]:-}"; do
               "Sigue en \`sirius:ci-pending\` desde ${desde_ci}. Quality ya termino en \`${conclusion}\` para \`${open_head}\`, asi que no va a volver a correr por su cuenta: sin un commit nuevo no hay evento nuevo, y sin evento nuevo nada mueve este estado." \
               "El reconciliador **no ha reparado nada**. Transicionar desde aqui seria decidir que la correccion procede, y eso no lo puede saber." \
               "1. Mirar en Actions por que fallo Quality en la PR #${open_pr}." \
-              "2. Si quieres que la automatizacion lo corrija, quitar \`sirius:ci-pending\` y aplicar \`sirius:repair-requested\`." \
+              "${que_hacer}" \
               "Si tras eso el bloque sigue sin arrancar, la ejecucion de Actions dice por que: es el unico sitio donde consta siempre." >"$ci_file"
             if sirius_comment_once "$REPO" "$issue" "$marker_ci" "$ci_file"; then
               report AVISADO "#${issue}: aviso de atasco publicado (o ya estaba)."
