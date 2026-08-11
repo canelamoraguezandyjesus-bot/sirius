@@ -385,3 +385,52 @@ anterior. Es que **una prueba no puede ser más correcta que la afirmación que
 copia**: mientras el contrato dijo una cosa falsa, cada versión de la prueba
 heredó el error aunque cambiara de técnica. Antes de medir hay que comprobar que
 lo que se va a medir es cierto.
+
+## Séptima ronda: auditoría adversarial en paralelo, ocho defectos más
+
+Tras ocho hallazgos externos consecutivos, la revisión dejó de ser suficiente
+como único filtro: cada ronda encontraba uno, se corregía, y aparecía otro. Se
+montó una **auditoría adversarial de seis lentes independientes** sobre el
+cambio —afirmaciones contra realidad, vacuidad de pruebas, corrección del shell,
+semántica de `gh`, coherencia con la máquina de estados, y el aviso tal como lo
+lee una persona— con cada hallazgo pasando por un refutador cuyo trabajo era
+tumbarlo ejecutándolo.
+
+Once hallazgos en bruto → **ocho defectos distintos**, todos confirmados
+ejecutando. Dos de gravedad alta, y uno era una **regresión introducida en la
+ronda anterior**.
+
+| | Defecto | Por qué importaba |
+|---|---|---|
+| D1 | `mapfile < <(...)` descartaba el fallo del listado | un 503 apagaba las cuatro pasadas diarias **con aspecto de éxito**: resumen vacío, `rc=0`, idéntico a un repositorio sano |
+| D2 | `planned` + `implement-requested` caía en CONTRADICCION | es el **único** estado en que `implement-requested` existe en producción sana; una activación muerta no recibía aviso nunca, y encima se la acusaba de incoherente en cada pasada |
+| D3 | `2>/dev/null` sobre la llamada entera | un 403 por límite de tasa salía **idéntico** a «no hay evento»: la detección podía estar apagada del todo sin una sola señal |
+| D4 | el caso B no miraba `draft` | `advance-…` se niega a mover una PR en borrador y `quality.yml` sí corre en ella: el reconciliador arrancaba 85 min de revisión sobre algo que una persona aparcó a propósito |
+| D5 | `ci-pending` nunca recibía aviso | su motor es `on: workflow_run`, un evento de un solo uso: con Quality en rojo y ese run muerto, callejón cerrado — y la cabecera afirmaba que **todos** los estados de máquina reciben aviso |
+| D6 | §9.1 citaba RECON-STUCK-007 para más de lo que cubre | una escritura insertada en el caso A pasaba **25/25** del fichero |
+| D7 | RECON-STUCK-011 hacía `grep` sobre el guion | su aserción positiva quedaba satisfecha por un **comentario de shell** mientras el aviso publicado ya no contenía la frase |
+| D8 | `printf` con seis `%s` y siete argumentos | `printf` reutiliza el formato: la última línea salía pegada al punto 2 —en Markdown, dentro del ítem— con diez líneas en blanco detrás |
+
+Y dos defectos más aparecieron **al arreglar los anteriores**, los dos por la
+misma causa que ya había producido tres: **un simulado más permisivo que la
+herramienta real**. El `gh` simulado no aplicaba el `--jq` a `/pulls/`, así que
+devolvía `draft` aunque el guion dejara de pedirlo —la prueba pasaba con el
+defecto puesto— y aceptaba una siembra con `head` como cadena cuando la API
+devuelve un objeto con `sha`. Corregido el simulado, la siembra irreal falló
+sola.
+
+**Once mutaciones**, todas con el resultado predicho antes de ejecutarlas.
+
+### Lo que esta ronda enseña, y no es «revisar más»
+
+Los ocho hallazgos externos anteriores salieron de un revisor que miraba **con
+otra cabeza**. Estos ocho salieron de seis cabezas mirando **a la vez, con
+lentes distintas y con la lista de patrones ya conocidos por delante**. La
+diferencia no es cantidad de repasos: es que un solo revisor —humano, modelo o
+yo— comparte sesgo consigo mismo entre rondas, y por eso las rondas encuentran
+de una en una.
+
+La regla operativa que sale: **cuando una pieza acumula dos rondas de hallazgos,
+deja de revisarse en serie y se audita en paralelo con lentes explícitas**. Y la
+lente que más rinde es siempre la misma: coger cada frase declarativa y
+preguntar qué comprobación la sostiene.

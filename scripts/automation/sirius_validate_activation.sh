@@ -69,9 +69,15 @@ reject() {
     # MACHINE_LABELS. Es exactamente la clase de fallo que la incidencia #138
     # vino a eliminar, reintroducida por la puerta que debia protegerla.
     #
-    # Conservandola, el estado queda como estaba y el proximo intento vuelve a
-    # rechazar: se pierde tiempo, no se pierde la incidencia. Y no hay bucle,
-    # porque `issues: labeled` solo dispara al APLICAR la etiqueta.
+    # Conservandola, el estado queda como estaba: se pierde tiempo, no se pierde
+    # la incidencia. Y no hay bucle, porque `issues: labeled` solo dispara al
+    # APLICAR la etiqueta.
+    #
+    # Lo que esto NO significa, y conviene no leer de mas: que el reconciliador
+    # vaya a avisar. Solo lo hara en el camino `sin-planned`, donde queda
+    # `planned` + `implement-requested`, que es el par que el reconciliador
+    # reconoce. En `estado-incompatible` o `cuerpo-incompleto` la incidencia
+    # queda con otras etiquetas y hace falta que una persona la mire.
     # Hallazgo P2 de Codex en la PR #146.
     echo "::error::No se pudo publicar el comentario de rechazo en #${ISSUE}; se CONSERVA sirius:implement-requested para no dejar la incidencia muda." >&2
     rm -f "$body_file"

@@ -76,8 +76,7 @@ label_applied_at() {
   sirius_retry gh api -X GET "repos/${1}/issues/${2}/events" -f per_page=100 \
     --paginate --slurp \
     --jq "(add // []) | [.[] | select(.event == \"labeled\" and .label.name == \"${3}\")] \
-          | if length == 0 then empty else (last | \"\(.created_at) \(.id)\") end" \
-    2>/dev/null
+          | if length == 0 then empty else (last | \"\(.created_at) \(.id)\") end"
 }
 
 # reactivation_labels <etiqueta> — las etiquetas que hay que APLICAR, en orden,
@@ -148,11 +147,20 @@ report() {
 overall_rc=0
 
 # Incidencias abiertas (se excluyen PRs, que el endpoint /issues incluye).
-mapfile -t open_issues < <(
-  sirius_retry gh api -X GET "repos/${REPO}/issues" \
-    -f state=open -f per_page=100 --paginate \
-    --jq '.[] | select(has("pull_request") | not) | .number'
-)
+# Sustitucion de COMANDO, no de proceso. Con `mapfile < <(...)` el estado de
+# salida se pierde: un 503 o un 403 dejaba la lista vacia, `overall_rc` en 0 y
+# el resumen del job VACIO, byte a byte igual que un repositorio sano sin
+# incidencias. Las cuatro pasadas diarias se apagaban con aspecto de exito, que
+# es el peor desenlace para una red de seguridad: no detectar y ademas parecer
+# que se ha comprobado. Auditoria de la PR #146.
+if ! open_list="$(sirius_retry gh api -X GET "repos/${REPO}/issues" \
+  -f state=open -f per_page=100 --paginate \
+  --jq '.[] | select(has("pull_request") | not) | .number')"; then
+  report ERROR "No se pudieron listar las incidencias abiertas de ${REPO}; esta pasada NO ha comprobado nada."
+  exit 1
+fi
+# `<<<""` produce un elemento vacio que el guardia del bucle ya descarta.
+mapfile -t open_issues <<<"$open_list"
 
 for issue in "${open_issues[@]:-}"; do
   [ -z "${issue:-}" ] && continue
@@ -194,8 +202,21 @@ for issue in "${open_issues[@]:-}"; do
   fi
 
   # --- Contradicción: más de una etiqueta de estado sirius -------------------
+  #
+  # Con una excepcion, y no es cosmetica: `sirius:planned` +
+  # `sirius:implement-requested` es el UNICO estado en que
+  # `implement-requested` existe en produccion sana.
+  # `sirius_validate_activation.sh` EXIGE `planned`, e
+  # `implement-sirius-work.yml` retira las dos juntas al consumir el evento.
+  # Contarlo como contradiccion acusaba de incoherente a una activacion normal
+  # en cada pasada y —peor— el `continue` cortaba antes del bucle de estados,
+  # asi que una activacion cuyo run muriera antes de consumir el evento NO
+  # recibia aviso nunca: justo el caso que esta red existe para cubrir.
+  # Auditoria de la PR #146.
+  par_de_activacion="$(printf '%s\n' "$sirius_labels" | sort | tr '\n' ' ')"
   state_count="$(printf '%s\n' "$sirius_labels" | grep -c . || true)"
-  if [ "${state_count:-0}" -gt 1 ]; then
+  if [ "${state_count:-0}" -gt 1 ] &&
+     [ "$par_de_activacion" != "sirius:implement-requested sirius:planned " ]; then
     report CONTRADICCION "#${issue}: varias etiquetas sirius simultáneas ($(printf '%s' "$sirius_labels" | tr '\n' ' ')); requiere revisión humana."
     rm -f "$comments_file" "$body_file"
     continue
@@ -229,15 +250,22 @@ for issue in "${open_issues[@]:-}"; do
       cat "$body_file" "$comments_file" \
         | grep -oE "https://github\.com/${REPO}/pull/[0-9]+" | sort -u
     )
-    open_pr="" open_head=""
+    open_pr="" open_head="" open_draft=""
     for url in "${pr_urls[@]:-}"; do
       [ -z "${url:-}" ] && continue
       prnum="${url##*/}"
-      prjson="$(sirius_retry gh api "repos/${REPO}/pulls/${prnum}" --jq '{state: .state, head: .head.sha}' 2>/dev/null)" || continue
+      # Se pide tambien `draft`: `advance-sirius-after-quality.yml` se NIEGA a
+      # transicionar una PR en borrador, y `quality.yml` SI corre en borrador.
+      # Sin mirarlo, el caso B hacia justo lo que el productor del evento habia
+      # decidido no hacer —arrancar al revisor sobre algo que una persona dejo
+      # aparcado a proposito—, contra los limites 2 y 5 del §9.1. Es el error de
+      # siempre: decidir por otro sistema sin leer su predicado. Auditoria #146.
+      prjson="$(sirius_retry gh api "repos/${REPO}/pulls/${prnum}" --jq '{state: .state, head: .head.sha, draft: (.draft // false)}' 2>/dev/null)" || continue
       if [ "$(printf '%s' "$prjson" | jq -r '.state')" = "open" ]; then
         if [ -n "$open_pr" ]; then open_pr="AMBIGUA"; break; fi
         open_pr="$prnum"
         open_head="$(printf '%s' "$prjson" | jq -r '.head')"
+        open_draft="$(printf '%s' "$prjson" | jq -r '.draft')"
       fi
     done
     if [ -z "$open_pr" ]; then
@@ -247,7 +275,9 @@ for issue in "${open_issues[@]:-}"; do
     else
       conclusion="$(sirius_retry gh api "repos/${REPO}/commits/${open_head}/check-runs" \
         --jq '[.check_runs[] | select(.name == "quality")] | (first.conclusion // "none")' 2>/dev/null)" || conclusion="none"
-      if [ "$conclusion" = "success" ]; then
+      if [ "$open_draft" = "true" ]; then
+        report AVISO "#${issue}: ci-pending con la PR #${open_pr} en borrador; el productor del evento tampoco la avanzaria, no se transiciona."
+      elif [ "$conclusion" = "success" ]; then
         report ATASCO "#${issue}: ci-pending pero Quality esta en verde para ${open_head}; se reintenta la transicion."
         marker="<!-- sirius-quality:${open_head}:success -->"
         tfile="$(mktemp)"
@@ -270,8 +300,59 @@ for issue in "${open_issues[@]:-}"; do
       elif [ "$conclusion" = "none" ]; then
         report AVISO "#${issue}: ci-pending y Quality aun sin resultado para ${open_head}; nada que reconciliar."
       else
-        report AVISO "#${issue}: ci-pending con Quality '${conclusion}' para ${open_head}; el workflow de avance debe gestionarlo (no se transiciona aqui)."
+        report AVISO "#${issue}: ci-pending con Quality '${conclusion}' para ${open_head}; aqui no se transiciona."
+        avisar_ci_atascado="si"
       fi
+    fi
+
+    # `sirius:ci-pending` tambien lo mueve SOLO la maquina, y su unico motor
+    # —`advance-sirius-after-quality.yml`, con `on: workflow_run`— es un evento
+    # de un solo uso: con Quality en rojo y ese run muerto no se aplica
+    # `repair-requested`, luego no hay commit nuevo, luego Quality no vuelve a
+    # correr y no hay `workflow_run` nuevo. Callejon cerrado.
+    #
+    # Era el unico estado de maquina que no recibia aviso en la incidencia,
+    # mientras la cabecera de este guion afirmaba que todos lo reciben. No entra
+    # en MACHINE_LABELS: el `continue` de arriba corta antes, y
+    # `reactivation_labels` devolveria la propia etiqueta, que no dispara nada.
+    # Auditoria de la PR #146.
+    if [ "${avisar_ci_atascado:-}" = "si" ]; then
+      marca_ci="$(label_applied_at "$REPO" "$issue" "sirius:ci-pending")"
+      if [ -z "$marca_ci" ]; then
+        report AVISO "#${issue}: ci-pending; no pude fechar el estado, no afirmo si esta atascado."
+      else
+        desde_ci="${marca_ci%% *}"
+        evento_ci="${marca_ci##* }"
+        epoch_ci="$(date -u -d "$desde_ci" +%s 2>/dev/null || true)"
+        if [ -z "$epoch_ci" ]; then
+          report AVISO "#${issue}: ci-pending; fecha ilegible (${desde_ci}), no afirmo antiguedad."
+        else
+          edad_ci=$(( ( $(_sirius_now) - epoch_ci ) / 60 ))
+          if [ "$edad_ci" -lt "$STUCK_MINUTES" ]; then
+            report EN-CURSO "#${issue}: ci-pending desde hace ${edad_ci} min; dentro de lo normal."
+          else
+            report ATASCO "#${issue}: ci-pending lleva ${edad_ci} min con Quality ya resuelto; se avisa en la incidencia."
+            marker_ci="<!-- sirius-stuck:sirius:ci-pending:${evento_ci} -->"
+            ci_file="$(mktemp)"
+            printf '%s\n\n%s\n\n%s\n\n%s\n\n%s\n%s\n\n%s\n' \
+              "$marker_ci" \
+              "🕒 **Este bloque lleva ${edad_ci} minutos sin avanzar**" \
+              "Sigue en \`sirius:ci-pending\` desde ${desde_ci}. Quality ya termino en \`${conclusion}\` para \`${open_head}\`, asi que no va a volver a correr por su cuenta: sin un commit nuevo no hay evento nuevo, y sin evento nuevo nada mueve este estado." \
+              "El reconciliador **no ha reparado nada**. Transicionar desde aqui seria decidir que la correccion procede, y eso no lo puede saber." \
+              "1. Mirar en Actions por que fallo Quality en la PR #${open_pr}." \
+              "2. Si quieres que la automatizacion lo corrija, quitar \`sirius:ci-pending\` y aplicar \`sirius:repair-requested\`." \
+              "Si tras eso el bloque sigue sin arrancar, la ejecucion de Actions dice por que: es el unico sitio donde consta siempre." >"$ci_file"
+            if sirius_comment_once "$REPO" "$issue" "$marker_ci" "$ci_file"; then
+              report AVISADO "#${issue}: aviso de atasco publicado (o ya estaba)."
+            else
+              report ERROR "#${issue}: no se pudo publicar el aviso de atasco; reintentable."
+              overall_rc=1
+            fi
+            rm -f "$ci_file"
+          fi
+        fi
+      fi
+      unset avisar_ci_atascado
     fi
     rm -f "$comments_file" "$body_file"
     continue
@@ -327,7 +408,11 @@ for issue in "${open_issues[@]:-}"; do
     fi
     marker="<!-- sirius-stuck:${lbl}:${evento_id} -->"
     stuck_file="$(mktemp)"
-    printf '%s\n\n%s\n\n%s\n\n%s\n\n%s\n%s\n' \
+    # SIETE conversiones para SIETE argumentos. `printf` REUTILIZA el formato
+    # cuando sobran argumentos, asi que con seis la ultima linea salia pegada
+    # a la anterior —en Markdown eso la mete DENTRO del punto 2— y detras se
+    # colaban diez lineas en blanco. Auditoria de la PR #146.
+    printf '%s\n\n%s\n\n%s\n\n%s\n\n%s\n%s\n\n%s\n' \
       "$marker" \
       "🕒 **Este bloque lleva ${edad_min} minutos sin avanzar**" \
       "Sigue en \`${lbl}\` desde ${desde}. Ese estado solo lo mueve la automatización, y una etiqueta ya aplicada no vuelve a disparar \`issues: labeled\`: si la ejecución que debía moverlo murió, no hay nada que lo mueva." \

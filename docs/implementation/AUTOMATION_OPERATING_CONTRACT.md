@@ -409,8 +409,13 @@ amparado por esta excepción y necesita una decisión nueva:
    aplica `sirius:review-requested` para reparar una transición perdida. Eso no
    inicia un bloque —el bloque ya estaba en marcha— pero sí despierta al
    revisor, así que queda bajo el límite 2 y no bajo este. Es la única etiqueta
-   disparadora que este workflow escribe, y solo desde `sirius:ci-pending`;
-   RECON-STUCK-007 lo comprueba ejecutando.
+   disparadora que este workflow escribe, y solo desde `sirius:ci-pending`.
+   Lo comprueban ejecutando dos pruebas, no una: RECON-STUCK-007 recorre todos
+   los demás caminos y exige que no se escriba ninguna disparadora, y
+   RECON-STUCK-013 exige que desde `ci-pending` con Quality verde se escriba
+   `review-requested` y solo esa. Ambas miran CADA escritura de etiqueta, no el
+   estado final: retirar y volver a poner deja el mismo estado y dispara un
+   evento nuevo.
 2. **No avanza un ciclo sano.** Solo repara estados inequívocos que ya estaban
    mal (los casos A y B de `scripts/automation/sirius_reconcile.sh`), y esos
    mismos casos son reparables hoy a mano sin esta excepción.

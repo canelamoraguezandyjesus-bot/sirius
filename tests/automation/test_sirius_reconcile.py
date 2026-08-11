@@ -74,6 +74,11 @@ case "$sub" in
       exit 1
     fi
     if printf '%s' "$args" | grep -qE 'issues\?|issues -f|repos/[^ ]+/issues($| -f)'; then
+      # GitHub falla: 503, 403 por limite de tasa... Sin poder simularlo, el
+      # camino en que la pasada entera no comprueba nada no se puede medir.
+      if [ "${MOCK_FAIL_LIST:-0}" = "1" ]; then
+        echo "gh: HTTP 503 (listado de incidencias)" >&2; exit 1
+      fi
       cat "$D/open_issues.txt" 2>/dev/null; exit 0
     fi
     if printf '%s' "$args" | grep -q '/check-runs'; then
@@ -82,11 +87,23 @@ case "$sub" in
     fi
     if printf '%s' "$args" | grep -q '/pulls/'; then
       pr="$(printf '%s' "$args" | grep -oE 'pulls/[0-9]+' | cut -d/ -f2)"
-      cat "$D/pr_${pr}.json" 2>/dev/null || exit 1; exit 0
+      [ -f "$D/pr_${pr}.json" ] || exit 1
+      # Se aplica el `--jq` REAL, igual que con /events. Devolver el fichero
+      # entero hacia que un campo que el llamador YA NO PIDE siguiera llegandole:
+      # quitar `draft` del filtro no cambiaba nada y la prueba pasaba con el
+      # defecto puesto. Un simulado mas permisivo que `gh` deja pasar cualquier
+      # suposicion, que es la raiz de varios defectos de esta PR.
+      jqpr=""; prev=""
+      for a in "$@"; do [ "$prev" = "--jq" ] && jqpr="$a"; prev="$a"; done
+      if [ -n "$jqpr" ]; then jq -c "$jqpr" "$D/pr_${pr}.json"; else cat "$D/pr_${pr}.json"; fi
+      exit 0
     fi
     n="$(issue_from "$args")"
     if printf '%s' "$args" | grep -q '/events'; then
       raw="$D/events_${n}.txt"
+      if [ "${MOCK_FAIL_EVENTS:-0}" = "1" ]; then
+        echo "gh: HTTP 403 (rate limit) al leer eventos" >&2; exit 1
+      fi
       [ -f "$raw" ] || exit 1
       # El archivo guarda un array de PAGINAS. `gh --paginate` emite un
       # documento JSON por pagina, y `--slurp` emite un unico array con todas.
@@ -267,7 +284,9 @@ def test_reconcile_ambiguous_completed_marker_not_fixed(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def _seed_ci_pending(env: dict[str, str], conclusion: str, edad_min: int = 1000) -> None:
+def _seed_ci_pending(
+    env: dict[str, str], conclusion: str, edad_min: int = 1000, borrador: bool = False
+) -> None:
     md = _md(env)
     _seed_issue(
         env,
@@ -279,7 +298,14 @@ def _seed_ci_pending(env: dict[str, str], conclusion: str, edad_min: int = 1000)
     # `ci-pending` acaba de ponerse, el productor del evento todavía puede
     # actuar. Por eso hay que fechar el estado.
     _seed_events(env, 55, [_evento("labeled", "sirius:ci-pending", _iso(edad_min), 77)])
-    (md / "pr_57.json").write_text('{"state":"open","head":"c4d482267d9a"}', encoding="utf-8")
+    (md / "pr_57.json").write_text(
+        # Forma REAL de la API: `head` es un objeto con `sha`, no una cadena.
+        # Mientras el simulado devolvia el fichero entero sin aplicar el `--jq`,
+        # una forma inventada pasaba igual; en produccion `.head.sha` habria
+        # fallado. Un simulado fiel obliga a que la siembra tambien lo sea.
+        json.dumps({"state": "open", "head": {"sha": "c4d482267d9a"}, "draft": borrador}),
+        encoding="utf-8",
+    )
     (md / "checks_c4d482267d9a.txt").write_text(conclusion, encoding="utf-8")
 
 
@@ -656,6 +682,17 @@ def test_recon_stuck_013_la_unica_disparadora_que_escribe_es_review_requested(
     """
     env = _setup(tmp_path)
     _seed_ci_pending(env, "success")
+    # La misma pasada recorre los DEMÁS caminos del reconciliador, no solo el
+    # caso B: caso A, ci-pending sin PR, contradicción, espera humana y una
+    # incidencia sin etiquetas. Sin ellos, una escritura insertada en el caso A
+    # pasaba las 25 pruebas del fichero en verde —demostrado por mutación—, así
+    # que la afirmación del §9.1 no la sostenía ninguna comprobación.
+    _seed_issue(env, 50, [], comments="<!-- sirius-completed:b649c92faf98 -->\n")
+    _seed_issue(env, 51, ["sirius:ci-pending"], comments="sin ninguna PR\n")
+    _seed_events(env, 51, [_evento("labeled", "sirius:ci-pending", _iso(5000), 51)])
+    _seed_issue(env, 62, ["sirius:implementing", "sirius:ci-pending"])
+    _seed_issue(env, 63, ["sirius:ready-for-merge"])
+    _seed_issue(env, 64, [])
 
     assert _run_reconcile(env).returncode == 0
 
@@ -877,26 +914,30 @@ def test_recon_stuck_010_la_reactivacion_repone_lo_que_el_consumo_retiro() -> No
         assert estado in disparadoras, f"`{estado}` no dispara ningún trabajo"
 
 
-def test_recon_stuck_011_el_aviso_no_promete_lo_que_no_puede_garantizar() -> None:
-    """El aviso no puede afirmar que ninguna puerta se quedará muda.
+def test_recon_stuck_011_la_promesa_retirada_no_vuelve(tmp_path: Path) -> None:
+    """Ancla literal de una redacción revocada, medida sobre el texto PUBLICADO.
 
-    Tres rondas de revisión seguidas encontraron un camino distinto en el que
-    era falso: `reject()` retiraba la etiqueta sin comentario; y en `reviewing` y
-    `repairing` la precondición inválida no pasa por `reject()` sino por
-    `sirius_transition`, que aplica el estado terminal y retira la etiqueta antes
-    de publicar, con los llamadores tragándose el error con `|| echo`.
+    La versión anterior hacía `grep` sobre el fichero del guion, y fallaba en las
+    dos direcciones: no veía entrar una promesa nueva con otras palabras, y —peor—
+    su aserción positiva quedaba satisfecha por un COMENTARIO de shell aunque el
+    aviso publicado ya no contuviera la frase. Cuarta vez en esta PR que un
+    `grep` se hace pasar por una comprobación de comportamiento.
 
-    Arreglar cada camino era el cuarto parche de la misma forma. La afirmación
-    se retira: el reconciliador conoce lo que el consumo retiró —eso lo lee— pero
-    no las garantías de publicación de tres puertas distintas. Lo que sí puede
-    decir sin mentir es dónde consta siempre el motivo: el registro de Actions.
+    Esto NO garantiza que no vuelva una promesa equivalente con otras palabras
+    —eso no es decidible—; es un ancla contra la redacción concreta que tres
+    rondas de revisión demostraron falsa.
     """
-    guion = RECONCILE.read_text(encoding="utf-8")
+    env = _setup(tmp_path)
+    _seed_issue(env, 22, ["sirius:reviewing"])
+    _seed_events(env, 22, [_evento("labeled", "sirius:reviewing", _iso(2000), 22)])
+    assert _run_reconcile(env).returncode == 0
+    publicado = (_md(env) / "comments_22.txt").read_text(encoding="utf-8")
+
     for promesa in ("No se queda en silencio", "lo dirá en un comentario"):
-        assert promesa not in guion, (
+        assert promesa not in publicado, (
             f"el aviso vuelve a garantizar algo que no controla: {promesa!r}"
         )
-    assert "la ejecución de Actions dice por qué" in guion, (
+    assert "la ejecución de Actions dice por qué" in publicado, (
         "el aviso debe seguir diciendo dónde mirar cuando no arranque"
     )
 
@@ -925,3 +966,209 @@ def test_recon_stuck_012_el_aviso_publicado_se_lee_bien(tmp_path: Path) -> None:
     assert "`sirius:planned`, `sirius:implement-requested`" in publicado, (
         f"la secuencia no se lee como código: {publicado!r}"
     )
+    # `printf` REUTILIZA el formato cuando sobran argumentos. Con seis `%s` y
+    # siete argumentos, la última línea salía pegada al punto 2 —en Markdown eso
+    # la mete DENTRO del ítem, que es lo contrario de lo que se quería— y detrás
+    # se colaban diez líneas en blanco. Comprobar subcadenas sueltas no lo veía.
+    assert "\n\nSi tras eso el bloque sigue sin arrancar" in publicado, (
+        f"la salvedad se pega al punto 2 y GitHub la mete dentro del ítem: {publicado!r}"
+    )
+    assert publicado.rstrip("\n").endswith("consta siempre."), (
+        f"el aviso arrastra líneas en blanco de más: {publicado!r}"
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Auditoría adversarial de la PR #146: ocho defectos, y sus pruebas
+# --------------------------------------------------------------------------- #
+
+
+def test_recon_aud_001_si_falla_el_listado_la_pasada_no_pasa_por_exitosa(
+    tmp_path: Path,
+) -> None:
+    """Una red de seguridad que no comprueba nada no puede parecer que sí.
+
+    `mapfile -t open_issues < <( ... )` descarta el estado de salida de la
+    sustitución de proceso. Un 503 o un 403 dejaba la lista vacía, `overall_rc`
+    en 0 y el resumen del job VACÍO: byte a byte igual que un repositorio sano
+    sin incidencias. Las cuatro pasadas diarias se apagaban con aspecto de
+    éxito, que es el peor desenlace posible aquí — no detectar y además parecer
+    que se ha comprobado.
+    """
+    env = _setup(tmp_path)
+    _seed_issue(env, 70, ["sirius:repairing"])
+    _seed_events(env, 70, [_evento("labeled", "sirius:repairing", _iso(5000), 70)])
+    env["MOCK_FAIL_LIST"] = "1"
+
+    r = _run_reconcile(env)
+
+    assert r.returncode != 0, (
+        "la pasada salió con éxito sin haber podido mirar una sola incidencia:\n"
+        f"{r.stdout}{r.stderr}"
+    )
+    assert "NO ha comprobado nada" in r.stdout, r.stdout
+
+
+def test_recon_aud_002_un_fallo_al_leer_eventos_no_se_confunde_con_no_haberlos(
+    tmp_path: Path,
+) -> None:
+    """Sin diagnóstico, «no pude leer» y «no hay evento» son el mismo silencio.
+
+    `label_applied_at` llevaba `2>/dev/null` sobre la llamada ENTERA, no solo
+    sobre `gh`: se perdían el mensaje de `gh` y los avisos de reintento. Un 403
+    por límite de tasa producía una salida idéntica al caso benigno «esta
+    incidencia no tiene ese evento». Con límite de tasa el efecto es global: la
+    detección se apaga en las cuatro pasadas sin una sola señal. Es la misma
+    ceguera que ocultó el defecto del `-X GET`.
+    """
+    env = _setup(tmp_path)
+    _seed_issue(env, 71, ["sirius:repairing"])
+    _seed_events(env, 71, [_evento("commented", None, _iso(5000), 71)])
+    sin_evento = _run_reconcile(env)
+
+    (tmp_path / "fallo").mkdir()
+    otro = _setup(tmp_path / "fallo")
+    _seed_issue(otro, 71, ["sirius:repairing"])
+    _seed_events(otro, 71, [_evento("labeled", "sirius:repairing", _iso(5000), 71)])
+    otro["MOCK_FAIL_EVENTS"] = "1"
+    lectura_rota = _run_reconcile(otro)
+
+    assert "no pude fechar" in sin_evento.stdout, sin_evento.stdout
+    assert "no pude fechar" in lectura_rota.stdout, lectura_rota.stdout
+    assert lectura_rota.stderr != sin_evento.stderr, (
+        "un fallo de lectura sale igual que no tener eventos: la detección "
+        "puede estar apagada del todo sin que nada lo delate"
+    )
+    assert "403" in lectura_rota.stderr or "rate" in lectura_rota.stderr.lower(), (
+        f"el motivo del fallo no llega a ninguna parte: {lectura_rota.stderr!r}"
+    )
+
+
+def test_recon_aud_003_una_activacion_atascada_recibe_aviso(tmp_path: Path) -> None:
+    """`planned` + `implement-requested` no es una contradicción: es el estado normal.
+
+    `sirius_validate_activation.sh` EXIGE `planned` e `implement-sirius-work.yml`
+    retira las dos juntas al consumir el evento, así que ese par es el ÚNICO
+    estado en que `implement-requested` existe en producción sana. Contarlo como
+    contradicción cortaba antes del bucle de estados: una activación cuyo run
+    muriera antes de consumir el evento no recibía aviso NUNCA. Justo el caso
+    que esta red de seguridad existe para cubrir.
+    """
+    env = _setup(tmp_path)
+    _seed_issue(env, 72, ["sirius:planned", "sirius:implement-requested"])
+    _seed_events(env, 72, [_evento("labeled", "sirius:implement-requested", _iso(5000), 72)])
+
+    r = _run_reconcile(env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "CONTRADICCION" not in r.stdout, (
+        f"se acusa de incoherente a una activación normal: {r.stdout}"
+    )
+    publicado = (_md(env) / "comments_72.txt").read_text(encoding="utf-8")
+    assert "<!-- sirius-stuck:sirius:implement-requested:72 -->" in publicado, (
+        f"una activación atascada se quedó sin aviso: {publicado!r}"
+    )
+
+
+def test_recon_aud_004_una_contradiccion_de_verdad_sigue_siendo_contradiccion(
+    tmp_path: Path,
+) -> None:
+    # Control de la excepción anterior: exceptuar un par no puede convertirse en
+    # dejar de detectar los demás.
+    env = _setup(tmp_path)
+    _seed_issue(env, 73, ["sirius:ci-pending", "sirius:reviewing"])
+    _seed_events(env, 73, [_evento("labeled", "sirius:reviewing", _iso(5000), 73)])
+
+    r = _run_reconcile(env)
+    assert "CONTRADICCION" in r.stdout, r.stdout
+    assert "sirius-stuck" not in (_md(env) / "comments_73.txt").read_text(encoding="utf-8")
+
+
+def test_recon_aud_005_una_activacion_reciente_no_se_denuncia(tmp_path: Path) -> None:
+    # Y el par exceptuado tampoco puede denunciarse cuando es normal y reciente.
+    env = _setup(tmp_path)
+    _seed_issue(env, 74, ["sirius:planned", "sirius:implement-requested"])
+    _seed_events(env, 74, [_evento("labeled", "sirius:implement-requested", _iso(10), 74)])
+
+    r = _run_reconcile(env)
+    assert "dentro de lo normal" in r.stdout, r.stdout
+    assert "sirius-stuck" not in (_md(env) / "comments_74.txt").read_text(encoding="utf-8")
+
+
+def test_recon_aud_006_no_se_despierta_al_revisor_sobre_una_pr_en_borrador(
+    tmp_path: Path,
+) -> None:
+    """El productor del evento se niega a mover una PR en borrador; el caso B no.
+
+    `advance-sirius-after-quality.yml` sale sin hacer nada si la PR es borrador,
+    y `quality.yml` SÍ corre en borrador: Quality verde, `advance` se niega, y la
+    incidencia se queda en `ci-pending`. Es el camino más probable de llegar al
+    caso B. Sin mirar `draft`, seis horas después el reconciliador arrancaba al
+    revisor —85 minutos de trabajo— sobre una PR que una persona había aparcado
+    a propósito. Rompe los límites 2 y 5 del §9.1 que esta misma PR declara.
+
+    La aserción es sobre las etiquetas ESCRITAS, no sobre el estado final: el
+    evento `issues: labeled` se dispara aunque algo la retire después.
+    """
+    borrador = _etiquetas_borrador_del_productor()
+    assert borrador, (
+        "`advance-sirius-after-quality.yml` ya no comprueba `draft`; esta prueba "
+        "asume que sí y habría que revisarla"
+    )
+
+    env = _setup(tmp_path)
+    _seed_ci_pending(env, "success", borrador=True)
+
+    r = _run_reconcile(env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "borrador" in r.stdout, r.stdout
+    assert "sirius:review-requested" not in _etiquetas_escritas(env), (
+        "se despertó al revisor sobre una PR en borrador, que es justo lo que el "
+        "productor del evento se niega a hacer"
+    )
+
+
+def _etiquetas_borrador_del_productor() -> bool:
+    """¿`advance-sirius-after-quality.yml` comprueba `draft`? Leído del YAML real."""
+    texto = (REPO_ROOT / ".github" / "workflows" / "advance-sirius-after-quality.yml").read_text(
+        encoding="utf-8"
+    )
+    return "draft" in texto
+
+
+def test_recon_aud_007_ci_pending_atascado_tambien_recibe_aviso(tmp_path: Path) -> None:
+    """`ci-pending` era el único estado de máquina sin aviso en la incidencia.
+
+    Su único motor es `advance-sirius-after-quality.yml` con `on: workflow_run`,
+    un evento de un solo uso: con Quality en rojo y ese run muerto no se aplica
+    `repair-requested`, luego no hay commit nuevo, luego Quality no vuelve a
+    correr y no hay `workflow_run` nuevo. Callejón cerrado — y la cabecera del
+    guion afirmaba que todos los estados de máquina reciben aviso.
+    """
+    env = _setup(tmp_path)
+    _seed_ci_pending(env, "failure", edad_min=5000)
+
+    for _ in range(2):
+        assert _run_reconcile(env).returncode == 0
+
+    publicado = (_md(env) / "comments_55.txt").read_text(encoding="utf-8")
+    assert publicado.count("<!-- sirius-stuck:sirius:ci-pending:77 -->") == 1, (
+        f"esperaba un solo aviso de atasco, deduplicado: {publicado!r}"
+    )
+    assert "sirius:repair-requested" in publicado, (
+        "el aviso debe decir qué etiqueta aplica una persona para desatascarlo"
+    )
+    assert "sirius:repair-requested" not in _etiquetas_escritas(env), (
+        "el reconciliador no puede aplicarla él: eso sería decidir que la corrección procede"
+    )
+
+
+def test_recon_aud_008_ci_pending_reciente_no_se_denuncia(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed_ci_pending(env, "failure", edad_min=10)
+
+    # Lo corta el guardia de antigüedad del caso B, antes incluso de mirar
+    # Quality: da igual cuál de los dos lo pare, lo que no puede es denunciarlo.
+    r = _run_reconcile(env)
+    assert "EN-CURSO" in r.stdout, r.stdout
+    assert "ATASCO" not in r.stdout, r.stdout
+    assert "sirius-stuck" not in (_md(env) / "comments_55.txt").read_text(encoding="utf-8")
