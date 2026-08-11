@@ -31,16 +31,31 @@ CODE_BLOCK_SPOKEN_AS = "Te dejo el código en pantalla."
 LINK_SPOKEN_AS = "un enlace"
 
 
-def prepare_speech_text(text: str) -> str:
+_FENCE_LANGUAGE = re.compile(r"^```[^\n]*\n?|```$", re.MULTILINE)
+
+
+def prepare_speech_text(text: str, *, read_code: bool = False) -> str:
     """Devuelve el texto listo para sintetizar.
 
     Cadena vacía si no queda nada que decir, por ejemplo cuando la respuesta
     era solo un bloque de código y ya está en pantalla.
+
+    ``read_code`` es lo que hace el botón «Leer todo»: en vez de decir que el
+    código queda en pantalla, lo lee. Existe porque grabando hay un momento en
+    que sí quieres oírlo —para comentarlo mientras se ve— y hasta ahora la
+    única forma era leerlo tú.
+
+    Los enlaces se siguen diciendo como «un enlace» incluso leyéndolo todo:
+    deletrear una dirección en voz alta no le sirve a nadie.
     """
     if not text.strip():
         return ""
 
-    prepared = _CODE_FENCE.sub(f" {CODE_BLOCK_SPOKEN_AS} ", text)
+    prepared = (
+        _FENCE_LANGUAGE.sub("", text)
+        if read_code
+        else _CODE_FENCE.sub(f" {CODE_BLOCK_SPOKEN_AS} ", text)
+    )
     prepared = _MARKDOWN_LINK.sub(r"\1", prepared)
     prepared = _BARE_URL.sub(LINK_SPOKEN_AS, prepared)
     prepared = _INLINE_CODE.sub(r"\1", prepared)

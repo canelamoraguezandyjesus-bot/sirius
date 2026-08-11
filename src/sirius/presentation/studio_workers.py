@@ -60,16 +60,21 @@ class SpeakWorker(QRunnable):
         studio_voice_use_case: StudioVoiceUseCase,
         text: str,
         status: MessageStatus,
+        *,
+        read_code: bool = False,
     ) -> None:
         super().__init__()
         self._use_case = studio_voice_use_case
         self._text = text
         self._status = status
+        self._read_code = read_code
         self.signals = StudioVoiceWorkerSignals()
 
     def run(self) -> None:
         try:
-            outcome: SpeakOutcome = self._use_case.speak(self._text, self._status)
+            outcome: SpeakOutcome = self._use_case.speak(
+                self._text, self._status, read_code=self._read_code
+            )
         except Exception as exc:  # frontera del trabajador: informa, nunca tumba el hilo
             _logger.error("Síntesis interrumpida (%s)", type(exc).__name__)
             self.signals.crashed.emit(str(exc))

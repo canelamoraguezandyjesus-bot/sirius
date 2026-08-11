@@ -536,3 +536,24 @@ def test_the_real_app_starts_with_capture_off(qtbot: QtBot, tmp_path: Path) -> N
     capture = window._studio_capture_use_case
     assert capture is not None
     assert not capture.is_enabled
+
+
+@pytest.mark.gui
+def test_the_real_app_can_save_the_chosen_voice(tmp_path: Path, qtbot: QtBot) -> None:
+    """El mismo fallo de cableado que ya se coló una vez, vigilado aquí.
+
+    Que el diálogo de ajustes funcione en una ventana montada a mano no dice
+    nada: lo que importa es que la aplicación de verdad le pase cómo guardar.
+    Sin eso, elegir una voz funcionaría hasta cerrar Sirius.
+    """
+    window = _real_main_window(tmp_path, qtbot)
+
+    assert window._save_studio_voice is not None
+
+
+@pytest.mark.gui
+def test_the_real_app_offers_the_two_studio_buttons(tmp_path: Path, qtbot: QtBot) -> None:
+    window = _real_main_window(tmp_path, qtbot)
+
+    assert window.studio_page.read_all_button.isEnabled()
+    assert window.studio_page.settings_button.isEnabled()

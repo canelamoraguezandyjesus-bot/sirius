@@ -193,6 +193,8 @@ class StudioPage(QWidget):
     stop_voice_clicked = Signal()
     repeat_clicked = Signal()
     mute_toggled = Signal(bool)
+    read_all_clicked = Signal()
+    settings_clicked = Signal()
     capture_panel_toggled = Signal(bool)
     emergency_stop_clicked = Signal()
 
@@ -397,7 +399,10 @@ class StudioPage(QWidget):
 
         self.repeat_button = self._icon_button("repeat", "Repetir última respuesta", enabled=False)
         self.repeat_button.clicked.connect(self.repeat_clicked.emit)
-        self.read_all_button = self._icon_button("read_all", "Leer todo", enabled=False)
+        self.read_all_button = self._icon_button(
+            "read_all", "Leer la última respuesta entera, con el código", enabled=False
+        )
+        self.read_all_button.clicked.connect(self.read_all_clicked.emit)
         self.capture_button = self._icon_button(
             "capture", "Grabación, escenas y cámaras", enabled=False
         )
@@ -417,6 +422,7 @@ class StudioPage(QWidget):
         self.settings_button = self._icon_button(
             "settings", "Ajustes rápidos de Model Studio", enabled=False
         )
+        self.settings_button.clicked.connect(self.settings_clicked.emit)
         self.fullscreen_button = self._icon_button(
             "fullscreen", "Modo limpio a pantalla completa", enabled=True, shortcut_hint="F11"
         )
@@ -612,6 +618,8 @@ class StudioPage(QWidget):
             (self.microphone_button, "Hablar con Sirius"),
             (self.stop_voice_button, "Detener voz"),
             (self.repeat_button, "Repetir última respuesta"),
+            (self.read_all_button, "Leer la última respuesta entera, con el código"),
+            (self.settings_button, "Ajustes rápidos de Model Studio"),
         ):
             button.setEnabled(available)
             button.setToolTip(label if available else f"{label} · {unavailable_reason}")

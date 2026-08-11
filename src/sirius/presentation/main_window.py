@@ -96,6 +96,7 @@ from sirius.presentation.error_messages import failed_send_message
 from sirius.presentation.export_worker import ExportWorker
 from sirius.presentation.knowledge_widget import KnowledgeWidget
 from sirius.presentation.message_view import MessageItemDelegate, MessageItemWidget
+from sirius.presentation.model_studio.settings_dialog import StudioSettingsDialog
 from sirius.presentation.model_studio.studio_page import StudioPage
 from sirius.presentation.project_continuity_widget import ProjectContinuityWidget
 from sirius.presentation.studio_workers import CaptureWorker, SpeakWorker, TranscribeWorker
@@ -119,6 +120,13 @@ _AT_BOTTOM_TOLERANCE_PX = 8
 # convive con ella y se conmuta.
 TECHNICAL_PAGE_INDEX = 0
 MODEL_STUDIO_PAGE_INDEX = 1
+
+VOICE_PREVIEW_TEXT = "Hola. Soy Sirius, y esta es mi voz. Uno, dos, tres."
+"""Frase de prueba al elegir voz.
+
+Corta y con números: lo que distingue una voz de otra al oírlas seguidas es la
+entonación de una frase normal, no un párrafo.
+"""
 
 CAPTURE_HEARTBEAT_MILLISECONDS = 5_000
 """Cada cuánto se le pregunta a OBS cómo está mientras el panel está abierto.
@@ -200,6 +208,7 @@ class MainWindow(QMainWindow):
         *,
         studio_voice_use_case: StudioVoiceUseCase | None = None,
         studio_capture_use_case: StudioCaptureUseCase | None = None,
+        save_studio_voice: Callable[[str], None] | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
         confirm_restore: Callable[[str, str], bool] | None = None,
@@ -239,6 +248,10 @@ class MainWindow(QMainWindow):
         self._studio_voice_use_case = studio_voice_use_case
         self._studio_capture_use_case = studio_capture_use_case
         self._last_spoken_text: str | None = None
+        self._voice_before_preview: str | None = None
+        # La voz elegida tiene que sobrevivir al cierre: la raíz de composición
+        # pasa cómo guardarla, porque la ventana no toca la configuración.
+        self._save_studio_voice = save_studio_voice
         self._active_voice_worker: QRunnable | None = None
         self._active_capture_worker: QRunnable | None = None
         self._capture_busy = False
@@ -409,6 +422,8 @@ class MainWindow(QMainWindow):
         self.studio_page.microphone_clicked.connect(self._handle_microphone_clicked)
         self.studio_page.stop_voice_clicked.connect(self._handle_stop_voice_clicked)
         self.studio_page.repeat_clicked.connect(self._handle_repeat_clicked)
+        self.studio_page.read_all_clicked.connect(self._handle_read_all_clicked)
+        self.studio_page.settings_clicked.connect(self._handle_studio_settings_clicked)
         self.studio_page.mute_toggled.connect(self._handle_mute_toggled)
         self.studio_page.set_voice_available(
             self._studio_voice_use_case is not None,
@@ -650,11 +665,11 @@ class MainWindow(QMainWindow):
         self._last_spoken_text = text
         self._start_speaking(text, status)
 
-    def _start_speaking(self, text: str, status: MessageStatus) -> None:
+    def _start_speaking(self, text: str, status: MessageStatus, *, read_code: bool = False) -> None:
         if self._studio_voice_use_case is None:
             return
         self._mirror_studio_state(StudioInteractionState.SINTETIZANDO)
-        worker = SpeakWorker(self._studio_voice_use_case, text, status)
+        worker = SpeakWorker(self._studio_voice_use_case, text, status, read_code=read_code)
         worker.signals.finished.connect(self._on_spoken)
         worker.signals.crashed.connect(self._on_voice_crashed)
         self._active_voice_worker = worker
@@ -691,6 +706,55 @@ class MainWindow(QMainWindow):
         if self._studio_voice_use_case is None or self._last_spoken_text is None:
             return
         self._start_speaking(self._last_spoken_text, MessageStatus.COMPLETED)
+
+    def _handle_read_all_clicked(self) -> None:
+        """Lee la última respuesta **entera**, incluido el código.
+
+        Normalmente la voz resume un bloque de código en «te dejo el código en
+        pantalla», que es lo correcto casi siempre. Grabando hay un momento en
+        que sí quieres oírlo, para comentarlo mientras se ve, y hasta ahora la
+        única forma era leerlo tú.
+        """
+        if self._studio_voice_use_case is None or self._last_spoken_text is None:
+            return
+        self._start_speaking(self._last_spoken_text, MessageStatus.COMPLETED, read_code=True)
+
+    def _handle_studio_settings_clicked(self) -> None:
+        """Abre los ajustes rápidos: qué voz usa Sirius, probándola."""
+        if self._studio_voice_use_case is None:
+            return
+        dialog = StudioSettingsDialog(
+            voices=self._studio_voice_use_case.available_voices(),
+            current=self._studio_voice_use_case.voice,
+            parent=self,
+        )
+        dialog.test_requested.connect(self._preview_voice)
+        if dialog.exec() and dialog.selected_voice:
+            self._apply_studio_voice(dialog.selected_voice)
+        else:
+            # Cancelar no puede dejar puesta la voz que solo se estaba probando.
+            self._apply_studio_voice(
+                self._voice_before_preview or self._studio_voice_use_case.voice
+            )
+
+    def _preview_voice(self, voice: str) -> None:
+        """Prueba una voz sin adoptarla: elegir a oído exige oírlas."""
+        use_case = self._studio_voice_use_case
+        if use_case is None:
+            return
+        if self._voice_before_preview is None:
+            self._voice_before_preview = use_case.voice
+        use_case.set_voice(voice)
+        self._start_speaking(VOICE_PREVIEW_TEXT, MessageStatus.COMPLETED)
+
+    def _apply_studio_voice(self, voice: str) -> None:
+        use_case = self._studio_voice_use_case
+        if use_case is None:
+            return
+        use_case.set_voice(voice)
+        self._voice_before_preview = None
+        if self._save_studio_voice is not None:
+            self._save_studio_voice(use_case.voice)
 
     def _handle_mute_toggled(self, muted: bool) -> None:
         if self._studio_voice_use_case is None:

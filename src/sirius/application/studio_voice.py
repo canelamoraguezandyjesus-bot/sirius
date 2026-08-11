@@ -14,7 +14,7 @@ usa para enviar mensajes, igual que ``SendMessageUseCase``. Aquí no hay hilos.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Protocol
 
@@ -272,17 +272,20 @@ class StudioVoiceUseCase:
 
     # --- Hablar ----------------------------------------------------------
 
-    def speak(self, text: str, status: MessageStatus) -> SpeakOutcome:
+    def speak(self, text: str, status: MessageStatus, *, read_code: bool = False) -> SpeakOutcome:
         """Sintetiza y reproduce una respuesta.
 
         Solo se habla lo que Sirius terminó de decir de verdad. Una respuesta
         cancelada o fallida contiene texto a medias, y leerlo en voz alta lo
         presentaría como una respuesta completa.
+
+        ``read_code`` lee también los bloques de código, que normalmente se
+        resumen en «te dejo el código en pantalla». Es lo que hace «Leer todo».
         """
         if status is not MessageStatus.COMPLETED:
             return NothingToSay()
 
-        pronounceable = prepare_speech_text(text)
+        pronounceable = prepare_speech_text(text, read_code=read_code)
         if not pronounceable:
             return NothingToSay()
 
@@ -313,6 +316,24 @@ class StudioVoiceUseCase:
     def set_muted(self, muted: bool) -> None:
         """Silencia o reactiva la salida hablada. Idempotente."""
         self._playback.set_muted(muted)
+
+    def available_voices(self) -> tuple[str, ...]:
+        """Voces entre las que se puede elegir en este proveedor."""
+        return self._text_to_speech.available_voices()
+
+    @property
+    def voice(self) -> str:
+        return self._settings.voice
+
+    def set_voice(self, voice: str) -> None:
+        """Cambia la voz. Una que el proveedor no tenga se ignora.
+
+        Elegir una voz inexistente convertiría cada respuesta siguiente en un
+        error, y por una lista desplegable no se puede romper la voz entera.
+        """
+        if voice not in self.available_voices():
+            return
+        self._settings = replace(self._settings, voice=voice)
 
     @property
     def is_muted(self) -> bool:

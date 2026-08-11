@@ -104,6 +104,16 @@ from sirius.ports.secrets import SecretStore
 
 _logger = get_logger(__name__)
 
+STUDIO_VOICE_SETTING = "model_studio_voice"
+"""Dónde vive la voz elegida en los ajustes rápidos de Model Studio."""
+
+
+def save_studio_voice(voice: str) -> None:
+    """Guarda la voz sin tocar el resto de la configuración."""
+    settings = dict(load_settings())
+    settings[STUDIO_VOICE_SETTING] = voice
+    save_settings(settings)
+
 
 @dataclass(frozen=True, slots=True)
 class ConversationDependencies:
@@ -266,6 +276,8 @@ def _build_studio_voice_use_case(
         _logger.info("Audio temporal huérfano eliminado al arrancar: %d", orphans)
 
     settings = load_settings()
+    # La voz elegida en Ajustes se guarda aquí y manda sobre la de partida.
+    chosen_voice = str(settings.get(STUDIO_VOICE_SETTING, "") or DEFAULT_VOICE)
     reason = ""
     try:
         if resolve_provider_kind(settings) is LLMProviderKind.FAKE:
@@ -286,7 +298,7 @@ def _build_studio_voice_use_case(
             speech_to_text=UnconfiguredSpeechToText(reason),
             text_to_speech=UnconfiguredTextToSpeech(reason),
             audio_playback=playback,
-            settings=VoiceSettings(voice=DEFAULT_VOICE),
+            settings=VoiceSettings(voice=chosen_voice),
         )
 
     client = openai.OpenAI(api_key=resolve_openai_api_key(secret_store), max_retries=0)
@@ -305,7 +317,7 @@ def _build_studio_voice_use_case(
         speech_to_text=OpenAITranscription(client),
         text_to_speech=OpenAISpeech(client, temporary_audio_dir),
         audio_playback=playback,
-        settings=VoiceSettings(voice=DEFAULT_VOICE),
+        settings=VoiceSettings(voice=chosen_voice),
         budget_guard=budget_tracker,
     )
 

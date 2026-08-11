@@ -614,3 +614,78 @@ def test_the_speaker_icon_says_whether_there_is_sound(qtbot: QtBot, tmp_path: Pa
     button.setChecked(False)
 
     assert button.icon().pixmap(24, 24).toImage() == sounding
+
+
+# --- Los dos botones que no hacían nada ---------------------------------
+
+
+@pytest.mark.gui
+def test_read_all_speaks_the_code_that_the_voice_normally_skips(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """«Leer todo» tiene que decir algo distinto de «Repetir», o no sirve.
+
+    La voz resume un bloque de código en «te dejo el código en pantalla», que
+    es lo correcto casi siempre. Grabando hay un momento en que sí quieres
+    oírlo, para comentarlo mientras se ve.
+    """
+    directory = tmp_path / "audio"
+    directory.mkdir(exist_ok=True)
+    text_to_speech = FakeTextToSpeech(directory)
+    voice = _voice_use_case(tmp_path, text_to_speech=text_to_speech)
+    window = _build_window(
+        _bootstrapped_database(tmp_path / "sirius.db"), studio_voice_use_case=voice
+    )
+    qtbot.addWidget(window)
+    window.open_model_studio()
+    window._last_spoken_text = "Monta esto:\n```python\npin = 13\n```\nY ya está."
+
+    window.studio_page.repeat_button.click()
+    qtbot.waitUntil(lambda: len(text_to_speech.requests) == 1, timeout=5000)
+    assert "pin = 13" not in text_to_speech.requests[0].text
+    assert "código en pantalla" in text_to_speech.requests[0].text
+
+    window.studio_page.read_all_button.click()
+    qtbot.waitUntil(lambda: len(text_to_speech.requests) == 2, timeout=5000)
+    assert "pin = 13" in text_to_speech.requests[1].text
+
+
+@pytest.mark.gui
+def test_both_buttons_are_alive_once_there_is_a_voice(qtbot: QtBot, tmp_path: Path) -> None:
+    """Estaban dibujados y apagados para siempre, ocupando sitio en la barra."""
+    voice = _voice_use_case(tmp_path)
+    window = _build_window(
+        _bootstrapped_database(tmp_path / "sirius.db"), studio_voice_use_case=voice
+    )
+    qtbot.addWidget(window)
+
+    assert window.studio_page.read_all_button.isEnabled()
+    assert window.studio_page.settings_button.isEnabled()
+
+
+@pytest.mark.gui
+def test_choosing_a_voice_applies_it_and_saves_it(qtbot: QtBot, tmp_path: Path) -> None:
+    """Elegir a oído exige oírlas, y lo elegido tiene que sobrevivir al cierre."""
+    voice = _voice_use_case(tmp_path)
+    guardadas: list[str] = []
+    window = _build_window(
+        _bootstrapped_database(tmp_path / "sirius.db"), studio_voice_use_case=voice
+    )
+    window._save_studio_voice = guardadas.append
+    qtbot.addWidget(window)
+
+    window._apply_studio_voice("sage")
+
+    assert voice.voice == "sage"
+    assert guardadas == ["sage"]
+
+
+@pytest.mark.gui
+def test_a_voice_the_provider_does_not_have_is_ignored(qtbot: QtBot, tmp_path: Path) -> None:
+    """Una voz inexistente convertiría cada respuesta siguiente en un error."""
+    voice = _voice_use_case(tmp_path)
+    anterior = voice.voice
+
+    voice.set_voice("una-que-no-existe")
+
+    assert voice.voice == anterior
