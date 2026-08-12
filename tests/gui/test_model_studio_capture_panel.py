@@ -593,3 +593,32 @@ def test_the_heartbeat_only_runs_with_the_panel_open(qtbot: QtBot, tmp_path: Pat
     window.studio_page.capture_button.setChecked(True)
     window.close_model_studio()
     assert not window._capture_heartbeat.isActive(), "salir de Model Studio también lo para"
+
+
+@pytest.mark.gui
+def test_the_heartbeat_does_not_poll_a_surface_nobody_is_watching(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Fuera de Model Studio no hay a quién enseñarle la respuesta.
+
+    Y además hace el latido autolimitado: una ventana que nadie cerró deja de
+    sondear sola en vez de seguir gastando hilos indefinidamente. Se descubrió
+    porque varias ventanas vivas latiendo a la vez ralentizaban la suite lo
+    justo para que otra prueba agotara su espera.
+    """
+    backend = FakeCaptureBackend()
+    capture = StudioCaptureUseCase(backend=backend, scenes=_SCENES)
+    window = _window(tmp_path, capture)
+    qtbot.addWidget(window)
+    window.open_model_studio()
+    window.studio_page.capture_button.setChecked(True)
+    qtbot.waitUntil(
+        lambda: window.studio_page.capture_state is StudioCaptureState.PREPARADO, timeout=3000
+    )
+    window.close_model_studio()
+    ordenes = len(backend.commands)
+
+    window._poll_capture_state()
+    qtbot.wait(100)
+
+    assert len(backend.commands) == ordenes, "no se pregunta a lo que nadie mira"

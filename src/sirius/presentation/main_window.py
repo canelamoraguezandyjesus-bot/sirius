@@ -526,6 +526,12 @@ class MainWindow(QMainWindow):
         use_case = self._studio_capture_use_case
         if use_case is None or self._capture_busy or not use_case.is_enabled:
             return
+        # Y no se pregunta si la superficie no está a la vista. Además de que
+        # no habría a quién enseñarle la respuesta, esto hace el latido
+        # autolimitado: una ventana que nadie cerró deja de sondear sola, en
+        # vez de seguir gastando hilos y CPU indefinidamente.
+        if not self.model_studio_open:
+            return
         self._run_capture(use_case.refresh_status)
 
     def _handle_record_clicked(self) -> None:
