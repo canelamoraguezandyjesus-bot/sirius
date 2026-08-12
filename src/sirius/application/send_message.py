@@ -141,11 +141,19 @@ class SendMessageUseCase:
         *,
         operation_id: str | None = None,
         on_delta: Callable[[str], None] | None = None,
+        extra_instructions: str = "",
     ) -> SendMessageResult:
         """Persist the user's message, stream Sirius's reply, and persist its outcome.
 
         ``on_delta`` is invoked synchronously, once per text fragment, in the
         caller's thread — it never touches persistence or Qt itself.
+
+        ``extra_instructions`` es una indicación **efímera** que se añade al
+        final de las instrucciones de esta petición y nada más: no se guarda en
+        la conversación, no se guarda en la memoria y no crea una versión nueva
+        de la identidad. Va al final a propósito, para que no pueda desplazar ni
+        reinterpretar la identidad canónica que la precede. Model Studio la usa
+        para pedir respuestas breves mientras se graba (#126).
         """
         operation_id = operation_id or str(uuid.uuid4())
         context = self._context_builder.build(user_text)
@@ -159,9 +167,12 @@ class SendMessageUseCase:
             status=MessageStatus.COMPLETED,
         )
 
+        instructions = render_instructions(context)
+        if extra_instructions.strip():
+            instructions = f"{instructions}\n\n{extra_instructions.strip()}"
         request = LLMRequest(
             operation_id=operation_id,
-            instructions=render_instructions(context),
+            instructions=instructions,
             input_text=user_text,
         )
 

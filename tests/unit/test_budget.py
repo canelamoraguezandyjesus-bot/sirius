@@ -53,3 +53,48 @@ def test_without_a_repository_spend_does_not_survive_a_new_instance() -> None:
     second_tracker = BudgetTracker(policy)
 
     assert second_tracker.spent_usd == 0.0
+
+
+# --- Gasto de audio (Model Studio, hallazgo MS-A04) ---------------------
+
+
+def test_transcription_cost_counts_against_the_same_monthly_total() -> None:
+    """Sin tabla nueva ni migración: suma al mismo total que el texto."""
+    tracker = BudgetTracker()
+
+    tracker.record_usage(input_tokens=1_000_000, output_tokens=0)
+    after_text = tracker.spent_usd
+    tracker.record_transcription(audio_seconds=600.0)
+
+    assert tracker.spent_usd > after_text
+
+
+def test_speech_cost_counts_against_the_same_monthly_total() -> None:
+    tracker = BudgetTracker()
+
+    tracker.record_speech(character_count=100_000)
+
+    assert tracker.spent_usd > 0.0
+
+
+def test_audio_spend_can_exhaust_the_budget_and_block_sending() -> None:
+    """SV-011 de verdad: si el audio no se apuntara, el tope nunca llegaría."""
+    policy = BudgetPolicy(monthly_limit_usd=1.0, transcription_cost_usd_per_minute=0.5)
+    tracker = BudgetTracker(policy=policy)
+
+    assert tracker.has_remaining_budget()
+    tracker.record_transcription(audio_seconds=120.0)
+
+    assert not tracker.has_remaining_budget()
+
+
+def test_negative_audio_quantities_never_refund_budget() -> None:
+    """Una duración o un recuento absurdos no pueden devolver saldo."""
+    tracker = BudgetTracker()
+    tracker.record_speech(character_count=50_000)
+    spent = tracker.spent_usd
+
+    tracker.record_transcription(audio_seconds=-3600.0)
+    tracker.record_speech(character_count=-1_000_000)
+
+    assert tracker.spent_usd == spent

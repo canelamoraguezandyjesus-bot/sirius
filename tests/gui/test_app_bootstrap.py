@@ -464,3 +464,96 @@ def test_full_fresh_install_chain_reaches_the_main_window_in_one_run(
     assert windows[2].isVisible() is True
     assert onboarding.isVisible() is False
     assert project_window.isVisible() is False
+
+
+# --- Model Studio llega a la aplicación real ----------------------------
+#
+# Estas pruebas existen por un fallo real: la voz y la captura se construían
+# en la raíz de composición y se conectaban a MainWindow, pero `main.py` monta
+# `ValidatedMainWindow` SIN pasárselas. Resultado: en la aplicación de verdad
+# el micrófono salía apagado y Sirius no hablaba nunca, sin un solo error a la
+# vista, porque no había voz que pudiera fallar.
+#
+# Las pruebas anteriores no lo detectaron porque construían la ventana a mano
+# pasándole las verticales. Comprobaban la ventana, no la aplicación. Estas
+# entran por el mismo camino que el arranque real.
+
+
+def _real_main_window(tmp_path: Path, qtbot: QtBot) -> ValidatedMainWindow:
+    """La ventana tal como la construye ``main.py``, sin atajos."""
+    from sirius.main import _build_main_window
+
+    paths = resolve_paths(tmp_path)
+    initialize_persistence(paths)
+    project_repository = build_sqlite_project_repository(paths.data_dir / "sirius.db")
+    project_repository.create_project(
+        "HEAD-R1", "Cabeza", state_summary="montando", blockers=(), next_step="probar"
+    )
+    dependencies = build_conversation_dependencies(
+        paths.data_dir / "sirius.db", paths.backups_dir, secret_store=FakeSecretStore()
+    )
+    window = _build_main_window(dependencies, [])
+    qtbot.addWidget(window)
+    # _build_main_window devuelve QMainWindow por contrato; aquí interesa la
+    # ventana concreta, que es la que tiene Model Studio.
+    assert isinstance(window, ValidatedMainWindow)
+    return window
+
+
+@pytest.mark.gui
+def test_the_real_app_wires_the_voice_into_model_studio(qtbot: QtBot, tmp_path: Path) -> None:
+    window = _real_main_window(tmp_path, qtbot)
+
+    assert window._studio_voice_use_case is not None, (
+        "la aplicación real montó la ventana sin voz: el micrófono saldría "
+        "apagado y Sirius no hablaría nunca"
+    )
+
+
+@pytest.mark.gui
+def test_the_real_app_wires_the_capture_into_model_studio(qtbot: QtBot, tmp_path: Path) -> None:
+    window = _real_main_window(tmp_path, qtbot)
+
+    assert window._studio_capture_use_case is not None
+
+
+@pytest.mark.gui
+def test_the_real_app_offers_the_voice_controls(qtbot: QtBot, tmp_path: Path) -> None:
+    """Lo que el usuario ve: el micrófono se puede pulsar."""
+    window = _real_main_window(tmp_path, qtbot)
+
+    assert window.studio_page.voice_available
+    assert window.studio_page.microphone_button.isEnabled()
+
+
+@pytest.mark.gui
+def test_the_real_app_starts_with_capture_off(qtbot: QtBot, tmp_path: Path) -> None:
+    """Disponible no es lo mismo que encendido: abrir Sirius no conecta nada."""
+    window = _real_main_window(tmp_path, qtbot)
+
+    assert window.studio_page.capture_available
+    assert not window.studio_page.capture_panel_open
+    capture = window._studio_capture_use_case
+    assert capture is not None
+    assert not capture.is_enabled
+
+
+@pytest.mark.gui
+def test_the_real_app_can_save_the_chosen_voice(tmp_path: Path, qtbot: QtBot) -> None:
+    """El mismo fallo de cableado que ya se coló una vez, vigilado aquí.
+
+    Que el diálogo de ajustes funcione en una ventana montada a mano no dice
+    nada: lo que importa es que la aplicación de verdad le pase cómo guardar.
+    Sin eso, elegir una voz funcionaría hasta cerrar Sirius.
+    """
+    window = _real_main_window(tmp_path, qtbot)
+
+    assert window._save_studio_voice is not None
+
+
+@pytest.mark.gui
+def test_the_real_app_offers_the_two_studio_buttons(tmp_path: Path, qtbot: QtBot) -> None:
+    window = _real_main_window(tmp_path, qtbot)
+
+    assert window.studio_page.read_all_button.isEnabled()
+    assert window.studio_page.settings_button.isEnabled()

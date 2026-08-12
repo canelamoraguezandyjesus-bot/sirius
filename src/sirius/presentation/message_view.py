@@ -374,7 +374,13 @@ class MessageItemWidget(QWidget):
         primer instante en que la medida es válida.
         """
         self._sync_size()
-        QTimer.singleShot(0, self._sync_size)
+        # Atado a ``self``: Qt cancela el disparo si el widget muere antes de
+        # que llegue. Sin el contexto, un widget destruido entre medias hacía
+        # que ``_sync_size`` tocara un layout ya borrado —«Internal C++ object
+        # already deleted»— y la excepción salía en el bucle de eventos, es
+        # decir en cualquier prueba que estuviera corriendo en ese momento, no
+        # en la que creó el widget.
+        QTimer.singleShot(0, self, self._sync_size)
 
     def _sync_size(self) -> None:
         """Avisa de que el alto pedido cambió. NO impone geometría propia.

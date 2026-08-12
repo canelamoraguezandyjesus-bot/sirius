@@ -9,7 +9,11 @@ from PySide6.QtWidgets import QApplication, QMainWindow
 
 from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.application.data_location import DataLocationUseCase, LocationFileCorruptedError
-from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
+from sirius.composition_root import (
+    ConversationDependencies,
+    build_conversation_dependencies,
+    save_studio_voice,
+)
 from sirius.config.llm_provider_settings import LLMProviderKind, resolve_openai_provider_settings
 from sirius.infrastructure.bootstrap_location_store import build_bootstrap_location_store
 from sirius.infrastructure.crash_handler import install_crash_handler
@@ -62,6 +66,9 @@ def _build_main_window(
         restore_backup_use_case=dependencies.restore_backup_use_case,
         export_structured_use_case=dependencies.export_structured_use_case,
         close_database_connections=dependencies.close_database_connections,
+        studio_voice_use_case=dependencies.studio_voice_use_case,
+        studio_capture_use_case=dependencies.studio_capture_use_case,
+        save_studio_voice=save_studio_voice,
     )
     main_window.project_completed.connect(_on_project_completed)
     return main_window
