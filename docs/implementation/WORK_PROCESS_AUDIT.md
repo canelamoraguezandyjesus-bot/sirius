@@ -523,3 +523,10 @@ Ordenado por coste humano estimado (frecuencia × esfuerzo + latencia inducida),
 6. Un único piloto recomendado → matriz §10 ✔
 7. Taxonomía A–F del encargo §4 revisada: A (transferencia) → PROC-001/019; B (documentación) → PROC-009–013; C (investigación/decisión) → PROC-011/014; D (GitHub/coordinación) → PROC-002–007/018; E (validación/evidencia) → PROC-008/016/017; F (administración de agentes) → PROC-020/021 ✔
 - Regla de las dos rondas: la verificación adversarial posterior a este borrador se registra en la matriz §12; si dos rondas destapan la misma familia omitida, se revisará la taxonomía entera antes de ampliar el inventario.
+
+## Adenda (12 de agosto de 2026)
+
+Las afirmaciones «a fecha de hoy» de este documento describen el estado del 11–12 de agosto y varias caducaron horas después de escribirse (patrón «afirmaciones que caducan al retirar lo que describían»):
+
+- La issue #148 salió de `sirius:failed-safely` tras una **segunda** intervención humana la misma noche, la PR #149 se fusionó (squash `d7cec31`) y la incidencia quedó `sirius:completed`, cerrada por `github-actions[bot]` el 2026-08-11T21:35:03Z. El episodio completo suma DOS desatascos humanos para un cambio de una consulta — dato adicional a favor de la ficha PROC-005, no en contra.
+- La PR #122 y la issue #126 seguían en el estado descrito al escribir esta adenda; verificar antes de citar.
