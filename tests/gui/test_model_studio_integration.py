@@ -8,6 +8,7 @@ Model Studio se convierta en una segunda aplicación (§2 de la especificación)
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -41,10 +42,19 @@ from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseC
 from sirius.application.send_message import SendMessageUseCase
 from sirius.application.studio_voice import StudioVoiceUseCase, VoiceSettings
 from sirius.composition_root import build_conversation_dependencies
-from sirius.domain.conversation import MessageRole, MessageStatus
+from sirius.domain.conversation import MessageRole
 from sirius.domain.model_studio import StudioCaptureState, StudioInteractionState
 from sirius.ports.audio_capture import AudioCaptureError, AudioCaptureErrorKind
-from sirius.ports.llm import LLMError, LLMErrorKind, LLMProvider, LLMRequest, LLMStreamEvent
+from sirius.ports.llm import (
+    LLMCancelled,
+    LLMCompleted,
+    LLMError,
+    LLMErrorKind,
+    LLMProvider,
+    LLMRequest,
+    LLMStreamEvent,
+    LLMTextDelta,
+)
 from sirius.presentation.main_window import (
     MODEL_STUDIO_PAGE_INDEX,
     TECHNICAL_PAGE_INDEX,
@@ -784,6 +794,36 @@ def test_the_second_piece_waits_for_the_first_to_finish(qtbot: QtBot, tmp_path: 
     qtbot.waitUntil(lambda: len(text_to_speech.requests) == 2, timeout=5000)
 
 
+class _ProveedorQueSeQuedaEsperando:
+    """Suelta la primera frase y se para hasta que la prueba lo libere.
+
+    Es el patrón de la casa para «cancelar con el flujo de verdad en vuelo»:
+    sin él, una cancelación simulada compite con un envío real que termina bien
+    un instante después, y la prueba mide una carrera en vez de una regla.
+    """
+
+    def __init__(self) -> None:
+        self._continuar = threading.Event()
+        self._cancelados: set[str] = set()
+
+    def health_check(self) -> bool:
+        return True
+
+    def liberar(self) -> None:
+        self._continuar.set()
+
+    def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
+        yield LLMTextDelta(text=_RESPUESTA_LARGA)
+        self._continuar.wait(timeout=5)
+        if request.operation_id in self._cancelados:
+            yield LLMCancelled(partial_text=_RESPUESTA_LARGA)
+            return
+        yield LLMCompleted(text=_RESPUESTA_LARGA, input_tokens=1, output_tokens=2)
+
+    def cancel(self, operation_id: str) -> None:
+        self._cancelados.add(operation_id)
+
+
 @pytest.mark.gui
 def test_cancelling_shuts_the_voice_up(qtbot: QtBot, tmp_path: Path) -> None:
     """La contrapartida de hablar antes, y su compensación.
@@ -800,17 +840,25 @@ def test_cancelling_shuts_the_voice_up(qtbot: QtBot, tmp_path: Path) -> None:
     voice = _voice_use_case(tmp_path, text_to_speech=text_to_speech, playback=playback)
     window = _build_window(database_path, studio_voice_use_case=voice)
     qtbot.addWidget(window)
-    _swap_provider(window, database_path, FakeLLMProvider((_RESPUESTA_LARGA,)))
+    proveedor = _ProveedorQueSeQuedaEsperando()
+    _swap_provider(window, database_path, proveedor)
     window.open_model_studio()
 
     window.studio_page.input.setPlainText("¿por dónde empiezo?")
     window.studio_page.send_button.click()
+    # Con el envío parado a mitad, la primera frase ya se está leyendo.
     qtbot.waitUntil(lambda: len(text_to_speech.requests) >= 1, timeout=5000)
     dichas = len(text_to_speech.requests)
 
-    window._speak_if_studio_is_open(_RESPUESTA_LARGA, MessageStatus.CANCELLED)
+    # Se anota antes: la voz ya se para sola entre trozo y trozo, así que un
+    # «hubo alguna parada» pasaría aunque nadie hubiera cancelado nada.
+    paradas_antes = playback.stops
 
-    assert playback.stops >= 1, "la voz tiene que callarse"
+    window.cancel_button.click()
+    proveedor.liberar()
+    _wait_idle(qtbot, window)
+
+    assert playback.stops > paradas_antes, "cancelar tiene que callar la voz"
     qtbot.wait(200)
     assert len(text_to_speech.requests) == dichas, "no se lee el resto de algo cancelado"
 
