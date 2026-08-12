@@ -16,6 +16,18 @@ Definir una interfaz propia, reconocible y grabable para que Sirius pueda aparec
 > **Alcance de esta aprobación**  
 > Este documento aprueba la dirección de diseño y los requisitos visibles de la interfaz. No declara que la interfaz, la animación, la voz, las cámaras o la grabación estén implementadas.
 
+> ## Este documento está modificado en dos puntos. Léelos antes que nada.
+>
+> Se escribió el 7 de agosto de 2026 y su dirección de diseño sigue vigente entera. Dos cosas dejaron de ser ciertas ese mismo día y la siguiente semana, y quedan aquí dichas para que nadie lea como vigente lo que ya no lo es.
+>
+> **1. La presencia visual la redefinió el propio usuario.** La sección 3 describe «dos ojos y una boca sugeridos por agrupaciones de puntos más densas» y una «composición facial». Lo aprobado y construido es otra cosa: **una entidad digital abstracta y geométrica, no un rostro**. Ojos robóticos que parpadean y cambian de tamaño de forma sutil e irregular, boca de barras verticales tipo ecualizador, y cuatro marcas de esquina que la encuadran como interfaz. Sin sincronización labial y sin análisis de audio: la agitación nace de un pulso constante. Todo lo demás de la sección 3 —fondo negro, paleta azul, espacio negativo, prohibición de contorno de cabeza y de logotipo— se mantiene tal cual.
+>
+> **2. La ejecución no siguió el orden que este documento supone.** La sección de puesta en marcha describe una secuencia que se reordenó en tres etapas —E1 concha grabable, E2 voz, E3 captura— y todas están entregadas y verificadas contra OBS Studio 32.2.1 en Windows.
+>
+> **Dónde está lo vigente.** `docs/implementation/model_studio/SIRIUS_MODEL_STUDIO_RECONCILIACION_v1.0_PROPUESTA.md` recoge las once decisiones que reconcilian este documento con #126 y #127, cuáles se implementaron y cuáles no. Ante cualquier contradicción entre aquel documento y este, **manda aquel**.
+>
+> Lo que este documento sigue gobernando sin cambios: la composición de la superficie, la conversación compartida con la interfaz técnica, la caja única de entrada, la barra de iconos, los estados separados de interacción y captura, la parada de emergencia siempre accesible, el aislamiento de fallos y los doce criterios de aceptación.
+
 ## 1. Referencia visual provisional
 
 El mockup conversado fija la composición general. La presencia abstracta de puntos, la proporción de columnas y los elementos visuales se refinarán mediante prototipo, pero no deben sustituirse por una interfaz técnica genérica.
