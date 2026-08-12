@@ -1077,3 +1077,113 @@ def test_stop_diagnostic_cannot_forge_scanner_markers(
     # El contenido sigue siendo legible: se desactiva el marcador, no se borra
     # el texto, para que el diagnóstico siga sirviendo a un humano.
     assert "sirius-round:99" in published or "sirius-quality:" in published
+
+
+# --------------------------------------------------------------------------- #
+# La parada segura dice dónde mirar (incidencia #135)
+# --------------------------------------------------------------------------- #
+
+
+def _stop_link(comments: str) -> str:
+    """Devuelve la dirección publicada por la parada, o `""` si no hay ninguna."""
+    encontrado = re.search(r"- Registro de esta ejecución: (\S+)", comments)
+    return encontrado.group(1) if encontrado else ""
+
+
+def _cuerpo_de_parada(enlace: str, *, run_tag: str) -> str:
+    """El cuerpo COMPLETO de una parada por veredicto ausente del corrector."""
+    cuerpo = (
+        f"<!-- sirius-verdict:corrector:precheck:sin-veredicto:{run_tag} -->\n\n"
+        "🔴 **Me he detenido de forma segura**\n\n"
+        "El rol `corrector` no escribió ningún veredicto. Sin un resultado "
+        "estructurado no puedo saber en qué quedó el trabajo.\n"
+    )
+    return cuerpo if not enlace else f"{cuerpo}\n- Registro de esta ejecución: {enlace}\n"
+
+
+def test_the_stop_publishes_the_link_and_nothing_else(tmp_path: Path) -> None:
+    """Bajo Actions, el cuerpo de la parada es EXACTAMENTE marcador + motivo + enlace.
+
+    Comparar solo el enlace dejaba abierto el agujero que motivó todo esto: el
+    diagnóstico medido podía volver, esta vez dentro del propio publicador y no
+    del workflow, añadiendo su línea junto al enlace. `_stop_link` la ignoraría
+    y la prueba seguiría verde. Fuera de Actions ya se comparaba el cuerpo
+    entero; faltaba hacerlo también con enlace, que es el camino real.
+
+    Esta prueba es la mitad del cierre del canal; la otra la fija
+    `test_there_is_no_measured_diagnosis_step` sobre el workflow. Ninguna de las
+    dos basta sola: el workflow no puede inyectar texto, y el publicador no
+    puede añadirlo por su cuenta.
+    """
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:repairing"])
+    env["GITHUB_RUN_ID"] = "12345"
+    env["GITHUB_RUN_ATTEMPT"] = "3"
+    env["GITHUB_REPOSITORY"] = REPO
+    env["GITHUB_SERVER_URL"] = "https://github.com"
+    r = _run(env, "corrector", tmp_path / "no-existe.json")
+    assert r.returncode != 0
+    esperado = _cuerpo_de_parada(
+        f"https://github.com/{REPO}/actions/runs/12345/attempts/3", run_tag="12345-3"
+    )
+    assert _comments(env).strip() == esperado.strip()
+
+
+def test_the_link_identifies_the_attempt_that_stopped(tmp_path: Path) -> None:
+    # `/actions/runs/ID` resuelve SIEMPRE al último intento. Y este script
+    # publica una parada POR INTENTO a propósito (SIRIUS_RUN_TAG lleva el
+    # intento), así que sin `/attempts/N` la parada del intento 1 quedaría
+    # enlazando al registro del 2: un enlace que promete "esta ejecución" y
+    # entrega otra. Sería el mismo defecto —afirmar más de lo que el dato
+    # sostiene— que obligó a retirar el diagnóstico medido.
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:repairing"])
+    env["GITHUB_RUN_ID"] = "6001"
+    env["GITHUB_REPOSITORY"] = REPO
+    env["GITHUB_SERVER_URL"] = "https://github.com"
+
+    primero = dict(env)
+    primero["GITHUB_RUN_ATTEMPT"] = "1"
+    assert _run(primero, "corrector", tmp_path / "no-existe.json").returncode != 0
+    enlace_1 = _stop_link(_comments(env))
+
+    # Reejecución del MISMO run: publica su propia parada (marcador distinto).
+    (_md(env) / f"labels_{ISSUE}.txt").write_text("sirius:repairing\n", encoding="utf-8")
+    segundo = dict(env)
+    segundo["GITHUB_RUN_ATTEMPT"] = "2"
+    assert _run(segundo, "corrector", tmp_path / "no-existe.json").returncode != 0
+
+    enlaces = re.findall(r"- Registro de esta ejecución: (\S+)", _comments(env))
+    assert len(enlaces) == 2, f"cada intento publica su parada: {enlaces}"
+    assert enlace_1 == f"https://github.com/{REPO}/actions/runs/6001/attempts/1"
+    assert enlaces[1] == f"https://github.com/{REPO}/actions/runs/6001/attempts/2"
+    assert enlaces[0] != enlaces[1], "las dos paradas enlazan al mismo registro"
+
+
+def test_the_link_honours_the_server_of_the_installation(tmp_path: Path) -> None:
+    # En GitHub Enterprise el servidor no es github.com. Componer la dirección a
+    # mano con el dominio público daría un enlace roto justo cuando hace falta.
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:repairing"])
+    env["GITHUB_RUN_ID"] = "77"
+    env["GITHUB_REPOSITORY"] = REPO
+    env["GITHUB_SERVER_URL"] = "https://ghe.example.org"
+    r = _run(env, "corrector", tmp_path / "no-existe.json")
+    assert r.returncode != 0
+    assert _stop_link(_comments(env)).startswith("https://ghe.example.org/")
+
+
+def test_without_actions_variables_the_stop_message_is_unchanged(tmp_path: Path) -> None:
+    # Fuera de Actions no hay ejecución a la que enlazar: no se inventa una.
+    #
+    # Se compara el cuerpo ENTERO, no la ausencia de `actions/runs`. Buscar solo
+    # ese fragmento dejaba pasar el residuo que de verdad importa: una línea
+    # `- Registro de esta ejecución:` con destino vacío, que no contiene
+    # `actions/runs` ni casa con `_stop_link` —su `(\S+)` no encuentra nada— y
+    # aun así publica una promesa rota. La propiedad anunciada es que el mensaje
+    # queda sin cambios, así que se afirma exactamente eso.
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:repairing"])
+    r = _run(env, "corrector", tmp_path / "no-existe.json")
+    assert r.returncode != 0
+    assert _comments(env).strip() == _cuerpo_de_parada("", run_tag="manual-1").strip()

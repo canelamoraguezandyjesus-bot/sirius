@@ -30,6 +30,23 @@ Funciones principales:
 - `sirius_write_issue_body <repo> <n> <archivo> [respaldo]` — rechaza cuerpos de
   origen truncados, respalda el cuerpo anterior, escribe de una sola vez por REST
   y verifica por relectura (longitud + hash).
+- `sirius_comment_once <repo> <n> <marcador> <archivo>` — publica el comentario
+  solo si el marcador no está ya. Publicar contra la API **no puede ser
+  exactamente-una-vez**: `gh issue comment` no es idempotente y no hay clave de
+  idempotencia del servidor, así que un resultado ambiguo (GitHub acepta y la
+  respuesta se pierde) deja el comentario publicado sin que se pueda demostrar.
+  Por eso la garantía vive en los **lectores** —`parse_round_records` cuenta una
+  ronda por número y `ci_failure_streak` cuenta heads distintos—: un duplicado es
+  ruido en la incidencia, nunca una medida falseada. Siendo inocuo el duplicado,
+  reintenta hasta agotar un **plazo total** (`SIRIUS_COMMENT_BUDGET_SECONDS`,
+  90 s) que se aplica en tres sitios, porque fallar en cualquiera lo vacía de
+  contenido: se comprueba antes de cada llamada, la espera se recorta a lo que
+  queda, y cada proceso `gh` se lanza con el tiempo restante como límite —`gh` no
+  expone ninguno configurable, así que una llamada bloqueada esperando a GitHub
+  consumiría el resto del job—. Perder el registro sí hace daño, porque
+  `complete-sirius-after-merge`
+  cierra la incidencia antes de publicar y luego solo busca las abiertas. Tras un
+  fallo relee: si el marcador aparece, termina sin republicar.
 - `sirius_ensure_label <repo> <nombre> <color> <descripcion>` — etiqueta
   idempotente.
 - `sirius_scan_text` / `sirius_extract_sha` — extracción robusta de Head/Merge SHA
@@ -105,7 +122,19 @@ python3 scripts/automation/validate_issue_body.py cuerpo.md
 
 ## Pruebas
 
-`tests/automation/` ejercita ambas utilidades con un `gh` simulado (sin red):
+`tests/automation/` ejercita estas utilidades con un `gh` simulado (sin red):
 lectura correcta, 502/503 seguido de éxito por REST, respaldo GraphQL, cuerpo
 truncado o incompleto rechazado, todas las vías fallan → parada segura, escritura
 verificada y detección de escritura corrupta, e idempotencia de etiquetas.
+
+El simulador reproduce además tres condiciones que no son visibles desde fuera y
+sin las cuales varias garantías quedarían sin probar aunque las pruebas pasaran:
+
+- **autoría real** de cada comentario (`author_association`, `user.login`), para
+  que el filtro de autor de confianza se ejercite de verdad en REST y en el
+  respaldo GraphQL;
+- **fallo ambiguo** de una publicación —GitHub acepta la petición y la respuesta
+  se pierde— frente a un fallo limpio, que es lo único que distingue una
+  recuperación por relectura de un reintento ciego;
+- **consistencia eventual**: la escritura ya ocurrió pero la lectura todavía no
+  la refleja.
