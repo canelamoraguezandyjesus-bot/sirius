@@ -32,13 +32,34 @@ aprobado, y las tres pasadas del mismo código dan tres cifras distintas. Eso es
 justo lo que ADR-007 previó: afirmar aquí los 300 ms habría producido una
 prueba que pasa o falla según el minuto.
 
-El término dominante está medido y localizado en el código, no supuesto:
-`list_current_memories()` tarda ~117 ms para 500 recuerdos porque
-`_load_memory()` llama a `_get_current_revision_model()` **una vez por
+El término dominante estaba medido y localizado en el código, no supuesto:
+`list_current_memories()` tardaba ~117 ms para 500 recuerdos porque
+`_load_memory()` llamaba a `_get_current_revision_model()` **una vez por
 recuerdo** — una consulta para la lista y otra por cada elemento.
 
-**No se corrige aquí.** Es un cambio de código productivo y pertenece a su
-propio corte, con su decisión. Esta prueba lo deja medido y vigilado.
+**Corregido en B12e** (ADR-008, incidencia #148): `list_current_memories()`,
+`list_archived_memories()`, `list_current_decisions()` y
+`list_archived_decisions()` cargan ahora la revisión vigente del conjunto en
+una sola consulta, sin cambiar qué devuelven. Medición del 11 de agosto de
+2026, mismo conjunto de referencia y misma máquina, antes y después del
+arreglo:
+
+| Operación | P95 antes (B12c) | P95 después (B12e) | Límite | Uso después |
+|---|---|---|---|---|
+| listar decisiones vigentes | 20,3 ms | 2,2 ms | 300 ms | 1 % |
+| listar recuerdos vigentes | 104,7 ms | 9,3 ms | 300 ms | 3 % |
+| resumen de conocimiento | 125,4 ms | 12,6 ms | 300 ms | 4 % |
+| cargar historial completo | 87,9 ms | 94,2 ms | 300 ms | 31 % |
+| **construir contexto** | **239,8 ms** | **120,9 ms** | **300 ms** | **40 %** |
+
+Construir el contexto pasa del 80 % al 40 % de su presupuesto. La prueba de
+conteo de consultas que fija esto por máquina —para que no se deshaga en
+silencio en un cambio futuro— vive en
+`tests/integration/test_memory_decision_list_query_count.py`, no aquí: esta
+prueba mide tiempo sobre el conjunto de referencia completo, aquella fija el
+número de consultas de cada método de forma aislada y barata. Detalle
+completo en ADR-008 y en la sección de rendimiento de
+`docs/implementation/V8_EXECUTION.md`.
 """
 
 from __future__ import annotations

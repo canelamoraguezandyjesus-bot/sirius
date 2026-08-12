@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
+
+# Floor SQLite has guaranteed for SQLITE_LIMIT_VARIABLE_NUMBER since before
+# 3.32.0 (which raised the default to 32766). Used only if the DBAPI
+# connection turns out not to be a sqlite3.Connection, which should not
+# happen for this adapter but keeps the fallback from assuming an unverified,
+# possibly higher limit.
+_SQLITE_VARIABLE_LIMIT_FLOOR = 999
 
 
 def build_engine(database_path: Path) -> Engine:
@@ -50,3 +57,22 @@ def session_scope(session_factory: sessionmaker[Session]) -> Iterator[Session]:
         raise
     finally:
         session.close()
+
+
+def sqlite_variable_limit(session: Session) -> int:
+    """Read the current connection's SQLITE_LIMIT_VARIABLE_NUMBER.
+
+    Callers building an ``IN (...)`` clause from a caller-supplied list of ids
+    must not exceed this many bound parameters per statement, or SQLite
+    raises ``OperationalError: too many SQL variables``.
+    """
+    dbapi_connection = session.connection().connection.dbapi_connection
+    if isinstance(dbapi_connection, sqlite3.Connection):
+        return dbapi_connection.getlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER)
+    return _SQLITE_VARIABLE_LIMIT_FLOOR
+
+
+def chunked[T](items: Sequence[T], size: int) -> Iterator[Sequence[T]]:
+    """Yield ``items`` in consecutive slices of at most ``size`` elements."""
+    for start in range(0, len(items), size):
+        yield items[start : start + size]
