@@ -758,6 +758,53 @@ def _check_reviews(
     return None, True
 
 
+def _check_conversation_comments(
+    repo: str, pr: int, head: str, trigger_at: datetime, trigger_id: int
+) -> CodexResult | None:
+    """Respuesta del conector publicada como comentario de la conversación.
+
+    El conector no siempre contesta con una revisión formal: a veces publica un
+    comentario ordinario («Codex Review: Didn't find any major issues») con su
+    marcador ``Reviewed commit:``. El recolector no miraba ese canal, así que en
+    la incidencia #148 gastó los 1200 s completos y después afirmó que Codex no
+    había entregado un resultado identificable — habiendo respondido 101 s
+    después del disparador, con el autor permitido y demostrablemente sobre el
+    SHA esperado. Eso es exactamente «afirmar más de lo que el dato sostiene».
+
+    No cambia el contrato: esta señal NO aprueba. §4.1 exige para aprobar una
+    revisión formal ``APPROVED`` o una reacción ``+1``. Lo único que cambia es
+    que la ronda termina en segundos con un motivo verdadero en vez de mentir
+    con un timeout.
+    """
+    comments = _gh_paginated(f"repos/{repo}/issues/{pr}/comments")
+    for comment in comments:
+        if int(comment.get("id") or 0) == trigger_id:
+            continue  # el propio disparador
+        if not _is_allowed_author(comment):
+            continue
+        created_at = _parse_timestamp(comment.get("created_at"))
+        # Estrictamente posterior, igual que las revisiones: un empate de
+        # segundos no demuestra el orden causal.
+        if created_at is None or created_at <= trigger_at:
+            continue
+        declared_sha = _resolve_review_sha(comment)
+        if declared_sha is None or not _sha_matches(head, declared_sha):
+            continue
+        return CodexResult(
+            status="FAILED_SAFELY",
+            reason="respuesta-por-comentario",
+            reviewed_head_sha=head,
+            trigger_comment_id=trigger_id,
+            summary=(
+                f"Codex respondió sobre `{head}` en un comentario de la conversación "
+                f"({comment.get('html_url') or comment.get('id')}), no en una revisión "
+                "formal. No es una aprobación válida según §4.1, pero tampoco es un "
+                "timeout: la ronda se detiene con el motivo real."
+            ),
+        )
+    return None
+
+
 def _check_reactions(repo: str, pr: int, head: str, trigger_id: int) -> CodexResult | None:
     """Aprobación explícita sin hallazgos: reacción ``+1`` del conector sobre el
     disparador. La reacción ``eyes`` solo indica procesamiento y se ignora.
@@ -901,6 +948,14 @@ def cmd_collect(args: argparse.Namespace) -> int:
             )
             if observed is None and not has_reviews:
                 observed = _check_reactions(args.repo, args.pr, args.head, trigger_id)
+            if observed is None and not has_reviews:
+                # Último canal, y el más débil: solo se mira cuando no hay
+                # ninguna revisión formal en curso ni reacción. Mirarlo antes
+                # debilitaría la precedencia que exige §4.1 —una revisión formal
+                # manda sobre señales más flojas—.
+                observed = _check_conversation_comments(
+                    args.repo, args.pr, args.head, trigger_at, trigger_id
+                )
         except GhError as exc:
             # Error transitorio ya reintentado: se sigue sondeando hasta el
             # timeout; nunca se degrada a aprobación ni se aborta sin resultado.

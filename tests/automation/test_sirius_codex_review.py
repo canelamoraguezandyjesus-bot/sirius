@@ -1401,3 +1401,74 @@ def test_a_review_submitted_in_the_same_second_as_the_trigger_is_historical(
         "un empate de marca temporal no demuestra que la revisión sea posterior"
     )
     assert result["reason"] == "timeout"
+
+
+def test_una_respuesta_por_comentario_del_conector_no_es_un_timeout(tmp_path: Path) -> None:
+    """El conector no siempre contesta con una revisión formal.
+
+    En la incidencia #148 respondió «Codex Review: Didn't find any major issues»
+    en un comentario ordinario, 101 s después del disparador, con su marcador de
+    SHA. El recolector no miraba ese canal: gastó los 1200 s completos y después
+    afirmó que Codex «no entregó un resultado identificable». Había entregado
+    uno, del autor permitido y sobre el SHA esperado.
+
+    La ronda sigue sin aprobar —§4.1 exige revisión formal o reacción `+1`—,
+    pero termina en segundos y con el motivo verdadero.
+    """
+    env = _setup(tmp_path)
+    _write_state(tmp_path, trigger_at=_stamp(0))
+    _seed(env, "reviews.json", [])
+    _seed(
+        env,
+        "issue_comments.json",
+        [
+            _trigger_comment(comment_id=500, created_at=_stamp(0)),
+            {
+                "id": 900,
+                "body": (
+                    "Codex Review: Didn't find any major issues. Swish!\n\n"
+                    f"**Reviewed commit:** `{HEAD[:10]}`"
+                ),
+                "created_at": _stamp(1),
+                "user": {"login": CONNECTOR},
+            },
+        ],
+    )
+
+    r = _run_collect(env, tmp_path, timeout="30")
+
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "FAILED_SAFELY"
+    assert result["reason"] == "respuesta-por-comentario"
+
+
+def test_un_comentario_del_conector_sobre_otro_sha_sigue_sin_resolver_la_ronda(
+    tmp_path: Path,
+) -> None:
+    """El canal nuevo no relaja ninguna de las comprobaciones de §4.1."""
+    env = _setup(tmp_path)
+    _write_state(tmp_path, trigger_at=_stamp(0))
+    _seed(env, "reviews.json", [])
+    _seed(
+        env,
+        "issue_comments.json",
+        [
+            _trigger_comment(comment_id=500, created_at=_stamp(0)),
+            {
+                "id": 900,
+                "body": (
+                    f"Codex Review: nada que objetar.\n\n**Reviewed commit:** `{OTHER_HEAD[:10]}`"
+                ),
+                "created_at": _stamp(1),
+                "user": {"login": CONNECTOR},
+            },
+        ],
+    )
+
+    r = _run_collect(env, tmp_path, timeout="3")
+
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "FAILED_SAFELY"
+    assert result["reason"] == "timeout", "un SHA ajeno no puede resolver la ronda"
