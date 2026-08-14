@@ -1,0 +1,87 @@
+{
+  "que_es": "por que el filtro del modelo local perdia elementos correctos y criticos: su instruccion mandaba excluir por polaridad, y el banco espera lo contrario",
+  "commit": "e93d4e0",
+  "medido_sobre": "resultado_modelo_local.json (corrida v0.1, congelada)",
+  "la_regla_que_estaba_mal": "una frase que niega o prohibe algo no responde a una pregunta sobre lo que si se hace o se permite, y al reves",
+  "lo_que_dice_el_banco": {
+    "fuente": "round/metrics.py, confusion_de_polaridad, citando el §6.1",
+    "cita": "Fundir ambas es fallo; recuperarlas marcadas y distinguidas es correcto",
+    "lectura": "la polaridad es un requisito de MARCADO, no de exclusion: RF-19 prohibe entregar una prohibicion como si fuera un permiso, no entregarla"
+  },
+  "casos_del_banco_que_esperan_una_prohibicion": [
+    {
+      "caso": "N1-02",
+      "consulta": "¿Qué restricciones de transporte tengo?",
+      "esperados_negativos": [
+        {
+          "identidad": "MEMORIA:2",
+          "texto": "En este viaje no se alquila coche.",
+          "critico": true
+        }
+      ]
+    },
+    {
+      "caso": "N1-20",
+      "consulta": "¿Puedo usar vuelos con escala?",
+      "esperados_negativos": [
+        {
+          "identidad": "MEMORIA:14",
+          "texto": "No uses opciones de vuelo con escala.",
+          "critico": true
+        }
+      ]
+    },
+    {
+      "caso": "N1-31",
+      "consulta": "Dame todas las restricciones esenciales que debo respetar.",
+      "esperados_negativos": [
+        {
+          "identidad": "DECISION:10",
+          "texto": "No usar PostgreSQL en este proyecto.",
+          "critico": true
+        },
+        {
+          "identidad": "MEMORIA:14",
+          "texto": "No uses opciones de vuelo con escala.",
+          "critico": true
+        }
+      ]
+    },
+    {
+      "caso": "N1-34",
+      "consulta": "Prepara el contexto de planificación de Alfa.",
+      "esperados_negativos": [
+        {
+          "identidad": "MEMORIA:14",
+          "texto": "No uses opciones de vuelo con escala.",
+          "critico": true
+        }
+      ]
+    },
+    {
+      "caso": "N1-42",
+      "consulta": "¿Usar PostgreSQL?",
+      "esperados_negativos": [
+        {
+          "identidad": "DECISION:10",
+          "texto": "No usar PostgreSQL en este proyecto.",
+          "critico": true
+        }
+      ]
+    }
+  ],
+  "cuantos": {
+    "casos_con_contenido_que_esperan_un_negativo": 5,
+    "elementos_negativos_distintos": 3,
+    "de_ellos_criticos": 3
+  },
+  "consecuencia_medida_en_la_corrida_v0.1": {
+    "elementos_hallados_sin_filtro": "65/81",
+    "elementos_hallados_con_filtro": "51/81",
+    "omisiones_criticas_linea_base": 11,
+    "omisiones_criticas_con_filtro": 12,
+    "lectura": "el filtro subio los aciertos exactos de 24 a 30 y bajo la basura de 29 a 5, pero se llevo 14 elementos correctos por delante y dejo una omision critica mas que la busqueda sin filtrar, que es lo que B04-RF-24 prohibe"
+  },
+  "la_regla_vigente": "una prohibicion SI responde a una pregunta sobre si algo se puede hacer, y si hay dos frases opuestas sobre lo mismo se devuelven las dos",
+  "como_se_encontro": "leyendo el banco a mano, porque el artefacto v0.1 solo publicaba totales. Por eso el arnes pasa a guardar, por caso, que se quito y cuanto de lo quitado era correcto o critico"
+}

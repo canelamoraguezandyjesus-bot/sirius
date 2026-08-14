@@ -59,6 +59,23 @@ pregunta cuales responde el dato realmente. Una pregunta alucinada —«¿cuanto
 cuesta el vuelo?» para un dato de presupuesto— no supera su propio examen; una
 parafrasis legitima si. Cuesta una segunda llamada local por dato, al guardar y
 una sola vez.
+
+LA CRIBA TAMPOCO PUEDE EXCLUIR POR POLARIDAD
+============================================
+
+La primera version del examen decia «un dato que prohibe algo no responde a una
+pregunta sobre lo que si se permite», y se vio actuar en la corrida publicada:
+para `MEMORIA:2` —«En este viaje no se alquila coche»— el modelo genero «¿se
+puede llevar auto por el viaje?» y «¿hay limite en el uso de coche?», que son
+**las dos buenas**, y el examen **las tiro las dos**, dejando indexadas dos
+inferencias que el dato no dice.
+
+Es el mismo error que tenia el filtro de busqueda y esta explicado alli: el §6.1
+del banco trata la polaridad como marcado, no como exclusion. Una prohibicion
+responde a la pregunta de si eso se puede hacer; la respuesta es que no.
+
+Con la regla mala, un dato negativo se quedaba sin el vocabulario con el que
+alguien lo pediria de verdad, que es justo lo que esta tarea existe para poner.
 """
 
 from __future__ import annotations
@@ -112,8 +129,9 @@ INSTRUCCION_DE_CRIBA: Final = (
     "Reglas:\n"
     "- Una pregunta sobre el mismo tema que el dato no responde no cuenta.\n"
     "- Una pregunta que dice lo mismo con otras palabras si cuenta.\n"
-    "- Respeta la negacion: un dato que prohibe algo no responde a una pregunta "
-    "sobre lo que si se permite."
+    "- Un dato que prohibe algo SI responde a la pregunta de si eso se puede "
+    "hacer: «En este viaje no se alquila coche» responde a «¿se puede llevar "
+    "coche?», y la respuesta es que no. Esa pregunta cuenta."
 )
 
 

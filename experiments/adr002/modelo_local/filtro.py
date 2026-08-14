@@ -21,6 +21,36 @@ vigente se parece mas a la pregunta que el derogado. Y tampoco con la polaridad:
 «no uses escalas» y «acepta escala si ahorra 200 €» se parecen los dos
 muchisimo a «¿acepto escalas?». Quien lee si distingue las dos.
 
+CORRECCION MEDIDA: DISTINGUIR NO ES EXCLUIR
+===========================================
+
+La primera version de la instruccion decia, literalmente: «una frase que niega o
+prohibe algo no responde a una pregunta sobre lo que si se hace o se permite».
+**Era falsa, y el banco lo dice a la cara.**
+
+`round/metrics.py` cita el §6.1 al definir la fusion de polaridad: «Fundir ambas
+es fallo; recuperarlas **marcadas y distinguidas** es correcto». La polaridad es
+un requisito de **marcado**, no de exclusion. Lo que `RF-19` prohibe es entregar
+una prohibicion como si fuera un permiso; no prohibe entregarla.
+
+Y sobre el banco, contado: **cinco** casos con contenido esperan al menos un
+elemento de polaridad negativa, y dos de ellos son preguntas de permiso cuya
+respuesta correcta es una prohibicion —«¿Puedo usar vuelos con escala?» espera
+«No uses opciones de vuelo con escala»; «¿Usar PostgreSQL?» espera «No usar
+PostgreSQL en este proyecto»—. Los **tres** elementos negativos en juego
+—`MEMORIA:2`, `MEMORIA:14`, `DECISION:10`— estan marcados como criticos por el
+canon.
+
+De modo que aquella regla mandaba tirar justo lo que hay que entregar, y ademas
+lo critico. En la corrida publicada eso se ve: el filtro subio los aciertos
+exactos de 24 a 30 y bajo la basura de 29 a 5, pero perdio 13 elementos
+correctos y **una omision critica mas que la busqueda sin filtro** (12 contra
+11). `B04-RF-24` prohibe exactamente esa perdida.
+
+La regla vigente dice lo contrario y lo dice con ejemplo, y ademas manda
+devolver **las dos** cuando hay un par opuesto, que es lo que el §6.1 llama
+correcto.
+
 FALLA ABIERTO, Y ESO NO ES UN DESCUIDO
 ======================================
 
@@ -81,8 +111,11 @@ INSTRUCCION: Final = (
     "pregunta.\n\n"
     "Reglas:\n"
     "- Devuelve solo los numeros de las frases que responden a la pregunta.\n"
-    "- Respeta la negacion: una frase que niega o prohibe algo no responde a "
-    "una pregunta sobre lo que si se hace o se permite, y al reves.\n"
+    "- Una prohibicion SI responde a una pregunta sobre si algo se puede hacer: "
+    "a «¿puedo usar vuelos con escala?», la frase «no uses vuelos con escala» "
+    "es la respuesta, y es que no. Incluyela.\n"
+    "- Si hay dos frases opuestas sobre lo mismo, devuelve LAS DOS: quien "
+    "pregunta tiene que ver que hay un permiso y una prohibicion.\n"
     "- Respeta el tiempo: si preguntan por lo ANTERIOR o lo derogado, lo "
     "vigente no responde; si preguntan por lo vigente, lo derogado no responde.\n"
     "- Una frase que habla del mismo tema pero no responde a la pregunta no "

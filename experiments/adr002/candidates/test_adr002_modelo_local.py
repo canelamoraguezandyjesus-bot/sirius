@@ -33,13 +33,14 @@ class _Transporte:
         self.peticiones: list[tuple[str, dict[str, Any], float]] = []
 
     def __call__(self, ruta: str, cuerpo: Any, espera: float) -> dict[str, Any]:
-        self.peticiones.append((ruta, dict(cuerpo), espera))
+        # `cuerpo` es `None` en `/api/tags`, que va por GET y no admite cuerpo.
+        self.peticiones.append((ruta, dict(cuerpo) if cuerpo is not None else {}, espera))
         if not self._respuestas:
             return {"message": {"content": "{}"}}
         siguiente = self._respuestas.pop(0)
         if isinstance(siguiente, Exception):
             raise siguiente
-        if ruta == "/api/show":
+        if ruta in {"/api/show", "/api/tags"}:
             return dict(siguiente)  # type: ignore[arg-type]
         return {"message": {"content": json.dumps(siguiente)}}
 
@@ -117,17 +118,103 @@ def test_una_respuesta_vacia_o_ilegible_es_error_tipado() -> None:
         proveedor.responder_json("i", "e", ESQUEMA, espera=1.0)
 
 
-def test_la_huella_del_modelo_se_pregunta_al_servidor_y_se_recuerda() -> None:
-    """`TOL-207` exige regenerar derivados; para eso hay que saber con que."""
-    transporte = _Transporte({"digest": "sha256:abc123"}, {"digest": "sha256:otro"})
-    proveedor = _con(transporte)
+_CATALOGO = {
+    "models": [
+        {"name": "otro:8b", "model": "otro:8b", "digest": "ffffffffffff0000"},
+        {"name": "qwen3:4b-instruct", "model": "qwen3:4b-instruct", "digest": "0edcdef34593aa"},
+    ]
+}
+
+
+def test_la_huella_sale_del_catalogo_y_se_recuerda() -> None:
+    """`TOL-207` exige regenerar derivados; para eso hay que saber con que.
+
+    Correccion medida: se pedia a ``/api/show``, que **no trae el digest**, y la
+    corrida publicada salio con huella «desconocida». Vive en ``/api/tags``.
+    """
+    transporte = _Transporte(_CATALOGO, {"models": []})
+    proveedor = puerto.ProveedorOllama(modelo="qwen3:4b-instruct", transporte=transporte)
     primera = proveedor.info_modelo()
     segunda = proveedor.info_modelo()
-    assert primera.huella == "sha256:abc123"
+
+    assert primera.huella == "0edcdef34593aa", "el digest del modelo pedido, no el del vecino"
     assert segunda == primera, "preguntarla por cada dato seria una peticion por elemento"
     assert len(transporte.peticiones) == 1
-    assert transporte.peticiones[0][0] == "/api/show"
-    assert primera.completo.startswith("ollama:")
+    assert transporte.peticiones[0][0] == "/api/tags"
+
+
+def test_el_catalogo_se_pide_por_get_y_sin_cuerpo() -> None:
+    """`/api/tags` no admite cuerpo: mandarselo devuelve 405 y no habria huella."""
+    registradas: list[tuple[str, Any]] = []
+
+    def transporte(ruta: str, cuerpo: Any, espera: float) -> dict[str, Any]:
+        registradas.append((ruta, cuerpo))
+        return dict(_CATALOGO)
+
+    puerto.ProveedorOllama(modelo="qwen3:4b-instruct", transporte=transporte).info_modelo()
+    assert registradas == [("/api/tags", None)]
+
+
+def test_un_modelo_sin_etiqueta_se_encuentra_como_latest() -> None:
+    """Ollama resuelve «qwen3» a «qwen3:latest»; el catalogo lo lista asi."""
+    catalogo = {
+        "models": [{"name": "qwen3:latest", "model": "qwen3:latest", "digest": "abc123def456"}]
+    }
+    proveedor = puerto.ProveedorOllama(modelo="qwen3", transporte=_Transporte(catalogo))
+    assert proveedor.info_modelo().huella == "abc123def456"
+
+
+def test_sin_digest_se_describe_pero_no_se_inventa_una_huella() -> None:
+    """Confesar que no se sabe es mejor que un identificador falso.
+
+    Lo que no puede pasar es que la descripcion **parezca** un digest: quien lea
+    el artefacto tiene que ver de un golpe que ahi no hay identidad de pesos.
+    """
+    transporte = _Transporte(
+        {"models": [{"name": "otro:8b", "digest": "no-es-el-mio"}]},
+        {"details": {"family": "qwen3", "parameter_size": "4.0B", "quantization_level": "Q4_K_M"}},
+    )
+    proveedor = puerto.ProveedorOllama(modelo="qwen3:4b-instruct", transporte=transporte)
+    huella = proveedor.info_modelo().huella
+
+    assert huella == "sin-digest(qwen3/4.0B/Q4_K_M)"
+    assert huella == proveedor.info_modelo().huella_corta, "no se acorta lo que no es un digest"
+    assert [p[0] for p in transporte.peticiones] == ["/api/tags", "/api/show"]
+
+
+def test_si_el_servidor_no_esta_la_huella_no_se_inventa_sino_que_avisa() -> None:
+    """«Sin digest» y «Ollama apagado» no pueden verse igual.
+
+    Si el fallo se tragase aqui, el arnes imprimiria una huella tranquilizadora
+    y el responsable descubriria a los diez minutos —por un contador de fallo
+    abierto— que no estaba midiendo nada. Quien llama ya sabe degradar.
+    """
+    proveedor = puerto.ProveedorOllama(transporte=_Transporte(*[TimeoutError("lento")] * 4))
+    with pytest.raises(puerto.ModeloNoDisponibleError):
+        proveedor.info_modelo()
+
+
+def test_y_aun_asi_guardar_un_dato_no_revienta() -> None:
+    """La otra mitad del trato: la ingesta absorbe ese error y sigue."""
+    salida = ingesta.preguntas_que_responde(
+        "un dato",
+        _proveedor(*[TimeoutError("lento")] * 8),
+        vocabulario_de_categoria=("esencial",),
+    )
+    assert salida.preguntas == ()
+    assert salida.texto_para_indexar == "esencial"
+    assert "no se genero nada" in salida.razon
+
+
+def test_la_huella_se_acorta_a_doce_solo_si_es_un_digest() -> None:
+    """Doce es lo que imprime ``ollama ps``: asi se comparan de un vistazo.
+
+    Y «desconocida» recortada daria «desconocid», que parece un identificador.
+    """
+    largo = puerto.InfoModelo("ollama", "m", "sha256:" + "0123456789abcdef" * 4)
+    assert largo.huella_corta == "0123456789ab"
+    assert largo.completo == "ollama:m@0123456789ab"
+    assert puerto.InfoModelo("ollama", "m", "desconocida").huella_corta == "desconocida"
 
 
 def test_los_numeros_fuera_de_rango_no_pasan_la_lectura() -> None:
@@ -233,14 +320,15 @@ def test_una_pregunta_alucinada_no_supera_su_propio_examen() -> None:
 
 def test_lo_generado_guarda_con_que_modelo_se_genero() -> None:
     """Sin procedencia, al cambiar de modelo no se sabe que hay que regenerar."""
+    catalogo = {"models": [{"name": puerto.MODELO_POR_DEFECTO, "digest": "aabbccddeeff00"}]}
     salida = ingesta.preguntas_que_responde(
         "un dato",
-        _proveedor({"preguntas": ["¿que?"]}, {"responden": [1]}, {"digest": "sha256:ff"}),
+        _proveedor({"preguntas": ["¿que?"]}, {"responden": [1]}, catalogo),
     )
     assert salida.procedencia == {
         "proveedor": "ollama",
         "modelo": puerto.MODELO_POR_DEFECTO,
-        "huella": "sha256:ff",
+        "huella": "aabbccddeeff00",
     }
 
 
@@ -342,3 +430,154 @@ def test_una_interrupcion_del_usuario_sigue_interrumpiendo() -> None:
     """`BaseException` no se captura: parar tiene que parar de verdad."""
     with pytest.raises(KeyboardInterrupt):
         filtrar("lo que sea", CANDIDATOS, _ProveedorAjeno(KeyboardInterrupt()))
+
+
+# -- La polaridad: distinguir no es excluir ---------------------------------
+
+
+def _banco() -> tuple[dict[str, str], dict[str, str], list[Any]]:
+    """El banco de verdad. Estas pruebas no valen sobre datos inventados."""
+    from experiments.adr002.projection import contracts as pc
+    from experiments.adr002.round import cases as cs
+
+    artefactos = cs.cargar_artefactos()
+    polaridad, texto = {}, {}
+    for item in artefactos[cs.CORPUS]["items"]:
+        identidad = pc.referencia_canonica(str(item["id"]))
+        if identidad:
+            polaridad[identidad] = str(item["polaridad"])
+            texto[identidad] = str(item["text"])
+    return polaridad, texto, list(cs.casos_ejecutables(artefactos))
+
+
+def test_el_banco_espera_prohibiciones_como_respuesta_a_preguntas_de_permiso() -> None:
+    """El hecho medido que obliga a la regla del filtro. Leido del banco.
+
+    Si algun dia el banco deja de tener estos casos, esta prueba cae y la regla
+    se vuelve a discutir con datos. Mientras los tenga, excluir por polaridad es
+    tirar la respuesta correcta.
+    """
+    polaridad, _texto, casos = _banco()
+    con_negativa = [
+        caso
+        for caso in casos
+        if caso.adjudicable
+        and caso.resultado_esperado
+        and any(polaridad.get(e) == "NEGATIVA" for e in caso.resultado_esperado)
+    ]
+    assert len(con_negativa) >= 5, "el banco espera prohibiciones en varios casos"
+
+    por_identificador = {c.identificador: c for c in con_negativa}
+    escalas = por_identificador["N1-20"]
+    assert "puedo usar" in escalas.peticion.consulta.lower(), "es una pregunta de permiso"
+    assert "MEMORIA:14" in escalas.resultado_esperado, "y espera la prohibicion"
+
+
+def test_los_elementos_negativos_esperados_son_criticos() -> None:
+    """Por eso la regla mala costaba una omision critica: `B04-RF-24`."""
+    from experiments.adr002.projection import build
+    from experiments.adr002.round.execute_round import _criticos_del_canon
+
+    familia = build.cargar_familia()
+    criticos = set(_criticos_del_canon(familia["applied_criticality_v0_1.json"]["valores"]))
+    assert {"MEMORIA:2", "MEMORIA:14", "DECISION:10"} <= criticos
+
+
+def test_la_instruccion_del_filtro_no_manda_excluir_por_polaridad() -> None:
+    """Guarda contra reponer la regla que perdia lo critico.
+
+    El §6.1, citado en `round/metrics.py`: «Fundir ambas es fallo; recuperarlas
+    marcadas y distinguidas es correcto». Marcado, no exclusion.
+    """
+    assert "no responde a una pregunta sobre lo que si se hace" not in INSTRUCCION
+    assert "SI responde a una pregunta sobre si algo se puede hacer" in INSTRUCCION
+    assert "devuelve LAS DOS" in INSTRUCCION
+    assert "Respeta el tiempo" in INSTRUCCION, "la regla temporal si es correcta y se queda"
+
+
+def test_la_criba_de_ingesta_tampoco_excluye_por_polaridad() -> None:
+    """Mismo error, mismo sitio: dejaba los datos negativos sin vocabulario."""
+    assert "no responde a una pregunta sobre lo que si se permite" not in (
+        ingesta.INSTRUCCION_DE_CRIBA
+    )
+    assert "SI responde a la pregunta de si eso se puede hacer" in ingesta.INSTRUCCION_DE_CRIBA
+
+
+# -- El arnes: que se publica y que no se pisa ------------------------------
+
+
+class _Caso:
+    """Lo minimo que `_detalle` mira de un caso."""
+
+    def __init__(self, esperado: tuple[str, ...]) -> None:
+        self.identificador = "N1-20"
+        self.resultado_esperado = esperado
+        self.peticion = type("P", (), {"consulta": "¿Puedo usar vuelos con escala?"})()
+
+
+def test_el_detalle_separa_lo_que_el_filtro_tiro_en_bueno_y_malo() -> None:
+    """Sin esto solo hay totales, y con totales no se diagnostica nada.
+
+    El defecto de polaridad costo una lectura del banco a mano porque el
+    artefacto no decia **cuales** elementos correctos se perdian.
+    """
+    from experiments.adr002.modelo_local import medir
+
+    caso = _Caso(("MEMORIA:14", "DECISION:3"))
+    detalle = medir._detalle(
+        caso,
+        antes=("MEMORIA:14", "DECISION:3", "MEMORIA:917"),
+        despues=("DECISION:3",),
+        filtrado=Filtrado(("DECISION:3",), True),
+        criticos=frozenset({"MEMORIA:14", "MEMORIA:2"}),
+    )
+
+    assert detalle["quitados"] == ["MEMORIA:14", "MEMORIA:917"]
+    assert detalle["quitados_correctos"] == ["MEMORIA:14"], "lo que no debio irse"
+    assert detalle["quitados_criticos"] == ["MEMORIA:14"], "y ademas era critico"
+    assert detalle["filtro_actuo"] is True
+
+
+def test_un_critico_que_el_caso_no_esperaba_no_cuenta_como_perdida() -> None:
+    """Quitar un critico ajeno al caso es limpiar ruido, no perder nada."""
+    from experiments.adr002.modelo_local import medir
+
+    detalle = medir._detalle(
+        _Caso(("DECISION:3",)),
+        antes=("DECISION:3", "MEMORIA:2"),
+        despues=("DECISION:3",),
+        filtrado=Filtrado(("DECISION:3",), True),
+        criticos=frozenset({"MEMORIA:2"}),
+    )
+    assert detalle["quitados"] == ["MEMORIA:2"]
+    assert detalle["quitados_criticos"] == []
+
+
+def test_sin_filtro_el_detalle_no_habla_de_lo_quitado() -> None:
+    """Una corrida sin filtro no quita nada: inventarse la columna confundiria."""
+    from experiments.adr002.modelo_local import medir
+
+    detalle = medir._detalle(
+        _Caso(("DECISION:3",)),
+        antes=("DECISION:3",),
+        despues=("DECISION:3",),
+        filtrado=None,
+        criticos=frozenset(),
+    )
+    assert "quitados" not in detalle
+    assert detalle["obtenido"] == ["DECISION:3"]
+
+
+def test_no_se_pisa_un_artefacto_ya_medido(tmp_path: Any, monkeypatch: Any) -> None:
+    """Los artefactos medidos se conservan. Y se comprueba **antes** de medir:
+    negarse al final tiraria minutos de grafica del responsable."""
+    import sys
+
+    from experiments.adr002.modelo_local import medir
+
+    ya = tmp_path / "resultado.json"
+    ya.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["medir", "--salida", str(ya)])
+
+    assert medir.main() == 2
+    assert ya.read_text(encoding="utf-8") == "{}", "intacto"

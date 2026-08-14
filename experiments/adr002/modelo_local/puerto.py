@@ -128,8 +128,22 @@ class InfoModelo:
     huella: str
 
     @property
+    def huella_corta(self) -> str:
+        """Los doce primeros caracteres, que es lo que imprime ``ollama ps``.
+
+        Se acorta **solo si es un digest de verdad**: recortar «desconocida» a
+        doce daria «desconocid», que parece un identificador y no lo es.
+        """
+        limpia = self.huella.removeprefix("sha256:")
+        if len(limpia) >= 12 and all(c in "0123456789abcdef" for c in limpia):
+            return limpia[:12]
+        return self.huella
+
+    @property
     def completo(self) -> str:
-        return f"{self.proveedor}:{self.modelo}@{self.huella}"
+        """Para imprimir. Lleva la huella corta: se compara de un vistazo con
+        lo que sale en ``ollama ps``. El artefacto guarda la entera."""
+        return f"{self.proveedor}:{self.modelo}@{self.huella_corta}"
 
 
 @runtime_checkable
@@ -176,12 +190,22 @@ class ProveedorOllama:
         self._transporte = transporte
         self._info: InfoModelo | None = None
 
-    def _pedir(self, ruta: str, cuerpo: Mapping[str, Any], espera: float) -> Mapping[str, Any]:
+    def _pedir(
+        self,
+        ruta: str,
+        cuerpo: Mapping[str, Any] | None,
+        espera: float,
+        *,
+        metodo: str = "POST",
+    ) -> Mapping[str, Any]:
         """Una peticion, con **un** reintento. La espera se aplica siempre.
 
         Que el limite de tiempo valga tambien con transporte inyectado no es un
         detalle: en la version anterior se saltaba justo en las pruebas, de modo
         que lo unico comprobado era el camino que en produccion no se usa.
+
+        ``cuerpo`` a ``None`` con ``metodo="GET"`` es lo que pide el catalogo de
+        modelos: ``/api/tags`` no acepta cuerpo, y mandarselo devuelve 405.
         """
         ultimo: Exception | None = None
         for intento in range(REINTENTOS + 1):
@@ -190,9 +214,9 @@ class ProveedorOllama:
                     return dict(self._transporte(ruta, cuerpo, espera))
                 peticion = urllib.request.Request(
                     f"{self._servidor}{ruta}",
-                    data=json.dumps(cuerpo).encode("utf-8"),
+                    data=json.dumps(cuerpo).encode("utf-8") if cuerpo is not None else None,
                     headers={"Content-Type": "application/json"},
-                    method="POST",
+                    method=metodo,
                 )
                 with urllib.request.urlopen(peticion, timeout=espera) as respuesta:
                     return dict(json.loads(respuesta.read().decode("utf-8")))
@@ -214,12 +238,65 @@ class ProveedorOllama:
         """
         if self._info is not None:
             return self._info
-        crudo = self._pedir("/api/show", {"model": self._modelo}, ESPERA_FILTRO)
-        detalles = crudo.get("details")
-        de_detalles = detalles.get("digest") if isinstance(detalles, Mapping) else None
-        huella = str(crudo.get("digest") or de_detalles or "desconocida")
-        self._info = InfoModelo(proveedor="ollama", modelo=self._modelo, huella=huella)
+        self._info = InfoModelo(proveedor="ollama", modelo=self._modelo, huella=self._huella())
         return self._info
+
+    def _huella(self) -> str:
+        """El identificador de los pesos, del **catalogo**, no de la ficha.
+
+        Correccion medida: la version anterior lo pedia a ``/api/show``, que no
+        lo trae, y por eso la corrida publicada salio con huella «desconocida».
+        El digest vive en ``/api/tags``, y es el mismo que imprime ``ollama ps``
+        —de ahi que se acorte a doce al mostrarlo: para poder compararlo de un
+        vistazo con lo que el responsable ve en su terminal—.
+
+        Si el catalogo no lo da, se cae a una **descripcion** de los pesos
+        —familia, tamano, cuantizacion— marcada con «sin-digest» por delante.
+        No es una huella y no puede parecerlo: `TOL-207` necesita saber con que
+        se genero un derivado, y un identificador inventado seria peor que
+        confesar que no se sabe.
+        """
+        try:
+            catalogo = self._pedir("/api/tags", None, ESPERA_FILTRO, metodo="GET")
+        except ModeloNoDisponibleError:
+            # Puede que este servidor no publique catalogo. Lo decide la ficha,
+            # que ademas **si** propaga el error si lo que pasa es que no hay
+            # servidor: confundir «sin digest» con «Ollama apagado» dejaria al
+            # responsable descubriendo a los diez minutos que no medía nada.
+            return self._descripcion_de_los_pesos()
+        modelos = catalogo.get("models")
+        for entrada in modelos if isinstance(modelos, list) else []:
+            if not isinstance(entrada, Mapping):
+                continue
+            nombres = {str(entrada.get("name", "")), str(entrada.get("model", ""))}
+            # Ollama resuelve «qwen3» a «qwen3:latest»: quien lo pida sin
+            # etiqueta tiene que encontrarse igual en el catalogo.
+            if not (nombres & {self._modelo, f"{self._modelo}:latest"}):
+                continue
+            digest = str(entrada.get("digest") or "")
+            if digest:
+                return digest
+        return self._descripcion_de_los_pesos()
+
+    def _descripcion_de_los_pesos(self) -> str:
+        """Lo que se puede decir de los pesos cuando no hay digest.
+
+        **No captura** `ModeloNoDisponibleError`: si el servidor no esta, quien
+        pregunta tiene que enterarse en ese momento. Los dos que llaman ya saben
+        degradar —la ingesta no indexa y el arnes avisa por pantalla— y ninguno
+        de los dos puede hacerlo si el fallo se traga aqui.
+        """
+        ficha = self._pedir("/api/show", {"model": self._modelo}, ESPERA_FILTRO)
+        detalles = ficha.get("details")
+        if not isinstance(detalles, Mapping):
+            return "desconocida"
+        partes = [
+            str(detalles.get(clave) or "")
+            for clave in ("family", "parameter_size", "quantization_level")
+        ]
+        if not any(partes):
+            return "desconocida"
+        return "sin-digest(" + "/".join(p or "?" for p in partes) + ")"
 
     def responder_json(
         self, instruccion: str, entrada: str, esquema: Mapping[str, Any], *, espera: float

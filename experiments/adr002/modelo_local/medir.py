@@ -14,16 +14,47 @@ precision**: su unico efecto posible es perder aciertos. De modo que medir el
 filtro contra la busqueda de hoy no mediria el filtro; mediria el vacio, y el
 resultado —«no cambia nada»— seria indistinguible de «el modulo no sirve».
 
-Por eso este arnes mide **tres corridas encadenadas**:
+Por eso este arnes mide **cuatro corridas**:
 
 1. la busqueda tal cual, que es la linea base publicada;
 2. **mas la ampliacion**: las preguntas que el modelo escribe al guardar cada
    dato, indexadas junto a el. Esta es la mitad que **ensancha**;
 3. **mas el filtro**: el modelo elige cuales de los candidatos responden de
-   verdad. Esta es la mitad que **estrecha**.
+   verdad. Esta es la mitad que **estrecha**;
+4. **el filtro a solas**, sin la ampliacion.
 
 La segunda sube la cobertura y **empeora** el ruido; la tercera tiene que
 recuperar esa precision. Ninguna de las dos por separado cuenta la historia.
+
+LA CUARTA CORRIDA, Y POR QUE SE ANADIO DESPUES
+==============================================
+
+La primera medicion —artefacto `resultado_modelo_local.json`, congelado— dejo
+una pregunta sin responder que vale la mitad del coste del sistema: la corrida 2
+salio en 23 aciertos exactos, **por debajo** de la linea base de 24, y la
+ampliacion cuesta dos llamadas al modelo por dato guardado, ciento noventa y
+cuatro para este canon. Con tres corridas no habia forma de saber si el filtro a
+solas daria lo mismo, y por tanto si esa mitad cara sobra.
+
+Anadir una corrida **no toca** la medida de las otras tres: el banco, las
+metricas, el denominador y el listón preinscrito siguen siendo los mismos. El
+§8.1 prohibe cambiar la medicion despues de ver los resultados; esto no la
+cambia, la amplia, y las cifras de las corridas 1 a 3 se comparan con las
+publicadas caso por caso.
+
+QUE SE GUARDA DE CADA CASO, Y POR QUE HIZO FALTA
+================================================
+
+La version anterior solo publicaba totales, y con totales **no se puede
+diagnosticar**. Cuando la corrida dijo que el filtro perdia trece elementos
+correctos y una critica mas que la busqueda sin filtrar, hubo que averiguar
+cuales leyendo el banco a mano. La causa resulto ser una regla mal escrita en la
+instruccion del filtro —esta contada en `filtro.py`— y se encontro por lectura,
+no por medida, que es exactamente lo que un arnes debe evitar.
+
+Ahora cada corrida guarda, por caso, que entro al filtro, que se quito, y cuanto
+de lo quitado era correcto o critico. Se calcula al terminar y **no vuelve al
+modelo**: ninguna instruccion ve nada de esto.
 
 QUE SE PUBLICA, Y POR QUE MAS DE LA CUENTA
 ==========================================
@@ -108,6 +139,10 @@ class Corrida:
     filtro_actuo: int = 0
     filtro_fallo_abierto: int = 0
     razones_de_fallo: list[str] = field(default_factory=list)
+    #: Una entrada por caso. Sin esto, el artefacto solo trae totales y **no se
+    #: puede saber que quito el filtro**: la corrida v0.1 dijo que perdia trece
+    #: elementos correctos y hubo que deducir cuales leyendo el banco a mano.
+    detalles: list[dict[str, Any]] = field(default_factory=list)
 
 
 class ConAmpliacion(CandidatoA):
@@ -226,6 +261,11 @@ def _fila(corrida: Corrida, contexto: dict[str, Any]) -> dict[str, Any]:
         "ausencia_correcta": sum(1 for v in adjudicables if v.ausencia_correcta),
         "filtro_actuo": corrida.filtro_actuo,
         "filtro_fallo_abierto": corrida.filtro_fallo_abierto,
+        # El dano del filtro, en la misma fila que su beneficio. Publicar «la
+        # basura baja de 29 a 5» sin publicar «y de paso se lleva N correctos»
+        # seria contar media medida.
+        "correctos_quitados": sum(len(d.get("quitados_correctos", ())) for d in corrida.detalles),
+        "criticos_quitados": sum(len(d.get("quitados_criticos", ())) for d in corrida.detalles),
         "latencia_mediana_s": round(statistics.median(latencias), 2) if latencias else None,
         "latencia_p95_s": (
             round(latencias[min(len(latencias) - 1, int(len(latencias) * 0.95))], 2)
@@ -245,8 +285,52 @@ def _fila(corrida: Corrida, contexto: dict[str, Any]) -> dict[str, Any]:
             f"{corrida.filtro_fallo_abierto}; latencia mediana "
             f"{fila['latencia_mediana_s']}s p95 {fila['latencia_p95_s']}s"
         )
+        print(
+            f"  {'':34} el filtro se llevo {fila['correctos_quitados']} correctos, "
+            f"de ellos {fila['criticos_quitados']} criticos"
+        )
     del contexto
     return fila
+
+
+def _detalle(
+    caso: Any,
+    antes: Sequence[str],
+    despues: Sequence[str],
+    filtrado: Any | None,
+    criticos: frozenset[str],
+) -> dict[str, Any]:
+    """Que paso en un caso, con **lo quitado separado en bueno y malo**.
+
+    Es el instrumento que faltaba. Un total de «elementos hallados 51/81» dice
+    que se perdieron treinta, pero no **cuales**, y sin eso no se puede
+    distinguir un filtro que tira ruido de uno que tira respuestas. Aqui lo
+    quitado se parte contra `resultado_esperado` y contra la lista de criticos
+    del canon, que es exactamente lo que `B04-RF-24` protege.
+
+    Se calcula **despues** de que el modelo haya decidido y no vuelve a el:
+    nada de esto entra en ninguna instruccion.
+    """
+    esperado = frozenset(caso.resultado_esperado)
+    quitados = [i for i in antes if i not in frozenset(despues)]
+    detalle: dict[str, Any] = {
+        "caso": caso.identificador,
+        "consulta": caso.peticion.consulta,
+        "esperado": list(caso.resultado_esperado),
+        "obtenido": list(despues),
+    }
+    if filtrado is None:
+        return detalle
+    detalle |= {
+        "entraron_al_filtro": list(antes),
+        "quitados": quitados,
+        "quitados_correctos": [i for i in quitados if i in esperado],
+        "quitados_criticos": [i for i in quitados if i in criticos and i in esperado],
+        "filtro_actuo": filtrado.actuo,
+    }
+    if filtrado.razon:
+        detalle["razon"] = filtrado.razon
+    return detalle
 
 
 def _correr(
@@ -261,9 +345,12 @@ def _correr(
     textos: dict[str, str],
 ) -> Corrida:
     corrida = Corrida(nombre)
+    criticos = frozenset(contexto["criticos"])
     for caso in casos:
         recuperacion = engine.recuperar(caso.peticion, puerto, candidato, plano)
         ids = recuperacion.ids
+        antes = ids
+        filtrado: fl.Filtrado | None = None
         if filtrar_con is not None and ids:
             candidatos = [(i, textos.get(i, "")) for i in ids]
             comienzo = time.perf_counter()
@@ -275,6 +362,7 @@ def _correr(
                 corrida.filtro_fallo_abierto += 1
                 corrida.razones_de_fallo.append(filtrado.razon)
             ids = filtrado.identidades
+        corrida.detalles.append(_detalle(caso, antes, ids, filtrado, criticos))
         conforme, razon = mt.etapa_conforme(
             caso,
             tuple(p.etapa.value for p in recuperacion.traza.pasos),
@@ -319,8 +407,21 @@ def main() -> int:
     analizador.add_argument("--modelo", default=None, help="etiqueta del modelo en Ollama")
     analizador.add_argument("--servidor", default=None)
     analizador.add_argument("--cota-ingesta", type=int, default=1000)
-    analizador.add_argument("--salida", type=Path, default=Path("resultado_modelo_local.json"))
+    analizador.add_argument("--salida", type=Path, default=Path("resultado_modelo_local_v0.2.json"))
+    analizador.add_argument(
+        "--sobrescribir",
+        action="store_true",
+        help="permite pisar un artefacto que ya existe (por defecto, no)",
+    )
     argumentos = analizador.parse_args()
+
+    # Antes de medir, no despues: una corrida entera dura minutos de grafica, y
+    # negarse a escribir al final seria tirar ese trabajo. Y negarse a pisar es
+    # la regla del proyecto: los artefactos medidos se conservan, no se pisan.
+    if argumentos.salida.exists() and not argumentos.sobrescribir:
+        print(f"ERROR: «{argumentos.salida}» ya existe y no se pisa.")
+        print("Usa --salida con otro nombre, o --sobrescribir si de verdad quieres pisarlo.")
+        return 2
 
     extra: dict[str, Any] = {}
     if argumentos.modelo:
@@ -357,6 +458,7 @@ def main() -> int:
             textos[identidad] = str(item["text"])
 
     filas: list[dict[str, Any]] = []
+    detalles: dict[str, list[dict[str, Any]]] = {}
     with tempfile.TemporaryDirectory() as temporal:
         proyeccion = build.construir_desde_la_familia(Path(temporal) / "planos")
         puerto = PuertoSqlite(proyeccion.ruta_de_entrada(), proyeccion.ruta(Plano.EJES_P2))
@@ -376,6 +478,7 @@ def main() -> int:
             )
             fila_base = _fila(base, contexto)
             filas.append(fila_base)
+            detalles["1. busqueda tal cual"] = base.detalles
             desviado = {
                 c: (fila_base[k], v)
                 for c, k, v in (
@@ -400,39 +503,54 @@ def main() -> int:
                 cota=argumentos.cota_ingesta,
             )
             candidato_ampliado = ConAmpliacion(ruta_ampliacion)
-            filas.append(
-                _fila(
-                    _correr(
-                        "2. mas ampliacion",
-                        casos,
-                        candidato_ampliado,
-                        puerto,
-                        plano,
-                        contexto,
-                        filtrar_con=None,
-                        textos=textos,
-                    ),
-                    contexto,
-                )
+            ampliada = _correr(
+                "2. mas ampliacion",
+                casos,
+                candidato_ampliado,
+                puerto,
+                plano,
+                contexto,
+                filtrar_con=None,
+                textos=textos,
             )
+            filas.append(_fila(ampliada, contexto))
+            detalles["2. mas ampliacion"] = ampliada.detalles
 
             print()
             print("=== 3. mas el filtro que elige (ESTRECHA) ===")
-            filas.append(
-                _fila(
-                    _correr(
-                        "3. mas filtro",
-                        casos,
-                        candidato_ampliado,
-                        puerto,
-                        plano,
-                        contexto,
-                        filtrar_con=proveedor,
-                        textos=textos,
-                    ),
-                    contexto,
-                )
+            con_filtro = _correr(
+                "3. mas filtro",
+                casos,
+                candidato_ampliado,
+                puerto,
+                plano,
+                contexto,
+                filtrar_con=proveedor,
+                textos=textos,
             )
+            filas.append(_fila(con_filtro, contexto))
+            detalles["3. mas filtro"] = con_filtro.detalles
+
+            # La corrida que faltaba. La ampliacion cuesta dos llamadas al
+            # modelo por dato guardado —para este canon, ciento noventa y
+            # cuatro— y la corrida 2 salio **por debajo** de la linea base en
+            # aciertos exactos. Sin medir el filtro a solas no se sabe si esa
+            # mitad cara aporta o si sobra, y esa pregunta vale la mitad del
+            # coste del sistema entero.
+            print()
+            print("=== 4. el filtro SIN la ampliacion (¿se gana la mitad cara su sitio?) ===")
+            solo_filtro = _correr(
+                "4. solo filtro, sin ampliacion",
+                casos,
+                CandidatoA(),
+                puerto,
+                plano,
+                contexto,
+                filtrar_con=proveedor,
+                textos=textos,
+            )
+            filas.append(_fila(solo_filtro, contexto))
+            detalles["4. solo filtro, sin ampliacion"] = solo_filtro.detalles
         finally:
             puerto.close()
             plano.close()
@@ -455,6 +573,7 @@ def main() -> int:
         "vocabulario_de_categoria": list(VOCABULARIO_DE_CATEGORIA),
         "linea_base_publicada": BASE_PUBLICADA,
         "filas": filas,
+        "detalle_por_caso": detalles,
         "ampliacion_generada": registro,
     }
     argumentos.salida.write_text(
