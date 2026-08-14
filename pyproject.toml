@@ -22,6 +22,8 @@ dependencies = [
 
 [project.scripts]
 sirius = "sirius.main:main"
+sirius-voz = "sirius.voice_doctor:main"
+sirius-obs = "sirius.capture_setup:main"
 
 [build-system]
 requires = ["uv_build>=0.11.28,<0.12"]
@@ -35,7 +37,9 @@ dev = [
   "pytest>=8.4",
   "pytest-cov>=6.2",
   "pytest-qt>=4.5",
+  "pyyaml>=6.0",
   "ruff>=0.12",
+  "types-pyyaml>=6.0",
 ]
 # B13: toolchain de empaquetado para Windows. Deliberadamente fuera de las
 # dependencias de ejecución y del grupo `dev`: solo `scripts/build_windows.ps1`

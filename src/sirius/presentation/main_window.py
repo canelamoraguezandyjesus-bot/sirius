@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSplitter,
+    QStackedWidget,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -34,6 +35,8 @@ from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.archive_decision import ArchiveDecisionUseCase
 from sirius.application.archive_memory import ArchiveMemoryUseCase
 from sirius.application.budget_status import GetBudgetStatusUseCase
+from sirius.application.capture_commands import CaptureCommand, CaptureIntent, interpret
+from sirius.application.capture_replies import spoken_confirmation
 from sirius.application.correct_memory import CorrectMemoryUseCase
 from sirius.application.create_backup import CreateBackupUseCase
 from sirius.application.decision_origin import GetDecisionOriginUseCase
@@ -47,11 +50,22 @@ from sirius.application.get_conversation_history import (
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
 from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.project_continuity import ProjectContinuityUseCase
+from sirius.application.project_errors import ProjectContinuityError
 from sirius.application.project_lifecycle import ProjectLifecycleUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageResult, SendMessageUseCase
+from sirius.application.studio_brief import MODEL_STUDIO_BRIEF
+from sirius.application.studio_capture import CaptureFeedback, StudioCaptureUseCase
+from sirius.application.studio_voice import (
+    ListeningStarted,
+    NothingToSay,
+    SpeechStarted,
+    StudioVoiceUseCase,
+    TranscriptReady,
+    VoiceFailure,
+)
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
 from sirius.config.llm_provider_settings import (
@@ -61,7 +75,9 @@ from sirius.config.llm_provider_settings import (
     resolve_provider_kind,
 )
 from sirius.config.settings import load_settings, save_settings
+from sirius.domain.capture import SceneRegistry
 from sirius.domain.conversation import MessageRole, MessageStatus
+from sirius.domain.model_studio import StudioCaptureState, StudioInteractionState
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.backup import (
     BackupManifest,
@@ -80,7 +96,10 @@ from sirius.presentation.error_messages import failed_send_message
 from sirius.presentation.export_worker import ExportWorker
 from sirius.presentation.knowledge_widget import KnowledgeWidget
 from sirius.presentation.message_view import MessageItemDelegate, MessageItemWidget
+from sirius.presentation.model_studio.settings_dialog import StudioSettingsDialog
+from sirius.presentation.model_studio.studio_page import StudioPage
 from sirius.presentation.project_continuity_widget import ProjectContinuityWidget
+from sirius.presentation.studio_workers import CaptureWorker, SpeakWorker, TranscribeWorker
 
 _logger = get_logger(__name__)
 
@@ -96,6 +115,41 @@ _SIDE_PANEL_MAXIMUM_WIDTH = 420
 # Margen para considerar que la vista está «al final» del historial: el usuario
 # que está leyendo el último mensaje no siempre queda en el píxel exacto.
 _AT_BOTTOM_TOLERANCE_PX = 8
+
+# Páginas del widget central. Model Studio no sustituye la interfaz técnica:
+# convive con ella y se conmuta.
+TECHNICAL_PAGE_INDEX = 0
+MODEL_STUDIO_PAGE_INDEX = 1
+
+VOICE_PREVIEW_TEXT = "Hola. Soy Sirius, y esta es mi voz. Uno, dos, tres."
+"""Frase de prueba al elegir voz.
+
+Corta y con números: lo que distingue una voz de otra al oírlas seguidas es la
+entonación de una frase normal, no un párrafo.
+"""
+
+EARLY_SPEECH_MINIMUM_CHARACTERS = 60
+"""Cuánto tiene que haber escrito Sirius para empezar a hablar sin terminar.
+
+Grabando, esperar a la respuesta entera y encima a que se fabrique la voz son
+dos esperas seguidas mirando a la cámara. Con esto la primera se solapa con la
+segunda.
+
+Sesenta caracteres, y siempre cortando en final de frase: un trozo más corto
+suele ser un «Sí.» suelto que no gana nada, y partir a mitad de frase sonaría
+a corte. Se parte **una sola vez** por respuesta: el resto va entero al acabar,
+así que son dos peticiones y no diez, y el coste total no cambia.
+"""
+
+_SENTENCE_ENDINGS = (". ", "! ", "? ", ".\n", "!\n", "?\n")
+
+CAPTURE_HEARTBEAT_MILLISECONDS = 5_000
+"""Cada cuánto se le pregunta a OBS cómo está mientras el panel está abierto.
+
+Cinco segundos es el compromiso: lo bastante corto para que un OBS cerrado se
+note enseguida —y no veinte minutos después—, y lo bastante largo para que no
+sea un goteo constante de peticiones mientras se graba.
+"""
 
 # Estados con los que termina cualquier operación de copia de seguridad. Se
 # guardan además en la propiedad ``siriusBackupState`` de la etiqueta que los
@@ -122,6 +176,23 @@ _BACKUP_STATE_STYLES = {
     BACKUP_STATE_CANCELLED: "color: #8a6d00; font-weight: bold;",
     BACKUP_STATE_REJECTED: "color: #b3261e; font-weight: bold;",
 }
+
+
+def _first_sentence_end(text: str) -> int | None:
+    """Dónde acaba la primera frase, si ya hay bastante como para hablar.
+
+    Devuelve ``None`` mientras no haya un final de frase pasado el mínimo:
+    partir a mitad de frase sonaría a corte, y adelantar tres palabras no
+    ahorra ninguna espera.
+    """
+    if len(text) < EARLY_SPEECH_MINIMUM_CHARACTERS:
+        return None
+    cortes = [
+        text.find(final, EARLY_SPEECH_MINIMUM_CHARACTERS - 1) + len(final)
+        for final in _SENTENCE_ENDINGS
+        if text.find(final, EARLY_SPEECH_MINIMUM_CHARACTERS - 1) != -1
+    ]
+    return min(cortes) if cortes else None
 
 
 class MainWindow(QMainWindow):
@@ -167,6 +238,9 @@ class MainWindow(QMainWindow):
         export_structured_use_case: ExportStructuredUseCase,
         close_database_connections: Callable[[], None],
         *,
+        studio_voice_use_case: StudioVoiceUseCase | None = None,
+        studio_capture_use_case: StudioCaptureUseCase | None = None,
+        save_studio_voice: Callable[[str], None] | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
         confirm_restore: Callable[[str, str], bool] | None = None,
@@ -203,6 +277,36 @@ class MainWindow(QMainWindow):
         # right before RestoreBackupUseCase so the atomic file replace is not
         # blocked by this window's own pooled connections.
         self._close_database_connections = close_database_connections
+        self._studio_voice_use_case = studio_voice_use_case
+        self._studio_capture_use_case = studio_capture_use_case
+        self._last_spoken_text: str | None = None
+        self._voice_before_preview: str | None = None
+        # Cola de voz: el audio tiene que sonar en el orden en que se escribió,
+        # así que solo se sintetiza un trozo a la vez y el siguiente espera a
+        # que el anterior termine de sonar.
+        self._speech_queue: list[tuple[str, bool]] = []
+        self._speech_busy = False
+        self._spoken_prefix_length = 0
+        self._early_speech_used = False
+        # La voz elegida tiene que sobrevivir al cierre: la raíz de composición
+        # pasa cómo guardarla, porque la ventana no toca la configuración.
+        self._save_studio_voice = save_studio_voice
+        # Un conjunto y no una ranura: «Repetir» o «Leer todo» durante la
+        # síntesis lanzan un segundo trabajador, y con una sola referencia el
+        # segundo pisaba al primero. El que quedaba sin referencia fuerte podía
+        # recolectarse antes de entregar su señal, y su desenlace —incluido un
+        # fallo— se perdía en silencio.
+        self._active_voice_workers: set[QRunnable] = set()
+        self._active_capture_worker: QRunnable | None = None
+        self._capture_busy = False
+        self._capture_turn = 0
+        self._pending_capture_command: CaptureCommand | None = None
+        # Latido del Módulo Captura: preguntarle a OBS cada pocos segundos es
+        # lo único que permite enterarse de que se ha caído sin esperar a la
+        # siguiente orden. Solo corre con el panel abierto.
+        self._capture_heartbeat = QTimer(self)
+        self._capture_heartbeat.setInterval(CAPTURE_HEARTBEAT_MILLISECONDS)
+        self._capture_heartbeat.timeout.connect(self._poll_capture_state)
         # Dialogs are shown only through these seams: production defaults to
         # real Qt dialogs, but tests inject recording/no-op doubles so
         # scripts/check.ps1 never opens a real window on the desktop.
@@ -255,13 +359,23 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Sirius 0.1")
         self.resize(900, 620)
 
-        tabs = QTabWidget()
-        tabs.addTab(self._build_conversation_tab(), "Conversación")
-        tabs.addTab(self._build_knowledge_tab(), "Memoria y decisiones")
-        tabs.addTab(self._build_settings_tab(), "Configuración")
-        self.setCentralWidget(tabs)
+        self.tabs = QTabWidget()
+        self.tabs.addTab(self._build_conversation_tab(), "Conversación")
+        self.tabs.addTab(self._build_knowledge_tab(), "Memoria y decisiones")
+        self.tabs.addTab(self._build_settings_tab(), "Configuración")
+
+        # Model Studio es una página conmutable de esta misma ventana, no una
+        # segunda aplicación (SIRIUS-MODEL-STUDIO-UI-001 §2): mismo proceso,
+        # misma base de datos y los mismos casos de uso. La interfaz técnica
+        # queda intacta en la página 0 y conmutar oculta por completo la barra
+        # de pestañas, que es lo que da el modo limpio de §9.1 sin trucos.
+        self._pages = QStackedWidget()
+        self._pages.addWidget(self._build_technical_page())
+        self._pages.addWidget(self._build_studio_page())
+        self.setCentralWidget(self._pages)
 
         self._load_history()
+        self._refresh_studio_context()
 
     def _default_show_warning(self, title: str, text: str) -> None:
         QMessageBox.warning(self, title, text)
@@ -308,6 +422,594 @@ class MainWindow(QMainWindow):
         return QFileDialog.getExistingDirectory(self, title)
 
     # --- Conversación --------------------------------------------------
+
+    # --- Model Studio ----------------------------------------------------
+
+    def _build_technical_page(self) -> QWidget:
+        """Página 0: la interfaz de siempre, con el acceso a Model Studio arriba.
+
+        El contenido no cambia en nada; solo se le antepone el botón que abre
+        la superficie de grabación.
+        """
+        self.open_studio_button = QPushButton("Model Studio")
+        self.open_studio_button.setToolTip(
+            "Abrir la superficie audiovisual de Sirius, pensada para grabar."
+        )
+        self.open_studio_button.setAccessibleName("Abrir Model Studio")
+        self.open_studio_button.clicked.connect(self.open_model_studio)
+
+        header = QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
+        header.addStretch(1)
+        header.addWidget(self.open_studio_button)
+
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(6, 6, 6, 0)
+        layout.setSpacing(6)
+        layout.addLayout(header)
+        layout.addWidget(self.tabs, 1)
+        return page
+
+    def _build_studio_page(self) -> QWidget:
+        """Página 1: Model Studio.
+
+        La página es solo una vista: recibe la conversación ya resuelta por
+        esta ventana y devuelve intenciones por señales. No conoce casos de
+        uso ni proveedores, así que conectar después la voz o la captura no
+        obliga a tocarla.
+        """
+        self.studio_page = StudioPage()
+        self.studio_page.send_requested.connect(self._handle_studio_send)
+        self.studio_page.cancel_requested.connect(self._handle_cancel_clicked)
+        self.studio_page.exit_requested.connect(self.close_model_studio)
+        self.studio_page.microphone_clicked.connect(self._handle_microphone_clicked)
+        self.studio_page.stop_voice_clicked.connect(self._handle_stop_voice_clicked)
+        self.studio_page.repeat_clicked.connect(self._handle_repeat_clicked)
+        self.studio_page.read_all_clicked.connect(self._handle_read_all_clicked)
+        self.studio_page.settings_clicked.connect(self._handle_studio_settings_clicked)
+        self.studio_page.mute_toggled.connect(self._handle_mute_toggled)
+        self.studio_page.set_voice_available(
+            self._studio_voice_use_case is not None,
+            "todavía no disponible",
+        )
+        if self._studio_voice_use_case is not None:
+            self._studio_voice_use_case.set_speech_finished_callback(self._on_speech_finished)
+
+        self.studio_page.capture_panel_toggled.connect(self._handle_capture_panel_toggled)
+        self.studio_page.emergency_stop_clicked.connect(self._handle_emergency_stop)
+        self.studio_page.capture_panel.record_clicked.connect(self._handle_record_clicked)
+        self.studio_page.capture_panel.stop_clicked.connect(self._handle_stop_recording_clicked)
+        self.studio_page.capture_panel.pause_clicked.connect(self._handle_pause_clicked)
+        self.studio_page.capture_panel.resume_clicked.connect(self._handle_resume_clicked)
+        self.studio_page.capture_panel.mark_clicked.connect(self._handle_mark_clicked)
+        self.studio_page.capture_panel.scene_selected.connect(self._handle_scene_selected)
+        self.studio_page.set_capture_available(
+            self._studio_capture_use_case is not None,
+            "todavía no disponible",
+        )
+        if self._studio_capture_use_case is not None:
+            self.studio_page.capture_panel.set_scenes(
+                [
+                    (scene.scene_id, scene.display_name)
+                    for scene in self._studio_capture_use_case.authorized_scenes()
+                ]
+            )
+        return self.studio_page
+
+    # --- Captura de Model Studio ------------------------------------------
+
+    def _handle_capture_panel_toggled(self, opened: bool) -> None:
+        """Abrir el panel enciende el módulo; cerrarlo lo apaga y desconecta.
+
+        Encenderlo no es grabar: solo conecta y pregunta el estado. Y apagarlo
+        no detiene nada de lo que ya estuviera grabando.
+        """
+        if self._studio_capture_use_case is None:
+            return
+        # Abrir el panel es empezar de cero: se limpia lo que quedara dicho.
+        self.studio_page.capture_panel.set_message("")
+        use_case = self._studio_capture_use_case
+        self._run_capture(use_case.enable if opened else use_case.disable)
+        if opened:
+            self._capture_heartbeat.start()
+        else:
+            self._capture_heartbeat.stop()
+
+    def _poll_capture_state(self) -> None:
+        """Le pregunta a OBS cómo está, sin que nadie haya dado una orden.
+
+        Sin esto, Sirius solo se entera de que OBS se ha caído la próxima vez
+        que le mandas algo: si cierras OBS sin querer y sigues hablando, la
+        barra seguiría diciendo GRABANDO durante veinte minutos. #127 lo dice
+        con todas las letras —el sistema de captura es la autoridad—, y una
+        autoridad a la que no se pregunta no manda nada.
+
+        Se salta sola si ya hay una orden en vuelo: la respuesta de esa orden
+        trae el estado igualmente y preguntar dos veces no aporta.
+        """
+        use_case = self._studio_capture_use_case
+        if use_case is None or self._capture_busy or not use_case.is_enabled:
+            return
+        # Y no se pregunta si la superficie no está a la vista. Además de que
+        # no habría a quién enseñarle la respuesta, esto hace el latido
+        # autolimitado: una ventana que nadie cerró deja de sondear sola, en
+        # vez de seguir gastando hilos y CPU indefinidamente.
+        if not self.model_studio_open:
+            return
+        self._run_capture(use_case.refresh_status)
+
+    def _handle_record_clicked(self) -> None:
+        self._run_capture_command("start_recording")
+
+    def _handle_stop_recording_clicked(self) -> None:
+        self._run_capture_command("stop_recording")
+
+    def _handle_pause_clicked(self) -> None:
+        self._run_capture_command("pause_recording")
+
+    def _handle_resume_clicked(self) -> None:
+        self._run_capture_command("resume_recording")
+
+    def _handle_mark_clicked(self) -> None:
+        self._run_capture_command("mark_moment")
+
+    def _handle_scene_selected(self, scene_id: str) -> None:
+        if self._studio_capture_use_case is None:
+            return
+        use_case = self._studio_capture_use_case
+        self._run_capture(lambda: use_case.switch_scene(scene_id))
+
+    def _handle_emergency_stop(self) -> None:
+        """Corta la grabación de inmediato, sin preguntar nada antes."""
+        if self._studio_capture_use_case is None:
+            return
+        self._run_capture(self._studio_capture_use_case.emergency_stop)
+
+    def _run_capture_command(self, name: str) -> None:
+        if self._studio_capture_use_case is None:
+            return
+        self._run_capture(getattr(self._studio_capture_use_case, name))
+
+    def _run_capture(self, command: Callable[[], CaptureFeedback]) -> None:
+        """Ejecuta una orden de captura, de una en una.
+
+        Dos órdenes a la vez pueden terminar en orden distinto al que se
+        pidieron y dejar el módulo en un estado que nadie eligió —encender y
+        apagar deprisa es lo fácil de hacer sin querer—. Mientras hay una en
+        vuelo, las nuevas se descartan; al terminar, ``_sync_capture_module``
+        comprueba si el módulo quedó como el usuario pidió y lo corrige.
+        """
+        if self._capture_busy:
+            return
+        self._capture_busy = True
+        worker = CaptureWorker(command)
+        worker.signals.finished.connect(self._on_capture_finished)
+        worker.signals.crashed.connect(self._on_capture_crashed)
+        self._active_capture_worker = worker
+        self._thread_pool.start(worker)
+
+    def _on_capture_finished(self, feedback: object) -> None:
+        self._active_capture_worker = None
+        self._capture_busy = False
+        if not isinstance(feedback, CaptureFeedback):
+            return
+        # El estado que se pinta es el que devolvió el backend, nunca uno
+        # supuesto: por eso se adopta tal cual y no se corrige aquí.
+        self.studio_page.set_capture_state(feedback.state)
+        self.studio_page.capture_panel.set_elapsed(feedback.recording_seconds)
+        if feedback.message:
+            # Solo se pisa el mensaje si hay algo nuevo que decir. La orden
+            # correctora de _sync_capture_module no trae mensaje, y sin este
+            # guardia borraría un rechazo justo después de enseñarlo.
+            self.studio_page.capture_panel.set_message(feedback.message)
+        if feedback.scene_id is not None:
+            self.studio_page.capture_panel.set_active_scene(feedback.scene_id)
+        if self.studio_page.interaction_state is StudioInteractionState.EJECUTANDO:
+            # La orden vino hablada o escrita: el usuario espera respuesta.
+            self._mirror_studio_state(StudioInteractionState.PREPARADO)
+            self._announce_capture(feedback)
+            self._capture_turn += 1
+        self._sync_capture_module()
+
+    def _announce_capture(self, feedback: CaptureFeedback) -> None:
+        """Cuenta cómo quedó la orden: en pantalla y, si hay voz, en voz alta.
+
+        Lo que se anuncia es el estado que devolvió el sistema de captura, no
+        una frase compuesta por el modelo. Es la diferencia entre informar y
+        afirmar algo que nadie ha confirmado.
+        """
+        spoken = (
+            spoken_confirmation(self._pending_capture_command, feedback, self._capture_turn)
+            if self._pending_capture_command is not None
+            else feedback.message or feedback.state.label
+        )
+        if not feedback.succeeded:
+            self.studio_page.set_error(spoken)
+        self._speak_if_studio_is_open(spoken, MessageStatus.COMPLETED)
+
+    def _sync_capture_module(self) -> None:
+        """Corrige el módulo si quedó al revés de lo que el usuario pidió.
+
+        Pasa cuando se abre y se cierra el panel más deprisa de lo que tarda
+        una orden: la segunda se descartó, y aquí se vuelve a emitir.
+        """
+        if self._studio_capture_use_case is None or self._capture_busy:
+            return
+        wanted = self.studio_page.capture_panel_open
+        if wanted == self._studio_capture_use_case.is_enabled:
+            return
+        use_case = self._studio_capture_use_case
+        self._run_capture(use_case.enable if wanted else use_case.disable)
+
+    def _on_capture_crashed(self, error_message: str) -> None:
+        del error_message  # el mensaje al usuario es seguro y genérico
+        self._capture_busy = False
+        self._active_capture_worker = None
+        aviso = "No sé cómo ha quedado la grabación. Vuelve a abrir el panel para comprobarlo."
+        self.studio_page.set_capture_state(StudioCaptureState.INCIERTO)
+        self.studio_page.capture_panel.set_message(aviso)
+        if self.studio_page.interaction_state is StudioInteractionState.EJECUTANDO:
+            # La orden vino hablada o escrita, así que el panel está cerrado y
+            # su mensaje no se ve. Sin reponer el estado, la superficie se queda
+            # en EJECUTANDO para siempre: caja, enviar y micrófono apagados y
+            # sin explicación. Simétrico con `_on_capture_finished`.
+            self.studio_page.set_error(aviso)
+            self._mirror_studio_state(StudioInteractionState.PREPARADO)
+
+    # --- Voz de Model Studio ---------------------------------------------
+
+    def _handle_microphone_clicked(self) -> None:
+        """Un clic empieza a escuchar; otro para y transcribe.
+
+        No hay que mantener nada pulsado (decisión del usuario del 7 de agosto
+        de 2026): grabando el montaje de HEAD-R1 no se tiene una mano libre
+        para sujetar el ratón.
+        """
+        if self._studio_voice_use_case is None or self._is_sending:
+            return
+        if self._studio_voice_use_case.is_listening:
+            self._stop_listening_and_transcribe()
+            return
+
+        outcome = self._studio_voice_use_case.start_listening()
+        if isinstance(outcome, VoiceFailure):
+            self._report_voice_failure(outcome)
+            return
+        if isinstance(outcome, ListeningStarted):
+            self.studio_page.set_error("")
+            self._mirror_studio_state(StudioInteractionState.ESCUCHANDO)
+
+    def _retain_voice_worker(self, worker: TranscribeWorker | SpeakWorker) -> None:
+        """Retiene el trabajador hasta que entregue su desenlace.
+
+        Sin una referencia fuerte en Python, un ``QRunnable`` que termina muy
+        deprisa puede recolectarse antes de que su señal en cola entre hilos se
+        entregue, y el resultado se pierde en silencio. Se descarta en ambos
+        desenlaces porque ``run()`` termina justo después de emitir.
+        """
+        self._active_voice_workers.add(worker)
+        worker.signals.finished.connect(
+            lambda _outcome, retenido=worker: self._active_voice_workers.discard(retenido)
+        )
+        worker.signals.crashed.connect(
+            lambda _message, retenido=worker: self._active_voice_workers.discard(retenido)
+        )
+
+    def _stop_listening_and_transcribe(self) -> None:
+        if self._studio_voice_use_case is None:
+            return
+        self._mirror_studio_state(StudioInteractionState.TRANSCRIBIENDO)
+        worker = TranscribeWorker(self._studio_voice_use_case)
+        worker.signals.finished.connect(self._on_transcribed)
+        worker.signals.crashed.connect(self._on_voice_crashed)
+        self._retain_voice_worker(worker)
+        self._thread_pool.start(worker)
+
+    def _on_transcribed(self, outcome: object) -> None:
+        if isinstance(outcome, VoiceFailure):
+            self._report_voice_failure(outcome)
+            return
+        if not isinstance(outcome, TranscriptReady):
+            return
+
+        # Nada se persiste todavía: el texto va a la caja para que el usuario
+        # lo corrija, lo cancele o lo envíe. Solo al enviar entra en la
+        # conversación.
+        self.studio_page.set_input_text(outcome.text)
+        self._mirror_studio_state(StudioInteractionState.REVISANDO)
+        self.studio_page.set_error(
+            "Se alcanzó el máximo de grabación; revisa el texto antes de enviarlo."
+            if outcome.stopped_by_limit
+            else ""
+        )
+
+    def _speak_if_studio_is_open(self, text: str | None, status: MessageStatus) -> None:
+        """Lee la respuesta en voz alta, solo dentro de Model Studio.
+
+        En la interfaz técnica no se habla: nadie espera que un chat de trabajo
+        empiece a sonar solo.
+        """
+        if self._studio_voice_use_case is None or not self.model_studio_open:
+            self._reset_speech_stream()
+            return
+        if not text or status is not MessageStatus.COMPLETED:
+            # Cancelada o fallida: si ya se había empezado a leer, se calla.
+            self._silence_pending_speech()
+            return
+        self._last_spoken_text = text
+        pendiente = text[self._spoken_prefix_length :] if self._early_speech_used else text
+        self._reset_speech_stream()
+        if pendiente.strip():
+            self._enqueue_speech(pendiente)
+
+    def _reset_speech_stream(self) -> None:
+        self._spoken_prefix_length = 0
+        self._early_speech_used = False
+
+    def _silence_pending_speech(self) -> None:
+        """Deja de leer una respuesta que se canceló o falló a mitad."""
+        self._speech_queue.clear()
+        self._reset_speech_stream()
+        if self._studio_voice_use_case is not None:
+            self._studio_voice_use_case.stop_speaking()
+        self._speech_busy = False
+
+    def _enqueue_speech(self, text: str, *, read_code: bool = False) -> None:
+        self._speech_queue.append((text, read_code))
+        self._pump_speech()
+
+    def _pump_speech(self) -> None:
+        """Saca el siguiente trozo, solo si no hay ninguno sonando."""
+        if self._speech_busy or not self._speech_queue:
+            return
+        text, read_code = self._speech_queue.pop(0)
+        self._speech_busy = True
+        self._start_speaking(text, MessageStatus.COMPLETED, read_code=read_code)
+
+    def _start_speaking(self, text: str, status: MessageStatus, *, read_code: bool = False) -> None:
+        if self._studio_voice_use_case is None:
+            return
+        self._mirror_studio_state(StudioInteractionState.SINTETIZANDO)
+        worker = SpeakWorker(self._studio_voice_use_case, text, status, read_code=read_code)
+        worker.signals.finished.connect(self._on_spoken)
+        worker.signals.crashed.connect(self._on_voice_crashed)
+        self._retain_voice_worker(worker)
+        self._thread_pool.start(worker)
+
+    def _on_spoken(self, outcome: object) -> None:
+        if isinstance(outcome, VoiceFailure):
+            # Un fallo de voz no puede dejar la cola atascada para siempre.
+            self._speech_busy = False
+            self._speech_queue.clear()
+            self._report_voice_failure(outcome)
+            return
+        if isinstance(outcome, SpeechStarted):
+            self._mirror_studio_state(StudioInteractionState.HABLANDO)
+            return
+        if isinstance(outcome, NothingToSay):
+            # Nada que decir de este trozo: el siguiente no tiene que esperar.
+            self._speech_busy = False
+            self._pump_speech()
+            if not self._speech_busy:
+                self._mirror_studio_state(StudioInteractionState.PREPARADO)
+
+    def _on_speech_finished(self) -> None:
+        """La voz terminó sola: se vuelve a PREPARADO.
+
+        Solo desde ``HABLANDO``. Si mientras sonaba ya se estaba pensando otra
+        respuesta o escuchando el micrófono, ese estado es el que manda: el
+        final de un audio no puede pisar algo que empezó después.
+        """
+        self._speech_busy = False
+        if self._speech_queue:
+            # Queda respuesta por leer: enlaza sin volver a PREPARADO, para que
+            # la barra no parpadee entre trozo y trozo.
+            self._pump_speech()
+            return
+        if self.studio_page.interaction_state is StudioInteractionState.HABLANDO:
+            self._mirror_studio_state(StudioInteractionState.PREPARADO)
+
+    def _handle_stop_voice_clicked(self) -> None:
+        if self._studio_voice_use_case is None:
+            return
+        # Por `_silence_pending_speech` y no por `stop_speaking()` a secas:
+        # parar la reproducción borra el aviso de final, así que `_on_spoken`
+        # no llega nunca y `_speech_busy` se quedaría en True para el resto de
+        # la sesión — la voz muerta en silencio, sin mensaje.
+        self._silence_pending_speech()
+        self._mirror_studio_state(StudioInteractionState.PREPARADO)
+
+    def _handle_repeat_clicked(self) -> None:
+        if self._studio_voice_use_case is None or self._last_spoken_text is None:
+            return
+        self._start_speaking(self._last_spoken_text, MessageStatus.COMPLETED)
+
+    def _handle_read_all_clicked(self) -> None:
+        """Lee la última respuesta **entera**, incluido el código.
+
+        Normalmente la voz resume un bloque de código en «te dejo el código en
+        pantalla», que es lo correcto casi siempre. Grabando hay un momento en
+        que sí quieres oírlo, para comentarlo mientras se ve, y hasta ahora la
+        única forma era leerlo tú.
+        """
+        if self._studio_voice_use_case is None or self._last_spoken_text is None:
+            return
+        self._start_speaking(self._last_spoken_text, MessageStatus.COMPLETED, read_code=True)
+
+    def _handle_studio_settings_clicked(self) -> None:
+        """Abre los ajustes rápidos: qué voz usa Sirius, probándola."""
+        if self._studio_voice_use_case is None:
+            return
+        dialog = StudioSettingsDialog(
+            voices=self._studio_voice_use_case.available_voices(),
+            current=self._studio_voice_use_case.voice,
+            parent=self,
+        )
+        dialog.test_requested.connect(self._preview_voice)
+        if dialog.exec() and dialog.selected_voice:
+            self._apply_studio_voice(dialog.selected_voice)
+        else:
+            # Cancelar no puede dejar puesta la voz que solo se estaba probando.
+            self._apply_studio_voice(
+                self._voice_before_preview or self._studio_voice_use_case.voice
+            )
+
+    def _preview_voice(self, voice: str) -> None:
+        """Prueba una voz sin adoptarla: elegir a oído exige oírlas."""
+        use_case = self._studio_voice_use_case
+        if use_case is None:
+            return
+        if self._voice_before_preview is None:
+            self._voice_before_preview = use_case.voice
+        use_case.set_voice(voice)
+        self._start_speaking(VOICE_PREVIEW_TEXT, MessageStatus.COMPLETED)
+
+    def _apply_studio_voice(self, voice: str) -> None:
+        use_case = self._studio_voice_use_case
+        if use_case is None:
+            return
+        use_case.set_voice(voice)
+        self._voice_before_preview = None
+        if self._save_studio_voice is not None:
+            self._save_studio_voice(use_case.voice)
+
+    def _handle_mute_toggled(self, muted: bool) -> None:
+        if self._studio_voice_use_case is None:
+            return
+        self._studio_voice_use_case.set_muted(muted)
+
+    def _report_voice_failure(self, failure: VoiceFailure) -> None:
+        """Un fallo de voz se cuenta y se sigue: el chat escrito no se toca."""
+        self.studio_page.set_error(failure.message)
+        self._mirror_studio_state(StudioInteractionState.ERROR)
+
+    def _on_voice_crashed(self, error_message: str) -> None:
+        del error_message  # no se muestra literal: el mensaje al usuario es seguro y genérico
+        self.studio_page.set_error("La voz ha fallado, pero la conversación sigue igual.")
+        self._mirror_studio_state(StudioInteractionState.ERROR)
+
+    @property
+    def model_studio_open(self) -> bool:
+        return self._pages.currentIndex() == MODEL_STUDIO_PAGE_INDEX
+
+    def open_model_studio(self) -> None:
+        """Conmuta a la superficie de grabación. Idempotente."""
+        self._pages.setCurrentIndex(MODEL_STUDIO_PAGE_INDEX)
+        self._refresh_studio_context()
+        self.studio_page.input.setFocus()
+
+    def close_model_studio(self) -> None:
+        """Vuelve a la interfaz técnica, saliendo antes del modo limpio.
+
+        Salir corta la voz y el micrófono: nada puede seguir escuchando ni
+        sonando en una superficie que ya no está a la vista.
+        """
+        if self.studio_page.clean_mode:
+            self.studio_page.toggle_clean_mode()
+        self._silence_voice()
+        # Fuera de Model Studio no hay a quién enseñarle el estado, así que
+        # tampoco hay motivo para seguir preguntándoselo a OBS.
+        self._capture_heartbeat.stop()
+        self._pages.setCurrentIndex(TECHNICAL_PAGE_INDEX)
+
+    def _silence_voice(self) -> None:
+        """Cierra micrófono y reproducción. Idempotente."""
+        if self._studio_voice_use_case is None:
+            return
+        self._studio_voice_use_case.cancel_listening()
+        # Mismo motivo que en `_handle_stop_voice_clicked`: salir de Model
+        # Studio mientras habla no puede dejar la cola bloqueada al volver.
+        self._silence_pending_speech()
+        self._mirror_studio_state(StudioInteractionState.PREPARADO)
+
+    def _handle_studio_send(self, text: str) -> None:
+        """Envío pedido desde Model Studio.
+
+        Pasa por el mismo ``_start_send`` que la interfaz técnica —y por tanto
+        por el mismo ``SendMessageUseCase``, la misma identidad, la misma
+        memoria y el mismo historial—, con los mismos bloqueos.
+        """
+        if not text.strip():
+            return
+        if self._is_sending or self._is_backup_busy or self._is_export_busy:
+            # La caja ya se vació al emitir, así que salir en silencio borraba
+            # lo escrito sin decir nada. Se devuelve el texto y se explica.
+            self.studio_page.set_input_text(text)
+            self.studio_page.set_error(
+                "Ahora mismo hay una operación en curso (envío, copia o exportación). "
+                "Tu texto sigue aquí; vuelve a enviarlo cuando termine."
+            )
+            return
+
+        # Una orden de captura no es conversación: se ejecuta y no se guarda en
+        # el historial. Lo que confirma que se está grabando es el estado que
+        # devuelve el sistema de captura, no una frase del modelo.
+        intent = self._capture_intent(text)
+        if intent is not None:
+            self._execute_capture_intent(intent)
+            return
+        # Grabando, una explicación de tres párrafos es un vídeo que nadie
+        # termina de ver (#126). La indicación es efímera: no se guarda.
+        self._start_send(text, extra_instructions=MODEL_STUDIO_BRIEF)
+
+    def _capture_intent(self, text: str) -> CaptureIntent | None:
+        """Qué orden de captura es esta frase, si es que es alguna.
+
+        Sin Módulo Captura no hay órdenes que reconocer: todo va a la
+        conversación, que es lo que el usuario espera.
+        """
+        if self._studio_capture_use_case is None:
+            return None
+        return interpret(text, SceneRegistry(self._studio_capture_use_case.authorized_scenes()))
+
+    def _execute_capture_intent(self, intent: CaptureIntent) -> None:
+        """Ejecuta la orden reconocida, por la misma vía que los botones.
+
+        MS-017: decirlo en voz alta y pulsar el botón producen exactamente el
+        mismo comando interno, con las mismas comprobaciones y la misma lista
+        blanca. Aquí no hay un camino paralelo.
+        """
+        use_case = self._studio_capture_use_case
+        if use_case is None:
+            return
+
+        self.studio_page.input.clear()
+        self.studio_page.set_error("")
+        self.studio_page.capture_panel.set_message("")
+        self._pending_capture_command = intent.command
+        self._mirror_studio_state(StudioInteractionState.EJECUTANDO)
+
+        if intent.command is CaptureCommand.SWITCH_SCENE and intent.scene_id is not None:
+            scene_id = intent.scene_id
+            self._run_capture(lambda: use_case.switch_scene(scene_id))
+            return
+        if intent.command is CaptureCommand.MARK_MOMENT:
+            label = intent.label or ""
+            self._run_capture(lambda: use_case.mark_moment(label))
+            return
+        if intent.command is CaptureCommand.GET_STATUS:
+            self._run_capture(use_case.refresh_status)
+            return
+        self._run_capture(getattr(use_case, intent.command.value))
+
+    def _refresh_studio_context(self) -> None:
+        """Alimenta la columna izquierda con el proyecto activo y su contexto.
+
+        Un proyecto sin configurar no es un error que deba verse al grabar:
+        la columna lo dice en lenguaje claro y la conversación sigue igual.
+        """
+        try:
+            summary = self._project_continuity_use_case.get_summary()
+        except ProjectContinuityError:
+            self.studio_page.set_project_name("")
+            self.studio_page.set_context_summary("")
+            return
+        self.studio_page.set_project_name(summary.name)
+        self.studio_page.set_context_summary(summary.current_state)
+
+    def _mirror_studio_state(self, state: StudioInteractionState) -> None:
+        self.studio_page.set_interaction_state(state)
 
     def _build_conversation_tab(self) -> QWidget:
         self.project_continuity_widget = ProjectContinuityWidget(
@@ -475,13 +1177,17 @@ class MainWindow(QMainWindow):
         clears a label.
         """
         status = self._get_budget_status_use_case.get_status()
-        if status.is_near_limit:
-            self.budget_warning_label.setText(
-                f"Aviso: llevas {status.spent_usd:.2f} USD de "
-                f"{status.monthly_limit_usd:.2f} USD de gasto este mes."
-            )
-        else:
-            self.budget_warning_label.setText("")
+        aviso = (
+            f"Aviso: llevas {status.spent_usd:.2f} USD de "
+            f"{status.monthly_limit_usd:.2f} USD de gasto este mes."
+            if status.is_near_limit
+            else ""
+        )
+        self.budget_warning_label.setText(aviso)
+        # También en Model Studio: quedarse sin presupuesto grabando es el peor
+        # momento para enterarse, y hasta ahora el aviso solo se veía en la
+        # interfaz técnica, que es justo donde no se está mirando.
+        self.studio_page.set_budget_notice(aviso)
 
     def _replace_history_with_authoritative_state(self) -> None:
         """Rebuild the visible list from GetConversationHistoryUseCase.
@@ -492,6 +1198,7 @@ class MainWindow(QMainWindow):
         afterwards) stays, because it is really there.
         """
         self.message_list.clear()
+        self.studio_page.clear_history()
         self._streaming_item = None
         try:
             messages = self._get_history_use_case.get_history()
@@ -576,6 +1283,11 @@ class MainWindow(QMainWindow):
             prefix, self._compose_markdown_body(content, status), bold=role is MessageRole.SIRIUS
         )
         item.setSizeHint(widget.sizeHint())
+
+        # Model Studio es una segunda vista de la MISMA conversación: se
+        # alimenta desde aquí en vez de repetir la lógica de envío, historial
+        # y streaming, que sigue viviendo en un solo sitio.
+        self.studio_page.append_message(role, content, status)
         return item
 
     def _sync_item_height(self, item: QListWidgetItem, widget: MessageItemWidget) -> None:
@@ -627,7 +1339,7 @@ class MainWindow(QMainWindow):
 
         self._start_send(self._last_failed_text)
 
-    def _start_send(self, text: str) -> None:
+    def _start_send(self, text: str, *, extra_instructions: str = "") -> None:
         self._is_sending = True
         self._active_operation_id = str(uuid.uuid4())
         self._active_send_text = text
@@ -645,11 +1357,18 @@ class MainWindow(QMainWindow):
         self.context_panel_widget.set_external_busy(True)
         self.status_label.setText("Sirius está pensando...")
         self.error_label.setText("")
+        self.studio_page.set_error("")
+        self._mirror_studio_state(StudioInteractionState.PENSANDO)
         self._update_retry_button()
 
         self._append_message_item(MessageRole.USER, text)
 
-        worker = SendMessageWorker(self._send_message_use_case, text, self._active_operation_id)
+        worker = SendMessageWorker(
+            self._send_message_use_case,
+            text,
+            self._active_operation_id,
+            extra_instructions=extra_instructions,
+        )
         worker.signals.delta.connect(self._on_delta)
         worker.signals.finished.connect(self._on_finished)
         worker.signals.crashed.connect(self._on_crashed)
@@ -674,6 +1393,8 @@ class MainWindow(QMainWindow):
             return
         self.cancel_button.setEnabled(False)
         self.status_label.setText("Cancelando...")
+        # Interrumpir es interrumpir: si ya estaba leyendo, deja de leer.
+        self._silence_pending_speech()
         self._send_message_use_case.cancel(self._active_operation_id)
 
     def _on_delta(self, text: str) -> None:
@@ -689,6 +1410,31 @@ class MainWindow(QMainWindow):
         if isinstance(widget, MessageItemWidget):
             widget.set_streaming_text("Sirius", self._streaming_text, bold=True)
             self._sync_item_height(self._streaming_item, widget)
+        self.studio_page.update_last_message(self._streaming_text, MessageStatus.COMPLETED)
+        self._speak_first_sentence_early()
+
+    def _speak_first_sentence_early(self) -> None:
+        """Empieza a hablar en cuanto hay una primera frase entera.
+
+        Se corta en final de frase y una sola vez por respuesta. Lo que se dice
+        es literalmente lo que ya está escrito en pantalla, no un adelanto ni
+        un resumen.
+
+        **Contrapartida asumida:** hablar antes de terminar significa que una
+        respuesta cancelada a mitad puede haber sonado en parte. Se compensa
+        cortando la voz en seco al cancelar o fallar, que es lo que pasa cuando
+        interrumpes a alguien: deja de hablar, no sigue.
+        """
+        if self._early_speech_used or self._studio_voice_use_case is None:
+            return
+        if not self.model_studio_open:
+            return
+        corte = _first_sentence_end(self._streaming_text)
+        if corte is None:
+            return
+        self._early_speech_used = True
+        self._spoken_prefix_length = corte
+        self._enqueue_speech(self._streaming_text[:corte])
 
     def _on_finished(self, result: SendMessageResult) -> None:
         # ``result.sirius_message`` is the row SendMessageUseCase actually
@@ -715,23 +1461,32 @@ class MainWindow(QMainWindow):
                     bold=True,
                 )
                 self._sync_item_height(self._streaming_item, widget)
+            self.studio_page.update_last_message(
+                result.sirius_message.content, result.sirius_message.status
+            )
 
         operation_id = result.sirius_message.operation_id
         if result.outcome is MessageStatus.CANCELLED:
             self.error_label.setText("Envío cancelado.")
+            self.studio_page.set_error("Envío cancelado.")
         elif result.outcome is MessageStatus.FAILED:
             self.error_label.setText(failed_send_message(result.error_kind, operation_id))
+            self.studio_page.set_error(failed_send_message(result.error_kind, operation_id))
             # Only a genuine failure offers "Reintentar" (D-05/B7b): a
             # CANCELLED outcome is a deliberate stop and never sets this.
             self._last_failed_text = self._active_send_text
         self._refresh_budget_warning()
         self._finish_sending()
+        # Después de _finish_sending, que es quien devuelve el estado a
+        # PREPARADO: si se hablara antes, ese reajuste borraría SINTETIZANDO.
+        self._speak_if_studio_is_open(result.sirius_message.content, result.sirius_message.status)
 
     def _on_crashed(self, error_message: str) -> None:
         del error_message  # not shown verbatim: keep the user-facing message safe and generic
         operation_id = self._active_operation_id
         self._replace_history_with_authoritative_state()
         self.error_label.setText(failed_send_message(None, operation_id))
+        self.studio_page.set_error(failed_send_message(None, operation_id))
         self._last_failed_text = self._active_send_text
         self._finish_sending()
 
@@ -751,19 +1506,31 @@ class MainWindow(QMainWindow):
         self.project_continuity_widget.set_external_busy(False)
         self.knowledge_widget.set_external_busy(False)
         self.context_panel_widget.set_external_busy(False)
+        # Un fallo deja el estado en ERROR y el motivo a la vista; un envío
+        # normal vuelve a PREPARADO. En ninguno de los dos casos la superficie
+        # se queda colgada en PENSANDO.
+        self._mirror_studio_state(
+            StudioInteractionState.ERROR
+            if self._last_failed_text is not None
+            else StudioInteractionState.PREPARADO
+        )
         self._update_retry_button()
         if self._close_requested:
             self._close_requested = False
             self.close()
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        """Request cancellation and defer closing instead of blocking.
+        """Cierra micrófono y voz, y luego aplica el cierre diferido de siempre.
+
+        Un temporal de audio no puede sobrevivir al cierre de la ventana.
 
         The worker keeps running to completion on its own thread; once it
         finishes, ``_finish_sending``/``_finish_backup_operation`` notices the
         pending request and closes the window from the main thread. Nothing
         is killed and no write is left half-done.
         """
+        self._silence_voice()
+        self._capture_heartbeat.stop()
         if self._is_sending:
             self._close_requested = True
             if self._active_operation_id is not None:

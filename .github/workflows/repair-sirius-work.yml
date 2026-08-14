@@ -6,11 +6,23 @@ name: Corregir bloque Sirius
 # mecanismo y el aviso sobre verificar la interfaz de
 # `anthropics/claude-code-action`.
 #
-# Máximo dos ciclos de corrección (contrato §5): el número de ciclo se cuenta
-# a partir de los marcadores `<!-- sirius-repair-cycle:N -->` que deja
-# sirius_apply_verdict.sh en cada corrección aplicada. Al llegar al tercer
-# intento se fuerza sirius:blocked-decision SIN invocar a Claude — ni siquiera
-# se gasta una ejecución en comprobarlo.
+# Convergencia técnica en vez de un tope fijo de ciclos (contrato §5, v1.5).
+# El límite anterior de dos ciclos era arbitrario: detenía trabajos que seguían
+# siendo puramente técnicos y que progresaban ronda a ronda. Ahora la puerta
+# consulta `scripts/automation/sirius_convergence.py`, que compara las huellas
+# estables de los hallazgos de cada ronda publicadas por
+# `sirius_apply_verdict.sh` y decide de forma determinista:
+#
+#   - CONTINUE mientras haya progreso comprobable: el par (hallazgos
+#     pendientes, gravedad agregada) queda estrictamente por debajo de la mejor
+#     marca histórica —ninguna magnitud la supera y al menos una la mejora—;
+#   - BLOCK, con motivo exacto, cuando no hay progreso neto en dos rondas
+#     consecutivas, un hallazgo dado por resuelto reaparece, el conjunto de
+#     hallazgos oscila entre estados anteriores, el head no avanzó o el
+#     historial no se puede leer.
+#
+# El bloqueo sigue aplicando sirius:blocked-decision SIN invocar a Claude: no
+# se gasta una ejecución cuando la decisión ya es humana.
 
 on:
   issues:
@@ -31,9 +43,45 @@ jobs:
     name: Corregir con Claude Code
     if: github.event.label.name == 'sirius:repair-requested'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Presupuesto de tiempo explícito y verificado por pruebas estructurales,
+    # con la misma regla que `review-sirius-work.yml`: cada paso que puede
+    # tardar declara su propio `timeout-minutes`, y el del job cubre la SUMA
+    # de todos ellos más margen para los pasos deterministas cortos
+    # (checkout, puerta, etiquetas, preparación del prompt).
+    #
+    # Sin esto, el corrector podía consumir los 45 minutos enteros: GitHub
+    # cancelaba el job y el paso que aplica el veredicto no llegaba a leerlo.
+    # La incidencia quedaba en `sirius:repairing` sin parada ni diagnóstico,
+    # que es exactamente lo que la #135 vino a evitar — y lo que el veredicto
+    # provisional del prompt NO puede evitar por sí solo, porque alguien
+    # tiene que llegar a leerlo.
+    # El presupuesto solo es real si TODOS los pasos están acotados. Con solo
+    # dos topes, la puerta —que lee comentarios, localiza la PR y extrae las
+    # observaciones con varios `gh` y sus reintentos, sin `SIRIUS_GH_DEADLINE`
+    # ni tope propio— podía comerse el margen que los otros reservaban, y el
+    # job caducaba durante el corrector igual que antes.
+    #   checkout 5 + puerta 8 + evento 3 + prompt 2 + corrector 30 +
+    #   aplicación 5 = 53, con 7 de margen sobre los 60 del job.
+    timeout-minutes: 60
+    #
+    # LO QUE ESTO NO GARANTIZA, dicho aqui para que nadie lo lea de mas.
+    #
+    # Todas las defensas de este workflow —topes de paso, plazo interno de la
+    # puerta, veredicto provisional del corrector— viven DENTRO del run. Un
+    # proceso que muere no puede informar de su propia muerte: si el checkout
+    # cae, si el runner desaparece o si alguien cancela el job, no queda ni
+    # etiqueta terminal ni diagnostico, y `sirius:repair-requested` sigue
+    # puesta. Como `issues: labeled` no vuelve a dispararse con una etiqueta ya
+    # aplicada, la incidencia queda ATASCADA hasta que una persona la quita y
+    # la vuelve a poner, o ejecuta `reconcile-sirius-states.yml` a mano.
+    #
+    # Eso no se arregla desde aqui: solo lo cierra un observador EXTERNO, y el
+    # contrato operativo prohibe hoy programarlo (ver el encabezado de
+    # `reconcile-sirius-states.yml`). Queda registrado como decision pendiente,
+    # no como defecto olvidado.
     steps:
       - name: Checkout
+        timeout-minutes: 5
         uses: actions/checkout@v6
         with:
           ref: main
@@ -46,38 +94,197 @@ jobs:
           # revisión→corrección→revisión no cerraría.
           token: ${{ secrets.SIRIUS_BOT_TOKEN }}
 
-      - name: Comprobar el contador de ciclos y localizar la PR
+      - name: Evaluar la convergencia y localizar la PR
+        timeout-minutes: 8
         id: gate
         shell: bash --noprofile --norc {0}
         env:
           GH_TOKEN: ${{ github.token }}
+          SIRIUS_TRIGGER_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           set -uo pipefail
           source scripts/automation/sirius_issue.sh
 
-          previous_cycle="$(sirius_retry gh api "repos/${GH_REPO}/issues/${ISSUE_NUMBER}/comments" --jq '.[].body' \
-            | grep -oE '<!-- sirius-repair-cycle:[0-9]+ -->' | grep -oE '[0-9]+' | sort -n | tail -1)"
-          previous_cycle="${previous_cycle:-0}"
-          next_cycle=$((previous_cycle + 1))
+          # Plazo interno de la puerta, con margen bajo su `timeout-minutes`.
+          #
+          # El tope del paso corta desde FUERA: mata la shell sin que llegue a
+          # escribir `valid=false` ni a publicar una parada segura. Y como el
+          # paso que aplica el veredicto exige `valid == 'true'`, tampoco corre:
+          # la incidencia se quedaria sin diagnostico, que es justo lo que la
+          # incidencia #135 vino a evitar. Un plazo INTERNO convierte ese corte
+          # en un desenlace controlado: las lecturas fallan solas y caen en las
+          # paradas seguras que ya existen mas abajo.
+          #
+          # Ese tope externo es ABSOLUTO: cuenta desde que arranca el paso, no
+          # desde cada llamada. Un plazo RELATIVO (`ahora + N`) no protege de
+          # el, porque "ahora" ya se ha corrido mientras tanto. Por eso el
+          # instante inicial se guarda UNA vez y todo lo demas se acota contra
+          # el, en vez de repartir ventanas relativas capa por capa.
+          #
+          # 5 minutos para leer, dentro de los 8 del paso. Los 3 restantes son
+          # para publicar la parada, que tambien necesita `gh`.
+          arranque=$(_sirius_now)
+          PRESUPUESTO_PASO=480  # `timeout-minutes: 8`; GATE-003 lo ata al YAML
+          MARGEN_PASO=30        # para escribir `valid=false` y salir vivos
+          tope_paso=$(( arranque + PRESUPUESTO_PASO - MARGEN_PASO ))
+          gate_deadline=$(( arranque + 300 ))
+          export SIRIUS_GH_DEADLINE="$gate_deadline"
 
-          if [ "$previous_cycle" -ge 2 ]; then
-            marker="<!-- sirius-verdict:corrector:precheck:limite-ciclos -->"
+          # Publicar no puede heredar un plazo ya agotado: seria exigirle a la
+          # parada segura que ocurra en el tiempo que ya se acabo. Pero SOLTAR
+          # el plazo es peor que heredarlo agotado (incidencia #140): sin cota,
+          # la lectura del historial y las etiquetas de `sirius_transition`
+          # pueden colgarse hasta que el tope externo del paso mate la shell,
+          # y entonces no se escribe `valid=false` ni se publica ninguna
+          # transicion terminal. Heredar un plazo agotado deja la parada MUDA;
+          # soltarlo la deja COLGADA, que es peor: al menos la muda falla
+          # rapido y visible.
+          #
+          # Se le da un plazo NUEVO y propio, PERO acotado por el tope del
+          # paso. Sin ese minimo, `parada()` se concedia 120s "desde ahora"
+          # aunque "ahora" ya se hubiera comido el presupuesto: entre agotarse
+          # la lectura y llegar aqui corren `sirius_next_round_number`,
+          # `sirius_convergence.py` y varios `jq`, que NO consultan
+          # `SIRIUS_GH_DEADLINE` y por tanto no los acota nadie. El maximo real
+          # era `300 + proceso local + 120`, no 420. Hallazgo P2 de Codex en la
+          # PR #142; misma familia que el de `_sirius_comment_once_bounded`:
+          # una cota que otra capa puede ampliar no es una cota.
+          #
+          # Si al llegar aqui ya no queda margen, el plazo sale vencido y la
+          # publicacion falla RAPIDO —`_sirius_gh` devuelve 124 sin llegar a
+          # lanzar la llamada—: muda, pero viva para escribir `valid=false`.
+          PLAZO_PUBLICACION=120
+          # Las etiquetas de parada (`failed-safely`, `blocked-decision`) son
+          # NOTIFICABLES, y un `issues: labeled` emitido con el GITHUB_TOKEN no
+          # dispara otros workflows por la regla anti-recursion de GitHub: sin
+          # el PAT, `notify-sirius-state.yml` no se entera y la parada no avisa.
+          # Mismo patron ya aprobado en `advance-sirius-after-quality.yml`; las
+          # lecturas de este paso siguen con el GITHUB_TOKEN.
+          #
+          # Con respaldo (`:-`) y no a secas: bajo `set -u`, una variable sin
+          # definir aborta. Una parada segura que revienta porque falta un
+          # secreto es el peor desenlace posible —deja la incidencia muda, que
+          # es justo lo que la PR #136 tardó ocho rondas en cerrar—, así que sin
+          # PAT se degrada a notificar peor, nunca a no parar.
+          parada() {
+            local plazo
+            plazo=$(( $(_sirius_now) + PLAZO_PUBLICACION ))
+            [ "$plazo" -le "$tope_paso" ] || plazo="$tope_paso"
+            export SIRIUS_GH_DEADLINE="$plazo"
+            ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"; sirius_transition "$@" )
+          }
+
+          # Sin tiempo, una lectura vacia NO significa "no hay nada": significa
+          # que no se llego a mirar. `sirius_find_pr_for_issue` y
+          # `sirius_extract_observations` se tragan los fallos de `gh` y
+          # devuelven vacio, asi que interpretar ese vacio publicaria "no
+          # encuentro ninguna PR" o "no hay observaciones" siendo falso. Se
+          # comprueba el plazo ANTES de interpretar.
+          sin_tiempo() {
+            local marker body_file
+            marker="<!-- sirius-verdict:corrector:precheck:puerta-sin-tiempo:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
             body_file="$(mktemp)"
             printf '%s\n\n%s\n\n%s\n' \
+              "$marker" "🔴 **Me he detenido de forma segura**" \
+              "Se me agoto el plazo de lectura antes de poder decidir si la correccion procede. No se si hay trabajo pendiente ni si el ciclo converge, asi que no continuo." >"$body_file"
+            parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+              "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
+              "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar la parada segura (puerta-sin-tiempo)."
+            rm -f "$body_file"
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+
+          # Decisión de convergencia sobre el historial completo de rondas. El
+          # volcado se lee UNA vez y se reutiliza para numerar la ronda: leerlo
+          # dos veces abriría una ventana en la que la segunda lectura falla y
+          # la ronda se numera a ciegas.
+          comments_file="$(mktemp)"
+          decision_file="$(mktemp)"
+          if ! sirius_dump_comments "$GH_REPO" "$ISSUE_NUMBER" "$comments_file"; then
+            marker="<!-- sirius-verdict:corrector:precheck:historial-ilegible:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
+            body_file="$(mktemp)"
+            printf '%s\n\n%s\n\n%s\n' \
+              "$marker" "🔴 **Me he detenido de forma segura**" \
+              "No he podido leer el historial de rondas de esta incidencia, así que no puedo demostrar que la corrección siga progresando. Me detengo en vez de corregir a ciegas." >"$body_file"
+            parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+              "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
+              "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar la parada segura (historial-ilegible)."
+            rm -f "$body_file" "$comments_file" "$decision_file"
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Numeración de la ronda: el mayor marcador `<!-- sirius-round:N -->`
+          # publicado por el revisor, sobre el volcado que ya se ha leído. El
+          # marcador heredado `<!-- sirius-repair-cycle:N -->` sigue emitiéndose
+          # para trazabilidad histórica, pero ya no gobierna ninguna decisión.
+          next_cycle="$(sirius_next_round_number "$GH_REPO" "$ISSUE_NUMBER" "$comments_file")"
+
+          python3 scripts/automation/sirius_convergence.py decide \
+            --comments-file "$comments_file" --output "$decision_file" || true
+          # Los valores por defecto de jq (`// "BLOCK"`) NO cubren el archivo
+          # vacío: sobre una entrada vacía jq no emite nada y sale con 0, así
+          # que la sustitución `||` tampoco actúa y la variable queda vacía. La
+          # decisión seguiría siendo segura (vacío != CONTINUE), pero el motivo
+          # y el detalle se perderían y el bloqueo se publicaría sin
+          # diagnóstico. Se aplica el respaldo sobre la variable ya expandida,
+          # que sí cubre los tres casos: archivo ausente, vacío o ilegible.
+          decision="$(jq -r '.decision // empty' "$decision_file" 2>/dev/null || true)"
+          reason="$(jq -r '.reason // empty' "$decision_file" 2>/dev/null || true)"
+          detail="$(jq -r '.detail // empty' "$decision_file" 2>/dev/null || true)"
+          rounds="$(jq -r '.rounds // empty' "$decision_file" 2>/dev/null || true)"
+          # Intentos consecutivos motivados por un fallo de Quality. Es el otro
+          # motor del ciclo —`advance-sirius-after-quality.yml` reaplica
+          # `sirius:repair-requested` sin publicar registro de ronda—, así que
+          # su cuenta se registra aparte para que el bloqueo diga cuál de los
+          # dos se agotó.
+          ci_failures="$(jq -r '.ci_failures // empty' "$decision_file" 2>/dev/null || true)"
+          decision="${decision:-BLOCK}"
+          reason="${reason:-indeterminado}"
+          detail="${detail:-No se pudo evaluar la convergencia; el analizador no entregó una decisión legible.}"
+          rounds="${rounds:-0}"
+          ci_failures="${ci_failures:-0}"
+          rm -f "$comments_file" "$decision_file"
+
+          if [ -z "${next_cycle:-}" ]; then
+            marker="<!-- sirius-verdict:corrector:precheck:ronda-innumerable:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
+            body_file="$(mktemp)"
+            printf '%s\n\n%s\n\n%s\n' \
+              "$marker" "🔴 **Me he detenido de forma segura**" \
+              "He leído el historial de rondas pero no he podido numerar la ronda siguiente. Me detengo en vez de corregir con una numeración que falsearía la medida de convergencia." >"$body_file"
+            parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+              "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
+              "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar la parada segura (ronda-innumerable)."
+            rm -f "$body_file"
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$decision" != "CONTINUE" ]; then
+            # Sufijo por run, igual que el resto de paradas: sin él, un
+            # segundo bloqueo con el mismo motivo compartiría marcador, se
+            # deduparía y la incidencia volveria a blocked-decision SIN
+            # publicar el diagnostico (incidencia #66).
+            marker="<!-- sirius-verdict:corrector:precheck:convergencia-${reason}:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
+            body_file="$(mktemp)"
+            printf '%s\n\n%s\n\n%s\n\n%s\n' \
               "$marker" \
               "🟡 **Necesito una decisión**" \
-              "Ya se completaron ${previous_cycle} ciclos de revisión-corrección sin converger. El contrato permite un máximo de dos; se detiene para que decidas el siguiente paso." >"$body_file"
-            sirius_transition "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+              "El ciclo de revisión-corrección ha dejado de converger tras ${rounds} ronda(s) registrada(s) y ${ci_failures} fallo(s) de Quality consecutivo(s), así que me detengo en vez de seguir corrigiendo." \
+              "Motivo (\`${reason}\`): ${detail}" >"$body_file"
+            parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
               "sirius:blocked-decision" "D4C5F9" "Estado: requiere una decisión humana" \
-              "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar el limite de ciclos."
+              "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar el bloqueo por convergencia."
             rm -f "$body_file"
             echo "valid=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           mapfile -t pr_numbers < <(sirius_find_pr_for_issue "$GH_REPO" "$ISSUE_NUMBER")
+          [ "$(_sirius_now)" -lt "$gate_deadline" ] || sin_tiempo
           if [ "${#pr_numbers[@]}" -ne 1 ]; then
             reason="sin-pr"
             why="No encuentro ninguna PR asociada a esta incidencia; no hay nada que corregir."
@@ -88,7 +295,7 @@ jobs:
             marker="<!-- sirius-verdict:corrector:precheck:${reason} -->"
             body_file="$(mktemp)"
             printf '%s\n\n%s\n\n%s\n' "$marker" "🔴 **Me he detenido de forma segura**" "$why" >"$body_file"
-            sirius_transition "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+            parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
               "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
               "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar la parada segura (${reason})."
             rm -f "$body_file"
@@ -97,13 +304,14 @@ jobs:
           fi
 
           observations="$(sirius_extract_observations "$GH_REPO" "$ISSUE_NUMBER")"
+          [ "$(_sirius_now)" -lt "$gate_deadline" ] || sin_tiempo
           if [ -z "$observations" ]; then
             marker="<!-- sirius-verdict:corrector:precheck:sin-observaciones -->"
             body_file="$(mktemp)"
             printf '%s\n\n%s\n\n%s\n' \
               "$marker" "🔴 **Me he detenido de forma segura**" \
               "No encuentro ninguna observación estructurada que corregir en esta incidencia." >"$body_file"
-            sirius_transition "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+            parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
               "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
               "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar la parada segura (sin-observaciones)."
             rm -f "$body_file"
@@ -117,10 +325,19 @@ jobs:
           echo "cycle=${next_cycle}" >> "$GITHUB_OUTPUT"
 
       - name: Consumir el evento y marcar en curso
+        timeout-minutes: 3
         if: steps.gate.outputs.valid == 'true'
         shell: bash --noprofile --norc {0}
         env:
-          GH_TOKEN: ${{ github.token }}
+          # Este paso solo AÑADE `sirius:repairing`, que no es notificable, y
+          # retira `sirius:repair-requested`. Aun así usa el PAT: la regla es
+          # «quien escribe etiquetas usa la identidad real», y se comprueba sin
+          # interpretar qué argumento del script añade y cuál quita. Deducir eso
+          # del texto del comando sería reconstruir desde fuera la semántica de
+          # otro sistema, que en este repositorio ya costó quince defectos
+          # (ADR-001). El coste de la regla ancha es un evento que nadie
+          # consume; el de la estrecha, una notificación perdida en silencio.
+          GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
@@ -130,6 +347,7 @@ jobs:
             "sirius:repairing" "sirius:repair-requested"
 
       - name: Preparar instrucciones para Claude Code
+        timeout-minutes: 2
         if: steps.gate.outputs.valid == 'true'
         id: build_prompt
         shell: bash --noprofile --norc {0}
@@ -148,7 +366,7 @@ jobs:
             echo "- Repositorio: ${GH_REPO}"
             echo "- Incidencia de trabajo: #${ISSUE_NUMBER}"
             echo "- Pull Request a corregir: #${PR_NUMBER}"
-            echo "- Ciclo de corrección: ${CYCLE} de 2 como máximo"
+            echo "- Ronda de corrección: ${CYCLE}. No hay un tope fijo de rondas: el ciclo continúa mientras haya progreso comprobable y se detiene en cuanto deja de haberlo."
             echo "- Las observaciones estructuradas están en la ruta exacta de la variable de entorno SIRIUS_OBSERVATIONS_FILE."
             echo "- El archivo de veredicto debe escribirse en la ruta exacta de la variable de entorno SIRIUS_VERDICT_FILE."
             echo "SIRIUS_PROMPT_EOF"
@@ -158,6 +376,7 @@ jobs:
         if: steps.gate.outputs.valid == 'true'
         id: claude
         continue-on-error: true
+        timeout-minutes: 30
         uses: anthropics/claude-code-action@v1
         env:
           GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
@@ -176,9 +395,12 @@ jobs:
 
       - name: Aplicar el veredicto
         if: always() && steps.gate.outputs.valid == 'true'
+        timeout-minutes: 5
         shell: bash --noprofile --norc {0}
         env:
-          GH_TOKEN: ${{ github.token }}
+          # El veredicto escribe la etiqueta del estado resultante, que puede ser
+          # notificable (`repair-requested`, `failed-safely`, `ready-for-merge`).
+          GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           CYCLE: ${{ steps.gate.outputs.cycle }}

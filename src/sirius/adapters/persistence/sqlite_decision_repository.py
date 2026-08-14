@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,7 +13,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from sirius.adapters.persistence.database import (
     build_engine,
     build_session_factory,
+    chunked,
     session_scope,
+    sqlite_variable_limit,
 )
 from sirius.adapters.persistence.models import DecisionModel, DecisionRevisionModel
 from sirius.domain.decision import (
@@ -72,6 +74,39 @@ def _get_current_revision_model(session: Session, decision_id: int) -> DecisionR
 def _load_decision(session: Session, model: DecisionModel) -> Decision:
     revision_model = _get_current_revision_model(session, model.id)
     return _to_domain_decision(model, revision_model)
+
+
+def _load_decisions(session: Session, models: Sequence[DecisionModel]) -> list[Decision]:
+    """Load the current revision of every model in a bounded number of queries.
+
+    ``_load_decision`` issues one query per model; called from a list method
+    that turns into N+1 queries for N models. This loads every current
+    revision the set needs via ``IN (...)`` queries instead, batched to the
+    connection's ``SQLITE_LIMIT_VARIABLE_NUMBER`` so a large set doesn't blow
+    past SQLite's bound-parameter limit in a single statement.
+    """
+    if not models:
+        return []
+    decision_ids = [model.id for model in models]
+    revisions_by_decision_id: dict[int, DecisionRevisionModel] = {}
+    for batch in chunked(decision_ids, sqlite_variable_limit(session)):
+        revision_models = session.scalars(
+            select(DecisionRevisionModel).where(
+                DecisionRevisionModel.decision_id.in_(batch),
+                DecisionRevisionModel.is_current.is_(True),
+            )
+        ).all()
+        revisions_by_decision_id.update(
+            (revision.decision_id, revision) for revision in revision_models
+        )
+    decisions = []
+    for model in models:
+        revision_model = revisions_by_decision_id.get(model.id)
+        if revision_model is None:
+            msg = f"Decision {model.id} has no current revision; data is corrupt."
+            raise ValueError(msg)
+        decisions.append(_to_domain_decision(model, revision_model))
+    return decisions
 
 
 class SqliteDecisionRepository:
@@ -197,7 +232,7 @@ class SqliteDecisionRepository:
                 .where(DecisionModel.status == DecisionStatus.APPROVED)
                 .order_by(DecisionModel.id)
             ).all()
-            return [_load_decision(session, model) for model in models]
+            return _load_decisions(session, models)
 
     def archive_decision(self, decision_id: int) -> Decision:
         with self._scope() as session:
@@ -221,7 +256,7 @@ class SqliteDecisionRepository:
                 .where(DecisionModel.status == DecisionStatus.ARCHIVED)
                 .order_by(DecisionModel.id)
             ).all()
-            return [_load_decision(session, model) for model in models]
+            return _load_decisions(session, models)
 
     def list_proposed_decisions(self) -> list[Decision]:
         with self._scope() as session:

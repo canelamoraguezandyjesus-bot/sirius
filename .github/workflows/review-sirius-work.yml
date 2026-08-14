@@ -1,15 +1,36 @@
 name: Revisar bloque Sirius
 
-# Ejecuta la Routine revisora genérica de Sirius con Claude Code real, dentro
-# de este mismo runner, en cuanto se aplica sirius:review-requested (solo
-# ocurre tras Quality en verde sobre el head registrado). Ver la cabecera de
-# implement-sirius-work.yml para el contexto general del mecanismo y el aviso
-# sobre verificar la interfaz de `anthropics/claude-code-action`.
+# Orquesta la revisión independiente de Sirius en cuanto se aplica
+# sirius:review-requested (solo ocurre tras Quality en verde sobre el head
+# registrado). Ver la cabecera de implement-sirius-work.yml para el contexto
+# general del mecanismo y el aviso sobre verificar la interfaz de
+# `anthropics/claude-code-action`.
+#
+# Dos modos, gobernados por la variable de repositorio
+# SIRIUS_CODEX_REVIEW_ENABLED (contrato operativo §4.1):
+#
+#   - ausente o distinta de `true`: revisión solo con Claude, como antes de la
+#     revisión dual (el gate de verificación de head y el reviewed_head_sha
+#     obligatorio aplican en ambos modos: son parte del contrato §4.1, no de
+#     la bandera);
+#   - `true`: revisión dual obligatoria. Se solicita primero la revisión nativa
+#     de Codex (comentario `@codex review` publicado por el paso determinista),
+#     se ejecuta el revisor Claude mientras Codex trabaja, se recoge el
+#     resultado de Codex y un agregador determinista combina ambos en un único
+#     veredicto. Si Codex no responde, responde sobre otro SHA o su resultado
+#     no es identificable, la ronda termina en FAILED_SAFELY: nunca se degrada
+#     en silencio a revisión solo Claude ni se aprueba sin ambos revisores.
+#
+# La bandera permite volver al flujo previo sin revertir commits. La revisión
+# automática del panel de Codex permanece apagada: el disparo ocurre únicamente
+# aquí, después de Quality. No se usa la API de OpenAI en ningún caso.
 #
 # Esta pasada es de SOLO LECTURA a propósito: el permiso del job es
 # contents: read (no write) y la PR no se toca. Aunque el propio prompt le
 # pide a Claude que no edite nada, el permiso del token es la garantía real —
-# incluso si Claude intentara hacer push, el token no lo permite.
+# incluso si Claude intentara hacer push, el token no lo permite. Codex actúa
+# igualmente como revisor de solo lectura: la automatización solo publica la
+# solicitud de revisión, jamás órdenes de corrección sobre la PR.
 
 on:
   issues:
@@ -19,6 +40,14 @@ permissions:
   contents: read
   issues: write
   pull-requests: read
+  # El gate lee `commits/<sha>/check-runs` para obtener el instante autoritativo
+  # en que Quality terminó sobre el head (solo en modo dual: es el ancla
+  # temporal del disparador de Codex). Declarar un bloque `permissions`
+  # explícito deja en `none` todo alcance no listado, así que sin esta línea esa
+  # lectura daría 403 y toda ronda de revisión dual moriría en la parada segura
+  # `quality-sin-marca`. Mismo alcance que ya declaran merge-sirius-work.yml y
+  # reconcile-sirius-states.yml para el mismo endpoint.
+  checks: read
   id-token: write
 
 concurrency:
@@ -27,10 +56,22 @@ concurrency:
 
 jobs:
   review:
-    name: Revisar con Claude Code
+    name: Revisar con Claude Code (y Codex si está activado)
     if: github.event.label.name == 'sirius:review-requested'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Presupuesto de tiempo explícito y verificado por pruebas estructurales.
+    # Cada paso que puede tardar declara su propio `timeout-minutes`, y el del
+    # job cubre la SUMA de todos ellos más margen para los pasos deterministas
+    # cortos (checkout, gate, etiquetas, disparador). Así, un timeout de Codex
+    # siempre se traduce en un resultado estructurado y nunca en una
+    # cancelación del job, y la agregación y la aplicación del veredicto
+    # tienen margen garantizado, no meramente probable:
+    #   revisor Claude 30 + recolección de Codex 30 + agregación 5 +
+    #   aplicación 10 = 75, dentro de los 85 del job.
+    # La espera interna del recolector está además limitada a
+    # SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS (1500 s = 25 min), por debajo de
+    # los 30 de su paso.
+    timeout-minutes: 85
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -38,49 +79,160 @@ jobs:
           ref: main
           persist-credentials: false
 
-      - name: Localizar la PR asociada
+      - name: Localizar la PR y verificar el head que superó Quality
         id: gate
         shell: bash --noprofile --norc {0}
         env:
+          # Las LECTURAS van con el GITHUB_TOKEN. La ESCRITURA de
+          # `sirius:failed-safely` necesita el PAT: es una etiqueta notificable
+          # del contrato §7 y el `issues: labeled` del GITHUB_TOKEN queda
+          # suprimido por la regla anti-recursión, así que la parada segura del
+          # gate no avisaba a nadie. Lo encontró la refutación de #154.
           GH_TOKEN: ${{ github.token }}
+          SIRIUS_TRIGGER_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
+          SIRIUS_CODEX_REVIEW_ENABLED: ${{ vars.SIRIUS_CODEX_REVIEW_ENABLED }}
         run: |
           set -uo pipefail
           source scripts/automation/sirius_issue.sh
-          mapfile -t pr_numbers < <(sirius_find_pr_for_issue "$GH_REPO" "$ISSUE_NUMBER")
-          if [ "${#pr_numbers[@]}" -eq 1 ]; then
-            echo "valid=true" >> "$GITHUB_OUTPUT"
-            echo "pr_number=${pr_numbers[0]}" >> "$GITHUB_OUTPUT"
-          else
-            echo "valid=false" >> "$GITHUB_OUTPUT"
-            reason="sin-pr"
-            why="No encuentro ninguna PR asociada a esta incidencia; no hay nada que revisar."
-            if [ "${#pr_numbers[@]}" -gt 1 ]; then
-              reason="varias-pr"
-              why="Esta incidencia referencia varias PR distintas; me detengo para no revisar la equivocada."
-            fi
-            marker="<!-- sirius-verdict:reviewer:precheck:${reason} -->"
+
+          dual="false"
+          if [ "${SIRIUS_CODEX_REVIEW_ENABLED:-}" = "true" ]; then
+            dual="true"
+          fi
+          echo "dual=${dual}" >> "$GITHUB_OUTPUT"
+
+          # Ninguna escritura de etiqueta llama a la función cruda: es la
+          # convención que comprueba tests/automation/test_sirius_notifications.py
+          trigger_transition() {
+            ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"; sirius_transition "$@" )
+          }
+
+          stop_gate() {
+            # stop_gate <reason-slug> <explicacion> — parada segura del gate.
+            local reason="$1" why="$2"
+            local marker="<!-- sirius-verdict:reviewer:precheck:${reason}:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
+            local body_file
             body_file="$(mktemp)"
             printf '%s\n\n%s\n\n%s\n' "$marker" "🔴 **Me he detenido de forma segura**" "$why" >"$body_file"
-            sirius_transition "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+            trigger_transition "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
               "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
               "noclose" "sirius:review-requested" || echo "::error::No se pudo aplicar la parada segura (${reason})."
             rm -f "$body_file"
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+          }
+
+          mapfile -t pr_numbers < <(sirius_find_pr_for_issue "$GH_REPO" "$ISSUE_NUMBER")
+          if [ "${#pr_numbers[@]}" -eq 0 ]; then
+            stop_gate "sin-pr" "No encuentro ninguna PR asociada a esta incidencia; no hay nada que revisar."
+            exit 0
           fi
+          if [ "${#pr_numbers[@]}" -gt 1 ]; then
+            stop_gate "varias-pr" "Esta incidencia referencia varias PR distintas; me detengo para no revisar la equivocada."
+            exit 0
+          fi
+          pr_number="${pr_numbers[0]}"
+
+          # Ambos revisores deben auditar exactamente el head que superó
+          # Quality. Si la PR avanzó después del último Quality en verde, esta
+          # ronda se descarta de forma segura: el nuevo commit tendrá que pasar
+          # Quality y abrir su propia ronda de revisión.
+          pr_head="$(sirius_retry gh api "repos/${GH_REPO}/pulls/${pr_number}" --jq '.head.sha')"
+          if [ -z "${pr_head:-}" ]; then
+            stop_gate "pr-illegible" "No he podido leer el head actual de la PR #${pr_number}."
+            exit 0
+          fi
+          scan_file="$(mktemp)"
+          sirius_scan_text "$GH_REPO" "$ISSUE_NUMBER" "$scan_file"
+          last_ci_sha="$(sirius_extract_sha "$scan_file")"
+          rm -f "$scan_file"
+          if [ "$last_ci_sha" = "no-head" ] || [ "$last_ci_sha" != "$pr_head" ]; then
+            stop_gate "head-obsoleto" "El head actual de la PR #${pr_number} (\`${pr_head}\`) no coincide con el último head que superó Quality (\`${last_ci_sha}\`). No inicio una revisión sobre una versión sin Quality en verde."
+            exit 0
+          fi
+
+          # Instante autoritativo en que Quality terminó sobre este head, leido
+          # de la API de check-runs (no de un texto de la incidencia, que es
+          # editable). Ancla la ronda: el disparador de Codex debe ser
+          # posterior a esta marca para pertenecer a la ronda posterior a CI.
+          #
+          # Solo se exige en modo dual. Es un dato que únicamente consume el
+          # disparador de Codex, así que exigirlo también con la bandera apagada
+          # dejaba que un 403 o un cambio de nombre del check matara una ronda
+          # de revisión solo-Claude que antes de esta funcionalidad habría
+          # funcionado: la bandera dejaría de ser reversible de verdad. La
+          # verificación de head —que sí es del contrato §4.1 y aplica a ambos
+          # modos— ya se ha hecho justo arriba.
+          quality_completed_at=""
+          if [ "$dual" = "true" ]; then
+            quality_completed_at="$(sirius_retry gh api "repos/${GH_REPO}/commits/${pr_head}/check-runs" \
+              --jq '[.check_runs[] | select(.name == "quality" and .conclusion == "success") | .completed_at] | sort | last // empty')"
+            if [ -z "${quality_completed_at:-}" ]; then
+              stop_gate "quality-sin-marca" "No he podido leer el instante en que Quality terminó en verde sobre \`${pr_head}\`. Sin esa marca no puedo demostrar que la solicitud de revisión de Codex pertenece a la ronda posterior a CI."
+              exit 0
+            fi
+          fi
+
+          echo "valid=true" >> "$GITHUB_OUTPUT"
+          echo "pr_number=${pr_number}" >> "$GITHUB_OUTPUT"
+          echo "head_sha=${pr_head}" >> "$GITHUB_OUTPUT"
+          echo "quality_completed_at=${quality_completed_at}" >> "$GITHUB_OUTPUT"
 
       - name: Consumir el evento y marcar en curso
         if: steps.gate.outputs.valid == 'true'
         shell: bash --noprofile --norc {0}
         env:
           GH_TOKEN: ${{ github.token }}
+          SIRIUS_TRIGGER_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           set -uo pipefail
           source scripts/automation/sirius_issue.sh
-          sirius_set_issue_labels "$GH_REPO" "$ISSUE_NUMBER" \
+          # `sirius:reviewing` no es notificable hoy, pero la regla es ancha a
+          # propósito: TODA escritura de etiqueta usa la identidad real. La regla
+          # estrecha obliga a decidir, llamada por llamada, si la etiqueta que se
+          # escribe es notificable — y equivocarse ahí cuesta un aviso perdido,
+          # mientras que pasarse solo cuesta un evento que nadie consume.
+          trigger_set_labels() {
+            ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"; sirius_set_issue_labels "$@" )
+          }
+          trigger_set_labels "$GH_REPO" "$ISSUE_NUMBER" \
             "sirius:reviewing" "sirius:review-requested"
+
+      - name: Solicitar la revisión de Codex (modo dual)
+        if: steps.gate.outputs.valid == 'true' && steps.gate.outputs.dual == 'true'
+        id: codex_trigger
+        # Un fallo aquí no corta el job: sin archivo de estado, la recolección
+        # y la agregación terminan en FAILED_SAFELY estructurado, nunca en
+        # aprobación silenciosa.
+        continue-on-error: true
+        shell: bash --noprofile --norc {0}
+        env:
+          # El comentario disparador debe provenir de una identidad real (el
+          # PAT del bot) para que la GitHub App de Codex lo procese; que un
+          # comentario automatizado active Codex es una dependencia externa
+          # aún no verificada que valida el piloto posterior al merge. El
+          # token viaja solo por entorno: nunca en argumentos ni en logs.
+          GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
+          HEAD_SHA: ${{ steps.gate.outputs.head_sha }}
+          QUALITY_COMPLETED_AT: ${{ steps.gate.outputs.quality_completed_at }}
+          # Identificador de ronda: el run de Actions. Estable en las
+          # reejecuciones del mismo run (idempotencia), distinto en una ronda
+          # nueva sobre el mismo head (no reutiliza revisiones anteriores).
+          ROUND_ID: ${{ github.run_id }}
+        run: |
+          set -uo pipefail
+          python3 scripts/automation/sirius_codex_review.py trigger \
+            --repo "$GH_REPO" \
+            --pr "$PR_NUMBER" \
+            --head "$HEAD_SHA" \
+            --round-id "$ROUND_ID" \
+            --quality-completed-at "$QUALITY_COMPLETED_AT" \
+            --state-file "${RUNNER_TEMP}/sirius_codex_state.json"
 
       - name: Preparar instrucciones para Claude Code
         if: steps.gate.outputs.valid == 'true'
@@ -90,6 +242,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
+          HEAD_SHA: ${{ steps.gate.outputs.head_sha }}
         run: |
           set -uo pipefail
           {
@@ -100,6 +253,7 @@ jobs:
             echo "- Repositorio: ${GH_REPO}"
             echo "- Incidencia de trabajo: #${ISSUE_NUMBER}"
             echo "- Pull Request a auditar: #${PR_NUMBER}"
+            echo "- Head SHA que superó Quality y que debes auditar: ${HEAD_SHA}"
             echo "- El archivo de veredicto debe escribirse en la ruta exacta de la variable de entorno SIRIUS_VERDICT_FILE."
             echo "SIRIUS_PROMPT_EOF"
           } >> "$GITHUB_OUTPUT"
@@ -108,6 +262,9 @@ jobs:
         if: steps.gate.outputs.valid == 'true'
         id: claude
         continue-on-error: true
+        # Acotado explícitamente para que la duración de Claude no pueda comerse
+        # el presupuesto reservado a la espera de Codex (ver timeout del job).
+        timeout-minutes: 30
         uses: anthropics/claude-code-action@v1
         env:
           GH_TOKEN: ${{ github.token }}
@@ -121,8 +278,58 @@ jobs:
           prompt: ${{ steps.build_prompt.outputs.prompt }}
           claude_args: '--dangerously-skip-permissions --allowedTools "Bash,Read,Grep,Glob" --max-turns 60'
 
+      - name: Recoger el resultado de Codex (modo dual)
+        if: steps.gate.outputs.valid == 'true' && steps.gate.outputs.dual == 'true'
+        id: codex_collect
+        # Timeout o error producen un JSON FAILED_SAFELY estructurado; si ni
+        # siquiera se puede escribir ese archivo, la agregación fallará y el
+        # veredicto ausente detendrá la incidencia de forma segura.
+        continue-on-error: true
+        # Mayor que el tope interno de espera del recolector
+        # (SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS, 25 min por defecto): el
+        # recolector siempre llega a escribir su resultado determinista antes
+        # de que este paso expire.
+        timeout-minutes: 30
+        shell: bash --noprofile --norc {0}
+        env:
+          # Solo lectura: recoger el resultado no necesita el PAT.
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.gate.outputs.pr_number }}
+          HEAD_SHA: ${{ steps.gate.outputs.head_sha }}
+          ROUND_ID: ${{ github.run_id }}
+          SIRIUS_CODEX_REVIEW_TIMEOUT_SECONDS: ${{ vars.SIRIUS_CODEX_REVIEW_TIMEOUT_SECONDS }}
+          SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS: ${{ vars.SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS }}
+        run: |
+          set -uo pipefail
+          python3 scripts/automation/sirius_codex_review.py collect \
+            --repo "$GH_REPO" \
+            --pr "$PR_NUMBER" \
+            --head "$HEAD_SHA" \
+            --round-id "$ROUND_ID" \
+            --state-file "${RUNNER_TEMP}/sirius_codex_state.json" \
+            --output "${RUNNER_TEMP}/sirius_codex_review.json"
+
+      - name: Agregar los veredictos (modo dual)
+        if: steps.gate.outputs.valid == 'true' && steps.gate.outputs.dual == 'true'
+        id: aggregate
+        continue-on-error: true
+        timeout-minutes: 5
+        shell: bash --noprofile --norc {0}
+        env:
+          HEAD_SHA: ${{ steps.gate.outputs.head_sha }}
+        run: |
+          set -uo pipefail
+          python3 scripts/automation/sirius_aggregate_reviews.py \
+            --claude-file "${RUNNER_TEMP}/sirius_verdict.json" \
+            --codex-file "${RUNNER_TEMP}/sirius_codex_review.json" \
+            --expected-head "$HEAD_SHA" \
+            --mode dual \
+            --output "${RUNNER_TEMP}/sirius_aggregated_verdict.json"
+
       - name: Aplicar el veredicto
         if: always() && steps.gate.outputs.valid == 'true'
+        timeout-minutes: 10
         shell: bash --noprofile --norc {0}
         env:
           # Este paso NO es Claude, es el script determinista. Si el veredicto es
@@ -134,7 +341,18 @@ jobs:
           GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
+          DUAL_MODE: ${{ steps.gate.outputs.dual }}
         run: |
           set -uo pipefail
+          # En modo dual SOLO se aplica el veredicto agregado: no existe ningún
+          # camino que aplique el veredicto de Claude sin haber esperado a
+          # Codex. Si la agregación no llegó a producir el archivo, el paso
+          # determinista lo trata como veredicto ausente y detiene la
+          # incidencia de forma segura.
+          if [ "${DUAL_MODE}" = "true" ]; then
+            verdict_file="${RUNNER_TEMP}/sirius_aggregated_verdict.json"
+          else
+            verdict_file="${RUNNER_TEMP}/sirius_verdict.json"
+          fi
           bash scripts/automation/sirius_apply_verdict.sh \
-            "$GH_REPO" "$ISSUE_NUMBER" "reviewer" "${RUNNER_TEMP}/sirius_verdict.json"
+            "$GH_REPO" "$ISSUE_NUMBER" "reviewer" "$verdict_file"

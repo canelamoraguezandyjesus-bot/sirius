@@ -122,6 +122,14 @@ La revisora publica uno de estos resultados:
 - `BLOCKED_BY_DECISION -> blocked-decision`;
 - `FAILED_SAFELY -> failed-safely`.
 
+Con la variable de repositorio `SIRIUS_CODEX_REVIEW_ENABLED=true` (contrato
+operativo §4.1), la ronda de revisión es dual: el mismo workflow solicita
+además la revisión nativa de Codex sobre el mismo head exacto y un agregador
+determinista combina ambos resultados en un único veredicto de la lista
+anterior. Los estados y transiciones no cambian; solo se llega a
+`ready-for-merge` si ambos revisores aprueban el mismo SHA, y un fallo o
+timeout de Codex termina en `failed-safely`, nunca en aprobación silenciosa.
+
 ### 4.5 Corrección
 
 `repair-requested -> repairing -> ci-pending`
@@ -135,7 +143,10 @@ La correctora:
 - registra el nuevo head;
 - vuelve a CI.
 
-Máximo dos ciclos. Si no converge:
+No hay un tope fijo de ciclos: la corrección continúa mientras haya progreso
+comprobable (contrato §5.1). Si el ciclo deja de converger — sin progreso neto
+en dos rondas consecutivas, reaparición de un hallazgo resuelto, oscilación o
+head sin avanzar:
 
 `repairing -> blocked-decision`
 
@@ -218,8 +229,9 @@ Permanecen bajo control humano:
 
 ## 8. Prohibiciones
 
-- tareas horarias como motor;
-- vigilancia periódica de PR;
+- tareas horarias como **motor** (una red de seguridad periódica que no es
+  motor sí está permitida: contrato v1.6 §9.1);
+- vigilancia periódica de PR como forma de dirigir el ciclo;
 - fusionar sin el comentario explícito de autorización del propietario descrito en §4.7;
 - cambios directos en `main`;
 - bucles ilimitados;

@@ -17,7 +17,7 @@ El usuario solo interviene para:
 
 ## 2. Principio de diseño
 
-GitHub y las Routines gobiernan el ciclo mediante eventos. No se utilizarán comprobaciones horarias ni tareas programadas de ChatGPT como motor técnico.
+GitHub y las Routines gobiernan el ciclo mediante eventos. No se utilizarán comprobaciones horarias ni tareas programadas de ChatGPT como motor técnico. Desde el contrato v1.6 §9.1 existe una única ejecución programada que **no** es motor: una red de seguridad que solo observa estados que ningún evento puede ya revivir.
 
 ChatGPT actúa como panel de mando cuando el usuario abre el chat:
 
@@ -102,7 +102,7 @@ Cuando exista `CHANGES_REQUESTED`, la Routine correctora:
 - registra el nuevo head;
 - vuelve a `sirius:ci-pending`.
 
-Se permiten como máximo dos ciclos. Si no converge, pasa a `sirius:blocked-decision`.
+No hay un tope fijo de ciclos: la corrección continúa mientras haya progreso comprobable y pasa a `sirius:blocked-decision` en cuanto deja de converger (contrato §5.1).
 
 ### 4.6 Aprobación y notificación
 
@@ -155,7 +155,7 @@ Los reintentos de webhooks no deben duplicar ramas, PR, revisiones ni correccion
 - decisiones silenciosas de producto o arquitectura;
 - correcciones ilimitadas;
 - revisión en cada push sin condiciones;
-- vigilancia horaria como motor;
+- vigilancia horaria como **motor** (excepción acotada: contrato v1.6 §9.1);
 - inicio indefinido de bloques sin autorización.
 
 ## 7. Tareas programadas de ChatGPT

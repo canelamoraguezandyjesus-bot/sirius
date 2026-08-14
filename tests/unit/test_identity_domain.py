@@ -51,3 +51,31 @@ def test_identity_is_immutable() -> None:
 
     with pytest.raises(AttributeError):
         identity.current_version = _version(version=2)  # type: ignore[misc]
+
+
+# --- Humor y confianza (Manual §5.2 y Anexo A) --------------------------
+
+
+def test_the_seed_authorises_the_humour_the_manual_approved() -> None:
+    """El manual autoriza bromas, provocaciones e insultos consentidos.
+
+    La semilla decía solo «humor contextual», que es más tibio que lo aprobado.
+    """
+    assert "insultos coloquiales consentidos" in INITIAL_PERSONALITY_INSTRUCTIONS
+    assert "humor seco, sarcasmo" in INITIAL_PERSONALITY_INSTRUCTIONS
+
+
+def test_the_seed_puts_the_fact_before_the_joke() -> None:
+    """Principio de personalidad de SIRIUS-MODEL-STUDIO-UI-001 §4.1."""
+    assert "Primero debe quedar claro qué ocurrió" in INITIAL_PERSONALITY_INSTRUCTIONS
+
+
+def test_the_seed_turns_the_humour_off_when_something_breaks() -> None:
+    """Anexo A del manual: error técnico serio reduce el humor."""
+    assert "reduce el humor" in INITIAL_PERSONALITY_INSTRUCTIONS
+    assert "pérdida de datos" in INITIAL_PERSONALITY_INSTRUCTIONS
+
+
+def test_the_seed_names_forcing_jokes_as_a_failure() -> None:
+    """Anexo A: el fallo de identidad es «forzar un chiste en cada mensaje»."""
+    assert "Forzar un chiste en cada mensaje" in INITIAL_PERSONALITY_INSTRUCTIONS

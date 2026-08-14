@@ -41,7 +41,7 @@ Los subbloques siguientes deben reutilizar y completar esa infraestructura. No d
 - No modificar documentos canónicos.
 - No declarar superadas pruebas manuales o con proveedor real.
 - `scripts/check.ps1` y CI deben quedar verdes antes del merge.
-- Máximo dos ciclos de revisión y corrección por PR. Si no converge, devolver `BLOCKED_BY_DECISION`.
+- El ciclo de revisión y corrección por PR continúa mientras haya progreso comprobable (contrato §5.1); si deja de converger, devolver `BLOCKED_BY_DECISION`.
 - El usuario conserva la autorización de merge.
 
 ## B4a — Origen consultable y guardado manual

@@ -28,12 +28,17 @@ class SendMessageWorker(QRunnable):
     """Runs ``SendMessageUseCase.send_message`` on a worker thread."""
 
     def __init__(
-        self, send_message_use_case: SendMessageUseCase, user_text: str, operation_id: str
+        self,
+        send_message_use_case: SendMessageUseCase,
+        user_text: str,
+        operation_id: str,
+        extra_instructions: str = "",
     ) -> None:
         super().__init__()
         self._send_message_use_case = send_message_use_case
         self._user_text = user_text
         self._operation_id = operation_id
+        self._extra_instructions = extra_instructions
         self.signals = SendMessageWorkerSignals()
 
     def run(self) -> None:
@@ -43,6 +48,7 @@ class SendMessageWorker(QRunnable):
                 self._user_text,
                 operation_id=self._operation_id,
                 on_delta=self.signals.delta.emit,
+                extra_instructions=self._extra_instructions,
             )
         except Exception as exc:  # A worker-boundary catch: report, never crash the pool thread.
             _logger.error(

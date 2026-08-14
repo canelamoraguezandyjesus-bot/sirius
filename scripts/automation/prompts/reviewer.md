@@ -17,6 +17,11 @@ revisor independiente.
   implementador publicó su URL) y audita el diff completo frente a ese
   alcance: corrección, cobertura de pruebas, migraciones, persistencia,
   seguridad, y que no se haya tocado nada fuera de lo autorizado.
+- Identifica y registra el head exacto que estás auditando: obtén el SHA
+  completo del head de la PR (por ejemplo con
+  `gh pr view <PR> --json headRefOid`) y compáralo con el head indicado en el
+  contexto de esta ejecución. Si no coinciden, no audites una versión
+  distinta: termina con `FAILED_SAFELY` explicando la discrepancia.
 - Verifica en particular: que las pruebas añadidas demuestran de verdad el
   comportamiento pedido (no son solo cosméticas), que no se debilitó ninguna
   comprobación existente para conseguir verde, y que no hay secretos ni datos
@@ -36,9 +41,16 @@ Escribe un único archivo JSON en la ruta exacta de la variable de entorno
 {
   "verdict": "REVIEW_APPROVED",
   "summary": "Explicación breve, en español, del resultado de la auditoría.",
+  "reviewed_head_sha": "SHA completo (40 hex) del head exacto que auditaste.",
   "observations": []
 }
 ```
+
+`reviewed_head_sha` es obligatorio cuando el veredicto es `REVIEW_APPROVED` o
+`CHANGES_REQUESTED`: declara qué versión revisaste de verdad. El paso
+determinista posterior contrasta ese SHA con el head actual de la PR y con el
+último head que superó Quality; si no coinciden los tres, tu veredicto no se
+aplica y la incidencia se detiene de forma segura.
 
 `verdict` debe ser exactamente uno de:
 
