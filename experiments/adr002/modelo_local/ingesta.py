@@ -70,9 +70,7 @@ from typing import Any, Final
 from experiments.adr002.modelo_local.puerto import (
     ESPERA_PREGUNTAS,
     InfoModelo,
-    ModeloNoDisponibleError,
     ProveedorIA,
-    RespuestaInvalidaError,
     enteros_validos,
 )
 
@@ -213,8 +211,16 @@ def preguntas_que_responde(
         generadas = _generar(texto, proveedor, espera)
         aprobadas, descartadas = _cribar(texto, generadas, proveedor, espera)
         info = proveedor.info_modelo()
-    except (ModeloNoDisponibleError, RespuestaInvalidaError) as fallo:
-        return PreguntasGeneradas((), categoria, None, f"no se genero nada: {fallo}")
+    except Exception as fallo:
+        # Cualquier fallo, no solo los dos de este paquete. Guardar un dato no
+        # puede romperse porque un proveedor de otra familia levante un error
+        # suyo —sin conexion, cuota agotada, clave invalida—: la ampliacion es
+        # un derivado, y quedarse sin ella deja el sistema exactamente como
+        # estaba. Que reventara el guardado seria perder el dato por no poder
+        # adornarlo. `BaseException` no se toca: una interrupcion interrumpe.
+        return PreguntasGeneradas(
+            (), categoria, None, f"no se genero nada ({type(fallo).__name__}): {fallo}"
+        )
     return PreguntasGeneradas(aprobadas, categoria, info, "", descartadas)
 
 

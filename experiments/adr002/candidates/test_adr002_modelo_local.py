@@ -283,3 +283,62 @@ def test_el_texto_para_indexar_junta_categoria_y_preguntas() -> None:
         vocabulario_de_categoria=("esencial",),
     )
     assert salida.texto_para_indexar == "esencial ¿cual es el limite de gasto?"
+
+
+# -- Que ningun proveedor pueda tumbar la busqueda ni el guardado ------------
+
+
+class _ProveedorAjeno:
+    """Un proveedor de otra familia que levanta SUS errores, no los de aqui.
+
+    Es el caso real de una API: sin conexion, cuota agotada, clave invalida o
+    demasiadas peticiones llegan como excepciones de su propia libreria. Si el
+    filtro solo supiera capturar los dos errores de este paquete, cualquiera de
+    esas reventaria la busqueda entera.
+    """
+
+    def __init__(self, fallo: Exception) -> None:
+        self._fallo = fallo
+
+    def info_modelo(self) -> puerto.InfoModelo:
+        raise self._fallo
+
+    def responder_json(self, instruccion, entrada, esquema, *, espera):  # type: ignore[no-untyped-def]
+        raise self._fallo
+
+
+@pytest.mark.parametrize(
+    "fallo",
+    [
+        ConnectionError("no hay red"),
+        RuntimeError("cuota agotada"),
+        PermissionError("clave invalida"),
+        ValueError("demasiadas peticiones"),
+    ],
+)
+def test_ningun_error_de_proveedor_tumba_la_busqueda(fallo: Exception) -> None:
+    """Falla ABIERTO ante CUALQUIER error, no solo ante los dos de casa."""
+    salida = filtrar("lo que sea", CANDIDATOS, _ProveedorAjeno(fallo))
+    assert salida.identidades == tuple(i for i, _ in CANDIDATOS)
+    assert not salida.actuo
+    assert type(fallo).__name__ in salida.razon, "la razon debe decir QUE fallo"
+
+
+@pytest.mark.parametrize(
+    "fallo",
+    [ConnectionError("no hay red"), RuntimeError("cuota agotada"), PermissionError("clave")],
+)
+def test_ningun_error_de_proveedor_tumba_el_guardado(fallo: Exception) -> None:
+    """Guardar un dato no puede romperse por no poder adornarlo."""
+    salida = ingesta.preguntas_que_responde(
+        "un dato", _ProveedorAjeno(fallo), vocabulario_de_categoria=("esencial",)
+    )
+    assert salida.preguntas == ()
+    assert salida.texto_para_indexar == "esencial"
+    assert type(fallo).__name__ in salida.razon
+
+
+def test_una_interrupcion_del_usuario_sigue_interrumpiendo() -> None:
+    """`BaseException` no se captura: parar tiene que parar de verdad."""
+    with pytest.raises(KeyboardInterrupt):
+        filtrar("lo que sea", CANDIDATOS, _ProveedorAjeno(KeyboardInterrupt()))

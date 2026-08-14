@@ -55,9 +55,7 @@ from typing import Any, Final
 
 from experiments.adr002.modelo_local.puerto import (
     ESPERA_FILTRO,
-    ModeloNoDisponibleError,
     ProveedorIA,
-    RespuestaInvalidaError,
     enteros_validos,
 )
 
@@ -141,8 +139,20 @@ def filtrar(
     entrada = f"Pregunta: {consulta}\n\nFrases guardadas:\n{_lista(candidatos)}"
     try:
         crudo = proveedor.responder_json(INSTRUCCION, entrada, ESQUEMA, espera=espera)
-    except (ModeloNoDisponibleError, RespuestaInvalidaError) as fallo:
-        return Filtrado(todas, False, f"el modelo no decidio: {fallo}")
+    except Exception as fallo:
+        # Se captura **cualquier** fallo, y es deliberado.
+        #
+        # Con solo los dos errores propios de este paquete, un proveedor que
+        # dejara escapar los suyos —sin conexion, cuota agotada, clave
+        # invalida, demasiadas peticiones— haria **reventar la busqueda
+        # entera**. Y eso es exactamente lo contrario de lo que este modulo
+        # promete: un filtro que solo puede quitar tiene que degradar a «no
+        # quito nada», nunca a «no hay respuesta».
+        #
+        # El tipo del fallo va en la razon para que quien lea las cifras
+        # distinga un servidor caido de un modelo prudente. `BaseException` no
+        # se toca: una interrupcion del usuario debe seguir interrumpiendo.
+        return Filtrado(todas, False, f"el modelo no decidio ({type(fallo).__name__}): {fallo}")
 
     elegidos = enteros_validos(crudo, "responden", tope=len(candidatos))
     if elegidos is None:
