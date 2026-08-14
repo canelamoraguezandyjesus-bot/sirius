@@ -45,12 +45,17 @@ agente y publica el informe como comentario.
   `implement-sirius-work.yml`, pero con **permisos de solo lectura**
   (`contents: read`) y sin token de escritura. El runbook se le pasa como
   prompt; el informe vuelve como comentario.
-- **Lo que aporta y la superficie 1 no:** queda registro de cada ejecución, se
-  puede lanzar desde el móvil, y el propio `claude-code-action` expone coste,
-  turnos y duración — que son justo las métricas que hoy hay que anotar a mano.
-- **Lo que exige:** (a) un ADR, porque el contrato §9 prohíbe «introducir otro
-  nivel de automatización» sin aprobación expresa; (b) trabajo en sesión, porque
-  el PAT no puede escribir en `.github/workflows/` (ADR-002).
+- **Lo que aporta y la superficie 1 no:** queda registro de cada ejecución y se
+  puede lanzar desde el móvil. *(Se afirmó aquí que `claude-code-action` expone
+  coste, turnos y duración. **No está comprobado**: es una acción de terceros y
+  este repositorio no tiene acceso a la red para verificar su salida. Si resulta
+  cierto, ahorra las métricas que hoy se anotan a mano; si no, hay que anotarlas
+  igual y la superficie 2 sigue mereciendo la pena por el registro.)*
+- **Lo que exige:** (a) un ADR, porque toda decisión deja un ADR (ADR-001) y
+  porque el contrato §9 prohíbe «convertir una idea exploratoria en una decisión
+  aprobada», que es exactamente lo que sería construir esto a partir de este
+  documento; (b) trabajo en sesión, porque el PAT no puede escribir en
+  `.github/workflows/` (ADR-002).
 - **Lo que NO exige:** ni Inspect, ni claves de API nuevas, ni gasto nuevo.
 
 ### Superficie 3 — Desde Sirius · **el final del camino, no ahora**
@@ -58,9 +63,9 @@ agente y publica el informe como comentario.
 Un control dentro de Sirius que cree la incidencia y aplique la etiqueta, de
 modo que lanzar una auditoría sea algo que se hace desde la aplicación.
 
-- **Por qué no ahora:** el alcance aprobado de Sirius 0.1 excluye expresamente
-  el multiagente y la automatización externa. Meterlo antes de cerrar 0.1 sería
-  ampliar el producto por la puerta de atrás.
+- **Por qué no ahora:** por lo mismo que el §3 — RECTOR §15 («amplía 0.1 por
+  preparación futura») y EV-007 (multiagente pospuesto). Meterlo antes de cerrar
+  0.1 sería ampliar el producto por la puerta de atrás.
 - **Cuándo:** después de aceptar 0.1. La superficie 2 no se tira: Sirius
   acabaría hablando con el mismo mecanismo de etiquetas, no con uno paralelo.
 
@@ -68,9 +73,11 @@ modo que lanzar una auditoría sea algo que se hace desde la aplicación.
 
 Decidido por eliminación, y conviene dejarlo escrito antes de escribir nada:
 
-**No** en `src/sirius/`. El alcance aprobado de 0.1 excluye multiagente, RAG y
-automatización externa. Cualquier runner o herramienta de agentes que viva ahí
-amplía el producto sin decisión.
+**No** en `src/sirius/`. RECTOR §15 manda detener una propuesta que «amplía 0.1
+por preparación futura» o que «introduce arquitectura multiagente sin
+evidencia», y EV-007 deja el multiagente **pospuesto** hasta que una tarea real
+demuestre que hace falta. Un runner de agentes dentro del producto es las dos
+cosas a la vez.
 
 **Sí** en `scripts/` (o, más adelante, en un repositorio aparte si crece). Es
 utillaje del laboratorio, igual que `scripts/automation/`, que ya es
@@ -158,7 +165,8 @@ clave de respuestas de `AUDITOR_AGENT_V0.md` §6 no es opcional.
 
 ### Bloque A — El Auditor invocable por etiqueta
 
-Requiere ADR previo (contrato §9). Cuerpo de la incidencia, listo para pegar:
+Requiere ADR previo (ADR-001; y contrato §9, «convertir una idea exploratoria en
+una decisión aprobada»). Cuerpo de la incidencia, listo para pegar:
 
 ```markdown
 ## Work ID
@@ -210,3 +218,65 @@ listo:
 > clave de API, y el coste estimado de una ejecución. No construyas el adaptador
 > ni conviertas el runbook. Solo responde la pregunta, con la comprobación
 > delante.
+
+## 8. Nota de arranque (tardía) y comprobación de las citas
+
+ADR-001 pide la nota de arranque **antes** del primer commit. Aquí no se cumplió:
+se escribe después, con la PR ya abierta. Vive en este documento porque
+`.claude/evidencia/` no es escribible en el entorno donde se trabajó y
+`docs/decisions/` está reservado a `ADR-NNN` por su propio README.
+
+No se disfraza de nota previa. Fingir que se decidió antes sería la alternativa
+que ADR-001 descarta por nombre: «publicaría como del agente una evidencia que
+nunca emitió».
+
+### Criterio de parada
+
+Escrito para lo que quedaba —la revisión de esta PR—, antes de comprobar nada:
+
+> Si al comprobar las citas aparece **más de una** afirmación que el árbol no
+> sostiene, no se parchea cita a cita: se retira el documento y se reescribe
+> verificando cada referencia contra el fichero antes de escribirla.
+
+**Se disparó: aparecieron dos.** Se corrigieron en el mismo commit en vez de
+reescribir, porque las dos fallaban por la misma causa —citar de memoria— y la
+corrección es la misma operación (abrir el fichero citado) aplicada a **todas**
+las citas del documento, que ya están comprobadas una por una abajo. Si la
+revisión encuentra una tercera, se reescribe.
+
+### Afirmación → comprobación
+
+| Afirmación | Comprobación | Resultado |
+|---|---|---|
+| `implement-sirius-work.yml` usa `anthropics/claude-code-action` | `.github/workflows/implement-sirius-work.yml:121` | **Cierta** |
+| El PAT no puede escribir en `.github/workflows/` | ADR-002, con el error literal de GitHub | **Cierta** |
+| El contrato §9 prohíbe «introducir otro nivel de automatización» | `AUTOMATION_OPERATING_CONTRACT.md:376-391` | **FALSA.** Esa frase no existe en §9: era una cita entrecomillada inventada. Corregido: el ADR lo exige ADR-001, y la prohibición de §9 que sí aplica es «convertir una idea exploratoria en una decisión aprobada» |
+| «El alcance aprobado de 0.1 excluye multiagente, RAG y automatización externa» | `docs/canonical/STATUS.md:29`, `docs/evolution/RECTOR.md:136,260`, `DECISIONS.md` EV-007 | **FALSA en su forma fuerte.** Los canónicos dicen que el multiagente está *pospuesto* y *no es requisito* de 1.0, no que 0.1 lo «excluya». Corregido citando RECTOR §15 —«amplía 0.1 por preparación futura», «introduce arquitectura multiagente sin evidencia»—, que sostiene mejor la misma conclusión |
+| `claude-code-action` expone coste, turnos y duración | Ninguna: acción de terceros, sin red en esta sesión | **No comprobada**, y marcada como tal en §2 |
+| El resumen de la investigación externa (§5) | Ninguna | **Material de terceros**, declarado no verificado en el propio §5 |
+
+La conclusión del §3 —el código de los agentes va en `scripts/`, nunca en
+`src/sirius/`— **no cambia** con las correcciones: queda mejor sostenida, porque
+RECTOR §15 es una regla de parada explícita y lo anterior era una paráfrasis.
+
+### Por qué no lleva ADR propio
+
+El documento no decide: prepara. La única elección con aire de decisión es el §3,
+y su ADR corresponde al **Bloque A**, cuando exista código que ponga a prueba la
+consecuencia. Un ADR cuya consecuencia no puede comprobarse todavía es la
+ceremonia que ADR-001 descarta.
+
+**Obligación pendiente:** el Bloque A no puede abrirse sin ADR, y ese ADR debe
+recoger el §3 — no darlo por decidido aquí.
+
+### Patrón reincidente
+
+`patrones.md`, familia «afirmar más de lo que el dato sostiene», en su variante
+más cara: **citar de memoria una fuente que está en el mismo árbol**. Es el mismo
+error que produjo dos ficheros `ADR-008` en la PR #153 —no comprobar la
+numeración antes de escribirla—. Van dos veces, misma familia.
+
+Por la regla de las dos rondas no toca seguir parcheando, así que la regla
+operativa que sale de aquí es: **ninguna referencia a otro documento del
+repositorio se escribe sin abrir el fichero citado en la misma acción.** Barato,
+mecánico, y habría evitado los dos casos.
