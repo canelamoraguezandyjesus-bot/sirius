@@ -49,11 +49,10 @@ agente y publica el informe como comentario.
   lectura** (`contents: read`). El runbook se le pasa como prompt leyéndolo del
   árbol, no copiado.
 - **Lo que aporta y la superficie 1 no:** queda registro de cada ejecución y se
-  puede lanzar desde el móvil. *(Se afirmó aquí que `claude-code-action` expone
-  coste, turnos y duración. **No está comprobado**: es una acción de terceros y
-  este repositorio no tiene acceso a la red para verificar su salida. Si resulta
-  cierto, ahorra las métricas que hoy se anotan a mano; si no, hay que anotarlas
-  igual y la superficie 2 sigue mereciendo la pena por el registro.)*
+  puede lanzar desde el móvil. *(Comprobado en el estreno del 14-08, run
+  31834172352: la acción vuelca en el log un JSON con `duration_ms` y la lista
+  de llamadas a herramientas. Coste en dinero no aparece — con suscripción no
+  hay tarifa por llamada que declarar.)*
 - **Estado:** implementada en `.github/workflows/audit-sirius-repository.yml`,
   autorizada por **ADR-016**. Se pone `auditoria:solicitada` a una incidencia y
   el informe vuelve como comentario de esa incidencia — **saneado**, porque lo
@@ -66,8 +65,10 @@ agente y publica el informe como comentario.
   declara `contents: read` y ejecuta el modelo; `publicar` puede comentar y **no
   ejecuta ningún modelo**. Detalle en ADR-016.
 - **Lo que NO exigió:** ni Inspect, ni claves de API nuevas, ni gasto nuevo.
-- **Lo que falta:** ejecutarla una vez de verdad. Hasta entonces, que
-  `claude-code-action` exponga coste y turnos sigue sin verificar.
+- **Estrenada el 14-08-2026** (incidencia #167): el primer intento terminó en
+  rojo honesto — el agente no entregó informe — y sirvió para calibrar el
+  encargo (#168); el segundo produjo el informe completo, saneado y con huella
+  intacta, y encontró un defecto real del propio arnés (corregido en #169).
 
 ### Superficie 3 — Desde Sirius · **el final del camino, no ahora**
 
@@ -121,6 +122,13 @@ choca con la restricción de no introducir gastos nuevos y hay que decidirlo
 antes de construir nada, no después.
 
 Se responde con una prueba de una tarde, no con más lectura.
+
+> **RESPONDIDA (15-08-2026), en lo que el laboratorio puede medir** — ver
+> [`BLOQUE_B_SUSCRIPCIONES_O_CLAVES.md`](BLOQUE_B_SUSCRIPCIONES_O_CLAVES.md):
+> la suscripción de Claude ya ejecuta agentes hoy (el Auditor por etiqueta) y
+> tiene camino OAuth verificado en Inspect, a falta de una prueba de 5 min en
+> Windows; la de ChatGPT Business **no** sirve para ningún runner — ese lado
+> exige clave de API de pago por uso, y esa es la decisión de gasto que queda.
 
 ## 5. Qué concluyó la investigación externa (14-08-2026)
 
