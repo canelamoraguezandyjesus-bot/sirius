@@ -883,7 +883,8 @@ def _consumo_de_los_workflows() -> dict[str, tuple[str, list[str]]]:
         # el nombre hizo que esta prueba se rompiera al introducir la envoltura,
         # sin que hubiera cambiado nada de lo que aquí se comprueba.
         m = re.search(
-            r'\w*set_(?:issue_)?labels "\$GH_REPO" "\$ISSUE_NUMBER" *\\\n\s*((?:"sirius:[^"]+" *)+)',
+            r'\w*set_(?:issue_)?labels "\$GH_REPO" "\$ISSUE_NUMBER" *\\\n'
+            r'\s*((?:"sirius:[^"]+" *)+)',
             texto,
         )
         assert m, f"no encuentro el paso de consumo en {nombre}"
