@@ -100,6 +100,7 @@ jobs:
         shell: bash --noprofile --norc {0}
         env:
           GH_TOKEN: ${{ github.token }}
+          SIRIUS_TRIGGER_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
@@ -155,12 +156,24 @@ jobs:
           # publicacion falla RAPIDO —`_sirius_gh` devuelve 124 sin llegar a
           # lanzar la llamada—: muda, pero viva para escribir `valid=false`.
           PLAZO_PUBLICACION=120
+          # Las etiquetas de parada (`failed-safely`, `blocked-decision`) son
+          # NOTIFICABLES, y un `issues: labeled` emitido con el GITHUB_TOKEN no
+          # dispara otros workflows por la regla anti-recursion de GitHub: sin
+          # el PAT, `notify-sirius-state.yml` no se entera y la parada no avisa.
+          # Mismo patron ya aprobado en `advance-sirius-after-quality.yml`; las
+          # lecturas de este paso siguen con el GITHUB_TOKEN.
+          #
+          # Con respaldo (`:-`) y no a secas: bajo `set -u`, una variable sin
+          # definir aborta. Una parada segura que revienta porque falta un
+          # secreto es el peor desenlace posible —deja la incidencia muda, que
+          # es justo lo que la PR #136 tardó ocho rondas en cerrar—, así que sin
+          # PAT se degrada a notificar peor, nunca a no parar.
           parada() {
             local plazo
             plazo=$(( $(_sirius_now) + PLAZO_PUBLICACION ))
             [ "$plazo" -le "$tope_paso" ] || plazo="$tope_paso"
             export SIRIUS_GH_DEADLINE="$plazo"
-            sirius_transition "$@"
+            ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-$GH_TOKEN}"; sirius_transition "$@" )
           }
 
           # Sin tiempo, una lectura vacia NO significa "no hay nada": significa
@@ -316,7 +329,15 @@ jobs:
         if: steps.gate.outputs.valid == 'true'
         shell: bash --noprofile --norc {0}
         env:
-          GH_TOKEN: ${{ github.token }}
+          # Este paso solo AÑADE `sirius:repairing`, que no es notificable, y
+          # retira `sirius:repair-requested`. Aun así usa el PAT: la regla es
+          # «quien escribe etiquetas usa la identidad real», y se comprueba sin
+          # interpretar qué argumento del script añade y cuál quita. Deducir eso
+          # del texto del comando sería reconstruir desde fuera la semántica de
+          # otro sistema, que en este repositorio ya costó quince defectos
+          # (ADR-001). El coste de la regla ancha es un evento que nadie
+          # consume; el de la estrecha, una notificación perdida en silencio.
+          GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
@@ -377,7 +398,9 @@ jobs:
         timeout-minutes: 5
         shell: bash --noprofile --norc {0}
         env:
-          GH_TOKEN: ${{ github.token }}
+          # El veredicto escribe la etiqueta del estado resultante, que puede ser
+          # notificable (`repair-requested`, `failed-safely`, `ready-for-merge`).
+          GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           CYCLE: ${{ steps.gate.outputs.cycle }}
