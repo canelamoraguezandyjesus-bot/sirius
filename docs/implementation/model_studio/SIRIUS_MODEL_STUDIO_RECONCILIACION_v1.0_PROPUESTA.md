@@ -27,8 +27,8 @@
 | R-06 | QtMultimedia se importa de forma perezosa; `libpulse0` se añade a Quality | APROBADO · **implementado y vigilado por prueba** | MS-A02 |
 | R-07 | `BudgetTracker` se amplía para registrar coste de audio, sin migración | APROBADO · **implementado** | MS-A04 |
 | R-08 | La voz de síntesis se verifica antes de fijarse en documento | APROBADO · **verificado: `cedar` NO existe en el endpoint autorizado** | MS-A09 |
-| R-09 | Ejecución en tres etapas: E1 concha grabable, E2 voz, E3 captura | APROBADO · E1 y E2 entregadas, E3 sin empezar | MS-A01 |
-| R-10 | Fusionar #128 antes de abrir cualquier implementación | APROBADO · **pendiente de que el usuario lo fusione** | MS-A07 |
+| R-09 | Ejecución en tres etapas: E1 concha grabable, E2 voz, E3 captura | APROBADO · E1, E2 y E3 entregadas en la PR #151 (`6216073`, 12-08-2026) | MS-A01 |
+| R-10 | Fusionar #128 antes de abrir cualquier implementación | APROBADO · #128 fusionada en `981c64d` el 10-08-2026 | MS-A07 |
 | R-11 | Envolvente de gasto de Model Studio | APROBADO · **opción 1, sin cambiar DR-018** | MS-A10 |
 
 > **Decisiones visuales tomadas por el usuario el 7 de agosto de 2026, sobre prototipo renderizado**
@@ -256,6 +256,10 @@ Dos observaciones que la decisión deja registradas:
 
 ## 14. Estado de ejecución al 7 de agosto de 2026
 
+> **Instantánea congelada** al 7 de agosto de 2026 sobre la rama
+> `claude/model-estudio-review-qpbknq`. NO describe el árbol actual. Para el
+> estado vigente, ver §16.
+
 Lo que existe de verdad en la rama `claude/model-estudio-review-qpbknq`, verificado con la suite completa (1605 pruebas en verde), Ruff y mypy.
 
 ### E1 · Concha grabable — ENTREGADA
@@ -285,3 +289,22 @@ Ni una línea de código. La investigación técnica previa que el propio #127 e
 2. **Fusionar #128**, para que la especificación de interfaz exista en `main`.
 3. **Prueba manual de la voz en Windows 11** con clave real: elegir voz entre las que sí existen, comprobar latencia y confirmar que no queda audio en disco ni en registros.
 4. **Decidir el backend de captura** a partir de la investigación, y verificarlo antes de escribir código.
+
+
+## 16. Estado a 14 de agosto de 2026
+
+Esta sección existe porque las §14 y §15 son instantáneas y envejecen; lo de
+abajo se escribe contra el árbol vigente y se comprueba por máquina
+(`tests/unit/test_model_studio_docs_coherence.py`).
+
+- **E3 entregada**: la PR #151 (`6216073`) implementa el Módulo Captura entero
+  —adaptadores de audio y captura, casos de uso de estudio, diario de tomas y su
+  panel— con sus pruebas. La afirmación «ni una línea de código» de §14 dejó de
+  ser cierta ese mismo día.
+- **R-11 decidida** el 9 de agosto (opción 1, §12) y **#128 fusionada** el 10.
+- **Backend de captura decidido**: OBS Studio por su servidor WebSocket local
+  (`src/sirius/adapters/capture/obs_websocket.py`).
+- **Lo que sigue sin demostrarse**: el comportamiento contra OBS real y en
+  Windows real. Las pruebas usan un servidor de mentira que habla el protocolo;
+  la advertencia del propio adaptador sobre lo que la verificación real no cubrió
+  sigue vigente.

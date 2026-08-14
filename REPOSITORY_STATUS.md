@@ -52,15 +52,19 @@ En particular:
   formal;
 - ninguna PA que exija proveedor real, Windows real o evaluación humana está
   declarada superada, y ninguna lo estará antes de V8.3 y V8.4;
-- el trazado formal requisito–prueba está incompleto: solo 15 de los 127
-  archivos de prueba mencionan un identificador PA o SP. Completarlo es el
-  contenido de B12, que es el único bloque de V8.1 que sigue pendiente.
+- el trazado formal requisito–prueba está declarado en
+  [`docs/implementation/TRAZABILIDAD_PA_SP.md`](docs/implementation/TRAZABILIDAD_PA_SP.md)
+  y comprobado por máquina (`tests/unit/test_pa_sp_traceability.py`, ADR-006).
+  El estado de cada bloque se lee en la tabla de bloques operativos de
+  [`docs/implementation/V8_EXECUTION.md`](docs/implementation/V8_EXECUTION.md#bloques-operativos),
+  que por ADR-005 es el único sitio que lo declara.
 
 ## Estado de verificación
 
 ### Confirmado automáticamente
 
-- GitHub Actions funciona en Windows.
+- GitHub Actions ejecuta las comprobaciones en Linux en cada pull request y merge;
+  la validación en Windows es puntual y bajo demanda.
 - Ruff format, Ruff lint, mypy estricto y pytest han pasado en las pull requests integradas examinadas.
 - Las pruebas normales usan proveedores y streams simulados y no realizan llamadas de red reales.
 - Las pruebas de `keyring` no leen ni escriben en el Credential Manager real.
