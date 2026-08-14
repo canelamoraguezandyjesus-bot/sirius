@@ -1458,8 +1458,7 @@ def test_un_comentario_del_conector_sobre_otro_sha_sigue_sin_resolver_la_ronda(
             {
                 "id": 900,
                 "body": (
-                    "Codex Review: nada que objetar.\n\n"
-                    f"**Reviewed commit:** `{OTHER_HEAD[:10]}`"
+                    f"Codex Review: nada que objetar.\n\n**Reviewed commit:** `{OTHER_HEAD[:10]}`"
                 ),
                 "created_at": _stamp(1),
                 "user": {"login": CONNECTOR},

@@ -77,10 +77,9 @@ def test_quien_escribe_una_etiqueta_notificable_usa_la_identidad_real() -> None:
             entorno = paso.get("env") or {}
             guion = str(paso.get("run") or "")
             por_entorno = "SIRIUS_BOT_TOKEN" in str(entorno.get("GH_TOKEN", ""))
-            por_subshell = (
-                re.search(r'export GH_TOKEN="\$\{?SIRIUS_TRIGGER_TOKEN', guion) is not None
-                and "SIRIUS_BOT_TOKEN" in str(entorno.get("SIRIUS_TRIGGER_TOKEN", ""))
-            )
+            por_subshell = re.search(
+                r'export GH_TOKEN="\$\{?SIRIUS_TRIGGER_TOKEN', guion
+            ) is not None and "SIRIUS_BOT_TOKEN" in str(entorno.get("SIRIUS_TRIGGER_TOKEN", ""))
             assert por_entorno or por_subshell, (
                 f"{nombre}, paso «{paso.get('name', 'sin nombre')}»: escribe una etiqueta "
                 "notificable con el GITHUB_TOKEN. GitHub suprime ese `issues: labeled` "
