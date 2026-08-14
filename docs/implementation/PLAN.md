@@ -420,10 +420,7 @@ mismo archivo.
 Incluye:
 
 - Credential Manager con valor señuelo;
-- ejecutable Nuitka — **construido y verificado en B13** (distribución portátil
-  STANDALONE para Windows 11 x64; ver `docs/implementation/B13_PACKAGING.md`).
-  B13 entrega el empaquetado y su verificación automática; el resto de esta
-  subetapa (B14) sigue pendiente;
+- ejecutable Nuitka;
 - rutas y funcionamiento sin administrador;
 - escalado, teclado y foco;
 - cierre forzado;
