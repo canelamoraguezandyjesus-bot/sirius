@@ -875,8 +875,16 @@ def _consumo_de_los_workflows() -> dict[str, tuple[str, list[str]]]:
     consumo: dict[str, tuple[str, list[str]]] = {}
     for nombre in _WORKFLOWS_DE_TRABAJO:
         texto = (REPO_ROOT / ".github" / "workflows" / nombre).read_text(encoding="utf-8")
+        # El nombre de la función no se fija: la escritura puede ir por la cruda
+        # (`sirius_set_issue_labels`) o por su envoltura con el PAT
+        # (`trigger_set_labels`), según el paso corra o no con la identidad real
+        # —ver tests/automation/test_sirius_notifications.py—. Lo que ancla la
+        # búsqueda es la FIRMA de la llamada, no cómo se llame la función: fijar
+        # el nombre hizo que esta prueba se rompiera al introducir la envoltura,
+        # sin que hubiera cambiado nada de lo que aquí se comprueba.
         m = re.search(
-            r'sirius_set_issue_labels "\$GH_REPO" "\$ISSUE_NUMBER" *\\\n\s*((?:"sirius:[^"]+" *)+)',
+            r'\w*set_(?:issue_)?labels "\$GH_REPO" "\$ISSUE_NUMBER" *\\\n'
+            r'\s*((?:"sirius:[^"]+" *)+)',
             texto,
         )
         assert m, f"no encuentro el paso de consumo en {nombre}"
