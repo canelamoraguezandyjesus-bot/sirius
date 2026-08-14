@@ -1,8 +1,14 @@
-# ADR-008 — Adoptar Auditor Agent v0 (solo lectura) como primer piloto de agentes
+# ADR-010 — Adoptar Auditor Agent v0 (solo lectura) como primer piloto de agentes
 
 - Estado: PROPUESTO
 - Fecha: 2026-08-12
-- Aprobación: la fusión de la PR que introduce este ADR, por el propietario
+- Aprobación: la fusión de la PR #153 por el propietario (2026-08-12)
+- Renumerado: nació como `ADR-008` en la PR #153 y colisionaba con
+  `ADR-008-cargar-en-lote-las-revisiones-vigentes-al-listar.md`, que había
+  entrado en `main` con la PR #149 mientras esta se redactaba. Nadie comprobó
+  la numeración antes de escribirlo. Se renumera a 010 (el 009 lo ocupa la voz
+  de Model Studio) para que el registro de decisiones no tenga dos entradas con
+  el mismo identificador. El contenido de la decisión no cambia.
 
 ## Contexto y problema
 
