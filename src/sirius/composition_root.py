@@ -88,6 +88,7 @@ from sirius.application.studio_voice import StudioVoiceUseCase, VoiceSettings
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
+from sirius.capture_setup import leer_contrasena_guardada
 from sirius.config.llm_provider_settings import (
     LLMProviderConfigurationError,
     LLMProviderKind,
@@ -322,7 +323,9 @@ def _build_studio_voice_use_case(
     )
 
 
-def _build_studio_capture_use_case(working_directory: Path) -> StudioCaptureUseCase:
+def _build_studio_capture_use_case(
+    working_directory: Path, secret_store: SecretStore
+) -> StudioCaptureUseCase:
     """Construye el Módulo Captura, siempre desactivado al arrancar.
 
     #127 exige que abrir Sirius no conecte con nada ni grabe nada: hay que
@@ -340,7 +343,9 @@ def _build_studio_capture_use_case(working_directory: Path) -> StudioCaptureUseC
 
     scenes = build_scene_registry(capture_settings.get("scenes"))
     backend = ObsWebSocketBackend(
-        password=str(capture_settings.get("password", "")),
+        # Del almacén del sistema, no del fichero: `settings.json` es
+        # configuración no confidencial y la contraseña es una credencial.
+        password=leer_contrasena_guardada(secret_store),
         host=str(capture_settings.get("host", "127.0.0.1")),
         port=int(capture_settings.get("port", 4455)),
     )
@@ -423,7 +428,7 @@ def build_conversation_dependencies(
         database_path, secret_store, llm_usage_repository=llm_usage_repository
     )
 
-    studio_capture_use_case = _build_studio_capture_use_case(database_path.parent)
+    studio_capture_use_case = _build_studio_capture_use_case(database_path.parent, secret_store)
 
     backup_service = build_sqlite_backup_service(database_path, backups_dir)
     export_service = build_filesystem_export_service(build_system_clock())
