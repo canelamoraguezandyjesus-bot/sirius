@@ -45,6 +45,7 @@ class _FakeObsServer:
         reject_requests: bool = False,
         never_identify: bool = False,
         consultas_hasta_confirmar: int = 0,
+        eventos_antes_de_responder: int = 0,
     ) -> None:
         self._password = password
         self.recording = recording
@@ -55,7 +56,12 @@ class _FakeObsServer:
         # OBS acepta la orden y tarda en ejecutarla: durante unas cuantas
         # consultas sigue informando del estado anterior.
         self._consultas_hasta_confirmar = consultas_hasta_confirmar
+        # Eventos que se emiten ANTES de contestar a la primera petición. Con
+        # más de `_MAXIMUM_HANDSHAKE_MESSAGES` el cliente se rinde y la
+        # respuesta queda encolada, que es el desfase de FINDING-001 (#154).
+        self._eventos_antes_de_responder = eventos_antes_de_responder
         self._pendientes = 0
+        self._request_id = ""
         self.received: list[str] = []
 
         self._listener = socket.socket()
@@ -139,7 +145,15 @@ class _FakeObsServer:
     def _handle(self, connection: socket.socket, message: dict[str, Any]) -> None:
         data = message.get("d", {})
         request_type = data.get("requestType", "")
+        # OBS devuelve el identificador que recibió; el servidor de mentira
+        # también, o no podría exhibir un desfase entre petición y respuesta.
+        self._request_id = str(data.get("requestId", ""))
         self.received.append(request_type)
+
+        if self._eventos_antes_de_responder > 0:
+            eventos, self._eventos_antes_de_responder = self._eventos_antes_de_responder, 0
+            for _ in range(eventos):
+                self._send(connection, {"op": 5, "d": {"eventType": "Ruido"}})
 
         if self._reject:
             self._respond(connection, request_type, result=False)
@@ -206,7 +220,7 @@ class _FakeObsServer:
                 "op": 7,
                 "d": {
                     "requestType": request_type,
-                    "requestId": "sirius",
+                    "requestId": self._request_id,
                     "requestStatus": {"result": result, "code": 100 if result else 204},
                     "responseData": response or {},
                 },
@@ -580,5 +594,40 @@ def test_when_obs_never_confirms_nothing_is_invented() -> None:
 
     assert isinstance(resultado, CaptureStatus)
     assert resultado.state is StudioCaptureState.PREPARADO
+    backend.disconnect()
+    server.close()
+
+
+def test_una_peticion_que_se_rinde_no_desplaza_las_siguientes() -> None:
+    """Una respuesta atrasada no puede pasar por la respuesta de otra petición.
+
+    Es FINDING-001 de la auditoría #154. El adaptador pedía todo con el mismo
+    identificador y aceptaba la primera respuesta que llegara, así que en cuanto
+    una petición se rendía —por plazo agotado o, como aquí, porque OBS emite más
+    eventos de los que se leen— su respuesta quedaba en el socket y la siguiente
+    petición la tomaba por suya. Las respuestas iban desplazadas desde entonces,
+    y como la de `StartRecord` no lleva `outputActive`, el estado se reconstruía
+    como PREPARADO con OBS grabando: exactamente lo que ADR-009 declara
+    imposible y lo que dejaba el botón de parar inerte.
+
+    Sin reloj de por medio: el desfase se provoca con eventos, no con esperas.
+    """
+    server = _FakeObsServer(eventos_antes_de_responder=9)
+    backend = ObsWebSocketBackend(port=server.port, settle_timeout_seconds=0.3)
+    backend.connect()
+
+    # Se rinde: nueve eventos agotan el presupuesto de mensajes de la petición.
+    rendida = backend.start_recording()
+    assert isinstance(rendida, CaptureError)
+    assert rendida.kind is CaptureErrorKind.TIMEOUT
+
+    # El servidor sí ejecutó la orden: está grabando de verdad.
+    assert server.recording is True
+
+    # La consulta siguiente debe decir la verdad, no heredar la respuesta vieja.
+    resultado = backend.get_status()
+
+    assert isinstance(resultado, CaptureStatus)
+    assert resultado.state is StudioCaptureState.GRABANDO
     backend.disconnect()
     server.close()

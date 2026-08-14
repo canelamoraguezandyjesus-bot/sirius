@@ -61,7 +61,10 @@ _OP_REQUEST = 6
 _OP_REQUEST_RESPONSE = 7
 
 _RPC_VERSION = 1
-_REQUEST_ID = "sirius"
+_REQUEST_ID_PREFIX = "sirius"
+"""Prefijo del identificador de petición. El número lo pone un contador por
+instancia: cada petición pide con un identificador distinto y solo acepta la
+respuesta que lo lleva (ADR-011)."""
 
 SETTLE_TIMEOUT_SECONDS = 5.0
 """Cuánto se espera a que OBS confirme un cambio que ya ha aceptado.
@@ -123,6 +126,7 @@ class ObsWebSocketBackend:
         self._client = WebSocketClient(host, port, timeout_seconds)
         self._identified = False
         self._settle_timeout = settle_timeout_seconds
+        self._request_count = 0
 
     # --- Conexión --------------------------------------------------------
 
@@ -189,12 +193,14 @@ class ObsWebSocketBackend:
     def _request(self, request_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
         if not self.is_connected():
             raise _NotConnected
+        self._request_count += 1
+        request_id = f"{_REQUEST_ID_PREFIX}-{self._request_count}"
         self._client.send_json(
             {
                 "op": _OP_REQUEST,
                 "d": {
                     "requestType": request_type,
-                    "requestId": _REQUEST_ID,
+                    "requestId": request_id,
                     "requestData": data or {},
                 },
             }
@@ -207,6 +213,16 @@ class ObsWebSocketBackend:
             payload = message.get("d", {})
             if not isinstance(payload, dict):
                 raise WebSocketError("respuesta ilegible")
+            if payload.get("requestId") != request_id:
+                # Respuesta de una petición anterior que se rindió antes de que
+                # llegara —por plazo agotado o por exceso de eventos— y quedó en
+                # el socket. Tomarla por propia desplaza todas las respuestas
+                # siguientes y acaba afirmando «no estoy grabando» con OBS
+                # grabando: es el FINDING-001 de #154 (ADR-011).
+                _logger.debug(
+                    "se descarta una respuesta atrasada mientras se espera %s", request_id
+                )
+                continue
             status = payload.get("requestStatus", {})
             if not (isinstance(status, dict) and status.get("result", False)):
                 raise _Rejected
