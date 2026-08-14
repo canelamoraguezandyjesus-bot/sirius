@@ -36,9 +36,26 @@ DOCUMENTOS_SIN_ESTADO = (
 FILA_DE_BLOQUE = re.compile(r"^\|\s*B\d{1,2}[a-f]?\s*\|", re.MULTILINE)
 
 # Afirmación de estado en prosa: «B5 está completado», «B12 queda pendiente».
+# La ventana intermedia existe porque la frase que se coló decía «Completarlo
+# es el contenido de B12, que es el único bloque de V8.1 que sigue pendiente»:
+# el verbo no va pegado al identificador. Se acota a 80 caracteres y no puede
+# cruzar el final de una frase, para no morder prosa legítima de la siguiente.
+#
+# El punto se admite SOLO cuando le sigue un dígito. Sin esa excepción el
+# patrón no caza nada: «V8.1» está justo en medio de la frase que se coló, y su
+# punto cortaba la ventana. Se comprobó midiendo, no razonando.
 ESTADO_EN_PROSA = re.compile(
-    r"\bB\d{1,2}[a-f]?\s+(?:est[áa]|queda|permanece|sigue)\s+"
+    r"\bB\d{1,2}[a-f]?\b(?:[^.\n]|\.(?=\d)){0,80}?"
+    r"\b(?:est[áa]|queda|permanece|sigue)\s+"
     r"(?:completad|pendiente|bloquead|en curso|iniciad|terminad)",
+    re.IGNORECASE,
+)
+
+# Una cuenta de ficheros escrita a mano caduca en el siguiente merge y vuelve a
+# afirmar lo que ya no es cierto. La trazabilidad se lee en
+# `TRAZABILIDAD_PA_SP.md`, que sí se comprueba por máquina (ADR-006).
+CUENTA_DE_FICHEROS_A_MANO = re.compile(
+    r"\b\d{1,3}\s+de\s+los\s+\d{1,3}\s+archivos de prueba",
     re.IGNORECASE,
 )
 
@@ -99,3 +116,21 @@ def test_el_catalogo_de_defectos_no_declara_estado_propio() -> None:
         "el del bloque que lo cierra; dos tablas del mismo hecho fue lo que "
         "las dejó contradiciéndose."
     )
+
+
+def test_ningun_documento_vigente_cuenta_ficheros_de_prueba_a_mano() -> None:
+    """Una cuenta escrita a mano caduca en el siguiente merge.
+
+    «Solo 15 de los 127 archivos de prueba mencionan un identificador PA o SP»
+    era cierto cuando se escribió y falso poco después, y estaba duplicada en
+    dos documentos vigentes. La trazabilidad se declara en
+    `TRAZABILIDAD_PA_SP.md` y se comprueba por máquina (ADR-006); ahí no
+    caduca porque la comprobación falla cuando deja de ser cierta.
+    """
+    for documento in (REPO_ROOT / "REPOSITORY_STATUS.md", REGISTRO_AUTORITATIVO):
+        encontrado = CUENTA_DE_FICHEROS_A_MANO.findall(_texto(documento))
+        assert not encontrado, (
+            f"{documento.relative_to(REPO_ROOT)} cuenta ficheros de prueba a mano "
+            f"({encontrado}). Esa cifra caduca sola; la trazabilidad se lee en "
+            "docs/implementation/TRAZABILIDAD_PA_SP.md (ADR-006)."
+        )
