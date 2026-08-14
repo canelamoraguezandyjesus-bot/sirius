@@ -354,7 +354,7 @@ def test_el_arnes_comprueba_la_huella_y_no_se_fia_del_agente() -> None:
         "daría «intacto» en falso."
     )
     guion_huella = str(pasos[i_huella].get("run") or "")
-    assert 'arbol=$(git status --porcelain --ignored=matching' in guion_huella, (
+    assert "arbol=$(git status --porcelain --ignored=matching" in guion_huella, (
         "La CAPTURA de la huella inicial no mira las rutas ignoradas: las dos "
         "mitades deben medir lo mismo o la comparación no compara nada."
     )
