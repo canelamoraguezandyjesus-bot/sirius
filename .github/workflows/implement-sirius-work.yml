@@ -98,7 +98,7 @@ jobs:
           # `advance-sirius-after-quality.yml`. Las LECTURAS siguen con el
           # GITHUB_TOKEN.
           (
-            export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-$GH_TOKEN}"
+            export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"
             sirius_set_issue_labels "$GH_REPO" "$ISSUE_NUMBER" \
               "sirius:implementing" "sirius:implement-requested" "sirius:planned"
           )

@@ -46,7 +46,7 @@ jobs:
           # `advance-sirius-after-quality.yml`; las LECTURAS siguen con el
           # GITHUB_TOKEN.
           trigger_transition() {
-            ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-$GH_TOKEN}"; sirius_transition "$@" )
+            ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"; sirius_transition "$@" )
           }
 
           # Candidatas: incidencias abiertas con cualquier etiqueta sirius:* (REST,

@@ -173,7 +173,7 @@ jobs:
             plazo=$(( $(_sirius_now) + PLAZO_PUBLICACION ))
             [ "$plazo" -le "$tope_paso" ] || plazo="$tope_paso"
             export SIRIUS_GH_DEADLINE="$plazo"
-            ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-$GH_TOKEN}"; sirius_transition "$@" )
+            ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"; sirius_transition "$@" )
           }
 
           # Sin tiempo, una lectura vacia NO significa "no hay nada": significa
