@@ -21,7 +21,7 @@ verificación; B14 es lo que se comprueba **con** ese paquete en las manos.
 | 5 | Escalado, teclado y foco | ✅ **Cerrada por las pruebas de interfaz.** `tests/gui/` cubre el historial, el panel de contexto, el escalado y los diálogos; el defecto real de geometría —cierre por `RecursionError` al acoplar la ventana— se reprodujo, se corrigió y quedó fijado en `tests/gui/test_window_geometry_recursion.py`. Qt no cambia de comportamiento por compilarse. |
 | 6 | Cierre forzado | ✅ **Cerrada por `tests/integration/test_forced_shutdown_recovery.py`.** Contra SQLite real migrado con Alembic: el estado confirmado sobrevive, `PRAGMA integrity_check` es `ok` y un turno interrumpido no corrompe nada. La capa de almacenamiento es idéntica compilada o no —el mismo SQLite, el mismo WAL, el mismo código—, así que repetirlo con el `.exe` no aportaría información. |
 | 7 | Restauración empaquetada | ✅ **Cerrada por las pruebas de copia y restauración más la verificación de B13.** Cubren el flujo: `tests/integration/test_sqlite_backup_service.py`, `test_sqlite_backup_restore.py`, `test_sqlite_backup_validation.py`, `test_backup_restore_project_lifecycle.py`, `tests/unit/test_create_backup.py`, `test_restore_backup.py`, `test_validate_backup.py` y `tests/gui/test_backup_recovery_ui.py`. Lo único que el empaquetado altera es la resolución de recursos, y está demostrado: ver abajo. |
-| 8 | Rendimiento local | ✅ **Cerrada sin umbral nuevo.** El plan no fija ningún límite de rendimiento que medir, y el arranque del paquete se observó dos veces dentro del plazo de 10 s de la verificación de B13. |
+| 8 | Rendimiento local | ❌ **ABIERTA. Corrección del 2026-08-10:** esta fila decía «cerrada sin umbral nuevo, el plan no fija ningún límite de rendimiento que medir». Era falso. **PA-025 fija umbrales explícitos: inicio ≤3 s P95 y operaciones locales ≤300 ms P95**, y nadie los mide. Que el arranque del paquete entre en el plazo de 10 s del smoke test de B13 no demuestra ≤3 s P95: son cosas distintas. Corresponde a **B12**, que incluye rendimiento. |
 | 9 | Inspección de archivos, logs, copias y exportaciones | ✅ **Cerrada por la verificación de B13.** Comprueba que el paquete no contiene bases de datos, `.env`, `settings.json`, `data_location.json`, registros, copias, exportaciones ni credenciales; que no hay `__pycache__` ni `.pyc` en `migrations/`; que tras dos arranques no se escribió ninguna clave en el entorno de prueba; y que el `data_location.json` real del usuario conserva su SHA-256. Las fugas de secretos en registros están cubiertas por `tests/unit/test_secrets.py`. |
 
 ## Por qué no se repite todo con el paquete
@@ -62,9 +62,11 @@ Con letra clara, porque es lo que separa esto de una aceptación:
   arranca y termina el proceso a propósito.
 - **El arranque sin clave y el valor señuelo** (partida 3), aplazados.
 - **Destinos UDP, DNS incluido** (partida 2), por lo explicado más abajo.
+- **Los umbrales de rendimiento de PA-025** (partida 8): inicio ≤3 s P95 y
+  operaciones locales ≤300 ms P95. Nadie los mide todavía.
 
-B14 queda con **8 partidas cerradas y 1 aplazada**. No se declara cumplido
-mientras la 3 siga abierta.
+B14 queda con **7 partidas cerradas, 1 aplazada y 1 abierta**. No se declara
+cumplido mientras queden la 3 y la 8.
 
 ## Partida 2 — El paquete no llama a nadie
 
