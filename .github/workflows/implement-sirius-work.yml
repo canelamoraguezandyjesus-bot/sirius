@@ -97,11 +97,11 @@ jobs:
           # entera y el estado no avisa nunca. Mismo patron ya aprobado en
           # `advance-sirius-after-quality.yml`. Las LECTURAS siguen con el
           # GITHUB_TOKEN.
-          (
-            export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"
-            sirius_set_issue_labels "$GH_REPO" "$ISSUE_NUMBER" \
-              "sirius:implementing" "sirius:implement-requested" "sirius:planned"
-          )
+          trigger_set_labels() {
+            ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"; sirius_set_issue_labels "$@" )
+          }
+          trigger_set_labels "$GH_REPO" "$ISSUE_NUMBER" \
+            "sirius:implementing" "sirius:implement-requested" "sirius:planned"
 
       - name: Preparar instrucciones para Claude Code
         if: steps.gate.outputs.valid == 'true'

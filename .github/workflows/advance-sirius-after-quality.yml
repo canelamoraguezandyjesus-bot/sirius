@@ -35,11 +35,15 @@ jobs:
           # tiene los permisos declarados del workflow (actions: read, etc.). El
           # PAT no tiene alcance de Actions y aquí daría 403.
           GH_TOKEN: ${{ github.token }}
-          # La ESCRITURA de la etiqueta que despierta al rol siguiente
-          # (`sirius:review-requested` / `sirius:repair-requested`) sí usa el PAT
-          # (identidad real): un `issues: labeled` del GITHUB_TOKEN por defecto
-          # queda suprimido (anti-recursión) y cortaría el ciclo. Se aplica solo a
-          # esas dos transiciones mediante `trigger_transition` (ver más abajo).
+          # TODA ESCRITURA de etiqueta va con el PAT (identidad real): un
+          # `issues: labeled` del GITHUB_TOKEN queda suprimido (anti-recursión).
+          # No son solo las que despiertan al rol siguiente
+          # (`sirius:review-requested` / `sirius:repair-requested`): también
+          # `sirius:failed-safely`, que no despierta a ningún workflow pero sí
+          # tiene que AVISAR al propietario, y es justo el estado en que la
+          # automatización se ha parado y necesita a una persona. Se creyó que
+          # bastaba con las dos primeras y `failed-safely` quedó mudo; lo
+          # encontró la refutación de AUDITOR-V0-RUN-001 (#154).
           SIRIUS_TRIGGER_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           RUN_ID: ${{ github.event.workflow_run.id }}
@@ -50,11 +54,12 @@ jobs:
           set -uo pipefail
           source scripts/automation/sirius_issue.sh
 
-          # Aplica una transición cuya etiqueta debe DESPERTAR a otro workflow
-          # (revisión o corrección): la escribe con el PAT en una subshell, para
-          # que el `issues: labeled` provenga de una identidad real y no lo
-          # suprima la regla anti-recursión del GITHUB_TOKEN. El resto del paso
-          # (lecturas y paradas seguras) sigue con el GITHUB_TOKEN.
+          # Aplica una transición escribiendo la etiqueta con el PAT en una
+          # subshell, para que el `issues: labeled` provenga de una identidad real
+          # y no lo suprima la regla anti-recursión del GITHUB_TOKEN. Las LECTURAS
+          # del paso siguen con el GITHUB_TOKEN. Ninguna escritura de etiqueta
+          # llama a `sirius_transition` directamente: esa es la convención que
+          # comprueba tests/automation/test_sirius_notifications.py.
           trigger_transition() {
             ( export GH_TOKEN="$SIRIUS_TRIGGER_TOKEN"; sirius_transition "$@" )
           }
@@ -131,7 +136,7 @@ jobs:
                 "El flujo encontro varias incidencias \`sirius:ci-pending\` que referencian la PR #${pr_number}. Se detiene de forma segura para evitar una transicion ambigua." \
                 "- Head SHA: \`${HEAD_SHA}\`" \
                 "- Quality run: ${RUN_URL}" >"$body_file"
-              sirius_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
+              trigger_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
                 "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
                 "noclose" "sirius:ci-pending" \
                 || echo "::error::No se pudo completar la parada segura en #${issue_number}."
@@ -183,7 +188,7 @@ jobs:
                 "- Quality run: ${RUN_URL}" \
                 "- Resultado: \`${CONCLUSION}\`" \
                 "- No se activa revision ni correccion; la incidencia queda detenida de forma segura para intervencion manual." >"$body_file"
-              sirius_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
+              trigger_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
                 "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
                 "noclose" "sirius:ci-pending" || rc=1
               ;;

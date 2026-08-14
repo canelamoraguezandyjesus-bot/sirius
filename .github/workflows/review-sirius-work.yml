@@ -83,7 +83,13 @@ jobs:
         id: gate
         shell: bash --noprofile --norc {0}
         env:
+          # Las LECTURAS van con el GITHUB_TOKEN. La ESCRITURA de
+          # `sirius:failed-safely` necesita el PAT: es una etiqueta notificable
+          # del contrato §7 y el `issues: labeled` del GITHUB_TOKEN queda
+          # suprimido por la regla anti-recursión, así que la parada segura del
+          # gate no avisaba a nadie. Lo encontró la refutación de #154.
           GH_TOKEN: ${{ github.token }}
+          SIRIUS_TRIGGER_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           SIRIUS_CODEX_REVIEW_ENABLED: ${{ vars.SIRIUS_CODEX_REVIEW_ENABLED }}
@@ -97,6 +103,12 @@ jobs:
           fi
           echo "dual=${dual}" >> "$GITHUB_OUTPUT"
 
+          # Ninguna escritura de etiqueta llama a la función cruda: es la
+          # convención que comprueba tests/automation/test_sirius_notifications.py
+          trigger_transition() {
+            ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"; sirius_transition "$@" )
+          }
+
           stop_gate() {
             # stop_gate <reason-slug> <explicacion> — parada segura del gate.
             local reason="$1" why="$2"
@@ -104,7 +116,7 @@ jobs:
             local body_file
             body_file="$(mktemp)"
             printf '%s\n\n%s\n\n%s\n' "$marker" "🔴 **Me he detenido de forma segura**" "$why" >"$body_file"
-            sirius_transition "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+            trigger_transition "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
               "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
               "noclose" "sirius:review-requested" || echo "::error::No se pudo aplicar la parada segura (${reason})."
             rm -f "$body_file"
@@ -172,12 +184,21 @@ jobs:
         shell: bash --noprofile --norc {0}
         env:
           GH_TOKEN: ${{ github.token }}
+          SIRIUS_TRIGGER_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           set -uo pipefail
           source scripts/automation/sirius_issue.sh
-          sirius_set_issue_labels "$GH_REPO" "$ISSUE_NUMBER" \
+          # `sirius:reviewing` no es notificable hoy, pero la regla es ancha a
+          # propósito: TODA escritura de etiqueta usa la identidad real. La regla
+          # estrecha obliga a decidir, llamada por llamada, si la etiqueta que se
+          # escribe es notificable — y equivocarse ahí cuesta un aviso perdido,
+          # mientras que pasarse solo cuesta un evento que nadie consume.
+          trigger_set_labels() {
+            ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"; sirius_set_issue_labels "$@" )
+          }
+          trigger_set_labels "$GH_REPO" "$ISSUE_NUMBER" \
             "sirius:reviewing" "sirius:review-requested"
 
       - name: Solicitar la revisión de Codex (modo dual)
