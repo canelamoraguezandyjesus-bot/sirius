@@ -337,8 +337,27 @@ def test_el_arnes_comprueba_la_huella_y_no_se_fia_del_agente() -> None:
     assert i_huella < con_modelo[0] < i_intacto, "El orden debe ser huella → modelo → comprobación."
 
     guion_intacto = str(pasos[i_intacto].get("run") or "")
-    for señal in ("git rev-parse HEAD", "git status --porcelain", "git branch"):
+    # `--ignored=matching` obligatorio: sin él, una escritura en una ruta que
+    # coincide con .gitignore no aparece en `git status --porcelain` y la
+    # huella daría «intacto» en falso. Lo encontró el PROPIO Auditor en su
+    # primera ejecución real (FINDING-001 de RUN-002, #167): el mecanismo que
+    # lo vigila tenía un punto ciego del tamaño del .gitignore.
+    for señal in ("git rev-parse HEAD", "git branch"):
         assert señal in guion_intacto, f"La huella final no mira `{señal}`."
+    # Anclado a la línea de CAPTURA (la asignación), no a cualquier aparición:
+    # la primera versión de esta aserción buscaba la orden en todo el paso y la
+    # satisfacía el volcado de diagnóstico del else — presencia de lo bueno en
+    # el sitio equivocado, el vicio exacto que ADR-015 registró.
+    assert 'arbol_despues="$(git status --porcelain --ignored=matching' in guion_intacto, (
+        "La CAPTURA de la huella final no mira las rutas ignoradas "
+        "(FINDING-001 de RUN-002, #167): una escritura en logs/ o .local/ "
+        "daría «intacto» en falso."
+    )
+    guion_huella = str(pasos[i_huella].get("run") or "")
+    assert "arbol=$(git status --porcelain --ignored=matching" in guion_huella, (
+        "La CAPTURA de la huella inicial no mira las rutas ignoradas: las dos "
+        "mitades deben medir lo mismo o la comparación no compara nada."
+    )
 
     guion_recoger = next(str(p.get("run") or "") for p in pasos if p.get("id") == "recoger")
     assert "INTACTO" in guion_recoger, "El resultado de la huella no llega a quien recoge."
