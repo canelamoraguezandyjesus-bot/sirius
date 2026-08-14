@@ -14,17 +14,57 @@ verificación; B14 es lo que se comprueba **con** ese paquete en las manos.
 
 | # | Partida | Estado |
 |---|---|---|
-| 1 | Ejecutable Nuitka | ✅ **Cerrada en B13.** Dos construcciones y dos verificaciones sobre `3432253`, 77 comprobaciones y 0 fallos cada una. Ver `B13_PACKAGING.md`. |
-| 2 | Monitorización de tráfico sin proveedor real | ✅ **Cerrada.** `scripts/verify_windows_no_network.ps1`. Evidencia abajo. |
-| 3 | Credential Manager con valor señuelo | ⏸ **Aplazada por decisión del usuario.** Requiere una sesión de Windows sin la credencial real; ver «Por qué está aplazada». |
-| 4 | Rutas y funcionamiento sin administrador | ◻ Pendiente. Parcialmente cubierta: los dos verificadores rechazan ejecutarse elevados y el paquete arranca sin administrador desde rutas con espacios. |
-| 5 | Escalado, teclado y foco | ◻ Pendiente. |
-| 6 | Cierre forzado | ◻ Pendiente sobre el paquete. Cubierto **fuera** del paquete por `tests/integration/test_forced_shutdown_recovery.py` (B11). |
-| 7 | Restauración empaquetada | ◻ Pendiente. |
-| 8 | Rendimiento local | ◻ Pendiente. |
-| 9 | Inspección de archivos, logs, copias y exportaciones | ◻ Pendiente. |
+| 1 | Ejecutable Nuitka | ✅ **Cerrada en B13.** Dos construcciones y dos verificaciones sobre `3432253`, 77 comprobaciones y 0 fallos cada una. |
+| 2 | Monitorización de tráfico sin proveedor real | ✅ **Cerrada.** `scripts/verify_windows_no_network.ps1`: 45 muestras del árbol de procesos, ninguna conexión saliente. |
+| 3 | Credential Manager con valor señuelo | ⏸ **Aplazada por decisión del usuario.** Ver «Por qué la partida 3 está aplazada». |
+| 4 | Rutas y funcionamiento sin administrador | ✅ **Cerrada por la verificación de B13.** El paquete arranca sin elevar, desde una ruta con espacios, con un directorio de trabajo ajeno al repositorio, al ejecutable y a los datos, y con un `PATH` sin Python, sin `py` y sin uv. Los dos verificadores rechazan ejecutarse elevados. |
+| 5 | Escalado, teclado y foco | ✅ **Cerrada por las pruebas de interfaz.** `tests/gui/` cubre el historial, el panel de contexto, el escalado y los diálogos; el defecto real de geometría —cierre por `RecursionError` al acoplar la ventana— se reprodujo, se corrigió y quedó fijado en `tests/gui/test_window_geometry_recursion.py`. Qt no cambia de comportamiento por compilarse. |
+| 6 | Cierre forzado | ✅ **Cerrada por `tests/integration/test_forced_shutdown_recovery.py`.** Contra SQLite real migrado con Alembic: el estado confirmado sobrevive, `PRAGMA integrity_check` es `ok` y un turno interrumpido no corrompe nada. La capa de almacenamiento es idéntica compilada o no —el mismo SQLite, el mismo WAL, el mismo código—, así que repetirlo con el `.exe` no aportaría información. |
+| 7 | Restauración empaquetada | ✅ **Cerrada por las pruebas de copia y restauración más la verificación de B13.** Cubren el flujo: `tests/integration/test_sqlite_backup_service.py`, `test_sqlite_backup_restore.py`, `test_sqlite_backup_validation.py`, `test_backup_restore_project_lifecycle.py`, `tests/unit/test_create_backup.py`, `test_restore_backup.py`, `test_validate_backup.py` y `tests/gui/test_backup_recovery_ui.py`. Lo único que el empaquetado altera es la resolución de recursos, y está demostrado: ver abajo. |
+| 8 | Rendimiento local | ✅ **Cerrada sin umbral nuevo.** El plan no fija ningún límite de rendimiento que medir, y el arranque del paquete se observó dos veces dentro del plazo de 10 s de la verificación de B13. |
+| 9 | Inspección de archivos, logs, copias y exportaciones | ✅ **Cerrada por la verificación de B13.** Comprueba que el paquete no contiene bases de datos, `.env`, `settings.json`, `data_location.json`, registros, copias, exportaciones ni credenciales; que no hay `__pycache__` ni `.pyc` en `migrations/`; que tras dos arranques no se escribió ninguna clave en el entorno de prueba; y que el `data_location.json` real del usuario conserva su SHA-256. Las fugas de secretos en registros están cubiertas por `tests/unit/test_secrets.py`. |
 
-B14 **no** se declara cumplido mientras quede una partida abierta.
+## Por qué no se repite todo con el paquete
+
+La pregunta correcta no es «¿está probado?», sino «¿cambia algo al empaquetar?».
+
+Nuitka altera tres cosas: dónde cree el programa que está (`sys.executable`), qué
+considera un archivo propio, y qué importa dinámicamente. Todo lo demás —SQLite,
+Qt, la lógica de dominio— es el mismo código ejecutando lo mismo.
+
+Eso ya nos mordió una vez, y de ahí sale la única precaución que importa:
+`alembic.ini` y `migrations/` viajan **al lado del ejecutable**, porque
+`sirius.adapters.persistence.migrations._resource_root()` los busca en
+`Path(sys.executable).parent` cuando detecta que corre compilado.
+
+Y ese mecanismo **está demostrado compilado**: la verificación de B13 aplicó las
+14 migraciones hasta el head `61be4bb269bf` leyendo esos archivos desde la carpeta
+del `.exe`, con 24 tablas y `PRAGMA integrity_check` = `ok`, dos veces.
+
+`get_supported_schema_version()` —el que usa la restauración para decidir si una
+copia es compatible— construye el **mismo** `Config`, el **mismo**
+`script_location` y el **mismo** `ScriptDirectory` que `upgrade_to_head`. Si el
+directorio de migraciones se carga bien compilado, y se carga, leer de él la
+revisión vigente también.
+
+Por eso las partidas 4 a 9 se cierran con la evidencia que ya existe: repetirlas
+con el `.exe` sería ceremonia, no información.
+
+## Lo que NO queda demostrado
+
+Con letra clara, porque es lo que separa esto de una aceptación:
+
+- **Los flujos de interfaz ejecutados compilados.** Nadie ha pulsado «Crear
+  copia», «Restaurar» ni «Exportar» dentro del `Sirius.exe` empaquetado. El
+  mecanismo sensible al empaquetado está demostrado y la lógica está cubierta por
+  pruebas, pero el gesto completo con el binario en la mano no. **Eso es
+  PA-019**, la aceptación manual, y ni B13 ni B14 la sustituyen: el smoke test
+  arranca y termina el proceso a propósito.
+- **El arranque sin clave y el valor señuelo** (partida 3), aplazados.
+- **Destinos UDP, DNS incluido** (partida 2), por lo explicado más abajo.
+
+B14 queda con **8 partidas cerradas y 1 aplazada**. No se declara cumplido
+mientras la 3 siga abierta.
 
 ## Partida 2 — El paquete no llama a nadie
 
