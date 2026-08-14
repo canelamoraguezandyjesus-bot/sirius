@@ -51,3 +51,8 @@ jobs:
           ensure_label "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura"
           ensure_label "sirius:ready-for-merge" "0E8A16" "Estado: revisión aprobada y pendiente de autorización humana de merge"
           ensure_label "sirius:completed" "006B75" "Estado terminal: bloque fusionado y cerrado"
+
+          # FUERA de la maquina de estados, a proposito. No es un estado ni un
+          # evento del ciclo de programacion: ningun workflow del ciclo la mira,
+          # y el reconciliador no la toca. Solo dispara el Auditor (ADR-016).
+          ensure_label "sirius:audit-requested" "5A32A3" "Fuera del ciclo: lanzar una auditoria de solo lectura del repositorio"
