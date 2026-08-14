@@ -107,7 +107,18 @@ if ([string]::IsNullOrWhiteSpace($ArtifactPath)) {
     $PackageRoot = Join-Path $extractRoot $selection.artifact_name
 }
 else {
-    $PackageRoot = [System.IO.Path]::GetFullPath($ArtifactPath)
+    # Una ruta relativa se resuelve contra $PWD, NUNCA con GetFullPath a secas.
+    # .NET la resolveria contra el directorio con el que ARRANCO el proceso, que
+    # en PowerShell no tiene por que ser donde esta el prompt: una sesion abierta
+    # en otra carpeta y luego movida con "cd" conserva el de origen. Paso de
+    # verdad: con el prompt en C:\dev\sirius, "dist\windows\..." se busco en
+    # C:\Users\ASUS\OneDrive\Desktop\laboratorio sirius\sirius\dist\windows\...
+    $PackageRoot = if ([System.IO.Path]::IsPathRooted($ArtifactPath)) {
+        [System.IO.Path]::GetFullPath($ArtifactPath)
+    }
+    else {
+        [System.IO.Path]::GetFullPath((Join-Path $PWD.Path $ArtifactPath))
+    }
 }
 
 $ExePath = Join-Path $PackageRoot "Sirius.exe"
@@ -188,7 +199,9 @@ function Get-ProcessTree {
         $children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $current" -ErrorAction SilentlyContinue)
         foreach ($child in $children) { $pending.Enqueue([int]$child.ProcessId) }
     }
-    return $found
+    # ToArray() y no la lista: PowerShell desenrolla lo que devuelve una
+    # funcion, asi que quien llama tiene que envolver en @() de todas formas.
+    return $found.ToArray()
 }
 
 # 0.0.0.0 y :: son el comodin de una escucha, no un destino; 127.x y ::1 son la
@@ -196,7 +209,7 @@ function Get-ProcessTree {
 $LocalOnly = @("0.0.0.0", "::", "::1")
 
 function Get-OutboundConnections {
-    param([System.Collections.Generic.List[int]]$ProcessIds)
+    param([int[]]$ProcessIds)
     $outbound = New-Object System.Collections.Generic.List[string]
     foreach ($processId in $ProcessIds) {
         $connections = @(Get-NetTCPConnection -OwningProcess $processId -ErrorAction SilentlyContinue)
@@ -208,7 +221,7 @@ function Get-OutboundConnections {
             $outbound.Add("pid $processId -> $remote`:$($connection.RemotePort) [$($connection.State)]")
         }
     }
-    return $outbound
+    return $outbound.ToArray()
 }
 
 $startInfo = New-Object System.Diagnostics.ProcessStartInfo
@@ -234,9 +247,13 @@ try {
     $deadline = (Get-Date).AddSeconds($ObserveSeconds)
     while ((Get-Date) -lt $deadline) {
         if ($process.HasExited) { break }
-        $tree = Get-ProcessTree -RootId $process.Id
+        # @() obligatorio: una funcion que devuelve UN elemento entrega un
+        # valor suelto, no una coleccion, y pedirle .Count a un entero revienta
+        # con Set-StrictMode. Sirius corre en un solo proceso sin hijos, que es
+        # justo el caso de un elemento.
+        $tree = @(Get-ProcessTree -RootId $process.Id)
         if ($tree.Count -gt $treeSize) { $treeSize = $tree.Count }
-        foreach ($entry in (Get-OutboundConnections -ProcessIds $tree)) {
+        foreach ($entry in @(Get-OutboundConnections -ProcessIds $tree)) {
             if (-not $observed.Contains($entry)) { $observed.Add($entry) }
         }
         $samples++

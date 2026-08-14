@@ -129,6 +129,40 @@ def test_the_udp_gap_is_declared_instead_of_hidden() -> None:
     assert "administrador" in script[script.index('Add-Skip "Destinos UDP') :]
 
 
+def test_a_relative_artifact_path_resolves_against_the_prompt() -> None:
+    """``GetFullPath`` a secas no resuelve contra donde esta el prompt.
+
+    .NET resuelve una ruta relativa contra el directorio con el que ARRANCO el
+    proceso, y en PowerShell ese no tiene que ser el del prompt: una sesion
+    abierta en una carpeta y luego movida con ``cd`` conserva el de origen. Paso
+    de verdad: con el prompt en ``C:\\dev\\sirius``, un ``-ArtifactPath`` relativo
+    se busco dentro del checkout viejo de OneDrive y la verificacion no arranco.
+    """
+    script = _script()
+    branch = script.index("$PackageRoot = if (")
+    body = script[branch : script.index('Write-Step "Entorno desechable"', branch)]
+
+    assert "IsPathRooted" in body, "no distingue una ruta absoluta de una relativa"
+    assert "$PWD.Path" in body, "una ruta relativa no se resuelve contra el prompt"
+
+
+def test_collections_returned_by_functions_are_forced_to_arrays() -> None:
+    """PowerShell desenrolla lo que devuelve una funcion.
+
+    Con un solo elemento entrega un valor suelto en vez de una coleccion, y
+    ``.Count`` sobre un entero revienta bajo ``Set-StrictMode``. Paso de verdad:
+    Sirius corre en un unico proceso sin hijos —justo el caso de un elemento— y
+    la vigilancia murio en ``$tree.Count`` con «No se encuentra la propiedad
+    'Count' en este objeto».
+    """
+    script = _script()
+
+    assert "@(Get-ProcessTree -RootId" in script, "el arbol de procesos no se envuelve en @()"
+    assert "@(Get-OutboundConnections -ProcessIds" in script, (
+        "las conexiones no se envuelven en @()"
+    )
+
+
 def test_the_verdict_separates_clean_from_reserved() -> None:
     script = _script()
 
