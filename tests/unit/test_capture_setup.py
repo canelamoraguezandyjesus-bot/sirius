@@ -9,17 +9,22 @@ se diría en voz alta.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
+from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.capture_commands import CaptureCommand, interpret
 from sirius.capture_setup import (
     AJUSTE,
     frases_de_voz,
     guardar_configuracion,
+    leer_contrasena_guardada,
     proponer_escenas,
 )
+from sirius.config.secrets_config import OBS_WEBSOCKET_PASSWORD_SECRET_NAME
+from sirius.config.settings import load_settings, save_settings
 from sirius.domain.capture import SceneRegistry, build_scene_registry
 
 
@@ -139,7 +144,9 @@ def test_saving_keeps_the_rest_of_the_configuration() -> None:
 
     save_settings({"llm_provider": "openai"})
 
-    paso = guardar_configuracion(proponer_escenas(["Mesa"]), "127.0.0.1", 4455, "secreta")
+    paso = guardar_configuracion(
+        proponer_escenas(["Mesa"]), "127.0.0.1", 4455, "secreta", FakeSecretStore()
+    )
 
     assert paso.correcto, paso.detalle
     guardado = load_settings()
@@ -152,15 +159,19 @@ def test_what_is_saved_is_what_sirius_reads_at_startup(tmp_path: Path) -> None:
     """La comprobación que evita el fallo silencioso: escribir algo inservible."""
     from sirius.composition_root import _build_studio_capture_use_case
 
-    guardar_configuracion(proponer_escenas(["Cara", "Mesa"]), "127.0.0.1", 4455, "secreta")
+    guardar_configuracion(
+        proponer_escenas(["Cara", "Mesa"]), "127.0.0.1", 4455, "secreta", FakeSecretStore()
+    )
 
-    caso_de_uso = _build_studio_capture_use_case(tmp_path)
+    caso_de_uso = _build_studio_capture_use_case(tmp_path, FakeSecretStore())
 
     assert [escena.scene_id for escena in caso_de_uso.authorized_scenes()] == ["cara", "mesa"]
 
 
 def test_the_password_is_never_part_of_what_gets_printed() -> None:
-    paso = guardar_configuracion(proponer_escenas(["Mesa"]), "127.0.0.1", 4455, "muy-secreta")
+    paso = guardar_configuracion(
+        proponer_escenas(["Mesa"]), "127.0.0.1", 4455, "muy-secreta", FakeSecretStore()
+    )
 
     assert "muy-secreta" not in paso.linea()
 
@@ -221,3 +232,59 @@ def test_the_environment_password_is_never_echoed(
     _preguntar_datos()
 
     assert "secretisima" not in capsys.readouterr().out
+
+
+# --- La contraseña es un secreto, no configuración -----------------------
+
+
+def test_la_contrasena_no_acaba_en_settings_json() -> None:
+    """`settings.json` es el fichero que el resto del sistema trata como no
+    confidencial, y AGENTS.md prohíbe guardar claves en archivos de texto."""
+    almacen = FakeSecretStore()
+
+    paso = guardar_configuracion(
+        proponer_escenas(["Mesa"]), "127.0.0.1", 4455, "muy-secreta", almacen
+    )
+
+    assert paso.correcto, paso.detalle
+    assert "muy-secreta" not in json.dumps(load_settings())
+    assert almacen.get_secret(OBS_WEBSOCKET_PASSWORD_SECRET_NAME) == "muy-secreta"
+
+
+class _AlmacenSinRespaldoSeguro(FakeSecretStore):
+    """`FakeSecretStore` es seguro a propósito; aquí hace falta lo contrario."""
+
+    def is_secure_backend(self) -> bool:
+        return False
+
+
+def test_sin_almacen_seguro_no_se_guarda_en_texto_plano() -> None:
+    """Mismo criterio que la clave de API: sin almacén seguro, no se guarda.
+
+    Escribirla igualmente «para que Captura funcione» sería exactamente lo que
+    este arreglo viene a retirar.
+    """
+    almacen = _AlmacenSinRespaldoSeguro()
+
+    paso = guardar_configuracion(
+        proponer_escenas(["Mesa"]), "127.0.0.1", 4455, "muy-secreta", almacen
+    )
+
+    assert not paso.correcto
+    assert "muy-secreta" not in json.dumps(load_settings())
+
+
+def test_una_contrasena_ya_escrita_se_traslada_y_se_borra_del_fichero() -> None:
+    """Sin migración, el texto plano SOBREVIVE al arreglo.
+
+    Una instalación existente ya tiene la contraseña en `settings.json`:
+    limitarse a dejar de escribirla la dejaría ahí para siempre.
+    """
+    save_settings({AJUSTE: {"host": "127.0.0.1", "port": 4455, "password": "vieja", "scenes": []}})
+    almacen = FakeSecretStore()
+
+    recuperada = leer_contrasena_guardada(almacen)
+
+    assert recuperada == "vieja"
+    assert almacen.get_secret(OBS_WEBSOCKET_PASSWORD_SECRET_NAME) == "vieja"
+    assert "vieja" not in json.dumps(load_settings()), "el texto plano tiene que desaparecer"

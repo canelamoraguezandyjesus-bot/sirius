@@ -30,6 +30,8 @@ from collections.abc import Callable, Sequence
 from getpass import getpass
 from typing import Any
 
+from sirius.adapters.secrets.keyring_store import build_keyring_secret_store
+from sirius.config.secrets_config import OBS_WEBSOCKET_PASSWORD_SECRET_NAME
 from sirius.config.settings import load_settings, save_settings
 from sirius.console_report import (
     Paso,
@@ -39,6 +41,7 @@ from sirius.console_report import (
 )
 from sirius.domain.capture import build_scene_registry, normalize_alias
 from sirius.ports.capture_backend import BackendScene, CaptureError
+from sirius.ports.secrets import SecretStore, SecretStoreError
 
 AJUSTE = "model_studio_capture"
 PUERTO_POR_DEFECTO = 4455
@@ -146,14 +149,40 @@ def frases_de_voz(escenas: Sequence[dict[str, Any]]) -> list[str]:
 
 
 def guardar_configuracion(
-    escenas: list[dict[str, Any]], anfitrion: str, puerto: int, contrasena: str
+    escenas: list[dict[str, Any]],
+    anfitrion: str,
+    puerto: int,
+    contrasena: str,
+    secret_store: SecretStore | None = None,
 ) -> Paso:
-    """Escribe la sección de captura sin tocar el resto de la configuración."""
+    """Escribe la sección de captura sin tocar el resto de la configuración.
+
+    La contraseña NO va aquí: es una credencial —lo que impide que el puerto
+    local quede abierto a cualquier proceso— y `settings.json` es el fichero que
+    el resto del sistema trata como no confidencial. Va al almacén del sistema,
+    junto a la clave de API (`AGENTS.md`: no guardar claves en archivos de
+    texto).
+    """
+    almacen = secret_store if secret_store is not None else build_keyring_secret_store()
+    if not almacen.is_secure_backend():
+        # Mismo criterio que la clave de API: sin almacén seguro no se guarda.
+        # Escribirla igualmente «para que funcione» es exactamente lo que este
+        # arreglo viene a quitar.
+        return Paso(
+            "Guardar la configuración",
+            correcto=False,
+            detalle=(
+                "El almacén seguro de Windows no está disponible, así que no se "
+                "guarda la contraseña. Sin él, la única forma de guardarla sería "
+                "en texto plano, y eso es lo que se acaba de retirar."
+            ),
+        )
+    almacen.set_secret(OBS_WEBSOCKET_PASSWORD_SECRET_NAME, contrasena)
+
     ajustes = dict(load_settings())
     ajustes[AJUSTE] = {
         "host": anfitrion,
         "port": puerto,
-        "password": contrasena,
         "scenes": escenas,
     }
     save_settings(ajustes)
@@ -416,10 +445,45 @@ def _preguntar_datos() -> tuple[str, int, str]:
         # No se muestra al teclearla, y no vuelve a aparecer en ninguna línea.
         contrasena = _leer(lambda: getpass("Contraseña del servidor WebSocket de OBS: "))
     if not contrasena:
-        contrasena = str(guardado.get("password", ""))
+        contrasena = leer_contrasena_guardada()
         if contrasena:
             print("  (sin contraseña escrita: se reutiliza la ya guardada)")
     return anfitrion, puerto, contrasena
+
+
+def leer_contrasena_guardada(secret_store: SecretStore | None = None) -> str:
+    """La contraseña vigente, del almacén seguro y —si no— del fichero antiguo.
+
+    La migración vive aquí y no en un paso aparte: una instalación existente
+    tiene la contraseña en `settings.json`, y limitarse a dejar de escribirla
+    haría que el texto plano SOBREVIVIERA al arreglo. Al leerla se traslada al
+    almacén y se borra del fichero, así que la primera ejecución después de
+    actualizar la retira sola.
+    """
+    almacen = secret_store if secret_store is not None else build_keyring_secret_store()
+    try:
+        guardada = almacen.get_secret(OBS_WEBSOCKET_PASSWORD_SECRET_NAME)
+    except SecretStoreError:
+        # Un almacén que falla no puede impedir que Sirius arranque: sin
+        # contraseña, Captura no conecta y lo dice, que es la degradación
+        # correcta. La comprobación existente de la ventana lo exige.
+        return ""
+    if guardada:
+        return guardada
+
+    ajustes = dict(load_settings())
+    seccion = ajustes.get(AJUSTE)
+    heredada = str(seccion.get("password", "")) if isinstance(seccion, dict) else ""
+    if not heredada:
+        return ""
+    if almacen.is_secure_backend():
+        almacen.set_secret(OBS_WEBSOCKET_PASSWORD_SECRET_NAME, heredada)
+        seccion = dict(seccion)  # type: ignore[arg-type]
+        seccion.pop("password", None)
+        ajustes[AJUSTE] = seccion
+        save_settings(ajustes)
+        print("  (contraseña trasladada al almacén seguro y retirada de settings.json)")
+    return heredada
 
 
 if __name__ == "__main__":
