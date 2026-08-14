@@ -25,7 +25,8 @@ from sirius.application.capture_commands import CaptureCommand, interpret
 from sirius.application.studio_capture import StudioCaptureUseCase
 from sirius.composition_root import build_conversation_dependencies
 from sirius.domain.capture import Scene, SceneRegistry
-from sirius.domain.model_studio import StudioCaptureState
+from sirius.domain.model_studio import StudioCaptureState, StudioInteractionState
+from sirius.ports.capture_backend import CaptureError, CaptureStatus
 from sirius.presentation.main_window import MainWindow
 from sirius.presentation.model_studio.capture_panel import StudioCapturePanel, format_elapsed
 
@@ -622,3 +623,54 @@ def test_the_heartbeat_does_not_poll_a_surface_nobody_is_watching(
     qtbot.wait(100)
 
     assert len(backend.commands) == ordenes, "no se pregunta a lo que nadie mira"
+
+
+@pytest.mark.gui
+def test_una_orden_de_captura_que_revienta_no_deja_model_studio_bloqueado(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Un fallo inesperado no puede apagar la superficie sin explicarlo.
+
+    Cuando la orden vino hablada o escrita, el panel está cerrado y su mensaje
+    no se ve. `_on_capture_crashed` dejaba la interacción en EJECUTANDO —caja,
+    enviar y micrófono apagados— para siempre y sin ningún aviso visible.
+    """
+
+    class _BackendQueRevienta(FakeCaptureBackend):
+        """Conectado y luego roto, que es como se cae un socket de verdad.
+
+        Dos precauciones para que la prueba no nazca vacua, ambas comprobadas
+        midiendo: revienta en ``get_status``, que es la PRIMERA llamada al
+        backend de cualquier orden —reventar solo en ``start_recording`` no
+        llega a ejercitarse—, y revienta solo DESPUÉS de conectar, porque
+        ``_require_enabled`` corta antes si el backend no está conectado y la
+        orden terminaría por el camino normal sin tocar el que se quiere fijar.
+        """
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.revienta = False
+
+        def get_status(self) -> CaptureStatus | CaptureError:
+            if self.revienta:
+                raise ConnectionResetError("el socket se fue")
+            return super().get_status()
+
+    backend = _BackendQueRevienta()
+    backend.connect()
+    backend.revienta = True
+    capture = StudioCaptureUseCase(backend, _SCENES, enabled=True)
+    window = _window(tmp_path, capture)
+    qtbot.addWidget(window)
+    window.open_model_studio()
+
+    window.studio_page.input.setPlainText("empieza a grabar")
+    window.studio_page.send_button.click()
+
+    qtbot.waitUntil(
+        lambda: window.studio_page.interaction_state is StudioInteractionState.PREPARADO,
+        timeout=5000,
+    )
+    assert window.studio_page.input.isEnabled()
+    assert window.studio_page.send_button.isEnabled()
+    assert window.studio_page.error_label.text() != ""

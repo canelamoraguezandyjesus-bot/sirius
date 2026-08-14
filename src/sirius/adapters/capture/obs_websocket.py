@@ -352,6 +352,11 @@ class ObsWebSocketBackend:
             status = self._settle(lambda record: not _grabando(record))
         except _NotConnected:
             return CaptureError(CaptureErrorKind.NOT_CONNECTED, "sin conexión")
+        except _Rejected:
+            # `_Rejected` no hereda de `WebSocketError`, así que sin esta rama
+            # se escapaba de todo el adaptador —era la única vía por la que una
+            # excepción no tipada llegaba al trabajador y reventaba la orden—.
+            return CaptureError(CaptureErrorKind.REJECTED, "orden rechazada")
         except TimeoutWebSocketError:
             return CaptureError(CaptureErrorKind.TIMEOUT, "sin respuesta")
         except WebSocketError:
