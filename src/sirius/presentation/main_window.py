@@ -291,7 +291,12 @@ class MainWindow(QMainWindow):
         # La voz elegida tiene que sobrevivir al cierre: la raíz de composición
         # pasa cómo guardarla, porque la ventana no toca la configuración.
         self._save_studio_voice = save_studio_voice
-        self._active_voice_worker: QRunnable | None = None
+        # Un conjunto y no una ranura: «Repetir» o «Leer todo» durante la
+        # síntesis lanzan un segundo trabajador, y con una sola referencia el
+        # segundo pisaba al primero. El que quedaba sin referencia fuerte podía
+        # recolectarse antes de entregar su señal, y su desenlace —incluido un
+        # fallo— se perdía en silencio.
+        self._active_voice_workers: set[QRunnable] = set()
         self._active_capture_worker: QRunnable | None = None
         self._capture_busy = False
         self._capture_turn = 0
@@ -640,10 +645,17 @@ class MainWindow(QMainWindow):
     def _on_capture_crashed(self, error_message: str) -> None:
         del error_message  # el mensaje al usuario es seguro y genérico
         self._capture_busy = False
+        self._active_capture_worker = None
+        aviso = "No sé cómo ha quedado la grabación. Vuelve a abrir el panel para comprobarlo."
         self.studio_page.set_capture_state(StudioCaptureState.INCIERTO)
-        self.studio_page.capture_panel.set_message(
-            "No sé cómo ha quedado la grabación. Vuelve a abrir el panel para comprobarlo."
-        )
+        self.studio_page.capture_panel.set_message(aviso)
+        if self.studio_page.interaction_state is StudioInteractionState.EJECUTANDO:
+            # La orden vino hablada o escrita, así que el panel está cerrado y
+            # su mensaje no se ve. Sin reponer el estado, la superficie se queda
+            # en EJECUTANDO para siempre: caja, enviar y micrófono apagados y
+            # sin explicación. Simétrico con `_on_capture_finished`.
+            self.studio_page.set_error(aviso)
+            self._mirror_studio_state(StudioInteractionState.PREPARADO)
 
     # --- Voz de Model Studio ---------------------------------------------
 
@@ -668,6 +680,22 @@ class MainWindow(QMainWindow):
             self.studio_page.set_error("")
             self._mirror_studio_state(StudioInteractionState.ESCUCHANDO)
 
+    def _retain_voice_worker(self, worker: TranscribeWorker | SpeakWorker) -> None:
+        """Retiene el trabajador hasta que entregue su desenlace.
+
+        Sin una referencia fuerte en Python, un ``QRunnable`` que termina muy
+        deprisa puede recolectarse antes de que su señal en cola entre hilos se
+        entregue, y el resultado se pierde en silencio. Se descarta en ambos
+        desenlaces porque ``run()`` termina justo después de emitir.
+        """
+        self._active_voice_workers.add(worker)
+        worker.signals.finished.connect(
+            lambda _outcome, retenido=worker: self._active_voice_workers.discard(retenido)
+        )
+        worker.signals.crashed.connect(
+            lambda _message, retenido=worker: self._active_voice_workers.discard(retenido)
+        )
+
     def _stop_listening_and_transcribe(self) -> None:
         if self._studio_voice_use_case is None:
             return
@@ -675,11 +703,10 @@ class MainWindow(QMainWindow):
         worker = TranscribeWorker(self._studio_voice_use_case)
         worker.signals.finished.connect(self._on_transcribed)
         worker.signals.crashed.connect(self._on_voice_crashed)
-        self._active_voice_worker = worker
+        self._retain_voice_worker(worker)
         self._thread_pool.start(worker)
 
     def _on_transcribed(self, outcome: object) -> None:
-        self._active_voice_worker = None
         if isinstance(outcome, VoiceFailure):
             self._report_voice_failure(outcome)
             return
@@ -747,11 +774,10 @@ class MainWindow(QMainWindow):
         worker = SpeakWorker(self._studio_voice_use_case, text, status, read_code=read_code)
         worker.signals.finished.connect(self._on_spoken)
         worker.signals.crashed.connect(self._on_voice_crashed)
-        self._active_voice_worker = worker
+        self._retain_voice_worker(worker)
         self._thread_pool.start(worker)
 
     def _on_spoken(self, outcome: object) -> None:
-        self._active_voice_worker = None
         if isinstance(outcome, VoiceFailure):
             # Un fallo de voz no puede dejar la cola atascada para siempre.
             self._speech_busy = False
@@ -787,7 +813,11 @@ class MainWindow(QMainWindow):
     def _handle_stop_voice_clicked(self) -> None:
         if self._studio_voice_use_case is None:
             return
-        self._studio_voice_use_case.stop_speaking()
+        # Por `_silence_pending_speech` y no por `stop_speaking()` a secas:
+        # parar la reproducción borra el aviso de final, así que `_on_spoken`
+        # no llega nunca y `_speech_busy` se quedaría en True para el resto de
+        # la sesión — la voz muerta en silencio, sin mensaje.
+        self._silence_pending_speech()
         self._mirror_studio_state(StudioInteractionState.PREPARADO)
 
     def _handle_repeat_clicked(self) -> None:
@@ -888,7 +918,9 @@ class MainWindow(QMainWindow):
         if self._studio_voice_use_case is None:
             return
         self._studio_voice_use_case.cancel_listening()
-        self._studio_voice_use_case.stop_speaking()
+        # Mismo motivo que en `_handle_stop_voice_clicked`: salir de Model
+        # Studio mientras habla no puede dejar la cola bloqueada al volver.
+        self._silence_pending_speech()
         self._mirror_studio_state(StudioInteractionState.PREPARADO)
 
     def _handle_studio_send(self, text: str) -> None:
@@ -901,6 +933,13 @@ class MainWindow(QMainWindow):
         if not text.strip():
             return
         if self._is_sending or self._is_backup_busy or self._is_export_busy:
+            # La caja ya se vació al emitir, así que salir en silencio borraba
+            # lo escrito sin decir nada. Se devuelve el texto y se explica.
+            self.studio_page.set_input_text(text)
+            self.studio_page.set_error(
+                "Ahora mismo hay una operación en curso (envío, copia o exportación). "
+                "Tu texto sigue aquí; vuelve a enviarlo cuando termine."
+            )
             return
 
         # Una orden de captura no es conversación: se ejecuta y no se guarda en

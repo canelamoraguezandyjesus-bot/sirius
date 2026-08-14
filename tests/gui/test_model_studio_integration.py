@@ -55,6 +55,7 @@ from sirius.ports.llm import (
     LLMStreamEvent,
     LLMTextDelta,
 )
+from sirius.ports.text_to_speech import SpeechError, SpeechRequest, SynthesizedSpeech
 from sirius.presentation.main_window import (
     MODEL_STUDIO_PAGE_INDEX,
     TECHNICAL_PAGE_INDEX,
@@ -895,3 +896,158 @@ def test_the_budget_warning_reaches_model_studio_from_the_window(
     window._refresh_budget_warning()
 
     assert window.studio_page.budget_label.text() == window.budget_warning_label.text()
+
+
+@pytest.mark.gui
+def test_detener_la_voz_no_deja_la_cola_bloqueada_para_el_resto_de_la_sesion(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Parar la voz no puede apagarla para siempre, y sin decirlo.
+
+    Detener la reproducción borra a propósito el aviso de final, así que
+    `_on_spoken` no llega nunca. Cuando el botón llamaba a `stop_speaking()` a
+    secas, `_speech_busy` se quedaba en True: la cola crecía, no volvía a
+    sintetizarse nada y ningún mensaje lo explicaba. Un clic apagaba la voz
+    para el resto de la sesión.
+    """
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    directory = tmp_path / "audio"
+    directory.mkdir(exist_ok=True)
+    text_to_speech = FakeTextToSpeech(directory)
+    voice = _voice_use_case(tmp_path, text_to_speech=text_to_speech)
+    window = _build_window(database_path, studio_voice_use_case=voice)
+    qtbot.addWidget(window)
+    _swap_provider(window, database_path, FakeLLMProvider(("Monta el Uno.",)))
+    window.open_model_studio()
+
+    window.studio_page.input.setPlainText("¿por dónde empiezo?")
+    window.studio_page.send_button.click()
+    qtbot.waitUntil(
+        lambda: window.studio_page.interaction_state is StudioInteractionState.HABLANDO,
+        timeout=5000,
+    )
+
+    window.studio_page.stop_voice_button.click()
+
+    assert window._speech_busy is False
+    assert window._speech_queue == []
+
+    _swap_provider(window, database_path, FakeLLMProvider(("Por el chasis.",)))
+    window.studio_page.input.setPlainText("¿y ahora?")
+    window.studio_page.send_button.click()
+    qtbot.waitUntil(
+        lambda: window.studio_page.interaction_state is StudioInteractionState.HABLANDO,
+        timeout=5000,
+    )
+    assert len(text_to_speech.requests) == 2
+
+
+@pytest.mark.gui
+def test_salir_de_model_studio_hablando_tampoco_bloquea_la_cola(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """El segundo camino de parada manual, con el mismo desenlace."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    directory = tmp_path / "audio"
+    directory.mkdir(exist_ok=True)
+    text_to_speech = FakeTextToSpeech(directory)
+    voice = _voice_use_case(tmp_path, text_to_speech=text_to_speech)
+    window = _build_window(database_path, studio_voice_use_case=voice)
+    qtbot.addWidget(window)
+    _swap_provider(window, database_path, FakeLLMProvider(("Monta el Uno.",)))
+    window.open_model_studio()
+
+    window.studio_page.input.setPlainText("¿por dónde empiezo?")
+    window.studio_page.send_button.click()
+    qtbot.waitUntil(
+        lambda: window.studio_page.interaction_state is StudioInteractionState.HABLANDO,
+        timeout=5000,
+    )
+
+    window.studio_page.exit_button.click()
+
+    assert window._speech_busy is False
+    assert window._speech_queue == []
+
+
+@pytest.mark.gui
+def test_con_una_copia_en_curso_lo_escrito_vuelve_a_la_caja_y_se_explica(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Rechazar un envío no puede borrar lo escrito en silencio.
+
+    La caja se vacía al emitir, así que el `return` mudo de la rama de
+    ocupación se llevaba el texto por delante sin ningún aviso.
+    """
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    window.open_model_studio()
+    window._is_export_busy = True
+
+    window.studio_page.input.setPlainText("una idea que no quiero perder")
+    window.studio_page.send_button.click()
+
+    assert window.studio_page.input.toPlainText() == "una idea que no quiero perder"
+    assert window.studio_page.error_label.text() != ""
+
+
+@pytest.mark.gui
+def test_una_copia_en_curso_devuelve_el_texto_igual_que_una_exportacion(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    window.open_model_studio()
+    window._is_backup_busy = True
+
+    window.studio_page.input.setPlainText("otra que tampoco")
+    window.studio_page.send_button.click()
+
+    assert window.studio_page.input.toPlainText() == "otra que tampoco"
+    assert window.studio_page.error_label.text() != ""
+
+
+@pytest.mark.gui
+def test_repetir_durante_la_sintesis_no_pierde_al_trabajador_anterior(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Dos voces en vuelo son dos referencias, no una.
+
+    Con una sola ranura, el trabajador de «Repetir» pisaba al que ya estaba
+    sintetizando; el pisado podía recolectarse antes de entregar su señal y su
+    desenlace —incluido un fallo— se perdía en silencio.
+    """
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    directory = tmp_path / "audio"
+    directory.mkdir(exist_ok=True)
+
+    class _SintesisLenta(FakeTextToSpeech):
+        def synthesize(self, request: SpeechRequest) -> SynthesizedSpeech | SpeechError:
+            # Lo justo para que la segunda voz llegue con la primera en vuelo.
+            threading.Event().wait(0.4)
+            return super().synthesize(request)
+
+    voice = _voice_use_case(tmp_path, text_to_speech=_SintesisLenta(directory))
+    window = _build_window(database_path, studio_voice_use_case=voice)
+    qtbot.addWidget(window)
+    _swap_provider(window, database_path, FakeLLMProvider(("Monta el Uno.",)))
+    window.open_model_studio()
+    window._last_spoken_text = "algo que repetir"
+
+    window.studio_page.input.setPlainText("¿por dónde empiezo?")
+    window.studio_page.send_button.click()
+    qtbot.waitUntil(
+        lambda: window.studio_page.interaction_state is StudioInteractionState.SINTETIZANDO,
+        timeout=5000,
+    )
+
+    window.studio_page.repeat_button.click()
+
+    assert len(window._active_voice_workers) == 2
+
+    # Que se vacíe al terminar es la otra mitad de la promesa: un conjunto que
+    # solo crece sería una fuga. Además evita que los trabajadores sobrevivan a
+    # la ventana durante el desmontaje.
+    qtbot.waitUntil(lambda: not window._active_voice_workers, timeout=5000)
