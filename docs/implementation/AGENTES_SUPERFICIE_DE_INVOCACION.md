@@ -1,9 +1,12 @@
 # Agentes de Sirius — desde dónde se invocan
 
 - **Fecha:** 14 de agosto de 2026
-- **Estado:** PREPARADO, NADA IMPLEMENTADO. Este documento describe el plan y
-  deja el trabajo listo para abrirse por el cauce normal. No autoriza nada por
-  sí mismo.
+- **Estado:** la **superficie 2 ya está construida** (ADR-016, §2). Las
+  superficies 1 y 3 y todo lo multimodelo siguen como estaban: la 1 disponible,
+  la 3 pospuesta hasta cerrar 0.1, y el multimodelo bloqueado tras la pregunta
+  del §4. Este documento no autoriza nada por sí mismo; lo que autoriza el
+  workflow del Auditor es ADR-016.
+- **Actualizado:** 14 de agosto de 2026, al implementar el Bloque A.
 - **Base:** [`AGENT_OPPORTUNITY_MATRIX.md`](AGENT_OPPORTUNITY_MATRIX.md),
   [`AUDITOR_AGENT_V0.md`](AUDITOR_AGENT_V0.md), ADR-010, y la investigación
   externa del 14-08-2026 resumida en §5.
@@ -35,28 +38,36 @@ Es lo que se hizo en RUN-001.
 - **Límite:** hay que abrirla a mano y estar delante. No hay historial de
   ejecuciones ni métricas comparables salvo que se registren aparte.
 
-### Superficie 2 — Etiqueta en GitHub · **construible con lo que ya hay**
+### Superficie 2 — Etiqueta en GitHub · **CONSTRUIDA (ADR-016)**
 
 Igual que el ciclo de programación actual: se crea una incidencia, se le pone
-una etiqueta (`sirius:audit-requested`, por ejemplo) y un workflow ejecuta el
+una etiqueta (`auditoria:solicitada`) y un workflow ejecuta el
 agente y publica el informe como comentario.
 
-- **Cómo:** un workflow nuevo que use `anthropics/claude-code-action`, igual que
-  `implement-sirius-work.yml`, pero con **permisos de solo lectura**
-  (`contents: read`) y sin token de escritura. El runbook se le pasa como
-  prompt; el informe vuelve como comentario.
+- **Cómo:** `anthropics/claude-code-action`, igual que
+  `implement-sirius-work.yml`, pero en un trabajo con **permisos de solo
+  lectura** (`contents: read`). El runbook se le pasa como prompt leyéndolo del
+  árbol, no copiado.
 - **Lo que aporta y la superficie 1 no:** queda registro de cada ejecución y se
   puede lanzar desde el móvil. *(Se afirmó aquí que `claude-code-action` expone
   coste, turnos y duración. **No está comprobado**: es una acción de terceros y
   este repositorio no tiene acceso a la red para verificar su salida. Si resulta
   cierto, ahorra las métricas que hoy se anotan a mano; si no, hay que anotarlas
   igual y la superficie 2 sigue mereciendo la pena por el registro.)*
-- **Lo que exige:** (a) un ADR, porque toda decisión deja un ADR (ADR-001) y
-  porque el contrato §9 prohíbe «convertir una idea exploratoria en una decisión
-  aprobada», que es exactamente lo que sería construir esto a partir de este
-  documento; (b) trabajo en sesión, porque el PAT no puede escribir en
-  `.github/workflows/` (ADR-002).
-- **Lo que NO exige:** ni Inspect, ni claves de API nuevas, ni gasto nuevo.
+- **Estado:** implementada en `.github/workflows/audit-sirius-repository.yml`,
+  autorizada por **ADR-016**. Se pone `auditoria:solicitada` a una incidencia y
+  el informe vuelve como comentario de esa incidencia — **saneado**, porque lo
+  escribe un modelo y se publica dentro del filtro de confianza del ciclo.
+  La etiqueta no lleva el prefijo `sirius:` a propósito: el ciclo reconoce lo
+  suyo por prefijo, y la primera elección (`sirius:audit-requested`) la metía
+  en la máquina de estados (detalle en ADR-016).
+- **La decisión que costó:** GitHub no tiene un permiso «solo comentar», así que
+  el trabajo se parte en dos y la frontera es estructural, no confiada: `auditar`
+  declara `contents: read` y ejecuta el modelo; `publicar` puede comentar y **no
+  ejecuta ningún modelo**. Detalle en ADR-016.
+- **Lo que NO exigió:** ni Inspect, ni claves de API nuevas, ni gasto nuevo.
+- **Lo que falta:** ejecutarla una vez de verdad. Hasta entonces, que
+  `claude-code-action` exponga coste y turnos sigue sin verificar.
 
 ### Superficie 3 — Desde Sirius · **el final del camino, no ahora**
 
@@ -151,22 +162,29 @@ clave de respuestas de `AUDITOR_AGENT_V0.md` §6 no es opcional.
 
 ## 6. Orden recomendado
 
-1. **Cerrar el piloto del Auditor**: ejecutar la verificación y fusionar las PR
-   pendientes (ver incidencia #154).
-2. **Superficie 2**: el Auditor invocable por etiqueta, con Claude, sin gasto
-   nuevo. Un ADR y un bloque de trabajo.
+1. ~~**Cerrar el piloto del Auditor**~~ — **hecho**: cuatro hallazgos graves,
+   cuatro defectos reales, cero falsos positivos (#154).
+2. ~~**Superficie 2**~~ — **hecha**: ADR-016 y
+   `.github/workflows/audit-sirius-repository.yml`. Falta estrenarla.
 3. **La prueba de la tarde** (§4): ¿sirven las suscripciones? Responde sí o no a
-   toda la línea multimodelo.
+   toda la línea multimodelo. **Es el siguiente paso.**
 4. **Triaje de paradas** como segundo agente, por el motivo del §5: máximo
    ahorro con la superficie de permisos más pequeña.
 5. **Multimodelo** solo entonces, y solo si el paso 3 lo permite.
 
 ## 7. Trabajo preparado, listo para abrirse
 
-### Bloque A — El Auditor invocable por etiqueta
+### Bloque A — El Auditor invocable por etiqueta · **HECHO**
 
-Requiere ADR previo (ADR-001; y contrato §9, «convertir una idea exploratoria en
-una decisión aprobada»). Cuerpo de la incidencia, listo para pegar:
+Implementado por ADR-016. Se deja el encargo original tal cual porque contrastar
+lo pedido con lo entregado es más útil que borrarlo. **Dos desviaciones
+deliberadas**, explicadas en ADR-016: (1) el encargo pedía un solo trabajo con
+`contents: read`; se entregan **dos**, porque comentar exige `issues: write` y
+darle eso al trabajo que ejecuta el modelo le pondría en la mano la máquina de
+estados entera. (2) El encargo nombraba la etiqueta `sirius:audit-requested`;
+la definitiva es `auditoria:solicitada`, **sin** el prefijo, porque el ciclo
+reconoce lo suyo por prefijo y aquella elección metía el run en la máquina de
+estados — lo encontró la ronda adversarial, no el autor.
 
 ```markdown
 ## Work ID
@@ -248,7 +266,7 @@ revisión encuentra una tercera, se reescribe.
 
 | Afirmación | Comprobación | Resultado |
 |---|---|---|
-| `implement-sirius-work.yml` usa `anthropics/claude-code-action` | `.github/workflows/implement-sirius-work.yml:121` | **Cierta** |
+| `implement-sirius-work.yml` usa `anthropics/claude-code-action` | `.github/workflows/implement-sirius-work.yml:131` | **Cierta**, pero la primera versión de esta fila citaba la línea 121 — que es un `echo` — dentro de la tabla que existe para certificar citas. Cuarta de la misma familia; corregida abriendo el fichero |
 | El PAT no puede escribir en `.github/workflows/` | ADR-002, con el error literal de GitHub | **Cierta** |
 | El contrato §9 prohíbe «introducir otro nivel de automatización» | `AUTOMATION_OPERATING_CONTRACT.md:376-391` | **FALSA.** Esa frase no existe en §9: era una cita entrecomillada inventada. Corregido: el ADR lo exige ADR-001, y la prohibición de §9 que sí aplica es «convertir una idea exploratoria en una decisión aprobada» |
 | «El alcance aprobado de 0.1 excluye multiagente, RAG y automatización externa» | `docs/canonical/STATUS.md:29`, `docs/evolution/RECTOR.md:136,260`, `DECISIONS.md` EV-007 | **FALSA en su forma fuerte.** Los canónicos dicen que el multiagente está *pospuesto* y *no es requisito* de 1.0, no que 0.1 lo «excluya». Corregido citando RECTOR §15 —«amplía 0.1 por preparación futura», «introduce arquitectura multiagente sin evidencia»—, que sostiene mejor la misma conclusión |

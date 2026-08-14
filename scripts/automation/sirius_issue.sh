@@ -761,3 +761,30 @@ sirius_extract_sha() {
   fi
   printf '%s' "$sha"
 }
+
+# sanitize_untrusted_text — neutraliza, en texto que procede de un agente o de
+# Codex (y que puede arrastrar contenido de la PR), las TRES secuencias que los
+# escáneres deterministas de la incidencia reinterpretan al releer comentarios:
+#   - las vallas ``` (podrían cerrar antes de tiempo o falsificar el bloque
+#     "## OBSERVACIONES_ESTRUCTURADAS ```json ... ```" que consume el gate del
+#     corrector mediante sirius_extract_observations);
+#   - los marcadores "Head SHA:"/"Merge SHA:" (envenenarían sirius_extract_sha
+#     en verificaciones de head posteriores);
+#   - la apertura "<!--" de un comentario HTML. Esta es la que faltaba, y su
+#     ausencia era explotable: los marcadores que gobiernan la convergencia
+#     (`<!-- sirius-round:N -->`) y la racha de CI (`<!-- sirius-quality:...-->`)
+#     son comentarios HTML, y los publica la automatización, así que caen del
+#     lado CONFIABLE del filtro de autor. Un texto no confiable que colara uno
+#     de esos marcadores en un cuerpo publicado por el script quedaba contado
+#     por `parse_round_records` o por `ci_failure_streak`: bastaba para fabricar
+#     una ronda con cero hallazgos (progreso falso, corrector vivo sin cota) o
+#     un `sirius-quality:<sha>:success` que reinicia la racha de fallos de CI.
+#     Romper la apertura basta: ambos escáneres exigen el literal "<!--".
+# El contenido sigue siendo legible y fiel; solo se desactivan los marcadores.
+# (\u0027 es una comilla simple, escapada para no cerrar la cadena del programa jq.)
+sanitize_untrusted_text() {
+  jq -Rrs 'gsub("```"; "\u0027\u0027\u0027") | gsub("(?<p>[Hh][Ee][Aa][Dd]|[Mm][Ee][Rr][Gg][Ee])(\\s+[Ss][Hh][Aa]\\s*:)"; "\(.p)-sha:") | gsub("<!--"; "&lt;!--")'
+}
+sanitize_untrusted_json() {
+  jq -c 'walk(if type == "string" then gsub("```"; "\u0027\u0027\u0027") | gsub("(?<p>[Hh][Ee][Aa][Dd]|[Mm][Ee][Rr][Gg][Ee])(\\s+[Ss][Hh][Aa]\\s*:)"; "\(.p)-sha:") | gsub("<!--"; "&lt;!--") else . end)'
+}
