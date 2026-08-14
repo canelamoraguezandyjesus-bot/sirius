@@ -52,9 +52,10 @@ repositorio y se lee entero, publica ese fichero como comentario.
 
 **La propiedad que hay que defender es una y se puede comprobar:** *ningún
 trabajo que ejecute un modelo declara permisos de escritura.* Es el mismo patrón
-que ya usa el ciclo de programación —«Claude NUNCA muta etiquetas: escribe un
-veredicto en un fichero y `sirius_apply_verdict.sh` lo aplica reverificando»— y
-por la misma razón.
+que ya usa el ciclo de programación — Claude nunca muta etiquetas: escribe un
+veredicto en un fichero y `sirius_apply_verdict.sh` lo aplica reverificando
+(parafraseado de la cabecera de `implement-sirius-work.yml`) — y por la misma
+razón.
 
 **Y la huella la toma el arnés, no el agente.** `AUDITOR_AGENT_V0.md` §2 dice que
 la restricción de escritura del Auditor es **procedimental**, y que la frontera
@@ -72,18 +73,37 @@ Un agente que certifica su propia inocencia es «el observador dentro de lo
 observado», que está en el catálogo de patrones. Aquí la toma el arnés.
 
 Esto obliga a una concesión que hay que decir en voz alta: **el agente conserva
-la herramienta `Write`**, porque tiene que dejar el informe en un fichero. La
+la herramienta `Write`**, porque tiene que dejar el informe en un fichero,
+cuya ruta se le da **literal** en el prompt — no como variable de entorno, que
+sin `Bash` no tendría forma de resolver. La
 tabla de §2 marca «editar código o documentación» como **No**, y `Write` sin
 restricción de ruta no distingue el informe del resto del árbol. Lo que impide
 el abuso no es la herramienta: es que cualquier escritura en el árbol invalida
 el run y lo dice en el comentario. Se prefiere **detectar y anular** antes que
 una restricción que no se puede expresar.
 
-**Etiqueta propia, fuera de la máquina de estados.** `sirius:audit-requested` no
-aparece en ninguna transición del ciclo y ningún workflow del ciclo reacciona a
-ella. Un run del Auditor no es un bloque de trabajo: meterlo en la máquina de
-estados acabaría en `failed-safely` sin que nada hubiera fallado, que es
-exactamente lo que se evitó al crear la incidencia #154 sin etiquetas.
+**Etiqueta `auditoria:solicitada`, sin el prefijo `sirius:`.** La primera
+versión usó `sirius:audit-requested` y era un error que la ronda adversarial
+demostró: el ciclo reconoce lo suyo por PREFIJO — `sirius_reconcile.sh` filtra
+con `grep '^sirius:'` y `complete-sirius-after-merge.yml` selecciona con
+`startswith("sirius:")` — así que «no aparece en ninguna transición» no la
+dejaba fuera de nada. Con ese prefijo, el reconciliador la contaba como estado
+simultáneo y el completador trataba la incidencia como bloque del ciclo. La
+etiqueta usa otro prefijo porque esa es la variable que esos mecanismos miran,
+y la prueba verifica el supuesto (que siguen filtrando por prefijo) en vez de
+darlo por sabido.
+
+**El informe se publica SANEADO.** El hallazgo más serio de la ronda
+adversarial: el comentario del informe sale como `github-actions[bot]`, que
+está **dentro** del filtro de confianza del ciclo (`SIRIUS_TRUSTED_AUTHOR_JQ`,
+equiparado a OWNER). Un informe crudo escrito por un modelo podría — sin
+malicia, simplemente citando literales como manda el runbook — sembrar
+marcadores `<!-- sirius-round:N -->` o bloques `OBSERVACIONES_ESTRUCTURADAS`
+que los escáneres del corrector consumen como propios. El repositorio ya tenía
+la defensa exacta, `sanitize_untrusted_text`, aplicada a todo texto de agente;
+el Auditor habría sido el único camino sin ella. El saneador se movió de
+`sirius_apply_verdict.sh` a `sirius_issue.sh` para que ambos lo compartan, y
+«publicar» lo aplica antes de comentar.
 
 **El runbook no se copia.** El prompt se construye leyendo
 `docs/implementation/AUDITOR_AGENT_V0.md` del propio árbol. Dos copias del mismo
@@ -92,35 +112,21 @@ defectos que la auditoría lleva corrigiendo desde el principio.
 
 ## Comprobación que la sostiene
 
-`tests/automation/test_auditor_workflow.py`, escrita en la forma que impuso
-ADR-015 — **busca lo malo, no lo bueno**, y deriva del YAML real en vez de
-copiar listas:
+`tests/automation/test_auditor_workflow.py` — reescrita tras la ronda
+adversarial, que demostró que la primera versión comprobaba **la forma que se
+le ocurrió al autor y no la que usa el código**: derivaba las etiquetas del
+ciclo de los `if:` cuando el ciclo decide por prefijo, ignoraba la herencia de
+permisos del nivel workflow (con lo que su lista de exenciones era decorativa:
+vaciarla no cambiaba nada), y no fijaba el `github_token` del modelo, que es la
+mitad del argumento de este ADR.
 
-1. Ningún trabajo que use `anthropics/claude-code-action` declara permiso de
-   escritura de ninguna clase. Se comprueba sobre **todos** los workflows, con
-   una lista de exenciones cerrada para los tres roles del ciclo, que sí escriben
-   código porque ese es su cometido.
-2. El trabajo del Auditor que puede escribir no ejecuta ningún modelo — la misma
-   frontera mirada desde el otro lado.
-3. El workflow no reacciona a ninguna etiqueta del ciclo. Las etiquetas del ciclo
-   **se derivan de los `if:` de los propios workflows**, no de una lista copiada
-   ni del bootstrap: lo que importa es qué dispara de verdad a cada workflow.
-4. Ningún workflow del ciclo reacciona a `sirius:audit-requested` — la
-   comprobación simétrica, que es la que se olvida.
-5. El runbook no está duplicado dentro del workflow.
-6. El arnés toma la huella **antes** del modelo y la compara **después**, y el
-   paso que recoge el informe **usa** ese veredicto. Sin esa última parte la
-   comprobación existiría sin consecuencia.
-7. Guardián de la guardiana: si el barrido dejara de encontrar el workflow, sus
-   trabajos, o la acción del modelo porque cambió de nombre, las comprobaciones
-   anteriores pasarían por vacío afirmando que todo va bien.
-
-Las siete verificadas por mutación en las dos direcciones: dar `issues: write` al
-trabajo con modelo, apuntar el Auditor a una etiqueta del ciclo, hacer que el
-ciclo reaccione a la del Auditor, copiar texto del runbook dentro del workflow,
-renombrar la acción del modelo, quitar la consecuencia de la huella, mover la
-huella detrás del modelo, y dejar de mirar las ramas. Cada una pone roja la
-prueba que le toca, y solo esa.
+Diez pruebas. Las que dependen de un supuesto sobre otro fichero lo verifican
+en la misma prueba (que el reconciliador sigue filtrando por `^sirius:`, que el
+filtro de confianza sigue incluyendo a `github-actions[bot]`) en vez de darlo
+por sabido. Verificadas por mutación, cada una en las dos direcciones; entre
+ellas: vaciar la lista de exenciones (la herencia delata a los tres roles),
+darle el PAT al modelo, devolver la etiqueta al prefijo `sirius:`, y publicar
+el informe sin saneador.
 
 ## Consecuencias
 
@@ -141,9 +147,19 @@ como lo que hay que vigilar si alguien añade pasos ahí.
 etiquetas, ni el contrato. El Auditor es un carril aparte que no toca la
 máquina de estados.
 
-**No introduce gasto nuevo ni claves nuevas**: usa el mismo
+**No introduce claves nuevas ni servicios nuevos**: usa el mismo
 `CLAUDE_CODE_OAUTH_TOKEN` que el ciclo. Nada de Inspect, ni multimodelo, ni
-proveedores nuevos — eso sigue bloqueado tras el Bloque B.
+proveedores nuevos — eso sigue bloqueado tras el Bloque B. Sí consume lo que
+todo lo demás: **minutos de Actions** por run, que en este repositorio privado
+son la moneda real. Decir «gasto cero» sin esa nota sería afirmar de más.
+
+**El modelo recibe `github.token`, nunca el PAT** — fijado por prueba, porque
+un PAT lleva sus propios permisos y anularía el recorte del job.
+
+**El código del agente sigue fuera de `src/sirius/`** (§3 de
+`AGENTES_SUPERFICIE_DE_INVOCACION.md`, que este ADR recoge como obligación):
+este bloque vive en `.github/workflows/` y `scripts/automation/`, y no toca el
+producto.
 
 ## Alternativas descartadas y por qué
 

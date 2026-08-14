@@ -52,7 +52,11 @@ jobs:
           ensure_label "sirius:ready-for-merge" "0E8A16" "Estado: revisión aprobada y pendiente de autorización humana de merge"
           ensure_label "sirius:completed" "006B75" "Estado terminal: bloque fusionado y cerrado"
 
-          # FUERA de la maquina de estados, a proposito. No es un estado ni un
-          # evento del ciclo de programacion: ningun workflow del ciclo la mira,
-          # y el reconciliador no la toca. Solo dispara el Auditor (ADR-016).
-          ensure_label "sirius:audit-requested" "5A32A3" "Fuera del ciclo: lanzar una auditoria de solo lectura del repositorio"
+          # FUERA de la maquina de estados POR CONSTRUCCION, no por promesa: el
+          # ciclo reconoce lo suyo por el PREFIJO `sirius:` (sirius_reconcile.sh
+          # filtra con grep '^sirius:'; complete-sirius-after-merge.yml con
+          # startswith("sirius:")), asi que esta etiqueta usa OTRO prefijo y esos
+          # caminos no pueden verla. Solo dispara el Auditor (ADR-016). La
+          # primera version usaba `sirius:audit-requested` y era un error: el
+          # prefijo la convertia en estado del ciclo.
+          ensure_label "auditoria:solicitada" "5A32A3" "Fuera del ciclo: lanzar una auditoria de solo lectura del repositorio"

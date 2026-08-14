@@ -1,7 +1,12 @@
 name: Auditar el repositorio (Auditor v0)
 
-# Lanza el Auditor de repositorio poniendo `sirius:audit-requested` a una
+# Lanza el Auditor de repositorio poniendo `auditoria:solicitada` a una
 # incidencia. Autorizado por ADR-016.
+#
+# La etiqueta NO lleva el prefijo `sirius:` a propósito: el ciclo reconoce lo
+# suyo por PREFIJO (sirius_reconcile.sh filtra con grep '^sirius:';
+# complete-sirius-after-merge.yml con startswith("sirius:")). Con ese prefijo,
+# un run del Auditor contaría como estado del ciclo.
 #
 # LA PROPIEDAD QUE DEFIENDE ESTE FICHERO, y que comprueba
 # `tests/automation/test_auditor_workflow.py`:
@@ -26,13 +31,13 @@ on:
 permissions: {}
 
 concurrency:
-  group: sirius-audit-${{ github.event.issue.number }}
+  group: sirius-audit-${{ github.event.issue.number }}-${{ github.event.label.name }}
   cancel-in-progress: false
 
 jobs:
   auditar:
     name: Auditar (solo lectura)
-    if: github.event.label.name == 'sirius:audit-requested'
+    if: github.event.label.name == 'auditoria:solicitada'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     # SOLO LECTURA. No añadir `issues: write` aquí «para que publique el
@@ -80,6 +85,10 @@ jobs:
             echo "::error::No encuentro $runbook; sin runbook no hay auditoría."
             exit 1
           fi
+          if grep -q "SIRIUS_PROMPT_EOF" "$runbook"; then
+            echo "::error::El runbook contiene el delimitador del heredoc; el prompt saldría truncado."
+            exit 1
+          fi
           {
             echo "prompt<<SIRIUS_PROMPT_EOF"
             cat "$runbook"
@@ -91,9 +100,14 @@ jobs:
             echo ""
             echo "## Cómo entregas el informe"
             echo "NO tienes credencial para escribir en GitHub, y no la vas a pedir."
-            echo "Escribe el informe completo en el fichero de la variable SIRIUS_REPORT_FILE."
-            echo "Ese fichero se publica después como comentario de la incidencia."
-            echo "Si el fichero queda vacío, la ejecución se marca como fallida."
+            echo "Escribe el informe completo, con la herramienta Write, en ESTA ruta exacta:"
+            echo ""
+            echo "    ${RUNNER_TEMP}/sirius_audit_report.md"
+            echo ""
+            echo "Es la única escritura legítima de todo el run: fuera del árbol del"
+            echo "repositorio. Ese fichero se publica como comentario de la incidencia,"
+            echo "saneado (las vallas de código y los marcadores HTML llegan neutralizados)."
+            echo "Si queda vacío, la ejecución se marca como fallida."
             echo "SIRIUS_PROMPT_EOF"
           } >> "$GITHUB_OUTPUT"
 
@@ -101,8 +115,6 @@ jobs:
         id: claude
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
-        env:
-          SIRIUS_REPORT_FILE: ${{ runner.temp }}/sirius_audit_report.md
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # El GITHUB_TOKEN del propio run, acotado por los permisos de ESTE
@@ -166,9 +178,9 @@ jobs:
               echo ""
               echo "Log del run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             } > "$informe"
-            echo "vacio=true" >> "$GITHUB_OUTPUT"
+            vacio="true"
           else
-            echo "vacio=false" >> "$GITHUB_OUTPUT"
+            vacio="false"
           fi
           if [ "${INTACTO:-false}" != "true" ]; then
             # Se antepone el aviso en vez de tirar el informe: sirve para
@@ -194,6 +206,14 @@ jobs:
           mkdir -p "${RUNNER_TEMP}/artefacto"
           cp "$informe" "${RUNNER_TEMP}/artefacto/informe.md"
 
+          # Un run sin informe o con el árbol tocado NO es un run bueno: este
+          # trabajo termina en rojo para que `needs.auditar.result` diga la
+          # verdad en el comentario. El artefacto ya está copiado y se sube
+          # igual (el paso siguiente lleva if: always()).
+          if [ "${INTACTO:-false}" != "true" ] || [ "$vacio" = "true" ]; then
+            exit 1
+          fi
+
       - name: Subir el informe como artefacto
         if: always()
         uses: actions/upload-artifact@v4
@@ -209,13 +229,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # ESTE trabajo sí puede comentar. Y por eso NO ejecuta ningún modelo: todo
-    # lo que hace está escrito abajo y se lee entero. Si algún día alguien añade
-    # aquí un paso que invoque un modelo, se rompe la separación de ADR-016 y
-    # `tests/automation/test_auditor_workflow.py` lo pone rojo.
+    # lo que hace está escrito aquí y se lee entero. `contents: read` existe
+    # solo para el checkout que trae el saneador de la librería. Si algún día
+    # alguien añade aquí un paso que invoque un modelo, se rompe la separación
+    # de ADR-016 y tests/automation/test_auditor_workflow.py lo pone rojo.
     permissions:
       issues: write
+      contents: read
     steps:
+      - name: Checkout (solo para leer el saneador)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
       - name: Descargar el informe
+        # Tolerante: si `auditar` murió antes de subir el artefacto, este paso
+        # no puede tumbar al que da la noticia.
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: informe-auditoria
@@ -228,8 +258,10 @@ jobs:
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RESULTADO: ${{ needs.auditar.result }}
         run: |
           set -uo pipefail
+          source scripts/automation/sirius_issue.sh
           cuerpo="$(mktemp)"
           {
             echo "<!-- sirius-audit:${GITHUB_SHA} -->"
@@ -237,12 +269,22 @@ jobs:
             echo ""
             echo "- Commit auditado: \`${GITHUB_SHA}\`"
             echo "- Run: ${RUN_URL}"
-            echo "- Resultado del trabajo de auditoría: \`${{ needs.auditar.result }}\`"
+            echo "- Resultado del trabajo de auditoría: \`${RESULTADO}\`"
             echo ""
             echo "---"
             echo ""
-            cat informe/informe.md
+            if [ -s informe/informe.md ]; then
+              # El informe lo escribió un MODELO, y este comentario sale como
+              # github-actions[bot], que está DENTRO del filtro de confianza del
+              # ciclo (SIRIUS_TRUSTED_AUTHOR_JQ). Sin sanear, sus vallas ``` y
+              # sus marcadores <!-- --> gobernarían la numeración de rondas y
+              # las observaciones que consume el corrector. Mismo saneado que
+              # sirius_apply_verdict.sh aplica a todo texto de agente.
+              sanitize_untrusted_text < informe/informe.md
+            else
+              echo "**El artefacto del informe no llegó.** Mira el log del run."
+            fi
           } > "$cuerpo"
           gh issue comment "$ISSUE_NUMBER" --repo "$GH_REPO" --body-file "$cuerpo" \
-            || echo "::error::No se pudo publicar el informe; queda como artefacto del run."
+            || echo "::error::No se pudo publicar; el informe queda como artefacto del run."
           rm -f "$cuerpo"

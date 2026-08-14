@@ -1,23 +1,31 @@
 """El Auditor se lanza por etiqueta, y lo que ejecuta un modelo no puede escribir.
 
 ADR-016 parte el trabajo en dos y hace la frontera estructural en vez de
-confiada:
+confiada: `auditar` declara `contents: read` y ejecuta el modelo; `publicar`
+puede comentar y NO ejecuta ningún modelo.
 
-- `auditar` declara `contents: read` y ejecuta el modelo. El token que recibe el
-  agente está acotado por esos permisos: es incapaz de escribir aunque se le
-  pida.
-- `publicar` puede comentar, y por eso NO ejecuta ningún modelo: todo lo que
-  hace está en el YAML y se lee entero.
+La primera versión de estas pruebas cayó en el error que esta sesión lleva
+repitiendo: comprobar la forma que se le ocurrió al autor en vez de la que usa
+el código. Tres ejemplos que la ronda adversarial demostró:
 
-Estas pruebas están escritas en la forma que impuso ADR-015: **buscan lo malo,
-no lo bueno**, y derivan del YAML real en vez de copiar listas. Preguntar «¿está
-el permiso correcto en algún sitio?» se satisface con una aparición y no dice
-nada de las demás; preguntar «¿hay algún trabajo con modelo que pueda escribir?»
-no tiene ese agujero.
+- Derivaba «las etiquetas del ciclo» de los `if:` de los workflows, cuando el
+  ciclo reconoce lo suyo por PREFIJO (`grep '^sirius:'` en el reconciliador,
+  `startswith("sirius:")` en el completador). La etiqueta `sirius:audit-requested`
+  entraba en la máquina de estados por donde la prueba juraba que no.
+- Miraba solo los `permissions:` del job e ignoraba la herencia del nivel
+  workflow, así que la lista de exenciones era decorativa: vaciarla no cambiaba
+  nada.
+- No fijaba el `github_token` del trabajo del modelo, que es la mitad del
+  argumento de ADR-016: pasarle el PAT anularía el recorte de permisos.
+
+Esta versión deriva de los mecanismos reales y, donde depende de un supuesto
+sobre otro fichero, ese supuesto se verifica en la misma prueba en vez de
+darse por sabido.
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -27,19 +35,30 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
 AUDITOR = WORKFLOWS / "audit-sirius-repository.yml"
 RUNBOOK = REPO_ROOT / "docs" / "implementation" / "AUDITOR_AGENT_V0.md"
+LIBRERIA = REPO_ROOT / "scripts" / "automation" / "sirius_issue.sh"
+RECONCILIADOR = REPO_ROOT / "scripts" / "automation" / "sirius_reconcile.sh"
 
-ETIQUETA_DEL_AUDITOR = "sirius:audit-requested"
+ETIQUETA_DEL_AUDITOR = "auditoria:solicitada"
 
 # Lo que delata que un trabajo ejecuta un modelo. Ancho a propósito: cualquier
 # acción de Anthropic cuenta, se llame como se llame la versión.
 ACCIONES_CON_MODELO = ("anthropics/claude-code-action",)
 
-# Todo permiso de GitHub Actions que no sea `read` o `none` es escritura.
-LECTURAS = frozenset({"read", "none"})
+# Comparación de etiqueta en una condición de Actions, en el `if:` del job o de
+# cualquier paso. Es la forma en que TODOS los workflows de este repositorio
+# deciden si reaccionan a un evento `labeled`.
+COMPARA_ETIQUETA = re.compile(r"github\.event\.label\.name\s*==\s*'([^']+)'")
 
 
 def _cargar(ruta: Path) -> dict[str, Any]:
     return yaml.safe_load(ruta.read_text(encoding="utf-8")) or {}
+
+
+def _todos_los_workflows() -> dict[str, dict[str, Any]]:
+    # `*.yml` y `*.yaml`: GitHub acepta las dos extensiones, y barrer solo una
+    # dejaría un workflow invisible a todas las comprobaciones.
+    ficheros = sorted(list(WORKFLOWS.glob("*.yml")) + list(WORKFLOWS.glob("*.yaml")))
+    return {ruta.name: _cargar(ruta) for ruta in ficheros}
 
 
 def _pasos(job: dict[str, Any]) -> list[dict[str, Any]]:
@@ -54,55 +73,68 @@ def _ejecuta_modelo(job: dict[str, Any]) -> bool:
     )
 
 
-def _permisos_de_escritura(job: dict[str, Any]) -> dict[str, str]:
-    permisos = job.get("permissions")
-    if permisos in (None, {}):
+def _escrituras(permisos: object) -> dict[str, str]:
+    """Los permisos de escritura que contiene una declaración `permissions:`."""
+    if permisos == {}:
         return {}
     if isinstance(permisos, str):
-        # `permissions: write-all` — la forma más peligrosa y la más corta.
-        return {} if permisos in LECTURAS else {"(global)": permisos}
-    return {k: v for k, v in permisos.items() if str(v) not in LECTURAS}
+        # Las formas cortas: `read-all` es lectura; `write-all`, escritura.
+        return {} if permisos in ("read-all",) else {"(global)": permisos}
+    if isinstance(permisos, dict):
+        return {k: str(v) for k, v in permisos.items() if str(v) not in ("read", "none")}
+    return {"(desconocido)": repr(permisos)}
+
+
+def _escrituras_efectivas(job: dict[str, Any], definicion: dict[str, Any]) -> dict[str, str]:
+    """Permisos de escritura EFECTIVOS de un job, con la herencia de GitHub.
+
+    Un job sin bloque `permissions:` hereda el del workflow; sin ninguno de los
+    dos, aplica el valor por defecto del repositorio, que puede ser permisivo.
+    Ese caso se trata como escritura: la primera versión de esta prueba lo
+    trataba como «sin permisos» y con eso la lista de exenciones era decorativa.
+    """
+    if "permissions" in job:
+        return _escrituras(job["permissions"])
+    if "permissions" in definicion:
+        return _escrituras(definicion["permissions"])
+    return {"(sin declarar)": "hereda el valor por defecto del repositorio"}
 
 
 def _etiquetas_que_disparan(definicion: dict[str, Any]) -> set[str]:
-    """Las etiquetas que aparecen en los `if:` de los trabajos de un workflow.
-
-    Se leen del YAML real. Copiar la lista del ciclo aquí la dejaría vieja en
-    silencio, que es la forma más común de prueba vacua en este repositorio.
-    """
-    etiquetas: set[str] = set()
+    """Toda etiqueta comparada en un `if:`, de job o de paso."""
+    condiciones: list[str] = []
     for job in (definicion.get("jobs") or {}).values():
-        condicion = str(job.get("if") or "")
-        for trozo in condicion.replace("'", '"').split('"'):
-            if trozo.startswith("sirius:"):
-                etiquetas.add(trozo)
-    return etiquetas
-
-
-def _workflows_del_ciclo() -> dict[str, dict[str, Any]]:
-    """Los workflows que reaccionan a etiquetas, salvo el del Auditor."""
-    ciclo: dict[str, dict[str, Any]] = {}
-    for ruta in sorted(WORKFLOWS.glob("*.yml")):
-        if ruta.name == AUDITOR.name:
+        if not isinstance(job, dict):
             continue
-        definicion = _cargar(ruta)
-        if _etiquetas_que_disparan(definicion):
-            ciclo[ruta.name] = definicion
-    return ciclo
+        condiciones.append(str(job.get("if") or ""))
+        condiciones.extend(str(p.get("if") or "") for p in _pasos(job))
+    return {e for c in condiciones for e in COMPARA_ETIQUETA.findall(c)}
+
+
+def _job_del_modelo() -> dict[str, Any]:
+    definicion = _cargar(AUDITOR)
+    job: dict[str, Any] = definicion["jobs"]["auditar"]
+    return job
+
+
+def _paso_del_modelo() -> dict[str, Any]:
+    return next(
+        p
+        for p in _pasos(_job_del_modelo())
+        if any(a in str(p.get("uses") or "") for a in ACCIONES_CON_MODELO)
+    )
+
+
+# ─────────────────────────── la frontera de permisos ───────────────────────────
 
 
 def test_ningun_trabajo_que_ejecute_un_modelo_puede_escribir() -> None:
-    """La propiedad central de ADR-016, y la única que de verdad protege algo.
+    """La propiedad central de ADR-016, con la herencia de permisos incluida.
 
-    Se comprueba sobre TODOS los workflows, no solo el del Auditor: si mañana
-    alguien añade un modelo a un trabajo con permisos de escritura, esto lo ve.
-
-    El ciclo de programación está exento y declarado: sus roles SÍ escriben
-    código y abren PR, que es su cometido. Lo que aquí se defiende es que
-    ningún trabajo nuevo se cuele con esa capacidad sin que nadie lo note.
+    Los tres roles del ciclo están exentos y declarados: escribir código y abrir
+    PR es su cometido. La lista es cerrada a propósito — añadir un nombre aquí
+    es una decisión, y este es el sitio donde se ve.
     """
-    # Exención explícita y cerrada. Añadir un nombre aquí es una decisión, y
-    # esta lista es el sitio donde se ve.
     ROLES_DEL_CICLO = {
         "implement-sirius-work.yml",
         "review-sirius-work.yml",
@@ -110,89 +142,157 @@ def test_ningun_trabajo_que_ejecute_un_modelo_puede_escribir() -> None:
     }
 
     infracciones: list[str] = []
-    for ruta in sorted(WORKFLOWS.glob("*.yml")):
-        if ruta.name in ROLES_DEL_CICLO:
+    for nombre, definicion in _todos_los_workflows().items():
+        if nombre in ROLES_DEL_CICLO:
             continue
-        definicion = _cargar(ruta)
         for nombre_job, job in (definicion.get("jobs") or {}).items():
             if not isinstance(job, dict) or not _ejecuta_modelo(job):
                 continue
-            escrituras = _permisos_de_escritura(job)
+            escrituras = _escrituras_efectivas(job, definicion)
             if escrituras:
-                infracciones.append(f"{ruta.name} · trabajo «{nombre_job}» · permisos {escrituras}")
+                infracciones.append(f"{nombre} · trabajo «{nombre_job}» · permisos {escrituras}")
 
     assert not infracciones, (
-        "Estos trabajos ejecutan un modelo Y pueden escribir. ADR-016 exige que "
-        "el trabajo que ejecuta el modelo no escriba, y que el que escribe no "
-        "ejecute modelos:\n\n" + "\n".join(f"  - {i}" for i in infracciones)
+        "Estos trabajos ejecutan un modelo Y pueden escribir (contando la "
+        "herencia del nivel workflow):\n\n" + "\n".join(f"  - {i}" for i in infracciones)
     )
 
 
-def test_el_trabajo_que_publica_no_ejecuta_ningun_modelo() -> None:
-    """La otra mitad de la frontera, mirada desde el lado que sí puede escribir."""
-    definicion = _cargar(AUDITOR)
-    for nombre_job, job in (definicion.get("jobs") or {}).items():
-        if _permisos_de_escritura(job):
-            assert not _ejecuta_modelo(job), (
-                f"El trabajo «{nombre_job}» del Auditor puede escribir y además "
-                "ejecuta un modelo. Lo que protege el informe no es el permiso: "
-                "es que ese trabajo no invoque ningún modelo, para que todo lo "
-                "que hace esté escrito en el YAML y se lea entero."
-            )
+def test_el_modelo_recibe_el_token_recortado_y_sin_herramientas_prohibidas() -> None:
+    """La otra mitad del argumento de ADR-016, que la primera versión no fijaba.
 
+    `contents: read` solo acota el `github.token` DEL RUN. Si al modelo se le
+    pasara el PAT —que existe en este repositorio y el ciclo ya usa así—, el
+    recorte no acotaría nada: un PAT lleva sus propios permisos, no los del job.
 
-def test_el_auditor_no_reacciona_a_ninguna_etiqueta_del_ciclo() -> None:
-    """Un run del Auditor no es un bloque de la tubería.
-
-    Si reaccionara a una etiqueta del ciclo, cada bloque de trabajo lanzaría
-    además una auditoría, y la incidencia acabaría en un estado que la máquina
-    no espera.
+    Y las herramientas: sin web (prohibición expresa del propietario en #154),
+    sin `--dangerously-skip-permissions` (el Auditor es la única llamada a la
+    acción que no debe llevarlo), y sin `Bash` sin acotar.
     """
+    con = _paso_del_modelo().get("with") or {}
+
+    token = str(con.get("github_token") or "")
+    assert "github.token" in token, "El modelo no recibe el token del run."
+    assert "secrets." not in token, (
+        "El modelo recibe un secreto como github_token. Un PAT lleva sus "
+        "propios permisos: anula el `contents: read` del job."
+    )
+
+    args = str(con.get("claude_args") or "")
+    for prohibido in ("WebSearch", "WebFetch", "--dangerously-skip-permissions"):
+        assert prohibido not in args, f"El Auditor lleva `{prohibido}`, que está prohibido."
+
+    herramientas = re.search(r'--allowedTools\s+"([^"]+)"', args)
+    assert herramientas, "El paso del modelo no acota sus herramientas."
+    assert not re.search(r"Bash(?!\()", herramientas.group(1)), (
+        "Hay un `Bash` sin acotar en las herramientas del Auditor; solo se "
+        "admiten formas restringidas como `Bash(git log:*)`."
+    )
+
+
+def test_el_trabajo_que_publica_no_ejecuta_ningun_modelo_y_sus_permisos_son_fijos() -> None:
+    definicion = _cargar(AUDITOR)
+    publicar = definicion["jobs"]["publicar"]
+
+    assert not _ejecuta_modelo(publicar), (
+        "«publicar» puede escribir y además ejecuta un modelo. Lo que protege "
+        "el informe es que ese trabajo no invoque ninguno, para que todo lo que "
+        "hace esté en el YAML y se lea entero."
+    )
+    assert publicar.get("permissions") == {"issues": "write", "contents": "read"}, (
+        "Los permisos de «publicar» cambiaron. `issues: write` publica el "
+        "comentario; `contents: read` existe solo para el checkout del "
+        f"saneador. Hay: {publicar.get('permissions')}"
+    )
+
+
+# ─────────────────────────── fuera de la máquina de estados ───────────────────────────
+
+
+def test_la_etiqueta_del_auditor_queda_fuera_del_ciclo_por_su_prefijo() -> None:
+    """El ciclo reconoce lo suyo por PREFIJO, no por lista de estados.
+
+    El supuesto se verifica aquí mismo en vez de darse por sabido: si esos
+    mecanismos cambian de forma, esta prueba falla y obliga a re-examinar la
+    pertenencia, en vez de seguir afirmándola sobre un mecanismo que ya no
+    existe. La primera etiqueta (`sirius:audit-requested`) entró en la máquina
+    de estados exactamente por esto.
+    """
+    reconciliador = RECONCILIADOR.read_text(encoding="utf-8")
+    assert "grep '^sirius:'" in reconciliador, (
+        "El reconciliador ya no filtra por el prefijo `^sirius:`. Esta prueba "
+        "asume ese mecanismo: re-examinar si la etiqueta del Auditor sigue "
+        "quedando fuera de su alcance."
+    )
+    completador = (WORKFLOWS / "complete-sirius-after-merge.yml").read_text(encoding="utf-8")
+    assert 'startswith("sirius:")' in completador, (
+        'El completador ya no selecciona incidencias por `startswith("sirius:")`. '
+        "Re-examinar la pertenencia de la etiqueta del Auditor."
+    )
+
+    assert not ETIQUETA_DEL_AUDITOR.startswith("sirius:"), (
+        "La etiqueta del Auditor lleva el prefijo `sirius:`: el reconciliador y "
+        "el completador la contarían como estado del ciclo."
+    )
+
+
+def test_el_auditor_solo_reacciona_a_su_etiqueta() -> None:
     del_auditor = _etiquetas_que_disparan(_cargar(AUDITOR))
     assert del_auditor == {ETIQUETA_DEL_AUDITOR}, (
         f"El Auditor debe dispararse solo con `{ETIQUETA_DEL_AUDITOR}`; "
         f"reacciona a {sorted(del_auditor)}."
     )
 
-    del_ciclo: set[str] = set()
-    for definicion in _workflows_del_ciclo().values():
-        del_ciclo |= _etiquetas_que_disparan(definicion)
 
-    solapamiento = del_auditor & del_ciclo
-    assert not solapamiento, f"El Auditor comparte disparador con el ciclo: {sorted(solapamiento)}."
-
-
-def test_ningun_workflow_del_ciclo_reacciona_a_la_etiqueta_del_auditor() -> None:
-    """La comprobación simétrica, que es la que se olvida.
-
-    Comprobar solo que el Auditor no toca el ciclo deja pasar el caso contrario:
-    que un workflow del ciclo empiece a reaccionar a `sirius:audit-requested`.
-    """
+def test_ningun_otro_workflow_reacciona_a_la_etiqueta_del_auditor() -> None:
     culpables = [
         nombre
-        for nombre, definicion in _workflows_del_ciclo().items()
-        if ETIQUETA_DEL_AUDITOR in _etiquetas_que_disparan(definicion)
+        for nombre, definicion in _todos_los_workflows().items()
+        if nombre != AUDITOR.name and ETIQUETA_DEL_AUDITOR in _etiquetas_que_disparan(definicion)
     ]
     assert not culpables, (
-        f"Estos workflows del ciclo reaccionan a `{ETIQUETA_DEL_AUDITOR}`: {culpables}. "
-        "Un run del Auditor entraría en la máquina de estados."
+        f"Estos workflows reaccionan a `{ETIQUETA_DEL_AUDITOR}`: {culpables}. "
+        "Un run del Auditor dejaría de ser un carril aparte."
+    )
+
+
+# ─────────────────────────── el contenido del informe ───────────────────────────
+
+
+def test_el_informe_se_publica_saneado() -> None:
+    """El informe lo escribe un modelo y se publica como `github-actions[bot]`,
+    que está DENTRO del filtro de confianza del ciclo (`SIRIUS_TRUSTED_AUTHOR_JQ`).
+
+    Sin sanear, sus vallas ``` y sus marcadores `<!-- -->` gobernarían la
+    numeración de rondas y las observaciones que consume el corrector — el
+    ataque que el propio `sirius_issue.sh` documenta y del que ya se defiende
+    en todos los demás caminos con `sanitize_untrusted_text`.
+    """
+    libreria = LIBRERIA.read_text(encoding="utf-8")
+    assert "sanitize_untrusted_text()" in libreria, (
+        "El saneador ya no vive en la librería; «publicar» no tendría qué cargar."
+    )
+    assert "SIRIUS_TRUSTED_AUTHOR_JQ" in libreria and "github-actions[bot]" in libreria, (
+        "El filtro de confianza cambió de forma: re-examinar si el informe del "
+        "Auditor sigue cayendo dentro de él."
+    )
+
+    definicion = _cargar(AUDITOR)
+    guiones = [str(p.get("run") or "") for p in _pasos(definicion["jobs"]["publicar"])]
+    publica = next(g for g in guiones if "gh issue comment" in g)
+    assert "sanitize_untrusted_text" in publica, (
+        "«publicar» pega el informe CRUDO en el comentario. Texto de un modelo, "
+        "publicado dentro del filtro de confianza, sin el saneado que el resto "
+        "del repositorio aplica sin excepción."
     )
 
 
 def test_el_runbook_no_esta_duplicado_dentro_del_workflow() -> None:
-    """Dos copias del mismo runbook se desincronizan.
-
-    El workflow debe LEER `AUDITOR_AGENT_V0.md` del árbol, no llevar su texto
-    dentro. La deriva documental es uno de los defectos que la auditoría lleva
-    corrigiendo desde el principio.
-    """
+    """Dos copias del mismo runbook se desincronizan: el workflow lo LEE."""
     texto_workflow = AUDITOR.read_text(encoding="utf-8")
     assert "AUDITOR_AGENT_V0.md" in texto_workflow, (
         "El workflow no menciona el runbook: o no lo lee, o lo lleva copiado."
     )
-
-    # Frases largas y propias del runbook. Si aparecen en el workflow, es que se
-    # copió el texto en vez de leerlo.
     lineas_del_runbook = [
         linea.strip()
         for linea in RUNBOOK.read_text(encoding="utf-8").splitlines()
@@ -200,90 +300,79 @@ def test_el_runbook_no_esta_duplicado_dentro_del_workflow() -> None:
     ]
     copiadas = [linea for linea in lineas_del_runbook if linea in texto_workflow]
     assert not copiadas, (
-        "El workflow lleva copiado el texto del runbook en vez de leerlo:\n"
+        "El workflow lleva copiado texto del runbook en vez de leerlo:\n"
         + "\n".join(f"  - {linea[:80]}…" for linea in copiadas[:5])
     )
 
 
+# ─────────────────────────── la huella del árbol ───────────────────────────
+
+
 def test_el_arnes_comprueba_la_huella_y_no_se_fia_del_agente() -> None:
-    """La frontera mecánica que `AUDITOR_AGENT_V0.md` §2 vuelve obligatoria.
+    """La frontera mecánica que `AUDITOR_AGENT_V0.md` §2 vuelve obligatoria
+    cuando los runs pasan a desatendidos — que es lo que hace este workflow.
 
-    §2 dice que la restricción de escritura del Auditor es **procedimental**, y
-    que la frontera mecánica «se vuelve obligatoria» si ocurre cualquiera de tres
-    cosas. La primera es *«los runs pasan a desatendidos o programados»*, que es
-    exactamente lo que hace este workflow.
-
-    `contents: read` cubre la mitad de GitHub. Esta es la otra mitad: que el
-    árbol no cambie. Y la comprueba el ARNÉS, no el agente — un agente que
-    certifica su propia inocencia es «el observador dentro de lo observado».
+    La huella la toma el ARNÉS, no el agente: un agente que certifica su propia
+    inocencia es «el observador dentro de lo observado». Y tiene consecuencia:
+    el informe sale marcado inválido y el trabajo termina en rojo.
     """
-    definicion = _cargar(AUDITOR)
-    pasos = _pasos(definicion["jobs"]["auditar"])
-    nombres = [str(p.get("name") or "") for p in pasos]
+    pasos = _pasos(_job_del_modelo())
     ids = [str(p.get("id") or "") for p in pasos]
 
-    assert "huella" in ids, "No hay paso de huella inicial; «no modificó nada» sería una promesa."
+    assert "huella" in ids, "No hay huella inicial; «no modificó nada» sería una promesa."
     assert "intacto" in ids, "Nadie compara la huella al final."
 
     i_huella = ids.index("huella")
     con_modelo = [
         i
         for i, p in enumerate(pasos)
-        if any(accion in str(p.get("uses") or "") for accion in ACCIONES_CON_MODELO)
+        if any(a in str(p.get("uses") or "") for a in ACCIONES_CON_MODELO)
     ]
     assert con_modelo, (
-        "Ningún paso de «auditar» invoca la acción del modelo. O el workflow "
-        "cambió, o `ACCIONES_CON_MODELO` dejó de reconocerla — y entonces esta "
-        "prueba estaría comprobando el vacío."
+        "Ningún paso de «auditar» invoca la acción del modelo: o el workflow "
+        "cambió, o `ACCIONES_CON_MODELO` dejó de reconocerla y esta prueba "
+        "estaría comprobando el vacío."
     )
-    i_modelo = con_modelo[0]
     i_intacto = ids.index("intacto")
-    assert i_huella < i_modelo < i_intacto, (
-        "El orden tiene que ser huella → modelo → comprobación; "
-        f"es {nombres[i_huella]} / {nombres[i_modelo]} / {nombres[i_intacto]}."
-    )
+    assert i_huella < con_modelo[0] < i_intacto, "El orden debe ser huella → modelo → comprobación."
 
     guion_intacto = str(pasos[i_intacto].get("run") or "")
     for señal in ("git rev-parse HEAD", "git status --porcelain", "git branch"):
         assert señal in guion_intacto, f"La huella final no mira `{señal}`."
 
-    # El paso que recoge el informe tiene que USAR el veredicto de la huella. Sin
-    # esto, la comprobación existiría y no serviría para nada.
     guion_recoger = next(str(p.get("run") or "") for p in pasos if p.get("id") == "recoger")
-    assert "INTACTO" in guion_recoger, (
-        "El paso que recoge el informe ignora el resultado de la huella: la "
-        "comprobación no tendría ninguna consecuencia."
+    assert "INTACTO" in guion_recoger, "El resultado de la huella no llega a quien recoge."
+    assert "exit 1" in guion_recoger, (
+        "Un run inválido o sin informe terminaría en verde: la señal "
+        "`needs.auditar.result` que ve el comentario sería vacua."
     )
+
+
+# ─────────────────────────── guardián de la guardiana ───────────────────────────
 
 
 def test_estas_pruebas_miran_algo() -> None:
-    """Guardián de la guardiana.
-
-    Todas las comprobaciones de arriba pasan trivialmente si el barrido deja de
-    encontrar material: si el fichero del Auditor desaparece, si sus trabajos
-    dejan de parsearse, o si `_ejecuta_modelo` deja de reconocer la acción
-    porque cambió de nombre. Una prueba que no puede fallar es peor que
-    ninguna: afirma que todo va bien.
-    """
-    assert AUDITOR.is_file(), f"No existe {AUDITOR.name}; las pruebas de arriba no miran nada."
-    assert RUNBOOK.is_file(), "No existe el runbook; el workflow no tendría qué leer."
+    """Todas las comprobaciones de arriba pasan trivialmente si el barrido deja
+    de encontrar material. Una prueba que no puede fallar es peor que ninguna."""
+    assert AUDITOR.is_file(), f"No existe {AUDITOR.name}."
+    assert RUNBOOK.is_file(), "No existe el runbook."
 
     definicion = _cargar(AUDITOR)
     jobs = definicion.get("jobs") or {}
-    assert set(jobs) == {"auditar", "publicar"}, (
-        f"ADR-016 parte el trabajo en «auditar» y «publicar»; hay {sorted(jobs)}."
-    )
+    assert set(jobs) == {"auditar", "publicar"}, f"ADR-016 espera dos trabajos; hay {sorted(jobs)}."
 
     con_modelo = [n for n, j in jobs.items() if _ejecuta_modelo(j)]
     assert con_modelo == ["auditar"], (
         f"Se esperaba que solo «auditar» ejecutara un modelo; ejecutan {con_modelo}. "
-        "Si la lista está vacía, `ACCIONES_CON_MODELO` dejó de reconocer la acción "
-        "y la comprobación de permisos está mirando el vacío."
+        "Vacío significa que `ACCIONES_CON_MODELO` dejó de reconocer la acción."
     )
 
-    ciclo = _workflows_del_ciclo()
-    assert len(ciclo) >= 4, (
-        f"Solo {len(ciclo)} workflows del ciclo reaccionan a etiquetas: "
-        "el barrido no los está leyendo y las comprobaciones de solapamiento "
-        f"pasarían por vacío. Encontrados: {sorted(ciclo)}"
+    todos = _todos_los_workflows()
+    assert len(todos) >= 10, (
+        f"Solo {len(todos)} workflows: el barrido no está leyendo el directorio."
+    )
+    con_disparo = [n for n, d in todos.items() if _etiquetas_que_disparan(d)]
+    assert len(con_disparo) >= 4, (
+        f"Solo {con_disparo} reaccionan a etiquetas: el extractor de condiciones "
+        "dejó de entender los `if:` y las comprobaciones de solapamiento pasan por vacío."
     )

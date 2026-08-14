@@ -41,7 +41,7 @@ Es lo que se hizo en RUN-001.
 ### Superficie 2 — Etiqueta en GitHub · **CONSTRUIDA (ADR-016)**
 
 Igual que el ciclo de programación actual: se crea una incidencia, se le pone
-una etiqueta (`sirius:audit-requested`, por ejemplo) y un workflow ejecuta el
+una etiqueta (`auditoria:solicitada`) y un workflow ejecuta el
 agente y publica el informe como comentario.
 
 - **Cómo:** `anthropics/claude-code-action`, igual que
@@ -55,8 +55,12 @@ agente y publica el informe como comentario.
   cierto, ahorra las métricas que hoy se anotan a mano; si no, hay que anotarlas
   igual y la superficie 2 sigue mereciendo la pena por el registro.)*
 - **Estado:** implementada en `.github/workflows/audit-sirius-repository.yml`,
-  autorizada por **ADR-016**. Se pone `sirius:audit-requested` a una incidencia y
-  el informe vuelve como comentario de esa incidencia.
+  autorizada por **ADR-016**. Se pone `auditoria:solicitada` a una incidencia y
+  el informe vuelve como comentario de esa incidencia — **saneado**, porque lo
+  escribe un modelo y se publica dentro del filtro de confianza del ciclo.
+  La etiqueta no lleva el prefijo `sirius:` a propósito: el ciclo reconoce lo
+  suyo por prefijo, y la primera elección (`sirius:audit-requested`) la metía
+  en la máquina de estados (detalle en ADR-016).
 - **La decisión que costó:** GitHub no tiene un permiso «solo comentar», así que
   el trabajo se parte en dos y la frontera es estructural, no confiada: `auditar`
   declara `contents: read` y ejecuta el modelo; `publicar` puede comentar y **no
@@ -172,12 +176,15 @@ clave de respuestas de `AUDITOR_AGENT_V0.md` §6 no es opcional.
 
 ### Bloque A — El Auditor invocable por etiqueta · **HECHO**
 
-Implementado por ADR-016. Se deja el encargo original porque describe el alcance
-que se respetó, y porque contrastar lo pedido con lo entregado es más útil que
-borrarlo. **Una desviación deliberada**, explicada en ADR-016: el encargo pedía
-un solo trabajo con `contents: read`; se entregan **dos**, porque comentar exige
-`issues: write` y darle eso al trabajo que ejecuta el modelo le pondría en la
-mano la máquina de estados entera.
+Implementado por ADR-016. Se deja el encargo original tal cual porque contrastar
+lo pedido con lo entregado es más útil que borrarlo. **Dos desviaciones
+deliberadas**, explicadas en ADR-016: (1) el encargo pedía un solo trabajo con
+`contents: read`; se entregan **dos**, porque comentar exige `issues: write` y
+darle eso al trabajo que ejecuta el modelo le pondría en la mano la máquina de
+estados entera. (2) El encargo nombraba la etiqueta `sirius:audit-requested`;
+la definitiva es `auditoria:solicitada`, **sin** el prefijo, porque el ciclo
+reconoce lo suyo por prefijo y aquella elección metía el run en la máquina de
+estados — lo encontró la ronda adversarial, no el autor.
 
 ```markdown
 ## Work ID
@@ -259,7 +266,7 @@ revisión encuentra una tercera, se reescribe.
 
 | Afirmación | Comprobación | Resultado |
 |---|---|---|
-| `implement-sirius-work.yml` usa `anthropics/claude-code-action` | `.github/workflows/implement-sirius-work.yml:121` | **Cierta** |
+| `implement-sirius-work.yml` usa `anthropics/claude-code-action` | `.github/workflows/implement-sirius-work.yml:131` | **Cierta**, pero la primera versión de esta fila citaba la línea 121 — que es un `echo` — dentro de la tabla que existe para certificar citas. Cuarta de la misma familia; corregida abriendo el fichero |
 | El PAT no puede escribir en `.github/workflows/` | ADR-002, con el error literal de GitHub | **Cierta** |
 | El contrato §9 prohíbe «introducir otro nivel de automatización» | `AUTOMATION_OPERATING_CONTRACT.md:376-391` | **FALSA.** Esa frase no existe en §9: era una cita entrecomillada inventada. Corregido: el ADR lo exige ADR-001, y la prohibición de §9 que sí aplica es «convertir una idea exploratoria en una decisión aprobada» |
 | «El alcance aprobado de 0.1 excluye multiagente, RAG y automatización externa» | `docs/canonical/STATUS.md:29`, `docs/evolution/RECTOR.md:136,260`, `DECISIONS.md` EV-007 | **FALSA en su forma fuerte.** Los canónicos dicen que el multiagente está *pospuesto* y *no es requisito* de 1.0, no que 0.1 lo «excluya». Corregido citando RECTOR §15 —«amplía 0.1 por preparación futura», «introduce arquitectura multiagente sin evidencia»—, que sostiene mejor la misma conclusión |
