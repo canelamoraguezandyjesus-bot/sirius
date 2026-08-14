@@ -65,7 +65,11 @@ jobs:
           set -uo pipefail
           {
             echo "head=$(git rev-parse HEAD)"
-            echo "arbol=$(git status --porcelain | sha256sum | cut -d' ' -f1)"
+            # --ignored=matching: sin esa bandera, una escritura en una ruta que
+            # coincida con .gitignore (logs/, .local/, settings.json...) no
+            # aparece y la huella daria "intacto" en falso. FINDING-001 del
+            # propio Auditor, RUN-002 (#167).
+            echo "arbol=$(git status --porcelain --ignored=matching | sha256sum | cut -d' ' -f1)"
             echo "ramas=$(git branch --format='%(refname:short)' | sha256sum | cut -d' ' -f1)"
           } >> "$GITHUB_OUTPUT"
 
@@ -160,7 +164,7 @@ jobs:
         run: |
           set -uo pipefail
           head_despues="$(git rev-parse HEAD)"
-          arbol_despues="$(git status --porcelain | sha256sum | cut -d' ' -f1)"
+          arbol_despues="$(git status --porcelain --ignored=matching | sha256sum | cut -d' ' -f1)"
           ramas_despues="$(git branch --format='%(refname:short)' | sha256sum | cut -d' ' -f1)"
 
           # El informe se escribe en RUNNER_TEMP, fuera del árbol: un run legítimo
@@ -173,7 +177,7 @@ jobs:
           else
             echo "intacto=false" >> "$GITHUB_OUTPUT"
             echo "::error::El árbol cambió durante la auditoría; el run queda invalidado."
-            git status --porcelain
+            git status --porcelain --ignored=matching
           fi
 
       - name: Recoger el informe
