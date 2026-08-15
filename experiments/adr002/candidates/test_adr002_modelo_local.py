@@ -787,3 +787,35 @@ def test_la_compuerta_no_lleva_la_regla_porque_no_la_necesita() -> None:
     from experiments.adr002.modelo_local import medir
 
     assert "criticos" not in medir.fl.compuerta.__code__.co_varnames
+
+
+def test_el_nombre_de_salida_avanza_solo_hasta_el_primero_libre(tmp_path: Any) -> None:
+    """La regla «no se pisa» se conserva; lo que se quita es pensar el nombre.
+
+    Con un nombre fijo, toda corrida a partir de la segunda moria en un error
+    que habia que leer y resolver a mano justo al ir a medir.
+    """
+    from experiments.adr002.modelo_local import medir
+
+    assert medir.siguiente_salida(tmp_path).name == "resultado_modelo_local_v0.2.json"
+    (tmp_path / "resultado_modelo_local_v0.2.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "resultado_modelo_local_v0.3.json").write_text("{}", encoding="utf-8")
+    assert medir.siguiente_salida(tmp_path).name == "resultado_modelo_local_v0.4.json"
+
+
+def test_al_negarse_a_pisar_dice_exactamente_que_escribir(
+    tmp_path: Any, monkeypatch: Any, capsys: Any
+) -> None:
+    """Un error que no dice como salir de el hace perder una corrida entera."""
+    import sys
+
+    from experiments.adr002.modelo_local import medir
+
+    ya = tmp_path / "resultado_modelo_local_v0.2.json"
+    ya.write_text("{}", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["medir", "--salida", str(ya)])
+
+    assert medir.main() == 2
+    assert "--salida" in capsys.readouterr().out
+    assert ya.read_text(encoding="utf-8") == "{}", "intacto"
