@@ -40,9 +40,20 @@ RECONCILIADOR = REPO_ROOT / "scripts" / "automation" / "sirius_reconcile.sh"
 
 ETIQUETA_DEL_AUDITOR = "auditoria:solicitada"
 
-# Lo que delata que un trabajo ejecuta un modelo. Ancho a propósito: cualquier
-# acción de Anthropic cuenta, se llame como se llame la versión.
-ACCIONES_CON_MODELO = ("anthropics/claude-code-action",)
+# El registro CERRADO de acciones (ADR-018): la clasificación de qué ejecuta
+# un modelo, la credencial de cada runtime y las exenciones del ciclo son
+# DATO compartido entre baterías, no constantes por fichero. Un runtime nuevo
+# entra por el registro o pone las pruebas en rojo.
+REGISTRO: dict[str, Any] = yaml.safe_load(
+    (Path(__file__).resolve().parent / "registro_de_acciones.yml").read_text(encoding="utf-8")
+)
+ACCIONES_CON_MODELO: dict[str, dict[str, str]] = REGISTRO["con_modelo"]
+
+
+def _nombre_accion(uses: str) -> str:
+    """El nombre de una acción sin @versión: la unidad del registro."""
+    return uses.split("@")[0].strip()
+
 
 # Comparación de etiqueta en una condición de Actions, en el `if:` del job o de
 # cualquier paso. Es la forma en que TODOS los workflows de este repositorio
@@ -67,9 +78,7 @@ def _pasos(job: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _ejecuta_modelo(job: dict[str, Any]) -> bool:
     return any(
-        accion in str(paso.get("uses") or "")
-        for paso in _pasos(job)
-        for accion in ACCIONES_CON_MODELO
+        _nombre_accion(str(paso.get("uses") or "")) in ACCIONES_CON_MODELO for paso in _pasos(job)
     )
 
 
@@ -121,7 +130,7 @@ def _paso_del_modelo() -> dict[str, Any]:
     return next(
         p
         for p in _pasos(_job_del_modelo())
-        if any(a in str(p.get("uses") or "") for a in ACCIONES_CON_MODELO)
+        if _nombre_accion(str(p.get("uses") or "")) in ACCIONES_CON_MODELO
     )
 
 
@@ -132,14 +141,11 @@ def test_ningun_trabajo_que_ejecute_un_modelo_puede_escribir() -> None:
     """La propiedad central de ADR-016, con la herencia de permisos incluida.
 
     Los tres roles del ciclo están exentos y declarados: escribir código y abrir
-    PR es su cometido. La lista es cerrada a propósito — añadir un nombre aquí
-    es una decisión, y este es el sitio donde se ve.
+    PR es su cometido. La lista es cerrada y desde ADR-018 vive como DATO en
+    `registro_de_acciones.yml`, compartida con la regla de secretos — añadir
+    un nombre allí es una decisión, y ese es el sitio donde se ve.
     """
-    ROLES_DEL_CICLO = {
-        "implement-sirius-work.yml",
-        "review-sirius-work.yml",
-        "repair-sirius-work.yml",
-    }
+    ROLES_DEL_CICLO = set(REGISTRO["exentos_del_ciclo"])
 
     infracciones: list[str] = []
     for nombre, definicion in _todos_los_workflows().items():
@@ -204,6 +210,160 @@ def test_el_trabajo_que_publica_no_ejecuta_ningun_modelo_y_sus_permisos_son_fijo
         "comentario; `contents: read` existe solo para el checkout del "
         f"saneador. Hay: {publicar.get('permissions')}"
     )
+
+
+# ─────────────────────────── el registro de acciones (ADR-018) ───────────────────────────
+
+
+def test_toda_accion_de_workflow_esta_clasificada_en_el_registro() -> None:
+    """Neutralidad al runtime por construcción: la defensa ya no reconoce un
+    nombre de acción concreto; reconoce «acción clasificada». Un motor nuevo
+    (Inspect, un contenedor, una acción de otro proveedor) no puede entrar sin
+    pasar por `registro_de_acciones.yml` — y entrar en `con_modelo` le aplica
+    de golpe el barrido de permisos y la regla de secretos.
+
+    Se recorren las `uses:` de PASO y las de NIVEL JOB (reusable workflows):
+    un barrido solo de pasos dejaría entrar un workflow reutilizable sin
+    clasificar. Las formas `./ruta` y `docker://` caen en «desconocida».
+    """
+    conocidas = set(REGISTRO["con_modelo"]) | set(REGISTRO["sin_modelo"])
+    desconocidas: list[str] = []
+    for nombre, definicion in _todos_los_workflows().items():
+        for nombre_job, job in (definicion.get("jobs") or {}).items():
+            if not isinstance(job, dict):
+                continue
+            usos = [str(job["uses"])] if "uses" in job else []
+            usos += [str(p["uses"]) for p in _pasos(job) if "uses" in p]
+            for uso in usos:
+                if _nombre_accion(uso) not in conocidas:
+                    desconocidas.append(f"{nombre} · «{nombre_job}» · {uso}")
+    assert not desconocidas, (
+        "Acciones sin clasificar en registro_de_acciones.yml (¿un runtime "
+        "nuevo entrando sin pasar por el registro?):\n"
+        + "\n".join(f"  - {d}" for d in desconocidas)
+    )
+
+
+def test_el_modelo_no_recibe_mas_secreto_que_su_credencial_registrada() -> None:
+    """`contents: read` solo acota el token DEL RUN: cualquier otro secreto que
+    alcance el proceso del modelo trae sus propios permisos y anula el recorte.
+
+    La primera formulación de esta regla miraba solo el input `github_token`;
+    la refutación del 15-08 enseñó dos agujeros: un secreto puede entrar por
+    `env:` (del paso, del job o del workflow — los tres niveles llegan al
+    proceso), y la credencial legítima podría cargar OTRO secreto por el mismo
+    input. Aquí se recolecta TODA referencia a `secrets.` de los tres niveles
+    y solo se admite la credencial COMPLETA registrada (input y secreto).
+    """
+    exentos = set(REGISTRO["exentos_del_ciclo"])
+    infracciones: list[str] = []
+    for nombre, definicion in _todos_los_workflows().items():
+        if nombre in exentos:
+            continue
+        for nombre_job, job in (definicion.get("jobs") or {}).items():
+            if not isinstance(job, dict):
+                continue
+            for paso in _pasos(job):
+                accion = _nombre_accion(str(paso.get("uses") or ""))
+                if accion not in ACCIONES_CON_MODELO:
+                    continue
+                credencial = ACCIONES_CON_MODELO[accion]
+                material = yaml.safe_dump(
+                    [definicion.get("env"), job.get("env"), paso.get("env"), paso.get("with")],
+                    allow_unicode=True,
+                )
+                for secreto in re.findall(r"secrets\.([A-Za-z0-9_]+)", material):
+                    if secreto != credencial["credencial_secreto"]:
+                        infracciones.append(f"{nombre} · «{nombre_job}» · secrets.{secreto}")
+                con = paso.get("with") or {}
+                esperado = "${{ secrets." + credencial["credencial_secreto"] + " }}"
+                if str(con.get(credencial["credencial_input"]) or "").strip() != esperado:
+                    infracciones.append(
+                        f"{nombre} · «{nombre_job}» · la credencial no viaja por su "
+                        f"input registrado «{credencial['credencial_input']}»"
+                    )
+    assert not infracciones, (
+        "Secretos fuera de la credencial registrada en trabajos de modelo no "
+        "exentos (un PAT o un secreto por env anula el recorte del job):\n"
+        + "\n".join(f"  - {i}" for i in infracciones)
+    )
+
+
+# ─────────────────── el arnés ejecuta, el modelo interpreta (ADR-018) ───────────────────
+
+
+def test_las_comprobaciones_las_ejecuta_el_arnes_y_no_el_modelo() -> None:
+    """La capacidad `ejecutar_solo_lectura` del contrato §2b la entrega el
+    ARNÉS —antes de la huella, para que sus cachés queden dentro de la línea
+    base— y el modelo la consume LEYENDO. Lo malo que se busca: que reaparezca
+    la orden de auditar sin ejecutar, que los pasos del arnés caigan detrás de
+    la huella (la invalidarían), o que alguien le dé ejecutores al modelo.
+    """
+    texto = AUDITOR.read_text(encoding="utf-8")
+    assert "sustituye por lectura" not in texto, (
+        "Ha vuelto la orden de «lectura estática»: el Auditor desatendido "
+        "volvería a auditar sin resultados reales — la divergencia exacta que "
+        "la reconciliación del 15-08 corrigió (ADR-018)."
+    )
+
+    pasos = _pasos(_job_del_modelo())
+    ids = [str(p.get("id") or "") for p in pasos]
+    for requerido in ("comprobaciones", "contexto"):
+        assert requerido in ids, f"Falta el paso del arnés «{requerido}»."
+    i_huella = ids.index("huella")
+    assert ids.index("comprobaciones") < i_huella and ids.index("contexto") < i_huella, (
+        "Los pasos del arnés deben ir ANTES de la huella: sus cachés (.venv, "
+        ".pytest_cache…) tienen que quedar dentro de la línea base, o la "
+        "comparación final acusaría al modelo de lo que hizo el arnés."
+    )
+
+    guion = str(pasos[ids.index("comprobaciones")].get("run") or "")
+    for comando in (
+        "uv run ruff format --check .",
+        "uv run ruff check .",
+        "uv run mypy src tests",
+        "uv run pytest",
+    ):
+        assert comando in guion, (
+            f"El arnés ya no ejecuta `{comando}`: las comprobaciones dejarían "
+            "de ser las MISMAS que las de quality.yml, y el informe mediría "
+            "contra otra vara."
+        )
+
+    guion_prompt = str(pasos[ids.index("build_prompt")].get("run") or "")
+    for ruta in ("comprobaciones/", "contexto_github/"):
+        assert ruta in guion_prompt, (
+            f"El prompt no dice al modelo dónde está `{ruta}`: ejecutado por "
+            "el arnés pero invisible para quien debe interpretarlo."
+        )
+
+    con = _paso_del_modelo().get("with") or {}
+    herramientas = re.search(r'--allowedTools\s+"([^"]+)"', str(con.get("claude_args") or ""))
+    assert herramientas is not None
+    assert not re.search(r"Bash\((?:uv|pytest|ruff|mypy)", herramientas.group(1)), (
+        "El modelo tiene ejecutores en su Bash: la alternativa que ADR-018 "
+        "descartó — cachés fuera de la línea base y más superficie en el paso "
+        "que lleva la credencial del runtime."
+    )
+
+    tope_paso = _paso_del_modelo().get("timeout-minutes")
+    tope_job = _job_del_modelo().get("timeout-minutes")
+    assert isinstance(tope_paso, int) and isinstance(tope_job, int) and tope_paso < tope_job, (
+        "El paso del modelo necesita un tope PROPIO menor que el del job: si "
+        "agota el del job, se cancelan la huella final, la recogida y el "
+        "artefacto — el arnés entero."
+    )
+
+
+def test_los_permisos_de_auditar_son_de_lectura_y_exactamente_los_declarados() -> None:
+    """Lista CERRADA (ADR-018): cuatro lecturas, ninguna escritura. Añadir un
+    permiso es una decisión, y este es el sitio donde se ve."""
+    assert _job_del_modelo().get("permissions") == {
+        "contents": "read",
+        "issues": "read",
+        "pull-requests": "read",
+        "actions": "read",
+    }, f"Permisos de «auditar»: {_job_del_modelo().get('permissions')}"
 
 
 # ─────────────────────────── fuera de la máquina de estados ───────────────────────────
@@ -326,11 +486,11 @@ def test_el_arnes_comprueba_la_huella_y_no_se_fia_del_agente() -> None:
     con_modelo = [
         i
         for i, p in enumerate(pasos)
-        if any(a in str(p.get("uses") or "") for a in ACCIONES_CON_MODELO)
+        if _nombre_accion(str(p.get("uses") or "")) in ACCIONES_CON_MODELO
     ]
     assert con_modelo, (
-        "Ningún paso de «auditar» invoca la acción del modelo: o el workflow "
-        "cambió, o `ACCIONES_CON_MODELO` dejó de reconocerla y esta prueba "
+        "Ningún paso de «auditar» invoca una acción del registro `con_modelo`: "
+        "o el workflow cambió, o el registro dejó de reconocerla y esta prueba "
         "estaría comprobando el vacío."
     )
     i_intacto = ids.index("intacto")

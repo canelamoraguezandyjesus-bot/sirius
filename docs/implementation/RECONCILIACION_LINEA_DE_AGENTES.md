@@ -154,11 +154,16 @@ código que borrar, hay nombres que dejar de usar mal.
 
 - **F0 — esta noche (hecho).** Reconciliación verificada; Auditor alineado con
   §2b; Investigador con frontera de confidencialidad; defensas neutrales;
-  ADR-018; este plan. Coste: 0 € (suscripción + minutos de Actions).
-- **F1 — el propietario, al despertar.** (a) Revisar y, si acepta, fusionar la
-  PR (la fusión ES la aceptación de los riesgos documentados en ADR-017/018);
-  (b) la prueba de 5 minutos en Windows (`BLOQUE_B` §5); (c) la decisión de
-  gasto OpenAI — sin prisa: no bloquea F2-F4 (hay motor local gratis).
+  ADR-018; este plan. Coste: 0 € nuevos (suscripción ya pagada + minutos de
+  Actions; cada run del Auditor pasa a costar ~6-8 minutos MÁS de Actions por
+  la instalación y la batería — cifra declarada, se acepta con la fusión).
+- **F1 — el propietario, al despertar.** (a) Revisar la PR retitulada. **La
+  prohibición de fusionar #171 sigue vigente**: solo la levanta una decisión
+  explícita del propietario — nunca la inercia del ciclo (la PR no lleva
+  etiquetas `sirius:` y ningún automatismo puede fusionarla) — y fusionar ES
+  aceptar los riesgos documentados en ADR-017/018. (b) La prueba de 5 minutos
+  en Windows (`BLOQUE_B` §5). (c) La decisión de gasto OpenAI — sin prisa: no
+  bloquea F2-F4 (hay motor local gratis).
 - **F2 — estrenos calibrados.** RUN-003 del Auditor por etiqueta (con la
   superficie nueva) y estreno del Investigador con la pregunta de la memoria.
   Puerta 1 de §10 del runbook: dos runs consecutivos con la MISMA superficie

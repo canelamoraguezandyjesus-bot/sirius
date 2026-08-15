@@ -46,7 +46,17 @@ BOOTSTRAP = WORKFLOWS / "bootstrap-sirius-automation-labels.yml"
 
 ETIQUETA_DEL_INVESTIGADOR = "investigacion:solicitada"
 
-ACCIONES_CON_MODELO = ("anthropics/claude-code-action",)
+# Registro cerrado de acciones (ADR-018), compartido con test_auditor_workflow.
+REGISTRO: dict[str, Any] = yaml.safe_load(
+    (Path(__file__).resolve().parent / "registro_de_acciones.yml").read_text(encoding="utf-8")
+)
+ACCIONES_CON_MODELO: dict[str, dict[str, str]] = REGISTRO["con_modelo"]
+
+
+def _nombre_accion(uses: str) -> str:
+    """El nombre de una acción sin @versión: la unidad del registro."""
+    return uses.split("@")[0].strip()
+
 
 COMPARA_ETIQUETA = re.compile(r"github\.event\.label\.name\s*==\s*'([^']+)'")
 
@@ -66,9 +76,7 @@ def _pasos(job: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _ejecuta_modelo(job: dict[str, Any]) -> bool:
     return any(
-        accion in str(paso.get("uses") or "")
-        for paso in _pasos(job)
-        for accion in ACCIONES_CON_MODELO
+        _nombre_accion(str(paso.get("uses") or "")) in ACCIONES_CON_MODELO for paso in _pasos(job)
     )
 
 
@@ -92,7 +100,7 @@ def _paso_del_modelo() -> dict[str, Any]:
     return next(
         p
         for p in _pasos(_job_del_modelo())
-        if any(a in str(p.get("uses") or "") for a in ACCIONES_CON_MODELO)
+        if _nombre_accion(str(p.get("uses") or "")) in ACCIONES_CON_MODELO
     )
 
 
@@ -256,6 +264,71 @@ def test_ningun_otro_workflow_reacciona_a_la_etiqueta_del_investigador() -> None
     )
 
 
+# ─────────────────── la frontera de confidencialidad (ADR-017/018) ───────────────────
+
+
+def test_la_web_viene_con_la_regla_de_confidencialidad_y_su_registro_auditable() -> None:
+    """El Investigador junta repositorio PRIVADO y salida a Internet: la web
+    solo es aceptable con las dos piezas de ADR-017/018 — la regla de
+    confidencialidad en el prompt y la extracción de consultas por el ARNÉS,
+    publicada junto al informe. Lo malo que se busca: web sin regla, extractor
+    que escribe texto de web no confiable al canal de outputs, degradación
+    silenciosa, o un apéndice capaz de convertir un run mudo en válido.
+    """
+    pasos = _pasos(_job_del_modelo())
+    ids = [str(p.get("id") or "") for p in pasos]
+
+    guion_prompt = str(pasos[ids.index("build_prompt")].get("run") or "")
+    assert "REGLA DE CONFIDENCIALIDAD" in guion_prompt, (
+        "La web está encendida sin la regla de confidencialidad en el prompt: "
+        "el canal de salida (texto de consultas, URLs) queda sin contrato."
+    )
+
+    assert "consultas" in ids, "El arnés ya no extrae las consultas web del run."
+    assert ids.index("intacto") < ids.index("consultas") < ids.index("recoger"), (
+        "La extracción debe correr tras la huella y antes de recoger, o el "
+        "apéndice no llega al informe publicado."
+    )
+
+    guion_consultas = str(pasos[ids.index("consultas")].get("run") or "")
+    assert "claude-execution-output.json" in guion_consultas, (
+        "El extractor ya no lee el volcado de ejecución del runtime: las "
+        "consultas dejarían de publicarse y el riesgo aceptado en ADR-017 "
+        "quedaría sin vigilancia."
+    )
+    assert "$GITHUB_OUTPUT" not in guion_consultas, (
+        "El extractor escribe en el canal de outputs texto que procede de web no confiable."
+    )
+    # Los DOS caminos de degradación, anclados por separado: una sola aserción
+    # de «hay algún ::warning::» la satisface el aviso que quede — el vicio de
+    # presencia-de-lo-bueno-en-el-sitio-equivocado que ADR-015 cataloga (y que
+    # la mutación M12 de esta misma noche volvió a cazar).
+    for aviso in (
+        "::warning::Consultas web no auditables: falta claude-execution-output.json",
+        "::warning::Consultas web no auditables: volcado con formato desconocido",
+    ):
+        assert aviso in guion_consultas, (
+            f"Falta el aviso «{aviso}»: esa vía de degradación del extractor "
+            "sería SILENCIOSA, y la auditabilidad —la mitad de la decisión de "
+            "ADR-017— se apagaría sin que nadie lo viera."
+        )
+
+    guion_recoger = str(pasos[ids.index("recoger")].get("run") or "")
+    assert guion_recoger.index('if [ ! -s "$informe" ]') < guion_recoger.index(
+        "consultas_web.md"
+    ), (
+        "El apéndice de consultas entra ANTES de evaluar si el informe venía "
+        "vacío: un run mudo pasaría por válido solo por el apéndice del arnés."
+    )
+
+    tope_paso = _paso_del_modelo().get("timeout-minutes")
+    tope_job = _job_del_modelo().get("timeout-minutes")
+    assert isinstance(tope_paso, int) and isinstance(tope_job, int) and tope_paso < tope_job, (
+        "El paso del modelo necesita un tope propio menor que el del job para "
+        "que la extracción de consultas y el artefacto corran SIEMPRE."
+    )
+
+
 # ─────────────────────────── el contenido del informe ───────────────────────────
 
 
@@ -323,7 +396,7 @@ def test_el_arnes_comprueba_la_huella_y_no_se_fia_del_agente() -> None:
     con_modelo = [
         i
         for i, p in enumerate(pasos)
-        if any(a in str(p.get("uses") or "") for a in ACCIONES_CON_MODELO)
+        if _nombre_accion(str(p.get("uses") or "")) in ACCIONES_CON_MODELO
     ]
     assert con_modelo, (
         "Ningún paso de «investigar» invoca la acción del modelo: o el workflow "

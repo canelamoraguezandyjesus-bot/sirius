@@ -60,13 +60,19 @@ a ser implícita.
 
 **3. Las defensas se atan a un registro, no a un nombre.** Nace
 `tests/automation/registro_de_acciones.yml`: TODA acción `uses:` de TODO
-workflow debe estar clasificada (`con_modelo` / `sin_modelo`); una acción
-desconocida pone las pruebas en rojo. `_ejecuta_modelo` deriva del registro en
-todos los ficheros de prueba. En un paso que ejecute un modelo de un workflow
-no exento, la única referencia a `secrets.` admisible (en `with:` y `env:`) es
-la credencial registrada de esa acción. Consecuencia: un motor nuevo no puede
-entrar sin pasar por el registro, y entrar le aplica todas las defensas de
-golpe.
+workflow — la de cada paso Y la de nivel job (reusable workflows), incluidas
+las formas `./ruta` y `docker://` — debe estar clasificada (`con_modelo` /
+`sin_modelo`); una acción desconocida pone las pruebas en rojo.
+`_ejecuta_modelo` deriva del registro en todos los ficheros de prueba. En un
+job que ejecute un modelo de un workflow no exento, la única referencia a
+`secrets.` admisible — recolectada en los TRES niveles: `env` del workflow,
+`env` del job, y `env`+`with` del paso del modelo — es la credencial COMPLETA
+registrada de esa acción (input y secreto, no solo el nombre del input). La
+exención de los tres roles del ciclo deja de ser una lista local de una
+prueba: es un campo del propio registro, DATO visible que las dos reglas (la
+de escritura y la de secretos) leen del mismo sitio. Consecuencia: un motor
+nuevo no puede entrar sin pasar por el registro, y entrar le aplica todas las
+defensas de golpe.
 
 **4. La frontera de confidencialidad del Investigador.** Tres piezas: (a)
 regla de contrato en runbook y prompt — ninguna consulta de búsqueda ni URL
@@ -75,7 +81,14 @@ de documentos); el tema se formula con términos genéricos del dominio público
 (b) pieza MECÁNICA: el arnés extrae del volcado de ejecución del runtime
 (verificado en el run 31835428937: `${RUNNER_TEMP}/claude-execution-output.json`)
 todas las consultas WebSearch y URLs WebFetch y las publica como apéndice del
-informe — el propietario audita lo que salió sin abrir logs; (c) el riesgo
+informe — el propietario audita lo que salió sin abrir logs. El apéndice se
+añade DESPUÉS de evaluar si el informe venía vacío (no puede convertir un run
+mudo en válido) y también en runs inválidos; el extractor es defensivo (jq
+validado, filtros que degradan a lista vacía) y su degradación es VISIBLE —
+aviso ⚠️ en el comentario y `::warning` en el run — porque una auditabilidad
+que se apaga en silencio no es auditabilidad. Deuda declarada del adaptador:
+el formato interno del volcado no tiene fixture propio; el estreno (F2)
+capturará uno real y le pondrá prueba de contrato; (c) el riesgo
 residual queda escrito en ADR-017: un modelo dirigido por una página inyectada
 puede exfiltrar antes de ser detectado; se acepta porque el job no tiene
 secretos que perder, el activo es texto del repo, y todo queda registrado. La

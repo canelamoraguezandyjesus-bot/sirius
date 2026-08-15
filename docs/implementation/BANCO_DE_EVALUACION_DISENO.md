@@ -62,9 +62,23 @@ conserva la DEFINICIÓN de los agentes; el laboratorio los consume leyéndolos.
 ## 4. Banco dorado del Auditor
 
 **Principio (§6 del runbook, intacto):** la clave no vive en el árbol auditado
-y no aparece en la misión. Regla operativa que lo garantiza: **todo caso dorado
-apunta a un commit anterior a la incorporación de la clave al repositorio** —
-el examen nunca está filtrado dentro de lo que el agente puede leer.
+y no aparece en la misión. La primera formulación de esta regla («el caso
+apunta a un commit anterior a la clave») era INSUFICIENTE y la refutación la
+tumbó: los casos dorados son commits de ESTE repositorio, y un checkout con
+historia completa deja leer el futuro por `git log --all` / `git show` — los
+mensajes de commit posteriores describen literalmente los defectos (el de
+`a22eab0` cuenta el FINDING-001), y las propias correcciones son la clave.
+Reglas operativas que SÍ lo garantizan, las dos a la vez:
+
+1. **La clave y la definición de los casos viven SOLO en el laboratorio**
+   (`sirius-lab`); jamás se fusionan a `sirius`.
+2. **El agente evaluado recibe un árbol SIN futuro:** o `git archive` del
+   commit base (sin `.git` — y la superficie declara `leer_historial_git` como
+   no disponible en ese run), o un clon truncado donde se borran todas las
+   refs posteriores al commit base (`reflog expire` + `gc --prune=now`), de
+   modo que el historial alcanzable termine en el caso. La MISMA forma para
+   todos los motores del mismo caso: si no, la diferencia medida sería el
+   arnés, no el modelo (§0 del runbook).
 
 **Composición inicial propuesta (todo con oráculo verificable):**
 

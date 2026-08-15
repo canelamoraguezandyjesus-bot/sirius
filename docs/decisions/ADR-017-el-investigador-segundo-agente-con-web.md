@@ -108,6 +108,44 @@ lo comprobado de lo leído (contenido). Lo que NO se puede impedir es que un
 informe recoja información falsa de una fuente falsa: por eso el formato
 obliga a citar cada afirmación, para que el propietario pueda juzgar la fuente.
 
+## La frontera de confidencialidad (añadida por la reconciliación, ADR-018)
+
+El repositorio es PRIVADO (verificado por API el 15-08) y este agente junta,
+por primera vez, lectura del árbol y salida a Internet. Los canales por los
+que puede salir contenido: el TEXTO de cada consulta de búsqueda y la URL
+completa (dominio, ruta, parámetros) de cada lectura de página. Con las
+herramientas concedidas no hay más: Bash está acotado a git sin red, no hay
+subagentes y el job no tiene secretos que perder.
+
+Tres opciones evaluadas y la decisión:
+
+- **Lista blanca de dominios** — descartada como mitigación principal: no
+  filtra el texto de las consultas de búsqueda (el canal principal) y mata la
+  misión de investigar en abierto. Queda disponible como endurecimiento
+  por-run si un encargo concreto lo pide.
+- **Partición en dos fases** (leer-repo sin web / buscar-web sin repo) — la
+  única imposibilidad mecánica real, pero exige orquestación que este workflow
+  no tiene y rompe el runbook (§3.2 manda contexto del repo ANTES de la web).
+  Es diseño del evaluador (`BANCO_DE_EVALUACION_DISENO.md`), no de v0.
+- **Contrato + registro auditable** — LO DECIDIDO para v0: la regla de
+  confidencialidad con listas CERRADAS (prohibido: fragmentos de código o
+  documentos, rutas, nombres propios del código, números/títulos de
+  incidencias, nombres de secretos; permitido: los términos de la pregunta
+  del propietario, tecnologías públicas, conceptos genéricos, mensajes de
+  error públicos) vive en el runbook §3.3b y en el prompt; y el ARNÉS extrae
+  todas las consultas del volcado de ejecución del runtime y las publica como
+  apéndice del informe. La degradación del extractor es VISIBLE (aviso ⚠️ en
+  el comentario y `::warning` en el run), nunca silenciosa.
+
+**Riesgo residual, aceptado al fusionar:** un modelo dirigido por una página
+inyectada puede exfiltrar contenido del repositorio ANTES de que nadie lea el
+registro — la detección es posterior al hecho. Se acepta porque el job no
+expone secretos ni credenciales (token del run con `contents: read`, nunca el
+PAT), el activo en riesgo es texto del repositorio, y todo queda publicado
+junto al informe. Quien fusione esta PR acepta ESTE párrafo con ella; y la
+prohibición de fusionar dictada el 15-08 sigue vigente hasta que el
+propietario la levante con una decisión explícita, no por inercia del ciclo.
+
 **Coste:** minutos de Actions por run, como todo lo demás. Sin claves nuevas,
 sin servicios nuevos: el mismo token de suscripción del ciclo.
 

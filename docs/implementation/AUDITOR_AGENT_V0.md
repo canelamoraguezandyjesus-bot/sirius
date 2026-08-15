@@ -48,8 +48,8 @@ Categorías obligatorias (ninguna es opcional):
 | Capacidad | v0 |
 |---|---|
 | Leer repositorio, historial git, issues/PRs/comentarios, runs y logs de Actions | Sí |
-| Ejecutar análisis y pruebas seguras (ruff, mypy, pytest, búsquedas) sin escribir fuera de temporales | Sí, si el entorno lo permite |
-| WebSearch / WebFetch | **No** |
+| Ejecutar análisis y pruebas seguras (ruff, mypy, pytest, búsquedas) sin escribir fuera de temporales | Sí — cómo la entrega cada superficie, en §2c |
+| Búsqueda y lectura web | **No** |
 | Editar código o documentación; commit; push; merge | **No** |
 | Cambiar etiquetas, issues, workflows, settings | **No** |
 | Secretos | **No** |
@@ -70,6 +70,24 @@ Esto es lo que un motor alternativo debe implementar para que su run sea compara
 | `leer_github` | issues, PRs, comentarios, revisiones, runs de Actions | declarar por run |
 
 Cada run registra qué capacidades usó realmente. Dos runs solo son comparables si su lista coincide; si no coincide, la diferencia se atribuye al arnés antes que al modelo.
+
+### 2c. Cómo entrega cada superficie el contrato de 2b (ADR-018)
+
+El contrato es del AGENTE; **cómo se cumple es del adaptador**, y se declara
+aquí para que la diferencia entre superficies nunca vuelva a ser implícita
+(la lección de RUN-001 vs RUN-002, medida en
+[`RECONCILIACION_LINEA_DE_AGENTES.md`](RECONCILIACION_LINEA_DE_AGENTES.md) §4):
+
+| Capacidad §2b | En sesión (superficie 1) | Por etiqueta (superficie 2, desde ADR-018) |
+|---|---|---|
+| `listar_ficheros` / `leer_fichero` / `buscar_contenido` | el motor | el motor |
+| `leer_historial_git` | el motor | el motor (Bash acotado a `git log/show/diff`) |
+| `ejecutar_solo_lectura` | el motor las ejecuta | **el ARNÉS las ejecuta** (los cuatro comandos de CI, antes de la huella) y el modelo LEE salidas y códigos |
+| `leer_github` | el motor | **el ARNÉS la vuelca** (listados sin cuerpos + informes previos de auditoría) y el modelo LEE los JSON |
+| Subagentes / verificación adversarial multiagente | disponible (así corrió RUN-001) | **NO existe** — se declara en cada informe en «qué no demuestra este informe»; esa capacidad vive en el evaluador ([`BANCO_DE_EVALUACION_DISENO.md`](BANCO_DE_EVALUACION_DISENO.md)) |
+
+Regla: un run que entregue menos que §2b lo DECLARA en el informe y en las
+métricas. Un informe que calla un recorte de superficie es un run fallido.
 
 ## 3. Runbook
 

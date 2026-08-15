@@ -3,9 +3,10 @@
 - **Autoriza:** ADR-017. Segundo agente del laboratorio, sobre el molde del
   Auditor (ADR-016).
 - **Se invoca desde dos superficies, con este mismo runbook:**
-  1. **En sesión** (disponible siempre): decirle a Claude Code «ejecuta el
-     Investigador sobre: `<pregunta>`». La sesión sigue este documento y
-     entrega el informe en la conversación o donde se le pida.
+  1. **En sesión** (disponible siempre): decirle a CUALQUIER sesión de agente
+     que siga este runbook «ejecuta el Investigador sobre: `<pregunta>`» (hoy
+     esa sesión es Claude Code; el runbook no depende de ello). La sesión
+     sigue este documento y entrega el informe donde se le pida.
   2. **Por etiqueta**: crear una incidencia cuyo cuerpo sea la pregunta y
      ponerle `investigacion:solicitada`. El informe vuelve como comentario.
 
@@ -21,15 +22,19 @@ termina en «hazlo así» sin alternativas ni fuentes no cumple la misión.
 | Capacidad | v0 |
 |---|---|
 | Leer el repositorio (ficheros, historial git) | Sí |
-| **Buscar y leer la web** (`WebSearch`, `WebFetch`) | **Sí — es la diferencia con el Auditor** |
+| **Buscar y leer la web** | **Sí — es la diferencia con el Auditor** |
 | Escribir el informe en la ruta que el arnés le indique | Sí, única escritura legítima |
 | Editar código o documentación; commit; push; etiquetas; issues | **No** |
-| Subagentes (`Task`) | **No** |
+| Subagentes | **No** |
 | Secretos | **No** |
+| **Sacar texto del repositorio en consultas o URL** | **No — regla de confidencialidad (§3.3b)** |
 
-Por etiqueta, estos límites son mecánicos (permisos del job, ADR-017). En
-sesión son procedimentales: la sesión que ejecute este runbook los respeta
-igual, y si la investigación sugiere cambios, los **propone** — no los hace.
+Los nombres de herramienta concretos (`WebSearch`, `Task`…) son del MOTOR y
+viven en el adaptador (el workflow, o la configuración de la sesión); este
+runbook habla de capacidades. Por etiqueta, estos límites son mecánicos
+(permisos del job, ADR-017). En sesión son procedimentales: la sesión que
+ejecute este runbook los respeta igual, y si la investigación sugiere cambios,
+los **propone** — no los hace.
 
 ## 3. Runbook
 
@@ -42,6 +47,16 @@ igual, y si la investigación sugiere cambios, los **propone** — no los hace.
 3. **Investigar fuera.** Buscar y leer fuentes. Preferir fuentes primarias
    (documentación oficial, código fuente, anuncios del fabricante) sobre
    resúmenes de terceros. Registrar la URL de cada fuente usada.
+3b. **Confidencialidad en cada consulta.** El repositorio es privado. En
+   ninguna consulta de búsqueda ni URL solicitada puede viajar texto del
+   repositorio: ni fragmentos de código o documentos, ni rutas de fichero,
+   ni nombres propios del código (funciones, clases, etiquetas, scripts),
+   ni números o títulos de incidencias, ni nombres de secretos. SÍ pueden
+   usarse: los términos de la pregunta tal como la formuló el propietario,
+   nombres de tecnologías públicas, conceptos genéricos del dominio y
+   mensajes de error públicos de herramientas de terceros. Por etiqueta, el
+   arnés extrae todas las consultas del registro de ejecución y las publica
+   junto al informe (ADR-018); en sesión, se listan en el informe a mano.
 4. **Separar tres niveles de confianza, y etiquetarlos en el informe:**
    - **Comprobado**: lo que el run verificó ejecutando o leyendo código real.
    - **Leído en fuente primaria**: documentación oficial, con URL.
@@ -49,10 +64,12 @@ igual, y si la investigación sugiere cambios, los **propone** — no los hace.
 5. **Contrastar, no confirmar.** Buscar al menos una fuente o argumento EN
    CONTRA de la opción que vaya ganando. Si no se encuentra, decirlo — «no
    encontré objeciones» es información; omitir la búsqueda no lo es.
-6. **El observador dentro de lo observado.** Si la pregunta trata sobre Claude,
-   Anthropic o este propio laboratorio, declararlo al principio del informe y
-   recomendar contraste externo. Un modelo investigándose a sí mismo tiene los
-   puntos ciegos catalogados en `patrones.md`.
+6. **El observador dentro de lo observado.** Si la pregunta trata sobre el
+   modelo que ejecuta este run, su fabricante, o este propio laboratorio,
+   declararlo al principio del informe y recomendar contraste externo. Un
+   modelo investigándose a sí mismo tiene los puntos ciegos catalogados en
+   `patrones.md`. (La regla es por MOTOR: con otro modelo, el conflicto es
+   con su fabricante, no con el de hoy.)
 7. **Escribir el informe INCREMENTALMENTE** desde el primer hallazgo, en la
    ruta que indique el arnés (por etiqueta) o como se acuerde (en sesión).
 
@@ -96,7 +113,8 @@ es observable, `unknown` si no; áreas declaradas como no comprobadas.
 - **Éxito:** el propietario puede tomar una decisión leyendo solo el informe, y
   puede auditar cualquier afirmación siguiendo su fuente.
 - **Fallo:** afirmaciones sin fuente; opciones sin coste; recomendación única
-  sin alternativas; no declarar el conflicto del §3.6 cuando aplica.
+  sin alternativas; no declarar el conflicto del §3.6 cuando aplica; **una
+  consulta o URL con contenido del repositorio (§3.3b) invalida el run**.
 - **Parada:** si la pregunta exige decidir (no investigar) o implementar, el
   run se detiene y lo dice: eso es del propietario o de un bloque de trabajo.
 

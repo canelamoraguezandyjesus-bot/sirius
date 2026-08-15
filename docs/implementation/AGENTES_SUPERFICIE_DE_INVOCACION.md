@@ -6,7 +6,14 @@
   web y con las superficies 1 y 2 desde el primer día). La superficie 3 sigue
   pospuesta hasta cerrar 0.1 y el multimodelo bloqueado tras la respuesta del
   §4. Este documento no autoriza nada por sí mismo; autorizan los ADR.
-- **Actualizado:** 15 de agosto de 2026, al construir el Investigador.
+- **Actualizado:** 15 de agosto de 2026 (madrugada), con la reconciliación de
+  la línea de agentes: los CINCO conceptos que este documento mezclaba a veces
+  (agente / modelo / runtime / evaluador / superficie) quedan separados y
+  mapeados en [`RECONCILIACION_LINEA_DE_AGENTES.md`](RECONCILIACION_LINEA_DE_AGENTES.md),
+  que desde ahora es el documento rector de esta línea; este queda como
+  catálogo de superficies. El Auditor por etiqueta dejó de ser «lectura
+  estática»: el arnés ejecuta las comprobaciones de CI y vuelca el contexto de
+  GitHub, y el modelo los interpreta (ADR-018).
 - **Base:** [`AGENT_OPPORTUNITY_MATRIX.md`](AGENT_OPPORTUNITY_MATRIX.md),
   [`AUDITOR_AGENT_V0.md`](AUDITOR_AGENT_V0.md), ADR-010, y la investigación
   externa del 14-08-2026 resumida en §5.
