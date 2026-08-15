@@ -475,7 +475,8 @@ Agente externo tras Adapter (#172 tipo B). No se instala en esta fase; su Adapte
 ### 7.4 Telegram (Adapter de interacción, sin lógica de motor)
 
 - Traduce mensajes/voz/archivos ↔ operaciones de la Capa 1: conversar, consultar estado,
-  crear trabajo (con confirmación), pausar, reanudar, cancelar, decidir una escalada.
+  crear trabajo según la puerta de intención de 8.5, pausar, reanudar, cancelar, decidir
+  una escalada.
 - **Cero estado propio**: si Telegram desaparece, no se pierde nada; otra interfaz (CLI,
   sesión, UI futura) ofrece las mismas operaciones contra el mismo motor.
 - Seguridad mínima de diseño: solo el propietario autenticado; toda orden sensible se
