@@ -1,0 +1,4677 @@
+{
+  "que_es": "medicion de las dos mitades del modelo local sobre el banco de ADR-002: la ampliacion que ensancha y el filtro que estrecha, en ese orden",
+  "commit": "44df432",
+  "denominador": "47 adjudicables = 50 casos ejecutables menos 3 no adjudicables, segun round/cases.py. El banco contiene otro recuento distinto que tambien vale 47",
+  "procedencia_del_modelo": {
+    "proveedor": "ollama",
+    "modelo": "qwen3:4b-instruct",
+    "huella": "0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+  },
+  "vocabulario_de_categoria": [
+    "esencial",
+    "restriccion",
+    "critica",
+    "obligatoria",
+    "imprescindible"
+  ],
+  "linea_base_publicada": {
+    "exactos": 24,
+    "omisiones": 11,
+    "contaminacion": 3
+  },
+  "filas": [
+    {
+      "corrida": "1. busqueda tal cual",
+      "casos_adjudicables": 47,
+      "casos_con_contenido": 31,
+      "casos_de_ausencia": 16,
+      "conjunto_exacto": 24,
+      "lo_correcto_entra_entero": 24,
+      "elementos_hallados": "64/81",
+      "elementos_de_mas": 29,
+      "omisiones_criticas": 11,
+      "contaminacion": 3,
+      "fuga_de_ambito": 0,
+      "ausencia_correcta": 36,
+      "filtro_actuo": 0,
+      "filtro_fallo_abierto": 0,
+      "correctos_quitados": 0,
+      "criticos_quitados": 0,
+      "latencia_mediana_s": null,
+      "latencia_p95_s": null
+    },
+    {
+      "corrida": "2. mas ampliacion",
+      "casos_adjudicables": 47,
+      "casos_con_contenido": 31,
+      "casos_de_ausencia": 16,
+      "conjunto_exacto": 22,
+      "lo_correcto_entra_entero": 24,
+      "elementos_hallados": "64/81",
+      "elementos_de_mas": 68,
+      "omisiones_criticas": 11,
+      "contaminacion": 3,
+      "fuga_de_ambito": 0,
+      "ausencia_correcta": 37,
+      "filtro_actuo": 0,
+      "filtro_fallo_abierto": 0,
+      "correctos_quitados": 0,
+      "criticos_quitados": 0,
+      "latencia_mediana_s": null,
+      "latencia_p95_s": null
+    },
+    {
+      "corrida": "3. mas filtro",
+      "casos_adjudicables": 47,
+      "casos_con_contenido": 31,
+      "casos_de_ausencia": 16,
+      "conjunto_exacto": 29,
+      "lo_correcto_entra_entero": 18,
+      "elementos_hallados": "47/81",
+      "elementos_de_mas": 5,
+      "omisiones_criticas": 17,
+      "contaminacion": 2,
+      "fuga_de_ambito": 0,
+      "ausencia_correcta": 39,
+      "filtro_actuo": 39,
+      "filtro_fallo_abierto": 0,
+      "correctos_quitados": 17,
+      "criticos_quitados": 6,
+      "latencia_mediana_s": 3.03,
+      "latencia_p95_s": 3.51
+    },
+    {
+      "corrida": "4. solo filtro, sin ampliacion",
+      "casos_adjudicables": 47,
+      "casos_con_contenido": 31,
+      "casos_de_ausencia": 16,
+      "conjunto_exacto": 29,
+      "lo_correcto_entra_entero": 19,
+      "elementos_hallados": "48/81",
+      "elementos_de_mas": 3,
+      "omisiones_criticas": 17,
+      "contaminacion": 2,
+      "fuga_de_ambito": 0,
+      "ausencia_correcta": 38,
+      "filtro_actuo": 36,
+      "filtro_fallo_abierto": 0,
+      "correctos_quitados": 16,
+      "criticos_quitados": 6,
+      "latencia_mediana_s": 3.04,
+      "latencia_p95_s": 3.66
+    }
+  ],
+  "detalle_por_caso": {
+    "1. busqueda tal cual": [
+      {
+        "caso": "N1-01",
+        "consulta": "¿Cómo prefiero que redactes?",
+        "esperado": [
+          "MEMORIA:1"
+        ],
+        "obtenido": [
+          "MEMORIA:1"
+        ]
+      },
+      {
+        "caso": "N1-02",
+        "consulta": "¿Qué restricciones de transporte tengo?",
+        "esperado": [
+          "MEMORIA:2"
+        ],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-03",
+        "consulta": "¿Qué reglas de calidad aplican a Gamma?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111",
+          "MEMORIA:112"
+        ]
+      },
+      {
+        "caso": "N1-04",
+        "consulta": "¿Qué formato de informe uso?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:906",
+          "MEMORIA:925"
+        ]
+      },
+      {
+        "caso": "N1-05",
+        "consulta": "¿Qué decisión de presupuesto usábamos antes?",
+        "esperado": [
+          "DECISION:2"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "DECISION:2"
+        ]
+      },
+      {
+        "caso": "N1-06",
+        "consulta": "¿Qué proveedor de mensajería aplica?",
+        "esperado": [
+          "DECISION:4"
+        ],
+        "obtenido": [
+          "DECISION:4"
+        ]
+      },
+      {
+        "caso": "N1-07",
+        "consulta": "¿Desde cuándo rige el contrato de mantenimiento?",
+        "esperado": [
+          "MEMORIA:5"
+        ],
+        "obtenido": [
+          "MEMORIA:5"
+        ]
+      },
+      {
+        "caso": "N1-08",
+        "consulta": "¿Cuál es el presupuesto de Beta?",
+        "esperado": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "obtenido": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ]
+      },
+      {
+        "caso": "N1-09",
+        "consulta": "¿Qué preferencia de reuniones tengo?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ]
+      },
+      {
+        "caso": "N1-10",
+        "consulta": "¿Qué horario de entrega tengo fijado?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-11",
+        "consulta": "¿Qué sabes del expediente retirado?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-12",
+        "consulta": "¿Hay información médica del titular?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-13",
+        "consulta": "¿Cuál es el identificador de PAA?",
+        "esperado": [
+          "MEMORIA:11"
+        ],
+        "obtenido": [
+          "MEMORIA:11"
+        ]
+      },
+      {
+        "caso": "N1-14",
+        "consulta": "¿De qué se ocupa Juan?",
+        "esperado": [
+          "MEMORIA:12",
+          "MEMORIA:13"
+        ],
+        "obtenido": [
+          "MEMORIA:25",
+          "MEMORIA:13",
+          "MEMORIA:12",
+          "DECISION:1",
+          "MEMORIA:23",
+          "MEMORIA:27"
+        ]
+      },
+      {
+        "caso": "N1-15",
+        "consulta": "¿Dónde dije exactamente que el alcance no incluye la migración?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:14",
+          "DECISION:10",
+          "MEMORIA:17",
+          "MEMORIA:21",
+          "MEMORIA:5"
+        ]
+      },
+      {
+        "caso": "N1-16",
+        "consulta": "¿Quién cierra el circuito de firmas?",
+        "esperado": [
+          "MEMORIA:27"
+        ],
+        "obtenido": [
+          "MEMORIA:27"
+        ]
+      },
+      {
+        "caso": "N1-17",
+        "consulta": "¿Qué política de teletrabajo tenemos en Alfa?",
+        "esperado": [],
+        "obtenido": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:11"
+        ]
+      },
+      {
+        "caso": "N1-18",
+        "consulta": "¿Qué dice el anexo técnico requerido?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-19",
+        "consulta": "¿Cuál es la plataforma de despliegue aprobada?",
+        "esperado": [
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ],
+        "obtenido": [
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ]
+      },
+      {
+        "caso": "N1-20",
+        "consulta": "¿Puedo usar vuelos con escala?",
+        "esperado": [
+          "MEMORIA:14"
+        ],
+        "obtenido": [
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "DECISION:10"
+        ]
+      },
+      {
+        "caso": "N1-21",
+        "consulta": "¿Acepto escalas?",
+        "esperado": [
+          "MEMORIA:16"
+        ],
+        "obtenido": [
+          "MEMORIA:14",
+          "MEMORIA:16"
+        ]
+      },
+      {
+        "caso": "N1-22",
+        "consulta": "¿Qué decisiones eran válidas entre enero y marzo?",
+        "esperado": [
+          "DECISION:1",
+          "DECISION:5",
+          "DECISION:9",
+          "DECISION:11",
+          "DECISION:14",
+          "DECISION:15"
+        ],
+        "obtenido": [
+          "DECISION:14"
+        ]
+      },
+      {
+        "caso": "N1-23",
+        "consulta": "¿Cuál es la decisión de presupuesto actual y cuál reemplazó?",
+        "esperado": [
+          "DECISION:2",
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "DECISION:2"
+        ]
+      },
+      {
+        "caso": "N1-24",
+        "consulta": "¿Cada cuánto revisamos el alcance?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-25",
+        "consulta": "Atlas",
+        "esperado": [
+          "MEMORIA:11"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:11"
+        ]
+      },
+      {
+        "caso": "N1-26",
+        "consulta": "Enumera las restricciones esenciales del expediente Gamma.",
+        "esperado": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111"
+        ],
+        "obtenido": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111"
+        ]
+      },
+      {
+        "caso": "N1-27",
+        "consulta": "¿Qué presupuesto aplico en Beta según el documento?",
+        "esperado": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "obtenido": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ]
+      },
+      {
+        "caso": "N1-28",
+        "consulta": "¿Qué se dijo en la sesión no guardada?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:14",
+          "DECISION:10",
+          "MEMORIA:16",
+          "MEMORIA:21",
+          "MEMORIA:5",
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:917",
+          "MEMORIA:919",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ]
+      },
+      {
+        "caso": "N1-29",
+        "consulta": "¿Cuál es el plazo legal de entrega?",
+        "esperado": [
+          "MEMORIA:20"
+        ],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-30",
+        "consulta": "Resume mi preferencia de redacción, el presupuesto vigente y la condición de ahorro en escalas, con su razón.",
+        "esperado": [
+          "DECISION:3",
+          "MEMORIA:1",
+          "MEMORIA:16"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "MEMORIA:16",
+          "DECISION:10",
+          "MEMORIA:11"
+        ]
+      },
+      {
+        "caso": "N1-31",
+        "consulta": "Dame todas las restricciones esenciales que debo respetar.",
+        "esperado": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "MEMORIA:25"
+        ],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-32",
+        "consulta": "¿Qué sabía Sirius sobre el aforo el 1 de marzo?",
+        "esperado": [
+          "DECISION:12"
+        ],
+        "obtenido": [
+          "DECISION:12"
+        ]
+      },
+      {
+        "caso": "N1-33",
+        "consulta": "[interna B05] evidencia de límite de gasto",
+        "esperado": [
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "MEMORIA:11"
+        ]
+      },
+      {
+        "caso": "N1-34",
+        "consulta": "Prepara el contexto de planificación de Alfa.",
+        "esperado": [
+          "DECISION:3",
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "MEMORIA:903",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:919"
+        ],
+        "obtenido": [
+          "MEMORIA:903",
+          "MEMORIA:915",
+          "MEMORIA:919",
+          "MEMORIA:931",
+          "MEMORIA:11",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:939"
+        ]
+      },
+      {
+        "caso": "N1-35",
+        "consulta": "¿Qué nota interna hay sobre la prueba?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:917",
+          "MEMORIA:919",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ]
+      },
+      {
+        "caso": "N1-36",
+        "consulta": "Variantes de la misma pregunta con dato histórico, candidata y fuera de ámbito.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-37",
+        "consulta": "¿Hay algo sobre el tema sensible del titular?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-38",
+        "consulta": "Dame las restricciones esenciales, máximo 10.",
+        "esperado": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110"
+        ],
+        "obtenido": [
+          "MEMORIA:110",
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109"
+        ]
+      },
+      {
+        "caso": "N1-39",
+        "consulta": "Ejecuta el mismo corpus con dos implementaciones distintas.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-40",
+        "consulta": "¿Cuál es el presupuesto vigente de Alfa?",
+        "esperado": [
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "MEMORIA:11"
+        ]
+      },
+      {
+        "caso": "N1-41",
+        "consulta": "¿Cada cuánto se revisa el coche de empresa?",
+        "esperado": [
+          "MEMORIA:22"
+        ],
+        "obtenido": [
+          "MEMORIA:22"
+        ]
+      },
+      {
+        "caso": "N1-42",
+        "consulta": "¿Usar PostgreSQL?",
+        "esperado": [
+          "DECISION:10"
+        ],
+        "obtenido": [
+          "DECISION:10"
+        ]
+      },
+      {
+        "caso": "N1-43",
+        "consulta": "¿Quién valida los entregables de calidad?",
+        "esperado": [
+          "MEMORIA:23",
+          "MEMORIA:24"
+        ],
+        "obtenido": [
+          "MEMORIA:23",
+          "MEMORIA:24",
+          "MEMORIA:12"
+        ]
+      },
+      {
+        "caso": "N1-44",
+        "consulta": "Restricciones esenciales, máximo duro 5.",
+        "esperado": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105"
+        ],
+        "obtenido": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105"
+        ]
+      },
+      {
+        "caso": "N1-45",
+        "consulta": "¿Cuál es el presupuesto que manejamos?",
+        "esperado": [
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:3"
+        ]
+      },
+      {
+        "caso": "N1-46",
+        "consulta": "[interna] datos de nómina del equipo Beta",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-47",
+        "consulta": "Consultas por occurred_at, valid_time y recorded_at.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-48",
+        "consulta": "Par diferencial: misma consulta, dos propósitos.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-49",
+        "consulta": "¿Hay algo sobre mi preferencia de reuniones?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:4",
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ]
+      },
+      {
+        "caso": "N1-50",
+        "consulta": "¿Qué condiciones de acceso al almacén hay?",
+        "esperado": [
+          "MEMORIA:25"
+        ],
+        "obtenido": [
+          "MEMORIA:25",
+          "MEMORIA:913",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:930",
+          "MEMORIA:939"
+        ]
+      }
+    ],
+    "2. mas ampliacion": [
+      {
+        "caso": "N1-01",
+        "consulta": "¿Cómo prefiero que redactes?",
+        "esperado": [
+          "MEMORIA:1"
+        ],
+        "obtenido": [
+          "MEMORIA:1"
+        ]
+      },
+      {
+        "caso": "N1-02",
+        "consulta": "¿Qué restricciones de transporte tengo?",
+        "esperado": [
+          "MEMORIA:2"
+        ],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-03",
+        "consulta": "¿Qué reglas de calidad aplican a Gamma?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111",
+          "MEMORIA:112"
+        ]
+      },
+      {
+        "caso": "N1-04",
+        "consulta": "¿Qué formato de informe uso?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:906",
+          "MEMORIA:925"
+        ]
+      },
+      {
+        "caso": "N1-05",
+        "consulta": "¿Qué decisión de presupuesto usábamos antes?",
+        "esperado": [
+          "DECISION:2"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "DECISION:2"
+        ]
+      },
+      {
+        "caso": "N1-06",
+        "consulta": "¿Qué proveedor de mensajería aplica?",
+        "esperado": [
+          "DECISION:4"
+        ],
+        "obtenido": [
+          "DECISION:4"
+        ]
+      },
+      {
+        "caso": "N1-07",
+        "consulta": "¿Desde cuándo rige el contrato de mantenimiento?",
+        "esperado": [
+          "MEMORIA:5"
+        ],
+        "obtenido": [
+          "MEMORIA:5"
+        ]
+      },
+      {
+        "caso": "N1-08",
+        "consulta": "¿Cuál es el presupuesto de Beta?",
+        "esperado": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "obtenido": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ]
+      },
+      {
+        "caso": "N1-09",
+        "consulta": "¿Qué preferencia de reuniones tengo?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ]
+      },
+      {
+        "caso": "N1-10",
+        "consulta": "¿Qué horario de entrega tengo fijado?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:24"
+        ]
+      },
+      {
+        "caso": "N1-11",
+        "consulta": "¿Qué sabes del expediente retirado?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-12",
+        "consulta": "¿Hay información médica del titular?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-13",
+        "consulta": "¿Cuál es el identificador de PAA?",
+        "esperado": [
+          "MEMORIA:11"
+        ],
+        "obtenido": [
+          "MEMORIA:11"
+        ]
+      },
+      {
+        "caso": "N1-14",
+        "consulta": "¿De qué se ocupa Juan?",
+        "esperado": [
+          "MEMORIA:12",
+          "MEMORIA:13"
+        ],
+        "obtenido": [
+          "MEMORIA:25",
+          "MEMORIA:13",
+          "MEMORIA:12",
+          "DECISION:1",
+          "MEMORIA:23",
+          "MEMORIA:27"
+        ]
+      },
+      {
+        "caso": "N1-15",
+        "consulta": "¿Dónde dije exactamente que el alcance no incluye la migración?",
+        "esperado": [],
+        "obtenido": [
+          "DECISION:3",
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "MEMORIA:25",
+          "DECISION:10",
+          "MEMORIA:17",
+          "MEMORIA:21",
+          "MEMORIA:4",
+          "MEMORIA:5",
+          "MEMORIA:911",
+          "MEMORIA:919",
+          "MEMORIA:925"
+        ]
+      },
+      {
+        "caso": "N1-16",
+        "consulta": "¿Quién cierra el circuito de firmas?",
+        "esperado": [
+          "MEMORIA:27"
+        ],
+        "obtenido": [
+          "MEMORIA:27"
+        ]
+      },
+      {
+        "caso": "N1-17",
+        "consulta": "¿Qué política de teletrabajo tenemos en Alfa?",
+        "esperado": [],
+        "obtenido": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:11"
+        ]
+      },
+      {
+        "caso": "N1-18",
+        "consulta": "¿Qué dice el anexo técnico requerido?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-19",
+        "consulta": "¿Cuál es la plataforma de despliegue aprobada?",
+        "esperado": [
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ],
+        "obtenido": [
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ]
+      },
+      {
+        "caso": "N1-20",
+        "consulta": "¿Puedo usar vuelos con escala?",
+        "esperado": [
+          "MEMORIA:14"
+        ],
+        "obtenido": [
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "DECISION:10",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:914",
+          "MEMORIA:917",
+          "MEMORIA:930",
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ]
+      },
+      {
+        "caso": "N1-21",
+        "consulta": "¿Acepto escalas?",
+        "esperado": [
+          "MEMORIA:16"
+        ],
+        "obtenido": [
+          "MEMORIA:14"
+        ]
+      },
+      {
+        "caso": "N1-22",
+        "consulta": "¿Qué decisiones eran válidas entre enero y marzo?",
+        "esperado": [
+          "DECISION:1",
+          "DECISION:5",
+          "DECISION:9",
+          "DECISION:11",
+          "DECISION:14",
+          "DECISION:15"
+        ],
+        "obtenido": [
+          "DECISION:14"
+        ]
+      },
+      {
+        "caso": "N1-23",
+        "consulta": "¿Cuál es la decisión de presupuesto actual y cuál reemplazó?",
+        "esperado": [
+          "DECISION:2",
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "DECISION:2"
+        ]
+      },
+      {
+        "caso": "N1-24",
+        "consulta": "¿Cada cuánto revisamos el alcance?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-25",
+        "consulta": "Atlas",
+        "esperado": [
+          "MEMORIA:11"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:11"
+        ]
+      },
+      {
+        "caso": "N1-26",
+        "consulta": "Enumera las restricciones esenciales del expediente Gamma.",
+        "esperado": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111"
+        ],
+        "obtenido": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111"
+        ]
+      },
+      {
+        "caso": "N1-27",
+        "consulta": "¿Qué presupuesto aplico en Beta según el documento?",
+        "esperado": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "obtenido": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ]
+      },
+      {
+        "caso": "N1-28",
+        "consulta": "¿Qué se dijo en la sesión no guardada?",
+        "esperado": [],
+        "obtenido": [
+          "DECISION:3",
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "MEMORIA:25",
+          "DECISION:10",
+          "MEMORIA:21",
+          "MEMORIA:4",
+          "MEMORIA:5",
+          "MEMORIA:911",
+          "MEMORIA:919",
+          "MEMORIA:925"
+        ]
+      },
+      {
+        "caso": "N1-29",
+        "consulta": "¿Cuál es el plazo legal de entrega?",
+        "esperado": [
+          "MEMORIA:20"
+        ],
+        "obtenido": [
+          "MEMORIA:24",
+          "MEMORIA:917"
+        ]
+      },
+      {
+        "caso": "N1-30",
+        "consulta": "Resume mi preferencia de redacción, el presupuesto vigente y la condición de ahorro en escalas, con su razón.",
+        "esperado": [
+          "DECISION:3",
+          "MEMORIA:1",
+          "MEMORIA:16"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "MEMORIA:14",
+          "MEMORIA:16"
+        ]
+      },
+      {
+        "caso": "N1-31",
+        "consulta": "Dame todas las restricciones esenciales que debo respetar.",
+        "esperado": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "MEMORIA:25"
+        ],
+        "obtenido": [
+          "MEMORIA:919",
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ]
+      },
+      {
+        "caso": "N1-32",
+        "consulta": "¿Qué sabía Sirius sobre el aforo el 1 de marzo?",
+        "esperado": [
+          "DECISION:12"
+        ],
+        "obtenido": [
+          "DECISION:12"
+        ]
+      },
+      {
+        "caso": "N1-33",
+        "consulta": "[interna B05] evidencia de límite de gasto",
+        "esperado": [
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "MEMORIA:25",
+          "DECISION:10",
+          "MEMORIA:5",
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:913",
+          "MEMORIA:915",
+          "MEMORIA:921",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ]
+      },
+      {
+        "caso": "N1-34",
+        "consulta": "Prepara el contexto de planificación de Alfa.",
+        "esperado": [
+          "DECISION:3",
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "MEMORIA:903",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:919"
+        ],
+        "obtenido": [
+          "MEMORIA:903",
+          "MEMORIA:915",
+          "MEMORIA:919",
+          "MEMORIA:931",
+          "MEMORIA:11",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:939"
+        ]
+      },
+      {
+        "caso": "N1-35",
+        "consulta": "¿Qué nota interna hay sobre la prueba?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:917",
+          "MEMORIA:919",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ]
+      },
+      {
+        "caso": "N1-36",
+        "consulta": "Variantes de la misma pregunta con dato histórico, candidata y fuera de ámbito.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-37",
+        "consulta": "¿Hay algo sobre el tema sensible del titular?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-38",
+        "consulta": "Dame las restricciones esenciales, máximo 10.",
+        "esperado": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110"
+        ],
+        "obtenido": [
+          "MEMORIA:110",
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109"
+        ]
+      },
+      {
+        "caso": "N1-39",
+        "consulta": "Ejecuta el mismo corpus con dos implementaciones distintas.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-40",
+        "consulta": "¿Cuál es el presupuesto vigente de Alfa?",
+        "esperado": [
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "MEMORIA:11"
+        ]
+      },
+      {
+        "caso": "N1-41",
+        "consulta": "¿Cada cuánto se revisa el coche de empresa?",
+        "esperado": [
+          "MEMORIA:22"
+        ],
+        "obtenido": [
+          "MEMORIA:22"
+        ]
+      },
+      {
+        "caso": "N1-42",
+        "consulta": "¿Usar PostgreSQL?",
+        "esperado": [
+          "DECISION:10"
+        ],
+        "obtenido": [
+          "DECISION:10",
+          "MEMORIA:910",
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ]
+      },
+      {
+        "caso": "N1-43",
+        "consulta": "¿Quién valida los entregables de calidad?",
+        "esperado": [
+          "MEMORIA:23",
+          "MEMORIA:24"
+        ],
+        "obtenido": [
+          "MEMORIA:23",
+          "MEMORIA:24",
+          "MEMORIA:12"
+        ]
+      },
+      {
+        "caso": "N1-44",
+        "consulta": "Restricciones esenciales, máximo duro 5.",
+        "esperado": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105"
+        ],
+        "obtenido": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105"
+        ]
+      },
+      {
+        "caso": "N1-45",
+        "consulta": "¿Cuál es el presupuesto que manejamos?",
+        "esperado": [
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:3"
+        ]
+      },
+      {
+        "caso": "N1-46",
+        "consulta": "[interna] datos de nómina del equipo Beta",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-47",
+        "consulta": "Consultas por occurred_at, valid_time y recorded_at.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-48",
+        "consulta": "Par diferencial: misma consulta, dos propósitos.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-49",
+        "consulta": "¿Hay algo sobre mi preferencia de reuniones?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:4",
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ]
+      },
+      {
+        "caso": "N1-50",
+        "consulta": "¿Qué condiciones de acceso al almacén hay?",
+        "esperado": [
+          "MEMORIA:25"
+        ],
+        "obtenido": [
+          "MEMORIA:25",
+          "MEMORIA:913",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:930",
+          "MEMORIA:939"
+        ]
+      }
+    ],
+    "3. mas filtro": [
+      {
+        "caso": "N1-01",
+        "consulta": "¿Cómo prefiero que redactes?",
+        "esperado": [
+          "MEMORIA:1"
+        ],
+        "obtenido": [
+          "MEMORIA:1"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:1"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-02",
+        "consulta": "¿Qué restricciones de transporte tengo?",
+        "esperado": [
+          "MEMORIA:2"
+        ],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-03",
+        "consulta": "¿Qué reglas de calidad aplican a Gamma?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111",
+          "MEMORIA:112"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111",
+          "MEMORIA:112"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-04",
+        "consulta": "¿Qué formato de informe uso?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:906",
+          "MEMORIA:925"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:906",
+          "MEMORIA:925"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-05",
+        "consulta": "¿Qué decisión de presupuesto usábamos antes?",
+        "esperado": [
+          "DECISION:2"
+        ],
+        "obtenido": [
+          "DECISION:2"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "DECISION:2"
+        ],
+        "quitados": [
+          "DECISION:3"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-06",
+        "consulta": "¿Qué proveedor de mensajería aplica?",
+        "esperado": [
+          "DECISION:4"
+        ],
+        "obtenido": [
+          "DECISION:4"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:4"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-07",
+        "consulta": "¿Desde cuándo rige el contrato de mantenimiento?",
+        "esperado": [
+          "MEMORIA:5"
+        ],
+        "obtenido": [
+          "MEMORIA:5"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:5"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-08",
+        "consulta": "¿Cuál es el presupuesto de Beta?",
+        "esperado": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "obtenido": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-09",
+        "consulta": "¿Qué preferencia de reuniones tengo?",
+        "esperado": [],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ],
+        "quitados": [
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-10",
+        "consulta": "¿Qué horario de entrega tengo fijado?",
+        "esperado": [],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "MEMORIA:24"
+        ],
+        "quitados": [
+          "MEMORIA:24"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-11",
+        "consulta": "¿Qué sabes del expediente retirado?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-12",
+        "consulta": "¿Hay información médica del titular?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-13",
+        "consulta": "¿Cuál es el identificador de PAA?",
+        "esperado": [
+          "MEMORIA:11"
+        ],
+        "obtenido": [
+          "MEMORIA:11"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:11"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-14",
+        "consulta": "¿De qué se ocupa Juan?",
+        "esperado": [
+          "MEMORIA:12",
+          "MEMORIA:13"
+        ],
+        "obtenido": [
+          "MEMORIA:13"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:25",
+          "MEMORIA:13",
+          "MEMORIA:12",
+          "DECISION:1",
+          "MEMORIA:23",
+          "MEMORIA:27"
+        ],
+        "quitados": [
+          "MEMORIA:25",
+          "MEMORIA:12",
+          "DECISION:1",
+          "MEMORIA:23",
+          "MEMORIA:27"
+        ],
+        "quitados_correctos": [
+          "MEMORIA:12"
+        ],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-15",
+        "consulta": "¿Dónde dije exactamente que el alcance no incluye la migración?",
+        "esperado": [],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "MEMORIA:25",
+          "DECISION:10",
+          "MEMORIA:17",
+          "MEMORIA:21",
+          "MEMORIA:4",
+          "MEMORIA:5",
+          "MEMORIA:911",
+          "MEMORIA:919",
+          "MEMORIA:925"
+        ],
+        "quitados": [
+          "DECISION:3",
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "MEMORIA:25",
+          "DECISION:10",
+          "MEMORIA:17",
+          "MEMORIA:21",
+          "MEMORIA:4",
+          "MEMORIA:5",
+          "MEMORIA:911",
+          "MEMORIA:919",
+          "MEMORIA:925"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-16",
+        "consulta": "¿Quién cierra el circuito de firmas?",
+        "esperado": [
+          "MEMORIA:27"
+        ],
+        "obtenido": [
+          "MEMORIA:27"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:27"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-17",
+        "consulta": "¿Qué política de teletrabajo tenemos en Alfa?",
+        "esperado": [],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:11"
+        ],
+        "quitados": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:11"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-18",
+        "consulta": "¿Qué dice el anexo técnico requerido?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-19",
+        "consulta": "¿Cuál es la plataforma de despliegue aprobada?",
+        "esperado": [
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ],
+        "obtenido": [
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-20",
+        "consulta": "¿Puedo usar vuelos con escala?",
+        "esperado": [
+          "MEMORIA:14"
+        ],
+        "obtenido": [
+          "MEMORIA:14",
+          "MEMORIA:16"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "DECISION:10",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:914",
+          "MEMORIA:917",
+          "MEMORIA:930",
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ],
+        "quitados": [
+          "DECISION:10",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:914",
+          "MEMORIA:917",
+          "MEMORIA:930",
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-21",
+        "consulta": "¿Acepto escalas?",
+        "esperado": [
+          "MEMORIA:16"
+        ],
+        "obtenido": [
+          "MEMORIA:14"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:14"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-22",
+        "consulta": "¿Qué decisiones eran válidas entre enero y marzo?",
+        "esperado": [
+          "DECISION:1",
+          "DECISION:5",
+          "DECISION:9",
+          "DECISION:11",
+          "DECISION:14",
+          "DECISION:15"
+        ],
+        "obtenido": [
+          "DECISION:14"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:14"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-23",
+        "consulta": "¿Cuál es la decisión de presupuesto actual y cuál reemplazó?",
+        "esperado": [
+          "DECISION:2",
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:2"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "DECISION:2"
+        ],
+        "quitados": [
+          "DECISION:3"
+        ],
+        "quitados_correctos": [
+          "DECISION:3"
+        ],
+        "quitados_criticos": [
+          "DECISION:3"
+        ],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-24",
+        "consulta": "¿Cada cuánto revisamos el alcance?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-25",
+        "consulta": "Atlas",
+        "esperado": [
+          "MEMORIA:11"
+        ],
+        "obtenido": [
+          "MEMORIA:11"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:11"
+        ],
+        "quitados": [
+          "DECISION:3",
+          "DECISION:10"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-26",
+        "consulta": "Enumera las restricciones esenciales del expediente Gamma.",
+        "esperado": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111"
+        ],
+        "obtenido": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-27",
+        "consulta": "¿Qué presupuesto aplico en Beta según el documento?",
+        "esperado": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "obtenido": [
+          "DECISION:5"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "quitados": [
+          "MEMORIA:6"
+        ],
+        "quitados_correctos": [
+          "MEMORIA:6"
+        ],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-28",
+        "consulta": "¿Qué se dijo en la sesión no guardada?",
+        "esperado": [],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "MEMORIA:25",
+          "DECISION:10",
+          "MEMORIA:21",
+          "MEMORIA:4",
+          "MEMORIA:5",
+          "MEMORIA:911",
+          "MEMORIA:919",
+          "MEMORIA:925"
+        ],
+        "quitados": [
+          "DECISION:3",
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "MEMORIA:25",
+          "DECISION:10",
+          "MEMORIA:21",
+          "MEMORIA:4",
+          "MEMORIA:5",
+          "MEMORIA:911",
+          "MEMORIA:919",
+          "MEMORIA:925"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-29",
+        "consulta": "¿Cuál es el plazo legal de entrega?",
+        "esperado": [
+          "MEMORIA:20"
+        ],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "MEMORIA:24",
+          "MEMORIA:917"
+        ],
+        "quitados": [
+          "MEMORIA:24",
+          "MEMORIA:917"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-30",
+        "consulta": "Resume mi preferencia de redacción, el presupuesto vigente y la condición de ahorro en escalas, con su razón.",
+        "esperado": [
+          "DECISION:3",
+          "MEMORIA:1",
+          "MEMORIA:16"
+        ],
+        "obtenido": [
+          "MEMORIA:14",
+          "MEMORIA:16"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "MEMORIA:14",
+          "MEMORIA:16"
+        ],
+        "quitados": [
+          "DECISION:3"
+        ],
+        "quitados_correctos": [
+          "DECISION:3"
+        ],
+        "quitados_criticos": [
+          "DECISION:3"
+        ],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-31",
+        "consulta": "Dame todas las restricciones esenciales que debo respetar.",
+        "esperado": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "MEMORIA:25"
+        ],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "MEMORIA:919",
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ],
+        "quitados": [
+          "MEMORIA:919",
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-32",
+        "consulta": "¿Qué sabía Sirius sobre el aforo el 1 de marzo?",
+        "esperado": [
+          "DECISION:12"
+        ],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "DECISION:12"
+        ],
+        "quitados": [
+          "DECISION:12"
+        ],
+        "quitados_correctos": [
+          "DECISION:12"
+        ],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-33",
+        "consulta": "[interna B05] evidencia de límite de gasto",
+        "esperado": [
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:3"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "MEMORIA:25",
+          "DECISION:10",
+          "MEMORIA:5",
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:913",
+          "MEMORIA:915",
+          "MEMORIA:921",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ],
+        "quitados": [
+          "MEMORIA:25",
+          "DECISION:10",
+          "MEMORIA:5",
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:913",
+          "MEMORIA:915",
+          "MEMORIA:921",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-34",
+        "consulta": "Prepara el contexto de planificación de Alfa.",
+        "esperado": [
+          "DECISION:3",
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "MEMORIA:903",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:919"
+        ],
+        "obtenido": [
+          "MEMORIA:11"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:903",
+          "MEMORIA:915",
+          "MEMORIA:919",
+          "MEMORIA:931",
+          "MEMORIA:11",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:939"
+        ],
+        "quitados": [
+          "MEMORIA:903",
+          "MEMORIA:915",
+          "MEMORIA:919",
+          "MEMORIA:931",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:939"
+        ],
+        "quitados_correctos": [
+          "MEMORIA:903",
+          "MEMORIA:915",
+          "MEMORIA:919",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-35",
+        "consulta": "¿Qué nota interna hay sobre la prueba?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:917",
+          "MEMORIA:919",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:917",
+          "MEMORIA:919",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-36",
+        "consulta": "Variantes de la misma pregunta con dato histórico, candidata y fuera de ámbito.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-37",
+        "consulta": "¿Hay algo sobre el tema sensible del titular?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-38",
+        "consulta": "Dame las restricciones esenciales, máximo 10.",
+        "esperado": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110"
+        ],
+        "obtenido": [
+          "MEMORIA:110",
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:110",
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-39",
+        "consulta": "Ejecuta el mismo corpus con dos implementaciones distintas.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-40",
+        "consulta": "¿Cuál es el presupuesto vigente de Alfa?",
+        "esperado": [
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:3"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "MEMORIA:11"
+        ],
+        "quitados": [
+          "MEMORIA:11"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-41",
+        "consulta": "¿Cada cuánto se revisa el coche de empresa?",
+        "esperado": [
+          "MEMORIA:22"
+        ],
+        "obtenido": [
+          "MEMORIA:22"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:22"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-42",
+        "consulta": "¿Usar PostgreSQL?",
+        "esperado": [
+          "DECISION:10"
+        ],
+        "obtenido": [
+          "DECISION:10"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:10",
+          "MEMORIA:910",
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ],
+        "quitados": [
+          "MEMORIA:910",
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-43",
+        "consulta": "¿Quién valida los entregables de calidad?",
+        "esperado": [
+          "MEMORIA:23",
+          "MEMORIA:24"
+        ],
+        "obtenido": [
+          "MEMORIA:24",
+          "MEMORIA:12"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:23",
+          "MEMORIA:24",
+          "MEMORIA:12"
+        ],
+        "quitados": [
+          "MEMORIA:23"
+        ],
+        "quitados_correctos": [
+          "MEMORIA:23"
+        ],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-44",
+        "consulta": "Restricciones esenciales, máximo duro 5.",
+        "esperado": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105"
+        ],
+        "obtenido": [
+          "MEMORIA:105"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105"
+        ],
+        "quitados": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104"
+        ],
+        "quitados_correctos": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104"
+        ],
+        "quitados_criticos": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104"
+        ],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-45",
+        "consulta": "¿Cuál es el presupuesto que manejamos?",
+        "esperado": [
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:3"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-46",
+        "consulta": "[interna] datos de nómina del equipo Beta",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-47",
+        "consulta": "Consultas por occurred_at, valid_time y recorded_at.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-48",
+        "consulta": "Par diferencial: misma consulta, dos propósitos.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-49",
+        "consulta": "¿Hay algo sobre mi preferencia de reuniones?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:4",
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ],
+        "quitados": [
+          "MEMORIA:4"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-50",
+        "consulta": "¿Qué condiciones de acceso al almacén hay?",
+        "esperado": [
+          "MEMORIA:25"
+        ],
+        "obtenido": [
+          "MEMORIA:25"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:25",
+          "MEMORIA:913",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:930",
+          "MEMORIA:939"
+        ],
+        "quitados": [
+          "MEMORIA:913",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:930",
+          "MEMORIA:939"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      }
+    ],
+    "4. solo filtro, sin ampliacion": [
+      {
+        "caso": "N1-01",
+        "consulta": "¿Cómo prefiero que redactes?",
+        "esperado": [
+          "MEMORIA:1"
+        ],
+        "obtenido": [
+          "MEMORIA:1"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:1"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-02",
+        "consulta": "¿Qué restricciones de transporte tengo?",
+        "esperado": [
+          "MEMORIA:2"
+        ],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-03",
+        "consulta": "¿Qué reglas de calidad aplican a Gamma?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111",
+          "MEMORIA:112"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111",
+          "MEMORIA:112"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-04",
+        "consulta": "¿Qué formato de informe uso?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:906",
+          "MEMORIA:925"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:906",
+          "MEMORIA:925"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-05",
+        "consulta": "¿Qué decisión de presupuesto usábamos antes?",
+        "esperado": [
+          "DECISION:2"
+        ],
+        "obtenido": [
+          "DECISION:2"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "DECISION:2"
+        ],
+        "quitados": [
+          "DECISION:3"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-06",
+        "consulta": "¿Qué proveedor de mensajería aplica?",
+        "esperado": [
+          "DECISION:4"
+        ],
+        "obtenido": [
+          "DECISION:4"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:4"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-07",
+        "consulta": "¿Desde cuándo rige el contrato de mantenimiento?",
+        "esperado": [
+          "MEMORIA:5"
+        ],
+        "obtenido": [
+          "MEMORIA:5"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:5"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-08",
+        "consulta": "¿Cuál es el presupuesto de Beta?",
+        "esperado": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "obtenido": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-09",
+        "consulta": "¿Qué preferencia de reuniones tengo?",
+        "esperado": [],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ],
+        "quitados": [
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-10",
+        "consulta": "¿Qué horario de entrega tengo fijado?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-11",
+        "consulta": "¿Qué sabes del expediente retirado?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-12",
+        "consulta": "¿Hay información médica del titular?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-13",
+        "consulta": "¿Cuál es el identificador de PAA?",
+        "esperado": [
+          "MEMORIA:11"
+        ],
+        "obtenido": [
+          "MEMORIA:11"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:11"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-14",
+        "consulta": "¿De qué se ocupa Juan?",
+        "esperado": [
+          "MEMORIA:12",
+          "MEMORIA:13"
+        ],
+        "obtenido": [
+          "MEMORIA:13"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:25",
+          "MEMORIA:13",
+          "MEMORIA:12",
+          "DECISION:1",
+          "MEMORIA:23",
+          "MEMORIA:27"
+        ],
+        "quitados": [
+          "MEMORIA:25",
+          "MEMORIA:12",
+          "DECISION:1",
+          "MEMORIA:23",
+          "MEMORIA:27"
+        ],
+        "quitados_correctos": [
+          "MEMORIA:12"
+        ],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-15",
+        "consulta": "¿Dónde dije exactamente que el alcance no incluye la migración?",
+        "esperado": [],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "MEMORIA:14",
+          "DECISION:10",
+          "MEMORIA:17",
+          "MEMORIA:21",
+          "MEMORIA:5"
+        ],
+        "quitados": [
+          "MEMORIA:14",
+          "DECISION:10",
+          "MEMORIA:17",
+          "MEMORIA:21",
+          "MEMORIA:5"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-16",
+        "consulta": "¿Quién cierra el circuito de firmas?",
+        "esperado": [
+          "MEMORIA:27"
+        ],
+        "obtenido": [
+          "MEMORIA:27"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:27"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-17",
+        "consulta": "¿Qué política de teletrabajo tenemos en Alfa?",
+        "esperado": [],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:11"
+        ],
+        "quitados": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:11"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-18",
+        "consulta": "¿Qué dice el anexo técnico requerido?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-19",
+        "consulta": "¿Cuál es la plataforma de despliegue aprobada?",
+        "esperado": [
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ],
+        "obtenido": [
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-20",
+        "consulta": "¿Puedo usar vuelos con escala?",
+        "esperado": [
+          "MEMORIA:14"
+        ],
+        "obtenido": [
+          "MEMORIA:14",
+          "MEMORIA:16"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "DECISION:10"
+        ],
+        "quitados": [
+          "DECISION:10"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-21",
+        "consulta": "¿Acepto escalas?",
+        "esperado": [
+          "MEMORIA:16"
+        ],
+        "obtenido": [
+          "MEMORIA:14",
+          "MEMORIA:16"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:14",
+          "MEMORIA:16"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-22",
+        "consulta": "¿Qué decisiones eran válidas entre enero y marzo?",
+        "esperado": [
+          "DECISION:1",
+          "DECISION:5",
+          "DECISION:9",
+          "DECISION:11",
+          "DECISION:14",
+          "DECISION:15"
+        ],
+        "obtenido": [
+          "DECISION:14"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:14"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-23",
+        "consulta": "¿Cuál es la decisión de presupuesto actual y cuál reemplazó?",
+        "esperado": [
+          "DECISION:2",
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:2"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "DECISION:2"
+        ],
+        "quitados": [
+          "DECISION:3"
+        ],
+        "quitados_correctos": [
+          "DECISION:3"
+        ],
+        "quitados_criticos": [
+          "DECISION:3"
+        ],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-24",
+        "consulta": "¿Cada cuánto revisamos el alcance?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-25",
+        "consulta": "Atlas",
+        "esperado": [
+          "MEMORIA:11"
+        ],
+        "obtenido": [
+          "MEMORIA:11"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:11"
+        ],
+        "quitados": [
+          "DECISION:3",
+          "DECISION:10"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-26",
+        "consulta": "Enumera las restricciones esenciales del expediente Gamma.",
+        "esperado": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111"
+        ],
+        "obtenido": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-27",
+        "consulta": "¿Qué presupuesto aplico en Beta según el documento?",
+        "esperado": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "obtenido": [
+          "DECISION:5"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "quitados": [
+          "MEMORIA:6"
+        ],
+        "quitados_correctos": [
+          "MEMORIA:6"
+        ],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-28",
+        "consulta": "¿Qué se dijo en la sesión no guardada?",
+        "esperado": [],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "MEMORIA:14",
+          "DECISION:10",
+          "MEMORIA:16",
+          "MEMORIA:21",
+          "MEMORIA:5",
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:917",
+          "MEMORIA:919",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ],
+        "quitados": [
+          "MEMORIA:14",
+          "DECISION:10",
+          "MEMORIA:16",
+          "MEMORIA:21",
+          "MEMORIA:5",
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:917",
+          "MEMORIA:919",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-29",
+        "consulta": "¿Cuál es el plazo legal de entrega?",
+        "esperado": [
+          "MEMORIA:20"
+        ],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-30",
+        "consulta": "Resume mi preferencia de redacción, el presupuesto vigente y la condición de ahorro en escalas, con su razón.",
+        "esperado": [
+          "DECISION:3",
+          "MEMORIA:1",
+          "MEMORIA:16"
+        ],
+        "obtenido": [
+          "MEMORIA:16"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "MEMORIA:16",
+          "DECISION:10",
+          "MEMORIA:11"
+        ],
+        "quitados": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:11"
+        ],
+        "quitados_correctos": [
+          "DECISION:3"
+        ],
+        "quitados_criticos": [
+          "DECISION:3"
+        ],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-31",
+        "consulta": "Dame todas las restricciones esenciales que debo respetar.",
+        "esperado": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "MEMORIA:25"
+        ],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-32",
+        "consulta": "¿Qué sabía Sirius sobre el aforo el 1 de marzo?",
+        "esperado": [
+          "DECISION:12"
+        ],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "DECISION:12"
+        ],
+        "quitados": [
+          "DECISION:12"
+        ],
+        "quitados_correctos": [
+          "DECISION:12"
+        ],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-33",
+        "consulta": "[interna B05] evidencia de límite de gasto",
+        "esperado": [
+          "DECISION:3"
+        ],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "MEMORIA:11"
+        ],
+        "quitados": [
+          "MEMORIA:11"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-34",
+        "consulta": "Prepara el contexto de planificación de Alfa.",
+        "esperado": [
+          "DECISION:3",
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "MEMORIA:903",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:919"
+        ],
+        "obtenido": [
+          "MEMORIA:11"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:903",
+          "MEMORIA:915",
+          "MEMORIA:919",
+          "MEMORIA:931",
+          "MEMORIA:11",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:939"
+        ],
+        "quitados": [
+          "MEMORIA:903",
+          "MEMORIA:915",
+          "MEMORIA:919",
+          "MEMORIA:931",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:939"
+        ],
+        "quitados_correctos": [
+          "MEMORIA:903",
+          "MEMORIA:915",
+          "MEMORIA:919",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-35",
+        "consulta": "¿Qué nota interna hay sobre la prueba?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:917",
+          "MEMORIA:919",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:917",
+          "MEMORIA:919",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-36",
+        "consulta": "Variantes de la misma pregunta con dato histórico, candidata y fuera de ámbito.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-37",
+        "consulta": "¿Hay algo sobre el tema sensible del titular?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-38",
+        "consulta": "Dame las restricciones esenciales, máximo 10.",
+        "esperado": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110"
+        ],
+        "obtenido": [
+          "MEMORIA:110",
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:110",
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-39",
+        "consulta": "Ejecuta el mismo corpus con dos implementaciones distintas.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-40",
+        "consulta": "¿Cuál es el presupuesto vigente de Alfa?",
+        "esperado": [
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:3"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "MEMORIA:11"
+        ],
+        "quitados": [
+          "MEMORIA:11"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-41",
+        "consulta": "¿Cada cuánto se revisa el coche de empresa?",
+        "esperado": [
+          "MEMORIA:22"
+        ],
+        "obtenido": [
+          "MEMORIA:22"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:22"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-42",
+        "consulta": "¿Usar PostgreSQL?",
+        "esperado": [
+          "DECISION:10"
+        ],
+        "obtenido": [
+          "DECISION:10"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:10"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-43",
+        "consulta": "¿Quién valida los entregables de calidad?",
+        "esperado": [
+          "MEMORIA:23",
+          "MEMORIA:24"
+        ],
+        "obtenido": [
+          "MEMORIA:23",
+          "MEMORIA:24"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:23",
+          "MEMORIA:24",
+          "MEMORIA:12"
+        ],
+        "quitados": [
+          "MEMORIA:12"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-44",
+        "consulta": "Restricciones esenciales, máximo duro 5.",
+        "esperado": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105"
+        ],
+        "obtenido": [
+          "MEMORIA:105"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105"
+        ],
+        "quitados": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104"
+        ],
+        "quitados_correctos": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104"
+        ],
+        "quitados_criticos": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104"
+        ],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-45",
+        "consulta": "¿Cuál es el presupuesto que manejamos?",
+        "esperado": [
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:3"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-46",
+        "consulta": "[interna] datos de nómina del equipo Beta",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-47",
+        "consulta": "Consultas por occurred_at, valid_time y recorded_at.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-48",
+        "consulta": "Par diferencial: misma consulta, dos propósitos.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-49",
+        "consulta": "¿Hay algo sobre mi preferencia de reuniones?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:4",
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ],
+        "quitados": [
+          "MEMORIA:4"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-50",
+        "consulta": "¿Qué condiciones de acceso al almacén hay?",
+        "esperado": [
+          "MEMORIA:25"
+        ],
+        "obtenido": [
+          "MEMORIA:25"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:25",
+          "MEMORIA:913",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:930",
+          "MEMORIA:939"
+        ],
+        "quitados": [
+          "MEMORIA:913",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:930",
+          "MEMORIA:939"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      }
+    ]
+  },
+  "ampliacion_generada": {
+    "por_identidad": {
+      "MEMORIA:1": {
+        "preguntas": [
+          "¿Estás dispuesto a aceptar una opción más simple?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Tienes un limite de gasto para esto?",
+          "¿Puedes hacerlo sin que me obligues a cambiar de opinión?",
+          "¿Hay algo que no puedas tolerar en esta decisión?"
+        ]
+      },
+      "MEMORIA:2": {
+        "preguntas": [
+          "¿Hay opción de alquilar vehículo?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Se puede llevar auto por el viaje?",
+          "¿Es obligatorio tener coche?",
+          "¿Hay límite de transporte por el viaje?"
+        ]
+      },
+      "MEMORIA:3": {
+        "preguntas": [
+          "¿Se puede usar el coche para ir de un lugar a otro?",
+          "¿Qué pasa si no quiero usar el coche?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite de distancia que debemos respetar?",
+          "¿Es obligatorio alquilar el coche para el viaje?"
+        ]
+      },
+      "DECISION:1": {
+        "preguntas": [
+          "¿Es necesario hacer una revisión de calidad antes de publicar?",
+          "¿Hay una obligación de revisar el contenido antes de compartirlo?",
+          "¿Qué pasa si no cumple con la revisión obligatoria?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo publicar sin revisar la calidad?"
+        ]
+      },
+      "MEMORIA:4": {
+        "preguntas": [
+          "¿Prefieres que el informe esté en columnas o en filas?",
+          "¿Puedo cambiar el formato si no me gusta la disposición en columnas?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay una obligación de usar formato en columnas?",
+          "¿Hay un límite en cuántas columnas puede tener el informe?"
+        ]
+      },
+      "DECISION:2": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para esta inversión?",
+          "¿Hay alguna obligación de no superar ese monto?",
+          "¿Es necesario respetar este límite para cumplir con el plazo?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo usar más dinero si lo justifico?"
+        ]
+      },
+      "DECISION:3": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para este proyecto?",
+          "¿Hay alguna obligación de no superar ese monto?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Puedo usar más dinero si hay una excepción?",
+          "¿Qué pasa si el presupuesto se supera?"
+        ]
+      },
+      "DECISION:4": {
+        "preguntas": [
+          "¿Cuándo cambia el proveedor de mensajería?",
+          "¿Hay un límite para cuando debe hacerse el cambio?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay una obligación de cambiar el servicio en septiembre?",
+          "¿Qué pasa si no se cambia a Norte a tiempo?"
+        ]
+      },
+      "MEMORIA:5": {
+        "preguntas": [
+          "¿Hay un límite de tiempo para la renovación?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hasta cuándo está vigente el mantenimiento?",
+          "¿Se puede cambiar el contrato sin aviso?",
+          "¿Qué pasa si no se actualiza el contrato?"
+        ]
+      },
+      "DECISION:5": {
+        "preguntas": [
+          "¿Tienes un limite de gasto para esta compra?",
+          "¿Es obligatorio que no supere los 4.000 €?",
+          "¿Puedo hacerlo sin exceder el presupuesto?",
+          "¿Hay una restriccion en cuanto al monto que puedo gastar?"
+        ],
+        "categoria": [],
+        "descartadas": []
+      },
+      "MEMORIA:6": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para Beta?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay alguna obligación financiera que debemos cumplir?",
+          "¿Puedo ajustar el presupuesto si hay cambios de prioridad?",
+          "¿Es posible superar el límite si es necesario?"
+        ]
+      },
+      "MEMORIA:7": {
+        "preguntas": [
+          "¿Puedo programar una reunión rápida antes del mediodía?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Te importa si las reuniones son breves por la mañana?",
+          "¿Hay alguna obligación de tener reuniones tempranas?",
+          "¿Qué pasa si no puedo asistir a una reunión por la mañana?"
+        ]
+      },
+      "MEMORIA:8": {
+        "preguntas": [
+          "¿Es posible cambiar el horario de entrega por una razón personal?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo tener una entrega más temprana para ajustarme al horario que me gusta?",
+          "¿Hay alguna opción para entregar antes si no me queda bien el horario actual?",
+          "¿Hay una obligación de entregar en un momento específico?"
+        ]
+      },
+      "MEMORIA:9": {
+        "preguntas": [],
+        "categoria": [],
+        "descartadas": []
+      },
+      "MEMORIA:10": {
+        "preguntas": [
+          "¿Tienes algún problema de salud que deba considerarse?",
+          "¿Hay condiciones médicas que me obliguen a evitar ciertos tratamientos?",
+          "¿Hay algo que deba evitar por razones de salud?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo hacer cambios en mi rutina si hay un límite de gasto?"
+        ]
+      },
+      "MEMORIA:11": {
+        "preguntas": [
+          "¿Cuál es el código interno del proyecto que estamos manejando?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay algún límite en el número de veces que se puede usar este identificador?",
+          "¿Es obligatorio que todos los documentos tengan este código asignado?",
+          "¿Qué pasa si alguien intenta usar un identificador diferente?"
+        ]
+      },
+      "MEMORIA:12": {
+        "preguntas": [
+          "¿Quién es el encargado de asegurar que los productos cumplan con los estándares?",
+          "¿Qué rol tiene Juan en el equipo de control de calidad?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay alguna obligación que deba cumplir como responsable de calidad?",
+          "¿Qué límites debe respetar en su labor diaria?"
+        ]
+      },
+      "MEMORIA:13": {
+        "preguntas": [
+          "¿Quién encarga las compras en la empresa?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Tiene Juan Molina autoridad para decidir los gastos?",
+          "¿Qué debe hacer si hay un error en una compra?",
+          "¿Hay un límite para los pagos que puede hacer Juan?"
+        ]
+      },
+      "DECISION:6": {
+        "preguntas": [
+          "¿Cuál es la plataforma que ya fue aprobada para usar?",
+          "¿Hay alguna obligación de usar solo Nimbo?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Qué pasa si no se elige Nimbo?",
+          "¿Es necesario que la decisión sea definitiva para esta plataforma?"
+        ]
+      },
+      "DECISION:7": {
+        "preguntas": [
+          "¿Cuál es la plataforma que ya fue aprobada para usar?",
+          "¿Es necesario que todo esté basado en Nimbo?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay alguna obligación de usar solo Nimbo?",
+          "¿Puedo cambiar a otra plataforma si no me gusta?"
+        ]
+      },
+      "DECISION:8": {
+        "preguntas": [
+          "¿Cuál es la plataforma que ya fue aprobada para usar?",
+          "¿Hay alguna obligación de usar solo Nimbo?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Qué pasa si no se elige Nimbo?",
+          "¿Es necesario que se cumpla esta decisión sin cambios?"
+        ]
+      },
+      "MEMORIA:14": {
+        "preguntas": [
+          "¿Puedo viajar sin escalas?",
+          "¿Es obligatorio que el vuelo sea directo?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Hay algún límite en el número de destinos?",
+          "¿Puedo elegir un horario fijo sin cambios?"
+        ]
+      },
+      "MEMORIA:15": {
+        "preguntas": [
+          "¿Puedo aceptar vuelos con escala si me ahorran dinero?",
+          "¿Puedo permitirme opciones con paradas si me ahorran tiempo?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite en cuanto puedo gastar por un vuelo con escala?",
+          "¿Es obligatorio que el vuelo sea directo?"
+        ]
+      },
+      "MEMORIA:16": {
+        "preguntas": [
+          "¿Puedo aceptar la escala si ahorro más de 200 €?",
+          "¿Qué pasa si no ahorro más de 200 €?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Hay un límite de gasto para aceptar la escala?",
+          "¿Es obligatorio ahorrar más de 200 € para aceptar la escala?"
+        ]
+      },
+      "DECISION:9": {
+        "preguntas": [
+          "¿Se aplica el descuento en los pedidos de invierno?",
+          "¿Puedo pedir algo sin el descuento de invierno?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay una obligación de usar el descuento de invierno?",
+          "¿Es un límite para usar el descuento en invierno?"
+        ]
+      },
+      "MEMORIA:17": {
+        "preguntas": [
+          "¿Cuándo se revisará el alcance del proyecto?",
+          "¿Hay una obligación de evaluar el avance cada cierto tiempo?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Qué pasa si el alcance cambia sin revisión?",
+          "¿Se puede modificar el alcance sin avisar?"
+        ]
+      },
+      "MEMORIA:18": {
+        "preguntas": [
+          "¿Hay un código interno para ese entregable?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Cuál es el nombre oficial del entregable de Atlas?",
+          "¿Es obligatorio usar ese nombre en todos los documentos?",
+          "¿Qué pasa si se usa un nombre diferente?"
+        ]
+      },
+      "MEMORIA:101": {
+        "preguntas": [
+          "¿Puedo hacer algo sin violar esta restricción?",
+          "¿Qué consecuencias tiene ignorar esta condición?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Hay alguna obligación que no se pueda ignorar en este caso?",
+          "¿Qué límite debe respetarse para evitar problemas?"
+        ]
+      },
+      "MEMORIA:102": {
+        "preguntas": [
+          "¿Puedo hacerlo sin violar la restricción dispersa?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Hay alguna obligación específica que deba cumplirse en este caso?",
+          "¿Qué límite debe respetarse para evitar problemas?",
+          "¿Qué consecuencias tiene no cumplir con esta regla?"
+        ]
+      },
+      "MEMORIA:103": {
+        "preguntas": [
+          "¿Hay alguna obligación específica en este punto del expediente?",
+          "¿Qué límite se establece para el cumplimiento de esta restricción?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Puedo hacer una excepción si la situación cambia?",
+          "¿Qué pasa si no se cumple esta dispersión?"
+        ]
+      },
+      "MEMORIA:104": {
+        "preguntas": [
+          "¿Qué obligación tiene que cumplirse sin falta?",
+          "¿Qué pasa si no respeto esta condición?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Hay algún límite que no se pueda superar en este caso?",
+          "¿Puedo hacerlo si no hay restricción clara?"
+        ]
+      },
+      "MEMORIA:105": {
+        "preguntas": [
+          "¿Hay alguna obligación específica en este número?",
+          "¿Qué límite se aplica aquí?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Puedo hacer una excepción a esta restricción?",
+          "¿Qué pasa si no cumple esta condición?"
+        ]
+      },
+      "MEMORIA:106": {
+        "preguntas": [
+          "¿Qué límite se aplica en esta restricción?",
+          "¿Puedo hacer algo sin violar esta dispersa?",
+          "¿Es necesario cumplir con esta restricción en todos los casos?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Hay alguna obligación específica en este número?"
+        ]
+      },
+      "MEMORIA:107": {
+        "preguntas": [
+          "¿Puedo hacerlo sin violar la restricción dispersa?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Hay alguna obligación que no se pueda ignorar en este caso?",
+          "¿Qué límite debe respetarse para evitar problemas?",
+          "¿Qué consecuencias tiene ignorar esta condición?"
+        ]
+      },
+      "MEMORIA:108": {
+        "preguntas": [
+          "¿Puedo hacer algo sin violar esta restricción?",
+          "¿Qué consecuencias tiene ignorar esta condición?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Hay alguna obligación que no se pueda ignorar en este caso?",
+          "¿Qué límite debe respetarse para evitar problemas?"
+        ]
+      },
+      "MEMORIA:109": {
+        "preguntas": [
+          "¿Qué limitación impone exactamente este punto?",
+          "¿Puedo hacer algo sin violar esta restricción?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Hay alguna obligación específica en este número?",
+          "¿Qué pasa si no cumple esta condición?"
+        ]
+      },
+      "MEMORIA:110": {
+        "preguntas": [
+          "¿Hay alguna obligación específica en este punto del expediente?",
+          "¿Qué límite se aplica a esta restricción?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Puedo modificar esta dispersa si hay una excepción?",
+          "¿Qué consecuencias tiene violar esta restricción?"
+        ]
+      },
+      "MEMORIA:111": {
+        "preguntas": [
+          "¿Hay alguna obligación específica en este punto del expediente?",
+          "¿Qué pasa si no se cumple esta restricción?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Qué límite se establece para cumplir con esta restricción?",
+          "¿Puedo hacer una excepción si la situación cambia?"
+        ]
+      },
+      "MEMORIA:112": {
+        "preguntas": [
+          "¿Hay alguna obligación específica en este punto del expediente?",
+          "¿Qué pasa si no se cumple esta dispersión?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Qué límite se establece para el cumplimiento de esta restricción?",
+          "¿Puedo hacer una excepción si la situación cambia?"
+        ]
+      },
+      "MEMORIA:19": {
+        "preguntas": [],
+        "categoria": [],
+        "descartadas": []
+      },
+      "MEMORIA:20": {
+        "preguntas": [
+          "¿Cuánto tiempo tengo para recibir el producto?",
+          "¿Es un límite para la entrega?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay una obligación de entregarlo dentro de ese periodo?",
+          "¿Puedo tener un retraso sin problemas?"
+        ]
+      },
+      "MEMORIA:21": {
+        "preguntas": [],
+        "categoria": [],
+        "descartadas": [
+          "¿Tienes un limite de gasto para esta compra?",
+          "¿Puedo hacerlo sin tener que pedir permiso?",
+          "¿Hay algo que no se puede cambiar después?",
+          "¿Necesito tener un motivo específico para hacerlo?"
+        ]
+      },
+      "MEMORIA:22": {
+        "preguntas": [
+          "¿Es obligatorio que se revise cada seis meses?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Cuándo se debe hacer la próxima revisión del auto?",
+          "¿Hay un límite para cuántas veces al año se revisa el vehículo?",
+          "¿Qué pasa si no se hace la revisión a tiempo?"
+        ]
+      },
+      "DECISION:10": {
+        "preguntas": [
+          "¿Puedo usar PostgreSQL en este proyecto?",
+          "¿Es un límite de tecnología que no se puede usar?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Hay una obligación de no usar bases de datos específicas?",
+          "¿Qué otras opciones tengo si no uso PostgreSQL?"
+        ]
+      },
+      "MEMORIA:23": {
+        "preguntas": [
+          "¿Quién es responsable de garantizar que el equipo de calidad funcione bien?",
+          "¿Hay una obligación de que operaciones apoye a calidad?",
+          "¿Cómo se asegura que la calidad tenga suficiente apoyo?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Qué pasa si operaciones no cumple con sus tareas?"
+        ]
+      },
+      "MEMORIA:24": {
+        "preguntas": [
+          "¿Hay una obligación de revisar cada entrega antes de publicar?",
+          "¿Es necesario que todos los entregables pasen por operaciones antes de publicarse?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Se pueden modificar los entregables después de que se validan?",
+          "¿Qué pasa si no se validan los entregables antes de salir al público?"
+        ]
+      },
+      "MEMORIA:25": {
+        "preguntas": [
+          "¿Necesito pedir permiso para entrar al almacén?",
+          "¿Hay una obligación de avisar antes de ir al almacén?",
+          "¿Es un límite que no pueda entrar sin autorización?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Puedo entrar sin que alguien me autorice?"
+        ]
+      },
+      "MEMORIA:26": {
+        "preguntas": [
+          "¿Qué tipo de presupuesto se asigna para las actividades?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Cuál es el límite de gasto para este mes?",
+          "¿Hay alguna obligación que debemos cumplir con el equipo?",
+          "¿Hay un plazo fijo para entregar los resultados?"
+        ]
+      },
+      "DECISION:11": {
+        "preguntas": [
+          "¿Se puede cambiar el proveedor de embalaje ahora?",
+          "¿Hay un límite para cuándo debe hacerse la transición?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay una obligación de hacer esta transición pronto?",
+          "¿Qué pasa si no se aprueba el cambio?"
+        ]
+      },
+      "DECISION:12": {
+        "preguntas": [
+          "¿Hay un límite de gente que puede entrar a la sala?",
+          "¿Es obligatorio que no supere los 40 asistentes?",
+          "¿Qué pasa si excedo el aforo máximo?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo tener más personas si no hay restricción?"
+        ]
+      },
+      "DECISION:13": {
+        "preguntas": [
+          "¿Hay un límite de gente que puede entrar a la sala?",
+          "¿Es obligatorio que no supere los 25 asistentes?",
+          "¿Qué pasa si excedo el aforo permitido?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo tener más de 25 personas si no hay restricción?"
+        ]
+      },
+      "MEMORIA:27": {
+        "preguntas": [
+          "¿Quién tiene que firmar esto?",
+          "¿Hay alguien que deba hacerlo de forma obligatoria?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Cuál es el límite de tiempo para completarlo?",
+          "¿Se puede hacer sin que alguien lo revise?"
+        ]
+      },
+      "MEMORIA:901": {
+        "preguntas": [
+          "¿Es obligatorio cumplir con este requisito?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite de gasto para esta nota?",
+          "¿Puedo cambiar la fecha de entrega sin problemas?",
+          "¿Hay una restricción en el tipo de producto que se puede almacenar?"
+        ]
+      },
+      "MEMORIA:902": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para esta planificación?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de hacer una actividad específica?",
+          "¿Puedo incluir amigos sin que afecte el presupuesto?"
+        ]
+      },
+      "MEMORIA:903": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para este viaje?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de hacer una actividad específica?",
+          "¿Puedo incluir días libres sin que afecte el plan?"
+        ]
+      },
+      "MEMORIA:904": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para este viaje?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de hacer una actividad específica?",
+          "¿Puedo incluir un día libre sin que afecte el plan?"
+        ]
+      },
+      "MEMORIA:905": {
+        "preguntas": [
+          "¿Puedo omitir la nota si no hay valor crítico?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo tener una reunión sin que tenga que evaluarla?",
+          "¿Hay un límite para cuántas reuniones puedo hacer?",
+          "¿Es obligatorio que todas las reuniones tengan una nota?"
+        ]
+      },
+      "MEMORIA:906": {
+        "preguntas": [
+          "¿Hay un límite de palabras para el documento?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo incluir fotos en el informe?",
+          "¿Hay una obligación de enviarlo antes del viernes?",
+          "¿Es necesario que el informe tenga una página de agradecimiento?"
+        ]
+      },
+      "MEMORIA:907": {
+        "preguntas": [
+          "¿Qué pasa si no se cumple la nota de gestión?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite de gasto para este tipo de contrato?",
+          "¿Es obligatorio que los proveedores cumplan con esta nota?",
+          "¿Puedo cambiar el proveedor sin problemas?"
+        ]
+      },
+      "MEMORIA:908": {
+        "preguntas": [
+          "¿Hay un límite de gasto para esta nota?",
+          "¿Puedo cambiar la nota si hay un error en el almacén?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Es obligatorio cumplir con este requisito?",
+          "¿Qué pasa si no se cumple la logística de almacén?"
+        ]
+      },
+      "MEMORIA:909": {
+        "preguntas": [
+          "¿Puedo tener más reuniones sin que afecte el valor crítico?",
+          "¿Hay un límite en cuántas reuniones puedo programar?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay una obligación de mantener esta nota ordinaria?",
+          "¿Es posible cambiar el calendario sin perder la nota?"
+        ]
+      },
+      "MEMORIA:910": {
+        "preguntas": [
+          "¿Puedo usar este sistema sin tener que justificar cada modificación?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite para cuántas veces se puede actualizar este documento?",
+          "¿Es obligatorio que todos los cambios estén registrados?",
+          "¿Qué pasa si no se cumple la nota de control de versiones?"
+        ]
+      },
+      "MEMORIA:911": {
+        "preguntas": [
+          "¿Puedo cambiarla si no hay valor crítico?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Tiene que seguirse esta nota en todos los documentos?",
+          "¿Es obligatorio usar esta versión para el registro?",
+          "¿Qué pasa si no la aplico en el proceso?"
+        ]
+      },
+      "MEMORIA:912": {
+        "preguntas": [
+          "¿Puedo tener una reunión sin que tenga valor crítico?",
+          "¿Puedo programar una reunión sin que tenga un valor crítico?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite de tiempo para las reuniones?",
+          "¿Es obligatorio que todas las reuniones tengan una nota ordinaria?"
+        ]
+      },
+      "MEMORIA:913": {
+        "preguntas": [
+          "¿Hay un límite de gasto para esta nota?",
+          "¿Es obligatorio cumplir con esta nota?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Qué tipo de control se aplica en el almacén?",
+          "¿Qué pasa si no se cumple el plazo?"
+        ]
+      },
+      "MEMORIA:914": {
+        "preguntas": [
+          "¿Puedo tener una reunión sin que tenga valor crítico?",
+          "¿Puedo incluir una reunión sin que afecte la nota ordinaria?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite de cuántas reuniones puedo programar?",
+          "¿Es obligatorio que todas las reuniones estén en el calendario?"
+        ]
+      },
+      "MEMORIA:915": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para esta planificación?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de ir con alguien?",
+          "¿Puedo hacerlo sin tener que justificarlo?"
+        ]
+      },
+      "MEMORIA:916": {
+        "preguntas": [
+          "¿Hay un límite de gasto para esta nota?",
+          "¿Hay una restricción en el tipo de productos que se pueden incluir?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Es obligatorio que el proveedor cumpla con plazos fijos?",
+          "¿Puedo cambiar el proveedor sin justificación?"
+        ]
+      },
+      "MEMORIA:917": {
+        "preguntas": [
+          "¿Es obligatorio cumplir con esta nota en el plazo?",
+          "¿Puedo cambiar la nota si hay un error en la logística?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite de gasto para esta nota?",
+          "¿Qué pasa si no se cumple la logística de almacén?"
+        ]
+      },
+      "MEMORIA:918": {
+        "preguntas": [
+          "¿Puedo usar este formato si no hay valor crítico en el informe?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Es obligatorio incluir esta nota si el informe no tiene datos sensibles?",
+          "¿Qué pasa si no cumple con el formato aunque sea solo una nota?",
+          "¿Hay un límite de tiempo para completar el informe con esta nota?"
+        ]
+      },
+      "MEMORIA:919": {
+        "preguntas": [
+          "¿Debo planear algo que no tenga valor crítico?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de hacer una actividad específica?",
+          "¿Cuál es el límite de gasto para este viaje?"
+        ]
+      },
+      "MEMORIA:920": {
+        "preguntas": [
+          "¿Hay un límite de cuántas reuniones puedo programar?",
+          "¿Puedo agregar una reunión sin que se supere la nota ordinaria?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo tener más reuniones sin que afecte el valor crítico?",
+          "¿Es obligatorio que todas las reuniones estén en el calendario?"
+        ]
+      },
+      "MEMORIA:921": {
+        "preguntas": [
+          "¿Hay un límite de gasto para esta nota?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Se debe cumplir esta obligación en el plazo establecido?",
+          "¿Qué pasa si no se cumple la entrega programada?",
+          "¿Puedo modificar esta nota sin autorización?"
+        ]
+      },
+      "MEMORIA:922": {
+        "preguntas": [
+          "¿Puedo planearlo sin tener que justificarlo?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de ir con alguien?",
+          "¿Cuál es el límite de gasto para este viaje?"
+        ]
+      },
+      "MEMORIA:923": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para esta planificación?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de ir con alguien?",
+          "¿Se puede hacer sin tener que comprometer otras actividades?"
+        ]
+      },
+      "MEMORIA:924": {
+        "preguntas": [
+          "¿Puedo usar este formato si no hay valor crítico en el informe?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Es obligatorio incluir esta nota si el informe no tiene datos sensibles?",
+          "¿Qué pasa si no cumple con el formato aunque no haya valor crítico?",
+          "¿Hay un límite de tiempo para completar el informe con esta nota?"
+        ]
+      },
+      "MEMORIA:925": {
+        "preguntas": [
+          "¿Qué pasa si el informe no cumple con el formato establecido?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo incluir datos sensibles en el informe?",
+          "¿Hay una obligación de revisar el contenido antes de entregarlo?",
+          "¿Se permite modificar la nota si hay errores de redacción?"
+        ]
+      },
+      "MEMORIA:926": {
+        "preguntas": [
+          "¿Hay un límite de gasto para esta nota?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Se debe cumplir esta obligación en el plazo establecido?",
+          "¿Qué pasa si no se cumple la entrega programada?",
+          "¿Puedo cambiar el destino del almacén sin autorización?"
+        ]
+      },
+      "MEMORIA:927": {
+        "preguntas": [
+          "¿Puedo usar este formato si no hay valor crítico en el informe?",
+          "¿Qué pasa si no cumple con la nota ordinaria 27?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Es obligatorio seguir este formato en todos los casos?",
+          "¿Hay un límite para cuántos informes puedo hacer con este formato?"
+        ]
+      },
+      "MEMORIA:928": {
+        "preguntas": [
+          "¿Hay un límite de gasto para esta nota?",
+          "¿Puedo modificar esta nota sin autorización?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Se debe cumplir esta obligación en el plazo establecido?",
+          "¿Qué pasa si no se atiende la logística de almacén?"
+        ]
+      },
+      "MEMORIA:929": {
+        "preguntas": [
+          "¿Hay un límite de gasto para esta nota?",
+          "¿Puedo modificar esta nota sin autorización?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Se debe cumplir esta obligación en el plazo establecido?",
+          "¿Qué pasa si no se cumple la entrega programada?"
+        ]
+      },
+      "MEMORIA:930": {
+        "preguntas": [
+          "¿Hay un límite de gasto para esta nota?",
+          "¿Puedo cambiar la nota si hay un error en la logística?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Se debe cumplir una obligación específica en el almacén?",
+          "¿Qué pasa si no se cumple el tiempo establecido?"
+        ]
+      },
+      "MEMORIA:931": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para esta planificación?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de ir con alguien?",
+          "¿Se puede hacer sin tener que comprometer otras actividades?"
+        ]
+      },
+      "MEMORIA:932": {
+        "preguntas": [
+          "¿Puedo tener una reunión sin que tenga que evaluarla?",
+          "¿Puedo agregar una reunión sin que afecte la nota?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay alguna obligación de revisar esta nota?",
+          "¿Es necesario que este calendario tenga un límite de tiempo?"
+        ]
+      },
+      "MEMORIA:933": {
+        "preguntas": [
+          "¿Es obligatorio que todos los cambios estén registrados?",
+          "¿Qué pasa si no se sigue el orden de versiones?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite para cuántas veces se puede actualizar este documento?",
+          "¿Puedo usar este documento para tomar decisiones importantes?"
+        ]
+      },
+      "MEMORIA:934": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para esta planificación?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de ir con alguien?",
+          "¿Se puede hacer sin tener que comprometer otras actividades?"
+        ]
+      },
+      "MEMORIA:935": {
+        "preguntas": [
+          "¿Se debe cumplir una obligación específica con los proveedores?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite de gasto para este tipo de contrato?",
+          "¿Puedo hacer cambios sin que afecte la nota?",
+          "¿Qué pasa si no se cumple la gestión de proveedores?"
+        ]
+      },
+      "MEMORIA:936": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para este viaje?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de hacer una actividad específica?",
+          "¿Puedo planearlo sin tener que justificarlo?"
+        ]
+      },
+      "MEMORIA:937": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para esta planificación?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de ir con alguien?",
+          "¿Se puede hacer sin tener que comprometer otras actividades?"
+        ]
+      },
+      "MEMORIA:938": {
+        "preguntas": [
+          "¿Es obligatorio incluir un valor crítico en la próxima reunión?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite de tiempo para hacer esta nota?",
+          "¿Puedo cambiar el calendario sin pedir permiso?",
+          "¿Hay una restricción en cuanto al número de notas que puedo escribir?"
+        ]
+      },
+      "MEMORIA:939": {
+        "preguntas": [
+          "¿Hay un límite de gasto para esta nota?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Se debe cumplir esta obligación en el plazo establecido?",
+          "¿Qué pasa si no se cumple la entrega programada?",
+          "¿Puedo modificar esta nota sin autorización?"
+        ]
+      },
+      "MEMORIA:940": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para este plan?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de hacer un viaje en familia?",
+          "¿Se puede hacer el viaje sin tener que justificarlo?"
+        ]
+      },
+      "DECISION:14": {
+        "preguntas": [
+          "¿Se puede hacer el turno corto en enero?",
+          "¿Cuándo se activa el turno reducido?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite para el turno reducido?",
+          "¿Está obligado el personal a asistir al turno corto?"
+        ]
+      },
+      "DECISION:15": {
+        "preguntas": [
+          "¿Cuándo se realiza la revisión del área de operaciones?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay una obligación de presentar informes después de la revisión?",
+          "¿Qué pasa si no se cumple el plazo de revisión?",
+          "¿Se puede cambiar la frecuencia de la revisión?"
+        ]
+      },
+      "DECISION:16": {
+        "preguntas": [
+          "¿Hay un límite de personas que pueden asistir?",
+          "¿Qué pasa si más de 12 personas quieren entrar?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Se puede aumentar el aforo para más gente?",
+          "¿Es obligatorio respetar el número máximo de asistentes?"
+        ]
+      },
+      "MEMORIA:950": {
+        "preguntas": [
+          "¿Es obligatorio ajustar el rotor en etapas?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite de holgura que debemos respetar?",
+          "¿Qué pasa si no seguimos el escalonado?",
+          "¿Puedo usar otro tipo de calibrado?"
+        ]
+      },
+      "MEMORIA:951": {
+        "preguntas": [
+          "¿Dónde se almacenan las bitacoras municipales?",
+          "¿Qué pasa si no se archiva junto con el deposito?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay una obligación de mantenerlas juntas con el deposito?",
+          "¿Se puede mover una bitacora sin el deposito comarcal?"
+        ]
+      }
+    },
+    "sin_generar": [],
+    "procedencia": {
+      "proveedor": "ollama",
+      "modelo": "qwen3:4b-instruct",
+      "huella": "0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+    }
+  }
+}
