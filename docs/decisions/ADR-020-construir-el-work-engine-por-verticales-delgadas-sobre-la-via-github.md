@@ -1,6 +1,7 @@
 # ADR-020 — Construir el Work Engine por verticales delgadas, reutilizando la vía GitHub y aplazando cada decisión a su punto exacto de consumo
 
-- Estado: PROPUESTO
+- Estado: APROBADO — por la fusión de la PR #175 en `main` (2026-08-15), conforme a la
+  regla de aprobación de este mismo ADR.
 - Fecha: 2026-08-15
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario. La fusión
   aprueba el PLAN (`docs/implementation/SIRIUS_WORK_ENGINE_PLAN_IMPLEMENTACION.md`) como
