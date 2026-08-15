@@ -1,12 +1,12 @@
 # Agentes de Sirius — desde dónde se invocan
 
 - **Fecha:** 14 de agosto de 2026
-- **Estado:** la **superficie 2 ya está construida** (ADR-016, §2). Las
-  superficies 1 y 3 y todo lo multimodelo siguen como estaban: la 1 disponible,
-  la 3 pospuesta hasta cerrar 0.1, y el multimodelo bloqueado tras la pregunta
-  del §4. Este documento no autoriza nada por sí mismo; lo que autoriza el
-  workflow del Auditor es ADR-016.
-- **Actualizado:** 14 de agosto de 2026, al implementar el Bloque A.
+- **Estado:** la **superficie 2 ya está construida** (ADR-016, §2) y hay **dos
+  agentes** sobre ella: el Auditor (ADR-016) y el Investigador (ADR-017, con
+  web y con las superficies 1 y 2 desde el primer día). La superficie 3 sigue
+  pospuesta hasta cerrar 0.1 y el multimodelo bloqueado tras la respuesta del
+  §4. Este documento no autoriza nada por sí mismo; autorizan los ADR.
+- **Actualizado:** 15 de agosto de 2026, al construir el Investigador.
 - **Base:** [`AGENT_OPPORTUNITY_MATRIX.md`](AGENT_OPPORTUNITY_MATRIX.md),
   [`AUDITOR_AGENT_V0.md`](AUDITOR_AGENT_V0.md), ADR-010, y la investigación
   externa del 14-08-2026 resumida en §5.
@@ -30,19 +30,25 @@ antes de invertir en la parte cara.
 
 ### Superficie 1 — Sesión de Claude Code · **disponible hoy, coste cero**
 
-Abrir una sesión y decir: «ejecuta AUDITOR-V0-RUN-002 sobre el commit `<sha>`».
-Funciona porque el runbook vive en el repositorio, no en la memoria de nadie.
-Es lo que se hizo en RUN-001.
+Abrir una sesión y decir: «ejecuta AUDITOR-V0-RUN-002 sobre el commit `<sha>`»
+o «ejecuta el Investigador sobre: `<pregunta>`». Funciona porque los runbooks
+viven en el repositorio, no en la memoria de nadie. Es lo que se hizo en
+RUN-001, y para el Investigador es superficie **de primera clase**: la condición
+del encargo de ADR-017 era poder usarlo desde una sesión, sin salir a claude.ai.
 
 - **Ventaja:** cero infraestructura, disponible ahora mismo.
 - **Límite:** hay que abrirla a mano y estar delante. No hay historial de
-  ejecuciones ni métricas comparables salvo que se registren aparte.
+  ejecuciones ni métricas comparables salvo que se registren aparte. Y los
+  límites de permisos del runbook son procedimentales, no mecánicos: los
+  impone la sesión que lo ejecuta, no un job con `contents: read`.
 
 ### Superficie 2 — Etiqueta en GitHub · **CONSTRUIDA (ADR-016)**
 
 Igual que el ciclo de programación actual: se crea una incidencia, se le pone
-una etiqueta (`auditoria:solicitada`) y un workflow ejecuta el
-agente y publica el informe como comentario.
+una etiqueta y un workflow ejecuta el agente y publica el informe como
+comentario. Dos etiquetas hoy, una por agente: `auditoria:solicitada` (Auditor,
+ADR-016) e `investigacion:solicitada` (Investigador, ADR-017 — el cuerpo de la
+incidencia ES la pregunta).
 
 - **Cómo:** `anthropics/claude-code-action`, igual que
   `implement-sirius-work.yml`, pero en un trabajo con **permisos de solo
@@ -174,10 +180,15 @@ clave de respuestas de `AUDITOR_AGENT_V0.md` §6 no es opcional.
    cuatro defectos reales, cero falsos positivos (#154).
 2. ~~**Superficie 2**~~ — **hecha**: ADR-016 y
    `.github/workflows/audit-sirius-repository.yml`. Falta estrenarla.
-3. **La prueba de la tarde** (§4): ¿sirven las suscripciones? Responde sí o no a
-   toda la línea multimodelo. **Es el siguiente paso.**
+3. ~~**La prueba de la tarde** (§4)~~ — **hecha** (Bloque B, 15-08): la
+   suscripción de Claude sirve; la de ChatGPT no; queda la prueba de 5 min en
+   Windows y la decisión de gasto OpenAI, ambas del propietario.
 4. **Triaje de paradas** como segundo agente, por el motivo del §5: máximo
    ahorro con la superficie de permisos más pequeña.
+   **Desviación registrada (15-08):** el segundo agente construido fue el
+   **Investigador** (ADR-017), por encargo directo del propietario — quería
+   lanzar investigaciones con su suscripción desde ya. El triaje no se
+   descarta: pasa a ser el candidato a tercer agente.
 5. **Multimodelo** solo entonces, y solo si el paso 3 lo permite.
 
 ## 7. Trabajo preparado, listo para abrirse

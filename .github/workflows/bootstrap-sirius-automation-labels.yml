@@ -55,8 +55,10 @@ jobs:
           # FUERA de la maquina de estados POR CONSTRUCCION, no por promesa: el
           # ciclo reconoce lo suyo por el PREFIJO `sirius:` (sirius_reconcile.sh
           # filtra con grep '^sirius:'; complete-sirius-after-merge.yml con
-          # startswith("sirius:")), asi que esta etiqueta usa OTRO prefijo y esos
-          # caminos no pueden verla. Solo dispara el Auditor (ADR-016). La
+          # startswith("sirius:")), asi que las etiquetas de los agentes usan
+          # OTROS prefijos y esos caminos no pueden verlas. Cada una dispara
+          # SOLO su agente (auditoria: ADR-016; investigacion: ADR-017). La
           # primera version usaba `sirius:audit-requested` y era un error: el
           # prefijo la convertia en estado del ciclo.
           ensure_label "auditoria:solicitada" "5A32A3" "Fuera del ciclo: lanzar una auditoria de solo lectura del repositorio"
+          ensure_label "investigacion:solicitada" "0B6E99" "Fuera del ciclo: investigar la pregunta del cuerpo de la incidencia (ADR-017)"
