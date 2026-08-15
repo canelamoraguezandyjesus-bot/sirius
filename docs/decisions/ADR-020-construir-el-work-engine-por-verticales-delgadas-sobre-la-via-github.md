@@ -45,31 +45,56 @@ rama se detiene y se consulta; una única PR documental con el menor número de 
 Adoptar el plan de `docs/implementation/SIRIUS_WORK_ENGINE_PLAN_IMPLEMENTACION.md`, cuyas
 decisiones de plan son:
 
-1. **Secuencia E0 → A (núcleo puro → spike I3 → almacén durable → espejo de solo lectura
-   + contexto v0 → perfiles/WorkerRequest/Resolver/egress) → B (spike I2 → investigación
-   con GPT Researcher) → E1 (contrato v1.7: C1+C2+C5) → C (spike I1 → supervisión activa
-   → despacho end-to-end → documental → auditor) → D (canonicidad por clase → servicio
-   desatendido → Telegram opcional)**, con hitos de valor observable al fin de cada fase.
+1. **Secuencia E0 → A (núcleo puro → spike I3 → almacén durable de referencia → espejo de
+   solo lectura + contexto v0 → perfiles/WorkerRequest/Resolver/egress/PermissionEnvelope
+   → interacción e intención compartida) → E1a (regla de autoridad) → B (spike I2 →
+   investigación con GPT Researcher) → E1b (contrato v1.7: C1+C2) → C (spike I1 →
+   supervisión activa → despacho end-to-end → documental → auditor) → D (conmutación de
+   canonicidad → servicio desatendido y representación definitiva → Telegram opcional)**,
+   con hitos de valor observable al fin de cada fase.
 2. **La investigación (Fase B) va antes que el motor activo (Fase C)** a propósito: da
-   valor nuevo sin depender de ninguna enmienda del contrato.
+   valor nuevo sin depender de la activación ni de la supervisión de la vía GitHub.
 3. **El código del motor vive en `src/sirius_engine/`**: fuera de `src/sirius/` (frontera
    aprobada), pero bajo `src/` para que `quality.yml` lo cubra sin modificar ningún
    workflow; con prueba de frontera que prohíbe importaciones entre `sirius` y
    `sirius_engine` en ambos sentidos.
-4. **Una única enmienda del contrato (E1, v1.7)** resuelve C1, C2 y C5 juntas, después
-   del hito M2 y antes de cualquier bloque de la Fase C; su texto operativo sale de la
-   arquitectura §14.
-5. **Los spikes se insertan solo delante de la decisión que dependen de ellos**
-   (I3→almacén, I2→investigador, I1→cotas de LOST); I4 bloquea únicamente el servicio
-   desatendido (D2); I5 es un dato que no bloquea nada.
-6. **Migración de canonicidad sin doble autoridad**: autoridad como función total por
-   clase de trabajo con conmutador fechado y reversible; espejo explícitamente
-   no-autoritativo antes; proyección obligatoria verificada después (plan §4).
-7. **Disposición recomendada para la PR #171: extraer piezas y cerrar sin fusionar** —
+4. **Un bloque compartido de interacción e intención (A5) antes de cualquier Worker
+   externo**: conversación/consulta/exploración sin WorkItem, puerta determinista de
+   intención, creación/activación, y el gobierno del trabajo (presupuesto con corte
+   determinista, `NEEDS_DECISION`, escalado y notificación). B1 y C2 lo **consumen**; no
+   lo reimplementan. El `PermissionEnvelope` viaja en el `WorkerRequest` de A4.
+5. **La v1.7 del contrato se entrega en dos actos, cada uno antes de su consumo**: E1a
+   (regla de autoridad, parte C5) antes del primer WorkItem nativo del motor (B1), y E1b
+   (C1 activación + C2 supervisión) antes de la Fase C. Partirla es necesario porque C5 se
+   consume mucho antes que C1/C2: sin la regla, el WorkItem de investigación nacería sin
+   autoridad definida.
+6. **Los spikes se insertan solo delante de la decisión que dependen de ellos**
+   (I3→patrón de escritura del almacén, I2→investigador, I1→cotas de LOST). **I4 bloquea
+   el servicio desatendido Y la fijación de la representación física definitiva** (por
+   ADR-019, que la hace depender de I3 e I4): A2 entrega un adaptador **de referencia** y
+   pruebas escritas contra el puerto, no la representación definitiva. **I5** no bloquea
+   la construcción de ningún bloque, pero la vía Codex debe haberse **ejecutado de
+   verdad** antes de declarar M3 completo.
+7. **Migración de canonicidad sin doble autoridad**: autoridad como función total por
+   clase de trabajo, en vigor desde E1a y con tabla que cubre todas las clases —las
+   nativas del motor (investigación, conversación, documental no publicada) nacen
+   canónicas; las que tienen proyección en la vía GitHub siguen con la incidencia como
+   fuente de verdad hasta su conmutación fechada y reversible (plan §4).
+8. **Los perfiles llegan a los workflows existentes por parametrización, no por carril
+   nuevo**: el WorkItem declara `Perfil: <ref>@<version>` en su cuerpo y el paso de
+   construcción de prompt resuelve esa ruta, con la ruta actual como valor por defecto;
+   el cambio lo hace una sesión interactiva (ADR-002) en el bloque que primero lo
+   necesita (C3, revisor documental).
+9. **Disposición recomendada para la PR #171: extraer piezas y cerrar sin fusionar** —
    su Investigador (repo privado + web) es incompatible con la política de egress
    aprobada; sus piezas compatibles (registro de acciones, runbooks neutrales, mejoras
    del arnés del Auditor, banco de evaluación) se extraen en PRs pequeñas en los bloques
    A4 y C4. El cierre es un acto del propietario; no bloquea ningún bloque.
+10. **E0 sanea además la condición documental**: ADR-019 sigue marcado PROPUESTO pese a
+    que la fusión de #173 es su aprobación según su propia cabecera, y la línea de
+    `docs/evolution/STATUS.md` lo cita así; E0 lo corrige a APROBADO con la fecha de
+    fusión, acotado a ese ADR y a esa línea (la misma familia de deriva que PROC-011
+    registró para los siete primeros ADR).
 
 ## Comprobación que la sostiene
 
@@ -77,8 +102,12 @@ decisiones de plan son:
   tres documentos de diseño en `main` byte a byte idénticos a lo auditado (diff vacío
   contra `d951163`); la excepción de `docs/evolution/STATUS.md` cubre solo diseño —
   de ahí E0.
-- Estado de la PR #171 reverificado por API en esta misma sesión (abierta, sin reviews,
-  `quality` verde, prohibición de fusión vigente) antes de recomendar su disposición.
+- Estado de la PR #171 reverificado por API tras las fusiones de #173/#174: abierta, sin
+  reviews, `quality` verde sobre `52e0f55`, prohibición de fusión vigente, y **base
+  `e13a1e3`, dos commits por detrás de `main`** — no contiene el diseño aprobado.
+- Condición documental verificada en `main`: ADR-019 con `Estado: PROPUESTO` y la línea
+  de `docs/evolution/STATUS.md` citándolo igual, pese a la fusión de #173 por el
+  propietario — de ahí el saneamiento de E0.
 - La cobertura de `src/sirius_engine/` por `quality.yml` se apoya en los comandos reales
   del workflow (`ruff format --check .`, `ruff check .`, `mypy src tests`, `pytest`,
   verificados en `quality.yml:49-59`) y en `testpaths = ["tests"]`
@@ -92,9 +121,10 @@ decisiones de plan son:
 - El primer bloque de código (A1) puede empezar en cuanto E0 esté fusionada; no requiere
   ninguna otra decisión, dato ni spike.
 - Las decisiones del propietario quedan concentradas en actos contados: aprobar este plan
-  (fusión de su PR), E0, E1, la posible decisión de gasto si el spike I2 la demuestra,
-  I4 antes de D2, cada conmutación de canonicidad (D1), y el cierre de #171 cuando quiera
-  ejecutar la disposición recomendada.
+  (fusión de su PR), E0, E1a, E1b, la posible decisión de gasto si el spike I2 la
+  demuestra, I4 antes de D2 (o antes, si quiere fijar ya la representación), cada
+  conmutación de canonicidad (D1), y el cierre de #171 cuando quiera ejecutar la
+  disposición recomendada.
 - La vertical funcional completa de #172 §6 queda cubierta al hito M3 con CUATRO perfiles
   (ejecutor de repo, revisor, investigador, auditor) más pasos deterministas, sin crear
   un agente por punto.
