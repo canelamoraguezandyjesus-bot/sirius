@@ -45,8 +45,11 @@ un carácter. El prompt deja de ordenar lectura estática y pasa a exigir la
 declaración de superficie de §2b en cada informe. Los permisos del job pasan a
 `contents/issues/pull-requests/actions: read` — todo lectura: la línea roja de
 ADR-016 (el modelo no escribe) queda intacta, y la ampliación no amplía al
-AGENTE, cuyo runbook §2 ya concedía leer GitHub; cumple un contrato que el
-workflow incumplía.
+AGENTE, cuyo runbook §2 ya concedía leer GitHub. La entrega es PARCIAL a
+propósito y está declarada en §2c del runbook: listados sin cuerpos (los
+cuerpos los escriben terceros y modelos), comentarios solo de las incidencias
+de auditoría, y la lista de runs SIN sus logs. Antes el workflow no entregaba
+NADA de esa fila; ahora entrega la parte declarada, y lo que falta se dice.
 
 **2. Los runbooks se vuelven neutrales al motor.** La definición de un agente
 habla de CAPACIDADES (buscar en la web, leer una URL, subagentes); el mapeo a

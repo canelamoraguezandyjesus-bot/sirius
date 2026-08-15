@@ -51,8 +51,9 @@ ACCIONES_CON_MODELO: dict[str, dict[str, str]] = REGISTRO["con_modelo"]
 
 
 def _nombre_accion(uses: str) -> str:
-    """El nombre de una acción sin @versión: la unidad del registro."""
-    return uses.split("@")[0].strip()
+    """El nombre de una acción sin @versión, en minúsculas (GitHub no
+    distingue mayúsculas al resolverlas): la unidad del registro."""
+    return uses.split("@")[0].strip().lower()
 
 
 # Comparación de etiqueta en una condición de Actions, en el `if:` del job o de
@@ -268,10 +269,11 @@ def test_el_modelo_no_recibe_mas_secreto_que_su_credencial_registrada() -> None:
                 if accion not in ACCIONES_CON_MODELO:
                     continue
                 credencial = ACCIONES_CON_MODELO[accion]
-                material = yaml.safe_dump(
-                    [definicion.get("env"), job.get("env"), paso.get("env"), paso.get("with")],
-                    allow_unicode=True,
-                )
+                # El JOB entero más el env del workflow: un secreto en un paso
+                # HERMANO (el checkout, el contexto) aterriza en el mismo
+                # runner cuyo sistema de ficheros lee el modelo — lo enseñó
+                # la revisión final del 15-08.
+                material = yaml.safe_dump([definicion.get("env"), job], allow_unicode=True)
                 for secreto in re.findall(r"secrets\.([A-Za-z0-9_]+)", material):
                     if secreto != credencial["credencial_secreto"]:
                         infracciones.append(f"{nombre} · «{nombre_job}» · secrets.{secreto}")
@@ -458,6 +460,10 @@ def test_el_runbook_no_esta_duplicado_dentro_del_workflow() -> None:
         for linea in RUNBOOK.read_text(encoding="utf-8").splitlines()
         if len(linea.strip()) > 60 and not linea.strip().startswith(("#", "-", "|", ">"))
     ]
+    assert lineas_del_runbook, (
+        "El filtro no extrajo ninguna línea del runbook: esta prueba estaría "
+        "comprobando el vacío (guardián añadido en la revisión del 15-08)."
+    )
     copiadas = [linea for linea in lineas_del_runbook if linea in texto_workflow]
     assert not copiadas, (
         "El workflow lleva copiado texto del runbook en vez de leerlo:\n"

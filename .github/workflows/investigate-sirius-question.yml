@@ -380,5 +380,5 @@ jobs:
             fi
           } > "$cuerpo"
           gh issue comment "$ISSUE_NUMBER" --repo "$GH_REPO" --body-file "$cuerpo" \
-            || echo "::error::No se pudo publicar; el informe queda como artefacto del run."
+            || { echo "::error::No se pudo publicar; el informe queda como artefacto del run."; rm -f "$cuerpo"; exit 1; }
           rm -f "$cuerpo"

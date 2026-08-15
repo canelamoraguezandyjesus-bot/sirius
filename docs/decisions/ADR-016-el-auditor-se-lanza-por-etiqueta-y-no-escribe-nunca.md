@@ -46,9 +46,11 @@ permanente en cuanto nadie la revisa.
 
 > **Sustitución parcial (ADR-018, 15-08-2026):** la fila de `auditar` la amplía
 > ADR-018 a `contents/issues/pull-requests/actions: read` — TODO lectura — para
-> cumplir la fila 1 de `AUDITOR_AGENT_V0.md` §2 que este workflow no entregaba
-> (FINDING-002 de RUN-002, #167). La propiedad de esta decisión — el trabajo
-> que ejecuta el modelo NO puede escribir — queda intacta y sigue vigilada.
+> entregar la parte declarada en `AUDITOR_AGENT_V0.md` §2c de la fila 1 de su
+> §2, que este workflow no entregaba en absoluto (FINDING-002 de RUN-002,
+> #167): listados sin cuerpos, informes previos de auditoría y lista de runs
+> sin sus logs. La propiedad de esta decisión — el trabajo que ejecuta el
+> modelo NO puede escribir — queda intacta y sigue vigilada.
 
 El Auditor lee el repositorio y escribe su informe **en un fichero del runner**.
 No recibe ninguna credencial capaz de escribir: no porque se le pida que se

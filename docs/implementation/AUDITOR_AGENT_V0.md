@@ -83,7 +83,7 @@ aquí para que la diferencia entre superficies nunca vuelva a ser implícita
 | `listar_ficheros` / `leer_fichero` / `buscar_contenido` | el motor | el motor |
 | `leer_historial_git` | el motor | el motor (Bash acotado a `git log/show/diff`) |
 | `ejecutar_solo_lectura` | el motor las ejecuta | **el ARNÉS las ejecuta** (los cuatro comandos de CI, antes de la huella) y el modelo LEE salidas y códigos |
-| `leer_github` | el motor | **el ARNÉS la vuelca** (listados sin cuerpos + informes previos de auditoría) y el modelo LEE los JSON |
+| `leer_github` | el motor | **el ARNÉS la vuelca PARCIALMENTE** y el modelo LEE los JSON: listados de issues/PRs/runs SIN cuerpos, comentarios SOLO de las incidencias de auditoría, y NINGÚN log de Actions. Ampliar esos campos es una decisión de ADR, no un retoque |
 | Subagentes / verificación adversarial multiagente | disponible (así corrió RUN-001) | **NO existe** — se declara en cada informe en «qué no demuestra este informe»; esa capacidad vive en el evaluador ([`BANCO_DE_EVALUACION_DISENO.md`](BANCO_DE_EVALUACION_DISENO.md)) |
 
 Regla: un run que entregue menos que §2b lo DECLARA en el informe y en las

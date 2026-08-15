@@ -36,6 +36,12 @@ Se verificó contra el árbol y contra GitHub cada afirmación comprobable del
 documento de reconciliación. Resultado global: **ningún veredicto FALSA**. El
 mapa que trajo el propietario es fiel.
 
+> **Las líneas citadas se refieren a las versiones VERIFICADAS**: `e13a1e3`
+> (main) y `9f78d12` (head de la PR #171 en ese momento). Esta misma PR
+> reescribe varios de los ficheros citados — la «lectura estática» de
+> `audit-sirius-repository.yml:119-120`, por ejemplo, se verificó ahí y se
+> ELIMINÓ después (§5). Para abrir una cita: `git show e13a1e3:ruta`.
+
 | Afirmación | Veredicto | Evidencia |
 |---|---|---|
 | El runbook del Auditor dice «el documento es el agente», modelo intercambiable | CIERTA | `AUDITOR_AGENT_V0.md:3` |
@@ -44,7 +50,7 @@ mapa que trajo el propietario es fiel.
 | El prompt ordena «sustituye por lectura estática» | CIERTA — instrucción explícita, no solo consecuencia | `audit-sirius-repository.yml:119-120` |
 | RUN-001: 8 lentes, verificación adversarial, 16 agentes, 2.428.822 tokens, 815 tool calls, presupuesto agotado a mitad de refutación | CIERTAS las cinco cifras, del run del AUDITOR | #154, comentario 5289523047 (informe y tabla de métricas de RUN-001) |
 | RUN-002 declaró que no pudo ejecutar pytest/ruff/mypy ni leer GitHub, y que dejó sin leer gran parte del árbol | CIERTA, con citas textuales | #167, comentario 5297635072 (2 de 152 ficheros de `src/` leídos; 9+ workflows sin abrir; ADR-002…013 sin leer) |
-| PR #171 abierta y sin fusionar | CIERTA | head `9f78d12` sobre base `e13a1e3` |
+| PR #171 abierta y sin fusionar | CIERTA | head `9f78d12` sobre base `e13a1e3` en el momento de verificar; esta reconciliación añade commits a esa misma rama |
 | ADR-017 reconoce que esto no garantiza la calidad de las investigaciones | MATIZADA — lo dice del ADR entero, no de «las pruebas estructurales» | ADR-017:32-34, 99-101 |
 | No hay frontera mecánica contra exfiltración por consultas web | CIERTA (y el repositorio es PRIVADO, verificado) | `investigate-sirius-question.yml:155-158`; API: `"private": true` |
 | Inspect no es dependencia; los workflows ejecutan Claude Code Action | CIERTA | `pyproject.toml`, `uv.lock` (sin inspect-ai); 5 workflows con la acción |
@@ -118,8 +124,11 @@ privilegio por agente; etiquetas fuera del ciclo por prefijo; el contrato §2b;
 la rúbrica y la clave §6; el merge siempre humano; «un agente es misión +
 contrato + permisos, no una clase de un framework».
 
-**Se corrige esta noche:** el workflow del Auditor (superficie completa por
-arnés + declaración §2b + fin de la «lectura estática»); la neutralidad de las
+**Se corrige esta noche:** el workflow del Auditor (la parte de la superficie
+§2b declarada en §2c, entregada por el arnés — comprobaciones ejecutadas y
+GitHub volcado en listados sin cuerpos, informes previos de auditoría y lista
+de runs SIN sus logs; lo que sigue fuera queda declarado allí — y fin de la
+«lectura estática»); la neutralidad de las
 definiciones (los runbooks dejan de nombrar herramientas y motor concretos en
 la definición; capacidades en su lugar); la neutralidad de las defensas
 (registro cerrado de acciones: una acción de workflow no clasificada pone las

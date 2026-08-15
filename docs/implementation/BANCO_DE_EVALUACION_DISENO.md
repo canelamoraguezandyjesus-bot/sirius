@@ -36,10 +36,12 @@ mismo agente bajo condiciones controladas y guarda registros comparables; los
 
 Inspect AI encaja como evaluador por hechos medidos, no por fe:
 
-- La autenticación por suscripción de Claude está verificada de extremo a
-  extremo en el Bloque B (`ANTHROPIC_AUTH_TOKEN`, cabecera OAuth en
-  `anthropic.py:380-394` de inspect-ai 0.3.258, prueba 401 con token falso).
-  Queda una prueba de 5 minutos en Windows, del propietario.
+- El MECANISMO de autenticación por suscripción de Claude está verificado en
+  el Bloque B (`ANTHROPIC_AUTH_TOKEN`, cabecera OAuth en `anthropic.py:380-394`
+  de inspect-ai 0.3.258, handshake probado con token falso → 401). Lo que el
+  Bloque B declara NO demostrado: que un token de suscripción VÁLIDO pase la
+  política del servidor — esa es exactamente la prueba de 5 minutos en Windows
+  del propietario, la primera con token real, no un flequillo de plataforma.
 - Trae Tasks, agentes, herramientas, scorers, límites de coste/tiempo/turnos y
   transcripciones: exactamente el «libro mayor de ejecuciones» (PROC-021) cuya
   ausencia tiene pospuesto al router AG-07.
