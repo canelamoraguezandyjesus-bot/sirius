@@ -14,45 +14,41 @@ precision**: su unico efecto posible es perder aciertos. De modo que medir el
 filtro contra la busqueda de hoy no mediria el filtro; mediria el vacio, y el
 resultado —«no cambia nada»— seria indistinguible de «el modulo no sirve».
 
-Por eso este arnes mide **tres corridas**:
+Por eso este arnes mide **cuatro corridas**:
 
 1. la busqueda tal cual, que es la linea base publicada;
-2. **el filtro que elige** cuales de los candidatos responden de verdad;
-3. **la compuerta**, que solo dice si hay algo aprovechable y no elige.
+2. **mas la categoria buscable**, que no cuesta ninguna llamada al modelo;
+3. **el filtro con la regla**, sin categoria: lo mejor conocido hasta ahora;
+4. **las dos juntas**.
 
-Y la ampliacion al guardar, con ``--con-ampliacion``, **apagada por defecto**.
+Con banderas, ademas: ``--con-ampliacion`` y ``--con-compuerta``, las dos
+apagadas por defecto y por la misma razon: estan medidas y no ganan.
 
-LO QUE DOS CORRIDAS ENSENARON, Y POR QUE ESTAS SON ESTAS
-========================================================
+LO QUE CUATRO CORRIDAS ENSENARON, Y POR QUE ESTAS SON ESTAS
+===========================================================
 
-La ampliacion —las preguntas que el modelo escribe al guardar cada dato— se
-midio en `resultado_modelo_local.json` y en `..._v0.2.json`. Las dos veces salio
-**por debajo** de la linea base en aciertos exactos, 23 y 22 contra 24, y la
-segunda ademas triplico la basura. Cuesta dos llamadas al modelo por dato, 194
-para este canon. La corrida que la aislaba —el filtro sin ella— dio exactamente
-lo mismo que con ella: 29 y 29 aciertos, 17 y 17 omisiones criticas. **No
-aporta**, y por eso deja de medirse por defecto. Sigue disponible entera para
-quien quiera reproducir aquello.
+La **ampliacion** —las preguntas que el modelo escribe al guardar cada dato— se
+midio dos veces y las dos salio por debajo de la linea base a solas, 23 y 22
+contra 24. La corrida que la aislaba lo zanjo: con ella 29 aciertos y 17
+omisiones criticas; sin ella, 29 y 17. Cuesta dos llamadas al modelo por dato,
+194 para este canon. No aporta.
 
-Lo que la sustituye es la pregunta que la v0.2 dejo planteada. Separando los 47
-casos en los que esperan contenido y los que esperan que no salga nada:
+La **compuerta** —el modelo dice si hay algo, no elige— cumplio su promesa
+estructural: cero elementos correctos perdidos. Pero gana poco, 25 y 26 de 47 en
+dos corridas, porque su instruccion dice «ante duda, di que si» y de 36 veces
+dijo «no» una.
 
-===========================  ==================  =================
-corrida                      aciertos contenido  aciertos ausencia
-===========================  ==================  =================
-busqueda sola                16/31               8/16
-el filtro que elige          17/31               12/16
-===========================  ==================  =================
+El **filtro que elige, con la regla de las criticas**, da 30 de 47 con las once
+omisiones criticas de la linea base y el ruido de 29 a 10. Es lo mejor medido, y
+es la corrida 3.
 
-De los cinco aciertos que el filtro gana, **cuatro estan en decir «no tengo
-eso»**. Elegir cuales aporta uno, y cuesta dieciseis elementos correctos y seis
-omisiones criticas, porque trunca las respuestas largas —cuatro de cinco
-restricciones en `N1-44`, siete de diez en `N1-34`—.
-
-La compuerta se queda con lo que funciona y **no puede** hacer lo que rompe: no
-decide elemento a elemento, de modo que o entrega la lista entera o no entrega
-nada. Sobre las decisiones reales de la v0.2 eso daria 27/47 con las **once**
-omisiones criticas de la linea base, contra 29/47 con diecisiete.
+Lo que la corrida 4 pone a prueba es lo unico que faltaba. La categoria sube la
+cobertura y **empeora** el ruido —medido sin modelo: omisiones criticas de once
+a cinco, elementos de mas de 29 a 37—, y el filtro es precisamente lo que quita
+ruido. Pero la regla conserva **todas** las criticas que la busqueda trajo, y la
+categoria trae mas criticas a proposito: las dos podrian estorbarse. Ninguna
+medida anterior lo dice, y por eso van juntas en la misma corrida, sobre los
+mismos casos.
 
 Esto no cambia la medicion: el banco, las metricas, el denominador y el listón
 preinscrito son los mismos, y la linea base se comprueba contra la publicada en
@@ -109,11 +105,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Final
 
-from experiments.adr002.candidates.adr002_a import lexical
 from experiments.adr002.candidates.adr002_a.candidate import CandidatoA
 from experiments.adr002.candidates.common import engine
-from experiments.adr002.candidates.common.contracts import Candidata, ContextoDeEtapa, Etapa
 from experiments.adr002.candidates.common.port import PuertoSqlite
+from experiments.adr002.lateral import categoria as cat
+from experiments.adr002.lateral.candidato import ConIndiceLateral
 from experiments.adr002.modelo_local import filtro as fl
 from experiments.adr002.modelo_local import ingesta as ing
 from experiments.adr002.modelo_local.puerto import ProveedorIA, ProveedorOllama
@@ -141,6 +137,8 @@ VOCABULARIO_DE_CATEGORIA: Final[tuple[str, ...]] = (
     "imprescindible",
 )
 
+CRITICIDAD: Final = "applied_criticality_v0_1.json"
+
 _DDL_AMPLIACION: Final = (
     "CREATE VIRTUAL TABLE ampliacion_fts USING fts5(identidad UNINDEXED, contenido)"
 )
@@ -162,54 +160,23 @@ class Corrida:
     detalles: list[dict[str, Any]] = field(default_factory=list)
 
 
-class ConAmpliacion(CandidatoA):
+class ConAmpliacion(ConIndiceLateral):
     """`ADR002-A` mas las preguntas escritas al guardar, buscadas en `E1`.
 
-    Consulta un indice **aparte** y materializa por identidad a traves del
-    puerto canonico: no enumera el canon, no lee texto de fuera del puerto y no
-    toca el indice medido. La ampliacion es un derivado, y se comporta como tal.
+    El mecanismo —consultar un indice aparte y materializar por identidad a
+    traves del puerto canonico— es el mismo que usa la categoria, y vive en
+    `lateral/candidato.py`. Lo unico propio de aqui es de donde sale el
+    contenido del indice: ahi lo escribe un modelo, y en la categoria lo escribe
+    el canon.
     """
 
     def __init__(self, ruta_ampliacion: Path) -> None:
-        super().__init__()
-        self._ruta = ruta_ampliacion
-
-    def candidatas(self, contexto: ContextoDeEtapa) -> Sequence[Candidata]:
-        base = list(super().candidatas(contexto))
-        if contexto.etapa is not Etapa.E1:
-            return base
-        terminos = lexical.terminos_significativos(contexto.peticion.consulta)[:16]
-        if not terminos:
-            return base
-        consulta = " OR ".join(f'"{t}"' for t in terminos)
-        conexion = sqlite3.connect(f"file:{self._ruta}?mode=ro", uri=True)
-        try:
-            filas = conexion.execute(
-                "SELECT identidad FROM ampliacion_fts WHERE ampliacion_fts MATCH ? LIMIT 64",
-                (consulta,),
-            ).fetchall()
-        except sqlite3.OperationalError:
-            filas = []
-        finally:
-            conexion.close()
-
-        ya = set(contexto.ya_recuperados) | {c.item.id for c in base}
-        nuevas = [str(f[0]) for f in filas if str(f[0]) not in ya]
-        if not nuevas:
-            return base
-        extra: list[Candidata] = []
-        for lote in [nuevas[i : i + 16] for i in range(0, len(nuevas), 16)]:
-            for item in contexto.puerto.por_identificadores(tuple(lote)).items:
-                extra.append(
-                    Candidata(
-                        item=item,
-                        etapa=Etapa.E1,
-                        lectura=self.leer(item, contexto.peticion.consulta),
-                        razon="responde a una pregunta escrita al guardarlo",
-                        senal="ampliacion generada en la ingesta",
-                    )
-                )
-        return [*base, *extra]
+        super().__init__(
+            ruta_ampliacion,
+            tabla="ampliacion_fts",
+            razon="responde a una pregunta escrita al guardarlo",
+            senal="ampliacion generada en la ingesta",
+        )
 
 
 def construir_ampliacion(
@@ -471,6 +438,11 @@ def main() -> int:
             "veces, cuesta 194 llamadas al modelo y no mejora nada"
         ),
     )
+    analizador.add_argument(
+        "--con-compuerta",
+        action="store_true",
+        help="mide tambien la compuerta. Apagada por defecto: medida dos veces, 25 y 26 de 47",
+    )
     analizador.add_argument("--salida", type=Path, default=None)
     analizador.add_argument(
         "--sobrescribir",
@@ -515,7 +487,7 @@ def main() -> int:
     contexto = {
         "proyectos": pt.proyectos_del_canon(corpus),
         "polaridades": pt.polaridades_del_canon(corpus),
-        "criticos": _criticos_del_canon(familia["applied_criticality_v0_1.json"]["valores"]),
+        "criticos": _criticos_del_canon(familia[CRITICIDAD]["valores"]),
     }
     criticos = set(contexto["criticos"])
     textos: dict[str, str] = {}
@@ -584,10 +556,32 @@ def main() -> int:
                 filas.append(_fila(ampliada, contexto))
                 detalles["ampliacion (opcional)"] = ampliada.detalles
 
+            # La categoria que el canon ya declara, hecha buscable. No cuesta
+            # ninguna llamada al modelo y es determinista, de modo que esta
+            # corrida se reproduce sin Ollama —hay una medicion aparte que lo
+            # hace: `lateral/medir_categoria.py`—. Aqui esta para que la
+            # comparacion con filtro sea sobre la misma corrida.
             print()
-            print("=== 2. el filtro que ELIGE, sin poder tirar una critica ===")
+            print("=== 2. mas la CATEGORIA buscable (sin modelo, determinista) ===")
+            ruta_categoria = Path(temporal) / "categoria.sqlite3"
+            registro_categoria = cat.construir(ruta_categoria, familia[CRITICIDAD]["valores"])
+            con_categoria = _correr(
+                "2. mas la categoria buscable",
+                casos,
+                cat.ConCategoria(ruta_categoria),
+                puerto,
+                plano,
+                contexto,
+                filtrar_con=None,
+                textos=textos,
+            )
+            filas.append(_fila(con_categoria, contexto))
+            detalles["2. mas la categoria buscable"] = con_categoria.detalles
+
+            print()
+            print("=== 3. el filtro con la regla, SIN categoria (lo mejor conocido) ===")
             elige = _correr(
-                "2. el filtro que elige, criticas protegidas",
+                "3. filtro con regla, sin categoria",
                 casos,
                 CandidatoA(),
                 puerto,
@@ -597,32 +591,49 @@ def main() -> int:
                 textos=textos,
             )
             filas.append(_fila(elige, contexto))
-            detalles["2. el filtro que elige, criticas protegidas"] = elige.detalles
+            detalles["3. filtro con regla, sin categoria"] = elige.detalles
             rescatadas = sum(len(d.get("rescatados_por_la_regla", ())) for d in elige.detalles)
             print(f"  {'':34} la regla devolvio {rescatadas} criticas que el modelo tiraba")
 
-            # La compuerta. Medido sobre las decisiones reales de la v0.2: de
-            # los cinco aciertos que el que elige gana sobre la linea base,
-            # cuatro salen de casos donde lo correcto era no devolver nada, y
-            # elegir cuales cuesta dieciseis elementos correctos y seis
-            # criticos. Esta se queda con la pregunta que funciona y no puede
-            # hacer la que rompe: no decide elemento a elemento, asi que no
-            # puede truncar una respuesta larga.
+            # La combinacion. La categoria sube la cobertura y **empeora** el
+            # ruido —medido sin modelo: omisiones criticas de once a cinco, y
+            # elementos de mas de 29 a 37—, y el filtro es lo que quita ruido.
+            # Ninguna de las dos por separado dice si juntas se estorban: la
+            # regla conserva **todas** las criticas que la busqueda trajo, y la
+            # categoria trae mas criticas a proposito.
             print()
-            print("=== 3. la COMPUERTA: solo dice si hay algo, no elige ===")
-            gate = _correr(
-                "3. la compuerta (todo o nada)",
+            print("=== 4. el filtro con la regla, CON categoria (la combinacion) ===")
+            combinado = _correr(
+                "4. filtro con regla, con categoria",
                 casos,
-                CandidatoA(),
+                cat.ConCategoria(ruta_categoria),
                 puerto,
                 plano,
                 contexto,
                 filtrar_con=proveedor,
                 textos=textos,
-                modo="compuerta",
             )
-            filas.append(_fila(gate, contexto))
-            detalles["3. la compuerta (todo o nada)"] = gate.detalles
+            filas.append(_fila(combinado, contexto))
+            detalles["4. filtro con regla, con categoria"] = combinado.detalles
+            rescatadas = sum(len(d.get("rescatados_por_la_regla", ())) for d in combinado.detalles)
+            print(f"  {'':34} la regla devolvio {rescatadas} criticas que el modelo tiraba")
+
+            if argumentos.con_compuerta:
+                print()
+                print("=== la compuerta (medida dos veces: 25 y 26 de 47) ===")
+                gate = _correr(
+                    "la compuerta (opcional)",
+                    casos,
+                    CandidatoA(),
+                    puerto,
+                    plano,
+                    contexto,
+                    filtrar_con=proveedor,
+                    textos=textos,
+                    modo="compuerta",
+                )
+                filas.append(_fila(gate, contexto))
+                detalles["la compuerta (opcional)"] = gate.detalles
         finally:
             puerto.close()
             plano.close()
@@ -644,6 +655,7 @@ def main() -> int:
             else {}
         ),
         "vocabulario_de_categoria": list(VOCABULARIO_DE_CATEGORIA),
+        "indice_de_categoria": registro_categoria,
         "linea_base_publicada": BASE_PUBLICADA,
         "filas": filas,
         "detalle_por_caso": detalles,
