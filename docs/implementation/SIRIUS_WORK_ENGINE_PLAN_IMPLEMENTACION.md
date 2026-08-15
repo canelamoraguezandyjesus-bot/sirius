@@ -35,11 +35,11 @@ E0  autorización de implementación + saneamiento documental (mini-PR, tipo #17
      A2 almacén durable de REFERENCIA según S1 + barrido de recuperación
      A3 espejo de solo lectura de la vía GitHub + contexto.recuperar v0
      A4 perfiles versionados + WorkerRequest + Resolver v0 + egress + PermissionEnvelope
+     E1a REGLA DE AUTORIDAD por clase (parte C5 del contrato v1.7)              [DECISIÓN]
      A5 interacción e intención v0 (compartida): conversación/consulta/exploración sin
         WorkItem, puerta determinista, creación/activación, presupuesto y corte,
         NEEDS_DECISION, escalado y notificación
         ── HITO M1: estado durable y consultable; se acabó la reconstrucción forense ──
- └─ E1a REGLA DE AUTORIDAD por clase (parte C5 del contrato v1.7)               [DECISIÓN]
  └─ FASE B — investigación (valor nuevo; NO depende de C1/C2)
      S2 spike I2: GPT Researcher aislado (sin repo)             [posible decisión de gasto]
      B1 adapter GPT Researcher + ExportSafeBrief + flujo investigación completo
@@ -67,13 +67,14 @@ Qué demuestra cada eslabón y qué desbloquea:
   (la proyección reproduce el prompt real del workflow implementador), y que el egress es
   imposible de saltar en vez de improbable. Desbloquea la Fase B (el investigador necesita
   perfil + egress) y la C (el despacho necesita WorkerRequest).
+- **E1a** fija la regla de autoridad **antes de que exista el primer WorkItem del motor**:
+  A5 es quien los crea, así que la regla va delante de A5, no delante de B1. Ningún
+  WorkItem nace sin autoridad definida (ver §4).
 - **A5** demuestra la Capa 1 completa de #172 §6.1-6.4 (conversar, consultar el pasado,
   explorar y convertir una intención en trabajo) y aporta el gobierno que ningún Worker
   externo puede estrenarse sin él: presupuesto con corte determinista, `NEEDS_DECISION`,
   escalado y notificación. **B1 y C2 lo CONSUMEN; ninguno de los dos reimplementa la
   puerta de intención ni la interfaz.**
-- **E1a** fija la regla de autoridad ANTES del primer trabajo nativo: ningún WorkItem
-  nace sin autoridad definida (ver §4).
 - **B1** demuestra la promesa diferencial de #172 §6: investigar desde una orden, con
   frontera mecánica. Se coloca ANTES que la Fase C a propósito: da valor nuevo sin
   depender de la activación ni de la supervisión de la vía GitHub.
@@ -145,15 +146,17 @@ humana material previa.
 
 ### S1 — Spike I3: durabilidad del almacén (desechable)
 
-- **Objetivo**: decidir la representación física y el patrón de escritura: proceso matado
-  (`kill -9`) en CADA punto del ciclo de una transición → al rearrancar, ni pérdida ni
-  duplicación.
+- **Objetivo**: decidir el **patrón de escritura seguro** —proceso matado (`kill -9`) en
+  CADA punto del ciclo de una transición → al rearrancar, ni pérdida ni duplicación— y
+  **evaluar una representación de referencia** que lo sostenga. **No decide la
+  representación definitiva**: esa depende de I3 **e I4** (ADR-019) y se fija en D2, o
+  antes si el propietario adelanta I4.
 - **Dependencia real**: A1 (usa su dominio y su puerto).
 - **Ficheros**: `experiments/work_engine_spike_i3/` (desechable; SQLite u otro medio local
   VALE para el spike sin ser decisión de arquitectura).
 - **Prueba de terminado**: matriz punto-de-muerte × resultado publicada en la incidencia
-  del spike; decisión de representación registrada (una línea en el ADR de cierre de fase
-  o en la incidencia).
+  del spike; patrón de escritura seguro registrado, junto con la representación de
+  referencia evaluada y sus límites conocidos.
 - **Riesgo principal**: falso verde por matar «entre» transiciones y no «dentro»;
   mitigación: puntos de corte inyectados, no azar.
 - **Automatizable**: sí, como Work Item; es código desechable con criterio observable.
@@ -244,6 +247,27 @@ humana material previa.
 - **Automatizable**: sí (Work Items del ciclo).
 - **Decisión humana previa**: ninguna.
 
+### E1a — Regla de autoridad por clase (parte C5 del contrato v1.7)
+
+- **Objetivo**: fijar, ANTES de que el motor cree su primer WorkItem (lo hace A5), quién
+  es la autoridad de cada uno, sin ningún estado ambiguo. Redacción operativa en §4. En una
+  frase: **las clases con proyección en la vía GitHub (programación, auditoría) siguen
+  teniendo la incidencia como fuente de verdad hasta su conmutación; las clases nativas
+  del motor (conversación/exploración, investigación, documental no publicada) nacen
+  canónicas en el almacén del motor**, y su reflejo en GitHub —si lo hay— es informativo y
+  así se etiqueta.
+- **Dependencia real**: fusión de este plan; A4 puede estar en curso en paralelo. Debe
+  estar fusionada **antes de A5**, que es el bloque que crea y activa el primer WorkItem
+  del motor — no antes de B1, que ya llega con la regla vigente.
+- **Ficheros**: `docs/implementation/AUTOMATION_OPERATING_CONTRACT.md` (apertura de la
+  v1.7 con la regla de autoridad; C1 y C2 llegan después, en E1b, a la misma versión).
+- **Prueba de terminado**: contrato con la regla; ninguna clase sin autoridad asignada
+  (tabla completa en §4); pruebas documentales en verde.
+- **Riesgo principal**: enmendar de más y colar aquí la activación o la supervisión;
+  mitigación: E1a se limita a la autoridad — C1/C2 quedan explícitamente para E1b.
+- **Automatizable**: la redacción sí; la decisión es del propietario.
+- **Decisión humana previa**: SÍ (primera de las dos enmiendas).
+
 ### A5 — Interacción e intención v0 (bloque COMPARTIDO; lo consumen B1 y C2)
 
 - **Objetivo**: la Capa 1 y el gobierno del trabajo, una sola vez y para todas las clases:
@@ -259,9 +283,10 @@ humana material previa.
      activa; toda escalada llega con contexto suficiente para decidir sin reconstruir.
   5. **Interfaz v0**: sesión/CLI, sin estado propio (Telegram será otro adapter, D3).
 - **Dependencia real**: A2 (estado durable) + A3 (contexto) + A4 (permisos/egress para
-  poder calcular el sobre de permisos de un trabajo). **Ningún Worker externo se estrena
-  antes de este bloque**: sin presupuesto, corte y escalado, un Worker externo puede
-  gastar sin freno y fallar sin cauce.
+  poder calcular el sobre de permisos de un trabajo) + **E1a fusionada** (este bloque crea
+  y activa WorkItems: sin la regla de autoridad vigente, el primero nacería sin autoridad
+  definida). **Ningún Worker externo se estrena antes de este bloque**: sin presupuesto,
+  corte y escalado, un Worker externo puede gastar sin freno y fallar sin cauce.
 - **Ficheros**: `src/sirius_engine/` (intención, puerta, presupuesto, escalado,
   notificación, interfaz v0), `tests/engine/`.
 - **Prueba de terminado**: (1) una conversación de varios turnos con consultas al pasado
@@ -281,25 +306,6 @@ cualquier trabajo pasado o vivo y obtiene estado con evidencia de un almacén qu
 sobrevive a reinicios, y puede convertir una orden en WorkItem con presupuesto y cauce de
 escalado. Nada escribe aún en GitHub y ningún Worker externo se ha estrenado.
 
-### E1a — Regla de autoridad por clase (parte C5 del contrato v1.7)
-
-- **Objetivo**: fijar, ANTES de que nazca el primer trabajo nativo del motor, quién es la
-  autoridad de cada WorkItem, sin ningún estado ambiguo. Redacción operativa en §4. En una
-  frase: **las clases con proyección en la vía GitHub (programación, auditoría) siguen
-  teniendo la incidencia como fuente de verdad hasta su conmutación; las clases nativas
-  del motor (conversación/exploración, investigación, documental no publicada) nacen
-  canónicas en el almacén del motor**, y su reflejo en GitHub —si lo hay— es informativo y
-  así se etiqueta.
-- **Dependencia real**: fusión de este plan. Debe estar fusionada **antes de B1**, porque
-  B1 crea el primer WorkItem que no existe en GitHub.
-- **Ficheros**: `docs/implementation/AUTOMATION_OPERATING_CONTRACT.md` (apertura de la
-  v1.7 con la regla de autoridad; C1 y C2 llegan después, en E1b, a la misma versión).
-- **Prueba de terminado**: contrato con la regla; ninguna clase sin autoridad asignada
-  (tabla completa en §4); pruebas documentales en verde.
-- **Riesgo principal**: enmendar de más y colar aquí la activación o la supervisión;
-  mitigación: E1a se limita a la autoridad — C1/C2 quedan explícitamente para E1b.
-- **Automatizable**: la redacción sí; la decisión es del propietario.
-- **Decisión humana previa**: SÍ (primera de las dos enmiendas).
 
 ### S2 — Spike I2: GPT Researcher aislado (desechable)
 
@@ -331,7 +337,7 @@ escalado. Nada escribe aún en GitHub y ningún Worker externo se ha estrenado.
 - **Consume A5, no lo reimplementa**: la orden, la puerta de intención, la creación del
   WorkItem, el presupuesto con corte, el escalado y la notificación son los de A5. B1
   aporta únicamente el Adapter, el brief y las comprobaciones propias de investigación.
-- **Dependencia real**: A2 + A4 + **A5** + **E1a** (autoridad del WorkItem nativo) + S2.
+- **Dependencia real**: A2 + A4 + **A5** (que ya llega con E1a vigente) + S2.
   **No depende de C1/C2 (activación ni supervisión de la vía GitHub)**: no toca etiquetas
   `sirius:*` ni sus ciclos.
 - **Ficheros**: `src/sirius_engine/` (adapter + flujo), perfil investigador-externo,
@@ -553,7 +559,7 @@ consume mucho antes que C1 y C2**. El primer WorkItem nativo del motor nace en B
 investigación no existe como incidencia del ciclo), y un WorkItem sin autoridad definida
 es precisamente el estado ambiguo que la regla debe impedir.
 
-- **E1a — regla de autoridad (C5), antes de B1.** Texto operativo en §4. No toca
+- **E1a — regla de autoridad (C5), antes de A5.** Texto operativo en §4. No toca
   activación ni supervisión: la vía GitHub sigue funcionando exactamente igual.
 - **E1b — activación y supervisión (C1 y C2), antes de la Fase C.** C1 = transporte de
   una orden registrada, nunca iniciativa; C2 = supervisor autorizado con límites
@@ -561,7 +567,8 @@ es precisamente el estado ambiguo que la regla debe impedir.
 - **Cómo**: cada entrega es una PR documental del propietario sobre
   `AUTOMATION_OPERATING_CONTRACT.md`, registrada en su §10; las pruebas estructurales que
   fijan §9.1 (RECON-STUCK-007/013) se actualizan en la misma PR si el texto las mueve.
-- **Guardia del plan**: B1 declara E1a como dependencia dura; C1 y C2 declaran E1b. La
+- **Guardia del plan**: A5 declara E1a como dependencia dura (y B1 la hereda); C1 y C2
+  declaran E1b. La
   conmutación de las clases con proyección GitHub (D1) consume la parte de E1a que queda
   viva después de M3.
 
@@ -569,8 +576,8 @@ es precisamente el estado ambiguo que la regla debe impedir.
 
 Regla única: **la autoridad es una función total por clase de trabajo, con un solo
 conmutador fechado por clase**; no existe estado intermedio y **ningún WorkItem puede
-nacer sin autoridad asignada**. La regla entra en vigor en **E1a**, antes del primer
-trabajo nativo del motor (B1).
+nacer sin autoridad asignada**. La regla entra en vigor en **E1a**, antes de que **A5**
+cree el primer WorkItem del motor.
 
 **Tabla de autoridad al entrar en vigor E1a** (cubre TODAS las clases de #172 §6; sin
 huecos):
