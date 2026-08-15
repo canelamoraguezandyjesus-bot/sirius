@@ -55,13 +55,13 @@ Cada componente lleva su naturaleza: **[D]** determinista, **[M]** necesita mode
 
 | # | Componente | Responsabilidad | Naturaleza |
 |---|---|---|---|
-| 1 | **Almacén de estado** | Persistir WorkItems, Runs y el diario de eventos del motor. SQLite propio del motor (fichero separado; nunca la base del producto 0.1) | [D] |
+| 1 | **Almacén de estado** | Persistir WorkItems, Runs y el diario de eventos del motor: un almacén durable propio, detrás de un **puerto de persistencia** (el patrón ya vigente en el producto), siempre separado de la base de Sirius 0.1. La representación física NO se decide aquí: la decide el resultado de I3/I4 (el spike puede usar SQLite por coste y coherencia, sin convertirlo en decisión) | [D] |
 | 2 | **Máquina de estados** | Transiciones válidas de WorkItem y Run (sección 3); toda mutación pasa por aquí y queda en el diario | [D] |
 | 3 | **Supervisor** | Deadlines por Run, sondeo de `STATUS` vía Adapters, detección de Runs perdidos, barrido de recuperación al arrancar | [D] |
-| 4 | **Despachador** | Elegir Worker para un paso (perfil requerido + capacidades + permisos + presupuesto), construir el WorkPackage, invocar `START`. Despacha pasos en paralelo SOLO si no dependen entre sí (independencia real, #172 §2.6); en la duda, en serie | [D] |
+| 4 | **Despachador** | Elegir Worker para un paso (perfil requerido + capacidades + permisos + presupuesto), construir el WorkPackage, invocar `START`. Despacha pasos en paralelo SOLO si no dependen entre sí (independencia real, #172 §2.6); en la duda, en serie. Nunca despacha un sustituto sobre un recurso mutable con una cancelación sin confirmar (3.3) | [D] |
 | 5 | **Capability Resolver** | Traducir capacidades abstractas de un perfil a proveedores concretos (skill/MCP/API/CLI/función local/Worker externo) según registro versionado | [D] |
 | 6 | **Perfiles de agente** | Documentos versionados: misión, procedimiento, capacidades requeridas, permisos, contrato E/S, criterios de éxito y parada. Sin modelo, runtime, credenciales ni estado | [dato, no código] |
-| 7 | **Intérprete de intención** | Distinguir conversar/consultar/explorar/decidir/ordenar; estructurar un borrador de WorkItem desde lenguaje natural. Nunca crea trabajo por sí mismo: la creación exige confirmación (sección 8.5) | [M] con puerta [D] |
+| 7 | **Intérprete de intención** | Distinguir conversar/consultar/explorar/decidir/ordenar; estructurar el WorkItem desde lenguaje natural. Una orden explícita e inequívoca del propietario crea y activa directamente; la ambigüedad pregunta o no crea; lo sensible/material escala (sección 8.5) | [M] con puerta [D] |
 | 8 | **Contexto** (`contexto.recuperar`) | Capacidad común de recuperación (sección 9); compone proveedores; filtra por contexto autorizado | [D] (proveedores; el resumen final puede ser [M]) |
 | 9 | **Permisos y presupuesto** | Perfil de permisos por WorkItem/Run (deny-by-default); límites de gasto/turnos/tiempo; corte y escalado al agotar | [D] |
 | 10 | **Escalado y notificación** | Detectar condiciones de `NEEDS_DECISION` (sección 10); notificar por la interfaz activa; registrar la decisión del propietario como entrada | [D] |
@@ -139,7 +139,7 @@ resultado          síntesis final + artefactos entregados
 | `NEEDS_DECISION` | Escalado al propietario (sección 10) | Solo la decisión registrada del propietario |
 | `PAUSED` | Pausado por orden | Orden de reanudar |
 | `FAILED_SAFELY` | Parada segura con diagnóstico legible; nada se pierde | Reactivación consciente (como hoy exige retirar la etiqueta a sabiendas) |
-| `CANCELLED` | Terminal; el motor cancela los Runs vivos vía `CANCEL` y lo deja escrito | — |
+| `CANCELLED` | Terminal para el despacho (nada nuevo se lanza); los Runs vivos siguen el protocolo de cancelación en dos tiempos de 3.3 y el supervisor los atiende hasta su terminal remoto | — |
 | `DELIVERED` | Terminal; entregable producido, criterio de terminado satisfecho, resultado entregado por la interfaz | — |
 
 Operaciones que NO son estados:
@@ -181,9 +181,14 @@ Reglas:
   reintentar, sustituir Worker o escalar. Esta es la respuesta estructural a «un proceso que
   muere no puede informar de su propia muerte»: quien lo declara muerto es un observador
   externo con estado propio, no el proceso.
-- `CANCELLED`: el motor invocó `CANCEL`; si el Adapter no puede garantizar la cancelación
-  remota, lo dice, y el Run queda cancelado para el motor con nota de «cancelación remota no
-  confirmada» (el supervisor deja de atenderlo salvo para registrar efectos tardíos).
+- **Cancelación en dos tiempos** (un Run cancelado no es un Run inofensivo): `CANCEL`
+  produce `CANCEL_REQUESTED`; el Run pasa a `CANCELLED` SOLO cuando el Adapter observa un
+  estado terminal remoto o un aislamiento demostrado (proceso terminado, run de Actions
+  concluido). Mientras tanto queda en `CANCELLATION_UNCONFIRMED`: el supervisor SIGUE
+  reconciliándolo, y el despachador tiene prohibido lanzar un sustituto o un paso nuevo
+  sobre el mismo recurso mutable (la misma PR, el mismo fichero, el mismo servicio). Los
+  efectos tardíos de un Run cancelado se registran en el diario pero JAMÁS se aplican
+  automáticamente al estado canónico: los reconcilia el motor como entrada nueva.
 
 ### 3.4 Las fases y el ciclo revisar-reparar
 
@@ -217,11 +222,14 @@ Reglas:
   consulta `STATUS` contra el mundo real (la API de GitHub, el estado del proceso local…)
   y reconcilia; para cada WorkItem en `ACTIVE`/`WAITING` recalcula el siguiente paso. Un
   reinicio de Sirius no pierde ni duplica trabajo: como mucho repite una consulta.
-- Si el propio motor está caído, no hay supervisión: esa ventana se cubre con (a) el
-  reconciliador GitHub existente como respaldo de la vía GitHub, y (b) la notificación de
-  arranque/parada del motor en el diario. La cota de esta garantía queda escrita: **el motor
-  no se supervisa a sí mismo**; su caída la nota el propietario (o un vigilante externo
-  futuro, fuera de este mínimo).
+- **El motor no se supervisa a sí mismo, y el propietario NO es su detector de caída.**
+  Requisito de despliegue (entra en I4): el motor corre bajo supervisión externa con
+  reinicio automático — servicio del sistema operativo, process manager o equivalente —
+  de modo que una muerte a las 02:00 termina en reinicio y barrido de recuperación, no en
+  un descubrimiento humano por la mañana. Mientras el motor esté caído pese a eso, el
+  respaldo es (a) el reconciliador GitHub existente para la vía GitHub y (b) el diario de
+  arranques/paradas, que hace la caída visible y datada. Alta disponibilidad queda fuera
+  de este mínimo.
 
 ## 4. WorkPackage y WorkResult
 
@@ -229,9 +237,13 @@ Reglas:
 
 ```yaml
 work_id:        WI-…            # y run_id del intento
+perfil:         {ref: AgentProfile, version_o_hash: …}   # QUÉ perfil gobierna este paso,
+                                # fijado e inmutable para el Run (G2: sin esto no se puede
+                                # reconstruir qué runbook recibió el Worker)
 objetivo:       …               # qué debe lograr ESTE paso, no el WorkItem entero
 contexto:                       # SOLO contexto autorizado por el perfil de permisos
-  - {tipo: documento|decision|extracto|enlace, ref: …, contenido?: …}
+  - {tipo: documento|decision|extracto|enlace, ref: …, contenido?: …, procedencia: …,
+     clasificacion: privado|exportable}   # clasificación obligatoria: alimenta 6.1
 entregable:     …               # forma exacta del resultado esperado
 restricciones:  [fuera de alcance, invariantes, salvaguardas]
 capacidades:    [contexto.recuperar, repo.leer, web.buscar, …]   # abstractas
@@ -284,6 +296,33 @@ Notas de diseño:
 - Si un Worker externo habla un estándar útil, su Adapter lo aprovecha por dentro; el
   contrato de Sirius no cambia (#172 §4.5).
 
+### 5.1 WorkerRequest: la proyección determinista del encargo
+
+Entre el WorkPackage y el runtime concreto hay una transformación que hoy ya existe en la
+vía GitHub (`implement-sirius-work.yml` concatena prompt de rol + repo + incidencia + rama
++ contrato de veredicto antes de invocar a Claude) y que este diseño fija como obligación
+de TODO Adapter:
+
+```
+WorkPackage + AgentProfileRef(version/hash) + CapabilityBindings (resolución de 6)
+            + PermissionEnvelope + OutputSchema (el contrato de WorkResult del rol)
+            ──[proyección determinista del Adapter]──> WorkerRequest
+```
+
+Reglas:
+
+1. La proyección es **determinista y por Adapter**: mismo WorkPackage + mismo perfil +
+   misma resolución → mismo WorkerRequest (módulo secretos). Dos Adapters pueden producir
+   WorkerRequests distintos en forma, pero nunca en contenido normativo: objetivo, alcance,
+   permisos, criterios de aceptación y formato de salida viajan completos o el Adapter
+   falla en `START` (fail-closed), nunca los recorta en silencio.
+2. **El Worker no reinterpreta** alcance, permisos ni criterios de aceptación: son datos
+   del WorkPackage; el perfil (runbook) le dice CÓMO trabajar, no QUÉ le está permitido.
+3. **Evidencia**: el WorkerRequest exacto enviado — o su hash + las versiones de todas sus
+   partes, con secretos saneados — queda en el diario del Run. Sin esto no se puede
+   reconstruir qué instrucciones recibió el Worker ni auditar si perdió criterios,
+   permisos o contexto por el camino.
+
 ## 6. Capability Resolver
 
 Los perfiles piden capacidades abstractas; el Resolver las satisface con el proveedor
@@ -299,7 +338,8 @@ AgentProfile ──capacidades──> Resolver ──registro──> proveedor c
    validacion.ejecutar                     ├─ servidor MCP
    documento.crear                         ├─ API / CLI
    …                                       ├─ función local determinista
-                                           └─ delegación a otro Worker (p. ej. investigar)
+                                           └─ REQUERIMIENTO de delegación devuelto al
+                                              motor (nunca invocación directa; regla 7)
 ```
 
 Reglas:
@@ -322,6 +362,37 @@ Reglas:
    scripts, plantillas, referencias) — nunca autoridad ni memoria — y puede ser propia o
    externa si es portable y auditable. Su formato NO determina el motor: el Resolver la
    trata como un proveedor más (#172 §4.3).
+7. **Ninguna delegación Worker→Worker invisible.** Si satisfacer una capacidad exige otro
+   Worker (p. ej. `investigar.profundo`), el Resolver NO lo invoca: devuelve un
+   requerimiento al motor, y el motor crea un paso/Run hijo de primera clase — con su
+   ciclo de vida, presupuesto, cancelación, evidencia y revisión propios, enlazado al
+   paso padre. Una capability nunca decide ni ejecuta trabajo por su cuenta (#172 §3.1).
+
+### 6.1 Política global de egress (la frontera de privacidad, cerrada en un solo sitio)
+
+Regla de #172 §4.7, elevada a invariante del motor — no de un adapter concreto:
+
+1. **Incompatibilidad estructural en el Resolver**: un mismo Run no puede tener resueltas
+   a la vez capacidades de red externa (`web.*` o equivalentes) y acceso irrestricto al
+   repositorio/contexto privado. La combinación no se degrada ni se advierte: **no se
+   resuelve** (fail-closed antes de `START`).
+2. **Todo contexto que viaja a un Worker con red externa pasa por `ExportSafeBrief`**
+   (7.3), sea cual sea el Worker: GPT Researcher, un futuro investigador, o cualquier otro.
+3. **Cada fragmento exportado lleva procedencia y clasificación** (`clasificacion:
+   exportable` en el WorkPackage, 4.1). La clasificación no la otorga el modelo que
+   redacta: nace de una política versionada en el repositorio (por defecto NADA es
+   exportable; lo público declarado, sí) y de decisiones registradas del propietario para
+   todo lo demás (escalado 5 de la sección 10).
+4. **Validación determinista y fail-closed antes de `START`**: un verificador [D] del
+   motor comprueba que el brief solo contiene fragmentos con clasificación exportable y
+   procedencia conocida. Si no puede afirmarlo, el Run no arranca. El modelo puede ayudar
+   a REDACTAR el brief, pero no puede concederse a sí mismo permiso de exportación: la
+   puerta es del motor.
+5. El Investigador de la PR #171 (repo privado + web, con riesgo residual aceptado por
+   escrito) queda como **evidencia/prototipo del carril de agentes por etiqueta, fuera de
+   este motor**: dentro de la nueva arquitectura esa combinación es incompatible por la
+   regla 1, sin excepciones por perfil. Si algún día se quisiera una excepción, sería una
+   decisión explícita del propietario contra esta política, no una configuración.
 
 ## 7. Adapters de Worker
 
@@ -384,18 +455,22 @@ Agente externo tras Adapter (#172 tipo B). No se instala en esta fase; su Adapte
   la frontera contrato+registro del Investigador de la PR #171 (detección posterior al
   hecho), tal como exige #172 §4.7: «La protección no puede depender únicamente de decirle
   al modelo "no filtres datos"».
-- **`ExportSafeBrief`** (construcción [D], redacción asistida [M], dentro de Sirius):
-  pregunta de investigación + contexto mínimo imprescindible reescrito para exportación +
-  restricciones de ámbito + formato esperado. Regla dura: al brief solo entra material
-  marcado exportable; nombres, rutas, código y datos del repo privado NO entran salvo
-  decisión explícita registrada. El brief completo queda en la evidencia del Run.
+- **`ExportSafeBrief`** (dentro de Sirius): pregunta de investigación + contexto mínimo
+  imprescindible reescrito para exportación + restricciones de ámbito + formato esperado.
+  Un modelo puede ayudar a redactarlo, pero la puerta es la política global de egress
+  (6.1): cada fragmento con procedencia y clasificación exportable según la política
+  versionada o una decisión registrada del propietario, y un verificador determinista
+  fail-closed antes de `START`. Nombres, rutas, código y datos del repo privado NO entran
+  salvo esa decisión explícita. El brief completo queda en la evidencia del Run.
 - **Reconciliación al volver**: el resultado externo se une al contexto privado DENTRO de
   Sirius (fase COMPROBAR: fuentes presentes y accesibles, trazabilidad mínima; fase REVISAR
   si el trabajo lo pide). El investigador externo nunca escribe en el repo ni en la memoria.
-- Convivencia de perfiles: «investigación externa» (GPT Researcher, sin repo, con web) e
-  «investigación interna» (el Investigador de #171: con repo, con web, riesgo residual
-  declarado) son perfiles distintos con fronteras distintas; el motor elige por la
-  sensibilidad del contexto que el trabajo necesita.
+- **Sin segundo carril con repo+web dentro del motor**: la política 6.1 hace
+  estructuralmente incompatible que un Worker tenga a la vez red externa y acceso
+  irrestricto al contexto privado — que es exactamente la combinación del Investigador de
+  la PR #171. Ese Investigador queda como evidencia/prototipo del carril de agentes por
+  etiqueta, fuera de esta arquitectura (6.1, regla 5); toda investigación del motor, sea
+  cual sea el Worker, pasa por `ExportSafeBrief`.
 
 ### 7.4 Telegram (Adapter de interacción, sin lógica de motor)
 
@@ -461,12 +536,21 @@ automáticamente (ADR-010): la síntesis se entrega al propietario, que decide.
 
 - Conversar, consultar el pasado, explorar y debatir NO crean WorkItem. La conversación es
   entrada; su continuidad la da la Capa 1 + `contexto.recuperar`.
-- El intérprete de intención [M] detecta una posible orden de trabajo y estructura un
-  borrador de WorkItem (objetivo, entregable, límites) a partir del lenguaje natural.
-- **Puerta determinista**: el WorkItem solo nace cuando el propietario confirma el borrador
-  con un acto explícito (un «sí, hazlo» sobre el resumen propuesto). Sin confirmación, no
-  hay trabajo. La activación (`PLANNED → ACTIVE`) es la orden del propietario, o una cola
-  expresamente aprobada (la única figura que el contrato ya contempla, §9 in fine).
+- El intérprete de intención [M] clasifica el mensaje y estructura el WorkItem (objetivo,
+  entregable, límites) a partir del lenguaje natural. La intención se expresa UNA vez
+  (#172 §0); la puerta [D] decide según el caso, sin pedir la orden dos veces:
+  1. **Orden explícita e inequívoca** («implementa X», «investiga Y») → el WorkItem se
+     crea Y se activa directamente: la orden ya es la autorización que el contrato exige
+     («orden del usuario»). Sirius informa de qué entendió y arranca; corregirlo a tiempo
+     es posible porque todo es pausable y cancelable (3.2).
+  2. **Exploración o ambigüedad** (debate, «quizá habría que…», objetivo sin entregable
+     discernible) → no se crea trabajo, o se pregunta lo mínimo que falta. Nunca un
+     interrogatorio ni un formulario.
+  3. **Acción sensible o material** (las condiciones de la sección 10: gasto, permisos,
+     destructivo, privacidad…) → confirmación o escalado ANTES de ejecutar esa parte,
+     aunque la orden fuera inequívoca.
+- La activación también puede venir de una cola expresamente aprobada (la única figura que
+  el contrato ya contempla, §9 in fine).
 
 ## 9. Contexto sin «Agente de memoria»
 
@@ -535,8 +619,9 @@ queda registrada en el diario y, si procede, como ADR.
 (Respuestas según este diseño; donde una respuesta depende de una contradicción detenida en
 la sección 14, se marca.)
 
-- **¿Dónde vive el estado si Telegram desaparece?** En el almacén del motor [canónico
-  condicionado a C5]. Telegram es un adaptador sin estado (7.4).
+- **¿Dónde vive el estado si Telegram desaparece?** En el almacén del motor — dirección ya
+  fijada por #172 §1.3; la migración desde «la incidencia es la fuente de verdad» y la
+  enmienda del contrato se tratan en C5. Telegram es un adaptador sin estado (7.4).
 - **¿Si Claude Code muere?** El WorkItem y el Run viven en el motor; el Run muerto termina
   en `LOST` por cota y se reintenta/sustituye/escala (3.3). En la vía GitHub, además, la
   incidencia conserva su proyección.
@@ -544,12 +629,15 @@ la sección 14, se marca.)
   brief queda en la evidencia para reintentar (7.3).
 - **¿Cómo se reanuda un trabajo tras reinicio?** Barrido de recuperación: `STATUS` de cada
   Run abierto contra el mundo real + recálculo del siguiente paso (3.5).
-- **¿Cómo se cancela?** Orden por la interfaz → `CANCELLED`; el motor invoca `CANCEL` en
-  los Runs vivos y registra si la cancelación remota quedó confirmada (3.2, 5).
+- **¿Cómo se cancela?** Orden por la interfaz → `CANCELLED` (nada nuevo se despacha); cada
+  Run vivo pasa por `CANCEL_REQUESTED`/`CANCELLATION_UNCONFIRMED` y solo es `CANCELLED`
+  con terminal remoto o aislamiento demostrado; hasta entonces el supervisor lo sigue
+  reconciliando y nadie toca el mismo recurso mutable (3.2, 3.3, 5).
 - **¿Cómo se cambia el alcance?** Edición versionada del WorkItem + rehacer PREPARAR +
   cancelación previa de Runs invalidados (3.2).
-- **¿Cómo se diferencia conversar de crear trabajo?** Puerta determinista de confirmación
-  sobre un borrador estructurado por el intérprete (8.5).
+- **¿Cómo se diferencia conversar de crear trabajo?** El intérprete clasifica y la puerta
+  determinista decide: orden inequívoca → crea y activa sin segunda confirmación;
+  ambigüedad → pregunta o no crea; sensible/material → confirma o escala (8.5).
 - **¿Cómo se recupera contexto?** Capacidad común `contexto.recuperar` que compone
   proveedores deterministas; sin agente de memoria (9).
 - **¿Cómo se satisfacen capacidades sin acoplar perfiles?** Registro versionado + Resolver
@@ -559,7 +647,9 @@ la sección 14, se marca.)
 - **¿Cómo se reutiliza Codex por GitHub?** Worker-revisor por la vía dual existente;
   `sirius_codex_review.py` ya es su Adapter (7.2).
 - **¿Cómo investiga GPT Researcher sin el repo privado?** Frontera mecánica: proceso sin
-  credenciales ni árbol; solo recibe el `ExportSafeBrief` (7.3).
+  credenciales ni árbol; solo recibe el `ExportSafeBrief`, validado fail-closed por la
+  política global de egress — que además hace imposible resolver repo irrestricto + red
+  externa a ningún Worker del motor (6.1, 7.3).
 - **¿Cómo se crea y revisa documentación?** Flujo 8.1 con el contrato de observación y la
   convergencia existentes.
 - **¿Cómo se ejecuta el Auditor?** Perfil portable con permisos de solo lectura, por la
@@ -571,7 +661,8 @@ la sección 14, se marca.)
   resultados (RESULT), defectos (REPARAR), avisos (10). El propietario solo decide lo de
   la lista cerrada de 10 y da la orden de fusión.
 - **¿Cómo se sustituye un Worker sin cambiar el motor?** Otro Adapter que cumpla
-  START/STATUS/RESULT/CANCEL para el mismo perfil; la sustitución es un Run nuevo (3.3, 5).
+  START/STATUS/RESULT/CANCEL para el mismo perfil; la sustitución es un Run nuevo — nunca
+  sobre un recurso mutable con una cancelación sin confirmar (3.3, 5).
 - **¿Qué parte es determinista y cuál de modelo?** Tabla de 11.
 - **¿Qué permisos/gastos obligan a escalar?** Lista cerrada de 10.
 - **¿Qué evidencia permite reconstruir?** Diario del motor + GitHub visible (12).
@@ -582,7 +673,10 @@ la sección 14, se marca.)
 ## 14. Contradicciones materiales — presentadas y detenidas, no resueltas
 
 Regla de #172 §12 aplicada: decisión exacta + evidencia + consecuencia + recomendación +
-rama detenida. **Ninguna se resuelve en este documento.**
+rama detenida. **Ninguna se resuelve en este documento.** Tras la primera auditoría
+adversarial (2026-08-15): C1, C2, C3 y C5 confirmadas como reales (con su clasificación
+anotada en cada una); C4 RETIRADA como contradicción — su formulación original era
+incorrecta y queda como lección de mínimo privilegio.
 
 ### C1 — El motor no puede aplicar `sirius:implement-requested` (contrato §9.1, límite 1)
 
@@ -595,12 +689,15 @@ rama detenida. **Ninguna se resuelve en este documento.**
 - **Consecuencia**: sin resolverlo, el motor puede preparar el WorkItem y su proyección
   GitHub, pero la activación seguiría siendo un clic humano — se conserva el cuello de
   botella exacto que #172 quiere eliminar.
-- **Recomendación**: cuando el propietario autorice la implementación, enmendar el contrato
-  para distinguir **iniciativa** (prohibida: la máquina no decide qué trabajo existe) de
-  **transporte de una orden ya dada** (el motor aplica la etiqueta únicamente para
-  WorkItems confirmados explícitamente por el propietario, 8.5, dejando la orden enlazada
-  en la evidencia). El espíritu del límite — que nada arranque solo — se conserva.
-- **Rama detenida**: el diseño del `START` de 7.1 queda condicionado a esta decisión.
+- **Clasificación** (primera auditoría, 2026-08-15): conflicto de AUTORIZACIÓN DE
+  IMPLEMENTACIÓN, no del diseño — el contrato exige «orden del usuario», y una orden
+  explícita e inequívoca YA es esa orden (8.5); no hace falta repetirla.
+- **Recomendación**: al autorizar la implementación, enmendar el contrato para distinguir
+  **iniciativa** (prohibida: la máquina no decide qué trabajo existe) de **transporte de
+  una orden ya dada** (el motor aplica la etiqueta únicamente para WorkItems con orden
+  explícita del propietario registrada y enlazada en la evidencia, 8.5). El espíritu del
+  límite — que nada arranque solo — se conserva.
+- **Rama detenida**: el diseño del `START` de 7.1 queda condicionado a esa enmienda.
 
 ### C2 — La supervisión del motor es «vigilancia periódica como motor» (contrato §9 + §9.1)
 
@@ -641,24 +738,33 @@ rama detenida. **Ninguna se resuelve en este documento.**
   delegación supervisada a UN especialista por paso, sin equipos permanentes ni
   conversaciones abiertas entre agentes (RECTOR §9, 0.4) — pero el chasis descrito es, en
   la letra de evolución/STATUS, «arquitectura técnica» para agentes.
-- **Recomendación**: tratar #172 como la autorización expresa y posterior para la FASE DE
-  DISEÑO (la propia issue se declara «DISEÑO / RECONCILIACIÓN. NO AUTORIZA IMPLEMENTACIÓN»),
-  y al aprobar este diseño, actualizar `docs/evolution/STATUS.md` para registrar la
-  excepción con nombre (el Work Engine) en vez de dejar que la contradicción viva callada.
+- **Clasificación** (primera auditoría): real documentalmente, pero #172 ya es la
+  autorización expresa y posterior para esta fase de DISEÑO; no hay que volver a preguntar
+  al propietario si quería esta arquitectura — #172 lo demuestra.
+- **Recomendación**: actualizar `docs/evolution/STATUS.md` para registrar la excepción con
+  nombre (el Work Engine) ANTES de dar por aprobado ADR-019, en vez de dejar que la
+  contradicción viva callada.
 - **Rama detenida**: nada de este documento se presenta como cambio canónico; queda en
-  PROPUESTO hasta esa reconciliación.
+  PROPUESTO hasta esa reconciliación documental.
 
-### C4 — (Heredada, no nueva) Workers que escriben vs. la propiedad de ADR-016
+### C4 — RETIRADA como contradicción; queda como lección de mínimo privilegio
 
-- **Decisión vigente**: ADR-016: «ningún trabajo que ejecute un modelo declara permisos de
-  escritura» — propiedad probada por `tests/automation/test_auditor_workflow.py`.
-- **Estado**: los tres roles del ciclo la incumplen desde siempre (implementador y
-  corrector escriben; reciben el PAT), y la PR #171 ya los clasifica «prototipo declarado»
-  y exentos por nombre en su registro. Este diseño hereda esa clasificación sin ampliarla:
-  los Workers con escritura siguen siendo la excepción declarada, y el objetivo de largo
-  plazo (escritura solo mediante PR revisable, nunca directa; credencial mínima por perfil)
-  queda anotado como dirección, no como norma nueva.
-- **No detiene ninguna rama**: se lista para que nadie la descubra después como sorpresa.
+- **Corrección de la primera auditoría, verificada**: la formulación original de C4
+  («los tres roles del ciclo incumplen ADR-016») era INCORRECTA. ADR-016 es el diseño del
+  carril del Auditor y lo dice expresamente: «**No cambia nada del ciclo de programación.**
+  Ni sus workflows, ni sus etiquetas, ni el contrato. El Auditor es un carril aparte»
+  (`docs/decisions/ADR-016-…md:146-148`); su propiedad («ningún trabajo que ejecute un
+  modelo declara permisos de escritura») está probada por
+  `tests/automation/test_auditor_workflow.py` SOBRE ese workflow, no como norma global, y
+  el propio ADR cita el ciclo de programación como patrón análogo (veredicto + aplicador),
+  no como infractor.
+- **Lo que queda en pie, como patrón, no como incumplimiento**: la separación
+  modelo-sin-escritura / escritura-sin-modelo del carril Auditor es la referencia de
+  mínimo privilegio para los perfiles de permisos del motor; el modo de ejecución actual
+  de los tres roles conserva la clasificación «prototipo declarado» de la PR #171; y la
+  dirección de largo plazo (escritura solo mediante PR revisable, credencial mínima por
+  perfil) queda anotada como dirección.
+- **No detiene ninguna rama** y no es una contradicción del Work Engine.
 
 ### C5 — «La incidencia es la fuente de verdad del trabajo» (contrato §2) frente al almacén del motor
 
@@ -670,25 +776,31 @@ rama detenida. **Ninguna se resuelve en este documento.**
   incidencia pasaría a ser la **proyección** del WorkItem para la vía GitHub. Mientras
   ambos existan, alguien tiene que ser canónico: dos fuentes de verdad es exactamente la
   clase de duplicación que ADR-005 eliminó para V8.
-- **Consecuencia**: sin decisión explícita, la migración de esa propiedad ocurriría de
-  facto y en silencio al implementar el motor.
-- **Recomendación**: decidirlo junto con C1/C2 en la misma enmienda del contrato: la
-  fuente de verdad se traspasa al motor POR CLASE DE TRABAJO a medida que cada vía migra,
-  con la incidencia como proyección obligatoria (y verificable) mientras la vía GitHub
-  siga operativa. Hasta esa enmienda, la incidencia sigue siendo la fuente de verdad.
-- **Rama detenida**: el diseño no declara canónico al almacén del motor; lo declara
-  candidato, condicionado a esta decisión.
+- **Clasificación** (primera auditoría): la DIRECCIÓN ya está decidida por #172 §1.3
+  (GitHub es bus provisional; el estado pertenece a Sirius) — la pregunta «¿quién debe ser
+  canónico?» no se devuelve al propietario. Lo que falta es la MIGRACIÓN.
+- **Consecuencia**: hoy la incidencia sigue siendo la fuente de verdad; sin una migración
+  diseñada y una enmienda del contrato, el traspaso ocurriría de facto y en silencio al
+  implementar el motor — dos fuentes de verdad es la duplicación que ADR-005 eliminó
+  para V8.
+- **Recomendación**: diseñar la migración en el plan de implementación y enmendarlo junto
+  con C1/C2 en el contrato: la fuente de verdad se traspasa al motor POR CLASE DE TRABAJO
+  a medida que cada vía migra, con la incidencia como proyección obligatoria (y
+  verificable) mientras la vía GitHub siga operativa.
+- **Pendiente, no rama detenida sobre la dirección**: el diseño declara la dirección
+  (decidida en #172) y deja el traspaso efectivo condicionado a esa enmienda y a esa
+  migración.
 
 ## 15. Incógnitas que requieren spike empírico (aisladas; no se resuelven por intuición)
 
 | # | Incógnita | Por qué bloquea | Spike mínimo y desechable |
 |---|---|---|---|
-| I1 | ¿`STATUS` fiable sobre runs de Actions? (latencia, rate limits, estados intermedios, runs cancelados/expirados) | Calibra las cotas de `LOST` en la vía GitHub (7.1) | Sonda de solo lectura contra runs reales del repo: consultar N runs vivos/muertos y medir qué se observa y cuándo |
-| I2 | Contrato real de GPT Researcher (entrada/salida, coste, clave LLM necesaria, calidad con brief mínimo) | Sin esto el Adapter 7.3 es papel; además exige decisión de gasto (clave API) | Ejecución aislada, sin repo, con un `ExportSafeBrief` de prueba sobre una pregunta con respuesta conocida; medir formato, fuentes y coste |
-| I3 | Durabilidad del almacén del motor (proceso muere en mitad de una transición → ¿recupera sin perder ni duplicar?) | Es LA garantía del motor (3.5) | Esqueleto desechable: WorkItem + Run en SQLite, matar el proceso en cada punto del ciclo, verificar el barrido de recuperación |
-| I4 | ¿Dónde corre el motor? (máquina del propietario Windows vs. siempre-encendido; disponibilidad real) | Decide la latencia de supervisión y el respaldo necesario | No es spike de código: dato + decisión del propietario; si hay dudas de viabilidad en Windows, prueba de 5 min del esqueleto de I3 |
-| I5 | Valor real de `SIRIUS_CODEX_REVIEW_ENABLED` | Decide si la fase REVISAR de la vía GitHub es dual o simple hoy | Dato del propietario (leer la variable en Settings); no requiere spike |
-| I6 | ¿La etiqueta aplicada por la identidad del motor despierta los workflows? | Condición técnica de C1 (además de la contractual) | Ya casi verificado por ADR-014/015 (el PAT dispara `issues: labeled`); prueba de un clic sobre una incidencia de humo si se quiere evidencia directa |
+| I1 | Bordes de `STATUS` sobre runs de Actions: latencia real, runs cancelados/expirados, rate limits, y la transición correcta a `LOST` | Calibra las cotas de `LOST` en la vía GitHub (7.1). Que la API expone runs/status/conclusion/timestamps ya está comprobado (primera auditoría): el spike mide los BORDES, no la existencia | Sonda de solo lectura contra runs reales del repo: N runs vivos/muertos/cancelados y medir qué se observa y cuándo |
+| I2 | Contrato real de GPT Researcher: entrada/salida, calidad con brief mínimo, y COSTE (hoy NO VERIFICADO: no está demostrado que exija gasto) | Sin esto el Adapter 7.3 es papel. El coste lo mide el spike; SI la opción elegida exige gasto, se escala entonces por presupuesto (sección 10), no antes | Ejecución aislada, sin repo, con un `ExportSafeBrief` de prueba sobre una pregunta con respuesta conocida; medir formato, fuentes y coste real |
+| I3 | Durabilidad del almacén del motor (proceso muere en mitad de una transición → ¿recupera sin perder ni duplicar?) | Es LA garantía del motor (3.5) | Esqueleto desechable: WorkItem + Run en un almacén local (SQLite vale PARA EL SPIKE, sin convertirse en decisión de arquitectura — la representación física la decide este resultado), matar el proceso en cada punto del ciclo, verificar el barrido de recuperación |
+| I4 | ¿Dónde corre el motor? (máquina del propietario Windows vs. siempre-encendido; disponibilidad real) | Decide la latencia de supervisión y el respaldo necesario. REQUISITO no negociable del despliegue elegido: supervisión y reinicio automático EXTERNOS al motor (servicio del SO, process manager o equivalente, 3.5) — el propietario no es el detector rutinario de caída | Dato + decisión del propietario; si hay dudas de viabilidad en Windows, prueba de 5 min del esqueleto de I3 bajo el supervisor elegido |
+| I5 | Valor real de `SIRIUS_CODEX_REVIEW_ENABLED` | NO bloquea la arquitectura: es conocer el estado operativo actual de la revisión dual (el soporte existe; la activación no está verificada) | Dato del propietario (leer la variable en Settings); no requiere spike |
+| I6 | ¿La etiqueta aplicada por la identidad concreta del motor despierta los workflows? | Condición técnica de C1 (además de la contractual). Casi cerrada: el mecanismo etiqueta→run está demostrado en producción (RUN-002 del Auditor se ejecutó por `issues: labeled`; ADR-014/015) | Queda como SMOKE TEST de implementación con la identidad que use el motor, no como spike de diseño |
 
 Regla: cada spike es desechable, aislado (sin tocar 0.1 ni canónicos) y responde UNA
 pregunta que cambia una decisión. Ninguno se ejecuta en esta fase sin orden.
@@ -711,9 +823,12 @@ El plan de implementación NO se escribe aquí: es la fase posterior a la aproba
 
 - No garantiza que el modo dual de Codex esté activo (I5), ni la viabilidad empírica de
   GPT Researcher (I2), ni el comportamiento de `claude-code-action` como producto externo.
-- No garantiza la supervivencia a la caída del propio motor mientras está caído: esa
-  ventana queda cubierta solo por el respaldo GitHub y por el propietario (3.5).
-- No resuelve C1–C3: sin esas decisiones del propietario, la parte de despacho automático
-  y supervisión activa queda en propuesta.
+- No garantiza supervisión mientras el propio motor esté caído: el requisito de despliegue
+  supervisado con reinicio automático (3.5, I4) reduce esa ventana a un reinicio, y el
+  reconciliador GitHub respalda la vía GitHub; alta disponibilidad queda fuera de este
+  mínimo.
+- No resuelve C1, C2, C3 ni C5: sin esas enmiendas del contrato y la reconciliación
+  documental, el despacho automático, la supervisión activa y el traspaso de la fuente de
+  verdad quedan en propuesta.
 - No autoriza nada: implementación, spikes, instalaciones y enmiendas de contrato son
   decisiones posteriores, del propietario, con este documento como material.

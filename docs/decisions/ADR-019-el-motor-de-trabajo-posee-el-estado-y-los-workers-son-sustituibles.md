@@ -61,29 +61,53 @@ Diseñar (no implementar) el sistema de trabajo así — arquitectura completa e
    máquina de estados (con WAITING, retry, LOST, pause/resume, cancelación, cambio de
    alcance, sustitución de Worker), supervisor externo con cotas absolutas, despachador,
    Capability Resolver, permisos, presupuesto, escalado y diario de evidencia. Su almacén
-   es propio y separado de la base del producto 0.1.
+   es propio, separado del producto 0.1 y vive **detrás de un puerto de persistencia**; la
+   representación física NO se decide aquí: la decide el resultado de I3/I4 (el spike
+   puede usar SQLite sin convertirlo en decisión). El despliegue del motor exige
+   supervisión y reinicio automático externos (servicio del SO o equivalente): el
+   propietario no es el detector rutinario de su caída.
 2. **Los Workers son temporales y sustituibles** tras el contrato conceptual
    `START/STATUS/RESULT/CANCEL`, con `WorkPackage`/`WorkResult` como E/S. El Worker
-   informa; el motor aplica.
+   informa; el motor aplica. La cancelación es en dos tiempos: un Run solo queda
+   `CANCELLED` con estado terminal remoto o aislamiento demostrado; hasta entonces
+   (`CANCELLATION_UNCONFIRMED`) el supervisor lo sigue reconciliando y nada nuevo se
+   despacha sobre el mismo recurso mutable. Todo Adapter aplica una **proyección
+   determinista** `WorkPackage + AgentProfileRef(version/hash) + capacidades resueltas +
+   permisos + esquema de salida → WorkerRequest`, que queda en la evidencia (o su hash y
+   versiones, sin secretos); el Worker no reinterpreta alcance, permisos ni criterios de
+   aceptación.
 3. **La automatización GitHub existente es el primer Adapter de Claude Code**, no una vía a
    sustituir ni a duplicar: etiquetas y marcadores son su protocolo; los scripts
    deterministas, el contrato de observación y la convergencia se conservan.
 4. **Codex sigue entrando por la revisión dual de GitHub** como Worker-revisor;
    `sirius_codex_review.py` ya es su Adapter.
-5. **GPT Researcher entra tras Adapter con frontera mecánica `ExportSafeBrief`**: el Worker
-   con Internet corre sin credenciales ni árbol del repo privado; solo recibe un briefing
-   mínimo exportable.
+5. **GPT Researcher entra tras Adapter con frontera mecánica `ExportSafeBrief`**, bajo una
+   **política global de egress del motor**: red externa y acceso irrestricto al contexto
+   privado son incompatibles en el Capability Resolver para TODO Worker (fail-closed antes
+   de `START`); cada fragmento exportado lleva procedencia y clasificación según política
+   versionada o decisión registrada del propietario; un modelo puede redactar el brief,
+   nunca autorizarlo. El Investigador de la PR #171 (repo privado + web) queda como
+   prototipo/evidencia del carril por etiqueta, fuera de esta arquitectura.
 6. **Los Agent Profiles son documentos versionados neutrales al motor** (molde: Auditor
    v0); las capacidades abstractas se resuelven por un registro versionado (Resolver),
-   nunca nombrando herramientas en el perfil.
+   nunca nombrando herramientas en el perfil. El Resolver jamás delega Worker→Worker por
+   su cuenta: una capacidad que exige otro Worker devuelve un requerimiento y el motor
+   crea un paso/Run hijo de primera clase.
 7. **Las interfaces son adaptadores sin estado** (Telegram el primero, sin instalar aún).
-8. Las **contradicciones materiales** quedan presentadas con evidencia y DETENIDAS en la
-   arquitectura §14; ninguna se resuelve aquí: C1 (activación por máquina prohibida por el
-   contrato §9.1), C2 (vigilancia periódica como motor, prohibida por §9), C3 («diseñar
-   arquitectura multiagente» no autorizado en evolución/STATUS frente a la orden posterior
-   de #172), C5 (la incidencia como fuente de verdad del contrato §2 frente al almacén del
-   motor). C4 registra la tensión heredada de ADR-016 con los Workers que escriben, ya
-   clasificada como prototipo declarado.
+8. **La intención se expresa una vez**: una orden explícita e inequívoca del propietario
+   crea y activa el WorkItem directamente (la orden ya es la autorización que exige el
+   contrato); la ambigüedad pregunta o no crea; solo lo sensible/material (gasto,
+   permisos, destructivo, privacidad) exige confirmación o escalado adicional.
+9. Las **contradicciones materiales** quedan presentadas con evidencia y DETENIDAS en la
+   arquitectura §14; ninguna se resuelve aquí: C1 (activación por máquina, prohibida por
+   el contrato §9.1 — conflicto de autorización de implementación, no del diseño), C2
+   (vigilancia periódica como motor, prohibida por §9 — enmienda previa a implementar),
+   C3 («diseñar arquitectura multiagente» no autorizado en evolución/STATUS frente a la
+   orden posterior de #172 — reconciliar antes de dar este ADR por aprobado), C5 (la
+   incidencia como fuente de verdad del contrato §2: la dirección la decidió #172 §1.3 y
+   lo pendiente es la migración y la enmienda). C4 fue formulada como contradicción con
+   ADR-016 y RETIRADA en la primera auditoría: ADR-016 declara «No cambia nada del ciclo
+   de programación» (líneas 146-148); queda como lección de mínimo privilegio.
 
 ## Comprobación que la sostiene
 
@@ -100,6 +124,14 @@ Diseñar (no implementar) el sistema de trabajo así — arquitectura completa e
   `models.py`; todas las `op.create_table` de `migrations/versions/`).
 - Lo NO verificable desde el árbol está marcado NO VERIFICADO en ambos documentos
   (secretos, variables como `SIRIUS_CODEX_REVIEW_ENABLED`, runs reales, productos externos).
+- **Primera auditoría adversarial del propietario (2026-08-15, método de #172 §10)**:
+  veredicto NO APTO con 1 hallazgo bloqueante (B1, frontera de privacidad no cerrada
+  universalmente), 5 graves (G1 confirmación doble, G2 proyección WorkerRequest ausente,
+  G3 delegación oculta en el Resolver, G4 cancelación no confirmada tratada como terminal,
+  G5 caída del motor detectada por el propietario) y 2 menores (M1 SQLite prematuro, M2 C4
+  mal formulada — verificada contra `ADR-016:146-148` antes de aceptarla). Los ocho se
+  corrigieron sobre la misma PR #173 en este documento y en la arquitectura, sin rediseñar
+  el chasis. Segunda auditoría corta pendiente, contra esos ocho puntos.
 
 ## Consecuencias
 
@@ -108,10 +140,12 @@ Diseñar (no implementar) el sistema de trabajo así — arquitectura completa e
   y sin tocar canónicos.
 - **Decisiones que quedan en manos del propietario** (ninguna se toma aquí): resolver
   C1, C2 y C5 enmendando el contrato al autorizar la implementación; reconciliar
-  `docs/evolution/STATUS.md` con la orden de #172 (C3); decidir el destino de la PR #171
-  (este diseño no la necesita fusionada ni rechazada); autorizar los spikes I1–I3 y el
-  gasto de I2 (clave LLM para GPT Researcher); aportar el dato I5 (valor de
-  `SIRIUS_CODEX_REVIEW_ENABLED`) y la decisión I4 (dónde corre el motor).
+  `docs/evolution/STATUS.md` con la orden de #172 (C3) antes de dar este ADR por
+  aprobado; decidir el destino de la PR #171 (este diseño no la necesita fusionada ni
+  rechazada); autorizar los spikes I1–I3 (I2 mide el coste real de GPT Researcher — hoy NO
+  VERIFICADO — y solo si la opción elegida exige gasto se escala por presupuesto); aportar
+  el dato I5 (valor de `SIRIUS_CODEX_REVIEW_ENABLED`) y la decisión I4 (dónde corre el
+  motor, con supervisión y reinicio automático externos como requisito del despliegue).
 - Tras la aprobación explícita del diseño (método de #172 §10), y solo entonces, se
   escribirá el plan de implementación.
 
