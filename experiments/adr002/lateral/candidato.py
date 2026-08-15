@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Final
 
@@ -26,18 +26,35 @@ class ConIndiceLateral(CandidatoA):
     medido. Lo lateral es un derivado, y se comporta como tal.
     """
 
-    def __init__(self, ruta: Path, *, tabla: str, razon: str, senal: str) -> None:
+    def __init__(
+        self,
+        ruta: Path,
+        *,
+        tabla: str,
+        razon: str,
+        senal: str,
+        terminos_extra: Callable[[ContextoDeEtapa], Sequence[str]] | None = None,
+    ) -> None:
         super().__init__()
         self._ruta = ruta
         self._tabla = tabla
         self._razon = razon
         self._senal = senal
+        #: Terminos que se anaden a los de la consulta, decididos por quien
+        #: construye el candidato a partir de **la peticion**, no del texto.
+        self._terminos_extra = terminos_extra
 
     def candidatas(self, contexto: ContextoDeEtapa) -> Sequence[Candidata]:
         base = list(super().candidatas(contexto))
         if contexto.etapa is not Etapa.E1:
             return base
-        terminos = lexical.terminos_significativos(contexto.peticion.consulta)[:TERMINOS_MAXIMOS]
+        terminos = list(lexical.terminos_significativos(contexto.peticion.consulta))[
+            :TERMINOS_MAXIMOS
+        ]
+        if self._terminos_extra is not None:
+            for extra in self._terminos_extra(contexto):
+                if extra not in terminos:
+                    terminos.append(extra)
         if not terminos:
             return base
         consulta = " OR ".join(f'"{t}"' for t in terminos)

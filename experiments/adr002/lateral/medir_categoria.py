@@ -175,18 +175,28 @@ def main() -> int:
             registro = cat.construir(ruta, familia[CRITICIDAD]["valores"])
             con = _correr(casos, cat.ConCategoria(ruta), puerto, plano, contexto)
             fila_con = _fila("2. mas la categoria buscable", con)
+            sembrado = _correr(
+                casos,
+                cat.ConCategoria(ruta, sembrar_en_contexto=True),
+                puerto,
+                plano,
+                contexto,
+            )
+            fila_sembrado = _fila("3. y las criticas al ensamblar contexto", sembrado)
         finally:
             puerto.close()
             plano.close()
 
-    antes, despues = _omisiones(base), _omisiones(con)
+    antes, despues, final = _omisiones(base), _omisiones(con), _omisiones(sembrado)
     print()
     print("=== las omisiones criticas, una por una ===")
     for caso in sorted(antes):
-        quedan = despues.get(caso, [])
-        resueltas = [i for i in antes[caso] if i not in quedan]
-        marca = "RESUELTA" if not quedan else ("parcial" if resueltas else "sigue")
-        print(f"  {caso:8} {marca:9} antes={antes[caso]}  ahora={quedan}")
+        quedan = final.get(caso, [])
+        marca = "RESUELTA" if not quedan else "sigue"
+        print(
+            f"  {caso:8} {marca:9} al empezar={len(antes[caso])}  "
+            f"con categoria={len(despues.get(caso, []))}  al final={quedan or 0}"
+        )
 
     artefacto = {
         "que_es": (
@@ -196,8 +206,18 @@ def main() -> int:
         "commit": cabeza,
         "linea_base_publicada": BASE_PUBLICADA,
         "indice_de_categoria": registro,
-        "filas": [fila_base, fila_con],
-        "omisiones_criticas": {"antes": antes, "despues": despues},
+        "filas": [fila_base, fila_con, fila_sembrado],
+        "omisiones_criticas": {
+            "antes": antes,
+            "con_categoria": despues,
+            "y_sembrando_en_contexto": final,
+        },
+        "estatuto_de_la_siembra": (
+            "la regla de sembrar las criticas cuando la peticion declara que ensambla "
+            "contexto se escribio DESPUES de ver que casos fallaban, y los dos unicos "
+            "casos del banco con ese proposito son justo esos dos. El banco ya no puede "
+            "confirmarla de forma independiente: se sostiene por diseno, no por medida"
+        ),
     }
     argumentos.salida.write_text(
         json.dumps(artefacto, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"

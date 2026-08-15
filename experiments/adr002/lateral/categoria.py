@@ -57,6 +57,7 @@ from pathlib import Path
 from typing import Any, Final
 
 from experiments.adr002.candidates.adr002_a import lexical
+from experiments.adr002.candidates.common.contracts import ContextoDeEtapa
 from experiments.adr002.lateral.candidato import ConIndiceLateral
 from experiments.adr002.projection import contracts as pc
 
@@ -142,20 +143,64 @@ def construir(ruta: Path, criticidad: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-class ConCategoria(ConIndiceLateral):
-    """`ADR002-A` mas la categoria buscable."""
+#: Que propositos declaran que se esta ensamblando el contexto de algo. Es un
+#: campo **de la peticion**, no una adivinanza sobre el texto: quien pide lo
+#: declara al pedirlo.
+PROPOSITO_DE_CONTEXTO: Final = "contexto"
 
-    def __init__(self, ruta: Path) -> None:
+
+def _pide_contexto(contexto: ContextoDeEtapa) -> tuple[str, ...]:
+    """El vocabulario de categoria, si la peticion dice que ensambla contexto.
+
+    POR QUE, Y CON QUE ESTATUTO
+    ===========================
+
+    Preparar el contexto de un proyecto y dejarse fuera sus restricciones
+    criticas es la forma exacta del fallo que `B04-RF-24` prohibe. `N1-34`
+    —«Prepara el contexto de planificacion de Alfa»— no comparte ni una palabra
+    con «El presupuesto maximo del proyecto es 1.500 €», de modo que la busqueda
+    por palabras no puede traerlo por mucho que se afine, y la categoria tampoco
+    porque la pregunta no nombra ninguna categoria. Lo que si dice la peticion,
+    en un campo suyo, es **para que** se pide.
+
+    **Y ahora el estatuto, que importa tanto como la regla.** Esto se escribio
+    **despues** de ver que casos fallaban, y los dos unicos casos del banco con
+    este proposito son justo esos dos. De modo que el banco **ya no puede
+    confirmar esta regla de forma independiente**: la confirmaria por
+    construccion. Se sostiene por diseno —cualquiera escribiria «al montar el
+    contexto de un proyecto, entran sus restricciones»— y no por medida, y asi
+    queda declarado en `docs/architecture` y en el artefacto.
+
+    El ambito hace el resto: `G4` filtra por proyecto, de modo que entran las
+    criticas **de ese** proyecto y no las de otro.
+    """
+    if PROPOSITO_DE_CONTEXTO not in str(contexto.peticion.proposito).lower():
+        return ()
+    return VOCABULARIO
+
+
+class ConCategoria(ConIndiceLateral):
+    """`ADR002-A` mas la categoria buscable.
+
+    ``sembrar_en_contexto`` decide si una peticion que declara ensamblar
+    contexto arrastra ademas las criticas de su ambito. Va como interruptor
+    porque las dos conductas se miden juntas: la regla se diseno sabiendo que
+    casos fallaban y hay que poder ver las dos columnas.
+    """
+
+    def __init__(self, ruta: Path, *, sembrar_en_contexto: bool = False) -> None:
         super().__init__(
             ruta,
             tabla=TABLA,
             razon="el canon lo declara de esta categoria",
             senal="categoria declarada en el canon",
+            terminos_extra=_pide_contexto if sembrar_en_contexto else None,
         )
 
 
 __all__ = [
     "NIVEL_ORDINARIO",
+    "PROPOSITO_DE_CONTEXTO",
     "TABLA",
     "VOCABULARIO",
     "ConCategoria",

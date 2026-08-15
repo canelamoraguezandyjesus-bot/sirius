@@ -618,6 +618,30 @@ def main() -> int:
             rescatadas = sum(len(d.get("rescatados_por_la_regla", ())) for d in combinado.detalles)
             print(f"  {'':34} la regla devolvio {rescatadas} criticas que el modelo tiraba")
 
+            # Y la siembra: si la peticion **declara** que ensambla contexto, las
+            # criticas de su ambito entran. Medido sin modelo: las omisiones
+            # criticas pasan de cinco a una. Pero no es gratis y por eso va en su
+            # propia fila: bajo el limite, cambia aciertos ordinarios por
+            # aciertos criticos —en `N1-34` entran las tres criticas y salen once
+            # notas— y en `N1-33` mete cinco elementos de mas. El filtro es lo
+            # que puede limpiar eso, y esta corrida es la unica que lo dice.
+            print()
+            print("=== 5. y las CRITICAS al ensamblar contexto (filtro y regla puestos) ===")
+            sembrado = _correr(
+                "5. con siembra en contexto",
+                casos,
+                cat.ConCategoria(ruta_categoria, sembrar_en_contexto=True),
+                puerto,
+                plano,
+                contexto,
+                filtrar_con=proveedor,
+                textos=textos,
+            )
+            filas.append(_fila(sembrado, contexto))
+            detalles["5. con siembra en contexto"] = sembrado.detalles
+            rescatadas = sum(len(d.get("rescatados_por_la_regla", ())) for d in sembrado.detalles)
+            print(f"  {'':34} la regla devolvio {rescatadas} criticas que el modelo tiraba")
+
             if argumentos.con_compuerta:
                 print()
                 print("=== la compuerta (medida dos veces: 25 y 26 de 47) ===")
@@ -656,6 +680,12 @@ def main() -> int:
         ),
         "vocabulario_de_categoria": list(VOCABULARIO_DE_CATEGORIA),
         "indice_de_categoria": registro_categoria,
+        "estatuto_de_la_siembra": (
+            "la regla de sembrar las criticas cuando la peticion declara que ensambla "
+            "contexto se escribio DESPUES de ver que casos fallaban, y los dos unicos "
+            "casos del banco con ese proposito son justo esos dos. El banco ya no puede "
+            "confirmarla de forma independiente: se sostiene por diseno, no por medida"
+        ),
         "linea_base_publicada": BASE_PUBLICADA,
         "filas": filas,
         "detalle_por_caso": detalles,

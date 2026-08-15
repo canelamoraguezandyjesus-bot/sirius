@@ -103,3 +103,53 @@ def test_un_canon_sin_criticos_deja_el_indice_vacio_y_no_revienta(tmp_path: Path
     conexion = sqlite3.connect(str(ruta))
     assert conexion.execute(f"SELECT count(*) FROM {cat.TABLA}").fetchone()[0] == 0
     conexion.close()
+
+
+# -- La siembra al ensamblar contexto ---------------------------------------
+
+
+class _Peticion:
+    def __init__(self, proposito: str) -> None:
+        self.proposito = proposito
+        self.consulta = "lo que sea"
+
+
+class _Contexto:
+    def __init__(self, proposito: str) -> None:
+        self.peticion = _Peticion(proposito)
+
+
+def test_solo_siembra_cuando_la_peticion_declara_que_ensambla_contexto() -> None:
+    """El disparador es un campo **de la peticion**, no una adivinanza del texto.
+
+    Quien pide declara para que pide. Ahi no hay heuristica que ajustar.
+    """
+    assert cat._pide_contexto(_Contexto("ensamblar_contexto_b05")) == cat.VOCABULARIO
+    assert cat._pide_contexto(_Contexto("responder_al_usuario")) == ()
+    assert cat._pide_contexto(_Contexto("planificar_viaje")) == ()
+
+
+def test_la_siembra_va_apagada_salvo_que_se_pida() -> None:
+    """Las dos conductas se miden juntas, asi que ninguna puede ser implicita."""
+    from pathlib import Path
+
+    assert cat.ConCategoria(Path("x"))._terminos_extra is None
+    assert cat.ConCategoria(Path("x"), sembrar_en_contexto=True)._terminos_extra is not None
+
+
+def test_el_banco_solo_tiene_dos_casos_con_ese_proposito() -> None:
+    """La razon por la que esta regla **no puede validarse con este banco**.
+
+    Se escribio despues de ver que casos fallaban, y los dos unicos casos con
+    proposito de contexto son justo los dos que fallaban. Confirmarla aqui seria
+    confirmarla por construccion. Esta prueba existe para que nadie lea las
+    cifras como una validacion independiente.
+    """
+    from experiments.adr002.round import cases as cs
+
+    con_contexto = [
+        c.identificador
+        for c in cs.casos_ejecutables(cs.cargar_artefactos())
+        if cat.PROPOSITO_DE_CONTEXTO in str(c.peticion.proposito).lower()
+    ]
+    assert sorted(con_contexto) == ["N1-33", "N1-34"]
