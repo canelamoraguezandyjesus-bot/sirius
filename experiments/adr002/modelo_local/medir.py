@@ -14,33 +14,50 @@ precision**: su unico efecto posible es perder aciertos. De modo que medir el
 filtro contra la busqueda de hoy no mediria el filtro; mediria el vacio, y el
 resultado —«no cambia nada»— seria indistinguible de «el modulo no sirve».
 
-Por eso este arnes mide **cuatro corridas**:
+Por eso este arnes mide **tres corridas**:
 
 1. la busqueda tal cual, que es la linea base publicada;
-2. **mas la ampliacion**: las preguntas que el modelo escribe al guardar cada
-   dato, indexadas junto a el. Esta es la mitad que **ensancha**;
-3. **mas el filtro**: el modelo elige cuales de los candidatos responden de
-   verdad. Esta es la mitad que **estrecha**;
-4. **el filtro a solas**, sin la ampliacion.
+2. **el filtro que elige** cuales de los candidatos responden de verdad;
+3. **la compuerta**, que solo dice si hay algo aprovechable y no elige.
 
-La segunda sube la cobertura y **empeora** el ruido; la tercera tiene que
-recuperar esa precision. Ninguna de las dos por separado cuenta la historia.
+Y la ampliacion al guardar, con ``--con-ampliacion``, **apagada por defecto**.
 
-LA CUARTA CORRIDA, Y POR QUE SE ANADIO DESPUES
-==============================================
+LO QUE DOS CORRIDAS ENSENARON, Y POR QUE ESTAS SON ESTAS
+========================================================
 
-La primera medicion —artefacto `resultado_modelo_local.json`, congelado— dejo
-una pregunta sin responder que vale la mitad del coste del sistema: la corrida 2
-salio en 23 aciertos exactos, **por debajo** de la linea base de 24, y la
-ampliacion cuesta dos llamadas al modelo por dato guardado, ciento noventa y
-cuatro para este canon. Con tres corridas no habia forma de saber si el filtro a
-solas daria lo mismo, y por tanto si esa mitad cara sobra.
+La ampliacion —las preguntas que el modelo escribe al guardar cada dato— se
+midio en `resultado_modelo_local.json` y en `..._v0.2.json`. Las dos veces salio
+**por debajo** de la linea base en aciertos exactos, 23 y 22 contra 24, y la
+segunda ademas triplico la basura. Cuesta dos llamadas al modelo por dato, 194
+para este canon. La corrida que la aislaba —el filtro sin ella— dio exactamente
+lo mismo que con ella: 29 y 29 aciertos, 17 y 17 omisiones criticas. **No
+aporta**, y por eso deja de medirse por defecto. Sigue disponible entera para
+quien quiera reproducir aquello.
 
-Anadir una corrida **no toca** la medida de las otras tres: el banco, las
-metricas, el denominador y el listón preinscrito siguen siendo los mismos. El
-§8.1 prohibe cambiar la medicion despues de ver los resultados; esto no la
-cambia, la amplia, y las cifras de las corridas 1 a 3 se comparan con las
-publicadas caso por caso.
+Lo que la sustituye es la pregunta que la v0.2 dejo planteada. Separando los 47
+casos en los que esperan contenido y los que esperan que no salga nada:
+
+===========================  ==================  =================
+corrida                      aciertos contenido  aciertos ausencia
+===========================  ==================  =================
+busqueda sola                16/31               8/16
+el filtro que elige          17/31               12/16
+===========================  ==================  =================
+
+De los cinco aciertos que el filtro gana, **cuatro estan en decir «no tengo
+eso»**. Elegir cuales aporta uno, y cuesta dieciseis elementos correctos y seis
+omisiones criticas, porque trunca las respuestas largas —cuatro de cinco
+restricciones en `N1-44`, siete de diez en `N1-34`—.
+
+La compuerta se queda con lo que funciona y **no puede** hacer lo que rompe: no
+decide elemento a elemento, de modo que o entrega la lista entera o no entrega
+nada. Sobre las decisiones reales de la v0.2 eso daria 27/47 con las **once**
+omisiones criticas de la linea base, contra 29/47 con diecisiete.
+
+Esto no cambia la medicion: el banco, las metricas, el denominador y el listón
+preinscrito son los mismos, y la linea base se comprueba contra la publicada en
+cada corrida. Cambia **que configuraciones se ponen a prueba**, que es lo que un
+resultado debe cambiar.
 
 QUE SE GUARDA DE CADA CASO, Y POR QUE HIZO FALTA
 ================================================
@@ -343,9 +360,11 @@ def _correr(
     *,
     filtrar_con: ProveedorIA | None,
     textos: dict[str, str],
+    modo: str = "elige",
 ) -> Corrida:
     corrida = Corrida(nombre)
     criticos = frozenset(contexto["criticos"])
+    decidir = fl.compuerta if modo == "compuerta" else fl.filtrar
     for caso in casos:
         recuperacion = engine.recuperar(caso.peticion, puerto, candidato, plano)
         ids = recuperacion.ids
@@ -354,7 +373,7 @@ def _correr(
         if filtrar_con is not None and ids:
             candidatos = [(i, textos.get(i, "")) for i in ids]
             comienzo = time.perf_counter()
-            filtrado = fl.filtrar(caso.peticion.consulta, candidatos, filtrar_con)
+            filtrado = decidir(caso.peticion.consulta, candidatos, filtrar_con)
             corrida.latencias.append(time.perf_counter() - comienzo)
             if filtrado.actuo:
                 corrida.filtro_actuo += 1
@@ -407,7 +426,15 @@ def main() -> int:
     analizador.add_argument("--modelo", default=None, help="etiqueta del modelo en Ollama")
     analizador.add_argument("--servidor", default=None)
     analizador.add_argument("--cota-ingesta", type=int, default=1000)
-    analizador.add_argument("--salida", type=Path, default=Path("resultado_modelo_local_v0.2.json"))
+    analizador.add_argument(
+        "--con-ampliacion",
+        action="store_true",
+        help=(
+            "mide tambien la ampliacion al guardar. Apagada por defecto: medida dos "
+            "veces, cuesta 194 llamadas al modelo y no mejora nada"
+        ),
+    )
+    analizador.add_argument("--salida", type=Path, default=Path("resultado_modelo_local_v0.3.json"))
     analizador.add_argument(
         "--sobrescribir",
         action="store_true",
@@ -492,55 +519,35 @@ def main() -> int:
                 print()
                 print("  AVISO: la linea base NO reproduce la publicada:", desviado)
 
-            print()
-            print("=== 2. mas la ampliacion escrita al guardar (ENSANCHA) ===")
-            ruta_ampliacion = Path(temporal) / "ampliacion.sqlite3"
-            registro = construir_ampliacion(
-                ruta_ampliacion,
-                corpus["items"],
-                criticos,
-                proveedor,
-                cota=argumentos.cota_ingesta,
-            )
-            candidato_ampliado = ConAmpliacion(ruta_ampliacion)
-            ampliada = _correr(
-                "2. mas ampliacion",
-                casos,
-                candidato_ampliado,
-                puerto,
-                plano,
-                contexto,
-                filtrar_con=None,
-                textos=textos,
-            )
-            filas.append(_fila(ampliada, contexto))
-            detalles["2. mas ampliacion"] = ampliada.detalles
+            registro: dict[str, Any] = {}
+            if argumentos.con_ampliacion:
+                print()
+                print("=== la ampliacion escrita al guardar (medida dos veces: no aporta) ===")
+                ruta_ampliacion = Path(temporal) / "ampliacion.sqlite3"
+                registro = construir_ampliacion(
+                    ruta_ampliacion,
+                    corpus["items"],
+                    criticos,
+                    proveedor,
+                    cota=argumentos.cota_ingesta,
+                )
+                ampliada = _correr(
+                    "ampliacion (opcional)",
+                    casos,
+                    ConAmpliacion(ruta_ampliacion),
+                    puerto,
+                    plano,
+                    contexto,
+                    filtrar_con=None,
+                    textos=textos,
+                )
+                filas.append(_fila(ampliada, contexto))
+                detalles["ampliacion (opcional)"] = ampliada.detalles
 
             print()
-            print("=== 3. mas el filtro que elige (ESTRECHA) ===")
-            con_filtro = _correr(
-                "3. mas filtro",
-                casos,
-                candidato_ampliado,
-                puerto,
-                plano,
-                contexto,
-                filtrar_con=proveedor,
-                textos=textos,
-            )
-            filas.append(_fila(con_filtro, contexto))
-            detalles["3. mas filtro"] = con_filtro.detalles
-
-            # La corrida que faltaba. La ampliacion cuesta dos llamadas al
-            # modelo por dato guardado —para este canon, ciento noventa y
-            # cuatro— y la corrida 2 salio **por debajo** de la linea base en
-            # aciertos exactos. Sin medir el filtro a solas no se sabe si esa
-            # mitad cara aporta o si sobra, y esa pregunta vale la mitad del
-            # coste del sistema entero.
-            print()
-            print("=== 4. el filtro SIN la ampliacion (¿se gana la mitad cara su sitio?) ===")
-            solo_filtro = _correr(
-                "4. solo filtro, sin ampliacion",
+            print("=== 2. el filtro que ELIGE cuales responden ===")
+            elige = _correr(
+                "2. el filtro que elige",
                 casos,
                 CandidatoA(),
                 puerto,
@@ -549,16 +556,40 @@ def main() -> int:
                 filtrar_con=proveedor,
                 textos=textos,
             )
-            filas.append(_fila(solo_filtro, contexto))
-            detalles["4. solo filtro, sin ampliacion"] = solo_filtro.detalles
+            filas.append(_fila(elige, contexto))
+            detalles["2. el filtro que elige"] = elige.detalles
+
+            # La compuerta. Medido sobre las decisiones reales de la v0.2: de
+            # los cinco aciertos que el que elige gana sobre la linea base,
+            # cuatro salen de casos donde lo correcto era no devolver nada, y
+            # elegir cuales cuesta dieciseis elementos correctos y seis
+            # criticos. Esta se queda con la pregunta que funciona y no puede
+            # hacer la que rompe: no decide elemento a elemento, asi que no
+            # puede truncar una respuesta larga.
+            print()
+            print("=== 3. la COMPUERTA: solo dice si hay algo, no elige ===")
+            gate = _correr(
+                "3. la compuerta (todo o nada)",
+                casos,
+                CandidatoA(),
+                puerto,
+                plano,
+                contexto,
+                filtrar_con=proveedor,
+                textos=textos,
+                modo="compuerta",
+            )
+            filas.append(_fila(gate, contexto))
+            detalles["3. la compuerta (todo o nada)"] = gate.detalles
         finally:
             puerto.close()
             plano.close()
 
     artefacto = {
         "que_es": (
-            "medicion de las dos mitades del modelo local sobre el banco de ADR-002: "
-            "la ampliacion que ensancha y el filtro que estrecha, en ese orden"
+            "medicion del modelo local sobre el banco de ADR-002: la busqueda sola, "
+            "el filtro que elige cuales responden, y la compuerta que solo dice si hay "
+            "algo. La ampliacion al guardar sale aparte y solo si se pide"
         ),
         "commit": cabeza,
         "denominador": (

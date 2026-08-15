@@ -51,6 +51,46 @@ La regla vigente dice lo contrario y lo dice con ejemplo, y ademas manda
 devolver **las dos** cuando hay un par opuesto, que es lo que el §6.1 llama
 correcto.
 
+SEGUNDA CORRECCION MEDIDA: EL QUE ELIGE SE QUEDA CON UNO
+========================================================
+
+Arreglada la polaridad, la corrida v0.2 salio **peor**: las omisiones criticas
+subieron de doce a diecisiete. Con el detalle por caso —que se anadio para esto
+justamente— se ve donde, y es un patron limpio:
+
+* `N1-44` «Restricciones esenciales, maximo duro 5»: la busqueda entrego **las
+  cinco correctas** y el filtro se quedo con **una**;
+* `N1-34`, con diez elementos esperados: tiro **siete**;
+* `N1-23` «¿cual es la decision de presupuesto actual y cual reemplazo?»: pedia
+  las dos, y devolvio una —ademas la sustituida—;
+* `N1-30`, que pide tres cosas en una frase: devolvio parte.
+
+Once de los dieciseis elementos correctos perdidos salen de los dos casos cuya
+respuesta correcta es mas larga. **El dano crece con el tamano de la respuesta**:
+el modelo trata una peticion de lista como si fuera una pregunta de una sola
+cosa, y se queda con el candidato que mas se parece.
+
+Y el beneficio no esta donde parecia. Separando los 47 casos:
+
+===========================  ==================  =================
+corrida                      aciertos contenido  aciertos ausencia
+===========================  ==================  =================
+busqueda sola                16/31               8/16
+mas el filtro que elige      17/31               12/16
+===========================  ==================  =================
+
+De los cinco aciertos que gana, **cuatro son casos en los que lo correcto era no
+devolver nada**. Elegir cuales aporta uno y cuesta dieciseis elementos correctos
+y seis criticos.
+
+De ahi la compuerta: se queda con la pregunta que funciona —«¿hay algo aqui?»— y
+no puede hacer la que rompe. Sobre las decisiones reales de la v0.2, quedarse
+solo con ese veredicto da 27/47 con **once** omisiones criticas, las mismas que
+la busqueda sola, contra 29/47 con diecisiete del que elige.
+
+Las dos siguen en el codigo y se miden juntas: quien decida cual entra en Sirius
+tiene que ver las dos columnas.
+
 FALLA ABIERTO, Y ESO NO ES UN DESCUIDO
 ======================================
 
@@ -116,14 +156,47 @@ INSTRUCCION: Final = (
     "es la respuesta, y es que no. Incluyela.\n"
     "- Si hay dos frases opuestas sobre lo mismo, devuelve LAS DOS: quien "
     "pregunta tiene que ver que hay un permiso y una prohibicion.\n"
-    "- Respeta el tiempo: si preguntan por lo ANTERIOR o lo derogado, lo "
-    "vigente no responde; si preguntan por lo vigente, lo derogado no responde.\n"
+    "- Respeta el tiempo: si preguntan solo por lo ANTERIOR, lo vigente no "
+    "responde; si preguntan solo por lo vigente, lo derogado no responde. Pero "
+    "si piden LAS DOS —«cual es la actual y cual reemplazo»—, devuelve las dos.\n"
+    "- Si la pregunta pide VARIAS cosas o una lista —«todas las restricciones», "
+    "«el presupuesto y la preferencia»—, devuelve TODAS las frases que hagan "
+    "falta. No elijas la mejor: la respuesta completa son todas.\n"
+    "- Frases parecidas entre si NO son repeticiones. Si cinco frases dicen "
+    "«restriccion numero 1», «numero 2»... y la pregunta las pide, son cinco "
+    "respuestas distintas y van las cinco.\n"
     "- Una frase que habla del mismo tema pero no responde a la pregunta no "
     "cuenta.\n"
     "- Si ninguna frase responde, devuelve la lista vacia.\n"
     "- Ante duda razonable, incluyela: es peor perder algo importante que "
     "entregar de mas."
 )
+
+#: La compuerta pregunta **una sola cosa**: si hay algo aprovechable. No elige.
+#:
+#: Medido sobre el banco: de los cinco aciertos exactos que el filtro que elige
+#: gana sobre la busqueda sola, **cuatro** salen de casos donde lo correcto era
+#: no devolver nada. Elegir cuales, en cambio, es donde pierde: se lleva
+#: dieciseis elementos correctos y seis criticos. Esta pregunta se queda con lo
+#: que funciona y no puede hacer lo que rompe.
+INSTRUCCION_COMPUERTA: Final = (
+    "Recibes una PREGUNTA y una lista numerada de FRASES guardadas en la "
+    "memoria personal de alguien. Dices si ALGUNA aporta algo para responder.\n\n"
+    "Reglas:\n"
+    "- Responde si o no. **No eliges cuales**: solo dices si hay algo "
+    "aprovechable en la lista.\n"
+    "- Una prohibicion aporta a una pregunta sobre si algo se puede hacer: la "
+    "respuesta es que no, y eso es responder.\n"
+    "- Una frase derogada aporta si preguntan por lo anterior.\n"
+    "- Si todas hablan de otra cosa, di que no.\n"
+    "- Ante duda, di que si: es peor perder algo importante que entregar de mas."
+)
+
+ESQUEMA_COMPUERTA: Final[Mapping[str, Any]] = {
+    "type": "object",
+    "properties": {"hay_respuesta": {"type": "boolean"}},
+    "required": ["hay_respuesta"],
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,4 +270,60 @@ def filtrar(
     return Filtrado(tuple(todas[n - 1] for n in sorted(elegidos)), True)
 
 
-__all__ = ["CANDIDATOS_MAXIMOS", "ESQUEMA", "INSTRUCCION", "Filtrado", "filtrar"]
+def compuerta(
+    consulta: str,
+    candidatos: Sequence[tuple[str, str]],
+    proveedor: ProveedorIA,
+    *,
+    tope: int = CANDIDATOS_MAXIMOS,
+    espera: float = ESPERA_FILTRO,
+) -> Filtrado:
+    """Todo o nada: el modelo dice si hay respuesta, no cual. `RF-25`, `RF-26`.
+
+    **No puede truncar una respuesta.** Esa es toda la idea. El que elige se
+    lleva por delante cuatro de cinco restricciones o siete de diez, porque
+    decide elemento a elemento y se queda con el que mas se parece; este no
+    puede hacerlo, porque no decide elemento a elemento.
+
+    Lo que si puede es equivocarse entero y decir «no hay nada» cuando lo habia.
+    Medido sobre las decisiones reales de la corrida v0.2: eso pasa **una vez**
+    en 47 casos, y **no cuesta ninguna omision critica** —las once de la
+    busqueda sola se quedan en once—, mientras que el que elige las sube a
+    diecisiete.
+
+    Falla abierto igual que el otro, y por lo mismo: un modulo que solo puede
+    quitar tiene que degradar a «no quito nada».
+    """
+    if not candidatos:
+        return Filtrado((), False, "no habia candidatos")
+    todas = tuple(ident for ident, _ in candidatos)
+    # La cola no juzgada **nunca** se descarta: un «no» sobre las treinta
+    # primeras no dice nada de la treinta y una.
+    cola = todas[tope:]
+
+    entrada = f"Pregunta: {consulta}\n\nFrases guardadas:\n{_lista(candidatos[:tope])}"
+    try:
+        crudo = proveedor.responder_json(
+            INSTRUCCION_COMPUERTA, entrada, ESQUEMA_COMPUERTA, espera=espera
+        )
+    except Exception as fallo:
+        return Filtrado(todas, False, f"el modelo no decidio ({type(fallo).__name__}): {fallo}")
+
+    hay = crudo.get("hay_respuesta")
+    if not isinstance(hay, bool):
+        return Filtrado(todas, False, "la respuesta no traia un si o un no")
+    if hay:
+        return Filtrado(todas, True)
+    return Filtrado(cola, True)
+
+
+__all__ = [
+    "CANDIDATOS_MAXIMOS",
+    "ESQUEMA",
+    "ESQUEMA_COMPUERTA",
+    "INSTRUCCION",
+    "INSTRUCCION_COMPUERTA",
+    "Filtrado",
+    "compuerta",
+    "filtrar",
+]

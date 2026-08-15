@@ -22,7 +22,15 @@ from typing import Any
 
 import pytest
 from experiments.adr002.modelo_local import ingesta, puerto
-from experiments.adr002.modelo_local.filtro import ESQUEMA, INSTRUCCION, Filtrado, filtrar
+from experiments.adr002.modelo_local.filtro import (
+    ESQUEMA,
+    ESQUEMA_COMPUERTA,
+    INSTRUCCION,
+    INSTRUCCION_COMPUERTA,
+    Filtrado,
+    compuerta,
+    filtrar,
+)
 
 
 class _Transporte:
@@ -581,3 +589,119 @@ def test_no_se_pisa_un_artefacto_ya_medido(tmp_path: Any, monkeypatch: Any) -> N
 
     assert medir.main() == 2
     assert ya.read_text(encoding="utf-8") == "{}", "intacto"
+
+
+# -- La compuerta: todo o nada, medida contra el que elige -------------------
+
+
+def test_la_compuerta_pregunta_si_o_no_y_no_elige() -> None:
+    """Un booleano, no una lista de numeros. Es toda la diferencia."""
+    transporte = _Transporte({"hay_respuesta": True})
+    salida = compuerta("¿acepto escalas?", CANDIDATOS, _con(transporte))
+
+    _ruta, cuerpo, _espera = transporte.peticiones[0]
+    assert cuerpo["format"] == dict(ESQUEMA_COMPUERTA)
+    assert cuerpo["messages"][0]["content"] == INSTRUCCION_COMPUERTA
+    assert salida.identidades == tuple(i for i, _ in CANDIDATOS), "entrega la lista entera"
+    assert salida.actuo
+
+
+def test_la_compuerta_no_puede_truncar_una_respuesta_larga() -> None:
+    """La propiedad por la que existe.
+
+    El que elige se quedo con una de las cinco restricciones de `N1-44` y con
+    tres de los diez elementos de `N1-34`. Esta no puede: no decide elemento a
+    elemento, de modo que o van todas o no va ninguna.
+    """
+    cinco = tuple((f"MEMORIA:{100 + n}", f"Restriccion esencial numero {n}.") for n in range(1, 6))
+    salida = compuerta(
+        "Restricciones esenciales, maximo duro 5.", cinco, _proveedor({"hay_respuesta": True})
+    )
+    assert salida.identidades == tuple(i for i, _ in cinco), "las cinco, no la que mas se parece"
+
+
+def test_la_compuerta_respeta_el_no_del_modelo() -> None:
+    """Decir «no tengo eso» es de donde sale su ganancia: `RF-25` y `RF-26`."""
+    salida = compuerta(
+        "¿cual es la capital de Francia?", CANDIDATOS, _proveedor({"hay_respuesta": False})
+    )
+    assert salida.identidades == ()
+    assert salida.actuo
+
+
+def test_un_no_sobre_la_cabeza_no_descarta_la_cola_sin_mirar() -> None:
+    """Misma disciplina que el que elige: lo no juzgado no se tira."""
+    muchos = tuple((f"MEMORIA:{n}", f"frase {n}") for n in range(1, 6))
+    salida = compuerta("lo que sea", muchos, _proveedor({"hay_respuesta": False}), tope=3)
+    assert salida.identidades == ("MEMORIA:4", "MEMORIA:5"), "la cola no la vio nadie"
+
+
+def test_la_compuerta_tambien_falla_abierto() -> None:
+    """Un modulo que solo puede quitar degrada a «no quito nada». `RF-24`."""
+    for fallo in (ConnectionError("sin red"), RuntimeError("cuota"), TimeoutError("lento")):
+        salida = compuerta("lo que sea", CANDIDATOS, _ProveedorAjeno(fallo))
+        assert salida.identidades == tuple(i for i, _ in CANDIDATOS)
+        assert not salida.actuo
+        assert type(fallo).__name__ in salida.razon
+
+
+def test_una_respuesta_que_no_es_si_ni_no_deja_todo_pasar() -> None:
+    """Sin un booleano de verdad no hay veredicto, y sin veredicto no se quita."""
+    salida = compuerta("lo que sea", CANDIDATOS, _proveedor({"hay_respuesta": "puede"}))
+    assert salida.identidades == tuple(i for i, _ in CANDIDATOS)
+    assert not salida.actuo
+
+
+def test_el_arnes_sabe_llamar_a_las_dos() -> None:
+    """Si `_correr` no distingue el modo, la comparacion no mide dos cosas."""
+    from experiments.adr002.modelo_local import filtro as fl
+    from experiments.adr002.modelo_local import medir
+
+    assert medir.fl.compuerta is fl.compuerta
+    assert medir.fl.filtrar is fl.filtrar
+
+
+def test_la_estimacion_de_la_compuerta_se_recomputa_del_artefacto_congelado() -> None:
+    """La cifra que justifica la compuerta, rehecha desde la corrida v0.2.
+
+    **No es una medicion**: replica los veredictos que el modelo dio con la
+    instruccion del que elige. Se guarda como prueba para que la cifra publicada
+    no pueda desviarse de la evidencia sin que algo se rompa, y para que quien la
+    lea vea de donde sale.
+    """
+    import json
+    from pathlib import Path
+
+    from experiments.adr002.projection import build
+    from experiments.adr002.round import cases as cs
+    from experiments.adr002.round.execute_round import _criticos_del_canon
+
+    artefacto = Path("resultado_modelo_local_v0.2.json")
+    if not artefacto.exists():  # pragma: no cover - solo si alguien borra la evidencia
+        pytest.skip("no esta la corrida v0.2")
+
+    casos = {c.identificador: c for c in cs.casos_ejecutables(cs.cargar_artefactos())}
+    criticos = set(
+        _criticos_del_canon(build.cargar_familia()["applied_criticality_v0_1.json"]["valores"])
+    )
+    det = json.loads(artefacto.read_text(encoding="utf-8"))["detalle_por_caso"]
+
+    exacto = omisiones = 0
+    for c in det["4. solo filtro, sin ampliacion"]:
+        caso = casos[c["caso"]]
+        if not caso.adjudicable:
+            continue
+        entraron = c.get("entraron_al_filtro", c["obtenido"])
+        dijo_nada = c.get("filtro_actuo") and not c["obtenido"] and entraron
+        obtenido = set(() if dijo_nada else entraron)
+        esperado = set(caso.resultado_esperado)
+        exacto += sorted(obtenido) == sorted(esperado)
+        omisiones += len(
+            [
+                i
+                for i in criticos
+                if i in esperado and i not in obtenido and i not in set(caso.pendientes_por_limite)
+            ]
+        )
+
+    assert (exacto, omisiones) == (27, 11), "27/47 sin anadir ni una omision critica"
