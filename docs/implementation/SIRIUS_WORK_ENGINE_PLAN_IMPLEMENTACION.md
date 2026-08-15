@@ -1,7 +1,8 @@
 # Sirius Work Engine — Plan mínimo de implementación
 
-- Estado: PROPUESTO. **Este plan no implementa nada**: ordena la implementación. Su
-  aprobación es la fusión de la PR que lo introduce, por el propietario (ADR-020).
+- Estado: APROBADO — por la fusión de la PR #175 en `main` (2026-08-15), conforme a la
+  regla de aprobación de este mismo plan (ADR-020). **Este plan no implementa nada**:
+  ordena la implementación.
 - Fecha: 2026-08-15
 - Base: `main` = `54bb690` (PR #173 y #174 fusionadas). Diseño aprobado:
   `SIRIUS_WORK_ENGINE_ARQUITECTURA_MINIMA.md`, `SIRIUS_WORK_ENGINE_INVENTARIO.md`,
