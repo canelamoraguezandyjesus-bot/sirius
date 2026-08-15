@@ -3,7 +3,9 @@
 **Estado documental:** APROBADO  
 **Documento rector vigente:** v1.0  
 **Fecha de aprobación:** 22 de julio de 2026  
-**Estado de ejecución:** INACTIVO / NO AUTORIZADO
+**Estado de ejecución:** INACTIVO / NO AUTORIZADO, con una única excepción registrada el
+15 de agosto de 2026: la implementación del Sirius Work Engine, estrictamente según
+ADR-019, ADR-020 y su plan aprobado. El resto del roadmap post-0.1 sigue sin autorizar.
 
 ## Vigente
 
@@ -19,15 +21,18 @@
 ## No autorizado todavía
 
 - ampliar Sirius 0.1;
-- implementar el roadmap post-0.1;
+- implementar el roadmap post-0.1, salvo lo que ampara expresamente la excepción del
+  Sirius Work Engine descrita más abajo;
 - seleccionar proveedores o frameworks para agentes;
 - diseñar una arquitectura técnica multiagente — con una única excepción registrada el
-  15 de agosto de 2026: el **diseño** del Sirius Work Engine queda autorizado por la orden
-  explícita y posterior del propietario en la incidencia #172
-  (SIRIUS-WORK-ENGINE-DESIGN-001), materializada en la PR #173 (ADR-019, PROPUESTO). La
-  excepción cubre solo esa fase de diseño: implementar el Work Engine, adoptar frameworks
-  o proveedores no aprobados y cualquier multiagente más allá de la delegación supervisada
-  descrita en ese diseño siguen no autorizados;
+  15 de agosto de 2026 y ampliada ese mismo día: el **diseño y la implementación** del
+  Sirius Work Engine quedan autorizados por la orden explícita y posterior del propietario
+  en la incidencia #172 (SIRIUS-WORK-ENGINE-DESIGN-001), materializada en la PR #173
+  (ADR-019, APROBADO) y en la PR #175 (ADR-020, APROBADO, con su plan de implementación).
+  La implementación queda autorizada **estrictamente según ADR-020 y su plan aprobado**;
+  fuera de ese alcance siguen NO autorizados: adoptar frameworks o proveedores no
+  aprobados, cualquier multiagente abierto más allá de la delegación supervisada descrita
+  en ese diseño, y el resto del roadmap post-0.1;
 - dar permisos generales sobre el ordenador;
 - activar percepción continua;
 - integrar Sirius con HEAD-R1;
