@@ -677,7 +677,11 @@ Regla de #172 §12 aplicada: decisión exacta + evidencia + consecuencia + recom
 rama detenida. **Ninguna se resuelve en este documento.** Tras la primera auditoría
 adversarial (2026-08-15): C1, C2, C3 y C5 confirmadas como reales (con su clasificación
 anotada en cada una); C4 RETIRADA como contradicción — su formulación original era
-incorrecta y queda como lección de mínimo privilegio.
+incorrecta y queda como lección de mínimo privilegio. Tras la segunda auditoría (APTO CON
+CORRECCIONES, los ocho hallazgos cerrados) y la fusión de la PR #174 (2026-08-15): **C3
+RESUELTA** — la excepción de diseño está registrada en `docs/evolution/STATUS.md`; quedan
+pendientes C1, C2 y C5, las tres como enmiendas del contrato al autorizar la
+implementación.
 
 ### C1 — El motor no puede aplicar `sirius:implement-requested` (contrato §9.1, límite 1)
 
@@ -723,7 +727,7 @@ incorrecta y queda como lección de mínimo privilegio.
 - **Rama detenida**: las políticas concretas de reintento/sustitución tras `LOST` (3.3)
   quedan en propuesta, no en norma, hasta esa decisión.
 
-### C3 — «Diseñar una arquitectura técnica multiagente» consta como no autorizado
+### C3 — «Diseñar una arquitectura técnica multiagente» constaba como no autorizado — RESUELTA por la PR #174
 
 - **Decisión vigente**: `docs/evolution/STATUS.md`, «No autorizado todavía»: «seleccionar
   proveedores o frameworks para agentes; **diseñar una arquitectura técnica multiagente**».
@@ -742,11 +746,14 @@ incorrecta y queda como lección de mínimo privilegio.
 - **Clasificación** (primera auditoría): real documentalmente, pero #172 ya es la
   autorización expresa y posterior para esta fase de DISEÑO; no hay que volver a preguntar
   al propietario si quería esta arquitectura — #172 lo demuestra.
-- **Recomendación**: actualizar `docs/evolution/STATUS.md` para registrar la excepción con
-  nombre (el Work Engine) ANTES de dar por aprobado ADR-019, en vez de dejar que la
-  contradicción viva callada.
-- **Rama detenida**: nada de este documento se presenta como cambio canónico; queda en
-  PROPUESTO hasta esa reconciliación documental.
+- **Recomendación** (aplicada): actualizar `docs/evolution/STATUS.md` para registrar la
+  excepción con nombre (el Work Engine) ANTES de dar por aprobado ADR-019, en vez de dejar
+  que la contradicción viva callada.
+- **RESUELTA (2026-08-15)**: la PR #174, fusionada en `main`, registró la excepción en la
+  misma línea de la prohibición de `docs/evolution/STATUS.md`, acotada a la fase de diseño
+  de #172/#173; implementación, frameworks/proveedores no aprobados y multiagente abierto
+  siguen no autorizados. La precondición para dar ADR-019 por aprobado queda satisfecha;
+  la aprobación sigue siendo la fusión de esta PR por el propietario.
 
 ### C4 — RETIRADA como contradicción; queda como lección de mínimo privilegio
 
@@ -828,8 +835,8 @@ El plan de implementación NO se escribe aquí: es la fase posterior a la aproba
   supervisado con reinicio automático (3.5, I4) reduce esa ventana a un reinicio, y el
   reconciliador GitHub respalda la vía GitHub; alta disponibilidad queda fuera de este
   mínimo.
-- No resuelve C1, C2, C3 ni C5: sin esas enmiendas del contrato y la reconciliación
-  documental, el despacho automático, la supervisión activa y el traspaso de la fuente de
-  verdad quedan en propuesta.
+- No resuelve C1, C2 ni C5: sin esas enmiendas del contrato, el despacho automático, la
+  supervisión activa y el traspaso de la fuente de verdad quedan en propuesta. (C3 quedó
+  resuelta por la PR #174: la reconciliación documental ya está hecha.)
 - No autoriza nada: implementación, spikes, instalaciones y enmiendas de contrato son
   decisiones posteriores, del propietario, con este documento como material.

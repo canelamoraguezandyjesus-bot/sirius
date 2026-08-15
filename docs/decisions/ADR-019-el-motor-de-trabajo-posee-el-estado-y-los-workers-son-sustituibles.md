@@ -103,7 +103,8 @@ Diseñar (no implementar) el sistema de trabajo así — arquitectura completa e
    el contrato §9.1 — conflicto de autorización de implementación, no del diseño), C2
    (vigilancia periódica como motor, prohibida por §9 — enmienda previa a implementar),
    C3 («diseñar arquitectura multiagente» no autorizado en evolución/STATUS frente a la
-   orden posterior de #172 — reconciliar antes de dar este ADR por aprobado), C5 (la
+   orden posterior de #172 — RESUELTA por la PR #174, fusionada el 15-08-2026: la
+   excepción de diseño quedó registrada en `docs/evolution/STATUS.md`), C5 (la
    incidencia como fuente de verdad del contrato §2: la dirección la decidió #172 §1.3 y
    lo pendiente es la migración y la enmienda). C4 fue formulada como contradicción con
    ADR-016 y RETIRADA en la primera auditoría: ADR-016 declara «No cambia nada del ciclo
@@ -131,7 +132,12 @@ Diseñar (no implementar) el sistema de trabajo así — arquitectura completa e
   G5 caída del motor detectada por el propietario) y 2 menores (M1 SQLite prematuro, M2 C4
   mal formulada — verificada contra `ADR-016:146-148` antes de aceptarla). Los ocho se
   corrigieron sobre la misma PR #173 en este documento y en la arquitectura, sin rediseñar
-  el chasis. Segunda auditoría corta pendiente, contra esos ocho puntos.
+  el chasis.
+- **Segunda auditoría corta del propietario (2026-08-15, sobre `3829cd4`)**: veredicto
+  **APTO CON CORRECCIONES** — los ocho hallazgos (B1, G1–G5, M1–M2) CERRADOS; residual
+  menor puramente documental (una frase del adapter de Telegram y la descripción de la
+  PR), saneado en `0cf1588`. Consecuencia registrada por el auditor: C3 seguía siendo
+  precondición para aprobar/fusionar; quedó satisfecha después por la PR #174.
 
 ## Consecuencias
 
@@ -139,9 +145,9 @@ Diseñar (no implementar) el sistema de trabajo así — arquitectura completa e
   y aísla seis incógnitas con spike mínimo (§15), sin código productivo, sin fusionar #171
   y sin tocar canónicos.
 - **Decisiones que quedan en manos del propietario** (ninguna se toma aquí): resolver
-  C1, C2 y C5 enmendando el contrato al autorizar la implementación; reconciliar
-  `docs/evolution/STATUS.md` con la orden de #172 (C3) antes de dar este ADR por
-  aprobado; decidir el destino de la PR #171 (este diseño no la necesita fusionada ni
+  C1, C2 y C5 enmendando el contrato al autorizar la implementación (la reconciliación
+  documental de C3 quedó SATISFECHA por la PR #174, fusionada el 15-08-2026);
+  decidir el destino de la PR #171 (este diseño no la necesita fusionada ni
   rechazada); autorizar los spikes I1–I3 (I2 mide el coste real de GPT Researcher — hoy NO
   VERIFICADO — y solo si la opción elegida exige gasto se escala por presupuesto); aportar
   el dato I5 (valor de `SIRIUS_CODEX_REVIEW_ENABLED`) y la decisión I4 (dónde corre el
