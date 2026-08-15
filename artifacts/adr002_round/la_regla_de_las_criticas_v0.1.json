@@ -1,0 +1,73 @@
+{
+  "que_es": "la regla que hace que el filtro deje de empeorar lo critico: si el modelo se queda con algunas, no puede tirar una critica; si dice que ninguna responde, se respeta entero",
+  "commit": "ed73040",
+  "medido_sobre": "resultado_modelo_local_v0.3.json, corrida «2. el filtro que elige»",
+  "naturaleza_de_las_filas": "las dos primeras y la tercera son MEDIDAS. Las dos ultimas son recomputos exactos sobre los MISMOS veredictos del modelo: la regla vive en el codigo, despues de que el modelo hable, y no cambia ni una instruccion. Por eso no son estimaciones como lo fue la compuerta, que si exigia una instruccion distinta y salio dos puntos por debajo de lo estimado",
+  "por_que_no_se_protege_cuando_dice_que_ninguna": "declarar ausencia no es truncar una respuesta, y RF-25 y RF-26 lo permiten. Forzar las criticas de vuelta ahi rompe los casos de ausencia que el filtro acierta: los aciertos bajan de 30 a 27",
+  "criticas_que_el_modelo_tiraba": {
+    "total_devueltas_por_la_regla": 16,
+    "de_esas_hacian_falta": 4
+  },
+  "filas": {
+    "busqueda sola": {
+      "exacto": 24,
+      "adjudicables": 47,
+      "completas": 24,
+      "con_contenido": 31,
+      "trozos": 64,
+      "esperados": 81,
+      "de_mas": 29,
+      "criticos_perdidos": 11,
+      "ausencia_exacta": 8,
+      "de_ausencia": 16
+    },
+    "el que elige, sin regla (medido)": {
+      "exacto": 30,
+      "adjudicables": 47,
+      "completas": 19,
+      "con_contenido": 31,
+      "trozos": 49,
+      "esperados": 81,
+      "de_mas": 5,
+      "criticos_perdidos": 15,
+      "ausencia_exacta": 13,
+      "de_ausencia": 16
+    },
+    "la compuerta (medido)": {
+      "exacto": 25,
+      "adjudicables": 47,
+      "completas": 24,
+      "con_contenido": 31,
+      "trozos": 64,
+      "esperados": 81,
+      "de_mas": 29,
+      "criticos_perdidos": 11,
+      "ausencia_exacta": 9,
+      "de_ausencia": 16
+    },
+    "elige + criticas protegidas SIEMPRE": {
+      "exacto": 27,
+      "adjudicables": 47,
+      "completas": 20,
+      "con_contenido": 31,
+      "trozos": 53,
+      "esperados": 81,
+      "de_mas": 10,
+      "criticos_perdidos": 11,
+      "ausencia_exacta": 10,
+      "de_ausencia": 16
+    },
+    "elige + protegidas SOLO si eligio algunas": {
+      "exacto": 30,
+      "adjudicables": 47,
+      "completas": 20,
+      "con_contenido": 31,
+      "trozos": 53,
+      "esperados": 81,
+      "de_mas": 10,
+      "criticos_perdidos": 11,
+      "ausencia_exacta": 13,
+      "de_ausencia": 16
+    }
+  }
+}

@@ -206,11 +206,23 @@ class Filtrado:
     ``actuo`` en falso significa que el modelo **no decidio**, por la razon que
     diga ``razon``. Quien agregue muchos filtrados tiene que contar esos casos
     aparte o la cifra resultante no significa nada.
+
+    ``rescatados`` son los criticos que el modelo quiso tirar y la regla devolvio
+    a la lista. Se publica **aparte** para que nadie confunda lo que decidio el
+    modelo con lo que decidio el codigo: sin esta separacion, una corrida no
+    permite reconstruir el juicio del modelo a solas.
     """
 
     identidades: tuple[str, ...]
     actuo: bool
     razon: str = ""
+    rescatados: tuple[str, ...] = ()
+
+    @property
+    def sin_proteccion(self) -> tuple[str, ...]:
+        """Lo que habria salido si el codigo no hubiera devuelto nada."""
+        rescatados = frozenset(self.rescatados)
+        return tuple(i for i in self.identidades if i not in rescatados)
 
 
 def _lista(candidatos: Sequence[tuple[str, str]]) -> str:
@@ -222,6 +234,7 @@ def filtrar(
     candidatos: Sequence[tuple[str, str]],
     proveedor: ProveedorIA,
     *,
+    criticos: frozenset[str] = frozenset(),
     tope: int = CANDIDATOS_MAXIMOS,
     espera: float = ESPERA_FILTRO,
 ) -> Filtrado:
@@ -231,6 +244,23 @@ def filtrar(
     entrego la busqueda, y ese orden se conserva en la salida: el filtro decide
     **que sale**, no en que orden. Si el modelo pudiera reordenar, una medida de
     orden dejaria de ser atribuible a nadie.
+
+    ``criticos`` son las identidades que el **canon** marca con criticidad
+    distinta de ordinaria. No es el oraculo: es un dato del elemento guardado,
+    no de la respuesta correcta, y el sistema lo conoce en tiempo de ejecucion.
+    Con esa lista, la regla que aplica el codigo despues de que el modelo hable
+    es una sola:
+
+        si el modelo se queda con **algunas**, no puede tirar una critica.
+
+    Y la otra mitad importa igual: si el modelo dice que **ninguna** responde,
+    se respeta entero. Eso no es truncar una respuesta, es declarar ausencia, y
+    `RF-25` y `RF-26` lo permiten expresamente. Distinguir las dos cosas es lo
+    que hace que la regla salga a cuenta: medido sobre la corrida v0.3,
+    protegerlas **siempre** baja los aciertos de 30 a 27 porque rompe los casos
+    de ausencia; protegerlas **solo cuando eligio algunas** conserva los 30 y
+    baja las omisiones criticas de quince a once, que son las de la busqueda
+    sola. Es decir: el filtro deja de empeorar lo critico, por construccion.
     """
     if not candidatos:
         return Filtrado((), False, "no habia candidatos")
@@ -239,8 +269,12 @@ def filtrar(
         # Los primeros se filtran y **la cola pasa intacta**: recortarla aqui
         # seria descartar sin que nadie lo mirase, que es lo que este modulo
         # existe para no hacer.
-        cabeza = filtrar(consulta, candidatos[:tope], proveedor, tope=tope, espera=espera)
-        return Filtrado(cabeza.identidades + todas[tope:], cabeza.actuo, cabeza.razon)
+        cabeza = filtrar(
+            consulta, candidatos[:tope], proveedor, criticos=criticos, tope=tope, espera=espera
+        )
+        return Filtrado(
+            cabeza.identidades + todas[tope:], cabeza.actuo, cabeza.razon, cabeza.rescatados
+        )
 
     entrada = f"Pregunta: {consulta}\n\nFrases guardadas:\n{_lista(candidatos)}"
     try:
@@ -265,9 +299,20 @@ def filtrar(
         return Filtrado(todas, False, "la respuesta no traia una lista de numeros")
     if not elegidos:
         # El modelo dice que ninguno responde. Es una respuesta legitima y hay
-        # que respetarla: es como Sirius llega a decir «no tengo eso».
+        # que respetarla: es como Sirius llega a decir «no tengo eso». Aqui **no**
+        # se rescata nada, y es deliberado: declarar ausencia no es truncar una
+        # respuesta, y forzar los criticos de vuelta romperia justo los casos en
+        # los que el filtro acierta.
         return Filtrado((), True)
-    return Filtrado(tuple(todas[n - 1] for n in sorted(elegidos)), True)
+
+    elegidas = frozenset(todas[n - 1] for n in elegidos)
+    # Eligio algunas. Entonces no puede tirar una critica: se devuelven en el
+    # orden de la busqueda, no al final, para que el orden siga siendo el que
+    # entrego la busqueda y no una mezcla de dos criterios.
+    rescatados = tuple(i for i in todas if i in criticos and i not in elegidas)
+    return Filtrado(
+        tuple(i for i in todas if i in elegidas or i in rescatados), True, "", rescatados
+    )
 
 
 def compuerta(

@@ -345,6 +345,12 @@ def _detalle(
         "quitados_criticos": [i for i in quitados if i in criticos and i in esperado],
         "filtro_actuo": filtrado.actuo,
     }
+    if filtrado.rescatados:
+        # Lo que decidio el **codigo**, separado de lo que decidio el modelo.
+        # Con estas dos claves, quien lea el artefacto puede recomputar exacto
+        # que habria salido sin la regla, sin volver a encender el modelo.
+        detalle["rescatados_por_la_regla"] = list(filtrado.rescatados)
+        detalle["obtenido_sin_proteccion"] = list(filtrado.sin_proteccion)
     if filtrado.razon:
         detalle["razon"] = filtrado.razon
     return detalle
@@ -364,7 +370,10 @@ def _correr(
 ) -> Corrida:
     corrida = Corrida(nombre)
     criticos = frozenset(contexto["criticos"])
-    decidir = fl.compuerta if modo == "compuerta" else fl.filtrar
+    # Solo el que elige puede truncar una respuesta, y por eso solo el lleva la
+    # regla. La compuerta no la necesita: o entrega la lista entera o no entrega
+    # nada, de modo que no hay nada de lo que protegerla.
+    protegidos = frozenset() if modo == "compuerta" else criticos
     for caso in casos:
         recuperacion = engine.recuperar(caso.peticion, puerto, candidato, plano)
         ids = recuperacion.ids
@@ -373,7 +382,13 @@ def _correr(
         if filtrar_con is not None and ids:
             candidatos = [(i, textos.get(i, "")) for i in ids]
             comienzo = time.perf_counter()
-            filtrado = decidir(caso.peticion.consulta, candidatos, filtrar_con)
+            filtrado = (
+                fl.compuerta(caso.peticion.consulta, candidatos, filtrar_con)
+                if modo == "compuerta"
+                else fl.filtrar(
+                    caso.peticion.consulta, candidatos, filtrar_con, criticos=protegidos
+                )
+            )
             corrida.latencias.append(time.perf_counter() - comienzo)
             if filtrado.actuo:
                 corrida.filtro_actuo += 1
@@ -545,9 +560,9 @@ def main() -> int:
                 detalles["ampliacion (opcional)"] = ampliada.detalles
 
             print()
-            print("=== 2. el filtro que ELIGE cuales responden ===")
+            print("=== 2. el filtro que ELIGE, sin poder tirar una critica ===")
             elige = _correr(
-                "2. el filtro que elige",
+                "2. el filtro que elige, criticas protegidas",
                 casos,
                 CandidatoA(),
                 puerto,
@@ -557,7 +572,9 @@ def main() -> int:
                 textos=textos,
             )
             filas.append(_fila(elige, contexto))
-            detalles["2. el filtro que elige"] = elige.detalles
+            detalles["2. el filtro que elige, criticas protegidas"] = elige.detalles
+            rescatadas = sum(len(d.get("rescatados_por_la_regla", ())) for d in elige.detalles)
+            print(f"  {'':34} la regla devolvio {rescatadas} criticas que el modelo tiraba")
 
             # La compuerta. Medido sobre las decisiones reales de la v0.2: de
             # los cinco aciertos que el que elige gana sobre la linea base,

@@ -705,3 +705,85 @@ def test_la_estimacion_de_la_compuerta_se_recomputa_del_artefacto_congelado() ->
         )
 
     assert (exacto, omisiones) == (27, 11), "27/47 sin anadir ni una omision critica"
+
+
+# -- La regla: si elige algunas, no puede tirar una critica -----------------
+
+
+CRITICAS = frozenset({"MEMORIA:14", "DECISION:3"})
+
+
+def test_si_el_modelo_elige_algunas_no_puede_tirar_una_critica() -> None:
+    """`B04-RF-24`, garantizado por el codigo y no por la instruccion.
+
+    Medido sobre la corrida v0.3: el modelo tiraba cuatro criticas que hacian
+    falta. Pedirselo por escrito ya se intento dos veces y las dos fallo.
+    """
+    salida = filtrar(
+        "¿acepto escalas?", CANDIDATOS, _proveedor({"responden": [2]}), criticos=CRITICAS
+    )
+    assert salida.identidades == ("MEMORIA:14", "MEMORIA:16", "DECISION:3")
+    assert salida.rescatados == ("MEMORIA:14", "DECISION:3")
+    assert salida.actuo
+
+
+def test_el_orden_sigue_siendo_el_de_la_busqueda() -> None:
+    """Las rescatadas vuelven a su sitio, no al final.
+
+    Si volviesen pegadas al final, el orden dejaria de ser el de la busqueda y
+    pasaria a ser una mezcla de dos criterios que nadie podria atribuir.
+    """
+    salida = filtrar("lo que sea", CANDIDATOS, _proveedor({"responden": [3]}), criticos=CRITICAS)
+    assert salida.identidades == ("MEMORIA:14", "DECISION:3")
+
+
+def test_un_no_rotundo_se_respeta_entero_y_no_rescata_nada() -> None:
+    """La otra mitad de la regla, y la que la hace salir a cuenta.
+
+    Decir «no tengo eso» no es truncar una respuesta: `RF-25` y `RF-26` lo
+    permiten. Medido: proteger tambien aqui baja los aciertos de 30 a 27,
+    porque rompe justo los casos de ausencia que el filtro acierta.
+    """
+    salida = filtrar(
+        "¿cual es la capital de Francia?",
+        CANDIDATOS,
+        _proveedor({"responden": []}),
+        criticos=CRITICAS,
+    )
+    assert salida.identidades == ()
+    assert salida.rescatados == ()
+    assert salida.actuo
+
+
+def test_sin_lista_de_criticas_se_comporta_como_antes() -> None:
+    """La regla es opcional: sin canon que consultar, no inventa proteccion."""
+    salida = filtrar("lo que sea", CANDIDATOS, _proveedor({"responden": [2]}))
+    assert salida.identidades == ("MEMORIA:16",)
+    assert salida.rescatados == ()
+
+
+def test_se_puede_reconstruir_lo_que_decidio_el_modelo_a_solas() -> None:
+    """Sin esto, una corrida no permite separar al modelo del codigo."""
+    salida = filtrar("lo que sea", CANDIDATOS, _proveedor({"responden": [2]}), criticos=CRITICAS)
+    assert salida.sin_proteccion == ("MEMORIA:16",), "lo que habria salido sin la regla"
+
+
+def test_la_cola_no_juzgada_conserva_las_rescatadas() -> None:
+    """Con mas candidatos que el tope, la regla no se pierde por el camino."""
+    muchos = tuple((f"MEMORIA:{n}", f"frase {n}") for n in range(1, 6))
+    salida = filtrar(
+        "lo que sea",
+        muchos,
+        _proveedor({"responden": [1]}),
+        criticos=frozenset({"MEMORIA:2"}),
+        tope=3,
+    )
+    assert salida.identidades == ("MEMORIA:1", "MEMORIA:2", "MEMORIA:4", "MEMORIA:5")
+    assert salida.rescatados == ("MEMORIA:2",)
+
+
+def test_la_compuerta_no_lleva_la_regla_porque_no_la_necesita() -> None:
+    """No decide elemento a elemento, de modo que no hay nada que proteger."""
+    from experiments.adr002.modelo_local import medir
+
+    assert "criticos" not in medir.fl.compuerta.__code__.co_varnames
