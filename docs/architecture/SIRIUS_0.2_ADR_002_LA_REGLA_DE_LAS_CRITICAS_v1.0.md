@@ -1,5 +1,8 @@
 # Sirius 0.2 · ADR-002 · Si elige algunas, no puede tirar una crítica
 
+> **CONFIRMADO en `SIRIUS_0.2_ADR_002_LA_REGLA_CONFIRMADA_v1.0.md`.** Las cifras que aqui se dan eran un recomputo. Estan medidas en maquina en el documento que lo confirma, y salieron identicas.
+
+
 **Estado:** evidencia dentro de ADR-002. No abre ADR nuevo. PR #117 sigue abierta y sin fusionar.
 
 **Cierra** la línea abierta en `SIRIUS_0.2_ADR_002_EL_QUE_ELIGE_SE_QUEDA_CON_UNO_v1.0.md`.

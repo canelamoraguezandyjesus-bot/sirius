@@ -1,5 +1,8 @@
 # Sirius 0.2 · ADR-002 · El que elige se queda con uno
 
+> **SUPERADO por `SIRIUS_0.2_ADR_002_LA_REGLA_CONFIRMADA_v1.0.md`.** El diagnostico —el modelo trunca las respuestas largas— es correcto y se mantiene. La solucion que propone, la compuerta de si/no, **se midio y perdio**: 25 y 26 de 47 en dos corridas. La que gano es la regla de las criticas.
+
+
 **Estado:** evidencia dentro de ADR-002. No abre ADR nuevo. PR #117 sigue abierta y sin fusionar.
 
 **Continúa** `SIRIUS_0.2_ADR_002_EL_FILTRO_TIRABA_LO_QUE_HABIA_QUE_GUARDAR_v1.0.md`, cuya corrección

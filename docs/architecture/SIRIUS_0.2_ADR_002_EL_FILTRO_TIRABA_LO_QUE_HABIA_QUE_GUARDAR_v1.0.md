@@ -1,5 +1,8 @@
 # Sirius 0.2 · ADR-002 · El filtro tiraba lo que había que guardar
 
+> **SUPERADO por `SIRIUS_0.2_ADR_002_EL_QUE_ELIGE_SE_QUEDA_CON_UNO_v1.0.md`.** La correccion de polaridad que propone es correcta y sigue en el codigo, pero **no era la causa principal**: al aplicarla, las omisiones criticas subieron de doce a diecisiete. La causa real esta en el documento sucesor.
+
+
 **Estado:** evidencia dentro de ADR-002. No abre ADR nuevo. PR #117 sigue abierta y sin fusionar.
 
 **Corrige** el defecto que dejó a la vista la primera medición del modelo local

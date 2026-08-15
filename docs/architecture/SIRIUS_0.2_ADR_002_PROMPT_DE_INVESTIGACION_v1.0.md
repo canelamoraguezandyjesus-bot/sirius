@@ -1,5 +1,8 @@
 # Prompt de investigación · memoria de asistente personal
 
+> **RETIRADO.** Se retiro sin usarse. La via que proponia investigar quedo resuelta en local con un modelo propio, de modo que la investigacion dejo de hacer falta. Se conserva por trazabilidad.
+
+
 **Cómo usarlo:** pégalo entero en una herramienta de investigación profunda (Deep Research de
 ChatGPT o de Gemini, o Claude con búsqueda web). Está escrito para que devuelva una **decisión con
 fuentes**, no un resumen bonito.

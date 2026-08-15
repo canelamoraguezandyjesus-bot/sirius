@@ -1,5 +1,8 @@
 # Sirius 0.2 · ADR-002 · De once a cinco, y por qué paro ahí
 
+> **SUPERADO por `SIRIUS_0.2_ADR_002_DE_ONCE_A_UNA_v1.0.md`.** **Su recomendacion era parar en cinco omisiones criticas, y estaba equivocada.** Faltaba una via que no se habia mirado: la peticion declara su propio proposito. Con ella quedan en una. El analisis de las tres salidas que aqui se examinan sigue siendo valido.
+
+
 **Estado:** evidencia dentro de ADR-002. No abre ADR nuevo. PR #117 sigue abierta y sin fusionar.
 
 **Cierra** la línea de las once omisiones críticas que dejó abierta
