@@ -35,7 +35,7 @@ E0  autorización de implementación + saneamiento documental (mini-PR, tipo #17
      A2 almacén durable de REFERENCIA según S1 + barrido de recuperación
      A3 espejo de solo lectura de la vía GitHub + contexto.recuperar v0
      A4 perfiles versionados + WorkerRequest + Resolver v0 + egress + PermissionEnvelope
-     E1a REGLA DE AUTORIDAD por clase (parte C5 del contrato v1.7)              [DECISIÓN]
+     E1a REGLA DE AUTORIDAD por clase (contrato v1.7, parte C5)                 [DECISIÓN]
      A5 interacción e intención v0 (compartida): conversación/consulta/exploración sin
         WorkItem, puerta determinista, creación/activación, presupuesto y corte,
         NEEDS_DECISION, escalado y notificación
@@ -45,7 +45,7 @@ E0  autorización de implementación + saneamiento documental (mini-PR, tipo #17
      B1 adapter GPT Researcher + ExportSafeBrief + flujo investigación completo
         ── HITO M2: Sirius investiga de verdad desde una orden ──
  └─ FASE C — motor activo sobre la vía GitHub
-     E1b enmienda del contrato v1.7: C1 (activación) + C2 (supervisión)         [DECISIÓN]
+     E1b contrato v1.8: C1 (activación) + C2 (supervisión)                      [DECISIÓN]
      S3 spike I1: bordes de STATUS de runs de Actions (solo lectura)
      C1 supervisión activa (LOST → reactivar / sustituir / escalar)
      C2 despacho end-to-end de programación (orden → ciclo completo → entrega)
@@ -247,7 +247,7 @@ humana material previa.
 - **Automatizable**: sí (Work Items del ciclo).
 - **Decisión humana previa**: ninguna.
 
-### E1a — Regla de autoridad por clase (parte C5 del contrato v1.7)
+### E1a — Regla de autoridad por clase (contrato v1.7, parte C5)
 
 - **Objetivo**: fijar, ANTES de que el motor cree su primer WorkItem (lo hace A5), quién
   es la autoridad de cada uno, sin ningún estado ambiguo. Redacción operativa en §4. En una
@@ -259,8 +259,8 @@ humana material previa.
 - **Dependencia real**: fusión de este plan; A4 puede estar en curso en paralelo. Debe
   estar fusionada **antes de A5**, que es el bloque que crea y activa el primer WorkItem
   del motor — no antes de B1, que ya llega con la regla vigente.
-- **Ficheros**: `docs/implementation/AUTOMATION_OPERATING_CONTRACT.md` (apertura de la
-  v1.7 con la regla de autoridad; C1 y C2 llegan después, en E1b, a la misma versión).
+- **Ficheros**: `docs/implementation/AUTOMATION_OPERATING_CONTRACT.md` (**v1.6 → v1.7**,
+  con su registro §10; C1 y C2 llegan después, en su propia versión v1.8).
 - **Prueba de terminado**: contrato con la regla; ninguna clase sin autoridad asignada
   (tabla completa en §4); pruebas documentales en verde.
 - **Riesgo principal**: enmendar de más y colar aquí la activación o la supervisión;
@@ -356,9 +356,9 @@ escalado. Nada escribe aún en GitHub y ningún Worker externo se ha estrenado.
 **HITO M2**: Sirius investiga de verdad — #172 §6.5-6.6 cumplidos — sin haber tocado la
 activación ni la supervisión de la vía GitHub.
 
-### E1b — Enmienda del contrato operativo v1.7 (C1 + C2)
+### E1b — Enmienda del contrato operativo v1.8 (C1 + C2)
 
-- **Objetivo**: cerrar la v1.7 abierta por E1a con las dos contradicciones que la Fase C
+- **Objetivo**: una versión propia del contrato con las dos contradicciones que la Fase C
   consume (arquitectura §14):
   - **C1**: distinguir iniciativa (prohibida) de transporte de una orden ya dada: el
     motor puede aplicar `sirius:implement-requested` SOLO para WorkItems con orden
@@ -366,13 +366,12 @@ activación ni la supervisión de la vía GitHub.
   - **C2**: el supervisor del motor queda autorizado con límites: supervisa y repara SUS
     Runs; no inventa trabajo; no fusiona; no toca ciclos que no gobierna; el
     reconciliador de Actions queda como respaldo de la vía GitHub.
-  (La parte C5 —autoridad y su conmutación— ya está en la v1.7 desde E1a.)
+  (La parte C5 —autoridad y su conmutación— entró en vigor con la v1.7, en E1a.)
 - **Dependencia real**: E1a fusionada; conviene tras M2 (evidencia de que el motor existe
   y aporta), pero puede prepararse en paralelo a la Fase B.
-- **Ficheros**: `docs/implementation/AUTOMATION_OPERATING_CONTRACT.md` (cierre de la
-  v1.7, con su registro §10). PR documental propia, revisada y fusionada por el
-  propietario.
-- **Prueba de terminado**: contrato v1.7 completo y fusionado; las pruebas estructurales
+- **Ficheros**: `docs/implementation/AUTOMATION_OPERATING_CONTRACT.md` (**v1.7 → v1.8**,
+  con su registro §10). PR documental propia, revisada y fusionada por el propietario.
+- **Prueba de terminado**: contrato v1.8 fusionado; las pruebas estructurales
   que citan §9.1 (RECON-STUCK-007/013) siguen en verde o actualizadas en la misma PR con
   justificación.
 - **Riesgo principal**: enmendar de más; mitigación: solo esos dos puntos, con el texto
@@ -401,8 +400,7 @@ activación ni la supervisión de la vía GitHub.
   política del paso: reactivación (la receta exacta del reconciliador: reponer lo que el
   consumo retiró), sustitución o escalado; coordinación con el reconciliador (el motor
   respeta sus marcadores; el reconciliador queda de respaldo, sin cambiarlo).
-- **Dependencia real**: A3 + S3 + **E1b (C2)**. Sin la v1.7 completa este bloque NO
-  empieza.
+- **Dependencia real**: A3 + S3 + **E1b (C2)**. Sin la v1.8 este bloque NO empieza.
 - **Ficheros**: `src/sirius_engine/` (supervisor + políticas), `tests/engine/`.
 - **Prueba de terminado**: en una incidencia de humo, un run matado a mitad queda
   reactivado o escalado por el motor sin intervención humana, con el episodio completo en
@@ -553,24 +551,26 @@ propietario decide no ejercitarla, esa carencia se escribe en el registro del hi
 
 ## 3. C1, C2, C5: cómo y cuándo se enmiendan
 
-Una sola versión del contrato (v1.6 → **v1.7**), en **dos entregas** colocadas cada una
-justo antes del primer bloque que la consume. La razón de partirla es exacta: **C5 se
-consume mucho antes que C1 y C2**. El primer WorkItem nativo del motor nace en B1 (una
-investigación no existe como incidencia del ciclo), y un WorkItem sin autoridad definida
-es precisamente el estado ambiguo que la regla debe impedir.
+**Dos versiones discretas del contrato**, cada una en su PR y con su merge, colocadas
+justo antes del bloque que la consume — como el contrato ha venido versionándose hasta
+hoy (1.4, 1.5, 1.6): un identificador, un contenido normativo, una fecha de entrada en
+vigor. La razón de separarlas es exacta: **C5 se consume mucho antes que C1 y C2**. El
+primer WorkItem del motor nace en **A5** (la puerta de intención lo crea y lo activa), y
+un WorkItem sin autoridad definida es precisamente el estado ambiguo que la regla debe
+impedir.
 
-- **E1a — regla de autoridad (C5), antes de A5.** Texto operativo en §4. No toca
-  activación ni supervisión: la vía GitHub sigue funcionando exactamente igual.
-- **E1b — activación y supervisión (C1 y C2), antes de la Fase C.** C1 = transporte de
-  una orden registrada, nunca iniciativa; C2 = supervisor autorizado con límites
-  nombrados y reconciliador como respaldo. Texto derivado de la arquitectura §14.
+- **E1a — contrato v1.7: regla de autoridad (C5), antes de A5.** Texto operativo en §4.
+  No toca activación ni supervisión: la vía GitHub sigue funcionando exactamente igual.
+- **E1b — contrato v1.8: activación y supervisión (C1 y C2), antes de la Fase C.**
+  C1 = transporte de una orden registrada, nunca iniciativa; C2 = supervisor autorizado
+  con límites nombrados y reconciliador como respaldo. Texto derivado de la
+  arquitectura §14.
 - **Cómo**: cada entrega es una PR documental del propietario sobre
   `AUTOMATION_OPERATING_CONTRACT.md`, registrada en su §10; las pruebas estructurales que
   fijan §9.1 (RECON-STUCK-007/013) se actualizan en la misma PR si el texto las mueve.
-- **Guardia del plan**: A5 declara E1a como dependencia dura (y B1 la hereda); C1 y C2
-  declaran E1b. La
-  conmutación de las clases con proyección GitHub (D1) consume la parte de E1a que queda
-  viva después de M3.
+- **Guardia del plan**: A5 declara E1a (v1.7) como dependencia dura y B1 la hereda; C1 y
+  C2 declaran E1b (v1.8). La conmutación de las clases con proyección GitHub (D1) consume
+  la parte de la v1.7 que queda viva después de M3.
 
 ## 4. Migración de canonicidad sin doble autoridad (diseño)
 

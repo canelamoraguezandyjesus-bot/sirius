@@ -48,7 +48,7 @@ decisiones de plan son:
 1. **Secuencia E0 → A (núcleo puro → spike I3 → almacén durable de referencia → espejo de
    solo lectura + contexto v0 → perfiles/WorkerRequest/Resolver/egress/PermissionEnvelope
    → E1a regla de autoridad → interacción e intención compartida) → B (spike I2 →
-   investigación con GPT Researcher) → E1b (contrato v1.7: C1+C2) → C (spike I1 →
+   investigación con GPT Researcher) → E1b (contrato v1.8: C1+C2) → C (spike I1 →
    supervisión activa → despacho end-to-end → documental → auditor) → D (conmutación de
    canonicidad → servicio desatendido y representación definitiva → Telegram opcional)**,
    con hitos de valor observable al fin de cada fase.
@@ -63,16 +63,18 @@ decisiones de plan son:
    intención, creación/activación, y el gobierno del trabajo (presupuesto con corte
    determinista, `NEEDS_DECISION`, escalado y notificación). B1 y C2 lo **consumen**; no
    lo reimplementan. El `PermissionEnvelope` viaja en el `WorkerRequest` de A4.
-5. **La v1.7 del contrato se entrega en dos actos, cada uno antes de su consumo**: E1a
-   (regla de autoridad, parte C5) **antes de A5**, que es el bloque que crea y activa el
-   primer WorkItem del motor, y E1b (C1 activación + C2 supervisión) antes de la Fase C.
-   Partirla es necesario porque C5 se consume mucho antes que C1/C2: sin la regla, el
-   primer WorkItem nacería sin autoridad definida.
+5. **Dos versiones discretas del contrato, cada una antes de su consumo**: **v1.7** en
+   E1a (regla de autoridad, parte C5) **antes de A5**, que es el bloque que crea y activa
+   el primer WorkItem del motor, y **v1.8** en E1b (C1 activación + C2 supervisión) antes
+   de la Fase C. Separarlas es necesario porque C5 se consume mucho antes que C1/C2 (sin
+   la regla, el primer WorkItem nacería sin autoridad definida), y cada una es una versión
+   propia porque el contrato versiona por merge: un identificador, un contenido, una fecha
+   de entrada en vigor.
 6. **Los spikes se insertan solo delante de la decisión que dependen de ellos**
    (I3→patrón de escritura seguro y representación de referencia, I2→investigador,
    I1→cotas de LOST). **I4 bloquea el servicio desatendido Y la fijación de la
-   representación física definitiva** (por
-   ADR-019, que la hace depender de I3 e I4): A2 entrega un adaptador **de referencia** y
+   representación física definitiva** (por ADR-019, que la hace depender de I3 e I4):
+   A2 entrega un adaptador **de referencia** y
    pruebas escritas contra el puerto, no la representación definitiva. **I5** no bloquea
    la construcción de ningún bloque, pero la vía Codex debe haberse **ejecutado de
    verdad** antes de declarar M3 completo.
