@@ -436,6 +436,28 @@ def _correr(
     return corrida
 
 
+#: Como se llaman las corridas. La primera se escribio antes de que existiera
+#: esta numeracion y se quedo sin sufijo; de ahi que la cuenta empiece en dos.
+PATRON_DE_SALIDA: Final = "resultado_modelo_local_v0.{}.json"
+PRIMERA_VERSION_NUMERADA: Final = 2
+
+
+def siguiente_salida(directorio: Path | None = None) -> Path:
+    """El primer nombre libre de la serie.
+
+    Que el nombre por defecto avance solo no es comodidad: el arnes se niega a
+    pisar un resultado ya medido, de modo que un nombre fijo convierte cada
+    corrida a partir de la segunda en un error que hay que leer y resolver a
+    mano justo cuando uno queria medir. La regla —no se pisa— se conserva
+    entera; lo que se quita es tener que pensar el nombre.
+    """
+    base = directorio or Path()
+    numero = PRIMERA_VERSION_NUMERADA
+    while (base / PATRON_DE_SALIDA.format(numero)).exists():
+        numero += 1
+    return base / PATRON_DE_SALIDA.format(numero)
+
+
 def main() -> int:
     analizador = argparse.ArgumentParser(description="Mide ampliacion y filtro sobre el banco")
     analizador.add_argument("--modelo", default=None, help="etiqueta del modelo en Ollama")
@@ -449,20 +471,23 @@ def main() -> int:
             "veces, cuesta 194 llamadas al modelo y no mejora nada"
         ),
     )
-    analizador.add_argument("--salida", type=Path, default=Path("resultado_modelo_local_v0.3.json"))
+    analizador.add_argument("--salida", type=Path, default=None)
     analizador.add_argument(
         "--sobrescribir",
         action="store_true",
         help="permite pisar un artefacto que ya existe (por defecto, no)",
     )
     argumentos = analizador.parse_args()
+    if argumentos.salida is None:
+        argumentos.salida = siguiente_salida()
 
     # Antes de medir, no despues: una corrida entera dura minutos de grafica, y
     # negarse a escribir al final seria tirar ese trabajo. Y negarse a pisar es
     # la regla del proyecto: los artefactos medidos se conservan, no se pisan.
     if argumentos.salida.exists() and not argumentos.sobrescribir:
         print(f"ERROR: «{argumentos.salida}» ya existe y no se pisa.")
-        print("Usa --salida con otro nombre, o --sobrescribir si de verdad quieres pisarlo.")
+        print(f"Prueba con:  --salida {siguiente_salida()}")
+        print("O con --sobrescribir, si de verdad quieres pisarlo.")
         return 2
 
     extra: dict[str, Any] = {}
