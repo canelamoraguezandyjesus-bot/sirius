@@ -1,0 +1,113 @@
+{
+  "que_es": "las cinco omisiones criticas que la categoria no cierra, con su causa y lo que costaria cada una",
+  "commit": "8538bc5",
+  "de_donde_viene": "de once, la categoria cerro seis: N1-02 y N1-31 enteros. Quedan estas cinco en tres casos",
+  "pendientes": [
+    {
+      "caso": "N1-33",
+      "consulta": "[interna B05] evidencia de límite de gasto",
+      "criticos_que_faltan": [
+        {
+          "identidad": "DECISION:3",
+          "texto": "El presupuesto máximo del proyecto es 1.500 €."
+        }
+      ],
+      "causa": "sinonimo",
+      "explicacion": "la pregunta dice «limite de gasto» y el dato dice «presupuesto maximo»: ni una palabra en comun",
+      "los_recupera_la_ampliacion_del_modelo": [
+        "DECISION:3"
+      ],
+      "criticos_del_ambito": [
+        "DECISION:10",
+        "DECISION:3",
+        "MEMORIA:14",
+        "MEMORIA:16",
+        "MEMORIA:25"
+      ],
+      "criticos_esperados": [
+        "DECISION:3"
+      ],
+      "devolver_todos_los_criticos_del_ambito_acertaria": false
+    },
+    {
+      "caso": "N1-30",
+      "consulta": "Resume mi preferencia de redacción, el presupuesto vigente y la condición de ahorro en escalas, con su razón.",
+      "criticos_que_faltan": [
+        {
+          "identidad": "MEMORIA:1",
+          "texto": "El usuario prefiere que redactes en tono directo y sin adornos."
+        }
+      ],
+      "causa": "derivacion",
+      "explicacion": "la pregunta dice «preferencia de redaccion» y el dato «prefiere que redactes»: misma familia de palabras, pero sustantivo contra verbo, que el recorte de sufijos no une",
+      "los_recupera_la_ampliacion_del_modelo": [],
+      "criticos_del_ambito": [
+        "DECISION:10",
+        "DECISION:3",
+        "MEMORIA:14",
+        "MEMORIA:16",
+        "MEMORIA:25"
+      ],
+      "criticos_esperados": [
+        "DECISION:3",
+        "MEMORIA:1",
+        "MEMORIA:16"
+      ],
+      "devolver_todos_los_criticos_del_ambito_acertaria": false
+    },
+    {
+      "caso": "N1-34",
+      "consulta": "Prepara el contexto de planificación de Alfa.",
+      "criticos_que_faltan": [
+        {
+          "identidad": "DECISION:3",
+          "texto": "El presupuesto máximo del proyecto es 1.500 €."
+        },
+        {
+          "identidad": "MEMORIA:14",
+          "texto": "No uses opciones de vuelo con escala."
+        },
+        {
+          "identidad": "MEMORIA:16",
+          "texto": "Acepta escala solo si ahorra más de 200 €."
+        }
+      ],
+      "causa": "consulta sin palabras utiles",
+      "explicacion": "«Prepara el contexto de planificacion de Alfa» no comparte palabra con ninguno de los tres",
+      "los_recupera_la_ampliacion_del_modelo": [],
+      "criticos_del_ambito": [
+        "DECISION:10",
+        "DECISION:3",
+        "MEMORIA:14",
+        "MEMORIA:16",
+        "MEMORIA:25"
+      ],
+      "criticos_esperados": [
+        "DECISION:3",
+        "MEMORIA:14",
+        "MEMORIA:16"
+      ],
+      "devolver_todos_los_criticos_del_ambito_acertaria": false
+    }
+  ],
+  "opciones_examinadas": [
+    {
+      "opcion": "devolver todos los criticos del ambito en consultas amplias",
+      "veredicto": "REFUTADA por el banco",
+      "prueba": "en los tres casos los criticos esperados son un SUBCONJUNTO estricto de los criticos del ambito. La regla meteria DECISION:10 y MEMORIA:25 donde no se esperan: dos elementos de mas en N1-34, dos en N1-30 y cuatro en N1-33",
+      "y_ademas": "distinguir «consulta amplia» de «consulta estrecha» exigiria un umbral, y ese umbral solo se puede elegir mirando estos casos, que es fijar la medida sobre el resultado"
+    },
+    {
+      "opcion": "la ampliacion escrita por el modelo al guardar",
+      "veredicto": "recupera UNA de las cinco",
+      "prueba": "medido en la corrida v0.2: para DECISION:3 el modelo escribio «¿Cual es el limite de gasto para este proyecto?», que es justo el sinonimo que falta, y N1-33 pasa de 0/1 a 1/1. N1-30 y N1-34 no se mueven",
+      "coste": "dos llamadas al modelo por dato guardado, 194 para este canon, y 11 elementos de basura en N1-33"
+    },
+    {
+      "opcion": "una lista de sinonimos escrita a mano",
+      "veredicto": "NO se hace",
+      "razon": "escribir «presupuesto = limite de gasto» ahora, sabiendo que ese es el caso que falla, es ajustar el sistema al banco. Funcionaria aqui y no fuera de aqui, y ademas taparia la medida"
+    }
+  ],
+  "recomendacion": "parar. De once se cerraron seis con una pieza determinista, sin modelo y sin coste. Las cinco que quedan valen, entre las tres opciones examinadas, o una omision menos a cambio de 194 llamadas por guardado, o un ajuste al banco que no sobrevive fuera de el"
+}
