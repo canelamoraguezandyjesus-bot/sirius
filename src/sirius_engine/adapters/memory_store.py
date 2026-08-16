@@ -248,11 +248,19 @@ class InMemoryWorkEngineStore:
             limites=limites,
         )
         # Arquitectura §3.2: "Si el cambio invalida Runs vivos, el motor los
-        # cancela primero." Solo se solicita la cancelación en dos tiempos
-        # (nunca se confirma aquí); el supervisor sigue reconciliando cada
-        # Run hasta su terminal remoto o un aislamiento demostrado (§3.3).
+        # cancela primero." Un Run aún PREPARED nunca llegó a ningún Worker
+        # remoto, así que se invalida de una vez (sin la cancelación en dos
+        # tiempos, reservada a Runs ya despachados) para que dispatch_run()
+        # ya no pueda lanzar el paquete de trabajo obsoleto. Para Runs
+        # DISPATCHED/RUNNING solo se solicita la cancelación (nunca se
+        # confirma aquí); el supervisor sigue reconciliando cada Run hasta su
+        # terminal remoto o un aislamiento demostrado (§3.3).
         for run in self.list_runs_for_work_item(work_id):
-            if (
+            if run.estado is run_ops.RunState.PREPARED:
+                self._record_run(
+                    run.invalidate_prepared(now=now), "run_prepared_invalidated", now=now
+                )
+            elif (
                 run.estado in run_ops.LIVE_STATES
                 and run.cancellation_status is run_ops.CancellationStatus.NONE
             ):

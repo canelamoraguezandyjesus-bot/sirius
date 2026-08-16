@@ -136,6 +136,19 @@ class Run:
             raise DeadlineNotExceededError(self.run_id)
         return replace(self, estado=RunState.FINISHED, desenlace=RunOutcome.LOST, updated_at=now)
 
+    def invalidate_prepared(self, *, now: datetime) -> Run:
+        """``PREPARED -> FINISHED(CANCELLED)`` directamente, sin cancelación en dos tiempos.
+
+        Un Run en ``PREPARED`` nunca llegó a ningún Worker remoto, así que no
+        hay nada que confirmar (§3.3): el alcance obsoleto se invalida de una
+        vez, a diferencia de :meth:`request_cancel`, reservado a Runs ya
+        despachados.
+        """
+        self._require(frozenset({RunState.PREPARED}), "invalidate_prepared")
+        return replace(
+            self, estado=RunState.FINISHED, desenlace=RunOutcome.CANCELLED, updated_at=now
+        )
+
     def request_cancel(self, *, now: datetime) -> Run:
         """``CANCEL`` produce ``CANCELLATION_UNCONFIRMED`` (el estado del ciclo no cambia)."""
         self._require(LIVE_STATES, "request_cancel")

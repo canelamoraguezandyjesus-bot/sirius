@@ -13,7 +13,7 @@ import pytest
 
 from sirius_engine.domain.errors import IllegalTransitionError
 from sirius_engine.domain.events import AggregateType
-from sirius_engine.domain.run import CancellationStatus, RunState
+from sirius_engine.domain.run import CancellationStatus, RunOutcome, RunState
 from sirius_engine.domain.work_item import WorkItemPhase, WorkItemState
 from sirius_engine.ports.store import WorkEngineStore
 
@@ -166,6 +166,44 @@ def test_scope_change_requests_cancellation_of_a_live_run_before_changing_scope(
         i for i, event in enumerate(events) if event.kind == "work_item_scope_changed"
     )
     assert cancel_index < scope_index
+
+
+def test_scope_change_invalidates_a_prepared_run_so_it_can_never_be_dispatched(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun, now: datetime
+) -> None:
+    """CODEX-001: un Run PREPARED con el alcance viejo no debe poder despacharse.
+
+    A diferencia de un Run DISPATCHED/RUNNING, uno PREPARED nunca llegó a un
+    Worker remoto, así que se invalida de una vez en vez de pasar por la
+    cancelación en dos tiempos (§3.3).
+    """
+    work_id = "WI-SCOPE-INVALIDATES-PREPARED"
+    make_work_item(now=now, work_id=work_id)
+    store.activate_work_item(work_id, now=now)
+
+    deadline = now + timedelta(hours=1)
+    make_run(run_id="RUN-STALE-PREPARED", work_id=work_id, now=now, deadline=deadline)
+
+    store.change_work_item_scope(work_id, now=now, objetivo="objetivo nuevo")
+
+    run = store.get_run("RUN-STALE-PREPARED")
+    assert run is not None
+    assert run.estado is RunState.FINISHED
+    assert run.desenlace is RunOutcome.CANCELLED
+    # No pasó por la cancelación en dos tiempos: nunca hubo nada remoto que confirmar.
+    assert run.cancellation_status is CancellationStatus.NONE
+
+    with pytest.raises(IllegalTransitionError):
+        store.dispatch_run("RUN-STALE-PREPARED", now=now)
+
+    events = store.list_events()
+    invalidated_index = next(
+        i for i, event in enumerate(events) if event.kind == "run_prepared_invalidated"
+    )
+    scope_index = next(
+        i for i, event in enumerate(events) if event.kind == "work_item_scope_changed"
+    )
+    assert invalidated_index < scope_index
 
 
 def test_scope_change_does_not_touch_a_finished_run(

@@ -115,6 +115,7 @@ EventKind = Literal[
     "run_succeeded",
     "run_failed",
     "run_marked_lost",
+    "run_prepared_invalidated",
     "run_cancellation_requested",
     "run_cancellation_confirmed",
     "run_retried",
