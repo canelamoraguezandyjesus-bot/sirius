@@ -387,6 +387,7 @@ jobs:
           SIRIUS_VERDICT_FILE: ${{ runner.temp }}/sirius_verdict.json
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          show_full_output: true
           # Mismo PAT que el checkout: el push de la corrección debe provenir de
           # una identidad real para que `synchronize` vuelva a disparar Quality.
           github_token: ${{ secrets.SIRIUS_BOT_TOKEN }}
