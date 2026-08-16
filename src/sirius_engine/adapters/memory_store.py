@@ -22,7 +22,7 @@ from sirius_engine.domain.errors import (
     UnknownRunError,
     UnknownWorkItemError,
 )
-from sirius_engine.domain.events import AggregateType, Event, EventKind
+from sirius_engine.domain.events import AggregateType, Event, EventKind, rebuild_state
 from sirius_engine.domain.run import Run
 from sirius_engine.domain.work_item import WorkItem, WorkItemClass
 
@@ -121,11 +121,13 @@ class InMemoryWorkEngineStore:
         return self._work_items.get(work_id)
 
     def list_work_item_versions(self, work_id: str) -> Sequence[WorkItem]:
-        return tuple(
-            event.entity
-            for event in self._events
-            if isinstance(event.entity, WorkItem) and event.aggregate_id == work_id
-        )
+        """Una instantánea por revisión de alcance (§3.2), no una por evento.
+
+        Delega en :func:`~sirius_engine.domain.events.rebuild_state` sobre el
+        mismo diario que respalda este almacén, de modo que esta proyección y
+        la reconstrucción del diario nunca puedan divergir.
+        """
+        return rebuild_state(self._events).work_item_versions.get(work_id, ())
 
     def activate_work_item(self, work_id: str, *, now: datetime) -> WorkItem:
         current = self._require_work_item(work_id)
@@ -183,6 +185,42 @@ class InMemoryWorkEngineStore:
             current.deliver(resultado=resultado, now=now), "work_item_delivered", now=now
         )
 
+    def begin_work_item_execution(self, work_id: str, *, now: datetime) -> WorkItem:
+        current = self._require_work_item(work_id)
+        return self._record_work_item(
+            current.begin_execution(now=now), "work_item_execution_started", now=now
+        )
+
+    def begin_work_item_check(self, work_id: str, *, now: datetime) -> WorkItem:
+        current = self._require_work_item(work_id)
+        return self._record_work_item(
+            current.begin_check(now=now), "work_item_check_started", now=now
+        )
+
+    def begin_work_item_review(self, work_id: str, *, now: datetime) -> WorkItem:
+        current = self._require_work_item(work_id)
+        return self._record_work_item(
+            current.begin_review(now=now), "work_item_review_started", now=now
+        )
+
+    def approve_work_item_review(self, work_id: str, *, now: datetime) -> WorkItem:
+        current = self._require_work_item(work_id)
+        return self._record_work_item(
+            current.approve_review(now=now), "work_item_review_approved", now=now
+        )
+
+    def request_work_item_repair(self, work_id: str, *, now: datetime) -> WorkItem:
+        current = self._require_work_item(work_id)
+        return self._record_work_item(
+            current.request_repair(now=now), "work_item_repair_requested", now=now
+        )
+
+    def resume_work_item_after_repair(self, work_id: str, *, now: datetime) -> WorkItem:
+        current = self._require_work_item(work_id)
+        return self._record_work_item(
+            current.resume_after_repair(now=now), "work_item_repair_resumed", now=now
+        )
+
     def pause_work_item(self, work_id: str, *, now: datetime) -> WorkItem:
         current = self._require_work_item(work_id)
         return self._record_work_item(current.pause(now=now), "work_item_paused", now=now)
@@ -202,17 +240,24 @@ class InMemoryWorkEngineStore:
         limites: Mapping[str, object] | None = None,
     ) -> WorkItem:
         current = self._require_work_item(work_id)
-        return self._record_work_item(
-            current.change_scope(
-                now=now,
-                objetivo=objetivo,
-                entregable=entregable,
-                criterio_terminado=criterio_terminado,
-                limites=limites,
-            ),
-            "work_item_scope_changed",
+        changed = current.change_scope(
             now=now,
+            objetivo=objetivo,
+            entregable=entregable,
+            criterio_terminado=criterio_terminado,
+            limites=limites,
         )
+        # Arquitectura §3.2: "Si el cambio invalida Runs vivos, el motor los
+        # cancela primero." Solo se solicita la cancelación en dos tiempos
+        # (nunca se confirma aquí); el supervisor sigue reconciliando cada
+        # Run hasta su terminal remoto o un aislamiento demostrado (§3.3).
+        for run in self.list_runs_for_work_item(work_id):
+            if (
+                run.estado in run_ops.LIVE_STATES
+                and run.cancellation_status is run_ops.CancellationStatus.NONE
+            ):
+                self._record_run(run.request_cancel(now=now), "run_cancellation_requested", now=now)
+        return self._record_work_item(changed, "work_item_scope_changed", now=now)
 
     def reprioritize_work_item(self, work_id: str, *, prioridad: int, now: datetime) -> WorkItem:
         current = self._require_work_item(work_id)

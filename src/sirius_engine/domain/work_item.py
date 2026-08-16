@@ -16,7 +16,7 @@ from datetime import datetime
 from enum import StrEnum
 from types import MappingProxyType
 
-from sirius_engine.domain.errors import IllegalTransitionError
+from sirius_engine.domain.errors import IllegalPhaseTransitionError, IllegalTransitionError
 
 _AGGREGATE = "WorkItem"
 
@@ -92,6 +92,10 @@ class WorkItem:
         if self.estado not in allowed:
             raise IllegalTransitionError(_AGGREGATE, operation, self.estado)
 
+    def _require_phase(self, allowed: frozenset[WorkItemPhase], operation: str) -> None:
+        if self.fase not in allowed:
+            raise IllegalPhaseTransitionError(_AGGREGATE, operation, self.fase)
+
     def activate(self, *, now: datetime) -> WorkItem:
         """``PLANNED -> ACTIVE`` (orden del propietario o cola aprobada)."""
         self._require(frozenset({WorkItemState.PLANNED}), "activate")
@@ -140,13 +144,53 @@ class WorkItem:
         self._require(frozenset({WorkItemState.FAILED_SAFELY}), "reactivate")
         return replace(self, estado=WorkItemState.ACTIVE, updated_at=now)
 
+    def begin_execution(self, *, now: datetime) -> WorkItem:
+        """``PREPARAR -> EJECUTAR`` (arquitectura §3.4)."""
+        self._require(frozenset({WorkItemState.ACTIVE}), "begin_execution")
+        self._require_phase(frozenset({WorkItemPhase.PREPARAR}), "begin_execution")
+        return replace(self, fase=WorkItemPhase.EJECUTAR, updated_at=now)
+
+    def begin_check(self, *, now: datetime) -> WorkItem:
+        """``EJECUTAR -> COMPROBAR`` (arquitectura §3.4)."""
+        self._require(frozenset({WorkItemState.ACTIVE}), "begin_check")
+        self._require_phase(frozenset({WorkItemPhase.EJECUTAR}), "begin_check")
+        return replace(self, fase=WorkItemPhase.COMPROBAR, updated_at=now)
+
+    def begin_review(self, *, now: datetime) -> WorkItem:
+        """``COMPROBAR -> REVISAR`` (arquitectura §3.4)."""
+        self._require(frozenset({WorkItemState.ACTIVE}), "begin_review")
+        self._require_phase(frozenset({WorkItemPhase.COMPROBAR}), "begin_review")
+        return replace(self, fase=WorkItemPhase.REVISAR, updated_at=now)
+
+    def approve_review(self, *, now: datetime) -> WorkItem:
+        """``REVISAR -> ENTREGAR`` (revisión ``APPROVED``, arquitectura §3.4)."""
+        self._require(frozenset({WorkItemState.ACTIVE}), "approve_review")
+        self._require_phase(frozenset({WorkItemPhase.REVISAR}), "approve_review")
+        return replace(self, fase=WorkItemPhase.ENTREGAR, updated_at=now)
+
+    def request_repair(self, *, now: datetime) -> WorkItem:
+        """``REVISAR -> REPARAR`` (revisión ``CHANGES_REQUIRED``, arquitectura §3.4)."""
+        self._require(frozenset({WorkItemState.ACTIVE}), "request_repair")
+        self._require_phase(frozenset({WorkItemPhase.REVISAR}), "request_repair")
+        return replace(self, fase=WorkItemPhase.REPARAR, updated_at=now)
+
+    def resume_after_repair(self, *, now: datetime) -> WorkItem:
+        """``REPARAR -> COMPROBAR``: reingresa al bucle revisar-reparar (arquitectura §3.4)."""
+        self._require(frozenset({WorkItemState.ACTIVE}), "resume_after_repair")
+        self._require_phase(frozenset({WorkItemPhase.REPARAR}), "resume_after_repair")
+        return replace(self, fase=WorkItemPhase.COMPROBAR, updated_at=now)
+
     def deliver(self, *, resultado: Mapping[str, object], now: datetime) -> WorkItem:
-        """``ACTIVE -> DELIVERED`` (fase ENTREGAR completada)."""
+        """``ACTIVE -> DELIVERED`` (fase ENTREGAR completada).
+
+        Requiere haber recorrido el ciclo de fases hasta ``ENTREGAR`` (§3.4)
+        —vía :meth:`approve_review`— antes de aceptar la entrega.
+        """
         self._require(frozenset({WorkItemState.ACTIVE}), "deliver")
+        self._require_phase(frozenset({WorkItemPhase.ENTREGAR}), "deliver")
         return replace(
             self,
             estado=WorkItemState.DELIVERED,
-            fase=WorkItemPhase.ENTREGAR,
             resultado=MappingProxyType(dict(resultado)),
             updated_at=now,
         )

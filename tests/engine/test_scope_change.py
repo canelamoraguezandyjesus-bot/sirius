@@ -12,10 +12,12 @@ from datetime import datetime, timedelta
 import pytest
 
 from sirius_engine.domain.errors import IllegalTransitionError
+from sirius_engine.domain.events import AggregateType
+from sirius_engine.domain.run import CancellationStatus, RunState
 from sirius_engine.domain.work_item import WorkItemPhase, WorkItemState
 from sirius_engine.ports.store import WorkEngineStore
 
-from .conftest import MakeWorkItem
+from .conftest import MakeRun, MakeWorkItem
 
 
 def test_scope_change_bumps_version_and_keeps_the_previous_version_readable(
@@ -83,6 +85,36 @@ def test_scope_change_rejected_from_a_terminal_state(
         store.change_work_item_scope(work_id, now=now, objetivo="demasiado tarde")
 
 
+# -- Historial de versiones: una entrada por revisión de alcance ----------------------
+
+
+def test_list_work_item_versions_returns_one_entry_per_scope_revision(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, now: datetime
+) -> None:
+    work_id = "WI-VERSIONS-DEDUP"
+    make_work_item(now=now, work_id=work_id)
+    # Same version (1): a state change, not a scope revision.
+    store.activate_work_item(work_id, now=now)
+
+    store.change_work_item_scope(work_id, now=now, objetivo="objetivo revisado")
+
+    versions = store.list_work_item_versions(work_id)
+    assert [version.version for version in versions] == [1, 2]
+    # The version-1 snapshot kept is the latest one known for it (ACTIVE),
+    # not a stale copy from before the state change.
+    assert versions[0].estado is WorkItemState.ACTIVE
+    assert versions[1].version == 2
+    assert versions[1].objetivo == "objetivo revisado"
+
+    # No journal entry was discarded to build this projection.
+    events = [
+        event
+        for event in store.list_events()
+        if event.aggregate_type is AggregateType.WORK_ITEM and event.aggregate_id == work_id
+    ]
+    assert len(events) == 3
+
+
 # -- Repriorización: no es un estado, no versiona -------------------------------------
 
 
@@ -97,3 +129,80 @@ def test_reprioritize_does_not_bump_version_or_change_state(
     assert reprioritized.prioridad == 9
     assert reprioritized.version == 1
     assert reprioritized.estado is WorkItemState.ACTIVE
+
+
+# -- Cambio de alcance cancela primero los Runs vivos que invalida --------------------
+
+
+def test_scope_change_requests_cancellation_of_a_live_run_before_changing_scope(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun, now: datetime
+) -> None:
+    work_id = "WI-SCOPE-CANCELS-RUNS"
+    make_work_item(now=now, work_id=work_id)
+    store.activate_work_item(work_id, now=now)
+
+    deadline = now + timedelta(hours=1)
+    make_run(run_id="RUN-OLD-SCOPE", work_id=work_id, now=now, deadline=deadline)
+    store.dispatch_run("RUN-OLD-SCOPE", now=now)
+    store.confirm_run_running("RUN-OLD-SCOPE", now=now)
+
+    store.change_work_item_scope(work_id, now=now, objetivo="objetivo nuevo")
+
+    # The invalidated run is not silently forgotten: cancellation was
+    # requested, but it stays live until the adapter confirms a remote
+    # terminal state or demonstrated isolation (§3.3) — never auto-confirmed.
+    run = store.get_run("RUN-OLD-SCOPE")
+    assert run is not None
+    assert run.estado is RunState.RUNNING
+    assert run.cancellation_status is CancellationStatus.UNCONFIRMED
+    assert run.desenlace is None
+
+    # The cancellation request lands in the journal before the scope change.
+    events = store.list_events()
+    cancel_index = next(
+        i for i, event in enumerate(events) if event.kind == "run_cancellation_requested"
+    )
+    scope_index = next(
+        i for i, event in enumerate(events) if event.kind == "work_item_scope_changed"
+    )
+    assert cancel_index < scope_index
+
+
+def test_scope_change_does_not_touch_a_finished_run(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun, now: datetime
+) -> None:
+    work_id = "WI-SCOPE-FINISHED-RUN"
+    make_work_item(now=now, work_id=work_id)
+    store.activate_work_item(work_id, now=now)
+
+    deadline = now + timedelta(hours=1)
+    make_run(run_id="RUN-DONE", work_id=work_id, now=now, deadline=deadline)
+    store.dispatch_run("RUN-DONE", now=now)
+    store.confirm_run_running("RUN-DONE", now=now)
+    store.succeed_run("RUN-DONE", resultado={"ok": True}, now=now)
+
+    store.change_work_item_scope(work_id, now=now, objetivo="objetivo nuevo")
+
+    run = store.get_run("RUN-DONE")
+    assert run is not None
+    assert run.cancellation_status is CancellationStatus.NONE
+
+
+def test_scope_change_does_not_double_request_an_already_pending_cancellation(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun, now: datetime
+) -> None:
+    work_id = "WI-SCOPE-ALREADY-CANCELLING"
+    make_work_item(now=now, work_id=work_id)
+    store.activate_work_item(work_id, now=now)
+
+    deadline = now + timedelta(hours=1)
+    make_run(run_id="RUN-ALREADY-CANCELLING", work_id=work_id, now=now, deadline=deadline)
+    store.dispatch_run("RUN-ALREADY-CANCELLING", now=now)
+    store.request_run_cancellation("RUN-ALREADY-CANCELLING", now=now)
+
+    # Must not raise IllegalTransitionError for re-requesting a pending cancellation.
+    store.change_work_item_scope(work_id, now=now, objetivo="objetivo nuevo")
+
+    run = store.get_run("RUN-ALREADY-CANCELLING")
+    assert run is not None
+    assert run.cancellation_status is CancellationStatus.UNCONFIRMED

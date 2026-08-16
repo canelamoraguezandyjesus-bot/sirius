@@ -74,7 +74,33 @@ class WorkEngineStore(Protocol):
 
     def deliver_work_item(
         self, work_id: str, *, resultado: Mapping[str, object], now: datetime
-    ) -> WorkItem: ...
+    ) -> WorkItem:
+        """``ACTIVE -> DELIVERED``. Requiere haber llegado a fase ``ENTREGAR`` (§3.4)."""
+        ...
+
+    def begin_work_item_execution(self, work_id: str, *, now: datetime) -> WorkItem:
+        """Fase ``PREPARAR -> EJECUTAR`` (§3.4)."""
+        ...
+
+    def begin_work_item_check(self, work_id: str, *, now: datetime) -> WorkItem:
+        """Fase ``EJECUTAR -> COMPROBAR`` (§3.4)."""
+        ...
+
+    def begin_work_item_review(self, work_id: str, *, now: datetime) -> WorkItem:
+        """Fase ``COMPROBAR -> REVISAR`` (§3.4)."""
+        ...
+
+    def approve_work_item_review(self, work_id: str, *, now: datetime) -> WorkItem:
+        """Fase ``REVISAR -> ENTREGAR`` (revisión ``APPROVED``, §3.4)."""
+        ...
+
+    def request_work_item_repair(self, work_id: str, *, now: datetime) -> WorkItem:
+        """Fase ``REVISAR -> REPARAR`` (revisión ``CHANGES_REQUIRED``, §3.4)."""
+        ...
+
+    def resume_work_item_after_repair(self, work_id: str, *, now: datetime) -> WorkItem:
+        """Fase ``REPARAR -> COMPROBAR``: reingresa al bucle revisar-reparar (§3.4)."""
+        ...
 
     def pause_work_item(self, work_id: str, *, now: datetime) -> WorkItem: ...
 
@@ -89,7 +115,9 @@ class WorkEngineStore(Protocol):
         entregable: str | None = None,
         criterio_terminado: str | None = None,
         limites: Mapping[str, object] | None = None,
-    ) -> WorkItem: ...
+    ) -> WorkItem:
+        """Edición versionada del alcance. Si invalida Runs vivos, los cancela primero (§3.2)."""
+        ...
 
     def reprioritize_work_item(
         self, work_id: str, *, prioridad: int, now: datetime

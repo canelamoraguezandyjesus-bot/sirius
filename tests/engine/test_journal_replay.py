@@ -36,6 +36,13 @@ def _run_arbitrary_sequence(
     store.reprioritize_work_item("WI-1", prioridad=5, now=now)
     store.fail_work_item_safely("WI-1", diagnostico="dependencia externa caída", now=now)
     store.reactivate_work_item("WI-1", now=now)
+    store.begin_work_item_execution("WI-1", now=now)
+    store.begin_work_item_check("WI-1", now=now)
+    store.begin_work_item_review("WI-1", now=now)
+    store.request_work_item_repair("WI-1", now=now)
+    store.resume_work_item_after_repair("WI-1", now=now)
+    store.begin_work_item_review("WI-1", now=now)
+    store.approve_work_item_review("WI-1", now=now)
     store.deliver_work_item("WI-1", resultado={"ok": True}, now=now)
 
     make_work_item(now=now, work_id="WI-2")

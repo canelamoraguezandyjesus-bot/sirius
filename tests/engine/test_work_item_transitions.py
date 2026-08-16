@@ -14,7 +14,7 @@ from datetime import datetime
 import pytest
 
 from sirius_engine.domain.errors import IllegalTransitionError
-from sirius_engine.domain.work_item import WorkItem, WorkItemState
+from sirius_engine.domain.work_item import WorkItem, WorkItemPhase, WorkItemState
 from sirius_engine.ports.store import WorkEngineStore
 
 from .conftest import MakeWorkItem
@@ -115,6 +115,13 @@ def _to_active(
 ) -> None:
     _to_planned(store, make_work_item, work_id, now)
     store.activate_work_item(work_id, now=now)
+    # Recorre el ciclo de fases (§3.4) hasta ENTREGAR, para que "deliver" sea
+    # legal desde ACTIVE en esta matriz de estados; las demás operaciones no
+    # dependen de la fase.
+    store.begin_work_item_execution(work_id, now=now)
+    store.begin_work_item_check(work_id, now=now)
+    store.begin_work_item_review(work_id, now=now)
+    store.approve_work_item_review(work_id, now=now)
 
 
 def _to_waiting(
@@ -200,9 +207,24 @@ def test_full_happy_path_planned_to_delivered(
     work_id = "WI-HAPPY-PATH"
     created = make_work_item(now=now, work_id=work_id)
     assert created.estado is WorkItemState.PLANNED
+    assert created.fase is WorkItemPhase.PREPARAR
 
     activated = store.activate_work_item(work_id, now=now)
     assert activated.estado is WorkItemState.ACTIVE
+    assert activated.fase is WorkItemPhase.PREPARAR
+
+    executing = store.begin_work_item_execution(work_id, now=now)
+    assert executing.fase is WorkItemPhase.EJECUTAR
+
+    checking = store.begin_work_item_check(work_id, now=now)
+    assert checking.fase is WorkItemPhase.COMPROBAR
+
+    reviewing = store.begin_work_item_review(work_id, now=now)
+    assert reviewing.fase is WorkItemPhase.REVISAR
+
+    approved = store.approve_work_item_review(work_id, now=now)
+    assert approved.fase is WorkItemPhase.ENTREGAR
+    assert approved.estado is WorkItemState.ACTIVE
 
     delivered = store.deliver_work_item(work_id, resultado={"entregado": True}, now=now)
     assert delivered.estado is WorkItemState.DELIVERED
@@ -222,6 +244,11 @@ def test_waiting_round_trip_then_delivered(
     active_again = store.observe_work_item_external_fact(work_id, now=now)
     assert active_again.estado is WorkItemState.ACTIVE
 
+    store.begin_work_item_execution(work_id, now=now)
+    store.begin_work_item_check(work_id, now=now)
+    store.begin_work_item_review(work_id, now=now)
+    store.approve_work_item_review(work_id, now=now)
+
     delivered = store.deliver_work_item(work_id, resultado={}, now=now)
     assert delivered.estado is WorkItemState.DELIVERED
 
@@ -240,6 +267,11 @@ def test_pause_resume_round_trip_preserves_prior_state(
     resumed = store.resume_work_item(work_id, now=now)
     assert resumed.estado is WorkItemState.ACTIVE
     assert resumed.paused_from is None
+
+    store.begin_work_item_execution(work_id, now=now)
+    store.begin_work_item_check(work_id, now=now)
+    store.begin_work_item_review(work_id, now=now)
+    store.approve_work_item_review(work_id, now=now)
 
     delivered = store.deliver_work_item(work_id, resultado={}, now=now)
     assert delivered.estado is WorkItemState.DELIVERED
@@ -271,6 +303,11 @@ def test_failed_safely_round_trip_then_delivered(
 
     reactivated = store.reactivate_work_item(work_id, now=now)
     assert reactivated.estado is WorkItemState.ACTIVE
+
+    store.begin_work_item_execution(work_id, now=now)
+    store.begin_work_item_check(work_id, now=now)
+    store.begin_work_item_review(work_id, now=now)
+    store.approve_work_item_review(work_id, now=now)
 
     delivered = store.deliver_work_item(work_id, resultado={}, now=now)
     assert delivered.estado is WorkItemState.DELIVERED

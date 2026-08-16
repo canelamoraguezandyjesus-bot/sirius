@@ -60,18 +60,29 @@ def rebuild_state(events: Sequence[Event]) -> RebuiltState:
 
     Determinista: la misma secuencia de eventos produce siempre el mismo
     resultado, sin importar el orden en que ``events`` se haya recibido.
+
+    ``work_item_versions`` conserva **una entrada por revisión de alcance**
+    (``WorkItem.version``, arquitectura §3.2): eventos que comparten versión
+    —cambios de estado, repriorizaciones— actualizan la instantánea de esa
+    versión en vez de añadir una copia nueva, así un consumidor puede
+    indexar revisiones de alcance de forma fiable. Ningún evento del diario
+    se descarta por esto: todos siguen presentes en ``events``.
     """
-    work_item_versions: dict[str, list[WorkItem]] = {}
+    work_item_versions: dict[str, dict[int, WorkItem]] = {}
     runs: dict[str, Run] = {}
     for event in sorted(events, key=lambda e: e.sequence):
         if event.aggregate_type is AggregateType.WORK_ITEM:
             assert isinstance(event.entity, WorkItem)
-            work_item_versions.setdefault(event.aggregate_id, []).append(event.entity)
+            by_version = work_item_versions.setdefault(event.aggregate_id, {})
+            by_version[event.entity.version] = event.entity
         else:
             assert isinstance(event.entity, Run)
             runs[event.aggregate_id] = event.entity
     return RebuiltState(
-        work_item_versions={k: tuple(v) for k, v in work_item_versions.items()},
+        work_item_versions={
+            work_id: tuple(by_version.values())
+            for work_id, by_version in work_item_versions.items()
+        },
         runs=dict(runs),
     )
 
@@ -91,6 +102,12 @@ EventKind = Literal[
     "work_item_resumed",
     "work_item_scope_changed",
     "work_item_reprioritized",
+    "work_item_execution_started",
+    "work_item_check_started",
+    "work_item_review_started",
+    "work_item_review_approved",
+    "work_item_repair_requested",
+    "work_item_repair_resumed",
     "run_prepared",
     "run_dispatched",
     "run_confirmed_running",

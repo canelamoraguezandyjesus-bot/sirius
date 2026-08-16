@@ -23,6 +23,22 @@ class IllegalTransitionError(EngineError):
         self.current_state = current_state
 
 
+class IllegalPhaseTransitionError(EngineError):
+    """Raised when a phase-advancing operation is attempted from a phase the approved cycle forbids.
+
+    Mirrors :class:`IllegalTransitionError` but for the ``fase`` axis
+    (arquitectura §3.4: ``PREPARAR -> EJECUTAR -> COMPROBAR -> REVISAR ->
+    (REPARAR -> COMPROBAR -> REVISAR)* -> ENTREGAR``), which advances
+    independently of ``estado``.
+    """
+
+    def __init__(self, aggregate: str, operation: str, current_phase: str) -> None:
+        super().__init__(f"cannot {operation} {aggregate} while in phase {current_phase!r}")
+        self.aggregate = aggregate
+        self.operation = operation
+        self.current_phase = current_phase
+
+
 class DeadlineNotExceededError(EngineError):
     """Raised by ``mark_lost`` when the Run's absolute deadline has not passed yet.
 
