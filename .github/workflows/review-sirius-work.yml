@@ -274,9 +274,10 @@ jobs:
           SIRIUS_VERDICT_FILE: ${{ runner.temp }}/sirius_verdict.json
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          show_full_output: true
           github_token: ${{ github.token }}
           prompt: ${{ steps.build_prompt.outputs.prompt }}
-          claude_args: '--dangerously-skip-permissions --allowedTools "Bash,Read,Grep,Glob" --max-turns 60'
+          claude_args: '--dangerously-skip-permissions --allowedTools "Bash,Read,Grep,Glob" --max-turns 200'
 
       - name: Recoger el resultado de Codex (modo dual)
         if: steps.gate.outputs.valid == 'true' && steps.gate.outputs.dual == 'true'
