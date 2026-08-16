@@ -1,0 +1,58 @@
+{
+  "que_es": "estado de las DOS puertas que el acta de cierre dejo en rojo, tras el trabajo de recuperacion: el recall critico y la conformidad de etapa",
+  "commit": "c37ba45",
+  "puerta_1_recall_critico": {
+    "norma": "B04-M01, umbral 100 % por caso; §14 R1: una omision reproducible elimina la alternativa",
+    "al_cerrarse_ADR002": {
+      "omisiones": 16,
+      "casos": [
+        "N1-02",
+        "N1-30",
+        "N1-31",
+        "N1-33",
+        "N1-34",
+        "N1-44"
+      ]
+    },
+    "ahora": {
+      "omisiones": 1,
+      "casos": [
+        "N1-30"
+      ]
+    },
+    "resueltos": {
+      "N1-02": "categoria buscable",
+      "N1-31": "categoria buscable",
+      "N1-44": "regla de las criticas",
+      "N1-33": "siembra en contexto",
+      "N1-34": "siembra en contexto"
+    },
+    "sigue_en_rojo": true,
+    "por_que": "el umbral es 100 % y queda una omision reproducible"
+  },
+  "puerta_2_conformidad_de_etapa": {
+    "al_cerrarse_ADR002": "roja para los cuatro candidatos",
+    "linea_base_ahora": "14/46 casos NO conformes",
+    "con_todo_lo_construido": "14/46 casos NO conformes",
+    "arreglados_por_este_trabajo": [
+      "N1-33"
+    ],
+    "rotos_por_este_trabajo": [
+      "N1-31"
+    ],
+    "saldo": "cero: arregla uno y rompe otro",
+    "razones_de_los_que_fallan_en_ambos": {
+      "resuelto en E1 y el caso declara E4": 5,
+      "resuelto en E3 y el caso declara E4": 1,
+      "resuelto en E1 y el caso declara E3": 3,
+      "resuelto en E2 y el caso declara E3": 1,
+      "resuelto en E3 y el caso declara E1": 1,
+      "el caso declara E0 y la expansion aporto en E3": 1,
+      "resuelto en E1 y el caso declara E2": 1
+    },
+    "sigue_en_rojo": true,
+    "lectura": "el patron dominante es «resuelto en E1 y el caso declara E4»: la busqueda resuelve ANTES de lo que el caso declara. El acta de cierre ya advirtio que esta puerta se mide contra una instanciacion modificable",
+    "efecto_colateral_declarado": "la categoria buscable rompe la etapa de N1-31 justo por arreglar su recall critico: trae en E1 lo que el caso declaraba para mas tarde. Se declara porque es un coste real de lo construido, no un detalle"
+  },
+  "conclusion": "ADR-002 sigue sin poder cerrarse eligiendo una alternativa. La conclusion del acta de cierre se mantiene: por un motivo mucho menor en la primera puerta —de dieciseis omisiones en seis casos a una en uno— y por el mismo motivo, intacto, en la segunda"
+}

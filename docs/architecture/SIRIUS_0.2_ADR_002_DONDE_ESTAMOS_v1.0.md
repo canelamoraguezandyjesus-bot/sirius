@@ -114,12 +114,19 @@ Meter esto en Sirius. Son **dos decisiones**, no una:
 
 ---
 
-## Los cuatro documentos que hay que leer
+## El estado formal de ADR-002
 
-1. `SIRIUS_0.2_ADR_002_DE_ONCE_A_UNA_v1.0.md` — el recorrido completo y qué vale cada pieza.
-2. `SIRIUS_0.2_ADR_002_LA_REGLA_CONFIRMADA_v1.0.md` — la garantía que protege lo importante.
-3. `SIRIUS_0.2_POR_QUE_SIEMPRE_FALLA_ALGO_v1.0.md` — qué se ha roto de verdad y qué no era un fallo.
-4. `SIRIUS_0.2_ADR_002_LA_SEMANTICA_CERRADA_v1.0.md` — por qué los vectores no eran la respuesta.
+**No conforme.** `SIRIUS_0.2_ADR_002_CIERRE_v2.0.md` lo cierra con las dos puertas nombradas: el
+recall crítico, a **un caso** de pasar —venía de seis—, y la conformidad de etapa, **intacta** en 14
+de 46 casos y que este trabajo no mejora. No se fuerza el verde por ninguna de las dos.
+
+## Los documentos que hay que leer
+
+1. `SIRIUS_0.2_ADR_002_CIERRE_v2.0.md` — el cierre, con las dos puertas y la distancia a cada una.
+2. `SIRIUS_0.2_ADR_002_DE_ONCE_A_UNA_v1.0.md` — el recorrido completo y qué vale cada pieza.
+3. `SIRIUS_0.2_ADR_002_LA_REGLA_CONFIRMADA_v1.0.md` — la garantía que protege lo importante.
+4. `SIRIUS_0.2_POR_QUE_SIEMPRE_FALLA_ALGO_v1.0.md` — qué se ha roto de verdad y qué no era un fallo.
+5. `SIRIUS_0.2_ADR_002_LA_ULTIMA_OMISION_v1.0.md` — el caso que queda y las cinco vías medidas.
 
 Las seis mediciones están enteras en la raíz del repositorio, `resultado_modelo_local*.json`, y
 ninguna se ha pisado. La evidencia que las analiza vive en `artifacts/adr002_round/`.

@@ -109,6 +109,13 @@ def _fila(nombre: str, veredictos: list[Any]) -> dict[str, Any]:
         "elementos_esperados": sum(len(v.esperado) for v in con_contenido),
         "elementos_de_mas": sum(len(set(v.obtenido) - set(v.esperado)) for v in con_contenido),
         "omisiones_criticas": resumen.criticos_pendientes_total,
+        # La otra puerta que el acta de cierre dejo en rojo para los cuatro. Su
+        # causa, segun la verificacion adversarial de aquel paquete, era la
+        # propia omision critica; si eso es cierto, arreglar los criticos tiene
+        # que moverla, y esta corrida es la que lo dice.
+        "etapa_conforme": (
+            f"{resumen.casos_con_etapa_conforme}/{resumen.casos_con_etapa_puntuable}"
+        ),
         "contaminacion": resumen.contaminacion_total,
         "fuga_de_ambito": resumen.fuga_de_ambito_total,
         "ausencia_correcta": sum(1 for v in adjudicables if v.ausencia_correcta),
@@ -118,7 +125,7 @@ def _fila(nombre: str, veredictos: list[Any]) -> dict[str, Any]:
         f"entra-entero={fila['lo_correcto_entra_entero']}/{fila['casos_con_contenido']}  "
         f"hallados={fila['elementos_hallados']}/{fila['elementos_esperados']}  "
         f"de-mas={fila['elementos_de_mas']}  omis={fila['omisiones_criticas']}  "
-        f"fuga={fila['fuga_de_ambito']}"
+        f"etapa={fila['etapa_conforme']}"
     )
     return fila
 

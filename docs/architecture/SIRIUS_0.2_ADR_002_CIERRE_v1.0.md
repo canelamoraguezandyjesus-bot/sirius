@@ -1,5 +1,8 @@
 # SIRIUS 0.2 — ADR-002 · Cierre
 
+> **SUSTITUIDO por `SIRIUS_0.2_ADR_002_CIERRE_v2.0.md`.** Su veredicto se mantiene, pero las cifras no: el recall critico paso de dieciseis omisiones en seis casos a una en uno. La conformidad de etapa sigue igual. El analisis de este documento es valido; las cifras de la tabla del §1 ya no.
+
+
 **Versión:** 1.0
 **Estado:** **NINGUNA ALTERNATIVA ES CONFORME · `ADR-002` no puede cerrarse eligiendo**
 **Fecha:** 7 de agosto de 2026
