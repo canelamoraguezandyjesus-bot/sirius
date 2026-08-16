@@ -89,13 +89,18 @@ con datos no está dentro de Sirius fallando dentro de seis meses.
 
 ---
 
-## Lo único que sigue faltando
+## Lo único que sigue faltando, y por qué decide más de lo que parece
 
 **Un elemento.** Guardaste «prefiere que **redactes** en tono directo» y preguntas por «preferencia
 de **redacción**». Sustantivo contra verbo.
 
-Haría falta un diccionario de sinónimos, y escribirlo ahora sabiendo cuál es el caso que falla sería
-ajustar el sistema al examen: funcionaría aquí y en ningún sitio más. Queda escrito, no escondido.
+Y no es un decimal. El acta de cierre dejó ADR-002 sin poder cerrarse por **una sola obligación**
+—recall crítico, umbral 100 % por caso— que fallaba en **seis casos**. Cinco están resueltos por lo
+construido esta semana; **este es el sexto**. Con él vivo, la puerta sigue roja.
+
+Ninguna técnica de palabras lo cierra —ni recorte de sufijos, ni lematizador, ni trigramas—, porque
+no es flexión sino derivación. Está caracterizado entero, con el atajo prohibido que sí lo cerraría
+y por qué no se usa, en `SIRIUS_0.2_ADR_002_LA_ULTIMA_OMISION_v1.0.md`.
 
 ---
 
