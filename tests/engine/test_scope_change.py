@@ -415,3 +415,55 @@ def test_a_live_run_cancelled_by_a_scope_change_is_never_retryable(
         store.retry_run(
             "RUN-LIVE-STALE", new_run_id="RUN-LIVE-STALE-RETRY", deadline=deadline, now=now
         )
+
+
+@pytest.mark.parametrize(
+    "situacion",
+    ["prepared", "vivo_sin_cancelacion", "vivo_con_cancelacion_en_vuelo"],
+)
+def test_scope_change_invalidates_a_run_in_any_cancellation_situation(
+    store: WorkEngineStore,
+    make_work_item: MakeWorkItem,
+    make_run: MakeRun,
+    now: datetime,
+    situacion: str,
+) -> None:
+    """La obsolescencia se marca SIEMPRE, sea cual sea el estado de cancelación.
+
+    Raíz de las rondas 2-5 de la incidencia #177: la marca viajaba dentro de
+    los caminos de cancelación (``if PREPARED / elif vivo y cancelación NONE``),
+    así que cada ronda destapaba el estado que ese camino no cubría. Marcar sin
+    condiciones y decidir aparte si hay que parar al Worker cierra la familia
+    entera, y esta tabla la recorre: en las tres situaciones el Run queda
+    obsoleto y, una vez terminado, no puede originar otro.
+    """
+    work_id = f"WI-SCOPE-TABLE-{situacion}"
+    make_work_item(now=now, work_id=work_id)
+    store.activate_work_item(work_id, now=now)
+
+    deadline = now + timedelta(hours=1)
+    run_id = f"RUN-{situacion}"
+    make_run(run_id=run_id, work_id=work_id, now=now, deadline=deadline)
+    if situacion != "prepared":
+        store.dispatch_run(run_id, now=now)
+    if situacion == "vivo_con_cancelacion_en_vuelo":
+        store.request_run_cancellation(run_id, now=now)
+
+    store.change_work_item_scope(work_id, now=now, objetivo="objetivo nuevo")
+
+    invalidado = store.get_run(run_id)
+    assert invalidado is not None
+    assert invalidado.invalidado_por_alcance is True, (
+        "el cambio de alcance debe marcar la obsolescencia en cualquier situación"
+    )
+
+    # Llevar el Run a su terminal por el camino que le corresponda.
+    if invalidado.estado in (RunState.DISPATCHED, RunState.RUNNING):
+        store.confirm_run_cancelled(run_id, now=now)
+    terminado = store.get_run(run_id)
+    assert terminado is not None
+    assert terminado.desenlace is RunOutcome.CANCELLED
+    assert terminado.invalidado_por_alcance is True
+
+    with pytest.raises(ScopeInvalidatedRunError):
+        store.retry_run(run_id, new_run_id=f"{run_id}-RETRY", deadline=deadline, now=now)

@@ -164,23 +164,33 @@ class Run:
             updated_at=now,
         )
 
-    def request_cancel(self, *, now: datetime, por_cambio_de_alcance: bool = False) -> Run:
-        """``CANCEL`` produce ``CANCELLATION_UNCONFIRMED`` (el estado del ciclo no cambia).
+    def mark_scope_invalidated(self, *, now: datetime) -> Run:
+        """Registrar que un cambio de alcance dejó obsoleto a este Run (§3.2).
 
-        ``por_cambio_de_alcance`` marca el motivo en el momento de pedirla, no
-        al confirmarla: cuando el terminal remoto llegue, el Run habrá quedado
-        en ``FINISHED(CANCELLED)`` igual que una cancelación ordinaria, y para
-        entonces la causa ya no es deducible del estado.
+        Es una marca, no una transición: no cambia ``estado`` ni
+        ``cancellation_status``, y es idempotente. Va deliberadamente
+        SEPARADA de pedir la cancelación porque son dos hechos ortogonales —
+        «este paquete de trabajo ya no vale» y «hay que parar al Worker»— y
+        atarlos costó cuatro rondas de revisión en la incidencia #177: cada
+        vez que la marca viajaba dentro de un camino de cancelación aparecía
+        un estado que ese camino no cubría (``PREPARED``, cancelación ya
+        ``UNCONFIRMED``…). Marcando siempre, sin condiciones, no queda
+        ninguna puerta por la que un paquete obsoleto vuelva a ser copiable.
+
+        Un Run ya terminado no se marca: su desenlace es historia y no puede
+        originar otro Run distinto del que ya originó.
         """
+        self._require(frozenset({RunState.PREPARED}) | LIVE_STATES, "mark_scope_invalidated")
+        if self.invalidado_por_alcance:
+            return self
+        return replace(self, invalidado_por_alcance=True, updated_at=now)
+
+    def request_cancel(self, *, now: datetime) -> Run:
+        """``CANCEL`` produce ``CANCELLATION_UNCONFIRMED`` (el estado del ciclo no cambia)."""
         self._require(LIVE_STATES, "request_cancel")
         if self.cancellation_status is CancellationStatus.UNCONFIRMED:
             raise IllegalTransitionError(_AGGREGATE, "request_cancel", self.estado)
-        return replace(
-            self,
-            cancellation_status=CancellationStatus.UNCONFIRMED,
-            invalidado_por_alcance=self.invalidado_por_alcance or por_cambio_de_alcance,
-            updated_at=now,
-        )
+        return replace(self, cancellation_status=CancellationStatus.UNCONFIRMED, updated_at=now)
 
     def confirm_cancelled(self, *, now: datetime) -> Run:
         """``CANCELLATION_UNCONFIRMED -> FINISHED(CANCELLED)``.

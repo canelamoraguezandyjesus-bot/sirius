@@ -248,27 +248,35 @@ class InMemoryWorkEngineStore:
             limites=limites,
         )
         # Arquitectura §3.2: "Si el cambio invalida Runs vivos, el motor los
-        # cancela primero." Un Run aún PREPARED nunca llegó a ningún Worker
-        # remoto, así que se invalida de una vez (sin la cancelación en dos
-        # tiempos, reservada a Runs ya despachados) para que dispatch_run()
-        # ya no pueda lanzar el paquete de trabajo obsoleto. Para Runs
-        # DISPATCHED/RUNNING solo se solicita la cancelación (nunca se
-        # confirma aquí); el supervisor sigue reconciliando cada Run hasta su
-        # terminal remoto o un aislamiento demostrado (§3.3).
+        # cancela primero." Son DOS hechos ortogonales, y aquí se tratan como
+        # tales porque atarlos costó cuatro rondas de revisión (#177):
+        #
+        #   (a) MARCAR la obsolescencia: se aplica a TODO Run no terminado,
+        #       sin ninguna condición sobre su estado de cancelación. Su
+        #       `work_package` describe un alcance que ya no rige, y eso es
+        #       cierto tanto si está PREPARED, como si corre tranquilo, como
+        #       si ya tenía una cancelación ordinaria en vuelo.
+        #   (b) PARAR al Worker: solo donde procede. Un Run PREPARED nunca
+        #       llegó a ningún Worker remoto, así que se cierra de una vez
+        #       (sin la cancelación en dos tiempos, reservada a los ya
+        #       despachados). A uno vivo se le pide la cancelación, y si ya
+        #       la tenía pedida no se le manda un segundo CANCEL. Nunca se
+        #       confirma aquí: el supervisor sigue reconciliando cada Run
+        #       hasta su terminal remoto o un aislamiento demostrado (§3.3).
         for run in self.list_runs_for_work_item(work_id):
-            if run.estado is run_ops.RunState.PREPARED:
+            if run.estado is run_ops.RunState.FINISHED:
+                continue
+            invalidado = run.mark_scope_invalidated(now=now)
+            if invalidado.estado is run_ops.RunState.PREPARED:
                 self._record_run(
-                    run.invalidate_prepared(now=now), "run_prepared_invalidated", now=now
+                    invalidado.invalidate_prepared(now=now), "run_prepared_invalidated", now=now
                 )
-            elif (
-                run.estado in run_ops.LIVE_STATES
-                and run.cancellation_status is run_ops.CancellationStatus.NONE
-            ):
+            elif invalidado.cancellation_status is run_ops.CancellationStatus.NONE:
                 self._record_run(
-                    run.request_cancel(now=now, por_cambio_de_alcance=True),
-                    "run_cancellation_requested",
-                    now=now,
+                    invalidado.request_cancel(now=now), "run_cancellation_requested", now=now
                 )
+            else:
+                self._record_run(invalidado, "run_scope_invalidated", now=now)
         return self._record_work_item(changed, "work_item_scope_changed", now=now)
 
     def reprioritize_work_item(self, work_id: str, *, prioridad: int, now: datetime) -> WorkItem:
