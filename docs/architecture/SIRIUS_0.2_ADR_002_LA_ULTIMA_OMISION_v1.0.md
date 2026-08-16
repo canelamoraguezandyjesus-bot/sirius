@@ -85,15 +85,30 @@ Queda escrito aquí para que conste que existía, que se vio, y que se descartó
 
 ---
 
-## Lo único que quedaría
+## Lo que quedaba, medido: tampoco cierra
 
-Ampliar **la consulta** con el modelo local en el momento de buscar. El modelo sí relaciona
-«preferencia de redacción» con «prefiere que redactes» — para él no es un problema de vocabulario.
+Ampliar **la consulta** con el modelo local. Escribí que «el modelo sí relaciona las dos formas, para
+él no es un problema de vocabulario». **Lo medí y era falso.**
 
-**Cuesta una llamada más por cada búsqueda.** La latencia hoy es de 3,1 s de mediana y 3,6 s de p95,
-y el presupuesto declarado es de 5 s. Duplicarla lo rompe.
+Corrida v0.7, con el modelo respondiendo en 43 de 47 consultas:
 
-**No está medido y no se implementa sin decisión.**
+| | |
+|---|---|
+| palabras que propuso en total | **256** |
+| de ellas, la otra forma de una palabra de la consulta | **2** |
+
+El modelo da **sinónimos temáticos** —«gasto» por «presupuesto», «normas» por «reglas»—, que es lo
+que hace un diccionario. Casi nunca da **la otra forma de la misma palabra**, que es lo único que
+cierra este caso. Para `N1-30` escribió `['deseo', 'limite', 'nivel', 'mide', 'cambio']`: ninguna
+sirve.
+
+Efecto sobre el banco entero: **cambia exactamente una cosa, un elemento de basura más.** Ninguna
+ganancia.
+
+**Y una declaración que toca hacer:** la instrucción que le di usaba de ejemplo las palabras exactas
+del caso que falla —«si la pregunta dice redacción, el dato puede decir redactes»—. La escribí
+mirando el caso. Falló igual, así que no afecta a ningún resultado, pero si hubiera funcionado
+habría habido que declararla no validable con este banco. Queda dicho.
 
 ---
 
