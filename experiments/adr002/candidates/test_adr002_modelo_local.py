@@ -819,3 +819,68 @@ def test_al_negarse_a_pisar_dice_exactamente_que_escribir(
     assert medir.main() == 2
     assert "--salida" in capsys.readouterr().out
     assert ya.read_text(encoding="utf-8") == "{}", "intacto"
+
+
+# -- Tarea 3: ampliar la consulta -------------------------------------------
+
+
+def test_el_modelo_solo_ve_la_consulta() -> None:
+    """No puede filtrarse el oraculo porque no se le ensena nada mas.
+
+    Ni el corpus, ni la respuesta esperada, ni ninguna anotacion del banco.
+    """
+    from experiments.adr002.modelo_local import consulta as cq
+
+    transporte = _Transporte({"palabras": ["prefiere", "redactes"]})
+    cq.ampliar("Resume mi preferencia de redaccion.", _con(transporte))
+
+    _ruta, cuerpo, _espera = transporte.peticiones[0]
+    assert cuerpo["messages"][1]["content"] == "Resume mi preferencia de redaccion."
+    assert cuerpo["messages"][0]["content"] == cq.INSTRUCCION
+    assert cuerpo["format"] == dict(cq.ESQUEMA)
+
+
+def test_devuelve_palabras_nuevas_y_tira_las_que_ya_estaban() -> None:
+    """Repetir una palabra de la consulta no amplia y gasta sitio en el tope."""
+    from experiments.adr002.modelo_local import consulta as cq
+
+    salida = cq.ampliar(
+        "preferencia de redaccion",
+        _proveedor({"palabras": ["prefiere", "redactes", "redaccion", "preferencia"]}),
+    )
+    assert salida.palabras == ("prefiere", "redactes")
+    assert salida.actuo
+
+
+def test_una_frase_entera_se_parte_en_palabras() -> None:
+    """El indice casa tokens: una frase suelta no encontraria nada."""
+    from experiments.adr002.modelo_local import consulta as cq
+
+    salida = cq.ampliar("tono", _proveedor({"palabras": ["que redactes directo"]}))
+    assert salida.palabras == ("redactes", "directo")
+
+
+@pytest.mark.parametrize(
+    "fallo", [ConnectionError("sin red"), RuntimeError("cuota"), TimeoutError("lento")]
+)
+def test_ampliar_falla_abierto(fallo: Exception) -> None:
+    """Ampliar es una mejora: no ampliar deja la busqueda como estaba."""
+    from experiments.adr002.modelo_local import consulta as cq
+
+    salida = cq.ampliar("lo que sea", _ProveedorAjeno(fallo))
+    assert salida.palabras == ()
+    assert not salida.actuo
+    assert type(fallo).__name__ in salida.razon
+
+
+def test_ninguna_normalizacion_lexica_cierra_el_caso_que_queda() -> None:
+    """La razon por la que hace falta el modelo, comprobada y no supuesta.
+
+    Si algun dia el recorte de sufijos uniera estas palabras, esta prueba cae y
+    la llamada al modelo por busqueda deja de estar justificada.
+    """
+    from experiments.adr002.candidates.adr002_a import lexical
+
+    for nombre, verbo in (("preferencia", "prefiere"), ("redaccion", "redactes")):
+        assert lexical.raiz(nombre) != lexical.raiz(verbo), f"{nombre}/{verbo}"
+        assert not (set(lexical.variantes(nombre)) & set(lexical.variantes(verbo)))

@@ -58,7 +58,7 @@ from typing import Any, Final
 
 from experiments.adr002.candidates.adr002_a import lexical
 from experiments.adr002.candidates.common.contracts import ContextoDeEtapa
-from experiments.adr002.lateral.candidato import ConIndiceLateral
+from experiments.adr002.lateral.candidato import ConIndiceLateral, Fuente
 from experiments.adr002.projection import contracts as pc
 
 TABLA: Final = "categoria_fts"
@@ -179,6 +179,17 @@ def _pide_contexto(contexto: ContextoDeEtapa) -> tuple[str, ...]:
     return VOCABULARIO
 
 
+def fuente(*, sembrar_en_contexto: bool = False, ruta: Path) -> Fuente:
+    """La fuente lateral de categoria, para pasarsela al candidato."""
+    return Fuente(
+        ruta=ruta,
+        tabla=TABLA,
+        razon="el canon lo declara de esta categoria",
+        senal="categoria declarada en el canon",
+        terminos_extra=_pide_contexto if sembrar_en_contexto else None,
+    )
+
+
 class ConCategoria(ConIndiceLateral):
     """`ADR002-A` mas la categoria buscable.
 
@@ -189,13 +200,7 @@ class ConCategoria(ConIndiceLateral):
     """
 
     def __init__(self, ruta: Path, *, sembrar_en_contexto: bool = False) -> None:
-        super().__init__(
-            ruta,
-            tabla=TABLA,
-            razon="el canon lo declara de esta categoria",
-            senal="categoria declarada en el canon",
-            terminos_extra=_pide_contexto if sembrar_en_contexto else None,
-        )
+        super().__init__([fuente(ruta=ruta, sembrar_en_contexto=sembrar_en_contexto)])
 
 
 __all__ = [
@@ -205,6 +210,7 @@ __all__ = [
     "VOCABULARIO",
     "ConCategoria",
     "construir",
+    "fuente",
     "identidades_con_categoria",
     "palabras_de_categoria",
 ]

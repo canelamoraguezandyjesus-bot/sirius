@@ -109,7 +109,9 @@ from experiments.adr002.candidates.adr002_a.candidate import CandidatoA
 from experiments.adr002.candidates.common import engine
 from experiments.adr002.candidates.common.port import PuertoSqlite
 from experiments.adr002.lateral import categoria as cat
+from experiments.adr002.lateral import texto as tx
 from experiments.adr002.lateral.candidato import ConIndiceLateral
+from experiments.adr002.modelo_local import consulta as cq
 from experiments.adr002.modelo_local import filtro as fl
 from experiments.adr002.modelo_local import ingesta as ing
 from experiments.adr002.modelo_local.puerto import ProveedorIA, ProveedorOllama
@@ -642,6 +644,53 @@ def main() -> int:
             rescatadas = sum(len(d.get("rescatados_por_la_regla", ())) for d in sembrado.detalles)
             print(f"  {'':34} la regla devolvio {rescatadas} criticas que el modelo tiraba")
 
+            # La corrida 6. Es lo unico que puede cerrar `N1-30`, el ultimo
+            # critico que queda: la consulta dice «preferencia de redaccion» y
+            # el dato «prefiere que redactes», y eso es derivacion, que ninguna
+            # normalizacion lexica une —comprobado en `modelo_local/consulta.py`—.
+            # Cuesta una llamada al modelo **por busqueda**, no por dato
+            # guardado, de modo que la latencia se publica al lado del acierto y
+            # no debajo: el presupuesto declarado son 5 s.
+            print()
+            print("=== 6. y AMPLIANDO LA CONSULTA con el modelo (una llamada mas por busqueda) ===")
+            ruta_texto = Path(temporal) / "texto.sqlite3"
+            registro_texto = tx.construir(ruta_texto, corpus["items"])
+            palabras: dict[str, tuple[str, ...]] = {}
+            fallos_de_ampliacion = 0
+
+            def _amplia(ctx: Any) -> tuple[str, ...]:
+                nonlocal fallos_de_ampliacion
+                consulta = str(ctx.peticion.consulta)
+                if consulta not in palabras:
+                    salida = cq.ampliar(consulta, proveedor)
+                    if not salida.actuo:
+                        fallos_de_ampliacion += 1
+                    palabras[consulta] = salida.palabras
+                return palabras[consulta]
+
+            ampliado = _correr(
+                "6. con la consulta ampliada",
+                casos,
+                ConIndiceLateral(
+                    [
+                        cat.fuente(ruta=ruta_categoria, sembrar_en_contexto=True),
+                        tx.fuente(ruta_texto, _amplia),
+                    ]
+                ),
+                puerto,
+                plano,
+                contexto,
+                filtrar_con=proveedor,
+                textos=textos,
+            )
+            filas.append(_fila(ampliado, contexto))
+            detalles["6. con la consulta ampliada"] = ampliado.detalles
+            distintas = sum(1 for v in palabras.values() if v)
+            print(
+                f"  {'':34} el modelo amplio {distintas} consultas de {len(palabras)}; "
+                f"no pudo en {fallos_de_ampliacion}"
+            )
+
             if argumentos.con_compuerta:
                 print()
                 print("=== la compuerta (medida dos veces: 25 y 26 de 47) ===")
@@ -680,6 +729,8 @@ def main() -> int:
         ),
         "vocabulario_de_categoria": list(VOCABULARIO_DE_CATEGORIA),
         "indice_de_categoria": registro_categoria,
+        "indice_de_texto": registro_texto,
+        "palabras_de_la_ampliacion_de_consulta": {c: list(p) for c, p in palabras.items() if p},
         "estatuto_de_la_siembra": (
             "la regla de sembrar las criticas cuando la peticion declara que ensambla "
             "contexto se escribio DESPUES de ver que casos fallaban, y los dos unicos "

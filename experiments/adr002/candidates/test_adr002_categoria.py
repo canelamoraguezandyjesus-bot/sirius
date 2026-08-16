@@ -133,8 +133,8 @@ def test_la_siembra_va_apagada_salvo_que_se_pida() -> None:
     """Las dos conductas se miden juntas, asi que ninguna puede ser implicita."""
     from pathlib import Path
 
-    assert cat.ConCategoria(Path("x"))._terminos_extra is None
-    assert cat.ConCategoria(Path("x"), sembrar_en_contexto=True)._terminos_extra is not None
+    assert cat.fuente(ruta=Path("x")).terminos_extra is None
+    assert cat.fuente(ruta=Path("x"), sembrar_en_contexto=True).terminos_extra is not None
 
 
 def test_el_banco_solo_tiene_dos_casos_con_ese_proposito() -> None:
@@ -153,3 +153,41 @@ def test_el_banco_solo_tiene_dos_casos_con_ese_proposito() -> None:
         if cat.PROPOSITO_DE_CONTEXTO in str(c.peticion.proposito).lower()
     ]
     assert sorted(con_contexto) == ["N1-33", "N1-34"]
+
+
+# -- El indice de texto y la ampliacion de la consulta ----------------------
+
+
+def test_el_indice_de_texto_no_lleva_la_razon_de_criticidad(tmp_path: Path) -> None:
+    """El mismo atajo prohibido, cerrado tambien por este lado.
+
+    `criticidad.razon` de `MEMORIA:1` dice «Requisito de **redaccion** declarado
+    explicitamente por el usuario», que contiene la palabra exacta de la consulta
+    que falla. Indexarlo cerraria el caso y haria que el banco se aprobase solo.
+    """
+    import sqlite3
+
+    from experiments.adr002.lateral import texto as tx
+
+    items = [
+        {
+            "id": "MEM-001",
+            "text": "El usuario prefiere que redactes en tono directo.",
+            "criticidad": {
+                "nivel": "IMPORTANTE",
+                "razon": "Requisito de redaccion declarado explicitamente por el usuario.",
+            },
+        }
+    ]
+    ruta = tmp_path / "t.sqlite3"
+    registro = tx.construir(ruta, items)
+
+    conexion = sqlite3.connect(str(ruta))
+    guardado = " ".join(str(f[0]) for f in conexion.execute(f"SELECT contenido FROM {tx.TABLA}"))
+    conexion.close()
+
+    assert "redactes" in guardado, "el texto guardado si entra"
+    assert "Requisito" not in guardado, "la razon de criticidad NO entra"
+    assert "explicitamente" not in guardado
+    assert registro["campos_leidos"] == ["id", "text"]
+    assert registro["razon_de_criticidad_leida"] is False
