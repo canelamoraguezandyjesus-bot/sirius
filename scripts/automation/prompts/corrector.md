@@ -105,3 +105,29 @@ trabajase durante decenas de turnos y terminase sin escribirlo. Ese trabajo se
 perdió entero y la incidencia quedó detenida esperando a una persona, que es
 justo lo que este paso existe para evitar. Un veredicto `FAILED_SAFELY` con un
 diagnóstico honesto vale infinitamente más que ningún veredicto.
+
+### Nadie te va a contestar: no termines el turno esperando nada
+
+**Aquí no hay interlocutor.** Nadie lee tus mensajes intermedios, nadie te
+responde y nadie te va a devolver el turno. Cuando tu turno termina, el runner
+mata todo lo que siguiera vivo y lo único que queda de ti es el archivo de
+veredicto. Por eso:
+
+- **Ejecuta las validaciones en primer plano y espera su resultado dentro del
+  mismo turno.** Nada de lanzar `pytest` (ni ningún comando largo) en segundo
+  plano para «recoger la salida luego»: no hay un luego.
+- **Nunca cierres el turno anunciando trabajo pendiente.** Frases como «espero a
+  que termine y aviso», «te informo en cuanto tenga el resultado» o «continúo en
+  el siguiente mensaje» son, en este contexto, el final de la ronda: el trabajo
+  se pierde entero.
+- Si algo no cabe en el turno o se queda colgado, **eso es exactamente un
+  `FAILED_SAFELY` con su diagnóstico** —qué lanzaste, dónde se quedó—, no un
+  motivo para esperar.
+
+No es una precaución teórica. En la incidencia #177 tres rondas seguidas se
+perdieron así, y la única con el volcado del modelo a la vista lo dejó escrito
+en su último mensaje: «Espero a que termine el `pytest` en segundo plano […] y
+aviso en cuanto tenga el resultado» (run 31953500564, `terminal_reason:
+completed`). El corte no fue por turnos —69 de 120 en otra de ellas—, ni por
+permisos, ni por timeout: la ronda terminó porque el modelo creyó que la
+conversación seguía.
