@@ -75,9 +75,14 @@ comentario ajeno con el mismo marcador no pueda hacer valer una revisión no
 solicitada por el workflow; `collect` espera el resultado del conector oficial
 (allowlist `SIRIUS_CODEX_ALLOWED_AUTHORS`), verifica que la revisión
 corresponde exactamente al head esperado (`commit_id` o marcador
-`Reviewed commit:`), reconoce la aprobación explícita (revisión `APPROVED` o
-reacción `+1` del conector sobre el disparador; `eyes` solo indica
-procesamiento) y escribe un JSON normalizado. Timeout configurable
+`Reviewed commit:`), reconoce la aprobación explícita —revisión `APPROVED`,
+reacción `+1` sobre el disparador, o un comentario que declare ausencia de
+hallazgos en la fórmula conocida del conector (contrato v1.6.1: es el único
+canal por el que este conector lo dice de verdad); `eyes` solo indica
+procesamiento— y escribe un JSON normalizado. Ese tercer canal falla cerrado:
+otra redacción, o un comentario con insignias de severidad, sigue terminando en
+la parada segura `respuesta-por-comentario`, y solo se consulta cuando no hay
+ninguna revisión formal posterior al disparador. Timeout configurable
 (`SIRIUS_CODEX_REVIEW_TIMEOUT_SECONDS`, 1200 s por defecto) y limitado por
 `SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS` (1500 s) para que el resultado se
 escriba siempre antes de que expire el paso del workflow; cualquier caso no
