@@ -884,3 +884,34 @@ def test_ninguna_normalizacion_lexica_cierra_el_caso_que_queda() -> None:
     for nombre, verbo in (("preferencia", "prefiere"), ("redaccion", "redactes")):
         assert lexical.raiz(nombre) != lexical.raiz(verbo), f"{nombre}/{verbo}"
         assert not (set(lexical.variantes(nombre)) & set(lexical.variantes(verbo)))
+
+
+def test_la_latencia_que_se_compara_con_el_presupuesto_incluye_la_busqueda() -> None:
+    """El defecto que la corrida v0.7 dejo a la vista, cerrado.
+
+    Cuando la ampliacion de consulta empezo a llamar al modelo **dentro** de la
+    busqueda, la fila publico 3,58 s de p95 —menos que sin ampliar—, que es
+    imposible habiendo una llamada de mas. El cronometro solo rodeaba el filtro.
+    Si alguien vuelve a comparar el presupuesto contra el filtro a solas, esta
+    prueba cae.
+    """
+    from experiments.adr002.modelo_local import medir
+
+    corrida = medir.Corrida("prueba")
+    corrida.latencias = [0.5, 0.5]
+    corrida.latencias_de_busqueda = [4.0, 4.0]
+    corrida.latencias_totales = [4.5, 4.6]
+
+    fila = {
+        "latencia_filtro_p95_s": medir._p95(corrida.latencias),
+        "latencia_busqueda_p95_s": medir._p95(corrida.latencias_de_busqueda),
+        "latencia_total_p95_s": medir._p95(corrida.latencias_totales),
+    }
+
+    assert fila["latencia_total_p95_s"] == 4.6
+    assert fila["latencia_total_p95_s"] > fila["latencia_filtro_p95_s"], "el total manda"
+    assert not medir._pasa(fila), "4,6 s cabe en el presupuesto de 5"
+
+    fila["latencia_total_p95_s"] = 6.1
+    assert medir._pasa(fila), "6,1 s lo pasa y hay que decirlo"
+    assert medir.PRESUPUESTO_DE_LATENCIA_S == 5.0
