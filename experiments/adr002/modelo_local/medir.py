@@ -156,6 +156,11 @@ class Corrida:
     filtro_actuo: int = 0
     filtro_fallo_abierto: int = 0
     razones_de_fallo: list[str] = field(default_factory=list)
+    #: La busqueda entera y el total, aparte del filtro. Sin las tres, una
+    #: llamada al modelo hecha **dentro** de la busqueda no aparece en ninguna
+    #: cifra y el presupuesto se declara cumplido sin serlo.
+    latencias_de_busqueda: list[float] = field(default_factory=list)
+    latencias_totales: list[float] = field(default_factory=list)
     #: Una entrada por caso. Sin esto, el artefacto solo trae totales y **no se
     #: puede saber que quito el filtro**: la corrida v0.1 dijo que perdia trece
     #: elementos correctos y hubo que deducir cuales leyendo el banco a mano.
@@ -222,6 +227,27 @@ def construir_ampliacion(
     return registro
 
 
+#: Lo que el responsable fijo por escrito como techo de una busqueda.
+PRESUPUESTO_DE_LATENCIA_S: Final = 5.0
+
+
+def _p50(valores: list[float]) -> float | None:
+    return round(statistics.median(valores), 2) if valores else None
+
+
+def _p95(valores: list[float]) -> float | None:
+    if not valores:
+        return None
+    ordenados = sorted(valores)
+    return round(ordenados[min(len(ordenados) - 1, int(len(ordenados) * 0.95))], 2)
+
+
+def _pasa(fila: dict[str, Any]) -> bool:
+    """Si el p95 del total se sale del presupuesto. Se dice, no se esconde."""
+    total = fila.get("latencia_total_p95_s")
+    return total is not None and total > PRESUPUESTO_DE_LATENCIA_S
+
+
 def _fila(corrida: Corrida, contexto: dict[str, Any]) -> dict[str, Any]:
     resumen = mt.resumir(corrida.nombre, corrida.veredictos, borrado_y_regeneracion=True)
     adjudicables = [v for v in corrida.veredictos if v.adjudicable]
@@ -231,7 +257,7 @@ def _fila(corrida: Corrida, contexto: dict[str, Any]) -> dict[str, Any]:
     esperados = sum(len(v.esperado) for v in con_contenido)
     hallados = sum(len(set(v.esperado) & set(v.obtenido)) for v in con_contenido)
     sobrantes = sum(len(set(v.obtenido) - set(v.esperado)) for v in con_contenido)
-    latencias = sorted(corrida.latencias)
+    latencias = corrida.latencias
     fila = {
         "corrida": corrida.nombre,
         "casos_adjudicables": len(adjudicables),
@@ -252,12 +278,15 @@ def _fila(corrida: Corrida, contexto: dict[str, Any]) -> dict[str, Any]:
         # seria contar media medida.
         "correctos_quitados": sum(len(d.get("quitados_correctos", ())) for d in corrida.detalles),
         "criticos_quitados": sum(len(d.get("quitados_criticos", ())) for d in corrida.detalles),
-        "latencia_mediana_s": round(statistics.median(latencias), 2) if latencias else None,
-        "latencia_p95_s": (
-            round(latencias[min(len(latencias) - 1, int(len(latencias) * 0.95))], 2)
-            if latencias
-            else None
-        ),
+        "latencia_filtro_mediana_s": _p50(latencias),
+        "latencia_filtro_p95_s": _p95(latencias),
+        # La busqueda aparte, porque la ampliacion de consulta llama al modelo
+        # desde dentro de ella; y el total, que es lo unico comparable con el
+        # presupuesto de 5 s que fijo el responsable.
+        "latencia_busqueda_mediana_s": _p50(corrida.latencias_de_busqueda),
+        "latencia_busqueda_p95_s": _p95(corrida.latencias_de_busqueda),
+        "latencia_total_mediana_s": _p50(corrida.latencias_totales),
+        "latencia_total_p95_s": _p95(corrida.latencias_totales),
     }
     print(
         f"  {corrida.nombre:34} exacto={fila['conjunto_exacto']}/{fila['casos_adjudicables']}  "
@@ -268,8 +297,16 @@ def _fila(corrida: Corrida, contexto: dict[str, Any]) -> dict[str, Any]:
     if corrida.latencias:
         print(
             f"  {'':34} filtro actuo {corrida.filtro_actuo}, fallo abierto "
-            f"{corrida.filtro_fallo_abierto}; latencia mediana "
-            f"{fila['latencia_mediana_s']}s p95 {fila['latencia_p95_s']}s"
+            f"{corrida.filtro_fallo_abierto}"
+        )
+        print(
+            f"  {'':34} latencia POR BUSQUEDA (lo que cuenta para el presupuesto de "
+            f"{PRESUPUESTO_DE_LATENCIA_S} s): mediana {fila['latencia_total_mediana_s']}s "
+            f"p95 {fila['latencia_total_p95_s']}s" + ("  <-- LO PASA" if _pasa(fila) else "")
+        )
+        print(
+            f"  {'':34}   de los cuales busqueda {fila['latencia_busqueda_p95_s']}s "
+            f"y filtro {fila['latencia_filtro_p95_s']}s (p95)"
         )
         print(
             f"  {'':34} el filtro se llevo {fila['correctos_quitados']} correctos, "
@@ -344,13 +381,22 @@ def _correr(
     # nada, de modo que no hay nada de lo que protegerla.
     protegidos = frozenset() if modo == "compuerta" else criticos
     for caso in casos:
+        # El cronometro arranca **antes de buscar**, no antes de filtrar.
+        #
+        # Correccion medida: cuando la ampliacion de consulta empezo a llamar al
+        # modelo desde dentro de la busqueda, la fila publico 3,58 s de p95 —
+        # menos que sin ampliar—, que es imposible habiendo una llamada mas. El
+        # cronometro solo rodeaba el filtro, de modo que la mitad cara quedaba
+        # fuera de la cifra que decide si se respeta el presupuesto.
+        comienzo = time.perf_counter()
         recuperacion = engine.recuperar(caso.peticion, puerto, candidato, plano)
+        corrida.latencias_de_busqueda.append(time.perf_counter() - comienzo)
         ids = recuperacion.ids
         antes = ids
         filtrado: fl.Filtrado | None = None
         if filtrar_con is not None and ids:
             candidatos = [(i, textos.get(i, "")) for i in ids]
-            comienzo = time.perf_counter()
+            arranque_del_filtro = time.perf_counter()
             filtrado = (
                 fl.compuerta(caso.peticion.consulta, candidatos, filtrar_con)
                 if modo == "compuerta"
@@ -358,7 +404,9 @@ def _correr(
                     caso.peticion.consulta, candidatos, filtrar_con, criticos=protegidos
                 )
             )
-            corrida.latencias.append(time.perf_counter() - comienzo)
+            corrida.latencias.append(time.perf_counter() - arranque_del_filtro)
+        if filtrado is not None:
+            corrida.latencias_totales.append(time.perf_counter() - comienzo)
             if filtrado.actuo:
                 corrida.filtro_actuo += 1
             else:
