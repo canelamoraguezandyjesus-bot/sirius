@@ -206,6 +206,82 @@ def test_scope_change_invalidates_a_prepared_run_so_it_can_never_be_dispatched(
     assert invalidated_index < scope_index
 
 
+def test_retry_rejects_a_run_invalidated_by_scope_change(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun, now: datetime
+) -> None:
+    """CODEX-001 (ronda 4): un Run invalidado no debe originar otro despachable.
+
+    Antes de esta corrección, ``retry_run``/``substitute_run_worker`` seguían
+    aceptando un Run ``FINISHED(CANCELLED)`` y, sin ``work_package`` nuevo,
+    copiaban el paquete obsoleto: preparar -> cambiar alcance -> reintentar ->
+    despachar terminaba en ``DISPATCHED`` con el alcance viejo, pese a la
+    invalidación.
+    """
+    work_id = "WI-SCOPE-RETRY-INVALIDATED"
+    make_work_item(now=now, work_id=work_id)
+    store.activate_work_item(work_id, now=now)
+
+    deadline = now + timedelta(hours=1)
+    make_run(run_id="RUN-STALE", work_id=work_id, now=now, deadline=deadline)
+
+    store.change_work_item_scope(work_id, now=now, objetivo="objetivo nuevo")
+    stale = store.get_run("RUN-STALE")
+    assert stale is not None
+    assert stale.desenlace is RunOutcome.CANCELLED
+
+    with pytest.raises(IllegalTransitionError):
+        store.retry_run("RUN-STALE", new_run_id="RUN-STALE-RETRY", deadline=deadline, now=now)
+
+
+def test_worker_substitution_rejects_a_run_invalidated_by_scope_change(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun, now: datetime
+) -> None:
+    work_id = "WI-SCOPE-SUBSTITUTE-INVALIDATED"
+    make_work_item(now=now, work_id=work_id)
+    store.activate_work_item(work_id, now=now)
+
+    deadline = now + timedelta(hours=1)
+    make_run(
+        run_id="RUN-STALE-SUB", work_id=work_id, now=now, deadline=deadline, worker="claude-code"
+    )
+
+    store.change_work_item_scope(work_id, now=now, objetivo="objetivo nuevo")
+
+    with pytest.raises(IllegalTransitionError):
+        store.substitute_run_worker(
+            "RUN-STALE-SUB",
+            new_run_id="RUN-STALE-SUB-RETRY",
+            worker="codex",
+            motivo="intento de sustituir un Run ya invalidado",
+            deadline=deadline,
+            now=now,
+        )
+
+
+def test_retry_still_works_for_a_run_terminated_by_a_normal_cause(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun, now: datetime
+) -> None:
+    """La corrección de CODEX-001 solo bloquea Runs ``CANCELLED``.
+
+    Un Run terminado por una causa distinta (``FAILED``, ``SUCCEEDED``,
+    ``LOST``) sigue pudiendo reintentarse con normalidad.
+    """
+    work_id = "WI-SCOPE-RETRY-NORMAL"
+    make_work_item(now=now, work_id=work_id)
+    store.activate_work_item(work_id, now=now)
+
+    deadline = now + timedelta(hours=1)
+    make_run(run_id="RUN-FAILED-NORMAL", work_id=work_id, now=now, deadline=deadline)
+    store.dispatch_run("RUN-FAILED-NORMAL", now=now)
+    store.fail_run("RUN-FAILED-NORMAL", diagnostico="fallo transitorio", now=now)
+
+    retried = store.retry_run(
+        "RUN-FAILED-NORMAL", new_run_id="RUN-FAILED-NORMAL-RETRY", deadline=deadline, now=now
+    )
+    assert retried.estado is RunState.PREPARED
+    assert retried.intento == 2
+
+
 def test_scope_change_does_not_touch_a_finished_run(
     store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun, now: datetime
 ) -> None:

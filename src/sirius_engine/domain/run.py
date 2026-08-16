@@ -222,9 +222,13 @@ def retry(
 
     Nunca muta ``previous``. Requiere que el intento anterior haya
     terminado (``FINISHED``): un Run vivo no se reintenta, se cancela o se
-    espera primero.
+    espera primero. Un Run que terminó ``CANCELLED`` (invalidado por un
+    cambio de alcance, o cancelado explícitamente) tampoco se reintenta: su
+    ``work_package`` puede referirse a un alcance ya obsoleto, y copiarlo a
+    ciegas produciría un Run despachable con datos que la invalidación
+    buscaba impedir precisamente que llegaran a ejecutarse.
     """
-    if previous.estado is not RunState.FINISHED:
+    if previous.estado is not RunState.FINISHED or previous.desenlace is RunOutcome.CANCELLED:
         raise IllegalTransitionError(_AGGREGATE, "retry", previous.estado)
     return prepare(
         run_id=run_id,
