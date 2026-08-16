@@ -70,6 +70,27 @@ class MutableResourceConflictError(EngineError):
         self.conflicting_run_id = conflicting_run_id
 
 
+class ScopeInvalidatedRunError(EngineError):
+    """Raised when retrying or substituting a Run invalidated by a scope change.
+
+    Arquitectura §3.2: un cambio de alcance invalida los Runs que quedan
+    obsoletos. Su ``work_package`` describe el alcance viejo, así que ese Run
+    no puede originar otro: hay que volver a PREPARAR desde el alcance nuevo.
+    Se mantiene distinto de :class:`IllegalTransitionError` porque una
+    cancelación ordinaria ya confirmada **sí** admite reintento y sustitución
+    (§3.3 solo lo prohíbe mientras la cancelación está sin confirmar), y una
+    prueba debe poder distinguir qué guarda saltó.
+    """
+
+    def __init__(self, run_id: str, operation: str) -> None:
+        super().__init__(
+            f"cannot {operation} run {run_id}: it was invalidated by a scope change; "
+            "prepare a new run from the current scope instead"
+        )
+        self.run_id = run_id
+        self.operation = operation
+
+
 class UnknownWorkItemError(EngineError):
     """Raised when a ``work_id`` does not refer to a known WorkItem."""
 

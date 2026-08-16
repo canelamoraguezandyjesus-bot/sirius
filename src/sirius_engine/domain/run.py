@@ -17,7 +17,11 @@ from datetime import datetime
 from enum import StrEnum
 from types import MappingProxyType
 
-from sirius_engine.domain.errors import DeadlineNotExceededError, IllegalTransitionError
+from sirius_engine.domain.errors import (
+    DeadlineNotExceededError,
+    IllegalTransitionError,
+    ScopeInvalidatedRunError,
+)
 
 _AGGREGATE = "Run"
 
@@ -80,6 +84,13 @@ class Run:
     recurso_mutable: str | None = None
     sustituye_a: str | None = None
     motivo_sustitucion: str | None = None
+    #: True cuando este Run se cerró porque un cambio de alcance lo dejó
+    #: obsoleto (§3.2). Es un hecho distinto de "cancelado": su
+    #: ``work_package`` describe el alcance viejo, así que no puede originar
+    #: otro Run. Se marca en el momento de invalidar —no se deduce después
+    #: de ``desenlace``— porque una cancelación ordinaria confirmada termina
+    #: exactamente igual, en ``FINISHED(CANCELLED)``, y sí admite reintento.
+    invalidado_por_alcance: bool = False
 
     def _require(self, allowed: frozenset[RunState], operation: str) -> None:
         if self.estado not in allowed:
@@ -146,15 +157,30 @@ class Run:
         """
         self._require(frozenset({RunState.PREPARED}), "invalidate_prepared")
         return replace(
-            self, estado=RunState.FINISHED, desenlace=RunOutcome.CANCELLED, updated_at=now
+            self,
+            estado=RunState.FINISHED,
+            desenlace=RunOutcome.CANCELLED,
+            invalidado_por_alcance=True,
+            updated_at=now,
         )
 
-    def request_cancel(self, *, now: datetime) -> Run:
-        """``CANCEL`` produce ``CANCELLATION_UNCONFIRMED`` (el estado del ciclo no cambia)."""
+    def request_cancel(self, *, now: datetime, por_cambio_de_alcance: bool = False) -> Run:
+        """``CANCEL`` produce ``CANCELLATION_UNCONFIRMED`` (el estado del ciclo no cambia).
+
+        ``por_cambio_de_alcance`` marca el motivo en el momento de pedirla, no
+        al confirmarla: cuando el terminal remoto llegue, el Run habrá quedado
+        en ``FINISHED(CANCELLED)`` igual que una cancelación ordinaria, y para
+        entonces la causa ya no es deducible del estado.
+        """
         self._require(LIVE_STATES, "request_cancel")
         if self.cancellation_status is CancellationStatus.UNCONFIRMED:
             raise IllegalTransitionError(_AGGREGATE, "request_cancel", self.estado)
-        return replace(self, cancellation_status=CancellationStatus.UNCONFIRMED, updated_at=now)
+        return replace(
+            self,
+            cancellation_status=CancellationStatus.UNCONFIRMED,
+            invalidado_por_alcance=self.invalidado_por_alcance or por_cambio_de_alcance,
+            updated_at=now,
+        )
 
     def confirm_cancelled(self, *, now: datetime) -> Run:
         """``CANCELLATION_UNCONFIRMED -> FINISHED(CANCELLED)``.
@@ -222,14 +248,22 @@ def retry(
 
     Nunca muta ``previous``. Requiere que el intento anterior haya
     terminado (``FINISHED``): un Run vivo no se reintenta, se cancela o se
-    espera primero. Un Run que terminó ``CANCELLED`` (invalidado por un
-    cambio de alcance, o cancelado explícitamente) tampoco se reintenta: su
-    ``work_package`` puede referirse a un alcance ya obsoleto, y copiarlo a
-    ciegas produciría un Run despachable con datos que la invalidación
-    buscaba impedir precisamente que llegaran a ejecutarse.
+    espera primero.
+
+    Lo que impide reintentar no es haber terminado ``CANCELLED``, sino haber
+    quedado **obsoleto por un cambio de alcance**
+    (``invalidado_por_alcance``): ese ``work_package`` describe un alcance
+    que ya no rige, y copiarlo produciría un Run despachable con los datos
+    que la invalidación existía para frenar. Una cancelación ordinaria ya
+    confirmada termina en el mismo desenlace pero no arrastra esa obsolescencia,
+    así que sí admite reintento y sustitución: la arquitectura §3.3 solo lo
+    prohíbe mientras la cancelación sigue **sin confirmar**, y esa guarda vive
+    en el despachador (``MutableResourceConflictError``), no aquí.
     """
-    if previous.estado is not RunState.FINISHED or previous.desenlace is RunOutcome.CANCELLED:
+    if previous.estado is not RunState.FINISHED:
         raise IllegalTransitionError(_AGGREGATE, "retry", previous.estado)
+    if previous.invalidado_por_alcance:
+        raise ScopeInvalidatedRunError(previous.run_id, "retry")
     return prepare(
         run_id=run_id,
         work_id=previous.work_id,

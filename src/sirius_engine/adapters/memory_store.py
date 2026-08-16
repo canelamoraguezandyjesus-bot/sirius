@@ -264,7 +264,11 @@ class InMemoryWorkEngineStore:
                 run.estado in run_ops.LIVE_STATES
                 and run.cancellation_status is run_ops.CancellationStatus.NONE
             ):
-                self._record_run(run.request_cancel(now=now), "run_cancellation_requested", now=now)
+                self._record_run(
+                    run.request_cancel(now=now, por_cambio_de_alcance=True),
+                    "run_cancellation_requested",
+                    now=now,
+                )
         return self._record_work_item(changed, "work_item_scope_changed", now=now)
 
     def reprioritize_work_item(self, work_id: str, *, prioridad: int, now: datetime) -> WorkItem:

@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from sirius_engine.domain.errors import IllegalTransitionError
+from sirius_engine.domain.errors import IllegalTransitionError, ScopeInvalidatedRunError
 from sirius_engine.domain.events import AggregateType
 from sirius_engine.domain.run import CancellationStatus, RunOutcome, RunState
 from sirius_engine.domain.work_item import WorkItemPhase, WorkItemState
@@ -229,7 +229,7 @@ def test_retry_rejects_a_run_invalidated_by_scope_change(
     assert stale is not None
     assert stale.desenlace is RunOutcome.CANCELLED
 
-    with pytest.raises(IllegalTransitionError):
+    with pytest.raises(ScopeInvalidatedRunError):
         store.retry_run("RUN-STALE", new_run_id="RUN-STALE-RETRY", deadline=deadline, now=now)
 
 
@@ -247,7 +247,7 @@ def test_worker_substitution_rejects_a_run_invalidated_by_scope_change(
 
     store.change_work_item_scope(work_id, now=now, objetivo="objetivo nuevo")
 
-    with pytest.raises(IllegalTransitionError):
+    with pytest.raises(ScopeInvalidatedRunError):
         store.substitute_run_worker(
             "RUN-STALE-SUB",
             new_run_id="RUN-STALE-SUB-RETRY",
@@ -261,7 +261,7 @@ def test_worker_substitution_rejects_a_run_invalidated_by_scope_change(
 def test_retry_still_works_for_a_run_terminated_by_a_normal_cause(
     store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun, now: datetime
 ) -> None:
-    """La corrección de CODEX-001 solo bloquea Runs ``CANCELLED``.
+    """Lo que bloquea el reintento es la obsolescencia, no el desenlace.
 
     Un Run terminado por una causa distinta (``FAILED``, ``SUCCEEDED``,
     ``LOST``) sigue pudiendo reintentarse con normalidad.
@@ -320,3 +320,98 @@ def test_scope_change_does_not_double_request_an_already_pending_cancellation(
     run = store.get_run("RUN-ALREADY-CANCELLING")
     assert run is not None
     assert run.cancellation_status is CancellationStatus.UNCONFIRMED
+
+
+def test_substitution_works_after_an_ordinary_confirmed_cancellation(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun, now: datetime
+) -> None:
+    """CODEX-001 (ronda 4): confirmar una cancelación normal no obsoletiza el paso.
+
+    La corrección de la ronda 3 equiparó toda cancelación confirmada con una
+    invalidación por cambio de alcance, así que despachar -> solicitar
+    cancelación -> confirmarla -> sustituir por otro Worker fallaba, incluso
+    aportando un ``work_package`` nuevo. La arquitectura §3.3 solo prohíbe el
+    sustituto mientras la cancelación sigue SIN confirmar; una vez observado el
+    terminal remoto, el paso puede reintentarse con otro Worker.
+    """
+    work_id = "WI-SCOPE-SUBSTITUTE-AFTER-CANCEL"
+    make_work_item(now=now, work_id=work_id)
+    store.activate_work_item(work_id, now=now)
+
+    deadline = now + timedelta(hours=1)
+    make_run(
+        run_id="RUN-CANCELLED-OK", work_id=work_id, now=now, deadline=deadline, worker="claude-code"
+    )
+    store.dispatch_run("RUN-CANCELLED-OK", now=now)
+    store.request_run_cancellation("RUN-CANCELLED-OK", now=now)
+    cancelled = store.confirm_run_cancelled("RUN-CANCELLED-OK", now=now)
+    assert cancelled.desenlace is RunOutcome.CANCELLED
+    assert cancelled.invalidado_por_alcance is False
+
+    substituted = store.substitute_run_worker(
+        "RUN-CANCELLED-OK",
+        new_run_id="RUN-CANCELLED-OK-SUB",
+        worker="codex",
+        motivo="el Worker anterior se canceló y se prueba con otro",
+        deadline=deadline,
+        now=now,
+    )
+    assert substituted.estado is RunState.PREPARED
+    assert substituted.worker == "codex"
+    assert substituted.intento == 2
+    assert substituted.sustituye_a == "RUN-CANCELLED-OK"
+
+
+def test_retry_works_after_an_ordinary_confirmed_cancellation(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun, now: datetime
+) -> None:
+    work_id = "WI-SCOPE-RETRY-AFTER-CANCEL"
+    make_work_item(now=now, work_id=work_id)
+    store.activate_work_item(work_id, now=now)
+
+    deadline = now + timedelta(hours=1)
+    make_run(run_id="RUN-CANCELLED-RETRY", work_id=work_id, now=now, deadline=deadline)
+    store.dispatch_run("RUN-CANCELLED-RETRY", now=now)
+    store.request_run_cancellation("RUN-CANCELLED-RETRY", now=now)
+    store.confirm_run_cancelled("RUN-CANCELLED-RETRY", now=now)
+
+    retried = store.retry_run(
+        "RUN-CANCELLED-RETRY", new_run_id="RUN-CANCELLED-RETRY-2", deadline=deadline, now=now
+    )
+    assert retried.estado is RunState.PREPARED
+    assert retried.intento == 2
+
+
+def test_a_live_run_cancelled_by_a_scope_change_is_never_retryable(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun, now: datetime
+) -> None:
+    """La distinción se marca al invalidar, no se deduce del desenlace.
+
+    Un Run DISPATCHED al que el cambio de alcance le solicita la cancelación
+    termina, tras confirmarse el terminal remoto, en el mismo
+    ``FINISHED(CANCELLED)`` que una cancelación ordinaria. Si la causa se
+    dedujese del estado final, ambos serían indistinguibles y el paquete
+    obsoleto volvería a ser copiable.
+    """
+    work_id = "WI-SCOPE-LIVE-INVALIDATED"
+    make_work_item(now=now, work_id=work_id)
+    store.activate_work_item(work_id, now=now)
+
+    deadline = now + timedelta(hours=1)
+    make_run(run_id="RUN-LIVE-STALE", work_id=work_id, now=now, deadline=deadline)
+    store.dispatch_run("RUN-LIVE-STALE", now=now)
+
+    store.change_work_item_scope(work_id, now=now, objetivo="objetivo nuevo")
+    pendiente = store.get_run("RUN-LIVE-STALE")
+    assert pendiente is not None
+    assert pendiente.cancellation_status is CancellationStatus.UNCONFIRMED
+    assert pendiente.invalidado_por_alcance is True
+
+    confirmado = store.confirm_run_cancelled("RUN-LIVE-STALE", now=now)
+    assert confirmado.desenlace is RunOutcome.CANCELLED
+    assert confirmado.invalidado_por_alcance is True
+
+    with pytest.raises(ScopeInvalidatedRunError):
+        store.retry_run(
+            "RUN-LIVE-STALE", new_run_id="RUN-LIVE-STALE-RETRY", deadline=deadline, now=now
+        )
