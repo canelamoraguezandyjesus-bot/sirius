@@ -56,8 +56,9 @@ nunca muere, es quien reabre el diario y comprueba el estado reconstruido.
 - No cubre concurrencia multiproceso: el arnés asume un único escritor.
 - No implementa el puerto `WorkEngineStore` completo: solo el subconjunto de
   operaciones de `WorkItem` necesario para ejercitar el patrón
-  (crear/activar/cancelar/fallar-a-salvo/entregar), no `Run` ni el resto.
-  Suficiente para demostrar el patrón de escritura; no es una migración.
+  (crear/activar/cancelar/fallar-a-salvo), no `Run`, no las fases del ciclo
+  revisar-reparar (`entregar` las exige) ni el resto. Suficiente para
+  demostrar el patrón de escritura; no es una migración.
 - No fija la representación definitiva del almacén (eso es I3+I4, D2).
 
 ### 3. Criterio de parada (decidido ahora, antes de ver ningún resultado)
