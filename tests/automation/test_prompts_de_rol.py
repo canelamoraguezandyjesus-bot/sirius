@@ -144,6 +144,63 @@ def test_lo_que_los_prompts_prohiben_esta_denegado_de_verdad(prompt_path: Path) 
         assert "Bash(wget*)" in permissions["deny"]
 
 
+# Workflow que ejecuta cada rol. Si el prompt promete que el entorno viene
+# preparado, es ESE workflow el que tiene que prepararlo.
+WORKFLOW_DE_CADA_ROL = {
+    "implementer.md": "implement-sirius-work.yml",
+    "corrector.md": "repair-sirius-work.yml",
+    "reviewer.md": "review-sirius-work.yml",
+}
+
+PROMESA_DE_ENTORNO = "El workflow ya te ha preparado el entorno antes de arrancarte"
+
+
+@pytest.mark.parametrize("prompt_path", PROMPTS, ids=lambda p: p.name)
+def test_el_prompt_que_promete_entorno_corre_donde_de_verdad_se_prepara(
+    prompt_path: Path,
+) -> None:
+    """Una promesa sobre el entorno tiene que ser verificable, no un supuesto.
+
+    Este test nace de un defecto real. El texto del prompt afirmaba que las
+    herramientas «ya están disponibles» cuando el workflow del implementador no
+    instalaba ninguna: solo `quality.yml` traía `uv`. El rol, obedeciendo la
+    prohibición de instalar, se detuvo en `FAILED_SAFELY` — correctamente, pero
+    la ronda se perdió por una frase que nadie había contrastado
+    (incidencia #182, run 31990550597).
+
+    Así que la promesa queda atada a los pasos reales del workflow que ejecuta
+    ese rol: si alguien la escribe donde no se cumple, o quita el `setup-uv` de
+    un workflow cuyo prompt la promete, esto falla.
+    """
+    import yaml
+
+    if PROMESA_DE_ENTORNO not in _flat(prompt_path.read_text(encoding="utf-8")):
+        pytest.skip(f"{prompt_path.name} no promete un entorno preparado")
+
+    nombre = WORKFLOW_DE_CADA_ROL.get(prompt_path.name)
+    assert nombre, (
+        f"{prompt_path.name} promete un entorno preparado pero no se sabe qué "
+        "workflow lo ejecuta; añádelo a WORKFLOW_DE_CADA_ROL"
+    )
+    workflow = REPO_ROOT / ".github" / "workflows" / nombre
+    with workflow.open(encoding="utf-8") as handle:
+        doc = yaml.safe_load(handle)
+    pasos = next(iter(doc["jobs"].values()))["steps"]
+
+    usos = " ".join(str(p.get("uses") or "") for p in pasos)
+    comandos = " ".join(str(p.get("run") or "") for p in pasos)
+    assert "astral-sh/setup-uv" in usos, f"{nombre} no instala uv, pero su prompt lo promete"
+    assert "uv sync" in comandos, f"{nombre} no sincroniza dependencias, pero su prompt lo promete"
+
+    # Y la preparación debe ocurrir ANTES de arrancar al modelo: instalarla
+    # después no le serviría de nada.
+    i_uv = next(i for i, p in enumerate(pasos) if "setup-uv" in str(p.get("uses") or ""))
+    i_claude = next(
+        i for i, p in enumerate(pasos) if "claude-code-action" in str(p.get("uses") or "")
+    )
+    assert i_uv < i_claude, f"{nombre} instala uv después de arrancar al modelo"
+
+
 def test_ningun_prompt_promete_una_reanudacion_automatica() -> None:
     """La frase que mató las tres rondas, en sus variantes.
 
