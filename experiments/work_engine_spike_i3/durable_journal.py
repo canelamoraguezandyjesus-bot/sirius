@@ -215,6 +215,18 @@ def replay(journal_path: Path) -> ReplayResult:
     consumed = 0
     first_invalid_index: int | None = None
     for index, line_bytes in enumerate(lines):
+        if not line_bytes.endswith(b"\n"):
+            # Solo puede ser la última línea del fichero (splitlines únicamente
+            # deja sin `\n` el sufijo final si `raw` no termina en salto de
+            # línea). Aunque su contenido analice como JSON válido y su
+            # checksum cuadre, la ausencia del `\n` de cierre es indistinguible
+            # de una escritura interrumpida justo antes de escribirlo -este
+            # escritor solo añade el `\n` como parte atómica de la misma
+            # `write()` que el resto de la línea (`build_line`)-, así que no
+            # puede darse por asentada: cae a la misma comprobación de cola
+            # truncada que una línea que ni siquiera parsea.
+            first_invalid_index = index
+            break
         record = _parse_valid_line(line_bytes)
         if record is None:
             first_invalid_index = index

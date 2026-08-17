@@ -35,6 +35,7 @@ from experiments.work_engine_spike_i3.durable_journal import (
     InternalCorruptionError,
     KillPoint,
     append_durably,
+    build_line,
     recover_invalid_tail,
     replay,
 )
@@ -348,6 +349,73 @@ def test_kill_mid_write_torn_reapertura_reintento_preserva_prefijo_y_produce_un_
     assert tras_el_reintento.discarded_tail_bytes == 0
     assert len(tras_el_reintento.valid_records) == 2, (
         "el reintento debe producir exactamente un evento nuevo, preservando el prefijo válido"
+    )
+    assert tras_el_reintento.valid_records[0]["aggregate_id"] == primero["aggregate_id"]
+    assert tras_el_reintento.valid_records[1]["aggregate_id"] == segundo["aggregate_id"]
+
+
+def test_registro_completo_sin_delimitador_final_se_trata_como_cola_truncada(
+    tmp_path: Path,
+) -> None:
+    """CODEX-001: un registro con todo su JSON escrito pero sin el `\\n` final no es válido.
+
+    Antes de esta corrección, `replay()` solo consideraba cola truncada la
+    línea que fallaba al analizar como JSON o cuyo checksum no cuadraba. Una
+    escritura interrumpida justo ANTES de escribir el último byte -el `\\n`
+    que `build_line` añade al final- deja en disco el JSON completo del
+    registro con su checksum correcto, así que `_parse_valid_line` lo
+    aceptaba como válido y `replay` lo contaba como asentado
+    (`discarded_tail_bytes == 0`). Como `append_durably` abre con
+    `O_APPEND`, el reintento de la misma petición lógica se escribía
+    entonces DETRÁS de ese registro sin `\\n` de cierre, fundiendo ambos en
+    una sola línea rota que la siguiente reproducción no podía analizar ni
+    tratar como cola truncada (había un registro válido -el primero- delante
+    en el fichero, pero la línea fundida en sí no era ni JSON válido ni
+    terminaba en su propio salto de línea de forma coherente con el patrón
+    esperado), lanzando `InternalCorruptionError` para siempre.
+
+    Este registro sin `\\n` final solo puede ser la ÚLTIMA línea del fichero
+    -el delimitador es lo último que escribe `build_line` en la misma
+    escritura que el resto de la línea-, así que es indistinguible de una
+    escritura interrumpida justo antes de completarla y debe tratarse como
+    cola truncada: descartarse y recortarse antes de reintentar, igual que
+    la cola de `MID_WRITE_TORN`.
+
+    Escenario: un registro válido ya asentado (prefijo que debe sobrevivir),
+    seguido de un segundo registro escrito completo salvo su último byte
+    (`build_line(segundo)[:-1]`, un prefijo de N-1 bytes). Tras "reabrir" y
+    recortar la cola inválida, un reintento de la misma petición debe
+    producir exactamente el segundo evento, sin fundirse con el primero.
+    """
+    journal_path = tmp_path / "diario.jsonl"
+    primero = _sample_record(sequence=1)
+    segundo = _sample_record(sequence=2)
+    segundo["aggregate_id"] = "WI-SPIKE-0002"
+
+    append_durably(journal_path, primero, kill_at=None)
+    assert len(replay(journal_path).valid_records) == 1
+
+    linea_segundo = build_line(segundo)
+    journal_path.write_bytes(journal_path.read_bytes() + linea_segundo[:-1])
+
+    tras_el_corte = replay(journal_path)
+    assert len(tras_el_corte.valid_records) == 1, (
+        "un registro sin su `\\n` final no debe darse por asentado, aunque su JSON y "
+        "checksum sean correctos"
+    )
+    assert tras_el_corte.valid_records[0]["aggregate_id"] == primero["aggregate_id"]
+    assert tras_el_corte.discarded_tail_bytes == len(linea_segundo) - 1, (
+        "debe descartarse exactamente el prefijo sin terminar, ni un byte más ni menos"
+    )
+
+    recortados = recover_invalid_tail(journal_path)
+    assert recortados == tras_el_corte.discarded_tail_bytes
+    append_durably(journal_path, segundo, kill_at=None)
+
+    tras_el_reintento = replay(journal_path)
+    assert tras_el_reintento.discarded_tail_bytes == 0
+    assert len(tras_el_reintento.valid_records) == 2, (
+        "el reintento debe producir exactamente un evento nuevo, sin fundirse con el prefijo"
     )
     assert tras_el_reintento.valid_records[0]["aggregate_id"] == primero["aggregate_id"]
     assert tras_el_reintento.valid_records[1]["aggregate_id"] == segundo["aggregate_id"]

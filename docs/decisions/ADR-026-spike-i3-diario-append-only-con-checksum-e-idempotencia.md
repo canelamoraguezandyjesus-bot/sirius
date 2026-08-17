@@ -181,16 +181,19 @@ descartaba entera, reintento incluido, indefinidamente. Detalle y prueba en
 ## Comprobación que la sostiene
 
 - **Matriz completa** en `experiments/work_engine_spike_i3/RESULTADOS.md` y
-  reproducida por `tests/engine/test_spike_i3_durability.py`: 22 pruebas — 6
+  reproducida por `tests/engine/test_spike_i3_durability.py`: 23 pruebas — 6
   puntos de corte nombrados para `WorkItem` más los mismos 6 para `Run`
   (matados con `SIGKILL` inyectado por el propio proceso escritor,
   subproceso real vía `subprocess.run`), duplicación por reintento tras
   reinicio, un ciclo de vida real reabierto desde cero, recuperación de la
   cola truncada tras `mid_write_torn` (kill → reapertura → reintento
-  produce exactamente un evento nuevo preservando el prefijo válido), una
-  prueba dedicada de que `recover_invalid_tail` es no-operativa sobre un
-  diario ya limpio, y dos mutaciones. Comando ejecutado:
-  `uv run pytest tests/engine/test_spike_i3_durability.py -v` → **22
+  produce exactamente un evento nuevo preservando el prefijo válido),
+  recuperación de un registro completo escrito salvo su `\n` final (prefijo
+  de N-1 bytes → reapertura → reintento produce exactamente un evento nuevo
+  sin fundirse con el prefijo), una prueba dedicada de que
+  `recover_invalid_tail` es no-operativa sobre un diario ya limpio, y dos
+  mutaciones. Comando ejecutado:
+  `uv run pytest tests/engine/test_spike_i3_durability.py -v` → **23
   passed**.
 - **Mutación vista fallar en dos puntos concretos** (requisito 4): quitar la
   comparación de checksum hace que un registro con un byte alterado se
@@ -204,7 +207,7 @@ descartaba entera, reintento incluido, indefinidamente. Detalle y prueba en
   (338 ficheros, sin errores — `experiments/` se resuelve como dependencia
   de `tests/engine/test_spike_i3_durability.py` sin tocar `pyproject.toml`,
   comprobado empíricamente antes de escribir el arnés completo), `uv run
-  pytest` con `QT_QPA_PLATFORM=offscreen` (2229 passed, 3 skipped, 274,69 s
+  pytest` con `QT_QPA_PLATFORM=offscreen` (2242 passed, 3 skipped, 302,34 s
   — ver «Consecuencias» sobre por qué se fijó esa variable a mano) y `git
   diff --check --cached` sin salida.
 
