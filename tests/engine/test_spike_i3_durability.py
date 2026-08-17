@@ -22,6 +22,7 @@ PR, junto con la comparativa de patrones y los límites conocidos.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from collections.abc import Mapping
@@ -530,6 +531,53 @@ def test_corrupcion_en_la_ultima_linea_terminada_no_se_trata_como_cola_truncada(
     assert journal_path.read_bytes() == corrupted_bytes, (
         "el anexo debe abortar sin truncar la línea corrupta ni escribir el registro nuevo"
     )
+
+
+def test_escritura_corta_de_os_write_no_pierde_el_delimitador_final(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CODEX-001: una escritura corta real de ``os.write`` no debe confirmarse como éxito.
+
+    Antes de esta corrección, ``append_durably`` llamaba a ``os.write(fd,
+    line)`` e ignoraba su valor de retorno. POSIX permite que ``os.write``
+    escriba menos bytes de los pedidos sin lanzar excepción, incluso sobre
+    un fichero regular; si esa escritura corta dejaba fuera justo el ``\\n``
+    final, el ``fsync`` posterior confirmaba en disco un registro con JSON y
+    checksum completos pero SIN su delimitador de línea. ``replay`` no puede
+    distinguir eso de una escritura interrumpida a mitad, así que lo trataba
+    como cola truncada y ``recover_invalid_tail`` lo borraba para siempre -un
+    anexo que `append_durably` había dado por bueno.
+
+    A diferencia de ``test_registro_completo_sin_delimitador_final_se_trata_
+    como_cola_truncada`` (que fabrica el fichero truncado a mano sin pasar
+    por el escritor), esta prueba recorre ``append_durably`` de verdad con un
+    ``os.write`` real recortado -mismo patrón de reproducción que describe el
+    hallazgo: sustituir la primera llamada por ``real_write(fd, data[:-1])``.
+    """
+    journal_path = tmp_path / "diario.jsonl"
+    registro = _sample_record(sequence=1)
+
+    real_write = os.write
+    llamadas = {"n": 0}
+
+    def escritura_corta_una_vez(fd: int, data: bytes) -> int:
+        llamadas["n"] += 1
+        if llamadas["n"] == 1 and len(data) > 1:
+            return real_write(fd, data[:-1])
+        return real_write(fd, data)
+
+    monkeypatch.setattr(os, "write", escritura_corta_una_vez)
+
+    append_durably(journal_path, registro, kill_at=None)
+
+    assert llamadas["n"] >= 2, "la escritura corta simulada debe haber ocurrido de verdad"
+    resultado = replay(journal_path)
+    assert resultado.discarded_tail_bytes == 0, (
+        "una escritura corta real de os.write no debe dejar cola descartable: "
+        "append_durably debe completar los bytes que faltan antes de confirmar éxito"
+    )
+    assert len(resultado.valid_records) == 1
+    assert resultado.valid_records[0]["aggregate_id"] == registro["aggregate_id"]
 
 
 def test_recover_invalid_tail_es_no_operativo_sin_cola_invalida(tmp_path: Path) -> None:

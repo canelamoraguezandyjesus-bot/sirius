@@ -86,6 +86,32 @@ def _self_kill() -> None:
     raise AssertionError("SIGKILL no puede bloquearse ni capturarse: inalcanzable")
 
 
+def _write_all(fd: int, data: bytes) -> None:
+    """Escribir todos los bytes de ``data`` en ``fd``, sin confirmar una escritura corta.
+
+    ``os.write`` puede devolver una cuenta de bytes escritos menor que
+    ``len(data)`` sin lanzar excepción -POSIX lo permite incluso en ficheros
+    regulares-, y el resultado son los mismos bytes en disco que dejaría una
+    escritura interrumpida a mitad: el registro queda sin su delimitador
+    ``\\n`` final. Sin este bucle, ``append_durably`` confirmaba éxito con
+    ese sufijo incompleto en disco; :func:`replay` lo trataba entonces como
+    cola truncada -indistinguible de un kill real- y `recover_invalid_tail`
+    lo descartaba para siempre, aunque el JSON y el checksum del registro
+    estuvieran completos (CODEX-001, incidencia #182). Reintentar hasta
+    completar ``data`` -o fallar sin haber llamado a ``fsync``- evita
+    confirmar ese estado a medias.
+    """
+    written = 0
+    while written < len(data):
+        count = os.write(fd, data[written:])
+        if count <= 0:
+            raise OSError(
+                f"os.write() devolvió {count} bytes escritos de {len(data) - written} "
+                "pendientes; no se puede confirmar el anexo"
+            )
+        written += count
+
+
 def canonical_bytes(record_without_checksum: Mapping[str, Any]) -> bytes:
     return json.dumps(record_without_checksum, sort_keys=True, ensure_ascii=False).encode("utf-8")
 
@@ -166,7 +192,7 @@ def append_durably(
             os.fsync(fd)  # incluso el prefijo truncado llega a disco: caso peor.
             _self_kill()
 
-        os.write(fd, line)
+        _write_all(fd, line)
 
         if kill_at is KillPoint.AFTER_WRITE_BEFORE_FSYNC:
             _self_kill()
