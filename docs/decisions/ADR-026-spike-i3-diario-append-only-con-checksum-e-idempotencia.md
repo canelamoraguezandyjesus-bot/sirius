@@ -159,20 +159,39 @@ sobrevivir a `kill -9` en cualquier punto del ciclo.
 Se implementó en `experiments/work_engine_spike_i3/` (desechable): el núcleo
 de escritura durable con seis puntos de corte nombrados
 (`durable_journal.py`), el subproceso real que los ejecuta
-(`writer_process.py`), la (de)serialización de `WorkItem`
+(`writer_process.py`), la (de)serialización de `WorkItem` y de `Run`
 (`entity_codec.py`), y un almacén mínimo del puerto sobre ese diario
-(`durable_store.py`) que cubre crear/activar/cancelar/fallar-a-salvo (no
-`Run` ni el resto — subconjunto deliberado, ver límite conocido §2).
+(`durable_store.py`) que cubre crear/activar/cancelar/fallar-a-salvo de
+`WorkItem` (no el CRUD de `Run` ni el resto — subconjunto deliberado, ver
+límite conocido §2). La matriz de seis puntos se repite también sobre una
+transición representativa de `Run` (`run_prepared`) directamente contra
+`append_durably`/`replay`, sin pasar por `durable_store.py` — corrección
+posrevisión (hallazgo CODEX-002, ronda 2): la definición de I3 exige
+`WorkItem` **y** `Run` en la evidencia, no solo en el CRUD.
+
+Corrección posrevisión adicional (hallazgo CODEX-001, ronda 2):
+`append_durably()` ahora empieza cada anexo llamando a
+`recover_invalid_tail()`, que recorta y sincroniza la cola inválida que un
+`kill -9` en `mid_write_torn` pudo dejar. Sin esto, un reintento se
+escribía (por `O_APPEND`) detrás de esa cola, y la línea fundida (cola +
+registro nuevo) seguía sin analizar como JSON válido — `replay` la
+descartaba entera, reintento incluido, indefinidamente. Detalle y prueba en
+`RESULTADOS.md` §"Recuperar la cola truncada antes de reintentar".
 
 ## Comprobación que la sostiene
 
 - **Matriz completa** en `experiments/work_engine_spike_i3/RESULTADOS.md` y
-  reproducida por `tests/engine/test_spike_i3_durability.py`: 10 pruebas, 6
-  puntos de corte nombrados (matados con `SIGKILL` inyectado por el propio
-  proceso escritor, subproceso real vía `subprocess.run`), más duplicación
-  por reintento tras reinicio, un ciclo de vida real reabierto desde cero, y
-  dos mutaciones. Comando ejecutado: `uv run pytest tests/engine/test_spike_i3_durability.py -v`
-  → **10 passed**.
+  reproducida por `tests/engine/test_spike_i3_durability.py`: 18 pruebas — 6
+  puntos de corte nombrados para `WorkItem` más los mismos 6 para `Run`
+  (matados con `SIGKILL` inyectado por el propio proceso escritor,
+  subproceso real vía `subprocess.run`), duplicación por reintento tras
+  reinicio, un ciclo de vida real reabierto desde cero, recuperación de la
+  cola truncada tras `mid_write_torn` (kill → reapertura → reintento
+  produce exactamente un evento nuevo preservando el prefijo válido), una
+  prueba dedicada de que `recover_invalid_tail` es no-operativa sobre un
+  diario ya limpio, y dos mutaciones. Comando ejecutado:
+  `uv run pytest tests/engine/test_spike_i3_durability.py -v` → **18
+  passed**.
 - **Mutación vista fallar en dos puntos concretos** (requisito 4): quitar la
   comparación de checksum hace que un registro con un byte alterado se
   acepte como válido (`test_mutacion_quitar_el_checksum_acepta_un_registro_corrupto`);
@@ -213,7 +232,8 @@ de escritura durable con seis puntos de corte nombrados
   workflows, prohibido por el alcance de esta incidencia); se documenta aquí
   para que quien revise A2 (o el propietario) decida si vale la pena
   igualarlo en el workflow real.
-- Queda pendiente, si el propietario lo quiere: extender el arnés a `Run`
-  para las nuevas piezas de A2, e implementar un índice en memoria para que
-  `_next_sequence`/la comprobación de idempotencia no relean el diario
-  entero en cada anexo (límite conocido #6).
+- Queda pendiente, si el propietario lo quiere: el CRUD completo de `Run`
+  en `durable_store.py` para las nuevas piezas de A2 (la matriz ya cubre su
+  transición de escritura, ver arriba), e implementar un índice en memoria
+  para que `_next_sequence`/la comprobación de idempotencia no relean el
+  diario entero en cada anexo (límite conocido #6).

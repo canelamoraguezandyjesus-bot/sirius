@@ -17,6 +17,14 @@ interrumpida: se descarta ella y todo lo que la sigue (ADR-026, límite
 conocido: un fichero solo puede corromperse de verdad en la cola si el único
 escritor es este arnés; una corrupción interna del medio no se distingue de
 una cola truncada).
+
+Antes de cada anexo, :func:`append_durably` llama a
+:func:`recover_invalid_tail`, que recorta y sincroniza esa misma cola
+inválida del fichero. Es necesario porque la apertura de escritura usa
+``O_APPEND``: sin recortar primero, un reintento escribiría su registro
+nuevo (válido) justo detrás de la cola vieja (inválida), y ambos se
+fundirían en una sola línea rota para `replay` -que la descartaría entera,
+incluido el registro nuevo del reintento.
 """
 
 from __future__ import annotations
@@ -66,6 +74,37 @@ def build_line(record_without_checksum: Mapping[str, Any]) -> bytes:
     return json.dumps(full, sort_keys=True, ensure_ascii=False).encode("utf-8") + b"\n"
 
 
+def recover_invalid_tail(journal_path: Path) -> int:
+    """Truncar y sincronizar la cola inválida del diario, si la hay.
+
+    Antes de cada anexo hay que dejar el diario en un estado del que
+    ``O_APPEND`` pueda partir de forma segura: si una escritura anterior
+    murió a mitad (p. ej. ``MID_WRITE_TORN``), sus bytes finales quedan sin
+    ``\\n`` de cierre, y anexar detrás de ellos con ``O_APPEND`` fundiría el
+    registro nuevo (válido) con la cola vieja (inválida) en una sola línea
+    para :func:`replay`, que la descartaría entera -incluido el registro
+    nuevo. Recortar la cola inválida ANTES de escribir evita esa fusión.
+
+    No repara corrupción interna (ADR-026, límite conocido: `replay` ya
+    trata cualquier registro corrupto que no esté al final como cola
+    truncada, y esta función recorta exactamente lo que `replay` ya
+    descartaría, ni un byte más). Devuelve cuántos bytes se recortaron.
+    """
+    if not journal_path.exists():
+        return 0
+    result = replay(journal_path)
+    if result.discarded_tail_bytes == 0:
+        return 0
+    valid_size = journal_path.stat().st_size - result.discarded_tail_bytes
+    fd = os.open(journal_path, os.O_WRONLY)
+    try:
+        os.ftruncate(fd, valid_size)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    return result.discarded_tail_bytes
+
+
 def append_durably(
     journal_path: Path,
     record_without_checksum: Mapping[str, Any],
@@ -74,12 +113,14 @@ def append_durably(
 ) -> None:
     """Anexar un registro al diario, con puntos de corte inyectables.
 
-    Sin ``kill_at`` es el camino normal: abrir, escribir, ``fsync``, cerrar.
-    Con ``kill_at``, se autotermina justo después de completar las acciones
-    hasta ese punto — nunca antes.
+    Sin ``kill_at`` es el camino normal: recuperar la cola inválida si la
+    hay, abrir, escribir, ``fsync``, cerrar. Con ``kill_at``, se autotermina
+    justo después de completar las acciones hasta ese punto — nunca antes.
     """
     if kill_at is KillPoint.BEFORE_OPEN:
         _self_kill()
+
+    recover_invalid_tail(journal_path)
 
     line = build_line(record_without_checksum)
 

@@ -30,11 +30,17 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from experiments.work_engine_spike_i3.durable_journal import KillPoint, append_durably, replay
+from experiments.work_engine_spike_i3.durable_journal import (
+    KillPoint,
+    append_durably,
+    recover_invalid_tail,
+    replay,
+)
 from experiments.work_engine_spike_i3.durable_store import DurableJsonlWorkItemStore
-from experiments.work_engine_spike_i3.entity_codec import work_item_to_dict
+from experiments.work_engine_spike_i3.entity_codec import run_to_dict, work_item_to_dict
 
 from sirius_engine.domain.events import AggregateType
+from sirius_engine.domain.run import prepare as prepare_run
 from sirius_engine.domain.work_item import WorkItemClass, create_work_item
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -61,6 +67,38 @@ def _sample_record(*, sequence: int = 1, idempotency_key: str | None = None) -> 
         "aggregate_id": work_item.work_id,
         "kind": "work_item_created",
         "entity": work_item_to_dict(work_item),
+        "idempotency_key": idempotency_key,
+    }
+
+
+def _sample_run_record(*, sequence: int = 1, idempotency_key: str | None = None) -> dict[str, Any]:
+    """Registro de una transición representativa de ``Run`` (incidencia #182, CODEX-002).
+
+    I3 exige un esqueleto desechable con ``WorkItem`` **y** ``Run``: la
+    matriz punto-de-muerte ya cubre `WorkItem` (`_sample_record`); esto
+    aporta la transición de `Run` correspondiente -`prepare`, la primera del
+    ciclo `PREPARED -> DISPATCHED -> RUNNING -> FINISHED` (§3.3)- para
+    demostrar que el mismo patrón de escritura (diario append-only, `fsync`,
+    checksum, idempotencia) también cubre a `Run`, sin implementar el resto
+    del puerto (ver límites conocidos en `RESULTADOS.md`).
+    """
+    run = prepare_run(
+        run_id="RUN-SPIKE-0001",
+        work_id="WI-SPIKE-0001",
+        paso="paso-1",
+        worker="worker-de-prueba",
+        work_package={"instrucciones": "ejecutar paso 1"},
+        intento=1,
+        deadline=datetime(2026, 8, 17, 13, 0, tzinfo=UTC),
+        now=_NOW,
+    )
+    return {
+        "sequence": sequence,
+        "occurred_at": _NOW.isoformat(),
+        "aggregate_type": AggregateType.RUN.value,
+        "aggregate_id": run.run_id,
+        "kind": "run_prepared",
+        "entity": run_to_dict(run),
         "idempotency_key": idempotency_key,
     }
 
@@ -132,6 +170,38 @@ def test_matriz_punto_de_muerte_por_resultado(kill_at: KillPoint, tmp_path: Path
         assert result.valid_records[0]["aggregate_id"] == record["aggregate_id"]
 
 
+@pytest.mark.parametrize("kill_at", tuple(KillPoint), ids=lambda kp: kp.value)
+def test_matriz_punto_de_muerte_por_resultado_run(kill_at: KillPoint, tmp_path: Path) -> None:
+    """Réplica de la matriz anterior para una transición de ``Run`` (CODEX-002).
+
+    Mismo patrón de escritura, mismo arnés (`writer_process` no distingue
+    tipo de agregado: solo anexa el registro que se le pase), la MISMA
+    garantía -nunca a medias, nunca dos veces- también vale para `Run`.
+    """
+    journal_path = tmp_path / "diario.jsonl"
+    record = _sample_run_record()
+
+    completed = _run_writer_subprocess(journal_path, record, kill_at, tmp_path)
+
+    assert completed.returncode == -9, (
+        f"el subproceso debía morir por SIGKILL exactamente en {kill_at.value}; "
+        f"returncode={completed.returncode!r} stderr={completed.stderr!r}"
+    )
+
+    result = replay(journal_path)
+    assert len(result.valid_records) in (0, 1), (
+        f"nunca a medias ni dos veces; matar en {kill_at.value} produjo "
+        f"{len(result.valid_records)} registros válidos para Run"
+    )
+    outcome = "no_ocurrio" if len(result.valid_records) == 0 else "ocurrio_una_vez"
+    assert outcome == EXPECTED_OUTCOME[kill_at], (
+        f"punto {kill_at.value} (Run): se esperaba {EXPECTED_OUTCOME[kill_at]}, salió {outcome}"
+    )
+    if outcome == "ocurrio_una_vez":
+        assert result.valid_records[0]["aggregate_id"] == record["aggregate_id"]
+        assert result.valid_records[0]["aggregate_type"] == AggregateType.RUN.value
+
+
 def test_reintento_tras_reinicio_no_duplica_por_idempotencia(tmp_path: Path) -> None:
     """Mitad "sin duplicación" del requisito: reintento tras reinicio, sin doble evento.
 
@@ -177,6 +247,70 @@ def test_reintento_tras_reinicio_no_duplica_por_idempotencia(tmp_path: Path) -> 
     assert reintentado == creado
     assert len(store_tras_reiniciar.list_events()) == 1
     assert len(replay(journal_path).valid_records) == 1
+
+
+def test_kill_mid_write_torn_reapertura_reintento_preserva_prefijo_y_produce_un_evento(
+    tmp_path: Path,
+) -> None:
+    """CODEX-001: un reintento tras `mid_write_torn` no debe quedarse en 0 registros para siempre.
+
+    Antes de esta corrección, `replay()` descartaba la cola inválida sin
+    truncarla, y como `append_durably` abre con `O_APPEND`, el reintento se
+    escribía DETRÁS de la cola torn -así que la línea fundida (cola torn +
+    registro nuevo) seguía sin analizar como JSON válido y `replay` seguía
+    descartándolo todo, reintento incluido. `recover_invalid_tail` (llamado
+    automáticamente al principio de cada `append_durably`) recorta esa cola
+    antes de escribir, así que el reintento aterriza limpio detrás del
+    último registro válido.
+
+    Escenario: (1) un registro válido ya asentado -el prefijo que debe
+    sobrevivir-, (2) un segundo registro que muere en `MID_WRITE_TORN`
+    -deja una cola inválida-, (3) "reapertura" (nuevo proceso) reintenta la
+    MISMA petición lógica sin matar esta vez.
+    """
+    journal_path = tmp_path / "diario.jsonl"
+    primero = _sample_record(sequence=1)
+    segundo = _sample_record(sequence=2)
+    segundo["aggregate_id"] = "WI-SPIKE-0002"
+
+    # (1) Prefijo válido ya asentado antes del incidente.
+    append_durably(journal_path, primero, kill_at=None)
+    assert len(replay(journal_path).valid_records) == 1
+
+    # (2) El escritor muere a mitad de escribir el segundo registro.
+    completed = _run_writer_subprocess(journal_path, segundo, KillPoint.MID_WRITE_TORN, tmp_path)
+    assert completed.returncode == -9
+
+    tras_el_kill = replay(journal_path)
+    assert len(tras_el_kill.valid_records) == 1, "el prefijo válido debe sobrevivir al kill"
+    assert tras_el_kill.valid_records[0]["aggregate_id"] == primero["aggregate_id"]
+    assert tras_el_kill.discarded_tail_bytes > 0, "la cola torn debe quedar marcada como inválida"
+
+    # (3) "Reapertura": un proceso nuevo reintenta la MISMA petición, sin kill esta vez.
+    recortados = recover_invalid_tail(journal_path)
+    assert recortados == tras_el_kill.discarded_tail_bytes
+    append_durably(journal_path, segundo, kill_at=None)
+
+    tras_el_reintento = replay(journal_path)
+    assert tras_el_reintento.discarded_tail_bytes == 0
+    assert len(tras_el_reintento.valid_records) == 2, (
+        "el reintento debe producir exactamente un evento nuevo, preservando el prefijo válido"
+    )
+    assert tras_el_reintento.valid_records[0]["aggregate_id"] == primero["aggregate_id"]
+    assert tras_el_reintento.valid_records[1]["aggregate_id"] == segundo["aggregate_id"]
+
+
+def test_recover_invalid_tail_es_no_operativo_sin_cola_invalida(tmp_path: Path) -> None:
+    """`recover_invalid_tail` no debe tocar un diario ya limpio (ni uno inexistente)."""
+    journal_path = tmp_path / "diario.jsonl"
+
+    assert recover_invalid_tail(journal_path) == 0
+
+    append_durably(journal_path, _sample_record(sequence=1), kill_at=None)
+    raw_antes = journal_path.read_bytes()
+
+    assert recover_invalid_tail(journal_path) == 0
+    assert journal_path.read_bytes() == raw_antes
 
 
 def test_almacen_durable_reproduce_un_ciclo_de_vida_real(tmp_path: Path) -> None:

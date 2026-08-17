@@ -1,8 +1,15 @@
-"""(De)serialización JSON de ``WorkItem`` para el diario durable del spike (ADR-026).
+"""(De)serialización JSON de ``WorkItem`` y ``Run`` para el diario durable del spike (ADR-026).
 
-Traduce instancias del dominio de A1 (:mod:`sirius_engine.domain.work_item`)
-a diccionarios JSON-seguros y de vuelta. No reimplementa ninguna transición
-del dominio: solo empaqueta y desempaqueta sus campos.
+Traduce instancias del dominio de A1 (:mod:`sirius_engine.domain.work_item`,
+:mod:`sirius_engine.domain.run`) a diccionarios JSON-seguros y de vuelta. No
+reimplementa ninguna transición del dominio: solo empaqueta y desempaqueta
+sus campos. El codec de ``Run`` existe para aportar, junto con la matriz de
+``tests/engine/test_spike_i3_durability.py``, al menos una transición
+representativa de ``Run`` a la evidencia del spike (incidencia #182,
+requisito de la definición de I3 en
+``docs/implementation/SIRIUS_WORK_ENGINE_ARQUITECTURA_MINIMA.md``); no
+implementa el CRUD completo de ``Run`` -eso queda fuera de I3, ver
+``RESULTADOS.md``.
 """
 
 from __future__ import annotations
@@ -12,6 +19,7 @@ from datetime import datetime
 from types import MappingProxyType
 from typing import Any
 
+from sirius_engine.domain.run import CancellationStatus, Run, RunOutcome, RunState
 from sirius_engine.domain.work_item import WorkItem, WorkItemClass, WorkItemPhase, WorkItemState
 
 
@@ -62,4 +70,57 @@ def work_item_from_dict(data: Mapping[str, Any]) -> WorkItem:
         resultado=None if resultado is None else dict(resultado),
         diagnostico=data["diagnostico"],
         paused_from=None if paused_from is None else WorkItemState(paused_from),
+    )
+
+
+def run_to_dict(run: Run) -> dict[str, Any]:
+    return {
+        "run_id": run.run_id,
+        "work_id": run.work_id,
+        "paso": run.paso,
+        "worker": run.worker,
+        "work_package": dict(run.work_package),
+        "intento": run.intento,
+        "estado": run.estado.value,
+        "deadline": run.deadline.isoformat(),
+        "created_at": run.created_at.isoformat(),
+        "updated_at": run.updated_at.isoformat(),
+        "desenlace": (run.desenlace.value if run.desenlace is not None else None),
+        "cancellation_status": run.cancellation_status.value,
+        "ultima_observacion": run.ultima_observacion,
+        "observado_en": (run.observado_en.isoformat() if run.observado_en is not None else None),
+        "resultado": (dict(run.resultado) if run.resultado is not None else None),
+        "diagnostico": run.diagnostico,
+        "recurso_mutable": run.recurso_mutable,
+        "sustituye_a": run.sustituye_a,
+        "motivo_sustitucion": run.motivo_sustitucion,
+        "invalidado_por_alcance": run.invalidado_por_alcance,
+    }
+
+
+def run_from_dict(data: Mapping[str, Any]) -> Run:
+    desenlace = data["desenlace"]
+    observado_en = data["observado_en"]
+    resultado = data["resultado"]
+    return Run(
+        run_id=data["run_id"],
+        work_id=data["work_id"],
+        paso=data["paso"],
+        worker=data["worker"],
+        work_package=MappingProxyType(dict(data["work_package"])),
+        intento=data["intento"],
+        estado=RunState(data["estado"]),
+        deadline=datetime.fromisoformat(data["deadline"]),
+        created_at=datetime.fromisoformat(data["created_at"]),
+        updated_at=datetime.fromisoformat(data["updated_at"]),
+        desenlace=None if desenlace is None else RunOutcome(desenlace),
+        cancellation_status=CancellationStatus(data["cancellation_status"]),
+        ultima_observacion=data["ultima_observacion"],
+        observado_en=None if observado_en is None else datetime.fromisoformat(observado_en),
+        resultado=None if resultado is None else dict(resultado),
+        diagnostico=data["diagnostico"],
+        recurso_mutable=data["recurso_mutable"],
+        sustituye_a=data["sustituye_a"],
+        motivo_sustitucion=data["motivo_sustitucion"],
+        invalidado_por_alcance=data["invalidado_por_alcance"],
     )

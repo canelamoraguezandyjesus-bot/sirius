@@ -16,14 +16,19 @@ sobrevivir a un `kill -9` en cualquier punto.
 
 ## Matriz punto-de-muerte × resultado
 
-Producida por `tests/engine/test_spike_i3_durability.py::test_matriz_punto_de_muerte_por_resultado`,
-parametrizada sobre los seis puntos nombrados de
+Producida por `tests/engine/test_spike_i3_durability.py::test_matriz_punto_de_muerte_por_resultado`
+(para una transición de `WorkItem`) y su réplica
+`test_matriz_punto_de_muerte_por_resultado_run` (misma matriz, para la
+transición representativa `run_prepared` de `Run` — ver «Cobertura de `Run`»,
+abajo), ambas parametrizadas sobre los seis puntos nombrados de
 `experiments/work_engine_spike_i3/durable_journal.KillPoint`. Cada punto mata
 el proceso escritor **exactamente ahí** (autoterminación con
 `os.kill(os.getpid(), signal.SIGKILL)` inyectada en el propio código de
 escritura, no un temporizador externo) y comprueba, desde un proceso PADRE
 que nunca muere, cuántos registros válidos quedan en el diario tras
-reproducirlo.
+reproducirlo. Los seis resultados de la tabla valen igual para ambos tipos
+de agregado: el arnés (`writer_process`, `append_durably`, `replay`) es
+agnóstico al contenido del registro.
 
 | # | Punto nombrado | Qué se completó antes de morir | Resultado tras reiniciar | ¿Por qué? |
 |---|---|---|---|---|
@@ -40,10 +45,29 @@ Además:
 |---|---|---|
 | Reintento de la misma petición lógica tras "reiniciar" (misma `idempotency_key`) | **Ocurrió una sola vez** (1 evento, no 2) | `test_reintento_tras_reinicio_no_duplica_por_idempotencia` |
 | Ciclo de vida real encadenado (crear → activar → fallar a salvo) reabierto desde cero | El estado reconstruido coincide exactamente con el que produjo la ejecución en vivo | `test_almacen_durable_reproduce_un_ciclo_de_vida_real` |
+| Kill en `mid_write_torn` → reapertura → reintento de la misma petición | **Ocurrió una sola vez** el reintento (1 evento nuevo), preservando cualquier prefijo válido previo | `test_kill_mid_write_torn_reapertura_reintento_preserva_prefijo_y_produce_un_evento` |
 
 **En ningún punto de la matriz el estado quedó "a medias" ni "duplicado".**
-Es exactamente uno de los dos resultados permitidos en los ocho casos
-probados.
+Es exactamente uno de los dos resultados permitidos en los quince casos
+probados (seis puntos × dos tipos de agregado, más los tres casos
+adicionales de la tabla).
+
+### Cobertura de `Run`
+
+La definición aprobada de I3 (`docs/implementation/SIRIUS_WORK_ENGINE_ARQUITECTURA_MINIMA.md:808`)
+exige un esqueleto desechable con `WorkItem` **y** `Run`. La matriz de arriba
+se repite íntegra (los mismos seis puntos, el mismo arnés, `writer_process`)
+sobre `run_prepared` -la primera transición del ciclo `PREPARED ->
+DISPATCHED -> RUNNING -> FINISHED` (§3.3)- en
+`test_matriz_punto_de_muerte_por_resultado_run`, con los mismos resultados
+que la tabla de arriba (`entity_codec.run_to_dict`/`run_from_dict` codifican
+`Run` igual que `work_item_to_dict`/`work_item_from_dict` codifican
+`WorkItem`; `rebuild_state`, de A1, ya distinguía ambos tipos de agregado
+sin cambios). Esto demuestra que el patrón de escritura durable no depende
+del tipo de agregado -es el mismo diario, el mismo `append_durably`, el
+mismo `replay`- sin implementar el resto del puerto de `Run` (ver límite
+conocido 5, abajo): `DurableJsonlWorkItemStore` sigue sin tener métodos de
+`Run`, eso es trabajo de A2.
 
 ### Cómo se simuló la escritura truncada (torn write)
 
@@ -54,6 +78,24 @@ los bytes del registro) y lo escribe (con `fsync`, el peor caso: incluso el
 prefijo corrupto llega a disco) antes de autoterminarse. Es la forma honesta
 de convertir "escritura interrumpida" en un punto NOMBRADO y determinista, en
 vez de perseguir una condición de carrera contra el planificador del kernel.
+
+### Recuperar la cola truncada antes de reintentar
+
+La fila 3 de la matriz («No ocurrió») describe el estado justo tras el
+`kill -9`, no lo que pasa al reintentar. Detectado en revisión: `replay()`
+descarta la cola inválida pero no la elimina del fichero, y
+`append_durably()` abre con `O_APPEND` — así que un reintento ingenuo
+escribiría su registro nuevo **detrás** de la cola vieja, y ambos se
+fundirían en una sola línea rota para `replay`, que seguiría descartándolo
+todo, reintento incluido (el reintento nunca "aterrizaba"). Corregido: cada
+llamada a `append_durably()` empieza recortando y sincronizando esa cola
+inválida (`durable_journal.recover_invalid_tail`, sin intentar reparar
+corrupción interna, solo el sufijo que `replay` ya descartaría) antes de
+escribir. Probado en
+`test_kill_mid_write_torn_reapertura_reintento_preserva_prefijo_y_produce_un_evento`:
+kill en `mid_write_torn` → "reapertura" (proceso nuevo) → reintento de la
+MISMA petición produce exactamente un evento nuevo, preservando cualquier
+prefijo válido anterior al incidente.
 
 ## Prueba por mutación (ADR-001 §3, requisito 4)
 
@@ -103,9 +145,15 @@ Dos mutaciones sembradas, cada una vista fallar en un caso concreto:
 4. **Concurrencia multiproceso.** El arnés asume un único escritor. Dos
    procesos anexando al mismo diario a la vez podrían intercalar escrituras
    de forma insegura; no probado ni protegido (sin bloqueo de fichero).
-5. **Cobertura parcial del puerto.** Solo `WorkItem` (crear/activar/cancelar/
-   fallar-a-salvo), no `Run`, no las fases del ciclo revisar-reparar. Basta
-   para demostrar el patrón de escritura; no es una migración de A2.
+5. **Cobertura parcial del puerto.** El patrón de escritura (diario
+   append-only + `fsync` + checksum + idempotencia) se demuestra también
+   sobre una transición representativa de `Run` (`run_prepared`, misma
+   matriz de seis puntos — ver «Cobertura de `Run`», abajo), pero
+   `DurableJsonlWorkItemStore` solo implementa el CRUD de `WorkItem`
+   (crear/activar/cancelar/fallar-a-salvo). No implementa el CRUD de `Run`
+   (`prepare`/`dispatch`/`confirm_running`/... ni las fases del ciclo
+   revisar-reparar). Basta para demostrar que el patrón de escritura vale
+   para ambos tipos de agregado; no es una migración de A2.
 6. **Rendimiento no evaluado.** `_next_sequence` y la comprobación de
    idempotencia releen el diario entero en cada anexo (O(n) por escritura).
    Aceptable para un spike con ficheros de prueba pequeños; un almacén de
