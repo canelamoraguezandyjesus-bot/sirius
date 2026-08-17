@@ -67,3 +67,41 @@ Escribe un único archivo JSON en la ruta exacta de la variable de entorno
 Si no escribes ese archivo, o no es JSON válido, o `verdict` no es uno de los
 valores anteriores, el paso siguiente lo tratará como un fallo y detendrá la
 incidencia de forma segura para revisión humana.
+
+### Escríbelo dos veces: al empezar y al terminar
+
+**Tu PRIMERA acción, antes de mirar nada, es escribir un veredicto provisional**
+en esa misma ruta:
+
+```json
+{
+  "verdict": "FAILED_SAFELY",
+  "summary": "Ronda interrumpida antes de terminar: este veredicto provisional se escribió al empezar y no llegó a sustituirse."
+}
+```
+
+**Tu ÚLTIMA acción, siempre, es sustituirlo por el definitivo.** No termines el
+turno sin haberlo hecho, pase lo que pase antes: hayas corregido todo, parte, o
+nada. Cada uno de esos desenlaces tiene su valor de `verdict`, así que ninguno
+es motivo para callarse.
+
+Por qué las dos veces y no solo la última: esta ejecución tiene un tope duro de
+turnos (`--max-turns`). Si lo agotas trabajando no hay «última acción» —te
+cortan a mitad y el archivo no existe—, que es exactamente la parada que esta
+regla viene a evitar. El provisional convierte ese corte en un diagnóstico
+honesto y tuyo, en vez de en un silencio.
+
+Y si terminas bien pero olvidas sustituirlo, sale `FAILED_SAFELY` con el trabajo
+hecho: molesto, pero seguro. El error cae del lado de detenerse para que lo mire
+una persona, nunca del de declarar un éxito falso.
+
+Escribirlo tú es lo que lo hace honesto. Si lo dejara puesto el workflow antes
+de arrancarte, la incidencia publicaría como tuyo un veredicto que nunca
+emitiste; y afirmar más de lo que el dato sostiene es justo el defecto que esta
+automatización lleva trece hallazgos corrigiendo.
+
+Esto no es una formalidad: ya ha ocurrido (incidencia #135) que una ronda
+trabajase durante decenas de turnos y terminase sin escribirlo. Ese trabajo se
+perdió entero y la incidencia quedó detenida esperando a una persona, que es
+justo lo que este paso existe para evitar. Un veredicto `FAILED_SAFELY` con un
+diagnóstico honesto vale infinitamente más que ningún veredicto.

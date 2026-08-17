@@ -44,9 +44,68 @@ case "$ROLE" in
     ;;
 esac
 
+# Identificador único de esta ejecución. Los veredictos de parada (FAILED_SAFELY,
+# BLOCKED_BY_DECISION y las paradas precheck de este script) llevaban antes un
+# marcador fijo por rol; dos paradas seguidas compartían marcador y la segunda
+# se dedupaba, ocultando su motivo (incidencia observada en el piloto sobre #66).
+# Con este sufijo cada parada publica su propio comentario con su diagnóstico,
+# sin perder la idempotencia dentro del mismo INTENTO. El alcance importa y es
+# estrecho: SIRIUS_RUN_TAG incluye GITHUB_RUN_ATTEMPT, así que solo dedupa entre
+# invocaciones que conservan run E intento. Reejecutar el workflow incrementa el
+# intento, cambia el marcador y publica una parada nueva; eso es deliberado
+# —cada reejecución merece su propio diagnóstico— y es justamente el motivo de
+# que el registro de convergencia necesite OTRO sufijo, sin el intento (ver
+# SIRIUS_ROUND_TAG, debajo). De los veredictos de avance,
+# READY_FOR_REVIEW, FIXED y REVIEW_APPROVED van anclados SOLO al head SHA, que
+# ya los hace únicos y estables.
+#
+# CHANGES_REQUESTED es la excepción y no debe alinearse con ellos «por
+# coherencia»: su marcador es head + run (ver SIRIUS_ROUND_TAG, justo debajo).
+# Arrastra el registro de convergencia, así que anclarlo solo al head o al
+# contenido haría que dos rondas con los mismos hallazgos sobre el mismo head se
+# dedupasen, congelando el historial justo en el escenario de estancamiento que
+# la política de convergencia existe para detectar.
 SIRIUS_RUN_TAG="${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1}"
+
+# Identificador de RONDA (sin el número de reintento). El marcador de
+# CHANGES_REQUESTED arrastra el registro de convergencia, y ese registro debe
+# publicarse UNA sola vez por ronda: con el sufijo por intento, reejecutar el
+# mismo run de Actions (attempt 2) generaba un marcador distinto, no dedupaba y
+# publicaba un SEGUNDO registro con el mismo head. La ronda siguiente veía dos
+# registros consecutivos sobre el mismo head y bloqueaba por `head-sin-avance`
+# un trabajo que sí había avanzado. Con el run como identificador, una
+# reejecución es idempotente y una ronda nueva —que siempre es un run nuevo—
+# sigue registrándose por separado.
 SIRIUS_ROUND_TAG="${GITHUB_RUN_ID:-manual}"
 
+# sanitize_untrusted_text — neutraliza, en texto que procede de un agente o de
+# Codex (y que puede arrastrar contenido de la PR), las TRES secuencias que los
+# escáneres deterministas de la incidencia reinterpretan al releer comentarios:
+#   - las vallas ``` (podrían cerrar antes de tiempo o falsificar el bloque
+#     "## OBSERVACIONES_ESTRUCTURADAS ```json ... ```" que consume el gate del
+#     corrector mediante sirius_extract_observations);
+#   - los marcadores "Head SHA:"/"Merge SHA:" (envenenarían sirius_extract_sha
+#     en verificaciones de head posteriores);
+#   - la apertura "<!--" de un comentario HTML. Esta es la que faltaba, y su
+#     ausencia era explotable: los marcadores que gobiernan la convergencia
+#     (`<!-- sirius-round:N -->`) y la racha de CI (`<!-- sirius-quality:...-->`)
+#     son comentarios HTML, y los publica la automatización, así que caen del
+#     lado CONFIABLE del filtro de autor. Un texto no confiable que colara uno
+#     de esos marcadores en un cuerpo publicado por el script quedaba contado
+#     por `parse_round_records` o por `ci_failure_streak`: bastaba para fabricar
+#     una ronda con cero hallazgos (progreso falso, corrector vivo sin cota) o
+#     un `sirius-quality:<sha>:success` que reinicia la racha de fallos de CI.
+#     Romper la apertura basta: ambos escáneres exigen el literal "<!--".
+# El contenido sigue siendo legible y fiel; solo se desactivan los marcadores.
+# (\u0027 es una comilla simple, escapada para no cerrar la cadena del programa jq.)
+sanitize_untrusted_text() {
+  jq -Rrs 'gsub("```"; "\u0027\u0027\u0027") | gsub("(?<p>[Hh][Ee][Aa][Dd]|[Mm][Ee][Rr][Gg][Ee])(\\s+[Ss][Hh][Aa]\\s*:)"; "\(.p)-sha:") | gsub("<!--"; "&lt;!--")'
+}
+sanitize_untrusted_json() {
+  jq -c 'walk(if type == "string" then gsub("```"; "\u0027\u0027\u0027") | gsub("(?<p>[Hh][Ee][Aa][Dd]|[Mm][Ee][Rr][Gg][Ee])(\\s+[Ss][Hh][Aa]\\s*:)"; "\(.p)-sha:") | gsub("<!--"; "&lt;!--") else . end)'
+}
+
+# transition <marker> <body_file> <add_label> <color> <desc>
 transition() {
   local marker="$1" body_file="$2" add="$3" color="$4" desc="$5"
   sirius_transition "$REPO" "$ISSUE" "$marker" "$body_file" \
@@ -54,7 +113,21 @@ transition() {
 }
 
 stop_safely() {
+  # stop_safely <reason-slug> <explicacion> — parada segura determinista
+  # (no depende del veredicto del agente: el propio script detectó algo
+  # inconsistente y no continúa). Siempre termina el script con estado !=0:
+  # es una anomalía que debe quedar visible como fallo del job (igual que
+  # los casos de ambigüedad de advance-sirius-after-quality.yml), no un
+  # rechazo esperado como el de la puerta de activación.
   local reason="$1" why="$2"
+  # El diagnóstico NO es texto de confianza: varias llamadas interpolan valores
+  # crudos del veredicto (`.verdict` cuando no está en el conjunto permitido,
+  # `.reviewed_head_sha` cuando no resuelve al head). Este comentario lo publica
+  # la automatización, así que cae del lado confiable del filtro de autor y lo
+  # leen después los escáneres deterministas: sin sanear, un marcador colado en
+  # esos valores se contaba como ronda o como resultado de Quality. Se sanea en
+  # este único punto, que es por donde pasan todas las paradas.
+  why="$(printf '%s' "$why" | sanitize_untrusted_text)"
   local marker="<!-- sirius-verdict:${ROLE}:precheck:${reason}:${SIRIUS_RUN_TAG} -->"
   local body_file
   body_file="$(mktemp)"
@@ -62,12 +135,57 @@ stop_safely() {
     "$marker" \
     "🔴 **Me he detenido de forma segura**" \
     "$why" >"$body_file"
+  # Enlace al job (incidencia #135). Una parada que solo dice "no escribió
+  # veredicto" obliga a buscar a mano dónde mirar. Esto es un HECHO, no una
+  # medida: no se calcula ni se interpreta nada, así que no puede ser falso.
+  #
+  # Hubo un intento anterior de publicar aquí un diagnóstico medido —commits
+  # nuevos, si el head avanzó, estado del árbol—. Se retiró: cinco rondas de
+  # revisión encontraron siete defectos en él, TODOS de la misma familia (una
+  # afirmación que el dato no sostenía), y además podía volver rojo el job que
+  # venía a diagnosticar. Un diagnóstico al que se le cree tiene que decir solo
+  # lo que sostiene, y aquí lo único que se sostiene sin medir es dónde mirar.
+  if [ -n "${GITHUB_RUN_ID:-}" ] && [ -n "${GITHUB_REPOSITORY:-}" ]; then
+    # El intento forma parte de la dirección; no es un adorno. `/actions/runs/ID`
+    # resuelve SIEMPRE al último intento, y SIRIUS_RUN_TAG incluye el intento a
+    # propósito para que cada reejecución publique su propia parada. Sin
+    # `/attempts/N`, la parada del intento 1 enlazaría al registro del intento 2:
+    # un enlace que promete «esta ejecución» y entrega otra. Es exactamente el
+    # defecto que retiró al diagnóstico medido —afirmar más de lo que el dato
+    # sostiene— y aquí se evita sin medir nada, componiendo la dirección con los
+    # identificadores que Actions ya da por ciertos.
+    local run_url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+    if [ -n "${GITHUB_RUN_ATTEMPT:-}" ]; then
+      run_url="${run_url}/attempts/${GITHUB_RUN_ATTEMPT}"
+    fi
+    # «Ejecución», no «job»: la dirección apunta al run, que puede contener
+    # varios jobs. Decir «job» ya sería afirmar de más.
+    printf '\n- Registro de esta ejecución: %s\n' "$run_url" >>"$body_file"
+  fi
+
   if ! transition "$marker" "$body_file" "sirius:failed-safely" "D93F0B" \
     "Estado temporal: fallo operativo detenido de forma segura"; then
-    # Si el historial es ilegible, la transición no puede deduplicar y se
-    # detiene antes de mutar estado. El aviso de parada no es un registro de
-    # ronda ni gobierna la convergencia y su marcador incluye el run, por lo que
-    # publicarlo directamente conserva trazabilidad sin crear una ronda falsa.
+    # La transición verificada se niega a actuar cuando no puede leer el
+    # historial: sin lectura no hay deduplicación, y mutar a ciegas es lo que
+    # 6e02b30 cerró. Pero perder el diagnóstico de una parada segura es peor que
+    # arriesgar un duplicado, así que aquí se aplica el estado y se publica el
+    # aviso por la vía directa.
+    #
+    # El duplicado es un riesgo REAL dentro de UNA SOLA ejecución, y conviene no
+    # minimizarlo: el POST de `gh issue comment` no es idempotente y
+    # `sirius_retry` lo repite, así que un resultado ambiguo —GitHub acepta la
+    # petición y la respuesta se pierde— ya deja una copia publicada; si además
+    # se agotan los reintentos, `sirius_comment_once` devuelve fallo y esta vía
+    # publica otra. El marcador acota las ejecuciones DISTINTAS; no elimina los
+    # resultados ambiguos del POST.
+    #
+    # Es tolerable para ESTE marcador porque no lo cuenta ninguna medida:
+    # `parse_round_records` exige `<!-- sirius-round:N -->` con su bloque
+    # `## RONDA_HALLAZGOS` y `ci_failure_streak` exige marcadores
+    # `sirius-quality:`. Un aviso `precheck` repetido es ruido en la incidencia,
+    # no puede falsear la convergencia ni la racha de CI, y perder el
+    # diagnóstico sí sería un fallo silencioso. NO se generalice a los registros
+    # de ronda, donde publicar sin deduplicar sí falsearía la medida.
     echo "::warning::No se pudo registrar la parada segura (${reason}) mediante la transición verificada; aplicando el estado y el aviso de diagnóstico." >&2
     if ! sirius_ensure_label "$REPO" "sirius:failed-safely" "D93F0B" \
       "Estado temporal: fallo operativo detenido de forma segura" \
@@ -82,6 +200,7 @@ stop_safely() {
   exit 1
 }
 
+# --- 1) El veredicto debe existir y ser JSON válido con "verdict" -------------
 if [ ! -s "$VERDICT_FILE" ]; then
   stop_safely "sin-veredicto" \
     "El rol \`${ROLE}\` no escribió ningún veredicto. Sin un resultado estructurado no puedo saber en qué quedó el trabajo."
@@ -90,13 +209,6 @@ if ! verdict="$(jq -r '.verdict // empty' "$VERDICT_FILE" 2>/dev/null)" || [ -z 
   stop_safely "veredicto-invalido" \
     "El archivo de veredicto del rol \`${ROLE}\` no es JSON válido o no tiene el campo \`verdict\`."
 fi
-
-sanitize_untrusted_text() {
-  jq -Rrs 'gsub("```"; "\u0027\u0027\u0027") | gsub("(?<p>[Hh][Ee][Aa][Dd]|[Mm][Ee][Rr][Gg][Ee])(\\s+[Ss][Hh][Aa]\\s*:)"; "\(.p)-sha:")'
-}
-sanitize_untrusted_json() {
-  jq -c 'walk(if type == "string" then gsub("```"; "\u0027\u0027\u0027") | gsub("(?<p>[Hh][Ee][Aa][Dd]|[Mm][Ee][Rr][Gg][Ee])(\\s+[Ss][Hh][Aa]\\s*:)"; "\(.p)-sha:") else . end)'
-}
 
 summary="$(jq -r '.summary // "(sin resumen)"' "$VERDICT_FILE" 2>/dev/null | sanitize_untrusted_text)"
 
@@ -110,7 +222,14 @@ if ! printf '%s\n' "$allowed" | tr ' ' '\n' | grep -Fxq "$verdict"; then
     "El rol \`${ROLE}\` devolvió el veredicto \`${verdict}\`, que no es uno de los permitidos para ese rol (\`${allowed}\`)."
 fi
 
+# --- 2) Veredictos que exigen localizar y verificar la PR ----------------------
+# `locate_verified_pr` NUNCA llama a `stop_safely` ni a `exit` directamente:
+# se invoca mediante sustitución de comandos (`$(...)`), que corre en una
+# subshell, así que un `exit` ahí dentro solo mataría la subshell y el script
+# principal seguiría con variables vacías sin que nadie lo notara. En su
+# lugar imprime un resultado con tabuladores que el llamador interpreta.
 locate_verified_pr() {
+  # Salida: "OK\t<pr>\t<head>" o "FAIL\t<motivo-slug>\t<explicacion>".
   mapfile -t pr_numbers < <(sirius_find_pr_for_issue "$REPO" "$ISSUE")
   if [ "${#pr_numbers[@]}" -eq 0 ]; then
     printf 'FAIL\tsin-pr\tEl rol `%s` reporto `%s`, pero no encuentro ninguna PR asociada a esta incidencia (falta el comentario con su URL).\n' "$ROLE" "$verdict"
@@ -138,6 +257,11 @@ locate_verified_pr() {
   printf 'OK\t%s\t%s\n' "$pr" "$pr_head"
 }
 
+# resolve_pr — SIN argumentos: opera sobre globales, no sobre parámetros. Lee
+# `verdict` (a través de locate_verified_pr, que lo usa en sus mensajes) y deja
+# escritos `pr_number` y `head_sha`. Ejecuta locate_verified_pr y aplica
+# stop_safely si falló (esto sí corre en el shell principal, no en la subshell).
+# Termina el script si falla.
 resolve_pr() {
   local result status field2 field3
   result="$(locate_verified_pr)"
@@ -151,6 +275,9 @@ resolve_pr() {
   head_sha="$field3"
 }
 
+# sha_matches <sha-completo> <candidato> — 0 solo si el candidato resuelve sin
+# ambigüedad al SHA completo: igual, o una abreviatura hexadecimal de al menos
+# 7 caracteres que sea prefijo exacto. Nunca acepta cadenas vacías o no hex.
 sha_matches() {
   local full cand
   full="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
@@ -167,6 +294,13 @@ sha_matches() {
   return 1
 }
 
+# require_reviewed_head — endurecimiento de la revisión (contrato §4.1):
+# cualquier resultado de revisión (aprobación O cambios solicitados) debe
+# demostrar sobre qué versión se pronunció. Exige que el JSON declare
+# `reviewed_head_sha`, que coincida con el head actual de la PR (pr_number/
+# head_sha ya resueltos por resolve_pr) y que ese head siga siendo el último
+# que superó Quality según la incidencia. Si cualquiera de los tres difiere,
+# parada segura: nunca se aplica un veredicto sobre una versión distinta.
 require_reviewed_head() {
   local reviewed_sha scan_file last_ci_sha
   reviewed_sha="$(jq -r '.reviewed_head_sha // empty' "$VERDICT_FILE" 2>/dev/null)"
@@ -241,8 +375,14 @@ case "$verdict" in
       stop_safely "sin-observaciones" \
         "El revisor pidió \`CHANGES_REQUESTED\` sin ninguna observación estructurada; no hay nada concreto que corregir."
     fi
+    # Mismo endurecimiento que la aprobación (contrato §4.1): tampoco se
+    # solicita corrección a partir de una revisión hecha sobre otra versión.
     resolve_pr
     require_reviewed_head
+    # Las observaciones arrastran texto no confiable (hallazgos de Codex,
+    # contenido de la PR): se neutralizan sus marcadores ANTES de incrustarlas
+    # en el comentario, para que el bloque OBSERVACIONES_ESTRUCTURADAS que el
+    # gate del corrector re-extrae no pueda romperse ni falsificarse.
     observations="$(printf '%s' "$observations" | sanitize_untrusted_json)"
     if [ -z "$observations" ] || [ "$observations" = "[]" ]; then
       stop_safely "sanitizacion-fallida" \
@@ -251,6 +391,10 @@ case "$verdict" in
     readable="$(printf '%s' "$observations" | jq -r '.[] | "- **\(.id // "?")** (\(.severidad // "?")) \(.archivo // "?"): \(.problema // "?")\n  - Criterio esperado: \(.criterio_esperado // "?")\n  - Prueba: \(.prueba // "?")\n  - Límites de corrección: \(.limites_correccion // "?")"')"
     pr_hint="https://github.com/${REPO}/pull/${pr_number}"
 
+    # Registro de convergencia (contrato §5, v1.5). Sustituye al contador ciego
+    # de ciclos: publica las huellas estables de los hallazgos de esta ronda
+    # para que la puerta del corrector pueda medir progreso real entre rondas
+    # en vez de detenerse en un número fijo.
     if ! round_number="$(sirius_next_round_number "$REPO" "$ISSUE")"; then
       stop_safely "historial-de-rondas-ilegible" \
         "No he podido leer el historial de rondas de esta incidencia, así que no puedo numerar esta ronda sin arriesgarme a repetir un número ya usado y corromper la medida de convergencia. Me detengo de forma segura."
@@ -268,6 +412,15 @@ case "$verdict" in
     round_json="$(cat "$round_record")"
     rm -f "$round_verdict" "$round_record"
 
+    # El marcador incluye head Y run: NO puede depender solo del contenido. Si
+    # dos rondas distintas encontraran exactamente los mismos hallazgos —el caso
+    # de estancamiento que la política de convergencia existe para detectar—, un
+    # marcador por contenido se deduparía y la segunda ronda no publicaría su
+    # registro. El historial se congelaría en una sola ronda y `sin-progreso` y
+    # `head-sin-avance` no podrían dispararse nunca: justo el escenario que debe
+    # terminar sería el único que no termina. Con head + run, una reejecución del
+    # mismo run sigue siendo idempotente y una ronda nueva siempre se registra.
+    # El sufijo es el de RONDA (run sin intento): ver SIRIUS_ROUND_TAG.
     marker="<!-- sirius-verdict:reviewer:changes:${head_sha}:${SIRIUS_ROUND_TAG} -->"
     body_file="$(mktemp)"
     {

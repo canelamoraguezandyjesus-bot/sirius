@@ -211,6 +211,23 @@ def parse_round_records(text: str) -> list[dict[str, Any]]:
     análisis: la decisión se toma con los registros que sí son válidos.
     """
     records: list[dict[str, Any]] = []
+    # Una ronda cuenta UNA vez por número, aunque su registro aparezca repetido.
+    #
+    # No es defensa contra un tercero —la lectura previa ya filtra por autor—
+    # sino contra nosotros mismos: publicar un comentario contra la API de GitHub
+    # no puede ser exactamente-una-vez, porque el POST no es idempotente y no hay
+    # clave de idempotencia del lado del servidor. Un resultado ambiguo (GitHub
+    # acepta y la respuesta se pierde) deja el comentario publicado, y ni la
+    # ejecución que lo publicó ni la siguiente pueden demostrar que llegó si la
+    # lectura todavía no lo refleja. Perseguir la unicidad en la escritura es
+    # perseguir algo inalcanzable; lo que sí está en nuestra mano es que un
+    # duplicado no signifique nada distinto de un original.
+    #
+    # Sin esto, dos copias del registro de la ronda N se leían como dos rondas
+    # consecutivas sobre el mismo head, y la puerta bloqueaba por
+    # `head-sin-avance` un trabajo que sí avanzaba. `ci_failure_streak` ya es
+    # idempotente por el mismo motivo: cuenta heads distintos, no marcadores.
+    seen_rounds: set[int] = set()
     for marker_round, raw in ROUND_RECORD_RE.findall(text):
         try:
             record = json.loads(raw)
@@ -230,6 +247,11 @@ def parse_round_records(text: str) -> list[dict[str, Any]]:
         # excepción al ordenar (que dejaría la decisión vacía y bloquearía toda
         # ronda posterior).
         record["round"] = int(marker_round)
+        # La comprobación va aquí, después de validar el JSON: si la primera
+        # copia estuviera corrupta y la segunda fuese legible, gana la legible.
+        if record["round"] in seen_rounds:
+            continue
+        seen_rounds.add(record["round"])
         record["fingerprints"] = {
             str(item.get("fingerprint") or "") for item in normalized if item.get("fingerprint")
         }
