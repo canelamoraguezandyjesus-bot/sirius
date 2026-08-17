@@ -13,14 +13,18 @@ del registro más ``checksum_sha256``, calculado sobre la codificación
 canónica (claves ordenadas) del resto de campos. Al reproducir
 (:func:`replay`), la primera línea que no analiza como JSON válido o cuyo
 checksum no coincide se trata como cola truncada por una escritura
-interrumpida SOLO si no hay ningún registro completo y válido después de
-ella: se descarta ella y todo lo que la sigue (ADR-026). Si en cambio hay al
-menos un registro válido después de la línea inválida, la línea inválida no
-puede ser una cola truncada -una escritura interrumpida deja basura solo al
-final, nunca un registro bueno después de la basura-, así que es corrupción
-interna del medio: :func:`replay` lanza :class:`InternalCorruptionError` en
-vez de descartar en silencio, porque recortar ahí perdería registros válidos
-que sí llegaron a completarse.
+interrumpida SOLO si, a la vez, (a) no hay ningún registro completo y válido
+después de ella, y (b) esa línea inválida no termina en su propio salto de
+línea -es decir, es el sufijo SIN terminar al final del fichero-: en ese caso
+se descarta ella y todo lo que la sigue (ADR-026). Si hay al menos un
+registro válido después de la línea inválida, o si la línea inválida sí
+termina en su propio `\n` (una línea completa que se escribió entera pero
+cuyo contenido o checksum no cuadra), no puede ser una cola truncada -una
+escritura interrumpida por este escritor solo deja basura SIN terminar al
+final, nunca una línea completa ni un registro bueno después de la basura-,
+así que es corrupción interna del medio: :func:`replay` lanza
+:class:`InternalCorruptionError` en vez de descartar en silencio, porque
+recortar ahí perdería registros válidos que sí llegaron a completarse.
 
 Antes de cada anexo, :func:`append_durably` llama a
 :func:`recover_invalid_tail`, que recorta y sincroniza esa misma cola
@@ -45,14 +49,17 @@ from typing import Any
 
 
 class InternalCorruptionError(RuntimeError):
-    """El diario tiene una línea corrupta con registros completos y válidos después de ella.
+    """El diario tiene una línea corrupta que no puede ser cola truncada.
 
-    No puede ser una cola truncada por una escritura interrumpida (esa solo
-    deja basura al final del fichero); es corrupción interna del medio.
-    Recortar perdería registros válidos, así que :func:`replay` se niega a
-    hacerlo y :func:`recover_invalid_tail`/:func:`append_durably` propagan
-    este error en vez de anexar (ADR-026, límite conocido: reparar el medio
-    o aportar redundancia queda fuera de alcance de este spike).
+    Dos señales, cualquiera de las dos basta: hay registros completos y
+    válidos después de la línea inválida, o la propia línea inválida termina
+    en su salto de línea (una línea que se escribió entera, así que no es el
+    sufijo sin terminar que deja una escritura interrumpida). En ambos casos
+    es corrupción interna del medio, no una cola truncada. Recortar perdería
+    registros válidos, así que :func:`replay` se niega a hacerlo y
+    :func:`recover_invalid_tail`/:func:`append_durably` propagan este error
+    en vez de anexar (ADR-026, límite conocido: reparar el medio o aportar
+    redundancia queda fuera de alcance de este spike).
     """
 
 
@@ -218,12 +225,23 @@ def replay(journal_path: Path) -> ReplayResult:
     if first_invalid_index is None:
         return ReplayResult(valid_records=tuple(valid), discarded_tail_bytes=0)
 
+    invalid_line = lines[first_invalid_index]
     remaining_lines = lines[first_invalid_index + 1 :]
-    if any(_parse_valid_line(line_bytes) is not None for line_bytes in remaining_lines):
+    has_valid_record_after = any(
+        _parse_valid_line(line_bytes) is not None for line_bytes in remaining_lines
+    )
+    if has_valid_record_after:
         raise InternalCorruptionError(
             f"{journal_path}: la línea {first_invalid_index + 1} es inválida pero hay "
             "registros completos y válidos después -no es una cola truncada por una "
             "escritura interrumpida, sino corrupción interna del medio"
+        )
+    if invalid_line.endswith(b"\n"):
+        raise InternalCorruptionError(
+            f"{journal_path}: la línea {first_invalid_index + 1} es inválida pero "
+            "termina en su propio salto de línea -una escritura interrumpida por este "
+            "escritor solo deja un sufijo SIN terminar al final del fichero, así que "
+            "una línea completa e inválida es corrupción interna del medio, no cola truncada"
         )
 
     discarded_tail_bytes = len(raw) - consumed

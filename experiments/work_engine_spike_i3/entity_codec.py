@@ -67,7 +67,7 @@ def work_item_from_dict(data: Mapping[str, Any]) -> WorkItem:
         created_at=datetime.fromisoformat(data["created_at"]),
         updated_at=datetime.fromisoformat(data["updated_at"]),
         evidencia=tuple(data["evidencia"]),
-        resultado=None if resultado is None else dict(resultado),
+        resultado=None if resultado is None else MappingProxyType(dict(resultado)),
         diagnostico=data["diagnostico"],
         paused_from=None if paused_from is None else WorkItemState(paused_from),
     )

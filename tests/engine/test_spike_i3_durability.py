@@ -42,13 +42,14 @@ from experiments.work_engine_spike_i3.durable_store import DurableJsonlWorkItemS
 from experiments.work_engine_spike_i3.entity_codec import (
     run_from_dict,
     run_to_dict,
+    work_item_from_dict,
     work_item_to_dict,
 )
 
 from sirius_engine.domain.events import AggregateType
 from sirius_engine.domain.run import Run
 from sirius_engine.domain.run import prepare as prepare_run
-from sirius_engine.domain.work_item import WorkItemClass, create_work_item
+from sirius_engine.domain.work_item import WorkItem, WorkItemClass, create_work_item
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _NOW = datetime(2026, 8, 17, 12, 0, tzinfo=UTC)
@@ -76,6 +77,35 @@ def _sample_record(*, sequence: int = 1, idempotency_key: str | None = None) -> 
         "entity": work_item_to_dict(work_item),
         "idempotency_key": idempotency_key,
     }
+
+
+def _sample_work_item_entregado() -> WorkItem:
+    """Un ``WorkItem`` llevado hasta ``deliver()`` (CLAUDE-REV-001).
+
+    Recorre el ciclo de fases real (§3.4: PREPARAR -> EJECUTAR -> COMPROBAR
+    -> REVISAR -> ENTREGAR) en vez de construir el estado ``DELIVERED`` a
+    mano, para que la prueba de round-trip parta del mismo WorkItem que
+    produciría el dominio, con `resultado` ya congelado por `deliver()`.
+    """
+    return (
+        create_work_item(
+            work_id="WI-SPIKE-0001",
+            peticion_original="texto literal de la petición",
+            objetivo="objetivo normalizado y confirmado",
+            contexto_origen=("incidencia:182",),
+            entregable="un entregable de prueba",
+            criterio_terminado="el entregable existe y pasa sus pruebas",
+            limites={"presupuesto_turnos": 5},
+            prioridad=1,
+            clase=WorkItemClass.PROGRAMACION,
+            now=_NOW,
+        )
+        .activate(now=_NOW)
+        .begin_execution(now=_NOW)
+        .begin_check(now=_NOW)
+        .begin_review(now=_NOW)
+        .approve_review(now=_NOW)
+    )
 
 
 def _sample_run() -> Run:
@@ -379,6 +409,61 @@ def test_corrupcion_interna_con_registros_validos_despues_no_trunca_ni_anexa(
     )
 
 
+def test_corrupcion_en_la_ultima_linea_terminada_no_se_trata_como_cola_truncada(
+    tmp_path: Path,
+) -> None:
+    """CODEX-001: una última línea COMPLETA (con su ``\\n``) pero corrupta no es cola truncada.
+
+    Antes de esta corrección, `replay()` solo miraba si había registros
+    válidos DESPUÉS de la línea inválida para decidir si era cola truncada;
+    si la línea inválida era la última del fichero, `remaining_lines`
+    quedaba vacío y la trataba como cola truncada sin más comprobación,
+    aunque esa línea terminase en su propio salto de línea -algo que una
+    escritura interrumpida por este escritor nunca deja: solo deja un
+    sufijo SIN terminar al final (ver `MID_WRITE_TORN` en
+    `durable_journal.py`). Un `append_durably` posterior habría llamado a
+    `recover_invalid_tail`, que habría truncado y perdido ese registro para
+    siempre.
+
+    Escenario: dos registros asentados con normalidad; se corrompe el
+    segundo (JSON bien formado, checksum ya no coincide) sin tocar su
+    salto de línea final, así que sigue siendo la última línea completa
+    del fichero. `replay` debe lanzar `InternalCorruptionError` sin tocar
+    el fichero, y un `append_durably` posterior debe abortar igual en vez
+    de truncar la línea corrupta y perderla.
+    """
+    journal_path = tmp_path / "diario.jsonl"
+    primero = _sample_record(sequence=1)
+    segundo = _sample_record(sequence=2)
+    segundo["aggregate_id"] = "WI-SPIKE-0002"
+
+    append_durably(journal_path, primero, kill_at=None)
+    append_durably(journal_path, segundo, kill_at=None)
+
+    lines = journal_path.read_bytes().splitlines(keepends=True)
+    assert len(lines) == 2, "el escenario exige exactamente dos registros asentados"
+    assert lines[-1].endswith(b"\n"), "la línea corrompida debe seguir terminada"
+    lines[-1] = lines[-1].replace(b"WI-SPIKE-0002", b"WI-SPIKE-CORRUPTA", 1)
+    assert b"WI-SPIKE-CORRUPTA" in lines[-1], "la mutación debe tocar de verdad los bytes"
+    assert lines[-1].endswith(b"\n"), "la mutación no debe quitar el salto de línea final"
+    corrupted_bytes = b"".join(lines)
+    journal_path.write_bytes(corrupted_bytes)
+
+    with pytest.raises(InternalCorruptionError):
+        replay(journal_path)
+    assert journal_path.read_bytes() == corrupted_bytes, (
+        "detectar corrupción interna no debe tocar el fichero"
+    )
+
+    tercero = _sample_record(sequence=3)
+    tercero["aggregate_id"] = "WI-SPIKE-0003"
+    with pytest.raises(InternalCorruptionError):
+        append_durably(journal_path, tercero, kill_at=None)
+    assert journal_path.read_bytes() == corrupted_bytes, (
+        "el anexo debe abortar sin truncar la línea corrupta ni escribir el registro nuevo"
+    )
+
+
 def test_recover_invalid_tail_es_no_operativo_sin_cola_invalida(tmp_path: Path) -> None:
     """`recover_invalid_tail` no debe tocar un diario ya limpio (ni uno inexistente)."""
     journal_path = tmp_path / "diario.jsonl"
@@ -410,6 +495,30 @@ def test_run_from_dict_round_trip_resultado_inmutable() -> None:
     reconstruido = run_from_dict(run_to_dict(terminado))
 
     assert reconstruido == terminado
+    assert isinstance(reconstruido.resultado, MappingProxyType)
+    assert not isinstance(reconstruido.resultado, dict)
+    with pytest.raises(TypeError):
+        reconstruido.resultado["salida"] = "mutado"  # type: ignore[index]
+
+
+def test_work_item_from_dict_round_trip_resultado_inmutable() -> None:
+    """CLAUDE-REV-001: `work_item_from_dict` debe restaurar `resultado` inmutable, como `deliver()`.
+
+    `WorkItem` es una instantánea `frozen`, y `WorkItem.deliver()` congela
+    `resultado` con `MappingProxyType` a propósito: nadie debe poder alterar
+    retroactivamente el resultado de un `WorkItem` ya entregado sin pasar
+    por una transición y un evento nuevos. Antes de esta corrección,
+    `work_item_from_dict` restauraba `resultado` como un `dict` mutable
+    normal, así que cualquier consumidor podía romper esa invariante
+    después de reproducir el diario -el mismo defecto que CODEX-002 ya
+    corrigió para `Run.resultado` en `run_from_dict`.
+    """
+    entregado = _sample_work_item_entregado().deliver(resultado={"salida": "ok"}, now=_NOW)
+    assert isinstance(entregado.resultado, MappingProxyType)
+
+    reconstruido = work_item_from_dict(work_item_to_dict(entregado))
+
+    assert reconstruido == entregado
     assert isinstance(reconstruido.resultado, MappingProxyType)
     assert not isinstance(reconstruido.resultado, dict)
     with pytest.raises(TypeError):
@@ -482,8 +591,11 @@ def test_mutacion_quitar_el_checksum_acepta_un_registro_corrupto(tmp_path: Path)
     assert corrupted != raw, "la mutación debe tocar de verdad los bytes del fichero"
     journal_path.write_bytes(corrupted)
 
-    # Implementación real: el checksum no coincide -> se descarta como cola corrupta.
-    assert replay(journal_path).valid_records == ()
+    # Implementación real: el checksum no coincide y la línea sigue terminada
+    # en su propio salto de línea -no es cola truncada, es corrupción interna
+    # del medio (CODEX-001)- así que replay se niega a descartarla en silencio.
+    with pytest.raises(InternalCorruptionError):
+        replay(journal_path)
 
     # Variante mutada (sin comprobar el checksum): acepta el registro corrupto.
     assert len(_replay_sin_checksum(journal_path)) == 1
