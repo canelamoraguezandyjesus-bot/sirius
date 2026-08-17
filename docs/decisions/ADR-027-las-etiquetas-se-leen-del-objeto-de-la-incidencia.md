@@ -1,6 +1,9 @@
 # ADR-027 — Las etiquetas se leen del objeto de la incidencia, nunca del endpoint `/issues/{n}/labels`
 
-- Estado: PROPUESTO
+- Estado: PROPUESTO — **revisado parcialmente el mismo día por
+  [ADR-028](ADR-028-una-averia-transitoria-no-justifica-una-invariante-permanente.md): los
+  puntos 2 y 3 de la decisión (la prohibición del endpoint y su prueba) quedan retirados; los
+  puntos 1 y 4 siguen en pie.**
 - Fecha: 2026-08-17
 - Aprobación: la fusión de la PR de esta rama por el propietario.
 
