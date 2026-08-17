@@ -8,8 +8,10 @@ future durable implementation (requisito 9).
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -21,6 +23,21 @@ from sirius_engine.ports.store import WorkEngineStore
 #: Every store implementation the contract tests must pass against. A1 only
 #: has the in-memory one; a future durable store is added here, unchanged.
 STORE_FACTORIES = (InMemoryWorkEngineStore,)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Añadir la raíz del repo a ``sys.path``.
+
+    ``experiments/`` vive fuera de ``src/`` (que sí está en ``sys.path`` vía
+    el ``.pth`` que instala ``uv sync``). Con ``--import-mode=importlib``,
+    pytest no añade la raíz del repo por sí solo, así que
+    ``tests/engine/test_spike_i3_durability.py`` (incidencia #182, requisito
+    3) no podría importar ``experiments.work_engine_spike_i3`` sin esto.
+    """
+    repo_root = str(Path(__file__).resolve().parents[2])
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+
 
 MakeWorkItem = Callable[..., WorkItem]
 MakeRun = Callable[..., Run]
