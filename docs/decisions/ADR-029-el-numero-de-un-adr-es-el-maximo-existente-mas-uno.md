@@ -94,17 +94,57 @@ Mutaciones planificadas, escritas antes de ejecutarlas:
 - mirar solo el primer archivo del directorio → debe fallar la prueba del
   máximo.
 
-Los resultados reales se anotan en esta sección antes de pedir la fusión.
+### Resultados reales
+
+32 pruebas en verde (`uv run pytest tests/automation/test_siguiente_adr.py
+tests/automation/test_registro_de_decisiones.py`). Las siete mutaciones se
+aplicaron una a una sobre el árbol confirmado y se revirtieron con
+`git checkout --`:
+
+| Mutación | Prueba que debía caer | Resultado |
+|---|---|---|
+| primer hueco libre en vez de máximo+1 | huecos nunca se reutilizan | **falla** (3 pruebas) |
+| no quitar diacríticos | convenio del registro | **falla** (2 pruebas) |
+| quitar la guarda de sobrescritura | no destruir un ADR | **falla** |
+| mirar solo el primer archivo | el máximo es de todo el directorio | **falla** (5 pruebas) |
+| crear un `ADR-020` duplicado a mano | guardiana del registro | **falla**, y nombra los dos archivos |
+| archivo con mayúsculas en el título | convenio de nombres | **falla** |
+| quitar `# ADR-NNN` de `PLANTILLA.md` | marcadores de la plantilla real | **falla** |
+
+**Un hallazgo que cambió el diseño de una prueba.** La mutación de la guarda de
+sobrescritura destapó que la prueba original —crear un ADR sobre otro ya
+existente— pasaba **en vacío**: como el número es máximo+1, el nombre generado
+no puede chocar nunca con un archivo presente, así que la guarda es
+inalcanzable por el camino normal y borrarla no rompía nada. Es la cuarta forma
+del patrón «pruebas que nacen vacuas». Se rehízo forzando el fallo del cálculo
+con `monkeypatch`, que es lo único que ejercita de verdad una segunda línea de
+defensa; así mutada, la prueba sí cae.
+
+### Lo que estas pruebas NO dicen
+
+En esta máquina (Windows) el árbol completo trae **15 fallos y un error de
+mypy previos**, en `test_sirius_repair_workflow.py`, `test_spike_i3_durability.py`,
+dos módulos de GUI y `experiments/work_engine_spike_i3/durable_journal.py`
+(`signal.SIGKILL` no existe en Windows). Se comprobó que son ajenos a este
+trabajo ejecutando los mismos módulos sobre `origin/main` en HEAD separado:
+mismos 15 fallos, 126 pasadas; en esta rama, mismos 15 fallos y 158 pasadas.
+La diferencia de 32 es exactamente el número de pruebas añadidas aquí.
 
 ## Consecuencias
 
 - La numeración deja de depender de que alguien lea bien un listado.
 - Los huecos 017 y 018 quedan vacíos para siempre. Es el precio de que el
   número sea función únicamente del máximo, y se acepta.
-- Aparece una prueba que recorre `docs/decisions/` y falla si dos archivos
-  comparten número. Eso sí hace el fallo **imposible** en `main` con Quality en
-  verde, se haya usado la skill o no. El guion quita fricción; **la prueba es
-  la garantía**, y conviene no confundirlas.
+- Aparece `tests/automation/test_registro_de_decisiones.py`, que recorre
+  `docs/decisions/` y falla si dos archivos comparten número. Corre con el
+  resto de la batería, se haya usado la skill o no: el guion quita fricción,
+  **la prueba es la garantía**, y conviene no confundirlas.
+- Esa prueba tolera **una** excepción, fijada nombre por nombre: el par
+  `ADR-016` que ya existía. Corregirlo afectaría a una veintena de referencias
+  repartidas por workflows, pruebas y documentos —ninguna de las cuales dice
+  cuál de los dos documentos cita—, y es decisión del propietario, no de este
+  ADR. Cuando se corrija, la prueba fallará y pedirá que se quite la excepción,
+  que es el aviso que se quería.
 - Sigue sin ser imposible la colisión entre dos ramas abiertas a la vez: la
   prueba la detecta al fusionar la segunda. Es tarde, pero es detectable; hoy
   no lo era en absoluto.
