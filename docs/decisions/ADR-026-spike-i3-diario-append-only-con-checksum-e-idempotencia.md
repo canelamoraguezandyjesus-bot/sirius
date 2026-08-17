@@ -178,10 +178,24 @@ registro nuevo) seguía sin analizar como JSON válido — `replay` la
 descartaba entera, reintento incluido, indefinidamente. Detalle y prueba en
 `RESULTADOS.md` §"Recuperar la cola truncada antes de reintentar".
 
+Corrección posrevisión adicional (hallazgo CODEX-001, ronda 6):
+`append_durably()` ignoraba el valor de retorno de `os.write()`: POSIX
+permite una escritura corta incluso en ficheros regulares, y una escritura
+corta real dejaba en disco un registro con JSON y checksum completos pero
+sin su delimitador `\n` final, aunque `append_durably` ya hubiera dado el
+anexo por bueno. `replay` trataba esa línea como cola truncada y
+`recover_invalid_tail` la borraba para siempre en el siguiente anexo — un
+registro que el escritor creía confirmado, perdido. Corregido con
+`_write_all`, que reintenta `os.write()` hasta completar todos los bytes del
+registro (o falla explícitamente) antes de llamar a `fsync`. Prueba nueva:
+`test_escritura_corta_de_os_write_no_pierde_el_delimitador_final`, que
+recorta de verdad la escritura de `os.write` (a diferencia de la prueba
+previa de cola truncada, que fabricaba el fichero incompleto a mano).
+
 ## Comprobación que la sostiene
 
 - **Matriz completa** en `experiments/work_engine_spike_i3/RESULTADOS.md` y
-  reproducida por `tests/engine/test_spike_i3_durability.py`: 23 pruebas — 6
+  reproducida por `tests/engine/test_spike_i3_durability.py`: 24 pruebas — 6
   puntos de corte nombrados para `WorkItem` más los mismos 6 para `Run`
   (matados con `SIGKILL` inyectado por el propio proceso escritor,
   subproceso real vía `subprocess.run`), duplicación por reintento tras
@@ -191,10 +205,11 @@ descartaba entera, reintento incluido, indefinidamente. Detalle y prueba en
   recuperación de un registro completo escrito salvo su `\n` final (prefijo
   de N-1 bytes → reapertura → reintento produce exactamente un evento nuevo
   sin fundirse con el prefijo), una prueba dedicada de que
-  `recover_invalid_tail` es no-operativa sobre un diario ya limpio, y dos
-  mutaciones. Comando ejecutado:
-  `uv run pytest tests/engine/test_spike_i3_durability.py -v` → **23
-  passed**.
+  `recover_invalid_tail` es no-operativa sobre un diario ya limpio,
+  la escritura corta de `os.write` que `_write_all` completa sin perder el
+  delimitador final (hallazgo CODEX-001, ronda 6), y dos mutaciones. Comando
+  ejecutado: `uv run pytest tests/engine/test_spike_i3_durability.py -v` →
+  **24 passed**.
 - **Mutación vista fallar en dos puntos concretos** (requisito 4): quitar la
   comparación de checksum hace que un registro con un byte alterado se
   acepte como válido (`test_mutacion_quitar_el_checksum_acepta_un_registro_corrupto`);
@@ -207,7 +222,7 @@ descartaba entera, reintento incluido, indefinidamente. Detalle y prueba en
   (338 ficheros, sin errores — `experiments/` se resuelve como dependencia
   de `tests/engine/test_spike_i3_durability.py` sin tocar `pyproject.toml`,
   comprobado empíricamente antes de escribir el arnés completo), `uv run
-  pytest` con `QT_QPA_PLATFORM=offscreen` (2242 passed, 3 skipped, 302,34 s
+  pytest` con `QT_QPA_PLATFORM=offscreen` (2243 passed, 3 skipped, 284,81 s
   — ver «Consecuencias» sobre por qué se fijó esa variable a mano) y `git
   diff --check --cached` sin salida.
 

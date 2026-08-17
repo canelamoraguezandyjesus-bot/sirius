@@ -97,6 +97,25 @@ kill en `mid_write_torn` → "reapertura" (proceso nuevo) → reintento de la
 MISMA petición produce exactamente un evento nuevo, preservando cualquier
 prefijo válido anterior al incidente.
 
+### Completar escrituras cortas de `os.write` antes de confirmar el anexo
+
+Detectado en revisión (CODEX-001, ronda 6): `append_durably()` ignoraba el
+valor de retorno de `os.write()`. POSIX permite una escritura corta incluso
+en ficheros regulares, y una escritura corta real dejaba en disco un
+registro con JSON y checksum completos pero **sin** su delimitador `\n`
+final -aunque `append_durably` ya hubiera dado el anexo por bueno-. `replay`
+trataba esa línea como cola truncada (la misma clasificación que la fila 3
+de la matriz) y `recover_invalid_tail` la borraba para siempre en el
+siguiente anexo: un registro que el escritor creía confirmado, perdido sin
+avisar. Corregido con `_write_all`, que reintenta `os.write()` hasta
+completar todos los bytes del registro (o falla explícitamente, sin llamar
+a `fsync` sobre una escritura incompleta) antes de seguir. Probado en
+`test_escritura_corta_de_os_write_no_pierde_el_delimitador_final`, que
+recorta de verdad la escritura de `os.write` (sustituyendo la primera
+llamada por `real_write(fd, data[:-1])` vía `monkeypatch`), a diferencia de la
+prueba de cola truncada (`test_registro_completo_sin_delimitador_final_se_trata_como_cola_truncada`),
+que fabrica el fichero incompleto a mano para probar el lado de `replay`.
+
 ## Prueba por mutación (ADR-001 §3, requisito 4)
 
 Dos mutaciones sembradas, cada una vista fallar en un caso concreto:
