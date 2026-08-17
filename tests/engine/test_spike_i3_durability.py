@@ -27,19 +27,26 @@ import sys
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import pytest
 from experiments.work_engine_spike_i3.durable_journal import (
+    InternalCorruptionError,
     KillPoint,
     append_durably,
     recover_invalid_tail,
     replay,
 )
 from experiments.work_engine_spike_i3.durable_store import DurableJsonlWorkItemStore
-from experiments.work_engine_spike_i3.entity_codec import run_to_dict, work_item_to_dict
+from experiments.work_engine_spike_i3.entity_codec import (
+    run_from_dict,
+    run_to_dict,
+    work_item_to_dict,
+)
 
 from sirius_engine.domain.events import AggregateType
+from sirius_engine.domain.run import Run
 from sirius_engine.domain.run import prepare as prepare_run
 from sirius_engine.domain.work_item import WorkItemClass, create_work_item
 
@@ -71,6 +78,26 @@ def _sample_record(*, sequence: int = 1, idempotency_key: str | None = None) -> 
     }
 
 
+def _sample_run() -> Run:
+    """El ``Run`` de referencia para la matriz punto-de-muerte y la prueba de round-trip.
+
+    Una sola llamada pura y determinista (mismos argumentos siempre): se
+    reutiliza tanto para construir el registro que se anexa como para el
+    valor esperado tras reconstruir tal registro con ``run_from_dict``
+    (CODEX-003), sin duplicar los literales.
+    """
+    return prepare_run(
+        run_id="RUN-SPIKE-0001",
+        work_id="WI-SPIKE-0001",
+        paso="paso-1",
+        worker="worker-de-prueba",
+        work_package={"instrucciones": "ejecutar paso 1"},
+        intento=1,
+        deadline=datetime(2026, 8, 17, 13, 0, tzinfo=UTC),
+        now=_NOW,
+    )
+
+
 def _sample_run_record(*, sequence: int = 1, idempotency_key: str | None = None) -> dict[str, Any]:
     """Registro de una transición representativa de ``Run`` (incidencia #182, CODEX-002).
 
@@ -82,16 +109,7 @@ def _sample_run_record(*, sequence: int = 1, idempotency_key: str | None = None)
     checksum, idempotencia) también cubre a `Run`, sin implementar el resto
     del puerto (ver límites conocidos en `RESULTADOS.md`).
     """
-    run = prepare_run(
-        run_id="RUN-SPIKE-0001",
-        work_id="WI-SPIKE-0001",
-        paso="paso-1",
-        worker="worker-de-prueba",
-        work_package={"instrucciones": "ejecutar paso 1"},
-        intento=1,
-        deadline=datetime(2026, 8, 17, 13, 0, tzinfo=UTC),
-        now=_NOW,
-    )
+    run = _sample_run()
     return {
         "sequence": sequence,
         "occurred_at": _NOW.isoformat(),
@@ -200,6 +218,11 @@ def test_matriz_punto_de_muerte_por_resultado_run(kill_at: KillPoint, tmp_path: 
     if outcome == "ocurrio_una_vez":
         assert result.valid_records[0]["aggregate_id"] == record["aggregate_id"]
         assert result.valid_records[0]["aggregate_type"] == AggregateType.RUN.value
+        # CODEX-003: no basta inspeccionar el dict crudo -18 pruebas seguirían en
+        # verde aunque `run_from_dict` lanzase siempre-, hay que deserializar el
+        # evento y comprobar el estado exacto del `Run` reconstruido.
+        run_reconstruido = run_from_dict(result.valid_records[0]["entity"])
+        assert run_reconstruido == _sample_run()
 
 
 def test_reintento_tras_reinicio_no_duplica_por_idempotencia(tmp_path: Path) -> None:
@@ -300,6 +323,62 @@ def test_kill_mid_write_torn_reapertura_reintento_preserva_prefijo_y_produce_un_
     assert tras_el_reintento.valid_records[1]["aggregate_id"] == segundo["aggregate_id"]
 
 
+def test_corrupcion_interna_con_registros_validos_despues_no_trunca_ni_anexa(
+    tmp_path: Path,
+) -> None:
+    """CODEX-001: una línea corrupta con registros válidos completos detrás no es cola truncada.
+
+    Antes de esta corrección, `replay()` se detenía en la primera línea
+    inválida y trataba TODO lo que la seguía como `discarded_tail_bytes`,
+    aunque hubiese registros posteriores íntegros. `recover_invalid_tail`
+    truncaba entonces el fichero hasta antes de la línea inválida,
+    eliminando para siempre esos registros válidos. Una escritura
+    interrumpida solo puede dejar basura al FINAL del fichero -nunca un
+    registro bueno detrás de la basura-, así que la presencia de un
+    registro válido después de la línea inválida es la señal de que se
+    trata de corrupción interna del medio, no de una cola truncada: hay que
+    conservar el fichero intacto y negarse a anexar.
+
+    Escenario: tres registros asentados con normalidad; se corrompe el
+    segundo (JSON bien formado, checksum ya no coincide) dejando el tercero
+    intacto detrás. `replay` debe lanzar `InternalCorruptionError` sin
+    tocar el fichero, y un `append_durably` posterior debe abortar de la
+    misma forma en vez de truncar la cola "inválida" (que en realidad
+    contiene un registro bueno) y perderla.
+    """
+    journal_path = tmp_path / "diario.jsonl"
+    primero = _sample_record(sequence=1)
+    segundo = _sample_record(sequence=2)
+    segundo["aggregate_id"] = "WI-SPIKE-0002"
+    tercero = _sample_record(sequence=3)
+    tercero["aggregate_id"] = "WI-SPIKE-0003"
+
+    append_durably(journal_path, primero, kill_at=None)
+    append_durably(journal_path, segundo, kill_at=None)
+    append_durably(journal_path, tercero, kill_at=None)
+
+    lines = journal_path.read_bytes().splitlines(keepends=True)
+    assert len(lines) == 3, "el escenario exige exactamente tres registros asentados"
+    lines[1] = lines[1].replace(b"WI-SPIKE-0002", b"WI-SPIKE-CORRUPTA", 1)
+    assert b"WI-SPIKE-CORRUPTA" in lines[1], "la mutación debe tocar de verdad los bytes"
+    corrupted_bytes = b"".join(lines)
+    journal_path.write_bytes(corrupted_bytes)
+
+    with pytest.raises(InternalCorruptionError):
+        replay(journal_path)
+    assert journal_path.read_bytes() == corrupted_bytes, (
+        "detectar corrupción interna no debe tocar el fichero"
+    )
+
+    cuarto = _sample_record(sequence=4)
+    cuarto["aggregate_id"] = "WI-SPIKE-0004"
+    with pytest.raises(InternalCorruptionError):
+        append_durably(journal_path, cuarto, kill_at=None)
+    assert journal_path.read_bytes() == corrupted_bytes, (
+        "el anexo debe abortar sin truncar la cola ni escribir el registro nuevo"
+    )
+
+
 def test_recover_invalid_tail_es_no_operativo_sin_cola_invalida(tmp_path: Path) -> None:
     """`recover_invalid_tail` no debe tocar un diario ya limpio (ni uno inexistente)."""
     journal_path = tmp_path / "diario.jsonl"
@@ -311,6 +390,30 @@ def test_recover_invalid_tail_es_no_operativo_sin_cola_invalida(tmp_path: Path) 
 
     assert recover_invalid_tail(journal_path) == 0
     assert journal_path.read_bytes() == raw_antes
+
+
+def test_run_from_dict_round_trip_resultado_inmutable() -> None:
+    """CODEX-002: `run_from_dict` debe restaurar `resultado` inmutable, igual que `Run.succeed()`.
+
+    `Run` es una instantánea `frozen`, y `Run.succeed()` congela `resultado`
+    con `MappingProxyType` a propósito: nadie debe poder alterar
+    retroactivamente el resultado de un `Run` ya terminado sin pasar por una
+    transición y un evento nuevos. Antes de esta corrección,
+    `run_from_dict` restauraba `resultado` como un `dict` mutable normal,
+    así que cualquier consumidor podía romper esa invariante después de
+    reproducir el diario.
+    """
+    corrido = _sample_run().dispatch(now=_NOW).confirm_running(now=_NOW)
+    terminado = corrido.succeed(resultado={"salida": "ok"}, now=_NOW)
+    assert isinstance(terminado.resultado, MappingProxyType)
+
+    reconstruido = run_from_dict(run_to_dict(terminado))
+
+    assert reconstruido == terminado
+    assert isinstance(reconstruido.resultado, MappingProxyType)
+    assert not isinstance(reconstruido.resultado, dict)
+    with pytest.raises(TypeError):
+        reconstruido.resultado["salida"] = "mutado"  # type: ignore[index]
 
 
 def test_almacen_durable_reproduce_un_ciclo_de_vida_real(tmp_path: Path) -> None:

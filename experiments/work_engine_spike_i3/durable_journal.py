@@ -13,10 +13,14 @@ del registro más ``checksum_sha256``, calculado sobre la codificación
 canónica (claves ordenadas) del resto de campos. Al reproducir
 (:func:`replay`), la primera línea que no analiza como JSON válido o cuyo
 checksum no coincide se trata como cola truncada por una escritura
-interrumpida: se descarta ella y todo lo que la sigue (ADR-026, límite
-conocido: un fichero solo puede corromperse de verdad en la cola si el único
-escritor es este arnés; una corrupción interna del medio no se distingue de
-una cola truncada).
+interrumpida SOLO si no hay ningún registro completo y válido después de
+ella: se descarta ella y todo lo que la sigue (ADR-026). Si en cambio hay al
+menos un registro válido después de la línea inválida, la línea inválida no
+puede ser una cola truncada -una escritura interrumpida deja basura solo al
+final, nunca un registro bueno después de la basura-, así que es corrupción
+interna del medio: :func:`replay` lanza :class:`InternalCorruptionError` en
+vez de descartar en silencio, porque recortar ahí perdería registros válidos
+que sí llegaron a completarse.
 
 Antes de cada anexo, :func:`append_durably` llama a
 :func:`recover_invalid_tail`, que recorta y sincroniza esa misma cola
@@ -38,6 +42,18 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
+
+
+class InternalCorruptionError(RuntimeError):
+    """El diario tiene una línea corrupta con registros completos y válidos después de ella.
+
+    No puede ser una cola truncada por una escritura interrumpida (esa solo
+    deja basura al final del fichero); es corrupción interna del medio.
+    Recortar perdería registros válidos, así que :func:`replay` se niega a
+    hacerlo y :func:`recover_invalid_tail`/:func:`append_durably` propagan
+    este error en vez de anexar (ADR-026, límite conocido: reparar el medio
+    o aportar redundancia queda fuera de alcance de este spike).
+    """
 
 
 class KillPoint(StrEnum):
@@ -85,10 +101,13 @@ def recover_invalid_tail(journal_path: Path) -> int:
     para :func:`replay`, que la descartaría entera -incluido el registro
     nuevo. Recortar la cola inválida ANTES de escribir evita esa fusión.
 
-    No repara corrupción interna (ADR-026, límite conocido: `replay` ya
-    trata cualquier registro corrupto que no esté al final como cola
-    truncada, y esta función recorta exactamente lo que `replay` ya
-    descartaría, ni un byte más). Devuelve cuántos bytes se recortaron.
+    No repara corrupción interna (ADR-026, límite conocido): si `replay`
+    determina que la línea inválida tiene registros completos y válidos
+    detrás -así que no es una cola truncada-, deja `InternalCorruptionError`
+    propagarse sin tocar el fichero, en vez de recortar y perder esos
+    registros. Cuando sí es cola truncada, recorta exactamente lo que
+    `replay` ya descartaría, ni un byte más. Devuelve cuántos bytes se
+    recortaron.
     """
     if not journal_path.exists():
         return 0
@@ -164,24 +183,48 @@ class ReplayResult:
     discarded_tail_bytes: int
 
 
+def _parse_valid_line(line_bytes: bytes) -> dict[str, Any] | None:
+    """Analizar una línea como registro válido, o ``None`` si falla JSON o checksum."""
+    try:
+        record = json.loads(line_bytes)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(record, dict) or "checksum_sha256" not in record:
+        return None
+    checksum = record.pop("checksum_sha256")
+    expected = hashlib.sha256(canonical_bytes(record)).hexdigest()
+    if checksum != expected:
+        return None
+    return record
+
+
 def replay(journal_path: Path) -> ReplayResult:
     if not journal_path.exists():
         return ReplayResult(valid_records=(), discarded_tail_bytes=0)
 
     raw = journal_path.read_bytes()
+    lines = raw.splitlines(keepends=True)
     valid: list[dict[str, Any]] = []
     consumed = 0
-    for line_bytes in raw.splitlines(keepends=True):
-        try:
-            record = json.loads(line_bytes)
-        except json.JSONDecodeError:
-            break
-        if not isinstance(record, dict) or "checksum_sha256" not in record:
-            break
-        checksum = record.pop("checksum_sha256")
-        expected = hashlib.sha256(canonical_bytes(record)).hexdigest()
-        if checksum != expected:
+    first_invalid_index: int | None = None
+    for index, line_bytes in enumerate(lines):
+        record = _parse_valid_line(line_bytes)
+        if record is None:
+            first_invalid_index = index
             break
         valid.append(record)
         consumed += len(line_bytes)
-    return ReplayResult(valid_records=tuple(valid), discarded_tail_bytes=len(raw) - consumed)
+
+    if first_invalid_index is None:
+        return ReplayResult(valid_records=tuple(valid), discarded_tail_bytes=0)
+
+    remaining_lines = lines[first_invalid_index + 1 :]
+    if any(_parse_valid_line(line_bytes) is not None for line_bytes in remaining_lines):
+        raise InternalCorruptionError(
+            f"{journal_path}: la línea {first_invalid_index + 1} es inválida pero hay "
+            "registros completos y válidos después -no es una cola truncada por una "
+            "escritura interrumpida, sino corrupción interna del medio"
+        )
+
+    discarded_tail_bytes = len(raw) - consumed
+    return ReplayResult(valid_records=tuple(valid), discarded_tail_bytes=discarded_tail_bytes)

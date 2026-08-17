@@ -137,11 +137,16 @@ Dos mutaciones sembradas, cada una vista fallar en un caso concreto:
    `fsync` sin persistir de verdad, ningún patrón de escritura en espacio de
    usuario puede detectarlo. No cubierto.
 3. **Corrupción del medio.** El checksum por registro detecta alteración de
-   bytes ya escritos y truncamiento en la cola. No cubre reparación (no hay
-   redundancia) ni corrupción en medio del fichero (un registro corrupto que
-   no esté al final del diario haría que `replay` descarte también todo lo
-   que le sigue, tratándolo como si fuera cola truncada -conservador, pero
-   pierde datos posteriores válidos).
+   bytes ya escritos y truncamiento en la cola. `replay` distingue una cola
+   realmente truncada (nada válido después de la línea inválida -se
+   descarta, es lo que una escritura interrumpida deja) de corrupción
+   interna (hay al menos un registro completo y válido después de la línea
+   inválida -imposible en una cola truncada, así que `replay` lanza
+   `InternalCorruptionError` en vez de descartar y perder esos registros
+   posteriores; `recover_invalid_tail`/`append_durably` propagan el error y
+   dejan el fichero intacto). No cubre reparación: no hay redundancia del
+   medio para reconstruir el registro corrupto en sí, solo detección
+   conservadora que evita perder lo que sí sigue íntegro.
 4. **Concurrencia multiproceso.** El arnés asume un único escritor. Dos
    procesos anexando al mismo diario a la vez podrían intercalar escrituras
    de forma insegura; no probado ni protegido (sin bloqueo de fichero).

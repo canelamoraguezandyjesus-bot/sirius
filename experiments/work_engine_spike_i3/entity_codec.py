@@ -117,7 +117,7 @@ def run_from_dict(data: Mapping[str, Any]) -> Run:
         cancellation_status=CancellationStatus(data["cancellation_status"]),
         ultima_observacion=data["ultima_observacion"],
         observado_en=None if observado_en is None else datetime.fromisoformat(observado_en),
-        resultado=None if resultado is None else dict(resultado),
+        resultado=None if resultado is None else MappingProxyType(dict(resultado)),
         diagnostico=data["diagnostico"],
         recurso_mutable=data["recurso_mutable"],
         sustituye_a=data["sustituye_a"],
