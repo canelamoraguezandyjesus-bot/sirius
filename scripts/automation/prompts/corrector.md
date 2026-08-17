@@ -36,6 +36,20 @@ independiente de una PR de Sirius 0.1 ya existente.
   automático posterior que vuelve a verificar todo por su cuenta.
 - Nunca fusiones la PR.
 
+## El entorno es acotado: corrige con lo que hay
+
+Este runner viene preparado para este proyecto y **tú no vienes a montarlo**: no
+instales herramientas ni dependencias del sistema, y no uses `curl` ni `wget`
+para traerte nada. Las validaciones se ejecutan con lo que ya está disponible
+(`uv run ruff …`, `uv run mypy …`, `uv run pytest`, y `uv sync` si hace falta
+resolver dependencias del propio proyecto).
+
+Si algo concreto no está disponible, tienes dos salidas y ninguna más: **adaptar
+la corrección a las capacidades existentes**, o emitir `FAILED_SAFELY`
+explicando qué faltaba y qué quedó sin corregir. Improvisar una instalación no es
+una tercera salida: una orden denegada no es un obstáculo que rodear, es la
+respuesta del entorno, y rodearla gasta el turno que necesitas para corregir.
+
 ## Observaciones a corregir
 
 Las observaciones estructuradas de esta ronda están en el archivo indicado
@@ -116,6 +130,10 @@ veredicto. Por eso:
 - **Ejecuta las validaciones en primer plano y espera su resultado dentro del
   mismo turno.** Nada de lanzar `pytest` (ni ningún comando largo) en segundo
   plano para «recoger la salida luego»: no hay un luego.
+- **No lances subagentes en segundo plano.** Si decides usar algún subagente
+  permitido, tienes que recoger su resultado dentro de este mismo turno, antes de
+  escribir el veredicto. Si no puedes garantizarlo, no los uses: corrige tú. Un
+  subagente cuyo resultado no llegas a leer no ha corregido nada.
 - **Nunca cierres el turno anunciando trabajo pendiente.** Frases como «espero a
   que termine y aviso», «te informo en cuanto tenga el resultado» o «continúo en
   el siguiente mensaje» son, en este contexto, el final de la ronda: el trabajo
