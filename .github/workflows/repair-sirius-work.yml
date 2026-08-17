@@ -93,7 +93,20 @@ jobs:
           # el token por defecto ese re-disparo quedaría suprimido y el ciclo
           # revisión→corrección→revisión no cerraría.
           token: ${{ secrets.SIRIUS_BOT_TOKEN }}
+     
+      - name: Install Qt system libraries for PySide6 (offscreen)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+          python-version: "3.14.6"
+
+      - name: Sync environment
+        run: uv sync --locked --all-groups
       - name: Evaluar la convergencia y localizar la PR
         timeout-minutes: 8
         id: gate
