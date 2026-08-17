@@ -50,8 +50,8 @@ En particular:
   política de presupuesto aprobadas (B6a a B6d), pero eso lo demuestran
   pruebas automáticas con dobles deterministas, no una prueba de aceptación
   formal;
-- ninguna PA que exija proveedor real, Windows real o evaluación humana está
-  declarada superada, y ninguna lo estará antes de V8.3 y V8.4;
+- el estado de cada prueba de aceptación —incluidas las que exigen proveedor
+  real, Windows real o evaluación humana— se lee en el registro, nunca aquí;
 - el trazado formal requisito–prueba está declarado en
   [`docs/implementation/TRAZABILIDAD_PA_SP.md`](docs/implementation/TRAZABILIDAD_PA_SP.md)
   y comprobado por máquina (`tests/unit/test_pa_sp_traceability.py`, ADR-006).
@@ -95,14 +95,13 @@ En particular:
   incluidos estados vacíos, filtrado de decisiones APPROVED, origen,
   actualización manual y coordinación con operaciones ocupadas.
 
-### Pendiente de validación manual
+### Validación manual
 
-- Guardar, consultar mediante el sistema y eliminar un valor señuelo en Windows Credential Manager.
-- Construir y ejecutar el artefacto empaquetado en Windows 11.
-- Comprobar escalado, teclado, foco, rutas, cierre forzado y restauración empaquetada.
-- Ejecutar posteriormente la ventana autorizada con proveedor real.
-- Completar PA-E2E-01, PS-01 a PS-07 y las pruebas manuales de seguridad y privacidad.
-- Revisar visualmente B5 con muchos recuerdos y decisiones y en una ventana pequeña; no es un bloqueo automático demostrado.
+Qué pruebas manuales se han ejecutado, quién las ejecutó y con qué salvedades se
+lee en la tabla de evidencia de
+[`docs/implementation/V8_EXECUTION.md`](docs/implementation/V8_EXECUTION.md), que
+por ADR-005 es el único registro de estado. Esta lista vivía aquí y se quedaba
+atrás; era una de las derivas que ADR-005 vino a cerrar.
 
 ## Estado de V7
 
@@ -133,7 +132,10 @@ Qué bloque está hecho y cuál no se lee en
 [`docs/implementation/V8_EXECUTION.md`](docs/implementation/V8_EXECUTION.md#bloques-operativos).
 Aquí no se repite.
 
-No se considera iniciada la aceptación formal con proveedor real.
+La aceptación formal con proveedor real está **completada**: el propietario declaró Sirius 0.1
+aceptado y terminado el 10 de agosto de 2026. La declaración, con sus salvedades, vive en
+[`docs/implementation/V8_EXECUTION.md`](docs/implementation/V8_EXECUTION.md), que por ADR-005
+es el único registro de estado.
 
 La ventana con proveedor real permanece bloqueada hasta que se cumplan las
 condiciones de la puerta V8.3, que están escritas en `V8_EXECUTION.md` y no se
