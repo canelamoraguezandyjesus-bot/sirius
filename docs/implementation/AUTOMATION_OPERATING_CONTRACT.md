@@ -1,10 +1,10 @@
 # SIRIUS - Contrato operativo de automatización
 
-- **Versión:** 1.6
-- **Fecha:** 10 de agosto de 2026
-- **Estado:** VIGENTE (§4, §5 y §9 actualizadas; ver §10.3, §10.4 y §10.5)
+- **Versión:** 1.6.1
+- **Fecha:** 16 de agosto de 2026
+- **Estado:** VIGENTE (§4, §5 y §9 actualizadas; ver §10.3, §10.4, §10.5 y §10.6)
 - **Autoridad:** Operativa para el desarrollo automatizado de Sirius 0.1
-- **Sustituye:** versión 1.5 del 3 de agosto de 2026
+- **Sustituye:** versión 1.6 del 10 de agosto de 2026
 - **No modifica:** Producto, Arquitectura Técnica, ATD, requisitos ni alcance de Sirius 0.1
 
 ## 0. Propósito
@@ -144,8 +144,34 @@ Reglas del modo dual:
   El recolector solo acepta resultados del conector oficial de Codex
   (allowlist), posteriores al disparador y demostrablemente referidos a ese
   SHA (`commit_id` de la revisión o el marcador `Reviewed commit:`). La
-  ausencia de comentarios no es aprobación: la aprobación exige una revisión
-  formal `APPROVED` o una reacción `+1` del conector sobre el disparador.
+  ausencia de señales no es aprobación: aprobar exige una señal explícita del
+  conector, y solo se admiten tres —una revisión formal `APPROVED`, una reacción
+  `+1` sobre el disparador, o un comentario de la conversación que **declare
+  ausencia de hallazgos en la fórmula conocida** del conector, con las mismas
+  comprobaciones de autor, orden temporal y SHA que cualquier otra señal—.
+- El tercer canal existe porque los otros dos no ocurren con este conector
+  (v1.6.1). Observado en la PR #178: en seis rondas con hallazgos publicó
+  revisiones formales, todas `COMMENTED` y ninguna `APPROVED`; en la ronda sin
+  hallazgos publicó un comentario («Codex Review: Didn't find any major issues»)
+  y **no** marcó 👍 el disparador, pese a que su propio texto lo promete. Con
+  solo los dos canales anteriores, ninguna PR limpia podía alcanzar
+  `sirius:ready-for-merge`: el modo dual quedaba estructuralmente bloqueado.
+- El reconocimiento de esa fórmula es **deliberadamente estrecho** y falla
+  cerrado: solo variantes de la afirmación observada («did(n't) find any
+  [major] issues») aprueban, y un comentario que además traiga insignias de
+  severidad no aprueba aunque la contenga. Cualquier otra redacción sigue siendo
+  la parada segura `respuesta-por-comentario`. Si el conector cambia su texto, el
+  coste es una ronda detenida que mira una persona, nunca una aprobación falsa.
+  Esta señal aporta, además, solo la mitad del veredicto: la precedencia del
+  agregador (más abajo en esta misma sección) exige que Claude apruebe también
+  el mismo SHA para que la ronda termine en `REVIEW_APPROVED`.
+- Se consideran **todos** los comentarios del conector referidos al head
+  esperado, no solo uno, y basta uno que no declare ausencia de hallazgos para
+  detener la ronda — el mismo principio que ya rige para las revisiones. Decidir
+  con el primero dejaría que un comentario intermedio bloqueara una ronda
+  limpia; decidir con el último dejaría que una declaración posterior enterrara
+  un comentario anterior con hallazgos. Exigirlo de todos quita la dependencia
+  del orden de llegada por los dos lados.
 - Se consideran **todas** las revisiones del conector posteriores al
   disparador, no solo la última: sus hallazgos se unen y basta una que no
   demuestre el SHA esperado para detener la ronda. Quedarse con la última
@@ -542,4 +568,13 @@ desde fuera. Y no repara ese estado: avisa a una persona. Ver ADR-004.
 - **Mantiene:** que ninguna automatización fusione, inicie bloques ni avance un ciclo sano por sondeo; que ante la duda se informe en vez de actuar; y la reversibilidad —quitar el `schedule:` devuelve el comportamiento anterior sin tocar nada más—.
 - **Entrada en vigor:** cuando la PR que introduce el `schedule:` sea revisada, tenga CI verde y sea fusionada por autorización explícita del usuario.
 
-El historial de las versiones 1.0, 1.1, 1.2, 1.3, 1.4 y 1.5 permanece disponible en Git y no se reescribe retrospectivamente.
+### 10.6 Versión 1.6.1 — el canal por el que Codex dice de verdad que no encontró nada
+
+- **Decisión:** admitir como tercera señal de aprobación de Codex un comentario de la conversación que declare ausencia de hallazgos en la fórmula conocida del conector, con las mismas comprobaciones de autor, orden temporal y SHA que las otras dos. Incidencia #177.
+- **Motivo:** los dos canales que §4.1 admitía —revisión formal `APPROVED` y reacción `+1`— no ocurren nunca con este conector. Comprobado sobre las siete rondas de la PR #178: seis revisiones formales, todas `COMMENTED` y ninguna `APPROVED`, y en la única ronda sin hallazgos un comentario («Codex Review: Didn't find any major issues») con el disparador a cero reacciones. No era una intermitencia: con la regla anterior ninguna PR limpia podía alcanzar `sirius:ready-for-merge` en modo dual. La incidencia #148 ya había visto ese mismo comentario y se corrigió entonces solo la mentira del timeout; segunda vez que muerde la misma familia, así que se corrige la regla y no el síntoma.
+- **Alcance:** el reconocimiento de la señal en `scripts/automation/sirius_codex_review.py` (`_declares_no_findings` y el desenlace de `_check_conversation_comments`), sus pruebas, y la redacción de §4.1 y de esta sección. No cambia el contrato de estados, la precedencia del agregador, la convergencia (§5), la verificación de head, los permisos, ni el mecanismo de merge (§8). Ningún workflow se toca.
+- **Mantiene:** que la ausencia de señales no aprueba jamás; la allowlist de autores; la exigencia de que la señal sea estrictamente posterior al disparador y demostrablemente sobre el SHA esperado; la precedencia —una revisión formal manda sobre señales más débiles, y el comentario solo se consulta cuando no hay ninguna—; que Codex sigue siendo obligatorio en modo dual; y que Claude debe aprobar el mismo SHA para que la ronda apruebe. El reconocimiento falla cerrado: una redacción distinta, o un comentario con insignias de severidad, sigue terminando en `respuesta-por-comentario`.
+- **Numeración:** se usa un tercer nivel (1.6.1) a propósito. El plan aprobado del Work Engine (ADR-020, decisión 5) reserva **v1.7 para E1a** y **v1.8 para E1b**; tomar la 1.7 aquí habría obligado a renumerar un plan ya aprobado por una razón puramente contable. Esta enmienda además no añade capacidad: corrige la descripción de un canal de la revisión dual que la v1.4 ya introdujo.
+- **Entrada en vigor:** cuando la PR que introduce este canal sea revisada, tenga CI verde y sea fusionada por autorización explícita del usuario.
+
+El historial de las versiones 1.0, 1.1, 1.2, 1.3, 1.4, 1.5 y 1.6 permanece disponible en Git y no se reescribe retrospectivamente.

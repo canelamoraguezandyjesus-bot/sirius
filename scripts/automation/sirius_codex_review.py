@@ -25,11 +25,13 @@ Dos subórdenes:
     JSON normalizado. Solo acepta señales del conector oficial (allowlist),
     posteriores al disparador y demostrablemente referidas al SHA esperado
     (``commit_id`` de la revisión o, como respaldo, el marcador textual
-    ``Reviewed commit:``). La ausencia de comentarios NUNCA se interpreta como
-    aprobación: la aprobación exige una revisión formal ``APPROVED`` o una
-    reacción ``+1`` del conector sobre el disparador. La reacción ``eyes`` solo
-    indica procesamiento. Cualquier otro caso (timeout, otro SHA, autor no
-    autorizado, respuesta ambigua) termina en ``FAILED_SAFELY``.
+    ``Reviewed commit:``). La ausencia de señales NUNCA se interpreta como
+    aprobación: aprobar exige una señal explícita del conector — revisión formal
+    ``APPROVED``, reacción ``+1`` sobre el disparador, o un comentario que
+    declare ausencia de hallazgos en la fórmula conocida (contrato v1.6.1, el
+    único canal que este conector usa de verdad para decirlo). La reacción
+    ``eyes`` solo indica procesamiento. Cualquier otro caso (timeout, otro SHA,
+    autor no autorizado, respuesta ambigua) termina en ``FAILED_SAFELY``.
 
 Todo el acceso a GitHub pasa por el CLI ``gh`` con reintentos limitados, igual
 que ``sirius_issue.sh``; las pruebas lo simulan sin red. Los cuerpos de los
@@ -111,6 +113,22 @@ esperado, evidencia o prueba que lo demuestra y límites de la corrección.
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 REVIEWED_COMMIT_RE = re.compile(r"Reviewed commit[^0-9a-fA-F]{0,20}([0-9a-fA-F]{7,40})")
 SEVERITY_BADGE_RE = re.compile(r"!\[(P[0-9])[^\]]*Badge[^\]]*\]")
+
+# Fórmula con la que el conector declara que no encontró nada, observada en las
+# incidencias #148 y #177: «Codex Review: Didn't find any major issues».
+#
+# Se aceptan solo variantes de ESA afirmación (apóstrofo recto o tipográfico,
+# forma contraída o no, con «major» o sin él). No se exige el prefijo «Codex
+# Review:» —la procedencia ya la garantiza la allowlist de autores—, pero
+# tampoco se admite ninguna otra redacción: lo que no encaja no aprueba, se
+# detiene. Ver `_declares_no_findings` para por qué la estrechez es el punto.
+# La comilla tipográfica se escribe escapada en el patrón, no literal: el
+# carácter crudo es indistinguible del apóstrofo recto a simple vista, y en algo
+# que decide una aprobación no puede quedar duda de qué se está aceptando.
+NO_FINDINGS_RE = re.compile(
+    "(?:did\\s?n['\u2019]t|did\\s+not)\\s+find\\s+any\\s+(?:major\\s+)?issues",
+    re.IGNORECASE,
+)
 
 
 class GhError(RuntimeError):
@@ -758,25 +776,61 @@ def _check_reviews(
     return None, True
 
 
+def _declares_no_findings(body: str) -> bool:
+    """¿El comentario dice, en la fórmula conocida del conector, que no halló nada?
+
+    Reconocimiento DELIBERADAMENTE ESTRECHO. Es lo único que separa una
+    aprobación de una parada segura, así que el criterio es «esta frase concreta,
+    observada», no «suena a que aprueba». Una redacción distinta —o una que
+    además traiga hallazgos— no aprueba: cae en la parada segura de siempre.
+
+    La asimetría manda: si el conector cambia su texto, el coste es una ronda
+    bloqueada que mira una persona. Si el patrón fuera ancho, el coste sería
+    aprobar una PR con defectos reportados. Solo uno de esos dos errores es
+    recuperable.
+    """
+    if SEVERITY_BADGE_RE.search(body):
+        # Trae insignias de severidad: hay hallazgos, diga lo que diga el
+        # encabezado. No es una aprobación.
+        return False
+    return NO_FINDINGS_RE.search(body) is not None
+
+
 def _check_conversation_comments(
     repo: str, pr: int, head: str, trigger_at: datetime, trigger_id: int
 ) -> CodexResult | None:
     """Respuesta del conector publicada como comentario de la conversación.
 
-    El conector no siempre contesta con una revisión formal: a veces publica un
-    comentario ordinario («Codex Review: Didn't find any major issues») con su
-    marcador ``Reviewed commit:``. El recolector no miraba ese canal, así que en
-    la incidencia #148 gastó los 1200 s completos y después afirmó que Codex no
-    había entregado un resultado identificable — habiendo respondido 101 s
-    después del disparador, con el autor permitido y demostrablemente sobre el
-    SHA esperado. Eso es exactamente «afirmar más de lo que el dato sostiene».
+    El conector no siempre contesta con una revisión formal. La incidencia #148
+    lo vio por primera vez: respondió «Codex Review: Didn't find any major
+    issues» en un comentario ordinario, 101 s después del disparador y con su
+    marcador ``Reviewed commit:``. El recolector no miraba ese canal, gastó los
+    1200 s completos y después afirmó que Codex no había entregado un resultado
+    identificable. Se añadió entonces esta comprobación, pero devolviendo
+    siempre ``FAILED_SAFELY`` porque §4.1 solo admitía aprobar con revisión
+    formal ``APPROVED`` o reacción ``+1``.
 
-    No cambia el contrato: esta señal NO aprueba. §4.1 exige para aprobar una
-    revisión formal ``APPROVED`` o una reacción ``+1``. Lo único que cambia es
-    que la ronda termina en segundos con un motivo verdadero en vez de mentir
-    con un timeout.
+    La incidencia #177 demostró que ese canal no es un caso límite: es el ÚNICO
+    por el que este conector dice «no encontré nada». En las 7 rondas de la PR
+    #178 emitió seis revisiones formales —todas ``COMMENTED``, ninguna
+    ``APPROVED``— cuando tenía hallazgos, y un comentario de conversación cuando
+    no los tenía, sin marcar 👍 el disparador pese a prometerlo en su propio
+    texto. Con la regla anterior, los dos canales de aprobación del contrato no
+    ocurrían nunca: ninguna PR limpia podía alcanzar ``ready-for-merge``.
+
+    Por eso el contrato v1.6.1 admite un tercer canal, con las mismas
+    comprobaciones de siempre (autor permitido, estrictamente posterior al
+    disparador, SHA demostrable e igual al esperado) más una condición nueva: el
+    cuerpo debe declarar ausencia de hallazgos en la fórmula conocida
+    (``_declares_no_findings``). Cualquier otro comentario del conector sigue
+    siendo la parada segura ``respuesta-por-comentario``.
+
+    La precedencia NO cambia: el llamador solo consulta este canal cuando no hay
+    ninguna revisión formal posterior al disparador ni reacción. Una señal débil
+    no resuelve una ambigüedad.
     """
     comments = _gh_paginated(f"repos/{repo}/issues/{pr}/comments")
+    candidates: list[dict[str, Any]] = []
     for comment in comments:
         if int(comment.get("id") or 0) == trigger_id:
             continue  # el propio disparador
@@ -790,6 +844,27 @@ def _check_conversation_comments(
         declared_sha = _resolve_review_sha(comment)
         if declared_sha is None or not _sha_matches(head, declared_sha):
             continue
+        candidates.append(comment)
+
+    if not candidates:
+        return None
+
+    # Se miran TODOS los comentarios de la ronda, no solo el primero, y basta uno
+    # que no declare ausencia de hallazgos para detenerla — el mismo principio
+    # que `_check_reviews` aplica a las revisiones.
+    #
+    # Quedarse con el primero haría depender el desenlace del orden de llegada:
+    # un comentario intermedio del conector precedería a la declaración de «no
+    # encontré nada» y bloquearía una ronda limpia; y al revés, si el que
+    # decidiera fuera el último, una declaración posterior enterraría un
+    # comentario anterior con hallazgos y aprobaría un head con defectos ya
+    # reportados. Exigirlo de todos elimina la dependencia del orden por los dos
+    # lados a la vez.
+    unclear = next(
+        (c for c in candidates if not _declares_no_findings(str(c.get("body") or ""))),
+        None,
+    )
+    if unclear is not None:
         return CodexResult(
             status="FAILED_SAFELY",
             reason="respuesta-por-comentario",
@@ -797,12 +872,24 @@ def _check_conversation_comments(
             trigger_comment_id=trigger_id,
             summary=(
                 f"Codex respondió sobre `{head}` en un comentario de la conversación "
-                f"({comment.get('html_url') or comment.get('id')}), no en una revisión "
-                "formal. No es una aprobación válida según §4.1, pero tampoco es un "
-                "timeout: la ronda se detiene con el motivo real."
+                f"({unclear.get('html_url') or unclear.get('id')}) que no es una revisión "
+                "formal ni declara ausencia de hallazgos en la fórmula reconocida. No "
+                "puedo interpretarlo como aprobación ni como lista de cambios; la ronda "
+                "se detiene con el motivo real, no con un timeout."
             ),
         )
-    return None
+    return CodexResult(
+        status="APPROVED",
+        reviewed_head_sha=head,
+        trigger_comment_id=trigger_id,
+        summary=(
+            f"Codex declaró no haber encontrado hallazgos en el commit `{head}`, en un "
+            f"comentario de la conversación "
+            f"({candidates[-1].get('html_url') or candidates[-1].get('id')}). Es el canal "
+            "por el que este conector comunica la ausencia de hallazgos: no publica una "
+            "revisión formal cuando no tiene nada que reportar."
+        ),
+    )
 
 
 def _check_reactions(repo: str, pr: int, head: str, trigger_id: int) -> CodexResult | None:
