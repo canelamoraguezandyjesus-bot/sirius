@@ -16,7 +16,7 @@ verificación; B14 es lo que se comprueba **con** ese paquete en las manos.
 |---|---|---|
 | 1 | Ejecutable Nuitka | ✅ **Cerrada en B13.** Dos construcciones y dos verificaciones sobre `3432253`, 77 comprobaciones y 0 fallos cada una. |
 | 2 | Monitorización de tráfico sin proveedor real | ✅ **Cerrada.** `scripts/verify_windows_no_network.ps1`: 45 muestras del árbol de procesos, ninguna conexión saliente. |
-| 3 | Credential Manager con valor señuelo | ⏸ **Aplazada por decisión del usuario.** Ver «Por qué la partida 3 está aplazada». |
+| 3 | Credential Manager con valor señuelo | ✅ **Cerrada por ejecución del propietario** el 2026-08-10. Prueba manual: la ejecuta quien la ejecuta, y este registro dice quién la reportó. Es además una de las puertas de V8.3 («Credential Manager haya sido comprobado con un valor señuelo»). |
 | 4 | Rutas y funcionamiento sin administrador | ✅ **Cerrada por la verificación de B13.** El paquete arranca sin elevar, desde una ruta con espacios, con un directorio de trabajo ajeno al repositorio, al ejecutable y a los datos, y con un `PATH` sin Python, sin `py` y sin uv. Los dos verificadores rechazan ejecutarse elevados. |
 | 5 | Escalado, teclado y foco | ✅ **Cerrada por las pruebas de interfaz.** `tests/gui/` cubre el historial, el panel de contexto, el escalado y los diálogos; el defecto real de geometría —cierre por `RecursionError` al acoplar la ventana— se reprodujo, se corrigió y quedó fijado en `tests/gui/test_window_geometry_recursion.py`. Qt no cambia de comportamiento por compilarse. |
 | 6 | Cierre forzado | ✅ **Cerrada por `tests/integration/test_forced_shutdown_recovery.py`.** Contra SQLite real migrado con Alembic: el estado confirmado sobrevive, `PRAGMA integrity_check` es `ok` y un turno interrumpido no corrompe nada. La capa de almacenamiento es idéntica compilada o no —el mismo SQLite, el mismo WAL, el mismo código—, así que repetirlo con el `.exe` no aportaría información. |
@@ -57,14 +57,17 @@ Con letra clara, porque es lo que separa esto de una aceptación:
 - **Los flujos de interfaz ejecutados compilados.** Nadie ha pulsado «Crear
   copia», «Restaurar» ni «Exportar» dentro del `Sirius.exe` empaquetado. El
   mecanismo sensible al empaquetado está demostrado y la lógica está cubierta por
-  pruebas, pero el gesto completo con el binario en la mano no. **Eso es
-  PA-019**, la aceptación manual, y ni B13 ni B14 la sustituyen: el smoke test
-  arranca y termina el proceso a propósito.
-- **El arranque sin clave y el valor señuelo** (partida 3), aplazados.
+  pruebas, pero el gesto completo con el binario en la mano no. Eso corresponde a
+  **PA-020, PA-021 y PA-022** en su parte manual, y ni B13 ni B14 las sustituyen:
+  el smoke test arranca y termina el proceso a propósito.
+
+  **Corrección del 2026-08-10:** este párrafo atribuía esos flujos a PA-019. Es
+  falso. PA-019 es *cierre forzado*: «terminar el proceso durante una operación →
+  se recupera el último estado consistente sin corrupción». El propietario
+  reporta PA-019 ejecutada el 2026-08-10 sobre el paquete.
 - **Destinos UDP, DNS incluido** (partida 2), por lo explicado más abajo.
 
-B14 queda con **8 partidas cerradas y 1 aplazada**. No se declara cumplido
-mientras la 3 siga abierta.
+B14 queda con **las 9 partidas cerradas**.
 
 ## Partida 2 — El paquete no llama a nadie
 
