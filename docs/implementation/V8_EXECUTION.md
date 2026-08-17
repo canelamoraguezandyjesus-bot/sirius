@@ -10,16 +10,35 @@ manda este.
 
 ## Estado
 
-- V8.1 — Corrección documental y automatizada: **ACTIVA**.
-- V8.2 — Windows sin clave: **BLOQUEADA** hasta integración automática verde.
-- V8.3 — Proveedor real: **BLOQUEADA**.
-- V8.4 — PA-E2E-01 y cierre: **BLOQUEADA**.
-- Sirius 0.1: **NO ACEPTADO** y **NO TERMINADO**.
+- V8.1 — Corrección documental y automatizada: **COMPLETA**.
+- V8.2 — Windows sin clave: **COMPLETA**.
+- V8.3 — Proveedor real: **COMPLETA**.
+- V8.4 — PA-E2E-01 y cierre: **COMPLETA**.
+- Sirius 0.1: **ACEPTADO** y **TERMINADO** por declaración del propietario el
+  **10 de agosto de 2026**.
 
-**V8.1 no tiene ya trabajo automatizable pendiente.** B1 a B12 están completos
-en su parte automatizable y B13 está cerrado por declaración del propietario,
-con la salvedad escrita en su fila. Lo que bloquea V8.2 y V8.3 no es código:
-es Windows real y una clave real, y ambas cosas exigen al propietario.
+## Declaración de aceptación
+
+El propietario declara Sirius 0.1 **listo, cerrado y verificado** el 10 de agosto
+de 2026, tras ejecutar personalmente, con clave y proveedor reales, las pruebas de
+aceptación que exigían Windows real, proveedor real o evaluación humana: PA-001,
+PA-002, PA-008, PA-009, PA-019, PA-023, PS-01 a PS-07 y PA-E2E-01, más la partida
+del valor señuelo en Windows Credential Manager.
+
+Los **16 bloques** de V8 quedan cerrados. Detalle de cada uno en la tabla de
+bloques operativos; detalle de cada prueba, en la tabla de evidencia.
+
+Lo que esta declaración **no** borra, porque una aceptación honesta se lleva sus
+salvedades escritas:
+
+- **PS-01 a PS-07 se reportaron como un juicio global** sobre las siete, no como
+  siete veredictos separados.
+- No hay captura automática de ninguna prueba manual: las pasa quien las ejecuta,
+  y aquí consta quién.
+- Siguen sin demostrarse los **destinos UDP** de la partida 2 de B14 y los flujos
+  de **PA-020, PA-021 y PA-022** pulsados dentro del ejecutable empaquetado.
+
+Sirius 0.1 está aceptado con esas salvedades a la vista, no a pesar de ellas.
 
 **B12e cierra el riesgo que B12c destapó** (ADR-008): `list_current_memories()`,
 `list_archived_memories()`, `list_current_decisions()` y
