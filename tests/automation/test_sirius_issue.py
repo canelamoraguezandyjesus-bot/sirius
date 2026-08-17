@@ -124,9 +124,22 @@ case "$sub" in
       python3 "$D/build_comments.py" rest "$comments_file" 2>/dev/null | jq -r "$filter" 2>/dev/null
       exit 0
     fi
-    if printf '%s' "$args" | grep -q '/labels'; then
+    # Las etiquetas se leen del OBJETO de la incidencia (`--jq '.labels[].name'`),
+    # no del endpoint `/issues/<n>/labels` (ADR-027). Por eso el simulado
+    # despacha por el FILTRO y no por la ruta: es lo que distingue esta lectura
+    # ahora que la ruta es la misma que la del cuerpo.
+    #
+    # Y construye el objeto entero para aplicarle el `--jq` REAL del llamador,
+    # con el mismo criterio que la rama de comentarios de aqui al lado: si
+    # devolviera la lista ya filtrada, el filtro —que es justo lo que este
+    # cambio toca— no quedaria medido por ninguna prueba, y `.[].name` (el
+    # viejo, que sobre un objeto es un error de jq) pasaria en verde.
+    filtro=""; prev=""
+    for a in "$@"; do [ "$prev" = "--jq" ] && filtro="$a"; prev="$a"; done
+    if printf '%s' "$filtro" | grep -q '[.]labels'; then
       if [ "${GH_MOCK_FAIL_LABELS_READ:-0}" = "1" ]; then echo "503 labels" >&2; exit 1; fi
-      cat "$labels_file" 2>/dev/null
+      cat "$labels_file" 2>/dev/null \
+        | jq -R . | jq -sc '{labels: map(select(length>0) | {name: .})}' | jq -r "$filtro"
       exit 0
     fi
     if printf '%s' "$args" | grep -q '/pulls/'; then

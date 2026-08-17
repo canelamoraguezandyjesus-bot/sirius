@@ -147,11 +147,20 @@ case "$sub" in
       else printf '%s' "$entrada"; fi
       exit 0
     fi
-    if printf '%s' "$args" | grep -q '/labels'; then
+    # Las etiquetas se leen del OBJETO de la incidencia (`--jq '.labels[].name'`),
+    # no del endpoint `/issues/<n>/labels` (ADR-027). El despacho va por el
+    # FILTRO porque la ruta ya no distingue esta lectura de la del cuerpo, y el
+    # objeto se construye entero para aplicarle el `--jq` REAL del llamador, por
+    # el mismo motivo que se explica en la rama de PRs de aqui arriba.
+    filtro_lbl=""; prev=""
+    for a in "$@"; do [ "$prev" = "--jq" ] && filtro_lbl="$a"; prev="$a"; done
+    if printf '%s' "$filtro_lbl" | grep -q '[.]labels'; then
       if [ "${MOCK_FAIL_LABELS:-0}" = "1" ]; then
         echo "gh: HTTP 503 (etiquetas)" >&2; exit 1
       fi
-      cat "$D/labels_${n}.txt" 2>/dev/null; exit 0
+      cat "$D/labels_${n}.txt" 2>/dev/null \
+        | jq -R . | jq -sc '{labels: map(select(length>0) | {name: .})}' | jq -r "$filtro_lbl"
+      exit 0
     fi
     if printf '%s' "$args" | grep -q '/comments'; then
       if fallo_transitorio comentarios "${MOCK_FAIL_COMMENTS:-0}"; then

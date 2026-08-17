@@ -87,7 +87,7 @@ reject() {
   # Retirar el evento y verificar que quedo retirado (estado limpio, reintentable).
   sirius_retry gh issue edit "$ISSUE" --repo "$REPO" --remove-label "sirius:implement-requested" >/dev/null 2>&1 || true
   local labels_now=""
-  if ! labels_now="$(sirius_retry gh api "repos/${REPO}/issues/${ISSUE}/labels" --jq '.[].name')"; then
+  if ! labels_now="$(sirius_retry gh api "repos/${REPO}/issues/${ISSUE}" --jq '.labels[].name')"; then
     echo "::error::No se pudo verificar la retirada del evento en #${ISSUE}; reintentable." >&2
     return 1
   fi
@@ -116,7 +116,7 @@ if [ "$(printf '%s' "$issue_json" | jq -r '.state')" != "open" ]; then
 fi
 
 # --- 2) Etiquetas: planned presente y sin estados incompatibles ----------------
-labels="$(sirius_retry gh api "repos/${REPO}/issues/${ISSUE}/labels" --jq '.[].name')" || {
+labels="$(sirius_retry gh api "repos/${REPO}/issues/${ISSUE}" --jq '.labels[].name')" || {
   echo "::warning::No se pudieron leer las etiquetas de #${ISSUE}; no se valida."
   exit 0
 }
