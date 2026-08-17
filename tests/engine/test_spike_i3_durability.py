@@ -248,7 +248,7 @@ def test_matriz_punto_de_muerte_por_resultado_run(kill_at: KillPoint, tmp_path: 
     if outcome == "ocurrio_una_vez":
         assert result.valid_records[0]["aggregate_id"] == record["aggregate_id"]
         assert result.valid_records[0]["aggregate_type"] == AggregateType.RUN.value
-        # CODEX-003: no basta inspeccionar el dict crudo -18 pruebas seguirían en
+        # CODEX-003: no basta inspeccionar el dict crudo -22 pruebas seguirían en
         # verde aunque `run_from_dict` lanzase siempre-, hay que deserializar el
         # evento y comprobar el estado exacto del `Run` reconstruido.
         run_reconstruido = run_from_dict(result.valid_records[0]["entity"])

@@ -137,14 +137,21 @@ Dos mutaciones sembradas, cada una vista fallar en un caso concreto:
    `fsync` sin persistir de verdad, ningún patrón de escritura en espacio de
    usuario puede detectarlo. No cubierto.
 3. **Corrupción del medio.** El checksum por registro detecta alteración de
-   bytes ya escritos y truncamiento en la cola. `replay` distingue una cola
-   realmente truncada (nada válido después de la línea inválida -se
-   descarta, es lo que una escritura interrumpida deja) de corrupción
-   interna (hay al menos un registro completo y válido después de la línea
-   inválida -imposible en una cola truncada, así que `replay` lanza
-   `InternalCorruptionError` en vez de descartar y perder esos registros
-   posteriores; `recover_invalid_tail`/`append_durably` propagan el error y
-   dejan el fichero intacto). No cubre reparación: no hay redundancia del
+   bytes ya escritos y truncamiento en la cola. `replay` solo descarta la
+   línea inválida y todo lo que la sigue como cola truncada por una
+   escritura interrumpida si, a la vez, (a) no hay ningún registro completo
+   y válido después de ella, y (b) esa línea inválida no termina en su
+   propio `\n` -es decir, es el sufijo SIN terminar al final del fichero-.
+   Si se da al menos una de las dos señales contrarias -hay un registro
+   completo y válido después de la línea inválida, o la propia línea
+   inválida sí termina en su `\n` (una línea completa que se escribió
+   entera pero cuyo contenido o checksum no cuadra)- no puede ser una cola
+   truncada, porque una escritura interrumpida por este escritor solo deja
+   basura SIN terminar al final, nunca una línea completa ni un registro
+   bueno después de la basura; `replay` lanza `InternalCorruptionError` en
+   vez de descartar y perder esos registros posteriores o esa línea
+   completa. `recover_invalid_tail`/`append_durably` propagan el error y
+   dejan el fichero intacto. No cubre reparación: no hay redundancia del
    medio para reconstruir el registro corrupto en sí, solo detección
    conservadora que evita perder lo que sí sigue íntegro.
 4. **Concurrencia multiproceso.** El arnés asume un único escritor. Dos

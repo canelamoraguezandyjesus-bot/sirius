@@ -181,7 +181,7 @@ descartaba entera, reintento incluido, indefinidamente. Detalle y prueba en
 ## Comprobación que la sostiene
 
 - **Matriz completa** en `experiments/work_engine_spike_i3/RESULTADOS.md` y
-  reproducida por `tests/engine/test_spike_i3_durability.py`: 18 pruebas — 6
+  reproducida por `tests/engine/test_spike_i3_durability.py`: 22 pruebas — 6
   puntos de corte nombrados para `WorkItem` más los mismos 6 para `Run`
   (matados con `SIGKILL` inyectado por el propio proceso escritor,
   subproceso real vía `subprocess.run`), duplicación por reintento tras
@@ -190,7 +190,7 @@ descartaba entera, reintento incluido, indefinidamente. Detalle y prueba en
   produce exactamente un evento nuevo preservando el prefijo válido), una
   prueba dedicada de que `recover_invalid_tail` es no-operativa sobre un
   diario ya limpio, y dos mutaciones. Comando ejecutado:
-  `uv run pytest tests/engine/test_spike_i3_durability.py -v` → **18
+  `uv run pytest tests/engine/test_spike_i3_durability.py -v` → **22
   passed**.
 - **Mutación vista fallar en dos puntos concretos** (requisito 4): quitar la
   comparación de checksum hace que un registro con un byte alterado se
