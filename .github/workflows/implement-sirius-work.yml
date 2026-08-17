@@ -85,7 +85,21 @@ jobs:
             echo "::error::La validacion de activacion no se pudo completar; reintentable."
             exit 1
           fi
-          labels_now="$(gh api "repos/${GH_REPO}/issues/${ISSUE_NUMBER}/labels" --jq '.[].name')"
+          # Un fallo de LECTURA no es una activacion invalida. Distinguirlos es
+          # todo: cuando esta lectura fallaba en silencio, su salida vacia se
+          # convertia en `valid=false` y el paso anunciaba que "la puerta ya la
+          # rechazo y explico el motivo en la incidencia" -- falso: no rechazaba
+          # nada ni explicaba nada, y dejaba la incidencia en un callejon MUDO,
+          # con sus etiquetas intactas y sin ningun evento que pudiera revivirla.
+          # Ocurrio en la #186 (runs 32035648135 y 32037335181, "unexpected end
+          # of JSON input" tras cuatro reintentos). Es la misma clase de fallo que
+          # la #138 vino a eliminar y que `sirius_validate_activation.sh` evita a
+          # proposito unas lineas mas arriba. Ahora falla RUIDOSAMENTE: el run
+          # queda en rojo, visible y reintentable.
+          if ! labels_now="$(gh api "repos/${GH_REPO}/issues/${ISSUE_NUMBER}/labels" --jq '.[].name')"; then
+            echo "::error::No se pudieron leer las etiquetas de #${ISSUE_NUMBER}; no puedo distinguir una activacion invalida de un fallo de lectura. Reintentable."
+            exit 1
+          fi
           if printf '%s\n' "$labels_now" | grep -Fxq "sirius:implement-requested"; then
             echo "valid=true" >> "$GITHUB_OUTPUT"
           else
