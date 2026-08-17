@@ -177,7 +177,7 @@ for issue in "${open_issues[@]:-}"; do
   # error a la llamada dejaba el motivo fuera del registro, que es lo mismo que
   # ya costo un hallazgo en la lectura de eventos. Que se omita se dice; por que,
   # tambien.
-  labels="$(sirius_retry gh api "repos/${REPO}/issues/${issue}/labels" --jq '.[].name')" || {
+  labels="$(sirius_retry gh api "repos/${REPO}/issues/${issue}" --jq '.labels[].name')" || {
     report AVISO "No se pudieron leer las etiquetas de #${issue}; se omite."
     continue
   }

@@ -44,8 +44,16 @@ sub="$1"; shift || true
 case "$sub" in
   api)
     args="$*"
-    if printf '%s' "$args" | grep -q '/labels'; then
-      cat "$D/labels.txt" 2>/dev/null; exit 0
+    # Las etiquetas vienen del OBJETO de la incidencia (`--jq '.labels[].name'`),
+    # no de `/issues/<n>/labels` (ADR-027): se despacha por el FILTRO, porque la
+    # ruta ya no distingue esta lectura de la del cuerpo, y se aplica el `--jq`
+    # real del llamador para que un filtro equivocado no pueda pasar en verde.
+    filtro_lbl=""; prev=""
+    for a in "$@"; do [ "$prev" = "--jq" ] && filtro_lbl="$a"; prev="$a"; done
+    if printf '%s' "$filtro_lbl" | grep -q '[.]labels'; then
+      cat "$D/labels.txt" 2>/dev/null \
+        | jq -R . | jq -sc '{labels: map(select(length>0) | {name: .})}' | jq -r "$filtro_lbl"
+      exit 0
     fi
     if printf '%s' "$args" | grep -q '/comments'; then
       cat "$D/comments.txt" 2>/dev/null; exit 0

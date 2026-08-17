@@ -486,7 +486,7 @@ sirius_set_issue_labels() {
   done
   # Verificacion autoritativa del estado final.
   local labels=""
-  if ! labels="$(sirius_retry _sirius_gh api "repos/${repo}/issues/${num}/labels" --jq '.[].name')"; then
+  if ! labels="$(sirius_retry _sirius_gh api "repos/${repo}/issues/${num}" --jq '.labels[].name')"; then
     echo "sirius_set_issue_labels: no se pudo verificar las etiquetas de #${num}" >&2
     return 1
   fi
@@ -662,7 +662,7 @@ sirius_transition() {
   if printf '%s' "$existing" | grep -Fq "$marker"; then
     marker_present=1
     local verified=1 labels_now="" state_now=""
-    labels_now="$(sirius_retry _sirius_gh api "repos/${repo}/issues/${num}/labels" --jq '.[].name' 2>/dev/null)" || verified=0
+    labels_now="$(sirius_retry _sirius_gh api "repos/${repo}/issues/${num}" --jq '.labels[].name' 2>/dev/null)" || verified=0
     printf '%s\n' "$labels_now" | grep -Fxq "$add" || verified=0
     if [ "$close_flag" = "close" ] && [ "$verified" -eq 1 ]; then
       state_now="$(sirius_retry _sirius_gh api "repos/${repo}/issues/${num}" --jq '.state' 2>/dev/null)" || verified=0

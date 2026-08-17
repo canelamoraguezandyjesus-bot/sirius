@@ -65,7 +65,7 @@ if [ "$lowered" != "fusiona" ]; then
 fi
 
 # --- 2) Reverificacion autoritativa de la etiqueta (evita condiciones de carrera) ---
-labels_now="$(sirius_retry gh api "repos/${REPO}/issues/${ISSUE}/labels" --jq '.[].name')" || labels_now=""
+labels_now="$(sirius_retry gh api "repos/${REPO}/issues/${ISSUE}" --jq '.labels[].name')" || labels_now=""
 if ! printf '%s\n' "$labels_now" | grep -Fxq "sirius:ready-for-merge"; then
   echo "#${ISSUE} ya no esta en sirius:ready-for-merge; no se actua."
   exit 0
