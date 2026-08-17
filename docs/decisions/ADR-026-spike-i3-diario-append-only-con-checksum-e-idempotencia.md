@@ -122,5 +122,98 @@ parchear caso a caso y se revisa el diseño del patrón entero.
 
 ---
 
-*El resto de este documento (Contexto, Opciones consideradas, Decisión,
-Comprobación, Consecuencias) se completa al terminar el spike.*
+## Contexto y problema
+
+La incidencia #182 (S1, spike I3 del plan de implementación del Work Engine)
+pide decidir el patrón de escritura seguro del almacén: un proceso matado con
+`kill -9` en cualquier punto del ciclo de una transición no debe dejar ni
+pérdida ni duplicación al rearrancar. No fija la representación definitiva
+del almacén (eso es I3+I4, D2); solo evalúa el patrón y una representación de
+referencia. A1 (incidencia #177, ya fusionada) entrega el dominio, el puerto
+`WorkEngineStore` y un diario de eventos append-only **en memoria**
+(`InMemoryWorkEngineStore`), con `rebuild_state` como reproducción
+determinista del diario.
+
+## Opciones consideradas
+
+Ver la tabla completa, con motivo de adopción o descarte de cada una,
+probada o no, en
+[`experiments/work_engine_spike_i3/RESULTADOS.md`](../../experiments/work_engine_spike_i3/RESULTADOS.md#comparativa-de-los-patrones-considerados).
+Resumen: reemplazo atómico (descartado, mal encaje con un diario de muchos
+eventos pequeños), SQLite WAL (descartado por ahora, complejidad de adopción
+sin ventaja de durabilidad demostrable sobre el diario), registro de
+intención + reconciliación (descartado para transiciones internas del
+almacén -no hay "acción" separada del "desenlace" cuando la única acción
+observable es el propio anexo durable-, pero sigue siendo el patrón correcto
+para acciones externas como el despacho de un `Run`, fuera de alcance de
+S1), e idempotencia por identificador monótono (adoptada, como componente).
+
+## Decisión
+
+Adoptar **diario append-only con `fsync`, checksum SHA-256 por registro y
+clave de idempotencia**, como extensión directa del diario append-only que
+A1 ya entregó (`Event` + `rebuild_state`): el mismo diseño, escrito a fichero
+en vez de a una lista en memoria, con la validación necesaria para
+sobrevivir a `kill -9` en cualquier punto del ciclo.
+
+Se implementó en `experiments/work_engine_spike_i3/` (desechable): el núcleo
+de escritura durable con seis puntos de corte nombrados
+(`durable_journal.py`), el subproceso real que los ejecuta
+(`writer_process.py`), la (de)serialización de `WorkItem`
+(`entity_codec.py`), y un almacén mínimo del puerto sobre ese diario
+(`durable_store.py`) que cubre crear/activar/cancelar/fallar-a-salvo (no
+`Run` ni el resto — subconjunto deliberado, ver límite conocido §2).
+
+## Comprobación que la sostiene
+
+- **Matriz completa** en `experiments/work_engine_spike_i3/RESULTADOS.md` y
+  reproducida por `tests/engine/test_spike_i3_durability.py`: 10 pruebas, 6
+  puntos de corte nombrados (matados con `SIGKILL` inyectado por el propio
+  proceso escritor, subproceso real vía `subprocess.run`), más duplicación
+  por reintento tras reinicio, un ciclo de vida real reabierto desde cero, y
+  dos mutaciones. Comando ejecutado: `uv run pytest tests/engine/test_spike_i3_durability.py -v`
+  → **10 passed**.
+- **Mutación vista fallar en dos puntos concretos** (requisito 4): quitar la
+  comparación de checksum hace que un registro con un byte alterado se
+  acepte como válido (`test_mutacion_quitar_el_checksum_acepta_un_registro_corrupto`);
+  quitar la comprobación de `idempotency_key` antes de anexar produce dos
+  registros para el mismo reintento en vez de uno
+  (`test_mutacion_quitar_la_comprobacion_de_idempotencia_duplica`).
+- **Las cuatro validaciones obligatorias + `git diff --check`, en verde**
+  sobre el repositorio completo: `uv run ruff format --check .` (350
+  ficheros), `uv run ruff check .` (sin hallazgos), `uv run mypy src tests`
+  (338 ficheros, sin errores — `experiments/` se resuelve como dependencia
+  de `tests/engine/test_spike_i3_durability.py` sin tocar `pyproject.toml`,
+  comprobado empíricamente antes de escribir el arnés completo), `uv run
+  pytest` con `QT_QPA_PLATFORM=offscreen` (2229 passed, 3 skipped, 274,69 s
+  — ver «Consecuencias» sobre por qué se fijó esa variable a mano) y `git
+  diff --check --cached` sin salida.
+
+## Consecuencias
+
+- El patrón queda evaluado y con evidencia reproducible en CI (requisito 3):
+  `tests/engine/` sí lo recorre `pytest`, a diferencia de `experiments/`.
+- **No se afirma que el arnés demuestre que `fsync` sea necesario ante fallo
+  real de alimentación**: la matriz muestra el mismo resultado
+  ("ocurrió una vez") con y sin `fsync` de por medio, porque `kill -9` no
+  vacía la caché de páginas del kernel. Es el límite conocido más importante
+  de este spike y queda escrito, no oculto (`RESULTADOS.md` §"Límites
+  conocidos").
+- **No fija la representación definitiva del almacén**: A2 puede reutilizar
+  este patrón (`Event`/`rebuild_state` de A1 sin cambios, detección de cola
+  corrupta, idempotencia por clave), pero eso lo decide D2 (o antes, si el
+  propietario adelanta I4), no este ADR.
+- **Hallazgo colateral, sin corregir aquí (fuera de alcance de S1)**:
+  `.github/workflows/implement-sirius-work.yml` no fija
+  `QT_QPA_PLATFORM=offscreen` como sí hace `quality.yml` (línea 29). Sin esa
+  variable, `uv run pytest` completo aborta con un `Fatal Python error`
+  dentro de Qt (`QGuiApplicationPrivate::createPlatformIntegration`) al
+  llegar a la suite de GUI, reproducido dos veces en esta misma ejecución.
+  Se adaptó fijando la variable a mano al invocar `pytest` (no toca
+  workflows, prohibido por el alcance de esta incidencia); se documenta aquí
+  para que quien revise A2 (o el propietario) decida si vale la pena
+  igualarlo en el workflow real.
+- Queda pendiente, si el propietario lo quiere: extender el arnés a `Run`
+  para las nuevas piezas de A2, e implementar un índice en memoria para que
+  `_next_sequence`/la comprobación de idempotencia no relean el diario
+  entero en cada anexo (límite conocido #6).
