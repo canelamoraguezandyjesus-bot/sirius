@@ -10,16 +10,35 @@ manda este.
 
 ## Estado
 
-- V8.1 — Corrección documental y automatizada: **ACTIVA**.
-- V8.2 — Windows sin clave: **BLOQUEADA** hasta integración automática verde.
-- V8.3 — Proveedor real: **BLOQUEADA**.
-- V8.4 — PA-E2E-01 y cierre: **BLOQUEADA**.
-- Sirius 0.1: **NO ACEPTADO** y **NO TERMINADO**.
+- V8.1 — Corrección documental y automatizada: **COMPLETA**.
+- V8.2 — Windows sin clave: **COMPLETA**.
+- V8.3 — Proveedor real: **COMPLETA**.
+- V8.4 — PA-E2E-01 y cierre: **COMPLETA**.
+- Sirius 0.1: **ACEPTADO** y **TERMINADO** por declaración del propietario el
+  **10 de agosto de 2026**.
 
-**V8.1 no tiene ya trabajo automatizable pendiente.** B1 a B12 están completos
-en su parte automatizable y B13 está cerrado por declaración del propietario,
-con la salvedad escrita en su fila. Lo que bloquea V8.2 y V8.3 no es código:
-es Windows real y una clave real, y ambas cosas exigen al propietario.
+## Declaración de aceptación
+
+El propietario declara Sirius 0.1 **listo, cerrado y verificado** el 10 de agosto
+de 2026, tras ejecutar personalmente, con clave y proveedor reales, las pruebas de
+aceptación que exigían Windows real, proveedor real o evaluación humana: PA-001,
+PA-002, PA-008, PA-009, PA-019, PA-023, PS-01 a PS-07 y PA-E2E-01, más la partida
+del valor señuelo en Windows Credential Manager.
+
+Los **16 bloques** de V8 quedan cerrados. Detalle de cada uno en la tabla de
+bloques operativos; detalle de cada prueba, en la tabla de evidencia.
+
+Lo que esta declaración **no** borra, porque una aceptación honesta se lleva sus
+salvedades escritas:
+
+- **PS-01 a PS-07 se reportaron como un juicio global** sobre las siete, no como
+  siete veredictos separados.
+- No hay captura automática de ninguna prueba manual: las pasa quien las ejecuta,
+  y aquí consta quién.
+- Siguen sin demostrarse los **destinos UDP** de la partida 2 de B14 y los flujos
+  de **PA-020, PA-021 y PA-022** pulsados dentro del ejecutable empaquetado.
+
+Sirius 0.1 está aceptado con esas salvedades a la vista, no a pesar de ellas.
 
 **B12e cierra el riesgo que B12c destapó** (ADR-008): `list_current_memories()`,
 `list_archived_memories()`, `list_current_decisions()` y
@@ -134,7 +153,7 @@ fusiona actualiza esta tabla y nada más.
 | Bloque | Entrega | Estado |
 |---|---|---|
 | B1 | Reconciliación documental y trazabilidad | Completo (ADR-005: el estado de V8 vive solo en esta tabla; `PLAN.md` y `REPOSITORY_STATUS.md` dejan de copiarlo y `tests/unit/test_documentation_single_source.py` falla si vuelven a hacerlo) |
-| B2 | Onboarding, credencial, ruta y activación | Completo en su parte automatizable (RF-001 y RF-002 implementados y cubiertos: `OnboardingWindow`, `ValidateAndSaveApiKeyUseCase`, `ValidatedMainWindow`; B2b resuelve, valida y persiste la ruta local antes de SQLite, logging y composición. D-01 cerrado en su parte automatizable; PA-001 y PA-002 exigen proveedor real (V8.3). D-10 pendiente solo de la comprobación real en Windows, que pertenece a B14) |
+| B2 | Onboarding, credencial, ruta y activación | Completo en su parte automatizable (RF-001 y RF-002 implementados y cubiertos: `OnboardingWindow`, `ValidateAndSaveApiKeyUseCase`, `ValidatedMainWindow`; B2b resuelve, valida y persiste la ruta local antes de SQLite, logging y composición. D-01 cerrado en su parte automatizable; PA-001 y PA-002 exigen proveedor real (V8.3). D-10 **cerrado el 2026-08-10**: su única condición pendiente era la comprobación real en Windows, que pertenecía a B14, y B14 quedó completo ese día. PA-001 y PA-002 siguen exigiendo proveedor real) |
 | B3 | Proyecto mínimo y ciclo de vida | Completo (B3a, B3b y B3c implementados y cubiertos automáticamente: saludo inicial y primer proyecto utilizable, continuidad observable —estado, bloqueos, siguiente paso, resumen al retomar— y ciclo de vida versionado con `project_revisions` inmutables; RF-014 a RF-018 cubiertos. D-02 cerrado en su parte automatizable junto con B4; PA-008 y PA-009 exigen decisión registrada evaluada con proveedor real) |
 | B4 | Eventos, recuerdos, decisiones y conflictos | Completo (B4a a B4f fusionados en `main`: guardado manual con origen consultable, decisiones con aprobación explícita, corrección versionada y sustitución, archivo/eliminación con redacción de origen, precedencia y detección determinista de conflictos, y la pestaña «Memoria y decisiones» que lo integra con `GetKnowledgeOverviewUseCase`. RF-019 a RF-026 y PA-010 a PA-016 cubiertos automáticamente con proveedor simulado; D-03 cerrado en su parte automatizable) |
 | B5 | Panel de contexto | Completo (PR #79, squash `7370a19`, incidencia #60: `ContextPanelWidget` integra en la pestaña «Conversación» un panel de solo lectura con el proyecto activo y su siguiente paso, las decisiones APPROVED vigentes y los recuerdos vigentes, con consulta de origen y actualización local bajo demanda; sin repositorios, modelos, migraciones ni red nuevos. D-04 cerrado) |
@@ -146,9 +165,9 @@ fusiona actualiza esta tabla y nada más.
 | B11 | Recuperación tras cierre forzado | Completo (prueba de integración que simula un cierre forzado —repositorios abandonados sin `close()` ordenado— sobre SQLite real migrado con Alembic, demostrando que el estado confirmado sobrevive íntegro, `PRAGMA integrity_check` es `ok`, un turno interrumpido a mitad de streaming deja el historial coherente sin fila parcial, y la reapertura es idempotente; `PRAGMA synchronous=FULL` afirma la durabilidad explícitamente; A-02 cerrado en su parte automatizable) |
 | B12 | Suite PA/SP automática, rendimiento y evidencia | Completo en su parte automatizable. **B12a** (ADR-006): `docs/implementation/TRAZABILIDAD_PA_SP.md` enlaza los 40 identificadores del Plan de Pruebas con las pruebas que cubren su parte automatizable, y `tests/unit/test_pa_sp_traceability.py` comprueba por máquina que cada prueba nombrada exista. El hueco era de trazabilidad, no de cobertura: 28 de 40 no se citaban en ninguna prueba, pero el comportamiento sí estaba probado. **B12c completo** (ADR-007): `tests/integration/test_local_performance.py` mide P50/P95 sobre el conjunto de referencia del plan (5.000 mensajes, 500 recuerdos, 100 decisiones, 10 proyectos; 30 repeticiones), afirma el límite aprobado donde hay un orden de magnitud de holgura —inicio, 30 ms frente a 3.000— y vigila el resto con un guardarraíl declarado. **Destapó un riesgo de producto: construir el contexto consume entre el 89 % y el 100 % de sus 300 ms**, por 501 consultas para 500 recuerdos en `list_current_memories()`; corregirlo es código productivo y espera decisión. **B12d completo**: evidencia consolidada en el registro de este archivo. B12b queda sin contenido: tras B12a el único hueco automatizable era PA-025, que cierra B12c. **B12e completo** (ADR-008, corte correctivo sobre lo que B12c midió, incidencia #148): `SqliteMemoryRepository.list_current_memories()`/`list_archived_memories()` y `SqliteDecisionRepository.list_current_decisions()`/`list_archived_decisions()` cargan la revisión vigente del conjunto en una única consulta `IN (...)` en vez de una por elemento, sin cambiar qué devuelven. `tests/integration/test_memory_decision_list_query_count.py` fija por prueba que el número de consultas de los cuatro métodos no crece con el número de elementos, verificada por mutación. Construir el contexto baja de 239,8 ms a 120,9 ms P95 sobre el mismo conjunto de referencia y la misma máquina; PA-025 sigue sin declararse superada |
 | B13 | Empaquetado reproducible | Completo **por declaración del propietario** el 10 de agosto de 2026: declara ejecutados los builds de Windows que faltaban. Implementado y cubierto: el proceso de empaquetado, los scripts de build y verificación y `_resource_root`, que resuelve `alembic.ini`/`migrations/` junto al ejecutable cuando la app corre congelada (PyInstaller `sys.frozen` o Nuitka `__compiled__`) y desde la raíz en desarrollo. **Sin evidencia escrita en el repositorio**: no hay salida de build ni de verify adjunta, así que A-03 —que es puerta de V8.3— queda cerrado sobre la palabra del propietario y no sobre una comprobación registrada. La PR #122 sigue abierta. Ver la nota de A-03 en el registro de evidencia |
-| B14 | Windows sin clave | Bloqueado |
-| B15 | Ventana compacta con proveedor real | Bloqueado |
-| B16 | PA-E2E-01, regresión y cierre | Bloqueado |
+| B14 | Windows sin clave | Completo **por declaracion del propietario** el 10 de agosto de 2026. Las 9 partidas cerradas: ejecutable Nuitka (via B13); trafico sin proveedor real (`scripts/verify_windows_no_network.ps1`, 45 muestras del arbol de procesos y ninguna conexion saliente); **Credential Manager con valor senuelo, ejecutado por el propietario**; rutas y funcionamiento sin administrador, e inspeccion de archivos, logs, copias y exportaciones (via la verificacion de B13); escalado, teclado y foco (`tests/gui`); cierre forzado (`test_forced_shutdown_recovery.py`, y **PA-019 manual ejecutada por el propietario** sobre el paquete); restauracion (8 pruebas de copia y restauracion); y rendimiento local (B12c, ADR-007). Marcador y evidencia en `docs/implementation/B14_WINDOWS_SIN_CLAVE.md` |
+| B15 | Ventana compacta con proveedor real | Completo **por declaración del propietario** el 2026-08-10. Ejecutada con clave y proveedor reales: PA-001 (clave válida valida, protege y abre la conversación), PA-002 (clave inválida rechazada, explicada y no guardada), PA-008 (decisiones y bloqueos recuperados al volver dias despues, decisiones aun vigentes), PA-009 (la recomendacion del siguiente paso cuadra con el estado real del proyecto) y PA-023 (trafico solo hacia el proveedor configurado) |
+| B16 | PA-E2E-01, regresión y cierre | Completo **por declaración del propietario** el 2026-08-10. PA-E2E-01 ejecutada sobre un proyecto real durante varias sesiones; PS-01 a PS-07 evaluadas por el propietario como juicio global. La suite automatica completa quedo en verde el mismo dia (2285 pruebas, 0 fallos) |
 
 ## Criterio de cierre de bloque
 
@@ -206,6 +225,10 @@ Añadir una fila por resultado verificable. No registrar secretos ni contenido s
 | 2026-08-10 | B12a | `03bede4` (PR #145) | automática | `test_pa_sp_traceability.py` | Superada | CI verde, 1649 pruebas | ADR-006: los 40 identificadores del plan quedan enlazados y comprobados por máquina. Siete mutaciones verificadas, incluida el renombrado de una prueba real |
 | 2026-08-10 | B12c | rama `claude/ciclo-pendientes-prs-issues-qm4t8x` | automática | `test_local_performance.py` | Superada con hallazgo | 1653 pruebas en verde; cifras en la sección de rendimiento de arriba | ADR-007. **No declara PA-025 superada.** Destapa que construir el contexto usa entre el 89 % y el 100 % de sus 300 ms; causa localizada en `list_current_memories()`. Cinco mutaciones verificadas |
 | 2026-08-11 | B12e | rama `fix/b12e-sqlite-list-n-plus-1` (incidencia #148) | automática | `test_memory_decision_list_query_count.py`; `test_memory_decision_list_sqlite_variable_limit.py`; `test_local_performance.py` | Superada | CI verde, 1659 pruebas (1653 previas + 6 nuevas); cifras antes/después en la sección de rendimiento de abajo | ADR-008. Corrige el N+1 que ADR-007 localizó, sin cambiar lo que devuelven los cuatro métodos. Cuatro mutaciones verificadas: con el N+1 restaurado, las cuatro pruebas de conteo fallan; restaurado el arreglo, pasan. Ronda 2 (revisión CODEX-001 de la PR #149): el `IN (...)` sin trocear podía fallar con `OperationalError: too many SQL variables` por encima de `SQLITE_LIMIT_VARIABLE_NUMBER`; `_load_memories()`/`_load_decisions()` ahora trocean en lotes de ese límite. Dos mutaciones verificadas: con el troceo revertido, las dos pruebas nuevas fallan con ese mismo error; con el arreglo, pasan |
+| 2026-08-10 | B13 | commit `3432253`, rama `feat/b13-reproducible-windows-package`; artefacto `Sirius-0.1.0.dev0-3432253-windows-x64` | manual-Windows | `scripts/build_windows.ps1` y `scripts/verify_windows_package.ps1` dos veces cada uno desde un checkout limpio fuera de OneDrive (`C:\dev\sirius`). **77 comprobaciones, 0 fallos, 3 omitidas** en ambas verificaciones; **inventario relativo identico** entre las dos construcciones (109 rutas comparadas una a una) | Superada con reservas | Compilacion 1125.2 s y 1036.6 s; ZIP `988613c0...` y `2a1e8d9e...`; Windows 11 Pro 10.0.26200.0, MSVC `cl` 19.44.35228, Windows SDK 10.0.26100.0, Python 3.14.6, PySide6/Qt 6.11.1, Nuitka 4.1.3, uv 0.11.28, head de Alembic `61be4bb269bf`, 24 tablas | Las 3 omisiones son la misma: el arranque sin clave no es observable en una sesion de Windows con la credencial guardada; es de B14. Hash del ZIP distinto entre las dos, como se declara. Cuatro defectos del proceso corregidos en esta pasada: `7a96c1a` modo de enlace de uv contra el filtro de nube de OneDrive; `839d6ff` la puerta de credencial hacia imposible verificar en la unica maquina donde se construye; `e9d51c7` `pyside6-deploy` colgaba el build 50 minutos esperando una respuesta invisible; `3432253` la clcache interna de Nuitka fallaba en las 15 unidades que intento. Ver `docs/implementation/B13_PACKAGING.md` |
+| 2026-08-10 | B14 | commit `567ca94`, rama `feat/b13-reproducible-windows-package` | manual-Windows | `scripts/verify_windows_no_network.ps1` sobre el `Sirius.exe` del artefacto, sin elevar y en entorno desechable. Vigilancia del arbol de procesos completo cada 250 ms: **45 muestras, ninguna conexion saliente** | Superada con reservas | 11 comprobaciones, 0 fallos, 1 omitida; 10 pruebas estructurales en `tests/unit/test_verify_windows_no_network_safety.py` | Cierra la partida 2 de las 9 de B14. Omision: destinos UDP, DNS incluido, que no se pueden observar sin captura de paquetes y eso exigiria administrador. La partida 3 (valor senuelo en Credential Manager) queda aplazada por decision del usuario. Marcador en `docs/implementation/B14_WINDOWS_SIN_CLAVE.md` |
+| 2026-08-10 | B14 | paquete `Sirius-0.1.0.dev0-3432253-windows-x64` instalado en `%LOCALAPPDATA%\Programs\Sirius` | manual-Windows | Dos pruebas manuales **ejecutadas y reportadas por el propietario**: la partida 3 de B14 (valor senuelo en Windows Credential Manager) y **PA-019** (cierre forzado: terminar el proceso durante una operacion y comprobar que se recupera el ultimo estado consistente sin corrupcion) | Superada segun el propietario | Declaracion del propietario en la sesion del 2026-08-10. Sin captura automatica: una prueba manual la pasa quien la ejecuta, y este registro dice quien la reporto | **Cierra B14.** La partida 3 es ademas una de las puertas de V8.3 («Credential Manager haya sido comprobado con un valor senuelo»). PA-019 cubre la mitad manual de **A-02**. No convierte a B15 en desbloqueado: V8.3 sigue exigiendo D-01, D-02 y D-10 cerrados y la **autorizacion expresa del propietario** para obtener y usar una clave temporal |
+| 2026-08-10 | B15 y B16 | paquete `Sirius-0.1.0.dev0-3432253-windows-x64`, con clave y proveedor reales | proveedor-real + evaluacion-humana | Pruebas de aceptacion **ejecutadas y declaradas superadas por el propietario**: **PA-002** (una clave invalida se rechaza, se explica y no se guarda), **PA-001** (una clave valida valida, se protege y abre la conversacion), **PA-008** (decisiones y bloqueos registrados, cerrar, volver dias despues: siguen ahi y las decisiones siguen vigentes), **PA-009** (preguntar por el siguiente paso: la recomendacion cuadra con el estado real), **PA-023** (trafico real: solo hacia el proveedor configurado), **PS-01 a PS-07** (conversacion, decision tecnica, desacuerdo, incertidumbre, error grave, frustracion y tarea larga) y **PA-E2E-01** (proyecto real durante varias sesiones) | Superadas segun el propietario | Declaracion del propietario en la sesion del 2026-08-10. La suite automatica completa quedo en verde el mismo dia sobre el arbol fusionado con `main`: 2285 pruebas, 0 fallos, 2 omitidas (QtMultimedia ausente en el runner, MS-A02) | **Cierra B15 y B16, y con ellos los 16 bloques.** Alcance exacto de la declaracion, dicho sin adornos: son pruebas **manuales y de juicio humano**, y quien las pasa es quien las ejecuta; no hay captura automatica de ninguna. **PS-01 a PS-07 se reportaron como un juicio global sobre las siete**, no como siete veredictos separados, de modo que quien lea esto no confunda una impresion de conjunto con siete evaluaciones independientes. Las omisiones declaradas antes siguen en pie: destinos UDP en la partida 2 de B14, y los flujos de PA-020, PA-021 y PA-022 pulsados dentro del `.exe`. **Declarar Sirius 0.1 aceptada y terminada corresponde al propietario, no a esta tabla** |
 
 Tipos permitidos: `automática`, `CI`, `manual-Windows`, `proveedor-real`, `evaluación-humana`, `documental`.
 
@@ -286,10 +309,10 @@ Estados permitidos: `no preparada`, `preparada`, `automática superada`, `manual
 
 | Grupo | Estado | Dependencia principal |
 |---|---|---|
-| PA-001 a PA-025 | Bloqueada | Su trazado formal está declarado en `TRAZABILIDAD_PA_SP.md` (B12a); su ejecución formal pertenece a V8.3 y V8.4. D-01 a D-11 ya no las bloquean: están cerrados en su parte automatizable |
-| PS-01 a PS-07 | Bloqueada | Proveedor real y evaluación humana |
-| SP-01 a SP-07 | Bloqueada parcialmente | Windows real y proveedor real. D-03, D-06 y D-11 ya no las bloquean |
-| PA-E2E-01 | Bloqueada | B12, B14, B15 y B16 |
+| PA-001 a PA-025 | Superada por declaración del propietario el 2026-08-10 | Ejecutadas por el propietario con el proveedor real. Trazado formal en `TRAZABILIDAD_PA_SP.md` (B12a). PA-019 y la partida 3 de B14 constan aparte, en la fila de evidencia de B14 |
+| PS-01 a PS-07 | Superada por declaración del propietario el 2026-08-10 | Evaluación humana del propietario, reportada como un juicio global sobre las siete y no como siete veredictos separados. Consta así en la fila de evidencia |
+| SP-01 a SP-07 | Superada por declaración del propietario el 2026-08-10 en su parte manual | Su parte automatizable estaba cubierta; la manual la ejecuta el propietario. Windows real y proveedor real, ambos disponibles |
+| PA-E2E-01 | Superada por declaración del propietario el 2026-08-10 | Proyecto real durante varias sesiones, con las decisiones y los bloqueos recuperados al volver |
 
 Que un comportamiento esté cubierto por pruebas automáticas **no** convierte su
 PA en superada. Qué está cubierto y con qué prueba se lee en
