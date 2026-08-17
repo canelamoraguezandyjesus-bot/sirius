@@ -38,6 +38,14 @@ jobs:
     if: github.event.label.name == 'sirius:implement-requested'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      # PySide6 corre sin pantalla en el runner: sin el plugin offscreen, la
+      # suite de GUI no falla, ABORTA (SIGABRT de Qt al no encontrar servidor X).
+      # El paso "Install Qt system libraries for PySide6 (offscreen)" trae las
+      # bibliotecas pero no fija la variable, asi que `uv run pytest` --que este
+      # workflow le ORDENA ejecutar al implementador-- se estrellaba. Solo estaba
+      # en `quality.yml`; aqui faltaba.
+      QT_QPA_PLATFORM: offscreen
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -96,7 +104,15 @@ jobs:
           # la #138 vino a eliminar y que `sirius_validate_activation.sh` evita a
           # proposito unas lineas mas arriba. Ahora falla RUIDOSAMENTE: el run
           # queda en rojo, visible y reintentable.
-          if ! labels_now="$(gh api "repos/${GH_REPO}/issues/${ISSUE_NUMBER}/labels" --jq '.[].name')"; then
+          # Las etiquetas se leen del OBJETO de la incidencia, NO del endpoint
+          # `/issues/<n>/labels`. El 17-08-2026, con el mismo token y en el mismo
+          # instante, `issues/186` respondia y `issues/186/labels` devolvia cuerpo
+          # vacio: cuatro reintentos, cuatro fallos, en cuatro runs a lo largo de
+          # mas de una hora (32035648135, 32037335181, 32039249452, 32039796936).
+          # Que una respondiera y la otra no descarta permisos, autenticacion y
+          # limite de tasa: los tres habrian roto ambas. El objeto ya trae
+          # `labels`, asi que da los mismos nombres y ahorra una llamada.
+          if ! labels_now="$(gh api "repos/${GH_REPO}/issues/${ISSUE_NUMBER}" --jq '.labels[].name')"; then
             echo "::error::No se pudieron leer las etiquetas de #${ISSUE_NUMBER}; no puedo distinguir una activacion invalida de un fallo de lectura. Reintentable."
             exit 1
           fi
