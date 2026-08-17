@@ -40,15 +40,21 @@ independiente de una PR de Sirius 0.1 ya existente.
 
 Este runner viene preparado para este proyecto y **tú no vienes a montarlo**: no
 instales herramientas ni dependencias del sistema, y no uses `curl` ni `wget`
-para traerte nada. Las validaciones se ejecutan con lo que ya está disponible
-(`uv run ruff …`, `uv run mypy …`, `uv run pytest`, y `uv sync` si hace falta
-resolver dependencias del propio proyecto).
+para traerte nada.
 
-Si algo concreto no está disponible, tienes dos salidas y ninguna más: **adaptar
-la corrección a las capacidades existentes**, o emitir `FAILED_SAFELY`
-explicando qué faltaba y qué quedó sin corregir. Improvisar una instalación no es
-una tercera salida: una orden denegada no es un obstáculo que rodear, es la
-respuesta del entorno, y rodearla gasta el turno que necesitas para corregir.
+**El workflow ya te ha preparado el entorno antes de arrancarte**: instala `uv`
+(paso `Install uv`) y sincroniza las dependencias del proyecto (`uv sync
+--locked --all-groups`), además de las bibliotecas de Qt que necesita la suite
+de GUI en modo offscreen. Así que `uv run ruff …`, `uv run mypy …` y
+`uv run pytest` funcionan tal cual, sin instalar nada.
+
+Si aun así alguna de esas herramientas no estuviera disponible, **eso es un
+fallo del entorno, no un problema que debas resolver instalando**: tienes dos
+salidas y ninguna más — adaptar la corrección a las capacidades existentes, o
+emitir `FAILED_SAFELY` diciendo qué faltaba y qué quedó sin corregir. Improvisar
+una instalación no es una tercera salida: una orden denegada no es un obstáculo
+que rodear, es la respuesta del entorno, y rodearla gasta el turno que necesitas
+para corregir.
 
 ## Observaciones a corregir
 

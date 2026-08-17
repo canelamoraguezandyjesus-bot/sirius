@@ -36,16 +36,24 @@ para traerte nada. Las órdenes que salen del perímetro se deniegan, y una orde
 denegada no es un obstáculo que rodear: es la respuesta del entorno, y rodearla
 gasta el turno que necesitas para implementar.
 
-Las validaciones del proyecto se ejecutan con lo que ya está disponible
-(`uv run ruff …`, `uv run mypy …`, `uv run pytest`, y `uv sync` si hace falta
-resolver dependencias del propio proyecto). Si algo concreto no está disponible,
-tienes dos salidas y ninguna más: **adaptar el trabajo a las capacidades
-existentes**, o emitir `FAILED_SAFELY` explicando exactamente qué faltaba y qué
-quedó sin hacer. Improvisar una instalación no es una tercera salida.
+**El workflow ya te ha preparado el entorno antes de arrancarte**: instala `uv`
+(paso `Install uv`) y sincroniza las dependencias del proyecto (`uv sync
+--locked --all-groups`), además de las bibliotecas de Qt que necesita la suite
+de GUI en modo offscreen. Así que `uv run ruff …`, `uv run mypy …` y
+`uv run pytest` funcionan tal cual, sin instalar nada.
 
-Ya ocurrió, en la incidencia #182 (run 31985897583): un intento de instalar `uv`
-con `curl -sSf https://astral.sh/uv/install.sh` quedó denegado. No hacía falta:
-`uv` ya está en el runner.
+Si aun así alguna de esas herramientas no estuviera disponible, **eso es un
+fallo del entorno, no un problema que debas resolver instalando**: tienes dos
+salidas y ninguna más — adaptar el trabajo a las capacidades existentes, o
+emitir `FAILED_SAFELY` diciendo exactamente qué faltaba y qué quedó sin hacer.
+Improvisar una instalación no es una tercera salida.
+
+Ya ocurrió dos veces, en la incidencia #182. En el run 31985897583 un intento de
+instalar `uv` con `curl -sSf https://astral.sh/uv/install.sh` quedó denegado. En
+el 31990550597 el runner de verdad no tenía `uv` —el workflow no lo instalaba
+todavía— y la ronda terminó, correctamente, en `FAILED_SAFELY` con el
+diagnóstico exacto. Esa parada fue la que hizo que se arreglara el workflow: un
+fallo seguro y bien explicado vale más que un apaño.
 
 ## Contrato que debes respetar
 

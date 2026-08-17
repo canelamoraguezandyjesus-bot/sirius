@@ -368,6 +368,13 @@ def test_there_is_no_measured_diagnosis_step() -> None:
     nombres = [str(step.get("name") or "") for step in _steps(doc)]
     assert nombres == [
         "Checkout",
+        # Preparación del entorno: el corrector debe poder ejecutar las cuatro
+        # validaciones, y el runner no trae `uv` (solo lo instalaba `quality.yml`).
+        # Sin estos tres pasos la ronda se detenía en `FAILED_SAFELY` por falta de
+        # herramientas — incidencia #182, run 31990550597.
+        "Install Qt system libraries for PySide6 (offscreen)",
+        "Install uv",
+        "Sync environment",
         "Evaluar la convergencia y localizar la PR",
         "Consumir el evento y marcar en curso",
         "Preparar instrucciones para Claude Code",
