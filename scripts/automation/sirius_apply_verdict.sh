@@ -78,32 +78,11 @@ SIRIUS_RUN_TAG="${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1}"
 # sigue registrándose por separado.
 SIRIUS_ROUND_TAG="${GITHUB_RUN_ID:-manual}"
 
-# sanitize_untrusted_text — neutraliza, en texto que procede de un agente o de
-# Codex (y que puede arrastrar contenido de la PR), las TRES secuencias que los
-# escáneres deterministas de la incidencia reinterpretan al releer comentarios:
-#   - las vallas ``` (podrían cerrar antes de tiempo o falsificar el bloque
-#     "## OBSERVACIONES_ESTRUCTURADAS ```json ... ```" que consume el gate del
-#     corrector mediante sirius_extract_observations);
-#   - los marcadores "Head SHA:"/"Merge SHA:" (envenenarían sirius_extract_sha
-#     en verificaciones de head posteriores);
-#   - la apertura "<!--" de un comentario HTML. Esta es la que faltaba, y su
-#     ausencia era explotable: los marcadores que gobiernan la convergencia
-#     (`<!-- sirius-round:N -->`) y la racha de CI (`<!-- sirius-quality:...-->`)
-#     son comentarios HTML, y los publica la automatización, así que caen del
-#     lado CONFIABLE del filtro de autor. Un texto no confiable que colara uno
-#     de esos marcadores en un cuerpo publicado por el script quedaba contado
-#     por `parse_round_records` o por `ci_failure_streak`: bastaba para fabricar
-#     una ronda con cero hallazgos (progreso falso, corrector vivo sin cota) o
-#     un `sirius-quality:<sha>:success` que reinicia la racha de fallos de CI.
-#     Romper la apertura basta: ambos escáneres exigen el literal "<!--".
-# El contenido sigue siendo legible y fiel; solo se desactivan los marcadores.
-# (\u0027 es una comilla simple, escapada para no cerrar la cadena del programa jq.)
-sanitize_untrusted_text() {
-  jq -Rrs 'gsub("```"; "\u0027\u0027\u0027") | gsub("(?<p>[Hh][Ee][Aa][Dd]|[Mm][Ee][Rr][Gg][Ee])(\\s+[Ss][Hh][Aa]\\s*:)"; "\(.p)-sha:") | gsub("<!--"; "&lt;!--")'
-}
-sanitize_untrusted_json() {
-  jq -c 'walk(if type == "string" then gsub("```"; "\u0027\u0027\u0027") | gsub("(?<p>[Hh][Ee][Aa][Dd]|[Mm][Ee][Rr][Gg][Ee])(\\s+[Ss][Hh][Aa]\\s*:)"; "\(.p)-sha:") | gsub("<!--"; "&lt;!--") else . end)'
-}
+# sanitize_untrusted_text / sanitize_untrusted_json viven en sirius_issue.sh
+# (este script la carga arriba). Se movieron alli porque tambien los necesita
+# quien publica texto de agente FUERA de este script: el informe del Auditor
+# (ADR-016) sale como github-actions[bot], que esta dentro del filtro de
+# confianza, y sin este saneado gobernaria rondas y observaciones.
 
 # transition <marker> <body_file> <add_label> <color> <desc>
 transition() {

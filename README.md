@@ -60,4 +60,7 @@ Para ejecutar todas las comprobaciones locales:
 .\scripts\check.ps1
 ```
 
-GitHub Actions ejecuta también Ruff, mypy y pytest en Windows para cada pull request y cada cambio integrado en `main`.
+GitHub Actions ejecuta Ruff, mypy y pytest en Linux (`ubuntu-latest`, workflow `Quality`) para
+cada pull request y cada cambio integrado en `main`. La validación equivalente en Windows vive
+en `.github/workflows/quality-windows.yml` y es **puntual**: se lanza a mano
+(`workflow_dispatch`) antes de un hito o una entrega.

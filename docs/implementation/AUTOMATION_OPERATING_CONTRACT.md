@@ -1,11 +1,11 @@
 # SIRIUS - Contrato operativo de automatización
 
-**Versión:** 1.5  
-**Fecha:** 3 de agosto de 2026  
-**Estado:** VIGENTE (§4 y §5 actualizadas; ver §10.3 y §10.4)  
-**Autoridad:** Operativa para el desarrollo automatizado de Sirius 0.1  
-**Sustituye:** versión 1.4 del 3 de agosto de 2026  
-**No modifica:** Producto, Arquitectura Técnica, ATD, requisitos ni alcance de Sirius 0.1
+- **Versión:** 1.6.1
+- **Fecha:** 16 de agosto de 2026
+- **Estado:** VIGENTE (§4, §5 y §9 actualizadas; ver §10.3, §10.4, §10.5 y §10.6)
+- **Autoridad:** Operativa para el desarrollo automatizado de Sirius 0.1
+- **Sustituye:** versión 1.6 del 10 de agosto de 2026
+- **No modifica:** Producto, Arquitectura Técnica, ATD, requisitos ni alcance de Sirius 0.1
 
 ## 0. Propósito
 
@@ -144,8 +144,34 @@ Reglas del modo dual:
   El recolector solo acepta resultados del conector oficial de Codex
   (allowlist), posteriores al disparador y demostrablemente referidos a ese
   SHA (`commit_id` de la revisión o el marcador `Reviewed commit:`). La
-  ausencia de comentarios no es aprobación: la aprobación exige una revisión
-  formal `APPROVED` o una reacción `+1` del conector sobre el disparador.
+  ausencia de señales no es aprobación: aprobar exige una señal explícita del
+  conector, y solo se admiten tres —una revisión formal `APPROVED`, una reacción
+  `+1` sobre el disparador, o un comentario de la conversación que **declare
+  ausencia de hallazgos en la fórmula conocida** del conector, con las mismas
+  comprobaciones de autor, orden temporal y SHA que cualquier otra señal—.
+- El tercer canal existe porque los otros dos no ocurren con este conector
+  (v1.6.1). Observado en la PR #178: en seis rondas con hallazgos publicó
+  revisiones formales, todas `COMMENTED` y ninguna `APPROVED`; en la ronda sin
+  hallazgos publicó un comentario («Codex Review: Didn't find any major issues»)
+  y **no** marcó 👍 el disparador, pese a que su propio texto lo promete. Con
+  solo los dos canales anteriores, ninguna PR limpia podía alcanzar
+  `sirius:ready-for-merge`: el modo dual quedaba estructuralmente bloqueado.
+- El reconocimiento de esa fórmula es **deliberadamente estrecho** y falla
+  cerrado: solo variantes de la afirmación observada («did(n't) find any
+  [major] issues») aprueban, y un comentario que además traiga insignias de
+  severidad no aprueba aunque la contenga. Cualquier otra redacción sigue siendo
+  la parada segura `respuesta-por-comentario`. Si el conector cambia su texto, el
+  coste es una ronda detenida que mira una persona, nunca una aprobación falsa.
+  Esta señal aporta, además, solo la mitad del veredicto: la precedencia del
+  agregador (más abajo en esta misma sección) exige que Claude apruebe también
+  el mismo SHA para que la ronda termine en `REVIEW_APPROVED`.
+- Se consideran **todos** los comentarios del conector referidos al head
+  esperado, no solo uno, y basta uno que no declare ausencia de hallazgos para
+  detener la ronda — el mismo principio que ya rige para las revisiones. Decidir
+  con el primero dejaría que un comentario intermedio bloqueara una ronda
+  limpia; decidir con el último dejaría que una declaración posterior enterrara
+  un comentario anterior con hallazgos. Exigirlo de todos quita la dependencia
+  del orden de llegada por los dos lados.
 - Se consideran **todas** las revisiones del conector posteriores al
   disparador, no solo la última: sus hallazgos se unen y basta una que no
   demuestre el SHA esperado para detener la ronda. Quedarse con la última
@@ -387,8 +413,80 @@ Está prohibido:
 - usar secretos reales o datos personales en pruebas automáticas;
 - cambiar Producto, Arquitectura Técnica, ATD o documentos canónicos sin decisión explícita;
 - convertir una idea exploratoria en una decisión aprobada;
-- usar vigilancia horaria como motor del flujo;
+- usar vigilancia periódica como **motor** del flujo (excepción acotada en §9.1);
 - iniciar bloques sucesivos sin orden del usuario o cola expresamente aprobada.
+
+### 9.1 Excepción: red de seguridad periódica que no es motor
+
+La prohibición anterior existe para que el flujo lo dirijan los eventos y no una
+tarea que sondea. Esa razón no alcanza a un caso: **un proceso que muere no
+puede informar de su propia muerte**, y `issues: labeled` no vuelve a dispararse
+con una etiqueta ya aplicada. Cuando una ejecución muere a mitad, la incidencia
+queda en un estado que ningún evento futuro puede mover, y el flujo por eventos
+—por construcción— no puede notarlo.
+
+Queda permitida, por tanto, **una** ejecución periódica, sujeta a todo lo
+siguiente. Si un cambio futuro rompe cualquiera de estos límites, deja de estar
+amparado por esta excepción y necesita una decisión nueva:
+
+1. **No inicia trabajo.** No aplica **nunca** `sirius:implement-requested`, que
+   es la etiqueta que arranca un bloque nuevo. La redacción anterior decía «ni
+   ninguna otra etiqueta que arranque un bloque», y **era falsa**: el caso B
+   aplica `sirius:review-requested` para reparar una transición perdida. Eso no
+   inicia un bloque —el bloque ya estaba en marcha— pero sí despierta al
+   revisor, así que queda bajo el límite 2 y no bajo este. Es la única etiqueta
+   disparadora que este workflow escribe, y solo desde `sirius:ci-pending`.
+   Lo comprueban ejecutando dos pruebas, no una: RECON-STUCK-007 recorre todos
+   los demás caminos y exige que no se escriba ninguna disparadora, y
+   RECON-STUCK-013 exige que desde `ci-pending` con Quality verde se escriba
+   `review-requested` y solo esa. Ambas miran CADA escritura de etiqueta, no el
+   estado final: retirar y volver a poner deja el mismo estado y dispara un
+   evento nuevo.
+2. **No avanza un ciclo sano.** Solo repara estados inequívocos que ya estaban
+   mal (los casos A y B de `scripts/automation/sirius_reconcile.sh`), y esos
+   mismos casos son reparables hoy a mano sin esta excepción.
+3. **No fusiona.** El merge sigue siendo humano y exige el comentario de §8.
+4. **Ante la duda, informa y no toca.** Un estado que no puede fechar o cuya
+   situación es ambigua produce un aviso, nunca una acción. «Duda» incluye **no
+   haber podido leer**: si las etiquetas, los comentarios o el cuerpo de una
+   incidencia fallan en todas sus vías, esa incidencia se omite entera en esa
+   pasada —sin comprobarla y sin comentario— y consta en el resumen del job.
+   Un fichero vacío por un 503 es byte a byte el de una incidencia sana, así que
+   usarlo como dato era afirmar hechos que nadie había leído. Lo comprueban
+   ejecutando RECON-AUD-011 a RECON-AUD-016, una por cada lectura y por cada
+   afirmación que se derivaba de ella.
+5. **No sustituye a ningún productor de eventos.** Si el flujo por eventos
+   funciona, esta ejecución no hace nada.
+
+Hoy la implementa `.github/workflows/reconcile-sirius-states.yml` con cadencia de
+seis horas. La cadencia es parte de la excepción, no un detalle: cada hora
+costaría ~720 minutos de Actions al mes sobre los 2000 gratuitos del repositorio
+privado, y seis horas cuestan ~120. Acortarla es un cambio de coste y se decide
+como tal.
+
+Consecuencia que conviene decir en voz alta: el **caso B** del reconciliador
+—`sirius:ci-pending` con Quality ya en verde— pasa a repararse **sin
+supervisión**, y esa reparación despierta al revisor. No es trabajo nuevo: es
+exactamente lo que `advance-sirius-after-quality.yml` habría hecho si el evento
+no se hubiera perdido. Pero antes ocurría solo cuando una persona lo pedía, y
+ahora puede ocurrir de madrugada.
+
+Para que eso siga dentro de los límites 2 y 5 hace falta una condición que la
+primera versión de esta excepción no tenía: el caso B **solo repara si el estado
+`ci-pending` lleva puesto más de `STUCK_MINUTES`**. Sin ella, un cron que se
+dispare justo después de que Quality se ponga verde —con
+`advance-sirius-after-quality.yml` encolado o corriendo— transiciona antes que
+él: eso no es reparar un estado roto, es **sustituir al productor del evento y
+avanzar un ciclo sano**, exactamente lo que los límites 2 y 5 prohíben.
+
+Desde fuera no hay forma de distinguir «la transición se perdió» de «la
+transición está en vuelo» salvo por el tiempo transcurrido. La condición se
+aplica también a las ejecuciones manuales: la distinción no depende de quién
+dispare. Todo esto es reversible quitando el `schedule:`.
+
+Lo que esta excepción **no** resuelve: no detecta que un run murió —eso solo lo
+sabe el run—, sino que un estado dejó de avanzar, que es lo único observable
+desde fuera. Y no repara ese estado: avisa a una persona. Ver ADR-004.
 
 ## 10. Entrada en vigor y cambio registrado
 
@@ -462,4 +560,21 @@ Está prohibido:
 - **Mantiene:** la incidencia como fuente de verdad; una sola máquina de estados; Claude como implementador y único corrector; Claude y Codex como revisores cuando la bandera está activa; fallo seguro; verificación del SHA; Quality antes de la revisión; merge exclusivamente humano mediante `fusiona`; y reversibilidad. La terminación del ciclo la garantizan las condiciones de bloqueo, no un contador.
 - **Entrada en vigor:** cuando la PR que introduce la política de convergencia sea revisada, tenga CI verde y sea fusionada por autorización explícita del usuario.
 
-El historial de las versiones 1.0, 1.1, 1.2, 1.3 y 1.4 permanece disponible en Git y no se reescribe retrospectivamente.
+### 10.5 Versión 1.6 — red de seguridad periódica que no es motor del flujo
+
+- **Decisión:** acotar la prohibición de vigilancia periódica a lo que de verdad prohibía —usarla como motor— y permitir una sola ejecución programada como red de seguridad, con los cinco límites del §9.1. Incidencia #138.
+- **Motivo:** la única pieza capaz de notar una incidencia atascada por un run muerto (`reconcile-sirius-states.yml`) solo arrancaba si una persona pulsaba un botón, es decir, dependía de que un humano notara primero justo aquello que la automatización debía notar por él. Siete correcciones consecutivas fallaron por vivir dentro del run que puede morir; la octava habría fallado igual.
+- **Alcance:** `reconcile-sirius-states.yml` (añade `schedule:`), `scripts/automation/sirius_reconcile.sh` (avisa en la incidencia cuando un estado de máquina lleva más de `STUCK_MINUTES` sin avanzar) y la redacción de §9. No cambia estados, ni la revisión dual (§4), ni la convergencia (§5), ni el merge (§8).
+- **Mantiene:** que ninguna automatización fusione, inicie bloques ni avance un ciclo sano por sondeo; que ante la duda se informe en vez de actuar; y la reversibilidad —quitar el `schedule:` devuelve el comportamiento anterior sin tocar nada más—.
+- **Entrada en vigor:** cuando la PR que introduce el `schedule:` sea revisada, tenga CI verde y sea fusionada por autorización explícita del usuario.
+
+### 10.6 Versión 1.6.1 — el canal por el que Codex dice de verdad que no encontró nada
+
+- **Decisión:** admitir como tercera señal de aprobación de Codex un comentario de la conversación que declare ausencia de hallazgos en la fórmula conocida del conector, con las mismas comprobaciones de autor, orden temporal y SHA que las otras dos. Incidencia #177.
+- **Motivo:** los dos canales que §4.1 admitía —revisión formal `APPROVED` y reacción `+1`— no ocurren nunca con este conector. Comprobado sobre las siete rondas de la PR #178: seis revisiones formales, todas `COMMENTED` y ninguna `APPROVED`, y en la única ronda sin hallazgos un comentario («Codex Review: Didn't find any major issues») con el disparador a cero reacciones. No era una intermitencia: con la regla anterior ninguna PR limpia podía alcanzar `sirius:ready-for-merge` en modo dual. La incidencia #148 ya había visto ese mismo comentario y se corrigió entonces solo la mentira del timeout; segunda vez que muerde la misma familia, así que se corrige la regla y no el síntoma.
+- **Alcance:** el reconocimiento de la señal en `scripts/automation/sirius_codex_review.py` (`_declares_no_findings` y el desenlace de `_check_conversation_comments`), sus pruebas, y la redacción de §4.1 y de esta sección. No cambia el contrato de estados, la precedencia del agregador, la convergencia (§5), la verificación de head, los permisos, ni el mecanismo de merge (§8). Ningún workflow se toca.
+- **Mantiene:** que la ausencia de señales no aprueba jamás; la allowlist de autores; la exigencia de que la señal sea estrictamente posterior al disparador y demostrablemente sobre el SHA esperado; la precedencia —una revisión formal manda sobre señales más débiles, y el comentario solo se consulta cuando no hay ninguna—; que Codex sigue siendo obligatorio en modo dual; y que Claude debe aprobar el mismo SHA para que la ronda apruebe. El reconocimiento falla cerrado: una redacción distinta, o un comentario con insignias de severidad, sigue terminando en `respuesta-por-comentario`.
+- **Numeración:** se usa un tercer nivel (1.6.1) a propósito. El plan aprobado del Work Engine (ADR-020, decisión 5) reserva **v1.7 para E1a** y **v1.8 para E1b**; tomar la 1.7 aquí habría obligado a renumerar un plan ya aprobado por una razón puramente contable. Esta enmienda además no añade capacidad: corrige la descripción de un canal de la revisión dual que la v1.4 ya introdujo.
+- **Entrada en vigor:** cuando la PR que introduce este canal sea revisada, tenga CI verde y sea fusionada por autorización explícita del usuario.
+
+El historial de las versiones 1.0, 1.1, 1.2, 1.3, 1.4, 1.5 y 1.6 permanece disponible en Git y no se reescribe retrospectivamente.

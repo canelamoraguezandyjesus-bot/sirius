@@ -19,7 +19,18 @@ from pathlib import Path
 
 import openai
 
+from sirius.adapters.audio.openai_speech import DEFAULT_VOICE, OpenAISpeech
+from sirius.adapters.audio.openai_transcription import OpenAITranscription
+from sirius.adapters.audio.qt_capture import QtAudioCapture
+from sirius.adapters.audio.qt_playback import QtAudioPlayback
+from sirius.adapters.audio.unconfigured import (
+    UnconfiguredSpeechToText,
+    UnconfiguredTextToSpeech,
+)
+from sirius.adapters.audio.winsound_playback import WinsoundAudioPlayback, winsound_is_available
 from sirius.adapters.backup.sqlite_backup_service import build_sqlite_backup_service
+from sirius.adapters.capture.file_journal import build_file_capture_journal
+from sirius.adapters.capture.obs_websocket import ObsWebSocketBackend
 from sirius.adapters.clock.system_clock import build_system_clock
 from sirius.adapters.export.filesystem_export_service import build_filesystem_export_service
 from sirius.adapters.llm.budget import BudgetPolicy, BudgetTracker
@@ -72,9 +83,12 @@ from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseC
 from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageUseCase
+from sirius.application.studio_capture import StudioCaptureUseCase
+from sirius.application.studio_voice import StudioVoiceUseCase, VoiceSettings
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
+from sirius.capture_setup import leer_contrasena_guardada
 from sirius.config.llm_provider_settings import (
     LLMProviderConfigurationError,
     LLMProviderKind,
@@ -83,11 +97,23 @@ from sirius.config.llm_provider_settings import (
     resolve_provider_kind,
 )
 from sirius.config.settings import load_settings, save_settings
+from sirius.domain.capture import build_scene_registry
 from sirius.infrastructure.logging import get_logger
+from sirius.ports.audio_playback import AudioPlayback
 from sirius.ports.llm import LLMProvider
 from sirius.ports.secrets import SecretStore
 
 _logger = get_logger(__name__)
+
+STUDIO_VOICE_SETTING = "model_studio_voice"
+"""Dónde vive la voz elegida en los ajustes rápidos de Model Studio."""
+
+
+def save_studio_voice(voice: str) -> None:
+    """Guarda la voz sin tocar el resto de la configuración."""
+    settings = dict(load_settings())
+    settings[STUDIO_VOICE_SETTING] = voice
+    save_settings(settings)
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,6 +169,8 @@ class ConversationDependencies:
     validate_backup_use_case: ValidateBackupUseCase
     restore_backup_use_case: RestoreBackupUseCase
     export_structured_use_case: ExportStructuredUseCase
+    studio_voice_use_case: StudioVoiceUseCase
+    studio_capture_use_case: StudioCaptureUseCase
     close_database_connections: Callable[[], None]
     activate_configured_llm_provider: Callable[[], None]
 
@@ -202,6 +230,130 @@ def _build_llm_provider(
         max_output_tokens=provider_settings.max_output_tokens,
         budget_tracker=budget_tracker,
     )
+
+
+def build_audio_playback() -> AudioPlayback:
+    """Elige por qué camino suena la voz en esta máquina.
+
+    En Windows manda ``winsound``, que es el reproductor del propio sistema y
+    viene con Python. No es una preferencia: el motor multimedia de Qt allí
+    descodifica con FFmpeg, y con el WAV del proveedor de voz respondía
+    ``Packet corrupt`` y se quedaba callado —sin sonido y sin error—. Una capa
+    menos por el camino es una cosa menos que puede tragarse el audio.
+
+    Fuera de Windows sigue mandando Qt, que es lo único que hay. Los dos
+    cumplen el mismo puerto, así que cambiar de uno a otro no toca nada más.
+    """
+    if winsound_is_available():
+        return WinsoundAudioPlayback()
+    return QtAudioPlayback()
+
+
+def _build_studio_voice_use_case(
+    database_path: Path,
+    secret_store: SecretStore,
+    *,
+    llm_usage_repository: SqliteLLMUsageRepository | None = None,
+) -> StudioVoiceUseCase:
+    """Construye la voz de Model Studio con el proveedor configurado.
+
+    Sin clave, o con el proveedor simulado seleccionado, se devuelven
+    adaptadores «sin configurar» que explican por qué no pueden hablar, igual
+    que hace ``UnconfiguredLLMProvider`` con el texto. Sirius arranca siempre y
+    la conversación escrita no se entera de nada.
+
+    El micrófono y los altavoces se construyen igual haya clave o no: son del
+    sistema, no del proveedor, y sus adaptadores no tocan el audio hasta que de
+    verdad se graba.
+    """
+    temporary_audio_dir = database_path.parent / "audio-temporal"
+    capture = QtAudioCapture(temporary_audio_dir)
+    playback = build_audio_playback()
+    _logger.info("Reproductor de voz elegido: %s", type(playback).__name__)
+    # Un cierre forzado durante una grabación no puede dejar la voz del usuario
+    # tirada en el disco: se limpia al arrancar.
+    orphans = capture.cleanup_orphans()
+    if orphans:
+        _logger.info("Audio temporal huérfano eliminado al arrancar: %d", orphans)
+
+    settings = load_settings()
+    # La voz elegida en Ajustes se guarda aquí y manda sobre la de partida.
+    chosen_voice = str(settings.get(STUDIO_VOICE_SETTING, "") or DEFAULT_VOICE)
+    reason = ""
+    try:
+        if resolve_provider_kind(settings) is LLMProviderKind.FAKE:
+            reason = "El proveedor simulado no tiene voz. Configura OpenAI en Configuración."
+        else:
+            api_key = resolve_openai_api_key(secret_store)
+            if not api_key:
+                reason = (
+                    "No hay ninguna clave de API guardada. Añádela en la pestaña "
+                    "Configuración para que Sirius pueda hablar."
+                )
+    except LLMProviderConfigurationError as exc:
+        reason = str(exc)
+
+    if reason:
+        return StudioVoiceUseCase(
+            audio_capture=capture,
+            speech_to_text=UnconfiguredSpeechToText(reason),
+            text_to_speech=UnconfiguredTextToSpeech(reason),
+            audio_playback=playback,
+            settings=VoiceSettings(voice=chosen_voice),
+        )
+
+    client = openai.OpenAI(api_key=resolve_openai_api_key(secret_store), max_retries=0)
+    # El MISMO contador mensual que el texto: la voz y el chat gastan del mismo
+    # bolsillo, así que el tope de DR-018 sigue siendo uno solo.
+    try:
+        budget_settings = resolve_openai_provider_settings(settings)
+    except LLMProviderConfigurationError:
+        budget_settings = resolve_openai_provider_settings({})
+    budget_tracker = BudgetTracker(
+        policy=BudgetPolicy(monthly_limit_usd=budget_settings.monthly_budget_usd),
+        usage_repository=llm_usage_repository or build_sqlite_llm_usage_repository(database_path),
+    )
+    return StudioVoiceUseCase(
+        audio_capture=capture,
+        speech_to_text=OpenAITranscription(client),
+        text_to_speech=OpenAISpeech(client, temporary_audio_dir),
+        audio_playback=playback,
+        settings=VoiceSettings(voice=chosen_voice),
+        budget_guard=budget_tracker,
+    )
+
+
+def _build_studio_capture_use_case(
+    working_directory: Path, secret_store: SecretStore
+) -> StudioCaptureUseCase:
+    """Construye el Módulo Captura, siempre desactivado al arrancar.
+
+    #127 exige que abrir Sirius no conecte con nada ni grabe nada: hay que
+    encenderlo a propósito. Por eso aquí no se conecta, solo se prepara.
+
+    La lista blanca de escenas y la contraseña del sistema de captura son
+    configuración del usuario; mientras no exista, el módulo se construye sin
+    escenas y no se puede encender, que es lo correcto: sin escenas
+    autorizadas no hay nada que se pueda activar de forma segura.
+    """
+    settings = load_settings()
+    capture_settings = settings.get("model_studio_capture", {})
+    if not isinstance(capture_settings, dict):
+        capture_settings = {}
+
+    scenes = build_scene_registry(capture_settings.get("scenes"))
+    backend = ObsWebSocketBackend(
+        # Del almacén del sistema, no del fichero: `settings.json` es
+        # configuración no confidencial y la contraseña es una credencial.
+        password=leer_contrasena_guardada(secret_store),
+        host=str(capture_settings.get("host", "127.0.0.1")),
+        port=int(capture_settings.get("port", 4455)),
+    )
+    # Las marcas acaban junto al vídeo, y el diario de órdenes en la carpeta de
+    # Sirius. Sin esto, «marca esto como el primer led» no llegaba a ninguna
+    # parte y la confirmación hablada prometía algo que no ocurría.
+    journal = build_file_capture_journal(working_directory / "capturas", build_system_clock())
+    return StudioCaptureUseCase(backend=backend, scenes=scenes, enabled=False, journal=journal)
 
 
 def build_conversation_dependencies(
@@ -271,6 +423,12 @@ def build_conversation_dependencies(
         warn_threshold_usd=BudgetPolicy().warn_threshold_usd,
         monthly_limit_usd=budget_settings.monthly_budget_usd,
     )
+
+    studio_voice_use_case = _build_studio_voice_use_case(
+        database_path, secret_store, llm_usage_repository=llm_usage_repository
+    )
+
+    studio_capture_use_case = _build_studio_capture_use_case(database_path.parent, secret_store)
 
     backup_service = build_sqlite_backup_service(database_path, backups_dir)
     export_service = build_filesystem_export_service(build_system_clock())
@@ -351,5 +509,7 @@ def build_conversation_dependencies(
             decision_repository,
         ),
         close_database_connections=close_database_connections,
+        studio_voice_use_case=studio_voice_use_case,
+        studio_capture_use_case=studio_capture_use_case,
         activate_configured_llm_provider=activate_configured_llm_provider,
     )

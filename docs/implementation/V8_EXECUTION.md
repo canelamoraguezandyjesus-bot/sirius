@@ -2,13 +2,50 @@
 
 Este documento es el registro operativo único de V8. No sustituye el Producto, el Plan de Pruebas, la Arquitectura, las ATD ni `docs/implementation/PLAN.md`.
 
+Por ADR-005, es además el **único sitio del repositorio donde se declara el
+estado** de un bloque de V8 o de un defecto del catálogo. `PLAN.md` describe el
+plan; `REPOSITORY_STATUS.md` describe qué hay construido; ninguno de los dos
+dice en qué punto está. Si un documento contradice a este en materia de estado,
+manda este.
+
 ## Estado
 
-- V8.1 — Corrección documental y automatizada: **ACTIVA**.
-- V8.2 — Windows sin clave: **BLOQUEADA** hasta integración automática verde.
-- V8.3 — Proveedor real: **BLOQUEADA**.
-- V8.4 — PA-E2E-01 y cierre: **BLOQUEADA**.
-- Sirius 0.1: **NO ACEPTADO** y **NO TERMINADO**.
+- V8.1 — Corrección documental y automatizada: **COMPLETA**.
+- V8.2 — Windows sin clave: **COMPLETA**.
+- V8.3 — Proveedor real: **COMPLETA**.
+- V8.4 — PA-E2E-01 y cierre: **COMPLETA**.
+- Sirius 0.1: **ACEPTADO** y **TERMINADO** por declaración del propietario el
+  **10 de agosto de 2026**.
+
+## Declaración de aceptación
+
+El propietario declara Sirius 0.1 **listo, cerrado y verificado** el 10 de agosto
+de 2026, tras ejecutar personalmente, con clave y proveedor reales, las pruebas de
+aceptación que exigían Windows real, proveedor real o evaluación humana: PA-001,
+PA-002, PA-008, PA-009, PA-019, PA-023, PS-01 a PS-07 y PA-E2E-01, más la partida
+del valor señuelo en Windows Credential Manager.
+
+Los **16 bloques** de V8 quedan cerrados. Detalle de cada uno en la tabla de
+bloques operativos; detalle de cada prueba, en la tabla de evidencia.
+
+Lo que esta declaración **no** borra, porque una aceptación honesta se lleva sus
+salvedades escritas:
+
+- **PS-01 a PS-07 se reportaron como un juicio global** sobre las siete, no como
+  siete veredictos separados.
+- No hay captura automática de ninguna prueba manual: las pasa quien las ejecuta,
+  y aquí consta quién.
+- Siguen sin demostrarse los **destinos UDP** de la partida 2 de B14 y los flujos
+  de **PA-020, PA-021 y PA-022** pulsados dentro del ejecutable empaquetado.
+
+Sirius 0.1 está aceptado con esas salvedades a la vista, no a pesar de ellas.
+
+**B12e cierra el riesgo que B12c destapó** (ADR-008): `list_current_memories()`,
+`list_archived_memories()`, `list_current_decisions()` y
+`list_archived_decisions()` cargan ahora la revisión vigente del conjunto en
+una sola consulta en vez de una por elemento. Construir el contexto pasa de
+usar entre el 89 % y el 100 % de los 300 ms de RNF-003 a usar el 40 %. Ver la
+sección de rendimiento y ADR-008.
 
 No se crea una fase canónica adicional denominada `Preparación V8`.
 
@@ -72,46 +109,65 @@ Debe cumplirse:
 
 ## Catálogo cerrado de trabajo
 
-| ID | Resumen | Fuente principal | Bloquea proveedor real | Bloquea cierre | Estado | Bloque |
-|---|---|---|---:|---:|---|---|
-| D-01 | Onboarding y validación de credencial | RF-001/002; PA-001/002 | Sí | Sí | Abierto | B2 |
-| D-02 | Proyecto operable | RF-014–018; PA-006–009 | Sí | Sí | Abierto | B3 |
-| D-03 | Eventos, memoria y decisiones | RF-019–026; PA-010–016 | Sí | Sí | Abierto | B4 |
-| D-04 | Panel de contexto | Producto §9.1 | Sí | Sí | Abierto | B5 |
-| D-05 | Reintento sin reescribir | RF-007; PA-003/017 | Sí | Sí | Abierto | B7 |
-| D-06 | Markdown seguro y código copiable | RF-008; SP-07 | No | Sí | Abierto | B8 |
-| D-07 | Exportación estructurada | RF-031; PA-020; ATD-009 | No | Sí | Cerrado (B9a y B9b implementados) | B9 |
-| D-08 | Errores accionables | RF-028; RNF-018 | Sí | Sí | Abierto | B7 |
-| D-09 | Aviso de presupuesto | RF-030; PA-018 | No | Sí | Abierto | B7 |
-| D-10 | Ruta de datos y activación clara | Producto §5.1 | No | Sí | Abierto | B2 |
-| D-11 | Contexto pertinente y limitado | RNF-008; SP-03; ATD-007 | Sí | Sí | Abierto | B6 |
-| A-01 | Política de acciones fuera de alcance | RF-035; PA-024 | Sí | Sí | Cerrado en su parte automatizable (B10 implementado) | B10 |
-| A-02 | Recuperación tras cierre forzado | RNF-005/006; PA-019 | No | Sí | Cerrado en su parte automatizable (B11 implementado) | B11 |
-| A-03 | Empaquetado reproducible | ATD-011 | Sí, como puerta | Sí | Abierto | B13 |
-| A-04 | Evidencia de aceptación trazada | Plan de Pruebas | No, por sí sola | Sí | Abierto | B12/B16 |
+Este catálogo **no declara estado**. Cada defecto lo cierra un bloque, y el
+estado se lee en la tabla de bloques de la sección siguiente, que es la única
+autoritativa (ADR-005). Tener el mismo hecho en dos tablas fue lo que las
+dejó contradiciéndose entre sí.
+
+| ID | Resumen | Fuente principal | Bloquea proveedor real | Bloquea cierre | Lo cierra |
+|---|---|---|---:|---:|---|
+| D-01 | Onboarding y validación de credencial | RF-001/002; PA-001/002 | Sí | Sí | B2 |
+| D-02 | Proyecto operable | RF-014–018; PA-006–009 | Sí | Sí | B3 y B4 |
+| D-03 | Eventos, memoria y decisiones | RF-019–026; PA-010–016 | Sí | Sí | B4 |
+| D-04 | Panel de contexto | Producto §9.1 | Sí | Sí | B5 |
+| D-05 | Reintento sin reescribir | RF-007; PA-003/017 | Sí | Sí | B7 |
+| D-06 | Markdown seguro y código copiable | RF-008; SP-07 | No | Sí | B8 |
+| D-07 | Exportación estructurada | RF-031; PA-020; ATD-009 | No | Sí | B9 |
+| D-08 | Errores accionables | RF-028; RNF-018 | Sí | Sí | B7 |
+| D-09 | Aviso de presupuesto | RF-030; PA-018 | No | Sí | B7 |
+| D-10 | Ruta de datos y activación clara | Producto §5.1 | No | Sí | B2 y B14 |
+| D-11 | Contexto pertinente y limitado | RNF-008; SP-03; ATD-007 | Sí | Sí | B6 |
+| A-01 | Política de acciones fuera de alcance | RF-035; PA-024 | Sí | Sí | B10 |
+| A-02 | Recuperación tras cierre forzado | RNF-005/006; PA-019 | No | Sí | B11 |
+| A-03 | Empaquetado reproducible | ATD-011 | Sí, como puerta | Sí | B13 |
+| A-04 | Evidencia de aceptación trazada | Plan de Pruebas | No, por sí sola | Sí | B12 y B16 |
 
 Cualquier defecto nuevo debe vincularse a un requisito ya aprobado. Si no puede hacerse, debe detenerse el trabajo y solicitar decisión.
 
+### Qué significa «cerrado» aquí
+
+Un defecto **cerrado en su parte automatizable** tiene su comportamiento
+implementado y cubierto por pruebas automáticas con dobles deterministas. No
+significa que su prueba de aceptación formal esté superada: las PA que exigen
+proveedor real, Windows real o evaluación humana permanecen sin declarar hasta
+V8.3 y V8.4. Esta distinción es la que separa infraestructura de aceptación, y
+no debe borrarse al resumir.
+
 ## Bloques operativos
+
+**Esta tabla es el único registro autoritativo del estado de V8 (ADR-005).**
+Ningún otro documento del repositorio declara el estado de un bloque o de un
+defecto; `PLAN.md` y `REPOSITORY_STATUS.md` enlazan aquí. Un bloque que se
+fusiona actualiza esta tabla y nada más.
 
 | Bloque | Entrega | Estado |
 |---|---|---|
-| B1 | Reconciliación documental y trazabilidad | En curso |
-| B2 | Onboarding, credencial, ruta y activación | En curso (RF-002, B2a y B2b implementados y cubiertos automáticamente; activación real en Windows pendiente) |
-| B3 | Proyecto mínimo y ciclo de vida | En curso (B3a, B3b y B3c implementados y cubiertos automáticamente; decisiones (B4) pendientes) |
-| B4 | Eventos, recuerdos, decisiones y conflictos | En curso (B4a a B4e fusionados en `main`; B4f implementado, PR pendiente de revisión y merge; parte automatizable de RF-019 a RF-026/PA-010 a PA-016 completa) |
-| B5 | Panel de contexto | Pendiente |
+| B1 | Reconciliación documental y trazabilidad | Completo (ADR-005: el estado de V8 vive solo en esta tabla; `PLAN.md` y `REPOSITORY_STATUS.md` dejan de copiarlo y `tests/unit/test_documentation_single_source.py` falla si vuelven a hacerlo) |
+| B2 | Onboarding, credencial, ruta y activación | Completo en su parte automatizable (RF-001 y RF-002 implementados y cubiertos: `OnboardingWindow`, `ValidateAndSaveApiKeyUseCase`, `ValidatedMainWindow`; B2b resuelve, valida y persiste la ruta local antes de SQLite, logging y composición. D-01 cerrado en su parte automatizable; PA-001 y PA-002 exigen proveedor real (V8.3). D-10 **cerrado el 2026-08-10**: su única condición pendiente era la comprobación real en Windows, que pertenecía a B14, y B14 quedó completo ese día. PA-001 y PA-002 siguen exigiendo proveedor real) |
+| B3 | Proyecto mínimo y ciclo de vida | Completo (B3a, B3b y B3c implementados y cubiertos automáticamente: saludo inicial y primer proyecto utilizable, continuidad observable —estado, bloqueos, siguiente paso, resumen al retomar— y ciclo de vida versionado con `project_revisions` inmutables; RF-014 a RF-018 cubiertos. D-02 cerrado en su parte automatizable junto con B4; PA-008 y PA-009 exigen decisión registrada evaluada con proveedor real) |
+| B4 | Eventos, recuerdos, decisiones y conflictos | Completo (B4a a B4f fusionados en `main`: guardado manual con origen consultable, decisiones con aprobación explícita, corrección versionada y sustitución, archivo/eliminación con redacción de origen, precedencia y detección determinista de conflictos, y la pestaña «Memoria y decisiones» que lo integra con `GetKnowledgeOverviewUseCase`. RF-019 a RF-026 y PA-010 a PA-016 cubiertos automáticamente con proveedor simulado; D-03 cerrado en su parte automatizable) |
+| B5 | Panel de contexto | Completo (PR #79, squash `7370a19`, incidencia #60: `ContextPanelWidget` integra en la pestaña «Conversación» un panel de solo lectura con el proyecto activo y su siguiente paso, las decisiones APPROVED vigentes y los recuerdos vigentes, con consulta de origen y actualización local bajo demanda; sin repositorios, modelos, migraciones ni red nuevos. D-04 cerrado) |
 | B6 | Selección y presupuesto de contexto | Completo (B6a, B6b, B6c y B6d implementados y cubiertos automáticamente: índices FTS5, su sincronización transaccional, recuperación/ordenación de relevancia comprobable, presupuesto/recorte determinista con `TokenCounter` estimador local, y su cableado dentro de `ContextBuilder` con la sección de decisiones vigentes relacionadas; D-11 cerrado) |
 | B7 | Reintento, errores y presupuesto | Completo (B7a, B7b y B7c implementados y cubiertos automáticamente: mapeo `LLMErrorKind` -> mensaje accionable, "Reintentar" para un envío `FAILED`/crasheado que reenvía el mismo texto con un `operation_id` nuevo sin reescribir, y aviso no bloqueante al acercarse al límite mensual de presupuesto (`GetBudgetStatusUseCase`); D-05, D-08 y D-09 cerrados en su parte automatizable; B7 completo) |
 | B8 | Markdown seguro y copia de código | Completo (B8a y B8b implementados y cubiertos automáticamente: mensajes renderizados como Markdown seguro con el motor nativo de Qt, sin HTML activo, y cada bloque de código cercado con su propio botón "Copiar" que coloca el código exacto en el portapapeles; D-06 cerrado en su parte automatizable) |
 | B9 | Exportación estructurada | Completo (B9a y B9b implementados y cubiertos automáticamente: `ExportService`/`ExportStructuredUseCase` y la acción "Exportar" en la interfaz, con aviso previo y ejecución en segundo plano; D-07 cerrado) |
 | B10 | Política de acciones fuera de alcance | Completo (política RF-035 añadida a la semilla canónica de identidad y renderizada en las instrucciones; A-01 cerrado en su parte automatizable) |
 | B11 | Recuperación tras cierre forzado | Completo (prueba de integración que simula un cierre forzado —repositorios abandonados sin `close()` ordenado— sobre SQLite real migrado con Alembic, demostrando que el estado confirmado sobrevive íntegro, `PRAGMA integrity_check` es `ok`, un turno interrumpido a mitad de streaming deja el historial coherente sin fila parcial, y la reapertura es idempotente; `PRAGMA synchronous=FULL` afirma la durabilidad explícitamente; A-02 cerrado en su parte automatizable) |
-| B12 | Suite PA/SP automática, rendimiento y evidencia | Pendiente |
-| B13 | Empaquetado reproducible | Pendiente (groundwork: `sirius.adapters.persistence.migrations._resource_root` resuelve `alembic.ini`/`migrations/` junto al ejecutable cuando la app corre congelada —PyInstaller `sys.frozen` o Nuitka `__compiled__`— y desde la raíz del repositorio en desarrollo, sin cambios de comportamiento; cubierto por prueba unitaria con modo empaquetado simulado. El build real con Nuitka en Windows sigue pendiente) |
-| B14 | Windows sin clave | Bloqueado |
-| B15 | Ventana compacta con proveedor real | Bloqueado |
-| B16 | PA-E2E-01, regresión y cierre | Bloqueado |
+| B12 | Suite PA/SP automática, rendimiento y evidencia | Completo en su parte automatizable. **B12a** (ADR-006): `docs/implementation/TRAZABILIDAD_PA_SP.md` enlaza los 40 identificadores del Plan de Pruebas con las pruebas que cubren su parte automatizable, y `tests/unit/test_pa_sp_traceability.py` comprueba por máquina que cada prueba nombrada exista. El hueco era de trazabilidad, no de cobertura: 28 de 40 no se citaban en ninguna prueba, pero el comportamiento sí estaba probado. **B12c completo** (ADR-007): `tests/integration/test_local_performance.py` mide P50/P95 sobre el conjunto de referencia del plan (5.000 mensajes, 500 recuerdos, 100 decisiones, 10 proyectos; 30 repeticiones), afirma el límite aprobado donde hay un orden de magnitud de holgura —inicio, 30 ms frente a 3.000— y vigila el resto con un guardarraíl declarado. **Destapó un riesgo de producto: construir el contexto consume entre el 89 % y el 100 % de sus 300 ms**, por 501 consultas para 500 recuerdos en `list_current_memories()`; corregirlo es código productivo y espera decisión. **B12d completo**: evidencia consolidada en el registro de este archivo. B12b queda sin contenido: tras B12a el único hueco automatizable era PA-025, que cierra B12c. **B12e completo** (ADR-008, corte correctivo sobre lo que B12c midió, incidencia #148): `SqliteMemoryRepository.list_current_memories()`/`list_archived_memories()` y `SqliteDecisionRepository.list_current_decisions()`/`list_archived_decisions()` cargan la revisión vigente del conjunto en una única consulta `IN (...)` en vez de una por elemento, sin cambiar qué devuelven. `tests/integration/test_memory_decision_list_query_count.py` fija por prueba que el número de consultas de los cuatro métodos no crece con el número de elementos, verificada por mutación. Construir el contexto baja de 239,8 ms a 120,9 ms P95 sobre el mismo conjunto de referencia y la misma máquina; PA-025 sigue sin declararse superada |
+| B13 | Empaquetado reproducible | Completo **por declaración del propietario** el 10 de agosto de 2026: declara ejecutados los builds de Windows que faltaban. Implementado y cubierto: el proceso de empaquetado, los scripts de build y verificación y `_resource_root`, que resuelve `alembic.ini`/`migrations/` junto al ejecutable cuando la app corre congelada (PyInstaller `sys.frozen` o Nuitka `__compiled__`) y desde la raíz en desarrollo. **Sin evidencia escrita en el repositorio**: no hay salida de build ni de verify adjunta, así que A-03 —que es puerta de V8.3— queda cerrado sobre la palabra del propietario y no sobre una comprobación registrada. La PR #122 sigue abierta. Ver la nota de A-03 en el registro de evidencia |
+| B14 | Windows sin clave | Completo **por declaracion del propietario** el 10 de agosto de 2026. Las 9 partidas cerradas: ejecutable Nuitka (via B13); trafico sin proveedor real (`scripts/verify_windows_no_network.ps1`, 45 muestras del arbol de procesos y ninguna conexion saliente); **Credential Manager con valor senuelo, ejecutado por el propietario**; rutas y funcionamiento sin administrador, e inspeccion de archivos, logs, copias y exportaciones (via la verificacion de B13); escalado, teclado y foco (`tests/gui`); cierre forzado (`test_forced_shutdown_recovery.py`, y **PA-019 manual ejecutada por el propietario** sobre el paquete); restauracion (8 pruebas de copia y restauracion); y rendimiento local (B12c, ADR-007). Marcador y evidencia en `docs/implementation/B14_WINDOWS_SIN_CLAVE.md` |
+| B15 | Ventana compacta con proveedor real | Completo **por declaración del propietario** el 2026-08-10. Ejecutada con clave y proveedor reales: PA-001 (clave válida valida, protege y abre la conversación), PA-002 (clave inválida rechazada, explicada y no guardada), PA-008 (decisiones y bloqueos recuperados al volver dias despues, decisiones aun vigentes), PA-009 (la recomendacion del siguiente paso cuadra con el estado real del proyecto) y PA-023 (trafico solo hacia el proveedor configurado) |
+| B16 | PA-E2E-01, regresión y cierre | Completo **por declaración del propietario** el 2026-08-10. PA-E2E-01 ejecutada sobre un proyecto real durante varias sesiones; PS-01 a PS-07 evaluadas por el propietario como juicio global. La suite automatica completa quedo en verde el mismo dia (2285 pruebas, 0 fallos) |
 
 ## Criterio de cierre de bloque
 
@@ -145,7 +201,7 @@ Añadir una fila por resultado verificable. No registrar secretos ni contenido s
 | 2026-07-18 | B4b | PR #37 (`d1bbb87`) | automática | `test_decision_domain.py`, `test_propose_decision_use_case.py`, `test_approve_decision_use_case.py`, `test_decision_origin_use_case.py`, `test_decision_lifecycle.py`, `test_decision_unit_of_work.py`, `test_sqlite_decision_repository.py`, `test_composition_root_decisions.py`, `test_migrations.py` (decisiones) | Superada | CI `Quality` verde, `scripts/check.ps1` verde localmente (669 pytest) | Decisiones y aprobación explícita (RF-020, PA-011). `Decision`/`DecisionRevision` con estados PROPOSED/APPROVED, aprobación con confirmación explícita obligatoria, ninguna exploración conversacional crea ni aprueba una decisión. Sin sustitución, corrección, B4c, B4d, B4e ni B4f. **PR #37 fusionada en `main`** el 18 de julio de 2026 (verificado sobre `origin/main` antes de iniciar B4c) |
 | 2026-07-18 | B4c | PR #39 (`e244649`) | automática | `test_correct_memory_use_case.py`, `test_correct_memory_unit_of_work.py`, `test_memory_correction_lifecycle.py`, `test_supersede_decision_use_case.py`, `test_decision_domain.py` (nuevos casos `ensure_can_supersede`), `test_decision_unit_of_work.py` (nuevos casos de sustitución), `test_sqlite_decision_repository.py` (nuevos casos de sustitución/consulta vigente), `test_decision_lifecycle.py` (nuevos casos E2E de sustitución), `test_send_message.py` (dos nuevos casos negativos: ninguna corrección ni sustitución automática), `test_composition_root_manual_memory.py`/`test_composition_root_decisions.py` (nuevos casos de wiring), `test_migrations.py` (nuevos casos de la migración `05559a954593`) | Superada | Ruff format, Ruff lint y mypy estricto correctos; 735 pytest (669 previas + 66 nuevas); `git diff --check` y `git status --short` limpios | Corrección y sustitución (RF-022, RF-023, PA-012, PA-013). `CorrectMemoryUseCase` consolida la corrección ya existente desde V4 bajo el contrato transaccional de B4a (evento + nueva revisión inmutable + puntero vigente en una sola `UnitOfWork`). `DecisionStatus.SUPERSEDED`/`Decision.supersedes_decision_id` y `SupersedeDecisionUseCase` (confirmación explícita obligatoria, aprueba la sustituta y marca la sustituida como histórica en la misma transacción); `list_current_decisions()`/`get_superseding_decision()` para distinguir vigente de sustituida. Migración Alembic aditiva `05559a954593`. Sin clave real ni red; sin B4d, B4e ni B4f. **PR #39 fusionada en `main`** el 19 de julio de 2026 (commit `e244649affd11e6e1bdb8179adb00d2b6d610f7e`, CI `quality` verde), verificado directamente sobre `origin/main` antes de iniciar B4d |
 | 2026-07-19 | B4d | PR borrador (rama `feat/b4d-archive-delete-redaction-20260719-01`) | automática | `test_archive_memory_use_case.py`, `test_archive_decision_use_case.py`, `test_delete_memory_use_case.py` (unit); `test_archive_memory_unit_of_work.py`, `test_archive_decision_unit_of_work.py`, `test_delete_memory_unit_of_work.py` (atomicidad/rollback con SQLite real); `test_memory_archive_delete_lifecycle.py`, `test_decision_archive_lifecycle.py` (E2E); `test_sqlite_memory_repository.py`/`test_sqlite_decision_repository.py`/`test_sqlite_conversation_repository.py` (nuevos casos de archivo/eliminación/redacción); `test_composition_root_archive_delete.py` (wiring); `test_send_message.py` (dos nuevos casos negativos: ninguna conversación ordinaria archiva ni elimina); `test_decision_domain.py`/`test_conversation_domain.py` (nuevos casos de dominio); `test_migrations.py` (nuevos casos de la migración `bf0ac43b986b`) | Superada | Ruff format, Ruff lint y mypy estricto correctos; 830 pytest (735 previas + 95 nuevas); `git diff --check` y `git status --short` limpios | Archivo, eliminación y redacción de origen (RF-024, RF-025, PA-015, PA-016, SP-06). `ArchiveMemoryUseCase`/`ArchiveDecisionUseCase` consolidan el archivo ya implementado a nivel de repositorio desde V4 (memoria) y añaden el estado `DecisionStatus.ARCHIVED` (decisión, solo alcanzable desde APROBADA) bajo el contrato transaccional de B4a/c (evento + cambio de estado en una sola `UnitOfWork`); `MemoryRepository.list_archived_memories()`/`DecisionRepository.list_archived_decisions()` son las consultas explícitas de archivados. `DeleteMemoryUseCase` exige `confirmed=True` y una elección explícita y tipada (`SourceMessageChoice.PRESERVE`/`REDACT`, sin valor por defecto) antes de abrir transacción alguna; reutiliza `MemoryRepository.delete_memory()` (V4, ya redacta el contenido estructurado de toda la historia de revisiones conservando el marcador mínimo: id, versión, origen, fecha) y añade `ConversationRepository.redact_message()` (nuevo, migración `bf0ac43b986b`: `messages.content` pasa a nulo y `messages.redacted_at` se añade, mismo patrón NOT NULL→nullable en modo por lotes que `f5fb28ed426a`) para el mensaje fuente, dentro de la misma transacción que el evento y el borrado de contenido — un fallo en cualquier paso revierte los tres. La eliminación de decisiones queda deliberadamente fuera de esta implementación: ni PA-016 ni la enumeración de estados de decisión de Producto S6 la mencionan (a diferencia de "archivada", que sí aparece explícitamente), así que solo `Memory` es eliminable en este corte. `DeleteMemoryUseCase.delete()` devuelve también la advertencia aprobada sobre copias antiguas (SP-06/DR-012). Sin clave real ni red; sin B4e ni B4f; sin merge; sin incidencia `agent-review-requested` (no autorizada para este corte) |
-| 2026-07-19 | B4e | PR #52 (fusionada) | automática | `test_precedence_domain.py`, `test_detect_precedence_conflicts_use_case.py`, `test_composition_root_precedence.py`, `test_sqlite_memory_repository.py`/`test_context_builder.py` (nuevos casos), `test_migrations.py` (migración `94418c79da9d`) | Superada | Ruff format, Ruff lint y mypy estricto correctos; 873 pytest (830 previas + 43 nuevas) | Precedencia y conflictos (RF-026, PA-014, DR-011). `Memory.subject_key`/`Memory.project_id` (opcionales, mirroring `Decision`); `sirius.domain.precedence.evaluate_subject_precedence`/`find_subject_conflicts`, determinista, sin desempate por fecha ni orden; `DetectPrecedenceConflictsUseCase` de solo lectura; conexión mínima en `ContextBuilder` que excluye únicamente el recuerdo ya superado por una decisión `APPROVED` inequívoca del mismo asunto, sin tocar un conflicto genuino. Sin clave real ni red; sin B4f. **PR #52 fusionada en `main`** el 20 de julio de 2026 (verificado sobre `origin/main` antes de iniciar B4f) — fila añadida en auditoría de cierre de B4f, dado que no se había registrado en su momento |
+| 2026-07-19 | B4e | PR #52 (fusionada) | automática | `test_precedence_domain.py`, `test_composition_root_precedence.py`, `test_sqlite_memory_repository.py`/`test_context_builder.py` (nuevos casos), `test_migrations.py` (migración `94418c79da9d`) | Superada | Ruff format, Ruff lint y mypy estricto correctos; 873 pytest (830 previas + 43 nuevas). Corrección 2026-08-14: la fila citaba una prueba de nombre test_detect_precedence_conflicts_use_case (sin acentos graves a propósito: entre ellos volvería a leerse como evidencia) que nunca existió en el repositorio; el caso de uso lo cubre `test_composition_root_precedence.py` | Precedencia y conflictos (RF-026, PA-014, DR-011). `Memory.subject_key`/`Memory.project_id` (opcionales, mirroring `Decision`); `sirius.domain.precedence.evaluate_subject_precedence`/`find_subject_conflicts`, determinista, sin desempate por fecha ni orden; `DetectPrecedenceConflictsUseCase` de solo lectura; conexión mínima en `ContextBuilder` que excluye únicamente el recuerdo ya superado por una decisión `APPROVED` inequívoca del mismo asunto, sin tocar un conflicto genuino. Sin clave real ni red; sin B4f. **PR #52 fusionada en `main`** el 20 de julio de 2026 (verificado sobre `origin/main` antes de iniciar B4f) — fila añadida en auditoría de cierre de B4f, dado que no se había registrado en su momento |
 | 2026-07-20 | B4f | rama `claude/focused-bohr-3dj9el`, PR pendiente | automática | `test_composition_root_knowledge_overview.py` (nuevo); `test_sqlite_decision_repository.py` (nuevo caso `list_proposed_decisions`); `test_knowledge_widget.py` (GUI, nuevo: guardar/corregir/archivar/eliminar recuerdo con ambas elecciones y advertencia, proponer/aprobar/sustituir/archivar decisión, consultar origen de ambos, detectar conflictos con y sin conflicto pendiente, coordinación de estado ocupado, con los doce casos de uso reales de `composition_root` contra SQLite temporal); `test_main_window.py`/`test_conversation_ui.py`/`test_settings_ui.py`/`test_backup_recovery_ui.py`/`test_validated_main_window.py` (adaptados a la pestaña nueva y a la firma ampliada de `MainWindow`/`ValidatedMainWindow`) | Superada | Ruff format, Ruff lint y mypy estricto correctos; 928 pytest (873 previas + 55 nuevas); `git diff --check` limpio | Integración observable y cierre de B4 (PA-010 a PA-016 completas en su parte automatizable). `KnowledgeWidget` (pestaña nueva "Memoria y decisiones" de la misma `MainWindow`, sin aplicación de gestión independiente) integra, mediante los doce casos de uso ya existentes de B4a-B4e sin duplicar lógica de dominio: guardar/corregir/archivar/eliminar recuerdos (con la elección explícita de conservar o redactar el mensaje fuente y la advertencia sobre copias antiguas, SP-06/DR-012); proponer/aprobar/sustituir/archivar decisiones; consultar el origen de ambos; y mostrar los conflictos de precedencia de B4e sin resolverlos ni elegir en silencio. Nueva consulta de solo lectura `GetKnowledgeOverviewUseCase` y método mínimo `DecisionRepository.list_proposed_decisions()` (indispensable para que una decisión propuesta sea descubrible y aprobable desde la interfaz). Sin clave real ni red; sin B5, B6 ni otro bloque; sin merge |
 | 2026-07-21 | B6a | rama `feature/b6a-fts5-sync-20260721-01`, PR pendiente | automática | `test_fts5_availability.py` (nuevo: confirma FTS5 compilado en el SQLite del entorno, vía `sqlite3` y vía el motor SQLAlchemy de Sirius); `test_migrations.py` (nuevos casos: `message_fts`/`knowledge_fts` creadas al llegar a `head`, downgrade que elimina solo esos índices y sus triggers dejando datos base intactos, backfill de un mensaje y de una revisión vigente de memoria/decisión ya existentes antes de esta migración, con la revisión histórica no vigente excluida del backfill); `test_search_index_sync.py` (nuevo, contra SQLite real migrado con Alembic: alta de mensaje/recuerdo/decisión indexa en la misma transacción, corrección de recuerdo reemplaza el texto indexado, archivar recuerdo/decisión conserva el texto indexado, aprobar/archivar una decisión no lo toca, y las dos pruebas de la invariante crítica — redactar un mensaje y eliminar un recuerdo dejan de ser recuperables por FTS —, más una prueba de fallo en el commit que confirma que el dato y la entrada del índice se revierten juntos) | Superada | Ruff format, Ruff lint y mypy estricto correctos; 1021 pytest (1006 previas + 15 nuevas) | Sustrato de búsqueda local (SIRIUS-ARQ-0.1 S7.1/S8.1; ATD-004; D-11, parcial). Migración Alembic escrita a mano (`61be4bb269bf`) crea `message_fts` (FTS5 "external content" sobre `messages`, `content_rowid='id'`, sin copia duplicada del texto) y `knowledge_fts` (FTS5 autocontenida que cubre memorias y decisiones bajo el mismo agrupamiento "conocimiento" que ya usa `GetKnowledgeOverviewUseCase` de B4f, con rowid sintético `id*2`/`id*2+1` para no mezclar los dos espacios de id). La sincronización es enteramente vía triggers SQLite creados en la propia migración (`AFTER INSERT/UPDATE/DELETE`) — ningún repositorio ni caso de uso llama a nada nuevo — por lo que la actualización del índice ocurre siempre dentro de la misma transacción SQLite que el dato, exactamente como exige S8.1: un fallo antes del commit revierte el dato y la entrada del índice juntos. Cierra la deuda anotada en `delete_memory.py` desde B4d ("FTS5 out of scope"): `DeleteMemoryUseCase`/`ConversationRepository.redact_message` no cambiaron una sola línea y el índice queda igualmente sincronizado. Invariante crítica verificada: el contenido eliminado (`DeleteMemoryUseCase`) o redactado (`redact_message`) deja de ser recuperable por FTS de inmediato. No añade búsqueda, relevancia, orden, presupuesto ni recorte de contexto (eso es B6b/B6c), no toca `ContextBuilder` ni el ensamblado de contexto (B6d), y no usa embeddings ni recuperación semántica (§7.5 lo prohíbe). Sin dependencias nuevas (FTS5 es parte de SQLite); sin clave real ni red; sin merge |
 
@@ -165,7 +221,87 @@ Añadir una fila por resultado verificable. No registrar secretos ni contenido s
 | 2026-07-22 | B10 | rama `feature/b10-external-actions-policy`, PR pendiente | automática | `test_identity_domain.py` (nuevo caso: la semilla canónica de personalidad incluye, en su texto exacto, el rechazo de acciones externas de RF-035); `test_render_instructions.py` (nuevo caso: instanciando la identidad con la semilla canónica real `INITIAL_PERSONALITY_INSTRUCTIONS`, `render_instructions()` sobre ese contexto contiene esa misma política, verificando que llega íntegra a las instrucciones renderizadas para el proveedor) | Superada | Ruff format, Ruff lint y mypy estricto correctos; 1191 pytest (1189 previas + 2 nuevas) | Política RF-035 "Sin acciones externas" (A-01, parte automatizable de PA-024). `INITIAL_PERSONALITY_INSTRUCTIONS` (`sirius.domain.identity`) gana un párrafo final con redacción tomada literalmente del canónico de Producto (S3/S5 "Límite de ayuda" + S10 RF-035, sin texto inventado): "Sirius ayuda mediante conversación, razonamiento, planificación, revisión y registro; no ejecuta acciones externas y rechaza las solicitudes de ejecutar archivos, comandos, web o automatizaciones, por estar fuera del alcance de 0.1." La política queda dentro de las reglas de la identidad (SIRIUS-ARQ-0.1 S6.1) y se renderiza sin cambios de contrato porque `render_instructions()` ya emitía `personality_instructions` verbatim. No se añadió ninguna guardia de ejecución: Sirius 0.1 no tiene ruta de código capaz de ejecutar archivos, comandos, web ni automatizaciones, así que RNF-024 se mantiene cumplido estructuralmente, sin nueva superficie. No se tocó `send_message.py` más allá de lo derivado del texto de identidad, ni el modelo de datos, ni `docs/canonical/**`. La prueba formal de que el modelo declina en runtime (PA-024 con proveedor real) queda expresamente fuera de alcance, para V8.3. Sin clave real ni red; sin merge |
 | 2026-07-22 | B11 | rama `feature/b11-forced-shutdown-recovery-test`, PR pendiente | automática | `test_forced_shutdown_recovery.py` (nuevo, contra SQLite real migrado con Alembic: escribe estado confirmado —conversación con mensajes COMPLETED de ambos roles, proyecto activo con su revisión vigente, un recuerdo manual— y un turno interrumpido a mitad de streaming (mensaje USER `COMPLETED` sin fila SIRIUS, porque `send_message.py` solo la escribe al terminar el streaming), abandona esos repositorios y sus motores sin `close()` ordenado en vez de cerrarlos, y reabre con repositorios nuevos + `initialize_persistence()`: la conversación principal, la identidad y el proyecto activo no se duplican; los mensajes confirmados y el recuerdo sobreviven con su contenido exacto; el turno interrumpido deja únicamente su fila USER, sin fila SIRIUS parcial ni corrupta; `PRAGMA integrity_check` devuelve `ok`; una segunda reapertura tras la primera sigue sin duplicar nada) | Superada | Ruff format, Ruff lint y mypy estricto correctos; 1192 pytest (1191 previas + 1 nueva) | Cierre de B11, último bloque de código de V8.1 (A-02; RNF-005/006; parte automatizable de PA-019). La recuperación tras cierre forzado ya estaba cubierta por diseño desde antes de este bloque —cada escritura de repositorio se confirma en su propia transacción SQLite vía `session_scope`, los mensajes de Sirius se persisten enteros solo al terminar el streaming (nunca una fila parcial), e `initialize_persistence()` ya recargaba el estado de forma idempotente al arrancar—, pero no existía ninguna prueba que lo demostrara ni una afirmación explícita de la durabilidad; B11 añade ambas sin cambiar ese diseño. La única línea de producción tocada es `build_engine` (`adapters/persistence/database.py`): el listener `connect` ya existente que fija `PRAGMA foreign_keys=ON` ahora también fija `PRAGMA synchronous=FULL` junto a él, para afirmar la durabilidad explícitamente en vez de depender de un valor por defecto implícito de SQLite — cambio conservador que no altera ningún comportamiento observable (ninguna prueba existente cambió) y no toca el modo de journal (sigue el rollback journal por defecto; WAL queda fuera de alcance, ver la incidencia). La prueba nueva simula el cierre forzado abandonando deliberadamente cada repositorio/motor sin llamar a `close()`/`dispose()` en vez de cerrarlos de forma ordenada, tal como haría un proceso realmente matado, y reabre con instancias completamente nuevas contra el mismo fichero. No se tocó `send_message.py`, el modelo de datos, migraciones destructivas, el proveedor, Producto, Arquitectura ni ATD. La prueba manual PA-019 (matar el proceso de verdad en Windows) queda fuera de alcance, para V8.2. Sin clave real ni red; sin merge |
 
+| 2026-08-10 | B1 | `b0beab4` (PR #144) | documental | `test_documentation_single_source.py` | Superada | CI verde, 1527 pruebas | ADR-005: el estado de V8 pasa a vivir solo en la tabla de bloques de este archivo. Cuatro mutaciones verificadas |
+| 2026-08-10 | B12a | `03bede4` (PR #145) | automática | `test_pa_sp_traceability.py` | Superada | CI verde, 1649 pruebas | ADR-006: los 40 identificadores del plan quedan enlazados y comprobados por máquina. Siete mutaciones verificadas, incluida el renombrado de una prueba real |
+| 2026-08-10 | B12c | rama `claude/ciclo-pendientes-prs-issues-qm4t8x` | automática | `test_local_performance.py` | Superada con hallazgo | 1653 pruebas en verde; cifras en la sección de rendimiento de arriba | ADR-007. **No declara PA-025 superada.** Destapa que construir el contexto usa entre el 89 % y el 100 % de sus 300 ms; causa localizada en `list_current_memories()`. Cinco mutaciones verificadas |
+| 2026-08-11 | B12e | rama `fix/b12e-sqlite-list-n-plus-1` (incidencia #148) | automática | `test_memory_decision_list_query_count.py`; `test_memory_decision_list_sqlite_variable_limit.py`; `test_local_performance.py` | Superada | CI verde, 1659 pruebas (1653 previas + 6 nuevas); cifras antes/después en la sección de rendimiento de abajo | ADR-008. Corrige el N+1 que ADR-007 localizó, sin cambiar lo que devuelven los cuatro métodos. Cuatro mutaciones verificadas: con el N+1 restaurado, las cuatro pruebas de conteo fallan; restaurado el arreglo, pasan. Ronda 2 (revisión CODEX-001 de la PR #149): el `IN (...)` sin trocear podía fallar con `OperationalError: too many SQL variables` por encima de `SQLITE_LIMIT_VARIABLE_NUMBER`; `_load_memories()`/`_load_decisions()` ahora trocean en lotes de ese límite. Dos mutaciones verificadas: con el troceo revertido, las dos pruebas nuevas fallan con ese mismo error; con el arreglo, pasan |
+| 2026-08-10 | B13 | commit `3432253`, rama `feat/b13-reproducible-windows-package`; artefacto `Sirius-0.1.0.dev0-3432253-windows-x64` | manual-Windows | `scripts/build_windows.ps1` y `scripts/verify_windows_package.ps1` dos veces cada uno desde un checkout limpio fuera de OneDrive (`C:\dev\sirius`). **77 comprobaciones, 0 fallos, 3 omitidas** en ambas verificaciones; **inventario relativo identico** entre las dos construcciones (109 rutas comparadas una a una) | Superada con reservas | Compilacion 1125.2 s y 1036.6 s; ZIP `988613c0...` y `2a1e8d9e...`; Windows 11 Pro 10.0.26200.0, MSVC `cl` 19.44.35228, Windows SDK 10.0.26100.0, Python 3.14.6, PySide6/Qt 6.11.1, Nuitka 4.1.3, uv 0.11.28, head de Alembic `61be4bb269bf`, 24 tablas | Las 3 omisiones son la misma: el arranque sin clave no es observable en una sesion de Windows con la credencial guardada; es de B14. Hash del ZIP distinto entre las dos, como se declara. Cuatro defectos del proceso corregidos en esta pasada: `7a96c1a` modo de enlace de uv contra el filtro de nube de OneDrive; `839d6ff` la puerta de credencial hacia imposible verificar en la unica maquina donde se construye; `e9d51c7` `pyside6-deploy` colgaba el build 50 minutos esperando una respuesta invisible; `3432253` la clcache interna de Nuitka fallaba en las 15 unidades que intento. Ver `docs/implementation/B13_PACKAGING.md` |
+| 2026-08-10 | B14 | commit `567ca94`, rama `feat/b13-reproducible-windows-package` | manual-Windows | `scripts/verify_windows_no_network.ps1` sobre el `Sirius.exe` del artefacto, sin elevar y en entorno desechable. Vigilancia del arbol de procesos completo cada 250 ms: **45 muestras, ninguna conexion saliente** | Superada con reservas | 11 comprobaciones, 0 fallos, 1 omitida; 10 pruebas estructurales en `tests/unit/test_verify_windows_no_network_safety.py` | Cierra la partida 2 de las 9 de B14. Omision: destinos UDP, DNS incluido, que no se pueden observar sin captura de paquetes y eso exigiria administrador. La partida 3 (valor senuelo en Credential Manager) queda aplazada por decision del usuario. Marcador en `docs/implementation/B14_WINDOWS_SIN_CLAVE.md` |
+| 2026-08-10 | B14 | paquete `Sirius-0.1.0.dev0-3432253-windows-x64` instalado en `%LOCALAPPDATA%\Programs\Sirius` | manual-Windows | Dos pruebas manuales **ejecutadas y reportadas por el propietario**: la partida 3 de B14 (valor senuelo en Windows Credential Manager) y **PA-019** (cierre forzado: terminar el proceso durante una operacion y comprobar que se recupera el ultimo estado consistente sin corrupcion) | Superada segun el propietario | Declaracion del propietario en la sesion del 2026-08-10. Sin captura automatica: una prueba manual la pasa quien la ejecuta, y este registro dice quien la reporto | **Cierra B14.** La partida 3 es ademas una de las puertas de V8.3 («Credential Manager haya sido comprobado con un valor senuelo»). PA-019 cubre la mitad manual de **A-02**. No convierte a B15 en desbloqueado: V8.3 sigue exigiendo D-01, D-02 y D-10 cerrados y la **autorizacion expresa del propietario** para obtener y usar una clave temporal |
+| 2026-08-10 | B15 y B16 | paquete `Sirius-0.1.0.dev0-3432253-windows-x64`, con clave y proveedor reales | proveedor-real + evaluacion-humana | Pruebas de aceptacion **ejecutadas y declaradas superadas por el propietario**: **PA-002** (una clave invalida se rechaza, se explica y no se guarda), **PA-001** (una clave valida valida, se protege y abre la conversacion), **PA-008** (decisiones y bloqueos registrados, cerrar, volver dias despues: siguen ahi y las decisiones siguen vigentes), **PA-009** (preguntar por el siguiente paso: la recomendacion cuadra con el estado real), **PA-023** (trafico real: solo hacia el proveedor configurado), **PS-01 a PS-07** (conversacion, decision tecnica, desacuerdo, incertidumbre, error grave, frustracion y tarea larga) y **PA-E2E-01** (proyecto real durante varias sesiones) | Superadas segun el propietario | Declaracion del propietario en la sesion del 2026-08-10. La suite automatica completa quedo en verde el mismo dia sobre el arbol fusionado con `main`: 2285 pruebas, 0 fallos, 2 omitidas (QtMultimedia ausente en el runner, MS-A02) | **Cierra B15 y B16, y con ellos los 16 bloques.** Alcance exacto de la declaracion, dicho sin adornos: son pruebas **manuales y de juicio humano**, y quien las pasa es quien las ejecuta; no hay captura automatica de ninguna. **PS-01 a PS-07 se reportaron como un juicio global sobre las siete**, no como siete veredictos separados, de modo que quien lea esto no confunda una impresion de conjunto con siete evaluaciones independientes. Las omisiones declaradas antes siguen en pie: destinos UDP en la partida 2 de B14, y los flujos de PA-020, PA-021 y PA-022 pulsados dentro del `.exe`. **Declarar Sirius 0.1 aceptada y terminada corresponde al propietario, no a esta tabla** |
+
 Tipos permitidos: `automática`, `CI`, `manual-Windows`, `proveedor-real`, `evaluación-humana`, `documental`.
+
+### Rendimiento local sobre el conjunto de referencia (2026-08-10, B12c)
+
+30 repeticiones por operación sobre 5.000 mensajes, 500 recuerdos, 100
+decisiones versionadas y 10 proyectos con uno activo. Tres pasadas del mismo
+código en la misma máquina. Runner de CI (Linux), **no** el Windows del
+usuario: esto no declara PA-025 superada.
+
+| Operación | P95 pasada 1 | pasada 2 | pasada 3 | Límite |
+|---|---|---|---|---|
+| inicio (rutas, migraciones, repositorios) | 30,3 ms | — | — | 3.000 ms |
+| listar decisiones vigentes | 25,4 ms | 22,8 ms | 25,8 ms | 300 ms |
+| cargar historial completo | 99,1 ms | 123,1 ms | 120,1 ms | 300 ms |
+| listar recuerdos vigentes | 117,4 ms | 122,5 ms | 115,3 ms | 300 ms |
+| resumen de conocimiento | 154,5 ms | 132,0 ms | 136,3 ms | 300 ms |
+| **construir contexto** | **266,4 ms** | **286,6 ms** | **298,6 ms** | **300 ms** |
+
+**Riesgo abierto para PA-025.** Construir el contexto usa entre el 89 % y el
+100 % de su presupuesto. Causa localizada en el código:
+`SqliteMemoryRepository.list_current_memories()` ejecuta 501 consultas para 500
+recuerdos porque `_load_memory()` pide la revisión vigente una por una.
+Corregirlo es un cambio de código productivo, fuera del alcance de B12c, y
+espera decisión del propietario. Ver ADR-007.
+
+### Rendimiento local sobre el conjunto de referencia (2026-08-11, B12e)
+
+Mismo conjunto de referencia, misma máquina, mismo runner de CI (Linux) que la
+medición de B12c. Una pasada antes del arreglo (código de `main` en
+`97676e1`) y una después, 30 repeticiones por operación:
+
+| Operación | P95 antes (B12c, `main`) | P95 después (B12e) | Límite |
+|---|---|---|---|
+| listar recuerdos vigentes | 104,7 ms | 9,3 ms | 300 ms |
+| listar decisiones vigentes | 20,3 ms | 2,2 ms | 300 ms |
+| resumen de conocimiento | 125,4 ms | 12,6 ms | 300 ms |
+| cargar historial completo | 87,9 ms | 94,2 ms | 300 ms |
+| **construir contexto** | **239,8 ms** | **120,9 ms** | **300 ms** |
+
+Construir el contexto pasa del 80 % al 40 % de su presupuesto de 300 ms.
+`listar recuerdos vigentes` y `listar decisiones vigentes` —las dos
+operaciones que tenían la forma N+1 (`list_archived_memories()` y
+`list_archived_decisions()` la comparten, pero el conjunto de referencia no
+tiene elementos archivados que medir aquí)— caen a menos del 10 % del límite.
+
+**No cambia qué devuelven los cuatro métodos corregidos.**
+`test_sqlite_memory_repository.py`, `test_sqlite_decision_repository.py`,
+`test_memory_archive_delete_lifecycle.py`, `test_decision_lifecycle.py` y
+`test_decision_archive_lifecycle.py` —que no se tocaron— siguen en verde y son
+la prueba de ello.
+
+**PA-025 sigue sin declararse superada.** Este runner es Linux compartido, no
+el Windows del usuario; el criterio de ADR-007 sobre cuándo se afirma el
+límite del plan en CI no cambia con B12e.
+
+### Asientos correctores (2026-08-10)
+
+Las filas de este registro son evidencia fechada y no se reescriben. Lo que
+cambió después se apunta aquí debajo, que es como se corrige un libro de
+registro.
+
+- Las filas del 22 de julio de B8a, B8b, B9a, B9b, B10 y B11 dicen «PR
+  pendiente». Las seis se fusionaron: B8a en la PR #101 (`35659a3`), B8b en la
+  #103 (`135a032`), B9a en la #105 (`3221553`), B9b en la #107 (`cf9688a`),
+  B10 en la #109 (`586438b`) y B11 en la #111 (`cbebcbd`).
+- **A-03 (empaquetado reproducible) — cerrado sin evidencia registrada.** El
+  propietario declaró el 10 de agosto de 2026 que las ejecuciones de build y
+  verify en Windows ya están hechas, y autorizó darlo por bueno sin adjuntar
+  su salida. No hay, por tanto, ninguna fila de tipo `manual-Windows` que lo
+  sostenga: A-03 es una puerta de V8.3 y hoy está cerrada sobre una
+  declaración, no sobre una comprobación. Queda escrito para que quien abra
+  V8.3 sepa exactamente qué respalda esa puerta.
 
 ## Estado de pruebas de aceptación
 
@@ -173,37 +309,36 @@ Estados permitidos: `no preparada`, `preparada`, `automática superada`, `manual
 
 | Grupo | Estado | Dependencia principal |
 |---|---|---|
-| PA-001 a PA-025 | Bloqueada | D-01 a D-11 y A-01/A-02 según prueba |
-| PS-01 a PS-07 | Bloqueada | Proveedor real y evaluación humana |
-| SP-01 a SP-07 | Bloqueada parcialmente | D-03, D-06, D-11, Windows y proveedor real |
-| PA-E2E-01 | Bloqueada | B2 a B15 |
+| PA-001 a PA-025 | Superada por declaración del propietario el 2026-08-10 | Ejecutadas por el propietario con el proveedor real. Trazado formal en `TRAZABILIDAD_PA_SP.md` (B12a). PA-019 y la partida 3 de B14 constan aparte, en la fila de evidencia de B14 |
+| PS-01 a PS-07 | Superada por declaración del propietario el 2026-08-10 | Evaluación humana del propietario, reportada como un juicio global sobre las siete y no como siete veredictos separados. Consta así en la fila de evidencia |
+| SP-01 a SP-07 | Superada por declaración del propietario el 2026-08-10 en su parte manual | Su parte automatizable estaba cubierta; la manual la ejecuta el propietario. Windows real y proveedor real, ambos disponibles |
+| PA-E2E-01 | Superada por declaración del propietario el 2026-08-10 | Proyecto real durante varias sesiones, con las decisiones y los bloqueos recuperados al volver |
 
-## Próximo trabajo autorizado
+Que un comportamiento esté cubierto por pruebas automáticas **no** convierte su
+PA en superada. Qué está cubierto y con qué prueba se lee en
+`docs/implementation/TRAZABILIDAD_PA_SP.md`, comprobado por máquina (ADR-006);
+la declaración formal de una PA superada ocurre en V8.3 y V8.4. Aquí no se
+escribe la cuenta a mano: caduca en el siguiente merge y vuelve a afirmar lo
+que ya no es cierto.
 
-B1 (reconciliación documental) integrado. B2 está en curso: RF-002 (validación de
-credencial antes de guardar), B2a (primera configuración básica, PR #24, squash
-`f7134ca`) y B2b (selección y persistencia de la ruta local de datos, PR #26,
-squash `2c60afc`) ya están fusionados en `main`. B3 está en curso: B3a (saludo y
-creación del primer proyecto, PR #27, squash `882ab62`) y B3b (continuidad
-observable del proyecto activo, PR #28, squash `a2f74df`) ya están fusionados en
-`main`. B3c (ciclo de vida y versionado del proyecto: historial de revisiones
-inmutable, completar el proyecto activo sin borrar su historial, habilitar un
-proyecto posterior solo tras completar el actual) ya está implementado y
-cubierto automáticamente — PR #29.
+## Anexo histórico: fichas de bloque hasta B3c
 
-B4 (eventos, recuerdos, decisiones y conflictos) está en curso, dividido
-operativamente en B4a-B4f (ver `docs/implementation/B4_EXECUTION.md`). B4a
-(origen consultable y guardado manual, PR #36), B4b (decisiones y aprobación
-explícita, PR #37), B4c (corrección y sustitución, PR #39) y B4e (precedencia
-y conflictos, PR #52) ya están **fusionados en `main`**. B4d (archivo,
-eliminación y redacción de origen) también quedó fusionado — a diferencia de
-B4b y B4c, esa PR **no** activó la revisión automática por incidencia
-`agent-review-requested`: esa autorización puntual no se extendió a B4d (ver
-`AUTOMATION_OPERATING_CONTRACT.md` §2/§10). B4f (integración observable y
-cierre de B4) ya está implementado — PR pendiente de revisión y merge; con
-B4a-B4f completos, RF-019 a RF-026 y PA-010 a PA-016 quedan implementados y
-cubiertos automáticamente en su parte automatizable. No se ha iniciado B5 ni
-B6.
+**Este anexo no es estado.** Es el detalle congelado de los bloques que se
+ficharon uno a uno entre B2a y B3c, conservado por su valor de registro. Se
+detiene en B3c porque a partir de B4 el detalle dejó de fichar aquí; el estado
+vigente de todos los bloques está en la tabla de bloques operativos, que es la
+única autoritativa (ADR-005). No añadir fichas nuevas a este anexo.
+
+Las PR que fusionaron cada subbloque: B2a #24 (`f7134ca`), B2b #26 (`2c60afc`),
+B3a #27 (`882ab62`), B3b #28 (`a2f74df`), B3c #29, B4a #36, B4b #37, B4c #39,
+B4d, B4e #52, B4f, B5 #79 (`7370a19`), B6a #82, B6b #84, B6c #86, B6d #91,
+B7a #93, B7b #97, B7c #99, B8a #101, B8b #103, B9a #105, B9b #107, B10 #109,
+B11 #111.
+
+Una nota que conviene no perder: la PR de B4d **no** activó la revisión
+automática por incidencia `agent-review-requested`, a diferencia de las de B4b
+y B4c. Aquella autorización puntual no se extendió a B4d (ver
+`AUTOMATION_OPERATING_CONTRACT.md` §2/§10).
 
 ### B2a — Primera configuración básica — FUSIONADA (PR #24, squash `f7134ca658e6343779ee6bfe89ad05dd2f0a8ba3`)
 

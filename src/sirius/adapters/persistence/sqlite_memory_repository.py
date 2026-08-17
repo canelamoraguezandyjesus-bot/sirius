@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,7 +13,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from sirius.adapters.persistence.database import (
     build_engine,
     build_session_factory,
+    chunked,
     session_scope,
+    sqlite_variable_limit,
 )
 from sirius.adapters.persistence.models import MemoryModel, MemoryRevisionModel
 from sirius.domain.memory import (
@@ -74,6 +76,39 @@ def _get_current_revision_model(session: Session, memory_id: int) -> MemoryRevis
 def _load_memory(session: Session, model: MemoryModel) -> Memory:
     revision_model = _get_current_revision_model(session, model.id)
     return _to_domain_memory(model, revision_model)
+
+
+def _load_memories(session: Session, models: Sequence[MemoryModel]) -> list[Memory]:
+    """Load the current revision of every model in a bounded number of queries.
+
+    ``_load_memory`` issues one query per model; called from a list method
+    that turns into N+1 queries for N models. This loads every current
+    revision the set needs via ``IN (...)`` queries instead, batched to the
+    connection's ``SQLITE_LIMIT_VARIABLE_NUMBER`` so a large set doesn't blow
+    past SQLite's bound-parameter limit in a single statement.
+    """
+    if not models:
+        return []
+    memory_ids = [model.id for model in models]
+    revisions_by_memory_id: dict[int, MemoryRevisionModel] = {}
+    for batch in chunked(memory_ids, sqlite_variable_limit(session)):
+        revision_models = session.scalars(
+            select(MemoryRevisionModel).where(
+                MemoryRevisionModel.memory_id.in_(batch),
+                MemoryRevisionModel.is_current.is_(True),
+            )
+        ).all()
+        revisions_by_memory_id.update(
+            (revision.memory_id, revision) for revision in revision_models
+        )
+    memories = []
+    for model in models:
+        revision_model = revisions_by_memory_id.get(model.id)
+        if revision_model is None:
+            msg = f"Memory {model.id} has no current revision; data is corrupt."
+            raise ValueError(msg)
+        memories.append(_to_domain_memory(model, revision_model))
+    return memories
 
 
 class SqliteMemoryRepository:
@@ -165,7 +200,7 @@ class SqliteMemoryRepository:
                 .where(MemoryModel.status == MemoryStatus.CURRENT)
                 .order_by(MemoryModel.id)
             ).all()
-            return [_load_memory(session, model) for model in models]
+            return _load_memories(session, models)
 
     def list_archived_memories(self) -> list[Memory]:
         with self._scope() as session:
@@ -174,7 +209,7 @@ class SqliteMemoryRepository:
                 .where(MemoryModel.status == MemoryStatus.ARCHIVED)
                 .order_by(MemoryModel.id)
             ).all()
-            return [_load_memory(session, model) for model in models]
+            return _load_memories(session, models)
 
     def get_history(self, memory_id: int) -> list[MemoryRevision]:
         with self._scope() as session:

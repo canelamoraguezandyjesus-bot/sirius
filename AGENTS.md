@@ -9,6 +9,7 @@ Este repositorio implementa Sirius 0.1. El producto y la arquitectura están apr
 3. Identifica la vertical activa.
 4. No añadas funciones fuera de alcance.
 5. Si la tarea afecta Claude Code, Routines, cloud, permisos, revisión automática, PR automáticas o cualquier flujo de agentes, lee obligatoriamente `docs/implementation/AUTOMATION_OPERATING_CONTRACT.md` y ejecuta únicamente la fase vigente descrita allí.
+6. Si la tarea afecta hardware local de IA, DGX Spark o equivalente, Sirius Core, modelos open-weight, proveedores de IA, model routing, benchmarks de modelos, costes de inferencia o políticas local/nube, lee obligatoriamente `docs/evolution/SIRIUS_AI_CORE_AND_MODEL_STRATEGY.md`. Ese documento es una recolección informativa de ideas futuras: no constituye aprobación para implementarlas.
 
 ## Reglas obligatorias
 

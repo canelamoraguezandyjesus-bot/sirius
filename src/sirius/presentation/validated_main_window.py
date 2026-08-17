@@ -28,6 +28,8 @@ from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageUseCase
+from sirius.application.studio_capture import StudioCaptureUseCase
+from sirius.application.studio_voice import StudioVoiceUseCase
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
@@ -65,6 +67,9 @@ class ValidatedMainWindow(MainWindow):
         export_structured_use_case: ExportStructuredUseCase,
         close_database_connections: Callable[[], None],
         *,
+        studio_voice_use_case: StudioVoiceUseCase | None = None,
+        studio_capture_use_case: StudioCaptureUseCase | None = None,
+        save_studio_voice: Callable[[str], None] | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
         confirm_restore: Callable[[str, str], bool] | None = None,
@@ -101,6 +106,9 @@ class ValidatedMainWindow(MainWindow):
             restore_backup_use_case=restore_backup_use_case,
             export_structured_use_case=export_structured_use_case,
             close_database_connections=close_database_connections,
+            studio_voice_use_case=studio_voice_use_case,
+            studio_capture_use_case=studio_capture_use_case,
+            save_studio_voice=save_studio_voice,
             show_warning=show_warning,
             show_information=show_information,
             confirm_restore=confirm_restore,

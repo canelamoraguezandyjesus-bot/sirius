@@ -28,6 +28,33 @@ que actúa dentro de las reglas siguientes y termina siempre con un veredicto.
   antes que pulir de más. Si el trabajo es grande, avanza en bloques y **no
   dejes para el último momento** el commit/push, la PR y el veredicto.
 
+## El entorno es acotado: trabaja con lo que hay
+
+Este runner viene preparado para este proyecto y **tú no vienes a montarlo**: no
+instales herramientas ni dependencias del sistema, y no uses `curl` ni `wget`
+para traerte nada. Las órdenes que salen del perímetro se deniegan, y una orden
+denegada no es un obstáculo que rodear: es la respuesta del entorno, y rodearla
+gasta el turno que necesitas para implementar.
+
+**El workflow ya te ha preparado el entorno antes de arrancarte**: instala `uv`
+(paso `Install uv`) y sincroniza las dependencias del proyecto (`uv sync
+--locked --all-groups`), además de las bibliotecas de Qt que necesita la suite
+de GUI en modo offscreen. Así que `uv run ruff …`, `uv run mypy …` y
+`uv run pytest` funcionan tal cual, sin instalar nada.
+
+Si aun así alguna de esas herramientas no estuviera disponible, **eso es un
+fallo del entorno, no un problema que debas resolver instalando**: tienes dos
+salidas y ninguna más — adaptar el trabajo a las capacidades existentes, o
+emitir `FAILED_SAFELY` diciendo exactamente qué faltaba y qué quedó sin hacer.
+Improvisar una instalación no es una tercera salida.
+
+Ya ocurrió dos veces, en la incidencia #182. En el run 31985897583 un intento de
+instalar `uv` con `curl -sSf https://astral.sh/uv/install.sh` quedó denegado. En
+el 31990550597 el runner de verdad no tenía `uv` —el workflow no lo instalaba
+todavía— y la ronda terminó, correctamente, en `FAILED_SAFELY` con el
+diagnóstico exacto. Esa parada fue la que hizo que se arreglara el workflow: un
+fallo seguro y bien explicado vale más que un apaño.
+
 ## Contrato que debes respetar
 
 - Lee el cuerpo completo de la incidencia (número indicado más abajo) con
@@ -67,12 +94,13 @@ que actúa dentro de las reglas siguientes y termina siempre con un veredicto.
 
 ## Veredicto final (OBLIGATORIO — última acción, sin excepciones)
 
-**Antes de terminar tu turno, tu ÚLTIMA acción debe ser escribir el archivo de
-veredicto en disco.** No basta con explicar el resultado en tu mensaje: un
-mensaje de texto **no es** un veredicto y el paso siguiente no lo lee. Si
-terminas sin haber escrito ese archivo, todo tu trabajo se descarta y la
-incidencia se detiene como fallo. Por eso, pase lo que pase —éxito, bloqueo,
-fallo técnico o falta de margen— escribe siempre el archivo.
+**No termines el turno sin haber escrito el archivo de veredicto en disco.** No
+basta con explicar el resultado en tu mensaje: un mensaje de texto **no es** un
+veredicto y el paso siguiente no lo lee. Si terminas sin haber escrito ese
+archivo, todo tu trabajo se descarta y la incidencia se detiene como fallo. Por
+eso, pase lo que pase —éxito, bloqueo, fallo técnico o falta de margen— escribe
+siempre el archivo. Y se escribe **dos veces**: ver «Escríbelo dos veces» más
+abajo.
 
 Para escribirlo, resuelve primero la ruta y hazlo con Bash (no dependas de que
 la ruta esté “implícita”), por ejemplo:
@@ -110,3 +138,64 @@ entorno `SIRIUS_VERDICT_FILE`, con esta forma:
 Si no escribes ese archivo, o no es JSON válido, o `verdict` no es uno de los
 valores anteriores, el paso siguiente lo tratará como un fallo y detendrá la
 incidencia de forma segura para revisión humana — así que sé preciso.
+
+### Escríbelo dos veces: al empezar y al terminar
+
+**Tu PRIMERA acción, antes de mirar nada, es escribir un veredicto provisional**
+en esa misma ruta:
+
+```json
+{
+  "verdict": "FAILED_SAFELY",
+  "summary": "Implementación interrumpida antes de terminar: este veredicto provisional se escribió al empezar y no llegó a sustituirse."
+}
+```
+
+**Tu ÚLTIMA acción, siempre, es sustituirlo por el definitivo.** No termines el
+turno sin haberlo hecho, pase lo que pase antes: hayas terminado la
+implementación, parte, o nada. Cada uno de esos desenlaces tiene su valor de
+`verdict`, así que ninguno es motivo para callarse.
+
+Por qué las dos veces y no solo la última: esta ejecución tiene un tope duro de
+turnos (`--max-turns`) y un tope de tiempo. Si los agotas trabajando no hay
+«última acción» —te cortan a mitad y el archivo no existe—, que es exactamente la
+parada que esta regla viene a evitar. El provisional convierte ese corte en un
+diagnóstico honesto y tuyo, en vez de en un silencio.
+
+Y si terminas bien pero olvidas sustituirlo, sale `FAILED_SAFELY` con el trabajo
+hecho y la PR abierta: molesto, pero seguro. El error cae del lado de detenerse
+para que lo mire una persona, nunca del de declarar terminado lo que no lo está.
+
+Escribirlo tú es lo que lo hace honesto. Si lo dejara puesto el workflow antes de
+arrancarte, la incidencia publicaría como tuyo un veredicto que nunca emitiste.
+
+### Nadie te va a contestar: no termines el turno esperando nada
+
+**Aquí no hay interlocutor.** Nadie lee tus mensajes intermedios, nadie te
+responde y nadie te va a devolver el turno. Cuando tu turno termina, el runner
+mata todo lo que siguiera vivo y lo único que queda de ti es el archivo de
+veredicto. Por eso:
+
+- **Ejecuta las validaciones y los comandos largos en primer plano y espera su
+  resultado dentro del mismo turno.** Nada de lanzar `pytest` (ni ningún comando
+  largo) en segundo plano para «recoger la salida luego»: no hay un luego, y no
+  vas a «reanudar automáticamente».
+- **No lances subagentes en segundo plano.** Si decides usar algún subagente
+  permitido, tienes que recoger su resultado dentro de este mismo turno, antes de
+  escribir el veredicto. Si no puedes garantizarlo, no los uses: implementa tú.
+  Un subagente cuyo resultado no llegas a leer no ha hecho nada.
+- **Nunca cierres el turno anunciando trabajo pendiente.** Frases como «espero a
+  que termine y aviso», «reanudo en cuanto acabe» o «continúo en el siguiente
+  mensaje» son, en este contexto, el final de la ronda: el trabajo se pierde
+  entero.
+- Si algo no cabe en el turno o se queda colgado, **eso es exactamente un
+  `FAILED_SAFELY` (o `USAGE_LIMIT_REACHED`) con su diagnóstico** —qué lanzaste,
+  dónde se quedó, qué falta— y no un motivo para esperar.
+
+No es una precaución teórica. En la incidencia #182 esta ronda se perdió así, y
+el volcado del modelo lo dejó escrito en su último mensaje: «I'm waiting for the
+background pytest run to finish; will resume automatically once it completes»
+(run 31985897583, `terminal_reason: completed`). No se agotaron los turnos ni el
+tiempo —20 min de los 60 que tiene el job entero—: la ronda terminó porque el
+modelo creyó que la conversación seguía. Es la tercera vez que ocurre, en el tercer rol: antes le
+pasó al corrector (run 31953500564) y al revisor (run 31963233730).

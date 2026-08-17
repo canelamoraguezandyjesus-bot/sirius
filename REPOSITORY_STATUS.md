@@ -19,136 +19,52 @@
 - V6B: adaptador OpenAI, streaming, cancelación, errores tipados internos, idempotencia y presupuesto persistente.
 - V7A: Windows Credential Manager, configuración del proveedor, diagnóstico local y protección frente a configuraciones inválidas.
 - V7: creación, validación y restauración segura de copias cifradas, incluida su interfaz.
-- V8 (parcial, dentro de B2, B3, B4 y B5): validación de credencial contra el proveedor
-  antes de guardarla (RF-002), integrada en la interfaz (`ValidatedMainWindow`).
-  RF-002 está implementado y cubierto automáticamente. Además (B2a, PR #24,
-  squash `f7134ca658e6343779ee6bfe89ad05dd2f0a8ba3`, fusionado en `main`), la
-  pantalla de primera apertura (`OnboardingWindow`) se muestra únicamente cuando
-  `ApiKeySettingsUseCase.has_key()` es falso, explica la política de datos, muestra
-  proveedor y modelo predeterminados, y activa el proveedor real en la misma
-  ejecución tras validar y guardar la clave, sin exigir reinicio. RF-001 está
-  implementado y cubierto automáticamente. D-01 permanece abierto hasta demostrar
-  el resto de sus condiciones (pruebas formales con proveedor real, PA-001/PA-002).
-  Además (B2b, PR #26, squash `2c60afc2652aadbf3aaa3e8672cd5a1f476e4ac4`,
-  fusionado en `main`), la ubicación de los datos se resuelve, valida y persiste
-  antes de crear directorios de datos, configurar el logging dependiente de la
-  ruta, abrir SQLite o construir la composición: `BootstrapLocationStore` guarda
-  un puntero JSON atómico y mínimo en el directorio de configuración estable de
-  Windows (independiente de `data_dir`), `WindowsDataPathValidator` prueba
-  escritura real y detecta instalaciones existentes y carpetas bajo OneDrive, y
-  `DataLocationWindow` ofrece la ruta predeterminada ya seleccionada con una
-  opción avanzada para elegir otra carpeta, solo cuando hace falta una primera
-  elección. Una ruta personalizada con datos existentes se bloquea sin adoptarla
-  ni migrarla; un archivo de ubicación corrupto nunca abre una base
-  predeterminada en silencio. D-10 permanece parcialmente abierto: falta la
-  comprobación real de activación en Windows (Credential Manager, pendiente de
-  validación manual) y la validación manual de rutas reales de Windows. Además
-  (B3a, PR #27, squash `882ab62416574e6a77c4714c6510565c1b670b1d`, fusionado en
-  `main`), tras resolver la ruta y configurar la clave, Sirius distingue el
-  placeholder vacío de arranque de un proyecto realmente configurado
-  (`sirius.domain.project.is_configured()`), y `InitialProjectUseCase` crea el
-  primero completando ese placeholder (sin insertar una segunda fila) con
-  nombre, objetivo y un estado/siguiente paso iniciales mínimos y centralizados;
-  `InitialProjectWindow` muestra un saludo determinista (reutiliza
-  `INITIAL_IDENTITY_NAME`, nunca generado por el proveedor) y se muestra solo
-  cuando hay clave configurada pero ningún proyecto todavía, abriendo
-  `ValidatedMainWindow` en la misma ejecución al crearlo. RF-014 y RF-015 están
-  implementados y cubiertos automáticamente; RF-016 solo en su parte inicial.
-  D-02 queda parcialmente corregido: quedan pendientes bloqueos, decisiones
-  relacionadas, completar/archivar conservando historial y el resumen al
-  retomar, para un corte posterior de B3. Además (B3b, PR #28, squash
-  `a2f74df935f32835506c3228b328c2b9b6eec13b`, fusionado en `main`), Sirius
-  conserva y muestra la continuidad del proyecto activo: `Project.blockers`
-  (texto libre, migración Alembic no destructiva `66951344e4b9`, probada con
-  Alembic real desde el head anterior) se añade junto a estado y siguiente
-  paso; `ProjectContinuityUseCase` consulta y actualiza los tres campos en una
-  sola escritura, rechazando la ausencia de proyecto o el placeholder y un
-  estado o siguiente paso vacío, y traduciendo cualquier fallo de
-  infraestructura a un error seguro; `ProjectContinuityWidget`, insertado por
-  `MainWindow` encima del historial en la pestaña "Conversación" existente
-  (sin pestaña ni ventana nueva), muestra un resumen local y determinista con
-  el siguiente paso destacado ("Ahora toca: …") y permite actualizar
-  estado/bloqueos/siguiente paso; `render_instructions()` incluye ahora
-  nombre y bloqueos en la sección "# Proyecto activo" enviada al proveedor.
-  RF-016 queda cubierto salvo la parte de "decisiones" (B4); RF-017 queda
-  implementado y cubierto automáticamente. D-02 sigue parcialmente
-  corregido: quedan pendientes decisiones relacionadas, completar el
-  proyecto conservando historial y habilitar un proyecto posterior. Además
-  (B3c, PR #29), Sirius versiona la continuidad del proyecto activo y
-  permite cerrarlo: el historial ya no vive en columnas planas sino en
-  `project_revisions`, revisiones inmutables versionadas, con
-  `projects.current_revision_id` (campo mínimo de la arquitectura aprobada,
-  SIRIUS-ARQ-0.1 S7.3) como único
-  puntero autoritativo a la revisión vigente — con clave foránea física
-  hacia `project_revisions.id`, y validación en el repositorio de que la
-  revisión referenciada pertenece al mismo proyecto — sembradas por
-  migración Alembic no destructiva `6f710ea6c2d2` (relleno de la fila
-  existente en revisión 1 con su puntero fijado, resincronización de
-  columnas heredadas vía ese mismo puntero al bajar de versión);
-  `ContextBuilder` ya no exige un proyecto activo para construir el
-  contexto: su ausencia (ninguno creado todavía, o el último se acaba de
-  completar) deja `Context.project` en `None`, conforme al contrato
-  aprobado (`LLMRequest.project_context: str | None`), y
-  `render_instructions()` omite entonces la sección "# Proyecto activo"
-  entera; `ProjectLifecycleUseCase`
-  completa el proyecto activo (RF-018, "Marcarlo completado sin borrar su
-  historial") sin eliminar ni reescribir nada; `ProjectContinuityWidget` añade
-  el botón "Completar proyecto" con confirmación explícita antes de escribir;
-  al completar, `sirius.main` cierra la ventana principal y reabre
-  `InitialProjectWindow` en el mismo proceso — sin reiniciar Sirius y sin
-  reactivar ni sobrescribir jamás el proyecto cerrado — reutilizando el mismo
-  camino que ya usa el arranque cuando no hay proyecto configurado. Solo se
-  implementa COMPLETED: el texto aprobado de RF-018 no menciona archivar, y
-  ARCHIVED queda fuera de alcance de Sirius 0.1. RF-018 queda implementado y
-  cubierto automáticamente. D-02 queda cerrado en lo que respecta a B3
-  (decisiones relacionadas siguen perteneciendo a B4). Además (B4a-B4f,
-  ver `docs/implementation/B4_EXECUTION.md` y `docs/implementation/PLAN.md`
-  para el detalle completo por subbloque), Sirius completa la capacidad
-  observable de eventos, recuerdos y decisiones: guardado manual con origen
-  consultable (B4a, RF-019/RF-021, PA-010); decisiones con aprobación
-  explícita, sin que una exploración conversacional apruebe nada por sí sola
-  (B4b, RF-020, PA-011); corrección versionada de recuerdos y sustitución
-  explícita de decisiones (B4c, RF-022/RF-023, PA-012/PA-013); archivo,
-  eliminación con la elección explícita sobre el mensaje fuente y la
-  advertencia sobre copias antiguas (B4d, RF-024/RF-025, PA-015/PA-016,
-  SP-06); precedencia y detección determinista de conflictos entre
-  recuerdos y decisiones, sin elegir nunca un ganador en silencio (B4e,
-  RF-026, PA-014, DR-011); y, cerrando B4, la integración visible de todo lo
-  anterior en una pestaña nueva ("Memoria y decisiones") de la misma
-  `MainWindow` — sin aplicación de gestión independiente — junto con la
-  consulta de solo lectura `GetKnowledgeOverviewUseCase` que la alimenta
-  (B4f). RF-019 a RF-026 y PA-010 a PA-016 quedan implementados y cubiertos
-  automáticamente (proveedor simulado); la parte de PA-008 y PA-E2E-01 que
-  depende de proveedor real o evaluación humana no se declara superada.
-  Además (B5, PR #79, squash `7370a19`, incidencia #60 completada),
-  `ContextPanelWidget` integra en la pestaña "Conversación" un panel de solo
-  lectura con el proyecto activo y su siguiente paso, las decisiones APPROVED
-  vigentes y los recuerdos vigentes, con consulta de origen y actualización
-  local bajo demanda. Reutiliza los cuatro casos de uso ya cableados, no añade
-  repositorios, modelos, migraciones ni llamadas de red y queda cubierto por
-  pruebas GUI deterministas.
+- V8: las correcciones de V8.1 están construidas por bloques (B1 a B11), más
+  el empaquetado de B13. Qué entrega cada bloque, en qué estado está y qué
+  defecto del catálogo cierra se lee en la tabla de bloques operativos de
+  [`docs/implementation/V8_EXECUTION.md`](docs/implementation/V8_EXECUTION.md#bloques-operativos),
+  que por ADR-005 es el único registro de estado del repositorio. Este archivo
+  describe qué hay construido; no dice en qué punto está, precisamente porque
+  la automatización no puede escribirlo y por eso se quedaba atrás.
+
+En términos de capacidad, lo construido dentro de V8 cubre: el onboarding de
+primera apertura con política de datos y validación de la credencial antes de
+guardarla; la elección y persistencia de la ruta local de datos antes de abrir
+SQLite; el proyecto activo completo —creación, continuidad observable con
+estado, bloqueos y siguiente paso, y ciclo de vida versionado sobre revisiones
+inmutables—; la memoria y las decisiones al completo —guardado manual con
+origen consultable, aprobación explícita, corrección versionada, sustitución,
+archivo, eliminación con redacción de origen y detección determinista de
+conflictos, integrado todo en la pestaña «Memoria y decisiones»—; el panel de
+contexto de solo lectura; la selección, relevancia y presupuesto del contexto
+sobre índices FTS5; el reintento de un envío fallido sin reescribirlo, los
+errores accionables y el aviso de presupuesto; el Markdown seguro con bloques
+de código copiables; la exportación estructurada; la política de rechazo de
+acciones fuera de alcance; y la prueba de recuperación tras un cierre forzado.
 
 Estas entradas describen infraestructura o hitos de implementación. No demuestran por sí solas que la capacidad completa de producto sea utilizable ni que sus pruebas de aceptación hayan pasado.
 
 En particular:
 
-- el proyecto ya cubre el ciclo de vida hasta donde llega B3: B3a, B3b y B3c
-  cubren el saludo inicial, la creación del primer proyecto, su continuidad
-  (estado, bloqueos, siguiente paso, resumen al retomar) y completarlo
-  conservando su historial; las decisiones relacionadas quedan cubiertas por
-  B4 (ver arriba);
-- la memoria ya contiene, e integra observablemente (B4a-B4f), la semántica
-  aprobada de decisiones, eventos, corrección, sustitución, archivo,
-  eliminación, conflictos y origen consultable;
-- el panel de contexto completo B5 está implementado e integrado en la pestaña
-  "Conversación" como superficie local, determinista y de solo lectura;
-- el constructor de contexto no aplica aún toda la selección, precedencia y política de presupuesto aprobadas; B6 sigue pendiente y debe dividirse antes de activarse.
+- el constructor de contexto ya aplica la selección, la relevancia y la
+  política de presupuesto aprobadas (B6a a B6d), pero eso lo demuestran
+  pruebas automáticas con dobles deterministas, no una prueba de aceptación
+  formal;
+- el estado de cada prueba de aceptación —incluidas las que exigen proveedor
+  real, Windows real o evaluación humana— se lee en el registro, nunca aquí;
+- el trazado formal requisito–prueba está declarado en
+  [`docs/implementation/TRAZABILIDAD_PA_SP.md`](docs/implementation/TRAZABILIDAD_PA_SP.md)
+  y comprobado por máquina (`tests/unit/test_pa_sp_traceability.py`, ADR-006).
+  El estado de cada bloque se lee en la tabla de bloques operativos de
+  [`docs/implementation/V8_EXECUTION.md`](docs/implementation/V8_EXECUTION.md#bloques-operativos),
+  que por ADR-005 es el único sitio que lo declara.
 
 ## Estado de verificación
 
 ### Confirmado automáticamente
 
-- GitHub Actions funciona en Windows.
+- GitHub Actions ejecuta las comprobaciones en Linux en cada pull request y merge;
+  la validación en Windows es puntual y bajo demanda.
 - Ruff format, Ruff lint, mypy estricto y pytest han pasado en las pull requests integradas examinadas.
 - Las pruebas normales usan proveedores y streams simulados y no realizan llamadas de red reales.
 - Las pruebas de `keyring` no leen ni escriben en el Credential Manager real.
@@ -179,14 +95,13 @@ En particular:
   incluidos estados vacíos, filtrado de decisiones APPROVED, origen,
   actualización manual y coordinación con operaciones ocupadas.
 
-### Pendiente de validación manual
+### Validación manual
 
-- Guardar, consultar mediante el sistema y eliminar un valor señuelo en Windows Credential Manager.
-- Construir y ejecutar el artefacto empaquetado en Windows 11.
-- Comprobar escalado, teclado, foco, rutas, cierre forzado y restauración empaquetada.
-- Ejecutar posteriormente la ventana autorizada con proveedor real.
-- Completar PA-E2E-01, PS-01 a PS-07 y las pruebas manuales de seguridad y privacidad.
-- Revisar visualmente B5 con muchos recuerdos y decisiones y en una ventana pequeña; no es un bloqueo automático demostrado.
+Qué pruebas manuales se han ejecutado, quién las ejecutó y con qué salvedades se
+lee en la tabla de evidencia de
+[`docs/implementation/V8_EXECUTION.md`](docs/implementation/V8_EXECUTION.md), que
+por ADR-005 es el único registro de estado. Esta lista vivía aquí y se quedaba
+atrás; era una de las derivas que ADR-005 vino a cerrar.
 
 ## Estado de V7
 
@@ -213,18 +128,20 @@ Puede incluir:
 - comprobaciones de Windows sin clave;
 - recopilación de evidencia.
 
-B5 está completado. Antes de B6 deben cerrarse la deriva documental y la higiene operativa, contrastar B6 contra las fuentes canónicas y dividirlo en subbloques pequeños y revisables. La exportación estructurada RF-031 continúa pendiente y puede ser un bloque intermedio más contenido.
+Qué bloque está hecho y cuál no se lee en
+[`docs/implementation/V8_EXECUTION.md`](docs/implementation/V8_EXECUTION.md#bloques-operativos).
+Aquí no se repite.
 
-No se considera iniciada la aceptación formal con proveedor real.
+La aceptación formal con proveedor real está **completada**: el propietario declaró Sirius 0.1
+aceptado y terminado el 10 de agosto de 2026. La declaración, con sus salvedades, vive en
+[`docs/implementation/V8_EXECUTION.md`](docs/implementation/V8_EXECUTION.md), que por ADR-005
+es el único registro de estado.
 
-La ventana con proveedor real permanece bloqueada hasta que:
-
-- estén resueltos D-01, D-02, D-03, D-04, D-05, D-08, D-11 y A-01;
-- exista un ejecutable reproducible;
-- la suite automática y FakeLLM estén verdes sobre la integración exacta;
-- Credential Manager haya sido comprobado con un valor señuelo;
-- copia y restauración hayan sido verificadas en el ejecutable;
-- no exista una contradicción documental material.
+La ventana con proveedor real permanece bloqueada hasta que se cumplan las
+condiciones de la puerta V8.3, que están escritas en `V8_EXECUTION.md` y no se
+duplican aquí. En resumen, lo que falta ya no es trabajo automatizable: es
+Windows real, una clave real y el trazado formal de las pruebas de aceptación
+(B12).
 
 No se crea una fase canónica adicional denominada `Preparación V8`.
 
@@ -236,7 +153,7 @@ No se crea una fase canónica adicional denominada `Preparación V8`.
 - No se convierten conversaciones exploratorias en requisitos ni cambios de arquitectura.
 - Las pruebas visuales, físicas o dependientes del Windows real siguen requiriendo intervención del usuario.
 - Antes de volver a trabajar desde el equipo local, debe sincronizarse con `git pull --ff-only origin main`.
-- Cada bloque debe indicar expresamente qué documentos vivos actualiza. Los documentos de raíz o de operaciones que el agente automático no pueda modificar se sincronizan en una PR documental posterior al merge.
+- Cada bloque actualiza la tabla de bloques operativos de `docs/implementation/V8_EXECUTION.md` y nada más. Ya no hace falta una PR documental posterior al merge para sincronizar los documentos de raíz: por ADR-005 estos dejaron de declarar estado, así que no se quedan atrás. El implementador automático tiene permiso de escritura sobre `docs/implementation/**`, que es justo donde vive ahora el registro.
 
 ## Fuentes históricas
 

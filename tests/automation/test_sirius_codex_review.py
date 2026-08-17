@@ -1401,3 +1401,267 @@ def test_a_review_submitted_in_the_same_second_as_the_trigger_is_historical(
         "un empate de marca temporal no demuestra que la revisión sea posterior"
     )
     assert result["reason"] == "timeout"
+
+
+# Cuerpo LITERAL con el que el conector cerró la ronda del run 31963233730 sobre
+# el head `cddf65fe` de la PR #178, recortado a lo que decide (se omite el bloque
+# `<details>` de ayuda, que es constante). Si esta prueba deja de reflejar lo que
+# el conector publica de verdad, deja de demostrar nada.
+CONNECTOR_NO_FINDINGS_BODY = (
+    "Codex Review: Didn't find any major issues. Another round soon, please!\n\n"
+    f"**Reviewed commit:** `{HEAD[:10]}`"
+)
+
+
+def test_el_conector_aprueba_declarando_por_comentario_que_no_encontro_nada(
+    tmp_path: Path,
+) -> None:
+    """El único canal por el que este conector dice «no encontré nada».
+
+    Hasta el contrato v1.6.1 esto era `FAILED_SAFELY`: §4.1 solo admitía aprobar
+    con revisión formal `APPROVED` o reacción `+1`. La incidencia #177 demostró
+    que ninguna de las dos ocurre nunca con este conector — en las 7 rondas de la
+    PR #178 emitió seis revisiones formales, todas `COMMENTED` y ninguna
+    `APPROVED`, y cuando no tuvo hallazgos publicó este comentario sin marcar 👍
+    el disparador (reacciones a cero, comprobado por API). Con la regla anterior
+    ninguna PR limpia podía alcanzar `ready-for-merge`: el modo dual estaba
+    estructuralmente bloqueado, no intermitentemente roto.
+    """
+    env = _setup(tmp_path)
+    _write_state(tmp_path, trigger_at=_stamp(0))
+    _seed(env, "reviews.json", [])
+    _seed(
+        env,
+        "issue_comments.json",
+        [
+            _trigger_comment(comment_id=500, created_at=_stamp(0)),
+            {
+                "id": 900,
+                "body": CONNECTOR_NO_FINDINGS_BODY,
+                "created_at": _stamp(1),
+                "user": {"login": CONNECTOR},
+            },
+        ],
+    )
+
+    r = _run_collect(env, tmp_path, timeout="30")
+
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "APPROVED"
+    # La aprobación declara SOBRE QUÉ versión se pronuncia: el agregador y
+    # `sirius_apply_verdict.sh` la contrastan con el head actual de la PR.
+    assert result["reviewed_head_sha"] == HEAD
+    assert not result["observations"]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        pytest.param(
+            "Codex Review: here are some automated review suggestions.",
+            id="resumen-sin-declarar-ausencia",
+        ),
+        pytest.param(
+            "Codex Review: I found a couple of issues worth a second look.",
+            id="dice-que-si-encontro",
+        ),
+        pytest.param("@codex is thinking about it…", id="ruido-del-conector"),
+        pytest.param(
+            "Didn't find any major blockers, but see the notes below.",
+            id="parecido-pero-no-es-la-formula",
+        ),
+    ],
+)
+def test_cualquier_otra_redaccion_del_conector_sigue_deteniendo_la_ronda(
+    tmp_path: Path, body: str
+) -> None:
+    """La estrechez del reconocimiento ES la garantía, no un descuido.
+
+    Lo que separa una aprobación de una parada segura es una frase concreta y
+    observada. Cualquier otra redacción —incluida una parecida— cae en la parada
+    de siempre: un cambio de formato del conector cuesta una ronda bloqueada que
+    mira una persona, nunca una aprobación falsa.
+    """
+    env = _setup(tmp_path)
+    _write_state(tmp_path, trigger_at=_stamp(0))
+    _seed(env, "reviews.json", [])
+    _seed(
+        env,
+        "issue_comments.json",
+        [
+            _trigger_comment(comment_id=500, created_at=_stamp(0)),
+            {
+                "id": 900,
+                "body": f"{body}\n\n**Reviewed commit:** `{HEAD[:10]}`",
+                "created_at": _stamp(1),
+                "user": {"login": CONNECTOR},
+            },
+        ],
+    )
+
+    r = _run_collect(env, tmp_path, timeout="30")
+
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "FAILED_SAFELY"
+    assert result["reason"] == "respuesta-por-comentario"
+
+
+def test_un_comentario_que_dice_no_encontrar_nada_pero_trae_hallazgos_no_aprueba(
+    tmp_path: Path,
+) -> None:
+    """El encabezado no manda sobre el contenido.
+
+    Un comentario que declarara ausencia de hallazgos y a la vez trajera
+    insignias de severidad se está contradiciendo. Aprobarlo sería exactamente
+    «afirmar más de lo que el dato sostiene»: la parada segura es la respuesta.
+    """
+    env = _setup(tmp_path)
+    _write_state(tmp_path, trigger_at=_stamp(0))
+    _seed(env, "reviews.json", [])
+    _seed(
+        env,
+        "issue_comments.json",
+        [
+            _trigger_comment(comment_id=500, created_at=_stamp(0)),
+            {
+                "id": 900,
+                "body": (
+                    "Codex Review: Didn't find any major issues.\n\n"
+                    "![P1 Badge](https://example.invalid/p1.svg) `src/x.py` fuga de memoria\n\n"
+                    f"**Reviewed commit:** `{HEAD[:10]}`"
+                ),
+                "created_at": _stamp(1),
+                "user": {"login": CONNECTOR},
+            },
+        ],
+    )
+
+    r = _run_collect(env, tmp_path, timeout="30")
+
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "FAILED_SAFELY"
+    assert result["reason"] == "respuesta-por-comentario"
+
+
+@pytest.mark.parametrize(
+    "orden",
+    [
+        pytest.param("ruido_primero", id="el-ruido-llega-antes"),
+        pytest.param("ruido_despues", id="el-ruido-llega-despues"),
+    ],
+)
+def test_basta_un_comentario_sin_declarar_ausencia_para_detener_la_ronda(
+    tmp_path: Path, orden: str
+) -> None:
+    """El desenlace no puede depender del orden de llegada.
+
+    Si decidiera el PRIMER comentario, uno intermedio del conector bloquearía una
+    ronda limpia. Si decidiera el ÚLTIMO, una declaración posterior de «no
+    encontré nada» enterraría un comentario anterior con hallazgos y aprobaría un
+    head con defectos ya reportados. Se exige a TODOS —el mismo principio que
+    `_check_reviews` aplica a las revisiones—, así que el orden deja de importar.
+    """
+    env = _setup(tmp_path)
+    _write_state(tmp_path, trigger_at=_stamp(0))
+    _seed(env, "reviews.json", [])
+    limpio = {
+        "id": 900,
+        "body": CONNECTOR_NO_FINDINGS_BODY,
+        "user": {"login": CONNECTOR},
+    }
+    ruido = {
+        "id": 901,
+        "body": (
+            f"Codex Review: found something worth a look.\n\n**Reviewed commit:** `{HEAD[:10]}`"
+        ),
+        "user": {"login": CONNECTOR},
+    }
+    primero, segundo = (ruido, limpio) if orden == "ruido_primero" else (limpio, ruido)
+    _seed(
+        env,
+        "issue_comments.json",
+        [
+            _trigger_comment(comment_id=500, created_at=_stamp(0)),
+            {**primero, "created_at": _stamp(1)},
+            {**segundo, "created_at": _stamp(2)},
+        ],
+    )
+
+    r = _run_collect(env, tmp_path, timeout="30")
+
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "FAILED_SAFELY"
+    assert result["reason"] == "respuesta-por-comentario"
+
+
+def test_una_revision_formal_en_curso_impide_que_el_comentario_apruebe(
+    tmp_path: Path,
+) -> None:
+    """La precedencia de §4.1 no se toca al abrir el tercer canal.
+
+    Si el conector ya publicó una revisión formal que todavía no ha entregado
+    nada, la ronda es ambigua. Dejar que un comentario la resolviera convertiría
+    esa ambigüedad en aprobación — el mismo defecto que la regla de la reacción
+    `+1` vino a cerrar. El comentario ni siquiera se consulta.
+    """
+    env = _setup(tmp_path)
+    _write_state(tmp_path, trigger_at=_stamp(0))
+    _seed(env, "reviews.json", [_review(review_id=700, body="", submitted_at=_stamp(1))])
+    _seed(env, "review_comments_700.json", [])
+    _seed(
+        env,
+        "issue_comments.json",
+        [
+            _trigger_comment(comment_id=500, created_at=_stamp(0)),
+            {
+                "id": 900,
+                "body": CONNECTOR_NO_FINDINGS_BODY,
+                "created_at": _stamp(2),
+                "user": {"login": CONNECTOR},
+            },
+        ],
+    )
+
+    r = _run_collect(env, tmp_path, timeout="2")
+
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "FAILED_SAFELY"
+    assert result["reason"] == "timeout", (
+        "una revisión formal sin entregar deja la ronda ambigua; el comentario no la resuelve"
+    )
+
+
+def test_un_comentario_del_conector_sobre_otro_sha_sigue_sin_resolver_la_ronda(
+    tmp_path: Path,
+) -> None:
+    """El canal nuevo no relaja ninguna de las comprobaciones de §4.1."""
+    env = _setup(tmp_path)
+    _write_state(tmp_path, trigger_at=_stamp(0))
+    _seed(env, "reviews.json", [])
+    _seed(
+        env,
+        "issue_comments.json",
+        [
+            _trigger_comment(comment_id=500, created_at=_stamp(0)),
+            {
+                "id": 900,
+                "body": (
+                    f"Codex Review: nada que objetar.\n\n**Reviewed commit:** `{OTHER_HEAD[:10]}`"
+                ),
+                "created_at": _stamp(1),
+                "user": {"login": CONNECTOR},
+            },
+        ],
+    )
+
+    r = _run_collect(env, tmp_path, timeout="3")
+
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "FAILED_SAFELY"
+    assert result["reason"] == "timeout", "un SHA ajeno no puede resolver la ronda"

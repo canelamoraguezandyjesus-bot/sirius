@@ -1,0 +1,312 @@
+name: Auditar el repositorio (Auditor v0)
+
+# Lanza el Auditor de repositorio poniendo `auditoria:solicitada` a una
+# incidencia. Autorizado por ADR-016.
+#
+# La etiqueta NO lleva el prefijo `sirius:` a propósito: el ciclo reconoce lo
+# suyo por PREFIJO (sirius_reconcile.sh filtra con grep '^sirius:';
+# complete-sirius-after-merge.yml con startswith("sirius:")). Con ese prefijo,
+# un run del Auditor contaría como estado del ciclo.
+#
+# LA PROPIEDAD QUE DEFIENDE ESTE FICHERO, y que comprueba
+# `tests/automation/test_auditor_workflow.py`:
+#
+#   El trabajo que ejecuta el modelo NO puede escribir. El trabajo que puede
+#   escribir NO ejecuta ningún modelo.
+#
+# No es una promesa de buen comportamiento: `auditar` declara `contents: read` y
+# nada más, así que el token que recibe el agente es incapaz de escribir aunque
+# se le pida. `publicar` sí puede comentar, pero su guion está aquí entero y no
+# invoca ningún modelo.
+#
+# Un run del Auditor NO es un bloque de la tubería. Por eso usa una etiqueta
+# propia que no aparece en ninguna transición del ciclo: meterlo en la máquina
+# de estados acabaría en `sirius:failed-safely` sin que nada hubiera fallado.
+
+on:
+  issues:
+    types: [labeled]
+
+# Permisos MÍNIMOS a nivel de workflow. Cada trabajo los recorta todavía más.
+permissions: {}
+
+concurrency:
+  group: sirius-audit-${{ github.event.issue.number }}-${{ github.event.label.name }}
+  cancel-in-progress: false
+
+jobs:
+  auditar:
+    name: Auditar (solo lectura)
+    if: github.event.label.name == 'auditoria:solicitada'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # SOLO LECTURA. No añadir `issues: write` aquí «para que publique el
+    # informe»: el informe lo publica el trabajo siguiente. Ampliar esto es lo
+    # que el criterio de parada de ADR-016 prohíbe expresamente.
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # AUDITOR_AGENT_V0.md §2 dice que la restriccion de escritura del Auditor es
+      # PROCEDIMENTAL, y que la frontera mecanica «se vuelve obligatoria» si los
+      # runs pasan a desatendidos. Este workflow es exactamente eso. La parte de
+      # GitHub ya es mecanica (`contents: read` acota el token). Esta es la otra
+      # mitad: la huella la toma el ARNES, no el agente, porque un agente que
+      # certifica su propia inocencia es el observador dentro de lo observado.
+      - name: Huella inicial del árbol
+        id: huella
+        shell: bash --noprofile --norc {0}
+        run: |
+          set -uo pipefail
+          {
+            echo "head=$(git rev-parse HEAD)"
+            # --ignored=matching: sin esa bandera, una escritura en una ruta que
+            # coincida con .gitignore (logs/, .local/, settings.json...) no
+            # aparece y la huella daria "intacto" en falso. FINDING-001 del
+            # propio Auditor, RUN-002 (#167).
+            echo "arbol=$(git status --porcelain --ignored=matching | sha256sum | cut -d' ' -f1)"
+            echo "ramas=$(git branch --format='%(refname:short)' | sha256sum | cut -d' ' -f1)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Preparar el encargo
+        id: build_prompt
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -uo pipefail
+          # El runbook se LEE del árbol; no se copia aquí. Dos copias del mismo
+          # runbook se desincronizan, y la deriva documental es uno de los
+          # defectos que la auditoría lleva corrigiendo desde el principio.
+          runbook="docs/implementation/AUDITOR_AGENT_V0.md"
+          if [ ! -f "$runbook" ]; then
+            echo "::error::No encuentro $runbook; sin runbook no hay auditoría."
+            exit 1
+          fi
+          if grep -q "SIRIUS_PROMPT_EOF" "$runbook"; then
+            echo "::error::El runbook contiene el delimitador del heredoc; el prompt saldría truncado."
+            exit 1
+          fi
+          {
+            echo "prompt<<SIRIUS_PROMPT_EOF"
+            cat "$runbook"
+            echo ""
+            echo "## Contexto de esta ejecución"
+            echo "- Repositorio: ${GH_REPO}"
+            echo "- Incidencia que registra el run: #${ISSUE_NUMBER}"
+            echo "- Commit auditado: ${GITHUB_SHA}"
+            echo ""
+            echo "## Cómo trabajas AQUÍ (esto manda sobre el runbook si chocan)"
+            echo ""
+            echo "Corres desatendido, en un runner de Actions, sin nadie mirando."
+            echo "En RUN-002 (el estreno) el auditor gastó su tiempo intentando"
+            echo "herramientas que no tenía y esperando subagentes que no existen,"
+            echo "y terminó sin escribir el informe. No repitas eso:"
+            echo ""
+            echo "1. TRABAJAS SOLO. No lances subagentes ni tareas en segundo plano,"
+            echo "   y no esperes notificaciones: nada te va a llegar. Cuando tu"
+            echo "   último turno termina, el run se acaba."
+            echo "2. Tus ÚNICAS herramientas son: Read, Grep, Glob, Write, y Bash"
+            echo "   SOLO para git log / git show / git diff. Todo lo demás —pytest,"
+            echo "   compilar, ls, cualquier otro comando— será DENEGADO. No lo"
+            echo "   intentes ni insistas: cada intento es un turno perdido."
+            echo "   Donde el runbook diga «ejecutar pruebas», sustituye por lectura"
+            echo "   estática y dilo en el informe como área no inspeccionada."
+            echo "3. Escribe el informe INCREMENTALMENTE con Write en esta ruta"
+            echo "   exacta, desde el primer hallazgo — no lo dejes para el final,"
+            echo "   porque un corte a mitad dejaría el fichero vacío y el run en rojo:"
+            echo ""
+            echo "    ${RUNNER_TEMP}/sirius_audit_report.md"
+            echo ""
+            echo "Es la única escritura legítima de todo el run: fuera del árbol del"
+            echo "repositorio. NO tienes credencial para escribir en GitHub, y no la"
+            echo "vas a pedir. El fichero se publica como comentario de la incidencia,"
+            echo "saneado (las vallas de código y los marcadores HTML llegan"
+            echo "neutralizados). Si queda vacío, la ejecución se marca como fallida."
+            echo "SIRIUS_PROMPT_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Ejecutar Claude Code (auditor, solo lectura)
+        id: claude
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # El GITHUB_TOKEN del propio run, acotado por los permisos de ESTE
+          # trabajo (`contents: read`). No es el PAT: darle el PAT anularía el
+          # recorte, porque un PAT lleva sus propios permisos y no los del job.
+          github_token: ${{ github.token }}
+          prompt: ${{ steps.build_prompt.outputs.prompt }}
+          # Sin herramientas de escritura salvo `Write`, que necesita para
+          # dejar el informe en SIRIUS_REPORT_FILE. No hay `Bash` con red ni
+          # WebSearch/WebFetch: el Auditor v0 no navega (restricción del
+          # propietario al encargar el piloto).
+          claude_args: >-
+            --allowedTools "Read,Grep,Glob,Write,Bash(git log:*),Bash(git show:*),Bash(git diff:*)"
+            --disallowedTools "Task"
+            --max-turns 200
+          show_full_output: true
+
+      - name: Comprobar que el Auditor no modificó nada
+        if: always()
+        id: intacto
+        shell: bash --noprofile --norc {0}
+        env:
+          HEAD_ANTES: ${{ steps.huella.outputs.head }}
+          ARBOL_ANTES: ${{ steps.huella.outputs.arbol }}
+          RAMAS_ANTES: ${{ steps.huella.outputs.ramas }}
+        run: |
+          set -uo pipefail
+          head_despues="$(git rev-parse HEAD)"
+          arbol_despues="$(git status --porcelain --ignored=matching | sha256sum | cut -d' ' -f1)"
+          ramas_despues="$(git branch --format='%(refname:short)' | sha256sum | cut -d' ' -f1)"
+
+          # El informe se escribe en RUNNER_TEMP, fuera del árbol: un run legítimo
+          # deja las tres huellas idénticas. Si alguna cambió, el Auditor tocó lo
+          # que estaba auditando y el run no vale, diga lo que diga su informe.
+          if [ "$head_despues" = "$HEAD_ANTES" ] \
+            && [ "$arbol_despues" = "$ARBOL_ANTES" ] \
+            && [ "$ramas_despues" = "$RAMAS_ANTES" ]; then
+            echo "intacto=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "intacto=false" >> "$GITHUB_OUTPUT"
+            echo "::error::El árbol cambió durante la auditoría; el run queda invalidado."
+            git status --porcelain --ignored=matching
+          fi
+
+      - name: Recoger el informe
+        if: always()
+        id: recoger
+        shell: bash --noprofile --norc {0}
+        env:
+          INTACTO: ${{ steps.intacto.outputs.intacto }}
+        run: |
+          set -uo pipefail
+          informe="${RUNNER_TEMP}/sirius_audit_report.md"
+          if [ ! -s "$informe" ]; then
+            # Sin informe hay que decirlo, no callar: un run mudo es
+            # indistinguible de un run que no se lanzó.
+            {
+              echo "## 🔴 El Auditor no entregó informe"
+              echo ""
+              echo "El fichero de informe quedó vacío o no se creó."
+              echo "Resultado del paso de Claude: \`${{ steps.claude.outcome }}\`."
+              echo ""
+              echo "Log del run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            } > "$informe"
+            vacio="true"
+          else
+            vacio="false"
+          fi
+          if [ "${INTACTO:-false}" != "true" ]; then
+            # Se antepone el aviso en vez de tirar el informe: sirve para
+            # diagnosticar qué hizo, pero nadie debe tomarlo por válido.
+            aviso="$(mktemp)"
+            {
+              echo "## ⛔ RUN INVALIDADO — el árbol cambió durante la auditoría"
+              echo ""
+              echo "La huella de \`git status\`, \`HEAD\` o las ramas locales no coincide"
+              echo "entre el inicio y el final. El Auditor v0 es de SOLO LECTURA"
+              echo "(\`AUDITOR_AGENT_V0.md\` §2) y el runbook manda parar ante cualquier"
+              echo "diferencia de huella (§3, paso 8)."
+              echo ""
+              echo "**El informe de abajo NO es válido.** Se conserva solo para diagnosticar."
+              echo ""
+              echo "---"
+              echo ""
+              cat "$informe"
+            } > "$aviso"
+            mv "$aviso" "$informe"
+          fi
+
+          mkdir -p "${RUNNER_TEMP}/artefacto"
+          cp "$informe" "${RUNNER_TEMP}/artefacto/informe.md"
+
+          # Un run sin informe o con el árbol tocado NO es un run bueno: este
+          # trabajo termina en rojo para que `needs.auditar.result` diga la
+          # verdad en el comentario. El artefacto ya está copiado y se sube
+          # igual (el paso siguiente lleva if: always()).
+          if [ "${INTACTO:-false}" != "true" ] || [ "$vacio" = "true" ]; then
+            exit 1
+          fi
+
+      - name: Subir el informe como artefacto
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: informe-auditoria
+          path: ${{ runner.temp }}/artefacto/informe.md
+          retention-days: 30
+
+  publicar:
+    name: Publicar el informe
+    needs: auditar
+    if: always() && needs.auditar.result != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # ESTE trabajo sí puede comentar. Y por eso NO ejecuta ningún modelo: todo
+    # lo que hace está escrito aquí y se lee entero. `contents: read` existe
+    # solo para el checkout que trae el saneador de la librería. Si algún día
+    # alguien añade aquí un paso que invoque un modelo, se rompe la separación
+    # de ADR-016 y tests/automation/test_auditor_workflow.py lo pone rojo.
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: Checkout (solo para leer el saneador)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Descargar el informe
+        # Tolerante: si `auditar` murió antes de subir el artefacto, este paso
+        # no puede tumbar al que da la noticia.
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: informe-auditoria
+          path: informe
+
+      - name: Comentar en la incidencia
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RESULTADO: ${{ needs.auditar.result }}
+        run: |
+          set -uo pipefail
+          source scripts/automation/sirius_issue.sh
+          cuerpo="$(mktemp)"
+          {
+            echo "<!-- sirius-audit:${GITHUB_SHA} -->"
+            echo "## Informe del Auditor v0"
+            echo ""
+            echo "- Commit auditado: \`${GITHUB_SHA}\`"
+            echo "- Run: ${RUN_URL}"
+            echo "- Resultado del trabajo de auditoría: \`${RESULTADO}\`"
+            echo ""
+            echo "---"
+            echo ""
+            if [ -s informe/informe.md ]; then
+              # El informe lo escribió un MODELO, y este comentario sale como
+              # github-actions[bot], que está DENTRO del filtro de confianza del
+              # ciclo (SIRIUS_TRUSTED_AUTHOR_JQ). Sin sanear, sus vallas ``` y
+              # sus marcadores <!-- --> gobernarían la numeración de rondas y
+              # las observaciones que consume el corrector. Mismo saneado que
+              # sirius_apply_verdict.sh aplica a todo texto de agente.
+              sanitize_untrusted_text < informe/informe.md
+            else
+              echo "**El artefacto del informe no llegó.** Mira el log del run."
+            fi
+          } > "$cuerpo"
+          gh issue comment "$ISSUE_NUMBER" --repo "$GH_REPO" --body-file "$cuerpo" \
+            || echo "::error::No se pudo publicar; el informe queda como artefacto del run."
+          rm -f "$cuerpo"

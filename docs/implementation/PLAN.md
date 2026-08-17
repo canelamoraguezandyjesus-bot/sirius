@@ -11,6 +11,13 @@ Cada vertical debe producir una parte usable, probada y documentada antes de ini
 - Aceptación manual con proveedor real: BLOQUEADA.
 - Sirius 0.1: NO ACEPTADO y NO TERMINADO.
 
+**Este archivo describe el plan, no el punto en que está.** El estado vigente
+de cada bloque de V8 y de cada defecto del catálogo se lee en un solo sitio:
+la tabla de bloques operativos de
+[`V8_EXECUTION.md`](V8_EXECUTION.md#bloques-operativos). Por ADR-005 ningún
+otro documento lo declara, porque tener la misma tabla en tres archivos es lo
+que los dejó contradiciéndose.
+
 Las etiquetas de este archivo describen hitos de implementación. No constituyen evidencia suficiente de cumplimiento funcional ni sustituyen las pruebas PA, PS, SP o PA-E2E-01.
 
 Una vertical puede tener su infraestructura implementada y mantener defectos de producto abiertos que deban corregirse dentro de V8.
@@ -398,169 +405,15 @@ Prohibido en esta subetapa:
 
 #### Correcciones ya fusionadas dentro de V8.1
 
-- Validación de credencial antes de guardarla (RF-002): `ValidateAndSaveApiKeyUseCase`
-  valida la clave contra el proveedor (`OpenAICredentialValidator`) antes de persistirla,
-  e integra el flujo en la interfaz mediante `ValidatedMainWindow` (subclase de
-  `MainWindow` que sustituye a `_save_api_key`, ejecuta la validación en `QThreadPool`
-  vía `CredentialValidationWorker` y nunca accede al almacén de secretos ni al proveedor
-  directamente desde la presentación). Cubierto con pruebas unitarias y de GUI
-  (`tests/unit/test_validate_and_save_api_key.py`, `tests/unit/test_openai_credential_validator.py`,
-  `tests/gui/test_validated_main_window.py`), siempre contra un validador simulado.
-  RF-002 está implementado y cubierto automáticamente. D-01 permanece abierto hasta
-  demostrar el resto de sus condiciones: falta RF-001 (pantalla de primera
-  configuración con política de datos) y D-10 (ruta de datos y activación clara)
-  permanece abierto sin ningún cambio; PA-001 y PA-002 formales exigen una
-  credencial real y no se declaran superadas — siguen bloqueadas hasta V8.3.
-- Corrección de una fuga de conexión SQLite en el helper de test de restauración
-  (`tests/gui/test_backup_recovery_ui.py::_bootstrapped_database`), que dejaba
-  repositorios temporales sin cerrar y causaba un fallo intermitente y reproducible
-  del reemplazo atómico de archivo en Windows (`PermissionError`) durante la prueba
-  de extremo a extremo de restauración. Es una corrección de higiene de prueba, no
-  un cambio de comportamiento de producto: el helper ahora cierra cada repositorio
-  en un `finally`, igual que `initialize_persistence()` ya hacía. Incluye una prueba
-  de regresión determinista.
-- Primera configuración básica (B2a, RF-001): `OnboardingWindow` (nueva ventana de
-  presentación, independiente de `MainWindow`) se muestra únicamente cuando
-  `ApiKeySettingsUseCase.has_key()` es falso; explica en un único lugar centralizado
-  (`onboarding_window.DATA_POLICY_TEXT`) qué se conserva localmente y qué se envía
-  al proveedor, muestra proveedor y modelo predeterminados (reutilizados de
-  `LLMProviderKind`/`resolve_openai_provider_settings`, sin selector nuevo) y
-  solicita únicamente la clave, reutilizando `ValidateAndSaveApiKeyUseCase` y
-  `CredentialValidationWorker` de RF-002 sin duplicar el flujo. Tras una validación
-  correcta, activa el proveedor real en la misma ejecución mediante la nueva
-  `ConversationDependencies.activate_configured_llm_provider` (composition root:
-  fija `llm_provider="openai"` en la configuración no sensible existente y
-  reconstruye el proveedor con `SendMessageUseCase.set_llm_provider`) y
-  `sirius.main` sustituye la ventana de onboarding por `ValidatedMainWindow` sin
-  reiniciar Sirius. Cubierto con pruebas unitarias y de GUI
-  (`tests/gui/test_onboarding_window.py`, `tests/gui/test_app_bootstrap.py`,
-  nuevos casos en `tests/unit/test_composition_root_credential_validation.py` y
-  `tests/integration/test_send_message.py`), siempre contra un validador simulado
-  y sin red real. RF-001 está implementado y cubierto automáticamente. D-01
-  permanece abierto hasta las pruebas formales con proveedor real (PA-001/PA-002);
-  D-10 sigue parcialmente abierto: cubre política de datos y valores
-  predeterminados, pero no la edición de la ruta local (B2b) ni la comprobación
-  real de activación en Windows (Credential Manager con valor señuelo, pendiente
-  de validación manual). El saludo con identidad propia y la propuesta de
-  proyecto inicial pertenecen a B3 (D-02) y no son una condición de D-10.
-- Selección y persistencia de la ruta local de datos (B2b, parte de D-10):
-  la ubicación de datos se resuelve y valida antes de inicializar SQLite,
-  configurar el logging dependiente de la ruta o construir la composición.
-  Un nuevo componente aislado, `BootstrapLocationStore`
-  (`sirius.infrastructure.bootstrap_location_store`), guarda un puntero JSON
-  mínimo (`{"version": 1, "data_dir": "<ruta absoluta>"}`) en el directorio de
-  configuración estable de Windows (`SiriusPaths.config_dir`, ahora
-  independiente de `data_dir`: ver `resolve_paths(data_dir=...)`), separado de
-  `settings.json`, SQLite y el almacén de secretos; la escritura es atómica
-  (archivo temporal + `os.replace`). `WindowsDataPathValidator`
-  (`sirius.infrastructure.data_path_validator`) valida cada carpeta candidata
-  con una prueba de escritura real (nunca solo `os.access()`), caracteres y
-  nombres reservados de Windows, y detecta una instalación Sirius existente y
-  una carpeta bajo OneDrive. `DataLocationUseCase`
-  (`sirius.application.data_location`) orquesta resolución, validación y
-  persistencia sin conocer SQLite, SQLAlchemy, migraciones ni platformdirs
-  directamente. `DataLocationWindow` (nueva ventana de presentación,
-  independiente de `OnboardingWindow`) se muestra únicamente cuando hace
-  falta una primera elección (instalación nueva sin instalación previa en la
-  ruta predeterminada) o cuando el archivo externo de ubicación está dañado;
-  ofrece la ruta predeterminada ya seleccionada y una opción avanzada para
-  elegir otra carpeta. Una instalación existente en la ruta predeterminada
-  sin archivo de ubicación se conserva silenciosamente (sin pantalla de
-  migración); una ruta personalizada con datos existentes se bloquea sin
-  adoptarla, moverla ni sobrescribirla; un archivo de ubicación corrupto
-  nunca abre una base predeterminada en silencio y exige una elección nueva y
-  explícita antes de sobrescribirlo. `sirius.main` resuelve la ubicación
-  antes de cualquier paso dependiente de datos y solo entonces continúa con
-  el onboarding de credencial de B2a, en la misma ejecución. Cubierto con
-  pruebas unitarias y de GUI (`tests/unit/test_paths.py`,
-  `tests/unit/test_data_path_validator.py`,
-  `tests/unit/test_bootstrap_location_store.py`,
-  `tests/unit/test_data_location_use_case.py`,
-  `tests/gui/test_data_location_window.py`,
-  `tests/gui/test_app_bootstrap.py`), siempre con dobles deterministas, sin
-  datos reales y sin red. La migración o adopción de datos existentes fuera
-  de la ruta predeterminada queda explícitamente fuera de este corte. D-10
-  sigue sin cerrarse por completo: falta la comprobación real de activación
-  en Windows (Credential Manager con valor señuelo, pendiente de validación
-  manual) y las validaciones manuales de rutas reales de Windows.
-- Saludo inicial y creación utilizable del primer proyecto (B3a, parte de
-  D-02): tras resolver la ruta y configurar la clave, Sirius distingue el
-  placeholder vacío que `get_or_create_active_project()` siembra desde V3
-  (`sirius.domain.project.is_configured()`) de un proyecto realmente
-  configurado, y `InitialProjectUseCase`
-  (`sirius.application.initial_project`) crea el primero completando ese
-  placeholder transaccionalmente (sin insertar una segunda fila) solo con
-  nombre y objetivo, asignando un estado y un siguiente paso iniciales
-  mínimos y centralizados (`INITIAL_PROJECT_STATE`/`INITIAL_PROJECT_NEXT_STEP`).
-  Rechaza un segundo proyecto activo antes de escribir nada, con un error
-  tipado y sin tocar el proyecto existente. `InitialProjectWindow` (nueva
-  ventana de presentación) muestra un saludo determinista que reutiliza
-  `sirius.domain.identity.INITIAL_IDENTITY_NAME` (nunca generado por el
-  proveedor) y solicita únicamente nombre y objetivo; `sirius.main` la
-  muestra solo cuando ya hay clave configurada pero ningún proyecto
-  configurado todavía, y abre `ValidatedMainWindow` en la misma ejecución al
-  crearlo. El proyecto configurado llega a `ContextBuilder` mediante el
-  mecanismo ya existente, sin cambios en `sirius.application.context`, porque
-  la conversación nunca se abre antes de que el proyecto quede configurado.
-  Cubierto con pruebas unitarias, de integración y de GUI
-  (`tests/unit/test_project_domain.py`,
-  `tests/unit/test_initial_project_use_case.py`,
-  `tests/integration/test_initial_project_persistence.py`,
-  `tests/gui/test_initial_project_window.py`, nuevos casos en
-  `tests/gui/test_app_bootstrap.py`), siempre con dobles deterministas o
-  SQLite temporal, sin datos reales, sin clave real y sin red. RF-014 y
-  RF-015 quedan implementados y cubiertos automáticamente; RF-016 solo en su
-  parte inicial (estado y siguiente paso al crear). D-02 queda parcialmente
-  corregido: quedan pendientes de un corte posterior de B3 los bloqueos,
-  las decisiones relacionadas, completar/archivar conservando historial y el
-  resumen observable al retomar. PA-006 y PA-007 quedan preparadas/cubiertas
-  automáticamente, sin declararse formalmente superadas.
-- Continuidad observable del proyecto activo (B3b, parte de D-02): texto
-  aprobado verificado antes de implementar (RF-016 "Conservar objetivo,
-  estado breve, decisiones, bloqueos y siguiente paso"; RF-017 "Recuperar el
-  proyecto al iniciar y resumirlo brevemente"). `Project.blockers` (texto
-  libre, cero o varias líneas, sin tabla ni entidad `Blocker` independiente)
-  se añade mediante la migración Alembic no destructiva `66951344e4b9`
-  (`server_default=''`, probada actualizando desde el head anterior con
-  Alembic real y conservando todo proyecto existente).
-  `ProjectContinuityUseCase` (`sirius.application.project_continuity`)
-  consulta y actualiza conjuntamente estado, bloqueos y siguiente paso en
-  una sola escritura del repositorio, sin conocer SQLAlchemy ni SQLite;
-  rechaza la ausencia de proyecto o el placeholder de arranque
-  (`ProjectNotConfiguredError`), un estado o siguiente paso vacío
-  (`InvalidProjectContinuityDataError`, bloqueos vacíos sí se permiten), y
-  traduce cualquier fallo del repositorio a `ProjectContinuityError` sin
-  exponer su detalle interno. `ProjectContinuityWidget` (nuevo widget de
-  presentación, no una pestaña ni ventana nueva) se inserta en la pestaña
-  "Conversación" existente, encima del historial: resumen determinista y
-  local (nunca generado por el proveedor, nunca persistido como mensaje) con
-  el siguiente paso destacado ("Ahora toca: …") y una acción "Actualizar
-  proyecto" que edita estado/bloqueos/siguiente paso (nombre y objetivo
-  quedan de solo lectura en este corte) con guardar/cancelar, doble envío
-  impedido y errores seguros sin trazas. `MainWindow`/`ValidatedMainWindow`
-  reciben el nuevo caso de uso explícitamente, reutilizando el
-  `ProjectRepository` ya construido en `composition_root` (sin repositorio
-  adicional, sin reiniciar SQLite). `render_instructions()` añade
-  `Nombre:`/`Bloqueos:` a la sección `# Proyecto activo` ya existente
-  ("Bloqueos: Ninguno registrado." cuando no hay bloqueos), sin decisiones
-  ni recuerdos ficticios y sin cambiar la política de contexto de B6.
-  Cubierto con pruebas unitarias, de integración (incluida Alembic real) y
-  de GUI (`tests/unit/test_project_domain.py` nuevos casos,
-  `tests/unit/test_project_continuity_use_case.py`,
-  `tests/unit/test_render_instructions.py`,
-  `tests/unit/test_composition_root_project_continuity.py`,
-  `tests/integration/test_sqlite_project_repository.py` nuevos casos,
-  `tests/integration/test_migrations.py` nuevos casos,
-  `tests/integration/test_send_message.py` nuevo caso,
-  `tests/gui/test_project_continuity_widget.py`,
-  `tests/gui/test_main_window.py` y `tests/gui/test_app_bootstrap.py` nuevos
-  casos), sin datos reales, sin clave real y sin red. RF-016 queda cubierto
-  salvo la parte de "decisiones" (pertenece a B4); RF-017 queda implementado
-  y cubierto automáticamente. D-02 sigue parcialmente corregido: quedan
-  pendientes decisiones relacionadas, completar/archivar conservando
-  historial y habilitar un proyecto posterior. PA-008 y PA-009 no se
-  declaran superadas: PA-008 exige además una decisión registrada (B4) y
-  PA-009 una recomendación evaluada del proveedor real.
+Esta sección contenía la ficha completa de cada corrección fusionada, y se
+quedó parada en B3b mientras se fusionaban ocho bloques más. Era la tercera
+copia del mismo hecho, y la que más tardaba en actualizarse.
+
+Qué bloques hay fusionados, con qué estado y qué defecto cierra cada uno se lee
+ahora en un solo sitio: la tabla de bloques operativos de
+[`V8_EXECUTION.md`](V8_EXECUTION.md#bloques-operativos) (ADR-005). El detalle
+técnico de los subbloques B2a a B3c se conserva en el anexo histórico de ese
+mismo archivo.
 
 ### V8.2 — Windows sin clave — BLOQUEADA HASTA INTEGRACIÓN AUTOMÁTICA VERDE
 

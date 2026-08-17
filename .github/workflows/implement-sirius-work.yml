@@ -38,6 +38,14 @@ jobs:
     if: github.event.label.name == 'sirius:implement-requested'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      # PySide6 corre sin pantalla en el runner: sin el plugin offscreen, la
+      # suite de GUI no falla, ABORTA (SIGABRT de Qt al no encontrar servidor X).
+      # El paso "Install Qt system libraries for PySide6 (offscreen)" trae las
+      # bibliotecas pero no fija la variable, asi que `uv run pytest` --que este
+      # workflow le ORDENA ejecutar al implementador-- se estrellaba. Solo estaba
+      # en `quality.yml`; aqui faltaba.
+      QT_QPA_PLATFORM: offscreen
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -52,7 +60,20 @@ jobs:
           # PAT la PR y sus pushes provienen de una identidad real y Quality
           # arranca sola, como si la abriera una persona.
           token: ${{ secrets.SIRIUS_BOT_TOKEN }}
+      
+      - name: Install Qt system libraries for PySide6 (offscreen)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+          python-version: "3.14.6"
+
+      - name: Sync environment
+        run: uv sync --locked --all-groups
       - name: Verificar precondiciones de activación
         id: gate
         shell: bash --noprofile --norc {0}
@@ -72,7 +93,29 @@ jobs:
             echo "::error::La validacion de activacion no se pudo completar; reintentable."
             exit 1
           fi
-          labels_now="$(gh api "repos/${GH_REPO}/issues/${ISSUE_NUMBER}/labels" --jq '.[].name')"
+          # Un fallo de LECTURA no es una activacion invalida. Distinguirlos es
+          # todo: cuando esta lectura fallaba en silencio, su salida vacia se
+          # convertia en `valid=false` y el paso anunciaba que "la puerta ya la
+          # rechazo y explico el motivo en la incidencia" -- falso: no rechazaba
+          # nada ni explicaba nada, y dejaba la incidencia en un callejon MUDO,
+          # con sus etiquetas intactas y sin ningun evento que pudiera revivirla.
+          # Ocurrio en la #186 (runs 32035648135 y 32037335181, "unexpected end
+          # of JSON input" tras cuatro reintentos). Es la misma clase de fallo que
+          # la #138 vino a eliminar y que `sirius_validate_activation.sh` evita a
+          # proposito unas lineas mas arriba. Ahora falla RUIDOSAMENTE: el run
+          # queda en rojo, visible y reintentable.
+          # Las etiquetas se leen del OBJETO de la incidencia, NO del endpoint
+          # `/issues/<n>/labels`. El 17-08-2026, con el mismo token y en el mismo
+          # instante, `issues/186` respondia y `issues/186/labels` devolvia cuerpo
+          # vacio: cuatro reintentos, cuatro fallos, en cuatro runs a lo largo de
+          # mas de una hora (32035648135, 32037335181, 32039249452, 32039796936).
+          # Que una respondiera y la otra no descarta permisos, autenticacion y
+          # limite de tasa: los tres habrian roto ambas. El objeto ya trae
+          # `labels`, asi que da los mismos nombres y ahorra una llamada.
+          if ! labels_now="$(gh api "repos/${GH_REPO}/issues/${ISSUE_NUMBER}" --jq '.labels[].name')"; then
+            echo "::error::No se pudieron leer las etiquetas de #${ISSUE_NUMBER}; no puedo distinguir una activacion invalida de un fallo de lectura. Reintentable."
+            exit 1
+          fi
           if printf '%s\n' "$labels_now" | grep -Fxq "sirius:implement-requested"; then
             echo "valid=true" >> "$GITHUB_OUTPUT"
           else
@@ -85,12 +128,22 @@ jobs:
         shell: bash --noprofile --norc {0}
         env:
           GH_TOKEN: ${{ github.token }}
+          SIRIUS_TRIGGER_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           set -uo pipefail
           source scripts/automation/sirius_issue.sh
-          sirius_set_issue_labels "$GH_REPO" "$ISSUE_NUMBER" \
+          # La etiqueta NOTIFICABLE se escribe con el PAT: un `issues: labeled`
+          # emitido con el GITHUB_TOKEN no dispara otros workflows (regla
+          # anti-recursion de GitHub), asi que `notify-sirius-state.yml` no se
+          # entera y el estado no avisa nunca. Mismo patron ya aprobado en
+          # `advance-sirius-after-quality.yml`. Las LECTURAS siguen con el
+          # GITHUB_TOKEN.
+          trigger_set_labels() {
+            ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"; sirius_set_issue_labels "$@" )
+          }
+          trigger_set_labels "$GH_REPO" "$ISSUE_NUMBER" \
             "sirius:implementing" "sirius:implement-requested" "sirius:planned"
 
       - name: Preparar instrucciones para Claude Code
@@ -146,7 +199,9 @@ jobs:
         if: always() && steps.gate.outputs.valid == 'true'
         shell: bash --noprofile --norc {0}
         env:
-          GH_TOKEN: ${{ github.token }}
+          # El veredicto escribe el estado resultante, que puede ser notificable
+          # (`ci-pending` no lo es, pero `failed-safely` y `blocked-decision` sí).
+          GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |

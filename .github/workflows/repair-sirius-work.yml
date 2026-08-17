@@ -62,7 +62,7 @@ jobs:
     # job caducaba durante el corrector igual que antes.
     #   checkout 5 + puerta 8 + evento 3 + prompt 2 + corrector 30 +
     #   aplicación 5 = 53, con 7 de margen sobre los 60 del job.
-    timeout-minutes: 60
+    timeout-minutes: 75
     #
     # LO QUE ESTO NO GARANTIZA, dicho aqui para que nadie lo lea de mas.
     #
@@ -79,6 +79,14 @@ jobs:
     # contrato operativo prohibe hoy programarlo (ver el encabezado de
     # `reconcile-sirius-states.yml`). Queda registrado como decision pendiente,
     # no como defecto olvidado.
+    env:
+      # PySide6 corre sin pantalla en el runner: sin el plugin offscreen, la
+      # suite de GUI no falla, ABORTA (SIGABRT de Qt al no encontrar servidor X).
+      # El paso "Install Qt system libraries for PySide6 (offscreen)" trae las
+      # bibliotecas pero no fija la variable, asi que `uv run pytest` --que este
+      # workflow le ORDENA ejecutar al corrector-- se estrellaba. Solo estaba en
+      # `quality.yml`; aqui faltaba.
+      QT_QPA_PLATFORM: offscreen
     steps:
       - name: Checkout
         timeout-minutes: 5
@@ -93,13 +101,30 @@ jobs:
           # el token por defecto ese re-disparo quedaría suprimido y el ciclo
           # revisión→corrección→revisión no cerraría.
           token: ${{ secrets.SIRIUS_BOT_TOKEN }}
+     
+      - name: Install Qt system libraries for PySide6 (offscreen)
+        timeout-minutes: 5
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0
 
+      - name: Install uv
+        timeout-minutes: 3
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+          python-version: "3.14.6"
+
+      - name: Sync environment
+        timeout-minutes: 8
+        run: uv sync --locked --all-groups
       - name: Evaluar la convergencia y localizar la PR
         timeout-minutes: 8
         id: gate
         shell: bash --noprofile --norc {0}
         env:
           GH_TOKEN: ${{ github.token }}
+          SIRIUS_TRIGGER_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
@@ -116,14 +141,64 @@ jobs:
           # en un desenlace controlado: las lecturas fallan solas y caen en las
           # paradas seguras que ya existen mas abajo.
           #
+          # Ese tope externo es ABSOLUTO: cuenta desde que arranca el paso, no
+          # desde cada llamada. Un plazo RELATIVO (`ahora + N`) no protege de
+          # el, porque "ahora" ya se ha corrido mientras tanto. Por eso el
+          # instante inicial se guarda UNA vez y todo lo demas se acota contra
+          # el, en vez de repartir ventanas relativas capa por capa.
+          #
           # 5 minutos para leer, dentro de los 8 del paso. Los 3 restantes son
           # para publicar la parada, que tambien necesita `gh`.
-          gate_deadline=$(( $(_sirius_now) + 300 ))
+          arranque=$(_sirius_now)
+          PRESUPUESTO_PASO=480  # `timeout-minutes: 8`; GATE-003 lo ata al YAML
+          MARGEN_PASO=30        # para escribir `valid=false` y salir vivos
+          tope_paso=$(( arranque + PRESUPUESTO_PASO - MARGEN_PASO ))
+          gate_deadline=$(( arranque + 300 ))
           export SIRIUS_GH_DEADLINE="$gate_deadline"
 
           # Publicar no puede heredar un plazo ya agotado: seria exigirle a la
-          # parada segura que ocurra en el tiempo que ya se acabo.
-          parada() { unset SIRIUS_GH_DEADLINE; sirius_transition "$@"; }
+          # parada segura que ocurra en el tiempo que ya se acabo. Pero SOLTAR
+          # el plazo es peor que heredarlo agotado (incidencia #140): sin cota,
+          # la lectura del historial y las etiquetas de `sirius_transition`
+          # pueden colgarse hasta que el tope externo del paso mate la shell,
+          # y entonces no se escribe `valid=false` ni se publica ninguna
+          # transicion terminal. Heredar un plazo agotado deja la parada MUDA;
+          # soltarlo la deja COLGADA, que es peor: al menos la muda falla
+          # rapido y visible.
+          #
+          # Se le da un plazo NUEVO y propio, PERO acotado por el tope del
+          # paso. Sin ese minimo, `parada()` se concedia 120s "desde ahora"
+          # aunque "ahora" ya se hubiera comido el presupuesto: entre agotarse
+          # la lectura y llegar aqui corren `sirius_next_round_number`,
+          # `sirius_convergence.py` y varios `jq`, que NO consultan
+          # `SIRIUS_GH_DEADLINE` y por tanto no los acota nadie. El maximo real
+          # era `300 + proceso local + 120`, no 420. Hallazgo P2 de Codex en la
+          # PR #142; misma familia que el de `_sirius_comment_once_bounded`:
+          # una cota que otra capa puede ampliar no es una cota.
+          #
+          # Si al llegar aqui ya no queda margen, el plazo sale vencido y la
+          # publicacion falla RAPIDO —`_sirius_gh` devuelve 124 sin llegar a
+          # lanzar la llamada—: muda, pero viva para escribir `valid=false`.
+          PLAZO_PUBLICACION=120
+          # Las etiquetas de parada (`failed-safely`, `blocked-decision`) son
+          # NOTIFICABLES, y un `issues: labeled` emitido con el GITHUB_TOKEN no
+          # dispara otros workflows por la regla anti-recursion de GitHub: sin
+          # el PAT, `notify-sirius-state.yml` no se entera y la parada no avisa.
+          # Mismo patron ya aprobado en `advance-sirius-after-quality.yml`; las
+          # lecturas de este paso siguen con el GITHUB_TOKEN.
+          #
+          # Con respaldo (`:-`) y no a secas: bajo `set -u`, una variable sin
+          # definir aborta. Una parada segura que revienta porque falta un
+          # secreto es el peor desenlace posible —deja la incidencia muda, que
+          # es justo lo que la PR #136 tardó ocho rondas en cerrar—, así que sin
+          # PAT se degrada a notificar peor, nunca a no parar.
+          parada() {
+            local plazo
+            plazo=$(( $(_sirius_now) + PLAZO_PUBLICACION ))
+            [ "$plazo" -le "$tope_paso" ] || plazo="$tope_paso"
+            export SIRIUS_GH_DEADLINE="$plazo"
+            ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"; sirius_transition "$@" )
+          }
 
           # Sin tiempo, una lectura vacia NO significa "no hay nada": significa
           # que no se llego a mirar. `sirius_find_pr_for_issue` y
@@ -278,7 +353,15 @@ jobs:
         if: steps.gate.outputs.valid == 'true'
         shell: bash --noprofile --norc {0}
         env:
-          GH_TOKEN: ${{ github.token }}
+          # Este paso solo AÑADE `sirius:repairing`, que no es notificable, y
+          # retira `sirius:repair-requested`. Aun así usa el PAT: la regla es
+          # «quien escribe etiquetas usa la identidad real», y se comprueba sin
+          # interpretar qué argumento del script añade y cuál quita. Deducir eso
+          # del texto del comando sería reconstruir desde fuera la semántica de
+          # otro sistema, que en este repositorio ya costó quince defectos
+          # (ADR-001). El coste de la regla ancha es un evento que nadie
+          # consume; el de la estrecha, una notificación perdida en silencio.
+          GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
@@ -328,6 +411,7 @@ jobs:
           SIRIUS_VERDICT_FILE: ${{ runner.temp }}/sirius_verdict.json
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          show_full_output: true
           # Mismo PAT que el checkout: el push de la corrección debe provenir de
           # una identidad real para que `synchronize` vuelva a disparar Quality.
           github_token: ${{ secrets.SIRIUS_BOT_TOKEN }}
@@ -339,7 +423,9 @@ jobs:
         timeout-minutes: 5
         shell: bash --noprofile --norc {0}
         env:
-          GH_TOKEN: ${{ github.token }}
+          # El veredicto escribe la etiqueta del estado resultante, que puede ser
+          # notificable (`repair-requested`, `failed-safely`, `ready-for-merge`).
+          GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           CYCLE: ${{ steps.gate.outputs.cycle }}

@@ -8,11 +8,18 @@ propiedades que el contrato exige: sintaxis YAML, condiciones de la bandera
 en el paso que convierte fallos en veredictos estructurados, y la ausencia de
 un camino que aplique el veredicto de Claude sin esperar a Codex cuando el
 modo dual está activo.
+
+Cubren además el prompt del revisor (``scripts/automation/prompts/reviewer.md``),
+que el workflow inserta literalmente: las reglas que evitan que una ronda muera
+sin veredicto —provisional al empezar, prohibición de esperar nada, y entorno
+acotado— son parte de la misma garantía y se comprueban contra el workflow y
+contra la lista real de permisos, no por sí solas.
 """
 
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -22,6 +29,18 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "review-sirius-work.yml"
 COLLECTOR = REPO_ROOT / "scripts" / "automation" / "sirius_codex_review.py"
+REVIEWER_PROMPT = REPO_ROOT / "scripts" / "automation" / "prompts" / "reviewer.md"
+SETTINGS = REPO_ROOT / ".claude" / "settings.json"
+
+
+def _reviewer_prompt() -> str:
+    return REVIEWER_PROMPT.read_text(encoding="utf-8")
+
+
+def _permissions() -> dict[str, list[str]]:
+    settings = json.loads(SETTINGS.read_text(encoding="utf-8"))
+    permissions: dict[str, list[str]] = settings["permissions"]
+    return permissions
 
 
 def _collector_module() -> Any:
@@ -301,3 +320,116 @@ def test_the_checks_scope_is_declared_for_the_check_runs_read() -> None:
     # Un bloque `permissions` explícito deja en `none` todo alcance no listado.
     doc = _load()
     assert doc["permissions"]["checks"] == "read"
+
+
+# --- El prompt del revisor -------------------------------------------------
+#
+# Las tres reglas siguientes existen porque tres rondas de la incidencia #177
+# murieron sin veredicto. No son estilo: cada una cierra un camino por el que la
+# revisión terminó en silencio, y el silencio del revisor detiene la incidencia
+# entera esperando a una persona.
+
+
+def test_the_workflow_actually_feeds_the_reviewer_prompt() -> None:
+    # Sin esta comprobación, las tres que siguen podrían validar un archivo que
+    # el workflow ya no inserta: pasarían en verde sobre un prompt muerto.
+    assert (
+        "cat scripts/automation/prompts/reviewer.md"
+        in _step(_load(), "Preparar instrucciones")["run"]
+    )
+
+
+def test_the_reviewer_writes_a_provisional_verdict_before_reviewing() -> None:
+    """El tope duro de turnos hace inalcanzable una regla de «última acción».
+
+    El prompt solo exigía el veredicto al final. Pero el paso acota al revisor
+    con `--max-turns` y con `timeout-minutes`, y agotar cualquiera de los dos lo
+    corta a mitad: no hay última acción, el archivo no existe y la ronda muere en
+    la parada `sin-veredicto` —exactamente lo que ocurrió en el run 31963233730—.
+
+    Por eso el veredicto se escribe DOS veces: un `FAILED_SAFELY` provisional al
+    empezar y el definitivo al terminar. Lo escribe el revisor, no el workflow:
+    un veredicto sembrado por el envoltorio se publicaría como suyo sin que lo
+    hubiera emitido.
+    """
+    prompt = _reviewer_prompt()
+    assert "PRIMERA acción" in prompt
+    assert "ÚLTIMA acción" in prompt
+    assert "--max-turns" in prompt
+    # El provisional es una parada, nunca un resultado de revisión: si el corte
+    # llega antes de sustituirlo, la incidencia se detiene en vez de pronunciarse
+    # sobre una PR que nadie llegó a auditar.
+    provisional = prompt[prompt.index("PRIMERA acción") : prompt.index("ÚLTIMA acción")]
+    assert '"verdict": "FAILED_SAFELY"' in provisional, "el provisional debe ser una parada"
+    for resultado in ("REVIEW_APPROVED", "CHANGES_REQUESTED"):
+        assert resultado not in provisional, f"el provisional no puede pronunciarse: {resultado}"
+    # Y ambos topes existen de verdad en el workflow: si desaparecieran, esta
+    # regla quedaría explicando una restricción imaginaria.
+    claude = _step(_load(), "Ejecutar Claude Code")
+    assert "--max-turns" in str(claude["with"]["claude_args"])
+    assert claude["timeout-minutes"] > 0
+
+
+def test_the_reviewer_is_told_that_nobody_will_answer_and_must_not_wait() -> None:
+    """La causa real del corte de #177: el modelo creyó que la conversación seguía.
+
+    Terminó el turno con «Standing by for the three background review agents to
+    report back before writing the final verdict» y `terminal_reason: completed`.
+    No fue el tope de turnos ni el de tiempo: 106 s de 30 min. El runner mató los
+    agentes al cerrar el turno y no quedó ningún veredicto.
+    """
+    prompt = _reviewer_prompt()
+    seccion = prompt[prompt.index("Nadie te va a contestar") :]
+    assert "segundo plano" in seccion
+    # La prohibición cubre expresamente los subagentes, que es por donde se
+    # perdió esta ronda: si se usan, su resultado se recoge en el mismo turno.
+    assert "No lances subagentes en segundo plano" in seccion
+    assert "dentro de este mismo turno" in seccion
+    # Quedarse esperando no es una espera: es el final de la ronda, y su
+    # desenlace correcto es un fallo seguro con diagnóstico.
+    assert "FAILED_SAFELY" in seccion
+    # La evidencia literal viaja con la regla: sin ella es una opinión.
+    assert "Standing by for the three background review agents" in seccion
+    assert "31963233730" in seccion
+
+
+def test_the_bounded_environment_section_matches_the_real_permission_list() -> None:
+    """Una instrucción de entorno que mienta gasta el turno en denegaciones.
+
+    En el run 31963233730 el revisor perdió tres órdenes: dos bloques enteros por
+    incluir `git merge-base` —capturado por el patrón `git merge*` de la lista de
+    denegación— y un intento de instalar `uv` con `curl`. Esta prueba ata el
+    texto a la lista real: lo que el prompt prohíbe está denegado de verdad, y lo
+    que recomienda está permitido de verdad.
+    """
+    prompt = _reviewer_prompt()
+    seccion = prompt[prompt.index("El entorno es acotado") : prompt.index("## Veredicto final")]
+    permissions = _permissions()
+    deny, allow = permissions["deny"], permissions["allow"]
+
+    assert "no instales herramientas ni dependencias" in seccion
+    for prohibida, regla in (("`curl`", "Bash(curl*)"), ("`wget`", "Bash(wget*)")):
+        assert prohibida in seccion
+        assert regla in deny, f"el prompt prohíbe {prohibida} pero la lista no lo deniega"
+
+    for herramienta, regla in (
+        ("`gh pr diff`", "Bash(gh pr diff*)"),
+        ("`gh pr view`", "Bash(gh pr view*)"),
+        ("`gh api`", "Bash(gh api*)"),
+        ("`git diff`", "Bash(git diff *)"),
+        ("`git log`", "Bash(git log *)"),
+        ("`git show`", "Bash(git show *)"),
+    ):
+        assert herramienta in seccion
+        assert regla in allow, f"el prompt recomienda {herramienta} pero no está permitida"
+        assert regla not in deny
+
+    # `git merge-base` se nombra porque su denegación no es evidente: la lista no
+    # menciona esa orden, la captura por prefijo.
+    assert "git merge-base" in seccion
+    assert "Bash(git merge*)" in deny
+    # Quality en verde es la precondición de esta fase; reconstruir el entorno de
+    # CI es trabajo ya hecho por otro paso.
+    assert "reconstruir el entorno de CI" in seccion
+    # Y la única salida cuando algo falta es adaptarse o parar, nunca improvisar.
+    assert "FAILED_SAFELY" in seccion

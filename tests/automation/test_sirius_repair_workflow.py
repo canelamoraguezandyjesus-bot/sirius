@@ -9,6 +9,9 @@ sin degradar a una corrección a ciegas.
 
 from __future__ import annotations
 
+import os
+import re
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -107,13 +110,30 @@ def test_the_defaults_survive_an_empty_decision_file() -> None:
     assert 'detail="${detail:-' in run
 
 
+def _sin_comentarios(guion: str) -> str:
+    """Quita las líneas de comentario de un guion de shell.
+
+    Un comentario no se ejecuta, así que no puede fijar ningún orden. Comparar
+    posiciones sobre el texto crudo lo daba por bueno en las dos direcciones:
+    un comentario podía romper una prueba correcta y —peor— podía hacerla pasar
+    mencionando pronto algo que el código ya no hace pronto. Verificado por
+    mutación: con el orden real invertido y un señuelo en un comentario, la
+    versión anterior de la prueba pasaba.
+
+    Solo quita líneas ENTERAS de comentario, que es lo decidible sin interpretar
+    shell; un `#` al final de una línea con código se queda.
+    """
+    return "\n".join(linea for linea in guion.splitlines() if not linea.lstrip().startswith("#"))
+
+
 def test_the_round_number_comes_from_the_history_already_read() -> None:
     # Releer el historial para numerar la ronda abre una ventana en la que la
     # segunda lectura falla y la ronda se numeraría a ciegas.
-    run = _step(_load(), "Evaluar la convergencia")["run"]
+    run = str(_step(_load(), "Evaluar la convergencia")["run"])
     assert 'sirius_next_round_number "$GH_REPO" "$ISSUE_NUMBER" "$comments_file"' in run
     # Y la numeración ocurre DESPUÉS de comprobar que el volcado se pudo leer.
-    assert run.index("sirius_dump_comments") < run.index("sirius_next_round_number")
+    codigo = _sin_comentarios(run)
+    assert codigo.index("sirius_dump_comments") < codigo.index("sirius_next_round_number")
 
 
 def test_an_unnumberable_round_stops_safely() -> None:
@@ -224,9 +244,13 @@ def test_the_gate_stops_itself_before_its_step_timeout_kills_it() -> None:
     margen = gate["timeout-minutes"] * 60 - 300
     assert margen >= 120, f"solo {margen}s para publicar la parada tras agotar el plazo"
 
-    # Publicar suelta el plazo: todas las transiciones de la puerta pasan por
-    # `parada`, y ninguna llama ya a `sirius_transition` directamente.
-    assert "parada() { unset SIRIUS_GH_DEADLINE; sirius_transition" in run
+    # Publicar lleva su PROPIO plazo, no el de lectura ya agotado ni ninguno:
+    # todas las transiciones de la puerta pasan por `parada`, y ninguna llama ya
+    # a `sirius_transition` directamente. Esta aserción fijaba antes el `unset`
+    # que causó la incidencia #140, así que fijaba el defecto en vez de la
+    # propiedad; ver los casos GATE-001..006 al final del módulo.
+    assert 'export SIRIUS_GH_DEADLINE="$plazo"' in run
+    assert "unset SIRIUS_GH_DEADLINE" not in run
     assert 'sirius_transition "$GH_REPO"' not in run
     assert run.count('parada "$GH_REPO"') >= 5
 
@@ -344,6 +368,13 @@ def test_there_is_no_measured_diagnosis_step() -> None:
     nombres = [str(step.get("name") or "") for step in _steps(doc)]
     assert nombres == [
         "Checkout",
+        # Preparación del entorno: el corrector debe poder ejecutar las cuatro
+        # validaciones, y el runner no trae `uv` (solo lo instalaba `quality.yml`).
+        # Sin estos tres pasos la ronda se detenía en `FAILED_SAFELY` por falta de
+        # herramientas — incidencia #182, run 31990550597.
+        "Install Qt system libraries for PySide6 (offscreen)",
+        "Install uv",
+        "Sync environment",
         "Evaluar la convergencia y localizar la PR",
         "Consumir el evento y marcar en curso",
         "Preparar instrucciones para Claude Code",
@@ -365,3 +396,209 @@ def test_there_is_no_measured_diagnosis_step() -> None:
         "bash scripts/automation/sirius_apply_verdict.sh \\",
         '"$GH_REPO" "$ISSUE_NUMBER" "corrector" "${RUNNER_TEMP}/sirius_verdict.json" "$CYCLE"',
     ]
+
+
+# --------------------------------------------------------------------------- #
+# La parada segura publica ACOTADA (incidencia #140)
+# --------------------------------------------------------------------------- #
+
+# `parada()` hacía `unset SIRIUS_GH_DEADLINE` antes de publicar. El razonamiento
+# original era correcto a medias —publicar no puede heredar un plazo agotado—
+# pero la conclusión no: heredar un plazo agotado deja la parada MUDA, mientras
+# que soltarlo la deja COLGADA hasta que el tope externo del paso mata la shell
+# sin escribir `valid=false` ni publicar transición alguna. Es peor: al menos la
+# muda falla rápido y visible. Tocaba fijar un plazo NUEVO, no quitar la cota.
+
+_SIMULADOR_GH = """#!/usr/bin/env bash
+printf '%s\\n' "${SIRIUS_GH_DEADLINE:-VACIO}" >>"$SIRIUS_TEST_PLAZOS"
+exit 0
+"""
+
+_LIBRETO = """set -uo pipefail
+# Reloj gobernado por la prueba. La PRIMERA lectura fija el instante de
+# arranque del paso; las siguientes lo adelantan `SIRIUS_TEST_AVANCE` segundos.
+# Con avance 0 queda congelado —el caso normal—; con un avance grande se simula
+# lo que de verdad ocurre en produccion: entre agotarse la lectura y llamar a
+# `parada` corre proceso LOCAL (numerar la ronda, decidir la convergencia,
+# varios `jq`) que no consulta `SIRIUS_GH_DEADLINE` y al que, por tanto, no lo
+# acota nadie. Sin poder mover el reloj esa ventana no se puede medir, y era
+# justo donde estaba el defecto.
+_sirius_now() {{
+  if [ -f "$SIRIUS_TEST_RELOJ" ]; then
+    printf '%s\\n' "$(( $(cat "$SIRIUS_TEST_RELOJ") + SIRIUS_TEST_AVANCE ))"
+  else
+    printf '%s\\n' "$SIRIUS_TEST_BASE" >"$SIRIUS_TEST_RELOJ"
+    printf '%s\\n' "$SIRIUS_TEST_BASE"
+  fi
+}}
+sirius_transition() {{ gh api /simulado >/dev/null; }}
+{bloque}
+export SIRIUS_GH_DEADLINE={plazo_previo}
+parada repo 1 marcador cuerpo etiqueta color desc noclose previa
+"""
+
+
+def _guion_de_la_puerta() -> str:
+    return str(_step(_load(), "Evaluar la convergencia")["run"])
+
+
+def _bloque_de_parada() -> str:
+    """Extrae del YAML la `parada()` REAL, en vez de copiarla aquí.
+
+    Una copia se queda vieja en silencio y la prueba pasaría a medir un texto
+    que ya no se ejecuta: es la forma más común de prueba vacua en este
+    repositorio.
+
+    El bloque arranca en `arranque=$(_sirius_now)` y no en `PLAZO_PUBLICACION=`
+    porque el tope del paso se DERIVA de ese instante inicial. Empezando más
+    abajo habría que inventar aquí un `tope_paso`, y la prueba mediría el
+    cálculo de la prueba en vez del del workflow.
+    """
+    guion = _guion_de_la_puerta()
+    inicio = guion.index("arranque=$(_sirius_now)")
+    fin = guion.index("\n\n", guion.index("parada() {"))
+    return guion[inicio:fin]
+
+
+def _ejecuta_parada(tmp_path: Path, plazo_previo: str, avance: int = 0) -> tuple[int, list[str]]:
+    """Ejecuta la parada real con un `gh` simulado.
+
+    Devuelve el instante de arranque simulado y los plazos que llegó a ver
+    `gh`, que es quien acaba respetándolos. `avance` son los segundos que el
+    reloj salta entre la primera lectura y las siguientes: modela el proceso
+    local no acotado que corre antes de la parada.
+    """
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    gh = bin_dir / "gh"
+    gh.write_text(_SIMULADOR_GH, encoding="utf-8")
+    gh.chmod(0o755)
+
+    base = 1_700_000_000
+    plazos = tmp_path / "plazos.txt"
+    libreto = tmp_path / "correr.sh"
+    libreto.write_text(
+        _LIBRETO.format(bloque=_bloque_de_parada(), plazo_previo=plazo_previo),
+        encoding="utf-8",
+    )
+
+    entorno = dict(os.environ)
+    entorno["PATH"] = f"{bin_dir}{os.pathsep}{entorno['PATH']}"
+    entorno["SIRIUS_TEST_PLAZOS"] = str(plazos)
+    entorno["SIRIUS_TEST_RELOJ"] = str(tmp_path / "reloj.txt")
+    entorno["SIRIUS_TEST_BASE"] = str(base)
+    entorno["SIRIUS_TEST_AVANCE"] = str(avance)
+    resultado = subprocess.run(
+        ["bash", str(libreto)],
+        capture_output=True,
+        text=True,
+        env=entorno,
+        check=False,
+        timeout=60,
+    )
+    assert resultado.returncode == 0, resultado.stderr
+    vistos = plazos.read_text(encoding="utf-8").split() if plazos.exists() else []
+    return base, vistos
+
+
+def _numero_en_la_puerta(patron: str) -> int:
+    """Lee un número del guion de la puerta, fallando con motivo si no está."""
+    m = re.search(patron, _guion_de_la_puerta())
+    assert m, f"no encuentro `{patron}` en el guion de la puerta: no se mediría nada"
+    return int(m.group(1))
+
+
+def test_gate_001_la_parada_publica_con_el_plazo_de_lectura_agotado(tmp_path: Path) -> None:
+    # El caso que motiva la incidencia: el plazo de lectura ya expiró y aun así
+    # la parada tiene que llegar a publicar.
+    _, plazos = _ejecuta_parada(tmp_path, plazo_previo="1")
+    assert plazos, "la parada no llegó a invocar gh: no se publicó nada"
+
+
+def test_gate_002_la_publicacion_nunca_corre_sin_cota(tmp_path: Path) -> None:
+    base, plazos = _ejecuta_parada(tmp_path, plazo_previo="1")
+    assert plazos, "la parada no llegó a invocar gh: no se publicó nada"
+    for plazo in plazos:
+        assert plazo != "VACIO", "la parada publicó sin ninguna cota de tiempo"
+        assert int(plazo) > base, "la parada publicó con un plazo ya expirado"
+
+
+def test_gate_003_el_plazo_de_publicacion_cabe_bajo_el_tope_del_paso() -> None:
+    puerta = _step(_load(), "Evaluar la convergencia")
+    lectura = _numero_en_la_puerta(r"gate_deadline=\$\(\( arranque \+ (\d+) \)\)")
+    publicacion = _numero_en_la_puerta(r"PLAZO_PUBLICACION=(\d+)")
+    presupuesto = _numero_en_la_puerta(r"PRESUPUESTO_PASO=(\d+)")
+    margen = _numero_en_la_puerta(r"MARGEN_PASO=(\d+)")
+    tope = puerta["timeout-minutes"] * 60
+    # `PRESUPUESTO_PASO` es un número copiado a mano desde `timeout-minutes`, y
+    # un número copiado se queda viejo solo: bajar el tope del paso sin tocarlo
+    # dejaría toda la aritmética de abajo hablando de un presupuesto que ya no
+    # existe. Atarlo aquí es lo que impide que los comentarios mientan.
+    assert presupuesto == tope, (
+        f"PRESUPUESTO_PASO={presupuesto}s no es el tope real del paso ({tope}s)"
+    )
+    assert lectura + publicacion <= presupuesto - margen, (
+        f"lectura {lectura}s + publicación {publicacion}s no cabe con margen "
+        f"{margen}s en {presupuesto}s"
+    )
+
+
+def test_gate_004_la_parada_no_suelta_el_plazo_ni_se_lo_amplia() -> None:
+    # Los patrones exactos que causaron los dos defectos no pueden volver por
+    # inercia. Es una prueba de TEXTO y por sí sola no demuestra nada del
+    # comportamiento: quien lo demuestra es GATE-005.
+    guion = _guion_de_la_puerta()
+    assert "unset SIRIUS_GH_DEADLINE" not in guion, (
+        "soltar el plazo deja la publicación sin cota (incidencia #140)"
+    )
+    assert "plazo=$(( $(_sirius_now) + PLAZO_PUBLICACION ))" in guion
+    assert '[ "$plazo" -le "$tope_paso" ] || plazo="$tope_paso"' in guion, (
+        "sin el mínimo contra el tope del paso, la parada vuelve a concederse "
+        "sus segundos «desde ahora» aunque el paso esté a punto de morir"
+    )
+    assert 'export SIRIUS_GH_DEADLINE="$plazo"' in guion
+
+
+def test_gate_005_la_publicacion_no_desborda_el_tope_absoluto_del_paso(tmp_path: Path) -> None:
+    """El plazo de publicación es un MÍNIMO contra el tope del paso.
+
+    Hallazgo P2 de Codex en la PR #142, y misma familia que el defecto que esa
+    PR venía a arreglar una capa más abajo. `parada()` se concedía
+    `ahora + 120` sin mirar cuánto quedaba del paso. Entre agotarse la lectura
+    (300s) y llegar aquí corren `sirius_next_round_number`,
+    `sirius_convergence.py` y varios `jq`: proceso local que NO consulta
+    `SIRIUS_GH_DEADLINE`, así que no lo acota nadie. El máximo real era
+    `300 + proceso local + 120`. Con más de 60s de proceso local, Actions mata
+    el paso a los 480s DURANTE `sirius_transition`, y la incidencia se queda
+    otra vez sin transición terminal —la #135 y la #140 por tercera vez—.
+
+    Aquí el reloj salta casi el paso entero antes de la parada. Lo que se mide
+    es el instante absoluto que ve `gh`, que es quien lo respeta.
+    """
+    puerta = _step(_load(), "Evaluar la convergencia")
+    presupuesto = puerta["timeout-minutes"] * 60
+    margen = _numero_en_la_puerta(r"MARGEN_PASO=(\d+)")
+    base, plazos = _ejecuta_parada(tmp_path, plazo_previo="1", avance=presupuesto - 10)
+
+    assert plazos, "la parada no llegó a invocar gh: no se publicó nada"
+    tope = base + presupuesto - margen
+    for plazo in plazos:
+        assert plazo != "VACIO", "la parada publicó sin ninguna cota de tiempo"
+        assert int(plazo) <= tope, (
+            f"la publicación se concedió hasta {plazo}, más allá del tope del "
+            f"paso {tope}: Actions la mataría a media transición"
+        )
+
+
+def test_gate_006_sin_desbordar_el_plazo_es_el_propio_de_publicacion(tmp_path: Path) -> None:
+    # Acotar por arriba no puede degenerar en acotar SIEMPRE al tope: en el caso
+    # normal la publicación se lleva sus segundos, no lo que reste del paso.
+    # Sin esta prueba, un `plazo="$tope_paso"` incondicional pasaría GATE-005.
+    publicacion = _numero_en_la_puerta(r"PLAZO_PUBLICACION=(\d+)")
+    base, plazos = _ejecuta_parada(tmp_path, plazo_previo="1")
+
+    assert plazos, "la parada no llegó a invocar gh: no se publicó nada"
+    for plazo in plazos:
+        assert int(plazo) == base + publicacion, (
+            f"sin desbordar el paso el plazo debe ser {base + publicacion}, no {plazo}"
+        )

@@ -36,6 +36,26 @@ independiente de una PR de Sirius 0.1 ya existente.
   automático posterior que vuelve a verificar todo por su cuenta.
 - Nunca fusiones la PR.
 
+## El entorno es acotado: corrige con lo que hay
+
+Este runner viene preparado para este proyecto y **tú no vienes a montarlo**: no
+instales herramientas ni dependencias del sistema, y no uses `curl` ni `wget`
+para traerte nada.
+
+**El workflow ya te ha preparado el entorno antes de arrancarte**: instala `uv`
+(paso `Install uv`) y sincroniza las dependencias del proyecto (`uv sync
+--locked --all-groups`), además de las bibliotecas de Qt que necesita la suite
+de GUI en modo offscreen. Así que `uv run ruff …`, `uv run mypy …` y
+`uv run pytest` funcionan tal cual, sin instalar nada.
+
+Si aun así alguna de esas herramientas no estuviera disponible, **eso es un
+fallo del entorno, no un problema que debas resolver instalando**: tienes dos
+salidas y ninguna más — adaptar la corrección a las capacidades existentes, o
+emitir `FAILED_SAFELY` diciendo qué faltaba y qué quedó sin corregir. Improvisar
+una instalación no es una tercera salida: una orden denegada no es un obstáculo
+que rodear, es la respuesta del entorno, y rodearla gasta el turno que necesitas
+para corregir.
+
 ## Observaciones a corregir
 
 Las observaciones estructuradas de esta ronda están en el archivo indicado
@@ -105,3 +125,33 @@ trabajase durante decenas de turnos y terminase sin escribirlo. Ese trabajo se
 perdió entero y la incidencia quedó detenida esperando a una persona, que es
 justo lo que este paso existe para evitar. Un veredicto `FAILED_SAFELY` con un
 diagnóstico honesto vale infinitamente más que ningún veredicto.
+
+### Nadie te va a contestar: no termines el turno esperando nada
+
+**Aquí no hay interlocutor.** Nadie lee tus mensajes intermedios, nadie te
+responde y nadie te va a devolver el turno. Cuando tu turno termina, el runner
+mata todo lo que siguiera vivo y lo único que queda de ti es el archivo de
+veredicto. Por eso:
+
+- **Ejecuta las validaciones en primer plano y espera su resultado dentro del
+  mismo turno.** Nada de lanzar `pytest` (ni ningún comando largo) en segundo
+  plano para «recoger la salida luego»: no hay un luego.
+- **No lances subagentes en segundo plano.** Si decides usar algún subagente
+  permitido, tienes que recoger su resultado dentro de este mismo turno, antes de
+  escribir el veredicto. Si no puedes garantizarlo, no los uses: corrige tú. Un
+  subagente cuyo resultado no llegas a leer no ha corregido nada.
+- **Nunca cierres el turno anunciando trabajo pendiente.** Frases como «espero a
+  que termine y aviso», «te informo en cuanto tenga el resultado» o «continúo en
+  el siguiente mensaje» son, en este contexto, el final de la ronda: el trabajo
+  se pierde entero.
+- Si algo no cabe en el turno o se queda colgado, **eso es exactamente un
+  `FAILED_SAFELY` con su diagnóstico** —qué lanzaste, dónde se quedó—, no un
+  motivo para esperar.
+
+No es una precaución teórica. En la incidencia #177 tres rondas seguidas se
+perdieron así, y la única con el volcado del modelo a la vista lo dejó escrito
+en su último mensaje: «Espero a que termine el `pytest` en segundo plano […] y
+aviso en cuanto tenga el resultado» (run 31953500564, `terminal_reason:
+completed`). El corte no fue por turnos —69 de 120 en otra de ellas—, ni por
+permisos, ni por timeout: la ronda terminó porque el modelo creyó que la
+conversación seguía.

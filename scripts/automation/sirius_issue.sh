@@ -486,7 +486,7 @@ sirius_set_issue_labels() {
   done
   # Verificacion autoritativa del estado final.
   local labels=""
-  if ! labels="$(sirius_retry _sirius_gh api "repos/${repo}/issues/${num}/labels" --jq '.[].name')"; then
+  if ! labels="$(sirius_retry _sirius_gh api "repos/${repo}/issues/${num}" --jq '.labels[].name')"; then
     echo "sirius_set_issue_labels: no se pudo verificar las etiquetas de #${num}" >&2
     return 1
   fi
@@ -547,6 +547,15 @@ _sirius_comment_once_bounded() {
   # Instante ABSOLUTO, compartido con `_sirius_gh` y con `sirius_retry`: es lo
   # que hace que el plazo acote el CONJUNTO y no cada llamada por separado.
   local deadline=$(( $(_sirius_now) + budget ))
+  # Un plazo HEREDADO más estricto manda sobre el propio. Sin esto los plazos no
+  # se componen: cada capa se concedía el suyo ignorando el de arriba, así que
+  # un llamador que reservaba 120s para publicar veía cómo esta función se daba
+  # 90s MÁS por su cuenta —hasta 210s en total— y el presupuesto del paso que
+  # lo envolvía se desbordaba. Una cota que la capa de abajo puede ampliar no
+  # es una cota.
+  if [ "${SIRIUS_GH_DEADLINE:-0}" -gt 0 ] && [ "$SIRIUS_GH_DEADLINE" -lt "$deadline" ]; then
+    deadline="$SIRIUS_GH_DEADLINE"
+  fi
   export SIRIUS_GH_DEADLINE="$deadline"
   local delay="${SIRIUS_RETRY_BASE_DELAY:-2}"
   local after="" remaining=0
@@ -653,7 +662,7 @@ sirius_transition() {
   if printf '%s' "$existing" | grep -Fq "$marker"; then
     marker_present=1
     local verified=1 labels_now="" state_now=""
-    labels_now="$(sirius_retry _sirius_gh api "repos/${repo}/issues/${num}/labels" --jq '.[].name' 2>/dev/null)" || verified=0
+    labels_now="$(sirius_retry _sirius_gh api "repos/${repo}/issues/${num}" --jq '.labels[].name' 2>/dev/null)" || verified=0
     printf '%s\n' "$labels_now" | grep -Fxq "$add" || verified=0
     if [ "$close_flag" = "close" ] && [ "$verified" -eq 1 ]; then
       state_now="$(sirius_retry _sirius_gh api "repos/${repo}/issues/${num}" --jq '.state' 2>/dev/null)" || verified=0
@@ -751,4 +760,31 @@ sirius_extract_sha() {
     sha="no-head"
   fi
   printf '%s' "$sha"
+}
+
+# sanitize_untrusted_text — neutraliza, en texto que procede de un agente o de
+# Codex (y que puede arrastrar contenido de la PR), las TRES secuencias que los
+# escáneres deterministas de la incidencia reinterpretan al releer comentarios:
+#   - las vallas ``` (podrían cerrar antes de tiempo o falsificar el bloque
+#     "## OBSERVACIONES_ESTRUCTURADAS ```json ... ```" que consume el gate del
+#     corrector mediante sirius_extract_observations);
+#   - los marcadores "Head SHA:"/"Merge SHA:" (envenenarían sirius_extract_sha
+#     en verificaciones de head posteriores);
+#   - la apertura "<!--" de un comentario HTML. Esta es la que faltaba, y su
+#     ausencia era explotable: los marcadores que gobiernan la convergencia
+#     (`<!-- sirius-round:N -->`) y la racha de CI (`<!-- sirius-quality:...-->`)
+#     son comentarios HTML, y los publica la automatización, así que caen del
+#     lado CONFIABLE del filtro de autor. Un texto no confiable que colara uno
+#     de esos marcadores en un cuerpo publicado por el script quedaba contado
+#     por `parse_round_records` o por `ci_failure_streak`: bastaba para fabricar
+#     una ronda con cero hallazgos (progreso falso, corrector vivo sin cota) o
+#     un `sirius-quality:<sha>:success` que reinicia la racha de fallos de CI.
+#     Romper la apertura basta: ambos escáneres exigen el literal "<!--".
+# El contenido sigue siendo legible y fiel; solo se desactivan los marcadores.
+# (\u0027 es una comilla simple, escapada para no cerrar la cadena del programa jq.)
+sanitize_untrusted_text() {
+  jq -Rrs 'gsub("```"; "\u0027\u0027\u0027") | gsub("(?<p>[Hh][Ee][Aa][Dd]|[Mm][Ee][Rr][Gg][Ee])(\\s+[Ss][Hh][Aa]\\s*:)"; "\(.p)-sha:") | gsub("<!--"; "&lt;!--")'
+}
+sanitize_untrusted_json() {
+  jq -c 'walk(if type == "string" then gsub("```"; "\u0027\u0027\u0027") | gsub("(?<p>[Hh][Ee][Aa][Dd]|[Mm][Ee][Rr][Gg][Ee])(\\s+[Ss][Hh][Aa]\\s*:)"; "\(.p)-sha:") | gsub("<!--"; "&lt;!--") else . end)'
 }

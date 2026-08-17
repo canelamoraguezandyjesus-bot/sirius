@@ -2,7 +2,8 @@
 
 Las decisiones aprobadas existentes viven en el documento canónico correspondiente.
 
-A partir del repositorio, cada cambio importante se registrará aquí como `ADR-NNN-titulo.md` con:
+A partir del repositorio, cada cambio importante se registrará aquí como `ADR-NNN-titulo.md`
+(plantilla en `PLANTILLA.md`) con:
 
 - estado;
 - contexto;
