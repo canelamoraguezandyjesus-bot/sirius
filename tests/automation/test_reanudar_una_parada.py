@@ -12,9 +12,12 @@ Estas pruebas cubren las dos mitades del arreglo:
 1. la frontera de historial que hace la orden efectiva
    (`history_after_last_resume`), y que **no debilita** la política: una parada
    real vuelve a saltar a partir del marcador;
-2. el invariante general —**todo estado que exige una decisión humana declara la
-   orden que lo levanta**—, recorriendo la lista en vez de enumerarla a mano,
-   para que un estado de parada nuevo no pueda nacer sin salida.
+2. el invariante general —**todo estado que deja el ciclo esperando a una
+   persona declara quién lo levanta**—, deduciendo las paradas de la
+   enumeración real de estados en vez de escribirlas aquí, para que una parada
+   nueva no pueda nacer sin salida. La primera versión de este módulo decía
+   hacerlo y en realidad enumeraba una sola parada a mano; la #193 encontró el
+   hueco al día siguiente (ADR-035).
 """
 
 from __future__ import annotations
@@ -163,36 +166,143 @@ def test_solo_cuenta_la_ultima_orden() -> None:
 
 # --- El invariante general ----------------------------------------------------
 #
-# La lista se lee del propio script de reconciliación, no se escribe a mano: una
-# lista copiada habría que acordarse de ampliarla, que es exactamente el olvido
-# que esta prueba existe para hacer imposible.
+# La lista de estados se LEE del código. La versión anterior de este módulo
+# afirmaba hacerlo y no lo hacía: enumeraba a mano
+# `{"sirius:blocked-decision": "continua"}` y dejaba fuera
+# `sirius:failed-safely` con esta razón escrita: «su salida está documentada en
+# `sirius_validate_activation.sh` (línea 46) y consiste en retirar la etiqueta
+# tras leer el diagnóstico».
+#
+# Esa razón era falsa por dos vías independientes: la línea 46 habla de
+# reactivar el trabajo DESDE CERO con `sirius:implement-requested`, no de
+# retomar la ronda interrumpida; y ningún workflow escucha `unlabeled`, así que
+# retirar la etiqueta no dispara nada. La #193 lo pagó al día siguiente: una
+# parada segura por un timeout de Codex, sobre una PR con Quality en verde y
+# tres rondas de trabajo acumulado, sin ninguna vía de vuelta que no fuese
+# cirugía manual.
+#
+# Una lista escrita a mano solo protege de los olvidos que ya recordaste. Por
+# eso los estados salen ahora de `INCOMPATIBLE_STATES` —la enumeración real que
+# mantiene la automatización viva— y las exclusiones son ESTRUCTURALES: se
+# descarta lo que por su forma no puede estar esperando a nadie, y todo lo que
+# quede tiene que declarar quién lo levanta.
 
-PARADAS_QUE_EXIGEN_DECISION = {
-    # estado terminal que espera a una persona -> orden exacta que lo levanta
-    "sirius:blocked-decision": "continua",
-}
+ACTIVACION = SCRIPTS_DIR / "sirius_validate_activation.sh"
+REANUDAR = SCRIPTS_DIR / "sirius_resume_on_command.sh"
+
+# Un `sirius:*-requested` es un EVENTO: aplicarlo dispara un workflow, así que
+# por construcción no deja nada esperando a una persona.
+_ES_EVENTO = re.compile(r"^sirius:.+-requested$")
+# Fases en curso: hay un job corriendo y el ciclo avanza solo.
+_EN_CURSO = frozenset(
+    {"sirius:implementing", "sirius:reviewing", "sirius:repairing", "sirius:ci-pending"}
+)
+# Fin del recorrido: no hay nada que reanudar.
+_TERMINAL = frozenset({"sirius:completed"})
 
 
-def test_todo_estado_de_parada_declara_la_orden_que_lo_levanta() -> None:
+def _estados_sirius_del_codigo() -> list[str]:
+    """Los estados `sirius:*` que la automatización viva reconoce."""
+    texto = ACTIVACION.read_text(encoding="utf-8")
+    match = re.search(r'INCOMPATIBLE_STATES="([^"]+)"', texto)
+    assert match, f"no se encontró INCOMPATIBLE_STATES en {ACTIVACION.name}"
+    return match.group(1).split()
+
+
+def _codigo_sin_comentarios(script: Path) -> str:
+    """El guion sin sus líneas de comentario.
+
+    Buscar la etiqueta en el fichero entero no vale, y no es teórico: la primera
+    versión de esta prueba lo hacía y la mutación de control —sacar
+    `sirius:failed-safely` del conjunto de paradas y de su rama `case`— pasó en
+    verde, porque el nombre seguía apareciendo en el comentario de cabecera que
+    explica la historia. Una prueba que se conforma con que algo se MENCIONE
+    certifica documentación, no comportamiento.
+    """
+    return "\n".join(
+        linea
+        for linea in script.read_text(encoding="utf-8").splitlines()
+        if not linea.lstrip().startswith("#")
+    )
+
+
+def _paradas_que_esperan_a_una_persona() -> list[str]:
+    return [
+        estado
+        for estado in _estados_sirius_del_codigo()
+        if not _ES_EVENTO.match(estado) and estado not in _EN_CURSO and estado not in _TERMINAL
+    ]
+
+
+def test_la_lista_de_estados_se_lee_de_verdad_del_codigo() -> None:
+    """Si el `grep` de arriba fallara, lo de abajo pasaría sin comprobar nada."""
+    estados = _estados_sirius_del_codigo()
+    assert len(estados) >= 8, f"se leyeron demasiado pocos estados: {estados}"
+    assert "sirius:blocked-decision" in estados
+    assert "sirius:failed-safely" in estados
+
+
+def test_toda_parada_que_espera_a_una_persona_declara_quien_la_levanta() -> None:
     """Un estado de parada sin salida es un defecto de diseño, no un accidente.
 
-    `sirius:failed-safely` no aparece aquí a propósito: su salida está
-    documentada y probada en `sirius_validate_activation.sh` (línea 46, «exige
-    revisar el diagnóstico»), y consiste en retirar la etiqueta tras leerlo.
-    Tiene vía de vuelta. `sirius:blocked-decision` no la tenía.
+    Nada aquí nombra las paradas: salen de restarle, a la enumeración real de
+    estados, las que por su forma no esperan a nadie. Una parada nueva que
+    alguien añada mañana entra sola en esta prueba y tendrá que traer su orden.
     """
-    for estado, orden in PARADAS_QUE_EXIGEN_DECISION.items():
-        ejecutores = [
-            script
-            for script in SCRIPTS_DIR.glob("sirius_*_on_command.sh")
-            if estado in script.read_text(encoding="utf-8")
-        ]
-        assert ejecutores, f"{estado} no tiene ningún ejecutor de orden que lo levante"
-        for script in ejecutores:
-            texto = script.read_text(encoding="utf-8")
-            assert f'"{orden}"' in texto, (
-                f"{script.name} atiende a {estado} pero no comprueba la orden exacta {orden!r}"
-            )
+    paradas = _paradas_que_esperan_a_una_persona()
+    assert paradas, "no se dedujo ninguna parada; la deducción está rota"
+    ejecutores = sorted(SCRIPTS_DIR.glob("sirius_*_on_command.sh"))
+    assert ejecutores, "no hay ningún ejecutor de órdenes que comprobar"
+    for estado in paradas:
+        quien = [s for s in ejecutores if estado in _codigo_sin_comentarios(s)]
+        assert quien, (
+            f"{estado} deja el ciclo esperando a una persona y ningún ejecutor "
+            f"de órdenes lo levanta: es una parada sin salida"
+        )
+
+
+def test_una_parada_segura_vuelve_a_la_fase_que_se_detuvo() -> None:
+    """`failed-safely` lo emite cualquiera de los tres roles, no solo el corrector.
+
+    Devolverla siempre a `repair-requested` haría que una revisión caída se
+    «reanudase» corrigiendo observaciones que nadie escribió. La fase se lee del
+    historial —el marcador del veredicto lleva el rol— en vez de suponerse.
+    """
+    texto = REANUDAR.read_text(encoding="utf-8")
+    assert "sirius:failed-safely" in texto
+    for rol, destino in (
+        ("implementer", "sirius:implement-requested"),
+        ("reviewer", "sirius:review-requested"),
+        ("corrector", "sirius:repair-requested"),
+    ):
+        assert re.search(rf"{rol}\)\s*printf '{re.escape(destino)}", texto), (
+            f"no hay vuelta declarada para el rol {rol}"
+        )
+    assert "FAILED_SAFELY|precheck" in texto, (
+        "las paradas `precheck` también dejan la incidencia en failed-safely, "
+        "y también hay que saber de qué fase vinieron"
+    )
+
+
+def test_una_parada_segura_no_mueve_el_liston_de_convergencia() -> None:
+    """Reanudar una fase caída no puede perdonar rondas.
+
+    `sirius-convergence-reset` desplaza la frontera que mide el progreso. Vale
+    para `blocked-decision`, que es una parada POR falta de progreso. En un
+    `failed-safely` no hay rondas que perdonar, y publicarlo ahí borraría el
+    listón sin que nadie lo pidiera: un ciclo de verdad estancado podría correr
+    para siempre.
+    """
+    texto = REANUDAR.read_text(encoding="utf-8")
+    inicio = texto.index('if [ "$parada" = "sirius:blocked-decision" ]; then')
+    fin = texto.index("# --- 5)", inicio)
+    rama_bloqueo, rama_operativa = texto[inicio:fin].split("else", 1)
+    assert "sirius-convergence-reset" in rama_bloqueo, (
+        "la parada por convergencia sí necesita mover el listón"
+    )
+    assert "sirius-convergence-reset" not in rama_operativa, (
+        "una parada operativa no puede publicar el marcador que perdona rondas"
+    )
 
 
 @pytest.mark.parametrize(
@@ -214,3 +324,33 @@ def test_toda_orden_por_comentario_se_reverifica_por_rest(script: Path) -> None:
         f"{script.name} no reverifica el estado por REST antes de actuar"
     )
     assert "orden exacta" in texto, f"{script.name} no exige una orden exacta"
+
+
+def test_el_workflow_deja_pasar_todas_las_paradas_que_el_guion_sabe_levantar() -> None:
+    """El guion y su workflow tienen que estar de acuerdo, o el guion no corre.
+
+    El `if:` del job filtra por etiqueta, así que una parada que el guion sabe
+    levantar pero el workflow no deja pasar produce exactamente lo que ADR-030
+    vino a eliminar —una orden del propietario que no llega a ninguna parte— y
+    encima **sin dejar rastro**, porque el job ni siquiera arranca: no hay run
+    que mirar ni comentario que leer, la orden simplemente no hace nada.
+
+    Se descubrió al ampliar el guion a `sirius:failed-safely` (ADR-035): el
+    cambio del guion, por sí solo, habría sido inerte, y no lo habría notado
+    nadie hasta la siguiente parada.
+    """
+    import yaml
+
+    workflow = REPO_ROOT / ".github" / "workflows" / "resume-sirius-on-command.yml"
+    doc = yaml.safe_load(workflow.read_text(encoding="utf-8"))
+    condicion = " ".join(str(job.get("if") or "") for job in doc["jobs"].values())
+    assert condicion.strip(), f"{workflow.name} no filtra nada; revisa la lectura"
+
+    codigo = _codigo_sin_comentarios(REANUDAR)
+    match = re.search(r'SIRIUS_PARADAS_REANUDABLES="([^"]+)"', codigo)
+    assert match, f"no se encontró SIRIUS_PARADAS_REANUDABLES en {REANUDAR.name}"
+    for estado in match.group(1).split():
+        assert estado in condicion, (
+            f"{workflow.name} no deja pasar {estado}, así que el guion nunca "
+            f"llegaría a levantarla: hay que pegar el workflow actualizado"
+        )

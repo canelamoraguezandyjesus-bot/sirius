@@ -44,6 +44,50 @@ Para comparar la PR tienes de sobra con lo que ya está disponible: `gh pr diff`
 `gh pr view`, `gh api`, `git diff`, `git log`, `git show` y la lectura directa de
 archivos. Con eso se audita un diff entero.
 
+### Este runner no tiene el intérprete del proyecto
+
+El workflow que te arranca **no instala `uv` ni sincroniza el entorno**. El del
+implementador y el del corrector sí lo hacen (`Install uv` + `uv sync --locked
+--all-groups`); el tuyo, no. Lo único que hay en tu `PATH` es el intérprete del
+sistema del runner, y **ese no es el del proyecto**: `pyproject.toml` fija
+`requires-python = ">=3.14,<3.15"` y `target-version = "py314"`.
+
+**La propiedad, y es una sola:** lo que averigües *ejecutando* código en este
+runner es una afirmación **sobre este runner**, no sobre el proyecto. Su cadena
+de herramientas no es la del proyecto, así que no puede refutar nada del
+proyecto. Da igual con qué lo ejecutes.
+
+Y hay una comprobación que **sí** es autoritativa y que ya está hecha: `Quality`
+pasó en verde sobre el head que auditas, con el intérprete de verdad, ejecutando
+las cuatro validaciones obligatorias — `ruff format --check`, `ruff check`,
+`mypy src tests` y `pytest` entero. De ahí sale una consecuencia que te ahorra
+rondas: **todo hallazgo cuya forma sea «esto no compila», «esto no importa»,
+«mypy rechazaría esto» o «esta prueba falla» está refutado antes de que lo
+escribas.** Si tu conclusión contradice un Quality verde, lo que has encontrado
+es un defecto de tu método, no del código.
+
+Lo que Quality **no** cubre es justo donde eres imprescindible, y ahí no te
+frenes: comportamiento que ninguna prueba ejerce, alcance excedido, decisiones
+sin registrar, invariantes que el diff rompe sin que nada las vigile.
+
+Esto ya costó dos rondas enteras de la incidencia #193, con la misma observación
+las dos veces:
+
+| Ronda | Lo que afirmaste | Lo que pasaba de verdad |
+| --- | --- | --- |
+| 2 | `CLAUDE-A3-001`: «`SyntaxError` en `context_recall.py`, el módulo no se puede importar, pytest no pudo haber pasado en verde» | `except A, B:` sin paréntesis es válido desde Python 3.14 (PEP 758). El corrector lo verificó, no había nada que arreglar, y la ronda se gastó entera. |
+| 4 | El mismo hallazgo, otra vez, «verificado por dos vías independientes» | Las dos vías eran el mismo intérprete equivocado. Y `ruff format` del proyecto **exige** la forma sin paréntesis: «arreglarlo» habría roto una validación obligatoria. |
+
+Fíjate en el detalle que más importa de esa tabla: la segunda vez venía con una
+demostración —`ast.parse` falla, aquí está el error— y la demostración era
+correcta *sobre el runner*. Por eso la regla no es «desconfía cuando dudes»,
+sino la propiedad de arriba: la certeza no es la señal.
+
+Si de verdad necesitas ejecutar algo del proyecto para sostener un hallazgo, no
+lo ejecutes con lo que encuentres a mano: emite `FAILED_SAFELY` diciendo qué
+querías ejecutar y qué quedó sin comprobar. Un hallazgo falso con una
+demostración convincente hace más daño que un hallazgo que falta.
+
 Si una herramienta concreta no está disponible, tienes dos salidas y ninguna
 más: **adaptar la revisión a las capacidades existentes**, o emitir
 `FAILED_SAFELY` explicando exactamente qué te faltaba y qué quedó sin comprobar.
