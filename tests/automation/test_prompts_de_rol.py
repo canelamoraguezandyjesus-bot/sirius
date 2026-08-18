@@ -87,19 +87,50 @@ def test_todo_rol_escribe_un_veredicto_provisional_al_empezar(prompt_path: Path)
 
 @pytest.mark.parametrize("prompt_path", PROMPTS, ids=lambda p: p.name)
 def test_todo_rol_tiene_prohibido_terminar_el_turno_esperando_algo(prompt_path: Path) -> None:
-    """La causa real de las tres rondas perdidas, en los tres roles.
+    """La regla debe enunciar una PROPIEDAD, no enumerar vehículos.
 
-    Cubre expresamente los subagentes: en el revisor el vehículo del fallo no fue
-    un comando sino tres agentes en segundo plano, así que una regla que solo
-    hablara de comandos no habría cubierto el caso observado.
+    Cuatro rondas se han perdido por esto, en los tres roles y las cuatro con
+    `terminal_reason: completed`. La cuarta (#193, run 32166867844) es la que
+    obliga a esta forma: la regla YA existía, pero decía «nada de `pytest` en
+    segundo plano» y «no lances subagentes», y el modelo esperó una notificación
+    de la herramienta Monitor — un tercer mecanismo que la lista no nombraba.
+    Hizo justo lo prohibido sin incumplir ninguna frase.
+
+    Por eso esta prueba NO se limita a comprobar que aparecen las palabras de la
+    lista. Si lo hiciera, seguiría dando por buena una regla esquivable con el
+    siguiente mecanismo que se invente, que es exactamente cómo llegamos aquí.
+    Lo que exige es que la prohibición esté enunciada como propiedad general y
+    que los ejemplos se declaren no exhaustivos.
     """
     prompt = _flat(prompt_path.read_text(encoding="utf-8"))
     assert "Nadie te va a contestar" in prompt, "falta la sección anti-espera"
     seccion = prompt[prompt.index("Nadie te va a contestar") :]
 
-    assert "segundo plano" in seccion
+    # 1) La propiedad: la prohibición no depende del mecanismo.
+    assert "Da igual el mecanismo" in seccion, (
+        "la regla debe prohibir esperar SEA CUAL SEA el vehículo, no enumerar vehículos"
+    )
+    assert "no va a llegar" in seccion
+
+    # 2) Los ejemplos, declarados explícitamente no exhaustivos. Sin esto, un
+    # lector razonable puede leer la lista como la definición de lo prohibido.
+    assert "No son la lista completa" in seccion, (
+        "los ejemplos deben declararse no exhaustivos, o la lista vuelve a ser la regla"
+    )
+
+    # 3) La propiedad va ANTES que los ejemplos. El orden no es estilo: lo que se
+    # lee primero es lo que se toma por la regla.
+    posicion_propiedad = seccion.index("Da igual el mecanismo")
+    posicion_ejemplos = seccion.index("- **Ejecuta las validaciones")
+    assert posicion_propiedad < posicion_ejemplos, (
+        "la propiedad debe preceder a los ejemplos, no ir de nota al pie"
+    )
+
+    # 4) Los vehículos ya observados siguen nombrados, incluido el de la #193.
     assert "No lances subagentes en segundo plano" in seccion
+    assert "notificaciones" in seccion, "falta el mecanismo que costó la ronda de #193"
     assert "dentro de este mismo turno" in seccion
+
     # El desenlace correcto de «no me cabe en el turno» es una parada con
     # diagnóstico, nunca una espera.
     assert "FAILED_SAFELY" in seccion
