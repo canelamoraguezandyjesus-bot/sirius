@@ -1,4 +1,4 @@
-"""Pruebas del calculador de número de ADR (ADR-030).
+"""Pruebas del calculador de número de ADR (ADR-032).
 
 Cada prueba fija una PROPIEDAD, no una grafía concreta: «el número propuesto es
 mayor que todos los existentes», no «el número es 28». Enumerar valores es la

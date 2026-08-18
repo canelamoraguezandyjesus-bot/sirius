@@ -1,4 +1,4 @@
-"""El registro de decisiones no admite dos ADR con el mismo número (ADR-030).
+"""El registro de decisiones no admite dos ADR con el mismo número (ADR-032).
 
 Esta es la pieza que hace el fallo **imposible** en `main`, no solo improbable:
 `scripts/siguiente_adr.py` quita fricción, pero no impide crear un ADR a mano,
@@ -9,7 +9,7 @@ Hay una excepción, y está fijada nombre por nombre a propósito: el par
 `ADR-016` que ya existía cuando se escribió esto. Corregirlo es una decisión
 del propietario —hay una veintena de referencias a «ADR-016» en workflows,
 pruebas y documentos, y ninguna dice cuál de los dos documentos cita—, y
-ADR-030 declaró expresamente que no corrige el pasado. Fijar la excepción por
+ADR-032 declaró expresamente que no corrige el pasado. Fijar la excepción por
 su nombre es lo que mantiene la prueba anti-vacua: cualquier duplicado nuevo
 rompe la igualdad, y arreglar el viejo también, que es cuando toca venir aquí
 y borrar la excepción.
@@ -47,7 +47,7 @@ def test_no_new_number_is_ever_reused() -> None:
 def test_every_adr_follows_the_naming_convention() -> None:
     """Mayúsculas en «ADR», tres dígitos y el resto en minúsculas sin tildes."""
     incumplen = [nombre for nombre in numeros_por_archivo(REGISTRO) if not CONVENIO.match(nombre)]
-    assert incumplen == [], f"nombres fuera del convenio de ADR-030: {incumplen}"
+    assert incumplen == [], f"nombres fuera del convenio de ADR-032: {incumplen}"
 
 
 def test_the_registry_has_the_template_the_script_needs() -> None:

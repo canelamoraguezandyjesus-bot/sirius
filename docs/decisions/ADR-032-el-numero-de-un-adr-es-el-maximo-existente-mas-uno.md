@@ -1,4 +1,4 @@
-# ADR-030 — Calcular el número de un ADR como el máximo existente más uno
+# ADR-032 — Calcular el número de un ADR como el máximo existente más uno
 
 - Estado: PROPUESTO
 - Fecha: 2026-08-17
