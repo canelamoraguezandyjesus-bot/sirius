@@ -60,6 +60,26 @@ from sirius_engine.domain.work_item import WorkItem, WorkItemClass
 _ScopeCascadeKey = tuple[str, str, str]
 _IdempotencyKey = str | _ScopeCascadeKey
 
+# CODEX-001 (ronda 6): forma de texto que usaba la clave interna de la
+# cascada ANTES de la ronda 5 (``f"{idempotency_key}::scope-cascade::
+# {run.run_id}"``). Un diario escrito por esa versión persiste esa clave
+# como `str`, no como la tupla que esta versión deriva; `_decode_idempotency_key`
+# reconstruye la tupla equivalente al reproducir un registro con esa forma,
+# para que un reintento tras una cascada incompleta la reconozca igual que
+# reconocería una escrita ya en formato nuevo. Solo se aplica a los tres
+# tipos de evento que la cascada puede producir (ninguna otra vía de la API
+# pública los emite con clave derivada) y exige que el sufijo coincida con
+# el `aggregate_id` del propio registro, para no confundir por casualidad
+# una clave pública que un llamador hubiera elegido con esa forma exacta
+# (el mismo riesgo, ya aceptado, que motivó la ronda 5 para el formato
+# nuevo: aquí es inevitable porque el formato viejo era literalmente texto
+# concatenado y no lleva ninguna marca que lo distinga de una clave
+# pública coincidente).
+_LEGACY_SCOPE_CASCADE_MARKER = "::scope-cascade::"
+_LEGACY_SCOPE_CASCADE_KINDS = frozenset(
+    {"run_prepared_invalidated", "run_cancellation_requested", "run_scope_invalidated"}
+)
+
 
 class DurableWorkEngineStore:
     """Satisface :class:`sirius_engine.ports.store.WorkEngineStore` de forma durable."""
@@ -98,11 +118,27 @@ class DurableWorkEngineStore:
         devolverla como tupla para que sea hashable y comparable de nuevo
         contra las derivadas en memoria; una clave pública sigue siendo
         ``str`` tal cual.
+
+        CODEX-001 (ronda 6): un registro heredado de antes de la ronda 5
+        persiste la clave interna de la cascada como texto concatenado
+        (:data:`_LEGACY_SCOPE_CASCADE_MARKER`), no como lista. Si el
+        registro es de uno de los tres tipos que solo la cascada emite
+        (:data:`_LEGACY_SCOPE_CASCADE_KINDS`) y el texto termina exactamente
+        en ``"::scope-cascade::" + aggregate_id`` de ESTE registro, se
+        reconstruye la misma tupla que derivaría la cascada actual, para que
+        un reintento tras una cascada incompleta la reconozca.
         """
         raw = record.get("idempotency_key")
         if isinstance(raw, list):
             return tuple(raw)
         assert raw is None or isinstance(raw, str)
+        if isinstance(raw, str) and record.get("kind") in _LEGACY_SCOPE_CASCADE_KINDS:
+            aggregate_id = record.get("aggregate_id")
+            assert isinstance(aggregate_id, str)
+            legacy_suffix = f"{_LEGACY_SCOPE_CASCADE_MARKER}{aggregate_id}"
+            if raw.endswith(legacy_suffix):
+                public_key = raw[: -len(legacy_suffix)]
+                return ("scope-cascade", public_key, aggregate_id)
         return raw
 
     def _absorb(self, event: Event, *, idempotency_key: _IdempotencyKey | None) -> None:

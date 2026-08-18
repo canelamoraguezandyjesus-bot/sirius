@@ -392,6 +392,91 @@ def test_una_clave_publica_con_forma_de_clave_de_cascada_no_bloquea_la_invalidac
     assert "run_cancellation_requested" in [event.kind for event in store.list_events()]
 
 
+def test_reintento_tras_cascada_incompleta_reconoce_clave_interna_de_diario_heredado(
+    tmp_path: Path,
+) -> None:
+    """CODEX-001 (ronda 6): un diario heredado de antes de la ronda 5 debe migrarse.
+
+    Reproduce el hallazgo exacto: un diario escrito por la versión ANTERIOR a
+    la ronda 5 -que derivaba la clave interna de la cascada concatenando
+    texto, ``f"{clave}::scope-cascade::{run_id}"``, en vez de una tupla- con
+    4 registros, el último ``run_cancellation_requested`` con esa clave
+    heredada, tras una cascada de ``change_work_item_scope`` interrumpida a
+    mitad (p. ej. por un ``DirectorySyncError``, CODEX-001 ronda 4). Al abrir
+    ese diario con esta versión y reintentar la MISMA clave pública ``"K"``,
+    `_decode_idempotency_key` debe reconstruir la tupla equivalente a partir
+    del texto heredado para que la cascada reconozca ese paso como ya hecho;
+    sin la migración, la clave heredada (``str``) nunca coincide con la
+    tupla que esta versión deriva al reintentar, y la cascada repite el paso
+    ya confirmado -anexando ``run_scope_invalidated`` de más, 6 registros en
+    vez de los 5 esperados (los 4 + ``work_item_scope_changed``).
+    """
+    journal_path = tmp_path / "diario.jsonl"
+    work_id = "WI-CODEX001R6-0001"
+    run_id = "RUN-CODEX001R6-0001"
+
+    store = DurableWorkEngineStore(journal_path)
+    store.create_work_item(
+        work_id=work_id,
+        peticion_original="texto literal",
+        objetivo="objetivo original",
+        contexto_origen=(),
+        entregable="entregable",
+        criterio_terminado="criterio",
+        limites={},
+        prioridad=1,
+        clase=WorkItemClass.PROGRAMACION,
+        now=_NOW,
+    )
+    store.prepare_run(
+        run_id=run_id,
+        work_id=work_id,
+        paso="paso-1",
+        worker="worker-de-prueba",
+        work_package={"instrucciones": "ejecutar paso 1"},
+        deadline=datetime(2026, 8, 18, 13, 0, tzinfo=UTC),
+        now=_NOW,
+    )
+    store.dispatch_run(run_id, now=_NOW)
+
+    # Escribir a mano el 4.º registro exactamente como lo escribía la
+    # cascada ANTES de la ronda 5: clave interna como texto concatenado.
+    dispatched = store.get_run(run_id)
+    assert dispatched is not None
+    cancelado = dispatched.mark_scope_invalidated(now=_NOW).request_cancel(now=_NOW)
+    legacy_key = f"K::scope-cascade::{run_id}"
+    append_durably(
+        journal_path,
+        {
+            "sequence": 4,
+            "occurred_at": _NOW.isoformat(),
+            "aggregate_type": AggregateType.RUN.value,
+            "aggregate_id": run_id,
+            "kind": "run_cancellation_requested",
+            "entity": run_to_dict(cancelado),
+            "idempotency_key": legacy_key,
+        },
+    )
+
+    reabierto = DurableWorkEngineStore(journal_path)
+    reabierto.change_work_item_scope(
+        work_id, now=_NOW, objetivo="objetivo nuevo", idempotency_key="K"
+    )
+
+    registros = replay(journal_path).valid_records
+    assert [r["kind"] for r in registros] == [
+        "work_item_created",
+        "run_prepared",
+        "run_dispatched",
+        "run_cancellation_requested",
+        "work_item_scope_changed",
+    ]
+    run = reabierto.get_run(run_id)
+    assert run is not None
+    assert run.invalidado_por_alcance is True
+    assert run.cancellation_status == CancellationStatus.UNCONFIRMED
+
+
 def test_fallo_de_fsync_a_mitad_de_la_cascada_de_change_scope_no_duplica_al_reintentar(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
