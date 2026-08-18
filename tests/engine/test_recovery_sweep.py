@@ -16,7 +16,7 @@ import pytest
 
 from sirius_engine.domain.errors import IllegalTransitionError
 from sirius_engine.domain.events import rebuild_state
-from sirius_engine.domain.run import Run, RunState
+from sirius_engine.domain.run import CancellationStatus, Run, RunOutcome, RunState
 from sirius_engine.domain.work_item import WorkItemState
 from sirius_engine.ports.store import WorkEngineStore
 from sirius_engine.ports.world import RemoteRunStatus, RunWorldObservation
@@ -292,3 +292,120 @@ def test_mutacion_quitar_el_filtro_de_runs_terminados_rompe_la_idempotencia(
 
     with pytest.raises(IllegalTransitionError):
         _sweep_sin_filtro_de_runs_terminados(store, world, now=now)
+
+
+# --- Rama CANCELLED de `_reconcile_run` --------------------------------------
+#
+# La cancelación es en dos tiempos (§3.3): `CANCEL` deja el Run vivo con
+# `cancellation_status = UNCONFIRMED`, y solo un terminal remoto observado -o
+# un aislamiento demostrado- lo cierra. El barrido es justo quien observa ese
+# terminal cuando el motor estuvo caído entre los dos tiempos, así que esta
+# rama cubre el hueco exacto que la cancelación en dos tiempos abre.
+#
+# Se prueban las DOS direcciones de su guarda. Solo con el caso positivo,
+# borrar `if run.cancellation_status is not CancellationStatus.UNCONFIRMED`
+# dejaría la prueba en verde mientras el barrido cerraría como CANCELLED
+# cualquier Run que el mundo reportase así, sin que nadie lo hubiera pedido.
+
+
+def _waiting_work_item_with_cancellation_requested(
+    store: WorkEngineStore,
+    make_work_item: MakeWorkItem,
+    make_run: MakeRun,
+    *,
+    now: datetime,
+    deadline: datetime,
+) -> None:
+    """Escenario real: se pidió `CANCEL` y el motor murió antes de confirmarlo."""
+    _waiting_work_item_with_live_run(
+        store, make_work_item, make_run, now=now, deadline=deadline, run_state=RunState.RUNNING
+    )
+    store.request_run_cancellation("RUN-0001", now=now)
+
+
+def test_barrido_confirma_una_cancelacion_que_el_mundo_ya_dio_por_terminada(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun, now: datetime
+) -> None:
+    """El desenlace remoto ocurrió mientras el motor estaba caído; el barrido lo cierra."""
+    deadline = now + timedelta(hours=2)
+    _waiting_work_item_with_cancellation_requested(
+        store, make_work_item, make_run, now=now, deadline=deadline
+    )
+    world = FakeRunWorldObserver(
+        observations={"RUN-0001": RunWorldObservation(status=RemoteRunStatus.CANCELLED)}
+    )
+
+    result = run_recovery_sweep(store, world, now=now)
+
+    assert result == RecoverySweepResult(
+        reconciled_run_ids=("RUN-0001",), released_work_item_ids=("WI-0001",)
+    )
+    run = store.get_run("RUN-0001")
+    assert run is not None
+    assert run.estado is RunState.FINISHED
+    assert run.desenlace is RunOutcome.CANCELLED
+    assert run.cancellation_status is CancellationStatus.NONE
+    kinds = [event.kind for event in store.list_events() if event.aggregate_id == "RUN-0001"]
+    assert kinds == [
+        "run_prepared",
+        "run_dispatched",
+        "run_confirmed_running",
+        "run_cancellation_requested",
+        "run_cancellation_confirmed",
+    ]
+    # El WorkItem esperaba a ese Run: al terminar, la espera asíncrona se libera.
+    work_item = store.get_work_item("WI-0001")
+    assert work_item is not None
+    assert work_item.estado is WorkItemState.ACTIVE
+
+
+def test_barrido_no_cierra_como_cancelado_un_run_cuya_cancelacion_nadie_pidio(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun, now: datetime
+) -> None:
+    """La otra dirección de la guarda: sin `CANCEL` previo, el barrido no actúa.
+
+    Un Run remoto puede reportarse CANCELLED por causas ajenas al motor. Sin
+    la cancelación en dos tiempos registrada en el diario, cerrarlo aquí
+    inventaría una decisión que nadie tomó -y `confirm_cancelled` la
+    rechazaría con `IllegalTransitionError`, perdiendo la pasada entera-.
+    """
+    deadline = now + timedelta(hours=2)
+    _waiting_work_item_with_live_run(
+        store, make_work_item, make_run, now=now, deadline=deadline, run_state=RunState.RUNNING
+    )
+    world = FakeRunWorldObserver(
+        observations={"RUN-0001": RunWorldObservation(status=RemoteRunStatus.CANCELLED)}
+    )
+    eventos_antes = tuple(store.list_events())
+
+    result = run_recovery_sweep(store, world, now=now)
+
+    assert result == RecoverySweepResult(reconciled_run_ids=(), released_work_item_ids=())
+    assert tuple(store.list_events()) == eventos_antes
+    run = store.get_run("RUN-0001")
+    assert run is not None
+    assert run.estado is RunState.RUNNING
+    assert run.cancellation_status is CancellationStatus.NONE
+
+
+def test_barrido_de_una_cancelacion_ejecutado_dos_veces_deja_el_mismo_estado(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun, now: datetime
+) -> None:
+    """Requisito 4, para esta rama: la segunda pasada no anexa ningún evento nuevo."""
+    deadline = now + timedelta(hours=2)
+    _waiting_work_item_with_cancellation_requested(
+        store, make_work_item, make_run, now=now, deadline=deadline
+    )
+    world = FakeRunWorldObserver(
+        observations={"RUN-0001": RunWorldObservation(status=RemoteRunStatus.CANCELLED)}
+    )
+
+    primera = run_recovery_sweep(store, world, now=now)
+    eventos_tras_primera = tuple(store.list_events())
+
+    segunda = run_recovery_sweep(store, world, now=now)
+    eventos_tras_segunda = tuple(store.list_events())
+
+    assert primera.reconciled_run_ids == ("RUN-0001",)
+    assert segunda == RecoverySweepResult(reconciled_run_ids=(), released_work_item_ids=())
+    assert eventos_tras_segunda == eventos_tras_primera
