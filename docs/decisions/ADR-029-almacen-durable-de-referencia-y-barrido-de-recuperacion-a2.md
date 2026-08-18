@@ -140,3 +140,170 @@ se revisa el diseño entero de la pieza afectada.
   ejecución pudiera olvidar poner a cero. Un `Run` ya reconciliado a
   `FINISHED` sale del conjunto "no terminado" que el barrido recorre, así
   que no hay ninguna rama de código que pueda volver a tocarlo.
+
+---
+
+## Contexto y problema
+
+A1 (incidencia #177, PR #178) entregó el dominio, el puerto `WorkEngineStore`
+y la única implementación existente, `InMemoryWorkEngineStore`. S1
+(incidencia #182, PR #185, ADR-026) evaluó y decidió el patrón de escritura
+seguro del almacén -diario append-only con `fsync`, checksum SHA-256 por
+registro e idempotencia por clave- contra un subconjunto desechable del
+puerto en `experiments/work_engine_spike_i3/`. La incidencia #186 (A2) pide
+dos entregas: promocionar ese patrón a una implementación **de referencia**
+del puerto completo, y el barrido de recuperación al arrancar (arquitectura
+§3.5), que no existía en S1.
+
+## Opciones consideradas
+
+El patrón de escritura no se reabre (ver «Método: adoptar lo ya probado, no
+reinventar» de la incidencia #186): la comparativa completa de patrones ya
+quedó resuelta en ADR-026 y `experiments/work_engine_spike_i3/RESULTADOS.md`.
+Lo único que este ADR decide de nuevo es el barrido de recuperación, con dos
+opciones:
+
+| Opción | Encaje | Decisión |
+|---|---|---|
+| Barrido con estado propio (p. ej. una tabla "runs ya reconciliados") | Añade una fuente de verdad nueva que puede desincronizarse del diario, y exige que alguien la limpie o migre | Descartada |
+| Barrido puramente derivado del diario (`list_events()` + `rebuild_state`), sin memoria propia entre invocaciones | Directo: reutiliza exactamente lo que A1 ya entrega; la idempotencia es una consecuencia del diseño (§4 de esta nota), no una comprobación aparte | **Adoptada** |
+
+Para "recalcular el siguiente paso" de un `WorkItem` (arquitectura §3.5), se
+consideró también inventar un despachador mínimo que decidiera qué Worker
+lanzar a continuación. Descartado: A2 no tiene Adapters de Worker, permisos
+ni presupuesto (eso es A4/A5); construirlo aquí sería decidir por cuenta
+propia algo fuera del alcance permitido de la incidencia #186 (sección
+«Fuera de alcance»). Se acota a lo que el propio dominio de A1 ya modela
+para la espera asíncrona: liberar `WAITING -> ACTIVE` vía
+`observe_work_item_external_fact` cuando todos los `Run` vivos del
+`WorkItem` alcanzaron un desenlace observable.
+
+## Decisión
+
+1. **Promover el patrón de escritura de S1** desde
+   `experiments/work_engine_spike_i3/` a código de producción en
+   `src/sirius_engine/adapters/durable/` (`journal.py`, `entity_codec.py`),
+   sin reabrir el diseño: mismo diario JSON Lines, mismo `KillPoint`/
+   `append_durably` con el hook de corte inyectable, mismo
+   `recover_invalid_tail`, mismo `replay` con la distinción cola-truncada
+   vs. corrupción-interna.
+2. **Implementar el puerto `WorkEngineStore` completo** (`WorkItem` y `Run`,
+   las ~36 operaciones, no el subconjunto que cubrió S1) en
+   `DurableWorkEngineStore` (`src/sirius_engine/adapters/durable/store.py`),
+   reproduciendo exactamente la semántica de `InMemoryWorkEngineStore`
+   (incluida la cascada de invalidación de Runs en `change_work_item_scope`
+   y el guardián de recurso mutable en `dispatch_run`). A diferencia de S1
+   (que releía el diario entero en cada llamada, límite conocido #6 de
+   `RESULTADOS.md`), este almacén reproduce el diario **una sola vez** al
+   construirse y mantiene un índice en memoria actualizado de forma
+   incremental en cada anexo.
+3. **Añadir `idempotency_key` como parámetro opcional** en cada método de
+   escritura del almacén durable (no en el puerto: es una extensión
+   compatible, igual que ya hacía el `durable_store.py` de S1), para que un
+   llamador que reintente la misma petición lógica tras un reinicio no
+   duplique el evento.
+4. **Parametrizar la batería de comportamiento existente** (`tests/engine/`,
+   ya escrita contra el puerto desde A1) sobre `InMemoryWorkEngineStore` y
+   `DurableWorkEngineStore` en `conftest.py` (`STORE_FACTORIES`), sin tocar
+   el cuerpo de ninguna prueba existente.
+5. **Barrido de recuperación** (`src/sirius_engine/recovery.py`,
+   `run_recovery_sweep`): puramente derivado del diario
+   (`rebuild_state(store.list_events())`), con un puerto propio
+   `RunWorldObserver` (`src/sirius_engine/ports/world.py`) para consultar el
+   desenlace remoto de cada `Run` no terminado. Reconcilia cada `Run` según
+   lo que el mundo reporte (`SUCCEEDED`/`FAILED`/`LOST`/`CANCELLED`/
+   `PENDING`), promoviendo primero el `Run` al estado mínimo que la
+   transición terminal exige (`PREPARED -> DISPATCHED[-> RUNNING]`) cuando
+   el motor murió antes de registrar un paso intermedio que el desenlace
+   real implica. Libera `WorkItem` en `WAITING` a `ACTIVE` cuando todos sus
+   `Run` vivos ya terminaron. En A2, la única implementación de
+   `RunWorldObserver` es un doble de pruebas (`FakeRunWorldObserver`); la
+   real es A3 y bloques posteriores.
+
+## Comprobación que la sostiene
+
+- **Requisito 1 (batería contra el puerto, ambas implementaciones)**:
+  `uv run pytest tests/engine/ -q --deselect tests/engine/test_spike_i3_durability.py`
+  → **145 passed** (la batería completa de A1, parametrizada x2 sin cambiar
+  ningún cuerpo de prueba).
+- **Requisito 2 (matriz punto-de-muerte contra producción)**:
+  `tests/engine/test_durable_journal.py` reproduce la matriz de seis puntos
+  nombrados de S1 contra `src/sirius_engine/adapters/durable/`, con
+  `tests/engine/_durable_writer_process.py` como arnés (subproceso real,
+  `SIGKILL` inyectado por el propio escritor) — 13 pruebas: 6 de la matriz +
+  reintento sin duplicación tras reinicio + ciclo de vida real reabierto +
+  4 mutaciones. `tests/engine/test_spike_i3_durability.py` (S1, 24 pruebas)
+  se conserva sin tocar, como evidencia fechada de la incidencia #182.
+- **Requisitos 3 y 4 (barrido de recuperación, con idempotencia)**:
+  `tests/engine/test_recovery_sweep.py`, 16 pruebas — incluye un `Run`
+  `RUNNING` que tuvo éxito mientras el motor "estaba caído" (libera también
+  el `WorkItem WAITING` asociado), un `Run` `DISPATCHED` promovido hasta
+  `RUNNING` antes de cerrarse, un `Run` `PREPARED` promovido hasta
+  `DISPATCHED` antes de fallar, `LOST` respetando el `deadline`, un
+  `WorkItem WAITING` con dos `Run` que solo se libera cuando ambos
+  terminaron, y la prueba directa de requisito 4: ejecutar el barrido dos
+  veces seguidas sobre el mismo estado no anexa ningún evento nuevo.
+- **Requisito 5 (mutaciones)**: cuatro sembradas y vistas fallar —
+  `test_mutacion_quitar_el_checksum_acepta_un_registro_corrupto`,
+  `test_mutacion_quitar_la_comprobacion_de_idempotencia_duplica`,
+  `test_mutacion_quitar_recover_invalid_tail_funde_el_reintento_con_la_cola_rota`
+  (las tres en `test_durable_journal.py`) y
+  `test_mutacion_quitar_el_filtro_de_runs_terminados_rompe_la_idempotencia`
+  (`test_recovery_sweep.py`, sobre el barrido). Para `fsync`, el arnés de
+  kill-injection no puede distinguir su ausencia (ver «Qué NO va a
+  garantizar esto» arriba), así que
+  `test_mutacion_quitar_el_fsync_deja_de_invocarlo` usa un espía sobre
+  `os.fsync` en vez de la matriz: la implementación real lo invoca
+  exactamente una vez por anexo; un mutante que borre esa línea dejaría la
+  lista de llamadas vacía.
+- **Requisito 7 (frontera intacta)**:
+  `uv run pytest tests/engine/test_boundary.py -q` → **2 passed**.
+- **Las cuatro validaciones obligatorias + `git diff --check`, en verde**
+  sobre el repositorio completo: `uv run ruff format --check .` (376
+  ficheros), `uv run ruff check .` (sin hallazgos), `uv run mypy src tests`
+  (358 ficheros, sin errores) y `uv run pytest` con
+  `QT_QPA_PLATFORM=offscreen` fijado a mano (nota operativa de la
+  incidencia #186: `implement-sirius-work.yml` no lo fija, a diferencia de
+  `quality.yml`) → **2521 passed, 3 skipped, 289.49 s**. `git diff --check
+  --cached` sin salida.
+
+## Consecuencias
+
+- **A2 queda satisfecha sin fijar la representación física definitiva**: la
+  suite completa de `tests/engine/` corre sobre el puerto, y
+  `DurableWorkEngineStore` es un adaptador más -intercambiable en
+  `conftest.py`- no una migración. D2 (o el propietario adelantando I4)
+  sigue siendo quien fija la representación definitiva.
+- **Límites conocidos, heredados de ADR-026 y sin cerrar aquí** (repetidos
+  también en la nota de arranque, sección 2, para que no se pierdan):
+  1. Este arnés no demuestra que `fsync` sea necesario ante un fallo real de
+     alimentación o caída del SO (`kill -9` no vacía la caché de páginas del
+     kernel); se compensa parcialmente con el espía sobre `os.fsync`, que sí
+     demuestra que el código lo invoca, no que sea necesario.
+  2. `fsync` mentiroso del sistema de ficheros/disco: no cubierto.
+  3. Corrupción del medio: solo detección (checksum + distinción cola
+     truncada/corrupción interna), sin reparación ni redundancia.
+  4. Concurrencia multiproceso sobre el mismo diario: el arnés y el almacén
+     asumen un único escritor; no probado ni protegido.
+- **Límites nuevos de A2**:
+  5. El barrido de recuperación no despacha trabajo nuevo ni decide qué
+     Worker usar: solo reconcilia `Run` existentes contra el mundo y libera
+     la espera asíncrona de un `WorkItem`. El despacho real es A4/A5 y el
+     Supervisor.
+  6. `RunWorldObserver` solo tiene, en A2, un doble de pruebas
+     (`FakeRunWorldObserver`). La implementación real que lee GitHub o
+     procesos locales es A3 y bloques posteriores; hasta entonces, el
+     barrido no tiene ningún efecto fuera de pruebas.
+  7. La promoción de un `Run` al estado mínimo que exige su transición
+     terminal (`_ensure_dispatched`/`_ensure_running` en `recovery.py`)
+     asume que un desenlace remoto reportado por el mundo implica que los
+     pasos intermedios sí ocurrieron, aunque el diario no los registrara
+     antes de que el motor muriera. Es una inferencia razonable (el mundo no
+     reporta un desenlace de algo que nunca se despachó), pero es una
+     inferencia, no una observación directa de esos pasos intermedios.
+  8. `mark_run_lost` respeta el `deadline` del `Run` (arquitectura §3.3): si
+     el mundo reporta `LOST` antes de que venza, el barrido no actúa y
+     "repite la consulta" en la siguiente pasada, tal como exige el
+     requisito de reinicio de la incidencia — no hay temporizador propio
+     que dispare esa siguiente pasada; eso es responsabilidad de quien
+     invoque `run_recovery_sweep` (fuera de alcance de A2).
