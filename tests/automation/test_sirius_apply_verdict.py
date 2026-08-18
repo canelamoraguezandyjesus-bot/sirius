@@ -76,6 +76,17 @@ case "$sub" in
       # Historial ilegible por ambas vías: permite comprobar que numerar una
       # ronda a ciegas se convierte en parada segura y no en un número repetido.
       if [ "${GH_MOCK_HISTORY_UNREADABLE:-0}" = "1" ]; then echo "503 comments" >&2; exit 1; fi
+      # Falla SOLO a partir de la lectura n+1. Hace falta desde ADR-036: ahora
+      # `sirius_find_pr_for_issue` tambien se detiene si no puede leer los
+      # comentarios, asi que un fallo desde la primera lectura para ANTES y la
+      # guardia de numeracion de ronda quedaria sin medir. Con esto se deja
+      # pasar la localizacion de la PR y cae la lectura posterior, que es un
+      # fallo transitorio perfectamente real: son llamadas distintas.
+      if [ -n "${GH_MOCK_COMMENTS_FAIL_AFTER:-}" ]; then
+        cnt=0; [ -f "$D/comments_calls" ] && cnt="$(cat "$D/comments_calls")"
+        cnt=$((cnt+1)); echo "$cnt" > "$D/comments_calls"
+        if [ "$cnt" -gt "$GH_MOCK_COMMENTS_FAIL_AFTER" ]; then echo "503 comments" >&2; exit 1; fi
+      fi
       if printf '%s' "$args" | grep -q '@json'; then
         python3 -c '
 import json, sys
@@ -101,6 +112,14 @@ for line in raw.splitlines():
       view)
         if printf '%s' "$*" | grep -q comments; then
           if [ "${GH_MOCK_HISTORY_UNREADABLE:-0}" = "1" ]; then echo "503 graphql" >&2; exit 1; fi
+          # El respaldo GraphQL cae con la MISMA lectura logica que el REST. Sin
+          # esto, `GH_MOCK_COMMENTS_FAIL_AFTER` no simulaba nada: el respaldo
+          # rescataba la lectura y el guion seguia adelante como si nada.
+          if [ -n "${GH_MOCK_COMMENTS_FAIL_AFTER:-}" ] && [ -f "$D/comments_calls" ]; then
+            if [ "$(cat "$D/comments_calls")" -gt "$GH_MOCK_COMMENTS_FAIL_AFTER" ]; then
+              echo "503 graphql" >&2; exit 1
+            fi
+          fi
           cat "$D/comments_${num}.txt" 2>/dev/null
         else cat "$D/body_${num}.txt" 2>/dev/null; fi
         exit 0;;
@@ -1028,11 +1047,68 @@ def test_changes_requested_stops_safely_when_the_history_is_unreadable(tmp_path:
             ],
         },
     )
-    env["GH_MOCK_HISTORY_UNREADABLE"] = "1"
+    # Se deja pasar la primera lectura —la que localiza la PR— y cae la
+    # siguiente. Antes bastaba con tumbarlas todas; desde ADR-036 eso para en la
+    # guardia anterior, que también es correcta pero no es la que aísla esta
+    # prueba. Dos llamadas distintas pueden fallar por separado, así que el
+    # escenario es real, no un artificio para esquivar la guardia.
+    env["GH_MOCK_COMMENTS_FAIL_AFTER"] = "1"
     r = _run(env, "reviewer", verdict)
     assert r.returncode != 0
     assert "sirius:failed-safely" in _labels(env)
     assert "historial-de-rondas-ilegible" in _comments(env)
+
+
+def test_changes_requested_no_confunde_historial_ilegible_con_incidencia_sin_pr(
+    tmp_path: Path,
+) -> None:
+    """La guardia nueva de ADR-036, en el aplicador de veredictos.
+
+    Con el historial ilegible desde la primera lectura, antes salía
+    `sin-pr` — una AFIRMACIÓN sobre la incidencia, deducida de un vacío que solo
+    significaba que GitHub no contestó. Y mandaba la incidencia a parada segura
+    con ese diagnóstico falso escrito.
+    """
+    env = _setup(tmp_path)
+    _seed_issue(
+        env,
+        ["sirius:reviewing"],
+        comments="",
+        body=(
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+            "QUALITY_SUCCESS\n- Head SHA: `aaaaaaaaaaaa`\n"
+        ),
+    )
+    _seed_pr(env, 9, head="aaaaaaaaaaaa")
+    verdict = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "CHANGES_REQUESTED",
+            "summary": "hay defectos",
+            "reviewed_head_sha": "aaaaaaaaaaaa",
+            "observations": [
+                {
+                    "id": "CODEX-001",
+                    "severidad": "P2",
+                    "archivo": "src/x.py:10",
+                    "problema": "no valida entrada",
+                    "criterio_esperado": "debe validar",
+                    "prueba": "test_x_invalid",
+                    "limites_correccion": "solo src/x.py",
+                }
+            ],
+        },
+    )
+    env["GH_MOCK_HISTORY_UNREADABLE"] = "1"
+    r = _run(env, "reviewer", verdict)
+    assert r.returncode != 0
+    comentarios = _comments(env)
+    assert "historial-ilegible" in comentarios, (
+        "una lectura caída tiene que decir que fue una lectura caída"
+    )
+    assert "sin-pr" not in comentarios, (
+        "un historial ilegible no puede publicarse como «no hay ninguna PR»"
+    )
 
 
 # --------------------------------------------------------------------------- #

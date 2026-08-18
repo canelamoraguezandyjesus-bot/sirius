@@ -715,22 +715,46 @@ sirius_transition() {
 # sirius_find_pr_for_issue <repo> <issue> — imprime, una por línea, los números
 # de PR de este repositorio mencionados en el cuerpo o los comentarios de la
 # incidencia (a partir de su URL completa) que estén ACTUALMENTE ABIERTAS. Sin
-# duplicados; vacío si no hay ninguna. Best-effort: nunca falla por sí sola (una
-# lectura agotada deja el resultado vacío, no aborta).
+# duplicados.
+#
+# Código de salida, y es la mitad del contrato:
+#   0 — se pudo leer. Cero líneas significa «leí y no hay ninguna»: es un HECHO.
+#   2 — NO se pudo leer. No imprime nada, y ese vacío no significa nada.
+#
+# Antes devolvía 0 siempre y las tres lecturas llevaban `2>/dev/null || :`, así
+# que un 503 salía por el mismo sitio que una incidencia sin PR. En la #193, con
+# GitHub degradado, el ejecutor de órdenes le publicó al propietario «No he
+# encontrado ninguna PR asociada a esta incidencia» con la PR abierta delante.
+# Afirmar de más es peor que callarse: una lectura caída es reintentable y no
+# pide nada de nadie; una PR de verdad ausente sí. El llamador necesita poder
+# distinguirlas, y para eso tiene que llegarle la diferencia.
 #
 # El filtro por estado abierto es deliberado: una incidencia puede arrastrar en
 # comentarios antiguos la URL de una PR ya cerrada o superada (p. ej. un
 # relanzamiento tras descartar un intento previo). Contarla como vigente haría
 # que el resolutor viese "varias PR" y se detuviera en falso. Solo cuentan las
-# PR abiertas; si no se puede confirmar el estado de una candidata, se omite
-# (fallo seguro: peor una parada por "sin PR", reintentable, que operar sobre la
-# PR equivocada).
+# PR abiertas — y si el estado de una candidata no se puede leer, eso también es
+# un fallo de lectura (2), no una omisión silenciosa.
 sirius_find_pr_for_issue() {
   local repo="$1" num="$2" body_file="" comments_file="" candidates="" pr="" state=""
   body_file="$(mktemp)"
   comments_file="$(mktemp)"
-  sirius_read_issue_body "$repo" "$num" >"$body_file" 2>/dev/null || : >"$body_file"
-  sirius_read_issue_comments "$repo" "$num" >"$comments_file" 2>/dev/null || : >"$comments_file"
+  # Un fallo de LECTURA no es "no hay PR". Antes las tres lecturas llevaban
+  # `2>/dev/null || :` y el vacio resultante viajaba hasta el llamador como un
+  # hecho: en la incidencia #193, con GitHub devolviendo 503, el ejecutor de
+  # ordenes le publico al propietario "No he encontrado ninguna PR asociada a
+  # esta incidencia" mientras la PR estaba abierta. Es peor que callarse: manda
+  # a una persona a buscar un problema que no existe.
+  if ! sirius_read_issue_body "$repo" "$num" >"$body_file" 2>/dev/null; then
+    rm -f "$body_file" "$comments_file"
+    echo "sirius_find_pr_for_issue: no se pudo leer el cuerpo de #${num}; no distingo ausencia de fallo de lectura" >&2
+    return 2
+  fi
+  if ! sirius_read_issue_comments "$repo" "$num" >"$comments_file" 2>/dev/null; then
+    rm -f "$body_file" "$comments_file"
+    echo "sirius_find_pr_for_issue: no se pudieron leer los comentarios de #${num}; no distingo ausencia de fallo de lectura" >&2
+    return 2
+  fi
   candidates="$(cat "$comments_file" "$body_file" \
     | grep -oE "https://github\.com/${repo}/pull/[0-9]+" \
     | sed -E 's#.*/pull/##' \
@@ -739,7 +763,12 @@ sirius_find_pr_for_issue() {
   local pr_json=""
   for pr in $candidates; do
     [ -z "$pr" ] && continue
-    pr_json="$(sirius_retry _sirius_gh api "repos/${repo}/pulls/${pr}" 2>/dev/null || true)"
+    # Lo mismo con el estado: sin poder leerlo no se sabe si sigue abierta.
+    # Descartarla en silencio convertia una PR ilegible en una PR inexistente.
+    if ! pr_json="$(sirius_retry _sirius_gh api "repos/${repo}/pulls/${pr}" 2>/dev/null)"; then
+      echo "sirius_find_pr_for_issue: no se pudo leer el estado de la PR #${pr}; no distingo cerrada de ilegible" >&2
+      return 2
+    fi
     state="$(printf '%s' "$pr_json" | jq -r '.state // empty' 2>/dev/null || true)"
     if [ "$state" = "open" ]; then
       printf '%s\n' "$pr"

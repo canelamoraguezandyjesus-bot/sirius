@@ -103,7 +103,17 @@ fi
 # El marcador lleva el head para que quede escrito SOBRE QUÉ se autorizó
 # continuar. Sin eso, un reset serviría para siempre y para cualquier commit
 # posterior, que es justo lo que una autorización puntual no debe ser.
-mapfile -t pr_numbers < <(sirius_find_pr_for_issue "$REPO" "$ISSUE")
+# El codigo de salida importa tanto como la salida: 2 significa que NO se pudo
+# leer, y entonces el vacio no dice nada. Con `< <(...)` ese codigo se perdia y
+# un 503 se publicaba como "no hay ninguna PR".
+pr_list="$(mktemp)"
+if ! sirius_find_pr_for_issue "$REPO" "$ISSUE" >"$pr_list"; then
+  rm -f "$pr_list"
+  echo "::error::No se pudo leer la incidencia #${ISSUE} para localizar su PR; no puedo distinguir que no haya ninguna de que no haya podido leerla. Reintentable."
+  exit 1
+fi
+mapfile -t pr_numbers <"$pr_list"
+rm -f "$pr_list"
 if [ "${#pr_numbers[@]}" -eq 0 ]; then
   block "No he encontrado ninguna PR asociada a esta incidencia, así que no puedo saber sobre qué head autorizas continuar."
   exit 1

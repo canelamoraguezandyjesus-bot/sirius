@@ -326,30 +326,23 @@ def test_un_historial_ilegible_no_es_un_historial_vacio(tmp_path: Path) -> None:
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Defecto PREEXISTENTE y compartido, registrado sin arreglar (ADR-035): "
-        "`sirius_find_pr_for_issue` traga los fallos de lectura (`2>/dev/null || :`), "
-        "así que un historial ilegible sale como «no hay PR». No se arregla aquí "
-        "porque la función la comparten todos los ejecutores de órdenes —incluido "
-        "`sirius_merge_on_command.sh`— y tocarla es un cambio de otro alcance. "
-        "Cuando se arregle, esta prueba pasará y el `strict` obligará a retirar el marcador."
-    ),
-)
 def test_el_diagnostico_de_una_lectura_caida_no_debe_afirmar_que_no_hay_pr(
     tmp_path: Path,
 ) -> None:
     """La familia de defecto que este repositorio lleva un año corrigiendo.
 
-    Con los comentarios ilegibles, el guion publica «No he encontrado ninguna PR
-    asociada a esta incidencia». Es **falso**: la PR está ahí, lo que falló fue
-    la lectura. Y el propietario recibe esa afirmación como diagnóstico.
+    Nació como `xfail` en ADR-035, describiendo el defecto sin arreglarlo: con
+    los comentarios ilegibles, el guion publicaba «No he encontrado ninguna PR
+    asociada a esta incidencia». Falso — la PR estaba ahí, lo que falló fue la
+    lectura — y el propietario lo recibía como diagnóstico.
 
     La diferencia importa porque las dos situaciones piden cosas distintas: una
     lectura caída es reintentable y no exige nada de nadie; una PR de verdad
     ausente sí. Decir la segunda cuando pasó la primera manda a una persona a
     buscar un problema que no existe.
+
+    `sirius_find_pr_for_issue` devuelve ahora 2 cuando no pudo leer, y los tres
+    ejecutores que la usan distinguen ese caso (ADR-036).
     """
     env = _setup(tmp_path)
     _sembrar(
@@ -360,9 +353,15 @@ def test_el_diagnostico_de_una_lectura_caida_no_debe_afirmar_que_no_hay_pr(
     env["GH_MOCK_FAIL_COMMENTS"] = "1"
     resultado = _ejecutar(env)
     salida = resultado.stdout + resultado.stderr
+    assert resultado.returncode != 0
     assert "No he encontrado ninguna PR" not in salida, (
         "una lectura caída se está reportando como ausencia de PR"
     )
+    assert "Reintentable" in salida, "una lectura caída tiene que decir que se puede reintentar"
+    # Y no publica el diagnóstico de la ausencia, que le pediría al propietario
+    # actuar sobre algo que nunca se llegó a leer.
+    assert "No he podido reanudar el ciclo" not in _comentarios(env)
+    assert "sirius:failed-safely" in _etiquetas(env)
 
 
 def test_una_incidencia_sin_parada_no_se_toca(tmp_path: Path) -> None:
