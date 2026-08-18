@@ -253,3 +253,69 @@ def test_ningun_prompt_promete_una_reanudacion_automatica() -> None:
                 f"{prompt_path.name} sugiere una reanudación automática fuera de la "
                 f"sección que la prohíbe: {match.group(0)!r}"
             )
+
+
+@pytest.mark.parametrize("prompt_path", PROMPTS, ids=lambda p: p.name)
+def test_el_prompt_cuyo_workflow_no_prepara_el_entorno_lo_advierte(
+    prompt_path: Path,
+) -> None:
+    """La otra mitad de la promesa: callarse también engaña.
+
+    `test_el_prompt_que_promete_entorno_corre_donde_de_verdad_se_prepara` cubre
+    una dirección —prometer un entorno que el workflow no monta—. Faltaba la
+    contraria, y costó dos rondas enteras de la #193.
+
+    El workflow del revisor no instala `uv` ni sincroniza el proyecto, y su
+    prompt no lo decía: ni lo prometía ni lo desmentía. El rol hizo lo natural
+    con ese silencio — usar el `python3` que encontró en el `PATH` —, y ese no
+    es el del proyecto (`requires-python >=3.14`). Obtuvo un `SyntaxError` en
+    código perfectamente válido (`except A, B:`, PEP 758) y lo publicó como
+    hallazgo bloqueante en la ronda 2. En la ronda 4 volvió a publicarlo, esta
+    vez «verificado por dos vías independientes» que eran el mismo intérprete
+    equivocado. Quality estaba en verde las dos veces, que es la refutación.
+
+    Así que no basta con no mentir: si el entorno NO está preparado, el prompt
+    tiene que decirlo, y decirlo como PROPIEDAD. Enumerar herramientas vetadas
+    dejaría siempre una fuera (ADR-033): lo que se afirma aquí es que ejecutar
+    código en ese runner no dice nada del proyecto, sea cual sea el vehículo.
+    """
+    import yaml
+
+    nombre = WORKFLOW_DE_CADA_ROL.get(prompt_path.name)
+    if not nombre:
+        pytest.skip(f"{prompt_path.name} no tiene un workflow conocido que lo ejecute")
+
+    workflow = REPO_ROOT / ".github" / "workflows" / nombre
+    with workflow.open(encoding="utf-8") as handle:
+        doc = yaml.safe_load(handle)
+    pasos = next(iter(doc["jobs"].values()))["steps"]
+    usos = " ".join(str(p.get("uses") or "") for p in pasos)
+    if "astral-sh/setup-uv" in usos:
+        pytest.skip(f"{nombre} sí prepara el entorno del proyecto")
+
+    texto = _flat(prompt_path.read_text(encoding="utf-8"))
+
+    assert PROMESA_DE_ENTORNO not in texto, (
+        f"{nombre} no prepara el entorno y {prompt_path.name} lo promete igualmente"
+    )
+    assert "no es el del proyecto" in texto, (
+        f"{prompt_path.name} corre sin el entorno del proyecto y no advierte de "
+        f"que el intérprete del runner no es el suyo"
+    )
+    assert "sobre este runner" in texto, (
+        f"{prompt_path.name} no enuncia la propiedad: lo que se averigua "
+        f"ejecutando código aquí es una afirmación sobre el runner, no sobre el proyecto"
+    )
+    assert "Da igual con qué lo ejecutes" in texto, (
+        f"{prompt_path.name} deja la regla atada a herramientas concretas; "
+        f"una regla que enumera vehículos siempre tiene un hueco más (ADR-033)"
+    )
+
+    # Y la propiedad va ANTES que los ejemplos: leída al revés, la tabla de
+    # casos pasados parece la lista completa de lo prohibido.
+    posicion_propiedad = texto.find("sobre este runner")
+    posicion_ejemplos = texto.find("Esto ya costó dos rondas")
+    assert posicion_ejemplos != -1, f"{prompt_path.name} no cita la evidencia que motivó la regla"
+    assert posicion_propiedad < posicion_ejemplos, (
+        f"{prompt_path.name} pone los ejemplos antes que la propiedad que los explica"
+    )

@@ -1,8 +1,9 @@
 name: Reanudar bloque Sirius
 
 # Levanta una parada del ciclo cuando el propietario del repositorio escribe la
-# orden exacta "continua" en una incidencia que está en
-# `sirius:blocked-decision`.
+# orden exacta "continua" en una incidencia parada: `sirius:blocked-decision`
+# (la política de convergencia) o `sirius:failed-safely` (cualquier rol cuyo
+# turno no pudo terminar). Ver ADR-035 para la segunda.
 #
 # La parada la aplica la política de convergencia (`sirius_convergence.py`)
 # cuando el ciclo revisión-corrección deja de progresar, y es correcta: las tres
@@ -37,7 +38,8 @@ jobs:
     if: >-
       github.event.issue.pull_request == null &&
       github.event.comment.author_association == 'OWNER' &&
-      contains(github.event.issue.labels.*.name, 'sirius:blocked-decision')
+      (contains(github.event.issue.labels.*.name, 'sirius:blocked-decision') ||
+       contains(github.event.issue.labels.*.name, 'sirius:failed-safely'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
