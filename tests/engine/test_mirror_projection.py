@@ -93,7 +93,7 @@ def test_reconstruye_ciclo_completo_de_incidencia_186_desde_fixture() -> None:
     corrección (FIXED x7) -> un fallo de Quality intermedio seguido de un
     verde -> bloqueo por convergencia-sin-progreso -> completado. Los valores
     esperados aquí están verificados contra la API real de GitHub (ver
-    ADR-032), no inventados.
+    ADR-034), no inventados.
     """
     fixture = _cargar_fixture("github_issue_186.json")
     metadatos, cuerpo, comentarios = _lecturas_desde_fixture(fixture)

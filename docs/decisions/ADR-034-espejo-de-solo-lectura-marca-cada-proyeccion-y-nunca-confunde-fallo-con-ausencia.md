@@ -1,4 +1,4 @@
-# ADR-032 — El espejo de solo lectura de la vía GitHub marca cada proyección como no autoritativa y nunca confunde un fallo de lectura con una ausencia
+# ADR-034 — El espejo de solo lectura de la vía GitHub marca cada proyección como no autoritativa y nunca confunde un fallo de lectura con una ausencia
 
 - Estado: PROPUESTO
 - Fecha: 2026-08-18
@@ -250,3 +250,13 @@ Las cinco opciones de la sección «Opciones consideradas». Además: exponer
 A3 entrega la capacidad, no una interfaz nueva); cachear las lecturas del
 espejo entre invocaciones (introduciría el propio riesgo de divergencia
 silenciosa que el bloque prohíbe, y no lo pide ningún requisito de v0).
+
+## Nota de renumeración
+
+Este ADR nació como **ADR-032** y se renumeró a **034** antes de fusionarse. Mientras A3 se
+implementaba en su rama, otra rama fusionó en `main` un ADR-032 distinto —el que fija que el
+número de un ADR es el máximo existente más uno— junto con la prueba que prohíbe los duplicados.
+
+El choque no era visible desde ninguna de las dos ramas: cada una tenía un solo ADR-032. Lo
+destapó Quality, que valida sobre la **fusión** con `main` y no sobre la rama. Es exactamente el
+defecto que esa prueba nueva viene a impedir, y lo cazó el mismo día.
