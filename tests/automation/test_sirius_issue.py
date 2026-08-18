@@ -146,6 +146,11 @@ case "$sub" in
       # Estado de una PR concreta: se devuelve un JSON con el estado por-PR
       # (archivo pr_state_<N>.txt, "open" por defecto) para poder simular PRs
       # cerradas/superadas. El llamador extrae `.state` con jq.
+      #
+      # `pulls_fail` simula que la lectura CAE, que es distinto de que la PR
+      # este cerrada: sin poder distinguirlos no habria como probar que una PR
+      # ilegible ya no se descarta en silencio (ADR-036).
+      if should_fail pulls_fail; then echo "503 pulls" >&2; exit 1; fi
       pr_num="$(printf '%s' "$args" | grep -oE '/pulls/[0-9]+' | grep -oE '[0-9]+' | head -1)"
       pr_state="open"
       [ -f "$D/pr_state_${pr_num}.txt" ] && pr_state="$(cat "$D/pr_state_${pr_num}.txt")"
@@ -734,6 +739,79 @@ def test_find_pr_for_issue_keeps_only_open_when_superseded(tmp_path: Path) -> No
     r = _run("sirius_find_pr_for_issue owner/repo 55", env)
     assert r.returncode == 0, r.stderr
     assert r.stdout.split() == ["73"]
+
+
+# --- El contrato de salida: 0 = lei, 2 = no pude leer -------------------------
+#
+# Estas cinco pruebas existen porque la funcion devolvia 0 SIEMPRE y se tragaba
+# los fallos con `2>/dev/null || :`. Un 503 salia por el mismo sitio que una
+# incidencia sin PR, y en la #193 el ejecutor de ordenes le publico al
+# propietario "No he encontrado ninguna PR asociada a esta incidencia" con la PR
+# abierta delante. Ver ADR-036.
+
+
+def test_find_pr_devuelve_2_si_no_puede_leer_el_cuerpo(tmp_path: Path) -> None:
+    """Sin cuerpo no se sabe si la URL de la PR estaba ahi."""
+    env = _setup(tmp_path)
+    env["GH_MOCK_REST_ALWAYS_FAIL"] = "1"
+    (_mock_dir(env) / "graphql_fail").write_text("99", encoding="utf-8")
+    r = _run("sirius_find_pr_for_issue owner/repo 55", env)
+    assert r.returncode == 2, f"salida {r.returncode}, no 2: {r.stderr}"
+    assert r.stdout.strip() == "", "no debe imprimir nada cuando no ha podido leer"
+
+
+def test_find_pr_devuelve_2_si_no_puede_leer_los_comentarios(tmp_path: Path) -> None:
+    """El caso real de la #193: el cuerpo se lee, el historial no."""
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "body_rest.txt").write_text("cuerpo sin PR", encoding="utf-8")
+    env["GH_MOCK_COMMENTS_ALWAYS_FAIL"] = "1"
+    env["GH_MOCK_GRAPHQL_ALWAYS_FAIL"] = "1"
+    r = _run("sirius_find_pr_for_issue owner/repo 55", env)
+    assert r.returncode == 2, f"salida {r.returncode}, no 2: {r.stderr}"
+    assert r.stdout.strip() == ""
+
+
+def test_find_pr_devuelve_2_si_no_puede_leer_el_estado_de_una_candidata(
+    tmp_path: Path,
+) -> None:
+    """Una PR ilegible no es una PR cerrada.
+
+    Antes se omitia en silencio, asi que una incidencia con una sola PR y un
+    fallo puntual al leerla salia como "ninguna PR".
+    """
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "body_rest.txt").write_text(
+        "PR: https://github.com/owner/repo/pull/57\n", encoding="utf-8"
+    )
+    (_mock_dir(env) / "pulls_fail").write_text("99", encoding="utf-8")
+    r = _run("sirius_find_pr_for_issue owner/repo 55", env)
+    assert r.returncode == 2, f"salida {r.returncode}, no 2: {r.stderr}"
+    assert r.stdout.strip() == ""
+
+
+def test_find_pr_devuelve_0_cuando_de_verdad_no_hay_ninguna(tmp_path: Path) -> None:
+    """La otra mitad del contrato: un 0 con salida vacia SI es una afirmacion.
+
+    Sin esta prueba, devolver 2 siempre pasaria por "arreglado" y habria matado
+    el unico caso en que el llamador puede concluir algo.
+    """
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "body_rest.txt").write_text("sin PR aqui", encoding="utf-8")
+    r = _run("sirius_find_pr_for_issue owner/repo 55", env)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == ""
+
+
+def test_find_pr_distingue_una_pr_cerrada_de_una_ilegible(tmp_path: Path) -> None:
+    """Cerrada se lee y se descarta (0). Ilegible no se lee (2)."""
+    env = _setup(tmp_path)
+    (_mock_dir(env) / "body_rest.txt").write_text(
+        "PR: https://github.com/owner/repo/pull/57\n", encoding="utf-8"
+    )
+    (_mock_dir(env) / "pr_state_57.txt").write_text("closed", encoding="utf-8")
+    r = _run("sirius_find_pr_for_issue owner/repo 55", env)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == ""
 
 
 def test_find_pr_for_issue_ignores_other_repo(tmp_path: Path) -> None:

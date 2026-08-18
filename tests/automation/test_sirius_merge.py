@@ -87,6 +87,9 @@ case "$sub" in
       exit 0
     fi
     if printf '%s' "$args" | grep -q '/comments'; then
+      # Una lectura CAIDA no es un historial vacio. Sin esta palanca no habria
+      # como probar que el guion ya no publica "no hay PR" ante un 503.
+      if [ "${GH_MOCK_FAIL_COMMENTS:-0}" = "1" ]; then echo "503 comments" >&2; exit 1; fi
       if printf '%s' "$args" | grep -q '@json'; then
         python3 -c '
 import json, sys
@@ -110,6 +113,7 @@ for line in raw.splitlines():
     for a in "$@"; do case "$a" in [0-9]*) num="$a"; break;; esac; done
     case "$action" in
       view)
+        if [ "${GH_MOCK_FAIL_COMMENTS:-0}" = "1" ]; then echo "503 graphql" >&2; exit 1; fi
         if printf '%s' "$*" | grep -q comments; then cat "$D/comments_${num}.txt" 2>/dev/null
         else cat "$D/body_${num}.txt" 2>/dev/null; fi
         exit 0;;
@@ -433,3 +437,35 @@ def test_block_comment_is_idempotent_per_comment_id(tmp_path: Path) -> None:
     r2 = _run_merge(env)
     assert r2.returncode != 0
     assert _comments(env).count("sirius-merge-blocked:111") == 1
+
+
+def test_una_lectura_caida_no_se_publica_como_ausencia_de_pr(tmp_path: Path) -> None:
+    """El defecto que la #193 destapó, en el guion de fusión.
+
+    `sirius_find_pr_for_issue` se tragaba los fallos y devolvía vacío, así que
+    con GitHub degradado el propietario recibía «No he encontrado ninguna PR
+    asociada a esta incidencia» estando la PR abierta. Es una afirmación falsa
+    publicada como diagnóstico: manda a una persona a buscar un problema que no
+    existe, justo cuando lo único que hacía falta era reintentar.
+
+    Ahora la función devuelve 2 y el guion lo distingue (ADR-036).
+    """
+    env = _setup(tmp_path)
+    _ready_issue(env)
+    env["GH_MOCK_FAIL_COMMENTS"] = "1"
+    r = _run_merge(env)
+
+    assert r.returncode != 0
+    assert "MERGE" not in _actions(env), "no puede fusionar nada sin haber leído"
+    salida = r.stdout + r.stderr
+    assert "No he encontrado ninguna PR" not in salida, (
+        "una lectura caída se está reportando como ausencia de PR"
+    )
+    assert "Reintentable" in salida
+    assert "No he podido fusionar" not in _comentarios_publicados(env), (
+        "no debe publicar el diagnóstico de la ausencia cuando lo que falló fue la lectura"
+    )
+
+
+def _comentarios_publicados(env: dict[str, str]) -> str:
+    return _comments(env)

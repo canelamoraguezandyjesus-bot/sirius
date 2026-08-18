@@ -209,7 +209,18 @@ fi
 # lugar imprime un resultado con tabuladores que el llamador interpreta.
 locate_verified_pr() {
   # Salida: "OK\t<pr>\t<head>" o "FAIL\t<motivo-slug>\t<explicacion>".
-  mapfile -t pr_numbers < <(sirius_find_pr_for_issue "$REPO" "$ISSUE")
+  # Salida 2 = no se pudo leer. Sin esto, un 503 se convertia en `sin-pr`, que
+  # es una AFIRMACION sobre la incidencia y ademas la manda a parada segura con
+  # un diagnostico falso. `historial-ilegible` dice lo que de verdad paso.
+  local pr_list
+  pr_list="$(mktemp)"
+  if ! sirius_find_pr_for_issue "$REPO" "$ISSUE" >"$pr_list"; then
+    rm -f "$pr_list"
+    printf 'FAIL\thistorial-ilegible\tNo he podido leer la incidencia para localizar su PR, asi que no puedo distinguir que no haya ninguna de que no haya podido leerla. Reintentable.\n'
+    return 0
+  fi
+  mapfile -t pr_numbers <"$pr_list"
+  rm -f "$pr_list"
   if [ "${#pr_numbers[@]}" -eq 0 ]; then
     printf 'FAIL\tsin-pr\tEl rol `%s` reporto `%s`, pero no encuentro ninguna PR asociada a esta incidencia (falta el comentario con su URL).\n' "$ROLE" "$verdict"
     return 0

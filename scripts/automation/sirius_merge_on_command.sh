@@ -72,7 +72,17 @@ if ! printf '%s\n' "$labels_now" | grep -Fxq "sirius:ready-for-merge"; then
 fi
 
 # --- 3) Una unica PR asociada --------------------------------------------------
-mapfile -t pr_numbers < <(sirius_find_pr_for_issue "$REPO" "$ISSUE")
+# Ver la nota del contrato en `sirius_find_pr_for_issue`: salida 2 = no se pudo
+# leer, y ese vacio no es una ausencia. Publicar "no hay PR" cuando lo que hubo
+# fue un 503 manda al propietario a buscar un problema inexistente.
+pr_list="$(mktemp)"
+if ! sirius_find_pr_for_issue "$REPO" "$ISSUE" >"$pr_list"; then
+  rm -f "$pr_list"
+  echo "::error::No se pudo leer la incidencia #${ISSUE} para localizar su PR; no puedo distinguir que no haya ninguna de que no haya podido leerla. Reintentable."
+  exit 1
+fi
+mapfile -t pr_numbers <"$pr_list"
+rm -f "$pr_list"
 if [ "${#pr_numbers[@]}" -eq 0 ]; then
   block "No he encontrado ninguna PR asociada a esta incidencia. Comprueba que el cuerpo o los comentarios referencien su URL completa."
   exit 1
