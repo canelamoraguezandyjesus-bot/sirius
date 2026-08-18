@@ -186,6 +186,31 @@ class DurableWorkEngineStore:
             raise UnknownRunError(run_id)
         return run
 
+    def _idempotent_work_item(self, idempotency_key: str | None) -> WorkItem | None:
+        """Resultado ya anexado para ``idempotency_key``, o ``None`` si es una clave nueva.
+
+        Debe consultarse ANTES de evaluar cualquier transición del dominio o
+        efecto derivado (CODEX-002): un reintento con la misma clave no debe
+        recomputar la transición sobre el estado ya avanzado.
+        """
+        if idempotency_key is None:
+            return None
+        cached = self._idempotency_seen.get(idempotency_key)
+        if cached is None:
+            return None
+        assert isinstance(cached, WorkItem)
+        return cached
+
+    def _idempotent_run(self, idempotency_key: str | None) -> Run | None:
+        """Análogo a :meth:`_idempotent_work_item`, para transiciones de ``Run``."""
+        if idempotency_key is None:
+            return None
+        cached = self._idempotency_seen.get(idempotency_key)
+        if cached is None:
+            return None
+        assert isinstance(cached, Run)
+        return cached
+
     # -- WorkItem -----------------------------------------------------------------
 
     def create_work_item(
@@ -243,6 +268,9 @@ class DurableWorkEngineStore:
     def activate_work_item(
         self, work_id: str, *, now: datetime, idempotency_key: str | None = None
     ) -> WorkItem:
+        cached = self._idempotent_work_item(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_work_item(work_id)
         return self._append_work_item(
             current.activate(now=now),
@@ -254,6 +282,9 @@ class DurableWorkEngineStore:
     def cancel_work_item(
         self, work_id: str, *, now: datetime, idempotency_key: str | None = None
     ) -> WorkItem:
+        cached = self._idempotent_work_item(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_work_item(work_id)
         return self._append_work_item(
             current.cancel(now=now),
@@ -265,6 +296,9 @@ class DurableWorkEngineStore:
     def escalate_work_item(
         self, work_id: str, *, now: datetime, idempotency_key: str | None = None
     ) -> WorkItem:
+        cached = self._idempotent_work_item(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_work_item(work_id)
         return self._append_work_item(
             current.escalate(now=now),
@@ -281,6 +315,9 @@ class DurableWorkEngineStore:
         now: datetime,
         idempotency_key: str | None = None,
     ) -> WorkItem:
+        cached = self._idempotent_work_item(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_work_item(work_id)
         return self._append_work_item(
             current.resolve_decision(continuar=continuar, now=now),
@@ -292,6 +329,9 @@ class DurableWorkEngineStore:
     def dispatch_work_item_async(
         self, work_id: str, *, now: datetime, idempotency_key: str | None = None
     ) -> WorkItem:
+        cached = self._idempotent_work_item(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_work_item(work_id)
         return self._append_work_item(
             current.dispatch_async(now=now),
@@ -303,6 +343,9 @@ class DurableWorkEngineStore:
     def observe_work_item_external_fact(
         self, work_id: str, *, now: datetime, idempotency_key: str | None = None
     ) -> WorkItem:
+        cached = self._idempotent_work_item(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_work_item(work_id)
         return self._append_work_item(
             current.observe_external_fact(now=now),
@@ -319,6 +362,9 @@ class DurableWorkEngineStore:
         now: datetime,
         idempotency_key: str | None = None,
     ) -> WorkItem:
+        cached = self._idempotent_work_item(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_work_item(work_id)
         return self._append_work_item(
             current.fail_safely(diagnostico=diagnostico, now=now),
@@ -330,6 +376,9 @@ class DurableWorkEngineStore:
     def reactivate_work_item(
         self, work_id: str, *, now: datetime, idempotency_key: str | None = None
     ) -> WorkItem:
+        cached = self._idempotent_work_item(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_work_item(work_id)
         return self._append_work_item(
             current.reactivate(now=now),
@@ -346,6 +395,9 @@ class DurableWorkEngineStore:
         now: datetime,
         idempotency_key: str | None = None,
     ) -> WorkItem:
+        cached = self._idempotent_work_item(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_work_item(work_id)
         return self._append_work_item(
             current.deliver(resultado=resultado, now=now),
@@ -357,6 +409,9 @@ class DurableWorkEngineStore:
     def begin_work_item_execution(
         self, work_id: str, *, now: datetime, idempotency_key: str | None = None
     ) -> WorkItem:
+        cached = self._idempotent_work_item(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_work_item(work_id)
         return self._append_work_item(
             current.begin_execution(now=now),
@@ -368,6 +423,9 @@ class DurableWorkEngineStore:
     def begin_work_item_check(
         self, work_id: str, *, now: datetime, idempotency_key: str | None = None
     ) -> WorkItem:
+        cached = self._idempotent_work_item(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_work_item(work_id)
         return self._append_work_item(
             current.begin_check(now=now),
@@ -379,6 +437,9 @@ class DurableWorkEngineStore:
     def begin_work_item_review(
         self, work_id: str, *, now: datetime, idempotency_key: str | None = None
     ) -> WorkItem:
+        cached = self._idempotent_work_item(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_work_item(work_id)
         return self._append_work_item(
             current.begin_review(now=now),
@@ -390,6 +451,9 @@ class DurableWorkEngineStore:
     def approve_work_item_review(
         self, work_id: str, *, now: datetime, idempotency_key: str | None = None
     ) -> WorkItem:
+        cached = self._idempotent_work_item(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_work_item(work_id)
         return self._append_work_item(
             current.approve_review(now=now),
@@ -401,6 +465,9 @@ class DurableWorkEngineStore:
     def request_work_item_repair(
         self, work_id: str, *, now: datetime, idempotency_key: str | None = None
     ) -> WorkItem:
+        cached = self._idempotent_work_item(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_work_item(work_id)
         return self._append_work_item(
             current.request_repair(now=now),
@@ -412,6 +479,9 @@ class DurableWorkEngineStore:
     def resume_work_item_after_repair(
         self, work_id: str, *, now: datetime, idempotency_key: str | None = None
     ) -> WorkItem:
+        cached = self._idempotent_work_item(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_work_item(work_id)
         return self._append_work_item(
             current.resume_after_repair(now=now),
@@ -423,6 +493,9 @@ class DurableWorkEngineStore:
     def pause_work_item(
         self, work_id: str, *, now: datetime, idempotency_key: str | None = None
     ) -> WorkItem:
+        cached = self._idempotent_work_item(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_work_item(work_id)
         return self._append_work_item(
             current.pause(now=now), "work_item_paused", now=now, idempotency_key=idempotency_key
@@ -431,6 +504,9 @@ class DurableWorkEngineStore:
     def resume_work_item(
         self, work_id: str, *, now: datetime, idempotency_key: str | None = None
     ) -> WorkItem:
+        cached = self._idempotent_work_item(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_work_item(work_id)
         return self._append_work_item(
             current.resume(now=now), "work_item_resumed", now=now, idempotency_key=idempotency_key
@@ -447,6 +523,9 @@ class DurableWorkEngineStore:
         limites: Mapping[str, object] | None = None,
         idempotency_key: str | None = None,
     ) -> WorkItem:
+        cached = self._idempotent_work_item(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_work_item(work_id)
         changed = current.change_scope(
             now=now,
@@ -492,6 +571,9 @@ class DurableWorkEngineStore:
         now: datetime,
         idempotency_key: str | None = None,
     ) -> WorkItem:
+        cached = self._idempotent_work_item(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_work_item(work_id)
         return self._append_work_item(
             current.reprioritize(prioridad=prioridad, now=now),
@@ -556,6 +638,9 @@ class DurableWorkEngineStore:
     def dispatch_run(
         self, run_id: str, *, now: datetime, idempotency_key: str | None = None
     ) -> Run:
+        cached = self._idempotent_run(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_run(run_id)
         conflict = self._conflicting_unconfirmed_cancellation(current)
         if conflict is not None:
@@ -568,6 +653,9 @@ class DurableWorkEngineStore:
     def confirm_run_running(
         self, run_id: str, *, now: datetime, idempotency_key: str | None = None
     ) -> Run:
+        cached = self._idempotent_run(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_run(run_id)
         return self._append_run(
             current.confirm_running(now=now),
@@ -584,6 +672,9 @@ class DurableWorkEngineStore:
         now: datetime,
         idempotency_key: str | None = None,
     ) -> Run:
+        cached = self._idempotent_run(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_run(run_id)
         return self._append_run(
             current.observe(observacion=observacion, now=now),
@@ -600,6 +691,9 @@ class DurableWorkEngineStore:
         now: datetime,
         idempotency_key: str | None = None,
     ) -> Run:
+        cached = self._idempotent_run(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_run(run_id)
         return self._append_run(
             current.succeed(resultado=resultado, now=now),
@@ -616,6 +710,9 @@ class DurableWorkEngineStore:
         now: datetime,
         idempotency_key: str | None = None,
     ) -> Run:
+        cached = self._idempotent_run(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_run(run_id)
         return self._append_run(
             current.fail(diagnostico=diagnostico, now=now),
@@ -627,6 +724,9 @@ class DurableWorkEngineStore:
     def mark_run_lost(
         self, run_id: str, *, now: datetime, idempotency_key: str | None = None
     ) -> Run:
+        cached = self._idempotent_run(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_run(run_id)
         return self._append_run(
             current.mark_lost(now=now),
@@ -638,6 +738,9 @@ class DurableWorkEngineStore:
     def request_run_cancellation(
         self, run_id: str, *, now: datetime, idempotency_key: str | None = None
     ) -> Run:
+        cached = self._idempotent_run(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_run(run_id)
         return self._append_run(
             current.request_cancel(now=now),
@@ -649,6 +752,9 @@ class DurableWorkEngineStore:
     def confirm_run_cancelled(
         self, run_id: str, *, now: datetime, idempotency_key: str | None = None
     ) -> Run:
+        cached = self._idempotent_run(idempotency_key)
+        if cached is not None:
+            return cached
         current = self._require_run(run_id)
         return self._append_run(
             current.confirm_cancelled(now=now),

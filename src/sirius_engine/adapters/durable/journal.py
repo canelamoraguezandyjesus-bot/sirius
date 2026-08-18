@@ -92,6 +92,22 @@ def _self_kill() -> None:
     raise AssertionError("SIGKILL no puede bloquearse ni capturarse: inalcanzable")
 
 
+def _fsync_directory(path: Path) -> None:
+    """Sincronizar el directorio padre de ``path``, para hacer durable su entrada.
+
+    Solo hace falta cuando el anexo CREÓ el fichero (CODEX-001): en sistemas
+    de archivos donde sincronizar el fichero no basta para hacer durable la
+    entrada nueva de directorio, una caída justo después de un anexo
+    confirmado podría, al reiniciar, dejar el diario entero sin existir pese
+    a que ``os.fsync`` sobre su descriptor tuvo éxito.
+    """
+    dir_fd = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
+
+
 def _write_all(fd: int, data: bytes) -> None:
     """Escribir todos los bytes de ``data`` en ``fd``, sin confirmar una escritura corta.
 
@@ -166,14 +182,18 @@ def append_durably(
     """Anexar un registro al diario, con puntos de corte inyectables.
 
     Sin ``kill_at`` es el camino normal: recuperar la cola inválida si la
-    hay, abrir, escribir, ``fsync``, cerrar. Con ``kill_at``, se autotermina
-    justo después de completar las acciones hasta ese punto — nunca antes.
+    hay, abrir, escribir, ``fsync``, cerrar y -solo si este anexo creó el
+    fichero (CODEX-001)- sincronizar también su directorio padre, para que la
+    entrada de directorio sea igual de durable que el propio contenido. Con
+    ``kill_at``, se autotermina justo después de completar las acciones hasta
+    ese punto — nunca antes.
     """
     if kill_at is KillPoint.BEFORE_OPEN:
         _self_kill()
 
     recover_invalid_tail(journal_path)
 
+    created = not journal_path.exists()
     line = build_line(record_without_checksum)
 
     fd = os.open(journal_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
@@ -203,6 +223,9 @@ def append_durably(
             _self_kill()
     finally:
         os.close(fd)
+
+    if created:
+        _fsync_directory(journal_path)
 
     if kill_at is KillPoint.AFTER_CLOSE:
         _self_kill()

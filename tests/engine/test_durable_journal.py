@@ -173,6 +173,100 @@ def test_reintento_tras_reinicio_no_duplica_por_idempotencia(tmp_path: Path) -> 
     assert len(replay(journal_path).valid_records) == 1
 
 
+def test_reintento_de_una_transicion_tras_reinicio_no_duplica_ni_lanza(
+    tmp_path: Path,
+) -> None:
+    """CLAUDE-A2-IDEMP-01 / CODEX-002: reintentar una TRANSICIÓN, no solo una creación.
+
+    ``test_reintento_tras_reinicio_no_duplica_por_idempotencia`` solo ejercita
+    ``create_work_item``. Este caso reproduce exactamente el defecto
+    reportado: activar un WorkItem con una ``idempotency_key``, "reiniciar" el
+    almacén, y reintentar la MISMA activación con la MISMA clave. Antes de la
+    corrección, el chequeo de idempotencia ocurría DESPUÉS de evaluar
+    ``current.activate(...)`` -sobre un estado ya avanzado a ACTIVE- y el
+    dominio lanzaba ``IllegalTransitionError`` en vez de devolver el resultado
+    ya anexado.
+    """
+    journal_path = tmp_path / "diario.jsonl"
+
+    store_antes_de_reiniciar = DurableWorkEngineStore(journal_path)
+    store_antes_de_reiniciar.create_work_item(
+        work_id="WI-IDEMP-TRANS-0001",
+        peticion_original="texto literal",
+        objetivo="objetivo",
+        contexto_origen=("incidencia:186",),
+        entregable="entregable",
+        criterio_terminado="criterio",
+        limites={},
+        prioridad=1,
+        clase=WorkItemClass.PROGRAMACION,
+        now=_NOW,
+    )
+    activado = store_antes_de_reiniciar.activate_work_item(
+        "WI-IDEMP-TRANS-0001", now=_NOW, idempotency_key="req-activar-WI-IDEMP-TRANS-0001"
+    )
+
+    # "Reinicio": una instancia nueva del almacén sobre el MISMO diario.
+    store_tras_reiniciar = DurableWorkEngineStore(journal_path)
+    reintentado = store_tras_reiniciar.activate_work_item(
+        "WI-IDEMP-TRANS-0001", now=_NOW, idempotency_key="req-activar-WI-IDEMP-TRANS-0001"
+    )
+
+    assert reintentado == activado
+    assert len(store_tras_reiniciar.list_events()) == 2  # crear + activar, no tres.
+    assert len(replay(journal_path).valid_records) == 2
+
+
+def test_reintento_de_change_work_item_scope_no_repite_la_cascada_de_runs(
+    tmp_path: Path,
+) -> None:
+    """CODEX-002: la cascada de ``change_work_item_scope`` también debe saltarse en el reintento.
+
+    ``change_work_item_scope`` invalida cada ``Run`` no terminado del
+    WorkItem ANTES de anexar el propio cambio de alcance. Si el chequeo de
+    idempotencia no se adelanta también delante de esa cascada, un reintento
+    volvería a invalidar los Run (o fallaría al intentarlo dos veces), en vez
+    de devolver el resultado ya confirmado sin ningún efecto adicional.
+    """
+    journal_path = tmp_path / "diario.jsonl"
+    store = DurableWorkEngineStore(journal_path)
+    store.create_work_item(
+        work_id="WI-IDEMP-SCOPE-0001",
+        peticion_original="texto literal",
+        objetivo="objetivo original",
+        contexto_origen=(),
+        entregable="entregable",
+        criterio_terminado="criterio",
+        limites={},
+        prioridad=1,
+        clase=WorkItemClass.PROGRAMACION,
+        now=_NOW,
+    )
+    store.prepare_run(
+        run_id="RUN-IDEMP-SCOPE-0001",
+        work_id="WI-IDEMP-SCOPE-0001",
+        paso="paso-1",
+        worker="worker-de-prueba",
+        work_package={"instrucciones": "ejecutar paso 1"},
+        deadline=datetime(2026, 8, 18, 13, 0, tzinfo=UTC),
+        now=_NOW,
+    )
+    key = "req-cambiar-alcance-WI-IDEMP-SCOPE-0001"
+
+    cambiado = store.change_work_item_scope(
+        "WI-IDEMP-SCOPE-0001", now=_NOW, objetivo="objetivo nuevo", idempotency_key=key
+    )
+    eventos_tras_primer_cambio = len(store.list_events())
+
+    reintentado = store.change_work_item_scope(
+        "WI-IDEMP-SCOPE-0001", now=_NOW, objetivo="objetivo nuevo", idempotency_key=key
+    )
+
+    assert reintentado == cambiado
+    assert len(store.list_events()) == eventos_tras_primer_cambio
+    assert len(replay(journal_path).valid_records) == eventos_tras_primer_cambio
+
+
 def test_almacen_durable_reproduce_un_ciclo_de_vida_real(tmp_path: Path) -> None:
     journal_path = tmp_path / "diario.jsonl"
     store = DurableWorkEngineStore(journal_path)
@@ -325,10 +419,17 @@ def test_mutacion_quitar_el_fsync_deja_de_invocarlo(
     páginas del kernel, documentado también en ADR-029 §2) — por eso esta
     mutación no se demuestra con la matriz, sino con un espía: la
     implementación real invoca `os.fsync` exactamente una vez por anexo
-    normal; un mutante que borre esa línea deja de invocarlo, y este espía
-    lo detecta donde el kill-matrix no podría.
+    normal sobre un diario ya existente; un mutante que borre esa línea deja
+    de invocarlo, y este espía lo detecta donde el kill-matrix no podría.
+
+    El diario se crea ANTES del espía (con un primer anexo) para aislar el
+    `fsync` del propio anexo del `fsync` del directorio que solo ocurre en el
+    anexo que crea el fichero (CODEX-001, cubierto aparte por
+    ``test_creacion_del_diario_sincroniza_tambien_su_directorio``).
     """
     journal_path = tmp_path / "diario.jsonl"
+    append_durably(journal_path, _sample_record(sequence=1), kill_at=None)
+
     llamadas: list[int] = []
     real_fsync = os.fsync
 
@@ -338,11 +439,66 @@ def test_mutacion_quitar_el_fsync_deja_de_invocarlo(
 
     monkeypatch.setattr(os, "fsync", fsync_espia)
 
-    append_durably(journal_path, _sample_record(sequence=1), kill_at=None)
+    append_durably(journal_path, _sample_record(sequence=2), kill_at=None)
 
     assert len(llamadas) == 1, (
-        "append_durably debe llamar a os.fsync exactamente una vez por anexo; "
-        "un mutante que quite esa línea dejaría esta lista vacía"
+        "append_durably debe llamar a os.fsync exactamente una vez por anexo sobre un "
+        "diario ya existente; un mutante que quite esa línea dejaría esta lista vacía"
+    )
+
+
+def test_creacion_del_diario_sincroniza_tambien_su_directorio(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CODEX-001: el anexo que CREA el diario también sincroniza su directorio padre.
+
+    Sin esto, en sistemas de archivos donde sincronizar el fichero no basta
+    para hacer durable su entrada nueva de directorio, una caída justo
+    después de un primer anexo confirmado podría, al reiniciar, dejar el
+    diario entero sin existir. Se comprueba con un espía sobre ``os.open``
+    que confirma que, además del descriptor del propio diario, se abre (en
+    solo lectura) y se sincroniza un descriptor del directorio padre.
+    """
+    journal_path = tmp_path / "subdir" / "diario.jsonl"
+    journal_path.parent.mkdir()
+
+    fsync_calls: list[int] = []
+    real_fsync = os.fsync
+    dir_fd_abierto: list[int] = []
+    real_open = os.open
+
+    def open_espia(path: Any, flags: int, *args: Any) -> int:
+        fd = real_open(path, flags, *args)
+        if Path(os.fspath(path)) == journal_path.parent and flags == os.O_RDONLY:
+            dir_fd_abierto.append(fd)
+        return fd
+
+    def fsync_espia(fd: int) -> None:
+        fsync_calls.append(fd)
+        real_fsync(fd)
+
+    monkeypatch.setattr(os, "open", open_espia)
+    monkeypatch.setattr(os, "fsync", fsync_espia)
+
+    append_durably(journal_path, _sample_record(sequence=1), kill_at=None)
+
+    assert len(dir_fd_abierto) == 1, (
+        "el anexo que crea el diario debe abrir su directorio padre en solo lectura "
+        "para poder sincronizarlo"
+    )
+    assert dir_fd_abierto[0] in fsync_calls, (
+        "el descriptor del directorio padre abierto al crear el diario debe sincronizarse "
+        "con os.fsync, o su entrada nueva podría no sobrevivir a una caída"
+    )
+
+    # Un segundo anexo, sobre el diario YA existente, no debe volver a
+    # sincronizar el directorio: el protocolo de anexos posteriores queda
+    # intacto (CODEX-001, límite de la corrección).
+    dir_fd_abierto.clear()
+    fsync_calls.clear()
+    append_durably(journal_path, _sample_record(sequence=2), kill_at=None)
+    assert dir_fd_abierto == [], (
+        "un anexo sobre un diario ya existente no debe abrir su directorio padre de nuevo"
     )
 
 
