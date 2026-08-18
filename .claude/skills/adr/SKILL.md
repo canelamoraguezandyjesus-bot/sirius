@@ -27,7 +27,7 @@ uv run python scripts/siguiente_adr.py --solo-numero
 
 El número es **el máximo existente más uno**. Los huecos históricos —hoy 017 y
 018— **no se reutilizan nunca**: rellenarlos haría que un mismo número apuntara
-a decisiones distintas según la fecha del clon (ADR-029).
+a decisiones distintas según la fecha del clon (ADR-030).
 
 El nombre queda `ADR-NNN-titulo-normalizado.md`: tres dígitos, minúsculas, sin
 diacríticos, guiones por separador. Es el convenio que ya siguen los ADR del

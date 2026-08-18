@@ -2,7 +2,7 @@
 """Calcula el número del siguiente ADR y crea el archivo desde la plantilla.
 
 El número es **el máximo existente más uno**, nunca un hueco histórico
-(ADR-029). El registro tiene hoy dos `ADR-016` y ningún 017 ni 018: el hueco es
+(ADR-030). El registro tiene hoy dos `ADR-016` y ningún 017 ni 018: el hueco es
 inofensivo —nadie busca un ADR por su posición—, pero el número repetido hace
 que dos decisiones distintas se citen igual.
 
@@ -81,7 +81,7 @@ def normalizar_titulo(titulo: str) -> str:
     conserva `[a-z0-9.]`; **todo** lo demás separa. Añadir una regla por cada
     carácter que aparezca —una tilde, luego una eñe, luego unas comillas— es la
     familia «reconstruir por fuera una semántica ajena» que costó quince
-    defectos en la PR #139, y el criterio de parada de ADR-029 la prohíbe.
+    defectos en la PR #139, y el criterio de parada de ADR-030 la prohíbe.
 
     Los puntos se conservan porque el convenio ya los usa: ADR-012 termina en
     `sirius-0.1`.
