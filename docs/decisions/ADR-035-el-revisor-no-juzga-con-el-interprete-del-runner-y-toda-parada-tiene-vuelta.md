@@ -1,13 +1,14 @@
 # ADR-035 — El revisor no juzga con el intérprete del runner, y toda parada tiene vuelta
 
-- **Estado**: aceptada
-- **Fecha**: 2026-08-18
-- **Contexto**: incidencia #193 (A3), PR #194, ronda 4
-- **Relacionadas**: ADR-001 (disciplina de evidencia), ADR-030 (una parada se
+- Estado: APROBADO
+- Fecha: 2026-08-18
+- Aprobación: fusión de la PR #198 por el propietario
+- Contexto: incidencia #193 (A3), PR #194, ronda 4
+- Relacionadas: ADR-001 (disciplina de evidencia), ADR-030 (una parada se
   levanta con una orden), ADR-033 (una regla que enumera vehículos siempre
   tiene un hueco más)
 
-## Contexto
+## Contexto y problema
 
 La ronda 4 de #193 terminó en `sirius:failed-safely` con **Quality en verde**
 sobre `e90e984a` y sin ningún defecto real en el trabajo. Reconstruido el
@@ -62,6 +63,38 @@ que retirar la etiqueta no dispara nada. Una parada segura sobre una PR con
 Quality en verde, 5 commits y 3 rondas de trabajo no tenía más salida que la
 cirugía manual — exactamente lo que ADR-030 vino a eliminar.
 
+## Criterio de parada (escrito ANTES de decidir)
+
+Publicado en la incidencia #193 **antes de tocar nada**
+([comentario 5334002579](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/193#issuecomment-5334002579)),
+con las cuatro preguntas y esto:
+
+> Paro cuando se cumplan las tres: el revisor **no pueda** volver a comprobar
+> sintaxis con un intérprete que no es el del proyecto, y haya una prueba que lo
+> sostenga; **toda** etiqueta de parada declare la orden que la levanta, con una
+> prueba escrita como propiedad y no como lista; A3 vuelva a estar en revisión
+> sobre `e90e984a`.
+>
+> Si aparece una **tercera** familia distinta, la registro y **no** la arreglo
+> en este lote.
+
+Las tres se cumplieron. Y apareció la tercera familia, que se registró sin
+arreglar (ver más abajo) — el criterio hizo su trabajo justo donde incomodaba.
+
+## Opciones consideradas
+
+**Para el intérprete del revisor:**
+
+1. Instalar `uv` y sincronizar el proyecto en `review-sirius-work.yml`, como
+   hacen los workflows del implementador y del corrector.
+2. Decírselo al prompt como propiedad: este runner no tiene el intérprete del
+   proyecto, así que ejecutar código aquí no afirma nada sobre el proyecto.
+
+**Para la parada sin vuelta:**
+
+1. Devolver todo `failed-safely` a una etiqueta fija.
+2. Leer del historial el rol que se detuvo y reponer su disparador.
+
 ## Decisión
 
 ### El prompt del revisor enuncia una propiedad, no una lista
@@ -100,7 +133,9 @@ estar esperando a nadie: los `*-requested` son eventos, las fases en curso
 tienen un job corriendo, `completed` es el final. Una parada nueva entra sola
 en la prueba y tendrá que traer su orden.
 
-## Evidencia: dos pruebas mías que no mordían
+## Comprobación que la sostiene
+
+### Dos pruebas mías que no mordían
 
 La prueba por mutación (ADR-001 §3) encontró que **mi propia prueba estática
 pasaba en verde con el defecto sembrado, dos veces seguidas**:
@@ -139,6 +174,24 @@ lote de hoy ya cierra dos familias. Queda escrito como prueba, no como prosa:
 `test_el_diagnostico_de_una_lectura_caida_no_debe_afirmar_que_no_hay_pr`, con
 `xfail(strict=True)`. Cuando alguien lo arregle, la prueba pasará y el `strict`
 obligará a retirar el marcador — no se puede olvidar en silencio.
+
+## Alternativas descartadas y por qué
+
+**Instalar `uv` en el workflow del revisor.** Habría hecho verdadero lo que el
+revisor suponía, en vez de corregir el razonamiento. Tres motivos: obliga a
+tocar `.github/**`, que el propietario pega a mano (ADR-002); gasta minutos de
+Actions en cada ronda de revisión; y contradice la postura del propio prompt de
+no reconstruir el entorno de CI. Además no arregla el error de fondo — el
+revisor seguiría pudiendo concluir cosas del proyecto ejecutando cosas del
+runner.
+
+**Enumerar las herramientas vetadas** («no uses `python3`»). Descartada por
+ADR-033: prohibir `python3` deja fuera `python`, `py`, `compileall`, `ast` y las
+que vengan. La propiedad cubre todas sin nombrar ninguna.
+
+**Devolver todo `failed-safely` a `repair-requested`.** Es lo que hace ADR-030
+para `blocked-decision`, y aquí sería incorrecto: una revisión caída se
+«reanudaría» corrigiendo observaciones que nadie escribió.
 
 ## Consecuencias
 

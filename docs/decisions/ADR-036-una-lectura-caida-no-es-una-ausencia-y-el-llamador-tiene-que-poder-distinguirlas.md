@@ -1,12 +1,13 @@
 # ADR-036 — Una lectura caída no es una ausencia, y el llamador tiene que poder distinguirlas
 
-- **Estado**: aceptada
-- **Fecha**: 2026-08-18
-- **Contexto**: incidencia #193, la parada de la ronda 4
-- **Relacionadas**: ADR-030 (una parada se levanta con una orden), ADR-035 (que
+- Estado: APROBADO
+- Fecha: 2026-08-18
+- Aprobación: fusión de la PR #199 por el propietario
+- Contexto: incidencia #193, la parada de la ronda 4
+- Relacionadas: ADR-030 (una parada se levanta con una orden), ADR-035 (que
   lo registró sin arreglarlo)
 
-## Contexto
+## Contexto y problema
 
 ADR-035 dejó este defecto escrito y sin arreglar, con una prueba `xfail`, porque
 el criterio de parada de aquel lote lo decía. Este ADR lo cierra.
@@ -41,6 +42,34 @@ nada de nadie; una PR de verdad ausente sí**. Decir la segunda cuando pasó la
 primera manda a una persona a buscar un problema que no existe — y esto ocurrió
 el mismo día en que GitHub estuvo degradado durante horas.
 
+## Criterio de parada (escrito ANTES de decidir)
+
+**No se escribió uno propio, y decirlo importa más que inventarlo a posteriori.**
+
+Este trabajo no nació de una investigación abierta: el defecto ya estaba
+diagnosticado, acotado y escrito en ADR-035, con una prueba `xfail(strict=True)`
+que describía exactamente el desenlace correcto. El criterio venía heredado y
+era el de aquel lote:
+
+> Si aparece una tercera familia distinta, la registro y **no** la arreglo en
+> este lote.
+
+Eso es lo que dejó el defecto sin arreglar. El propietario revocó esa espera
+explícitamente y pidió cerrarlo en el momento, así que la condición de fin pasó
+a ser la que la propia prueba `xfail` ya fijaba: que pasara a verde sin
+desactivarla y sin romper el caso contrario.
+
+Registrar aquí un criterio redactado después de ver los resultados sería
+teatro: lo que ata no es tenerlo, es haberlo publicado antes (ADR-001).
+
+## Opciones consideradas
+
+1. **Arreglar solo los tres sitios de llamada**, dejando la función como está y
+   comprobando la lectura por separado en cada ejecutor.
+2. **Arreglar la función** para que distinga, y que los tres llamadores lean su
+   código de salida.
+3. **Devolver 1** en vez de 2, reutilizando el convenio de fallo genérico.
+
 ## Decisión
 
 ### El código de salida es la mitad del contrato
@@ -66,7 +95,9 @@ salida en un fichero y comprobar el código antes de interpretarla:
   primero describe lo que pasó; el segundo era una afirmación sobre la
   incidencia que además la mandaba a parada segura con un diagnóstico falso.
 
-## Prueba por mutación (ADR-001 §3)
+## Comprobación que la sostiene
+
+### Prueba por mutación (ADR-001 §3)
 
 Cuatro mutaciones sembradas, vistas fallar y revertidas:
 
@@ -100,6 +131,24 @@ apareció un segundo defecto, esta vez del propio simulador: el respaldo GraphQL
 no estaba cubierto por la palanca, así que rescataba la lectura y el guion
 seguía como si nada — la prueba habría pasado sin simular nada. Ahora las dos
 vías caen con la misma lectura lógica.
+
+## Alternativas descartadas y por qué
+
+**Comprobar la lectura en cada llamador, dejando la función intacta.** Repite la
+misma comprobación tres veces y deja el defecto vivo en la función, así que el
+cuarto llamador que aparezca vuelve a heredarlo. La distinción entre «leí» y «no
+pude leer» es conocimiento de la función, no de quien la usa: es ella la única
+que sabe si el `gh` respondió.
+
+**Devolver 1 en vez de 2.** `1` es el fallo genérico de bash y ya lo emiten las
+funciones que esta llama. Un código propio hace que «no pude leer» sea
+distinguible de un error cualquiera si mañana se añade otro modo de fallo.
+
+**Dejarlo con la guardia de plazo que ya existía.** `repair-sirius-work.yml`
+comprobaba el plazo antes de interpretar un vacío, precisamente por este
+defecto. Es una defensa útil pero parcial: solo cubre el caso de plazo agotado,
+y solo en ese workflow. Se mantiene — son dos cosas distintas —, pero no es
+sustituto de que la función diga la verdad.
 
 ## Consecuencias
 
