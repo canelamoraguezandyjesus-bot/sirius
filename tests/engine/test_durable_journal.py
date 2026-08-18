@@ -477,6 +477,70 @@ def test_reintento_tras_cascada_incompleta_reconoce_clave_interna_de_diario_here
     assert run.cancellation_status == CancellationStatus.UNCONFIRMED
 
 
+def test_cancelacion_publica_con_forma_de_clave_de_cascada_es_idempotente_al_reabrir(
+    tmp_path: Path,
+) -> None:
+    """CODEX-001 (ronda 7): una cancelación PÚBLICA no debe confundirse con la cascada.
+
+    Reproduce el hallazgo exacto: se pide la cancelación de un Run
+    ``DISPATCHED`` vía la API pública ``request_run_cancellation`` -no la
+    cascada de ``change_work_item_scope``- con la clave pública
+    ``"K::scope-cascade::R"``, que por casualidad tiene la misma forma de
+    texto que la clave interna heredada de la cascada
+    (:data:`_LEGACY_SCOPE_CASCADE_MARKER`). Al reabrir el almacén,
+    `_decode_idempotency_key` NO debe reinterpretar esa clave pública como la
+    tupla interna de la cascada -el Run anexado no lleva
+    `invalidado_por_alcance`, la evidencia que sí deja la cascada-, así que
+    debe seguir siendo reconocible como la misma clave `str` que el llamador
+    volverá a usar. Reintentar la MISMA petición tras reabrir debe devolver
+    el Run ya cancelado de forma idempotente, sin lanzar
+    `IllegalTransitionError` por pedir la cancelación dos veces.
+    """
+    journal_path = tmp_path / "diario.jsonl"
+    store = DurableWorkEngineStore(journal_path)
+    work_id = "WI-CODEX001R7-0001"
+    run_id = "RUN-CODEX001R7-0001"
+    store.create_work_item(
+        work_id=work_id,
+        peticion_original="texto literal",
+        objetivo="objetivo original",
+        contexto_origen=(),
+        entregable="entregable",
+        criterio_terminado="criterio",
+        limites={},
+        prioridad=1,
+        clase=WorkItemClass.PROGRAMACION,
+        now=_NOW,
+    )
+    store.prepare_run(
+        run_id=run_id,
+        work_id=work_id,
+        paso="paso-1",
+        worker="worker-de-prueba",
+        work_package={"instrucciones": "ejecutar paso 1"},
+        deadline=datetime(2026, 8, 18, 13, 0, tzinfo=UTC),
+        now=_NOW,
+    )
+    store.dispatch_run(run_id, now=_NOW)
+
+    colliding_public_key = f"K::scope-cascade::{run_id}"
+    primero = store.request_run_cancellation(run_id, now=_NOW, idempotency_key=colliding_public_key)
+    assert primero.invalidado_por_alcance is False
+    assert primero.cancellation_status is CancellationStatus.UNCONFIRMED
+
+    reabierto = DurableWorkEngineStore(journal_path)
+    reintento = reabierto.request_run_cancellation(
+        run_id, now=_NOW, idempotency_key=colliding_public_key
+    )
+    assert reintento == primero
+    assert [event.kind for event in reabierto.list_events()] == [
+        "work_item_created",
+        "run_prepared",
+        "run_dispatched",
+        "run_cancellation_requested",
+    ]
+
+
 def test_fallo_de_fsync_a_mitad_de_la_cascada_de_change_scope_no_duplica_al_reintentar(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

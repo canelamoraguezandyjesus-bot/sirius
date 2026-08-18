@@ -127,18 +127,45 @@ class DurableWorkEngineStore:
         en ``"::scope-cascade::" + aggregate_id`` de ESTE registro, se
         reconstruye la misma tupla que derivaría la cascada actual, para que
         un reintento tras una cascada incompleta la reconozca.
+
+        CODEX-001 (ronda 7): ``run_cancellation_requested`` no es exclusivo
+        de la cascada -a diferencia de los otros dos tipos de
+        :data:`_LEGACY_SCOPE_CASCADE_KINDS`, la API pública
+        ``request_run_cancellation`` también lo emite, con una clave que
+        elige el llamador-. Si esa clave pública coincide por casualidad con
+        la forma heredada (``"<algo>::scope-cascade::<run_id>"`` para ESTE
+        ``run_id``), la detección de arriba la confundiría con la clave
+        interna heredada y la convertiría en la tupla derivada, perdiendo la
+        idempotencia de la cancelación pública. Por eso, para este tipo en
+        concreto, además de la forma del texto se exige la evidencia
+        persistida de que el registro salió de la cascada: el propio Run
+        anexado lleva ``invalidado_por_alcance=True`` (:mod:`domain.run`)
+        únicamente cuando pasó por ``mark_scope_invalidated`` antes de
+        ``request_cancel``, algo que solo hace la cascada -la API pública
+        llama a ``request_cancel`` directamente y, si el Run ya estuviera
+        invalidado por alcance, ya tendría la cancelación en curso y
+        ``request_cancel`` rechazaría la llamada por transición ilegal antes
+        de que hubiera nada que anexar-. Los otros dos tipos siguen sin
+        necesitar esta comprobación porque ningún camino público los emite.
         """
         raw = record.get("idempotency_key")
         if isinstance(raw, list):
             return tuple(raw)
         assert raw is None or isinstance(raw, str)
         if isinstance(raw, str) and record.get("kind") in _LEGACY_SCOPE_CASCADE_KINDS:
-            aggregate_id = record.get("aggregate_id")
-            assert isinstance(aggregate_id, str)
-            legacy_suffix = f"{_LEGACY_SCOPE_CASCADE_MARKER}{aggregate_id}"
-            if raw.endswith(legacy_suffix):
-                public_key = raw[: -len(legacy_suffix)]
-                return ("scope-cascade", public_key, aggregate_id)
+            entity = record.get("entity")
+            assert isinstance(entity, Mapping)
+            is_cascade_evidence = (
+                record.get("kind") != "run_cancellation_requested"
+                or entity.get("invalidado_por_alcance") is True
+            )
+            if is_cascade_evidence:
+                aggregate_id = record.get("aggregate_id")
+                assert isinstance(aggregate_id, str)
+                legacy_suffix = f"{_LEGACY_SCOPE_CASCADE_MARKER}{aggregate_id}"
+                if raw.endswith(legacy_suffix):
+                    public_key = raw[: -len(legacy_suffix)]
+                    return ("scope-cascade", public_key, aggregate_id)
         return raw
 
     def _absorb(self, event: Event, *, idempotency_key: _IdempotencyKey | None) -> None:
