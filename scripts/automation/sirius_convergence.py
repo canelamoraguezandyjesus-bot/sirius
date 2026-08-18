@@ -108,6 +108,41 @@ CI_FAILURE_MARKER_RE = re.compile(
 )
 CI_SUCCESS_MARKER_RE = re.compile(r"<!--\s*sirius-quality:[0-9a-fA-F]+:success\s*-->")
 
+# Marcador que publica `sirius_resume_on_command.sh` cuando el propietario
+# levanta una parada escribiendo la orden en la incidencia.
+#
+# La política de convergencia es una salvaguarda, no un obstáculo: cuando
+# bloquea, tiene razón. Lo que faltaba no era relajarla, sino una entrada por la
+# que la decisión humana que reclama pueda LLEGAR. Sin ella, el historial la
+# condena para siempre —`decide()` mide sobre todas las rondas publicadas, así
+# que reponer la etiqueta disparadora vuelve a bloquear en el acto— y levantar
+# la parada exige editar la incidencia a mano o hacer el trabajo fuera del
+# ciclo. Ocurrió en la #186: el propietario autorizó una ronda más y no había
+# forma de dársela a la máquina.
+RESUME_MARKER_RE = re.compile(r"<!--\s*sirius-convergence-reset:[0-9a-fA-F]+\s*-->")
+
+
+def history_after_last_resume(text: str) -> str:
+    """El historial que cuenta: lo publicado DESPUÉS de la última orden de continuar.
+
+    Corta el texto, no lo filtra, y por eso reinicia los DOS motores del ciclo a
+    la vez —las rondas de revisión y la racha de fallos de Quality— con una sola
+    regla. Reiniciar solo uno dejaría al otro condenando el trabajo que el
+    propietario acaba de autorizar.
+
+    Lo que NO hace, y es la mitad del diseño: **no borra nada**. Las rondas
+    anteriores siguen publicadas en la incidencia y siguen siendo auditables;
+    lo único que cambia es que dejan de servir de listón. Una parada por
+    `sin-progreso` volverá a saltar en cuanto haya dos rondas planas
+    *posteriores* al marcador, con el mismo criterio de siempre. La salvaguarda
+    no se debilita: se le da una entrada.
+    """
+    corte = 0
+    for match in RESUME_MARKER_RE.finditer(text):
+        corte = match.end()
+    return text[corte:]
+
+
 # Intentos consecutivos de corrección motivados por un fallo de Quality, sin un
 # Quality en verde de por medio, antes de pasar a decisión humana. Tres da
 # margen a un arreglo de construcción real —el primero puede ser un diagnóstico
@@ -544,7 +579,10 @@ def cmd_decide(args: argparse.Namespace) -> int:
             "rounds": 0,
         }
     else:
-        result = decide(parse_round_records(text), ci_failures=ci_failure_streak(text))
+        # El corte se aplica UNA vez y alimenta las dos medidas, para que no
+        # puedan discrepar sobre dónde empieza el historial vigente.
+        vigente = history_after_last_resume(text)
+        result = decide(parse_round_records(vigente), ci_failures=ci_failure_streak(vigente))
     with open(args.output, "w", encoding="utf-8") as handle:
         json.dump(result, handle, ensure_ascii=False, indent=2)
         handle.write("\n")
