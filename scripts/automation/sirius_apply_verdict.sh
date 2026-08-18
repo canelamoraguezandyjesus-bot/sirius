@@ -194,7 +194,7 @@ summary="$(jq -r '.summary // "(sin resumen)"' "$VERDICT_FILE" 2>/dev/null | san
 case "$ROLE" in
   implementer) allowed="READY_FOR_REVIEW BLOCKED_BY_DECISION FAILED_SAFELY USAGE_LIMIT_REACHED" ;;
   reviewer) allowed="REVIEW_APPROVED CHANGES_REQUESTED BLOCKED_BY_DECISION FAILED_SAFELY" ;;
-  corrector) allowed="FIXED BLOCKED_BY_DECISION FAILED_SAFELY" ;;
+  corrector) allowed="FIXED CHECKS_UNRELATED BLOCKED_BY_DECISION FAILED_SAFELY" ;;
 esac
 if ! printf '%s\n' "$allowed" | tr ' ' '\n' | grep -Fxq "$verdict"; then
   stop_safely "veredicto-fuera-de-conjunto" \
@@ -322,6 +322,80 @@ case "$verdict" in
         "- Head SHA: \`${head_sha}\`" \
         "${summary}" >"$body_file"
     fi
+    if ! transition "$marker" "$body_file" "sirius:ci-pending" "FBCA04" "Evento consumible: en espera de Quality"; then
+      rm -f "$body_file"
+      exit 1
+    fi
+    rm -f "$body_file"
+    ;;
+
+  CHECKS_UNRELATED)
+    # El corrector comprobó y el fallo de Quality no es atribuible a su trabajo.
+    #
+    # Hasta ahora no existía forma de decir eso. El corrector solo tenía `FIXED`
+    # —que presupone un push—, así que emitirlo sin empujar dejaba la incidencia
+    # en `ci-pending` esperando un evento `pull_request` que nadie iba a emitir:
+    # sin push no hay evento, sin evento no hay Quality, y `ci-pending` no avisa
+    # a nadie. Ocurrió dos veces el mismo día, con dos pruebas inestables
+    # distintas (Qt en la #186, SQLite en la PR #191).
+    #
+    # Las tres condiciones de abajo NO son ceremonia: son lo que distingue este
+    # veredicto de una excusa. Sin ellas, `CHECKS_UNRELATED` sería una forma de
+    # esquivar una construcción rota reejecutándola indefinidamente.
+    resolve_pr
+    scan_file="$(mktemp)"
+    sirius_scan_text "$REPO" "$ISSUE" "$scan_file"
+
+    # (a) Tiene que haber un fallo de Quality registrado PARA ESTE head. Si el
+    # corrector fue despertado por observaciones de revisión y no por CI, este
+    # veredicto no describe nada real.
+    if ! grep -qiE "<!--[[:space:]]*sirius-quality:${head_sha}:(failure|timed_out)[[:space:]]*-->" "$scan_file"; then
+      rm -f "$scan_file"
+      stop_safely "sin-fallo-de-ci-que-atribuir" \
+        "El veredicto es \`CHECKS_UNRELATED\`, pero no hay ningún fallo de Quality registrado para el head actual (\`${head_sha}\`). Ese veredicto solo tiene sentido cuando la ronda la disparó un \`CI_FAILURE\`."
+    fi
+
+    # (b) Una sola reejecución por head. Si el fallo se repite sobre el MISMO
+    # commit ya no es intermitencia: es reproducible, y reintentar deja de ser
+    # diagnóstico para convertirse en un bucle. La cota vive aquí, en el dato
+    # publicado, y no en una variable del proceso: el corrector es otro proceso
+    # en cada ronda y no recuerda nada.
+    if grep -qF "<!-- sirius-verdict:corrector:CHECKS_UNRELATED:${head_sha} -->" "$scan_file"; then
+      rm -f "$scan_file"
+      stop_safely "ci-ajeno-reincidente" \
+        "Ya se reejecutaron las comprobaciones una vez para el head \`${head_sha}\` por considerarlas ajenas, y han vuelto a fallar sobre el mismo commit. Eso no es intermitencia: es reproducible. Se requiere una decisión humana."
+    fi
+
+    # (c) El identificador del run que hay que reejecutar sale del propio
+    # comentario `CI_FAILURE`, que ya lo publica. Se toma el más reciente porque
+    # `sirius_scan_text` entrega los comentarios del más nuevo al más antiguo.
+    rerun_id="$(grep -oE "actions/runs/[0-9]+" "$scan_file" | head -n 1 | grep -oE "[0-9]+" || true)"
+    rm -f "$scan_file"
+    if [ -z "$rerun_id" ]; then
+      stop_safely "sin-run-que-reejecutar" \
+        "El veredicto es \`CHECKS_UNRELATED\` pero no he encontrado en la incidencia el identificador del run de Quality que habría que reejecutar. Me detengo en vez de dejar la incidencia esperando un evento que nadie va a emitir."
+    fi
+
+    # La reejecución va con el token de esta invocación, que es el PAT: un
+    # `workflow_run` emitido a partir del GITHUB_TOKEN no despertaría a
+    # `advance-sirius-after-quality.yml` (regla anti-recursión de GitHub) y la
+    # incidencia se quedaría igual de muda que sin este veredicto.
+    if ! sirius_retry gh api -X POST "repos/${REPO}/actions/runs/${rerun_id}/rerun-failed-jobs" >/dev/null; then
+      stop_safely "reejecucion-fallida" \
+        "No he podido reejecutar los trabajos fallidos del run \`${rerun_id}\`. Me detengo en vez de dejar la incidencia esperando un resultado que no va a llegar."
+    fi
+
+    pr_url="https://github.com/${REPO}/pull/${pr_number}"
+    marker="<!-- sirius-verdict:corrector:CHECKS_UNRELATED:${head_sha} -->"
+    body_file="$(mktemp)"
+    printf '%s\n\n%s\n\n%s\n%s\n%s\n\n%s\n\n%s\n' \
+      "$marker" \
+      "## COMPROBACIONES_REEJECUTADAS" \
+      "- PR: ${pr_url}" \
+      "- Head SHA: \`${head_sha}\`" \
+      "- Run reejecutado: https://github.com/${REPO}/actions/runs/${rerun_id}" \
+      "${summary}" \
+      "Si vuelven a fallar sobre este mismo commit, el fallo es reproducible y la incidencia se detendrá para decisión humana." >"$body_file"
     if ! transition "$marker" "$body_file" "sirius:ci-pending" "FBCA04" "Evento consumible: en espera de Quality"; then
       rm -f "$body_file"
       exit 1

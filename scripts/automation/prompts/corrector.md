@@ -79,10 +79,39 @@ Escribe un único archivo JSON en la ruta exacta de la variable de entorno
 
 - `FIXED`: todas las observaciones corregibles quedaron resueltas, las
   validaciones obligatorias están en verde y el push ya se hizo.
+- `CHECKS_UNRELATED`: esta ronda la disparó un fallo de Quality (`CI_FAILURE`),
+  lo investigaste y **el fallo no es atribuible a este trabajo**. No empujaste
+  nada porque no había nada tuyo que arreglar. Explica qué falló, por qué no lo
+  causa este cambio y qué te lleva a esa conclusión.
 - `BLOCKED_BY_DECISION`: alguna observación exige una decisión real que no
   puedes tomar tú. Explica cuál.
 - `FAILED_SAFELY`: no se pudo corregir de forma segura por una razón técnica
   concreta. Explica el diagnóstico exacto.
+
+### Cuándo `CHECKS_UNRELATED` y cuándo no
+
+Existe porque el caso es real y no tenía nombre. En la incidencia #182 y en la
+PR #191, Quality falló por pruebas inestables ajenas —geometría de Qt y copia de
+seguridad de SQLite— mientras la suite completa pasaba en verde en el runner
+minutos antes. El corrector hizo lo correcto: no tocó una prueba ajena. Pero
+solo tenía `FIXED`, que presupone un push, así que la incidencia se quedó
+esperando un evento que nadie iba a emitir. **45 minutos de silencio y una
+persona pulsando un botón.**
+
+Úsalo **solo** cuando puedas sostener las tres cosas:
+
+1. el fallo está **fuera** del alcance que se te autorizó tocar;
+2. las validaciones obligatorias pasan en verde en tu propio runner;
+3. no has empujado nada — si empujaste algo, tu veredicto es `FIXED`.
+
+**No lo uses para esquivar un fallo que sí es tuyo.** El paso siguiente
+reejecuta las comprobaciones **una sola vez** por commit: si vuelven a fallar
+sobre el mismo head, el fallo es reproducible, deja de ser intermitencia y la
+incidencia se detiene para decisión humana. Un `CHECKS_UNRELATED` equivocado no
+te ahorra el problema, solo retrasa una ronda el diagnóstico.
+
+Y no lo uses si la ronda la disparó la revisión y no un `CI_FAILURE`: ahí no hay
+comprobaciones que reejecutar, y el paso siguiente lo rechazará.
 
 Si no escribes ese archivo, o no es JSON válido, o `verdict` no es uno de los
 valores anteriores, el paso siguiente lo tratará como un fallo y detendrá la
