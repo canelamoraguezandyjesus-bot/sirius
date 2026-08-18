@@ -1,9 +1,11 @@
-"""Shared fixtures for the Sirius Work Engine core tests (incidencia #177).
+"""Shared fixtures for the Sirius Work Engine core tests (incidencia #177, #186).
 
 Every test in ``tests/engine/`` drives a :class:`WorkEngineStore` (the
-port), never the concrete :class:`InMemoryWorkEngineStore` directly beyond
-constructing it here — so the same test bodies can run unmodified against a
-future durable implementation (requisito 9).
+port), never a concrete store directly beyond constructing it here — so the
+same test bodies run unmodified against every implementation listed in
+``STORE_FACTORIES`` (A1 requisito 9; A2 incidencia #186 requisito 1: la
+misma batería pasa con la implementación en memoria de A1 y con el almacén
+durable de A2, sin tocar los cuerpos de las pruebas).
 """
 
 from __future__ import annotations
@@ -15,14 +17,25 @@ from pathlib import Path
 
 import pytest
 
+from sirius_engine.adapters.durable.store import DurableWorkEngineStore
 from sirius_engine.adapters.memory_store import InMemoryWorkEngineStore
 from sirius_engine.domain.run import Run
 from sirius_engine.domain.work_item import WorkItem, WorkItemClass
 from sirius_engine.ports.store import WorkEngineStore
 
-#: Every store implementation the contract tests must pass against. A1 only
-#: has the in-memory one; a future durable store is added here, unchanged.
-STORE_FACTORIES = (InMemoryWorkEngineStore,)
+
+def _make_in_memory_store(tmp_path: Path) -> WorkEngineStore:
+    return InMemoryWorkEngineStore()
+
+
+def _make_durable_store(tmp_path: Path) -> WorkEngineStore:
+    return DurableWorkEngineStore(tmp_path / "diario.jsonl")
+
+
+#: Every store implementation the contract tests must pass against (A2
+#: incidencia #186, requisito 1). Adding a future substitute means adding one
+#: factory here — no test body changes.
+STORE_FACTORIES = (_make_in_memory_store, _make_durable_store)
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -44,9 +57,9 @@ MakeRun = Callable[..., Run]
 
 
 @pytest.fixture(params=STORE_FACTORIES, ids=lambda factory: factory.__name__)
-def store(request: pytest.FixtureRequest) -> WorkEngineStore:
-    factory: type[InMemoryWorkEngineStore] = request.param
-    return factory()
+def store(request: pytest.FixtureRequest, tmp_path: Path) -> WorkEngineStore:
+    factory: Callable[[Path], WorkEngineStore] = request.param
+    return factory(tmp_path)
 
 
 @pytest.fixture
