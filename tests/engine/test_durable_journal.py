@@ -334,6 +334,108 @@ def test_reintento_de_change_work_item_scope_no_repite_la_cascada_de_runs(
     assert len(replay(journal_path).valid_records) == eventos_tras_primer_cambio
 
 
+def test_fallo_de_fsync_a_mitad_de_la_cascada_de_change_scope_no_duplica_al_reintentar(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CODEX-001 (ronda 4): la cascada de ``change_work_item_scope`` debe ser
+    reanudable, no solo la llamada de nivel superior.
+
+    Reproduce el hallazgo exacto: un Run ``DISPATCHED`` vivo, y falla
+    únicamente el `fsync` del DIRECTORIO (la segunda llamada a `os.fsync`
+    dentro de CADA anexo) al anexar `run_cancellation_requested` -el anexo
+    interno de la cascada, no el anexo final del cambio de alcance-. El
+    registro queda completo y durable en el diario pese al fallo (CODEX-001
+    previo), pero `change_work_item_scope` nunca llega a anexar
+    `work_item_scope_changed`. Antes de esta corrección, el reintento con la
+    MISMA clave de idempotencia recomputaba la cascada entera para el mismo
+    Run -que ya no tiene `cancellation_status is NONE`- y anexaba un
+    `run_scope_invalidated` adicional además de `work_item_scope_changed`:
+    seis registros en vez de cinco.
+    """
+    journal_path = tmp_path / "diario.jsonl"
+    store = DurableWorkEngineStore(journal_path)
+    store.create_work_item(
+        work_id="WI-CODEX001R4-0001",
+        peticion_original="texto literal",
+        objetivo="objetivo original",
+        contexto_origen=(),
+        entregable="entregable",
+        criterio_terminado="criterio",
+        limites={},
+        prioridad=1,
+        clase=WorkItemClass.PROGRAMACION,
+        now=_NOW,
+    )
+    store.prepare_run(
+        run_id="RUN-CODEX001R4-0001",
+        work_id="WI-CODEX001R4-0001",
+        paso="paso-1",
+        worker="worker-de-prueba",
+        work_package={"instrucciones": "ejecutar paso 1"},
+        deadline=datetime(2026, 8, 18, 13, 0, tzinfo=UTC),
+        now=_NOW,
+    )
+    store.dispatch_run("RUN-CODEX001R4-0001", now=_NOW)
+
+    real_fsync = os.fsync
+    llamadas = 0
+
+    def fsync_que_falla_la_segunda_llamada(fd: int) -> None:
+        nonlocal llamadas
+        llamadas += 1
+        # A partir de aquí (los tres anexos previos ya están confirmados y no
+        # pasan por este contador): llamada 1 es el fsync de FICHERO del
+        # anexo `run_cancellation_requested` -tiene éxito, el registro queda
+        # completo-; llamada 2 es el fsync de SU directorio, la que falla.
+        if llamadas == 2:
+            raise OSError("fallo simulado de fsync de directorio")
+        real_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", fsync_que_falla_la_segunda_llamada)
+
+    key = "req-cambiar-alcance-WI-CODEX001R4-0001"
+    with pytest.raises(DirectorySyncError):
+        store.change_work_item_scope(
+            "WI-CODEX001R4-0001", now=_NOW, objetivo="objetivo nuevo", idempotency_key=key
+        )
+
+    registros_tras_el_fallo = replay(journal_path).valid_records
+    assert [r["kind"] for r in registros_tras_el_fallo] == [
+        "work_item_created",
+        "run_prepared",
+        "run_dispatched",
+        "run_cancellation_requested",
+    ]
+
+    monkeypatch.setattr(os, "fsync", real_fsync)
+
+    reintentado = store.change_work_item_scope(
+        "WI-CODEX001R4-0001", now=_NOW, objetivo="objetivo nuevo", idempotency_key=key
+    )
+
+    assert reintentado.objetivo == "objetivo nuevo"
+    eventos_finales = [event.kind for event in store.list_events()]
+    assert eventos_finales == [
+        "work_item_created",
+        "run_prepared",
+        "run_dispatched",
+        "run_cancellation_requested",
+        "work_item_scope_changed",
+    ]
+    registros_finales = replay(journal_path).valid_records
+    assert [r["kind"] for r in registros_finales] == eventos_finales
+
+    run_final = store.get_run("RUN-CODEX001R4-0001")
+    assert run_final is not None
+    assert run_final.cancellation_status is not None
+    assert run_final.invalidado_por_alcance is True
+
+    # "Reinicio": reproducir el diario desde cero debe llegar al mismo estado.
+    store_reabierto = DurableWorkEngineStore(journal_path)
+    assert [event.kind for event in store_reabierto.list_events()] == eventos_finales
+    assert store_reabierto.get_work_item("WI-CODEX001R4-0001") == reintentado
+
+
 def test_almacen_durable_reproduce_un_ciclo_de_vida_real(tmp_path: Path) -> None:
     journal_path = tmp_path / "diario.jsonl"
     store = DurableWorkEngineStore(journal_path)

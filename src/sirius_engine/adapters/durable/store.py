@@ -550,26 +550,47 @@ class DurableWorkEngineStore:
         # condición sobre su estado de cancelación; (b) parar al Worker solo
         # donde procede -cerrar de una vez un PREPARED, pedir cancelación a
         # uno vivo sin cancelación ya pedida, o solo marcar si ya la tenía.
+        #
+        # CODEX-001 (ronda 4): si el `fsync` del directorio falla a mitad de
+        # esta cascada, el registro ya quedó durable (CODEX-001 previo) pero
+        # el anexo del propio cambio de alcance -al final, con
+        # `idempotency_key`- nunca llega a ocurrir. Un reintento con la MISMA
+        # clave vuelve a evaluar `_idempotent_work_item` en falso y repetiría
+        # cada anexo de esta cascada para los Runs ya procesados. Por eso cada
+        # anexo interno lleva su propia clave derivada de la clave del
+        # llamador: el reintento la encuentra ya en `_idempotency_seen`
+        # -incluso si el intento anterior murió justo después de absorberla
+        # en memoria- y `_append_run` la salta sin volver a anexar.
         for run in self.list_runs_for_work_item(work_id):
             if run.estado is run_ops.RunState.FINISHED:
                 continue
+            run_idempotency_key = (
+                f"{idempotency_key}::scope-cascade::{run.run_id}"
+                if idempotency_key is not None
+                else None
+            )
             invalidado = run.mark_scope_invalidated(now=now)
             if invalidado.estado is run_ops.RunState.PREPARED:
                 self._append_run(
                     invalidado.invalidate_prepared(now=now),
                     "run_prepared_invalidated",
                     now=now,
-                    idempotency_key=None,
+                    idempotency_key=run_idempotency_key,
                 )
             elif invalidado.cancellation_status is run_ops.CancellationStatus.NONE:
                 self._append_run(
                     invalidado.request_cancel(now=now),
                     "run_cancellation_requested",
                     now=now,
-                    idempotency_key=None,
+                    idempotency_key=run_idempotency_key,
                 )
             else:
-                self._append_run(invalidado, "run_scope_invalidated", now=now, idempotency_key=None)
+                self._append_run(
+                    invalidado,
+                    "run_scope_invalidated",
+                    now=now,
+                    idempotency_key=run_idempotency_key,
+                )
         return self._append_work_item(
             changed, "work_item_scope_changed", now=now, idempotency_key=idempotency_key
         )
