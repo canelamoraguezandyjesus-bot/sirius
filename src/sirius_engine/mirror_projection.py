@@ -97,6 +97,20 @@ _SHA_MARKER_RE = re.compile(r"(?:Head|Merge)\s+SHA:\s*`?([0-9a-fA-F]{7,40})")
 # bloque existe para evitar.
 _PR_ABIERTA_RE = re.compile(r"PR abierta:\s*(https?://\S+)")
 
+# Mismo marcador que publica el ciclo Quality
+# (`sirius_convergence.CI_FAILURE_MARKER_RE`/`CI_SUCCESS_MARKER_RE`), pero
+# capturando head Y conclusión de CUALQUIER resultado (no solo si cuenta para
+# la racha): a diferencia de ``sirius_convergence.ci_failure_streak``, que
+# reduce el historial a un contador, esta expresión sirve para reconstruir la
+# secuencia completa de eventos observados -la usa el espejo de solo lectura
+# (A3) para no perder los fallos que un éxito posterior ya cerró para la
+# racha pero que siguen siendo hechos ocurridos en el ciclo-. Vive aquí, y no
+# en scripts/automation/sirius_convergence.py, porque ese script es
+# automatización viva fuera del alcance de este bloque (incidencia #193).
+_QUALITY_EVENT_RE = re.compile(
+    r"<!--\s*sirius-quality:([0-9a-fA-F]+):(failure|timed_out|success)\s*-->"
+)
+
 # "<!-- sirius-verdict:<rol>:<resto> -->" — el número de campos tras el rol
 # varía (precheck lleva un motivo y una etiqueta de ejecución de más), así que
 # se captura todo el contenido y se separa por ":" en vez de fijar un número
@@ -207,7 +221,7 @@ def _interpretar_eventos_quality(texto_vigente: str) -> tuple[EventoQuality, ...
     """
     return tuple(
         EventoQuality(head=match.group(1), conclusion=match.group(2))
-        for match in sirius_convergence.QUALITY_EVENT_RE.finditer(texto_vigente)
+        for match in _QUALITY_EVENT_RE.finditer(texto_vigente)
     )
 
 
