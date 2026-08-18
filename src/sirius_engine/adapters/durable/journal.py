@@ -54,6 +54,21 @@ from pathlib import Path
 from typing import Any
 
 
+class DirectorySyncError(OSError):
+    """El registro ya quedó completo (escrito y con ``fsync``) en el diario, pero
+    sincronizar su directorio padre falló (CODEX-001).
+
+    Distingue este fallo -posterior a que el registro sea durable en el
+    propio fichero- de un fallo anterior (abrir, escribir o el `fsync` del
+    fichero), en los que el registro NO llegó a persistir. Quien llama a
+    :func:`append_durably` y recibe esta excepción sabe que el evento ya
+    ocurrió de forma durable en el diario y debe reconciliar su índice en
+    memoria en consecuencia -en vez de reintentar el anexo desde cero, lo que
+    duplicaría el registro-, aunque la entrada de directorio en sí no quedó
+    garantizada frente a una caída inmediata.
+    """
+
+
 class InternalCorruptionError(RuntimeError):
     """El diario tiene una línea corrupta que no puede ser cola truncada.
 
@@ -95,11 +110,18 @@ def _self_kill() -> None:
 def _fsync_directory(path: Path) -> None:
     """Sincronizar el directorio padre de ``path``, para hacer durable su entrada.
 
-    Solo hace falta cuando el anexo CREÓ el fichero (CODEX-001): en sistemas
-    de archivos donde sincronizar el fichero no basta para hacer durable la
-    entrada nueva de directorio, una caída justo después de un anexo
-    confirmado podría, al reiniciar, dejar el diario entero sin existir pese
-    a que ``os.fsync`` sobre su descriptor tuvo éxito.
+    Se llama en CADA anexo confirmado, no solo en el que crea el fichero
+    (CODEX-002): comprobar "¿existía el fichero antes de abrirlo?" no basta
+    para saber si su entrada de directorio ya quedó sincronizada, porque una
+    ejecución anterior pudo morir después de crear el fichero (``O_CREAT``)
+    pero antes de sincronizar el directorio -dejando el fichero visible sin
+    que su entrada sea durable-; el siguiente anexo vería `created = False` y
+    nunca repararía esa entrada pendiente. Sincronizar el directorio padre en
+    todos los anexos, sin condición, cierra esa ventana: en sistemas de
+    archivos donde sincronizar el fichero no basta para hacer durable una
+    entrada nueva (o pendiente) de directorio, una caída justo después de un
+    anexo confirmado podría, al reiniciar, dejar el diario entero sin existir
+    pese a que ``os.fsync`` sobre su descriptor tuvo éxito.
     """
     dir_fd = os.open(path.parent, os.O_RDONLY)
     try:
@@ -182,18 +204,24 @@ def append_durably(
     """Anexar un registro al diario, con puntos de corte inyectables.
 
     Sin ``kill_at`` es el camino normal: recuperar la cola inválida si la
-    hay, abrir, escribir, ``fsync``, cerrar y -solo si este anexo creó el
-    fichero (CODEX-001)- sincronizar también su directorio padre, para que la
-    entrada de directorio sea igual de durable que el propio contenido. Con
-    ``kill_at``, se autotermina justo después de completar las acciones hasta
-    ese punto — nunca antes.
+    hay, abrir, escribir, ``fsync``, cerrar y sincronizar también su
+    directorio padre en CADA anexo (CODEX-002), para que la entrada de
+    directorio sea igual de durable que el propio contenido. Con ``kill_at``,
+    se autotermina justo después de completar las acciones hasta ese punto —
+    nunca antes.
+
+    Si el ``fsync`` del directorio falla DESPUÉS de que el registro ya quedó
+    completo (escrito y con ``fsync``) en el propio fichero, se relanza como
+    :class:`DirectorySyncError` (CODEX-001) en vez de una excepción genérica:
+    quien llama debe distinguir ese caso -el evento ya ocurrió de forma
+    durable- de un fallo anterior, en el que el registro no llegó a
+    persistir.
     """
     if kill_at is KillPoint.BEFORE_OPEN:
         _self_kill()
 
     recover_invalid_tail(journal_path)
 
-    created = not journal_path.exists()
     line = build_line(record_without_checksum)
 
     fd = os.open(journal_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
@@ -224,8 +252,13 @@ def append_durably(
     finally:
         os.close(fd)
 
-    if created:
+    try:
         _fsync_directory(journal_path)
+    except OSError as exc:
+        raise DirectorySyncError(
+            f"{journal_path}: el registro ya está completo en el diario, pero "
+            "sincronizar su directorio padre falló"
+        ) from exc
 
     if kill_at is KillPoint.AFTER_CLOSE:
         _self_kill()

@@ -33,7 +33,7 @@ from sirius_engine.adapters.durable.entity_codec import (
     run_to_dict,
     work_item_to_dict,
 )
-from sirius_engine.adapters.durable.journal import append_durably, replay
+from sirius_engine.adapters.durable.journal import DirectorySyncError, append_durably, replay
 from sirius_engine.domain import run as run_ops
 from sirius_engine.domain import work_item as work_item_ops
 from sirius_engine.domain.errors import (
@@ -123,18 +123,26 @@ class DurableWorkEngineStore:
             "entity": work_item_to_dict(work_item),
             "idempotency_key": idempotency_key,
         }
-        append_durably(self._journal_path, record)
-        self._absorb(
-            Event(
-                sequence=sequence,
-                occurred_at=now,
-                aggregate_type=AggregateType.WORK_ITEM,
-                aggregate_id=work_item.work_id,
-                kind=kind,
-                entity=work_item,
-            ),
-            idempotency_key=idempotency_key,
+        event = Event(
+            sequence=sequence,
+            occurred_at=now,
+            aggregate_type=AggregateType.WORK_ITEM,
+            aggregate_id=work_item.work_id,
+            kind=kind,
+            entity=work_item,
         )
+        try:
+            append_durably(self._journal_path, record)
+        except DirectorySyncError:
+            # CODEX-001: el registro ya quedó completo y con fsync en el
+            # propio diario -solo falló sincronizar su directorio padre-, así
+            # que el evento ya ocurrió de forma durable. Reconciliar el
+            # índice en memoria ahora evita que un reintento con la misma
+            # clave, al no encontrarla en `_idempotency_seen`, vuelva a
+            # anexar un segundo registro con la misma secuencia.
+            self._absorb(event, idempotency_key=idempotency_key)
+            raise
+        self._absorb(event, idempotency_key=idempotency_key)
         return work_item
 
     def _append_run(
@@ -160,18 +168,21 @@ class DurableWorkEngineStore:
             "entity": run_to_dict(run),
             "idempotency_key": idempotency_key,
         }
-        append_durably(self._journal_path, record)
-        self._absorb(
-            Event(
-                sequence=sequence,
-                occurred_at=now,
-                aggregate_type=AggregateType.RUN,
-                aggregate_id=run.run_id,
-                kind=kind,
-                entity=run,
-            ),
-            idempotency_key=idempotency_key,
+        event = Event(
+            sequence=sequence,
+            occurred_at=now,
+            aggregate_type=AggregateType.RUN,
+            aggregate_id=run.run_id,
+            kind=kind,
+            entity=run,
         )
+        try:
+            append_durably(self._journal_path, record)
+        except DirectorySyncError:
+            # CODEX-001: mismo razonamiento que en `_append_work_item`.
+            self._absorb(event, idempotency_key=idempotency_key)
+            raise
+        self._absorb(event, idempotency_key=idempotency_key)
         return run
 
     def _require_work_item(self, work_id: str) -> WorkItem:

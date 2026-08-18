@@ -24,6 +24,7 @@ import pytest
 
 from sirius_engine.adapters.durable.entity_codec import run_from_dict, run_to_dict
 from sirius_engine.adapters.durable.journal import (
+    DirectorySyncError,
     InternalCorruptionError,
     KillPoint,
     append_durably,
@@ -170,6 +171,72 @@ def test_reintento_tras_reinicio_no_duplica_por_idempotencia(tmp_path: Path) -> 
 
     assert reintentado == creado
     assert len(store_tras_reiniciar.list_events()) == 1
+    assert len(replay(journal_path).valid_records) == 1
+
+
+def test_fallo_de_fsync_de_directorio_tras_persistir_no_duplica_al_reintentar(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CODEX-001: reproduce el hallazgo exacto -fallar únicamente la SEGUNDA llamada a
+    ``os.fsync`` (la del directorio, tras la del propio fichero) deja el registro
+    completo en disco pero el evento sin absorber en memoria. Con la corrección, el
+    reintento con la MISMA instancia y la MISMA clave no debe duplicar el registro.
+    """
+    journal_path = tmp_path / "diario.jsonl"
+    store = DurableWorkEngineStore(journal_path)
+
+    real_fsync = os.fsync
+    llamadas = 0
+
+    def fsync_que_falla_la_segunda_vez(fd: int) -> None:
+        nonlocal llamadas
+        llamadas += 1
+        if llamadas == 2:
+            raise OSError("fallo simulado de fsync de directorio")
+        real_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", fsync_que_falla_la_segunda_vez)
+
+    with pytest.raises(DirectorySyncError):
+        store.create_work_item(
+            work_id="WI-CODEX001-0001",
+            peticion_original="texto literal",
+            objetivo="objetivo",
+            contexto_origen=(),
+            entregable="entregable",
+            criterio_terminado="criterio",
+            limites={},
+            prioridad=1,
+            clase=WorkItemClass.PROGRAMACION,
+            now=_NOW,
+            idempotency_key="req-crear-WI-CODEX001-0001",
+        )
+
+    # El registro ya está completo en el diario -su fsync de fichero tuvo
+    # éxito-, aunque falló sincronizar el directorio. Antes de la corrección,
+    # el índice en memoria no reflejaba este evento pese a estar ya durable.
+    assert len(replay(journal_path).valid_records) == 1
+    creado = store.get_work_item("WI-CODEX001-0001")
+    assert creado is not None
+
+    monkeypatch.setattr(os, "fsync", real_fsync)
+
+    reintentado = store.create_work_item(
+        work_id="WI-CODEX001-0001",
+        peticion_original="texto literal",
+        objetivo="objetivo",
+        contexto_origen=(),
+        entregable="entregable",
+        criterio_terminado="criterio",
+        limites={},
+        prioridad=1,
+        clase=WorkItemClass.PROGRAMACION,
+        now=_NOW,
+        idempotency_key="req-crear-WI-CODEX001-0001",
+    )
+
+    assert reintentado == creado
+    assert len(store.list_events()) == 1
     assert len(replay(journal_path).valid_records) == 1
 
 
@@ -418,14 +485,13 @@ def test_mutacion_quitar_el_fsync_deja_de_invocarlo(
     uno sin él (ADR-026 límite conocido: `kill -9` no vacía la caché de
     páginas del kernel, documentado también en ADR-029 §2) — por eso esta
     mutación no se demuestra con la matriz, sino con un espía: la
-    implementación real invoca `os.fsync` exactamente una vez por anexo
-    normal sobre un diario ya existente; un mutante que borre esa línea deja
-    de invocarlo, y este espía lo detecta donde el kill-matrix no podría.
-
-    El diario se crea ANTES del espía (con un primer anexo) para aislar el
-    `fsync` del propio anexo del `fsync` del directorio que solo ocurre en el
-    anexo que crea el fichero (CODEX-001, cubierto aparte por
-    ``test_creacion_del_diario_sincroniza_tambien_su_directorio``).
+    implementación real invoca `os.fsync` exactamente dos veces por anexo
+    normal sobre un diario ya existente -una para el propio fichero, otra
+    para su directorio padre (CODEX-002: se sincroniza en CADA anexo, no
+    solo en el que crea el fichero, cubierto aparte por
+    ``test_cada_anexo_sincroniza_tambien_su_directorio``)-; un mutante que
+    borre la línea del `fsync` del fichero deja esta lista con una sola
+    llamada, y este espía lo detecta donde el kill-matrix no podría.
     """
     journal_path = tmp_path / "diario.jsonl"
     append_durably(journal_path, _sample_record(sequence=1), kill_at=None)
@@ -441,23 +507,30 @@ def test_mutacion_quitar_el_fsync_deja_de_invocarlo(
 
     append_durably(journal_path, _sample_record(sequence=2), kill_at=None)
 
-    assert len(llamadas) == 1, (
-        "append_durably debe llamar a os.fsync exactamente una vez por anexo sobre un "
-        "diario ya existente; un mutante que quite esa línea dejaría esta lista vacía"
+    assert len(llamadas) == 2, (
+        "append_durably debe llamar a os.fsync dos veces por anexo sobre un diario ya "
+        "existente (fichero + directorio); un mutante que quite la línea del fichero "
+        "dejaría esta lista con una sola llamada"
     )
 
 
-def test_creacion_del_diario_sincroniza_tambien_su_directorio(
+def test_cada_anexo_sincroniza_tambien_su_directorio(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """CODEX-001: el anexo que CREA el diario también sincroniza su directorio padre.
+    """CODEX-001/CODEX-002: TODO anexo confirmado sincroniza su directorio padre.
 
     Sin esto, en sistemas de archivos donde sincronizar el fichero no basta
-    para hacer durable su entrada nueva de directorio, una caída justo
-    después de un primer anexo confirmado podría, al reiniciar, dejar el
-    diario entero sin existir. Se comprueba con un espía sobre ``os.open``
-    que confirma que, además del descriptor del propio diario, se abre (en
-    solo lectura) y se sincroniza un descriptor del directorio padre.
+    para hacer durable su entrada de directorio, una caída justo después de
+    un anexo confirmado podría, al reiniciar, dejar el diario entero sin
+    existir. Comprobarlo solo en el anexo que CREA el fichero no basta
+    (CODEX-002): una ejecución anterior puede morir después de crear el
+    fichero pero antes de sincronizar su directorio, dejándolo visible sin
+    que la entrada sea durable; el siguiente anexo vería el fichero ya
+    existente y, si solo sincronizara en la creación, nunca repararía esa
+    entrada pendiente. Por eso la corrección sincroniza el directorio en
+    CADA anexo, se comprueba aquí con un espía sobre ``os.open``/``os.fsync``
+    tanto en el primer anexo (que crea el fichero) como en el segundo (sobre
+    el diario ya existente).
     """
     journal_path = tmp_path / "subdir" / "diario.jsonl"
     journal_path.parent.mkdir()
@@ -491,14 +564,56 @@ def test_creacion_del_diario_sincroniza_tambien_su_directorio(
         "con os.fsync, o su entrada nueva podría no sobrevivir a una caída"
     )
 
-    # Un segundo anexo, sobre el diario YA existente, no debe volver a
-    # sincronizar el directorio: el protocolo de anexos posteriores queda
-    # intacto (CODEX-001, límite de la corrección).
+    # Un segundo anexo, sobre el diario YA existente, también debe abrir y
+    # sincronizar el directorio padre (CODEX-002): no puede depender de si
+    # ESTE anexo creó el fichero, porque una ejecución anterior pudo haberlo
+    # creado sin llegar a sincronizar su directorio.
     dir_fd_abierto.clear()
     fsync_calls.clear()
     append_durably(journal_path, _sample_record(sequence=2), kill_at=None)
-    assert dir_fd_abierto == [], (
-        "un anexo sobre un diario ya existente no debe abrir su directorio padre de nuevo"
+    assert len(dir_fd_abierto) == 1, (
+        "un anexo sobre un diario ya existente también debe abrir su directorio padre, "
+        "por si una creación anterior murió antes de sincronizarlo (CODEX-002)"
+    )
+    assert dir_fd_abierto[0] in fsync_calls, (
+        "el directorio padre debe sincronizarse en cada anexo, no solo en el que crea "
+        "el fichero (CODEX-002)"
+    )
+
+
+def test_creacion_interrumpida_antes_de_sincronizar_directorio_se_repara_en_el_reintento(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CODEX-002: reproduce el defecto exacto -``AFTER_OPEN_BEFORE_WRITE`` deja el fichero
+    creado (visible) pero sin su directorio sincronizado; antes de la corrección, el
+    reintento sobre ese fichero ya existente nunca abría el directorio padre.
+    """
+    journal_path = tmp_path / "diario.jsonl"
+
+    # Simula la creación interrumpida: el fichero queda creado (vacío) pero
+    # su directorio padre nunca llegó a sincronizarse, tal como dejaría un
+    # kill en AFTER_OPEN_BEFORE_WRITE.
+    fd = os.open(journal_path, os.O_WRONLY | os.O_CREAT, 0o644)
+    os.close(fd)
+    assert journal_path.exists()
+
+    dir_fd_abierto: list[int] = []
+    real_open = os.open
+
+    def open_espia(path: Any, flags: int, *args: Any) -> int:
+        fd = real_open(path, flags, *args)
+        if Path(os.fspath(path)) == journal_path.parent and flags == os.O_RDONLY:
+            dir_fd_abierto.append(fd)
+        return fd
+
+    monkeypatch.setattr(os, "open", open_espia)
+
+    append_durably(journal_path, _sample_record(sequence=1), kill_at=None)
+
+    assert len(dir_fd_abierto) == 1, (
+        "el reintento sobre un fichero ya existente -pero creado por una ejecución "
+        "interrumpida que nunca sincronizó su directorio- debe sincronizarlo ahora "
+        "(CODEX-002); antes de la corrección, `created` ya era falso y nunca lo abría"
     )
 
 
