@@ -46,6 +46,20 @@ from sirius_engine.domain.events import AggregateType, Event, EventKind, rebuild
 from sirius_engine.domain.run import Run
 from sirius_engine.domain.work_item import WorkItem, WorkItemClass
 
+# Clave interna de la cascada de invalidación de `change_work_item_scope`
+# (CODEX-001, ronda 5): una tupla, nunca una `str`. La clave pública que
+# aporta el llamador siempre es `str`; al derivar la clave de cada Run de la
+# cascada con una tupla en vez de concatenar texto (p.ej. `f"{key}::scope-
+# cascade::{run_id}"`), ninguna clave pública -sea cual sea su contenido-
+# puede colisionar por igualdad con una derivada: son de tipos distintos y
+# `"x" == ("a", "b", "c")` es siempre `False` en Python. Antes, una clave
+# pública que por casualidad (o a propósito) tuviera la forma exacta del
+# texto compuesto colisionaba en `_idempotency_seen` con la derivada
+# correspondiente y `_append_run` devolvía el Run cacheado sin anexar la
+# invalidación.
+_ScopeCascadeKey = tuple[str, str, str]
+_IdempotencyKey = str | _ScopeCascadeKey
+
 
 class DurableWorkEngineStore:
     """Satisface :class:`sirius_engine.ports.store.WorkEngineStore` de forma durable."""
@@ -55,7 +69,7 @@ class DurableWorkEngineStore:
         self._events: list[Event] = []
         self._work_items: dict[str, WorkItem] = {}
         self._runs: dict[str, Run] = {}
-        self._idempotency_seen: dict[str, WorkItem | Run] = {}
+        self._idempotency_seen: dict[_IdempotencyKey, WorkItem | Run] = {}
         self._next_sequence = 1
         self._load()
 
@@ -73,9 +87,25 @@ class DurableWorkEngineStore:
                 kind=record["kind"],
                 entity=entity,
             )
-            self._absorb(event, idempotency_key=record.get("idempotency_key"))
+            self._absorb(event, idempotency_key=self._decode_idempotency_key(record))
 
-    def _absorb(self, event: Event, *, idempotency_key: str | None) -> None:
+    @staticmethod
+    def _decode_idempotency_key(record: Mapping[str, object]) -> _IdempotencyKey | None:
+        """Reconstruir la clave de idempotencia de un registro del diario.
+
+        Una clave interna de cascada (:data:`_ScopeCascadeKey`) se escribe en
+        JSON como lista -``json`` no distingue tupla de lista- y hay que
+        devolverla como tupla para que sea hashable y comparable de nuevo
+        contra las derivadas en memoria; una clave pública sigue siendo
+        ``str`` tal cual.
+        """
+        raw = record.get("idempotency_key")
+        if isinstance(raw, list):
+            return tuple(raw)
+        assert raw is None or isinstance(raw, str)
+        return raw
+
+    def _absorb(self, event: Event, *, idempotency_key: _IdempotencyKey | None) -> None:
         """Registrar ``event`` en el índice en memoria, sin volver a tocar el diario."""
         self._events.append(event)
         self._next_sequence = max(self._next_sequence, event.sequence + 1)
@@ -99,7 +129,7 @@ class DurableWorkEngineStore:
         kind: EventKind,
         *,
         now: datetime,
-        idempotency_key: str | None,
+        idempotency_key: _IdempotencyKey | None,
     ) -> WorkItem:
         """Anexar de forma durable, o devolver lo ya anexado si ``idempotency_key`` se repite.
 
@@ -151,7 +181,7 @@ class DurableWorkEngineStore:
         kind: EventKind,
         *,
         now: datetime,
-        idempotency_key: str | None,
+        idempotency_key: _IdempotencyKey | None,
     ) -> Run:
         if idempotency_key is not None:
             cached = self._idempotency_seen.get(idempotency_key)
@@ -561,11 +591,22 @@ class DurableWorkEngineStore:
         # llamador: el reintento la encuentra ya en `_idempotency_seen`
         # -incluso si el intento anterior murió justo después de absorberla
         # en memoria- y `_append_run` la salta sin volver a anexar.
+        #
+        # CODEX-001 (ronda 5): la clave derivada es una tupla
+        # (:data:`_ScopeCascadeKey`), no texto concatenado. Una clave pública
+        # es siempre `str`; si se derivara concatenando texto (p.ej.
+        # ``f"{idempotency_key}::scope-cascade::{run.run_id}"``), una clave
+        # pública que un llamador anterior hubiera usado con esa forma exacta
+        # colisionaría en `_idempotency_seen` con la derivada de una cascada
+        # posterior, y `_append_run` devolvería el Run ya cacheado sin anexar
+        # la invalidación. Una tupla nunca es igual a una `str`, así que esta
+        # clave interna queda aislada de cualquier clave pública por
+        # construcción, no solo por convención de formato.
         for run in self.list_runs_for_work_item(work_id):
             if run.estado is run_ops.RunState.FINISHED:
                 continue
-            run_idempotency_key = (
-                f"{idempotency_key}::scope-cascade::{run.run_id}"
+            run_idempotency_key: _ScopeCascadeKey | None = (
+                ("scope-cascade", idempotency_key, run.run_id)
                 if idempotency_key is not None
                 else None
             )

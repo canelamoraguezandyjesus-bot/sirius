@@ -35,7 +35,7 @@ from sirius_engine.adapters.durable.journal import (
 )
 from sirius_engine.adapters.durable.store import DurableWorkEngineStore
 from sirius_engine.domain.events import AggregateType
-from sirius_engine.domain.run import Run
+from sirius_engine.domain.run import CancellationStatus, Run
 from sirius_engine.domain.run import prepare as prepare_run
 from sirius_engine.domain.work_item import WorkItemClass
 
@@ -332,6 +332,64 @@ def test_reintento_de_change_work_item_scope_no_repite_la_cascada_de_runs(
     assert reintentado == cambiado
     assert len(store.list_events()) == eventos_tras_primer_cambio
     assert len(replay(journal_path).valid_records) == eventos_tras_primer_cambio
+
+
+def test_una_clave_publica_con_forma_de_clave_de_cascada_no_bloquea_la_invalidacion(
+    tmp_path: Path,
+) -> None:
+    """CODEX-001 (ronda 5): la clave interna de la cascada no debe colisionar con una pública.
+
+    Reproduce el hallazgo exacto: un Run se despacha con la clave pública
+    ``"K::scope-cascade::R"`` -la misma forma de texto que, ANTES de esta
+    corrección, se usaba para derivar la clave interna de la cascada de
+    ``change_work_item_scope`` concatenando la clave del llamador con
+    ``"::scope-cascade::"`` y el id del Run-. Al cambiar después el alcance
+    del WorkItem con la clave pública ``"K"``, la clave derivada para ese
+    mismo Run coincidía por igualdad de texto con la entrada ya presente en
+    `_idempotency_seen`, y `_append_run` devolvía el Run cacheado sin anexar
+    la invalidación: el alcance cambiaba pero el Run seguía `DISPATCHED`, sin
+    cancelación pedida y sin `invalidado_por_alcance`. Con la clave interna
+    aislada por tipo (una tupla, nunca igual a una `str`), el Run debe quedar
+    invalidado y con la cancelación pedida.
+    """
+    journal_path = tmp_path / "diario.jsonl"
+    store = DurableWorkEngineStore(journal_path)
+    work_id = "WI-CODEX001R5-0001"
+    run_id = "RUN-CODEX001R5-0001"
+    store.create_work_item(
+        work_id=work_id,
+        peticion_original="texto literal",
+        objetivo="objetivo original",
+        contexto_origen=(),
+        entregable="entregable",
+        criterio_terminado="criterio",
+        limites={},
+        prioridad=1,
+        clase=WorkItemClass.PROGRAMACION,
+        now=_NOW,
+    )
+    store.prepare_run(
+        run_id=run_id,
+        work_id=work_id,
+        paso="paso-1",
+        worker="worker-de-prueba",
+        work_package={"instrucciones": "ejecutar paso 1"},
+        deadline=datetime(2026, 8, 18, 13, 0, tzinfo=UTC),
+        now=_NOW,
+    )
+    scope_key = "K"
+    colliding_public_key = f"{scope_key}::scope-cascade::{run_id}"
+    store.dispatch_run(run_id, now=_NOW, idempotency_key=colliding_public_key)
+
+    store.change_work_item_scope(
+        work_id, now=_NOW, objetivo="objetivo nuevo", idempotency_key=scope_key
+    )
+
+    run = store.get_run(run_id)
+    assert run is not None
+    assert run.invalidado_por_alcance is True
+    assert run.cancellation_status is CancellationStatus.UNCONFIRMED
+    assert "run_cancellation_requested" in [event.kind for event in store.list_events()]
 
 
 def test_fallo_de_fsync_a_mitad_de_la_cascada_de_change_scope_no_duplica_al_reintentar(
