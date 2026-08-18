@@ -51,7 +51,7 @@ def test_buscar_en_arbol_repo_encuentra_y_referencia_con_fichero_y_linea(
     (tmp_path / "otro.md").write_text("nada relevante aquí\n", encoding="utf-8")
     (tmp_path / "binario.png").write_bytes(b"\x89PNG\r\n")
 
-    referencias = buscar_en_arbol_repo(tmp_path, "B12e")
+    referencias, fallidas = buscar_en_arbol_repo(tmp_path, "B12e")
 
     assert referencias == (
         Referencia(tipo="fichero", identificador="docs/b12e.md:1", fragmento="# B12e"),
@@ -61,19 +61,47 @@ def test_buscar_en_arbol_repo_encuentra_y_referencia_con_fichero_y_linea(
             fragmento="B12e quedó bloqueado por decisión.",
         ),
     )
+    assert fallidas == ()
 
 
 def test_buscar_en_arbol_repo_ignora_directorios_excluidos(tmp_path: Path) -> None:
     (tmp_path / ".git").mkdir()
     (tmp_path / ".git" / "ficticio.md").write_text("B12e\n", encoding="utf-8")
-    referencias = buscar_en_arbol_repo(tmp_path, "B12e")
+    referencias, fallidas = buscar_en_arbol_repo(tmp_path, "B12e")
     assert referencias == ()
+    assert fallidas == ()
 
 
 def test_buscar_en_arbol_repo_es_determinista(tmp_path: Path) -> None:
     (tmp_path / "a.md").write_text("consulta\n", encoding="utf-8")
     (tmp_path / "b.md").write_text("consulta\n", encoding="utf-8")
     assert buscar_en_arbol_repo(tmp_path, "consulta") == buscar_en_arbol_repo(tmp_path, "consulta")
+
+
+def test_buscar_en_arbol_repo_fallo_de_lectura_se_reporta_no_se_esconde(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Requisito 2 también en el proveedor de árbol: un fichero elegible que ya
+    no se puede leer (borrado, sin permisos, cualquier ``OSError``) no debe
+    desaparecer como si el árbol no tuviera nada que decir sobre él.
+    """
+    (tmp_path / "legible.md").write_text("B12e en el que sí se puede confiar\n", encoding="utf-8")
+    (tmp_path / "ilegible.md").write_text("B12e pero no se podrá leer\n", encoding="utf-8")
+
+    original_read_text = Path.read_text
+
+    def read_text_que_falla_para_ilegible(self: Path, *args: object, **kwargs: object) -> str:
+        if self.name == "ilegible.md":
+            raise OSError("permiso denegado")
+        return original_read_text(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "read_text", read_text_que_falla_para_ilegible)
+
+    referencias, fallidas = buscar_en_arbol_repo(tmp_path, "B12e")
+
+    assert any(r.identificador.startswith("legible.md") for r in referencias)
+    assert not any(r.identificador.startswith("ilegible.md") for r in referencias)
+    assert fallidas == ("arbol:ilegible.md",)
 
 
 # --- Proveedor 2: incidencias y PR ------------------------------------------
@@ -135,6 +163,17 @@ def test_buscar_en_historial_git_referencia_por_sha_corto() -> None:
     referencias = buscar_en_historial_git(entradas, "B12e")
     assert referencias == (
         Referencia(tipo="commit", identificador="a" * 12, fragmento="Añade B12e"),
+    )
+
+
+def test_buscar_en_historial_git_cita_el_cuerpo_cuando_la_coincidencia_esta_ahi() -> None:
+    """La cita debe evidenciar dónde ocurrió la coincidencia: si el asunto no
+    contiene la consulta, el fragmento debe venir del cuerpo, no del asunto.
+    """
+    entradas = (EntradaGitLog(sha="a" * 40, asunto="Refactor", cuerpo="B12e quedó bloqueado"),)
+    referencias = buscar_en_historial_git(entradas, "B12e")
+    assert referencias == (
+        Referencia(tipo="commit", identificador="a" * 12, fragmento="B12e quedó bloqueado"),
     )
 
 

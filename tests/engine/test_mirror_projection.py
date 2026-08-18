@@ -126,6 +126,22 @@ def test_reconstruye_ciclo_completo_de_incidencia_186_desde_fixture() -> None:
     # (a2959b57c) pero un `success` posterior sobre el MISMO head lo cierra.
     assert mirrored.fallos_quality_consecutivos == 0
 
+    # Pero la secuencia COMPLETA de eventos no se pierde: el `failure` sigue
+    # siendo un hecho ocurrido en el ciclo, aunque ya no cuente para la racha.
+    assert len(mirrored.eventos_quality) == 8
+    assert [e.conclusion for e in mirrored.eventos_quality] == [
+        "success",
+        "success",
+        "success",
+        "success",
+        "success",
+        "failure",
+        "success",
+        "success",
+    ]
+    assert mirrored.eventos_quality[5].head.startswith("a2959b57")
+    assert mirrored.eventos_quality[6].head == mirrored.eventos_quality[5].head
+
     veredictos_por_rol = [v.rol for v in mirrored.veredictos]
     assert veredictos_por_rol.count("corrector") == 7
     assert veredictos_por_rol.count("reviewer") == 7
@@ -281,6 +297,66 @@ def test_etiqueta_sirius_desconocida_produce_estado_none_no_un_valor_por_defecto
     assert mirrored.fase is None
 
 
+def test_etiquetas_de_estado_contradictorias_no_eligen_una_ganadora() -> None:
+    """`sirius:repairing` + `sirius:completed` a la vez no es un estado real:
+    es una contradicción que el espejo debe exponer, no resolver en silencio
+    quedándose con la de mayor prioridad.
+    """
+    metadatos = LecturaMetadatos(
+        estado=LecturaEstado.OK,
+        metadatos=MetadatosIncidencia(
+            numero=1,
+            titulo="t",
+            estado_gh="open",
+            etiquetas=("sirius:repairing", "sirius:completed"),
+        ),
+    )
+    cuerpo = LecturaCuerpo(estado=LecturaEstado.OK, cuerpo="")
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=())
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.estado is None
+    assert mirrored.fase is None
+    assert mirrored.etiquetas_contradictorias is True
+
+
+def test_par_de_activacion_planned_e_implement_requested_no_es_contradiccion() -> None:
+    """La única excepción real: `sirius_validate_activation.sh` exige
+    `sirius:planned` y `implement-sirius-work.yml` retira las dos juntas al
+    consumir el evento, así que esta combinación es una activación normal.
+    """
+    metadatos = LecturaMetadatos(
+        estado=LecturaEstado.OK,
+        metadatos=MetadatosIncidencia(
+            numero=1,
+            titulo="t",
+            estado_gh="open",
+            etiquetas=("sirius:planned", "sirius:implement-requested"),
+        ),
+    )
+    cuerpo = LecturaCuerpo(estado=LecturaEstado.OK, cuerpo="")
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=())
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.etiquetas_contradictorias is False
+    assert mirrored.estado is WorkItemState.PLANNED
+    assert mirrored.fase is WorkItemPhase.PREPARAR
+
+
 def test_comentario_no_confiable_no_se_interpreta_como_marcador() -> None:
     """Mutación (c): si el filtro de confianza se rompiera (p. ej. aceptando
     cualquier autor), esta prueba fallaría -un tercero sin autoridad NO
@@ -363,11 +439,13 @@ def test_mirrored_work_item_no_admite_autoritativo_por_constructor() -> None:
             estado=None,
             fase=None,
             etiquetas=(),
+            etiquetas_contradictorias=False,
             cerrada=False,
             pr_url=None,
             head_sha=None,
             rondas=(),
             veredictos=(),
+            eventos_quality=(),
             fallos_quality_consecutivos=0,
             origen=None,  # type: ignore[arg-type]
             autoritativo=True,

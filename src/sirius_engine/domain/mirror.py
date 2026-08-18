@@ -68,6 +68,20 @@ class RondaHallazgos:
 
 
 @dataclass(frozen=True, slots=True)
+class EventoQuality:
+    """Un marcador ``<!-- sirius-quality:<head>:<conclusión> -->`` leído.
+
+    A diferencia de ``fallos_quality_consecutivos`` -que reduce el historial a
+    la racha vigente-, la secuencia completa de eventos conserva cada
+    resultado observado, en el orden en que se publicó: un ciclo con fallos y
+    recuperaciones queda distinguible de uno donde Quality nunca se ejecutó.
+    """
+
+    head: str
+    conclusion: str
+
+
+@dataclass(frozen=True, slots=True)
 class VeredictoPublicado:
     """Un marcador ``<!-- sirius-verdict:<rol>:<veredicto>:<referencia> -->`` leído."""
 
@@ -83,18 +97,24 @@ class MirroredWorkItem:
 
     ``estado``/``fase`` son ``None`` cuando la incidencia no lleva ninguna
     etiqueta ``sirius:*`` reconocida -eso también es un hecho observado, no
-    una ausencia de lectura-.
+    una ausencia de lectura-. También son ``None`` cuando lleva VARIAS
+    etiquetas de estado a la vez fuera del único par de activación válido
+    (``sirius:planned`` + ``sirius:implement-requested``): en ese caso
+    ``etiquetas_contradictorias`` es ``True`` y expone la contradicción en
+    vez de que el espejo elija una etiqueta ganadora en silencio.
     """
 
     work_id: str
     estado: WorkItemState | None
     fase: WorkItemPhase | None
     etiquetas: tuple[str, ...]
+    etiquetas_contradictorias: bool
     cerrada: bool
     pr_url: str | None
     head_sha: str | None
     rondas: tuple[RondaHallazgos, ...]
     veredictos: tuple[VeredictoPublicado, ...]
+    eventos_quality: tuple[EventoQuality, ...]
     fallos_quality_consecutivos: int
     origen: OrigenLectura
     autoritativo: bool = field(default=False, init=False)

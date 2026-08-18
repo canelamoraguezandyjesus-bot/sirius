@@ -73,10 +73,17 @@ def _fragmento(texto: str, consulta_normalizada: str, *, contexto: int = 40) -> 
 
 def buscar_en_arbol_repo(
     raiz: Path, consulta: str, *, extensiones: tuple[str, ...] = _EXTENSIONES_POR_DEFECTO
-) -> tuple[Referencia, ...]:
-    """Búsqueda determinista de ``consulta`` en el árbol del repositorio."""
+) -> tuple[tuple[Referencia, ...], tuple[str, ...]]:
+    """Búsqueda determinista de ``consulta`` en el árbol del repositorio.
+
+    Un fichero elegible que no se puede leer (desaparece, pierde permisos,
+    cualquier otro ``OSError``) no se salta en silencio: su ruta se acumula
+    en el segundo elemento devuelto, para no convertir "no pude leer" en "no
+    había nada" (mismo contrato que :func:`buscar_en_incidencias`).
+    """
     consulta_normalizada = consulta.casefold()
     encontradas: list[Referencia] = []
+    fallidas: list[str] = []
     for ruta in sorted(raiz.rglob("*")):
         relativa = ruta.relative_to(raiz)
         if _DIRECTORIOS_EXCLUIDOS & set(relativa.parts):
@@ -86,6 +93,7 @@ def buscar_en_arbol_repo(
         try:
             texto = ruta.read_text(encoding="utf-8")
         except UnicodeDecodeError, OSError:
+            fallidas.append(f"arbol:{relativa}")
             continue
         for numero_linea, linea in enumerate(texto.splitlines(), start=1):
             if consulta_normalizada in linea.casefold():
@@ -97,7 +105,8 @@ def buscar_en_arbol_repo(
                     )
                 )
     encontradas.sort(key=lambda r: r.identificador)
-    return tuple(encontradas)
+    fallidas.sort()
+    return tuple(encontradas), tuple(fallidas)
 
 
 # --- Proveedor 2: incidencias y PR ------------------------------------------
@@ -212,7 +221,10 @@ def buscar_en_historial_git(
     for entrada in entradas:
         texto = f"{entrada.asunto}\n{entrada.cuerpo}"
         if consulta_normalizada in texto.casefold():
-            fragmento = entrada.asunto.strip() or _fragmento(entrada.cuerpo, consulta_normalizada)
+            if consulta_normalizada in entrada.asunto.casefold():
+                fragmento = entrada.asunto.strip()
+            else:
+                fragmento = _fragmento(entrada.cuerpo, consulta_normalizada)
             encontradas.append(
                 Referencia(tipo="commit", identificador=entrada.sha[:12], fragmento=fragmento)
             )
@@ -240,14 +252,14 @@ def recuperar_contexto(
     compartido, y el resultado se ordena de forma estable dentro de cada
     proveedor.
     """
-    referencias_arbol = buscar_en_arbol_repo(raiz_repo, consulta)
-    referencias_incidencias, proveedores_fallidos = buscar_en_incidencias(
+    referencias_arbol, fallidas_arbol = buscar_en_arbol_repo(raiz_repo, consulta)
+    referencias_incidencias, fallidas_incidencias = buscar_en_incidencias(
         port, repo=repo, numeros=numeros_incidencias, consulta=consulta
     )
     referencias_git = buscar_en_historial_git(entradas_git_log, consulta)
     return ContextoRecuperado(
         consulta=consulta,
         referencias=referencias_arbol + referencias_incidencias + referencias_git,
-        proveedores_fallidos=proveedores_fallidos,
+        proveedores_fallidos=fallidas_arbol + fallidas_incidencias,
         origen=OrigenLectura(fuente=f"contexto.recuperar:{repo}", leido_en=ahora),
     )

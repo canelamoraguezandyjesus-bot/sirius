@@ -52,6 +52,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
 from automation import sirius_convergence  # noqa: E402
 from sirius_engine.domain.mirror import (  # noqa: E402
     EspejoIlegibleError,
+    EventoQuality,
     MirroredRun,
     MirroredWorkItem,
     OrigenLectura,
@@ -145,15 +146,29 @@ _LABEL_PRIORITY: tuple[str, ...] = (
 )
 
 
-def _estado_y_fase(etiquetas: Sequence[str]) -> tuple[WorkItemState | None, WorkItemPhase | None]:
-    presentes = set(etiquetas)
+# Único par de etiquetas de estado que puede coexistir sin ser una
+# contradicción: `sirius_validate_activation.sh` EXIGE `sirius:planned` y
+# `implement-sirius-work.yml` retira las dos juntas al consumir el evento
+# (scripts/automation/sirius_reconcile.sh:250-268, auditoría de la PR #146).
+_PAR_DE_ACTIVACION_VALIDO = frozenset({"sirius:planned", "sirius:implement-requested"})
+
+
+def _estado_y_fase(
+    etiquetas: Sequence[str],
+) -> tuple[WorkItemState | None, WorkItemPhase | None, bool]:
+    presentes = set(etiquetas) & _LABEL_STATE.keys()
+    if not presentes:
+        return None, None, False
+    if len(presentes) > 1 and presentes != _PAR_DE_ACTIVACION_VALIDO:
+        return None, None, True
     reconocida: str | None = None
     for candidata in _LABEL_PRIORITY:
         if candidata in presentes:
             reconocida = candidata
     if reconocida is None:
-        return None, None
-    return _LABEL_STATE[reconocida]
+        return None, None, False
+    estado, fase = _LABEL_STATE[reconocida]
+    return estado, fase, False
 
 
 def _texto_cronologico_de_confianza(cuerpo: str, comentarios: Sequence[Comentario]) -> str:
@@ -178,6 +193,21 @@ def _interpretar_rondas(texto_vigente: str) -> tuple[RondaHallazgos, ...]:
             gravedad_total=int(registro["severity_total"]),
         )
         for registro in registros
+    )
+
+
+def _interpretar_eventos_quality(texto_vigente: str) -> tuple[EventoQuality, ...]:
+    """Secuencia completa de eventos Quality, en el orden en que se publicaron.
+
+    A diferencia de ``sirius_convergence.ci_failure_streak`` -que colapsa el
+    historial a la racha vigente desde el último ``success``-, aquí no se
+    descarta nada: un ``failure`` cerrado por un ``success`` posterior sobre
+    el mismo head deja de contar para la racha, pero sigue siendo un evento
+    ocurrido en el ciclo.
+    """
+    return tuple(
+        EventoQuality(head=match.group(1), conclusion=match.group(2))
+        for match in sirius_convergence.QUALITY_EVENT_RE.finditer(texto_vigente)
     )
 
 
@@ -252,18 +282,20 @@ def proyectar_work_item(
     texto_vigente = sirius_convergence.history_after_last_resume(
         _texto_cronologico_de_confianza(cuerpo.cuerpo, comentarios.comentarios)
     )
-    estado, fase = _estado_y_fase(metadatos.metadatos.etiquetas)
+    estado, fase, etiquetas_contradictorias = _estado_y_fase(metadatos.metadatos.etiquetas)
 
     return MirroredWorkItem(
         work_id=f"{repo}#{numero}",
         estado=estado,
         fase=fase,
         etiquetas=metadatos.metadatos.etiquetas,
+        etiquetas_contradictorias=etiquetas_contradictorias,
         cerrada=metadatos.metadatos.estado_gh == "closed",
         pr_url=_interpretar_pr_url(cuerpo.cuerpo, comentarios.comentarios),
         head_sha=_interpretar_head_sha(cuerpo.cuerpo, comentarios.comentarios),
         rondas=_interpretar_rondas(texto_vigente),
         veredictos=_interpretar_veredictos(comentarios.comentarios),
+        eventos_quality=_interpretar_eventos_quality(texto_vigente),
         fallos_quality_consecutivos=sirius_convergence.ci_failure_streak(texto_vigente),
         origen=OrigenLectura(fuente=f"github:{repo}#{numero}", leido_en=ahora),
     )

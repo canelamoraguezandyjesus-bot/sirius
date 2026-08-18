@@ -108,6 +108,17 @@ CI_FAILURE_MARKER_RE = re.compile(
 )
 CI_SUCCESS_MARKER_RE = re.compile(r"<!--\s*sirius-quality:[0-9a-fA-F]+:success\s*-->")
 
+# Mismo marcador que las dos expresiones anteriores, pero capturando head Y
+# conclusión de CUALQUIER resultado (no solo si cuenta para la racha): a
+# diferencia de ``ci_failure_streak``, que reduce el historial a un contador,
+# esta expresión sirve para reconstruir la secuencia completa de eventos
+# observados -la usa el espejo de solo lectura (A3) para no perder los
+# fallos que un éxito posterior ya cerró para la racha pero que siguen
+# siendo hechos ocurridos en el ciclo-.
+QUALITY_EVENT_RE = re.compile(
+    r"<!--\s*sirius-quality:([0-9a-fA-F]+):(failure|timed_out|success)\s*-->"
+)
+
 # Marcador que publica `sirius_resume_on_command.sh` cuando el propietario
 # levanta una parada escribiendo la orden en la incidencia.
 #
