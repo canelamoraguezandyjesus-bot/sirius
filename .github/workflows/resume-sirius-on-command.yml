@@ -1,0 +1,68 @@
+name: Reanudar bloque Sirius
+
+# Levanta una parada del ciclo cuando el propietario del repositorio escribe la
+# orden exacta "continua" en una incidencia que está en
+# `sirius:blocked-decision`.
+#
+# La parada la aplica la política de convergencia (`sirius_convergence.py`)
+# cuando el ciclo revisión-corrección deja de progresar, y es correcta: las tres
+# veces que bloqueó en la incidencia #186 tenía razón. Lo que faltaba no era
+# relajarla, sino una entrada por la que la decisión humana que reclama pudiera
+# LLEGAR. Sin ella, `decide()` mide sobre todo el historial publicado, así que
+# reponer la etiqueta disparadora volvía a bloquear en el acto y levantar la
+# parada exigía editar la incidencia a mano.
+#
+# Esta automatización no decide nada: ejecuta una decisión que el propietario ya
+# tomó, para una incidencia concreta y en un estado concreto. El script vuelve a
+# verificar todo por REST (ver scripts/automation/sirius_resume_on_command.sh)
+# antes de actuar, porque el evento describe el pasado y la decisión se toma
+# sobre el presente. Ver ADR-030.
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: resume-sirius-work-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  resume:
+    name: Reanudar si la orden es válida
+    if: >-
+      github.event.issue.pull_request == null &&
+      github.event.comment.author_association == 'OWNER' &&
+      contains(github.event.issue.labels.*.name, 'sirius:blocked-decision')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout automation library
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Reanudar el ciclo por orden del propietario
+        shell: bash --noprofile --norc {0}
+        env:
+          # Las LECTURAS (etiquetas, PR) van con el GITHUB_TOKEN. La ESCRITURA
+          # de `sirius:repair-requested` usa el PAT: un `issues: labeled`
+          # emitido con el GITHUB_TOKEN no dispara otros workflows (regla
+          # anti-recursión de GitHub), así que sin él la etiqueta se aplicaría
+          # y no despertaría al corrector — otra parada muda, que es justo lo
+          # que este workflow existe para acabar.
+          GH_TOKEN: ${{ github.token }}
+          SIRIUS_TRIGGER_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -uo pipefail
+          bash scripts/automation/sirius_resume_on_command.sh \
+            "$GH_REPO" "$ISSUE_NUMBER" "$COMMENT_ID" "$COMMENT_BODY"
