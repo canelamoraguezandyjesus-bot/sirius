@@ -48,10 +48,19 @@ capacidades:
     red: false
     escritura: false
 
+  # `escritura: false` a propósito (incidencia #202, ronda 3,
+  # CLAUDE-REVISOR-001): esta capacidad escribe el veredicto JSON en la ruta
+  # externa que da el motor (SIRIUS_VERDICT_FILE), no en el repositorio. Es
+  # la misma distinción que ya hace la nota sobre `red` más arriba para la
+  # vía GitHub -escribir fuera del árbol versionado no es "escritura en el
+  # repo"-, así que no debe exigir `permisos.escritura` no nulo. Un perfil de
+  # solo lectura (reviewer, auditor) puede pedirla sin ampliar su ámbito de
+  # escritura del repositorio; `repo.escribir` y `pr.crear` siguen siendo las
+  # únicas capacidades que sí lo exigen.
   veredicto.escribir:
     proveedor: funcion_local
     red: false
-    escritura: true
+    escritura: false
 
   contexto.recuperar:
     proveedor: skill

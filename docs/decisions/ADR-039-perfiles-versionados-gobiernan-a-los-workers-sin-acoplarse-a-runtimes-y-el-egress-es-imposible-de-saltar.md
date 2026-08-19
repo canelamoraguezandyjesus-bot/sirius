@@ -281,6 +281,88 @@ exactamente como antes de sembrar.
   `leer_github` parcial). No hizo falta para las cinco pruebas de terminado
   de este bloque; queda para cuando exista un Adapter real que la necesite.
 
+## Adenda: rondas de corrección posteriores a la fusión de la nota original
+
+La sección «Comprobación que la sostiene» de arriba documenta únicamente el
+estado del bloque en su commit original (`a895f28`). La revisión
+independiente de la PR que acompaña a esta rama (incidencia #202) encontró
+defectos en dos rondas posteriores; esta adenda deja constancia de ambas en
+el mismo lugar donde vive la evidencia original, en vez de dejarla solo en
+comentarios de la incidencia (skill `disciplina-evidencia`: el ADR es el
+registro autoritativo).
+
+### Ronda 2 (commit `0ff8c4f`)
+
+- **CODEX-001** — `pyyaml` estaba declarado solo como dependencia de
+  desarrollo (`dev`) en `pyproject.toml`, pero `profile_registry.py` y
+  `capability_registry.py` lo importan en tiempo de ejecución para cargar
+  los perfiles y el registro de capacidades desde YAML: sin él, cualquier
+  entorno de producción que instale solo las dependencias del proyecto
+  rompe al primer `load_agent_profile`. Movido a `dependencies`.
+- **CODEX-002** — `resolve_capabilities` comprobaba que la capacidad
+  estuviera en `capacidades_concedidas`, pero no cruzaba las propiedades
+  `red`/`escritura` del registro contra el `PermissionEnvelope` efectivo:
+  una capacidad marcada `red: true` o `escritura: true` en el registro se
+  resolvía igual aunque el envelope no autorizara esa propiedad. Corregido
+  añadiendo las dos guardas (`capability_resolver.py`) y dos pruebas
+  (`test_capacidad_de_red_no_se_resuelve_sin_envelope_con_red`,
+  `test_capacidad_de_escritura_no_se_resuelve_sin_envelope_con_escritura`).
+  Efecto colateral no buscado: al ser `veredicto.escribir` una capacidad
+  marcada `escritura: true` en el registro de esa ronda, esta guarda dejó de
+  resolverla para `reviewer` (perfil de solo lectura, `permisos.escritura:
+  null`), así que la capacidad se retiró de `reviewer.yml` para que la
+  suite volviera a estar en verde -sin notar que `reviewer.yml` seguía
+  prometiendo `veredicto_json` en su `contrato_salida`. Ese es exactamente
+  el defecto que corrige la ronda 3 (CLAUDE-REVISOR-001, abajo).
+- Comprobación: `uv run ruff format --check .`, `uv run ruff check .`,
+  `uv run mypy src tests` y `QT_QPA_PLATFORM=offscreen uv run pytest -q` en
+  verde (2706 passed según el comentario `CORRECCION_APLICADA` de la
+  incidencia #202; no se repitió aquí por no formar parte del alcance de
+  esta adenda).
+
+### Ronda 3 (esta corrección)
+
+- **CLAUDE-REVISOR-001 (P2)** — `veredicto.escribir` estaba modelado en
+  `registro_capacidades.yml` con `escritura: true`, la misma propiedad
+  genérica que `repo.escribir`/`pr.crear` usan para "escritura en el
+  repositorio". Pero escribir el veredicto JSON en la ruta externa que da
+  el motor (`SIRIUS_VERDICT_FILE`) no es escritura en el repo -es la misma
+  distinción que el propio registro ya hace para `red` con la vía GitHub
+  existente ("no cuenta como red externa: es el plano de control de
+  confianza"). Corregido marcando `veredicto.escribir` con `escritura:
+  false` y restaurando la capacidad en `reviewer.yml`. Añadida
+  `test_el_artefacto_veredicto_json_es_resoluble_bajo_el_envelope_propio`
+  (parametrizada sobre los cuatro perfiles reales), que falla si algún
+  perfil promete `veredicto_json` en su `contrato_salida` sin poder
+  resolver `veredicto.escribir` bajo su propio `PermissionEnvelope`.
+- **CODEX-001 (P2, ronda 3)** — `_cargar_permisos` aceptaba
+  `permisos.escritura: ""` (cadena vacía) como si fuera un ámbito de
+  escritura válido, porque solo rechazaba `None`; `compute_permission_envelope`
+  lo copiaba literalmente y `resolve_capabilities` lo trataba como "hay
+  ámbito" (`envelope.escritura is None` es falso para `""`), concediendo
+  `repo.escribir` sin un ámbito real. Corregido rechazando también la
+  cadena vacía en `profile_registry._cargar_permisos`. Añadida
+  `test_ambito_de_escritura_vacio_es_un_error`.
+- **CLAUDE-REVISOR-002 (P3)** — esta misma adenda, que documenta las dos
+  rondas anteriores en el ADR en vez de dejarlas solo en comentarios de la
+  incidencia.
+- Comprobación, las cuatro validaciones obligatorias en verde sobre el
+  repositorio completo tras aplicar los tres cambios de esta ronda:
+
+  ```
+  $ uv run ruff format --check .
+  408 files already formatted
+
+  $ uv run ruff check .
+  All checks passed!
+
+  $ uv run mypy src tests
+  Success: no issues found in 389 source files
+
+  $ QT_QPA_PLATFORM=offscreen uv run pytest -q
+  2710 passed, 6 skipped in 287.55s (0:04:47)
+  ```
+
 ## Alternativas descartadas y por qué
 
 Ver «Opciones consideradas» arriba: las cuatro alternativas evaluadas se
