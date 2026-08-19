@@ -20,7 +20,7 @@
 # el Worker ya opera, no egress hacia el mundo abierto -la distinción que
 # hace real la política de egress es esa, no "toca la red por dentro".
 
-version: 1
+version: 2
 
 capacidades:
   incidencia.leer:
@@ -48,19 +48,24 @@ capacidades:
     red: false
     escritura: false
 
-  # `escritura: false` a propósito (incidencia #202, ronda 3,
-  # CLAUDE-REVISOR-001): esta capacidad escribe el veredicto JSON en la ruta
-  # externa que da el motor (SIRIUS_VERDICT_FILE), no en el repositorio. Es
-  # la misma distinción que ya hace la nota sobre `red` más arriba para la
-  # vía GitHub -escribir fuera del árbol versionado no es "escritura en el
-  # repo"-, así que no debe exigir `permisos.escritura` no nulo. Un perfil de
-  # solo lectura (reviewer, auditor) puede pedirla sin ampliar su ámbito de
-  # escritura del repositorio; `repo.escribir` y `pr.crear` siguen siendo las
-  # únicas capacidades que sí lo exigen.
+  # Escribe el veredicto JSON en la ruta externa que da el motor
+  # (SIRIUS_VERDICT_FILE): un efecto de escritura real, aunque no toque el
+  # árbol versionado del repositorio. `escritura: true` -no `false`- porque
+  # la guarda general del Resolver (§6 regla 2) debe seguir exigiendo un
+  # ámbito de escritura efectivo para cualquier capacidad que escriba, sin
+  # excepción (incidencia #202, ronda 4, CODEX-001: marcar esta capacidad
+  # como `escritura: false` para esquivar esa guarda sentaba un precedente
+  # peligroso para cualquier futura capacidad de escritura fuera del repo).
+  # Un perfil de solo lectura del repositorio (reviewer) puede pedirla
+  # declarando un ámbito acotado al canal del motor (`permisos.escritura:
+  # veredicto`), distinto de `repo` -eso no le concede `repo.escribir` ni
+  # `pr.crear`: esas dos siguen gateadas, con independencia del ámbito, por
+  # no estar en la lista `capacidades` del perfil. El Auditor (ADR-016: "no
+  # escribe nunca") no pide esta capacidad.
   veredicto.escribir:
     proveedor: funcion_local
     red: false
-    escritura: false
+    escritura: true
 
   contexto.recuperar:
     proveedor: skill

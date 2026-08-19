@@ -286,7 +286,7 @@ exactamente como antes de sembrar.
 La sección «Comprobación que la sostiene» de arriba documenta únicamente el
 estado del bloque en su commit original (`a895f28`). La revisión
 independiente de la PR que acompaña a esta rama (incidencia #202) encontró
-defectos en dos rondas posteriores; esta adenda deja constancia de ambas en
+defectos en rondas posteriores; esta adenda deja constancia de cada una en
 el mismo lugar donde vive la evidencia original, en vez de dejarla solo en
 comentarios de la incidencia (skill `disciplina-evidencia`: el ADR es el
 registro autoritativo).
@@ -361,6 +361,54 @@ registro autoritativo).
 
   $ QT_QPA_PLATFORM=offscreen uv run pytest -q
   2710 passed, 6 skipped in 287.55s (0:04:47)
+  ```
+
+### Ronda 4 (esta corrección)
+
+- **CODEX-001 (P2)** — la ronda 3 marcó `veredicto.escribir` con
+  `escritura: false` para esquivar la guarda general del Resolver (§6 regla
+  2), aunque el procedimiento real del revisor (`scripts/automation/prompts/reviewer.md:106-109,145-154`)
+  ejecuta una escritura de sistema de archivos real sobre `SIRIUS_VERDICT_FILE`.
+  El riesgo: cualquier futura capacidad que escriba fuera del repo podría
+  reutilizar la misma clasificación para saltarse el permiso. Corregido
+  devolviendo `veredicto.escribir` a `escritura: true` (un efecto de
+  escritura real exige un ámbito de escritura efectivo, sin excepción) y
+  dándole a `reviewer` un ámbito acotado al canal del motor
+  (`permisos.escritura: veredicto`), distinto de `repo` -nunca `repo` ni
+  concediéndole `repo.escribir`/`pr.crear`, que siguen gateadas por no estar
+  en la lista `capacidades` del perfil, con independencia del ámbito
+  declarado. Añadida `test_reviewer_sigue_sin_poder_resolver_repo_escribir`,
+  que falla si ese ámbito llegara a colarle una capacidad de escritura sobre
+  el repositorio.
+- **CODEX-002 (P2)** — `reviewer.yml` y `registro_capacidades.yml` cambiaron
+  su contenido normativo en la ronda 3 (la lista de capacidades de
+  `reviewer` y la semántica de `veredicto.escribir`) sin incrementar
+  `version`, dejando ambiguo qué permisos gobernaron un Run identificado
+  como `reviewer@1`. Corregido incrementando `version: 1 -> 2` en ambos
+  ficheros (que además cambian de contenido normativo otra vez en esta
+  misma ronda, por CODEX-001 de arriba).
+- **CODEX-003 (P2)** — `profile_registry._cargar_permisos` rechazaba la
+  cadena vacía (`""`) como ámbito de escritura desde la ronda 3, pero no un
+  ámbito formado solo por espacios (`"   "`): esa cadena es truthy en
+  Python, así que pasaba la validación y `compute_permission_envelope` la
+  conservaba como si fuera un ámbito real. Corregido comprobando
+  `escritura.strip()` en vez de `escritura` a secas. Añadida
+  `test_ambito_de_escritura_solo_espacios_es_un_error`.
+- Comprobación, las cuatro validaciones obligatorias en verde sobre el
+  repositorio completo tras aplicar los tres cambios de esta ronda:
+
+  ```
+  $ uv run ruff format --check .
+  408 files already formatted
+
+  $ uv run ruff check .
+  All checks passed!
+
+  $ uv run mypy src tests
+  Success: no issues found in 389 source files
+
+  $ QT_QPA_PLATFORM=offscreen uv run pytest -q
+  2712 passed, 6 skipped in 332.51s (0:05:32)
   ```
 
 ## Alternativas descartadas y por qué

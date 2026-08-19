@@ -49,7 +49,7 @@ def _cargar_permisos(datos: Mapping[str, object], *, contexto: str) -> ProfilePe
     if not isinstance(permisos_datos, Mapping):
         raise ValueError(f"{contexto}: el campo 'permisos' debe ser un mapeo")
     escritura = permisos_datos.get("escritura")
-    if escritura is not None and (not isinstance(escritura, str) or not escritura):
+    if escritura is not None and (not isinstance(escritura, str) or not escritura.strip()):
         raise ValueError(f"{contexto}: 'permisos.escritura' debe ser texto no vacío o nulo")
     red = permisos_datos.get("red", False)
     if not isinstance(red, bool):

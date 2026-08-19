@@ -1,10 +1,15 @@
 # AgentProfile versionado: revisor independiente de Sirius (arquitectura §5.1).
 #
 # Procedimiento real en scripts/automation/prompts/reviewer.md. Perfil de
-# solo lectura: ninguna capacidad de escritura, ninguna de red.
+# solo lectura del repositorio: ninguna capacidad de escritura sobre el
+# árbol versionado, ninguna de red. El único ámbito de escritura que declara
+# es `veredicto` -acotado al canal que da el motor para el veredicto JSON
+# (SIRIUS_VERDICT_FILE)-, nunca `repo`: `repo.escribir` y `pr.crear` no
+# están en `capacidades` y no se resuelven pase lo que declare
+# `permisos.escritura` (incidencia #202, ronda 4, CODEX-001).
 
 ref: reviewer
-version: 1
+version: 2
 
 mision: >
   Revisar de forma independiente una Pull Request ya existente de Sirius que
@@ -22,7 +27,7 @@ capacidades:
   - veredicto.escribir
 
 permisos:
-  escritura: null
+  escritura: veredicto
   red: false
 
 contrato_entrada:

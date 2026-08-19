@@ -88,12 +88,15 @@ def test_capacidad_de_escritura_no_se_resuelve_sin_envelope_con_escritura() -> N
 
 @pytest.mark.parametrize("ref", _PERFILES_REALES)
 def test_el_artefacto_veredicto_json_es_resoluble_bajo_el_envelope_propio(ref: str) -> None:
-    """CLAUDE-REVISOR-001: si un perfil promete 'veredicto_json' en su
-    contrato_salida, debe poder pedir 'veredicto.escribir' y resolverla bajo
-    su propio PermissionEnvelope -sin que eso exija ampliar su ámbito de
-    escritura del repositorio (permisos.escritura no nulo). Perfiles de solo
-    lectura (reviewer, auditor) deben poder cumplir su propio contrato de
-    salida sin dejar de ser de solo lectura."""
+    """CLAUDE-REVISOR-001, remodelada en la ronda 4 (CODEX-001): si un
+    perfil promete 'veredicto_json' en su contrato_salida, debe poder pedir
+    'veredicto.escribir' y resolverla bajo su propio PermissionEnvelope.
+    'veredicto.escribir' es una capacidad de escritura real
+    (`escritura: true` en el registro) y exige un ámbito de escritura
+    efectivo como cualquier otra -reviewer lo satisface con un ámbito
+    acotado al canal del motor (`permisos.escritura: veredicto`), no con
+    `repo`: eso no lo saca de ser de solo lectura del repositorio (ver
+    ``test_reviewer_sigue_sin_poder_resolver_repo_escribir`` más abajo)."""
     perfil = load_agent_profile(ref)
     if "veredicto_json" not in perfil.contrato_salida:
         pytest.skip(f"perfil {ref!r} no promete 'veredicto_json' en su contrato_salida")
@@ -105,3 +108,17 @@ def test_el_artefacto_veredicto_json_es_resoluble_bajo_el_envelope_propio(ref: s
         solicitadas=("veredicto.escribir",), envelope=envelope, registro=_REGISTRO
     )
     assert resuelta.nombre == "veredicto.escribir"
+
+
+def test_reviewer_sigue_sin_poder_resolver_repo_escribir() -> None:
+    """CODEX-001 (incidencia #202, ronda 4): darle a reviewer un ámbito de
+    escritura no nulo (`veredicto`, para poder resolver 'veredicto.escribir')
+    no debe colarle `repo.escribir` -la guarda general de escritura no se
+    debilita, y lo que de verdad impide `repo.escribir` es que no está en la
+    lista `capacidades` del perfil, con independencia del ámbito declarado."""
+    perfil = load_agent_profile("reviewer")
+    assert perfil.permisos.escritura is not None
+    assert perfil.permisos.escritura != "repo"
+    envelope = compute_permission_envelope(perfil)
+    with pytest.raises(CapabilityNotGrantedError):
+        resolve_capabilities(solicitadas=("repo.escribir",), envelope=envelope, registro=_REGISTRO)

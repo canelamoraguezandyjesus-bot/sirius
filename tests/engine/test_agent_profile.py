@@ -104,6 +104,28 @@ def test_ambito_de_escritura_vacio_es_un_error(tmp_path: Path) -> None:
         load_agent_profile("vacio", perfiles_dir=tmp_path)
 
 
+def test_ambito_de_escritura_solo_espacios_es_un_error(tmp_path: Path) -> None:
+    """CODEX-003 (incidencia #202, ronda 4): un ámbito formado solo por
+    espacios es tan inválido como la cadena vacía -truthy en Python, así que
+    la comprobación anterior (que solo rechazaba la cadena vacía) lo dejaba
+    pasar como si fuera un ámbito real."""
+    (tmp_path / "espacios.yml").write_text(
+        "ref: espacios\n"
+        "version: 1\n"
+        "mision: probar\n"
+        "procedimiento_ref: README.md\n"
+        "capacidades: [repo.escribir]\n"
+        "permisos:\n"
+        '  escritura: "   "\n'
+        "  red: false\n"
+        "contrato_entrada: [x]\n"
+        "contrato_salida: [y]\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="escritura"):
+        load_agent_profile("espacios", perfiles_dir=tmp_path)
+
+
 def test_ref_interno_distinto_del_nombre_de_fichero_es_un_error(tmp_path: Path) -> None:
     (tmp_path / "esperado.yml").write_text(
         "ref: otro\n"
