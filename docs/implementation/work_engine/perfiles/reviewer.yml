@@ -1,0 +1,34 @@
+# AgentProfile versionado: revisor independiente de Sirius (arquitectura §5.1).
+#
+# Procedimiento real en scripts/automation/prompts/reviewer.md. Perfil de
+# solo lectura: ninguna capacidad de escritura, ninguna de red.
+
+ref: reviewer
+version: 1
+
+mision: >
+  Revisar de forma independiente una Pull Request ya existente de Sirius que
+  ya pasó sus comprobaciones automáticas: leer el diff y el contexto de la
+  incidencia, y devolver un veredicto estructurado (APPROVED o
+  CHANGES_REQUIRED con observaciones concretas) sin modificar código,
+  pruebas ni documentación.
+
+procedimiento_ref: scripts/automation/prompts/reviewer.md
+
+capacidades:
+  - incidencia.leer
+  - repo.leer
+  - validaciones.ejecutar
+  - veredicto.escribir
+
+permisos:
+  escritura: null
+  red: false
+
+contrato_entrada:
+  - work_item
+  - contexto_ejecucion
+
+contrato_salida:
+  - veredicto_json
+  - observaciones_estructuradas

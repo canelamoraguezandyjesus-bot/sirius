@@ -1,0 +1,68 @@
+# Registro CERRADO de capacidades del Capability Resolver v0 (arquitectura §6).
+#
+# Heredero directo del patrón de `registro_de_acciones.yml` (PR #171): dato,
+# no código, versionado en el repositorio. Cada capacidad que un perfil
+# pueda pedir (docs/implementation/work_engine/perfiles/*.yml) tiene que
+# tener una entrada aquí, con NOMBRE exacto -sin degradar una capacidad
+# ausente a la más parecida (incidencia #202, A4-P4). Añadir una capacidad
+# nueva es una decisión visible en este fichero, igual que añadir una acción
+# de workflow lo es en su propio registro.
+#
+# `proveedor` es la categoría abstracta del diagrama de arquitectura §6
+# -nunca un nombre de herramienta concreto-: herramienta_nativa | skill |
+# mcp | api_cli | funcion_local | delegacion.
+#
+# `red: true` marca las capacidades de red EXTERNA (§6.1): un perfil que
+# pida una de estas junto con escritura irrestricta es estructuralmente
+# incompatible (EgressIncompatibleError, calculado por el motor). Las
+# capacidades de la vía GitHub existente (incidencia, PR, validaciones) NO
+# cuentan como red externa: son el plano de control de confianza en el que
+# el Worker ya opera, no egress hacia el mundo abierto -la distinción que
+# hace real la política de egress es esa, no "toca la red por dentro".
+
+version: 1
+
+capacidades:
+  incidencia.leer:
+    proveedor: api_cli
+    red: false
+    escritura: false
+
+  repo.leer:
+    proveedor: funcion_local
+    red: false
+    escritura: false
+
+  repo.escribir:
+    proveedor: funcion_local
+    red: false
+    escritura: true
+
+  pr.crear:
+    proveedor: api_cli
+    red: false
+    escritura: true
+
+  validaciones.ejecutar:
+    proveedor: funcion_local
+    red: false
+    escritura: false
+
+  veredicto.escribir:
+    proveedor: funcion_local
+    red: false
+    escritura: true
+
+  contexto.recuperar:
+    proveedor: skill
+    red: false
+    escritura: false
+
+  # Aún sin Worker que lo consuma dentro de este motor (B1 la usará); vive en
+  # el registro porque §6 ya la enumera como ejemplo canónico de capacidad de
+  # red externa, y el Resolver la necesita para poder probar la
+  # incompatibilidad estructural de §6.1 regla 1 sin inventar un nombre.
+  web.buscar:
+    proveedor: herramienta_nativa
+    red: true
+    escritura: false

@@ -1,0 +1,35 @@
+# AgentProfile versionado: Auditor de Sirius (arquitectura §5.1).
+#
+# Procedimiento real en docs/implementation/AUDITOR_AGENT_V0.md (el runbook
+# es el propio documento, ADR-010). Perfil de solo lectura: ADR-016 fija que
+# el Auditor "se lanza por etiqueta y no escribe nunca" -este perfil no pide
+# ninguna capacidad de escritura ni de red, en la misma línea.
+
+ref: auditor
+version: 1
+
+mision: >
+  Auditar el repositorio de Sirius de forma independiente y reproducible
+  según el runbook AUDITOR_AGENT_V0: inspeccionar código, pruebas,
+  documentación, workflows, historial e incidencias, y entregar un informe
+  con hallazgos verificados y lo explícitamente no inspeccionado -nunca
+  escribir en el repositorio ni convertir hallazgos en trabajo por su
+  cuenta.
+
+procedimiento_ref: docs/implementation/AUDITOR_AGENT_V0.md
+
+capacidades:
+  - incidencia.leer
+  - repo.leer
+  - validaciones.ejecutar
+  - contexto.recuperar
+
+permisos:
+  escritura: null
+  red: false
+
+contrato_entrada:
+  - contexto_repositorio
+
+contrato_salida:
+  - informe_de_auditoria
