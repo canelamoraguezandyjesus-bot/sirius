@@ -114,3 +114,80 @@ class DuplicateIdError(EngineError):
         super().__init__(f"{aggregate} {aggregate_id!r} already exists")
         self.aggregate = aggregate
         self.aggregate_id = aggregate_id
+
+
+class UnknownAgentProfileError(EngineError):
+    """Raised when an ``AgentProfile`` ref does not resolve to a versioned profile.
+
+    Arquitectura §5.1: un ``AgentProfileRef`` sin perfil correspondiente no
+    tiene un valor por defecto razonable -no hay "perfil genérico" al que
+    caer- así que se declara explícitamente en vez de dejar que ``None``
+    viaje silenciosamente hasta un fallo más difícil de diagnosticar.
+    """
+
+    def __init__(self, ref: str) -> None:
+        super().__init__(f"unknown agent profile {ref!r}")
+        self.ref = ref
+
+
+class UnknownCapabilityError(EngineError):
+    """Raised when a profile requests a capability absent from the registry.
+
+    Arquitectura §6: "una capacidad no registrada no se resuelve; no se
+    degrada ni se sustituye por otra" (incidencia #202, requisito A4-P4).
+    """
+
+    def __init__(self, nombre: str) -> None:
+        super().__init__(f"capability {nombre!r} is not registered in the capability registry")
+        self.nombre = nombre
+
+
+class CapabilityNotGrantedError(EngineError):
+    """Raised when a requested capability is registered but absent from the effective envelope.
+
+    Arquitectura §6.1 / incidencia #202 (A4-P5): un ``PermissionEnvelope``
+    sin la capacidad pedida IMPIDE la resolución -nunca la concede recortada
+    ni la sustituye por otra.
+    """
+
+    def __init__(self, nombre: str) -> None:
+        super().__init__(
+            f"capability {nombre!r} is registered but not granted by the permission envelope"
+        )
+        self.nombre = nombre
+
+
+class EgressIncompatibleError(EngineError):
+    """Raised when a profile declares both external network and unrestricted write access.
+
+    Arquitectura §6.1 regla 1: red externa (``web.*``) y escritura
+    irrestricta al repositorio/contexto privado son incompatibles en un
+    mismo Run; la combinación no se degrada ni se advierte, no se resuelve
+    (fail-closed antes de ``START``).
+    """
+
+    def __init__(self, profile_ref: str) -> None:
+        super().__init__(
+            f"agent profile {profile_ref!r} declares both external network and "
+            "unrestricted write access, which the global egress policy forbids "
+            "in the same Run (arquitectura §6.1 regla 1)"
+        )
+        self.profile_ref = profile_ref
+
+
+class EgressClassificationError(EngineError):
+    """Raised when a context fragment cannot be proven safe to send to a Worker.
+
+    Arquitectura §6.1 regla 4: un fragmento sin clasificación conocida, o sin
+    la clasificación ``exportable`` exigida cuando el Worker tiene red
+    externa concedida, impide arrancar el Run. Fail-closed: nunca advierte,
+    siempre impide (incidencia #202, A4-P3).
+    """
+
+    def __init__(self, procedencia: str, *, motivo: str) -> None:
+        super().__init__(
+            f"context fragment from {procedencia!r} blocks START: {motivo} "
+            "(arquitectura §6.1 regla 4, fail-closed)"
+        )
+        self.procedencia = procedencia
+        self.motivo = motivo

@@ -1,0 +1,36 @@
+# AgentProfile versionado: corrector genérico y acotado de Sirius (arquitectura §5.1).
+#
+# Procedimiento real en scripts/automation/prompts/corrector.md. Trabaja
+# sobre la rama y la PR YA existentes -no crea una PR nueva, así que no pide
+# `pr.crear`.
+
+ref: corrector
+version: 1
+
+mision: >
+  Corregir, exclusivamente, las observaciones estructuradas que dejó la
+  revisión independiente de una PR de Sirius ya existente: en la misma rama
+  y PR, sin ampliar el alcance, hasta que las validaciones obligatorias
+  vuelvan a estar en verde, y escribir siempre un veredicto estructurado.
+
+procedimiento_ref: scripts/automation/prompts/corrector.md
+
+capacidades:
+  - incidencia.leer
+  - repo.leer
+  - repo.escribir
+  - validaciones.ejecutar
+  - veredicto.escribir
+
+permisos:
+  escritura: repo
+  red: false
+
+contrato_entrada:
+  - work_item
+  - observaciones_estructuradas
+  - contexto_ejecucion
+
+contrato_salida:
+  - rama_corregida
+  - veredicto_json

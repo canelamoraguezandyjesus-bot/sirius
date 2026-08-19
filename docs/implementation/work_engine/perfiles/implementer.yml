@@ -1,0 +1,42 @@
+# AgentProfile versionado: implementador genérico de Sirius (arquitectura §5.1).
+#
+# Procedimiento real en scripts/automation/prompts/implementer.md -este
+# perfil NO duplica ese texto: `procedimiento_ref` apunta a él, para que
+# ambos no puedan divergir. El Adapter GitHub
+# (src/sirius_engine/adapters/github_worker_request.py) lee ese fichero y
+# reproduce, para la vía GitHub, la misma concatenación que
+# `.github/workflows/implement-sirius-work.yml` ya hace hoy (A4-P2).
+
+ref: implementer
+version: 1
+
+mision: >
+  Implementar de forma completa y autónoma una única incidencia de trabajo
+  de Sirius: escribir código y pruebas, ejecutar las validaciones
+  obligatorias del proyecto, hacer commit y push a una rama nueva, abrir una
+  Pull Request hacia main y escribir siempre un veredicto estructurado -sin
+  detenerse a mitad de camino ni esperar respuesta de nadie.
+
+procedimiento_ref: scripts/automation/prompts/implementer.md
+
+capacidades:
+  - incidencia.leer
+  - repo.leer
+  - repo.escribir
+  - validaciones.ejecutar
+  - pr.crear
+  - veredicto.escribir
+
+permisos:
+  escritura: repo
+  red: false
+
+contrato_entrada:
+  - work_item
+  - contexto_ejecucion
+
+contrato_salida:
+  - rama_con_codigo_y_pruebas
+  - pull_request_abierta
+  - comentario_pr_abierta_en_la_incidencia
+  - veredicto_json

@@ -1,0 +1,98 @@
+# Registro CERRADO de capacidades del Capability Resolver v0 (arquitectura §6).
+#
+# Heredero directo del patrón de `registro_de_acciones.yml` (PR #171): dato,
+# no código, versionado en el repositorio. Cada capacidad que un perfil
+# pueda pedir (docs/implementation/work_engine/perfiles/*.yml) tiene que
+# tener una entrada aquí, con NOMBRE exacto -sin degradar una capacidad
+# ausente a la más parecida (incidencia #202, A4-P4). Añadir una capacidad
+# nueva es una decisión visible en este fichero, igual que añadir una acción
+# de workflow lo es en su propio registro.
+#
+# `proveedor` es la categoría abstracta del diagrama de arquitectura §6
+# -nunca un nombre de herramienta concreto-: herramienta_nativa | skill |
+# mcp | api_cli | funcion_local | delegacion.
+#
+# `red: true` marca las capacidades de red EXTERNA (§6.1): un perfil que
+# pida una de estas junto con escritura irrestricta es estructuralmente
+# incompatible (EgressIncompatibleError, calculado por el motor). Las
+# capacidades de la vía GitHub existente (incidencia, PR, validaciones) NO
+# cuentan como red externa: son el plano de control de confianza en el que
+# el Worker ya opera, no egress hacia el mundo abierto -la distinción que
+# hace real la política de egress es esa, no "toca la red por dentro".
+#
+# `ambitos_escritura` (incidencia #202, ronda 5, CODEX-001) es obligatorio y
+# no vacío cuando `escritura: true`, y prohibido cuando `escritura: false`:
+# la lista de ámbitos de `permisos.escritura` (arquitectura §5.1) bajo los
+# que el Resolver concede esta capacidad en concreto. Un ámbito de escritura
+# no nulo YA NO basta por sí solo -tiene que ser uno de los listados aquí-,
+# para que un perfil con un ámbito acotado (p. ej. `veredicto`) no pueda
+# resolver una capacidad pensada para otro ámbito (p. ej. `repo.escribir`).
+
+version: 3
+
+capacidades:
+  incidencia.leer:
+    proveedor: api_cli
+    red: false
+    escritura: false
+
+  repo.leer:
+    proveedor: funcion_local
+    red: false
+    escritura: false
+
+  repo.escribir:
+    proveedor: funcion_local
+    red: false
+    escritura: true
+    ambitos_escritura: [repo]
+
+  pr.crear:
+    proveedor: api_cli
+    red: false
+    escritura: true
+    ambitos_escritura: [repo]
+
+  validaciones.ejecutar:
+    proveedor: funcion_local
+    red: false
+    escritura: false
+
+  # Escribe el veredicto JSON en la ruta externa que da el motor
+  # (SIRIUS_VERDICT_FILE): un efecto de escritura real, aunque no toque el
+  # árbol versionado del repositorio. `escritura: true` -no `false`- porque
+  # la guarda general del Resolver (§6 regla 2) debe seguir exigiendo un
+  # ámbito de escritura efectivo para cualquier capacidad que escriba, sin
+  # excepción (incidencia #202, ronda 4, CODEX-001: marcar esta capacidad
+  # como `escritura: false` para esquivar esa guarda sentaba un precedente
+  # peligroso para cualquier futura capacidad de escritura fuera del repo).
+  # `ambitos_escritura: [repo, veredicto]` (ronda 5, CODEX-001) porque dos
+  # familias de perfil distintas la piden bajo dos ámbitos distintos: los
+  # perfiles con escritura amplia en el repositorio (`implementer`,
+  # `corrector`, ámbito `repo`) la resuelven como parte de ese ámbito más
+  # amplio, y un perfil de solo lectura del repositorio (`reviewer`) puede
+  # pedirla declarando el ámbito acotado al canal del motor
+  # (`permisos.escritura: veredicto`) sin que eso le conceda `repo.escribir`
+  # ni `pr.crear` -esas dos capacidades solo listan `repo` en su propio
+  # `ambitos_escritura`, así que un ámbito `veredicto` nunca las resuelve,
+  # con independencia de si el perfil las pide en `capacidades`. El Auditor
+  # (ADR-016: "no escribe nunca") no pide esta capacidad.
+  veredicto.escribir:
+    proveedor: funcion_local
+    red: false
+    escritura: true
+    ambitos_escritura: [repo, veredicto]
+
+  contexto.recuperar:
+    proveedor: skill
+    red: false
+    escritura: false
+
+  # Aún sin Worker que lo consuma dentro de este motor (B1 la usará); vive en
+  # el registro porque §6 ya la enumera como ejemplo canónico de capacidad de
+  # red externa, y el Resolver la necesita para poder probar la
+  # incompatibilidad estructural de §6.1 regla 1 sin inventar un nombre.
+  web.buscar:
+    proveedor: herramienta_nativa
+    red: true
+    escritura: false
