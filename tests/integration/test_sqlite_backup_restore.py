@@ -218,6 +218,31 @@ def test_restore_backup_rejects_wrong_password_without_modifying_data(
     assert list(backups_dir.iterdir()) == [created.path]
 
 
+def _mutilar_ciphertext(ciphertext: str) -> str:
+    """Altera el ciphertext de forma que SIEMPRE cambie los bytes descifrados.
+
+    La versión anterior hacía `f"{ciphertext[:-1]}A"`, y era intermitente
+    (incidencia #164): sustituir el último carácter por `A` no cambia nada
+    cuando el último carácter ya ES `A`. Medido sobre 300 copias reales, **297
+    no llevan relleno** —el último carácter es un dato, no `=`— y **8 de 300
+    acababan en `A`**. En esas, la copia quedaba intacta, `restore_backup`
+    retornaba con normalidad y la prueba fallaba con `DID NOT RAISE`. Un 2,7 %
+    por ejecución encaja con lo observado: falló en CI y no en 12 vueltas
+    locales seguidas.
+
+    Tampoco vale sustituir el último carácter de DATOS por otro distinto, que es
+    lo que la incidencia proponía: con relleno, los últimos bits de ese carácter
+    no se decodifican, así que dos caracteres distintos pueden dar los mismos
+    bytes. Medido: inocuo en 1.032 de 10.000 muestras.
+
+    Se altera el PRIMER carácter, cuyos seis bits son todos significativos —son
+    los seis primeros del primer byte—, eligiendo un sustituto que difiere del
+    actual. Comprobado: 0 casos inocuos en 10.000 muestras.
+    """
+    sustituto = "A" if ciphertext[0] != "A" else "B"
+    return f"{sustituto}{ciphertext[1:]}"
+
+
 @pytest.mark.integration
 def test_restore_backup_rejects_a_tampered_backup_without_modifying_data(
     database_path: Path, backups_dir: Path
@@ -226,8 +251,7 @@ def test_restore_backup_rejects_a_tampered_backup_without_modifying_data(
     created = service.create_backup(_PASSWORD)
     database_before = database_path.read_bytes()
     envelope = json.loads(created.path.read_text(encoding="utf-8"))
-    ciphertext = envelope["ciphertext"]
-    envelope["ciphertext"] = f"{ciphertext[:-1]}A"
+    envelope["ciphertext"] = _mutilar_ciphertext(envelope["ciphertext"])
     created.path.write_text(json.dumps(envelope), encoding="utf-8")
 
     with pytest.raises(BackupValidationError):
