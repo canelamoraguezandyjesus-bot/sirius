@@ -84,7 +84,7 @@ jobs:
         # El plazo de paso es la red de seguridad de ultimo recurso: si los
         # plazos internos fallaran, el paso muere en 6 min con `failure`, no
         # el trabajo entero en 20 con `cancelled`.
-        timeout-minutes: 6
+        timeout-minutes: 10
         shell: bash --noprofile --norc {0}
         run: |
           set -uo pipefail
@@ -97,17 +97,28 @@ jobs:
             exit 0
           fi
           echo "Faltan por instalar:${faltan}"
-          for intento in 1 2; do
+          # Intento 1: instalar SIN `update`. La imagen del runner ya trae listas
+          # de paquetes, y suelen bastar. Esto evita por completo el paso lento:
+          # `apt-get update` refresca TODOS los origenes configurados —Microsoft,
+          # Google, Docker...— y ninguno de ellos sirve para estas tres.
+          # shellcheck disable=SC2086
+          if timeout 150 sudo apt-get install -y --no-install-recommends ${faltan}; then
+            echo "Instaladas sin necesidad de refrescar las listas."
+            exit 0
+          fi
+          echo "::warning::No bastaron las listas existentes; refresco e intento otra vez."
+          # Intento 2: refrescar y reinstalar, con plazos HOLGADOS. El fallo
+          # observado el 19-08 no fue un espejo caido sino uno LENTO: se corto a
+          # los 60 s una descarga que iba avanzando. Un plazo demasiado corto
+          # convierte lentitud en fallo, que es otra forma de romper el ciclo.
+          if timeout 240 sudo apt-get update; then
             # shellcheck disable=SC2086
-            if timeout 60 sudo apt-get update \
-               && timeout 120 sudo apt-get install -y --no-install-recommends ${faltan}; then
-              echo "Instaladas en el intento ${intento}."
+            if timeout 180 sudo apt-get install -y --no-install-recommends ${faltan}; then
+              echo "Instaladas tras refrescar las listas."
               exit 0
             fi
-            echo "::warning::Intento ${intento} agotado o fallido; reintento."
-            sleep 5
-          done
-          echo "::error::No se pudieron instalar las bibliotecas de Qt tras 2 intentos acotados."
+          fi
+          echo "::error::No se pudieron instalar las bibliotecas de Qt (${faltan}) con plazos acotados."
           exit 1
 
       - name: Install uv
