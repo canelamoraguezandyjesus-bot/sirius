@@ -62,7 +62,7 @@ jobs:
     # job caducaba durante el corrector igual que antes.
     #   checkout 5 + puerta 8 + evento 3 + prompt 2 + corrector 30 +
     #   aplicación 5 = 53, con 7 de margen sobre los 60 del job.
-    timeout-minutes: 75
+    timeout-minutes: 80
     #
     # LO QUE ESTO NO GARANTIZA, dicho aqui para que nadie lo lea de mas.
     #
@@ -103,10 +103,45 @@ jobs:
           token: ${{ secrets.SIRIUS_BOT_TOKEN }}
      
       - name: Install Qt system libraries for PySide6 (offscreen)
-        timeout-minutes: 5
+        # Ver la nota extensa en `quality.yml`: un apt colgado se comia el
+        # trabajo entero. Aqui el `timeout-minutes` ya acotaba el dano; ahora
+        # ademas no se instala lo que ya esta y cada intento lleva su plazo.
+        timeout-minutes: 10
+        shell: bash --noprofile --norc {0}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0
+          set -uo pipefail
+          faltan=""
+          for lib in libegl1 libgl1 libxkbcommon0; do
+            dpkg -s "$lib" >/dev/null 2>&1 || faltan="${faltan} ${lib}"
+          done
+          if [ -z "$(printf '%s' "$faltan" | tr -d '[:space:]')" ]; then
+            echo "Las tres bibliotecas ya estan instaladas; no se toca apt."
+            exit 0
+          fi
+          echo "Faltan por instalar:${faltan}"
+          # Intento 1: instalar SIN `update`. La imagen del runner ya trae listas
+          # de paquetes, y suelen bastar. Esto evita por completo el paso lento:
+          # `apt-get update` refresca TODOS los origenes configurados —Microsoft,
+          # Google, Docker...— y ninguno de ellos sirve para estas tres.
+          # shellcheck disable=SC2086
+          if timeout 150 sudo apt-get install -y --no-install-recommends ${faltan}; then
+            echo "Instaladas sin necesidad de refrescar las listas."
+            exit 0
+          fi
+          echo "::warning::No bastaron las listas existentes; refresco e intento otra vez."
+          # Intento 2: refrescar y reinstalar, con plazos HOLGADOS. El fallo
+          # observado el 19-08 no fue un espejo caido sino uno LENTO: se corto a
+          # los 60 s una descarga que iba avanzando. Un plazo demasiado corto
+          # convierte lentitud en fallo, que es otra forma de romper el ciclo.
+          if timeout 240 sudo apt-get update; then
+            # shellcheck disable=SC2086
+            if timeout 180 sudo apt-get install -y --no-install-recommends ${faltan}; then
+              echo "Instaladas tras refrescar las listas."
+              exit 0
+            fi
+          fi
+          echo "::error::No se pudieron instalar las bibliotecas de Qt (${faltan}) con plazos acotados."
+          exit 1
 
       - name: Install uv
         timeout-minutes: 3
