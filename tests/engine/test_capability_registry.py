@@ -42,7 +42,8 @@ def test_cargar_desde_un_fichero_explicito(tmp_path: Path) -> None:
     ruta = tmp_path / "registro.yml"
     ruta.write_text(
         "version: 7\ncapacidades:\n  x.y:\n"
-        "    proveedor: funcion_local\n    red: false\n    escritura: true\n",
+        "    proveedor: funcion_local\n    red: false\n    escritura: true\n"
+        "    ambitos_escritura: [ambito_x]\n",
         encoding="utf-8",
     )
     registro = load_capability_registry(ruta)
@@ -51,6 +52,7 @@ def test_cargar_desde_un_fichero_explicito(tmp_path: Path) -> None:
     assert definicion is not None
     assert definicion.proveedor == "funcion_local"
     assert definicion.escritura is True
+    assert definicion.ambitos_escritura == frozenset({"ambito_x"})
 
 
 @pytest.mark.parametrize(
@@ -60,6 +62,20 @@ def test_cargar_desde_un_fichero_explicito(tmp_path: Path) -> None:
         "no-es-un-mapeo",
         "capacidades:\n  x: {}\n",  # falta version
         "version: uno\ncapacidades: {}\n",  # version no es entero
+        # CODEX-001 (ronda 5): 'escritura: true' sin ámbito declarado no debe
+        # cargar -dejaría la capacidad sin ningún ámbito que la conceda
+        # nunca, en vez de fallar explícito en el momento de definirla.
+        "version: 1\ncapacidades:\n  x.y:\n"
+        "    proveedor: funcion_local\n    red: false\n    escritura: true\n",
+        # ... ni con la lista vacía explícita.
+        "version: 1\ncapacidades:\n  x.y:\n"
+        "    proveedor: funcion_local\n    red: false\n    escritura: true\n"
+        "    ambitos_escritura: []\n",
+        # 'escritura: false' con ámbitos declarados tampoco es válido: una
+        # capacidad de solo lectura no tiene ámbito de escritura que cruzar.
+        "version: 1\ncapacidades:\n  x.y:\n"
+        "    proveedor: funcion_local\n    red: false\n    escritura: false\n"
+        "    ambitos_escritura: [repo]\n",
     ],
 )
 def test_registro_malformado_lanza_error_explicito(tmp_path: Path, contenido: str) -> None:

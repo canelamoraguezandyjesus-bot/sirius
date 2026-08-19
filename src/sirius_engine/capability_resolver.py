@@ -10,10 +10,15 @@ degradación en ninguna de las dos:
    :class:`~sirius_engine.domain.errors.CapabilityNotGrantedError` (nunca
    una versión recortada de la capacidad, nunca sustituida por otra). Una
    capacidad está "no concedida" tanto si su nombre falta de
-   ``capacidades_concedidas`` como si el registro la marca ``red`` o
-   ``escritura`` y el envelope no autoriza esa propiedad (arquitectura §6
-   regla 2: "una capacidad con escritura o con red se resuelve solo si
-   ambos lo permiten").
+   ``capacidades_concedidas`` como si el registro la marca ``red`` y el
+   envelope no autoriza red, como si la marca ``escritura`` y el ámbito de
+   escritura del envelope (``envelope.escritura``) no figura entre los
+   ``ambitos_escritura`` que el registro declara para esa capacidad
+   (arquitectura §6 regla 2: "una capacidad con escritura o con red se
+   resuelve solo si ambos lo permiten"; incidencia #202, ronda 5,
+   CODEX-001: un ámbito de escritura no nulo no basta por sí solo -tiene
+   que ser uno de los ámbitos compatibles con la capacidad pedida, para que
+   un ámbito acotado como ``veredicto`` no pueda colar ``repo.escribir``).
 """
 
 from __future__ import annotations
@@ -54,7 +59,7 @@ def resolve_capabilities(
             raise CapabilityNotGrantedError(nombre)
         if definicion.red and not envelope.red:
             raise CapabilityNotGrantedError(nombre)
-        if definicion.escritura and envelope.escritura is None:
+        if definicion.escritura and envelope.escritura not in definicion.ambitos_escritura:
             raise CapabilityNotGrantedError(nombre)
         resueltas.append(ResolvedCapability(nombre=nombre, proveedor=definicion.proveedor))
     return tuple(resueltas)

@@ -19,8 +19,16 @@
 # cuentan como red externa: son el plano de control de confianza en el que
 # el Worker ya opera, no egress hacia el mundo abierto -la distinción que
 # hace real la política de egress es esa, no "toca la red por dentro".
+#
+# `ambitos_escritura` (incidencia #202, ronda 5, CODEX-001) es obligatorio y
+# no vacío cuando `escritura: true`, y prohibido cuando `escritura: false`:
+# la lista de ámbitos de `permisos.escritura` (arquitectura §5.1) bajo los
+# que el Resolver concede esta capacidad en concreto. Un ámbito de escritura
+# no nulo YA NO basta por sí solo -tiene que ser uno de los listados aquí-,
+# para que un perfil con un ámbito acotado (p. ej. `veredicto`) no pueda
+# resolver una capacidad pensada para otro ámbito (p. ej. `repo.escribir`).
 
-version: 2
+version: 3
 
 capacidades:
   incidencia.leer:
@@ -37,11 +45,13 @@ capacidades:
     proveedor: funcion_local
     red: false
     escritura: true
+    ambitos_escritura: [repo]
 
   pr.crear:
     proveedor: api_cli
     red: false
     escritura: true
+    ambitos_escritura: [repo]
 
   validaciones.ejecutar:
     proveedor: funcion_local
@@ -56,16 +66,22 @@ capacidades:
   # excepción (incidencia #202, ronda 4, CODEX-001: marcar esta capacidad
   # como `escritura: false` para esquivar esa guarda sentaba un precedente
   # peligroso para cualquier futura capacidad de escritura fuera del repo).
-  # Un perfil de solo lectura del repositorio (reviewer) puede pedirla
-  # declarando un ámbito acotado al canal del motor (`permisos.escritura:
-  # veredicto`), distinto de `repo` -eso no le concede `repo.escribir` ni
-  # `pr.crear`: esas dos siguen gateadas, con independencia del ámbito, por
-  # no estar en la lista `capacidades` del perfil. El Auditor (ADR-016: "no
-  # escribe nunca") no pide esta capacidad.
+  # `ambitos_escritura: [repo, veredicto]` (ronda 5, CODEX-001) porque dos
+  # familias de perfil distintas la piden bajo dos ámbitos distintos: los
+  # perfiles con escritura amplia en el repositorio (`implementer`,
+  # `corrector`, ámbito `repo`) la resuelven como parte de ese ámbito más
+  # amplio, y un perfil de solo lectura del repositorio (`reviewer`) puede
+  # pedirla declarando el ámbito acotado al canal del motor
+  # (`permisos.escritura: veredicto`) sin que eso le conceda `repo.escribir`
+  # ni `pr.crear` -esas dos capacidades solo listan `repo` en su propio
+  # `ambitos_escritura`, así que un ámbito `veredicto` nunca las resuelve,
+  # con independencia de si el perfil las pide en `capacidades`. El Auditor
+  # (ADR-016: "no escribe nunca") no pide esta capacidad.
   veredicto.escribir:
     proveedor: funcion_local
     red: false
     escritura: true
+    ambitos_escritura: [repo, veredicto]
 
   contexto.recuperar:
     proveedor: skill

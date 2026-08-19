@@ -411,6 +411,56 @@ registro autoritativo).
   2712 passed, 6 skipped in 332.51s (0:05:32)
   ```
 
+### Ronda 5 (esta corrección)
+
+- **CODEX-001 (P2)** — la ronda 4 le dio a `reviewer` un ámbito de escritura
+  acotado (`permisos.escritura: veredicto`) y confió en que la única guarda
+  contra que ese ámbito colara `repo.escribir`/`pr.crear` fuera que esas dos
+  capacidades no estuvieran en la lista `capacidades` del perfil. Pero
+  `resolve_capabilities` seguía sin comprobar nada más específico que
+  "¿hay algún ámbito no nulo?": una prueba directa
+  (`PermissionEnvelope({"repo.escribir"}, escritura="veredicto", red=False)`)
+  resolvía `repo.escribir` igual, y lo mismo con `pr.crear` -el resolver no
+  vinculaba cada capacidad de escritura con un ámbito compatible, así que
+  cualquier perfil futuro que combinara el ámbito `veredicto` con esas
+  capacidades en su lista `capacidades` las habría resuelto sin que nada lo
+  impidiera. Corregido añadiendo `ambitos_escritura` al registro de
+  capacidades (`registro_capacidades.yml`, `capability_registry.py`): cada
+  capacidad con `escritura: true` declara ahora la lista cerrada de ámbitos
+  de `permisos.escritura` bajo los que se resuelve (`repo.escribir` y
+  `pr.crear` solo aceptan `repo`; `veredicto.escribir` acepta `repo` y
+  `veredicto`, porque tanto los perfiles de escritura amplia como el perfil
+  de solo lectura con ámbito acotado necesitan escribir el veredicto). El
+  Resolver (`capability_resolver.py`) cambia la guarda de "¿ámbito no nulo?"
+  a "¿el ámbito del envelope está entre los ámbitos compatibles de la
+  capacidad?". Añadidas
+  `test_un_ambito_de_escritura_acotado_no_cuela_una_capacidad_de_otro_ambito`
+  (la prueba directa citada por la revisión, parametrizada sobre
+  `repo.escribir` y `pr.crear`) y
+  `test_veredicto_escribir_resuelve_bajo_cualquiera_de_sus_dos_ambitos_compatibles`
+  en `tests/engine/test_capability_resolver.py`, y dos casos nuevos de
+  registro malformado (`escritura: true` sin ámbitos, `escritura: false` con
+  ámbitos) en `tests/engine/test_capability_registry.py`. Incrementado
+  `version: 2 -> 3` en `registro_capacidades.yml` (cambio normativo, mismo
+  criterio que CODEX-002 de la ronda 4).
+- Comprobación, las cuatro validaciones obligatorias en verde sobre el
+  repositorio completo tras aplicar el cambio de esta ronda:
+
+  ```
+  $ uv run ruff format --check .
+  406 files already formatted (tras `ruff format .`, que reformateó los 2
+  ficheros de esta ronda)
+
+  $ uv run ruff check .
+  All checks passed!
+
+  $ uv run mypy src tests
+  Success: no issues found in 389 source files
+
+  $ QT_QPA_PLATFORM=offscreen uv run pytest -q
+  2719 passed, 6 skipped in 351.65s (0:05:51)
+  ```
+
 ## Alternativas descartadas y por qué
 
 Ver «Opciones consideradas» arriba: las cuatro alternativas evaluadas se

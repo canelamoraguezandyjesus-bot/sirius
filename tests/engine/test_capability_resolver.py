@@ -110,6 +110,42 @@ def test_el_artefacto_veredicto_json_es_resoluble_bajo_el_envelope_propio(ref: s
     assert resuelta.nombre == "veredicto.escribir"
 
 
+@pytest.mark.parametrize("nombre_capacidad", ["repo.escribir", "pr.crear"])
+def test_un_ambito_de_escritura_acotado_no_cuela_una_capacidad_de_otro_ambito(
+    nombre_capacidad: str,
+) -> None:
+    """CODEX-001 (incidencia #202, ronda 5): un ámbito de escritura no nulo
+    ya no basta por sí solo para resolver cualquier capacidad de escritura
+    -tiene que ser uno de los ámbitos que el registro declara compatibles
+    con esa capacidad en concreto. Envelope construido directamente (no vía
+    un perfil real) para probar el cruce que señaló la revisión: un ámbito
+    acotado al canal del motor (``veredicto``) no resuelve ``repo.escribir``
+    ni ``pr.crear``, que solo aceptan el ámbito ``repo``."""
+    envelope = PermissionEnvelope(
+        capacidades_concedidas=frozenset({nombre_capacidad}), escritura="veredicto", red=False
+    )
+    with pytest.raises(CapabilityNotGrantedError):
+        resolve_capabilities(solicitadas=(nombre_capacidad,), envelope=envelope, registro=_REGISTRO)
+
+
+@pytest.mark.parametrize("ambito", ["repo", "veredicto"])
+def test_veredicto_escribir_resuelve_bajo_cualquiera_de_sus_dos_ambitos_compatibles(
+    ambito: str,
+) -> None:
+    """`veredicto.escribir` declara `ambitos_escritura: [repo, veredicto]`
+    en el registro -a diferencia de `repo.escribir`/`pr.crear`, que solo
+    aceptan `repo`- porque tanto los perfiles de escritura amplia en el
+    repositorio como el perfil de solo lectura con el ámbito acotado al
+    canal del motor necesitan poder escribir el veredicto."""
+    envelope = PermissionEnvelope(
+        capacidades_concedidas=frozenset({"veredicto.escribir"}), escritura=ambito, red=False
+    )
+    (resuelta,) = resolve_capabilities(
+        solicitadas=("veredicto.escribir",), envelope=envelope, registro=_REGISTRO
+    )
+    assert resuelta.nombre == "veredicto.escribir"
+
+
 def test_reviewer_sigue_sin_poder_resolver_repo_escribir() -> None:
     """CODEX-001 (incidencia #202, ronda 4): darle a reviewer un ámbito de
     escritura no nulo (`veredicto`, para poder resolver 'veredicto.escribir')

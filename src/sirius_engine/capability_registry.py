@@ -38,6 +38,16 @@ class CapabilityDefinition:
     proveedor: str
     red: bool
     escritura: bool
+    #: Ámbitos de ``permisos.escritura`` bajo los que esta capacidad puede
+    #: resolverse (incidencia #202, ronda 5, CODEX-001). Vacío si
+    #: ``escritura`` es ``False`` -una capacidad de solo lectura no tiene
+    #: ámbito que comprobar-; no vacío si ``escritura`` es ``True``: un
+    #: ámbito de escritura declarado por el perfil (``permisos.escritura``)
+    #: solo concede las capacidades de escritura que lo listan aquí, nunca
+    #: "cualquier ámbito no nulo sirve para cualquier capacidad de
+    #: escritura" -eso permitía que un ámbito acotado como ``veredicto``
+    #: colara ``repo.escribir``.
+    ambitos_escritura: frozenset[str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,15 +73,35 @@ def _campo_bool(datos: Mapping[str, object], campo: str, *, contexto: str) -> bo
     return valor
 
 
+def _campo_ambitos_escritura(
+    datos: Mapping[str, object], *, escritura: bool, contexto: str
+) -> frozenset[str]:
+    valor = datos.get("ambitos_escritura", [])
+    if not isinstance(valor, list) or not all(isinstance(item, str) and item for item in valor):
+        raise ValueError(
+            f"{contexto}: el campo 'ambitos_escritura' debe ser una lista de texto no vacío"
+        )
+    ambitos = frozenset(valor)
+    if escritura and not ambitos:
+        raise ValueError(
+            f"{contexto}: 'escritura: true' exige al menos un ámbito en 'ambitos_escritura'"
+        )
+    if not escritura and ambitos:
+        raise ValueError(f"{contexto}: 'ambitos_escritura' no vacío exige 'escritura: true'")
+    return ambitos
+
+
 def _cargar_definicion(nombre: str, datos: object) -> CapabilityDefinition:
     if not isinstance(datos, Mapping):
         raise ValueError(f"capacidad {nombre!r}: la entrada debe ser un mapeo")
     contexto = f"capacidad {nombre!r}"
+    escritura = _campo_bool(datos, "escritura", contexto=contexto)
     return CapabilityDefinition(
         nombre=nombre,
         proveedor=_campo_texto(datos, "proveedor", contexto=contexto),
         red=_campo_bool(datos, "red", contexto=contexto),
-        escritura=_campo_bool(datos, "escritura", contexto=contexto),
+        escritura=escritura,
+        ambitos_escritura=_campo_ambitos_escritura(datos, escritura=escritura, contexto=contexto),
     )
 
 
