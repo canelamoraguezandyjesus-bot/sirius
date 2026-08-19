@@ -1,10 +1,10 @@
 # SIRIUS - Contrato operativo de automatización
 
-- **Versión:** 1.6.1
-- **Fecha:** 16 de agosto de 2026
-- **Estado:** VIGENTE (§4, §5 y §9 actualizadas; ver §10.3, §10.4, §10.5 y §10.6)
+- **Versión:** 1.7
+- **Fecha:** 19 de agosto de 2026
+- **Estado:** VIGENTE (§4, §5, §9 y §11 actualizadas; ver §10.3, §10.4, §10.5, §10.6 y §10.7)
 - **Autoridad:** Operativa para el desarrollo automatizado de Sirius 0.1
-- **Sustituye:** versión 1.6 del 10 de agosto de 2026
+- **Sustituye:** versión 1.6.1 del 16 de agosto de 2026
 - **No modifica:** Producto, Arquitectura Técnica, ATD, requisitos ni alcance de Sirius 0.1
 
 ## 0. Propósito
@@ -577,4 +577,75 @@ desde fuera. Y no repara ese estado: avisa a una persona. Ver ADR-004.
 - **Numeración:** se usa un tercer nivel (1.6.1) a propósito. El plan aprobado del Work Engine (ADR-020, decisión 5) reserva **v1.7 para E1a** y **v1.8 para E1b**; tomar la 1.7 aquí habría obligado a renumerar un plan ya aprobado por una razón puramente contable. Esta enmienda además no añade capacidad: corrige la descripción de un canal de la revisión dual que la v1.4 ya introdujo.
 - **Entrada en vigor:** cuando la PR que introduce este canal sea revisada, tenga CI verde y sea fusionada por autorización explícita del usuario.
 
+### 10.7 Versión 1.7 — regla de autoridad por clase de trabajo (E1a)
+
+- **Decisión:** fijar, ANTES de que el motor cree su primer WorkItem, quién es la autoridad de cada clase de trabajo, sin ningún estado ambiguo. Se añade §11. Incidencia del bloque E1a del plan del Work Engine (ADR-020).
+- **Motivo:** A5 es el bloque que crea y activa el primer WorkItem del motor. Un WorkItem que nazca sin autoridad definida es exactamente el estado ambiguo que esta regla existe para impedir, y una vez creado ya no se puede arreglar sin reescribir historia. La regla va delante de A5, no detrás.
+- **Alcance:** solo la autoridad. **No toca la activación ni la supervisión**, que llegan en la v1.8 (E1b), ni el mecanismo de merge (§8), ni la convergencia (§5), ni las notificaciones (§7), ni ningún workflow.
+- **Mantiene:** §2 intacta mientras una clase no haya conmutado — para las clases con proyección en la vía GitHub, la incidencia sigue siendo la fuente de verdad hasta el acto fechado de su conmutación.
+- **Entrada en vigor:** cuando la PR que introduce esta sección sea revisada, tenga CI verde y sea fusionada por autorización explícita del usuario.
+
 El historial de las versiones 1.0, 1.1, 1.2, 1.3, 1.4, 1.5 y 1.6 permanece disponible en Git y no se reescribe retrospectivamente.
+
+
+## 11. Autoridad por clase de trabajo
+
+Regla única: **la autoridad es una función total por clase de trabajo, con un solo conmutador fechado por clase.** No existe estado intermedio, y **ningún WorkItem puede nacer sin autoridad asignada**.
+
+### 11.1 Tabla de autoridad
+
+Cubre todas las clases de trabajo, sin huecos. Una clase que no aparezca aquí no puede crear WorkItems hasta que se añada.
+
+| Clase de trabajo | ¿Existe en la vía GitHub? | Autoridad desde la v1.7 | ¿Conmuta? |
+|---|---|---|---|
+| conversación / exploración / consulta | no (no crea WorkItem) | motor, o ningún WorkItem | — |
+| investigación | no | **motor, desde su nacimiento** | — |
+| documental no publicada | no | **motor** | — |
+| documental publicada (PR en el repo) | sí | incidencia | sí |
+| programación | sí | incidencia | sí |
+| auditoría | sí (etiqueta propia) | incidencia | sí |
+| reparación / espera / cancelación | son fases o estados, no clases | la de su WorkItem | — |
+
+Para las clases nativas del motor **no hay periodo previo**: nacen canónicas en el almacén del motor. Si algo de ellas se refleja en GitHub, ese reflejo es informativo y se etiqueta como tal.
+
+Para las clases con proyección en la vía GitHub, mientras no hayan conmutado, el motor mantiene un espejo **explícitamente no autoritativo**, así marcado en toda salida del motor.
+
+### 11.2 Condición de conmutación
+
+Una clase con proyección en la vía GitHub conmuta cuando se cumplen las dos, medidas sobre esa clase:
+
+1. **Siete días naturales consecutivos** en que el verificador de proyección (motor ↔ incidencia) esté en verde de forma continua.
+2. **Cero correcciones manuales del estado** en ese periodo: ninguna vez en que una persona o una sesión haya tenido que arreglar a mano el almacén del motor o las etiquetas de la incidencia **porque ambos dijeran cosas distintas**.
+
+**Lo que NO interrumpe el contador**, y la distinción es deliberada: un fallo de un servicio externo, una ejecución de CI cancelada, una parada por convergencia, un timeout de un revisor o cualquier otra avería operativa. Ninguna de esas cosas hace que las dos representaciones discrepen, y **es la discrepancia lo único que esta condición mide**.
+
+> Esa distinción es la corrección de fondo respecto a la propuesta del plan, que exigía catorce días sin ninguna intervención manual. Sobre el ritmo real del repositorio esa condición no es exigente: es inalcanzable, y una condición inalcanzable no protege — impide que la conmutación ocurra nunca. Se cambia el umbral a siete días y, sobre todo, se cambia **qué se cuenta**.
+
+El contador no puede empezar antes de que el motor lleve el ciclo por sí mismo (bloques C1 y C2). Mientras lo lleve la vía GitHub no hay proyección propia que verificar.
+
+### 11.3 El acto de conmutación
+
+**Es automático.** No requiere autorización explícita del usuario, a diferencia del merge (§8).
+
+La razón es que la condición de §11.2 es **medible**: no hay juicio que emitir, solo una comprobación que se cumple o no. Pedir una firma sobre una medición no añade seguridad; añade una espera y traslada al usuario la responsabilidad de un criterio que no puede evaluar por su cuenta.
+
+El acto consiste en: registro fechado como dato versionado en el repositorio, más anuncio por el canal de notificaciones ya existente (§7).
+
+**Orden entre clases:** documental publicada → programación → auditoría. De menor a mayor consecuencia si algo sale mal.
+
+### 11.4 Después de conmutar, y la vuelta atrás
+
+Desde el instante de la conmutación, para esa clase: el almacén del motor es canónico, y la incidencia pasa a **proyección obligatoria** — el motor la mantiene al día y el verificador la vigila. Una divergencia deja de ser una duda de autoridad y pasa a ser **un defecto del motor**.
+
+**A la primera divergencia detectada, la clase revierte automáticamente**: la incidencia vuelve a ser la fuente de verdad, el motor vuelve a ser espejo, y se notifica.
+
+No se espera a un patrón ni a una segunda ocurrencia. Volver atrás no cuesta nada —ninguna de las dos representaciones se borra, ambas conservan su historial completo— y seguir siendo autoridad cuando ya se ha demostrado poco fiable sí cuesta.
+
+Tras una reversión, la clase vuelve a empezar el contador de §11.2 desde cero.
+
+### 11.5 Lo que esta sección NO cambia
+
+- **Nada sobre dónde se ejecuta el trabajo.** Los workflows de GitHub Actions siguen siendo quienes ejecutan al implementador, al revisor y al corrector. La conmutación mueve la autoridad del estado, no la ejecución.
+- **Nada de lo que el usuario ve.** Las incidencias, las etiquetas y las notificaciones siguen existiendo y actualizándose igual.
+- **Nada del merge.** §8 sigue exigiendo la orden explícita del usuario, antes y después de conmutar.
+- **Nada de la activación ni de la supervisión.** Llegan en la v1.8 (E1b), no aquí.
