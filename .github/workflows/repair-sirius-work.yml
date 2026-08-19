@@ -103,10 +103,34 @@ jobs:
           token: ${{ secrets.SIRIUS_BOT_TOKEN }}
      
       - name: Install Qt system libraries for PySide6 (offscreen)
-        timeout-minutes: 5
+        # Ver la nota extensa en `quality.yml`: un apt colgado se comia el
+        # trabajo entero. Aqui el `timeout-minutes` ya acotaba el dano; ahora
+        # ademas no se instala lo que ya esta y cada intento lleva su plazo.
+        timeout-minutes: 6
+        shell: bash --noprofile --norc {0}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0
+          set -uo pipefail
+          faltan=""
+          for lib in libegl1 libgl1 libxkbcommon0; do
+            dpkg -s "$lib" >/dev/null 2>&1 || faltan="${faltan} ${lib}"
+          done
+          if [ -z "$(printf '%s' "$faltan" | tr -d '[:space:]')" ]; then
+            echo "Las tres bibliotecas ya estan instaladas; no se toca apt."
+            exit 0
+          fi
+          echo "Faltan por instalar:${faltan}"
+          for intento in 1 2; do
+            # shellcheck disable=SC2086
+            if timeout 60 sudo apt-get update \
+               && timeout 120 sudo apt-get install -y --no-install-recommends ${faltan}; then
+              echo "Instaladas en el intento ${intento}."
+              exit 0
+            fi
+            echo "::warning::Intento ${intento} agotado o fallido; reintento."
+            sleep 5
+          done
+          echo "::error::No se pudieron instalar las bibliotecas de Qt tras 2 intentos acotados."
+          exit 1
 
       - name: Install uv
         timeout-minutes: 3
