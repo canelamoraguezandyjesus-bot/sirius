@@ -461,6 +461,43 @@ registro autoritativo).
   2719 passed, 6 skipped in 351.65s (0:05:51)
   ```
 
+### Ronda 6 (commit `ec319a5f`)
+
+- **CODEX-001 (P2)** — `_campo_ambitos_escritura` (`capability_registry.py`)
+  validaba cada elemento de `ambitos_escritura` comprobando solo que fuera un
+  `str` truthy (`isinstance(item, str) and item`), el mismo patrón que ya se
+  había corregido para `permisos.escritura` en la ronda 3 (`CODEX-001`) y para
+  `"   "` en la ronda 4 (`CODEX-003`), pero que no se había replicado en este
+  otro campo del registro. Un ámbito de escritura declarado como `"   "` en
+  `registro_capacidades.yml` es truthy en Python, así que pasaba el filtro y
+  quedaba como `frozenset({"   "})`; un `PermissionEnvelope` construido con
+  ese mismo valor de `permisos.escritura` podía entonces resolver la
+  capacidad, pese a no tener ningún identificador de ámbito efectivo.
+  Corregido exigiendo `item.strip()` no vacío en vez de `item` a secas.
+  Añadido un caso parametrizado en
+  `test_registro_malformado_lanza_error_explicito`
+  (`tests/engine/test_capability_registry.py`) que carga un registro con
+  `ambitos_escritura: ["   "]` y falla si no se rechaza. No se ha tocado
+  `registro_capacidades.yml` en esta ronda -no cambia contenido normativo,
+  solo la validación del cargador-, así que no aplica el criterio de
+  incremento de `version` de las rondas 4 y 5.
+- Comprobación, las cuatro validaciones obligatorias en verde sobre el
+  repositorio completo tras aplicar el cambio de esta ronda:
+
+  ```
+  $ uv run ruff format --check .
+  408 files already formatted
+
+  $ uv run ruff check .
+  All checks passed!
+
+  $ uv run mypy src tests
+  Success: no issues found in 389 source files
+
+  $ QT_QPA_PLATFORM=offscreen uv run pytest -q
+  2720 passed, 6 skipped in 496.08s (0:08:16)
+  ```
+
 ## Alternativas descartadas y por qué
 
 Ver «Opciones consideradas» arriba: las cuatro alternativas evaluadas se
