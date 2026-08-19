@@ -8,7 +8,12 @@ degradación en ninguna de las dos:
    (nunca un proveedor por defecto ni la capacidad más parecida).
 2. Capacidad registrada pero no concedida por el envelope ->
    :class:`~sirius_engine.domain.errors.CapabilityNotGrantedError` (nunca
-   una versión recortada de la capacidad, nunca sustituida por otra).
+   una versión recortada de la capacidad, nunca sustituida por otra). Una
+   capacidad está "no concedida" tanto si su nombre falta de
+   ``capacidades_concedidas`` como si el registro la marca ``red`` o
+   ``escritura`` y el envelope no autoriza esa propiedad (arquitectura §6
+   regla 2: "una capacidad con escritura o con red se resuelve solo si
+   ambos lo permiten").
 """
 
 from __future__ import annotations
@@ -46,6 +51,10 @@ def resolve_capabilities(
         if definicion is None:
             raise UnknownCapabilityError(nombre)
         if nombre not in envelope.capacidades_concedidas:
+            raise CapabilityNotGrantedError(nombre)
+        if definicion.red and not envelope.red:
+            raise CapabilityNotGrantedError(nombre)
+        if definicion.escritura and envelope.escritura is None:
             raise CapabilityNotGrantedError(nombre)
         resueltas.append(ResolvedCapability(nombre=nombre, proveedor=definicion.proveedor))
     return tuple(resueltas)

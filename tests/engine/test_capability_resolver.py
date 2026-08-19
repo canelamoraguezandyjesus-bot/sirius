@@ -59,3 +59,22 @@ def test_no_concede_una_version_recortada_de_la_capacidad() -> None:
 def test_solicitud_vacia_resuelve_una_tupla_vacia() -> None:
     envelope = _envelope()
     assert resolve_capabilities(solicitadas=(), envelope=envelope, registro=_REGISTRO) == ()
+
+
+def test_capacidad_de_red_no_se_resuelve_sin_envelope_con_red() -> None:
+    """CODEX-002: nombrar la capacidad en capacidades_concedidas no basta si el
+    envelope no autoriza red -el registro y los permisos efectivos deben cruzarse."""
+    envelope = PermissionEnvelope(
+        capacidades_concedidas=frozenset({"web.buscar"}), escritura=None, red=False
+    )
+    with pytest.raises(CapabilityNotGrantedError):
+        resolve_capabilities(solicitadas=("web.buscar",), envelope=envelope, registro=_REGISTRO)
+
+
+def test_capacidad_de_escritura_no_se_resuelve_sin_envelope_con_escritura() -> None:
+    """CODEX-002: idéntica guarda para escritura -nombrar la capacidad no basta."""
+    envelope = PermissionEnvelope(
+        capacidades_concedidas=frozenset({"repo.escribir"}), escritura=None, red=False
+    )
+    with pytest.raises(CapabilityNotGrantedError):
+        resolve_capabilities(solicitadas=("repo.escribir",), envelope=envelope, registro=_REGISTRO)

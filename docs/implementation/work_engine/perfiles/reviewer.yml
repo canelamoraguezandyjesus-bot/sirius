@@ -19,7 +19,6 @@ capacidades:
   - incidencia.leer
   - repo.leer
   - validaciones.ejecutar
-  - veredicto.escribir
 
 permisos:
   escritura: null
