@@ -1,6 +1,6 @@
 # ADR-042 — Gobierno previo al primer Worker externo: puerta determinista, presupuesto con corte y siete causas cerradas de escalado
 
-- Estado: PROPUESTO
+- Estado: APROBADO — por la fusión de la PR que acompaña a esta rama.
 - Fecha: 2026-08-19
 - Aprobación: la fusión de la PR de este bloque (A5, incidencia #206) por el propietario.
 - Este documento ES la nota de arranque de la rama (skill `disciplina-evidencia`):
@@ -214,11 +214,11 @@ Componentes nuevos, dentro de `src/sirius_engine/` y `tests/engine/`:
   `DatosNuevoTrabajo` — la forma de una intención ya clasificada.
 - **`intent_interpreter.py`**: `interpretar_intencion_v0` — heurística
   determinista de texto libre a `IntentSignal`.
-- **`gate.py`**: `puerta_determinista` — arquitectura §8.5, las tres salidas
-  y ninguna más.
-- **`work_intake.py`**: `crear_y_activar_desde_orden` /
-  `crear_y_escalar_desde_orden` — la creación/activación real contra el
-  `WorkEngineStore`, con la autoridad ya adjunta a la evidencia.
+- **`gate.py`**: `decidir` (la puerta determinista, arquitectura §8.5) — las
+  tres salidas (`NO_CREAR`/`CREAR_Y_ACTIVAR`/`CREAR_Y_ESCALAR`) y ninguna más.
+- **`work_intake.py`**: `aplicar_decision` — la creación/activación (o
+  creación/escalado) real contra el `WorkEngineStore`, con la autoridad de
+  la clase calculada y devuelta en el mismo movimiento.
 - **`governance.py`**: `registrar_gasto` (corte determinista) y
   `resolver_fallo_tecnico` (nunca escala).
 - **`ports/notification.py`** + **`adapters/cli_notification.py`**: el canal
@@ -230,13 +230,123 @@ Componentes nuevos, dentro de `src/sirius_engine/` y `tests/engine/`:
 
 ## Comprobación que la sostiene
 
-(Se completa al terminar la implementación, con los comandos y resultados
-reales de las cuatro validaciones obligatorias y las tres mutaciones
-sembradas y vistas fallar.)
+Las cuatro validaciones obligatorias, en verde sobre el repositorio completo
+(intérprete real del proyecto, `uv run`, Python 3.14.6):
+
+```
+$ uv run ruff format --check .
+429 files already formatted
+
+$ uv run ruff check .
+All checks passed!
+
+$ uv run mypy src tests
+Success: no issues found in 410 source files
+
+$ QT_QPA_PLATFORM=offscreen uv run pytest -q
+2813 passed, 6 skipped in 268.91s (0:04:28)
+
+$ git diff --check
+$ git diff --cached --check
+(sin salida; exit 0)
+
+$ uv run pytest tests/engine/test_boundary.py -q   # sin modificarlo
+2 passed in 0.24s
+```
+
+Las cinco pruebas de terminado, mapeadas a sus ficheros:
+
+- **A5-P1** (conversar/consultar el pasado en varios turnos no crea
+  WorkItem): `tests/engine/test_session.py::test_conversacion_de_varios_turnos_no_crea_ningun_workitem`
+  y `test_una_conversacion_larga_intercalada_con_una_orden_solo_crea_ese_workitem`.
+- **A5-P2** (orden inequívoca crea y activa sin segunda confirmación):
+  `tests/engine/test_gate.py::test_orden_inequivoca_crea_y_activa_sin_ningun_campo_de_confirmacion`,
+  `tests/engine/test_work_intake.py::test_crear_y_activar_no_pide_ninguna_confirmacion_intermedia`,
+  `tests/engine/test_session.py::test_orden_inequivoca_crea_y_activa_sin_segunda_confirmacion`.
+- **A5-P3** (petición ambigua no crea trabajo):
+  `tests/engine/test_gate.py::test_tipos_sin_trabajo_nunca_crean_nada`,
+  `tests/engine/test_session.py::test_peticion_ambigua_no_crea_trabajo`.
+- **A5-P4** (presupuesto agotado corta el Run y produce `NEEDS_DECISION` con
+  notificación, visto fallar con el corte desactivado):
+  `tests/engine/test_governance.py::test_agotar_el_presupuesto_corta_el_run_y_escala_con_notificacion`.
+- **A5-P5** (lista cerrada de siete causas, las dos direcciones):
+  `tests/engine/test_escalation.py::test_la_lista_de_causas_es_exactamente_la_cerrada_de_arquitectura_10`
+  (positiva: son exactamente esas siete) y
+  `tests/engine/test_governance.py::test_fallo_tecnico_corregible_nunca_escala`
+  (negativa: un fallo técnico no escala).
+
+**Prueba por mutación (ADR-001 §3), las tres exigidas por la incidencia,
+sembradas y vistas fallar, luego revertidas:**
+
+1. Desactivar el corte por presupuesto (`governance.registrar_gasto`: la
+   guarda `if not nuevo_presupuesto.agotado:` sustituida por `if True:`) →
+   ```
+   $ uv run pytest tests/engine/test_governance.py -q
+   4 failed, 4 passed in 0.10s
+   FAILED test_agotar_el_presupuesto_corta_el_run_y_escala_con_notificacion[_make_in_memory_store]
+   FAILED test_agotar_el_presupuesto_corta_el_run_y_escala_con_notificacion[_make_durable_store]
+   FAILED test_agotar_por_encima_del_limite_tambien_corta[_make_in_memory_store]
+   FAILED test_agotar_por_encima_del_limite_tambien_corta[_make_durable_store]
+   ```
+   A5-P4 cayó como se esperaba. Revertido con
+   `git checkout -- src/sirius_engine/governance.py` (confirmado sin diff).
+2. Hacer que la puerta pida confirmación ante una orden inequívoca
+   (`gate.decidir`: la rama `ORDEN_INEQUIVOCA` devuelve `CREAR_Y_ESCALAR` en
+   vez de `CREAR_Y_ACTIVAR`) →
+   ```
+   $ uv run pytest tests/engine/test_gate.py tests/engine/test_work_intake.py tests/engine/test_session.py -q
+   2 failed, 23 passed in 0.49s
+   FAILED test_gate.py::test_orden_inequivoca_crea_y_activa_sin_ningun_campo_de_confirmacion
+   FAILED test_session.py::test_orden_inequivoca_crea_y_activa_sin_segunda_confirmacion
+   ```
+   A5-P2 cayó como se esperaba. Revertido con `git checkout -- src/sirius_engine/gate.py`
+   (confirmado sin diff).
+3. Añadir una causa de escalado fuera de las siete
+   (`domain/escalation.CausaEscalado`: octavo miembro
+   `OCTAVA_CAUSA_FUERA_DE_LA_LISTA`) →
+   ```
+   $ uv run pytest tests/engine/test_escalation.py -q
+   2 failed, 2 passed in 0.04s
+   FAILED test_la_lista_de_causas_tiene_exactamente_siete_miembros - assert 8 == 7
+   FAILED test_la_lista_de_causas_es_exactamente_la_cerrada_de_arquitectura_10
+   ```
+   A5-P5 cayó como se esperaba. Revertido con
+   `git checkout -- src/sirius_engine/domain/escalation.py` (confirmado sin diff).
+
+Tras revertir las tres mutaciones, se repitieron las cuatro validaciones
+obligatorias completas (arriba) y quedaron en verde, confirmando que el
+árbol quedó exactamente como antes de sembrar cada mutación.
 
 ## Consecuencias
 
-(Se completa al terminar.)
+- El HITO M1 queda demostrado con pruebas automáticas: se puede conversar
+  con el motor (`SesionCLI`), preguntarle por el pasado
+  (`contexto.recuperar`, A3), y convertir una orden en un WorkItem activado
+  con presupuesto, corte y cauce de escalado — todo sin escribir en GitHub
+  ni estrenar ningún Worker externo.
+- B1 (investigación) y C2 (despacho de programación) pueden consumir
+  `gate.decidir` + `work_intake.aplicar_decision` sin reimplementar la
+  puerta de intención ni la interfaz, tal como exige el plan de
+  implementación (A5 es "bloque COMPARTIDO").
+- `interpretar_intencion_v0` queda documentado como marcador de posición: el
+  día que exista un intérprete de intención con modelo real, sustituye a
+  esta función produciendo el mismo `IntentSignal`, sin que `gate.py` cambie
+  una línea.
+- Límite conocido: el `Budget` no persiste entre reinicios del proceso -es
+  un valor explícito que el llamador conserva, mismo patrón que `now`. Un
+  futuro adaptador que sí lo persista deberá decidir dónde vive ese estado
+  (probablemente junto al `WorkEngineStore` durable de A2), pero eso es
+  trabajo de un bloque posterior, no de A5.
+- Límite conocido: la heurística de sensibilidad de `intent_interpreter.py`
+  reconoce un conjunto pequeño y explícito de marcadores léxicos; no
+  pretende cubrir todo lo que un revisor humano consideraría sensible. Lo
+  que sí garantiza -y lo que las pruebas fijan- es que la lista de causas
+  *posibles* nunca crece de forma accidental.
+- La corrección del error de diagnóstico sobre `context_recall.py` (ver
+  «Contexto y problema») deja una lección operativa para el resto de esta
+  ronda y para futuras: cualquier comprobación de sintaxis o de
+  comportamiento debe hacerse con `uv run python`/`uv run pytest`, nunca con
+  el intérprete del sistema.
 
 ## Alternativas descartadas y por qué
 
