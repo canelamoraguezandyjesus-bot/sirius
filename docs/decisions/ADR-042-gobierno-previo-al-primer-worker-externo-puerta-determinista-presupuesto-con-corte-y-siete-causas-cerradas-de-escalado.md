@@ -27,14 +27,36 @@ una intención en un WorkItem activado, y no hay ninguna noción de presupuesto
 que corte ni de escalado con causa cerrada. La arquitectura mínima (§8.5,
 §9, §10) ya especifica la forma; A5 la construye.
 
-**Hallazgo previo, fuera del objetivo de A5 pero bloqueante para empezar**:
-`src/sirius_engine/context_recall.py:95` tenía un `except UnicodeDecodeError,
-OSError:` — sintaxis de Python 2, inválida en Python 3 (`SyntaxError:
-multiple exception types must be parenthesized`). Cualquier importación del
-paquete `sirius_engine` fallaba, incluida la de `context_recall`, de la que
-A5 depende explícitamente para "¿qué pasó con X?" (objetivo 1). Se corrige
-como paréntesis mínimo (`except (UnicodeDecodeError, OSError):`), sin tocar
-ninguna otra línea del fichero.
+**Corrección sobre el primer commit de esta rama (autocorrección, no un
+hallazgo de revisor)**: el primer commit de esta rama afirmaba que
+`src/sirius_engine/context_recall.py:95` (`except UnicodeDecodeError,
+OSError:`) era un `SyntaxError` -sintaxis de Python 2- y lo "corregía"
+envolviéndolo en paréntesis. Esa afirmación era falsa, y la causa es
+exactamente la que ADR-001 pide nombrar sin suavizar: la comprobación se hizo
+con el `python3` del sistema (3.12), no con `uv run python` (el intérprete
+real del proyecto, fijado en 3.14 por `requires-python = ">=3.14,<3.15"` en
+`pyproject.toml`). Python 3.14 incorpora PEP 758, que permite exactamente
+`except A, B:` sin paréntesis; `ruff format` (con `target-version = "py314"`
+en este repositorio) lo trata como la forma canónica y **deshace** la versión
+con paréntesis al reformatear -que es la señal que expuso el error: el fichero
+"se revertía solo" tras `ruff format .`, y no era una regresión externa sino
+`ruff` corrigiendo una desviación de estilo que yo mismo había introducido.
+Verificado con el intérprete correcto:
+
+```
+$ uv run python --version
+Python 3.14.6
+$ uv run python -c "compile('try:\n pass\nexcept ValueError, TypeError:\n pass\n', '<t>', 'exec')"
+(sin error: la sintaxis sin paréntesis es válida)
+```
+
+Revertido a la forma original (`except UnicodeDecodeError, OSError:`) en el
+commit que sigue a este; `ruff format --check`, `ruff check`, `mypy` y
+`pytest tests/engine/test_context_recall.py` en verde sobre el fichero
+intacto. Ningún otro fichero de este bloque se vio afectado por el error de
+diagnóstico. Se deja constancia aquí en vez de silenciarlo, como pide
+`disciplina-evidencia` §4 sobre verificar antes de aceptar cualquier
+afirmación -incluida la propia.
 
 ## Criterio de parada (escrito ANTES de decidir)
 
@@ -43,11 +65,11 @@ Publicado antes de tocar código nuevo, siguiendo el método de la skill
 
 1. **¿Dónde vive el fallo (la ausencia) y dónde va el arreglo? ¿Puede el
    sitio del arreglo OBSERVAR lo que soluciona?**
-   - El bug de sintaxis: el fallo y el arreglo viven en la misma línea de
-     `context_recall.py`. Es observable de la forma más directa posible: el
-     intérprete de Python se niega a analizar el fichero (`SyntaxError`
-     explícito al primer intento de `ast.parse`/import), no un fallo
-     silencioso que pudiera pasar desapercibido.
+   - (Nota posterior: el primer commit de esta rama afirmó aquí un
+     `SyntaxError` en `context_recall.py` que no existía -ver la sección
+     «Contexto y problema» arriba para la corrección completa. Se deja el
+     resto de este criterio de parada como se publicó, sin retocar la
+     redacción original, salvo esta nota.)
    - La ausencia de gobierno (puerta, presupuesto, escalado): vive fuera de
      `src/sirius_engine/` en el sentido de que hoy NO EXISTE ningún camino que
      convierta una intención en trabajo gobernado; el arreglo es código nuevo

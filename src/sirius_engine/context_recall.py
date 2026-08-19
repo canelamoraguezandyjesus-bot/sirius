@@ -92,7 +92,7 @@ def buscar_en_arbol_repo(
             continue
         try:
             texto = ruta.read_text(encoding="utf-8")
-        except (UnicodeDecodeError, OSError):
+        except UnicodeDecodeError, OSError:
             fallidas.append(f"arbol:{relativa}")
             continue
         for numero_linea, linea in enumerate(texto.splitlines(), start=1):
