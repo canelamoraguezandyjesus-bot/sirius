@@ -17,6 +17,27 @@ Este documento es **evidencia**, no autoridad. Donde afirma algo sobre el
 comportamiento del sistema, cita `ruta:línea` o el comando que lo comprueba.
 Donde no pudo comprobarlo, lo dice.
 
+> **Conclusión, antes de los detalles.** **Doce de las trece piezas** que el brief
+> describe como diseño nuevo ya existen en este repositorio, construidas y
+> probadas, en dos carriles: la automatización de GitHub —donde el «Refutador de
+> modelo distinto», el «Promotion Gate determinista que falla cerrado» y la
+> «aprobación ligada al hash exacto» **ya operan a diario**— y el dominio de
+> memoria y decisiones de V4. El brief se escribió contra los documentos de
+> Sirius, no contra su código.
+>
+> Por eso **no recomiendo construir un vertical de aprendizaje**, y el veredicto
+> de calendario es **«todavía no»**, sin fecha: el motor no tiene puerto de
+> Worker, no ha ejecutado ningún WorkItem, no hay ningún diario en disco, la
+> maquinaria de permisos de A4 está construida y **sin cablear**, y el
+> presupuesto **no puede** gobernar nada posterior a la entrega (comprobado
+> ejecutando: §14.5, H-3).
+>
+> El análisis de enganche de §6 sigue siendo válido como respuesta a «si algún
+> día, por dónde» — no como propuesta de empezar. Dos rondas adversariales
+> devolvieron objeciones de la misma familia y **la regla de las dos rondas
+> (ADR-001) se activó**: §14 escribe el patrón, la raíz, las seis correcciones a
+> lo que este informe afirmó de más y la decisión de retirar y escalar.
+
 ---
 
 ## 1. Estado real encontrado
@@ -294,15 +315,26 @@ depende de un contrato **que hoy nadie valida**. Es GAP-2.
 - `validar_egress_fail_closed` (`egress.py:29`): un fragmento **sin clasificar**
   impide arrancar siempre; con red concedida, cualquier fragmento no
   `exportable` también.
-- **Veredicto — y es una buena noticia**: la invariante «el Extractor y el
-  Refutador **no pueden** crear/modificar/borrar conocimiento activo» **sí es
-  expresable de forma estructural hoy**, sin código nuevo del motor. Basta que
-  el conocimiento activo se escriba a través de una capacidad registrada (p. ej.
-  `conocimiento.escribir`, `escritura: true`, `ambitos_escritura:
-  [conocimiento]`) y que los perfiles de Extractor y Refutador declaren
-  `permisos.escritura: null`. El Resolver rechaza entonces esa capacidad por dos
-  motivos independientes, sin depender de ninguna instrucción de prompt. Es la
-  diferencia entre «se lo hemos pedido» y «no puede».
+- **Veredicto — CORREGIDO en la ronda 2, ver §16.** La invariante «el Extractor y
+  el Refutador **no pueden** crear/modificar/borrar conocimiento activo» es
+  **expresable** con estas piezas: un perfil con `permisos.escritura: null` y una
+  capacidad `conocimiento.escribir` registrada con `ambitos_escritura:
+  [conocimiento]` serían rechazados por el Resolver por dos motivos
+  independientes, sin depender de ningún prompt.
+  **Pero hoy no está en vigor, y esto es lo que la primera redacción de este
+  informe afirmó de más**: `compute_permission_envelope`, `resolve_capabilities`,
+  `validar_egress_fail_closed` y `project_worker_request` **no tienen ningún
+  llamador en `src/`** — solo en `tests/`. Toda la maquinaria de A4 está
+  construida y **sin cablear**. La única superficie que hoy restringe de verdad a
+  un Worker es `--allowedTools` en el YAML del workflow, y para el revisor está
+  configurada como `--dangerously-skip-permissions --allowedTools "Bash,Read,Grep,Glob"`
+  (`.github/workflows/review-sirius-work.yml:280`). El Auditor sí es estricto
+  (`audit-sirius-repository.yml:151-152`), consistente con ADR-016.
+  Segundo límite, también de la ronda 2: `PermissionEnvelope.escritura` es **un
+  solo nombre de ámbito**, no una ruta ni un recurso. Si el conocimiento activo
+  se materializa como ficheros del repositorio, un perfil con `escritura: repo`
+  lo cubriría igual que cubre el código. La separación exige un ámbito propio, y
+  eso es trabajo, no una propiedad que ya esté ahí.
 
 ### 3.7 Presupuesto, escalado y notificación (A5, rama abierta)
 
@@ -374,12 +406,23 @@ Sin construir nada:
 | Conocimiento versionado, corregible y reversible (diseño) | Memoria/decisiones de V4 | `src/sirius/domain/memory.py`, `decision.py`, `precedence.py` |
 | «Inspect AI no es dueño del ciclo» | Ya decidido | `SIRIUS_WORK_ENGINE_INVENTARIO.md:187` |
 | «No hay Agente de memoria» | Ya decidido | Arquitectura §9 |
+| **Refutador con modelo distinto** | **Ya construido y operando** | `scripts/automation/sirius_aggregate_reviews.py` (Claude + Codex, dos proveedores) |
+| **Promotion Gate determinista que falla cerrado** | **Ya construido y operando** | `sirius_aggregate_reviews.py:8-23`: JSON ausente o inválido → `FAILED_SAFELY`; SHA distinto o no demostrable → `FAILED_SAFELY`; solo si **ambos** aprueban el mismo SHA → `REVIEW_APPROVED`. «No hay votos, promedios ni arbitraje por otro modelo: solo reglas fijas» |
+| **Aprobación ligada al cambio exacto/hash** | **Ya construido y operando** | `scripts/automation/sirius_apply_verdict.sh:15-17`: coincidencia exacta entre el `reviewed_head_sha` declarado, el head actual de la PR y el último head que superó Quality |
+| **Fuente no confiable tratada como dato, no como instrucción** | **Ya construido** | `sirius_aggregate_reviews.py:20-21`: «Los textos de ambos revisores se tratan como datos; este script nunca los interpreta como instrucciones» |
 
-Nueve de las trece piezas que el brief describe como diseño nuevo **ya están
-construidas o ya están decididas**. Es el resultado más importante de este
-contraste: el vertical de aprendizaje es mucho más pequeño de lo que los
-adjuntos sugieren, y lo que queda es sobre todo **una puerta de promoción y un
-canal de presentación**, no una arquitectura.
+**Doce de las trece piezas** que el brief describe como diseño nuevo ya están
+construidas o ya están decididas. *(La primera redacción de este informe dijo
+nueve; la ronda 2 encontró las tres del carril de automatización y la corrección
+está en §16.)*
+
+Es el resultado más importante de todo el contraste, y conviene decirlo sin
+suavizarlo: **el brief se escribió contra los documentos de Sirius, no contra su
+código.** Lo que pide como diseño nuevo existe, construido y probado, en dos
+carriles distintos —la automatización de GitHub y el dominio de memoria y
+decisiones de V4— más el Auditor como sidecar de solo lectura. Lo que Sirius no
+tiene no es el patrón: es ese patrón **dentro del motor**, y el motor todavía no
+ha ejecutado nada.
 
 ---
 
@@ -439,11 +482,25 @@ Eso ya se puede expresar con el Resolver y el registro de capacidades (§3.6).
 | **O3** WorkItem de clase `aprendizaje` despachado por el motor | `WorkItemClass` + `_TABLA_AUTORIDAD` | No | Sí | **Sí** | **Sí** | **Descartada**: prohibida por el encargo y por el contrato §11.1; además convierte al aprendizaje en trabajo del motor y al sidecar en actor con autoridad |
 | **O4** Lector del diario, fuera del camino de escritura | `ports/store.py:202` `list_events()` / el JSONL de `adapters/durable/journal.py` | **No** | **No** | **No** | **No** | **RECOMENDADA** |
 
-### 6.2 La opción recomendada, en una frase
+### 6.2 La opción mejor clasificada — que **no** es lo mismo que recomendarla
 
-> **El aprendizaje v0 es un lector del diario, no un actor del motor. No tiene
-> hook, no tiene estado en el motor, no crea WorkItems, no escribe nada activo, y
-> se invoca por una orden del propietario.**
+> **Si algún día se construye**: el aprendizaje v0 es un lector del diario, no un
+> actor del motor. No tiene hook, no tiene estado en el motor, no crea WorkItems,
+> no escribe nada activo, y se invoca por una orden del propietario.
+
+**Corrección de la ronda 2 (§16)**: la primera redacción marcó esta opción como
+«RECOMENDADA». No lo es, y etiquetarla así era responderme sola una pregunta que
+no me toca. La comparación de §6.1 puntúa seis ejes **todos internos al motor**
+(rompe lo entregado, autoridad, puerto, dominio, A5, clase nueva) y **omite el
+único criterio de parada que ata a este repositorio**: `AGENTS.md` obliga a
+detenerse ante «introducir otro proceso, servidor, agente o base de datos», y
+esta opción introduce **un staging propio** y **un punto de entrada que no
+existe** (`pyproject.toml` declara `sirius`, `sirius-voz` y `sirius-obs`, ninguno
+del motor). Los dispara los dos.
+
+Lo que queda en pie es el **orden**: O4 sobre O1, O2 y O3 es correcto y ninguna
+de las cuatro lentes adversariales lo refutó. Lo que cambia es el estatus: **de
+recomendación a pregunta al propietario** (§12, D-1).
 
 Cómo funciona, concretamente:
 
@@ -561,6 +618,12 @@ proceso y la base de datos, pero **sí introduce perfiles de agente nuevos**
 (Extractor, Refutador, Curator). Eso basta para exigir decisión.
 
 ### 8.3 Colocación propuesta
+
+**Corregido en la ronda 2 (§14.4, C-6): el veredicto de calendario es «todavía
+no», sin fecha.** Ningún bloque del plan programa GAP-1 (identidad de modelo por
+Run), así que **ni siquiera M3 entrega el dato que el vertical necesita**. Lo que
+sigue describe la forma que tendría la fase **si** el propietario decidiera
+construirla, no cuándo empezarla.
 
 **Una fase propia, después del HITO M3, y no dentro de ninguna fase aprobada.**
 No se reordena nada: se añade al final.
@@ -891,12 +954,16 @@ enmendar el contrato v1.7 y tocar la tabla de A5.
 precisamente para no necesitarlo. Si más adelante se quiere, es una enmienda de
 contrato con su propio ADR, no un efecto colateral.
 
-**D-3 — Presupuesto del aprendizaje.**
-`Budget` no se persiste (§3.7) y el sidecar corre después de que el WorkItem sea
-terminal: **no hay presupuesto al que cargarse**. Cualquier llamada a modelo es
-gasto nuevo, causa 2 de escalado.
-*Recomiendo*: fijar un tope explícito y pequeño para la fase de sombra, y que el
-corte al agotarlo sea determinista. No fijo ninguna cifra: no tengo dato.
+**D-3 — Presupuesto del aprendizaje. BLOQUEANTE tras la ronda 2.**
+No es que el presupuesto sea incómodo de aplicar: es que **no se puede aplicar en
+absoluto**. Comprobado ejecutando (§14.5, H-3): `registrar_gasto` sobre un
+WorkItem `DELIVERED` lanza `IllegalTransitionError`, porque el corte determinista
+escala y escalar exige `ACTIVE`. Y como el aprendizaje no es un WorkItem, no hay
+`work_id` al que cargar nada. Un sidecar gastaría **sin límite, sin corte, sin
+`NEEDS_DECISION`, sin escalada y sin notificación**.
+*Recomiendo*: **no ejecutar ninguna llamada a modelo desde el aprendizaje hasta
+que exista una puerta de gasto que le sirva.** No es una cifra lo que falta: es
+el mecanismo.
 
 **D-4 — ¿Segunda memoria? (la objeción A4, que sobrevivió)**
 La arquitectura §9 dice que el sustrato de memoria ya existe en el producto y que
@@ -942,6 +1009,19 @@ reproducida (§1.3). *Recomiendo*: renumerar el ADR de A5 a **ADR-044** —no a
 `tests/automation/test_registro_de_decisiones.py`. Es la decisión del propietario
 sobre su propia PR; aquí solo se reporta con la evidencia.
 
+**D-9 — La pregunta que la ronda 2 formuló mejor que yo, y que ordena a todas las
+demás.**
+Doce de las trece piezas del brief existen ya, construidas y probadas, en dos
+carriles: el agregador determinista de revisión dual (`sirius_aggregate_reviews.py`
++ `sirius_apply_verdict.sh`) y el dominio de memoria y decisiones de V4. Antes de
+decidir **cómo** aprende Sirius, hay que decidir si lo que crece es **eso** —
+generalizando un mecanismo ya probado— o si se construye un mecanismo nuevo al
+lado. Son caminos incompatibles, y la elección no es técnica: es de producto.
+*Recomiendo*: hacer crecer lo que ya existe. Un mecanismo nuevo al lado es la
+duplicación que ADR-005 eliminó de V8, cometida a mayor escala.
+*Bloquea*: el orden de todo lo demás. Si la respuesta es «crecer lo existente»,
+las decisiones D-1 a D-8 cambian de forma.
+
 ---
 
 ## 13. Qué NO recomiendo construir
@@ -980,7 +1060,142 @@ sobre su propia PR; aquí solo se reporta con la evidencia.
 
 ---
 
-## 14. Lo que este informe NO garantiza
+## 14. Ronda 2: la regla de las dos rondas se activó
+
+Cuatro refutaciones independientes (duplicación, ownership/governance, seguridad,
+coste/orden), con lentes distintas, contra el diseño de §6. **Verifiqué cada
+hallazgo contra el código antes de aceptarlo** (ADR-001 §4); lo que sigue es lo
+que resistió esa verificación, con la comprobación que lo sostiene.
+
+### 14.1 El patrón, escrito antes de decidir qué hacer con él
+
+La ronda 1 (§11) devolvió cinco objeciones de la familia **«esta pieza ya existe
+con otro nombre»**: A1 (el Auditor), A2 (el Refutador), A3 (el dossier), A4 (la
+segunda memoria), A7 (el staging). Concedí tres y declaré una insalvable. Al
+cerrar §11 escribí que si la ronda siguiente devolvía la misma familia, la regla
+se activaría.
+
+**La devolvió, y con más fuerza.** La ronda 2 encontró tres piezas más de la
+misma familia, y son justamente las que yo había dado por inexistentes.
+
+Por ADR-001, aquí **se prohíbe seguir parcheando el diseño**. Toca escribir la
+raíz y decidir: seguir, retirar o escalar.
+
+### 14.2 La raíz
+
+**El brief se escribió contra los documentos de Sirius, no contra su código.**
+Por eso especifica como diseño nuevo un conjunto de capacidades que este
+repositorio ya construyó y probó, en dos carriles distintos. No es un defecto del
+brief como pieza de pensamiento: es lo que pasa cuando se diseña sobre una
+descripción en vez de sobre un árbol de ficheros. Pero cambia el entregable: lo
+que hacía falta no era un diseño de vertical, sino **este contraste**.
+
+### 14.3 El argumento con el que salvé A1 en la ronda 1 era falso
+
+En §11, A1, defendí que el Auditor «falla en la cola»: que el tramo
+`staging → Gate → activo` no existe en Sirius. **Existe, y no una vez sino dos.**
+
+- **Carril de automatización**: fichero de veredicto (staging) →
+  `scripts/automation/sirius_aggregate_reviews.py` (Gate determinista) →
+  `scripts/automation/sirius_apply_verdict.sh` (aplicación previa reverificación).
+  Y el agregador es, literalmente, lo que el brief pide: **dos revisores de
+  proveedores distintos** (Claude + Codex), **sin votos, promedios ni arbitraje
+  por otro modelo**, con **fail-closed** ante JSON ausente o inválido y ante SHA
+  distinto o no demostrable, y aprobación **solo si ambos aprueban el mismo SHA**
+  (`sirius_aggregate_reviews.py:8-23`). La ligadura al hash exacto es
+  `sirius_apply_verdict.sh:15-17`: coincidencia exacta entre el `reviewed_head_sha`
+  declarado, el head actual de la PR y el último head que superó Quality.
+- **Carril del producto**: propuesta → aprobación humana explícita → decisión
+  activa, con sustitución y archivado reversibles
+  (`src/sirius/domain/{memory,decision,precedence}.py`).
+
+Es decir: **el «Refutador de modelo distinto», el «Promotion Gate determinista
+que falla cerrado» y la «aprobación ligada al cambio exacto» no son lo que a
+Sirius le falta. Son lo que Sirius ya hace todos los días.** Lo que falta es esa
+maquinaria *dentro del motor*, y el motor todavía no ha ejecutado nada.
+
+### 14.4 Correcciones a lo que este informe afirmó de más
+
+| # | Lo que dije | Lo que es | Comprobación |
+|---|---|---|---|
+| C-1 | «La invariante del Extractor **sí es expresable** de forma estructural hoy, sin código nuevo» | Expresable sí; **en vigor no**. `compute_permission_envelope`, `resolve_capabilities`, `validar_egress_fail_closed` y `project_worker_request` **no tienen ningún llamador en `src/`** — solo en `tests/`. A4 está construido y sin cablear | `grep -rn` de los cuatro símbolos sobre `src/` y `tests/` |
+| C-2 | (no lo dije) | `PermissionEnvelope.escritura` es **un nombre de ámbito**, no una ruta. Si el conocimiento se materializa como ficheros del repo, `escritura: repo` lo cubre igual que el código. Separarlo es trabajo | `domain/permission_envelope.py:22-30` |
+| C-3 | «Nueve de trece piezas ya existen» | **Doce de trece.** Faltaban las tres del carril de automatización | §14.3 |
+| C-4 | «Diario con integridad comprobable» | Comprobable frente a **corrupción del medio**, no frente a manipulación: el checksum es SHA-256 **sin clave**, recalculable por cualquiera que pueda escribir el fichero | `adapters/durable/journal.py:1-20` |
+| C-5 | «Opción RECOMENDADA» | **Mejor clasificada, no recomendada.** La matriz omitía el criterio de parada de `AGENTS.md`, que esta opción dispara dos veces (staging propio; punto de entrada inexistente) | §6.2, ya corregido |
+| C-6 | Coloqué el vertical «después de M3» | El calendario correcto es **«todavía no»**, sin fecha. Ningún bloque del plan programa GAP-1, así que **M3 tampoco entrega el dato que el vertical necesita** | `PLAN` §2, bloques C1–C4 |
+
+Y una objeción de la ronda 2 que acepto sin matices: **ADR-043 no es norma
+vigente.** Es mi propia nota de arranque, en `PROPUESTO` y sin fusionar. Apoyar
+el ranking en «los criterios de parada 1 y 2 de ADR-043» en vez de en `AGENTS.md`
+y el contrato es lo que produjo el punto ciego de C-5.
+
+### 14.5 Hallazgos propios que la ronda 2 destapó, y que **no son de aprendizaje**
+
+Tres defectos verificados que existen hoy, independientemente de que este
+vertical se construya o no. Se reportan aquí porque es donde se encontraron; su
+corrección es trabajo aparte.
+
+**H-1 — El cuerpo de la incidencia entra sin filtro de autor, dentro de una
+función que promete lo contrario.**
+`mirror_projection.py:188-197`, `_texto_cronologico_de_confianza`, filtra los
+comentarios con `es_autor_de_confianza` y después concatena el **cuerpo** de la
+incidencia sin filtrarlo:
+`return "\n".join((*de_confianza, cuerpo))`. El puerto lo hace además
+imposible de arreglar sin tocarlo: `LecturaCuerpo`
+(`ports/github_mirror.py:61-65`) tiene `estado`, `cuerpo` y `error`, y **ningún
+campo de autor**. Ese texto gobierna la numeración de rondas y la racha de fallos
+de CI vía `sirius_convergence.parse_round_records`. El nombre de la función
+afirma una propiedad que la función no tiene.
+
+**H-2 — «No pude leer el resultado» se convierte en «éxito con resultado
+vacío».**
+`recovery.py:93-95`: `store.succeed_run(live.run_id, resultado=observation.resultado or {}, now=now)`.
+Y el puerto no ofrece forma de decir «no pude observar»: `RemoteRunStatus`
+(`ports/world.py:23-33`) enumera `PENDING`, `SUCCEEDED`, `FAILED`, `LOST` y
+`CANCELLED`, y **no tiene `UNKNOWN`**. Es exactamente la familia que ADR-036
+cerró para el espejo, reaparecida en el barrido de recuperación — es decir, en el
+único camino por el que el resultado real de un Worker llegaría al diario.
+
+**H-3 — El presupuesto no puede gobernar nada posterior a la entrega.**
+Comprobado **ejecutando**, no razonado: `registrar_gasto` sobre un WorkItem ya
+`DELIVERED` lanza `IllegalTransitionError` («cannot escalate WorkItem while in
+state DELIVERED»), porque el corte determinista escala, y escalar exige `ACTIVE`.
+Como el aprendizaje además **no es un WorkItem** (§3.8), no hay ningún `work_id`
+al que cargar el gasto. Un sidecar de aprendizaje gastaría **sin límite, sin
+corte, sin `NEEDS_DECISION`, sin escalada y sin notificación**. Esto no es un
+matiz de coste: es la ausencia completa de la única puerta de gasto que el plan
+construyó, y agrava D-3 hasta convertirla en bloqueante.
+
+### 14.6 La decisión que exige la regla
+
+Seguir, retirar o escalar. **Escalar, y retirar la parte que sobra.**
+
+- **Se retira** la recomendación de construir un vertical de aprendizaje. Doce
+  de trece piezas existen; lo que quedaría es tan pequeño que llamarlo «vertical»
+  es lo que hacía parecer necesario todo lo demás.
+- **Se conserva** el contraste (§1–§5), que es lo que de verdad hacía falta, y el
+  análisis de enganche (§6) con su nuevo estatus: la respuesta a «si algún día,
+  por dónde», no una propuesta de calendario.
+- **Sube al propietario** la pregunta real, que la ronda 2 formuló mejor de lo
+  que yo la tenía: **antes de diseñar cómo aprende Sirius, decidir si lo que ya
+  tiene construido —el agregador determinista de revisión dual y el dominio de
+  memoria y decisiones de V4— es el mecanismo que debe crecer, en vez de un
+  mecanismo nuevo al lado.** Es la pregunta D-9 de §12.
+
+### 14.7 Una objeción de la ronda 2 que no acepto entera
+
+Se argumentó que el lector **es** un coordinador, porque una orden produce N
+candidatos y cada uno encadena Refutador, Curator y Gate. Acepto el fondo —
+encadena invocaciones de modelo sin ninguna puerta de gasto, que es exactamente
+H-3 — y no acepto la etiqueta: «coordinador» en el vocabulario de este
+repositorio (ADR-019, arquitectura §2) significa poseer ciclo de vida y estado, y
+un lector del diario no posee ninguno de los dos. La corrección correcta no es
+llamarlo coordinador: es que **sin puerta de gasto no debe existir**.
+
+---
+
+## 15. Lo que este informe NO garantiza
 
 Repetido de ADR-043 porque es donde toca leerlo:
 
@@ -995,7 +1210,7 @@ Repetido de ADR-043 porque es donde toca leerlo:
 - No garantiza que el enganche recomendado sobreviva a las enmiendas C1 y C2 del
   contrato (E1b), que aún no existen.
 
-## 15. Comprobaciones que sostienen este informe
+## 16. Comprobaciones que sostienen este informe
 
 ```
 git log -1 --oneline                       -> a25ee3b (main)
@@ -1010,4 +1225,25 @@ grep -rniE "claude|openai|anthropic|gpt-|sonnet|opus" src/sirius_engine/
 grep -rn "WorkPackage|WorkResult" src/     -> ningún tipo; solo Mapping opacos
 grep -rni "inspect.ai|inspect_ai" .        -> solo documentos, nunca código
 tests/engine/test_boundary.py              -> sirius <-> sirius_engine, prohibido en ambos sentidos
+```
+
+Añadidas al verificar la ronda 2:
+
+```
+grep -rn "project_worker_request|compute_permission_envelope|resolve_capabilities|
+          validar_egress_fail_closed|ContextFragment\(" src/ tests/
+                                           -> ningún llamador en src/; solo en tests/
+grep -rln sirius_engine .github/ scripts/  -> vacío: el motor no está cableado a nada
+sed -n '/\[project.scripts\]/,/^\[/p' pyproject.toml
+                                           -> sirius, sirius-voz, sirius-obs (ninguno del motor)
+find . -name "*.jsonl" -not -path "./.git/*"
+                                           -> vacío: no existe ningún diario en disco
+grep -n allowedTools .github/workflows/*.yml
+                                           -> revisor: --dangerously-skip-permissions
+                                              --allowedTools "Bash,Read,Grep,Glob"
+                                              auditor: Read,Grep,Glob,Write,Bash(git log:*)…
+                                              + --disallowedTools "Task"
+registrar_gasto sobre un WorkItem DELIVERED (ejecutado)
+                                           -> IllegalTransitionError: cannot escalate
+                                              WorkItem while in state DELIVERED
 ```

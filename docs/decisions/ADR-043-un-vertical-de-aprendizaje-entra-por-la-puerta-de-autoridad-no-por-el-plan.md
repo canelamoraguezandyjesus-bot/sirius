@@ -130,13 +130,51 @@ Para la forma de ENTRADA de este trabajo en el repositorio:
 2. **Si algún día se construye, se engancha por la opción 4.** El aprendizaje
    v0 **no es un WorkItem**: es un lector del diario, invocado por una orden del
    propietario, que no crea trabajo, no toca estado del motor y no puede escribir
-   conocimiento activo. Esta no es una preferencia estética: es la única de las
-   cuatro opciones que no exige tocar el dominio, ni el puerto, ni A5, ni el
-   contrato — y por tanto la única que no dispara el criterio de parada de más
-   arriba.
+   conocimiento activo. Es la única de las cuatro opciones que no exige tocar el
+   dominio, ni el puerto, ni A5, ni el contrato.
+   **Corregido tras la segunda ronda adversarial**: «la mejor de las cuatro» no
+   es «recomendada». La comparación puntúa seis ejes internos al motor y omitía el
+   criterio de parada de `AGENTS.md` —«introducir otro proceso, servidor, agente o
+   base de datos»—, que esta opción dispara dos veces: el staging propio y un
+   punto de entrada que no existe (`pyproject.toml` declara `sirius`, `sirius-voz`
+   y `sirius-obs`, ninguno del motor). El estatus correcto es **pregunta al
+   propietario**, no recomendación.
 
-Se declara además, sin suavizarla (criterio de parada 3): **la invariante «el
-Refutador usa un modelo distinto del proponente» NO es sostenible hoy.** Ni
+3. **No se recomienda construir el vertical, y el calendario es «todavía no».**
+   Dos rondas adversariales devolvieron objeciones de la misma familia —«esta
+   pieza ya existe con otro nombre»— y **la regla de las dos rondas se activó**.
+   La raíz: **el brief se escribió contra los documentos de Sirius, no contra su
+   código**. Doce de sus trece piezas ya existen construidas y probadas, en dos
+   carriles. En particular, el argumento con el que salvé el diseño en la primera
+   ronda era falso: el tramo `staging → Gate → activo` **sí existe**, y es
+   `sirius_aggregate_reviews.py` (dos revisores de proveedores distintos, reglas
+   fijas, fail-closed ante JSON inválido o SHA no demostrable, aprobación solo si
+   ambos aprueban el mismo SHA) más `sirius_apply_verdict.sh` (coincidencia exacta
+   entre el SHA declarado, el head de la PR y el último head que superó Quality).
+   Se retira, por tanto, la recomendación de construir; se conserva el contraste,
+   que es lo que hacía falta; y sube al propietario la pregunta que ordena a las
+   demás: **si lo que debe crecer es el mecanismo ya probado, en vez de uno nuevo
+   al lado** (informe §12, D-9).
+
+Se declara además, sin suavizarlas (criterio de parada 3): **de las seis
+garantías no negociables del encargo, cinco no son sostenibles hoy dentro del
+motor.** La primera redacción de este ADR declaró solo una; la segunda ronda
+encontró las otras cuatro y se aplica el mismo criterio a todas (informe §14.4):
+
+- «Extractor y Refutador no escriben conocimiento activo»: **expresable, no en
+  vigor**. `compute_permission_envelope`, `resolve_capabilities`,
+  `validar_egress_fail_closed` y `project_worker_request` no tienen ningún
+  llamador en `src/` — solo en `tests/`. La única superficie que hoy restringe a
+  un Worker es `--allowedTools` en el YAML, y para el revisor está configurada con
+  `Bash` y `--dangerously-skip-permissions`.
+- «Aprobación ligada al hash exacto»: existe y funciona, pero **solo en bash y
+  solo sobre la vía GitHub**; un lector del diario con staging propio no hereda
+  ninguna de esas comprobaciones.
+- «Fail-closed»: dos fallos abiertos verificados en los caminos que el pipeline
+  usaría (`recovery.py:93-95` y `context_recall.py:262`).
+- «El egress para la evidencia privada»: `validar_egress_fail_closed` solo sabe
+  mirar `ContextFragment`, y **en todo `src/` no se construye ni uno**.
+- «El Refutador usa un modelo distinto del proponente»: **no comprobable.** Ni
 `AgentProfile` (`domain/profile.py:38-48`), ni `WorkerRequest`
 (`worker_request.py:44-54`), ni `Run.worker` (`domain/run.py:71`) llevan
 identidad de modelo, así que el motor no puede comprobarla. Es además una
@@ -189,6 +227,16 @@ Ningún documento de estado, plan, contrato ni canónico aparece en esa lista.
 - Queda reportado, con la prueba reproducida, que la PR #207 está en rojo por dos
   ADR-042 en el registro. Para no repetir la colisión, este trabajo toma el 043 y
   el duplicado de A5 debería renumerarse a **044**.
+- Quedan registrados tres defectos verificados que **no son de aprendizaje** y
+  existen hoy (informe §14.5): el cuerpo de la incidencia entra sin filtro de
+  autor dentro de `_texto_cronologico_de_confianza` y el puerto lo hace
+  imposible de arreglar (`mirror_projection.py:188-197`,
+  `ports/github_mirror.py:61-65`); «no pude leer el resultado» se convierte en
+  «éxito con resultado vacío» en el barrido de recuperación y `RemoteRunStatus`
+  no tiene `UNKNOWN` (`recovery.py:93-95`, `ports/world.py:23-33`, familia que
+  ADR-036 ya cerró para el espejo); y `registrar_gasto` sobre un WorkItem
+  `DELIVERED` lanza `IllegalTransitionError`, así que el presupuesto no puede
+  gobernar nada posterior a la entrega.
 - Si el propietario no autoriza nada, no queda ninguna deuda: borrar estos dos
   documentos deja el repositorio exactamente como estaba.
 
