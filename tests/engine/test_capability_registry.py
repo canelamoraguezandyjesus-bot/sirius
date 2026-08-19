@@ -76,6 +76,11 @@ def test_cargar_desde_un_fichero_explicito(tmp_path: Path) -> None:
         "version: 1\ncapacidades:\n  x.y:\n"
         "    proveedor: funcion_local\n    red: false\n    escritura: false\n"
         "    ambitos_escritura: [repo]\n",
+        # CODEX-001 (ronda 6): un ámbito compuesto solo por espacios es
+        # truthy pero no tiene identificador efectivo -no debe cargar.
+        "version: 1\ncapacidades:\n  x.y:\n"
+        "    proveedor: funcion_local\n    red: false\n    escritura: true\n"
+        '    ambitos_escritura: ["   "]\n',
     ],
 )
 def test_registro_malformado_lanza_error_explicito(tmp_path: Path, contenido: str) -> None:

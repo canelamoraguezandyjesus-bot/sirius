@@ -77,7 +77,9 @@ def _campo_ambitos_escritura(
     datos: Mapping[str, object], *, escritura: bool, contexto: str
 ) -> frozenset[str]:
     valor = datos.get("ambitos_escritura", [])
-    if not isinstance(valor, list) or not all(isinstance(item, str) and item for item in valor):
+    if not isinstance(valor, list) or not all(
+        isinstance(item, str) and item.strip() for item in valor
+    ):
         raise ValueError(
             f"{contexto}: el campo 'ambitos_escritura' debe ser una lista de texto no vacío"
         )
