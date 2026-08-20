@@ -265,13 +265,16 @@ que es cuando el dato nace. Antes no hay nada que registrar.
 
 Para no perder tiempo con ello:
 
-- **La maquinaria de A4 no está cableada.** `compute_permission_envelope`,
-  `resolve_capabilities`, `validar_egress_fail_closed` y
-  `project_worker_request` no tienen ningún llamador en `src/` — solo en
-  `tests/`. Es **correcto**: el plan dice que A4 «entrega la proyección, el campo
-  y las pruebas» y sitúa el cableado en C2/C3. Lo único que hay que cuidar es no
+- **La maquinaria de A4 no la ejecuta ningún camino de producción.**
+  `project_worker_request` (`src/sirius_engine/worker_request.py:57`) encadena el
+  cálculo del envelope, la validación de egress y la resolución de capacidades
+  (`:65-67`), pero **nadie llama a esa proyección** fuera de las pruebas. Es
+  **correcto**: el plan dice que A4 «entrega la proyección, el campo y las
+  pruebas» y sitúa el cableado en C2/C3. Lo único que hay que cuidar es no
   afirmar «el egress es imposible de saltar» del sistema en marcha: hoy lo es del
   camino de código, no de lo que corre.
+
+
 - **El checksum del diario no lleva clave.** Protege contra corrupción del medio,
   que es su amenaza declarada. Contra manipulación no protege, pero ADR-012 ya
   decidió que un proceso local está dentro de la frontera de confianza.

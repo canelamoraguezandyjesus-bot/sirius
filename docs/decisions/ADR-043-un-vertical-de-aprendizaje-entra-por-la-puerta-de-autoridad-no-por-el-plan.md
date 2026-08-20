@@ -127,7 +127,12 @@ Para la forma de ENTRADA de este trabajo en el repositorio:
 
 ## Decisión
 
-**Dos decisiones, y ninguna autoriza construir nada.**
+**Una sola decisión se somete a aprobación aquí, y no autoriza construir nada.**
+*(Reestructurado en la ronda 3: la redacción anterior metía en «Decisión» dos
+puntos que el propio texto declaraba «pregunta al propietario». Como la
+aprobación de un ADR es la fusión de su PR, eso hacía que aceptar la forma de
+entrada aprobara de paso un diseño con staging propio y perfiles nuevos. Ahora
+solo el punto 1 se aprueba al fusionar; el resto vive en «Constataciones».)*
 
 1. **Forma de entrada.** El contraste de los adjuntos y la auditoría de costuras
    entran como evidencia en
@@ -136,7 +141,12 @@ Para la forma de ENTRADA de este trabajo en el repositorio:
    convertirse en decisión vive aquí, en estado `PROPUESTO`, y solo la fusión de
    la PR por el propietario lo aprueba.
 
-2. **Si algún día se construye, se engancha por la opción 4.** El aprendizaje
+## Constataciones que NO se aprueban al fusionar
+
+Son el resultado de la auditoría, no decisiones. Cada una remite a §12 del informe,
+donde figura como decisión abierta del propietario.
+
+1. **Si algún día se construye, se engancha por la opción 4.** El aprendizaje
    v0 **no es un WorkItem**: es un lector del diario, invocado por una orden del
    propietario, que no crea trabajo, no toca estado del motor y no puede escribir
    conocimiento activo. Es la única de las cuatro opciones que no exige tocar el
@@ -149,7 +159,7 @@ Para la forma de ENTRADA de este trabajo en el repositorio:
    y `sirius-obs`, ninguno del motor). El estatus correcto es **pregunta al
    propietario**, no recomendación.
 
-3. **No se recomienda construir el vertical, y el calendario es «todavía no».**
+2. **No se recomienda construir el vertical, y el calendario es «todavía no».**
    Dos rondas adversariales devolvieron objeciones de la misma familia —«esta
    pieza ya existe con otro nombre»— y **la regla de las dos rondas se activó**.
    La raíz: **el brief se escribió contra los documentos de Sirius, no contra su
@@ -182,9 +192,12 @@ motor.** La primera redacción de este ADR declaró solo una; la segunda ronda
 encontró las otras cuatro y se aplica el mismo criterio a todas (informe §14.4):
 
 - «Extractor y Refutador no escriben conocimiento activo»: **expresable, no en
-  vigor**. `compute_permission_envelope`, `resolve_capabilities`,
-  `validar_egress_fail_closed` y `project_worker_request` no tienen ningún
-  llamador en `src/` — solo en `tests/`. La única superficie que hoy restringe a
+  vigor**. *(Corregido en la ronda 3.)* la proyección de A4 **sí está ensamblada** en `src/`: `project_worker_request`
+(`worker_request.py:57`) encadena envelope, egress y resolución de capacidades
+(`worker_request.py:65-67`). Lo que **no existe es ningún llamador de esa
+proyección**: solo la invocan las pruebas. Ningún camino de ejecución del motor
+construye un `WorkerRequest`, así que las tres guardas nunca corren en
+producción. La única superficie que hoy restringe a
   un Worker es `--allowedTools` en el YAML, y para el revisor está configurada con
   `Bash` y `--dangerously-skip-permissions`.
 - «Aprobación ligada al hash exacto»: existe y funciona, pero **solo en bash y
@@ -195,7 +208,7 @@ encontró las otras cuatro y se aplica el mismo criterio a todas (informe §14.4
 - «El egress para la evidencia privada»: `validar_egress_fail_closed` solo sabe
   mirar `ContextFragment`, y **en todo `src/` no se construye ni uno**.
 - «El Refutador usa un modelo distinto del proponente»: **no comprobable.** Ni
-`AgentProfile` (`domain/profile.py:38-48`), ni `WorkerRequest`
+`AgentProfile` (`domain/profile.py:33-48`), ni `WorkerRequest`
 (`worker_request.py:44-54`), ni `Run.worker` (`domain/run.py:71`) llevan
 identidad de modelo, así que el motor no puede comprobarla. Es además una
 divergencia respecto de la arquitectura §3.3, que sí la pide. Mientras no se
@@ -225,17 +238,27 @@ Y el predicado que hace observable el fallo que este ADR previene:
 
 ```
 git diff --name-only origin/main...HEAD
+  docs/audits/DEFECTOS_ENCONTRADOS_2026-08-20.md
   docs/audits/SIRIUS_LEARNING_SEAM_AUDIT_2026-08.md
   docs/decisions/ADR-043-un-vertical-de-aprendizaje-entra-por-la-puerta-de-autoridad-no-por-el-plan.md
 ```
 
-Ningún documento de estado, plan, contrato ni canónico aparece en esa lista.
+Ningún documento de estado, plan, contrato ni canónico aparece en esa lista, ni
+`src/`, ni `.github/`, ni `scripts/`.
+
+**Este es el único sitio donde se transcribe ese resultado.** El informe lo
+enlaza en vez de copiarlo: la ronda 3 encontró las dos copias divergidas —ambas
+decían dos ficheros cuando ya eran tres—, que es la familia exacta que ADR-005
+eliminó de V8.
 
 ## Consecuencias
 
-- El propietario recibe un informe con evidencia y **nueve decisiones** aisladas
-  (informe §12, D-1 a D-9), en vez de un plan editado que dé por hechas cosas que
-  no lo son.
+- El propietario recibe un informe con evidencia y lo que queda abierto,
+  **separado en tres listas** (informe §12): **seis decisiones que solo él puede
+  tomar** (D-1 a D-5 y D-10), **tres investigaciones técnicas** que se cierran con
+  datos y no con una firma (D-6, D-7, D-9), y **una entrada que ya está decidida**
+  y solo hay que aplicar (D-8). Y con la advertencia de que casi todo cuelga de
+  D-1: si esa se responde «no», las demás no llegan a plantearse.
 - El vertical de aprendizaje queda **sin autorizar**, que es su estado real: la
   excepción de `docs/evolution/STATUS.md:27-35` ampara el Work Engine
   «estrictamente según ADR-020 y su plan aprobado», y esto no está en ese plan.
@@ -262,9 +285,13 @@ Ningún documento de estado, plan, contrato ni canónico aparece en esa lista.
   `ports/github_mirror.py:61-65`); «no pude leer el resultado» se convierte en
   «éxito con resultado vacío» en el barrido de recuperación y `RemoteRunStatus`
   no tiene `UNKNOWN` (`recovery.py:93-95`, `ports/world.py:23-33`, familia que
-  ADR-036 ya cerró para el espejo); y `registrar_gasto` sobre un WorkItem
-  `DELIVERED` lanza `IllegalTransitionError`, así que el presupuesto no puede
-  gobernar nada posterior a la entrega.
+  ADR-036 ya cerró para el espejo); y `registrar_gasto` no puede cortar ni escalar
+  **desde ningún estado que no sea `ACTIVE`** —incluido `WAITING`, que es donde
+  queda un WorkItem mientras corre un Worker asíncrono, o sea justo cuando se
+  gasta—: mata el Run y después lanza `IllegalTransitionError`, dejando el
+  WorkItem esperando a un Run que ya no existe, sin escalada y con el presupuesto
+  perdido. La descripción canónica, con su reproducción, está en **H-3** del parte
+  de defectos; aquí no se repite.
 - Si el propietario no autoriza nada, no queda ninguna deuda: borrar estos dos
   documentos deja el repositorio exactamente como estaba.
 

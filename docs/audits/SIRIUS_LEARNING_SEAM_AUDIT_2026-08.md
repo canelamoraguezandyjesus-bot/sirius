@@ -43,7 +43,7 @@ Donde no pudo comprobarlo, lo dice.
 >
 > **No recomiendo construir el Learning System todavía**, y la razón fuerte no es
 > el inventario de patrones: es que **no hay experiencia real de la que aprender**
-> (§6.5). El calendario es **«todavía no»**, sin fase inventada.
+> (§6.6). El calendario es **«todavía no»**, sin fase inventada.
 >
 > Dos rondas adversariales devolvieron objeciones de la misma familia y **la regla
 > de las dos rondas (ADR-001) se activó**: §14 escribe el patrón, la raíz, las
@@ -139,7 +139,7 @@ declaró antes de empezar (ADR-043, «qué NO garantiza esto»).
 | a | «PR #207 (A5) seguía abierto» | **CIERTO, y peor de lo que sugiere** | Abierto y con `test_registro_de_decisiones` en rojo (§1.3) |
 | b | «Sirius en `main` `a25ee3b`» | **CIERTO** | `git log -1` |
 | c | «El diseño debe respetar WorkPackage y WorkResult» (los da por piezas existentes) | **FALSO en código** | No existe ningún tipo `WorkPackage` ni `WorkResult`. Son `Mapping[str, object]` opacos: `domain/run.py:72` (`work_package`), `domain/run.py:81` (`resultado`), `domain/work_item.py:85` (`resultado`) |
-| d | «Agent Profile no contiene provider/model/credenciales/estado» | **CIERTO** | `domain/profile.py:38-48`: `ref, version, mision, procedimiento_ref, capacidades, permisos, contrato_entrada, contrato_salida`. Sin modelo ni proveedor |
+| d | «Agent Profile no contiene provider/model/credenciales/estado» | **CIERTO** | `domain/profile.py:33-48`: `ref, version, mision, procedimiento_ref, capacidades, permisos, contrato_entrada, contrato_salida`. Sin modelo ni proveedor |
 | e | «PermissionEnvelope existe» | **CIERTO** | `domain/permission_envelope.py:22-30`, deny-by-default, `ENVELOPE_VACIO` |
 | f | «journal / evidence existe» | **CIERTO y sólido** | `adapters/durable/journal.py`: JSON Lines, `checksum_sha256` por registro, `fsync`, recorte de cola truncada (ADR-026, ADR-029) |
 | g | «context recovery existe» | **CIERTO** | `context_recall.py`: tres proveedores deterministas, **sin LLM**, y `proveedores_fallidos` separado de «no hay» (ADR-036) |
@@ -182,7 +182,7 @@ pide como punto de partida.
 Esta es la costura que la auditoría vino a buscar, y está rota. Tres lecturas
 independientes lo confirman:
 
-- `AgentProfile` **no tiene** campo de modelo ni proveedor (`domain/profile.py:38-48`).
+- `AgentProfile` **no tiene** campo de modelo ni proveedor (`domain/profile.py:33-48`).
 - `WorkerRequest` —la proyección exacta del encargo— lleva `perfil_ref` y
   `perfil_version`, y **ningún** identificador de modelo (`worker_request.py:44-54`).
 - `Run.worker` es **una sola cadena sin estructura** (`domain/run.py:71`), y
@@ -203,9 +203,10 @@ divergencia con la arquitectura, no una ampliación de alcance por aprendizaje.
 
 ### 2.3 Patrones que Sirius ya ha demostrado — y por qué eso no es lo mismo que tenerlos disponibles
 
-Tres, y **ninguna de las tres es reutilizable tal cual desde el motor**. Se
-listan porque demuestran que el problema está resuelto en algún sitio de Sirius,
-no porque estén a mano:
+Los que este contraste encontró primero, con la advertencia que gobierna toda la
+sección: **patrón demostrado no es componente disponible**. Ninguno es
+reutilizable tal cual desde el motor. No es un inventario cerrado —§14.3 añade
+los del carril de automatización— y la clasificación completa vive en §4.1:
 
 1. **MEMORY declarativa versionada con procedencia obligatoria — ya existe, en
    el producto.** `src/sirius/domain/memory.py`: `Memory` + `MemoryRevision`
@@ -317,7 +318,7 @@ depende de un contrato **que hoy nadie valida**. Es GAP-2.
 
 ### 3.6 Perfiles, `PermissionEnvelope`, Resolver y egress
 
-- `AgentProfile` (`domain/profile.py:38-48`): sin modelo, sin proveedor, sin
+- `AgentProfile` (`domain/profile.py:33-48`): sin modelo, sin proveedor, sin
   credenciales, sin estado. Sustituibilidad intacta.
 - `compute_permission_envelope` (`domain/permission_envelope.py:36`):
   deny-by-default estricto (`capacidades_concedidas = frozenset(capacidades)`,
@@ -331,7 +332,7 @@ depende de un contrato **que hoy nadie valida**. Es GAP-2.
   `incidencia.leer`, `repo.leer`, `repo.escribir`, `pr.crear`,
   `validaciones.ejecutar`, `veredicto.escribir`, `contexto.recuperar`,
   `web.buscar`.
-- `validar_egress_fail_closed` (`egress.py:29`): un fragmento **sin clasificar**
+- `validar_egress_fail_closed` (`egress.py:25`): un fragmento **sin clasificar**
   impide arrancar siempre; con red concedida, cualquier fragmento no
   `exportable` también.
 - **Veredicto — CORREGIDO en la ronda 2, ver §14.4 (C-1 y C-2).** La invariante «el Extractor y
@@ -340,11 +341,15 @@ depende de un contrato **que hoy nadie valida**. Es GAP-2.
   capacidad `conocimiento.escribir` registrada con `ambitos_escritura:
   [conocimiento]` serían rechazados por el Resolver por dos motivos
   independientes, sin depender de ningún prompt.
-  **Pero hoy no está en vigor, y esto es lo que la primera redacción de este
-  informe afirmó de más**: `compute_permission_envelope`, `resolve_capabilities`,
-  `validar_egress_fail_closed` y `project_worker_request` **no tienen ningún
-  llamador en `src/`** — solo en `tests/`. Toda la maquinaria de A4 está
-  construida y **sin cablear**. La única superficie que hoy restringe de verdad a
+  **Pero hoy no está en vigor.** *(Corregido en la ronda 3: las dos redacciones
+  anteriores decían que los cuatro símbolos «no tienen ningún llamador en
+  `src/`», y eso era **falso** para tres de ellos.)* Lo cierto, y más estrecho:
+  la proyección de A4 **sí está ensamblada** en `src/`: `project_worker_request`
+(`worker_request.py:57`) encadena envelope, egress y resolución de capacidades
+(`worker_request.py:65-67`). Lo que **no existe es ningún llamador de esa
+proyección**: solo la invocan las pruebas. Ningún camino de ejecución del motor
+construye un `WorkerRequest`, así que las tres guardas nunca corren en
+producción. La única superficie que hoy restringe de verdad a
   un Worker es `--allowedTools` en el YAML del workflow, y para el revisor está
   configurada como `--dangerously-skip-permissions --allowedTools "Bash,Read,Grep,Glob"`
   (`.github/workflows/review-sirius-work.yml:280`). El Auditor sí es estricto
@@ -440,15 +445,15 @@ solo se pueden cerrar con datos que hoy no existen.
 | Mecanismo que el aprendizaje necesitaría | Qué hay ya, y dónde | Estado real | Forma |
 |---|---|---|---|
 | Historia durable e íntegra de lo ocurrido | Diario JSON Lines con checksum por registro y `fsync`, `sirius_engine/adapters/durable/journal.py` | Construido, misma capa. **Sin un solo registro en disco** | **A** |
-| Reconstruir «qué pasó» sin reejecutar nada | `rebuild_state()`, `domain/events.py:56`; `list_events()`, `ports/store.py:202` | Construido, función pura | **A** |
+| Reconstruir «qué pasó» sin reejecutar nada | `rebuild_state()`, `domain/events.py:58`; `list_events()`, `ports/store.py:202` | Construido, función pura | **A** |
 | Recuperación determinista antes de gastar IA | `contexto.recuperar`, `context_recall.py`: tres proveedores, ningún LLM, cita en vez de sintetizar | Construido, pero **no es llave en mano**: `recuperar_contexto(...)` exige que el llamador le pase ya montados el puerto de GitHub, los números de incidencia y las entradas de `git log`. Y un proveedor no puede reportar su fallo (H-5) | **A** para la función; **C** para poder usarla de verdad, porque falta quien ensamble sus insumos |
 | «Una lectura caída no es una ausencia» | ADR-036, más `proveedores_fallidos` | **Invariante demostrada**, implementada en dos de tres proveedores | **D** + defecto |
 | Filtro de fuente no confiable | `es_autor_de_confianza`, `mirror_projection.py:80-82` | Construido para comentarios. El cuerpo de la incidencia lo esquiva y el puerto impide arreglarlo (H-1) | **A** para lo que cubre; **E** para lo que no |
-| Least privilege por perfil, deny-by-default | `PermissionEnvelope` + Resolver + registro cerrado de capacidades | Construido y **sin cablear**: ningún llamador en `src/`. Además `escritura` es **un nombre de ámbito**, no una ruta ni un recurso | **C** — no es reutilizar, es terminar de cablear y añadir un ámbito |
-| Egress fail-closed por fragmento | `egress.py:29` | Construido y **sin cablear**: en todo `src/` no se construye ni un `ContextFragment` | **C** |
+| Least privilege por perfil, deny-by-default | `PermissionEnvelope` + Resolver + registro cerrado de capacidades | Construido y **encadenado** por `project_worker_request` (`worker_request.py:65-67`), pero **esa proyección no la llama nadie en `src/`**: las guardas no corren en producción. El mecanismo de ámbitos sí está en uso como dato —`reviewer.yml` declara `escritura: veredicto` y por eso no resuelve `repo.escribir`—; lo que falta para el conocimiento activo es **un ámbito propio**, no el mecanismo | **C** — falta el llamador, no la pieza |
+| Egress fail-closed por fragmento | `egress.py:25` | Construido y llamado desde la proyección (`worker_request.py:66`), pero **en todo `src/` no se construye ni un `ContextFragment`**: sin fragmentos que validar, la guarda no protege nada en producción | **C** |
 | Perfiles sustituibles sin modelo dentro | `AgentProfile` + `profile_registry` | Construido. Sin identidad de modelo/runtime (GAP-1, §5) | **A**, con la divergencia abierta |
 | Refutación obligatoria por hallazgo | ADR-010: cada hallazgo exige evidencia **e intento de refutación** | **Es una regla, no un componente** | **D** |
-| Dos revisores de proveedores distintos + agregación determinista que falla cerrado | `scripts/automation/sirius_aggregate_reviews.py` | Construido y **operando a diario**. Pero es un script de CI acoplado al veredicto de una PR, a `gh` y al ciclo de etiquetas. Usarlo desde el motor acoplaría el motor a la vía GitHub | **D** hoy; **B** si se decide extraer la regla de agregación a una primitiva neutral. **Nunca A** |
+| Dos revisores de proveedores distintos + agregación determinista que falla cerrado | `scripts/automation/sirius_aggregate_reviews.py` | Construido y probado (`tests/automation/test_sirius_aggregate_reviews.py`). **Corregido en la ronda 3**: la redacción anterior lo descalificaba diciendo que estaba «acoplado a `gh` y al ciclo de etiquetas», y **eso es falso** — el fichero importa solo `argparse`, `json`, `re`, `sys`, `typing`, y no toca `gh`, etiquetas, red ni entorno. Su acoplamiento real es al **esquema del veredicto JSON** y al concepto de `reviewed_head_sha`. Su ejecución en modo dual depende además de la variable de repositorio `SIRIUS_CODEX_REVIEW_ENABLED` (`review-sirius-work.yml:95,100-104`), cuyo valor no está en el árbol (I5 del plan) | **B** — es el mejor candidato a primitiva compartida de toda la tabla, precisamente porque es Python puro y determinista |
 | Aprobación ligada al cambio exacto | `sirius_apply_verdict.sh:15-17`: coincidencia exacta entre el SHA declarado, el head de la PR y el último head que superó Quality | Construido y operando, **en bash**, atado a `reviewed_head_sha` y a una PR | **D** — el invariante viaja, el mecanismo no |
 | Fuente externa tratada como dato, nunca como instrucción | `sirius_aggregate_reviews.py:20-21`, explícito en su contrato | Construido | **D** |
 | Conocimiento versionado con procedencia obligatoria, corrección por revisión nueva, supersede y archivado reversible | `src/sirius/domain/{memory,decision,precedence}.py` (V4) | Construido y probado, **al otro lado de una frontera que una prueba hace cumplir** (`tests/engine/test_boundary.py`) | **D**; **B** o **C** solo si el propietario decide abrir esa vía. **Nunca A** |
@@ -461,23 +466,28 @@ solo se pueden cerrar con datos que hoy no existen.
 
 ### 4.2 Qué se concluye de verdad de esa tabla
 
-1. **La reutilización física directa (A) se limita a leer el diario y el contexto
-   del propio motor**, y ni siquiera entera: `contexto.recuperar` es una función
-   pura reutilizable, pero **nadie ensambla hoy sus insumos**, así que usarla de
-   verdad es C, no A. Lo genuinamente A son el diario y `rebuild_state`. Es real
-   y es útil, y es mucho menos de lo que la primera redacción de este informe
-   daba a entender.
-2. **Todo lo que viene de `scripts/automation` es D, no A.** El agregador de
-   revisión dual demuestra que Sirius sabe hacer refutación independiente,
-   agregación determinista fail-closed y ligadura a hash exacto. Lo demuestra en
-   bash y Python de CI, atado a una PR. Traer eso al motor tal cual sería
-   acoplarlo a la vía GitHub.
+1. **La reutilización física directa (A) es poca y toda de lectura dentro del
+   propio motor.** Enumerada sin «se limita a»: `rebuild_state`
+   (`domain/events.py:58`), el filtro de autor (`mirror_projection.py:80`, que
+   `context_recall.py` ya reutiliza), y `AgentProfile` + `profile_registry` como
+   dato versionado. El diario **no** es A limpia: ver §6.5. Y `contexto.recuperar`
+   es A como función y **C** para usarla de verdad, porque nadie ensambla hoy sus
+   insumos. Es real y es útil, y es mucho menos de lo que las dos primeras
+   redacciones de este informe daban a entender.
+2. **De `scripts/automation` sale el mejor candidato a primitiva compartida, y
+   la primera redacción lo descartó con un motivo falso.** `sirius_apply_verdict.sh`
+   sí está atado a la vía GitHub (es bash y habla con la PR): eso es **D**. Pero
+   `sirius_aggregate_reviews.py` **no**: es Python de biblioteca estándar, sin
+   `gh`, sin etiquetas, sin red y sin entorno, y su regla de agregación es una
+   función determinista sobre dos veredictos y un SHA. Es **B**, y merece
+   evaluarse como tal en D-9.
 3. **Todo lo que viene de `src/sirius` es D por defecto**, y solo pasa a B o C con
    una decisión del propietario, porque la frontera está comprobada por una
    prueba, no sugerida por un documento.
-4. **Dos mecanismos centrales están construidos y sin cablear** (permisos y
-   egress). Eso no es reutilización pendiente: es **trabajo del propio Work
-   Engine** que el plan sitúa en C2/C3.
+4. **Dos mecanismos centrales están construidos y encadenados, pero su
+   proyección no la llama nadie** (permisos y egress): `project_worker_request`
+   solo se invoca desde las pruebas. Eso no es reutilización pendiente: es
+   **trabajo del propio Work Engine** que el plan sitúa en C2/C3.
 5. **Lo que el aprendizaje necesitaría y no existe en ninguna forma** son tres
    cosas: conocimiento activo del motor, un canal para presentar una propuesta, y
    un staging durable. Las tres son **E** o **B**.
@@ -501,7 +511,7 @@ correspondiente no se puede afirmar.
 
 **GAP-1 — Identidad estructurada de Worker/modelo/runtime por Run.**
 `Run.worker` es una cadena libre (`domain/run.py:71`); ni `AgentProfile`
-(`domain/profile.py:36-48`) ni `WorkerRequest` (`worker_request.py:45-54`) llevan
+(`domain/profile.py:36-48`) ni `WorkerRequest` (`worker_request.py:44-54`) llevan
 modelo. La arquitectura §3.3 sí lo pide: «worker: adapter + perfil + (si aplica)
 **modelo/runtime concretos usados**».
 
@@ -551,9 +561,12 @@ coste del aprendizaje es gasto nuevo y sin cauce contable propio.
 
 **GAP-8 — La imposibilidad de escribir conocimiento activo es expresable, pero
 no está en vigor.** La primera redacción de este informe la sacó de la lista de
-gaps diciendo que «ya se puede expresar». Se puede expresar, y **no está
-cableada**: `compute_permission_envelope`, `resolve_capabilities` y
-`validar_egress_fail_closed` no tienen ningún llamador en `src/` (§3.6). Y
+gaps diciendo que «ya se puede expresar». Se puede expresar, y **no corre**: la proyección de A4 **sí está ensamblada** en `src/`: `project_worker_request`
+(`worker_request.py:57`) encadena envelope, egress y resolución de capacidades
+(`worker_request.py:65-67`). Lo que **no existe es ningún llamador de esa
+proyección**: solo la invocan las pruebas. Ningún camino de ejecución del motor
+construye un `WorkerRequest`, así que las tres guardas nunca corren en
+producción (§3.6). Y
 `PermissionEnvelope.escritura` es un nombre de ámbito, no una ruta: separar
 «puede escribir su staging» de «no puede escribir conocimiento activo» exige un
 ámbito propio que hoy no existe en el registro.
@@ -569,7 +582,33 @@ cableada**: `compute_permission_envelope`, `resolve_capabilities` y
 | **O1** Dentro de la transición | `domain/work_item.py:186` `deliver()` | **Sí** | Sí | No | No | **Descartada**: el dominio es puro y sin efectos; un fallo del sidecar viviría dentro de la entrega |
 | **O2** Dentro del puerto de almacén | `ports/store.py:73` `deliver_work_item()` | **Sí** | Puerto | No | No | **Descartada**: obliga a todas las implementaciones y mete el aprendizaje en la transición terminal |
 | **O3** WorkItem de clase `aprendizaje` despachado por el motor | `WorkItemClass` + `_TABLA_AUTORIDAD` | No | Sí | **Sí** | **Sí** | **Descartada**: prohibida por el encargo y por el contrato §11.1; además convierte al aprendizaje en trabajo del motor y al sidecar en actor con autoridad |
-| **O4** Lector del diario, fuera del camino de escritura | `ports/store.py:202` `list_events()` — **por el puerto, nunca leyendo el fichero** | **No** | **No** | **No** | **No** | Mejor clasificada (§6.2) |
+| **O4** Lector del diario, fuera del camino de escritura | `ports/store.py:202` `list_events()` — **por el puerto, nunca leyendo el fichero** | **No** | **No** | **No** | **No** | Mejor clasificada (§6.2), con las garantías acotadas en §6.5 |
+| **O5** WorkItem de una clase **ya existente** con autoridad `motor` (p. ej. `MIXTA` o `CONSULTA_LARGA`) | `a5:domain/authority.py`, filas ya presentes | No | No | No | **No** | Descartada **con argumento, no por imposibilidad** — ver abajo |
+
+**Sobre O5, y sobre un error de la primera redacción.** Las dos versiones
+anteriores presentaban «el aprendizaje v0 no es un WorkItem» como una
+**consecuencia forzada** por la tabla de autoridad y el contrato §11.1. La ronda
+3 lo refutó y tiene razón: el bloqueo solo aparece si la clase se llama
+`aprendizaje`. La tabla de A5 ya asigna autoridad `motor` a `CONVERSACION_NO_APLICA`,
+`INVESTIGACION`, `DOCUMENTACION`, `CONSULTA_LARGA` y `MIXTA`, así que un WorkItem
+de aprendizaje **podría** nacer bajo una de ellas sin tocar el enum, ni la tabla,
+ni el contrato.
+
+Se descarta igualmente, y con argumento explícito:
+
+1. `clase` es un campo **descriptivo** que alimenta la autoridad y la proyección
+   (arquitectura §3.1). Meter aprendizaje bajo `MIXTA` haría que la tabla de
+   autoridad describiera mal el trabajo que gobierna — el defecto es de
+   honestidad del modelo de datos, no de permisos.
+2. Convertirlo en WorkItem devuelve al motor la propiedad de su ciclo de vida y
+   lo mete en la cola de presupuesto y despacho: justo lo que O4 evita, y lo que
+   hace que un fallo del aprendizaje pueda tocar el estado del motor.
+3. El contrato §9 sigue prohibiendo iniciar trabajo sin orden del propietario, así
+   que cada WorkItem de aprendizaje necesitaría su orden de todos modos: la
+   supuesta ventaja de «entrar por el cauce normal» no ahorra nada.
+
+Los tres son argumentos, no pruebas. **Que O5 quede descartada es una decisión de
+producto**, y sube como tal (§12, D-2).
 
 ### 6.2 La opción mejor clasificada — que **no** es lo mismo que recomendarla
 
@@ -618,11 +657,12 @@ Cómo funciona, concretamente:
   afirmar sin condiciones, y es una garantía explícita del brief §2.
 - **No convierte al aprendizaje en coordinador.** No crea trabajo, no activa
   nada, no toca etiquetas, no observa nada vivo. Lee historia cerrada.
-- **No exige tocar el dominio, ni el puerto, ni el códec, ni A5.** Cierra por
-  construcción los criterios de parada 1 y 2 de ADR-043.
-- **El motor sigue siendo dueño del estado**: el diario es la fuente, y el lector
-  no tiene forma de escribir en él (`list_events()` es de lectura; el fichero se
-  abre en `O_APPEND` solo desde `append_durably`).
+- **No exige tocar el dominio, ni el códec, ni A5.** *(Corregido en la ronda 3:
+  decía además «ni el puerto», y eso o es falso o cuesta la garantía de solo
+  lectura. Ver §6.5.)*
+- **El motor sigue siendo dueño del estado**: el diario es la fuente y el lector
+  no escribe. *(Corregido en la ronda 3: eso es hoy una **convención**, no una
+  propiedad estructural. Ver §6.5.)*
 - **Se entra por el puerto, nunca por el fichero.** El formato JSON Lines con
   checksum vive en `adapters/durable/journal.py`, que es **un detalle de un
   adaptador concreto**. Leerlo directamente ataría el aprendizaje a una
@@ -649,7 +689,37 @@ Cómo funciona, concretamente:
 - **No hace verificable la independencia del Refutador** (GAP-1). Mientras no lo
   sea, el candidato **espera**, que es exactamente lo que el brief §8 manda.
 
-### 6.5 Por qué, aun siendo el punto correcto, no se construye todavía
+### 6.5 Qué es estructural hoy y qué es solo convención
+
+**Esta subsección es la corrección de raíz de la ronda 3.** Tres objeciones
+independientes resultaron ser la misma: **el informe afirmaba como estructural
+una garantía que hoy solo es convención** — exactamente el estándar que él mismo
+exige en §10.1 («invariantes que deben ser imposibles de violar, no
+improbables») y en §2.2 («una garantía que solo vive en un prompt no es una
+garantía»). Se aplicaba una vara para el brief y otra para la propuesta propia.
+
+Corregido de una vez, en vez de frase a frase:
+
+| Garantía que la propuesta afirmaba | Qué es de verdad hoy |
+|---|---|
+| «El lector no puede escribir el estado» | **Convención.** `WorkEngineStore` (`ports/store.py:24`) es **un solo Protocol** con 36 métodos, de los que solo cinco son de lectura. Quien recibe el almacén para llamar a `list_events()` puede llamar igual a `cancel_work_item` o a `deliver_work_item`. **No existe ningún puerto de solo lectura** en `src/sirius_engine/ports/` |
+| «El fichero solo se abre en `O_APPEND`, desde `append_durably`» | **Falso.** `adapters/durable/journal.py:165` exporta `recover_invalid_tail`, que abre en `os.O_WRONLY` (`:189`) y **trunca** (`:191`). El módulo que sabe leer es el mismo que sabe truncar |
+| «No exige tocar el puerto» | **Incompatible con la anterior.** O se entra por `list_events()` —y entonces se sostiene un handle con las 31 escrituras— o se lee el fichero —y entonces se depende de una representación que ADR-019 deja abierta hasta D2. **No hay tercera vía en el código** |
+| «El staging es reversible del todo y no acopla nada» | **Parcial.** Reutilizar el patrón de escritura de `adapters/durable/journal.py` para el staging es el mismo acoplamiento a un adapter concreto que §6.3 acaba de rechazar para la lectura, aplicado al revés. O es **E** con su coste dicho, o es **B** con la primitiva extraída de verdad |
+| «`test_boundary.py` garantiza que B exige decisión» | **No lo garantiza.** Esa prueba compara **nombres de import directo** (`name == pkg or name.startswith(pkg + ".")`), no el grafo de dependencias. Un tercer paquete neutral del que dependieran los dos lados dejaría las dos pruebas en verde creando justo la dependencia compartida que la frontera existe para impedir. La frontera es **norma**, no garantía, para la ruta B |
+| «Se entra por el puerto» resuelve el acoplamiento | **Lo traslada.** No existe ningún composition root del motor: `DurableWorkEngineStore` solo se instancia en pruebas. Quien construya el almacén decide qué adapter usa el motor y dónde vive su diario — y hoy ese primero sería el sidecar de un vertical no autorizado |
+
+**Lo que sobrevive intacto** de §6.1–§6.4, y conviene decirlo para no tirar lo
+bueno con lo malo: el **orden** de las opciones. O4 sigue siendo la única de las
+cuatro que no toca el dominio, ni el códec, ni A5, y la única de la que se puede
+afirmar sin condiciones que un fallo del sidecar no rompe un WorkItem entregado.
+Lo que cae no es la elección: son las garantías de más que se le colgaron.
+
+**Lo que esto convierte en decisión del propietario** (§12, D-10): para que un
+lector sea de solo lectura **de verdad** hace falta una interfaz nueva del motor
+—un puerto de lectura del diario— y eso es alcance de C2/D2, no de una auditoría.
+
+### 6.6 Por qué, aun siendo el punto correcto, no se construye todavía
 
 El orden de las opciones de §6.1 es una conclusión técnica y sobrevivió a las
 cuatro lentes adversariales. **La recomendación de calendario es otra cosa, y es
@@ -664,8 +734,8 @@ confundir «hay algo parecido» con «está resuelto»—, sino cinco hechos:
    (`find . -name "*.jsonl"` no devuelve nada). Los únicos WorkItems que han
    existido son fixtures de prueba.
 3. **Varias invariantes necesarias no son comprobables todavía** (§2.2 y §14.4):
-   la independencia del refutador no tiene dato, y los mecanismos de permisos y
-   egress están construidos y sin cablear.
+   la independencia del refutador no tiene dato, y las guardas de permisos y
+   egress, aunque encadenadas, no las ejecuta ningún camino de producción.
 4. **Construir el pipeline ahora obligaría a decidir abstracciones sin datos
    reales**: la forma del dossier, el esquema del candidato, la deduplicación y
    los umbrales se decidirían contra fixtures inventadas, que es exactamente lo
@@ -716,15 +786,15 @@ Dos precisiones que el repositorio ya impone y conviene no perder:
 ### 8.1 Lo que este informe **no** hace
 
 No edita `SIRIUS_WORK_ENGINE_PLAN_IMPLEMENTACION.md`, ni el contrato operativo,
-ni `docs/canonical/`, ni `docs/evolution/STATUS.md`. Comprobable:
+ni `docs/canonical/`, ni `docs/evolution/STATUS.md`, ni `src/`, ni `.github/`, ni
+`scripts/`.
 
-```
-$ git diff --name-only origin/main...HEAD
-docs/audits/SIRIUS_LEARNING_SEAM_AUDIT_2026-08.md
-docs/decisions/ADR-043-….md
-```
+El predicado que lo comprueba —`git diff --name-only origin/main...HEAD`— y su
+resultado vigente **viven en un solo sitio**: la sección «Comprobación que la
+sostiene» de ADR-043. Aquí se enlaza y no se transcribe. *(La ronda 3 encontró
+las dos copias anteriores divergidas: ambas decían dos ficheros cuando ya eran
+tres. Es la familia que ADR-005 eliminó de V8, cometida por este mismo informe.)*
 
-Ese predicado es el «arreglo que puede observar el fallo» de ADR-043.
 
 ### 8.2 Por qué hace falta una puerta, y no solo una recomendación
 
@@ -746,7 +816,7 @@ proceso y la base de datos, pero **sí introduce perfiles de agente nuevos**
 
 **Corregido tras la ronda 2 y tras la revisión del propietario.** La primera
 redacción proponía una «Fase L» con seis bloques después del hito M3. **Se
-retira entera.** Proponer una fase es fijar la forma del trabajo, y §6.5 explica
+retira entera.** Proponer una fase es fijar la forma del trabajo, y §6.6 explica
 por qué no hay datos para fijarla: no hay Worker gobernado, no hay corpus, y
 varias invariantes no son comprobables. Una fase inventada sobre eso no ordena
 nada — solo parece que sí.
@@ -778,8 +848,10 @@ sensación**.
 **Etapa 0 — Sombra manual.**
 El propietario ordena la revisión. Se generan candidatos. **Nada se activa.**
 Ni siquiera se presenta como propuesta: se acumula y se mide.
-*Salida*: haber visto suficientes WorkItems reales de **al menos dos clases
-distintas** y tener medidas —no estimadas— las métricas de §10.3.
+*Salida*: haber visto WorkItems reales de **al menos dos clases distintas** y
+tener medidas —no estimadas— **las dos métricas que la sombra sí puede producir**
+(candidatos por WorkItem y porcentaje `NO_CANDIDATE`). Las otras siete de §10.3
+no son puerta de esta etapa: no puede generarlas.
 
 **Etapa 1 — Propuesta manual.**
 Candidato → Refutador independiente → cambio exacto con hash → aprobación
@@ -806,26 +878,43 @@ arquitectura siguen el contrato y los ADR, siempre.
 
 ## 10. Pruebas y puertas antes de activar nada
 
-### 10.1 Invariantes que deben ser imposibles de violar, no improbables
+### 10.1 Invariantes que deberían ser imposibles de violar, no improbables
 
-Cada una con la forma de prueba que la sostiene. Todas deben verse **fallar** con
-la mutación sembrada antes de darse por buenas (ADR-001, prueba por mutación).
+**Corregido en la ronda 3, y es una corrección incómoda.** La redacción anterior
+presentaba trece invariantes como si fueran comprobables y prometía prueba por
+mutación «para todas». Ni una cosa ni la otra:
+
+- **Solo una (I9) es comprobable hoy**, y ya se cumple sin trabajo: el
+  `work_package` es una instantánea real —`MappingProxyType(dict(...))` en
+  `run.py:238`—, así que mutar el dict del llamador después de `prepare_run` no
+  cambia ni el Run ni el evento del diario. Verificado ejecutándolo.
+- **Las otras doce vigilan objetos que no existen**: no hay candidato, ni
+  staging, ni Gate, ni conocimiento activo, ni un solo registro en el diario.
+- **Tres no son invariantes**: I4, I7 y I13 describen comportamiento de un modelo,
+  no una propiedad estructural, y no admiten mutación determinista. Son
+  **fixtures de evaluación** y su sitio es §10.2.
+- **La promesa de mutación solo se sostiene para las estructurales**: I3, I10,
+  I11 y I12.
+
+Se conserva la lista porque es una **lista de comprobación útil para quien
+algún día construya esto**, no porque describa un estado verificable. Cada fila
+lleva ahora de qué depende.
 
 | # | Invariante | Cómo se hace estructural (no por prompt) |
 |---|---|---|
-| I1 | Un modelo de aprendizaje no puede escribir conocimiento activo | El perfil declara `permisos.escritura: null`; la escritura de conocimiento es una capacidad registrada con `ambitos_escritura: [conocimiento]`. El Resolver la rechaza por dos guardas independientes (§3.6). Mutación: dar el ámbito al perfil y ver la prueba fallar |
-| I2 | No se promueve sin Refutador de modelo distinto | **Hoy imposible de comprobar** (§2.2). Prueba pendiente de GAP-1. Mientras tanto, el Gate **debe fallar cerrado**: sin dato de modelo, no promueve |
+| I1 *(depende de GAP-8; absorbe I8)* | Un modelo de aprendizaje no puede escribir conocimiento activo | El perfil declara `permisos.escritura: null`; la escritura de conocimiento es una capacidad registrada con `ambitos_escritura: [conocimiento]`. El Resolver la rechaza por dos guardas independientes (§3.6). Mutación: dar el ámbito al perfil y ver la prueba fallar |
+| I2 *(depende de GAP-1)* | No se promueve sin Refutador de modelo distinto | **Hoy imposible de comprobar** (§2.2). Prueba pendiente de GAP-1. Mientras tanto, el Gate **debe fallar cerrado**: sin dato de modelo, no promueve |
 | I3 | Una aprobación no permite aplicar un diff distinto | El Gate recalcula el hash del cambio materializado y lo compara con el aprobado. Mutación: alterar un byte y ver que no promueve |
-| I4 | Un fallo transitorio no produce una prohibición general | Fixture: `run_failed` seguido de `run_retried` con `SUCCEEDED`. El candidato negativo, si existe, debe nombrar el recovery, no el fallo |
-| I5 | Dos WorkItems que descubren lo mismo no crean dos conocimientos activos | Dedup contra activos + staged + rechazados **antes** de crear |
+| I4 *(no es invariante: fixture)* | Un fallo transitorio no produce una prohibición general | Fixture: `run_failed` seguido de `run_retried` con `SUCCEEDED`. El candidato negativo, si existe, debe nombrar el recovery, no el fallo |
+| I5 | Dos WorkItems que descubren lo mismo no crean dos conocimientos activos | *(La celda anterior repetía la invariante en voz activa en vez de dar un mecanismo.)* El único mecanismo demostrado en Sirius es deliberadamente conservador: `sirius_aggregate_reviews.py:17-19` **solo** elimina duplicados exactos —misma fuente, mismo fichero, mismo cuerpo normalizado— «porque es preferible conservar dos hallazgos parecidos con su procedencia que borrar uno incorrectamente». Ese es el punto de partida, no un algoritmo semántico |
 | I6 | Un candidato rechazado no vuelve idéntico | El rechazo se conserva con motivo y hash; reabrir exige evidencia materialmente nueva |
 | I7 | Una fuente maliciosa no convierte texto fuente en instrucción persistente | La evidencia entra como **dato citado**, nunca como instrucción. Reutiliza `es_autor_de_confianza` y el patrón de `Referencia` (cita, no síntesis) |
-| I8 | La cuarentena del Curator es reversible y el Curator no borra ni reescribe | El Curator no tiene capacidad de escritura de conocimiento; solo puede marcar. Mismo mecanismo que I1 |
+| ~~I8~~ | *Fundida en I1 en la ronda 3: su propia celda decía «mismo mecanismo que I1», así que eran una invariante contada dos veces* | — |
 | I9 | Una actualización de conocimiento no cambia el snapshot de un Run en marcha | El `WorkPackage` ya es «instantánea exacta de lo enviado» (`run.py:72`), inmutable por diseño. La versión del conocimiento se fija ahí |
 | I10 | Un fallo de aprendizaje no convierte un WorkItem entregable en fallido | Estructural por §6: el lector está fuera del camino de escritura. Mutación: hacer explotar el lector y comprobar que el WorkItem sigue `DELIVERED` |
 | I11 | El Promotion Gate falla cerrado | Cualquier dato ausente (refutador, hash, procedencia, clasificación) **no promueve**. Mutación: quitar cada dato por turnos |
-| I12 | Ningún aprendizaje eleva permisos, egress, presupuesto ni autoridad | El Gate rechaza cualquier candidato cuyo cambio toque perfiles, registro de capacidades, contrato, ADR o `docs/canonical/`. Es una comprobación de rutas, determinista |
-| I13 | Un aprendizaje negativo nace estrecho, y eso no depende del buen juicio del modelo | El Gate rechaza todo candidato negativo cuyo `negative_scope` no nombre Worker, modelo, runtime, versión y entorno observados. Comprobación de campos, no juicio. **Depende de GAP-1**: sin identidad de modelo, el campo no se puede rellenar (ver §11, A8) |
+| I12 | Ningún aprendizaje eleva permisos, egress, presupuesto ni autoridad | **Corregido (ronda 3): lista de permitidos, no de prohibidos.** Enumerar rutas prohibidas es «una regla que enumera vehículos» (ADR-033) — la anterior ya se dejaba fuera `.github/**`, que es hoy la única superficie que restringe de verdad a un Worker. El Gate rechaza **todo** cambio fuera del conjunto explícito de rutas de conocimiento, igual que el envelope concede «exactamente las capacidades que el perfil declara, ni una más» |
+| I13 *(no es invariante: fixture; depende de GAP-1)* | Un aprendizaje negativo nace estrecho, y eso no depende del buen juicio del modelo | **Reescrita en la ronda 3**: comprobar que los campos *estén presentes* lo satisface cualquier texto de relleno. Lo que hay que comprobar es **contraste**: que el `negative_scope` **coincida** con la identidad registrada en el Run. Y eso no se puede hoy, porque esa identidad no existe (GAP-1). Se declara **no sostenible hoy**, con el mismo criterio de parada 3 que I2 |
 
 I12 merece una nota: es la traducción mecánica de «GOVERNANCE nunca se
 autoaprende» (§7). Una lista de rutas prohibidas es comprobable; una promesa de
@@ -833,9 +922,14 @@ buen juicio no.
 
 ### 10.2 Fixtures mínimas de evaluación
 
-Las diez del brief §16 siguen siendo las correctas, y ahora se pueden construir
-de una forma que antes no: **como secuencias de eventos del diario**, no como
-conversaciones. Éxito con técnica reutilizable; éxito sin nada nuevo; fallo de un
+**Corregido en la ronda 3.** La redacción anterior decía que las diez «ahora se
+pueden construir como secuencias de eventos del diario». Es cierto solo para
+cuatro: fallo de un Worker y éxito de otro (`run_worker_substituted`), fallo
+transitorio seguido de reintento correcto (`run_failed` → `run_retried`),
+corrección del revisor (`work_item_repair_requested`) y éxito sin nada nuevo. Dos
+más dependen de que `WorkResult` tenga esquema (GAP-2) y las otras cuatro
+dependen de objetos que no existen. Las diez siguen siendo las fixtures
+correctas; lo que no es cierto es que ya se puedan escribir. Éxito con técnica reutilizable; éxito sin nada nuevo; fallo de un
 Worker y éxito de otro (`run_worker_substituted`); fallo por credencial/setup;
 fallo transitorio seguido de reintento correcto (`run_failed` → `run_retried`);
 corrección del revisor (`work_item_repair_requested`); candidato duplicado;
@@ -843,6 +937,12 @@ candidato que contradice conocimiento activo; candidato atractivo sin evidencia;
 evidencia con inyección de prompt.
 
 ### 10.3 Métricas de sombra (se miden, no se fijan)
+
+**De las nueve, solo dos son medibles en la etapa de sombra** —candidatos por
+WorkItem y porcentaje `NO_CANDIDATE`—: las otras siete necesitan un Refutador,
+un humano aprobando o conocimiento activo que cuarentenar, y ninguna de esas
+cosas ocurre en sombra. La salida de la Etapa 0 se lee con esas dos, no con las
+nueve.
 
 Candidatos por WorkItem; porcentaje `NO_CANDIDATE`; rechazados por el humano;
 rechazados por el Refutador; duplicados; reaperturas por evidencia nueva;
@@ -886,10 +986,16 @@ eso es una capacidad, no un subsistema.
 
 ### A2 — «El Refutador es un revisor más con otro nombre»
 
-**Intento de demostración.** El motor ya tiene la fase REVISAR con un Worker de
-perfil independiente y salida cerrada (`APPROVED | CHANGES_REQUIRED |
-DECISION_REQUIRED`, arquitectura §3.4), y la regla de que el revisor no arregla
-lo que revisa. El Refutador es exactamente eso.
+**Intento de demostración.** *(Precisado en la ronda 3: la redacción anterior
+decía «el motor ya tiene… un Worker de perfil independiente», y eso mezclaba lo
+construido con lo escrito.)* El motor tiene la **fase** `REVISAR`
+(`domain/work_item.py:44-52`) con sus transiciones en el puerto
+(`ports/store.py:90-102`) y un perfil `reviewer` como dato versionado
+(`perfiles/reviewer.yml`). El **Worker** que la ejecuta y la salida cerrada
+`APPROVED | CHANGES_REQUIRED | DECISION_REQUIRED` viven hoy en la vía GitHub, no
+en el motor: el motor no tiene puerto de Worker. Aun así, el mecanismo —perfil
+independiente, contrato de salida cerrado, el revisor no arregla lo que revisa—
+está demostrado, y el Refutador es exactamente eso.
 
 **Veredicto: la objeción acierta en el mecanismo.** Lo que el Refutador añade no
 es un componente: es **una exigencia de independencia más fuerte** (modelo
@@ -1035,10 +1141,20 @@ pequeño que su brief** y reescribirlo a esa escala.
 
 ---
 
-## 12. Decisiones que de verdad necesitan al propietario
+## 12. Lo que queda abierto, en tres listas separadas
 
-Solo las que no se pueden cerrar con evidencia. Cada una dice qué bloquea y qué
-recomiendo, para que se pueda decidir sin reconstruir nada.
+**Reestructurado en la ronda 3.** Las dos redacciones anteriores presentaban
+«nueve decisiones del propietario» y no lo eran: había dentro investigaciones
+técnicas que se cierran con datos y defectos ya reportados que no necesitan
+ninguna firma. Mezclarlos infla la lista y esconde cuáles son de verdad tuyas.
+
+Además, **casi todo cuelga de la primera**: si D-1 se responde «no», las demás no
+llegan a plantearse. No son nueve decisiones paralelas.
+
+### 12.A — Decisiones que solo puede tomar el propietario
+
+Son seis. Ninguna se cierra con evidencia: todas cambian alcance, autoridad,
+gasto o una frontera aprobada.
 
 **D-1 — ¿Se autoriza siquiera explorar este vertical?**
 La excepción de `docs/evolution/STATUS.md:27-35` ampara el Work Engine
@@ -1046,18 +1162,26 @@ La excepción de `docs/evolution/STATUS.md:27-35` ampara el Work Engine
 plan, así que **hoy no está autorizado ni en su forma mínima**. Además introduce
 perfiles de agente nuevos, que activan el criterio de parada de `AGENTS.md`.
 *Bloquea*: todo lo demás. *Recomiendo*: **no autorizar nada todavía**, por las
-cinco razones de §6.5. Si aun así se quisiera un primer paso, el único que no
+cinco razones de §6.6. Si aun así se quisiera un primer paso, el único que no
 introduce ningún agente ni gasto es un lector determinista del diario que
 construya el dossier y no llame a ningún modelo — y hoy leería un fichero que no
 existe, así que ni siquiera eso aporta evidencia todavía.
 
-**D-2 — ¿El aprendizaje llega a ser alguna vez una clase de trabajo?**
-Hoy no puede: `WorkItemClass` es cerrado y el contrato §11.1 dice que «una clase
-que no aparezca aquí no puede crear WorkItems hasta que se añada» — lo que exige
-enmendar el contrato v1.7 y tocar la tabla de A5.
-*Recomiendo*: **no**, ni ahora ni en v0. El diseño de §6 está construido
-precisamente para no necesitarlo. Si más adelante se quiere, es una enmienda de
-contrato con su propio ADR, no un efecto colateral.
+**D-2 — ¿El aprendizaje llega a ser alguna vez un WorkItem?** *(Ampliada en la
+ronda 3 para absorber la opción O5.)*
+Dos caminos, y solo uno estaba contado antes:
+- **Clase nueva `aprendizaje`**: hoy imposible sin enmienda. `WorkItemClass` es
+  cerrado y el contrato §11.1 dice que «una clase que no aparezca aquí no puede
+  crear WorkItems hasta que se añada», lo que exige enmendar la v1.7 y tocar la
+  tabla de A5.
+- **Clase ya existente con autoridad `motor`** (`MIXTA`, `CONSULTA_LARGA`…):
+  **sí es posible hoy**, sin tocar nada. La ronda 3 refutó que estuviera
+  bloqueado, y tenía razón: la primera redacción presentaba como imposibilidad lo
+  que era una elección.
+*Recomiendo*: **no**, por los tres argumentos de §6.1 (el campo `clase` dejaría
+de describir el trabajo; el motor recuperaría la propiedad del ciclo de vida; y
+el contrato §9 obliga igualmente a una orden por cada WorkItem). Pero son
+argumentos, no una imposibilidad, así que **la decisión es tuya**.
 
 **D-3 — Presupuesto del aprendizaje. BLOQUEANTE tras la ronda 2.**
 No es que el presupuesto sea incómodo de aplicar: es que **no se puede aplicar en
@@ -1089,15 +1213,36 @@ clasifica **capacidades** (`web.buscar`), no el transporte del propio modelo:
 escalado), y preferir, si existe, un refutador local o del proveedor ya en uso
 antes que uno nuevo.
 
-**D-6 — ¿Se corrige la divergencia con la arquitectura §3.3 en B1/C2?**
+**D-10 — ¿Se añade un puerto de solo lectura del diario? *(nueva, ronda 3)***
+Hoy `WorkEngineStore` (`ports/store.py:24`) es **un solo Protocol con 36 métodos**,
+de los que cinco son de lectura, y **no existe ningún puerto de solo lectura**.
+Por tanto: o un lector entra por `list_events()` sosteniendo un handle con las 31
+escrituras, o lee el fichero y depende de una representación que ADR-019 deja
+abierta hasta D2. **No hay tercera vía** (§6.5).
+*Bloquea*: que «el aprendizaje no puede escribir el estado» pase de convención a
+garantía estructural. Y no solo al aprendizaje: cualquier consumidor de solo
+lectura del motor tiene hoy el mismo problema.
+*Recomiendo*: tratarlo como interfaz nueva del motor, alcance de C2/D2, decidida
+por quien lleve esos bloques. **No es alcance de una auditoría, y desde luego no
+de un vertical sin autorizar.**
+
+### 12.B — Investigaciones técnicas: se cierran con datos, no con una firma
+
+Lo que necesitan del propietario es, como mucho, **cuándo** se hacen y quién las
+paga; no **si** son correctas.
+
+**D-6 — ¿Cuándo se cobra el trabajo de cerrar GAP-1?** *(reclasificada en la
+ronda 3: no es «si se corrige», es «en qué bloque»)*
 `Run.worker` es una cadena sin estructura y no hay identidad de modelo/runtime
 (GAP-1); `WorkPackage`/`WorkResult` no tienen esquema (GAP-2). Ambas son
 divergencias respecto de la arquitectura **aprobada**, no ampliaciones pedidas
 por el aprendizaje. Cerrarlas donde nacen —el primer Worker real— cambia el
 alcance de bloques aprobados, y eso es del propietario.
-*Recomiendo*: sí, y **por su propio mérito**: sin identidad de modelo tampoco se
-puede comparar dos Runs, ni explicar por qué se sustituyó un Worker, ni sostener
-la invariante I2 ni la I13.
+*Recomiendo*: cerrarlo, y **por su propio mérito**: sin identidad de modelo no se
+pueden comparar dos Runs, ni explicar en qué se diferenció una sustitución de
+Worker, ni sostener las invariantes I2 e I13. **El «sí» no necesita firma**: es
+conformidad con una arquitectura ya aprobada, y está reportado como H-6 en el
+parte de defectos. Lo único abierto es la secuenciación.
 
 **D-7 — ¿Cuándo, si acaso, el disparo pasa a ser automático?**
 Hoy exige o enmendar el contrato §9/§9.1 (que ya gastó su única ejecución
@@ -1107,17 +1252,6 @@ servicio supervisado y el barrido es parte de su propio ciclo.
 un sidecar sobre un corpus inexistente es el peor cambio posible por unidad de
 riesgo.
 
-**D-8 — La colisión de ADR-042 en la PR #207.**
-No es de aprendizaje, pero deja A5 con una comprobación en rojo real y
-reproducida (§1.3, H-4). *Recomiendo*: al corregirla, el duplicado toma **el
-siguiente número válido en `main` en ese momento**, calculado con
-`scripts/siguiente_adr.py` contra `main`, y se vuelve a pasar
-`tests/automation/test_registro_de_decisiones.py`.
-**Esta rama no reserva ningún número frente a A5** y no debe consultarse para
-calcularlo: es exploratoria y sin aprobar, mientras que A5 es trabajo del Work
-Engine ya autorizado. Si esta rama llega a integrarse alguna vez, será ella la
-que recalcule su propio número. *(La primera redacción recomendaba que A5 tomara
-el 044 «porque este trabajo toma el 043». Retirado: invertía la prioridad.)*
 
 **D-9 — Investigación de reutilización: qué se reutiliza, en qué forma, y a qué
 coste de acoplamiento.**
@@ -1157,13 +1291,38 @@ Condiciones que la investigación no puede saltarse:
 La tabla de §4.1 es la **hipótesis de partida** de esa investigación, no su
 resultado; varias filas solo se pueden cerrar con datos que hoy no existen.
 
-*Bloquea*: la forma que tendría cualquier construcción futura, y por tanto el
-sentido de D-1 a D-8. *No bloquea*: nada de lo que está en marcha, porque no se
-va a construir nada todavía.
+*Cuándo se hace*: **no ahora.** La ronda 3 señaló la contradicción de la
+redacción anterior, que la declaraba «bloqueante» y a la vez decía que no
+bloqueaba nada — y además varias filas de §4.1 están fijadas a estados que el
+propio plan cambiará antes de que exista ningún aprendizaje. Se degrada a lo que
+es: **la pregunta que se hace cuando exista un candidato concreto de extracción**,
+con la tabla de §4.1 como punto de partida a reverificar entonces, no como
+resultado.
 *Es decisión del propietario*, no técnica, en un punto concreto: **si se abre o
 no la vía para extraer primitivas compartidas entre `src/sirius` y
 `src/sirius_engine`.** Eso cambia una frontera aprobada y no lo decide una
 auditoría.
+
+
+### 12.C — Ya decidido o ya reportado: no requiere ninguna decisión nueva
+
+Se conservan aquí para que no se pierdan, con la etiqueta explícita de que **no
+son decisiones**.
+
+**D-8 — La colisión de ADR-042 en la PR #207. NO es una decisión.**
+*(Reclasificada en la ronda 3.)* ADR-032 ya decidió la regla —el número es el
+máximo existente más uno— y el defecto está reportado como **H-4** en el parte.
+Lo único que queda es aplicarlo.
+No es de aprendizaje, pero deja A5 con una comprobación en rojo real y
+reproducida (§1.3, H-4). *Recomiendo*: al corregirla, el duplicado toma **el
+siguiente número válido en `main` en ese momento**, calculado con
+`scripts/siguiente_adr.py` contra `main`, y se vuelve a pasar
+`tests/automation/test_registro_de_decisiones.py`.
+**Esta rama no reserva ningún número frente a A5** y no debe consultarse para
+calcularlo: es exploratoria y sin aprobar, mientras que A5 es trabajo del Work
+Engine ya autorizado. Si esta rama llega a integrarse alguna vez, será ella la
+que recalcule su propio número. *(La primera redacción recomendaba que A5 tomara
+el 044 «porque este trabajo toma el 043». Retirado: invertía la prioridad.)*
 
 
 ---
@@ -1269,7 +1428,8 @@ el mecanismo, salvo decisión expresa, no (§4).
 
 | # | Lo que dije | Lo que es | Comprobación |
 |---|---|---|---|
-| C-1 | «La invariante del Extractor **sí es expresable** de forma estructural hoy, sin código nuevo» | Expresable sí; **en vigor no**. `compute_permission_envelope`, `resolve_capabilities`, `validar_egress_fail_closed` y `project_worker_request` **no tienen ningún llamador en `src/`** — solo en `tests/`. A4 está construido y sin cablear | `grep -rn` de los cuatro símbolos sobre `src/` y `tests/` |
+| C-1 | «La invariante del Extractor **sí es expresable** de forma estructural hoy, sin código nuevo» | Expresable sí; **en vigor no** — pero la corrección misma se afirmó mal: ver C-7 | `grep -rn project_worker_request src/` |
+| C-7 *(ronda 3)* | «Los cuatro símbolos no tienen ningún llamador en `src/` — solo en `tests/`» | **FALSO para tres de los cuatro.** `worker_request.py:65-67` llama a `compute_permission_envelope`, `validar_egress_fail_closed` y `resolve_capabilities`. Lo verdadero es más estrecho: **nadie llama a `project_worker_request`** fuera de las pruebas, así que ningún camino de producción construye un `WorkerRequest`. El grep que sostenía la afirmación **excluía el fichero donde estaban los llamadores** | `grep -rnE "compute_permission_envelope\|resolve_capabilities\|validar_egress_fail_closed" src/` → tres aciertos en `worker_request.py`; `grep -rn project_worker_request src/` → solo su definición |
 | C-2 | (no lo dije) | `PermissionEnvelope.escritura` es **un nombre de ámbito**, no una ruta. Si el conocimiento se materializa como ficheros del repo, `escritura: repo` lo cubre igual que el código. Separarlo es trabajo | `domain/permission_envelope.py:22-30` |
 | C-3 | «Nueve de trece piezas ya existen» → corregido a «doce de trece» | **Las dos cifras estaban mal planteadas.** Contar piezas confunde *patrón demostrado* con *componente disponible*. La cuenta se retira entera y se sustituye por la clasificación A–E de §4, que dice de cada mecanismo **en qué forma** podría reutilizarse y a qué coste de acoplamiento | §4.1 |
 | C-4 | «Diario con integridad comprobable» | Comprobable frente a **corrupción del medio**, no frente a manipulación: el checksum es SHA-256 **sin clave**, recalculable por cualquiera que pueda escribir el fichero | `adapters/durable/journal.py:1-20` |
@@ -1350,6 +1510,8 @@ vacío».**
 ---
 
 **H-3 — El corte de presupuesto no funciona fuera de `ACTIVE`.**
+*(Descripción canónica y reproducción: `DEFECTOS_ENCONTRADOS_2026-08-20.md`, H-3.
+Aquí solo la relación con el aprendizaje.)*
 
 - **Impacto**: **bloquea cualquier automatización que gaste modelos fuera de un
   WorkItem gobernado**, y además rompe el gobierno dentro del caso normal.
@@ -1388,7 +1550,7 @@ Seguir, retirar o escalar. **Escalar, y retirar la parte que sobra.**
 - **Se retira** la recomendación de construir un vertical de aprendizaje. **La
   razón fuerte no es que «ya existan las piezas»** —esa formulación estaba mal
   planteada y se corrigió en §4—: es que **no hay experiencia real de la que
-  aprender**. Las cinco razones están en §6.5: no hay Worker gobernado de extremo
+  aprender**. Las cinco razones están en §6.6: no hay Worker gobernado de extremo
   a extremo, no hay corpus, varias invariantes no son comprobables, construir
   ahora obligaría a fijar abstracciones sin datos, y lo que tiene que avanzar
   primero es el motor.
@@ -1416,7 +1578,81 @@ llamarlo coordinador: es que **sin puerta de gasto no debe existir**.
 
 ---
 
-## 15. Lo que este informe NO garantiza
+## 15. Ronda 3: qué encontró y qué se corrigió
+
+Seis lentes pedidas por el propietario: reutilización falsa, acoplamiento
+accidental, duplicación real, patrón contra componente, decisiones de producto
+disfrazadas de técnicas, y trabajo futuro sin valor. **Cada hallazgo se verificó
+contra el código antes de aceptarlo**; los tres más graves se comprobaron
+ejecutando.
+
+### 15.1 El error factual más serio de todo el trabajo
+
+Las dos redacciones anteriores afirmaban, en **siete sitios de los tres
+documentos**, que `compute_permission_envelope`, `resolve_capabilities`,
+`validar_egress_fail_closed` y `project_worker_request` «no tienen ningún
+llamador en `src/` — solo en `tests/`». **Es falso para tres de los cuatro**:
+`worker_request.py:65-67` los llama.
+
+Y lo peor no es el error: es cómo se produjo. El grep que lo «comprobó**
+excluía `worker_request.py` para «quitar ruido» — es decir, **excluía el único
+fichero donde estaban los llamadores**. Se presentó además como una corrección
+de la ronda 2, bajo un encabezado que dice «verifiqué cada hallazgo contra el
+código». Un filtro de conveniencia convirtió una comprobación en su contrario.
+
+Lo verdadero es más estrecho y sostiene igual la conclusión: **nadie llama a
+`project_worker_request` fuera de las pruebas**, así que ningún camino de
+producción construye un `WorkerRequest` y las guardas no corren. Corregido en los
+siete sitios.
+
+### 15.2 La familia de la ronda 3: convención presentada como estructura
+
+Tres objeciones independientes resultaron ser la misma, y es una familia
+**distinta** de la de las rondas 1 y 2: el informe afirmaba como estructural una
+garantía que hoy es solo convención — el mismo estándar que le exige al brief.
+Corregido de raíz en **§6.5**, no frase a frase.
+
+### 15.3 Las demás correcciones aplicadas
+
+| Qué decía | Qué es | Dónde |
+|---|---|---|
+| El agregador de revisión dual está «acoplado a `gh` y al ciclo de etiquetas», así que «nunca A» | **Falso.** Importa solo `argparse`, `json`, `re`, `sys`, `typing`; cero coincidencias de `gh`, etiquetas, red o entorno. Su acoplamiento real es al esquema del veredicto. Es el **mejor candidato a primitiva compartida** de toda la tabla | §4.1, §4.2 |
+| «Operando a diario» | Su modo dual depende de `SIRIUS_CODEX_REVIEW_ENABLED`, cuyo valor no está en el árbol (I5 del plan). Construido y probado sí; operando, no comprobado | §4.1 |
+| «El aprendizaje v0 no es un WorkItem» como consecuencia forzada | **Es una decisión, no una imposibilidad.** Podría nacer bajo una clase existente con autoridad `motor` (`MIXTA`, `CONSULTA_LARGA`). Se descarta igual, pero con argumento explícito, y sube como decisión | §6.1, D-2 |
+| «Nueve decisiones del propietario» | Eran cuatro decisiones, tres investigaciones técnicas y una cosa ya decidida. §12 se parte en tres listas | §12 |
+| Trece invariantes con prueba por mutación «para todas» | Una es comprobable hoy (I9, y ya se cumple); tres no son invariantes sino fixtures; la promesa de mutación solo vale para cuatro | §10.1 |
+| «Las diez fixtures ya se pueden construir como secuencias de eventos» | Cuatro sí; dos dependen de GAP-2; cuatro dependen de objetos que no existen | §10.2 |
+| I12 como lista de rutas prohibidas | Una regla que enumera vehículos siempre tiene un hueco más (ADR-033) — se dejaba fuera `.github/**`. Invertida a lista de permitidos | §10.1 |
+| El predicado del diff, transcrito en dos documentos | Las dos copias habían divergido: decían dos ficheros cuando ya eran tres. Ahora vive **solo** en ADR-043 | §8.1 |
+| H-3 descrito en tres sitios, ya divergido | El ADR describía el caso débil (`DELIVERED`) y perdía el grave (`WAITING`). Descripción canónica única en el parte de defectos | §14.5, ADR |
+| Citas `ruta:línea` desplazadas ±1..3 | Barrido mecánico: `egress.py:25`, `events.py:58`, `work_item.py:38`, `profile.py:33-48`, `worker_request.py:44-54` | todo el informe |
+
+### 15.4 Lo que la ronda 3 intentó tumbar y no pudo
+
+- **El orden de las opciones de enganche.** Las tres lentes que lo atacaron
+  coinciden: O4 sigue siendo la única que no toca dominio, códec ni A5, y la
+  única de la que se puede afirmar que un fallo del sidecar no rompe un WorkItem
+  entregado. Lo que cayó no fue la elección: fueron las garantías de más.
+- **La distinción central del marco corregido**: «que exista el patrón no
+  significa que el sistema esté medio construido».
+- **Los hechos duros**: no hay puerto de Worker, no hay corpus, no hay ningún
+  diario en disco, el motor no está referenciado por ningún workflow.
+- **I9**: se intentó demostrar que «el `WorkPackage` es instantánea inmutable»
+  era falso —`Mapping` no es inmutable en Python—, y se comprobó ejecutando que
+  sí lo es: `run.py:238` guarda `MappingProxyType(dict(...))`, así que mutar el
+  dict del llamador no cambia ni el Run ni el evento.
+
+### 15.5 Por qué esta es la última ronda
+
+La familia de la ronda 3 es nueva, así que la regla de las dos rondas no obliga a
+parar por ella. Pero el propietario pidió no parchear indefinidamente, y el
+criterio para dejarlo es observable: **de las objeciones de esta ronda, ninguna
+cambió una sola conclusión.** Todas fueron de precisión, de clasificación o de
+sobreafirmación. Cuando una ronda deja de mover las conclusiones y solo mueve la
+redacción, seguir es pulir, no auditar.
+
+
+## 16. Lo que este informe NO garantiza
 
 Repetido de ADR-043 porque es donde toca leerlo:
 
@@ -1431,7 +1667,7 @@ Repetido de ADR-043 porque es donde toca leerlo:
 - No garantiza que el enganche recomendado sobreviva a las enmiendas C1 y C2 del
   contrato (E1b), que aún no existen.
 
-## 16. Comprobaciones que sostienen este informe
+## 17. Comprobaciones que sostienen este informe
 
 ```
 git log -1 --oneline                       -> a25ee3b (main)
@@ -1446,6 +1682,32 @@ grep -rniE "claude|openai|anthropic|gpt-|sonnet|opus" src/sirius_engine/
 grep -rn "WorkPackage|WorkResult" src/     -> ningún tipo; solo Mapping opacos
 grep -rni "inspect.ai|inspect_ai" .        -> solo documentos, nunca código
 tests/engine/test_boundary.py              -> sirius <-> sirius_engine, prohibido en ambos sentidos
+```
+
+Añadidas al verificar la ronda 3:
+
+```
+grep -rnE "compute_permission_envelope|resolve_capabilities|validar_egress_fail_closed" src/
+                                           -> TRES aciertos en worker_request.py:65-67
+                                              (desmiente lo que este informe afirmó
+                                              en las rondas 1 y 2)
+grep -rn project_worker_request src/       -> solo su definición y su docstring:
+                                              nadie construye un WorkerRequest
+sed -n '26,32p' scripts/automation/sirius_aggregate_reviews.py
+                                           -> argparse, json, re, sys, typing.
+                                              Cero gh, etiquetas, red o entorno
+grep -n SIRIUS_CODEX_REVIEW_ENABLED .github/workflows/review-sirius-work.yml
+                                           -> el modo dual depende de una variable
+                                              de repositorio ausente del árbol
+grep -n "os.open\|ftruncate" src/sirius_engine/adapters/durable/journal.py
+                                           -> recover_invalid_tail abre O_WRONLY (:189)
+                                              y trunca (:191)
+grep -c "    def " src/sirius_engine/ports/store.py
+                                           -> 36 métodos en un solo Protocol; no hay
+                                              puerto de solo lectura
+registrar_gasto sobre un WorkItem en WAITING (ejecutado)
+                                           -> Run muerto, WorkItem en waiting,
+                                              IllegalTransitionError, sin escalada
 ```
 
 Añadidas al verificar la ronda 2:
