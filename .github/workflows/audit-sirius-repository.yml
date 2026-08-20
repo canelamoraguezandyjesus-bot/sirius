@@ -151,7 +151,15 @@ jobs:
             --allowedTools "Read,Grep,Glob,Write,Bash(git log:*),Bash(git show:*),Bash(git diff:*)"
             --disallowedTools "Task"
             --max-turns 200
-          show_full_output: true
+          # La salida completa del agente NO va al log: el repositorio es
+          # publico y los registros de Actions de un repositorio publico los lee
+          # cualquiera, sin cuenta, durante 90 dias. La transcripcion integra
+          # incluye lo que el agente leyo del arbol, sus razonamientos y lo que
+          # imprimieron los comandos que ejecuto. Estuvo en `true` mientras el
+          # repositorio era privado y el propio comentario ya preveia revertirlo;
+          # la apertura lo hizo obligatorio (ADR-044). Para auditar una ejecucion
+          # quedan el veredicto en `SIRIUS_VERDICT_FILE` y el resumen del paso.
+          show_full_output: false
 
       - name: Comprobar que el Auditor no modificó nada
         if: always()

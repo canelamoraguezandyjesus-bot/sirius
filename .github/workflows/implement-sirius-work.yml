@@ -244,11 +244,15 @@ jobs:
           # error_max_turns, 121 turnos, 14,6 min) sin llegar a push/PR/veredicto.
           # 300 da margen para bloques grandes; los pequeños terminan mucho antes.
           claude_args: '--dangerously-skip-permissions --allowedTools "Bash,Read,Write,Edit,Grep,Glob" --max-turns 300'
-          # Salida completa en el log del runner (repo privado, log solo visible
-          # para el propietario): permite auditar qué hizo el implementador si
-          # vuelve a agotarse el presupuesto o falla. Revertir a false cuando el
-          # ciclo esté estabilizado.
-          show_full_output: true
+          # La salida completa del agente NO va al log: el repositorio es
+          # publico y los registros de Actions de un repositorio publico los lee
+          # cualquiera, sin cuenta, durante 90 dias. La transcripcion integra
+          # incluye lo que el agente leyo del arbol, sus razonamientos y lo que
+          # imprimieron los comandos que ejecuto. Estuvo en `true` mientras el
+          # repositorio era privado y el propio comentario ya preveia revertirlo;
+          # la apertura lo hizo obligatorio (ADR-044). Para auditar una ejecucion
+          # quedan el veredicto en `SIRIUS_VERDICT_FILE` y el resumen del paso.
+          show_full_output: false
 
       - name: Aplicar el veredicto
         if: always() && steps.gate.outputs.valid == 'true'
