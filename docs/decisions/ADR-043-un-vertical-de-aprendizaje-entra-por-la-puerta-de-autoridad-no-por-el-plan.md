@@ -113,8 +113,10 @@ código real delante (informe §6.1):
    exige tocar `WorkItemClass`, la tabla de autoridad de A5 —prohibido— y el
    contrato v1.7 §11.1, que dice literalmente que «una clase que no aparezca
    aquí no puede crear WorkItems hasta que se añada».
-4. **Un lector del diario, fuera del camino de escritura** (`list_events()` /
-   el JSONL de `adapters/durable/journal.py`). Elegida.
+4. **Un lector del diario, fuera del camino de escritura**, entrando **por el
+   puerto** (`WorkEngineStore.list_events()`, `ports/store.py:202`) y nunca por el
+   fichero: el formato JSON Lines es un detalle de `adapters/durable/journal.py`,
+   y ADR-019 deja la representación física abierta hasta D2. Elegida.
 
 Para la forma de ENTRADA de este trabajo en el repositorio:
 

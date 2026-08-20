@@ -441,7 +441,7 @@ solo se pueden cerrar con datos que hoy no existen.
 |---|---|---|---|
 | Historia durable e íntegra de lo ocurrido | Diario JSON Lines con checksum por registro y `fsync`, `sirius_engine/adapters/durable/journal.py` | Construido, misma capa. **Sin un solo registro en disco** | **A** |
 | Reconstruir «qué pasó» sin reejecutar nada | `rebuild_state()`, `domain/events.py:56`; `list_events()`, `ports/store.py:202` | Construido, función pura | **A** |
-| Recuperación determinista antes de gastar IA | `contexto.recuperar`, `context_recall.py`: tres proveedores, ningún LLM, cita en vez de sintetizar | Construido. Un proveedor no puede reportar su fallo (H-5) | **A**, con defecto abierto |
+| Recuperación determinista antes de gastar IA | `contexto.recuperar`, `context_recall.py`: tres proveedores, ningún LLM, cita en vez de sintetizar | Construido, pero **no es llave en mano**: `recuperar_contexto(...)` exige que el llamador le pase ya montados el puerto de GitHub, los números de incidencia y las entradas de `git log`. Y un proveedor no puede reportar su fallo (H-5) | **A** para la función; **C** para poder usarla de verdad, porque falta quien ensamble sus insumos |
 | «Una lectura caída no es una ausencia» | ADR-036, más `proveedores_fallidos` | **Invariante demostrada**, implementada en dos de tres proveedores | **D** + defecto |
 | Filtro de fuente no confiable | `es_autor_de_confianza`, `mirror_projection.py:80-82` | Construido para comentarios. El cuerpo de la incidencia lo esquiva y el puerto impide arreglarlo (H-1) | **A** para lo que cubre; **E** para lo que no |
 | Least privilege por perfil, deny-by-default | `PermissionEnvelope` + Resolver + registro cerrado de capacidades | Construido y **sin cablear**: ningún llamador en `src/`. Además `escritura` es **un nombre de ámbito**, no una ruta ni un recurso | **C** — no es reutilizar, es terminar de cablear y añadir un ámbito |
@@ -462,9 +462,11 @@ solo se pueden cerrar con datos que hoy no existen.
 ### 4.2 Qué se concluye de verdad de esa tabla
 
 1. **La reutilización física directa (A) se limita a leer el diario y el contexto
-   del propio motor.** Cuatro filas, todas dentro de `sirius_engine`, todas de
-   lectura. Es real y es útil, y es mucho menos de lo que la primera redacción de
-   este informe daba a entender.
+   del propio motor**, y ni siquiera entera: `contexto.recuperar` es una función
+   pura reutilizable, pero **nadie ensambla hoy sus insumos**, así que usarla de
+   verdad es C, no A. Lo genuinamente A son el diario y `rebuild_state`. Es real
+   y es útil, y es mucho menos de lo que la primera redacción de este informe
+   daba a entender.
 2. **Todo lo que viene de `scripts/automation` es D, no A.** El agregador de
    revisión dual demuestra que Sirius sabe hacer refutación independiente,
    agregación determinista fail-closed y ligadura a hash exacto. Lo demuestra en
@@ -567,7 +569,7 @@ cableada**: `compute_permission_envelope`, `resolve_capabilities` y
 | **O1** Dentro de la transición | `domain/work_item.py:186` `deliver()` | **Sí** | Sí | No | No | **Descartada**: el dominio es puro y sin efectos; un fallo del sidecar viviría dentro de la entrega |
 | **O2** Dentro del puerto de almacén | `ports/store.py:73` `deliver_work_item()` | **Sí** | Puerto | No | No | **Descartada**: obliga a todas las implementaciones y mete el aprendizaje en la transición terminal |
 | **O3** WorkItem de clase `aprendizaje` despachado por el motor | `WorkItemClass` + `_TABLA_AUTORIDAD` | No | Sí | **Sí** | **Sí** | **Descartada**: prohibida por el encargo y por el contrato §11.1; además convierte al aprendizaje en trabajo del motor y al sidecar en actor con autoridad |
-| **O4** Lector del diario, fuera del camino de escritura | `ports/store.py:202` `list_events()` / el JSONL de `adapters/durable/journal.py` | **No** | **No** | **No** | **No** | **RECOMENDADA** |
+| **O4** Lector del diario, fuera del camino de escritura | `ports/store.py:202` `list_events()` — **por el puerto, nunca leyendo el fichero** | **No** | **No** | **No** | **No** | Mejor clasificada (§6.2) |
 
 ### 6.2 La opción mejor clasificada — que **no** es lo mismo que recomendarla
 
@@ -621,6 +623,12 @@ Cómo funciona, concretamente:
 - **El motor sigue siendo dueño del estado**: el diario es la fuente, y el lector
   no tiene forma de escribir en él (`list_events()` es de lectura; el fichero se
   abre en `O_APPEND` solo desde `append_durably`).
+- **Se entra por el puerto, nunca por el fichero.** El formato JSON Lines con
+  checksum vive en `adapters/durable/journal.py`, que es **un detalle de un
+  adaptador concreto**. Leerlo directamente ataría el aprendizaje a una
+  representación que ADR-019 deja explícitamente abierta hasta D2. La única vía
+  admisible es `WorkEngineStore.list_events()`. *(La primera redacción ofrecía las
+  dos como equivalentes; era un acoplamiento accidental y se retira.)*
 - **Reversibilidad total**: borrar el directorio de staging deja el sistema
   exactamente como estaba. No hay migración que revertir.
 - **Coincide con el precedente que el repositorio ya validó**: A3 entró como
