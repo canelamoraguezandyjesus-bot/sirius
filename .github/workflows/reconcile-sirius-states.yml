@@ -12,12 +12,13 @@ name: Reconciliar estados de Sirius
 # observa estados que ningún evento puede ya revivir, porque `issues: labeled`
 # no vuelve a dispararse con una etiqueta ya aplicada.
 #
-# Cadencia: cada 6 horas. El coste es el argumento, no la comodidad: el job dura
-# menos de un minuto y GitHub factura por minuto empezado, así que 4 ejecuciones
-# al día son ~120 min/mes de los 2000 gratuitos del repositorio privado. Cada
-# hora serían ~720 min/mes, y la latencia de detección no vale ese precio para
-# un repositorio de una sola persona. El minuto :17 evita la congestión de las
-# horas en punto, donde GitHub retrasa las tareas programadas.
+# Cadencia: cada 6 horas. El argumento era el coste —4 ejecuciones al día son
+# ~120 min/mes frente a los ~720 de una cadencia horaria—, y dejó de aplicar al
+# hacerse público el repositorio (ADR-044): los runners estándar no consumen
+# cuota en un repositorio público. Se mantiene en 6 horas por lo que queda en
+# pie: esto es una excepción declarada a «los eventos mandan» (contrato §10.4), y
+# una excepción horaria se parece demasiado a un motor. El minuto :17 evita la
+# congestión de las horas en punto, donde GitHub retrasa las tareas programadas.
 
 on:
   workflow_dispatch:

@@ -112,7 +112,7 @@ else {
     # en PowerShell no tiene por que ser donde esta el prompt: una sesion abierta
     # en otra carpeta y luego movida con "cd" conserva el de origen. Paso de
     # verdad: con el prompt en C:\dev\sirius, "dist\windows\..." se busco en
-    # C:\Users\ASUS\OneDrive\Desktop\laboratorio sirius\sirius\dist\windows\...
+    # C:\Users\<usuario>\<carpeta-de-arranque>\dist\windows\...
     $PackageRoot = if ([System.IO.Path]::IsPathRooted($ArtifactPath)) {
         [System.IO.Path]::GetFullPath($ArtifactPath)
     }

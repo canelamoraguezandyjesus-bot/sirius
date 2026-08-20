@@ -459,9 +459,14 @@ amparado por esta excepción y necesita una decisión nueva:
    funciona, esta ejecución no hace nada.
 
 Hoy la implementa `.github/workflows/reconcile-sirius-states.yml` con cadencia de
-seis horas. La cadencia es parte de la excepción, no un detalle: cada hora
-costaría ~720 minutos de Actions al mes sobre los 2000 gratuitos del repositorio
-privado, y seis horas cuestan ~120. Acortarla es un cambio de coste y se decide
+seis horas. La cadencia se eligió por coste —cada hora costaría ~720 minutos de
+Actions al mes sobre los 2000 gratuitos de un repositorio privado, y seis horas
+cuestan ~120—, y **ese argumento dejó de aplicar** cuando el repositorio pasó a
+ser público (ADR-044): los runners estándar de Actions no consumen cuota en un
+repositorio público. La cadencia se mantiene en seis horas por una razón
+distinta, que sí sigue en pie: el reconciliador es una excepción a «los eventos
+mandan», y una excepción que corre cada hora se parece demasiado a un motor.
+Acortarla ya no es un cambio de coste; es un cambio de arquitectura y se decide
 como tal.
 
 Consecuencia que conviene decir en voz alta: el **caso B** del reconciliador
