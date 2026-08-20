@@ -9,6 +9,13 @@ Este ADR es además la **nota de arranque** de la rama
 se escribió y se publicó **antes del primer cambio de contenido**, y su criterio
 de parada se decidió **antes de ver ningún resultado de la auditoría**.
 
+> **Número provisional.** Esta rama es exploratoria y no está aprobada, así que
+> **no reserva numeración frente a ningún trabajo autorizado** — en particular,
+> frente a A5. Si alguna vez se integra, este ADR **recalculará su propio
+> número** con `scripts/siguiente_adr.py` contra `main` en ese momento, y si el
+> 043 está ocupado tomará el que corresponda. Cualquier cita a «ADR-043» dentro
+> de esta rama es interna y provisional.
+
 ## Contexto y problema
 
 El propietario aporta dos documentos —`01_HERMES_LEARNING_AUDIT` (auditoría
@@ -144,17 +151,28 @@ Para la forma de ENTRADA de este trabajo en el repositorio:
    Dos rondas adversariales devolvieron objeciones de la misma familia —«esta
    pieza ya existe con otro nombre»— y **la regla de las dos rondas se activó**.
    La raíz: **el brief se escribió contra los documentos de Sirius, no contra su
-   código**. Doce de sus trece piezas ya existen construidas y probadas, en dos
-   carriles. En particular, el argumento con el que salvé el diseño en la primera
-   ronda era falso: el tramo `staging → Gate → activo` **sí existe**, y es
-   `sirius_aggregate_reviews.py` (dos revisores de proveedores distintos, reglas
-   fijas, fail-closed ante JSON inválido o SHA no demostrable, aprobación solo si
-   ambos aprueban el mismo SHA) más `sirius_apply_verdict.sh` (coincidencia exacta
-   entre el SHA declarado, el head de la PR y el último head que superó Quality).
-   Se retira, por tanto, la recomendación de construir; se conserva el contraste,
-   que es lo que hacía falta; y sube al propietario la pregunta que ordena a las
-   demás: **si lo que debe crecer es el mecanismo ya probado, en vez de uno nuevo
-   al lado** (informe §12, D-9).
+   código**, y por eso plantea como problema abierto varias cosas para las que
+   este repositorio **ya tiene patrones e invariantes demostrados** — refutación
+   entre proveedores distintos, agregación determinista fail-closed, ligadura a
+   un hash exacto, conocimiento versionado con procedencia y supersede.
+
+   **De ahí NO se sigue que el sistema esté medio construido, y la primera
+   corrección de este ADR cometió ese error al hablar de «doce de trece
+   piezas».** Esos mecanismos viven repartidos entre `scripts/automation`,
+   `src/sirius` y `src/sirius_engine`; varios están al otro lado de fronteras que
+   una prueba hace cumplir; otros están construidos y **sin cablear**. Qué se
+   reutiliza físicamente, qué por primitiva extraída, qué por adapter, qué solo
+   como invariante y qué hay que implementar detrás de las interfaces del Work
+   Engine **es una investigación pendiente**, no un resultado: informe §4 y
+   decisión D-9.
+
+   **La razón fuerte para no construir todavía es otra, y es independiente del
+   inventario**: no existe ningún Worker gobernado de extremo a extremo por el
+   Work Engine, no existe corpus de WorkItems ni Runs reales, varias invariantes
+   necesarias no son comprobables, y construir el pipeline ahora obligaría a fijar
+   abstracciones sin datos reales. Primero tiene que avanzar el motor hasta
+   producir experiencia real. **No se propone ninguna fase** ni se reserva hueco
+   en el plan.
 
 Se declara además, sin suavizarlas (criterio de parada 3): **de las seis
 garantías no negociables del encargo, cinco no son sostenibles hoy dentro del
@@ -213,20 +231,28 @@ Ningún documento de estado, plan, contrato ni canónico aparece en esa lista.
 
 ## Consecuencias
 
-- El propietario recibe un informe con evidencia y **ocho decisiones** aisladas
-  (informe §12), en vez de un plan editado que dé por hechas cosas que no lo son.
+- El propietario recibe un informe con evidencia y **nueve decisiones** aisladas
+  (informe §12, D-1 a D-9), en vez de un plan editado que dé por hechas cosas que
+  no lo son.
 - El vertical de aprendizaje queda **sin autorizar**, que es su estado real: la
   excepción de `docs/evolution/STATUS.md:27-35` ampara el Work Engine
   «estrictamente según ADR-020 y su plan aprobado», y esto no está en ese plan.
-- Queda registrado que **nueve de las trece piezas** que el brief describe como
-  diseño nuevo ya existen o ya estaban decididas (informe §4). El trabajo real es
-  mucho menor que su brief, y esa es la conclusión más útil de todo el ejercicio.
+- Queda registrado, con la clasificación A–E de §4, **en qué forma podría
+  reutilizarse cada mecanismo** que el aprendizaje necesitaría: reutilización
+  física directa, extracción de una primitiva compartida, adapter o puerto,
+  reutilización solo conceptual, o implementación nueva. La reutilización física
+  directa se limita a leer el diario y el contexto del propio motor; todo lo que
+  viene de `scripts/automation` o de `src/sirius` es conceptual por defecto, y
+  solo pasa a otra cosa con una decisión del propietario que abra una frontera.
+  La regla que gobierna: **reuse before build, pero también abstraction before
+  coupling.**
 - Queda registrada una divergencia entre el código y la arquitectura §3.3
   (identidad de modelo/runtime por Run) que **no es alcance de aprendizaje** y
   que conviene cerrar por su propio mérito cuando exista el primer Worker real.
 - Queda reportado, con la prueba reproducida, que la PR #207 está en rojo por dos
-  ADR-042 en el registro. Para no repetir la colisión, este trabajo toma el 043 y
-  el duplicado de A5 debería renumerarse a **044**.
+  ADR-042 en el registro. Al corregirla, el duplicado debe tomar **el siguiente
+  número válido en `main` en ese momento**, calculado contra `main`. **Esta rama
+  no reserva número frente a A5** ni debe consultarse para calcularlo.
 - Quedan registrados tres defectos verificados que **no son de aprendizaje** y
   existen hoy (informe §14.5): el cuerpo de la incidencia entra sin filtro de
   autor dentro de `_texto_cronologico_de_confianza` y el puerto lo hace

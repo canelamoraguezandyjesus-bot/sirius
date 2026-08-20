@@ -11,10 +11,23 @@
 - **Esto no autoriza ampliar alcance.** Es un parte de defectos. Cada arreglo va
   en su rama, con su prueba vista fallar antes de arreglar (ADR-001) y su ADR si
   produce una decisión.
+- **Numeración**: `H-n` son los mismos identificadores que usa §14.5 del informe,
+  para que ambos documentos hablen igual. Van **ordenados por gravedad**, no por
+  número. No confundir con `D-n`, que en el informe son **decisiones** del
+  propietario, no defectos.
+
+| | Hallazgo | Bloque | Gravedad |
+|---|---|---|---|
+| **H-3** | El corte de presupuesto revienta fuera de `ACTIVE` | A5 | Alta |
+| **H-4** | Dos ADR-042: la PR #207 en rojo | A5 | Bloqueante de esa PR |
+| **H-2** | «No pude leer» → «éxito vacío»; falta `UNKNOWN` | A2 | Media (latente), crítica para la evidencia futura |
+| **H-1** | El cuerpo de la incidencia esquiva el filtro de confianza | A3 | Media-baja |
+| **H-5** | Los fallos del proveedor git no caben en `proveedores_fallidos` | A3 | Baja |
+| **H-6** | `Run.worker` no cumple arquitectura §3.3 (divergencia, no defecto) | A1 | Baja, pero conviene antes de B1/C2 |
 
 ---
 
-## D-1 — El corte de presupuesto no funciona cuando el Worker es asíncrono
+## H-3 — El corte de presupuesto no funciona cuando el Worker es asíncrono
 
 - **Bloque:** A5 · **Rama:** `feature/a5-interaccion-intencion-v0` (PR #207, abierta)
 - **Gravedad:** ALTA. Es la garantía principal del bloque, y falla en el caso normal.
@@ -108,7 +121,7 @@ cumplir, porque son propiedades ya aprobadas:
 
 ---
 
-## D-2 — Dos ADR-042: la PR #207 está en rojo
+## H-4 — Dos ADR-042: la PR #207 está en rojo
 
 - **Bloque:** A5 · **Rama:** `feature/a5-interaccion-intencion-v0`
 - **Gravedad:** BLOQUEANTE de esa PR (explica su `mergeable_state: unstable`).
@@ -127,14 +140,21 @@ FAILED test_no_new_number_is_ever_reused
 Es la familia exacta que ADR-032 describió: dos ramas leen el mismo listado y
 eligen el mismo número. La prueba está haciendo su trabajo.
 
-**Arreglo:** renumerar el ADR de A5 a **ADR-044**, no a 043. El 043 ya está
-tomado por la rama `claude/sirius-learning-audit-ixtr0g`. Hay que actualizar
-también las referencias cruzadas al «ADR-042» que apunten al de A5 (el cuerpo de
-la PR #207 y el propio ADR lo citan).
+**Arreglo:** renumerar el ADR de A5 al **siguiente número válido en `main` en el
+momento de corregirlo**, calculado con `uv run python scripts/siguiente_adr.py
+--solo-numero` **contra `main`**. Hay que actualizar también las referencias
+cruzadas al «ADR-042» que apunten al de A5 (el cuerpo de la PR #207 y el propio
+ADR lo citan).
+
+**No consultes ninguna rama exploratoria para elegir el número.** En particular,
+la rama `claude/sirius-learning-audit-ixtr0g` (auditoría de aprendizaje) no está
+aprobada y **no reserva numeración**: A5 es trabajo del Work Engine ya
+autorizado y tiene prioridad. Si esa rama llega a integrarse, será ella la que
+recalcule su propio número.
 
 ---
 
-## D-3 — «No pude leer el resultado» se convierte en «éxito con resultado vacío»
+## H-2 — «No pude leer el resultado» se convierte en «éxito con resultado vacío»
 
 - **Bloque:** A2 · **Rama:** `main`
 - **Gravedad:** MEDIA hoy (latente), ALTA cuando llegue el observador real de C1.
@@ -165,7 +185,7 @@ legible no puede cerrarse como `SUCCEEDED`; y el puerto tiene que poder expresar
 
 ---
 
-## D-4 — El cuerpo de la incidencia esquiva el filtro de confianza
+## H-1 — El cuerpo de la incidencia esquiva el filtro de confianza
 
 - **Bloque:** A3 · **Rama:** `main`
 - **Gravedad:** MEDIA-BAJA en la práctica, pero la función afirma algo falso.
@@ -198,7 +218,7 @@ la función deja de llamarse «de confianza» y el llamador sabe lo que recibe.
 
 ---
 
-## D-5 — Un tercio de `contexto.recuperar` no puede reportar su fallo
+## H-5 — Un tercio de `contexto.recuperar` no puede reportar su fallo
 
 - **Bloque:** A3 · **Rama:** `main` · **Gravedad:** BAJA
 
@@ -218,7 +238,7 @@ El patrón de ADR-036 está cerrado en dos de tres proveedores.
 
 ---
 
-## D-6 — `Run.worker` no cumple la arquitectura §3.3
+## H-6 (GAP-1) — `Run.worker` no cumple la arquitectura §3.3
 
 - **Bloque:** A1 (arrastrado por A2 y A4) · **Rama:** `main`
 - **Gravedad:** BAJA hoy. No urge, pero conviene cerrarlo antes de B1/C2.
