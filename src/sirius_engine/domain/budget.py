@@ -16,6 +16,7 @@ rutinaria de un gasto (ADR-043).
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
@@ -48,8 +49,14 @@ class Budget:
     consumido: float = 0.0
 
     def __post_init__(self) -> None:
+        if not math.isfinite(self.limite):
+            raise ValueError(f"el límite de presupuesto debe ser un número finito: {self.limite}")
         if self.limite < 0:
             raise ValueError(f"el límite de presupuesto no puede ser negativo: {self.limite}")
+        if not math.isfinite(self.consumido):
+            raise ValueError(
+                f"el consumo de presupuesto debe ser un número finito: {self.consumido}"
+            )
         if self.consumido < 0:
             raise ValueError(f"el consumo de presupuesto no puede ser negativo: {self.consumido}")
 
@@ -64,6 +71,8 @@ class Budget:
 
     def consumir(self, coste: float) -> Budget:
         """Registrar un gasto. Nunca muta ``self``; devuelve un ``Budget`` nuevo."""
+        if not math.isfinite(coste):
+            raise ValueError(f"el coste de un gasto debe ser un número finito: {coste}")
         if coste < 0:
             raise ValueError(f"el coste de un gasto no puede ser negativo: {coste}")
         return replace(self, consumido=self.consumido + coste)
@@ -85,4 +94,7 @@ def leer_limite_declarado(limites: Mapping[str, object]) -> float:
     limite = presupuesto["limite"]
     if not isinstance(limite, (int, float)) or isinstance(limite, bool):
         raise ValueError(f"'presupuesto.limite' debe ser numérico, recibido: {limite!r}")
-    return float(limite)
+    limite_float = float(limite)
+    if not math.isfinite(limite_float):
+        raise ValueError(f"'presupuesto.limite' debe ser un número finito, recibido: {limite!r}")
+    return limite_float

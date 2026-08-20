@@ -44,6 +44,32 @@ class WorkEngineStore(Protocol):
         """Crear un WorkItem confirmado en ``PLANNED`` y registrarlo en el diario."""
         ...
 
+    def create_and_escalate_work_item(
+        self,
+        *,
+        work_id: str,
+        peticion_original: str,
+        objetivo: str,
+        contexto_origen: tuple[str, ...],
+        entregable: str,
+        criterio_terminado: str,
+        limites: Mapping[str, object],
+        prioridad: int,
+        clase: WorkItemClass,
+        now: datetime,
+        plan: tuple[str, ...] = (),
+    ) -> WorkItem:
+        """Crear un WorkItem directamente en ``NEEDS_DECISION``, en una sola operación.
+
+        Para el caso ``CREAR_Y_ESCALAR`` de la puerta (arquitectura §8.5):
+        a diferencia de encadenar ``create_work_item`` + ``activate_work_item``
+        + ``escalate_work_item``, ningún observador puede ver ``ACTIVE`` de
+        forma intermedia -ni una caída a mitad de camino puede dejar un
+        trabajo sensible en ese estado- porque solo hay un punto de
+        persistencia para las tres transiciones.
+        """
+        ...
+
     def get_work_item(self, work_id: str) -> WorkItem | None:
         """Devolver la última versión conocida del WorkItem, o ``None`` si no existe."""
         ...

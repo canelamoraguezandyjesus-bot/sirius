@@ -50,6 +50,31 @@ def test_coste_negativo_es_invalido() -> None:
         Budget(limite=10.0).consumir(-1.0)
 
 
+@pytest.mark.parametrize("limite", (float("nan"), float("inf"), float("-inf")))
+def test_limite_no_finito_es_invalido(limite: float) -> None:
+    with pytest.raises(ValueError, match="límite"):
+        Budget(limite=limite)
+
+
+@pytest.mark.parametrize("consumido", (float("nan"), float("inf"), float("-inf")))
+def test_consumido_no_finito_es_invalido(consumido: float) -> None:
+    with pytest.raises(ValueError, match="consumo"):
+        Budget(limite=10.0, consumido=consumido)
+
+
+@pytest.mark.parametrize("coste", (float("nan"), float("inf"), float("-inf")))
+def test_coste_no_finito_es_invalido(coste: float) -> None:
+    with pytest.raises(ValueError, match="coste"):
+        Budget(limite=10.0).consumir(coste)
+
+
+def test_nan_no_elude_el_corte_por_agotamiento() -> None:
+    """CODEX-001: toda comparación ordenada con NaN es falsa; sin la guarda de
+    finitud, `Budget(limite=float("nan"))` dejaría `agotado` siempre en False."""
+    with pytest.raises(ValueError, match="límite"):
+        Budget(limite=float("nan"))
+
+
 def test_leer_limite_declarado_lee_la_forma_esperada() -> None:
     assert leer_limite_declarado({"presupuesto": {"limite": 12.5}}) == 12.5
 
@@ -62,6 +87,9 @@ def test_leer_limite_declarado_lee_la_forma_esperada() -> None:
         {"presupuesto": "no es un mapa"},
         {"presupuesto": {"limite": "no es numero"}},
         {"presupuesto": {"limite": True}},
+        {"presupuesto": {"limite": float("nan")}},
+        {"presupuesto": {"limite": float("inf")}},
+        {"presupuesto": {"limite": float("-inf")}},
     ),
 )
 def test_leer_limite_declarado_falla_explicito_si_falta_o_es_invalido(

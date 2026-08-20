@@ -5,10 +5,11 @@ Dos funciones, cada una con una regla de una sola dirección (arquitectura
 
 - :func:`registrar_gasto` es la ÚNICA función de este bloque que actualiza
   el consumo de un :class:`~sirius_engine.domain.budget.Budget`. Si el
-  gasto agota el presupuesto, corta de forma determinista: para cualquier
-  Run vivo del WorkItem y escala con la causa cerrada
-  ``GASTO_O_PRESUPUESTO``, con notificación. No existe ninguna otra vía
-  para gastar sin pasar por aquí.
+  gasto agota el presupuesto, corta de forma determinista: pide la
+  cancelación (protocolo en dos tiempos del dominio, arquitectura §3.3) de
+  TODOS los Runs vivos del WorkItem -nunca los de otro- y escala con la
+  causa cerrada ``GASTO_O_PRESUPUESTO``, con notificación. No existe
+  ninguna otra vía para gastar sin pasar por aquí.
 - :func:`resolver_fallo_tecnico` nunca produce una escalada: "los fallos
   técnicos corregibles NO escalan" (arquitectura §10) se resuelve con
   ``FAILED_SAFELY`` y diagnóstico, nunca con ``NEEDS_DECISION``.
@@ -45,7 +46,6 @@ def registrar_gasto(
     presupuesto: Budget,
     coste: float,
     now: datetime,
-    run_id: str | None = None,
     notificar: NotificationPort | None = None,
 ) -> ResultadoGasto:
     """Registrar un gasto contra ``presupuesto``. Corte determinista al agotarse.
@@ -54,6 +54,14 @@ def registrar_gasto(
     estado oculto, misma disciplina que ``now``); el nuevo valor, ya con el
     gasto aplicado, se devuelve siempre en ``ResultadoGasto.presupuesto``,
     tanto si corta como si no.
+
+    Al agotarse, pide la cancelación de TODOS los Runs vivos del WorkItem
+    -listados con ``list_runs_for_work_item``, nunca un identificador
+    aislado que el llamador pudiera omitir o que perteneciera a otro
+    WorkItem- respetando el protocolo en dos tiempos del dominio
+    (``request_run_cancellation``: la confirmación remota
+    (``confirm_run_cancelled``) le corresponde al Adapter que observa el
+    terminal remoto, no a este corte determinista).
     """
     nuevo_presupuesto = presupuesto.consumir(coste)
     if not nuevo_presupuesto.agotado:
@@ -64,10 +72,9 @@ def registrar_gasto(
             presupuesto=nuevo_presupuesto, work_item=work_item, cortado=False, escalada=None
         )
 
-    if run_id is not None:
-        run = store.get_run(run_id)
-        if run is not None and run.estado in LIVE_STATES:
-            store.fail_run(run_id, diagnostico="presupuesto agotado: corte determinista", now=now)
+    for run in store.list_runs_for_work_item(work_id):
+        if run.estado in LIVE_STATES and not run.has_unconfirmed_cancellation:
+            store.request_run_cancellation(run.run_id, now=now)
 
     work_item = store.escalate_work_item(work_id, now=now)
     escalada = construir_escalada(

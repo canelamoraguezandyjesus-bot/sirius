@@ -117,6 +117,42 @@ class InMemoryWorkEngineStore:
         )
         return self._record_work_item(work_item, "work_item_created", now=now)
 
+    def create_and_escalate_work_item(
+        self,
+        *,
+        work_id: str,
+        peticion_original: str,
+        objetivo: str,
+        contexto_origen: tuple[str, ...],
+        entregable: str,
+        criterio_terminado: str,
+        limites: Mapping[str, object],
+        prioridad: int,
+        clase: WorkItemClass,
+        now: datetime,
+        plan: tuple[str, ...] = (),
+    ) -> WorkItem:
+        if work_id in self._work_items:
+            raise DuplicateIdError("WorkItem", work_id)
+        work_item = (
+            work_item_ops.create_work_item(
+                work_id=work_id,
+                peticion_original=peticion_original,
+                objetivo=objetivo,
+                contexto_origen=contexto_origen,
+                entregable=entregable,
+                criterio_terminado=criterio_terminado,
+                limites=limites,
+                prioridad=prioridad,
+                clase=clase,
+                now=now,
+                plan=plan,
+            )
+            .activate(now=now)
+            .escalate(now=now)
+        )
+        return self._record_work_item(work_item, "work_item_created_needing_decision", now=now)
+
     def get_work_item(self, work_id: str) -> WorkItem | None:
         return self._work_items.get(work_id)
 

@@ -89,6 +89,7 @@ def rebuild_state(events: Sequence[Event]) -> RebuiltState:
 
 EventKind = Literal[
     "work_item_created",
+    "work_item_created_needing_decision",
     "work_item_activated",
     "work_item_cancelled",
     "work_item_escalated",

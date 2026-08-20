@@ -10,6 +10,12 @@ un WorkItem de este flujo puede nacer.
 ``ResultadoPuerta.NO_CREAR`` nunca llega hasta aquí como creación: no hay
 ninguna rama de este módulo que produzca un ``WorkItem`` para ese
 desenlace.
+
+``CREAR_Y_ESCALAR`` crea el WorkItem directamente en ``NEEDS_DECISION`` con
+``WorkEngineStore.create_and_escalate_work_item`` -una única operación de
+almacén, no la secuencia crear+activar+escalar-, así que ningún observador
+externo ni una caída a mitad de camino puede dejar visible un trabajo
+sensible como ``ACTIVE``, despachable.
 """
 
 from __future__ import annotations
@@ -47,9 +53,10 @@ def aplicar_decision(
 
     ``CREAR_Y_ACTIVAR`` crea y activa sin ningún paso intermedio de
     confirmación (requisito: "una orden inequívoca no pide confirmación").
-    ``CREAR_Y_ESCALAR`` crea, activa y escala en la misma llamada: el
-    WorkItem nunca queda ``ACTIVE`` de forma visible para un despachador
-    antes de escalar.
+    ``CREAR_Y_ESCALAR`` crea el WorkItem directamente en ``NEEDS_DECISION``
+    en una sola operación de almacén: nunca queda ``ACTIVE`` de forma
+    visible para un despachador, ni siquiera momentáneamente entre dos
+    llamadas.
     """
     if decision.resultado is ResultadoPuerta.NO_CREAR:
         return ResultadoIntake(work_item=None, autoridad=None, escalada=None)
@@ -57,7 +64,27 @@ def aplicar_decision(
     assert decision.datos_trabajo is not None
     datos = decision.datos_trabajo
     autoridad = autoridad_de_clase(datos.clase)
-    store.create_work_item(
+
+    if decision.resultado is ResultadoPuerta.CREAR_Y_ACTIVAR:
+        store.create_work_item(
+            work_id=work_id,
+            peticion_original=peticion_original,
+            objetivo=datos.objetivo,
+            contexto_origen=datos.contexto_origen,
+            entregable=datos.entregable,
+            criterio_terminado=datos.criterio_terminado,
+            limites=datos.limites,
+            prioridad=datos.prioridad,
+            clase=datos.clase,
+            now=now,
+            plan=datos.plan,
+        )
+        work_item = store.activate_work_item(work_id, now=now)
+        return ResultadoIntake(work_item=work_item, autoridad=autoridad, escalada=None)
+
+    assert decision.resultado is ResultadoPuerta.CREAR_Y_ESCALAR
+    assert decision.causa_escalado is not None
+    work_item = store.create_and_escalate_work_item(
         work_id=work_id,
         peticion_original=peticion_original,
         objetivo=datos.objetivo,
@@ -70,14 +97,6 @@ def aplicar_decision(
         now=now,
         plan=datos.plan,
     )
-    work_item = store.activate_work_item(work_id, now=now)
-
-    if decision.resultado is ResultadoPuerta.CREAR_Y_ACTIVAR:
-        return ResultadoIntake(work_item=work_item, autoridad=autoridad, escalada=None)
-
-    assert decision.resultado is ResultadoPuerta.CREAR_Y_ESCALAR
-    assert decision.causa_escalado is not None
-    work_item = store.escalate_work_item(work_id, now=now)
     escalada = construir_escalada(
         work_item, causa=decision.causa_escalado, motivo=decision.motivo, ocurrida_en=now
     )

@@ -95,6 +95,29 @@ def test_crear_y_escalar_deja_el_workitem_en_needs_decision(store: WorkEngineSto
     assert resultado.escalada.peticion_original == "borra la base de producción"
 
 
+def test_crear_y_escalar_nunca_deja_visible_un_estado_active_intermedio(
+    store: WorkEngineStore,
+) -> None:
+    """CODEX-003: una sola operación de almacén, sin ``work_item_activated`` observable."""
+    decision = DecisionPuerta(
+        resultado=ResultadoPuerta.CREAR_Y_ESCALAR,
+        motivo="operación destructiva",
+        datos_trabajo=_datos(),
+        causa_escalado=CausaEscalado.OPERACION_DESTRUCTIVA_O_IRREVERSIBLE,
+    )
+    aplicar_decision(
+        decision,
+        store=store,
+        work_id="WI-INTAKE-0007",
+        peticion_original="borra la base de producción",
+        now=_NOW,
+    )
+    eventos = [e for e in store.list_events() if e.aggregate_id == "WI-INTAKE-0007"]
+    assert len(eventos) == 1
+    assert eventos[0].kind == "work_item_created_needing_decision"
+    assert eventos[0].entity.estado is WorkItemState.NEEDS_DECISION
+
+
 def test_crear_y_escalar_notifica(store: WorkEngineStore) -> None:
     entregadas: list[Escalada] = []
 

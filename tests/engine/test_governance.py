@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 
 from sirius_engine.domain.budget import Budget
 from sirius_engine.domain.escalation import CausaEscalado, Escalada
-from sirius_engine.domain.run import RunOutcome, RunState
+from sirius_engine.domain.run import CancellationStatus, RunOutcome, RunState
 from sirius_engine.domain.work_item import WorkItemState
 from sirius_engine.governance import registrar_gasto, resolver_fallo_tecnico
 from sirius_engine.ports.store import WorkEngineStore
@@ -75,7 +75,13 @@ def test_gasto_que_no_agota_no_corta_nada(
 def test_agotar_el_presupuesto_corta_el_run_y_escala_con_notificacion(
     store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun
 ) -> None:
-    """A5-P4: corte determinista al agotarse, con NEEDS_DECISION y notificación."""
+    """A5-P4: corte determinista al agotarse, con NEEDS_DECISION y notificación.
+
+    "Corta" significa pedir la cancelación del Run vivo por el protocolo en
+    dos tiempos del dominio (CODEX-002): el Run queda con la cancelación
+    pedida y sin confirmar, nunca ``FAILED`` de un plumazo -confirmarlo es
+    responsabilidad del Adapter que observa el terminal remoto.
+    """
     _activar_con_run(
         store,
         work_id="WI-GOV-0002",
@@ -90,7 +96,6 @@ def test_agotar_el_presupuesto_corta_el_run_y_escala_con_notificacion(
         work_id="WI-GOV-0002",
         presupuesto=Budget(limite=10.0),
         coste=10.0,
-        run_id="RUN-GOV-0002",
         now=_NOW,
         notificar=notificador,
     )
@@ -99,8 +104,8 @@ def test_agotar_el_presupuesto_corta_el_run_y_escala_con_notificacion(
 
     run_cortado = store.get_run("RUN-GOV-0002")
     assert run_cortado is not None
-    assert run_cortado.estado is RunState.FINISHED
-    assert run_cortado.desenlace is RunOutcome.FAILED
+    assert run_cortado.estado is RunState.RUNNING
+    assert run_cortado.cancellation_status is CancellationStatus.UNCONFIRMED
 
     work_item_escalado = store.get_work_item("WI-GOV-0002")
     assert work_item_escalado is not None
@@ -127,13 +132,76 @@ def test_agotar_por_encima_del_limite_tambien_corta(
         work_id="WI-GOV-0003",
         presupuesto=Budget(limite=10.0),
         coste=15.0,
-        run_id="RUN-GOV-0003",
         now=_NOW,
     )
     assert resultado.cortado is True
     work_item = store.get_work_item("WI-GOV-0003")
     assert work_item is not None
     assert work_item.estado is WorkItemState.NEEDS_DECISION
+
+
+def test_agotar_el_presupuesto_cancela_todos_los_runs_vivos_del_work_item(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun
+) -> None:
+    """CODEX-002: no solo el Run que llegó como argumento -TODOS los vivos."""
+    make_work_item(now=_NOW, work_id="WI-GOV-0006", limites={"presupuesto": {"limite": 10.0}})
+    store.activate_work_item("WI-GOV-0006", now=_NOW)
+    make_run(
+        now=_NOW,
+        deadline=_DEADLINE,
+        run_id="RUN-GOV-0006-A",
+        work_id="WI-GOV-0006",
+        paso="paso-1",
+    )
+    store.dispatch_run("RUN-GOV-0006-A", now=_NOW)
+    store.confirm_run_running("RUN-GOV-0006-A", now=_NOW)
+    make_run(
+        now=_NOW,
+        deadline=_DEADLINE,
+        run_id="RUN-GOV-0006-B",
+        work_id="WI-GOV-0006",
+        paso="paso-2",
+    )
+    store.dispatch_run("RUN-GOV-0006-B", now=_NOW)
+
+    resultado = registrar_gasto(
+        store, work_id="WI-GOV-0006", presupuesto=Budget(limite=10.0), coste=10.0, now=_NOW
+    )
+    assert resultado.cortado is True
+
+    run_a = store.get_run("RUN-GOV-0006-A")
+    run_b = store.get_run("RUN-GOV-0006-B")
+    assert run_a is not None and run_a.cancellation_status is CancellationStatus.UNCONFIRMED
+    assert run_b is not None and run_b.cancellation_status is CancellationStatus.UNCONFIRMED
+
+
+def test_agotar_el_presupuesto_no_toca_runs_de_otro_work_item(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun
+) -> None:
+    """CODEX-002: el corte de un WorkItem nunca cancela Runs ajenos."""
+    _activar_con_run(
+        store,
+        work_id="WI-GOV-0007",
+        run_id="RUN-GOV-0007",
+        make_work_item=make_work_item,
+        make_run=make_run,
+    )
+    _activar_con_run(
+        store,
+        work_id="WI-GOV-OTRO-0007",
+        run_id="RUN-GOV-OTRO-0007",
+        make_work_item=make_work_item,
+        make_run=make_run,
+    )
+
+    registrar_gasto(
+        store, work_id="WI-GOV-0007", presupuesto=Budget(limite=10.0), coste=10.0, now=_NOW
+    )
+
+    run_ajeno = store.get_run("RUN-GOV-OTRO-0007")
+    assert run_ajeno is not None
+    assert run_ajeno.estado is RunState.RUNNING
+    assert run_ajeno.cancellation_status is CancellationStatus.NONE
 
 
 def test_fallo_tecnico_corregible_nunca_escala(
