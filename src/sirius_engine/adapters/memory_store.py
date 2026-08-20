@@ -177,6 +177,17 @@ class InMemoryWorkEngineStore:
         current = self._require_work_item(work_id)
         return self._record_work_item(current.escalate(now=now), "work_item_escalated", now=now)
 
+    def cancel_all_live_runs_and_escalate_work_item(
+        self, work_id: str, *, now: datetime
+    ) -> WorkItem:
+        for run in self.list_runs_for_work_item(work_id):
+            if run.estado in run_ops.LIVE_STATES and not run.has_unconfirmed_cancellation:
+                self.request_run_cancellation(run.run_id, now=now)
+        current = self._require_work_item(work_id)
+        if current.estado is work_item_ops.WorkItemState.NEEDS_DECISION:
+            return current
+        return self.escalate_work_item(work_id, now=now)
+
     def resolve_work_item_decision(
         self, work_id: str, *, continuar: bool, now: datetime
     ) -> WorkItem:

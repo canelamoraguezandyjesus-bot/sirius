@@ -458,6 +458,30 @@ class DurableWorkEngineStore:
             idempotency_key=idempotency_key,
         )
 
+    def cancel_all_live_runs_and_escalate_work_item(
+        self, work_id: str, *, now: datetime
+    ) -> WorkItem:
+        """Reanudable sin necesitar una clave de idempotencia explícita (CODEX-001, ronda 3).
+
+        A diferencia de `change_work_item_scope`, esta cascada no necesita
+        una clave derivada por Run: la guarda de negocio
+        (`has_unconfirmed_cancellation`) ya distingue sin ambigüedad "este
+        Run ya tiene la cancelación pedida" de "todavía no", así que
+        reintentar la llamada entera -tras una `DirectorySyncError` a mitad
+        de la cascada, cuyo registro ya quedó durable pese a la excepción
+        (mismo razonamiento que `_append_run`)- nunca repite un anexo. El
+        propio estado del WorkItem hace de guarda equivalente para el paso
+        final: si ya está en `NEEDS_DECISION`, se devuelve tal cual en vez
+        de reintentar una transición `escalate` que fallaría por ilegal.
+        """
+        for run in self.list_runs_for_work_item(work_id):
+            if run.estado in run_ops.LIVE_STATES and not run.has_unconfirmed_cancellation:
+                self.request_run_cancellation(run.run_id, now=now)
+        current = self._require_work_item(work_id)
+        if current.estado is work_item_ops.WorkItemState.NEEDS_DECISION:
+            return current
+        return self.escalate_work_item(work_id, now=now)
+
     def resolve_work_item_decision(
         self,
         work_id: str,

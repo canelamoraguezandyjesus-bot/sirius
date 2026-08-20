@@ -84,6 +84,27 @@ class WorkEngineStore(Protocol):
 
     def escalate_work_item(self, work_id: str, *, now: datetime) -> WorkItem: ...
 
+    def cancel_all_live_runs_and_escalate_work_item(
+        self, work_id: str, *, now: datetime
+    ) -> WorkItem:
+        """Pedir la cancelación de TODOS los Runs vivos del WorkItem y escalarlo.
+
+        Una sola operación reanudable, para el corte por presupuesto agotado
+        (``governance.registrar_gasto``, CODEX-001 ronda 3, incidencia
+        #206/#207): a diferencia de listar los Runs y pedir su cancelación
+        uno a uno desde fuera, terminando con un ``escalate_work_item``
+        aparte, esto es un único punto de reintento. Pedir la cancelación de
+        un Run que ya la tenía pedida es un no-op (se salta, igual que
+        ``change_work_item_scope``); si el WorkItem ya está en
+        ``NEEDS_DECISION`` -porque un intento anterior completó el corte
+        pero el llamador no llegó a saberlo antes de caer- se devuelve tal
+        cual, sin volver a intentar la transición ``escalate`` y sin lanzar.
+        Así, si una caída deja el corte a medias -algunos Runs cancelados,
+        otros no, con o sin escalar todavía-, llamarlo de nuevo con el mismo
+        ``work_id`` retoma exactamente donde se quedó hasta completarlo.
+        """
+        ...
+
     def resolve_work_item_decision(
         self, work_id: str, *, continuar: bool, now: datetime
     ) -> WorkItem: ...

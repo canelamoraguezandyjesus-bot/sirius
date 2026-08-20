@@ -204,6 +204,38 @@ def test_agotar_el_presupuesto_no_toca_runs_de_otro_work_item(
     assert run_ajeno.cancellation_status is CancellationStatus.NONE
 
 
+def test_reintentar_registrar_gasto_tras_un_corte_ya_completado_no_falla(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun
+) -> None:
+    """CODEX-001 (ronda 3): un reintento de ``registrar_gasto`` no debe fallar
+    si el corte del intento anterior ya completó -por ejemplo, porque el
+    llamador no llegó a enterarse del éxito antes de caer justo después.
+    ``cancel_all_live_runs_and_escalate_work_item`` debe devolver el
+    WorkItem ya escalado tal cual, sin reintentar una transición
+    ``escalate`` que ahora sería ilegal.
+    """
+    _activar_con_run(
+        store,
+        work_id="WI-GOV-0008",
+        run_id="RUN-GOV-0008",
+        make_work_item=make_work_item,
+        make_run=make_run,
+    )
+    primero = registrar_gasto(
+        store, work_id="WI-GOV-0008", presupuesto=Budget(limite=10.0), coste=10.0, now=_NOW
+    )
+    assert primero.cortado is True
+
+    reintento = registrar_gasto(
+        store, work_id="WI-GOV-0008", presupuesto=Budget(limite=10.0), coste=10.0, now=_NOW
+    )
+    assert reintento.cortado is True
+
+    work_item = store.get_work_item("WI-GOV-0008")
+    assert work_item is not None
+    assert work_item.estado is WorkItemState.NEEDS_DECISION
+
+
 def test_fallo_tecnico_corregible_nunca_escala(
     store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun
 ) -> None:

@@ -56,12 +56,19 @@ def registrar_gasto(
     tanto si corta como si no.
 
     Al agotarse, pide la cancelación de TODOS los Runs vivos del WorkItem
-    -listados con ``list_runs_for_work_item``, nunca un identificador
-    aislado que el llamador pudiera omitir o que perteneciera a otro
-    WorkItem- respetando el protocolo en dos tiempos del dominio
-    (``request_run_cancellation``: la confirmación remota
+    -nunca un identificador aislado que el llamador pudiera omitir o que
+    perteneciera a otro WorkItem- respetando el protocolo en dos tiempos del
+    dominio (``request_run_cancellation``: la confirmación remota
     (``confirm_run_cancelled``) le corresponde al Adapter que observa el
-    terminal remoto, no a este corte determinista).
+    terminal remoto, no a este corte determinista), en una sola operación de
+    almacén reanudable
+    (``cancel_all_live_runs_and_escalate_work_item``, CODEX-001 ronda 3,
+    incidencia #206/#207): si una caída deja el corte a medias -algunos Runs
+    cancelados, otros no, con o sin escalar todavía-, el propio almacén
+    retoma exactamente donde se quedó al reintentar esta misma llamada, sin
+    que ``registrar_gasto`` ni el llamador necesiten recordar nada del
+    corte en curso (``Budget`` sigue sin persistirse: no hace falta, porque
+    la operación de almacén no depende de él).
     """
     nuevo_presupuesto = presupuesto.consumir(coste)
     if not nuevo_presupuesto.agotado:
@@ -72,11 +79,7 @@ def registrar_gasto(
             presupuesto=nuevo_presupuesto, work_item=work_item, cortado=False, escalada=None
         )
 
-    for run in store.list_runs_for_work_item(work_id):
-        if run.estado in LIVE_STATES and not run.has_unconfirmed_cancellation:
-            store.request_run_cancellation(run.run_id, now=now)
-
-    work_item = store.escalate_work_item(work_id, now=now)
+    work_item = store.cancel_all_live_runs_and_escalate_work_item(work_id, now=now)
     escalada = construir_escalada(
         work_item,
         causa=CausaEscalado.GASTO_O_PRESUPUESTO,
