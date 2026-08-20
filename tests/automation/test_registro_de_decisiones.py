@@ -18,9 +18,10 @@ y borrar la excepción.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from pathlib import Path
 
-from siguiente_adr import duplicados, numeros_por_archivo, siguiente_numero
+from siguiente_adr import duplicados, numeros_en_ramas, numeros_por_archivo, siguiente_numero
 
 REGISTRO = Path(__file__).resolve().parents[2] / "docs" / "decisions"
 
@@ -60,3 +61,72 @@ def test_the_proposed_number_is_free_in_the_real_registry() -> None:
     propuesto = siguiente_numero(REGISTRO)
     assert propuesto not in usados
     assert propuesto > max(usados)
+
+
+# --- El número no se elige solo con lo que hay en este árbol (ADR-044) ---------
+#
+# Estas pruebas existen por un fallo real: el 20-08-2026 el arreglo de Qt y el
+# bloque A5 crearon a la vez un `ADR-042` cada uno en ramas distintas. Ninguno de
+# los dos árboles veía al otro, el guion propuso 42 a los dos, y la colisión solo
+# apareció al fusionar: Quality en rojo y la incidencia #206 atascada. El mismo
+# día estuvo a punto de repetirse con el 043.
+
+
+def _git_de_mentira(ramas: dict[str, list[str]]) -> Callable[[list[str], Path], str]:
+    """Sustituto de git que responde lo que le digamos, no lo que haya en el clon.
+
+    Se inyecta para que la prueba sea función de sus argumentos: si leyera las
+    ramas de verdad mediría el estado del clon en que corre, no el código.
+    """
+
+    def ejecutar(argumentos: list[str], _raiz: Path) -> str:
+        if argumentos[0] == "for-each-ref":
+            return "\n".join(ramas) + "\n"
+        if argumentos[0] == "ls-tree":
+            return "\n".join(ramas.get(argumentos[2], [])) + "\n"
+        return ""
+
+    return ejecutar
+
+
+def _registro(tmp_path: Path, nombres: list[str]) -> Path:
+    registro = tmp_path / "decisions"
+    registro.mkdir()
+    for nombre in nombres:
+        (registro / nombre).write_text("# adr\n", encoding="utf-8")
+    return registro
+
+
+def test_a_number_taken_by_an_unmerged_branch_is_not_offered_again(tmp_path: Path) -> None:
+    """El caso exacto que rompió main: dos ramas vivas sobre el mismo registro."""
+    registro = _registro(tmp_path, ["ADR-041-uno.md", "ADR-042-dos.md"])
+    ramas = {"refs/remotes/origin/feature/a5": ["decisions/ADR-043-de-otra-rama.md"]}
+
+    reservados = numeros_en_ramas(registro, _git_de_mentira(ramas))
+
+    assert 43 in reservados, "no vio el ADR que ya existe en otra rama"
+    assert siguiente_numero(registro, reservados) == 44
+    # Y la mitad que hace la prueba no vacua: sin mirar las ramas, colisiona.
+    assert siguiente_numero(registro) == 43
+
+
+def test_reading_the_branches_never_breaks_the_script(tmp_path: Path) -> None:
+    """Sin git, fuera de un repositorio o con el clon a medias: degrada, no aborta."""
+    registro = _registro(tmp_path, ["ADR-041-uno.md"])
+
+    def git_mudo(_argumentos: list[str], _raiz: Path) -> str:
+        return ""
+
+    assert numeros_en_ramas(registro, git_mudo) == {}
+    assert siguiente_numero(registro, {}) == 42
+
+
+def test_a_branch_that_only_has_older_adrs_does_not_move_the_number(tmp_path: Path) -> None:
+    """Una rama vieja no empuja el número hacia arriba: solo cuenta el máximo."""
+    registro = _registro(tmp_path, ["ADR-041-uno.md", "ADR-042-dos.md"])
+    ramas = {"refs/remotes/origin/vieja": ["decisions/ADR-030-antigua.md"]}
+
+    reservados = numeros_en_ramas(registro, _git_de_mentira(ramas))
+
+    assert reservados == {30: ["refs/remotes/origin/vieja"]}
+    assert siguiente_numero(registro, reservados) == 43

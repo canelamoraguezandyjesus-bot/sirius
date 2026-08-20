@@ -17,7 +17,15 @@ concurrency:
 
 jobs:
   advance:
-    if: github.event.workflow_run.event == 'pull_request'
+    # La segunda condicion importa desde que el repositorio es publico
+    # (ADR-044): la PR de un desconocido contra `main` dispara Quality EN ESTE
+    # repositorio, y su `workflow_run` llegaria aqui, que es el unico workflow
+    # alcanzable desde fuera que porta el PAT. Exigir que la rama de cabeza sea
+    # de este repositorio deja fuera las bifurcaciones sin tocar ningun camino
+    # legitimo: un bloque de Sirius siempre se implementa en una rama propia.
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

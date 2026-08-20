@@ -205,7 +205,10 @@ def test_a_wrong_number_never_destroys_an_existing_adr(
     """
     directorio = _registro(tmp_path, "ADR-028-previo.md")
     victima = directorio / "ADR-028-previo.md"
-    monkeypatch.setattr(siguiente_adr, "siguiente_numero", lambda _directorio: 28)
+    # El doble acepta `reservados` porque la firma real lo lleva desde ADR-044;
+    # lo que la prueba fija no es la firma, es que un numero equivocado no
+    # se lleve por delante un ADR ya escrito.
+    monkeypatch.setattr(siguiente_adr, "siguiente_numero", lambda _directorio, _reservados=(): 28)
     with pytest.raises(FileExistsError):
         crear_adr(directorio, "Previo", FECHA)
     assert victima.read_text(encoding="utf-8") == "# adr\n", "el ADR existente sigue intacto"

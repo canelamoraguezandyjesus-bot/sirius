@@ -77,7 +77,7 @@ Describe con precisión qué decisión falta y por qué, sin proponerla como ya 
 - No hagas `git push`.
 - No hagas `git merge` ni `git rebase`.
 - No ejecutes ninguna operación destructiva (borrado recursivo forzado, `git reset --hard`, `git clean`, borrado de ramas).
-- No toques `.claude/`, `.github/`, `.gitignore`, `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `PRIVATE_PROJECT.md` ni `docs/canonical/`.
+- No toques `.claude/`, `.github/`, `.gitignore`, `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `LICENSE` ni `docs/canonical/`.
 
 ## 9. Entrega final
 

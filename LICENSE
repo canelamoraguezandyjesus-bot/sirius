@@ -1,0 +1,25 @@
+Copyright (c) 2026 Proyecto Sirius. Todos los derechos reservados.
+
+Este repositorio es de lectura pública y de uso reservado.
+
+Se publica su código fuente para que pueda leerse, estudiarse y auditarse. Esa
+publicación NO concede ninguna licencia de uso: no se autoriza copiar, modificar,
+combinar, publicar, distribuir, sublicenciar ni vender el software ni ninguna
+parte de él, ni crear obras derivadas, sin permiso previo y por escrito del
+titular de los derechos.
+
+Las funciones propias de la plataforma en la que se aloja —consultar el
+historial, bifurcar el repositorio dentro de la propia plataforma y proponer
+cambios— se permiten en la medida en que sus condiciones de servicio las
+requieren, y solo para eso.
+
+Este repositorio incorpora componentes de terceros con sus propias licencias,
+que no quedan afectadas por este aviso. Las dependencias se declaran en
+`pyproject.toml` y se fijan en `uv.lock`. En particular, cualquier artefacto
+distribuible construido a partir de este código enlaza PySide6/Qt, bajo LGPL-3.0,
+y debe acompañarse de los avisos que esa licencia exige.
+
+EL SOFTWARE SE PROPORCIONA "TAL CUAL", SIN GARANTÍA DE NINGÚN TIPO, EXPRESA O
+IMPLÍCITA, INCLUIDAS ENTRE OTRAS LAS DE COMERCIABILIDAD, IDONEIDAD PARA UN FIN
+DETERMINADO Y NO INFRACCIÓN. EN NINGÚN CASO EL TITULAR DE LOS DERECHOS RESPONDERÁ
+DE RECLAMACIÓN, DAÑO U OTRA RESPONSABILIDAD DERIVADA DEL SOFTWARE O DE SU USO.

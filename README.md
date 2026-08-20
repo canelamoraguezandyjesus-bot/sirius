@@ -1,6 +1,9 @@
 # Sirius 0.1
 
-Repositorio privado del compañero personal de creación e ingeniería Sirius.
+Compañero personal de creación e ingeniería Sirius.
+
+Repositorio de lectura pública y uso reservado: el código está a la vista para
+poder leerse y auditarse, y no se licencia para su reutilización. Ver `LICENSE`.
 
 ## Estado actual
 
