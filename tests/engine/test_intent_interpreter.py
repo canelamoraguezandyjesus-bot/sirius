@@ -1,4 +1,4 @@
-"""interpretar_intencion_v0: heurística determinista de texto libre (ADR-042).
+"""interpretar_intencion_v0: heurística determinista de texto libre (ADR-043).
 
 Marcador de posición v0 -no es el intérprete con modelo que exige
 arquitectura §11-, pero determinista: misma entrada, misma

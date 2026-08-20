@@ -11,7 +11,7 @@ en todo el motor (arquitectura, dominio: nunca leído de un reloj real).
 obligaría a pasar por ``change_work_item_scope``, que invalida y cancela
 TODOS los Runs vivos del WorkItem como efecto colateral (arquitectura §3.2)
 -correcto para un cambio real de alcance, catastrófico para la contabilidad
-rutinaria de un gasto (ADR-042).
+rutinaria de un gasto (ADR-043).
 """
 
 from __future__ import annotations

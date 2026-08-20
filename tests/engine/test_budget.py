@@ -1,4 +1,4 @@
-"""Budget: presupuesto explícito, corte determinista al agotarse (ADR-042)."""
+"""Budget: presupuesto explícito, corte determinista al agotarse (ADR-043)."""
 
 from __future__ import annotations
 

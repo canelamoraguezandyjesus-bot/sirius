@@ -3,7 +3,7 @@
 Arquitectura §11 marca "interpretar intención y estructurar borradores" como
 algo que **necesita modelo** [M]. Este módulo NO es ese intérprete: es un
 marcador de posición v0, deliberadamente pequeño (patrones léxicos, sin
-dependencia nueva), documentado como tal (ADR-042). Existe para que la
+dependencia nueva), documentado como tal (ADR-043). Existe para que la
 interfaz v0 (:mod:`sirius_engine.session`) pueda demostrarse con texto libre
 hoy; el día que exista un intérprete real con modelo, sustituye a esta
 función sin que :mod:`sirius_engine.gate` -que solo conoce

@@ -12,7 +12,7 @@ el mismo criterio que la tabla aplica al resto de clases sin proyección en
 GitHub (investigación, documental no publicada) — ninguna tiene una
 proyección GitHub definida en ningún documento aprobado. Es la lectura
 conservadora que completa un patrón ya aprobado, no una fila nueva
-inventada (ADR-042).
+inventada (ADR-043).
 
 ``WorkItemClass.DOCUMENTACION`` se resuelve a ``MOTOR`` porque A5 nunca
 publica nada en GitHub (fuera de alcance de esta incidencia): la única

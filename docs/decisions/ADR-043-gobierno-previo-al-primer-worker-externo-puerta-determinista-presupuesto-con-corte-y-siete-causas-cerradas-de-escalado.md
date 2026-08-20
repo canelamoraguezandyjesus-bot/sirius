@@ -1,4 +1,4 @@
-# ADR-042 — Gobierno previo al primer Worker externo: puerta determinista, presupuesto con corte y siete causas cerradas de escalado
+# ADR-043 — Gobierno previo al primer Worker externo: puerta determinista, presupuesto con corte y siete causas cerradas de escalado
 
 - Estado: APROBADO — por la fusión de la PR que acompaña a esta rama.
 - Fecha: 2026-08-19
