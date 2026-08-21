@@ -1,0 +1,29 @@
+{
+  "caso": "completado_exito",
+  "run_id": "32438622606",
+  "_comando": "gh api repos/canelamoraguezandyjesus-bot/sirius/actions/runs/32438622606[/jobs]",
+  "_nota": "Camino feliz: Quality corriendo ruff+mypy+pytest completo.",
+  "run": {
+    "name": "Quality",
+    "status": "completed",
+    "conclusion": "success",
+    "created_at": "2026-08-21T02:05:36Z",
+    "run_started_at": "2026-08-21T02:05:36Z",
+    "updated_at": "2026-08-21T02:11:08Z"
+  },
+  "jobs": {
+    "total_count": 1,
+    "jobs": [
+      {
+        "name": "quality",
+        "status": "completed",
+        "conclusion": "success",
+        "runner_id": 1000001807,
+        "runner_name": "GitHub Actions 1000001807",
+        "started_at": "2026-08-21T02:05:39Z",
+        "completed_at": "2026-08-21T02:11:07Z"
+      }
+    ]
+  },
+  "logs_http": "200"
+}

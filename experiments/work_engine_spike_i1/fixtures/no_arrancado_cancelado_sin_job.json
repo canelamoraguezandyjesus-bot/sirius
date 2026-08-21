@@ -1,0 +1,19 @@
+{
+  "caso": "no_arrancado_cancelado_sin_job",
+  "run_id": "29793001470",
+  "_comando": "gh api repos/canelamoraguezandyjesus-bot/sirius/actions/runs/29793001470[/jobs]",
+  "_nota": "Variante del borde 'no arrancó': aquí sí llegó a status=completed/conclusion=cancelled en ~1s, pero total_count de jobs es 0 igual que el caso perpetuo. Pedir sus registros devuelve 200 con un zip vacío (22 bytes), NO 404 -a diferencia del caso perpetuo. Los dos comparten la señal estructural que los distingue de un run fallido de verdad (total_jobs==0), pero difieren en el código HTTP de /logs: eso demuestra que /logs por sí solo no basta como señal de 'no arrancó', hay que mirar total_jobs.",
+  "run": {
+    "name": "Revisar bloque Sirius",
+    "status": "completed",
+    "conclusion": "cancelled",
+    "created_at": "2026-07-21T01:23:47Z",
+    "run_started_at": "2026-07-21T01:23:47Z",
+    "updated_at": "2026-07-21T01:23:48Z"
+  },
+  "jobs": {
+    "total_count": 0,
+    "jobs": []
+  },
+  "logs_http": "200"
+}

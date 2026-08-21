@@ -1,0 +1,29 @@
+{
+  "caso": "cancelado",
+  "run_id": "32216181668",
+  "_comando": "gh api repos/canelamoraguezandyjesus-bot/sirius/actions/runs/32216181668[/jobs]",
+  "_nota": "Mismo incidente documentado en ADR-042 (#202): el paso de Qt cuelga hasta que GitHub cancela a los 20 minutos.",
+  "run": {
+    "name": "Quality",
+    "status": "completed",
+    "conclusion": "cancelled",
+    "created_at": "2026-08-19T04:33:19Z",
+    "run_started_at": "2026-08-19T04:33:19Z",
+    "updated_at": "2026-08-19T04:53:38Z"
+  },
+  "jobs": {
+    "total_count": 1,
+    "jobs": [
+      {
+        "name": "quality",
+        "status": "completed",
+        "conclusion": "cancelled",
+        "runner_id": 1000001704,
+        "runner_name": "GitHub Actions 1000001704",
+        "started_at": "2026-08-19T04:33:21Z",
+        "completed_at": "2026-08-19T04:53:37Z"
+      }
+    ]
+  },
+  "logs_http": "200"
+}
