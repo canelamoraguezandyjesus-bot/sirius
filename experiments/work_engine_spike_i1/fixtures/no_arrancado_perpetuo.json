@@ -1,0 +1,19 @@
+{
+  "caso": "no_arrancado_perpetuo",
+  "run_id": "32217400860",
+  "_comando": "gh api repos/canelamoraguezandyjesus-bot/sirius/actions/runs/32217400860[/jobs]",
+  "_nota": "Sigue en status=queued desde su creación (>48h al medir, 2026-08-21). Nunca se le creó ningún job: total_count=0. Pedir sus registros devuelve 404, no un cuerpo vacío.",
+  "run": {
+    "name": "Advance Sirius after Quality",
+    "status": "queued",
+    "conclusion": null,
+    "created_at": "2026-08-19T04:53:40Z",
+    "run_started_at": "2026-08-19T04:53:40Z",
+    "updated_at": "2026-08-19T04:53:40Z"
+  },
+  "jobs": {
+    "total_count": 0,
+    "jobs": []
+  },
+  "logs_http": "404"
+}

@@ -138,13 +138,146 @@ caso a caso y se revisa el diseño del clasificador entero.
 
 ## Opciones consideradas
 
+La incidencia #211 (S3, spike I1 del plan de implementación del Work Engine)
+pide medir, sobre runs reales de Actions de este repositorio, lo que decide
+las cotas de `LOST` que C1 necesitará: latencia real de transiciones de
+estado, comportamiento de los bordes (no solo el camino feliz), límites de
+peticiones, y con eso una cadencia de sondeo y cotas por etiqueta de estado
+propuestas. Depende de A3 (ya fusionado); es independiente de E1b y de la
+Fase B.
+
+## Opciones consideradas
+
+Ver la tabla completa, con motivo de adopción o descarte de cada una, en
+[`experiments/work_engine_spike_i1/RESULTADOS.md`](../../experiments/work_engine_spike_i1/RESULTADOS.md#comparativa-de-lo-considerado).
+Resumen: clasificar por campos estructurales de la API (`total_jobs`,
+`runner_id`, `conclusion`) en vez de por un umbral de duración adivinado
+(adoptado), un código HTTP de `/logs` como señal única de "no arrancó"
+(medido, no adoptado -dos runs con el mismo borde dieron códigos distintos),
+una guarda de solo lectura por revisión manual del código en vez de un
+guarda ejecutable (descartada, no sobrevive a una mutación real), y
+exhaustar el rate limit real para observar el 403 exacto (descartado
+deliberadamente, declarado NO CONCLUYENTE: el token es compartido con
+automatización concurrente de este mismo repositorio).
+
 ## Decisión
+
+Implementar la sonda en `experiments/work_engine_spike_i1/` (desechable):
+`probe.py` (`GitHubActionsProbe` sobre `gh api`, con `SoloLecturaEjecutor`
+como guarda ejecutable de solo lectura -no una promesa leída en el código-,
+mismo patrón de `ejecutar` inyectable que `sirius_engine.adapters.github_cli_mirror`
+de A3) y `boundary.py` (clasificador puro `clasificar()` + `construir_tabla()`,
+sin `gh`, sin red, sin reloj real). Seis fixtures JSON en `fixtures/`
+capturan la forma real de la API para seis runs reales de este repositorio,
+elegidos para cubrir los cuatro bordes exigidos por S3-P1 (cancelado, no
+arrancado, `skipped`, completado con éxito) más dos adicionales
+(no-arrancado-cancelado-sin-job y completado-con-fallo) que hicieron falta
+para que la tabla demostrara la distinción que pide el requisito 3 de la
+incidencia.
+
+La señal de clasificación adoptada es `total_jobs == 0` para "no arrancó"
+-comprobado primero, antes que cualquier otra rama-, no un umbral de
+duración ni el código HTTP de `/logs` en solitario: la medición encontró dos
+variantes reales de "no arrancó" (un run que se queda en `queued` de forma
+perpetua, y uno que se cancela en ~1 s sin llegar a crear ningún job) que
+comparten `total_jobs==0` pero difieren en duración y en el código de
+`/logs` (404 vs. 200 con cuerpo vacío). Cualquier señal basada en duración o
+en `/logs` en solitario habría clasificado mal al menos uno de los dos.
+
+Cotas propuestas para C1 (cadencia mínima de sondeo, señales de
+clasificación por borde, coste de presupuesto por ciclo de sondeo), cada una
+justificada por una fila de la tabla medida, en
+[`RESULTADOS.md` §"Cotas propuestas para C1"](../../experiments/work_engine_spike_i1/RESULTADOS.md#cotas-propuestas-para-c1-s3-p2).
+No las fija: la decisión de adoptarlas es de C1.
 
 ## Comprobación que la sostiene
 
-[Evidencia concreta: comandos ejecutados, resultados, enlaces exactos. Sin
-esta sección, el ADR afirma más de lo que el dato sostiene.]
+- **Tabla borde×observación** con seis filas, cada una con el comando de
+  `gh api` ejecutado de verdad y su salida recortada, en
+  [`RESULTADOS.md`](../../experiments/work_engine_spike_i1/RESULTADOS.md#tabla-borde--observación-s3-p1)
+  y reproducida por `tests/engine/test_spike_i1_boundary.py` sobre los
+  fixtures congelados. Comando: `uv run pytest tests/engine/test_spike_i1_boundary.py -v`
+  → **8 passed**.
+- **Solo lectura demostrada** (S3-P3):
+  `tests/engine/test_spike_i1_probe.py::test_solo_lectura_ejecutor_rechaza_toda_forma_de_escritura`
+  prueba nueve formas de intentar escribir (verbo explícito, endpoints
+  mutantes, banderas de cuerpo, comando de escritura de otro subcomando de
+  `gh`), todas rechazadas ANTES de llegar al ejecutor interno -afirmado con
+  un contador de llamadas, no solo con la excepción. Comando:
+  `uv run pytest tests/engine/test_spike_i1_probe.py -v` → **24 passed**.
+- **Determinismo** (S3-P4): `construir_tabla` produce el mismo resultado dos
+  veces sobre los mismos fixtures (prueba dinámica), y un guarda estático
+  basado en AST -mismo método que `tests/engine/test_boundary.py` usa para
+  la frontera `sirius`/`sirius_engine`- afirma que ni `boundary.py` ni
+  `probe.py` contienen ninguna llamada a `datetime.now`, `time.time`,
+  `time.monotonic` ni `time.perf_counter`.
+- **Tres mutaciones sembradas, vistas fallar cada una en la prueba que le
+  correspondía, y revertidas** (requisito 4 de la incidencia, detalle
+  completo con los comandos y la salida exacta en
+  [`RESULTADOS.md` §"Prueba por mutación"](../../experiments/work_engine_spike_i1/RESULTADOS.md#prueba-por-mutación-adr-001-3-requisito-4-de-la-incidencia)):
+  tratar "no arrancado" como "fallido" → 4 pruebas caen; quitar el guarda de
+  solo lectura del `__post_init__` de la sonda → 1 prueba cae
+  (`test_probe_envuelve_el_ejecutor_inyectado_con_el_guarda`); meter
+  `datetime.now()` en el camino de la medición → 1 prueba cae (el guarda
+  AST). Ninguna mutación pasó desapercibida.
+- **`tests/engine/test_boundary.py` sigue en verde sin haberlo modificado**
+  (exigido explícitamente por la incidencia): `git diff -- tests/engine/test_boundary.py`
+  sin salida.
+- **Las cuatro validaciones obligatorias + `git diff --check`, en verde**
+  sobre el repositorio completo: `uv run ruff format --check .`,
+  `uv run ruff check .`, `uv run mypy src tests` (413 ficheros,
+  `experiments/` se resuelve como dependencia de
+  `tests/engine/test_spike_i1_*.py` sin tocar `pyproject.toml`, igual que
+  hizo S1), `uv run pytest` con `QT_QPA_PLATFORM=offscreen`, y
+  `git diff --check` sin salida.
 
 ## Consecuencias
 
+- Las cotas para C1 quedan justificadas por medición real de este
+  repositorio, no por documentación de GitHub ni por intuición: cadencia
+  mínima de sondeo (≥5 s, sostenida por el desvío de cierre run↔job medido),
+  señal estructural de "no arrancó" (`total_jobs==0`, no un umbral de
+  duración -el hallazgo más importante del spike, ver "Decisión"), y coste
+  de presupuesto por ciclo de sondeo (1 punto de rate limit por endpoint).
+- **No se afirma la respuesta exacta al agotar el rate limit real (403,
+  cabeceras).** Declarado NO CONCLUYENTE en la nota de arranque y sostenido
+  en la medición: exhaustarlo de verdad dejaría sin cuota al token
+  compartido con la automatización concurrente de este mismo repositorio.
+  Queda escrito qué haría falta (un token dedicado) para quien quiera
+  cerrarlo.
+- **No se afirma el comportamiento de un run expirado por retención.** Este
+  repositorio tiene 40 días de historial; la retención por defecto de
+  GitHub Actions es de 90. Declarado NO CONCLUYENTE, no sustituido por
+  documentación de terceros (ADR-036).
+- No fija ninguna pieza del motor: C1 decide si reutiliza esta sonda, el
+  clasificador, o ninguno de los dos.
+
 ## Alternativas descartadas y por qué
+
+**Umbral de duración para "no arrancó"** (p. ej. "menos de N segundos").
+Descartada por evidencia directa: el caso "no arrancado perpetuo" medido
+lleva más de 48 horas en `queued` al momento de escribir este ADR. Cualquier
+umbral fijo lo habría clasificado mal, y es exactamente el riesgo principal
+que la incidencia declaró ("medir solo el camino feliz").
+
+**Código HTTP de `/logs` como única señal de "no arrancó".** Medido, no
+adoptado: los dos runs "no arrancados" del historial dieron códigos
+distintos (404 el perpetuo, 200 con cuerpo vacío el cancelado en ~1 s) pese
+a compartir la misma ausencia estructural de job. Se conserva como columna
+informativa de la tabla, no como criterio de clasificación.
+
+**Revisión manual del código como garantía de solo lectura**, en vez de un
+guarda ejecutable. Descartada: no es verificable en cada ejecución real, y
+una mutación que quite la comprobación (probada de verdad, ver "Comprobación
+que la sostiene") no la habría detectado sin `SoloLecturaEjecutor` corriendo
+en cada llamada.
+
+**Exhaustar el rate limit real** para observar el 403 exacto de agotamiento.
+Descartada antes de medir (nota de arranque) y confirmada al medir: el token
+de `gh` de este runner es el mismo que usa cualquier otra automatización
+concurrente de `canelamoraguezandyjesus-bot/sirius` -y el propio historial
+medido en este spike muestra que esos workflows corren constantemente.
+Vaciar la cuota real (miles de peticiones) la dejaría sin cupo para esa
+automatización hasta el reinicio de la ventana horaria: exactamente el tipo
+de efecto en un sistema compartido que el alcance de solo lectura de esta
+incidencia prohíbe.

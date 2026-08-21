@@ -1,0 +1,29 @@
+{
+  "caso": "completado_fallo",
+  "run_id": "32434919237",
+  "_comando": "gh api repos/canelamoraguezandyjesus-bot/sirius/actions/runs/32434919237[/jobs]",
+  "_nota": "Borde adicional, no exigido por S3-P1 pero necesario para que la tabla demuestre 'no arrancó' distinto de 'falló ejecutando': aquí sí hay runner_id real asignado y un job que corrió y falló.",
+  "run": {
+    "name": "Fusionar bloque Sirius",
+    "status": "completed",
+    "conclusion": "failure",
+    "created_at": "2026-08-21T01:03:04Z",
+    "run_started_at": "2026-08-21T01:03:04Z",
+    "updated_at": "2026-08-21T01:03:19Z"
+  },
+  "jobs": {
+    "total_count": 1,
+    "jobs": [
+      {
+        "name": "Fusionar si la orden es válida",
+        "status": "completed",
+        "conclusion": "failure",
+        "runner_id": 1000001802,
+        "runner_name": "GitHub Actions 1000001802",
+        "started_at": "2026-08-21T01:03:09Z",
+        "completed_at": "2026-08-21T01:03:18Z"
+      }
+    ]
+  },
+  "logs_http": "200"
+}
