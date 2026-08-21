@@ -22,13 +22,14 @@ from sirius_engine.dispatcher import (
     DispatchOutcome,
     dispatch_work_item,
 )
-from sirius_engine.domain.dispatch import MARCADOR_ORDEN_PROPIETARIO
+from sirius_engine.domain.dispatch import MARCADOR_ORDEN_PROPIETARIO, DispatchEpisode
 from sirius_engine.domain.errors import (
     ClaseNoDespachableError,
     EstadoNoDespachableError,
     OrdenNoEnlazadaError,
 )
 from sirius_engine.domain.work_item import WorkItem, WorkItemClass, WorkItemState, create_work_item
+from sirius_engine.ports.dispatch_journal import Reserva
 from sirius_engine.ports.github_writer import IncidenciaCreada
 from sirius_engine.profile_field import ProfileRef
 
@@ -305,19 +306,60 @@ def test_etiqueta_no_es_un_parametro_configurable() -> None:
         )
 
 
+@dataclasses.dataclass
+class _DiarioQueSenalaReservaEnCurso:
+    """Envuelve :class:`InMemoryDispatchJournal` y señala cuándo una llamada
+    concurrente a ``reservar`` encuentra la reserva de otra todavía en curso
+    -sin episodio grabado-.
+
+    Arrancar el hilo B no basta para garantizar que haya ejecutado
+    ``reservar()`` antes de liberar al hilo A: si el planificador reanuda
+    primero a A, este puede grabar el episodio antes de que B reserve, y B
+    tomaría entonces la ruta de "ya despachado" en vez de la ruta de
+    "esperar la reserva en curso" -la que esta prueba necesita ejercitar
+    (revisión de la incidencia #240, ronda 3, CODEX-001)-. Esta señal deja
+    esperar de forma determinista a que B haya llegado a ``reservar()``
+    mientras A sigue bloqueado, sin tocar el despachador de producción.
+    """
+
+    _delegate: InMemoryDispatchJournal
+    reserva_en_curso_detectada: threading.Event
+
+    def episode_for(self, work_id: str) -> DispatchEpisode | None:
+        return self._delegate.episode_for(work_id)
+
+    def record(self, episode: DispatchEpisode) -> None:
+        self._delegate.record(episode)
+
+    def episodes(self) -> tuple[DispatchEpisode, ...]:
+        return self._delegate.episodes()
+
+    def reservar(self, work_id: str) -> Reserva:
+        reserva = self._delegate.reservar(work_id)
+        if not reserva.obtenida and reserva.episodio is None:
+            self.reserva_en_curso_detectada.set()
+        return reserva
+
+    def liberar(self, work_id: str) -> None:
+        self._delegate.liberar(work_id)
+
+
 def test_dos_hilos_concurrentes_para_el_mismo_work_id_producen_una_sola_activacion() -> None:
     """CODEX-003: la reserva atómica decide, sin intercalado, cuál hilo escribe.
 
     Reproduce exactamente la intercalación del hallazgo: los dos hilos
     llegan a ``episode_for``/``reservar`` para el mismo ``work_id`` antes de
     que ninguno haya escrito nada. El hilo B se libera solo DESPUÉS de que el
-    hilo A ya obtuvo la reserva (``a_en_curso``) pero sigue escribiendo en
-    GitHub (bloqueado en ``continuar``): es el hueco donde, sin la reserva
-    atómica, ``episode_for`` seguía devolviendo ``None`` para B. Con la
-    reserva, B tiene que esperar el episodio de A en vez de escribir el suyo.
+    hilo A ya obtuvo la reserva (``a_en_curso``) Y de que el hilo B ya
+    intentó reservar y encontró la de A en curso (``reserva_en_curso_detectada``,
+    CODEX-001) -pero A sigue escribiendo en GitHub (bloqueado en
+    ``continuar``)-: es el hueco donde, sin la reserva atómica, ``episode_for``
+    seguía devolviendo ``None`` para B. Con la reserva, B tiene que esperar el
+    episodio de A en vez de escribir el suyo.
     """
     work_item = _work_item(evidencia=(ORDEN,))
-    journal = InMemoryDispatchJournal()
+    reserva_en_curso_detectada = threading.Event()
+    journal = _DiarioQueSenalaReservaEnCurso(InMemoryDispatchJournal(), reserva_en_curso_detectada)
     a_en_curso = threading.Event()
     continuar = threading.Event()
 
@@ -351,6 +393,7 @@ def test_dos_hilos_concurrentes_para_el_mismo_work_id_producen_una_sola_activaci
 
     hilo_b = threading.Thread(target=_despachar, args=(1,))
     hilo_b.start()
+    assert reserva_en_curso_detectada.wait(timeout=5)
 
     continuar.set()
     hilo_a.join(timeout=5)
