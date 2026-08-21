@@ -229,6 +229,25 @@ class ClaseNoDespachableError(EngineError):
         self.clase = clase
 
 
+class EstadoNoDespachableError(EngineError):
+    """Raised when the C2 dispatcher is asked to dispatch a WorkItem that is not ``ACTIVE``.
+
+    Una referencia de orden en ``evidencia`` que sobrevive a una
+    cancelación, una pausa, una escalada o una entrega no revive el
+    trabajo: solo un ``WorkItem`` de programación actualmente ``ACTIVE``
+    -el único estado en que §3.2 sitúa trabajo en curso listo para
+    despacharse- puede despacharse (incidencia #240, C2).
+    """
+
+    def __init__(self, work_id: str, estado: str) -> None:
+        super().__init__(
+            f"work item {work_id!r} is in state {estado!r}; the C2 dispatcher only "
+            "dispatches work items in state 'active'"
+        )
+        self.work_id = work_id
+        self.estado = estado
+
+
 class WorkerRuntimeConflictError(EngineError):
     """Raised when a Run is told it ran on a model or runtime other than the one on record.
 
