@@ -193,6 +193,42 @@ class EgressClassificationError(EngineError):
         self.motivo = motivo
 
 
+class OrdenNoEnlazadaError(EngineError):
+    """Raised when the dispatcher is asked to activate a WorkItem without a linked owner order.
+
+    Contrato §12.1: el motor solo puede aplicar la etiqueta de activación
+    "solo si existe una orden explícita del propietario, registrada y
+    enlazada en la evidencia de ese WorkItem. Sin orden enlazada que
+    señalar, el motor no arranca nada." Esta guarda es la que hace cumplir
+    esa condición sin excepción (incidencia #240, C2).
+    """
+
+    def __init__(self, work_id: str) -> None:
+        super().__init__(
+            f"work item {work_id!r} has no owner order linked in its evidence; "
+            "the dispatcher refuses to activate it (contrato §12.1)"
+        )
+        self.work_id = work_id
+
+
+class ClaseNoDespachableError(EngineError):
+    """Raised when the C2 dispatcher is asked to dispatch a WorkItem outside its class scope.
+
+    El bloque C2 (incidencia #240) despacha exclusivamente la clase
+    ``programacion``: es lo único que su alcance permitido autoriza. Otras
+    clases (documentacion, auditoria...) tienen su propio bloque futuro y no
+    se inventan aquí.
+    """
+
+    def __init__(self, work_id: str, clase: str) -> None:
+        super().__init__(
+            f"work item {work_id!r} has class {clase!r}; the C2 dispatcher only "
+            "handles 'programacion' work items"
+        )
+        self.work_id = work_id
+        self.clase = clase
+
+
 class WorkerRuntimeConflictError(EngineError):
     """Raised when a Run is told it ran on a model or runtime other than the one on record.
 
