@@ -47,6 +47,46 @@ class FakeRunWorldObserver:
         )
 
 
+@dataclass
+class ObserverQueFallaEnLaSegundaLlamada:
+    """Doble que cuenta invocaciones por ``run_id`` y lanza en la SEGUNDA de cada uno.
+
+    Reproduce CLAUDE-C1-REV-001: antes, ``_episodio`` volvía a llamar a
+    ``observer.check_run()`` DESPUÉS de que ``run_recovery_sweep`` ya hubiera
+    consumido la primera lectura para cerrar el Run como ``LOST``. Con la
+    corrección, ``supervise_runs`` nunca vuelve a preguntar al mundo por el
+    mismo ``run_id`` dentro de la misma pasada -así que este doble, aunque
+    esté preparado para fallar en la segunda llamada, nunca la recibe-.
+    """
+
+    observations: dict[str, RunWorldObservation] = field(default_factory=dict)
+    llamadas_por_run: dict[str, int] = field(default_factory=dict)
+
+    def check_run(self, run: Run, *, now: datetime) -> RunWorldObservation:
+        n = self.llamadas_por_run.get(run.run_id, 0) + 1
+        self.llamadas_por_run[run.run_id] = n
+        if n >= 2:
+            raise RuntimeError(f"lectura del run {run.run_id} no disponible (segunda llamada)")
+        return self.observations.get(
+            run.run_id, RunWorldObservation(status=RemoteRunStatus.PENDING)
+        )
+
+
+@dataclass
+class NotificadorQueFallaLaPrimeraVez:
+    """Doble de :class:`~sirius_engine.ports.notification.NotificationPort` para CODEX-004."""
+
+    entregas: list[object] = field(default_factory=list)
+    fallar_hasta: int = 1
+    intentos: int = 0
+
+    def notificar(self, escalada: object) -> None:
+        self.intentos += 1
+        if self.intentos <= self.fallar_hasta:
+            raise RuntimeError("fallo simulado del escritor de la interfaz activa")
+        self.entregas.append(escalada)
+
+
 def _make_motor_work_item(
     store: WorkEngineStore, *, now: datetime, work_id: str = "WI-0001"
 ) -> None:
@@ -177,6 +217,83 @@ def test_c1_p1_agotadas_las_reactivaciones_con_alternativa_configurada_sustituye
     assert nuevo.sustituye_a == "RUN-0001"
 
 
+# --- CLAUDE-C1-REV-001: el episodio no relee el mundo tras mutar el almacén -------------
+
+
+def test_el_episodio_se_registra_aunque_una_segunda_lectura_del_mundo_fallase(
+    store: WorkEngineStore, make_run: MakeRun, now: datetime
+) -> None:
+    """Antes, `_episodio` releía `observer.check_run()` DESPUÉS de aplicar la mutación
+
+    (`retry_run`/`substitute_run_worker`/`escalate_work_item`): si esa
+    segunda lectura fallaba, la excepción se propagaba sin capturar y el
+    episodio nunca se registraba, aunque la mutación ya hubiera ocurrido -la
+    siguiente pasada reintentaba la misma acción y chocaba con
+    `DuplicateIdError` para siempre. Con la corrección, `_episodio` no
+    vuelve a preguntar al mundo: este doble, preparado para fallar en su
+    segunda invocación por `run_id`, nunca la recibe.
+    """
+    _make_motor_work_item(store, now=now)
+    _deadline, momento = _dispatch_lost_run(store, make_run, now=now)
+    world = ObserverQueFallaEnLaSegundaLlamada(
+        observations={"RUN-0001": RunWorldObservation(status=RemoteRunStatus.LOST)}
+    )
+    journal = InMemorySupervisorJournal()
+
+    resultado = supervise_runs(store, world, journal, now=momento)
+
+    assert resultado.errors == ()
+    assert len(resultado.acted) == 1
+    assert world.llamadas_por_run["RUN-0001"] == 1
+    episodios = journal.episodes()
+    assert len(episodios) == 1
+    assert "lost" in episodios[0].observado
+
+
+# --- CODEX-004: una notificación fallida no pierde la escalada pendiente ----------------
+
+
+def test_notificacion_fallida_no_pierde_la_escalada_y_se_reintenta_sin_repetirla(
+    store: WorkEngineStore, make_run: MakeRun, now: datetime
+) -> None:
+    _make_motor_work_item(store, now=now)
+    _deadline, momento = _dispatch_lost_run(store, make_run, now=now)
+    world = FakeRunWorldObserver(
+        observations={"RUN-0001": RunWorldObservation(status=RemoteRunStatus.LOST)}
+    )
+    journal = InMemorySupervisorJournal()
+    politica = SupervisorPolicy(max_reactivaciones=0, max_sustituciones=0)  # fuerza ESCALATE
+    notificador = NotificadorQueFallaLaPrimeraVez()
+
+    primera = supervise_runs(
+        store, world, journal, now=momento, policy=politica, notificar=notificador
+    )
+
+    # La transición SÍ se aplicó -el WorkItem queda en NEEDS_DECISION-, pero
+    # el episodio no se registra: la notificación no llegó y no se puede
+    # afirmar que la escalada quedó entregada.
+    assert primera.acted == ()
+    assert len(primera.errors) == 1
+    assert journal.episodes() == ()
+    work_item = store.get_work_item("WI-0001")
+    assert work_item is not None
+    assert work_item.estado is WorkItemState.NEEDS_DECISION
+
+    segunda = supervise_runs(
+        store, world, journal, now=momento, policy=politica, notificar=notificador
+    )
+
+    # La segunda pasada reintenta la ENTREGA, no la transición: ni
+    # `escalate_work_item` se vuelve a invocar (habría lanzado, el WorkItem
+    # ya no está ACTIVE) ni el propietario se queda sin avisar.
+    assert len(segunda.acted) == 1
+    assert segunda.acted[0].decision is SupervisionDecision.ESCALATE
+    assert len(journal.episodes()) == 1
+    assert len(notificador.entregas) == 1
+    assert notificador.intentos == 2
+    assert store.get_work_item("WI-0001").estado is WorkItemState.NEEDS_DECISION  # type: ignore[union-attr]
+
+
 # --- C1-P2: no hay carrera con el reconciliador -----------------------------------------
 
 
@@ -269,7 +386,7 @@ def _supervise_runs_sin_marcador_de_idempotencia(
         outcome = _actuar(store, run, work_item, policy=politica, now=now, notificar=None)
         if outcome is None:
             continue
-        journal.record(_episodio(run, observer, outcome, now=now))
+        journal.record(_episodio(run, outcome, now=now))
         acted.append(outcome)
     return SupervisionSweepResult(recovery=recovery_result, acted=tuple(acted))
 

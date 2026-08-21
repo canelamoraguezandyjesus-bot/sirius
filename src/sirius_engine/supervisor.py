@@ -216,14 +216,24 @@ def _escalar(
             # un hecho externo que no ha ocurrido para ELLOS. Se difiere.
             return None
         actual = store.observe_work_item_external_fact(work_item.work_id, now=now)
-    if actual.estado is not WorkItemState.ACTIVE:
-        return None
-    escalado = store.escalate_work_item(work_item.work_id, now=now)
     motivo = (
         f"el paso {run.paso!r} se perdió tras {run.intento} intento(s) sin que la "
         "política de supervisión encontrara una alternativa: ni reintentar ni sustituir "
         "el Worker progresó (arquitectura §10, causa 7)"
     )
+    if actual.estado is WorkItemState.ACTIVE:
+        escalado = store.escalate_work_item(work_item.work_id, now=now)
+    elif actual.estado is WorkItemState.NEEDS_DECISION:
+        # La transición YA se aplicó -de esta misma acción en una pasada
+        # anterior que murió justo después de escalar, antes de que la
+        # notificación se entregara (CODEX-004)-: `escalate_work_item` no
+        # se repite (el WorkItem ya no está ACTIVE), solo se reintenta la
+        # entrega pendiente. Sin este caso, un fallo de `notificar` dejaba
+        # el propietario sin avisar para siempre: la siguiente pasada veía
+        # `NEEDS_DECISION` -no `ACTIVE`- y difería sin volver a intentarlo.
+        escalado = actual
+    else:
+        return None
     escalada = construir_escalada(
         escalado,
         causa=CausaEscalado.AUSENCIA_DE_CONVERGENCIA,
@@ -258,19 +268,28 @@ def _actuar(
     return _escalar(store, run, work_item, now=now, notificar=notificar)
 
 
-def _episodio(
-    run: Run, observer: RunWorldObserver, outcome: SupervisionOutcome, *, now: datetime
-) -> SupervisionEpisode:
-    observacion = observer.check_run(run, now=now)
-    observado = observacion.status.value
-    if observacion.diagnostico:
-        observado = f"{observado}: {observacion.diagnostico}"
+def _episodio(run: Run, outcome: SupervisionOutcome, *, now: datetime) -> SupervisionEpisode:
+    """Construye el episodio SIN volver a preguntar al mundo.
+
+    Antes se releía vía ``observer.check_run()`` para completar el texto
+    "observado", y esa segunda lectura corría DESPUÉS de que la mutación del
+    almacén (``retry_run``/``substitute_run_worker``/``escalate_work_item``)
+    ya se hubiera aplicado con éxito: si esa relectura fallaba, la excepción
+    se propagaba sin capturar (fuera del ``try``/``except`` que aísla
+    ``_actuar``), el episodio nunca llegaba a registrarse, y la siguiente
+    pasada reintentaba la MISMA acción sobre un Run ya reactivado/sustituido
+    -``DuplicateIdError`` permanente-. El desenlace que motiva esta llamada
+    ya está en el propio ``run`` (el bucle de :func:`supervise_runs` solo
+    llega aquí cuando ``run.desenlace is RunOutcome.LOST``): no hace falta
+    ninguna E/S adicional para contarlo.
+    """
+    assert run.desenlace is not None
     return SupervisionEpisode(
         run_id=run.run_id,
         work_id=run.work_id,
         paso=run.paso,
         intento=run.intento,
-        observado=observado,
+        observado=run.desenlace.value,
         decision=outcome.decision,
         motivo=outcome.motivo,
         resulting_run_id=outcome.resulting_run_id,
@@ -339,7 +358,7 @@ def supervise_runs(
         if outcome is None:
             deferred.append(run_id)
             continue
-        journal.record(_episodio(run, observer, outcome, now=now))
+        journal.record(_episodio(run, outcome, now=now))
         acted.append(outcome)
 
     return SupervisionSweepResult(

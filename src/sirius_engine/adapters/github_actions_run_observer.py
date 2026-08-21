@@ -15,8 +15,10 @@ usa la única cota absoluta que el dominio ya tenía antes de esta incidencia,
 ``Run.deadline`` (arquitectura §3.3) -así que la decisión de LOST sigue
 perteneciendo enteramente a :meth:`~sirius_engine.domain.run.Run.mark_lost`
 vía :func:`sirius_engine.recovery.run_recovery_sweep`, este observador solo
-reporta ``LOST`` cuando la ambigüedad estructural coincide con el deadline ya
-vencido-.
+reporta ``LOST`` cuando el run no tiene un desenlace remoto concluyente
+(``completed``) y esa misma cota absoluta ya venció -sin condicionarlo a la
+ambigüedad de ``total_jobs==0``: la arquitectura (§3.3, líneas 179-183) exige
+la cota como absoluta también para un job que sí llegó a arrancar-.
 """
 
 from __future__ import annotations
@@ -43,29 +45,46 @@ def _clasificar(run: Run, snapshot: RunActionsSnapshot, *, now: datetime) -> Run
                 status=RemoteRunStatus.UNKNOWN,
                 diagnostico=f"no se pudo leer total_jobs del run {run.run_id}",
             )
-        if snapshot.total_jobs == 0 and now >= run.deadline:
-            # S3-P1, fila 2 ("no arrancado, perpetuo"): sin ningún job creado
-            # y con la cota absoluta del Run ya vencida. No es una duración
-            # inventada -es la misma `Run.deadline` que ya regía antes de
-            # esta incidencia-, solo la lectura estructural que confirma que
-            # no hay nada más que esperar.
-            return RunWorldObservation(
-                status=RemoteRunStatus.LOST,
-                diagnostico=(
+        if now >= run.deadline:
+            # Arquitectura §3.3 (líneas 179-183): "LOST: el supervisor no
+            # obtiene un STATUS concluyente y la cota absoluta vence" -sin
+            # condicionar eso a `total_jobs==0`. Un job que sí llegó a
+            # arrancar (`total_jobs>0`) y sigue `in_progress`/`queued` tras
+            # el deadline es exactamente esa falta de desenlace concluyente;
+            # no es la ambigüedad de S3-P1 fila 2 (esa es solo "no arrancó"),
+            # pero la misma cota absoluta ya vencida se aplica igual.
+            if snapshot.total_jobs == 0:
+                diagnostico = (
                     f"run {run.run_id} sigue sin crear ningún job (total_jobs=0) y su "
                     "deadline ya venció"
-                ),
-            )
+                )
+            else:
+                diagnostico = (
+                    f"run {run.run_id} sigue sin desenlace concluyente "
+                    f"(total_jobs={snapshot.total_jobs}) y su deadline ya venció"
+                )
+            return RunWorldObservation(status=RemoteRunStatus.LOST, diagnostico=diagnostico)
         return RunWorldObservation(status=RemoteRunStatus.PENDING)
 
     conclusion = snapshot.conclusion
     if conclusion == "success":
-        # La API de Actions no expone el resultado estructurado del Worker
-        # (eso vive en el veredicto/PR, fuera de este puerto): se reporta
-        # SUCCEEDED sin `resultado` legible, y el barrido de recuperación ya
-        # trata eso como observación inutilizable (H-2, ADR-053) en vez de
-        # inventar un resultado vacío.
-        return RunWorldObservation(status=RemoteRunStatus.SUCCEEDED, resultado=None)
+        # La API de Actions no expone el WorkResult estructurado del Worker
+        # (eso vive en el veredicto/PR, fuera de este puerto), y este
+        # Adapter no tiene ninguna vía de resultados que lo lea. Un
+        # `WorkResult` ausente o ilegible nunca se interpreta como éxito
+        # (arquitectura §5.1, líneas 273-286): se cierra como FAILED con
+        # diagnóstico, igual que el patrón de `sirius_apply_verdict.sh`.
+        # Reportar SUCCEEDED con `resultado=None` dejaba el Run vivo para
+        # siempre -`recovery.py` trata esa combinación como observación
+        # inutilizable, y ningún observador futuro va a poder leer un
+        # resultado que este puerto nunca supo obtener-.
+        return RunWorldObservation(
+            status=RemoteRunStatus.FAILED,
+            diagnostico=(
+                f"run {run.run_id}: conclusion=success pero no hay una vía de resultados "
+                "que confirme un WorkResult estructurado"
+            ),
+        )
     if conclusion == "skipped":
         # S3-P1, fila 4: se creó un job pero su `if:` no se cumplió. Ningún
         # trabajo real se ejecutó -desenlace corregible, no una pérdida
@@ -75,6 +94,16 @@ def _clasificar(run: Run, snapshot: RunActionsSnapshot, *, now: datetime) -> Run
             diagnostico=f"run {run.run_id}: conclusion=skipped (la condición `if:` no se cumplió)",
         )
     if conclusion == "cancelled":
+        if snapshot.total_jobs is None:
+            # La lectura de `/jobs` falló para un run ya `completed`: sin
+            # `total_jobs` no se puede distinguir la fila 3 (cancelado antes
+            # de arrancar) de la fila 1 (cancelado con trabajo real), y cada
+            # una cierra distinto. No se adivina -mismo principio que la
+            # rama de arriba para el run no terminado-: se reporta UNKNOWN.
+            return RunWorldObservation(
+                status=RemoteRunStatus.UNKNOWN,
+                diagnostico=f"run {run.run_id}: cancelado pero no se pudo leer total_jobs",
+            )
         if snapshot.total_jobs == 0:
             # S3-P1, fila 3: cancelado antes de crear ningún job -"no
             # arrancó", no "se perdió"-.

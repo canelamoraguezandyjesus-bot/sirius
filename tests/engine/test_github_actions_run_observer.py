@@ -53,15 +53,24 @@ def _observer(*, run_id: str, snapshot: RunActionsSnapshot) -> GitHubActionsRunO
     return GitHubActionsRunObserver(probe=probe, repo=_REPO)
 
 
-def test_fila_5_completado_con_exito_se_reporta_succeeded_sin_resultado_leible() -> None:
-    """S3-P1 fila 5: éxito medido; la API de Actions no trae el resultado estructurado."""
+def test_fila_5_completado_con_exito_sin_via_de_resultados_se_reporta_failed() -> None:
+    """S3-P1 fila 5: éxito medido, pero sin vía de resultados que confirme un WorkResult.
+
+    Este Adapter no sabe leer el ``WorkResult`` estructurado (eso vive en el
+    veredicto/PR, fuera de este puerto): reportar ``SUCCEEDED`` con
+    ``resultado=None`` dejaba el Run vivo para siempre, porque
+    ``recovery.py`` trata esa combinación como observación inutilizable
+    (CODEX-002). Un ``WorkResult`` ausente o ilegible se cierra como
+    ``FAILED`` con diagnóstico (arquitectura §5.1, líneas 273-286), nunca
+    como éxito inventado.
+    """
     run = _run(run_id="32438622606")
     snapshot = RunActionsSnapshot(
         run_id=run.run_id, estado_run="completed", conclusion="success", total_jobs=1
     )
     observacion = _observer(run_id=run.run_id, snapshot=snapshot).check_run(run, now=_AHORA)
-    assert observacion.status is RemoteRunStatus.SUCCEEDED
-    assert observacion.resultado is None
+    assert observacion.status is RemoteRunStatus.FAILED
+    assert observacion.diagnostico is not None and "success" in observacion.diagnostico
 
 
 def test_fila_6_completado_con_fallo_se_reporta_failed() -> None:
@@ -104,6 +113,23 @@ def test_cancelado_con_trabajo_real_sin_cancel_pedido_es_una_perdida() -> None:
     assert observacion.status is RemoteRunStatus.LOST
 
 
+def test_cancelado_sin_poder_leer_total_jobs_es_unknown() -> None:
+    """CODEX-003: sin `total_jobs`, un cancelado no se puede clasificar entre la fila 1 y
+
+    la fila 3 -"cancelado antes de arrancar" (`FAILED`) y "cancelado con
+    trabajo real sin `CANCEL` pedido" (`LOST`) exigen saber si había algún
+    job creado. El dato ausente no autoriza a caer por ninguna de las dos
+    ramas medidas: se reporta `UNKNOWN`.
+    """
+    run = _run(run_id="32216181668", cancellation_status=CancellationStatus.NONE)
+    snapshot = RunActionsSnapshot(
+        run_id=run.run_id, estado_run="completed", conclusion="cancelled", total_jobs=None
+    )
+    observacion = _observer(run_id=run.run_id, snapshot=snapshot).check_run(run, now=_AHORA)
+    assert observacion.status is RemoteRunStatus.UNKNOWN
+    assert observacion.diagnostico is not None and observacion.diagnostico != ""
+
+
 def test_fila_3_no_arrancado_cancelado_sin_job_se_reporta_failed() -> None:
     """S3-P1 fila 3: `total_jobs==0` y `cancelled` -no llegó a arrancar, no es una pérdida-."""
     run = _run(run_id="29793001470")
@@ -140,14 +166,29 @@ def test_fila_2_no_arrancado_perpetuo_tras_el_deadline_es_lost() -> None:
     assert observacion.status is RemoteRunStatus.LOST
 
 
-def test_un_job_real_en_curso_es_pending_aunque_haya_vencido_el_deadline() -> None:
-    """`total_jobs>0`: hay evidencia estructural de que sí arrancó -no es la ambigüedad de S3-."""
-    run = _run(run_id="32438622606", deadline=_AHORA - timedelta(minutes=1))
+def test_un_job_real_en_curso_es_pending_antes_del_deadline() -> None:
+    """`total_jobs>0`: hay evidencia estructural de que sí arrancó, y la cota no ha vencido."""
+    run = _run(run_id="32438622606", deadline=_AHORA + timedelta(minutes=1))
     snapshot = RunActionsSnapshot(
         run_id=run.run_id, estado_run="in_progress", conclusion=None, total_jobs=1
     )
     observacion = _observer(run_id=run.run_id, snapshot=snapshot).check_run(run, now=_AHORA)
     assert observacion.status is RemoteRunStatus.PENDING
+
+
+def test_un_job_real_en_curso_es_lost_tras_vencer_el_deadline() -> None:
+    """CODEX-001: `total_jobs>0` no exime de la cota absoluta -un job que arrancó y quedó
+
+    colgado tras el deadline es la misma falta de desenlace concluyente que
+    la arquitectura (§3.3, líneas 179-183) cierra como `LOST`, aunque no sea
+    la ambigüedad de `total_jobs==0` que S3 midió.
+    """
+    run = _run(run_id="32438622606", deadline=_AHORA - timedelta(minutes=1))
+    snapshot = RunActionsSnapshot(
+        run_id=run.run_id, estado_run="in_progress", conclusion=None, total_jobs=1
+    )
+    observacion = _observer(run_id=run.run_id, snapshot=snapshot).check_run(run, now=_AHORA)
+    assert observacion.status is RemoteRunStatus.LOST
 
 
 def test_lectura_no_disponible_es_unknown_no_pending() -> None:
