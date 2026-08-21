@@ -127,3 +127,15 @@ defectos:
     ficheros:
       - src/sirius_engine/ports/dispatch_journal.py
       - src/sirius_engine/adapters/memory_dispatch_journal.py
+
+  - id: H-12
+    titulo: La guarda de orden enlazada del despachador era insatisfacible desde produccion
+    bloque: C2
+    gravedad: alta
+    estado: cerrado
+    cerrado_por: 615279d19e2643b9d8556a26e4fb52299750577f
+    ficheros:
+      - src/sirius_engine/work_intake.py
+      - src/sirius_engine/ports/store.py
+      - src/sirius_engine/domain/work_item.py
+      - src/sirius_engine/dispatch_cli.py
