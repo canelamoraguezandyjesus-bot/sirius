@@ -22,8 +22,8 @@ defectos:
     titulo: El cuerpo de la incidencia esquiva el filtro de confianza
     bloque: A3
     gravedad: media-baja
-    estado: abierto
-    incidencia: 215
+    estado: cerrado
+    cerrado_por: e92e535dd064d79761042850686916567082a092
     ficheros:
       - src/sirius_engine/mirror_projection.py
       - src/sirius_engine/ports/github_mirror.py
