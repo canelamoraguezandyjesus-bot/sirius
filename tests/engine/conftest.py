@@ -21,6 +21,7 @@ from sirius_engine.adapters.durable.store import DurableWorkEngineStore
 from sirius_engine.adapters.memory_store import InMemoryWorkEngineStore
 from sirius_engine.domain.run import Run
 from sirius_engine.domain.work_item import WorkItem, WorkItemClass
+from sirius_engine.domain.worker_ref import WorkerRef
 from sirius_engine.ports.store import WorkEngineStore
 
 
@@ -51,6 +52,16 @@ def pytest_configure(config: pytest.Config) -> None:
     if repo_root not in sys.path:
         sys.path.insert(0, repo_root)
 
+
+#: El Worker por defecto de las pruebas: adapter y perfil versionado, sin
+#: modelo ni runtime, que es lo que se sabe antes de que ningún Worker real
+#: acepte el encargo (§3.3, ADR-054). Las pruebas que necesitan un modelo
+#: concreto lo pasan explícitamente.
+WORKER_DE_PRUEBA = WorkerRef(adapter="claude-code", perfil_ref="perfiles/prueba", perfil_version=1)
+
+#: Un Worker distinto del anterior, para las pruebas de sustitución: otro
+#: adapter bajo el mismo perfil versionado.
+WORKER_ALTERNATIVO = WorkerRef(adapter="codex", perfil_ref="perfiles/prueba", perfil_version=1)
 
 MakeWorkItem = Callable[..., WorkItem]
 MakeRun = Callable[..., Run]
@@ -106,7 +117,7 @@ def make_run(store: WorkEngineStore) -> MakeRun:
         run_id: str = "RUN-0001",
         work_id: str = "WI-0001",
         paso: str = "paso-1",
-        worker: str = "claude-code",
+        worker: WorkerRef = WORKER_DE_PRUEBA,
         recurso_mutable: str | None = None,
     ) -> Run:
         return store.prepare_run(

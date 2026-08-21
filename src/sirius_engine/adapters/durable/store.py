@@ -45,6 +45,7 @@ from sirius_engine.domain.errors import (
 from sirius_engine.domain.events import AggregateType, Event, EventKind, rebuild_state
 from sirius_engine.domain.run import Run
 from sirius_engine.domain.work_item import WorkItem, WorkItemClass
+from sirius_engine.domain.worker_ref import WorkerRef
 
 # Clave interna de la cascada de invalidación de `change_work_item_scope`
 # (CODEX-001, ronda 5): una tupla, nunca una `str`. La clave pública que
@@ -862,7 +863,7 @@ class DurableWorkEngineStore:
         run_id: str,
         work_id: str,
         paso: str,
-        worker: str,
+        worker: WorkerRef,
         work_package: Mapping[str, object],
         deadline: datetime,
         now: datetime,
@@ -923,14 +924,20 @@ class DurableWorkEngineStore:
         )
 
     def confirm_run_running(
-        self, run_id: str, *, now: datetime, idempotency_key: str | None = None
+        self,
+        run_id: str,
+        *,
+        now: datetime,
+        modelo: str | None = None,
+        runtime: str | None = None,
+        idempotency_key: str | None = None,
     ) -> Run:
         cached = self._idempotent_run(idempotency_key)
         if cached is not None:
             return cached
         current = self._require_run(run_id)
         return self._append_run(
-            current.confirm_running(now=now),
+            current.confirm_running(now=now, modelo=modelo, runtime=runtime),
             "run_confirmed_running",
             now=now,
             idempotency_key=idempotency_key,
@@ -1042,7 +1049,7 @@ class DurableWorkEngineStore:
         new_run_id: str,
         deadline: datetime,
         now: datetime,
-        worker: str | None = None,
+        worker: WorkerRef | None = None,
         work_package: Mapping[str, object] | None = None,
         idempotency_key: str | None = None,
     ) -> Run:
@@ -1069,7 +1076,7 @@ class DurableWorkEngineStore:
         run_id: str,
         *,
         new_run_id: str,
-        worker: str,
+        worker: WorkerRef,
         motivo: str,
         deadline: datetime,
         now: datetime,

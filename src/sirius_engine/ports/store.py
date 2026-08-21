@@ -19,6 +19,7 @@ from typing import Protocol
 from sirius_engine.domain.events import Event
 from sirius_engine.domain.run import Run
 from sirius_engine.domain.work_item import WorkItem, WorkItemClass
+from sirius_engine.domain.worker_ref import WorkerRef
 
 
 class WorkEngineStore(Protocol):
@@ -178,7 +179,7 @@ class WorkEngineStore(Protocol):
         run_id: str,
         work_id: str,
         paso: str,
-        worker: str,
+        worker: WorkerRef,
         work_package: Mapping[str, object],
         deadline: datetime,
         now: datetime,
@@ -201,7 +202,22 @@ class WorkEngineStore(Protocol):
         """
         ...
 
-    def confirm_run_running(self, run_id: str, *, now: datetime) -> Run: ...
+    def confirm_run_running(
+        self,
+        run_id: str,
+        *,
+        now: datetime,
+        modelo: str | None = None,
+        runtime: str | None = None,
+    ) -> Run:
+        """``DISPATCHED -> RUNNING``, anotando el modelo/runtime que el Worker aceptó.
+
+        ``modelo`` y ``runtime`` son opcionales porque no todo Worker los
+        dice; omitirlos deja intacto lo que ya constara. Contradecir lo ya
+        registrado levanta
+        :class:`~sirius_engine.domain.errors.WorkerRuntimeConflictError`.
+        """
+        ...
 
     def observe_run(self, run_id: str, *, observacion: str, now: datetime) -> Run: ...
 
@@ -224,7 +240,7 @@ class WorkEngineStore(Protocol):
         new_run_id: str,
         deadline: datetime,
         now: datetime,
-        worker: str | None = None,
+        worker: WorkerRef | None = None,
         work_package: Mapping[str, object] | None = None,
     ) -> Run:
         """Crear un Run nuevo (intento+1) sobre el mismo paso que ``run_id``, sin mutarlo."""
@@ -235,7 +251,7 @@ class WorkEngineStore(Protocol):
         run_id: str,
         *,
         new_run_id: str,
-        worker: str,
+        worker: WorkerRef,
         motivo: str,
         deadline: datetime,
         now: datetime,

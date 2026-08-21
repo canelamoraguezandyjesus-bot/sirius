@@ -16,6 +16,7 @@ from typing import Any
 from sirius_engine.domain.events import AggregateType
 from sirius_engine.domain.run import CancellationStatus, Run, RunOutcome, RunState
 from sirius_engine.domain.work_item import WorkItem, WorkItemClass, WorkItemPhase, WorkItemState
+from sirius_engine.domain.worker_ref import WorkerRef
 
 
 def work_item_to_dict(work_item: WorkItem) -> dict[str, Any]:
@@ -68,12 +69,51 @@ def work_item_from_dict(data: Mapping[str, Any]) -> WorkItem:
     )
 
 
+def worker_ref_to_dict(worker: WorkerRef) -> dict[str, Any]:
+    """Serializar el ``worker`` de §3.3 con su estructura, no como una cadena.
+
+    Si el diario guardara solo el adapter, la respuesta a «¿qué modelo hizo
+    esto?» se perdería en el primer reinicio (incidencia #217, ADR-054).
+    """
+    return {
+        "adapter": worker.adapter,
+        "perfil_ref": worker.perfil_ref,
+        "perfil_version": worker.perfil_version,
+        "modelo": worker.modelo,
+        "runtime": worker.runtime,
+    }
+
+
+def worker_ref_from_dict(data: Any) -> WorkerRef:
+    """Reconstruir el ``worker``. Un diario anterior a ADR-054 no se adivina.
+
+    Antes de ADR-054 el campo era una cadena libre que no dice bajo qué
+    perfil se ejecutó el Run. Inventar aquí un perfil para poder leerla
+    convertiría un dato ausente en uno presente, que es exactamente el
+    defecto que ADR-054 cierra, así que se declara ilegible y se dice por
+    qué (ADR-036: "no pude leerlo" no es "no hay nada").
+    """
+    if not isinstance(data, Mapping):
+        raise ValueError(
+            f"journal record predates ADR-054: its Run.worker is {data!r}, a bare string that "
+            "does not say which profile ran; it cannot be read as a WorkerRef without inventing "
+            "one"
+        )
+    return WorkerRef(
+        adapter=data["adapter"],
+        perfil_ref=data["perfil_ref"],
+        perfil_version=data["perfil_version"],
+        modelo=data["modelo"],
+        runtime=data["runtime"],
+    )
+
+
 def run_to_dict(run: Run) -> dict[str, Any]:
     return {
         "run_id": run.run_id,
         "work_id": run.work_id,
         "paso": run.paso,
-        "worker": run.worker,
+        "worker": worker_ref_to_dict(run.worker),
         "work_package": dict(run.work_package),
         "intento": run.intento,
         "estado": run.estado.value,
@@ -101,7 +141,7 @@ def run_from_dict(data: Mapping[str, Any]) -> Run:
         run_id=data["run_id"],
         work_id=data["work_id"],
         paso=data["paso"],
-        worker=data["worker"],
+        worker=worker_ref_from_dict(data["worker"]),
         work_package=MappingProxyType(dict(data["work_package"])),
         intento=data["intento"],
         estado=RunState(data["estado"]),

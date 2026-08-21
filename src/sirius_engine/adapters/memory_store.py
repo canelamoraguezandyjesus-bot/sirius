@@ -25,6 +25,7 @@ from sirius_engine.domain.errors import (
 from sirius_engine.domain.events import AggregateType, Event, EventKind, rebuild_state
 from sirius_engine.domain.run import Run
 from sirius_engine.domain.work_item import WorkItem, WorkItemClass
+from sirius_engine.domain.worker_ref import WorkerRef
 
 
 class InMemoryWorkEngineStore:
@@ -358,7 +359,7 @@ class InMemoryWorkEngineStore:
         run_id: str,
         work_id: str,
         paso: str,
-        worker: str,
+        worker: WorkerRef,
         work_package: Mapping[str, object],
         deadline: datetime,
         now: datetime,
@@ -405,9 +406,20 @@ class InMemoryWorkEngineStore:
             raise MutableResourceConflictError(current.recurso_mutable, conflict.run_id)
         return self._record_run(current.dispatch(now=now), "run_dispatched", now=now)
 
-    def confirm_run_running(self, run_id: str, *, now: datetime) -> Run:
+    def confirm_run_running(
+        self,
+        run_id: str,
+        *,
+        now: datetime,
+        modelo: str | None = None,
+        runtime: str | None = None,
+    ) -> Run:
         current = self._require_run(run_id)
-        return self._record_run(current.confirm_running(now=now), "run_confirmed_running", now=now)
+        return self._record_run(
+            current.confirm_running(now=now, modelo=modelo, runtime=runtime),
+            "run_confirmed_running",
+            now=now,
+        )
 
     def observe_run(self, run_id: str, *, observacion: str, now: datetime) -> Run:
         current = self._require_run(run_id)
@@ -450,7 +462,7 @@ class InMemoryWorkEngineStore:
         new_run_id: str,
         deadline: datetime,
         now: datetime,
-        worker: str | None = None,
+        worker: WorkerRef | None = None,
         work_package: Mapping[str, object] | None = None,
     ) -> Run:
         if new_run_id in self._runs:
@@ -471,7 +483,7 @@ class InMemoryWorkEngineStore:
         run_id: str,
         *,
         new_run_id: str,
-        worker: str,
+        worker: WorkerRef,
         motivo: str,
         deadline: datetime,
         now: datetime,
