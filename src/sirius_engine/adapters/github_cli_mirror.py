@@ -24,6 +24,7 @@ from datetime import datetime
 
 from sirius_engine.ports.github_mirror import (
     Comentario,
+    CuerpoIncidencia,
     LecturaComentarios,
     LecturaCuerpo,
     LecturaEstado,
@@ -91,13 +92,39 @@ class GitHubCliMirrorReader:
         return LecturaMetadatos(estado=LecturaEstado.OK, metadatos=metadatos)
 
     def leer_cuerpo(self, *, repo: str, numero: int) -> LecturaCuerpo:
-        proceso = self._invocar(["api", f"repos/{repo}/issues/{numero}", "--jq", '.body // ""'])
+        # El autor del cuerpo viaja en la MISMA respuesta que el cuerpo
+        # (`user.login` y `author_association` de `repos/{repo}/issues/{n}`),
+        # así que transportarlo no cuesta ninguna llamada de red adicional:
+        # solo dos campos más en el `--jq`. Sin él, la proyección no puede
+        # filtrar el cuerpo por confianza -defecto H-1, incidencia #215-.
+        #
+        # El `--jq` pasa a emitir un objeto en vez de una cadena, y por eso
+        # aquí ya no vale `rstrip("\n")` sobre la salida cruda: el salto de
+        # línea que se recorta es el del final del JSON, no el del cuerpo.
+        proceso = self._invocar(
+            [
+                "api",
+                f"repos/{repo}/issues/{numero}",
+                "--jq",
+                '{login: (.user.login // ""), association: (.author_association // ""), '
+                'body: (.body // "")} | @json',
+            ]
+        )
         if proceso.returncode != 0:
             return LecturaCuerpo(
                 estado=LecturaEstado.NO_DISPONIBLE,
                 error=proceso.stderr.strip() or "gh api devolvió un error",
             )
-        return LecturaCuerpo(estado=LecturaEstado.OK, cuerpo=proceso.stdout.rstrip("\n"))
+        try:
+            crudo = json.loads(proceso.stdout)
+            cuerpo = CuerpoIncidencia(
+                autor_login=str(crudo["login"]),
+                autor_asociacion=str(crudo["association"]),
+                texto=str(crudo.get("body") or ""),
+            )
+        except (json.JSONDecodeError, KeyError, TypeError) as exc:
+            return LecturaCuerpo(estado=LecturaEstado.NO_DISPONIBLE, error=str(exc))
+        return LecturaCuerpo(estado=LecturaEstado.OK, cuerpo=cuerpo)
 
     def leer_comentarios(self, *, repo: str, numero: int) -> LecturaComentarios:
         proceso = self._invocar(

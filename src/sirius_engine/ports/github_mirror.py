@@ -31,6 +31,23 @@ class LecturaEstado(StrEnum):
     NO_DISPONIBLE = "no_disponible"
 
 
+class ContenidoConAutor(Protocol):
+    """Todo texto de terceros que entra al motor, con la identidad de quien lo escribió.
+
+    Existe para que el filtro de confianza sea UNO y se aplique igual venga el
+    texto de donde venga. Los miembros se declaran como propiedades de solo
+    lectura a propósito: así lo satisface cualquier ``dataclass(frozen=True)``
+    -que es lo que son :class:`Comentario` y :class:`CuerpoIncidencia`- sin que
+    el protocolo exija poder reasignarlos.
+    """
+
+    @property
+    def autor_login(self) -> str: ...
+
+    @property
+    def autor_asociacion(self) -> str: ...
+
+
 @dataclass(frozen=True, slots=True)
 class Comentario:
     """Un comentario de la incidencia, con los metadatos que gobiernan la confianza."""
@@ -39,6 +56,31 @@ class Comentario:
     autor_asociacion: str
     cuerpo: str
     creado_en: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class CuerpoIncidencia:
+    """El cuerpo de la incidencia CON su autor: hermano de :class:`Comentario`.
+
+    El cuerpo viajaba antes como una cadena suelta, y por eso
+    ``mirror_projection._texto_cronologico_de_confianza`` filtraba los
+    comentarios por autor y concatenaba el cuerpo sin filtrar: no tenía con
+    qué filtrarlo (defecto H-1, incidencia #215, ADR-051).
+
+    Los tres campos son obligatorios y no tienen valor por defecto. Es
+    deliberado: un campo de autor opcional habría reintroducido el defecto en
+    silencio -por omisión el cuerpo saldría "no de confianza" y desaparecería
+    del historial sin que nadie lo notara-. Aquí un cuerpo sin autor no se
+    puede construir, y eso lo comprueba mypy, no una excepción en producción.
+
+    El texto se llama ``texto`` y no ``cuerpo`` para que el acceso desde una
+    :class:`LecturaCuerpo` sea ``lectura.cuerpo.texto`` y no
+    ``lectura.cuerpo.cuerpo``.
+    """
+
+    autor_login: str
+    autor_asociacion: str
+    texto: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,7 +103,7 @@ class LecturaMetadatos:
 @dataclass(frozen=True, slots=True)
 class LecturaCuerpo:
     estado: LecturaEstado
-    cuerpo: str | None = None
+    cuerpo: CuerpoIncidencia | None = None
     error: str | None = None
 
 

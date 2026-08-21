@@ -139,12 +139,12 @@ def buscar_en_incidencias(
         cuerpo = port.leer_cuerpo(repo=repo, numero=numero)
         if cuerpo.estado is not LecturaEstado.OK or cuerpo.cuerpo is None:
             fallidas.append(f"incidencia:{numero}:cuerpo")
-        elif consulta_normalizada in cuerpo.cuerpo.casefold():
+        elif consulta_normalizada in cuerpo.cuerpo.texto.casefold():
             encontradas.append(
                 Referencia(
                     tipo="incidencia",
                     identificador=f"{repo}#{numero}:cuerpo",
-                    fragmento=_fragmento(cuerpo.cuerpo, consulta_normalizada),
+                    fragmento=_fragmento(cuerpo.cuerpo.texto, consulta_normalizada),
                 )
             )
 

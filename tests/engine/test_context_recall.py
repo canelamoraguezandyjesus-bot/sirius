@@ -31,6 +31,7 @@ from sirius_engine.context_recall import (
 from sirius_engine.domain.mirror import EspejoIlegibleError
 from sirius_engine.ports.github_mirror import (
     Comentario,
+    CuerpoIncidencia,
     LecturaComentarios,
     LecturaCuerpo,
     LecturaEstado,
@@ -120,7 +121,16 @@ def test_buscar_en_arbol_repo_fallo_de_lectura_se_reporta_no_se_esconde(
 
 def test_buscar_en_incidencias_respeta_el_filtro_de_confianza() -> None:
     puerto = FixedGitHubMirrorReader(
-        cuerpos_por_incidencia={(_REPO, 1): LecturaCuerpo(estado=LecturaEstado.OK, cuerpo="")},
+        cuerpos_por_incidencia={
+            (_REPO, 1): LecturaCuerpo(
+                estado=LecturaEstado.OK,
+                cuerpo=CuerpoIncidencia(
+                    autor_login="canelamoraguezandyjesus-bot",
+                    autor_asociacion="OWNER",
+                    texto="",
+                ),
+            )
+        },
         comentarios_por_incidencia={
             (_REPO, 1): LecturaComentarios(
                 estado=LecturaEstado.OK,
@@ -152,7 +162,16 @@ def test_buscar_en_incidencias_fallo_de_lectura_se_reporta_no_se_esconde() -> No
     no reduce el resultado a "no hay referencias ahí" sin dejar rastro.
     """
     puerto = FixedGitHubMirrorReader(
-        cuerpos_por_incidencia={(_REPO, 1): LecturaCuerpo(estado=LecturaEstado.OK, cuerpo="B12e")}
+        cuerpos_por_incidencia={
+            (_REPO, 1): LecturaCuerpo(
+                estado=LecturaEstado.OK,
+                cuerpo=CuerpoIncidencia(
+                    autor_login="canelamoraguezandyjesus-bot",
+                    autor_asociacion="OWNER",
+                    texto="B12e",
+                ),
+            )
+        }
         # incidencia 2: ni cuerpo ni comentarios configurados -> NO_DISPONIBLE
     )
     referencias, fallidas = buscar_en_incidencias(
@@ -273,7 +292,14 @@ def test_recuperar_contexto_responde_con_referencias_no_con_afirmaciones(
     (tmp_path / "PLAN.md").write_text("B12e: pendiente de decisión.\n", encoding="utf-8")
     puerto = FixedGitHubMirrorReader(
         cuerpos_por_incidencia={
-            (_REPO, 1): LecturaCuerpo(estado=LecturaEstado.OK, cuerpo="B12e se referencia aquí")
+            (_REPO, 1): LecturaCuerpo(
+                estado=LecturaEstado.OK,
+                cuerpo=CuerpoIncidencia(
+                    autor_login="canelamoraguezandyjesus-bot",
+                    autor_asociacion="OWNER",
+                    texto="B12e se referencia aquí",
+                ),
+            )
         },
         comentarios_por_incidencia={
             (_REPO, 1): LecturaComentarios(estado=LecturaEstado.OK, comentarios=())

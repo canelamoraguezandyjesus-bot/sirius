@@ -62,6 +62,8 @@ from sirius_engine.domain.mirror import (  # noqa: E402
 from sirius_engine.domain.work_item import WorkItemPhase, WorkItemState  # noqa: E402
 from sirius_engine.ports.github_mirror import (  # noqa: E402
     Comentario,
+    ContenidoConAutor,
+    CuerpoIncidencia,
     GitHubMirrorPort,
     LecturaComentarios,
     LecturaCuerpo,
@@ -77,9 +79,16 @@ from sirius_engine.ports.github_mirror import (  # noqa: E402
 _BOT_LOGIN = "github-actions[bot]"
 
 
-def es_autor_de_confianza(comentario: Comentario) -> bool:
-    """Compartido con :mod:`sirius_engine.context_recall`: un único filtro de confianza."""
-    return comentario.autor_asociacion == "OWNER" or comentario.autor_login == _BOT_LOGIN
+def es_autor_de_confianza(contenido: ContenidoConAutor) -> bool:
+    """Compartido con :mod:`sirius_engine.context_recall`: un único filtro de confianza.
+
+    Toma cualquier :class:`ContenidoConAutor` -un :class:`Comentario` o el
+    :class:`CuerpoIncidencia`- y no un ``Comentario`` concreto, para que el
+    cuerpo de la incidencia pase por ESTE predicado y no por otro parecido.
+    Cuando aceptaba solo comentarios, el cuerpo no tenía forma de llegar aquí
+    y se concatenaba sin filtrar (defecto H-1, incidencia #215, ADR-051).
+    """
+    return contenido.autor_asociacion == "OWNER" or contenido.autor_login == _BOT_LOGIN
 
 
 # --- Marcadores sin módulo Python de referencia -----------------------------
@@ -185,16 +194,41 @@ def _estado_y_fase(
     return estado, fase, False
 
 
-def _texto_cronologico_de_confianza(cuerpo: str, comentarios: Sequence[Comentario]) -> str:
-    """Cuerpo + comentarios de confianza, del más antiguo al más reciente.
+def _texto_cronologico_de_confianza(
+    cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
+) -> str:
+    """Cuerpo y comentarios DE CONFIANZA, del más antiguo al más reciente.
 
     Mismo orden que espera ``sirius_convergence.parse_round_records``/
     ``ci_failure_streak`` («el historial de la incidencia en orden
-    cronológico»): los comentarios ya llegan ordenados por el puerto, así que
-    aquí solo se filtra por confianza y se concatena.
+    cronológico»): los comentarios ya llegan ordenados por el puerto.
+
+    Dos cosas que esta función afirmaba y no hacía (defecto H-1, incidencia
+    #215, ADR-051), corregidas aquí:
+
+    - **«de confianza»**: filtraba los comentarios por autor y concatenaba el
+      cuerpo sin filtrar, porque ``LecturaCuerpo`` no transportaba autor. El
+      resultado gobierna la numeración de rondas y la racha de fallos de
+      Quality, así que quien pudiera escribir el cuerpo gobernaba las dos.
+      Ahora el cuerpo pasa por el MISMO ``es_autor_de_confianza`` que los
+      comentarios: el sitio del texto ya no cambia la respuesta.
+    - **«del más antiguo al más reciente»**: el cuerpo -lo primero que existe
+      en una incidencia- se concatenaba al FINAL. No se notaba en las rondas
+      porque ``parse_round_records`` ordena por número de marcador, pero sí en
+      ``history_after_last_resume``, que **corta** el texto por la última
+      orden de continuar: un ``sirius-convergence-reset`` en el cuerpo se leía
+      como posterior a todo y borraba el historial entero.
+
+    Un cuerpo que no supera el filtro se descarta **en silencio**, igual que
+    ya se descartaba un comentario ajeno. Es deliberado: lo que se busca es
+    que cuerpo y comentario reciban el mismo trato, no un canal de aviso
+    nuevo. Si algún día hiciera falta observarlo, es un campo de
+    ``MirroredWorkItem`` y otra decisión.
     """
-    de_confianza = [c.cuerpo for c in comentarios if es_autor_de_confianza(c)]
-    return "\n".join((*de_confianza, cuerpo))
+    partes = [c.cuerpo for c in comentarios if es_autor_de_confianza(c)]
+    if es_autor_de_confianza(cuerpo):
+        partes.insert(0, cuerpo.texto)
+    return "\n".join(partes)
 
 
 def _interpretar_rondas(texto_vigente: str) -> tuple[RondaHallazgos, ...]:
@@ -305,8 +339,8 @@ def proyectar_work_item(
         etiquetas=metadatos.metadatos.etiquetas,
         etiquetas_contradictorias=etiquetas_contradictorias,
         cerrada=metadatos.metadatos.estado_gh == "closed",
-        pr_url=_interpretar_pr_url(cuerpo.cuerpo, comentarios.comentarios),
-        head_sha=_interpretar_head_sha(cuerpo.cuerpo, comentarios.comentarios),
+        pr_url=_interpretar_pr_url(cuerpo.cuerpo.texto, comentarios.comentarios),
+        head_sha=_interpretar_head_sha(cuerpo.cuerpo.texto, comentarios.comentarios),
         rondas=_interpretar_rondas(texto_vigente),
         veredictos=_interpretar_veredictos(comentarios.comentarios),
         eventos_quality=_interpretar_eventos_quality(texto_vigente),
