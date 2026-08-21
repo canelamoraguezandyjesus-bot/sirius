@@ -32,6 +32,7 @@ import pytest
 from sirius_engine.domain.budget import Budget
 from sirius_engine.domain.errors import IllegalTransitionError
 from sirius_engine.domain.work_item import WorkItemClass, WorkItemState
+from sirius_engine.domain.worker_ref import WorkerRef
 from sirius_engine.governance import registrar_gasto, resolver_fallo_tecnico
 from sirius_engine.ports.store import WorkEngineStore
 
@@ -61,7 +62,7 @@ def _crear_con_run_vivo(store: WorkEngineStore, work_id: str, run_id: str) -> No
         run_id=run_id,
         work_id=work_id,
         paso="paso",
-        worker="worker-de-prueba",
+        worker=WorkerRef(adapter="worker-de-prueba", perfil_ref="implementer", perfil_version=1),
         work_package={},
         deadline=_DEADLINE,
         now=_NOW,

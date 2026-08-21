@@ -42,11 +42,14 @@ from platformdirs import PlatformDirs
 
 from sirius_engine.adapters.durable.store import DurableWorkEngineStore
 from sirius_engine.adapters.fixture_mirror import FixedGitHubMirrorReader
-from sirius_engine.context_recall import EntradaGitLog, leer_historial_git
+from sirius_engine.context_recall import (
+    LecturaHistorialGit,
+    leer_historial_git_como_lectura,
+)
 from sirius_engine.domain.events import AggregateType
-from sirius_engine.domain.mirror import EspejoIlegibleError
 from sirius_engine.gate import ResultadoPuerta, decidir
 from sirius_engine.intent_interpreter import interpretar_intencion_v0
+from sirius_engine.ports.github_mirror import LecturaEstado
 from sirius_engine.ports.store import WorkEngineStore
 from sirius_engine.session import ContextoRecuperarConfig, SesionCLI
 
@@ -122,15 +125,21 @@ def resolver_raiz(*, argumento: str | None, entorno: Mapping[str, str]) -> Path:
     return Path.cwd()
 
 
-def _historial(raiz: Path) -> tuple[tuple[EntradaGitLog, ...], str | None]:
-    """Leer el historial local de ``git``; si no se puede, devolverlo dicho, no vacío."""
-    try:
-        return leer_historial_git(raiz), None
-    except EspejoIlegibleError as error:
-        return (), (
-            f"  (no pude leer el historial de git en {raiz}: {error.motivo}. "
-            "Las respuestas de abajo no lo incluyen: no es que no haya nada ahí.)"
-        )
+def _historial(raiz: Path) -> tuple[LecturaHistorialGit, str | None]:
+    """Leer el historial local de ``git``; si no se puede, devolverlo dicho, no vacío.
+
+    Ya no traduce la excepción a mano: ``leer_historial_git_como_lectura`` es el
+    punto único donde ``EspejoIlegibleError`` se convierte en un dato que el
+    motor puede transportar hasta ``proveedores_fallidos`` (H-5, ADR-050). Aquí
+    solo se conserva el aviso que ve la persona, que el motor no da.
+    """
+    lectura = leer_historial_git_como_lectura(raiz)
+    if lectura.estado is LecturaEstado.OK:
+        return lectura, None
+    return lectura, (
+        f"  (no pude leer el historial de git en {raiz}: {lectura.error}. "
+        "Las respuestas de abajo no lo incluyen: no es que no haya nada ahí.)"
+    )
 
 
 # --- Un turno ------------------------------------------------------------------
@@ -240,7 +249,7 @@ def main(
 
     raiz = resolver_raiz(argumento=args.raiz, entorno=entorno)
     diario = resolver_diario(argumento=args.diario, entorno=entorno)
-    entradas_git, aviso_historial = _historial(raiz)
+    lectura_git, aviso_historial = _historial(raiz)
     store = DurableWorkEngineStore(diario)
     sesion = SesionCLI(
         store=store,
@@ -249,7 +258,7 @@ def main(
             port=FixedGitHubMirrorReader(),
             repo=REPO,
             numeros_incidencias=(),
-            entradas_git_log=entradas_git,
+            lectura_historial_git=lectura_git,
         ),
     )
 

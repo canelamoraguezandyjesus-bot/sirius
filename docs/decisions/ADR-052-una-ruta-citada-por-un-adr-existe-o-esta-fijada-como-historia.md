@@ -328,3 +328,62 @@ donde importa.
 - **Ignorar toda ruta borrada, sin lista.** Convierte el borrado en la vía fácil
   para poner la prueba en verde, que es justo el fallo que ADR-047 vino a
   impedir en el registro de defectos.
+
+---
+
+## Adenda (21-08-2026) — la categoría espejo, prevista y colocada en el sitio equivocado
+
+**Este ADR predijo el fallo y se equivocó al decidir a quién le pasaba.** En
+«Alternativas descartadas» escribió, para justificar no extender la guarda a
+todo `docs/`:
+
+> «`docs/implementation/` está lleno de documentos de plan que citan a propósito
+> rutas que aún no existen. Sería el falso positivo garantizado. **Los ADR son
+> distintos**: su sección "Comprobación que la sostiene" describe algo que **ya**
+> pasó.»
+
+El supuesto duró horas. La primera vez que la guarda corrió sobre un `main` con
+todo dentro, falló:
+
+```
+ADR-055 cita rutas que ya no existen: ['src/sirius_engine/ports/worker.py']
+```
+
+Y ADR-055 cita ese fichero **precisamente para decir que todavía no existe**:
+
+> «no existe todavía ni la puerta que arranca un trabajador (`ports/worker.py`
+> no está)»
+
+Ahí la ausencia del fichero no invalida la afirmación: **es** la afirmación.
+Exigir que exista sería exigir que el ADR mintiera.
+
+Un ADR **sí** cita rutas futuras, y no en su sección de comprobación: lo hace en
+«Consecuencias» y al acotar el alcance, para explicar dónde termina lo que
+decide. Eso es exactamente lo que hace un ADR bueno.
+
+### La decisión de la adenda
+
+Se añade `TODAVIA_NO_EXISTEN`, **separada** de `BORRADOS_A_PROPOSITO`, con la
+misma forma: ruta → lista cerrada de los ADR autorizados a citarla.
+
+Se separan en vez de reutilizar una sola lista porque no son lo mismo:
+
+| | `BORRADOS_A_PROPOSITO` | `TODAVIA_NO_EXISTEN` |
+| --- | --- | --- |
+| Historia | existió y se borró | no ha existido nunca |
+| Cuándo caduca | nunca: el pasado no cambia | **cuando el fichero se cree** |
+
+Esa segunda fila es lo que hace que fundirlas fuera un error: una excepción de
+«todavía no existe» **tiene fecha de caducidad**, y metida en la lista de
+borrados sobreviviría en silencio a la creación del fichero, dejando esa ruta
+sin vigilar para siempre. Por eso la adenda trae además
+`test_una_excepcion_de_todavia_no_existe_se_retira_cuando_el_fichero_nace`: el
+día que `ports/worker.py` exista, la batería exige quitar la excepción.
+
+### Lo que esto dice del criterio de parada original
+
+El criterio decía: «mejor que se escape una cita rota que tener una prueba que
+grita en falso». Se cumplió — la guarda gritó en falso el primer día, y el
+arreglo fue **estrechar** la guarda, no forzar el documento. Lo que faltaba no
+era prudencia, era una categoría; y la prueba de que el criterio servía es que
+señaló la dirección correcta cuando llegó el caso.
