@@ -25,12 +25,23 @@ dependencies = [
 sirius = "sirius.main:main"
 sirius-voz = "sirius.voice_doctor:main"
 sirius-obs = "sirius.capture_setup:main"
+# El comando del motor (M1, ADR-055). Hasta el 21-08-2026 M1 se daba por
+# alcanzado sin que existiera: la "interfaz v0" era una clase que solo
+# construían las pruebas. `tests/engine/test_cli_entrypoint.py` parte de esta
+# línea, así que ninguna fusión en verde puede volver a quitarla.
+sirius-motor = "sirius_engine.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.11.28,<0.12"]
 build-backend = "uv_build"
 [tool.uv.build-backend]
-module-name = "sirius"
+# Dos módulos, no uno. Con `module-name = "sirius"` el wheel construido NO
+# contenía `sirius_engine` (comprobado: 172 ficheros de `sirius/`, 0 de
+# `sirius_engine/`), y por tanto la entrada `sirius-motor` habría quedado
+# muerta en cuanto alguien instalara el paquete en vez de trabajar en editable.
+# En editable funcionaba porque el `.pth` publica `src/` entero, que es
+# justo lo que escondía el problema.
+module-name = ["sirius", "sirius_engine"]
 [dependency-groups]
 dev = [
   "httpx>=0.28,<1",
