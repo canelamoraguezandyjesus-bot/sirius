@@ -90,6 +90,7 @@ class DurableWorkEngineStore:
         self._work_items: dict[str, WorkItem] = {}
         self._runs: dict[str, Run] = {}
         self._idempotency_seen: dict[_IdempotencyKey, WorkItem | Run] = {}
+        self._pending_budget_cutoffs: dict[str, datetime] = {}
         self._next_sequence = 1
         self._load()
 
@@ -108,6 +109,30 @@ class DurableWorkEngineStore:
                 entity=entity,
             )
             self._absorb(event, idempotency_key=self._decode_idempotency_key(record))
+        self._reconcile_pending_budget_cutoffs()
+
+    def _reconcile_pending_budget_cutoffs(self) -> None:
+        """Terminar, al reabrir el almacén, un corte por presupuesto que quedó a medias.
+
+        CODEX-001 (ronda 8, incidencia #206/#207): antes de esta corrección,
+        una caída del proceso a mitad de
+        ``cancel_all_live_runs_and_escalate_work_item`` no dejaba ningún
+        rastro durable de que hubiera un corte en marcha -ni ``Budget`` (que
+        nunca se persiste, arquitectura, dominio) ni el diario decían nada-,
+        así que el WorkItem quedaba ``ACTIVE`` para siempre salvo que ALGÚN
+        llamador externo decidiera, por su cuenta, repetir exactamente esa
+        llamada. Ahora la propia cascada anexa ``work_item_budget_cutoff_started``
+        ANTES de tocar ningún Run (ver ``cancel_all_live_runs_and_escalate_work_item``),
+        así que reabrir el almacén basta para saber qué WorkItems se quedaron
+        a medias -sin ``work_item_escalated`` posterior que cierre el
+        marcador- y terminarlos aquí mismo, con el ``now`` que ya quedó
+        persistido en el propio marcador (nunca un reloj real).
+        """
+        for work_id, started_at in list(self._pending_budget_cutoffs.items()):
+            work_item = self._work_items.get(work_id)
+            if work_item is None or work_item.estado is not work_item_ops.WorkItemState.ACTIVE:
+                continue
+            self.cancel_all_live_runs_and_escalate_work_item(work_id, now=started_at)
 
     @staticmethod
     def _decode_idempotency_key(record: Mapping[str, object]) -> _IdempotencyKey | None:
@@ -180,6 +205,10 @@ class DurableWorkEngineStore:
             self._runs[event.aggregate_id] = event.entity
         if idempotency_key is not None and idempotency_key not in self._idempotency_seen:
             self._idempotency_seen[idempotency_key] = event.entity
+        if event.kind == "work_item_budget_cutoff_started":
+            self._pending_budget_cutoffs[event.aggregate_id] = event.occurred_at
+        elif event.kind == "work_item_escalated":
+            self._pending_budget_cutoffs.pop(event.aggregate_id, None)
 
     # -- diario -----------------------------------------------------------------
 
@@ -357,6 +386,53 @@ class DurableWorkEngineStore:
             work_item, "work_item_created", now=now, idempotency_key=idempotency_key
         )
 
+    def create_and_escalate_work_item(
+        self,
+        *,
+        work_id: str,
+        peticion_original: str,
+        objetivo: str,
+        contexto_origen: tuple[str, ...],
+        entregable: str,
+        criterio_terminado: str,
+        limites: Mapping[str, object],
+        prioridad: int,
+        clase: WorkItemClass,
+        now: datetime,
+        plan: tuple[str, ...] = (),
+        idempotency_key: str | None = None,
+    ) -> WorkItem:
+        if idempotency_key is not None:
+            cached = self._idempotency_seen.get(idempotency_key)
+            if cached is not None:
+                assert isinstance(cached, WorkItem)
+                return cached
+        if work_id in self._work_items:
+            raise DuplicateIdError("WorkItem", work_id)
+        work_item = (
+            work_item_ops.create_work_item(
+                work_id=work_id,
+                peticion_original=peticion_original,
+                objetivo=objetivo,
+                contexto_origen=contexto_origen,
+                entregable=entregable,
+                criterio_terminado=criterio_terminado,
+                limites=limites,
+                prioridad=prioridad,
+                clase=clase,
+                now=now,
+                plan=plan,
+            )
+            .activate(now=now)
+            .escalate(now=now)
+        )
+        return self._append_work_item(
+            work_item,
+            "work_item_created_needing_decision",
+            now=now,
+            idempotency_key=idempotency_key,
+        )
+
     def get_work_item(self, work_id: str) -> WorkItem | None:
         return self._work_items.get(work_id)
 
@@ -410,6 +486,46 @@ class DurableWorkEngineStore:
             now=now,
             idempotency_key=idempotency_key,
         )
+
+    def cancel_all_live_runs_and_escalate_work_item(
+        self, work_id: str, *, now: datetime
+    ) -> WorkItem:
+        """Reanudable sin necesitar una clave de idempotencia explícita (CODEX-001, ronda 3).
+
+        A diferencia de `change_work_item_scope`, esta cascada no necesita
+        una clave derivada por Run: la guarda de negocio
+        (`has_unconfirmed_cancellation`) ya distingue sin ambigüedad "este
+        Run ya tiene la cancelación pedida" de "todavía no", así que
+        reintentar la llamada entera -tras una `DirectorySyncError` a mitad
+        de la cascada, cuyo registro ya quedó durable pese a la excepción
+        (mismo razonamiento que `_append_run`)- nunca repite un anexo. El
+        propio estado del WorkItem hace de guarda equivalente para el paso
+        final: si ya está en `NEEDS_DECISION`, se devuelve tal cual en vez
+        de reintentar una transición `escalate` que fallaría por ilegal.
+
+        CODEX-001 (ronda 8): antes de tocar ningún Run, se anexa
+        ``work_item_budget_cutoff_started`` -si todavía no hay uno pendiente
+        para este ``work_id``- para que la INTENCIÓN del corte quede durable
+        antes de empezar la cascada, no solo sus efectos parciales. Si el
+        proceso muere antes de completarla, reabrir el almacén
+        (``_reconcile_pending_budget_cutoffs``) encuentra ese marcador sin un
+        ``work_item_escalated`` que lo cierre y termina el corte por su
+        cuenta, sin depender de que ningún llamador recuerde reintentarlo.
+        """
+        current = self._require_work_item(work_id)
+        if current.estado is work_item_ops.WorkItemState.NEEDS_DECISION:
+            return current
+        if work_id not in self._pending_budget_cutoffs:
+            self._append_work_item(
+                current, "work_item_budget_cutoff_started", now=now, idempotency_key=None
+            )
+        for run in self.list_runs_for_work_item(work_id):
+            if run.estado in run_ops.LIVE_STATES and not run.has_unconfirmed_cancellation:
+                self.request_run_cancellation(run.run_id, now=now)
+        current = self._require_work_item(work_id)
+        if current.estado is work_item_ops.WorkItemState.NEEDS_DECISION:
+            return current
+        return self.escalate_work_item(work_id, now=now)
 
     def resolve_work_item_decision(
         self,
