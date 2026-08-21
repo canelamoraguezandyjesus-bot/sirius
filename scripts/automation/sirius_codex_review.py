@@ -95,6 +95,18 @@ DEFAULT_SETTLE_SECONDS = 60
 # nueva sobre el mismo head (por ejemplo, tras una parada segura y una nueva
 # aplicación de la etiqueta) obtiene su propio disparador y NUNCA puede quedar
 # satisfecha por una revisión pedida en la ronda anterior.
+#: Prefijos con los que el conector declara que ha fallado ÉL, no que haya
+#: revisado. Enumerados recorriendo las 21 PR en las que ha comentado; ver
+#: `_declara_fallo_del_conector` para el detalle y las latencias observadas.
+#: Se anclan al inicio del cuerpo y se mantienen estrechos: reconocer de más
+#: aquí no aprueba nada, pero pararía una ronda sana antes de tiempo.
+_FALLOS_DECLARADOS_DEL_CONECTOR: tuple[str, ...] = (
+    "Codex Review: Something went wrong.",
+    "You have reached your Codex usage",
+    "To use Codex here,",
+    "Codex couldn't complete this request.",
+)
+
 TRIGGER_MARKER_TEMPLATE = "<!-- sirius-codex-review:{head}:{round_id} -->"
 
 # Solicitud de revisión: únicamente orientación de revisión, jamás instrucciones
@@ -776,6 +788,52 @@ def _check_reviews(
     return None, True
 
 
+def _declara_fallo_del_conector(body: str) -> str | None:
+    """¿El conector está diciendo que ÉL ha fallado, en vez de revisar?
+
+    Devuelve la primera línea del mensaje si lo es, o ``None``.
+
+    Por qué existe. El 21-08-2026, en la PR #233, Codex contestó a los **4
+    minutos** con «Codex Review: Something went wrong. Try again later by
+    commenting "@codex review".» El recolector no lo vio, esperó los 1200 s
+    completos y después afirmó que Codex «no entregó un resultado
+    identificable». Contestó: contestó un fallo. Se perdieron 16 minutos y una
+    ronda, y el mensaje decía exactamente qué había que hacer.
+
+    La causa mecánica: estos cuerpos no traen ``Reviewed commit:``, así que
+    ``_resolve_review_sha`` devuelve ``None`` y el filtro de SHA los descartaba
+    **antes** de mirarles el texto. No eran ambiguos: eran invisibles.
+
+    Reconocimiento por prefijo anclado al inicio, y estrecho a propósito, igual
+    que :func:`_declares_no_findings`. Las cuatro formas salen de recorrer las
+    **21 PR** en las que este conector ha comentado, no de suponerlas:
+
+    ==========================================  ====  =================
+    Prefijo                                     Casos Latencia observada
+    ==========================================  ====  =================
+    ``Codex Review: Something went wrong.``     2     4 m 08 s / 5 m 44 s
+    ``You have reached your Codex usage``       1     7 s
+    ``To use Codex here,``                      1     12 s
+    ``Codex couldn't complete this request.``   2     canal de tarea
+    ==========================================  ====  =================
+
+    Los dos cuerpos de la primera son **idénticos byte a byte** (578 caracteres).
+    Con n=2 no está probado que el bloque de error interior sea siempre «Unknown
+    error», así que lo que se reconoce es el prefijo, que sí es estable.
+
+    **Esto nunca aprueba nada.** Solo convierte una espera de 20 minutos en una
+    parada inmediata y diagnosticable. La asimetría es la de
+    ``_declares_no_findings`` pero al revés y más benigna: si el conector cambia
+    su texto de error, volvemos al comportamiento de hoy —esperar el plazo—, que
+    es exactamente lo que ya hacíamos.
+    """
+    texto = body.strip()
+    for prefijo in _FALLOS_DECLARADOS_DEL_CONECTOR:
+        if texto.startswith(prefijo):
+            return texto.splitlines()[0].strip()
+    return None
+
+
 def _declares_no_findings(body: str) -> bool:
     """¿El comentario dice, en la fórmula conocida del conector, que no halló nada?
 
@@ -841,6 +899,26 @@ def _check_conversation_comments(
         # segundos no demuestra el orden causal.
         if created_at is None or created_at <= trigger_at:
             continue
+        # ANTES del filtro de SHA, y no después, porque estos mensajes no
+        # traen `Reviewed commit:` y morían justo en esa línea sin que nadie
+        # les leyera el texto (PR #233, 21-08-2026: 16 minutos esperando a
+        # quien ya había contestado).
+        fallo = _declara_fallo_del_conector(str(comment.get("body") or ""))
+        if fallo is not None:
+            return CodexResult(
+                status="FAILED_SAFELY",
+                reason="codex-fallo-declarado",
+                reviewed_head_sha=head,
+                trigger_comment_id=trigger_id,
+                summary=(
+                    f"Codex no revisó `{head}`: declaró un fallo suyo "
+                    f"({comment.get('html_url') or comment.get('id')}) — «{fallo}». "
+                    "La ronda termina en fallo seguro sin agotar el plazo, porque "
+                    "esperar más no lo va a cambiar: el conector ya contestó. "
+                    "Volver a aplicar la etiqueta de revisión abre una ronda nueva "
+                    "con su propio disparador, que es lo que este mensaje pide."
+                ),
+            )
         declared_sha = _resolve_review_sha(comment)
         if declared_sha is None or not _sha_matches(head, declared_sha):
             continue

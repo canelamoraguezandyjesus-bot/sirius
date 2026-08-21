@@ -1665,3 +1665,114 @@ def test_un_comentario_del_conector_sobre_otro_sha_sigue_sin_resolver_la_ronda(
     result = _result(tmp_path)
     assert result["status"] == "FAILED_SAFELY"
     assert result["reason"] == "timeout", "un SHA ajeno no puede resolver la ronda"
+
+
+# -- El conector puede contestar que ha fallado ÉL ---------------------------------
+
+
+# Copiado LITERAL del comentario 5372221712 de la PR #233 (21-08-2026), incluidas
+# las comillas tipográficas y el símbolo del pie. Ruff avisa de esos caracteres
+# como ambiguos y aquí el aviso se silencia a propósito: "corregirlos" haría que
+# la prueba dejara de comprobar el mensaje real y pasara a comprobar una versión
+# saneada que el conector nunca envía. La evidencia se copia, no se limpia.
+_ERROR_REAL_DE_LA_PR_233 = (
+    "Codex Review: Something went wrong. Try again later by commenting "
+    "“@codex review”.\n\n```\nUnknown error\n```\n\n ℹ️ About Codex in GitHub\n"  # noqa: RUF001
+)
+
+
+def test_collect_para_en_cuanto_el_conector_declara_un_fallo_suyo(tmp_path: Path) -> None:
+    """Un error del conector NO es silencio, y esperar el plazo entero no lo cambia.
+
+    El 21-08-2026, en la PR #233, Codex contestó a los 4 minutos con este mismo
+    cuerpo. El recolector no lo vio -estos mensajes no traen `Reviewed commit:`,
+    así que el filtro de SHA los descartaba antes de leerles el texto- y esperó
+    los 1200 s completos para declarar «no entregó un resultado identificable».
+    Contestó: contestó un fallo. Se perdieron 16 minutos y una ronda.
+    """
+    env = _setup(tmp_path)
+    _write_state(tmp_path)
+    _seed(
+        env,
+        "issue_comments.json",
+        [
+            _trigger_comment(),
+            {
+                "id": 601,
+                "body": _ERROR_REAL_DE_LA_PR_233,
+                "created_at": AFTER_TRIGGER,
+                "user": {"login": CONNECTOR},
+                "html_url": "https://github.com/owner/repo/pull/9#issuecomment-601",
+            },
+        ],
+    )
+    r = _run_collect(env, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "FAILED_SAFELY"
+    assert result["reason"] == "codex-fallo-declarado", (
+        "un fallo declarado por el conector no puede seguir contándose como 'timeout': "
+        "el diagnóstico dice qué pasó y qué hacer, y 'no contestó' es falso"
+    )
+    assert "Something went wrong" in result["summary"]
+    # Sigue sin publicar un segundo disparador: reintentar es abrir otra ronda,
+    # y eso lo decide quien aplica la etiqueta, no el recolector.
+    assert _post_count(env) == 0
+
+
+def test_collect_no_confunde_un_fallo_del_conector_con_una_aprobacion(
+    tmp_path: Path,
+) -> None:
+    """La dirección que importa: reconocer el error NUNCA puede aprobar nada."""
+    env = _setup(tmp_path)
+    _write_state(tmp_path)
+    _seed(
+        env,
+        "issue_comments.json",
+        [
+            _trigger_comment(),
+            {
+                "id": 602,
+                "body": "You have reached your Codex usage limits for code reviews.",
+                "created_at": AFTER_TRIGGER,
+                "user": {"login": CONNECTOR},
+            },
+        ],
+    )
+    r = _run_collect(env, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] != "APPROVED"
+    assert result["status"] == "FAILED_SAFELY"
+    assert result["reason"] == "codex-fallo-declarado"
+
+
+def test_collect_no_llama_fallo_a_una_revision_normal(tmp_path: Path) -> None:
+    """La otra dirección: un comentario que sí revisa no se confunde con un fallo.
+
+    Sin esta, un reconocedor demasiado ancho pararía rondas sanas antes de
+    tiempo, que es el único daño que este cambio podría causar.
+    """
+    env = _setup(tmp_path)
+    _write_state(tmp_path)
+    _seed(
+        env,
+        "issue_comments.json",
+        [
+            _trigger_comment(),
+            {
+                "id": 603,
+                "body": (
+                    "Codex Review: Didn't find any major issues. Chef's kiss.\n\n"
+                    f"**Reviewed commit:** `{HEAD[:10]}`\n"
+                ),
+                "created_at": AFTER_TRIGGER,
+                "user": {"login": CONNECTOR},
+            },
+        ],
+    )
+    r = _run_collect(env, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["reason"] != "codex-fallo-declarado"
+    assert result["status"] == "APPROVED"
