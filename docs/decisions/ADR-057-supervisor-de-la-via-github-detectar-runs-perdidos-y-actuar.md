@@ -229,3 +229,40 @@ abierto a propósito, y las tres se apoyan en piezas del dominio que ya
 existían antes de esta incidencia (`Run.deadline`, `domain/authority.py`,
 `retry_run`/`substitute_run_worker`/`escalate_work_item`) en vez de crear
 mecanismos paralelos.
+
+## Adenda (21-08-2026): la durabilidad del diario de supervisión queda registrada como defecto H-10
+
+La ronda 4 de revisión (CODEX-001) pidió que la marca de «escalada pendiente de
+notificar» sobreviva a un reinicio del proceso, con una marca durable y
+correlacionada con el Run.
+
+El hallazgo es correcto. **No se corrige aquí**, y el corrector se detuvo en vez
+de elegir por su cuenta, porque satisfacerlo exige uno de dos diseños sin
+precedente en el repositorio —fusionar la durabilidad del diario con el diario
+de sucesos de `DurableWorkEngineStore`, acoplando dos puertos hoy independientes
+a propósito; o construir un *outbox*, que no existe en ningún sitio— y los dos
+**reabren la decisión que este mismo ADR dejó diferida**.
+
+Lo que hace que aplazarlo sea defendible y no un descuido: **el escenario todavía
+no existe**. Comprobado:
+
+```
+$ grep -c "SupervisorJournal\|supervise_runs" src/sirius_engine/cli.py
+0
+
+$ grep -rn "supervise_runs" --include="*.py" src/ | grep -v "def supervise_runs\|supervisor.py"
+(nadie)
+```
+
+Ningún punto de entrada de producción empareja el almacén durable con un diario
+de supervisión, y nadie llama al supervisor fuera de las pruebas. Es la misma
+forma que H-2: hoy latente, caro después.
+
+**Decisión del propietario, 21-08-2026:** registrarlo como defecto **H-10**
+(incidencia #236) y dejar entrar C1. Queda en
+`docs/audits/registro_defectos.yml`, así que no puede perderse: una prueba falla
+si se borra o se queda sin incidencia.
+
+**Cuándo hay que cerrarlo:** antes de que el supervisor se cablee en producción,
+es decir, antes o dentro de **C2**. Si C2 llega con esto abierto, el fallo pasa
+de inalcanzable a alcanzable en el mismo commit.
