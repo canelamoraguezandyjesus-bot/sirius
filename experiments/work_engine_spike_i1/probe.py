@@ -40,39 +40,38 @@ class EscrituraProhibida(RuntimeError):
     """La sonda intentó una llamada que no es de solo lectura."""
 
 
-# Formas largas de las banderas de escritura: la forma unida con "=" (p. ej.
-# "--method=DELETE") vale igual que la forma separada por espacio para `gh`.
-_BANDERAS_ESCRITURA_LARGAS = ("--method", "--input")
-# Formas cortas: `gh` (como cualquier CLI basada en pflag) acepta el valor
-# pegado a la bandera sin espacio ni "=" (p. ej. "-XDELETE"), así que basta
-# con que el argumento EMPIECE por la bandera corta, no que sea igual a ella.
-_BANDERAS_ESCRITURA_CORTAS = ("X", "f", "F")
-# `-i`/`--include` es la única bandera corta booleana de `gh api`: pflag deja
-# agruparla delante de una bandera que toma valor, p. ej. "-iXDELETE" equivale
-# a "-i -X DELETE" (CODEX-001, incidencia #211, PR #212). Antes de mirar si el
-# argumento empieza por una bandera de escritura hay que quitarle ese prefijo
-# booleano, si lo tiene, o "-iXDELETE" no coincide con ninguna "-X"/"-f"/"-F".
-_BANDERAS_BOOLEANAS_CORTAS_AGRUPABLES = "i"
-
-
-def _es_bandera_de_escritura(arg: str) -> bool:
-    if arg in _BANDERAS_ESCRITURA_LARGAS:
-        return True
-    if any(arg.startswith(f"{larga}=") for larga in _BANDERAS_ESCRITURA_LARGAS):
-        return True
-    if not arg.startswith("-") or arg.startswith("--"):
-        return False
-    resto = arg[1:].lstrip(_BANDERAS_BOOLEANAS_CORTAS_AGRUPABLES)
-    return any(resto.startswith(corta) for corta in _BANDERAS_ESCRITURA_CORTAS)
+# LISTA BLANCA, no lista negra. Tres rondas de revisión (incidencia #211,
+# PR #212) encontraron tres formas distintas de burlar la lista negra anterior
+# -"--method=DELETE", luego "-XDELETE" pegado, luego "-iXDELETE" agrupado- y la
+# tercera engañaba además a la detección del endpoint con `-H "Accept: ..."`.
+# Tres defectos de la misma familia son la señal de ADR-001 para dejar de
+# parchear y atacar la raíz: **intentar entender la gramática de banderas de
+# `gh` es una carrera que se pierde**, porque basta una sintaxis no prevista.
+#
+# Aquí se invierte: no se enumera lo prohibido, se enumera lo permitido. La
+# sonda solo necesita estas dos banderas, y no se acepta ninguna otra.
+_BANDERAS_PERMITIDAS = frozenset({"--silent", "--paginate"})
+# La propiedad que hace sólida la detección del endpoint, y que la versión
+# anterior no tenía: **las dos banderas permitidas son booleanas y no consumen
+# valor**. Por construcción, entonces, cualquier argumento que no empiece por
+# "-" sólo puede ser el endpoint; ya no hay que adivinar cuál lo es. Si algún
+# día hiciera falta una bandera CON valor, esta propiedad se rompe y hay que
+# revisar esta función entera, no sólo añadirla al conjunto.
 
 
 def _asegurar_solo_lectura(argv: list[str]) -> None:
     if not argv or argv[0] != "api":
         raise EscrituraProhibida(f"esta sonda solo invoca 'gh api ...': {argv!r}")
-    if any(_es_bandera_de_escritura(arg) for arg in argv):
-        raise EscrituraProhibida(f"bandera de escritura o de cuerpo prohibida: {argv!r}")
-    endpoint = next((arg for arg in argv[1:] if not arg.startswith("-")), "")
-    endpoint_sin_query = endpoint.split("?", 1)[0]
+    posicionales: list[str] = []
+    for arg in argv[1:]:
+        if arg.startswith("-"):
+            if arg not in _BANDERAS_PERMITIDAS:
+                raise EscrituraProhibida(f"bandera no permitida {arg!r}: {argv!r}")
+        else:
+            posicionales.append(arg)
+    if len(posicionales) != 1:
+        raise EscrituraProhibida(f"se esperaba exactamente un endpoint: {argv!r}")
+    endpoint_sin_query = posicionales[0].split("?", 1)[0]
     if any(sufijo in endpoint_sin_query for sufijo in _ENDPOINTS_ESCRITURA):
         raise EscrituraProhibida(f"endpoint de escritura prohibido: {argv!r}")
 
