@@ -100,8 +100,11 @@ cada una; comando ejecutado: `uv run pytest tests/engine/test_spike_i1_boundary.
 4. **El run-level `updated_at` va detrás del job-level `completed_at` por 1
    segundo** en las tres filas completadas con éxito/fallo/cancelación
    (filas 1, 5, 6): la API tarda un instante en propagar "el job terminó" a
-   "el run terminó". Cadencia de sondeo más fina que ese margen no gana
-   nada.
+   "el run terminó". **Eso es todo lo que este dato dice.** No dice nada
+   sobre qué cadencia de sondeo conviene: de un desfase de propagación de 1 s
+   no se deriva que sondear cada 2, 5 o 15 s sea equivalente. La primera
+   versión de este informe hacía ese salto y la ronda 4 lo retractó; ver
+   "Cotas propuestas para C1".
 5. **Latencia cola→runner observada: 2-5 s** en los tres casos que sí
    llegaron a tener un job (filas 1, 5, 6). Nunca 0.
 
@@ -294,7 +297,8 @@ capas:
 Si C1 reutiliza esta sonda, hereda gratis: el guarda de solo lectura
 (`SoloLecturaEjecutor`), la distinción estructural "no arrancó" vs.
 "`skipped`" vs. "falló" vs. "cancelado" por campos de la API en vez de
-umbrales de duración, y la cadencia mínima razonada (≥5 s). Lo que C1 tiene
+umbrales de duración, y las mediciones crudas de latencia. **No hereda
+ninguna cadencia**: la cota de cadencia quedó NO CONCLUYENTE. Lo que C1 tiene
 que resolver que este spike deja fuera a propósito: sondeo concurrente de
 múltiples runs, una política de reintento/backoff ante `NO_DISPONIBLE`
 real (esta sonda solo reporta el estado, no reintenta -mismo principio que

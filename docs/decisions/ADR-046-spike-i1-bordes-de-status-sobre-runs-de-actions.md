@@ -233,12 +233,26 @@ No las fija: la decisión de adoptarlas es de C1.
 
 ## Consecuencias
 
-- Las cotas para C1 quedan justificadas por medición real de este
-  repositorio, no por documentación de GitHub ni por intuición: cadencia
-  mínima de sondeo (≥5 s, sostenida por el desvío de cierre run↔job medido),
-  señal estructural de "no arrancó" (`total_jobs==0`, no un umbral de
-  duración -el hallazgo más importante del spike, ver "Decisión"), y coste
-  de presupuesto por ciclo de sondeo (1 punto de rate limit por endpoint).
+- **Lo que queda justificado por medición real** de este repositorio, no por
+  documentación de GitHub ni por intuición: la señal estructural de "no
+  arrancó" (`total_jobs==0`, no un umbral de duración -el hallazgo más
+  importante del spike, ver "Decisión") y el coste de presupuesto por ciclo
+  de sondeo (1 punto de rate limit por endpoint leído).
+- **Y dos cotas que este spike NO entrega, declaradas así a propósito**
+  (rondas 4 y 5 de revisión, hallazgos CODEX-002 y CLAUDE-REVISOR-001):
+  - **Cadencia mínima de sondeo: NO CONCLUYENTE.** Lo único medido es un
+    desvío de propagación run↔job de **1 s**; de ahí no se deriva ningún
+    intervalo. Una versión anterior de este ADR publicaba «≥5 s» como
+    sostenida por la medición, y eso era un salto sin derivación: **C1 no
+    debe tomar de aquí ninguna cifra de cadencia.**
+  - **Cota de `LOST`: NO CONCLUYENTE.** `total_jobs == 0` está medido como
+    señal de "todavía no existe job", pero una observación puntual no
+    distingue un run recién encolado de uno atascado 48 h. Convertir esa
+    señal en cota de `LOST` exige medir la evolución en el tiempo, y eso no
+    cabe en un spike de solo lectura sobre el historial.
+  El detalle y qué haría falta para cerrarlas, en la tabla "Cotas propuestas
+  para C1" de `experiments/work_engine_spike_i1/RESULTADOS.md`, que es la
+  fuente; este ADR no puede decir nada distinto de ella.
 - **No se afirma la respuesta exacta al agotar el rate limit real (403,
   cabeceras).** Declarado NO CONCLUYENTE en la nota de arranque y sostenido
   en la medición: exhaustarlo de verdad dejaría sin cuota al token
