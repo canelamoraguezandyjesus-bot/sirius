@@ -60,6 +60,13 @@ class _EjecutorContador:
         ["api", "-fbody=hola", "repos/owner/repo/issues/1/comments"],
         ["api", "-Fbody=hola", "repos/owner/repo/issues/1/comments"],
         ["api", "--input=body.json", "repos/owner/repo/actions/runs/1/cancel"],
+        # Banderas cortas agrupadas: pflag deja anteponer "-i" (booleana) a una
+        # bandera que toma valor, así que "-iXDELETE" equivale a "-i -X DELETE"
+        # aunque el argumento no empiece por "-X" (CODEX-001, incidencia #211,
+        # PR #212).
+        ["api", "-iXDELETE", "repos/owner/repo/actions/runs/1"],
+        ["api", "-ifbody=hola", "repos/owner/repo/issues/1/comments"],
+        ["api", "-iFbody=hola", "repos/owner/repo/issues/1/comments"],
         [],
     ],
 )
@@ -81,6 +88,9 @@ def test_solo_lectura_ejecutor_rechaza_toda_forma_de_escritura(argv: list[str]) 
         ["api", "--silent", "repos/owner/repo/actions/runs/1/logs"],
         ["api", "rate_limit"],
         ["api", "--paginate", "repos/owner/repo/actions/runs?per_page=100"],
+        # "-i" (--include) es la única bandera corta booleana de `gh api`: sola,
+        # sin nada agrupado detrás, sigue siendo una lectura legítima.
+        ["api", "-i", "repos/owner/repo/actions/runs/1"],
     ],
 )
 def test_solo_lectura_ejecutor_permite_lecturas_normales(argv: list[str]) -> None:

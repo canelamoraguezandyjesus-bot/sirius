@@ -46,7 +46,13 @@ _BANDERAS_ESCRITURA_LARGAS = ("--method", "--input")
 # Formas cortas: `gh` (como cualquier CLI basada en pflag) acepta el valor
 # pegado a la bandera sin espacio ni "=" (p. ej. "-XDELETE"), así que basta
 # con que el argumento EMPIECE por la bandera corta, no que sea igual a ella.
-_BANDERAS_ESCRITURA_CORTAS = ("-X", "-f", "-F")
+_BANDERAS_ESCRITURA_CORTAS = ("X", "f", "F")
+# `-i`/`--include` es la única bandera corta booleana de `gh api`: pflag deja
+# agruparla delante de una bandera que toma valor, p. ej. "-iXDELETE" equivale
+# a "-i -X DELETE" (CODEX-001, incidencia #211, PR #212). Antes de mirar si el
+# argumento empieza por una bandera de escritura hay que quitarle ese prefijo
+# booleano, si lo tiene, o "-iXDELETE" no coincide con ninguna "-X"/"-f"/"-F".
+_BANDERAS_BOOLEANAS_CORTAS_AGRUPABLES = "i"
 
 
 def _es_bandera_de_escritura(arg: str) -> bool:
@@ -54,7 +60,10 @@ def _es_bandera_de_escritura(arg: str) -> bool:
         return True
     if any(arg.startswith(f"{larga}=") for larga in _BANDERAS_ESCRITURA_LARGAS):
         return True
-    return any(arg.startswith(corta) for corta in _BANDERAS_ESCRITURA_CORTAS)
+    if not arg.startswith("-") or arg.startswith("--"):
+        return False
+    resto = arg[1:].lstrip(_BANDERAS_BOOLEANAS_CORTAS_AGRUPABLES)
+    return any(resto.startswith(corta) for corta in _BANDERAS_ESCRITURA_CORTAS)
 
 
 def _asegurar_solo_lectura(argv: list[str]) -> None:
