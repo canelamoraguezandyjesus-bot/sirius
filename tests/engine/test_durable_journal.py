@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 import subprocess
 import sys
 from collections.abc import Mapping
@@ -1162,3 +1163,81 @@ def test_canonical_bytes_es_estable_ante_el_orden_de_las_claves() -> None:
     a = {"b": 1, "a": 2}
     b = {"a": 2, "b": 1}
     assert canonical_bytes(a) == canonical_bytes(b)
+
+
+def test_reabrir_el_almacen_termina_un_corte_que_quedo_a_medias_en_waiting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """H-3, segunda aparicion de la misma familia: la recuperacion tambien miraba solo ACTIVE.
+
+    `_reconcile_pending_budget_cutoffs` se saltaba todo WorkItem que no
+    estuviera en `ACTIVE`. Como un Worker asincrono deja el WorkItem en
+    `WAITING` -y `WAITING` es el estado en que se gasta el dinero-, una
+    caida a mitad del corte por presupuesto dejaba el trabajo esperando para
+    siempre a un Run ya cancelado, sin escalada y sin que nadie se enterara,
+    aunque el marcador durable del corte estuviera ahi.
+    """
+    journal_path = tmp_path / "diario.jsonl"
+    store = DurableWorkEngineStore(journal_path)
+    store.create_work_item(
+        work_id="WI-H3-0001",
+        peticion_original="texto literal",
+        objetivo="objetivo",
+        contexto_origen=(),
+        entregable="entregable",
+        criterio_terminado="criterio",
+        limites={"presupuesto": {"limite": 10.0}},
+        prioridad=1,
+        clase=WorkItemClass.INVESTIGACION,
+        now=_NOW,
+    )
+    store.activate_work_item("WI-H3-0001", now=_NOW)
+    store.prepare_run(
+        run_id="RUN-H3-0001",
+        work_id="WI-H3-0001",
+        paso="investigar",
+        worker="worker-externo",
+        work_package={"instrucciones": "investigar"},
+        deadline=datetime(2026, 8, 18, 13, 0, tzinfo=UTC),
+        now=_NOW,
+    )
+    store.dispatch_run("RUN-H3-0001", now=_NOW)
+    store.confirm_run_running("RUN-H3-0001", now=_NOW)
+    store.dispatch_work_item_async("WI-H3-0001", now=_NOW)
+    assert store.get_work_item("WI-H3-0001").estado is WorkItemState.WAITING  # type: ignore[union-attr]
+
+    # Caida justo DESPUES de que el marcador del corte quede durable: el
+    # `fsync` real ya se ejecuto, asi que el marcador sobrevive; lo que no
+    # llega a ocurrir es la cascada.
+    real_fsync = os.fsync
+    ya_fallo = False
+
+    def fsync_que_falla_tras_el_marcador(fd: int) -> None:
+        nonlocal ya_fallo
+        real_fsync(fd)
+        if ya_fallo or not stat.S_ISDIR(os.fstat(fd).st_mode):
+            return
+        if "work_item_budget_cutoff_started" in journal_path.read_text():
+            ya_fallo = True
+            raise OSError("fallo simulado de fsync de directorio")
+
+    monkeypatch.setattr(os, "fsync", fsync_que_falla_tras_el_marcador)
+    with pytest.raises(DirectorySyncError):
+        store.cancel_all_live_runs_and_escalate_work_item("WI-H3-0001", now=_NOW)
+    monkeypatch.setattr(os, "fsync", real_fsync)
+
+    kinds = [r["kind"] for r in replay(journal_path).valid_records]
+    assert "work_item_budget_cutoff_started" in kinds
+    assert "work_item_escalated" not in kinds
+    a_medias = store.get_work_item("WI-H3-0001")
+    assert a_medias is not None and a_medias.estado is WorkItemState.WAITING
+
+    # Reabrir el almacen, sin que nadie repita la llamada, tiene que terminarlo.
+    reabierto = DurableWorkEngineStore(journal_path)
+    recuperado = reabierto.get_work_item("WI-H3-0001")
+    assert recuperado is not None
+    assert recuperado.estado is WorkItemState.NEEDS_DECISION
+
+    run = reabierto.get_run("RUN-H3-0001")
+    assert run is not None
+    assert run.cancellation_status is CancellationStatus.UNCONFIRMED

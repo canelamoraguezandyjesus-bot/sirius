@@ -37,6 +37,18 @@ class WorkItemState(StrEnum):
 #: Terminal states: no operation in §3.2 leaves an outgoing edge from these.
 TERMINAL_STATES = frozenset({WorkItemState.CANCELLED, WorkItemState.DELIVERED})
 
+#: Estados desde los que un corte por presupuesto agotado puede llegar a
+#: ``NEEDS_DECISION`` sin ninguna acción del propietario.
+#:
+#: El diagrama de §3.2 dibuja ``escalar`` solo desde ``ACTIVE``, pero §10
+#: declara agotar el presupuesto como causa 2 de ``NEEDS_DECISION`` **sin
+#: condicionarlo al estado**. ``WAITING`` es exactamente el estado en que el
+#: motor espera a un Worker externo, y por tanto el estado en el que se gasta
+#: el dinero: dejarlo fuera hacía que la garantía principal del gobierno de
+#: A5 fallara justo en el caso normal (H-3). No añade ninguna arista nueva al
+#: diagrama: ``WAITING -> ACTIVE -> NEEDS_DECISION`` ya existen las dos.
+BUDGET_CUTOFF_ESCALABLE_STATES = frozenset({WorkItemState.ACTIVE, WorkItemState.WAITING})
+
 #: States ``pausar`` may be called from (§3.2: "desde PLANNED/ACTIVE/WAITING").
 PAUSABLE_STATES = frozenset({WorkItemState.PLANNED, WorkItemState.ACTIVE, WorkItemState.WAITING})
 

@@ -260,3 +260,92 @@ def test_fallo_tecnico_corregible_nunca_escala(
     assert run is not None
     assert run.estado is RunState.FINISHED
     assert run.desenlace is RunOutcome.FAILED
+
+
+def test_agotar_el_presupuesto_desde_waiting_corta_y_escala(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun
+) -> None:
+    """H-3: el corte tiene que funcionar con un Worker asincrono, no solo en ACTIVE.
+
+    ``WAITING`` es el estado en que el motor espera a un Worker externo
+    (arquitectura §3.2), y por tanto **el estado en el que se gasta el
+    dinero**. Las demas pruebas de este fichero parten todas de ``ACTIVE``,
+    que es justo por donde se colo el defecto.
+    """
+    _activar_con_run(
+        store,
+        work_id="WI-GOV-0100",
+        run_id="RUN-GOV-0100",
+        make_work_item=make_work_item,
+        make_run=make_run,
+    )
+    store.dispatch_work_item_async("WI-GOV-0100", now=_NOW)
+    en_espera = store.get_work_item("WI-GOV-0100")
+    assert en_espera is not None
+    assert en_espera.estado is WorkItemState.WAITING
+
+    notificador = _Notificador()
+    resultado = registrar_gasto(
+        store,
+        work_id="WI-GOV-0100",
+        presupuesto=Budget(limite=10.0),
+        coste=11.0,
+        now=_NOW,
+        notificar=notificador,
+    )
+
+    assert resultado.cortado is True
+    assert resultado.presupuesto.consumido == 11.0
+    assert resultado.escalada is not None
+    assert resultado.escalada.causa is CausaEscalado.GASTO_O_PRESUPUESTO
+    assert len(notificador.entregadas) == 1
+
+    work_item = store.get_work_item("WI-GOV-0100")
+    assert work_item is not None
+    assert work_item.estado is WorkItemState.NEEDS_DECISION
+
+    run = store.get_run("RUN-GOV-0100")
+    assert run is not None
+    assert run.cancellation_status is CancellationStatus.UNCONFIRMED
+
+
+def test_un_coste_tardio_sobre_un_trabajo_ya_detenido_no_escala_ni_revienta(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun
+) -> None:
+    """H-3, cuarta propiedad: decidir explicitamente el estado no escalable.
+
+    Un coste que llega tarde -el Worker ya habia parado- no puede escalar un
+    trabajo que ya no esta en curso, pero tampoco puede romper: el
+    presupuesto actualizado se devuelve siempre, que es lo que promete el
+    docstring de ``registrar_gasto``.
+    """
+    _activar_con_run(
+        store,
+        work_id="WI-GOV-0101",
+        run_id="RUN-GOV-0101",
+        make_work_item=make_work_item,
+        make_run=make_run,
+    )
+    store.fail_work_item_safely("WI-GOV-0101", diagnostico="el Worker no progresa", now=_NOW)
+
+    notificador = _Notificador()
+    resultado = registrar_gasto(
+        store,
+        work_id="WI-GOV-0101",
+        presupuesto=Budget(limite=10.0),
+        coste=11.0,
+        now=_NOW,
+        notificar=notificador,
+    )
+
+    assert resultado.presupuesto.consumido == 11.0
+    assert resultado.escalada is None
+    assert notificador.entregadas == []
+
+    work_item = store.get_work_item("WI-GOV-0101")
+    assert work_item is not None
+    assert work_item.estado is WorkItemState.FAILED_SAFELY
+
+    run = store.get_run("RUN-GOV-0101")
+    assert run is not None
+    assert run.cancellation_status is CancellationStatus.UNCONFIRMED

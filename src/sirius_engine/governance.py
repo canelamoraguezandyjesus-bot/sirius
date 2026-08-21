@@ -24,7 +24,7 @@ from sirius_engine.domain.budget import Budget
 from sirius_engine.domain.errors import UnknownWorkItemError
 from sirius_engine.domain.escalation import CausaEscalado, Escalada, construir_escalada
 from sirius_engine.domain.run import LIVE_STATES
-from sirius_engine.domain.work_item import WorkItem
+from sirius_engine.domain.work_item import WorkItem, WorkItemState
 from sirius_engine.ports.notification import NotificationPort
 from sirius_engine.ports.store import WorkEngineStore
 
@@ -80,6 +80,15 @@ def registrar_gasto(
         )
 
     work_item = store.cancel_all_live_runs_and_escalate_work_item(work_id, now=now)
+    if work_item.estado is not WorkItemState.NEEDS_DECISION:
+        # El corte se aplicó -los Runs vivos quedaron cancelados- pero el
+        # WorkItem no estaba en un estado desde el que escalar tenga sentido
+        # (ya pausado, ya fallado, ya terminal). No se inventa una escalada
+        # que nadie puede resolver, y sobre todo NO se lanza: el presupuesto
+        # actualizado se devuelve igual, que es lo que este docstring promete.
+        return ResultadoGasto(
+            presupuesto=nuevo_presupuesto, work_item=work_item, cortado=True, escalada=None
+        )
     escalada = construir_escalada(
         work_item,
         causa=CausaEscalado.GASTO_O_PRESUPUESTO,
