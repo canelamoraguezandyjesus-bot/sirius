@@ -110,6 +110,7 @@ EventKind = Literal[
     "work_item_repair_requested",
     "work_item_repair_resumed",
     "work_item_budget_cutoff_started",
+    "work_item_budget_cutoff_stopped_waiting",
     "run_prepared",
     "run_dispatched",
     "run_confirmed_running",
