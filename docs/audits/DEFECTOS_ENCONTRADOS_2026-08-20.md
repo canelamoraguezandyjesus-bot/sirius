@@ -9,7 +9,7 @@
 > | --- | --- | --- |
 > | **H-3** el corte de presupuesto no salía de `WAITING` | **CERRADO** | commit `e812349` (PR #210), ADR-045 |
 > | **H-4** dos ADR-042 | **CERRADO** | commit `6988030` |
-> | **H-2** «no pude leer» se cierra como éxito vacío | ABIERTO | incidencia #214 |
+> | **H-2** «no pude leer» se cierra como éxito vacío | **CERRADO** | commit `3f8967e`, ADR-053 |
 > | **H-1** el cuerpo esquiva el filtro de confianza | ABIERTO | incidencia #215 |
 > | **H-5** un proveedor de contexto no reporta su fallo | ABIERTO | incidencia #216 |
 > | **H-6** `Run.worker` es una cadena libre | ABIERTO | incidencia #217 |
