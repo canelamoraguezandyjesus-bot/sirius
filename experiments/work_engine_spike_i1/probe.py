@@ -40,10 +40,27 @@ class EscrituraProhibida(RuntimeError):
     """La sonda intentó una llamada que no es de solo lectura."""
 
 
+# Formas largas de las banderas de escritura: la forma unida con "=" (p. ej.
+# "--method=DELETE") vale igual que la forma separada por espacio para `gh`.
+_BANDERAS_ESCRITURA_LARGAS = ("--method", "--input")
+# Formas cortas: `gh` (como cualquier CLI basada en pflag) acepta el valor
+# pegado a la bandera sin espacio ni "=" (p. ej. "-XDELETE"), así que basta
+# con que el argumento EMPIECE por la bandera corta, no que sea igual a ella.
+_BANDERAS_ESCRITURA_CORTAS = ("-X", "-f", "-F")
+
+
+def _es_bandera_de_escritura(arg: str) -> bool:
+    if arg in _BANDERAS_ESCRITURA_LARGAS:
+        return True
+    if any(arg.startswith(f"{larga}=") for larga in _BANDERAS_ESCRITURA_LARGAS):
+        return True
+    return any(arg.startswith(corta) for corta in _BANDERAS_ESCRITURA_CORTAS)
+
+
 def _asegurar_solo_lectura(argv: list[str]) -> None:
     if not argv or argv[0] != "api":
         raise EscrituraProhibida(f"esta sonda solo invoca 'gh api ...': {argv!r}")
-    if any(bandera in argv for bandera in ("--method", "-X", "-f", "-F", "--input")):
+    if any(_es_bandera_de_escritura(arg) for arg in argv):
         raise EscrituraProhibida(f"bandera de escritura o de cuerpo prohibida: {argv!r}")
     endpoint = next((arg for arg in argv[1:] if not arg.startswith("-")), "")
     endpoint_sin_query = endpoint.split("?", 1)[0]

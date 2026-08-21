@@ -53,6 +53,13 @@ class _EjecutorContador:
         ["api", "repos/owner/repo/issues/1/comments"],
         ["api", "-f", "body=hola", "repos/owner/repo/issues/1/comments"],
         ["issue", "comment", "1", "--body", "hola"],
+        # Formas unidas de `--method`/`-X`: `gh` las acepta igual que las
+        # separadas por espacio (CODEX-001, incidencia #211, PR #212).
+        ["api", "--method=DELETE", "repos/owner/repo/actions/runs/1"],
+        ["api", "-XDELETE", "repos/owner/repo/actions/runs/1"],
+        ["api", "-fbody=hola", "repos/owner/repo/issues/1/comments"],
+        ["api", "-Fbody=hola", "repos/owner/repo/issues/1/comments"],
+        ["api", "--input=body.json", "repos/owner/repo/actions/runs/1/cancel"],
         [],
     ],
 )
