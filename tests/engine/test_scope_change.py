@@ -17,7 +17,7 @@ from sirius_engine.domain.run import CancellationStatus, RunOutcome, RunState
 from sirius_engine.domain.work_item import WorkItemPhase, WorkItemState
 from sirius_engine.ports.store import WorkEngineStore
 
-from .conftest import MakeRun, MakeWorkItem
+from .conftest import WORKER_ALTERNATIVO, WORKER_DE_PRUEBA, MakeRun, MakeWorkItem
 
 
 def test_scope_change_bumps_version_and_keeps_the_previous_version_readable(
@@ -242,7 +242,7 @@ def test_worker_substitution_rejects_a_run_invalidated_by_scope_change(
 
     deadline = now + timedelta(hours=1)
     make_run(
-        run_id="RUN-STALE-SUB", work_id=work_id, now=now, deadline=deadline, worker="claude-code"
+        run_id="RUN-STALE-SUB", work_id=work_id, now=now, deadline=deadline, worker=WORKER_DE_PRUEBA
     )
 
     store.change_work_item_scope(work_id, now=now, objetivo="objetivo nuevo")
@@ -251,7 +251,7 @@ def test_worker_substitution_rejects_a_run_invalidated_by_scope_change(
         store.substitute_run_worker(
             "RUN-STALE-SUB",
             new_run_id="RUN-STALE-SUB-RETRY",
-            worker="codex",
+            worker=WORKER_ALTERNATIVO,
             motivo="intento de sustituir un Run ya invalidado",
             deadline=deadline,
             now=now,
@@ -340,7 +340,11 @@ def test_substitution_works_after_an_ordinary_confirmed_cancellation(
 
     deadline = now + timedelta(hours=1)
     make_run(
-        run_id="RUN-CANCELLED-OK", work_id=work_id, now=now, deadline=deadline, worker="claude-code"
+        run_id="RUN-CANCELLED-OK",
+        work_id=work_id,
+        now=now,
+        deadline=deadline,
+        worker=WORKER_DE_PRUEBA,
     )
     store.dispatch_run("RUN-CANCELLED-OK", now=now)
     store.request_run_cancellation("RUN-CANCELLED-OK", now=now)
@@ -351,13 +355,13 @@ def test_substitution_works_after_an_ordinary_confirmed_cancellation(
     substituted = store.substitute_run_worker(
         "RUN-CANCELLED-OK",
         new_run_id="RUN-CANCELLED-OK-SUB",
-        worker="codex",
+        worker=WORKER_ALTERNATIVO,
         motivo="el Worker anterior se canceló y se prueba con otro",
         deadline=deadline,
         now=now,
     )
     assert substituted.estado is RunState.PREPARED
-    assert substituted.worker == "codex"
+    assert substituted.worker == WORKER_ALTERNATIVO
     assert substituted.intento == 2
     assert substituted.sustituye_a == "RUN-CANCELLED-OK"
 

@@ -52,9 +52,11 @@ from sirius_engine.domain.events import AggregateType
 from sirius_engine.domain.run import Run
 from sirius_engine.domain.run import prepare as prepare_run
 from sirius_engine.domain.work_item import WorkItem, WorkItemClass, create_work_item
+from sirius_engine.domain.worker_ref import WorkerRef
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _NOW = datetime(2026, 8, 17, 12, 0, tzinfo=UTC)
+_WORKER = WorkerRef(adapter="worker-de-prueba", perfil_ref="perfiles/prueba", perfil_version=1)
 
 
 def _sample_record(*, sequence: int = 1, idempotency_key: str | None = None) -> dict[str, Any]:
@@ -122,7 +124,7 @@ def _sample_run() -> Run:
         run_id="RUN-SPIKE-0001",
         work_id="WI-SPIKE-0001",
         paso="paso-1",
-        worker="worker-de-prueba",
+        worker=_WORKER,
         work_package={"instrucciones": "ejecutar paso 1"},
         intento=1,
         deadline=datetime(2026, 8, 17, 13, 0, tzinfo=UTC),

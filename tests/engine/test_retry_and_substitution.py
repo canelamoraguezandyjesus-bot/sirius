@@ -14,7 +14,7 @@ from sirius_engine.domain.errors import IllegalTransitionError
 from sirius_engine.domain.run import RunOutcome, RunState
 from sirius_engine.ports.store import WorkEngineStore
 
-from .conftest import MakeRun
+from .conftest import WORKER_ALTERNATIVO, WORKER_DE_PRUEBA, MakeRun
 
 
 def test_retry_creates_a_new_run_with_incremented_attempt(
@@ -79,21 +79,21 @@ def test_worker_substitution_creates_a_new_run_recording_the_motive(
     store: WorkEngineStore, make_run: MakeRun, now: datetime
 ) -> None:
     deadline = now + timedelta(hours=1)
-    make_run(run_id="RUN-1", now=now, deadline=deadline, worker="claude-code")
+    make_run(run_id="RUN-1", now=now, deadline=deadline, worker=WORKER_DE_PRUEBA)
     store.dispatch_run("RUN-1", now=now)
     store.fail_run("RUN-1", diagnostico="el Worker no responde", now=now)
 
     substituted = store.substitute_run_worker(
         "RUN-1",
         new_run_id="RUN-2",
-        worker="codex",
+        worker=WORKER_ALTERNATIVO,
         motivo="claude-code dejó de responder tras dos intentos",
         deadline=deadline + timedelta(hours=1),
         now=now,
     )
 
     assert substituted.run_id == "RUN-2"
-    assert substituted.worker == "codex"
+    assert substituted.worker == WORKER_ALTERNATIVO
     assert substituted.intento == 2
     assert substituted.sustituye_a == "RUN-1"
     assert substituted.motivo_sustitucion == "claude-code dejó de responder tras dos intentos"
@@ -102,7 +102,7 @@ def test_worker_substitution_creates_a_new_run_recording_the_motive(
     # The previous run — including its original worker — is untouched.
     original = store.get_run("RUN-1")
     assert original is not None
-    assert original.worker == "claude-code"
+    assert original.worker == WORKER_DE_PRUEBA
     assert original.estado is RunState.FINISHED
 
 
@@ -110,7 +110,7 @@ def test_worker_substitution_requires_a_different_worker(
     store: WorkEngineStore, make_run: MakeRun, now: datetime
 ) -> None:
     deadline = now + timedelta(hours=1)
-    make_run(run_id="RUN-1", now=now, deadline=deadline, worker="claude-code")
+    make_run(run_id="RUN-1", now=now, deadline=deadline, worker=WORKER_DE_PRUEBA)
     store.dispatch_run("RUN-1", now=now)
     store.fail_run("RUN-1", diagnostico="fallo", now=now)
 
@@ -118,7 +118,7 @@ def test_worker_substitution_requires_a_different_worker(
         store.substitute_run_worker(
             "RUN-1",
             new_run_id="RUN-2",
-            worker="claude-code",
+            worker=WORKER_DE_PRUEBA,
             motivo="motivo inválido",
             deadline=deadline,
             now=now,

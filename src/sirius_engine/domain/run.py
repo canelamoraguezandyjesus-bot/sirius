@@ -22,6 +22,7 @@ from sirius_engine.domain.errors import (
     IllegalTransitionError,
     ScopeInvalidatedRunError,
 )
+from sirius_engine.domain.worker_ref import WorkerRef
 
 _AGGREGATE = "Run"
 
@@ -68,7 +69,8 @@ class Run:
     run_id: str
     work_id: str
     paso: str
-    worker: str
+    #: Adapter + perfil + (si aplica) modelo/runtime concretos usados (§3.3).
+    worker: WorkerRef
     work_package: Mapping[str, object]
     intento: int
     estado: RunState
@@ -101,10 +103,25 @@ class Run:
         self._require(frozenset({RunState.PREPARED}), "dispatch")
         return replace(self, estado=RunState.DISPATCHED, updated_at=now)
 
-    def confirm_running(self, *, now: datetime) -> Run:
-        """``DISPATCHED -> RUNNING`` (``STATUS`` confirma que el Worker aceptó)."""
+    def confirm_running(
+        self, *, now: datetime, modelo: str | None = None, runtime: str | None = None
+    ) -> Run:
+        """``DISPATCHED -> RUNNING`` (``STATUS`` confirma que el Worker aceptó).
+
+        Es el instante en que nace el dato de §3.3 «modelo/runtime concretos
+        usados»: un Worker remoto elige su modelo al aceptar el encargo, no
+        antes, así que ``STATUS`` es la primera observación que puede
+        aportarlo. Ambos son opcionales porque un Worker puede no decirlo,
+        y omitirlos deja lo que ya constara intacto; contradecir lo que ya
+        constaba falla (``WorkerRuntimeConflictError``), nunca sobrescribe.
+        """
         self._require(frozenset({RunState.DISPATCHED}), "confirm_running")
-        return replace(self, estado=RunState.RUNNING, updated_at=now)
+        return replace(
+            self,
+            estado=RunState.RUNNING,
+            worker=self.worker.record_execution(modelo=modelo, runtime=runtime),
+            updated_at=now,
+        )
 
     def observe(self, *, observacion: str, now: datetime) -> Run:
         """Registra el último ``STATUS`` conocido, sin cambiar de estado."""
@@ -222,7 +239,7 @@ def prepare(
     run_id: str,
     work_id: str,
     paso: str,
-    worker: str,
+    worker: WorkerRef,
     work_package: Mapping[str, object],
     intento: int,
     deadline: datetime,
@@ -251,7 +268,7 @@ def retry(
     run_id: str,
     deadline: datetime,
     now: datetime,
-    worker: str | None = None,
+    worker: WorkerRef | None = None,
     work_package: Mapping[str, object] | None = None,
 ) -> Run:
     """Reintento: Run nuevo sobre el mismo paso, intento incrementado (§3.2).
@@ -278,7 +295,7 @@ def retry(
         run_id=run_id,
         work_id=previous.work_id,
         paso=previous.paso,
-        worker=worker if worker is not None else previous.worker,
+        worker=worker if worker is not None else previous.worker.without_execution(),
         work_package=work_package if work_package is not None else previous.work_package,
         intento=previous.intento + 1,
         deadline=deadline,
@@ -291,7 +308,7 @@ def substitute_worker(
     previous: Run,
     *,
     run_id: str,
-    worker: str,
+    worker: WorkerRef,
     motivo: str,
     deadline: datetime,
     now: datetime,

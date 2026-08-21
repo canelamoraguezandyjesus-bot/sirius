@@ -16,7 +16,7 @@ from sirius_engine.domain.run import RunState
 from sirius_engine.domain.work_item import WorkItemState
 from sirius_engine.ports.store import WorkEngineStore
 
-from .conftest import MakeRun, MakeWorkItem
+from .conftest import WORKER_ALTERNATIVO, MakeRun, MakeWorkItem
 
 
 def _run_arbitrary_sequence(
@@ -60,7 +60,7 @@ def _run_arbitrary_sequence(
     store.substitute_run_worker(
         "RUN-1",
         new_run_id="RUN-3",
-        worker="codex",
+        worker=WORKER_ALTERNATIVO,
         motivo="cambio de Worker tras el fallo",
         deadline=deadline,
         now=now,

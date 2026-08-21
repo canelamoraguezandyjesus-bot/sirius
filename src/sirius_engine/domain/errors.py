@@ -191,3 +191,25 @@ class EgressClassificationError(EngineError):
         )
         self.procedencia = procedencia
         self.motivo = motivo
+
+
+class WorkerRuntimeConflictError(EngineError):
+    """Raised when a Run is told it ran on a model or runtime other than the one on record.
+
+    Arquitectura §3.3: ``worker`` registra el modelo/runtime **concretos
+    usados**. Un Run que ya tiene ese dato no puede cambiarlo después: su
+    historia es lo único que sostiene cualquier afirmación posterior sobre
+    qué modelo hizo qué (incidencia #217). Sobrescribirlo en silencio
+    convertiría esa afirmación en indemostrable, así que la contradicción
+    falla de forma explícita, como cualquier otra operación fuera del grafo
+    aprobado.
+    """
+
+    def __init__(self, campo: str, *, registrado: str, recibido: str) -> None:
+        super().__init__(
+            f"worker already ran with {campo} {registrado!r}; refusing to overwrite it "
+            f"with {recibido!r}"
+        )
+        self.campo = campo
+        self.registrado = registrado
+        self.recibido = recibido

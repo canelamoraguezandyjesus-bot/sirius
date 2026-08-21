@@ -39,9 +39,16 @@ from sirius_engine.domain.events import AggregateType
 from sirius_engine.domain.run import CancellationStatus, Run
 from sirius_engine.domain.run import prepare as prepare_run
 from sirius_engine.domain.work_item import WorkItemClass, WorkItemState
+from sirius_engine.domain.worker_ref import WorkerRef
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _NOW = datetime(2026, 8, 18, 12, 0, tzinfo=UTC)
+#: Adapter + perfil versionado, sin modelo ni runtime: lo que se conoce
+#: antes de que ningún Worker acepte el encargo (§3.3, ADR-054).
+_WORKER = WorkerRef(adapter="worker-de-prueba", perfil_ref="perfiles/prueba", perfil_version=1)
+_WORKER_EXTERNO = WorkerRef(
+    adapter="worker-externo", perfil_ref="perfiles/prueba", perfil_version=1
+)
 
 
 def _sample_run() -> Run:
@@ -49,7 +56,7 @@ def _sample_run() -> Run:
         run_id="RUN-A2-0001",
         work_id="WI-A2-0001",
         paso="paso-1",
-        worker="worker-de-prueba",
+        worker=_WORKER,
         work_package={"instrucciones": "ejecutar paso 1"},
         intento=1,
         deadline=datetime(2026, 8, 18, 13, 0, tzinfo=UTC),
@@ -314,7 +321,7 @@ def test_reintento_de_change_work_item_scope_no_repite_la_cascada_de_runs(
         run_id="RUN-IDEMP-SCOPE-0001",
         work_id="WI-IDEMP-SCOPE-0001",
         paso="paso-1",
-        worker="worker-de-prueba",
+        worker=_WORKER,
         work_package={"instrucciones": "ejecutar paso 1"},
         deadline=datetime(2026, 8, 18, 13, 0, tzinfo=UTC),
         now=_NOW,
@@ -373,7 +380,7 @@ def test_una_clave_publica_con_forma_de_clave_de_cascada_no_bloquea_la_invalidac
         run_id=run_id,
         work_id=work_id,
         paso="paso-1",
-        worker="worker-de-prueba",
+        worker=_WORKER,
         work_package={"instrucciones": "ejecutar paso 1"},
         deadline=datetime(2026, 8, 18, 13, 0, tzinfo=UTC),
         now=_NOW,
@@ -433,7 +440,7 @@ def test_reintento_tras_cascada_incompleta_reconoce_clave_interna_de_diario_here
         run_id=run_id,
         work_id=work_id,
         paso="paso-1",
-        worker="worker-de-prueba",
+        worker=_WORKER,
         work_package={"instrucciones": "ejecutar paso 1"},
         deadline=datetime(2026, 8, 18, 13, 0, tzinfo=UTC),
         now=_NOW,
@@ -517,7 +524,7 @@ def test_cancelacion_publica_con_forma_de_clave_de_cascada_es_idempotente_al_rea
         run_id=run_id,
         work_id=work_id,
         paso="paso-1",
-        worker="worker-de-prueba",
+        worker=_WORKER,
         work_package={"instrucciones": "ejecutar paso 1"},
         deadline=datetime(2026, 8, 18, 13, 0, tzinfo=UTC),
         now=_NOW,
@@ -578,7 +585,7 @@ def test_fallo_de_fsync_a_mitad_de_la_cascada_de_change_scope_no_duplica_al_rein
         run_id="RUN-CODEX001R4-0001",
         work_id="WI-CODEX001R4-0001",
         paso="paso-1",
-        worker="worker-de-prueba",
+        worker=_WORKER,
         work_package={"instrucciones": "ejecutar paso 1"},
         deadline=datetime(2026, 8, 18, 13, 0, tzinfo=UTC),
         now=_NOW,
@@ -686,7 +693,7 @@ def test_fallo_de_fsync_entre_dos_runs_del_corte_por_presupuesto_no_impide_compl
             run_id=run_id,
             work_id="WI-CODEX001R3B-0001",
             paso=paso,
-            worker="worker-de-prueba",
+            worker=_WORKER,
             work_package={"instrucciones": f"ejecutar {paso}"},
             deadline=datetime(2026, 8, 18, 13, 0, tzinfo=UTC),
             now=_NOW,
@@ -798,7 +805,7 @@ def test_reabrir_el_almacen_tras_el_fallo_reconcilia_el_corte_pendiente_sin_rein
             run_id=run_id,
             work_id="WI-CODEX001R8-0001",
             paso=paso,
-            worker="worker-de-prueba",
+            worker=_WORKER,
             work_package={"instrucciones": f"ejecutar {paso}"},
             deadline=datetime(2026, 8, 18, 13, 0, tzinfo=UTC),
             now=_NOW,
@@ -1196,7 +1203,7 @@ def test_reabrir_el_almacen_termina_un_corte_que_quedo_a_medias_en_waiting(
         run_id="RUN-H3-0001",
         work_id="WI-H3-0001",
         paso="investigar",
-        worker="worker-externo",
+        worker=_WORKER_EXTERNO,
         work_package={"instrucciones": "investigar"},
         deadline=datetime(2026, 8, 18, 13, 0, tzinfo=UTC),
         now=_NOW,
