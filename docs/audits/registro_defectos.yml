@@ -83,7 +83,7 @@ defectos:
     bloque: A5
     gravedad: alta
     estado: cerrado
-    cerrado_por: pendiente-de-esta-misma-rama
+    cerrado_por: 7fedb39
     ficheros:
       - src/sirius_engine/governance.py
 
