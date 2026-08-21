@@ -1,10 +1,10 @@
 # SIRIUS - Contrato operativo de automatización
 
-- **Versión:** 1.7
-- **Fecha:** 19 de agosto de 2026
-- **Estado:** VIGENTE (§4, §5, §9 y §11 actualizadas; ver §10.3, §10.4, §10.5, §10.6 y §10.7)
+- **Versión:** 1.8
+- **Fecha:** 21 de agosto de 2026
+- **Estado:** VIGENTE (§4, §5, §9, §11 y §12 actualizadas; ver §10.3 a §10.8)
 - **Autoridad:** Operativa para el desarrollo automatizado de Sirius 0.1
-- **Sustituye:** versión 1.6.1 del 16 de agosto de 2026
+- **Sustituye:** versión 1.7 del 19 de agosto de 2026
 - **No modifica:** Producto, Arquitectura Técnica, ATD, requisitos ni alcance de Sirius 0.1
 
 ## 0. Propósito
@@ -413,8 +413,10 @@ Está prohibido:
 - usar secretos reales o datos personales en pruebas automáticas;
 - cambiar Producto, Arquitectura Técnica, ATD o documentos canónicos sin decisión explícita;
 - convertir una idea exploratoria en una decisión aprobada;
-- usar vigilancia periódica como **motor** del flujo (excepción acotada en §9.1);
-- iniciar bloques sucesivos sin orden del usuario o cola expresamente aprobada.
+- usar vigilancia periódica como **motor** del flujo (excepciones acotadas en §9.1 y
+  §12.2; fuera de ellas sigue prohibida);
+- iniciar bloques sucesivos sin orden del usuario o cola expresamente aprobada
+  (§12.1 precisa qué cuenta como orden del usuario y quién puede transportarla).
 
 ### 9.1 Excepción: red de seguridad periódica que no es motor
 
@@ -590,7 +592,16 @@ desde fuera. Y no repara ese estado: avisa a una persona. Ver ADR-004.
 - **Mantiene:** §2 intacta mientras una clase no haya conmutado — para las clases con proyección en la vía GitHub, la incidencia sigue siendo la fuente de verdad hasta el acto fechado de su conmutación.
 - **Entrada en vigor:** cuando la PR que introduce esta sección sea revisada, tenga CI verde y sea fusionada por autorización explícita del usuario.
 
-El historial de las versiones 1.0, 1.1, 1.2, 1.3, 1.4, 1.5 y 1.6 permanece disponible en Git y no se reescribe retrospectivamente.
+### 10.8 Versión 1.8 — activación y supervisión del motor (E1b)
+
+- **Decisión:** autorizar al motor de trabajo dos cosas que el contrato le prohibía, con sus límites, en la nueva §12: **transportar una orden ya dada** (aplicar `sirius:implement-requested` solo para WorkItems con orden explícita del propietario registrada y enlazada) y **supervisar y reparar sus propios Runs**. Bloque E1b del plan del Work Engine (ADR-020); contradicciones C1 y C2 de la arquitectura §14, con el texto derivado de sus recomendaciones.
+- **Motivo:** sin la primera, el motor puede preparar el trabajo pero la activación sigue siendo un clic humano, que es el cuello de botella exacto que el Work Engine viene a eliminar. Sin la segunda, el motor no existe como motor: se reduce a otra colección de reacciones a eventos, con la misma clase de atascos que ya hemos pagado.
+- **Decidido por el propietario**, por interrogatorio, el 21 de agosto de 2026: a la pregunta de si el motor puede dar la salida a un trabajo ya pedido, «que la dé el motor»; a la de si puede levantar solo un trabajo caído, «que lo arregle solo». Y antes de ambas, al elegir qué construir primero, «desatascarse solo».
+- **Alcance:** solo esos dos puntos. **No toca** §8 (el merge sigue siendo suyo), ni §9.1 (el vigilante periódico conserva sus cinco límites intactos, incluido el de no aplicar nunca `sirius:implement-requested`), ni §5, ni §11, ni ningún workflow.
+- **Mantiene:** la prohibición de iniciativa —la máquina no decide qué trabajo existe— y la de vigilancia periódica como motor para todo lo que no sea el motor sobre sus propios Runs.
+- **Entrada en vigor:** cuando la PR que introduce §12 sea revisada, tenga CI verde y sea fusionada por autorización explícita del usuario.
+
+El historial de las versiones 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 y 1.7 permanece disponible en Git y no se reescribe retrospectivamente.
 
 
 ## 11. Autoridad por clase de trabajo
@@ -654,3 +665,79 @@ Tras una reversión, la clase vuelve a empezar el contador de §11.2 desde cero.
 - **Nada de lo que el usuario ve.** Las incidencias, las etiquetas y las notificaciones siguen existiendo y actualizándose igual.
 - **Nada del merge.** §8 sigue exigiendo la orden explícita del usuario, antes y después de conmutar.
 - **Nada de la activación ni de la supervisión.** Llegan en la v1.8 (E1b), no aquí.
+
+
+## 12. El motor de trabajo: qué puede hacer por su cuenta
+
+Esta sección autoriza al **motor de trabajo** dos cosas que el contrato le
+prohibía, y **solo esas dos**, con sus límites. Todo lo demás sigue igual.
+
+El motor es un actor distinto del vigilante periódico de §9.1. Los límites de
+aquella sección gobiernan al vigilante y **no se tocan aquí**: siguen valiendo
+enteros para él. Confundirlos sería relajar dos cosas creyendo que se relaja
+una.
+
+### 12.1 Transportar una orden ya dada no es iniciativa
+
+El motor **puede** aplicar `sirius:implement-requested` a un WorkItem, con una
+condición que no admite excepción:
+
+> Solo si existe una **orden explícita del propietario**, registrada y
+> **enlazada en la evidencia** de ese WorkItem. Sin orden enlazada que señalar,
+> el motor no arranca nada.
+
+Lo que sigue prohibido, y es lo que el límite protegía: **la máquina no decide
+qué trabajo existe**. No inventa bloques, no encadena el siguiente porque el
+anterior terminó, no interpreta un silencio como permiso.
+
+Por qué la distinción es real y no una excusa: el contrato exigía «orden del
+usuario», y una orden explícita e inequívoca **ya es** esa orden. Pedirla dos
+veces —una al encargar el trabajo y otra al pulsar la etiqueta— no añade
+control, añade un intermediario. Y esta enmienda solo cambia **quién teclea la
+etiqueta**, no **quién decide**.
+
+Hay una razón práctica, además de la doctrinal: mientras el propietario delegó
+ese gesto en la sesión interactiva, esa sesión lo puso mal **tres veces en una
+noche** —una activación sin `sirius:planned`, una revisión antes de que
+terminara Quality, y una tercera— y las tres detuvieron un bloque. La etiqueta
+es una comprobación mecánica de precondiciones, y eso lo hace mejor una máquina
+que una persona a las cuatro de la mañana.
+
+### 12.2 Supervisar y reparar sus propios Runs
+
+El motor **puede** sondear el estado de sus Runs y **actuar** sobre ellos:
+reintentar, sustituir el Worker o escalar. Eso es vigilancia periódica que sí
+dirige el flujo, y por eso hacía falta esta enmienda.
+
+Con cuatro límites, y ninguno es decorativo:
+
+1. **Solo SUS Runs.** Los que él despachó y gobierna. No toca ciclos ajenos ni
+   trabajos que no nacieron de él.
+2. **No inventa trabajo.** El límite de §12.1 vale igual aquí: reparar un Run no
+   autoriza a crear otro WorkItem.
+3. **No fusiona. Nunca.** §8 queda intacta: el merge sigue siendo un gesto
+   explícito del propietario y no hay ninguna vía por la que el motor lo haga.
+4. **El vigilante periódico de §9.1 se queda como respaldo** de la vía GitHub,
+   con sus límites intactos. Si el motor se equivoca, se cuelga o muere, esa red
+   sigue debajo.
+
+Por qué la prohibición general deja de aplicarse aquí: se escribió para la
+automatización de GitHub, donde el observador vivía **dentro** de lo observado
+—y por eso no podía informar de su propia muerte— y cada sondeo costaba minutos
+de Actions. El motor es un observador externo, y es exactamente la «decisión
+pendiente» que `repair-sirius-work.yml` y la incidencia #138 dejaron anunciada.
+
+### 12.3 Lo que esta sección NO cambia
+
+Se dice explícitamente para que nadie lo deduzca al revés:
+
+- **§8, el merge.** Sigue exigiendo el comentario explícito del propietario. Es
+  el único gesto que el contrato le reserva y esta enmienda no lo toca.
+- **§9.1, el vigilante periódico.** Sus cinco límites siguen enteros. En
+  particular sigue sin poder aplicar `sirius:implement-requested`: la
+  autorización de §12.1 es del motor, no suya.
+- **§5, la convergencia.** Un ciclo que no progresa sigue parándose y pidiendo
+  una decisión humana.
+- **§11, la autoridad por clase.** Sin cambios.
+- **La prohibición de vigilancia periódica como motor** sigue vigente para todo
+  lo que no sea el motor supervisando sus propios Runs.
