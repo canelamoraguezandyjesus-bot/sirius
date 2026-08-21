@@ -1,0 +1,79 @@
+# Registro de defectos conocidos del Work Engine.
+#
+# Por qué existe: hasta el 21-08-2026 los defectos encontrados vivían en un
+# documento de una rama sin fusionar, sin ninguna incidencia que los siguiera.
+# Cuatro de seis seguían vivos en `main` semanas después y la batería completa
+# pasaba en verde con ellos dentro. Encontrar un defecto no sirve de nada si
+# después se evapora.
+#
+# Este fichero es la fuente legible por máquina, y
+# `tests/automation/test_registro_de_defectos.py` es lo que impide que se
+# pudra: un defecto abierto sin incidencia, o que cite un fichero que ya no
+# existe, rompe la batería. No encuentra defectos nuevos -eso no lo hace una
+# lista-; garantiza que uno encontrado no se pierda.
+#
+# Un defecto NUNCA se borra de aquí: pasa a `estado: cerrado` con el commit que
+# lo cerró. El historial de lo que falló es tan valioso como lo que falla hoy.
+
+version: 1
+
+defectos:
+  - id: H-1
+    titulo: El cuerpo de la incidencia esquiva el filtro de confianza
+    bloque: A3
+    gravedad: media-baja
+    estado: abierto
+    incidencia: 215
+    ficheros:
+      - src/sirius_engine/mirror_projection.py
+      - src/sirius_engine/ports/github_mirror.py
+
+  - id: H-2
+    titulo: "«No pude leer el resultado» se cierra como éxito con resultado vacío"
+    bloque: A2
+    gravedad: media
+    estado: abierto
+    incidencia: 214
+    ficheros:
+      - src/sirius_engine/recovery.py
+      - src/sirius_engine/ports/world.py
+
+  - id: H-3
+    titulo: El corte por presupuesto no salía de WAITING
+    bloque: A5
+    gravedad: alta
+    estado: cerrado
+    cerrado_por: e8123499076817317dde7c59adb00dda62971fa8
+    ficheros:
+      - src/sirius_engine/governance.py
+      - src/sirius_engine/adapters/durable/store.py
+      - src/sirius_engine/adapters/memory_store.py
+
+  - id: H-4
+    titulo: Dos ADR con el número 042 dejaron la PR 207 en rojo
+    bloque: A5
+    gravedad: bloqueante
+    estado: cerrado
+    cerrado_por: 698803014637e2165c62ebac19ef302395ac25d8
+    ficheros:
+      - docs/decisions/ADR-042-un-paso-de-preparacion-sin-plazo-propio-puede-costar-el-trabajo-entero.md
+
+  - id: H-5
+    titulo: Un tercio de contexto.recuperar no puede reportar su fallo
+    bloque: A3
+    gravedad: baja
+    estado: abierto
+    incidencia: 216
+    ficheros:
+      - src/sirius_engine/context_recall.py
+
+  - id: H-6
+    titulo: "Run.worker es una cadena libre y no cumple arquitectura 3.3"
+    bloque: A1
+    gravedad: baja
+    estado: abierto
+    incidencia: 217
+    ficheros:
+      - src/sirius_engine/domain/run.py
+      - src/sirius_engine/domain/profile.py
+      - src/sirius_engine/worker_request.py
