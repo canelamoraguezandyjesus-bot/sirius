@@ -96,3 +96,12 @@ defectos:
     ficheros:
       - src/sirius_engine/domain/work_item.py
       - tests/engine/test_work_item_transitions.py
+
+  - id: H-9
+    titulo: Con los tres proveedores caidos la sesion dice "no encontre referencias"
+    bloque: A5
+    gravedad: media
+    estado: abierto
+    incidencia: 224
+    ficheros:
+      - src/sirius_engine/session.py
