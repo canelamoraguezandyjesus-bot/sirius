@@ -186,6 +186,14 @@ donde figura como decisión abierta del propietario.
    producir experiencia real. **No se propone ninguna fase** ni se reserva hueco
    en el plan.
 
+   **«Todavía no» viene con una puerta comprobable, no con una fecha** (informe
+   §8.4): siete condiciones, cada una verificable con un comando, hoy las siete
+   en `NO`. El momento más temprano posible es después del hito M3 —ocho bloques
+   del plan por delante, más A5 abierto—, **y solo si GAP-1 se engancha a B1 o a
+   C2**, que es la decisión D-6. Si GAP-1 no se asigna a ningún bloque, la puerta
+   no se abre sola: M3 llegaría con seis de las siete condiciones cumplidas y la
+   séptima sin dueño.
+
 Se declara además, sin suavizarlas (criterio de parada 3): **de las seis
 garantías no negociables del encargo, cinco no son sostenibles hoy dentro del
 motor.** La primera redacción de este ADR declaró solo una; la segunda ronda

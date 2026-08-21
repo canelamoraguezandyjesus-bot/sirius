@@ -43,7 +43,14 @@ Donde no pudo comprobarlo, lo dice.
 >
 > **No recomiendo construir el Learning System todavía**, y la razón fuerte no es
 > el inventario de patrones: es que **no hay experiencia real de la que aprender**
-> (§6.6). El calendario es **«todavía no»**, sin fase inventada.
+> (§6.6).
+>
+> «Todavía no» **no significa «ya veremos»**: §8.4 fija una puerta de **siete
+> condiciones comprobables con un comando cada una**, hoy las siete en `NO`. El
+> momento más temprano posible es **justo después del hito M3 —ocho bloques del
+> plan por delante, más A5 que sigue abierto—, y solo si GAP-1 se engancha a B1 o
+> a C2**. Si GAP-1 no se engancha a ningún bloque, la puerta no se abre sola
+> nunca, y ese es el único punto que hay que vigilar de aquí a entonces.
 >
 > Dos rondas adversariales devolvieron objeciones de la misma familia y **la regla
 > de las dos rondas (ADR-001) se activó**: §14 escribe el patrón, la raíz, las
@@ -833,6 +840,78 @@ Lo que sí se puede afirmar sobre colocación, y es todo:
   WorkItems reales ejecutados por Workers reales, habrá con qué contrastar este
   diseño. Antes no.
 
+
+### 8.4 Cuándo volver a mirar: la condición, no la fecha
+
+«Todavía no» sin una condición comprobable no es una respuesta. Esto la fija.
+
+**No hay fecha porque no hay dato para fijarla** — inventar un mes sería
+exactamente lo que este informe le reprocha al brief. Lo que sí se puede fijar es
+una **puerta observable**: siete condiciones, cada una comprobable con un comando,
+sin juicio de nadie. Mientras alguna esté en `NO`, la respuesta sigue siendo
+«todavía no», y no hace falta preguntar a nadie para saberlo.
+
+#### La puerta
+
+| # | Condición | Cómo se comprueba | Hoy |
+|---|---|---|---|
+| 1 | Existe **puerto de Worker** (`START/STATUS/RESULT/CANCEL`) | `ls src/sirius_engine/ports/` | **NO** |
+| 2 | Existe **un adapter de Worker real** | `ls src/sirius_engine/adapters/` | **NO** |
+| 3 | El diario tiene **registros reales en disco** | `find . -name "*.jsonl" -not -path "./.git/*"` | **NO** |
+| 4 | El corpus tiene **las tres formas** de las que el aprendizaje extrae: un WorkItem entregado, uno fallado, y un Run con Worker sustituido | eventos `work_item_delivered`, `work_item_failed_safely`, `run_worker_substituted` en el diario | **NO** |
+| 5 | **GAP-1 cerrado**: el Run lleva identidad estructurada de modelo/runtime | `grep -E "modelo\|runtime" src/sirius_engine/domain/run.py` | **NO** |
+| 6 | **H-2 cerrado**: el observador puede decir «no pude mirar» | `grep UNKNOWN src/sirius_engine/ports/world.py` | **NO** |
+| 7 | **H-3 cerrado**: el corte de presupuesto funciona fuera de `ACTIVE` | prueba de gobierno que parta de `WAITING` | **NO** |
+
+Siete de siete en `NO`. Esa es la distancia real, y por eso no hay fecha.
+
+#### Sobre la condición 4, que es la única que podría parecer arbitraria
+
+No es un umbral estadístico inventado: es un **mínimo estructural**. El
+aprendizaje extrae de tres formas de experiencia y solo de tres —algo que salió
+bien y se puede reutilizar, algo que salió mal con alcance acotado, y algo que
+falló con un Worker y funcionó con otro—. Si el corpus no tiene las tres, no hay
+nada que contrastar y cualquier candidato se estaría midiendo contra una sola
+forma. Cuántos de cada una hacen falta **es una decisión que se toma mirando los
+primeros números**, no antes: el lector determinista de §6.2 no llama a ningún
+modelo, así que contarlos es gratis.
+
+#### Traducido al plan aprobado
+
+Qué bloque entrega cada condición, según
+`SIRIUS_WORK_ENGINE_PLAN_IMPLEMENTACION.md`:
+
+| Condición | La entrega |
+|---|---|
+| 1 y 2 | **B1** (primer Worker externo real) |
+| 3 y 4 | **C2** (despacho end-to-end de programación) + **C3** (documentación) — dos clases distintas |
+| 5 (GAP-1) | **ningún bloque la programa hoy** — ver abajo |
+| 6 (H-2) | A2/C1, como corrección de defecto |
+| 7 (H-3) | A5, como corrección de defecto |
+
+Entre hoy y ahí hay, por el plan vigente: **A5** (abierto y en rojo) y después
+**S2, B1, E1b, S3, C1, C2, C3 y C4** — ocho bloques más, con los hitos M2 y M3
+por medio.
+
+#### El punto que hace que la puerta no se abra sola
+
+**La condición 5 no la programa ningún bloque.** GAP-1 es una divergencia con la
+arquitectura §3.3 que nadie ha asignado. Si no se engancha a **B1 o a C2** —que
+es donde nace el dato, y es la decisión D-6—, entonces M3 llega, el resto de
+condiciones se cumple, y la puerta **sigue cerrada indefinidamente** sin que
+nadie sepa por qué.
+
+Dicho al revés, que es como hay que leerlo: **el momento más temprano posible es
+justo después de M3, y solo si GAP-1 se engancha a B1 o C2.** Si no se engancha,
+no hay momento.
+
+#### Qué hacer el día que las siete estén en `SÍ`
+
+Nada automático. Volver a este informe, ejecutar el lector determinista —que no
+llama a ningún modelo y por tanto no gasta— sobre el corpus real, mirar los dos
+únicos números que la sombra puede producir (candidatos por WorkItem y porcentaje
+`NO_CANDIDATE`) y **entonces** decidir D-1 con datos delante en vez de con este
+diseño delante.
 
 
 ---
