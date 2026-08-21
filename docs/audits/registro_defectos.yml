@@ -71,8 +71,8 @@ defectos:
     titulo: "Run.worker es una cadena libre y no cumple arquitectura 3.3"
     bloque: A1
     gravedad: baja
-    estado: abierto
-    incidencia: 217
+    estado: cerrado
+    cerrado_por: 2996ae361c4bdd7ce05cc5cd2ff3cc7f379b7049
     ficheros:
       - src/sirius_engine/domain/run.py
       - src/sirius_engine/domain/profile.py
