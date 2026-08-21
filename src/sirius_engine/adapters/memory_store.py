@@ -100,6 +100,7 @@ class InMemoryWorkEngineStore:
         clase: WorkItemClass,
         now: datetime,
         plan: tuple[str, ...] = (),
+        evidencia: tuple[str, ...] = (),
     ) -> WorkItem:
         if work_id in self._work_items:
             raise DuplicateIdError("WorkItem", work_id)
@@ -115,6 +116,7 @@ class InMemoryWorkEngineStore:
             clase=clase,
             now=now,
             plan=plan,
+            evidencia=evidencia,
         )
         return self._record_work_item(work_item, "work_item_created", now=now)
 
@@ -132,6 +134,7 @@ class InMemoryWorkEngineStore:
         clase: WorkItemClass,
         now: datetime,
         plan: tuple[str, ...] = (),
+        evidencia: tuple[str, ...] = (),
     ) -> WorkItem:
         if work_id in self._work_items:
             raise DuplicateIdError("WorkItem", work_id)
@@ -148,6 +151,7 @@ class InMemoryWorkEngineStore:
                 clase=clase,
                 now=now,
                 plan=plan,
+                evidencia=evidencia,
             )
             .activate(now=now)
             .escalate(now=now)

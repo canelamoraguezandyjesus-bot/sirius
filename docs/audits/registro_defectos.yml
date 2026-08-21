@@ -117,3 +117,13 @@ defectos:
       - src/sirius_engine/ports/supervisor_journal.py
       - src/sirius_engine/adapters/memory_supervisor_journal.py
       - src/sirius_engine/adapters/durable/supervisor_journal.py
+
+  - id: H-11
+    titulo: El diario del despachador solo vive en memoria; una sola activacion no cruza procesos
+    bloque: C2
+    gravedad: media
+    estado: abierto
+    incidencia: 242
+    ficheros:
+      - src/sirius_engine/ports/dispatch_journal.py
+      - src/sirius_engine/adapters/memory_dispatch_journal.py

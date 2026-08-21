@@ -25,6 +25,9 @@ dependencies = [
 sirius = "sirius.main:main"
 sirius-voz = "sirius.voice_doctor:main"
 sirius-obs = "sirius.capture_setup:main"
+# La costura entre una orden y la vía GitHub (C2). El despachador existía y
+# nadie lo llamaba: su cableado era la frontera declarada del bloque.
+sirius-despachar = "sirius_engine.dispatch_cli:main"
 # El comando del motor (M1, ADR-055). Hasta el 21-08-2026 M1 se daba por
 # alcanzado sin que existiera: la "interfaz v0" era una clase que solo
 # construían las pruebas. `tests/engine/test_cli_entrypoint.py` parte de esta

@@ -274,6 +274,7 @@ def create_work_item(
     clase: WorkItemClass,
     now: datetime,
     plan: tuple[str, ...] = (),
+    evidencia: tuple[str, ...] = (),
 ) -> WorkItem:
     """Crear un WorkItem confirmado, en ``PLANNED`` (§3.2: "crear (confirmado)")."""
     return WorkItem(
@@ -289,6 +290,7 @@ def create_work_item(
         estado=WorkItemState.PLANNED,
         fase=WorkItemPhase.PREPARAR,
         plan=plan,
+        evidencia=evidencia,
         version=1,
         created_at=now,
         updated_at=now,
