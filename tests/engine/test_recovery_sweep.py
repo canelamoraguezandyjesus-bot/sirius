@@ -20,7 +20,12 @@ from sirius_engine.domain.run import CancellationStatus, Run, RunOutcome, RunSta
 from sirius_engine.domain.work_item import WorkItemState
 from sirius_engine.ports.store import WorkEngineStore
 from sirius_engine.ports.world import RemoteRunStatus, RunWorldObservation
-from sirius_engine.recovery import RecoverySweepResult, _reconcile_run, run_recovery_sweep
+from sirius_engine.recovery import (
+    RecoverySweepResult,
+    UnobservedRun,
+    _reconcile_run,
+    run_recovery_sweep,
+)
 
 from .conftest import MakeRun, MakeWorkItem
 
@@ -34,6 +39,11 @@ class FakeRunWorldObserver:
     forma de ejercitar el barrido (arquitectura §3.5, alcance permitido de
     la incidencia #186: «en este bloque no hay acceso real a GitHub ni a
     procesos: se sustituye por un doble en las pruebas»).
+
+    Desde H-2 (ADR-053), un escenario de éxito tiene que decir **qué se leyó**:
+    ``resultado={}`` es «leí, y el Worker no devolvió campos», mientras que
+    ``resultado=None`` es «no pude leer el resultado» y ya no cierra el Run.
+    Antes daban lo mismo, y esa era exactamente la confusión del defecto.
     """
 
     observations: dict[str, RunWorldObservation] = field(default_factory=dict)
@@ -113,7 +123,9 @@ def test_barrido_promueve_un_run_dispatched_hasta_running_antes_de_darlo_por_exi
     )
 
     world = FakeRunWorldObserver(
-        observations={"RUN-0001": RunWorldObservation(status=RemoteRunStatus.SUCCEEDED)}
+        observations={
+            "RUN-0001": RunWorldObservation(status=RemoteRunStatus.SUCCEEDED, resultado={})
+        }
     )
 
     result = run_recovery_sweep(store, world, now=now)
@@ -211,7 +223,9 @@ def test_barrido_ejecutado_dos_veces_seguidas_deja_el_mismo_estado(
         store, make_work_item, make_run, now=now, deadline=deadline, run_state=RunState.RUNNING
     )
     world = FakeRunWorldObserver(
-        observations={"RUN-0001": RunWorldObservation(status=RemoteRunStatus.SUCCEEDED)}
+        observations={
+            "RUN-0001": RunWorldObservation(status=RemoteRunStatus.SUCCEEDED, resultado={})
+        }
     )
 
     primera = run_recovery_sweep(store, world, now=now)
@@ -241,7 +255,9 @@ def test_barrido_ignora_un_workitem_waiting_con_runs_todavia_vivos(
     store.confirm_run_running("RUN-0002", now=now)
 
     world = FakeRunWorldObserver(
-        observations={"RUN-0001": RunWorldObservation(status=RemoteRunStatus.SUCCEEDED)}
+        observations={
+            "RUN-0001": RunWorldObservation(status=RemoteRunStatus.SUCCEEDED, resultado={})
+        }
     )
 
     result = run_recovery_sweep(store, world, now=now)
@@ -284,7 +300,9 @@ def test_mutacion_quitar_el_filtro_de_runs_terminados_rompe_la_idempotencia(
         store, make_work_item, make_run, now=now, deadline=deadline, run_state=RunState.RUNNING
     )
     world = FakeRunWorldObserver(
-        observations={"RUN-0001": RunWorldObservation(status=RemoteRunStatus.SUCCEEDED)}
+        observations={
+            "RUN-0001": RunWorldObservation(status=RemoteRunStatus.SUCCEEDED, resultado={})
+        }
     )
 
     _sweep_sin_filtro_de_runs_terminados(store, world, now=now)
@@ -409,3 +427,189 @@ def test_barrido_de_una_cancelacion_ejecutado_dos_veces_deja_el_mismo_estado(
     assert primera.reconciled_run_ids == ("RUN-0001",)
     assert segunda == RecoverySweepResult(reconciled_run_ids=(), released_work_item_ids=())
     assert eventos_tras_segunda == eventos_tras_primera
+
+
+# --- H-2 (incidencia #214, ADR-053): «no pude observar» no es un desenlace ----
+#
+# ADR-036 cerró esta familia para el espejo -«una lectura caída no es una
+# ausencia»- y reapareció aquí, en el único camino por el que el resultado real
+# de un Worker llega al diario: `resultado=observation.resultado or {}` convertía
+# «el mundo dijo SUCCEEDED pero no pude leer el resultado» en «éxito con
+# resultado vacío», y de paso liberaba el `WorkItem` como si el paso hubiera
+# entregado algo.
+#
+# Se miden las TRES direcciones, no solo la que arregla el defecto:
+#
+#   1. `SUCCEEDED` sin resultado legible (`resultado=None`) NO cierra el Run.
+#   2. `SUCCEEDED` con resultado legible y VACÍO (`{}`) SÍ lo cierra. Sin esta,
+#      «no cerrar nunca» pasaría por arreglo -es la lección del «devolver 2
+#      siempre» de ADR-036, que habría matado el único caso concluyente-.
+#   3. `UNKNOWN` no se confunde con `PENDING`: el barrido no inventa desenlace,
+#      pero tampoco se queda callado -lo reporta en `unobserved_runs`-.
+
+
+def test_barrido_no_cierra_como_exito_un_desenlace_sin_resultado_legible(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun, now: datetime
+) -> None:
+    """H-2: el mundo dijo `SUCCEEDED`, pero el resultado no se pudo leer.
+
+    Un `Run` cerrado así diría en el diario «este trabajo salió bien y no
+    entregó nada», que es una afirmación que nadie hizo.
+    """
+    deadline = now + timedelta(hours=2)
+    _waiting_work_item_with_live_run(
+        store, make_work_item, make_run, now=now, deadline=deadline, run_state=RunState.RUNNING
+    )
+    world = FakeRunWorldObserver(
+        observations={
+            "RUN-0001": RunWorldObservation(status=RemoteRunStatus.SUCCEEDED, resultado=None)
+        }
+    )
+    eventos_antes = tuple(store.list_events())
+
+    result = run_recovery_sweep(store, world, now=now)
+
+    assert result.reconciled_run_ids == ()
+    assert result.released_work_item_ids == ()
+    assert tuple(store.list_events()) == eventos_antes
+    run = store.get_run("RUN-0001")
+    assert run is not None
+    assert run.estado is RunState.RUNNING
+    assert run.desenlace is None
+    assert run.resultado is None
+    # No inventa desenlace, pero tampoco se calla: quien invoca el barrido
+    # recibe el Run y el porqué, y puede registrarlo o avisar.
+    assert [inobservable.run_id for inobservable in result.unobserved_runs] == ["RUN-0001"]
+    assert "resultado" in result.unobserved_runs[0].diagnostico
+    # El WorkItem sigue esperando: liberarlo afirmaría que el paso terminó.
+    work_item = store.get_work_item("WI-0001")
+    assert work_item is not None
+    assert work_item.estado is WorkItemState.WAITING
+
+
+def test_un_resultado_legible_y_vacio_si_cierra_el_run_como_exito(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun, now: datetime
+) -> None:
+    """Anti-vacua: `{}` es una lectura, no una ausencia de lectura.
+
+    Sin esta prueba, «no cerrar nunca como éxito» pasaría por arreglo. La
+    diferencia entera está en `None` (no pude leer) frente a `{}` (leí, y el
+    Worker no devolvió campos).
+    """
+    deadline = now + timedelta(hours=2)
+    _waiting_work_item_with_live_run(
+        store, make_work_item, make_run, now=now, deadline=deadline, run_state=RunState.RUNNING
+    )
+    world = FakeRunWorldObserver(
+        observations={
+            "RUN-0001": RunWorldObservation(status=RemoteRunStatus.SUCCEEDED, resultado={})
+        }
+    )
+
+    result = run_recovery_sweep(store, world, now=now)
+
+    assert result.reconciled_run_ids == ("RUN-0001",)
+    assert result.released_work_item_ids == ("WI-0001",)
+    assert result.unobserved_runs == ()
+    run = store.get_run("RUN-0001")
+    assert run is not None
+    assert run.estado is RunState.FINISHED
+    assert run.desenlace is RunOutcome.SUCCEEDED
+    assert dict(run.resultado or {}) == {}
+
+
+def test_barrido_no_inventa_un_desenlace_cuando_el_mundo_no_pudo_observar(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun, now: datetime
+) -> None:
+    """`UNKNOWN`: la lectura del mundo cayó. No es un hecho sobre el `Run`."""
+    deadline = now + timedelta(hours=2)
+    _waiting_work_item_with_live_run(
+        store, make_work_item, make_run, now=now, deadline=deadline, run_state=RunState.RUNNING
+    )
+    world = FakeRunWorldObserver(
+        observations={
+            "RUN-0001": RunWorldObservation(
+                status=RemoteRunStatus.UNKNOWN, diagnostico="502 al leer el estado del Run"
+            )
+        }
+    )
+    eventos_antes = tuple(store.list_events())
+
+    result = run_recovery_sweep(store, world, now=now)
+
+    assert result.reconciled_run_ids == ()
+    assert result.released_work_item_ids == ()
+    assert result.unobserved_runs == (
+        UnobservedRun(run_id="RUN-0001", diagnostico="502 al leer el estado del Run"),
+    )
+    assert tuple(store.list_events()) == eventos_antes
+    run = store.get_run("RUN-0001")
+    assert run is not None
+    assert run.estado is RunState.RUNNING
+    assert run.desenlace is None
+    work_item = store.get_work_item("WI-0001")
+    assert work_item is not None
+    assert work_item.estado is WorkItemState.WAITING
+
+
+def test_no_pude_observar_no_es_sigue_vivo_el_barrido_los_distingue(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun, now: datetime
+) -> None:
+    """Las dos direcciones de la distinción, en la misma pasada.
+
+    `PENDING` es una afirmación -«sigue vivo»- y el barrido calla porque no
+    hay nada que hacer todavía. `UNKNOWN` no afirma nada, y callar sería
+    tratar un fallo de lectura como un hecho sobre el mundo. Tratar `UNKNOWN`
+    como `PENDING` deja este barrido sin nada que reportar.
+    """
+    deadline = now + timedelta(hours=2)
+    make_work_item(now=now)
+    store.activate_work_item("WI-0001", now=now)
+    store.dispatch_work_item_async("WI-0001", now=now)
+    make_run(now=now, deadline=deadline, run_id="RUN-0001")
+    make_run(now=now, deadline=deadline, run_id="RUN-0002")
+    for run_id in ("RUN-0001", "RUN-0002"):
+        store.dispatch_run(run_id, now=now)
+        store.confirm_run_running(run_id, now=now)
+
+    world = FakeRunWorldObserver(
+        observations={
+            "RUN-0001": RunWorldObservation(status=RemoteRunStatus.UNKNOWN),
+            "RUN-0002": RunWorldObservation(status=RemoteRunStatus.PENDING),
+        }
+    )
+
+    result = run_recovery_sweep(store, world, now=now)
+
+    assert result.reconciled_run_ids == ()
+    assert [inobservable.run_id for inobservable in result.unobserved_runs] == ["RUN-0001"]
+    # Sin `diagnostico` del observador, el barrido pone uno propio: no puede
+    # decir POR QUÉ falló la lectura, pero sí que no la hubo.
+    assert result.unobserved_runs[0].diagnostico != ""
+    assert store.get_run("RUN-0002").estado is RunState.RUNNING  # type: ignore[union-attr]
+
+
+def test_barrido_repetido_sobre_un_run_inobservable_no_anexa_ningun_evento(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun, now: datetime
+) -> None:
+    """Requisito 4 para esta rama: «como mucho repite una consulta».
+
+    Un `Run` inobservable sigue vivo, así que la siguiente pasada vuelve a
+    preguntar por él -y vuelve a reportarlo- sin escribir nada en el diario.
+    """
+    deadline = now + timedelta(hours=2)
+    _waiting_work_item_with_live_run(
+        store, make_work_item, make_run, now=now, deadline=deadline, run_state=RunState.RUNNING
+    )
+    world = FakeRunWorldObserver(
+        observations={"RUN-0001": RunWorldObservation(status=RemoteRunStatus.UNKNOWN)}
+    )
+    eventos_antes = tuple(store.list_events())
+
+    primera = run_recovery_sweep(store, world, now=now)
+    segunda = run_recovery_sweep(store, world, now=now)
+
+    assert primera == segunda
+    assert [inobservable.run_id for inobservable in segunda.unobserved_runs] == ["RUN-0001"]
+    assert tuple(store.list_events()) == eventos_antes
+    assert world.calls == ["RUN-0001", "RUN-0001"]

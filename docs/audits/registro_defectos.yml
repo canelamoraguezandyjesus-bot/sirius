@@ -32,8 +32,8 @@ defectos:
     titulo: "«No pude leer el resultado» se cierra como éxito con resultado vacío"
     bloque: A2
     gravedad: media
-    estado: abierto
-    incidencia: 214
+    estado: cerrado
+    cerrado_por: 3f8967e59ce84fe5df18200115daeda44770c0dd
     ficheros:
       - src/sirius_engine/recovery.py
       - src/sirius_engine/ports/world.py
