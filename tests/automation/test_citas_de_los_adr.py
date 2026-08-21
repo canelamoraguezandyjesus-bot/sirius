@@ -79,6 +79,25 @@ BORRADOS_A_PROPOSITO: dict[str, list[str]] = {
     ]
 }
 
+# La categoría espejo, que la primera versión de esta guarda no previó y que
+# apareció el mismo día que se fusionó: una ruta citada **precisamente para
+# decir que TODAVÍA NO existe**.
+#
+# ADR-055 escribe «no existe todavía ni la puerta que arranca un trabajador
+# (`ports/worker.py` no está)» para explicar por qué el comando de consola no
+# puede crear trabajo. Ahí la ausencia del fichero no invalida la afirmación:
+# **es** la afirmación. Exigir que exista sería exigir que el ADR mintiera.
+#
+# Se separa de BORRADOS_A_PROPOSITO en vez de meterla ahí porque no es lo
+# mismo: aquello es «existió y se borró a propósito», esto es «no ha existido
+# nunca todavía». Confundirlas haría que el día en que `ports/worker.py` se
+# cree, nadie se enterara de que esta excepción sobra.
+TODAVIA_NO_EXISTEN: dict[str, list[str]] = {
+    "src/sirius_engine/ports/worker.py": [
+        "ADR-055-un-comando-de-consola-que-el-propietario-pueda-teclear-para-hablar-con-el-motor.md",
+    ]
+}
+
 
 def _fuera_de_los_bloques(texto: str) -> Iterator[str]:
     """Las líneas del documento que NO están dentro de un bloque de código.
@@ -132,7 +151,9 @@ def _rotas(adr: Path) -> list[str]:
     return [
         ruta
         for ruta in citas_de(adr.read_text(encoding="utf-8"))
-        if not (RAIZ / ruta).exists() and adr.name not in BORRADOS_A_PROPOSITO.get(ruta, [])
+        if not (RAIZ / ruta).exists()
+        and adr.name not in BORRADOS_A_PROPOSITO.get(ruta, [])
+        and adr.name not in TODAVIA_NO_EXISTEN.get(ruta, [])
     ]
 
 
@@ -266,3 +287,18 @@ def test_las_raices_declaradas_son_directorios_de_verdad() -> None:
     """Una raíz que ya no existe deja de mirar sus citas sin que nadie se entere."""
     fantasmas = [raiz for raiz in RAICES_DEL_REPOSITORIO if not (RAIZ / raiz).is_dir()]
     assert fantasmas == [], f"raíces declaradas que ya no son directorios: {fantasmas}"
+
+
+def test_una_excepcion_de_todavia_no_existe_se_retira_cuando_el_fichero_nace() -> None:
+    """Si el fichero llega a existir, la excepción sobra y hay que quitarla.
+
+    Sin esto, una excepción puesta para «todavía no existe» sobreviviría a la
+    creación del fichero y la guarda dejaría de mirar esa ruta para siempre,
+    en silencio. Es el mismo peligro que cualquier lista de excepciones que se
+    queda obsoleta.
+    """
+    ya_existen = sorted(ruta for ruta in TODAVIA_NO_EXISTEN if (RAIZ / ruta).exists())
+    assert ya_existen == [], (
+        f"estas rutas ya existen: {ya_existen}. Quítalas de TODAVIA_NO_EXISTEN: "
+        "la excepción se puso porque no existían, y ya no es cierto."
+    )
