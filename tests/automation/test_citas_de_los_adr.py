@@ -1,0 +1,268 @@
+"""Una ruta citada por un ADR existe, o está fijada como historia (ADR-052).
+
+El método de este repositorio (ADR-001) exige que cada afirmación traiga la
+comprobación que la sostiene, y un ADR cumple esa regla **citando ficheros**.
+Esa cita es el puente entre lo que se afirma y lo que lo prueba, y se cae solo:
+cuando el código se mueve o un fichero se borra, nadie vuelve a los ADR. La
+evidencia no se contradice, se pudre en silencio.
+
+No es hipotético. En `bbfb625` había tres citas rotas, y una era del día
+anterior: ADR-045 citaba un parte de auditoría que vivía en una rama sin
+fusionar. Lo arregló por casualidad otra PR que traía ese fichero a `main` por
+un motivo distinto.
+
+**Esta prueba es conservadora a propósito, y esa es su decisión de diseño
+principal.** Deja escapar citas rotas antes que señalar una sana: una prueba que
+grita en falso se acaba ignorando, y entonces no protege de nada. Por eso solo
+mira `código en línea` fuera de los bloques de código, exige un único token y
+exige una raíz del repositorio delante. Lo que renuncia a mirar está medido y
+escrito en ADR-052: sobre `main` renunciaba a mirar 18 citas de 156, y ninguna
+de esas 18 estaba rota el día que se escribió esto.
+
+Es determinista: lee ficheros y comprueba si una ruta existe. No razona, no
+invoca ningún modelo, no sale a la red y cuesta milisegundos.
+"""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
+
+RAIZ = Path(__file__).resolve().parents[2]
+REGISTRO = RAIZ / "docs" / "decisions"
+
+# Una cita solo cuenta si empieza por una de estas. Es el filtro que separa una
+# RUTA de todo lo demás que lleva barra: ramas (`origin/main`, `feat/loquesea`),
+# repositorios de terceros (`astral-sh/setup-uv`), rutas relativas al paquete
+# (`domain/work_item.py`) y módulos de Python. Ninguno de esos se puede
+# distinguir con certeza, así que no se miran.
+RAICES_DEL_REPOSITORIO = (
+    ".claude/",
+    ".github/",
+    "docs/",
+    "experiments/",
+    "migrations/",
+    "scripts/",
+    "src/",
+    "tests/",
+)
+
+# Globos, URLs y plantillas de las APIs (`repos/{o}/{r}/...`) no son rutas que se
+# puedan abrir: se descartan enteras en vez de intentar resolverlas.
+NO_ES_UNA_RUTA_CONCRETA = ("://", "*", "{", "}", "<", ">")
+
+CODIGO_EN_LINEA = re.compile(r"`([^`\n]+)`")
+# `fichero.py:95`, `workflow.yml:67-81`, `test_x.py::test_caso`.
+SUFIJO_DE_CITA = re.compile(r"::.*$|:\d[\d,\-]*$")
+
+# --- La excepción, fijada por nombre -----------------------------------------
+#
+# Mismo patrón que `DUPLICADO_HISTORICO` en `test_registro_de_decisiones.py`:
+# una ruta borrada A PROPÓSITO que un ADR cita como historia, con la lista
+# cerrada de los ADR que pueden citarla. Un ADR nuevo que la cite rompe la
+# prueba hasta que alguien venga aquí y explique por qué.
+#
+# `tests/automation/test_lectura_de_etiquetas.py` no se movió: se borró, y
+# borrarlo ES la decisión que ADR-028 registra («Se borra
+# tests/automation/test_lectura_de_etiquetas.py entero»). ADR-027 la creó, y
+# ADR-028 decidió expresamente no reescribir ADR-027 porque «borrar el rastro
+# eliminaría justo lo que sirve». Exigir que exista sería exigir que no se
+# hubiera tomado la decisión. ADR-052 la cita al explicar esta excepción.
+BORRADOS_A_PROPOSITO: dict[str, list[str]] = {
+    "tests/automation/test_lectura_de_etiquetas.py": [
+        "ADR-027-las-etiquetas-se-leen-del-objeto-de-la-incidencia.md",
+        "ADR-028-una-averia-transitoria-no-justifica-una-invariante-permanente.md",
+        "ADR-052-una-ruta-citada-por-un-adr-existe-o-esta-fijada-como-historia.md",
+    ]
+}
+
+
+def _fuera_de_los_bloques(texto: str) -> Iterator[str]:
+    """Las líneas del documento que NO están dentro de un bloque de código.
+
+    Ahí viven las salidas de comandos pegadas, los ejemplos y las rutas de otra
+    máquina. Una valla sin cerrar deja dentro todo lo que queda: al dudar, no se
+    mira.
+    """
+    dentro = False
+    for linea in texto.splitlines():
+        if linea.lstrip().startswith(("```", "~~~")):
+            dentro = not dentro
+            continue
+        if not dentro:
+            yield linea
+
+
+def ruta_citada(bruto: str) -> str | None:
+    """La ruta del repositorio que hay en un `código en línea`, o None.
+
+    None significa «esto no lo sé juzgar», que es la respuesta por defecto.
+    """
+    texto = bruto.strip()
+    if not texto or any(caracter.isspace() for caracter in texto):
+        return None  # una orden entera, no una cita: `git checkout -- src/x.py`
+    if any(marca in texto for marca in NO_ES_UNA_RUTA_CONCRETA):
+        return None
+    texto = SUFIJO_DE_CITA.sub("", texto.rstrip(".,;:)"))
+    texto = texto.removeprefix("./")
+    if not texto.startswith(RAICES_DEL_REPOSITORIO):
+        return None
+    return texto
+
+
+def citas_de(texto: str) -> list[str]:
+    """Todas las rutas del repositorio citadas por un documento, en orden."""
+    vistas: dict[str, None] = {}
+    for linea in _fuera_de_los_bloques(texto):
+        for span in CODIGO_EN_LINEA.finditer(linea):
+            ruta = ruta_citada(span.group(1))
+            if ruta is not None:
+                vistas[ruta] = None
+    return list(vistas)
+
+
+def _adrs() -> list[Path]:
+    return sorted(REGISTRO.glob("ADR-*.md"))
+
+
+def _rotas(adr: Path) -> list[str]:
+    return [
+        ruta
+        for ruta in citas_de(adr.read_text(encoding="utf-8"))
+        if not (RAIZ / ruta).exists() and adr.name not in BORRADOS_A_PROPOSITO.get(ruta, [])
+    ]
+
+
+# --- La guarda ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize("adr", _adrs(), ids=lambda p: p.name)
+def test_toda_ruta_citada_por_un_adr_existe(adr: Path) -> None:
+    """El corazón: una comprobación que no se puede abrir no comprueba nada."""
+    assert _rotas(adr) == [], (
+        f"{adr.name} cita rutas que ya no existen: {_rotas(adr)}. "
+        "Si el fichero solo se movió, actualiza el ADR. Si se borró a propósito y el ADR "
+        "lo cita como historia, añádelo a BORRADOS_A_PROPOSITO explicando por qué."
+    )
+
+
+def test_lo_fijado_como_borrado_sigue_borrado_de_verdad() -> None:
+    """Si el fichero vuelve, la excepción sobra y hay que quitarla de aquí."""
+    resucitados = sorted(ruta for ruta in BORRADOS_A_PROPOSITO if (RAIZ / ruta).exists())
+    assert resucitados == [], (
+        f"estas rutas vuelven a existir: {resucitados}. Quítalas de BORRADOS_A_PROPOSITO: "
+        "una excepción que ya no excepciona nada solo sirve para tapar la siguiente."
+    )
+
+
+def test_lo_fijado_como_borrado_lo_cita_de_verdad_quien_dice_citarlo() -> None:
+    """Una excepción que nadie usa es un permiso abierto para el futuro."""
+    sobrantes: list[str] = []
+    for ruta, adrs in BORRADOS_A_PROPOSITO.items():
+        for nombre in adrs:
+            documento = REGISTRO / nombre
+            if not documento.is_file() or ruta not in citas_de(
+                documento.read_text(encoding="utf-8")
+            ):
+                sobrantes.append(f"{nombre} ya no cita {ruta}")
+    assert sobrantes == [], f"excepciones que sobran: {sobrantes}"
+
+
+# --- Anti-vacua ---------------------------------------------------------------
+#
+# El corpus real está limpio hoy, así que las pruebas de arriba pasarían igual
+# con el extractor roto. Estas fijan el comportamiento con texto sintético, que
+# es lo único que no depende de cómo esté el repositorio hoy.
+
+_ADR_SINTETICO = """# ADR-999 — De mentira
+
+Lo prueba `tests/automation/test_citas_de_los_adr.py`, y el fallo vivía en
+`src/sirius_engine/governance.py:77`.
+
+```
+$ ls src/sirius_engine/esto_no_existe_y_esta_en_un_bloque.py
+```
+"""
+
+
+def test_una_ruta_inventada_se_detecta() -> None:
+    roto = _ADR_SINTETICO.replace("governance.py", "no_existe_de_ninguna_manera.py")
+    citadas = citas_de(roto)
+    assert "src/sirius_engine/no_existe_de_ninguna_manera.py" in citadas
+    assert not (RAIZ / "src/sirius_engine/no_existe_de_ninguna_manera.py").exists()
+
+
+def test_una_ruta_valida_no_se_señala() -> None:
+    """La otra dirección: sin esto, «falla siempre» también pasaría la de arriba."""
+    citadas = citas_de(_ADR_SINTETICO)
+    assert "src/sirius_engine/governance.py" in citadas, "no recortó el sufijo `:77`"
+    assert all((RAIZ / ruta).exists() for ruta in citadas), citadas
+
+
+def test_una_ruta_dentro_de_un_bloque_de_codigo_no_se_mira() -> None:
+    """Ahí hay salidas pegadas y ejemplos: es la fuente número uno de falso positivo."""
+    assert "src/sirius_engine/esto_no_existe_y_esta_en_un_bloque.py" not in citas_de(_ADR_SINTETICO)
+
+
+@pytest.mark.parametrize(
+    "span",
+    [
+        "origin/main",  # una rama
+        "feat/investigador-por-etiqueta",  # otra rama
+        "astral-sh/setup-uv",  # un repositorio de terceros
+        "https://github.com/x/y/pull/189",  # una URL
+        ".github/**",  # un globo
+        "scripts/automation/prompts/*.md",  # otro globo
+        "repos/{o}/{r}/issues/{n}",  # una plantilla de la API
+        "domain/work_item.py",  # relativa al paquete, sin `src/` delante
+        "domain/escalation.CausaEscalado",  # un módulo, no un fichero
+        "git checkout -- src/sirius_engine/gate.py",  # una orden entera
+        "uv run pytest tests/engine/test_gate.py -q",  # otra orden
+        "if/elif",  # prosa con barra
+        "/root/.local/share/sirius",  # una ruta de fuera del repositorio
+    ],
+)
+def test_lo_que_no_es_una_ruta_de_este_repositorio_se_ignora(span: str) -> None:
+    """Cada uno de estos salió del corpus real y habría sido un grito en falso."""
+    assert ruta_citada(span) is None
+
+
+@pytest.mark.parametrize(
+    ("span", "esperado"),
+    [
+        ("src/sirius_engine/context_recall.py:95", "src/sirius_engine/context_recall.py"),
+        (
+            ".github/workflows/repair-sirius-work.yml:67-81",
+            ".github/workflows/repair-sirius-work.yml",
+        ),
+        ("tests/engine/test_gate.py::test_algo", "tests/engine/test_gate.py"),
+        (
+            "./tests/automation/test_citas_de_los_adr.py",
+            "tests/automation/test_citas_de_los_adr.py",
+        ),
+        ("docs/decisions/", "docs/decisions/"),
+    ],
+)
+def test_los_sufijos_de_cita_se_recortan(span: str, esperado: str) -> None:
+    assert ruta_citada(span) == esperado
+
+
+def test_el_barrido_encuentra_citas_de_verdad() -> None:
+    """Si alguien rompe el extractor, la guarda pasaría en verde sin mirar nada.
+
+    El suelo es holgado y solo hacia abajo: el registro crece, y una prueba con
+    la cifra exacta de hoy caduca a la semana.
+    """
+    adrs = _adrs()
+    assert len(adrs) >= 40, f"solo {len(adrs)} ADR leídos: ¿se movió docs/decisions/?"
+    total = sum(len(citas_de(adr.read_text(encoding="utf-8"))) for adr in adrs)
+    assert total >= 100, f"solo {total} citas encontradas; el 21-08-2026 había 153 en 46 ADR"
+
+
+def test_las_raices_declaradas_son_directorios_de_verdad() -> None:
+    """Una raíz que ya no existe deja de mirar sus citas sin que nadie se entere."""
+    fantasmas = [raiz for raiz in RAICES_DEL_REPOSITORIO if not (RAIZ / raiz).is_dir()]
+    assert fantasmas == [], f"raíces declaradas que ya no son directorios: {fantasmas}"
