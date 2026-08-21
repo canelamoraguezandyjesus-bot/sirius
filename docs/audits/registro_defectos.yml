@@ -111,7 +111,7 @@ defectos:
     bloque: C1
     gravedad: media
     estado: cerrado
-    cerrado_por: PENDIENTE_DE_COMMIT
+    cerrado_por: 4fffa937e15c904ee46efe6780082b1165cfb789
     incidencia: 236
     ficheros:
       - src/sirius_engine/ports/supervisor_journal.py
