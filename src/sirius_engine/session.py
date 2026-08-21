@@ -17,7 +17,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from sirius_engine.context_recall import ContextoRecuperado, EntradaGitLog, recuperar_contexto
+from sirius_engine.context_recall import (
+    ContextoRecuperado,
+    LecturaHistorialGit,
+    recuperar_contexto,
+)
 from sirius_engine.domain.intent import TipoIntencion
 from sirius_engine.gate import ResultadoPuerta, decidir
 from sirius_engine.intent_interpreter import interpretar_intencion_v0
@@ -44,7 +48,7 @@ class ContextoRecuperarConfig:
     port: GitHubMirrorPort
     repo: str
     numeros_incidencias: Sequence[int]
-    entradas_git_log: Sequence[EntradaGitLog]
+    lectura_historial_git: LecturaHistorialGit
 
 
 def _resumir_contexto(contexto: ContextoRecuperado | None) -> str:
@@ -116,6 +120,6 @@ class SesionCLI:
             port=cfg.port,
             repo=cfg.repo,
             numeros_incidencias=cfg.numeros_incidencias,
-            entradas_git_log=cfg.entradas_git_log,
+            lectura_historial_git=cfg.lectura_historial_git,
             ahora=now,
         )

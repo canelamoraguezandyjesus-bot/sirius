@@ -11,7 +11,7 @@
 > | **H-4** dos ADR-042 | **CERRADO** | commit `6988030` |
 > | **H-2** «no pude leer» se cierra como éxito vacío | ABIERTO | incidencia #214 |
 > | **H-1** el cuerpo esquiva el filtro de confianza | ABIERTO | incidencia #215 |
-> | **H-5** un proveedor de contexto no reporta su fallo | ABIERTO | incidencia #216 |
+> | **H-5** un proveedor de contexto no reporta su fallo | **CERRADO** | commit `d7efb15`, ADR-050 |
 > | **H-6** `Run.worker` es una cadena libre | ABIERTO | incidencia #217 |
 >
 > La fuente legible por máquina de esa tabla es

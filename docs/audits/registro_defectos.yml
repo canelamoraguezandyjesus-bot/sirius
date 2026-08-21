@@ -62,8 +62,8 @@ defectos:
     titulo: Un tercio de contexto.recuperar no puede reportar su fallo
     bloque: A3
     gravedad: baja
-    estado: abierto
-    incidencia: 216
+    estado: cerrado
+    cerrado_por: d7efb15fb8195ac7fb9628f00738522111578ee5
     ficheros:
       - src/sirius_engine/context_recall.py
 
