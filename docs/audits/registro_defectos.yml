@@ -101,7 +101,7 @@ defectos:
     titulo: Con los tres proveedores caidos la sesion dice "no encontre referencias"
     bloque: A5
     gravedad: media
-    estado: abierto
-    incidencia: 224
+    estado: cerrado
+    cerrado_por: 41df5e2
     ficheros:
       - src/sirius_engine/session.py
