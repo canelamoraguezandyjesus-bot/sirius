@@ -19,6 +19,68 @@ Si lo que quieres es congelar y mirar, hoy no está congelado.
 
 ---
 
+## Nota de arranque de este trabajo, con su carencia dicha
+
+Este documento **es** la nota de arranque de su rama (skill
+`disciplina-evidencia`, ADR-001), publicada aquí y no aparte. Va delante porque
+lo que ata no es tener criterio de parada, es haberlo publicado.
+
+**Y aquí no se publicó antes.** No hubo cuatro preguntas ni criterio de parada
+puestos por delante. Se escriben ahora, y por eso valen menos que si se
+hubieran comprometido de antemano. Queda dicho en vez de disimulado.
+
+Lo que **sí** existía por escrito antes de que ningún frente devolviera nada es
+el guion del propio trabajo:
+
+    $ ls -l --time-style=+%H:%M:%S .../donde-estamos-y-que-falta-wf_8a193f45-d96.js
+    02:44:20
+
+Los cinco frentes arrancaron a partir de esa marca, y el guion les imponía por
+adelantado, textual:
+
+- «Cada afirmación va con el COMANDO que la sostiene y su salida literal
+  recortada. Una afirmación sin comprobación no entra.»
+- «Distingue SIEMPRE "no pude leerlo" de "no hay nada" (ADR-036).»
+- «Si algo quedó sin comprobar, va en una sección final. No lo escondas ni lo
+  maquilles.»
+- «NO modifiques ningún fichero del repositorio. Solo lees.»
+
+Eso es método comprometido antes de ver resultados. No es la nota de arranque
+de ADR-001 y no la sustituye.
+
+**Criterio de parada** (el que se aplicó): se paró al tener respuesta
+comprobada a las cinco preguntas del encargo, y **no antes de que cada frente
+declarara qué NO pudo comprobar**. La lista final tiene doce entradas; si
+hubiera salido vacía, habría sido señal de que nadie miró de verdad.
+
+**Qué se recomprobó a mano**, fuera de los agentes que lo trajeron: la medición
+de cobertura sobre el árbol anterior al arreglo (§5), que el parte de defectos
+no está en `main` (§3), que `SesionCLI` no la invoca nada fuera de las pruebas
+y que no existe ningún comando de consola del motor (§1).
+
+**Por qué no lleva ADR:** no decide nada. Describe lo que hay y deja las tres
+decisiones al propietario sin tomarlas. Un ADR aquí se arrogaría una autoridad
+que el documento expresamente no ejerce; cuando alguna de las tres se decida,
+esa sí llevará el suyo.
+
+**Un defecto encontrado al intentar cumplir esto, y que no se ha arreglado.**
+La nota tenía que ir en `.claude/evidencia/<rama>.md`, que es donde el propio
+repositorio dice que vivan —«confírmala en la rama: así sobrevive a los
+contenedores efímeros y queda visible en la PR, que es donde la visibilidad
+ata»—. No se puede:
+
+    $ git check-ignore -v .claude/evidencia/claude-donde-estamos.md
+    .gitignore:42:.claude/*    .claude/evidencia/claude-donde-estamos.md
+
+La regla `.claude/*` del `.gitignore` raíz ignora esa carpeta entera, y solo se
+reabren `settings.json` y dos comandos. Es decir: **el mecanismo que existe
+para que la evidencia sobreviva está apagado sin que lo diga nadie**, y toda
+nota escrita ahí muere con el contenedor. Falta un `!.claude/evidencia/`. No se
+aplica aquí porque el entorno denegó el permiso para tocar `.gitignore`; queda
+apuntado, que es justo lo que este documento reprocha que no se haga.
+
+---
+
 ## 1. Dónde estamos
 
 ### Lo que está terminado y funcionando
