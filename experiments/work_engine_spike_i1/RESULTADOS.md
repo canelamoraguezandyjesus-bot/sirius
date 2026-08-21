@@ -164,11 +164,20 @@ $ gh api rate_limit --jq '.resources.core.remaining'
 Cada cota está justificada por una fila concreta de la tabla de arriba; C1
 decide si las adopta, esto no lo fija.
 
+**Dos de ellas se declaran NO CONCLUYENTES** tras la ronda 4 de revisión, y
+conviene entender por qué eso es el resultado correcto y no una rebaja: la
+incidencia #211 exige que «cada cota propuesta viene de una medición ejecutada»
+y que «si un borde no puede medirse, se declara NO CONCLUYENTE y se escribe qué
+haría falta para responderlo». Las dos estaban **razonadas**, no medidas. Un
+spike que entrega una cifra inventada con aspecto de medición es peor que uno
+que entrega un hueco declarado: el hueco se ve, la cifra inventada se consume.
+
 | Cota propuesta | Valor | Fila que la sostiene |
 |---|---|---|
-| Cadencia mínima de sondeo | **≥ 5 s** entre lecturas del mismo run | Fila 1/5/6: el desvío de cierre run↔job es de 1 s; sondear más rápido que esto no añade información nueva, solo gasta cuota. |
+| Cadencia mínima de sondeo | **NO CONCLUYENTE** | Lo medido es un desvío de cierre run↔job de **1 s** (filas 1/5/6). De ahí NO se deriva ninguna cadencia: que el cierre se vea con 1 s de desfase no demuestra que sondear entre 1 y 5 s sea redundante. La ronda 4 (CODEX-002) señaló ese salto y tiene razón. **Qué haría falta:** medir cuánta información nueva aporta cada intervalo -sondear un mismo run a 1 s, 5 s y 15 s y comparar qué transiciones se pierden- sobre una muestra que no sea anecdótica. Hasta entonces C1 no debe tomar de aquí ninguna cifra: fijarla sin medirla le costaría capacidad de reacción por una decisión inventada. |
 | Umbral de "puede seguir vivo" para un run en `queued` sin job | **Ninguno por duración**: un run en `queued` con `total_jobs==0` puede seguir así indefinidamente (fila 2, >48 h y contando) | El propio caso 2: cualquier umbral de minutos/horas fabricado sin esta medición se habría equivocado. |
-| Señal de "no arrancó" (para el bound `LOST`) | `total_jobs == 0` (no un umbral de duración, no el código de `/logs`) | Filas 2 y 3: mismo `total_jobs==0`, duraciones y códigos de `/logs` distintos (perpetuo vs. cancelado en ~1 s). |
+| Señal observable de "todavía no existe job" | `total_jobs == 0` (no un umbral de duración, no el código de `/logs`) | Filas 2 y 3: mismo `total_jobs==0`, duraciones y códigos de `/logs` distintos (perpetuo vs. cancelado en ~1 s). Esto está **medido** y es lo que clasifica `boundary.clasificar`. |
+| Cota de `LOST` a partir de esa señal | **NO CONCLUYENTE** | Una observación **puntual** con `status=queued` y `total_jobs==0` no distingue un run que acaba de encolarse de la fila 2, que lleva **más de 48 h** así. Son el mismo estado observable. Adoptar `total_jobs==0` como cota de `LOST` haría que C1 marcara perdidos runs sanos de inmediato; y no adoptarla deja el run perpetuo sin marcar nunca. La ronda 4 (CODEX-001) lo señaló y tiene razón: **la señal está medida, la cota no**. **Qué haría falta:** o medir la evolución de runs sanos frente a atascados a lo largo del tiempo, o encontrar otra señal de vitalidad que no dependa de la duración. Ninguna de las dos cabe en un spike de solo lectura sobre el historial, así que se deja abierta a propósito en vez de fabricarla. |
 | Señal de "`skipped`" | `conclusion == "skipped"` (a nivel run) o `job.conclusion == "skipped"` | Fila 4: coincide en ambos niveles en el único caso medido. |
 | Señal de "cancelado con trabajo real perdido" | `total_jobs > 0` y `conclusion == "cancelled"` | Fila 1: distingue de la fila 3, que también es `cancelled` pero con `total_jobs==0`. |
 | Coste de presupuesto por ciclo de sondeo de un run | 1 punto de `rate_limit` por endpoint leído (`run`, `jobs`, `logs` si hace falta) | Medición de "Rate limits" arriba. |
