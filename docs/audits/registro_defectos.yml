@@ -77,3 +77,12 @@ defectos:
       - src/sirius_engine/domain/run.py
       - src/sirius_engine/domain/profile.py
       - src/sirius_engine/worker_request.py
+
+  - id: H-9
+    titulo: Con los tres proveedores caidos la sesion dice "no encontre referencias"
+    bloque: A5
+    gravedad: media
+    estado: abierto
+    incidencia: 224
+    ficheros:
+      - src/sirius_engine/session.py
