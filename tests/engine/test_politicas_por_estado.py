@@ -202,18 +202,18 @@ def test_ninguna_politica_revienta_desde_ningun_estado(
     assert despues is not None, "la política no puede hacer desaparecer el WorkItem"
 
 
-# -- La tabla de abajo no puede tener huecos ------------------------------------------
+# -- Las tablas de abajo no pueden tener huecos ----------------------------------------
 
 
-def _metodos_del_dominio_con_guarda_de_estado() -> set[str]:
-    """Métodos de ``WorkItem`` que pueden lanzar ``IllegalTransitionError``.
+def _metodos_del_dominio_con_guarda(*, llamada: str, excepcion: str) -> set[str]:
+    """Métodos públicos de ``WorkItem`` que contienen una guarda de la clase pedida.
 
     Se leen del código con ``ast``, no de una lista escrita a mano: una lista a
     mano se queda desactualizada en silencio, que es justo el fallo que esto
-    viene a impedir. Se reconocen las DOS formas que usa el dominio hoy: la
-    llamada a ``self._require(...)`` y el ``raise IllegalTransitionError``
-    escrito directamente -que es como están ``change_scope`` y ``reprioritize``,
-    y por eso nadie notó que faltaban de la tabla.
+    viene a impedir. Se reconocen las DOS formas que usa el dominio: la llamada
+    a ``self.<llamada>(...)`` y el ``raise <excepcion>`` escrito directamente
+    -que es como están ``change_scope`` y ``reprioritize``, y por eso nadie notó
+    que faltaban de la tabla de estados (defecto H-8).
     """
     import ast
     from pathlib import Path
@@ -226,59 +226,44 @@ def _metodos_del_dominio_con_guarda_de_estado() -> set[str]:
         if not isinstance(metodo, ast.FunctionDef) or metodo.name.startswith("_"):
             continue
         for nodo in ast.walk(metodo):
-            llama_require = (
+            llama = (
                 isinstance(nodo, ast.Call)
                 and isinstance(nodo.func, ast.Attribute)
-                and nodo.func.attr == "_require"
+                and nodo.func.attr == llamada
             )
             lanza_directo = (
                 isinstance(nodo, ast.Raise)
                 and isinstance(nodo.exc, ast.Call)
                 and isinstance(nodo.exc.func, ast.Name)
-                and nodo.exc.func.id == "IllegalTransitionError"
+                and nodo.exc.func.id == excepcion
             )
-            if llama_require or lanza_directo:
+            if llama or lanza_directo:
                 con_guarda.add(metodo.name)
                 break
     return con_guarda
 
 
-#: Operaciones del dominio con guarda de estado que HOY no están en la tabla de
-#: `test_work_item_transitions.py`, fijadas por nombre. La lista existe para que
-#: la prueba no sea vacua mientras se cierran: cualquier operación NUEVA que
-#: nazca fuera de la tabla rompe la batería igualmente, que es lo que importa.
-#: Al meter una en la tabla, se quita de aquí. Cuando quede vacía, se borra la
-#: constante y la excepción con ella.
-FUERA_DE_LA_TABLA_HOY = frozenset(
-    {
-        # Las señaló la auditoría del 20-08: guarda de estado, ninguna prueba
-        # contra cada estado.
-        "change_scope",
-        "reprioritize",
-        # Estas seis las encontró esta misma guarda al estrenarse, y la
-        # auditoría no las había visto. Todas llevan `_require(ACTIVE)` además
-        # de su guarda de fase, así que son operaciones de estado a todos los
-        # efectos. Meterlas en la tabla no es teclear una línea: la tabla de
-        # `test_work_item_transitions.py` modela estados, no fases, y estas
-        # exigen las dos cosas a la vez. Eso es trabajo con diseño detrás y va
-        # en su propia incidencia (defecto H-8), no de tapadillo aquí.
-        "begin_execution",
-        "begin_check",
-        "begin_review",
-        "approve_review",
-        "request_repair",
-        "resume_after_repair",
-    }
-)
+def _metodos_del_dominio_con_guarda_de_estado() -> set[str]:
+    return _metodos_del_dominio_con_guarda(llamada="_require", excepcion="IllegalTransitionError")
+
+
+def _metodos_del_dominio_con_guarda_de_fase() -> set[str]:
+    return _metodos_del_dominio_con_guarda(
+        llamada="_require_phase", excepcion="IllegalPhaseTransitionError"
+    )
 
 
 def test_ninguna_operacion_del_dominio_se_queda_fuera_de_la_tabla() -> None:
-    """Guarda 2: un hueco en la tabla es un estado que nadie prueba.
+    """Guarda 2 (ADR-048): un hueco en la tabla de estados es un estado que nadie prueba.
 
     Sin esto, añadir una operación con guarda de estado y olvidarse de la
     tabla no rompe nada, y la tabla deja de ser exhaustiva sin que nadie se
-    entere. Ya pasó: ``change_scope`` y ``reprioritize`` tienen guarda y nunca
-    entraron.
+    entere. Ya pasó, y con ocho a la vez: ``change_scope`` y ``reprioritize``
+    tienen guarda y nunca entraron, y las seis del ciclo de fases llevan
+    ``_require(ACTIVE)`` además de su guarda de fase. Eso fue el defecto H-8
+    (incidencia #219), y esta prueba vivió durante un tiempo con una lista de
+    excepciones -``FUERA_DE_LA_TABLA_HOY``- que declaraba el hueco mientras se
+    cerraba. La lista ya no existe: las ocho están en la tabla (ADR-058).
     """
     from .test_work_item_transitions import OPERATIONS
 
@@ -290,7 +275,7 @@ def test_ninguna_operacion_del_dominio_se_queda_fuera_de_la_tabla() -> None:
     def cubierta(metodo: str) -> bool:
         return any(clave == metodo or clave.startswith(f"{metodo}_") for clave in OPERATIONS)
 
-    fuera = sorted(m for m in con_guarda if not cubierta(m) and m not in FUERA_DE_LA_TABLA_HOY)
+    fuera = sorted(m for m in con_guarda if not cubierta(m))
     assert fuera == [], (
         f"operaciones del dominio con guarda de estado que nadie prueba contra cada "
         f"estado: {fuera}. Añádelas a OPERATIONS/LEGAL_FROM en "
@@ -298,15 +283,25 @@ def test_ninguna_operacion_del_dominio_se_queda_fuera_de_la_tabla() -> None:
     )
 
 
-def test_la_lista_de_excepciones_no_se_queda_obsoleta() -> None:
-    """Si alguien cierra el hueco y no borra la excepción, la prueba lo dice.
+def test_ninguna_operacion_de_fase_se_queda_fuera_de_la_tabla() -> None:
+    """La guarda hermana, para el eje FASE (ADR-058).
 
-    Una lista de excepciones que sobrevive a lo que excusaba es la forma más
-    silenciosa de que una guarda deje de guardar.
+    H-8 nació porque el eje estado tenía esta guarda y el eje fase no: una
+    operación con ``_require_phase`` podía nacer fuera de toda tabla sin romper
+    nada. Cerrar solo las ocho habría cerrado ocho defectos, no la familia que
+    los produce.
     """
-    from .test_work_item_transitions import OPERATIONS
+    from .test_work_item_transitions import OPERACIONES_CON_GUARDA_DE_FASE
 
-    ya_cubiertas = sorted(FUERA_DE_LA_TABLA_HOY & set(OPERATIONS))
-    assert ya_cubiertas == [], (
-        f"estas ya están en la tabla: {ya_cubiertas}. Quítalas de FUERA_DE_LA_TABLA_HOY."
+    con_guarda = _metodos_del_dominio_con_guarda_de_fase()
+    fuera = sorted(con_guarda - OPERACIONES_CON_GUARDA_DE_FASE)
+    assert fuera == [], (
+        f"operaciones del dominio con guarda de fase que nadie prueba contra cada "
+        f"fase: {fuera}. Añádelas a OPERACIONES_CON_GUARDA_DE_FASE/LEGAL_PHASE_FROM "
+        "en tests/engine/test_work_item_transitions.py."
+    )
+    sobran = sorted(OPERACIONES_CON_GUARDA_DE_FASE - con_guarda)
+    assert sobran == [], (
+        f"la tabla de fases cruza operaciones que ya no tienen guarda de fase: "
+        f"{sobran}. Si la guarda se quitó a propósito, quítalas también de la tabla."
     )
