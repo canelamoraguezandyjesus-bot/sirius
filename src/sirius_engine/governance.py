@@ -24,7 +24,7 @@ from sirius_engine.domain.budget import Budget
 from sirius_engine.domain.errors import UnknownWorkItemError
 from sirius_engine.domain.escalation import CausaEscalado, Escalada, construir_escalada
 from sirius_engine.domain.run import LIVE_STATES
-from sirius_engine.domain.work_item import WorkItem, WorkItemState
+from sirius_engine.domain.work_item import ESTADOS_EN_CURSO, WorkItem, WorkItemState
 from sirius_engine.ports.notification import NotificationPort
 from sirius_engine.ports.store import WorkEngineStore
 
@@ -127,4 +127,18 @@ def resolver_fallo_tecnico(
     run = store.get_run(run_id)
     if run is not None and run.estado in LIVE_STATES:
         store.fail_run(run_id, diagnostico=diagnostico, now=now)
+    work_item = store.get_work_item(work_id)
+    if work_item is None:
+        raise UnknownWorkItemError(work_id)
+    if work_item.estado not in ESTADOS_EN_CURSO:
+        # Fallo técnico que llega tarde: el trabajo ya no estaba en curso. El
+        # Run queda fallado, pero no se fuerza una transición imposible ni se
+        # lanza: un aviso tardío no puede romper al llamador (misma regla que
+        # el corte por presupuesto, ADR-045).
+        return work_item
+    if work_item.estado is WorkItemState.WAITING:
+        # El Worker externo por el que esperaba acaba de caerse: eso ES un
+        # hecho externo observado, así que la arista del diagrama vale tal
+        # cual y con su nombre verdadero (H-7).
+        store.observe_work_item_external_fact(work_id, now=now)
     return store.fail_work_item_safely(work_id, diagnostico=diagnostico, now=now)

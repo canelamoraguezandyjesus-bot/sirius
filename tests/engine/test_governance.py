@@ -349,3 +349,40 @@ def test_un_coste_tardio_sobre_un_trabajo_ya_detenido_no_escala_ni_revienta(
     run = store.get_run("RUN-GOV-0101")
     assert run is not None
     assert run.cancellation_status is CancellationStatus.UNCONFIRMED
+
+
+def test_un_fallo_tecnico_con_worker_asincrono_tambien_termina_en_failed_safely(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun
+) -> None:
+    """H-7: la funcion hermana de H-3, en el mismo fichero y con el mismo fallo.
+
+    ``resolver_fallo_tecnico`` llama a ``fail_work_item_safely``, que exige
+    ``ACTIVE``. Pero un Worker asincrono se cae mientras el WorkItem esta en
+    ``WAITING``, que es justo cuando hay algo fuera que puede fallar. Antes de
+    este arreglo la funcion lanzaba, dejando el Run muerto y el WorkItem
+    esperando para siempre a algo que ya no existe.
+    """
+    _activar_con_run(
+        store,
+        work_id="WI-GOV-0102",
+        run_id="RUN-GOV-0102",
+        make_work_item=make_work_item,
+        make_run=make_run,
+    )
+    store.dispatch_work_item_async("WI-GOV-0102", now=_NOW)
+
+    work_item = resolver_fallo_tecnico(
+        store,
+        work_id="WI-GOV-0102",
+        run_id="RUN-GOV-0102",
+        diagnostico="el Worker externo se cayo",
+        now=_NOW,
+    )
+
+    assert work_item.estado is WorkItemState.FAILED_SAFELY
+    assert work_item.diagnostico == "el Worker externo se cayo"
+
+    run = store.get_run("RUN-GOV-0102")
+    assert run is not None
+    assert run.estado is RunState.FINISHED
+    assert run.desenlace is RunOutcome.FAILED

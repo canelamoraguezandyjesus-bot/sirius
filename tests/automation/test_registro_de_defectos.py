@@ -96,7 +96,7 @@ def test_los_ficheros_que_cita_un_defecto_existen(defecto: dict[str, Any]) -> No
 #
 # Añadir un defecto nuevo NO obliga a tocar esta lista. Borrar uno viejo sí, y
 # ahí es donde toca pararse a pensar en vez de teclear.
-IDS_QUE_NO_PUEDEN_DESAPARECER = frozenset({"H-1", "H-2", "H-3", "H-4", "H-5", "H-6"})
+IDS_QUE_NO_PUEDEN_DESAPARECER = frozenset({"H-1", "H-2", "H-3", "H-4", "H-5", "H-6", "H-7", "H-8"})
 
 
 def test_ningun_defecto_conocido_desaparece_del_registro() -> None:

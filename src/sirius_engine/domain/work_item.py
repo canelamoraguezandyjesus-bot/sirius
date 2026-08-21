@@ -37,8 +37,8 @@ class WorkItemState(StrEnum):
 #: Terminal states: no operation in §3.2 leaves an outgoing edge from these.
 TERMINAL_STATES = frozenset({WorkItemState.CANCELLED, WorkItemState.DELIVERED})
 
-#: Estados desde los que un corte por presupuesto agotado puede llegar a
-#: ``NEEDS_DECISION`` sin ninguna acción del propietario.
+#: Los dos estados en que **puede haber un Run vivo**: el trabajo está pasando
+#: ahora mismo y, por tanto, hay algo que una política puede tener que cortar.
 #:
 #: El diagrama de §3.2 dibuja ``escalar`` solo desde ``ACTIVE``, pero §10
 #: declara agotar el presupuesto como causa 2 de ``NEEDS_DECISION`` **sin
@@ -47,7 +47,13 @@ TERMINAL_STATES = frozenset({WorkItemState.CANCELLED, WorkItemState.DELIVERED})
 #: el dinero: dejarlo fuera hacía que la garantía principal del gobierno de
 #: A5 fallara justo en el caso normal (H-3). No añade ninguna arista nueva al
 #: diagrama: ``WAITING -> ACTIVE -> NEEDS_DECISION`` ya existen las dos.
-BUDGET_CUTOFF_ESCALABLE_STATES = frozenset({WorkItemState.ACTIVE, WorkItemState.WAITING})
+#:
+#: El mismo error apareció una segunda vez en ``resolver_fallo_tecnico`` (H-7),
+#: la función hermana en el mismo fichero: un Worker asíncrono se cae mientras
+#: el WorkItem está en ``WAITING``, que es justo cuando hay algo fuera que puede
+#: fallar. Por eso este conjunto se llama por lo que ES -dónde hay trabajo en
+#: curso- y no por el primer sitio donde hizo falta.
+ESTADOS_EN_CURSO = frozenset({WorkItemState.ACTIVE, WorkItemState.WAITING})
 
 #: States ``pausar`` may be called from (§3.2: "desde PLANNED/ACTIVE/WAITING").
 PAUSABLE_STATES = frozenset({WorkItemState.PLANNED, WorkItemState.ACTIVE, WorkItemState.WAITING})
