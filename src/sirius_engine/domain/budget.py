@@ -21,26 +21,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
 
-class BudgetExhaustedError(Exception):
-    """Señal de que un gasto llevaría el presupuesto por debajo de cero.
-
-    :func:`Budget.consumir` nunca lanza esto para un gasto que agota
-    exactamente el presupuesto (``consumido == limite`` es un estado válido,
-    ``agotado``); solo para un gasto que lo dejaría NEGATIVO, que no
-    describe ningún coste real.
-    """
-
-    def __init__(self, limite: float, consumido: float, coste: float) -> None:
-        super().__init__(
-            f"no se puede registrar un gasto de {coste} sobre un presupuesto "
-            f"con límite {limite} y consumido {consumido}: dejaría el consumo "
-            "por debajo de cero"
-        )
-        self.limite = limite
-        self.consumido = consumido
-        self.coste = coste
-
-
 @dataclass(frozen=True, slots=True)
 class Budget:
     """Presupuesto inmutable: ``limite`` declarado, ``consumido`` hasta ahora."""

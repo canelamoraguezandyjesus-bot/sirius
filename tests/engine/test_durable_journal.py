@@ -695,18 +695,21 @@ def test_fallo_de_fsync_entre_dos_runs_del_corte_por_presupuesto_no_impide_compl
     real_fsync = os.fsync
     llamadas = 0
 
-    def fsync_que_falla_la_cuarta_llamada(fd: int) -> None:
+    def fsync_que_falla_la_sexta_llamada(fd: int) -> None:
         nonlocal llamadas
         llamadas += 1
-        # Llamada 1: fsync de fichero al cancelar RUN-A (éxito). Llamada 2:
-        # fsync de SU directorio (éxito, RUN-A queda cancelado). Llamada 3:
-        # fsync de fichero al cancelar RUN-B (éxito, el registro ya es
-        # completo). Llamada 4: fsync de SU directorio -la que falla-.
-        if llamadas == 4:
+        # Llamada 1: fsync de fichero al anexar la intención del corte
+        # (`work_item_budget_cutoff_started`, CODEX-001 ronda 8, éxito).
+        # Llamada 2: fsync de SU directorio (éxito). Llamada 3: fsync de
+        # fichero al cancelar RUN-A (éxito). Llamada 4: fsync de SU
+        # directorio (éxito, RUN-A queda cancelado). Llamada 5: fsync de
+        # fichero al cancelar RUN-B (éxito, el registro ya es completo).
+        # Llamada 6: fsync de SU directorio -la que falla-.
+        if llamadas == 6:
             raise OSError("fallo simulado de fsync de directorio")
         real_fsync(fd)
 
-    monkeypatch.setattr(os, "fsync", fsync_que_falla_la_cuarta_llamada)
+    monkeypatch.setattr(os, "fsync", fsync_que_falla_la_sexta_llamada)
 
     with pytest.raises(DirectorySyncError):
         store.cancel_all_live_runs_and_escalate_work_item("WI-CODEX001R3B-0001", now=_NOW)
@@ -719,6 +722,7 @@ def test_fallo_de_fsync_entre_dos_runs_del_corte_por_presupuesto_no_impide_compl
         "run_dispatched",
         "run_prepared",
         "run_dispatched",
+        "work_item_budget_cutoff_started",
         "run_cancellation_requested",
         "run_cancellation_requested",
     ]
@@ -739,6 +743,7 @@ def test_fallo_de_fsync_entre_dos_runs_del_corte_por_presupuesto_no_impide_compl
         "run_dispatched",
         "run_prepared",
         "run_dispatched",
+        "work_item_budget_cutoff_started",
         "run_cancellation_requested",
         "run_cancellation_requested",
         "work_item_escalated",
@@ -755,6 +760,118 @@ def test_fallo_de_fsync_entre_dos_runs_del_corte_por_presupuesto_no_impide_compl
     store_reabierto = DurableWorkEngineStore(journal_path)
     assert [event.kind for event in store_reabierto.list_events()] == eventos_finales
     assert store_reabierto.get_work_item("WI-CODEX001R3B-0001") == reintentado
+
+
+def test_reabrir_el_almacen_tras_el_fallo_reconcilia_el_corte_pendiente_sin_reintento_manual(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CODEX-001 (ronda 8, incidencia #206/#207): el corte se autorrepara al reabrir.
+
+    Reproduce el hallazgo exacto: tras la MISMA caída a mitad de la cascada
+    que el test anterior, en vez de que el llamador repita la llamada, se
+    reabre el almacén sin más -exactamente como ocurriría tras un reinicio
+    real del proceso, donde nada garantiza que alguien vaya a repetir
+    ``cancel_all_live_runs_and_escalate_work_item``-. La intención del corte
+    (``work_item_budget_cutoff_started``) ya quedó anexada de forma durable
+    ANTES del fallo, así que reabrir el almacén basta para que
+    ``_reconcile_pending_budget_cutoffs`` termine el corte por su cuenta, con
+    el ``now`` que ya persistía el propio marcador -nunca un reloj real-.
+    """
+    journal_path = tmp_path / "diario.jsonl"
+    store = DurableWorkEngineStore(journal_path)
+    store.create_work_item(
+        work_id="WI-CODEX001R8-0001",
+        peticion_original="texto literal",
+        objetivo="objetivo",
+        contexto_origen=(),
+        entregable="entregable",
+        criterio_terminado="criterio",
+        limites={},
+        prioridad=1,
+        clase=WorkItemClass.PROGRAMACION,
+        now=_NOW,
+    )
+    store.activate_work_item("WI-CODEX001R8-0001", now=_NOW)
+    for run_id, paso in (("RUN-CODEX001R8-A", "paso-1"), ("RUN-CODEX001R8-B", "paso-2")):
+        store.prepare_run(
+            run_id=run_id,
+            work_id="WI-CODEX001R8-0001",
+            paso=paso,
+            worker="worker-de-prueba",
+            work_package={"instrucciones": f"ejecutar {paso}"},
+            deadline=datetime(2026, 8, 18, 13, 0, tzinfo=UTC),
+            now=_NOW,
+        )
+        store.dispatch_run(run_id, now=_NOW)
+
+    real_fsync = os.fsync
+    llamadas = 0
+
+    def fsync_que_falla_la_sexta_llamada(fd: int) -> None:
+        nonlocal llamadas
+        llamadas += 1
+        if llamadas == 6:
+            raise OSError("fallo simulado de fsync de directorio")
+        real_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", fsync_que_falla_la_sexta_llamada)
+
+    with pytest.raises(DirectorySyncError):
+        store.cancel_all_live_runs_and_escalate_work_item("WI-CODEX001R8-0001", now=_NOW)
+
+    registros_tras_el_fallo = replay(journal_path).valid_records
+    assert [r["kind"] for r in registros_tras_el_fallo] == [
+        "work_item_created",
+        "work_item_activated",
+        "run_prepared",
+        "run_dispatched",
+        "run_prepared",
+        "run_dispatched",
+        "work_item_budget_cutoff_started",
+        "run_cancellation_requested",
+        "run_cancellation_requested",
+    ]
+    work_item_a_medias = store.get_work_item("WI-CODEX001R8-0001")
+    assert work_item_a_medias is not None
+    assert work_item_a_medias.estado is WorkItemState.ACTIVE
+
+    monkeypatch.setattr(os, "fsync", real_fsync)
+
+    # Reabrir el almacén SIN volver a llamar a `cancel_all_live_runs_and_
+    # escalate_work_item`: la reconciliación debe ocurrir sola, dentro del
+    # propio `__init__`.
+    store_reabierto = DurableWorkEngineStore(journal_path)
+
+    reconciliado = store_reabierto.get_work_item("WI-CODEX001R8-0001")
+    assert reconciliado is not None
+    assert reconciliado.estado is WorkItemState.NEEDS_DECISION
+
+    eventos_finales = [event.kind for event in store_reabierto.list_events()]
+    assert eventos_finales == [
+        "work_item_created",
+        "work_item_activated",
+        "run_prepared",
+        "run_dispatched",
+        "run_prepared",
+        "run_dispatched",
+        "work_item_budget_cutoff_started",
+        "run_cancellation_requested",
+        "run_cancellation_requested",
+        "work_item_escalated",
+    ]
+    registros_finales = replay(journal_path).valid_records
+    assert [r["kind"] for r in registros_finales] == eventos_finales
+
+    run_a = store_reabierto.get_run("RUN-CODEX001R8-A")
+    run_b = store_reabierto.get_run("RUN-CODEX001R8-B")
+    assert run_a is not None and run_a.cancellation_status is CancellationStatus.UNCONFIRMED
+    assert run_b is not None and run_b.cancellation_status is CancellationStatus.UNCONFIRMED
+
+    # Una segunda reapertura no debe repetir la reconciliación: ya no hay
+    # ningún corte pendiente, así que el diario y el estado quedan estables.
+    store_reabierto_otra_vez = DurableWorkEngineStore(journal_path)
+    assert [event.kind for event in store_reabierto_otra_vez.list_events()] == eventos_finales
+    assert store_reabierto_otra_vez.get_work_item("WI-CODEX001R8-0001") == reconciliado
 
 
 def test_almacen_durable_reproduce_un_ciclo_de_vida_real(tmp_path: Path) -> None:
