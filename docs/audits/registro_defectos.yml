@@ -77,3 +77,22 @@ defectos:
       - src/sirius_engine/domain/run.py
       - src/sirius_engine/domain/profile.py
       - src/sirius_engine/worker_request.py
+
+  - id: H-7
+    titulo: resolver_fallo_tecnico revienta con un Worker asincrono, igual que H-3
+    bloque: A5
+    gravedad: alta
+    estado: cerrado
+    cerrado_por: pendiente-de-esta-misma-rama
+    ficheros:
+      - src/sirius_engine/governance.py
+
+  - id: H-8
+    titulo: Ocho operaciones con guarda de estado no estan en ninguna tabla exhaustiva
+    bloque: A1
+    gravedad: media
+    estado: abierto
+    incidencia: 219
+    ficheros:
+      - src/sirius_engine/domain/work_item.py
+      - tests/engine/test_work_item_transitions.py

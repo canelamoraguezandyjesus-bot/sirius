@@ -186,7 +186,7 @@ class InMemoryWorkEngineStore:
         current = self._require_work_item(work_id)
         if current.estado is work_item_ops.WorkItemState.NEEDS_DECISION:
             return current
-        if current.estado not in work_item_ops.BUDGET_CUTOFF_ESCALABLE_STATES:
+        if current.estado not in work_item_ops.ESTADOS_EN_CURSO:
             # Estado no escalable (PLANNED, PAUSED, FAILED_SAFELY o terminal):
             # los Runs vivos ya quedaron cancelados y el gasto se devuelve al
             # llamador, pero no se escala un trabajo que ya no está en curso.

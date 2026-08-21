@@ -130,10 +130,7 @@ class DurableWorkEngineStore:
         """
         for work_id, started_at in list(self._pending_budget_cutoffs.items()):
             work_item = self._work_items.get(work_id)
-            if (
-                work_item is None
-                or work_item.estado not in work_item_ops.BUDGET_CUTOFF_ESCALABLE_STATES
-            ):
+            if work_item is None or work_item.estado not in work_item_ops.ESTADOS_EN_CURSO:
                 continue
             self.cancel_all_live_runs_and_escalate_work_item(work_id, now=started_at)
 
@@ -528,7 +525,7 @@ class DurableWorkEngineStore:
         current = self._require_work_item(work_id)
         if current.estado is work_item_ops.WorkItemState.NEEDS_DECISION:
             return current
-        if current.estado not in work_item_ops.BUDGET_CUTOFF_ESCALABLE_STATES:
+        if current.estado not in work_item_ops.ESTADOS_EN_CURSO:
             # Estado no escalable (PLANNED, PAUSED, FAILED_SAFELY o terminal):
             # los Runs vivos ya quedaron cancelados y el gasto se devuelve al
             # llamador, pero no se escala un trabajo que ya no está en curso.
