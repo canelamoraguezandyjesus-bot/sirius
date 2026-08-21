@@ -227,7 +227,14 @@ class WorkEngineStore(Protocol):
 
     def fail_run(self, run_id: str, *, diagnostico: str, now: datetime) -> Run: ...
 
-    def mark_run_lost(self, run_id: str, *, now: datetime) -> Run: ...
+    def mark_run_lost(self, run_id: str, *, now: datetime, diagnostico: str | None = None) -> Run:
+        """``{DISPATCHED,RUNNING} -> FINISHED(LOST)``.
+
+        ``diagnostico`` conserva lo que el observador del mundo haya dicho
+        sobre por qué se declaró perdido (CODEX-002); opcional porque no
+        todo observador lo da.
+        """
+        ...
 
     def request_run_cancellation(self, run_id: str, *, now: datetime) -> Run: ...
 

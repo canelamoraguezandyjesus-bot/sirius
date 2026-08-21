@@ -105,3 +105,13 @@ defectos:
     cerrado_por: 41df5e2
     ficheros:
       - src/sirius_engine/session.py
+
+  - id: H-10
+    titulo: La marca de escalada pendiente de avisar no sobrevive a un reinicio
+    bloque: C1
+    gravedad: media
+    estado: abierto
+    incidencia: 236
+    ficheros:
+      - src/sirius_engine/ports/supervisor_journal.py
+      - src/sirius_engine/adapters/memory_supervisor_journal.py

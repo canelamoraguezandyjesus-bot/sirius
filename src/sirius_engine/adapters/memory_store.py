@@ -439,9 +439,11 @@ class InMemoryWorkEngineStore:
             current.fail(diagnostico=diagnostico, now=now), "run_failed", now=now
         )
 
-    def mark_run_lost(self, run_id: str, *, now: datetime) -> Run:
+    def mark_run_lost(self, run_id: str, *, now: datetime, diagnostico: str | None = None) -> Run:
         current = self._require_run(run_id)
-        return self._record_run(current.mark_lost(now=now), "run_marked_lost", now=now)
+        return self._record_run(
+            current.mark_lost(now=now, diagnostico=diagnostico), "run_marked_lost", now=now
+        )
 
     def request_run_cancellation(self, run_id: str, *, now: datetime) -> Run:
         current = self._require_run(run_id)

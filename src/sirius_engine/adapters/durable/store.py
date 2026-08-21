@@ -998,14 +998,19 @@ class DurableWorkEngineStore:
         )
 
     def mark_run_lost(
-        self, run_id: str, *, now: datetime, idempotency_key: str | None = None
+        self,
+        run_id: str,
+        *,
+        now: datetime,
+        diagnostico: str | None = None,
+        idempotency_key: str | None = None,
     ) -> Run:
         cached = self._idempotent_run(idempotency_key)
         if cached is not None:
             return cached
         current = self._require_run(run_id)
         return self._append_run(
-            current.mark_lost(now=now),
+            current.mark_lost(now=now, diagnostico=diagnostico),
             "run_marked_lost",
             now=now,
             idempotency_key=idempotency_key,

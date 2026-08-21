@@ -214,6 +214,37 @@ def test_barrido_no_marca_lost_antes_de_que_venza_el_deadline(
     assert run.estado is RunState.FINISHED
 
 
+def test_barrido_conserva_el_diagnostico_del_observador_al_marcar_lost(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun, now: datetime
+) -> None:
+    """CODEX-002 (incidencia #232 ronda 3): el diagnóstico de LOST no se pierde.
+
+    Antes, ``mark_run_lost`` no aceptaba ningún diagnóstico y el barrido lo
+    descartaba aunque el observador lo hubiera dado -exactamente lo mismo
+    que ``test_barrido_promueve_un_run_prepared_hasta_dispatched_antes_de_darlo_por_fallido``
+    ya comprueba para ``FAILED`` arriba, pero para ``LOST``-.
+    """
+    deadline = now + timedelta(hours=2)
+    _waiting_work_item_with_live_run(
+        store, make_work_item, make_run, now=now, deadline=deadline, run_state=RunState.RUNNING
+    )
+    world = FakeRunWorldObserver(
+        observations={
+            "RUN-0001": RunWorldObservation(
+                status=RemoteRunStatus.LOST, diagnostico="total_jobs=0 y deadline vencido"
+            )
+        }
+    )
+
+    result = run_recovery_sweep(store, world, now=deadline + timedelta(minutes=1))
+
+    assert result.reconciled_run_ids == ("RUN-0001",)
+    run = store.get_run("RUN-0001")
+    assert run is not None
+    assert run.estado is RunState.FINISHED
+    assert run.diagnostico == "total_jobs=0 y deadline vencido"
+
+
 def test_barrido_ejecutado_dos_veces_seguidas_deja_el_mismo_estado(
     store: WorkEngineStore, make_work_item: MakeWorkItem, make_run: MakeRun, now: datetime
 ) -> None:
