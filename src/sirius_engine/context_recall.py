@@ -24,6 +24,15 @@ Un fallo de lectura en un proveedor NUNCA se convierte en "no hay
 referencias" (mismo requisito 2 que el espejo): se acumula en
 ``proveedores_fallidos`` y se devuelve junto a lo que sí se pudo encontrar,
 para que quien reciba el contexto sepa que la cobertura es parcial.
+
+**Los tres proveedores tienen la misma firma**
+``-> (referencias, fallidas)`` (ADR-050). Hasta la incidencia #216 el
+tercero era la excepción: devolvía solo referencias, y su fallo de lectura
+vivía izado fuera del módulo como un :class:`EspejoIlegibleError` que
+alguien de arriba atrapaba y traducía a "no había nada". Con la firma
+igualada, olvidar un proveedor en ``proveedores_fallidos`` se ve como una
+asimetría en una sola línea en vez de ser el resultado natural de leer el
+código.
 """
 
 from __future__ import annotations
@@ -161,11 +170,44 @@ def buscar_en_incidencias(
 # --- Proveedor 3: historial de git ------------------------------------------
 
 
+PROVEEDOR_HISTORIAL_GIT = "historial_git"
+"""Identificador de este proveedor en ``proveedores_fallidos``.
+
+Es deliberadamente grueso -no lleva el motivo del fallo-, por la misma razón
+por la que ``arbol:<ruta>`` tampoco lo lleva: el motivo de un ``git log``
+caído es el ``stderr`` del binario, que cambia entre versiones y máquinas, y
+``recuperar_contexto`` tiene que dar la misma salida para la misma entrada
+(requisito 5 de A3). El motivo sí se conserva, en
+:attr:`LecturaHistorialGit.error`, para quien quiera diagnosticar.
+"""
+
+
 @dataclass(frozen=True, slots=True)
 class EntradaGitLog:
     sha: str
     asunto: str
     cuerpo: str
+
+
+@dataclass(frozen=True, slots=True)
+class LecturaHistorialGit:
+    """Un intento de leer el historial de git: se pudo, o no se pudo.
+
+    Misma forma exacta que :class:`~sirius_engine.ports.github_mirror.LecturaCuerpo`
+    y :class:`~sirius_engine.ports.github_mirror.LecturaComentarios`, y reutiliza
+    su mismo :class:`~sirius_engine.ports.github_mirror.LecturaEstado`. No
+    amplía ``GitHubMirrorPort``: el historial de git no se lee por la vía
+    GitHub, pero el problema que resuelve el tipo es idéntico, así que la
+    forma también.
+
+    ``estado=OK`` con ``entradas=()`` es "leí el historial y no había
+    coincidencias": un vacío legítimo. Solo ``NO_DISPONIBLE`` significa "no
+    pude leer".
+    """
+
+    estado: LecturaEstado
+    entradas: tuple[EntradaGitLog, ...] | None = None
+    error: str | None = None
 
 
 _REGISTRO_SEPARADOR = "\x1e"
@@ -213,12 +255,39 @@ def leer_historial_git(
     return tuple(entradas)
 
 
+def leer_historial_git_como_lectura(
+    raiz: Path, *, limite: int = 500, ejecutar: EjecutorGit = _ejecutar_git
+) -> LecturaHistorialGit:
+    """El mismo adapter que :func:`leer_historial_git`, pero devolviendo el fallo.
+
+    :func:`leer_historial_git` conserva su contrato de **lanzar**
+    ``EspejoIlegibleError``: una excepción es lo que impide confundir "leí y
+    no había" con "no pude leer" en quien la llame directamente (ADR-034).
+    Esta función es el punto -único- donde esa excepción se convierte en un
+    dato que ``recuperar_contexto`` puede transportar hasta
+    ``proveedores_fallidos``.
+    """
+    try:
+        entradas = leer_historial_git(raiz, limite=limite, ejecutar=ejecutar)
+    except EspejoIlegibleError as exc:
+        return LecturaHistorialGit(estado=LecturaEstado.NO_DISPONIBLE, error=exc.motivo)
+    return LecturaHistorialGit(estado=LecturaEstado.OK, entradas=entradas)
+
+
 def buscar_en_historial_git(
-    entradas: Sequence[EntradaGitLog], consulta: str
-) -> tuple[Referencia, ...]:
+    lectura: LecturaHistorialGit, consulta: str
+) -> tuple[tuple[Referencia, ...], tuple[str, ...]]:
+    """Busca ``consulta`` en el historial ya leído.
+
+    Devuelve ``(referencias, fallidas)`` como los otros dos proveedores. Una
+    lectura ``NO_DISPONIBLE`` no da cero referencias en silencio: da cero
+    referencias **y** ``("historial_git",)``.
+    """
+    if lectura.estado is not LecturaEstado.OK or lectura.entradas is None:
+        return (), (PROVEEDOR_HISTORIAL_GIT,)
     consulta_normalizada = consulta.casefold()
     encontradas: list[Referencia] = []
-    for entrada in entradas:
+    for entrada in lectura.entradas:
         texto = f"{entrada.asunto}\n{entrada.cuerpo}"
         if consulta_normalizada in texto.casefold():
             if consulta_normalizada in entrada.asunto.casefold():
@@ -229,7 +298,7 @@ def buscar_en_historial_git(
                 Referencia(tipo="commit", identificador=entrada.sha[:12], fragmento=fragmento)
             )
     encontradas.sort(key=lambda r: r.identificador)
-    return tuple(encontradas)
+    return tuple(encontradas), ()
 
 
 # --- Orquestación ------------------------------------------------------------
@@ -242,7 +311,7 @@ def recuperar_contexto(
     port: GitHubMirrorPort,
     repo: str,
     numeros_incidencias: Sequence[int],
-    entradas_git_log: Sequence[EntradaGitLog],
+    lectura_historial_git: LecturaHistorialGit,
     ahora: datetime,
 ) -> ContextoRecuperado:
     """``contexto.recuperar`` v0: combina los tres proveedores deterministas.
@@ -256,10 +325,10 @@ def recuperar_contexto(
     referencias_incidencias, fallidas_incidencias = buscar_en_incidencias(
         port, repo=repo, numeros=numeros_incidencias, consulta=consulta
     )
-    referencias_git = buscar_en_historial_git(entradas_git_log, consulta)
+    referencias_git, fallidas_git = buscar_en_historial_git(lectura_historial_git, consulta)
     return ContextoRecuperado(
         consulta=consulta,
         referencias=referencias_arbol + referencias_incidencias + referencias_git,
-        proveedores_fallidos=fallidas_arbol + fallidas_incidencias,
+        proveedores_fallidos=fallidas_arbol + fallidas_incidencias + fallidas_git,
         origen=OrigenLectura(fuente=f"contexto.recuperar:{repo}", leido_en=ahora),
     )

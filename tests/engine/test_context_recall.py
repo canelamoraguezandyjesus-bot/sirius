@@ -19,11 +19,13 @@ import pytest
 from sirius_engine.adapters.fixture_mirror import FixedGitHubMirrorReader
 from sirius_engine.context_recall import (
     EntradaGitLog,
+    LecturaHistorialGit,
     Referencia,
     buscar_en_arbol_repo,
     buscar_en_historial_git,
     buscar_en_incidencias,
     leer_historial_git,
+    leer_historial_git_como_lectura,
     recuperar_contexto,
 )
 from sirius_engine.domain.mirror import EspejoIlegibleError
@@ -36,6 +38,15 @@ from sirius_engine.ports.github_mirror import (
 
 _REPO = "canelamoraguezandyjesus-bot/sirius"
 _AHORA = datetime(2026, 8, 18, 15, 0, tzinfo=UTC)
+
+
+def _git_leido(*entradas: EntradaGitLog) -> LecturaHistorialGit:
+    """Historial leído sin problemas. ``()`` es "leí y no había", no "no pude leer"."""
+    return LecturaHistorialGit(estado=LecturaEstado.OK, entradas=entradas)
+
+
+def _git_ilegible() -> LecturaHistorialGit:
+    return LecturaHistorialGit(estado=LecturaEstado.NO_DISPONIBLE, error="git no disponible")
 
 
 # --- Proveedor 1: árbol del repositorio -------------------------------------
@@ -156,25 +167,29 @@ def test_buscar_en_incidencias_fallo_de_lectura_se_reporta_no_se_esconde() -> No
 
 
 def test_buscar_en_historial_git_referencia_por_sha_corto() -> None:
-    entradas = (
+    lectura = _git_leido(
         EntradaGitLog(sha="a" * 40, asunto="Añade B12e", cuerpo=""),
         EntradaGitLog(sha="b" * 40, asunto="Sin relación", cuerpo="tampoco menciona nada"),
     )
-    referencias = buscar_en_historial_git(entradas, "B12e")
+    referencias, fallidas = buscar_en_historial_git(lectura, "B12e")
     assert referencias == (
         Referencia(tipo="commit", identificador="a" * 12, fragmento="Añade B12e"),
     )
+    assert fallidas == ()
 
 
 def test_buscar_en_historial_git_cita_el_cuerpo_cuando_la_coincidencia_esta_ahi() -> None:
     """La cita debe evidenciar dónde ocurrió la coincidencia: si el asunto no
     contiene la consulta, el fragmento debe venir del cuerpo, no del asunto.
     """
-    entradas = (EntradaGitLog(sha="a" * 40, asunto="Refactor", cuerpo="B12e quedó bloqueado"),)
-    referencias = buscar_en_historial_git(entradas, "B12e")
+    lectura = _git_leido(
+        EntradaGitLog(sha="a" * 40, asunto="Refactor", cuerpo="B12e quedó bloqueado")
+    )
+    referencias, fallidas = buscar_en_historial_git(lectura, "B12e")
     assert referencias == (
         Referencia(tipo="commit", identificador="a" * 12, fragmento="B12e quedó bloqueado"),
     )
+    assert fallidas == ()
 
 
 def test_leer_historial_git_propaga_fallo_como_espejo_ilegible(tmp_path: Path) -> None:
@@ -200,6 +215,55 @@ def test_leer_historial_git_parsea_registros_delimitados(tmp_path: Path) -> None
     )
 
 
+def test_buscar_en_historial_git_distingue_no_pude_leer_de_no_habia_nada() -> None:
+    """H-5 (incidencia #216): el tercer proveedor tiene la misma firma que los
+    otros dos, y las dos situaciones que producen cero referencias -no pude
+    leer, leí y no había- no dan el mismo resultado.
+    """
+    sin_leer, fallidas_sin_leer = buscar_en_historial_git(_git_ilegible(), "B12e")
+    leido_vacio, fallidas_leido_vacio = buscar_en_historial_git(_git_leido(), "B12e")
+
+    assert sin_leer == leido_vacio == ()
+    assert fallidas_sin_leer == ("historial_git",)
+    assert fallidas_leido_vacio == ()
+
+
+def test_leer_historial_git_como_lectura_convierte_el_fallo_en_no_disponible(
+    tmp_path: Path,
+) -> None:
+    """El adapter es el único sitio donde ``EspejoIlegibleError`` deja de ser
+    una excepción: tiene que convertirse en ``NO_DISPONIBLE``, nunca en un
+    ``OK`` con cero entradas.
+    """
+
+    def ejecutar_fallido(argv: list[str], raiz: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            argv, returncode=1, stdout="", stderr="git no disponible"
+        )
+
+    lectura = leer_historial_git_como_lectura(tmp_path, ejecutar=ejecutar_fallido)
+
+    assert lectura.estado is LecturaEstado.NO_DISPONIBLE
+    assert lectura.entradas is None
+    assert lectura.error == "git no disponible"
+
+
+def test_leer_historial_git_como_lectura_marca_ok_un_historial_vacio(tmp_path: Path) -> None:
+    """Anti-vacua del adapter: un historial que se leyó y estaba vacío es
+    ``OK``, no ``NO_DISPONIBLE``. Sin esta prueba, un adapter que devolviera
+    siempre ``NO_DISPONIBLE`` pasaría la de arriba.
+    """
+
+    def ejecutar_vacio(argv: list[str], raiz: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(argv, returncode=0, stdout="", stderr="")
+
+    lectura = leer_historial_git_como_lectura(tmp_path, ejecutar=ejecutar_vacio)
+
+    assert lectura.estado is LecturaEstado.OK
+    assert lectura.entradas == ()
+    assert lectura.error is None
+
+
 # --- Orquestación ------------------------------------------------------------
 
 
@@ -223,7 +287,7 @@ def test_recuperar_contexto_responde_con_referencias_no_con_afirmaciones(
         port=puerto,
         repo=_REPO,
         numeros_incidencias=[1],
-        entradas_git_log=entradas_git,
+        lectura_historial_git=_git_leido(*entradas_git),
         ahora=_AHORA,
     )
 
@@ -232,6 +296,51 @@ def test_recuperar_contexto_responde_con_referencias_no_con_afirmaciones(
     assert contexto.proveedores_fallidos == ()
     assert contexto.origen.leido_en == _AHORA
     assert contexto.consulta == "B12e"
+
+
+def test_recuperar_contexto_reporta_el_fallo_del_tercer_proveedor(tmp_path: Path) -> None:
+    """H-5 (incidencia #216). Antes de ADR-050, ``proveedores_fallidos`` sumaba
+    solo dos de los tres proveedores: un ``git log`` caído llegaba a quien
+    recibía el ``ContextoRecuperado`` como "git no tenía nada".
+
+    La prueba exige además que el fallo de un proveedor no se lleve por
+    delante a los otros dos: la referencia del árbol tiene que seguir ahí.
+    """
+    (tmp_path / "PLAN.md").write_text("B12e: pendiente de decisión.\n", encoding="utf-8")
+
+    contexto = recuperar_contexto(
+        "B12e",
+        raiz_repo=tmp_path,
+        port=FixedGitHubMirrorReader(),
+        repo=_REPO,
+        numeros_incidencias=[],
+        lectura_historial_git=_git_ilegible(),
+        ahora=_AHORA,
+    )
+
+    assert "historial_git" in contexto.proveedores_fallidos
+    assert any(r.tipo == "fichero" for r in contexto.referencias)
+
+
+def test_recuperar_contexto_no_llama_fallo_a_un_historial_de_git_vacio(tmp_path: Path) -> None:
+    """Anti-vacua de la de arriba: "git se leyó y no había coincidencias" NO
+    puede aparecer en ``proveedores_fallidos``. Sin esta prueba, reportar
+    siempre el tercer proveedor pasaría por arreglo.
+    """
+    (tmp_path / "PLAN.md").write_text("B12e: pendiente de decisión.\n", encoding="utf-8")
+
+    contexto = recuperar_contexto(
+        "B12e",
+        raiz_repo=tmp_path,
+        port=FixedGitHubMirrorReader(),
+        repo=_REPO,
+        numeros_incidencias=[],
+        lectura_historial_git=_git_leido(),
+        ahora=_AHORA,
+    )
+
+    assert contexto.proveedores_fallidos == ()
+    assert any(r.tipo == "fichero" for r in contexto.referencias)
 
 
 def test_recuperar_contexto_es_determinista(tmp_path: Path) -> None:
@@ -245,7 +354,7 @@ def test_recuperar_contexto_es_determinista(tmp_path: Path) -> None:
             port=puerto,
             repo=_REPO,
             numeros_incidencias=[],
-            entradas_git_log=(),
+            lectura_historial_git=_git_leido(),
             ahora=_AHORA,
         )
 

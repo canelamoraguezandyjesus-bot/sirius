@@ -13,8 +13,10 @@ from pathlib import Path
 
 from sirius_engine.adapters.fixture_mirror import FixedGitHubMirrorReader
 from sirius_engine.adapters.memory_store import InMemoryWorkEngineStore
+from sirius_engine.context_recall import LecturaHistorialGit
 from sirius_engine.domain.escalation import Escalada
 from sirius_engine.domain.work_item import WorkItemState
+from sirius_engine.ports.github_mirror import LecturaEstado
 from sirius_engine.session import ContextoRecuperarConfig, SesionCLI
 
 _NOW = datetime(2026, 8, 19, 12, 0, tzinfo=UTC)
@@ -36,7 +38,7 @@ def _sesion(*, tmp_path: Path) -> tuple[SesionCLI, InMemoryWorkEngineStore, _Not
         port=FixedGitHubMirrorReader(),
         repo="canelamoraguezandyjesus-bot/sirius",
         numeros_incidencias=(),
-        entradas_git_log=(),
+        lectura_historial_git=LecturaHistorialGit(estado=LecturaEstado.OK, entradas=()),
     )
     sesion = SesionCLI(store=store, notificar=notificador, contexto_recuperar=contexto_cfg)
     return sesion, store, notificador
