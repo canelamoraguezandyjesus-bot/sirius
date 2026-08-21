@@ -202,8 +202,10 @@ corrección de una fila, no un rediseño.
 
 Componentes nuevos, dentro de `src/sirius_engine/` y `tests/engine/`:
 
-- **`domain/budget.py`**: `Budget` (límite/consumido, inmutable) y
-  `BudgetExhaustedError`.
+- **`domain/budget.py`**: `Budget` (límite/consumido, inmutable; propiedades
+  `restante` y `agotado`, método `consumir` que devuelve un `Budget` nuevo) y
+  `leer_limite_declarado` (lectura total del límite fijado en
+  `WorkItem.limites`).
 - **`domain/escalation.py`**: `CausaEscalado` (las siete causas cerradas de
   arquitectura §10) y `Escalada` (instantánea completa del WorkItem + causa +
   referencias, para que "decidir sin reconstruir nada" sea una propiedad
