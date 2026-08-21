@@ -32,6 +32,7 @@ from sirius_engine.mirror_projection import (
 )
 from sirius_engine.ports.github_mirror import (
     Comentario,
+    CuerpoIncidencia,
     LecturaComentarios,
     LecturaCuerpo,
     LecturaEstado,
@@ -44,6 +45,20 @@ from sirius_engine.ports.github_mirror import (
 _FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 _REPO = "canelamoraguezandyjesus-bot/sirius"
 _AHORA = datetime(2026, 8, 18, 15, 0, tzinfo=UTC)
+_OWNER_LOGIN = "canelamoraguezandyjesus-bot"
+
+
+def _cuerpo_de_confianza(texto: str) -> LecturaCuerpo:
+    """Cuerpo escrito por el propietario: el caso normal de una incidencia de Sirius.
+
+    Desde ADR-051 el cuerpo viaja con su autor, así que una lectura de cuerpo
+    ya no se puede construir sin decir quién lo escribió. Este ayudante fija
+    el caso de confianza para las pruebas que no van sobre el filtro.
+    """
+    return LecturaCuerpo(
+        estado=LecturaEstado.OK,
+        cuerpo=CuerpoIncidencia(autor_login=_OWNER_LOGIN, autor_asociacion="OWNER", texto=texto),
+    )
 
 
 def _cargar_fixture(nombre: str) -> dict[str, Any]:
@@ -64,7 +79,14 @@ def _lecturas_desde_fixture(
             etiquetas=tuple(fixture["etiquetas"]),
         ),
     )
-    cuerpo = LecturaCuerpo(estado=LecturaEstado.OK, cuerpo=fixture["cuerpo"])
+    cuerpo = LecturaCuerpo(
+        estado=LecturaEstado.OK,
+        cuerpo=CuerpoIncidencia(
+            autor_login=fixture["cuerpo_autor_login"],
+            autor_asociacion=fixture["cuerpo_autor_asociacion"],
+            texto=fixture["cuerpo"],
+        ),
+    )
     comentarios = LecturaComentarios(
         estado=LecturaEstado.OK,
         comentarios=tuple(
@@ -190,7 +212,7 @@ def test_fallo_de_metadatos_lanza_espejo_ilegible_no_ausencia() -> None:
     confunden para el proveedor de metadatos.
     """
     metadatos = LecturaMetadatos(estado=LecturaEstado.NO_DISPONIBLE, error="503")
-    cuerpo = LecturaCuerpo(estado=LecturaEstado.OK, cuerpo="")
+    cuerpo = _cuerpo_de_confianza("")
     comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=())
 
     with pytest.raises(EspejoIlegibleError) as excinfo:
@@ -234,7 +256,7 @@ def test_fallo_de_comentarios_lanza_espejo_ilegible_no_ausencia() -> None:
         estado=LecturaEstado.OK,
         metadatos=MetadatosIncidencia(numero=1, titulo="t", estado_gh="open", etiquetas=()),
     )
-    cuerpo = LecturaCuerpo(estado=LecturaEstado.OK, cuerpo="")
+    cuerpo = _cuerpo_de_confianza("")
     comentarios = LecturaComentarios(estado=LecturaEstado.NO_DISPONIBLE, error="503")
 
     with pytest.raises(EspejoIlegibleError) as excinfo:
@@ -282,7 +304,7 @@ def test_etiqueta_sirius_desconocida_produce_estado_none_no_un_valor_por_defecto
             numero=1, titulo="t", estado_gh="open", etiquetas=("etiqueta-no-reconocida",)
         ),
     )
-    cuerpo = LecturaCuerpo(estado=LecturaEstado.OK, cuerpo="")
+    cuerpo = _cuerpo_de_confianza("")
     comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=())
 
     mirrored = proyectar_work_item(
@@ -311,7 +333,7 @@ def test_etiquetas_de_estado_contradictorias_no_eligen_una_ganadora() -> None:
             etiquetas=("sirius:repairing", "sirius:completed"),
         ),
     )
-    cuerpo = LecturaCuerpo(estado=LecturaEstado.OK, cuerpo="")
+    cuerpo = _cuerpo_de_confianza("")
     comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=())
 
     mirrored = proyectar_work_item(
@@ -341,7 +363,7 @@ def test_par_de_activacion_planned_e_implement_requested_no_es_contradiccion() -
             etiquetas=("sirius:planned", "sirius:implement-requested"),
         ),
     )
-    cuerpo = LecturaCuerpo(estado=LecturaEstado.OK, cuerpo="")
+    cuerpo = _cuerpo_de_confianza("")
     comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=())
 
     mirrored = proyectar_work_item(
@@ -366,7 +388,7 @@ def test_comentario_no_confiable_no_se_interpreta_como_marcador() -> None:
         estado=LecturaEstado.OK,
         metadatos=MetadatosIncidencia(numero=1, titulo="t", estado_gh="open", etiquetas=()),
     )
-    cuerpo = LecturaCuerpo(estado=LecturaEstado.OK, cuerpo="")
+    cuerpo = _cuerpo_de_confianza("")
     comentario_falso = Comentario(
         autor_login="un-tercero-cualquiera",
         autor_asociacion="NONE",
@@ -404,7 +426,7 @@ def test_marcador_pr_abierta_citado_en_texto_no_se_confunde_con_uno_real() -> No
         estado=LecturaEstado.OK,
         metadatos=MetadatosIncidencia(numero=1, titulo="t", estado_gh="open", etiquetas=()),
     )
-    cuerpo = LecturaCuerpo(estado=LecturaEstado.OK, cuerpo="")
+    cuerpo = _cuerpo_de_confianza("")
     comentario = Comentario(
         autor_login="canelamoraguezandyjesus-bot",
         autor_asociacion="OWNER",
@@ -422,6 +444,190 @@ def test_marcador_pr_abierta_citado_en_texto_no_se_confunde_con_uno_real() -> No
         ahora=_AHORA,
     )
     assert mirrored.pr_url is None
+
+
+# --- El cuerpo pasa por el MISMO filtro que los comentarios (H-1, #215) ----
+#
+# El defecto: `_texto_cronologico_de_confianza` filtraba los comentarios por
+# autor y concatenaba el cuerpo sin filtrar, porque `LecturaCuerpo` no
+# transportaba autor y la función no tenía con qué filtrarlo. Ese texto
+# alimenta `parse_round_records` y `ci_failure_streak`: gobierna la
+# numeración de rondas y el corte por CI. Ver ADR-051.
+
+_REGISTRO_DE_RONDA_99 = (
+    "<!-- sirius-round:99 -->\n\n## RONDA_HALLAZGOS\n```json\n"
+    '{"round": 99, "head": "deadbeef", "findings": [], "pending": 0, '
+    '"severity_total": 0}\n```\n'
+)
+
+
+def _metadatos_minimos() -> LecturaMetadatos:
+    return LecturaMetadatos(
+        estado=LecturaEstado.OK,
+        metadatos=MetadatosIncidencia(numero=1, titulo="t", estado_gh="open", etiquetas=()),
+    )
+
+
+def test_el_mismo_texto_de_ronda_se_filtra_igual_venga_del_cuerpo_o_de_un_comentario() -> None:
+    """La prueba A/B del defecto H-1: MISMO texto, MISMO autor, distinto sitio.
+
+    Un tercero sin autoridad publica el registro de la ronda 99. Puesto en un
+    comentario, el filtro lo descarta -eso ya funcionaba-. Puesto en el
+    cuerpo de la incidencia, escapaba del filtro y fabricaba una ronda 99 en
+    el espejo.
+
+    Que las dos mitades vivan en la MISMA prueba es deliberado: lo que se fija
+    aquí no es «el cuerpo se filtra», sino que **el sitio del texto no cambia
+    la respuesta**. Una prueba que solo mirase el cuerpo pasaría también si
+    alguien rompiera el filtro de los comentarios.
+
+    Mutación que la tumba: volver a
+    ``"\\n".join((*de_confianza, cuerpo))`` en
+    ``_texto_cronologico_de_confianza``.
+    """
+    tercero = "un-tercero-cualquiera"
+
+    desde_comentario = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=_metadatos_minimos(),
+        cuerpo=_cuerpo_de_confianza(""),
+        comentarios=LecturaComentarios(
+            estado=LecturaEstado.OK,
+            comentarios=(
+                Comentario(
+                    autor_login=tercero,
+                    autor_asociacion="NONE",
+                    cuerpo=_REGISTRO_DE_RONDA_99,
+                    creado_en=_AHORA,
+                ),
+            ),
+        ),
+        ahora=_AHORA,
+    )
+
+    desde_cuerpo = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=_metadatos_minimos(),
+        cuerpo=LecturaCuerpo(
+            estado=LecturaEstado.OK,
+            cuerpo=CuerpoIncidencia(
+                autor_login=tercero,
+                autor_asociacion="NONE",
+                texto=_REGISTRO_DE_RONDA_99,
+            ),
+        ),
+        comentarios=LecturaComentarios(estado=LecturaEstado.OK, comentarios=()),
+        ahora=_AHORA,
+    )
+
+    assert desde_comentario.rondas == ()
+    assert desde_cuerpo.rondas == (), "el cuerpo de un tercero fabricó una ronda en el espejo"
+    assert desde_cuerpo.rondas == desde_comentario.rondas
+
+
+def test_el_cuerpo_de_un_tercero_tampoco_gobierna_la_racha_de_fallos_de_quality() -> None:
+    """El otro motor del ciclo que ese texto alimenta: ``ci_failure_streak``.
+
+    Dos marcadores de fallo sobre heads distintos en el cuerpo sumaban una
+    racha de 2 de las 3 que agotan el margen y mandan la incidencia a
+    decisión humana (``MAX_CI_FAILURE_STREAK``). Se comprueba aparte de las
+    rondas porque son dos consumidores distintos del mismo texto: arreglar
+    uno sin el otro dejaría la mitad del defecto en pie.
+
+    Mutación que la tumba: la misma que la prueba anterior.
+    """
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=_metadatos_minimos(),
+        cuerpo=LecturaCuerpo(
+            estado=LecturaEstado.OK,
+            cuerpo=CuerpoIncidencia(
+                autor_login="un-tercero-cualquiera",
+                autor_asociacion="NONE",
+                texto=(
+                    "<!-- sirius-quality:cafecafe:failure -->\n"
+                    "<!-- sirius-quality:beefbeef:failure -->\n"
+                ),
+            ),
+        ),
+        comentarios=LecturaComentarios(estado=LecturaEstado.OK, comentarios=()),
+        ahora=_AHORA,
+    )
+
+    assert mirrored.fallos_quality_consecutivos == 0
+    assert mirrored.eventos_quality == ()
+
+
+def test_el_cuerpo_del_propietario_si_cuenta_como_de_confianza() -> None:
+    """El complemento imprescindible: el arreglo no puede ser «tirar el cuerpo».
+
+    Sin esta prueba, la anterior pasaría igual con una implementación que
+    ignorase el cuerpo siempre -y el espejo perdería en silencio las rondas
+    que el propietario o el bot publiquen ahí-. Cubre las dos identidades de
+    confianza, que son las dos que ``es_autor_de_confianza`` reconoce.
+
+    Mutación que la tumba: hacer que ``_texto_cronologico_de_confianza``
+    descarte el cuerpo incondicionalmente.
+    """
+    for login, asociacion in (
+        ("canelamoraguezandyjesus-bot", "OWNER"),
+        ("github-actions[bot]", "NONE"),
+    ):
+        mirrored = proyectar_work_item(
+            repo=_REPO,
+            numero=1,
+            metadatos=_metadatos_minimos(),
+            cuerpo=LecturaCuerpo(
+                estado=LecturaEstado.OK,
+                cuerpo=CuerpoIncidencia(
+                    autor_login=login,
+                    autor_asociacion=asociacion,
+                    texto=_REGISTRO_DE_RONDA_99,
+                ),
+            ),
+            comentarios=LecturaComentarios(estado=LecturaEstado.OK, comentarios=()),
+            ahora=_AHORA,
+        )
+        assert [r.numero for r in mirrored.rondas] == [99], f"{login}/{asociacion}"
+
+
+def test_el_cuerpo_se_concatena_primero_por_ser_lo_mas_antiguo() -> None:
+    """Segundo hallazgo de la misma función: el orden contradecía su docstring.
+
+    ``_texto_cronologico_de_confianza`` promete «del más antiguo al más
+    reciente» y ponía el cuerpo -lo primero que existe en una incidencia- al
+    FINAL. No se notaba en la numeración de rondas porque
+    ``parse_round_records`` ordena internamente por número de marcador; sí se
+    nota en ``history_after_last_resume``, que **corta** el texto por la
+    última orden de continuar: con el cuerpo al final, un
+    ``sirius-convergence-reset`` en el cuerpo se leía como posterior a todos
+    los comentarios y los borraba a todos.
+
+    Mutación que la tumba: volver a poner ``cuerpo`` al final de la
+    concatenación.
+    """
+    comentario = Comentario(
+        autor_login="canelamoraguezandyjesus-bot",
+        autor_asociacion="OWNER",
+        cuerpo=_REGISTRO_DE_RONDA_99,
+        creado_en=_AHORA,
+    )
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=_metadatos_minimos(),
+        cuerpo=_cuerpo_de_confianza("<!-- sirius-convergence-reset:deadbee -->"),
+        comentarios=LecturaComentarios(estado=LecturaEstado.OK, comentarios=(comentario,)),
+        ahora=_AHORA,
+    )
+
+    assert [r.numero for r in mirrored.rondas] == [99], (
+        "una reanudación escrita en el cuerpo borró rondas publicadas DESPUÉS"
+    )
 
 
 # --- Estructura de las proyecciones (nota de arranque, pregunta 4) ---------
