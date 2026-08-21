@@ -51,13 +51,73 @@ class ContextoRecuperarConfig:
     lectura_historial_git: LecturaHistorialGit
 
 
+#: Cuántas cosas se citan como mucho en una sola frase, antes de pasar a "y N
+#: más". Vale igual para las referencias encontradas y para los sitios que no
+#: se dejaron leer: el destinatario de este texto es una persona leyendo una
+#: línea, no un programa recorriendo una lista.
+_MAXIMO_CITADO = 5
+
+
+def _citar(identificadores: Sequence[str]) -> str:
+    """Citar hasta :data:`_MAXIMO_CITADO` identificadores y contar el resto."""
+    mostrados = "; ".join(identificadores[:_MAXIMO_CITADO])
+    restantes = len(identificadores) - _MAXIMO_CITADO
+    if restantes > 0:
+        return f"{mostrados}; y {restantes} más"
+    return mostrados
+
+
 def _resumir_contexto(contexto: ContextoRecuperado | None) -> str:
+    """El texto que lee una persona. Nunca dice "no hay" de lo que no se pudo mirar.
+
+    Es la única función que convierte un ``ContextoRecuperado`` en lenguaje
+    natural, y por eso es donde se decide si Sirius miente. Hasta la
+    incidencia #224 (defecto **H-9**) no miraba ``proveedores_fallidos``: con
+    las tres fuentes caídas respondía "No encontré referencias para X", que es
+    una ausencia que nadie había comprobado. Es la familia de ADR-036 -"una
+    lectura caída no es una ausencia"- un nivel por encima de H-5 (ADR-050) y
+    peor que él: H-5 perdía el dato dentro de una estructura, donde un
+    programa podía notarlo; esto se lo dice a una persona, en su idioma, con
+    una frase que suena a respuesta.
+
+    Las tres situaciones se dicen distintas, y las dos que ya existían se
+    dicen **igual que antes** (ADR-059):
+
+    - Se pudo mirar en todo y no había nada → "No encontré referencias...".
+    - Se pudo mirar en todo y había → "Encontré N referencia(s)...".
+    - Quedaron sitios sin leer → se dice, y se dice **cuáles**, tanto si
+      además se encontró algo como si no. Avisar solo cuando no se encontró
+      nada dejaría media mentira: una respuesta parcial que se lee como
+      completa.
+
+    Los identificadores (``historial_git``, ``arbol:<ruta>``,
+    ``incidencia:<n>:cuerpo``) se citan tal como llegan, sin traducir: son
+    citas, igual que las de las referencias encontradas, y una tabla de
+    traducción aquí se quedaría muda en silencio ante un proveedor nuevo.
+    Lo que sí tiene que entenderse sin saber qué es un "proveedor" es la
+    frase que los envuelve.
+    """
     if contexto is None:
         return "No hay fuentes de contexto.recuperar configuradas para esta sesión."
+    sin_leer = contexto.proveedores_fallidos
     if not contexto.referencias:
-        return f"No encontré referencias para {contexto.consulta!r}."
-    citas = "; ".join(f"{r.tipo}:{r.identificador}" for r in contexto.referencias[:5])
-    return f"Encontré {len(contexto.referencias)} referencia(s) para {contexto.consulta!r}: {citas}"
+        if not sin_leer:
+            return f"No encontré referencias para {contexto.consulta!r}."
+        return (
+            f"No pude mirar en todos los sitios, así que no puedo decirte si hay algo sobre "
+            f"{contexto.consulta!r}: {len(sin_leer)} sitio(s) no se dejaron leer "
+            f"({_citar(sin_leer)}). En los que sí pude mirar no había nada."
+        )
+    citas = "; ".join(f"{r.tipo}:{r.identificador}" for r in contexto.referencias[:_MAXIMO_CITADO])
+    encontrado = (
+        f"Encontré {len(contexto.referencias)} referencia(s) para {contexto.consulta!r}: {citas}"
+    )
+    if not sin_leer:
+        return encontrado
+    return (
+        f"{encontrado}. Aviso: puede que no sea todo, porque {len(sin_leer)} sitio(s) "
+        f"no se dejaron leer ({_citar(sin_leer)}); ahí no he podido mirar."
+    )
 
 
 class SesionCLI:
