@@ -194,6 +194,7 @@ def _escalar(
     *,
     now: datetime,
     notificar: NotificationPort | None,
+    journal: SupervisorJournal,
 ) -> SupervisionOutcome | None:
     """Escalar por ``AUSENCIA_DE_CONVERGENCIA`` (arquitectura §10, causa 7).
 
@@ -223,14 +224,22 @@ def _escalar(
     )
     if actual.estado is WorkItemState.ACTIVE:
         escalado = store.escalate_work_item(work_item.work_id, now=now)
+        # Se correlaciona ANTES de intentar la notificación, para que la
+        # marca sobreviva aunque `notificar` falle a continuación
+        # (CODEX-004): es lo que la rama de abajo necesita para distinguir
+        # "esto es MI escalada, pendiente de entregar" de cualquier otro
+        # motivo por el que el WorkItem esté en NEEDS_DECISION.
+        journal.record_pending_escalation(run.run_id, work_item.work_id)
     elif actual.estado is WorkItemState.NEEDS_DECISION:
-        # La transición YA se aplicó -de esta misma acción en una pasada
-        # anterior que murió justo después de escalar, antes de que la
-        # notificación se entregara (CODEX-004)-: `escalate_work_item` no
-        # se repite (el WorkItem ya no está ACTIVE), solo se reintenta la
-        # entrega pendiente. Sin este caso, un fallo de `notificar` dejaba
-        # el propietario sin avisar para siempre: la siguiente pasada veía
-        # `NEEDS_DECISION` -no `ACTIVE`- y difería sin volver a intentarlo.
+        # NEEDS_DECISION por sí solo NO basta como prueba de que la causa
+        # fue una notificación fallida de ESTE Run (CODEX-001): el WorkItem
+        # pudo llegar aquí por otro motivo -un corte de presupuesto, por
+        # ejemplo- o un segundo Run del mismo WorkItem pudo perderse en esta
+        # misma pasada y escalar primero. Solo se reintenta la entrega si el
+        # diario correlaciona la escalada pendiente con ESTE `run_id`
+        # exactamente (ver `record_pending_escalation` más arriba).
+        if journal.pending_escalation_run_id(work_item.work_id) != run.run_id:
+            return None
         escalado = actual
     else:
         return None
@@ -243,6 +252,7 @@ def _escalar(
     )
     if notificar is not None:
         notificar.notificar(escalada)
+    journal.clear_pending_escalation(work_item.work_id)
     return SupervisionOutcome(
         run_id=run.run_id,
         work_id=work_item.work_id,
@@ -261,11 +271,12 @@ def _actuar(
     policy: SupervisorPolicy,
     now: datetime,
     notificar: NotificationPort | None,
+    journal: SupervisorJournal,
 ) -> SupervisionOutcome | None:
     decision = decidir_politica(run, policy=policy)
     if decision in (SupervisionDecision.REACTIVATE, SupervisionDecision.SUBSTITUTE_WORKER):
         return _reactivar_o_sustituir(store, run, decision=decision, policy=policy, now=now)
-    return _escalar(store, run, work_item, now=now, notificar=notificar)
+    return _escalar(store, run, work_item, now=now, notificar=notificar, journal=journal)
 
 
 def _episodio(run: Run, outcome: SupervisionOutcome, *, now: datetime) -> SupervisionEpisode:
@@ -282,14 +293,28 @@ def _episodio(run: Run, outcome: SupervisionOutcome, *, now: datetime) -> Superv
     ya está en el propio ``run`` (el bucle de :func:`supervise_runs` solo
     llega aquí cuando ``run.desenlace is RunOutcome.LOST``): no hace falta
     ninguna E/S adicional para contarlo.
+
+    ``run.diagnostico`` (CODEX-002) es el diagnóstico que el barrido de
+    recuperación copió de la observación del mundo AL cerrar el Run como
+    ``LOST`` (:func:`sirius_engine.recovery.run_recovery_sweep`) -por
+    ejemplo, ``total_jobs=0`` y deadline vencido-, y ya vive en el propio
+    ``run`` por la misma razón que ``desenlace``: no hace falta releer nada
+    para incluirlo. Si el observador no dio diagnóstico (o este Run ya
+    estaba ``LOST`` de una pasada anterior a este campo), ``observado``
+    conserva el desenlace a secas, igual que antes.
     """
     assert run.desenlace is not None
+    observado = (
+        run.desenlace.value
+        if run.diagnostico is None
+        else (f"{run.desenlace.value}: {run.diagnostico}")
+    )
     return SupervisionEpisode(
         run_id=run.run_id,
         work_id=run.work_id,
         paso=run.paso,
         intento=run.intento,
-        observado=run.desenlace.value,
+        observado=observado,
         decision=outcome.decision,
         motivo=outcome.motivo,
         resulting_run_id=outcome.resulting_run_id,
@@ -351,7 +376,9 @@ def supervise_runs(
             deferred.append(run_id)
             continue
         try:
-            outcome = _actuar(store, run, work_item, policy=policy, now=now, notificar=notificar)
+            outcome = _actuar(
+                store, run, work_item, policy=policy, now=now, notificar=notificar, journal=journal
+            )
         except Exception as exc:  # aislar el fallo de ESTE Run del resto del barrido
             errors.append(SupervisionError(run_id=run_id, mensaje=str(exc)))
             continue

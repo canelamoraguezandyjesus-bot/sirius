@@ -20,6 +20,8 @@ class InMemorySupervisorJournal:
 
     _episodios: list[SupervisionEpisode] = field(default_factory=list)
     _run_ids_atendidos: set[str] = field(default_factory=set)
+    #: work_id -> run_id que dejó la escalada pendiente de notificar (CODEX-001).
+    _escaladas_pendientes: dict[str, str] = field(default_factory=dict)
 
     def has_episode(self, run_id: str) -> bool:
         return run_id in self._run_ids_atendidos
@@ -30,3 +32,12 @@ class InMemorySupervisorJournal:
 
     def episodes(self) -> tuple[SupervisionEpisode, ...]:
         return tuple(self._episodios)
+
+    def pending_escalation_run_id(self, work_id: str) -> str | None:
+        return self._escaladas_pendientes.get(work_id)
+
+    def record_pending_escalation(self, run_id: str, work_id: str) -> None:
+        self._escaladas_pendientes[work_id] = run_id
+
+    def clear_pending_escalation(self, work_id: str) -> None:
+        self._escaladas_pendientes.pop(work_id, None)

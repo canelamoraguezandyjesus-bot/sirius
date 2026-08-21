@@ -250,6 +250,125 @@ def test_el_episodio_se_registra_aunque_una_segunda_lectura_del_mundo_fallase(
     assert "lost" in episodios[0].observado
 
 
+# --- CODEX-002: el episodio conserva el diagnóstico del observador ----------------------
+
+
+def test_codex002_el_episodio_conserva_el_diagnostico_del_observador(
+    store: WorkEngineStore, make_run: MakeRun, now: datetime
+) -> None:
+    """El observador dio un diagnóstico concreto al declarar LOST: no se pierde.
+
+    Antes, ``run_recovery_sweep`` solo ejecutaba ``mark_run_lost`` sin
+    diagnóstico y ``_episodio`` registraba literalmente ``"lost"``, sin el
+    dato que explica qué se observó (CODEX-002). Con la corrección, el
+    diagnóstico viaja con el propio ``Run`` -sin ninguna segunda consulta al
+    mundo- y ``episodio.observado`` lo conserva.
+    """
+    _make_motor_work_item(store, now=now)
+    _deadline, momento = _dispatch_lost_run(store, make_run, now=now)
+    world = FakeRunWorldObserver(
+        observations={
+            "RUN-0001": RunWorldObservation(
+                status=RemoteRunStatus.LOST, diagnostico="total_jobs=0 y deadline vencido"
+            )
+        }
+    )
+    journal = InMemorySupervisorJournal()
+
+    supervise_runs(store, world, journal, now=momento)
+
+    episodio = journal.episodes()[0]
+    assert "total_jobs=0 y deadline vencido" in episodio.observado
+    assert "lost" in episodio.observado
+
+
+# --- CODEX-001: NEEDS_DECISION solo se trata como notificación pendiente si se correlaciona --
+
+
+def test_codex001_needs_decision_por_otra_causa_no_se_trata_como_notificacion_fallida(
+    store: WorkEngineStore, make_run: MakeRun, now: datetime
+) -> None:
+    """El WorkItem llega a NEEDS_DECISION por un corte de presupuesto ajeno a este Run.
+
+    Antes, ``_escalar`` trataba CUALQUIER ``NEEDS_DECISION`` como si fuera
+    una notificación pendiente de ESTE Run y volvía a construir y enviar una
+    escalada citándolo como causa (CODEX-001). Con la corrección, sin una
+    correlación explícita en el diario (``pending_escalation_run_id``), el
+    Run se difiere: no se notifica ni se registra un episodio que atribuya
+    una causa que no consta.
+    """
+    _make_motor_work_item(store, now=now)
+    _deadline, momento = _dispatch_lost_run(store, make_run, now=now)
+    # Corte de presupuesto AJENO a RUN-0001 -mismo camino que `governance.py`-,
+    # ANTES de que el barrido siquiera sepa que el Run se perdió.
+    store.cancel_all_live_runs_and_escalate_work_item("WI-0001", now=now)
+    work_item_antes = store.get_work_item("WI-0001")
+    assert work_item_antes is not None
+    assert work_item_antes.estado is WorkItemState.NEEDS_DECISION
+
+    world = FakeRunWorldObserver(
+        observations={"RUN-0001": RunWorldObservation(status=RemoteRunStatus.LOST)}
+    )
+    journal = InMemorySupervisorJournal()
+    politica = SupervisorPolicy(max_reactivaciones=0, max_sustituciones=0)  # fuerza ESCALATE
+    notificador = NotificadorQueFallaLaPrimeraVez(fallar_hasta=0)  # nunca falla
+
+    resultado = supervise_runs(
+        store, world, journal, now=momento, policy=politica, notificar=notificador
+    )
+
+    assert resultado.acted == ()
+    assert resultado.deferred == ("RUN-0001",)
+    assert resultado.errors == ()
+    assert journal.episodes() == ()
+    assert notificador.entregas == []
+    work_item = store.get_work_item("WI-0001")
+    assert work_item is not None
+    assert work_item.estado is WorkItemState.NEEDS_DECISION
+
+
+def test_codex001_dos_runs_perdidos_en_la_misma_pasada_no_duplican_la_escalada(
+    store: WorkEngineStore, make_run: MakeRun, now: datetime
+) -> None:
+    """Dos Runs del mismo WorkItem se pierden en la misma pasada.
+
+    Antes, el segundo Run encontraba el WorkItem YA en ``NEEDS_DECISION``
+    -por la escalada que el primero acababa de disparar- y lo trataba como
+    su propia notificación pendiente: dos notificaciones y dos episodios
+    para una sola escalada real (CODEX-001). Con la corrección, solo el
+    primer Run (el que de verdad correlaciona con la escalada pendiente en
+    el diario) actúa; el segundo se difiere.
+    """
+    _make_motor_work_item(store, now=now)
+    store.activate_work_item("WI-0001", now=now)
+    store.dispatch_work_item_async("WI-0001", now=now)
+    deadline = now + timedelta(hours=2)
+    for run_id, paso in (("RUN-A", "paso-1"), ("RUN-B", "paso-2")):
+        make_run(now=now, deadline=deadline, run_id=run_id, work_id="WI-0001", paso=paso)
+        store.dispatch_run(run_id, now=now)
+        store.confirm_run_running(run_id, now=now)
+    momento = deadline + timedelta(minutes=1)
+    world = FakeRunWorldObserver(
+        observations={
+            "RUN-A": RunWorldObservation(status=RemoteRunStatus.LOST),
+            "RUN-B": RunWorldObservation(status=RemoteRunStatus.LOST),
+        }
+    )
+    journal = InMemorySupervisorJournal()
+    politica = SupervisorPolicy(max_reactivaciones=0, max_sustituciones=0)  # fuerza ESCALATE
+    notificador = NotificadorQueFallaLaPrimeraVez(fallar_hasta=0)  # nunca falla
+
+    resultado = supervise_runs(
+        store, world, journal, now=momento, policy=politica, notificar=notificador
+    )
+
+    assert len(resultado.acted) == 1
+    assert resultado.acted[0].run_id == "RUN-A"
+    assert resultado.deferred == ("RUN-B",)
+    assert len(journal.episodes()) == 1
+    assert len(notificador.entregas) == 1
+
+
 # --- CODEX-004: una notificación fallida no pierde la escalada pendiente ----------------
 
 
@@ -383,7 +502,9 @@ def _supervise_runs_sin_marcador_de_idempotencia(
         work_item = _run_gobernado_por_el_motor(store, run)
         if work_item is None or not _bajo_jurisdiccion_del_motor(work_item):
             continue
-        outcome = _actuar(store, run, work_item, policy=politica, now=now, notificar=None)
+        outcome = _actuar(
+            store, run, work_item, policy=politica, now=now, notificar=None, journal=journal
+        )
         if outcome is None:
             continue
         journal.record(_episodio(run, outcome, now=now))

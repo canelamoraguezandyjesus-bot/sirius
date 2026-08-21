@@ -150,7 +150,7 @@ class Run:
             updated_at=now,
         )
 
-    def mark_lost(self, *, now: datetime) -> Run:
+    def mark_lost(self, *, now: datetime, diagnostico: str | None = None) -> Run:
         """``{DISPATCHED,RUNNING} -> FINISHED(LOST)`` cuando vence la cota absoluta.
 
         Requiere, de forma independiente: (a) un estado sin ``STATUS``
@@ -158,11 +158,22 @@ class Run:
         (b) ``now >= deadline`` (comprobado con
         :class:`~sirius_engine.domain.errors.DeadlineNotExceededError` si no
         se cumple).
+
+        ``diagnostico`` conserva lo que el observador del mundo haya dicho
+        sobre por qué se declaró perdido (CODEX-002, incidencia #232 ronda
+        3): opcional porque no todo observador lo da, igual que ya es
+        opcional en ``fail``.
         """
         self._require(LIVE_STATES, "mark_lost")
         if now < self.deadline:
             raise DeadlineNotExceededError(self.run_id)
-        return replace(self, estado=RunState.FINISHED, desenlace=RunOutcome.LOST, updated_at=now)
+        return replace(
+            self,
+            estado=RunState.FINISHED,
+            desenlace=RunOutcome.LOST,
+            diagnostico=diagnostico,
+            updated_at=now,
+        )
 
     def invalidate_prepared(self, *, now: datetime) -> Run:
         """``PREPARED -> FINISHED(CANCELLED)`` directamente, sin cancelación en dos tiempos.

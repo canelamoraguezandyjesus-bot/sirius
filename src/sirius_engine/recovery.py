@@ -171,7 +171,12 @@ def _reconcile_run(
         if now < run.deadline:
             return RunSweepOutcome.NOTHING_TO_DO
         live = _ensure_dispatched(store, run, now=now)
-        store.mark_run_lost(live.run_id, now=now)
+        # El diagnóstico del observador (si lo dio) se copia al Run AL
+        # cerrarlo -no después- para que quede disponible sin volver a
+        # preguntar al mundo (CODEX-002, incidencia #232 ronda 3): quien lo
+        # necesite luego (el supervisor, al construir su episodio) lo lee de
+        # `run.diagnostico`, no de una segunda consulta remota.
+        store.mark_run_lost(live.run_id, now=now, diagnostico=observation.diagnostico)
         return RunSweepOutcome.RECONCILED
     if status is RemoteRunStatus.CANCELLED:
         if run.cancellation_status is not CancellationStatus.UNCONFIRMED:
