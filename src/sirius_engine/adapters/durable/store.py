@@ -130,7 +130,10 @@ class DurableWorkEngineStore:
         """
         for work_id, started_at in list(self._pending_budget_cutoffs.items()):
             work_item = self._work_items.get(work_id)
-            if work_item is None or work_item.estado is not work_item_ops.WorkItemState.ACTIVE:
+            if (
+                work_item is None
+                or work_item.estado not in work_item_ops.BUDGET_CUTOFF_ESCALABLE_STATES
+            ):
                 continue
             self.cancel_all_live_runs_and_escalate_work_item(work_id, now=started_at)
 
@@ -525,6 +528,23 @@ class DurableWorkEngineStore:
         current = self._require_work_item(work_id)
         if current.estado is work_item_ops.WorkItemState.NEEDS_DECISION:
             return current
+        if current.estado not in work_item_ops.BUDGET_CUTOFF_ESCALABLE_STATES:
+            # Estado no escalable (PLANNED, PAUSED, FAILED_SAFELY o terminal):
+            # los Runs vivos ya quedaron cancelados y el gasto se devuelve al
+            # llamador, pero no se escala un trabajo que ya no está en curso.
+            # Tampoco se lanza: un coste que llega tarde no puede romper.
+            return current
+        if current.estado is work_item_ops.WorkItemState.WAITING:
+            # Cancelados sus Runs, no espera ya ningún hecho externo: vuelve al
+            # motor por la arista que el diagrama ya tiene, con un nombre de
+            # suceso que dice por qué -no "hecho externo observado", que sería
+            # falso en el diario.
+            current = self._append_work_item(
+                current.observe_external_fact(now=now),
+                "work_item_budget_cutoff_stopped_waiting",
+                now=now,
+                idempotency_key=None,
+            )
         return self.escalate_work_item(work_id, now=now)
 
     def resolve_work_item_decision(

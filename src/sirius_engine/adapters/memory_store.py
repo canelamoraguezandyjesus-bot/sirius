@@ -186,6 +186,22 @@ class InMemoryWorkEngineStore:
         current = self._require_work_item(work_id)
         if current.estado is work_item_ops.WorkItemState.NEEDS_DECISION:
             return current
+        if current.estado not in work_item_ops.BUDGET_CUTOFF_ESCALABLE_STATES:
+            # Estado no escalable (PLANNED, PAUSED, FAILED_SAFELY o terminal):
+            # los Runs vivos ya quedaron cancelados y el gasto se devuelve al
+            # llamador, pero no se escala un trabajo que ya no está en curso.
+            # Tampoco se lanza: un coste que llega tarde no puede romper.
+            return current
+        if current.estado is work_item_ops.WorkItemState.WAITING:
+            # Cancelados sus Runs, no espera ya ningún hecho externo: vuelve al
+            # motor por la arista que el diagrama ya tiene, con un nombre de
+            # suceso que dice por qué -no "hecho externo observado", que sería
+            # falso en el diario.
+            current = self._record_work_item(
+                current.observe_external_fact(now=now),
+                "work_item_budget_cutoff_stopped_waiting",
+                now=now,
+            )
         return self.escalate_work_item(work_id, now=now)
 
     def resolve_work_item_decision(
