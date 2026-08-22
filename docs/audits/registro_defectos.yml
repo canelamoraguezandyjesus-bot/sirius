@@ -122,11 +122,13 @@ defectos:
     titulo: El diario del despachador solo vive en memoria; una sola activacion no cruza procesos
     bloque: C2
     gravedad: media
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 18b4f2a3c7aa331dd1b0cdd3993691876e844663
     incidencia: 242
     ficheros:
       - src/sirius_engine/ports/dispatch_journal.py
       - src/sirius_engine/adapters/memory_dispatch_journal.py
+      - src/sirius_engine/adapters/durable/dispatch_journal.py
 
   - id: H-12
     titulo: La guarda de orden enlazada del despachador era insatisfacible desde produccion
