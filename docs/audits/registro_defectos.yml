@@ -130,6 +130,16 @@ defectos:
       - src/sirius_engine/adapters/memory_dispatch_journal.py
       - src/sirius_engine/adapters/durable/dispatch_journal.py
 
+  - id: H-13
+    titulo: mirror_projection inyecta scripts en sys.path desde __file__, asi que el paquete no es instalable
+    bloque: A3
+    gravedad: media
+    estado: abierto
+    incidencia: 272
+    ficheros:
+      - src/sirius_engine/mirror_projection.py
+      - pyproject.toml
+
   - id: H-12
     titulo: La guarda de orden enlazada del despachador era insatisfacible desde produccion
     bloque: C2
