@@ -19,6 +19,7 @@ from sirius_engine.adapters.memory_dispatch_journal import InMemoryDispatchJourn
 from sirius_engine.dispatcher import (
     ETIQUETA_ACTIVACION,
     ETIQUETA_INICIAL,
+    ETIQUETA_SOLICITUD_AUDITORIA,
     DispatchOutcome,
     dispatch_work_item,
 )
@@ -232,8 +233,9 @@ def test_c2_p6_el_episodio_se_reconstruye_del_diario_sin_github() -> None:
     assert episodio.recorded_at == NOW
 
 
-def test_clase_distinta_de_programacion_no_se_despacha() -> None:
-    work_item = _work_item(evidencia=(ORDEN,), clase=WorkItemClass.AUDITORIA)
+def test_clase_fuera_de_la_tabla_no_se_despacha() -> None:
+    """Requisito 5 (#256): solo la tabla cerrada de §12.4 -programacion, auditoria- se despacha."""
+    work_item = _work_item(evidencia=(ORDEN,), clase=WorkItemClass.DOCUMENTACION)
     writer = _EscritorSoloVerbosEnumerados()
     journal = InMemoryDispatchJournal()
 
@@ -248,6 +250,136 @@ def test_clase_distinta_de_programacion_no_se_despacha() -> None:
             now=NOW,
         )
     assert writer.llamadas == []
+
+
+# --- C4: el motor despacha auditorías (incidencia #256, contrato §12.4) --
+
+
+def test_c4_una_auditoria_con_orden_enlazada_recibe_la_etiqueta_de_auditoria() -> None:
+    """Requisito 1 (#256): la auditoría se despacha por el mismo camino y recibe su etiqueta."""
+    work_item = _work_item(evidencia=(ORDEN,), clase=WorkItemClass.AUDITORIA)
+    writer = _EscritorSoloVerbosEnumerados()
+    journal = InMemoryDispatchJournal()
+
+    resultado = dispatch_work_item(
+        work_item,
+        writer=writer,
+        journal=journal,
+        repo="acme/repo",
+        profile_ref=PERFIL,
+        bloque="C4",
+        now=NOW,
+    )
+
+    assert resultado.ya_despachado is False
+    assert resultado.episodio.numero_incidencia == 241
+    assert resultado.episodio.etiqueta == ETIQUETA_SOLICITUD_AUDITORIA
+    verbos = [nombre for nombre, _ in writer.llamadas]
+    assert verbos == ["crear_incidencia", "aplicar_etiqueta"]
+    _, args_etiqueta = writer.llamadas[1]
+    assert args_etiqueta["etiqueta"] == ETIQUETA_SOLICITUD_AUDITORIA
+
+
+def test_c4_la_incidencia_de_auditoria_no_lleva_ninguna_etiqueta_sirius() -> None:
+    """Requisito 2 (#256): ni al crearse ni al aplicar la etiqueta de activación.
+
+    Esta es también la prueba por mutación del requisito 7: si la fila de
+    ``TABLA_ACTIVACION`` para ``auditoria`` devolviera ``ETIQUETA_ACTIVACION``
+    (``sirius:implement-requested``) en vez de ``ETIQUETA_SOLICITUD_AUDITORIA``,
+    la última aserción de esta prueba cae -verificado a mano cambiando esa
+    fila y viendo el fallo, revertido antes de este commit-.
+    """
+    work_item = _work_item(evidencia=(ORDEN,), clase=WorkItemClass.AUDITORIA)
+    writer = _EscritorSoloVerbosEnumerados()
+    journal = InMemoryDispatchJournal()
+
+    dispatch_work_item(
+        work_item,
+        writer=writer,
+        journal=journal,
+        repo="acme/repo",
+        profile_ref=PERFIL,
+        bloque="C4",
+        now=NOW,
+    )
+
+    _, args_creacion = writer.llamadas[0]
+    etiquetas_creacion = args_creacion["etiquetas"]
+    assert isinstance(etiquetas_creacion, tuple)
+    for etiqueta_creada in etiquetas_creacion:
+        assert isinstance(etiqueta_creada, str)
+        assert not etiqueta_creada.startswith("sirius:")
+    assert len(etiquetas_creacion) == 0
+
+    _, args_etiqueta = writer.llamadas[1]
+    etiqueta_aplicada = args_etiqueta["etiqueta"]
+    assert isinstance(etiqueta_aplicada, str)
+    assert not etiqueta_aplicada.startswith("sirius:")
+    assert etiqueta_aplicada == ETIQUETA_SOLICITUD_AUDITORIA
+
+
+def test_c4_la_escritura_de_auditoria_es_exactamente_la_enumerada() -> None:
+    """Requisito 3 (#256): crear_incidencia y aplicar_etiqueta, en ese orden, y ninguna más."""
+    work_item = _work_item(evidencia=(ORDEN,), clase=WorkItemClass.AUDITORIA)
+    writer = _EscritorSoloVerbosEnumerados()
+    journal = InMemoryDispatchJournal()
+
+    dispatch_work_item(
+        work_item,
+        writer=writer,
+        journal=journal,
+        repo="acme/repo",
+        profile_ref=PERFIL,
+        bloque="C4",
+        now=NOW,
+    )
+
+    verbos = [nombre for nombre, _ in writer.llamadas]
+    assert verbos == ["crear_incidencia", "aplicar_etiqueta"]
+    assert len(writer.llamadas) == 2
+
+
+def test_c4_programacion_sigue_recibiendo_sus_etiquetas_de_siempre() -> None:
+    """Requisito 4 (#256): no regresión -programación no cambia con la tabla nueva."""
+    work_item = _work_item(evidencia=(ORDEN,), clase=WorkItemClass.PROGRAMACION)
+    writer = _EscritorSoloVerbosEnumerados()
+    journal = InMemoryDispatchJournal()
+
+    dispatch_work_item(
+        work_item,
+        writer=writer,
+        journal=journal,
+        repo="acme/repo",
+        profile_ref=PERFIL,
+        bloque="C2",
+        now=NOW,
+    )
+
+    _, args_creacion = writer.llamadas[0]
+    assert args_creacion["etiquetas"] == (ETIQUETA_INICIAL,)
+    _, args_etiqueta = writer.llamadas[1]
+    assert args_etiqueta["etiqueta"] == ETIQUETA_ACTIVACION
+
+
+def test_c4_sin_orden_enlazada_una_auditoria_tampoco_se_despacha() -> None:
+    """Requisito 6 (#256): la condición de §12.1 vale igual para auditoria."""
+    work_item = _work_item(evidencia=(), clase=WorkItemClass.AUDITORIA)
+    writer = _EscritorSoloVerbosEnumerados()
+    journal = InMemoryDispatchJournal()
+
+    with pytest.raises(OrdenNoEnlazadaError):
+        dispatch_work_item(
+            work_item,
+            writer=writer,
+            journal=journal,
+            repo="acme/repo",
+            profile_ref=PERFIL,
+            bloque="C4",
+            now=NOW,
+        )
+
+    assert writer.llamadas == []
+    assert journal.episodes() == ()
 
 
 # --- Revisión de la incidencia #240, ronda 2 -----------------------------
