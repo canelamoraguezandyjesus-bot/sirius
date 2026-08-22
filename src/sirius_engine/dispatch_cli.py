@@ -31,21 +31,25 @@ import os
 import sys
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
+from pathlib import Path
 
+from sirius_engine.adapters.durable.dispatch_journal import DurableDispatchJournal
 from sirius_engine.adapters.durable.store import DurableWorkEngineStore
 from sirius_engine.adapters.github_cli_writer import GitHubCliWriter, MissingCredentialError
 from sirius_engine.adapters.memory_dispatch_journal import InMemoryDispatchJournal
 from sirius_engine.adapters.memory_store import InMemoryWorkEngineStore
 from sirius_engine.cli import REPO, resolver_diario
 from sirius_engine.dispatcher import dispatch_work_item
+from sirius_engine.domain.authority import autoridad_de_clase
 from sirius_engine.domain.dispatch import MARCADOR_ORDEN_PROPIETARIO
 from sirius_engine.gate import ResultadoPuerta, decidir
 from sirius_engine.intent_interpreter import interpretar_intencion_v0
 from sirius_engine.issue_body_projection import generar_cuerpo_incidencia
+from sirius_engine.ports.dispatch_journal import DispatchJournal
 from sirius_engine.ports.github_writer import GitHubWriterPort, IncidenciaCreada
 from sirius_engine.ports.store import WorkEngineStore
 from sirius_engine.profile_field import ProfileRef
-from sirius_engine.work_intake import aplicar_decision
+from sirius_engine.work_intake import ResultadoIntake, aplicar_decision
 
 COMANDO = "sirius-despachar"
 
@@ -76,6 +80,18 @@ class _EscritorDeEnsayo:
 
     def aplicar_etiqueta(self, *, repo: str, numero: int, etiqueta: str) -> None:
         return None
+
+
+def _diario_de_despacho(diario_del_motor: Path) -> Path:
+    """El diario del despachador, hermano del del motor y en su mismo directorio.
+
+    Diario propio y no el del motor por el mismo criterio que separó el del
+    supervisor (ADR-061) y el del despachador (ADR-064): el diario de eventos
+    del ``WorkEngineStore`` modela transiciones tipadas de ``WorkItem``/``Run``
+    y no tiene sitio para «qué orden» ni «qué incidencia» nació de una
+    activación.
+    """
+    return diario_del_motor.with_name(f"{diario_del_motor.stem}-despacho.jsonl")
 
 
 def _work_id(ahora: datetime) -> str:
@@ -148,11 +164,22 @@ def main(
     # inconsistente -trabajo activo sin nada que lo atienda- que el resto del
     # motor se cuida de no producir. El ensayo enseña qué pasaría; no lo hace
     # a medias.
+    # El diario del despachador es DURABLE al ejecutar de verdad. Con el de
+    # memoria, la garantía «una sola activación por WorkItem» (C2-P3) no cruza
+    # procesos: cada invocación nacía sin memoria de lo ya despachado, así que
+    # repetir la orden creaba una segunda incidencia -y de una incidencia
+    # cuelga un ciclo entero-. Era el hueco H-B de la incidencia #250: H-11
+    # construyó el adaptador durable y este camino, el único de producción que
+    # despacha, seguía sin usarlo.
     store: WorkEngineStore
+    journal: DispatchJournal
     if args.ejecutar:
-        store = DurableWorkEngineStore(resolver_diario(argumento=args.diario, entorno=entorno))
+        diario = resolver_diario(argumento=args.diario, entorno=entorno)
+        store = DurableWorkEngineStore(diario)
+        journal = DurableDispatchJournal(_diario_de_despacho(diario))
     else:
         store = InMemoryWorkEngineStore()
+        journal = InMemoryDispatchJournal()
     work_id = _work_id(ahora)
 
     # El despachador se niega a activar un WorkItem cuya orden no se pueda
@@ -161,14 +188,27 @@ def main(
     # íntegro de la orden bajo este work_id, que es una respuesta real a "¿quién
     # pidió esto?" -no un relleno para pasar la guarda-.
     referencia_orden = args.orden_ref or f"{_ORIGEN_CLI}{work_id}"
-    resultado = aplicar_decision(
-        decision,
-        store=store,
-        work_id=work_id,
-        peticion_original=args.orden,
-        now=ahora,
-        evidencia=(f"{MARCADOR_ORDEN_PROPIETARIO}{referencia_orden}",),
-    )
+
+    # Repetir la misma orden es idempotente, no un error. El `work_id` se deriva
+    # del instante de la orden, así que dos invocaciones seguidas comparten uno:
+    # sin esto, `create_work_item` levantaba `DuplicateIdError` y la persona veía
+    # una traza en vez de «ya estaba despachado». El trabajo ya existe; se
+    # reutiliza y se deja que el despachador consulte su diario, que es quien
+    # sabe si ya hubo activación.
+    ya_existente = store.get_work_item(work_id)
+    if ya_existente is not None:
+        resultado = ResultadoIntake(
+            work_item=ya_existente, autoridad=autoridad_de_clase(ya_existente.clase), escalada=None
+        )
+    else:
+        resultado = aplicar_decision(
+            decision,
+            store=store,
+            work_id=work_id,
+            peticion_original=args.orden,
+            now=ahora,
+            evidencia=(f"{MARCADOR_ORDEN_PROPIETARIO}{referencia_orden}",),
+        )
 
     if decision.resultado is ResultadoPuerta.CREAR_Y_ESCALAR:
         linea("He creado el trabajo, pero NO lo he despachado: necesita tu decisión.")
@@ -205,7 +245,7 @@ def main(
     desenlace = dispatch_work_item(
         work_item,
         writer=writer,
-        journal=InMemoryDispatchJournal(),
+        journal=journal,
         repo=args.repo,
         profile_ref=PERFIL_POR_DEFECTO,
         bloque=args.bloque,
