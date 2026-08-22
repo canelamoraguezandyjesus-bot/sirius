@@ -56,6 +56,11 @@ issue_from() { printf '%s' "$1" | grep -oE 'issues/[0-9]+' | head -1 | cut -d/ -
 case "$sub" in
   api)
     args="$*"
+    if printf '%s' "$args" | grep -q '/compare/'; then
+      # Cuantos commits de la base le faltan a la rama. Por defecto 0: al dia.
+      cat "$D/behind_by.txt" 2>/dev/null || echo "0"
+      exit 0
+    fi
     if printf '%s' "$args" | grep -q '/check-runs'; then
       sha="$(printf '%s' "$args" | grep -oE 'commits/[^/]+' | cut -d/ -f2)"
       cat "$D/checks_${sha}.txt" 2>/dev/null || echo "none"
@@ -213,6 +218,7 @@ def _seed_pr(
     merged: bool = False,
     mergeable_state: str = "clean",
     head: str = "c4d482267d9a",
+    base: str = "main",
 ) -> None:
     md = _md(env)
     (md / f"pr_{pr}.json").write_text(
@@ -223,6 +229,7 @@ def _seed_pr(
                 "merged": merged,
                 "mergeable_state": mergeable_state,
                 "head": head,
+                "base": base,
             }
         ),
         encoding="utf-8",
@@ -242,6 +249,11 @@ def _ready_issue(env: dict[str, str], pr: int = 57, head: str = "c4d482267d9a") 
     )
     _seed_pr(env, pr, head=head)
     _seed_checks(env, head, "success")
+
+
+def _sembrar_atraso(env: dict[str, str], commits: int) -> None:
+    """Cuantos commits de la base le faltan a la rama de la PR."""
+    (_md(env) / "behind_by.txt").write_text(f"{commits}\n", encoding="utf-8")
 
 
 def _actions(env: dict[str, str]) -> str:
@@ -500,3 +512,55 @@ def test_una_lectura_caida_no_se_publica_como_ausencia_de_pr(tmp_path: Path) -> 
 
 def _comentarios_publicados(env: dict[str, str]) -> str:
     return _comments(env)
+
+
+# --- La rama tiene que estar al dia con la base -------------------------------
+#
+# `mergeable_state` solo dice `dirty` cuando hay CONFLICTO de git. Una rama
+# atrasada sin conflicto sale `clean`, y entonces se fusionaria algo cuyo Quality
+# se calculo contra un `main` que ya no existe.
+
+
+def test_una_rama_atrasada_no_se_fusiona(tmp_path: Path) -> None:
+    """Verde contra su propia base no es verde contra la base de verdad.
+
+    Ya pasó: `main` se puso roja tras una tanda de fusiones porque dos ramas,
+    verdes por separado, usaban campos incompatibles. Y estuvo a punto de
+    repetirse tres veces el 22-08-2026 con números de ADR — ficheros de nombre
+    distinto, sin conflicto para git, y `main` con dos ADR del mismo número.
+    """
+    env = _setup(tmp_path)
+    _ready_issue(env)
+    _sembrar_atraso(env, 3)
+    r = _run_merge(env)
+    assert r.returncode != 0, r.stdout + r.stderr
+    assert "MERGE" not in _actions(env)
+    publicado = _comentarios_publicados(env)
+    assert "3 commit(s) por detras" in publicado, publicado
+    assert "Update branch" in publicado
+
+
+def test_una_rama_al_dia_si_se_fusiona(tmp_path: Path) -> None:
+    """Control positivo: sin el, la prueba de arriba pasaria con el merge roto."""
+    env = _setup(tmp_path)
+    _ready_issue(env)
+    _sembrar_atraso(env, 0)
+    r = _run_merge(env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "MERGE" in _actions(env)
+
+
+def test_si_no_se_puede_leer_el_atraso_no_se_bloquea_la_fusion(tmp_path: Path) -> None:
+    """Una lectura caida no es «esta atrasada».
+
+    Distinguirlo importa: tratar un fallo de lectura como atraso dejaria la
+    orden del propietario tirada por un 503, que es el callejon mudo que el
+    resto de este guion viene a eliminar. El error cae del lado de seguir,
+    porque las otras cinco comprobaciones siguen puestas.
+    """
+    env = _setup(tmp_path)
+    _ready_issue(env)
+    (_md(env) / "behind_by.txt").write_text("null\n", encoding="utf-8")
+    r = _run_merge(env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "MERGE" in _actions(env)
