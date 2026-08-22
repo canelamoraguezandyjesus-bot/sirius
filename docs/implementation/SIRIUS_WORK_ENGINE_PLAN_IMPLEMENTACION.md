@@ -523,8 +523,14 @@ propietario decide no ejercitarla, esa carencia se escribe en el registro del hi
   registrada; el episodio de divergencia sembrado dispara alarma (mutación).
 - **Riesgo principal**: doble autoridad ambigua; mitigación: la regla de §4 hace la
   autoridad una función total (clase → autoridad) sin estados intermedios.
-- **Automatizable**: el verificador sí; cada conmutación la registra el propietario.
-- **Decisión humana previa**: la conmutación de cada clase (acto simple, previsto en E1a).
+- **Automatizable**: sí, íntegramente. El verificador, el contador y **el propio acto de
+  conmutación**: el contrato §11.3 lo declara automático porque la condición de §11.2 es
+  medible, y «pedir una firma sobre una medición no añade seguridad; añade una espera y
+  traslada al usuario la responsabilidad de un criterio que no puede evaluar por su
+  cuenta». Corregido el 2026-08-22: este bloque decía que cada conmutación la registraba
+  el propietario, y era la redacción anterior a la v1.7.
+- **Decisión humana previa**: **ninguna**. Es el cambio respecto de lo que este plan
+  preveía, y es deliberado en el contrato, no un descuido.
 
 ### D2 — Servicio desatendido + representación física definitiva — BLOQUEADO por I4
 
@@ -629,17 +635,29 @@ huecos):
 
    **Cuando el plan y el contrato discrepen, gana el contrato.** El plan es una previsión
    escrita antes; el contrato es la norma vigente.
-3. **El acto de conmutación**: registro fechado (dato versionado en el repo) + anuncio en
-   la incidencia patrón de la clase. Desde ese instante, para esa clase: el almacén del
+3. **El acto de conmutación**: es **automático** (contrato §11.3) y consiste en registro
+   fechado (dato versionado en el repo) + anuncio por el canal de notificaciones ya
+   existente (contrato §7). Desde ese instante, para esa clase: el almacén del
    motor es canónico y la incidencia pasa a PROYECCIÓN OBLIGATORIA — el motor la mantiene
    y el verificador la vigila; una divergencia es un defecto del motor, no una duda de
    autoridad.
 4. **Orden de conmutación** (solo las clases con proyección): documental publicada →
    programación → auditoría (programación solo tras el periodo de C1+C2). Investigación y
    demás clases nativas no aparecen: no conmutan porque ya nacieron canónicas.
-5. **Vuelta atrás**: el conmutador es reversible por clase con el mismo acto fechado;
-   revertir re-declara la incidencia como fuente de verdad y el motor vuelve a espejo.
-   Nada que borrar: ambos lados conservan su historial completo.
+5. **Vuelta atrás**: **a la primera divergencia detectada, la clase revierte
+   automáticamente** (contrato §11.4) — no se espera a un patrón ni a una segunda
+   ocurrencia. La incidencia vuelve a ser fuente de verdad, el motor vuelve a espejo, se
+   notifica, y el contador de §11.2 empieza de cero. Nada que borrar: ambos lados
+   conservan su historial completo.
+
+   Corregido el 2026-08-22: este plan describía la reversión como un acto fechado
+   deliberado, simétrico a la conmutación. El contrato la hizo automática y sin espera,
+   con un motivo escrito: volver atrás no cuesta nada, y seguir siendo autoridad cuando
+   ya se ha demostrado poco fiable sí cuesta.
+
+   **Esa reversión automática no la implementa hoy ningún bloque de este plan.** D1a
+   construyó el verificador y D1b el contador, y los dos declaran explícitamente que no
+   conmutan nada. El hueco está registrado en la incidencia #273.
 
 ## 5. Spikes e incógnitas: inserción exacta
 
