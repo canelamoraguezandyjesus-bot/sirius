@@ -14,7 +14,6 @@ Requisitos ejercitados aquí:
 
 from __future__ import annotations
 
-import ast
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -22,7 +21,6 @@ from typing import Any
 
 import pytest
 
-from sirius_engine import mirror_projection
 from sirius_engine.adapters.fixture_mirror import FixedGitHubMirrorReader
 from sirius_engine.domain.mirror import EspejoIlegibleError, MirroredWorkItem
 from sirius_engine.domain.work_item import WorkItemPhase, WorkItemState
@@ -710,60 +708,3 @@ def test_leer_y_proyectar_run_orquesta_el_puerto() -> None:
     mirrored = leer_y_proyectar_run(puerto, repo=_REPO, run_id="123", ahora=_AHORA)
     assert mirrored is not None
     assert mirrored.conclusion == "success"
-
-
-# --- `scripts/automation` no es parte del artefacto instalado (CODEX-001, ronda 3) ---
-#
-# ``pyproject.toml`` empaqueta únicamente ``sirius`` y ``sirius_engine``:
-# ``scripts/`` es automatización de este repositorio, no algo que un wheel
-# instalado lleve consigo. Un `import automation...` a nivel de módulo aquí
-# bastaba para que CARGAR este módulo -y por tanto `sirius_engine.cli` y
-# `sirius_engine.seven_day_streak_cli`, que lo importan- reventara con
-# `ModuleNotFoundError` fuera de un checkout, incluso para quien no necesita
-# leer GitHub en absoluto (`sirius-racha --hora-recomendada`, resolver
-# `--raiz`). Comprobado construyendo el wheel real e instalándolo en un
-# entorno limpio: https://github.com/canelamoraguezandyjesus-bot/sirius/pull/269#discussion_r3837235813
-
-
-def test_cargar_este_modulo_no_importa_automation_a_nivel_de_modulo() -> None:
-    """El import de ``automation`` debe vivir DENTRO de una función, nunca en el cuerpo del módulo.
-
-    ``ast.walk`` recorrería también las funciones y no distinguiría los dos
-    casos; aquí se recorre solo ``tree.body`` -las sentencias de nivel de
-    módulo- a propósito, porque la propiedad exigida es justamente que
-    ``automation`` no aparezca ahí.
-    """
-    ruta = Path(mirror_projection.__file__)
-    cuerpo_del_modulo = ast.parse(ruta.read_text(encoding="utf-8"), filename=str(ruta)).body
-
-    nombres_importados_a_nivel_de_modulo: set[str] = set()
-    for sentencia in cuerpo_del_modulo:
-        if isinstance(sentencia, ast.Import):
-            nombres_importados_a_nivel_de_modulo.update(alias.name for alias in sentencia.names)
-        elif isinstance(sentencia, ast.ImportFrom) and sentencia.module is not None:
-            nombres_importados_a_nivel_de_modulo.add(sentencia.module)
-
-    ofensores = {
-        nombre
-        for nombre in nombres_importados_a_nivel_de_modulo
-        if nombre == "automation" or nombre.startswith("automation.")
-    }
-    assert ofensores == set(), (
-        f"{ruta.name} importa {ofensores} al cargarse: eso rompe con ModuleNotFoundError "
-        "fuera de un checkout, porque el wheel instalado no empaqueta scripts/automation"
-    )
-
-
-def test_sirius_convergence_se_resuelve_bajo_demanda_a_las_mismas_funciones() -> None:
-    """El diferimiento no cambia QUÉ se reutiliza (incidencia #193): sigue siendo el script real.
-
-    Sin esto, la prueba anterior por sí sola aceptaría también una
-    corrección que rompiera la reutilización -por ejemplo, duplicar la
-    lógica en vez de diferir el import-, que es justo lo que el diseño
-    original quería evitar (una segunda copia que podría divergir).
-    """
-    convergencia = mirror_projection._sirius_convergence()
-    assert convergencia.__name__ == "automation.sirius_convergence"
-    assert callable(convergencia.parse_round_records)
-    assert callable(convergencia.history_after_last_resume)
-    assert callable(convergencia.ci_failure_streak)

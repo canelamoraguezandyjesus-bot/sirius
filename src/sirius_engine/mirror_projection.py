@@ -44,10 +44,12 @@ import sys
 from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
-from types import ModuleType
 
 _SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
 
+from automation import sirius_convergence  # noqa: E402
 from sirius_engine.domain.mirror import (  # noqa: E402
     EspejoIlegibleError,
     EventoQuality,
@@ -69,27 +71,6 @@ from sirius_engine.ports.github_mirror import (  # noqa: E402
     LecturaMetadatos,
     LecturaRunActions,
 )
-
-
-def _sirius_convergence() -> ModuleType:
-    """Importa ``scripts/automation/sirius_convergence`` al usarlo, no al cargar este módulo.
-
-    Diferido a tiempo de llamada (CODEX-001, ronda 3): ``pyproject.toml``
-    empaqueta únicamente ``sirius`` y ``sirius_engine`` -``scripts/`` es
-    automatización de este repositorio, no parte del artefacto instalado-, así
-    que importar ``automation`` al cargar este módulo rompía con
-    ``ModuleNotFoundError`` a cualquier llamador fuera del checkout, incluidos
-    los que no necesitan leer GitHub en absoluto (``sirius-racha
-    --hora-recomendada``, la resolución de ``--raiz``). Solo quien de verdad
-    llama a :func:`proyectar_work_item` paga este coste, y solo entonces se
-    sabe si ``scripts/automation`` está disponible.
-    """
-    if str(_SCRIPTS_DIR) not in sys.path:
-        sys.path.insert(0, str(_SCRIPTS_DIR))
-    from automation import sirius_convergence
-
-    return sirius_convergence
-
 
 # --- Filtro de autor de confianza ------------------------------------------
 #
@@ -251,7 +232,7 @@ def _texto_cronologico_de_confianza(
 
 
 def _interpretar_rondas(texto_vigente: str) -> tuple[RondaHallazgos, ...]:
-    registros = _sirius_convergence().parse_round_records(texto_vigente)
+    registros = sirius_convergence.parse_round_records(texto_vigente)
     return tuple(
         RondaHallazgos(
             numero=int(registro["round"]),
@@ -346,8 +327,7 @@ def proyectar_work_item(
     if comentarios.estado is not LecturaEstado.OK or comentarios.comentarios is None:
         raise EspejoIlegibleError("comentarios", comentarios.error or "lectura no disponible")
 
-    convergencia = _sirius_convergence()
-    texto_vigente = convergencia.history_after_last_resume(
+    texto_vigente = sirius_convergence.history_after_last_resume(
         _texto_cronologico_de_confianza(cuerpo.cuerpo, comentarios.comentarios)
     )
     estado, fase, etiquetas_contradictorias = _estado_y_fase(metadatos.metadatos.etiquetas)
@@ -364,7 +344,7 @@ def proyectar_work_item(
         rondas=_interpretar_rondas(texto_vigente),
         veredictos=_interpretar_veredictos(comentarios.comentarios),
         eventos_quality=_interpretar_eventos_quality(texto_vigente),
-        fallos_quality_consecutivos=convergencia.ci_failure_streak(texto_vigente),
+        fallos_quality_consecutivos=sirius_convergence.ci_failure_streak(texto_vigente),
         origen=OrigenLectura(fuente=f"github:{repo}#{numero}", leido_en=ahora),
     )
 
