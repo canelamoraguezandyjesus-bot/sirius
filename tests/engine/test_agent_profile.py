@@ -1,9 +1,14 @@
 """AgentProfile versionado como dato (arquitectura §5.1, incidencia #202).
 
-Perfiles reales: los tres roles del ciclo de programación
-(implementer/reviewer/corrector) más el Auditor, cargados desde
-``docs/implementation/work_engine/perfiles/``. Ninguna prueba aquí depende
-de nombres de herramienta: solo de la forma del dato.
+Perfiles reales, cargados desde ``docs/implementation/work_engine/perfiles/``.
+La lista (``PERFILES_REALES``, en ``conftest.py``) se lee del propio
+directorio (``glob``), no de una tupla escrita a mano en cada fichero, y la
+comparten las cuatro suites de invariantes de perfiles
+(test_agent_profile.py, test_capability_resolver.py,
+test_permission_envelope.py, test_worker_request.py): un `.yml` nuevo con un
+`procedimiento_ref` roto pasaría en verde si solo una de las cuatro lo viera
+(incidencia #247, bloque C3b, hallazgos R8 y CODEX-002). Ninguna prueba aquí
+depende de nombres de herramienta: solo de la forma del dato.
 """
 
 from __future__ import annotations
@@ -15,13 +20,18 @@ import pytest
 from sirius_engine.domain.errors import UnknownAgentProfileError
 from sirius_engine.profile_registry import load_agent_profile
 
-_PERFILES_REALES = ("implementer", "reviewer", "corrector", "auditor")
+from .conftest import PERFILES_REALES as _PERFILES_REALES
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_hay_perfiles_que_comprobar() -> None:
+    """Un glob vacío dejaría toda la familia sin vigilancia y en verde."""
+    assert len(_PERFILES_REALES) >= 4, "faltan perfiles en docs/implementation/work_engine/perfiles"
+
+
 @pytest.mark.parametrize("ref", _PERFILES_REALES)
-def test_carga_los_cuatro_perfiles_reales(ref: str) -> None:
+def test_carga_todos_los_perfiles_reales(ref: str) -> None:
     perfil = load_agent_profile(ref)
     assert perfil.ref == ref
     assert perfil.version >= 1

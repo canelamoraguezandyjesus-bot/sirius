@@ -53,6 +53,23 @@ def pytest_configure(config: pytest.Config) -> None:
         sys.path.insert(0, repo_root)
 
 
+_PERFILES_DIR = (
+    Path(__file__).resolve().parents[2] / "docs" / "implementation" / "work_engine" / "perfiles"
+)
+
+#: Todos los perfiles reales versionados, leídos del propio directorio
+#: (``glob``) y compartidos por toda la suite de invariantes de perfiles
+#: (test_agent_profile.py, test_capability_resolver.py,
+#: test_permission_envelope.py, test_worker_request.py): un perfil nuevo se
+#: suma automáticamente a las cuatro sin que nadie tenga que acordarse de
+#: ampliar una tupla escrita a mano en cada fichero (incidencia #247, bloque
+#: C3b, hallazgo CODEX-002). Excluye ``registro_capacidades``, que no es un
+#: AgentProfile.
+PERFILES_REALES = tuple(
+    sorted(p.stem for p in _PERFILES_DIR.glob("*.yml") if p.stem != "registro_capacidades")
+)
+
+
 #: El Worker por defecto de las pruebas: adapter y perfil versionado, sin
 #: modelo ni runtime, que es lo que se sabe antes de que ningún Worker real
 #: acepte el encargo (§3.3, ADR-054). Las pruebas que necesitan un modelo
