@@ -21,8 +21,10 @@ Cuatro guardas, comprobadas en este orden y por la misma razón que
    primero, antes de cualquier otra guarda, para que ni siquiera un
    ``work_item`` que ya no cumpliera las guardas siguientes (por ejemplo,
    si su clase cambiara) pueda invalidar un episodio ya registrado.
-2. **Clase despachable.** Solo ``WorkItemClass.PROGRAMACION`` se despacha
-   aquí; cualquier otra clase levanta
+2. **Clase despachable (contrato §12.4, C4, incidencia #256).** Solo las
+   clases de :data:`TABLA_ACTIVACION` se despachan aquí -``programacion`` y
+   ``auditoria``, la tabla cerrada de dos filas que fija el contrato-;
+   cualquier otra clase levanta
    :class:`~sirius_engine.domain.errors.ClaseNoDespachableError`.
 3. **Estado activo (revisión #240 ronda 2).** Solo un ``WorkItem`` en
    ``WorkItemState.ACTIVE`` puede despacharse: uno cancelado, pausado,
@@ -32,7 +34,7 @@ Cuatro guardas, comprobadas en este orden y por la misma razón que
 4. **Orden enlazada (C2-P1, contrato §12.1, sin excepción).** Sin una
    referencia reconocible en ``work_item.evidencia``
    (:func:`sirius_engine.domain.dispatch.orden_enlazada`), el motor no
-   arranca nada: se levanta
+   arranca nada -tampoco para una auditoría-: se levanta
    :class:`~sirius_engine.domain.errors.OrdenNoEnlazadaError` en vez de
    proyectar o escribir cualquier cosa.
 
@@ -43,9 +45,13 @@ llamada concurrente esperando un episodio que nunca se va a grabar.
 
 La escritura es exactamente la enumerada por
 :class:`~sirius_engine.ports.github_writer.GitHubWriterPort` (C2-P4): crear
-la incidencia, aplicar la etiqueta. Ninguna otra llamada. La etiqueta
-aplicada es siempre :data:`ETIQUETA_ACTIVACION` -contrato §12.1 no autoriza
-transportar ninguna otra-: no es un parámetro que un llamador pueda variar.
+la incidencia, aplicar la etiqueta. Ninguna otra llamada. Qué etiquetas
+-la inicial y la de activación- son las que :data:`TABLA_ACTIVACION` fija
+para la clase que se despacha (contrato §12.4): no son un parámetro que un
+llamador pueda variar. Una incidencia de ``auditoria`` nace sin ninguna
+etiqueta ``sirius:*`` -a propósito, para no entrar en el reconciliador de
+programación (``scripts/automation/sirius_reconcile.sh``)-, así que su fila
+de la tabla trae ``etiquetas_iniciales=()``.
 """
 
 from __future__ import annotations
@@ -69,10 +75,41 @@ from sirius_engine.profile_field import ProfileRef
 #: sin atajos ni caminos privilegiados.
 ETIQUETA_ACTIVACION = "sirius:implement-requested"
 
-#: La etiqueta con la que nace toda incidencia de trabajo real (misma
-#: plantilla: ``.github/ISSUE_TEMPLATE/sirius-work-item.yml`` la aplica de
-#: entrada).
+#: La etiqueta del carril del Auditor (ADR-016, contrato §12.4): fuera del
+#: espacio ``sirius:*`` a propósito -no es un estado del ciclo de
+#: programación-.
+ETIQUETA_SOLICITUD_AUDITORIA = "auditoria:solicitada"
+
+#: La etiqueta con la que nace toda incidencia de trabajo de programación
+#: (misma plantilla: ``.github/ISSUE_TEMPLATE/sirius-work-item.yml`` la
+#: aplica de entrada). Una incidencia de auditoría no la lleva -ver
+#: :data:`TABLA_ACTIVACION`-.
 ETIQUETA_INICIAL = "sirius:planned"
+
+
+@dataclass(frozen=True, slots=True)
+class _ActivacionPorClase:
+    """Una fila de :data:`TABLA_ACTIVACION`: qué etiquetas corresponden a una clase."""
+
+    etiquetas_iniciales: tuple[str, ...]
+    etiqueta_activacion: str
+
+
+#: Tabla cerrada de clase -> etiquetas (contrato §12.4, ADR-068). Vive como
+#: constante de código, no se deriva del cuerpo de la incidencia -que
+#: escribe el propio motor-: derivarla de ahí permitiría que el motor se
+#: concediera permisos a sí mismo. Añadir una fila es una enmienda del
+#: contrato, no una decisión de implementación.
+TABLA_ACTIVACION: dict[WorkItemClass, _ActivacionPorClase] = {
+    WorkItemClass.PROGRAMACION: _ActivacionPorClase(
+        etiquetas_iniciales=(ETIQUETA_INICIAL,),
+        etiqueta_activacion=ETIQUETA_ACTIVACION,
+    ),
+    WorkItemClass.AUDITORIA: _ActivacionPorClase(
+        etiquetas_iniciales=(),
+        etiqueta_activacion=ETIQUETA_SOLICITUD_AUDITORIA,
+    ),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,7 +159,8 @@ def dispatch_work_item(
         )
 
     try:
-        if work_item.clase is not WorkItemClass.PROGRAMACION:
+        entrada_tabla = TABLA_ACTIVACION.get(work_item.clase)
+        if entrada_tabla is None:
             raise ClaseNoDespachableError(work_item.work_id, work_item.clase.value)
 
         if work_item.estado is not WorkItemState.ACTIVE:
@@ -137,16 +175,21 @@ def dispatch_work_item(
         )
         titulo = f"[SIRIUS] {bloque} — {work_item.objetivo.strip()[:80]}"
         creada = writer.crear_incidencia(
-            repo=repo, titulo=titulo, cuerpo=cuerpo, etiquetas=(ETIQUETA_INICIAL,)
+            repo=repo,
+            titulo=titulo,
+            cuerpo=cuerpo,
+            etiquetas=entrada_tabla.etiquetas_iniciales,
         )
-        writer.aplicar_etiqueta(repo=repo, numero=creada.numero, etiqueta=ETIQUETA_ACTIVACION)
+        writer.aplicar_etiqueta(
+            repo=repo, numero=creada.numero, etiqueta=entrada_tabla.etiqueta_activacion
+        )
 
         episodio = DispatchEpisode(
             work_id=work_item.work_id,
             orden_enlazada=referencia_orden,
             repo=repo,
             numero_incidencia=creada.numero,
-            etiqueta=ETIQUETA_ACTIVACION,
+            etiqueta=entrada_tabla.etiqueta_activacion,
             recorded_at=now,
         )
         journal.record(episodio)

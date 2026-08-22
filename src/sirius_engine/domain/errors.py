@@ -212,18 +212,19 @@ class OrdenNoEnlazadaError(EngineError):
 
 
 class ClaseNoDespachableError(EngineError):
-    """Raised when the C2 dispatcher is asked to dispatch a WorkItem outside its class scope.
+    """Raised when the dispatcher is asked to dispatch a WorkItem outside its class scope.
 
-    El bloque C2 (incidencia #240) despacha exclusivamente la clase
-    ``programacion``: es lo único que su alcance permitido autoriza. Otras
-    clases (documentacion, auditoria...) tienen su propio bloque futuro y no
-    se inventan aquí.
+    El despachador (C2, incidencia #240; ampliado a auditoría en C4,
+    incidencia #256) despacha exclusivamente las clases de la tabla cerrada
+    del contrato §12.4 -``programacion`` y ``auditoria``-: es lo único que su
+    alcance permitido autoriza. Otras clases (documentacion, investigacion...)
+    tienen su propio bloque futuro y no se inventan aquí.
     """
 
     def __init__(self, work_id: str, clase: str) -> None:
         super().__init__(
-            f"work item {work_id!r} has class {clase!r}; the C2 dispatcher only "
-            "handles 'programacion' work items"
+            f"work item {work_id!r} has class {clase!r}; the dispatcher only "
+            "handles 'programacion' and 'auditoria' work items"
         )
         self.work_id = work_id
         self.clase = clase

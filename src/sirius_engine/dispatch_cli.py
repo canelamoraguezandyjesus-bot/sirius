@@ -42,6 +42,7 @@ from sirius_engine.cli import REPO, resolver_diario
 from sirius_engine.dispatcher import dispatch_work_item
 from sirius_engine.domain.authority import autoridad_de_clase
 from sirius_engine.domain.dispatch import MARCADOR_ORDEN_PROPIETARIO
+from sirius_engine.domain.work_item import WorkItemClass
 from sirius_engine.gate import ResultadoPuerta, decidir
 from sirius_engine.intent_interpreter import interpretar_intencion_v0
 from sirius_engine.issue_body_projection import generar_cuerpo_incidencia
@@ -53,9 +54,23 @@ from sirius_engine.work_intake import ResultadoIntake, aplicar_decision
 
 COMANDO = "sirius-despachar"
 
-#: Perfil bajo el que se despacha por defecto: el implementador genérico, que es
-#: el que atiende la clase ``programacion`` en la vía GitHub.
-PERFIL_POR_DEFECTO = ProfileRef(ref="implementer", version=1)
+#: Perfil por clase de trabajo (mismo criterio que ``TABLA_ACTIVACION`` en
+#: :mod:`sirius_engine.dispatcher` selecciona la etiqueta según §12.4): la
+#: clase que se despacha decide qué perfil declara el cuerpo, no un único
+#: valor fijo que ignoraría cuál guardián real va a atender la incidencia
+#: (hallazgo CODEX-001, incidencia #256). Solo cubre las dos clases
+#: despachables -``programacion`` y ``auditoria``-: para cualquier otra,
+#: ``dispatch_work_item`` rechaza el despacho antes de que el perfil llegue a
+#: proyectarse en ningún cuerpo real.
+TABLA_PERFILES: dict[WorkItemClass, ProfileRef] = {
+    WorkItemClass.PROGRAMACION: ProfileRef(ref="implementer", version=1),
+    WorkItemClass.AUDITORIA: ProfileRef(ref="auditor", version=1),
+}
+
+#: Perfil de repliegue cuando la clase no está en :data:`TABLA_PERFILES`. No
+#: debería observarse nunca en un cuerpo real: ``dispatch_work_item`` ya
+#: rechazó esa clase antes de usar el perfil para nada.
+PERFIL_POR_DEFECTO = TABLA_PERFILES[WorkItemClass.PROGRAMACION]
 
 #: Rama base sobre la que se pide el trabajo.
 BASE_POR_DEFECTO = "main"
@@ -219,6 +234,7 @@ def main(
 
     assert resultado.work_item is not None
     work_item = resultado.work_item
+    perfil = TABLA_PERFILES.get(work_item.clase, PERFIL_POR_DEFECTO)
 
     linea(f"Orden entendida como clase «{work_item.clase.value}».")
     linea(f"  Trabajo:    {work_id}")
@@ -247,7 +263,7 @@ def main(
         writer=writer,
         journal=journal,
         repo=args.repo,
-        profile_ref=PERFIL_POR_DEFECTO,
+        profile_ref=perfil,
         bloque=args.bloque,
         now=ahora,
         base_branch=BASE_POR_DEFECTO,
@@ -262,7 +278,7 @@ def main(
         linea(
             generar_cuerpo_incidencia(
                 work_item,
-                profile_ref=PERFIL_POR_DEFECTO,
+                profile_ref=perfil,
                 bloque=args.bloque,
                 base_branch=BASE_POR_DEFECTO,
             )
