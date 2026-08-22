@@ -171,7 +171,34 @@ def test_eje_fidelidad_diverge_y_coincide() -> None:
 
 
 def test_ventana_1_despacho_reciente_no_es_divergencia() -> None:
-    """Motor forzado ACTIVE, incidencia recién creada aún proyectando PLANNED."""
+    """Motor forzado ACTIVE, incidencia recién creada aún proyectando PLANNED.
+
+    La edad de la etiqueta de máquina es conocida y reciente: solo una edad
+    conocida y por debajo de la tolerancia abre esta ventana.
+    """
+    motor = _motor(estado=WorkItemState.ACTIVE, fase=WorkItemPhase.PREPARAR)
+    espejo = _espejo(estado=WorkItemState.PLANNED, fase=WorkItemPhase.PREPARAR)
+    contexto = ContextoEjesDiarios(edad_etiqueta_maquina=timedelta(minutes=1))
+    linea = verificar_dia(
+        motor=motor,
+        espejo=espejo,
+        contexto=contexto,
+        ventana_tolerancia=_TOLERANCIA,
+        instante=_AHORA,
+    )
+    veredicto_estado = next(v for v in linea.veredictos if v.eje == EJE_ESTADO)
+    assert veredicto_estado.resultado is ResultadoEje.NO_COMPARABLE
+    assert "despacho" in (veredicto_estado.motivo or "")
+
+
+def test_ventana_1_edad_desconocida_no_protege_el_despacho_indefinidamente() -> None:
+    """Sin edad de etiqueta de máquina, no hay lectura que sostenga "reciente".
+
+    Un despacho ACTIVE/PLANNED con `edad_etiqueta_maquina is None` no puede
+    quedar `NO_COMPARABLE` para siempre: cae en comparación normal, igual
+    que ya hace la ventana 4 cuando la edad se desconoce (ver
+    `ContextoEjesDiarios`).
+    """
     motor = _motor(estado=WorkItemState.ACTIVE, fase=WorkItemPhase.PREPARAR)
     espejo = _espejo(estado=WorkItemState.PLANNED, fase=WorkItemPhase.PREPARAR)
     linea = verificar_dia(
@@ -182,8 +209,7 @@ def test_ventana_1_despacho_reciente_no_es_divergencia() -> None:
         instante=_AHORA,
     )
     veredicto_estado = next(v for v in linea.veredictos if v.eje == EJE_ESTADO)
-    assert veredicto_estado.resultado is ResultadoEje.NO_COMPARABLE
-    assert "despacho" in (veredicto_estado.motivo or "")
+    assert veredicto_estado.resultado is ResultadoEje.DIVERGENCIA
 
 
 def test_ventana_1_despacho_reciente_vence_y_pasa_a_divergencia() -> None:

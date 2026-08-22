@@ -200,18 +200,17 @@ def _ventana_no_comparable_estado(
         return f"motor en {motor.estado.value}: el vocabulario de etiquetas no puede expresarlo"
     # Ventana 1: el despachador exige ACTIVE y la incidencia recién creada
     # todavía proyecta PLANNED hasta que el ciclo mueve la primera etiqueta
-    # (medido en la #186: más de una hora). Pero solo mientras sea reciente:
-    # si la edad de la etiqueta de máquina ya supera la tolerancia (y se
-    # conoce esa edad), un despacho que sigue en PLANNED ha dejado de ser
-    # una espera legítima y pasa a comparación normal, que lo declara
-    # DIVERGENCIA.
+    # (medido en la #186: más de una hora). Pero solo mientras se sepa que es
+    # reciente: igual que la ventana 4 (ver `ContextoEjesDiarios`), sin la
+    # edad de la etiqueta de máquina tratar esto como "no comparable" sería
+    # una suposición, no una lectura -así que una edad desconocida no protege
+    # el despacho, y un PLANNED que no coincide con ACTIVE cae en
+    # comparación normal, que lo declara DIVERGENCIA.
     if (
         motor.estado is WorkItemState.ACTIVE
         and espejo.estado is WorkItemState.PLANNED
-        and (
-            contexto.edad_etiqueta_maquina is None
-            or contexto.edad_etiqueta_maquina < ventana_tolerancia
-        )
+        and contexto.edad_etiqueta_maquina is not None
+        and contexto.edad_etiqueta_maquina < ventana_tolerancia
     ):
         return "despacho reciente: el ciclo aún no ha movido la primera etiqueta desde PLANNED"
     return _ventana_residencia_o_fusion(motor, espejo, contexto, ventana_tolerancia)
