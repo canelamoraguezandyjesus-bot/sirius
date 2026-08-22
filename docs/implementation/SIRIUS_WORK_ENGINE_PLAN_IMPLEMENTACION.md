@@ -465,7 +465,7 @@ activación ni la supervisión de la vía GitHub.
   documentos como script determinista NUEVO (se invoca desde las validaciones del Work
   Item); una edición mínima del paso de prompt de `review-sirius-work.yml`; `tests/` del
   comprobador y prueba estructural del paso editado.
-- **Prueba de terminado**: un documento real creado, revisado con `CHANGES_REQUIRED` y
+- **Prueba de terminado**: un documento real creado, revisado con `CHANGES_REQUESTED` y
   observaciones estructuradas por el **perfil revisor documental seleccionado desde la
   incidencia**, reparado sin intervención y entregado; las validaciones documentales
   vistas fallar con un defecto sembrado (mutación); una incidencia SIN campo `Perfil:`

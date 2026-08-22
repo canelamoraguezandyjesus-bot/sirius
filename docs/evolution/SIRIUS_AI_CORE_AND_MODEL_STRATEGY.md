@@ -220,7 +220,7 @@ Cuando una tarea sensible necesite ayuda externa, Sirius Core podría intentar r
 
 ---
 
-# 7. Snapshot de modelos para futuros benchmarks
+## 7. Snapshot de modelos para futuros benchmarks
 
 Esta tabla existe para **recordar candidatos y órdenes de magnitud**. No es un ranking científico ni una selección aprobada.
 
@@ -336,7 +336,7 @@ Objetivo: **escalado progresivo por dificultad**, no utilizar siempre el modelo 
 
 ---
 
-# 11. Benchmark propio de Sirius antes de elegir proveedores
+## 11. Benchmark propio de Sirius antes de elegir proveedores
 
 Cuando llegue el momento de conectar modelos, **no decidir por un leaderboard público**.
 
@@ -373,7 +373,7 @@ El resultado deseado no es «un ganador», sino una **matriz de routing por tipo
 
 ---
 
-# 12. Qué hacer cuando el usuario diga «ya tengo el Spark»
+## 12. Qué hacer cuando el usuario diga «ya tengo el Spark»
 
 Este es el recordatorio principal para la IA futura que trabaje en el repositorio.
 

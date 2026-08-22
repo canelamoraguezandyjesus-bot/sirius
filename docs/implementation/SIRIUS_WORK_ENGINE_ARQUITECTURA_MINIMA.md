@@ -204,7 +204,7 @@ Reglas:
   fuentes y URLs, trazabilidad mínima; trabajo externo → estado real del servicio. «El
   Worker dice que terminó» no es evidencia.
 - **REVISAR** [M]: otro Worker con perfil de revisión independiente. Salida cerrada:
-  `APPROVED` | `CHANGES_REQUIRED` (defecto, evidencia, gravedad, corrección esperada — el
+  `APPROVED` | `CHANGES_REQUESTED` (defecto, evidencia, gravedad, corrección esperada — el
   contrato de observación ya existente) | `DECISION_REQUIRED`. El revisor no arregla lo que
   revisa.
 - **REPARAR** [M]: las observaciones vuelven **al Worker**, no al propietario. El bucle
@@ -503,7 +503,7 @@ interpreta»). El motor generaliza ese patrón: comprobar nunca es opinión de m
 3. COMPROBAR [D]: rutas citadas existen, referencias internas resuelven, formato válido,
    artefactos declarados presentes.
 4. REVISAR: Worker con perfil «revisor documental» independiente → `APPROVED` /
-   `CHANGES_REQUIRED` con el contrato de observación existente.
+   `CHANGES_REQUESTED` con el contrato de observación existente.
 5. REPARAR: las observaciones vuelven al Worker ejecutor; convergencia heredada; el
    propietario no transporta nada.
 6. ENTREGAR: síntesis + enlace al artefacto; si el artefacto vive en el repo, la fusión
@@ -655,7 +655,7 @@ la sección 14, se marca.)
   convergencia existentes.
 - **¿Cómo se ejecuta el Auditor?** Perfil portable con permisos de solo lectura, por la
   superficie disponible; propiedad ADR-016 intacta (8.4).
-- **¿Cómo vuelven los defectos al Worker automáticamente?** `CHANGES_REQUIRED` →
+- **¿Cómo vuelven los defectos al Worker automáticamente?** `CHANGES_REQUESTED` →
   observaciones estructuradas → Run de reparación del Worker ejecutor; convergencia
   gobierna el bucle (3.4, 8.1).
 - **¿Cómo se evita que el propietario sea mensajero?** El motor transporta: contexto (9),

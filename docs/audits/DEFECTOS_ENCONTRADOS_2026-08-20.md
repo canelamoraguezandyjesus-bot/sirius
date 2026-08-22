@@ -21,7 +21,9 @@
 > queda **tal y como se escribió**, como evidencia fechada.
 
 - **Fecha:** 2026-08-20
-- **Qué es esto:** el extracto accionable de
+- **Qué es esto:** el extracto accionable del documento de auditoría que, a la
+  fecha de este extracto, solo vive sin fusionar a `main` en la rama
+  `origin/claude/sirius-learning-audit-ixtr0g` — cita de esa rama:
   `docs/audits/SIRIUS_LEARNING_SEAM_AUDIT_2026-08.md`. Esa auditoría iba de otra
   cosa (integrar un diseño de aprendizaje); estos seis defectos aparecieron por
   el camino y **no tienen nada que ver con el aprendizaje**. La auditoría es la
