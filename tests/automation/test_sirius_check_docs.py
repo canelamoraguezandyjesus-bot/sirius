@@ -159,6 +159,37 @@ def test_una_cita_en_linea_con_segmentos_de_directorio_no_se_sale_del_repositori
     assert m.ruta_citada("docs/../../../../../../etc/hostname") is None
 
 
+def test_el_escape_se_rechaza_antes_de_consultar_el_sistema_de_ficheros(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CODEX-001: rechazar el `..` léxicamente, sin E/S fuera de RAIZ.
+
+    `Path.resolve()` hace `lstat` de cada componente que atraviesa, incluidos
+    los que quedan fuera de RAIZ mientras llega hasta `/etc`. Instrumentando
+    `os.lstat` se comprueba que ningún componente fuera de RAIZ se consulta:
+    la pila de segmentos se vacía y la función devuelve `None` antes de que
+    `resolve()` llegue a ejecutarse.
+    """
+    m = _module()
+    import os
+
+    consultas_fuera_de_raiz: list[str] = []
+    original_lstat = os.lstat
+
+    def lstat_vigilado(ruta: Any, *args: Any, **kwargs: Any) -> Any:
+        texto = os.fspath(ruta)
+        try:
+            Path(texto).relative_to(m.RAIZ)
+        except ValueError:
+            consultas_fuera_de_raiz.append(texto)
+        return original_lstat(ruta, *args, **kwargs)
+
+    monkeypatch.setattr(os, "lstat", lstat_vigilado)
+
+    assert m._contenida_en_raiz("docs/../../../../../../etc/hostname") is None
+    assert consultas_fuera_de_raiz == []
+
+
 def test_un_enlace_con_prefijo_de_raiz_y_segmentos_de_directorio_no_se_sale(
     tmp_path: Path,
 ) -> None:

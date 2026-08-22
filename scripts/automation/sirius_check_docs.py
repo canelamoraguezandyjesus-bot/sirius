@@ -132,16 +132,30 @@ def _precedida_por_rama(texto: str, offset: int) -> bool:
 def _contenida_en_raiz(ruta_relativa: str) -> str | None:
     """`ruta_relativa` resuelta y comprobada dentro de RAIZ, o None si se sale.
 
-    Sin esto, una cita como `docs/../../../../etc/hostname` supera el filtro
-    de prefijos de RAICES_DEL_REPOSITORIO intacta (empieza por `docs/`) y
-    `(RAIZ / ruta).exists()` la resolvería fuera del árbol del repositorio,
-    consultando el sistema de ficheros del runner. Mismo patrón que ya usaba
+    Primero normaliza `..` léxicamente, sin tocar el sistema de ficheros: una
+    cita como `docs/../../../../etc/hostname` se rechaza en cuanto el `..`
+    vacía la pila de segmentos ya vistos, antes de que `Path.resolve()` llegue
+    a consultar `/etc` en el runner (`Path.resolve()` hace E/S por cada
+    componente que resuelve, incluidos los que quedan fuera de RAIZ mientras
+    llega hasta ahí). Solo cuando el candidato ya está léxicamente contenido
+    en RAIZ se le aplica `resolve()`, para atrapar los enlaces simbólicos
+    dentro del repositorio que apunten fuera de él. Mismo patrón que ya usaba
     la rama relativa-al-documento de `_ruta_de_enlace`.
     """
+    segmentos: list[str] = []
+    for parte in ruta_relativa.split("/"):
+        if parte in ("", "."):
+            continue
+        if parte == "..":
+            if not segmentos:
+                return None  # se sale de RAIZ léxicamente: ni se resuelve
+            segmentos.pop()
+        else:
+            segmentos.append(parte)
     try:
-        return str((RAIZ / ruta_relativa).resolve().relative_to(RAIZ))
+        return str(RAIZ.joinpath(*segmentos).resolve().relative_to(RAIZ))
     except ValueError:
-        return None  # '..' se sale del repositorio: no se comprueba
+        return None  # enlace simbólico que se sale del repositorio
 
 
 def ruta_citada(bruto: str) -> str | None:
