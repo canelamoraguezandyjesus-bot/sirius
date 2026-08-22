@@ -1,9 +1,11 @@
 """AgentProfile versionado como dato (arquitectura §5.1, incidencia #202).
 
-Perfiles reales: los tres roles del ciclo de programación
-(implementer/reviewer/corrector) más el Auditor, cargados desde
-``docs/implementation/work_engine/perfiles/``. Ninguna prueba aquí depende
-de nombres de herramienta: solo de la forma del dato.
+Perfiles reales, cargados desde ``docs/implementation/work_engine/perfiles/``.
+La lista se lee del propio directorio (``glob``), no de una tupla escrita a
+mano: un `.yml` nuevo con un `procedimiento_ref` roto pasaría en verde con la
+tupla, porque nadie se acuerda de ampliarla (incidencia #247, bloque C3b,
+hallazgo R8). Ninguna prueba aquí depende de nombres de herramienta: solo de
+la forma del dato.
 """
 
 from __future__ import annotations
@@ -15,13 +17,24 @@ import pytest
 from sirius_engine.domain.errors import UnknownAgentProfileError
 from sirius_engine.profile_registry import load_agent_profile
 
-_PERFILES_REALES = ("implementer", "reviewer", "corrector", "auditor")
-
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+_PERFILES_DIR = _REPO_ROOT / "docs" / "implementation" / "work_engine" / "perfiles"
+
+# El directorio ES la lista (salvo el registro de capacidades, que no es un
+# AgentProfile): un perfil nuevo se vigila automáticamente, sin acordarse de
+# ampliar nada a mano.
+_PERFILES_REALES = tuple(
+    sorted(p.stem for p in _PERFILES_DIR.glob("*.yml") if p.stem != "registro_capacidades")
+)
+
+
+def test_hay_perfiles_que_comprobar() -> None:
+    """Un glob vacío dejaría toda la familia sin vigilancia y en verde."""
+    assert len(_PERFILES_REALES) >= 4, f"faltan perfiles en {_PERFILES_DIR}"
 
 
 @pytest.mark.parametrize("ref", _PERFILES_REALES)
-def test_carga_los_cuatro_perfiles_reales(ref: str) -> None:
+def test_carga_todos_los_perfiles_reales(ref: str) -> None:
     perfil = load_agent_profile(ref)
     assert perfil.ref == ref
     assert perfil.version >= 1

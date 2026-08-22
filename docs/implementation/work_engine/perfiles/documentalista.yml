@@ -1,0 +1,44 @@
+# AgentProfile versionado: documentalista genérico de Sirius (arquitectura §5.1).
+#
+# Procedimiento real en scripts/automation/prompts/documentalista.md -este
+# perfil NO duplica ese texto: `procedimiento_ref` apunta a él, para que
+# ambos no puedan divergir. Analogo documental de `implementer.yml`: mismas
+# capacidades de escritura (`repo`, `pr.crear`), porque el trabajo -escribir
+# documentación, hacer commit y push, abrir una PR- es la misma forma de
+# trabajo, solo que el contenido que produce es documental y no código
+# (incidencia #247, bloque C3b).
+
+ref: documentalista
+version: 1
+
+mision: >
+  Implementar de forma completa y autónoma una única incidencia de trabajo
+  documental de Sirius: escribir o actualizar la documentación pedida dentro
+  del alcance permitido, ejecutar las validaciones obligatorias del
+  proyecto, hacer commit y push a una rama nueva, abrir una Pull Request
+  hacia main y escribir siempre un veredicto estructurado -sin detenerse a
+  mitad de camino ni esperar respuesta de nadie.
+
+procedimiento_ref: scripts/automation/prompts/documentalista.md
+
+capacidades:
+  - incidencia.leer
+  - repo.leer
+  - repo.escribir
+  - validaciones.ejecutar
+  - pr.crear
+  - veredicto.escribir
+
+permisos:
+  escritura: repo
+  red: false
+
+contrato_entrada:
+  - work_item
+  - contexto_ejecucion
+
+contrato_salida:
+  - rama_con_documentacion
+  - pull_request_abierta
+  - comentario_pr_abierta_en_la_incidencia
+  - veredicto_json

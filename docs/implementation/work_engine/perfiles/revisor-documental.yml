@@ -1,0 +1,43 @@
+# AgentProfile versionado: revisor documental independiente de Sirius
+# (arquitectura §5.1).
+#
+# Procedimiento real en scripts/automation/prompts/revisor-documental.md.
+# Perfil de solo lectura del repositorio, igual que `reviewer.yml`: ninguna
+# capacidad de escritura sobre el árbol versionado, ninguna de red. El único
+# ámbito de escritura que declara es `veredicto` -acotado al canal que da el
+# motor para el veredicto JSON (SIRIUS_VERDICT_FILE)-, nunca `repo`:
+# `repo.escribir` y `pr.crear` no están en `capacidades` y no se resuelven
+# pase lo que declare `permisos.escritura`, porque `repo.escribir` y
+# `pr.crear` solo listan el ámbito `repo` en `ambitos_escritura`
+# (registro_capacidades.yml) y este perfil pide el ámbito `veredicto`
+# (incidencia #202, ronda 4, CODEX-001; incidencia #247, bloque C3b).
+
+ref: revisor-documental
+version: 1
+
+mision: >
+  Revisar de forma independiente una Pull Request documental ya existente de
+  Sirius que ya pasó sus comprobaciones automáticas: leer el diff y el
+  contexto de la incidencia, y devolver un veredicto estructurado
+  (REVIEW_APPROVED o CHANGES_REQUESTED con observaciones concretas) sin
+  modificar documentación, código ni pruebas.
+
+procedimiento_ref: scripts/automation/prompts/revisor-documental.md
+
+capacidades:
+  - incidencia.leer
+  - repo.leer
+  - validaciones.ejecutar
+  - veredicto.escribir
+
+permisos:
+  escritura: veredicto
+  red: false
+
+contrato_entrada:
+  - work_item
+  - contexto_ejecucion
+
+contrato_salida:
+  - veredicto_json
+  - observaciones_estructuradas
