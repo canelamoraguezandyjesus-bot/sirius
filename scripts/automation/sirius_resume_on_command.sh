@@ -72,7 +72,17 @@ block() {
 # --- 1) La orden debe ser exactamente "continua" ------------------------------
 # Exacta y sin texto adicional, igual que `fusiona`: una mención casual de la
 # palabra en una discusión no puede reanudar un ciclo que se detuvo por algo.
-trimmed="$(printf '%s' "$COMMENT_BODY" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+#
+# Con una excepción medida: la firma de atribución que algunas herramientas
+# AÑADEN SOLAS al final de cada comentario. Pasó de verdad —dos incidencias
+# quedaron bloqueadas porque quien podía dar la orden no podía escribirla sin
+# esa firma detrás—, y no es un caso hipotético: quien comenta por API no
+# controla lo que el servidor le anexa. Se recorta ese bloque concreto y solo
+# ese; cualquier otro texto sigue invalidando la orden, que es lo que esta
+# guarda protege.
+sin_firma="$(printf '%s' "$COMMENT_BODY" | tr -d '\r' \
+  | sed -e '/^[[:space:]]*---[[:space:]]*$/,$d')"
+trimmed="$(printf '%s' "$sin_firma" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 lowered="$(printf '%s' "$trimmed" | tr '[:upper:]' '[:lower:]')"
 if [ "$lowered" != "continua" ] && [ "$lowered" != "continúa" ]; then
   echo "El comentario de #${ISSUE} no es la orden exacta 'continua'; no se actua."
