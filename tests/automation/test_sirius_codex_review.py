@@ -1776,3 +1776,27 @@ def test_collect_no_llama_fallo_a_una_revision_normal(tmp_path: Path) -> None:
     result = _result(tmp_path)
     assert result["reason"] != "codex-fallo-declarado"
     assert result["status"] == "APPROVED"
+
+
+def test_las_citas_al_contrato_operativo_referencian_secciones_que_existen() -> None:
+    """Ninguna cita ``§N`` o ``§N.N`` de este script apunta a una sección fantasma.
+
+    Motivo del defecto (incidencia #243): el docstring de ``_normalized_body``
+    citaba ``§6.7`` para el contrato de duplicar consumo, pero la sección 6 del
+    contrato (``Idempotencia y protección contra bucles``) no tiene subsecciones
+    — solo existe ``§6``. Antes de la corrección, esta prueba falla porque
+    ``6.7`` no aparece entre los encabezados reales del contrato.
+    """
+    import re
+
+    contract_text = (
+        REPO_ROOT / "docs" / "implementation" / "AUTOMATION_OPERATING_CONTRACT.md"
+    ).read_text(encoding="utf-8")
+    valid_sections = set(re.findall(r"(?m)^#{2,3} ([0-9]+(?:\.[0-9]+)?)(?=[.\s])", contract_text))
+    assert "6.7" not in valid_sections  # confirma que la sección citada no existe
+
+    script_text = SCRIPT.read_text(encoding="utf-8")
+    cited_sections = set(re.findall(r"§([0-9]+(?:\.[0-9]+)?)", script_text))
+    assert cited_sections, "no se encontró ninguna cita al contrato en el script"
+    missing = cited_sections - valid_sections
+    assert not missing, f"citas a secciones inexistentes del contrato: {sorted(missing)}"

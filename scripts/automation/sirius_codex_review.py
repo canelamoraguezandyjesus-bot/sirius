@@ -427,7 +427,7 @@ def _normalized_body(text: str) -> str:
     normalizasen los finales de línea (CRLF) o recortasen el salto final, y esa
     falsa diferencia publicaría un SEGUNDO `@codex review` para el mismo head
     en cada reejecución — justo el consumo duplicado que el contrato prohíbe
-    (§6.7). El contenido interno sí debe coincidir exactamente.
+    (§6). El contenido interno sí debe coincidir exactamente.
     """
     return text.replace("\r\n", "\n").replace("\r", "\n").strip()
 
