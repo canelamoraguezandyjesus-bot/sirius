@@ -57,7 +57,16 @@ block() {
 }
 
 # --- 1) La orden debe ser exactamente "fusiona" -------------------------------
-trimmed="$(printf '%s' "$COMMENT_BODY" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+# Se recorta antes la firma de atribución que algunas herramientas AÑADEN SOLAS
+# al final de cada comentario: quien comenta por API no controla lo que el
+# servidor le anexa, y sin esto la orden es inescribible por esa vía. Se recorta
+# ese bloque y solo ese —desde una línea que sea únicamente guiones hasta el
+# final—; cualquier otro texto sigue invalidando la orden, que es lo que esta
+# guarda protege. La autorización sigue siendo del propietario: el workflow ya
+# exigió `author_association == OWNER` y este guion lo reverifica por REST.
+sin_firma="$(printf '%s' "$COMMENT_BODY" | tr -d '\r' \
+  | sed -e '/^[[:space:]]*---[[:space:]]*$/,$d')"
+trimmed="$(printf '%s' "$sin_firma" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 lowered="$(printf '%s' "$trimmed" | tr '[:upper:]' '[:lower:]')"
 if [ "$lowered" != "fusiona" ]; then
   echo "El comentario de #${ISSUE} no es la orden exacta 'fusiona'; no se actua."
