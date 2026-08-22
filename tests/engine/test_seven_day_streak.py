@@ -1,0 +1,430 @@
+"""El contador de los siete días (D1b, incidencia #268).
+
+La prueba de terminado de este bloque, igual que la de D1a, no es "llega a
+siete": es "se ha visto volver a cero" (nota de arranque). Por eso el orden
+de este fichero es:
+
+1. El registro: solo crece, y dos pasadas idénticas no duplican ni pierden
+   líneas (requisito 6).
+2. El contador vuelve a cero por CADA camino declarado -un día no verde y
+   una corrección manual detectada-, cada uno con su prueba sembrada
+   (requisito 1).
+3. Un día sin línea, y un registro vacío, no cumplen la condición 1
+   (requisito 2).
+4. Un día entero de ``NO_COMPARABLE`` no cuenta como verde (requisito 4).
+5. El contador informa por clase y dice por qué NO se cumple (requisito 7).
+6. Ninguna ruta del contador conmuta nada (requisito 8).
+7. La hora de la pasada se deriva del ``schedule: cron:`` real, nunca a ojo
+   (requisito 5).
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, date, datetime, time, timedelta
+from pathlib import Path
+
+import pytest
+import yaml
+
+from sirius_engine.domain.authority import Autoridad, autoridad_de_clase
+from sirius_engine.domain.events import AggregateType, Event
+from sirius_engine.domain.work_item import WorkItemClass, create_work_item
+from sirius_engine.projection_verifier import (
+    EJE_ESTADO,
+    EJE_FASE,
+    LineaRegistro,
+    ResultadoEje,
+    VeredictoEje,
+    formatear_linea,
+)
+from sirius_engine.seven_day_streak import (
+    anadir_lineas,
+    detectar_correcciones_manuales,
+    evaluar_racha,
+    hora_recomendada_pasada,
+    leer_registro,
+)
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_HOY = date(2026, 8, 22)
+_WORK_ID = "WI-D1B-1"
+_CLASE = WorkItemClass.PROGRAMACION
+
+
+def _instante(dia: date, hora: int = 12) -> datetime:
+    return datetime(dia.year, dia.month, dia.day, hora, tzinfo=UTC)
+
+
+def _linea_verde(
+    dia: date, *, work_id: str = _WORK_ID, clase: WorkItemClass = _CLASE
+) -> LineaRegistro:
+    return LineaRegistro(
+        instante=_instante(dia),
+        clase=clase,
+        work_id=work_id,
+        veredictos=(
+            VeredictoEje(eje=EJE_FASE, resultado=ResultadoEje.COINCIDE),
+            VeredictoEje(eje=EJE_ESTADO, resultado=ResultadoEje.COINCIDE),
+        ),
+    )
+
+
+def _linea_divergente(
+    dia: date, *, work_id: str = _WORK_ID, clase: WorkItemClass = _CLASE, eje: str = EJE_ESTADO
+) -> LineaRegistro:
+    otros = EJE_FASE if eje == EJE_ESTADO else EJE_ESTADO
+    return LineaRegistro(
+        instante=_instante(dia),
+        clase=clase,
+        work_id=work_id,
+        veredictos=(
+            VeredictoEje(eje=otros, resultado=ResultadoEje.COINCIDE),
+            VeredictoEje(
+                eje=eje,
+                resultado=ResultadoEje.DIVERGENCIA,
+                motivo="motor=<WorkItemState.ACTIVE> incidencia=<WorkItemState.PLANNED>",
+            ),
+        ),
+    )
+
+
+def _rango(inicio: date, fin: date) -> list[date]:
+    dias = []
+    cursor = inicio
+    while cursor <= fin:
+        dias.append(cursor)
+        cursor += timedelta(days=1)
+    return dias
+
+
+def _evento(work_id: str, *, dia: date, hora: int = 6) -> Event:
+    motor = create_work_item(
+        work_id=work_id,
+        peticion_original="texto",
+        objetivo="objetivo",
+        contexto_origen=("incidencia:1",),
+        entregable="entregable",
+        criterio_terminado="criterio",
+        limites={},
+        prioridad=1,
+        clase=_CLASE,
+        now=_instante(dia, hora),
+    )
+    return Event(
+        sequence=1,
+        occurred_at=_instante(dia, hora),
+        aggregate_type=AggregateType.WORK_ITEM,
+        aggregate_id=work_id,
+        kind="work_item_activated",
+        entity=motor,
+    )
+
+
+# --- 1. El registro: solo crece, sin duplicar --------------------------------
+
+
+def test_anadir_lineas_dos_pasadas_identicas_no_duplican(tmp_path: Path) -> None:
+    ruta = tmp_path / "registro.jsonl"
+    lineas = (_linea_verde(_HOY),)
+    primera = anadir_lineas(ruta, lineas)
+    segunda = anadir_lineas(ruta, lineas)
+    assert primera == 1
+    assert segunda == 0
+    assert leer_registro(ruta) == lineas
+
+
+def test_anadir_lineas_solo_crece_no_reordena_lo_anterior(tmp_path: Path) -> None:
+    ruta = tmp_path / "registro.jsonl"
+    anadir_lineas(ruta, (_linea_verde(date(2026, 8, 1)),))
+    texto_tras_primera = ruta.read_text(encoding="utf-8")
+    anadir_lineas(ruta, (_linea_verde(date(2026, 8, 2)),))
+    texto_tras_segunda = ruta.read_text(encoding="utf-8")
+    assert texto_tras_segunda.startswith(texto_tras_primera)
+
+
+def test_leer_registro_de_fichero_inexistente_es_vacio(tmp_path: Path) -> None:
+    assert leer_registro(tmp_path / "no-existe.jsonl") == ()
+
+
+def test_leer_registro_invierte_formatear_linea(tmp_path: Path) -> None:
+    ruta = tmp_path / "registro.jsonl"
+    original = _linea_divergente(_HOY)
+    anadir_lineas(ruta, (original,))
+    (leida,) = leer_registro(ruta)
+    assert formatear_linea(leida) == formatear_linea(original)
+
+
+# --- 2. El contador vuelve a cero: los dos caminos, cada uno sembrado -------
+
+
+def test_racha_vuelve_a_cero_por_un_dia_no_verde_en_medio_de_la_racha() -> None:
+    """Tres días verdes, un día divergente, tres días verdes más: la racha NO suma los siete.
+
+    Lleva un evento del motor que explica la resolución del día divergente al
+    siguiente (índice 3 -> índice 4), para aislar ESTE camino de reinicio -un
+    día no verde- del otro (corrección manual, probado aparte): sin ese
+    evento, la resolución sin explicación sería TAMBIÉN una huella de
+    corrección, y esta prueba dejaría de medir un solo camino.
+    """
+    dias = _rango(_HOY - timedelta(days=6), _HOY)
+    lineas = []
+    for indice, dia in enumerate(dias):
+        if indice == 3:  # el cuarto día de siete, en medio, se siembra rojo.
+            lineas.append(_linea_divergente(dia))
+        else:
+            lineas.append(_linea_verde(dia))
+    eventos = (_evento(_WORK_ID, dia=dias[3], hora=18),)
+
+    evaluacion = evaluar_racha(lineas=lineas, eventos=eventos, clase=_CLASE, hoy=_HOY)
+
+    assert evaluacion.cumple is False
+    assert evaluacion.dias_consecutivos == 3, (
+        "solo los tres días verdes DESPUÉS del día rojo cuentan: la racha se rompió ahí, "
+        "y los tres verdes de antes no la resucitan"
+    )
+    assert "día no verde" in evaluacion.motivo
+    assert dias[3].isoformat() in evaluacion.motivo
+
+
+def test_racha_vuelve_a_cero_por_correccion_manual_detectada_en_medio_de_la_racha() -> None:
+    """Una DIVERGENCIA que se resuelve a COINCIDE sin transición del motor rompe la racha ahí.
+
+    Sembrado: el día 4 (de siete) tiene DIVERGENCIA en estado; el día 5 esa
+    misma línea pasa a COINCIDE, pero el diario de eventos del motor no
+    registra NINGUNA transición de ``_WORK_ID`` entre esos dos instantes. Es
+    exactamente la huella que la nota de arranque de la incidencia pide: la
+    incidencia (o el almacén) cambiaron sin que el motor lo hiciera.
+    """
+    dias = _rango(_HOY - timedelta(days=6), _HOY)
+    lineas = []
+    for indice, dia in enumerate(dias):
+        if indice == 3:
+            lineas.append(_linea_divergente(dia))
+        else:
+            lineas.append(_linea_verde(dia))
+    # Sin eventos del motor: nada explica que el día 4 (índice 3, DIVERGENCIA)
+    # pasara a día 5 (índice 4, COINCIDE) en la lista `lineas` de arriba.
+
+    evaluacion = evaluar_racha(lineas=lineas, eventos=(), clase=_CLASE, hoy=_HOY)
+
+    assert evaluacion.cumple is False
+    # El día divergente (índice 3) YA rompe la racha por sí solo (camino 1);
+    # esta prueba fija además que, aunque ese día individual fuera verde por
+    # descuido de otro cambio, la corrección manual detectada al resolverse
+    # seguiría rompiéndola: se comprueba directamente sobre el detector.
+    huellas = detectar_correcciones_manuales(lineas, ())
+    assert len(huellas) == 1
+    assert huellas[0].work_id == _WORK_ID
+    assert huellas[0].eje == EJE_ESTADO
+    assert huellas[0].dia == dias[4]
+
+
+def test_correccion_manual_no_se_detecta_si_el_motor_registra_una_transicion() -> None:
+    """La MISMA resolución, pero con un evento del motor de por medio: no deja huella."""
+    dia_divergencia = _HOY - timedelta(days=1)
+    dia_coincide = _HOY
+    lineas = (_linea_divergente(dia_divergencia), _linea_verde(dia_coincide))
+    eventos = (_evento(_WORK_ID, dia=dia_divergencia, hora=18),)
+
+    huellas = detectar_correcciones_manuales(lineas, eventos)
+
+    assert huellas == ()
+
+
+def test_correccion_manual_rompe_la_racha_aunque_ambos_dias_individualmente_fueran_verdes() -> None:
+    """Fija que la condición 2 rompe la racha incluso cuando la condición 1 no lo haría.
+
+    Construye una racha de siete días TODOS verdes (condición 1 se cumpliría
+    sola), pero con una corrección manual sembrada en dos líneas del mismo
+    work_id que, aisladas, también leen verde/verde-tras-no-comparable: el
+    contador tiene que romperse por la corrección, no solo por un día rojo.
+    """
+    dias = _rango(_HOY - timedelta(days=6), _HOY)
+    lineas: list[LineaRegistro] = [_linea_verde(dia) for dia in dias]
+    # Sustituye el día 3 (índice 2) por una DIVERGENCIA que en el índice 3 se
+    # resuelve a COINCIDE sin ningún evento del motor: los siete días,
+    # tomados uno a uno, solo tienen UN no-verde (índice 2), pero la
+    # corrección manual detectada en el índice 3 debe romper la racha
+    # también ahí, no solo en el índice 2.
+    lineas[2] = _linea_divergente(dias[2])
+
+    evaluacion = evaluar_racha(lineas=lineas, eventos=(), clase=_CLASE, hoy=_HOY)
+
+    assert evaluacion.cumple is False
+    assert evaluacion.dias_consecutivos == 3, "solo los tres días tras la corrección cuentan"
+    assert "corrección manual" in evaluacion.motivo
+
+
+# --- 3. Un día sin línea, y un registro vacío, no cumplen la condición 1 ----
+
+
+def test_registro_vacio_no_cumple() -> None:
+    evaluacion = evaluar_racha(lineas=(), eventos=(), clase=_CLASE, hoy=_HOY)
+    assert evaluacion.cumple is False
+    assert evaluacion.dias_consecutivos == 0
+    assert "sin línea" in evaluacion.motivo or "sin ninguna línea" in evaluacion.motivo
+
+
+def test_seis_dias_verdes_y_un_hueco_no_cumple() -> None:
+    """Siete días exige días PRESENTES y consecutivos: un hueco no es rojo, pero tampoco cuenta."""
+    dias = _rango(_HOY - timedelta(days=6), _HOY)
+    lineas = [
+        _linea_verde(dia) for indice, dia in enumerate(dias) if indice != 2
+    ]  # hueco en el día 3
+
+    evaluacion = evaluar_racha(lineas=lineas, eventos=(), clase=_CLASE, hoy=_HOY)
+
+    assert evaluacion.cumple is False
+    assert evaluacion.dias_consecutivos == 4, "solo los cuatro días tras el hueco cuentan"
+    assert "sin línea registrada" in evaluacion.motivo
+
+
+# --- 4. Un día entero de NO_COMPARABLE no cuenta como verde -----------------
+
+
+def test_dia_no_comparable_no_cuenta_como_verde_y_conserva_el_motivo() -> None:
+    dia_no_comparable = _HOY
+    linea_no_comparable = LineaRegistro(
+        instante=_instante(dia_no_comparable),
+        clase=_CLASE,
+        work_id=_WORK_ID,
+        veredictos=(
+            VeredictoEje(eje=EJE_FASE, resultado=ResultadoEje.COINCIDE),
+            VeredictoEje(
+                eje=EJE_ESTADO,
+                resultado=ResultadoEje.NO_COMPARABLE,
+                motivo="residencia normal de etiqueta de máquina",
+            ),
+        ),
+    )
+    lineas = [_linea_verde(_HOY - timedelta(days=1)), linea_no_comparable]
+
+    evaluacion = evaluar_racha(lineas=lineas, eventos=(), clase=_CLASE, hoy=_HOY)
+
+    assert evaluacion.cumple is False
+    assert evaluacion.dias_consecutivos == 0, (
+        "el día no comparable rompe la racha en el primer paso"
+    )
+    assert "no_comparable" in evaluacion.motivo
+    assert "residencia normal de etiqueta de máquina" in evaluacion.motivo
+
+
+# --- 5. El contador informa por clase y dice por qué NO se cumple ----------
+
+
+def test_evaluacion_distingue_clases_y_no_mezcla_sus_lineas() -> None:
+    dias = _rango(_HOY - timedelta(days=6), _HOY)
+    lineas = [_linea_verde(dia, clase=WorkItemClass.PROGRAMACION) for dia in dias]
+    lineas += [_linea_divergente(dias[-1], work_id="WI-AUDITORIA-1", clase=WorkItemClass.AUDITORIA)]
+
+    programacion = evaluar_racha(
+        lineas=lineas, eventos=(), clase=WorkItemClass.PROGRAMACION, hoy=_HOY
+    )
+    auditoria = evaluar_racha(lineas=lineas, eventos=(), clase=WorkItemClass.AUDITORIA, hoy=_HOY)
+
+    assert programacion.cumple is True
+    assert programacion.dias_consecutivos == 7
+    assert auditoria.cumple is False
+    assert auditoria.dias_consecutivos == 0
+
+
+def test_motivo_de_incumplimiento_es_especifico_no_un_booleano_suelto() -> None:
+    evaluacion = evaluar_racha(lineas=(), eventos=(), clase=_CLASE, hoy=_HOY)
+    assert evaluacion.motivo != ""
+    assert str(evaluacion.cumple) not in evaluacion.motivo  # no es solo "False" repetido
+
+
+# --- 6. Ninguna ruta del contador conmuta nada ------------------------------
+
+
+def test_evaluar_una_racha_completa_no_cambia_la_autoridad_de_ninguna_clase() -> None:
+    dias = _rango(_HOY - timedelta(days=6), _HOY)
+    lineas = [_linea_verde(dia) for dia in dias]
+    autoridad_antes = {clase: autoridad_de_clase(clase) for clase in WorkItemClass}
+
+    evaluacion = evaluar_racha(lineas=lineas, eventos=(), clase=_CLASE, hoy=_HOY)
+
+    assert evaluacion.cumple is True  # la racha llegó a siete: el caso que más tentaría a conmutar
+    autoridad_despues = {clase: autoridad_de_clase(clase) for clase in WorkItemClass}
+    assert autoridad_antes == autoridad_despues
+    assert autoridad_de_clase(_CLASE) is Autoridad.INCIDENCIA  # sigue sin conmutar
+
+
+# --- 7. La hora de la pasada se deriva, nunca a ojo -------------------------
+
+
+def test_hora_recomendada_es_el_punto_medio_del_mayor_hueco(tmp_path: Path) -> None:
+    workflows = tmp_path / "workflows"
+    workflows.mkdir()
+    (workflows / "reconciliar.yml").write_text(
+        yaml.safe_dump({"on": {"schedule": [{"cron": "17 */6 * * *"}]}}), encoding="utf-8"
+    )
+    (workflows / "otro.yml").write_text(
+        yaml.safe_dump({"on": {"push": None}, "jobs": {"j": {"timeout-minutes": 30}}}),
+        encoding="utf-8",
+    )
+
+    hora, motivo = hora_recomendada_pasada(workflows)
+
+    assert hora == time(3, 17)
+    assert "hueco" in motivo
+
+
+def test_hora_recomendada_sin_schedule_no_inventa_nada(tmp_path: Path) -> None:
+    workflows = tmp_path / "workflows"
+    workflows.mkdir()
+    (workflows / "solo-push.yml").write_text(
+        yaml.safe_dump({"on": {"push": None}}), encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="no hay de qué derivar"):
+        hora_recomendada_pasada(workflows)
+
+
+def test_hora_recomendada_para_si_ningun_hueco_deja_ventana_tranquila(tmp_path: Path) -> None:
+    """Disparos cada 30 minutos: ningún punto del día queda a 2h50m del más cercano."""
+    workflows = tmp_path / "workflows"
+    workflows.mkdir()
+    (workflows / "muy-frecuente.yml").write_text(
+        yaml.safe_dump({"on": {"schedule": [{"cron": "*/30 * * * *"}]}}), encoding="utf-8"
+    )
+    (workflows / "otro.yml").write_text(
+        yaml.safe_dump({"jobs": {"j": {"timeout-minutes": 60}}}), encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="ninguna hora produciría días verdes"):
+        hora_recomendada_pasada(workflows)
+
+
+def test_hora_recomendada_atada_al_schedule_real_del_repositorio() -> None:
+    """Misma disciplina que ``test_ventana_tolerancia_atada_al_yaml_real...``: YAML aparte."""
+    minutos_disparo = set()
+    for wf in sorted((_REPO_ROOT / ".github" / "workflows").glob("*.yml")):
+        doc = yaml.safe_load(wf.read_text(encoding="utf-8"))
+        activadores = doc.get("on") if isinstance(doc, dict) else None
+        if activadores is None and isinstance(doc, dict):
+            activadores = doc.get(True)
+        if not isinstance(activadores, dict):
+            continue
+        for entrada in activadores.get("schedule") or []:
+            expresion = entrada.get("cron")
+            minuto, hora_campo = expresion.split()[0], expresion.split()[1]
+            if hora_campo.startswith("*/"):
+                paso = int(hora_campo[2:])
+                for h in range(0, 24, paso):
+                    minutos_disparo.add(h * 60 + int(minuto))
+            else:
+                minutos_disparo.add(int(hora_campo) * 60 + int(minuto))
+    assert minutos_disparo, "no encontré ningún schedule real: la comparación no mediría nada"
+
+    ordenados = sorted(minutos_disparo)
+    huecos = []
+    for indice, inicio in enumerate(ordenados):
+        siguiente = ordenados[(indice + 1) % len(ordenados)]
+        duracion = (siguiente - inicio) % (24 * 60)
+        huecos.append((duracion or 24 * 60, inicio))
+    duracion_max = max(duracion for duracion, _inicio in huecos)
+    inicio_max = min(inicio for duracion, inicio in huecos if duracion == duracion_max)
+    punto_medio = (inicio_max + duracion_max // 2) % (24 * 60)
+    esperado = time(hour=punto_medio // 60, minute=punto_medio % 60)
+
+    hora, _motivo = hora_recomendada_pasada()
+    assert hora == esperado
