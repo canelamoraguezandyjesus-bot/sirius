@@ -185,7 +185,14 @@ def _ramas_con_ruta(ruta: str) -> list[str]:
             check=True,
             timeout=10,
         )
-    except OSError, subprocess.SubprocessError:
+    # Dos cláusulas y no `except (A, B):` a propósito: `ruff format` con
+    # `target-version = "py314"` quita los paréntesis y deja sintaxis de PEP 758,
+    # que el `python3` del runner (3.12) no entiende. Es la forma en que esta
+    # sintaxis se coló ya una vez en `sirius_convergence.py`. Dos cláusulas
+    # sobreviven al formateador y compilan en las dos versiones.
+    except OSError:
+        return []
+    except subprocess.SubprocessError:
         return []
     ramas: list[str] = []
     for rama in listado.stdout.splitlines():
@@ -267,7 +274,11 @@ def _slug(titulo: str) -> str:
     """Aproximación al slug de ancla que genera Markdown para un encabezado."""
     texto = re.sub(r"`([^`]*)`", r"\1", titulo.strip().lower())
     texto = re.sub(r"[^\w\s-]", "", texto, flags=re.UNICODE)
-    return re.sub(r"\s+", "-", texto).strip("-")
+    # Un guion por espacio, NO por grupo de espacios: al quitar un símbolo que
+    # tenía espacio a cada lado quedan dos, y GitHub genera dos guiones. Con
+    # `\s+` el comprobador marcaba como roto el enlace correcto de ADR-046 a
+    # `#tabla-borde--observación-s3-p1`.
+    return re.sub(r"\s", "-", texto).strip("-")
 
 
 def _slugs_con_sufijos(encabezados: list[tuple[int, int, str]]) -> set[str]:

@@ -331,3 +331,51 @@ def test_cli_exige_al_menos_un_documento() -> None:
         check=False,
     )
     assert result.returncode != 0
+
+
+# --- El script tiene que arrancar donde de verdad se ejecuta -------------------
+
+
+def test_el_comprobador_arranca_con_el_python_del_runner() -> None:
+    """El Work Item lo invoca en el runner, con `python3` a secas, no con `uv`.
+
+    `except A, B:` sin paréntesis es PEP 758, solo desde 3.14. El proyecto se
+    valida con 3.14 y Quality lo aprueba; el runner de `ubuntu-latest` usa 3.12
+    y el script moriría al arrancar. Es la segunda vez que esta sintaxis se
+    cuela: la primera fue en `sirius_convergence.py`, y de ahí salió
+    `test_sirius_runner_python_compat.py`.
+    """
+    import ast
+
+    fuente = SCRIPT.read_text(encoding="utf-8")
+    try:
+        ast.parse(fuente, filename=str(SCRIPT), feature_version=(3, 12))
+    except SyntaxError as exc:
+        pytest.fail(
+            f"sirius_check_docs.py no compila con Python 3.12 (línea {exc.lineno}): "
+            f"{exc.msg}. Los Work Item documentales lo invocan con el `python3` del "
+            "runner, no con el intérprete del proyecto."
+        )
+
+
+def test_el_slug_no_colapsa_los_espacios_que_deja_la_puntuacion() -> None:
+    """GitHub genera doble guion donde había un símbolo entre dos espacios.
+
+    Defecto real: `ADR-046` enlaza a `#tabla-borde--observación-s3-p1`, que es
+    el ancla correcta de un encabezado con un signo de multiplicar entre dos
+    espacios. Con `\\s+` el comprobador generaba un solo guion y marcaba como
+    roto un enlace que esta bien: una falsa alarma sobre un documento correcto
+    del repositorio.
+    """
+    m = _module()
+    titulo = "Tabla borde \u00d7 observaci\u00f3n (S3-P1)"
+    assert m._slug(titulo) == "tabla-borde--observaci\u00f3n-s3-p1"
+
+
+def test_el_enlace_real_del_adr_046_no_da_falsa_alarma() -> None:
+    """El caso concreto que lo destapó, comprobado sobre el documento de verdad."""
+    nombre = "ADR-046-spike-i1-bordes-de-status-sobre-runs-de-actions.md"
+    documento = REPO_ROOT / "docs" / "decisions" / nombre
+    hallazgos = _module().comprobar_documento(documento)
+    anclas = [h for h in hallazgos if "ancla" in h.mensaje]
+    assert anclas == [], f"falsa alarma sobre un enlace correcto: {[str(h) for h in anclas]}"

@@ -38,6 +38,13 @@ RUNNER_PYTHON = (3, 12)
 # Se listan de forma explícita para que añadir un script nuevo a un workflow
 # obligue a incluirlo aquí conscientemente.
 SCRIPTS_RUN_ON_THE_RUNNER = (
+    # `sirius_check_docs.py` NO lo descubre `test_the_listed_scripts_are_the_ones_
+    # the_workflows_invoke`: esa derivación recorre `.github/workflows/*.yml` y
+    # `scripts/automation/*.sh`, y este script se invoca desde el campo
+    # «Validaciones obligatorias» del cuerpo de un Work Item, que no es un
+    # fichero del árbol. La derivación no está mal; es ciega a ese sitio de
+    # invocación, y por eso este va a mano y con este comentario.
+    "sirius_check_docs.py",
     "sirius_aggregate_reviews.py",
     "sirius_codex_review.py",
     "sirius_convergence.py",
