@@ -12,6 +12,8 @@ import io
 from datetime import UTC, datetime
 from pathlib import Path
 
+import yaml
+
 from sirius_engine import seven_day_streak_cli
 from sirius_engine.adapters.fixture_mirror import FixedGitHubMirrorReader
 from sirius_engine.adapters.memory_dispatch_journal import InMemoryDispatchJournal
@@ -252,3 +254,88 @@ def test_una_lectura_caida_del_espejo_se_informa_y_se_salta_sin_inventar_linea(
     assert "no pude leer la incidencia" in texto
     assert "no es que no hubiera nada" in texto
     assert leer_registro(registro) == ()
+
+
+# --- CODEX-002: --raiz/SIRIUS_RACHA_RAIZ, no __file__, resuelven los recursos ---
+
+
+def test_resolver_raiz_argumento_manda_sobre_entorno_y_defecto(tmp_path: Path) -> None:
+    del_entorno = seven_day_streak_cli.resolver_raiz(
+        argumento=None, entorno={seven_day_streak_cli.VARIABLE_RAIZ: str(tmp_path)}
+    )
+    manda_el_argumento = seven_day_streak_cli.resolver_raiz(
+        argumento=str(tmp_path / "otra"),
+        entorno={seven_day_streak_cli.VARIABLE_RAIZ: str(tmp_path)},
+    )
+
+    assert seven_day_streak_cli.resolver_raiz(argumento=None, entorno={}) == Path.cwd()
+    assert del_entorno == tmp_path
+    assert manda_el_argumento == tmp_path / "otra"
+
+
+def test_el_registro_por_defecto_se_resuelve_bajo_la_raiz_no_bajo_file(tmp_path: Path) -> None:
+    """Sin ``--registro``, la ruta por defecto debe venir de ``--raiz``, no de ``__file__``.
+
+    En un wheel instalado ``__file__`` cae bajo ``site-packages`` -sin
+    ``docs/operations``-, así que una pasada real necesita que el registro se
+    resuelva desde una raíz que sí exista (CODEX-002).
+    """
+    raiz = tmp_path / "checkout"
+    workflows = raiz / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "ci.yml").write_text(
+        yaml.safe_dump({"on": {"push": None}, "jobs": {"j": {"timeout-minutes": 30}}}),
+        encoding="utf-8",
+    )
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    # Un trabajo real, para que la pasada escriba de verdad una línea: con el
+    # almacén vacío, `anadir_lineas` no tiene nada que anexar y nunca llega a
+    # crear el fichero, así que la ruta por defecto no quedaría fijada.
+    _preparar_trabajo_activo(store, journal, work_id="WI-1", clase=WorkItemClass.PROGRAMACION)
+
+    salida = io.StringIO()
+    codigo = seven_day_streak_cli.main(
+        ["--diario", str(tmp_path / "diario.jsonl"), "--raiz", str(raiz)],
+        entorno={},
+        salida=salida,
+        ahora=_AHORA,
+        store=store,
+        dispatch_journal=journal,
+        mirror=_mirror_verde(),
+    )
+
+    registro_esperado = raiz / "docs" / "operations" / "racha_siete_dias.jsonl"
+    assert codigo == 0
+    assert f"en {registro_esperado}" in salida.getvalue()
+    assert registro_esperado.exists()
+
+
+# --- CODEX-003: --hora-recomendada expone la hora derivada desde el comando ---
+
+
+def test_hora_recomendada_se_expone_sin_ejecutar_la_pasada(tmp_path: Path) -> None:
+    raiz = tmp_path / "checkout"
+    workflows = raiz / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "reconciliar.yml").write_text(
+        yaml.safe_dump(
+            {
+                "on": {"schedule": [{"cron": "17 */6 * * *"}]},
+                "jobs": {"j": {"timeout-minutes": 30}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    salida = io.StringIO()
+    codigo = seven_day_streak_cli.main(
+        ["--raiz", str(raiz), "--hora-recomendada"], entorno={}, salida=salida
+    )
+
+    assert codigo == 0
+    assert "03:17 UTC" in salida.getvalue()
+    registro_por_defecto = raiz / "docs" / "operations" / "racha_siete_dias.jsonl"
+    assert not registro_por_defecto.exists(), (
+        "--hora-recomendada solo informa: no ejecuta la pasada ni escribe nada (CODEX-003)"
+    )

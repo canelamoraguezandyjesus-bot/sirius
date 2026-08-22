@@ -97,7 +97,14 @@ def _rango(inicio: date, fin: date) -> list[date]:
     return dias
 
 
-def _evento(work_id: str, *, dia: date, hora: int = 6) -> Event:
+def _evento(
+    work_id: str,
+    *,
+    dia: date,
+    hora: int = 6,
+    kind: str = "work_item_activated",
+    aggregate_type: AggregateType = AggregateType.WORK_ITEM,
+) -> Event:
     motor = create_work_item(
         work_id=work_id,
         peticion_original="texto",
@@ -113,9 +120,9 @@ def _evento(work_id: str, *, dia: date, hora: int = 6) -> Event:
     return Event(
         sequence=1,
         occurred_at=_instante(dia, hora),
-        aggregate_type=AggregateType.WORK_ITEM,
+        aggregate_type=aggregate_type,
         aggregate_id=work_id,
-        kind="work_item_activated",
+        kind=kind,
         entity=motor,
     )
 
@@ -229,6 +236,69 @@ def test_correccion_manual_no_se_detecta_si_el_motor_registra_una_transicion() -
     huellas = detectar_correcciones_manuales(lineas, eventos)
 
     assert huellas == ()
+
+
+def test_correccion_manual_se_detecta_pese_a_un_evento_ajeno_al_eje_resuelto() -> None:
+    """CODEX-001 (ronda 2): una repriorización entre las dos líneas no explica nada.
+
+    ``reprioritize`` (``work_item_reprioritized``) no toca ni fase ni estado
+    (:mod:`sirius_engine.domain.work_item`): es exactamente el evento "ajeno"
+    del hallazgo -sin comprobar el eje que de verdad se resolvió, cualquier
+    evento del ``work_id`` ocultaba la corrección-. Con el eje ya comprobado,
+    esta repriorización no puede explicar que ``estado`` pasara de
+    DIVERGENCIA a COINCIDE: la huella se registra igual.
+    """
+    dia_divergencia = _HOY - timedelta(days=1)
+    dia_coincide = _HOY
+    lineas = (_linea_divergente(dia_divergencia), _linea_verde(dia_coincide))
+    eventos = (_evento(_WORK_ID, dia=dia_divergencia, hora=18, kind="work_item_reprioritized"),)
+
+    huellas = detectar_correcciones_manuales(lineas, eventos)
+
+    assert len(huellas) == 1
+    assert huellas[0].eje == EJE_ESTADO
+
+
+def test_correccion_manual_no_se_detecta_si_el_evento_toca_el_eje_de_fase() -> None:
+    """La misma resolución, pero de ``fase``: solo un ``kind`` que toque fase la explica."""
+    dia_divergencia = _HOY - timedelta(days=1)
+    dia_coincide = _HOY
+    lineas = (
+        _linea_divergente(dia_divergencia, eje=EJE_FASE),
+        _linea_verde(dia_coincide),
+    )
+    eventos = (_evento(_WORK_ID, dia=dia_divergencia, hora=18, kind="work_item_execution_started"),)
+
+    huellas = detectar_correcciones_manuales(lineas, eventos)
+
+    assert huellas == ()
+
+
+def test_evento_de_un_run_con_el_mismo_aggregate_id_no_explica_nada() -> None:
+    """CODEX-001: un evento que no es del ``WorkItem`` (``aggregate_type`` distinto) no cuenta.
+
+    Aunque su ``kind`` fuera uno que normalmente explica ``estado`` y su
+    ``aggregate_id`` coincidiera con el ``work_id``, un evento de ``RUN`` no es
+    una transición del ``WorkItem``: no puede ser la explicación de que su
+    eje pasara de DIVERGENCIA a COINCIDE.
+    """
+    dia_divergencia = _HOY - timedelta(days=1)
+    dia_coincide = _HOY
+    lineas = (_linea_divergente(dia_divergencia), _linea_verde(dia_coincide))
+    eventos = (
+        _evento(
+            _WORK_ID,
+            dia=dia_divergencia,
+            hora=18,
+            kind="work_item_activated",
+            aggregate_type=AggregateType.RUN,
+        ),
+    )
+
+    huellas = detectar_correcciones_manuales(lineas, eventos)
+
+    assert len(huellas) == 1
+    assert huellas[0].eje == EJE_ESTADO
 
 
 def test_correccion_manual_rompe_la_racha_aunque_ambos_dias_individualmente_fueran_verdes() -> None:

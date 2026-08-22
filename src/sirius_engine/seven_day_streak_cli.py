@@ -29,9 +29,11 @@ para ese ``work_id`` esa pasada).
 
 Nada de esto engancha el comando a un horario: eso es automatización
 (``.github/**``) y queda fuera de este bloque (ADR-002). El horario
-recomendado -derivado, no elegido a ojo- lo calcula e informa
-:func:`sirius_engine.seven_day_streak.hora_recomendada_pasada`; cablearlo a
-un ``cron`` real es trabajo de otra incidencia.
+recomendado -derivado, no elegido a ojo- lo calcula
+:func:`sirius_engine.seven_day_streak.hora_recomendada_pasada` y lo expone
+``--hora-recomendada`` (CODEX-003, ronda 2), sin ejecutar la pasada ni tocar
+ningún ``schedule``; cablearlo a un ``cron`` real es trabajo de otra
+incidencia.
 
 **Consecuencia documentada, no un defecto de este bloque** (ADR-074): hoy
 ningún workflow real ni script de ``scripts/automation/`` invoca ningún
@@ -78,13 +80,35 @@ from sirius_engine.seven_day_streak import (
 
 COMANDO = "sirius-racha"
 
-#: El registro versionado, dato del repositorio (no del propietario, a
-#: diferencia del diario del motor): mismo criterio de "raíz del repo" que
-#: ``_WORKFLOWS_DIR`` en :mod:`sirius_engine.projection_verifier` -tres
-#: niveles arriba de este fichero.
-REGISTRO_POR_DEFECTO = (
-    Path(__file__).resolve().parents[2] / "docs" / "operations" / "racha_siete_dias.jsonl"
-)
+#: Ruta del registro versionado y de ``.github/workflows``, relativas a la
+#: raíz del repositorio que ``--raiz``/``SIRIUS_RACHA_RAIZ`` resuelvan
+#: (CODEX-002, ronda 2): un ejecutable instalado no puede derivarlas de
+#: ``__file__`` -en un wheel, eso cae bajo ``site-packages``, que no lleva
+#: ni ``.github`` ni ``docs/operations``-.
+_REGISTRO_RELATIVO = Path("docs") / "operations" / "racha_siete_dias.jsonl"
+_WORKFLOWS_RELATIVO = Path(".github") / "workflows"
+
+#: Variable de entorno con la que se puede fijar la raíz sin tocar código,
+#: mismo patrón que ``SIRIUS_MOTOR_RAIZ`` en :mod:`sirius_engine.cli`
+#: (ADR-055) -no se importa de allí porque cada punto de entrada resuelve su
+#: propia raíz, igual que cada uno resuelve su propio diario.
+VARIABLE_RAIZ = "SIRIUS_RACHA_RAIZ"
+
+
+def resolver_raiz(*, argumento: str | None, entorno: Mapping[str, str]) -> Path:
+    """``--raiz`` manda sobre ``SIRIUS_RACHA_RAIZ``, y este sobre el directorio actual.
+
+    El directorio actual sirve de defecto razonable para quien ya está
+    parado en un checkout -que es como corren hoy la CI y las pruebas-, pero
+    un wheel o ejecutable instalado necesita que alguien lo diga: por eso
+    ``sirius-racha`` nunca deriva esta ruta de ``__file__``.
+    """
+    if argumento:
+        return Path(argumento).expanduser()
+    del_entorno = entorno.get(VARIABLE_RAIZ)
+    if del_entorno:
+        return Path(del_entorno).expanduser()
+    return Path.cwd()
 
 
 def _diario_de_despacho(diario_del_motor: Path) -> Path:
@@ -120,7 +144,26 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--registro",
         default=None,
-        help=f"ruta del registro versionado (por defecto {REGISTRO_POR_DEFECTO})",
+        help=(
+            f"ruta del registro versionado (por defecto {_REGISTRO_RELATIVO} bajo la raíz "
+            "resuelta, ver --raiz)"
+        ),
+    )
+    parser.add_argument(
+        "--raiz",
+        default=None,
+        help=(
+            "raíz del repositorio cuyos .github/workflows y registro versionado usar "
+            f"(por defecto, ${VARIABLE_RAIZ} o el directorio actual)"
+        ),
+    )
+    parser.add_argument(
+        "--hora-recomendada",
+        action="store_true",
+        help=(
+            "imprime la hora derivada para cablear este comando a un horario, y por qué, "
+            "sin ejecutar la pasada (no conmuta ni crea ningún schedule)"
+        ),
     )
     return parser
 
@@ -150,6 +193,13 @@ def main(
     def linea(texto: str = "") -> None:
         escribir(f"{texto}\n")
 
+    raiz = resolver_raiz(argumento=args.raiz, entorno=entorno)
+    workflows_dir = raiz / _WORKFLOWS_RELATIVO
+
+    if args.hora_recomendada:
+        linea(hora_recomendada(workflows_dir))
+        return 0
+
     diario = resolver_diario(argumento=args.diario, entorno=entorno)
     if store is None:
         store = DurableWorkEngineStore(diario)
@@ -157,8 +207,8 @@ def main(
         dispatch_journal = DurableDispatchJournal(_diario_de_despacho(diario))
     if mirror is None:
         mirror = GitHubCliMirrorReader()
-    registro = Path(args.registro) if args.registro else REGISTRO_POR_DEFECTO
-    ventana_tolerancia = ventana_tolerancia_etiqueta_maquina()
+    registro = Path(args.registro) if args.registro else raiz / _REGISTRO_RELATIVO
+    ventana_tolerancia = ventana_tolerancia_etiqueta_maquina(workflows_dir)
 
     lineas_nuevas = []
     for work_id in _work_ids_conocidos(store):
@@ -219,13 +269,16 @@ def main(
     return 0
 
 
-def hora_recomendada() -> str:
+def hora_recomendada(workflows_dir: Path) -> str:
     """Texto informativo: la hora derivada para cablear este comando a un horario, y por qué.
 
     No engancha nada -eso es ADR-002 y otro bloque-: es lo que quien cablee
-    el ``cron`` necesita para no elegir una hora a ojo.
+    el ``cron`` necesita para no elegir una hora a ojo. ``workflows_dir``
+    viene siempre de la raíz ya resuelta (``--raiz``/``SIRIUS_RACHA_RAIZ``,
+    CODEX-002): un ejecutable instalado no tiene ``.github/workflows`` bajo
+    ``__file__``, así que esta función ya no lo asume por defecto.
     """
-    hora, motivo = hora_recomendada_pasada()
+    hora, motivo = hora_recomendada_pasada(workflows_dir)
     return f"{hora.isoformat(timespec='minutes')} UTC — {motivo}"
 
 

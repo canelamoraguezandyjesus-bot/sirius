@@ -56,9 +56,11 @@ from typing import Any
 
 import yaml
 
-from sirius_engine.domain.events import Event
+from sirius_engine.domain.events import AggregateType, Event
 from sirius_engine.domain.work_item import WorkItemClass
 from sirius_engine.projection_verifier import (
+    EJE_ESTADO,
+    EJE_FASE,
     LineaRegistro,
     ResultadoEje,
     VeredictoEje,
@@ -147,6 +149,57 @@ def anadir_lineas(ruta: Path, lineas: Sequence[LineaRegistro]) -> int:
 # --- 2. La huella de una corrección manual, derivada -------------------------
 
 
+#: Qué eje puede explicar cada ``kind`` de :class:`Event` -derivado de qué
+#: campo toca cada transición tipada en :mod:`sirius_engine.domain.work_item`
+#: (``activate``, ``begin_execution``, ``reprioritize``...). Un ``kind``
+#: ausente de los dos conjuntos -``work_item_reprioritized`` (no toca fase ni
+#: estado) o ``work_item_budget_cutoff_started`` (anexa la instantánea sin
+#: transicionarla)- no explica NINGUNA resolución: así una repriorización
+#: normal, o cualquier ``kind`` futuro sin mapeo aquí, no puede ocultar una
+#: corrección manual del eje que de verdad se resolvió (CODEX-001, ronda 2).
+_KINDS_QUE_EXPLICAN_ESTADO: frozenset[str] = frozenset(
+    {
+        "work_item_created",
+        "work_item_created_needing_decision",
+        "work_item_activated",
+        "work_item_cancelled",
+        "work_item_escalated",
+        "work_item_decision_resolved",
+        "work_item_dispatched_async",
+        "work_item_observed_external_fact",
+        "work_item_failed_safely",
+        "work_item_reactivated",
+        "work_item_delivered",
+        "work_item_paused",
+        "work_item_resumed",
+        "work_item_budget_cutoff_stopped_waiting",
+    }
+)
+
+_KINDS_QUE_EXPLICAN_FASE: frozenset[str] = frozenset(
+    {
+        "work_item_created",
+        "work_item_created_needing_decision",
+        "work_item_execution_started",
+        "work_item_check_started",
+        "work_item_review_started",
+        "work_item_review_approved",
+        "work_item_repair_requested",
+        "work_item_repair_resumed",
+        "work_item_scope_changed",
+    }
+)
+
+#: Ejes que este detector sabe explicar. Uno ausente de aquí -hoy,
+#: :data:`~sirius_engine.projection_verifier.EJE_FIDELIDAD_PROYECCION`, que no
+#: se repite tras el despacho- nunca tiene un ``kind`` que lo explique, así
+#: que cualquier resolución suya se trata, con razón, como sin explicar.
+_KINDS_POR_EJE: dict[str, frozenset[str]] = {
+    EJE_FASE: _KINDS_QUE_EXPLICAN_FASE,
+    EJE_ESTADO: _KINDS_QUE_EXPLICAN_ESTADO,
+}
+
+
 @dataclass(frozen=True, slots=True)
 class HuellaCorreccionManual:
     """Un eje que dejó de divergir sin que el diario de eventos lo explique.
@@ -156,8 +209,8 @@ class HuellaCorreccionManual:
     solo cambia su propio estado a través de sus transiciones tipadas, y CADA
     una de ellas queda en :class:`~sirius_engine.domain.events.Event`
     (arquitectura §3.5/§12) -así que una divergencia que se resuelve sin
-    ningún evento del motor en el intervalo no puede explicarse por el
-    camino normal: algo la resolvió por fuera de él.
+    ninguna transición del motor QUE TOQUE ESE EJE en el intervalo no puede
+    explicarse por el camino normal: algo la resolvió por fuera de él.
     """
 
     work_id: str
@@ -173,15 +226,21 @@ def detectar_correcciones_manuales(
 
     Compara cada línea con la SIGUIENTE del mismo ``work_id`` (en orden de
     ``instante``): si un eje daba ``DIVERGENCIA`` y pasa a ``COINCIDE``, hace
-    falta que el diario de eventos tenga AL MENOS una transición de ese
-    ``work_id`` en el intervalo -da igual cuál, lo que importa es que el
-    motor hizo *algo*-. Sin eso, se registra la huella.
+    falta que el diario de eventos tenga AL MENOS una transición **del propio
+    ``WorkItem`` (:data:`~sirius_engine.domain.events.AggregateType.WORK_ITEM`)
+    y cuyo ``kind`` sea capaz de tocar ESE eje** (:data:`_KINDS_POR_EJE`) en el
+    intervalo -un evento ajeno al eje resuelto, como una repriorización entre
+    dos días de fase, no cuenta como explicación-. Sin eso, se registra la
+    huella.
 
     Deliberadamente no intenta cubrir todos los caminos por los que una
     corrección manual podría ocultarse -por ejemplo, una que además
-    reescribiera el diario de eventos no dejaría huella aquí-. La nota de
-    arranque no pide un detector completo: pide uno derivado de lo que el
-    sistema observa, no de que una persona se acuerde de anotarlo.
+    reescribiera el diario de eventos no dejaría huella aquí, y una hecha
+    invocando la MISMA transición tipada que usaría el camino automático es
+    indistinguible de esta con los datos que el diario guarda hoy (el evento
+    no lleva quién ni por qué la disparó)-. La nota de arranque no pide un
+    detector completo: pide uno derivado de lo que el sistema observa, no de
+    que una persona se acuerde de anotarlo.
     """
     por_work_id: dict[str, list[LineaRegistro]] = {}
     for linea in lineas:
@@ -191,7 +250,12 @@ def detectar_correcciones_manuales(
     for work_id, entradas in por_work_id.items():
         ordenadas = sorted(entradas, key=lambda linea: linea.instante)
         eventos_del_trabajo = sorted(
-            (e for e in eventos if e.aggregate_id == work_id), key=lambda e: e.occurred_at
+            (
+                e
+                for e in eventos
+                if e.aggregate_type is AggregateType.WORK_ITEM and e.aggregate_id == work_id
+            ),
+            key=lambda e: e.occurred_at,
         )
         for anterior, siguiente in pairwise(ordenadas):
             veredictos_antes = {v.eje: v for v in anterior.veredictos}
@@ -202,8 +266,10 @@ def detectar_correcciones_manuales(
                     continue
                 if v_despues.resultado is not ResultadoEje.COINCIDE:
                     continue
+                kinds_que_explican = _KINDS_POR_EJE.get(eje, frozenset())
                 hay_transicion_del_motor = any(
                     anterior.instante < evento.occurred_at <= siguiente.instante
+                    and evento.kind in kinds_que_explican
                     for evento in eventos_del_trabajo
                 )
                 if hay_transicion_del_motor:
@@ -216,8 +282,8 @@ def detectar_correcciones_manuales(
                         motivo=(
                             f"{eje} pasó de DIVERGENCIA ({v_antes.motivo}) a COINCIDE entre "
                             f"{anterior.instante.isoformat()} y {siguiente.instante.isoformat()} "
-                            "sin ninguna transición del motor registrada en el diario de "
-                            "eventos en ese intervalo"
+                            "sin ninguna transición del motor que toque ese eje registrada en "
+                            "el diario de eventos en ese intervalo"
                         ),
                     )
                 )
