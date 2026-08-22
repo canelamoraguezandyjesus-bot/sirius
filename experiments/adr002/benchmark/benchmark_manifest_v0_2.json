@@ -1,0 +1,135 @@
+{
+ "documento": "Manifiesto del benchmark de ADR-002",
+ "version_contrato": "0.2",
+ "estado": "PROPUESTO_NO_CONGELADO",
+ "semilla_compartida": 20260726,
+ "advertencia": "Ninguna puerta de arranque queda satisfecha por este manifiesto. ADR002-TOL-207 no está aprobada; TOL-208, TOL-209 y TOL-210 siguen NO SATISFECHAS. T0 no se ha ejecutado.",
+ "fuentes_canonicas": {
+  "SIRIUS_0.2_BLOQUE_04_BUSQUEDA_Y_RECUPERACION_v1.0_APROBADO.docx": {
+   "sha256_real": "b28a2cbed62b90f35e28db2412e46939b9bd2cdb8f145a5e9bbb2a8e7a5cbb45",
+   "sha256_manifest": "b28a2cbed62b90f35e28db2412e46939b9bd2cdb8f145a5e9bbb2a8e7a5cbb45",
+   "coincide": true,
+   "bytes": 93326
+  },
+  "SIRIUS_0.2_PLAN_DE_PRUEBAS_Y_REGISTRO_EXTERNO_DE_DELEGACIONES_v1.0_APROBADO.docx": {
+   "sha256_real": "39058c0f5fe50bb4b703411bd5296e1bb8b1ede513ccf2d9eacabb35da3f59fd",
+   "sha256_manifest": "39058c0f5fe50bb4b703411bd5296e1bb8b1ede513ccf2d9eacabb35da3f59fd",
+   "coincide": true,
+   "bytes": 93708
+  },
+  "SIRIUS_0.2_ARQ_00_MARCO_RECTOR_ARQUITECTURA_Y_MAPA_DECISIONES_v1.0_APROBADO.docx": {
+   "sha256_real": "730a5fd13dce18bfcdb8dd4afee23dfe22c067c7cb3b953a9bd115cf73224f49",
+   "sha256_manifest": "730a5fd13dce18bfcdb8dd4afee23dfe22c067c7cb3b953a9bd115cf73224f49",
+   "coincide": true,
+   "bytes": 85951
+  }
+ },
+ "artefactos": {
+  "corpus_conformidad": {
+   "fichero": "conformance_corpus_v0_2.json",
+   "version": "0.2",
+   "proposito": "Adjudicar puertas, exactitud, contaminación, negación, ámbito, tiempo, conflicto, ausencia y explicación. NO se usa para fijar cifras de rendimiento absoluto.",
+   "conteos": {
+    "proyectos": 7,
+    "entidades": 5,
+    "items": 94,
+    "recuerdos": 79,
+    "decisiones": 15,
+    "items_heredados_v0_1": 92,
+    "items_anadidos_v0_2": 2,
+    "mensajes": 6,
+    "documentos": 5,
+    "relaciones": 9
+   }
+  },
+  "corpus_rendimiento": {
+   "fichero": "performance_corpus_v0_1.json",
+   "version": "0.1",
+   "proposito": "Latencia, tamaño, construcción, reconstrucción y estabilidad a la escala del corpus que produjo las cifras LAB-LINUX. NO crea referencias funcionales y NO sustituye al corpus de conformidad.",
+   "escala_declarada": {
+    "n": 500,
+    "regla": "recuerdos(N)=N · decisiones(N)=N//10 · mensajes(N)=N*10",
+    "objetivo": {
+     "recuerdos": 500,
+     "decisiones": 50,
+     "mensajes": 5000
+    },
+    "escala_de_referencia": {
+     "mensajes": 5000,
+     "recuerdos": 500,
+     "decisiones": 50,
+     "proyectos": 2
+    },
+    "fuente_de_la_escala": "SIRIUS_0.2_REGISTRO_TOLERANCIAS_v0.4_PROPUESTO.md · ADR002-TOL-208",
+    "escalas_proyectables": [
+     500,
+     5000,
+     50000
+    ]
+   },
+   "conteos": {
+    "proyectos": 8,
+    "items": 550,
+    "recuerdos": 500,
+    "decisiones": 50,
+    "mensajes": 5000,
+    "documentos": 5,
+    "relaciones": 9,
+    "longitud_media_texto": 85.25,
+    "longitud_minima_texto": 34,
+    "longitud_maxima_texto": 103
+   }
+  },
+  "casos": {
+   "fichero": "cases_v0_2.json",
+   "conteos": {
+    "nivel_1_b04": 50,
+    "nivel_1_pdp": 8,
+    "nivel_2": 5,
+    "nivel_3": 7,
+    "ramas_canonicas": 19
+   }
+  },
+  "referencias": {
+   "fichero": "references_v0_2.json",
+   "conteos": {
+    "referencias_nivel_1": 50,
+    "referencias_con_ramas": 8
+   }
+  },
+  "casos_pdp": {
+   "fichero": "pdp_cases_v0_1.json",
+   "conteos": {
+    "pdp_ca_totales": 28,
+    "casos_ejecutados_por_ADR002": 8,
+    "casos_tocados_por_dependencia": 0,
+    "casos_fuera_de_alcance": 20
+   }
+  }
+ },
+ "relacion_entre_corpus": {
+  "regla": "Los dos corpus comparten versión de contrato, semilla y anclajes. El de conformidad adjudica comportamiento; el de rendimiento mide magnitudes. Cambiar cualquiera exige nueva versión explícita de ambos.",
+  "anclajes_compartidos": 94,
+  "prohibicion": "Prohibido fijar cifras de rendimiento sobre el corpus de conformidad y prohibido adjudicar conformidad sobre el corpus de rendimiento."
+ },
+ "artefactos_v0_1_conservados": [
+  "corpus_v0_1.json",
+  "cases_v0_1.json",
+  "references_v0_1.json"
+ ],
+ "hallazgos_de_auditoria_cerrados": {
+  "B-01": "Asignaciones RED<->CA<->M<->F leídas del Anexo B del DOCX y comparadas.",
+  "B-02": "Bloques `canonico` e `instanciacion` separados, con fuente por campo.",
+  "B-03": "estado_t0 = NO_MEDIDO en todos los casos; previsiones sin veredicto.",
+  "M-01": "Ramas M4 instanciadas en CA-09, CA-10, CA-24 y CA-49.",
+  "M-02": "Ramas diferenciadas en CA-36, CA-47 y CA-48.",
+  "M-03": "Los catorce campos del PDP §7 más la condición de insuficiencia.",
+  "M-04": "PDP-CA aplicables instanciados; el resto en matriz de exclusión.",
+  "M-05": "Corpus de conformidad y de rendimiento separados.",
+  "M-07": "Cardinalidad y parada sin atribución canónica indebida.",
+  "menores": "Literalidad carácter a carácter y denominadores de familias por criterio."
+ },
+ "hallazgos_no_tratados_en_esta_ronda": {
+  "M-06": "Presupuesto absoluto de almacenamiento: ADR002-TOL-207 no se aprueba ni se modifica en esta ronda."
+ }
+}

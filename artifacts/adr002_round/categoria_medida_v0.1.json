@@ -1,0 +1,148 @@
+{
+  "que_es": "que aporta hacer buscable la categoria que el canon ya declara, sin modelo, sin red y de forma determinista",
+  "commit": "53108cd",
+  "linea_base_publicada": {
+    "exactos": 24,
+    "omisiones": 11,
+    "contaminacion": 3
+  },
+  "indice_de_categoria": {
+    "que_es": "el nombre de la categoria de cada elemento no ordinario, hecho buscable",
+    "vocabulario_congelado": [
+      "esencial",
+      "restriccion",
+      "critica",
+      "obligatoria",
+      "imprescindible"
+    ],
+    "palabras_indexadas": [
+      "esenci",
+      "esencia",
+      "esencial",
+      "esencias",
+      "esencies",
+      "esencio",
+      "esencios",
+      "esencis",
+      "restriccion",
+      "restricciona",
+      "restriccionas",
+      "restricciones",
+      "restricciono",
+      "restriccionos",
+      "restriccions",
+      "critic",
+      "critica",
+      "criticas",
+      "critices",
+      "critico",
+      "criticos",
+      "critics",
+      "obligatori",
+      "obligatoria",
+      "obligatorias",
+      "obligatories",
+      "obligatorio",
+      "obligatorios",
+      "obligatoris",
+      "imprescindibl",
+      "imprescindibla",
+      "imprescindiblas",
+      "imprescindible",
+      "imprescindibles",
+      "imprescindiblo",
+      "imprescindiblos",
+      "imprescindibls"
+    ],
+    "identidades": [
+      "DECISION:3",
+      "DECISION:10",
+      "MEMORIA:1",
+      "MEMORIA:2",
+      "MEMORIA:14",
+      "MEMORIA:16",
+      "MEMORIA:25",
+      "MEMORIA:101",
+      "MEMORIA:102",
+      "MEMORIA:103",
+      "MEMORIA:104",
+      "MEMORIA:105",
+      "MEMORIA:106",
+      "MEMORIA:107",
+      "MEMORIA:108",
+      "MEMORIA:109",
+      "MEMORIA:110",
+      "MEMORIA:111",
+      "MEMORIA:112"
+    ],
+    "razon_segura_leida": false
+  },
+  "filas": [
+    {
+      "corrida": "1. busqueda tal cual",
+      "conjunto_exacto": 24,
+      "casos_adjudicables": 47,
+      "lo_correcto_entra_entero": 24,
+      "casos_con_contenido": 31,
+      "elementos_hallados": 64,
+      "elementos_esperados": 81,
+      "elementos_de_mas": 29,
+      "omisiones_criticas": 11,
+      "contaminacion": 3,
+      "fuga_de_ambito": 0,
+      "ausencia_correcta": 36
+    },
+    {
+      "corrida": "2. mas la categoria buscable",
+      "conjunto_exacto": 23,
+      "casos_adjudicables": 47,
+      "lo_correcto_entra_entero": 26,
+      "casos_con_contenido": 31,
+      "elementos_hallados": 70,
+      "elementos_esperados": 81,
+      "elementos_de_mas": 37,
+      "omisiones_criticas": 5,
+      "contaminacion": 3,
+      "fuga_de_ambito": 0,
+      "ausencia_correcta": 38
+    }
+  ],
+  "omisiones_criticas": {
+    "antes": {
+      "N1-02": [
+        "MEMORIA:2"
+      ],
+      "N1-30": [
+        "MEMORIA:1"
+      ],
+      "N1-31": [
+        "DECISION:10",
+        "DECISION:3",
+        "MEMORIA:14",
+        "MEMORIA:16",
+        "MEMORIA:25"
+      ],
+      "N1-33": [
+        "DECISION:3"
+      ],
+      "N1-34": [
+        "DECISION:3",
+        "MEMORIA:14",
+        "MEMORIA:16"
+      ]
+    },
+    "despues": {
+      "N1-30": [
+        "MEMORIA:1"
+      ],
+      "N1-33": [
+        "DECISION:3"
+      ],
+      "N1-34": [
+        "DECISION:3",
+        "MEMORIA:14",
+        "MEMORIA:16"
+      ]
+    }
+  }
+}

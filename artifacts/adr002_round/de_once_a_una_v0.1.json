@@ -1,0 +1,70 @@
+{
+  "que_es": "cierre de la linea de las omisiones criticas: de once a una, medido en maquina",
+  "commit": "f01dfc6",
+  "medido_sobre": "resultado_modelo_local_v0.6.json",
+  "recorrido": {
+    "1. la busqueda tal cual": {
+      "exacto": 24,
+      "adjudicables": 47,
+      "completas": 24,
+      "con_contenido": 31,
+      "trozos": 64,
+      "esperados": 81,
+      "de_mas": 29,
+      "criticos_perdidos": 11
+    },
+    "2. filtro con la regla de las criticas": {
+      "exacto": 30,
+      "adjudicables": 47,
+      "completas": 20,
+      "con_contenido": 31,
+      "trozos": 53,
+      "esperados": 81,
+      "de_mas": 10,
+      "criticos_perdidos": 11
+    },
+    "3. mas la categoria buscable": {
+      "exacto": 29,
+      "adjudicables": 47,
+      "completas": 22,
+      "con_contenido": 31,
+      "trozos": 59,
+      "esperados": 81,
+      "de_mas": 14,
+      "criticos_perdidos": 5
+    },
+    "4. mas la siembra al ensamblar contexto": {
+      "exacto": 29,
+      "adjudicables": 47,
+      "completas": 23,
+      "con_contenido": 31,
+      "trozos": 63,
+      "esperados": 81,
+      "de_mas": 21,
+      "criticos_perdidos": 1
+    }
+  },
+  "lo_unico_que_sigue_faltando": {
+    "caso": "N1-30",
+    "consulta": "Resume mi preferencia de redacción, el presupuesto vigente y la condición de ahorro en escalas, con su razón.",
+    "identidad": "MEMORIA:1",
+    "texto": "El usuario prefiere que redactes en tono directo y sin adornos.",
+    "causa": "derivacion: la pregunta dice «preferencia de redaccion» y el dato «prefiere que redactes». Sustantivo contra verbo; el recorte de sufijos no los une",
+    "por_que_no_se_arregla_ahora": "haria falta un diccionario, y escribirlo sabiendo cual es el caso que falla es ajustar el sistema al banco"
+  },
+  "lo_que_costo_la_siembra": {
+    "de_mas": "de 14 a 21 elementos, todavia por debajo de los 29 de la busqueda sola",
+    "criticas_devueltas_a_la_fuerza": 22,
+    "lectura": "el modelo intenta descartar las restricciones sembradas y la regla se las devuelve. Eso es la regla funcionando, y cuesta ruido"
+  },
+  "estatuto_de_cada_pieza": {
+    "la regla de las criticas": "MEDIDA. Predicha antes de escribirla y confirmada en maquina",
+    "la categoria buscable": "MEDIDA. Determinista, sin modelo, reproducible sin Ollama",
+    "la siembra en contexto": "NO VALIDABLE con este banco: escrita despues de ver los fallos, y los dos unicos casos con ese proposito son esos dos. Se sostiene por diseno"
+  },
+  "latencia": {
+    "mediana_s": 3.1,
+    "p95_s": 3.64
+  },
+  "lo_que_exige_para_entrar_en_sirius": "Ollama arrancado, para la mitad del filtro. La categoria buscable no necesita modelo y va sola"
+}

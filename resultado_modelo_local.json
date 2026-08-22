@@ -1,0 +1,1257 @@
+{
+  "que_es": "medicion de las dos mitades del modelo local sobre el banco de ADR-002: la ampliacion que ensancha y el filtro que estrecha, en ese orden",
+  "commit": "788652b",
+  "denominador": "47 adjudicables = 50 casos ejecutables menos 3 no adjudicables, segun round/cases.py. El banco contiene otro recuento distinto que tambien vale 47",
+  "procedencia_del_modelo": {
+    "proveedor": "ollama",
+    "modelo": "qwen3:4b-instruct",
+    "huella": "desconocida"
+  },
+  "vocabulario_de_categoria": [
+    "esencial",
+    "restriccion",
+    "critica",
+    "obligatoria",
+    "imprescindible"
+  ],
+  "linea_base_publicada": {
+    "exactos": 24,
+    "omisiones": 11,
+    "contaminacion": 3
+  },
+  "filas": [
+    {
+      "corrida": "1. busqueda tal cual",
+      "casos_adjudicables": 47,
+      "casos_con_contenido": 31,
+      "casos_de_ausencia": 16,
+      "conjunto_exacto": 24,
+      "lo_correcto_entra_entero": 24,
+      "elementos_hallados": "64/81",
+      "elementos_de_mas": 29,
+      "omisiones_criticas": 11,
+      "contaminacion": 3,
+      "fuga_de_ambito": 0,
+      "ausencia_correcta": 36,
+      "filtro_actuo": 0,
+      "filtro_fallo_abierto": 0,
+      "latencia_mediana_s": null,
+      "latencia_p95_s": null
+    },
+    {
+      "corrida": "2. mas ampliacion",
+      "casos_adjudicables": 47,
+      "casos_con_contenido": 31,
+      "casos_de_ausencia": 16,
+      "conjunto_exacto": 23,
+      "lo_correcto_entra_entero": 25,
+      "elementos_hallados": "65/81",
+      "elementos_de_mas": 47,
+      "omisiones_criticas": 10,
+      "contaminacion": 3,
+      "fuga_de_ambito": 0,
+      "ausencia_correcta": 37,
+      "filtro_actuo": 0,
+      "filtro_fallo_abierto": 0,
+      "latencia_mediana_s": null,
+      "latencia_p95_s": null
+    },
+    {
+      "corrida": "3. mas filtro",
+      "casos_adjudicables": 47,
+      "casos_con_contenido": 31,
+      "casos_de_ausencia": 16,
+      "conjunto_exacto": 30,
+      "lo_correcto_entra_entero": 18,
+      "elementos_hallados": "51/81",
+      "elementos_de_mas": 5,
+      "omisiones_criticas": 12,
+      "contaminacion": 3,
+      "fuga_de_ambito": 0,
+      "ausencia_correcta": 40,
+      "filtro_actuo": 39,
+      "filtro_fallo_abierto": 0,
+      "latencia_mediana_s": 3.11,
+      "latencia_p95_s": 4.11
+    }
+  ],
+  "ampliacion_generada": {
+    "por_identidad": {
+      "MEMORIA:1": {
+        "preguntas": [
+          "¿Hay algo que no deba incluirse?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Puedes hacerlo sin mucho gasto?",
+          "¿Es obligatorio que esté en el plan?",
+          "¿Puedo tener una versión más corta?"
+        ]
+      },
+      "MEMORIA:2": {
+        "preguntas": [
+          "¿Hay que arreglar transporte por fuera?",
+          "¿Es obligatorio usar otro medio de transporte?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Se puede llevar auto por el viaje?",
+          "¿Hay límite en el uso de coche?"
+        ]
+      },
+      "MEMORIA:3": {
+        "preguntas": [
+          "¿Se puede usar el coche para ir de un lugar a otro?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite de distancia que debemos respetar?",
+          "¿Es obligatorio alquilar el coche para el viaje?",
+          "¿Qué pasa si no quiero usar el coche?"
+        ]
+      },
+      "DECISION:1": {
+        "preguntas": [
+          "¿Es necesario hacer una revisión de calidad antes de publicar?",
+          "¿Hay una obligación de revisar el contenido antes de compartirlo?",
+          "¿Qué pasa si no cumplimos con la revisión obligatoria?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo publicar sin revisar primero el contenido?"
+        ]
+      },
+      "MEMORIA:4": {
+        "preguntas": [
+          "¿Prefieres que el informe esté en columnas o en filas?",
+          "¿Puedo cambiar el formato si no me gusta la disposición en columnas?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay una obligación de usar formato en columnas?",
+          "¿Hay un límite en cuántas columnas puede tener el informe?"
+        ]
+      },
+      "DECISION:2": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para esta inversión?",
+          "¿Hay alguna obligación de no superar ese monto?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo hacer ajustes si el presupuesto se vuelve insuficiente?",
+          "¿Qué pasa si excedo el límite establecido?"
+        ]
+      },
+      "DECISION:3": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para este proyecto?",
+          "¿Hay alguna obligación de no superar ese monto?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Puedo usar más dinero si hay una excepción?",
+          "¿Qué pasa si el presupuesto se supera?"
+        ]
+      },
+      "DECISION:4": {
+        "preguntas": [
+          "¿Cuándo cambia el proveedor de mensajería?",
+          "¿Hay un límite para cuando debe hacerse el cambio?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay una obligación de cambiar el servicio en septiembre?",
+          "¿Qué pasa si no se cambia a Norte a tiempo?"
+        ]
+      },
+      "MEMORIA:5": {
+        "preguntas": [
+          "¿Hay un límite de tiempo para la renovación?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hasta cuándo está vigente el mantenimiento?",
+          "¿Se necesita un aviso previo para cambiarlo?",
+          "¿Está obligado el cumplimiento del contrato?"
+        ]
+      },
+      "DECISION:5": {
+        "preguntas": [
+          "¿Puedo hacerlo sin exceder el presupuesto?",
+          "¿Hay una obligación de no pasar de 4.000 €?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Tienes un limite de gasto para esta compra?",
+          "¿Es necesario que el costo no supere ese monto?"
+        ]
+      },
+      "MEMORIA:6": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para Beta?",
+          "¿Qué pasa si no respetamos el límite establecido?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay alguna obligación financiera que debemos cumplir?",
+          "¿Podemos superar el presupuesto sin autorización?"
+        ]
+      },
+      "MEMORIA:7": {
+        "preguntas": [
+          "¿Puedo programar una reunión rápida antes del mediodía?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Te importa si las reuniones son breves por la mañana?",
+          "¿Hay alguna obligación de tener reuniones tempranas?",
+          "¿Qué pasa si no puedo asistir a una reunión por la mañana?"
+        ]
+      },
+      "MEMORIA:8": {
+        "preguntas": [
+          "¿Se puede ajustar el horario si el usuario no puede recibirlo en el momento?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar el horario de entrega si no me alcanza el tiempo?",
+          "¿Hay una obligación de entregar antes de las 18 horas?",
+          "¿Es posible tener un límite de entrega para evitar rechazos?"
+        ]
+      },
+      "MEMORIA:9": {
+        "preguntas": [],
+        "categoria": [],
+        "descartadas": []
+      },
+      "MEMORIA:10": {
+        "preguntas": [
+          "¿Tienes algún problema de salud que deba considerarse?",
+          "¿Hay condiciones médicas que me obliguen a evitar ciertos tratamientos?",
+          "¿Hay algo que deba evitar por razones de salud?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo hacer cambios en mi rutina si hay un límite de gasto?"
+        ]
+      },
+      "MEMORIA:11": {
+        "preguntas": [
+          "¿Cuál es el número interno del proyecto Atlas Alfa?",
+          "¿Hay algún código asignado al proyecto?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Es necesario que el identificador sea único?",
+          "¿Qué pasa si se cambia el código interno?"
+        ]
+      },
+      "MEMORIA:12": {
+        "preguntas": [
+          "¿Quién es el encargado de asegurar que los productos cumplan con los estándares?",
+          "¿Qué rol tiene Juan en el equipo de control de calidad?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay alguna obligación que deba cumplir en su función?",
+          "¿Qué límites tiene en cuanto a las revisiones que puede hacer?"
+        ]
+      },
+      "MEMORIA:13": {
+        "preguntas": [
+          "¿Quién encarga las compras en la empresa?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Tiene Juan Molina autoridad para decidir los gastos?",
+          "¿Qué debe hacer si hay un error en una compra?",
+          "¿Hay algún límite que deba respetar al comprar?"
+        ]
+      },
+      "DECISION:6": {
+        "preguntas": [
+          "¿Qué plataforma se eligió para poner en marcha el proyecto?",
+          "¿Puedo cambiar a otra plataforma si no cumple con los requisitos?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay alguna obligación de usar solo Nimbo en el despliegue?",
+          "¿Es necesario que todos los equipos estén alineados con esta decisión?"
+        ]
+      },
+      "DECISION:7": {
+        "preguntas": [
+          "¿Qué plataforma se eligió finalmente para el despliegue?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay alguna obligación de usar esta plataforma?",
+          "¿Puedo cambiar a otra si el límite de tiempo se vuelve crítico?",
+          "¿Qué pasa si no se cumple el plazo de implementación?"
+        ]
+      },
+      "DECISION:8": {
+        "preguntas": [
+          "¿Cuál es la plataforma que ya fue aprobada para usar?",
+          "¿Hay alguna obligación de usar solo Nimbo?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Qué pasa si no se elige Nimbo?",
+          "¿Es necesario que la decisión sea definitiva para esta plataforma?"
+        ]
+      },
+      "MEMORIA:14": {
+        "preguntas": [
+          "¿Puedo viajar sin escalas?",
+          "¿Es obligatorio que el vuelo sea directo?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Hay algún límite en el número de destinos?",
+          "¿Puedo elegir un horario fijo sin cambios?"
+        ]
+      },
+      "MEMORIA:15": {
+        "preguntas": [
+          "¿Puedo aceptar vuelos con paradas si me ayudan a ahorrar dinero?",
+          "¿Puedo permitir opciones con escala si me ahorro dinero?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite en cuántas escalas puedo tener?",
+          "¿Es obligatorio que el vuelo sea directo?"
+        ]
+      },
+      "MEMORIA:16": {
+        "preguntas": [
+          "¿Puedo aceptar la escala si ahorro más de 200 €?",
+          "¿Es obligatorio ahorrar más de 200 € para aceptar la escala?",
+          "¿Qué pasa si no ahorro más de 200 €?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Hay un límite de gasto para aceptar la escala?"
+        ]
+      },
+      "DECISION:9": {
+        "preguntas": [
+          "¿Se aplica el descuento en los pedidos de invierno?",
+          "¿Puedo usar el descuento si hago un pedido en invierno?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite para los pedidos con descuento?",
+          "¿Es obligatorio aplicar el descuento en esta temporada?"
+        ]
+      },
+      "MEMORIA:17": {
+        "preguntas": [
+          "¿Cuándo se revisa el alcance del proyecto?",
+          "¿Hay una obligación de evaluar el avance cada cierto tiempo?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Qué pasa si el alcance cambia sin revisión?",
+          "¿Se puede modificar el alcance sin avisar?"
+        ]
+      },
+      "MEMORIA:18": {
+        "preguntas": [
+          "¿Hay un código interno para ese entregable?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Cuál es el nombre oficial del entregable de Atlas?",
+          "¿Es obligatorio usar ese nombre en todos los documentos?",
+          "¿Qué pasa si se usa un nombre diferente?"
+        ]
+      },
+      "MEMORIA:101": {
+        "preguntas": [
+          "¿Hay alguna obligación específica en este punto?",
+          "¿Es necesario cumplirla en todos los casos?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Qué límite se aplica a esta restricción?",
+          "¿Puedo hacer algo sin violarla?"
+        ]
+      },
+      "MEMORIA:102": {
+        "preguntas": [
+          "¿Puedo hacerlo sin violar la restricción dispersa?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Hay alguna obligación específica que deba cumplirse en este caso?",
+          "¿Qué límite debe respetarse para evitar problemas?",
+          "¿Qué consecuencias tiene no cumplir con esta condición?"
+        ]
+      },
+      "MEMORIA:103": {
+        "preguntas": [
+          "¿Qué limitación impone esta restricción?",
+          "¿Puedo hacer algo sin violar esta dispersa?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Hay alguna obligación específica en este número?",
+          "¿Es necesario cumplir con esta restricción en todos los casos?"
+        ]
+      },
+      "MEMORIA:104": {
+        "preguntas": [
+          "¿Qué obligación tiene que cumplirse sin falta?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Hay algún límite que no se pueda superar en este caso?",
+          "¿Puedo hacer algo que viole esta restricción?",
+          "¿Qué consecuencia tiene violar esta condición?"
+        ]
+      },
+      "MEMORIA:105": {
+        "preguntas": [
+          "¿Qué límite se aplica en esta restricción?",
+          "¿Puedo hacer algo sin violar esta dispersa?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Hay alguna obligación específica en este número?",
+          "¿Es necesario cumplir esta restricción en todos los casos?"
+        ]
+      },
+      "MEMORIA:106": {
+        "preguntas": [
+          "¿Qué límite se aplica en esta restricción?",
+          "¿Puedo hacer algo sin violar esta dispersa?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Hay alguna obligación específica en este número?",
+          "¿Es necesario cumplir con esta restricción en todo momento?"
+        ]
+      },
+      "MEMORIA:107": {
+        "preguntas": [
+          "¿Qué límite se aplica en esta restricción?",
+          "¿Puedo hacer algo sin violar esta dispersa?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Hay alguna obligación específica en este número?",
+          "¿Es necesario cumplir con esta restricción en todos los casos?"
+        ]
+      },
+      "MEMORIA:108": {
+        "preguntas": [
+          "¿Qué limitación impone exactamente este punto?",
+          "¿Qué consecuencias tiene incumplir esta dispersa?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Hay alguna obligación específica en este número?",
+          "¿Puedo hacer algo sin violar esta restricción?"
+        ]
+      },
+      "MEMORIA:109": {
+        "preguntas": [
+          "¿Qué límite se aplica a esta restricción?",
+          "¿Puedo hacer algo sin violar esta dispersa?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Hay alguna obligación específica en este número?",
+          "¿Es necesario cumplir con esta restricción en todos los casos?"
+        ]
+      },
+      "MEMORIA:110": {
+        "preguntas": [
+          "¿Qué límite debe respetarse para evitar problemas?",
+          "¿Puedo hacer algo sin violar esta restricción?",
+          "¿Qué consecuencias tiene ignorar esta condición?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Hay alguna obligación que no se pueda ignorar en este caso?"
+        ]
+      },
+      "MEMORIA:111": {
+        "preguntas": [
+          "¿Qué pasa si no se cumple esta limitación?",
+          "¿Qué consecuencias tiene ignorar esta restricción?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Hay alguna obligación específica que deba cumplirse con esta restricción?",
+          "¿Puedo modificarla si la situación cambia?"
+        ]
+      },
+      "MEMORIA:112": {
+        "preguntas": [
+          "¿Hay alguna obligación específica en este punto del expediente?",
+          "¿Qué pasa si no se cumple esta dispersión?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Qué límite se establece para el cumplimiento de esta restricción?",
+          "¿Puedo hacer una excepción si la situación cambia?"
+        ]
+      },
+      "MEMORIA:19": {
+        "preguntas": [],
+        "categoria": [],
+        "descartadas": []
+      },
+      "MEMORIA:20": {
+        "preguntas": [
+          "¿Cuál es el límite de tiempo para entregar el producto?",
+          "¿Hay una obligación de entregar dentro de ese plazo?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Qué pasa si no se cumple el plazo establecido?",
+          "¿Es posible extender el periodo sin autorización?"
+        ]
+      },
+      "MEMORIA:21": {
+        "preguntas": [
+          "¿Hay algo que no se puede cambiar después?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Tienes un limite de gasto para esta compra?",
+          "¿Puedo hacerlo sin tener que pedir permiso?",
+          "¿Necesito tener un motivo específico para hacerlo?"
+        ]
+      },
+      "MEMORIA:22": {
+        "preguntas": [
+          "¿Es obligatorio que se revise cada seis meses?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Cuándo se debe hacer la próxima revisión del auto?",
+          "¿Hay un límite para cuántas veces al año se revisa el vehículo?",
+          "¿Qué pasa si no se hace la revisión a tiempo?"
+        ]
+      },
+      "DECISION:10": {
+        "preguntas": [
+          "¿Puedo usar PostgreSQL en este proyecto?",
+          "¿Hay una obligación de no usar bases de datos específicas?",
+          "¿Es un límite de tecnología que no se puede usar?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Qué otras opciones tengo si no uso PostgreSQL?"
+        ]
+      },
+      "MEMORIA:23": {
+        "preguntas": [
+          "¿Quién es responsable de asegurar que el equipo de calidad funcione bien?",
+          "¿Hay una obligación de que operaciones apoye a calidad?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Qué pasa si operaciones no cumple con su parte?",
+          "¿Cómo se mide el rendimiento de operaciones en calidad?"
+        ]
+      },
+      "MEMORIA:24": {
+        "preguntas": [
+          "¿Hay una obligación de revisar cada entrega antes de publicar?",
+          "¿Es necesario que todos los entregables pasen por operaciones antes de publicarse?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Se pueden modificar los entregables después de que se validan?",
+          "¿Qué pasa si no se validan los entregables antes de salir al público?"
+        ]
+      },
+      "MEMORIA:25": {
+        "preguntas": [
+          "¿Necesito pedir permiso para entrar al almacén?",
+          "¿Hay una obligación de avisar antes de ir al almacén?",
+          "¿Es un límite que no pueda entrar sin autorización?"
+        ],
+        "categoria": [
+          "esencial",
+          "restriccion",
+          "critica",
+          "obligatoria",
+          "imprescindible"
+        ],
+        "descartadas": [
+          "¿Puedo entrar sin que alguien me autorice?"
+        ]
+      },
+      "MEMORIA:26": {
+        "preguntas": [
+          "¿Hay alguna obligación que debemos cumplir con la nómina?",
+          "¿Cómo se distribuye el pago entre los miembros?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Cuál es el límite de gasto para el equipo de Beta?",
+          "¿Qué tipo de restricción hay en el presupuesto?"
+        ]
+      },
+      "DECISION:11": {
+        "preguntas": [
+          "¿Se puede cambiar el proveedor de embalaje ahora?",
+          "¿Hay un límite para cuándo debe hacerse la transición?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay una obligación de hacer esta transición pronto?",
+          "¿Qué pasa si no se aprueba el cambio?"
+        ]
+      },
+      "DECISION:12": {
+        "preguntas": [
+          "¿Hay un límite de gente que puede entrar a la sala?",
+          "¿Qué pasa si excedo el aforo máximo?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Es obligatorio que no supere los 40 asistentes?",
+          "¿Puedo tener más personas si no hay restricción?"
+        ]
+      },
+      "DECISION:13": {
+        "preguntas": [
+          "¿Hay un límite de gente que puede entrar a la sala?",
+          "¿Qué pasa si excedo el aforo máximo?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Es obligatorio que no supere los 25 asistentes?",
+          "¿Puedo tener más personas si no hay restricción?"
+        ]
+      },
+      "MEMORIA:27": {
+        "preguntas": [
+          "¿Hay alguien que deba hacerlo de forma obligatoria?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Quién tiene que firmar esto?",
+          "¿Cuál es el límite de tiempo para completarlo?",
+          "¿Se puede hacer sin que alguien lo revise?"
+        ]
+      },
+      "MEMORIA:901": {
+        "preguntas": [
+          "¿Puedo hacerlo sin tener que pedir autorización?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite de gasto para esta nota?",
+          "¿Se debe cumplir esta obligación en el plazo establecido?",
+          "¿Es necesario que esté registrado en el sistema?"
+        ]
+      },
+      "MEMORIA:902": {
+        "preguntas": [
+          "¿Puedo incluir días libres sin que afecte el plan?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de hacer una actividad específica?",
+          "¿Cuál es el límite de gasto para este viaje?"
+        ]
+      },
+      "MEMORIA:903": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para este viaje?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de hacer una actividad específica?",
+          "¿Puedo incluir días libres sin que afecte el plan?"
+        ]
+      },
+      "MEMORIA:904": {
+        "preguntas": [
+          "¿Puedo incluir un día libre sin que afecte el plan?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de hacer una actividad específica?",
+          "¿Cuál es el límite de gasto para este viaje?"
+        ]
+      },
+      "MEMORIA:905": {
+        "preguntas": [
+          "¿Puedo tener una reunión sin que tenga valor crítico?",
+          "¿Puedo incluir una reunión sin que tenga un valor crítico en el calendario?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite para cuántas reuniones puedo programar?",
+          "¿Es obligatorio que todas las reuniones tengan una nota ordinaria?"
+        ]
+      },
+      "MEMORIA:906": {
+        "preguntas": [
+          "¿Hay un límite de palabras para el informe?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo incluir fotos en el informe?",
+          "¿Hay una obligación de enviarlo antes de la fecha límite?",
+          "¿Se permite cambiar el formato después de enviarlo?"
+        ]
+      },
+      "MEMORIA:907": {
+        "preguntas": [
+          "¿Puedo cambiar de proveedor sin penalizaciones?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite de gasto para este tipo de contrato?",
+          "¿Es obligatorio que el proveedor cumpla con los plazos establecidos?",
+          "¿Qué pasa si el servicio no cumple con los estándares mínimos?"
+        ]
+      },
+      "MEMORIA:908": {
+        "preguntas": [
+          "¿Puedo hacer cambios sin que afecte la calidad del servicio?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite de gasto para esta nota?",
+          "¿Se debe cumplir esta obligación en el plazo establecido?",
+          "¿Es necesario que esta nota se cumpla sin excepción?"
+        ]
+      },
+      "MEMORIA:909": {
+        "preguntas": [
+          "¿Puedo tener una reunión sin que tenga que evaluarla?",
+          "¿Hay alguna obligación de revisar esta nota?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Es necesario que esta reunión tenga un valor crítico?",
+          "¿Hay un límite para cuántas reuniones puedo tener?"
+        ]
+      },
+      "MEMORIA:910": {
+        "preguntas": [
+          "¿Puedo usar este sistema sin tener que justificar cada modificación?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite para cuántas veces se puede actualizar este documento?",
+          "¿Es obligatorio que todos los cambios estén registrados?",
+          "¿Qué pasa si no se cumple la norma de control de versiones?"
+        ]
+      },
+      "MEMORIA:911": {
+        "preguntas": [
+          "¿Es obligatorio que todos los cambios estén registrados?",
+          "¿Qué pasa si no se sigue el orden de versiones?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite para cuántas veces se puede modificar este documento?",
+          "¿Puedo usar este documento para tomar decisiones importantes?"
+        ]
+      },
+      "MEMORIA:912": {
+        "preguntas": [
+          "¿Puedo tener una reunión sin que tenga valor crítico?",
+          "¿Puedo agregar una reunión sin que afecte la nota ordinaria?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite para cuántas reuniones puedo programar?",
+          "¿Es obligatorio que todas las reuniones estén en el calendario?"
+        ]
+      },
+      "MEMORIA:913": {
+        "preguntas": [
+          "¿Hay un límite de gasto para esta nota?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Es obligatorio cumplir con este plazo?",
+          "¿Puedo modificar el contenido sin autorización?",
+          "¿Qué pasa si no se cumple la entrega?"
+        ]
+      },
+      "MEMORIA:914": {
+        "preguntas": [
+          "¿Puedo tener una reunión sin que tenga valor crítico?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite para cuántas reuniones puedo programar?",
+          "¿Es obligatorio que todas las reuniones estén en el calendario?",
+          "¿Puedo agregar una reunión sin que afecte la nota ordinaria?"
+        ]
+      },
+      "MEMORIA:915": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para esta planificación?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de hacer un viaje en familia?",
+          "¿Puedo incluir actividades que no tengan costo?"
+        ]
+      },
+      "MEMORIA:916": {
+        "preguntas": [
+          "¿Qué pasa si no se cumple la nota de gestión?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite de gasto para este tipo de contrato?",
+          "¿Es obligatorio que los proveedores cumplan con esta nota?",
+          "¿Puedo cambiar el proveedor sin problemas?"
+        ]
+      },
+      "MEMORIA:917": {
+        "preguntas": [
+          "¿Hay un límite de gasto para esta nota?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Es obligatorio cumplir con este requisito?",
+          "¿Qué pasa si no se atiende la logística de almacén?",
+          "¿Puedo cambiar la nota si hay un error en la logística?"
+        ]
+      },
+      "MEMORIA:918": {
+        "preguntas": [
+          "¿Puedo usar este formato si no hay valor crítico en el informe?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Es obligatorio incluir esta nota si el informe no tiene datos sensibles?",
+          "¿Qué pasa si no cumple con el formato aunque sea solo una nota?",
+          "¿Hay un límite de tiempo para completar el informe con esta nota?"
+        ]
+      },
+      "MEMORIA:919": {
+        "preguntas": [
+          "¿Se puede hacer sin tener que comprometer otras actividades?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de ir con alguien?",
+          "¿Cuál es el límite de gasto para esta planificación?"
+        ]
+      },
+      "MEMORIA:920": {
+        "preguntas": [
+          "¿Hay un límite de cuántas reuniones puedo programar?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo tener más reuniones sin que afecte el valor crítico?",
+          "¿Es obligatorio que todas las reuniones estén en el calendario?",
+          "¿Puedo agregar una reunión sin que se pierda la nota ordinaria?"
+        ]
+      },
+      "MEMORIA:921": {
+        "preguntas": [
+          "¿Hay un límite de gasto para esta nota?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Se debe cumplir esta obligación en el plazo establecido?",
+          "¿Qué pasa si no se cumple la entrega programada?",
+          "¿Puedo modificar la nota sin autorización?"
+        ]
+      },
+      "MEMORIA:922": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para esta planificación?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de ir con alguien?",
+          "¿Se puede hacer sin tener que comprometer otras actividades?"
+        ]
+      },
+      "MEMORIA:923": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para esta planificación?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de ir con alguien?",
+          "¿Se puede hacer sin tener que comprometer otras actividades?"
+        ]
+      },
+      "MEMORIA:924": {
+        "preguntas": [
+          "¿Puedo usar este formato si no hay valor crítico en el informe?",
+          "¿Qué pasa si no cumple con la nota ordinaria 24?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Es obligatorio seguir este formato en todos los casos?",
+          "¿Hay un límite para cuántos informes puedo hacer con este formato?"
+        ]
+      },
+      "MEMORIA:925": {
+        "preguntas": [
+          "¿El formato debe seguir una estructura fija?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo incluir datos sensibles en el informe?",
+          "¿Hay una obligación de revisar el contenido antes de entregarlo?",
+          "¿Hay un límite de tiempo para entregar el informe?"
+        ]
+      },
+      "MEMORIA:926": {
+        "preguntas": [
+          "¿Hay un límite de gasto para esta nota?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Se debe cumplir esta obligación en el plazo establecido?",
+          "¿Qué pasa si no se cumple la entrega programada?",
+          "¿Puedo modificar esta nota sin autorización?"
+        ]
+      },
+      "MEMORIA:927": {
+        "preguntas": [
+          "¿Puedo incluir datos que no tengan valor crítico?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite para cuánto puedo gastar en este informe?",
+          "¿Es obligatorio que el informe tenga una estructura específica?",
+          "¿Hay una restricción en cuanto al número de páginas del informe?"
+        ]
+      },
+      "MEMORIA:928": {
+        "preguntas": [
+          "¿Hay un límite de gasto para esta nota?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Es obligatorio cumplir con este plazo?",
+          "¿Puedo cambiar el lugar del almacén sin problemas?",
+          "¿Hay una restricción en el tipo de productos que se pueden almacenar?"
+        ]
+      },
+      "MEMORIA:929": {
+        "preguntas": [
+          "¿Hay un límite de gasto para esta nota?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Se debe cumplir esta obligación en el plazo establecido?",
+          "¿Qué pasa si no se cumple la entrega programada?",
+          "¿Puedo cambiar el lugar del almacén sin afectar el proceso?"
+        ]
+      },
+      "MEMORIA:930": {
+        "preguntas": [
+          "¿Puedo modificar la nota si hay un error?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite de gasto para esta nota?",
+          "¿Es obligatorio cumplir con este tiempo de entrega?",
+          "¿Qué pasa si no se cumple el plazo de entrega?"
+        ]
+      },
+      "MEMORIA:931": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para esta planificación?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de ir con alguien?",
+          "¿Puedo hacerlo sin tener que justificarlo?"
+        ]
+      },
+      "MEMORIA:932": {
+        "preguntas": [
+          "¿Puedo tener una reunión sin que tenga que evaluarla?",
+          "¿Puedo incluir algo que no tenga valor crítico?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite de cuántas reuniones puedo hacer?",
+          "¿Es obligatorio que todas las reuniones tengan una nota?"
+        ]
+      },
+      "MEMORIA:933": {
+        "preguntas": [
+          "¿Es obligatorio que esta nota esté siempre disponible para revisar?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite para cuántas veces se puede actualizar esta nota?",
+          "¿Puedo eliminarla si ya no la necesito?",
+          "¿Qué pasa si no la actualizo en un tiempo determinado?"
+        ]
+      },
+      "MEMORIA:934": {
+        "preguntas": [
+          "¿Se puede hacer sin tener que planificar mucho?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de ir con alguien?",
+          "¿Cuál es el límite de gasto para este viaje?"
+        ]
+      },
+      "MEMORIA:935": {
+        "preguntas": [
+          "¿Qué pasa si no se cumple el valor crítico?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite de gasto para esta nota?",
+          "¿Es obligatorio que se revise cada mes?",
+          "¿Puedo dejar de usar este proveedor si no cumple?"
+        ]
+      },
+      "MEMORIA:936": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para este plan?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de hacer un viaje en familia?",
+          "¿Se puede hacer el viaje sin tener que pedir permiso?"
+        ]
+      },
+      "MEMORIA:937": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para esta planificación?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de ir con alguien?",
+          "¿Se puede hacer sin tener que comprometer otras actividades?"
+        ]
+      },
+      "MEMORIA:938": {
+        "preguntas": [
+          "¿Puedo cambiar la fecha sin problemas?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite de tiempo para esta reunión?",
+          "¿Es obligatorio que esté incluida en el calendario?",
+          "¿Hay una prioridad para esta nota?"
+        ]
+      },
+      "MEMORIA:939": {
+        "preguntas": [
+          "¿Hay un límite de gasto para esta nota?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Es obligatorio cumplir con este plazo?",
+          "¿Puedo cambiar el lugar del almacén sin problemas?",
+          "¿Hay una restricción en el uso de personal?"
+        ]
+      },
+      "MEMORIA:940": {
+        "preguntas": [
+          "¿Cuál es el límite de gasto para este plan?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Puedo cambiar de destino sin problemas?",
+          "¿Hay alguna obligación de hacer un viaje en familia?",
+          "¿Se puede hacer el viaje sin tener que justificarlo?"
+        ]
+      },
+      "DECISION:14": {
+        "preguntas": [
+          "¿Se puede hacer el turno corto en enero?",
+          "¿Cuándo se activa el turno reducido?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite para el turno reducido?",
+          "¿Está obligado el personal a asistir al turno corto?"
+        ]
+      },
+      "DECISION:15": {
+        "preguntas": [
+          "¿Cuándo se realiza la revisión del área de operaciones?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay una obligación de presentar informes después de la revisión?",
+          "¿Qué pasa si no se cumple el plazo de revisión?",
+          "¿Se puede cambiar la frecuencia de la revisión?"
+        ]
+      },
+      "DECISION:16": {
+        "preguntas": [
+          "¿Cuántas personas pueden estar en la sala al mismo tiempo?",
+          "¿Hay un límite de personas para las reuniones?",
+          "¿Puedo organizar una reunión para más de 12 personas?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Es necesario que todos los asistentes estén presentes?"
+        ]
+      },
+      "MEMORIA:950": {
+        "preguntas": [
+          "¿Es obligatorio cumplir con esa holgura escalonada?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un límite de tolerancia en el ajuste del rotor?",
+          "¿Se necesita un control riguroso en el proceso?",
+          "¿Puedo modificar el calibrado si no hay holgura adecuada?"
+        ]
+      },
+      "MEMORIA:951": {
+        "preguntas": [
+          "¿Dónde se almacenan las bitacoras municipales?",
+          "¿Es obligatorio que las bitacoras estén junto al depósito?"
+        ],
+        "categoria": [],
+        "descartadas": [
+          "¿Hay un lugar fijo para guardar los depósitos comarcals?",
+          "¿Pueden moverse las bitacoras sin autorización?"
+        ]
+      }
+    },
+    "sin_generar": [],
+    "procedencia": {
+      "proveedor": "ollama",
+      "modelo": "qwen3:4b-instruct",
+      "huella": "desconocida"
+    }
+  }
+}

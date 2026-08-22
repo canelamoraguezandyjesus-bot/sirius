@@ -1,0 +1,776 @@
+{
+ "documento": "Etiquetado ciego en ingesta v0.1 · ADR-002 · opcion 1",
+ "proposito": "Probar si anotar 'de que va' cada nota AL GUARDARLA recupera lo que la busqueda por palabras no encuentra, en especial las preguntas de categoria.",
+ "metodo": "Las escribio un agente que recibio UNICAMENTE los 97 textos, inline en el encargo, con prohibicion expresa de leer ficheros. Ejecuto con CERO usos de herramienta (tool_uses: 0), lo que prueba que no vio el banco: ni las consultas, ni resultado_esperado, ni las razones de criticidad.",
+ "por_que_esto_si_es_ciego": "A diferencia de la ampliacion de consulta v0.1 -que escribi yo, habiendo visto las respuestas-, aqui el autor no tenia acceso posible a la solucion. Es el control que faltaba.",
+ "base_contra_la_que_se_compara": {
+  "exactos": "24/47",
+  "omisiones_criticas": 11,
+  "contaminacion": 3,
+  "conformidad_de_etapa": "32/46"
+ },
+ "etiquetas_por_rowid": {
+  "2": [
+   "preferencia de estilo",
+   "cómo escribir",
+   "redacción concisa",
+   "sin florituras",
+   "comunicación llana",
+   "instrucción de escritura"
+  ],
+  "3": [
+   "control de calidad",
+   "paso previo obligatorio",
+   "requisito antes de difundir",
+   "verificación necesaria",
+   "validación previa",
+   "norma de proceso"
+  ],
+  "4": [
+   "restricción de transporte",
+   "sin vehículo de alquiler",
+   "desplazamientos en viaje",
+   "prohibición logística",
+   "moverse sin coche",
+   "política de viaje"
+  ],
+  "5": [
+   "límite de gasto",
+   "tope económico",
+   "cuánto se puede gastar",
+   "coste máximo",
+   "cifra de presupuesto",
+   "dinero disponible"
+  ],
+  "6": [
+   "decisión de transporte",
+   "sí a vehículo alquilado",
+   "trayectos largos",
+   "desplazamientos en viaje",
+   "logística del viaje",
+   "permiso de coche"
+  ],
+  "7": [
+   "límite de gasto",
+   "tope económico",
+   "cuánto se puede gastar",
+   "coste máximo",
+   "cifra de presupuesto",
+   "versión alternativa del importe"
+  ],
+  "8": [
+   "preferencia de presentación",
+   "disposición del documento",
+   "cómo maquetar el informe",
+   "estructura visual",
+   "formato de entrega",
+   "gusto del usuario"
+  ],
+  "9": [
+   "cambio de proveedor",
+   "transporte de paquetes",
+   "empresa de reparto",
+   "a partir de otoño",
+   "fecha de efecto",
+   "sustitución de servicio"
+  ],
+  "10": [
+   "renovación de contrato",
+   "servicio técnico",
+   "información incompleta",
+   "fecha desconocida",
+   "vigencia sin determinar",
+   "dato faltante"
+  ],
+  "11": [
+   "límite de gasto",
+   "importe del proyecto",
+   "cuánto cuesta Beta",
+   "cifra oficial",
+   "tope económico",
+   "dinero asignado"
+  ],
+  "12": [
+   "importe mencionado de palabra",
+   "dato de reunión",
+   "cifra contradictoria",
+   "versión oral del presupuesto",
+   "coste de Beta",
+   "acta de reunión"
+  ],
+  "13": [
+   "herramienta autorizada",
+   "entorno de publicación",
+   "sistema para desplegar",
+   "tecnología aprobada",
+   "infraestructura del proyecto",
+   "decisión técnica"
+  ],
+  "14": [
+   "suposición no confirmada",
+   "hábito probable",
+   "encuentros breves",
+   "franja matinal",
+   "preferencia deducida",
+   "agenda del usuario"
+  ],
+  "15": [
+   "herramienta autorizada",
+   "entorno de publicación",
+   "sistema para desplegar",
+   "tecnología aprobada",
+   "dato repetido",
+   "decisión técnica"
+  ],
+  "16": [
+   "opción descartada",
+   "propuesta no aceptada",
+   "franja de entrega",
+   "decisión negativa",
+   "alternativa rechazada",
+   "horarios de reparto"
+  ],
+  "17": [
+   "herramienta autorizada",
+   "entorno de publicación",
+   "sistema para desplegar",
+   "tecnología aprobada",
+   "repetición de la misma decisión",
+   "infraestructura"
+  ],
+  "18": [],
+  "19": [
+   "rebaja estacional",
+   "promoción de temporada",
+   "precio reducido",
+   "condiciones comerciales",
+   "aplicación de descuento",
+   "compras"
+  ],
+  "20": [
+   "información médica",
+   "dato confidencial",
+   "salud del responsable",
+   "categoría protegida",
+   "privacidad",
+   "no divulgar"
+  ],
+  "21": [
+   "restricción tecnológica",
+   "base de datos prohibida",
+   "motor no permitido",
+   "veto técnico",
+   "elección de almacenamiento",
+   "decisión de arquitectura"
+  ],
+  "22": [
+   "código del proyecto",
+   "referencia interna",
+   "clave de expediente",
+   "siglas",
+   "cómo se llama en el sistema",
+   "identificación"
+  ],
+  "23": [
+   "autorización de cambio",
+   "visto bueno",
+   "nuevo suministrador",
+   "materiales de empaquetado",
+   "decisión aprobada",
+   "cadena de suministro"
+  ],
+  "24": [
+   "persona a cargo",
+   "quién lleva calidad",
+   "nombre del encargado",
+   "rol asignado",
+   "contacto responsable",
+   "personal"
+  ],
+  "25": [
+   "capacidad del espacio",
+   "cuántas personas caben",
+   "límite de ocupación",
+   "tamaño del local",
+   "restricción de asistentes",
+   "sala"
+  ],
+  "26": [
+   "persona a cargo",
+   "quién lleva compras",
+   "nombre del encargado",
+   "aprovisionamiento",
+   "rol asignado",
+   "personal"
+  ],
+  "27": [
+   "capacidad del espacio",
+   "cuántas personas caben",
+   "límite de ocupación",
+   "cifra alternativa de aforo",
+   "restricción de asistentes",
+   "sala"
+  ],
+  "28": [
+   "restricción de vuelos",
+   "sin conexiones intermedias",
+   "viaje directo",
+   "prohibición de itinerario",
+   "preferencia aérea",
+   "transporte"
+  ],
+  "29": [
+   "jornada acortada",
+   "cambio de horario",
+   "medida de temporada",
+   "primer mes del año",
+   "condición laboral",
+   "personal"
+  ],
+  "30": [
+   "permiso de itinerario con conexión",
+   "criterio de precio",
+   "vuelo más barato",
+   "flexibilidad aérea",
+   "decisión de viaje",
+   "contradice la norma anterior"
+  ],
+  "31": [
+   "asignación de tarea",
+   "quién hace la revisión",
+   "periodicidad cada tres meses",
+   "área encargada",
+   "reparto de responsabilidad",
+   "gobernanza"
+  ],
+  "32": [
+   "condición económica para conexión",
+   "umbral de ahorro",
+   "cuándo se permite",
+   "matiz sobre vuelos",
+   "regla con excepción",
+   "viajes"
+  ],
+  "33": [
+   "capacidad de sala",
+   "cifra antigua del archivo",
+   "dato histórico",
+   "cuántas personas cabían",
+   "ocupación registrada",
+   "expediente"
+  ],
+  "34": [
+   "acuerdo del grupo",
+   "revisión periódica",
+   "cada quince días",
+   "definición del alcance",
+   "cadencia de seguimiento",
+   "conclusión de reunión"
+  ],
+  "36": [
+   "alias del producto",
+   "denominación secreta",
+   "cómo se llama internamente",
+   "nombre del proyecto",
+   "referencia del resultado",
+   "identificación"
+  ],
+  "38": [],
+  "40": [
+   "plazo normativo",
+   "tiempo máximo legal",
+   "un mes para entregar",
+   "información de tercero",
+   "referencia externa",
+   "obligación jurídica"
+  ],
+  "42": [
+   "instrucción de exclusión",
+   "no recordar esto",
+   "contenido descartado",
+   "marcado por el usuario",
+   "no almacenar",
+   "metadato"
+  ],
+  "44": [
+   "mantenimiento periódico",
+   "coche de la empresa",
+   "revisión semestral",
+   "cada medio año",
+   "vehículo corporativo",
+   "calendario de inspección"
+  ],
+  "46": [
+   "estructura organizativa",
+   "de quién depende",
+   "jerarquía interna",
+   "adscripción de equipo",
+   "organigrama",
+   "relación entre áreas"
+  ],
+  "48": [
+   "aprobación previa",
+   "quién da el visto bueno",
+   "control antes de difundir",
+   "verificación de resultados",
+   "flujo de trabajo",
+   "responsabilidad"
+  ],
+  "50": [
+   "permiso de entrada",
+   "control de acceso",
+   "zona restringida",
+   "se necesita aprobación",
+   "seguridad del depósito",
+   "logística"
+  ],
+  "52": [
+   "retribuciones del personal",
+   "información salarial",
+   "dato confidencial",
+   "sueldos del equipo",
+   "privacidad",
+   "recursos humanos"
+  ],
+  "54": [
+   "información incompleta",
+   "circuito de aprobación",
+   "quién firma sin identificar",
+   "dato ausente",
+   "proceso de validación",
+   "nota a medias"
+  ],
+  "202": [
+   "limitación clave",
+   "condición del expediente",
+   "requisito disperso",
+   "norma fragmentada",
+   "primera de la serie",
+   "caso Gamma"
+  ],
+  "204": [
+   "limitación clave",
+   "condición del expediente",
+   "requisito disperso",
+   "norma fragmentada",
+   "segunda de la serie",
+   "caso Gamma"
+  ],
+  "206": [
+   "limitación clave",
+   "condición del expediente",
+   "requisito disperso",
+   "norma fragmentada",
+   "tercera de la serie",
+   "caso Gamma"
+  ],
+  "208": [
+   "limitación clave",
+   "condición del expediente",
+   "requisito disperso",
+   "norma fragmentada",
+   "cuarta de la serie",
+   "caso Gamma"
+  ],
+  "210": [
+   "limitación clave",
+   "condición del expediente",
+   "requisito disperso",
+   "norma fragmentada",
+   "quinta de la serie",
+   "caso Gamma"
+  ],
+  "212": [
+   "limitación clave",
+   "condición del expediente",
+   "requisito disperso",
+   "norma fragmentada",
+   "sexta de la serie",
+   "caso Gamma"
+  ],
+  "214": [
+   "limitación clave",
+   "condición del expediente",
+   "requisito disperso",
+   "norma fragmentada",
+   "séptima de la serie",
+   "caso Gamma"
+  ],
+  "216": [
+   "limitación clave",
+   "condición del expediente",
+   "requisito disperso",
+   "norma fragmentada",
+   "octava de la serie",
+   "caso Gamma"
+  ],
+  "218": [
+   "limitación clave",
+   "condición del expediente",
+   "requisito disperso",
+   "norma fragmentada",
+   "novena de la serie",
+   "caso Gamma"
+  ],
+  "220": [
+   "limitación clave",
+   "condición del expediente",
+   "requisito disperso",
+   "norma fragmentada",
+   "décima de la serie",
+   "caso Gamma"
+  ],
+  "222": [
+   "limitación clave",
+   "condición del expediente",
+   "requisito disperso",
+   "norma fragmentada",
+   "undécima de la serie",
+   "caso Gamma"
+  ],
+  "224": [
+   "limitación clave",
+   "condición del expediente",
+   "requisito disperso",
+   "norma fragmentada",
+   "duodécima de la serie",
+   "caso Gamma"
+  ],
+  "1802": [
+   "apunte rutinario",
+   "movimiento de mercancía",
+   "gestión del depósito",
+   "relleno sin relevancia",
+   "tema operativo",
+   "existencias"
+  ],
+  "1804": [
+   "apunte rutinario",
+   "descanso del personal",
+   "calendario de ausencias",
+   "periodo estival",
+   "relleno sin relevancia",
+   "recursos humanos"
+  ],
+  "1806": [
+   "apunte rutinario",
+   "descanso del personal",
+   "calendario de ausencias",
+   "periodo estival",
+   "relleno sin relevancia",
+   "recursos humanos"
+  ],
+  "1808": [
+   "apunte rutinario",
+   "descanso del personal",
+   "calendario de ausencias",
+   "periodo estival",
+   "relleno sin relevancia",
+   "recursos humanos"
+  ],
+  "1810": [
+   "apunte rutinario",
+   "agenda de encuentros",
+   "fechas de convocatoria",
+   "programación semanal",
+   "relleno sin relevancia",
+   "coordinación"
+  ],
+  "1812": [
+   "apunte rutinario",
+   "presentación de documentos",
+   "plantilla de reporte",
+   "maquetación",
+   "relleno sin relevancia",
+   "documentación"
+  ],
+  "1814": [
+   "apunte rutinario",
+   "trato con suministradores",
+   "compras externas",
+   "contratación",
+   "relleno sin relevancia",
+   "cadena de suministro"
+  ],
+  "1816": [
+   "apunte rutinario",
+   "movimiento de mercancía",
+   "gestión del depósito",
+   "relleno sin relevancia",
+   "tema operativo",
+   "existencias"
+  ],
+  "1818": [
+   "apunte rutinario",
+   "agenda de encuentros",
+   "fechas de convocatoria",
+   "programación semanal",
+   "relleno sin relevancia",
+   "coordinación"
+  ],
+  "1820": [
+   "apunte rutinario",
+   "versionado de ficheros",
+   "historial documental",
+   "revisiones del archivo",
+   "relleno sin relevancia",
+   "documentación"
+  ],
+  "1822": [
+   "apunte rutinario",
+   "versionado de ficheros",
+   "historial documental",
+   "revisiones del archivo",
+   "relleno sin relevancia",
+   "documentación"
+  ],
+  "1824": [
+   "apunte rutinario",
+   "agenda de encuentros",
+   "fechas de convocatoria",
+   "programación semanal",
+   "relleno sin relevancia",
+   "coordinación"
+  ],
+  "1826": [
+   "apunte rutinario",
+   "movimiento de mercancía",
+   "gestión del depósito",
+   "relleno sin relevancia",
+   "tema operativo",
+   "existencias"
+  ],
+  "1828": [
+   "apunte rutinario",
+   "agenda de encuentros",
+   "fechas de convocatoria",
+   "programación semanal",
+   "relleno sin relevancia",
+   "coordinación"
+  ],
+  "1830": [
+   "apunte rutinario",
+   "descanso del personal",
+   "calendario de ausencias",
+   "periodo estival",
+   "relleno sin relevancia",
+   "recursos humanos"
+  ],
+  "1832": [
+   "apunte rutinario",
+   "trato con suministradores",
+   "compras externas",
+   "contratación",
+   "relleno sin relevancia",
+   "cadena de suministro"
+  ],
+  "1834": [
+   "apunte rutinario",
+   "movimiento de mercancía",
+   "gestión del depósito",
+   "relleno sin relevancia",
+   "tema operativo",
+   "existencias"
+  ],
+  "1836": [
+   "apunte rutinario",
+   "presentación de documentos",
+   "plantilla de reporte",
+   "maquetación",
+   "relleno sin relevancia",
+   "documentación"
+  ],
+  "1838": [
+   "apunte rutinario",
+   "descanso del personal",
+   "calendario de ausencias",
+   "periodo estival",
+   "relleno sin relevancia",
+   "recursos humanos"
+  ],
+  "1840": [
+   "apunte rutinario",
+   "agenda de encuentros",
+   "fechas de convocatoria",
+   "programación semanal",
+   "relleno sin relevancia",
+   "coordinación"
+  ],
+  "1842": [
+   "apunte rutinario",
+   "movimiento de mercancía",
+   "gestión del depósito",
+   "relleno sin relevancia",
+   "tema operativo",
+   "existencias"
+  ],
+  "1844": [
+   "apunte rutinario",
+   "descanso del personal",
+   "calendario de ausencias",
+   "periodo estival",
+   "relleno sin relevancia",
+   "recursos humanos"
+  ],
+  "1846": [
+   "apunte rutinario",
+   "descanso del personal",
+   "calendario de ausencias",
+   "periodo estival",
+   "relleno sin relevancia",
+   "recursos humanos"
+  ],
+  "1848": [
+   "apunte rutinario",
+   "presentación de documentos",
+   "plantilla de reporte",
+   "maquetación",
+   "relleno sin relevancia",
+   "documentación"
+  ],
+  "1850": [
+   "apunte rutinario",
+   "presentación de documentos",
+   "plantilla de reporte",
+   "maquetación",
+   "relleno sin relevancia",
+   "documentación"
+  ],
+  "1852": [
+   "apunte rutinario",
+   "movimiento de mercancía",
+   "gestión del depósito",
+   "relleno sin relevancia",
+   "tema operativo",
+   "existencias"
+  ],
+  "1854": [
+   "apunte rutinario",
+   "presentación de documentos",
+   "plantilla de reporte",
+   "maquetación",
+   "relleno sin relevancia",
+   "documentación"
+  ],
+  "1856": [
+   "apunte rutinario",
+   "movimiento de mercancía",
+   "gestión del depósito",
+   "relleno sin relevancia",
+   "tema operativo",
+   "existencias"
+  ],
+  "1858": [
+   "apunte rutinario",
+   "movimiento de mercancía",
+   "gestión del depósito",
+   "relleno sin relevancia",
+   "tema operativo",
+   "existencias"
+  ],
+  "1860": [
+   "apunte rutinario",
+   "movimiento de mercancía",
+   "gestión del depósito",
+   "relleno sin relevancia",
+   "tema operativo",
+   "existencias"
+  ],
+  "1862": [
+   "apunte rutinario",
+   "descanso del personal",
+   "calendario de ausencias",
+   "periodo estival",
+   "relleno sin relevancia",
+   "recursos humanos"
+  ],
+  "1864": [
+   "apunte rutinario",
+   "agenda de encuentros",
+   "fechas de convocatoria",
+   "programación semanal",
+   "relleno sin relevancia",
+   "coordinación"
+  ],
+  "1866": [
+   "apunte rutinario",
+   "versionado de ficheros",
+   "historial documental",
+   "revisiones del archivo",
+   "relleno sin relevancia",
+   "documentación"
+  ],
+  "1868": [
+   "apunte rutinario",
+   "descanso del personal",
+   "calendario de ausencias",
+   "periodo estival",
+   "relleno sin relevancia",
+   "recursos humanos"
+  ],
+  "1870": [
+   "apunte rutinario",
+   "trato con suministradores",
+   "compras externas",
+   "contratación",
+   "relleno sin relevancia",
+   "cadena de suministro"
+  ],
+  "1872": [
+   "apunte rutinario",
+   "descanso del personal",
+   "calendario de ausencias",
+   "periodo estival",
+   "relleno sin relevancia",
+   "recursos humanos"
+  ],
+  "1874": [
+   "apunte rutinario",
+   "descanso del personal",
+   "calendario de ausencias",
+   "periodo estival",
+   "relleno sin relevancia",
+   "recursos humanos"
+  ],
+  "1876": [
+   "apunte rutinario",
+   "agenda de encuentros",
+   "fechas de convocatoria",
+   "programación semanal",
+   "relleno sin relevancia",
+   "coordinación"
+  ],
+  "1878": [
+   "apunte rutinario",
+   "movimiento de mercancía",
+   "gestión del depósito",
+   "relleno sin relevancia",
+   "tema operativo",
+   "existencias"
+  ],
+  "1880": [
+   "apunte rutinario",
+   "descanso del personal",
+   "calendario de ausencias",
+   "periodo estival",
+   "relleno sin relevancia",
+   "recursos humanos"
+  ],
+  "1900": [
+   "ajuste mecánico",
+   "separación por niveles",
+   "puesta a punto de la pieza giratoria",
+   "tolerancia entre partes",
+   "especificación técnica",
+   "mantenimiento de maquinaria"
+  ],
+  "1902": [
+   "registro local guardado",
+   "cuaderno de anotaciones del ayuntamiento",
+   "custodia en el almacén de la comarca",
+   "ubicación de archivos",
+   "conservación documental",
+   "regla de emplazamiento"
+  ]
+ }
+}

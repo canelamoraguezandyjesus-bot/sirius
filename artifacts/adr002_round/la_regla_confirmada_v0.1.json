@@ -1,0 +1,93 @@
+{
+  "que_es": "confirmacion en maquina de la regla de las criticas: mismos veredictos del modelo, con la regla y sin ella",
+  "commit": "80b7ffe",
+  "medido_sobre": "resultado_modelo_local_v0.4.json, corrida «2. el filtro que elige, criticas protegidas»",
+  "por_que_la_comparacion_es_limpia": "las dos filas salen de la MISMA llamada al modelo. El artefacto guarda «obtenido» y «obtenido_sin_proteccion» por caso, de modo que la diferencia es atribuible a la regla y solo a ella, sin variacion de modelo entre corridas",
+  "prediccion_previa": {
+    "hecha_sobre": "resultado_modelo_local_v0.3.json, antes de escribir el codigo",
+    "decia": {
+      "exacto": "30/47",
+      "completas": "20/31",
+      "trozos": "53/81",
+      "de_mas": 10,
+      "criticos_perdidos": 11
+    },
+    "acerto": true
+  },
+  "filas": {
+    "linea base (busqueda sola)": {
+      "exacto": 24,
+      "adjudicables": 47,
+      "completas": 24,
+      "con_contenido": 31,
+      "trozos": 64,
+      "esperados": 81,
+      "de_mas": 29,
+      "criticos_perdidos": 11
+    },
+    "sin la regla (solo el modelo)": {
+      "exacto": 30,
+      "adjudicables": 47,
+      "completas": 19,
+      "con_contenido": 31,
+      "trozos": 49,
+      "esperados": 81,
+      "de_mas": 5,
+      "criticos_perdidos": 15
+    },
+    "con la regla": {
+      "exacto": 30,
+      "adjudicables": 47,
+      "completas": 20,
+      "con_contenido": 31,
+      "trozos": 53,
+      "esperados": 81,
+      "de_mas": 10,
+      "criticos_perdidos": 11
+    },
+    "la compuerta": {
+      "exacto": 26,
+      "adjudicables": 47,
+      "completas": 24,
+      "con_contenido": 31,
+      "trozos": 64,
+      "esperados": 81,
+      "de_mas": 29,
+      "criticos_perdidos": 11
+    }
+  },
+  "lo_que_rescato_la_regla": {
+    "criticas_devueltas": [
+      "DECISION:10",
+      "DECISION:3",
+      "MEMORIA:101",
+      "MEMORIA:102",
+      "MEMORIA:103",
+      "MEMORIA:104",
+      "MEMORIA:25"
+    ],
+    "de_esas_hacian_falta": [
+      "MEMORIA:101",
+      "MEMORIA:102",
+      "MEMORIA:103",
+      "MEMORIA:104"
+    ],
+    "volvieron_como_ruido": [
+      "DECISION:10",
+      "DECISION:3",
+      "MEMORIA:25"
+    ],
+    "el_trato": "nueve devueltas: cuatro omisiones criticas menos a cambio de cinco elementos de mas. Las cuatro utiles son las restricciones de N1-44, el caso donde la busqueda entregaba las cinco correctas y el modelo se quedaba con una"
+  },
+  "lo_que_sigue_costando": {
+    "elementos_correctos_no_criticos_perdidos": 11,
+    "respuestas_completas": "20/31 contra 24/31 de la busqueda sola",
+    "lectura": "la regla protege lo critico, no lo demas. El filtro sigue truncando respuestas largas en lo secundario"
+  },
+  "latencia": {
+    "mediana_s": 3.45,
+    "p95_s": 6.55,
+    "aviso": "el p95 supera los 5 s de presupuesto en esta corrida. La regla no anade ninguna llamada al modelo -- la corrida anterior, con el mismo numero de llamadas, dio 4,05 s de p95 -- de modo que es variacion de la maquina y no del codigo. Queda apuntado, no explicado"
+  },
+  "lo_que_no_arregla": "las once omisiones criticas que quedan son de la BUSQUEDA, no del filtro: son datos que nunca llegaron a los candidatos. La regla garantiza que el filtro no empeore la cobertura critica, nada mas"
+}

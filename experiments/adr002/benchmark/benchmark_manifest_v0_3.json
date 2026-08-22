@@ -1,0 +1,583 @@
+{
+ "documento": "Manifiesto del benchmark de ADR-002",
+ "version_contrato": "0.3",
+ "estado": "PROPUESTO_NO_CONGELADO",
+ "semilla_compartida": 20260726,
+ "advertencia": "Ninguna puerta de arranque queda satisfecha por este manifiesto. ADR002-TOL-207 no está aprobada; TOL-208, TOL-209 y TOL-210 siguen NO SATISFECHAS. T0 no se ha ejecutado y ADR002-A/B/C/D no se han implementado ni ejecutado.",
+ "fuentes_canonicas": {
+  "SIRIUS_0.2_BLOQUE_04_BUSQUEDA_Y_RECUPERACION_v1.0_APROBADO.docx": {
+   "sha256_real": "b28a2cbed62b90f35e28db2412e46939b9bd2cdb8f145a5e9bbb2a8e7a5cbb45",
+   "sha256_manifest": "b28a2cbed62b90f35e28db2412e46939b9bd2cdb8f145a5e9bbb2a8e7a5cbb45",
+   "coincide": true,
+   "bytes": 93326
+  },
+  "SIRIUS_0.2_PLAN_DE_PRUEBAS_Y_REGISTRO_EXTERNO_DE_DELEGACIONES_v1.0_APROBADO.docx": {
+   "sha256_real": "39058c0f5fe50bb4b703411bd5296e1bb8b1ede513ccf2d9eacabb35da3f59fd",
+   "sha256_manifest": "39058c0f5fe50bb4b703411bd5296e1bb8b1ede513ccf2d9eacabb35da3f59fd",
+   "coincide": true,
+   "bytes": 93708
+  },
+  "SIRIUS_0.2_ARQ_00_MARCO_RECTOR_ARQUITECTURA_Y_MAPA_DECISIONES_v1.0_APROBADO.docx": {
+   "sha256_real": "730a5fd13dce18bfcdb8dd4afee23dfe22c067c7cb3b953a9bd115cf73224f49",
+   "sha256_manifest": "730a5fd13dce18bfcdb8dd4afee23dfe22c067c7cb3b953a9bd115cf73224f49",
+   "coincide": true,
+   "bytes": 85951
+  }
+ },
+ "medidas_del_canon": {
+  "casos_b04": 50,
+  "filas_anexo_b": 79,
+  "filas_registro_red": 79,
+  "ca_b04_nombrados_por_anexo_b": 20,
+  "familias_pdp": 25,
+  "casos_pdp": 28,
+  "campos_ficha_pdp7": 14,
+  "requisitos_b04": 32,
+  "metricas_b04": 21,
+  "destinos_arq00": 25
+ },
+ "tablas_canonicas": [
+  {
+   "identidad": "b04_casos_17",
+   "documento": "SIRIUS_0.2_BLOQUE_04_BUSQUEDA_Y_RECUPERACION_v1.0_APROBADO.docx",
+   "indice_fisico": 39,
+   "contexto": "17. Casos de aceptación finales",
+   "cabecera": [
+    "ID",
+    "Riesgo",
+    "Entrada",
+    "Resultado esperado",
+    "Fallo observable"
+   ],
+   "filas": 39,
+   "descripcion": "B04 §17 · casos de aceptación CA-01 a CA-39"
+  },
+  {
+   "identidad": "b04_casos_17_1",
+   "documento": "SIRIUS_0.2_BLOQUE_04_BUSQUEDA_Y_RECUPERACION_v1.0_APROBADO.docx",
+   "indice_fisico": 40,
+   "contexto": "17.1 Casos añadidos y corregidos tras auditoría final",
+   "cabecera": [
+    "ID",
+    "Riesgo",
+    "Entrada",
+    "Resultado esperado",
+    "Fallo observable"
+   ],
+   "filas": 11,
+   "descripcion": "B04 §17.1 · casos añadidos y corregidos CA-40 a CA-50"
+  },
+  {
+   "identidad": "b04_modos",
+   "documento": "SIRIUS_0.2_BLOQUE_04_BUSQUEDA_Y_RECUPERACION_v1.0_APROBADO.docx",
+   "indice_fisico": 16,
+   "contexto": "5. Modos de recuperación y elegibilidad",
+   "cabecera": [
+    "Modo",
+    "Finalidad",
+    "Elegibilidad"
+   ],
+   "filas": 5,
+   "descripcion": "B04 §5 · modos de recuperación"
+  },
+  {
+   "identidad": "b04_etapas",
+   "documento": "SIRIUS_0.2_BLOQUE_04_BUSQUEDA_Y_RECUPERACION_v1.0_APROBADO.docx",
+   "indice_fisico": 34,
+   "contexto": "15.1 Etapas normativas",
+   "cabecera": [
+    "Etapa",
+    "Comportamiento",
+    "Salida"
+   ],
+   "filas": 6,
+   "descripcion": "B04 §15.1 · etapas E0-E5"
+  },
+  {
+   "identidad": "b04_cardinalidad",
+   "documento": "SIRIUS_0.2_BLOQUE_04_BUSQUEDA_Y_RECUPERACION_v1.0_APROBADO.docx",
+   "indice_fisico": 35,
+   "contexto": "15.2 Cardinalidad y suficiencia",
+   "cabecera": [
+    "Cardinalidad",
+    "Definición",
+    "Regla de parada"
+   ],
+   "filas": 3,
+   "descripcion": "B04 §15.2 · cardinalidad y regla de parada"
+  },
+  {
+   "identidad": "b04_paradas",
+   "documento": "SIRIUS_0.2_BLOQUE_04_BUSQUEDA_Y_RECUPERACION_v1.0_APROBADO.docx",
+   "indice_fisico": 36,
+   "contexto": "15.3 Criterios de parada",
+   "cabecera": [
+    "ID",
+    "Condición"
+   ],
+   "filas": 7,
+   "descripcion": "B04 §15.3 · criterios de parada S1-S7"
+  },
+  {
+   "identidad": "b04_requisitos",
+   "documento": "SIRIUS_0.2_BLOQUE_04_BUSQUEDA_Y_RECUPERACION_v1.0_APROBADO.docx",
+   "indice_fisico": 38,
+   "contexto": "16. Requisitos funcionales finales",
+   "cabecera": [
+    "ID",
+    "Requisito"
+   ],
+   "filas": 32,
+   "descripcion": "B04 §16 · requisitos funcionales B04-RF-01 a 32"
+  },
+  {
+   "identidad": "b04_metricas",
+   "documento": "SIRIUS_0.2_BLOQUE_04_BUSQUEDA_Y_RECUPERACION_v1.0_APROBADO.docx",
+   "indice_fisico": 41,
+   "contexto": "18. Métricas y puertas finales",
+   "cabecera": [
+    "ID",
+    "Métrica",
+    "Cálculo / qué mide",
+    "Umbral / puerta"
+   ],
+   "filas": 21,
+   "descripcion": "B04 §18 · métricas B04-M01 a M21"
+  },
+  {
+   "identidad": "pdp_ficha_7",
+   "documento": "SIRIUS_0.2_PLAN_DE_PRUEBAS_Y_REGISTRO_EXTERNO_DE_DELEGACIONES_v1.0_APROBADO.docx",
+   "indice_fisico": 10,
+   "contexto": "7. Unidad de caso y ficha obligatoria",
+   "cabecera": [
+    "Campo",
+    "Definición",
+    "Cuándo se congela"
+   ],
+   "filas": 14,
+   "descripcion": "PDP §7 · ficha obligatoria de caso, catorce campos"
+  },
+  {
+   "identidad": "pdp_familias_8",
+   "documento": "SIRIUS_0.2_PLAN_DE_PRUEBAS_Y_REGISTRO_EXTERNO_DE_DELEGACIONES_v1.0_APROBADO.docx",
+   "indice_fisico": 11,
+   "contexto": "8. Corpus obligatorio",
+   "cabecera": [
+    "ID",
+    "Familia",
+    "Cobertura mínima"
+   ],
+   "filas": 25,
+   "descripcion": "PDP §8 · veinticinco familias con cobertura mínima"
+  },
+  {
+   "identidad": "pdp_casos_transversales",
+   "documento": "SIRIUS_0.2_PLAN_DE_PRUEBAS_Y_REGISTRO_EXTERNO_DE_DELEGACIONES_v1.0_APROBADO.docx",
+   "indice_fisico": 13,
+   "contexto": "Los 276 casos numerados aprobados de B02–B08 se incorporan por referencia exacta y congela",
+   "cabecera": [
+    "ID",
+    "Entrada adversarial",
+    "Resultado esperado"
+   ],
+   "filas": 28,
+   "descripcion": "PDP §9 · casos transversales PDP-CA-01 a 28"
+  },
+  {
+   "identidad": "pdp_registro_red",
+   "documento": "SIRIUS_0.2_PLAN_DE_PRUEBAS_Y_REGISTRO_EXTERNO_DE_DELEGACIONES_v1.0_APROBADO.docx",
+   "indice_fisico": 6,
+   "contexto": "El denominador final de RED-1.0 es 79 filas. Fue reconstruido contra B01–B08 y CT, con loc",
+   "cabecera": [
+    "ID",
+    "Fuente",
+    "Localizador",
+    "Delegación obligatoria",
+    "Artefacto del Plan",
+    "Estado"
+   ],
+   "filas": 79,
+   "descripcion": "PDP §4 · Registro RED, expresamente distinto del Anexo B"
+  },
+  {
+   "identidad": "pdp_anexo_b",
+   "documento": "SIRIUS_0.2_PLAN_DE_PRUEBAS_Y_REGISTRO_EXTERNO_DE_DELEGACIONES_v1.0_APROBADO.docx",
+   "indice_fisico": 32,
+   "contexto": "La matriz asigna a cada fila RED una familia, casos exactos, métrica o puerta, evidencia m",
+   "cabecera": [
+    "RED",
+    "Familia",
+    "Caso(s) exactos",
+    "Métrica / puerta",
+    "Evidencia mínima",
+    "Estado"
+   ],
+   "filas": 79,
+   "descripcion": "PDP Anexo B · matriz RED -> familia / casos / métrica / evidencia"
+  },
+  {
+   "identidad": "arq00_destinos_20",
+   "documento": "SIRIUS_0.2_ARQ_00_MARCO_RECTOR_ARQUITECTURA_Y_MAPA_DECISIONES_v1.0_APROBADO.docx",
+   "indice_fisico": 25,
+   "contexto": "El PDP conserva las preguntas y huecos que el producto delegó. ARQ-00 los convierte en sup",
+   "cabecera": [
+    "ID",
+    "Familia canónica",
+    "Cobertura mínima literal",
+    "Área responsable",
+    "Destino"
+   ],
+   "filas": 25,
+   "descripcion": "ARQ-00 §20 · destino por familia del PDP"
+  }
+ ],
+ "metricas_del_anexo_b": {
+  "b04_propias": [
+   "B04-M06",
+   "B04-M09",
+   "B04-M10",
+   "B04-M11",
+   "B04-M13",
+   "B04-M15",
+   "B04-M16",
+   "B04-M18",
+   "B04-M20",
+   "B04-M21"
+  ],
+  "externas_canonicas": [
+   "B01-M06",
+   "B01-M07",
+   "B01-M08",
+   "B01-M13",
+   "B03-M01",
+   "B03-M02",
+   "B03-M06",
+   "B03-M07",
+   "B03-M09",
+   "B03-M10",
+   "B03-M11",
+   "B03-M15",
+   "B03-M16",
+   "B05-M01",
+   "B05-M02",
+   "B05-M04",
+   "B05-M05",
+   "B05-M08",
+   "B05-M09",
+   "B05-M12",
+   "B05-M13",
+   "B05-M15",
+   "B05-M16",
+   "B06-M03",
+   "B06-M04",
+   "B06-M05",
+   "B06-M06",
+   "B06-M07",
+   "B06-M08",
+   "B06-M10",
+   "B06-M12",
+   "B06-M13",
+   "B06-M14",
+   "B06-M15",
+   "B06-M16",
+   "B06-M20",
+   "B07-M06",
+   "B07-M08",
+   "B07-M09",
+   "B07-M11",
+   "B07-M12",
+   "B07-M13",
+   "B07-M15",
+   "B07-M16",
+   "B07-M17",
+   "B07-M18",
+   "B07-M20",
+   "B07-M22",
+   "B07-M23",
+   "B07-M24",
+   "B08-M02",
+   "B08-M04",
+   "B08-M05",
+   "B08-M09",
+   "B08-M10",
+   "B08-M11",
+   "B08-M12",
+   "B08-M13",
+   "B08-M14",
+   "B08-M15",
+   "B08-M16",
+   "B08-M17",
+   "B08-M18",
+   "B08-M19",
+   "B08-M20",
+   "B08-M21",
+   "B08-M24",
+   "B08-M25",
+   "B08-M26",
+   "B08-M27",
+   "B08-M29",
+   "B08-M30",
+   "B08-M31",
+   "B08-M32",
+   "PDP-M01",
+   "PDP-M02",
+   "PDP-M03",
+   "PDP-M04",
+   "PDP-M05",
+   "PDP-M06",
+   "PDP-M07",
+   "PDP-M08",
+   "PDP-M09",
+   "PDP-M10",
+   "PDP-M11",
+   "PDP-M12",
+   "PDP-M13",
+   "PDP-M14",
+   "PDP-M15",
+   "PDP-M16",
+   "PDP-M17"
+  ]
+ },
+ "artefactos": {
+  "corpus_conformidad": {
+   "fichero": "conformance_corpus_v0_3.json",
+   "version": "0.3",
+   "conteos": {
+    "proyectos": 7,
+    "entidades": 5,
+    "items": 94,
+    "recuerdos": 79,
+    "decisiones": 15,
+    "mensajes": 6,
+    "documentos": 5,
+    "relaciones": 9
+   }
+  },
+  "corpus_rendimiento": {
+   "fichero": "performance_corpus_v0_2.json",
+   "version": "0.2",
+   "conteos": {
+    "proyectos": 2,
+    "entidades": 24,
+    "items": 550,
+    "recuerdos": 500,
+    "decisiones": 50,
+    "mensajes": 5000,
+    "documentos": 120,
+    "relaciones": 180
+   },
+   "distribucion_observada": {
+    "conteos_reales": {
+     "items": 550,
+     "recuerdos": 500,
+     "decisiones": 50,
+     "mensajes": 5000,
+     "documentos": 120,
+     "relaciones": 180,
+     "entidades": 24,
+     "proyectos": 2,
+     "proyectos_referenciados": 2
+    },
+    "longitud_texto": {
+     "n": 6194,
+     "media": 86.66,
+     "mediana": 82.0,
+     "p95": 169,
+     "desviacion": 43.55,
+     "minimo": 24,
+     "maximo": 220,
+     "longitudes_distintas": 186
+    },
+    "vocabulario": {
+     "tokens_informativos": 55219,
+     "tamano": 236,
+     "frecuencia_maxima": 1408,
+     "frecuencia_relativa_maxima": 0.0255,
+     "token_mas_frecuente": "junto",
+     "pendiente_zipf": -0.7957,
+     "diez_mas_frecuentes": [
+      {
+       "token": "junto",
+       "frecuencia": 1408
+      },
+      {
+       "token": "telar",
+       "frecuencia": 1083
+      },
+      {
+       "token": "nebulosa",
+       "frecuencia": 1009
+      },
+      {
+       "token": "arrecife",
+       "frecuencia": 914
+      },
+      {
+       "token": "glaciar",
+       "frecuencia": 882
+      },
+      {
+       "token": "bruma",
+       "frecuencia": 870
+      },
+      {
+       "token": "granizo",
+       "frecuencia": 855
+      },
+      {
+       "token": "basalto",
+       "frecuencia": 832
+      },
+      {
+       "token": "cielo",
+       "frecuencia": 820
+      },
+      {
+       "token": "taller",
+       "frecuencia": 806
+      }
+     ]
+    },
+    "textos": {
+     "total": 6194,
+     "distintos": 6194,
+     "proporcion_distintos": 1.0
+    },
+    "fechas": {
+     "distintas": 457,
+     "meses_distintos": 15,
+     "minima": "2025-03-01",
+     "maxima": "2026-05-31"
+    },
+    "reparto_por_proyecto": {
+     "PRJ-ARRECIFE": 0.5351,
+     "PRJ-CUMBRE": 0.4649
+    },
+    "reparto_por_eje": {
+     "confirmacion": {
+      "CANDIDATA": 0.1927,
+      "CONFIRMADA": 0.6164,
+      "RECHAZADA": 0.12,
+      "SUPRIMIDA": 0.0709
+     },
+     "validez": {
+      "INVALIDADA": 0.1018,
+      "SIN_SOPORTE": 0.0818,
+      "SUSTITUIDA": 0.1564,
+      "VIGENTE": 0.66
+     },
+     "disponibilidad": {
+      "ARCHIVADA": 0.1236,
+      "DISPONIBLE": 0.7345,
+      "ELIMINADA": 0.0582,
+      "NO_GUARDADA": 0.0309,
+      "PURGADA": 0.0527
+     },
+     "sensibilidad": {
+      "ORDINARIA": 0.82,
+      "RESTRINGIDA": 0.18
+     },
+     "polaridad": {
+      "AFIRMATIVA": 0.7964,
+      "NEGATIVA": 0.2036
+     },
+     "condicion_presente": {
+      "False": 0.8164,
+      "True": 0.1836
+     },
+     "temporalidad_cerrada": {
+      "False": 0.7127,
+      "True": 0.2873
+     }
+    },
+    "proporciones": {
+     "items_con_entidades": 0.3655,
+     "items_con_procedencia": 0.4091,
+     "items_con_criticidad": 0.22,
+     "entidades_con_alias": 0.3333
+    },
+    "relaciones": {
+     "tipos": {
+      "APOYA": 30,
+      "CONFLICTO_CON": 30,
+      "CORRIGE": 30,
+      "DERIVA_DE": 30,
+      "REFUTA": 30,
+      "SUSTITUYE_A": 30
+     },
+     "tipos_distintos": 6,
+     "densidad_por_item": 0.3273
+    }
+   }
+  },
+  "casos": {
+   "fichero": "cases_v0_3.json",
+   "conteos": {
+    "nivel_1_b04": 50,
+    "nivel_1_pdp": 2,
+    "nivel_2": 5,
+    "nivel_3": 7,
+    "ramas_canonicas": 19
+   }
+  },
+  "referencias": {
+   "fichero": "references_v0_3.json",
+   "conteos": {
+    "referencias_nivel_1": 50,
+    "referencias_con_ramas": 8,
+    "referencias_con_cierre_exhaustivo": 1
+   }
+  },
+  "casos_pdp": {
+   "fichero": "pdp_cases_v0_2.json",
+   "conteos": {
+    "pdp_ca_totales": 28,
+    "casos_funcionales_nivel_1": 2,
+    "reglas_de_protocolo_del_arnes": 6,
+    "casos_fuera_de_alcance": 20
+   }
+  },
+  "reglas_de_arnes": {
+   "fichero": "pdp_harness_rules_v0_1.json",
+   "conteos": {
+    "reglas": 6
+   }
+  },
+  "proyeccion_t0": {
+   "fichero": "t0_preexecution_projection_v0_1.json",
+   "estado": "NO_NORMATIVO_NO_CONGELABLE",
+   "normativo": false,
+   "congelable": false,
+   "conteos": {
+    "casos_funcionales_proyectados": 52,
+    "reglas_de_arnes_proyectadas": 0,
+    "casos_no_proyectados": 12
+   }
+  }
+ },
+ "relacion_entre_corpus": {
+  "regla": "Los dos corpus son INDEPENDIENTES. Comparten versión de contrato, semilla y vocabulario de estados. El de conformidad adjudica comportamiento sobre 94 anclajes; el de rendimiento mide magnitudes sobre 5.550 elementos sintéticos y no reproduce los anclajes byte a byte.",
+  "prohibicion": "Prohibido fijar cifras de rendimiento sobre el corpus de conformidad y prohibido adjudicar conformidad sobre el corpus de rendimiento.",
+  "contaminacion": "El léxico del corpus de rendimiento es disjunto del léxico protegido del corpus de conformidad por token exacto, singular/plural o sufijo, raíz común de 6 caracteres, nombre o alias de entidad y n-grama."
+ },
+ "artefactos_anteriores_conservados": [
+  "corpus_v0_1.json",
+  "cases_v0_1.json",
+  "references_v0_1.json",
+  "conformance_corpus_v0_2.json",
+  "performance_corpus_v0_1.json",
+  "cases_v0_2.json",
+  "references_v0_2.json",
+  "pdp_cases_v0_1.json",
+  "benchmark_manifest_v0_2.json"
+ ],
+ "hallazgos_de_auditoria_cerrados": {
+  "B-01": "Tablas DOCX seleccionadas por cabecera e identidad, con invariantes de contenido y Anexo B bidireccional. Cero o varias candidatas es un fallo.",
+  "B-02": "Corpus de rendimiento sintético no degenerado: 5.000 mensajes, 500 recuerdos, 50 decisiones, 2 proyectos reales y distribuciones publicadas.",
+  "B-03": "Cierre EXHAUSTIVO de CA-47 rederivado del corpus y verificado por cálculo.",
+  "B-04": "Solo PDP-CA-09 y PDP-CA-22 son casos funcionales; los seis de disciplina son reglas de protocolo del arnés."
+ },
+ "hallazgos_no_tratados_en_esta_ronda": {
+  "ADR002-TOL-207": "Presupuesto absoluto de almacenamiento: no se aprueba ni se modifica. Su cálculo depende de medir sobre este corpus de rendimiento, y T0 no se ha ejecutado."
+ }
+}

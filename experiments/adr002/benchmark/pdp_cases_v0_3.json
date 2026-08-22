@@ -1,0 +1,604 @@
+{
+ "documento": "Casos transversales del Plan de Pruebas y su clasificación en ADR-002",
+ "version": "0.3",
+ "version_contrato": "0.4",
+ "estado": "PROPUESTO_NO_CONGELADO",
+ "fuente": "Plan de Pruebas + RED/PDP v1.0 APROBADO · §9 y Anexo B",
+ "advertencia": "ADR-002 NO cubre los 304 casos del Plan completo (276 heredados + 28 transversales). Aquí se clasifican los 28 PDP-CA en tres clases disjuntas y se justifica la exclusión del resto.",
+ "clases": {
+  "CASO_FUNCIONAL_NIVEL_1": "Anclado por una fila del Anexo B que cita un caso B04-CA o una métrica B04-M. Lleva ficha completa del PDP §7 y consulta funcional.",
+  "REGLA_DE_PROTOCOLO_DEL_ARNES": "Disciplina de congelación importada por un artefacto aprobado de ADR-002. No es una consulta funcional y no recibe previsión frente a T0.",
+  "FUERA_DE_ALCANCE": "Ninguna fila del Anexo B que lo asigna cita B04 y ADR-002 no importa su regla."
+ },
+ "conteos": {
+  "pdp_ca_totales": 28,
+  "casos_funcionales_nivel_1": 2,
+  "reglas_de_protocolo_del_arnes": 6,
+  "casos_fuera_de_alcance": 20
+ },
+ "casos_funcionales_nivel_1": {
+  "PDP-CA-09": {
+   "criterio": "ANEXO_B_RED_CON_CASO_O_METRICA_DE_B04",
+   "red": [
+    "RED-017"
+   ],
+   "metricas": [
+    "B04-M16"
+   ],
+   "metricas_externas": [
+    "B08-M25"
+   ],
+   "familias": [
+    "F22"
+   ],
+   "casos_b04": [
+    "B04-CA-39"
+   ]
+  },
+  "PDP-CA-22": {
+   "criterio": "ANEXO_B_RED_CON_CASO_O_METRICA_DE_B04",
+   "red": [
+    "RED-017"
+   ],
+   "metricas": [
+    "B04-M16"
+   ],
+   "metricas_externas": [
+    "B08-M25"
+   ],
+   "familias": [
+    "F22"
+   ],
+   "casos_b04": [
+    "B04-CA-39"
+   ]
+  }
+ },
+ "reglas_de_protocolo_del_arnes": {
+  "PDP-CA-02": {
+   "criterio": "DISCIPLINA_DE_CONGELACION_IMPORTADA_POR_ADR002",
+   "regla_que_lo_importa": "Registro de Tolerancias v0.4 §9 regla 1 y Especificación de benchmark §3 principio 2",
+   "artefacto": "pdp_harness_rules_v0_1.json"
+  },
+  "PDP-CA-03": {
+   "criterio": "DISCIPLINA_DE_CONGELACION_IMPORTADA_POR_ADR002",
+   "regla_que_lo_importa": "Protocolo de medición v0.1 §6.5, §6.6 y prohibición 8",
+   "artefacto": "pdp_harness_rules_v0_1.json"
+  },
+  "PDP-CA-06": {
+   "criterio": "DISCIPLINA_DE_CONGELACION_IMPORTADA_POR_ADR002",
+   "regla_que_lo_importa": "ADR002-TOL-210 · punto de congelación antes de la primera ejecución",
+   "artefacto": "pdp_harness_rules_v0_1.json"
+  },
+  "PDP-CA-16": {
+   "criterio": "DISCIPLINA_DE_CONGELACION_IMPORTADA_POR_ADR002",
+   "regla_que_lo_importa": "Protocolo de medición v0.1 §7 · registro obligatorio",
+   "artefacto": "pdp_harness_rules_v0_1.json"
+  },
+  "PDP-CA-17": {
+   "criterio": "DISCIPLINA_DE_CONGELACION_IMPORTADA_POR_ADR002",
+   "regla_que_lo_importa": "Registro de Tolerancias v0.4 §9 reglas 1 y 10",
+   "artefacto": "pdp_harness_rules_v0_1.json"
+  },
+  "PDP-CA-18": {
+   "criterio": "DISCIPLINA_DE_CONGELACION_IMPORTADA_POR_ADR002",
+   "regla_que_lo_importa": "ADR002-TOL-107 · salida NO EVALUABLE permanece en el denominador",
+   "artefacto": "pdp_harness_rules_v0_1.json"
+  }
+ },
+ "casos_fuera_de_alcance": {
+  "PDP-CA-01": {
+   "entrada_adversarial": "Fila RED omitida",
+   "resultado_esperado": "M29 falla y el Plan queda incompleto.",
+   "red_que_lo_asigna": [],
+   "familias": [],
+   "responsable": [
+    "PDP · Plan de Pruebas completo"
+   ],
+   "motivo": "Ninguna fila RED del Anexo B asigna este PDP-CA."
+  },
+  "PDP-CA-04": {
+   "entrada_adversarial": "Familia difícil excluida",
+   "resultado_esperado": "Mínimo por familia y puerta de corpus fallan.",
+   "red_que_lo_asigna": [
+    "RED-001",
+    "RED-065"
+   ],
+   "familias": [
+    "F01",
+    "F02",
+    "F03",
+    "F04",
+    "F05",
+    "F06",
+    "F07",
+    "F08",
+    "F09",
+    "F10",
+    "F11",
+    "F12",
+    "F13",
+    "F14",
+    "F15",
+    "F16",
+    "F17",
+    "F18",
+    "F19",
+    "F20",
+    "F21",
+    "F22",
+    "F23",
+    "F24",
+    "F25"
+   ],
+   "responsable": [
+    "ADR-001",
+    "ADR-002",
+    "ADR-003A",
+    "ADR-003B",
+    "ADR-003C",
+    "ADR-004",
+    "ARQ-00",
+    "PDP"
+   ],
+   "motivo": "Ninguna fila del Anexo B que lo asigna cita un caso B04-CA ni una métrica B04-M, y ADR-002 no importa su regla. No se afirma cobertura.",
+   "nota_responsable": "El responsable procede del destino de FAMILIA en ARQ-00 §20 (responsable_de_familia); no equivale a ejecutor_del_caso. Este PDP-CA queda fuera del alcance ejecutado por ADR-002."
+  },
+  "PDP-CA-05": {
+   "entrada_adversarial": "Promedio alto con una fuga",
+   "resultado_esperado": "La puerta absoluta falla.",
+   "red_que_lo_asigna": [
+    "RED-006"
+   ],
+   "familias": [],
+   "responsable": [
+    "PDP · Plan de Pruebas completo"
+   ],
+   "motivo": "Ninguna fila del Anexo B que lo asigna cita un caso B04-CA ni una métrica B04-M, y ADR-002 no importa su regla. No se afirma cobertura."
+  },
+  "PDP-CA-07": {
+   "entrada_adversarial": "Desacuerdo crítico sin resolución",
+   "resultado_esperado": "Caso abierto y no superado.",
+   "red_que_lo_asigna": [
+    "RED-003"
+   ],
+   "familias": [],
+   "responsable": [
+    "PDP · Plan de Pruebas completo"
+   ],
+   "motivo": "Ninguna fila del Anexo B que lo asigna cita un caso B04-CA ni una métrica B04-M, y ADR-002 no importa su regla. No se afirma cobertura."
+  },
+  "PDP-CA-08": {
+   "entrada_adversarial": "Arnés defectuoso documentado",
+   "resultado_esperado": "Se repite conservando ambas ejecuciones.",
+   "red_que_lo_asigna": [],
+   "familias": [],
+   "responsable": [
+    "PDP · Plan de Pruebas completo"
+   ],
+   "motivo": "Ninguna fila RED del Anexo B asigna este PDP-CA."
+  },
+  "PDP-CA-10": {
+   "entrada_adversarial": "Campo crítico no preservado en exportación",
+   "resultado_esperado": "Portabilidad falla aunque el archivo sea legible.",
+   "red_que_lo_asigna": [],
+   "familias": [],
+   "responsable": [
+    "PDP · Plan de Pruebas completo"
+   ],
+   "motivo": "Ninguna fila RED del Anexo B asigna este PDP-CA."
+  },
+  "PDP-CA-11": {
+   "entrada_adversarial": "Puerta fallida compensada por promedio",
+   "resultado_esperado": "Cierre bloqueado.",
+   "red_que_lo_asigna": [
+    "RED-006"
+   ],
+   "familias": [],
+   "responsable": [
+    "PDP · Plan de Pruebas completo"
+   ],
+   "motivo": "Ninguna fila del Anexo B que lo asigna cita un caso B04-CA ni una métrica B04-M, y ADR-002 no importa su regla. No se afirma cobertura."
+  },
+  "PDP-CA-12": {
+   "entrada_adversarial": "Fuente obligatoria no verificada",
+   "resultado_esperado": "Candidato no elegible.",
+   "red_que_lo_asigna": [
+    "RED-063"
+   ],
+   "familias": [],
+   "responsable": [
+    "PDP · Plan de Pruebas completo"
+   ],
+   "motivo": "Ninguna fila del Anexo B que lo asigna cita un caso B04-CA ni una métrica B04-M, y ADR-002 no importa su regla. No se afirma cobertura."
+  },
+  "PDP-CA-13": {
+   "entrada_adversarial": "Borrado no demostrable en un soporte",
+   "resultado_esperado": "Operación y salida bloqueadas.",
+   "red_que_lo_asigna": [],
+   "familias": [],
+   "responsable": [
+    "PDP · Plan de Pruebas completo"
+   ],
+   "motivo": "Ninguna fila RED del Anexo B asigna este PDP-CA."
+  },
+  "PDP-CA-14": {
+   "entrada_adversarial": "Carga excede presupuesto",
+   "resultado_esperado": "Puerta de experiencia falla.",
+   "red_que_lo_asigna": [
+    "RED-019"
+   ],
+   "familias": [
+    "F16"
+   ],
+   "responsable": [
+    "ADR-003C"
+   ],
+   "motivo": "Ninguna fila del Anexo B que lo asigna cita un caso B04-CA ni una métrica B04-M, y ADR-002 no importa su regla. No se afirma cobertura."
+  },
+  "PDP-CA-15": {
+   "entrada_adversarial": "Métrica sin denominador externo",
+   "resultado_esperado": "Métrica no adjudicable y cierre bloqueado.",
+   "red_que_lo_asigna": [
+    "RED-072"
+   ],
+   "familias": [],
+   "responsable": [
+    "PDP · Plan de Pruebas completo"
+   ],
+   "motivo": "Ninguna fila del Anexo B que lo asigna cita un caso B04-CA ni una métrica B04-M, y ADR-002 no importa su regla. No se afirma cobertura."
+  },
+  "PDP-CA-19": {
+   "entrada_adversarial": "Nueva decisión canónica tras pruebas",
+   "resultado_esperado": "Regresión dirigida y nueva versión de candidato.",
+   "red_que_lo_asigna": [
+    "RED-005"
+   ],
+   "familias": [
+    "F24"
+   ],
+   "responsable": [
+    "ADR-004",
+    "PDP"
+   ],
+   "motivo": "Ninguna fila del Anexo B que lo asigna cita un caso B04-CA ni una métrica B04-M, y ADR-002 no importa su regla. No se afirma cobertura."
+  },
+  "PDP-CA-20": {
+   "entrada_adversarial": "Solicitud de aprobación condicional",
+   "resultado_esperado": "Acta rechazada; no existe dispensa.",
+   "red_que_lo_asigna": [
+    "RED-006",
+    "RED-061",
+    "RED-070"
+   ],
+   "familias": [],
+   "responsable": [
+    "PDP · Plan de Pruebas completo"
+   ],
+   "motivo": "Ninguna fila del Anexo B que lo asigna cita un caso B04-CA ni una métrica B04-M, y ADR-002 no importa su regla. No se afirma cobertura."
+  },
+  "PDP-CA-21": {
+   "entrada_adversarial": "Una delegación B08 no entra en RED",
+   "resultado_esperado": "PDP-M01/M02 fallan; el denominador no puede congelarse.",
+   "red_que_lo_asigna": [
+    "RED-073"
+   ],
+   "familias": [],
+   "responsable": [
+    "PDP · Plan de Pruebas completo"
+   ],
+   "motivo": "Ninguna fila del Anexo B que lo asigna cita un caso B04-CA ni una métrica B04-M, y ADR-002 no importa su regla. No se afirma cobertura."
+  },
+  "PDP-CA-23": {
+   "entrada_adversarial": "Segunda revisión ve primer veredicto o comparte contexto",
+   "resultado_esperado": "No es independiente; el caso crítico permanece abierto.",
+   "red_que_lo_asigna": [
+    "RED-003",
+    "RED-074"
+   ],
+   "familias": [],
+   "responsable": [
+    "PDP · Plan de Pruebas completo"
+   ],
+   "motivo": "Ninguna fila del Anexo B que lo asigna cita un caso B04-CA ni una métrica B04-M, y ADR-002 no importa su regla. No se afirma cobertura."
+  },
+  "PDP-CA-24": {
+   "entrada_adversarial": "M15/M16 se ejecutan sin ventana, denominador o control prefijados",
+   "resultado_esperado": "La métrica longitudinal es inválida y no aporta cierre.",
+   "red_que_lo_asigna": [
+    "RED-023",
+    "RED-024"
+   ],
+   "familias": [
+    "F17",
+    "F25"
+   ],
+   "responsable": [
+    "ADR-001",
+    "ADR-003B",
+    "ADR-004",
+    "PDP"
+   ],
+   "motivo": "Ninguna fila del Anexo B que lo asigna cita un caso B04-CA ni una métrica B04-M, y ADR-002 no importa su regla. No se afirma cobertura."
+  },
+  "PDP-CA-25": {
+   "entrada_adversarial": "Sirius 0.1 no puede ejecutarse en condiciones equivalentes",
+   "resultado_esperado": "Se registra NO EJECUTABLE PROPUESTO; sin corrección canónica aprobada de B01, M13/F25 permanece abierto y no se imputa puntuación.",
+   "red_que_lo_asigna": [
+    "RED-024",
+    "RED-042"
+   ],
+   "familias": [
+    "F17",
+    "F25"
+   ],
+   "responsable": [
+    "ADR-001",
+    "ADR-003B",
+    "ADR-004",
+    "PDP"
+   ],
+   "motivo": "Ninguna fila del Anexo B que lo asigna cita un caso B04-CA ni una métrica B04-M, y ADR-002 no importa su regla. No se afirma cobertura."
+  },
+  "PDP-CA-26": {
+   "entrada_adversarial": "Cambio no relacionado intenta invalidar todo el banco",
+   "resultado_esperado": "Solo se repite el impacto demostrado; evidencia no afectada se conserva.",
+   "red_que_lo_asigna": [
+    "RED-068"
+   ],
+   "familias": [
+    "F24"
+   ],
+   "responsable": [
+    "ADR-004",
+    "PDP"
+   ],
+   "motivo": "Ninguna fila del Anexo B que lo asigna cita un caso B04-CA ni una métrica B04-M, y ADR-002 no importa su regla. No se afirma cobertura."
+  },
+  "PDP-CA-27": {
+   "entrada_adversarial": "Banco contiene solo casos adversariales y omite uso ordinario",
+   "resultado_esperado": "Cobertura de familia incompleta; no puede cerrar.",
+   "red_que_lo_asigna": [
+    "RED-001",
+    "RED-065"
+   ],
+   "familias": [
+    "F01",
+    "F02",
+    "F03",
+    "F04",
+    "F05",
+    "F06",
+    "F07",
+    "F08",
+    "F09",
+    "F10",
+    "F11",
+    "F12",
+    "F13",
+    "F14",
+    "F15",
+    "F16",
+    "F17",
+    "F18",
+    "F19",
+    "F20",
+    "F21",
+    "F22",
+    "F23",
+    "F24",
+    "F25"
+   ],
+   "responsable": [
+    "ADR-001",
+    "ADR-002",
+    "ADR-003A",
+    "ADR-003B",
+    "ADR-003C",
+    "ADR-004",
+    "ARQ-00",
+    "PDP"
+   ],
+   "motivo": "Ninguna fila del Anexo B que lo asigna cita un caso B04-CA ni una métrica B04-M, y ADR-002 no importa su regla. No se afirma cobertura.",
+   "nota_responsable": "El responsable procede del destino de FAMILIA en ARQ-00 §20 (responsable_de_familia); no equivale a ejecutor_del_caso. Este PDP-CA queda fuera del alcance ejecutado por ADR-002."
+  },
+  "PDP-CA-28": {
+   "entrada_adversarial": "Fila RED en estado ABIERTA",
+   "resultado_esperado": "Permanece en el denominador y bloquea el cierre.",
+   "red_que_lo_asigna": [
+    "RED-073"
+   ],
+   "familias": [],
+   "responsable": [
+    "PDP · Plan de Pruebas completo"
+   ],
+   "motivo": "Ninguna fila del Anexo B que lo asigna cita un caso B04-CA ni una métrica B04-M, y ADR-002 no importa su regla. No se afirma cobertura."
+  }
+ },
+ "familias_pdp": {
+  "advertencia": "No existe una sola cifra de «cobertura de familias de ADR-002». Se reportan cuatro denominadores distintos, cada uno con su fuente, y no se agregan.",
+  "1_destino_directo_adr002_arq00_20": {
+   "fuente": "ARQ-00 v1.0 APROBADO §20",
+   "familias": [
+    "F01",
+    "F02",
+    "F03",
+    "F10",
+    "F15",
+    "F22",
+    "F23"
+   ],
+   "de": 25
+  },
+  "2_entradas_obligatorias_declaradas": {
+   "fuente": "SIRIUS_0.2_ADR_002_RECUPERACION_RANKING_INDICES_v0.3_ABIERTO.md §2",
+   "familias": [
+    "F01",
+    "F02",
+    "F03",
+    "F04",
+    "F05",
+    "F06",
+    "F10",
+    "F11",
+    "F14",
+    "F15",
+    "F22",
+    "F23",
+    "F24"
+   ],
+   "de": 25
+  },
+  "3_tocadas_por_casos_sin_atribuir_cierre": {
+   "fuente": "Matriz/corpus ADR-002 v0.3 PROPUESTO",
+   "familias": [
+    "F01",
+    "F02",
+    "F03",
+    "F04",
+    "F05",
+    "F06",
+    "F07",
+    "F08",
+    "F09",
+    "F10",
+    "F11",
+    "F12",
+    "F13",
+    "F14",
+    "F15",
+    "F21",
+    "F22",
+    "F23",
+    "F24",
+    "F25"
+   ],
+   "de": 25,
+   "nota": "Que un caso canónico toque una familia no cierra esa familia ni la atribuye a ADR-002. El mínimo canónico por familia del PDP §8 exige ejecutar todos sus casos asignados del banco de 304."
+  },
+  "4_fuera_de_alcance_de_adr002": {
+   "fuente": "ARQ-00 v1.0 APROBADO §20",
+   "familias": [
+    "F04",
+    "F05",
+    "F06",
+    "F07",
+    "F08",
+    "F09",
+    "F11",
+    "F12",
+    "F13",
+    "F14",
+    "F16",
+    "F17",
+    "F18",
+    "F19",
+    "F20",
+    "F21",
+    "F24",
+    "F25"
+   ],
+   "de": 25,
+   "responsables": {
+    "F04": [
+     "ADR-001"
+    ],
+    "F05": [
+     "ADR-003A",
+     "ADR-003C"
+    ],
+    "F06": [
+     "ADR-001",
+     "ADR-003B"
+    ],
+    "F07": [
+     "ADR-001"
+    ],
+    "F08": [
+     "ADR-001"
+    ],
+    "F09": [
+     "ADR-001",
+     "ADR-003B"
+    ],
+    "F11": [
+     "ADR-003B",
+     "ADR-004",
+     "PDP"
+    ],
+    "F12": [
+     "ADR-003A",
+     "ADR-004"
+    ],
+    "F13": [
+     "ADR-001",
+     "ADR-004"
+    ],
+    "F14": [
+     "ADR-003B",
+     "PDP"
+    ],
+    "F16": [
+     "ADR-003C"
+    ],
+    "F17": [
+     "ADR-001",
+     "ADR-003B"
+    ],
+    "F18": [
+     "ADR-001"
+    ],
+    "F19": [
+     "ADR-003A",
+     "ADR-003B",
+     "ADR-004",
+     "PDP"
+    ],
+    "F20": [
+     "ADR-004"
+    ],
+    "F21": [
+     "ARQ-00",
+     "ADR-004",
+     "PDP"
+    ],
+    "F24": [
+     "PDP",
+     "ADR-004"
+    ],
+    "F25": [
+     "PDP",
+     "ADR-004"
+    ]
+   }
+  }
+ },
+ "cobertura_minima_por_familia": {
+  "F01": "Recuperación y paquete útil sin historia irrelevante.",
+  "F02": "Cómo estaba el mundo o proyecto en T.",
+  "F03": "Qué sabía Sirius en T, excluyendo registros posteriores.",
+  "F04": "Cronologías, versiones, sustituciones y comparación entre momentos.",
+  "F05": "Confirmar, editar, aplazar, rechazar, suprimir y presión masiva.",
+  "F06": "Autoridad por dominio, lados incompatibles, parcialidad y escalado.",
+  "F07": "Identidad longitudinal sin fusiones falsas.",
+  "F08": "Aislamiento, relaciones y prohibición de ampliar ámbito.",
+  "F09": "No tratar futuro o sin fecha como actual.",
+  "F10": "Pluralidad, contradicción, fuente inaccesible y pérdida de soporte.",
+  "F11": "Pares con y sin contenido protegido o proyecto sensible.",
+  "F12": "Restricciones retrospectivas y prospectivas.",
+  "F13": "Contenido, derivados, relaciones, eventos y no reconstruibilidad.",
+  "F14": "Objetivo, duro, críticos primero, PARCIAL y conteos seguros.",
+  "F15": "Sesgo posicional, proximidad, negación, condición y conflicto.",
+  "F16": "Una interrupción por unidad y agrupación de aclaraciones.",
+  "F17": "Reanudación tras inactividad, cambio de conversación o fase.",
+  "F18": "Estados explícitos, conflictos y propuestas efímeras.",
+  "F19": "Matriz de 14 operaciones, reversión, bloqueo y fallo.",
+  "F20": "Portabilidad, autoridad, diferencias e instrucciones incrustadas.",
+  "F21": "Autorización, retirada, retención y no reconstruibilidad.",
+  "F22": "Implementaciones y consumidores independientes.",
+  "F23": "Fuente inaccesible, evidencia insuficiente y estados seguros.",
+  "F24": "Cambios materiales, defecto de arnés y conservación de ejecuciones.",
+  "F25": "Control congelado si es ejecutable. Si no lo es, se registra NO EJECUTABLE PROPUESTO y la obligación solo puede cambiar mediante corrección canónica aprobada de B01; permanecen obligatorios el control sin memoria y todas las puertas absolutas."
+ },
+ "hereda_de": "pdp_cases_v0_2.json"
+}

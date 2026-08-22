@@ -1,0 +1,105 @@
+{
+  "documento": "Ficha de control de falsacion T0-control para ADR-002, version 1",
+  "version_esquema": "ficha-candidato-0.2",
+  "estado": "CONGELADA",
+  "plantilla": "SIRIUS_0.2_ADR_002_FICHA_CANDIDATO_TEMPLATE_v0.4_PROPUESTO.md",
+  "registro": "SIRIUS_0.2_REGISTRO_TOLERANCIAS_v0.5_PROPUESTO.md",
+  "protocolo": "SIRIUS_0.2_ADR_002_PROTOCOLO_MEDICION_v0.2_PROPUESTO.md",
+  "actas_de_puerta": [
+    "SIRIUS_0.2_ADR_002_TOL_207_APROBACION_v1.0.md",
+    "SIRIUS_0.2_ADR_002_TOL_209_APROBACION_v1.0.md",
+    "SIRIUS_0.2_ADR_002_TOL_210_APROBACION_v1.0.md",
+    "SIRIUS_0.2_ADR_002_TOL_210_ACTO_SUCESOR_01_EXENCION_T0_v1.0.md"
+  ],
+  "identidad": {
+    "candidato": "T0-control",
+    "papel": "CONTROL_DE_FALSACION",
+    "version": 1,
+    "sustituye_a": null,
+    "motivo_de_sustitucion": null
+  },
+  "congelacion": {
+    "commit_de_referencia": "c881fce697009d294121c5b99d23ba6af5b8b173",
+    "huella": "d47a767e61b30729e15f48c9924413f6fddc9429",
+    "ruta": "artifacts/adr002_cards/ficha_T0-control_v1.json"
+  },
+  "arquitectura_de_control": {
+    "sustrato_lexico": "FTS5 medido de Sirius 0.1 (tabla items_fts con unicode61 y remove_diacritics 2), sin alternativa ni indice adicional",
+    "materializacion_de_relaciones": "las del canon de Sirius 0.1 tal como estan: sin indice relacional derivado ni senal tardia adicional",
+    "puerto_de_acceso": "KnowledgeSearchRepository de Sirius 0.1 via build_sqlite_knowledge_search_repository y RankRelevantKnowledgeUseCase, los originales medidos",
+    "incumplimientos_conocidos": {
+      "RF-06": "aislamiento de ambito no implementado: la busqueda no aisla por proyecto; medido e inventariado por la Resolucion de la particion §3",
+      "RF-14": "barrido completo prohibido presente: rank() recorre todos los candidatos del indice; es la razon de ser del control de falsacion",
+      "RF-19": "validacion explicita de sujeto, polaridad, condicion y tiempo no implementada; medido e inventariado por la Resolucion de la particion §3"
+    }
+  },
+  "corpus": {
+    "version": "v0.4 congelada (performance_corpus_v0_2.json, version interna 0.2)",
+    "mensajes": 5000,
+    "recuerdos": 500,
+    "decisiones": 50,
+    "proyectos": 2,
+    "longitud_media_y_distribucion": "las declaradas por los metadatos congelados del propio corpus (escala_declarada y reparto_declarado); no se regeneran",
+    "commit": "d27352b9f03dfc6a4d939b855474ce0ad1c2fc86",
+    "head_de_esquema": "61be4bb269bf",
+    "t0_rederivada_sobre_este_corpus": false,
+    "referencia_de_la_rederivacion": "no existe aun: esta ficha ampara precisamente la rederivacion de los pasos 2 y 3 de ADR002-TOL-208, que exige esta ficha congelada antes"
+  },
+  "protocolo_aplicado": {
+    "protocolo": "SIRIUS_0.2_ADR_002_PROTOCOLO_MEDICION_v0.2_PROPUESTO.md",
+    "desviaciones": "ninguna",
+    "entorno": "LAB-LINUX: contenedor Linux del repositorio, carga no controlada y declarada como tal; mismo entorno de las mediciones previas de ADR-002",
+    "semilla": "20260726, la congelada en los metadatos del corpus v0.4; la ejecucion del control no introduce aleatoriedad adicional",
+    "repeticiones_por_magnitud": 100
+  },
+  "escenario_de_control": {
+    "fuente_del_plan": "SIRIUS_0.2_ADR_002_PAQUETE_TRABAJO_10_TOL208_REDERIVACION_T0_v0.1.md",
+    "escenarios": [
+      "cero_resultados",
+      "un_resultado_exacto",
+      "muchos_candidatos"
+    ],
+    "capas": [
+      "solo_indice_fts5",
+      "recuperacion_completa_rank"
+    ],
+    "magnitudes": 6
+  },
+  "estabilidad": {
+    "sesiones_previstas": 11,
+    "sm_ns": 17405,
+    "u50_ns": 2685,
+    "regimen_p50": "relativo <= 20 % por encima de U50; B50(M) por debajo; sin afirmacion de latencia bajo SM",
+    "regimen_p95": "absoluto contra B95(M) en todo el rango cubierto; NO_EVALUABLE bajo SM o por encima de la mayor escala medida",
+    "sin_umbral_relativo_para_p95": true,
+    "consulta_de_banda": "M es el minimo entre sesiones del mismo percentil que se evalua",
+    "repeticion_unica_y_no_evaluable": "si un control ambiental invalida la corrida se aplica una unica repeticion autorizada por el protocolo; si sigue invalida, NO_EVALUABLE"
+  },
+  "presupuesto_aplicable": {
+    "presupuesto_absoluto_b": 1610612736,
+    "nota": "presupuesto por candidato del acta de TOL-207, citado como referencia del entorno; el control no compite por la puerta 7 y su consumo se conocera al medir, nunca antes"
+  },
+  "exenciones_de_control": {
+    "limitada_a": "T0-control",
+    "alternativa_minima_y_senal_tardia": "T0 no representa ninguna alternativa minima de ARQ-00 §23 ni declara senal tardia: es la linea base medida de Sirius 0.1 y la Resolucion de la particion §3 lo declara control de falsacion, no candidato",
+    "etapas_e0_e5": "T0 no implementa E0-E5 (Resolucion de la particion §3): no hay etapas cuyas transiciones o condiciones de insuficiencia declarar",
+    "limites_locales_por_etapa": "sin etapas E0-E5 no existe decision alguna que congele limites locales por etapa para T0, y fijarlos ahora seria inventarlos",
+    "limites_extremo_a_extremo": "el Registro declara que T0 no es un presupuesto heredable y que ningun candidato se descarta por superar el tiempo de T0: un P95/P99 propio de T0 no existe ni debe existir",
+    "consumo_de_almacenamiento_previo": "declarar el consumo de T0 seria una medicion de T0, que exige el acta de autorizacion expresa e independiente, no esta ficha",
+    "limites_del_ciclo_de_indice": "T0 no anade ningun indice adicional al FTS5 medido: no existe decision que congele limites de ciclo de indice para la linea base"
+  },
+  "huella_candidato": {
+    "commit_del_prototipo": "c881fce697009d294121c5b99d23ba6af5b8b173",
+    "hash_del_arbol_de_fuentes": "arbol Git 6d8558ef1fe4994cb15a12967525bf3496b3c0b8 de src/sirius en el commit del prototipo; sin cambios desde el commit auditado del corpus v0.4",
+    "migraciones_o_ddl": "cadena canonica de Alembic hasta 61be4bb269bf (head), sin cambios ni DDL adicional",
+    "artefactos_y_su_hash": "ninguno generado por adelantado: la base de datos del control se construye en cada sesion desde el corpus congelado (blob 4e9e2746e49b158a43eda7826b47c78c41b36e90) y se destruye al terminar",
+    "reproduccion": "uv run python -m experiments.adr002.rederivation.run_rederivation --check; la ejecucion real exige ademas el acta de autorizacion SIRIUS_0.2_ADR_002_TOL_208_AUTORIZACION_T0_v1.0.md"
+  },
+  "declaracion_de_congelacion": {
+    "texto": "Declaro que los valores de esta ficha se han fijado antes de la primera ejecucion de este control, que no proceden de ningun resultado observado del propio control sobre el corpus congelado, y que cualquier modificacion posterior obligara a nueva version de ficha y a repetir las ejecuciones ya realizadas.",
+    "responsable": "Usuario / Proyecto Sirius («Apruebo y autorizo»)",
+    "fecha": "2026-07-31",
+    "valores_anteriores_a_la_primera_ejecucion": true
+  },
+  "no_contiene_resultados": true
+}

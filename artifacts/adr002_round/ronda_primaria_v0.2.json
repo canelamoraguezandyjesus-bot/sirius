@@ -1,0 +1,389 @@
+{
+ "documento": "Ronda primaria de ADR-002 sobre los cinco participantes",
+ "version_esquema": "ronda-primaria-adr002-0.1",
+ "estado": "EVIDENCIA",
+ "protocolo": "SIRIUS_0.2_ADR_002_PROTOCOLO_MEDICION_v0.2_PROPUESTO.md",
+ "especificacion": "SIRIUS_0.2_ADR_002_ESPECIFICACION_BENCHMARK_v0.3_PROPUESTO.md",
+ "acta_de_autorizacion": "SIRIUS_0.2_ADR_002_AUTORIZACION_RONDA_PRIMARIA_v1.0.md",
+ "head_en_ejecucion": "ca7e9e9e1e920c754d926e285f4cca43b7735775",
+ "sustrato": {
+  "fichero": "entrada.sqlite3",
+  "origen": "experiments/adr002/benchmark/conformance_corpus_v0_6.json",
+  "nota": "los cinco miden sobre el MISMO fichero; el corpus de rendimiento no puede alojar a los candidatos y su escala queda fuera de esta ronda"
+ },
+ "plan": {
+  "participantes": [
+   "T0-control",
+   "ADR002-A",
+   "ADR002-B",
+   "ADR002-C",
+   "ADR002-D"
+  ],
+  "sesiones": 11,
+  "repeticiones": 100,
+  "warmup_descartado": 10,
+  "semilla": "20260726",
+  "reloj": "time.perf_counter_ns",
+  "casos_por_repeticion": 50,
+  "orden": "intercalado y rotado por (sesion + repeticion) mod 5"
+ },
+ "fichas_vigentes": {
+  "T0-control": {
+   "version": 1,
+   "huella": "d47a767e61b30729e15f48c9924413f6fddc9429"
+  },
+  "ADR002-A": {
+   "version": 6,
+   "huella": "d305073ce5bb21a07e8523969752a9f06a966d01"
+  },
+  "ADR002-B": {
+   "version": 8,
+   "huella": "b7ea269da379fc0de324efa5ca2da7baa616d112"
+  },
+  "ADR002-C": {
+   "version": 3,
+   "huella": "ef71f944536ffc07dd18b39278ba43da2776232c"
+  },
+  "ADR002-D": {
+   "version": 3,
+   "huella": "5ca687f88a7d194a922ca39eb32778c0ab02608c"
+  }
+ },
+ "conformidad": {
+  "T0-control": {
+   "casos_adjudicados": 47,
+   "casos_no_adjudicables": 3,
+   "puertas": {
+    "contaminacion_cero": false,
+    "fuga_de_ambito_cero": false,
+    "confusion_de_polaridad_cero": false,
+    "conformidad_de_etapa": false,
+    "borrado_y_regeneracion": true
+   },
+   "pasa_las_puertas": false,
+   "descartado_por_fallo_duro": true,
+   "contaminacion_total": 16,
+   "fuga_de_ambito_total": 1289,
+   "confusion_de_polaridad_total": 2480,
+   "polaridad_mal_leida_total": 0,
+   "casos_con_etapa_conforme": 0,
+   "casos_con_etapa_puntuable": 46,
+   "casos_con_resultado_exacto": 1,
+   "casos_con_orden_exacto": 1,
+   "casos_con_orden_declarado": 19,
+   "casos_con_ausencia_correcta": 0,
+   "criticos_pendientes_total": 21,
+   "explicaciones_completas": 0,
+   "resultados_totales": 2192
+  },
+  "ADR002-A": {
+   "casos_adjudicados": 47,
+   "casos_no_adjudicables": 3,
+   "puertas": {
+    "contaminacion_cero": false,
+    "fuga_de_ambito_cero": true,
+    "confusion_de_polaridad_cero": true,
+    "conformidad_de_etapa": false,
+    "borrado_y_regeneracion": true
+   },
+   "pasa_las_puertas": false,
+   "descartado_por_fallo_duro": true,
+   "contaminacion_total": 3,
+   "fuga_de_ambito_total": 0,
+   "confusion_de_polaridad_total": 0,
+   "polaridad_mal_leida_total": 0,
+   "casos_con_etapa_conforme": 32,
+   "casos_con_etapa_puntuable": 46,
+   "casos_con_resultado_exacto": 23,
+   "casos_con_orden_exacto": 11,
+   "casos_con_orden_declarado": 19,
+   "casos_con_ausencia_correcta": 35,
+   "criticos_pendientes_total": 16,
+   "explicaciones_completas": 149,
+   "resultados_totales": 149
+  },
+  "ADR002-B": {
+   "casos_adjudicados": 47,
+   "casos_no_adjudicables": 3,
+   "puertas": {
+    "contaminacion_cero": false,
+    "fuga_de_ambito_cero": true,
+    "confusion_de_polaridad_cero": true,
+    "conformidad_de_etapa": false,
+    "borrado_y_regeneracion": true
+   },
+   "pasa_las_puertas": false,
+   "descartado_por_fallo_duro": true,
+   "contaminacion_total": 3,
+   "fuga_de_ambito_total": 0,
+   "confusion_de_polaridad_total": 0,
+   "polaridad_mal_leida_total": 0,
+   "casos_con_etapa_conforme": 30,
+   "casos_con_etapa_puntuable": 46,
+   "casos_con_resultado_exacto": 21,
+   "casos_con_orden_exacto": 10,
+   "casos_con_orden_declarado": 19,
+   "casos_con_ausencia_correcta": 35,
+   "criticos_pendientes_total": 16,
+   "explicaciones_completas": 152,
+   "resultados_totales": 152
+  },
+  "ADR002-C": {
+   "casos_adjudicados": 47,
+   "casos_no_adjudicables": 3,
+   "puertas": {
+    "contaminacion_cero": false,
+    "fuga_de_ambito_cero": true,
+    "confusion_de_polaridad_cero": true,
+    "conformidad_de_etapa": false,
+    "borrado_y_regeneracion": true
+   },
+   "pasa_las_puertas": false,
+   "descartado_por_fallo_duro": true,
+   "contaminacion_total": 3,
+   "fuga_de_ambito_total": 0,
+   "confusion_de_polaridad_total": 0,
+   "polaridad_mal_leida_total": 0,
+   "casos_con_etapa_conforme": 32,
+   "casos_con_etapa_puntuable": 46,
+   "casos_con_resultado_exacto": 23,
+   "casos_con_orden_exacto": 11,
+   "casos_con_orden_declarado": 19,
+   "casos_con_ausencia_correcta": 35,
+   "criticos_pendientes_total": 16,
+   "explicaciones_completas": 149,
+   "resultados_totales": 149
+  },
+  "ADR002-D": {
+   "casos_adjudicados": 47,
+   "casos_no_adjudicables": 3,
+   "puertas": {
+    "contaminacion_cero": false,
+    "fuga_de_ambito_cero": true,
+    "confusion_de_polaridad_cero": true,
+    "conformidad_de_etapa": false,
+    "borrado_y_regeneracion": true
+   },
+   "pasa_las_puertas": false,
+   "descartado_por_fallo_duro": true,
+   "contaminacion_total": 3,
+   "fuga_de_ambito_total": 0,
+   "confusion_de_polaridad_total": 0,
+   "polaridad_mal_leida_total": 0,
+   "casos_con_etapa_conforme": 30,
+   "casos_con_etapa_puntuable": 46,
+   "casos_con_resultado_exacto": 21,
+   "casos_con_orden_exacto": 10,
+   "casos_con_orden_declarado": 19,
+   "casos_con_ausencia_correcta": 35,
+   "criticos_pendientes_total": 16,
+   "explicaciones_completas": 151,
+   "resultados_totales": 151
+  }
+ },
+ "rendimiento": {
+  "T0-control": {
+   "p50_por_sesion_ns": [
+    1705326433,
+    1591863875,
+    1616785507,
+    1584691895,
+    1621791852,
+    1558309904,
+    1689992554,
+    1540013894,
+    1667984660,
+    1615576866,
+    1576565602
+   ],
+   "p95_por_sesion_ns": [
+    2224536609,
+    1978376531,
+    1955349234,
+    1855095389,
+    1929415615,
+    1883680682,
+    2005068133,
+    1746014788,
+    1975155126,
+    1831263538,
+    1802859309
+   ],
+   "min_p50_ns": 1540013894,
+   "max_p50_ns": 1705326433,
+   "min_p95_ns": 1746014788,
+   "max_p95_ns": 2224536609,
+   "min_ns": 1392813346,
+   "max_ns": 3256285770,
+   "n": 1100
+  },
+  "ADR002-A": {
+   "p50_por_sesion_ns": [
+    261490828,
+    237179635,
+    227526002,
+    229445870,
+    235587958,
+    221513827,
+    241274362,
+    228363469,
+    238323714,
+    233280516,
+    225213479
+   ],
+   "p95_por_sesion_ns": [
+    371978912,
+    387343246,
+    383223297,
+    361441225,
+    350670064,
+    358897154,
+    364192328,
+    374504382,
+    368327910,
+    377219442,
+    357791877
+   ],
+   "min_p50_ns": 221513827,
+   "max_p50_ns": 261490828,
+   "min_p95_ns": 350670064,
+   "max_p95_ns": 387343246,
+   "min_ns": 73578402,
+   "max_ns": 1162996600,
+   "n": 1100
+  },
+  "ADR002-B": {
+   "p50_por_sesion_ns": [
+    290276914,
+    261932464,
+    250307319,
+    252322016,
+    255468937,
+    250403021,
+    267225921,
+    248717420,
+    261531851,
+    246001802,
+    241075874
+   ],
+   "p95_por_sesion_ns": [
+    395524498,
+    409993465,
+    418984309,
+    389339552,
+    377166414,
+    381141248,
+    395983432,
+    399232036,
+    403631344,
+    409095559,
+    386641808
+   ],
+   "min_p50_ns": 241075874,
+   "max_p50_ns": 290276914,
+   "min_p95_ns": 377166414,
+   "max_p95_ns": 418984309,
+   "min_ns": 88474829,
+   "max_ns": 858627734,
+   "n": 1100
+  },
+  "ADR002-C": {
+   "p50_por_sesion_ns": [
+    258977979,
+    232306132,
+    226157121,
+    230288215,
+    231128730,
+    222573448,
+    244723415,
+    228425397,
+    229867910,
+    223177429,
+    224323245
+   ],
+   "p95_por_sesion_ns": [
+    357418053,
+    374415610,
+    369368799,
+    365226518,
+    349388190,
+    353332201,
+    358209784,
+    365781551,
+    368538556,
+    371090800,
+    360709830
+   ],
+   "min_p50_ns": 222573448,
+   "max_p50_ns": 258977979,
+   "min_p95_ns": 349388190,
+   "max_p95_ns": 374415610,
+   "min_ns": 72856855,
+   "max_ns": 706333011,
+   "n": 1100
+  },
+  "ADR002-D": {
+   "p50_por_sesion_ns": [
+    293324164,
+    254380416,
+    252456256,
+    243589721,
+    242383789,
+    244427999,
+    263918307,
+    238758721,
+    249535604,
+    234734516,
+    249201324
+   ],
+   "p95_por_sesion_ns": [
+    377291708,
+    419753744,
+    384877591,
+    391461085,
+    363579371,
+    382510441,
+    388424129,
+    387389002,
+    394401511,
+    390545828,
+    375969673
+   ],
+   "min_p50_ns": 234734516,
+   "max_p50_ns": 293324164,
+   "min_p95_ns": 363579371,
+   "max_p95_ns": 419753744,
+   "min_ns": 86698284,
+   "max_ns": 730729294,
+   "n": 1100
+  }
+ },
+ "no_adjudicables": {
+  "B04-CA-37": "RED-032 sin congelar: las tolerancias de texto, estado, conteo y tiempo de RF-26 no existen todavia (especificacion v0.3 §12 incertidumbre 1)",
+  "B04-CA-39": "RED-033 sin congelar: la clase de equivalencia de orden no existe todavia (especificacion v0.3 §12 incertidumbre 1)",
+  "B04-CA-48": "RED-032 sin congelar: las tolerancias de texto, estado, conteo y tiempo de RF-26 no existen todavia (especificacion v0.3 §12 incertidumbre 1)"
+ },
+ "instanciaciones_contradictorias": {
+  "B04-CA-14": "declara resolverse en E0, que no expande, y a la vez espera resultados; su metrica de etapa no puntua para nadie"
+ },
+ "desviaciones": [
+  "el permiso NO_AUTORIZADO se traduce como proposito vacio, que es el unico punto del contrato comun donde la falta de autorizacion tiene efecto (E0)",
+  "un caso declara su tiempo objetivo como intervalo; VentanaTemporal sostiene un instante, y se toma el extremo final del intervalo",
+  "los casos que no declaran limite reciben un limite que no ata, igual para los cinco participantes: el tamano del canon",
+  "espacios_autorizados queda en su valor por defecto para todos los casos y todos los participantes: los casos no instancian que espacios autoriza cada modo"
+ ],
+ "repeticion_unica_6_8_ejercitada": false,
+ "controles_internos": {
+  "autorizacion_expresa_presente": true,
+  "familia_de_conformidad_intacta": true,
+  "corpus_congelado_intacto": true,
+  "perfil_y_suelo_congelados": true,
+  "capa_comun_neutral": true,
+  "ronda_sin_reduccion": true,
+  "once_sesiones_completas": true,
+  "los_cinco_sobre_el_mismo_fichero": true,
+  "warmup_declarado_y_descartado": true,
+  "percentiles_por_rango_mas_cercano": true
+ },
+ "no_elige": "esta ronda produce evidencia; elegir alternativa es un acto posterior y separado del usuario, y este artefacto no lo hace"
+}

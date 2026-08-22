@@ -1,0 +1,103 @@
+{
+ "documento": "Caso discriminante relacional de ADR-002 (nivel 4)",
+ "version_esquema": "discriminante-relacional-adr002-0.1",
+ "estado": "EVIDENCIA",
+ "caso": "N4-01",
+ "identificador": "ADR002-DISC-REL-01",
+ "nivel": 4,
+ "proposito": "falsar la suficiencia de una expansion exclusivamente lexica-estructurada ante una dependencia explicita entre dos sujetos sin solapamiento lexico",
+ "por_que_se_publica_aparte": "la ronda primaria ejecutaba solo el nivel 1, de modo que las corridas v0.1 y v0.2 midieron la aportacion de la senal relacional sin ejecutar el unico caso construido para que esa senal importe. Sus cifras no cambian; lo que cambia es lo que puede concluirse de ellas",
+ "no_mide": [
+  "latencia",
+  "memoria",
+  "almacenamiento",
+  "calidad comparada entre candidatos"
+ ],
+ "consulta": "calibrado del rotor",
+ "arista": "REL-010",
+ "oraculo": {
+  "alcance_lexico_estructurado": [
+   "MEMORIA:950"
+  ],
+  "aportado_por_un_salto_relacional": [
+   "MEMORIA:951"
+  ],
+  "consulta_propia_del_destino": "bitacora municipal"
+ },
+ "veredictos": [
+  {
+   "participante": "T0-control",
+   "obtenido": [
+    "MEMORIA:112",
+    "DECISION:3",
+    "MEMORIA:107",
+    "MEMORIA:108",
+    "MEMORIA:109",
+    "MEMORIA:110",
+    "MEMORIA:111",
+    "MEMORIA:950",
+    "DECISION:16",
+    "MEMORIA:101",
+    "MEMORIA:102",
+    "MEMORIA:103",
+    "MEMORIA:104",
+    "MEMORIA:105",
+    "MEMORIA:106",
+    "MEMORIA:10",
+    "MEMORIA:11",
+    "MEMORIA:18",
+    "MEMORIA:23",
+    "MEMORIA:25",
+    "MEMORIA:26",
+    "MEMORIA:27"
+   ],
+   "alcanza_el_lexico": true,
+   "alcanza_por_arista": false,
+   "etapa_de_aporte": null,
+   "falsa_la_suficiencia_lexica": false
+  },
+  {
+   "participante": "ADR002-A",
+   "obtenido": [
+    "MEMORIA:950"
+   ],
+   "alcanza_el_lexico": true,
+   "alcanza_por_arista": false,
+   "etapa_de_aporte": null,
+   "falsa_la_suficiencia_lexica": false
+  },
+  {
+   "participante": "ADR002-B",
+   "obtenido": [
+    "MEMORIA:950"
+   ],
+   "alcanza_el_lexico": true,
+   "alcanza_por_arista": false,
+   "etapa_de_aporte": null,
+   "falsa_la_suficiencia_lexica": false
+  },
+  {
+   "participante": "ADR002-C",
+   "obtenido": [
+    "MEMORIA:950",
+    "MEMORIA:951"
+   ],
+   "alcanza_el_lexico": true,
+   "alcanza_por_arista": true,
+   "etapa_de_aporte": "E3",
+   "falsa_la_suficiencia_lexica": true
+  },
+  {
+   "participante": "ADR002-D",
+   "obtenido": [
+    "MEMORIA:950",
+    "MEMORIA:951"
+   ],
+   "alcanza_el_lexico": true,
+   "alcanza_por_arista": true,
+   "etapa_de_aporte": "E3",
+   "falsa_la_suficiencia_lexica": true
+  }
+ ],
+ "no_elige": "este caso no elige alternativa: responde si la expansion lexica basta, y para quien no basta"
+}
