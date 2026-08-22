@@ -492,7 +492,14 @@ activación ni la supervisión de la vía GitHub.
 - **Riesgo principal**: tocar el carril del Auditor «de paso»; mitigación: prohibido en
   el bloque; cualquier mejora del carril (p. ej. las de la PR #171) es una PR aparte.
 - **Automatizable**: sí.
-- **Decisión humana previa**: ninguna.
+- **Decisión humana previa**: **SÍ — enmienda del contrato (v1.9)**. Corregido el
+  2026-08-22: este bloque declaraba «ninguna» y era inexacto. El contrato §12.1 (v1.8)
+  autoriza al motor a aplicar `sirius:implement-requested` y **nombra esa etiqueta y
+  ninguna otra**; el carril del Auditor usa `auditoria:solicitada`, fuera del espacio
+  `sirius:*` por ADR-016. Bajo la v1.8 el motor puede preparar una auditoría entera y no
+  darle la salida. La v1.9 lo resuelve con una §12.4 que generaliza §12.1 a una tabla
+  cerrada de clase → etiqueta, sin relajar la condición de orden enlazada. **C4 no se
+  puede implementar antes de que esa enmienda esté fusionada.**
 
 **HITO M3**: vertical funcional completa — los 16 puntos de #172 §6 cubiertos (la
 interfaz v0 es CLI/sesión; Telegram queda como D3). **Criterio de cierre explícito**: M3

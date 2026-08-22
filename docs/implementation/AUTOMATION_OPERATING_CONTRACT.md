@@ -1,10 +1,10 @@
 # SIRIUS - Contrato operativo de automatización
 
-- **Versión:** 1.8
-- **Fecha:** 21 de agosto de 2026
-- **Estado:** VIGENTE (§4, §5, §9, §11 y §12 actualizadas; ver §10.3 a §10.8)
+- **Versión:** 1.9
+- **Fecha:** 22 de agosto de 2026
+- **Estado:** VIGENTE (§4, §5, §9, §11 y §12 actualizadas; ver §10.3 a §10.9)
 - **Autoridad:** Operativa para el desarrollo automatizado de Sirius 0.1
-- **Sustituye:** versión 1.7 del 19 de agosto de 2026
+- **Sustituye:** versión 1.8 del 21 de agosto de 2026
 - **No modifica:** Producto, Arquitectura Técnica, ATD, requisitos ni alcance de Sirius 0.1
 
 ## 0. Propósito
@@ -601,7 +601,17 @@ desde fuera. Y no repara ese estado: avisa a una persona. Ver ADR-004.
 - **Mantiene:** la prohibición de iniciativa —la máquina no decide qué trabajo existe— y la de vigilancia periódica como motor para todo lo que no sea el motor sobre sus propios Runs.
 - **Entrada en vigor:** cuando la PR que introduce §12 sea revisada, tenga CI verde y sea fusionada por autorización explícita del usuario.
 
-El historial de las versiones 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 y 1.7 permanece disponible en Git y no se reescribe retrospectivamente.
+### 10.9 Versión 1.9 — la etiqueta de activación depende de la clase despachada
+
+- **Decisión:** generalizar §12.1 mediante una nueva §12.4: el motor puede aplicar la etiqueta de activación **que corresponde a la clase del WorkItem que despacha**, tomada de una **tabla cerrada** de dos filas (`programacion` → `sirius:implement-requested`; `auditoria` → `auditoria:solicitada`). La condición de §12.1 —orden explícita del propietario, registrada y enlazada en la evidencia— **no se relaja ni se reescribe**.
+- **Motivo:** §12.1 nombró una etiqueta concreta porque, cuando se escribió, `programacion` era la única clase despachable. Esa redacción bloquea el bloque C4 (Auditor como perfil del motor), cuyo carril usa `auditoria:solicitada` fuera del espacio `sirius:*` por decisión de ADR-016. Sin esta enmienda el motor puede preparar una auditoría entera y no darle la salida — el cuello de botella exacto que §12.1 eliminó para programación.
+- **Por qué es una generalización y no una autorización nueva:** el argumento de §12.1 no dependía de la etiqueta, sino del gesto: «solo cambia quién teclea la etiqueta, no quién decide». Ese razonamiento es idéntico para una auditoría pedida por el propietario.
+- **Defecto de planificación que la motiva:** el plan del Work Engine (ADR-020) anticipó **dos** enmiendas —v1.7 (E1a) y v1.8 (E1b)— y declara para C4 «Decisión humana previa: ninguna». Es inexacto: C4 no se puede implementar bajo la v1.8. El plan se corrige en la misma PR que esta enmienda.
+- **Alcance:** solo §12. **No toca** §8 (el merge sigue siendo del propietario), ni §9.1 (el vigilante periódico sigue sin poder aplicar ninguna de las dos etiquetas), ni §5, ni §11, ni ningún workflow, ni la superficie del Auditor.
+- **Mantiene:** la prohibición de iniciativa; la tabla cerrada (una clase que no esté en ella no se despacha); ADR-016 (el Auditor se lanza por etiqueta y no escribe nunca) y ADR-010 (los hallazgos no se convierten en trabajo por su cuenta).
+- **Entrada en vigor:** cuando la PR que introduce §12.4 sea revisada, tenga CI verde y sea fusionada por autorización explícita del propietario.
+
+El historial de las versiones 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7 y 1.8 permanece disponible en Git y no se reescribe retrospectivamente.
 
 
 ## 11. Autoridad por clase de trabajo
@@ -741,3 +751,48 @@ Se dice explícitamente para que nadie lo deduzca al revés:
 - **§11, la autoridad por clase.** Sin cambios.
 - **La prohibición de vigilancia periódica como motor** sigue vigente para todo
   lo que no sea el motor supervisando sus propios Runs.
+
+### 12.4 La etiqueta que el motor aplica depende de la clase que despacha
+
+§12.1 autorizó al motor a aplicar `sirius:implement-requested`, y nombró esa
+etiqueta y ninguna otra. Fue correcto: cuando se escribió, la única clase que el
+motor sabía despachar era `programacion`.
+
+Esa redacción **bloquea la clase auditoría**, cuyo carril usa una etiqueta
+distinta a propósito —`auditoria:solicitada`, fuera del espacio `sirius:*`,
+como fija ADR-016—. Sin esta enmienda, el motor podría preparar una auditoría
+entera y no podría darle la salida, que es exactamente el cuello de botella que
+§12.1 vino a eliminar para programación.
+
+El motor **puede** aplicar la etiqueta de activación **que corresponde a la
+clase del WorkItem que despacha**, tomada de esta tabla cerrada:
+
+| Clase del WorkItem | Etiqueta de activación que el motor puede aplicar |
+|---|---|
+| `programacion` | `sirius:implement-requested` |
+| `auditoria` | `auditoria:solicitada` |
+
+Con la **misma condición sin excepción de §12.1**, que no se relaja ni se
+reescribe: solo si existe una orden explícita del propietario, registrada y
+enlazada en la evidencia de ese WorkItem.
+
+**Por qué esto es una generalización y no una autorización nueva.** El argumento
+de §12.1 no dependía de qué etiqueta era: *«esta enmienda solo cambia quién
+teclea la etiqueta, no quién decide»*. Ese razonamiento es idéntico para una
+auditoría pedida por el propietario. Lo que cambia es el carril, no la
+naturaleza del gesto.
+
+**Qué sigue prohibido, y es lo que la tabla protege:**
+
+- **La tabla es cerrada.** Una clase que no esté en ella no se despacha: el
+  motor se detiene con la clase no despachable, como hace hoy. Añadir una fila
+  es una enmienda de este contrato, no una decisión de implementación.
+- **El carril del Auditor no se toca.** El motor aplica la etiqueta y nada más.
+  No modifica `audit-sirius-repository.yml`, no escribe en el informe, no altera
+  la superficie que ADR-016 fijó. El Auditor sigue lanzándose por etiqueta y sin
+  escribir nunca.
+- **Los hallazgos no se convierten en trabajo.** ADR-010 sigue entero: cada
+  hallazgo puede originar una orden **del propietario**, y el motor no la
+  inventa. Despachar una auditoría no autoriza a despachar sus consecuencias.
+- **§9.1 sigue sin poder aplicar ninguna de las dos.** La autorización es del
+  motor, no del vigilante periódico, igual que en §12.1.
