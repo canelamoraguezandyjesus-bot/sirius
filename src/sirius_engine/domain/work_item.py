@@ -187,9 +187,31 @@ class WorkItem:
         return replace(self, fase=WorkItemPhase.ENTREGAR, updated_at=now)
 
     def request_repair(self, *, now: datetime) -> WorkItem:
-        """``REVISAR -> REPARAR`` (revisión ``CHANGES_REQUIRED``, arquitectura §3.4)."""
+        """``REVISAR -> REPARAR`` o ``COMPROBAR -> REPARAR``.
+
+        Dos entradas, porque el ciclo real tiene dos y el motor tiene que poder
+        representar las dos:
+
+        - Desde **REVISAR**, cuando la revisión pide cambios (arquitectura §3.4).
+        - Desde **COMPROBAR**, cuando las validaciones objetivas fallan. Es lo que
+          hace la vía GitHub en cada CI roja: `advance-sirius-after-quality.yml`
+          pasa de `sirius:ci-pending` a `sirius:repair-requested` sin pasar por
+          revisión, porque no hay nada que revisar de un cambio que no compila.
+
+        La segunda faltaba, y su ausencia no era teórica: el motor tenía que
+        elegir entre inventar una fase REVISAR que nunca ocurrió o quedarse en
+        COMPROBAR mientras la incidencia decía REPARAR. Lo encontró el diseño del
+        verificador de proyección (incidencia #250, hallazgo H-D): las dos
+        máquinas de estados no eran el mismo grafo, y esa arista era una de las
+        dos que faltaban.
+
+        `resume_after_repair` devuelve a COMPROBAR, así que el bucle cierra igual
+        por las dos entradas: reparar y volver a comprobar.
+        """
         self._require(frozenset({WorkItemState.ACTIVE}), "request_repair")
-        self._require_phase(frozenset({WorkItemPhase.REVISAR}), "request_repair")
+        self._require_phase(
+            frozenset({WorkItemPhase.REVISAR, WorkItemPhase.COMPROBAR}), "request_repair"
+        )
         return replace(self, fase=WorkItemPhase.REPARAR, updated_at=now)
 
     def resume_after_repair(self, *, now: datetime) -> WorkItem:

@@ -254,7 +254,9 @@ LEGAL_FROM: dict[WorkItemState, frozenset[str]] = {
 LEGAL_PHASE_FROM: dict[WorkItemPhase, frozenset[str]] = {
     WorkItemPhase.PREPARAR: frozenset({"begin_execution"}),
     WorkItemPhase.EJECUTAR: frozenset({"begin_check"}),
-    WorkItemPhase.COMPROBAR: frozenset({"begin_review"}),
+    # Dos salidas: si las validaciones pasan se revisa; si fallan se repara sin
+    # pasar por revisión — lo que hace la vía GitHub en cada CI roja.
+    WorkItemPhase.COMPROBAR: frozenset({"begin_review", "request_repair"}),
     WorkItemPhase.REVISAR: frozenset({"approve_review", "request_repair"}),
     WorkItemPhase.REPARAR: frozenset({"resume_after_repair"}),
     WorkItemPhase.ENTREGAR: frozenset({"deliver"}),
@@ -734,3 +736,72 @@ def test_escalation_and_decision_to_cancel(
 
     resolved = store.resolve_work_item_decision(work_id, continuar=False, now=now)
     assert resolved.estado is WorkItemState.CANCELLED
+
+
+# ─────────── Las dos entradas a REPARAR: revisión y comprobación fallida ───────────
+
+
+def _en_fase(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, work_id: str, now: datetime
+) -> WorkItem:
+    """Un WorkItem ACTIVE en fase COMPROBAR, por el camino legal."""
+    make_work_item(now=now, work_id=work_id)
+    store.activate_work_item(work_id, now=now)
+    store.begin_work_item_execution(work_id, now=now)
+    return store.begin_work_item_check(work_id, now=now)
+
+
+def test_comprobar_puede_ir_a_reparar_sin_pasar_por_revisar(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, now: datetime
+) -> None:
+    """El camino de la CI roja, que el motor no podía representar.
+
+    `advance-sirius-after-quality.yml` pasa de `sirius:ci-pending` a
+    `sirius:repair-requested` cuando Quality falla: no hay nada que revisar de
+    un cambio que no compila. Sin esta arista el motor tenía que elegir entre
+    inventar una fase REVISAR que nunca ocurrió, o quedarse en COMPROBAR
+    mientras la incidencia decía REPARAR — una divergencia permanente entre las
+    dos fuentes (incidencia #250, hallazgo H-D).
+    """
+    en_comprobar = _en_fase(store, make_work_item, "WI-COMPROBAR", now)
+    assert en_comprobar.fase is WorkItemPhase.COMPROBAR
+
+    reparando = store.request_work_item_repair("WI-COMPROBAR", now=now)
+    assert reparando.fase is WorkItemPhase.REPARAR
+
+    # Y el bucle cierra igual por esta entrada que por la de revisión.
+    vuelta = store.resume_work_item_after_repair("WI-COMPROBAR", now=now)
+    assert vuelta.fase is WorkItemPhase.COMPROBAR
+
+
+def test_revisar_sigue_pudiendo_ir_a_reparar(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, now: datetime
+) -> None:
+    """No regresión: añadir una entrada no puede quitar la que ya existía."""
+    _en_fase(store, make_work_item, "WI-REVISAR", now)
+    en_revisar = store.begin_work_item_review("WI-REVISAR", now=now)
+    assert en_revisar.fase is WorkItemPhase.REVISAR
+    assert store.request_work_item_repair("WI-REVISAR", now=now).fase is WorkItemPhase.REPARAR
+
+
+def test_reparar_no_puede_entrar_otra_vez_en_reparar(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, now: datetime
+) -> None:
+    """Control negativo: la guarda sigue rechazando lo que no es una entrada."""
+    _en_fase(store, make_work_item, "WI-DOBLE", now)
+    store.request_work_item_repair("WI-DOBLE", now=now)
+    with pytest.raises(IllegalPhaseTransitionError):
+        store.request_work_item_repair("WI-DOBLE", now=now)
+
+
+def test_preparar_y_ejecutar_siguen_sin_poder_reparar(
+    store: WorkEngineStore, make_work_item: MakeWorkItem, now: datetime
+) -> None:
+    """Las otras dos fases que no son entrada legal a REPARAR."""
+    make_work_item(now=now, work_id="WI-PREPARAR")
+    store.activate_work_item("WI-PREPARAR", now=now)
+    with pytest.raises(IllegalPhaseTransitionError):
+        store.request_work_item_repair("WI-PREPARAR", now=now)
+    store.begin_work_item_execution("WI-PREPARAR", now=now)
+    with pytest.raises(IllegalPhaseTransitionError):
+        store.request_work_item_repair("WI-PREPARAR", now=now)
