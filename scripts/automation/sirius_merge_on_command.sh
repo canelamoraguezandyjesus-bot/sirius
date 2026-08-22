@@ -105,7 +105,7 @@ pr_number="${pr_numbers[0]}"
 
 # --- 4) Estado de la PR ---------------------------------------------------------
 pr_json="$(sirius_retry gh api "repos/${REPO}/pulls/${pr_number}" \
-  --jq '{state: .state, draft: .draft, merged: .merged, mergeable_state: .mergeable_state, head: .head.sha}')" || pr_json=""
+  --jq '{state: .state, draft: .draft, merged: .merged, mergeable_state: .mergeable_state, head: .head.sha, base: .base.ref}')" || pr_json=""
 if [ -z "$pr_json" ]; then
   block "No he podido leer el estado de la PR #${pr_number}."
   exit 1
@@ -120,6 +120,7 @@ pr_state="$(printf '%s' "$pr_json" | jq -r '.state')"
 pr_draft="$(printf '%s' "$pr_json" | jq -r '.draft')"
 current_head="$(printf '%s' "$pr_json" | jq -r '.head')"
 mergeable_state="$(printf '%s' "$pr_json" | jq -r '.mergeable_state')"
+base_ref="$(printf '%s' "$pr_json" | jq -r '.base')"
 
 if [ "$pr_state" != "open" ] || [ "$pr_draft" = "true" ]; then
   block "La PR #${pr_number} no esta abierta y lista (estado \`${pr_state}\`, borrador \`${pr_draft}\`)."
@@ -127,6 +128,25 @@ if [ "$pr_state" != "open" ] || [ "$pr_draft" = "true" ]; then
 fi
 if [ "$mergeable_state" = "dirty" ]; then
   block "La PR #${pr_number} tiene conflictos con la rama base; resuélvelos antes de volver a escribir \`fusiona\`."
+  exit 1
+fi
+
+# --- 4b) La rama tiene que estar al dia con la base ----------------------------
+# `mergeable_state` solo dice `dirty` cuando hay CONFLICTO de git. Una rama
+# atrasada sin conflicto sale `clean`, y entonces se fusionaria algo cuyo Quality
+# se calculo contra un `main` que ya no existe: verde contra su propia base y
+# rojo una vez juntas. Ya paso —`main` se puso roja tras una tanda de fusiones
+# porque dos ramas verdes por separado usaban campos incompatibles— y estuvo a
+# punto de repetirse tres veces el 22-08-2026 con numeros de ADR: ficheros de
+# nombre distinto, sin conflicto para git, y `main` con dos ADR del mismo numero.
+#
+# `compare` da la respuesta exacta: `behind_by` es cuantos commits de la base le
+# faltan a la rama. Cero o no se puede leer -> se sigue; leerlo mal no debe
+# bloquear una fusion legitima, pero un atraso conocido si.
+behind_by="$(sirius_retry gh api "repos/${REPO}/compare/${base_ref}...${current_head}" \
+  --jq '.behind_by')" || behind_by=""
+if [ -n "$behind_by" ] && [ "$behind_by" != "null" ] && [ "$behind_by" -gt 0 ] 2>/dev/null; then
+  block "La PR #${pr_number} esta ${behind_by} commit(s) por detras de \`${base_ref}\`. Su Quality se calculo contra una base que ya no existe, asi que el verde no dice nada sobre como quedaria \`${base_ref}\` al fusionar. Actualiza la rama (boton \"Update branch\"), espera a que Quality vuelva a pasar, y escribe \`fusiona\` otra vez."
   exit 1
 fi
 
