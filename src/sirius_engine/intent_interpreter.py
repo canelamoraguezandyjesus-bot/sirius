@@ -62,6 +62,71 @@ _VERBO_A_CLASE: dict[str, WorkItemClass] = {
 
 _VERBOS_IMPERATIVOS_SIN_CLASE = ("crea", "prepara", "genera", "responde")
 
+#: Qué queda autorizado a cambiar, por clase. Va a la sección "Alcance
+#: permitido" del cuerpo de la incidencia, que es la ÚNICA de las dos secciones
+#: derivadas que alguien obedece: al implementador se le ordena hacer solo lo
+#: que autorice y detenerse con ``BLOCKED_BY_DECISION`` si necesita salirse
+#: (``scripts/automation/prompts/implementer.md``). Antes iba ahí un eco literal
+#: de la orden -que ya está completa en "Objetivo", justo encima-: repetirla no
+#: acotaba nada. Estas frases acotan, y no dicen nada que la orden no diga: no
+#: describen QUÉ hay que hacer -eso es el objetivo- sino QUÉ TIPO de cambio
+#: queda autorizado, que se sigue de la clase y de nada más.
+_ALCANCE_POR_CLASE: dict[WorkItemClass, str] = {
+    WorkItemClass.PROGRAMACION: (
+        "El cambio en el código que pide el objetivo, con sus pruebas, y nada más."
+    ),
+    WorkItemClass.DOCUMENTACION: (
+        "El documento o el pasaje que pide el objetivo, y nada más. "
+        "Sin cambios de comportamiento en el código."
+    ),
+    WorkItemClass.INVESTIGACION: (
+        "Averiguar y escribir lo que pide el objetivo. "
+        "Sin cambios en el código ni en la configuración del proyecto."
+    ),
+    WorkItemClass.AUDITORIA: (
+        "Examinar y reportar lo que pide el objetivo. "
+        "Sin arreglar por el camino lo que se encuentre: un hallazgo se reporta, no se parchea."
+    ),
+    WorkItemClass.CONSULTA_LARGA: (
+        "Responder lo que pide el objetivo. Sin cambios en el árbol del repositorio."
+    ),
+}
+
+#: Qué comprobación declara el trabajo terminado, por clase. La arquitectura
+#: pide de este campo "qué comprobación lo declara terminado"; el v0 ponía una
+#: tautología -"el entregable existe y satisface la orden"- que ninguna
+#: comprobación puede falsar, que es justo la familia de defecto que ADR-001
+#: nombra: una garantía puesta donde no puede cumplirse.
+#:
+#: Estas frases NO inventan un criterio para cada orden -derivar eso del
+#: lenguaje natural necesita modelo, y este intérprete es un apaño (ADR-043)-.
+#: Citan la disciplina que ya rige en este repositorio para esa clase de
+#: trabajo. Citar una regla existente no es afirmar de más.
+_CRITERIO_POR_CLASE: dict[WorkItemClass, str] = {
+    WorkItemClass.PROGRAMACION: (
+        "Las validaciones obligatorias de esta incidencia, en verde, y al menos una prueba "
+        "que fije lo que el objetivo pide y que se haya visto FALLAR antes del cambio "
+        "(ADR-001). Si el objetivo describe un fallo concreto, esa prueba lo reproduce."
+    ),
+    WorkItemClass.DOCUMENTACION: (
+        "El texto existe en el árbol y cada afirmación comprobable que hace cita el fichero "
+        "y la línea que la sostiene (ADR-001). Lo que no quede demostrado se dice aparte."
+    ),
+    WorkItemClass.INVESTIGACION: (
+        "El resultado está escrito con el método y los datos que lo sostienen, y con un "
+        "apartado explícito de lo que NO queda demostrado (ADR-001)."
+    ),
+    WorkItemClass.AUDITORIA: (
+        "Cada hallazgo llega con su evidencia reproducible -fichero:línea o comprobación "
+        "ejecutable- y su gravedad. Lo que no tenga evidencia se declara como sospecha, "
+        "no como hallazgo (ADR-001)."
+    ),
+    WorkItemClass.CONSULTA_LARGA: (
+        "La respuesta existe y dice de dónde sale cada dato. Lo que no se haya podido "
+        "comprobar se dice, en vez de rellenarse (ADR-001)."
+    ),
+}
+
 _MARCADORES_DESTRUCTIVO = ("borra", "borrar", "elimina", "eliminar", "destruye", "resetea todo")
 _MARCADORES_GASTO = ("clave real", "usa una clave de pago", "aumenta el presupuesto", "gasta")
 _MARCADORES_CREDENCIALES = ("credencial", "clave api", "contraseña", "permiso de administrador")
@@ -141,11 +206,12 @@ def interpretar_intencion_v0(
             ),
         )
 
+    clase_efectiva = clase if clase is not None else WorkItemClass.CONSULTA_LARGA
     datos_trabajo = DatosNuevoTrabajo(
         objetivo=mensaje.strip(),
-        entregable=f"lo que pide la orden: {mensaje.strip()}",
-        criterio_terminado="el entregable descrito existe y satisface la orden original",
-        clase=clase if clase is not None else WorkItemClass.CONSULTA_LARGA,
+        entregable=_ALCANCE_POR_CLASE[clase_efectiva],
+        criterio_terminado=_CRITERIO_POR_CLASE[clase_efectiva],
+        clase=clase_efectiva,
         limites={"presupuesto": {"limite": limite_presupuesto}},
         contexto_origen=("sesion-cli",),
     )
