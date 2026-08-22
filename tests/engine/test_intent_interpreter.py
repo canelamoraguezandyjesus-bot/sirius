@@ -102,3 +102,58 @@ def test_limite_de_presupuesto_configurable() -> None:
     signal = interpretar_intencion_v0("implementa X", limite_presupuesto=42.0)
     assert signal.datos_trabajo is not None
     assert signal.datos_trabajo.limites["presupuesto"] == {"limite": 42.0}
+
+
+# --- Alcance y criterio derivados de la clase -------------------------------
+#
+# Antes, estos dos campos eran constantes: un eco literal de la orden y una
+# tautología ("el entregable existe y satisface la orden"). El eco iba a la
+# sección "Alcance permitido" del cuerpo de la incidencia -la única de las dos
+# que alguien obedece- sin acotar nada, y la tautología a una sección que
+# ninguna comprobación puede falsar.
+
+
+@pytest.mark.parametrize(
+    ("mensaje", "clase"),
+    [
+        ("implementa el despachador", WorkItemClass.PROGRAMACION),
+        ("documenta el flujo de escalado", WorkItemClass.DOCUMENTACION),
+        ("investiga el coste real", WorkItemClass.INVESTIGACION),
+        ("audita el ciclo de revision", WorkItemClass.AUDITORIA),
+        ("prepara un resumen", WorkItemClass.CONSULTA_LARGA),
+    ],
+)
+def test_el_alcance_y_el_criterio_dependen_de_la_clase(mensaje: str, clase: WorkItemClass) -> None:
+    datos = interpretar_intencion_v0(mensaje).datos_trabajo
+    assert datos is not None
+    assert datos.clase is clase
+    # No son constantes: cada clase acota una cosa distinta.
+    otras = {
+        interpretar_intencion_v0(otro).datos_trabajo.entregable  # type: ignore[union-attr]
+        for otro in ("implementa x", "documenta x", "investiga x", "audita x", "prepara x")
+    }
+    assert len(otras) == 5, "cinco clases deben dar cinco alcances distintos"
+
+
+def test_el_alcance_no_repite_la_orden_que_ya_esta_en_el_objetivo() -> None:
+    orden = "Corrige la cita rota al contrato en sirius_codex_review.py"
+    datos = interpretar_intencion_v0(orden).datos_trabajo
+    assert datos is not None
+    assert datos.objetivo == orden
+    assert orden not in datos.entregable, (
+        "el objetivo ya lleva la orden entera justo encima; repetirla en el "
+        "alcance no acota nada, que era el defecto"
+    )
+    assert "y nada mas" in datos.entregable.replace("á", "a"), (
+        "el alcance tiene que ACOTAR, no describir"
+    )
+
+
+def test_el_criterio_de_terminado_nombra_una_comprobacion_no_una_tautologia() -> None:
+    datos = interpretar_intencion_v0("implementa el despachador").datos_trabajo
+    assert datos is not None
+    assert "satisface la orden original" not in datos.criterio_terminado
+    # Para programación, la comprobación que este repositorio ya exige.
+    assert "validaciones obligatorias" in datos.criterio_terminado
+    assert "FALLAR" in datos.criterio_terminado
+    assert "ADR-001" in datos.criterio_terminado

@@ -41,6 +41,7 @@ class WorkEngineStore(Protocol):
         clase: WorkItemClass,
         now: datetime,
         plan: tuple[str, ...] = (),
+        evidencia: tuple[str, ...] = (),
     ) -> WorkItem:
         """Crear un WorkItem confirmado en ``PLANNED`` y registrarlo en el diario."""
         ...
@@ -59,6 +60,7 @@ class WorkEngineStore(Protocol):
         clase: WorkItemClass,
         now: datetime,
         plan: tuple[str, ...] = (),
+        evidencia: tuple[str, ...] = (),
     ) -> WorkItem:
         """Crear un WorkItem directamente en ``NEEDS_DECISION``, en una sola operación.
 

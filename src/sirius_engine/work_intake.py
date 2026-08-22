@@ -48,6 +48,7 @@ def aplicar_decision(
     peticion_original: str,
     now: datetime,
     notificar: NotificationPort | None = None,
+    evidencia: tuple[str, ...] = (),
 ) -> ResultadoIntake:
     """Aplicar la decisión de la puerta contra el almacén real.
 
@@ -57,6 +58,14 @@ def aplicar_decision(
     en una sola operación de almacén: nunca queda ``ACTIVE`` de forma
     visible para un despachador, ni siquiera momentáneamente entre dos
     llamadas.
+
+    ``evidencia`` viaja hasta el ``WorkItem`` creado porque es el único
+    momento en que se sabe de dónde vino la orden. El despachador C2 exige
+    que ahí conste la referencia a la orden del propietario
+    (:func:`~sirius_engine.domain.dispatch.orden_enlazada`) y se niega a
+    activar sin ella; antes de este parámetro ningún camino de producción
+    escribía ``evidencia``, así que esa guarda no podía satisfacerse desde
+    fuera de las pruebas (H-12).
     """
     if decision.resultado is ResultadoPuerta.NO_CREAR:
         return ResultadoIntake(work_item=None, autoridad=None, escalada=None)
@@ -78,6 +87,7 @@ def aplicar_decision(
             clase=datos.clase,
             now=now,
             plan=datos.plan,
+            evidencia=evidencia,
         )
         work_item = store.activate_work_item(work_id, now=now)
         return ResultadoIntake(work_item=work_item, autoridad=autoridad, escalada=None)
@@ -96,6 +106,7 @@ def aplicar_decision(
         clase=datos.clase,
         now=now,
         plan=datos.plan,
+        evidencia=evidencia,
     )
     escalada = construir_escalada(
         work_item, causa=decision.causa_escalado, motivo=decision.motivo, ocurrida_en=now

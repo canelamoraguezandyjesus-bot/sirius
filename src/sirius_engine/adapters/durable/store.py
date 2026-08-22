@@ -361,6 +361,7 @@ class DurableWorkEngineStore:
         clase: WorkItemClass,
         now: datetime,
         plan: tuple[str, ...] = (),
+        evidencia: tuple[str, ...] = (),
         idempotency_key: str | None = None,
     ) -> WorkItem:
         if idempotency_key is not None:
@@ -382,6 +383,7 @@ class DurableWorkEngineStore:
             clase=clase,
             now=now,
             plan=plan,
+            evidencia=evidencia,
         )
         return self._append_work_item(
             work_item, "work_item_created", now=now, idempotency_key=idempotency_key
@@ -401,6 +403,7 @@ class DurableWorkEngineStore:
         clase: WorkItemClass,
         now: datetime,
         plan: tuple[str, ...] = (),
+        evidencia: tuple[str, ...] = (),
         idempotency_key: str | None = None,
     ) -> WorkItem:
         if idempotency_key is not None:
@@ -423,6 +426,7 @@ class DurableWorkEngineStore:
                 clase=clase,
                 now=now,
                 plan=plan,
+                evidencia=evidencia,
             )
             .activate(now=now)
             .escalate(now=now)
