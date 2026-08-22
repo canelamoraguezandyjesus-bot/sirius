@@ -151,6 +151,39 @@ def test_los_sufijos_de_cita_se_recortan() -> None:
     )
 
 
+def test_una_cita_en_linea_con_segmentos_de_directorio_no_se_sale_del_repositorio() -> None:
+    """Sin resolver '..', `docs/../../etc/hostname` superaba el filtro de
+    prefijos intacto (empieza por `docs/`) y `(RAIZ / ruta).exists()` podía
+    consultar rutas fuera del árbol del repositorio."""
+    m = _module()
+    assert m.ruta_citada("docs/../../../../../../etc/hostname") is None
+
+
+def test_un_enlace_con_prefijo_de_raiz_y_segmentos_de_directorio_no_se_sale(
+    tmp_path: Path,
+) -> None:
+    m = _module()
+    documento = tmp_path / "doc.md"
+    assert m._ruta_de_enlace("docs/../../../../../../etc/hostname", documento) is None
+
+
+def test_un_enlace_absoluto_con_segmentos_de_directorio_no_se_sale(tmp_path: Path) -> None:
+    """La rama de enlace absoluto (con `/`) no tenía ninguna prueba dedicada."""
+    m = _module()
+    documento = tmp_path / "doc.md"
+    assert m._ruta_de_enlace("/docs/../../../../../../etc/hostname", documento) is None
+
+
+def test_un_enlace_absoluto_normal_resuelve_a_la_ruta_de_repositorio(tmp_path: Path) -> None:
+    """Caso positivo de la misma rama: sin '..', el enlace absoluto se acepta tal cual."""
+    m = _module()
+    documento = tmp_path / "doc.md"
+    assert (
+        m._ruta_de_enlace("/docs/decisions/ADR-001-el-metodo-de-evidencia.md", documento)
+        == "docs/decisions/ADR-001-el-metodo-de-evidencia.md"
+    )
+
+
 def test_un_enlace_vacio_se_detecta_de_verdad(tmp_path: Path) -> None:
     doc = _escribir(tmp_path, "# Título\n\nFalta el destino: [aqui]().\n")
     hallazgos = _module().comprobar_documento(doc)

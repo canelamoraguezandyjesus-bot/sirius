@@ -129,6 +129,21 @@ def _precedida_por_rama(texto: str, offset: int) -> bool:
     return "rama" in texto[inicio:offset].lower()
 
 
+def _contenida_en_raiz(ruta_relativa: str) -> str | None:
+    """`ruta_relativa` resuelta y comprobada dentro de RAIZ, o None si se sale.
+
+    Sin esto, una cita como `docs/../../../../etc/hostname` supera el filtro
+    de prefijos de RAICES_DEL_REPOSITORIO intacta (empieza por `docs/`) y
+    `(RAIZ / ruta).exists()` la resolvería fuera del árbol del repositorio,
+    consultando el sistema de ficheros del runner. Mismo patrón que ya usaba
+    la rama relativa-al-documento de `_ruta_de_enlace`.
+    """
+    try:
+        return str((RAIZ / ruta_relativa).resolve().relative_to(RAIZ))
+    except ValueError:
+        return None  # '..' se sale del repositorio: no se comprueba
+
+
 def ruta_citada(bruto: str) -> str | None:
     """La ruta del repositorio que hay en un `código en línea`, o None.
 
@@ -143,7 +158,7 @@ def ruta_citada(bruto: str) -> str | None:
     texto = texto.removeprefix("./")
     if not texto.startswith(RAICES_DEL_REPOSITORIO):
         return None
-    return texto
+    return _contenida_en_raiz(texto)
 
 
 def _ruta_de_enlace(objetivo: str, documento: Path) -> str | None:
@@ -164,9 +179,11 @@ def _ruta_de_enlace(objetivo: str, documento: Path) -> str | None:
     parte_ruta = parte_ruta.removeprefix("./")
     if parte_ruta.startswith("/"):
         candidato = parte_ruta.lstrip("/")
-        return candidato if candidato.startswith(RAICES_DEL_REPOSITORIO) else None
+        return (
+            _contenida_en_raiz(candidato) if candidato.startswith(RAICES_DEL_REPOSITORIO) else None
+        )
     if parte_ruta.startswith(RAICES_DEL_REPOSITORIO):
-        return parte_ruta
+        return _contenida_en_raiz(parte_ruta)
     try:
         absoluta = (documento.parent / parte_ruta).resolve()
         return str(absoluta.relative_to(RAIZ))
