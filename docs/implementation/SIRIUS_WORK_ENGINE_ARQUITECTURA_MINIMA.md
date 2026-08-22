@@ -194,6 +194,9 @@ Reglas:
 
 `PREPARAR → EJECUTAR → COMPROBAR → REVISAR → (REPARAR → COMPROBAR → REVISAR)* → ENTREGAR`
 
+con una arista más que el diagrama de una línea no recoge: **COMPROBAR → REPARAR**
+cuando las validaciones fallan (ver REPARAR, abajo).
+
 - **PREPARAR** [D+M]: reconstruir qué se pidió, contexto autorizado
   (`contexto.recuperar`), decisiones y restricciones aplicables, entregable, comprobaciones
   deterministas disponibles, perfil y Worker candidatos, permisos y presupuesto.
@@ -210,6 +213,14 @@ Reglas:
 - **REPARAR** [M]: las observaciones vuelven **al Worker**, no al propietario. El bucle
   continúa bajo la política de convergencia heredada (par pendientes/gravedad estrictamente
   descendente contra la mejor marca; reaparición u oscilación → `NEEDS_DECISION`).
+
+  **Tiene dos entradas, no una** (corregido el 2026-08-22, ADR-072): desde REVISAR cuando
+  la revisión pide cambios, y **desde COMPROBAR cuando las validaciones objetivas fallan**.
+  La segunda no estaba escrita y el ciclo real la usa en cada CI roja —
+  `advance-sirius-after-quality.yml` pasa de `sirius:ci-pending` a
+  `sirius:repair-requested` sin pasar por revisión, porque no hay nada que revisar de un
+  cambio que no compila. Faltaba en el dominio, y el motor tenía que elegir entre inventar
+  una fase REVISAR que nunca ocurrió o divergir de la incidencia.
 - **ENTREGAR** [D+M]: síntesis final + artefactos + evidencia por la interfaz activa;
   `criterio_terminado` comprobado de forma determinista donde sea posible.
 
