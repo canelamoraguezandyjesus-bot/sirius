@@ -144,3 +144,58 @@ def test_la_orden_queda_enlazada_en_el_work_item_creado(tmp_path: Path) -> None:
     assert work_item is not None
     assert orden_enlazada(work_item) == "https://github.com/acme/repo/issues/9#c1"
     assert any(e.startswith(MARCADOR_ORDEN_PROPIETARIO) for e in work_item.evidencia)
+
+
+# --- El despacho sobrevive al proceso (H-B de la incidencia #250) --------------
+
+
+def test_repetir_la_misma_orden_no_crea_una_segunda_incidencia(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """C2-P3 entre procesos, no solo dentro de uno.
+
+    El diario del despachador estaba cableado en memoria, así que cada
+    invocación nacía sin memoria de lo ya despachado: repetir la orden creaba
+    una SEGUNDA incidencia para el mismo trabajo, y de una incidencia cuelga un
+    ciclo entero -implementador, Quality, dos revisores- sobre trabajo que ya
+    estaba en marcha.
+
+    Cada llamada a ``main`` construye sus adaptadores desde cero, igual que
+    haría un proceso nuevo: es el reinicio que la prueba necesita.
+    """
+    creadas: list[str] = []
+
+    class _EscritorQueCuenta:
+        def crear_incidencia(
+            self, *, repo: str, titulo: str, cuerpo: str, etiquetas: tuple[str, ...]
+        ) -> Any:
+            from sirius_engine.ports.github_writer import IncidenciaCreada
+
+            creadas.append(titulo)
+            return IncidenciaCreada(
+                numero=100 + len(creadas),
+                url=f"https://github.com/{repo}/issues/{100 + len(creadas)}",
+            )
+
+        def aplicar_etiqueta(self, *, repo: str, numero: int, etiqueta: str) -> None:
+            return None
+
+    monkeypatch.setattr(dispatch_cli, "GitHubCliWriter", lambda: _EscritorQueCuenta())
+    diario = tmp_path / "diario.jsonl"
+
+    primero, salida_1 = _correr([_ORDEN, "--ejecutar"], diario=diario)
+    segundo, salida_2 = _correr([_ORDEN, "--ejecutar"], diario=diario)
+
+    assert primero == 0, salida_1
+    assert segundo == 0, salida_2
+    assert len(creadas) == 1, (
+        f"se crearon {len(creadas)} incidencias para el mismo trabajo; la garantía "
+        "«una sola activación por WorkItem» no cruzó el proceso"
+    )
+    assert "Ya estaba despachado" in salida_2
+
+
+def test_el_diario_del_despachador_es_hermano_del_diario_del_motor(tmp_path: Path) -> None:
+    """Diario propio, no el del motor: el de eventos no tiene sitio para «qué incidencia»."""
+    diario = tmp_path / "sub" / "motor.jsonl"
+    assert dispatch_cli._diario_de_despacho(diario) == tmp_path / "sub" / "motor-despacho.jsonl"
