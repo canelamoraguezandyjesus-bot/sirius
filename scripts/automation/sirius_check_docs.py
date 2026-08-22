@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """Comprobador determinista de documentos de Sirius (bloque C3a, incidencia #246).
 
-Solo implementa las cuatro comprobaciones que se midieron encontrando defectos
+Solo implementa las tres comprobaciones que se midieron encontrando defectos
 reales sobre este árbol (ver el comentario de medición de la incidencia y
-ADR-001): referencias a fichero que no resuelven, más de un `h1` por
-documento, saltos de nivel de encabezado, y anclas/enlaces vacíos (estos dos
-últimos van dentro de la comprobación de referencias, a coste nulo). Otras
-candidatas medidas y descartadas explícitamente por baja precisión (citas
-`§N`, `ADR-NNN`, líneas largas) no están aquí a propósito: no se añaden
-"ya que estamos".
+ADR-001): referencias a fichero que no resuelven (incluyendo enlaces vacíos,
+dentro de esa misma comprobación, a coste nulo), más de un `h1` por
+documento, y saltos de nivel de encabezado. Otras candidatas medidas y
+descartadas explícitamente por baja precisión (citas `§N`, `ADR-NNN`, líneas
+largas) no están aquí a propósito: no se añaden "ya que estamos".
 
 Una comprobación de anclas (`#slug`) llegó a existir y se **retiró**: sobre los
 114 documentos del árbol no había ni un solo enlace de ancla pura, ni un enlace
@@ -276,34 +275,6 @@ def _enlaces_vacios(documento: Path, texto: str, visible: str) -> list[Hallazgo]
                 )
             )
     return hallazgos
-
-
-def _encabezados_de_fichero(ruta: Path) -> list[tuple[int, int, str]]:
-    try:
-        texto = ruta.read_text(encoding="utf-8")
-    except OSError:
-        return []
-    return _encabezados_de(texto, _enmascarar_bloques(texto))
-
-
-def _fichero_local_de_enlace(parte_ruta: str, documento: Path) -> Path | None:
-    """Ruta absoluta al fichero local citado por la parte de ruta de un enlace, o None.
-
-    Mismas exclusiones que `_ruta_de_enlace` (URLs, plantillas, `mailto:`), pero
-    sin exigir que el resultado quede dentro de `RAIZ`: aquí el uso es leer el
-    fichero para comprobar su ancla, no clasificar una cita de `RAICES_DEL_REPOSITORIO`.
-    """
-    parte_ruta = parte_ruta.strip()
-    if not parte_ruta or any(marca in parte_ruta for marca in NO_ES_UNA_RUTA_CONCRETA):
-        return None
-    if parte_ruta.startswith(("http://", "https://", "mailto:")):
-        return None
-    parte_ruta = parte_ruta.removeprefix("./")
-    if parte_ruta.startswith("/"):
-        return (RAIZ / parte_ruta.lstrip("/")).resolve()
-    if parte_ruta.startswith(RAICES_DEL_REPOSITORIO):
-        return (RAIZ / parte_ruta).resolve()
-    return (documento.parent / parte_ruta).resolve()
 
 
 def _encabezados_de(texto: str, visible: str) -> list[tuple[int, int, str]]:
