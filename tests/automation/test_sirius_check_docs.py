@@ -165,6 +165,39 @@ def test_un_ancla_que_corresponde_a_un_encabezado_no_se_avisa(tmp_path: Path) ->
     assert _module().comprobar_documento(doc) == []
 
 
+def test_un_ancla_rota_hacia_otro_documento_se_detecta(tmp_path: Path) -> None:
+    """CODEX-001: el fragmento de un enlace a otro fichero también se valida,
+    no solo que el fichero exista."""
+    (tmp_path / "target.md").write_text("# Target\n", encoding="utf-8")
+    doc = _escribir(tmp_path, "# Título\n\n[broken](./target.md#missing)\n")
+    hallazgos = _module().comprobar_documento(doc)
+    assert any(
+        "ancla" in h.mensaje and "missing" in h.mensaje and "target.md" in h.mensaje
+        for h in hallazgos
+    )
+
+
+def test_un_ancla_valida_hacia_otro_documento_no_se_avisa(tmp_path: Path) -> None:
+    (tmp_path / "target.md").write_text("# Target\n", encoding="utf-8")
+    doc = _escribir(tmp_path, "# Título\n\n[ok](./target.md#target)\n")
+    assert _module().comprobar_documento(doc) == []
+
+
+def test_un_ancla_con_mayusculas_distintas_al_encabezado_se_detecta(tmp_path: Path) -> None:
+    """CODEX-002: el fragmento es sensible a mayúsculas, no se vuelve a
+    normalizar antes de comparar."""
+    doc = _escribir(tmp_path, "# Título\n\n## Seccion real\n\n[ver](#SECCION-REAL)\n")
+    hallazgos = _module().comprobar_documento(doc)
+    assert any("ancla" in h.mensaje and "SECCION-REAL" in h.mensaje for h in hallazgos)
+
+
+def test_un_ancla_hacia_un_encabezado_repetido_con_sufijo_no_se_avisa(tmp_path: Path) -> None:
+    """CODEX-003: el segundo encabezado con el mismo título recibe el sufijo
+    `-1` que genera GitHub, y el ancla al segundo debe resolver."""
+    doc = _escribir(tmp_path, "# Título\n\n## Same\n\n## Same\n\n[second](#same-1)\n")
+    assert _module().comprobar_documento(doc) == []
+
+
 def test_un_enlace_vacio_se_detecta_de_verdad(tmp_path: Path) -> None:
     doc = _escribir(tmp_path, "# Título\n\nFalta el destino: [aqui]().\n")
     hallazgos = _module().comprobar_documento(doc)

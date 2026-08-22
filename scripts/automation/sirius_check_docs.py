@@ -25,6 +25,7 @@ import argparse
 import re
 import subprocess
 import sys
+import urllib.parse
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -269,24 +270,103 @@ def _slug(titulo: str) -> str:
     return re.sub(r"\s+", "-", texto).strip("-")
 
 
+def _slugs_con_sufijos(encabezados: list[tuple[int, int, str]]) -> set[str]:
+    """Los identificadores de ancla que genera Markdown, con sufijo para duplicados.
+
+    Un segundo encabezado con el mismo slug que uno anterior recibe `-1`, un
+    tercero `-2`, etc. — el mismo convenio que usa GitHub para desambiguar.
+    """
+    vistos: dict[str, int] = {}
+    slugs: set[str] = set()
+    for _, _, titulo in encabezados:
+        base = _slug(titulo)
+        cuenta = vistos.get(base, 0)
+        slugs.add(base if cuenta == 0 else f"{base}-{cuenta}")
+        vistos[base] = cuenta + 1
+    return slugs
+
+
+def _encabezados_de_fichero(ruta: Path) -> list[tuple[int, int, str]]:
+    try:
+        texto = ruta.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    return _encabezados_de(texto, _enmascarar_bloques(texto))
+
+
+def _fichero_local_de_enlace(parte_ruta: str, documento: Path) -> Path | None:
+    """Ruta absoluta al fichero local citado por la parte de ruta de un enlace, o None.
+
+    Mismas exclusiones que `_ruta_de_enlace` (URLs, plantillas, `mailto:`), pero
+    sin exigir que el resultado quede dentro de `RAIZ`: aquí el uso es leer el
+    fichero para comprobar su ancla, no clasificar una cita de `RAICES_DEL_REPOSITORIO`.
+    """
+    parte_ruta = parte_ruta.strip()
+    if not parte_ruta or any(marca in parte_ruta for marca in NO_ES_UNA_RUTA_CONCRETA):
+        return None
+    if parte_ruta.startswith(("http://", "https://", "mailto:")):
+        return None
+    parte_ruta = parte_ruta.removeprefix("./")
+    if parte_ruta.startswith("/"):
+        return (RAIZ / parte_ruta.lstrip("/")).resolve()
+    if parte_ruta.startswith(RAICES_DEL_REPOSITORIO):
+        return (RAIZ / parte_ruta).resolve()
+    return (documento.parent / parte_ruta).resolve()
+
+
 def _anclas_rotas(
     documento: Path, texto: str, visible: str, encabezados: list[tuple[int, int, str]]
 ) -> list[Hallazgo]:
-    slugs = {_slug(titulo) for _, _, titulo in encabezados}
+    """Anclas rotas, tanto dentro del propio documento como hacia otros locales.
+
+    El fragmento se compara —tras decodificar el URL-encoding, si lo hay—
+    directamente contra los identificadores generados por los encabezados de
+    destino: las anclas son sensibles a mayúsculas, así que no se vuelve a
+    pasar por `_slug`.
+    """
+    slugs_propios = _slugs_con_sufijos(encabezados)
+    cache_slugs_externos: dict[Path, set[str]] = {}
     hallazgos: list[Hallazgo] = []
     for span in ENLACE_MD.finditer(visible):
         objetivo = span.group(1).strip()
-        if not objetivo.startswith("#") or len(objetivo) == 1:
+        ruta_parte, _, fragmento = objetivo.partition("#")
+        if not fragmento:
             continue
-        ancla = objetivo[1:]
-        if _slug(ancla) not in slugs and ancla not in slugs:
-            hallazgos.append(
-                Hallazgo(
-                    documento,
-                    _linea_de(texto, span.start()),
-                    f"el ancla `#{ancla}` no corresponde a ningún encabezado de este documento",
+        ruta_parte = ruta_parte.strip()
+        if not ruta_parte:
+            documento_destino = documento
+            slugs = slugs_propios
+        else:
+            fichero_destino = _fichero_local_de_enlace(ruta_parte, documento)
+            if fichero_destino is None:
+                continue  # URL externa, plantilla u otra ruta no comprobable
+            if (
+                fichero_destino.suffix.lower() not in (".md", ".markdown")
+                or not fichero_destino.is_file()
+            ):
+                continue  # no existe o no es Markdown: ya lo cubre la comprobación de citas
+            documento_destino = fichero_destino
+            if documento_destino not in cache_slugs_externos:
+                cache_slugs_externos[documento_destino] = _slugs_con_sufijos(
+                    _encabezados_de_fichero(documento_destino)
                 )
+            slugs = cache_slugs_externos[documento_destino]
+        if urllib.parse.unquote(fragmento) in slugs:
+            continue
+        if documento_destino == documento:
+            destino = "este documento"
+        else:
+            try:
+                destino = f"`{documento_destino.relative_to(RAIZ)}`"
+            except ValueError:
+                destino = f"`{documento_destino}`"
+        hallazgos.append(
+            Hallazgo(
+                documento,
+                _linea_de(texto, span.start()),
+                f"el ancla `#{fragmento}` no corresponde a ningún encabezado de {destino}",
             )
+        )
     return hallazgos
 
 
