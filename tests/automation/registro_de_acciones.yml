@@ -1,0 +1,37 @@
+# Registro CERRADO de acciones de workflow (ADR-018).
+#
+# TODA accion `uses:` de TODO workflow —de paso o de nivel job (reusable
+# workflows), incluidas las formas `./ruta` y `docker://`— debe estar
+# clasificada aqui; una accion desconocida pone en rojo
+# test_toda_accion_de_workflow_esta_clasificada_en_el_registro.
+#
+# Añadir una accion (o un motor de modelos nuevo) es una DECISION visible en
+# este fichero: entrar en `con_modelo` le aplica de golpe el barrido global de
+# permisos, la regla de secretos y el resto de defensas de agentes. La
+# comparacion es siempre por NOMBRE de accion, sin @version.
+
+con_modelo:
+  anthropics/claude-code-action:
+    # La credencial COMPLETA del runtime: por que input viaja y que secreto
+    # lleva. Es la UNICA referencia a `secrets.` admisible en el job del
+    # modelo de un workflow no exento, recolectada en los tres niveles
+    # (env del workflow, env del job, env+with del paso del modelo).
+    credencial_input: claude_code_oauth_token
+    credencial_secreto: CLAUDE_CODE_OAUTH_TOKEN
+
+sin_modelo:
+  - actions/checkout
+  - actions/upload-artifact
+  - actions/download-artifact
+  - astral-sh/setup-uv
+
+# Los tres roles del ciclo de programacion: escribir codigo y abrir PR es su
+# cometido, y llevan el PAT por diseño aprobado del ciclo. Exentos del barrido
+# de permisos de escritura Y de la regla de secretos (una sola fuente para las
+# dos, ADR-018). Lista cerrada: añadir un nombre aqui es una decision, y este
+# es el sitio donde se ve. La reconciliacion los degrada a "prototipo
+# declarado": no son el patron de la linea de agentes.
+exentos_del_ciclo:
+  - implement-sirius-work.yml
+  - review-sirius-work.yml
+  - repair-sirius-work.yml

@@ -40,14 +40,44 @@ RECONCILIADOR = REPO_ROOT / "scripts" / "automation" / "sirius_reconcile.sh"
 
 ETIQUETA_DEL_AUDITOR = "auditoria:solicitada"
 
-# Lo que delata que un trabajo ejecuta un modelo. Ancho a propósito: cualquier
-# acción de Anthropic cuenta, se llame como se llame la versión.
-ACCIONES_CON_MODELO = ("anthropics/claude-code-action",)
+REGISTRO_DE_ACCIONES = Path(__file__).resolve().parent / "registro_de_acciones.yml"
+
+
+def _registro() -> dict[str, Any]:
+    return yaml.safe_load(REGISTRO_DE_ACCIONES.read_text(encoding="utf-8")) or {}
+
+
+REGISTRO: dict[str, Any] = _registro()
+
+# Lo que delata que un trabajo ejecuta un modelo. **Se DERIVA del registro**, no
+# se escribe aquí (ADR-018, rescatado de la PR #171).
+#
+# Antes era la tupla `("anthropics/claude-code-action",)`, escrita a mano. Eso
+# hacía que toda la defensa reconociera UN NOMBRE, no una categoría: un runtime
+# nuevo —otra acción, otro proveedor, un contenedor— entraba sin que el barrido
+# de permisos ni la regla de secretos lo miraran siquiera, porque su nombre no
+# estaba en la tupla. Es la familia que ADR-033 nombró: una lista escrita a mano
+# siempre tiene un hueco más.
+#
+# Derivándolo, la pregunta deja de ser «¿es esta acción?» y pasa a ser «¿está
+# clasificada?». Meter un motor nuevo obliga a pasar por el registro, y entrar
+# en `con_modelo` le aplica de golpe todas las defensas existentes.
+ACCIONES_CON_MODELO = tuple(REGISTRO["con_modelo"])
 
 # Comparación de etiqueta en una condición de Actions, en el `if:` del job o de
 # cualquier paso. Es la forma en que TODOS los workflows de este repositorio
 # deciden si reaccionan a un evento `labeled`.
 COMPARA_ETIQUETA = re.compile(r"github\.event\.label\.name\s*==\s*'([^']+)'")
+
+
+def _nombre_accion(uses: str) -> str:
+    """El nombre de la acción sin su versión: `owner/repo@v4` -> `owner/repo`.
+
+    Las formas `./ruta` (acción local) y `docker://imagen` se devuelven tal
+    cual: no son nombres del registro y tienen que caer en «desconocida», que
+    es justo lo que se quiere de ellas mientras nadie las clasifique.
+    """
+    return uses.split("@", 1)[0].strip()
 
 
 def _cargar(ruta: Path) -> dict[str, Any]:
@@ -395,3 +425,115 @@ def test_estas_pruebas_miran_algo() -> None:
         f"Solo {con_disparo} reaccionan a etiquetas: el extractor de condiciones "
         "dejó de entender los `if:` y las comprobaciones de solapamiento pasan por vacío."
     )
+
+
+# ─────────────── El registro cerrado de acciones (ADR-018, PR #171) ───────────────
+
+
+def _acciones_sin_clasificar(
+    workflows: dict[str, dict[str, Any]], conocidas: set[str]
+) -> list[str]:
+    """Las `uses:` de esos workflows que no están en `conocidas`.
+
+    Se recorren las de PASO **y las de NIVEL JOB** (workflows reutilizables):
+    un barrido solo de pasos dejaría entrar un workflow reutilizable entero sin
+    clasificar, que es una puerta más ancha que la que se está cerrando.
+    """
+    desconocidas: list[str] = []
+    for nombre, definicion in workflows.items():
+        for nombre_job, job in (definicion.get("jobs") or {}).items():
+            if not isinstance(job, dict):
+                continue
+            usos = [str(job["uses"])] if "uses" in job else []
+            usos += [str(p["uses"]) for p in _pasos(job) if "uses" in p]
+            desconocidas += [
+                f"{nombre} · «{nombre_job}» · {uso}"
+                for uso in usos
+                if _nombre_accion(uso) not in conocidas
+            ]
+    return desconocidas
+
+
+def _conocidas() -> set[str]:
+    return set(REGISTRO["con_modelo"]) | set(REGISTRO["sin_modelo"])
+
+
+def test_toda_accion_de_workflow_esta_clasificada_en_el_registro() -> None:
+    """Neutralidad al runtime por construcción.
+
+    La defensa deja de reconocer un nombre de acción concreto y pasa a
+    reconocer «acción clasificada». Un motor nuevo —Inspect, un contenedor,
+    una acción de otro proveedor— no puede entrar sin pasar por
+    `registro_de_acciones.yml`, y entrar en `con_modelo` le aplica de golpe el
+    barrido de permisos y la regla de secretos que ya existen.
+    """
+    desconocidas = _acciones_sin_clasificar(_todos_los_workflows(), _conocidas())
+    assert not desconocidas, (
+        "Acciones sin clasificar en registro_de_acciones.yml (¿un runtime nuevo "
+        "entrando sin pasar por el registro?):\n" + "\n".join(f"  - {d}" for d in desconocidas)
+    )
+
+
+def test_una_accion_desconocida_en_un_paso_se_detecta() -> None:
+    """Defecto sembrado: sin esto, la prueba de arriba pasaría estando rota.
+
+    Se siembra sobre definiciones sintéticas y no sobre `.github/`, porque
+    escribir un workflow falso en el árbol real para probar una guarda es
+    exactamente la clase de prueba que deja basura detrás.
+    """
+    sintetico = {
+        "falso.yml": {"jobs": {"trabajo": {"steps": [{"uses": "proveedor/motor-nuevo@v1"}]}}}
+    }
+    assert _acciones_sin_clasificar(sintetico, _conocidas()) == [
+        "falso.yml · «trabajo» · proveedor/motor-nuevo@v1"
+    ]
+
+
+def test_un_workflow_reutilizable_sin_clasificar_tambien_se_detecta() -> None:
+    """El `uses:` de nivel job, que un barrido de pasos no vería."""
+    sintetico = {"falso.yml": {"jobs": {"trabajo": {"uses": "otro/workflow-entero@v2"}}}}
+    assert _acciones_sin_clasificar(sintetico, _conocidas()) == [
+        "falso.yml · «trabajo» · otro/workflow-entero@v2"
+    ]
+
+
+def test_las_formas_locales_y_docker_no_pasan_por_conocidas() -> None:
+    """`./ruta` y `docker://` no son nombres del registro: caen en desconocida."""
+    sintetico = {
+        "falso.yml": {
+            "jobs": {
+                "t": {"steps": [{"uses": "./.github/acciones/propia"}, {"uses": "docker://alpine"}]}
+            }
+        }
+    }
+    assert len(_acciones_sin_clasificar(sintetico, _conocidas())) == 2
+
+
+def test_la_version_no_cuenta_para_clasificar() -> None:
+    """`actions/checkout@v4` y `@v6` son la misma acción para el registro."""
+    for version in ("v4", "v6", "abc123"):
+        sintetico = {"f.yml": {"jobs": {"t": {"steps": [{"uses": f"actions/checkout@{version}"}]}}}}
+        assert _acciones_sin_clasificar(sintetico, _conocidas()) == []
+
+
+def test_el_registro_no_tiene_entradas_muertas() -> None:
+    """Una acción clasificada que ya nadie usa es una excepción que sobra.
+
+    Mismo criterio que las excepciones declaradas del resto del repositorio: se
+    quitan cuando dejan de hacer falta, para que la lista no crezca sola.
+    """
+    usadas = {
+        _nombre_accion(str(p["uses"]))
+        for definicion in _todos_los_workflows().values()
+        for job in (definicion.get("jobs") or {}).values()
+        if isinstance(job, dict)
+        for p in _pasos(job)
+        if "uses" in p
+    } | {
+        _nombre_accion(str(job["uses"]))
+        for definicion in _todos_los_workflows().values()
+        for job in (definicion.get("jobs") or {}).values()
+        if isinstance(job, dict) and "uses" in job
+    }
+    muertas = sorted(_conocidas() - usadas)
+    assert muertas == [], f"clasificadas en el registro pero ya sin uso: {muertas}"
