@@ -514,10 +514,12 @@ propietario decide no ejercitarla, esa carencia se escribe en el registro del hi
   canónico + proyección obligatoria», con verificador de proyección motor↔incidencia.
   (Las clases nativas del motor NO pasan por aquí: nacieron canónicas por E1a.)
 - **Dependencia real**: E1a (regla) + clase estable: documental tras C3; programación
-  tras el periodo de C1+C2 sin intervención manual (umbral en §4).
+  tras el periodo de C1+C2 sin intervención manual (umbral en §4, que remite al
+  contrato §11.2: **siete días**).
 - **Ficheros**: `src/sirius_engine/` (verificador de proyección), registro de conmutación
   (dato versionado).
-- **Prueba de terminado**: verificador en verde N días por clase (N en §4) + conmutación
+- **Prueba de terminado**: verificador en verde **siete días** por clase (contrato §11.2,
+  vía §4) + conmutación
   registrada; el episodio de divergencia sembrado dispara alarma (mutación).
 - **Riesgo principal**: doble autoridad ambigua; mitigación: la regla de §4 hace la
   autoridad una función total (clase → autoridad) sin estados intermedios.
@@ -606,10 +608,27 @@ huecos):
    **Para las clases nativas no hay periodo previo**: nacen canónicas en el motor y, si
    se refleja algo en GitHub, ese reflejo es informativo y se etiqueta como tal.
 2. **Condición de conmutación por clase** (solo para las clases con proyección GitHub):
-   el verificador de proyección (motor ↔ incidencia) en verde de forma continua durante
-   **14 días** para esa clase Y cero intervenciones manuales de desatasco en ese periodo.
-   (El umbral es propuesta de este plan; E1a puede ajustarlo — es el único parámetro
-   abierto.)
+   la fija el **contrato §11.2**, que es la fuente normativa. El texto que este plan
+   propuso —«14 días y cero intervenciones manuales de desatasco»— **fue ajustado por
+   E1a al entrar en vigor la v1.7**, y lo vigente es:
+
+   1. **Siete días naturales consecutivos** con el verificador de proyección
+      (motor ↔ incidencia) en verde de forma continua.
+   2. **Cero correcciones manuales del estado** en ese periodo — y «corrección manual»
+      significa una sola cosa: que una persona o una sesión haya tenido que arreglar a
+      mano el almacén o las etiquetas **porque ambos dijeran cosas distintas**. El
+      contrato enumera además lo que **no** interrumpe el contador (un fallo externo, una
+      CI cancelada, una parada por convergencia, el plazo de un revisor): *«es la
+      discrepancia lo único que esta condición mide»*.
+
+   El contrato declara **inalcanzable** la redacción original de este plan, y por eso la
+   sustituyó. Se corrige aquí el 22-08-2026, tras encontrarse la discrepancia al diseñar
+   el verificador (incidencia #250, hallazgo H-A): construirlo contra este texto habría
+   producido el verificador equivocado, midiendo «hubo intervención» en vez de
+   «hubo discrepancia».
+
+   **Cuando el plan y el contrato discrepen, gana el contrato.** El plan es una previsión
+   escrita antes; el contrato es la norma vigente.
 3. **El acto de conmutación**: registro fechado (dato versionado en el repo) + anuncio en
    la incidencia patrón de la clase. Desde ese instante, para esa clase: el almacén del
    motor es canónico y la incidencia pasa a PROYECCIÓN OBLIGATORIA — el motor la mantiene
