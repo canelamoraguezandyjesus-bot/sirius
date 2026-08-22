@@ -18,6 +18,8 @@ from sirius_engine.domain.permission_envelope import (
 from sirius_engine.domain.profile import AgentProfile, ProfilePermissions
 from sirius_engine.profile_registry import load_agent_profile
 
+from .conftest import PERFILES_REALES
+
 
 def _perfil(*, capacidades: tuple[str, ...], escritura: str | None, red: bool) -> AgentProfile:
     return AgentProfile(
@@ -66,8 +68,8 @@ def test_red_sin_escritura_es_compatible() -> None:
     assert envelope.escritura is None
 
 
-@pytest.mark.parametrize("ref", ("implementer", "reviewer", "corrector", "auditor"))
-def test_los_cuatro_perfiles_reales_calculan_un_envelope_sin_incompatibilidad(ref: str) -> None:
+@pytest.mark.parametrize("ref", PERFILES_REALES)
+def test_todos_los_perfiles_reales_calculan_un_envelope_sin_incompatibilidad(ref: str) -> None:
     perfil = load_agent_profile(ref)
     envelope = compute_permission_envelope(perfil)
     assert envelope.capacidades_concedidas == frozenset(perfil.capacidades)

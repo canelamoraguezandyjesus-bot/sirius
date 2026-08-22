@@ -32,6 +32,8 @@ from sirius_engine.domain.work_item import WorkItem, WorkItemClass, create_work_
 from sirius_engine.profile_registry import load_agent_profile
 from sirius_engine.worker_request import project_worker_request
 
+from .conftest import PERFILES_REALES
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _WORKFLOW_PATH = _REPO_ROOT / ".github" / "workflows" / "implement-sirius-work.yml"
 _BUILD_PROMPT_STEP_NAME = "Preparar instrucciones para Claude Code"
@@ -77,8 +79,8 @@ def test_misma_entrada_produce_el_mismo_worker_request(now: datetime) -> None:
     assert primero is not segundo  # objetos nuevos, no el mismo, y aun así iguales
 
 
-@pytest.mark.parametrize("ref", ("implementer", "reviewer", "corrector", "auditor"))
-def test_determinismo_para_los_cuatro_perfiles_reales(ref: str, now: datetime) -> None:
+@pytest.mark.parametrize("ref", PERFILES_REALES)
+def test_determinismo_para_todos_los_perfiles_reales(ref: str, now: datetime) -> None:
     # WorkerRequest.limites es un Mapping (MappingProxyType), no hasheable:
     # se comparan tres proyecciones por igualdad, no por pertenencia a un
     # set -que exigiría __hash__ sobre un campo que a propósito no lo tiene.

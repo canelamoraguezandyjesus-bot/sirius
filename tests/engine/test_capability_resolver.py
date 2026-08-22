@@ -13,9 +13,9 @@ from sirius_engine.domain.permission_envelope import (
 )
 from sirius_engine.profile_registry import load_agent_profile
 
-_REGISTRO = load_capability_registry()
+from .conftest import PERFILES_REALES as _PERFILES_REALES
 
-_PERFILES_REALES = ("implementer", "reviewer", "corrector", "auditor")
+_REGISTRO = load_capability_registry()
 
 
 def _envelope(*capacidades: str) -> PermissionEnvelope:
