@@ -141,6 +141,16 @@ def _contenida_en_raiz(ruta_relativa: str) -> str | None:
     en RAIZ se le aplica `resolve()`, para atrapar los enlaces simbólicos
     dentro del repositorio que apunten fuera de él. Mismo patrón que ya usaba
     la rama relativa-al-documento de `_ruta_de_enlace`.
+
+    El atajo léxico es EXACTO solo si ningún segmento del camino es un enlace
+    simbólico: `docs/enlace/../x.md` no significa lo mismo si `docs/enlace`
+    apunta fuera. Enseñarle a distinguirlo obligaría a consultar rutas de
+    fuera del árbol, que es justo lo que esta función existe para impedir —
+    las dos propiedades no se pueden tener a la vez. La condición que lo hace
+    exacto se fija donde se puede comprobar: `tests/automation/`
+    `test_sirius_check_docs.py::test_el_arbol_versionado_no_contiene_enlaces_simbolicos`
+    exige que el árbol versionado no tenga ninguno (hoy: cero). Si alguien
+    versiona uno, esa prueba cae y obliga a decidirlo a propósito.
     """
     segmentos: list[str] = []
     for parte in ruta_relativa.split("/"):

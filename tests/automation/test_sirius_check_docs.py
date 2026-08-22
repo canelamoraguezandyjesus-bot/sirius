@@ -373,3 +373,58 @@ def test_el_comprobador_arranca_con_el_python_del_runner() -> None:
             f"{exc.msg}. Los Work Item documentales lo invocan con el `python3` del "
             "runner, no con el intérprete del proyecto."
         )
+
+
+# --- La raíz de la familia «contención de rutas» ------------------------------
+#
+# Rondas 5, 6 y 7 de la revisión fueron todas sobre lo mismo, y cada arreglo
+# cambiaba una propiedad por la otra:
+#
+#   ronda 5: `resolve()` y luego comprobar  -> semántica correcta con enlaces
+#            simbólicos, pero consulta el sistema de ficheros FUERA del
+#            repositorio antes de rechazar.
+#   ronda 6: colapsar `..` léxicamente      -> no consulta nada fuera, pero un
+#            enlace simbólico antes de `..` cambiaría la ruta real.
+#   ronda 7: Codex pide las dos a la vez.
+#
+# No se pueden tener las dos: saber a dónde apunta un enlace simbólico EXIGE
+# consultarlo. Se para de parchear (ADR-001, regla de las dos rondas) y se
+# ataca la raíz: el conflicto solo existe si hay enlaces simbólicos, y en este
+# repositorio no hay ninguno. Esta prueba lo convierte en imposible en vez de
+# improbable — la cuarta pregunta de la nota de arranque de la incidencia #246.
+
+
+def test_el_arbol_versionado_no_contiene_enlaces_simbolicos() -> None:
+    """Sin enlaces simbólicos, el atajo léxico de `_contenida_en_raiz` es exacto.
+
+    `_contenida_en_raiz` colapsa `..` contando segmentos, sin tocar el disco.
+    Eso es equivalente a la resolución real **si y solo si** ningún segmento
+    del camino es un enlace simbólico. En vez de enseñarle a la función a
+    distinguirlo —lo que la obligaría a consultar rutas de fuera del árbol,
+    que es justo lo que la ronda 5 vino a impedir— se fija aquí la condición
+    que la hace exacta.
+
+    Si algún día alguien versiona un enlace simbólico, esta prueba cae y
+    obliga a decidirlo a propósito, en vez de que el comprobador empiece a
+    validar en silencio un fichero distinto del citado.
+    """
+    listado = subprocess.run(
+        ["git", "ls-files", "-s"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    # Modo 120000 en el índice de git = enlace simbólico.
+    enlaces = [
+        linea.split("\t", 1)[1]
+        for linea in listado.stdout.splitlines()
+        if linea.startswith("120000 ")
+    ]
+    assert enlaces == [], (
+        "el árbol versionado contiene enlaces simbólicos: "
+        f"{enlaces}. `_contenida_en_raiz` colapsa `..` sin resolverlos, así que "
+        "una cita que atraviese uno validaría un fichero distinto del citado. "
+        "Decide: o se retiran, o la función pasa a resolverlos de verdad "
+        "asumiendo la E/S fuera del árbol que la ronda 5 evitó."
+    )
