@@ -1,4 +1,4 @@
-# ADR-066 — Las órdenes del propietario toleran la firma que añade la herramienta
+# ADR-067 — Las órdenes del propietario toleran la firma que añade la herramienta
 
 - Estado: APROBADO
 - Fecha: 2026-08-22
