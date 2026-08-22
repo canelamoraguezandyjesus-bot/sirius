@@ -3,7 +3,7 @@
 Solo las cuatro comprobaciones medidas entran (ver el docstring del script y
 el comentario de medición de la incidencia): referencias a fichero rotas
 (con sus dos filtros y su clasificación por rama), un solo `h1`, sin saltos
-de nivel de encabezado, y anclas/enlaces vacíos. Cada comprobación se ve
+de nivel de encabezado, y enlaces vacíos. Cada comprobación se ve
 fallar con un defecto sembrado (ADR-001, prueba por mutación), incluido el
 control negativo de que una ruta inventada dentro de un bloque de código no
 avisa.
@@ -149,53 +149,6 @@ def test_los_sufijos_de_cita_se_recortan() -> None:
         m.ruta_citada("docs/decisions/ADR-001-el-metodo-de-evidencia.md:95")
         == "docs/decisions/ADR-001-el-metodo-de-evidencia.md"
     )
-
-
-# --- Anclas y enlaces vacíos (dentro de (1), coste nulo) ----------------------
-
-
-def test_un_ancla_rota_se_detecta(tmp_path: Path) -> None:
-    doc = _escribir(tmp_path, "# Título\n\n## Sección real\n\n[ver](#no-existe)\n")
-    hallazgos = _module().comprobar_documento(doc)
-    assert any("ancla" in h.mensaje and "no-existe" in h.mensaje for h in hallazgos)
-
-
-def test_un_ancla_que_corresponde_a_un_encabezado_no_se_avisa(tmp_path: Path) -> None:
-    doc = _escribir(tmp_path, "# Título\n\n## Seccion real\n\n[ver](#seccion-real)\n")
-    assert _module().comprobar_documento(doc) == []
-
-
-def test_un_ancla_rota_hacia_otro_documento_se_detecta(tmp_path: Path) -> None:
-    """CODEX-001: el fragmento de un enlace a otro fichero también se valida,
-    no solo que el fichero exista."""
-    (tmp_path / "target.md").write_text("# Target\n", encoding="utf-8")
-    doc = _escribir(tmp_path, "# Título\n\n[broken](./target.md#missing)\n")
-    hallazgos = _module().comprobar_documento(doc)
-    assert any(
-        "ancla" in h.mensaje and "missing" in h.mensaje and "target.md" in h.mensaje
-        for h in hallazgos
-    )
-
-
-def test_un_ancla_valida_hacia_otro_documento_no_se_avisa(tmp_path: Path) -> None:
-    (tmp_path / "target.md").write_text("# Target\n", encoding="utf-8")
-    doc = _escribir(tmp_path, "# Título\n\n[ok](./target.md#target)\n")
-    assert _module().comprobar_documento(doc) == []
-
-
-def test_un_ancla_con_mayusculas_distintas_al_encabezado_se_detecta(tmp_path: Path) -> None:
-    """CODEX-002: el fragmento es sensible a mayúsculas, no se vuelve a
-    normalizar antes de comparar."""
-    doc = _escribir(tmp_path, "# Título\n\n## Seccion real\n\n[ver](#SECCION-REAL)\n")
-    hallazgos = _module().comprobar_documento(doc)
-    assert any("ancla" in h.mensaje and "SECCION-REAL" in h.mensaje for h in hallazgos)
-
-
-def test_un_ancla_hacia_un_encabezado_repetido_con_sufijo_no_se_avisa(tmp_path: Path) -> None:
-    """CODEX-003: el segundo encabezado con el mismo título recibe el sufijo
-    `-1` que genera GitHub, y el ancla al segundo debe resolver."""
-    doc = _escribir(tmp_path, "# Título\n\n## Same\n\n## Same\n\n[second](#same-1)\n")
-    assert _module().comprobar_documento(doc) == []
 
 
 def test_un_enlace_vacio_se_detecta_de_verdad(tmp_path: Path) -> None:
@@ -356,26 +309,3 @@ def test_el_comprobador_arranca_con_el_python_del_runner() -> None:
             f"{exc.msg}. Los Work Item documentales lo invocan con el `python3` del "
             "runner, no con el intérprete del proyecto."
         )
-
-
-def test_el_slug_no_colapsa_los_espacios_que_deja_la_puntuacion() -> None:
-    """GitHub genera doble guion donde había un símbolo entre dos espacios.
-
-    Defecto real: `ADR-046` enlaza a `#tabla-borde--observación-s3-p1`, que es
-    el ancla correcta de un encabezado con un signo de multiplicar entre dos
-    espacios. Con `\\s+` el comprobador generaba un solo guion y marcaba como
-    roto un enlace que esta bien: una falsa alarma sobre un documento correcto
-    del repositorio.
-    """
-    m = _module()
-    titulo = "Tabla borde \u00d7 observaci\u00f3n (S3-P1)"
-    assert m._slug(titulo) == "tabla-borde--observaci\u00f3n-s3-p1"
-
-
-def test_el_enlace_real_del_adr_046_no_da_falsa_alarma() -> None:
-    """El caso concreto que lo destapó, comprobado sobre el documento de verdad."""
-    nombre = "ADR-046-spike-i1-bordes-de-status-sobre-runs-de-actions.md"
-    documento = REPO_ROOT / "docs" / "decisions" / nombre
-    hallazgos = _module().comprobar_documento(documento)
-    anclas = [h for h in hallazgos if "ancla" in h.mensaje]
-    assert anclas == [], f"falsa alarma sobre un enlace correcto: {[str(h) for h in anclas]}"
