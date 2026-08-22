@@ -1,4 +1,4 @@
-# ADR-065 — Perfiles documentales: documentalista y revisor documental, coherentes con la maquinaria existente
+# ADR-066 — Perfiles documentales: documentalista y revisor documental, coherentes con la maquinaria existente
 
 - Estado: PROPUESTO
 - Fecha: 2026-08-22
