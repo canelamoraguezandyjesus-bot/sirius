@@ -114,7 +114,9 @@ _CASOS_ROJOS: dict[str, object] = {
     ),
     EJE_FIDELIDAD_PROYECCION: lambda: verificar_fidelidad_proyeccion(
         despachado=_motor(),
-        declarado=CuerpoDeclarado(work_id="otro-work-id"),
+        declarado=CuerpoDeclarado(
+            work_id="otro-work-id", objetivo=_motor().objetivo, entregable=_motor().entregable
+        ),
     ),
 }
 
@@ -182,6 +184,22 @@ def test_ventana_1_despacho_reciente_no_es_divergencia() -> None:
     veredicto_estado = next(v for v in linea.veredictos if v.eje == EJE_ESTADO)
     assert veredicto_estado.resultado is ResultadoEje.NO_COMPARABLE
     assert "despacho" in (veredicto_estado.motivo or "")
+
+
+def test_ventana_1_despacho_reciente_vence_y_pasa_a_divergencia() -> None:
+    """Superada la tolerancia, un despacho que sigue en PLANNED ya es un defecto real."""
+    motor = _motor(estado=WorkItemState.ACTIVE, fase=WorkItemPhase.PREPARAR)
+    espejo = _espejo(estado=WorkItemState.PLANNED, fase=WorkItemPhase.PREPARAR)
+    contexto = ContextoEjesDiarios(edad_etiqueta_maquina=timedelta(minutes=200))
+    linea = verificar_dia(
+        motor=motor,
+        espejo=espejo,
+        contexto=contexto,
+        ventana_tolerancia=_TOLERANCIA,
+        instante=_AHORA,
+    )
+    veredicto_estado = next(v for v in linea.veredictos if v.eje == EJE_ESTADO)
+    assert veredicto_estado.resultado is ResultadoEje.DIVERGENCIA
 
 
 @pytest.mark.parametrize(
@@ -395,7 +413,9 @@ def test_formatear_linea_incluye_instante_clase_work_id_y_ejes() -> None:
 
 def test_fidelidad_detecta_otro_work_id() -> None:
     motor = _motor()
-    declarado = CuerpoDeclarado(work_id="otro-repo#999", objetivo=motor.objetivo)
+    declarado = CuerpoDeclarado(
+        work_id="otro-repo#999", objetivo=motor.objetivo, entregable=motor.entregable
+    )
     veredicto = verificar_fidelidad_proyeccion(despachado=motor, declarado=declarado)
     assert veredicto.resultado is ResultadoEje.DIVERGENCIA
     assert "work_id" in (veredicto.motivo or "")
@@ -403,7 +423,11 @@ def test_fidelidad_detecta_otro_work_id() -> None:
 
 def test_fidelidad_detecta_otro_objetivo() -> None:
     motor = _motor()
-    declarado = CuerpoDeclarado(work_id=motor.work_id, objetivo="un objetivo que no es el real")
+    declarado = CuerpoDeclarado(
+        work_id=motor.work_id,
+        objetivo="un objetivo que no es el real",
+        entregable=motor.entregable,
+    )
     veredicto = verificar_fidelidad_proyeccion(despachado=motor, declarado=declarado)
     assert veredicto.resultado is ResultadoEje.DIVERGENCIA
     assert "objetivo" in (veredicto.motivo or "")
@@ -411,18 +435,33 @@ def test_fidelidad_detecta_otro_objetivo() -> None:
 
 def test_fidelidad_detecta_otro_alcance() -> None:
     motor = _motor()
-    declarado = CuerpoDeclarado(work_id=motor.work_id, entregable="otro alcance permitido distinto")
+    declarado = CuerpoDeclarado(
+        work_id=motor.work_id,
+        objetivo=motor.objetivo,
+        entregable="otro alcance permitido distinto",
+    )
     veredicto = verificar_fidelidad_proyeccion(despachado=motor, declarado=declarado)
     assert veredicto.resultado is ResultadoEje.DIVERGENCIA
     assert "alcance" in (veredicto.motivo or "")
 
 
 def test_fidelidad_campos_ausentes_no_se_comparan() -> None:
-    """Una sección vacía no es una divergencia: es que no se pudo leer."""
+    """Una fidelidad parcial no declara verde: falta objetivo y alcance, no hay verdicto."""
     motor = _motor()
     declarado = CuerpoDeclarado(work_id=motor.work_id)  # objetivo y entregable ausentes
     veredicto = verificar_fidelidad_proyeccion(despachado=motor, declarado=declarado)
-    assert veredicto.resultado is ResultadoEje.COINCIDE
+    assert veredicto.resultado is ResultadoEje.NO_COMPARABLE
+    assert "objetivo" in (veredicto.motivo or "")
+    assert "alcance" in (veredicto.motivo or "")
+
+
+def test_fidelidad_un_solo_campo_ausente_tambien_es_no_comparable() -> None:
+    """Basta con que falte UNO de los tres para que no haya verdicto (CODEX-001)."""
+    motor = _motor()
+    declarado = CuerpoDeclarado(work_id=motor.work_id, objetivo=motor.objetivo)  # sin alcance
+    veredicto = verificar_fidelidad_proyeccion(despachado=motor, declarado=declarado)
+    assert veredicto.resultado is ResultadoEje.NO_COMPARABLE
+    assert "alcance" in (veredicto.motivo or "")
 
 
 def test_fidelidad_sin_ningun_campo_leido_es_no_comparable() -> None:

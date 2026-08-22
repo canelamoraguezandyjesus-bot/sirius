@@ -198,10 +198,21 @@ def _ventana_no_comparable_estado(
     if motor.estado in _ESTADOS_SIN_ETIQUETA:
         # Ventana 2.
         return f"motor en {motor.estado.value}: el vocabulario de etiquetas no puede expresarlo"
-    if motor.estado is WorkItemState.ACTIVE and espejo.estado is WorkItemState.PLANNED:
-        # Ventana 1: el despachador exige ACTIVE y la incidencia recién
-        # creada todavía proyecta PLANNED hasta que el ciclo mueve la
-        # primera etiqueta (medido en la #186: más de una hora).
+    # Ventana 1: el despachador exige ACTIVE y la incidencia recién creada
+    # todavía proyecta PLANNED hasta que el ciclo mueve la primera etiqueta
+    # (medido en la #186: más de una hora). Pero solo mientras sea reciente:
+    # si la edad de la etiqueta de máquina ya supera la tolerancia (y se
+    # conoce esa edad), un despacho que sigue en PLANNED ha dejado de ser
+    # una espera legítima y pasa a comparación normal, que lo declara
+    # DIVERGENCIA.
+    if (
+        motor.estado is WorkItemState.ACTIVE
+        and espejo.estado is WorkItemState.PLANNED
+        and (
+            contexto.edad_etiqueta_maquina is None
+            or contexto.edad_etiqueta_maquina < ventana_tolerancia
+        )
+    ):
         return "despacho reciente: el ciclo aún no ha movido la primera etiqueta desde PLANNED"
     return _ventana_residencia_o_fusion(motor, espejo, contexto, ventana_tolerancia)
 
@@ -268,26 +279,27 @@ def verificar_fidelidad_proyeccion(
 
     UNA vez, no a diario (nada edita el cuerpo después de publicado). Un
     campo declarado como ``None`` -sección ausente o vacía- no se compara:
-    "no se pudo leer" no es "divergía". Si NINGÚN campo comparable se pudo
-    leer, no hay nada que decir que sí: es ``NO_COMPARABLE``, no ``COINCIDE``.
+    "no se pudo leer" no es "divergía". Pero una fidelidad parcial tampoco es
+    fidelidad: si falta CUALQUIERA de los tres campos comparables, no hay
+    verdicto posible -``NO_COMPARABLE``, nunca ``COINCIDE`` sobre lo que sí
+    se leyó- porque un cuerpo truncado que solo conserva un campo no ha
+    demostrado nada sobre los otros dos.
     """
     campos: tuple[tuple[str, str | None, str], ...] = (
         ("work_id", declarado.work_id, despachado.work_id),
         ("objetivo", declarado.objetivo, despachado.objetivo),
         ("alcance permitido", declarado.entregable, despachado.entregable),
     )
-    leidos = [c for c in campos if c[1] is not None]
-    if not leidos:
+    ausentes = [nombre for nombre, cuerpo_valor, _ in campos if cuerpo_valor is None]
+    if ausentes:
         return VeredictoEje(
             eje=EJE_FIDELIDAD_PROYECCION,
             resultado=ResultadoEje.NO_COMPARABLE,
-            motivo=(
-                "el cuerpo no declara ninguno de los campos comparables (work_id/objetivo/alcance)"
-            ),
+            motivo=f"el cuerpo no declara: {', '.join(ausentes)}",
         )
     divergencias = [
         f"{nombre}: motor={motor_valor!r} cuerpo={cuerpo_valor!r}"
-        for nombre, cuerpo_valor, motor_valor in leidos
+        for nombre, cuerpo_valor, motor_valor in campos
         if cuerpo_valor != motor_valor
     ]
     if divergencias:
