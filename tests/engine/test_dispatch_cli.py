@@ -195,6 +195,33 @@ def test_repetir_la_misma_orden_no_crea_una_segunda_incidencia(
     assert "Ya estaba despachado" in salida_2
 
 
+def test_una_auditoria_declara_el_perfil_auditor_y_no_el_implementador(tmp_path: Path) -> None:
+    """CODEX-001 (#256, ronda 2): el perfil declarado depende de la clase despachada.
+
+    Antes ``PERFIL_POR_DEFECTO`` era ``implementer@1`` sin condición: una orden
+    de auditoría se activaba por el carril del Auditor (``auditoria:solicitada``)
+    mientras el cuerpo declaraba un perfil con permisos de implementación.
+    Repite la reproducción exacta del hallazgo con la clase «auditoria».
+    """
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr(["Audita el repositorio buscando defectos concretos"], diario=diario)
+
+    assert codigo == 0, texto
+    assert "clase «auditoria»" in texto
+    assert "Perfil: auditor@1" in texto
+    assert "Perfil: implementer@1" not in texto
+
+
+def test_una_programacion_sigue_declarando_el_perfil_implementador(tmp_path: Path) -> None:
+    """La otra fila de la tabla cerrada (§12.4): la clase «programacion» no cambia."""
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr([_ORDEN], diario=diario)
+
+    assert codigo == 0, texto
+    assert "clase «programacion»" in texto
+    assert "Perfil: implementer@1" in texto
+
+
 def test_el_diario_del_despachador_es_hermano_del_diario_del_motor(tmp_path: Path) -> None:
     """Diario propio, no el del motor: el de eventos no tiene sitio para «qué incidencia»."""
     diario = tmp_path / "sub" / "motor.jsonl"
