@@ -57,19 +57,27 @@ condición ya verificada como no aplicable antes de tocar código:
 
 ## Opciones consideradas
 
-1. **Enlace simbólico**: el contenido vive una sola vez en
-   `src/sirius_engine/round_history.py` (para que el paquete lo importe sin
-   ningún truco: `from sirius_engine.round_history import ...`), y
-   `scripts/automation/round_history.py` es un enlace simbólico a ese mismo
-   fichero. `sirius_convergence.py` carga su hermano por ruta de fichero
+1. **Enlace simbólico** hermano en `scripts/automation/`, cargado por ruta
+   de fichero: **descartada tras verla fallar**. Fue el primer intento y
+   Quality lo tumbó con `test_el_arbol_versionado_no_contiene_enlaces_simbolicos`,
+   una guarda que ya existía: el árbol versionado no tiene ningún enlace
+   simbólico, y `_contenida_en_raiz` colapsa los `..` sin resolverlos, así que
+   una cita que atravesara uno validaría un fichero distinto del citado.
+   Además habría roto la suite en un checkout de Windows sin `core.symlinks`,
+   donde git materializa el enlace como texto y `scripts/check.ps1` ejecuta la
+   suite entera.
+2. **Ruta relativa resuelta desde el script**, sin fichero intermedio: el
+   contenido vive una sola vez en `src/sirius_engine/round_history.py` -para
+   que el paquete lo importe sin ningún truco: `from sirius_engine.round_history
+   import ...`- y `sirius_convergence.py` lo carga por ruta de fichero
    (`importlib.util.spec_from_file_location`, el mismo patrón que ya usa
-   `tests/automation/test_sirius_convergence.py` para cargar el propio
-   script), sin pasar por `import sirius_engine...` en ningún punto.
-2. **Tercer módulo empaquetado de forma independiente** (`round_history` como
+   `tests/automation/test_sirius_convergence.py` para cargar el propio script),
+   sin pasar por `import sirius_engine...` en ningún punto.
+3. **Tercer módulo empaquetado de forma independiente** (`round_history` como
    distribución propia junto a `sirius`/`sirius_engine`): descartada por el
    backend de construcción (ver más abajo, `uv_build` exige que cada entrada
    de `module-name` sea un paquete real bajo `src/`, no un módulo suelto).
-3. **Cargar `src/sirius_engine/round_history.py` desde el script insertando
+4. **Cargar `src/sirius_engine/round_history.py` desde el script insertando
    `src/` en `sys.path` e importando `sirius_engine.round_history`**:
    descartada porque ejecutar ese `import` construye `sirius_engine` como
    paquete en `sys.modules` -aunque su `__init__.py` esté vacío hoy-, que es
@@ -77,25 +85,26 @@ condición ya verificada como no aplicable antes de tocar código:
 
 ## Decisión
 
-Opción 1. `src/sirius_engine/round_history.py` es la única definición real
+Opción 2. `src/sirius_engine/round_history.py` es la única definición real
 de las tres funciones (con las expresiones regulares y funciones auxiliares
 que necesitan: `ROUND_RECORD_RE`, `RESUME_MARKER_RE`,
 `CI_FAILURE_MARKER_RE`/`CI_SUCCESS_MARKER_RE`, `SEVERITY_WEIGHTS`,
 `severity_weight`, `_normalize_text`, `_normalize_location`). Movidas tal
 cual, sin reescribir su lógica.
 
-`scripts/automation/round_history.py` es un enlace simbólico relativo
-(`../../src/sirius_engine/round_history.py`) al mismo fichero -comprobado
-que `uv build --wheel` resuelve el enlace y empaqueta el contenido real, no
-un enlace roto-.
+**No hay fichero hermano en `scripts/automation/`.** El script resuelve la
+ruta contra el árbol (`Path(__file__).resolve().parents[2] / "src" /
+"sirius_engine" / "round_history.py"`), que es lo mismo que habría hecho el
+enlace pero sin dejar en el árbol un objeto que una guarda prohíbe y que
+Windows no siempre materializa.
 
 `mirror_projection.py` importa el módulo compartido de forma normal:
 `from sirius_engine.round_history import (ci_failure_streak,
 history_after_last_resume, parse_round_records)`. Sin `sys.path`, sin
 `scripts/` en ninguna parte.
 
-`sirius_convergence.py` deja de definir esas funciones y carga su hermano
-`round_history.py` por ruta de fichero
+`sirius_convergence.py` deja de definir esas funciones y carga el módulo del
+paquete por ruta de fichero
 (`importlib.util.spec_from_file_location`, resuelta desde `Path(__file__)`),
 exactamente el mismo patrón que la suite de pruebas ya usaba para cargar el
 propio script. No hace `import sirius_engine` ni `import round_history` a
@@ -167,13 +176,13 @@ empaqueta.
 
 ## Alternativas descartadas y por qué
 
-- **Symlink en dirección inversa** (fichero real en
-  `scripts/automation/round_history.py`, enlace en `src/sirius_engine/`):
-  funcionalmente equivalente -mismo inodo, cualquier lado resuelve al
-  mismo contenido-, pero se prefirió el fichero real dentro del paquete
-  porque son analizadores de dominio (interpretar el historial de una
-  incidencia) que el motor debería poder reutilizar sin que su origen
-  "real" viva en la carpeta de automatización del repositorio.
+- **Enlace simbólico en cualquiera de las dos direcciones**: descartada por
+  la guarda `test_el_arbol_versionado_no_contiene_enlaces_simbolicos`, que
+  prohíbe enlaces en el árbol versionado y tumbó el primer intento. Aunque no
+  existiera esa guarda, el fichero real seguiría yendo dentro del paquete:
+  son analizadores de dominio -interpretar el historial de una incidencia-
+  que el motor debe poder reutilizar sin que su origen viva en la carpeta de
+  automatización del repositorio.
 - **Insertar `scripts/automation` en `sys.path` desde dentro de
   `sirius_convergence.py`** para poder hacer `import round_history` a
   secas: descartada por ser el mismo tipo de mutación global de `sys.path`
