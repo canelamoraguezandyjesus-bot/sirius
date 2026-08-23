@@ -37,6 +37,10 @@ sirius-motor = "sirius_engine.cli:main"
 # #268). Añade líneas al registro versionado y evalúa la racha por clase;
 # no conmuta nada (contrato §11.3).
 sirius-racha = "sirius_engine.seven_day_streak_cli:main"
+# El detector de la regla de las dos rondas (M1, incidencia #277): señala si
+# el mismo archivo lleva 3+ rondas consecutivas de hallazgos, con su
+# evidencia. No para el ciclo ni diagnostica la causa (eso es la #251).
+sirius-familia-repetida = "sirius_engine.round_family_detector_cli:main"
 
 [build-system]
 requires = ["uv_build>=0.11.28,<0.12"]
