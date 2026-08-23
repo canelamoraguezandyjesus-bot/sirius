@@ -161,6 +161,20 @@ def _incompletas(
     return resultado
 
 
+@dataclass(frozen=True, slots=True)
+class ParcialidadDeclarada:
+    """Cuánto de una tabla incompleta está autorizado, y por qué.
+
+    ``ausentes`` fija el conjunto EXACTO de miembros cuya ausencia exime el
+    motivo: no la tabla entera. Si aparece una ausencia nueva que este
+    conjunto no cubre, la guarda tiene que señalarla igual que si la tabla no
+    estuviera declarada -declarar dos de cuatro ausencias no exime una
+    quinta que aparezca después (#288)."""
+
+    motivo: str
+    ausentes: frozenset[str]
+
+
 # --- Parcialidad legítima, declarada por nombre y con motivo (ADR-079) ------
 #
 # La medición de la incidencia #287 recorrió las 15 tablas `dict[Enum, X]` de
@@ -170,28 +184,58 @@ def _incompletas(
 # preferible a una inventada (requisito 4 de la incidencia); esta no está
 # vacía porque la medición encontró parcialidad real, no porque se haya
 # supuesto.
-PARCIALIDAD_DECLARADA: dict[tuple[str, str], str] = {
-    ("src/sirius_engine/dispatch_cli.py", "TABLA_PERFILES"): (
-        "Solo cubre las dos clases despachables (programacion, auditoria): "
-        "dispatch_work_item rechaza cualquier otra clase antes de que el "
-        "perfil llegue a leerse (contrato §12.4, comentario junto a la tabla)."
+PARCIALIDAD_DECLARADA: dict[tuple[str, str], ParcialidadDeclarada] = {
+    ("src/sirius_engine/dispatch_cli.py", "TABLA_PERFILES"): ParcialidadDeclarada(
+        motivo=(
+            "Solo cubre las dos clases despachables (programacion, auditoria): "
+            "dispatch_work_item rechaza cualquier otra clase antes de que el "
+            "perfil llegue a leerse (contrato §12.4, comentario junto a la tabla)."
+        ),
+        ausentes=frozenset(
+            {"CONVERSACION_NO_APLICA", "INVESTIGACION", "DOCUMENTACION", "CONSULTA_LARGA", "MIXTA"}
+        ),
     ),
-    ("src/sirius_engine/dispatcher.py", "TABLA_ACTIVACION"): (
-        "Tabla cerrada de dos filas fijada por el contrato §12.4 (ADR-068): "
-        "añadir una fila es una enmienda del contrato, no una decisión de "
-        "implementación (comentario junto a la tabla)."
+    ("src/sirius_engine/dispatcher.py", "TABLA_ACTIVACION"): ParcialidadDeclarada(
+        motivo=(
+            "Tabla cerrada de dos filas fijada por el contrato §12.4 (ADR-068): "
+            "añadir una fila es una enmienda del contrato, no una decisión de "
+            "implementación (comentario junto a la tabla)."
+        ),
+        ausentes=frozenset(
+            {"CONVERSACION_NO_APLICA", "INVESTIGACION", "DOCUMENTACION", "CONSULTA_LARGA", "MIXTA"}
+        ),
     ),
-    ("src/sirius_engine/intent_interpreter.py", "_ALCANCE_POR_CLASE"): (
-        "clase_efectiva, en interpretar_intencion_v0, nunca vale "
-        "CONVERSACION_NO_APLICA ni MIXTA: solo llega aquí una clase de "
-        "_VERBO_A_CLASE (programacion/investigacion/documentacion/auditoria) "
-        "o el valor por defecto CONSULTA_LARGA."
+    ("src/sirius_engine/intent_interpreter.py", "_ALCANCE_POR_CLASE"): ParcialidadDeclarada(
+        motivo=(
+            "clase_efectiva, en interpretar_intencion_v0, nunca vale "
+            "CONVERSACION_NO_APLICA ni MIXTA: solo llega aquí una clase de "
+            "_VERBO_A_CLASE (programacion/investigacion/documentacion/auditoria) "
+            "o el valor por defecto CONSULTA_LARGA."
+        ),
+        ausentes=frozenset({"CONVERSACION_NO_APLICA", "MIXTA"}),
     ),
-    ("src/sirius_engine/intent_interpreter.py", "_CRITERIO_POR_CLASE"): (
-        "Misma clase_efectiva que _ALCANCE_POR_CLASE, justo arriba en el "
-        "mismo fichero: comparten el mismo argumento."
+    ("src/sirius_engine/intent_interpreter.py", "_CRITERIO_POR_CLASE"): ParcialidadDeclarada(
+        motivo=(
+            "Misma clase_efectiva que _ALCANCE_POR_CLASE, justo arriba en el "
+            "mismo fichero: comparten el mismo argumento."
+        ),
+        ausentes=frozenset({"CONVERSACION_NO_APLICA", "MIXTA"}),
     ),
 }
+
+
+def _declaraciones_no_coinciden(
+    incompletas: list[tuple[TablaEnum, frozenset[str]]],
+    declaradas: dict[tuple[str, str], ParcialidadDeclarada],
+) -> list[tuple[TablaEnum, frozenset[str], frozenset[str]]]:
+    """Tablas declaradas cuyo conjunto de ausentes actual ya no coincide con
+    el declarado: apareció una ausencia nueva, o desapareció una declarada."""
+    resultado = []
+    for tabla, faltan in incompletas:
+        declarada = declaradas.get((tabla.archivo, tabla.nombre))
+        if declarada is not None and faltan != declarada.ausentes:
+            resultado.append((tabla, faltan, declarada.ausentes))
+    return resultado
 
 
 def test_las_tablas_indexadas_por_enum_cubren_el_enum_o_estan_declaradas() -> None:
@@ -207,6 +251,14 @@ def test_las_tablas_indexadas_por_enum_cubren_el_enum_o_estan_declaradas() -> No
         f"{sorted(faltan)}. Complétala, o declárala en PARCIALIDAD_DECLARADA "
         "con el motivo."
         for tabla, faltan in sin_declarar
+    )
+
+    no_coinciden = _declaraciones_no_coinciden(incompletas, PARCIALIDAD_DECLARADA)
+    assert not no_coinciden, "\n".join(
+        f"{tabla.archivo}:{tabla.nombre} (dict[{tabla.enum}, ...]) declaraba ausentes "
+        f"{sorted(ausentes_declarados)} pero ahora faltan {sorted(faltan)}. Actualiza "
+        "PARCIALIDAD_DECLARADA con el conjunto exacto, o completa la tabla."
+        for tabla, faltan, ausentes_declarados in no_coinciden
     )
 
 
@@ -291,6 +343,75 @@ def test_la_guarda_no_senala_la_misma_tabla_ya_completa() -> None:
     )
     (tabla,) = [t for t in tablas if t.nombre == "_SAFE_MESSAGES"]
     assert not (enums[tabla.enum] - tabla.claves)
+
+
+_ENUM_FIXTURE_DECLARACION = """
+from enum import StrEnum
+
+
+class Perfil(StrEnum):
+    PROGRAMACION = "programacion"
+    AUDITORIA = "auditoria"
+    DOCUMENTACION = "documentacion"
+"""
+
+#: Como TABLA_PERFILES real: cubre dos de las tres variantes, y la ausente
+#: (DOCUMENTACION) es la única que la declaración de abajo autoriza.
+_TABLA_FIXTURE_DECLARACION_ORIGINAL = """
+from fixture_enum_declaracion import Perfil
+
+TABLA_PERFILES: dict[Perfil, str] = {
+    Perfil.PROGRAMACION: "x",
+    Perfil.AUDITORIA: "x",
+}
+"""
+
+#: Retira PROGRAMACION de la tabla, igual que el ejemplo del hallazgo
+#: CODEX-001 (#288): la tabla sigue en PARCIALIDAD_DECLARADA por su clave
+#: (archivo, nombre), pero ahora le falta una variante que la declaración
+#: original no autorizaba.
+_TABLA_FIXTURE_DECLARACION_NUEVA_OMISION = _TABLA_FIXTURE_DECLARACION_ORIGINAL.replace(
+    '    Perfil.PROGRAMACION: "x",\n', ""
+)
+
+
+def test_la_declaracion_no_exime_una_omision_nueva_de_la_misma_tabla() -> None:
+    """CODEX-001 (#288): antes, `(archivo, nombre) in PARCIALIDAD_DECLARADA`
+    eximía la tabla entera, así que una omisión nueva -no la que motivó la
+    declaración original- pasaba en silencio mientras la tabla siguiera
+    incompleta. `_declaraciones_no_coinciden` compara el conjunto EXACTO de
+    ausentes declarado contra el actual: una ausencia no autorizada tiene que
+    seguir señalándose."""
+    declarada = {
+        ("fixture_tabla_declaracion.py", "TABLA_PERFILES"): ParcialidadDeclarada(
+            motivo="Solo cubre las clases despachables (fixture).",
+            ausentes=frozenset({"DOCUMENTACION"}),
+        )
+    }
+
+    enums, tablas_original = _analizar(
+        [
+            ("fixture_enum_declaracion.py", _ENUM_FIXTURE_DECLARACION),
+            ("fixture_tabla_declaracion.py", _TABLA_FIXTURE_DECLARACION_ORIGINAL),
+        ]
+    )
+    incompletas_original = _incompletas(enums, tablas_original)
+    assert not _declaraciones_no_coinciden(incompletas_original, declarada)
+
+    enums, tablas_nueva = _analizar(
+        [
+            ("fixture_enum_declaracion.py", _ENUM_FIXTURE_DECLARACION),
+            ("fixture_tabla_declaracion.py", _TABLA_FIXTURE_DECLARACION_NUEVA_OMISION),
+        ]
+    )
+    incompletas_nueva = _incompletas(enums, tablas_nueva)
+    no_coinciden = _declaraciones_no_coinciden(incompletas_nueva, declarada)
+
+    assert len(no_coinciden) == 1
+    tabla, faltan, ausentes_declarados = no_coinciden[0]
+    assert tabla.nombre == "TABLA_PERFILES"
+    assert faltan == {"DOCUMENTACION", "PROGRAMACION"}
+    assert ausentes_declarados == {"DOCUMENTACION"}
 
 
 def test_una_tabla_con_clave_compuesta_no_se_reconoce() -> None:

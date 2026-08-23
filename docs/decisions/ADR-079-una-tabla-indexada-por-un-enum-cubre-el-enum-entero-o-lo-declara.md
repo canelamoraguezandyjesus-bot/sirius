@@ -74,13 +74,17 @@ literal, y exige que sus claves cubran el enum entero. Una tabla incompleta
 sin declarar rompe la prueba nombrando el fichero, la tabla y las variantes
 que faltan.
 
-La parcialidad legítima se declara en `PARCIALIDAD_DECLARADA`
-(diccionario `(archivo, nombre) -> motivo` dentro del propio test): la lista
-cerrada de las 4 tablas que la medición confirmó incompletas a propósito. Dos
-pruebas complementarias evitan que esa lista se pudra: una falla si una
-entrada declarada ya está completa (la excepción sobra), otra falla si la
-tabla que declaraba ya no existe con ese nombre (la excepción queda
-huérfana).
+La parcialidad legítima se declara en `PARCIALIDAD_DECLARADA` (diccionario
+`(archivo, nombre) -> ParcialidadDeclarada(motivo, ausentes)` dentro del
+propio test): la lista cerrada de las 4 tablas que la medición confirmó
+incompletas a propósito. `ausentes` fija el conjunto exacto de miembros cuya
+falta autoriza el motivo -no la tabla entera-, así que si aparece una
+ausencia nueva que ese conjunto no cubre la guarda la sigue señalando aunque
+la tabla ya esté en la lista (#288). Tres pruebas complementarias evitan que
+esa lista se pudra: una falla si el conjunto de ausentes ya no coincide con
+el declarado, otra si una entrada declarada ya está completa (la excepción
+sobra), otra si la tabla que declaraba ya no existe con ese nombre (la
+excepción queda huérfana).
 
 ### Qué reconoce el criterio, y qué no (requisito 6 de la incidencia #287)
 
