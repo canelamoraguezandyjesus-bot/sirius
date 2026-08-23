@@ -32,24 +32,25 @@ texto de la revisión, la misma familia de defecto:
   #186).
 
 Ningún otro archivo, en ninguna de las 14 incidencias, llegó a 3 rondas
-consecutivas: el umbral de 2 -tocar el mismo archivo en dos rondas seguidas-
-se hubiera disparado también sobre incidencias que progresaron con
-normalidad (p. ej. #268, requisito 2), que es exactamente el falso positivo
-que la nota de arranque de la incidencia #277 advierte como el riesgo real
-de este bloque. Con el umbral en 3, la medición no encontró ningún falso
+consecutivas. Con el umbral en 3, la medición no encontró ningún falso
 positivo entre los aciertos: 4 aciertos, 0 falsos, sobre el conjunto medido.
 
 **Lo que este criterio NO atrapa, y por qué eso es aceptable.** La
-incidencia #268 (citada en el requisito 2) tuvo tres rondas de revisión con
-hallazgos en ``seven_day_streak_cli.py`` y luego en ``mirror_projection.py``:
-el mismo archivo solo se repite en 2 rondas consecutivas (1 y 2), nunca en
-3, así que este detector no la señala. El requisito 2 solo exige acertar en
-**al menos una** de las dos incidencias citadas (#268 o #246); este bloque
-acierta en #246 -y, con evidencia todavía más explícita, en #211- sin
-inventar una segunda señal que la medición no pudiera respaldar (criterio de
-parada (a) de la nota de arranque: si la medición hubiera mostrado más
-falsos que ciertos con un umbral más laxo, el criterio se cambiaba o el
-bloque se paraba).
+incidencia #268 (citada en el requisito 2) tuvo rondas 1-2 de revisión con
+hallazgos en ``seven_day_streak_cli.py`` que sí eran la misma familia de
+defecto real -confirmado porque el corrector, aplicando la regla de las dos
+rondas de ADR-001 antes de una ronda 3, encontró la causa raíz
+(``mirror_projection.py`` inyectando ``scripts/`` en ``sys.path``) y la
+registró en la incidencia #272 (H-13), corregida en la PR #283-: no es un
+caso de progreso normal. El mismo archivo solo se repite en 2 rondas
+consecutivas, nunca en 3, así que este detector no la señala: es una familia
+real que el umbral elegido no atrapa, no un falso positivo evitado. El
+requisito 2 solo exige acertar en **al menos una** de las dos incidencias
+citadas (#268 o #246); este bloque acierta en #246 -y, con evidencia todavía
+más explícita, en #211- sin inventar una segunda señal que la medición no
+pudiera respaldar (criterio de parada (a) de la nota de arranque: si la
+medición hubiera mostrado más falsos que ciertos con un umbral más laxo, el
+criterio se cambiaba o el bloque se paraba).
 
 Determinista y sin red: recibe los registros de ronda que
 :func:`sirius_engine.round_history.parse_round_records` ya extrajo -no lee
@@ -66,8 +67,9 @@ from sirius_engine.round_history import _normalize_location
 
 #: Medido sobre las 14 incidencias reales del repositorio con más de una
 #: ronda (ver el docstring del módulo): 3 rondas consecutivas sobre el mismo
-#: archivo dio 4 aciertos y 0 falsos positivos; 2 hubiera señalado también
-#: progreso normal (incidencia #268).
+#: archivo dio 4 aciertos y 0 falsos positivos. La incidencia #268 (2 rondas
+#: consecutivas, nunca 3) es una familia real que este umbral no atrapa, no
+#: un falso positivo evitado; ver el docstring del módulo.
 RONDAS_CONSECUTIVAS_MINIMAS = 3
 
 

@@ -126,12 +126,22 @@ de la incidencia #277 exige acertar en #268 o #246; el criterio acierta en
 #246 (y, con evidencia más explícita todavía, en #211).
 
 Las 10 incidencias restantes con más de una ronda no dispararon el
-criterio, y ninguna debía hacerlo: en particular #268 (rondas 1-2 comparten
-`seven_day_streak_cli.py`, pero solo 2 consecutivas, nunca 3) y #177
-(`memory_store.py` en las rondas 1, 2 y 5 -no consecutivas-, con progreso
-real y una decisión humana de por medio) son justo los casos que un umbral
-más laxo (2 consecutivas, o 3 sin exigir consecutividad) habría señalado de
-más.
+criterio. De ellas, #177 (`memory_store.py` en las rondas 1, 2 y 5 -no
+consecutivas-, con progreso real y una decisión humana de por medio) es
+justo el caso que un umbral más laxo (3 rondas sin exigir consecutividad)
+habría señalado de más, y que por tanto no debía dispararse.
+
+#268 es un caso distinto y no debe leerse igual que #177: las rondas 1-2
+sobre `seven_day_streak_cli.py` sí eran la misma familia de defecto real -no
+un caso que "no debía" señalarse-. El propio corrector, aplicando la regla
+de las dos rondas de ADR-001 antes de que existiera una ronda 3, paró,
+encontró la causa raíz (`mirror_projection.py` inyectando `scripts/` en
+`sys.path`, inutilizable desde un wheel) y la registró en la incidencia #272
+(H-13), corregida en la PR #283 (fusionada 2026-08-23T01:35:36Z). El
+criterio de este bloque no señala #268 porque el mismo archivo solo llega a
+2 rondas consecutivas, nunca a 3: es una familia real que el umbral elegido
+no atrapa -limitación ya reconocida en la sección "Consecuencias"-, no un
+falso positivo evitado.
 
 Complemento medido y descartado: `severidad_total` no decreciente entre
 apariciones consecutivas del mismo archivo, sobre los 6 archivos que llegan
