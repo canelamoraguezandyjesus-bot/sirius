@@ -67,6 +67,40 @@ decir por qué.
 No es lentitud: es una ventana. Por eso falla la ejecución cargada y pasa la que
 va sola, aun con diez veces de margen.
 
+**Dónde está la ventana, exactamente.** `SpeakWorker` es un `QRunnable` y corre
+`StudioVoiceUseCase.speak()` en un `QThreadPool`, **nunca en el hilo de la
+interfaz** (`src/sirius/presentation/studio_workers.py`). Dentro de `speak()`:
+
+```python
+synthesized = self._text_to_speech.synthesize(...)   # aquí crece `requests`
+...
+self._record_speech(synthesized)                     # <- la ventana vive aquí
+return self._play(synthesized)                       # aquí se llama a play()
+```
+
+El hilo de la interfaz ve crecer `requests` y `waitUntil` vuelve **de inmediato**,
+mientras el trabajador todavía está entre las dos líneas. Sin esa frontera de
+hilos la ventana no existiría —`speak()` es síncrono—, y por eso nombrarla
+importa: es lo que convierte un orden aparentemente garantizado en una carrera.
+
+## Un resultado negativo que no se calla
+
+**No se consiguió reproducir el fallo.** Con la espera vieja restaurada y la
+guarda puesta: tres tandas de **dos suites de GUI concurrentes** —la condición
+real de CI, dos ejecuciones a la vez— dieron `393 passed` las seis veces. Antes,
+dos vueltas de la suite bajo carga de CPU en todos los núcleos menos uno: también
+`393 passed`.
+
+Eso **no desmiente el diagnóstico**: la ventana es demostrable leyendo el código,
+y es estrecha —un registro de presupuesto entre dos líneas—, que es justamente por
+qué el fallo es raro y no constante. Pero sí obliga a decir dos cosas:
+
+1. La causa está **razonada sobre el código y sobre la frontera de hilos**, no
+   reproducida a voluntad. Se dice así.
+2. **Volver a lanzar la prueba no vale como comprobación de este arreglo.** Ocho
+   ejecuciones en verde no distinguen «arreglado» de «hoy no tocó». Lo que sí
+   comprueba es la guarda del doble, que sí se ve fallar a voluntad.
+
 **La prueba de al lado ya tenía la cura.** `test_the_second_piece_waits_for_the_first_to_finish`,
 cuarenta líneas más abajo, espera a que el sistema quede quieto antes de llamar a
 `finish()`. El conocimiento existía en una prueba y no en su vecina, que es la
@@ -144,6 +178,12 @@ ADR cierra uno, con causa medida. No audita los otros, y decir lo contrario
 sería vender más de lo que se compra. Lo que sí queda para todos ellos es la
 lección: un plazo agotado en una prueba de GUI merece que se mida la duración
 real antes de culpar a la máquina.
+
+Lo poco que sí se midió sobre ellas: con la espera vieja restaurada, ocho
+ejecuciones de la suite de GUI —seis de ellas concurrentes de dos en dos— no
+sacaron ningún otro fallo. Es una señal débil a favor de que esto era un sitio y
+no un sistema, y se presenta como lo que es: ausencia de evidencia, no evidencia
+de ausencia.
 
 **Un doble de pruebas es una pieza de vigilancia, no de comodidad.** Su trabajo
 no es dejar pasar: es delatar. Cuando un doble tolera en silencio una secuencia
