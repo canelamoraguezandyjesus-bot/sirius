@@ -130,14 +130,27 @@ defectos:
       - src/sirius_engine/adapters/memory_dispatch_journal.py
       - src/sirius_engine/adapters/durable/dispatch_journal.py
 
+  - id: H-14
+    titulo: El corrector no puede arreglar un fallo de Quality, aunque su prompt diga que si
+    bloque: ciclo
+    gravedad: media
+    estado: abierto
+    incidencia: 282
+    ficheros:
+      - .github/workflows/repair-sirius-work.yml
+      - scripts/automation/prompts/corrector.md
+
   - id: H-13
     titulo: mirror_projection inyecta scripts en sys.path desde __file__, asi que el paquete no es instalable
     bloque: A3
     gravedad: media
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 87163d99b4222447404171000f8e82c512740ab0
     incidencia: 272
     ficheros:
       - src/sirius_engine/mirror_projection.py
+      - src/sirius_engine/round_history.py
+      - scripts/automation/sirius_convergence.py
       - pyproject.toml
 
   - id: H-12
