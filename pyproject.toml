@@ -33,6 +33,10 @@ sirius-despachar = "sirius_engine.dispatch_cli:main"
 # construían las pruebas. `tests/engine/test_cli_entrypoint.py` parte de esta
 # línea, así que ninguna fusión en verde puede volver a quitarla.
 sirius-motor = "sirius_engine.cli:main"
+# El ejecutor diario de D1a y el contador de los siete días (D1b, incidencia
+# #268). Añade líneas al registro versionado y evalúa la racha por clase;
+# no conmuta nada (contrato §11.3).
+sirius-racha = "sirius_engine.seven_day_streak_cli:main"
 
 [build-system]
 requires = ["uv_build>=0.11.28,<0.12"]
