@@ -49,6 +49,15 @@ SCRIPTS_RUN_ON_THE_RUNNER = (
     "sirius_codex_review.py",
     "sirius_convergence.py",
     "validate_issue_body.py",
+    # `round_history.py` NO lo descubre la derivación de abajo TAMPOCO, por el
+    # motivo contrario a `sirius_check_docs.py`: nadie lo invoca como script
+    # (`python3 round_history.py`) porque no es uno -es el módulo compartido
+    # que `sirius_convergence.py` carga por ruta de fichero (H-13, incidencia
+    # #275)-, así que ningún `.yml`/`.sh` menciona su nombre. Pero su sintaxis
+    # la compila el MISMO `python3` del runner en cuanto `sirius_convergence.py`
+    # lo importa, así que tiene que pasar la misma comprobación que un script
+    # de verdad, aquí a mano.
+    "round_history.py",
 )
 
 
