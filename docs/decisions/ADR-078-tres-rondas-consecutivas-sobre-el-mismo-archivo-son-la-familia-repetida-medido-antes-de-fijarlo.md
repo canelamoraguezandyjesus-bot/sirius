@@ -185,8 +185,12 @@ sigue en verde sin modificar ese archivo (requisito 6).
 ## Alternativas descartadas y por qué
 
 - **Mismo archivo en 2 rondas consecutivas**: descartada por la nota de
-  arranque antes de medir -es el caso normal declarado en el requisito 3- y
-  confirmada como mala elección por los datos (#268 la habría disparado).
+  arranque antes de medir -es el caso normal declarado en el requisito 3:
+  corregir un archivo y que la revisión lo mire una vez más-. El rechazo se
+  sostiene en ese razonamiento a priori, **no en #268**: ese caso lo habría
+  señalado con acierto, porque sus rondas 1-2 eran una familia real (H-13,
+  incidencia #272, corregida en la PR #283). Que un umbral más laxo lo
+  hubiera atrapado es el precio del elegido, no un argumento a su favor.
 - **Mismo archivo en 3+ rondas sin exigir consecutividad**: descartada tras
   medir -#177 la habría disparado sobre un caso de progreso real-.
 - **`severidad_total` no decreciente como señal adicional**: medida y

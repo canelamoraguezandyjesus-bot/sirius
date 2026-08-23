@@ -4,8 +4,10 @@ Estas pruebas fijan el criterio medido en el módulo bajo prueba: 3+ rondas
 consecutivas sobre el mismo archivo. Dos de ellas replican incidencias reales
 de este repositorio -#246 y #211-, comprobadas a mano leyendo el texto de la
 revisión (requisito 2); otra replica #268 sin cortar, tal cual ocurrió, para
-demostrar que NO se señala (requisito 3: el falso positivo más probable es
-justo el que #268 hubiera producido con un umbral de 2).
+fijar que el umbral elegido NO la señala. Ojo con lo que eso significa: #268
+era una familia REAL -sus rondas 1-2 destaparon H-13, incidencia #272- así que
+esa prueba fija una limitación conocida del umbral, no un acierto. El falso
+positivo del requisito 3 se prueba aparte, con un caso construido.
 """
 
 from __future__ import annotations
@@ -108,12 +110,19 @@ def test_detecta_la_incidencia_211_la_propia_revision_confirma_la_familia() -> N
 
 
 def test_no_senala_dos_rondas_consecutivas_sobre_el_mismo_archivo() -> None:
-    """El falso positivo más probable: corregir un fichero y que se revise otra vez.
+    """Dos rondas seguidas sobre el mismo archivo no bastan, y aquí se paga.
 
-    Es el patrón real y sin bucle de la incidencia #268 (rondas 1 y 2, antes
-    de que la ronda 3 pasara a un archivo distinto): dos rondas seguidas
-    tocan ``seven_day_streak_cli.py`` y la incidencia progresó con
-    normalidad. Con el umbral en 3 esto no se señala.
+    Reproduce la incidencia #268 tal cual ocurrió: rondas 1 y 2 sobre
+    ``seven_day_streak_cli.py``, y la 3 sobre un archivo distinto. Con el
+    umbral en 3 consecutivas no se señala.
+
+    **Y era una familia real.** Sus rondas 1-2 destaparon H-13 -el paquete no
+    era instalable- registrado en la incidencia #272 y corregido en la PR
+    #283. Esta prueba NO fija un falso positivo evitado: fija el precio del
+    umbral elegido, para que se vea el día que alguien decida bajarlo. El
+    falso positivo que el requisito 3 pide -corregir un archivo y que la
+    revisión lo mire una vez más, sin bucle- se prueba con un caso
+    construido, no con este.
     """
     cli = "src/sirius_engine/seven_day_streak_cli.py"
     otro = "src/sirius_engine/seven_day_streak.py"
