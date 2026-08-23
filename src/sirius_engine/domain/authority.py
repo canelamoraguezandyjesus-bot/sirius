@@ -123,12 +123,20 @@ def autoridad_de_clase(
     sin entradas para ``clase``, manda la tabla estática, igual que siempre.
     Con entradas, manda la más reciente por ``instante`` -un registro que
     solo crece y nunca reordena lo anterior, así que "la más reciente" es
-    siempre la vigente.
+    siempre la vigente. Si dos entradas comparten ``instante`` -reversión y
+    conmutación anterior con el mismo segundo, por ejemplo-, el desempate es
+    la posición en ``registro``: gana la añadida después, nunca la primera
+    que ``max`` encuentre, porque el registro append-only ya codifica ese
+    orden y es la única fuente de verdad sobre "qué pasó después" cuando el
+    reloj no distingue (CODEX-001).
     """
     vigente = _TABLA_AUTORIDAD[clase]
     entradas_de_clase = [entrada for entrada in registro if entrada.clase is clase]
     if entradas_de_clase:
-        vigente = max(entradas_de_clase, key=lambda entrada: entrada.instante).autoridad
+        vigente = max(
+            enumerate(entradas_de_clase),
+            key=lambda indexada: (indexada[1].instante, indexada[0]),
+        )[1].autoridad
     return vigente
 
 

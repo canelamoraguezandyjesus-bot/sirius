@@ -164,6 +164,33 @@ def test_la_entrada_mas_reciente_manda() -> None:
     assert autoridad_de_clase(WorkItemClass.PROGRAMACION, registro=(conmuta,)) is Autoridad.MOTOR
 
 
+def test_conmutaciones_con_el_mismo_instante_desempatan_por_orden_de_registro() -> None:
+    """Mismo `instante`: gana la añadida después al registro, no la primera de la lista.
+
+    Reproduce CODEX-001: una reversión con el mismo instante que la
+    conmutación anterior debe dejar la clase en INCIDENCIA, no en MOTOR -que
+    es lo que `max()` sin desempate devolvía al conservar la primera entrada
+    con el máximo `instante` empatado.
+    """
+    mismo_instante = _instante(1)
+    conmuta = EntradaConmutacion(
+        instante=mismo_instante,
+        clase=WorkItemClass.PROGRAMACION,
+        autoridad=Autoridad.MOTOR,
+        motivo="conmuta",
+    )
+    revierte = EntradaConmutacion(
+        instante=mismo_instante,
+        clase=WorkItemClass.PROGRAMACION,
+        autoridad=Autoridad.INCIDENCIA,
+        motivo="revierte con el mismo instante, añadida después",
+    )
+    assert (
+        autoridad_de_clase(WorkItemClass.PROGRAMACION, registro=(conmuta, revierte))
+        is Autoridad.INCIDENCIA
+    )
+
+
 def test_formatear_y_parsear_una_entrada_es_la_identidad() -> None:
     entrada = EntradaConmutacion(
         instante=_instante(3),
