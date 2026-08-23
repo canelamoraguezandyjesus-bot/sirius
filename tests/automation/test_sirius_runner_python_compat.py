@@ -51,6 +51,16 @@ SCRIPTS_RUN_ON_THE_RUNNER = (
     "validate_issue_body.py",
 )
 
+#: El módulo compartido no vive en `scripts/automation/` -vive en el paquete,
+#: y `sirius_convergence.py` lo carga por ruta de fichero (H-13, incidencia
+#: #275)-, así que no puede entrar en la tupla de arriba, que resuelve nombres
+#: contra ese directorio. Pero lo compila el MISMO `python3` del runner en
+#: cuanto `sirius_convergence.py` lo carga, así que necesita exactamente la
+#: misma comprobación, y por eso tiene la suya propia justo debajo.
+MODULO_COMPARTIDO = (
+    Path(__file__).resolve().parents[2] / "src" / "sirius_engine" / "round_history.py"
+)
+
 
 @pytest.mark.parametrize("name", SCRIPTS_RUN_ON_THE_RUNNER)
 def test_script_parses_with_the_runner_python(name: str) -> None:
@@ -65,6 +75,20 @@ def test_script_parses_with_the_runner_python(name: str) -> None:
             f"(línea {exc.lineno}): {exc.msg}. Los workflows lo ejecutan con el "
             f"`python3` del sistema del runner ({version}), no con el intérprete "
             "del entorno de desarrollo."
+        )
+
+
+def test_el_modulo_compartido_tambien_compila_con_el_python_del_runner() -> None:
+    """Lo carga `sirius_convergence.py`, que corre con el `python3` del sistema."""
+    source = MODULO_COMPARTIDO.read_text(encoding="utf-8")
+    try:
+        ast.parse(source, filename=str(MODULO_COMPARTIDO), feature_version=RUNNER_PYTHON)
+    except SyntaxError as exc:  # pragma: no cover - el mensaje es el valor
+        version = ".".join(str(part) for part in RUNNER_PYTHON)
+        pytest.fail(
+            f"round_history.py usa sintaxis que Python {version} no entiende "
+            f"(línea {exc.lineno}): {exc.msg}. Lo carga sirius_convergence.py, que "
+            "los workflows ejecutan con el `python3` del sistema del runner."
         )
 
 

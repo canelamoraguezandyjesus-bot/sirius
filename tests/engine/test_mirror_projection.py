@@ -14,8 +14,10 @@ Requisitos ejercitados aquí:
 
 from __future__ import annotations
 
+import importlib
 import json
 import re
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -757,3 +759,48 @@ def test_el_vocabulario_interpretado_es_el_que_de_verdad_se_crea() -> None:
         f"solo se crean: {sorted(creadas - set(_LABEL_STATE))}; "
         f"solo se interpretan: {sorted(set(_LABEL_STATE) - creadas)}"
     )
+
+
+# --- H-13 (incidencia #275): ejecutar la proyección ya no exige el árbol ---
+
+
+def test_proyectar_funciona_sin_scripts_en_sys_path_ni_automation_importable() -> None:
+    """LLAMAR a la proyección ya no exige el árbol de código, no solo importarla.
+
+    Antes de este bloque, ``mirror_projection`` insertaba ``scripts/`` en
+    ``sys.path`` e importaba ``automation.sirius_convergence`` en cuanto se
+    LLAMABA a ``proyectar_work_item`` (incidencia #272): fuera de un checkout
+    con ese árbol -por ejemplo, tras instalar el paquete desde un wheel- la
+    llamada fallaba con ``ModuleNotFoundError``, aunque el módulo se pudiera
+    IMPORTAR sin problema. Esta prueba quita ``scripts/`` de ``sys.path``,
+    confirma que ``automation`` deja de ser importable en ese estado, y
+    entonces LLAMA a ``proyectar_work_item`` sobre el ciclo completo de la
+    fixture #186: si el arreglo no alcanzara para la llamada -y no solo para
+    el import-, esta prueba fallaría con el mismo ``ModuleNotFoundError``.
+    """
+    scripts_dir = (Path(__file__).resolve().parents[2] / "scripts").resolve()
+    ruta_original = list(sys.path)
+    sys.path[:] = [p for p in sys.path if Path(p).resolve() != scripts_dir]
+    sys.modules.pop("automation", None)
+    sys.modules.pop("automation.sirius_convergence", None)
+    try:
+        with pytest.raises(ModuleNotFoundError):
+            importlib.import_module("automation")
+
+        fixture = _cargar_fixture("github_issue_186.json")
+        metadatos, cuerpo, comentarios = _lecturas_desde_fixture(fixture)
+
+        mirrored = proyectar_work_item(
+            repo=_REPO,
+            numero=186,
+            metadatos=metadatos,
+            cuerpo=cuerpo,
+            comentarios=comentarios,
+            ahora=_AHORA,
+        )
+
+        assert [r.numero for r in mirrored.rondas] == list(range(1, 8))
+        assert mirrored.fallos_quality_consecutivos == 0
+        assert len(mirrored.eventos_quality) == 8
+    finally:
+        sys.path[:] = ruta_original
