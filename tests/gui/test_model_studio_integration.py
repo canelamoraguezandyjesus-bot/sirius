@@ -755,7 +755,11 @@ def test_nothing_is_said_twice(qtbot: QtBot, tmp_path: Path) -> None:
 
     window.studio_page.input.setPlainText("¿por dónde empiezo?")
     window.studio_page.send_button.click()
-    qtbot.waitUntil(lambda: len(text_to_speech.requests) >= 1, timeout=5000)
+    # Esperar la SÍNTESIS no basta: entre que se registra la petición y que
+    # `play()` arranca hay una ventana que la carga de la máquina ensancha, y un
+    # `finish()` caído ahí dentro se perdía en silencio (#290). Lo que hay que
+    # esperar es que el audio esté SONANDO.
+    qtbot.waitUntil(lambda: len(playback.played) >= 1, timeout=5000)
     playback.finish()  # el primer trozo termina de sonar
     qtbot.waitUntil(lambda: len(text_to_speech.requests) == 2, timeout=5000)
 

@@ -176,8 +176,28 @@ class FakeAudioPlayback:
         return self._muted
 
     def finish(self) -> None:
-        """Simula que el audio terminó de sonar por sí solo."""
+        """Simula que el audio terminó de sonar por sí solo.
+
+        **Grita si no hay nada sonando**, en vez de callarse. Un `finish()` que
+        llega antes de que `play()` se haya llamado no tiene a quién avisar; si
+        se traga el aviso, el trozo siguiente no se sintetiza nunca y la prueba
+        muere en un plazo agotado de cinco segundos **sin causa visible**. Eso
+        es lo que le pasó a `test_nothing_is_said_twice` el 23-08-2026, con dos
+        ejecuciones de Quality sobre el mismo commit dando resultados distintos
+        (#290, ADR-081).
+
+        La trampa es fina: esperar a que se registre la petición de SÍNTESIS no
+        garantiza que la REPRODUCCIÓN haya arrancado, y entre las dos hay una
+        ventana que la carga de la máquina ensancha. Lo que hay que esperar es
+        que crezca `played`.
+        """
+        if self._on_finished is None:
+            raise AssertionError(
+                "finish() sin nada sonando: play() todavía no se ha llamado (o ya "
+                "hubo un stop()), así que el aviso de final no tiene destinatario "
+                "y se perdería en silencio. Espera a que crezca `played` antes de "
+                "dar el audio por terminado."
+            )
         self._playing = False
         callback, self._on_finished = self._on_finished, None
-        if callback is not None:
-            callback()
+        callback()

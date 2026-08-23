@@ -164,3 +164,13 @@ defectos:
       - src/sirius_engine/ports/store.py
       - src/sirius_engine/domain/work_item.py
       - src/sirius_engine/dispatch_cli.py
+
+  - id: H-15
+    titulo: Un final de audio que llega antes de tiempo se pierde en silencio y para el ciclo al azar
+    bloque: gui
+    gravedad: media
+    estado: abierto
+    incidencia: 290
+    ficheros:
+      - src/sirius/adapters/audio/fake.py
+      - tests/gui/test_model_studio_integration.py
