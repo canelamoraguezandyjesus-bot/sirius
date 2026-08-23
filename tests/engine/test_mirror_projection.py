@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -27,6 +28,8 @@ from sirius_engine.adapters.fixture_mirror import FixedGitHubMirrorReader
 from sirius_engine.domain.mirror import EspejoIlegibleError, MirroredWorkItem
 from sirius_engine.domain.work_item import WorkItemPhase, WorkItemState
 from sirius_engine.mirror_projection import (
+    _LABEL_PRIORITY,
+    _LABEL_STATE,
     leer_y_proyectar_run,
     leer_y_proyectar_work_item,
     proyectar_run,
@@ -710,6 +713,52 @@ def test_leer_y_proyectar_run_orquesta_el_puerto() -> None:
     mirrored = leer_y_proyectar_run(puerto, repo=_REPO, run_id="123", ahora=_AHORA)
     assert mirrored is not None
     assert mirrored.conclusion == "success"
+
+
+# --- Las tres listas del vocabulario de etiquetas ----------------------------
+#
+# El estado del ciclo vive en tres sitios que tienen que decir lo mismo:
+# quién CREA las etiquetas (el workflow de bootstrap), quién las INTERPRETA
+# (`_LABEL_STATE`) y en qué ORDEN desempata (`_LABEL_PRIORITY`). Ninguna
+# prueba las ataba, y el camino de fallo no es ruidoso: una etiqueta que esté
+# en `_LABEL_STATE` y no en `_LABEL_PRIORITY` hace que `_estado_y_fase`
+# recorra la prioridad sin encontrarla y devuelva `(None, None, False)` — es
+# decir, «esta incidencia no tiene ninguna etiqueta `sirius:*`», con el tercer
+# elemento diciendo además que no hay contradicción. La proyección quedaría
+# ciega justo sobre la etiqueta nueva.
+
+_BOOTSTRAP = (
+    Path(__file__).resolve().parents[2]
+    / ".github"
+    / "workflows"
+    / "bootstrap-sirius-automation-labels.yml"
+)
+
+
+def _etiquetas_que_crea_el_bootstrap() -> set[str]:
+    return set(re.findall(r"sirius:[a-z-]+", _BOOTSTRAP.read_text(encoding="utf-8")))
+
+
+def test_interpretar_y_desempatar_cubren_exactamente_las_mismas_etiquetas() -> None:
+    """Una etiqueta sin fila en la prioridad deja la proyección ciega, sin ruido."""
+    assert set(_LABEL_STATE) == set(_LABEL_PRIORITY), (
+        "las etiquetas que se interpretan y las que se desempatan tienen que ser "
+        "las mismas: una que esté solo en una de las dos se pierde en silencio"
+    )
+
+
+def test_el_vocabulario_interpretado_es_el_que_de_verdad_se_crea() -> None:
+    """Lo que el bootstrap crea en GitHub y lo que la proyección entiende.
+
+    Se lee el workflow, no se copia su lista: copiarla sería el mismo olvido
+    que la prueba existe para hacer imposible.
+    """
+    creadas = _etiquetas_que_crea_el_bootstrap()
+    assert creadas, "no se leyó ninguna etiqueta del bootstrap: la lectura falló"
+    assert creadas == set(_LABEL_STATE), (
+        f"solo se crean: {sorted(creadas - set(_LABEL_STATE))}; "
+        f"solo se interpretan: {sorted(set(_LABEL_STATE) - creadas)}"
+    )
 
 
 # --- H-13 (incidencia #275): ejecutar la proyección ya no exige el árbol ---
