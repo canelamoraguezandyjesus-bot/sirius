@@ -63,3 +63,30 @@ def test_el_aviso_no_llega_dos_veces_por_el_mismo_audio() -> None:
         playback.finish()
 
     assert finales == [None]
+
+
+def test_el_aviso_queda_instalado_antes_de_que_played_crezca() -> None:
+    """`played` es la señal de «ya suena»: quien la ve tiene que poder terminar.
+
+    Es la ventana que quedaba tras arreglar #290, dos líneas más abajo y de la
+    misma familia: si `played` creciera antes de instalar el aviso, otro hilo
+    podría verla y llamar a `finish()` sin que hubiera destinatario. Instalar
+    primero convierte «`played` no vacío» en «aviso puesto», que es lo que las
+    pruebas dan por hecho.
+    """
+    playback = FakeAudioPlayback()
+    aviso_puesto_al_crecer: list[bool] = []
+
+    class _ListaQueMira(list[Path]):
+        def append(self, item: Path) -> None:
+            aviso_puesto_al_crecer.append(playback._on_finished is not None)
+            super().append(item)
+
+    playback.played = _ListaQueMira()
+
+    playback.play(Path("voz-1.wav"), lambda: None)
+
+    assert aviso_puesto_al_crecer == [True], (
+        "`played` creció antes de instalar el aviso de final: quien vea esa "
+        "señal desde otro hilo puede llamar a `finish()` y no encontrar a nadie"
+    )

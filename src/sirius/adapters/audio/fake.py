@@ -155,9 +155,15 @@ class FakeAudioPlayback:
     def play(self, audio_path: Path, on_finished: Callable[[], None]) -> PlaybackError | None:
         if self._error is not None:
             return self._error
-        self.played.append(audio_path)
-        self._playing = True
+        # El ORDEN importa, y no es cosmético. `played` es la señal por la que
+        # las pruebas saben que ya suena algo antes de llamar a `finish()`. Si
+        # creciera antes de instalar el aviso, quedaría una ventana —estrecha,
+        # pero de la misma familia que #290— en la que otro hilo vería «ya
+        # suena» y daría el audio por terminado sin que hubiera destinatario.
+        # Instalando primero, `played` no vacío implica aviso puesto.
         self._on_finished = on_finished
+        self._playing = True
+        self.played.append(audio_path)
         return None
 
     def stop(self) -> None:

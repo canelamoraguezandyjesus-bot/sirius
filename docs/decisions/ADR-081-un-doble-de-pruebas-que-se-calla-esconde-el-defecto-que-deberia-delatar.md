@@ -171,6 +171,38 @@ esperan el grito pasarían solas, así que
 `test_con_reproduccion_en_marcha_el_aviso_llega` fija que con reproducción
 activa el aviso sí llega.
 
+## La ventana que quedaba, y un aviso sobre el propio método
+
+Revisando el arreglo se encontró que **no cerraba la ventana del todo**, dos
+líneas más abajo y en la misma familia. `FakeAudioPlayback.play()` hacía crecer
+`played` ANTES de instalar el aviso:
+
+```python
+self.played.append(audio_path)     # otro hilo ya puede ver «ya suena»
+self._playing = True
+self._on_finished = on_finished    # ...pero el aviso todavía no está puesto
+```
+
+`played` es precisamente la señal por la que la prueba arreglada sabe que puede
+llamar a `finish()`. Con ese orden, el arreglo cambiaba una ventana ancha por una
+estrecha en vez de cerrarla. Instalando el aviso primero, **`played` no vacío
+implica aviso puesto**, y la invariante queda fijada por
+`test_el_aviso_queda_instalado_antes_de_que_played_crezca`, que se ve fallar
+devolviendo el orden anterior.
+
+**Y un aviso que toca a la disciplina misma.** Al restaurar el fichero mutado con
+`cp`, la siguiente ejecución siguió comportándose como el fichero MUTADO: el
+fuente restaurado era correcto —`inspect.getsource` lo confirmaba— pero
+`__pycache__` servía el bytecode viejo. Durante unos minutos eso se leyó como
+«contaminación entre pruebas», que es un diagnóstico falso y caro.
+
+Importa más allá de este bloque: **este repositorio comprueba sus guardas
+sembrando mutaciones**, y una caché rancia puede hacer que una mutación parezca
+no morder, o que un arreglo parezca no arreglar. La conclusión práctica es
+sencilla y va escrita aquí para que no se vuelva a descubrir: **tras restaurar
+un fichero mutado, borrar `__pycache__` antes de creerse la siguiente
+ejecución.**
+
 ## Consecuencias
 
 **Lo que esto NO arregla.** Hay **139 plazos de 5000 ms** en `tests/gui/`. Este
