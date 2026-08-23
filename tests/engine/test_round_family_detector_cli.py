@@ -78,3 +78,17 @@ def test_historial_inexistente_falla_con_diagnostico(tmp_path: Path) -> None:
     codigo = cli.main(["--historial", str(tmp_path / "no-existe.txt")])
 
     assert codigo == 1
+
+
+def test_salida_en_directorio_inexistente_falla_con_diagnostico(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    historial = tmp_path / "historial.txt"
+    historial.write_text(_RONDA_1 + _RONDA_2 + _RONDA_3, encoding="utf-8")
+    salida = tmp_path / "directorio-inexistente" / "out.json"
+
+    codigo = cli.main(["--historial", str(historial), "--salida", str(salida)])
+
+    assert codigo == 1
+    assert not salida.exists()
+    assert cli.COMANDO in capsys.readouterr().err

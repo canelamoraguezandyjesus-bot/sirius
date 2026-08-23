@@ -69,7 +69,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     texto_json = json.dumps(payload, ensure_ascii=False, indent=2)
 
     if args.salida:
-        Path(args.salida).write_text(texto_json + "\n", encoding="utf-8")
+        try:
+            Path(args.salida).write_text(texto_json + "\n", encoding="utf-8")
+        except OSError as error:
+            print(f"{COMANDO}: no se pudo escribir {args.salida} ({error}).", file=sys.stderr)
+            return 1
     else:
         print(texto_json)
     return 0
