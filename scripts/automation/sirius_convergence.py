@@ -56,9 +56,24 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+#: El módulo compartido vive UNA sola vez, dentro del paquete. Este script lo
+#: alcanza por ruta relativa al árbol, no por importación: `sirius_convergence`
+#: se ejecuta con el `python3` del sistema -`repair-sirius-work.yml:285`-, sin
+#: el entorno del proyecto instalado, así que `import sirius_engine` no es una
+#: opción (criterio de parada (a) de la incidencia #275).
+#:
+#: Se resuelve la ruta directamente en vez de dejar un enlace simbólico
+#: hermano: el árbol versionado no tiene ninguno, y una prueba lo prohíbe
+#: -`test_el_arbol_versionado_no_contiene_enlaces_simbolicos`- porque
+#: `_contenida_en_raiz` colapsa los `..` sin resolverlos y una cita que
+#: atravesara un enlace validaría un fichero distinto del citado.
+_RUTA_COMPARTIDA = (
+    Path(__file__).resolve().parents[2] / "src" / "sirius_engine" / "round_history.py"
+)
+
 
 def _cargar_round_history() -> ModuleType:
-    ruta = Path(__file__).resolve().parent / "round_history.py"
+    ruta = _RUTA_COMPARTIDA
     spec = importlib.util.spec_from_file_location("sirius_round_history", ruta)
     if spec is None or spec.loader is None:  # pragma: no cover - defensivo
         raise ImportError(f"No se pudo cargar el módulo compartido en {ruta}")
