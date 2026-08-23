@@ -136,10 +136,61 @@ def test_ningun_defecto_conocido_desaparece_del_registro() -> None:
 
 _ASUNTO_DE_ARREGLO = re.compile(r"^(?P<id>H-\d+)\s*:", re.IGNORECASE)
 
+# Asuntos REALES de `main`, tomados el 23-08-2026. Los dos primeros arreglan un
+# defecto; los dos últimos nombran un identificador SIN arreglarlo, y son el
+# falso positivo que descartó el criterio ingenuo (ADR-080).
+ASUNTOS_QUE_SON_ARREGLO = (
+    "H-13: el motor deja de necesitar el árbol de código para ejecutar la proyección (#283)",
+    "H-11: diario del despachador durable, hermano de ADR-061 (#248)",
+)
+ASUNTOS_QUE_SOLO_NOMBRAN = (
+    "Cerrar H-13 en el registro y dar de alta H-14 (#286)",
+    "El registro de defectos decía abierto lo que se cerró, y añade H-13 (#271)",
+)
 
-def _asuntos_de_main() -> list[str]:
+# La historia de `main` no siempre está a mano, y el 23-08-2026 se midió dónde
+# no lo está: Quality clona con `actions/checkout` y la profundidad por defecto,
+# así que en una PR el árbol NO tiene `origin/main` y `git log origin/main` sale
+# con código 128 (ejecución 32633782403, dos pruebas rojas).
+#
+# Ahí esta guarda se salta y dice por qué. Lo que NO hace es apañarse con lo que
+# haya: caer a `HEAD` leería una historia de UN commit, no encontraría ningún
+# arreglo, y pasaría en verde sin haber comprobado nada. Un verde falso es peor
+# que un salto declarado, y este repositorio ya lo ha pagado tres veces.
+#
+# Por el mismo motivo se salta cuando la referencia resuelve pero no deja ver
+# ni un arreglo: en un `push` a `main` el clon por defecto trae un solo commit,
+# y «no veo ninguno» sería indistinguible de «no hay ninguno».
+_REFERENCIAS_DE_MAIN = ("origin/main", "main")
+
+_SIN_HISTORIA = (
+    "este árbol no deja leer la historia de `main`, así que no hay dónde buscar "
+    "el arreglo: {motivo}. Pasa en Quality, que clona con la profundidad por "
+    "defecto; ADR-080 lo explica y dice qué haría falta para que corra ahí. "
+    "El criterio en sí sigue comprobado por "
+    "test_el_criterio_reconoce_el_arreglo_y_no_la_mera_mencion, que no depende "
+    "del entorno."
+)
+
+
+def _referencia_de_main() -> str | None:
+    """La primera referencia a `main` que resuelva en este árbol, o None."""
+    for referencia in _REFERENCIAS_DE_MAIN:
+        hecho = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", referencia],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=RAIZ,
+        )
+        if hecho.returncode == 0:
+            return referencia
+    return None
+
+
+def _asuntos_de(referencia: str) -> list[str]:
     salida = subprocess.run(
-        ["git", "log", "origin/main", "--format=%s"],
+        ["git", "log", referencia, "--format=%s"],
         capture_output=True,
         text=True,
         check=True,
@@ -148,28 +199,51 @@ def _asuntos_de_main() -> list[str]:
     return [linea for linea in salida.splitlines() if linea]
 
 
-def _arreglos_ya_en_main() -> dict[str, list[str]]:
-    """Identificador -> asuntos de `main` que dicen arreglarlo."""
+def _arreglos_en(asuntos: list[str]) -> dict[str, list[str]]:
+    """Identificador -> asuntos que dicen arreglarlo."""
     encontrados: dict[str, list[str]] = {}
-    for asunto in _asuntos_de_main():
+    for asunto in asuntos:
         casa = _ASUNTO_DE_ARREGLO.match(asunto)
         if casa:
             encontrados.setdefault(casa.group("id").upper(), []).append(asunto)
     return encontrados
 
 
-def test_la_lectura_del_historial_encuentra_algo() -> None:
-    """Anti-vacua: sin esto, un `git log` que fallara dejaría la guarda siempre verde."""
-    assert _asuntos_de_main(), "no se leyó ningún asunto de main: la guarda no comprobaría nada"
-    assert _arreglos_ya_en_main(), (
-        "ningún commit de main sigue la convención `H-N: ...`; si de verdad "
-        "desapareció, esta guarda dejó de tener entradas y hay que decidir si sobra"
-    )
+def _arreglos_ya_en_main() -> tuple[dict[str, list[str]], str]:
+    """Los arreglos visibles en `main`, o un motivo de por qué no se pueden ver."""
+    referencia = _referencia_de_main()
+    if referencia is None:
+        return {}, "no resuelve ninguna de " + " ni ".join(_REFERENCIAS_DE_MAIN)
+    arreglos = _arreglos_en(_asuntos_de(referencia))
+    if not arreglos:
+        return {}, f"{referencia} resuelve pero no deja ver ni un commit `H-N: ...`"
+    return arreglos, ""
+
+
+def test_el_criterio_reconoce_el_arreglo_y_no_la_mera_mencion() -> None:
+    """Anti-vacua que NO depende del entorno: el criterio no puede quedarse inerte.
+
+    La guarda de abajo se salta donde no hay historia de `main`, y un criterio
+    roto ahí no se notaría. Esta corre siempre, y sobre asuntos reales del
+    repositorio: si alguien deja la expresión sin morder, o la afloja hasta
+    tragarse una simple mención, se rompe aquí.
+    """
+    for asunto in ASUNTOS_QUE_SON_ARREGLO:
+        assert _arreglos_en([asunto]), f"el criterio ya no reconoce un arreglo: {asunto!r}"
+
+    for asunto in ASUNTOS_QUE_SOLO_NOMBRAN:
+        assert not _arreglos_en([asunto]), (
+            f"el criterio confunde nombrar con arreglar: {asunto!r}. Ese es "
+            "exactamente el falso positivo que ADR-080 descartó midiendo."
+        )
 
 
 def test_ningun_defecto_abierto_tiene_ya_su_arreglo_en_main() -> None:
     """Un defecto arreglado y fusionado no puede seguir marcado como abierto."""
-    arreglos = _arreglos_ya_en_main()
+    arreglos, motivo = _arreglos_ya_en_main()
+    if motivo:
+        pytest.skip(_SIN_HISTORIA.format(motivo=motivo))
+
     contradicciones = [
         (defecto["id"], arreglos[defecto["id"].upper()])
         for defecto in _defectos()

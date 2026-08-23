@@ -98,10 +98,23 @@ Los dos casos que motivan este ADR tienen commits que empiezan por su
 identificador —`H-11: diario del despachador durable…` y `H-13: el motor deja
 de necesitar el árbol…`—, así que la guarda los habría roto el mismo día.
 
-**Mutación vista fallar (ADR-001):** marcando H-13 como `abierto`, que es
-literalmente lo que ocurrió, cae
-`test_ningun_defecto_abierto_tiene_ya_su_arreglo_en_main`
-(`test_registro_de_defectos.py:178`). Con el registro correcto, 22 passed.
+**Dos mutaciones vistas fallar (ADR-001):**
+
+1. Marcando H-13 como `abierto` —literalmente lo que ocurrió— cae
+   `test_ningun_defecto_abierto_tiene_ya_su_arreglo_en_main`.
+2. Sustituyendo el criterio por el ingenuo de la opción 2 cae
+   `test_el_criterio_reconoce_el_arreglo_y_no_la_mera_mencion`, y lo dice
+   nombrando el asunto: «el criterio confunde nombrar con arreglar: *Cerrar
+   H-13 en el registro y dar de alta H-14 (#286)*».
+
+Con el árbol correcto, 22 passed.
+
+Y una tercera, **intentada y descartada por inútil**, que merece quedar escrita
+porque estuvo a punto de colarse como evidencia: aflojar el patrón *o* cambiar
+`match` por `search`, **por separado**, no rompe nada. `match` ya ancla al
+principio, así que cada mitad por su cuenta es un cambio sin efecto. Una
+mutación que no cambia el comportamiento no demuestra nada: la prueba de que la
+prueba muerde son las dos mitades juntas, que es el criterio ingenuo entero.
 
 ## Consecuencias
 
@@ -120,6 +133,32 @@ arreglo cuyo asunto empiece por el identificador queda vigilado; uno que no,
 no. Si con el tiempo la convención se generaliza, el alcance sube solo, sin
 tocar el criterio.
 
+**Dónde corre, y dónde no.** Medido el 23-08-2026 sobre la ejecución
+32633782403: en Quality esta guarda **no corre**. Quality clona con
+`actions/checkout` y la profundidad por defecto, y en una PR eso deja un árbol
+sin `origin/main`; `git log origin/main` sale con código 128. La primera versión
+de la guarda se estrelló ahí y puso la PR en rojo por un motivo de entorno, no
+por un defecto del registro.
+
+La salida elegida es **saltar y decir por qué**, no apañarse con lo que haya. La
+tentación era caer a `HEAD`, que sí resuelve: leería una historia de UN commit,
+no encontraría ningún arreglo y pasaría en verde sin haber comprobado nada. Se
+descarta por el criterio de parada 3 — es exactamente el falso verde que este
+repositorio ya ha pagado tres veces. Por el mismo motivo se salta también cuando
+la referencia resuelve pero no deja ver ni un commit de la convención, que es lo
+que pasaría en un `push` a `main` con el clon por defecto.
+
+Un salto declarado deja la guarda sin dientes en CI, así que la parte que sí
+puede correr en cualquier árbol se separó en una prueba propia: el criterio se
+comprueba contra asuntos reales del repositorio —dos que arreglan y dos que solo
+nombran— sin tocar el historial. Así, lo que el entorno se lleva es el alcance,
+no la garantía de que el criterio siga mordiendo.
+
+**Lo que lo cambiaría** es una línea, `fetch-depth: 0` en el checkout de Quality,
+y no se hace aquí por dos motivos: ADR-002 prohíbe que la automatización edite
+`.github/**`, y encarecer cada ejecución del ciclo para una sola guarda es una
+decisión del propietario, no de este bloque. Queda anotado, no ejecutado.
+
 **Lo que sigue sin mecanizar:** que la entrada se cierre *sola*. Esta guarda
 avisa de la contradicción; cerrarla sigue siendo un acto humano. Se avisa
 antes de que el registro mienta, que es lo que faltaba.
@@ -131,6 +170,10 @@ antes de que el registro mienta, que es lo que faltaba.
   establece que la incidencia no es la autoridad.
 - **Cualquier mención del identificador**: descartada tras medir, con el falso
   positivo de H-14 como evidencia.
+- **Caer a `HEAD` cuando `origin/main` no resuelve**, para que la guarda
+  «corra igualmente» en Quality: descartada por el criterio de parada 3. En ese
+  árbol `HEAD` trae un commit, así que la guarda pasaría en verde sin comprobar
+  nada. Un verde falso es peor que un salto declarado.
 - **Exigir la convención `H-N:` a todo commit que arregle un defecto**, para
   subir el alcance: sería una regla nueva sobre cómo escribir commits, fuera
   del alcance de una guarda del registro, y con el riesgo conocido de que una
