@@ -56,6 +56,7 @@ _SAFE_MESSAGES: dict[LLMErrorKind, str] = {
     LLMErrorKind.TIMEOUT: "El proveedor tardó demasiado en responder.",
     LLMErrorKind.INVALID_RESPONSE: "El proveedor no devolvió una respuesta válida.",
     LLMErrorKind.BUDGET_EXCEEDED: "Se alcanzó el límite mensual de uso del proveedor.",
+    LLMErrorKind.CONFIGURATION: "El proveedor de IA no está configurado.",
     LLMErrorKind.UNKNOWN: "No se pudo completar la petición al proveedor.",
 }
 

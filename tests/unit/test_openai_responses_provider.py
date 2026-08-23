@@ -15,7 +15,7 @@ import openai
 import pytest
 
 from sirius.adapters.llm.budget import BudgetPolicy, BudgetTracker
-from sirius.adapters.llm.openai_responses import OpenAIResponsesProvider
+from sirius.adapters.llm.openai_responses import OpenAIResponsesProvider, _build_error
 from sirius.ports.llm import (
     LLMCancelled,
     LLMCompleted,
@@ -431,3 +431,20 @@ def test_exceptions_are_classified_safely_without_leaking_their_message(
         "El proveedor tardó demasiado en responder.",
         "No se pudo completar la petición al proveedor.",
     }
+
+
+@pytest.mark.parametrize("kind", list(LLMErrorKind))
+def test_every_error_kind_has_a_safe_message(kind: LLMErrorKind) -> None:
+    """Guards against a future ``LLMErrorKind`` member reaching ``_build_error``.
+
+    ``_build_error`` indexes ``_SAFE_MESSAGES`` directly, so a kind missing from
+    that table raises ``KeyError`` at the exact moment the provider is already
+    failing — the worst possible time to add a second failure. The presentation
+    table over this same enum has had an exhaustiveness guard for a while
+    (``tests/unit/test_error_messages.py``); this one did not, and the gap was
+    not hypothetical: ``CONFIGURATION`` was added to the enum, the presentation
+    table picked it up and this one did not.
+    """
+    error = _build_error(kind)
+    assert error.kind is kind
+    assert error.message
