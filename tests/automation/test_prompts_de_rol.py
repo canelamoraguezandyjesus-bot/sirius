@@ -30,15 +30,40 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROMPTS_DIR = REPO_ROOT / "scripts" / "automation" / "prompts"
+APPLY_VERDICT = REPO_ROOT / "scripts" / "automation" / "sirius_apply_verdict.sh"
 
 # El directorio ES la lista. No se enumeran los ficheros a mano a propósito: una
 # lista escrita a mano habría que acordarse de ampliarla, que es exactamente el
 # olvido que estas pruebas existen para hacer imposible.
 PROMPTS = sorted(PROMPTS_DIR.glob("*.md"))
 
+# Veredictos que NO afirman éxito: son paradas. Todo lo demás que un rol puede
+# emitir sí lo afirma, y por eso esta es la lista que se escribe a mano — es
+# cerrada por naturaleza (parar, bloquear, agotarse) y no crece cuando alguien
+# inventa una forma nueva de decir que algo salió bien.
+VEREDICTOS_DE_PARADA = frozenset({"BLOCKED_BY_DECISION", "FAILED_SAFELY", "USAGE_LIMIT_REACHED"})
+
+#: Los roles que `sirius_apply_verdict.sh` reconoce, con su vocabulario. La
+#: lista vive en el script y se lee de ahí, no se copia: cuando se añadió
+#: `CHECKS_UNRELATED` al corrector, una copia escrita a mano en este fichero se
+#: quedó sin él y la guarda del veredicto provisional dejó de cubrirlo en
+#: silencio. Es el mismo olvido que el comentario de `PROMPTS`, tres líneas más
+#: arriba, dice que estas pruebas existen para hacer imposible.
+_ALLOWED_RE = re.compile(r'^\s*(\w+)\)\s*allowed="([^"]+)"', re.MULTILINE)
+
+
+def _vocabulario_por_rol() -> dict[str, frozenset[str]]:
+    fuente = APPLY_VERDICT.read_text(encoding="utf-8")
+    return {rol: frozenset(v.split()) for rol, v in _ALLOWED_RE.findall(fuente)}
+
+
+VOCABULARIO_POR_ROL = _vocabulario_por_rol()
+
 # Valores de `verdict` que afirman que el trabajo salió bien, en cualquiera de los
 # tres roles. Ninguno puede aparecer en el veredicto provisional.
-SUCCESS_VERDICTS = ("READY_FOR_REVIEW", "REVIEW_APPROVED", "CHANGES_REQUESTED", "FIXED")
+SUCCESS_VERDICTS = tuple(
+    sorted(frozenset().union(*VOCABULARIO_POR_ROL.values()) - VEREDICTOS_DE_PARADA)
+)
 
 
 def _flat(texto: str) -> str:
@@ -50,6 +75,39 @@ def _flat(texto: str) -> str:
     párrafo — y eso enseñaría a desactivar la prueba en vez de a leerla.
     """
     return " ".join(texto.split())
+
+
+def test_el_vocabulario_de_veredictos_se_leyo_de_verdad() -> None:
+    """Una derivación que no encuentra nada deja la guarda vacía y siempre verde.
+
+    `SUCCESS_VERDICTS` se deriva leyendo `sirius_apply_verdict.sh`. Si ese
+    formato cambia y la expresión deja de casar, la lista queda vacía y
+    `test_el_veredicto_provisional_nunca_declara_exito` pasaría sin comprobar
+    nada — el mismo falso verde que la derivación venía a impedir, con otra
+    cara. Esta prueba es la que lo hace imposible.
+    """
+    assert set(VOCABULARIO_POR_ROL) == {"implementer", "reviewer", "corrector"}, (
+        "los tres roles del contrato tienen que salir del script, no de aquí"
+    )
+    assert SUCCESS_VERDICTS, "la derivación no encontró ningún veredicto"
+    for parada in VEREDICTOS_DE_PARADA:
+        assert any(parada in v for v in VOCABULARIO_POR_ROL.values()), (
+            f"{parada} ya no existe en el script: la lista de paradas se quedó vieja"
+        )
+        assert parada not in SUCCESS_VERDICTS
+
+
+def test_el_corrector_puede_declarar_que_el_fallo_no_es_suyo() -> None:
+    """`CHECKS_UNRELATED` afirma éxito, y la lista escrita a mano no lo tenía.
+
+    Se añadió al corrector después de que esta guarda se escribiera -el propio
+    script lo cuenta: «hasta ahora el corrector solo tenía FIXED»- y la copia
+    de este fichero no se amplió. Sin él en la lista, un prompt podía declarar
+    por adelantado que el fallo de Quality no era suyo, que es exactamente lo
+    que el veredicto provisional no puede hacer.
+    """
+    assert "CHECKS_UNRELATED" in SUCCESS_VERDICTS
+    assert "CHECKS_UNRELATED" in VOCABULARIO_POR_ROL["corrector"]
 
 
 def test_hay_prompts_que_comprobar() -> None:
