@@ -10,16 +10,19 @@ meses probando en producción (incidencia #193, «Método: reutilizar la
 semántica ya probada, no reinventarla»):
 
 - ``sirius-round``/``RONDA_HALLAZGOS`` y la racha de fallos de Quality
-  (``sirius-quality``) se interpretan **importando**
-  ``scripts/automation/sirius_convergence.py`` -su ``ROUND_RECORD_RE``,
-  ``parse_round_records``, ``ci_failure_streak`` y
-  ``history_after_last_resume`` son las mismas funciones que gobiernan la
-  convergencia real, no una segunda copia que podría divergir-. El mismo
-  patrón de añadir ``scripts/`` a ``sys.path`` ya lo usa
-  ``tests/engine/conftest.py`` para ``experiments/``, y ``pyproject.toml``
-  ya trata ``scripts/`` como raíz de imports para pytest (``pythonpath``) y
-  mypy (``mypy_path``): este módulo hace en tiempo de ejecución lo mismo que
-  esos dos ya asumen en tiempo de comprobación.
+  (``sirius-quality``) se interpretan con ``parse_round_records``,
+  ``ci_failure_streak`` y ``history_after_last_resume`` de
+  :mod:`sirius_engine.round_history` -las mismas funciones que gobiernan la
+  convergencia real de ``scripts/automation/sirius_convergence.py``, no una
+  segunda copia que podría divergir: ``scripts/automation/round_history.py``
+  es un enlace simbólico a este módulo, no una copia-. Antes de H-13
+  (incidencia #275) este módulo insertaba ``scripts/`` en ``sys.path`` e
+  importaba el script de automatización directamente; eso funcionaba en el
+  checkout de desarrollo pero rompía con ``ModuleNotFoundError`` en cuanto
+  alguien llamaba a la proyección desde una instalación real del paquete,
+  porque ``scripts/`` no viaja en el wheel (incidencia #272). Importar el
+  módulo compartido -que sí vive dentro de ``sirius_engine``- de forma
+  normal, sin ningún truco de ``sys.path``, es lo que arregla eso.
 - El filtro de autor de confianza (``OWNER`` o ``github-actions[bot]``) es el
   MISMO predicado booleano que ``SIRIUS_TRUSTED_AUTHOR_JQ`` en
   ``sirius_issue.sh``, trasladado a Python porque no existe una forma de
@@ -40,17 +43,10 @@ incidencia sea reproducible (requisito 5).
 from __future__ import annotations
 
 import re
-import sys
 from collections.abc import Sequence
 from datetime import datetime
-from pathlib import Path
 
-_SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
-if str(_SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS_DIR))
-
-from automation import sirius_convergence  # noqa: E402
-from sirius_engine.domain.mirror import (  # noqa: E402
+from sirius_engine.domain.mirror import (
     EspejoIlegibleError,
     EventoQuality,
     MirroredRun,
@@ -59,8 +55,8 @@ from sirius_engine.domain.mirror import (  # noqa: E402
     RondaHallazgos,
     VeredictoPublicado,
 )
-from sirius_engine.domain.work_item import WorkItemPhase, WorkItemState  # noqa: E402
-from sirius_engine.ports.github_mirror import (  # noqa: E402
+from sirius_engine.domain.work_item import WorkItemPhase, WorkItemState
+from sirius_engine.ports.github_mirror import (
     Comentario,
     ContenidoConAutor,
     CuerpoIncidencia,
@@ -70,6 +66,11 @@ from sirius_engine.ports.github_mirror import (  # noqa: E402
     LecturaEstado,
     LecturaMetadatos,
     LecturaRunActions,
+)
+from sirius_engine.round_history import (
+    ci_failure_streak,
+    history_after_last_resume,
+    parse_round_records,
 )
 
 # --- Filtro de autor de confianza ------------------------------------------
@@ -107,15 +108,16 @@ _SHA_MARKER_RE = re.compile(r"(?:Head|Merge)\s+SHA:\s*`?([0-9a-fA-F]{7,40})")
 _PR_ABIERTA_RE = re.compile(r"PR abierta:\s*(https?://\S+)")
 
 # Mismo marcador que publica el ciclo Quality
-# (`sirius_convergence.CI_FAILURE_MARKER_RE`/`CI_SUCCESS_MARKER_RE`), pero
+# (`round_history.CI_FAILURE_MARKER_RE`/`CI_SUCCESS_MARKER_RE`), pero
 # capturando head Y conclusión de CUALQUIER resultado (no solo si cuenta para
-# la racha): a diferencia de ``sirius_convergence.ci_failure_streak``, que
+# la racha): a diferencia de ``round_history.ci_failure_streak``, que
 # reduce el historial a un contador, esta expresión sirve para reconstruir la
 # secuencia completa de eventos observados -la usa el espejo de solo lectura
 # (A3) para no perder los fallos que un éxito posterior ya cerró para la
 # racha pero que siguen siendo hechos ocurridos en el ciclo-. Vive aquí, y no
-# en scripts/automation/sirius_convergence.py, porque ese script es
-# automatización viva fuera del alcance de este bloque (incidencia #193).
+# en sirius_engine.round_history, porque esta expresión no gobierna ninguna
+# decisión de convergencia real, solo la reconstrucción de solo lectura
+# (incidencia #193).
 _QUALITY_EVENT_RE = re.compile(
     r"<!--\s*sirius-quality:([0-9a-fA-F]+):(failure|timed_out|success)\s*-->"
 )
@@ -199,7 +201,7 @@ def _texto_cronologico_de_confianza(
 ) -> str:
     """Cuerpo y comentarios DE CONFIANZA, del más antiguo al más reciente.
 
-    Mismo orden que espera ``sirius_convergence.parse_round_records``/
+    Mismo orden que espera ``round_history.parse_round_records``/
     ``ci_failure_streak`` («el historial de la incidencia en orden
     cronológico»): los comentarios ya llegan ordenados por el puerto.
 
@@ -232,7 +234,7 @@ def _texto_cronologico_de_confianza(
 
 
 def _interpretar_rondas(texto_vigente: str) -> tuple[RondaHallazgos, ...]:
-    registros = sirius_convergence.parse_round_records(texto_vigente)
+    registros = parse_round_records(texto_vigente)
     return tuple(
         RondaHallazgos(
             numero=int(registro["round"]),
@@ -247,7 +249,7 @@ def _interpretar_rondas(texto_vigente: str) -> tuple[RondaHallazgos, ...]:
 def _interpretar_eventos_quality(texto_vigente: str) -> tuple[EventoQuality, ...]:
     """Secuencia completa de eventos Quality, en el orden en que se publicaron.
 
-    A diferencia de ``sirius_convergence.ci_failure_streak`` -que colapsa el
+    A diferencia de ``round_history.ci_failure_streak`` -que colapsa el
     historial a la racha vigente desde el último ``success``-, aquí no se
     descarta nada: un ``failure`` cerrado por un ``success`` posterior sobre
     el mismo head deja de contar para la racha, pero sigue siendo un evento
@@ -327,7 +329,7 @@ def proyectar_work_item(
     if comentarios.estado is not LecturaEstado.OK or comentarios.comentarios is None:
         raise EspejoIlegibleError("comentarios", comentarios.error or "lectura no disponible")
 
-    texto_vigente = sirius_convergence.history_after_last_resume(
+    texto_vigente = history_after_last_resume(
         _texto_cronologico_de_confianza(cuerpo.cuerpo, comentarios.comentarios)
     )
     estado, fase, etiquetas_contradictorias = _estado_y_fase(metadatos.metadatos.etiquetas)
@@ -344,7 +346,7 @@ def proyectar_work_item(
         rondas=_interpretar_rondas(texto_vigente),
         veredictos=_interpretar_veredictos(comentarios.comentarios),
         eventos_quality=_interpretar_eventos_quality(texto_vigente),
-        fallos_quality_consecutivos=sirius_convergence.ci_failure_streak(texto_vigente),
+        fallos_quality_consecutivos=ci_failure_streak(texto_vigente),
         origen=OrigenLectura(fuente=f"github:{repo}#{numero}", leido_en=ahora),
     )
 

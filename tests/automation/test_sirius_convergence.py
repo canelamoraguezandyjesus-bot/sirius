@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -582,6 +584,79 @@ def test_cli_decide_blocks_when_history_is_unreadable(tmp_path: Path) -> None:
     decision = json.loads(output.read_text(encoding="utf-8"))
     assert decision["decision"] == "BLOCK"
     assert decision["reason"] == "historial-ilegible"
+
+
+def _bare_system_python() -> str | None:
+    """Un ``python3`` distinto del que ejecuta esta suite, sin el proyecto instalado.
+
+    ``repair-sirius-work.yml`` invoca ``sirius_convergence.py`` con el
+    ``python3`` del sistema del runner, **sin** ``actions/setup-python`` y sin
+    haber corrido ``uv sync``: no es ``sys.executable`` (el intérprete de este
+    proceso, que sí tiene el proyecto y sus dependencias instalados) sino el
+    de la distribución del sistema operativo. En ``ubuntu-latest`` es
+    ``/usr/bin/python3`` (Python 3.12, el mismo que fija
+    ``test_sirius_runner_python_compat.RUNNER_PYTHON``); se prueba primero por
+    ruta fija porque bajo ``uv run`` el ``.venv`` se antepone en ``PATH`` y
+    ``shutil.which("python3")`` encontraría el intérprete del propio proyecto,
+    no el del sistema.
+    """
+    ejecutando = Path(sys.executable).resolve()
+    for candidato in ("/usr/bin/python3", shutil.which("python3")):
+        if candidato is None:
+            continue
+        ruta = Path(candidato).resolve()
+        if ruta.is_file() and ruta != ejecutando:
+            return str(ruta)
+    return None
+
+
+_BARE_PYTHON = _bare_system_python()
+
+
+@pytest.mark.skipif(
+    _BARE_PYTHON is None,
+    reason="No hay un python3 del sistema distinto del de este proyecto en este entorno.",
+)
+def test_cli_decide_runs_under_the_bare_system_python_without_the_project_installed(
+    tmp_path: Path,
+) -> None:
+    """Requisito 3: el script sigue respondiendo bajo el intérprete pelado del runner.
+
+    Invoca ``sirius_convergence.py`` exactamente como lo hace
+    ``repair-sirius-work.yml:285`` -``python3 scripts/automation/sirius_convergence.py``
+    desde la raíz del repositorio-, pero con un intérprete que NO es el de
+    este proyecto (``_BARE_PYTHON``, no ``sys.executable``) y con un entorno
+    reducido al ``PATH``: sin ``PYTHONPATH``, sin ``VIRTUAL_ENV``, sin nada que
+    el ``.venv`` de desarrollo pudiera filtrar. Si el módulo compartido
+    obligara a importar ``sirius_engine`` -que no está instalado en ese
+    intérprete-, esta prueba fallaría con ``ModuleNotFoundError`` en vez de
+    con ``decision == CONTINUE``.
+    """
+    assert _BARE_PYTHON is not None
+    comments = tmp_path / "comments.txt"
+    comments.write_text(_round_comment(1, HEAD_A, [_observation()]), encoding="utf-8")
+    output = tmp_path / "decision.json"
+    entorno_reducido = {"PATH": os.environ.get("PATH", "")}
+    result = subprocess.run(
+        [
+            _BARE_PYTHON,
+            str(SCRIPT),
+            "decide",
+            "--comments-file",
+            str(comments),
+            "--output",
+            str(output),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=REPO_ROOT,
+        env=entorno_reducido,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    decision = json.loads(output.read_text(encoding="utf-8"))
+    assert decision["decision"] == "CONTINUE"
+    assert decision["reason"] == "primera-ronda-con-hallazgos"
 
 
 # --------------------------------------------------------------------------- #
