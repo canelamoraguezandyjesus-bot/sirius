@@ -22,9 +22,9 @@ Los archivos originales conservan palabras como `PROPUESTO` en su nombre o conte
 
 ## Estado operativo
 
-- La implementación de Sirius 0.1 continúa autorizada por verticales, sin ampliar el alcance aprobado.
-- Sirius 0.1 todavía debe terminarse y aceptarse antes de activar una versión post-0.1.
-- El Documento Rector de Evolución fija dirección futura, pero no autoriza implementación.
+- Sirius 0.1: **ACEPTADO y TERMINADO** por declaración del propietario el **10 de agosto de 2026**, tras ejecutar personalmente, con clave y proveedor reales, las pruebas de aceptación que exigían Windows real, proveedor real o evaluación humana. Los dieciséis bloques de V8 quedan cerrados y las cuatro puertas V8.1 a V8.4, completas. El detalle, la evidencia y las salvedades que la propia declaración deja escritas están en `docs/implementation/V8_EXECUTION.md`, que por `ADR-005` es el único registro de estado y que por `ADR-016` se lee siempre desde `main`.
+- La implementación de Sirius 0.1 estuvo autorizada por verticales, sin ampliar el alcance aprobado.
+- El Documento Rector de Evolución fija dirección futura, pero no autoriza implementación. El roadmap post-0.1 sigue sin autorizar, con la única excepción registrada el 15 de agosto de 2026 en `docs/evolution/STATUS.md`: el Sirius Work Engine, estrictamente según `ADR-019`, `ADR-020` y su plan aprobado.
 - HEAD-R1 permanece físicamente inactivo. No existen compras ni fases autorizadas.
 - El multiagente permanece condicionado a evidencia posterior y no es requisito obligatorio de Sirius 1.0.
 - Ningún modelo puede controlar directamente actuadores o firmware activo.
