@@ -174,3 +174,13 @@ defectos:
     ficheros:
       - src/sirius/adapters/audio/fake.py
       - tests/gui/test_model_studio_integration.py
+
+  - id: H-16
+    titulo: El workflow del motor quedó sin arrancar, y Quality no mira los workflows
+    bloque: D2
+    gravedad: alta
+    estado: abierto
+    incidencia: 296
+    ficheros:
+      - .github/workflows/motor-sirius.yml
+      - tests/automation/test_expresiones_de_workflow.py

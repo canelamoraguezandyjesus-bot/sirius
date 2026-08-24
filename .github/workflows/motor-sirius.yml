@@ -5,19 +5,34 @@ name: Motor de Sirius
 # ADR-082 (decisión I4 del propietario en #270) y por la cláusula ampliada de
 # `docs/evolution/STATUS.md`.
 #
-# POR QUÉ ES UN WORKFLOW PROPIO Y NO UN PASO DE LOS QUE YA HAY. Los doce grupos
-# de concurrencia del ciclo son POR INCIDENCIA o POR PR -así deben ser: dos
-# incidencias distintas pueden avanzar a la vez-. El motor necesita justo lo
-# contrario: un grupo GLOBAL, porque su diario es uno solo y dos invocaciones
-# sobre él se pisan. Los dos requisitos no caben en el mismo fichero.
+# POR QUÉ ES UN WORKFLOW PROPIO Y NO UN PASO DE LOS QUE YA HAY. Los workflows que
+# llevan el ciclo se serializan POR INCIDENCIA o POR PR -así deben ser: dos
+# encargos distintos avanzan a la vez-, y el motor necesita lo contrario, un
+# grupo GLOBAL, porque su diario es uno solo. Esos dos requisitos no caben en el
+# mismo fichero, y por eso este existe.
+#
+# Corrección del 24-08-2026, contada porque este comentario decía otra cosa: NO
+# es verdad que «los doce grupos del ciclo sean por incidencia o por PR». Contado:
+# de los doce, nueve lo son, uno va por SHA (`advance-sirius-after-quality`) y
+# DOS son constantes globales (`bootstrap-sirius-automation-labels` y
+# `reconcile-sirius-states`). Este último es además un contraejemplo directo a la
+# frase «no caben juntos»: combina grupo global constante con
+# `cancel-in-progress: false`. La decisión no cambia -los workflows del CICLO
+# siguen siendo por incidencia-, pero el censo que la sostenía era falso.
 #
 # LO QUE PROTEGE EL BLOQUE `concurrency` DE ABAJO, y no es teoría: está medido en
-# `tests/engine/test_exclusion_entre_invocaciones.py`. Dos invocaciones que
-# arranquen antes de que ninguna grabe crean el mismo trabajo dos veces, con la
-# misma clave de idempotencia y el mismo número de secuencia, y llegan a crear
-# DOS incidencias y aplicar DOS etiquetas para una sola petición. El almacén
-# reproduce su diario una sola vez, al construirse, así que una invocación ya
-# arrancada es ciega a todo lo que ocurra después. Serializar no es una
+# `tests/engine/test_exclusion_entre_invocaciones.py`. El almacén reproduce su
+# diario una sola vez, al construirse, así que una invocación ya arrancada es
+# ciega a todo lo que ocurra después: dos que arranquen antes de que ninguna
+# grabe crean el mismo trabajo dos veces, con la misma clave de idempotencia y el
+# mismo número de secuencia.
+#
+# Ojo con lo que ESTE workflow arriesga y lo que no. La medición llega hasta «DOS
+# incidencias y DOS etiquetas para una sola petición», pero eso lo produce el
+# DESPACHADOR, que aquí no corre: `sirius-supervisar` llama a `supervise_runs`
+# sin ningún escritor, y el bloque `permissions` de abajo no lleva
+# `issues: write`. Lo que este fichero puede corromper es el diario. Serializar
+# no es una
 # precaución: es lo único que lo impide.
 #
 # `cancel-in-progress: false` a propósito: cancelar la invocación que va no
@@ -63,7 +78,16 @@ jobs:
       #: La rama donde vive la memoria del motor. Constante a proposito: es la
       #: misma para todas las invocaciones, igual que el grupo de concurrencia.
       RAMA_MEMORIA: estado-del-motor
-      MEMORIA: ${{ runner.temp }}/memoria
+      # `MEMORIA` NO se declara aqui, y las dos formas de intentarlo fallan:
+      #   `${{ runner.temp }}` -> ese contexto no existe cuando GitHub lee el
+      #     `env:` de un trabajo, y el fichero entero se vuelve ilegible
+      #     ("Unrecognized named-value: 'runner'"). Costo que el motor dejara
+      #     de arrancar el 24-08-2026.
+      #   `${RUNNER_TEMP}`     -> GitHub no expande eso, y bash tampoco expande
+      #     el CONTENIDO de una variable: quedaria la ruta literal con el dolar
+      #     dentro. Peor, porque parece correcto y falla en ejecucion.
+      # Se calcula en el primer paso y se publica por `$GITHUB_ENV`, que es
+      # donde `$RUNNER_TEMP` si esta resuelto.
 
     steps:
       - name: Checkout
@@ -99,24 +123,48 @@ jobs:
       # Y de paso el historial de `main` deja de llenarse de apuntes de
       # contabilidad: el motor anota en cada turno, y eso es estado, no codigo.
       - name: Traer la memoria del motor
+        env:
+          # `env:` de PASO: aqui `runner` SI esta resuelto. Se declara en CADA
+          # paso que la use en vez de publicarla por `$GITHUB_ENV`, porque esa
+          # publicacion solo ocurre si este paso llega a correr, y el paso que
+          # confirma lleva `if: always()`. Un `always()` que dependa de una
+          # variable publicada por un paso `success()` es la regresion que este
+          # mismo fichero introdujo al arreglar el fallo anterior.
+          MEMORIA: ${{ runner.temp }}/memoria
         run: |
           set -uo pipefail
           git config user.name "sirius-motor"
           git config user.email "canelamoraguezandyjesus@gmail.com"
-          if git ls-remote --exit-code --heads origin "$RAMA_MEMORIA" >/dev/null 2>&1; then
-            git fetch --depth=1 origin "$RAMA_MEMORIA"
-            git worktree add "$MEMORIA" "origin/$RAMA_MEMORIA"
-          else
-            # Primer turno de la historia: la rama todavia no existe. Huerfana a
-            # proposito -no comparte historia con `main` y no la arrastra-.
-            echo "La rama $RAMA_MEMORIA no existe todavia; se crea vacia."
-            git worktree add --orphan -b "$RAMA_MEMORIA" "$MEMORIA"
-          fi
+
+          # Se ramifica por el CODIGO de `ls-remote`, no por su signo, y su
+          # stderr NO se tapa. Git distingue 2 -"el remoto contesto y la rama no
+          # esta"- de 128 -"no pude hablar con el remoto"-, y colapsarlos crearia
+          # una rama huerfana VACIA por un corte de red: el turno correria con el
+          # diario en blanco y su anotacion se perderia al rechazarse el push.
+          codigo=0
+          git ls-remote --exit-code --heads origin "$RAMA_MEMORIA" >/dev/null || codigo=$?
+          case "$codigo" in
+            0)
+              git fetch --depth=1 origin "$RAMA_MEMORIA"
+              git worktree add "$MEMORIA" "origin/$RAMA_MEMORIA"
+              ;;
+            2)
+              # Primer turno de la historia: la rama todavia no existe. Huerfana a
+              # proposito -no comparte historia con `main` y no la arrastra-.
+              echo "La rama $RAMA_MEMORIA no existe todavia; se crea vacia."
+              git worktree add --orphan -b "$RAMA_MEMORIA" "$MEMORIA"
+              ;;
+            *)
+              echo "::error::no se pudo consultar el remoto (ls-remote salio con $codigo)." >&2
+              exit 1
+              ;;
+          esac
 
       - name: Dar el turno
         id: turno
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Aqui `runner` SI esta resuelto: es el `env:` de un paso, no de un trabajo.
           SIRIUS_MOTOR_DIARIO: ${{ runner.temp }}/memoria/diario.jsonl
         run: |
           set -uo pipefail
@@ -131,6 +179,8 @@ jobs:
         # diario ya tiene las lineas de lo que hizo y perderlas seria peor que
         # el propio fallo. Un turno sin cambios no confirma nada y no es error.
         if: always()
+        env:
+          MEMORIA: ${{ runner.temp }}/memoria
         run: |
           set -uo pipefail
           if [ ! -d "$MEMORIA" ]; then
@@ -138,7 +188,18 @@ jobs:
             exit 0
           fi
           cd "$MEMORIA"
-          if [ -z "$(git status --porcelain)" ]; then
+
+          # Se mira el CODIGO de `git status`, no su salida. Una salida vacia
+          # porque el comando reviento se leeria como "no hay cambios" y este
+          # paso saldria en VERDE tirando el diario, que es justo lo contrario
+          # de lo que su comentario promete. La regla ya esta escrita en esta
+          # casa: una lectura vacia no significa "no hay nada", significa que no
+          # se llego a mirar (`repair-sirius-work.yml`).
+          if ! estado=$(git status --porcelain); then
+            echo "::error::no se pudo leer el estado de la memoria; esto NO es un turno sin cambios." >&2
+            exit 1
+          fi
+          if [ -z "$estado" ]; then
             echo "El motor no anoto nada en este turno."
             exit 0
           fi
