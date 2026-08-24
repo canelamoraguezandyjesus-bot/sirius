@@ -1,0 +1,120 @@
+{
+ "documento": "Marcado de M2 en la ronda de ADR-002",
+ "version_esquema": "marcado-m2-adr002-0.1",
+ "estado": "EVIDENCIA",
+ "cita_del_canon": "B04 M2 · Historico explicito: «Permite archivado, sustituido y finalizado con marcas temporales; separa tiempo valido de corte de registro y nunca lo presenta como actual»",
+ "por_que_faltaba": "la readjudicacion lo dejo escrito como pendiente_de_medir: una obligacion canonica sin control. Cerrar ADR-002 sin ella seria cerrar sobre una puerta que nunca se abrio",
+ "no_toca_nada_congelado": "la marca ya la publica trace.Explicacion (estado y tiempo): esta medicion la LEE. No modifica candidatos ni capa comun, y no exige fichas sucesoras",
+ "no_modifica_metrics": "metrics.py produjo las cifras publicadas de v0.1 y v0.2 y no se toca: el §8.1 prohibe cambiar la medicion despues de observarla",
+ "estados_no_vigentes_en_el_canon": {
+  "DECISION:12": {
+   "validez": "SUSTITUIDA",
+   "disponibilidad": "DISPONIBLE",
+   "estado_que_m2_nombraria": "sustituido"
+  },
+  "DECISION:2": {
+   "validez": "SUSTITUIDA",
+   "disponibilidad": "DISPONIBLE",
+   "estado_que_m2_nombraria": "sustituido"
+  },
+  "MEMORIA:17": {
+   "validez": "SIN_SOPORTE",
+   "disponibilidad": "DISPONIBLE",
+   "estado_que_m2_nombraria": "finalizado"
+  },
+  "MEMORIA:19": {
+   "validez": "VIGENTE",
+   "disponibilidad": "NO_GUARDADA",
+   "estado_que_m2_nombraria": "no recuperable"
+  },
+  "MEMORIA:4": {
+   "validez": "VIGENTE",
+   "disponibilidad": "ARCHIVADA",
+   "estado_que_m2_nombraria": "archivado"
+  },
+  "MEMORIA:9": {
+   "validez": "VIGENTE",
+   "disponibilidad": "PURGADA",
+   "estado_que_m2_nombraria": "no recuperable"
+  }
+ },
+ "por_participante": {
+  "T0-control": {
+   "medible": false,
+   "razon": "no publica explicacion por resultado: sin marca que leer, M2 no puede comprobarse. Es un incumplimiento declarado en su ficha, no una carencia de esta medicion"
+  },
+  "ADR002-A": {
+   "medible": true,
+   "resultados_observados": 149,
+   "no_vigentes_devueltos": 5,
+   "estados_historicos_ejercitados": [
+    "archivado",
+    "finalizado",
+    "sustituido"
+   ],
+   "los_tres_estados_se_ejercitaron": true,
+   "por_que_importa_lo_anterior": "sin ejercitar los tres estados, «nunca como actual» podria estar pasando por no haber devuelto ni un elemento no vigente, que es aprobar sin presentarse",
+   "m2_1_nunca_como_actual": true,
+   "incumplimientos": [],
+   "m2_2_separa_tiempo_valido_de_corte": true,
+   "resultados_sin_las_dos_marcas": [],
+   "m2_3_distingue_los_tres_estados": false,
+   "razon_de_m2_3": "la salida publica ['no vigente', 'vigente']: 1 marca(s) de no vigencia para los 3 estados que M2 nombra (archivado, sustituido, finalizado). Lo no vigente vuelve marcado, pero no vuelve marcado CON QUE, y M3 y M4 necesitan saberlo"
+  },
+  "ADR002-B": {
+   "medible": true,
+   "resultados_observados": 152,
+   "no_vigentes_devueltos": 5,
+   "estados_historicos_ejercitados": [
+    "archivado",
+    "finalizado",
+    "sustituido"
+   ],
+   "los_tres_estados_se_ejercitaron": true,
+   "por_que_importa_lo_anterior": "sin ejercitar los tres estados, «nunca como actual» podria estar pasando por no haber devuelto ni un elemento no vigente, que es aprobar sin presentarse",
+   "m2_1_nunca_como_actual": true,
+   "incumplimientos": [],
+   "m2_2_separa_tiempo_valido_de_corte": true,
+   "resultados_sin_las_dos_marcas": [],
+   "m2_3_distingue_los_tres_estados": false,
+   "razon_de_m2_3": "la salida publica ['no vigente', 'vigente']: 1 marca(s) de no vigencia para los 3 estados que M2 nombra (archivado, sustituido, finalizado). Lo no vigente vuelve marcado, pero no vuelve marcado CON QUE, y M3 y M4 necesitan saberlo"
+  },
+  "ADR002-C": {
+   "medible": true,
+   "resultados_observados": 149,
+   "no_vigentes_devueltos": 5,
+   "estados_historicos_ejercitados": [
+    "archivado",
+    "finalizado",
+    "sustituido"
+   ],
+   "los_tres_estados_se_ejercitaron": true,
+   "por_que_importa_lo_anterior": "sin ejercitar los tres estados, «nunca como actual» podria estar pasando por no haber devuelto ni un elemento no vigente, que es aprobar sin presentarse",
+   "m2_1_nunca_como_actual": true,
+   "incumplimientos": [],
+   "m2_2_separa_tiempo_valido_de_corte": true,
+   "resultados_sin_las_dos_marcas": [],
+   "m2_3_distingue_los_tres_estados": false,
+   "razon_de_m2_3": "la salida publica ['no vigente', 'vigente']: 1 marca(s) de no vigencia para los 3 estados que M2 nombra (archivado, sustituido, finalizado). Lo no vigente vuelve marcado, pero no vuelve marcado CON QUE, y M3 y M4 necesitan saberlo"
+  },
+  "ADR002-D": {
+   "medible": true,
+   "resultados_observados": 151,
+   "no_vigentes_devueltos": 5,
+   "estados_historicos_ejercitados": [
+    "archivado",
+    "finalizado",
+    "sustituido"
+   ],
+   "los_tres_estados_se_ejercitaron": true,
+   "por_que_importa_lo_anterior": "sin ejercitar los tres estados, «nunca como actual» podria estar pasando por no haber devuelto ni un elemento no vigente, que es aprobar sin presentarse",
+   "m2_1_nunca_como_actual": true,
+   "incumplimientos": [],
+   "m2_2_separa_tiempo_valido_de_corte": true,
+   "resultados_sin_las_dos_marcas": [],
+   "m2_3_distingue_los_tres_estados": false,
+   "razon_de_m2_3": "la salida publica ['no vigente', 'vigente']: 1 marca(s) de no vigencia para los 3 estados que M2 nombra (archivado, sustituido, finalizado). Lo no vigente vuelve marcado, pero no vuelve marcado CON QUE, y M3 y M4 necesitan saberlo"
+  }
+ },
+ "no_elige": "esta medicion no elige alternativa: comprueba una obligacion del canon que ninguna metrica de la ronda comprobaba"
+}
