@@ -1,22 +1,42 @@
-# La memoria del motor
+# La memoria del motor no está aquí
 
-Aquí vive el diario del Work Engine: lo que hizo, cuándo y por qué. Es un
-fichero por línea, en JSON, que solo crece.
+Está en la rama **`estado-del-motor`**, no en `main`. Este fichero es el cartel
+que lo dice, porque buscarla aquí es lo primero que hace cualquiera.
 
-**Por qué está dentro del repositorio.** Porque el motor corre dentro de GitHub
-Actions (ADR-082, decisión I4 del propietario en #270) y el disco del runner
-muere con el trabajo. Confirmarlo aquí es la única forma de que la memoria
-sobreviva de una invocación a la siguiente.
+Para verla:
 
-**Esto no es código y nada lo construye.** Vive aparte a propósito: si el diario
-compartiera sitio con el código, cada línea de contabilidad dispararía la
-revisión de calidad entera —veinte minutos por una anotación—.
+    git fetch origin estado-del-motor
+    git show origin/estado-del-motor:diario.jsonl
 
-**Cuando el motor lo teclea el propietario**, el diario NO vive aquí: vive en el
-directorio de datos de su plataforma, fuera del árbol. Esa decisión sigue
-vigente (ADR-055) y ADR-082 solo la deroga para la ejecución dentro de Actions.
-Las dos ubicaciones conviven sin tocar código, por `--diario` y
-`SIRIUS_MOTOR_DIARIO`.
+## Por qué en otra rama
 
-**No se edita a mano.** Es append-only con checksum por registro; una edición
-manual lo invalida.
+**`main` está protegido.** Exige pull request, así que un `git push` directo
+desde el workflow del motor se rechaza. El primer turno en el servidor tapó ese
+rechazo: salió antes de empujar —no había nada que anotar— y la ejecución dio
+verde sin llegar a intentarlo. El fallo estaba esperando al primer turno con
+trabajo dentro.
+
+**La alternativa era abrir un agujero.** Meter al motor en la lista de
+excepciones del ruleset le daría permiso permanente para empujar a `main`, para
+esto y para cualquier otra cosa. Su propia rama no abre ninguno: el ruleset
+apunta a la rama por defecto, y esta no lo es.
+
+**Y el historial se queda limpio.** El motor anota en cada turno. Eso es
+estado, no código, y no tiene por qué llenar el historial de `main` de apuntes
+de contabilidad.
+
+## Qué hay en esa rama
+
+- `diario.jsonl` — el diario del motor: WorkItems, Runs y sus transiciones.
+- `diario-supervision.jsonl` — los episodios del supervisor, para que una
+  invocación no repita lo que ya hizo la anterior.
+
+Los dos son append-only, con checksum por registro (ADR-026). La rama es
+huérfana a propósito: no comparte historia con `main` y no la arrastra.
+
+## Lo que esto NO resuelve
+
+Que dos invocaciones simultáneas se pisen. Eso lo impide el grupo de
+concurrencia del workflow, y está medido en
+`tests/engine/test_exclusion_entre_invocaciones.py`: dos lecturas independientes
+del diario despachan el mismo trabajo dos veces. Cambiar de rama no cambia eso.

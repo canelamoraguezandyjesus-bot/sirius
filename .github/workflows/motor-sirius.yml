@@ -59,6 +59,11 @@ jobs:
     name: Un turno del motor
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      #: La rama donde vive la memoria del motor. Constante a proposito: es la
+      #: misma para todas las invocaciones, igual que el grupo de concurrencia.
+      RAMA_MEMORIA: estado-del-motor
+      MEMORIA: ${{ runner.temp }}/memoria
 
     steps:
       - name: Checkout
@@ -80,11 +85,39 @@ jobs:
       - name: Sync environment
         run: uv sync --locked --all-groups
 
+      # La memoria del motor NO vive en `main`, y no es un capricho de orden.
+      #
+      # `main` esta protegido: exige pull request. Un `git push` directo desde
+      # aqui se rechaza, y el primer turno en el servidor lo tapo -salio antes
+      # de empujar porque no habia nada que anotar, asi que el rechazo nunca
+      # llego a ocurrir y la ejecucion salio en verde-.
+      #
+      # Meter al motor en la lista de excepciones del ruleset habria abierto un
+      # agujero permanente en esa proteccion. Su propia rama no abre ninguno: el
+      # ruleset apunta a la rama por defecto, y esta no lo es.
+      #
+      # Y de paso el historial de `main` deja de llenarse de apuntes de
+      # contabilidad: el motor anota en cada turno, y eso es estado, no codigo.
+      - name: Traer la memoria del motor
+        run: |
+          set -uo pipefail
+          git config user.name "sirius-motor"
+          git config user.email "canelamoraguezandyjesus@gmail.com"
+          if git ls-remote --exit-code --heads origin "$RAMA_MEMORIA" >/dev/null 2>&1; then
+            git fetch --depth=1 origin "$RAMA_MEMORIA"
+            git worktree add "$MEMORIA" "origin/$RAMA_MEMORIA"
+          else
+            # Primer turno de la historia: la rama todavia no existe. Huerfana a
+            # proposito -no comparte historia con `main` y no la arrastra-.
+            echo "La rama $RAMA_MEMORIA no existe todavia; se crea vacia."
+            git worktree add --orphan -b "$RAMA_MEMORIA" "$MEMORIA"
+          fi
+
       - name: Dar el turno
         id: turno
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SIRIUS_MOTOR_DIARIO: ${{ github.workspace }}/estado-del-motor/diario.jsonl
+          SIRIUS_MOTOR_DIARIO: ${{ runner.temp }}/memoria/diario.jsonl
         run: |
           set -uo pipefail
           if [ "${{ inputs.ensayo }}" = "false" ]; then
@@ -94,23 +127,26 @@ jobs:
           fi
 
       - name: Confirmar la memoria del motor
-        # Se ejecuta aunque el turno falle: si el motor actuó y luego murió, su
-        # diario ya tiene las líneas de lo que hizo y perderlas seria peor que
+        # Se ejecuta aunque el turno falle: si el motor actuo y luego murio, su
+        # diario ya tiene las lineas de lo que hizo y perderlas seria peor que
         # el propio fallo. Un turno sin cambios no confirma nada y no es error.
         if: always()
         run: |
           set -uo pipefail
-          if [ -z "$(git status --porcelain estado-del-motor/)" ]; then
-            echo "El motor no anotó nada en este turno."
+          if [ ! -d "$MEMORIA" ]; then
+            echo "No se llego a preparar la memoria; no hay nada que confirmar."
             exit 0
           fi
-          git config user.name "sirius-motor"
-          git config user.email "canelamoraguezandyjesus@gmail.com"
-          git add estado-del-motor/
+          cd "$MEMORIA"
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "El motor no anoto nada en este turno."
+            exit 0
+          fi
+          git add -A
           git commit -m "Motor: turno del $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           # Sin reintento ni rebase: el grupo de concurrencia garantiza que no
-          # hay otra invocación empujando a la vez. Si esto falla, es que esa
-          # garantía no se cumplió, y eso hay que verlo en rojo -no taparlo con
+          # hay otra invocacion empujando a la vez. Si esto falla, es que esa
+          # garantia no se cumplio, y eso hay que verlo en rojo -no taparlo con
           # un `pull --rebase` que ademas releeria un diario que el proceso ya
           # tiene cargado en memoria.
-          git push origin HEAD:${{ github.ref_name }}
+          git push origin "HEAD:refs/heads/$RAMA_MEMORIA"
