@@ -217,10 +217,41 @@ gobierno. Va en la misma enmienda porque separarlas dejaría el permiso mintiend
 
 ### Una decisión de seguridad que este ADR no toma
 
-El motor pasaría a ejecutar un modelo **y** a necesitar `contents: write` sobre el
-repositorio en la misma superficie. Eso es una decisión del propietario y no se
-cuela aquí: queda declarada como pendiente, con nombre, para que no se resuelva por
-omisión el día del cableado.
+> **CORRECCIÓN del 24-08-2026, medida al preparar D2 (#296).** Lo que este
+> apartado decía era, literalmente:
+>
+> > «El motor pasaría a ejecutar un modelo **y** a necesitar `contents: write`
+> > sobre el repositorio en la misma superficie.»
+>
+> **La primera mitad es falsa, y era la que hacía grave a la decisión.** El motor
+> **no ejecuta ningún modelo**: no importa ningún SDK -cero coincidencias de
+> `anthropic`, `openai`, `httpx`, `requests` en `src/sirius_engine/`- y sus
+> únicos subprocesos son `gh` (tres sitios) y `git` (uno). La arquitectura ya lo
+> clasificaba como determinista frente a los Workers, que son quienes sí
+> necesitan modelo. El modelo se invoca en OTROS workflows, despertados por una
+> etiqueta.
+>
+> No se borra el error: se deja a la vista con lo que lo desmiente, porque el
+> propietario iba a decidir sobre él.
+
+La decisión que **sí** queda pendiente es más pequeña y hay que enunciarla bien,
+porque la anterior habría hecho elegir sobre un peligro que no existe:
+
+**Un programa determinista, con el token del bot, confirmando el diario en el
+repositorio en cada paso del ciclo.** Lo que de eso es nuevo y lo que no, medido:
+
+| | |
+|---|---|
+| Ejecutar un modelo con permiso de escritura | **no ocurre**: el motor no ejecuta modelos |
+| Usar `SIRIUS_BOT_TOKEN` | **no es nuevo**: ya se usa en 20 sitios del ciclo |
+| Confirmar un fichero desde un workflow | **no es nuevo**: `materialize-approved-docx.yml` ya lo hace con `contents: write` |
+| Que sea el motor quien confirme, en cada paso | **eso sí es nuevo** |
+
+Y un aviso que el propietario necesita antes de elegir: **hoy no hay ninguna
+guarda que vigile esto.** `test_auditor_workflow.py` reconoce un modelo solo por
+el campo `uses:` de un paso; un trabajo cuyo paso sea `run: sirius-motor ...` con
+`contents: write` pasa en verde sin que salte nada. Quien decida creyendo que la
+red está puesta, decidiría con una red que no lo está.
 
 ### Ninguna cifra de latencia
 
