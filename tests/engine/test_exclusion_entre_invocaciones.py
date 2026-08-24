@@ -34,10 +34,12 @@ import pytest
 
 from sirius_engine.adapters.durable.dispatch_journal import DurableDispatchJournal
 from sirius_engine.adapters.durable.store import DurableWorkEngineStore
-from sirius_engine.dispatcher import ETIQUETA_ACTIVACION
+from sirius_engine.dispatcher import ETIQUETA_ACTIVACION, dispatch_work_item
 from sirius_engine.domain.dispatch import DispatchEpisode
 from sirius_engine.domain.errors import DuplicateIdError
 from sirius_engine.domain.work_item import WorkItem, WorkItemClass
+
+from .test_dispatcher import NOW, ORDEN, PERFIL, _EscritorSoloVerbosEnumerados, _work_item
 
 AHORA = datetime(2026, 8, 24, 2, 0, tzinfo=UTC)
 
@@ -265,3 +267,79 @@ def test_una_invocacion_que_arranca_despues_del_registro_si_se_para(tmp_path: Pa
 
     tardio = DurableDispatchJournal(ruta)  # arranca CON el episodio ya dentro
     assert tardio.reservar("WI-D2-0013").obtenida is False
+
+
+# --- Y ahora sí: el doble despacho, atravesando el despachador -------------
+#
+# Las pruebas de arriba miden la doble RESERVA. El revisor independiente señaló,
+# con razón, que de ahí a «dos incidencias, dos ramas, dos PRs» hay una
+# inferencia mía: si apareciera una defensa posterior a la reserva, aquellas
+# seguirían verdes y su mensaje seguiría afirmando lo que ya no sería cierto.
+#
+# Esta llega hasta el final y CUENTA las escrituras. El escritor es un doble
+# local que registra los verbos enumerados y falla ante cualquier otro; no se
+# toca GitHub.
+#
+# De paso desmiente una frase del propio `dispatch_work_item`: su docstring dice
+# que es determinista en sus guardas «incluso bajo concurrencia (la reserva del
+# diario decide, sin intercalado posible, cuál llamada escribe)». Es cierto
+# DENTRO de un proceso -lo garantiza un `threading.Lock`- y falso entre dos.
+
+
+def test_dos_invocaciones_despachan_de_verdad_dos_veces(tmp_path: Path) -> None:
+    """Dos incidencias creadas y dos etiquetas aplicadas para una sola petición."""
+    ruta = tmp_path / "diario-despacho.jsonl"
+    trabajo = _work_item(work_id="WI-D2-0020", evidencia=(ORDEN,))
+
+    escritor_a = _EscritorSoloVerbosEnumerados()
+    escritor_b = _EscritorSoloVerbosEnumerados()
+    diario_a = DurableDispatchJournal(ruta)
+    diario_b = DurableDispatchJournal(ruta)  # arranca antes de que el primero grabe
+
+    for escritor, diario in ((escritor_a, diario_a), (escritor_b, diario_b)):
+        dispatch_work_item(
+            trabajo,
+            writer=escritor,
+            journal=diario,
+            repo="acme/repo",
+            profile_ref=PERFIL,
+            bloque="D2",
+            now=NOW,
+        )
+
+    creadas = [
+        c for e in (escritor_a, escritor_b) for c in e.llamadas if c[0] == "crear_incidencia"
+    ]
+    etiquetadas = [
+        c for e in (escritor_a, escritor_b) for c in e.llamadas if c[0] == "aplicar_etiqueta"
+    ]
+
+    assert len(creadas) == 2, (
+        f"se esperaban DOS incidencias creadas para una sola petición, hubo {len(creadas)}. "
+        "Si esto baja a 1, apareció una defensa posterior a la reserva y hay que "
+        "rehacer el razonamiento de ADR-082, no ajustar esta prueba."
+    )
+    assert len(etiquetadas) == 2, f"se esperaban dos etiquetas aplicadas, hubo {len(etiquetadas)}"
+
+
+def test_una_sola_invocacion_despacha_una_sola_vez(tmp_path: Path) -> None:
+    """Contraste obligatorio: dentro de un proceso el despachador sí protege."""
+    ruta = tmp_path / "diario-despacho.jsonl"
+    trabajo = _work_item(work_id="WI-D2-0021", evidencia=(ORDEN,))
+
+    escritor = _EscritorSoloVerbosEnumerados()
+    diario = DurableDispatchJournal(ruta)
+
+    for _ in range(2):
+        dispatch_work_item(
+            trabajo,
+            writer=escritor,
+            journal=diario,
+            repo="acme/repo",
+            profile_ref=PERFIL,
+            bloque="D2",
+            now=NOW,
+        )
+
+    creadas = [c for c in escritor.llamadas if c[0] == "crear_incidencia"]
+    assert len(creadas) == 1, f"un solo proceso no puede despachar dos veces, hubo {len(creadas)}"
