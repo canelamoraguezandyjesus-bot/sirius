@@ -1,0 +1,116 @@
+name: Motor de Sirius
+
+# El turno del motor: reconciliar el mundo, cerrar como perdido lo que se perdió,
+# reactivar o sustituir, y escalar lo que no se puede salvar. Autorizado por
+# ADR-082 (decisión I4 del propietario en #270) y por la cláusula ampliada de
+# `docs/evolution/STATUS.md`.
+#
+# POR QUÉ ES UN WORKFLOW PROPIO Y NO UN PASO DE LOS QUE YA HAY. Los doce grupos
+# de concurrencia del ciclo son POR INCIDENCIA o POR PR -así deben ser: dos
+# incidencias distintas pueden avanzar a la vez-. El motor necesita justo lo
+# contrario: un grupo GLOBAL, porque su diario es uno solo y dos invocaciones
+# sobre él se pisan. Los dos requisitos no caben en el mismo fichero.
+#
+# LO QUE PROTEGE EL BLOQUE `concurrency` DE ABAJO, y no es teoría: está medido en
+# `tests/engine/test_exclusion_entre_invocaciones.py`. Dos invocaciones que
+# arranquen antes de que ninguna grabe crean el mismo trabajo dos veces, con la
+# misma clave de idempotencia y el mismo número de secuencia, y llegan a crear
+# DOS incidencias y aplicar DOS etiquetas para una sola petición. El almacén
+# reproduce su diario una sola vez, al construirse, así que una invocación ya
+# arrancada es ciega a todo lo que ocurra después. Serializar no es una
+# precaución: es lo único que lo impide.
+#
+# `cancel-in-progress: false` a propósito: cancelar la invocación que va no
+# protege el diario, lo deja a medias. Se espera, no se mata. Y el grupo es una
+# CONSTANTE: uno que variara por evento metería cada invocación en un grupo
+# distinto y la protección sería decorativa.
+# `tests/automation/test_serializacion_del_motor.py` rompe si algo de esto se
+# afloja.
+#
+# SIN HORARIO, A PROPÓSITO Y DE MOMENTO. Esta primera vuelta solo se dispara a
+# mano. Un motor que empieza a correr solo antes de que nadie le haya visto dar
+# un turno es cómo se rompen las cosas de madrugada. La cadencia es la decisión
+# siguiente, y necesita medir antes cómo convive con `reconcile-sirius-states`,
+# que hoy barre estados atascados cada seis horas.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ensayo:
+        description: "Solo resolver y decir qué usaría, sin supervisar nada"
+        type: boolean
+        default: true
+
+concurrency:
+  group: motor-sirius
+  cancel-in-progress: false
+
+# MÍNIMOS, y medidos: `supervise_runs` no escribe en GitHub -no recibe ningún
+# escritor: solo almacén, observador y sus diarios-. Lee el estado de los runs
+# por la API (`actions: read`) y confirma su memoria en el repositorio
+# (`contents: write`). No necesita `issues: write` ni el token del bot, y por eso
+# no los lleva: el día que los necesite será una decisión, no un descuido.
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  turno:
+    name: Un turno del motor
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # El motor confirma su diario, así que necesita credenciales que
+          # persistan para el `git push` del final.
+          persist-credentials: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+          # El paquete exige `>=3.14,<3.15`. Un workflow que invoque al motor
+          # con el `python3` del sistema (3.12 en `ubuntu-latest`) no lo
+          # arranca: es la misma familia que costó H-13.
+          python-version: "3.14.6"
+
+      - name: Sync environment
+        run: uv sync --locked --all-groups
+
+      - name: Dar el turno
+        id: turno
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SIRIUS_MOTOR_DIARIO: ${{ github.workspace }}/estado-del-motor/diario.jsonl
+        run: |
+          set -uo pipefail
+          if [ "${{ inputs.ensayo }}" = "false" ]; then
+            uv run sirius-supervisar
+          else
+            uv run sirius-supervisar --ensayo
+          fi
+
+      - name: Confirmar la memoria del motor
+        # Se ejecuta aunque el turno falle: si el motor actuó y luego murió, su
+        # diario ya tiene las líneas de lo que hizo y perderlas seria peor que
+        # el propio fallo. Un turno sin cambios no confirma nada y no es error.
+        if: always()
+        run: |
+          set -uo pipefail
+          if [ -z "$(git status --porcelain estado-del-motor/)" ]; then
+            echo "El motor no anotó nada en este turno."
+            exit 0
+          fi
+          git config user.name "sirius-motor"
+          git config user.email "canelamoraguezandyjesus@gmail.com"
+          git add estado-del-motor/
+          git commit -m "Motor: turno del $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          # Sin reintento ni rebase: el grupo de concurrencia garantiza que no
+          # hay otra invocación empujando a la vez. Si esto falla, es que esa
+          # garantía no se cumplió, y eso hay que verlo en rojo -no taparlo con
+          # un `pull --rebase` que ademas releeria un diario que el proceso ya
+          # tiene cargado en memoria.
+          git push origin HEAD:${{ github.ref_name }}

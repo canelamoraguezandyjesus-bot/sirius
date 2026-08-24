@@ -35,13 +35,19 @@ recomendado -derivado, no elegido a ojo- lo calcula
 ningún ``schedule``; cablearlo a un ``cron`` real es trabajo de otra
 incidencia.
 
-**Consecuencia documentada, no un defecto de este bloque** (ADR-074): hoy
-ningún workflow real ni script de ``scripts/automation/`` invoca ningún
-comando de ``sirius_engine``, así que el almacén durable del motor no es
-todavía la maquinaria que hace avanzar el ciclo real de una incidencia -ese
-ciclo sigue siendo enteramente el de las etiquetas ``sirius:*``. Mientras
-eso no cambie, una pasada real medirá con honestidad ``sin línea
-registrada`` o divergencias estructurales de fase; nunca un falso verde.
+**Esto cambió el 24-08-2026 y conviene leerlo entero.** Hasta D2, ningún
+workflow ni script invocaba ningún comando de ``sirius_engine``, y por eso
+ADR-074 documentó que el almacén del motor no era todavía la maquinaria que
+hace avanzar el ciclo. Desde D2 existe ``motor-sirius.yml``, que invoca
+``sirius-supervisar`` y confirma el diario en el repositorio.
+
+Pero **el contador sigue sin poder contar de verdad**, y por un motivo
+distinto al de antes: ese workflow arranca **solo a mano**, sin horario,
+mientras se comprueba que da bien un turno. Un motor que no corre por su
+cuenta no lleva el ciclo, así que una pasada real seguirá midiendo con
+honestidad ``sin línea registrada`` o divergencias estructurales de fase;
+nunca un falso verde. Lo que falta ya no es el cableado: es la cadencia, y es
+la decisión siguiente de D2.
 """
 
 from __future__ import annotations
