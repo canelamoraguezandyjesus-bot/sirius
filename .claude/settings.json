@@ -135,7 +135,7 @@
       "Bash(gh workflow *)",
       "PowerShell(gh workflow *)",
       "Edit(./.claude/**)",
-      "Edit(./.github/**)",
+      
       "Edit(./.gitignore)",
       "Edit(./AGENTS.md)",
       "Edit(./CLAUDE.md)",
