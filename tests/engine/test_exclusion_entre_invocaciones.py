@@ -171,13 +171,20 @@ def test_los_dos_registros_comparten_numero_de_secuencia(tmp_path: Path) -> None
 # La reserva del despachador tiene DOS defensas y solo una sobrevive a la
 # relectura, cosa que ADR-064 no distingue y conviene tener medida:
 #
-#   `_por_work_id`  -> se puebla al leer el diario, así que SÍ ve un episodio ya
-#                      grabado por otra invocación anterior;
+#   `_por_work_id`  -> se puebla AL CONSTRUIRSE, leyendo el diario, así que ve
+#                      lo que ya estuviera grabado EN ESE INSTANTE;
 #   `_en_curso`     -> vive solo en memoria y nunca se persiste, así que NO ve
 #                      una reserva que otra invocación tenga en marcha.
 #
-# La frontera está exactamente ahí: quien llega DESPUÉS de que el otro grabara
-# se para; quien llega mientras el otro todavía no ha grabado, no.
+# La frontera NO está donde primero escribí. Dije que «quien llega después de
+# que el otro grabara se para», y es falso: lo que decide no es cuándo se
+# reserva, sino CUÁNDO SE CONSTRUYÓ el diario. `_load()` corre una sola vez, en
+# el constructor, así que una invocación ya arrancada sigue ciega para siempre
+# aunque la otra grabe después. Lo señaló el revisor independiente y se
+# comprobó ejecutándolo; las dos ordenaciones quedan fijadas abajo.
+#
+# La ventana peligrosa es, por tanto, más ancha de lo que yo había escrito: va
+# desde que una invocación se construye hasta que muere.
 
 
 def _episodio(work_id: str) -> DispatchEpisode:
@@ -213,20 +220,48 @@ def test_dos_despachadores_reservan_el_mismo_trabajo_a_la_vez(tmp_path: Path) ->
     )
 
 
-def test_el_que_llega_despues_de_que_el_otro_grabe_si_se_para(tmp_path: Path) -> None:
-    """Dónde está la frontera, exactamente.
+def test_una_invocacion_ya_arrancada_sigue_ciega_aunque_la_otra_grabe(tmp_path: Path) -> None:
+    """Dónde está la frontera DE VERDAD, y no donde yo dije primero.
 
-    La defensa que lee el diario SÍ funciona entre invocaciones. Lo que no
-    cruza es la reserva *en curso*. Por eso la ventana peligrosa es la que va
-    desde que uno reserva hasta que graba, y no toda la ejecución.
+    La primera versión de esta prueba construía el segundo diario **después**
+    del `record()`, y de ahí concluí que «quien llega después de que el otro
+    grabara se para». Es falso, y lo señaló el revisor independiente: lo que
+    decide no es cuándo se reserva, es **cuándo se construyó el diario**.
+
+    `_load()` corre una sola vez, en el constructor. Una invocación que ya
+    arrancó es ciega a todo lo que ocurra después, para siempre — aunque la
+    otra grabe y aunque ella reserve mucho más tarde.
+
+    Consecuencia, y es peor que lo que yo había escrito: la ventana peligrosa
+    no va de reservar a grabar. Va **desde que una invocación se construye
+    hasta que muere**. Dos invocaciones que arranquen antes de que cualquiera
+    grabe despacharán las dos, se ordenen luego como se ordenen.
     """
     ruta = tmp_path / "diario-despacho.jsonl"
 
     primero = DurableDispatchJournal(ruta)
+    segundo = DurableDispatchJournal(ruta)  # arranca ANTES de que el primero grabe
+
     assert primero.reservar("WI-D2-0012").obtenida is True
     primero.record(_episodio("WI-D2-0012"))
 
-    tardio = DurableDispatchJournal(ruta)  # lee el diario CON el episodio dentro
-    assert tardio.reservar("WI-D2-0012").obtenida is False, (
-        "un episodio ya grabado sí tiene que frenar a la invocación siguiente"
+    assert segundo.reservar("WI-D2-0012").obtenida is True, (
+        "una invocación ya arrancada tiene que seguir ciega: si esto pasa a "
+        "False, la reserva cruza y hay que rehacer la ventana de ADR-082"
     )
+
+
+def test_una_invocacion_que_arranca_despues_del_registro_si_se_para(tmp_path: Path) -> None:
+    """La única mitad que sí protege: la que lee el diario al construirse.
+
+    Es real y conviene tenerla fijada, pero no cubre el caso concurrente: en
+    dos runners simultáneos los dos arrancan antes de que ninguno grabe.
+    """
+    ruta = tmp_path / "diario-despacho.jsonl"
+
+    primero = DurableDispatchJournal(ruta)
+    assert primero.reservar("WI-D2-0013").obtenida is True
+    primero.record(_episodio("WI-D2-0013"))
+
+    tardio = DurableDispatchJournal(ruta)  # arranca CON el episodio ya dentro
+    assert tardio.reservar("WI-D2-0013").obtenida is False
