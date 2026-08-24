@@ -12,6 +12,15 @@ name: Reconciliar estados de Sirius
 # observa estados que ningún evento puede ya revivir, porque `issues: labeled`
 # no vuelve a dispararse con una etiqueta ya aplicada.
 #
+# DESDE ADR-082 ESA FRASE HAY QUE LEERLA DISTINTO. El motor ya vive también
+# dentro de Actions (`motor-sirius.yml`), así que «esto no es el motor» dejó de
+# poder apoyarse en DÓNDE corre cada cosa. Lo que separa a los dos es lo que
+# hacen, y es exactamente la lista de arriba: el motor sí inicia bloques, sí
+# avanza un ciclo sano y sí actúa sobre lo que supervisa; esto no hace ninguna
+# de las tres. El criterio pasa de la ubicación a la responsabilidad, y con ese
+# criterio la separación sigue en pie sin cambiar una coma de lo que este
+# workflow hace.
+#
 # Cadencia: cada 6 horas. El argumento era el coste —4 ejecuciones al día son
 # ~120 min/mes frente a los ~720 de una cadencia horaria—, y dejó de aplicar al
 # hacerse público el repositorio (ADR-044): los runners estándar no consumen
