@@ -65,9 +65,7 @@ def _invoca_al_motor(texto: str) -> bool:
     for comando in _comandos_del_motor():
         if re.search(rf"(?m)(?:^|[|&;]|\brun:|\buv run )\s*{re.escape(comando)}\b", texto):
             return True
-    if re.search(rf"(?m)python3?\s+-m\s+{re.escape(_PAQUETE)}\b", texto):
-        return True
-    return False
+    return bool(re.search(rf"(?m)python3?\s+-m\s+{re.escape(_PAQUETE)}\b", texto))
 
 
 def _workflows() -> list[Path]:
