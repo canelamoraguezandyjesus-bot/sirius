@@ -179,8 +179,9 @@ defectos:
     titulo: El workflow del motor quedó sin arrancar, y Quality no mira los workflows
     bloque: D2
     gravedad: alta
-    estado: abierto
+    estado: cerrado
     incidencia: 296
+    cerrado_por: e568fba1045d1aab0927a2cfb2519a8bc3c633c8
     ficheros:
       - .github/workflows/motor-sirius.yml
       - tests/automation/test_expresiones_de_workflow.py

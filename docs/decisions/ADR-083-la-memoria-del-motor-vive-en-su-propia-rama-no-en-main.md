@@ -94,6 +94,44 @@ uv run ruff check .              → OK
 uv run pytest tests/automation   → 706 passed, 5 skipped
 ```
 
+## Comprobación posterior: el camino de escritura ya no está sin probar
+
+Esta decisión se tomó sin haber visto nunca ejecutarse el `git push`, y este
+mismo documento lo dejó dicho: «una ejecución que pasa por no tener trabajo que
+hacer no prueba que sepa hacerlo». **Eso ya está cerrado, y por ejecución.**
+
+Se extrajeron los tres bloques `run:` del workflow —`diff` confirma que dos son
+idénticos byte a byte y que en el tercero la única diferencia es la expansión
+que GitHub hace de `inputs.ensayo` antes de que bash vea nada— y se ejecutaron
+con `bash -e`, el shell del runner, contra un remoto de juguete.
+
+Con la memoria vacía: el turno sale en verde, `git status --porcelain` sale
+vacío y la rama no se crea. Con **una sola línea** dentro del diario y el mismo
+script sin tocar un carácter:
+
+```
+git add -A
+git commit           -> root-commit, «Motor: turno del ...»
+git push origin HEAD:refs/heads/estado-del-motor
+                     -> * [new branch]  HEAD -> estado-del-motor   (exit 0)
+```
+
+El camino de escritura **está intacto y es alcanzable en cuanto haya un byte
+que anotar**. No estaba roto: estaba ocioso. Decirlo importa porque lo contrario
+—«no puede recorrerse nunca»— se llegó a escribir aquí, y era falso.
+
+Se buscaron además, ejecutando, cuatro familias de fallo alrededor de este
+camino: el primer turno, el segundo con carrera contra el remoto, la basura que
+podría colarse en el árbol huérfano, y el turno que muere a mitad. Ninguno
+sobrevivió a la refutación. Los dos que más lo parecían se caen por lo mismo:
+el turno que muere sale en **rojo**, no en verde, porque `Dar el turno` no tiene
+`continue-on-error` y `set -uo pipefail` no desactiva el `-e` del runner.
+
+**Lo que esta comprobación NO dice.** Que el motor tenga algo que anotar. El
+diario solo se llena por el despachador, y su cableado sigue siendo la frontera
+declarada del bloque anterior: hoy `sirius-despachar` no lo invoca ningún
+workflow ni ningún script. El motor supervisa correctamente un mundo vacío.
+
 ## Consecuencias
 
 **El historial de `main` deja de llenarse de contabilidad.** El motor anota en
