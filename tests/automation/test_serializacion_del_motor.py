@@ -31,7 +31,11 @@ from __future__ import annotations
 
 import re
 import tomllib
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
+
+import yaml
 
 RAIZ = Path(__file__).resolve().parents[2]
 WORKFLOWS = RAIZ / ".github" / "workflows"
@@ -70,14 +74,44 @@ def _workflows() -> list[Path]:
     return sorted(WORKFLOWS.glob("*.yml"))
 
 
-def _los_que_invocan_al_motor() -> list[Path]:
-    return [w for w in _workflows() if _invoca_al_motor(w.read_text(encoding="utf-8"))]
+def _pasos_de(trabajo: Mapping[str, Any]) -> str:
+    """Todo el texto ejecutable de un trabajo, para buscar la invocación."""
+    pasos = trabajo.get("steps") or []
+    trozos: list[str] = []
+    for paso in pasos:
+        if isinstance(paso, Mapping):
+            trozos.extend(str(v) for k, v in paso.items() if k in {"run", "uses", "with"})
+    return "\n".join(trozos)
 
 
-def _bloque_concurrency(texto: str) -> str | None:
-    """El bloque `concurrency:` de nivel workflow, si lo hay."""
-    casa = re.search(r"(?m)^concurrency:\s*$((?:\n[ \t]+.*|\n)*)", texto)
-    return casa.group(1) if casa else None
+def _concurrency_efectiva(datos: Mapping[str, Any], trabajo: Mapping[str, Any]) -> Any:
+    """La que de verdad protege a ese trabajo.
+
+    GitHub admite `concurrency` a nivel de workflow y a nivel de trabajo, y las
+    dos serializan. Mirar solo la de arriba señalaría como desprotegido un
+    workflow correctamente protegido por trabajo -un falso positivo-, y una
+    guarda que grita donde no debe acaba desactivada. La del trabajo manda sobre
+    la del workflow, que es como lo resuelve GitHub.
+    """
+    propia = trabajo.get("concurrency")
+    return propia if propia is not None else datos.get("concurrency")
+
+
+def _invocaciones_del_motor() -> list[tuple[str, str, Any]]:
+    """(workflow, trabajo, concurrency efectiva) por cada trabajo que invoca al motor."""
+    encontradas: list[tuple[str, str, Any]] = []
+    for ruta in _workflows():
+        texto = ruta.read_text(encoding="utf-8")
+        if not _invoca_al_motor(texto):
+            continue
+        datos = yaml.safe_load(texto) or {}
+        trabajos = datos.get("jobs") or {}
+        for nombre, trabajo in trabajos.items():
+            if not isinstance(trabajo, Mapping):
+                continue
+            if _invoca_al_motor(_pasos_de(trabajo)):
+                encontradas.append((ruta.name, str(nombre), _concurrency_efectiva(datos, trabajo)))
+    return encontradas
 
 
 # --- Anti-vacua que NO depende del árbol -----------------------------------
@@ -125,14 +159,12 @@ def test_los_comandos_del_motor_se_derivan_y_no_estan_vacios() -> None:
 # --- Lo que se exige al cableado -------------------------------------------
 
 
-def test_todo_workflow_que_invoca_al_motor_declara_un_grupo_de_concurrencia() -> None:
-    sin_grupo = [
-        w.name
-        for w in _los_que_invocan_al_motor()
-        if _bloque_concurrency(w.read_text("utf-8")) is None
+def test_toda_invocacion_del_motor_esta_serializada() -> None:
+    sin_proteger = [
+        f"{w}:{j}" for w, j, conc in _invocaciones_del_motor() if not isinstance(conc, Mapping)
     ]
-    assert sin_grupo == [], (
-        f"estos workflows invocan al motor y no serializan sus invocaciones: {sin_grupo}. "
+    assert sin_proteger == [], (
+        f"estos trabajos invocan al motor sin grupo de concurrencia: {sin_proteger}. "
         "Dos a la vez despachan el mismo trabajo dos veces (ADR-082); la medición "
         "está en tests/engine/test_exclusion_entre_invocaciones.py."
     )
@@ -140,14 +172,11 @@ def test_todo_workflow_que_invoca_al_motor_declara_un_grupo_de_concurrencia() ->
 
 def test_el_grupo_de_concurrencia_del_motor_es_constante() -> None:
     """Un grupo que varía por evento no serializa nada: cada invocación va al suyo."""
-    variables = []
-    for w in _los_que_invocan_al_motor():
-        bloque = _bloque_concurrency(w.read_text("utf-8"))
-        if bloque is None:
-            continue
-        grupo = re.search(r"(?m)^\s*group:\s*(.+)$", bloque)
-        if grupo and "${{" in grupo.group(1):
-            variables.append((w.name, grupo.group(1).strip()))
+    variables = [
+        (f"{w}:{j}", str(conc.get("group")))
+        for w, j, conc in _invocaciones_del_motor()
+        if isinstance(conc, Mapping) and "${{" in str(conc.get("group", ""))
+    ]
     assert variables == [], (
         f"el grupo de concurrencia del motor varía por evento: {variables}. "
         "Dos invocaciones distintas caerían en grupos distintos y no se "
@@ -157,14 +186,12 @@ def test_el_grupo_de_concurrencia_del_motor_es_constante() -> None:
 
 def test_el_motor_espera_su_turno_en_vez_de_matar_al_que_va() -> None:
     """`cancel-in-progress: true` dejaría el diario a medias en vez de protegerlo."""
-    cancelan = []
-    for w in _los_que_invocan_al_motor():
-        bloque = _bloque_concurrency(w.read_text("utf-8"))
-        if bloque is None:
-            continue
-        if re.search(r"(?m)^\s*cancel-in-progress:\s*true\b", bloque):
-            cancelan.append(w.name)
+    cancelan = [
+        f"{w}:{j}"
+        for w, j, conc in _invocaciones_del_motor()
+        if isinstance(conc, Mapping) and conc.get("cancel-in-progress") is True
+    ]
     assert cancelan == [], (
-        f"estos workflows cancelan la invocación en curso del motor: {cancelan}. "
+        f"estos trabajos cancelan la invocación en curso del motor: {cancelan}. "
         "Cancelar no protege el diario: lo deja a medias. Se espera, no se mata."
     )
