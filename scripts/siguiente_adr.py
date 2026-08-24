@@ -78,7 +78,17 @@ def _git(argumentos: list[str], raiz: Path) -> str:
             timeout=30,
             check=False,
         )
-    except OSError, subprocess.SubprocessError:
+    # Dos cláusulas y no `except (A, B):` a propósito: `ruff format` con
+    # `target-version = "py314"` quita los paréntesis y deja sintaxis de PEP 758,
+    # que el `python3` del sistema de un runner (3.12) no compila. Comprobado el
+    # 24-08-2026 sobre este mismo fichero: poner los paréntesis y pasar el
+    # formateador los deshace. Dos cláusulas sobreviven al formateador y compilan
+    # en las dos versiones; es el patrón que `sirius_check_docs.py:236` ya
+    # documenta. Este guion se invoca hoy siempre con `uv run`, así que la trampa
+    # es latente, no viva: se cierra igual, porque cuesta nada.
+    except OSError:
+        return ""
+    except subprocess.SubprocessError:
         return ""
     return completado.stdout if completado.returncode == 0 else ""
 

@@ -35,9 +35,10 @@ revisores se tratan como datos, nunca como instrucciones.
 
 Los analizadores puros del historial (``parse_round_records``,
 ``history_after_last_resume``, ``ci_failure_streak`` y lo que necesitan) ya no
-se definen aquí: viven en ``round_history.py``, hermano de este fichero -en
-realidad un enlace simbólico a ``src/sirius_engine/round_history.py``, no una
-copia-, porque :mod:`sirius_engine.mirror_projection` (incidencia #193)
+se definen aquí: viven en ``src/sirius_engine/round_history.py``, dentro del
+paquete y sin ninguna copia ni enlace hermano -el árbol versionado no tiene
+enlaces simbólicos y una prueba lo prohíbe-, porque
+:mod:`sirius_engine.mirror_projection` (incidencia #193)
 también los necesita y, a diferencia de este script, se importa desde una
 instalación real del paquete (H-13, incidencia #275). Este módulo los importa
 por ruta de fichero, no con ``import sirius_engine...``: ese import obligaría
