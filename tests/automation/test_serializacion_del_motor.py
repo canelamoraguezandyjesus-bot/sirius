@@ -97,8 +97,30 @@ def _concurrency_efectiva(datos: Mapping[str, Any], trabajo: Mapping[str, Any]) 
     return propia if propia is not None else datos.get("concurrency")
 
 
+#: Un `git push` dentro de un workflow del motor muta el mismo estado compartido
+#: que el motor: el diario versionado. Tiene que estar serializado igual.
+_EMPUJA = re.compile(r"(?m)\bgit\s+push\b")
+
+
+def _toca_el_estado_compartido(trabajo: Mapping[str, Any]) -> bool:
+    """¿Este trabajo invoca al motor, o confirma su memoria?
+
+    Las dos cosas mutan lo mismo. Mirar solo la primera dejaba fuera al trabajo
+    que hace `git push` del diario -exactamente el que existiria si alguien
+    partiera el cableado en dos-, y ese es el que de verdad escribe. Lo encontro
+    un escéptico al que se le pidió tumbar la separación en dos trabajos, y
+    tenía razón: la guarda vigilaba al que decide, no al que muta.
+    """
+    texto = _pasos_de(trabajo)
+    return _invoca_al_motor(texto) or bool(_EMPUJA.search(texto))
+
+
 def _invocaciones_del_motor() -> list[tuple[str, str, Any]]:
-    """(workflow, trabajo, concurrency efectiva) por cada trabajo que invoca al motor."""
+    """(workflow, trabajo, concurrency efectiva) por cada trabajo a vigilar.
+
+    El workflow entra en el alcance si INVOCA al motor; dentro de él se vigila
+    todo trabajo que invoque al motor o que empuje al repositorio.
+    """
     encontradas: list[tuple[str, str, Any]] = []
     for ruta in _workflows():
         texto = ruta.read_text(encoding="utf-8")
@@ -109,7 +131,7 @@ def _invocaciones_del_motor() -> list[tuple[str, str, Any]]:
         for nombre, trabajo in trabajos.items():
             if not isinstance(trabajo, Mapping):
                 continue
-            if _invoca_al_motor(_pasos_de(trabajo)):
+            if _toca_el_estado_compartido(trabajo):
                 encontradas.append((ruta.name, str(nombre), _concurrency_efectiva(datos, trabajo)))
     return encontradas
 
@@ -164,7 +186,8 @@ def test_toda_invocacion_del_motor_esta_serializada() -> None:
         f"{w}:{j}" for w, j, conc in _invocaciones_del_motor() if not isinstance(conc, Mapping)
     ]
     assert sin_proteger == [], (
-        f"estos trabajos invocan al motor sin grupo de concurrencia: {sin_proteger}. "
+        f"estos trabajos mutan el estado del motor -lo invocan o empujan su "
+        f"diario- sin grupo de concurrencia: {sin_proteger}. "
         "Dos a la vez despachan el mismo trabajo dos veces (ADR-082); la medición "
         "está en tests/engine/test_exclusion_entre_invocaciones.py."
     )
@@ -192,6 +215,6 @@ def test_el_motor_espera_su_turno_en_vez_de_matar_al_que_va() -> None:
         if isinstance(conc, Mapping) and conc.get("cancel-in-progress") is True
     ]
     assert cancelan == [], (
-        f"estos trabajos cancelan la invocación en curso del motor: {cancelan}. "
+        f"estos trabajos cancelan una ejecución en curso del motor: {cancelan}. "
         "Cancelar no protege el diario: lo deja a medias. Se espera, no se mata."
     )
