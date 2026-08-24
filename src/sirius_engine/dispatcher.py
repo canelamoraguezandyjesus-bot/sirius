@@ -135,9 +135,19 @@ def dispatch_work_item(
     """Despachar ``work_item`` por la vía GitHub, si no se despachó ya.
 
     Determinista en sus guardas (mismo ``work_item``/diario -> misma
-    decisión) incluso bajo concurrencia (la reserva del diario decide, sin
-    intercalado posible, cuál llamada escribe); la única E/S es exactamente
-    la enumerada por :class:`~sirius_engine.ports.github_writer.GitHubWriterPort`.
+    decisión) bajo concurrencia **dentro de un proceso**: ahí la reserva del
+    diario decide sin intercalado posible cuál llamada escribe, porque la
+    protege un ``threading.Lock``. La única E/S es exactamente la enumerada por
+    :class:`~sirius_engine.ports.github_writer.GitHubWriterPort`.
+
+    **Entre procesos NO lo es, y antes esta frase decía que sí.** El diario
+    reproduce su historia una sola vez, al construirse, y la reserva en curso
+    vive solo en memoria: dos invocaciones que arranquen antes de que ninguna
+    grabe despachan las dos. Está medido en
+    ``tests/engine/test_exclusion_entre_invocaciones.py``, contando las
+    escrituras: dos incidencias creadas y dos etiquetas aplicadas para una sola
+    petición. Lo que lo impide no vive aquí, sino en el grupo de concurrencia
+    del workflow que invoque al motor (ADR-082, D2).
     """
     reserva = journal.reservar(work_item.work_id)
     if reserva.episodio is not None:
