@@ -3,6 +3,8 @@
 - Estado: APROBADO — por la fusión de la PR #175 en `main` (2026-08-15), conforme a la
   regla de aprobación de este mismo ADR.
 - Fecha: 2026-08-15
+- Enmendado: ADR-082 supera el descarte de evolucionar los workflows hacia el motor y la
+  dependencia «I4 antes del servicio desatendido» (decisión I4, #270)
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario. La fusión
   aprueba el PLAN (`docs/implementation/SIRIUS_WORK_ENGINE_PLAN_IMPLEMENTACION.md`) como
   secuencia de trabajo; la autorización de implementación efectiva es E0 (mini-PR a

@@ -30,11 +30,21 @@ un ``threading.Event`` no es serializable ni tiene sentido fuera del proceso
 que lo crea, y el puerto no promete nada sobre una reserva EN CURSO que no
 llegó a grabar episodio -solo sobre un episodio ya grabado (H-11 no exige,
 y esta incidencia no decide, qué hace un reinicio con una reserva huérfana
-que ningún ``liberar`` cerró; ese caso queda para cuando el despachador
-corra desatendido, D2-. Si el proceso muere entre ``reservar`` y ``record``,
+que ningún ``liberar`` cerró; ese caso dejó de ser futuro con ADR-082-. Si
+el proceso muere entre ``reservar`` y ``record``,
 un reinicio simplemente no encuentra ``_en_curso`` -no sobrevivió, nunca lo
 prometió- y una llamada nueva puede volver a reservar: el mismo
 comportamiento que ya tiene hoy ``liberar`` tras una guarda rechazada.
+
+AVISO, desde ADR-082 (decisión I4, #270). Lo de arriba se escribió como un
+límite de un proceso que se reinicia de vez en cuando. Con el motor corriendo
+dentro de GitHub Actions **cada invocación es un proceso nuevo**, y dos
+invocaciones simultáneas son dos reservas del mismo trabajo: dos despachos,
+dos incidencias, dos ramas. Ya no es un caso de borde tras una caída — es lo
+que pasa siempre que dos ejecuciones coincidan. Lo único que hoy lo impide es
+serializar las invocaciones del motor, y eso vive en el workflow que lo
+invoca, no aquí. Este módulo no promete exclusión entre procesos y no hay que
+leerle esa promesa.
 """
 
 from __future__ import annotations

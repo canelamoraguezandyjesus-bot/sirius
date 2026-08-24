@@ -8,8 +8,10 @@ clave de idempotencia opcional
 A1 sin reimplementar ninguna transición y ``Event``/``rebuild_state``
 (:mod:`sirius_engine.domain.events`) para reconstruir el estado.
 
-**De referencia, no definitiva** (ADR-019, ADR-029): la representación
-física del almacén la fija D2, no este módulo. La suite de comportamiento en
+**De referencia, y desde ADR-082 también definitiva en su formato**
+(ADR-019, ADR-029): la representación física ya no la decide un bloque
+futuro, la fijó la decisión I4 (#270) — diario append-only, un registro por
+línea, versionado dentro del repositorio. La suite de comportamiento en
 ``tests/engine/`` está escrita contra el puerto y corre, sin modificarse,
 tanto sobre :class:`~sirius_engine.adapters.memory_store.InMemoryWorkEngineStore`
 como sobre este almacén.

@@ -3,6 +3,7 @@
 - Estado: APROBADO
 - Fecha: 2026-08-21
 - Aprobación: fusión de la PR de la incidencia #238 por el propietario
+- Enmendado: ADR-082 supera la premisa de un disco que sobrevive al proceso: dentro de GitHub Actions los dos diarios solo son durables si se versionan en el repositorio (decisión I4, #270)
 
 ## Contexto y problema
 

@@ -127,6 +127,14 @@ Verificado en `src/sirius/` (hexagonal vigilada por tests de frontera):
 - **Ningún observador externo del ciclo**: la única vigilancia permitida es el
   reconciliador cada 6 h, que por contrato «no es motor» y para los estados de máquina
   atascados **solo avisa** («El reconciliador no ha reparado nada», `sirius_reconcile.sh:518`).
+  Sigue siendo cierto, y **ADR-082** cambia en qué se convierte esta carencia: con el motor
+  corriendo dentro de GitHub Actions no habrá observador externo a GitHub, y eso queda
+  declarado como el precio de la opción A, no como un hueco que el motor vaya a cerrar. Lo
+  alcanzable pasa a ser un observador **externo al run observado** (ADR-057: un run sí puede
+  observar otro por la API). Queda anotado que el aviso vigente delega la detección en el
+  propietario («Mirar en Actions si queda alguna ejecución viva», `sirius_reconcile.sh:519`):
+  mientras ese mensaje no se enmiende, reabre el hallazgo G5 de ADR-019 —«caída del motor
+  detectada por el propietario»— que se dio por cerrado.
 - **Ningún contrato de Worker ni adapter**: los tres roles están cableados a
   `claude-code-action` dentro de cada YAML; sustituir el motor exige editar workflows.
 - **Ninguna capacidad de investigación**: GPT Researcher no está en el repositorio; el
@@ -142,13 +150,14 @@ Verificado en `src/sirius/` (hexagonal vigilada por tests de frontera):
 
 ### 1.8 El defecto estructural de durabilidad, reconocido por escrito
 
-Verificado, literal, en `repair-sirius-work.yml:67-81`:
+Verificado, literal, en `repair-sirius-work.yml:67-81` (se transcribe sin tildes porque el
+comentario original no las lleva; corregido tras cotejarlo carácter a carácter):
 
 > Todas las defensas de este workflow […] viven DENTRO del run. Un proceso que muere no
 > puede informar de su propia muerte: […] la incidencia queda ATASCADA hasta que una
-> persona la quita y la vuelve a poner […]. Eso no se arregla desde aquí: solo lo cierra un
-> observador EXTERNO, y el contrato operativo prohíbe hoy programarlo […]. Queda registrado
-> como decisión pendiente, no como defecto olvidado.
+> persona la quita y la vuelve a poner […]. Eso no se arregla desde aqui: solo lo cierra un
+> observador EXTERNO, y el contrato operativo prohibe hoy programarlo […]. Queda registrado
+> como decision pendiente, no como defecto olvidado.
 
 Alcance real: afecta a los tres consumidores de eventos por etiqueta (implementar, revisar,
 reparar), al avance tras Quality (`workflow_run` es de un solo uso) y a la puerta de
@@ -177,7 +186,7 @@ referencia del diseño nuevo; «descartar» = no entra.)
 | Auditor v0 (runbook = perfil; ADR-016) | **Conservar** | Primer Agent Profile real del repositorio; molde del resto |
 | Prompts `implementer/reviewer/corrector.md` | **Adaptar** → Agent Profiles versionados y neutrales al motor | Ya casi lo son; les falta separar capacidades requeridas de herramientas concretas (precedente: ADR-018 en PR #171) |
 | Plantilla del Work Item (`sirius-work-item.yml`) + `validate_issue_body.py` | **Adaptar** → proyección GitHub del `WorkPackage` | Los 12 campos actuales son un subconjunto del WorkPackage de #172 §3.3 |
-| Reconciliador (`sirius_reconcile.sh`) | **Adaptar** → respaldo transitorio de la supervisión del motor | Cuando el motor sea el observador externo, el reconciliador queda como red de seguridad de la vía GitHub, no como única vigilancia |
+| Reconciliador (`sirius_reconcile.sh`) | **Conservar** → parte permanente de la supervisión, no respaldo transitorio | Desde **ADR-082** el motor corre dentro de Actions, así que no es externo al sustrato que observa y no puede informar de su propia muerte: el reconciliador programado pasa a ser la única pieza capaz de notar que murió el run del propio motor |
 | ContextBuilder + FTS5 + presupuesto de contexto | **Adaptar** → proveedor futuro de `contexto.recuperar` | Hoy solo sirve al turno conversacional; exponerlo como capacidad es trabajo futuro sobre código existente |
 | Registro de acciones + runbooks neutrales (PR #171) | **Adaptar** (conceptos; independiente de que #171 se fusione) | Precedentes directos del formato de perfil y del registro de qué ejecuta modelo |
 | Los tres workflows de rol como «modo de ejecución» | **Prototipo declarado** | Clasificación ya hecha por la PR #171 (`registro_de_acciones.yml`: exentos del ciclo por `--dangerously-skip-permissions` y PAT al modelo); el motor debe poder sustituir ese modo sin cambiar el chasis |

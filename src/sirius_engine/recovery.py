@@ -1,5 +1,13 @@
 """Barrido de recuperación al arrancar (A2, incidencia #186, arquitectura §3.5).
 
+Desde ADR-082 «al arrancar» quiere decir **en cada invocación**: el motor corre
+dentro de GitHub Actions y no sobrevive a su propia ejecución, así que este
+barrido deja de ser la ruta de excepción tras una caída y pasa a ser la ruta
+caliente. La cita de abajo sigue siendo la de la arquitectura, y su «no pierde
+ni duplica trabajo» sigue valiendo para una invocación sola; lo que NO cubre es
+que dos coincidan sobre el mismo diario, que es un riesgo declarado en ADR-082
+y se ataja serializándolas en el workflow, no aquí.
+
 «Al arrancar, el motor ejecuta un barrido de recuperación: para cada Run no
 terminado consulta ``STATUS`` contra el mundo real [...] y reconcilia; para
 cada WorkItem en ``ACTIVE``/``WAITING`` recalcula el siguiente paso. Un

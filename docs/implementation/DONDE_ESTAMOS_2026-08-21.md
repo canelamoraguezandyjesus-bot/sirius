@@ -19,6 +19,34 @@ Si lo que quieres es congelar y mirar, hoy no está congelado.
 
 ---
 
+## Nota posterior: lo que ADR-082 ya ha superado
+
+**Añadida el 24 de agosto de 2026. Debajo no se ha tocado ni una línea.** Esto
+es una foto fechada: reescribirla para que cuadre con hoy sería falsear lo que
+se sabía a las 03:24 del 21 de agosto, y un documento así no vale nada si no es
+fiel a su hora. Lo que sí hace falta es avisar por delante, porque **una de las
+preguntas que aquí se dejan abiertas ya está contestada** y nadie debería leer
+esta foto como si fuera el estado de hoy.
+
+El 23 de agosto de 2026 el propietario eligió la **opción A** de la incidencia
+#270, y `ADR-082` la fija: **el motor corre dentro de GitHub Actions, y su
+cuaderno —el diario— es un fichero versionado del repositorio**. Con eso, cuatro
+afirmaciones de más abajo dejan de valer para el futuro y valen solo para el 21
+de agosto:
+
+| Dónde, más abajo | Qué decía el 21-ago | Qué vale desde ADR-082 |
+|---|---|---|
+| §2, fila **D2** de «La lista, en orden del plan» | «Que el motor corra solo, siempre — No: falta que decidas DÓNDE vive» | Ya está decidido: dentro de Actions, con el diario en el repositorio. Lo que le queda a D2 es cablearlo y demostrar que dos ejecuciones a la vez no le rompen el diario |
+| §6, cierre de «Las tres decisiones que hacen falta» | «Fuera de las tres, y no urgente: dónde va a vivir Sirius en definitiva. Bloquea exactamente un bloque (D2)» | Contestada el 23-ago. Y no bloqueaba solo a D2: si el motor vive en un runner cuyo disco se borra al terminar, la respuesta alcanza a toda su memoria durable |
+| §1, punto 2, y la misma premisa repetida en §4 | «(vacío: el diario del motor está sin estrenar)» y «cero ficheros de diario» | Era cierto ese día. Desde el 23-ago existe `docs/operations/racha_siete_dias.jsonl`, versionado, y con ADR-082 el diario del motor será también un `.jsonl` dentro del repositorio |
+| §4, «Dónde encaja, y el cabo suelto» | el permiso autoriza el motor «estrictamente según ADR-020 y su plan aprobado» | La regla sigue en pie —lo que no está en el plan no está amparado, y meterlo exige ampliar el permiso; es justo lo que ADR-082 tuvo que hacer—. Lo que caduca es la cita: es el permiso **vigente el 21-ago**, y ADR-082 lo amplía. Hay que releerlo en `docs/evolution/STATUS.md` antes de volver a citarlo |
+
+Ninguna otra afirmación de este documento la toca ADR-082. Que sigan siendo
+ciertas hoy es otra pregunta, y esta foto no la responde: para eso hay que
+volver a medir.
+
+---
+
 ## Nota de arranque de este trabajo, con su carencia dicha
 
 Este documento **es** la nota de arranque de su rama (skill

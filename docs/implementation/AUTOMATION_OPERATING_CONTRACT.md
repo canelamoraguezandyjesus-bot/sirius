@@ -647,7 +647,9 @@ Una clase con proyección en la vía GitHub conmuta cuando se cumplen las dos, m
 
 > Esa distinción es la corrección de fondo respecto a la propuesta del plan, que exigía catorce días sin ninguna intervención manual. Sobre el ritmo real del repositorio esa condición no es exigente: es inalcanzable, y una condición inalcanzable no protege — impide que la conmutación ocurra nunca. Se cambia el umbral a siete días y, sobre todo, se cambia **qué se cuenta**.
 
-El contador no puede empezar antes de que el motor lleve el ciclo por sí mismo (bloques C1 y C2). Mientras lo lleve la vía GitHub no hay proyección propia que verificar.
+El contador no puede empezar antes de que el motor lleve el estado por sí mismo (bloques C1 y C2): que lo escriba en su diario y mantenga la incidencia como proyección de él. Lo que crea la proyección a verificar es que existan **dos** representaciones del mismo estado —el diario del motor y las etiquetas de la incidencia—; mientras el motor no tenga estado propio que comparar no hay nada que medir. Dónde se ejecute el motor no entra en esta condición: desde ADR-082 corre dentro de GitHub Actions, invocado por los workflows, y eso no le quita ni le da autoridad.
+
+Precisión que ADR-082 obliga a añadir al punto 1: el motor ya no es un proceso que corra sin parar —nace y muere con cada invocación—, así que el verificador no observa de forma continua. «En verde de forma continua» se mide, por tanto, sobre las pasadas realmente ejecutadas, y medirlo así no lo relaja: **una sola pasada en rojo rompe el contador**, y un tramo sin ninguna pasada tampoco lo acredita, porque no hay nada medido que enseñar.
 
 ### 11.3 El acto de conmutación
 
@@ -671,7 +673,7 @@ Tras una reversión, la clase vuelve a empezar el contador de §11.2 desde cero.
 
 ### 11.5 Lo que esta sección NO cambia
 
-- **Nada sobre dónde se ejecuta el trabajo.** Los workflows de GitHub Actions siguen siendo quienes ejecutan al implementador, al revisor y al corrector. La conmutación mueve la autoridad del estado, no la ejecución.
+- **Nada sobre dónde se ejecuta el trabajo.** Los workflows de GitHub Actions siguen siendo quienes ejecutan al implementador, al revisor y al corrector, y desde ADR-082 también al propio motor. La conmutación mueve la autoridad del estado, no la ejecución.
 - **Nada de lo que el usuario ve.** Las incidencias, las etiquetas y las notificaciones siguen existiendo y actualizándose igual.
 - **Nada del merge.** §8 sigue exigiendo la orden explícita del usuario, antes y después de conmutar.
 - **Nada de la activación ni de la supervisión.** Llegan en la v1.8 (E1b), no aquí.
@@ -728,14 +730,35 @@ Con cuatro límites, y ninguno es decorativo:
 3. **No fusiona. Nunca.** §8 queda intacta: el merge sigue siendo un gesto
    explícito del propietario y no hay ninguna vía por la que el motor lo haga.
 4. **El vigilante periódico de §9.1 se queda como respaldo** de la vía GitHub,
-   con sus límites intactos. Si el motor se equivoca, se cuelga o muere, esa red
-   sigue debajo.
+   con sus límites intactos. Si el motor se equivoca, o si su run no llega a
+   terminar, esa red sigue debajo. Desde ADR-082 los modos de fallo que cubre
+   son los de un job, no los de un proceso que se cuelga: el run que no se
+   disparó, el que expiró por timeout, el que alguien canceló y el que terminó
+   a medias sin dejar su diario confirmado. Y hay que decir en voz alta lo que
+   este respaldo **ya no** da: motor y vigilante corren ambos en GitHub
+   Actions, así que la red comparte sustrato con lo que respalda y una
+   degradación de la plataforma se lleva a los dos. Esa dependencia común se
+   acepta a sabiendas y no está mitigada.
 
-Por qué la prohibición general deja de aplicarse aquí: se escribió para la
-automatización de GitHub, donde el observador vivía **dentro** de lo observado
-—y por eso no podía informar de su propia muerte— y cada sondeo costaba minutos
-de Actions. El motor es un observador externo, y es exactamente la «decisión
-pendiente» que `repair-sirius-work.yml` y la incidencia #138 dejaron anunciada.
+Por qué la prohibición general deja de aplicarse aquí, y no es porque el motor
+viva fuera de GitHub Actions: desde ADR-082 corre dentro, invocado por los
+workflows. Las dos razones que sí siguen en pie son otras. **Primera:** el
+defecto que §9.1 nombra es que un proceso no puede informar de su **propia**
+muerte, no de la ajena, y ADR-057 demuestra que un run sí puede observar otro
+run por la API. El motor es externo **al run que vigila** aunque comparta
+sustrato con él, y eso es lo que esta autorización necesita. **Segunda:** el
+argumento de coste dejó de aplicar cuando el repositorio pasó a ser público
+(ADR-044), como ya recoge §9.1.
+
+Lo que esto **no** resuelve, y se dice aquí en voz alta en vez de dejarlo
+deducir: la muerte del run del propio motor sigue sin observador propio. Ahí el
+motor hereda los tres modos de muerte que `repair-sirius-work.yml` describe
+sobre sí mismo —el checkout que cae, el runner que desaparece, el job que
+alguien cancela— y deja de ser el «observador externo» que aquel workflow y la
+incidencia #138 dejaron anunciado como decisión pendiente. Esta sección
+responde la mitad alcanzable de esa decisión —externo al run observado—, no la
+otra. La única red que queda debajo es el vigilante periódico de §9.1, con los
+límites que allí tiene. Es el precio de ADR-082 y no está mitigado.
 
 ### 12.3 Lo que esta sección NO cambia
 
