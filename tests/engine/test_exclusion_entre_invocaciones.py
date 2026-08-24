@@ -32,7 +32,10 @@ from typing import Any
 
 import pytest
 
+from sirius_engine.adapters.durable.dispatch_journal import DurableDispatchJournal
 from sirius_engine.adapters.durable.store import DurableWorkEngineStore
+from sirius_engine.dispatcher import ETIQUETA_ACTIVACION
+from sirius_engine.domain.dispatch import DispatchEpisode
 from sirius_engine.domain.errors import DuplicateIdError
 from sirius_engine.domain.work_item import WorkItem, WorkItemClass
 
@@ -158,3 +161,72 @@ def test_los_dos_registros_comparten_numero_de_secuencia(tmp_path: Path) -> None
 
     # Y el almacén los relee sin protestar: el diario corrupto pasa por bueno.
     assert len(DurableWorkEngineStore(diario).list_events()) == 2
+
+
+# --- El daño peor: despachar dos veces ------------------------------------
+#
+# Lo de arriba corrompe el diario, y un diario se repara leyendo. Esto ya ha
+# escrito en GitHub: dos incidencias, dos ramas, dos PRs para una sola petición.
+#
+# La reserva del despachador tiene DOS defensas y solo una sobrevive a la
+# relectura, cosa que ADR-064 no distingue y conviene tener medida:
+#
+#   `_por_work_id`  -> se puebla al leer el diario, así que SÍ ve un episodio ya
+#                      grabado por otra invocación anterior;
+#   `_en_curso`     -> vive solo en memoria y nunca se persiste, así que NO ve
+#                      una reserva que otra invocación tenga en marcha.
+#
+# La frontera está exactamente ahí: quien llega DESPUÉS de que el otro grabara
+# se para; quien llega mientras el otro todavía no ha grabado, no.
+
+
+def _episodio(work_id: str) -> DispatchEpisode:
+    return DispatchEpisode(
+        work_id=work_id,
+        orden_enlazada="https://github.com/acme/repo/issues/1#issuecomment-1",
+        repo="acme/repo",
+        numero_incidencia=296,
+        etiqueta=ETIQUETA_ACTIVACION,
+        recorded_at=AHORA,
+    )
+
+
+def test_un_solo_despachador_no_reserva_dos_veces(tmp_path: Path) -> None:
+    """Contraste: dentro de una invocación la reserva sí protege."""
+    diario = DurableDispatchJournal(tmp_path / "diario-despacho.jsonl")
+
+    assert diario.reservar("WI-D2-0010").obtenida is True
+    assert diario.reservar("WI-D2-0010").obtenida is False
+
+
+def test_dos_despachadores_reservan_el_mismo_trabajo_a_la_vez(tmp_path: Path) -> None:
+    """El daño peor de ADR-082, medido: dos activaciones de una sola petición."""
+    ruta = tmp_path / "diario-despacho.jsonl"
+
+    primero = DurableDispatchJournal(ruta)
+    segundo = DurableDispatchJournal(ruta)  # lee el mismo diario, todavía vacío
+
+    assert primero.reservar("WI-D2-0011").obtenida is True
+    assert segundo.reservar("WI-D2-0011").obtenida is True, (
+        "si esto deja de dar True, la reserva cruza procesos y hay que revisar "
+        "ADR-082: el grupo de concurrencia podría dejar de ser obligatorio"
+    )
+
+
+def test_el_que_llega_despues_de_que_el_otro_grabe_si_se_para(tmp_path: Path) -> None:
+    """Dónde está la frontera, exactamente.
+
+    La defensa que lee el diario SÍ funciona entre invocaciones. Lo que no
+    cruza es la reserva *en curso*. Por eso la ventana peligrosa es la que va
+    desde que uno reserva hasta que graba, y no toda la ejecución.
+    """
+    ruta = tmp_path / "diario-despacho.jsonl"
+
+    primero = DurableDispatchJournal(ruta)
+    assert primero.reservar("WI-D2-0012").obtenida is True
+    primero.record(_episodio("WI-D2-0012"))
+
+    tardio = DurableDispatchJournal(ruta)  # lee el diario CON el episodio dentro
+    assert tardio.reservar("WI-D2-0012").obtenida is False, (
+        "un episodio ya grabado sí tiene que frenar a la invocación siguiente"
+    )
