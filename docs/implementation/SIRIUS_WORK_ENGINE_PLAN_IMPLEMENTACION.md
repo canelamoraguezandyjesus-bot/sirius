@@ -15,10 +15,12 @@ motor determinista que posee el estado; Workers sustituibles tras
 `START/STATUS/RESULT/CANCEL`; proyección determinista `WorkerRequest` con perfil
 versionado; Capability Resolver con registro y **política global de egress** (red externa
 + contexto privado irrestricto: incompatibles, fail-closed); **cancelación en dos
-tiempos**; **supervisor externo** al proceso supervisado; **persistencia detrás de
-puerto**; reutilizar la automatización GitHub existente como primer Adapter, sin vías
-paralelas; merge humano por `fusiona`; sin frameworks, proveedores ni base de datos
-definitiva salvo dependencia demostrable.
+tiempos**; **supervisor externo al RUN supervisado** —no necesariamente externo a GitHub
+Actions: ADR-082 fija que el motor corre dentro de Actions, y ADR-057 demuestra que un run
+sí puede observar otro run por la API—; **persistencia detrás de puerto**; reutilizar la
+automatización GitHub existente como primer Adapter, sin vías paralelas; merge humano
+por `fusiona`; sin frameworks, proveedores ni base de datos definitiva salvo dependencia
+demostrable.
 
 ---
 
@@ -55,7 +57,7 @@ E0  autorización de implementación + saneamiento documental (mini-PR, tipo #17
         ── HITO M3: vertical funcional completa de #172 §6 (incluye vía Codex ejecutada) ──
  └─ FASE D — canonicidad y servicio
      D1 conmutación de canonicidad de las clases con proyección GitHub (regla E1a)
-     D2 servicio desatendido + representación física definitiva  [BLOQUEADO por I4]
+     D2 cableado en los workflows + representación versionada        [I4 CERRADA]
      D3 (posterior, opcional) adapter Telegram                   [DECISIÓN nueva]
 ```
 
@@ -101,6 +103,18 @@ humana material previa.
      (frameworks/proveedores no aprobados, multiagente abierto, permisos generales).
      Satisface también el criterio de parada de `AGENTS.md` («introducir otro proceso,
      servidor, agente o base de datos») mediante decisión explícita del propietario.
+
+     Enmendado el 2026-08-24 (ADR-082, decisión I4 de la incidencia #270): la excepción
+     tiene que nombrar además **ADR-082 y #270**, porque su redacción vigente autoriza
+     «estrictamente según ADR-019, ADR-020 y su plan aprobado» y la opción A se aparta de
+     los tres — sin enmendarla, el cableado del motor queda fuera de lo autorizado, no
+     por diseño sino por gobierno. Y cambia cuál es el criterio de parada que hay que
+     satisfacer: con el motor dentro de Actions y su diario como fichero del repositorio
+     ya no se introduce «otro proceso, servidor, agente o base de datos», pero sí se toca
+     el otro —«no introduzcas disparador API, eventos de GitHub […] ni otro nivel de
+     automatización antes de la puerta y aprobación expresa definidas en
+     `AUTOMATION_OPERATING_CONTRACT.md`»—, así que la enmienda del contrato va **con**
+     esta autorización, no después.
   2. **Sanear la condición documental**: ADR-019 sigue con `Estado: PROPUESTO` pese a que
      la fusión de la PR #173 por el propietario **es** su aprobación según su propia
      cabecera (verificado en `main` = `54bb690`), y la línea de la excepción en
@@ -113,8 +127,9 @@ humana material previa.
 - **Dependencia real**: la fusión de la PR de este plan (aprueba ADR-020 y la secuencia).
 - **Ficheros**: `docs/evolution/STATUS.md` (una línea ampliada) y la cabecera de
   `docs/decisions/ADR-019-…md`. Mini-PR tipo #174.
-- **Prueba de terminado**: la excepción menciona implementación + ADR-020; ADR-019 y la
-  cita de STATUS dicen APROBADO con fecha; pruebas documentales en verde.
+- **Prueba de terminado**: la excepción menciona implementación + ADR-020 **y ADR-082
+  (#270)**; ADR-019 y la cita de STATUS dicen APROBADO con fecha; pruebas documentales en
+  verde.
 - **Riesgo principal**: redactar de más y autorizar de más; se mitiga copiando el patrón
   acotado de #174 y limitando el saneamiento a ADR-019.
 - **Automatizable**: la redacción de la mini-PR sí; la fusión es del propietario.
@@ -169,13 +184,17 @@ humana material previa.
   con el patrón de escritura que S1 demostró seguro, más el barrido de arranque
   (arquitectura §3.5): reconciliar cada Run abierto contra el mundo y recalcular el
   siguiente paso.
-- **Frontera explícita (ADR-019)**: la representación física **definitiva** depende de
-  I3 **e I4** — el dónde corre el motor condiciona el medio (permisos de escritura,
-  concurrencia, copias, disponibilidad). A2 no la fija: entrega un adaptador que cumple el
-  puerto y unas pruebas de recuperación que cualquier sustituto deberá pasar. **La
-  fijación definitiva ocurre en D2**, cuando I4 esté resuelta — **salvo que el propietario
-  adelante I4**, en cuyo caso A2 puede fijar ya la representación y D2 se limita al
-  servicio.
+- **Frontera resuelta (ADR-082)**: el propietario adelantó I4 el 23-08-2026 (incidencia
+  #270), así que la representación física **queda fijada, y no en D2**: el diario del
+  motor es un fichero append-only versionado dentro del repositorio. El adaptador que
+  entrega A2 deja de ser «de referencia» en cuanto se le añada la escritura sobre esa
+  ruta versionada y la confirmación por el workflow que lo invoca; las pruebas de
+  recuperación siguen escritas contra el puerto, que es lo que permite el cambio. Las dos
+  variables que esta frontera nombraba y que el entorno elegido cambia de raíz
+  —**concurrencia** (dos runs pueden escribir el mismo fichero) y **disponibilidad** (el
+  sistema de ficheros del runner no sobrevive al job)— **no están medidas**: son el riesgo
+  principal del cableado, no un detalle de despliegue (ADR-082, «El `concurrency group`
+  deja de ser una precaución y pasa a ser la única»).
 - **Dependencia real**: A1 + resultado de S1.
 - **Ficheros**: `src/sirius_engine/` (adaptador de persistencia de referencia),
   `tests/engine/` (la prueba del spike, convertida en prueba estable del repositorio).
@@ -532,29 +551,52 @@ propietario decide no ejercitarla, esa carencia se escribe en el registro del hi
 - **Decisión humana previa**: **ninguna**. Es el cambio respecto de lo que este plan
   preveía, y es deliberado en el contrato, no un descuido.
 
-### D2 — Servicio desatendido + representación física definitiva — BLOQUEADO por I4
+### D2 — Cableado del motor en los workflows + representación versionada — I4 CERRADA
 
-- **Objetivo**: dos cosas que I4 gobierna a la vez:
-  1. el motor en régimen: proceso bajo supervisión externa con reinicio automático
-     (requisito de despliegue de la arquitectura §3.5), arrancando el barrido de
-     recuperación en cada arranque;
-  2. **fijar la representación física definitiva del almacén** (ADR-019: depende de I3
-     e I4), confirmando o sustituyendo el adaptador de referencia de A2 según lo que el
-     entorno elegido permita. Si el propietario adelanta I4, esta parte se adelanta con
-     ella y D2 se queda solo con el servicio.
-- **Dependencia real**: **I4** (dónde corre el motor). Este es el punto EXACTO donde I4
-  bloquea; hasta aquí, el motor corre atendido en sesiones sobre el adaptador de
-  referencia y nada anterior se detiene por ello.
-- **Ficheros**: unidad de servicio/process manager según I4; adaptador definitivo si
-  sustituye al de referencia; guía de operación.
-- **Prueba de terminado**: matar el proceso en horario desatendido → reinicio automático
-  + recuperación sin pérdida, verificado dos veces; si cambia la representación, la suite
-  de recuperación de A2 (escrita contra el puerto) pasa sin modificarse.
-- **Riesgo principal**: entorno Windows real (la clase de hueco que ya bloqueó V8.2/V8.3);
-  mitigación: prueba de 5 minutos del esqueleto bajo el supervisor elegido antes de dar
-  I4 por resuelta.
-- **Automatizable**: parcialmente; la instalación del servicio es de máquina real.
-- **Decisión humana previa**: I4 (dato + decisión de despliegue).
+- **Objetivo**: dos cosas que ADR-082 gobierna a la vez:
+  1. el motor en régimen: **invocado por los workflows del ciclo**, dentro de GitHub
+     Actions, con un grupo de concurrencia de nombre constante que serialice las
+     invocaciones, y arrancando el barrido de recuperación (arquitectura §3.5) en CADA
+     invocación — no «en cada arranque», porque cada invocación **es** un proceso nuevo
+     que no recuerda nada de la anterior;
+  2. **cablear la representación física del almacén, que ya está fijada**: el diario vive
+     como fichero versionado del repositorio (ADR-082), así que este bloque no elige
+     medio — apunta el adaptador de A2 a esa ruta y hace que el propio workflow confirme
+     el fichero al terminar.
+- **Dependencia real**: ninguna incógnita abierta. I4 quedó cerrada por el propietario
+  (#270, ADR-082) y con ella la representación física. Lo que este bloque hereda no es una
+  decisión pendiente sino un defecto conocido: el almacén reproduce el diario **una sola
+  vez, al construirse**, y la reserva que impide despachar dos veces el mismo trabajo vive
+  en memoria (ADR-064), de modo que dos invocaciones simultáneas son dos reservas del
+  mismo trabajo — dos incidencias, dos ramas, dos PRs. **No se enchufa el motor sin
+  demostrar la serialización** (ADR-082, Consecuencias).
+- **Ficheros**: los workflows que invocan al motor (`.github/workflows/**`, que edita el
+  propietario a mano por ADR-002), con la preparación de Python 3.14 que `pyproject.toml`
+  exige; el adaptador de persistencia apuntando a la ruta versionada del diario, y esa
+  ruta declarada en el repositorio; guía de operación.
+- **Prueba de terminado**: (a) dos invocaciones deliberadamente solapadas sobre el mismo
+  diario dejan exactamente un registro por petición lógica, sin números de secuencia
+  duplicados y sin pérdida, y la prueba se ve fallar con la serialización quitada
+  (mutación); (b) un run cancelado a mitad no deja el diario a medias ni una etiqueta sin
+  su línea; (c) la suite de recuperación de A2, escrita contra el puerto, pasa **sin
+  modificarse** sobre el adaptador versionado.
+- **Riesgo principal**: dos runs confirmando el mismo fichero y, peor, despachando dos
+  veces el mismo trabajo — un diario corrupto se repara leyendo, dos activaciones ya han
+  escrito en GitHub; mitigación: grupo de concurrencia de nombre constante con
+  `cancel-in-progress: false`, confirmación por anexado con reintento acotado, y la prueba
+  de solapamiento de arriba antes de dar el bloque por terminado.
+- **Automatizable**: parcialmente; la edición de `.github/**` la hace el propietario en
+  sesión interactiva (ADR-002).
+- **Decisión humana previa**: ya no I4. Sí la que ADR-082 declara pendiente con nombre y
+  no toma: qué permisos lleva el workflow que aloja al motor, que pasaría a ejecutar un
+  modelo **y** a tener `contents: write` sobre el repositorio en la misma superficie.
+
+Enmendado el 2026-08-24 (ADR-082, decisión I4 de #270): este bloque pedía un proceso
+bajo supervisión externa con reinicio automático, una unidad de servicio de máquina real
+y, como prueba de terminado, matar el proceso en horario desatendido. Con el motor dentro
+de Actions no hay proceso de larga duración que reiniciar ni horario desatendido que
+vigilar: lo que queda por demostrar es la exclusión entre invocaciones. Y el bloque deja
+de estar bloqueado, porque la incógnita que lo bloqueaba está decidida.
 
 ### D3 — Adapter Telegram (posterior, opcional)
 
@@ -666,7 +708,7 @@ huecos):
 | I3 durabilidad | S1 (tras A1) | A2 (patrón de escritura seguro) | A1 avanza sin ella |
 | I2 GPT Researcher | S2 (tras A4/A5) | B1; y decisión de gasto SOLO si el spike la demuestra | Fase A completa sin ella |
 | I1 bordes STATUS | S3 (tras A3, solapable con B) | C1 (cotas de LOST) | espejo pasivo A3 no la necesita |
-| I4 dónde corre el motor | dato + decisión del propietario | **D2**: servicio desatendido **y fijación de la representación física definitiva** (ADR-019). Si el propietario la adelanta, A2 puede fijar ya la representación | A–C corren atendidos, sobre el adaptador **de referencia** de A2 |
+| I4 dónde corre el motor | CERRADA: decisión del propietario del 23-08-2026 (#270), registrada en ADR-082 | ya no bloquea nada: la representación física queda fijada —diario versionado en el repositorio— y **D2** pasa a ser el cableado en los workflows | A–C corrieron atendidos sobre el adaptador **de referencia** de A2; dejan de correr atendidos en cuanto un workflow invoque al motor |
 | I5 bandera Codex | dato del propietario (leer/encender la variable) | **no bloquea la construcción de ningún bloque**, pero la vía Codex debe haberse EJECUTADO de verdad antes de declarar **M3** completo (o la carencia se escribe) | todos los bloques avanzan sin ella |
 
 Ningún spike se ejecuta por este plan: cada uno arranca como Work Item propio cuando su
@@ -714,8 +756,11 @@ las piezas con #171 aún abierta.
    controla entrando por fases — primero espejo (A3, cero escrituras), luego supervisión
    con reglas de coordinación (C1), luego despacho (C2) — y con E1b fijando los límites
    antes de la primera escritura.
-2. **El entorno real de I4** (Windows, disponibilidad): aislado en D2; nada anterior
-   depende de él.
+2. **El entorno real de I4** (runner efímero de Actions, concurrencia entre runs): tras
+   ADR-082 **deja de estar aislado en D2**. Afecta a todo lo que escribe un diario durable
+   —almacén, despachador y supervisor—, porque el sistema de ficheros del runner no
+   sobrevive al job y dos runs pueden escribir el mismo fichero. Se trata como defecto
+   abierto con incidencia propia, no como riesgo de un bloque futuro.
 3. **Coste de la vía GitHub** (minutos de Actions por ciclos de demostración): los
    bloques usan incidencias de humo pequeñas; el espejo y el supervisor leen con
    moderación (cadencias de S3).

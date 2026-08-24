@@ -93,13 +93,25 @@ _SIN_INCIDENCIAS = (
 def diario_por_defecto() -> Path:
     """El diario vive en el directorio de datos de la plataforma, junto al de Sirius.
 
-    Se elige ahí y no dentro del repositorio a propósito: el diario es estado
-    del propietario, no del árbol de código, y un fichero de estado dentro del
-    repositorio acaba en un `git status` sucio o, peor, confirmado. Es la misma
-    raíz que ya usa la aplicación de escritorio
-    (:mod:`sirius.infrastructure.paths`), en un subdirectorio propio del motor
-    para no mezclarse con ella. **Esto no decide la representación física del
-    almacén**, que es de D2 (ADR-019, ADR-029): decide un sitio por defecto.
+    Se elige ahí y no dentro del repositorio a propósito **cuando el motor lo
+    teclea el propietario**: ahí el diario es estado suyo, no del árbol de
+    código, y un fichero de estado dentro del repositorio acaba en un `git
+    status` sucio o, peor, confirmado. Es la misma raíz que ya usa la
+    aplicación de escritorio (:mod:`sirius.infrastructure.paths`), en un
+    subdirectorio propio del motor para no mezclarse con ella. Ese motivo
+    sigue vigente tal cual para la consola, y por eso este defecto no cambia.
+
+    **Dentro de GitHub Actions la ubicación no la decide este defecto: la fija
+    ADR-082.** Ahí el diario es un fichero versionado del repositorio, porque
+    el sistema de ficheros del runner es efímero y confirmarlo es la única
+    forma de que la memoria sobreviva de una invocación a la siguiente. Quien
+    invoca al motor desde un workflow la pasa por ``--diario`` o
+    ``SIRIUS_MOTOR_DIARIO``, que mandan sobre este defecto
+    (:func:`resolver_diario`): las dos ubicaciones conviven sin tocar código.
+
+    **Esto no decide la representación física del almacén**: eso lo cerró el
+    propietario al decidir I4 (ADR-082), y ya no lo decide un spike de D2
+    (ADR-019, ADR-029). Aquí se decide un sitio por defecto y nada más.
     """
     datos = PlatformDirs(_APP, appauthor=False, roaming=False).user_data_dir
     return Path(datos) / "motor" / "diario.jsonl"

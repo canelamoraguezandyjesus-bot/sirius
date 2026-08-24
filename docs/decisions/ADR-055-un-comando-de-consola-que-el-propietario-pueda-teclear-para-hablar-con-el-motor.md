@@ -2,6 +2,7 @@
 
 - Estado: PROPUESTO
 - Fecha: 2026-08-21
+- Enmendado: ADR-082 supera «el diario vive fuera del repositorio» solo dentro de GitHub Actions; para la consola sigue vigente (decisión I4, #270)
 - Aprobación: la fusión de la PR por el propietario
 
 ## Nota de arranque (publicada ANTES de escribir una línea de código)

@@ -3,7 +3,9 @@
 Contrato explícito que cualquier almacén del motor debe satisfacer: crear y
 transicionar ``WorkItem``/``Run``, exponer el historial de versiones de un
 WorkItem, y llevar el diario de eventos append-only. La representación
-física NO se decide aquí (queda para I3/I4, arquitectura §15); en A1 solo
+física ya no queda abierta: la fijó ADR-082 (decisión I4, #270) — diario
+append-only en ficheros versionados del repositorio. Este puerto no cambia
+por ello, que es justo lo que se buscaba al separarlo; en A1 solo
 existe la implementación en memoria de
 :mod:`sirius_engine.adapters.memory_store`, pero el mismo conjunto de
 pruebas de comportamiento se escribe contra este puerto para que una futura

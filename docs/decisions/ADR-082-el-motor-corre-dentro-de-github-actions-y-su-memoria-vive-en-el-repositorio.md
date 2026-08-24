@@ -105,6 +105,11 @@ Sobre **el mecanismo de la enmienda**, no sobre I4: eso lo decidió el propietar
 | **ADR-019**, Decisión, punto 1 | «El despliegue del motor exige supervisión y reinicio automático externos (servicio del SO o equivalente)». El motor no es un proceso de larga duración: nace y muere con cada invocación, así que no hay nada que un servicio del sistema reinicie. |
 | **ADR-019**, Opciones consideradas, opción 1 | Su **primera mitad** —«el observador seguiría dentro de lo observado»— se revisa, no se borra: sigue siendo cierta y pasa a Consecuencias como límite conocido. Su **segunda mitad** —«GitHub seguiría siendo la única memoria»— deja de aplicar: con la opción A la memoria es el diario propio del motor, versionado, no las etiquetas de GitHub. |
 | **ADR-055** y el `docstring` gemelo de `cli.py` | «El diario es estado del propietario, no del árbol de código». Se deroga **solo para la ejecución dentro de Actions**. Para el uso desde la consola del propietario sigue vigente tal cual: ahí el diario sigue fuera del repositorio. |
+| **ADR-020** | El descarte de «evolucionar los workflows hacia el motor», por el mismo motivo que ADR-019, y la dependencia «I4 antes del servicio desatendido»: I4 ya está resuelta. |
+| **ADR-056** | «El motor es un observador externo» como **razón** de la separación entre el §12 del contrato y su §9.1. La separación se mantiene; su criterio deja de ser la ubicación y pasa a ser la responsabilidad —qué inicia bloques, qué avanza un ciclo sano y qué fusiona—. |
+| **ADR-061** | La premisa de un disco que sobrevive al proceso. Dentro de Actions el disco del runner muere con el job: los diarios solo son durables si se versionan en el repositorio. |
+| **ADR-063** | «Quién invoca el comando va aparte». Lo invoca un workflow, y el riesgo que ese ADR dejaba como hipotético deja de serlo. |
+| **ADR-064** | Su premisa de proceso persistente. El límite que documentó —la reserva en memoria no sobrevive a un reinicio— pasa de ser un caso de borde a ser el riesgo principal, porque cada invocación **es** un proceso nuevo. |
 
 Lo que **no** cambia: el motor sigue siendo el dueño de su estado detrás de un
 puerto de persistencia (ADR-019, punto 1, primera mitad), los Workers siguen
@@ -133,6 +138,32 @@ decía que «el motor no arranca en el runner» por exigir Python 3.14 frente al
 del sistema. Medido: `pyproject.toml` exige `>=3.14,<3.15`, y cuatro workflows ya
 preparan `python-version: "3.14.6"`. El límite real es más pequeño y va escrito en
 Consecuencias.
+
+**La prueba de terminado, ejecutada y con su cifra.** Se fijó por escrito antes de
+empezar: «que ninguna afirmación de la versión vieja sobreviva sin que algo la
+señale». Ejecutada sobre los **743 ficheros versionados** (`git ls-files`) con el
+vocabulario de la versión vieja y sus variantes —supervisión externa, reinicio
+automático, servicio del SO, process manager, siempre encendido, desatendido,
+demonio, «máquina del propietario», «diario fuera del repositorio», «observador
+externo», I4, D2—:
+
+| | |
+|---|---|
+| Coincidencias únicas revisadas (`fichero:línea`) | **270** |
+| Compatibles con ADR-082, sin tocar | 266 |
+| **Afirmaciones viejas que sobrevivieron a la primera pasada** | **4** |
+
+Las cuatro estaban en `docs/` de código, no en prosa, y por eso las nueve vías del
+barrido documental no las vieron: `ports/store.py` («la representación física NO se
+decide aquí»), `adapters/durable/store.py` («la fija D2»),
+`adapters/durable/dispatch_journal.py` («ese caso queda para cuando el despachador
+corra desatendido») y `recovery.py` («al arrancar… un reinicio de Sirius no pierde
+ni duplica trabajo»). Corregidas en el mismo commit.
+
+**La tercera es la que justifica haber hecho esta pasada.** `dispatch_journal.py`
+aplazaba explícitamente el caso de la reserva huérfana «para cuando el despachador
+corra desatendido» — y con la opción A ese momento es ahora. Sin esta búsqueda, el
+árbol habría quedado prometiendo que el peor riesgo de ADR-082 era cosa del futuro.
 
 ## Consecuencias
 

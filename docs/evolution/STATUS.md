@@ -4,8 +4,10 @@
 **Documento rector vigente:** v1.0  
 **Fecha de aprobación:** 22 de julio de 2026  
 **Estado de ejecución:** INACTIVO / NO AUTORIZADO, con una única excepción registrada el
-15 de agosto de 2026: la implementación del Sirius Work Engine, estrictamente según
-ADR-019, ADR-020 y su plan aprobado. El resto del roadmap post-0.1 sigue sin autorizar.
+15 de agosto de 2026 y ampliada el 23 de agosto de 2026: la implementación del Sirius Work
+Engine, estrictamente según ADR-019, ADR-020 y su plan aprobado, con las enmiendas que
+ADR-082 introduce sobre el despliegue del motor y la ubicación de su diario (decisión I4
+del propietario en la incidencia #270). El resto del roadmap post-0.1 sigue sin autorizar.
 
 ## Vigente
 
@@ -25,14 +27,17 @@ ADR-019, ADR-020 y su plan aprobado. El resto del roadmap post-0.1 sigue sin aut
   Sirius Work Engine descrita más abajo;
 - seleccionar proveedores o frameworks para agentes;
 - diseñar una arquitectura técnica multiagente — con una única excepción registrada el
-  15 de agosto de 2026 y ampliada ese mismo día: el **diseño y la implementación** del
-  Sirius Work Engine quedan autorizados por la orden explícita y posterior del propietario
-  en la incidencia #172 (SIRIUS-WORK-ENGINE-DESIGN-001), materializada en la PR #173
-  (ADR-019, APROBADO) y en la PR #175 (ADR-020, APROBADO, con su plan de implementación).
-  La implementación queda autorizada **estrictamente según ADR-020 y su plan aprobado**;
-  fuera de ese alcance siguen NO autorizados: adoptar frameworks o proveedores no
-  aprobados, cualquier multiagente abierto más allá de la delegación supervisada descrita
-  en ese diseño, y el resto del roadmap post-0.1;
+  15 de agosto de 2026, ampliada ese mismo día y enmendada el 23 de agosto de 2026: el
+  **diseño y la implementación** del Sirius Work Engine quedan autorizados por la orden
+  explícita y posterior del propietario en la incidencia #172
+  (SIRIUS-WORK-ENGINE-DESIGN-001), materializada en la PR #173 (ADR-019, APROBADO) y en la
+  PR #175 (ADR-020, APROBADO, con su plan de implementación), y por su decisión I4 en la
+  incidencia #270 (opción A), materializada en ADR-082. La implementación queda autorizada
+  **estrictamente según ADR-020 y su plan aprobado, con las enmiendas que ADR-082 introduce
+  sobre el despliegue del motor y la ubicación de su diario**; fuera de ese alcance siguen
+  NO autorizados: adoptar frameworks o proveedores no aprobados, cualquier multiagente
+  abierto más allá de la delegación supervisada descrita en ese diseño, y el resto del
+  roadmap post-0.1;
 - dar permisos generales sobre el ordenador;
 - activar percepción continua;
 - integrar Sirius con HEAD-R1;

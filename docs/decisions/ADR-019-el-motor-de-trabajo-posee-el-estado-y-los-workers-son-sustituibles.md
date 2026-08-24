@@ -3,6 +3,7 @@
 - Estado: APROBADO — por la fusión de la PR #173 en `main` (2026-08-15), conforme a la
   regla de aprobación de este mismo ADR.
 - Fecha: 2026-08-15
+- Enmendado: ADR-082 supera la supervisión externa del despliegue y el motivo del descarte de la opción 1 (decisión I4, #270)
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario. La fusión
   aprueba el DISEÑO como material de trabajo; NO autoriza implementación, spikes,
   instalaciones ni enmiendas del contrato operativo (esas decisiones quedan listadas en la

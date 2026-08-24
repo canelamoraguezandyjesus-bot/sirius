@@ -23,6 +23,11 @@ No es: código productivo, una adopción de frameworks, un rediseño del chasis 
 una segunda vía paralela a la automatización existente. La automatización GitHub actual
 **es** el primer Adapter de Worker del motor (sección 7.1), no algo a sustituir.
 
+Desde ADR-082 esa relación es doble, y conviene decirlo: los workflows son a la vez el
+primer Adapter de Worker del motor y el **anfitrión que lo invoca** (decisión I4, #270).
+Motor y Adapter comparten tiempo de ejecución; la jerarquía de capas de la sección 1 es de
+responsabilidad, no de ubicación.
+
 ## 1. El chasis de tres capas, aterrizado sobre lo que existe
 
 ```
@@ -55,7 +60,7 @@ Cada componente lleva su naturaleza: **[D]** determinista, **[M]** necesita mode
 
 | # | Componente | Responsabilidad | Naturaleza |
 |---|---|---|---|
-| 1 | **Almacén de estado** | Persistir WorkItems, Runs y el diario de eventos del motor: un almacén durable propio, detrás de un **puerto de persistencia** (el patrón ya vigente en el producto), siempre separado de la base de Sirius 0.1. La representación física NO se decide aquí: la decide el resultado de I3/I4 (el spike puede usar SQLite por coste y coherencia, sin convertirlo en decisión) | [D] |
+| 1 | **Almacén de estado** | Persistir WorkItems, Runs y el diario de eventos del motor: un almacén durable propio, detrás de un **puerto de persistencia** (el patrón ya vigente en el producto), siempre separado de la base de Sirius 0.1. La representación física ya NO la decide un spike: la fija ADR-082 (decisión I4, #270) — diario append-only, un registro JSON por línea, en ficheros **versionados dentro del repositorio** y confirmados por el workflow que invoca al motor. El puerto no cambia; cambia el adaptador. La ruta elegida no puede caer bajo lo que `.gitignore` descarta (`*.db`, `.local/`, `logs/`, `backups/`, `exports/`) | [D] |
 | 2 | **Máquina de estados** | Transiciones válidas de WorkItem y Run (sección 3); toda mutación pasa por aquí y queda en el diario | [D] |
 | 3 | **Supervisor** | Deadlines por Run, sondeo de `STATUS` vía Adapters, detección de Runs perdidos, barrido de recuperación al arrancar | [D] |
 | 4 | **Despachador** | Elegir Worker para un paso (perfil requerido + capacidades + permisos + presupuesto), construir el WorkPackage, invocar `START`. Despacha pasos en paralelo SOLO si no dependen entre sí (independencia real, #172 §2.6); en la duda, en serie. Nunca despacha un sustituto sobre un recurso mutable con una cancelación sin confirmar (3.3) | [D] |
@@ -152,7 +157,7 @@ Operaciones que NO son estados:
   cualquier estado no terminal; obliga a rehacer PREPARAR; queda el antes y el después en el
   diario. Si el cambio invalida Runs vivos, el motor los cancela primero.
 - **Repriorización**: cambio del campo `prioridad`; afecta al orden de despacho, no al estado.
-- **Reinicio del proceso de Sirius**: no es una transición; ver 3.5.
+- **Arranque de una invocación del motor**: no es una transición; ver 3.5.
 
 ### 3.3 Run
 
@@ -229,18 +234,26 @@ cuando las validaciones fallan (ver REPARAR, abajo).
 - Toda transición se escribe en el almacén **antes** de producir efectos externos
   observables, y los efectos externos son idempotentes o reanudables (el patrón ya probado
   de `sirius_transition`: marcador primero comprobado, mutación después, comentario al final).
-- Al arrancar, el motor ejecuta un **barrido de recuperación**: para cada Run no terminado
-  consulta `STATUS` contra el mundo real (la API de GitHub, el estado del proceso local…)
-  y reconcilia; para cada WorkItem en `ACTIVE`/`WAITING` recalcula el siguiente paso. Un
-  reinicio de Sirius no pierde ni duplica trabajo: como mucho repite una consulta.
+- En **cada invocación** —que bajo ADR-082 es siempre un arranque en frío— el motor ejecuta
+  un **barrido de recuperación**: para cada Run no terminado consulta `STATUS` contra el
+  mundo real (la API de incidencias y la API de runs de Actions) y reconcilia; para cada
+  WorkItem en `ACTIVE`/`WAITING` recalcula el siguiente paso. Una invocación nueva no pierde
+  ni duplica trabajo: como mucho repite una consulta. El barrido deja de ser la ruta de
+  excepción tras una caída y pasa a ser la ruta caliente: su coste hay que medirlo, y lo que
+  ocurre cuando dos invocaciones lo ejecutan a la vez sobre el mismo diario queda declarado
+  en la sección 17, sin resolver.
 - **El motor no se supervisa a sí mismo, y el propietario NO es su detector de caída.**
-  Requisito de despliegue (entra en I4): el motor corre bajo supervisión externa con
-  reinicio automático — servicio del sistema operativo, process manager o equivalente —
-  de modo que una muerte a las 02:00 termina en reinicio y barrido de recuperación, no en
-  un descubrimiento humano por la mañana. Mientras el motor esté caído pese a eso, el
-  respaldo es (a) el reconciliador GitHub existente para la vía GitHub y (b) el diario de
-  arranques/paradas, que hace la caída visible y datada. Alta disponibilidad queda fuera
-  de este mínimo.
+  Despliegue fijado (I4, cerrada por ADR-082): el motor **corre dentro de GitHub Actions**,
+  invocado por los workflows del ciclo. No es un proceso de larga duración, así que aquí no
+  hay servicio del sistema operativo ni process manager que reinicien nada: cada invocación
+  es un arranque en frío, y su muerte —los tres modos que `repair-sirius-work.yml:67-81` ya
+  declara sobre sí mismo: checkout caído, runner desaparecido, job cancelado— no la repara
+  un reinicio de proceso, sino la invocación siguiente con su barrido de recuperación.
+  Mientras tanto el respaldo es (a) el reconciliador programado de la vía GitHub (contrato
+  §9.1) y (b) el historial de runs de Actions, que hace la caída visible y datada. Lo que
+  esto NO cubre —quién nota que ha muerto el run que hospeda al propio motor— va en la
+  sección 17 como defecto abierto, no como propiedad garantizada. Alta disponibilidad queda
+  fuera de este mínimo.
 
 ## 4. WorkPackage y WorkResult
 
@@ -299,9 +312,12 @@ Adapter; el motor solo conoce esto:
 
 Notas de diseño:
 
-- El sondeo de `STATUS` lo hace el **supervisor del motor** con cadencia por Adapter (un
-  Run de Actions se consulta distinto que un proceso local). Un modelo nunca se queda
-  «pensando si ya terminó otro agente» (#172 §2.8).
+- El sondeo de `STATUS` lo hace el **supervisor del motor**, y bajo ADR-082 lo hace **una
+  vez por invocación**, no en un bucle propio: la cadencia la fija el disparador del
+  workflow y es común a todo lo que corra en esa pasada. Un Adapter que necesite otra
+  cadencia necesita su propio workflow, y eso es decisión de arquitectura (contrato §9.1),
+  no de implementación. Un modelo nunca se queda «pensando si ya terminó otro agente»
+  (#172 §2.8).
 - Push además de pull: un Adapter puede empujar eventos (webhook, callback) como
   aceleración; el pull es la garantía, el push es la mejora.
 - Si un Worker externo habla un estándar útil, su Adapter lo aprovecha por dentro; el
@@ -427,11 +443,15 @@ protocolo de la vía, no el estado canónico (ver C5, sección 14).
 
 Consecuencias:
 
-- El motor pasa a ser el **observador externo** que el descargo de
-  `repair-sirius-work.yml:67-81` declara imposible desde dentro: detecta el Run perdido en
-  minutos (cota del Run), no en ≥180 min + 6 h. El reconciliador actual queda como respaldo
-  de la vía GitHub, no como única vigilancia (ver C2, sección 14: la vigilancia del motor
-  requiere decisión del propietario porque el contrato hoy la prohíbe como «motor»).
+- El motor pasa a ser el observador que el descargo de `repair-sirius-work.yml:67-81`
+  declara necesario, con la precisión que ADR-082 obliga a hacer: es externo **al Run
+  observado**, no a GitHub Actions. Un run sí puede observar otro run por la API (ADR-057),
+  y ahí está la ganancia frente al descargo. Lo que NO se promete es la cota en minutos: la
+  latencia la fija el disparador del workflow y no está medida (I1 la dejó NO CONCLUYENTE).
+  El reconciliador de la vía GitHub deja de ser respaldo transitorio y pasa a ser la única
+  pieza que puede observar la muerte del run del propio motor (ver C2, sección 14: la
+  vigilancia del motor requiere decisión del propietario porque el contrato hoy la prohíbe
+  como «motor»).
 - Los tres prompts de rol se versionan como Agent Profiles neutrales (lo que ya son casi);
   el modo de ejecución actual (`--dangerously-skip-permissions`, PAT en el runner) conserva
   la clasificación de **prototipo declarado** que fijó la PR #171.
@@ -457,9 +477,13 @@ Codex participa exactamente por donde ya participa: la revisión dual de
 
 Agente externo tras Adapter (#172 tipo B). No se instala en esta fase; su Adapter se diseña:
 
-- `START`: el motor construye un **`ExportSafeBrief`** y lanza el proceso de GPT Researcher
-  con ese único insumo. `STATUS`: estado del proceso/job local. `RESULT`: informe + fuentes
-  + incertidumbres, normalizados a WorkResult. `CANCEL`: terminar el proceso.
+- `START`: el motor construye un **`ExportSafeBrief`** y lanza a GPT Researcher con ese
+  único insumo, siempre como algo con **identificador consultable desde otra invocación**
+  —un job propio de Actions o un servicio externo—, nunca como subproceso del job que lo
+  lanza: bajo ADR-082 el motor no sobrevive a su propia invocación, y un subproceso suyo
+  moriría con ella sin dejar a quién preguntar. `STATUS`: consulta por ese identificador.
+  `RESULT`: informe + fuentes + incertidumbres, normalizados a WorkResult. `CANCEL`:
+  cancelación por ese identificador, en dos tiempos (3.3).
 - **Frontera de confidencialidad mecánica, no de prompt**: el Worker con Internet corre
   **sin credenciales del repositorio ni acceso al árbol privado**. La protección es
   estructural: no puede filtrar lo que no recibió. Esto es deliberadamente MÁS fuerte que
@@ -523,9 +547,11 @@ interpreta»). El motor generaliza ese patrón: comprobar nunca es opinión de m
 ### 8.2 Programación (la vía existente, dentro del motor)
 
 El ciclo actual completo (implementar → Quality → revisión dual → reparar → merge humano →
-cierre) se conserva como está; el motor añade por fuera: estado durable del WorkItem,
-supervisión con cota corta, reintento/sustitución tras `LOST`, y entrega final por la
-interfaz. Nada de la cadena determinista se duplica.
+cierre) se conserva como está; el motor añade **desde dentro del mismo ciclo**, invocado
+por sus workflows (ADR-082): estado durable del WorkItem, supervisión por invocación,
+reintento/sustitución tras `LOST`, y entrega final por la interfaz. La cota de supervisión
+no es «corta» por diseño: la fija el disparador del workflow y no está medida (I1). Nada de
+la cadena determinista se duplica.
 
 ### 8.3 Investigación (GPT Researcher)
 
@@ -615,10 +641,14 @@ queda registrada en el diario y, si procede, como ADR.
 
 ## 12. Evidencia: reconstruir qué ocurrió
 
-- **Diario del motor** (append-only, en su almacén): toda transición de WorkItem y Run,
-  todo WorkPackage/WorkResult (o su ausencia), toda resolución de capacidades, toda
-  escalada y decisión, toda sustitución de Worker con motivo. Suficiente para responder
-  «¿qué pasó con este trabajo?» sin leer GitHub.
+- **Diario del motor** (append-only, en su almacén; desde ADR-082, ficheros versionados
+  dentro del propio repositorio, y varios hermanos, no uno: el del almacén, el del
+  despachador y el del supervisor): toda transición de WorkItem y Run, todo
+  WorkPackage/WorkResult (o su ausencia), toda resolución de capacidades, toda escalada y
+  decisión, toda sustitución de Worker con motivo. Suficiente para responder «¿qué pasó con
+  este trabajo?» **sin depender de la API de incidencias, PRs ni etiquetas**: es un fichero
+  del árbol, legible con `git log` y `git show` aunque esa superficie se haya movido o
+  borrado.
 - **GitHub como evidencia visible** (bus provisional, #172 §1.3): PRs, incidencias,
   marcadores y comentarios siguen siendo el registro público entre herramientas; el motor
   no lo convierte en vertedero de conversaciones.
@@ -678,9 +708,13 @@ la sección 14, se marca.)
 - **¿Qué parte es determinista y cuál de modelo?** Tabla de 11.
 - **¿Qué permisos/gastos obligan a escalar?** Lista cerrada de 10.
 - **¿Qué evidencia permite reconstruir?** Diario del motor + GitHub visible (12).
-- **¿Qué sucede si una GitHub Action muere sin registrar su muerte?** El supervisor externo
-  la declara `LOST` al vencer la cota del Run y actúa; deja de depender de que el proceso
-  moribundo avise (3.3, 7.1). [Sujeto a C2, sección 14.]
+- **¿Qué sucede si una GitHub Action muere sin registrar su muerte?** Una invocación
+  posterior del motor la declara `LOST` al vencer la cota del Run y actúa; deja de depender
+  de que el proceso moribundo avise (3.3, 7.1). La declaración no es inmediata: ocurre en la
+  invocación siguiente, no «en minutos». **Y la pregunta se aplica también al propio
+  motor**: si muere el run que lo hospeda (ADR-082), quien puede notarlo es solo el
+  reconciliador programado de la vía GitHub. Eso es límite declarado (17), no propiedad
+  resuelta. [Sujeto a C2, sección 14.]
 
 ## 14. Contradicciones materiales — presentadas y detenidas, no resueltas
 
@@ -746,7 +780,12 @@ implementación.
   multiagente pospuesto), RECTOR §15 («introduce arquitectura multiagente sin evidencia» es
   señal de parada), `AGENTS.md:26` (no introducir coordinación de agentes antes de la
   puerta del contrato) y `AGENTS.md:36` (criterio de parada ante «introducir otro proceso,
-  servidor, agente o base de datos» — el motor sería otro proceso con otro almacén).
+  servidor, agente o base de datos»). Desde ADR-082 esta última mitad del choque se
+  disuelve: el motor no es otro proceso ni tiene otra base de datos — corre en los workflows
+  que ya existen y su memoria es un fichero del repositorio. El que queda vivo es el de
+  `AGENTS.md:26`: un motor invocado por workflows ES «eventos de GitHub… otro nivel de
+  automatización», y por eso las enmiendas del contrato que recomiendan C1 y C2 son
+  condición, no acompañamiento.
 - **Conflicto**: la incidencia #172, escrita por el propietario DESPUÉS de esos textos,
   ordena producir exactamente este diseño. Este documento existe por esa orden.
 - **Consecuencia**: dos instrucciones del propietario apuntan en direcciones opuestas según
@@ -791,10 +830,14 @@ implementación.
   (`.github/ISSUE_TEMPLATE/sirius-work-item.yml:10`): «Esta incidencia es la fuente de
   verdad del trabajo. Las etiquetas solo representan estados o eventos».
 - **Conflicto**: este diseño traslada el estado canónico al almacén del motor (#172 §1.3
-  lo pide: GitHub es «bus operativo provisional», «no la memoria definitiva de Sirius»); la
-  incidencia pasaría a ser la **proyección** del WorkItem para la vía GitHub. Mientras
-  ambos existan, alguien tiene que ser canónico: dos fuentes de verdad es exactamente la
-  clase de duplicación que ADR-005 eliminó para V8.
+  lo pide: GitHub es «bus operativo provisional», «no la memoria definitiva de Sirius»).
+  Precisión que ADR-082 obliga a hacer explícita: ese «bus provisional» es la superficie de
+  **incidencias, etiquetas y comentarios**, no el repositorio como árbol de ficheros
+  versionado. El diario del motor vive dentro del repositorio y sigue sin ser esa
+  superficie: no depende de la API de incidencias y su historial se reconstruye con
+  `git log`. La incidencia pasaría a ser la **proyección** del WorkItem para la vía GitHub.
+  Mientras ambos existan, alguien tiene que ser canónico: dos fuentes de verdad es
+  exactamente la clase de duplicación que ADR-005 eliminó para V8.
 - **Clasificación** (primera auditoría): la DIRECCIÓN ya está decidida por #172 §1.3
   (GitHub es bus provisional; el estado pertenece a Sirius) — la pregunta «¿quién debe ser
   canónico?» no se devuelve al propietario. Lo que falta es la MIGRACIÓN.
@@ -816,10 +859,10 @@ implementación.
 |---|---|---|---|
 | I1 | Bordes de `STATUS` sobre runs de Actions: latencia real, runs cancelados/expirados, rate limits, y la transición correcta a `LOST` | Calibra las cotas de `LOST` en la vía GitHub (7.1). Que la API expone runs/status/conclusion/timestamps ya está comprobado (primera auditoría): el spike mide los BORDES, no la existencia | Sonda de solo lectura contra runs reales del repo: N runs vivos/muertos/cancelados y medir qué se observa y cuándo |
 | I2 | Contrato real de GPT Researcher: entrada/salida, calidad con brief mínimo, y COSTE (hoy NO VERIFICADO: no está demostrado que exija gasto) | Sin esto el Adapter 7.3 es papel. El coste lo mide el spike; SI la opción elegida exige gasto, se escala entonces por presupuesto (sección 10), no antes | Ejecución aislada, sin repo, con un `ExportSafeBrief` de prueba sobre una pregunta con respuesta conocida; medir formato, fuentes y coste real |
-| I3 | Durabilidad del almacén del motor (proceso muere en mitad de una transición → ¿recupera sin perder ni duplicar?) | Es LA garantía del motor (3.5) | Esqueleto desechable: WorkItem + Run en un almacén local (SQLite vale PARA EL SPIKE, sin convertirse en decisión de arquitectura — la representación física la decide este resultado), matar el proceso en cada punto del ciclo, verificar el barrido de recuperación |
-| I4 | ¿Dónde corre el motor? (máquina del propietario Windows vs. siempre-encendido; disponibilidad real) | Decide la latencia de supervisión y el respaldo necesario. REQUISITO no negociable del despliegue elegido: supervisión y reinicio automático EXTERNOS al motor (servicio del SO, process manager o equivalente, 3.5) — el propietario no es el detector rutinario de caída | Dato + decisión del propietario; si hay dudas de viabilidad en Windows, prueba de 5 min del esqueleto de I3 bajo el supervisor elegido |
+| I3 | RESPONDIDA en su forma vieja (`experiments/work_engine_spike_i3/RESULTADOS.md`, ADR-026): un proceso que muere en mitad de una transición recupera sin perder ni duplicar. La representación física ya no la decide este resultado: la fija ADR-082 | Sigue siendo LA garantía del motor (3.5), pero la forma del riesgo cambió: ya no es un proceso muerto a media escritura, sino un job que termina sin haber confirmado el commit del diario, y dos invocaciones que escriben el mismo fichero a la vez — justo lo que el spike dejó fuera de cobertura («el arnés asume un único escritor», ADR-026/ADR-029) | Pregunta nueva y método nuevo: no matar un proceso, sino **solapar dos runs reales** y observar el diario resultante |
+| I4 | CERRADA (incidencia #270, ADR-082): el motor corre **dentro de GitHub Actions**, invocado por los workflows del ciclo, con su diario versionado en el repositorio | La latencia de supervisión pasa a depender del disparador del workflow, no de un bucle propio; el respaldo es el reconciliador programado de la vía GitHub (contrato §9.1), y ya no hay supervisión de sistema operativo que exigir (3.5) | Cerrada por decisión del propietario, no por spike. Lo que SÍ queda por medir se traslada: la cadencia real de invocación (I1 la dejó NO CONCLUYENTE) y el diario bajo dos invocaciones solapadas (I3) |
 | I5 | Valor real de `SIRIUS_CODEX_REVIEW_ENABLED` | NO bloquea la arquitectura: es conocer el estado operativo actual de la revisión dual (el soporte existe; la activación no está verificada) | Dato del propietario (leer la variable en Settings); no requiere spike |
-| I6 | ¿La etiqueta aplicada por la identidad concreta del motor despierta los workflows? | Condición técnica de C1 (además de la contractual). Casi cerrada: el mecanismo etiqueta→run está demostrado en producción (RUN-002 del Auditor se ejecutó por `issues: labeled`; ADR-014/015) | Queda como SMOKE TEST de implementación con la identidad que use el motor, no como spike de diseño |
+| I6 | ¿Con qué identidad aplica el motor la etiqueta, ahora que él mismo corre dentro de Actions (ADR-082)? | CONDICIÓN DURA de C1, no incógnita casi cerrada: el `GITHUB_TOKEN` por defecto no despierta otros workflows (regla anti-recursión de GitHub, documentada en ADR-014 y en las cabeceras de `complete-sirius-after-merge.yml`, `implement-sirius-work.yml` y `reconcile-sirius-states.yml`), así que el `START` de 7.1 necesita `secrets.SIRIUS_BOT_TOKEN` o equivalente. Que el mecanismo etiqueta→run funciona sí está demostrado en producción (RUN-002 del Auditor por `issues: labeled`; ADR-014/015) | SMOKE TEST obligatorio con la identidad real del motor, antes de dar C1 por resuelta |
 
 Regla: cada spike es desechable, aislado (sin tocar 0.1 ni canónicos) y responde UNA
 pregunta que cambia una decisión. Ninguno se ejecuta en esta fase sin orden.
@@ -842,10 +885,18 @@ El plan de implementación NO se escribe aquí: es la fase posterior a la aproba
 
 - No garantiza que el modo dual de Codex esté activo (I5), ni la viabilidad empírica de
   GPT Researcher (I2), ni el comportamiento de `claude-code-action` como producto externo.
-- No garantiza supervisión mientras el propio motor esté caído: el requisito de despliegue
-  supervisado con reinicio automático (3.5, I4) reduce esa ventana a un reinicio, y el
-  reconciliador GitHub respalda la vía GitHub; alta disponibilidad queda fuera de este
-  mínimo.
+- No garantiza latencia de supervisión: bajo ADR-082 la fijan el disparador del workflow y
+  la cola de Actions. El único spike que la midió (I1) la declaró NO CONCLUYENTE, así que
+  este diseño no promete ninguna cifra.
+- No garantiza que alguien note la muerte del run que hospeda al propio motor: los tres
+  modos de muerte de `repair-sirius-work.yml:67-81` (checkout caído, runner desaparecido,
+  job cancelado) le aplican igual (3.5). El respaldo declarado es el reconciliador
+  programado de la vía GitHub; no es cobertura completa. Alta disponibilidad queda fuera de
+  este mínimo.
+- No garantiza ausencia de pérdida ni de duplicación en el diario cuando dos invocaciones se
+  solapan: ADR-026 y ADR-029 dejan la concurrencia multiproceso fuera de cobertura («el
+  arnés asume un único escritor»), y con el motor dentro de Actions ese caso deja de ser
+  hipotético (I3). Es defecto abierto, no propiedad garantizada.
 - No resuelve C1, C2 ni C5: sin esas enmiendas del contrato, el despacho automático, la
   supervisión activa y el traspaso de la fuente de verdad quedan en propuesta. (C3 quedó
   resuelta por la PR #174: la reconciliación documental ya está hecha.)

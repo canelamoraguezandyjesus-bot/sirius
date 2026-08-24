@@ -3,6 +3,7 @@
 - Estado: APROBADO
 - Fecha: 2026-08-22
 - Aprobación: fusión de la PR de la incidencia #242 por el propietario
+- Enmendado: ADR-082 supera su premisa de proceso persistente (decisión I4, #270)
 
 ## Contexto y problema
 

@@ -2,6 +2,7 @@
 
 - Estado: APROBADO
 - Fecha: 2026-08-21
+- Enmendado: ADR-082 supera «quién invoca el comando va aparte»: lo invoca un workflow, y el riesgo a vigilar deja de ser hipotético (decisión I4, #270)
 - Aprobación: la fusión de la PR de esta rama por el propietario
 - Nota de arranque de esta rama: este ADR. Publicado y con criterio de parada
   fijado antes del primer commit.

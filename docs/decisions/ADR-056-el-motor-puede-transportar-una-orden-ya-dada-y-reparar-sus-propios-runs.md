@@ -2,6 +2,7 @@
 
 - Estado: APROBADO
 - Fecha: 2026-08-21
+- Enmendado: ADR-082 supera «el motor es un observador externo» como razón de la separación §12 / §9.1, que se mantiene con otro criterio (decisión I4, #270)
 - Aprobación: decisión del propietario por interrogatorio (21-08-2026); fusión de la PR
 - Contexto: bloque E1b del plan del Work Engine (ADR-020); contradicciones C1 y C2 de la arquitectura §14; contrato operativo v1.7 → v1.8
 - Relacionadas: ADR-004 (la red periódica no es motor), ADR-037 (qué gestos son del propietario), ADR-041 (autoridad por clase, v1.7)
