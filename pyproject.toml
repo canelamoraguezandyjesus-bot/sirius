@@ -41,6 +41,10 @@ sirius-racha = "sirius_engine.seven_day_streak_cli:main"
 # el mismo archivo lleva 3+ rondas consecutivas de hallazgos, con su
 # evidencia. No para el ciclo ni diagnostica la causa (eso es la #251).
 sirius-familia-repetida = "sirius_engine.round_family_detector_cli:main"
+# El interruptor que le faltaba al motor (D2, #296): `supervise_runs` estaba
+# construida y probada desde C1 y NADIE la llamaba -cero llamadas en src/-, asi
+# que no habia forma de pedirle al motor que diera un turno.
+sirius-supervisar = "sirius_engine.supervise_cli:main"
 
 [build-system]
 requires = ["uv_build>=0.11.28,<0.12"]
