@@ -63,7 +63,16 @@ jobs:
       #: La rama donde vive la memoria del motor. Constante a proposito: es la
       #: misma para todas las invocaciones, igual que el grupo de concurrencia.
       RAMA_MEMORIA: estado-del-motor
-      MEMORIA: ${{ runner.temp }}/memoria
+      # `MEMORIA` NO se declara aqui, y las dos formas de intentarlo fallan:
+      #   `${{ runner.temp }}` -> ese contexto no existe cuando GitHub lee el
+      #     `env:` de un trabajo, y el fichero entero se vuelve ilegible
+      #     ("Unrecognized named-value: 'runner'"). Costo que el motor dejara
+      #     de arrancar el 24-08-2026.
+      #   `${RUNNER_TEMP}`     -> GitHub no expande eso, y bash tampoco expande
+      #     el CONTENIDO de una variable: quedaria la ruta literal con el dolar
+      #     dentro. Peor, porque parece correcto y falla en ejecucion.
+      # Se calcula en el primer paso y se publica por `$GITHUB_ENV`, que es
+      # donde `$RUNNER_TEMP` si esta resuelto.
 
     steps:
       - name: Checkout
@@ -101,6 +110,8 @@ jobs:
       - name: Traer la memoria del motor
         run: |
           set -uo pipefail
+          echo "MEMORIA=$RUNNER_TEMP/memoria" >> "$GITHUB_ENV"
+          MEMORIA="$RUNNER_TEMP/memoria"
           git config user.name "sirius-motor"
           git config user.email "canelamoraguezandyjesus@gmail.com"
           if git ls-remote --exit-code --heads origin "$RAMA_MEMORIA" >/dev/null 2>&1; then
@@ -117,6 +128,7 @@ jobs:
         id: turno
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Aqui `runner` SI esta resuelto: es el `env:` de un paso, no de un trabajo.
           SIRIUS_MOTOR_DIARIO: ${{ runner.temp }}/memoria/diario.jsonl
         run: |
           set -uo pipefail
