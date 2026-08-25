@@ -216,3 +216,33 @@ defectos:
     ficheros:
       - src/sirius_engine/intent_interpreter.py
       - tests/engine/test_intent_interpreter.py
+
+  - id: H-20
+    titulo: Reabrir el diario durable escala a needs_decision un trabajo sano y con la fecha hacia atrás, y el almacén en memoria no lo reproduce
+    bloque: motor
+    gravedad: alta
+    estado: abierto
+    incidencia: 321
+    ficheros:
+      - src/sirius_engine/adapters/durable/store.py
+      - src/sirius_engine/adapters/memory_store.py
+
+  - id: H-21
+    titulo: El almacén presume de no releer el diario por escritura frente al spike de S1, y lo relee entero en cada anexo
+    bloque: motor
+    gravedad: media
+    estado: abierto
+    incidencia: 321
+    ficheros:
+      - src/sirius_engine/adapters/durable/journal.py
+      - src/sirius_engine/adapters/durable/store.py
+
+  - id: H-22
+    titulo: El supervisor crea un Run nuevo sobre un WorkItem que ya no está en curso, porque reactivar no comprueba el estado y escalar sí
+    bloque: motor
+    gravedad: alta
+    estado: abierto
+    incidencia: 321
+    ficheros:
+      - src/sirius_engine/supervisor.py
+      - tests/engine/test_supervisor.py
