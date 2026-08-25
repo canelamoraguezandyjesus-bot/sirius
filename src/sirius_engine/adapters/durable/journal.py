@@ -287,12 +287,31 @@ def _parse_valid_line(line_bytes: bytes) -> dict[str, Any] | None:
     return record
 
 
+def _split_lines_on_newline(raw: bytes) -> list[bytes]:
+    """Partir ``raw`` en líneas delimitadas ÚNICAMENTE por ``b"\\n"``, con el ``\\n`` incluido.
+
+    ``bytes.splitlines`` no sirve aquí: además de ``\\n`` corta también en
+    ``\\r`` y otros bytes de control, mientras que :func:`build_line` -el
+    único escritor de este formato- solo delimita registros con ``\\n``. Si
+    un byte de contenido se corrompe a ``\\r``, ``bytes.splitlines`` partiría
+    esa línea en dos fragmentos: el primero, sin su propio ``\\n``, sería
+    indistinguible del sufijo sin terminar que deja una escritura
+    interrumpida, y :func:`replay` descartaría en silencio un registro
+    completo y válido (incidencia #316).
+    """
+    parts = raw.split(b"\n")
+    lines = [part + b"\n" for part in parts[:-1]]
+    if parts[-1]:
+        lines.append(parts[-1])
+    return lines
+
+
 def replay(journal_path: Path) -> ReplayResult:
     if not journal_path.exists():
         return ReplayResult(valid_records=(), discarded_tail_bytes=0)
 
     raw = journal_path.read_bytes()
-    lines = raw.splitlines(keepends=True)
+    lines = _split_lines_on_newline(raw)
     valid: list[dict[str, Any]] = []
     consumed = 0
     first_invalid_index: int | None = None

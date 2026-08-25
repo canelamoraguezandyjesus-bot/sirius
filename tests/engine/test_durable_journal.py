@@ -948,6 +948,45 @@ def test_mutacion_quitar_el_checksum_acepta_un_registro_corrupto(tmp_path: Path)
     assert len(_replay_sin_checksum(journal_path)) == 1
 
 
+def test_byte_0x0d_corrupto_no_hace_desaparecer_un_registro_valido(tmp_path: Path) -> None:
+    """Reproduce la incidencia #316: un byte corrompido a 0x0D no debe borrar un registro.
+
+    ``bytes.splitlines`` corta también en ``\\r`` (0x0D), mientras que el
+    escritor solo delimita registros con ``\\n`` (0x0A, :func:`build_line`).
+    Un byte de contenido corrompido a 0x0D partía esa línea en dos fragmentos
+    para ``replay``: el primero -sin su propio ``\\n``- se confundía con la
+    cola sin terminar de una escritura interrumpida, y el registro completo y
+    válido desaparecía sin lanzar :class:`InternalCorruptionError`.
+    """
+    journal_path = tmp_path / "diario.jsonl"
+    for sequence in range(4):
+        append_durably(journal_path, _sample_record(sequence=sequence), kill_at=None)
+
+    raw = journal_path.read_bytes()
+    newline_positions = [index for index, byte in enumerate(raw) if byte == 0x0A]
+    assert len(newline_positions) == 4, "se esperan exactamente 4 líneas completas"
+    # Corromper la ÚLTIMA línea (el cuarto registro): así, tras la línea
+    # corrompida, no queda ningún registro válido -la única forma de
+    # reproducir la rama "cola truncada", que es la que el bug confunde con
+    # una escritura interrumpida real y descarta en silencio.
+    last_line_start = newline_positions[2] + 1
+    last_line_end = newline_positions[3]
+    corrupt_offset = (last_line_start + last_line_end) // 2
+    assert raw[corrupt_offset] != 0x0A
+
+    corrupted = bytearray(raw)
+    corrupted[corrupt_offset] = 0x0D
+    journal_path.write_bytes(bytes(corrupted))
+
+    # El escritor solo delimita registros con `\n`: esta línea corrompida
+    # sigue siendo, de principio a fin, la línea completa que se escribió -no
+    # el sufijo sin terminar de una escritura interrumpida-, así que perderla
+    # sin avisar sería corrupción interna, nunca una cola truncada que se
+    # pueda descartar en silencio.
+    with pytest.raises(InternalCorruptionError):
+        replay(journal_path)
+
+
 def test_mutacion_quitar_la_comprobacion_de_idempotencia_duplica(tmp_path: Path) -> None:
     """Contraste con ``test_reintento_tras_reinicio_no_duplica_por_idempotencia``.
 
