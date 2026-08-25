@@ -331,11 +331,59 @@ def test_the_checks_scope_is_declared_for_the_check_runs_read() -> None:
 
 
 def test_the_workflow_actually_feeds_the_reviewer_prompt() -> None:
-    # Sin esta comprobación, las tres que siguen podrían validar un archivo que
-    # el workflow ya no inserta: pasarían en verde sobre un prompt muerto.
-    assert (
-        "cat scripts/automation/prompts/reviewer.md"
-        in _step(_load(), "Preparar instrucciones")["run"]
+    """El prompt que validan las pruebas de abajo tiene que ser alcanzable.
+
+    Sin esta comprobación, las tres que siguen podrían validar un archivo que el
+    workflow ya no inserta: pasarían en verde sobre un prompt muerto.
+
+    Desde C3 (incidencia #333) el prompt ya no está clavado a fuego: se elige por
+    el campo ``Perfil:`` del cuerpo, para que una orden de documentación no
+    ejecute la vara del código. Así que se comprueban las tres cosas que sostienen
+    esa elección, no una cadena literal.
+    """
+    run = _step(_load(), "Preparar instrucciones")["run"]
+
+    assert "scripts/automation/prompts/reviewer.md" in run, (
+        "el prompt del revisor de código tiene que seguir siendo alcanzable; si no, "
+        "las pruebas de abajo validan un archivo muerto"
+    )
+    assert "scripts/automation/prompts/revisor-documental.md" in run, (
+        "el revisor documental también tiene que ser alcanzable: ese era el bloque C3"
+    )
+    assert 'cat "$PROMPT_ROL"' in run, (
+        "el prompt elegido tiene que insertarse de verdad, no solo nombrarse"
+    )
+
+
+def test_un_perfil_no_reconocido_no_cae_en_un_prompt_por_defecto() -> None:
+    """Elegir mal el prompt produce trabajo que PARECE hecho y no lo está.
+
+    Un repliegue silencioso a `reviewer.md` revisaría un documento con la vara
+    del código y publicaría su veredicto como bueno. Cuesta más que un workflow
+    en rojo, que se arregla en un minuto y se ve.
+    """
+    run = _step(_load(), "Preparar instrucciones")["run"]
+
+    assert "::error::" in run and "exit 1" in run, (
+        "un perfil no reconocido tiene que salir en rojo, no elegir un prompt por su cuenta"
+    )
+
+
+def test_el_cuerpo_de_la_incidencia_no_se_interpola_en_el_script() -> None:
+    """El cuerpo lo escribe quien abre la incidencia: es dato, nunca código.
+
+    Un ``${{ github.event.issue.body }}`` dentro del ``run:`` se sustituye antes
+    de que bash lea nada, así que un cuerpo con acentos graves o ``$(...)``
+    ejecutaría lo que llevara dentro con los permisos del trabajo. Por ``env:``
+    no puede.
+    """
+    paso = _step(_load(), "Preparar instrucciones")
+
+    assert "${{ github.event.issue.body }}" not in paso["run"], (
+        "el cuerpo de la incidencia no puede interpolarse dentro del script"
+    )
+    assert "ISSUE_BODY" in paso.get("env", {}), (
+        "el cuerpo tiene que viajar por `env:`, que es lo que lo convierte en dato"
     )
 
 
