@@ -42,6 +42,7 @@ from sirius_engine.cli import REPO, resolver_diario
 from sirius_engine.dispatcher import dispatch_work_item
 from sirius_engine.domain.authority import autoridad_de_clase
 from sirius_engine.domain.dispatch import MARCADOR_ORDEN_PROPIETARIO
+from sirius_engine.domain.errors import ClaseNoDespachableError
 from sirius_engine.domain.work_item import WorkItemClass
 from sirius_engine.gate import ResultadoPuerta, decidir
 from sirius_engine.intent_interpreter import interpretar_intencion_v0
@@ -258,16 +259,33 @@ def main(
         # Un ensayo que no pasa por las guardas no ensaya nada (H-12).
         writer = _EscritorDeEnsayo()
 
-    desenlace = dispatch_work_item(
-        work_item,
-        writer=writer,
-        journal=journal,
-        repo=args.repo,
-        profile_ref=perfil,
-        bloque=args.bloque,
-        now=ahora,
-        base_branch=BASE_POR_DEFECTO,
-    )
+    try:
+        desenlace = dispatch_work_item(
+            work_item,
+            writer=writer,
+            journal=journal,
+            repo=args.repo,
+            profile_ref=perfil,
+            bloque=args.bloque,
+            now=ahora,
+            base_branch=BASE_POR_DEFECTO,
+        )
+    except ClaseNoDespachableError:
+        # El intérprete v0 reconoce más verbos (clases) de los que la tabla
+        # cerrada del despachador despacha hoy (contrato §12.4): «documenta»
+        # o «investiga» crean un WorkItem válido que el despachador rechaza
+        # sin excepción, ni siquiera en ensayo (H-12: el ensayo atraviesa las
+        # guardas reales a propósito). Sin este `except`, la excepción del
+        # dominio se colaba hasta reventar el proceso con una traza en vez de
+        # decir, como las demás negativas de este comando, qué pasó y por qué.
+        linea(f"No he despachado el trabajo: la clase «{work_item.clase.value}» todavía")
+        linea("no se despacha por esta vía.")
+        linea(f"  Trabajo: {work_id}")
+        linea(
+            "  El despachador solo entiende «programacion» y «auditoria» (contrato §12.4); "
+            "el resto tiene su propio bloque futuro."
+        )
+        return 5
     episodio = desenlace.episodio
     if not args.ejecutar:
         linea("ENSAYO: no se ha escrito nada en GitHub.")

@@ -195,6 +195,55 @@ def test_repetir_la_misma_orden_no_crea_una_segunda_incidencia(
     assert "Ya estaba despachado" in salida_2
 
 
+def test_una_orden_de_documentacion_no_revienta_y_dice_que_no_se_despacha(
+    tmp_path: Path,
+) -> None:
+    """La clase «documentacion» no está en la tabla cerrada del despachador (§12.4).
+
+    Antes ``ClaseNoDespachableError`` se colaba sin capturar hasta reventar
+    ``main`` con una traza -incluso en ensayo, que es el modo que existe para
+    poder probar sin riesgo-. El comando tiene que decirlo con un mensaje
+    legible y su propio código de salida, como ya hacen las demás negativas
+    de este mismo comando (``NO_CREAR`` -> 2, ``CREAR_Y_ESCALAR`` -> 3, sin
+    credencial -> 4).
+    """
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr(["Documenta el proceso de despliegue"], diario=diario)
+
+    assert codigo == 5
+    assert "documentacion" in texto
+    assert "no se despacha" in texto
+    assert not diario.exists()
+
+
+def test_una_orden_de_documentacion_no_revienta_ni_siquiera_al_ejecutar(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """La misma guarda tiene que valer también fuera de ensayo (--ejecutar).
+
+    Con un escritor que sí "escribiría" (para no confundir esta guarda con la
+    de credencial ausente, que ya tiene su propio código de salida).
+    """
+
+    class _EscritorQueNuncaDeberiaLlamarse:
+        def crear_incidencia(
+            self, *, repo: str, titulo: str, cuerpo: str, etiquetas: tuple[str, ...]
+        ) -> Any:
+            raise AssertionError("no debe escribirse nada para una clase no despachable")
+
+        def aplicar_etiqueta(self, *, repo: str, numero: int, etiqueta: str) -> None:
+            raise AssertionError("no debe escribirse nada para una clase no despachable")
+
+    monkeypatch.setattr(dispatch_cli, "GitHubCliWriter", lambda: _EscritorQueNuncaDeberiaLlamarse())
+
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr(["Documenta el proceso de despliegue", "--ejecutar"], diario=diario)
+
+    assert codigo == 5
+    assert "documentacion" in texto
+    assert "no se despacha" in texto
+
+
 def test_una_auditoria_declara_el_perfil_auditor_y_no_el_implementador(tmp_path: Path) -> None:
     """CODEX-001 (#256, ronda 2): el perfil declarado depende de la clase despachada.
 
