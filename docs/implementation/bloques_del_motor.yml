@@ -69,8 +69,24 @@ bloques:
   - id: S2
     titulo: Probar si el investigador externo funciona y qué cuesta
     estado: pendiente
-    que_lo_cerraria: una medición del coste y del resultado con un investigador real
-    medido_hoy: no existe ningún adaptador de investigación en src/sirius_engine/adapters/
+    que_lo_cerraria: >-
+      una pregunta de respuesta conocida contestada de verdad, con dos
+      configuraciones de modelo, y el número de calidad que el propietario pidió
+      -«por lo menos un 80 %»-. Hace falta una máquina con Ollama y salida a
+      internet: la del propietario, no este contenedor.
+    medido_hoy: >-
+      Spike I2 ejecutado el 25-08-2026, informe en
+      experiments/work_engine_spike_i2/INFORME.md. Lo medido: gpt-researcher
+      0.15.1 se instala limpio; de fábrica exige clave de OpenAI y de Tavily;
+      PERO existe camino sin ninguna clave -seis de sus dieciséis buscadores no
+      la piden, duckduckgo entre ellos-. Y admite 25 proveedores de modelo, que
+      no se reparten en dos grupos sino en cuatro: hay LOCALES sin claves
+      (ollama), hay de PAGO (openai, anthropic), y hay CON CAPA GRATUITA en la
+      nube (groq, google_genai, openrouter) que no necesitan ni hardware ni las
+      APIs que el propietario descartó. Esa tercera vía es la más barata de
+      estrenar y la primera versión del informe casi la deja fuera. Lo que NO se
+      pudo medir aquí: la calidad, porque el proxy bloquea los buscadores y el
+      guardián no deja instalar Ollama. Ni una pregunta se contestó de verdad.
 
   - id: B1
     titulo: Que Sirius investigue de verdad desde una orden
