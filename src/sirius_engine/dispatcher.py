@@ -21,10 +21,10 @@ Cuatro guardas, comprobadas en este orden y por la misma razón que
    primero, antes de cualquier otra guarda, para que ni siquiera un
    ``work_item`` que ya no cumpliera las guardas siguientes (por ejemplo,
    si su clase cambiara) pueda invalidar un episodio ya registrado.
-2. **Clase despachable (contrato §12.4, C4, incidencia #256).** Solo las
-   clases de :data:`TABLA_ACTIVACION` se despachan aquí -``programacion`` y
-   ``auditoria``, la tabla cerrada de dos filas que fija el contrato-;
-   cualquier otra clase levanta
+2. **Clase despachable (contrato §12.4, C4, incidencia #256; C3, incidencia
+   #336, ADR-088).** Solo las clases de :data:`TABLA_ACTIVACION` se despachan
+   aquí -``programacion``, ``auditoria`` y ``documentacion``, la tabla cerrada
+   de tres filas que fija el contrato-; cualquier otra clase levanta
    :class:`~sirius_engine.domain.errors.ClaseNoDespachableError`.
 3. **Estado activo (revisión #240 ronda 2).** Solo un ``WorkItem`` en
    ``WorkItemState.ACTIVE`` puede despacharse: uno cancelado, pausado,
@@ -99,7 +99,9 @@ class _ActivacionPorClase:
 #: constante de código, no se deriva del cuerpo de la incidencia -que
 #: escribe el propio motor-: derivarla de ahí permitiría que el motor se
 #: concediera permisos a sí mismo. Añadir una fila es una enmienda del
-#: contrato, no una decisión de implementación.
+#: contrato, no una decisión de implementación -la fila ``DOCUMENTACION``
+#: la autoriza ADR-088 (incidencia #336): mismo ciclo que ``programacion``,
+#: sin etiquetas de activación nuevas (su criterio de parada (b)).
 TABLA_ACTIVACION: dict[WorkItemClass, _ActivacionPorClase] = {
     WorkItemClass.PROGRAMACION: _ActivacionPorClase(
         etiquetas_iniciales=(ETIQUETA_INICIAL,),
@@ -108,6 +110,10 @@ TABLA_ACTIVACION: dict[WorkItemClass, _ActivacionPorClase] = {
     WorkItemClass.AUDITORIA: _ActivacionPorClase(
         etiquetas_iniciales=(),
         etiqueta_activacion=ETIQUETA_SOLICITUD_AUDITORIA,
+    ),
+    WorkItemClass.DOCUMENTACION: _ActivacionPorClase(
+        etiquetas_iniciales=(ETIQUETA_INICIAL,),
+        etiqueta_activacion=ETIQUETA_ACTIVACION,
     ),
 }
 
