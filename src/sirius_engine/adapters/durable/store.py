@@ -138,10 +138,37 @@ class DurableWorkEngineStore:
         a medias -sin ``work_item_escalated`` posterior que cierre el
         marcador- y terminarlos aquí mismo, con el ``now`` que ya quedó
         persistido en el propio marcador (nunca un reloj real).
+
+        H-20, segunda mitad (ADR-092, incidencia #353): el WorkItem puede
+        dejar de estar en curso -``PAUSED``, por ejemplo- por un camino
+        AJENO a esta cascada (una pausa humana) mientras el marcador sigue
+        pendiente porque la caída ocurrió antes de escalar. El ``continue``
+        de más abajo saltaba ese caso sin dejar ningún rastro durable de que
+        el marcador ya no aplicaba, así que seguía pendiente en el diario:
+        si el WorkItem volvía después a estar en curso -reanudado a
+        propósito, con una fecha muy posterior-, la siguiente reapertura del
+        almacén encontraba el mismo marcador, creía que había un corte a
+        medias vigente y repetía la cascada con el ``now`` viejo del
+        marcador, escalando un WorkItem sano con una fecha anterior a
+        sucesos que el diario ya tenía anexados (la pausa y la reanudación).
+        Ahora, cuando el WorkItem ya no está en curso, el marcador se cierra
+        aquí mismo con ``work_item_budget_cutoff_abandoned`` -sin escalar,
+        sin tocar ningún Run- para que ninguna reapertura futura vuelva a
+        encontrarlo pendiente; usa ``work_item.updated_at`` (el propio
+        reloj persistido del WorkItem, nunca uno real) como ``occurred_at``,
+        que nunca precede al último suceso ya anexado para ese WorkItem.
         """
         for work_id, started_at in list(self._pending_budget_cutoffs.items()):
             work_item = self._work_items.get(work_id)
-            if work_item is None or work_item.estado not in work_item_ops.ESTADOS_EN_CURSO:
+            if work_item is None:
+                continue
+            if work_item.estado not in work_item_ops.ESTADOS_EN_CURSO:
+                self._append_work_item(
+                    work_item,
+                    "work_item_budget_cutoff_abandoned",
+                    now=work_item.updated_at,
+                    idempotency_key=None,
+                )
                 continue
             self.cancel_all_live_runs_and_escalate_work_item(work_id, now=started_at)
 
@@ -218,7 +245,7 @@ class DurableWorkEngineStore:
             self._idempotency_seen[idempotency_key] = event.entity
         if event.kind == "work_item_budget_cutoff_started":
             self._pending_budget_cutoffs[event.aggregate_id] = event.occurred_at
-        elif event.kind == "work_item_escalated":
+        elif event.kind in ("work_item_escalated", "work_item_budget_cutoff_abandoned"):
             self._pending_budget_cutoffs.pop(event.aggregate_id, None)
 
     # -- diario -----------------------------------------------------------------
@@ -537,9 +564,15 @@ class DurableWorkEngineStore:
         almacén encontrara el marcador, creyera el corte a medias y repitiera
         la cascada con el ``now`` viejo del marcador, escalando un WorkItem
         sano con una fecha hacia atrás. Por eso el marcador solo se anexa
-        cuando, YA antes de tocar ningún Run, el WorkItem está en curso: es
-        el único caso en el que la cascada puede terminar en escalada y, por
-        tanto, el único en el que el marcador puede llegar a limpiarse.
+        cuando, YA antes de tocar ningún Run, el WorkItem está en curso.
+
+        H-20, segunda mitad (ADR-092, incidencia #353): esta guarda por sí
+        sola no bastaba. Si el WorkItem SÍ estaba en curso cuando se anexó
+        el marcador -pasando esta guarda- y la cascada muere antes de
+        escalar, el WorkItem puede dejar de estar en curso después por un
+        camino ajeno a esta función (una pausa humana); el marcador seguía
+        entonces pendiente para siempre. Quien lo cierra en ese caso es
+        ``_reconcile_pending_budget_cutoffs``, no esta función.
         """
         current = self._require_work_item(work_id)
         if current.estado is work_item_ops.WorkItemState.NEEDS_DECISION:

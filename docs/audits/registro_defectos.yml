@@ -222,14 +222,22 @@ defectos:
     titulo: El marcador de corte por presupuesto puede quedar pendiente por caminos distintos al del WorkItem pausado
     bloque: motor
     gravedad: alta
-    estado: abierto
+    estado: cerrado
     incidencia: 321
     primera_mitad_cerrada_por: 4f91f99fb75bde506825e41ed1a211e31c176ce3
+    cerrado_por: f72fa1654f94db7d9778e5af9a130f59812b120c
     nota: >-
-      La divergencia entre los dos almacenes está cerrada y fijada por una prueba
-      que ejecuta el mismo guion contra los dos y compara estado Y fecha. Queda
-      abierta la segunda mitad: que el marcador de corte no quede pendiente por
-      OTROS caminos distintos al del WorkItem pausado, que es el único medido.
+      Segunda mitad (ADR-092, incidencia #353): el `continue` de
+      `_reconcile_pending_budget_cutoffs` saltaba un WorkItem que ya no estaba
+      en curso sin dejar ningún rastro durable de que el marcador dejaba de
+      aplicar. Si el WorkItem volvía después a estar en curso por un camino
+      ajeno al corte (una pausa y reanudación humanas), la siguiente
+      reapertura repetía la cascada con el `now` viejo del marcador y
+      escalaba un WorkItem sano con una fecha anterior a sucesos ya anexados.
+      Ahora ese `continue` cierra el marcador con un
+      `work_item_budget_cutoff_abandoned` durable antes de saltarlo. El
+      almacén en memoria no necesitaba cambios: nunca reabre, así que nunca
+      acumula un marcador pendiente (prueba de coherencia añadida igualmente).
     ficheros:
       - src/sirius_engine/adapters/durable/store.py
       - src/sirius_engine/adapters/memory_store.py

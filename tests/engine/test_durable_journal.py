@@ -1431,3 +1431,224 @@ def test_reabrir_el_diario_no_diverge_del_almacen_en_memoria_tras_un_corte_que_n
         f"memoria={en_memoria.estado.value}/{en_memoria.updated_at} "
         f"durable tras reabrir={tras_reabrir.estado.value}/{tras_reabrir.updated_at}"
     )
+
+
+def test_reabrir_dos_veces_tras_pausar_y_reanudar_no_escala_un_corte_a_medias_con_fecha_hacia_atras(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """H-20, segunda mitad (ADR-092, #353): el `continue` de reconciliar no cerraba el marcador.
+
+    Secuencia medida en la incidencia (distinta de la de
+    ``test_reabrir_el_diario_no_diverge_del_almacen_en_memoria_tras_un_corte_que_no_escalo``,
+    donde el WorkItem YA estaba `PAUSED` antes de que se pidiera el corte):
+    aquí el WorkItem SÍ está en curso cuando `cancel_all_live_runs_and_escalate_work_item`
+    anexa `work_item_budget_cutoff_started` -pasa la guarda de la primera
+    mitad-, pero la cascada muere justo después -aquí, un fallo de `fsync` de
+    directorio, mismo punto de muerte que
+    `test_reabrir_el_almacen_termina_un_corte_que_quedo_a_medias_en_waiting`-,
+    antes de escalar. Un humano PAUSA el WorkItem por su cuenta, sin relación
+    con el corte, antes de que nadie reabra el almacén. Al reabrir por primera
+    vez, `_reconcile_pending_budget_cutoffs` encuentra el marcador con el
+    WorkItem `PAUSED` (no en curso) y entraba por el `continue`; antes de esta
+    corrección ese `continue` no dejaba ningún rastro durable de que el
+    marcador ya no aplicaba, así que seguía pendiente en el diario. Un humano
+    reanuda el WorkItem a propósito -queda `ACTIVE` de nuevo, con una fecha muy
+    posterior a la del corte original-. Al reabrir el almacén una SEGUNDA vez,
+    antes de esta corrección la reconciliación encontraba el marcador todavía
+    pendiente con el WorkItem otra vez en curso, creía que había un corte a
+    medias vigente y repetía la cascada con el `now` viejo del marcador:
+    escalaba un WorkItem sano a `NEEDS_DECISION` con una fecha ANTERIOR a la de
+    su propia pausa y reanudación, ya anexadas en el diario -un diario con las
+    fechas desordenadas-.
+    """
+    work_id = "WI-H20B-0001"
+    momento_del_corte = datetime(2026, 8, 18, 12, 0, tzinfo=UTC)
+    momento_de_pausar = datetime(2026, 8, 20, 9, 0, tzinfo=UTC)
+    momento_de_reanudar = datetime(2026, 8, 25, 9, 0, tzinfo=UTC)
+
+    journal_path = tmp_path / "diario.jsonl"
+    store = DurableWorkEngineStore(journal_path)
+    store.create_work_item(
+        work_id=work_id,
+        peticion_original="texto literal",
+        objetivo="objetivo",
+        contexto_origen=(),
+        entregable="entregable",
+        criterio_terminado="criterio",
+        limites={"presupuesto": {"limite": 10.0}},
+        prioridad=1,
+        clase=WorkItemClass.PROGRAMACION,
+        now=momento_del_corte,
+    )
+    store.activate_work_item(work_id, now=momento_del_corte)
+    assert store.get_work_item(work_id).estado is WorkItemState.ACTIVE  # type: ignore[union-attr]
+
+    # Caida justo DESPUES de que el marcador del corte quede durable, igual
+    # que en `test_reabrir_el_almacen_termina_un_corte_que_quedo_a_medias_en_waiting`:
+    # el `fsync` real ya se ejecuto (el marcador sobrevive), lo que no llega a
+    # ocurrir es el resto de la cascada.
+    real_fsync = os.fsync
+    ya_fallo = False
+
+    def fsync_que_falla_tras_el_marcador(fd: int) -> None:
+        nonlocal ya_fallo
+        real_fsync(fd)
+        if ya_fallo or not stat.S_ISDIR(os.fstat(fd).st_mode):
+            return
+        if "work_item_budget_cutoff_started" in journal_path.read_text():
+            ya_fallo = True
+            raise OSError("fallo simulado de fsync de directorio")
+
+    monkeypatch.setattr(os, "fsync", fsync_que_falla_tras_el_marcador)
+    with pytest.raises(DirectorySyncError):
+        store.cancel_all_live_runs_and_escalate_work_item(work_id, now=momento_del_corte)
+    monkeypatch.setattr(os, "fsync", real_fsync)
+
+    kinds_tras_la_caida = [r["kind"] for r in replay(journal_path).valid_records]
+    assert "work_item_budget_cutoff_started" in kinds_tras_la_caida
+    assert "work_item_escalated" not in kinds_tras_la_caida
+    a_medias = store.get_work_item(work_id)
+    assert a_medias is not None and a_medias.estado is WorkItemState.ACTIVE
+
+    # Un humano pausa el WorkItem, sin relacion con el corte interrumpido.
+    store.pause_work_item(work_id, now=momento_de_pausar)
+
+    # Primera reapertura: el WorkItem esta PAUSED (no en curso). Antes de esta
+    # correccion, la reconciliacion lo saltaba sin dejar rastro durable.
+    reabierto_1 = DurableWorkEngineStore(journal_path)
+    tras_primera_reapertura = reabierto_1.get_work_item(work_id)
+    assert tras_primera_reapertura is not None
+    assert tras_primera_reapertura.estado is WorkItemState.PAUSED
+
+    # Un humano reanuda el WorkItem a proposito.
+    reabierto_1.resume_work_item(work_id, now=momento_de_reanudar)
+    assert reabierto_1.get_work_item(work_id).estado is WorkItemState.ACTIVE  # type: ignore[union-attr]
+
+    # Segunda reapertura: el WorkItem vuelve a estar en curso (ACTIVE). Antes
+    # de esta correccion, la reconciliacion encontraba el marcador todavia
+    # pendiente y repetia la cascada con el `now` viejo del corte original,
+    # escalando un WorkItem sano con una fecha anterior a su pausa/reanudacion.
+    reabierto_2 = DurableWorkEngineStore(journal_path)
+    tras_segunda_reapertura = reabierto_2.get_work_item(work_id)
+    assert tras_segunda_reapertura is not None
+    assert tras_segunda_reapertura.estado is WorkItemState.ACTIVE, (
+        "un WorkItem sano, pausado y reanudado por un humano tras un corte "
+        "por presupuesto que murio a mitad, no debe acabar escalado a "
+        f"needs_decision por su cuenta (quedo en {tras_segunda_reapertura.estado.value})"
+    )
+
+    kinds_finales = [r["kind"] for r in replay(journal_path).valid_records]
+    assert "work_item_escalated" not in kinds_finales, (
+        "el corte interrumpido, ya invalido por la pausa/reanudacion externas, "
+        "no debe repetirse en una reapertura posterior"
+    )
+
+    # La fecha de ningun suceso de este WorkItem, ya anexado en el diario,
+    # puede ir hacia atras respecto al anterior: el requisito explicito de la
+    # incidencia.
+    eventos_del_work_item = [e for e in reabierto_2.list_events() if e.aggregate_id == work_id]
+    fechas = [e.occurred_at for e in eventos_del_work_item]
+    assert fechas == sorted(fechas), (
+        f"el diario quedo con las fechas desordenadas para {work_id}: {fechas}"
+    )
+
+    # Reabrir una TERCERA vez, sin que nada mas cambie, no debe volver a tocar
+    # el marcador ya cerrado: ni un nuevo intento de cascada ni un segundo
+    # cierre duplicado.
+    eventos_tras_segunda_reapertura = kinds_finales
+    reabierto_3 = DurableWorkEngineStore(journal_path)
+    kinds_tras_tercera_reapertura = [r["kind"] for r in replay(journal_path).valid_records]
+    assert kinds_tras_tercera_reapertura == eventos_tras_segunda_reapertura
+    assert reabierto_3.get_work_item(work_id).estado is WorkItemState.ACTIVE  # type: ignore[union-attr]
+
+
+def test_el_almacen_en_memoria_nunca_necesita_reconciliar_un_corte_por_no_reabrirse_jamas(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """H-20, segunda mitad: coherencia entre los dos almacenes tras pausar y reanudar.
+
+    El almacén en memoria (``InMemoryWorkEngineStore``) no persiste ningún
+    marcador de corte ni reconcilia nada al construirse -no hay ningún
+    ``reabrir`` posible para él, arquitectura A1-, así que el guion de pausar
+    y reanudar sin relación con ningún corte lo deja, sin más, en ``ACTIVE``
+    con la fecha de la reanudación. El durable, sometido a la misma pausa y
+    reanudación pero DESPUÉS de un corte por presupuesto que murió a mitad
+    -guion completo en
+    ``test_reabrir_dos_veces_tras_pausar_y_reanudar_no_escala_un_corte_a_medias_con_fecha_hacia_atras``-,
+    tiene que llegar al MISMO desenlace: cualquier divergencia sería un
+    marcador que, en el durable, seguía influyendo un episodio de "en curso"
+    completamente ajeno al que lo generó.
+    """
+    work_id = "WI-H20B-0002"
+    momento_del_corte = datetime(2026, 8, 18, 12, 0, tzinfo=UTC)
+    momento_de_pausar = datetime(2026, 8, 20, 9, 0, tzinfo=UTC)
+    momento_de_reanudar = datetime(2026, 8, 25, 9, 0, tzinfo=UTC)
+
+    en_memoria = InMemoryWorkEngineStore()
+    en_memoria.create_work_item(
+        work_id=work_id,
+        peticion_original="texto literal",
+        objetivo="objetivo",
+        contexto_origen=(),
+        entregable="entregable",
+        criterio_terminado="criterio",
+        limites={"presupuesto": {"limite": 10.0}},
+        prioridad=1,
+        clase=WorkItemClass.PROGRAMACION,
+        now=momento_del_corte,
+    )
+    en_memoria.activate_work_item(work_id, now=momento_del_corte)
+    en_memoria.pause_work_item(work_id, now=momento_de_pausar)
+    en_memoria.resume_work_item(work_id, now=momento_de_reanudar)
+    referencia = en_memoria.get_work_item(work_id)
+    assert referencia is not None
+    assert referencia.estado is WorkItemState.ACTIVE
+
+    journal_path = tmp_path / "diario.jsonl"
+    durable = DurableWorkEngineStore(journal_path)
+    durable.create_work_item(
+        work_id=work_id,
+        peticion_original="texto literal",
+        objetivo="objetivo",
+        contexto_origen=(),
+        entregable="entregable",
+        criterio_terminado="criterio",
+        limites={"presupuesto": {"limite": 10.0}},
+        prioridad=1,
+        clase=WorkItemClass.PROGRAMACION,
+        now=momento_del_corte,
+    )
+    durable.activate_work_item(work_id, now=momento_del_corte)
+
+    real_fsync = os.fsync
+    ya_fallo = False
+
+    def fsync_que_falla_tras_el_marcador(fd: int) -> None:
+        nonlocal ya_fallo
+        real_fsync(fd)
+        if ya_fallo or not stat.S_ISDIR(os.fstat(fd).st_mode):
+            return
+        if "work_item_budget_cutoff_started" in journal_path.read_text():
+            ya_fallo = True
+            raise OSError("fallo simulado de fsync de directorio")
+
+    monkeypatch.setattr(os, "fsync", fsync_que_falla_tras_el_marcador)
+    with pytest.raises(DirectorySyncError):
+        durable.cancel_all_live_runs_and_escalate_work_item(work_id, now=momento_del_corte)
+    monkeypatch.setattr(os, "fsync", real_fsync)
+
+    durable.pause_work_item(work_id, now=momento_de_pausar)
+    reabierto_1 = DurableWorkEngineStore(journal_path)
+    reabierto_1.resume_work_item(work_id, now=momento_de_reanudar)
+    reabierto_2 = DurableWorkEngineStore(journal_path)
+    tras_reabrir = reabierto_2.get_work_item(work_id)
+    assert tras_reabrir is not None
+    assert (tras_reabrir.estado, tras_reabrir.updated_at) == (
+        referencia.estado,
+        referencia.updated_at,
+    ), (
+        "el almacen durable diverge del almacen en memoria tras pausar y "
+        "reanudar sobre un corte interrumpido a medias: "
+        f"memoria={referencia.estado.value}/{referencia.updated_at} "
+        f"durable tras reabrir={tras_reabrir.estado.value}/{tras_reabrir.updated_at}"
+    )
