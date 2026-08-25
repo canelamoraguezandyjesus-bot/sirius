@@ -75,16 +75,22 @@ pasar y ninguna prueba preexistente del módulo puede cambiar de resultado.
    explícito: prioriza no dejar pasar una orden sensible por otra rama,
    incluso a costa de escalar de más.
 3. **Verbo reconocido** (clase por `_VERBO_A_CLASE` o en
-   `_VERBOS_IMPERATIVOS_SIN_CLASE`) → `orden_inequivoca` directamente, sin
-   pasar por los marcadores de pasado/exploración/pregunta. Un primer verbo
-   imperativo reconocido hace inequívoca la orden por sí solo; dejar que un
-   marcador de pasado en el resto de la frase la reclasifique es el mismo
-   error de raíz que (a) pero sin implicación de seguridad — es mecánico, no
-   necesita decisión del propietario.
-4. Marcadores de pasado, exploración y pregunta final (con frontera de
-   palabra) → `consultar_pasado` / `explorar`, solo si (2) y (3) no
-   aplicaron.
-5. Si nada de lo anterior aplica → `ambigua`.
+   `_VERBOS_IMPERATIVOS_SIN_CLASE`) → `orden_inequivoca`, pero **solo** por
+   delante de los marcadores de **pasado**: si hay verbo reconocido, el
+   chequeo de pasado se omite. Un primer verbo imperativo reconocido hace
+   inequívoca la orden por sí solo frente al pasado; dejar que un marcador de
+   pasado en el resto de la frase la reclasifique es el mismo error de raíz
+   que (a) pero sin implicación de seguridad — es mecánico, no necesita
+   decisión del propietario. Esto es *lo único* que #324 y `evidencia-H-19.md`
+   miden y autorizan (revisión H-19-REV-001): frente a exploración y frente a
+   la interrogación final, el verbo **no** decide antes — ver (4).
+4. Marcadores de exploración y pregunta final (con frontera de palabra) →
+   `explorar`, comprobados **siempre** antes que la decisión del verbo -haya
+   o no verbo reconocido-, igual que antes de este ADR. Si no hay verbo
+   reconocido, los marcadores de pasado se comprueban aquí también, con su
+   prioridad original (antes que exploración/pregunta).
+5. Si hay verbo reconocido y ninguno de (2) o (4) aplicó → `orden_inequivoca`.
+6. Si nada de lo anterior aplica → `ambigua`.
 
 Los marcadores de todas las listas (`_MARCADORES_PASADO`,
 `_MARCADORES_EXPLORACION`, `_MARCADORES_DESTRUCTIVO`, `_MARCADORES_GASTO`,
@@ -131,6 +137,50 @@ genuino y sin verbo reconocido, exploración, órdenes sensibles ya
 correctamente detectadas, clases por verbo, alcance/criterio por clase)
 siguen pasando con la misma clasificación.
 
+### Revisión H-19-REV-001 y CODEX-001 (ronda 2 de corrección, incidencia #325 / PR #328)
+
+La revisión independiente de la PR encontró que la opción elegida se
+implementó de más: el verbo reconocido se adelantó no solo a los marcadores
+de pasado (lo único decidido en #324) sino también a exploración y a la
+interrogación final, sin evidencia ni decisión que lo autorizara. Y que exigir
+frontera de palabra en ambos extremos de todos los marcadores dejó de
+reconocer flexiones comunes de los marcadores sensibles (`credenciales`,
+`contraseñas`, `eliminarlo`).
+
+Antes de corregir:
+
+```
+$ uv run pytest tests/engine/test_intent_interpreter.py -k "test_verbo_no_se_adelanta_a_exploracion_ni_a_pregunta_final or test_variantes_flexionadas_de_marcadores_sensibles_escalan"
+5 failed, 41 deselected
+```
+
+Las 5 fallaban exactamente como predicen las observaciones: los dos casos de
+H-19-REV-001 con `assert <ORDEN_INEQUIVOCA> is <EXPLORAR>`, los tres de
+CODEX-001 con `assert <ORDEN_INEQUIVOCA> is <SENSIBLE_O_MATERIAL>`.
+
+Después de corregir -pasado solo se omite cuando hay verbo reconocido;
+exploración y la interrogación final se comprueban siempre antes que la
+decisión del verbo; se admiten explícitamente las flexiones `credenciales`,
+`contraseñas` y `eliminarlo`-:
+
+```
+$ uv run pytest tests/engine/test_intent_interpreter.py
+46 passed
+$ uv run ruff format --check .
+499 files already formatted
+$ uv run ruff check .
+All checks passed!
+$ uv run mypy src tests
+Success: no issues found in 476 source files
+$ uv run pytest
+3575 passed, 9 skipped in 285.13s
+```
+
+Ninguna prueba preexistente cambió de resultado, incluidas las que fijan el
+caso "¿Qué pasó con el bloque B12?" (pasado + interrogación final, sin verbo
+reconocido): siguen en `consultar_pasado`, porque el chequeo de pasado
+mantiene su prioridad original salvo que haya verbo reconocido.
+
 ## Consecuencias
 
 - Una orden con un marcador de sensibilidad siempre escala o pide
@@ -138,8 +188,13 @@ siguen pasando con la misma clasificación.
   como sensible texto que no lo era, que es el trade-off que el propietario
   aceptó explícitamente en #324.
 - Un mensaje que empiece con un verbo imperativo reconocido nunca se
-  clasifica como `consultar_pasado` o `explorar`, aunque el resto de la
-  frase contenga esos marcadores — el primer verbo decide.
+  clasifica como `consultar_pasado`, aunque el resto de la frase contenga un
+  marcador de pasado — el primer verbo decide frente al pasado, y solo frente
+  al pasado.
+- Ese mismo mensaje, si además contiene un marcador de exploración o termina
+  en `?`, sigue clasificándose como `explorar`: el verbo no decide frente a
+  exploración ni frente a la interrogación final, porque #324 no autorizó
+  ese salto y `evidencia-H-19.md` no lo mide (H-19-REV-001).
 - La frontera de palabra es ahora la regla general de comparación de
   marcadores en todo el módulo, no solo para los de pasado.
 

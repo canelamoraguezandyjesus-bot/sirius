@@ -232,6 +232,70 @@ def test_el_alcance_no_repite_la_orden_que_ya_esta_en_el_objetivo() -> None:
     )
 
 
+# --- H-19-REV-001: el verbo solo se adelanta a los marcadores de pasado,
+# --- no a exploración ni a la interrogación final ---------------------------
+#
+# #324 autorizó -y evidencia-H-19.md midió- únicamente el caso "verbo
+# reconocido antes que marcadores de PASADO". La ronda anterior adelantó el
+# verbo también por delante de exploración y de "?", sin que nadie lo pidiera
+# ni lo midiera. Frente a esos dos, debe mantenerse el orden previo a H-19:
+# esos dos chequeos antes que el verbo.
+
+
+@pytest.mark.parametrize(
+    "mensaje",
+    (
+        "Corrige esto, no crees que deberiamos revisarlo antes?",
+        "Implementa esto, no se si es buena idea?",
+    ),
+)
+def test_verbo_no_se_adelanta_a_exploracion_ni_a_pregunta_final(mensaje: str) -> None:
+    """Antes de esta corrección, un primer verbo reconocido decidía
+    ORDEN_INEQUIVOCA sin llegar nunca a comprobar exploración ni la
+    interrogación final, porque el chequeo del verbo se había adelantado
+    también por delante de esos dos (no solo de los marcadores de pasado,
+    que es lo único que #324 decidió). Fallaba con
+    ``AssertionError: assert <TipoIntencion.ORDEN_INEQUIVOCA> is <TipoIntencion.EXPLORAR>``.
+    """
+    signal = interpretar_intencion_v0(mensaje)
+    assert signal.tipo is TipoIntencion.EXPLORAR
+
+
+# --- CODEX-001: variantes flexionadas de marcadores sensibles ---------------
+#
+# Exigir frontera de palabra en ambos extremos (H-19) dejó de reconocer
+# flexiones y enclíticos comunes -"credenciales", "contraseñas",
+# "eliminarlo"- que antes activaban la barrera fail-closed. La corrección
+# admite explícitamente esas variantes, sin volver a la búsqueda libre por
+# subcadenas que confundía "estado de" con "estado del".
+
+
+@pytest.mark.parametrize(
+    ("mensaje", "causa_esperada"),
+    (
+        ("implementa autenticación usando credenciales de administrador", _CREDENCIALES),
+        ("implementa esto guardando las contraseñas en texto plano", _CREDENCIALES),
+        (
+            "implementa este cambio para eliminarlo todo",
+            CausaEscalado.OPERACION_DESTRUCTIVA_O_IRREVERSIBLE,
+        ),
+    ),
+)
+def test_variantes_flexionadas_de_marcadores_sensibles_escalan(
+    mensaje: str, causa_esperada: CausaEscalado
+) -> None:
+    """Antes de esta corrección, estas frases contenían la flexión de un
+    marcador sensible ("credenciales", "contraseñas", "eliminarlo") que la
+    frontera de palabra en ambos extremos dejaba de reconocer, así que un
+    primer verbo reconocido despachaba la orden como ORDEN_INEQUIVOCA sin
+    pasar por el escalado fail-closed. Fallaba con ``AssertionError: assert
+    <TipoIntencion.ORDEN_INEQUIVOCA> is <TipoIntencion.SENSIBLE_O_MATERIAL>``.
+    """
+    signal = interpretar_intencion_v0(mensaje)
+    assert signal.tipo is TipoIntencion.SENSIBLE_O_MATERIAL
+    assert signal.causa_sensibilidad is causa_esperada
+
+
 def test_el_criterio_de_terminado_nombra_una_comprobacion_no_una_tautologia() -> None:
     datos = interpretar_intencion_v0("implementa el despachador").datos_trabajo
     assert datos is not None

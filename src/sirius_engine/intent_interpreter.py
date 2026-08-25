@@ -127,9 +127,24 @@ _CRITERIO_POR_CLASE: dict[WorkItemClass, str] = {
     ),
 }
 
-_MARCADORES_DESTRUCTIVO = ("borra", "borrar", "elimina", "eliminar", "destruye", "resetea todo")
+_MARCADORES_DESTRUCTIVO = (
+    "borra",
+    "borrar",
+    "elimina",
+    "eliminar",
+    "eliminarlo",
+    "destruye",
+    "resetea todo",
+)
 _MARCADORES_GASTO = ("clave real", "usa una clave de pago", "aumenta el presupuesto", "gasta")
-_MARCADORES_CREDENCIALES = ("credencial", "clave api", "contraseña", "permiso de administrador")
+_MARCADORES_CREDENCIALES = (
+    "credencial",
+    "credenciales",
+    "clave api",
+    "contraseña",
+    "contraseñas",
+    "permiso de administrador",
+)
 _MARCADORES_PRIVACIDAD = ("dato personal", "informacion sensible", "publica los datos")
 
 _SENSIBILIDAD: tuple[tuple[tuple[str, ...], CausaEscalado], ...] = (
@@ -235,23 +250,23 @@ def interpretar_intencion_v0(
         )
 
     # Un primer verbo reconocido hace inequívoca la orden por sí solo, así que
-    # se decide ANTES que los marcadores de pasado/exploración: si no, una
-    # orden legítima sobre la situación actual de un módulo ("audita el
-    # estado de las pruebas") se confunde con una consulta sobre esa misma
+    # se decide ANTES que los marcadores de pasado -y SOLO antes que esos-: si
+    # no, una orden legítima sobre la situación actual de un módulo ("audita
+    # el estado de las pruebas") se confunde con una consulta sobre esa misma
     # situación en el pasado, porque el marcador aparece de verdad en el
     # texto -no por una colisión de subcadena que la frontera de palabra
-    # pueda resolver- (H-19, fallo b). Es la misma familia de raíz que la
-    # sensibilidad: el orden de las comprobaciones, no solo la comparación.
+    # pueda resolver- (H-19, fallo b). #324 autorizó -y evidencia-H-19.md
+    # midió- exclusivamente ese salto sobre pasado: frente a exploración y a
+    # la interrogación final, el verbo NO decide primero (H-19-REV-001), así
+    # que el chequeo de pasado solo se omite cuando hay verbo reconocido -en
+    # cuyo caso exploración/interrogación se comprueban igualmente antes que
+    # la decisión del verbo, más abajo- y se mantiene con su prioridad
+    # original en cualquier otro caso.
     es_orden_por_verbo = clase is not None or verbo in _VERBOS_IMPERATIVOS_SIN_CLASE
-    if es_orden_por_verbo:
-        datos_trabajo = _construir_datos_trabajo(mensaje, clase, limite_presupuesto)
-        return IntentSignal(
-            tipo=TipoIntencion.ORDEN_INEQUIVOCA,
-            mensaje_original=mensaje,
-            datos_trabajo=datos_trabajo,
-        )
 
-    if any(_marcador_presente(normalizado, marcador) for marcador in _MARCADORES_PASADO):
+    if not es_orden_por_verbo and any(
+        _marcador_presente(normalizado, marcador) for marcador in _MARCADORES_PASADO
+    ):
         return IntentSignal(
             tipo=TipoIntencion.CONSULTAR_PASADO, mensaje_original=mensaje, consulta=mensaje
         )
@@ -261,6 +276,14 @@ def interpretar_intencion_v0(
 
     if normalizado.endswith("?"):
         return IntentSignal(tipo=TipoIntencion.EXPLORAR, mensaje_original=mensaje)
+
+    if es_orden_por_verbo:
+        datos_trabajo = _construir_datos_trabajo(mensaje, clase, limite_presupuesto)
+        return IntentSignal(
+            tipo=TipoIntencion.ORDEN_INEQUIVOCA,
+            mensaje_original=mensaje,
+            datos_trabajo=datos_trabajo,
+        )
 
     return IntentSignal(
         tipo=TipoIntencion.AMBIGUA,
