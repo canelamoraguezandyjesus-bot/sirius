@@ -526,11 +526,28 @@ class DurableWorkEngineStore:
         (``_reconcile_pending_budget_cutoffs``) encuentra ese marcador sin un
         ``work_item_escalated`` que lo cierre y termina el corte por su
         cuenta, sin depender de que ningún llamador recuerde reintentarlo.
+
+        H-20 (``docs/audits/evidencia-H-20-H-22.md``, incidencia #345): ese
+        marcador solo lo limpia un ``work_item_escalated`` posterior. Si el
+        WorkItem YA no está en curso cuando se le pide este corte -PAUSED,
+        por ejemplo-, la cascada nunca escala (más abajo, "Estado no
+        escalable"), así que anexarlo de todas formas lo dejaba pendiente
+        para siempre: bastaba con que el WorkItem volviera después a estar
+        en curso -reanudado, con un ``now`` posterior- para que reabrir el
+        almacén encontrara el marcador, creyera el corte a medias y repitiera
+        la cascada con el ``now`` viejo del marcador, escalando un WorkItem
+        sano con una fecha hacia atrás. Por eso el marcador solo se anexa
+        cuando, YA antes de tocar ningún Run, el WorkItem está en curso: es
+        el único caso en el que la cascada puede terminar en escalada y, por
+        tanto, el único en el que el marcador puede llegar a limpiarse.
         """
         current = self._require_work_item(work_id)
         if current.estado is work_item_ops.WorkItemState.NEEDS_DECISION:
             return current
-        if work_id not in self._pending_budget_cutoffs:
+        if (
+            current.estado in work_item_ops.ESTADOS_EN_CURSO
+            and work_id not in self._pending_budget_cutoffs
+        ):
             self._append_work_item(
                 current, "work_item_budget_cutoff_started", now=now, idempotency_key=None
             )
