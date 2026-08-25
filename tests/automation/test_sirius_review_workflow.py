@@ -350,6 +350,9 @@ def test_the_workflow_actually_feeds_the_reviewer_prompt() -> None:
     assert "scripts/automation/prompts/revisor-documental.md" in run, (
         "el revisor documental también tiene que ser alcanzable: ese era el bloque C3"
     )
+    assert "scripts/automation/prompts/revisor-investigacion.md" in run, (
+        "el revisor de investigación también: ese es el bloque B1"
+    )
     assert 'cat "$PROMPT_ROL"' in run, (
         "el prompt elegido tiene que insertarse de verdad, no solo nombrarse"
     )

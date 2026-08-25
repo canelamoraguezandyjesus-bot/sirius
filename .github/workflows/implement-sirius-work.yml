@@ -224,12 +224,13 @@ jobs:
           case "$perfil" in
             implementer)    PROMPT_ROL=scripts/automation/prompts/implementer.md ;;
             documentalista) PROMPT_ROL=scripts/automation/prompts/documentalista.md ;;
+            investigador)   PROMPT_ROL=scripts/automation/prompts/investigador.md ;;
             *)
               # Ni repliegue silencioso ni adivinar. Un perfil que no se
               # reconoce se ve en ROJO: ejecutar el prompt equivocado produce
               # trabajo que parece hecho y no lo esta, y eso cuesta mas que un
               # workflow fallido que se arregla en un minuto.
-              echo "::error::perfil no reconocido en el cuerpo de #${ISSUE_NUMBER}: '${perfil}'. Se esperaba 'Perfil: implementer@N' o 'Perfil: documentalista@N'." >&2
+              echo "::error::perfil no reconocido en el cuerpo de #${ISSUE_NUMBER}: '${perfil}'. Se esperaba 'Perfil: implementer@N', 'Perfil: documentalista@N' o 'Perfil: investigador@N'." >&2
               exit 1 ;;
           esac
           echo "Perfil del encargo: ${perfil} -> ${PROMPT_ROL}"

@@ -255,8 +255,9 @@ jobs:
           case "$perfil" in
             implementer)    PROMPT_ROL=scripts/automation/prompts/reviewer.md ;;
             documentalista) PROMPT_ROL=scripts/automation/prompts/revisor-documental.md ;;
+            investigador)   PROMPT_ROL=scripts/automation/prompts/revisor-investigacion.md ;;
             *)
-              echo "::error::perfil no reconocido en el cuerpo de #${ISSUE_NUMBER}: '${perfil}'. Se esperaba 'Perfil: implementer@N' o 'Perfil: documentalista@N'." >&2
+              echo "::error::perfil no reconocido en el cuerpo de #${ISSUE_NUMBER}: '${perfil}'. Se esperaba 'Perfil: implementer@N', 'Perfil: documentalista@N' o 'Perfil: investigador@N'." >&2
               exit 1 ;;
           esac
           echo "Perfil del encargo: ${perfil} -> ${PROMPT_ROL}"

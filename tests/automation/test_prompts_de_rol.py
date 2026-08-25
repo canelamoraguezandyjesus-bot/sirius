@@ -379,3 +379,36 @@ def test_el_prompt_cuyo_workflow_no_prepara_el_entorno_lo_advierte(
     assert posicion_propiedad < posicion_ejemplos, (
         f"{prompt_path.name} pone los ejemplos antes que la propiedad que los explica"
     )
+
+
+# --- Un prompt citado por un workflow tiene que existir ----------------------
+
+
+def test_todo_prompt_citado_por_un_workflow_existe() -> None:
+    """Un `cat` a un fichero que no está mata el paso en ejecución, no en Quality.
+
+    Hueco encontrado el 25-08-2026 al cablear la investigación (B1): desde C3
+    los workflows ELIGEN el prompt por el campo `Perfil:` del cuerpo, así que
+    una rama del `case` puede nombrar un fichero que nadie ha escrito todavía y
+    ninguna prueba se entera. El fallo aparecería en el runner, a mitad de un
+    encargo real, y sólo para el perfil que nadie había ejercitado.
+
+    Esta guarda impone además un ORDEN: el prompt se escribe antes que el cable
+    que lo invoca, nunca al revés.
+    """
+    import re as _re
+
+    raiz = Path(__file__).resolve().parents[2]
+    citados: set[str] = set()
+    for workflow in sorted((raiz / ".github" / "workflows").glob("*.yml")):
+        texto = workflow.read_text(encoding="utf-8")
+        citados.update(_re.findall(r"scripts/automation/prompts/[\w.-]+\.md", texto))
+
+    assert citados, "ningún workflow cita un prompt: la comprobación no mediría nada"
+
+    ausentes = sorted(ruta for ruta in citados if not (raiz / ruta).is_file())
+    assert ausentes == [], (
+        f"workflows que citan prompts inexistentes: {ausentes}. "
+        "El `cat` fallaría en el runner, a mitad de un encargo real, y sólo para "
+        "el perfil que nadie hubiera ejercitado todavía."
+    )
