@@ -7,9 +7,9 @@ Cada vertical debe producir una parte usable, probada y documentada antes de ini
 - V0 a V6B: infraestructura de las verticales implementada.
 - V7A: implementada y endurecida.
 - V7: implementación automatizada terminada; permanece la validación manual de Windows Credential Manager con un valor señuelo.
-- V8: INICIADA únicamente en corrección documental, corrección funcional y automatización sin clave API.
-- Aceptación manual con proveedor real: BLOQUEADA.
-- Sirius 0.1: NO ACEPTADO y NO TERMINADO.
+- V8: **COMPLETA** en sus cuatro fases (V8.1 a V8.4).
+- Aceptación manual con proveedor real: **EJECUTADA Y SUPERADA** el 10-08-2026.
+- Sirius 0.1: **ACEPTADO y TERMINADO** por declaración del propietario el 10-08-2026.
 
 **Este archivo describe el plan, no el punto en que está.** El estado vigente
 de cada bloque de V8 y de cada defecto del catálogo se lee en un solo sitio:
@@ -378,7 +378,7 @@ Correspondencia principal:
 
 La correspondencia describe contenido, no equivalencia de estado. Una etiqueta `COMPLETADA` del plan no demuestra la aceptación de la vertical arquitectónica completa.
 
-## V8 — Corrección, aceptación y cierre de Sirius 0.1 — INICIADA PARCIALMENTE
+## V8 — Corrección, aceptación y cierre de Sirius 0.1 — COMPLETA
 
 V8 no constituye una nueva versión de producto. Ejecuta las correcciones, pruebas, empaquetado y aceptación ya previstos para Sirius 0.1.
 
