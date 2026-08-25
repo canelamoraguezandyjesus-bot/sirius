@@ -124,15 +124,31 @@ if ! sirius_find_pr_for_issue "$REPO" "$ISSUE" >"$pr_list"; then
 fi
 mapfile -t pr_numbers <"$pr_list"
 rm -f "$pr_list"
+# H-23 (incidencia #337): NINGUNA PR no es un error, es un caso.
+#
+# Un bloque puede detenerse ANTES de crear rama y PR -le pasó a #333, que vio que
+# completar su encargo exigía tocar `.github/**` y se detuvo sin escribir una
+# línea-. Esa es la conducta correcta: la alternativa era entregar media vuelta.
+# Pero hasta hoy las dos vías de reanudación fallaban, cada una por su motivo, y
+# la incidencia quedaba muerta. Un sistema que solo sabe reanudar lo que ya
+# produjo algo **castiga la parada temprana**, y con el tiempo eso enseña a no
+# pararse.
+#
+# Sin PR no hay head, y no hay head porque no hay nada construido. La
+# autorización que el propietario da entonces no es «continúa sobre esta
+# versión»: es «vuelve a empezar». Son dos permisos distintos y el marcador de
+# más abajo los distingue.
+sin_pr="false"
+head_sha=""
 if [ "${#pr_numbers[@]}" -eq 0 ]; then
-  block "No he encontrado ninguna PR asociada a esta incidencia, así que no puedo saber sobre qué head autorizas continuar."
-  exit 1
+  sin_pr="true"
 fi
-if [ "${#pr_numbers[@]}" -ne 1 ]; then
+if [ "$sin_pr" != "true" ] && [ "${#pr_numbers[@]}" -ne 1 ]; then
   list="$(printf '#%s, ' "${pr_numbers[@]}")"
   block "Esta incidencia referencia varias PR distintas (${list%, }); me detengo para no reanudar sobre la equivocada."
   exit 1
 fi
+if [ "$sin_pr" != "true" ]; then
 pr_number="${pr_numbers[0]}"
 
 if ! pr_json="$(sirius_retry gh api "repos/${REPO}/pulls/${pr_number}" \
@@ -149,6 +165,7 @@ if [ "$(printf '%s' "$pr_json" | jq -r '.state')" != "open" ]; then
   exit 1
 fi
 head_sha="$(printf '%s' "$pr_json" | jq -r '.head')"
+fi
 
 # --- 3bis) A qué fase se vuelve --------------------------------------------
 # Reanudar es reponer el EVENTO que la parada consumió, no elegir una etiqueta
@@ -169,6 +186,27 @@ destino_de_rol() {
   esac
 }
 
+# H-23: el atajo de abajo -`blocked-decision` vuelve siempre al corrector- da
+# por hecho que hay una PR que corregir. SIN PR manda el trabajo al corrector,
+# que se detiene en el acto por «sin-pr»: sería cambiar una parada muda por otra,
+# y encima con aspecto de haber funcionado. Sin PR, la fase se LEE del historial
+# igual que en una parada segura, porque la que se cayó pudo ser cualquiera y lo
+# normal es que fuera el implementador.
+if [ "$sin_pr" = "true" ]; then
+  dump_file="$(mktemp)"
+  if ! sirius_dump_comments "$REPO" "$ISSUE" "$dump_file"; then
+    rm -f "$dump_file"
+    echo "::error::No se pudieron leer los comentarios de #${ISSUE}; no puedo saber que fase se detuvo. Reintentable."
+    exit 1
+  fi
+  rol_parado="$(grep -oE '<!-- sirius-verdict:(implementer|reviewer|corrector):(FAILED_SAFELY|precheck):' \
+    "$dump_file" | tail -n 1 | cut -d: -f2)"
+  rm -f "$dump_file"
+  if ! etiqueta_destino="$(destino_de_rol "$rol_parado")"; then
+    block "Esta incidencia se detuvo antes de producir ninguna PR, y no encuentro publicado qué fase se paró, así que no sé a cuál devolverla. Aplica a mano la etiqueta de la fase que quieras repetir."
+    exit 1
+  fi
+else
 case "$parada" in
   sirius:blocked-decision)
     etiqueta_destino="sirius:repair-requested"
@@ -198,6 +236,7 @@ case "$parada" in
     exit 1
     ;;
 esac
+fi
 
 # --- 4) El permiso escrito, ANTES de reponer la etiqueta ----------------------
 # El orden importa y no es cosmético: si la etiqueta se aplicara primero, el
@@ -213,7 +252,19 @@ esac
 # Una parada operativa no tiene rondas que perdonar: solo hay que repetir la
 # fase que se cayó.
 body_file="$(mktemp)"
-if [ "$parada" = "sirius:blocked-decision" ]; then
+if [ "$sin_pr" = "true" ]; then
+  # NI `sirius-convergence-reset` NI `sirius-resume-stop`, y la diferencia
+  # importa: los dos llevan un head, porque los dos autorizan continuar sobre una
+  # versión concreta. Aquí no hay versión. Reutilizar cualquiera de ellos con un
+  # head inventado o vacío escribiría en el historial una autorización sobre algo
+  # que no existe, y ese historial es lo único que después dice qué se permitió.
+  marker="<!-- sirius-restart-sin-pr:${ISSUE}:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
+  printf '%s\n\n%s\n\n%s\n\n%s\n' \
+    "$marker" \
+    "🟢 **Reinicio autorizado por el propietario**" \
+    "Esta incidencia se detuvo **antes de producir ninguna rama ni PR**, así que no hay ningún head sobre el que continuar: lo que se autoriza es **repetir desde cero** la fase que se paró (\`${etiqueta_destino}\`)." \
+    "El historial queda intacto y no se perdona ninguna ronda: sin PR no hubo rondas que contar. Si la fase se vuelve a caer, se detendrá otra vez con su diagnóstico." >"$body_file"
+elif [ "$parada" = "sirius:blocked-decision" ]; then
   marker="<!-- sirius-convergence-reset:${head_sha} -->"
   printf '%s\n\n%s\n\n%s\n\n%s\n' \
     "$marker" \
@@ -252,4 +303,8 @@ if ! ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"
   exit 1
 fi
 
-echo "Parada ${parada} de #${ISSUE} levantada por orden del propietario: repuesta ${etiqueta_destino} sobre ${head_sha}."
+if [ "$sin_pr" = "true" ]; then
+  echo "Parada ${parada} de #${ISSUE} levantada por orden del propietario: repuesta ${etiqueta_destino} desde cero (la incidencia no tenia ninguna PR)."
+else
+  echo "Parada ${parada} de #${ISSUE} levantada por orden del propietario: repuesta ${etiqueta_destino} sobre ${head_sha}."
+fi
