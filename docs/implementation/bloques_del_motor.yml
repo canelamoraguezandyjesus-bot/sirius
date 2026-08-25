@@ -109,13 +109,19 @@ bloques:
 
   - id: C3
     titulo: El mismo ciclo para documentos
-    estado: pendiente
-    depende_de: C2
-    que_lo_cerraria: que una orden de clase documentacion dé una vuelta completa
-    medido_hoy: >-
-      los dos agentes están escritos y no los llama nadie -prompts/documentalista.md
-      y prompts/revisor-documental.md, cero referencias en workflows y en scripts- y
-      la clase `documentacion` no está en TABLA_ACTIVACION
+    estado: cerrado
+    evidencia: >-
+      Cerrado el 25-08-2026 en dos mitades, porque ADR-002 no deja que la misma
+      mano haga las dos. La de workflows, en sesión interactiva (PR #335,
+      ADR-088): implement-sirius-work.yml y review-sirius-work.yml leen el campo
+      `Perfil:` del cuerpo y eligen prompt, en vez de tenerlo clavado a fuego.
+      La de `src/`, por el propio ciclo (PR #339, incidencia #336): las filas
+      DOCUMENTACION en TABLA_ACTIVACION y TABLA_PERFILES. Verificada la cadena
+      entera ejecutando: «Documenta el estado del motor» -> clase documentacion
+      -> despachable con sirius:planned + sirius:implement-requested -las mismas
+      que programacion, que es lo que exige el título del bloque- -> Perfil
+      documentalista@1 -> el workflow elige prompts/documentalista.md. Las dos
+      pruebas nuevas se ven fallar contra main con ClaseNoDespachableError.
 
   - id: C4
     titulo: La auditoría dentro del motor
