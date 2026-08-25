@@ -42,13 +42,58 @@ name: Motor de Sirius
 # `tests/automation/test_serializacion_del_motor.py` rompe si algo de esto se
 # afloja.
 #
-# SIN HORARIO, A PROPÓSITO Y DE MOMENTO. Esta primera vuelta solo se dispara a
-# mano. Un motor que empieza a correr solo antes de que nadie le haya visto dar
-# un turno es cómo se rompen las cosas de madrugada. La cadencia es la decisión
-# siguiente, y necesita medir antes cómo convive con `reconcile-sirius-states`,
-# que hoy barre estados atascados cada seis horas.
+# CON HORARIO DESDE EL 25-08-2026 (D2, ADR-090). La cautela de antes decía:
+# «un motor que empieza a correr solo antes de que nadie le haya visto dar un
+# turno es cómo se rompen las cosas de madrugada». Ya se le ha visto: dio turnos
+# a mano, su camino de escritura está probado por ejecución (ADR-083) y su
+# diario dejó de estar vacío cuando el despachador anotó su primer encargo
+# (ADR-086).
+#
+# LA CADENCIA, Y POR QUÉ ESE MINUTO EXACTO. No se eligió a ojo: sale de dos
+# restricciones independientes que dejan una ventana de once minutos.
+#
+#   COTA INFERIOR, minuto 27. `reconcile-sirius-states` arranca a `17 */6` y
+#   declara `timeout-minutes: 10`. El motor no puede empezar antes de que aquel
+#   termine en el peor caso: el reconciliador repara estados que ningún evento
+#   puede ya revivir, y que el motor razone sobre un estado que está a punto de
+#   cambiar es decidir sobre información caduca. Primero se asienta, luego se
+#   supervisa.
+#
+#   COTA SUPERIOR, minuto 37. Y esta es la que casi se salta. El contador de los
+#   siete días (D1b, contrato §11.2) necesita un HUECO TRANQUILO en el día para
+#   medir: `hora_recomendada_pasada` busca el mayor tramo sin disparos y exige
+#   que su mitad supere la ventana de tolerancia (2h50m). Meter el motor a `47`
+#   partía los huecos de 360 minutos en 30 y 330, y 330/2 = 165 < 170:
+#   **ninguna hora habría producido días verdes**. Medido, no razonado:
+#
+#       22 */6 -> OK    32 */6 -> OK    42 */6 -> NO (335 min)
+#       27 */6 -> OK    37 */6 -> OK    47 */6 -> NO (330 min)
+#
+#   Es decir: cerrar D2 con el minuto 47 habría ROTO D1. Lo cazó
+#   `test_hora_recomendada_atada_al_schedule_real_del_repositorio`, que ata esa
+#   hora a los horarios REALES del repositorio en vez de a un YAML de juguete.
+#
+# Se elige el 32, el centro de la ventana: cinco minutos de margen por cada
+# lado. `tests/automation/test_turno_programado_actua.py` rompe si alguien lo
+# saca de ahí.
+#
+# NO COMPARTEN CANDADO, Y NO HACE FALTA: son grupos de concurrencia distintos,
+# pero no escriben lo mismo. El reconciliador escribe ETIQUETAS; el motor
+# escribe SU DIARIO, y no lleva `issues: write` -ver el bloque `permissions`-.
+# Lo que sí comparte candado el motor es el despachador (ADR-086), porque esos
+# dos sí escriben el mismo diario.
+#
+# CADA SEIS HORAS Y NO MÁS: hoy el diario tiene un encargo. El valor de un turno
+# es proporcional al trabajo en vuelo, y subir la frecuencia antes de tener ese
+# trabajo es gastar minutos de Actions en mirar un mundo quieto. Se sube cuando
+# haya algo que mirar, no antes.
 
 on:
+  # Minuto 32: dentro de la ventana 27-37 que dejan el timeout del
+  # reconciliador y el hueco que el contador de los siete días necesita.
+  # Ver la cabecera: fuera de esa ventana se rompe D1 o se pisa al otro.
+  schedule:
+    - cron: '32 */6 * * *'
   workflow_dispatch:
     inputs:
       ensayo:
@@ -166,11 +211,26 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Aqui `runner` SI esta resuelto: es el `env:` de un paso, no de un trabajo.
           SIRIUS_MOTOR_DIARIO: ${{ runner.temp }}/memoria/diario.jsonl
+          # UN TURNO PROGRAMADO ACTUA SIEMPRE, y hace falta decirlo aparte.
+          # `inputs.ensayo` NO EXISTE en un evento `schedule`: se expande a la
+          # cadena vacia, y `"" = "false"` es falso, asi que la comparacion sola
+          # habria mandado TODOS los turnos programados por la rama del ensayo.
+          # El motor correria cada seis horas para no hacer nada, en verde y para
+          # siempre: el verde falso de siempre, esta vez cableado a proposito.
+          # Por eso se decide por el EVENTO, no por un input que en ese evento no
+          # esta.
+          EVENTO: ${{ github.event_name }}
+          ENSAYO_PEDIDO: ${{ inputs.ensayo }}
         run: |
           set -uo pipefail
-          if [ "${{ inputs.ensayo }}" = "false" ]; then
+          if [ "$EVENTO" = "schedule" ]; then
+            echo "Turno programado: actua de verdad."
+            uv run sirius-supervisar
+          elif [ "$ENSAYO_PEDIDO" = "false" ]; then
+            echo "Turno a mano con el interruptor puesto: actua de verdad."
             uv run sirius-supervisar
           else
+            echo "Ensayo: no se supervisa nada."
             uv run sirius-supervisar --ensayo
           fi
 
