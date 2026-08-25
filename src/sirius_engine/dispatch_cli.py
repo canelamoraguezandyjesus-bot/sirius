@@ -39,7 +39,7 @@ from sirius_engine.adapters.github_cli_writer import GitHubCliWriter, MissingCre
 from sirius_engine.adapters.memory_dispatch_journal import InMemoryDispatchJournal
 from sirius_engine.adapters.memory_store import InMemoryWorkEngineStore
 from sirius_engine.cli import REPO, resolver_diario
-from sirius_engine.dispatcher import dispatch_work_item
+from sirius_engine.dispatcher import TABLA_ACTIVACION, dispatch_work_item
 from sirius_engine.domain.authority import autoridad_de_clase
 from sirius_engine.domain.dispatch import MARCADOR_ORDEN_PROPIETARIO
 from sirius_engine.domain.work_item import WorkItemClass
@@ -173,6 +173,33 @@ def main(
         linea("hoy es un apaño provisional (ADR-043) que reconoce pocos verbos: para")
         linea("programación, «corrige» o «implementa» al principio de la frase.")
         return 2
+
+    # H-17 (incidencia #308): el despachador solo atiende las clases de
+    # TABLA_ACTIVACION -«programacion» y «auditoria», la tabla cerrada del
+    # contrato §12.4-. Antes esta comprobación llegaba tarde: aplicar_decision
+    # ya había creado y activado el WorkItem, y dispatch_work_item levantaba
+    # ClaseNoDespachableError SIN capturar, así que el proceso terminaba con
+    # una traza y el WorkItem quedaba ACTIVE en el diario durable, huérfano
+    # -ningún despachador atiende esa clase-. Repetir la orden no lo
+    # idempotía: el work_id nace del instante, así que cada intento escribía
+    # OTRO WorkItem huérfano y las entradas se acumulaban sin límite en un
+    # diario append-only. Se comprueba aquí, contra la clase que YA se conoce
+    # sin haber tocado ningún almacén, para que el rechazo ocurra antes de
+    # crear nada -no después, cerrando lo ya creado.
+    if (
+        decision.resultado is ResultadoPuerta.CREAR_Y_ACTIVAR
+        and decision.datos_trabajo is not None
+        and decision.datos_trabajo.clase not in TABLA_ACTIVACION
+    ):
+        clase = decision.datos_trabajo.clase.value
+        linea("No he creado nada.")
+        linea(f"  Motivo: el despachador no gestiona la clase «{clase}»")
+        linea("")
+        linea("Solo las clases «programacion» y «auditoria» tienen despachador (contrato")
+        linea("§12.4). Crear el WorkItem para una orden de una clase que nunca se va a")
+        linea("despachar dejaría trabajo ACTIVE huérfano en el diario, así que el rechazo")
+        linea("ocurre antes de escribir nada.")
+        return 5
 
     # Un ENSAYO no persiste nada. Si usara el almacén durable dejaría un
     # WorkItem ACTIVE que nadie va a despachar: exactamente el estado
