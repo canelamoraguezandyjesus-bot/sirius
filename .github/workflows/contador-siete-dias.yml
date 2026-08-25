@@ -1,0 +1,198 @@
+name: Contador de los siete días
+
+# EL CUARTO CABLE QUE FALTABA. `sirius-racha` (D1a+D1b, incidencia #268) ejecuta
+# la pasada diaria del verificador de proyección, añade sus líneas al registro y
+# evalúa la racha que el contrato §11.2 exige para conmutar una clase. Está
+# construido, probado y con tres ADR escritos sobre él (074, 077, 084) — y
+# **no lo llamaba nadie**. Comprobado el 25-08-2026 buscando en todo el árbol:
+# ni un `schedule`, ni un `workflow_dispatch`, ni un script.
+#
+# ADR-074 lo dejó dicho a propósito, no por olvido: «engancharlo a un reloj es un
+# acto aparte», prohibido dentro de aquel bloque por ADR-002. Este fichero ES ese
+# acto, y solo puede escribirlo una sesión interactiva con la puerta de
+# `.github/**` abierta por el propietario.
+#
+# Es la CUARTA pieza correcta a la que no llamaba nadie en este repositorio:
+# antes fueron el despachador (C2), H-13 y el propio supervisor (D2).
+#
+# ---------------------------------------------------------------------------
+# POR QUÉ 03:24 UTC, Y POR QUÉ NO SE ELIGE A OJO
+#
+# La hora la DERIVA el propio comando: `sirius-racha --hora-recomendada` lee los
+# `schedule: cron:` reales de este directorio, busca el mayor hueco libre de
+# disparos periódicos y devuelve su punto medio. Medido el 25-08-2026:
+#
+#     03:24 UTC — punto medio del mayor hueco libre (345 min, tras las 00:32)
+#
+# No es una preferencia estética. El cierre de #265 midió que un día solo puede
+# salir VERDE si nada se movió durante la ventana de tolerancia previa a la
+# pasada; con etiquetas más frescas que esa ventana, el verificador no puede
+# distinguir una divergencia real de una etiqueta que aún no ha aterrizado.
+#
+# EL MARGEN ES DE DOS MINUTOS, y conviene que se lea en voz alta:
+#
+#     tolerancia   = max(timeout-minutes de TODOS los jobs) x 2 = 85 x 2 = 170 min
+#     tranquilidad = 00:32 -> 03:24                              = 172 min
+#
+# Dos minutos. **Si alguien sube cualquier `timeout-minutes` de 85 a 87, la
+# tolerancia pasa a 174 y NINGUNA hora del día produce días verdes**: D1 deja de
+# ser alcanzable y, sin guardián, lo haría en silencio — la racha simplemente no
+# se completaría nunca y nadie sabría por qué.
+# `tests/automation/test_contador_de_siete_dias.py` existe para que eso salga en
+# ROJO en vez de en silencio, y para que este comentario no pueda mentir.
+#
+# Por eso el `timeout-minutes` de abajo es 15 y NO puede subir de 85: el tope de
+# este mismo job entra en el cálculo de la tolerancia que decide si su propia
+# hora sirve. Subirlo sería el trabajo mordiéndose la cola.
+#
+# ---------------------------------------------------------------------------
+# POR QUÉ COMPARTE GRUPO DE CONCURRENCIA CON EL MOTOR, y no es cautela de más:
+# `sirius-racha` construye un `DurableWorkEngineStore` sobre el diario del motor,
+# y **construirlo puede ESCRIBIR**. Al reproducir el diario, el almacén reconcilia
+# los cortes por presupuesto que quedaron a medias, y esa reconciliación anexa
+# eventos (`work_item_budget_cutoff_abandoned` desde ADR-092, o la cascada entera
+# antes de eso). Abrir el diario para «solo leer» no es solo leer. Dos
+# invocaciones simultáneas sobre él se pisan -medido en
+# `tests/engine/test_exclusion_entre_invocaciones.py`-, así que este workflow
+# entra en el MISMO grupo global que `motor-sirius.yml` y `despachar-orden.yml`.
+#
+# LO QUE ESTE WORKFLOW NO HACE, y está escrito para que nadie lo suponga: **no
+# conmuta nada**. El contrato §11.3 reserva la conmutación de autoridad a un acto
+# explícito del propietario. Aquí solo se mide y se registra. `sirius-racha`
+# devuelve 0 tanto si la racha CUMPLE como si no: su verde significa «la pasada
+# se hizo», nunca «los siete días están».
+
+on:
+  schedule:
+    # 03:24 UTC, derivado — ver la cabecera. No tocar sin volver a derivarlo con
+    # `uv run sirius-racha --hora-recomendada`.
+    - cron: '24 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  # MISMO grupo que el motor y el despachador, a propósito. Ver la cabecera.
+  group: motor-sirius
+  cancel-in-progress: false
+
+# `contents: write` para confirmar el registro en la rama de memoria (ADR-083).
+# No hay `issues: write` porque este comando no escribe en ninguna incidencia:
+# solo LEE el espejo por `gh`, y darlo sería un permiso que nadie usa.
+permissions:
+  contents: write
+
+jobs:
+  pasada:
+    name: Dar la pasada diaria
+    runs-on: ubuntu-latest
+    # NO SUBIR DE 85. Ver la cabecera: este número entra en la tolerancia que
+    # decide si la hora de este mismo workflow puede producir días verdes.
+    timeout-minutes: 15
+    env:
+      RAMA_MEMORIA: estado-del-motor
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # La pasada confirma el registro en la rama de memoria, así que
+          # necesita credenciales que persistan para el `git push` final.
+          persist-credentials: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+          # El paquete exige `>=3.14,<3.15`. Con el `python3` del sistema
+          # (3.12 en `ubuntu-latest`) el comando no arranca: familia de H-13.
+          python-version: "3.14.6"
+
+      - name: Sync environment
+        run: uv sync --locked --all-groups
+
+      - name: Traer la memoria del motor
+        env:
+          # `env:` de PASO: aquí `runner` SÍ está resuelto. Se declara en cada
+          # paso que la use, y no por `$GITHUB_ENV`, por la misma razón que en
+          # `motor-sirius.yml`: el paso que confirma lleva `if: always()`.
+          MEMORIA: ${{ runner.temp }}/memoria
+        run: |
+          set -uo pipefail
+          git config user.name "sirius-motor"
+          git config user.email "canelamoraguezandyjesus@gmail.com"
+
+          # Se ramifica por el CÓDIGO de `ls-remote`, no por su signo: 2 es "el
+          # remoto contestó y la rama no está" y 128 es "no pude hablar con el
+          # remoto". Colapsarlos crearía una rama huérfana VACÍA por un corte de
+          # red, y la pasada mediría contra un diario en blanco -es decir,
+          # registraría un día sin nada que medir como si el mundo estuviera
+          # sano-.
+          codigo=0
+          git ls-remote --exit-code --heads origin "$RAMA_MEMORIA" >/dev/null || codigo=$?
+          case "$codigo" in
+            0)
+              git fetch --depth=1 origin "$RAMA_MEMORIA"
+              git worktree add "$MEMORIA" "origin/$RAMA_MEMORIA"
+              ;;
+            2)
+              echo "La rama $RAMA_MEMORIA no existe todavía; se crea vacía."
+              git worktree add --orphan -b "$RAMA_MEMORIA" "$MEMORIA"
+              ;;
+            *)
+              echo "::error::no se pudo consultar el remoto (ls-remote salió con $codigo)." >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Dar la pasada
+        env:
+          # `gh` es quien lee el espejo (`GitHubCliMirrorReader`), y sin token no
+          # lee nada. Ojo: una lectura caída NO rompe la pasada -el comando lo
+          # declara y sigue, ADR-084- así que un token ausente daría una pasada
+          # VERDE que no mide nada. Es el modo de fallo silencioso de esta pieza.
+          GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
+          SIRIUS_MOTOR_DIARIO: ${{ runner.temp }}/memoria/diario.jsonl
+          MEMORIA: ${{ runner.temp }}/memoria
+        run: |
+          set -uo pipefail
+          # El registro vive en la RAMA DE MEMORIA, no en `main` (ADR-093, que
+          # afina ADR-074): `main` exige pull request desde el ruleset del
+          # 24-08-2026, y un registro que se quedara en una PR sin fusionar haría
+          # que la pasada siguiente contara sobre un historial viejo. Es el mismo
+          # razonamiento por el que el diario del motor se mudó allí (ADR-083),
+          # y por el mismo motivo: no es lento, sería incorrecto.
+          uv run sirius-racha --registro "$MEMORIA/racha_siete_dias.jsonl"
+
+      - name: Confirmar el registro
+        # Se ejecuta aunque la pasada falle: si llegó a añadir líneas y luego
+        # murió, esas líneas ya están escritas y perderlas sería peor que el
+        # propio fallo. Una pasada sin líneas nuevas no confirma nada.
+        if: always()
+        env:
+          MEMORIA: ${{ runner.temp }}/memoria
+        run: |
+          set -uo pipefail
+          if [ ! -d "$MEMORIA" ]; then
+            echo "No se llegó a preparar la memoria; no hay nada que confirmar."
+            exit 0
+          fi
+          cd "$MEMORIA"
+
+          # Se mira el CÓDIGO de `git status`, no su salida: una salida vacía
+          # porque el comando reventó se leería como "no hay líneas nuevas" y
+          # este paso saldría en VERDE tirando la medición del día.
+          if ! estado=$(git status --porcelain); then
+            echo "::error::no se pudo leer el estado de la memoria; esto NO es una pasada sin líneas." >&2
+            exit 1
+          fi
+          if [ -z "$estado" ]; then
+            echo "La pasada no registró ninguna línea nueva."
+            echo "No es un fallo: un trabajo cuya incidencia no se pudo leer, o que"
+            echo "todavía no tiene autoridad de incidencia, no produce línea a propósito."
+            exit 0
+          fi
+          git add -A
+          git commit -m "Pasada del contador del $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          # Sin reintento ni rebase: el grupo de concurrencia garantiza que no
+          # hay otra invocación empujando a la vez. Si esto falla, esa garantía
+          # no se cumplió, y eso hay que verlo en rojo.
+          git push origin "HEAD:refs/heads/$RAMA_MEMORIA"
