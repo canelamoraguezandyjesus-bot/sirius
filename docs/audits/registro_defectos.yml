@@ -211,8 +211,9 @@ defectos:
     titulo: El intérprete de intención compara marcadores por subcadena sin frontera de palabra, y esa raíz produce al menos tres fallos distintos
     bloque: ciclo
     gravedad: alta
-    estado: abierto
+    estado: cerrado
     incidencia: 318
+    cerrado_por: ea0842bab58bd0ed2f91575001051e87e68e93dd
     ficheros:
       - src/sirius_engine/intent_interpreter.py
       - tests/engine/test_intent_interpreter.py
@@ -231,8 +232,9 @@ defectos:
     titulo: El almacén presume de no releer el diario por escritura frente al spike de S1, y lo relee entero en cada anexo
     bloque: motor
     gravedad: media
-    estado: abierto
+    estado: cerrado
     incidencia: 321
+    cerrado_por: a426dc665977b327feae818c76b94391cd8f9ad5
     ficheros:
       - src/sirius_engine/adapters/durable/journal.py
       - src/sirius_engine/adapters/durable/store.py
