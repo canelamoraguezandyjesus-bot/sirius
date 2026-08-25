@@ -97,10 +97,15 @@ bloques:
 
   - id: C2
     titulo: Una orden tuya y no tocas GitHub hasta «fusiona»
-    estado: en_curso
-    que_lo_cerraria: que el despachador publique la incidencia él, y el encargo quede en el diario
-    medido_hoy: el comando existe y funciona; su cableado era la frontera declarada del bloque
-    en_marcha: PR #331, despachar-orden.yml
+    estado: cerrado
+    evidencia: >-
+      Ejecutado en el servidor el 25-08-2026, run 32860766536 (ensayo) y el
+      siguiente con `ejecutar: true`. El despachador publicó la incidencia #333
+      él mismo -etiqueta `sirius:implementing` a los 40 segundos, sin fallar la
+      puerta de activación- y anotó el encargo en el diario: WI-20260825-144242
+      pasa de `planned` a `active` en `diario.jsonl`, y `diario-despacho.jsonl`
+      guarda su episodio con el número de incidencia. La rama `estado-del-motor`
+      NACIÓ en ese push (commit c0c905b): antes no existía.
 
   - id: C3
     titulo: El mismo ciclo para documentos
