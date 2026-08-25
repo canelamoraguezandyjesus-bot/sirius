@@ -1,0 +1,144 @@
+# EL REGISTRO DE LOS BLOQUES DEL MOTOR
+#
+# Este fichero existe por una frase del propietario, el 25-08-2026:
+# «empezamos construyendo el bloque, diciendo que está terminado, hablando de
+# bloques, y al final no está terminado».
+#
+# Y por un malentendido concreto: le dijeron «están todos los bloques hechos» y
+# era VERDAD -de los 16 bloques del PRODUCTO, cerrados el 10-08-2026-. Él lo
+# entendió como todo, porque nadie dijo de qué lista se hablaba. Hay dos listas
+# y se llaman igual, y hasta comparten un identificador: `B1` es un bloque del
+# producto Y un bloque del motor, dos cosas distintas.
+#
+# Por eso aquí NO se dice «los bloques». Se dice «los bloques del motor», y sus
+# identificadores van siempre con ese apellido.
+#
+# REGLA: `estado: cerrado` exige `evidencia`, y la evidencia es una comprobación
+# que alguien puede repetir -no una afirmación-. Lo hace cumplir
+# `tests/automation/test_registro_de_bloques.py`, igual que ADR-080 hace con el
+# registro de defectos.
+#
+# Estados: cerrado | en_curso | pendiente | fuera_de_alcance
+# Medido el 25-08-2026 sobre `main`. Las fechas de los cerrados vienen de la
+# foto del 21-08; lo demás se midió hoy, comando a comando.
+
+lista: bloques-del-motor
+no_confundir_con: los 16 bloques del producto Sirius 0.1, cerrados el 10-08-2026
+
+bloques:
+  - id: E0
+    titulo: El permiso escrito para construir el motor
+    estado: cerrado
+    evidencia: fechado el 15-08-2026 en la foto DONDE_ESTAMOS_2026-08-21.md
+
+  - id: A1
+    titulo: Las reglas del juego, qué es un trabajo y qué saltos están prohibidos
+    estado: cerrado
+    evidencia: fechado el 17-08-2026; el dominio vive en src/sirius_engine/domain/
+
+  - id: S1
+    titulo: Experimento desechable, cómo guardar en disco sin perder ni duplicar
+    estado: cerrado
+    evidencia: fechado el 17-08-2026; su patrón es el del diario durable (ADR-026)
+
+  - id: A2
+    titulo: El motor ya no olvida al reiniciarse
+    estado: cerrado
+    evidencia: fechado el 18-08-2026; adapters/durable/store.py reproduce el diario al construirse
+
+  - id: A3
+    titulo: El motor ya puede mirar GitHub, sin tocar nada
+    estado: cerrado
+    evidencia: fechado el 18-08-2026; adapters/github_actions_run_observer.py
+
+  - id: A4
+    titulo: Qué puede y qué no puede hacer cada rol, y la barrera de salida de datos
+    estado: cerrado
+    evidencia: fechado el 19-08-2026
+
+  - id: E1a
+    titulo: Quién manda sobre cada tipo de trabajo, contrato v1.7
+    estado: cerrado
+    evidencia: fechado el 19-08-2026; domain/authority.py es función total sobre WorkItemClass
+
+  - id: A5
+    titulo: Distinguir charla de orden, presupuesto con corte, escalado al propietario
+    estado: cerrado
+    evidencia: fechado el 21-08-2026; intent_interpreter.py y gate.py, reforzados por H-19 el 25-08
+
+  - id: S2
+    titulo: Probar si el investigador externo funciona y qué cuesta
+    estado: pendiente
+    que_lo_cerraria: una medición del coste y del resultado con un investigador real
+    medido_hoy: no existe ningún adaptador de investigación en src/sirius_engine/adapters/
+
+  - id: B1
+    titulo: Que Sirius investigue de verdad desde una orden
+    estado: pendiente
+    depende_de: S2
+    que_lo_cerraria: que una orden de clase investigacion produzca un resultado
+    medido_hoy: la clase `investigacion` no está en TABLA_ACTIVACION, así que ni se despacha
+    ojo: este B1 es del MOTOR y no tiene nada que ver con el B1 del producto
+
+  - id: E1b
+    titulo: Contrato v1.8, permitir al motor activar y vigilar
+    estado: cerrado
+    evidencia: AUTOMATION_OPERATING_CONTRACT.md incluye §11.2, §11.3, §11.4 y §12.4
+
+  - id: S3
+    titulo: Medir cuándo GitHub dice que algo terminó
+    estado: cerrado
+    evidencia: adapters/github_actions_run_probe.py y su observador, usados por la supervisión
+
+  - id: C1
+    titulo: Que el motor desatasque solo lo que se cuelga
+    estado: cerrado
+    evidencia: recovery.py y supervisor.py, invocados por `sirius-supervisar` desde motor-sirius.yml
+
+  - id: C2
+    titulo: Una orden tuya y no tocas GitHub hasta «fusiona»
+    estado: en_curso
+    que_lo_cerraria: que el despachador publique la incidencia él, y el encargo quede en el diario
+    medido_hoy: el comando existe y funciona; su cableado era la frontera declarada del bloque
+    en_marcha: PR #331, despachar-orden.yml
+
+  - id: C3
+    titulo: El mismo ciclo para documentos
+    estado: pendiente
+    depende_de: C2
+    que_lo_cerraria: que una orden de clase documentacion dé una vuelta completa
+    medido_hoy: >-
+      los dos agentes están escritos y no los llama nadie -prompts/documentalista.md
+      y prompts/revisor-documental.md, cero referencias en workflows y en scripts- y
+      la clase `documentacion` no está en TABLA_ACTIVACION
+
+  - id: C4
+    titulo: La auditoría dentro del motor
+    estado: cerrado
+    evidencia: la clase `auditoria` está en TABLA_ACTIVACION y audit-sirius-repository.yml la atiende
+
+  - id: D1
+    titulo: Pasar el mando de GitHub al motor, clase por clase
+    estado: pendiente
+    que_lo_cerraria: siete días consecutivos en verde por clase (contrato §11.2)
+    medido_hoy: >-
+      sus tres mitades existen -projection_verifier.py (D1a), seven_day_streak.py (D1b)
+      y authority_reversion.py (D1c)- pero authority_reversion NO LO LLAMA NADIE fuera
+      de sus propias pruebas. Es la salida de emergencia del §11.4: lo que devolvería
+      el mando si el motor se porta mal. Construida, probada e inalcanzable.
+
+  - id: D2
+    titulo: Que el motor corra solo, siempre
+    estado: en_curso
+    que_lo_cerraria: un horario, y un turno real que anote algo en el diario
+    medido_hoy: >-
+      arranca y su camino de escritura está probado por ejecución (ADR-083), pero
+      motor-sirius.yml solo tiene workflow_dispatch: no corre solo
+
+  - id: D3
+    titulo: Hablar con Sirius por Telegram
+    estado: fuera_de_alcance
+    medido_hoy: >-
+      declarado fuera del alcance aprobado ya en la foto del 21-08. Y el 25-08 el
+      propietario decidió que su centro de mando es la sesión interactiva, así que
+      este bloque no resuelve ningún problema que tenga hoy.
