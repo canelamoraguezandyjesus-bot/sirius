@@ -217,6 +217,7 @@ def main(
     ventana_tolerancia = ventana_tolerancia_etiqueta_maquina(workflows_dir)
 
     lineas_nuevas = []
+    lecturas_caidas_por_clase: dict[WorkItemClass, list[str]] = {}
     for work_id in _work_ids_conocidos(store):
         item = store.get_work_item(work_id)
         if item is None or item.estado in TERMINAL_STATES:
@@ -235,6 +236,9 @@ def main(
             linea(
                 f"  {work_id}: no pude leer la incidencia #{episodio.numero_incidencia} "
                 f"({error}). No se registra línea esta pasada: no es que no hubiera nada."
+            )
+            lecturas_caidas_por_clase.setdefault(item.clase, []).append(
+                f"{work_id} (incidencia #{episodio.numero_incidencia})"
             )
             continue
         lineas_nuevas.append(
@@ -265,7 +269,11 @@ def main(
         if autoridad_de_clase(clase) is not Autoridad.INCIDENCIA:
             continue
         evaluacion = evaluar_racha(
-            lineas=lineas_totales, eventos=eventos, clase=clase, hoy=ahora.date()
+            lineas=lineas_totales,
+            eventos=eventos,
+            clase=clase,
+            hoy=ahora.date(),
+            lecturas_caidas_hoy=tuple(lecturas_caidas_por_clase.get(clase, ())),
         )
         estado = "CUMPLE" if evaluacion.cumple else "no cumple"
         linea(f"{clase.value} ({DIAS_REQUERIDOS} días requeridos): {estado} — {evaluacion.motivo}")

@@ -315,6 +315,7 @@ def evaluar_racha(
     clase: WorkItemClass,
     hoy: date,
     dias_requeridos: int = DIAS_REQUERIDOS,
+    lecturas_caidas_hoy: Sequence[str] = (),
 ) -> EvaluacionRacha:
     """Cuenta la racha vigente de ``clase`` hacia atrás desde ``hoy``, sin conmutar nada.
 
@@ -332,6 +333,17 @@ def evaluar_racha(
     rompe ahí: el contador nunca mira más allá de esa frontera, así que un
     día verde ANTES de una racha rota no la resucita (requisito 1: el
     contador sabe volver a cero).
+
+    ``lecturas_caidas_hoy`` son descripciones, ya formadas por quien invoca,
+    de qué no se pudo leer en la PASADA que llama a esta función -esta
+    función solo ve el registro histórico (``lineas``) y el diario de
+    eventos (``eventos``), ninguno de los cuales guarda una lectura caída
+    (ADR-036: una lectura caída no deja línea, así que no hay nada de lo que
+    derivarla aquí). El contrato §11.2 clasifica un fallo de un servicio
+    externo como avería operativa -no como discrepancia, que es lo único que
+    la condición mide- así que no rompe la racha (ADR-084); pero se declara
+    en ``motivo`` para que un ``CUMPLE`` nunca calle que esta pasada tuvo
+    lecturas caídas.
     """
     lineas_clase = [linea for linea in lineas if linea.clase is clase]
     por_dia: dict[date, list[LineaRegistro]] = {}
@@ -376,6 +388,11 @@ def evaluar_racha(
             f"{dias_consecutivos} días naturales consecutivos en verde hasta "
             f"{hoy.isoformat()} (>= {dias_requeridos} requeridos), sin corrección manual "
             "detectada"
+        )
+    if lecturas_caidas_hoy:
+        motivo = (
+            f"{motivo} — aviso: esta pasada no pudo leer "
+            f"{', '.join(lecturas_caidas_hoy)} (no interrumpe el contador, contrato §11.2)"
         )
     return EvaluacionRacha(
         clase=clase, cumple=cumple, dias_consecutivos=dias_consecutivos, motivo=motivo

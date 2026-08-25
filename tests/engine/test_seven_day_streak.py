@@ -404,6 +404,42 @@ def test_motivo_de_incumplimiento_es_especifico_no_un_booleano_suelto() -> None:
     assert str(evaluacion.cumple) not in evaluacion.motivo  # no es solo "False" repetido
 
 
+def test_evaluar_racha_declara_lecturas_caidas_hoy_sin_interrumpir_el_contador() -> None:
+    """Incidencia #313: una lectura caída de esta pasada no rompe una racha ya registrada.
+
+    El contrato §11.2 clasifica un fallo de un servicio externo como avería
+    operativa, no como discrepancia -lo único que la condición mide-, así que
+    no interrumpe el contador (ADR-084). Pero el motivo tiene que declararlo:
+    callarlo es el falso verde silencioso que motivó la incidencia.
+    """
+    dias = _rango(_HOY - timedelta(days=6), _HOY)
+    lineas = [_linea_verde(dia) for dia in dias]
+
+    evaluacion = evaluar_racha(
+        lineas=lineas,
+        eventos=(),
+        clase=_CLASE,
+        hoy=_HOY,
+        lecturas_caidas_hoy=("WI-B (incidencia #402)",),
+    )
+
+    assert evaluacion.cumple is True, (
+        "el contrato §11.2 no deja que una avería operativa rompa el contador"
+    )
+    assert evaluacion.dias_consecutivos == 7
+    assert "WI-B (incidencia #402)" in evaluacion.motivo
+    assert "no interrumpe el contador" in evaluacion.motivo
+
+
+def test_evaluar_racha_sin_lecturas_caidas_no_menciona_ningun_aviso() -> None:
+    dias = _rango(_HOY - timedelta(days=6), _HOY)
+    lineas = [_linea_verde(dia) for dia in dias]
+
+    evaluacion = evaluar_racha(lineas=lineas, eventos=(), clase=_CLASE, hoy=_HOY)
+
+    assert "no interrumpe el contador" not in evaluacion.motivo
+
+
 # --- 6. Ninguna ruta del contador conmuta nada ------------------------------
 
 
