@@ -42,13 +42,36 @@ name: Motor de Sirius
 # `tests/automation/test_serializacion_del_motor.py` rompe si algo de esto se
 # afloja.
 #
-# SIN HORARIO, A PROPÓSITO Y DE MOMENTO. Esta primera vuelta solo se dispara a
-# mano. Un motor que empieza a correr solo antes de que nadie le haya visto dar
-# un turno es cómo se rompen las cosas de madrugada. La cadencia es la decisión
-# siguiente, y necesita medir antes cómo convive con `reconcile-sirius-states`,
-# que hoy barre estados atascados cada seis horas.
+# CON HORARIO DESDE EL 25-08-2026 (D2, ADR-090). La cautela de antes decía:
+# «un motor que empieza a correr solo antes de que nadie le haya visto dar un
+# turno es cómo se rompen las cosas de madrugada». Ya se le ha visto: dio turnos
+# a mano, su camino de escritura está probado por ejecución (ADR-083) y su
+# diario dejó de estar vacío cuando el despachador anotó su primer encargo
+# (ADR-086).
+#
+# LA CADENCIA, Y POR QUÉ ESE MINUTO. `reconcile-sirius-states` barre estados
+# atascados a `17 */6 * * *`. El motor corre TREINTA MINUTOS DESPUÉS, a
+# `47 */6 * * *`, y el desfase no es estético: el reconciliador repara estados
+# que ningún evento puede ya revivir, así que dejarle asentar el mundo antes de
+# que el motor lo mire evita que el motor razone sobre un estado que está a
+# punto de cambiar. Primero se asienta, luego se supervisa.
+#
+# NO COMPARTEN CANDADO, Y NO HACE FALTA: son grupos de concurrencia distintos,
+# pero no escriben lo mismo. El reconciliador escribe ETIQUETAS; el motor
+# escribe SU DIARIO, y no lleva `issues: write` -ver el bloque `permissions`-.
+# Lo que sí comparte candado el motor es el despachador (ADR-086), porque esos
+# dos sí escriben el mismo diario.
+#
+# CADA SEIS HORAS Y NO MÁS: hoy el diario tiene un encargo. El valor de un turno
+# es proporcional al trabajo en vuelo, y subir la frecuencia antes de tener ese
+# trabajo es gastar minutos de Actions en mirar un mundo quieto. Se sube cuando
+# haya algo que mirar, no antes.
 
 on:
+  # Treinta minutos después del reconciliador (`17 */6 * * *`), a propósito:
+  # que asiente el mundo antes de que el motor lo mire. Ver la cabecera.
+  schedule:
+    - cron: '47 */6 * * *'
   workflow_dispatch:
     inputs:
       ensayo:
@@ -166,11 +189,26 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Aqui `runner` SI esta resuelto: es el `env:` de un paso, no de un trabajo.
           SIRIUS_MOTOR_DIARIO: ${{ runner.temp }}/memoria/diario.jsonl
+          # UN TURNO PROGRAMADO ACTUA SIEMPRE, y hace falta decirlo aparte.
+          # `inputs.ensayo` NO EXISTE en un evento `schedule`: se expande a la
+          # cadena vacia, y `"" = "false"` es falso, asi que la comparacion sola
+          # habria mandado TODOS los turnos programados por la rama del ensayo.
+          # El motor correria cada seis horas para no hacer nada, en verde y para
+          # siempre: el verde falso de siempre, esta vez cableado a proposito.
+          # Por eso se decide por el EVENTO, no por un input que en ese evento no
+          # esta.
+          EVENTO: ${{ github.event_name }}
+          ENSAYO_PEDIDO: ${{ inputs.ensayo }}
         run: |
           set -uo pipefail
-          if [ "${{ inputs.ensayo }}" = "false" ]; then
+          if [ "$EVENTO" = "schedule" ]; then
+            echo "Turno programado: actua de verdad."
+            uv run sirius-supervisar
+          elif [ "$ENSAYO_PEDIDO" = "false" ]; then
+            echo "Turno a mano con el interruptor puesto: actua de verdad."
             uv run sirius-supervisar
           else
+            echo "Ensayo: no se supervisa nada."
             uv run sirius-supervisar --ensayo
           fi
 

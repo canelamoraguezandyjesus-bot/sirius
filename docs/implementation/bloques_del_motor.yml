@@ -140,11 +140,19 @@ bloques:
 
   - id: D2
     titulo: Que el motor corra solo, siempre
-    estado: en_curso
-    que_lo_cerraria: un horario, y un turno real que anote algo en el diario
-    medido_hoy: >-
-      arranca y su camino de escritura está probado por ejecución (ADR-083), pero
-      motor-sirius.yml solo tiene workflow_dispatch: no corre solo
+    estado: cerrado
+    evidencia: >-
+      Horario puesto el 25-08-2026 (ADR-090): `47 */6 * * *`, treinta minutos
+      después del reconciliador (`17 */6 * * *`) para que asiente el mundo antes
+      de que el motor lo mire. Las dos condiciones que faltaban se cumplieron
+      antes: el camino de escritura probado por ejecución (ADR-083) y el diario
+      con un encargo real dentro, anotado por el despachador (ADR-086) -sin eso
+      el horario habría sido un gasto vigilando un mundo vacío-. Y se cazó un
+      defecto ANTES de entrar: `inputs.ensayo` no existe en un evento
+      `schedule`, así que todos los turnos programados se habrían ido al ensayo,
+      en verde y para siempre. La rama se decide ahora por el evento, y
+      `tests/automation/test_turno_programado_actua.py` EJECUTA el guión real
+      con las cuatro combinaciones; devolviéndole el condicional viejo, falla.
 
   - id: D3
     titulo: Hablar con Sirius por Telegram
