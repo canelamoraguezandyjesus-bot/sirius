@@ -185,3 +185,13 @@ defectos:
     ficheros:
       - .github/workflows/motor-sirius.yml
       - tests/automation/test_expresiones_de_workflow.py
+
+  - id: H-17
+    titulo: Una orden rechazada por clase no despachable deja igualmente el WorkItem en el diario, en active y para siempre
+    bloque: D2
+    gravedad: media
+    estado: abierto
+    incidencia: 308
+    ficheros:
+      - src/sirius_engine/dispatch_cli.py
+      - tests/engine/test_dispatch_cli.py
