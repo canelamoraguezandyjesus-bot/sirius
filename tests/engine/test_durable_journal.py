@@ -35,11 +35,15 @@ from sirius_engine.adapters.durable.journal import (
     replay,
 )
 from sirius_engine.adapters.durable.store import DurableWorkEngineStore
+from sirius_engine.adapters.memory_store import InMemoryWorkEngineStore
+from sirius_engine.domain.budget import Budget
 from sirius_engine.domain.events import AggregateType
 from sirius_engine.domain.run import CancellationStatus, Run
 from sirius_engine.domain.run import prepare as prepare_run
-from sirius_engine.domain.work_item import WorkItemClass, WorkItemState
+from sirius_engine.domain.work_item import WorkItem, WorkItemClass, WorkItemState
 from sirius_engine.domain.worker_ref import WorkerRef
+from sirius_engine.governance import registrar_gasto
+from sirius_engine.ports.store import WorkEngineStore
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _NOW = datetime(2026, 8, 18, 12, 0, tzinfo=UTC)
@@ -1341,4 +1345,89 @@ def test_cada_anexo_salvo_el_primero_relee_el_diario_entero_h21(
         f"{anexos_totales} anexos (H-21); si este numero baja, alguien dejo de releer "
         "el diario entero en cada anexo y el docstring de DurableWorkEngineStore "
         "necesitaria dejar de decir que si se relee"
+    )
+
+
+def _ejecutar_guion_de_corte_que_no_escala(store: WorkEngineStore, *, work_id: str) -> WorkItem:
+    """El guion de H-20: un corte por presupuesto que golpea un WorkItem en PAUSED.
+
+    ``PAUSED`` no está en ``ESTADOS_EN_CURSO``, así que
+    ``cancel_all_live_runs_and_escalate_work_item`` (invocada por
+    ``registrar_gasto`` al agotarse el presupuesto) cancela los Runs vivos
+    -ninguno aquí- pero no escala: devuelve ``cortado=True, escalada=None``
+    y el WorkItem sigue ``PAUSED``. El guion lo reactiva después, con un
+    ``now`` posterior, quedando ``ACTIVE`` dentro del mismo proceso tanto en
+    memoria como en el durable.
+    """
+    momento_del_corte = datetime(2026, 1, 1, tzinfo=UTC)
+    momento_de_reanudar = datetime(2026, 1, 2, tzinfo=UTC)
+    store.create_work_item(
+        work_id=work_id,
+        peticion_original="texto literal",
+        objetivo="objetivo",
+        contexto_origen=(),
+        entregable="entregable",
+        criterio_terminado="criterio",
+        limites={"presupuesto": {"limite": 10.0}},
+        prioridad=1,
+        clase=WorkItemClass.PROGRAMACION,
+        now=momento_del_corte,
+    )
+    store.activate_work_item(work_id, now=momento_del_corte)
+    store.pause_work_item(work_id, now=momento_del_corte)
+    resultado = registrar_gasto(
+        store,
+        work_id=work_id,
+        presupuesto=Budget(limite=10.0),
+        coste=10.0,
+        now=momento_del_corte,
+    )
+    assert resultado.cortado is True
+    assert resultado.escalada is None
+    assert resultado.work_item.estado is WorkItemState.PAUSED
+    store.resume_work_item(work_id, now=momento_de_reanudar)
+    work_item = store.get_work_item(work_id)
+    assert work_item is not None
+    return work_item
+
+
+def test_reabrir_el_diario_no_diverge_del_almacen_en_memoria_tras_un_corte_que_no_escalo(
+    tmp_path: Path,
+) -> None:
+    """H-20 (incidencia #321/#345): el mismo guion debe acabar igual en los dos almacenes.
+
+    ``cancel_all_live_runs_and_escalate_work_item`` anexa
+    ``work_item_budget_cutoff_started`` ANTES de comprobar si el WorkItem
+    está en curso; si no lo está -aquí, ``PAUSED``-, sale sin escalar y sin
+    anexar ningún ``work_item_escalated`` que limpie el marcador, que queda
+    pendiente para siempre. El almacén en memoria no tiene ese marcador ni
+    reconciliación al reabrir, así que el mismo guion lo deja en ``ACTIVE``
+    con la fecha de la reanudación. El durable, reabierto, encuentra el
+    marcador todavía pendiente y a un WorkItem que YA está ``ACTIVE`` (en
+    curso), así que ``_reconcile_pending_budget_cutoffs`` repite la cascada
+    con el ``now`` viejo del marcador y lo escala a ``NEEDS_DECISION`` con
+    la fecha del corte original, no la de la reanudación: mismo guion,
+    almacenes que dicen algo distinto.
+    """
+    work_id = "WI-H20-0001"
+    en_memoria = _ejecutar_guion_de_corte_que_no_escala(InMemoryWorkEngineStore(), work_id=work_id)
+
+    journal_path = tmp_path / "diario.jsonl"
+    durable = DurableWorkEngineStore(journal_path)
+    en_el_mismo_proceso = _ejecutar_guion_de_corte_que_no_escala(durable, work_id=work_id)
+    assert (en_el_mismo_proceso.estado, en_el_mismo_proceso.updated_at) == (
+        en_memoria.estado,
+        en_memoria.updated_at,
+    )
+
+    reabierto = DurableWorkEngineStore(journal_path)
+    tras_reabrir = reabierto.get_work_item(work_id)
+    assert tras_reabrir is not None
+    assert (tras_reabrir.estado, tras_reabrir.updated_at) == (
+        en_memoria.estado,
+        en_memoria.updated_at,
+    ), (
+        "el almacen durable diverge del almacen en memoria al reabrir el diario: "
+        f"memoria={en_memoria.estado.value}/{en_memoria.updated_at} "
+        f"durable tras reabrir={tras_reabrir.estado.value}/{tras_reabrir.updated_at}"
     )
