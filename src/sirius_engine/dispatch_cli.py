@@ -29,7 +29,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -39,7 +39,7 @@ from sirius_engine.adapters.github_cli_writer import GitHubCliWriter, MissingCre
 from sirius_engine.adapters.memory_dispatch_journal import InMemoryDispatchJournal
 from sirius_engine.adapters.memory_store import InMemoryWorkEngineStore
 from sirius_engine.cli import REPO, resolver_diario
-from sirius_engine.dispatcher import dispatch_work_item
+from sirius_engine.dispatcher import TABLA_ACTIVACION, dispatch_work_item
 from sirius_engine.domain.authority import autoridad_de_clase
 from sirius_engine.domain.dispatch import MARCADOR_ORDEN_PROPIETARIO
 from sirius_engine.domain.errors import ClaseNoDespachableError
@@ -108,6 +108,28 @@ def _diario_de_despacho(diario_del_motor: Path) -> Path:
     activación.
     """
     return diario_del_motor.with_name(f"{diario_del_motor.stem}-despacho.jsonl")
+
+
+def _informar_clase_no_despachable(
+    linea: Callable[[str], None], *, clase: str, work_id: str
+) -> int:
+    """El mensaje de rechazo por clase no despachable (§12.4), en un único sitio.
+
+    Lo comparten dos caminos: la comprobación temprana antes de construir
+    ``GitHubCliWriter`` en ``--ejecutar`` -que existe para no exigir una
+    credencial por una clase que de todas formas se iba a rechazar
+    (CODEX-001, incidencia #305, ronda 2)- y la guarda real de
+    ``dispatch_work_item`` que el ensayo sigue atravesando sin atajos (H-12).
+    Una sola fuente evita que los dos mensajes diverjan con el tiempo.
+    """
+    linea(f"No he despachado el trabajo: la clase «{clase}» todavía")
+    linea("no se despacha por esta vía.")
+    linea(f"  Trabajo: {work_id}")
+    linea(
+        "  El despachador solo entiende «programacion» y «auditoria» (contrato §12.4); "
+        "el resto tiene su propio bloque futuro."
+    )
+    return 5
 
 
 def _work_id(ahora: datetime) -> str:
@@ -246,6 +268,17 @@ def main(
 
     writer: GitHubWriterPort
     if args.ejecutar:
+        # La clase se rechaza ANTES de pedir credencial: si no lo hiciéramos
+        # así, una orden no despachable sin SIRIUS_BOT_TOKEN informaría solo
+        # de la credencial ausente (código 4) y nunca de que la clase tampoco
+        # se despacha (código 5) -el defecto real no llegaba a mostrarse
+        # porque la credencial lo tapaba primero (CODEX-001, incidencia #305,
+        # ronda 2). Para las clases que sí se despachan, la exigencia de
+        # credencial sigue intacta justo debajo.
+        if work_item.clase not in TABLA_ACTIVACION:
+            return _informar_clase_no_despachable(
+                linea, clase=work_item.clase.value, work_id=work_id
+            )
         try:
             writer = GitHubCliWriter()
         except MissingCredentialError as error:
@@ -278,14 +311,10 @@ def main(
         # guardas reales a propósito). Sin este `except`, la excepción del
         # dominio se colaba hasta reventar el proceso con una traza en vez de
         # decir, como las demás negativas de este comando, qué pasó y por qué.
-        linea(f"No he despachado el trabajo: la clase «{work_item.clase.value}» todavía")
-        linea("no se despacha por esta vía.")
-        linea(f"  Trabajo: {work_id}")
-        linea(
-            "  El despachador solo entiende «programacion» y «auditoria» (contrato §12.4); "
-            "el resto tiene su propio bloque futuro."
-        )
-        return 5
+        # En --ejecutar la comprobación de arriba ya la adelanta antes de
+        # pedir credencial; este `except` sigue siendo quien la atrapa en
+        # ensayo, y el respaldo si alguna vez divergieran las dos tablas.
+        return _informar_clase_no_despachable(linea, clase=work_item.clase.value, work_id=work_id)
     episodio = desenlace.episodio
     if not args.ejecutar:
         linea("ENSAYO: no se ha escrito nada en GitHub.")

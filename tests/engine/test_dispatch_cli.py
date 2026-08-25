@@ -216,32 +216,25 @@ def test_una_orden_de_documentacion_no_revienta_y_dice_que_no_se_despacha(
     assert not diario.exists()
 
 
-def test_una_orden_de_documentacion_no_revienta_ni_siquiera_al_ejecutar(
-    tmp_path: Path, monkeypatch: Any
-) -> None:
+def test_una_orden_de_documentacion_no_revienta_ni_siquiera_al_ejecutar(tmp_path: Path) -> None:
     """La misma guarda tiene que valer también fuera de ensayo (--ejecutar).
 
-    Con un escritor que sí "escribiría" (para no confundir esta guarda con la
-    de credencial ausente, que ya tiene su propio código de salida).
+    Sin monkeypatchear ``GitHubCliWriter`` y sin credencial en el entorno
+    (``_correr`` no pasa ``SIRIUS_BOT_TOKEN`` por defecto): si la clase se
+    comprobara DESPUÉS de construir el escritor real, esta orden fallaría por
+    credencial ausente (código 4, «No puedo escribir en GitHub») en vez de
+    por clase no despachable (código 5) -exactamente el defecto que una
+    prueba con un escritor doble, que se construye igual con o sin
+    credencial, no podía reproducir (CODEX-001, incidencia #305, ronda 2).
     """
-
-    class _EscritorQueNuncaDeberiaLlamarse:
-        def crear_incidencia(
-            self, *, repo: str, titulo: str, cuerpo: str, etiquetas: tuple[str, ...]
-        ) -> Any:
-            raise AssertionError("no debe escribirse nada para una clase no despachable")
-
-        def aplicar_etiqueta(self, *, repo: str, numero: int, etiqueta: str) -> None:
-            raise AssertionError("no debe escribirse nada para una clase no despachable")
-
-    monkeypatch.setattr(dispatch_cli, "GitHubCliWriter", lambda: _EscritorQueNuncaDeberiaLlamarse())
-
     diario = tmp_path / "diario.jsonl"
     codigo, texto = _correr(["Documenta el proceso de despliegue", "--ejecutar"], diario=diario)
 
-    assert codigo == 5
+    assert codigo == 5, texto
     assert "documentacion" in texto
     assert "no se despacha" in texto
+    assert "SIRIUS_BOT_TOKEN" not in texto
+    assert "No puedo escribir en GitHub" not in texto
 
 
 def test_una_auditoria_declara_el_perfil_auditor_y_no_el_implementador(tmp_path: Path) -> None:
