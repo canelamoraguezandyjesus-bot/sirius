@@ -137,13 +137,36 @@ def _extraer_paso_build_prompt() -> str:
 _HEREDOC_RE = re.compile(r"prompt<<SIRIUS_PROMPT_EOF\n(.*?\n)SIRIUS_PROMPT_EOF\n", re.DOTALL)
 
 
-def _prompt_real_del_workflow(*, repo: str, issue_number: int, tmp_path: Path) -> str:
+def _cuerpo_con_perfil(perfil: str) -> str:
+    """Un cuerpo de incidencia mínimo con su campo ``Perfil:``, como lo escribe el despachador.
+
+    Desde C3 (ADR-088) el workflow ELIGE el prompt leyendo ese campo, así que
+    ejecutar su guión sin cuerpo ya no reproduce nada: muere por variable no
+    definida. Dárselo aquí no es maquillar el fallo -es darle el mismo dato que
+    el `env:` del paso le da en producción.
+    """
+    return f"## Bloque\n\nENCARGO\n\nPerfil: {perfil}@1\n\n## Objetivo\n\nlo que sea\n"
+
+
+def _prompt_real_del_workflow(
+    *, repo: str, issue_number: int, tmp_path: Path, perfil: str = "implementer"
+) -> str:
     """Ejecutar el guión bash REAL del workflow (leído, no reescrito) y extraer su salida."""
     script = _extraer_paso_build_prompt()
-    output_path = tmp_path / "github_output.txt"
+    # Un fichero por invocación, y no por pulcritud: el guión ANEXA a
+    # `$GITHUB_OUTPUT`, así que dos llamadas sobre el mismo fichero hacen que la
+    # segunda lea el heredoc de la primera. Se descubrió porque una prueba que
+    # comparaba dos perfiles los vio idénticos: el fallo estaba en el arnés, no
+    # en el workflow.
+    output_path = tmp_path / f"github_output-{perfil}.txt"
     entorno = dict(os.environ)
     entorno.update(
-        {"GH_REPO": repo, "ISSUE_NUMBER": str(issue_number), "GITHUB_OUTPUT": str(output_path)}
+        {
+            "GH_REPO": repo,
+            "ISSUE_NUMBER": str(issue_number),
+            "GITHUB_OUTPUT": str(output_path),
+            "ISSUE_BODY": _cuerpo_con_perfil(perfil),
+        }
     )
     subprocess.run(
         ["bash", "-c", script],
@@ -157,6 +180,46 @@ def _prompt_real_del_workflow(*, repo: str, issue_number: int, tmp_path: Path) -
     match = _HEREDOC_RE.search(contenido)
     assert match is not None, f"no se pudo extraer el heredoc 'prompt' de:\n{contenido}"
     return match.group(1)
+
+
+def test_un_encargo_documental_ejecuta_el_prompt_documental_y_no_el_de_codigo(
+    tmp_path: Path,
+) -> None:
+    """C3 (ADR-088): el guión REAL elige por el campo `Perfil:`, no por costumbre.
+
+    Es la mitad del bloque que no se podía comprobar leyendo: hasta este cambio
+    el prompt estaba clavado a fuego, así que un encargo documental habría
+    ejecutado la vara del código -«una vuelta completa falsa», en palabras del
+    propio implementador cuando se negó a entregarlo-.
+    """
+    documental = _prompt_real_del_workflow(
+        repo="o/r", issue_number=1, tmp_path=tmp_path, perfil="documentalista"
+    )
+    de_codigo = _prompt_real_del_workflow(
+        repo="o/r", issue_number=1, tmp_path=tmp_path, perfil="implementer"
+    )
+
+    assert documental != de_codigo, "el perfil documental no puede recibir el prompt de código"
+    esperado = (_REPO_ROOT / "scripts/automation/prompts/documentalista.md").read_text(
+        encoding="utf-8"
+    )
+    assert esperado.strip() in documental, (
+        "el guión tiene que insertar documentalista.md, no solo nombrarlo"
+    )
+
+
+def test_un_perfil_desconocido_hace_fallar_el_guion_en_vez_de_elegir_uno(
+    tmp_path: Path,
+) -> None:
+    """Ni repliegue silencioso ni adivinar (ADR-088).
+
+    Un prompt elegido por descarte produce trabajo que PARECE hecho y publica su
+    veredicto como bueno. Cuesta más que un workflow en rojo.
+    """
+    with pytest.raises(subprocess.CalledProcessError):
+        _prompt_real_del_workflow(
+            repo="o/r", issue_number=1, tmp_path=tmp_path, perfil="perfil-que-no-existe"
+        )
 
 
 def test_la_proyeccion_del_perfil_implementer_reproduce_el_prompt_real_del_workflow(
