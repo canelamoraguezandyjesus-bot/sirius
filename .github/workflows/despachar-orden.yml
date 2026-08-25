@@ -1,0 +1,165 @@
+name: Despachar una orden
+
+# LA COSTURA QUE FALTABA. `sirius-despachar` convierte una orden del propietario
+# en una incidencia activada, y estaba construido y probado desde C2. Pero para
+# escribir en GitHub necesita `SIRIUS_BOT_TOKEN` y la herramienta `gh`, y ninguno
+# de los dos existe dentro de una sesión interactiva: el token vive aquí, en los
+# secretos de Actions. Resultado hasta hoy: la sesión generaba el cuerpo correcto
+# y luego publicaba la incidencia A MANO, por fuera del despachador.
+#
+# LO QUE ESO ROMPÍA, y no era la comodidad. Una incidencia creada a mano no pasa
+# por `dispatch_work_item`, así que **el encargo no se anota en el diario del
+# motor**. El ciclo arrancaba igual -va por etiquetas- pero el supervisor no
+# sabía que ese trabajo existía, y por tanto no podía rescatarlo si se atascaba.
+# El motor llevaba semanas vigilando un mundo vacío.
+#
+# QUIÉN DECIDE SIGUE SIENDO QUIEN DECIDÍA. Este workflow no elige despachar nada:
+# recibe el texto de una orden que ya salió del propietario a través de su sesión
+# interactiva, y le pone las manos. La automatización nunca crea trabajo por su
+# cuenta -que es lo que ADR-063 protege- y sigue sin poder tocar los workflows
+# que la gobiernan, que es lo que protege ADR-002.
+#
+# POR QUÉ COMPARTE GRUPO DE CONCURRENCIA CON `motor-sirius.yml`, y no es un
+# detalle: los dos escriben EL MISMO diario, en la misma rama. Dos invocaciones
+# simultáneas sobre ese diario crean el mismo trabajo dos veces, con la misma
+# clave de idempotencia y el mismo número de secuencia -está medido en
+# `tests/engine/test_exclusion_entre_invocaciones.py`, y el almacén es ciego a
+# todo lo que ocurra después de construirse-. Compartir el grupo `motor-sirius`
+# es lo único que garantiza que un despacho y un turno no coincidan nunca.
+# `tests/automation/test_serializacion_del_motor.py` se rompe si esto se afloja.
+
+on:
+  workflow_dispatch:
+    inputs:
+      orden:
+        description: "La orden, tal cual. Empieza por «Corrige» o «Implementa»."
+        type: string
+        required: true
+      ejecutar:
+        description: "Crear la incidencia de verdad. Sin marcar, solo ensaya."
+        type: boolean
+        default: false
+
+concurrency:
+  # MISMO grupo que el motor, a propósito. Ver la cabecera.
+  group: motor-sirius
+  cancel-in-progress: false
+
+# `contents: write` para confirmar el diario en la rama de memoria. La incidencia
+# NO se crea con este token: se crea con `SIRIUS_BOT_TOKEN` a través de `gh`, que
+# es la identidad que el contrato exige para escribir en la vía GitHub. Por eso
+# aquí no hay `issues: write`: darlo sería un permiso que nadie usa.
+permissions:
+  contents: write
+
+jobs:
+  despacho:
+    name: Despachar la orden
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RAMA_MEMORIA: estado-del-motor
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # El despacho confirma el diario, así que necesita credenciales que
+          # persistan para el `git push` del final.
+          persist-credentials: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+          # El paquete exige `>=3.14,<3.15`. Con el `python3` del sistema
+          # (3.12 en `ubuntu-latest`) el comando no arranca: familia de H-13.
+          python-version: "3.14.6"
+
+      - name: Sync environment
+        run: uv sync --locked --all-groups
+
+      - name: Traer la memoria del motor
+        env:
+          # `env:` de PASO: aquí `runner` SÍ está resuelto. Se declara en cada
+          # paso que la use, y no por `$GITHUB_ENV`, por la misma razón que en
+          # `motor-sirius.yml`: el paso que confirma lleva `if: always()`.
+          MEMORIA: ${{ runner.temp }}/memoria
+        run: |
+          set -uo pipefail
+          git config user.name "sirius-motor"
+          git config user.email "canelamoraguezandyjesus@gmail.com"
+
+          # Se ramifica por el CÓDIGO de `ls-remote`, no por su signo: 2 es "el
+          # remoto contestó y la rama no está" y 128 es "no pude hablar con el
+          # remoto". Colapsarlos crearía una rama huérfana VACÍA por un corte de
+          # red, y el despacho se anotaría sobre un diario en blanco.
+          codigo=0
+          git ls-remote --exit-code --heads origin "$RAMA_MEMORIA" >/dev/null || codigo=$?
+          case "$codigo" in
+            0)
+              git fetch --depth=1 origin "$RAMA_MEMORIA"
+              git worktree add "$MEMORIA" "origin/$RAMA_MEMORIA"
+              ;;
+            2)
+              echo "La rama $RAMA_MEMORIA no existe todavía; se crea vacía."
+              git worktree add --orphan -b "$RAMA_MEMORIA" "$MEMORIA"
+              ;;
+            *)
+              echo "::error::no se pudo consultar el remoto (ls-remote salió con $codigo)." >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Despachar
+        env:
+          # La credencial que el contrato exige para escribir en la vía GitHub.
+          SIRIUS_BOT_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
+          SIRIUS_MOTOR_DIARIO: ${{ runner.temp }}/memoria/diario.jsonl
+          # LA ORDEN VIAJA POR `env:`, NUNCA INTERPOLADA EN EL SCRIPT. Un
+          # `${{ inputs.orden }}` dentro del `run:` se sustituye ANTES de que
+          # bash lea nada, así que una orden con comillas, `$(...)` o acentos
+          # graves ejecutaría lo que llevara dentro con los permisos de este
+          # trabajo. Por `env:` el texto es un dato y no puede ser código.
+          ORDEN: ${{ inputs.orden }}
+          EJECUTAR: ${{ inputs.ejecutar }}
+        run: |
+          set -uo pipefail
+          if [ "$EJECUTAR" = "true" ]; then
+            uv run sirius-despachar "$ORDEN" --ejecutar
+          else
+            uv run sirius-despachar "$ORDEN"
+          fi
+
+      - name: Confirmar la memoria del motor
+        # Se ejecuta aunque el despacho falle: si llegó a crear el WorkItem y
+        # luego murió, esa línea ya está en el diario y perderla sería peor que
+        # el propio fallo. Un despacho sin cambios no confirma nada.
+        if: always()
+        env:
+          MEMORIA: ${{ runner.temp }}/memoria
+        run: |
+          set -uo pipefail
+          if [ ! -d "$MEMORIA" ]; then
+            echo "No se llegó a preparar la memoria; no hay nada que confirmar."
+            exit 0
+          fi
+          cd "$MEMORIA"
+
+          # Se mira el CÓDIGO de `git status`, no su salida: una salida vacía
+          # porque el comando reventó se leería como "no hay cambios" y este
+          # paso saldría en VERDE tirando el diario.
+          if ! estado=$(git status --porcelain); then
+            echo "::error::no se pudo leer el estado de la memoria; esto NO es un despacho sin cambios." >&2
+            exit 1
+          fi
+          if [ -z "$estado" ]; then
+            echo "El despacho no anotó nada (ensayo, o la orden no creó trabajo)."
+            exit 0
+          fi
+          git add -A
+          git commit -m "Despacho del $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          # Sin reintento ni rebase: el grupo de concurrencia garantiza que no
+          # hay otra invocación empujando a la vez. Si esto falla, esa garantía
+          # no se cumplió, y eso hay que verlo en rojo.
+          git push origin "HEAD:refs/heads/$RAMA_MEMORIA"
