@@ -219,11 +219,17 @@ defectos:
       - tests/engine/test_intent_interpreter.py
 
   - id: H-20
-    titulo: Reabrir el diario durable escala a needs_decision un trabajo sano y con la fecha hacia atrás, y el almacén en memoria no lo reproduce
+    titulo: El marcador de corte por presupuesto puede quedar pendiente por caminos distintos al del WorkItem pausado
     bloque: motor
     gravedad: alta
     estado: abierto
     incidencia: 321
+    primera_mitad_cerrada_por: 4f91f99fb75bde506825e41ed1a211e31c176ce3
+    nota: >-
+      La divergencia entre los dos almacenes está cerrada y fijada por una prueba
+      que ejecuta el mismo guion contra los dos y compara estado Y fecha. Queda
+      abierta la segunda mitad: que el marcador de corte no quede pendiente por
+      OTROS caminos distintos al del WorkItem pausado, que es el único medido.
     ficheros:
       - src/sirius_engine/adapters/durable/store.py
       - src/sirius_engine/adapters/memory_store.py
@@ -243,8 +249,9 @@ defectos:
     titulo: El supervisor crea un Run nuevo sobre un WorkItem que ya no está en curso, porque reactivar no comprueba el estado y escalar sí
     bloque: motor
     gravedad: alta
-    estado: abierto
+    estado: cerrado
     incidencia: 321
+    cerrado_por: bf1fd3ab300918b197427e247aa3610a12c4f63c
     ficheros:
       - src/sirius_engine/supervisor.py
       - tests/engine/test_supervisor.py
