@@ -50,6 +50,39 @@ def test_un_ensayo_no_escribe_en_github_ni_deja_rastro_en_el_diario(tmp_path: Pa
     )
 
 
+def test_una_clase_no_despachable_no_crea_ningun_work_item(tmp_path: Path) -> None:
+    """H-17: el rechazo por clase no despachable ocurre ANTES de crear el WorkItem.
+
+    Antes, «documenta»/«investiga» pasaban la puerta como ORDEN_INEQUIVOCA
+    (clase «documentacion»/«investigacion»), ``aplicar_decision`` creaba y
+    activaba el WorkItem, y solo entonces ``dispatch_work_item`` levantaba
+    ``ClaseNoDespachableError`` -sin capturar, así que el proceso terminaba con
+    una traza y el WorkItem quedaba ACTIVE en el diario durable para un
+    trabajo que ningún despachador va a atender nunca. Repetir la orden no
+    idempotía nada -el work_id se deriva del instante, así que cada intento
+    escribía OTRO WorkItem huérfano- y las entradas se acumulaban sin límite
+    en un diario append-only.
+    """
+    diario = tmp_path / "diario.jsonl"
+
+    codigo, texto = _correr(["Documenta el estado actual del motor", "--ejecutar"], diario=diario)
+
+    assert codigo == 5, texto
+    assert "No he creado nada" in texto
+    assert "documentacion" in texto
+    assert not diario.exists(), (
+        "un WorkItem de clase no despachable no puede quedar escrito en el diario "
+        "durable como ACTIVE: el rechazo tiene que ocurrir antes de crearlo"
+    )
+
+    # Repetir la misma orden no debe acumular una segunda entrada huérfana.
+    codigo_2, texto_2 = _correr(
+        ["Documenta el estado actual del motor", "--ejecutar"], diario=diario
+    )
+    assert codigo_2 == 5, texto_2
+    assert not diario.exists()
+
+
 def test_una_orden_ambigua_no_crea_nada_y_lo_explica(tmp_path: Path) -> None:
     diario = tmp_path / "diario.jsonl"
     codigo, texto = _correr(["Arregla eso cuando puedas"], diario=diario)
