@@ -36,6 +36,8 @@ ROLES = {
     "corrector.md": "corrector",
     "revisor-documental.md": "reviewer",
     "documentalista.md": "implementer",
+    "revisor-investigacion.md": "reviewer",
+    "investigador.md": "implementer",
 }
 
 

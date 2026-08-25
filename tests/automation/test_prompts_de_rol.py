@@ -241,6 +241,8 @@ WORKFLOW_DE_CADA_ROL = {
     "reviewer.md": "review-sirius-work.yml",
     "documentalista.md": "implement-sirius-work.yml",
     "revisor-documental.md": "review-sirius-work.yml",
+    "investigador.md": "implement-sirius-work.yml",
+    "revisor-investigacion.md": "review-sirius-work.yml",
 }
 
 PROMESA_DE_ENTORNO = "El workflow ya te ha preparado el entorno antes de arrancarte"

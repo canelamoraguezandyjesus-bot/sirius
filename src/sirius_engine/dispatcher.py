@@ -22,9 +22,10 @@ Cuatro guardas, comprobadas en este orden y por la misma razón que
    ``work_item`` que ya no cumpliera las guardas siguientes (por ejemplo,
    si su clase cambiara) pueda invalidar un episodio ya registrado.
 2. **Clase despachable (contrato §12.4, C4, incidencia #256; C3, incidencia
-   #336, ADR-088).** Solo las clases de :data:`TABLA_ACTIVACION` se despachan
-   aquí -``programacion``, ``auditoria`` y ``documentacion``, la tabla cerrada
-   de tres filas que fija el contrato-; cualquier otra clase levanta
+   #336, ADR-088; B1, incidencia #349).** Solo las clases de
+   :data:`TABLA_ACTIVACION` se despachan aquí -``programacion``, ``auditoria``,
+   ``documentacion`` e ``investigacion``, la tabla cerrada de cuatro filas que
+   fija el contrato-; cualquier otra clase levanta
    :class:`~sirius_engine.domain.errors.ClaseNoDespachableError`.
 3. **Estado activo (revisión #240 ronda 2).** Solo un ``WorkItem`` en
    ``WorkItemState.ACTIVE`` puede despacharse: uno cancelado, pausado,
@@ -101,7 +102,9 @@ class _ActivacionPorClase:
 #: concediera permisos a sí mismo. Añadir una fila es una enmienda del
 #: contrato, no una decisión de implementación -la fila ``DOCUMENTACION``
 #: la autoriza ADR-088 (incidencia #336): mismo ciclo que ``programacion``,
-#: sin etiquetas de activación nuevas (su criterio de parada (b)).
+#: sin etiquetas de activación nuevas (su criterio de parada (b)). La fila
+#: ``INVESTIGACION`` (B1, incidencia #349) sigue el mismo patrón: mismo
+#: ciclo, mismas etiquetas, sin inventar ninguna nueva.
 TABLA_ACTIVACION: dict[WorkItemClass, _ActivacionPorClase] = {
     WorkItemClass.PROGRAMACION: _ActivacionPorClase(
         etiquetas_iniciales=(ETIQUETA_INICIAL,),
@@ -112,6 +115,10 @@ TABLA_ACTIVACION: dict[WorkItemClass, _ActivacionPorClase] = {
         etiqueta_activacion=ETIQUETA_SOLICITUD_AUDITORIA,
     ),
     WorkItemClass.DOCUMENTACION: _ActivacionPorClase(
+        etiquetas_iniciales=(ETIQUETA_INICIAL,),
+        etiqueta_activacion=ETIQUETA_ACTIVACION,
+    ),
+    WorkItemClass.INVESTIGACION: _ActivacionPorClase(
         etiquetas_iniciales=(ETIQUETA_INICIAL,),
         etiqueta_activacion=ETIQUETA_ACTIVACION,
     ),
