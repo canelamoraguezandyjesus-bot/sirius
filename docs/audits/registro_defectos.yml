@@ -206,3 +206,13 @@ defectos:
     ficheros:
       - .claude/hooks/recordar_parada.py
       - .claude/settings.json
+
+  - id: H-19
+    titulo: El intérprete de intención compara marcadores por subcadena sin frontera de palabra, y esa raíz produce al menos tres fallos distintos
+    bloque: ciclo
+    gravedad: alta
+    estado: abierto
+    incidencia: 318
+    ficheros:
+      - src/sirius_engine/intent_interpreter.py
+      - tests/engine/test_intent_interpreter.py
