@@ -50,6 +50,23 @@ def _workflow() -> dict[str, Any]:
     return dict(yaml.safe_load(MOTOR.read_text(encoding="utf-8")))
 
 
+def _disparadores(doc: dict[Any, Any]) -> dict[str, Any]:
+    """Los disparadores de un workflow, sorteando la rareza de YAML.
+
+    La clave ``on:`` la lee YAML 1.1 como el booleano ``True``, no como el
+    texto ``"on"``, y qué de los dos aparece depende del analizador. Se prueban
+    los dos, que es el convenio que ya siguen `test_sirius_review_workflow.py`
+    y sus hermanas.
+    """
+    # El diccionario se tipa con clave `Any` y no `str` justamente por esto:
+    # una de las dos claves posibles es un booleano, y `dict[str, Any].get(True)`
+    # no compila. El tipo tiene que admitir la rareza que la función existe
+    # para sortear.
+    disparo = doc.get("on") or doc.get(True)
+    assert isinstance(disparo, dict), f"el workflow no declara disparadores: {disparo!r}"
+    return dict(disparo)
+
+
 def _paso_del_turno() -> dict[str, Any]:
     for paso in _workflow()["jobs"]["turno"]["steps"]:
         if paso.get("name") == "Dar el turno":
@@ -73,7 +90,7 @@ def _guion_ejecutable() -> str:
 
 def test_el_motor_tiene_horario() -> None:
     """Sin esto, las demás pruebas de este fichero validarían un motor que no corre solo."""
-    disparadores = _workflow()[True]
+    disparadores = _disparadores(_workflow())
     assert "schedule" in disparadores, (
         "el motor perdió su horario: si vuelve a dispararse solo a mano, "
         "D2 deja de estar cerrado y este fichero comprueba algo que ya no pasa"
@@ -89,11 +106,15 @@ def test_el_horario_no_pisa_al_reconciliador() -> None:
     revivir, y que el motor razone sobre un estado que está a punto de cambiar
     es cómo se toman decisiones sobre información caduca.
     """
-    reconciliador = yaml.safe_load(
-        (RAIZ / ".github" / "workflows" / "reconcile-sirius-states.yml").read_text(encoding="utf-8")
+    reconciliador = dict(
+        yaml.safe_load(
+            (RAIZ / ".github" / "workflows" / "reconcile-sirius-states.yml").read_text(
+                encoding="utf-8"
+            )
+        )
     )
-    minuto_reconciliador = int(str(reconciliador[True]["schedule"][0]["cron"]).split()[0])
-    minuto_motor = int(str(_workflow()[True]["schedule"][0]["cron"]).split()[0])
+    minuto_reconciliador = int(str(_disparadores(reconciliador)["schedule"][0]["cron"]).split()[0])
+    minuto_motor = int(str(_disparadores(_workflow())["schedule"][0]["cron"]).split()[0])
 
     assert minuto_motor != minuto_reconciliador, (
         "el motor y el reconciliador arrancarían a la vez, y no comparten grupo "
