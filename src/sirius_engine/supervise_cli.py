@@ -85,6 +85,8 @@ def _resumen(resultado: SupervisionSweepResult) -> list[str]:
         f"ajenos, no tocados: {len(resultado.skipped_foreign)}",
         f"aplazados:          {len(resultado.deferred)}",
         f"errores:            {len(resultado.errors)}",
+        f"liberados:          {len(resultado.recovery.released_work_item_ids)}",
+        f"no observados:      {len(resultado.recovery.unobserved_runs)}",
     ]
 
 
@@ -132,6 +134,11 @@ def main(
     escribir("")
     for linea in _resumen(resultado):
         escribir(linea)
+
+    if resultado.recovery.unobserved_runs:
+        escribir("")
+        for unobserved in resultado.recovery.unobserved_runs:
+            escribir(f"NO OBSERVADO: {unobserved.run_id}: {unobserved.diagnostico}")
 
     if resultado.errors:
         escribir("")
