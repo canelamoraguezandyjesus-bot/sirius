@@ -190,8 +190,9 @@ defectos:
     titulo: Una orden rechazada por clase no despachable deja igualmente el WorkItem en el diario, en active y para siempre
     bloque: D2
     gravedad: media
-    estado: abierto
+    estado: cerrado
     incidencia: 308
+    cerrado_por: 85b6bb2e63da18630bfc2422fe5a931d0fe87031
     ficheros:
       - src/sirius_engine/dispatch_cli.py
       - tests/engine/test_dispatch_cli.py
