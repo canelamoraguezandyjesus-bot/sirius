@@ -195,3 +195,13 @@ defectos:
     ficheros:
       - src/sirius_engine/dispatch_cli.py
       - tests/engine/test_dispatch_cli.py
+
+  - id: H-18
+    titulo: El recordatorio de evidencia exige un sitio denegado y no reconoce docs/audits/, así que da falsos positivos
+    bloque: ciclo
+    gravedad: media
+    estado: abierto
+    incidencia: 311
+    ficheros:
+      - .claude/hooks/recordar_parada.py
+      - .claude/settings.json
