@@ -248,3 +248,13 @@ defectos:
     ficheros:
       - src/sirius_engine/supervisor.py
       - tests/engine/test_supervisor.py
+
+  - id: H-23
+    titulo: Una incidencia que se bloquea antes de producir una PR no tiene forma de reanudarse, y eso castiga la parada temprana
+    bloque: ciclo
+    gravedad: media
+    estado: abierto
+    incidencia: 337
+    ficheros:
+      - .github/workflows/resume-sirius-on-command.yml
+      - scripts/automation/sirius_resume_on_command.sh
