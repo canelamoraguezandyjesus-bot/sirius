@@ -1287,3 +1287,58 @@ def test_reabrir_el_almacen_termina_un_corte_que_quedo_a_medias_en_waiting(
     run = reabierto.get_run("RUN-H3-0001")
     assert run is not None
     assert run.cancellation_status is CancellationStatus.UNCONFIRMED
+
+
+def test_cada_anexo_salvo_el_primero_relee_el_diario_entero_h21(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """H-21 (docs/audits/evidencia-H-20-H-22.md, incidencia #326): el docstring de
+    ``DurableWorkEngineStore`` presumía, frente al spike de S1, de reproducir el diario
+    una sola vez al construirse y mantenerse con un índice en memoria "sin volver a leer
+    el fichero por escritura". Es falso: ``append_durably`` llama incondicionalmente a
+    ``recover_invalid_tail``, que llama a ``replay``, que hace ``read_bytes`` del fichero
+    entero y recalcula los checksums en CADA anexo -salvo el primero sobre un diario que
+    todavía no existe, donde ``recover_invalid_tail``/``replay`` cortan antes de leer
+    nada por el `exists()` inicial-. Medición registrada en la auditoría: 200 anexos
+    producen 199 lecturas completas del fichero (6.470.505 bytes leídos para un fichero
+    final de 65.090 bytes). Esta prueba fija ese hecho con un espía sobre
+    ``Path.read_bytes``: si alguien introduce el índice incremental que el docstring
+    (antes de esta incidencia) presumía tener, el conteo baja de 199 y esta prueba lo
+    delata en vez de dejar que la frase falsa vuelva por la puerta de atrás.
+    """
+    journal_path = tmp_path / "diario.jsonl"
+
+    lecturas_completas: list[int] = []
+    read_bytes_real = Path.read_bytes
+
+    def read_bytes_espia(self: Path) -> bytes:
+        if self == journal_path:
+            lecturas_completas.append(len(lecturas_completas))
+        return read_bytes_real(self)
+
+    monkeypatch.setattr(Path, "read_bytes", read_bytes_espia)
+
+    store = DurableWorkEngineStore(journal_path)
+    store.create_work_item(
+        work_id="WI-H21-0001",
+        peticion_original="texto literal",
+        objetivo="objetivo",
+        contexto_origen=(),
+        entregable="entregable",
+        criterio_terminado="criterio",
+        limites={},
+        prioridad=1,
+        clase=WorkItemClass.PROGRAMACION,
+        now=_NOW,
+    )
+
+    anexos_totales = 200
+    for prioridad in range(2, anexos_totales + 1):
+        store.reprioritize_work_item("WI-H21-0001", prioridad=prioridad, now=_NOW)
+
+    assert len(lecturas_completas) == anexos_totales - 1, (
+        f"se esperaban {anexos_totales - 1} lecturas completas del diario tras "
+        f"{anexos_totales} anexos (H-21); si este numero baja, alguien dejo de releer "
+        "el diario entero en cada anexo y el docstring de DurableWorkEngineStore "
+        "necesitaria dejar de decir que si se relee"
+    )

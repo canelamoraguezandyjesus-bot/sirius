@@ -16,12 +16,20 @@ línea, versionado dentro del repositorio. La suite de comportamiento en
 tanto sobre :class:`~sirius_engine.adapters.memory_store.InMemoryWorkEngineStore`
 como sobre este almacén.
 
-A diferencia del spike de S1 (que releía el diario entero en cada llamada,
-límite conocido documentado en ``RESULTADOS.md``), este almacén reproduce el
-diario **una sola vez**, al construirse, y mantiene un índice en memoria
-(``_work_items``, ``_runs``, ``_events``, ``_idempotency_seen``) que
-actualiza de forma incremental en cada anexo — sin volver a leer el fichero
-por escritura.
+Mantiene un índice en memoria (``_work_items``, ``_runs``, ``_events``,
+``_idempotency_seen``) que se reproduce al construirse y se actualiza de
+forma incremental en cada anexo, pero **releer el índice no evita releer el
+fichero**: ``append_durably`` llama incondicionalmente a
+``recover_invalid_tail``, que llama a ``replay``, que hace ``read_bytes`` del
+diario entero y recalcula sus checksums — en cada anexo salvo el primero
+sobre un diario que todavía no existe. Medido (H-21,
+``docs/audits/evidencia-H-20-H-22.md``): 200 anexos producen 199 lecturas
+completas del fichero, 6.470.505 bytes leídos para un fichero final de
+65.090 bytes. Esta frase antes afirmaba, frente al spike de S1 (que también
+releía el diario entero en cada llamada, límite conocido documentado en
+``RESULTADOS.md``), que este almacén no volvía a leer el fichero por
+escritura; era falso, así que esa comparación con S1 se apoyaba en una
+afirmación falsa y hay que releerla — sin decidir aquí cómo queda.
 """
 
 from __future__ import annotations
