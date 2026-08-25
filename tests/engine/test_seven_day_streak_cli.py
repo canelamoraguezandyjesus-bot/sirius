@@ -9,7 +9,7 @@ contador ya tienen sus propias pruebas.
 from __future__ import annotations
 
 import io
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import yaml
@@ -28,6 +28,14 @@ from sirius_engine.ports.github_mirror import (
     LecturaEstado,
     LecturaMetadatos,
     MetadatosIncidencia,
+)
+from sirius_engine.projection_verifier import (
+    EJE_ESTADO,
+    EJE_FASE,
+    LineaRegistro,
+    ResultadoEje,
+    VeredictoEje,
+    formatear_linea,
 )
 from sirius_engine.seven_day_streak import leer_registro
 
@@ -254,6 +262,68 @@ def test_una_lectura_caida_del_espejo_se_informa_y_se_salta_sin_inventar_linea(
     assert "no pude leer la incidencia" in texto
     assert "no es que no hubiera nada" in texto
     assert leer_registro(registro) == ()
+
+
+def test_lecturas_caidas_hoy_se_declaran_en_la_misma_linea_del_veredicto_cumple(
+    tmp_path: Path,
+) -> None:
+    """Reproduce la incidencia #313: CUMPLE en la misma pasada que dice que no pudo leer.
+
+    Dos ``WorkItem`` de clase ``programacion``: WI-A con siete días verdes ya
+    registrados hasta hoy (sembrados directamente, como dejaría una racha
+    real), WI-B sin ninguna línea nunca. La pasada corre con un mirror que
+    falla para los dos -misma disciplina que
+    ``test_una_lectura_caida_del_espejo_se_informa_y_se_salta_sin_inventar_linea``-,
+    así que no añade ninguna línea nueva. El registro histórico ya sostiene
+    el CUMPLE (ADR-084: una avería operativa no interrumpe el contador), pero
+    la línea del veredicto tiene que decir que esta pasada tuvo lecturas
+    caídas -no solo las tres líneas de arriba.
+    """
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar_trabajo_activo(store, journal, work_id="WI-A", clase=WorkItemClass.PROGRAMACION)
+    _preparar_trabajo_activo(store, journal, work_id="WI-B", clase=WorkItemClass.PROGRAMACION)
+    registro = tmp_path / "registro.jsonl"
+    dias = [_AHORA - timedelta(days=delta) for delta in range(6, -1, -1)]
+    with registro.open("w", encoding="utf-8") as fichero:
+        for instante in dias:
+            linea = LineaRegistro(
+                instante=instante,
+                clase=WorkItemClass.PROGRAMACION,
+                work_id="WI-A",
+                veredictos=(
+                    VeredictoEje(eje=EJE_FASE, resultado=ResultadoEje.COINCIDE),
+                    VeredictoEje(eje=EJE_ESTADO, resultado=ResultadoEje.COINCIDE),
+                ),
+            )
+            fichero.write(formatear_linea(linea))
+            fichero.write("\n")
+    mirror_caido = FixedGitHubMirrorReader()  # sin configurar: NO_DISPONIBLE en las tres lecturas
+
+    codigo, texto = _correr(
+        registro=registro,
+        diario=tmp_path / "diario.jsonl",
+        store=store,
+        journal=journal,
+        mirror=mirror_caido,
+    )
+
+    assert codigo == 0
+    assert "0 línea(s) nueva(s)" in texto
+    lineas_de_veredicto = [
+        linea_texto
+        for linea_texto in texto.splitlines()
+        if linea_texto.startswith(f"{WorkItemClass.PROGRAMACION.value} (")
+    ]
+    assert len(lineas_de_veredicto) == 1
+    linea_veredicto = lineas_de_veredicto[0]
+    assert "CUMPLE" in linea_veredicto, (
+        "el contrato §11.2 no deja que una avería operativa rompa una racha ya registrada"
+    )
+    assert "WI-A" in linea_veredicto and "WI-B" in linea_veredicto, (
+        "la MISMA línea del veredicto tiene que declarar las lecturas caídas de esta pasada, "
+        "no solo las líneas de arriba"
+    )
 
 
 # --- CODEX-002: --raiz/SIRIUS_RACHA_RAIZ, no __file__, resuelven los recursos ---
