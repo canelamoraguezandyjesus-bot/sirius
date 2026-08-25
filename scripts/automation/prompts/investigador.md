@@ -96,10 +96,11 @@ fallo seguro y bien explicado vale más que un apaño.
 - Sin cambios en el código ni en la configuración del proyecto: tu alcance es
   averiguar y escribir lo que pide el objetivo, no arreglar por el camino lo
   que encuentres. Un hallazgo se reporta con su evidencia; no se parchea.
-- Añade o actualiza las comprobaciones necesarias para el alcance
-  implementado (pruebas automáticas cuando la incidencia toque código o
-  datos versionados, comprobaciones documentales cuando toque solo el
-  documento de hallazgos).
+- Añade o actualiza las comprobaciones documentales necesarias sobre tu
+  propio documento de hallazgos (que recoja lo que el objetivo exige:
+  evidencia, fuentes, alcance cubierto). No existe una rama de pruebas
+  automáticas para este rol: el investigador nunca toca código ni datos
+  versionados, así que esa comprobación no puede aplicar aquí.
 - Ejecuta todas las validaciones obligatorias del proyecto (`uv run ruff
   format --check .`, `uv run ruff check .`, `uv run mypy src tests`, `uv run
   pytest`) antes de dar por terminado el trabajo. No las omitas, no las
