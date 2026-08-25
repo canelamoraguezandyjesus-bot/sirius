@@ -60,15 +60,22 @@ parte en encargos y los despacha uno a uno.
 antes: es barata y no reabre nada, pero hoy no resuelve ningún problema que
 exista.
 
-**La opción 2 queda APLAZADA, no descartada.** Y con una condición del
-propietario que es parte de la decisión, no una nota al margen:
+**La opción 2 queda APLAZADA, no descartada.** Y con una preferencia del
+propietario apuntada, que **no es todavía una restricción**:
 
-> **Cuando llegue, el modelo que decida el reparto tiene que ser una vía local
-> o una API gratuita. No una API de pago de Claude ni de ChatGPT.**
+> «Podría ser una vía local, una API gratuita o algo así.»
 
-Esa restricción no es de gusto: es la misma regla de gasto que gobierna el resto
-del proyecto —se paga por pregunta, pero no con esas dos APIs—, y llega a este
-ADR porque es aquí donde se decidirá el primer modelo que el motor ejecute.
+Se anota porque es aquí donde se decidirá el primer modelo que el motor ejecute,
+y conviene que quien llegue ese día sepa por dónde iba pensando el propietario.
+Pero **qué modelo se usa no está decidido**, y este ADR no lo decide: lo elegirá
+él cuando llegue el momento, con el coste real delante.
+
+Queda dicho porque la primera versión de este documento convirtió esa frase en
+una prohibición con nombres propios —«no una API de pago de Claude ni de
+ChatGPT»— que el propietario no había dicho. Una preferencia suya no es una
+decisión suya, y escribirla como si lo fuera es ponerle en la boca algo que no
+dijo. Se corrige aquí en vez de disimularlo, porque el error es exactamente el
+que este repositorio persigue: afirmar más de lo que el dato sostiene.
 
 ## Comprobación que la sostiene
 
@@ -106,9 +113,10 @@ persona aguante seguir, y depende de que la sesión esté delante. El día que e
 techo estorbe, esta decisión se relee — y el registro de bloques dirá qué
 objetivo la hizo estorbar.
 
-**Y queda escrita la restricción del modelo.** Sin ella, el día que alguien
-retome la opción 2 la respuesta cómoda sería llamar a la API que ya se tiene a
-mano. Esa puerta queda cerrada por decisión, no por olvido.
+**Qué modelo lo hará sigue sin decidirse**, y a propósito. Lo único anotado es
+por dónde iba pensando el propietario —local, gratuito «o algo así»—, y esa
+frase no cierra ninguna puerta: una API de pago barata sigue sobre la mesa si
+el trabajo la pide. La decisión se toma el día que haya coste real que comparar.
 
 ## Alternativas descartadas y por qué
 

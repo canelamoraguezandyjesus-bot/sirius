@@ -168,6 +168,6 @@ bloques:
       (ADR-079). Es alcance nuevo, nombrado el 25-08-2026.
     decidido: >-
       ADR-089: lo hace la sesión interactiva. El descomponedor automático queda
-      APLAZADO, no descartado, y cuando llegue tiene que ser con un modelo local
-      o una API gratuita -no una de pago de Claude ni de ChatGPT-, por decisión
-      del propietario.
+      APLAZADO, no descartado. Qué modelo lo haría NO está decidido: sólo consta
+      la preferencia apuntada por el propietario -local, gratuito «o algo así»-,
+      y una API de pago barata sigue sobre la mesa.
