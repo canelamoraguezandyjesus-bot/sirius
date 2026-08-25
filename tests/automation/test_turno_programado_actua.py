@@ -99,12 +99,22 @@ def test_el_motor_tiene_horario() -> None:
     assert crones, "el horario existe pero no declara ningún cron"
 
 
-def test_el_horario_no_pisa_al_reconciliador() -> None:
-    """El reconciliador asienta el mundo; el motor lo mira después.
+def test_el_horario_cae_dentro_de_la_ventana_que_dejan_las_dos_restricciones() -> None:
+    """El minuto del motor no se elige a ojo: sale de dos cotas independientes.
 
-    No es estética: el reconciliador repara estados que ningún evento puede ya
-    revivir, y que el motor razone sobre un estado que está a punto de cambiar
-    es cómo se toman decisiones sobre información caduca.
+    **Cota inferior.** `reconcile-sirius-states` arranca a `17 */6` con
+    `timeout-minutes: 10`. El motor no puede empezar antes de que aquel termine
+    en el peor caso: repara estados que ningún evento puede ya revivir, y que el
+    motor razone sobre un estado a punto de cambiar es decidir sobre información
+    caduca.
+
+    **Cota superior, y ésta casi se salta.** El contador de los siete días
+    necesita un hueco tranquilo para medir. Con el motor en el minuto 47, los
+    huecos de 360 minutos se partían en 30 y 330, y `hora_recomendada_pasada`
+    dejaba de encontrar hora: **ninguna habría producido días verdes**. Cerrar
+    D2 así habría roto D1.
+
+    Medido antes de elegir: 22, 27, 32 y 37 valen; 42 y 47 no.
     """
     reconciliador = dict(
         yaml.safe_load(
@@ -116,14 +126,18 @@ def test_el_horario_no_pisa_al_reconciliador() -> None:
     minuto_reconciliador = int(str(_disparadores(reconciliador)["schedule"][0]["cron"]).split()[0])
     minuto_motor = int(str(_disparadores(_workflow())["schedule"][0]["cron"]).split()[0])
 
-    assert minuto_motor != minuto_reconciliador, (
-        "el motor y el reconciliador arrancarían a la vez, y no comparten grupo "
-        "de concurrencia: nada los serializa"
-    )
-    assert minuto_motor > minuto_reconciliador, (
-        f"el motor arranca en el minuto {minuto_motor} y el reconciliador en el "
-        f"{minuto_reconciliador}: el orden previsto es al revés, primero asentar "
-        "y después supervisar"
+    timeout_reconciliador = int(reconciliador["jobs"]["reconcile"]["timeout-minutes"])
+    minimo = minuto_reconciliador + timeout_reconciliador
+    maximo = 37
+
+    assert minimo <= minuto_motor <= maximo, (
+        f"el motor arranca en el minuto {minuto_motor}, fuera de la ventana "
+        f"[{minimo}, {maximo}].\n"
+        f"  Antes del {minimo}: pisa al reconciliador, que arranca en el "
+        f"{minuto_reconciliador} y puede tardar {timeout_reconciliador} minutos.\n"
+        f"  Después del {maximo}: parte el hueco tranquilo que el contador de los "
+        "siete días necesita, y `hora_recomendada_pasada` deja de encontrar hora "
+        "-medido: 42 y 47 lo rompen-. Cerrar D2 así rompería D1."
     )
 
 

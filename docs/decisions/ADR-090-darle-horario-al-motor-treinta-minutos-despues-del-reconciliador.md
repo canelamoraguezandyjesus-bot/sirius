@@ -1,4 +1,4 @@
-# ADR-090 — Darle horario al motor, treinta minutos después del reconciliador
+# ADR-090 — Darle horario al motor, dentro de la ventana que dejan el reconciliador y el contador
 
 - Estado: PROPUESTO
 - Fecha: 2026-08-25
@@ -75,12 +75,22 @@ diagnosticado.
 
 ## Decisión
 
-**El motor corre a `47 */6 * * *`**, treinta minutos después del reconciliador.
+**El motor corre a `32 */6 * * *`**, y ese minuto **no se eligió: se derivó**.
 
-El desfase no es estético: el reconciliador **repara estados que ningún evento
-puede ya revivir**, así que dejarle asentar el mundo antes de que el motor lo
-mire evita que el motor razone sobre un estado que está a punto de cambiar.
+Hay dos cotas independientes que dejan una ventana de once minutos:
+
+**Cota inferior, minuto 27.** El reconciliador arranca a `17 */6` y declara
+`timeout-minutes: 10`. El motor no puede empezar antes de que aquel termine en
+el peor caso: repara estados que ningún evento puede ya revivir, y que el motor
+razone sobre un estado a punto de cambiar es decidir sobre información caduca.
 Primero se asienta, luego se supervisa.
+
+**Cota superior, minuto 37. Y ésta casi se salta.** El contador de los siete
+días (D1b, contrato §11.2) necesita un **hueco tranquilo** en el día para medir:
+`hora_recomendada_pasada` busca el mayor tramo sin disparos periódicos y exige
+que su mitad supere la ventana de tolerancia (2h50m).
+
+Se elige el **32**, el centro: cinco minutos de margen por cada lado.
 
 **Cada seis horas y no más**, a propósito: hoy el diario tiene un encargo, y el
 valor de un turno es proporcional al trabajo en vuelo. Se sube cuando haya algo
@@ -93,6 +103,37 @@ existe:**
 if [ "$EVENTO" = "schedule" ]; then          # actúa
 elif [ "$ENSAYO_PEDIDO" = "false" ]; then    # actúa
 else                                          # ensaya
+```
+
+## El defecto que casi cierra D2 rompiendo D1
+
+La primera versión de esta decisión ponía el motor en el **minuto 47**. Con eso,
+los huecos de 360 minutos que dejaba el reconciliador se partían en 30 y 330, y
+330/2 = 165 < 170. Resultado, en palabras del propio código:
+
+```
+ValueError: el mayor hueco libre de disparos periódicos (330 min) no deja ni su
+mitad (165 min) por delante de la ventana de tolerancia (2:50:00): ninguna hora
+produciría días verdes con el ritmo real del repositorio
+```
+
+**Cerrar D2 habría roto D1**, que es el bloque del que depende toda la
+conmutación de autoridad del contrato §11.2.
+
+Lo cazó `test_hora_recomendada_atada_al_schedule_real_del_repositorio`, y lo
+cazó por una razón concreta: **ata esa hora a los horarios REALES del
+repositorio**, no a un YAML de juguete. Una prueba con datos inventados habría
+pasado en verde, porque el defecto sólo existe en la combinación real de los dos
+horarios.
+
+Y no se descubrió leyendo ni razonando: se descubrió porque Quality corre la
+batería entera y esta sesión sólo había ejecutado `tests/automation`.
+
+La ventana válida se midió, no se dedujo:
+
+```
+22 */6 -> OK    32 */6 -> OK    42 */6 -> NO (335 min)
+27 */6 -> OK    37 */6 -> OK    47 */6 -> NO (330 min)
 ```
 
 ## Comprobación que la sostiene
@@ -115,7 +156,9 @@ FAILED test_un_turno_programado_no_puede_decidirse_solo_por_el_input
 ```
 
 `tests/automation/test_turno_programado_actua.py` **ejecuta el guión real** del
-paso, no lo lee. Leerlo no habría bastado: el defecto no estaba en el texto,
+paso, no lo lee. Y comprueba además que el minuto siga dentro de la ventana
+`[27, 37]`, derivándola de los dos ficheros en vez de escribirla a mano: con el
+47 puesto, falla y explica cuál de las dos cotas se ha cruzado. Leerlo no habría bastado: el defecto no estaba en el texto,
 estaba en cómo bash trata una variable vacía, y una prueba que buscara una frase
 en el YAML habría pasado en verde con el fallo dentro.
 
@@ -129,6 +172,12 @@ supervisar hasta hoy— empieza a tener trabajo por su cuenta.
 antigua temía. Lo que ha cambiado no es el riesgo: es que ahora su camino de
 escritura está probado, su diario existe, y un turno sin trabajo dentro sale en
 verde sin escribir nada -medido-.
+
+**Y queda una lección más general que el caso.** Dos bloques cerrados pueden
+romperse el uno al otro sin que ninguno de los dos cambie de código: aquí bastó
+un cron. Lo que lo impidió no fue el cuidado de quien lo escribió -que puso el
+47- sino una prueba que medía sobre los ficheros reales del repositorio en vez
+de sobre un ejemplo.
 
 **Lo que esto NO resuelve:** que el motor sepa qué hacer con lo que encuentre
 más allá de reconciliar y escalar. Sigue sin decidir nada por su cuenta, y esa

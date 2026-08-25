@@ -49,12 +49,33 @@ name: Motor de Sirius
 # diario dejó de estar vacío cuando el despachador anotó su primer encargo
 # (ADR-086).
 #
-# LA CADENCIA, Y POR QUÉ ESE MINUTO. `reconcile-sirius-states` barre estados
-# atascados a `17 */6 * * *`. El motor corre TREINTA MINUTOS DESPUÉS, a
-# `47 */6 * * *`, y el desfase no es estético: el reconciliador repara estados
-# que ningún evento puede ya revivir, así que dejarle asentar el mundo antes de
-# que el motor lo mire evita que el motor razone sobre un estado que está a
-# punto de cambiar. Primero se asienta, luego se supervisa.
+# LA CADENCIA, Y POR QUÉ ESE MINUTO EXACTO. No se eligió a ojo: sale de dos
+# restricciones independientes que dejan una ventana de once minutos.
+#
+#   COTA INFERIOR, minuto 27. `reconcile-sirius-states` arranca a `17 */6` y
+#   declara `timeout-minutes: 10`. El motor no puede empezar antes de que aquel
+#   termine en el peor caso: el reconciliador repara estados que ningún evento
+#   puede ya revivir, y que el motor razone sobre un estado que está a punto de
+#   cambiar es decidir sobre información caduca. Primero se asienta, luego se
+#   supervisa.
+#
+#   COTA SUPERIOR, minuto 37. Y esta es la que casi se salta. El contador de los
+#   siete días (D1b, contrato §11.2) necesita un HUECO TRANQUILO en el día para
+#   medir: `hora_recomendada_pasada` busca el mayor tramo sin disparos y exige
+#   que su mitad supere la ventana de tolerancia (2h50m). Meter el motor a `47`
+#   partía los huecos de 360 minutos en 30 y 330, y 330/2 = 165 < 170:
+#   **ninguna hora habría producido días verdes**. Medido, no razonado:
+#
+#       22 */6 -> OK    32 */6 -> OK    42 */6 -> NO (335 min)
+#       27 */6 -> OK    37 */6 -> OK    47 */6 -> NO (330 min)
+#
+#   Es decir: cerrar D2 con el minuto 47 habría ROTO D1. Lo cazó
+#   `test_hora_recomendada_atada_al_schedule_real_del_repositorio`, que ata esa
+#   hora a los horarios REALES del repositorio en vez de a un YAML de juguete.
+#
+# Se elige el 32, el centro de la ventana: cinco minutos de margen por cada
+# lado. `tests/automation/test_turno_programado_actua.py` rompe si alguien lo
+# saca de ahí.
 #
 # NO COMPARTEN CANDADO, Y NO HACE FALTA: son grupos de concurrencia distintos,
 # pero no escriben lo mismo. El reconciliador escribe ETIQUETAS; el motor
@@ -68,10 +89,11 @@ name: Motor de Sirius
 # haya algo que mirar, no antes.
 
 on:
-  # Treinta minutos después del reconciliador (`17 */6 * * *`), a propósito:
-  # que asiente el mundo antes de que el motor lo mire. Ver la cabecera.
+  # Minuto 32: dentro de la ventana 27-37 que dejan el timeout del
+  # reconciliador y el hueco que el contador de los siete días necesita.
+  # Ver la cabecera: fuera de esa ventana se rompe D1 o se pisa al otro.
   schedule:
-    - cron: '47 */6 * * *'
+    - cron: '32 */6 * * *'
   workflow_dispatch:
     inputs:
       ensayo:
