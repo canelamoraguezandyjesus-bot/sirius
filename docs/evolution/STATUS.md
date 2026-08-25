@@ -45,8 +45,16 @@ del propietario en la incidencia #270). El resto del roadmap post-0.1 sigue sin 
 
 ## Prioridad actual
 
-Implementación de Sirius 0.1 terminada. Pendiente: empaquetado, pruebas manuales en Windows 11, configuración de clave real, prueba con proveedor real, recopilación de evidencias y aceptación formal. La siguiente definición de producto se abrirá únicamente cuando 0.1 produzca la evidencia aprobada y quede aceptada.
+**Sirius 0.1 está ACEPTADO y TERMINADO** por declaración del propietario del **10 de agosto de 2026**, con sus pruebas de aceptación ejecutadas sobre el paquete `Sirius-0.1.0.dev0-3432253-windows-x64` con clave y proveedor reales. La declaración, las pruebas superadas una por una y las salvedades declaradas están en `docs/implementation/V8_EXECUTION.md`.
 
-## Próximo paso futuro
+Queda por tanto **abierta la definición de producto Sirius 0.2 — Memoria útil**, que era lo único que esa aceptación condicionaba.
 
-Tras la aceptación de Sirius 0.1, crear la Definición de Producto Sirius 0.2 - Memoria útil, con requisitos y pruebas propios.
+> Esta línea dijo «pendiente de aceptación formal» desde el 22 de julio hasta el
+> 25 de agosto: **quince días después de que el propietario cerrara 0.1**. Se deja
+> dicho porque el coste no fue documental — se planificó sobre un estado falso, y
+> el propietario tuvo que corregirlo él. Un documento de estado que no se actualiza
+> cuando el estado cambia es peor que no tenerlo, porque se le cree.
+
+## Próximo paso
+
+Crear la **Definición de Producto Sirius 0.2 — Memoria útil**, con requisitos y pruebas propios. Ya no es «futuro» ni está condicionado: la aceptación de 0.1 que lo condicionaba ocurrió el 10-08-2026.
