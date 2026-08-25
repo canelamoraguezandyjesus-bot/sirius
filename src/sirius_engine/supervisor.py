@@ -57,7 +57,7 @@ from sirius_engine.domain.supervision import (
     SupervisorPolicy,
     decidir_politica,
 )
-from sirius_engine.domain.work_item import WorkItem, WorkItemState
+from sirius_engine.domain.work_item import ESTADOS_EN_CURSO, WorkItem, WorkItemState
 from sirius_engine.ports.notification import NotificationPort
 from sirius_engine.ports.store import WorkEngineStore
 from sirius_engine.ports.supervisor_journal import SupervisorJournal
@@ -143,11 +143,29 @@ def _nuevo_deadline(run: Run, *, now: datetime) -> datetime:
 def _reactivar_o_sustituir(
     store: WorkEngineStore,
     run: Run,
+    work_item: WorkItem,
     *,
     decision: SupervisionDecision,
     policy: SupervisorPolicy,
     now: datetime,
-) -> SupervisionOutcome:
+) -> SupervisionOutcome | None:
+    """Reactivar el Run o sustituir su Worker -pero solo si el WorkItem sigue en curso.
+
+    Devuelve ``None`` -sin actuar- si el ``WorkItem`` ya no está en
+    ``ESTADOS_EN_CURSO`` (H-22): la misma disciplina que ya aplica
+    ``_escalar`` ("ante la duda, informa y no toca"), aquí por simetría y
+    porque es la única política que este repositorio tiene escrita. Sin esta
+    comprobación, un ``WorkItem`` que ya se canceló o se entregó por otra vía
+    -mientras este Run seguía vivo en el mundo remoto- recibía de todos
+    modos un Run nuevo (``retry_run``/``substitute_run_worker``) cuando el
+    barrido por fin lo descubría ``LOST``: trabajo inventado sobre algo que
+    ya no está en curso. Se vuelve a preguntar al almacén -nunca al
+    ``work_item`` que entregó el llamador- por la misma razón que
+    :func:`_run_gobernado_por_el_motor`: es la única fuente de verdad.
+    """
+    actual = store.get_work_item(work_item.work_id)
+    if actual is None or actual.estado not in ESTADOS_EN_CURSO:
+        return None
     nuevo_run_id = f"{run.run_id}-S{run.intento + 1}"
     deadline = _nuevo_deadline(run, now=now)
     if decision is SupervisionDecision.REACTIVATE:
@@ -275,7 +293,9 @@ def _actuar(
 ) -> SupervisionOutcome | None:
     decision = decidir_politica(run, policy=policy)
     if decision in (SupervisionDecision.REACTIVATE, SupervisionDecision.SUBSTITUTE_WORKER):
-        return _reactivar_o_sustituir(store, run, decision=decision, policy=policy, now=now)
+        return _reactivar_o_sustituir(
+            store, run, work_item, decision=decision, policy=policy, now=now
+        )
     return _escalar(store, run, work_item, now=now, notificar=notificar, journal=journal)
 
 

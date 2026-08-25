@@ -217,6 +217,90 @@ def test_c1_p1_agotadas_las_reactivaciones_con_alternativa_configurada_sustituye
     assert nuevo.sustituye_a == "RUN-0001"
 
 
+# --- H-22: un WorkItem que ya no está en curso no recibe un Run nuevo -------------------
+
+
+def test_h22_un_run_perdido_sobre_un_workitem_cancelado_no_se_reactiva(
+    store: WorkEngineStore, make_run: MakeRun, now: datetime
+) -> None:
+    """El Run sigue vivo en el mundo remoto, pero el WorkItem ya se canceló por otra vía.
+
+    Reproduce H-22 (docs/audits/registro_defectos.yml, incidencia #321): antes,
+    ``_reactivar_o_sustituir`` no comprobaba el estado del WorkItem -a
+    diferencia de ``_escalar``, que sí lo hace- y llamaba a ``retry_run`` sin
+    importar en qué estado estuviera. Con la corrección, se aplica la misma
+    política que ``_escalar``: si el WorkItem ya no está en
+    ``ESTADOS_EN_CURSO``, no se crea Run nuevo, se difiere.
+    """
+    _make_motor_work_item(store, now=now)
+    _deadline, momento = _dispatch_lost_run(store, make_run, now=now)
+    # El WorkItem sale de "en curso" por una vía que no toca el Run: vuelve
+    # a ACTIVE (el supervisor no interviene aquí), falla sin poder progresar
+    # y se cancela -exactamente como llegaría un WorkItem real a CANCELLED
+    # mientras un Run suyo sigue despachado en el mundo remoto-.
+    store.observe_work_item_external_fact("WI-0001", now=now)
+    store.fail_work_item_safely("WI-0001", diagnostico="sin progreso posible", now=now)
+    store.cancel_work_item("WI-0001", now=now)
+    work_item_antes = store.get_work_item("WI-0001")
+    assert work_item_antes is not None
+    assert work_item_antes.estado is WorkItemState.CANCELLED
+
+    world = FakeRunWorldObserver(
+        observations={"RUN-0001": RunWorldObservation(status=RemoteRunStatus.LOST)}
+    )
+    journal = InMemorySupervisorJournal()
+
+    resultado = supervise_runs(store, world, journal, now=momento)
+
+    assert resultado.acted == ()
+    assert resultado.deferred == ("RUN-0001",)
+    assert resultado.errors == ()
+    assert journal.episodes() == ()
+    # Ningún Run nuevo: solo sigue existiendo el original, ya FINISHED/LOST.
+    assert [r.run_id for r in store.list_runs_for_work_item("WI-0001")] == ["RUN-0001"]
+    work_item = store.get_work_item("WI-0001")
+    assert work_item is not None
+    assert work_item.estado is WorkItemState.CANCELLED
+
+
+def test_h22_un_run_perdido_sobre_un_workitem_entregado_no_se_reactiva(
+    store: WorkEngineStore, make_run: MakeRun, now: datetime
+) -> None:
+    """Mismo defecto H-22, con el otro estado terminal medido: DELIVERED.
+
+    El WorkItem se entregó por completo -recorrió todo el ciclo de fases-
+    mientras el Run RUN-0001 seguía despachado en el mundo remoto y luego se
+    perdió. Que ya se entregara no debe resucitar un Run nuevo sobre él.
+    """
+    _make_motor_work_item(store, now=now)
+    _deadline, momento = _dispatch_lost_run(store, make_run, now=now)
+    store.observe_work_item_external_fact("WI-0001", now=now)
+    store.begin_work_item_execution("WI-0001", now=now)
+    store.begin_work_item_check("WI-0001", now=now)
+    store.begin_work_item_review("WI-0001", now=now)
+    store.approve_work_item_review("WI-0001", now=now)
+    store.deliver_work_item("WI-0001", resultado={"entregado": True}, now=now)
+    work_item_antes = store.get_work_item("WI-0001")
+    assert work_item_antes is not None
+    assert work_item_antes.estado is WorkItemState.DELIVERED
+
+    world = FakeRunWorldObserver(
+        observations={"RUN-0001": RunWorldObservation(status=RemoteRunStatus.LOST)}
+    )
+    journal = InMemorySupervisorJournal()
+
+    resultado = supervise_runs(store, world, journal, now=momento)
+
+    assert resultado.acted == ()
+    assert resultado.deferred == ("RUN-0001",)
+    assert resultado.errors == ()
+    assert journal.episodes() == ()
+    assert [r.run_id for r in store.list_runs_for_work_item("WI-0001")] == ["RUN-0001"]
+    work_item = store.get_work_item("WI-0001")
+    assert work_item is not None
+    assert work_item.estado is WorkItemState.DELIVERED
+
+
 # --- CLAUDE-C1-REV-001: el episodio no relee el mundo tras mutar el almacén -------------
 
 
