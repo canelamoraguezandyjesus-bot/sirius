@@ -153,3 +153,21 @@ bloques:
       declarado fuera del alcance aprobado ya en la foto del 21-08. Y el 25-08 el
       propietario decidió que su centro de mando es la sesión interactiva, así que
       este bloque no resuelve ningún problema que tenga hoy.
+
+  - id: D4
+    titulo: Partir un objetivo grande en bloques
+    estado: pendiente
+    incidencia: 341
+    que_lo_cerraria: >-
+      que un objetivo del tamaño de una versión entera se convierta en varios
+      encargos atendibles sin que una persona los escriba uno a uno
+    medido_hoy: >-
+      no aparece en NINGÚN plan -ni «partir» ni «descomponer» ni «planificador»
+      en docs/implementation/ ni en docs/decisions/-, no existe noción de trabajo
+      padre/hijo en el dominio, y la clase MIXTA es inalcanzable por construcción
+      (ADR-079). Es alcance nuevo, nombrado el 25-08-2026.
+    decidido: >-
+      ADR-089: lo hace la sesión interactiva. El descomponedor automático queda
+      APLAZADO, no descartado. Qué modelo lo haría NO está decidido: sólo consta
+      la preferencia apuntada por el propietario -local, gratuito «o algo así»-,
+      y una API de pago barata sigue sobre la mesa.
