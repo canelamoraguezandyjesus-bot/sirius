@@ -90,9 +90,7 @@ def test_el_horario_no_pisa_al_reconciliador() -> None:
     es cómo se toman decisiones sobre información caduca.
     """
     reconciliador = yaml.safe_load(
-        (RAIZ / ".github" / "workflows" / "reconcile-sirius-states.yml").read_text(
-            encoding="utf-8"
-        )
+        (RAIZ / ".github" / "workflows" / "reconcile-sirius-states.yml").read_text(encoding="utf-8")
     )
     minuto_reconciliador = int(str(reconciliador[True]["schedule"][0]["cron"]).split()[0])
     minuto_motor = int(str(_workflow()[True]["schedule"][0]["cron"]).split()[0])
