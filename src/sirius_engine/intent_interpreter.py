@@ -154,16 +154,53 @@ def _normalizar(mensaje: str) -> str:
     return re.sub(r"\s+", " ", sin_acentos).strip()
 
 
+def _marcador_presente(normalizado: str, marcador: str) -> bool:
+    """``True`` si ``marcador`` aparece en ``normalizado`` como palabra completa.
+
+    ``in`` por sí solo compara subcadenas: un marcador de dos palabras como
+    "estado de" casa dentro de "estado del" porque lo contiene por
+    casualidad (H-19). La frontera de palabra evita ese falso positivo sin
+    dejar de reconocer el marcador cuando de verdad aparece.
+    """
+    return re.search(rf"\b{re.escape(marcador)}\b", normalizado) is not None
+
+
 def _detectar_sensibilidad(normalizado: str) -> tuple[CausaEscalado, str] | None:
     for marcadores, causa in _SENSIBILIDAD:
         for marcador in marcadores:
-            if marcador in normalizado:
+            if _marcador_presente(normalizado, marcador):
                 return causa, f"el mensaje contiene {marcador!r}: causa {causa.value}"
     return None
 
 
+_PUNTUACION_DE_BORDE = re.compile(r"^[^\w]+|[^\w]+$")
+
+
 def _primer_verbo(normalizado: str) -> str:
-    return normalizado.split(" ", 1)[0] if normalizado else ""
+    """Primer token de ``normalizado``, sin la puntuación que lo rodea.
+
+    El propio ``--help`` propone el formato con el verbo entre comillas
+    angulares como ejemplo; sin quitar la puntuación de borde ese formato
+    -y una coma tras el verbo, u otras comillas- salía sin reconocer (H-19).
+    """
+    if not normalizado:
+        return ""
+    primer_token = normalizado.split(" ", 1)[0]
+    return _PUNTUACION_DE_BORDE.sub("", primer_token)
+
+
+def _construir_datos_trabajo(
+    mensaje: str, clase: WorkItemClass | None, limite_presupuesto: float
+) -> DatosNuevoTrabajo:
+    clase_efectiva = clase if clase is not None else WorkItemClass.CONSULTA_LARGA
+    return DatosNuevoTrabajo(
+        objetivo=mensaje.strip(),
+        entregable=_ALCANCE_POR_CLASE[clase_efectiva],
+        criterio_terminado=_CRITERIO_POR_CLASE[clase_efectiva],
+        clase=clase_efectiva,
+        limites={"presupuesto": {"limite": limite_presupuesto}},
+        contexto_origen=("sesion-cli",),
+    )
 
 
 def interpretar_intencion_v0(
@@ -175,49 +212,20 @@ def interpretar_intencion_v0(
     if not normalizado or normalizado in _MARCADORES_SALUDO:
         return IntentSignal(tipo=TipoIntencion.CONVERSAR, mensaje_original=mensaje)
 
-    if any(marcador in normalizado for marcador in _MARCADORES_PASADO):
-        return IntentSignal(
-            tipo=TipoIntencion.CONSULTAR_PASADO, mensaje_original=mensaje, consulta=mensaje
-        )
-
-    if any(marcador in normalizado for marcador in _MARCADORES_EXPLORACION):
-        return IntentSignal(tipo=TipoIntencion.EXPLORAR, mensaje_original=mensaje)
-
-    if normalizado.endswith("?"):
-        return IntentSignal(tipo=TipoIntencion.EXPLORAR, mensaje_original=mensaje)
-
     verbo = _primer_verbo(normalizado)
     clase = _VERBO_A_CLASE.get(verbo)
+
+    # La sensibilidad se comprueba ANTES que cualquier otra clasificación
+    # -incluida la de marcadores de pasado- por decisión del propietario
+    # (#324): fail-closed, que avise siempre aunque a veces avise de más,
+    # nunca que una orden sensible se escape por otra rama (H-19). Una frase
+    # con un marcador de sensibilidad ES una orden aunque su primer verbo no
+    # esté en la tabla reconocida (p. ej. "borra la base de producción"): la
+    # evidencia léxica de sensibilidad basta por sí sola.
     sensibilidad = _detectar_sensibilidad(normalizado)
-    # Una frase con un marcador de sensibilidad ES una orden, aunque su
-    # primer verbo no esté en la tabla reconocida (p. ej. "borra la base de
-    # producción"): la evidencia léxica de sensibilidad basta por sí sola,
-    # y es preferible sobre-marcar como sensible que dejarlo pasar como
-    # AMBIGUA sin más (fail-closed, mismo criterio que el egress de A4).
-    es_orden = (
-        clase is not None or verbo in _VERBOS_IMPERATIVOS_SIN_CLASE or sensibilidad is not None
-    )
-    if not es_orden:
-        return IntentSignal(
-            tipo=TipoIntencion.AMBIGUA,
-            mensaje_original=mensaje,
-            pregunta_aclaratoria=(
-                "¿Qué debe existir al terminar, y qué comprobación lo dará por hecho?"
-            ),
-        )
-
-    clase_efectiva = clase if clase is not None else WorkItemClass.CONSULTA_LARGA
-    datos_trabajo = DatosNuevoTrabajo(
-        objetivo=mensaje.strip(),
-        entregable=_ALCANCE_POR_CLASE[clase_efectiva],
-        criterio_terminado=_CRITERIO_POR_CLASE[clase_efectiva],
-        clase=clase_efectiva,
-        limites={"presupuesto": {"limite": limite_presupuesto}},
-        contexto_origen=("sesion-cli",),
-    )
-
     if sensibilidad is not None:
         causa, motivo = sensibilidad
+        datos_trabajo = _construir_datos_trabajo(mensaje, clase, limite_presupuesto)
         return IntentSignal(
             tipo=TipoIntencion.SENSIBLE_O_MATERIAL,
             mensaje_original=mensaje,
@@ -226,6 +234,38 @@ def interpretar_intencion_v0(
             motivo_sensibilidad=motivo,
         )
 
+    # Un primer verbo reconocido hace inequívoca la orden por sí solo, así que
+    # se decide ANTES que los marcadores de pasado/exploración: si no, una
+    # orden legítima sobre la situación actual de un módulo ("audita el
+    # estado de las pruebas") se confunde con una consulta sobre esa misma
+    # situación en el pasado, porque el marcador aparece de verdad en el
+    # texto -no por una colisión de subcadena que la frontera de palabra
+    # pueda resolver- (H-19, fallo b). Es la misma familia de raíz que la
+    # sensibilidad: el orden de las comprobaciones, no solo la comparación.
+    es_orden_por_verbo = clase is not None or verbo in _VERBOS_IMPERATIVOS_SIN_CLASE
+    if es_orden_por_verbo:
+        datos_trabajo = _construir_datos_trabajo(mensaje, clase, limite_presupuesto)
+        return IntentSignal(
+            tipo=TipoIntencion.ORDEN_INEQUIVOCA,
+            mensaje_original=mensaje,
+            datos_trabajo=datos_trabajo,
+        )
+
+    if any(_marcador_presente(normalizado, marcador) for marcador in _MARCADORES_PASADO):
+        return IntentSignal(
+            tipo=TipoIntencion.CONSULTAR_PASADO, mensaje_original=mensaje, consulta=mensaje
+        )
+
+    if any(_marcador_presente(normalizado, marcador) for marcador in _MARCADORES_EXPLORACION):
+        return IntentSignal(tipo=TipoIntencion.EXPLORAR, mensaje_original=mensaje)
+
+    if normalizado.endswith("?"):
+        return IntentSignal(tipo=TipoIntencion.EXPLORAR, mensaje_original=mensaje)
+
     return IntentSignal(
-        tipo=TipoIntencion.ORDEN_INEQUIVOCA, mensaje_original=mensaje, datos_trabajo=datos_trabajo
+        tipo=TipoIntencion.AMBIGUA,
+        mensaje_original=mensaje,
+        pregunta_aclaratoria=(
+            "¿Qué debe existir al terminar, y qué comprobación lo dará por hecho?"
+        ),
     )

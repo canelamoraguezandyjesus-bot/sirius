@@ -104,6 +104,89 @@ def test_limite_de_presupuesto_configurable() -> None:
     assert signal.datos_trabajo.limites["presupuesto"] == {"limite": 42.0}
 
 
+# --- H-19: sensibilidad antes que marcadores de pasado, frontera de palabra,
+# --- y puntuación en el primer verbo -----------------------------------------
+#
+# docs/audits/evidencia-H-19.md mide los tres fallos con salidas literales.
+# Los tres comparten raíz: comparación de marcadores por subcadena (`in`) sin
+# frontera de palabra, más el orden en que se comprueban las clasificaciones.
+# Decisión del propietario en #324: la sensibilidad se comprueba SIEMPRE
+# antes que los marcadores de pasado, aunque a veces avise de más.
+
+
+@pytest.mark.parametrize(
+    ("mensaje", "causa_esperada"),
+    (
+        (
+            "borra el estado de la base de produccion",
+            CausaEscalado.OPERACION_DESTRUCTIVA_O_IRREVERSIBLE,
+        ),
+        ("elimina el estado del cache", CausaEscalado.OPERACION_DESTRUCTIVA_O_IRREVERSIBLE),
+        (
+            "implementa esto usando una clave real de pago y borra el estado de la cola",
+            CausaEscalado.OPERACION_DESTRUCTIVA_O_IRREVERSIBLE,
+        ),
+    ),
+)
+def test_sensibilidad_se_comprueba_antes_que_marcadores_de_pasado(
+    mensaje: str, causa_esperada: CausaEscalado
+) -> None:
+    """Antes del fix, estas frases contienen un marcador de pasado ("estado
+    de") por casualidad y la puerta las despachaba como CONSULTAR_PASADO sin
+    llegar nunca al detector de sensibilidad: fail-open en una puerta
+    fail-closed. Fallaban con ``AssertionError: assert <CONSULTAR_PASADO>
+    is <SENSIBLE_O_MATERIAL>``.
+    """
+    signal = interpretar_intencion_v0(mensaje)
+    assert signal.tipo is TipoIntencion.SENSIBLE_O_MATERIAL
+    assert signal.causa_sensibilidad is causa_esperada
+
+
+@pytest.mark.parametrize(
+    ("mensaje", "clase_esperada"),
+    (
+        ("documenta el estado del motor", WorkItemClass.DOCUMENTACION),
+        ("audita el estado de las pruebas", WorkItemClass.AUDITORIA),
+        ("corrige el estado del despachador", WorkItemClass.PROGRAMACION),
+    ),
+)
+def test_marcador_de_pasado_respeta_frontera_de_palabra(
+    mensaje: str, clase_esperada: WorkItemClass
+) -> None:
+    """Estas órdenes legítimas sobre la situación actual de un módulo salían
+    clasificadas como CONSULTAR_PASADO: en dos casos "estado de" es subcadena
+    de "estado del" sin frontera de palabra; en el tercero el marcador
+    aparece de verdad, pero un primer verbo reconocido (audita/documenta/
+    corrige) debe decidir antes que ese marcador. Fallaban con
+    ``AssertionError: assert <TipoIntencion.CONSULTAR_PASADO> is <TipoIntencion.ORDEN_INEQUIVOCA>``.
+    """
+    signal = interpretar_intencion_v0(mensaje)
+    assert signal.tipo is TipoIntencion.ORDEN_INEQUIVOCA
+    assert signal.datos_trabajo is not None
+    assert signal.datos_trabajo.clase is clase_esperada
+
+
+@pytest.mark.parametrize(
+    "mensaje",
+    (
+        "«Corrige el fallo»",
+        '"Corrige el fallo"',
+        "Corrige, ya, el fallo",
+    ),
+)
+def test_primer_verbo_ignora_puntuacion_de_borde(mensaje: str) -> None:
+    """``_primer_verbo`` no quitaba la puntuación, así que el formato que el
+    propio ``--help`` propone como ejemplo (verbo entre comillas angulares)
+    salía AMBIGUA mientras el mismo texto sin comillas se despachaba bien.
+    Fallaban con
+    ``AssertionError: assert <TipoIntencion.AMBIGUA> is <TipoIntencion.ORDEN_INEQUIVOCA>``.
+    """
+    signal = interpretar_intencion_v0(mensaje)
+    assert signal.tipo is TipoIntencion.ORDEN_INEQUIVOCA
+    assert signal.datos_trabajo is not None
+    assert signal.datos_trabajo.clase is WorkItemClass.PROGRAMACION
+
+
 # --- Alcance y criterio derivados de la clase -------------------------------
 #
 # Antes, estos dos campos eran constantes: un eco literal de la orden y una
