@@ -79,11 +79,14 @@ bloques:
       experiments/work_engine_spike_i2/INFORME.md. Lo medido: gpt-researcher
       0.15.1 se instala limpio; de fábrica exige clave de OpenAI y de Tavily;
       PERO existe camino sin ninguna clave -seis de sus dieciséis buscadores no
-      la piden, duckduckgo entre ellos, y Ollama está soportado en los tres
-      sitios que hacen falta, incluidos los embeddings-. El coste deja de ser
-      por consulta y pasa a ser hardware. Lo que NO se pudo medir aquí: la
-      calidad, porque el proxy bloquea los buscadores y el guardián no deja
-      instalar Ollama. Ni una pregunta se contestó de verdad.
+      la piden, duckduckgo entre ellos-. Y admite 25 proveedores de modelo, que
+      no se reparten en dos grupos sino en cuatro: hay LOCALES sin claves
+      (ollama), hay de PAGO (openai, anthropic), y hay CON CAPA GRATUITA en la
+      nube (groq, google_genai, openrouter) que no necesitan ni hardware ni las
+      APIs que el propietario descartó. Esa tercera vía es la más barata de
+      estrenar y la primera versión del informe casi la deja fuera. Lo que NO se
+      pudo medir aquí: la calidad, porque el proxy bloquea los buscadores y el
+      guardián no deja instalar Ollama. Ni una pregunta se contestó de verdad.
 
   - id: B1
     titulo: Que Sirius investigue de verdad desde una orden

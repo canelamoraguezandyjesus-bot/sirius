@@ -90,6 +90,40 @@ Ollama da una configuración **sin ninguna clave**. El coste deja de ser por
 consulta y pasa a ser hardware, exactamente como anticipaba
 `BLOQUE_B_SUSCRIPCIONES_O_CLAVES.md`.
 
+## Medición 3b — Y hay una tercera vía que este informe casi se deja fuera
+
+La conclusión de arriba es cierta y **estaba incompleta**. Se escribió mirando
+solo la vía local que el plan nombraba, y eso dejaba una falsa disyuntiva:
+«o compras hardware, o pagas por consulta».
+
+Contados los proveedores que la herramienta admite: **25**.
+
+```
+aimlapi       anthropic     avian         azure_openai  bedrock
+cohere        dashscope     deepseek      fireworks     forge
+gigachat      google_genai  google_vertexai  groq       huggingface
+litellm       minimax       mistralai     netmind       ollama
+openai        openrouter    together      vllm_openai   xai
+```
+
+Y no se reparten en dos grupos, sino en cuatro:
+
+| | |
+|---|---|
+| Local, sin claves | `ollama`, `vllm_openai`, `huggingface` — el coste es hardware |
+| **Con capa gratuita o muy baratos** | `groq`, `google_genai`, `deepseek`, `openrouter`, `together`, `mistralai`, `fireworks` |
+| De pago por uso | `openai`, `anthropic`, `azure_openai`, `bedrock`, `google_vertexai`, `cohere`, `xai` |
+| Ni una cosa ni otra | `litellm` es un enrutador hacia los demás, no un proveedor |
+
+**La segunda fila es la que cambia el cálculo.** Un proveedor con capa gratuita
+en la nube, más un buscador sin clave, da investigación **sin comprar hardware y
+sin las dos APIs que el propietario descartó**. No hay que elegir entre local y
+de pago: hay una tercera vía, y es la más barata de estrenar.
+
+Que este informe estuviera a punto de cerrarse sin ella queda dicho aquí y no
+disimulado: la primera versión midió lo que el plan nombraba y no lo que la
+herramienta ofrecía.
+
 ## Medición 4 — Aquí no se puede terminar, y se dice por qué
 
 El recuperador sin clave **se ejecuta**: el código entra, construye la consulta
@@ -114,9 +148,14 @@ local, y sin modelo local no hay nada que medir sobre calidad.
 hacían dudoso están resueltas por medición: hay buscador sin clave, y hay
 soporte local para modelo **y** embeddings.
 
-**Coste: no es por consulta, es hardware.** El plan preguntaba si exigía gasto;
-la respuesta medida es que no exige claves. Lo que exige es una máquina que
-aguante un modelo local — la que el propietario ya estaba considerando comprar.
+**Coste: hay tres caminos, y dos no cuestan dinero.** El plan preguntaba si
+exigía gasto; la respuesta medida es que **no exige nada**:
+
+1. **Local** (`ollama`): sin claves, el coste es hardware.
+2. **Capa gratuita en la nube** (`groq`, `google_genai`, `openrouter`…): sin
+   hardware y sin las APIs que el propietario descartó. **La más barata de
+   estrenar**, y la que este informe casi se deja fuera.
+3. De pago por uso: existe, y no hace falta para empezar.
 
 **Lo que este spike NO demuestra, y no hay que leerlo de más:**
 
@@ -130,13 +169,21 @@ aguante un modelo local — la que el propietario ya estaba considerando comprar
 
 ## Qué haría falta para cerrar S2 del todo
 
-Una máquina con Ollama y salida a internet —la del propietario, o el
-ordenador pequeño encendido siempre del que habló—. Con ella:
+Cualquiera de las dos vías sin gasto, y el plan pide **≥2 configuraciones**
+precisamente porque el resultado puede depender del modelo y no del adaptador.
+La comparación natural es una de cada:
 
-1. `ollama pull` de un modelo pequeño y otro mediano.
-2. `RETRIEVER=duckduckgo`, `FAST_LLM`/`SMART_LLM`/`EMBEDDING` apuntando a Ollama.
-3. Una pregunta de **respuesta conocida**, como pide el plan, y comparar.
-4. Repetir con el modelo mediano: el plan avisa de que el resultado puede
-   depender del modelo y no del adaptador, y pide ≥2 configuraciones.
+1. **Una con capa gratuita** (`groq` o `google_genai`) — no necesita máquina
+   nueva, así que es la que se puede estrenar antes.
+2. **Una local** (`ollama`, modelo pequeño) — en la máquina del propietario o en
+   el ordenador pequeño encendido siempre del que habló.
+3. Con `RETRIEVER=duckduckgo` en las dos, para que la única variable sea el
+   modelo.
+4. Una pregunta de **respuesta conocida**, como pide el plan, y comparar.
+
+Eso da el número que falta —el «por lo menos un 80 %»— y cierra el bloque. Cuál
+de los proveedores se prueba primero **no lo decide este spike**: es del
+propietario, y su decisión de gasto sigue intacta porque ninguna de las dos vías
+recomendadas lo tiene.
 
 Eso da el número que falta y cierra el bloque.
