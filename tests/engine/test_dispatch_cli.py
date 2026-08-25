@@ -62,14 +62,19 @@ def test_una_clase_no_despachable_no_crea_ningun_work_item(tmp_path: Path) -> No
     idempotía nada -el work_id se deriva del instante, así que cada intento
     escribía OTRO WorkItem huérfano- y las entradas se acumulaban sin límite
     en un diario append-only.
+
+    Desde la incidencia #336 (ADR-088) «documenta» sí tiene despachador -ver
+    ``test_documenta_despacha_con_la_etiqueta_de_activacion_y_el_perfil_documentalista``-,
+    así que esta reproducción usa «investiga», que se queda fuera de la tabla
+    cerrada de §12.4 igual que antes.
     """
     diario = tmp_path / "diario.jsonl"
 
-    codigo, texto = _correr(["Documenta el estado actual del motor", "--ejecutar"], diario=diario)
+    codigo, texto = _correr(["Investiga el estado actual del motor", "--ejecutar"], diario=diario)
 
     assert codigo == 5, texto
     assert "No he creado nada" in texto
-    assert "documentacion" in texto
+    assert "investigacion" in texto
     assert not diario.exists(), (
         "un WorkItem de clase no despachable no puede quedar escrito en el diario "
         "durable como ACTIVE: el rechazo tiene que ocurrir antes de crearlo"
@@ -77,7 +82,7 @@ def test_una_clase_no_despachable_no_crea_ningun_work_item(tmp_path: Path) -> No
 
     # Repetir la misma orden no debe acumular una segunda entrada huérfana.
     codigo_2, texto_2 = _correr(
-        ["Documenta el estado actual del motor", "--ejecutar"], diario=diario
+        ["Investiga el estado actual del motor", "--ejecutar"], diario=diario
     )
     assert codigo_2 == 5, texto_2
     assert not diario.exists()
@@ -253,6 +258,45 @@ def test_una_programacion_sigue_declarando_el_perfil_implementador(tmp_path: Pat
     assert codigo == 0, texto
     assert "clase «programacion»" in texto
     assert "Perfil: implementer@1" in texto
+
+
+def test_documenta_despacha_con_la_etiqueta_de_activacion_y_el_perfil_documentalista(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Requisito de la incidencia #336: una orden que empieza por «Documenta»
+    da la vuelta completa del ciclo -misma etiqueta de activación que
+    programación (ADR-088)- y declara ``Perfil: documentalista@1`` en el
+    cuerpo, para que los workflows (ADR-088) elijan el prompt documental.
+    """
+    from sirius_engine.dispatcher import ETIQUETA_ACTIVACION
+
+    llamadas: list[tuple[str, dict[str, Any]]] = []
+
+    class _EscritorQueRegistra:
+        def crear_incidencia(
+            self, *, repo: str, titulo: str, cuerpo: str, etiquetas: tuple[str, ...]
+        ) -> Any:
+            from sirius_engine.ports.github_writer import IncidenciaCreada
+
+            llamadas.append(("crear_incidencia", {"cuerpo": cuerpo, "etiquetas": etiquetas}))
+            return IncidenciaCreada(numero=555, url=f"https://github.com/{repo}/issues/555")
+
+        def aplicar_etiqueta(self, *, repo: str, numero: int, etiqueta: str) -> None:
+            llamadas.append(("aplicar_etiqueta", {"etiqueta": etiqueta}))
+
+    monkeypatch.setattr(dispatch_cli, "GitHubCliWriter", lambda: _EscritorQueRegistra())
+
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr(["Documenta el estado actual del motor", "--ejecutar"], diario=diario)
+
+    assert codigo == 0, texto
+    assert "clase «documentacion»" in texto
+    verbos = [nombre for nombre, _ in llamadas]
+    assert verbos == ["crear_incidencia", "aplicar_etiqueta"]
+    _, args_creacion = llamadas[0]
+    assert "Perfil: documentalista@1" in args_creacion["cuerpo"]
+    _, args_etiqueta = llamadas[1]
+    assert args_etiqueta["etiqueta"] == ETIQUETA_ACTIVACION
 
 
 def test_el_diario_del_despachador_es_hermano_del_diario_del_motor(tmp_path: Path) -> None:

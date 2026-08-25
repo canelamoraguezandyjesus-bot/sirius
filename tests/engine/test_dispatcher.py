@@ -234,8 +234,9 @@ def test_c2_p6_el_episodio_se_reconstruye_del_diario_sin_github() -> None:
 
 
 def test_clase_fuera_de_la_tabla_no_se_despacha() -> None:
-    """Requisito 5 (#256): solo la tabla cerrada de §12.4 -programacion, auditoria- se despacha."""
-    work_item = _work_item(evidencia=(ORDEN,), clase=WorkItemClass.DOCUMENTACION)
+    """Requisito 5 (#256): solo la tabla cerrada de §12.4 -programacion, auditoria,
+    documentacion (ADR-088)- se despacha. ``investigacion`` se queda fuera."""
+    work_item = _work_item(evidencia=(ORDEN,), clase=WorkItemClass.INVESTIGACION)
     writer = _EscritorSoloVerbosEnumerados()
     journal = InMemoryDispatchJournal()
 
@@ -355,6 +356,38 @@ def test_c4_programacion_sigue_recibiendo_sus_etiquetas_de_siempre() -> None:
         now=NOW,
     )
 
+    _, args_creacion = writer.llamadas[0]
+    assert args_creacion["etiquetas"] == (ETIQUETA_INICIAL,)
+    _, args_etiqueta = writer.llamadas[1]
+    assert args_etiqueta["etiqueta"] == ETIQUETA_ACTIVACION
+
+
+# --- C3: el motor despacha documentación (incidencia #336, ADR-088) ------
+
+
+def test_c3_documentacion_recibe_las_mismas_etiquetas_que_programacion() -> None:
+    """Objetivo de la incidencia #336: mismo ciclo que programación (ADR-088,
+    criterio (b): «documentacion entra por sirius:planned y
+    sirius:implement-requested, igual que programacion»)."""
+    work_item = _work_item(evidencia=(ORDEN,), clase=WorkItemClass.DOCUMENTACION)
+    writer = _EscritorSoloVerbosEnumerados()
+    journal = InMemoryDispatchJournal()
+
+    resultado = dispatch_work_item(
+        work_item,
+        writer=writer,
+        journal=journal,
+        repo="acme/repo",
+        profile_ref=PERFIL,
+        bloque="C3",
+        now=NOW,
+    )
+
+    assert resultado.ya_despachado is False
+    assert resultado.episodio.numero_incidencia == 241
+    assert resultado.episodio.etiqueta == ETIQUETA_ACTIVACION
+    verbos = [nombre for nombre, _ in writer.llamadas]
+    assert verbos == ["crear_incidencia", "aplicar_etiqueta"]
     _, args_creacion = writer.llamadas[0]
     assert args_creacion["etiquetas"] == (ETIQUETA_INICIAL,)
     _, args_etiqueta = writer.llamadas[1]

@@ -58,13 +58,16 @@ COMANDO = "sirius-despachar"
 #: :mod:`sirius_engine.dispatcher` selecciona la etiqueta según §12.4): la
 #: clase que se despacha decide qué perfil declara el cuerpo, no un único
 #: valor fijo que ignoraría cuál guardián real va a atender la incidencia
-#: (hallazgo CODEX-001, incidencia #256). Solo cubre las dos clases
-#: despachables -``programacion`` y ``auditoria``-: para cualquier otra,
-#: ``dispatch_work_item`` rechaza el despacho antes de que el perfil llegue a
-#: proyectarse en ningún cuerpo real.
+#: (hallazgo CODEX-001, incidencia #256). Solo cubre las tres clases
+#: despachables -``programacion``, ``auditoria`` y ``documentacion``
+#: (ADR-088, incidencia #336)-: para cualquier otra, ``dispatch_work_item``
+#: rechaza el despacho antes de que el perfil llegue a proyectarse en ningún
+#: cuerpo real. El perfil ``documentalista`` es el que los workflows
+#: (ADR-088) leen del campo ``Perfil:`` para elegir el prompt documental.
 TABLA_PERFILES: dict[WorkItemClass, ProfileRef] = {
     WorkItemClass.PROGRAMACION: ProfileRef(ref="implementer", version=1),
     WorkItemClass.AUDITORIA: ProfileRef(ref="auditor", version=1),
+    WorkItemClass.DOCUMENTACION: ProfileRef(ref="documentalista", version=1),
 }
 
 #: Perfil de repliegue cuando la clase no está en :data:`TABLA_PERFILES`. No
@@ -175,8 +178,9 @@ def main(
         return 2
 
     # H-17 (incidencia #308): el despachador solo atiende las clases de
-    # TABLA_ACTIVACION -«programacion» y «auditoria», la tabla cerrada del
-    # contrato §12.4-. Antes esta comprobación llegaba tarde: aplicar_decision
+    # TABLA_ACTIVACION -«programacion», «auditoria» y «documentacion»
+    # (ADR-088, incidencia #336), la tabla cerrada del contrato §12.4-. Antes
+    # esta comprobación llegaba tarde: aplicar_decision
     # ya había creado y activado el WorkItem, y dispatch_work_item levantaba
     # ClaseNoDespachableError SIN capturar, así que el proceso terminaba con
     # una traza y el WorkItem quedaba ACTIVE en el diario durable, huérfano
@@ -195,10 +199,10 @@ def main(
         linea("No he creado nada.")
         linea(f"  Motivo: el despachador no gestiona la clase «{clase}»")
         linea("")
-        linea("Solo las clases «programacion» y «auditoria» tienen despachador (contrato")
-        linea("§12.4). Crear el WorkItem para una orden de una clase que nunca se va a")
-        linea("despachar dejaría trabajo ACTIVE huérfano en el diario, así que el rechazo")
-        linea("ocurre antes de escribir nada.")
+        linea("Solo las clases «programacion», «auditoria» y «documentacion» tienen")
+        linea("despachador (contrato §12.4). Crear el WorkItem para una orden de una clase")
+        linea("que nunca se va a despachar dejaría trabajo ACTIVE huérfano en el diario,")
+        linea("así que el rechazo ocurre antes de escribir nada.")
         return 5
 
     # Un ENSAYO no persiste nada. Si usara el almacén durable dejaría un
