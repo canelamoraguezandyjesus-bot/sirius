@@ -2,6 +2,45 @@
 
 Este repositorio implementa Sirius 0.1. El producto y la arquitectura están aprobados.
 
+## Antes de RESPONDER
+
+Esta sección existe porque la de abajo empieza por «antes de modificar código», y
+contestar una pregunta no es modificar código: ninguna de sus reglas se
+disparaba. El 25-08-2026 el propietario tuvo que decir tres veces en una sesión
+«búscalo, no me lo digas de memoria», y tenía razón las tres.
+
+**Toda afirmación sobre qué está planeado, decidido, medido o pendiente sale de
+leer este repositorio, y se dice DÓNDE se leyó.** Nunca de memoria, nunca de lo
+que parezca razonable. Si no se encontró, se dice «no lo he encontrado», que es
+una respuesta legítima; inventarlo no lo es.
+
+Antes de proponer construir algo, **busca si ya existe**. En este repositorio ha
+aparecido seis veces una pieza correcta a la que no llamaba nadie, y una séptima
+casi se construye por duplicado el 25-08 -un «investigador del repositorio» que
+ya existía con otro nombre: el auditor-.
+
+### Dónde mirar, para que buscar sea barato
+
+| Qué buscas | Dónde está |
+|---|---|
+| Qué se decidió y por qué | `docs/decisions/ADR-*.md` |
+| Qué bloques del MOTOR hay y cómo van | `docs/implementation/bloques_del_motor.yml` |
+| Qué defectos hay abiertos | `docs/audits/registro_defectos.yml` |
+| El plan del motor, bloque a bloque | `docs/implementation/SIRIUS_WORK_ENGINE_PLAN_IMPLEMENTACION.md` |
+| Qué reglas gobiernan la automatización | `docs/implementation/AUTOMATION_OPERATING_CONTRACT.md` |
+| Qué hace cada agente | `scripts/automation/prompts/` |
+| Cómo se usa el motor | `docs/operations/MOTOR_DE_SIRIUS.md` |
+| Proveedores de IA, coste y local vs nube | `docs/implementation/AGENT_OPPORTUNITY_MATRIX.md` §6 y `BLOQUE_B_SUSCRIPCIONES_O_CLAVES.md` |
+
+Dos avisos que ya han costado tiempo:
+
+- **«Los bloques» es ambiguo.** Hay dos listas: los 16 del PRODUCTO (cerrados el
+  10-08-2026) y los del MOTOR. Comparten hasta un identificador: `B1` es uno de
+  cada. Di siempre de cuál hablas.
+- **Un documento de estado puede estar caducado.** `STATUS.md` estuvo quince
+  días diciendo que Sirius 0.1 no estaba aceptado cuando ya lo estaba. Si una
+  afirmación importa, contrástala con el registro o con el historial.
+
 ## Antes de modificar código
 
 1. Lee `docs/canonical/STATUS.md`.
