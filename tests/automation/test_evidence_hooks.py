@@ -132,10 +132,63 @@ def test_work_without_evidence_nudges_exactly_once(repo: Path) -> None:
     assert not _hay_bloqueo(segundo), "el empujón por rama es UNO: repetirlo mata el montaje"
 
 
-def test_with_evidence_the_nudge_stays_silent(repo: Path) -> None:
-    _confirma(repo, ".claude/evidencia/trabajo.md", NOTA)
+def test_un_adr_de_la_rama_silencia_el_empujon(repo: Path) -> None:
+    _confirma(repo, "docs/decisions/ADR-095-decision-de-laboratorio.md", NOTA)
     r = _run_hook(HOOK_STOP, {}, repo)
     assert not _hay_bloqueo(r)
+
+
+def test_la_evidencia_de_un_defecto_en_docs_audits_silencia_el_empujon(repo: Path) -> None:
+    """H-18 (#311): la evidencia de un defecto medido vive junto a su registro.
+
+    En la rama `registrar-h17` la evidencia existía —`docs/audits/evidencia-H-17.md`,
+    71 líneas con las cuatro preguntas y el criterio de parada escrito antes de
+    medir— y el empujón la dio por ausente, porque solo reconocía
+    `docs/decisions/` y un directorio denegado. Un defecto medido es un hecho,
+    no una decisión: obligar a fabricar un ADR para que el aviso calle es
+    exactamente cumplir la forma y perder el fondo (ADR-001).
+    """
+    _confirma(repo, "docs/audits/evidencia-trabajo.md", NOTA)
+    r = _run_hook(HOOK_STOP, {}, repo)
+    assert not _hay_bloqueo(r), (
+        "la evidencia en docs/audits/evidencia-*.md tiene que callar el empujón; "
+        "si no, el falso positivo de H-18 sigue vivo"
+    )
+
+
+def test_el_sitio_denegado_ya_no_cuenta_como_evidencia(repo: Path) -> None:
+    """`.claude/evidencia/` está en la lista `deny`: nadie puede escribir ahí.
+
+    Medido en #311: el intento real se bloqueó con «Permission ... has been
+    denied». Un sitio inalcanzable no puede seguir contando como evidencia
+    válida —solo serviría para que un fichero colado por fuera del permiso
+    callara el aviso—, y en el árbol no hay ni un fichero de evidencia real
+    ahí: solo el .gitignore y el README del directorio.
+    """
+    _confirma(repo, ".claude/evidencia/trabajo.md", NOTA)
+    r = _run_hook(HOOK_STOP, {}, repo)
+    assert _hay_bloqueo(r), (
+        "una nota en el directorio denegado no puede callar el empujón: ahí no "
+        "puede escribir ninguna sesión, así que lo que haya no pasó por el método"
+    )
+
+
+def test_el_empujon_ya_no_ofrece_el_sitio_denegado(repo: Path) -> None:
+    """El mensaje tiene que ofrecer sitios donde escribir SÍ es posible.
+
+    Un comprobador que pide algo imposible enseña a saltárselo: la salida cómoda
+    era fabricar un ADR vacío para que el aviso callara.
+    """
+    _confirma(repo, "cambio.txt")
+    r = _run_hook(HOOK_STOP, {}, repo)
+    assert _hay_bloqueo(r)
+    assert "docs/audits/evidencia-" in r.stdout, (
+        "el aviso tiene que ofrecer docs/audits/ como sitio para la evidencia "
+        "de un hecho medido"
+    )
+    assert ".claude/evidencia" not in r.stdout, (
+        "el aviso sigue ofreciendo el directorio denegado: pide algo imposible"
+    )
 
 
 def test_without_work_the_nudge_stays_silent(repo: Path) -> None:
