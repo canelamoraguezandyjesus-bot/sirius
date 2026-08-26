@@ -134,11 +134,24 @@ defectos:
     titulo: El corrector no puede arreglar un fallo de Quality, aunque su prompt diga que si
     bloque: ciclo
     gravedad: media
-    estado: abierto
+    estado: cerrado
     incidencia: 282
     ficheros:
       - .github/workflows/repair-sirius-work.yml
       - scripts/automation/prompts/corrector.md
+    cerrado_por: c72a73074d08472dc45cf20aa1833923310df814
+    nota: >-
+      Cerrado el 25-08-2026, con el permiso sobre .github/ abierto por el
+      propietario. El precheck del corrector distingue ahora el disparador de la
+      ronda: si hay un fallo de Quality registrado para el head actual -el
+      marcador durable que sirius_apply_verdict.sh ya usaba para validar
+      CHECKS_UNRELATED-, la ausencia de observaciones estructuradas deja de ser
+      motivo de parada. Es la salida (1) que la propia incidencia recomendaba.
+      La logica va como funcion de la libreria real, no como texto pegado en el
+      YAML, para que el guardian ejecute lo mismo que corre en produccion.
+      Guardian: tests/automation/test_corrector_ante_fallo_de_ci.py, visto
+      FALLAR en tres mutaciones, incluida la de la puerta dejando de llamar a la
+      funcion.
 
   - id: H-13
     titulo: mirror_projection inyecta scripts en sys.path desde __file__, asi que el paquete no es instalable
@@ -268,8 +281,20 @@ defectos:
     titulo: Una incidencia que se bloquea antes de producir una PR no tiene forma de reanudarse, y eso castiga la parada temprana
     bloque: ciclo
     gravedad: media
-    estado: abierto
+    estado: cerrado
     incidencia: 337
     ficheros:
       - .github/workflows/resume-sirius-on-command.yml
       - scripts/automation/sirius_resume_on_command.sh
+    cerrado_por: 690c946f009cefe49d4ecb69eff586c0e8b9441a
+    nota: >-
+      Cerrado el 25-08-2026 con ADR-094. Sin PR, la orden continua autoriza un
+      REINICIO en vez de morir: repite desde cero la fase que se paro, con
+      marcador propio y sin head, porque no hay version sobre la que continuar.
+      Incluye la mitad que no se ve leyendo: blocked-decision volvia SIEMPRE al
+      corrector, que sin PR se detiene en el acto por sin-pr, o sea una parada
+      muda cambiada por otra. Guardian:
+      tests/automation/test_reanudar_ejecutando_el_guion.py, que ejecuta el
+      guion real contra un gh simulado; tres pruebas vistas FALLAR sin el
+      arreglo. Queda un hueco declarado: si la parada no publico marcador de
+      rol, sigue haciendo falta aplicar la etiqueta a mano.

@@ -31,8 +31,9 @@ ya existía con otro nombre: el auditor-.
 | Qué hace cada agente | `scripts/automation/prompts/` |
 | Cómo se usa el motor | `docs/operations/MOTOR_DE_SIRIUS.md` |
 | Proveedores de IA, coste y local vs nube | `docs/implementation/AGENT_OPPORTUNITY_MATRIX.md` §6 y `BLOQUE_B_SUSCRIPCIONES_O_CLAVES.md` |
+| La memoria del motor: diario, despachos y racha | la rama **`estado-del-motor`**, nunca `main` (ADR-083, ADR-093) |
 
-Dos avisos que ya han costado tiempo:
+Tres avisos que ya han costado tiempo:
 
 - **«Los bloques» es ambiguo.** Hay dos listas: los 16 del PRODUCTO (cerrados el
   10-08-2026) y los del MOTOR. Comparten hasta un identificador: `B1` es uno de
@@ -40,6 +41,10 @@ Dos avisos que ya han costado tiempo:
 - **Un documento de estado puede estar caducado.** `STATUS.md` estuvo quince
   días diciendo que Sirius 0.1 no estaba aceptado cuando ya lo estaba. Si una
   afirmación importa, contrástala con el registro o con el historial.
+- **El fichero `docs/operations/racha_siete_dias.jsonl` de `main` está vacío
+  a propósito y siempre lo estará.** El registro de verdad de la racha vive en
+  la rama `estado-del-motor` (ADR-093). Mirar el de `main` y concluir «el
+  contador no ha corrido nunca» sería exactamente el error del aviso anterior.
 
 ## Antes de modificar código
 

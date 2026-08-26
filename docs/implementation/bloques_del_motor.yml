@@ -153,6 +153,22 @@ bloques:
       y authority_reversion.py (D1c)- pero authority_reversion NO LO LLAMA NADIE fuera
       de sus propias pruebas. Es la salida de emergencia del §11.4: lo que devolvería
       el mando si el motor se porta mal. Construida, probada e inalcanzable.
+    actualizado_25_08_2026: >-
+      El contador YA SE EJECUTA SOLO. `sirius-racha` estaba construido, probado
+      y sin ningún llamante; desde hoy lo dispara
+      `.github/workflows/contador-siete-dias.yml` a las 03:24 UTC, hora derivada
+      y no elegida (ADR-093). Eso desatasca la mitad de D1 que dependía de que
+      alguien lo cableara. Lo que NO desatasca, y conviene no confundirlo: los
+      siete días siguen sin empezar, porque un día sin línea no es un día verde
+      y las líneas dependen de que haya trabajo circulando y de que sus
+      incidencias se puedan leer. El primer CUMPLE está a siete días naturales
+      como mínimo. Sigue pendiente `authority_reversion.py` (D1c), que a día de
+      hoy SIGUE sin llamante: sería la quinta pieza correcta sin llamante de
+      este repositorio, tras el despachador, H-13, el supervisor y el propio
+      contador. Y el margen del horario es de DOS MINUTOS: subir cualquier
+      `timeout-minutes` por encima de 85 deja al contrato §11.2 sin ninguna
+      hora posible, y `tests/automation/test_contador_de_siete_dias.py` lo pone
+      en rojo si pasa.
 
   - id: D2
     titulo: Que el motor corra solo, siempre

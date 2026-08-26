@@ -293,6 +293,43 @@ if m:
   return 0
 }
 
+# sirius_ronda_disparada_por_ci <comments_file> <head_sha> — ¿la ronda actual la
+# abrió un fallo de Quality sobre ESTE head?
+#
+# H-14 (incidencia #282, 23-08-2026). El corrector exigía observaciones
+# estructuradas SIN EXCEPCIÓN antes de mirar nada más, y un `CI_FAILURE` no trae
+# ninguna: **el fallo ES la observación**, y vive en los logs del run, no en un
+# bloque JSON de la incidencia. Así que la puerta se cerraba y el bloque moría en
+# `sirius:failed-safely` — le pasó a H-13 (#275) por una prueba de una línea, y
+# hubo que desatascarlo a mano.
+#
+# El prompt del corrector prometía justo lo que esa puerta le impedía: «hallazgos
+# CHANGES_REQUESTED ... **o** un resultado fallido de Quality ligado al head
+# actual». La segunda mitad era inalcanzable.
+#
+# El dato que faltaba NO había que ir a buscarlo fuera: ya estaba publicado en la
+# incidencia. `advance-sirius-after-quality.yml` deja el marcador durable
+# `<!-- sirius-quality:<head>:failure -->` (o `:timed_out`), y
+# `sirius_apply_verdict.sh` ya lo usaba para validar `CHECKS_UNRELATED`. Esto es
+# el mismo criterio, aplicado donde faltaba.
+#
+# POR HEAD, y no «hubo algún CI_FAILURE alguna vez»: si bastara con haberlo
+# habido, la puerta quedaría abierta para siempre en cuanto una incidencia
+# fallara CI una vez, y una ronda de revisión sin observaciones se colaría como
+# si fuera un fallo de CI. La pregunta correcta es si el head que hay AHORA
+# arrastra un fallo registrado.
+#
+# Devuelve 0 si sí, 1 si no. Un head vacío devuelve 1: sin saber sobre qué
+# versión se pregunta no se puede afirmar nada, y afirmarlo abriría la puerta por
+# el peor motivo -no poder comprobarlo-.
+sirius_ronda_disparada_por_ci() {
+  local comments_file="$1" head_sha="$2"
+  [ -n "$head_sha" ] || return 1
+  [ -s "$comments_file" ] || return 1
+  grep -qiE "<!--[[:space:]]*sirius-quality:${head_sha}:(failure|timed_out)[[:space:]]*-->" \
+    "$comments_file"
+}
+
 # sirius_dump_comments <repo> <issue> <out_file> — vuelca los comentarios en
 # orden cronológico (del más antiguo al más reciente) para analizarlos. Pagina
 # igual que el resto de lecturas. Best-effort: deja el archivo vacío si no se

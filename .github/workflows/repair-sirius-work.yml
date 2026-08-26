@@ -306,7 +306,11 @@ jobs:
           detail="${detail:-No se pudo evaluar la convergencia; el analizador no entregó una decisión legible.}"
           rounds="${rounds:-0}"
           ci_failures="${ci_failures:-0}"
-          rm -f "$comments_file" "$decision_file"
+          rm -f "$decision_file"
+          # `comments_file` NO se borra aquí: H-14 lo necesita más abajo para
+          # saber si esta ronda la abrió un fallo de Quality. Leer los
+          # comentarios una segunda vez abriría la ventana que el comentario de
+          # arriba avisa: que la segunda lectura falle y se decida a ciegas.
 
           if [ -z "${next_cycle:-}" ]; then
             marker="<!-- sirius-verdict:corrector:precheck:ronda-innumerable:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
@@ -357,7 +361,7 @@ jobs:
             parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
               "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
               "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar la parada segura (${reason})."
-            rm -f "$body_file"
+            rm -f "$body_file" "$comments_file"
             echo "valid=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -365,19 +369,41 @@ jobs:
           observations="$(sirius_extract_observations "$GH_REPO" "$ISSUE_NUMBER")"
           [ "$(_sirius_now)" -lt "$gate_deadline" ] || sin_tiempo
           if [ -z "$observations" ]; then
-            marker="<!-- sirius-verdict:corrector:precheck:sin-observaciones -->"
-            body_file="$(mktemp)"
-            printf '%s\n\n%s\n\n%s\n' \
-              "$marker" "🔴 **Me he detenido de forma segura**" \
-              "No encuentro ninguna observación estructurada que corregir en esta incidencia." >"$body_file"
-            parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
-              "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
-              "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar la parada segura (sin-observaciones)."
-            rm -f "$body_file"
-            echo "valid=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            # H-14 (incidencia #282): la ausencia de observaciones NO es motivo de
+            # parada cuando la ronda la abrió un fallo de Quality. Un `CI_FAILURE`
+            # no trae observaciones estructuradas -el fallo ES la observación, y
+            # vive en los logs del run-, así que exigirlas sin excepción mataba
+            # exactamente el caso que el prompt del corrector promete atender.
+            #
+            # El head se pide aquí y no antes porque solo hace falta en este
+            # camino: en el normal habría sido una llamada de red por ronda para
+            # nada. Si no se puede leer, `sirius_ronda_disparada_por_ci` devuelve
+            # 1 y se para como siempre: ante la duda, la puerta se cierra.
+            [ "$(_sirius_now)" -lt "$gate_deadline" ] || sin_tiempo
+            pr_head="$(sirius_retry gh pr view "${pr_numbers[0]}" --repo "$GH_REPO" \
+              --json headRefOid --jq '.headRefOid' 2>/dev/null || true)"
+            if sirius_ronda_disparada_por_ci "$comments_file" "$pr_head"; then
+              echo "Sin observaciones estructuradas, pero hay un fallo de Quality registrado"
+              echo "para el head ${pr_head}: la causa corregible es ese run (H-14). Sigo."
+            else
+              marker="<!-- sirius-verdict:corrector:precheck:sin-observaciones -->"
+              body_file="$(mktemp)"
+              printf '%s\n\n%s\n\n%s\n' \
+                "$marker" "🔴 **Me he detenido de forma segura**" \
+                "No encuentro ninguna observación estructurada que corregir en esta incidencia, ni ningún fallo de Quality registrado para el head actual." >"$body_file"
+              parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+                "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
+                "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar la parada segura (sin-observaciones)."
+              rm -f "$body_file" "$comments_file"
+              echo "valid=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
           fi
+          rm -f "$comments_file"
 
+          # Puede quedar VACÍO a propósito: es el caso de H-14, una ronda abierta
+          # por un fallo de Quality. El corrector lo distingue por el propio
+          # comentario `CI_FAILURE` de la incidencia, que trae el run y el head.
           printf '%s' "$observations" > "${RUNNER_TEMP}/sirius_observations.json"
           echo "valid=true" >> "$GITHUB_OUTPUT"
           echo "pr_number=${pr_numbers[0]}" >> "$GITHUB_OUTPUT"

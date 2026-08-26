@@ -425,3 +425,119 @@ def test_el_texto_antes_de_la_firma_sigue_invalidando_la_orden(tmp_path: Path) -
     )
     assert resultado.returncode == 0
     assert _etiquetas(env) == ["sirius:failed-safely"]
+
+
+# --------------------------------------------------------------------------- #
+# H-23: la incidencia que se para ANTES de producir ninguna PR
+# --------------------------------------------------------------------------- #
+#
+# Le pasó a #333 el 25-08-2026: vio que completar su encargo exigía tocar
+# `.github/**`, que ADR-002 le prohíbe, y se detuvo sin escribir una línea. Es la
+# conducta correcta -la alternativa era entregar «una vuelta completa falsa»,
+# palabras del propio implementador-. Y sin embargo quedaba muerta: reponer la
+# etiqueta disparadora volvía a bloquear en el acto, y `continua` exigía un head
+# que no existía.
+#
+# Un sistema cuya única salida para la parada temprana es la muerte **castiga lo
+# que debería premiar**, y con el tiempo enseña a no pararse.
+
+
+def _historial_sin_pr(marcador_de_parada: str) -> str:
+    """Igual que `_historial`, pero sin ninguna URL de PR: nunca se creó."""
+    return f"El bloque se detuvo antes de crear rama.\n{marcador_de_parada}\n"
+
+
+def test_una_parada_sin_pr_reactiva_la_fase_que_se_paro(tmp_path: Path) -> None:
+    """El desenlace de #333: sin PR, se autoriza repetir desde cero."""
+    env = _setup(tmp_path)
+    _sembrar(
+        env,
+        etiquetas=["sirius:failed-safely"],
+        historial=_historial_sin_pr("<!-- sirius-verdict:implementer:FAILED_SAFELY:1 -->"),
+    )
+    resultado = _ejecutar(env)
+
+    assert resultado.returncode == 0, resultado.stderr
+    assert "sirius:implement-requested" in _etiquetas(env), (
+        "sin PR, la incidencia tiene que volver a la fase que se paró; si no, la "
+        f"parada temprana sigue siendo una muerte. Etiquetas: {_etiquetas(env)}"
+    )
+    assert "sirius:failed-safely" not in _etiquetas(env)
+
+
+def test_una_parada_sin_pr_publica_un_permiso_QUE_NO_MIENTE(tmp_path: Path) -> None:
+    """El marcador no puede autorizar «sobre un head» que no existe.
+
+    `sirius-convergence-reset` y `sirius-resume-stop` llevan los dos un head,
+    porque los dos autorizan continuar sobre una versión concreta. Reutilizar
+    cualquiera de ellos aquí escribiría en el historial —que es lo único que
+    después dice qué se permitió— una autorización sobre algo inexistente.
+    """
+    env = _setup(tmp_path)
+    _sembrar(
+        env,
+        etiquetas=["sirius:failed-safely"],
+        historial=_historial_sin_pr("<!-- sirius-verdict:implementer:FAILED_SAFELY:1 -->"),
+    )
+    _ejecutar(env)
+
+    publicado = _comentarios(env)
+    assert "sirius-restart-sin-pr" in publicado, (
+        "falta el marcador propio del reinicio sin PR; el historial no diría que "
+        "lo autorizado fue empezar de cero"
+    )
+    assert "sirius-convergence-reset" not in publicado, (
+        "un reinicio sin PR no perdona rondas: no hubo rondas que contar"
+    )
+    assert "sirius-resume-stop:" not in publicado
+
+
+def test_una_parada_sin_pr_NO_manda_el_trabajo_al_corrector(tmp_path: Path) -> None:
+    """La mitad sutil de H-23, y la que no se ve leyendo.
+
+    `sirius:blocked-decision` volvía SIEMPRE a `sirius:repair-requested`, porque
+    esa parada la emite la política de convergencia y esa siempre para al
+    corrector. Sin PR, el corrector se detiene en el acto por «sin-pr»: sería
+    cambiar una parada muda por otra, y encima con aspecto de haber funcionado.
+    """
+    env = _setup(tmp_path)
+    _sembrar(
+        env,
+        etiquetas=["sirius:blocked-decision"],
+        historial=_historial_sin_pr("<!-- sirius-verdict:implementer:FAILED_SAFELY:1 -->"),
+    )
+    resultado = _ejecutar(env)
+
+    assert resultado.returncode == 0, resultado.stderr
+    etiquetas = _etiquetas(env)
+    assert "sirius:repair-requested" not in etiquetas, (
+        "sin PR no se manda al corrector: se detendría en el acto por «sin-pr» y "
+        f"la incidencia quedaría igual de muerta. Etiquetas: {etiquetas}"
+    )
+    assert "sirius:implement-requested" in etiquetas
+
+
+def test_sin_pr_y_sin_saber_que_fase_se_paro_no_se_inventa_ninguna(tmp_path: Path) -> None:
+    """Ante la duda se para, que es la regla de siempre.
+
+    Sin PR y sin marcador de rol publicado no hay forma de saber qué repetir.
+    Elegir una fase a ojo reanudaría la equivocada, que es peor que no reanudar.
+
+    **Esta pasa con las dos versiones del guion, y es deliberado.** Las otras
+    tres fallan sin el arreglo; ésta no, porque no fija comportamiento nuevo:
+    protege contra la SOBRECORRECCIÓN de abrir la puerta tanto que se reanude a
+    ciegas. Se deja escrito para que nadie la lea como una prueba vacua.
+    """
+    env = _setup(tmp_path)
+    _sembrar(
+        env,
+        etiquetas=["sirius:failed-safely"],
+        historial=_historial_sin_pr("no hay ningun marcador de veredicto aqui"),
+    )
+    resultado = _ejecutar(env)
+
+    assert resultado.returncode != 0
+    etiquetas = _etiquetas(env)
+    assert "sirius:implement-requested" not in etiquetas
+    assert "sirius:review-requested" not in etiquetas
+    assert "sirius:repair-requested" not in etiquetas
