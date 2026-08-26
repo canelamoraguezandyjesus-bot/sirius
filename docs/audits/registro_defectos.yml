@@ -214,11 +214,21 @@ defectos:
     titulo: El recordatorio de evidencia exige un sitio denegado y no reconoce docs/audits/, así que da falsos positivos
     bloque: ciclo
     gravedad: media
-    estado: abierto
+    estado: cerrado
     incidencia: 311
     ficheros:
       - .claude/hooks/recordar_parada.py
       - .claude/settings.json
+    cerrado_por: 9e1037e6404109e2522df3cd30156402fff62142
+    nota: >-
+      Cerrado el 26-08-2026, con la puerta de .claude/ abierta por el
+      propietario (#356) bajo el mismo trato que .github/: se arregla y se
+      vuelve a cerrar. El hook reconoce ahora docs/decisions/ADR-*.md y
+      docs/audits/evidencia-*.md, y dejo de ofrecer el sitio denegado. El falso
+      positivo se vio en vivo: el propio hook bloqueo el cierre de la rama que
+      lo arregla con la evidencia ya confirmada. Guardian:
+      tests/automation/test_evidence_hooks.py, tres pruebas nuevas vistas FALLAR
+      contra el hook sin arreglar.
 
   - id: H-19
     titulo: El intérprete de intención compara marcadores por subcadena sin frontera de palabra, y esa raíz produce al menos tres fallos distintos

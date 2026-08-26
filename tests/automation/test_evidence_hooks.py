@@ -183,8 +183,7 @@ def test_el_empujon_ya_no_ofrece_el_sitio_denegado(repo: Path) -> None:
     r = _run_hook(HOOK_STOP, {}, repo)
     assert _hay_bloqueo(r)
     assert "docs/audits/evidencia-" in r.stdout, (
-        "el aviso tiene que ofrecer docs/audits/ como sitio para la evidencia "
-        "de un hecho medido"
+        "el aviso tiene que ofrecer docs/audits/ como sitio para la evidencia de un hecho medido"
     )
     assert ".claude/evidencia" not in r.stdout, (
         "el aviso sigue ofreciendo el directorio denegado: pide algo imposible"
