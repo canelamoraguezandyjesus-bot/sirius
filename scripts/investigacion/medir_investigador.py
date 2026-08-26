@@ -33,6 +33,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import sys
 import time
 from dataclasses import asdict, dataclass
@@ -78,6 +79,14 @@ class ResultadoConfiguracion:
     total: int
     porcentaje: float
     segundos_totales: float
+    # LO QUE OCURRIO, no lo que se pidio. Estos cuatro campos son la correccion
+    # de la raiz que la refutacion del 26-08-2026 destapo: sin ellos, el arnes
+    # solo sabia repetir su propia configuracion.
+    preguntas_con_error: int
+    preguntas_sin_fuentes: int
+    fuentes_totales: int
+    medicion_fiable: bool
+    motivo_no_fiable: str | None
     preguntas: list[dict[str, Any]]
 
 
@@ -93,16 +102,30 @@ def _version_instalada() -> str:
 
 
 def _corrige(informe: str, obligatorias: list[str]) -> tuple[bool, list[str], list[str]]:
-    """Corrección deterministamente cruda, y declarada como tal.
+    """Corrección determinista, cruda y declarada como tal — pero por PALABRA.
 
-    Se busca cada cadena obligatoria sin distinguir mayúsculas. No juzga la
-    calidad de la redacción ni si el dato está sostenido: solo si aparece. Un
-    corrector fino exigiría otro modelo juzgando, y entonces mediríamos al juez.
-    El informe entero se conserva para que quien dude pueda leerlo.
+    REFUTADO EL 26-08-2026 Y CORREGIDO. La primera versión buscaba subcadena:
+    ``o.lower() in informe.lower()``. Medido por el refutador y comprobado a
+    mano:
+
+        _corrige("uv is a tool you can trust", ["Rust"])          -> True
+        _corrige("the Apache Foundation is unrelated", ["Apache"]) -> True
+
+    «trust» contiene «rust». Y como el texto corregido incluye las URLs de las
+    fuentes, cualquier enlace a `apache.org` aprobaba la pregunta de la licencia
+    sin que el informe dijera nada. Ahora se exige **límite de palabra**.
+
+    Lo que sigue sin hacer, y se dice para que nadie lo lea de más: no juzga la
+    calidad de la redacción ni si el dato está sostenido por las fuentes, solo
+    si aparece como palabra. Un corrector fino exigiría otro modelo juzgando, y
+    entonces mediríamos al juez. El informe entero se conserva para que quien
+    dude lo lea.
     """
-    bajo = informe.lower()
-    encontradas = [o for o in obligatorias if o.lower() in bajo]
-    ausentes = [o for o in obligatorias if o.lower() not in bajo]
+    encontradas: list[str] = []
+    ausentes: list[str] = []
+    for obligatoria in obligatorias:
+        patron = re.compile(rf"(?<!\w){re.escape(obligatoria)}(?!\w)", re.IGNORECASE)
+        (encontradas if patron.search(informe) else ausentes).append(obligatoria)
     return (not ausentes), encontradas, ausentes
 
 
@@ -147,11 +170,20 @@ def medir(configuracion: str) -> ResultadoConfiguracion:
                 id=str(pregunta["id"]),
                 tipo=str(pregunta["tipo"]),
                 texto=str(pregunta["texto"]),
-                # Un error NUNCA puede contar como acierto: sin informe no hay
-                # nada que corregir, y `_corrige("")` con obligatorias vacías
-                # devolvería True. Ése es el «no llegó a intentarlo» que el
-                # criterio de parada (c) prohíbe confundir con «respondió mal».
-                acierta=bool(acierta and error is None and informe.strip()),
+                # TRES condiciones, y la tercera es la que arregla la raiz.
+                #
+                # 1. Sin error: un error nunca es un acierto.
+                # 2. Con informe: `_corrige("")` con obligatorias vacias devolveria
+                #    True, o sea un 100 % construido sobre cero texto.
+                # 3. CON FUENTES. Esta es la nueva, y es la que mata a toda la
+                #    familia de defectos que la refutacion encontro. Sin `ddgs`
+                #    instalado el buscador no arranca, el modelo escribe de
+                #    memoria y el informe SALE PERFECTO: la respuesta esta ahi
+                #    porque el modelo se la sabe, no porque se haya investigado.
+                #    Exigir `fuentes > 0` es lo unico que distingue «investigo y
+                #    acerto» de «se lo sabia». Sin esta linea, un buscador muerto
+                #    daba 100 %.
+                acierta=bool(acierta and error is None and informe.strip() and fuentes > 0),
                 obligatorias_encontradas=encontradas,
                 obligatorias_ausentes=ausentes,
                 fuentes=fuentes,
@@ -163,6 +195,27 @@ def medir(configuracion: str) -> ResultadoConfiguracion:
 
     aciertos = sum(1 for r in resultados if r.acierta)
     total = len(resultados)
+    con_error = sum(1 for r in resultados if r.error is not None)
+    sin_fuentes = sum(1 for r in resultados if r.fuentes == 0)
+    fuentes_totales = sum(r.fuentes for r in resultados)
+
+    # POR QUE UNA MEDICION PUEDE NO SER FIABLE, y por que hay que decirlo aparte
+    # del porcentaje. Un 0 % puede significar dos cosas opuestas: «contesto mal»
+    # o «no llego a intentarlo». Confundirlas es el criterio de parada (c) de la
+    # nota de arranque, y era exactamente lo que este guion hacia antes.
+    motivo: str | None = None
+    if total == 0:
+        motivo = "el banco de preguntas esta vacio: no se midio nada"
+    elif fuentes_totales == 0:
+        motivo = (
+            "ninguna pregunta trajo ni una sola fuente: el buscador no funciono. "
+            "Los informes salen del modelo, no de la investigacion, asi que el "
+            "porcentaje no mide al investigador. Comprueba que `ddgs` este "
+            "instalado: gpt-researcher lo importa pero declara `duckduckgo-search`."
+        )
+    elif con_error == total:
+        motivo = "todas las preguntas fallaron: no hay nada medido"
+
     return ResultadoConfiguracion(
         configuracion=configuracion,
         proveedor_declarado=os.environ.get("SIRIUS_PROVEEDOR", "(sin declarar)"),
@@ -178,6 +231,11 @@ def medir(configuracion: str) -> ResultadoConfiguracion:
         total=total,
         porcentaje=round(100.0 * aciertos / total, 1) if total else 0.0,
         segundos_totales=round(time.monotonic() - arranque, 1),
+        preguntas_con_error=con_error,
+        preguntas_sin_fuentes=sin_fuentes,
+        fuentes_totales=fuentes_totales,
+        medicion_fiable=motivo is None,
+        motivo_no_fiable=motivo,
         preguntas=[asdict(r) for r in resultados],
     )
 
@@ -195,6 +253,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.salida:
         Path(args.salida).write_text(texto, encoding="utf-8")
     sys.stdout.write(texto + "\n")
+
+    # EL CODIGO DE SALIDA DEJA DE MENTIR. Antes devolvia 0 pasara lo que pasara,
+    # y el comparador decidia «medida valida» solo con verlo. Es decir: cinco
+    # preguntas reventadas, cero fuentes, y una comparacion concluyente.
+    #
+    # Ahora 3 significa «no me creas»: se midio algo, pero no lo que se queria
+    # medir. El JSON sale igual -contiene el motivo y los informes-, porque un
+    # fallo que no deja rastro es peor que el fallo.
+    if not resultado.medicion_fiable:
+        sys.stderr.write(f"MEDICION NO FIABLE: {resultado.motivo_no_fiable}\n")
+        return 3
     return 0
 
 

@@ -821,3 +821,125 @@ def test_el_env_del_trabajo_no_configura_al_investigador() -> None:
         "bloque lo ven todos los pasos: una sola de esas variables ahí y las dos "
         "configuraciones medirían contra el mismo sitio, con dos etiquetas distintas."
     )
+
+
+# --------------------------------------------------------------------------- #
+# La raíz que la refutación del 26-08-2026 destapó
+# --------------------------------------------------------------------------- #
+#
+# 27 hallazgos, 8 graves, y SEIS DE LOS OCHO eran el mismo defecto: el arnés
+# medía lo que se le PEDÍA y nunca lo que OCURRÍA. El caso que lo demuestra:
+# `gpt-researcher` importa `ddgs` y declara `duckduckgo-search`. Sin el primero
+# el buscador no arranca, el modelo escribe de memoria, y como las preguntas del
+# banco se las sabe, el informe SALE PERFECTO con cero fuentes.
+#
+# Medido antes de corregir: 5/5, 100 %, código 0, «concluyente».
+# Medido después:           0/5,   0 %, código 3, «no fiable».
+
+
+def _medidor_con_doble(
+    monkeypatch: pytest.MonkeyPatch, respuestas: dict[str, tuple[str, int]]
+) -> Any:
+    """El medidor REAL con la investigación sustituida por un doble.
+
+    Se apoya en el cargador que ya tiene este fichero (`_medidor`), en vez de
+    traerse otro: dos cargadores del mismo módulo son dos formas de que las
+    pruebas midan cosas distintas sin que se note.
+    """
+    modulo = _medidor()
+
+    async def _doble(pregunta: str) -> tuple[str, int]:
+        for clave, valor in respuestas.items():
+            if clave.lower() in pregunta.lower():
+                return valor
+        return ("", 0)
+
+    monkeypatch.setattr(modulo, "_investigar", _doble)
+    monkeypatch.setattr(modulo, "_version_instalada", lambda: modulo.VERSION_EXIGIDA)
+    return modulo
+
+
+def test_un_informe_correcto_SIN_FUENTES_no_es_un_acierto(monkeypatch: pytest.MonkeyPatch) -> None:
+    """La propiedad que mata a toda la familia, y la que costó una refutación.
+
+    El informe CONTIENE la respuesta correcta. Y no cuenta, porque nadie buscó:
+    el modelo se la sabía. Sin esta regla, un buscador muerto daba 100 %.
+    """
+    modulo = _medidor_con_doble(monkeypatch, {"": ("La capital de Australia es Canberra.", 0)})
+    resultado = modulo.medir("sin-fuentes")
+    assert resultado.aciertos == 0, (
+        f"un informe sin ni una fuente contó como acierto: {resultado.aciertos} de "
+        f"{resultado.total}. Eso es el modelo recitando, no el investigador"
+    )
+    assert resultado.medicion_fiable is False
+    assert "buscador no funciono" in (resultado.motivo_no_fiable or "")
+
+
+def test_el_mismo_informe_CON_FUENTES_si_es_un_acierto(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Anti-vacua: sin esto, «acierta=False» siempre pasaría la prueba de arriba."""
+    # Un texto que satisface las cinco obligatorias del banco. La primera versión
+    # de esta prueba devolvía solo la respuesta de P1 para las cinco preguntas y
+    # fallaba 1 de 5 — la prueba estaba mal, no el código: las otras cuatro
+    # suspendían con razón. Queda anotado porque una anti-vacua que falla por su
+    # propio montaje es la forma más fácil de acabar relajando la regla que vigila.
+    completo = "Canberra, 1969, Apache 2.0, Rust y Pyre."
+    modulo = _medidor_con_doble(monkeypatch, {"": (completo, 4)})
+    resultado = modulo.medir("con-fuentes")
+    assert resultado.aciertos == resultado.total
+    assert resultado.medicion_fiable is True
+    assert resultado.motivo_no_fiable is None
+
+
+def test_una_medicion_no_fiable_sale_con_codigo_3(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """El código de salida deja de mentir.
+
+    Antes devolvía 0 pasara lo que pasara, y el comparador decidía «medida
+    válida» solo con verlo: cinco preguntas reventadas y comparación concluyente.
+    """
+    modulo = _medidor_con_doble(monkeypatch, {"": ("Canberra, 1969, Apache, Rust, Pyre.", 0)})
+    codigo = modulo.main(["x", "--salida", str(tmp_path / "r.json")])
+    assert codigo == 3, f"una medición sin fuentes salió con código {codigo}"
+
+
+def test_una_medicion_fiable_sale_con_codigo_0(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Anti-vacua del anterior: `return 3` a secas también lo pasaría."""
+    modulo = _medidor_con_doble(monkeypatch, {"": ("Canberra 1969 Apache Rust Pyre", 7)})
+    assert modulo.main(["x", "--salida", str(tmp_path / "r.json")]) == 0
+
+
+def test_el_json_conserva_el_rastro_aunque_la_medicion_no_valga(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Un fallo que no deja rastro es peor que el fallo.
+
+    El JSON tiene que salir igual, con el motivo y los informes dentro, para que
+    quien lo lea después sepa QUÉ pasó y no solo que algo pasó.
+    """
+    salida = tmp_path / "r.json"
+    modulo = _medidor_con_doble(monkeypatch, {"": ("La capital de Australia es Canberra.", 0)})
+    modulo.main(["x", "--salida", str(salida)])
+    datos = json.loads(salida.read_text(encoding="utf-8"))
+    assert datos["medicion_fiable"] is False
+    assert datos["fuentes_totales"] == 0
+    assert "ddgs" in datos["motivo_no_fiable"], "el motivo tiene que nombrar la causa real"
+    assert datos["preguntas"], "los informes se conservan para poder releerlos"
+
+
+@pytest.mark.parametrize(
+    ("texto", "obligatoria", "esperado"),
+    [
+        ("uv is a tool you can trust", "Rust", False),
+        ("distrust and frustrating", "Rust", False),
+        ("uv está escrito en Rust", "Rust", True),
+        ("the Apache Foundation is unrelated", "Apache", True),
+        ("Rust.", "Rust", True),
+    ],
+)
+def test_la_correccion_exige_palabra_entera(texto: str, obligatoria: str, esperado: bool) -> None:
+    """«trust» contenía «rust», y aprobaba la pregunta. Medido por el refutador."""
+    acierta, _, _ = _medidor()._corrige(texto, [obligatoria])
+    assert acierta is esperado, f"_corrige({texto!r}, [{obligatoria!r}]) dio {acierta}"

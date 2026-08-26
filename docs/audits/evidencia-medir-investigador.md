@@ -171,3 +171,74 @@ importación, y un tope de 80 minutos que no rompe el margen de dos minutos de D
 Los hallazgos que no son de esta familia —el `-e` del shell que hace inalcanzables
 tres veredictos, la clave que puede viajar intacta en el JSON del artefacto, el
 plazo que tira la cuota ya gastada— se arreglan aparte, cada uno con su guardián.
+
+---
+
+## La raíz, corregida y medida en las dos direcciones (26-08-2026)
+
+No se parchearon los 27 hallazgos. Se cambió lo que estaba mal de raíz: **el
+veredicto pasa a depender de hechos observados, no de configuración declarada.**
+
+### 1. Las fuentes deciden
+
+Una pregunta solo cuenta como acierto si, a la vez: no hubo error, hay informe,
+la respuesta aparece **y `fuentes > 0`**. Esa tercera condición es la que mata a
+toda la familia: sin buscador, el modelo escribe de memoria y el informe sale
+perfecto — exigir fuentes es lo único que distingue «investigó y acertó» de
+«se lo sabía».
+
+**Simulado el escenario exacto** que se nos habría colado (buscador muerto, el
+modelo contestando bien de memoria, cero fuentes):
+
+```
+REGLA VIEJA (sin exigir fuentes): 5/5 = 100 %  -> codigo 0, «concluyente»
+REGLA NUEVA (fuentes > 0)       : 0/5 =   0 %  -> codigo 3, «no fiable»
+```
+
+Los cinco informes contenían la respuesta correcta —`Canberra`, `1969`,
+`Apache`, `Rust`, `Pyre`— y ninguno cuenta.
+
+### 2. El código de salida deja de mentir
+
+Antes devolvía `0` pasara lo que pasara, y el comparador decidía «medida válida»
+solo con verlo. Ahora `3` significa «no me creas»: se midió algo, pero no lo que
+se quería medir. El JSON sale igual, con el motivo y los informes dentro, porque
+**un fallo que no deja rastro es peor que el fallo**.
+
+### 3. La corrección exige palabra entera
+
+```
+_corrige("uv is a tool you can trust", ["Rust"])  ->  antes True, ahora False
+_corrige("distrust and frustrating",   ["Rust"])  ->  antes True, ahora False
+_corrige("uv está escrito en Rust",    ["Rust"])  ->  True (no se rompe lo bueno)
+```
+
+### Mutación: las tres vistas caer
+
+| mutación | prueba que cae |
+|---|---|
+| quitar `and fuentes > 0` | `test_un_informe_correcto_SIN_FUENTES_no_es_un_acierto` |
+| `if not resultado.medicion_fiable` → `if False` | `test_una_medicion_no_fiable_sale_con_codigo_3` |
+| quitar el límite de palabra del patrón | `test_la_correccion_exige_palabra_entera` (2 casos) |
+
+Y las anti-vacuas en el otro sentido: un informe **con** fuentes sí cuenta, y una
+medición fiable sí sale con código 0 — sin ellas, un `acierta=False` constante
+pasaría las tres de arriba sin mérito.
+
+### Un fallo propio, anotado
+
+La primera versión de la anti-vacua `test_el_mismo_informe_CON_FUENTES_si_es_un_acierto`
+fallaba 1 de 5, y **la prueba estaba mal, no el código**: el doble devolvía la
+respuesta de P1 para las cinco preguntas, así que las otras cuatro suspendían con
+razón. Queda dicho porque una anti-vacua que falla por su propio montaje es la
+forma más fácil de acabar relajando la regla que vigila.
+
+### Lo que sigue pendiente antes de reponer el disparador
+
+- La **prueba de vida** que gaste cero cuota: una búsqueda real que exija
+  fuentes > 0 y una llamada por proveedor, antes de medir nada.
+- Instalar `ddgs` en el workflow, que es la causa material del defecto.
+- El `-e` del shell, que hace inalcanzables tres veredictos.
+- La clave que puede viajar intacta en el JSON del artefacto.
+
+El disparador sigue desactivado (`workflow_call` sin llamantes) hasta que estén.
