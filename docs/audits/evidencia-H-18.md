@@ -1,67 +1,45 @@
-# Evidencia — H-18
+# Evidencia — H-18: el recordatorio de evidencia pedía un sitio imposible
 
-## Las cuatro preguntas, decididas ANTES de medir
-
-1. ¿Puede una sesión de Claude escribir en `.claude/evidencia/`, uno de los dos
-   sitios que el hook ofrece?
-2. ¿Reconoce el hook `docs/audits/` como sitio válido para evidencia?
-3. ¿Produjo un falso positivo real, o el aviso era correcto?
-4. ¿Puede arreglarlo el ciclo, o hace falta el propietario?
-
-## Criterio de parada, escrito antes de ver resultados
-
-- Si `.claude/evidencia/` **sí** es escribible, no hay contradicción y esto no se
-  registra: sería una queja sobre una molestia, no un defecto.
-- Si el hook **sí** mira `docs/audits/`, el aviso fue correcto y el error es mío
-  por no haber leído dónde lo pedía. Tampoco se registra.
-- Si el arreglo cae dentro de lo que el ciclo puede tocar, se despacha como
-  encargo. Si no, se abre incidencia **sin** etiquetas de activación: activar
-  algo que sólo puede acabar en rechazo es fabricar ruido.
+Rama `abrir-claude-para-h18`, 26-08-2026. No hay decisión nueva que registrar:
+el arreglo es el propuesto en la incidencia #311 y aceptado ahí. Esto es el
+hecho medido que lo sostiene, junto al registro que gobierna ADR-080 — que es
+exactamente el sitio que este arreglo enseña al hook a reconocer.
 
 ## Afirmación
 
-El hook ofrece dos ubicaciones y **una está en la lista `deny`**, así que ninguna
-sesión de Claude puede usarla. Como además no reconoce `docs/audits/`, marca
-como «sin evidencia» una rama que sí la tenía.
+El hook `recordar_parada.py` daba falsos positivos por partida doble: ofrecía
+`.claude/evidencia/` como sitio válido cuando `Edit(./.claude/**)` está en la
+lista `deny` (nadie puede escribir ahí), y no reconocía
+`docs/audits/evidencia-*.md`, donde vive la evidencia de un defecto medido.
 
-## Comprobación que la sostiene
+## Criterio de parada (antes de tocar nada)
 
-**Pregunta 1** — intento real de escribir en `.claude/evidencia/registrar-h17.md`:
+- Si en `.claude/evidencia/` hubiera ficheros de evidencia reales, o alguna
+  rama viva los usara, el reconocimiento del sitio viejo se conserva. Medido:
+  `git ls-files .claude/evidencia/` → solo `.gitignore` y `README.md`; ninguna
+  rama sin fusionar toca ese directorio. Se retira.
+- Ninguna prueba nueva vale sin haberse visto FALLAR contra el hook sin
+  arreglar.
+
+## Comprobación
+
+Las tres pruebas nuevas, contra el hook viejo (el arreglado aún no estaba en
+disco, la puerta seguía cerrada):
 
 ```
-Permission to use Bash with command … .claude/evidencia/registrar-h17.md …
-has been denied.
+FAILED test_la_evidencia_de_un_defecto_en_docs_audits_silencia_el_empujon
+FAILED test_el_sitio_denegado_ya_no_cuenta_como_evidencia
+FAILED test_el_empujon_ya_no_ofrece_el_sitio_denegado
+3 failed, 7 passed
 ```
 
-Y la causa, en el propio fichero de ajustes: `Edit(./.claude/**)` está en
-`permissions.deny`.
+Las siete de siempre pasan con las dos versiones: el comportamiento que no se
+quería cambiar no cambia. Tras aplicar el arreglo, las diez en verde (la salida
+queda en la PR).
 
-**Pregunta 2 y 3** — la evidencia se escribió en `docs/audits/evidencia-H-17.md`
-y se publicó en la rama:
+## Lo que este arreglo NO hace
 
-```
-51621ae Registrar H-17: …
- docs/audits/evidencia-H-17.md     | 71 +++++++++++++++++++++++++++++++++++++++
- docs/audits/registro_defectos.yml | 10 ++++++
-```
-
-Y aun así el hook volvió a bloquear el final del turno pidiendo evidencia. Es
-decir: **falso positivo confirmado**, no una omisión.
-
-**Pregunta 4** — el arreglo vive en `.claude/hooks/recordar_parada.py`, dentro
-del mismo árbol denegado. El ciclo tampoco lo toca. Luego es del propietario.
-
-## Cómo decidió el criterio de parada
-
-Los tres primeros puntos se cumplieron en contra de descartar, así que se
-registra. El cuarto decidió la forma: incidencia **#311 sin etiquetas de
-activación**, porque despacharla sólo produciría un rechazo.
-
-## Por qué esto no lleva ADR
-
-No hay decisión que registrar todavía. El arreglo propuesto —aceptar
-`docs/audits/evidencia-*.md` y retirar `.claude/evidencia/` de la oferta
-mientras siga denegada— es una consecuencia directa de la medición, no una
-elección entre opciones. Si el propietario prefiriese en cambio **abrir**
-`.claude/evidencia/` en la lista de permisos, eso sí sería una decisión sobre
-sus propias barreras, y entonces el ADR lo escribe él con esta medición delante.
+No garantiza que la evidencia sea buena: el hook sigue midiendo presencia y
+sustancia mínima (3 líneas útiles, 120 caracteres), no calidad. Y el aviso
+sigue siendo un empujón único por rama, no una puerta: eso es ADR-001 y no
+cambia aquí.

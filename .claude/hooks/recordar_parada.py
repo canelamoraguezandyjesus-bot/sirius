@@ -76,6 +76,30 @@ def _base() -> str:
     return ""
 
 
+def _es_evidencia(ruta: str) -> bool:
+    """Los dos sitios donde una evidencia puede escribirse DE VERDAD (H-18, #311).
+
+    Antes se ofrecían `docs/decisions/` y `.claude/evidencia/`, y el segundo es
+    **inalcanzable**: `Edit(./.claude/**)` vive en la lista `deny` de
+    `settings.json`, así que ninguna sesión puede escribir ahí. Medido: el
+    intento se bloqueó con «Permission ... has been denied».
+
+    Un comprobador que pide algo imposible enseña a saltárselo, y la salida
+    cómoda —fabricar un ADR para algo que no decide nada, sólo para que el aviso
+    calle— es exactamente la conducta que ADR-001 existe para impedir: cumplir la
+    forma y perder el fondo.
+
+    `docs/audits/evidencia-*.md` entra porque **no todo trabajo con evidencia
+    decide algo**: un defecto medido es un hecho, y su sitio es junto al registro
+    que gobierna ADR-080. En la rama `registrar-h17` la evidencia estaba ahí —71
+    líneas, con las cuatro preguntas, el criterio de parada escrito antes de
+    medir y las salidas ejecutadas— y este hook la dio por ausente.
+    """
+    if ruta.startswith("docs/decisions/ADR-") and ruta.endswith(".md"):
+        return True
+    return ruta.startswith("docs/audits/evidencia-") and ruta.endswith(".md")
+
+
 def _hay_evidencia(rama: str) -> bool:
     """Mismo criterio que la puerta del push: confirmada, de esta rama y con
     sustancia. Un criterio más laxo aquí callaría el empujón justo cuando la
@@ -86,9 +110,8 @@ def _hay_evidencia(rama: str) -> bool:
     codigo, salida = _git("diff", "--name-only", f"{base}...HEAD")
     if codigo != 0:
         return False
-    nota = f".claude/evidencia/{_sanear(rama)}.md"
     for ruta in salida.splitlines():
-        if ruta != nota and not (ruta.startswith("docs/decisions/ADR-") and ruta.endswith(".md")):
+        if not _es_evidencia(ruta):
             continue
         codigo, contenido = _git("show", f"HEAD:{ruta}")
         if codigo != 0:
@@ -144,8 +167,8 @@ def main() -> int:
                     f"La rama {rama} tiene trabajo sin nota de arranque ni ADR "
                     "(skill disciplina-evidencia, ADR-001). Antes de terminar: "
                     "escribe la evidencia (criterio de parada, afirmación y "
-                    "comprobación) en docs/decisions/ o en "
-                    f".claude/evidencia/{_sanear(rama)}.md, o di explícitamente "
+                    "comprobación) en docs/decisions/ADR-*.md o en "
+                    f"docs/audits/evidencia-{_sanear(rama)}.md, o di explícitamente "
                     "al usuario por qué este trabajo no la necesita. No repetiré este "
                     "aviso para esta rama en este entorno."
                 ),
