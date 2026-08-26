@@ -1,0 +1,57 @@
+# Banco de preguntas de respuesta conocida para medir al investigador (S2).
+#
+# POR QUÉ ASÍ, y no una pregunta suelta. El plan pide «una pregunta de respuesta
+# conocida»; una sola no da un porcentaje, y el propietario pidió «por lo menos un
+# 80 %». Con cinco preguntas el número existe y cada acierto vale 20 puntos.
+#
+# CÓMO SE CORRIGE, dicho aquí porque es la parte más débil de esta medición: se
+# busca en el informe una lista de cadenas obligatorias. Es CRUDO a propósito —un
+# corrector automático fino exigiría otro modelo juzgando, y entonces estaríamos
+# midiendo al juez—. Lo que este método NO puede hacer:
+#
+#   - No sabe si el informe está bien ESCRITO, solo si contiene el dato.
+#   - Puede dar por bueno un informe que nombre el dato de pasada, sin sostenerlo.
+#   - Puede suspender un informe correcto que use un sinónimo no previsto.
+#
+# Por eso cada pregunta admite VARIAS formas de la respuesta, y por eso el informe
+# de la medición guarda el texto entero: el número es una señal, no un veredicto,
+# y quien dude puede leer lo que de verdad contestó.
+#
+# CRITERIO DE ELECCIÓN de las preguntas: respuesta estable (no cambia de un mes a
+# otro), verificable sin ambigüedad, y que EXIJA buscar —nada que un modelo pueda
+# contestar de memoria sin salir a la red no mide al investigador, mide al modelo—.
+# Las dos primeras son de memoria a propósito: si esas fallan, el fallo es del
+# modelo y no de la búsqueda, y conviene poder distinguirlo.
+
+version: 1
+
+preguntas:
+  - id: P1
+    tipo: memoria
+    texto: "¿Cuál es la capital de Australia?"
+    # `Canberra` es inequívoco y ningún modelo útil debería fallarlo. Si falla,
+    # el problema no es el buscador: es el modelo o el cableado.
+    obligatorias: ["Canberra"]
+
+  - id: P2
+    tipo: memoria
+    texto: "¿En qué año llegó el ser humano a la Luna por primera vez?"
+    obligatorias: ["1969"]
+
+  - id: P3
+    tipo: busqueda
+    texto: "¿Qué licencia de software usa el proyecto GPT Researcher en GitHub?"
+    # Exige mirar el repositorio: no es un dato que se recite.
+    obligatorias: ["Apache"]
+
+  - id: P4
+    tipo: busqueda
+    texto: "¿En qué lenguaje de programación está escrito el gestor de paquetes uv, de Astral?"
+    obligatorias: ["Rust"]
+
+  - id: P5
+    tipo: busqueda
+    texto: "¿Cuál es el nombre del sistema de tipos estático para Python mantenido por Meta, alternativa a mypy?"
+    # Admite dos respuestas correctas: Meta mantiene Pyre, y Pyrefly es su sucesor.
+    # Cualquiera de las dos vale; exigir solo una suspendería un informe correcto.
+    obligatorias: ["Pyre"]
