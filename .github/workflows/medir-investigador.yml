@@ -1,0 +1,434 @@
+# ┌─────────────────────────────────────────────────────────────────────────┐
+# │  ESTE WORKFLOW NO SE PUEDE CORRER TODAVIA. Ver el bloque de abajo.       │
+# └─────────────────────────────────────────────────────────────────────────┘
+#
+# REFUTADO EL 26-08-2026, ANTES DE CORRERSE NI UNA VEZ (incidencia #258).
+#
+# Una refutacion adversarial de tres lentes encontro 27 hallazgos, 8 graves, y
+# SEIS DE LOS OCHO SON EL MISMO DEFECTO: este arnes medía lo que se le PEDIA y
+# nunca lo que OCURRIA. El caso que lo demuestra, verificado a mano:
+#
+#   gpt-researcher 0.15.1 importa `ddgs` (retrievers/duckduckgo/duckduckgo.py)
+#   y declara `duckduckgo-search>=4.1.1`. Son paquetes DISTINTOS, y este
+#   workflow no instala el primero:
+#       ModuleNotFoundError: No module named 'ddgs'
+#
+# Con el buscador muerto, los dos proveedores habrian escrito sus informes de
+# MEMORIA, con CERO fuentes, y el arnes habria publicado una comparacion
+# concluyente con porcentajes. Peor: ninguna de las cinco preguntas del banco
+# obliga a buscar, asi que habrian salido al 100 %.
+#
+# No falla: MIENTE. Y habria gastado cuota de las dos APIs del propietario para
+# producir un numero inventado.
+#
+# QUE FALTA ANTES DE HABILITARLO, y por que no se parchea uno a uno (ADR-001,
+# regla de las dos rondas: misma familia dos veces -> se busca la raiz):
+#
+#   1. Prueba de vida ANTES de gastar cuota: una busqueda real que exija
+#      fuentes > 0 y una llamada real por proveedor. Si falla, no se mide.
+#   2. El veredicto cerrado sobre EVIDENCIA: sin fuentes no hay medicion, una
+#      pregunta con error nunca entra en un resultado concluyente, y `servidor`
+#      deja de ser el eco de una variable de entorno.
+#   3. Banco de preguntas rehecho: que exijan buscar de verdad, y correccion
+#      con limite de palabra (hoy «Rust» se aprueba con «trust»).
+#
+# Hasta entonces el disparador esta comentado a proposito: el fichero se
+# conserva porque su cableado -entorno aislado, python 3.12, langchain-google-genai,
+# tope de 80 min que no rompe D1- si esta medido y sirve.
+#
+name: Medir al investigador
+
+# LAS MANOS QUE LE FALTABAN A `comparar_investigadores.py`. El guion está escrito
+# y probado, y no puede correr en ninguna sesión interactiva: la red de esas
+# máquinas está cerrada (medido: `curl` a duckduckgo, groq y nvidia devuelve 000)
+# y las dos claves viven aquí, en los secretos de Actions. Es la misma costura que
+# `despachar-orden.yml`: la pieza existía y nadie la llamaba.
+#
+# LO QUE ESTE FICHERO APORTA, Y LO QUE NO. No decide nada sobre la medición: qué
+# configuraciones se comparan, cómo se separa cada una y qué veredicto sale están
+# en `scripts/investigacion/configuraciones.yml` y en
+# `scripts/investigacion/comparar_investigadores.py`, que es donde se pueden leer
+# y probar. Aquí solo hay tres cosas: **un entorno donde la herramienta arranca**,
+# **las claves** y **la publicación del informe**. Cambiar un modelo es una línea
+# del YAML de configuraciones, no un cambio en este fichero: dos sitios donde
+# declarar el mismo modelo serían dos verdades, y una acabaría mintiendo.
+#
+# POR QUÉ ES A MANO Y NUNCA POR RELOJ. Cada pasada gasta cuota de dos APIs cuyas
+# claves son del propietario. Un cron que gasta su dinero mientras duerme no es
+# automatización: es una fuga. Se lanza cuando él quiere medir. De paso, al no
+# declarar `schedule`, este fichero **no añade ningún disparo al día** y no puede
+# estrechar el hueco tranquilo que necesita el contador de los siete días
+# (D1b, contrato §11.2).
+#
+# POR QUÉ EL `timeout-minutes` NO PUEDE SUBIR DE 85, y es lo más fácil de romper
+# de todo el fichero. La ventana de tolerancia del contador se DERIVA -no se
+# escribe a mano- del mayor `timeout-minutes` **de trabajo** de
+# `.github/workflows/*.yml`, por dos: hoy 85 x 2 = 170 minutos
+# (`ventana_tolerancia_etiqueta_maquina`, en `src/sirius_engine/projection_verifier.py`;
+# comprobado que solo mira los topes de TRABAJO, no los de paso). La tranquilidad
+# previa a la pasada del contador son 172 minutos. **El margen es de DOS.**
+#
+# No es teoría: se probó subiendo este trabajo a 87 y
+# `tests/automation/test_contador_de_siete_dias.py` se puso rojo con «solo deja
+# 172 min tranquilos, cuando la tolerancia vigente es de 174». Sin esa prueba, el
+# efecto habría sido silencioso: el contador seguiría corriendo en verde y la
+# racha no avanzaría NUNCA. Bajar el tope es inofensivo -una tolerancia menor le
+# pone las cosas más fáciles a D1-; subirlo es lo que lo rompe.
+#
+# LA TRAMPA QUE OBLIGA A TODO ESTO, medida sobre `gpt-researcher` 0.15.1: tanto el
+# proveedor de modelo (`llm_provider/generic/base.py`) como el de vectorización
+# (`memory/embeddings.py`) leen `OPENAI_BASE_URL` cuando el proveedor es `openai`.
+# Dos configuraciones en el MISMO proceso se pisan esa variable: NVIDIA la
+# secuestra y la configuración de Google acabaría hablando con el servidor de
+# NVIDIA, devolviendo un informe **perfecto y falso**. Quien impide eso es el
+# guion, dando a cada configuración un subproceso con el entorno construido desde
+# cero. Aquí solo hay que no estropearlo, y por eso **el `env:` del trabajo no
+# lleva ni una variable de configuración del investigador**: lo que se declara
+# arriba lo ve todo el mundo.
+#
+# LAS CLAVES ENTRAN POR SU NOMBRE DE ORIGEN: `NVIDIA_API_KEY` y `GOOGLE_API_KEY`.
+# La de NVIDIA se llama `OPENAI_API_KEY` DENTRO del subproceso -esa es su vía
+# compatible con OpenAI-, y esa traducción la hace el guion (`clave_destino`), no
+# este fichero. El criterio de parada (a) de la nota de arranque -«si hiciera
+# falta clave de OpenAI o Anthropic, se para»- se comprueba sobre el origen: aquí
+# no se le pide al propietario ninguna clave de OpenAI ni de Anthropic. El
+# buscador es DuckDuckGo, que no lleva clave.
+#
+# EL MODELO ESTRATÉGICO, que en `configuraciones.yml` se fija «por precaución»:
+# hoy queda MEDIDO, y era peor que una precaución. `DEFAULT_CONFIG["STRATEGIC_LLM"]`
+# vale `openai:o4-mini`, y `plan_research_outline` -que usa ese modelo y no el
+# listo- está en el camino de un informe normal: lo llama `skills/researcher.py`
+# en su línea 75. Sin fijarlo, la rama de Google pediría un modelo de OpenAI sin
+# tener clave de OpenAI y la de NVIDIA le pediría `o4-mini` a un servidor que no
+# lo tiene; en los dos casos `actions/query_processing.py` reintenta y **cae en
+# silencio al modelo listo**, dejando solo un aviso en el log. Habría número, sí,
+# pero de un camino que nadie eligió. Fijarlo no es opcional.
+#
+# EL PYTHON ESTÁ MEDIDO, NO SUPUESTO. Con el 3.14 que exige el proyecto,
+# `gpt-researcher==0.15.1` **no llega a instalarse**: fija `numpy==2.2.6`, que no
+# publica rueda para `cp314`, y compilar su sdist falla. Con 3.13 y con 3.12
+# instala e importa. Se elige el 3.12 y se fija por versión MENOR a propósito: la
+# rueda se etiqueta `cp312`, así que cualquier parche sirve; lo que no es
+# intercambiable es la menor. De ahí que el entorno viva APARTE, bajo
+# `$RUNNER_TEMP` y con `uv venv --no-project`: el proyecto exige `>=3.14,<3.15` y
+# mezclarlos rompe uno de los dos. Aquí no se ejecuta `uv sync` ni se toca el
+# entorno del repositorio.
+#
+# `langchain-google-genai` NO VIENE CON `gpt-researcher` (comprobado:
+# `ModuleNotFoundError`), y la vía `google_genai` lo importa en los dos sitios que
+# hacen falta: `base.py` para el modelo y `embeddings.py` para vectorizar. Sin
+# instalarlo, la rama de Google fallaría las cinco preguntas con un error de
+# importación: un 0 % que no mide a Google, mide a la instalación. Medido también
+# que instalarlo añade tres paquetes, no degrada ninguno y `gpt_researcher` sigue
+# importando.
+
+on:
+  # DISPARADOR DESACTIVADO A PROPOSITO mientras el arnes esta refutado (ver la
+  # cabecera). No basta con avisar en un comentario: mientras `workflow_dispatch`
+  # exista, el boton «Run workflow» esta ahi y un clic gasta cuota de las dos
+  # APIs para producir un numero que ya sabemos que es mentira. Un aviso que se
+  # puede ignorar con un clic no es una salvaguarda.
+  #
+  # Se repone -descomentando estas dos lineas- cuando la prueba de vida exista y
+  # el veredicto dependa de evidencia observada.
+  #
+  #   workflow_dispatch:
+  #
+  # `workflow_call` sin llamantes deja el fichero sintacticamente valido y sin
+  # ninguna forma de dispararse: no hay boton, y ningun otro workflow lo invoca.
+  workflow_call:
+
+concurrency:
+  # Dos pasadas a la vez gastarían el doble para medir lo mismo y sus artefactos
+  # competirían por el mismo nombre. Se espera, no se mata: cancelar una medición
+  # a medias tira lo ya gastado sin dejar informe.
+  group: medir-investigador
+  cancel-in-progress: false
+
+# MÍNIMOS: este workflow no escribe NADA en GitHub. No crea incidencias, no mueve
+# etiquetas y no toca la memoria del motor. `contents: read` es solo para traerse
+# los guiones. El día que necesite más será una decisión, no un descuido.
+permissions:
+  contents: read
+
+jobs:
+  medir:
+    name: Comparar dos configuraciones
+    runs-on: ubuntu-latest
+    # 80, y el margen sobre la suma de los pasos es deliberado. Los topes de paso
+    # suman 72 (12 de instalación + 5 de comprobación + 55 de comparación); los 8
+    # restantes cubren checkout, `setup-uv`, la subida del artefacto y la cola.
+    #
+    # POR QUÉ NO SE APURA: si el TRABAJO agota su tope, GitHub lo cancela, y un
+    # trabajo cancelado **no ejecuta los pasos `if: always()`**. Apurar el margen
+    # no se paga con un rojo tardío: se paga perdiendo el informe y el artefacto
+    # de una medición que ya gastó la cuota entera.
+    #
+    # Por arriba manda la cabecera: 85 es el techo y no se toca.
+    timeout-minutes: 80
+    env:
+      # AQUÍ NO VA NINGUNA VARIABLE DE CONFIGURACIÓN DEL INVESTIGADOR. Una
+      # `OPENAI_BASE_URL` en este bloque la verían todos los pasos, y ésa es
+      # exactamente la contaminación que el guion existe para impedir.
+      #
+      # Tampoco va ninguna ruta con `${{ runner.temp }}`: GitHub no resuelve ese
+      # contexto en el `env:` de un trabajo y el fichero se vuelve ilegible
+      # -«Unrecognized named-value: 'runner'»-, que es lo que tumbó a
+      # `motor-sirius.yml` el 24-08-2026. Lo vigila
+      # `tests/automation/test_expresiones_de_workflow.py`. Dentro de un `run:` sí
+      # se puede usar `$RUNNER_TEMP`, que ahí es una variable de entorno de verdad
+      # y bash la expande: es lo que se hace más abajo.
+      PYTHON_MEDICION: "3.12"
+      VERSION_EXIGIDA: "0.15.1"
+      # Segundos como mucho POR CONFIGURACIÓN. Tiene que quedar por debajo del
+      # tope del paso que lo usa (55 min): así el plazo lo corta el guion, que
+      # anota `agotado_el_tiempo` y escribe su informe, en vez de cortarlo GitHub
+      # matando el proceso y dejándonos sin nada. El plazo de dentro SIEMPRE antes
+      # que el de fuera.
+      SEGUNDOS_POR_CONFIGURACION: "1500"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # No se confirma nada: este trabajo solo lee guiones.
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+          # El 3.12 medido, no el 3.14 del proyecto: con 3.14 la herramienta no
+          # llega a instalarse (ver cabecera). Se lee de `env` para que la versión
+          # tenga UNA sola definición en el fichero.
+          python-version: ${{ env.PYTHON_MEDICION }}
+
+      - name: Comprobar que hay claves antes de gastar nada
+        env:
+          # Las claves entran por `env:`, NUNCA interpoladas dentro del `run:`: un
+          # `${{ secrets.X }}` dentro del guion se sustituye antes de que bash lea
+          # nada y acabaría en el log a la primera traza. Aquí solo se mira si
+          # están; su valor no se imprime jamás.
+          NVIDIA_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_NVIDIA_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_GOOGLE_KEY }}
+        shell: bash --noprofile --norc {0}
+        run: |
+          set -uo pipefail
+          # El comparador sabe seguir sin una clave: la informa como `sin_clave` y
+          # mide la otra, que está bien. Pero acabar en NO CONCLUYENTE después de
+          # instalar la herramienta y gastar minutos de Actions por una variable
+          # vacía es tirar el tiempo, y el criterio de parada (b) ya dice que con
+          # una sola configuración no vale. Se mira antes de instalar nada.
+          faltan=""
+          [ -n "${NVIDIA_API_KEY:-}" ] || faltan="$faltan SIRIUS_INVESTIGADOR_NVIDIA_KEY"
+          [ -n "${GOOGLE_API_KEY:-}" ] || faltan="$faltan SIRIUS_INVESTIGADOR_GOOGLE_KEY"
+          if [ -n "$faltan" ]; then
+            echo "::error::faltan secretos:$faltan. Con una sola clave la comparación no existe (criterio de parada (b))." >&2
+            exit 1
+          fi
+          echo "Las dos claves están declaradas. No se imprime ninguna."
+
+      - name: Montar el entorno del investigador, aparte del proyecto
+        timeout-minutes: 12
+        shell: bash --noprofile --norc {0}
+        run: |
+          set -uo pipefail
+          mkdir -p "$RUNNER_TEMP/medicion"
+
+          # `--no-project` a propósito: sin él, `uv` avisa de que 3.12 es
+          # incompatible con el `requires-python` del repositorio -medido: avisa y
+          # sigue-, y ese aviso invita a «arreglarlo» subiendo la versión, que es
+          # justo lo que NO funciona.
+          if ! uv venv --no-project --python "$PYTHON_MEDICION" "$RUNNER_TEMP/investigador"; then
+            echo "::error::no se pudo crear el entorno de medición." >&2
+            exit 1
+          fi
+
+          # `langchain-google-genai` no lo arrastra `gpt-researcher`, y sin él la
+          # vía nativa de Google no importa siquiera. `pyyaml` lo necesitan los dos
+          # guiones: uno para el banco de preguntas y el otro para las
+          # configuraciones.
+          #
+          # LA VERSIÓN DE GOOGLE VA FIJADA porque la medida es ÉSA: con la 4.3.5
+          # se comprobó que instala junto a `gpt-researcher==0.15.1` en 3.12, no
+          # degrada ningún paquete y las dos clases que la herramienta importa
+          # existen. Dejarla libre haría que una comparación de dentro de tres
+          # meses no fuera la misma medición que ésta, y no habría forma de saber
+          # cuál de las dos cosas cambió. Subirla es una línea, pero hay que
+          # volver a medir: no basta con que instale.
+          if ! uv pip install --python "$RUNNER_TEMP/investigador/bin/python" \
+              "gpt-researcher==$VERSION_EXIGIDA" "langchain-google-genai==4.3.5" ddgs pyyaml; then
+            echo "::error::no se pudo instalar el investigador." >&2
+            exit 1
+          fi
+
+      - name: Comprobar el entorno antes de gastar cuota
+        timeout-minutes: 5
+        shell: bash --noprofile --norc {0}
+        run: |
+          set -uo pipefail
+          PY="$RUNNER_TEMP/investigador/bin/python"
+
+          # Se comprueba por CÓDIGO DE SALIDA, no leyendo la última línea. La
+          # 0.16.0 ni siquiera se importa -usa `Any` sin importarlo en
+          # `actions/query_processing.py`-, así que una versión distinta de la
+          # exigida no es un matiz: sería medir sobre algo que nadie ha
+          # comprobado que funcione.
+          "$PY" - "$VERSION_EXIGIDA" <<'COMPROBACION'
+          import importlib.metadata as metadata
+          import sys
+
+          exigida = sys.argv[1]
+          instalada = metadata.version("gpt-researcher")
+          print(f"gpt-researcher instalado: {instalada}; exigido: {exigida}")
+          if instalada != exigida:
+              sys.exit(1)
+          # Anti-vacua: que el paquete esté no significa que arranque. Esto es lo
+          # que la 0.16.0 no pasa.
+          from gpt_researcher import GPTResearcher  # noqa: F401
+          from langchain_google_genai import ChatGoogleGenerativeAI  # noqa: F401
+          from langchain_google_genai import GoogleGenerativeAIEmbeddings  # noqa: F401
+          print("importan la herramienta y la vía nativa de Google")
+          COMPROBACION
+          codigo=$?
+          if [ "$codigo" -ne 0 ]; then
+            echo "::error::el entorno de medición no sirve (código $codigo). No se gasta cuota." >&2
+            exit 1
+          fi
+
+          # LOS DOS GUIONES CORREN CON UN 3.12, no con el 3.14 del proyecto, y
+          # `ruff` los revisa con `target-version = "py314"`: una sintaxis nueva
+          # pasaría Quality y reventaría aquí. Es la familia de H-13 (incidencia
+          # #275), y está comprobado que esta guarda la caza: un `except A, B:`
+          # (PEP 758, 3.14) sale con código 1. Se compilan con el intérprete que
+          # de verdad los va a ejecutar, y antes de gastar un euro.
+          for guion in medir_investigador comparar_investigadores; do
+            if ! "$PY" -m py_compile "scripts/investigacion/$guion.py"; then
+              echo "::error::$guion.py no compila con el Python de la medición." >&2
+              exit 1
+            fi
+          done
+
+      - name: Comparar las configuraciones
+        timeout-minutes: 55
+        env:
+          # El NOMBRE DE ORIGEN de cada clave, que es el que declara
+          # `configuraciones.yml` en su campo `variable_de_clave`. La de NVIDIA se
+          # llamará `OPENAI_API_KEY` dentro del subproceso; esa traducción la hace
+          # el guion, no este fichero. Ver la cabecera.
+          NVIDIA_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_NVIDIA_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_GOOGLE_KEY }}
+        shell: bash --noprofile --norc {0}
+        run: |
+          set -uo pipefail
+          mkdir -p "$RUNNER_TEMP/medicion"
+
+          # Se ejecuta con el intérprete del entorno de medición porque el guion
+          # lanza a sus hijos con `sys.executable`: arrancarlo con el `python3` del
+          # sistema pondría a medir a un intérprete que no tiene la herramienta.
+          "$RUNNER_TEMP/investigador/bin/python" scripts/investigacion/comparar_investigadores.py \
+            --salida-md "$RUNNER_TEMP/medicion/informe.md" \
+            --salida-json "$RUNNER_TEMP/medicion/comparacion.json" \
+            --tiempo-maximo "$SEGUNDOS_POR_CONFIGURACION"
+          codigo=$?
+          echo "$codigo" > "$RUNNER_TEMP/medicion/codigo-comparacion"
+
+          # ESTE PASO NO MUERE AUNQUE LA COMPARACIÓN NO SALGA. Podría: los pasos
+          # `if: always()` de abajo correrían igual. No se hace porque entonces
+          # habría DOS sitios diciendo por qué falló -aquí un código crudo, y en
+          # el veredicto su nombre-, y la primera línea roja que se lee sería la
+          # menos informativa. Los códigos 2, 3 y 4 del guion no son averías, son
+          # VEREDICTOS, y cada uno deja su informe escrito. El color lo decide un
+          # solo paso, el último, que traduce cada código a lo que significa.
+          if [ "$codigo" -ne 0 ]; then
+            echo "::warning::la comparación salió con $codigo; se publica igual para poder leerla."
+          fi
+          exit 0
+
+      - name: Volcar el informe al resumen del paso
+        # Aunque algo haya fallado: cuando la medición se tuerce es cuando más
+        # falta hace leer qué pasó.
+        if: always()
+        shell: bash --noprofile --norc {0}
+        run: |
+          set -uo pipefail
+          informe="$RUNNER_TEMP/medicion/informe.md"
+          if [ ! -f "$informe" ]; then
+            echo "::error::no hay informe que volcar: la comparación no llegó a escribirlo." >&2
+            echo "**No se compuso ningún informe.** Ver el registro del paso anterior." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          #: `$GITHUB_STEP_SUMMARY` admite 1 MiB y pasarse tumba el paso. El
+          #: informe de hoy ronda los 3 KB, pero crece con lo que digan los
+          #: subprocesos cuando fallan, así que el recorte no es decorativo. El
+          #: texto entero de cada respuesta viaja en el JSON, que se sube aparte.
+          TOPE=900000
+          tamano=$(wc -c < "$informe")
+          if [ "$tamano" -gt "$TOPE" ]; then
+            head -c "$TOPE" "$informe" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "_Recortado a $TOPE bytes de $tamano. El resto, en el artefacto._" >> "$GITHUB_STEP_SUMMARY"
+          else
+            cat "$informe" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Subir la medición como artefacto
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: medicion-investigador
+          # El directorio entero: el Markdown, el JSON con los informes completos
+          # de cada pregunta y el código de salida. Ninguna clave llega aquí: el
+          # medidor no las imprime y el comparador tapa cualquier secreto que
+          # apareciera en la salida capturada de un subproceso.
+          path: ${{ runner.temp }}/medicion
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Veredicto
+        # El último paso, y el único que decide el color. Se lee por CÓDIGO DE
+        # SALIDA, nunca por la última línea impresa.
+        if: always()
+        shell: bash --noprofile --norc {0}
+        run: |
+          set -uo pipefail
+          ruta="$RUNNER_TEMP/medicion/codigo-comparacion"
+          # Un fichero que no está NO es un cero: significa que el paso ni llegó a
+          # escribirlo -se lo llevó su propio `timeout-minutes`, o murió antes-.
+          # Confundirlo con «salió bien» es el verde falso de siempre.
+          if [ ! -f "$ruta" ]; then
+            codigo=99
+          else
+            valor=$(head -n 1 "$ruta")
+            case "$valor" in
+              ''|*[!0-9]*) codigo=98 ;;
+              *) codigo="$valor" ;;
+            esac
+          fi
+
+          case "$codigo" in
+            0)
+              echo "CONCLUYENTE: dos configuraciones medidas en procesos separados y contra servidores distintos."
+              exit 0
+              ;;
+            2)
+              echo "::error::NO CONCLUYENTE: se midieron menos de dos configuraciones. Criterio de parada (b): medir una sola no vale. El informe dice cuál no llegó a intentarlo y por qué." >&2
+              ;;
+            3)
+              echo "::error::COMPARACIÓN FALSA: dos mediciones declaran el MISMO servidor. O una secuestró el entorno de la otra, o ninguna declaró URL explícita: en los dos casos el número no se puede publicar." >&2
+              ;;
+            4)
+              echo "::error::CONFIGURACIÓN INVÁLIDA: el fichero de configuraciones no sirve para medir y el guion se paró antes de gastar nada." >&2
+              ;;
+            98)
+              echo "::error::el código de la comparación no es un número. Nadie escribió un veredicto legible." >&2
+              ;;
+            99)
+              echo "::error::la comparación no llegó a terminar: no dejó código. Probablemente agotó el tope del paso." >&2
+              ;;
+            *)
+              echo "::error::la comparación terminó con un código inesperado ($codigo)." >&2
+              ;;
+          esac
+          echo "El informe está en el resumen de este trabajo y en el artefacto «medicion-investigador»."
+          exit 1

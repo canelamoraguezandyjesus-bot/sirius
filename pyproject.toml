@@ -109,7 +109,12 @@ mypy_path = "scripts"
 exclude = ["migrations/versions"]
 
 [[tool.mypy.overrides]]
-module = ["PySide6.*", "pytestqt.*"]
+# `gpt_researcher` NO es dependencia del proyecto y no debe serlo: el paquete
+# exige Python >=3.14,<3.15 y la herramienta no lo soporta, asi que vive en un
+# entorno aparte que solo monta el workflow de medicion (S2). Aqui se declara
+# para que el guardian de `tests/` pueda importarlo condicionalmente sin que
+# mypy exija unos stubs de algo que a proposito no esta instalado.
+module = ["PySide6.*", "pytestqt.*", "gpt_researcher.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

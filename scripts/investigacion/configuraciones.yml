@@ -1,0 +1,95 @@
+# Qué configuraciones del investigador se comparan, y con qué se configura cada una.
+#
+# POR QUÉ EXISTE ESTE FICHERO, y no una lista dentro del guion: la comparación de
+# S2 tiene UNA sola variable —el modelo—. Todo lo demás (el buscador, el banco de
+# preguntas, el corrector) es idéntico en las dos ramas a propósito, porque si
+# cambiaran dos cosas a la vez el número no diría de cuál viene la diferencia.
+# Teniendo las configuraciones aquí, esa igualdad se LEE de un vistazo en vez de
+# tener que confiar en ella.
+#
+# LAS CLAVES NO ESTÁN AQUÍ, Y NO PUEDEN ESTARLO. Cada configuración declara el
+# NOMBRE de la variable de entorno de la que sale su clave (`variable_de_clave`),
+# nunca su valor: `AGENTS.md` prohíbe guardar claves en código, SQLite, registros
+# o ficheros de texto, y este fichero es un fichero de texto versionado.
+# `comparar_investigadores.py` rechaza el fichero entero (código de salida 4) si
+# algún nombre de `entorno` parece un secreto —termina en `_API_KEY`, `_TOKEN` o
+# `SECRET`—, de modo que el día que alguien pegue una clave aquí el guion se
+# niegue a correr en vez de filtrarla.
+#
+# LOS DOS NOMBRES DE LA CLAVE, que no son el mismo y conviene no confundir:
+#   - `variable_de_clave`: de dónde la lee el propietario (p. ej. `NVIDIA_API_KEY`).
+#   - `clave_destino`: con qué nombre la ve la herramienta dentro del subproceso.
+# En NVIDIA no coinciden, y ésa es justamente la trampa de la que trata todo esto:
+# NVIDIA entra por la vía compatible con OpenAI, así que su clave viaja dentro del
+# subproceso como `OPENAI_API_KEY`. El criterio de parada (a) de la nota de
+# arranque —«si hiciera falta clave de OpenAI o Anthropic, se para»— se comprueba
+# sobre `variable_de_clave`, el origen, NO sobre el destino: exigirle una clave de
+# OpenAI al propietario y ponerle ese nombre a la de NVIDIA son cosas distintas.
+#
+# LO QUE ESTE FICHERO NO GARANTIZA. Los nombres de modelo de abajo NO se han
+# comprobado contra los catálogos reales: la red de la máquina donde se escribió
+# está cerrada (curl a duckduckgo, groq y nvidia = 000), así que la medición solo
+# puede correr en GitHub Actions. Si un nombre de modelo ha cambiado, la
+# configuración fallará en su subproceso y se informará como `fallo`, con su
+# código de salida y el final de su stderr, sin contaminar a la otra ni contarse
+# como acierto. Corregir el nombre aquí es un cambio de una línea.
+
+version: 1
+
+configuraciones:
+  # NVIDIA entra por la vía compatible con OpenAI: proveedor `openai` en los tres
+  # sitios y `OPENAI_BASE_URL` apuntando a su servidor. Es exactamente el
+  # secuestro que obliga a que cada configuración corra en su propio proceso: esta
+  # variable manda sobre el proceso ENTERO —la lee el proveedor de modelo en
+  # `llm_provider/generic/base.py` y también el de vectorización en
+  # `memory/embeddings.py`—, así que si Google compartiera entorno con esta,
+  # hablaría con el servidor de NVIDIA y devolvería un informe perfecto y falso.
+  - nombre: nvidia
+    proveedor: nvidia
+    modelo: meta/llama-3.3-70b-instruct
+    variable_de_clave: NVIDIA_API_KEY
+    clave_destino: OPENAI_API_KEY
+    entorno:
+      FAST_LLM: "openai:meta/llama-3.3-70b-instruct"
+      SMART_LLM: "openai:meta/llama-3.3-70b-instruct"
+      # STRATEGIC_LLM se fija a propósito, aunque el plan no hable de él. Es una
+      # PRECAUCIÓN, no una medición: el `DEFAULT_CONFIG` de 0.15.1 trae un valor
+      # propio para esta clave, y dejarla sin fijar metería un TERCER proveedor en
+      # una comparación que presume de tener una sola variable. En la rama de
+      # Google, además, ese valor por defecto pediría una clave de OpenAI y
+      # dispararía el criterio de parada (a).
+      STRATEGIC_LLM: "openai:meta/llama-3.3-70b-instruct"
+      # `groq` no aparece entre los proveedores de vectorización de 0.15.1; NVIDIA
+      # sí sirve embeddings por la vía compatible con OpenAI, y por eso el
+      # proveedor vuelve a ser `openai` y hereda el mismo `OPENAI_BASE_URL`.
+      EMBEDDING: "openai:nvidia/nv-embedqa-e5-v5"
+      OPENAI_BASE_URL: "https://integrate.api.nvidia.com/v1"
+      # El buscador es el mismo en las dos y no lleva clave: es lo que mantiene
+      # la comparación en una sola variable.
+      RETRIEVER: "duckduckgo"
+      # Quita una fuente de ruido; NO hace la medición determinista. La web cambia
+      # entre una ejecución y otra, y el buscador puede devolver otras fuentes,
+      # así que dos ejecuciones del mismo día pueden dar números distintos.
+      TEMPERATURE: "0"
+      # Lo lee `medir_investigador.py` para declarar en su JSON qué proveedor dijo
+      # ser. No configura nada de la herramienta: sirve para que el informe pueda
+      # contrastar lo que se PIDIÓ con el servidor con el que de verdad se habló.
+      SIRIUS_PROVEEDOR: "nvidia"
+
+  # Google entra por su vía nativa, y por eso NO declara `OPENAI_BASE_URL`. Que
+  # esa variable esté ausente aquí no basta: el guion construye el entorno del
+  # subproceso desde cero justamente para que la ausencia sea real y no dependa de
+  # lo que hubiera en el entorno del que llama.
+  - nombre: google
+    proveedor: google
+    modelo: gemini-2.5-flash
+    variable_de_clave: GOOGLE_API_KEY
+    clave_destino: GOOGLE_API_KEY
+    entorno:
+      FAST_LLM: "google_genai:gemini-2.5-flash"
+      SMART_LLM: "google_genai:gemini-2.5-flash"
+      STRATEGIC_LLM: "google_genai:gemini-2.5-flash"
+      EMBEDDING: "google_genai:models/text-embedding-004"
+      RETRIEVER: "duckduckgo"
+      TEMPERATURE: "0"
+      SIRIUS_PROVEEDOR: "google"
