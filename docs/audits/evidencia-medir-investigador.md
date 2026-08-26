@@ -97,3 +97,77 @@ una declara en su salida contra qué servidor habló de verdad.
   dude lo lea.
 - **Que el número sea bueno.** Este bloque produce el porcentaje, no lo aprueba.
   Si sale por debajo del 80 %, eso también cierra S2 — con un «no».
+
+---
+
+## Segunda ronda: la refutación tumbó el diseño (26-08-2026)
+
+Tres refutadores con lentes distintas —comparación falsa, verde falso, y
+secretos y coste— sobre lo construido. **27 hallazgos, 8 de gravedad alta.**
+
+### La raíz, y por qué no se parchean uno a uno
+
+**Seis de los ocho graves son el mismo defecto**, así que se aplica la regla de
+las dos rondas de ADR-001: se para de parchear y se busca la raíz.
+
+**La raíz: el arnés medía lo que se le PEDÍA, nunca lo que OCURRÍA.**
+
+| lo que declaraba | de dónde salía de verdad |
+|---|---|
+| «habló con este servidor» | releía la variable de entorno que el padre acababa de escribir |
+| «midió 5 preguntas» | contaba entradas, aunque las cinco hubieran reventado |
+| «trajo N fuentes» | se imprimía en una columna y no condicionaba nada |
+| «comparación concluyente» | miraba un código de salida que era 0 pase lo que pase |
+
+### El hallazgo que lo demuestra, verificado a mano y no aceptado de palabra
+
+```
+$ sed -n '10,12p' .../gpt_researcher/retrievers/duckduckgo/duckduckgo.py
+        check_pkg('ddgs')
+        from ddgs import DDGS
+
+$ python -c "import importlib.metadata as m; print(m.requires('gpt-researcher'))"
+  ... 'duckduckgo-search>=4.1.1' ...
+
+$ python -c "import ddgs"
+ModuleNotFoundError: No module named 'ddgs'
+```
+
+Importa un paquete y declara otro. **El buscador no puede funcionar.**
+
+Consecuencia exacta: los dos proveedores habrían escrito sus informes de memoria
+del modelo, con cero fuentes, y el arnés habría publicado una comparación
+concluyente. Y como **ninguna de las cinco preguntas del banco obliga a buscar**
+—el propio fichero declaraba ese criterio tres líneas más arriba y lo incumplía—
+habrían salido al 100 %.
+
+No falla: **miente**. Y habría gastado cuota de las dos APIs del propietario.
+
+### Lo que se hizo al recibir la refutación
+
+**El disparador se desactivó de verdad, no con un aviso.** `workflow_dispatch`
+se sustituyó por `workflow_call` sin llamantes: el fichero sigue siendo válido y
+**no existe ningún botón** que pueda gastar cuota. Un aviso en un comentario que
+se ignora con un clic no es una salvaguarda. Comprobado:
+
+```
+disparadores reales del fichero: ['workflow_call']
+```
+
+El cableado que SÍ está medido se conserva, porque sirve: Python 3.12 (con 3.14
+`gpt-researcher` no instala — fija `numpy==2.2.6`, sin rueda `cp314`),
+`langchain-google-genai` que no viene incluido y sin el cual Google fallaría por
+importación, y un tope de 80 minutos que no rompe el margen de dos minutos de D1.
+
+### Lo que falta para reponerlo
+
+1. **Prueba de vida antes de gastar cuota**: una búsqueda real que exija
+   fuentes > 0 y una llamada real por proveedor. Si falla, no se mide nada.
+2. **Veredicto cerrado sobre evidencia**: sin fuentes no hay medición; una
+   pregunta con error nunca entra en un resultado concluyente.
+3. **Banco rehecho**: preguntas que exijan buscar, y corrección con límite de
+   palabra — hoy `Rust` se aprueba con «trust», comprobado.
+
+Los hallazgos que no son de esta familia —el `-e` del shell que hace inalcanzables
+tres veredictos, la clave que puede viajar intacta en el JSON del artefacto, el
+plazo que tira la cuota ya gastada— se arreglan aparte, cada uno con su guardián.
