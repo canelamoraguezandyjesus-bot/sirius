@@ -211,6 +211,7 @@ jobs:
           # están; su valor no se imprime jamás.
           NVIDIA_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_NVIDIA_KEY }}
           GOOGLE_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_GOOGLE_KEY }}
+        shell: bash --noprofile --norc {0}
         run: |
           set -uo pipefail
           # El comparador sabe seguir sin una clave: la informa como `sin_clave` y
@@ -229,6 +230,7 @@ jobs:
 
       - name: Montar el entorno del investigador, aparte del proyecto
         timeout-minutes: 12
+        shell: bash --noprofile --norc {0}
         run: |
           set -uo pipefail
           mkdir -p "$RUNNER_TEMP/medicion"
@@ -255,13 +257,14 @@ jobs:
           # cuál de las dos cosas cambió. Subirla es una línea, pero hay que
           # volver a medir: no basta con que instale.
           if ! uv pip install --python "$RUNNER_TEMP/investigador/bin/python" \
-              "gpt-researcher==$VERSION_EXIGIDA" "langchain-google-genai==4.3.5" pyyaml; then
+              "gpt-researcher==$VERSION_EXIGIDA" "langchain-google-genai==4.3.5" ddgs pyyaml; then
             echo "::error::no se pudo instalar el investigador." >&2
             exit 1
           fi
 
       - name: Comprobar el entorno antes de gastar cuota
         timeout-minutes: 5
+        shell: bash --noprofile --norc {0}
         run: |
           set -uo pipefail
           PY="$RUNNER_TEMP/investigador/bin/python"
@@ -315,6 +318,7 @@ jobs:
           # el guion, no este fichero. Ver la cabecera.
           NVIDIA_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_NVIDIA_KEY }}
           GOOGLE_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_GOOGLE_KEY }}
+        shell: bash --noprofile --norc {0}
         run: |
           set -uo pipefail
           mkdir -p "$RUNNER_TEMP/medicion"
@@ -345,6 +349,7 @@ jobs:
         # Aunque algo haya fallado: cuando la medición se tuerce es cuando más
         # falta hace leer qué pasó.
         if: always()
+        shell: bash --noprofile --norc {0}
         run: |
           set -uo pipefail
           informe="$RUNNER_TEMP/medicion/informe.md"
@@ -384,6 +389,7 @@ jobs:
         # El último paso, y el único que decide el color. Se lee por CÓDIGO DE
         # SALIDA, nunca por la última línea impresa.
         if: always()
+        shell: bash --noprofile --norc {0}
         run: |
           set -uo pipefail
           ruta="$RUNNER_TEMP/medicion/codigo-comparacion"

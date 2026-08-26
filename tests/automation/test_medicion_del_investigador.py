@@ -493,9 +493,19 @@ def test_la_configuracion_que_si_declara_la_variable_recibe_la_suya(
         "declara `configuraciones.yml`. Si es el centinela, hereda del entorno de fuera; si "
         "no está, la configuración no llegó a aplicarse y la medición no es de NVIDIA."
     )
-    assert entorno.get("OPENAI_API_KEY") == "clave-falsa-de-prueba-nvidia", (
+    # La clave llega TAPADA, y eso es la prueba de que llegó. El comparador pasa
+    # el JSON del hijo por `sin_secretos` antes de tocarlo -porque ese JSON se
+    # sube como artefacto-, así que el valor real nunca sale por aquí. El
+    # marcador solo aparece donde estaba la clave exacta: verlo demuestra las dos
+    # cosas a la vez, que llegó y que no se publica.
+    valor = entorno.get("OPENAI_API_KEY")
+    assert valor is not None, (
         "la clave tiene que llegar con su nombre de DESTINO: NVIDIA entra por la vía "
         "compatible con OpenAI y la herramienta la busca como OPENAI_API_KEY"
+    )
+    assert valor != "", "OPENAI_API_KEY llegó vacía: la configuración no se aplicó"
+    assert "clave-falsa-de-prueba-nvidia" not in valor, (
+        "la clave viajó SIN TAPAR en el JSON del hijo, que es lo que se sube como artefacto"
     )
     assert "GOOGLE_API_KEY" not in entorno, (
         "la clave de Google se coló en el subproceso de NVIDIA: ninguna configuración puede "
@@ -943,3 +953,102 @@ def test_la_correccion_exige_palabra_entera(texto: str, obligatoria: str, espera
     """«trust» contenía «rust», y aprobaba la pregunta. Medido por el refutador."""
     acierta, _, _ = _medidor()._corrige(texto, [obligatoria])
     assert acierta is esperado, f"_corrige({texto!r}, [{obligatoria!r}]) dio {acierta}"
+
+
+# --------------------------------------------------------------------------- #
+# Los tres hallazgos de la refutación que NO eran de la familia de la raíz
+# --------------------------------------------------------------------------- #
+
+
+def test_el_workflow_instala_el_paquete_que_el_buscador_importa() -> None:
+    """`ddgs`, la causa material del defecto.
+
+    `gpt-researcher` 0.15.1 hace `check_pkg('ddgs')` y `from ddgs import DDGS`,
+    pero declara `Requires-Dist: duckduckgo-search>=4.1.1`. Son paquetes
+    distintos. Sin instalarlo a mano el buscador NO arranca, el modelo escribe de
+    memoria y el informe sale perfecto con cero fuentes.
+    """
+    # SE MIRA LA ORDEN DE INSTALACION, NO EL FICHERO. La primera version de esta
+    # prueba buscaba «ddgs» en todo el texto y la cabecera del propio workflow lo
+    # nombra dos veces al explicar el defecto: quitarlo de la linea de instalacion
+    # la dejaba en verde. Vacua, y por el mismo motivo que ya paso con H-14: un
+    # guardian que se conforma con que algo este NOMBRADO no comprueba que este
+    # HECHO.
+    doc = _doc(WORKFLOW)
+    instalaciones = [
+        str(paso.get("run", ""))
+        for job in (doc.get("jobs") or {}).values()
+        for paso in (job.get("steps") or [])
+        if "uv pip install" in str(paso.get("run", ""))
+    ]
+    assert instalaciones, "el workflow no instala nada: no hay orden que comprobar"
+    sin_comentarios = "\n".join(
+        linea
+        for orden in instalaciones
+        for linea in orden.splitlines()
+        if not linea.lstrip().startswith("#")
+    )
+    assert re.search(r"(?<!\w)ddgs(?!\w)", sin_comentarios), (
+        "ninguna orden `uv pip install` del workflow instala `ddgs`: el buscador "
+        "no arrancaría y las dos configuraciones contestarían de memoria, con cero "
+        "fuentes y un informe perfecto"
+    )
+
+
+def test_todos_los_pasos_declaran_su_shell() -> None:
+    """El `-e` por defecto mata el paso antes de que se lea el código de salida.
+
+    El shell por defecto de un `run:` en GitHub es `bash -e {0}`, y
+    `set -uo pipefail` NO apaga errexit. Sin `shell:` explícito, cualquier
+    veredicto distinto de 0 mataba el paso antes de `codigo=$?`, y el trabajo
+    publicaba «probablemente agotó el tope» en vez del motivo real.
+    """
+    doc = _doc(WORKFLOW)
+    sin_shell = [
+        paso.get("name", "(sin nombre)")
+        for job in (doc.get("jobs") or {}).values()
+        for paso in (job.get("steps") or [])
+        if "run" in paso and "shell" not in paso
+    ]
+    assert sin_shell == [], (
+        f"pasos con `run:` y sin `shell:` explícito: {sin_shell}. Heredan `bash -e`, "
+        "que los mata antes de leer el código de salida"
+    )
+
+
+def test_el_json_del_hijo_se_tapa_antes_de_publicarse() -> None:
+    """La clave podía viajar intacta al artefacto.
+
+    `medir_investigador.py` guarda el texto de la excepción en el JSON, y el de
+    un cliente HTTP puede traer dentro la cabecera de autenticación. Ese JSON se
+    sube como artefacto. Antes solo se tapaba la cola de un subproceso fallido:
+    el único canal por el que una clave podía salir era el que no se tapaba.
+    """
+    modulo = _comparador()
+    fuente = Path(modulo.__file__).read_text(encoding="utf-8")
+    lectura = fuente.index("salida_json.read_text")
+    ventana = fuente[max(0, lectura - 200) : lectura + 100]
+    assert "sin_secretos" in ventana, (
+        "el JSON del hijo se lee sin pasar por `sin_secretos`, y es lo que se sube como artefacto"
+    )
+
+
+def test_una_medicion_que_el_hijo_declara_no_fiable_no_se_cuenta_como_medida(
+    tmp_path: Path,
+) -> None:
+    """El hijo ya sabe que lo suyo no vale. El padre tiene que hacerle caso.
+
+    Copiar su porcentaje como «medida completa» sería volver exactamente a la
+    raíz que la refutación tumbó: un número publicado sobre una medición que su
+    propio autor marcó como inservible.
+    """
+    modulo = _comparador()
+    fuente = Path(modulo.__file__).read_text(encoding="utf-8")
+    assert "medicion_fiable" in fuente, (
+        "el comparador no mira `medicion_fiable`: publicaría como medida válida "
+        "un resultado que el propio medidor marcó como no fiable"
+    )
+    marca = fuente.index("medicion_fiable")
+    assert "ESTADO_FALLO" in fuente[marca : marca + 400], (
+        "mira `medicion_fiable` pero no lo trata como fallo"
+    )

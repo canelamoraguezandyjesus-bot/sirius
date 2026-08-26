@@ -389,7 +389,21 @@ def medir_configuracion(
         )
         return base
 
-    resultado: dict[str, Any] = json.loads(salida_json.read_text(encoding="utf-8"))
+    # EL JSON DEL HIJO SE TAPA ENTERO ANTES DE TOCARLO. `medir_investigador.py`
+    # guarda `error = f"{type(exc).__name__}: {exc}"`, y el texto de una excepción
+    # de un cliente HTTP puede traer dentro la cabecera de autenticación. Ese JSON
+    # se sube como artefacto: antes solo se tapaba la cola de un subproceso que
+    # había fallado, así que el único canal por el que una clave podía salir de
+    # verdad era justo el que no se tapaba.
+    crudo = sin_secretos(salida_json.read_text(encoding="utf-8"), [clave])
+    resultado: dict[str, Any] = json.loads(crudo)
+    if not resultado.get("medicion_fiable", True):
+        # El hijo ya sabe que lo suyo no vale y lo dice. Copiar su porcentaje como
+        # «medida completa» seria volver a la raiz que la refutacion tumbo.
+        base.estado = ESTADO_FALLO
+        base.detalle = str(resultado.get("motivo_no_fiable", "medicion no fiable"))
+        base.resultado = resultado
+        return base
     base.estado = ESTADO_MEDIDA
     base.detalle = "medida completa"
     base.servidor = str(resultado.get("servidor", "(sin declarar)"))
