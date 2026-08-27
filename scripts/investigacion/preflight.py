@@ -34,10 +34,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any
+
+import yaml
 
 TIEMPO_MAXIMO = 60
 
@@ -154,6 +158,32 @@ def _prueba_de_vida(proveedor: str, clave: str, modelos_configurados: list[str])
     return resultado
 
 
+ATESTADO = Path(__file__).resolve().parent / "modelos_atestiguados.yml"
+
+
+def _muertos_conocidos(atestado: Path | None = None) -> set[str]:
+    """Modelos que el servidor ya dijo que NO responden, segun el atestado.
+
+    Es la memoria del instrumento. Sin ella vuelve a gastar su tope en cadaveres
+    conocidos, que es lo que hizo en la cuarta ronda de la noche del 26-08
+    (ADR-095). Si no hay atestado o no se puede leer, no se descarta nada: no
+    saber no es lo mismo que saber que esta muerto.
+    """
+    ruta = atestado or ATESTADO
+    if not ruta.is_file():
+        return set()
+    try:
+        datos = yaml.safe_load(ruta.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return set()
+    muertos: set[str] = set()
+    for proveedor in (datos.get("proveedores") or {}).values():
+        for nombre, ficha in (proveedor.get("modelos") or {}).items():
+            if isinstance(ficha, dict) and ficha.get("existe") and not ficha.get("usable"):
+                muertos.add(str(nombre))
+    return muertos
+
+
 def _candidatos(proveedor: str, modelos: list[str], filtro: str, tope: int) -> list[str]:
     """Modelos del catalogo que merece la pena probar, ordenados por sensatez.
 
@@ -169,9 +199,29 @@ def _candidatos(proveedor: str, modelos: list[str], filtro: str, tope: int) -> l
     """
     utiles = [m for m in modelos if filtro.lower() in m.lower()]
 
+    # EL INSTRUMENTO RECUERDA. Sin esto volvia a gastar el tope en modelos que el
+    # servidor YA le habia dicho que no servian: medido, `_candidatos` con tope 4
+    # devolvia tres de la generacion 2.5, que estaba declarada muerta hacia una
+    # hora. Probar dos veces lo mismo no es probar, es repetir.
+    muertos = _muertos_conocidos()
+    utiles = [m for m in utiles if m not in muertos] or utiles
+
     # Los que suenan a caros o a especiales, al final: guard, safety, reward,
     # vision, translate y los gigantes no son candidatos de trabajo diario.
-    def _peso(nombre: str) -> tuple[int, str]:
+    def _generacion(nombre: str) -> tuple[int, ...]:
+        """La version del modelo, para que lo NUEVO vaya antes que lo viejo.
+
+        MEDIDO: el orden alfabetico pone `gemini-2.5` delante de `gemini-3.5`, y
+        la generacion 2.5 entera estaba muerta. Ordenar por texto es ordenar por
+        antiguedad, justo al reves de lo que interesa.
+        """
+        numeros = re.findall(r"(\d+)(?:\.(\d+))?", nombre)
+        if not numeros:
+            return (0,)
+        mayor, menor = numeros[0]
+        return (-int(mayor), -int(menor or 0))
+
+    def _peso(nombre: str) -> tuple[int, tuple[int, ...], str]:
         bajo = nombre.lower()
         # MEDIDO: la primera pasada probo seis candidatos y los seis eran
         # `gemini-2.5-*` de audio, de imagen o de uso del ordenador, porque el
@@ -209,6 +259,7 @@ def _candidatos(proveedor: str, modelos: list[str], filtro: str, tope: int) -> l
         grande = any(x in bajo for x in ("340b", "550b", "253b", "120b-a12b"))
         return (
             3 if penaliza else (2 if preview else (1 if grande else 0)),
+            _generacion(nombre),
             nombre,
         )
 
@@ -284,6 +335,53 @@ def _configurados(proveedor: str) -> list[str]:
     return sorted({modelo for adaptador, modelo in encontrados if adaptador == familia})
 
 
+def _escribir_atestado(informes: list[dict[str, Any]], ahora: str) -> None:
+    """La memoria que no existia, y sin la cual ningun guardian puede exigir nada.
+
+    Hasta hoy el resultado de cada llamada moria en la cola de un log de Actions
+    y en prosa de `docs/audits/`. **Ningun programa podia leerlo**, asi que nada
+    impedia que el banco de medicion corriera sobre un modelo muerto —y estuvo a
+    punto de hacerlo cuatro veces en una noche (ADR-095)—.
+
+    Esto lo convierte en un dato: por modelo, si existe, si responde, con que
+    codigo y cuando. Lo escribe SOLO este guion; escribirlo a mano seria volver a
+    tener una afirmacion sin comprobacion detras, que es la raiz entera.
+    """
+    lineas: list[str] = [
+        "# Atestado de modelos — ESCRITO POR `preflight.py --atestiguar`.",
+        "#",
+        "# NO SE EDITA A MANO. Cada linea de aqui es el resultado de una llamada",
+        "# real al proveedor, con su fecha. Escribirla a mano seria una afirmacion",
+        "# sin comprobacion detras, que es exactamente la raiz que ADR-095 nombra.",
+        "#",
+        "# Lo lee `comparar_investigadores.py`, que se niega a medir si un modelo",
+        "# configurado no aparece aqui como usable y reciente.",
+        "version: 1",
+        f"generado_en: {ahora}",
+        "proveedores:",
+    ]
+    for informe in informes:
+        lineas.append(f"  {informe['proveedor']}:")
+        lineas.append(f"    host: {informe.get('host_preguntado', '?')}")
+        lineas.append(f"    catalogo_leido: {bool(informe.get('atestado'))}")
+        lineas.append("    modelos:")
+        prueba = dict(informe.get("prueba_de_vida") or {})
+        prueba.update(dict(informe.get("candidatos_probados") or {}))
+        configurados = dict(informe.get("configurados") or {})
+        nombres = sorted(set(prueba) | set(configurados))
+        if not nombres:
+            lineas.append("      {}")
+            continue
+        for nombre in nombres:
+            uso = prueba.get(nombre) or {}
+            lineas.append(f'      "{nombre}":')
+            lineas.append(f"        existe: {bool(configurados.get(nombre, nombre in prueba))}")
+            lineas.append(f"        usable: {bool(uso.get('usable'))}")
+            lineas.append(f"        codigo_http: {uso.get('codigo_http') or 0}")
+            lineas.append(f"        fecha_utc: {ahora}")
+    ATESTADO.write_text("\n".join(lineas) + "\n", encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Pregunta a cada proveedor qué modelos tiene.")
     parser.add_argument("proveedores", nargs="*", default=list(PROVEEDORES), help="cuáles revisar")
@@ -295,6 +393,11 @@ def main(argv: list[str] | None = None) -> int:
         help="prueba de verdad los modelos del catalogo que contengan esta palabra",
     )
     parser.add_argument("--tope", type=int, default=6, help="cuantos candidatos probar como mucho")
+    parser.add_argument(
+        "--atestiguar",
+        action="store_true",
+        help="escribe modelos_atestiguados.yml con lo que cada modelo contesto",
+    )
     args = parser.parse_args(argv)
 
     informes = [revisar(p) for p in (args.proveedores or list(PROVEEDORES))]
@@ -312,6 +415,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.buscar:
         for informe in informes:
             informe["modelos"] = [m for m in informe["modelos"] if args.buscar.lower() in m.lower()]
+
+    if args.atestiguar:
+        from datetime import UTC, datetime
+
+        _escribir_atestado(informes, datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"))
 
     texto = json.dumps(informes, ensure_ascii=False, indent=2)
     if args.salida:
