@@ -145,7 +145,22 @@ def test_una_pasada_anade_una_linea_y_evalua_las_dos_clases_con_autoridad(tmp_pa
     assert "1 línea(s) nueva(s)" in texto
     assert WorkItemClass.PROGRAMACION.value in texto
     assert WorkItemClass.AUDITORIA.value in texto
-    assert "no conmuta nada" in texto
+    # LAS DOS MITADES DEL §11, y por eso ya no se busca la frase entera: desde
+    # que la pasada cablea la reversion de emergencia (D1c), el texto dice DOS
+    # cosas distintas y confundirlas seria grave.
+    #
+    #   §11.3 — hacia el motor NO conmuta: eso sigue siendo un acto del propietario.
+    #   §11.4 — hacia GitHub SI revierte, y una sola divergencia real basta.
+    #
+    # Comprobar la frase literal ataba la prueba a la redaccion; comprobar las dos
+    # propiedades la ata a lo que importa.
+    assert "no conmuta" in texto.lower() and "hacia el motor" in texto.lower(), (
+        "la pasada tiene que declarar que NO conmuta hacia el motor (§11.3)"
+    )
+    assert "11.4" in texto, (
+        "la pasada tiene que dejar dicho qué hizo con la salida de emergencia del "
+        "§11.4: callarlo sería tener una salvaguarda que nadie sabe si actuó"
+    )
     lineas = leer_registro(registro)
     assert len(lineas) == 1
     assert lineas[0].work_id == "WI-1"

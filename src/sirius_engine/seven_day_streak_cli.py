@@ -62,6 +62,12 @@ from pathlib import Path
 from sirius_engine.adapters.durable.dispatch_journal import DurableDispatchJournal
 from sirius_engine.adapters.durable.store import DurableWorkEngineStore
 from sirius_engine.adapters.github_cli_mirror import GitHubCliMirrorReader
+from sirius_engine.authority_reversion import (
+    anadir_entradas,
+    evaluar_reversion,
+    formatear_aviso_reversion,
+    leer_registro_conmutaciones,
+)
 from sirius_engine.cli import resolver_diario
 from sirius_engine.domain.authority import Autoridad, autoridad_de_clase
 from sirius_engine.domain.events import AggregateType
@@ -92,6 +98,10 @@ COMANDO = "sirius-racha"
 #: ``__file__`` -en un wheel, eso cae bajo ``site-packages``, que no lleva
 #: ni ``.github`` ni ``docs/operations``-.
 _REGISTRO_RELATIVO = Path("docs") / "operations" / "racha_siete_dias.jsonl"
+#: El registro de conmutaciones de autoridad, hermano del de la racha. Vive junto
+#: a el porque son dos mitades de la misma medicion: uno cuenta los dias verdes
+#: hacia delante y el otro guarda las salidas de emergencia hacia atras.
+_CONMUTACIONES_RELATIVO = Path("docs") / "operations" / "conmutaciones_autoridad.jsonl"
 _WORKFLOWS_RELATIVO = Path(".github") / "workflows"
 
 #: Variable de entorno con la que se puede fijar la raíz sin tocar código,
@@ -279,7 +289,49 @@ def main(
         linea(f"{clase.value} ({DIAS_REQUERIDOS} días requeridos): {estado} — {evaluacion.motivo}")
 
     linea("")
-    linea("Esta pasada no conmuta nada (contrato §11.3): solo mide y registra.")
+
+    # --- La salida de emergencia del §11.4 (D1c) -----------------------------
+    #
+    # `authority_reversion` estaba construido, probado y **sin llamante**: cero
+    # referencias fuera de sus propias pruebas, comprobado el 27-08-2026. Es la
+    # QUINTA pieza correcta sin llamante de este repositorio, y la peor de las
+    # cinco: es lo único que devolvería el mando a la vía GitHub si el motor se
+    # porta mal con una clase ya conmutada.
+    #
+    # Una salida de emergencia que nadie invoca no es una salvaguarda; es un
+    # adorno que se cita en un contrato.
+    #
+    # POR QUÉ AQUÍ Y NO EN SU PROPIO RELOJ. El §11.4 dice que una sola
+    # divergencia real basta y que «no se espera a un patrón ni a una segunda
+    # ocurrencia». La pasada diaria es el único sitio donde esas divergencias se
+    # leen recién medidas: darle un reloj aparte añadiría un retardo entre ver la
+    # divergencia y actuar sobre ella, y ese retardo es exactamente lo que el
+    # contrato prohíbe.
+    #
+    # Y NO CONMUTA HACIA EL MOTOR, que es la otra mitad y sigue siendo un acto
+    # explícito del propietario (§11.3). Esto solo revierte, que es la dirección
+    # segura: devolver el mando nunca puede dar autoridad a nadie.
+    conmutaciones = raiz / _CONMUTACIONES_RELATIVO
+    revertidas = 0
+    for clase in WorkItemClass:
+        resultado = evaluar_reversion(
+            clase=clase,
+            registro_conmutaciones=leer_registro_conmutaciones(conmutaciones),
+            lineas_verificador=lineas_totales,
+            instante=ahora,
+        )
+        if resultado.entrada is None:
+            continue
+        anadir_entradas(conmutaciones, [resultado.entrada])
+        revertidas += 1
+        linea(f"REVERSIÓN (§11.4): {formatear_aviso_reversion(resultado.entrada)}")
+
+    if revertidas == 0:
+        linea("Ninguna clase requiere reversión de emergencia (§11.4).")
+
+    linea("")
+    linea("Esta pasada no conmuta NADA hacia el motor (contrato §11.3): solo mide,")
+    linea("registra y, si hace falta, devuelve el mando a GitHub (§11.4).")
     return 0
 
 
