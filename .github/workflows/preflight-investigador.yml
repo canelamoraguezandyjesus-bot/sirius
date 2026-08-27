@@ -1,0 +1,99 @@
+name: Preflight del investigador
+
+# PREGUNTARLE AL SERVIDOR EN VEZ DE CREERLE A UN INFORME.
+#
+# El 26-08-2026 se fusionó un banco para comparar NVIDIA contra Google. Al día
+# siguiente una investigación descubrió que los DOS modelos de vectorización
+# configurados llevaban meses muertos: `text-embedding-004` lo retiró Google en
+# enero y `nv-embedqa-e5-v5` está deprecado. El banco tenía 33 guardianes en
+# verde y comparaba dos cosas que ya no existían.
+#
+# Un nombre de modelo es un dato PERECEDERO. El único que sabe si sigue vivo es
+# el servidor, así que se le pregunta antes de gastar nada.
+#
+# Y de paso cierra el agujero que los refutadores encontraron y que sigue
+# abierto: el arnés de la comparación rellena su campo `servidor` releyendo la
+# variable de entorno que él mismo puso -un eco, no una prueba-. Aquí el
+# catálogo lo devuelve el host remoto: que venga con modelos dentro demuestra
+# que se habló con ÉL.
+#
+# COSTE: listar modelos. Céntimos, y solo cuando alguien pulsa el botón.
+#
+# `timeout-minutes` NO PUEDE SUBIR DE 85: el mayor tope del repositorio fija la
+# tolerancia del contador de los siete días (170 min = 85 x 2) y D1 cuelga de un
+# margen de dos minutos. Lo vigila `tests/automation/test_contador_de_siete_dias.py`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      buscar:
+        description: "Filtra los modelos por esta palabra (p. ej. «embed» o «gemini»). Vacío = todos."
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: Preguntar a los dos proveedores
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Preguntar
+        id: preguntar
+        shell: bash --noprofile --norc {0}
+        env:
+          # Por `env:`, NUNCA interpoladas dentro del `run:`: un `${{ secrets.X }}`
+          # se sustituye antes de que bash lea nada.
+          GOOGLE_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_GOOGLE_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_NVIDIA_KEY }}
+          BUSCAR: ${{ inputs.buscar }}
+        run: |
+          set -uo pipefail
+          codigo=0
+          uv run --no-project python scripts/investigacion/preflight.py \
+            --salida preflight.json --buscar "$BUSCAR" || codigo=$?
+          echo "codigo=$codigo" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Preflight del investigador"
+            echo
+            echo '```json'
+            cat preflight.json 2>/dev/null || echo "(no se escribió el informe)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Guardar el informe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preflight-investigador
+          path: preflight.json
+          if-no-files-found: warn
+
+      - name: Veredicto
+        shell: bash --noprofile --norc {0}
+        env:
+          CODIGO: ${{ steps.preguntar.outputs.codigo }}
+        run: |
+          set -uo pipefail
+          if [ "$CODIGO" = "0" ]; then
+            echo "Los dos proveedores contestaron con su catálogo."
+            exit 0
+          fi
+          echo "::error::algún proveedor no contestó; mira el informe de arriba." >&2
+          exit 1
