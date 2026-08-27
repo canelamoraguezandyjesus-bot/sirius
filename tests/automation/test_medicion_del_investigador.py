@@ -835,26 +835,41 @@ def test_el_paso_que_compara_recibe_las_dos_claves() -> None:
     )
 
 
-def test_las_claves_entran_por_env_y_solo_las_dos_previstas() -> None:
+def test_las_claves_entran_por_env_y_solo_las_declaradas() -> None:
     """Anti-vacua: un workflow sin claves pasaría la prueba de arriba sin mérito.
 
-    Se exige además que sean las dos de ORIGEN previstas. El criterio de parada
-    (a) de la nota de arranque -«si hiciera falta clave de OpenAI o Anthropic, se
-    para y se sube al propietario»- se comprueba sobre el origen: que la de
-    NVIDIA se llame `OPENAI_API_KEY` DENTRO del subproceso es otra cosa, la hace
-    el guion con `clave_destino`, y está permitida.
+    HASTA EL 27-08-2026 esta prueba fijaba a mano el par NVIDIA/GOOGLE, y añadir
+    la clave opcional del buscador (ADR-098) la puso roja: el número estaba
+    escrito en dos sitios y uno mentiría tarde o temprano. Ahora el conjunto
+    esperado se DERIVA de `configuraciones.yml` -claves principales más
+    opcionales-, que es la única fuente. La mitad que de verdad protege queda
+    igual y explícita: el criterio de parada (a) -«si hiciera falta clave de
+    OpenAI o Anthropic, se para»- se comprueba sobre el ORIGEN; que la de NVIDIA
+    se llame `OPENAI_API_KEY` DENTRO del subproceso la hace el guion con
+    `clave_destino` y está permitida.
     """
+    c = _comparador()
+    configuraciones = c.cargar_configuraciones(INVESTIGACION / "configuraciones.yml")
+    esperadas = {conf.variable_de_clave for conf in configuraciones} | {
+        origen for conf in configuraciones for origen, _destino in conf.claves_opcionales
+    }
+    assert esperadas, "sin claves declaradas esta prueba no mediría nada"
+
     entradas: dict[str, str] = {}
     for paso in _pasos(WORKFLOW):
         for variable, valor in (paso.get("env") or {}).items():
             if _SECRETO_INTERPOLADO.search(str(valor)):
                 entradas[str(variable)] = str(valor)
 
-    assert set(entradas) == {"NVIDIA_API_KEY", "GOOGLE_API_KEY"}, (
-        f"el workflow declara estas claves por `env:`: {sorted(entradas)}. Se esperaban "
-        "exactamente NVIDIA_API_KEY y GOOGLE_API_KEY, los nombres de ORIGEN que declara "
-        "`configuraciones.yml`. Si aparece una clave de OpenAI o de Anthropic, hay que "
-        "parar y subírselo al propietario (criterio de parada (a))."
+    assert set(entradas) == esperadas, (
+        f"el workflow declara estas claves por `env:`: {sorted(entradas)}, y "
+        f"`configuraciones.yml` declara {sorted(esperadas)}. Los dos tienen que decir lo "
+        "mismo: una clave en el workflow que ninguna configuración nombra no la usa nadie, "
+        "y una nombrada que el workflow no pasa deja la pieza muerta."
+    )
+    prohibidas = sorted(set(entradas) & set(c.CLAVES_QUE_OBLIGAN_A_PARAR))
+    assert prohibidas == [], (
+        f"el workflow pide {prohibidas}: criterio de parada (a), se para y se sube al propietario."
     )
 
 
@@ -1476,4 +1491,133 @@ def test_el_comparador_escribe_ese_desglose_de_verdad(
     assert "SEÑAL-QUE-SE-BUSCA" in registro, (
         "el desglose por pregunta no se escribió en el registro del trabajo; "
         f"lo que salió fue:\n{registro[-800:]}"
+    )
+
+
+# --- Claves opcionales: el buscador con clave, sin que su ausencia rompa nada ---
+#
+# ADR-098. DuckDuckGo desde los runners devolvió vacío en 5 de 7 búsquedas y el
+# 80 % de S2 no se podía ni medir. Tavily aporta fuentes si su clave está; el
+# esquema solo admitía UNA clave y el guardián anti-secretos rechaza -con razón-
+# cualquier `*_API_KEY` escrito en `entorno`. De ahí `claves_opcionales`.
+
+
+def _configuracion_con_opcional(c: Any) -> Any:
+    return c.Configuracion(
+        nombre="prueba",
+        proveedor="p",
+        modelo="m",
+        variable_de_clave="CLAVE_DE_PRUEBA",
+        clave_destino="CLAVE_DE_PRUEBA",
+        entorno={},
+        claves_opcionales=(("TAVILY_API_KEY", "TAVILY_API_KEY"),),
+    )
+
+
+def test_la_clave_opcional_presente_llega_al_hijo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pregunta 1, primera mitad: presente se entrega, con su nombre de destino."""
+    c = _comparador()
+    guion = tmp_path / "hijo.py"
+    guion.write_text(GUION_FALSO, encoding="utf-8")
+    monkeypatch.setattr(c, "MEDIDOR", guion)
+    monkeypatch.setenv("CLAVE_DE_PRUEBA", "clave-principal")
+    monkeypatch.setenv("TAVILY_API_KEY", "clave-del-buscador-de-prueba")
+    medicion = c.medir_configuracion(_configuracion_con_opcional(c), tmp_path, 60)
+    assert medicion.resultado is not None, medicion.detalle
+    entorno = dict(medicion.resultado["entorno_recibido"])
+    # El hijo la recibió (la variable existe en su retrato) y el retrato vuelve
+    # TAPADO: `sin_secretos` sustituyó el valor antes de que tocara el disco.
+    # Las dos cosas a la vez, con una sola llamada real.
+    assert entorno.get("TAVILY_API_KEY") == c.OCULTO, (
+        f"TAVILY_API_KEY en el retrato del hijo: {entorno.get('TAVILY_API_KEY')!r}. "
+        "O no llegó al subproceso (Tavily quedaría inerte también con el secreto "
+        "puesto), o llegó y NO se tapó (la clave saldría en el artefacto)."
+    )
+
+
+def test_la_clave_opcional_ausente_no_rompe_ni_avisa(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pregunta 1, segunda mitad: opcional significa opcional."""
+    c = _comparador()
+    guion = tmp_path / "hijo.py"
+    guion.write_text(GUION_FALSO, encoding="utf-8")
+    monkeypatch.setattr(c, "MEDIDOR", guion)
+    monkeypatch.setenv("CLAVE_DE_PRUEBA", "clave-principal")
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    medicion = c.medir_configuracion(_configuracion_con_opcional(c), tmp_path, 60)
+    assert medicion.estado == c.ESTADO_MEDIDA, (
+        f"sin la clave opcional la medición no puede degradarse: {medicion.estado} — "
+        f"{medicion.detalle}"
+    )
+    assert medicion.resultado is not None
+    assert "TAVILY_API_KEY" not in dict(medicion.resultado["entorno_recibido"]), (
+        "sin valor no se entrega la variable: una cadena vacía en el entorno del "
+        "hijo no es lo mismo que su ausencia."
+    )
+
+
+def test_el_valor_de_la_clave_opcional_se_tapa_en_la_salida(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pregunta 3: que sea opcional no la hace publicable.
+
+    El guion falso retrata el entorno entero en su JSON, que es exactamente el
+    texto que acaba en el artefacto: si la clave opcional no se tapara, saldría
+    versionada ahí.
+    """
+    c = _comparador()
+    guion = tmp_path / "hijo.py"
+    guion.write_text(GUION_FALSO, encoding="utf-8")
+    monkeypatch.setattr(c, "MEDIDOR", guion)
+    monkeypatch.setenv("CLAVE_DE_PRUEBA", "clave-principal-larga")
+    monkeypatch.setenv("TAVILY_API_KEY", "tvly-secreto-que-no-puede-salir")
+    medicion = c.medir_configuracion(_configuracion_con_opcional(c), tmp_path, 60)
+    assert medicion.resultado is not None
+    crudo = str(medicion.resultado)
+    assert "tvly-secreto-que-no-puede-salir" not in crudo, (
+        "el valor de la clave opcional aparece en el JSON que se sube como artefacto"
+    )
+
+
+def test_una_clave_opcional_de_openai_o_anthropic_para_el_guion(tmp_path: Path) -> None:
+    """Criterio de parada (a), también para las opcionales: el origen manda."""
+    c = _comparador()
+    fichero = tmp_path / "configuraciones.yml"
+    fichero.write_text(
+        """
+version: 1
+configuraciones:
+  - nombre: tramposa
+    proveedor: p
+    modelo: m
+    variable_de_clave: CLAVE_X
+    clave_destino: CLAVE_X
+    entorno:
+      FAST_LLM: "p:m"
+      SMART_LLM: "p:m"
+    claves_opcionales:
+      - variable_de_clave: OPENAI_API_KEY
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(c.ConfiguracionInvalida):
+        c.cargar_configuraciones(fichero)
+
+
+def test_las_dos_configuraciones_declaran_el_mismo_buscador() -> None:
+    """Pregunta 4: si difieren, la comparación tiene dos variables y no dice nada."""
+    c = _comparador()
+    configuraciones = c.cargar_configuraciones(INVESTIGACION / "configuraciones.yml")
+    buscadores = {conf.entorno.get("RETRIEVER") for conf in configuraciones}
+    assert len(buscadores) == 1, (
+        f"las configuraciones declaran buscadores distintos: {buscadores}. La "
+        "comparación presume de tener UNA variable -el modelo- y esto le mete otra."
+    )
+    (buscador,) = buscadores
+    assert buscador == "tavily,duckduckgo", (
+        f"el buscador declarado es {buscador!r}. Desde ADR-098 van los dos y en ese "
+        "orden: Tavily aporta fuentes si su clave está, y sin clave queda inerte."
     )

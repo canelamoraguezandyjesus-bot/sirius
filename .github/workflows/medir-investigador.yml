@@ -339,6 +339,12 @@ jobs:
           # el guion, no este fichero. Ver la cabecera.
           NVIDIA_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_NVIDIA_KEY }}
           GOOGLE_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_GOOGLE_KEY }}
+          # La clave del buscador (ADR-098). OPCIONAL: si el secreto no existe,
+          # esto vale cadena vacía, `claves_opcionales` la omite y Tavily queda
+          # inerte -DuckDuckGo se comporta como siempre-. Por eso el paso
+          # «Comprobar que hay claves» NO la exige: su ausencia no impide medir,
+          # solo deja al buscador como estaba.
+          TAVILY_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_TAVILY_KEY }}
         shell: bash --noprofile --norc {0}
         run: |
           set -uo pipefail
