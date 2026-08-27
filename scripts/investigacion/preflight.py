@@ -45,6 +45,26 @@ import yaml
 
 TIEMPO_MAXIMO = 60
 
+#: Codigos que significan «ahora no puedo», NO «esto no existe».
+#:
+#: MEDIDO EL 27-08-2026, EN LA PRIMERA PASADA REAL DEL BANCO. `gemini-3.5-flash`
+#: contesto:
+#:
+#:     HTTP 503: "This model is currently experiencing high demand."
+#:
+#: y el guardian lo marco NO RESPONDE, con lo que se nego a medir. Que se negara
+#: esta bien -no se mide lo que no contesta- pero el mensaje habria hecho cambiar
+#: un modelo que esta perfectamente vivo. Es el defecto de esta casa visto del
+#: reves: en vez de un verde que miente, un ROJO que miente.
+#:
+#: Un 503 o un 429 son «vuelve luego». Un 404 es «no existe». Confundirlos manda
+#: a buscar un sustituto que no hacia falta, que es como se perdio una noche.
+CODIGOS_TRANSITORIOS = frozenset({408, 425, 429, 500, 502, 503, 504})
+
+#: Cuantas veces se reintenta un codigo transitorio. Tres intentos con espera
+#: corta: si el proveedor esta saturado de verdad, insistir mas no lo desatasca.
+REINTENTOS = 3
+
 PROVEEDORES: dict[str, dict[str, Any]] = {
     "google": {
         "variable": "GOOGLE_API_KEY",
@@ -77,7 +97,28 @@ def _sin_clave(texto: str, clave: str) -> str:
 def _pedir(
     url: str, clave: str, cabecera: str, prefijo: str, cuerpo: dict[str, Any] | None = None
 ) -> tuple[int, Any, str]:
-    """Una petición. Devuelve (código, datos, error-ya-tapado)."""
+    """Una petición, reintentando lo transitorio. Devuelve (código, datos, error).
+
+    Un 503 no es un 404. Reintentar lo primero y no lo segundo es la diferencia
+    entre «espera un poco» y «este modelo ya no existe», y confundirlos manda a
+    buscar un sustituto que no hacía falta (ver `CODIGOS_TRANSITORIOS`).
+    """
+    import time as _time
+
+    codigo, datos, error = 0, None, ""
+    for intento in range(REINTENTOS):
+        codigo, datos, error = _una_peticion(url, clave, cabecera, prefijo, cuerpo)
+        if codigo not in CODIGOS_TRANSITORIOS:
+            return codigo, datos, error
+        if intento < REINTENTOS - 1:
+            _time.sleep(2 * (intento + 1))
+    return codigo, datos, error
+
+
+def _una_peticion(
+    url: str, clave: str, cabecera: str, prefijo: str, cuerpo: dict[str, Any] | None = None
+) -> tuple[int, Any, str]:
+    """Un solo intento."""
     datos = json.dumps(cuerpo).encode("utf-8") if cuerpo is not None else None
     peticion = urllib.request.Request(
         url,
@@ -152,6 +193,9 @@ def _prueba_de_vida(proveedor: str, clave: str, modelos_configurados: list[str])
         codigo, datos, error = _pedir(url, clave, cabecera, prefijo, cuerpo)
         resultado[modelo] = {
             "usable": bool(codigo == 200 and datos),
+            # TRES estados, no dos. «No se pudo comprobar» no es «no sirve»: el
+            # primero se arregla esperando y el segundo cambiando el modelo.
+            "sin_comprobar": codigo in CODIGOS_TRANSITORIOS,
             "codigo_http": codigo,
             "error": error or None,
         }
@@ -448,6 +492,12 @@ def main(argv: list[str] | None = None) -> int:
             uso = prueba.get(nombre) or {}
             if uso.get("usable"):
                 sys.stdout.write(f"         USABLE     {nombre}\n")
+            elif uso.get("sin_comprobar"):
+                detalle = str(uso.get("error") or f"HTTP {uso.get('codigo_http')}")[:88]
+                sys.stdout.write(
+                    f"         OCUPADO    {nombre}  ->  {detalle}\n"
+                    "                    (transitorio: NO cambies el modelo, vuelve a probar)\n"
+                )
             else:
                 detalle = str(uso.get("error") or f"HTTP {uso.get('codigo_http')}")[:110]
                 sys.stdout.write(f"         NO RESPONDE {nombre}  ->  {detalle}\n")
