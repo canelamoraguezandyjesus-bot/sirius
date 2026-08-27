@@ -17,7 +17,7 @@ en `test_authority.py` a nivel de `EntradaConmutacion`).
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -368,3 +368,91 @@ def test_evaluar_reversion_es_determinista_sin_red(clase: WorkItemClass) -> None
         instante=_instante(4),
     )
     assert primero == segundo
+
+
+# --- Que la salida de emergencia no se dispare con un defecto de etiquetas ---
+#
+# La otra mitad de la ventana 0 del verificador, y la que de verdad costaba: un
+# `NO_COMPARABLE` no revierte, pero eso solo sirve si la línea que produce una
+# incidencia contradictoria ES `NO_COMPARABLE`. Esta prueba no se fía de la
+# constante: construye la línea con `verificar_dia` REAL a partir de un espejo
+# contradictorio y se la da a `evaluar_reversion`.
+#
+# Sin la ventana 0, dos etiquetas pegadas a mano en una incidencia devolvían el
+# mando a la vía GitHub (§11.4) con un aviso que culpaba al motor.
+
+
+def _linea_de_incidencia_contradictoria(dia: int) -> LineaRegistro:
+    """La línea REAL que produce el verificador ante etiquetas que se contradicen."""
+    from sirius_engine.domain.mirror import MirroredWorkItem, OrigenLectura
+    from sirius_engine.domain.work_item import WorkItemPhase, WorkItemState, create_work_item
+    from sirius_engine.projection_verifier import ContextoEjesDiarios, verificar_dia
+
+    motor = create_work_item(
+        work_id=_WORK_ID,
+        peticion_original="petición",
+        objetivo="objetivo",
+        contexto_origen=("incidencia:353",),
+        entregable="entregable",
+        criterio_terminado="criterio",
+        limites={},
+        prioridad=1,
+        clase=_CLASE,
+        now=_instante(dia),
+    ).activate(now=_instante(dia))
+    espejo = MirroredWorkItem(
+        work_id="canelamoraguezandyjesus-bot/sirius#353",
+        estado=None,
+        fase=None,
+        etiquetas=("sirius:completed", "sirius:failed-safely"),
+        etiquetas_contradictorias=True,
+        cerrada=True,
+        pr_url=None,
+        head_sha=None,
+        rondas=(),
+        veredictos=(),
+        eventos_quality=(),
+        fallos_quality_consecutivos=0,
+        origen=OrigenLectura(fuente="test", leido_en=_instante(dia)),
+    )
+    assert motor.estado is WorkItemState.ACTIVE
+    assert motor.fase is WorkItemPhase.PREPARAR
+    return verificar_dia(
+        motor=motor,
+        espejo=espejo,
+        contexto=ContextoEjesDiarios(),
+        ventana_tolerancia=timedelta(minutes=170),
+        instante=_instante(dia),
+    )
+
+
+def test_una_incidencia_contradictoria_no_revierte_la_autoridad() -> None:
+    """Pregunta 4, primera mitad: el defecto está en las etiquetas, no en el motor."""
+    resultado = evaluar_reversion(
+        clase=_CLASE,
+        registro_conmutaciones=(_conmutacion_a_motor(1),),
+        lineas_verificador=(_linea_de_incidencia_contradictoria(3),),
+        instante=_instante(5),
+    )
+    assert not resultado.revierte, (
+        "la autoridad revirtió por una incidencia con dos etiquetas de estado "
+        f"pegadas: {resultado.motivo}. Eso es un defecto de las etiquetas, y la "
+        "salida de emergencia del §11.4 se gastaría en el sitio equivocado."
+    )
+
+
+def test_pero_una_divergencia_real_sigue_revirtiendo() -> None:
+    """Pregunta 4, segunda mitad: sin esto, el arreglo habría apagado la alarma."""
+    resultado = evaluar_reversion(
+        clase=_CLASE,
+        registro_conmutaciones=(_conmutacion_a_motor(1),),
+        lineas_verificador=(
+            _linea_de_incidencia_contradictoria(3),
+            _linea_divergente(4),
+        ),
+        instante=_instante(5),
+    )
+    assert resultado.revierte, (
+        "una divergencia real dejó de revertir la autoridad: la ventana 0 se "
+        "llevó por delante la alarma que tenía que proteger."
+    )

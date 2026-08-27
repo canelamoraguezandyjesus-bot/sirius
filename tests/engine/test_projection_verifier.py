@@ -495,3 +495,85 @@ def test_fidelidad_sin_ningun_campo_leido_es_no_comparable() -> None:
     declarado = CuerpoDeclarado()
     veredicto = verificar_fidelidad_proyeccion(despachado=motor, declarado=declarado)
     assert veredicto.resultado is ResultadoEje.NO_COMPARABLE
+
+
+# --- Una contradicción de etiquetas no es una divergencia -------------------
+#
+# MEDIDO EN PRODUCCIÓN, no supuesto. Las seis líneas de la única pasada real del
+# contador (rama `estado-del-motor`, 2026-08-26) dicen todas lo mismo:
+#
+#   {"eje": "estado", "motivo": "motor=<WorkItemState.ACTIVE> incidencia=None",
+#    "resultado": "divergencia"}
+#
+# Una de ellas es la incidencia #353, que lleva `sirius:failed-safely` **y**
+# `sirius:completed` a la vez. El espejo hace lo correcto: no elige ganadora, y
+# marca `etiquetas_contradictorias`. El verificador no lo miraba, así que una
+# incidencia mal etiquetada se registraba como si el motor estuviera
+# desincronizado.
+#
+# El precio no es cosmético: `authority_reversion` revierte la autoridad de una
+# clase a la PRIMERA divergencia tras la conmutación, sin esperar (§11.4). Dos
+# etiquetas pegadas a mano devolverían el mando a GitHub, con un aviso que
+# culpa al motor.
+
+_ETIQUETAS_CONTRADICTORIAS = ("sirius:failed-safely", "sirius:completed")
+
+
+def _linea_con_contradiccion() -> LineaRegistro:
+    return verificar_dia(
+        motor=_motor(estado=WorkItemState.ACTIVE, fase=WorkItemPhase.PREPARAR),
+        espejo=_espejo(
+            estado=None,
+            fase=None,
+            etiquetas=_ETIQUETAS_CONTRADICTORIAS,
+            etiquetas_contradictorias=True,
+        ),
+        contexto=_SIN_VENTANA,
+        ventana_tolerancia=_TOLERANCIA,
+        instante=_AHORA,
+    )
+
+
+def test_etiquetas_contradictorias_no_se_registran_como_divergencia() -> None:
+    """Pregunta 1: no se puede comparar contra una incidencia que se contradice."""
+    linea = _linea_con_contradiccion()
+    for veredicto in linea.veredictos:
+        assert veredicto.resultado is ResultadoEje.NO_COMPARABLE, (
+            f"el eje {veredicto.eje} dio {veredicto.resultado.value} con etiquetas "
+            f"contradictorias: {veredicto.motivo}. No hay nada contra lo que comparar."
+        )
+        # El motivo tiene que NOMBRAR las etiquetas: un «no comparable» sin
+        # decir cuáles chocan obliga a quien lo lea a ir a mirar la incidencia.
+        motivo = veredicto.motivo or ""
+        for etiqueta in _ETIQUETAS_CONTRADICTORIAS:
+            assert etiqueta in motivo, f"el motivo no nombra `{etiqueta}`: {motivo!r}"
+
+
+def test_una_incidencia_sin_etiquetas_sigue_siendo_divergencia() -> None:
+    """Pregunta 2: lo que NO puede cambiar.
+
+    Una incidencia sin ninguna etiqueta `sirius:*` es un hecho observado -así lo
+    dice el dominio-, no una lectura fallida. Si este arreglo también la
+    silenciara, taparía el caso que de verdad hay que ver.
+    """
+    linea = verificar_dia(
+        motor=_motor(estado=WorkItemState.ACTIVE, fase=WorkItemPhase.PREPARAR),
+        espejo=_espejo(estado=None, fase=None, etiquetas=(), etiquetas_contradictorias=False),
+        contexto=_SIN_VENTANA,
+        ventana_tolerancia=_TOLERANCIA,
+        instante=_AHORA,
+    )
+    for veredicto in linea.veredictos:
+        assert veredicto.resultado is ResultadoEje.DIVERGENCIA, (
+            f"el eje {veredicto.eje} dejó de ver una incidencia SIN etiquetas: "
+            f"{veredicto.resultado.value}. Eso sí es una divergencia observada."
+        )
+
+
+def test_una_contradiccion_tampoco_pinta_el_dia_de_verde() -> None:
+    """Pregunta 3: cambiar un rojo que miente por un verde que miente sería peor."""
+    assert not _linea_con_contradiccion().es_verde, (
+        "un día con la incidencia contradictoria salió VERDE: `NO_COMPARABLE` "
+        "estaría contando como evidencia de que las dos fuentes coinciden, y la "
+        "racha de los siete días avanzaría sobre nada."
+    )

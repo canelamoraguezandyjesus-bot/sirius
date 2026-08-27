@@ -161,6 +161,42 @@ def ventana_tolerancia_etiqueta_maquina(workflows_dir: Path = _WORKFLOWS_DIR) ->
     return timedelta(minutes=max(topes) * 2)
 
 
+def _ventana_contradiccion(espejo: MirroredWorkItem) -> str | None:
+    """Ventana 0: contra una incidencia que se contradice no se compara nada.
+
+    Va ANTES que las demás porque no es una tolerancia de tiempo ni un caso del
+    ciclo: es que **no hay dato**. El espejo ya hace lo correcto -no elige
+    etiqueta ganadora en silencio, y marca `etiquetas_contradictorias`-, pero
+    ese aviso no lo leía nadie: `estado`/`fase` llegaban aquí como `None` y
+    `_comparar` los declaraba DIVERGENCIA por no coincidir con el motor.
+
+    MEDIDO EN PRODUCCIÓN. Las seis líneas de la única pasada real del contador
+    (rama `estado-del-motor`, 2026-08-26) dicen todas
+    ``motor=<WorkItemState.ACTIVE> incidencia=None``, y una de ellas es la
+    incidencia #353, que lleva `sirius:failed-safely` y `sirius:completed` a la
+    vez. El registro culpaba al motor de un defecto de las etiquetas.
+
+    Y no es cosmético: :func:`sirius_engine.authority_reversion.evaluar_reversion`
+    revierte la autoridad de una clase a la PRIMERA divergencia registrada tras
+    la conmutación, sin esperar a la segunda (contrato §11.4). Dos etiquetas
+    pegadas a mano habrían devuelto el mando a la vía GitHub con un aviso que
+    señalaba al sitio equivocado.
+
+    El día **sigue sin poder salir verde**: `LineaRegistro.es_verde` exige que
+    todos los ejes COINCIDAN, y un `NO_COMPARABLE` no lo hace. Esto no cambia un
+    rojo que miente por un verde que miente; retira una acusación falsa y deja
+    el día sin contar, que es lo que corresponde cuando no se puede leer.
+    """
+    if not espejo.etiquetas_contradictorias:
+        return None
+    contradictorias = ", ".join(sorted(espejo.etiquetas))
+    return (
+        "la incidencia lleva etiquetas de estado que se contradicen "
+        f"({contradictorias}): no proyecta ni estado ni fase, así que no hay "
+        "contra qué comparar. El defecto está en las etiquetas, no en el motor"
+    )
+
+
 def _ventana_residencia_o_fusion(
     motor: WorkItem,
     espejo: MirroredWorkItem,
@@ -195,6 +231,10 @@ def _ventana_no_comparable_estado(
     contexto: ContextoEjesDiarios,
     ventana_tolerancia: timedelta,
 ) -> str | None:
+    contradiccion = _ventana_contradiccion(espejo)
+    if contradiccion is not None:
+        # Ventana 0, antes que ninguna otra: sin dato no hay comparación.
+        return contradiccion
     if motor.estado in _ESTADOS_SIN_ETIQUETA:
         # Ventana 2.
         return f"motor en {motor.estado.value}: el vocabulario de etiquetas no puede expresarlo"
@@ -222,6 +262,11 @@ def _ventana_no_comparable_fase(
     contexto: ContextoEjesDiarios,
     ventana_tolerancia: timedelta,
 ) -> str | None:
+    contradiccion = _ventana_contradiccion(espejo)
+    if contradiccion is not None:
+        # Ventana 0: igual que en estado, y por el mismo motivo -la
+        # contradicción deja los DOS ejes sin proyección, no solo uno-.
+        return contradiccion
     # Ni la ventana 1 ni la 2 afectan a fase: `activate()` y `pause()` no
     # tocan `fase`, así que la fase del motor sigue coincidiendo con la que
     # proyecta la última etiqueta de máquina vigente durante esas dos.
