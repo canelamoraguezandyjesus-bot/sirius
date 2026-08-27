@@ -69,6 +69,17 @@ bloques:
   - id: S2
     titulo: Probar si el investigador externo funciona y qué cuesta
     estado: pendiente
+    decidido: >-
+      ADR-098 (27-08-2026): el investigador se queda con NVIDIA. Dos pasadas
+      reales con claves y atestado -runs 33079519839 y 33088012637-: NVIDIA
+      contesto las 7 preguntas (~45 s cada una) y quedo MEDIDA con 2/7; Google
+      no completo NI UNA pregunta en 192 s, las siete cortadas identico, y no
+      hay plazo mayor que darle sin romper el techo de 85 min del contador.
+      Google descartado con condicion de revancha escrita en el ADR. Lo que
+      sigue abierto para el 80 %: los cinco fallos de NVIDIA son todos
+      fuentes=0 -DuckDuckGo devuelve vacio desde los runners-, asi que el
+      numero pendiente es del BUSCADOR, no del modelo. Investigacion completa
+      en docs/investigaciones/2026-08-27-medicion-real-nvidia-contra-google.md.
     que_lo_cerraria: >-
       una pregunta de respuesta conocida contestada de verdad, con dos
       configuraciones de modelo, y el número de calidad que el propietario pidió
