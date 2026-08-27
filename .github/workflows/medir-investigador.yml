@@ -123,19 +123,20 @@ name: Medir al investigador
 # importando.
 
 on:
-  # DISPARADOR DESACTIVADO A PROPOSITO mientras el arnes esta refutado (ver la
-  # cabecera). No basta con avisar en un comentario: mientras `workflow_dispatch`
-  # exista, el boton «Run workflow» esta ahi y un clic gasta cuota de las dos
-  # APIs para producir un numero que ya sabemos que es mentira. Un aviso que se
-  # puede ignorar con un clic no es una salvaguarda.
+  # DISPARADOR REPUESTO EL 27-08-2026. Estuvo desactivado a proposito mientras el
+  # arnes estaba refutado, con esta condicion escrita para reponerlo: «cuando la
+  # prueba de vida exista y el veredicto dependa de evidencia observada».
   #
-  # Se repone -descomentando estas dos lineas- cuando la prueba de vida exista y
-  # el veredicto dependa de evidencia observada.
+  # Las dos se cumplen y estan medidas:
+  #   - la prueba de vida existe y usa cada modelo de verdad (`preflight.py`);
+  #   - el veredicto depende de fuentes observadas -sin fuentes no hay acierto- y
+  #     de que cada modelo conste USABLE en el atestado (ADR-095). Comprobado:
+  #     con el atestado vacio el comparador se niega a medir con codigo 5.
   #
-  #   workflow_dispatch:
-  #
-  # `workflow_call` sin llamantes deja el fichero sintacticamente valido y sin
-  # ninguna forma de dispararse: no hay boton, y ningun otro workflow lo invoca.
+  # Sigue siendo SOLO a mano: cada pasada gasta cuota de dos APIs cuyas claves son
+  # del propietario. Un reloj que gasta su dinero mientras duerme no es
+  # automatizacion, es una fuga.
+  workflow_dispatch:
   workflow_call:
 
 concurrency:
@@ -329,7 +330,8 @@ jobs:
           "$RUNNER_TEMP/investigador/bin/python" scripts/investigacion/comparar_investigadores.py \
             --salida-md "$RUNNER_TEMP/medicion/informe.md" \
             --salida-json "$RUNNER_TEMP/medicion/comparacion.json" \
-            --tiempo-maximo "$SEGUNDOS_POR_CONFIGURACION"
+            --tiempo-maximo "$SEGUNDOS_POR_CONFIGURACION" \
+            --atestado scripts/investigacion/modelos_atestiguados.yml
           codigo=$?
           echo "$codigo" > "$RUNNER_TEMP/medicion/codigo-comparacion"
 
