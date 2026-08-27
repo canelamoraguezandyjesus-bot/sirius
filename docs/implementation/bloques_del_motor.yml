@@ -169,6 +169,22 @@ bloques:
       `timeout-minutes` por encima de 85 deja al contrato §11.2 sin ninguna
       hora posible, y `tests/automation/test_contador_de_siete_dias.py` lo pone
       en rojo si pasa.
+    actualizado_27_08_2026: >-
+      Las TRES mitades de D1 tienen ya llamante. `authority_reversion`
+      (D1c) era la quinta pieza sin llamante de este repositorio y la peor
+      de las cinco: la salida de emergencia del §11.4, lo único que
+      devuelve el mando a GitHub si el motor se porta mal con una clase ya
+      conmutada. Desde hoy la invoca la pasada diaria, que es el único
+      sitio donde las divergencias se leen recién medidas -un reloj aparte
+      añadiría justo el retardo que el §11.4 prohíbe-. Y solo revierte:
+      hacia el motor no conmuta nada, que sigue siendo acto del
+      propietario (§11.3). Lo que ESTO NO CAMBIA: los siete días siguen sin
+      empezar. Un día sin línea no es un día verde, y las líneas dependen
+      de que haya trabajo circulando y de que sus incidencias se puedan
+      leer. La salvaguarda queda CONECTADA, no ejercitada: hoy no hay
+      ninguna clase conmutada, así que la pasada dirá «ninguna clase
+      requiere reversión», y eso es lo correcto. Se ejercitará el único día
+      en que importa que estuviera puesta.
 
   - id: D2
     titulo: Que el motor corra solo, siempre
