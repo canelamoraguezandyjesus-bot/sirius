@@ -1,40 +1,33 @@
-# ┌─────────────────────────────────────────────────────────────────────────┐
-# │  ESTE WORKFLOW NO SE PUEDE CORRER TODAVIA. Ver el bloque de abajo.       │
-# └─────────────────────────────────────────────────────────────────────────┘
+# HISTORIA DE ESTE FICHERO, que es lo unico que queda de su cabecera anterior.
 #
-# REFUTADO EL 26-08-2026, ANTES DE CORRERSE NI UNA VEZ (incidencia #258).
+# Estuvo desactivado a proposito desde el 26-08-2026 con un cartel que decia
+# «ESTE WORKFLOW NO SE PUEDE CORRER TODAVIA». Lo habia refutado una revision
+# adversarial de tres lentes: 27 hallazgos, 8 graves, y SEIS DE LOS OCHO eran el
+# mismo defecto -el arnes medía lo que se le PEDIA y nunca lo que OCURRIA-. El
+# caso que lo demostraba: `gpt-researcher` 0.15.1 importa `ddgs` y declara
+# `duckduckgo-search`, son paquetes distintos, y sin el primero el buscador no
+# arranca. Con el buscador muerto los dos proveedores habrian escrito de MEMORIA,
+# con CERO fuentes, y el arnes habria publicado una comparacion concluyente con
+# porcentajes. No fallaba: MENTIA, gastando cuota de las dos APIs del propietario.
 #
-# Una refutacion adversarial de tres lentes encontro 27 hallazgos, 8 graves, y
-# SEIS DE LOS OCHO SON EL MISMO DEFECTO: este arnes medía lo que se le PEDIA y
-# nunca lo que OCURRIA. El caso que lo demuestra, verificado a mano:
+# EL CARTEL SE RETIRO EL 27-08-2026 porque las tres condiciones que el mismo
+# escribio para retirarlo estan cumplidas y medidas:
 #
-#   gpt-researcher 0.15.1 importa `ddgs` (retrievers/duckduckgo/duckduckgo.py)
-#   y declara `duckduckgo-search>=4.1.1`. Son paquetes DISTINTOS, y este
-#   workflow no instala el primero:
-#       ModuleNotFoundError: No module named 'ddgs'
+#   1. Prueba de vida ANTES de gastar cuota: `preflight.py` pregunta al servidor
+#      por cada modelo y escribe un atestado. Comprobado que un 503 no se
+#      confunde con un modelo muerto (PR #374).
+#   2. Veredicto sobre EVIDENCIA: sin `fuentes > 0` no hay acierto, una medicion
+#      sin fuentes sale con codigo 3, y el comparador se niega a medir -codigo 5-
+#      si algun modelo no consta USABLE en el atestado (ADR-095).
+#   3. Banco de preguntas rehecho: dos perecederas que no se pueden recitar de
+#      memoria, y correccion con limite de palabra -antes «Rust» se aprobaba con
+#      «trust»-.
 #
-# Con el buscador muerto, los dos proveedores habrian escrito sus informes de
-# MEMORIA, con CERO fuentes, y el arnes habria publicado una comparacion
-# concluyente con porcentajes. Peor: ninguna de las cinco preguntas del banco
-# obliga a buscar, asi que habrian salido al 100 %.
-#
-# No falla: MIENTE. Y habria gastado cuota de las dos APIs del propietario para
-# producir un numero inventado.
-#
-# QUE FALTA ANTES DE HABILITARLO, y por que no se parchea uno a uno (ADR-001,
-# regla de las dos rondas: misma familia dos veces -> se busca la raiz):
-#
-#   1. Prueba de vida ANTES de gastar cuota: una busqueda real que exija
-#      fuentes > 0 y una llamada real por proveedor. Si falla, no se mide.
-#   2. El veredicto cerrado sobre EVIDENCIA: sin fuentes no hay medicion, una
-#      pregunta con error nunca entra en un resultado concluyente, y `servidor`
-#      deja de ser el eco de una variable de entorno.
-#   3. Banco de preguntas rehecho: que exijan buscar de verdad, y correccion
-#      con limite de palabra (hoy «Rust» se aprueba con «trust»).
-#
-# Hasta entonces el disparador esta comentado a proposito: el fichero se
-# conserva porque su cableado -entorno aislado, python 3.12, langchain-google-genai,
-# tope de 80 min que no rompe D1- si esta medido y sirve.
+# SE DEJA ESCRITO Y NO SE BORRA porque la cabecera vieja sobrevivio a su propia
+# verdad: seguia diciendo «no se puede correr» despues de reponerse el
+# disparador, y un documento que se contradice con el fichero que encabeza es la
+# misma familia de defecto que perseguia. Lo que caduca se fecha; lo que se
+# levanta, se dice por que.
 #
 name: Medir al investigador
 
