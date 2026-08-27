@@ -1372,3 +1372,108 @@ def test_el_padre_le_dice_al_hijo_de_cuanto_tiempo_dispone(
     assert argv[argv.index("--presupuesto") + 1] == "60", (
         f"viaja un presupuesto que no es el plazo real del padre: {argv}"
     )
+
+
+def test_el_desglose_por_pregunta_sale_por_el_registro_y_trae_el_error() -> None:
+    """Lo que impidió no volver a adivinar: el artefacto no se puede leer.
+
+    El JSON con el detalle de cada pregunta se sube como artefacto, y desde una
+    sesión no se descarga. El 27-08-2026 eso costó una pasada de treinta minutos
+    con las dos APIs gastadas: la única pista legible fue «el subproceso terminó
+    con código 3».
+    """
+    c = _comparador()
+    medicion = c.Medicion(
+        nombre="prueba",
+        proveedor="p",
+        modelo="m",
+        estado=c.ESTADO_FALLO,
+        detalle="no fiable",
+        variable_de_clave="X",
+        variables_puestas=[],
+    )
+    medicion.resultado = {
+        "preguntas": [
+            {
+                "id": "P1",
+                "acierta": False,
+                "fuentes": 0,
+                "segundos": 3.2,
+                "cortada_por_plazo": False,
+                "error": "RuntimeError: el modelo devolvio 404 al escribir el informe",
+            },
+            {
+                "id": "P2",
+                "acierta": True,
+                "fuentes": 4,
+                "segundos": 41.0,
+                "cortada_por_plazo": False,
+                "error": None,
+            },
+        ]
+    }
+    lineas = c.desglose_por_pregunta(medicion)
+    assert len(lineas) == 2, lineas
+    assert "404 al escribir el informe" in lineas[0], (
+        f"el error de la pregunta no llega al registro: {lineas[0]!r}. Sin eso, "
+        "la única forma de saber qué pasó es descargar el artefacto a mano."
+    )
+    assert "fuentes=0" in lineas[0] and "fuentes=4" in lineas[1]
+    assert "[NO]" in lineas[0] and "[ok]" in lineas[1]
+
+
+def test_el_comparador_escribe_ese_desglose_de_verdad(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """El cable otra vez: que la función exista no la ejecuta nadie.
+
+    Es la misma comprobación que faltó con `--presupuesto`, donde quitar el cable
+    dejó las cuarenta pruebas en verde.
+    """
+    c = _comparador()
+    guion = tmp_path / "hijo.py"
+    guion.write_text(
+        "\nimport json, sys\n"
+        'salida = sys.argv[sys.argv.index("--salida") + 1]\n'
+        'open(salida, "w", encoding="utf-8").write(json.dumps({\n'
+        '  "medicion_fiable": False,\n'
+        '  "motivo_no_fiable": "motivo de prueba",\n'
+        '  "preguntas": [{"id": "PZ", "acierta": False, "fuentes": 0, "segundos": 1.0,\n'
+        '                 "cortada_por_plazo": False, "error": "SEÑAL-QUE-SE-BUSCA"}]}))\n'
+        "sys.exit(3)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(c, "MEDIDOR", guion)
+    monkeypatch.setenv("CLAVE_DE_PRUEBA", "no-es-una-clave")
+    monkeypatch.setattr(
+        c,
+        "cargar_configuraciones",
+        lambda _ruta: [
+            c.Configuracion(
+                nombre="prueba",
+                proveedor="p",
+                modelo="m",
+                variable_de_clave="CLAVE_DE_PRUEBA",
+                clave_destino="CLAVE_DE_PRUEBA",
+                entorno={},
+            )
+        ],
+    )
+    monkeypatch.setattr(c, "modelos_sin_atestado", lambda *_a, **_k: [])
+    c.main(
+        [
+            "--salida-md",
+            str(tmp_path / "i.md"),
+            "--salida-json",
+            str(tmp_path / "i.json"),
+            "--tiempo-maximo",
+            "60",
+            "--fecha",
+            "2026-08-27",
+        ]
+    )
+    registro = capsys.readouterr().err
+    assert "SEÑAL-QUE-SE-BUSCA" in registro, (
+        "el desglose por pregunta no se escribió en el registro del trabajo; "
+        f"lo que salió fue:\n{registro[-800:]}"
+    )

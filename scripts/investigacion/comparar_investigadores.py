@@ -340,6 +340,35 @@ def _fuentes_medias(resultado: dict[str, Any]) -> float:
     return round(sum(int(p.get("fuentes", 0)) for p in preguntas) / len(preguntas), 1)
 
 
+def desglose_por_pregunta(medicion: Medicion, tope: int = 220) -> list[str]:
+    """Una línea por pregunta, para el REGISTRO del trabajo.
+
+    POR QUÉ EXISTE, y no es adorno. El detalle de cada pregunta —qué error dio,
+    cuántas fuentes trajo, cuánto tardó— viaja en el JSON, y el JSON se sube como
+    artefacto. Un artefacto **no se puede leer desde una sesión**: hay que
+    descargarlo a mano. El 27-08-2026 eso significó una pasada entera de treinta
+    minutos, con las dos APIs gastadas, tras la cual la única pista disponible era
+    «el subproceso terminó con código 3».
+
+    El registro del trabajo sí se lee. Así que lo que hace falta para no volver a
+    adivinar se escribe donde se puede mirar, y el JSON sigue siendo la fuente
+    completa para quien lo descargue.
+    """
+    resultado = medicion.resultado or {}
+    lineas: list[str] = []
+    for pregunta in list(resultado.get("preguntas") or []):
+        marca = "ok" if pregunta.get("acierta") else "NO"
+        error = str(pregunta.get("error") or "").replace("\n", " ")
+        cola = f" error={error[:tope]}" if error else ""
+        lineas.append(
+            f"    [{marca}] {pregunta.get('id')} "
+            f"fuentes={pregunta.get('fuentes')} "
+            f"segundos={pregunta.get('segundos')} "
+            f"cortada={pregunta.get('cortada_por_plazo')}{cola}"
+        )
+    return lineas
+
+
 def medir_configuracion(
     configuracion: Configuracion,
     carpeta: Path,
@@ -735,8 +764,13 @@ def main(argv: list[str] | None = None) -> int:
                 sys.stderr.write(f"configuración inválida: {exc}\n")
                 return CODIGO_CONFIGURACION_INVALIDA
             sys.stderr.write(
-                f"  {configuracion.nombre}: {medicion.estado} — {medicion.detalle[:160]}\n"
+                f"  {configuracion.nombre}: {medicion.estado} — {medicion.detalle[:600]}\n"
             )
+            # SIEMPRE, no solo cuando falla: en una medición que sí sale, saber
+            # cuántas fuentes trajo cada pregunta es lo que separa «investigó y
+            # acertó» de «se lo sabía».
+            for linea in desglose_por_pregunta(medicion):
+                sys.stderr.write(linea + "\n")
             mediciones.append(medicion)
 
     medidas = [m for m in mediciones if m.estado == ESTADO_MEDIDA]

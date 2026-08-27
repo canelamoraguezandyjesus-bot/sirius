@@ -94,6 +94,28 @@ caer con la mutación M2.
 | M3 el padre no pasa `--presupuesto` | `test_el_padre_le_dice_al_hijo_de_cuanto_tiempo_dispone` |
 | M4 se quita el plazo por pregunta | las dos del corte |
 | M5 el motivo de las fuentes vuelve a ir primero | `test_si_se_cortan_todas_la_medicion_no_es_fiable` |
+| M6 el desglose por pregunta existe y nadie lo llama | `test_el_comparador_escribe_ese_desglose_de_verdad` |
+
+## Afirmación 4 — un artefacto no se puede leer desde una sesión
+
+**Lo que se afirma.** El detalle por pregunta —error, fuentes, segundos— viajaba
+solo en el JSON, y el JSON se sube como artefacto. Descargarlo desde una sesión
+no es posible.
+
+**Consecuencia medida.** Una pasada de treinta minutos con las dos APIs gastadas
+y una sola pista legible: *«el subproceso terminó con código 3»*. Se probó
+también la hipótesis barata antes de gastar otra pasada —que
+`GPTResearcher.get_source_urls` no existiera en la 0.15.1, lo que haría imposible
+que ninguna configuración saliera fiable nunca—: **se instaló el paquete y existe**,
+devuelve `list(self.visited_urls)`. Descartada sin gastar cuota.
+
+**El arreglo.** El desglose por pregunta se escribe en el registro del trabajo,
+que sí se lee, SIEMPRE —no solo cuando falla—: en una medición que sale bien,
+cuántas fuentes trajo cada pregunta es lo que separa «investigó y acertó» de «se
+lo sabía». El JSON sigue siendo la fuente completa para quien lo descargue.
+
+**Mutación M6.** Quitar la llamada dejando la función → cae
+`test_el_comparador_escribe_ese_desglose_de_verdad`.
 
 ## Lo que este trabajo NO demuestra
 
