@@ -50,6 +50,18 @@ PREGUNTAS = Path(__file__).resolve().parent / "preguntas.yml"
 #: aquí hay un número y no un rango.
 VERSION_EXIGIDA = "0.15.1"
 
+#: Del presupuesto total se reserva un 10 % para lo que no es contestar: arrancar
+#: el proceso, cargar la herramienta y escribir el JSON. Sin ese margen el hijo
+#: apuraría hasta el último segundo y lo cortaría el padre, que es justo lo que
+#: pasó el 27-08-2026: `agotado_el_tiempo` y CERO informe, con seis preguntas ya
+#: contestadas dentro del proceso muerto.
+MARGEN_DE_PRESUPUESTO = 0.9
+
+#: Suelo por pregunta. Un presupuesto ridículo dividido entre siete daría plazos
+#: de segundos y cortaría preguntas sanas: entonces el instrumento mediría su
+#: propio plazo, no al investigador. Medido: NVIDIA tardó ~46 s por pregunta.
+SEGUNDOS_MINIMOS_POR_PREGUNTA = 60
+
 
 @dataclass
 class ResultadoPregunta:
@@ -63,6 +75,9 @@ class ResultadoPregunta:
     segundos: float
     error: str | None
     informe: str
+    #: La pregunta se cortó por plazo. Es distinto de `error`: no dice que
+    #: contestara mal, dice que no le dio tiempo a contestar.
+    cortada_por_plazo: bool
 
 
 @dataclass
@@ -83,6 +98,8 @@ class ResultadoConfiguracion:
     # de la raiz que la refutacion del 26-08-2026 destapo: sin ellos, el arnes
     # solo sabia repetir su propia configuracion.
     preguntas_con_error: int
+    preguntas_cortadas_por_plazo: int
+    segundos_por_pregunta: int
     preguntas_sin_fuentes: int
     fuentes_totales: int
     medicion_fiable: bool
@@ -143,7 +160,20 @@ async def _investigar(pregunta: str) -> tuple[str, int]:
     return str(informe), fuentes
 
 
-def medir(configuracion: str) -> ResultadoConfiguracion:
+def segundos_por_pregunta(presupuesto: int, cuantas_preguntas: int) -> int:
+    """El plazo de cada pregunta se DERIVA del presupuesto, no se escribe a mano.
+
+    Un número fijo aquí se quedaría viejo en cuanto el banco creciera —y creció:
+    de cinco a siete preguntas el 26-08-2026— y volvería a pasar lo del 27, que
+    el plazo por configuración no llegaba para el banco entero.
+    """
+    if cuantas_preguntas <= 0:
+        return SEGUNDOS_MINIMOS_POR_PREGUNTA
+    reparto = int(presupuesto * MARGEN_DE_PRESUPUESTO / cuantas_preguntas)
+    return max(SEGUNDOS_MINIMOS_POR_PREGUNTA, reparto)
+
+
+def medir(configuracion: str, *, presupuesto: int = 1800) -> ResultadoConfiguracion:
     version = _version_instalada()
     if version != VERSION_EXIGIDA:
         # Se para en vez de medir: la 0.16.0 ni importa, y una versión no medida
@@ -154,14 +184,31 @@ def medir(configuracion: str) -> ResultadoConfiguracion:
             "de medir sobre una versión sin comprobar."
         )
 
+    preguntas = _cargar_preguntas()
+    plazo = segundos_por_pregunta(presupuesto, len(preguntas))
     resultados: list[ResultadoPregunta] = []
     arranque = time.monotonic()
-    for pregunta in _cargar_preguntas():
+    for pregunta in preguntas:
         inicio = time.monotonic()
         error: str | None = None
+        cortada = False
         informe, fuentes = "", 0
         try:
-            informe, fuentes = asyncio.run(_investigar(str(pregunta["texto"])))
+            # EL PLAZO ES POR PREGUNTA, y esa es la corrección del 27-08-2026.
+            # Antes solo lo había por configuración, en el proceso padre: una
+            # sola pregunta colgada se llevaba por delante las demás -ya
+            # contestadas, dentro del proceso que el padre mataba- y el informe
+            # solo sabía decir `agotado_el_tiempo`. Medido: Google no terminó en
+            # 1500 s y no quedó ni una respuesta que leer.
+            informe, fuentes = asyncio.run(
+                asyncio.wait_for(_investigar(str(pregunta["texto"])), timeout=plazo)
+            )
+        except TimeoutError:
+            cortada = True
+            error = (
+                f"la pregunta pasó de {plazo} s y se cortó. NO es una respuesta "
+                "equivocada: es que no llegó a terminar. Las demás siguen medidas."
+            )
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"
         acierta, encontradas, ausentes = _corrige(informe, list(pregunta["obligatorias"]))
@@ -190,12 +237,14 @@ def medir(configuracion: str) -> ResultadoConfiguracion:
                 segundos=round(time.monotonic() - inicio, 1),
                 error=error,
                 informe=informe,
+                cortada_por_plazo=cortada,
             )
         )
 
     aciertos = sum(1 for r in resultados if r.acierta)
     total = len(resultados)
     con_error = sum(1 for r in resultados if r.error is not None)
+    cortadas = sum(1 for r in resultados if r.cortada_por_plazo)
     sin_fuentes = sum(1 for r in resultados if r.fuentes == 0)
     fuentes_totales = sum(r.fuentes for r in resultados)
 
@@ -206,6 +255,17 @@ def medir(configuracion: str) -> ResultadoConfiguracion:
     motivo: str | None = None
     if total == 0:
         motivo = "el banco de preguntas esta vacio: no se midio nada"
+    elif cortadas == total:
+        # ANTES QUE EL DE LAS FUENTES, y no es cosmético. Si se cortaron todas,
+        # `fuentes_totales` también vale cero, así que el motivo de las fuentes
+        # se disparaba primero y mandaba a instalar `ddgs` cuando el buscador
+        # estaba perfectamente. Lo cazó su propia prueba: un rojo que miente, la
+        # misma familia que este trabajo viene a corregir.
+        motivo = (
+            f"las {total} preguntas se cortaron por plazo ({plazo} s cada una): "
+            "no se midió al investigador, se midió el reloj. Sube el presupuesto "
+            "o recorta el banco."
+        )
     elif fuentes_totales == 0:
         motivo = (
             "ninguna pregunta trajo ni una sola fuente: el buscador no funciono. "
@@ -232,6 +292,8 @@ def medir(configuracion: str) -> ResultadoConfiguracion:
         porcentaje=round(100.0 * aciertos / total, 1) if total else 0.0,
         segundos_totales=round(time.monotonic() - arranque, 1),
         preguntas_con_error=con_error,
+        preguntas_cortadas_por_plazo=cortadas,
+        segundos_por_pregunta=plazo,
         preguntas_sin_fuentes=sin_fuentes,
         fuentes_totales=fuentes_totales,
         medicion_fiable=motivo is None,
@@ -246,9 +308,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("configuracion", help="nombre legible de esta configuración")
     parser.add_argument("--salida", default=None, help="fichero JSON donde escribir")
+    parser.add_argument(
+        "--presupuesto",
+        type=int,
+        default=1800,
+        # EL MISMO NÚMERO QUE EL PADRE USA PARA MATARLO. Que el hijo lo conozca es
+        # lo que le permite repartirlo entre sus preguntas y terminar ANTES, con su
+        # informe escrito, en vez de morir con todo dentro.
+        help="segundos de los que dispone esta medición entera (los reparte entre preguntas)",
+    )
     args = parser.parse_args(argv)
 
-    resultado = medir(args.configuracion)
+    resultado = medir(args.configuracion, presupuesto=args.presupuesto)
     texto = json.dumps(asdict(resultado), ensure_ascii=False, indent=2)
     if args.salida:
         Path(args.salida).write_text(texto, encoding="utf-8")

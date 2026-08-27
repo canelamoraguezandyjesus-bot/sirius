@@ -156,6 +156,18 @@ ESTADO_SIN_CLAVE = "sin_clave"
 ESTADO_FALLO = "fallo"
 ESTADO_TIEMPO_AGOTADO = "agotado_el_tiempo"
 
+#: El código con el que `medir_investigador.py` dice «medí algo y NO te lo creas»:
+#: escribe su JSON entero, con el motivo dentro, y sale con 3.
+#:
+#: TIENE QUE COMPROBARSE ANTES que «código != 0», y por eso está aquí arriba con
+#: su explicación. Hasta el 27-08-2026 no se comprobaba, y la consecuencia fue una
+#: rama inalcanzable: la guarda genérica atrapaba el 3, ponía como detalle la cola
+#: de unos registros del buscador y volvía; el bloque de abajo que lee
+#: `motivo_no_fiable` -con su comentario diciendo «el hijo ya sabe que lo suyo no
+#: vale y lo dice»- no se ejecutaba NUNCA. Medido en la primera pasada real: no se
+#: pudo saber por qué NVIDIA no fue fiable porque el motivo se tiró.
+CODIGO_MEDICION_NO_FIABLE = 3
+
 
 class ConfiguracionInvalida(Exception):
     """El fichero de configuraciones no sirve para medir. Se para antes de medir."""
@@ -363,7 +375,19 @@ def medir_configuracion(
 
     entorno = entorno_desde_cero(configuracion, clave)
     salida_json = carpeta / f"{configuracion.nombre}.json"
-    orden = [sys.executable, str(MEDIDOR), configuracion.nombre, "--salida", str(salida_json)]
+    orden = [
+        sys.executable,
+        str(MEDIDOR),
+        configuracion.nombre,
+        "--salida",
+        str(salida_json),
+        # EL HIJO SABE DE CUÁNTO DISPONE. Sin esto reparte sobre un valor por
+        # defecto que no tiene nada que ver con el plazo real del padre, y vuelve
+        # a morir con las respuestas dentro. El padre sigue matando a los
+        # `tiempo_maximo` s: eso pasa a ser la red de seguridad, no el mecanismo.
+        "--presupuesto",
+        str(tiempo_maximo),
+    ]
     try:
         # Sin `shell=True` y con la orden como lista: nada de lo que viene del YAML
         # llega a un intérprete de órdenes.
@@ -386,7 +410,13 @@ def medir_configuracion(
 
     cola = sin_secretos((proceso.stderr or proceso.stdout or "").strip(), [clave])[-2000:]
     base.codigo_de_salida = proceso.returncode
-    if proceso.returncode != 0 or not salida_json.is_file():
+    # UN 3 CON JSON NO ES UN FALLO: es un veredicto con motivo escrito, y pasa de
+    # largo esta guarda a propósito para que abajo se lea. Un 3 SIN JSON sí es un
+    # fallo -el hijo se murió antes de escribirlo- y cae aquí como cualquier otro.
+    fiable_pero_dice_que_no = (
+        proceso.returncode == CODIGO_MEDICION_NO_FIABLE and salida_json.is_file()
+    )
+    if (proceso.returncode != 0 and not fiable_pero_dice_que_no) or not salida_json.is_file():
         base.estado = ESTADO_FALLO
         base.detalle = (
             f"el subproceso terminó con código {proceso.returncode}. Final de su salida:\n{cola}"
@@ -404,6 +434,11 @@ def medir_configuracion(
     if not resultado.get("medicion_fiable", True):
         # El hijo ya sabe que lo suyo no vale y lo dice. Copiar su porcentaje como
         # «medida completa» seria volver a la raiz que la refutacion tumbo.
+        #
+        # SIGUE SIN CONTAR COMO MEDIDA: lo unico que cambia desde el 27-08-2026 es
+        # que ahora se llega hasta aqui y el informe puede decir POR QUE. El
+        # porcentaje no se copia, y `resultado` viaja entero al JSON crudo para
+        # que quien dude lea las respuestas en vez de creerse una etiqueta.
         base.estado = ESTADO_FALLO
         base.detalle = str(resultado.get("motivo_no_fiable", "medicion no fiable"))
         base.resultado = resultado
