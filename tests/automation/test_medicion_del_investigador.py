@@ -551,17 +551,58 @@ def _configuraciones_de_prueba(ruta: Path, mismo_servidor: bool = False) -> Path
     return ruta
 
 
+def _atestado_de_prueba(configuraciones: Path) -> str:
+    """Un atestado que declara usables los modelos falsos de esta batería.
+
+    Se DERIVA del propio fichero de configuraciones en vez de escribirse a mano:
+    si alguien cambia un modelo de prueba y el atestado se quedara atrás, estas
+    pruebas empezarían a fallar por su montaje y no por el código, que es la forma
+    más fácil de acabar relajando el guardián que vigilan.
+    """
+    from datetime import UTC, datetime
+
+    texto = configuraciones.read_text(encoding="utf-8")
+    nombres = sorted(
+        set(
+            re.findall(r'(?:FAST_LLM|SMART_LLM|STRATEGIC_LLM|EMBEDDING):\s*"[^:"]+:([^"]+)"', texto)
+        )
+    )
+    ahora = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    lineas = ["version: 1", "proveedores:", "  prueba:", "    modelos:"]
+    for nombre in nombres:
+        lineas += [
+            f'      "{nombre}":',
+            "        existe: true",
+            "        usable: true",
+            f"        fecha_utc: {ahora}",
+        ]
+    return "\n".join(lineas) + "\n"
+
+
 def _comparar(
     tmp_path: Path,
     configuraciones: Path,
 ) -> tuple[int, dict[str, Any], str]:
-    """Ejecuta el comparador entero y devuelve (código, JSON crudo, Markdown)."""
+    """Ejecuta el comparador entero y devuelve (código, JSON crudo, Markdown).
+
+    ATESTADO PROPIO, y no es fontanería de prueba: desde ADR-095 el comparador se
+    NIEGA a medir un modelo del que no conste que responde. Estas pruebas usan
+    modelos de mentira, así que se les monta su atestado de mentira —lo mismo que
+    el `gh` simulado de otras baterías—. La comprobación NO se puede saltar: si el
+    fichero no existiera, todos los modelos contarían como sin atestiguar y el
+    comparador saldría con código 5, que es justo lo que debe pasar.
+    """
     md = tmp_path / "informe.md"
     crudo = tmp_path / "comparacion.json"
+    atestado = tmp_path / "atestado.yml"
+    if not atestado.exists():
+        atestado.write_text(_atestado_de_prueba(configuraciones), encoding="utf-8")
     codigo = _comparador().main(
         [
             "--configuraciones",
             str(configuraciones),
+            "--atestado",
+            str(atestado),
             "--salida-md",
             str(md),
             "--salida-json",

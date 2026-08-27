@@ -1,0 +1,21 @@
+# Atestado de modelos — ESCRITO POR `preflight.py --atestiguar`.
+#
+# NO SE EDITA A MANO. Cada linea de aqui es el resultado de una llamada
+# real al proveedor, con su fecha. Escribirla a mano seria una afirmacion
+# sin comprobacion detras, que es exactamente la raiz que ADR-095 nombra.
+#
+# Lo lee `comparar_investigadores.py`, que se niega a medir si un modelo
+# configurado no aparece aqui como usable y reciente.
+version: 1
+generado_en: 2026-08-27T03:39:50Z
+proveedores:
+  google:
+    host: generativelanguage.googleapis.com
+    catalogo_leido: False
+    modelos:
+      {}
+  nvidia:
+    host: integrate.api.nvidia.com
+    catalogo_leido: False
+    modelos:
+      {}

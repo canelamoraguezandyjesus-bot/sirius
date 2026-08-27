@@ -70,6 +70,10 @@ CODIGO_OK = 0
 CODIGO_NO_CONCLUYENTE = 2
 CODIGO_COMPARACION_FALSA = 3
 CODIGO_CONFIGURACION_INVALIDA = 4
+#: Se pidio medir un modelo del que no consta que responda. Es un codigo propio y
+#: no un `CONFIGURACION_INVALIDA` porque la configuracion puede estar impecable:
+#: lo que falta es la COMPROBACION de que ese nombre siga vivo (ADR-095).
+CODIGO_SIN_ATESTADO = 5
 
 #: Lo único que se hereda del entorno de quien llama. La lista es corta a
 #: propósito y cada grupo tiene su motivo:
@@ -565,6 +569,70 @@ def informe_markdown(
     return "\n".join(lineas) + "\n"
 
 
+ATESTADO = Path(__file__).resolve().parent / "modelos_atestiguados.yml"
+
+#: Cuantos dias vale un atestado. Un catalogo de modelos se pudre en semanas
+#: -medido: la familia `gemini-2.5` entera murio en ese plazo-, asi que siete dias
+#: es generoso y sigue siendo mucho mas corto que la vida de un documento.
+DIAS_DE_VALIDEZ = 7
+
+
+def modelos_sin_atestado(
+    configuraciones: list[Any], atestado: Path = ATESTADO, ahora: str | None = None
+) -> list[str]:
+    """Que modelos configurados NO constan como usables y recientes.
+
+    LA PIEZA QUE HACE IMPOSIBLE LO QUE CASI PASA CUATRO VECES: medir con 33
+    guardianes en verde sobre un modelo que el proveedor ya habia retirado
+    (ADR-095). Hasta hoy nada lo impedia, porque el resultado de cada llamada
+    moria en la cola de un log y ningun programa podia leerlo.
+
+    Devuelve la lista de los que fallan. Vacia significa que todos constan.
+
+    ANTE LA DUDA, SE PARA: si el atestado no existe, no se puede leer o esta
+    caducado, TODOS los modelos cuentan como sin atestiguar. No poder comprobarlo
+    es el peor motivo para seguir.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    nombres: list[str] = []
+    for configuracion in configuraciones:
+        for clave, valor in (getattr(configuracion, "entorno", None) or {}).items():
+            if clave in ("FAST_LLM", "SMART_LLM", "STRATEGIC_LLM", "EMBEDDING"):
+                nombres.append(str(valor).split(":", 1)[-1])
+    nombres = sorted(set(nombres))
+    if not nombres:
+        return []
+
+    if not atestado.is_file():
+        return nombres
+    try:
+        datos = yaml.safe_load(atestado.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return nombres
+
+    momento = datetime.now(UTC) if ahora is None else datetime.fromisoformat(ahora)
+    limite = momento - timedelta(days=DIAS_DE_VALIDEZ)
+
+    vivos: set[str] = set()
+    for proveedor in (datos.get("proveedores") or {}).values():
+        for nombre, ficha in (proveedor.get("modelos") or {}).items():
+            if not isinstance(ficha, dict) or not ficha.get("usable"):
+                continue
+            fecha = str(ficha.get("fecha_utc", ""))
+            try:
+                cuando = datetime.fromisoformat(fecha.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if cuando >= limite:
+                vivos.add(str(nombre))
+
+    def _consta(nombre: str) -> bool:
+        return any(nombre == v or v.endswith(nombre) or nombre.endswith(v) for v in vivos)
+
+    return [n for n in nombres if not _consta(n)]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=(
@@ -573,6 +641,15 @@ def main(argv: list[str] | None = None) -> int:
         )
     )
     parser.add_argument("--configuraciones", default=str(CONFIGURACIONES))
+    parser.add_argument(
+        "--atestado",
+        default=str(ATESTADO),
+        # Se inyecta para que una prueba pueda montar su propio atestado sin
+        # tocar el de produccion. NO existe forma de saltarse la comprobacion:
+        # apuntar a un fichero que no existe hace que TODOS los modelos cuenten
+        # como sin atestiguar, que es lo que debe pasar.
+        help="fichero de atestado de modelos (por defecto, el del repositorio)",
+    )
     parser.add_argument("--salida-md", required=True, help="informe comparativo en Markdown")
     parser.add_argument("--salida-json", required=True, help="JSON crudo con todo lo medido")
     parser.add_argument(
@@ -597,6 +674,20 @@ def main(argv: list[str] | None = None) -> int:
     except ConfiguracionInvalida as exc:
         sys.stderr.write(f"configuración inválida: {exc}\n")
         return CODIGO_CONFIGURACION_INVALIDA
+
+    # ANTES DE GASTAR UN CENTIMO: que conste que estos modelos responden.
+    # Un numero medido sobre un modelo muerto es peor que no tener numero,
+    # porque se cree. Esto es ADR-095 hecho guardian.
+    sin_atestado = modelos_sin_atestado(list(configuraciones), Path(args.atestado))
+    if sin_atestado:
+        sys.stderr.write(
+            "no consta que estos modelos respondan, o su atestado ha caducado: "
+            + ", ".join(sin_atestado)
+            + "\nEjecuta el preflight con --atestiguar antes de medir. "
+            "Medir sobre un nombre sin comprobar es como se perdio la noche del "
+            "26-08-2026 (ADR-095).\n"
+        )
+        return CODIGO_SIN_ATESTADO
 
     mediciones: list[Medicion] = []
     with TemporaryDirectory(prefix="sirius-comparacion-") as temporal:
