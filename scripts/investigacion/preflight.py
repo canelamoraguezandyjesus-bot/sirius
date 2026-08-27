@@ -126,7 +126,38 @@ def revisar(proveedor: str) -> dict[str, Any]:
     # modelos dentro es la prueba de que se hablo con EL, y no un eco de lo que
     # nosotros habiamos configurado.
     informe["atestado"] = bool(modelos)
+
+    # LA PREGUNTA QUE DE VERDAD IMPORTA: ¿existen los que tengo configurados?
+    # Sin esto habia que leerse el catalogo entero a ojo, y asi fue como tres
+    # modelos muertos sobrevivieron a un plan, a un spike y a una investigacion.
+    informe["configurados"] = {
+        nombre: any(nombre in m or m.endswith(nombre) for m in modelos)
+        for nombre in _configurados(proveedor)
+    }
     return informe
+
+
+def _configurados(proveedor: str) -> list[str]:
+    """Los modelos que `configuraciones.yml` declara para este proveedor.
+
+    Se leen del fichero real, no de una lista escrita aqui: una copia se queda
+    atras en cuanto alguien toca el original, y entonces el preflight diria que
+    todo esta vivo mientras produccion apunta a un modelo muerto. Es la misma
+    familia de defecto que ya mordio dos veces en este repositorio.
+    """
+    import re as _re
+    from pathlib import Path as _Path
+
+    ruta = _Path(__file__).resolve().parent / "configuraciones.yml"
+    if not ruta.is_file():
+        return []
+    texto = ruta.read_text(encoding="utf-8")
+    # `FAST_LLM: "openai:meta/llama-3.3-70b"` -> `meta/llama-3.3-70b`
+    encontrados = _re.findall(
+        r'(?:FAST_LLM|SMART_LLM|STRATEGIC_LLM|EMBEDDING):\s*"([^:"]+):([^"]+)"', texto
+    )
+    familia = "google_genai" if proveedor == "google" else "openai"
+    return sorted({modelo for adaptador, modelo in encontrados if adaptador == familia})
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -147,6 +178,21 @@ def main(argv: list[str] | None = None) -> int:
 
         Path(args.salida).write_text(texto, encoding="utf-8")
     sys.stdout.write(texto + "\n")
+
+    # EL RESUMEN VA AL FINAL, Y NO ES ESTETICA. La cola de un log de Actions es
+    # lo unico que se lee sin descargar nada, y un catalogo de 84 modelos empuja
+    # fuera de ella justo la linea que importa. Con esto, la respuesta a «existen
+    # los modelos que tengo configurados» se lee de un vistazo.
+    sys.stdout.write("\n===== RESUMEN =====\n")
+    for informe in informes:
+        estado = "OK" if informe.get("atestado") else "FALLO"
+        sys.stdout.write(
+            f"{informe['proveedor']:8} {estado:6} "
+            f"{informe.get('cuantos_modelos', 0)} modelos"
+            f"{'  ' + str(informe['error']) if informe.get('error') else ''}\n"
+        )
+        for nombre, vivo in (informe.get("configurados") or {}).items():
+            sys.stdout.write(f"         {'VIVO ' if vivo else 'MUERTO'}  {nombre}\n")
 
     # Rojo si alguno no contestó: un preflight que calla ante un fallo sería otra
     # vez el verde que no significa nada.
