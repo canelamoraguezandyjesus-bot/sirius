@@ -36,6 +36,11 @@ on:
         type: string
         required: false
         default: ""
+      tope:
+        description: "Cuántos candidatos probar como mucho. Cada uno es una llamada."
+        type: string
+        required: false
+        default: "8"
 
 permissions:
   contents: read
@@ -68,11 +73,12 @@ jobs:
           NVIDIA_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_NVIDIA_KEY }}
           BUSCAR: ${{ inputs.buscar }}
           PROBAR: ${{ inputs.probar }}
+          TOPE: ${{ inputs.tope }}
         run: |
           set -uo pipefail
           codigo=0
           uv run --no-project python scripts/investigacion/preflight.py \
-            --salida preflight.json --buscar "$BUSCAR" --probar "$PROBAR" || codigo=$?
+            --salida preflight.json --buscar "$BUSCAR" --probar "$PROBAR" --tope "${TOPE:-8}" || codigo=$?
           echo "codigo=$codigo" >> "$GITHUB_OUTPUT"
 
           {
