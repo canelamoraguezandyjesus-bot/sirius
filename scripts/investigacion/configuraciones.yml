@@ -46,23 +46,23 @@ configuraciones:
   # hablaría con el servidor de NVIDIA y devolvería un informe perfecto y falso.
   - nombre: nvidia
     proveedor: nvidia
-    modelo: meta/llama-3.3-70b-instruct
+    modelo: nvidia/llama-3.1-nemotron-70b-instruct
     variable_de_clave: NVIDIA_API_KEY
     clave_destino: OPENAI_API_KEY
     entorno:
-      FAST_LLM: "openai:meta/llama-3.3-70b-instruct"
-      SMART_LLM: "openai:meta/llama-3.3-70b-instruct"
+      FAST_LLM: "openai:nvidia/llama-3.1-nemotron-70b-instruct"
+      SMART_LLM: "openai:nvidia/llama-3.1-nemotron-70b-instruct"
       # STRATEGIC_LLM se fija a propósito, aunque el plan no hable de él. Es una
       # PRECAUCIÓN, no una medición: el `DEFAULT_CONFIG` de 0.15.1 trae un valor
       # propio para esta clave, y dejarla sin fijar metería un TERCER proveedor en
       # una comparación que presume de tener una sola variable. En la rama de
       # Google, además, ese valor por defecto pediría una clave de OpenAI y
       # dispararía el criterio de parada (a).
-      STRATEGIC_LLM: "openai:meta/llama-3.3-70b-instruct"
+      STRATEGIC_LLM: "openai:nvidia/llama-3.1-nemotron-70b-instruct"
       # `groq` no aparece entre los proveedores de vectorización de 0.15.1; NVIDIA
       # sí sirve embeddings por la vía compatible con OpenAI, y por eso el
       # proveedor vuelve a ser `openai` y hereda el mismo `OPENAI_BASE_URL`.
-      EMBEDDING: "openai:nvidia/nv-embedqa-e5-v5"
+      EMBEDDING: "openai:nvidia/llama-3.2-nv-embedqa-1b-v1"
       OPENAI_BASE_URL: "https://integrate.api.nvidia.com/v1"
       # El buscador es el mismo en las dos y no lleva clave: es lo que mantiene
       # la comparación en una sola variable.
@@ -89,7 +89,7 @@ configuraciones:
       FAST_LLM: "google_genai:gemini-2.5-flash"
       SMART_LLM: "google_genai:gemini-2.5-flash"
       STRATEGIC_LLM: "google_genai:gemini-2.5-flash"
-      EMBEDDING: "google_genai:models/text-embedding-004"
+      EMBEDDING: "google_genai:models/gemini-embedding-001"
       RETRIEVER: "duckduckgo"
       TEMPERATURE: "0"
       SIRIUS_PROVEEDOR: "google"
