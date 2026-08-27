@@ -78,7 +78,8 @@ jobs:
           set -uo pipefail
           codigo=0
           uv run --no-project python scripts/investigacion/preflight.py \
-            --salida preflight.json --buscar "$BUSCAR" --probar "$PROBAR" --tope "${TOPE:-8}" || codigo=$?
+            --salida preflight.json --buscar "$BUSCAR" --probar "$PROBAR" --tope "${TOPE:-8}" \
+            --atestiguar || codigo=$?
           echo "codigo=$codigo" >> "$GITHUB_OUTPUT"
 
           {
@@ -94,7 +95,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: preflight-investigador
-          path: preflight.json
+          path: |
+            preflight.json
+            scripts/investigacion/modelos_atestiguados.yml
           if-no-files-found: warn
 
       - name: Veredicto
