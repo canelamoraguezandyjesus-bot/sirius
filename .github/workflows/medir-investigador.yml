@@ -310,6 +310,33 @@ jobs:
             fi
           done
 
+      - name: Atestiguar que los modelos responden HOY
+        # EL LAZO QUE FALTABA. El atestado que el comparador exige lo escribia el
+        # preflight EN SU PROPIO RUNNER, y alli moria: el fichero versionado del
+        # repositorio se queda con lo que hubiera la ultima vez, o vacio. Con eso,
+        # el guardian de ADR-095 se negaba a medir SIEMPRE -correcto pero inutil-
+        # o, peor, dejaba pasar un atestado viejo.
+        #
+        # Se genera aqui, en la misma pasada, y por eso es mas fuerte que
+        # confirmarlo en el repositorio: no puede estar caducado ni pertenecer a
+        # otra cuenta. Lo que se mide y lo que se atestigua son la misma corrida.
+        #
+        # COSTE: listar catalogos y una llamada por modelo configurado. Centimos,
+        # y evita gastar la cuota entera de una medicion sobre un modelo muerto.
+        timeout-minutes: 5
+        shell: bash --noprofile --norc {0}
+        env:
+          GOOGLE_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_GOOGLE_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_NVIDIA_KEY }}
+        run: |
+          set -uo pipefail
+          codigo=0
+          python3 scripts/investigacion/preflight.py --atestiguar || codigo=$?
+          if [ "$codigo" -ne 0 ]; then
+            echo "::error::algún modelo configurado no responde. No se gasta cuota en medirlo." >&2
+            exit 1
+          fi
+
       - name: Comparar las configuraciones
         timeout-minutes: 55
         env:

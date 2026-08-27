@@ -1105,3 +1105,50 @@ def test_una_medicion_que_el_hijo_declara_no_fiable_no_se_cuenta_como_medida(
     assert "ESTADO_FALLO" in fuente[marca : marca + 400], (
         "mira `medicion_fiable` pero no lo trata como fallo"
     )
+
+
+# --------------------------------------------------------------------------- #
+# El lazo entre atestiguar y medir
+# --------------------------------------------------------------------------- #
+
+
+def _sin_comentarios(guion: str) -> str:
+    """El guion sin comentarios: un guardián que ve un nombre en un comentario
+    no comprueba nada. Cuarto caso de la noche del 27-08 (ADR-095)."""
+    return "\n".join(x for x in guion.splitlines() if not x.lstrip().startswith("#"))
+
+
+def test_el_banco_atestigua_en_su_propia_pasada() -> None:
+    """Sin esto, el guardián de ADR-095 existe y no sirve para nada.
+
+    El atestado que el comparador exige lo escribía el preflight **en su propio
+    runner**, y allí moría. El fichero versionado del repositorio se queda con lo
+    que hubiera la última vez, o vacío: con eso el banco se negaría a medir
+    siempre —correcto pero inútil— o, peor, mediría con un atestado viejo.
+
+    Generarlo en la misma pasada es más fuerte que confirmarlo en el repositorio:
+    no puede estar caducado ni pertenecer a otra cuenta. **Lo que se mide y lo que
+    se atestigua son la misma corrida.**
+    """
+    doc = _doc(WORKFLOW)
+    pasos = [paso for job in (doc.get("jobs") or {}).values() for paso in (job.get("steps") or [])]
+    nombres = [str(p.get("name", "")) for p in pasos]
+    guiones = [_sin_comentarios(str(p.get("run", ""))) for p in pasos]
+
+    indice_atestado = next(
+        (i for i, g in enumerate(guiones) if "--atestiguar" in g),
+        None,
+    )
+    assert indice_atestado is not None, (
+        "el banco no genera su propio atestado: el guardián de ADR-095 se negaría "
+        f"a medir siempre, o mediría con uno viejo. Pasos: {nombres}"
+    )
+
+    indice_medicion = next(
+        (i for i, g in enumerate(guiones) if "comparar_investigadores.py" in g),
+        None,
+    )
+    assert indice_medicion is not None, "el banco no llama al comparador"
+    assert indice_atestado < indice_medicion, (
+        "se atestigua DESPUÉS de medir: para entonces la cuota ya está gastada"
+    )
