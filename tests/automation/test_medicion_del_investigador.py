@@ -54,6 +54,7 @@ Lo que se fija, y qué defecto silencioso impide cada una:
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import json
 import re
@@ -298,6 +299,7 @@ def _medir_con(
     monkeypatch: pytest.MonkeyPatch,
     preguntas: list[dict[str, Any]],
     respuesta: Any,
+    presupuesto: int = 1800,
 ) -> Any:
     """Corre `medir()` de verdad, sin red y sin claves.
 
@@ -315,7 +317,7 @@ def _medir_con(
     monkeypatch.setattr(m, "_version_instalada", lambda: m.VERSION_EXIGIDA)
     monkeypatch.setattr(m, "_cargar_preguntas", lambda: preguntas)
     monkeypatch.setattr(m, "_investigar", respuesta)
-    return m.medir("configuración-de-prueba")
+    return m.medir("configuración-de-prueba", presupuesto=presupuesto)
 
 
 #: Una pregunta SIN cadenas obligatorias. Es el peor caso a propósito: es el
@@ -1086,25 +1088,19 @@ def test_el_json_del_hijo_se_tapa_antes_de_publicarse() -> None:
     )
 
 
-def test_una_medicion_que_el_hijo_declara_no_fiable_no_se_cuenta_como_medida(
-    tmp_path: Path,
-) -> None:
-    """El hijo ya sabe que lo suyo no vale. El padre tiene que hacerle caso.
-
-    Copiar su porcentaje como «medida completa» sería volver exactamente a la
-    raíz que la refutación tumbó: un número publicado sobre una medición que su
-    propio autor marcó como inservible.
-    """
-    modulo = _comparador()
-    fuente = Path(modulo.__file__).read_text(encoding="utf-8")
-    assert "medicion_fiable" in fuente, (
-        "el comparador no mira `medicion_fiable`: publicaría como medida válida "
-        "un resultado que el propio medidor marcó como no fiable"
-    )
-    marca = fuente.index("medicion_fiable")
-    assert "ESTADO_FALLO" in fuente[marca : marca + 400], (
-        "mira `medicion_fiable` pero no lo trata como fallo"
-    )
+# RETIRADO EL 27-08-2026: `test_una_medicion_que_el_hijo_declara_no_fiable_no_se_
+# cuenta_como_medida`. Leía el TEXTO del comparador y comprobaba que
+# `ESTADO_FALLO` apareciera dentro de los 400 caracteres siguientes a
+# `medicion_fiable`.
+#
+# Estuvo en verde todo el tiempo que esa rama fue INALCANZABLE. No podía ser de
+# otra manera: un guardián que lee el código fuente ve que la rama está escrita,
+# nunca que se ejecute. Es la lección de la noche entera en una sola prueba.
+#
+# Lo que comprueba lo mismo ejecutándolo:
+# `test_un_tres_no_se_convierte_en_una_medida`, que lanza un hijo de verdad —el
+# que sale con 3 y escribe su JSON con `porcentaje: 100.0` dentro— y exige que
+# quede en `fallo` y sin porcentaje copiado. Y se ve caer con la mutación.
 
 
 # --------------------------------------------------------------------------- #
@@ -1151,4 +1147,333 @@ def test_el_banco_atestigua_en_su_propia_pasada() -> None:
     assert indice_medicion is not None, "el banco no llama al comparador"
     assert indice_atestado < indice_medicion, (
         "se atestigua DESPUÉS de medir: para entonces la cuota ya está gastada"
+    )
+
+
+# --- Que el banco diga por qué no midió -------------------------------------
+#
+# La primera pasada real del banco (ejecución 33079519839, 27-08-2026) no midió
+# ninguna de las dos configuraciones y NO PUDO DECIR POR QUÉ:
+#
+#   nvidia:  fallo — el subproceso terminó con código 3. Final de su salida:
+#            «new images from 0 total images INFO: 🌐 Scraping complete…»
+#   google:  agotado_el_tiempo — el subproceso pasó de 1500 s y se cortó.
+#
+# Dos defectos distintos, uno por línea.
+
+
+GUION_QUE_SE_DECLARA_NO_FIABLE = """
+# Hijo que mide, se da cuenta de que lo suyo no vale, ESCRIBE su JSON con el
+# motivo dentro y sale con 3. Es el camino real de `medir_investigador.main`.
+import json
+import sys
+
+salida = sys.argv[sys.argv.index("--salida") + 1]
+retrato = {
+    "configuracion": sys.argv[1],
+    "servidor": "https://ejemplo.invalido/v1",
+    "version_herramienta": "0.15.1",
+    "aciertos": 5,
+    "total": 5,
+    "porcentaje": 100.0,
+    "segundos_totales": 1.0,
+    "medicion_fiable": False,
+    "motivo_no_fiable": "ninguna pregunta trajo ni una sola fuente: el buscador no funciono",
+    "preguntas": [],
+}
+with open(salida, "w", encoding="utf-8") as fichero:
+    fichero.write(json.dumps(retrato, ensure_ascii=False))
+sys.stderr.write("INFO: 🌐 Scraping complete\\n")
+sys.stderr.write("INFO: 📚 Getting relevant content based on query\\n")
+sys.exit(3)
+"""
+
+GUION_QUE_MUERE_SIN_JSON = """
+import sys
+sys.stderr.write("me mori antes de escribir nada\\n")
+sys.exit(3)
+"""
+
+GUION_QUE_REVIENTA = """
+import sys
+sys.stderr.write("excepcion cualquiera\\n")
+sys.exit(1)
+"""
+
+
+def _medicion_con_guion(guion_texto: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
+    c = _comparador()
+    guion = tmp_path / "hijo.py"
+    guion.write_text(guion_texto, encoding="utf-8")
+    monkeypatch.setattr(c, "MEDIDOR", guion)
+    monkeypatch.setenv("CLAVE_DE_PRUEBA", "no-es-una-clave")
+    configuracion = c.Configuracion(
+        nombre="prueba",
+        proveedor="proveedor",
+        modelo="modelo",
+        variable_de_clave="CLAVE_DE_PRUEBA",
+        clave_destino="CLAVE_DE_PRUEBA",
+        entorno={},
+    )
+    return c.medir_configuracion(configuracion, tmp_path, 60)
+
+
+def test_un_tres_con_json_publica_el_motivo_y_no_la_cola_del_buscador(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pregunta 1: el camino real, no una constante.
+
+    `medir_investigador.main` devuelve 3 EXACTAMENTE cuando la medición no es
+    fiable, y escribe su JSON antes. La guarda genérica del padre atrapaba ese 3
+    y volvía, así que la rama que lee `motivo_no_fiable` —con su comentario
+    diciendo «el hijo ya sabe que lo suyo no vale y lo dice»— era inalcanzable.
+    """
+    medicion = _medicion_con_guion(GUION_QUE_SE_DECLARA_NO_FIABLE, tmp_path, monkeypatch)
+    assert "el buscador no funciono" in medicion.detalle, (
+        f"el detalle no trae el motivo que el hijo escribió: {medicion.detalle!r}. "
+        "Se está publicando otra cosa —la cola de la salida— y el motivo se tira."
+    )
+    assert "Scraping complete" not in medicion.detalle, (
+        "el detalle sigue siendo la cola de los registros del buscador"
+    )
+    assert medicion.resultado is not None, "el JSON del hijo no llegó al informe"
+
+
+def test_un_tres_no_se_convierte_en_una_medida(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Criterio de parada (a): distinguir el 3 no puede volverse creerse el 3.
+
+    El JSON del hijo trae `porcentaje: 100.0`. Si esto pasara a `medida`, un
+    100 % construido sobre cero fuentes acabaría publicado como resultado.
+    """
+    medicion = _medicion_con_guion(GUION_QUE_SE_DECLARA_NO_FIABLE, tmp_path, monkeypatch)
+    c = _comparador()
+    assert medicion.estado == c.ESTADO_FALLO, (
+        f"una medición que el propio hijo declara no fiable quedó como {medicion.estado!r}"
+    )
+    assert medicion.porcentaje in (None, 0.0), (
+        f"se copió el porcentaje de una medición no fiable: {medicion.porcentaje}"
+    )
+
+
+def test_un_tres_sin_json_sigue_siendo_fallo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pregunta 2, primera mitad: sin JSON no hay motivo que leer."""
+    medicion = _medicion_con_guion(GUION_QUE_MUERE_SIN_JSON, tmp_path, monkeypatch)
+    c = _comparador()
+    assert medicion.estado == c.ESTADO_FALLO
+    assert "me mori antes de escribir nada" in medicion.detalle, (
+        f"un 3 sin JSON tiene que enseñar la cola de su salida: {medicion.detalle!r}"
+    )
+
+
+def test_otro_codigo_sigue_siendo_fallo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pregunta 2, segunda mitad: solo el 3 es un veredicto; el resto, averías."""
+    medicion = _medicion_con_guion(GUION_QUE_REVIENTA, tmp_path, monkeypatch)
+    c = _comparador()
+    assert medicion.estado == c.ESTADO_FALLO
+    assert "código 1" in medicion.detalle, medicion.detalle
+
+
+# --- El plazo, por pregunta y no por configuración --------------------------
+
+
+def test_el_plazo_por_pregunta_sale_del_presupuesto_y_cabe_dentro() -> None:
+    """Pregunta 4: un plazo interior mayor que el exterior no protege nada."""
+    m = _medidor()
+    cuantas = len(m._cargar_preguntas())
+    assert cuantas >= 7, f"el banco encogió a {cuantas}: esta prueba mide el reparto real"
+    presupuesto = 1500
+    plazo = m.segundos_por_pregunta(presupuesto, cuantas)
+    assert plazo * cuantas <= presupuesto, (
+        f"{cuantas} preguntas a {plazo} s son {plazo * cuantas} s, más que los "
+        f"{presupuesto} s del presupuesto: lo cortaría el padre y no habría informe."
+    )
+    assert plazo >= m.SEGUNDOS_MINIMOS_POR_PREGUNTA, (
+        "el reparto se saltó el suelo: con plazos de segundos se mide el reloj, no al investigador"
+    )
+    # Y el suelo manda cuando el presupuesto es ridículo.
+    assert m.segundos_por_pregunta(1, cuantas) == m.SEGUNDOS_MINIMOS_POR_PREGUNTA
+
+
+TRES_PREGUNTAS: list[dict[str, Any]] = [
+    {"id": "P1", "tipo": "prueba", "texto": "rápida 1", "obligatorias": ["sí"]},
+    {"id": "P2", "tipo": "prueba", "texto": "colgada", "obligatorias": ["sí"]},
+    {"id": "P3", "tipo": "prueba", "texto": "rápida 2", "obligatorias": ["sí"]},
+]
+
+
+def _con_una_colgada(monkeypatch: pytest.MonkeyPatch, cuantas_cuelgan: int) -> Any:
+    m = _medidor()
+    monkeypatch.setattr(m, "segundos_por_pregunta", lambda *_a, **_k: 1)
+
+    async def responde(pregunta: str) -> tuple[str, int]:
+        if "colgada" in pregunta or cuantas_cuelgan == 3:
+            await asyncio.sleep(3)
+        return "sí, con fuentes", 4
+
+    return _medir_con(monkeypatch, TRES_PREGUNTAS, responde)
+
+
+def test_una_pregunta_colgada_no_se_lleva_por_delante_las_demas(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pregunta 3: seis respuestas ya escritas no se tiran por una séptima colgada."""
+    resultado = _con_una_colgada(monkeypatch, cuantas_cuelgan=1)
+    assert resultado.aciertos == 2, (
+        f"se perdieron respuestas buenas: {resultado.aciertos} aciertos de 3 preguntas "
+        "con una sola colgada"
+    )
+    assert resultado.preguntas_cortadas_por_plazo == 1
+    cortada = next(p for p in resultado.preguntas if p["cortada_por_plazo"])
+    assert cortada["id"] == "P2"
+    assert "no llegó a terminar" in (cortada["error"] or ""), cortada["error"]
+    assert resultado.medicion_fiable, (
+        f"una medición con 2 de 3 respondidas se declaró no fiable: {resultado.motivo_no_fiable}"
+    )
+
+
+def test_si_se_cortan_todas_la_medicion_no_es_fiable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterio de parada (b): medir el reloj no es medir al investigador."""
+    resultado = _con_una_colgada(monkeypatch, cuantas_cuelgan=3)
+    assert not resultado.medicion_fiable
+    assert "se cortaron por plazo" in (resultado.motivo_no_fiable or ""), resultado.motivo_no_fiable
+
+
+GUION_QUE_RETRATA_SUS_ARGUMENTOS = """
+# Hijo que solo apunta con qué lo llamaron. Sirve para comprobar el CABLE, no la
+# pieza: que el medidor sepa repartir un presupuesto no demuestra que el padre se
+# lo dé, y sin esa mitad el hijo reparte un valor por defecto que no tiene nada
+# que ver con el plazo real -y vuelve a morir con las respuestas dentro-.
+import json
+import sys
+
+salida = sys.argv[sys.argv.index("--salida") + 1]
+with open(salida, "w", encoding="utf-8") as fichero:
+    fichero.write(json.dumps({"argv": sys.argv, "medicion_fiable": True, "preguntas": []}))
+"""
+
+
+def test_el_padre_le_dice_al_hijo_de_cuanto_tiempo_dispone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """El cable, no la pieza. Sin esta prueba, quitar `--presupuesto` deja todo verde."""
+    medicion = _medicion_con_guion(GUION_QUE_RETRATA_SUS_ARGUMENTOS, tmp_path, monkeypatch)
+    assert medicion.resultado is not None, medicion.detalle
+    argv = list(medicion.resultado["argv"])
+    assert "--presupuesto" in argv, (
+        f"el padre no le dice al hijo de cuánto dispone: {argv}. El hijo repartirá "
+        "un valor por defecto ajeno al plazo real y morirá con las respuestas dentro."
+    )
+    # 60 es el `tiempo_maximo` con el que `_medicion_con_guion` llama al padre: se
+    # comprueba que viaja EL MISMO número, no que exista la bandera.
+    assert argv[argv.index("--presupuesto") + 1] == "60", (
+        f"viaja un presupuesto que no es el plazo real del padre: {argv}"
+    )
+
+
+def test_el_desglose_por_pregunta_sale_por_el_registro_y_trae_el_error() -> None:
+    """Lo que impidió no volver a adivinar: el artefacto no se puede leer.
+
+    El JSON con el detalle de cada pregunta se sube como artefacto, y desde una
+    sesión no se descarga. El 27-08-2026 eso costó una pasada de treinta minutos
+    con las dos APIs gastadas: la única pista legible fue «el subproceso terminó
+    con código 3».
+    """
+    c = _comparador()
+    medicion = c.Medicion(
+        nombre="prueba",
+        proveedor="p",
+        modelo="m",
+        estado=c.ESTADO_FALLO,
+        detalle="no fiable",
+        variable_de_clave="X",
+        variables_puestas=[],
+    )
+    medicion.resultado = {
+        "preguntas": [
+            {
+                "id": "P1",
+                "acierta": False,
+                "fuentes": 0,
+                "segundos": 3.2,
+                "cortada_por_plazo": False,
+                "error": "RuntimeError: el modelo devolvio 404 al escribir el informe",
+            },
+            {
+                "id": "P2",
+                "acierta": True,
+                "fuentes": 4,
+                "segundos": 41.0,
+                "cortada_por_plazo": False,
+                "error": None,
+            },
+        ]
+    }
+    lineas = c.desglose_por_pregunta(medicion)
+    assert len(lineas) == 2, lineas
+    assert "404 al escribir el informe" in lineas[0], (
+        f"el error de la pregunta no llega al registro: {lineas[0]!r}. Sin eso, "
+        "la única forma de saber qué pasó es descargar el artefacto a mano."
+    )
+    assert "fuentes=0" in lineas[0] and "fuentes=4" in lineas[1]
+    assert "[NO]" in lineas[0] and "[ok]" in lineas[1]
+
+
+def test_el_comparador_escribe_ese_desglose_de_verdad(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """El cable otra vez: que la función exista no la ejecuta nadie.
+
+    Es la misma comprobación que faltó con `--presupuesto`, donde quitar el cable
+    dejó las cuarenta pruebas en verde.
+    """
+    c = _comparador()
+    guion = tmp_path / "hijo.py"
+    guion.write_text(
+        "\nimport json, sys\n"
+        'salida = sys.argv[sys.argv.index("--salida") + 1]\n'
+        'open(salida, "w", encoding="utf-8").write(json.dumps({\n'
+        '  "medicion_fiable": False,\n'
+        '  "motivo_no_fiable": "motivo de prueba",\n'
+        '  "preguntas": [{"id": "PZ", "acierta": False, "fuentes": 0, "segundos": 1.0,\n'
+        '                 "cortada_por_plazo": False, "error": "SEÑAL-QUE-SE-BUSCA"}]}))\n'
+        "sys.exit(3)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(c, "MEDIDOR", guion)
+    monkeypatch.setenv("CLAVE_DE_PRUEBA", "no-es-una-clave")
+    monkeypatch.setattr(
+        c,
+        "cargar_configuraciones",
+        lambda _ruta: [
+            c.Configuracion(
+                nombre="prueba",
+                proveedor="p",
+                modelo="m",
+                variable_de_clave="CLAVE_DE_PRUEBA",
+                clave_destino="CLAVE_DE_PRUEBA",
+                entorno={},
+            )
+        ],
+    )
+    monkeypatch.setattr(c, "modelos_sin_atestado", lambda *_a, **_k: [])
+    c.main(
+        [
+            "--salida-md",
+            str(tmp_path / "i.md"),
+            "--salida-json",
+            str(tmp_path / "i.json"),
+            "--tiempo-maximo",
+            "60",
+            "--fecha",
+            "2026-08-27",
+        ]
+    )
+    registro = capsys.readouterr().err
+    assert "SEÑAL-QUE-SE-BUSCA" in registro, (
+        "el desglose por pregunta no se escribió en el registro del trabajo; "
+        f"lo que salió fue:\n{registro[-800:]}"
     )
