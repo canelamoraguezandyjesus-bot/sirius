@@ -48,6 +48,8 @@ PROVEEDORES: dict[str, dict[str, Any]] = {
         "listar": "https://generativelanguage.googleapis.com/v1beta/models",
         "cabecera_clave": "x-goog-api-key",
         "prefijo": "",
+        "generar": "https://generativelanguage.googleapis.com/v1beta/{modelo}:generateContent",
+        "vectorizar": "https://generativelanguage.googleapis.com/v1beta/{modelo}:embedContent",
     },
     "nvidia": {
         "variable": "NVIDIA_API_KEY",
@@ -55,6 +57,8 @@ PROVEEDORES: dict[str, dict[str, Any]] = {
         "listar": "https://integrate.api.nvidia.com/v1/models",
         "cabecera_clave": "Authorization",
         "prefijo": "Bearer ",
+        "generar": "https://integrate.api.nvidia.com/v1/chat/completions",
+        "vectorizar": "https://integrate.api.nvidia.com/v1/embeddings",
     },
 }
 
@@ -96,6 +100,60 @@ def _nombres(proveedor: str, datos: Any) -> list[str]:
     return sorted(str(m.get("id", "")) for m in datos.get("data", []))
 
 
+def _prueba_de_vida(proveedor: str, clave: str, modelos_configurados: list[str]) -> dict[str, Any]:
+    """Que un modelo EXISTA en el catálogo no significa que puedas usarlo.
+
+    Son dos preguntas distintas y confundirlas cuesta una noche: un modelo puede
+    estar listado y quedar fuera de la cuota gratuita de la cuenta, o exigir un
+    campo que la vía compatible con OpenAI no manda —el vectorizador de NVIDIA
+    pide `input_type: query|passage`, y una llamada estándar no lo lleva—.
+
+    Aquí se USA cada uno, una vez: una frase de generación y una palabra de
+    vectorización. Es la diferencia entre «figura en la lista» y «me contesta».
+
+    COSTE: unas decenas de tokens por proveedor. Céntimos.
+    """
+    ficha = PROVEEDORES[proveedor]
+    cabecera, prefijo = str(ficha["cabecera_clave"]), str(ficha["prefijo"])
+    resultado: dict[str, Any] = {}
+
+    for modelo in modelos_configurados:
+        es_vector = "embed" in modelo.lower()
+        if proveedor == "google":
+            plantilla = ficha["vectorizar"] if es_vector else ficha["generar"]
+            # Google exige el prefijo `models/` en la ruta; el catálogo ya lo trae
+            # en unos nombres y en otros no, así que se normaliza aquí.
+            ruta = modelo if modelo.startswith("models/") else f"models/{modelo}"
+            url = str(plantilla).format(modelo=ruta)
+            cuerpo: dict[str, Any] = (
+                {"content": {"parts": [{"text": "hola"}]}}
+                if es_vector
+                else {"contents": [{"parts": [{"text": "Responde solo: hola"}]}]}
+            )
+        else:
+            url = str(ficha["vectorizar"] if es_vector else ficha["generar"])
+            cuerpo = (
+                # `input_type` es obligatorio en los vectorizadores de NVIDIA y
+                # NO lo manda una llamada compatible con OpenAI estandar. Es
+                # justo el detalle que solo se descubre usandolo.
+                {"input": ["hola"], "model": modelo, "input_type": "query"}
+                if es_vector
+                else {
+                    "model": modelo,
+                    "messages": [{"role": "user", "content": "Responde solo: hola"}],
+                    "max_tokens": 8,
+                }
+            )
+
+        codigo, datos, error = _pedir(url, clave, cabecera, prefijo, cuerpo)
+        resultado[modelo] = {
+            "usable": bool(codigo == 200 and datos),
+            "codigo_http": codigo,
+            "error": error or None,
+        }
+    return resultado
+
+
 def revisar(proveedor: str) -> dict[str, Any]:
     ficha = PROVEEDORES[proveedor]
     clave = os.environ.get(str(ficha["variable"]), "")
@@ -134,6 +192,11 @@ def revisar(proveedor: str) -> dict[str, Any]:
         nombre: any(nombre in m or m.endswith(nombre) for m in modelos)
         for nombre in _configurados(proveedor)
     }
+
+    # Y USARLOS. Existir no es poder usarse: cuota, permisos y forma de la
+    # llamada solo se comprueban llamando.
+    vivos = [n for n, existe in informe["configurados"].items() if existe]
+    informe["prueba_de_vida"] = _prueba_de_vida(proveedor, clave, vivos) if vivos else {}
     return informe
 
 
@@ -191,12 +254,32 @@ def main(argv: list[str] | None = None) -> int:
             f"{informe.get('cuantos_modelos', 0)} modelos"
             f"{'  ' + str(informe['error']) if informe.get('error') else ''}\n"
         )
-        for nombre, vivo in (informe.get("configurados") or {}).items():
-            sys.stdout.write(f"         {'VIVO ' if vivo else 'MUERTO'}  {nombre}\n")
+        prueba = informe.get("prueba_de_vida") or {}
+        for nombre, existe in (informe.get("configurados") or {}).items():
+            if not existe:
+                sys.stdout.write(f"         NO EXISTE  {nombre}\n")
+                continue
+            uso = prueba.get(nombre) or {}
+            if uso.get("usable"):
+                sys.stdout.write(f"         USABLE     {nombre}\n")
+            else:
+                detalle = str(uso.get("error") or f"HTTP {uso.get('codigo_http')}")[:110]
+                sys.stdout.write(f"         NO RESPONDE {nombre}  ->  {detalle}\n")
 
     # Rojo si alguno no contestó: un preflight que calla ante un fallo sería otra
     # vez el verde que no significa nada.
-    return 0 if all(i.get("atestado") for i in informes) else 1
+    # Rojo si alguno no contesto, si algun modelo configurado no existe, o si
+    # existe y NO RESPONDE. Un preflight que se conforma con «esta en la lista»
+    # deja pasar exactamente el fallo que este paso existe para cazar.
+    def _bien(informe: dict[str, Any]) -> bool:
+        if not informe.get("atestado"):
+            return False
+        if not all((informe.get("configurados") or {}).values()):
+            return False
+        prueba = informe.get("prueba_de_vida") or {}
+        return bool(prueba) and all(u.get("usable") for u in prueba.values())
+
+    return 0 if all(_bien(i) for i in informes) else 1
 
 
 if __name__ == "__main__":
