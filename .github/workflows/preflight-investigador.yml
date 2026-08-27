@@ -31,6 +31,11 @@ on:
         type: string
         required: false
         default: ""
+      probar:
+        description: "Prueba DE VERDAD los modelos del catálogo que contengan esta palabra. Cuesta unos céntimos."
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -62,11 +67,12 @@ jobs:
           GOOGLE_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_GOOGLE_KEY }}
           NVIDIA_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_NVIDIA_KEY }}
           BUSCAR: ${{ inputs.buscar }}
+          PROBAR: ${{ inputs.probar }}
         run: |
           set -uo pipefail
           codigo=0
           uv run --no-project python scripts/investigacion/preflight.py \
-            --salida preflight.json --buscar "$BUSCAR" || codigo=$?
+            --salida preflight.json --buscar "$BUSCAR" --probar "$PROBAR" || codigo=$?
           echo "codigo=$codigo" >> "$GITHUB_OUTPUT"
 
           {

@@ -154,6 +154,34 @@ def _prueba_de_vida(proveedor: str, clave: str, modelos_configurados: list[str])
     return resultado
 
 
+def _candidatos(proveedor: str, modelos: list[str], filtro: str, tope: int) -> list[str]:
+    """Modelos del catalogo que merece la pena probar, ordenados por sensatez.
+
+    NACE DE UN 404 QUE NINGUNA LISTA PODIA PREDECIR. `gemini-2.5-flash` figura en
+    el catalogo de Google y al usarlo contesta «no longer available»; los dos de
+    NVIDIA figuran y contestan «Not found for account». El catalogo dice lo que
+    el proveedor OFRECE, no lo que esta cuenta PUEDE usar. Son cosas distintas y
+    solo se separan llamando.
+
+    Se ordena para que lo barato vaya primero -los modelos pequenos suelen ser
+    los que entran en capa gratuita- y se corta en `tope` para que probar no
+    cueste mas que el fallo que evita.
+    """
+    utiles = [m for m in modelos if filtro.lower() in m.lower()]
+
+    # Los que suenan a caros o a especiales, al final: guard, safety, reward,
+    # vision, translate y los gigantes no son candidatos de trabajo diario.
+    def _peso(nombre: str) -> tuple[int, str]:
+        bajo = nombre.lower()
+        penaliza = any(
+            x in bajo for x in ("guard", "safety", "reward", "vision", "vlm", "translate", "parse")
+        )
+        grande = any(x in bajo for x in ("340b", "550b", "253b", "120b-a12b"))
+        return (2 if penaliza else (1 if grande else 0), nombre)
+
+    return sorted(utiles, key=_peso)[:tope]
+
+
 def revisar(proveedor: str) -> dict[str, Any]:
     ficha = PROVEEDORES[proveedor]
     clave = os.environ.get(str(ficha["variable"]), "")
@@ -228,9 +256,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("proveedores", nargs="*", default=list(PROVEEDORES), help="cuáles revisar")
     parser.add_argument("--salida", default=None)
     parser.add_argument("--buscar", default="", help="filtra los modelos por esta subcadena")
+    parser.add_argument(
+        "--probar",
+        default="",
+        help="prueba de verdad los modelos del catalogo que contengan esta palabra",
+    )
+    parser.add_argument("--tope", type=int, default=6, help="cuantos candidatos probar como mucho")
     args = parser.parse_args(argv)
 
     informes = [revisar(p) for p in (args.proveedores or list(PROVEEDORES))]
+
+    if args.probar:
+        for informe in informes:
+            proveedor = str(informe["proveedor"])
+            clave = os.environ.get(str(PROVEEDORES[proveedor]["variable"]), "")
+            if not clave:
+                continue
+            candidatos = _candidatos(
+                proveedor, list(informe.get("modelos") or []), args.probar, args.tope
+            )
+            informe["candidatos_probados"] = _prueba_de_vida(proveedor, clave, candidatos)
     if args.buscar:
         for informe in informes:
             informe["modelos"] = [m for m in informe["modelos"] if args.buscar.lower() in m.lower()]
@@ -265,6 +310,9 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 detalle = str(uso.get("error") or f"HTTP {uso.get('codigo_http')}")[:110]
                 sys.stdout.write(f"         NO RESPONDE {nombre}  ->  {detalle}\n")
+        for nombre, uso in (informe.get("candidatos_probados") or {}).items():
+            marca = "CANDIDATO OK" if uso.get("usable") else "candidato no"
+            sys.stdout.write(f"         {marca}  {nombre}\n")
 
     # Rojo si alguno no contestó: un preflight que calla ante un fallo sería otra
     # vez el verde que no significa nada.
