@@ -369,3 +369,79 @@ def test_toda_pregunta_tiene_algo_que_corregir() -> None:
     """
     vacias = [q["id"] for q in _banco()["preguntas"] if not q.get("obligatorias")]
     assert vacias == [], f"preguntas sin nada que corregir, o sea aprobado gratis: {vacias}"
+
+
+# --------------------------------------------------------------------------- #
+# «Ocupado» no es «muerto»
+# --------------------------------------------------------------------------- #
+#
+# MEDIDO EN LA PRIMERA PASADA REAL DEL BANCO, el 27-08-2026. `gemini-3.5-flash`
+# contestó:
+#
+#     HTTP 503: "This model is currently experiencing high demand."
+#
+# y el guardián lo marcó NO RESPONDE, negándose a medir. Que se negara está
+# bien —no se mide lo que no contesta—, pero el mensaje habría hecho **cambiar un
+# modelo que está perfectamente vivo**.
+#
+# Es el defecto de esta casa visto del revés: en vez de un verde que miente, un
+# ROJO que miente. Y cuesta lo mismo: mandar a buscar un sustituto que no hacía
+# falta es exactamente como se perdió una noche.
+
+
+def test_un_503_no_se_confunde_con_un_modelo_muerto() -> None:
+    """Un 503 es «vuelve luego»; un 404 es «no existe». No son lo mismo."""
+    modulo = _preflight()
+    assert 503 in modulo.CODIGOS_TRANSITORIOS
+    assert 429 in modulo.CODIGOS_TRANSITORIOS, "un límite de ritmo también es transitorio"
+    assert 404 not in modulo.CODIGOS_TRANSITORIOS, (
+        "un 404 se daría por transitorio y se reintentaría para siempre un modelo "
+        "que de verdad no existe"
+    )
+    assert 401 not in modulo.CODIGOS_TRANSITORIOS, (
+        "una clave mala no se arregla esperando, y reintentarla esconde el motivo"
+    )
+
+
+def test_lo_transitorio_se_reintenta_y_lo_definitivo_no(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reintentar un 404 sería insistir en algo que no va a cambiar.
+
+    Se ejecuta el `_pedir` real con el intento sustituido, y se cuenta cuántas
+    veces llama: es la diferencia entre comprobar la constante y comprobar el
+    comportamiento.
+    """
+    modulo = _preflight()
+    monkeypatch.setattr(modulo, "REINTENTOS", 3)
+    monkeypatch.setattr(
+        modulo.time if hasattr(modulo, "time") else modulo, "sleep", lambda _s: None, raising=False
+    )
+
+    for codigo, esperados in ((503, 3), (404, 1), (200, 1)):
+        llamadas = {"n": 0}
+
+        def _falso(*_a: object, _c: int = codigo, **_k: object) -> tuple[int, object, str]:
+            llamadas["n"] += 1
+            return _c, {"ok": True}, ""
+
+        monkeypatch.setattr(modulo, "_una_peticion", _falso)
+        import time as _t
+
+        monkeypatch.setattr(_t, "sleep", lambda _s: None)
+        modulo._pedir("https://ejemplo.invalido", "clave", "Authorization", "Bearer ")
+        assert llamadas["n"] == esperados, (
+            f"con HTTP {codigo} se llamó {llamadas['n']} veces y debían ser {esperados}"
+        )
+
+
+def test_el_informe_distingue_tres_estados_y_no_dos() -> None:
+    """Decir «no sirve» cuando es «vuelve luego» manda a cambiar lo que está bien.
+
+    El resumen tiene que ofrecer un tercer estado y, además, decir en voz alta
+    que NO se cambie el modelo: sin esa frase, quien lea el rojo hará lo de
+    siempre y buscará un sustituto.
+    """
+    fuente = Path(_preflight().__file__).read_text(encoding="utf-8")
+    assert "sin_comprobar" in fuente, "el informe no distingue «ocupado» de «no sirve»"
+    assert "NO cambies el modelo" in fuente, (
+        "el aviso no dice lo único que hay que hacer ante un transitorio: esperar"
+    )
