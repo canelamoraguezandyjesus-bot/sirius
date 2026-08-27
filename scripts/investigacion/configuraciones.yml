@@ -64,9 +64,15 @@ configuraciones:
       # proveedor vuelve a ser `openai` y hereda el mismo `OPENAI_BASE_URL`.
       EMBEDDING: "openai:nvidia/llama-nemotron-embed-vl-1b-v2"
       OPENAI_BASE_URL: "https://integrate.api.nvidia.com/v1"
-      # El buscador es el mismo en las dos y no lleva clave: es lo que mantiene
-      # la comparación en una sola variable.
-      RETRIEVER: "duckduckgo"
+      # El buscador es el mismo en las dos: es lo que mantiene la comparación en
+      # una sola variable. Van DOS y en este orden desde la pasada 3 del banco
+      # (ADR-098): DuckDuckGo solo, desde los runners de GitHub, devolvió vacío
+      # en 5 de 7 búsquedas y el 80 % de S2 no se podía ni medir. Tavily aporta
+      # fuentes SI su clave está (ver `claves_opcionales`); sin clave, su
+      # buscador captura el error y devuelve lista vacía -comprobado en el
+      # código de 0.15.1-, así que esta línea es inerte hasta que la clave
+      # exista y DuckDuckGo se comporta exactamente como hoy.
+      RETRIEVER: "tavily,duckduckgo"
       # Quita una fuente de ruido; NO hace la medición determinista. La web cambia
       # entre una ejecución y otra, y el buscador puede devolver otras fuentes,
       # así que dos ejecuciones del mismo día pueden dar números distintos.
@@ -75,6 +81,12 @@ configuraciones:
       # ser. No configura nada de la herramienta: sirve para que el informe pueda
       # contrastar lo que se PIDIÓ con el servidor con el que de verdad se habló.
       SIRIUS_PROVEEDOR: "nvidia"
+    # La clave del buscador, OPCIONAL de verdad: si no está en el entorno del
+    # runner se omite en silencio y Tavily queda inerte. Se NOMBRA, no se
+    # escribe, igual que la principal.
+    claves_opcionales:
+      - variable_de_clave: TAVILY_API_KEY
+        clave_destino: TAVILY_API_KEY
 
   # Google entra por su vía nativa, y por eso NO declara `OPENAI_BASE_URL`. Que
   # esa variable esté ausente aquí no basta: el guion construye el entorno del
@@ -90,6 +102,10 @@ configuraciones:
       SMART_LLM: "google_genai:gemini-3.5-flash"
       STRATEGIC_LLM: "google_genai:gemini-3.5-flash"
       EMBEDDING: "google_genai:models/gemini-embedding-001"
-      RETRIEVER: "duckduckgo"
+      # El mismo par que en NVIDIA, por la regla de la única variable.
+      RETRIEVER: "tavily,duckduckgo"
       TEMPERATURE: "0"
       SIRIUS_PROVEEDOR: "google"
+    claves_opcionales:
+      - variable_de_clave: TAVILY_API_KEY
+        clave_destino: TAVILY_API_KEY

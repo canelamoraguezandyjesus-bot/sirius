@@ -183,6 +183,16 @@ class Configuracion:
     variable_de_clave: str
     clave_destino: str
     entorno: dict[str, str]
+    #: Claves ADEMÁS de la principal, y opcionales de verdad: si la variable de
+    #: origen no está en el entorno del padre, se omite en silencio -sin estado
+    #: `sin_clave`, sin aviso-. Nació con el buscador (ADR-098): el esquema
+    #: admitía UNA clave, y el guardián anti-secretos rechaza -con razón-
+    #: cualquier `*_API_KEY` escrito en `entorno`, así que la clave de Tavily
+    #: necesitaba una vía declarada. Son pares (origen, destino), como la
+    #: principal. «Opcional» significa que su ausencia no impide medir; NO
+    #: significa que un verde pueda apoyarse en la pieza ausente -eso lo impide
+    #: `fuentes > 0`, que suspende cualquier pregunta sin fuentes-.
+    claves_opcionales: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass
@@ -272,6 +282,27 @@ def cargar_configuraciones(ruta: Path) -> list[Configuracion]:
                     "informe atribuiría el resultado a un modelo que no ha corrido."
                 )
 
+        opcionales_crudas: Any = cruda.get("claves_opcionales") or []
+        if not isinstance(opcionales_crudas, list):
+            raise ConfiguracionInvalida(
+                f"«claves_opcionales» de «{nombre}» no es una lista de pares origen/destino"
+            )
+        claves_opcionales: list[tuple[str, str]] = []
+        for opcional in opcionales_crudas:
+            if not isinstance(opcional, dict) or not opcional.get("variable_de_clave"):
+                raise ConfiguracionInvalida(
+                    f"una clave opcional de «{nombre}» no declara «variable_de_clave»"
+                )
+            origen = str(opcional["variable_de_clave"])
+            if origen in CLAVES_QUE_OBLIGAN_A_PARAR:
+                # El criterio de parada (a) se aplica al ORIGEN, igual que en la
+                # clave principal: que sea opcional no la exime.
+                raise ConfiguracionInvalida(
+                    f"«{nombre}» pide como opcional la clave de {origen}. Criterio de parada "
+                    "(a): si hiciera falta clave de OpenAI o Anthropic, se para."
+                )
+            claves_opcionales.append((origen, str(opcional.get("clave_destino") or origen)))
+
         configuraciones.append(
             Configuracion(
                 nombre=nombre,
@@ -280,6 +311,7 @@ def cargar_configuraciones(ruta: Path) -> list[Configuracion]:
                 variable_de_clave=variable_de_clave,
                 clave_destino=str(cruda["clave_destino"]),
                 entorno=entorno,
+                claves_opcionales=tuple(claves_opcionales),
             )
         )
     return configuraciones
@@ -306,8 +338,17 @@ def entorno_desde_cero(configuracion: Configuracion, clave: str) -> dict[str, st
             entorno[variable] = valor
     entorno.update(configuracion.entorno)
     entorno[configuracion.clave_destino] = clave
+    for origen, destino in configuracion.claves_opcionales:
+        # Opcional de verdad: presente se entrega, ausente se omite sin aviso.
+        valor_opcional = os.environ.get(origen, "").strip()
+        if valor_opcional:
+            entorno[destino] = valor_opcional
 
-    declaradas = set(configuracion.entorno) | {configuracion.clave_destino}
+    declaradas = (
+        set(configuracion.entorno)
+        | {configuracion.clave_destino}
+        | {destino for _origen, destino in configuracion.claves_opcionales}
+    )
     coladas = [v for v in VARIABLES_QUE_CONTAMINAN if v in entorno and v not in declaradas]
     if coladas:
         raise ConfiguracionInvalida(
@@ -395,6 +436,13 @@ def medir_configuracion(
     )
 
     clave = os.environ.get(configuracion.variable_de_clave, "").strip()
+    # TODO secreto que pueda acabar en el entorno del hijo se tapa en su salida,
+    # opcionales incluidas: que una clave sea opcional no la hace publicable.
+    secretos = [clave] + [
+        os.environ.get(origen, "").strip()
+        for origen, _destino in configuracion.claves_opcionales
+        if os.environ.get(origen, "").strip()
+    ]
     if not clave:
         base.detalle = (
             f"la variable {configuracion.variable_de_clave} no está en el entorno; no se ha "
@@ -437,7 +485,7 @@ def medir_configuracion(
         )
         return base
 
-    cola = sin_secretos((proceso.stderr or proceso.stdout or "").strip(), [clave])[-2000:]
+    cola = sin_secretos((proceso.stderr or proceso.stdout or "").strip(), secretos)[-2000:]
     base.codigo_de_salida = proceso.returncode
     # UN 3 CON JSON NO ES UN FALLO: es un veredicto con motivo escrito, y pasa de
     # largo esta guarda a propósito para que abajo se lea. Un 3 SIN JSON sí es un
@@ -458,7 +506,7 @@ def medir_configuracion(
     # se sube como artefacto: antes solo se tapaba la cola de un subproceso que
     # había fallado, así que el único canal por el que una clave podía salir de
     # verdad era justo el que no se tapaba.
-    crudo = sin_secretos(salida_json.read_text(encoding="utf-8"), [clave])
+    crudo = sin_secretos(salida_json.read_text(encoding="utf-8"), secretos)
     resultado: dict[str, Any] = json.loads(crudo)
     if not resultado.get("medicion_fiable", True):
         # El hijo ya sabe que lo suyo no vale y lo dice. Copiar su porcentaje como
