@@ -173,11 +173,44 @@ def _candidatos(proveedor: str, modelos: list[str], filtro: str, tope: int) -> l
     # vision, translate y los gigantes no son candidatos de trabajo diario.
     def _peso(nombre: str) -> tuple[int, str]:
         bajo = nombre.lower()
+        # MEDIDO: la primera pasada probo seis candidatos y los seis eran
+        # `gemini-2.5-*` de audio, de imagen o de uso del ordenador, porque el
+        # orden alfabetico los ponia delante. Ninguno servia, y la familia util
+        # ni se llego a tocar. Un orden que no distingue el trabajo diario del
+        # resto gasta el tope en lo que nunca iba a valer.
         penaliza = any(
-            x in bajo for x in ("guard", "safety", "reward", "vision", "vlm", "translate", "parse")
+            x in bajo
+            for x in (
+                "guard",
+                "safety",
+                "reward",
+                "vision",
+                "vlm",
+                "translate",
+                "parse",
+                "audio",
+                "image",
+                "tts",
+                "live",
+                "computer-use",
+                "video",
+                "clip",
+                "rerank",
+                "code",
+                "med-",
+                "fin-",
+                "creative",
+                "diffusion",
+            )
         )
+        # Una preview puede desaparecer sin aviso: elegirla seria volver a atarse
+        # a algo perecedero, que es el defecto que este fichero existe para cazar.
+        preview = "preview" in bajo or "-exp" in bajo
         grande = any(x in bajo for x in ("340b", "550b", "253b", "120b-a12b"))
-        return (2 if penaliza else (1 if grande else 0), nombre)
+        return (
+            3 if penaliza else (2 if preview else (1 if grande else 0)),
+            nombre,
+        )
 
     return sorted(utiles, key=_peso)[:tope]
 
