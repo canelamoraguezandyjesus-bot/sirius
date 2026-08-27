@@ -308,3 +308,52 @@ defectos:
       guion real contra un gh simulado; tres pruebas vistas FALLAR sin el
       arreglo. Queda un hueco declarado: si la parada no publico marcador de
       rol, sigue haciendo falta aplicar la etiqueta a mano.
+
+  - id: H-24
+    titulo: El verificador registra DIVERGENCIA cuando la incidencia lleva etiquetas que se contradicen, y eso gasta la reversion de autoridad
+    bloque: D1
+    gravedad: alta
+    estado: cerrado
+    cerrado_por: 3d1c6367f8611c579a7e6cf89730e856afd5b892
+    ficheros:
+      - src/sirius_engine/projection_verifier.py
+      - src/sirius_engine/mirror_projection.py
+      - tests/engine/test_projection_verifier.py
+      - tests/engine/test_authority_reversion.py
+    nota: >-
+      Encontrado leyendo el registro real de la racha, no el codigo: las seis
+      lineas de la unica pasada del contador dicen `incidencia=None` y una de
+      ellas es la #353, que lleva sirius:failed-safely y sirius:completed a la
+      vez. El espejo lo avisaba con `etiquetas_contradictorias` y ningun
+      consumidor leia el aviso -septimo caso de la enfermedad de esta casa, y el
+      primero que es un DATO SIN LECTOR en vez de una funcion sin llamante-.
+      Coste real: `authority_reversion` revierte a la primera divergencia sin
+      esperar (§11.4), asi que dos etiquetas pegadas a mano devolverian el mando
+      a GitHub culpando al motor. Cerrado con ADR-096: ventana 0 en los dos
+      ejes, NO_COMPARABLE nombrando las etiquetas que chocan. El dia sigue sin
+      poder salir verde.
+
+  - id: H-25
+    titulo: El contador de los siete dias cuenta rojos de una etapa que el contrato dice que aun no puede empezar
+    bloque: D1
+    gravedad: alta
+    estado: abierto
+    incidencia: 376
+    ficheros:
+      - src/sirius_engine/seven_day_streak_cli.py
+      - src/sirius_engine/projection_verifier.py
+      - .github/workflows/contador-siete-dias.yml
+    nota: >-
+      Medido en la rama de memoria: cada WorkItem despachado tiene EXACTAMENTE
+      dos sucesos -creado y activado- y ninguno mas, mientras sus seis
+      incidencias estan cerradas. En produccion solo escriben en el almacen
+      `sirius-despachar` (crea y activa) y `sirius-supervisar`, cuya tercera
+      guarda solo actua sobre autoridad MOTOR, y hoy ninguna clase ha conmutado.
+      Nada devuelve el desenlace de GitHub al motor. El contrato §11.2 ya lo
+      dice: «el contador no puede empezar antes de que el motor lleve el estado
+      por si mismo». Consecuencia: la racha no puede avanzar hoy por
+      construccion y cada pasada escribe rojos que significan «esto no ha
+      empezado» y se leen como «el motor se equivoco». Segunda ronda de la misma
+      familia que H-24, asi que se para a nombrar la raiz (ADR-001, regla de las
+      dos rondas): el verificador diario mete en DIVERGENCIA todo lo que no es
+      COINCIDE, y cada caso nuevo se ha ido tapando con una ventana mas.

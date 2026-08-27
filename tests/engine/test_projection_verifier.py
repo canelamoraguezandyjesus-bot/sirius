@@ -519,7 +519,7 @@ def test_fidelidad_sin_ningun_campo_leido_es_no_comparable() -> None:
 _ETIQUETAS_CONTRADICTORIAS = ("sirius:failed-safely", "sirius:completed")
 
 
-def _linea_con_contradiccion() -> object:
+def _linea_con_contradiccion() -> LineaRegistro:
     return verificar_dia(
         motor=_motor(estado=WorkItemState.ACTIVE, fase=WorkItemPhase.PREPARAR),
         espejo=_espejo(
@@ -544,10 +544,9 @@ def test_etiquetas_contradictorias_no_se_registran_como_divergencia() -> None:
         )
         # El motivo tiene que NOMBRAR las etiquetas: un «no comparable» sin
         # decir cuáles chocan obliga a quien lo lea a ir a mirar la incidencia.
+        motivo = veredicto.motivo or ""
         for etiqueta in _ETIQUETAS_CONTRADICTORIAS:
-            assert etiqueta in veredicto.motivo, (
-                f"el motivo no nombra `{etiqueta}`: {veredicto.motivo!r}"
-            )
+            assert etiqueta in motivo, f"el motivo no nombra `{etiqueta}`: {motivo!r}"
 
 
 def test_una_incidencia_sin_etiquetas_sigue_siendo_divergencia() -> None:
