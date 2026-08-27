@@ -419,8 +419,16 @@ def test_lo_transitorio_se_reintenta_y_lo_definitivo_no(monkeypatch: pytest.Monk
     for codigo, esperados in ((503, 3), (404, 1), (200, 1)):
         llamadas = {"n": 0}
 
-        def _falso(*_a: object, _c: int = codigo, **_k: object) -> tuple[int, object, str]:
-            llamadas["n"] += 1
+        def _falso(
+            *_a: object,
+            _c: int = codigo,
+            _cuenta: dict[str, int] = llamadas,
+            **_k: object,
+        ) -> tuple[int, object, str]:
+            # Se atan `codigo` y `llamadas` por valor por defecto: capturarlas del
+            # bucle haría que las tres vueltas compartieran la última, y la prueba
+            # mediría siempre el mismo caso creyendo que mide tres.
+            _cuenta["n"] += 1
             return _c, {"ok": True}, ""
 
         monkeypatch.setattr(modulo, "_una_peticion", _falso)
