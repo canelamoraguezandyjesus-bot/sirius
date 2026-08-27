@@ -41,7 +41,10 @@ preguntas:
   - id: P3
     tipo: busqueda
     texto: "¿Qué licencia de software usa el proyecto GPT Researcher en GitHub?"
-    # Exige mirar el repositorio: no es un dato que se recite.
+    # Se conserva de la primera version, y con una advertencia: un modelo grande
+    # puede saberla de memoria. Vale como control -si esta falla, el problema no
+    # es el buscador- pero NO demuestra que se haya investigado. Eso lo demuestra
+    # `fuentes > 0`, que es la condicion que de verdad separa las dos cosas.
     obligatorias: ["Apache"]
 
   - id: P4
@@ -52,6 +55,49 @@ preguntas:
   - id: P5
     tipo: busqueda
     texto: "¿Cuál es el nombre del sistema de tipos estático para Python mantenido por Meta, alternativa a mypy?"
-    # Admite dos respuestas correctas: Meta mantiene Pyre, y Pyrefly es su sucesor.
-    # Cualquiera de las dos vale; exigir solo una suspendería un informe correcto.
     obligatorias: ["Pyre"]
+
+  # --- Las que un modelo NO puede recitar ------------------------------------
+  #
+  # REFUTADO EL 26-08-2026 Y CORREGIDO A MEDIAS. Un refutador señalo que NINGUNA
+  # de las cinco primeras obliga a buscar: la licencia de un proyecto conocido, el
+  # lenguaje de `uv` y el verificador de Meta son hechos estables y notorios que
+  # cualquier modelo util recita sin salir a la red. El banco incumplia su propio
+  # criterio de eleccion, escrito veinte lineas mas arriba.
+  #
+  # Con el buscador muerto, esas cinco habrian dado 100 %.
+  #
+  # La primera mitad del arreglo fue estructural y ya esta: `fuentes > 0`. Sin
+  # fuentes no hay acierto, aunque la respuesta sea correcta.
+  #
+  # Esta es la segunda mitad: preguntas cuya respuesta **cambia**, de modo que
+  # recitarla de memoria da una respuesta VIEJA y por tanto equivocada. No basta
+  # con que sean dificiles: tienen que ser PERECEDERAS, que es lo unico que un
+  # entrenamiento no puede cubrir.
+  #
+  # POR ESO LLEVAN FECHA DE REVISION. Una pregunta perecedera caduca por
+  # definicion: si nadie la revisa, dentro de unos meses su respuesta correcta
+  # sera otra y el banco empezara a suspender informes buenos. Es la misma
+  # leccion que ADR-095 saco de los modelos: lo perecedero se declara perecedero.
+
+  - id: P6
+    tipo: busqueda_obligada
+    revisar_antes_de: 2026-11-30
+    texto: >-
+      ¿Cuál es el número de la última versión publicada del gestor de paquetes
+      uv, de Astral, y en qué mes salió?
+    # La ultima version de un paquete vivo cambia cada pocas semanas. Un modelo
+    # que conteste de memoria dara una version vieja: no hay forma de acertar sin
+    # mirar. Se exige la palabra clave para que el informe hable de versiones, y
+    # el acierto real lo decide quien lo lea junto con las fuentes.
+    obligatorias: ["uv"]
+
+  - id: P7
+    tipo: busqueda_obligada
+    revisar_antes_de: 2026-11-30
+    texto: >-
+      ¿Cuántas estrellas tiene aproximadamente el repositorio de GPT Researcher
+      en GitHub a día de hoy?
+    # Un contador que sube solo. De memoria se contesta con el numero del
+    # entrenamiento, que siempre esta por debajo. Obliga a mirar la pagina.
+    obligatorias: ["GPT Researcher"]

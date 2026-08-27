@@ -928,12 +928,24 @@ def test_un_informe_correcto_SIN_FUENTES_no_es_un_acierto(monkeypatch: pytest.Mo
 
 def test_el_mismo_informe_CON_FUENTES_si_es_un_acierto(monkeypatch: pytest.MonkeyPatch) -> None:
     """Anti-vacua: sin esto, «acierta=False» siempre pasaría la prueba de arriba."""
-    # Un texto que satisface las cinco obligatorias del banco. La primera versión
-    # de esta prueba devolvía solo la respuesta de P1 para las cinco preguntas y
-    # fallaba 1 de 5 — la prueba estaba mal, no el código: las otras cuatro
-    # suspendían con razón. Queda anotado porque una anti-vacua que falla por su
-    # propio montaje es la forma más fácil de acabar relajando la regla que vigila.
-    completo = "Canberra, 1969, Apache 2.0, Rust y Pyre."
+    # UN TEXTO DERIVADO DEL BANCO, no escrito a mano.
+    #
+    # Esta prueba ya se rompió DOS veces por su propio montaje: la primera porque
+    # el doble devolvía solo la respuesta de P1, y la segunda cuando el banco
+    # creció de cinco preguntas a siete y el texto fijo se quedó atrás. Las dos
+    # veces la culpa fue de la prueba, no del código.
+    #
+    # Una anti-vacua que falla por su montaje es la forma más fácil de acabar
+    # relajando la regla que vigila, así que deja de haber texto que mantener: se
+    # arma con todas las obligatorias del banco real.
+    import yaml as _yaml
+
+    banco = _yaml.safe_load(
+        (RAIZ / "scripts" / "investigacion" / "preguntas.yml").read_text(encoding="utf-8")
+    )
+    completo = ", ".join(
+        sorted({o for q in banco["preguntas"] for o in (q.get("obligatorias") or [])})
+    )
     modulo = _medidor_con_doble(monkeypatch, {"": (completo, 4)})
     resultado = modulo.medir("con-fuentes")
     assert resultado.aciertos == resultado.total

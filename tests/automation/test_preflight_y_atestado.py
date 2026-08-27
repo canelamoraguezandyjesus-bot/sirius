@@ -308,3 +308,64 @@ def test_ninguna_clave_sobrevive_al_tapado(texto: str, clave: str, esperado: boo
     tapado = modulo._sin_clave(texto, clave)
     assert (clave not in tapado) is True
     assert (tapado == texto) is esperado
+
+
+# --------------------------------------------------------------------------- #
+# El banco de preguntas: lo perecedero se declara perecedero
+# --------------------------------------------------------------------------- #
+#
+# Un refutador señaló que ninguna de las cinco preguntas originales obliga a
+# buscar: son hechos estables que cualquier modelo útil recita. Con el buscador
+# muerto habrían dado 100 %.
+#
+# La primera mitad del arreglo fue estructural (`fuentes > 0`). La segunda son
+# preguntas cuya respuesta CAMBIA, y por eso caducan: si nadie las revisa, dentro
+# de unos meses su respuesta correcta será otra y el banco suspenderá informes
+# buenos. Es la misma lección que ADR-095 sacó de los modelos.
+
+
+def _banco() -> dict[str, Any]:
+    import yaml
+
+    ruta = RAIZ / "scripts" / "investigacion" / "preguntas.yml"
+    return dict(yaml.safe_load(ruta.read_text(encoding="utf-8")))
+
+
+def test_hay_preguntas_que_un_modelo_no_puede_recitar() -> None:
+    """Sin alguna perecedera, un buscador muerto puede sacar buena nota."""
+    obligadas = [q for q in _banco()["preguntas"] if q.get("tipo") == "busqueda_obligada"]
+    assert obligadas, (
+        "el banco no tiene ninguna pregunta cuya respuesta cambie con el tiempo: "
+        "todas se pueden contestar de memoria, y entonces mide al modelo y no al "
+        "investigador"
+    )
+
+
+def test_toda_pregunta_perecedera_declara_cuando_caduca() -> None:
+    """Lo perecedero se declara perecedero, o se pudre en silencio.
+
+    Una pregunta cuya respuesta cambia y NO dice cuándo revisarla es una trampa
+    con fecha de explosión: llegará el día en que suspenda informes correctos y
+    nadie sabrá por qué.
+    """
+    from datetime import date
+
+    sin_fecha = [
+        q["id"]
+        for q in _banco()["preguntas"]
+        if q.get("tipo") == "busqueda_obligada" and not isinstance(q.get("revisar_antes_de"), date)
+    ]
+    assert sin_fecha == [], (
+        f"preguntas perecederas sin fecha de revisión: {sin_fecha}. "
+        "Su respuesta correcta cambiará y el banco empezará a suspender informes buenos."
+    )
+
+
+def test_toda_pregunta_tiene_algo_que_corregir() -> None:
+    """Una pregunta sin cadenas obligatorias es un aprobado automático.
+
+    `_corrige(texto, [])` devuelve True: bastaría una clave mal escrita en el YAML
+    para regalar un punto.
+    """
+    vacias = [q["id"] for q in _banco()["preguntas"] if not q.get("obligatorias")]
+    assert vacias == [], f"preguntas sin nada que corregir, o sea aprobado gratis: {vacias}"
