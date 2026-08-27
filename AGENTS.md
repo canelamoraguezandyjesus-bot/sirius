@@ -32,8 +32,10 @@ ya existía con otro nombre: el auditor-.
 | Cómo se usa el motor | `docs/operations/MOTOR_DE_SIRIUS.md` |
 | Proveedores de IA, coste y local vs nube | `docs/implementation/AGENT_OPPORTUNITY_MATRIX.md` §6 y `BLOQUE_B_SUSCRIPCIONES_O_CLAVES.md` |
 | La memoria del motor: diario, despachos y racha | la rama **`estado-del-motor`**, nunca `main` (ADR-083, ADR-093) |
+| Las investigaciones que informaron una decisión | `docs/investigaciones/` — **con su fecha y de qué dependen para caducar** |
+| Qué modelo de IA funciona HOY | `scripts/investigacion/modelos_atestiguados.yml`, que escribe una máquina tras llamar (ADR-095) |
 
-Tres avisos que ya han costado tiempo:
+Cuatro avisos que ya han costado tiempo:
 
 - **«Los bloques» es ambiguo.** Hay dos listas: los 16 del PRODUCTO (cerrados el
   10-08-2026) y los del MOTOR. Comparten hasta un identificador: `B1` es uno de
@@ -41,6 +43,10 @@ Tres avisos que ya han costado tiempo:
 - **Un documento de estado puede estar caducado.** `STATUS.md` estuvo quince
   días diciendo que Sirius 0.1 no estaba aceptado cuando ya lo estaba. Si una
   afirmación importa, contrástala con el registro o con el historial.
+- **Una investigación NO es una fuente sobre algo vivo.** Es una foto con fecha.
+  La del 27-08-2026 caducó **en veinticuatro horas**: tres de los modelos que
+  recomendaba no existían ya. Sirve para decidir qué preguntar, nunca para
+  responder — lo que responde es el servidor (ADR-095).
 - **El fichero `docs/operations/racha_siete_dias.jsonl` de `main` está vacío
   a propósito y siempre lo estará.** El registro de verdad de la racha vive en
   la rama `estado-del-motor` (ADR-093). Mirar el de `main` y concluir «el
