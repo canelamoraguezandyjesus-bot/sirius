@@ -321,12 +321,17 @@ jobs:
         env:
           GOOGLE_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_GOOGLE_KEY }}
           NVIDIA_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_NVIDIA_KEY }}
+          # Tambien el buscador se atesta antes de gastar (28-08-2026): la
+          # pasada 4 corrio 25 minutos con la clave de Tavily puesta y cero
+          # fuentes, y nadie podia decir por que. Sin este secreto, el atestado
+          # dice `sin_clave` y NO falla: la clave es opcional (PR #380).
+          TAVILY_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_TAVILY_KEY }}
         run: |
           set -uo pipefail
           codigo=0
           python3 scripts/investigacion/preflight.py --atestiguar || codigo=$?
           if [ "$codigo" -ne 0 ]; then
-            echo "::error::algún modelo configurado no responde. No se gasta cuota en medirlo." >&2
+            echo "::error::algún modelo configurado, o el buscador, no responde. No se gasta cuota en medirlo." >&2
             exit 1
           fi
 

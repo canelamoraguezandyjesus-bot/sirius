@@ -120,10 +120,17 @@ def _una_peticion(
 ) -> tuple[int, Any, str]:
     """Un solo intento."""
     datos = json.dumps(cuerpo).encode("utf-8") if cuerpo is not None else None
+    # `cabecera=""` significa SIN cabecera de autorizacion: el atestado del
+    # buscador tiene que reproducir la llamada de gpt-researcher 0.15.1, que
+    # manda la clave en el CUERPO y no en cabecera. Meter aqui una cabecera que
+    # la herramienta no manda mediria otra llamada distinta de la que falla.
+    cabeceras = {"Content-Type": "application/json"}
+    if cabecera:
+        cabeceras[cabecera] = f"{prefijo}{clave}"
     peticion = urllib.request.Request(
         url,
         data=datos,
-        headers={cabecera: f"{prefijo}{clave}", "Content-Type": "application/json"},
+        headers=cabeceras,
         method="POST" if datos else "GET",
     )
     try:
@@ -203,6 +210,80 @@ def _prueba_de_vida(proveedor: str, clave: str, modelos_configurados: list[str])
 
 
 ATESTADO = Path(__file__).resolve().parent / "modelos_atestiguados.yml"
+
+
+BUSCADOR_URL = "https://api.tavily.com/search"
+#: La pregunta trivial del atestado: si el buscador contesta 200 con cero
+#: resultados a ESTO, el detalle importa tanto como el codigo.
+BUSCADOR_PREGUNTA = "capital of Australia"
+
+
+def atestar_buscador() -> dict[str, Any]:
+    """UNA busqueda real a Tavily, con la MISMA llamada que hace la herramienta.
+
+    Nacio de la pasada 4 del banco (28-08-2026): la clave de Tavily estaba
+    puesta y llegaba al subproceso, y las fuentes siguieron a cero, identico a
+    la pasada sin clave. Nadie sabia si la clave era mala, si Tavily rechazaba
+    la FORMA de la llamada -la 0.15.1 manda `api_key` en el cuerpo, no en
+    cabecera `Authorization`- o si el buscador devolvia vacio por otra causa.
+    Los tres casos se distinguen leyendo la respuesta del servidor, y eso es
+    exactamente lo que esta funcion trae al informe.
+
+    Por eso la peticion reproduce la de `retrievers/tavily/tavily_search.py`:
+    clave en el cuerpo, sin cabecera de autorizacion. Atestar una llamada
+    distinta de la que falla seria medir otra cosa.
+
+    Tres estados, los de siempre (PR #374): `usable` con resultados,
+    `sin_comprobar` para lo transitorio -no cambies nada, vuelve a probar-,
+    y no-usable con el cuerpo de la respuesta visible. Sin clave: `sin_clave`,
+    que NO es un fallo -la clave es opcional en todo el diseno (PR #380)-.
+    """
+    clave = os.environ.get("TAVILY_API_KEY", "").strip()
+    informe: dict[str, Any] = {
+        "buscador": "tavily",
+        "url": BUSCADOR_URL,
+        "forma_de_llamada": "clave en el cuerpo (api_key), como gpt-researcher 0.15.1",
+    }
+    if not clave:
+        informe["estado"] = "sin_clave"
+        informe["detalle"] = (
+            "TAVILY_API_KEY no esta en el entorno; no se comprueba. No es un "
+            "fallo: sin clave el banco corre con DuckDuckGo, como siempre."
+        )
+        return informe
+
+    codigo, datos, error = _pedir(
+        BUSCADOR_URL,
+        clave,
+        "",
+        "",
+        cuerpo={
+            "query": BUSCADOR_PREGUNTA,
+            "search_depth": "basic",
+            "max_results": 3,
+            "api_key": clave,
+        },
+    )
+    resultados = len((datos or {}).get("results") or []) if isinstance(datos, dict) else 0
+    informe["codigo_http"] = codigo
+    if codigo == 200 and resultados > 0:
+        informe["estado"] = "usable"
+        informe["detalle"] = f"{resultados} resultados para una pregunta trivial"
+    elif codigo in CODIGOS_TRANSITORIOS:
+        informe["estado"] = "ocupado"
+        informe["detalle"] = _sin_clave(
+            f"transitorio tras {REINTENTOS} intentos: {error or f'HTTP {codigo}'}. "
+            "NO cambies nada, vuelve a probar",
+            clave,
+        )
+    else:
+        # El detalle ES la respuesta que se busca: distingue una clave invalida
+        # de una forma de autenticacion rechazada o de un 200 sin resultados.
+        informe["estado"] = "no_responde"
+        informe["detalle"] = _sin_clave(
+            error or f"HTTP {codigo} con {resultados} resultados", clave
+        )
+    return informe
 
 
 def _muertos_conocidos(atestado: Path | None = None) -> set[str]:
@@ -465,7 +546,8 @@ def main(argv: list[str] | None = None) -> int:
 
         _escribir_atestado(informes, datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"))
 
-    texto = json.dumps(informes, ensure_ascii=False, indent=2)
+    buscador = atestar_buscador()
+    texto = json.dumps([*informes, buscador], ensure_ascii=False, indent=2)
     if args.salida:
         from pathlib import Path
 
@@ -518,7 +600,18 @@ def main(argv: list[str] | None = None) -> int:
         prueba = informe.get("prueba_de_vida") or {}
         return bool(prueba) and all(u.get("usable") for u in prueba.values())
 
-    return 0 if all(_bien(i) for i in informes) else 1
+    # El buscador cuenta en el veredicto, pero SOLO si hay clave: `sin_clave`
+    # no puede poner rojo el preflight de quien corre con DuckDuckGo (la clave
+    # es opcional en todo el diseno, PR #380). `usable` pasa; `ocupado` y
+    # `no_responde` paran -gastar 25 minutos de banco con el buscador caido es
+    # exactamente lo que este paso existe para impedir-.
+    estado_buscador = str(buscador.get("estado"))
+    sys.stdout.write(
+        f"buscador {estado_buscador.upper():12} {str(buscador.get('detalle'))[:140]}\n"
+    )
+    buscador_bien = estado_buscador in ("usable", "sin_clave")
+
+    return 0 if all(_bien(i) for i in informes) and buscador_bien else 1
 
 
 if __name__ == "__main__":
