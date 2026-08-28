@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -27,17 +28,40 @@ from medir_investigador import VERSION_EXIGIDA, _urls_de_fuentes, _version_insta
 # Frases de planificación en primera persona que delatan que el modelo dejó su
 # borrador de razonamiento sin sintetizar en vez de un informe (revisión de la
 # PR #393, CODEX-001: la orden #392 publicó "We need to produce...", "Let's
-# extract info:" y similares). Varias apariciones son la señal; una sola
-# podría ser una cita legítima dentro de una fuente citada.
-_MARCADORES_DE_PLANIFICACION_SIN_SINTETIZAR = ("we need to", "we must", "we should", "let's ")
+# extract info:" y similares). Incluye el español porque `LANGUAGE: "spanish"`
+# (configuraciones.yml) es el idioma que de verdad se configura (CODEX-002 en
+# la revisión de la PR #393): el marcador no puede depender de que el modelo
+# desobedezca esa instrucción y escriba en inglés.
+_MARCADORES_DE_PLANIFICACION_SIN_SINTETIZAR = (
+    "we need to",
+    "we must",
+    "we should",
+    "let's ",
+    "necesitamos",
+    "debemos",
+    "tenemos que",
+    "vamos a",
+)
+_LIMITE_DE_ORACION = re.compile(r"(?<=[.!?\n])\s+")
 
 
 def _parece_planificacion_sin_sintetizar(informe: str) -> bool:
-    texto = informe.lower()
-    apariciones = sum(
-        texto.count(marcador) for marcador in _MARCADORES_DE_PLANIFICACION_SIN_SINTETIZAR
+    """Cuenta ORACIONES que EMPIEZAN con un marcador, no apariciones sueltas
+    en cualquier punto del texto: así una cita legítima que mencione la frase
+    a mitad de oración no cuenta, pero dos oraciones que narran el propio
+    proceso del modelo sí, sea cual sea el idioma o el número exacto de
+    frases (CODEX-002: el umbral fijo de tres apariciones dejaba pasar un
+    borrador con solo dos)."""
+    oraciones = _LIMITE_DE_ORACION.split(informe.lower().strip())
+    coincidencias = sum(
+        1
+        for oracion in oraciones
+        if any(
+            oracion.lstrip(" \"'*-#").startswith(marcador)
+            for marcador in _MARCADORES_DE_PLANIFICACION_SIN_SINTETIZAR
+        )
     )
-    return apariciones >= 3
+    return coincidencias >= 2
 
 
 async def _investigar(pregunta: str, tipo: str = "research_report") -> tuple[str, list[str]]:

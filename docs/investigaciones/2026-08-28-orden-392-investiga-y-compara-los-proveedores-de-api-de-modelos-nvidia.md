@@ -19,11 +19,24 @@ estado: VIGENTE
 
 ## Veredicto
 
-Para un uso sostenido de decenas de llamadas por tarea, **Google Gemini API es
-la opción con mejor soporte documentado como proveedor principal**; NVIDIA NIM
-queda mejor situado como catálogo de modelos abiertos y como alternativa o
-respaldo, no como dependencia principal de una herramienta de investigación en
-producción. Las razones, con la evidencia recogida:
+**Este informe no cambia la decisión vigente.** `docs/decisions/ADR-098-el-investigador-se-queda-con-nvidia-porque-fue-el-unico-que-pudo-correr-la-prueba.md`
+ya resolvió, con una medición real contra las cuentas de Sirius y no con
+documentación pública, que **el investigador de Sirius sigue usando NVIDIA**:
+en las dos pasadas del banco (`docs/investigaciones/2026-08-27-medicion-real-nvidia-contra-google.md`)
+NVIDIA contestó las siete preguntas mientras Google no completó ninguna —las
+siete cortadas idénticamente a los 192 s del plazo por pregunta—, y esa
+medición ocurrió exactamente bajo el régimen de decenas de llamadas por tarea
+que plantea la pregunta de esta orden. Nada de lo recopilado en este informe
+es una medición propia: es documentación pública de ambos proveedores, y esa
+evidencia es de menor rango que una ejecución real, así que no basta para
+revertir el veredicto medido.
+
+Lo que la documentación sí aporta, sin decidir nada por decreto: si se cumple
+la condición de revancha que ya fija el ADR-098 —la capa gratuita de Google
+cambia de cuota, o el propietario decide pagarla y el banco por relanzar se
+hace en el nivel de pago—, estas son las razones documentadas por las que ese
+nuevo banco merecería ejecutarse con Google como candidato serio, no solo
+repetirse con NVIDIA:
 
 1. **Gemini tiene un camino de pago publicado por Google mismo y con precio
    por token conocido** (desde céntimos por millón de tokens en caché hasta
@@ -51,11 +64,14 @@ producción. Las razones, con la evidencia recogida:
    pruebas y una vía de respaldo cuando Gemini esté agotado o restringido,
    pero no resuelve el problema de una API de pago predecible para producción.
 
-Esta conclusión es la misma que ya adoptó, como decisión de ingeniería
-provisional y no como hecho verificado en vivo, la investigación previa
-`docs/investigaciones/2026-08-27-nvidia-vs-google-para-el-investigador.md`:
-Google es el candidato con menor riesgo para convertir en principal, sin que
-eso signifique que NVIDIA deba descartarse.
+Estas mismas razones documentadas ya las recogió, también sin medición en
+vivo, la investigación previa
+`docs/investigaciones/2026-08-27-nvidia-vs-google-para-el-investigador.md`.
+Ese informe se escribió ANTES del banco real del mismo día: la medición que
+vino después (`docs/investigaciones/2026-08-27-medicion-real-nvidia-contra-google.md`)
+es la que de verdad decidió, y decidió NVIDIA. La documentación no se
+contradice con esa medición —explica por qué Google podría ser atractivo *si*
+sostuviera el volumen—, pero no la sustituye.
 
 ## Modelos que ofrece cada proveedor
 
@@ -162,10 +178,12 @@ revisión), y eso se repite tarea tras tarea. Con esa carga:
   días, sube a 1.000 RPM / 2.000.000 TPM / 10.000 RPD).
 
 Esa combinación —cuota diaria documentada más una escalera de pago barata y
-oficial— es la base del veredicto: para *volumen sostenido y predecible*,
-Gemini está mejor documentado que NIM. NIM sigue siendo preferible cuando lo
-que se necesita es variedad de modelos abiertos para experimentar o un
-respaldo cuando Gemini falle.
+oficial— es la razón documentada por la que Google merecería la revancha del
+ADR-098 si se diera la condición: mejor documentación para *volumen sostenido
+y predecible* que NIM. Pero documentación no es medición: la decisión vigente
+sigue siendo la del ADR-098, con NVIDIA como configuración activa del
+investigador, hasta que ese banco se repita con Google —en el nivel de pago,
+si esa es la propuesta— y complete el trabajo de verdad.
 
 ## Lo que NO queda demostrado
 

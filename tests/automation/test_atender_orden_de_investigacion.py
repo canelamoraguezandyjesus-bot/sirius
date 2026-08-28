@@ -288,6 +288,70 @@ def test_el_hijo_no_publica_planificacion_sin_sintetizar(
     assert "sintetiz" in str(resultado["error"]).lower()
 
 
+def test_el_hijo_no_publica_planificacion_sin_sintetizar_en_espanol(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CODEX-002 (revisión de la PR #393): con `LANGUAGE: "spanish"` configurado
+    (configuraciones.yml), un borrador de planificación en español no contiene
+    ningún marcador inglés. La regla tiene que atrapar el idioma que de verdad
+    se pide, no solo el que el modelo debería obedecer."""
+    hijo = _hijo_real(monkeypatch)
+
+    async def _planifica(_pregunta: str, _tipo: str = "research_report") -> tuple[str, list[str]]:
+        borrador = (
+            "Necesitamos producir el informe. Debemos sintetizar las fuentes. "
+            "Vamos a extraer los datos de precios y límites."
+        )
+        return borrador, ["https://a.example", "https://b.example"]
+
+    monkeypatch.setattr(hijo, "_investigar", _planifica)
+    salida = tmp_path / "resultado.json"
+    codigo = hijo.main(["--pregunta", "x", "--salida", str(salida), "--plazo", "30"])
+    assert codigo != 0, "un borrador de planificación en español salió en verde"
+    resultado = json.loads(salida.read_text(encoding="utf-8"))
+    assert "sintetiz" in str(resultado["error"]).lower()
+
+
+def test_el_hijo_no_publica_planificacion_con_solo_dos_marcadores(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CODEX-002: el umbral fijo de tres apariciones dejaba pasar un borrador
+    que solo repitiera el patrón dos veces."""
+    hijo = _hijo_real(monkeypatch)
+
+    async def _planifica(_pregunta: str, _tipo: str = "research_report") -> tuple[str, list[str]]:
+        borrador = "We need to cover pricing. Let's cover rate limits too."
+        return borrador, ["https://a.example", "https://b.example"]
+
+    monkeypatch.setattr(hijo, "_investigar", _planifica)
+    salida = tmp_path / "resultado.json"
+    codigo = hijo.main(["--pregunta", "x", "--salida", str(salida), "--plazo", "30"])
+    assert codigo != 0, "un borrador con solo dos marcadores salió en verde"
+    resultado = json.loads(salida.read_text(encoding="utf-8"))
+    assert "sintetiz" in str(resultado["error"]).lower()
+
+
+def test_el_hijo_no_confunde_una_cita_legitima_con_planificacion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Anti-vacua de CODEX-002: una fuente citada que mencione la frase a
+    mitad de oración, una sola vez, no es un borrador sin sintetizar."""
+    hijo = _hijo_real(monkeypatch)
+
+    async def _investiga(_pregunta: str, _tipo: str = "research_report") -> tuple[str, list[str]]:
+        informe = (
+            "# Informe\n\n"
+            'Una fuente citada advierte: "we need to reduce costs" al hablar '
+            "del ajuste de precios, pero el resto del texto sí está sintetizado."
+        )
+        return informe, ["https://a.example"]
+
+    monkeypatch.setattr(hijo, "_investigar", _investiga)
+    salida = tmp_path / "resultado.json"
+    codigo = hijo.main(["--pregunta", "x", "--salida", str(salida), "--plazo", "30"])
+    assert codigo == 0, "una cita legítima disparó el falso positivo"
+
+
 def test_el_hijo_con_fuentes_sale_en_verde_y_deja_todo_en_su_json(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
