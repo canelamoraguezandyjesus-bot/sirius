@@ -24,6 +24,21 @@ from typing import Any
 
 from medir_investigador import VERSION_EXIGIDA, _urls_de_fuentes, _version_instalada
 
+# Frases de planificación en primera persona que delatan que el modelo dejó su
+# borrador de razonamiento sin sintetizar en vez de un informe (revisión de la
+# PR #393, CODEX-001: la orden #392 publicó "We need to produce...", "Let's
+# extract info:" y similares). Varias apariciones son la señal; una sola
+# podría ser una cita legítima dentro de una fuente citada.
+_MARCADORES_DE_PLANIFICACION_SIN_SINTETIZAR = ("we need to", "we must", "we should", "let's ")
+
+
+def _parece_planificacion_sin_sintetizar(informe: str) -> bool:
+    texto = informe.lower()
+    apariciones = sum(
+        texto.count(marcador) for marcador in _MARCADORES_DE_PLANIFICACION_SIN_SINTETIZAR
+    )
+    return apariciones >= 3
+
 
 async def _investigar(pregunta: str, tipo: str = "research_report") -> tuple[str, list[str]]:
     from gpt_researcher import GPTResearcher
@@ -78,6 +93,16 @@ def main(argv: list[str] | None = None) -> int:
             resultado["error"] = (
                 "cero fuentes: el texto saldría de la memoria del modelo, no de "
                 "investigar. No se publica un informe recitado."
+            )
+            codigo = 3
+        elif _parece_planificacion_sin_sintetizar(informe):
+            # El defecto de la orden #392 (revisión de la PR #393): el informe
+            # era el borrador de razonamiento del modelo, no un informe. Sin
+            # fuentes SÍ había, así que la regla de arriba no lo paraba.
+            resultado["error"] = (
+                "el informe parece el borrador de planificación del modelo sin "
+                "sintetizar (frases como 'we need to' o \"let's\" repetidas), no "
+                "un informe redactado. No se publica sin sintetizar."
             )
             codigo = 3
     except TimeoutError:
