@@ -49,6 +49,7 @@ SCRIPTS_RUN_ON_THE_RUNNER = (
     "sirius_codex_review.py",
     "sirius_convergence.py",
     "validate_issue_body.py",
+    "resolver_prompt.py",
 )
 
 #: El módulo compartido no vive en `scripts/automation/` -vive en el paquete,
@@ -57,8 +58,11 @@ SCRIPTS_RUN_ON_THE_RUNNER = (
 #: contra ese directorio. Pero lo compila el MISMO `python3` del runner en
 #: cuanto `sirius_convergence.py` lo carga, así que necesita exactamente la
 #: misma comprobación, y por eso tiene la suya propia justo debajo.
-MODULO_COMPARTIDO = (
-    Path(__file__).resolve().parents[2] / "src" / "sirius_engine" / "round_history.py"
+MODULOS_COMPARTIDOS = (
+    # Lo carga `sirius_convergence.py`.
+    Path(__file__).resolve().parents[2] / "src" / "sirius_engine" / "round_history.py",
+    # Lo carga `resolver_prompt.py` (H-28): una sola verdad para `Perfil: rol@N`.
+    Path(__file__).resolve().parents[2] / "src" / "sirius_engine" / "profile_field.py",
 )
 
 
@@ -78,17 +82,18 @@ def test_script_parses_with_the_runner_python(name: str) -> None:
         )
 
 
-def test_el_modulo_compartido_tambien_compila_con_el_python_del_runner() -> None:
-    """Lo carga `sirius_convergence.py`, que corre con el `python3` del sistema."""
-    source = MODULO_COMPARTIDO.read_text(encoding="utf-8")
+@pytest.mark.parametrize("modulo", MODULOS_COMPARTIDOS, ids=lambda ruta: ruta.name)
+def test_el_modulo_compartido_tambien_compila_con_el_python_del_runner(modulo: Path) -> None:
+    """Los cargan scripts que corren con el `python3` del sistema (ver la tupla)."""
+    source = modulo.read_text(encoding="utf-8")
     try:
-        ast.parse(source, filename=str(MODULO_COMPARTIDO), feature_version=RUNNER_PYTHON)
+        ast.parse(source, filename=str(modulo), feature_version=RUNNER_PYTHON)
     except SyntaxError as exc:  # pragma: no cover - el mensaje es el valor
         version = ".".join(str(part) for part in RUNNER_PYTHON)
         pytest.fail(
-            f"round_history.py usa sintaxis que Python {version} no entiende "
-            f"(línea {exc.lineno}): {exc.msg}. Lo carga sirius_convergence.py, que "
-            "los workflows ejecutan con el `python3` del sistema del runner."
+            f"{modulo.name} usa sintaxis que Python {version} no entiende "
+            f"(línea {exc.lineno}): {exc.msg}. Lo carga un script que los "
+            "workflows ejecutan con el `python3` del sistema del runner."
         )
 
 
