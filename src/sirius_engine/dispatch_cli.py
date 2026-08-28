@@ -103,6 +103,12 @@ class _EscritorDeEnsayo:
     def aplicar_etiqueta(self, *, repo: str, numero: int, etiqueta: str) -> None:
         return None
 
+    def buscar_incidencia_por_work_id(self, *, repo: str, work_id: str) -> IncidenciaCreada | None:
+        # Un ensayo no tiene intención pendiente que adoptar: nunca se llama,
+        # y si algún día se llamara, «no hay ninguna» es la única respuesta
+        # que no inventa estado.
+        return None
+
 
 def _diario_de_despacho(diario_del_motor: Path) -> Path:
     """El diario del despachador, hermano del del motor y en su mismo directorio.

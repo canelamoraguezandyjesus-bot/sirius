@@ -305,6 +305,9 @@ def test_documenta_despacha_con_la_etiqueta_de_activacion_y_el_perfil_documental
         def aplicar_etiqueta(self, *, repo: str, numero: int, etiqueta: str) -> None:
             llamadas.append(("aplicar_etiqueta", {"etiqueta": etiqueta}))
 
+        def buscar_incidencia_por_work_id(self, *, repo: str, work_id: str) -> Any:
+            return None
+
     monkeypatch.setattr(dispatch_cli, "GitHubCliWriter", lambda: _EscritorQueRegistra())
 
     diario = tmp_path / "diario.jsonl"
@@ -349,6 +352,9 @@ def test_investiga_despacha_con_la_etiqueta_de_activacion_y_el_perfil_investigad
 
         def aplicar_etiqueta(self, *, repo: str, numero: int, etiqueta: str) -> None:
             llamadas.append(("aplicar_etiqueta", {"etiqueta": etiqueta}))
+
+        def buscar_incidencia_por_work_id(self, *, repo: str, work_id: str) -> Any:
+            return None
 
     monkeypatch.setattr(dispatch_cli, "GitHubCliWriter", lambda: _EscritorQueRegistra())
 

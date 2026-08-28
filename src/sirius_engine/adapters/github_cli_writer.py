@@ -14,7 +14,8 @@ esa variable en un workflow de GitHub Actions está fuera de este bloque
 (incidencia #240, límite explícito): esa parte la hace después una sesión
 interactiva (ADR-002).
 
-Solo dos verbos, y ninguno más (:class:`~sirius_engine.ports.github_writer.GitHubWriterPort`):
+Dos verbos de escritura y una lectura de adopción (H-29), y nada más
+(:class:`~sirius_engine.ports.github_writer.GitHubWriterPort`):
 crear una incidencia, aplicar una etiqueta.
 """
 
@@ -117,3 +118,35 @@ class GitHubCliWriter:
         proceso = self._invocar(argv)
         if proceso.returncode != 0:
             raise GitHubWriteError(argv, proceso.stderr.strip() or "gh devolvió un error")
+
+    def buscar_incidencia_por_work_id(self, *, repo: str, work_id: str) -> IncidenciaCreada | None:
+        """La lectura de adopción de H-29, contra el listado y NO contra el buscador.
+
+        El buscador de GitHub (`search/issues`) indexa con retraso: justo
+        después de crear una incidencia puede no encontrarla, y ese fallo es
+        exactamente el que convertiría la adopción en un duplicado. El listado
+        REST es consistente. Se piden las 100 más recientes en cualquier
+        estado -un despacho huérfano es siempre reciente- y se descartan las
+        PR, que también viajan por /issues.
+        """
+        consulta = (
+            f'[.[] | select(has("pull_request") | not) '
+            f'| select((.body // "") | contains("## Work ID\n\n{work_id}"))] '
+            f"| first | if . == null then empty else {{numero: .number, url: .html_url}} end"
+        )
+        argv = [
+            "api",
+            f"repos/{repo}/issues?state=all&per_page=100&sort=created&direction=desc",
+            "--jq",
+            consulta,
+        ]
+        proceso = self._invocar(argv)
+        if proceso.returncode != 0:
+            raise GitHubWriteError(argv, proceso.stderr.strip() or "gh devolvió un error")
+        salida = proceso.stdout.strip()
+        if not salida:
+            return None
+        import json as _json
+
+        datos = _json.loads(salida.splitlines()[0])
+        return IncidenciaCreada(numero=int(datos["numero"]), url=str(datos["url"]))

@@ -68,6 +68,24 @@ class DispatchJournal(Protocol):
         """
         ...
 
+    def record_intencion(self, work_id: str) -> None:
+        """H-29: grabar DURABLEMENTE que se va a producir el efecto externo.
+
+        Va ANTES de tocar GitHub. Si el proceso muere entre el efecto y
+        :meth:`record`, la intención sobrevive al reinicio y el siguiente
+        intento sabe que debe BUSCAR la incidencia para adoptarla en vez de
+        crear otra. Idempotente: grabarla dos veces no cambia nada.
+        """
+        ...
+
+    def intencion_pendiente(self, work_id: str) -> bool:
+        """True si hay intención grabada SIN episodio para ``work_id``.
+
+        Es exactamente la marca de «pudo quedar un efecto huérfano en GitHub».
+        Con episodio grabado, la intención deja de estar pendiente.
+        """
+        ...
+
     def episodes(self) -> Sequence[DispatchEpisode]:
         """Todos los episodios registrados, en orden de escritura.
 

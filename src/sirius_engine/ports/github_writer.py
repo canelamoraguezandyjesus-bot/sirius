@@ -43,3 +43,17 @@ class GitHubWriterPort(Protocol):
     def aplicar_etiqueta(self, *, repo: str, numero: int, etiqueta: str) -> None:
         """Aplicar UNA etiqueta a una incidencia ya existente. Nunca la retira, nunca comenta."""
         ...
+
+    def buscar_incidencia_por_work_id(self, *, repo: str, work_id: str) -> IncidenciaCreada | None:
+        """La LECTURA de adopción de H-29 (auditoría #396), y ninguna más.
+
+        No es una escritura: localiza la incidencia cuyo cuerpo declara
+        ``## Work ID`` con ``work_id``, para que un reintento tras una caída
+        ADOPTE el efecto ya producido en vez de duplicarlo. Se añadió con la
+        justificación explícita que la prueba estructural del puerto exige:
+        sin esta lectura, la intención durable solo sabría PARAR el reintento,
+        nunca converger a una única incidencia. Devuelve ``None`` si no hay
+        ninguna; los fallos de red se propagan -ante la duda, el llamador no
+        crea nada-.
+        """
+        ...

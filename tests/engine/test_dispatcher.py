@@ -102,6 +102,12 @@ class _EscritorSoloVerbosEnumerados:
             ("aplicar_etiqueta", {"repo": repo, "numero": numero, "etiqueta": etiqueta})
         )
 
+    def buscar_incidencia_por_work_id(self, *, repo: str, work_id: str) -> IncidenciaCreada | None:
+        # El camino feliz nunca busca (no hay intención pendiente); registrar
+        # la llamada permite asertarlo.
+        self.llamadas.append(("buscar_incidencia_por_work_id", {"work_id": work_id}))
+        return None
+
     def __getattr__(self, nombre: str) -> object:
         raise AssertionError(
             f"verbo de escritura no enumerado: {nombre!r} (alcance permitido #240)"
@@ -501,6 +507,12 @@ class _DiarioQueSenalaReservaEnCurso:
 
     def record(self, episode: DispatchEpisode) -> None:
         self._delegate.record(episode)
+
+    def record_intencion(self, work_id: str) -> None:
+        self._delegate.record_intencion(work_id)
+
+    def intencion_pendiente(self, work_id: str) -> bool:
+        return self._delegate.intencion_pendiente(work_id)
 
     def episodes(self) -> tuple[DispatchEpisode, ...]:
         return self._delegate.episodes()

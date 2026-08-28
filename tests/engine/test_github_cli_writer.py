@@ -121,4 +121,10 @@ def test_el_adapter_real_solo_expone_los_dos_verbos_enumerados() -> None:
         for nombre, miembro in inspect.getmembers(GitHubCliWriter, predicate=inspect.isfunction)
         if not nombre.startswith("_") and nombre not in campos
     }
-    assert metodos_publicos == {"crear_incidencia", "aplicar_etiqueta"}
+    # H-29 añadió la lectura de adopción, con su justificación en el puerto:
+    # sigue sin haber tercer verbo de ESCRITURA.
+    assert metodos_publicos == {
+        "crear_incidencia",
+        "aplicar_etiqueta",
+        "buscar_incidencia_por_work_id",
+    }

@@ -30,11 +30,20 @@ class InMemoryDispatchJournal:
     _episodios: list[DispatchEpisode] = field(default_factory=list)
     _por_work_id: dict[str, DispatchEpisode] = field(default_factory=dict)
     _en_curso: dict[str, threading.Event] = field(default_factory=dict)
+    _intenciones: set[str] = field(default_factory=set)
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
     def episode_for(self, work_id: str) -> DispatchEpisode | None:
         with self._lock:
             return self._por_work_id.get(work_id)
+
+    def record_intencion(self, work_id: str) -> None:
+        with self._lock:
+            self._intenciones.add(work_id)
+
+    def intencion_pendiente(self, work_id: str) -> bool:
+        with self._lock:
+            return work_id in self._intenciones and work_id not in self._por_work_id
 
     def record(self, episode: DispatchEpisode) -> None:
         with self._lock:
