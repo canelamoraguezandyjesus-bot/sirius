@@ -187,20 +187,20 @@ class ParcialidadDeclarada:
 PARCIALIDAD_DECLARADA: dict[tuple[str, str], ParcialidadDeclarada] = {
     ("src/sirius_engine/dispatch_cli.py", "TABLA_PERFILES"): ParcialidadDeclarada(
         motivo=(
-            "Solo cubre las tres clases despachables (programacion, auditoria, "
-            "documentacion -ADR-088, incidencia #336-): dispatch_work_item rechaza "
-            "cualquier otra clase antes de que el perfil llegue a leerse (contrato "
-            "§12.4, comentario junto a la tabla)."
+            "Solo cubre las cuatro clases despachables (programacion, auditoria, "
+            "documentacion -ADR-088-, investigacion -ADR-099-): dispatch_work_item "
+            "rechaza cualquier otra clase antes de que el perfil llegue a leerse "
+            "(contrato §12.4, comentario junto a la tabla)."
         ),
-        ausentes=frozenset({"CONVERSACION_NO_APLICA", "INVESTIGACION", "CONSULTA_LARGA", "MIXTA"}),
+        ausentes=frozenset({"CONVERSACION_NO_APLICA", "CONSULTA_LARGA", "MIXTA"}),
     ),
     ("src/sirius_engine/dispatcher.py", "TABLA_ACTIVACION"): ParcialidadDeclarada(
         motivo=(
-            "Tabla cerrada de tres filas fijada por el contrato §12.4 (ADR-068, "
-            "ADR-088): añadir una fila es una enmienda del contrato, no una "
-            "decisión de implementación (comentario junto a la tabla)."
+            "Tabla cerrada de cuatro filas fijada por el contrato §12.4 (ADR-068, "
+            "ADR-088, ADR-099): añadir una fila es una enmienda del contrato, no "
+            "una decisión de implementación (comentario junto a la tabla)."
         ),
-        ausentes=frozenset({"CONVERSACION_NO_APLICA", "INVESTIGACION", "CONSULTA_LARGA", "MIXTA"}),
+        ausentes=frozenset({"CONVERSACION_NO_APLICA", "CONSULTA_LARGA", "MIXTA"}),
     ),
     ("src/sirius_engine/intent_interpreter.py", "_ALCANCE_POR_CLASE"): ParcialidadDeclarada(
         motivo=(

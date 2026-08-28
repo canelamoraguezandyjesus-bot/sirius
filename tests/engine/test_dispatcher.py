@@ -234,9 +234,15 @@ def test_c2_p6_el_episodio_se_reconstruye_del_diario_sin_github() -> None:
 
 
 def test_clase_fuera_de_la_tabla_no_se_despacha() -> None:
-    """Requisito 5 (#256): solo la tabla cerrada de §12.4 -programacion, auditoria,
-    documentacion (ADR-088)- se despacha. ``investigacion`` se queda fuera."""
-    work_item = _work_item(evidencia=(ORDEN,), clase=WorkItemClass.INVESTIGACION)
+    """Requisito 5 (#256): solo la tabla cerrada de §12.4 se despacha.
+
+    HISTORIA DE ESTA PRUEBA: nació con «investigacion se queda fuera», y esa
+    clase entró en la tabla por ADR-099 (B1), igual que documentacion entró por
+    ADR-088. La propiedad que protege no cambió: la tabla es CERRADA, y las
+    clases que ningún ADR ha autorizado -consulta-larga, mixta- se rechazan
+    antes de escribir nada. Se prueba con ``CONSULTA_LARGA``, que sigue fuera.
+    """
+    work_item = _work_item(evidencia=(ORDEN,), clase=WorkItemClass.CONSULTA_LARGA)
     writer = _EscritorSoloVerbosEnumerados()
     journal = InMemoryDispatchJournal()
 
@@ -575,3 +581,36 @@ def test_dos_hilos_concurrentes_para_el_mismo_work_id_producen_una_sola_activaci
     assert segundo is not None
     assert primero.episodio == segundo.episodio
     assert {primero.ya_despachado, segundo.ya_despachado} == {True, False}
+
+
+# --- B1: el motor despacha investigación (ADR-099) ------------------------
+
+
+def test_b1_investigacion_recibe_las_mismas_etiquetas_que_programacion() -> None:
+    """B1 (ADR-099): mismo ciclo que programación y documentación.
+
+    `interpretar_intencion_v0` clasifica «investiga…» desde ADR-043; el
+    despachador la rechazaba aquí. La fila usa las MISMAS etiquetas que las
+    otras dos clases del ciclo -criterio (a) de la nota de arranque: B1 habla
+    el idioma del ciclo, no le enseña otro-.
+    """
+    work_item = _work_item(evidencia=(ORDEN,), clase=WorkItemClass.INVESTIGACION)
+    writer = _EscritorSoloVerbosEnumerados()
+    journal = InMemoryDispatchJournal()
+
+    resultado = dispatch_work_item(
+        work_item,
+        writer=writer,
+        journal=journal,
+        repo="acme/repo",
+        profile_ref=PERFIL,
+        bloque="B1",
+        now=NOW,
+    )
+
+    assert resultado.ya_despachado is False
+    assert resultado.episodio.etiqueta == ETIQUETA_ACTIVACION
+    verbos = [nombre for nombre, _ in writer.llamadas]
+    assert verbos == ["crear_incidencia", "aplicar_etiqueta"]
+    _, args_creacion = writer.llamadas[0]
+    assert args_creacion["etiquetas"] == (ETIQUETA_INICIAL,)

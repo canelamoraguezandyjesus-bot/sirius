@@ -1,0 +1,197 @@
+# El ejecutor de la clase investigacion (B1, ADR-099).
+#
+# COMO SE REPARTE EL TRABAJO con el implementador: los dos workflows escuchan la
+# MISMA etiqueta de activacion, y el reparto lo decide el campo `Perfil:` del
+# cuerpo -que escribe el despachador desde TABLA_PERFILES-. La puerta del
+# implementador excluye `investigador` ANTES de consumir el evento, y esta
+# puerta exige `investigador` y nada mas. Ninguna incidencia puede ser de los
+# dos a la vez, y ninguna se queda sin dueno.
+#
+# EL EJECUTOR NO ES UN AGENTE DE CLAUDE: es el investigador MEDIDO -el entorno
+# del banco (python 3.12, gpt-researcher 0.15.1, NVIDIA + Tavily) que dio 7/7
+# con fuentes reales, S2, run 33141864710-. Por eso el montaje del entorno es
+# COPIA del de medir-investigador.yml: mismo interprete, mismos pines. Cambiar
+# uno de los dos sin el otro seria correr las ordenes sobre un entorno que
+# nadie midio.
+#
+# EL PROTOCOLO CON EL CICLO ES EL DEL IMPLEMENTADOR, sin marcador nuevo
+# (criterio de parada (a) de la nota de arranque): se consume el evento igual,
+# el guion escribe el MISMO fichero de veredicto -provisional FAILED_SAFELY al
+# empezar, definitivo al terminar-, la PR se abre con el token del bot, el
+# comentario es el literal `PR abierta: <URL>` y el cierre lo aplica
+# `sirius_apply_verdict.sh` con el rol `implementer`, que es el rol que ese
+# guion entiende para "quien produce el entregable".
+#
+# EL TOPE DEL TRABAJO ES 30 MINUTOS y no puede pasar de 85: la ventana de
+# tolerancia del contador de los siete dias se deriva del mayor tope de trabajo
+# de esta carpeta por dos (§11.2, medido en su dia con el tope de 85 del banco).
+name: Investigar una orden
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: sirius-investigar-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  investigar:
+    name: Investigar con el investigador medido
+    if: github.event.label.name == 'sirius:implement-requested'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: true
+          token: ${{ secrets.SIRIUS_BOT_TOKEN }}
+
+      - name: "Puerta: solo el perfil investigador, y activacion valida"
+        id: gate
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          set -uo pipefail
+          perfil=$(printf '%s' "$ISSUE_BODY" | sed -n 's/^Perfil: *\([A-Za-z_-][A-Za-z_-]*\)@.*/\1/p' | head -1)
+          if [ "$perfil" != "investigador" ]; then
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo "Perfil '${perfil:-ninguno}': no es una orden de investigacion; la atiende el implementador."
+            exit 0
+          fi
+          # La MISMA validacion de activacion que el implementador: llegar aqui
+          # por la etiqueta no basta, la puerta comprueba el estado real.
+          if bash scripts/automation/sirius_validate_activation.sh "$GH_REPO" "$ISSUE_NUMBER"; then
+            script_rc=0
+          else
+            script_rc=$?
+          fi
+          if [ "$script_rc" -ne 0 ]; then
+            echo "::error::La validacion de activacion no se pudo completar; reintentable."
+            exit 1
+          fi
+          if ! labels_now="$(gh api "repos/${GH_REPO}/issues/${ISSUE_NUMBER}" --jq '.labels[].name')"; then
+            echo "::error::No se pudieron leer las etiquetas de #${ISSUE_NUMBER}; reintentable."
+            exit 1
+          fi
+          if printf '%s\n' "$labels_now" | grep -Fxq "sirius:implement-requested"; then
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo "La activacion no era valida; la puerta ya lo explico en la incidencia."
+          fi
+
+      - name: Consumir el evento y marcar en curso
+        if: steps.gate.outputs.valid == 'true'
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SIRIUS_TRIGGER_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -uo pipefail
+          source scripts/automation/sirius_issue.sh
+          trigger_set_labels() {
+            ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"; sirius_set_issue_labels "$@" )
+          }
+          trigger_set_labels "$GH_REPO" "$ISSUE_NUMBER" \
+            "sirius:implementing" "sirius:implement-requested" "sirius:planned"
+
+      - name: Install uv
+        if: steps.gate.outputs.valid == 'true'
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Montar el entorno del investigador, aparte del proyecto
+        if: steps.gate.outputs.valid == 'true'
+        timeout-minutes: 12
+        shell: bash --noprofile --norc {0}
+        env:
+          PYTHON_MEDICION: "3.12"
+          VERSION_EXIGIDA: "0.15.1"
+        run: |
+          set -uo pipefail
+          if ! uv venv --no-project --python "$PYTHON_MEDICION" "$RUNNER_TEMP/investigador"; then
+            echo "::error::no se pudo crear el entorno del investigador." >&2
+            exit 1
+          fi
+          if ! uv pip install --python "$RUNNER_TEMP/investigador/bin/python" \
+              "gpt-researcher==$VERSION_EXIGIDA" "langchain-google-genai==4.3.5" ddgs pyyaml; then
+            echo "::error::no se pudo instalar el investigador." >&2
+            exit 1
+          fi
+
+      - name: Atender la orden
+        if: steps.gate.outputs.valid == 'true'
+        id: atender
+        timeout-minutes: 24
+        continue-on-error: true
+        shell: bash --noprofile --norc {0}
+        env:
+          NVIDIA_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_NVIDIA_KEY }}
+          TAVILY_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_TAVILY_KEY }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          set -uo pipefail
+          printf '%s' "$ISSUE_BODY" > "$RUNNER_TEMP/cuerpo.md"
+          # 1260 s de plazo del guion, dentro de los 24 min del paso: el plazo
+          # de dentro SIEMPRE antes que el de fuera, para morir escribiendo el
+          # veredicto en vez de que GitHub mate el proceso con todo dentro.
+          "$RUNNER_TEMP/investigador/bin/python" scripts/investigacion/atender_orden.py \
+            --cuerpo "$RUNNER_TEMP/cuerpo.md" \
+            --numero "$ISSUE_NUMBER" \
+            --veredicto "$RUNNER_TEMP/sirius_verdict.json" \
+            --plazo 1260
+
+      - name: Abrir la PR del informe
+        if: steps.gate.outputs.valid == 'true' && steps.atender.outcome == 'success'
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -uo pipefail
+          ruta=$(python3 -c "import json,sys;print(json.load(open('$RUNNER_TEMP/sirius_verdict.json'))['ruta_informe'])")
+          rama="sirius/investigacion-${ISSUE_NUMBER}"
+          git config user.name "sirius-motor"
+          git config user.email "canelamoraguezandyjesus@gmail.com"
+          git checkout -b "$rama"
+          git add "$ruta"
+          git commit \
+            -m "Investigacion de la orden #${ISSUE_NUMBER}" \
+            -m "Informe del investigador del motor (B1, ADR-099) con sus fuentes, a partir del Objetivo de la incidencia #${ISSUE_NUMBER}."
+          git push -u origin "$rama"
+          url=$(gh pr create --repo "$GH_REPO" --base main --head "$rama" \
+            --title "Investigacion de la orden #${ISSUE_NUMBER}" \
+            --body "Informe producido por el investigador del motor (B1, ADR-099; configuracion medida de ADR-098). Cierra el encargo de #${ISSUE_NUMBER}. El documento declara su caducidad en la cabecera.")
+          # El comentario que el ciclo entiende, LITERAL como en el prompt del
+          # implementador: es lo que resuelve la PR en sirius_apply_verdict.sh.
+          gh issue comment "$ISSUE_NUMBER" --repo "$GH_REPO" --body "PR abierta: ${url}"
+
+      - name: Aplicar el veredicto
+        if: always() && steps.gate.outputs.valid == 'true'
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -uo pipefail
+          bash scripts/automation/sirius_apply_verdict.sh \
+            "$GH_REPO" "$ISSUE_NUMBER" "implementer" "${RUNNER_TEMP}/sirius_verdict.json"

@@ -177,6 +177,16 @@ def _contar_fuentes(investigador: Any) -> int:
     Y la regla `fuentes > 0` queda intacta: con los dos registros vacíos esto
     devuelve 0 y la medición sigue sin ser fiable.
     """
+    return len(_urls_de_fuentes(investigador))
+
+
+def _urls_de_fuentes(investigador: Any) -> set[str]:
+    """Las URL de la unión, para quien necesite los enlaces y no solo el número.
+
+    La separó B1 (``investigar_orden.py``): el documento de una orden lista sus
+    fuentes, y listarlas con OTRA lógica que la del conteo sería tener dos
+    verdades -el número diría una cosa y el apartado «Fuentes» otra-.
+    """
     urls: set[str] = set()
     with contextlib.suppress(Exception):
         urls.update(str(u) for u in investigador.get_source_urls() if u)
@@ -185,7 +195,7 @@ def _contar_fuentes(investigador: Any) -> int:
             url = origen.get("url") if isinstance(origen, dict) else None
             if url:
                 urls.add(str(url))
-    return len(urls)
+    return urls
 
 
 def segundos_por_pregunta(presupuesto: int, cuantas_preguntas: int) -> int:

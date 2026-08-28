@@ -63,29 +63,49 @@ def test_una_clase_no_despachable_no_crea_ningun_work_item(tmp_path: Path) -> No
     escribía OTRO WorkItem huérfano- y las entradas se acumulaban sin límite
     en un diario append-only.
 
-    Desde la incidencia #336 (ADR-088) «documenta» sí tiene despachador -ver
-    ``test_documenta_despacha_con_la_etiqueta_de_activacion_y_el_perfil_documentalista``-,
-    así que esta reproducción usa «investiga», que se queda fuera de la tabla
-    cerrada de §12.4 igual que antes.
+    Desde ADR-088 «documenta» tiene despachador, y desde ADR-099 (B1) también
+    «investiga»: el intérprete v0 ya NO produce ninguna clase fuera de la tabla
+    con texto real. La propiedad de H-17 sigue viva -la tabla es cerrada y
+    consulta-larga/mixta siguen fuera-, así que la reproducción pasa a
+    LABORATORIO: se fuerza la señal a clase consulta-larga y se comprueba lo
+    mismo de siempre, que el rechazo ocurre antes de escribir nada.
     """
+    from sirius_engine.domain.work_item import WorkItemClass as _Clase
+
     diario = tmp_path / "diario.jsonl"
 
-    codigo, texto = _correr(["Investiga el estado actual del motor", "--ejecutar"], diario=diario)
+    from sirius_engine.intent_interpreter import interpretar_intencion_v0 as señal_real
+    import dataclasses
 
-    assert codigo == 5, texto
-    assert "No he creado nada" in texto
-    assert "investigacion" in texto
-    assert not diario.exists(), (
-        "un WorkItem de clase no despachable no puede quedar escrito en el diario "
-        "durable como ACTIVE: el rechazo tiene que ocurrir antes de crearlo"
-    )
+    def _consulta_larga(texto: str, **kwargs: Any) -> Any:
+        señal = señal_real(texto, **kwargs)
+        assert señal.datos_trabajo is not None
+        return dataclasses.replace(
+            señal,
+            datos_trabajo=dataclasses.replace(señal.datos_trabajo, clase=_Clase.CONSULTA_LARGA),
+        )
 
-    # Repetir la misma orden no debe acumular una segunda entrada huérfana.
-    codigo_2, texto_2 = _correr(
-        ["Investiga el estado actual del motor", "--ejecutar"], diario=diario
-    )
-    assert codigo_2 == 5, texto_2
-    assert not diario.exists()
+    import unittest.mock
+
+    with unittest.mock.patch.object(dispatch_cli, "interpretar_intencion_v0", _consulta_larga):
+        codigo, texto = _correr(
+            ["Investiga el estado actual del motor", "--ejecutar"], diario=diario
+        )
+
+        assert codigo == 5, texto
+        assert "No he creado nada" in texto
+        assert "consulta-larga" in texto
+        assert not diario.exists(), (
+            "un WorkItem de clase no despachable no puede quedar escrito en el diario "
+            "durable como ACTIVE: el rechazo tiene que ocurrir antes de crearlo"
+        )
+
+        # Repetir la misma orden no debe acumular una segunda entrada huérfana.
+        codigo_2, texto_2 = _correr(
+            ["Investiga el estado actual del motor", "--ejecutar"], diario=diario
+        )
+        assert codigo_2 == 5, texto_2
+        assert not diario.exists()
 
 
 def test_una_orden_ambigua_no_crea_nada_y_lo_explica(tmp_path: Path) -> None:
@@ -303,3 +323,44 @@ def test_el_diario_del_despachador_es_hermano_del_diario_del_motor(tmp_path: Pat
     """Diario propio, no el del motor: el de eventos no tiene sitio para «qué incidencia»."""
     diario = tmp_path / "sub" / "motor.jsonl"
     assert dispatch_cli._diario_de_despacho(diario) == tmp_path / "sub" / "motor-despacho.jsonl"
+
+
+def test_investiga_despacha_con_la_etiqueta_de_activacion_y_el_perfil_investigador(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """B1 (ADR-099): una orden que empieza por «Investiga» da la vuelta
+    completa -mismas etiquetas que programación y documentación- y declara
+    ``Perfil: investigador@1`` en el cuerpo, que es lo que separa a su
+    ejecutor (el investigador medido de ADR-098) del agente implementador.
+    """
+    from sirius_engine.dispatcher import ETIQUETA_ACTIVACION
+
+    llamadas: list[tuple[str, dict[str, Any]]] = []
+
+    class _EscritorQueRegistra:
+        def crear_incidencia(
+            self, *, repo: str, titulo: str, cuerpo: str, etiquetas: tuple[str, ...]
+        ) -> Any:
+            from sirius_engine.ports.github_writer import IncidenciaCreada
+
+            llamadas.append(("crear_incidencia", {"cuerpo": cuerpo, "etiquetas": etiquetas}))
+            return IncidenciaCreada(numero=556, url=f"https://github.com/{repo}/issues/556")
+
+        def aplicar_etiqueta(self, *, repo: str, numero: int, etiqueta: str) -> None:
+            llamadas.append(("aplicar_etiqueta", {"etiqueta": etiqueta}))
+
+    monkeypatch.setattr(dispatch_cli, "GitHubCliWriter", lambda: _EscritorQueRegistra())
+
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr(
+        ["Investiga cual es la ultima version estable de Python", "--ejecutar"], diario=diario
+    )
+
+    assert codigo == 0, texto
+    assert "clase «investigacion»" in texto
+    verbos = [nombre for nombre, _ in llamadas]
+    assert verbos == ["crear_incidencia", "aplicar_etiqueta"]
+    _, args_creacion = llamadas[0]
+    assert "Perfil: investigador@1" in args_creacion["cuerpo"]
+    _, args_etiqueta = llamadas[1]
+    assert args_etiqueta["etiqueta"] == ETIQUETA_ACTIVACION
