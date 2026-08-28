@@ -402,7 +402,8 @@ defectos:
     titulo: El despacho produce efectos en GitHub antes de grabar el episodio durable, y una caida en medio duplica
     bloque: motor
     gravedad: alta
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 84b7969e77e461e32f39722c99006eefb19d632d
     incidencia: 396
     ficheros:
       - src/sirius_engine/dispatcher.py
