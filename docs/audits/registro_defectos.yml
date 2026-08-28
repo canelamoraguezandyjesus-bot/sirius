@@ -367,7 +367,8 @@ defectos:
     titulo: Un Run con cancelacion sin confirmar que cae a LOST pierde la exclusion del recurso mutable
     bloque: motor
     gravedad: alta
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 1867862a65a210587dd9ed19194bc80e0d6ccb32
     incidencia: 396
     ficheros:
       - src/sirius_engine/domain/run.py
@@ -401,7 +402,8 @@ defectos:
     titulo: El despacho produce efectos en GitHub antes de grabar el episodio durable, y una caida en medio duplica
     bloque: motor
     gravedad: alta
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 84b7969e77e461e32f39722c99006eefb19d632d
     incidencia: 396
     ficheros:
       - src/sirius_engine/dispatcher.py
@@ -422,7 +424,8 @@ defectos:
     titulo: Si behind_by no se puede leer, el merge sigue (fail-open deliberado que la auditoria impugna)
     bloque: ciclo
     gravedad: media
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 25d12c25eae0ea949c37c3436b8d9512b2a6b658
     incidencia: 396
     ficheros:
       - scripts/automation/sirius_merge_on_command.sh

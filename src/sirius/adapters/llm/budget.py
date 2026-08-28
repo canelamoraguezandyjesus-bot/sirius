@@ -14,7 +14,8 @@ the tracker falls back to a process-lifetime in-memory counter.
 from __future__ import annotations
 
 import threading
-from dataclasses import dataclass
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Protocol
 
@@ -50,6 +51,14 @@ class LLMUsageRepository(Protocol):
         ...
 
 
+@dataclass
+class ReservaPresupuesto:
+    """El resguardo de una admisión (H-30): importe estimado y si ya se soltó."""
+
+    importe_usd: float
+    liquidada: bool = field(default=False)
+
+
 def _current_year_month() -> str:
     return datetime.now(UTC).strftime("%Y-%m")
 
@@ -66,6 +75,7 @@ class BudgetTracker:
         self._usage_repository = usage_repository
         self._in_memory_spent_usd = 0.0
         self._lock = threading.Lock()
+        self._reservado_usd = 0.0
 
     @property
     def spent_usd(self) -> float:
@@ -76,8 +86,98 @@ class BudgetTracker:
         return self._usage_repository.get_spent_usd(_current_year_month())
 
     def has_remaining_budget(self) -> bool:
-        """Return whether a new request may be sent (checked before sending)."""
+        """Return whether a new request may be sent (checked before sending).
+
+        DESDE H-30 esto es el AVISO, no la puerta: la admisión real es
+        :meth:`reservar`, que es atómica y cuenta lo que ya está en vuelo.
+        Comprobar aquí y gastar después son dos operaciones, y dos peticiones
+        concurrentes al borde del tope pasaban las dos (auditoría #396).
+        """
         return self.spent_usd < self._policy.monthly_limit_usd
+
+    # --- H-30: la admisión es una reserva atómica -------------------------
+
+    def reservar(self, estimado_usd: float) -> ReservaPresupuesto | None:
+        """Admitir (o no) una petición, contando lo que ya está EN VUELO.
+
+        La regla, en dos mitades y con su porqué:
+
+        - Sin nada en vuelo, la admisión es EXACTAMENTE la de siempre
+          (``spent < limit``): una petición sola con remanente positivo entra
+          aunque su estimado exceda el remanente, igual que DR-018 venía
+          admitiendo. La reserva protege de la concurrencia; no endurece el
+          pacto (criterio de parada (b) de la nota de arranque).
+        - Con reservas vivas, la nueva tiene que demostrar que CABE JUNTA:
+          ``spent + en_vuelo + estimado <= limit``. Es lo que impide que dos
+          peticiones al borde del tope se cuelen las dos leyendo el mismo
+          saldo.
+
+        Devuelve la reserva admitida, o ``None`` si no hay sitio. Atómico
+        bajo el candado del tracker: la lectura del gastado y el alta de la
+        reserva ocurren sin que otra admisión se intercale. Cubre EL PROCESO
+        (la aplicación de escritorio es uno, y texto y voz conviven ahí);
+        cubrir varios procesos sería una reserva en el repositorio y se
+        declara como límite, no se finge.
+        """
+        with self._lock:
+            gastado = (
+                self._in_memory_spent_usd
+                if self._usage_repository is None
+                else self._usage_repository.get_spent_usd(_current_year_month())
+            )
+            if self._reservado_usd == 0.0:
+                admitida = gastado < self._policy.monthly_limit_usd
+            else:
+                admitida = (
+                    gastado + self._reservado_usd + estimado_usd <= self._policy.monthly_limit_usd
+                )
+            if not admitida:
+                return None
+            reserva = ReservaPresupuesto(importe_usd=max(0.0, estimado_usd))
+            self._reservado_usd += reserva.importe_usd
+            return reserva
+
+    def _soltar(self, reserva: ReservaPresupuesto) -> None:
+        with self._lock:
+            if reserva.liquidada:
+                return
+            reserva.liquidada = True
+            self._reservado_usd = max(0.0, self._reservado_usd - reserva.importe_usd)
+
+    @contextmanager
+    def reserva(self, estimado_usd: float):  # type: ignore[no-untyped-def]
+        """La reserva con la soltura garantizada.
+
+        El coste REAL lo apuntan los ``record_*`` de siempre, DENTRO del
+        ``with`` y con sus unidades naturales; la salida suelta la reserva
+        -pase lo que pase-, así que una petición reventada no apunta coste ni
+        deja el sitio bloqueado. Una sola forma para los tres carriles: no hay
+        segunda API de asiento que pueda divergir de la primera.
+        """
+        admitida = self.reservar(estimado_usd)
+        try:
+            yield admitida
+        finally:
+            if admitida is not None:
+                self._soltar(admitida)
+
+    # --- Los costes como funciones puras de la política, para los estimados ---
+
+    def costo_texto_usd(self, input_tokens: int, output_tokens: int) -> float:
+        return (
+            input_tokens / 1_000_000 * self._policy.input_cost_usd_per_million_tokens
+            + output_tokens / 1_000_000 * self._policy.output_cost_usd_per_million_tokens
+        )
+
+    def costo_transcripcion_usd(self, audio_seconds: float) -> float:
+        return max(0.0, audio_seconds) / 60.0 * self._policy.transcription_cost_usd_per_minute
+
+    def costo_sintesis_usd(self, character_count: int) -> float:
+        return (
+            max(0, character_count)
+            / 1_000_000
+            * self._policy.speech_cost_usd_per_million_characters
+        )
 
     def is_near_limit(self) -> bool:
         return self.spent_usd >= self._policy.warn_threshold_usd

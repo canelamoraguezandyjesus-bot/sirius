@@ -152,29 +152,41 @@ class OpenAIResponsesProvider:
                 yield LLMCancelled(partial_text="")
                 return
 
-            if not self._budget_tracker.has_remaining_budget():
-                _logger.warning(
-                    "Operación %s bloqueada: presupuesto mensual agotado", request.operation_id
-                )
-                yield _build_error(LLMErrorKind.BUDGET_EXCEEDED)
-                return
+            # H-30 (auditoría #396): la admisión es una RESERVA atómica, no un
+            # comprobar-y-gastar en dos pasos. El estimado es una cota honesta:
+            # la entrada por longitud (~4 caracteres/token, la aproximación de
+            # tarifado habitual) y la salida por el max_output_tokens ya
+            # configurado. El coste real lo apunta record_usage al completar,
+            # DENTRO del with; la salida suelta la reserva pase lo que pase.
+            entrada_estimada = (len(request.instructions) + len(request.input_text)) // 4
+            estimado_usd = self._budget_tracker.costo_texto_usd(
+                entrada_estimada, self._max_output_tokens
+            )
+            with self._budget_tracker.reserva(estimado_usd) as admitida:
+                if admitida is None:
+                    _logger.warning(
+                        "Operación %s bloqueada: presupuesto mensual agotado",
+                        request.operation_id,
+                    )
+                    yield _build_error(LLMErrorKind.BUDGET_EXCEEDED)
+                    return
 
-            try:
-                stream = self._create_stream(request)
-            except Exception as exc:  # translated to a safe, typed event; never re-raised
-                kind = _classify_exception(exc)
-                _logger.error(
-                    "Operación %s falló al conectar (%s)", request.operation_id, kind.value
-                )
-                yield _build_error(kind)
-                return
+                try:
+                    stream = self._create_stream(request)
+                except Exception as exc:  # translated to a safe, typed event; never re-raised
+                    kind = _classify_exception(exc)
+                    _logger.error(
+                        "Operación %s falló al conectar (%s)", request.operation_id, kind.value
+                    )
+                    yield _build_error(kind)
+                    return
 
-            try:
-                yield from self._consume_stream(request, stream)
-            finally:
-                close = getattr(stream, "close", None)
-                if callable(close):
-                    close()
+                try:
+                    yield from self._consume_stream(request, stream)
+                finally:
+                    close = getattr(stream, "close", None)
+                    if callable(close):
+                        close()
         finally:
             with self._lock:
                 self._cancelled_operations.discard(request.operation_id)
