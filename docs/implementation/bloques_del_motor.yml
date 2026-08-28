@@ -68,7 +68,23 @@ bloques:
 
   - id: S2
     titulo: Probar si el investigador externo funciona y qué cuesta
-    estado: pendiente
+    estado: cerrado
+    evidencia: >-
+      Cerrado el 28-08-2026 con la pasada 6 del banco (run 33141864710,
+      veredicto MEDIDA ÚNICA, código 0): nvidia/nemotron-3-nano-30b-a3b con
+      buscador tavily+duckduckgo contestó 7/7 (100 %) con fuentes reales en
+      todas -entre 17 y 31 por pregunta, 23,1 de media- en 327 s. Supera el
+      «por lo menos un 80 %» que pedía el propietario. El camino entero está
+      medido: el atestado comprueba modelo y buscador ANTES de gastar
+      (preflight), la regla fuentes>0 impide aprobar de memoria, y el conteo
+      mira los dos registros de la herramienta (visited_urls y
+      research_sources). Lo que este número NO es: una comparación con las
+      investigaciones profundas de ChatGPT/Claude -ese examen es de B1, con el
+      informe lado a lado- ni una garantía estable en el tiempo (una ejecución;
+      el propio informe lo declara). Costó seis pasadas y cinco defectos del
+      instrumento, todos con su ADR o su registro: la historia está en
+      docs/investigaciones/2026-08-27-medicion-real-nvidia-contra-google.md y
+      en ADR-098.
     decidido: >-
       ADR-098 (27-08-2026): el investigador se queda con NVIDIA. Dos pasadas
       reales con claves y atestado -runs 33079519839 y 33088012637-: NVIDIA
