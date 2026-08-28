@@ -22,6 +22,7 @@ import pytest
 
 from sirius_engine.adapters.durable.store import DurableWorkEngineStore
 from sirius_engine.domain.errors import WorkerRuntimeConflictError
+from sirius_engine.domain.work_item import WorkItemClass
 from sirius_engine.domain.worker_ref import WorkerRef
 from sirius_engine.ports.store import WorkEngineStore
 
@@ -225,6 +226,21 @@ def test_un_perfil_sin_version_valida_es_inconstruible(version: int) -> None:
 
 
 def _preparar_run_durable(store: DurableWorkEngineStore, *, now: datetime) -> None:
+    # H-27: el padre tiene que existir y estar en curso antes del intento.
+    store.create_work_item(
+        work_id="WI-0001",
+        peticion_original="p",
+        objetivo="objetivo normalizado y confirmado",
+        contexto_origen=("incidencia:177",),
+        entregable="e",
+        criterio_terminado="c",
+        limites={},
+        prioridad=1,
+        clase=WorkItemClass.PROGRAMACION,
+        now=now,
+        plan=("paso-1",),
+    )
+    store.activate_work_item("WI-0001", now=now)
     store.prepare_run(
         run_id="RUN-1",
         work_id="WI-0001",

@@ -12,11 +12,18 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from sirius_engine.domain.errors import IllegalTransitionError, MutableResourceConflictError
+from sirius_engine.domain.errors import (
+    IllegalTransitionError,
+    LiveRunsPreventDeliveryError,
+    MutableResourceConflictError,
+    ParentNotInProgressError,
+    UnknownWorkItemError,
+)
 from sirius_engine.domain.run import CancellationStatus, RunOutcome, RunState
+from sirius_engine.domain.work_item import WorkItemClass, WorkItemState
 from sirius_engine.ports.store import WorkEngineStore
 
-from .conftest import MakeRun
+from .conftest import WORKER_DE_PRUEBA, MakeRun
 
 
 def test_cancel_requested_is_not_cancelled_until_confirmed(
@@ -298,3 +305,105 @@ def test_h26_el_camino_del_supervisor_queda_bloqueado_en_el_despacho(
     store.release_run_cancellation("RUN-A-LOST-PENDING", now=despues)
     dispatched = store.dispatch_run("RUN-A-RETRY", now=despues)
     assert dispatched.estado is RunState.DISPATCHED
+
+
+# -- H-27 (auditoría #396): la frontera WorkItem-Run ----------------------------
+
+
+def _hasta_entregar(store: WorkEngineStore, work_id: str, now: datetime) -> None:
+    """El ciclo de fases REAL hasta poder entregar (§3.4)."""
+    store.begin_work_item_execution(work_id, now=now)
+    store.begin_work_item_check(work_id, now=now)
+    store.begin_work_item_review(work_id, now=now)
+    store.approve_work_item_review(work_id, now=now)
+
+
+def _padre_activo(store: WorkEngineStore, work_id: str, now: datetime) -> None:
+    store.create_work_item(
+        work_id=work_id,
+        peticion_original="p",
+        objetivo="objetivo normalizado y confirmado",
+        contexto_origen=("incidencia:1",),
+        entregable="e",
+        criterio_terminado="c",
+        limites={},
+        prioridad=1,
+        clase=WorkItemClass.PROGRAMACION,
+        now=now,
+        plan=("paso-1",),
+    )
+    store.activate_work_item(work_id, now=now)
+
+
+def test_h27_un_run_sin_padre_no_se_prepara(store: WorkEngineStore, now: datetime) -> None:
+    with pytest.raises(UnknownWorkItemError):
+        store.prepare_run(
+            run_id="RUN-HUERFANO",
+            work_id="WI-QUE-NO-EXISTE",
+            paso="paso-1",
+            worker=WORKER_DE_PRUEBA,
+            work_package={},
+            deadline=now + timedelta(hours=1),
+            now=now,
+        )
+
+
+def test_h27_un_padre_terminal_no_acepta_intentos_nuevos(
+    store: WorkEngineStore, now: datetime
+) -> None:
+    """Dirección A del informe: DELIVERED (o CANCELLED) no puede ganar hijos."""
+    _padre_activo(store, "WI-TERMINAL", now)
+    _hasta_entregar(store, "WI-TERMINAL", now)
+    store.deliver_work_item("WI-TERMINAL", resultado={"ok": True}, now=now)
+
+    with pytest.raises(ParentNotInProgressError):
+        store.prepare_run(
+            run_id="RUN-TARDE",
+            work_id="WI-TERMINAL",
+            paso="paso-1",
+            worker=WORKER_DE_PRUEBA,
+            work_package={},
+            deadline=now + timedelta(hours=1),
+            now=now,
+        )
+
+
+def test_h27_no_se_entrega_con_un_hijo_vivo(
+    store: WorkEngineStore, make_run: MakeRun, now: datetime
+) -> None:
+    """Dirección B: DELIVERED no puede coexistir con Runs vivos."""
+    _padre_activo(store, "WI-CON-HIJO", now)
+    make_run(
+        run_id="RUN-VIVO-H27",
+        work_id="WI-CON-HIJO",
+        now=now,
+        deadline=now + timedelta(hours=1),
+    )
+    store.dispatch_run("RUN-VIVO-H27", now=now)
+    _hasta_entregar(store, "WI-CON-HIJO", now)
+
+    with pytest.raises(LiveRunsPreventDeliveryError):
+        store.deliver_work_item("WI-CON-HIJO", resultado={"ok": True}, now=now)
+
+
+def test_h27_el_peligro_de_h26_tambien_impide_entregar(
+    store: WorkEngineStore, make_run: MakeRun, now: datetime
+) -> None:
+    """Un hijo LOST con cancelación sin confirmar es el peligro de H-26: un
+    Worker quizá vivo. Entregar el padre con eso pendiente contaría la misma
+    historia imposible."""
+    _padre_activo(store, "WI-PELIGRO", now)
+    deadline = now + timedelta(hours=1)
+    make_run(run_id="RUN-PELIGRO-H27", work_id="WI-PELIGRO", now=now, deadline=deadline)
+    store.dispatch_run("RUN-PELIGRO-H27", now=now)
+    store.request_run_cancellation("RUN-PELIGRO-H27", now=now)
+    despues = deadline + timedelta(minutes=1)
+    store.mark_run_lost("RUN-PELIGRO-H27", now=despues)
+    _hasta_entregar(store, "WI-PELIGRO", despues)
+
+    with pytest.raises(LiveRunsPreventDeliveryError):
+        store.deliver_work_item("WI-PELIGRO", resultado={"ok": True}, now=despues)
+
+    store.release_run_cancellation("RUN-PELIGRO-H27", now=despues)
+    entregado = store.deliver_work_item("WI-PELIGRO", resultado={"ok": True}, now=despues)
+    assert entregado.estado is WorkItemState.DELIVERED

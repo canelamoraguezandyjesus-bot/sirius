@@ -413,7 +413,8 @@ defectos:
     titulo: El presupuesto comprueba y gasta en dos pasos sin reserva, y dos peticiones al borde pasan las dos
     bloque: producto
     gravedad: media
-    estado: abierto
+    estado: cerrado
+    cerrado_por: af8573b91881013d6af3d0c0725a48f19ffc2c9a
     incidencia: 396
     ficheros:
       - src/sirius/adapters/llm/budget.py

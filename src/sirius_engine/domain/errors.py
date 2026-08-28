@@ -116,6 +116,38 @@ class DuplicateIdError(EngineError):
         self.aggregate_id = aggregate_id
 
 
+class ParentNotInProgressError(EngineError):
+    """H-27 (auditoría #396): un WorkItem terminal no puede ganar intentos nuevos.
+
+    Un Run es un intento de un paso de SU WorkItem; preparar uno para un padre
+    ``DELIVERED`` o ``CANCELLED`` contaría una historia que el dominio declara
+    imposible, y el diario la reconstruiría como si fuera legal.
+    """
+
+    def __init__(self, work_id: str, estado: str) -> None:
+        super().__init__(
+            f"work item {work_id!r} is {estado}: a terminal parent cannot gain new runs"
+        )
+        self.work_id = work_id
+        self.estado = estado
+
+
+class LiveRunsPreventDeliveryError(EngineError):
+    """H-27: DELIVERED no puede coexistir con Runs vivos ni con el peligro de H-26.
+
+    Entregar es afirmar que el trabajo terminó; un intento aún vivo -o un
+    perdido con cancelación sin confirmar, que es un Worker quizá vivo- dice lo
+    contrario a la vez.
+    """
+
+    def __init__(self, work_id: str, run_ids: tuple[str, ...]) -> None:
+        super().__init__(
+            f"work item {work_id!r} cannot be delivered: live or unresolved runs {run_ids!r}"
+        )
+        self.work_id = work_id
+        self.run_ids = run_ids
+
+
 class UnknownAgentProfileError(EngineError):
     """Raised when an ``AgentProfile`` ref does not resolve to a versioned profile.
 
