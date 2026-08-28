@@ -45,7 +45,7 @@ jobs:
     name: Investigar con el investigador medido
     if: github.event.label.name == 'sirius:implement-requested'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -138,7 +138,7 @@ jobs:
       - name: Atender la orden
         if: steps.gate.outputs.valid == 'true'
         id: atender
-        timeout-minutes: 24
+        timeout-minutes: 40
         continue-on-error: true
         shell: bash --noprofile --norc {0}
         env:
@@ -149,14 +149,17 @@ jobs:
         run: |
           set -uo pipefail
           printf '%s' "$ISSUE_BODY" > "$RUNNER_TEMP/cuerpo.md"
-          # 1260 s de plazo del guion, dentro de los 24 min del paso: el plazo
+          # 2280 s de plazo del guion, dentro de los 40 min del paso: el plazo
           # de dentro SIEMPRE antes que el de fuera, para morir escribiendo el
           # veredicto en vez de que GitHub mate el proceso con todo dentro.
+          # Subido de 1260 con el modo profundo (report_type deep, breadth 3 x
+          # depth 2): son ~12 investigaciones internas por orden.
           "$RUNNER_TEMP/investigador/bin/python" scripts/investigacion/atender_orden.py \
             --cuerpo "$RUNNER_TEMP/cuerpo.md" \
             --numero "$ISSUE_NUMBER" \
             --veredicto "$RUNNER_TEMP/sirius_verdict.json" \
-            --plazo 1260
+            --plazo 2280 \
+            --tipo deep
 
       - name: Abrir la PR del informe
         if: steps.gate.outputs.valid == 'true' && steps.atender.outcome == 'success'

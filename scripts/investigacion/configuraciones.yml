@@ -46,19 +46,25 @@ configuraciones:
   # hablaría con el servidor de NVIDIA y devolvería un informe perfecto y falso.
   - nombre: nvidia
     proveedor: nvidia
-    modelo: nvidia/nemotron-3-nano-30b-a3b
+    # SUBIDO desde el modelo nano el 28-08-2026 (tercera palanca del examen):
+    # aquel dio 7/7 en el banco pero el examen lado a lado contra la
+    # investigacion profunda de ChatGPT quedo en un 35-45 %. El super es la
+    # MISMA familia en grande (120B, A12B activos), respondio VIVO en el
+    # preflight (run 33167996379, CANDIDATO OK) y el banco lo re-mide entero:
+    # si no da 7/7, se vuelve al anterior -criterio (b) de la nota de arranque-.
+    modelo: nvidia/nemotron-3-super-120b-a12b
     variable_de_clave: NVIDIA_API_KEY
     clave_destino: OPENAI_API_KEY
     entorno:
-      FAST_LLM: "openai:nvidia/nemotron-3-nano-30b-a3b"
-      SMART_LLM: "openai:nvidia/nemotron-3-nano-30b-a3b"
+      FAST_LLM: "openai:nvidia/nemotron-3-super-120b-a12b"
+      SMART_LLM: "openai:nvidia/nemotron-3-super-120b-a12b"
       # STRATEGIC_LLM se fija a propósito, aunque el plan no hable de él. Es una
       # PRECAUCIÓN, no una medición: el `DEFAULT_CONFIG` de 0.15.1 trae un valor
       # propio para esta clave, y dejarla sin fijar metería un TERCER proveedor en
       # una comparación que presume de tener una sola variable. En la rama de
       # Google, además, ese valor por defecto pediría una clave de OpenAI y
       # dispararía el criterio de parada (a).
-      STRATEGIC_LLM: "openai:nvidia/nemotron-3-nano-30b-a3b"
+      STRATEGIC_LLM: "openai:nvidia/nemotron-3-super-120b-a12b"
       # `groq` no aparece entre los proveedores de vectorización de 0.15.1; NVIDIA
       # sí sirve embeddings por la vía compatible con OpenAI, y por eso el
       # proveedor vuelve a ser `openai` y hereda el mismo `OPENAI_BASE_URL`.
@@ -77,6 +83,13 @@ configuraciones:
       # entre una ejecución y otra, y el buscador puede devolver otras fuentes,
       # así que dos ejecuciones del mismo día pueden dar números distintos.
       TEMPERATURE: "0"
+      # El idioma del propietario. Por defecto la 0.15.1 escribe en ingles
+      # (LANGUAGE: "english" en su config), y el primer examen lado a lado
+      # salio en ingles con la orden en espanol.
+      LANGUAGE: "spanish"
+      # El techo de palabras del informe. El defecto (1200) explica lo corto
+      # del primer examen; 2500 da cuerpo sin disparar el gasto.
+      TOTAL_WORDS: "2500"
       # Lo lee `medir_investigador.py` para declarar en su JSON qué proveedor dijo
       # ser. No configura nada de la herramienta: sirve para que el informe pueda
       # contrastar lo que se PIDIÓ con el servidor con el que de verdad se habló.
