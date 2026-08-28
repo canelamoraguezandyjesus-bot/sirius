@@ -1621,3 +1621,63 @@ def test_las_dos_configuraciones_declaran_el_mismo_buscador() -> None:
         f"el buscador declarado es {buscador!r}. Desde ADR-098 van los dos y en ese "
         "orden: Tavily aporta fuentes si su clave está, y sin clave queda inerte."
     )
+
+
+# --- Contar las DOS fuentes: el registro que Tavily no alimenta ---------------
+#
+# La cadena entera (28-08-2026): la clave llegaba (pasada 4), Tavily contestaba
+# USABLE con resultados (atestado), y `fuentes` seguia a cero. La 0.15.1 manda
+# los resultados que ya traen contenido a `research_sources` y esos nunca pasan
+# por `visited_urls`, que era lo unico que se contaba. Tercer rojo-que-miente de
+# la misma familia: el instrumento lee el registro equivocado.
+
+
+class _InvestigadorFingido:
+    def __init__(self, visitadas: list[str], origenes: list[object]) -> None:
+        self._visitadas = visitadas
+        self._origenes = origenes
+
+    def get_source_urls(self) -> list[str]:
+        return list(self._visitadas)
+
+    def get_research_sources(self) -> list[object]:
+        return list(self._origenes)
+
+
+def test_las_fuentes_pretraidas_cuentan_aunque_no_se_visitaran() -> None:
+    """La prueba que la pasada 4 exigia: Tavily lleno, visited_urls vacio."""
+    m = _medidor()
+    fingido = _InvestigadorFingido(
+        visitadas=[],
+        origenes=[{"url": "https://a.example"}, {"url": "https://b.example"}],
+    )
+    assert m._contar_fuentes(fingido) == 2, (
+        "las fuentes pre-traidas por el buscador no cuentan: con Tavily POR FIN "
+        "funcionando, el medidor seguiria diciendo fuentes=0 y suspendiendo "
+        "preguntas investigadas con fuentes reales."
+    )
+
+
+def test_una_url_en_los_dos_registros_cuenta_una_vez() -> None:
+    """Inflar fuentes seria el verde que miente, peor que el rojo."""
+    m = _medidor()
+    fingido = _InvestigadorFingido(
+        visitadas=["https://a.example"],
+        origenes=[{"url": "https://a.example"}, {"url": "https://b.example"}],
+    )
+    assert m._contar_fuentes(fingido) == 2
+
+
+def test_origenes_sin_url_no_cuentan_ni_revientan() -> None:
+    m = _medidor()
+    fingido = _InvestigadorFingido(
+        visitadas=[],
+        origenes=[{"title": "sin url"}, "no soy un dict", {"url": ""}, None],
+    )
+    assert m._contar_fuentes(fingido) == 0
+
+
+def test_con_todo_vacio_sigue_siendo_cero_y_la_regla_intacta() -> None:
+    """Criterio de parada (a): la correccion no puede desarmar `fuentes > 0`."""
+    m = _medidor()
+    assert m._contar_fuentes(_InvestigadorFingido([], [])) == 0

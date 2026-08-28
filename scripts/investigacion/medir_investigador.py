@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import json
 import os
 import re
@@ -153,11 +154,38 @@ async def _investigar(pregunta: str) -> tuple[str, int]:
     investigador = GPTResearcher(query=pregunta, report_type="research_report")
     await investigador.conduct_research()
     informe = await investigador.write_report()
-    try:
-        fuentes = len(investigador.get_source_urls())
-    except Exception:
-        fuentes = 0
-    return str(informe), fuentes
+    return str(informe), _contar_fuentes(investigador)
+
+
+def _contar_fuentes(investigador: Any) -> int:
+    """La UNIÓN de los dos registros de fuentes de la herramienta, deduplicada.
+
+    REFUTADO EL 28-08-2026 POR LA CADENA ENTERA DE EVIDENCIA, no por una
+    sospecha: la clave de Tavily llegaba (pasada 4), el servidor contestaba
+    USABLE con resultados (atestado del preflight), y `fuentes` seguía a cero.
+    La 0.15.1 tiene DOS registros: `visited_urls` (páginas raspadas) y
+    `research_sources` (orígenes añadidos). Su `_search_relevant_source_urls`
+    manda los resultados que ya traen contenido —los de Tavily, con `body` casi
+    siempre > 100 caracteres— a `research_sources` como pre-traídos, y esos
+    NUNCA pasan por `visited_urls`. Contar solo `get_source_urls()` era contar
+    el registro que la vía nueva no alimenta: preguntas investigadas con
+    fuentes reales suspendían por `fuentes=0`. Un rojo que miente, tercero de
+    su familia (el 503 leído como muerto, la contradicción leída como
+    divergencia): el instrumento lee el registro equivocado.
+
+    La unión DEDUPLICA por URL: una página raspada Y pre-traída es UNA fuente.
+    Y la regla `fuentes > 0` queda intacta: con los dos registros vacíos esto
+    devuelve 0 y la medición sigue sin ser fiable.
+    """
+    urls: set[str] = set()
+    with contextlib.suppress(Exception):
+        urls.update(str(u) for u in investigador.get_source_urls() if u)
+    with contextlib.suppress(Exception):
+        for origen in investigador.get_research_sources():
+            url = origen.get("url") if isinstance(origen, dict) else None
+            if url:
+                urls.add(str(url))
+    return len(urls)
 
 
 def segundos_por_pregunta(presupuesto: int, cuantas_preguntas: int) -> int:
