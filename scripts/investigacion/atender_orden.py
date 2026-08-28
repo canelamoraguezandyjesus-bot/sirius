@@ -45,6 +45,39 @@ CONFIGURACIONES = Path(__file__).resolve().parent / "configuraciones.yml"
 MARGEN_DEL_HIJO = 0.9
 
 
+#: Lo que convierte una orden en investigación PROFUNDA. Tiene que ser
+#: intencional: ante la duda se va a la normal, que es el camino barato
+#: (criterio de parada (a) del interruptor). Se compara sin acentos y en
+#: minúsculas: escribir deprisa no puede cambiar el gasto en silencio.
+MARCAS_DE_PROFUNDA = (
+    "a fondo",
+    "en profundidad",
+    "profunda",
+    "profundo",
+    "exhaustiva",
+    "exhaustivo",
+)
+
+
+def _sin_acentos(texto: str) -> str:
+    plano = unicodedata.normalize("NFKD", texto)
+    return "".join(c for c in plano if not unicodedata.combining(c)).lower()
+
+
+def tipo_por_pregunta(pregunta: str) -> str:
+    """El interruptor del propietario: el texto de la orden decide el gasto.
+
+    «Investiga a fondo…» → `deep` (~40-60 créditos del buscador, ~25 min,
+    ~200 fuentes). «Investiga…» a secas → `research_report` (la normal:
+    20-30 fuentes, ~5-10 créditos, ~7 min). Lo pidió con estas palabras:
+    «poder acotar la investigación a lo que estoy pidiendo».
+    """
+    llano = _sin_acentos(pregunta)
+    if any(marca in llano for marca in MARCAS_DE_PROFUNDA):
+        return "deep"
+    return "research_report"
+
+
 def extraer_pregunta(cuerpo: str) -> str:
     """El texto del ``## Objetivo``, que es la pregunta de la orden.
 
@@ -69,7 +102,7 @@ def componer_documento(
     fuentes: list[str],
     numero: int,
     fecha: str,
-    tipo: str = "deep",
+    tipo: str,
 ) -> str:
     """El documento con la cabecera que exige el guardián de caducidad.
 
@@ -125,13 +158,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--plazo", type=int, default=1200)
     parser.add_argument(
         "--tipo",
-        default="deep",
-        # Las ORDENES van en profundo desde la segunda comparacion contra
-        # ChatGPT (28-08-2026): una pasada simple se quedo en el 35-45 % del
-        # criterio del propietario. El BANCO sigue en research_report: mide la
-        # tuberia con 7 preguntas cortas, y hacerlas profundas multiplicaria el
-        # gasto sin medir mejor. Cada camino declara su tipo en su llamador.
-        help="report_type de gpt-researcher para esta orden (por defecto, deep)",
+        default="auto",
+        # `auto` = lo decide el TEXTO de la orden (tipo_por_pregunta): «a
+        # fondo»/«profunda» → deep; a secas → research_report. Es el
+        # interruptor que pidió el propietario el 28-08-2026 tras ver el gasto
+        # de la profunda. Un valor explícito distinto de `auto` sigue mandando,
+        # para forzar cualquiera de los dos sin tocar código. El BANCO no pasa
+        # por aquí: fija research_report en su propio guion.
+        help="report_type: auto (decide el texto), research_report o deep",
     )
     parser.add_argument("--salida-dir", default=str(RAIZ / "docs" / "investigaciones"))
     parser.add_argument("--configuraciones", default=str(CONFIGURACIONES))
@@ -180,6 +214,7 @@ def main(argv: list[str] | None = None) -> int:
         if os.environ.get(origen, "").strip()
     ]
 
+    tipo = tipo_por_pregunta(pregunta) if args.tipo == "auto" else args.tipo
     salida_json = veredicto.parent / f"investigacion-{args.numero}.json"
     plazo_hijo = max(60, int(args.plazo * MARGEN_DEL_HIJO))
     proceso = subprocess.run(
@@ -193,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
             "--plazo",
             str(plazo_hijo),
             "--tipo",
-            args.tipo,
+            tipo,
         ],
         env=entorno_desde_cero(configuracion, clave),
         cwd=str(RAIZ),
@@ -226,7 +261,9 @@ def main(argv: list[str] | None = None) -> int:
             fuentes=[str(u) for u in resultado.get("fuentes") or []],
             numero=args.numero,
             fecha=fecha,
-            tipo=args.tipo,
+            # El tipo CALCULADO, no args.tipo: con `auto`, el argumento crudo
+            # diría «auto» y el documento mentiría sobre lo que corrió.
+            tipo=tipo,
         ),
         encoding="utf-8",
     )

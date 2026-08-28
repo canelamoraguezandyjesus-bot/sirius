@@ -137,3 +137,29 @@ def test_el_tope_del_ejecutor_respeta_la_ventana_del_contador() -> None:
     contador de los siete días (§11.2, medido)."""
     tope = _trabajo_unico(INVESTIGADOR).get("timeout-minutes")
     assert isinstance(tope, int) and tope <= 85, f"timeout-minutes={tope}"
+
+
+def test_el_ejecutor_deja_que_el_texto_decida_la_profundidad() -> None:
+    """El interruptor del propietario (28-08-2026): el workflow pasa `--tipo
+    auto` y es el TEXTO de la orden quien decide. Si volviera a clavar `deep`,
+    toda orden costaría ~40-60 créditos del buscador y ~25 minutos aunque
+    pidiera cómo conectar un Arduino —que es exactamente lo que el propietario
+    pidió poder evitar—. La mutación que clava `deep` pasó en verde sin esta
+    prueba."""
+    pasos = _pasos(INVESTIGADOR)
+    atiende = next(
+        p for p in pasos if "scripts/investigacion/atender_orden.py" in str(p.get("run", ""))
+    )
+    # SIN los comentarios del bloque `run:`: la primera versión de esta prueba
+    # y su mutación se aprobaron mutuamente contra el comentario del paso, que
+    # contiene la misma cadena. Es la tercera vez HOY que esta familia muerde;
+    # la receta de la casa es mirar solo el código.
+    codigo_del_paso = "\n".join(
+        linea
+        for linea in str(atiende.get("run", "")).splitlines()
+        if not linea.strip().startswith("#")
+    )
+    assert "--tipo auto" in codigo_del_paso, (
+        "el COMANDO del workflow no pasa `--tipo auto`: el interruptor de "
+        "profundidad quedaría sin llamante y todas las órdenes irían al precio caro"
+    )
