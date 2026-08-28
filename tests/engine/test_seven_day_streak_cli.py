@@ -12,6 +12,7 @@ import io
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
 import yaml
 
 from sirius_engine import seven_day_streak_cli
@@ -164,7 +165,17 @@ def test_una_pasada_anade_una_linea_y_evalua_las_dos_clases_con_autoridad(tmp_pa
     lineas = leer_registro(registro)
     assert len(lineas) == 1
     assert lineas[0].work_id == "WI-1"
-    assert lineas[0].es_verde is True
+    # H-25 (#376): mientras ninguna clase tenga estado propio declarado
+    # (`CLASES_CON_ESTADO_PROPIO` vacío, que hoy es la verdad), la línea sale
+    # NO_COMPARABLE citando el §11.2 y el día NO es verde: la etapa que el
+    # contador mide no ha empezado, y un verde aquí sería el falso verde que
+    # D1a existe para impedir. Antes esta prueba afirmaba `es_verde is True`
+    # con un espejo idéntico al motor; esa verdad era del instrumento sin
+    # precondición.
+    assert lineas[0].es_verde is False
+    for veredicto in lineas[0].veredictos:
+        assert veredicto.resultado is ResultadoEje.NO_COMPARABLE
+        assert veredicto.motivo is not None and "11.2" in veredicto.motivo
 
 
 def test_dos_pasadas_con_el_mismo_instante_no_duplican_la_linea(tmp_path: Path) -> None:
@@ -424,3 +435,38 @@ def test_hora_recomendada_se_expone_sin_ejecutar_la_pasada(tmp_path: Path) -> No
     assert not registro_por_defecto.exists(), (
         "--hora-recomendada solo informa: no ejecuta la pasada ni escribe nada (CODEX-003)"
     )
+
+
+def test_h25_declarar_una_clase_devuelve_la_comparacion_real_por_el_cli(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Simula EXACTAMENTE lo que hará el bloque (C) de #376: declarar la clase.
+
+    Con la clase en `CLASES_CON_ESTADO_PROPIO`, la misma pasada que hoy sale
+    NO_COMPARABLE (§11.2) vuelve a comparar de verdad — espejo idéntico al
+    motor → día verde. Prueba dos cosas a la vez: que el CLI lee la constante
+    real (cableado por comportamiento, no por grep) y que la corrección de
+    H-25 no capa el instrumento, solo lo hace honesto sobre su precondición.
+    """
+    monkeypatch.setattr(
+        seven_day_streak_cli,
+        "CLASES_CON_ESTADO_PROPIO",
+        frozenset({WorkItemClass.PROGRAMACION}),
+    )
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar_trabajo_activo(store, journal, work_id="WI-1", clase=WorkItemClass.PROGRAMACION)
+    registro = tmp_path / "registro.jsonl"
+
+    codigo, _texto = _correr(
+        registro=registro,
+        diario=tmp_path / "diario.jsonl",
+        store=store,
+        journal=journal,
+        mirror=_mirror_verde(),
+    )
+
+    assert codigo == 0
+    lineas = leer_registro(registro)
+    assert len(lineas) == 1
+    assert lineas[0].es_verde is True

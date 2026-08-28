@@ -71,6 +71,19 @@ _ESTADOS_SIN_ETIQUETA = frozenset(
     {WorkItemState.WAITING, WorkItemState.PAUSED, WorkItemState.CANCELLED}
 )
 
+#: H-25 (#376): las clases cuyo estado el motor YA mantiene por sí mismo — la
+#: precondición literal del §11.2 («el contador no puede empezar antes de que
+#: el motor lleve el estado por sí mismo»), como HECHO DECLARADO y no como
+#: inferencia por caso. Vacío hoy, porque hoy es la verdad: en producción solo
+#: escriben en el almacén `sirius-despachar` (crea y activa) y
+#: `sirius-supervisar` (solo autoridad MOTOR); nada devuelve el desenlace de
+#: GitHub. Una clase entra aquí SOLO desde el bloque que cablee ese retorno
+#: (la opción (C) de #376), con su evidencia y editando a la vez
+#: `test_h25_el_conjunto_declarado_esta_vacio_hoy` — jamás a mano para «poner
+#: el día verde». No es la ventana 5: las ventanas son tolerancias de la
+#: comparación; esto dice si la etapa que se compara ha empezado siquiera.
+CLASES_CON_ESTADO_PROPIO: frozenset[WorkItemClass] = frozenset()
+
 _WORKFLOWS_DIR = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 
 
@@ -355,6 +368,25 @@ def verificar_fidelidad_proyeccion(
     return VeredictoEje(eje=EJE_FIDELIDAD_PROYECCION, resultado=ResultadoEje.COINCIDE)
 
 
+def precondicion_estado_propio(
+    clase: WorkItemClass, clases_con_estado_propio: frozenset[WorkItemClass]
+) -> str | None:
+    """El motivo de no-comparación cuando la etapa del §11.2 no ha empezado, o ``None``.
+
+    Va ANTES que todas las ventanas -incluida la 0-: las ventanas son
+    tolerancias DE una comparación; esto dice si hay comparación que hacer.
+    Misma lección que la tercera guarda del supervisor (C1-P3): el
+    instrumento solo mide lo que su jurisdicción mantiene.
+    """
+    if clase in clases_con_estado_propio:
+        return None
+    return (
+        f"el motor no mantiene aún el estado de la clase {clase.value} por sí mismo "
+        "(§11.2): nada escribe el desenlace de GitHub en su almacén, así que esta "
+        "etapa no ha empezado — no es una divergencia del motor"
+    )
+
+
 def verificar_dia(
     *,
     motor: WorkItem,
@@ -362,10 +394,20 @@ def verificar_dia(
     contexto: ContextoEjesDiarios,
     ventana_tolerancia: timedelta,
     instante: datetime,
+    clases_con_estado_propio: frozenset[WorkItemClass],
 ) -> LineaRegistro:
-    """La comparación diaria: ejes fase y estado, con sus ventanas aplicadas."""
-    no_comparable_fase = _ventana_no_comparable_fase(motor, espejo, contexto, ventana_tolerancia)
-    no_comparable_estado = _ventana_no_comparable_estado(
+    """La comparación diaria: precondición §11.2 primero; después, ejes y ventanas.
+
+    ``clases_con_estado_propio`` es OBLIGATORIO y sin valor por defecto a
+    propósito (H-25): nadie compara sin declarar jurisdicción. Producción pasa
+    :data:`CLASES_CON_ESTADO_PROPIO`; una prueba de mecánica de comparación
+    declara la clase que usa.
+    """
+    precondicion = precondicion_estado_propio(motor.clase, clases_con_estado_propio)
+    no_comparable_fase = precondicion or _ventana_no_comparable_fase(
+        motor, espejo, contexto, ventana_tolerancia
+    )
+    no_comparable_estado = precondicion or _ventana_no_comparable_estado(
         motor, espejo, contexto, ventana_tolerancia
     )
     return LineaRegistro(
