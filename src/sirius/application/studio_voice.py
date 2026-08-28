@@ -14,6 +14,7 @@ usa para enviar mensajes, igual que ``SendMessageUseCase``. Aquí no hay hilos.
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Protocol
@@ -52,7 +53,20 @@ class VoiceSpendGuard(Protocol):
     voz y el texto gastan del mismo bolsillo y el tope mensual sigue siendo uno.
     """
 
-    def has_remaining_budget(self) -> bool: ...
+    def has_remaining_budget(self) -> bool:
+        """El AVISO de cortesía (p. ej. antes de abrir el micrófono): dejar
+        hablar un minuto para luego decir que no hay saldo es la peor forma de
+        avisar. La ADMISIÓN real es `reserva` (H-30)."""
+        ...
+
+    def reserva(self, estimado_usd: float) -> AbstractContextManager[object | None]:
+        """H-30: la admisión atómica. Dentro del ``with`` se hace la llamada y
+        se apunta el coste real con ``record_*``; la salida suelta la reserva."""
+        ...
+
+    def costo_transcripcion_usd(self, audio_seconds: float) -> float: ...
+
+    def costo_sintesis_usd(self, character_count: int) -> float: ...
 
     def record_transcription(self, audio_seconds: float) -> None: ...
 
@@ -251,22 +265,34 @@ class StudioVoiceUseCase:
             return self._capture_failure(captured)
 
         try:
-            if not self._has_budget():
-                return VoiceFailure(BUDGET_EXHAUSTED_MESSAGE, recoverable=False)
+            # El estimado es el TECHO de la captura (maximum_seconds): la
+            # duración real solo se conoce después, y una cota superior honesta
+            # es exactamente lo que una reserva necesita. El coste real lo
+            # apunta record_transcription dentro del with.
+            estimado = (
+                0.0
+                if self._budget is None
+                else self._budget.costo_transcripcion_usd(self._settings.limits.maximum_seconds)
+            )
+            with self._reserva(estimado) as admitida:
+                if admitida is None:
+                    return VoiceFailure(BUDGET_EXHAUSTED_MESSAGE, recoverable=False)
 
-            result = self._speech_to_text.transcribe(captured.audio_path, self._settings.language)
-            if isinstance(result, TranscriptionError):
-                return VoiceFailure(
-                    _TRANSCRIPTION_MESSAGES[result.kind],
-                    recoverable=result.kind not in _UNRECOVERABLE_TRANSCRIPTION,
+                result = self._speech_to_text.transcribe(
+                    captured.audio_path, self._settings.language
                 )
+                if isinstance(result, TranscriptionError):
+                    return VoiceFailure(
+                        _TRANSCRIPTION_MESSAGES[result.kind],
+                        recoverable=result.kind not in _UNRECOVERABLE_TRANSCRIPTION,
+                    )
 
-            self._record_transcription(result)
-            if not result.text.strip():
-                return VoiceFailure(
-                    _CAPTURE_MESSAGES[AudioCaptureErrorKind.EMPTY], recoverable=True
-                )
-            return TranscriptReady(result.text.strip(), captured.stopped_by_limit)
+                self._record_transcription(result)
+                if not result.text.strip():
+                    return VoiceFailure(
+                        _CAPTURE_MESSAGES[AudioCaptureErrorKind.EMPTY], recoverable=True
+                    )
+                return TranscriptReady(result.text.strip(), captured.stopped_by_limit)
         finally:
             self._capture.discard(captured.audio_path)
 
@@ -289,23 +315,28 @@ class StudioVoiceUseCase:
         if not pronounceable:
             return NothingToSay()
 
-        if not self._has_budget():
-            return VoiceFailure(BUDGET_EXHAUSTED_MESSAGE, recoverable=False)
-
-        synthesized = self._text_to_speech.synthesize(
-            SpeechRequest(
-                text=pronounceable,
-                voice=self._settings.voice,
-                instructions=self._settings.instructions,
-            )
+        # Aquí el estimado es casi exacto: los caracteres se conocen ANTES.
+        estimado = (
+            0.0 if self._budget is None else self._budget.costo_sintesis_usd(len(pronounceable))
         )
-        if isinstance(synthesized, SpeechError):
-            return VoiceFailure(
-                _SPEECH_MESSAGES[synthesized.kind],
-                recoverable=synthesized.kind not in _UNRECOVERABLE_SPEECH,
-            )
+        with self._reserva(estimado) as admitida:
+            if admitida is None:
+                return VoiceFailure(BUDGET_EXHAUSTED_MESSAGE, recoverable=False)
 
-        self._record_speech(synthesized)
+            synthesized = self._text_to_speech.synthesize(
+                SpeechRequest(
+                    text=pronounceable,
+                    voice=self._settings.voice,
+                    instructions=self._settings.instructions,
+                )
+            )
+            if isinstance(synthesized, SpeechError):
+                return VoiceFailure(
+                    _SPEECH_MESSAGES[synthesized.kind],
+                    recoverable=synthesized.kind not in _UNRECOVERABLE_SPEECH,
+                )
+
+            self._record_speech(synthesized)
         return self._play(synthesized)
 
     def stop_speaking(self) -> None:
@@ -372,7 +403,18 @@ class StudioVoiceUseCase:
         self._spoken_audio = None
 
     def _has_budget(self) -> bool:
+        """La cortesía previa al micrófono; la admisión es `_reserva`."""
         return self._budget is None or self._budget.has_remaining_budget()
+
+    def _reserva(self, estimado_usd: float) -> AbstractContextManager[object | None]:
+        """La admisión de H-30, o paso libre si no hay presupuesto configurado.
+
+        `nullcontext(True)` mantiene la forma: el llamador siempre escribe
+        `with self._reserva(est) as admitida:` y pregunta por `None`.
+        """
+        if self._budget is None:
+            return nullcontext(True)
+        return self._budget.reserva(estimado_usd)
 
     def _record_transcription(self, transcription: Transcription) -> None:
         if self._budget is not None:
