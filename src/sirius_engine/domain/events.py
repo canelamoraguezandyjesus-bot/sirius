@@ -123,6 +123,7 @@ EventKind = Literal[
     "run_scope_invalidated",
     "run_cancellation_requested",
     "run_cancellation_confirmed",
+    "run_cancellation_released",
     "run_retried",
     "run_worker_substituted",
 ]

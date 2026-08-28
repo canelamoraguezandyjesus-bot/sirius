@@ -461,6 +461,15 @@ class InMemoryWorkEngineStore:
             current.confirm_cancelled(now=now), "run_cancellation_confirmed", now=now
         )
 
+    def release_run_cancellation(self, run_id: str, *, now: datetime) -> Run:
+        """H-26: espejo en memoria de la liberacion explicita (ver el durable)."""
+        current = self._require_run(run_id)
+        return self._record_run(
+            current.release_unconfirmed_cancellation(now=now),
+            "run_cancellation_released",
+            now=now,
+        )
+
     def retry_run(
         self,
         run_id: str,

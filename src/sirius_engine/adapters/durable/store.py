@@ -1108,6 +1108,28 @@ class DurableWorkEngineStore:
             idempotency_key=idempotency_key,
         )
 
+    def release_run_cancellation(
+        self, run_id: str, *, now: datetime, idempotency_key: str | None = None
+    ) -> Run:
+        """H-26: limpiar el peligro de un Run PERDIDO, con la prueba en la mano.
+
+        La legalidad la decide el dominio (solo FINISHED(LOST) con
+        UNCONFIRMED); aqui solo se persiste. Quien llama trae la prueba de
+        terminal remoto o aislamiento (§3.3): este metodo no la comprueba
+        porque el almacen no ve el mundo, y por eso NADIE lo llama
+        automaticamente.
+        """
+        cached = self._idempotent_run(idempotency_key)
+        if cached is not None:
+            return cached
+        current = self._require_run(run_id)
+        return self._append_run(
+            current.release_unconfirmed_cancellation(now=now),
+            "run_cancellation_released",
+            now=now,
+            idempotency_key=idempotency_key,
+        )
+
     def retry_run(
         self,
         run_id: str,

@@ -244,6 +244,12 @@ class WorkEngineStore(Protocol):
 
     def confirm_run_cancelled(self, run_id: str, *, now: datetime) -> Run: ...
 
+    def release_run_cancellation(self, run_id: str, *, now: datetime) -> Run:
+        """H-26: limpia el peligro de un Run FINISHED(LOST) con cancelación
+        pendiente, sin tocar estado ni desenlace. Legal SOLO desde ahí; quien
+        llama trae la prueba de terminal remoto o aislamiento (§3.3)."""
+        ...
+
     def retry_run(
         self,
         run_id: str,
