@@ -13,7 +13,13 @@ import inspect
 
 from sirius_engine.ports.github_writer import GitHubWriterPort
 
-ESCRITURAS_ENUMERADAS = frozenset({"crear_incidencia", "aplicar_etiqueta"})
+# H-29 (auditoría #396) añadió la ÚNICA lectura del puerto, con justificación
+# escrita en su docstring: la adopción tras una caída necesita localizar la
+# incidencia por su work_id, o el reintento solo puede duplicar o quedarse
+# parado. Sigue sin haber tercer verbo de ESCRITURA.
+ESCRITURAS_ENUMERADAS = frozenset(
+    {"crear_incidencia", "aplicar_etiqueta", "buscar_incidencia_por_work_id"}
+)
 
 
 def test_el_puerto_declara_exactamente_los_dos_verbos_enumerados() -> None:

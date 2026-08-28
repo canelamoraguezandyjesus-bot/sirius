@@ -60,6 +60,10 @@ from sirius_engine.domain.dispatch import DispatchEpisode
 from sirius_engine.ports.dispatch_journal import Reserva
 
 _KIND_EPISODE = "dispatch_episode_recorded"
+#: H-29: la intencion durable que precede al efecto externo. Sin ella, una
+#: caida entre crear la incidencia y grabar el episodio dejaba el diario ciego
+#: y el reintento duplicaba el efecto.
+_KIND_INTENT = "dispatch_intent_recorded"
 
 
 def _episode_to_record(episode: DispatchEpisode) -> dict[str, Any]:
@@ -92,6 +96,7 @@ class DurableDispatchJournal:
         self._journal_path = journal_path
         self._episodios: list[DispatchEpisode] = []
         self._por_work_id: dict[str, DispatchEpisode] = {}
+        self._intenciones: set[str] = set()
         self._en_curso: dict[str, threading.Event] = {}
         self._lock = threading.Lock()
         self._load()
@@ -100,6 +105,10 @@ class DurableDispatchJournal:
         for record in replay(self._journal_path).valid_records:
             if record["kind"] == _KIND_EPISODE:
                 self._absorb_episode(_episode_from_record(record))
+            elif record["kind"] == _KIND_INTENT:
+                work_id = record.get("work_id")
+                assert isinstance(work_id, str)
+                self._intenciones.add(work_id)
 
     def _absorb_episode(self, episode: DispatchEpisode) -> None:
         self._episodios.append(episode)
@@ -108,6 +117,22 @@ class DurableDispatchJournal:
     def episode_for(self, work_id: str) -> DispatchEpisode | None:
         with self._lock:
             return self._por_work_id.get(work_id)
+
+    def record_intencion(self, work_id: str) -> None:
+        with self._lock:
+            ya = work_id in self._intenciones
+        if ya:
+            return
+        append_durably(
+            self._journal_path,
+            {"kind": _KIND_INTENT, "work_id": work_id},
+        )
+        with self._lock:
+            self._intenciones.add(work_id)
+
+    def intencion_pendiente(self, work_id: str) -> bool:
+        with self._lock:
+            return work_id in self._intenciones and work_id not in self._por_work_id
 
     def record(self, episode: DispatchEpisode) -> None:
         record = _episode_to_record(episode)

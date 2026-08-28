@@ -68,7 +68,7 @@ from sirius_engine.domain.errors import (
 from sirius_engine.domain.work_item import WorkItem, WorkItemClass, WorkItemState
 from sirius_engine.issue_body_projection import generar_cuerpo_incidencia
 from sirius_engine.ports.dispatch_journal import DispatchJournal
-from sirius_engine.ports.github_writer import GitHubWriterPort
+from sirius_engine.ports.github_writer import GitHubWriterPort, IncidenciaCreada
 from sirius_engine.profile_field import ProfileRef
 
 #: La misma etiqueta que el propietario aplicaría a mano (contrato §12.1):
@@ -196,16 +196,35 @@ def dispatch_work_item(
         if referencia_orden is None:
             raise OrdenNoEnlazadaError(work_item.work_id)
 
-        cuerpo = generar_cuerpo_incidencia(
-            work_item, profile_ref=profile_ref, bloque=bloque, base_branch=base_branch
-        )
-        titulo = f"[SIRIUS] {bloque} — {work_item.objetivo.strip()[:80]}"
-        creada = writer.crear_incidencia(
-            repo=repo,
-            titulo=titulo,
-            cuerpo=cuerpo,
-            etiquetas=entrada_tabla.etiquetas_iniciales,
-        )
+        # H-29 (auditoría #396). El orden viejo era efecto -> episodio, y una
+        # caída en medio dejaba el diario ciego: el reintento creaba una
+        # SEGUNDA incidencia para el mismo work_id. Dos piezas lo cierran:
+        #
+        # 1. La INTENCIÓN durable se graba ANTES de tocar GitHub. Sobrevive al
+        #    reinicio, así que el siguiente intento sabe que pudo quedar un
+        #    efecto huérfano.
+        # 2. Con intención pendiente, el reintento BUSCA la incidencia por su
+        #    work_id y la ADOPTA -re-aplica la etiqueta, que en GitHub es
+        #    idempotente, y graba el episodio con ese número-. Si la búsqueda
+        #    no la encuentra, la caída fue antes de crear y se crea con
+        #    normalidad. Si la búsqueda FALLA, la excepción se propaga: ante
+        #    la duda no se crea nada (criterio de parada (a) de la nota de
+        #    arranque de H-29), porque si la primera existía ya serían dos.
+        creada: IncidenciaCreada | None = None
+        if journal.intencion_pendiente(work_item.work_id):
+            creada = writer.buscar_incidencia_por_work_id(repo=repo, work_id=work_item.work_id)
+        if creada is None:
+            journal.record_intencion(work_item.work_id)
+            cuerpo = generar_cuerpo_incidencia(
+                work_item, profile_ref=profile_ref, bloque=bloque, base_branch=base_branch
+            )
+            titulo = f"[SIRIUS] {bloque} — {work_item.objetivo.strip()[:80]}"
+            creada = writer.crear_incidencia(
+                repo=repo,
+                titulo=titulo,
+                cuerpo=cuerpo,
+                etiquetas=entrada_tabla.etiquetas_iniciales,
+            )
         writer.aplicar_etiqueta(
             repo=repo, numero=creada.numero, etiqueta=entrada_tabla.etiqueta_activacion
         )
