@@ -337,7 +337,8 @@ defectos:
     titulo: El contador de los siete dias cuenta rojos de una etapa que el contrato dice que aun no puede empezar
     bloque: D1
     gravedad: alta
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 4322989fcf0009e2456d53bb66fc33a8e19a16e0
     incidencia: 376
     ficheros:
       - src/sirius_engine/seven_day_streak_cli.py
