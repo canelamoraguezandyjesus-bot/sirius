@@ -119,7 +119,12 @@ def _cancelled(store: WorkEngineStore, work_id: str, run_id: str) -> None:
 
 
 def _delivered(store: WorkEngineStore, work_id: str, run_id: str) -> None:
+    # H-27 selló la frontera: DELIVERED ya no puede coexistir con un Run vivo,
+    # así que el intento TERMINA antes de entregar -que es como ocurre de
+    # verdad-. Esta fixture construía la combinación inválida como si fuera
+    # legal, la misma familia que el informe señaló en test_journal_replay.
     _crear_con_run_vivo(store, work_id, run_id)
+    store.succeed_run(run_id, resultado={"ok": True}, now=_NOW)
     store.begin_work_item_execution(work_id, now=_NOW)
     store.begin_work_item_check(work_id, now=_NOW)
     store.begin_work_item_review(work_id, now=_NOW)

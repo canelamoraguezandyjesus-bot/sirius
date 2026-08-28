@@ -137,6 +137,25 @@ def make_run(store: WorkEngineStore) -> MakeRun:
         worker: WorkerRef = WORKER_DE_PRUEBA,
         recurso_mutable: str | None = None,
     ) -> Run:
+        # H-27: la frontera exige padre existente y no terminal. La fixture
+        # crea y activa el padre si no está, para que cada prueba siga
+        # pudiendo hablar solo de Runs sin repetir el andamiaje -y las que
+        # quieran probar la frontera llaman a `store.prepare_run` directo-.
+        if store.get_work_item(work_id) is None:
+            store.create_work_item(
+                work_id=work_id,
+                peticion_original="texto literal de la petición",
+                objetivo="objetivo normalizado y confirmado",
+                contexto_origen=("incidencia:177",),
+                entregable="un entregable de prueba",
+                criterio_terminado="el entregable existe y pasa sus pruebas",
+                limites={"presupuesto_turnos": 10},
+                prioridad=1,
+                clase=WorkItemClass.PROGRAMACION,
+                now=now,
+                plan=(paso,),
+            )
+            store.activate_work_item(work_id, now=now)
         return store.prepare_run(
             run_id=run_id,
             work_id=work_id,

@@ -18,13 +18,15 @@ from sirius_engine.domain import run as run_ops
 from sirius_engine.domain import work_item as work_item_ops
 from sirius_engine.domain.errors import (
     DuplicateIdError,
+    LiveRunsPreventDeliveryError,
     MutableResourceConflictError,
+    ParentNotInProgressError,
     UnknownRunError,
     UnknownWorkItemError,
 )
 from sirius_engine.domain.events import AggregateType, Event, EventKind, rebuild_state
 from sirius_engine.domain.run import Run
-from sirius_engine.domain.work_item import WorkItem, WorkItemClass
+from sirius_engine.domain.work_item import TERMINAL_STATES, WorkItem, WorkItemClass
 from sirius_engine.domain.worker_ref import WorkerRef
 
 
@@ -249,6 +251,13 @@ class InMemoryWorkEngineStore:
         self, work_id: str, *, resultado: Mapping[str, object], now: datetime
     ) -> WorkItem:
         current = self._require_work_item(work_id)
+        sin_resolver = tuple(
+            run.run_id
+            for run in self.list_runs_for_work_item(work_id)
+            if run.estado in run_ops.LIVE_STATES or run.has_unconfirmed_cancellation
+        )
+        if sin_resolver:
+            raise LiveRunsPreventDeliveryError(work_id, sin_resolver)
         return self._record_work_item(
             current.deliver(resultado=resultado, now=now), "work_item_delivered", now=now
         )
@@ -371,6 +380,12 @@ class InMemoryWorkEngineStore:
     ) -> Run:
         if run_id in self._runs:
             raise DuplicateIdError("Run", run_id)
+        # H-27: la frontera WorkItem-Run, espejo del durable (ver alli el porque).
+        padre = self._work_items.get(work_id)
+        if padre is None:
+            raise UnknownWorkItemError(work_id)
+        if padre.estado in TERMINAL_STATES:
+            raise ParentNotInProgressError(work_id, padre.estado.value)
         run = run_ops.prepare(
             run_id=run_id,
             work_id=work_id,
