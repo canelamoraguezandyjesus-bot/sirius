@@ -141,14 +141,30 @@ fi
 # nombre distinto, sin conflicto para git, y `main` con dos ADR del mismo numero.
 #
 # `compare` da la respuesta exacta: `behind_by` es cuantos commits de la base le
-# faltan a la rama. Cero o no se puede leer -> se sigue; leerlo mal no debe
-# bloquear una fusion legitima, pero un atraso conocido si.
+# faltan a la rama. Cero -> se sigue; atraso conocido -> se bloquea; y desde
+# H-31 (auditoria del 28-08-2026, correccion autorizada) NO PODER LEERLO
+# tambien bloquea: esta lectura es MATERIAL -decide si el verde de Quality
+# corresponde a la base que se va a fusionar- y las demas lecturas materiales
+# de este guion fallan cerradas. La version anterior seguia adelante con el
+# valor ilegible, a proposito y con su motivo escrito; el coste de ese lado ya
+# se pago una vez (main roja tras fusionar dos ramas verdes contra bases
+# viejas). Lo que aquel motivo protegia se conserva en el mensaje: el bloqueo
+# es REINTENTABLE, un 503 no deja la orden tirada en silencio.
 behind_by="$(sirius_retry gh api "repos/${REPO}/compare/${base_ref}...${current_head}" \
   --jq '.behind_by')" || behind_by=""
-if [ -n "$behind_by" ] && [ "$behind_by" != "null" ] && [ "$behind_by" -gt 0 ] 2>/dev/null; then
-  block "La PR #${pr_number} esta ${behind_by} commit(s) por detras de \`${base_ref}\`. Su Quality se calculo contra una base que ya no existe, asi que el verde no dice nada sobre como quedaria \`${base_ref}\` al fusionar. Actualiza la rama (boton \"Update branch\"), espera a que Quality vuelva a pasar, y escribe \`fusiona\` otra vez."
-  exit 1
-fi
+case "$behind_by" in
+  0)
+    : # al dia con la base
+    ;;
+  ''|null|*[!0-9]*)
+    block "No he podido comprobar si la PR #${pr_number} esta al dia con \`${base_ref}\` (la lectura de \`behind_by\` fallo o devolvio '\''${behind_by}'\''). Sin ese dato no se si el verde de Quality vale para la base actual, asi que NO fusiono. Es transitorio casi siempre: espera un momento y escribe \`fusiona\` otra vez para reintentar."
+    exit 1
+    ;;
+  *)
+    block "La PR #${pr_number} esta ${behind_by} commit(s) por detras de \`${base_ref}\`. Su Quality se calculo contra una base que ya no existe, asi que el verde no dice nada sobre como quedaria \`${base_ref}\` al fusionar. Actualiza la rama (boton \"Update branch\"), espera a que Quality vuelva a pasar, y escribe \`fusiona\` otra vez."
+    exit 1
+    ;;
+esac
 
 # --- 5) Sin cambios posteriores a la ultima aprobacion conocida ----------------
 scan_file="$(mktemp)"
