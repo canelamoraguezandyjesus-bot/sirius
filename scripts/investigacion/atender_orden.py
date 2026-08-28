@@ -110,6 +110,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--numero", required=True, type=int)
     parser.add_argument("--veredicto", required=True, help="ruta del JSON de veredicto")
     parser.add_argument("--plazo", type=int, default=1200)
+    parser.add_argument(
+        "--tipo",
+        default="deep",
+        # Las ORDENES van en profundo desde la segunda comparacion contra
+        # ChatGPT (28-08-2026): una pasada simple se quedo en el 35-45 % del
+        # criterio del propietario. El BANCO sigue en research_report: mide la
+        # tuberia con 7 preguntas cortas, y hacerlas profundas multiplicaria el
+        # gasto sin medir mejor. Cada camino declara su tipo en su llamador.
+        help="report_type de gpt-researcher para esta orden (por defecto, deep)",
+    )
     parser.add_argument("--salida-dir", default=str(RAIZ / "docs" / "investigaciones"))
     parser.add_argument("--configuraciones", default=str(CONFIGURACIONES))
     args = parser.parse_args(argv)
@@ -169,6 +179,8 @@ def main(argv: list[str] | None = None) -> int:
             str(salida_json),
             "--plazo",
             str(plazo_hijo),
+            "--tipo",
+            args.tipo,
         ],
         env=entorno_desde_cero(configuracion, clave),
         cwd=str(RAIZ),

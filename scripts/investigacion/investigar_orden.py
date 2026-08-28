@@ -25,10 +25,10 @@ from typing import Any
 from medir_investigador import VERSION_EXIGIDA, _urls_de_fuentes, _version_instalada
 
 
-async def _investigar(pregunta: str) -> tuple[str, list[str]]:
+async def _investigar(pregunta: str, tipo: str = "research_report") -> tuple[str, list[str]]:
     from gpt_researcher import GPTResearcher
 
-    investigador = GPTResearcher(query=pregunta, report_type="research_report")
+    investigador = GPTResearcher(query=pregunta, report_type=tipo)
     await investigador.conduct_research()
     informe = await investigador.write_report()
     # La MISMA unión que decide `fuentes > 0` en el banco (PR #382): listar los
@@ -41,6 +41,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pregunta", required=True)
     parser.add_argument("--salida", required=True)
     parser.add_argument("--plazo", type=int, default=1200, help="segundos como mucho")
+    parser.add_argument(
+        "--tipo",
+        default="research_report",
+        help="report_type de gpt-researcher (research_report, detailed_report o deep)",
+    )
     args = parser.parse_args(argv)
 
     version = _version_instalada()
@@ -60,7 +65,7 @@ def main(argv: list[str] | None = None) -> int:
     codigo = 0
     try:
         informe, fuentes = asyncio.run(
-            asyncio.wait_for(_investigar(args.pregunta), timeout=args.plazo)
+            asyncio.wait_for(_investigar(args.pregunta, args.tipo), timeout=args.plazo)
         )
         resultado["informe"] = informe
         resultado["fuentes"] = fuentes

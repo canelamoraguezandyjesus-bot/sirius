@@ -232,7 +232,7 @@ def test_el_hijo_no_publica_un_informe_sin_fuentes(
     fuentes es el modelo recitando, no una investigación."""
     hijo = _hijo_real(monkeypatch)
 
-    async def _recita(_pregunta: str) -> tuple[str, list[str]]:
+    async def _recita(_pregunta: str, _tipo: str = "research_report") -> tuple[str, list[str]]:
         return "# Informe precioso\n\nTodo de memoria.", []
 
     monkeypatch.setattr(hijo, "_investigar", _recita)
@@ -249,7 +249,7 @@ def test_el_hijo_con_fuentes_sale_en_verde_y_deja_todo_en_su_json(
     """Anti-vacua de la anterior: la regla no puede suspenderlo todo."""
     hijo = _hijo_real(monkeypatch)
 
-    async def _investiga(_pregunta: str) -> tuple[str, list[str]]:
+    async def _investiga(_pregunta: str, _tipo: str = "research_report") -> tuple[str, list[str]]:
         return "# Informe\n\nCon fuentes.", ["https://a.example", "https://b.example"]
 
     monkeypatch.setattr(hijo, "_investigar", _investiga)
@@ -259,3 +259,62 @@ def test_el_hijo_con_fuentes_sale_en_verde_y_deja_todo_en_su_json(
     resultado = json.loads(salida.read_text(encoding="utf-8"))
     assert resultado["error"] is None
     assert resultado["fuentes"] == ["https://a.example", "https://b.example"]
+
+
+# --- Las tres palancas (28-08-2026): tipo por camino, idioma y palabras -------
+
+
+def test_el_tipo_de_informe_llega_al_hijo_y_por_defecto_es_deep(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pregunta 1 de la nota de arranque: `--tipo` DE VERDAD en el argv del hijo.
+
+    El hijo de esta prueba retrata su argv en el JSON: si el padre no pasara el
+    tipo, el modo profundo sería una opción que nadie usa —la pieza sin cable—.
+    """
+    guion = """
+import json, sys
+salida = sys.argv[sys.argv.index("--salida") + 1]
+json.dump({"pregunta": "x", "informe": "# I\\n\\nx.", "fuentes": ["https://a"],
+           "error": None, "cortada_por_plazo": False, "argv": sys.argv[1:]},
+          open(salida, "w", encoding="utf-8"))
+sys.exit(0)
+"""
+    codigo, veredicto, _salida = _correr_main(tmp_path, monkeypatch, guion_hijo=guion)
+    assert codigo == 0, veredicto
+    resultado = json.loads((tmp_path / "investigacion-555.json").read_text(encoding="utf-8"))
+    argv = list(resultado["argv"])
+    assert "--tipo" in argv, "el padre no pasa el tipo: el modo profundo no lo usa nadie"
+    assert argv[argv.index("--tipo") + 1] == "deep", (
+        "las órdenes tienen que ir en profundo por defecto (nota de arranque de "
+        "las tres palancas); el banco es quien se queda en research_report"
+    )
+
+
+def test_el_banco_sigue_en_research_report() -> None:
+    """Pregunta 2: si el banco se volviera profundo por accidente, sus 7
+    preguntas costarían ~10x y el número cambiaría de significado sin que
+    nadie lo decidiera."""
+    medidor = (INVESTIGACION / "medir_investigador.py").read_text(encoding="utf-8")
+    assert 'report_type="research_report"' in medidor, (
+        "el banco ya no fija research_report: su número dejaría de ser comparable "
+        "con las pasadas anteriores"
+    )
+
+
+def test_el_idioma_y_las_palabras_llegan_al_entorno_del_hijo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pregunta 3: la configuración declara español y 2500 palabras, y el hijo
+    las RECIBE (retrato del entorno del subproceso real)."""
+    c = _atendedor()
+    configuraciones = c.cargar_configuraciones(INVESTIGACION / "configuraciones.yml")
+    entorno = configuraciones[0].entorno
+    assert entorno.get("LANGUAGE") == "spanish", (
+        "el primer examen salió en inglés y la palanca del idioma no está echada"
+    )
+    assert entorno.get("TOTAL_WORDS") == "2500"
+    monkeypatch.setenv(configuraciones[0].variable_de_clave, "clave-falsa-de-prueba")
+    recibido = c.entorno_desde_cero(configuraciones[0], "clave-falsa-de-prueba")
+    assert recibido.get("LANGUAGE") == "spanish"
+    assert recibido.get("TOTAL_WORDS") == "2500"
