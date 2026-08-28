@@ -37,17 +37,13 @@ def _run_arbitrary_sequence(
     store.fail_work_item_safely("WI-1", diagnostico="dependencia externa caída", now=now)
     store.reactivate_work_item("WI-1", now=now)
     store.begin_work_item_execution("WI-1", now=now)
-    store.begin_work_item_check("WI-1", now=now)
-    store.begin_work_item_review("WI-1", now=now)
-    store.request_work_item_repair("WI-1", now=now)
-    store.resume_work_item_after_repair("WI-1", now=now)
-    store.begin_work_item_review("WI-1", now=now)
-    store.approve_work_item_review("WI-1", now=now)
-    store.deliver_work_item("WI-1", resultado={"ok": True}, now=now)
 
-    make_work_item(now=now, work_id="WI-2")
-    store.cancel_work_item("WI-2", now=now)
-
+    # REORDENADO POR H-27 (auditoría #396). Esta secuencia creaba los Runs
+    # DESPUÉS de entregar WI-1 y de cancelar WI-2: la combinación que el
+    # dominio declara imposible, usada como fixture legal -era el ejemplo
+    # exacto del informe-. Ahora los intentos viven durante EJECUTAR y
+    # TERMINAN antes de entregar, que es como ocurre de verdad; el replay
+    # sigue cubriendo la misma variedad de operaciones.
     make_run(run_id="RUN-1", work_id="WI-1", now=now, deadline=deadline, recurso_mutable="pr#1")
     store.dispatch_run("RUN-1", now=now)
     store.confirm_run_running("RUN-1", now=now)
@@ -69,9 +65,19 @@ def _run_arbitrary_sequence(
     store.confirm_run_running("RUN-3", now=now)
     store.succeed_run("RUN-3", resultado={"pr": "merged"}, now=now)
 
+    store.begin_work_item_check("WI-1", now=now)
+    store.begin_work_item_review("WI-1", now=now)
+    store.request_work_item_repair("WI-1", now=now)
+    store.resume_work_item_after_repair("WI-1", now=now)
+    store.begin_work_item_review("WI-1", now=now)
+    store.approve_work_item_review("WI-1", now=now)
+    store.deliver_work_item("WI-1", resultado={"ok": True}, now=now)
+
+    make_work_item(now=now, work_id="WI-2")
     make_run(run_id="RUN-4", work_id="WI-2", now=now, deadline=now + timedelta(minutes=1))
     store.dispatch_run("RUN-4", now=now)
     store.mark_run_lost("RUN-4", now=now + timedelta(minutes=1))
+    store.cancel_work_item("WI-2", now=now + timedelta(minutes=1))
 
 
 def test_replaying_the_journal_reproduces_the_live_work_item_state(

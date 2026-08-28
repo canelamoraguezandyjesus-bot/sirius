@@ -48,13 +48,15 @@ from sirius_engine.domain import run as run_ops
 from sirius_engine.domain import work_item as work_item_ops
 from sirius_engine.domain.errors import (
     DuplicateIdError,
+    LiveRunsPreventDeliveryError,
     MutableResourceConflictError,
+    ParentNotInProgressError,
     UnknownRunError,
     UnknownWorkItemError,
 )
 from sirius_engine.domain.events import AggregateType, Event, EventKind, rebuild_state
 from sirius_engine.domain.run import Run
-from sirius_engine.domain.work_item import WorkItem, WorkItemClass
+from sirius_engine.domain.work_item import TERMINAL_STATES, WorkItem, WorkItemClass
 from sirius_engine.domain.worker_ref import WorkerRef
 
 # Clave interna de la cascada de invalidación de `change_work_item_scope`
@@ -701,6 +703,16 @@ class DurableWorkEngineStore:
         if cached is not None:
             return cached
         current = self._require_work_item(work_id)
+        # H-27, dirección B: entregar es afirmar que el trabajo terminó, y un
+        # intento vivo -o el peligro de H-26: un LOST con cancelación sin
+        # confirmar, un Worker quizá vivo- dice lo contrario a la vez.
+        sin_resolver = tuple(
+            run.run_id
+            for run in self.list_runs_for_work_item(work_id)
+            if run.estado in run_ops.LIVE_STATES or run.has_unconfirmed_cancellation
+        )
+        if sin_resolver:
+            raise LiveRunsPreventDeliveryError(work_id, sin_resolver)
         return self._append_work_item(
             current.deliver(resultado=resultado, now=now),
             "work_item_delivered",
@@ -938,6 +950,15 @@ class DurableWorkEngineStore:
                 return cached
         if run_id in self._runs:
             raise DuplicateIdError("Run", run_id)
+        # H-27 (auditoría #396): la frontera WorkItem-Run. Un Run es un intento
+        # de un paso de SU WorkItem: sin padre no hay intento, y un padre
+        # terminal (DELIVERED/CANCELLED) no puede ganar hijos -el diario
+        # reconstruiría una historia que el dominio declara imposible-.
+        padre = self._work_items.get(work_id)
+        if padre is None:
+            raise UnknownWorkItemError(work_id)
+        if padre.estado in TERMINAL_STATES:
+            raise ParentNotInProgressError(work_id, padre.estado.value)
         run = run_ops.prepare(
             run_id=run_id,
             work_id=work_id,

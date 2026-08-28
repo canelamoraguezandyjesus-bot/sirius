@@ -8,14 +8,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 
+from sirius_engine.adapters.durable.entity_codec import run_to_dict
+from sirius_engine.adapters.durable.journal import append_durably
+from sirius_engine.adapters.durable.store import DurableWorkEngineStore
 from sirius_engine.adapters.memory_store import InMemoryWorkEngineStore
 from sirius_engine.adapters.memory_supervisor_journal import InMemorySupervisorJournal
 from sirius_engine.domain.errors import DuplicateIdError
 from sirius_engine.domain.escalation import CausaEscalado
-from sirius_engine.domain.events import rebuild_state
+from sirius_engine.domain.events import AggregateType, rebuild_state
 from sirius_engine.domain.run import Run, RunOutcome, RunState
 from sirius_engine.domain.supervision import SupervisionDecision, SupervisorPolicy
 from sirius_engine.domain.work_item import WorkItem, WorkItemClass, WorkItemState
@@ -268,18 +272,22 @@ def test_h22_un_run_perdido_sobre_un_workitem_entregado_no_se_reactiva(
 ) -> None:
     """Mismo defecto H-22, con el otro estado terminal medido: DELIVERED.
 
-    El WorkItem se entregó por completo -recorrió todo el ciclo de fases-
-    mientras el Run RUN-0001 seguía despachado en el mundo remoto y luego se
-    perdió. Que ya se entregara no debe resucitar un Run nuevo sobre él.
+    El Run RUN-0001 se perdió durante la ejecución; el WorkItem terminó sus
+    fases y se entregó DESPUÉS -tras H-27 (auditoría #396) es el único orden
+    posible: `deliver_work_item` rechaza entregar con intentos sin resolver-.
+    La entrega no debe resucitar un Run nuevo sobre él: el supervisor, que
+    revisa TODOS los Runs perdidos sin episodio en cada pasada, lo encuentra
+    ya con su padre DELIVERED y debe diferir, no reactivar.
     """
     _make_motor_work_item(store, now=now)
     _deadline, momento = _dispatch_lost_run(store, make_run, now=now)
     store.observe_work_item_external_fact("WI-0001", now=now)
     store.begin_work_item_execution("WI-0001", now=now)
-    store.begin_work_item_check("WI-0001", now=now)
-    store.begin_work_item_review("WI-0001", now=now)
-    store.approve_work_item_review("WI-0001", now=now)
-    store.deliver_work_item("WI-0001", resultado={"entregado": True}, now=now)
+    store.mark_run_lost("RUN-0001", now=momento)
+    store.begin_work_item_check("WI-0001", now=momento)
+    store.begin_work_item_review("WI-0001", now=momento)
+    store.approve_work_item_review("WI-0001", now=momento)
+    store.deliver_work_item("WI-0001", resultado={"entregado": True}, now=momento)
     work_item_antes = store.get_work_item("WI-0001")
     assert work_item_antes is not None
     assert work_item_antes.estado is WorkItemState.DELIVERED
@@ -619,22 +627,60 @@ def test_mutacion_quitar_el_marcador_de_idempotencia_permite_doble_accion(
 # --- C1-P3: un Run ajeno no se toca -------------------------------------------------------
 
 
-def test_c1_p3_un_run_sin_workitem_propio_no_se_reactiva(
-    store: WorkEngineStore, now: datetime
-) -> None:
-    """Un Run cuyo `work_id` no corresponde a ningún WorkItem del almacén: "ajeno"."""
-    deadline = now + timedelta(hours=2)
-    store.prepare_run(
+def _run_ajeno(*, now: datetime, deadline: datetime) -> Run:
+    """Un Run fabricado FUERA del almacén, de un WorkItem que el almacén no conoce."""
+    return Run(
         run_id="RUN-AJENO",
         work_id="WI-AJENO",
         paso="paso-1",
         worker=WORKER_DE_PRUEBA,
         work_package={},
+        intento=1,
+        estado=RunState.RUNNING,
         deadline=deadline,
-        now=now,
+        created_at=now,
+        updated_at=now,
     )
-    store.dispatch_run("RUN-AJENO", now=now)
-    store.confirm_run_running("RUN-AJENO", now=now)
+
+
+def _almacen_durable_con_run_ajeno_legacy(
+    tmp_path: Path, *, now: datetime, deadline: datetime
+) -> DurableWorkEngineStore:
+    """Un almacén durable cuyo diario ya contiene un Run huérfano al abrirlo.
+
+    Tras H-27 (auditoría #396), `prepare_run` rechaza un `work_id` sin
+    WorkItem: la puerta legal ya no puede fabricar este escenario. El vector
+    que QUEDA -y el que estas pruebas deben seguir cubriendo- es la historia
+    previa: un diario escrito antes de la frontera, o compartido con otro
+    sistema, cuyos registros de Run apuntan a WorkItems que este almacén no
+    tiene. Solo el backend durable puede nacer con historia, así que estas
+    dos pruebas dejan de estar parametrizadas por los dos backends: el de
+    memoria nace vacío y solo se llena por la puerta que H-27 acaba de
+    cerrar. Se escribe el registro con las mismas piezas del adapter
+    (`append_durably`, `run_to_dict`); al ser el diario de instantáneas, un
+    único registro con el Run ya RUNNING basta.
+    """
+    journal_path = tmp_path / "diario-legacy.jsonl"
+    run = _run_ajeno(now=now, deadline=deadline)
+    append_durably(
+        journal_path,
+        {
+            "sequence": 1,
+            "occurred_at": now.isoformat(),
+            "aggregate_type": AggregateType.RUN.value,
+            "aggregate_id": run.run_id,
+            "kind": "run_confirmed_running",
+            "entity": run_to_dict(run),
+            "idempotency_key": None,
+        },
+    )
+    return DurableWorkEngineStore(journal_path)
+
+
+def test_c1_p3_un_run_sin_workitem_propio_no_se_reactiva(tmp_path: Path, now: datetime) -> None:
+    """Un Run cuyo `work_id` no corresponde a ningún WorkItem del almacén: "ajeno"."""
+    deadline = now + timedelta(hours=2)
+    store = _almacen_durable_con_run_ajeno_legacy(tmp_path, now=now, deadline=deadline)
     momento = deadline + timedelta(minutes=1)
     world = FakeRunWorldObserver(
         observations={"RUN-AJENO": RunWorldObservation(status=RemoteRunStatus.LOST)}
@@ -652,34 +698,21 @@ def test_c1_p3_un_run_sin_workitem_propio_no_se_reactiva(
 def test_run_gobernado_por_el_motor_rechaza_un_run_ajeno_directamente(
     store: WorkEngineStore, now: datetime
 ) -> None:
-    deadline = now + timedelta(hours=2)
-    run = store.prepare_run(
-        run_id="RUN-AJENO",
-        work_id="WI-AJENO",
-        paso="paso-1",
-        worker=WORKER_DE_PRUEBA,
-        work_package={},
-        deadline=deadline,
-        now=now,
-    )
+    """El objeto Run ni siquiera pasó por el almacén: exactamente el caso del docstring
+    de `_run_gobernado_por_el_motor` ("fabricado fuera del almacén"). Tras H-27,
+    `prepare_run` ya no puede fabricarlo; construirlo a pelo es la forma honesta."""
+    run = _run_ajeno(now=now, deadline=now + timedelta(hours=2))
     assert _run_gobernado_por_el_motor(store, run) is None
 
 
 def test_mutacion_quitar_la_comprobacion_de_propiedad_deja_tocar_un_run_ajeno(
-    store: WorkEngineStore, now: datetime
+    tmp_path: Path, now: datetime
 ) -> None:
+    """La comprobación de propiedad sigue siendo la ÚNICA defensa aquí: `retry_run`
+    no consulta al padre (solo `prepare_run` lo hace, H-27), así que sin ella el
+    supervisor sí puede parir un segundo Run bajo un WorkItem inexistente."""
     deadline = now + timedelta(hours=2)
-    store.prepare_run(
-        run_id="RUN-AJENO",
-        work_id="WI-AJENO",
-        paso="paso-1",
-        worker=WORKER_DE_PRUEBA,
-        work_package={},
-        deadline=deadline,
-        now=now,
-    )
-    store.dispatch_run("RUN-AJENO", now=now)
-    store.confirm_run_running("RUN-AJENO", now=now)
+    store = _almacen_durable_con_run_ajeno_legacy(tmp_path, now=now, deadline=deadline)
     momento = deadline + timedelta(minutes=1)
     world = FakeRunWorldObserver(
         observations={"RUN-AJENO": RunWorldObservation(status=RemoteRunStatus.LOST)}
