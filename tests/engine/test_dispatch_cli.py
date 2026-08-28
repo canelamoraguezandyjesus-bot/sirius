@@ -74,8 +74,9 @@ def test_una_clase_no_despachable_no_crea_ningun_work_item(tmp_path: Path) -> No
 
     diario = tmp_path / "diario.jsonl"
 
-    from sirius_engine.intent_interpreter import interpretar_intencion_v0 as señal_real
     import dataclasses
+
+    from sirius_engine.intent_interpreter import interpretar_intencion_v0 as señal_real
 
     def _consulta_larga(texto: str, **kwargs: Any) -> Any:
         señal = señal_real(texto, **kwargs)
