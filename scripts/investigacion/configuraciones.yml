@@ -88,24 +88,8 @@ configuraciones:
       - variable_de_clave: TAVILY_API_KEY
         clave_destino: TAVILY_API_KEY
 
-  # Google entra por su vía nativa, y por eso NO declara `OPENAI_BASE_URL`. Que
-  # esa variable esté ausente aquí no basta: el guion construye el entorno del
-  # subproceso desde cero justamente para que la ausencia sea real y no dependa de
-  # lo que hubiera en el entorno del que llama.
-  - nombre: google
-    proveedor: google
-    modelo: gemini-3.5-flash
-    variable_de_clave: GOOGLE_API_KEY
-    clave_destino: GOOGLE_API_KEY
-    entorno:
-      FAST_LLM: "google_genai:gemini-3.5-flash"
-      SMART_LLM: "google_genai:gemini-3.5-flash"
-      STRATEGIC_LLM: "google_genai:gemini-3.5-flash"
-      EMBEDDING: "google_genai:models/gemini-embedding-001"
-      # El mismo par que en NVIDIA, por la regla de la única variable.
-      RETRIEVER: "tavily,duckduckgo"
-      TEMPERATURE: "0"
-      SIRIUS_PROVEEDOR: "google"
-    claves_opcionales:
-      - variable_de_clave: TAVILY_API_KEY
-        clave_destino: TAVILY_API_KEY
+  # AQUÍ HUBO UNA SEGUNDA CONFIGURACIÓN (google, vía google_genai) hasta el
+  # 28-08-2026. La retiró ADR-098 tras dos pasadas medidas: no completó NI UNA
+  # pregunta en 192 s -las siete cortadas idéntico- y su cuota gratuita agotada
+  # (429) bloqueaba el banco entero. La condición de revancha está en el ADR;
+  # ejecutarla es revertir ese commit, no reescribir nada.
