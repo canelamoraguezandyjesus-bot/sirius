@@ -264,13 +264,17 @@ documento).
 Sobre una tarea externa real, no sintética, que requiera contexto de más de una sesión de
 conversación:
 
-- Sirius ensambla un paquete de contexto para esa tarea combinando los resultados de las
-  secciones 2 a 6 (búsqueda mejorada, mejor recuperación, sugerencias confirmadas,
-  conflictos asistidos, proyectos históricos) que ya estén incorporados a `main`.
+- Sirius ensambla un paquete de contexto para esa tarea combinando los cinco resultados de
+  las secciones 2 a 6 (búsqueda mejorada, mejor recuperación, sugerencias confirmadas,
+  conflictos asistidos, proyectos históricos): los cinco, sin excepción, deben estar
+  incorporados **y** comprobados en `main` antes de evaluar esta puerta — un subconjunto no
+  basta, el alcance de Sirius 0.2 es indivisible (`RECTOR.md:143`), y hoy quedan pendientes
+  sugerencias confirmadas (§4.3), conflictos asistidos (§5.3) y proyectos históricos (§6.3).
 - El paquete recupera la información correcta guardada en sesiones anteriores a la
   actual, verificado sobre un banco de casos versionado (mismo patrón que el banco de 47
-  casos de las secciones 2 y 3), sin regresión de aciertos exactos, cobertura ni omisiones
-  críticas frente a la última cifra incorporada a `main` en esas secciones.
+  casos de las secciones 2 y 3), con 0 omisiones críticas conocidas — el mismo umbral
+  absoluto que exige §3.4, no solo su no regresión — y sin degradar aciertos exactos ni
+  cobertura por debajo de la última cifra incorporada a `main` en esas secciones.
 - El paquete no aumenta el ruido: los «elementos de más» (terminología de §2.2) medidos
   sobre ese mismo banco no empeoran respecto a la última cifra incorporada a `main`.
 - Cada elemento del paquete es trazable a su origen —memoria, decisión o evento— por el
