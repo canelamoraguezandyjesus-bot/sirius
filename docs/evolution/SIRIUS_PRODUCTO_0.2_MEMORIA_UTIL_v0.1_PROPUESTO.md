@@ -269,7 +269,10 @@ conversación:
   conflictos asistidos, proyectos históricos): los cinco, sin excepción, deben estar
   incorporados **y** comprobados en `main` antes de evaluar esta puerta — un subconjunto no
   basta, el alcance de Sirius 0.2 es indivisible (`RECTOR.md:143`), y hoy quedan pendientes
-  sugerencias confirmadas (§4.3), conflictos asistidos (§5.3) y proyectos históricos (§6.3).
+  los cinco: búsqueda mejorada (§2.3, incorporación a `main` pendiente de la decisión del
+  propietario sobre la dependencia de Ollama), mejor recuperación (§3.3, última omisión
+  crítica y las dos puertas de ADR-002 sin resolver), sugerencias confirmadas (§4.3),
+  conflictos asistidos (§5.3) y proyectos históricos (§6.3).
 - El paquete recupera la información correcta guardada en sesiones anteriores a la
   actual, verificado sobre un banco de casos versionado (mismo patrón que el banco de 47
   casos de las secciones 2 y 3), con 0 omisiones críticas conocidas — el mismo umbral
