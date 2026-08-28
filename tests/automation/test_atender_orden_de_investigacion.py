@@ -80,6 +80,7 @@ def test_el_documento_pasa_el_guardian_de_caducidad() -> None:
         fuentes=["https://python.org", "https://peps.python.org"],
         numero=555,
         fecha="2026-08-28",
+        tipo="deep",
     )
     assert texto.startswith("---\n")
     fin = texto.find("\n---\n", 4)
@@ -170,8 +171,11 @@ def test_con_informe_y_fuentes_el_veredicto_es_ready_y_el_documento_existe(
     assert len(documentos) == 1, "el informe no se escribió"
     assert veredicto.get("ruta_informe"), "el workflow no sabría qué fichero confirmar"
     assert "orden-555" in documentos[0].name
-    assert "`deep`" in documentos[0].read_text(encoding="utf-8"), (
-        "el tipo por defecto de una orden es `deep`; el documento tiene que decirlo"
+    # Desde el interruptor (28-08-2026) una orden a secas va en NORMAL, y el
+    # documento tiene que decir el tipo que DE VERDAD corrió: si dijera otro,
+    # quien lo lea creería un gasto y una profundidad que no hubo.
+    assert "`research_report`" in documentos[0].read_text(encoding="utf-8"), (
+        "el documento no declara el tipo real de la investigación"
     )
 
 
@@ -309,15 +313,7 @@ def test_el_hijo_con_fuentes_sale_en_verde_y_deja_todo_en_su_json(
 # --- Las tres palancas (28-08-2026): tipo por camino, idioma y palabras -------
 
 
-def test_el_tipo_de_informe_llega_al_hijo_y_por_defecto_es_deep(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Pregunta 1 de la nota de arranque: `--tipo` DE VERDAD en el argv del hijo.
-
-    El hijo de esta prueba retrata su argv en el JSON: si el padre no pasara el
-    tipo, el modo profundo sería una opción que nadie usa —la pieza sin cable—.
-    """
-    guion = """
+GUION_QUE_RETRATA_ARGV = """
 import json, sys
 salida = sys.argv[sys.argv.index("--salida") + 1]
 json.dump({"pregunta": "x", "informe": "# I\\n\\nx.", "fuentes": ["https://a"],
@@ -325,15 +321,48 @@ json.dump({"pregunta": "x", "informe": "# I\\n\\nx.", "fuentes": ["https://a"],
           open(salida, "w", encoding="utf-8"))
 sys.exit(0)
 """
-    codigo, veredicto, _salida = _correr_main(tmp_path, monkeypatch, guion_hijo=guion)
-    assert codigo == 0, veredicto
+
+
+def _tipo_que_recibio_el_hijo(tmp_path: Path) -> str:
     resultado = json.loads((tmp_path / "investigacion-555.json").read_text(encoding="utf-8"))
     argv = list(resultado["argv"])
-    assert "--tipo" in argv, "el padre no pasa el tipo: el modo profundo no lo usa nadie"
-    assert argv[argv.index("--tipo") + 1] == "deep", (
-        "las órdenes tienen que ir en profundo por defecto (nota de arranque de "
-        "las tres palancas); el banco es quien se queda en research_report"
+    assert "--tipo" in argv, "el padre no pasa el tipo: el interruptor no lo usa nadie"
+    return str(argv[argv.index("--tipo") + 1])
+
+
+def test_una_orden_a_secas_va_en_normal(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """El interruptor del propietario (28-08-2026), mitad barata: «Investiga
+    cómo conectar un Arduino…» no puede costar 200 fuentes. Ante la duda,
+    NORMAL —equivocarse hacia barato se corrige repitiendo con «a fondo»;
+    hacia caro, no—."""
+    codigo, veredicto, _salida = _correr_main(
+        tmp_path, monkeypatch, guion_hijo=GUION_QUE_RETRATA_ARGV
     )
+    assert codigo == 0, veredicto
+    assert _tipo_que_recibio_el_hijo(tmp_path) == "research_report"
+
+
+CUERPO_A_FONDO = CUERPO.replace(
+    "Investiga cual es la ultima version estable de Python",
+    "Investiga a fondo cual es la ultima version estable de Python",
+)
+
+
+def test_una_orden_a_fondo_va_en_profundo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    codigo, veredicto, _salida = _correr_main(
+        tmp_path, monkeypatch, cuerpo=CUERPO_A_FONDO, guion_hijo=GUION_QUE_RETRATA_ARGV
+    )
+    assert codigo == 0, veredicto
+    assert _tipo_que_recibio_el_hijo(tmp_path) == "deep"
+
+
+def test_las_marcas_funcionan_sin_tildes_y_en_mayusculas() -> None:
+    """Pregunta 2: escribir deprisa no puede cambiar el gasto en silencio."""
+    a = _atendedor()
+    assert a.tipo_por_pregunta("Investiga EN PROFUNDIDAD el mercado") == "deep"
+    assert a.tipo_por_pregunta("haz una investigacion profunda de X") == "deep"
+    assert a.tipo_por_pregunta("Investiga cómo conectar un Arduino UNO") == "research_report"
+    assert a.tipo_por_pregunta("investiga qué placa comprar") == "research_report"
 
 
 def test_el_banco_sigue_en_research_report() -> None:

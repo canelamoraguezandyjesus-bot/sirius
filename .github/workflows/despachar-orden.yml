@@ -32,7 +32,7 @@ on:
   workflow_dispatch:
     inputs:
       orden:
-        description: "La orden, tal cual. Empieza por «Corrige» o «Implementa»."
+        description: "La orden, tal cual: «Corrige…», «Implementa…», «Documenta…», «Investiga…» (normal) o «Investiga a fondo…» (profunda)."
         type: string
         required: true
       ejecutar:
