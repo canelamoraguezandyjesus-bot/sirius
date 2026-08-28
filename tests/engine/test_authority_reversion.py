@@ -423,6 +423,7 @@ def _linea_de_incidencia_contradictoria(dia: int) -> LineaRegistro:
         contexto=ContextoEjesDiarios(),
         ventana_tolerancia=timedelta(minutes=170),
         instante=_instante(dia),
+        clases_con_estado_propio=frozenset({_CLASE}),
     )
 
 

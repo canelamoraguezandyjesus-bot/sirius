@@ -78,6 +78,7 @@ from sirius_engine.ports.dispatch_journal import DispatchJournal
 from sirius_engine.ports.github_mirror import GitHubMirrorPort
 from sirius_engine.ports.store import WorkEngineStore
 from sirius_engine.projection_verifier import (
+    CLASES_CON_ESTADO_PROPIO,
     ContextoEjesDiarios,
     ventana_tolerancia_etiqueta_maquina,
     verificar_dia,
@@ -266,6 +267,12 @@ def main(
                 contexto=ContextoEjesDiarios(edad_etiqueta_maquina=None),
                 ventana_tolerancia=ventana_tolerancia,
                 instante=ahora,
+                # H-25 (#376): la precondición del §11.2 como hecho declarado.
+                # Mientras el conjunto esté vacío -hoy lo está-, cada línea
+                # sale NO_COMPARABLE diciendo que la etapa no ha empezado, en
+                # vez de una DIVERGENCIA que acusa al motor de no llevar un
+                # estado que nada le escribe todavía.
+                clases_con_estado_propio=CLASES_CON_ESTADO_PROPIO,
             )
         )
 

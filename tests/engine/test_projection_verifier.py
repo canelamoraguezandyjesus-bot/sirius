@@ -59,6 +59,10 @@ from sirius_engine.projection_verifier import (
 _AHORA = datetime(2026, 8, 22, 12, 0, tzinfo=UTC)
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SIN_VENTANA = ContextoEjesDiarios()
+#: H-25: las pruebas de MECÁNICA de comparación declaran su clase con estado
+#: propio para que la precondición del §11.2 no las convierta a todas en
+#: NO_COMPARABLE; la precondición tiene su propia sección al final.
+_CON_ESTADO_PROPIO = frozenset({WorkItemClass.PROGRAMACION})
 #: Un valor de tolerancia fijo para las pruebas: no depende de leer el YAML
 #: real, así que un cambio en `.github/workflows/*.yml` no puede volver
 #: frágiles estas pruebas.
@@ -185,6 +189,7 @@ def test_ventana_1_despacho_reciente_no_es_divergencia() -> None:
         contexto=contexto,
         ventana_tolerancia=_TOLERANCIA,
         instante=_AHORA,
+        clases_con_estado_propio=_CON_ESTADO_PROPIO,
     )
     veredicto_estado = next(v for v in linea.veredictos if v.eje == EJE_ESTADO)
     assert veredicto_estado.resultado is ResultadoEje.NO_COMPARABLE
@@ -207,6 +212,7 @@ def test_ventana_1_edad_desconocida_no_protege_el_despacho_indefinidamente() -> 
         contexto=_SIN_VENTANA,
         ventana_tolerancia=_TOLERANCIA,
         instante=_AHORA,
+        clases_con_estado_propio=_CON_ESTADO_PROPIO,
     )
     veredicto_estado = next(v for v in linea.veredictos if v.eje == EJE_ESTADO)
     assert veredicto_estado.resultado is ResultadoEje.DIVERGENCIA
@@ -223,6 +229,7 @@ def test_ventana_1_despacho_reciente_vence_y_pasa_a_divergencia() -> None:
         contexto=contexto,
         ventana_tolerancia=_TOLERANCIA,
         instante=_AHORA,
+        clases_con_estado_propio=_CON_ESTADO_PROPIO,
     )
     veredicto_estado = next(v for v in linea.veredictos if v.eje == EJE_ESTADO)
     assert veredicto_estado.resultado is ResultadoEje.DIVERGENCIA
@@ -246,6 +253,7 @@ def test_ventana_2_estados_sin_etiqueta(estado_motor: WorkItemState) -> None:
         contexto=_SIN_VENTANA,
         ventana_tolerancia=_TOLERANCIA,
         instante=_AHORA,
+        clases_con_estado_propio=_CON_ESTADO_PROPIO,
     )
     veredicto_estado = next(v for v in linea.veredictos if v.eje == EJE_ESTADO)
     veredicto_fase = next(v for v in linea.veredictos if v.eje == EJE_FASE)
@@ -264,6 +272,7 @@ def test_ventana_3_fusion_sin_ready_for_merge() -> None:
         contexto=_SIN_VENTANA,
         ventana_tolerancia=_TOLERANCIA,
         instante=_AHORA,
+        clases_con_estado_propio=_CON_ESTADO_PROPIO,
     )
     for veredicto in linea.veredictos:
         assert veredicto.resultado is ResultadoEje.NO_COMPARABLE, veredicto
@@ -283,6 +292,7 @@ def test_ventana_4_residencia_normal_de_etiqueta_de_maquina() -> None:
         contexto=contexto,
         ventana_tolerancia=_TOLERANCIA,
         instante=_AHORA,
+        clases_con_estado_propio=_CON_ESTADO_PROPIO,
     )
     veredicto_fase = next(v for v in linea.veredictos if v.eje == EJE_FASE)
     assert veredicto_fase.resultado is ResultadoEje.NO_COMPARABLE
@@ -300,6 +310,7 @@ def test_fuera_de_la_ventana_4_la_divergencia_es_real() -> None:
         contexto=contexto,
         ventana_tolerancia=_TOLERANCIA,
         instante=_AHORA,
+        clases_con_estado_propio=_CON_ESTADO_PROPIO,
     )
     veredicto_fase = next(v for v in linea.veredictos if v.eje == EJE_FASE)
     assert veredicto_fase.resultado is ResultadoEje.DIVERGENCIA
@@ -407,6 +418,7 @@ def test_verificar_dia_es_determinista() -> None:
         contexto=contexto,
         ventana_tolerancia=_TOLERANCIA,
         instante=_AHORA,
+        clases_con_estado_propio=_CON_ESTADO_PROPIO,
     )
     segunda = verificar_dia(
         motor=motor,
@@ -414,6 +426,7 @@ def test_verificar_dia_es_determinista() -> None:
         contexto=contexto,
         ventana_tolerancia=_TOLERANCIA,
         instante=_AHORA,
+        clases_con_estado_propio=_CON_ESTADO_PROPIO,
     )
     assert primera == segunda
     assert formatear_linea(primera) == formatear_linea(segunda)
@@ -531,6 +544,7 @@ def _linea_con_contradiccion() -> LineaRegistro:
         contexto=_SIN_VENTANA,
         ventana_tolerancia=_TOLERANCIA,
         instante=_AHORA,
+        clases_con_estado_propio=_CON_ESTADO_PROPIO,
     )
 
 
@@ -562,6 +576,7 @@ def test_una_incidencia_sin_etiquetas_sigue_siendo_divergencia() -> None:
         contexto=_SIN_VENTANA,
         ventana_tolerancia=_TOLERANCIA,
         instante=_AHORA,
+        clases_con_estado_propio=_CON_ESTADO_PROPIO,
     )
     for veredicto in linea.veredictos:
         assert veredicto.resultado is ResultadoEje.DIVERGENCIA, (
@@ -577,3 +592,81 @@ def test_una_contradiccion_tampoco_pinta_el_dia_de_verde() -> None:
         "estaría contando como evidencia de que las dos fuentes coinciden, y la "
         "racha de los siete días avanzaría sobre nada."
     )
+
+
+# --- H-25 (#376): la precondición del §11.2 es un hecho declarado ----------------------
+#
+# El contador «no puede empezar antes de que el motor lleve el estado por sí
+# mismo» (§11.2, literal). Hoy nada escribe el desenlace de GitHub en el
+# almacén, así que comparar estado con la incidencia produce rojos que
+# significan «esta etapa no ha empezado» y se leen «el motor se equivocó»
+# (H-25, segunda ronda de la familia de H-24). La raíz, no la ventana 5: la
+# precondición es un conjunto DECLARADO (`CLASES_CON_ESTADO_PROPIO`), y
+# `verificar_dia` exige declararlo — nadie compara sin jurisdicción, la misma
+# lección que la tercera guarda del supervisor.
+
+
+def test_h25_una_clase_sin_estado_propio_no_se_compara_y_cita_el_contrato() -> None:
+    """El caso de producción: motor parado en lo que dejó el despacho, incidencia avanzada."""
+    linea = verificar_dia(
+        motor=_motor(estado=WorkItemState.ACTIVE),
+        espejo=_espejo(estado=WorkItemState.FAILED_SAFELY, fase=None),
+        contexto=_SIN_VENTANA,
+        ventana_tolerancia=_TOLERANCIA,
+        instante=_AHORA,
+        clases_con_estado_propio=frozenset(),
+    )
+    assert linea.es_verde is False
+    for veredicto in linea.veredictos:
+        assert veredicto.resultado is ResultadoEje.NO_COMPARABLE
+        assert veredicto.motivo is not None
+        assert "11.2" in veredicto.motivo
+        assert WorkItemClass.PROGRAMACION.value in veredicto.motivo
+        assert "no ha empezado" in veredicto.motivo
+
+
+def test_h25_una_clase_declarada_conserva_los_dientes() -> None:
+    """Mismos datos, clase declarada: la divergencia real SIGUE viéndose.
+
+    Es lo que separa esta corrección de un instrumento capado: declarar la
+    clase (lo que hará el bloque que cablee el desenlace, la (C) de #376)
+    devuelve la comparación entera, dientes incluidos.
+    """
+    linea = verificar_dia(
+        motor=_motor(estado=WorkItemState.ACTIVE),
+        espejo=_espejo(estado=WorkItemState.FAILED_SAFELY, fase=None),
+        contexto=_SIN_VENTANA,
+        ventana_tolerancia=_TOLERANCIA,
+        instante=_AHORA,
+        clases_con_estado_propio=frozenset({WorkItemClass.PROGRAMACION}),
+    )
+    estados = {v.eje: v.resultado for v in linea.veredictos}
+    assert estados[EJE_ESTADO] is ResultadoEje.DIVERGENCIA
+
+
+def test_h25_la_precondicion_va_antes_que_las_ventanas() -> None:
+    """Sin la precondición no hay nada que medir: manda sobre la ventana 0 incluso."""
+    linea = verificar_dia(
+        motor=_motor(estado=WorkItemState.ACTIVE),
+        espejo=_espejo(estado=None, fase=None, etiquetas_contradictorias=True),
+        contexto=_SIN_VENTANA,
+        ventana_tolerancia=_TOLERANCIA,
+        instante=_AHORA,
+        clases_con_estado_propio=frozenset(),
+    )
+    for veredicto in linea.veredictos:
+        assert veredicto.resultado is ResultadoEje.NO_COMPARABLE
+        assert veredicto.motivo is not None and "11.2" in veredicto.motivo
+
+
+def test_h25_el_conjunto_declarado_esta_vacio_hoy() -> None:
+    """Hoy es la verdad: nada devuelve el desenlace de GitHub al almacén.
+
+    Una clase entra en `CLASES_CON_ESTADO_PROPIO` SOLO desde el bloque que
+    cablee ese retorno (la (C) de #376), con su evidencia, editando esta
+    prueba A LA VEZ y a conciencia. Añadirla a mano para «poner el día verde»
+    es exactamente lo que esta prueba existe para hacer visible.
+    """
+    from sirius_engine.projection_verifier import CLASES_CON_ESTADO_PROPIO
+
+    assert frozenset() == CLASES_CON_ESTADO_PROPIO
