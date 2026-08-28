@@ -117,10 +117,27 @@ bloques:
 
   - id: B1
     titulo: Que Sirius investigue de verdad desde una orden
-    estado: pendiente
+    estado: cerrado
     depende_de: S2
-    que_lo_cerraria: que una orden de clase investigacion produzca un resultado
-    medido_hoy: la clase `investigacion` no está en TABLA_ACTIVACION, así que ni se despacha
+    evidencia: >-
+      Cerrado el 28-08-2026 con la vuelta ENTERA en el servidor, mismo criterio
+      que C2 con la #331. La costura la puso ADR-099 (PR #385): fila
+      INVESTIGACION en TABLA_ACTIVACION con las mismas etiquetas del ciclo,
+      perfil investigador@1 como llave del reparto, y el ejecutor
+      investigar-orden.yml corriendo el investigador MEDIDO de ADR-098 (no un
+      agente de Claude). La prueba real: la orden «Investiga cuales son los
+      limites de la capa gratuita de Tavily...» despachada por
+      despachar-orden.yml produjo la incidencia #386 (Perfil: investigador@1),
+      el ejecutor la atendio solo, investigo con fuentes y abrio la PR #387 con
+      docs/investigaciones/2026-08-28-orden-386-...md -12 KB, 23 fuentes,
+      cabecera de caducidad en regla-, comento «PR abierta:» y aplico
+      READY_FOR_REVIEW; la incidencia quedo en sirius:ci-pending y el ciclo
+      siguio por su via normal (revision documental; fusionar sigue siendo del
+      propietario, §8). Regla propia del ejecutor, con mutacion vista caer: sin
+      fuentes no se publica -cero fuentes es el modelo recitando y queda
+      FAILED_SAFELY-. Lo que NO cubre: el examen «lado a lado contra las
+      investigaciones profundas de ChatGPT», que ya es posible gracias a esta
+      costura y queda como siguiente paso declarado.
     ojo: este B1 es del MOTOR y no tiene nada que ver con el B1 del producto
 
   - id: E1b
