@@ -453,3 +453,135 @@ def test_el_informe_distingue_tres_estados_y_no_dos() -> None:
     assert "NO cambies el modelo" in fuente, (
         "el aviso no dice lo único que hay que hacer ante un transitorio: esperar"
     )
+
+
+# --- El atestado del buscador: la tercera pregunta de la escalera -------------
+#
+# Pasada 4 del banco (28-08-2026): la clave de Tavily estaba puesta y llegaba al
+# subproceso, y las fuentes siguieron a cero, identico a la pasada sin clave.
+# Nadie podia distinguir clave mala / forma de llamada rechazada / vacio por
+# otra causa, porque nadie le hacia al servidor la pregunta exacta: ¿respondes a
+# LA LLAMADA QUE HACE LA HERRAMIENTA (clave en el cuerpo, sin Authorization)?
+
+
+def _atestado_de_buscador_con(
+    monkeypatch: pytest.MonkeyPatch, *, codigo: int, datos: object, error: str = ""
+) -> dict[str, object]:
+    modulo = _preflight()
+    monkeypatch.setenv("TAVILY_API_KEY", "tvly-clave-de-prueba-larga")
+    capturas: list[tuple[str, str]] = []
+
+    def _falso(
+        url: str, clave: str, cabecera: str, prefijo: str, cuerpo: object = None
+    ) -> tuple[int, object, str]:
+        capturas.append((cabecera, str(cuerpo)))
+        return codigo, datos, error
+
+    monkeypatch.setattr(modulo, "_pedir", _falso)
+    informe = modulo.atestar_buscador()
+    # La forma de la llamada es la mitad del atestado: sin cabecera de
+    # autorizacion y con la clave en el cuerpo, como la 0.15.1. Atestar otra
+    # llamada seria medir otra cosa.
+    cabecera, cuerpo = capturas[0]
+    assert cabecera == "", f"el atestado manda cabecera de autorizacion: {cabecera!r}"
+    assert "api_key" in cuerpo, "el atestado no manda la clave en el cuerpo"
+    return dict(informe)
+
+
+def test_el_buscador_con_resultados_es_usable(monkeypatch: pytest.MonkeyPatch) -> None:
+    informe = _atestado_de_buscador_con(
+        monkeypatch, codigo=200, datos={"results": [{"url": "a"}, {"url": "b"}]}
+    )
+    assert informe["estado"] == "usable", informe
+
+
+def test_un_transitorio_del_buscador_es_ocupado_y_no_muerto(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """La leccion de la PR #374, aplicada aqui desde el dia uno."""
+    informe = _atestado_de_buscador_con(
+        monkeypatch, codigo=503, datos=None, error="HTTP 503: high demand"
+    )
+    assert informe["estado"] == "ocupado", informe
+    assert "vuelve a probar" in str(informe["detalle"])
+
+
+def test_un_rechazo_del_buscador_ensena_la_respuesta_del_servidor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """El detalle ES lo que se busca: distingue clave mala de forma rechazada."""
+    informe = _atestado_de_buscador_con(
+        monkeypatch,
+        codigo=401,
+        datos=None,
+        error='HTTP 401: {"detail": "Missing Authorization header"}',
+    )
+    assert informe["estado"] == "no_responde", informe
+    assert "Missing Authorization header" in str(informe["detalle"]), (
+        "el cuerpo de la respuesta no llega al informe, y ese texto es "
+        "exactamente la respuesta que el atestado existe para traer"
+    )
+
+
+def test_un_200_sin_resultados_no_es_usable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Un buscador que contesta bien y no trae nada para una pregunta trivial
+    no puede dar verde: seria el buscador muerto de siempre con otro codigo."""
+    informe = _atestado_de_buscador_con(monkeypatch, codigo=200, datos={"results": []})
+    assert informe["estado"] == "no_responde", informe
+
+
+def test_sin_clave_el_buscador_no_se_comprueba_ni_falla(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Criterio de parada (b): la clave es opcional en todo el diseno (PR #380)."""
+    modulo = _preflight()
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+
+    def _nunca(*_a: object, **_k: object) -> tuple[int, object, str]:
+        raise AssertionError("sin clave no se hace ninguna peticion")
+
+    monkeypatch.setattr(modulo, "_pedir", _nunca)
+    informe = modulo.atestar_buscador()
+    assert informe["estado"] == "sin_clave"
+
+
+def test_el_veredicto_del_preflight_escucha_al_buscador(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Pregunta 4: la pieza sin cable es la enfermedad de esta casa.
+
+    Se ejecuta `main` REAL con los proveedores en verde fingido y el buscador
+    caido: si el codigo de salida no se pone a 1, el banco gastaria sus 25
+    minutos con el buscador muerto y el atestado seria un adorno.
+    """
+    modulo = _preflight()
+    informe_verde = {
+        "proveedor": "nvidia",
+        "atestado": True,
+        "configurados": {"m": True},
+        "prueba_de_vida": {"m": {"usable": True}},
+        "modelos": ["m"],
+        "cuantos_modelos": 1,
+    }
+    monkeypatch.setattr(modulo, "revisar", lambda _p: dict(informe_verde))
+    monkeypatch.setattr(
+        modulo,
+        "atestar_buscador",
+        lambda: {"buscador": "tavily", "estado": "no_responde", "detalle": "HTTP 401"},
+    )
+    codigo = modulo.main(["nvidia"])
+    assert codigo == 1, (
+        "el preflight salio en verde con el buscador NO RESPONDE: el banco "
+        "gastaria la cuota entera midiendo sin fuentes."
+    )
+    assert "NO_RESPONDE" in capsys.readouterr().out
+    # Y con el buscador sin clave, el mismo verde fingido tiene que PASAR.
+    monkeypatch.setattr(
+        modulo,
+        "atestar_buscador",
+        lambda: {"buscador": "tavily", "estado": "sin_clave", "detalle": "sin clave"},
+    )
+    assert modulo.main(["nvidia"]) == 0, (
+        "sin clave el preflight se puso rojo: la clave del buscador es opcional "
+        "y esto la volveria obligatoria por la puerta de atras"
+    )

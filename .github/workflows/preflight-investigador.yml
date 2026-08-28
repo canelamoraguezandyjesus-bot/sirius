@@ -71,6 +71,10 @@ jobs:
           # se sustituye antes de que bash lea nada.
           GOOGLE_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_GOOGLE_KEY }}
           NVIDIA_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_NVIDIA_KEY }}
+          # El atestado del buscador (28-08-2026): una busqueda real a Tavily
+          # con la MISMA llamada que hace la herramienta. Sin el secreto:
+          # `sin_clave`, informativo, nunca rojo.
+          TAVILY_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_TAVILY_KEY }}
           BUSCAR: ${{ inputs.buscar }}
           PROBAR: ${{ inputs.probar }}
           TOPE: ${{ inputs.tope }}
