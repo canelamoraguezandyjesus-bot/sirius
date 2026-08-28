@@ -438,7 +438,8 @@ defectos:
     titulo: STATUS.md contradice a PLAN.md sobre si Sirius 0.1 esta terminado y aceptado
     bloque: documentacion
     gravedad: baja
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 80fb4fefd6bfa2b58a67a559bf3eabad6c448627
     incidencia: 396
     ficheros:
       - docs/canonical/STATUS.md
