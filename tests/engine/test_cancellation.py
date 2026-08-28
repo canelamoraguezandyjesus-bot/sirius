@@ -176,3 +176,125 @@ def test_dispatch_allowed_once_the_prior_cancellation_is_confirmed(
 
     dispatched = store.dispatch_run("RUN-B-NEW-ATTEMPT", now=now)
     assert dispatched.estado is RunState.DISPATCHED
+
+
+# -- H-26 (auditoría #396): LOST no libera la cancelación sin confirmar --------
+
+
+def _run_perdido_con_cancelacion_pendiente(
+    store: WorkEngineStore, make_run: MakeRun, now: datetime, resource: str
+) -> datetime:
+    """Run A: despachado, cancelación pedida, y perdido por plazo. Devuelve el
+    instante posterior al plazo."""
+    deadline = now + timedelta(hours=1)
+    make_run(
+        run_id="RUN-A-LOST-PENDING",
+        work_id="WI-SHARED",
+        now=now,
+        deadline=deadline,
+        recurso_mutable=resource,
+    )
+    store.dispatch_run("RUN-A-LOST-PENDING", now=now)
+    store.request_run_cancellation("RUN-A-LOST-PENDING", now=now)
+    despues = deadline + timedelta(minutes=1)
+    store.mark_run_lost("RUN-A-LOST-PENDING", now=despues)
+    perdido = store.get_run("RUN-A-LOST-PENDING")
+    assert perdido is not None
+    assert perdido.desenlace is RunOutcome.LOST
+    assert perdido.cancellation_status is CancellationStatus.UNCONFIRMED
+    return despues
+
+
+def test_h26_un_run_perdido_con_cancelacion_pendiente_sigue_bloqueando(
+    store: WorkEngineStore, make_run: MakeRun, now: datetime
+) -> None:
+    """El corazón de H-26: LOST significa «venció el plazo», NO «el Worker
+    murió». Mientras la cancelación siga sin confirmar, el peligro sobre el
+    recurso mutable es el mismo que cuando el Run estaba vivo, y el sustituto
+    tiene que seguir bloqueado."""
+    resource = "pr:owner/repo#77"
+    despues = _run_perdido_con_cancelacion_pendiente(store, make_run, now, resource)
+
+    make_run(
+        run_id="RUN-B-SUBSTITUTE",
+        work_id="WI-SHARED",
+        now=despues,
+        deadline=despues + timedelta(hours=1),
+        recurso_mutable=resource,
+    )
+    with pytest.raises(MutableResourceConflictError) as excinfo:
+        store.dispatch_run("RUN-B-SUBSTITUTE", now=despues)
+    assert excinfo.value.conflicting_run_id == "RUN-A-LOST-PENDING"
+
+
+def test_h26_la_liberacion_explicita_desbloquea_sin_reescribir_la_historia(
+    store: WorkEngineStore, make_run: MakeRun, now: datetime
+) -> None:
+    """La única salida es explícita —quien libera trae la prueba de terminal
+    remoto o aislamiento (§3.3)— y NO resucita el Run ni convierte LOST en
+    CANCELLED: limpia el peligro y nada más."""
+    resource = "pr:owner/repo#78"
+    despues = _run_perdido_con_cancelacion_pendiente(store, make_run, now, resource)
+
+    liberado = store.release_run_cancellation("RUN-A-LOST-PENDING", now=despues)
+    assert liberado.desenlace is RunOutcome.LOST, "la liberación reescribió el desenlace"
+    assert liberado.estado is RunState.FINISHED
+    assert liberado.cancellation_status is CancellationStatus.NONE
+
+    make_run(
+        run_id="RUN-B-SUBSTITUTE",
+        work_id="WI-SHARED",
+        now=despues,
+        deadline=despues + timedelta(hours=1),
+        recurso_mutable=resource,
+    )
+    dispatched = store.dispatch_run("RUN-B-SUBSTITUTE", now=despues)
+    assert dispatched.estado is RunState.DISPATCHED
+
+
+def test_h26_la_liberacion_no_es_legal_desde_un_run_vivo(
+    store: WorkEngineStore, make_run: MakeRun, now: datetime
+) -> None:
+    """Un Run vivo con cancelación pendiente tiene su propio camino
+    (`confirm_cancelled`); la liberación es SOLO para el hueco que deja LOST.
+    Si valiera desde vivo, sería una puerta para saltarse la confirmación."""
+    deadline = now + timedelta(hours=1)
+    make_run(
+        run_id="RUN-VIVO",
+        work_id="WI-X",
+        now=now,
+        deadline=deadline,
+        recurso_mutable="pr:owner/repo#79",
+    )
+    store.dispatch_run("RUN-VIVO", now=now)
+    store.request_run_cancellation("RUN-VIVO", now=now)
+    with pytest.raises(IllegalTransitionError):
+        store.release_run_cancellation("RUN-VIVO", now=now)
+
+
+def test_h26_el_camino_del_supervisor_queda_bloqueado_en_el_despacho(
+    store: WorkEngineStore, make_run: MakeRun, now: datetime
+) -> None:
+    """El supervisor materializa su decisión con `retry_run`/`substitute_run_worker`,
+    que dejan el intento nuevo en PREPARED; el momento en que un Worker
+    arrancaría de verdad es `dispatch_run`, y AHÍ muerde la exclusión: el
+    intento heredó el `recurso_mutable` del perdido (leído en `run_ops.retry`)
+    y no se despacha mientras el peligro siga. Tras la liberación explícita,
+    sí."""
+    resource = "pr:owner/repo#80"
+    despues = _run_perdido_con_cancelacion_pendiente(store, make_run, now, resource)
+
+    nuevo = store.retry_run(
+        "RUN-A-LOST-PENDING",
+        new_run_id="RUN-A-RETRY",
+        deadline=despues + timedelta(hours=1),
+        now=despues,
+    )
+    assert nuevo.recurso_mutable == resource, "el reintento perdió el recurso mutable"
+
+    with pytest.raises(MutableResourceConflictError):
+        store.dispatch_run("RUN-A-RETRY", now=despues)
+
+    store.release_run_cancellation("RUN-A-LOST-PENDING", now=despues)
+    dispatched = store.dispatch_run("RUN-A-RETRY", now=despues)
+    assert dispatched.estado is RunState.DISPATCHED

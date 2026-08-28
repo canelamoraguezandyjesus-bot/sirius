@@ -237,12 +237,41 @@ class Run:
             updated_at=now,
         )
 
+    def release_unconfirmed_cancellation(self, *, now: datetime) -> Run:
+        """Limpiar el peligro de un Run YA PERDIDO, sin reescribir su historia.
+
+        H-26 (auditoría #396): ``mark_lost`` conserva ``UNCONFIRMED`` a
+        propósito -LOST significa «venció el plazo», no «el Worker murió»-,
+        así que hace falta una salida y solo una: EXPLÍCITA, legal únicamente
+        desde ``FINISHED(LOST)`` con cancelación pendiente, y quien la llame
+        trae la prueba de terminal remoto o aislamiento (arquitectura §3.3).
+        No toca ``estado`` ni ``desenlace``: no resucita Runs ni convierte
+        LOST en CANCELLED. Un Run VIVO no pasa por aquí: su camino es
+        :meth:`confirm_cancelled`, y abrirle éste sería una puerta para
+        saltarse la confirmación.
+        """
+        if not (
+            self.estado is RunState.FINISHED
+            and self.desenlace is RunOutcome.LOST
+            and self.cancellation_status is CancellationStatus.UNCONFIRMED
+        ):
+            raise IllegalTransitionError(_AGGREGATE, "release_unconfirmed_cancellation", self.estado)
+        return replace(self, cancellation_status=CancellationStatus.NONE, updated_at=now)
+
     @property
     def has_unconfirmed_cancellation(self) -> bool:
-        """True mientras el Run está vivo con una cancelación pendiente de confirmar."""
-        return self.estado in LIVE_STATES and self.cancellation_status is (
-            CancellationStatus.UNCONFIRMED
-        )
+        """True mientras haya una cancelación pedida y NUNCA confirmada.
+
+        HASTA H-26 exigía además estado vivo, y eso apagaba el peligro justo
+        cuando el Run caía a LOST: la única exclusión del recurso mutable en
+        los dos stores se apoya en esta propiedad, así que un Worker quizá
+        vivo dejaba de bloquear a su sustituto. El peligro y el estado del
+        ciclo son ORTOGONALES -la misma lección que dejó escrita
+        ``mark_scope_invalidated``-: el peligro solo lo limpian
+        ``confirm_cancelled`` (vivo) o ``release_unconfirmed_cancellation``
+        (perdido, con prueba).
+        """
+        return self.cancellation_status is CancellationStatus.UNCONFIRMED
 
 
 def prepare(
