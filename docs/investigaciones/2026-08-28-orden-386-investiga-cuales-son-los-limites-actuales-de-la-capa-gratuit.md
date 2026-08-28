@@ -34,11 +34,11 @@ Credits are not allocated uniformly across all endpoints; rather, they are scale
 
 ### Per‑Minute Request Limits  
 
-Tavily enforces rate limits to preserve service stability and prevent abuse. While the exact numeric thresholds for the free tier are not explicitly disclosed in the public documentation, the policy states that **rate limits vary by plan** and that exceeding them triggers a `429 Too Many Requests` response with a `Retry-After` header indicating the waiting period before subsequent calls are permitted ([Tavily, 2026](https://www.tavily.com/press)). In practice, free‑tier users experience stricter throttling than paying customers, as higher‑volume plans receive higher per‑minute quotas and more generous retry windows.  
+Tavily enforces rate limits to preserve service stability and prevent abuse. While the exact numeric thresholds for the free tier are not explicitly disclosed in the public documentation, the policy states that **rate limits vary by plan** and that exceeding them triggers a `429 Too Many Requests` response with a `Retry-After` header indicating the waiting period before subsequent calls are permitted ([Tavily, 2026](https://docs.tavily.com/documentation/rate-limits); [Tavily Help Center, 2026](https://help.tavily.com/articles/3240802908-rate-limits)). In practice, free‑tier users experience stricter throttling than paying customers, as higher‑volume plans receive higher per‑minute quotas and more generous retry windows. The exact numeric RPM threshold for the free tier is not confirmed by the sources collected in this pass — see "Limitaciones" below.  
 
 ### Handling 429 Errors  
 
-When a request surpasses the rate limit, the API returns a `429` status code accompanied by a `Retry-After` directive that specifies the number of seconds to wait before retrying ([Tavily, 2026](https://www.tavily.com/press)). This mechanism ensures that a single burst of traffic does not destabilize the service, but it also means that free‑tier callers may experience intermittent delays that can stall automated workflows if not handled gracefully.  
+When a request surpasses the rate limit, the API returns a `429` status code accompanied by a `Retry-After` directive that specifies the number of seconds to wait before retrying ([Tavily, 2026](https://docs.tavily.com/documentation/rate-limits)). This mechanism ensures that a single burst of traffic does not destabilize the service, but it also means that free‑tier callers may experience intermittent delays that can stall automated workflows if not handled gracefully.  
 
 ## Consequences of Exceeding Limits  
 
@@ -52,13 +52,13 @@ In addition to credit depletion, surpassing the underlying rate limit can lead t
 
 ### Impact on Development Workflow  
 
-For developers building AI agents that rely on real‑time web data, unexpected suspensions can disrupt testing and production pipelines. Because the free tier lacks built‑in mechanisms for automatic back‑off or request queuing, developers must implement their own concurrency controls, such as semaphores or token‑bucket algorithms, to stay within the invisible per‑minute envelope ([Tavily, 2026](https://www.tavily.com/docs)). Failure to do so can cause cascading failures where a single `429` response halts an entire batch of queries, leading to incomplete data retrieval and potential loss of downstream functionality.  
+For developers building AI agents that rely on real‑time web data, unexpected suspensions can disrupt testing and production pipelines. Because the free tier lacks built‑in mechanisms for automatic back‑off or request queuing, developers must implement their own concurrency controls, such as semaphores or token‑bucket algorithms, to stay within the invisible per‑minute envelope ([Tavily, 2026](https://docs.tavily.com/documentation/best-practices/best-practices-search)). Failure to do so can cause cascading failures where a single `429` response halts an entire batch of queries, leading to incomplete data retrieval and potential loss of downstream functionality.  
 
 ## Strategies to Stay Within Free‑Tier Limits  
 
 ### Bounded Concurrency  
 
-A practical approach is to **cap the number of concurrent requests** using a semaphore or similar throttling construct. By limiting in‑flight calls to a value below the effective per‑minute ceiling, developers can avoid hitting the `429` boundary while still maximizing throughput ([Tavily, 2026](https://www.tavily.com/docs)).  
+A practical approach is to **cap the number of concurrent requests** using a semaphore or similar throttling construct. By limiting in‑flight calls to a value below the effective per‑minute ceiling, developers can avoid hitting the `429` boundary while still maximizing throughput ([Tavily, 2026](https://docs.tavily.com/documentation/best-practices/best-practices-search)).  
 
 ### Retry with Backoff  
 
@@ -66,7 +66,7 @@ Implementing exponential backoff after each `429` response allows the client to 
 
 ### Result Deduplication  
 
-Since credits are consumed per request rather than per unique URL, developers can **deduplicate URLs** before issuing extraction calls. By caching previously fetched resources, they avoid paying for redundant processing and stay within the credit budget longer ([Tavily, 2026](https://www.tavily.com/docs)).  
+Since credits are consumed per request rather than per unique URL, developers can **deduplicate URLs** before issuing extraction calls. By caching previously fetched resources, they avoid paying for redundant processing and stay within the credit budget longer ([Tavily, 2026](https://docs.tavily.com/documentation/api-credits)).  
 
 ### Monitoring Usage  
 
@@ -95,25 +95,23 @@ Moreover, the **consequence of exceeding limits** is binary for the free tier: o
 
 The free tier of the Tavily API provides a **fixed monthly credit budget of 1,000** and enforces **rate limits that are stricter than those of paid tiers**, though exact per‑minute thresholds are not publicly disclosed. Exceeding either the credit quota or the implicit request‑rate ceiling results in either the cessation of API calls upon credit depletion or a `429 Too Many Requests` response with a mandatory `Retry-After` pause. To harness the free tier effectively, developers should adopt bounded concurrency, implement exponential backoff, deduplicate results, and continuously monitor remaining credits. Understanding these constraints enables realistic planning of AI‑agent workflows and informs the decision to upgrade to a paid plan when higher throughput or uninterrupted service becomes essential.  
 
+## Limitaciones — qué NO queda demostrado
+
+- **Umbral exacto de peticiones por minuto (RPM) del plan gratuito.** Esta pasada del investigador recogió `https://docs.tavily.com/documentation/rate-limits` y `https://help.tavily.com/articles/3240802908-rate-limits` (ver `## Fuentes`), pero el informe no registró el contenido textual verificado de esas páginas, solo su URL. No hay, por tanto, evidencia recogida que sostenga una cifra numérica concreta de RPM para el plan gratuito; el informe se limita a describir el mecanismo (`429` + `Retry-After`) sin el umbral exacto.
+- **Vigencia a fecha 2026-08-28 de los 1.000 créditos/mes.** La cifra proviene de `https://www.tavily.com/pricing`, que sí está en `## Fuentes`, pero esta pasada no reconfirma que siga vigente en la fecha de esta ejecución más allá de lo recogido por la herramienta.
+- **Citas fabricadas corregidas en esta ronda.** Las citas que originalmente apuntaban a cuatro páginas genéricas del dominio `tavily.com` -ninguna de ellas presente en `## Fuentes`- se han sustituido por las fuentes reales sobre el mismo hecho (hallazgo DOC-386-01). El contenido exacto de esas páginas reales no fue verificado dentro de esta pasada de corrección, solo su pertinencia temática y su presencia en la lista de fuentes efectivamente recogidas.
+
 ## References  
 
 Tavily. (2026). *Pricing*. https://www.tavily.com/pricing  
 
-Tavily. (2026). *Documentation*. https://www.tavily.com/docs  
+Tavily. (2026). *API credits*. https://docs.tavily.com/documentation/api-credits  
 
-Tavily. (2026). *Press*. https://www.tavily.com/press  
+Tavily. (2026). *Rate limits*. https://docs.tavily.com/documentation/rate-limits  
 
-Tavily. (2026). *Rate limits and throttling*. https://www.tavily.com/press  
+Tavily Help Center. (2026). *Rate limits*. https://help.tavily.com/articles/3240802908-rate-limits  
 
-Tavily. (2026). *Free tier details*. https://www.tavily.com/pricing-plans  
-
-Tavily. (2026). *Enterprise plans*. https://www.tavily.com/enterprise  
-
-Tavily. (2026). *API credit consumption model*. https://www.tavily.com/docs  
-
-Tavily. (2026). *Bounded concurrency guide*. https://www.tavily.com/docs  
-
-Tavily. (2026). *429 error handling*. https://www.tavily.com/press
+Tavily. (2026). *Best practices for search*. https://docs.tavily.com/documentation/best-practices/best-practices-search
 
 ## Fuentes
 
