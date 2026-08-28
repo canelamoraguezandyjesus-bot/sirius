@@ -79,7 +79,8 @@ name: Medir al investigador
 # lleva ni una variable de configuración del investigador**: lo que se declara
 # arriba lo ve todo el mundo.
 #
-# LAS CLAVES ENTRAN POR SU NOMBRE DE ORIGEN: `NVIDIA_API_KEY` y `GOOGLE_API_KEY`.
+# LAS CLAVES ENTRAN POR SU NOMBRE DE ORIGEN: `NVIDIA_API_KEY` (y la opcional
+# `TAVILY_API_KEY` del buscador). Hasta ADR-098 tambien entraba la de Google.
 # La de NVIDIA se llama `OPENAI_API_KEY` DENTRO del subproceso -esa es su vía
 # compatible con OpenAI-, y esa traducción la hace el guion (`clave_destino`), no
 # este fichero. El criterio de parada (a) de la nota de arranque -«si hiciera
@@ -147,7 +148,7 @@ permissions:
 
 jobs:
   medir:
-    name: Comparar dos configuraciones
+    name: Medir las configuraciones declaradas
     runs-on: ubuntu-latest
     # 80, y el margen sobre la suma de los pasos es deliberado. Los topes de paso
     # suman 72 (12 de instalación + 5 de comprobación + 55 de comparación); los 8
@@ -204,20 +205,17 @@ jobs:
           # nada y acabaría en el log a la primera traza. Aquí solo se mira si
           # están; su valor no se imprime jamás.
           NVIDIA_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_NVIDIA_KEY }}
-          GOOGLE_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_GOOGLE_KEY }}
         shell: bash --noprofile --norc {0}
         run: |
           set -uo pipefail
-          # El comparador sabe seguir sin una clave: la informa como `sin_clave` y
-          # mide la otra, que está bien. Pero acabar en NO CONCLUYENTE después de
-          # instalar la herramienta y gastar minutos de Actions por una variable
-          # vacía es tirar el tiempo, y el criterio de parada (b) ya dice que con
-          # una sola configuración no vale. Se mira antes de instalar nada.
+          # Desde ADR-098 el banco mide UNA configuración -la elegida- y esta es
+          # su única clave obligatoria (la del buscador es opcional, PR #380).
+          # Se mira antes de instalar nada: gastar minutos de Actions para
+          # descubrir una variable vacía es tirar el tiempo.
           faltan=""
           [ -n "${NVIDIA_API_KEY:-}" ] || faltan="$faltan SIRIUS_INVESTIGADOR_NVIDIA_KEY"
-          [ -n "${GOOGLE_API_KEY:-}" ] || faltan="$faltan SIRIUS_INVESTIGADOR_GOOGLE_KEY"
           if [ -n "$faltan" ]; then
-            echo "::error::faltan secretos:$faltan. Con una sola clave la comparación no existe (criterio de parada (b))." >&2
+            echo "::error::faltan secretos:$faltan. Sin la clave de la configuración elegida no hay nada que medir." >&2
             exit 1
           fi
           echo "Las dos claves están declaradas. No se imprime ninguna."
@@ -319,7 +317,6 @@ jobs:
         timeout-minutes: 5
         shell: bash --noprofile --norc {0}
         env:
-          GOOGLE_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_GOOGLE_KEY }}
           NVIDIA_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_NVIDIA_KEY }}
           # Tambien el buscador se atesta antes de gastar (28-08-2026): la
           # pasada 4 corrio 25 minutos con la clave de Tavily puesta y cero
@@ -329,7 +326,12 @@ jobs:
         run: |
           set -uo pipefail
           codigo=0
-          python3 scripts/investigacion/preflight.py --atestiguar || codigo=$?
+          # SOLO el proveedor que el banco declara (ADR-098): atestar a Google
+          # sin su clave fallaria siempre, y atestarlo con ella gastaria cuota
+          # de un proveedor descartado. Si `configuraciones.yml` cambia de
+          # proveedor, esta linea tiene que cambiar con el; lo vigila
+          # `test_el_atestado_cubre_a_los_proveedores_declarados`.
+          python3 scripts/investigacion/preflight.py nvidia --atestiguar || codigo=$?
           if [ "$codigo" -ne 0 ]; then
             echo "::error::algún modelo configurado, o el buscador, no responde. No se gasta cuota en medirlo." >&2
             exit 1
@@ -343,7 +345,6 @@ jobs:
           # llamará `OPENAI_API_KEY` dentro del subproceso; esa traducción la hace
           # el guion, no este fichero. Ver la cabecera.
           NVIDIA_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_NVIDIA_KEY }}
-          GOOGLE_API_KEY: ${{ secrets.SIRIUS_INVESTIGADOR_GOOGLE_KEY }}
           # La clave del buscador (ADR-098). OPCIONAL: si el secreto no existe,
           # esto vale cadena vacía, `claves_opcionales` la omite y Tavily queda
           # inerte -DuckDuckGo se comporta como siempre-. Por eso el paso

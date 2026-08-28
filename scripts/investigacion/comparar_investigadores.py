@@ -824,7 +824,23 @@ def main(argv: list[str] | None = None) -> int:
     medidas = [m for m in mediciones if m.estado == ESTADO_MEDIDA]
     servidores_ok, motivo_servidores = veredicto_de_servidores(medidas)
 
-    if len(medidas) < 2:
+    if len(configuraciones) == 1 and len(medidas) == 1:
+        # DESDE ADR-098 el fichero declara UNA configuración -la elegida- y la
+        # pasada es una MEDICIÓN, no una comparación. El criterio «si acaba
+        # midiendo UNA sola configuración, no vale» era de la pregunta
+        # comparativa, que ese ADR cerró por nocaut. La distinción de
+        # servidores no aplica: no hay segundo número del que distinguirse. Y
+        # el veredicto lo dice con su propio nombre para que NADIE lea esto
+        # como una comparación concluyente.
+        codigo = CODIGO_OK
+        concluyente = True
+        veredicto = "MEDIDA ÚNICA"
+        motivo = (
+            "Una sola configuración declarada -la elegida por ADR-098- y medida en su "
+            "propio proceso. Esto NO compara nada: es el número de calidad de esa "
+            "configuración sobre el banco."
+        )
+    elif len(medidas) < 2:
         codigo = CODIGO_NO_CONCLUYENTE
         concluyente = False
         veredicto = "NO CONCLUYENTE"

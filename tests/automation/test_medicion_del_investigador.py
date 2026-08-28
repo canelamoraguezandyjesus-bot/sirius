@@ -444,22 +444,38 @@ def test_una_variable_contaminante_no_llega_al_subproceso_que_no_la_declara(
     NVIDIA y el informe saldría perfecto.
     """
     monkeypatch.setenv("OPENAI_BASE_URL", CENTINELA)
-    monkeypatch.setenv("GOOGLE_API_KEY", "clave-falsa-de-prueba-google")
+    monkeypatch.setenv("CLAVE_LIMPIA", "clave-falsa-de-prueba-limpia")
     monkeypatch.setenv("NVIDIA_API_KEY", "clave-falsa-de-prueba-nvidia")
 
-    entorno = _entorno_del_hijo("google", tmp_path)
+    # Configuración DE LABORATORIO que no declara OPENAI_BASE_URL, como hacía la
+    # de Google hasta que ADR-098 la retiró del fichero real: la propiedad que
+    # se prueba es del arnés, no de un proveedor, y quitar a Google del banco no
+    # podía llevarse la prueba (criterio de parada (b) de la nota de arranque
+    # del descarte).
+    c = _comparador()
+    limpia = c.Configuracion(
+        nombre="limpia",
+        proveedor="laboratorio",
+        modelo="m",
+        variable_de_clave="CLAVE_LIMPIA",
+        clave_destino="CLAVE_LIMPIA",
+        entorno={"FAST_LLM": "lab:m", "SMART_LLM": "lab:m"},
+    )
+    medicion = c.medir_configuracion(limpia, tmp_path, 60)
+    assert medicion.estado == c.ESTADO_MEDIDA, medicion.detalle
+    assert medicion.resultado is not None
+    entorno = dict(medicion.resultado["entorno_recibido"])
 
     assert "PATH" in entorno, (
         "el subproceso no recibió ni PATH: un entorno vacío pasaría el resto de esta "
         "prueba sin demostrar nada, y además dejaría al intérprete sin poder arrancar"
     )
     assert "OPENAI_BASE_URL" not in entorno, (
-        f"la configuración de Google recibió OPENAI_BASE_URL={entorno.get('OPENAI_BASE_URL')!r}. "
-        "Google entra por su vía nativa y no declara esa variable: si la ve, está viendo la "
-        "de otra configuración o la de quien lanzó el proceso. `gpt-researcher` 0.15.1 la lee "
-        "para el modelo (`llm_provider/generic/base.py`) y para vectorizar "
-        "(`memory/embeddings.py`), así que Google mediría contra el servidor de NVIDIA y "
-        "devolvería un informe impecable y FALSO."
+        f"la configuración limpia recibió OPENAI_BASE_URL={entorno.get('OPENAI_BASE_URL')!r} "
+        "sin declararla: está viendo la variable de quien lanzó el proceso. "
+        "`gpt-researcher` 0.15.1 la lee para el modelo (`llm_provider/generic/base.py`) y "
+        "para vectorizar (`memory/embeddings.py`), así que una configuración de vía nativa "
+        "mediría contra el servidor de otra y devolvería un informe impecable y FALSO."
     )
     coladas = sorted(v for v, valor in entorno.items() if CENTINELA in valor)
     assert coladas == [], (
@@ -467,7 +483,7 @@ def test_una_variable_contaminante_no_llega_al_subproceso_que_no_la_declara(
         "entorno de quien llama en vez de construirlo desde cero"
     )
     assert "NVIDIA_API_KEY" not in entorno, (
-        "la clave de NVIDIA no pinta nada en el subproceso de Google: cada configuración "
+        "la clave de NVIDIA no pinta nada en el subproceso de otra configuración: cada una "
         "recibe la suya, con el nombre que espera la herramienta, y ninguna más"
     )
 
@@ -803,19 +819,26 @@ def test_ninguna_clave_viaja_interpolada_dentro_de_un_run() -> None:
     )
 
 
-def test_el_paso_que_compara_recibe_las_dos_claves() -> None:
+def test_el_paso_que_compara_recibe_las_claves_declaradas() -> None:
     """Anti-vacua afinada, y la afinó una mutación que la versión anterior NO cazó.
 
-    La primera redacción de esta guarda solo miraba si las dos claves aparecían
+    La primera redacción de esta guarda solo miraba si las claves aparecían
     en ALGÚN `env:` del fichero. Se probó a quitárselas al paso que ejecuta el
     comparador -dejándolas en el paso que solo comprueba que existen- y la
     batería siguió verde: el trabajo habría comprobado las claves, instalado la
-    herramienta, y llegado a la comparación sin ninguna, para salir NO
-    CONCLUYENTE con las dos configuraciones marcadas `sin_clave`.
+    herramienta, y llegado a la comparación sin ninguna, para salir con todo
+    marcado `sin_clave`.
 
-    Por eso ahora se exige sobre el paso concreto que las necesita, que se
-    localiza por lo que ejecuta y no por su nombre.
+    Por eso se exige sobre el paso concreto que las necesita, localizado por lo
+    que ejecuta y no por su nombre. Y desde ADR-098 la lista de claves se DERIVA
+    de `configuraciones.yml` -las principales; las opcionales tienen su propia
+    guarda-, no se escribe aquí: era el número en dos sitios otra vez.
     """
+    c = _comparador()
+    configuraciones = c.cargar_configuraciones(INVESTIGACION / "configuraciones.yml")
+    principales = sorted({conf.variable_de_clave for conf in configuraciones})
+    assert principales, "sin claves declaradas esta prueba no mediría nada"
+
     pasos = [p for p in _pasos(WORKFLOW) if "comparar_investigadores.py" in str(p.get("run", ""))]
     assert len(pasos) == 1, (
         f"se esperaba exactamente un paso que ejecute el comparador, hay {len(pasos)}. "
@@ -824,7 +847,7 @@ def test_el_paso_que_compara_recibe_las_dos_claves() -> None:
     entorno = {str(k): str(v) for k, v in (pasos[0].get("env") or {}).items()}
     faltan = [
         variable
-        for variable in ("NVIDIA_API_KEY", "GOOGLE_API_KEY")
+        for variable in principales
         if not _SECRETO_INTERPOLADO.search(entorno.get(variable, ""))
     ]
     assert faltan == [], (
@@ -1681,3 +1704,121 @@ def test_con_todo_vacio_sigue_siendo_cero_y_la_regla_intacta() -> None:
     """Criterio de parada (a): la correccion no puede desarmar `fuentes > 0`."""
     m = _medidor()
     assert m._contar_fuentes(_InvestigadorFingido([], [])) == 0
+
+
+# --- El descarte de ADR-098, implementado y vigilado --------------------------
+
+
+def test_el_atestado_cubre_a_los_proveedores_declarados() -> None:
+    """El paso del atestado nombra a CADA proveedor de `configuraciones.yml`.
+
+    El atestado dejó de correr «para todos» cuando ADR-098 retiró a Google:
+    atestarlo sin su clave fallaría siempre, y con ella gastaría cuota de un
+    proveedor descartado. El precio de nombrar al proveedor en el workflow es
+    que el fichero de configuraciones y el workflow pueden divergir; esta prueba
+    es ese precio pagado una vez.
+    """
+    c = _comparador()
+    configuraciones = c.cargar_configuraciones(INVESTIGACION / "configuraciones.yml")
+    declarados = sorted({conf.proveedor for conf in configuraciones})
+    pasos = [p for p in _pasos(WORKFLOW) if "preflight.py" in str(p.get("run", ""))]
+    assert len(pasos) == 1, "se esperaba exactamente un paso de atestado en el banco"
+    orden = str(pasos[0]["run"])
+    ausentes = [p for p in declarados if p not in orden]
+    assert ausentes == [], (
+        f"el paso del atestado no nombra a {ausentes}: sus modelos entrarían a la "
+        "medición sin que nadie haya comprobado hoy que responden."
+    )
+
+
+def _main_con_configuraciones(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    nombres_y_codigos: list[tuple[str, int]],
+) -> tuple[int, dict[str, Any]]:
+    """Ejecuta `main` real con un hijo fingido por configuración declarada."""
+    import json as _json
+
+    c = _comparador()
+    guion = tmp_path / "hijo.py"
+    guion.write_text(
+        "\nimport json, sys\n"
+        'salida = sys.argv[sys.argv.index("--salida") + 1]\n'
+        "codigo = int(sys.argv[1].rsplit('-', 1)[-1])\n"
+        'open(salida, "w", encoding="utf-8").write(json.dumps({\n'
+        '  "medicion_fiable": codigo == 0, "motivo_no_fiable": None if codigo == 0 else "x",\n'
+        '  "servidor": "https://servidor-" + sys.argv[1], "aciertos": 5, "total": 7,\n'
+        '  "porcentaje": 71.4, "segundos_totales": 10.0, "preguntas": []}))\n'
+        "sys.exit(codigo)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(c, "MEDIDOR", guion)
+    monkeypatch.setenv("CLAVE_DE_PRUEBA", "no-es-una-clave")
+    monkeypatch.setattr(
+        c,
+        "cargar_configuraciones",
+        lambda _ruta: [
+            c.Configuracion(
+                nombre=f"{nombre}-{codigo}",
+                proveedor="p",
+                modelo="m",
+                variable_de_clave="CLAVE_DE_PRUEBA",
+                clave_destino="CLAVE_DE_PRUEBA",
+                entorno={},
+            )
+            for nombre, codigo in nombres_y_codigos
+        ],
+    )
+    monkeypatch.setattr(c, "modelos_sin_atestado", lambda *_a, **_k: [])
+    salida_json = tmp_path / "i.json"
+    codigo = c.main(
+        [
+            "--salida-md",
+            str(tmp_path / "i.md"),
+            "--salida-json",
+            str(salida_json),
+            "--tiempo-maximo",
+            "60",
+            "--fecha",
+            "2026-08-28",
+        ]
+    )
+    return codigo, dict(_json.loads(salida_json.read_text(encoding="utf-8")))
+
+
+def test_una_sola_declarada_y_medida_es_medida_unica(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pregunta 1: desde ADR-098 la pasada es una medición, no una comparación."""
+    codigo, crudo = _main_con_configuraciones(tmp_path, monkeypatch, [("unica", 0)])
+    assert codigo == 0, (
+        f"una única configuración declarada y MEDIDA salió con código {codigo}: el banco "
+        "de la configuración elegida no podría dar nunca su número en verde."
+    )
+    assert crudo["veredicto"] == "MEDIDA ÚNICA", crudo["veredicto"]
+    assert "NO compara" in str(crudo["motivo"]), (
+        "el motivo no deja claro que esto no es una comparación: alguien leería el "
+        "número como si hubiera ganado a otro."
+    )
+
+
+def test_una_sola_declarada_pero_no_medida_sigue_sin_valer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pregunta 2: una pasada vacía no sale verde por ser pequeña."""
+    codigo, crudo = _main_con_configuraciones(tmp_path, monkeypatch, [("unica", 3)])
+    assert codigo == c_codigo_no_concluyente(), f"código {codigo}, crudo: {crudo['veredicto']}"
+    assert crudo["veredicto"] == "NO CONCLUYENTE"
+
+
+def c_codigo_no_concluyente() -> int:
+    return int(_comparador().CODIGO_NO_CONCLUYENTE)
+
+
+def test_con_dos_declaradas_el_veredicto_viejo_queda_intacto(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pregunta 3: medir una de dos sigue siendo NO CONCLUYENTE."""
+    codigo, crudo = _main_con_configuraciones(tmp_path, monkeypatch, [("a", 0), ("b", 3)])
+    assert codigo == c_codigo_no_concluyente()
+    assert crudo["veredicto"] == "NO CONCLUYENTE"
