@@ -550,17 +550,39 @@ def test_una_rama_al_dia_si_se_fusiona(tmp_path: Path) -> None:
     assert "MERGE" in _actions(env)
 
 
-def test_si_no_se_puede_leer_el_atraso_no_se_bloquea_la_fusion(tmp_path: Path) -> None:
-    """Una lectura caida no es «esta atrasada».
+def test_si_no_se_puede_leer_el_atraso_se_bloquea_y_se_pide_reintento(tmp_path: Path) -> None:
+    """INVERTIDA el 28-08-2026 por H-31 (auditoría externa, autorizada la corrección).
 
-    Distinguirlo importa: tratar un fallo de lectura como atraso dejaria la
-    orden del propietario tirada por un 503, que es el callejon mudo que el
-    resto de este guion viene a eliminar. El error cae del lado de seguir,
-    porque las otras cinco comprobaciones siguen puestas.
+    La versión anterior dejaba SEGUIR con `behind_by` ilegible, con este motivo
+    escrito: «el error cae del lado de seguir, porque las otras cinco
+    comprobaciones siguen puestas». La auditoría lo impugnó y el argumento
+    gana: esta lectura es MATERIAL -decide si el verde de Quality corresponde a
+    la base que se va a fusionar- y las demás lecturas materiales del mismo
+    guion fallan cerradas. El coste del fail-open ya se pagó una vez: main roja
+    tras fusionar dos ramas verdes contra bases viejas.
+
+    Lo que la versión anterior protegía no se pierde: el bloqueo DICE que es
+    reintentable, así que un 503 no deja la orden tirada en silencio, la deja
+    con la instrucción de repetir `fusiona`.
     """
     env = _setup(tmp_path)
     _ready_issue(env)
     (_md(env) / "behind_by.txt").write_text("null\n", encoding="utf-8")
     r = _run_merge(env)
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert "MERGE" in _actions(env)
+    assert r.returncode != 0, "con behind_by ilegible la fusión siguió adelante"
+    assert "MERGE" not in _actions(env), "se fusionó sin saber si la base estaba al día"
+    salida = r.stdout + r.stderr
+    assert "reintent" in salida.lower() or "otra vez" in salida.lower(), (
+        f"el bloqueo no dice que se puede reintentar: cambiaría un merge colado "
+        f"por una orden tirada en silencio. Salida:\n{salida[-600:]}"
+    )
+
+
+def test_un_atraso_ilegible_por_vacio_tambien_bloquea(tmp_path: Path) -> None:
+    """La otra forma del mismo fallo: la API ni contesta y la variable queda vacía."""
+    env = _setup(tmp_path)
+    _ready_issue(env)
+    (_md(env) / "behind_by.txt").write_text("\n", encoding="utf-8")
+    r = _run_merge(env)
+    assert r.returncode != 0
+    assert "MERGE" not in _actions(env)
