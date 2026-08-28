@@ -23,7 +23,7 @@ Los archivos originales conservan palabras como `PROPUESTO` en su nombre o conte
 ## Estado operativo
 
 - La implementación de Sirius 0.1 continúa autorizada por verticales, sin ampliar el alcance aprobado.
-- Sirius 0.1 todavía debe terminarse y aceptarse antes de activar una versión post-0.1.
+- Sirius 0.1: ACEPTADO y TERMINADO por declaración del propietario el 10-08-2026 (docs/implementation/PLAN.md). Las versiones post-0.1 siguen sin activarse.
 - El Documento Rector de Evolución fija dirección futura, pero no autoriza implementación.
 - HEAD-R1 permanece físicamente inactivo. No existen compras ni fases autorizadas.
 - El multiagente permanece condicionado a evidencia posterior y no es requisito obligatorio de Sirius 1.0.

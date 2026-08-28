@@ -380,7 +380,8 @@ defectos:
     titulo: La consistencia WorkItem-Run no tiene guarda transversal (padre terminal con hijos vivos y viceversa)
     bloque: motor
     gravedad: alta
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 002022ab4157d1ed71a2d9b9da0d4afa2bd53067
     incidencia: 396
     ficheros:
       - src/sirius_engine/adapters/durable/store.py
