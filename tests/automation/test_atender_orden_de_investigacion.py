@@ -90,6 +90,24 @@ def test_el_documento_pasa_el_guardian_de_caducidad() -> None:
     assert "https://python.org" in texto
 
 
+def test_el_documento_declara_el_tipo_real_que_corrio() -> None:
+    """CODEX-002 (revisión de la PR #393): la cabecera tiene que nombrar el
+    `report_type` con el que corrió el hijo. `research_report` está reservado
+    al banco (`medir_investigador.py`); declararlo para una orden que corrió en
+    `deep` confunde la procedencia del documento con la del banco."""
+    a = _atendedor()
+    texto = a.componer_documento(
+        pregunta="x",
+        informe="# Informe\n\nx.",
+        fuentes=["https://a.example"],
+        numero=1,
+        fecha="2026-08-28",
+        tipo="deep",
+    )
+    assert "`deep`" in texto
+    assert "`research_report`" not in texto
+
+
 def _correr_main(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -152,6 +170,9 @@ def test_con_informe_y_fuentes_el_veredicto_es_ready_y_el_documento_existe(
     assert len(documentos) == 1, "el informe no se escribió"
     assert veredicto.get("ruta_informe"), "el workflow no sabría qué fichero confirmar"
     assert "orden-555" in documentos[0].name
+    assert "`deep`" in documentos[0].read_text(encoding="utf-8"), (
+        "el tipo por defecto de una orden es `deep`; el documento tiene que decirlo"
+    )
 
 
 def test_si_el_hijo_muere_queda_failed_safely_y_ningun_documento(
@@ -241,6 +262,30 @@ def test_el_hijo_no_publica_un_informe_sin_fuentes(
     assert codigo != 0, "un informe con cero fuentes salió en verde"
     resultado = json.loads(salida.read_text(encoding="utf-8"))
     assert "fuentes" in str(resultado["error"]).lower()
+
+
+def test_el_hijo_no_publica_planificacion_sin_sintetizar(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Revisión de la PR #393 (CODEX-001): la orden #392 publicó el borrador de
+    razonamiento del modelo en inglés, con fuentes de verdad, así que la regla
+    `fuentes > 0` no lo paró. Hace falta una regla propia."""
+    hijo = _hijo_real(monkeypatch)
+
+    async def _planifica(_pregunta: str, _tipo: str = "research_report") -> tuple[str, list[str]]:
+        borrador = (
+            "We need to produce a comprehensive research report in Spanish. "
+            "We need to synthesize from the provided text. Let's extract info: "
+            "NVIDIA NIM free tier is 40 RPM. We must be objective and impartial."
+        )
+        return borrador, ["https://a.example", "https://b.example"]
+
+    monkeypatch.setattr(hijo, "_investigar", _planifica)
+    salida = tmp_path / "resultado.json"
+    codigo = hijo.main(["--pregunta", "x", "--salida", str(salida), "--plazo", "30"])
+    assert codigo != 0, "un borrador de planificación sin sintetizar salió en verde"
+    resultado = json.loads(salida.read_text(encoding="utf-8"))
+    assert "sintetiz" in str(resultado["error"]).lower()
 
 
 def test_el_hijo_con_fuentes_sale_en_verde_y_deja_todo_en_su_json(

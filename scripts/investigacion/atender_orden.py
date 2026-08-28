@@ -63,9 +63,22 @@ def _slug(texto: str, tope: int = 60) -> str:
 
 
 def componer_documento(
-    *, pregunta: str, informe: str, fuentes: list[str], numero: int, fecha: str
+    *,
+    pregunta: str,
+    informe: str,
+    fuentes: list[str],
+    numero: int,
+    fecha: str,
+    tipo: str = "deep",
 ) -> str:
-    """El documento con la cabecera que exige el guardián de caducidad."""
+    """El documento con la cabecera que exige el guardián de caducidad.
+
+    ``tipo`` es el ``report_type`` REAL con el que corrió el hijo (CODEX-002,
+    revisión de la PR #393): las órdenes van en ``deep`` por defecto desde las
+    tres palancas del examen, y ``research_report`` queda reservado al banco
+    (``medir_investigador.py``). Declarar el que no corrió confunde la
+    procedencia del documento con la del banco, que mide un coste distinto.
+    """
     pregunta_yaml = " ".join(pregunta.split())
     lineas = [
         "---",
@@ -83,7 +96,7 @@ def componer_documento(
         f"# Investigación de la orden #{numero} — {fecha}",
         "",
         "> Informe producido por el investigador del motor (gpt-researcher "
-        f"{'0.15.1'}, `research_report`, NVIDIA + Tavily) a partir del "
+        f"{'0.15.1'}, `{tipo}`, NVIDIA + Tavily) a partir del "
         "`## Objetivo` de la incidencia. Las fuentes están al final; el número "
         "de fuentes es la misma unión que gobierna la medición del banco.",
         "",
@@ -213,6 +226,7 @@ def main(argv: list[str] | None = None) -> int:
             fuentes=[str(u) for u in resultado.get("fuentes") or []],
             numero=args.numero,
             fecha=fecha,
+            tipo=args.tipo,
         ),
         encoding="utf-8",
     )
