@@ -255,6 +255,9 @@ jobs:
           case "$perfil" in
             implementer)    PROMPT_ROL=scripts/automation/prompts/reviewer.md ;;
             documentalista) PROMPT_ROL=scripts/automation/prompts/revisor-documental.md ;;
+            # El entregable de una investigacion es un documento en
+            # docs/investigaciones/ (ADR-099): lo revisa el revisor documental.
+            investigador)   PROMPT_ROL=scripts/automation/prompts/revisor-documental.md ;;
             *)
               echo "::error::perfil no reconocido en el cuerpo de #${ISSUE_NUMBER}: '${perfil}'. Se esperaba 'Perfil: implementer@N' o 'Perfil: documentalista@N'." >&2
               exit 1 ;;

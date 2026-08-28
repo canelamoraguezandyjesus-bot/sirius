@@ -137,8 +137,21 @@ jobs:
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
           set -uo pipefail
+          # El perfil `investigador` NO lo atiende este workflow: lo atiende
+          # `investigar-orden.yml` con la misma etiqueta de activacion
+          # (ADR-099). La exclusion va AQUI, ANTES de consumir el evento: si se
+          # excluyera despues, las etiquetas ya estarian movidas y nadie
+          # atenderia la orden. Se sale con valid=false, que es "no es mio",
+          # no un fallo.
+          perfil=$(printf '%s' "$ISSUE_BODY" | sed -n 's/^Perfil: *\([A-Za-z_-][A-Za-z_-]*\)@.*/\1/p' | head -1)
+          if [ "$perfil" = "investigador" ]; then
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo "Perfil investigador: esta activacion la atiende investigar-orden.yml."
+            exit 0
+          fi
           if bash scripts/automation/sirius_validate_activation.sh "$GH_REPO" "$ISSUE_NUMBER"; then
             script_rc=0
           else

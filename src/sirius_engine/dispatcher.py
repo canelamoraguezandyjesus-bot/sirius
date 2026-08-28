@@ -115,6 +115,16 @@ TABLA_ACTIVACION: dict[WorkItemClass, _ActivacionPorClase] = {
         etiquetas_iniciales=(ETIQUETA_INICIAL,),
         etiqueta_activacion=ETIQUETA_ACTIVACION,
     ),
+    # La fila INVESTIGACION la autoriza ADR-099 (B1), con el mismo criterio que
+    # ADR-088 fijó para DOCUMENTACION: mismo ciclo y mismas etiquetas que
+    # programacion, sin vocabulario nuevo. Lo que la distingue no está aquí sino
+    # en el perfil (`investigador@1`): su ejecutor es el investigador MEDIDO de
+    # ADR-098, no un agente de código, y el workflow del implementador excluye
+    # ese perfil en su puerta.
+    WorkItemClass.INVESTIGACION: _ActivacionPorClase(
+        etiquetas_iniciales=(ETIQUETA_INICIAL,),
+        etiqueta_activacion=ETIQUETA_ACTIVACION,
+    ),
 }
 
 

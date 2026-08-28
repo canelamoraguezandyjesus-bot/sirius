@@ -68,6 +68,10 @@ TABLA_PERFILES: dict[WorkItemClass, ProfileRef] = {
     WorkItemClass.PROGRAMACION: ProfileRef(ref="implementer", version=1),
     WorkItemClass.AUDITORIA: ProfileRef(ref="auditor", version=1),
     WorkItemClass.DOCUMENTACION: ProfileRef(ref="documentalista", version=1),
+    # ADR-099 (B1). El perfil es la llave del reparto de ejecutores: el workflow
+    # del implementador excluye `investigador` en su puerta y lo atiende
+    # `investigar-orden.yml`, que corre el investigador medido de ADR-098.
+    WorkItemClass.INVESTIGACION: ProfileRef(ref="investigador", version=1),
 }
 
 #: Perfil de repliegue cuando la clase no está en :data:`TABLA_PERFILES`. No
