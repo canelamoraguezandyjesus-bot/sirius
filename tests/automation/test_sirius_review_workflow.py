@@ -343,12 +343,12 @@ def test_the_workflow_actually_feeds_the_reviewer_prompt() -> None:
     """
     run = _step(_load(), "Preparar instrucciones")["run"]
 
-    assert "scripts/automation/prompts/reviewer.md" in run, (
-        "el prompt del revisor de código tiene que seguir siendo alcanzable; si no, "
-        "las pruebas de abajo validan un archivo muerto"
-    )
-    assert "scripts/automation/prompts/revisor-documental.md" in run, (
-        "el revisor documental también tiene que ser alcanzable: ese era el bloque C3"
+    # Desde H-28 (auditoría #396) la elección vive en el manifiesto: el workflow
+    # invoca al resolver con el carril de revisión, y que reviewer.md y
+    # revisor-documental.md sigan alcanzables (y con el texto registrado) lo
+    # garantizan las pruebas del manifiesto en test_resolver_prompt.py.
+    assert "python3 scripts/automation/resolver_prompt.py --carril revision" in run, (
+        "el prompt del revisor tiene que salir del manifiesto versionado, no de rutas a fuego"
     )
     assert 'cat "$PROMPT_ROL"' in run, (
         "el prompt elegido tiene que insertarse de verdad, no solo nombrarse"
@@ -364,8 +364,15 @@ def test_un_perfil_no_reconocido_no_cae_en_un_prompt_por_defecto() -> None:
     """
     run = _step(_load(), "Preparar instrucciones")["run"]
 
-    assert "::error::" in run and "exit 1" in run, (
-        "un perfil no reconocido tiene que salir en rojo, no elegir un prompt por su cuenta"
+    # El mensaje ::error:: vive ahora en el resolver (visto en rojo en
+    # test_resolver_prompt.py con rol@N desconocido); al workflow le toca no
+    # tragarse ese fallo: si el resolver no entrega ruta, el paso muere.
+    assert "if ! PROMPT_ROL=$(python3 scripts/automation/resolver_prompt.py" in run, (
+        "la ruta del prompt tiene que venir del resolver, comprobando su salida"
+    )
+    assert "exit 1" in run, (
+        "un perfil que el manifiesto no reconoce tiene que salir en rojo, no elegir "
+        "un prompt por su cuenta"
     )
 
 

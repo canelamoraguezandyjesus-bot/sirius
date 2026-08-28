@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "_comentario": "H-28 (auditoria #396): que rol@N signifique UN texto. Cada fila fija el fichero y el sha256 de sus bytes; resolver_prompt.py lo verifica antes de entregar el prompt y para en rojo si el texto ya no es el registrado. Editar un prompt publicado exige registrar rol@N+1 aqui y subir version en docs/implementation/work_engine/perfiles/<rol>.yml, nunca editar la fila vieja. El carril revision se indexa por el perfil del EJECUTOR declarado en el cuerpo: quien revisa depende de quien implemento.",
+  "carriles": {
+    "ejecucion": {
+      "implementer@1": {
+        "fichero": "scripts/automation/prompts/implementer.md",
+        "sha256": "62fdde501dc77bab471071826b1af6ab9b9f62be6dc2b84bd6949249382d1ece"
+      },
+      "documentalista@1": {
+        "fichero": "scripts/automation/prompts/documentalista.md",
+        "sha256": "c785d92a811c38683ed71d8279d2a8769c91d975af715671e40546556642ef25"
+      }
+    },
+    "revision": {
+      "implementer@1": {
+        "fichero": "scripts/automation/prompts/reviewer.md",
+        "sha256": "10985a44c453eb4f760bd19626752c69bbbbe7a5e0bcc4119cad07217e9037a7"
+      },
+      "documentalista@1": {
+        "fichero": "scripts/automation/prompts/revisor-documental.md",
+        "sha256": "811d4a92e6e287732889b1052ac7ef7917c028470d8012d5d019e44b6e722394"
+      },
+      "investigador@1": {
+        "fichero": "scripts/automation/prompts/revisor-documental.md",
+        "sha256": "811d4a92e6e287732889b1052ac7ef7917c028470d8012d5d019e44b6e722394"
+      }
+    }
+  }
+}
