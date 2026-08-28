@@ -255,7 +255,9 @@ class Run:
             and self.desenlace is RunOutcome.LOST
             and self.cancellation_status is CancellationStatus.UNCONFIRMED
         ):
-            raise IllegalTransitionError(_AGGREGATE, "release_unconfirmed_cancellation", self.estado)
+            raise IllegalTransitionError(
+                _AGGREGATE, "release_unconfirmed_cancellation", self.estado
+            )
         return replace(self, cancellation_status=CancellationStatus.NONE, updated_at=now)
 
     @property
