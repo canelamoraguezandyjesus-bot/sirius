@@ -177,16 +177,27 @@ el contexto ordinario; ambas rutas quedan cubiertas por prueba automática.
 
 El bloque B4 detecta conflictos deterministas y sustituciones
 (`docs/implementation/V8_EXECUTION.md:158`). Concretamente,
-`sirius.domain.precedence.find_subject_conflicts` compara, por asunto y proyecto
-explícitos, memorias vigentes y decisiones aprobadas, y reporta `NO_CONFLICT`,
+`sirius.domain.precedence.evaluate_subject_precedence` compara, por asunto y proyecto
+explícitos, memorias vigentes y decisiones aprobadas, y decide entre `NO_CONFLICT`,
 `DECISION_PRECEDENCE` o `CONFLICT` sin elegir nunca un ganador
-(`src/sirius/domain/precedence.py:20-22`). `DetectPrecedenceConflictsUseCase` expone esa
-detección de solo lectura (`src/sirius/application/detect_precedence_conflicts.py:28-46`),
-y su docstring en inglés afirma que nunca elige un ganador, que resolver un conflicto
-reportado siempre pasa por los casos de uso ya existentes que ya exigen una orden o
-confirmación explícita, y que nada en `SendMessageUseCase` invoca este caso de uso
-tampoco, así que una conversación ordinaria nunca lo dispara, lo resuelve ni queda
-bloqueada por él (`src/sirius/application/detect_precedence_conflicts.py:10-16`).
+(`src/sirius/domain/precedence.py:123-163`). `find_subject_conflicts` evalúa con esa misma
+regla todos los asuntos vigentes, pero filtra el resultado a una consulta exclusiva de los
+que quedan en `CONFLICT`: descarta expresamente `NO_CONFLICT` y `DECISION_PRECEDENCE`
+(`src/sirius/domain/precedence.py:166-192`). `DetectPrecedenceConflictsUseCase` expone esa
+consulta de solo lectura de conflictos pendientes
+(`src/sirius/application/detect_precedence_conflicts.py:28-46`), y su docstring en inglés
+afirma que nunca elige un ganador, que resolver un conflicto reportado siempre pasa por los
+casos de uso ya existentes que ya exigen una orden o confirmación explícita, y que nada en
+`SendMessageUseCase` invoca este caso de uso tampoco, así que una conversación ordinaria
+nunca lo dispara, lo resuelve ni queda bloqueada por él
+(`src/sirius/application/detect_precedence_conflicts.py:10-16`).
+
+`KnowledgeWidget` ya cablea esa consulta a una superficie de interfaz: el botón «Detectar
+conflictos de precedencia» invoca `DetectPrecedenceConflictsUseCase.detect()` y presenta
+cada conflicto pendiente en una lista, sin elegir nunca un ganador
+(`src/sirius/presentation/knowledge_widget.py:627-669`), comportamiento cubierto por
+`tests/gui/test_knowledge_widget.py:517-535` con dos memorias del mismo asunto en
+conflicto.
 
 ### 5.2 Qué existe ya construido y medido como evidencia (PR #117, sin fusionar)
 
@@ -195,9 +206,12 @@ inventa ninguna.
 
 ### 5.3 Qué falta por construir
 
-Plantear el conflicto detectado al usuario y ofrecerle resolverlo (corregir, archivar,
-aprobar una decisión) desde ese mismo punto — hoy la detección existe pero no está
-cableada a ninguna superficie de interfaz ni a `SendMessageUseCase`.
+La detección y su visualización ya existen (§5.1): `KnowledgeWidget` ya lista cada
+conflicto pendiente ante el usuario. Falta ofrecer, desde ese mismo punto de la interfaz,
+las acciones de resolución (corregir, archivar, aprobar/sustituir una decisión) sobre cada
+conflicto listado — hoy la lista es de solo lectura y no está conectada a los casos de uso
+de corrección, archivado o aprobación ya existentes; tampoco a `SendMessageUseCase`, que
+sigue sin disparar ni resolver conflictos por sí solo.
 
 ### 5.4 Criterio de comprobación
 
@@ -239,7 +253,34 @@ consultarlos nunca modifica ni contamina el estado o el contexto del proyecto vi
 ### 7.1 Puerta de salida del Rector
 
 `RECTOR.md` §9.1: «puede construir un paquete de contexto fiable y trazable para una
-tarea externa» (`docs/evolution/RECTOR.md:146`).
+tarea externa» (`docs/evolution/RECTOR.md:146`), sostenida por la evidencia exigida en la
+misma sección: «recupera información correcta a través de varias sesiones sin aumentar
+ruido» (`docs/evolution/RECTOR.md:145`).
+
+**Criterio de comprobación de la puerta** (define solo qué prueba o medida la acredita
+cuando llegue el momento de construirla; no autoriza implementación — ver cabecera del
+documento).
+
+Sobre una tarea externa real, no sintética, que requiera contexto de más de una sesión de
+conversación:
+
+- Sirius ensambla un paquete de contexto para esa tarea combinando los resultados de las
+  secciones 2 a 6 (búsqueda mejorada, mejor recuperación, sugerencias confirmadas,
+  conflictos asistidos, proyectos históricos) que ya estén incorporados a `main`.
+- El paquete recupera la información correcta guardada en sesiones anteriores a la
+  actual, verificado sobre un banco de casos versionado (mismo patrón que el banco de 47
+  casos de las secciones 2 y 3), sin regresión de aciertos exactos, cobertura ni omisiones
+  críticas frente a la última cifra incorporada a `main` en esas secciones.
+- El paquete no aumenta el ruido: los «elementos de más» (terminología de §2.2) medidos
+  sobre ese mismo banco no empeoran respecto a la última cifra incorporada a `main`.
+- Cada elemento del paquete es trazable a su origen —memoria, decisión o evento— por el
+  mismo mecanismo que ya usan `GetMemoryOriginUseCase`/`GetDecisionOriginUseCase`
+  (`src/sirius/application/memory_origin.py`, `src/sirius/application/decision_origin.py`),
+  sin ningún elemento sin origen localizable.
+
+La puerta se declara cumplida solo cuando las cuatro condiciones anteriores están
+cubiertas por prueba automática o medida reproducible sobre el banco versionado, no por
+inspección manual.
 
 ### 7.2 Exclusiones del Rector
 
