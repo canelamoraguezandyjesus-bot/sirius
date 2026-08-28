@@ -23,8 +23,8 @@ Los archivos originales conservan palabras como `PROPUESTO` en su nombre o conte
 ## Estado operativo
 
 - La implementación de Sirius 0.1 continúa autorizada por verticales, sin ampliar el alcance aprobado.
-- Sirius 0.1: ACEPTADO y TERMINADO por declaración del propietario el 10-08-2026 (docs/implementation/PLAN.md). Las versiones post-0.1 siguen sin activarse.
-- El Documento Rector de Evolución fija dirección futura, pero no autoriza implementación.
+- Sirius 0.1: ACEPTADO y TERMINADO por declaración del propietario el 10-08-2026 (docs/implementation/PLAN.md). Las versiones post-0.1 siguen sin activarse, con dos excepciones registradas en `docs/evolution/STATUS.md`: el Sirius Work Engine (15-08-2026, estrictamente según ADR-019, ADR-020 y su plan aprobado) y la implementación de Sirius 0.2 — Memoria útil (28-08-2026, estrictamente según la Definición de Producto aprobada por la fusión de la PR #410 y sujeta a las puertas de activación del Rector §17).
+- El Documento Rector de Evolución fija dirección futura, pero no autoriza implementación por sí solo; las únicas autorizaciones vigentes son las dos excepciones anteriores.
 - HEAD-R1 permanece físicamente inactivo. No existen compras ni fases autorizadas.
 - El multiagente permanece condicionado a evidencia posterior y no es requisito obligatorio de Sirius 1.0.
 - Ningún modelo puede controlar directamente actuadores o firmware activo.
