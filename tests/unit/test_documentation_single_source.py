@@ -134,3 +134,30 @@ def test_ningun_documento_vigente_cuenta_ficheros_de_prueba_a_mano() -> None:
             f"({encontrado}). Esa cifra caduca sola; la trazabilidad se lee en "
             "docs/implementation/TRAZABILIDAD_PA_SP.md (ADR-006)."
         )
+
+
+def test_status_y_plan_cuentan_la_misma_historia_sobre_la_aceptacion_de_01() -> None:
+    """H-32 (auditoría externa, incidencia #396): dos vigentes, dos verdades.
+
+    `PLAN.md` declara «Sirius 0.1: ACEPTADO y TERMINADO por declaración del
+    propietario el 10-08-2026» mientras el «Estado operativo» de `STATUS.md`
+    seguía diciendo que 0.1 «todavía debe terminarse y aceptarse». Quien leyera
+    solo uno de los dos salía con una idea equivocada del otro. Esta prueba no
+    decide cuál es la verdad -eso lo declaró el propietario-; exige que los dos
+    documentos vigentes no la cuenten al revés el uno del otro.
+    """
+    plan = _texto(REPO_ROOT / "docs" / "implementation" / "PLAN.md")
+    status = _texto(REPO_ROOT / "docs" / "canonical" / "STATUS.md")
+
+    plan_declara_aceptado = "ACEPTADO y TERMINADO" in plan
+    status_lo_da_por_pendiente = re.search(r"Sirius 0\.1 todav[íi]a debe terminarse", status)
+    assert not (plan_declara_aceptado and status_lo_da_por_pendiente), (
+        "PLAN.md declara Sirius 0.1 ACEPTADO y TERMINADO (10-08-2026) pero "
+        "docs/canonical/STATUS.md sigue dándolo por pendiente. Corrige la línea "
+        "de STATUS.md citando a PLAN.md; las instantáneas históricas no se tocan."
+    )
+    assert plan_declara_aceptado, (
+        "PLAN.md ya no declara la aceptación de Sirius 0.1: si eso cambió de "
+        "verdad, esta prueba y STATUS.md deben cambiar JUNTOS, con la decisión "
+        "del propietario delante."
+    )

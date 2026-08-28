@@ -392,7 +392,8 @@ defectos:
     titulo: La version del perfil (rol@N) se registra pero el workflow ejecuta el prompt vigente de main
     bloque: ciclo
     gravedad: alta
-    estado: abierto
+    estado: cerrado
+    cerrado_por: b133ecb9ccf6ec1f7616d115a87aa9daac32537a
     incidencia: 396
     ficheros:
       - .github/workflows/implement-sirius-work.yml
