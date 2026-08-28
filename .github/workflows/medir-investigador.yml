@@ -442,7 +442,7 @@ jobs:
 
           case "$codigo" in
             0)
-              echo "CONCLUYENTE: dos configuraciones medidas en procesos separados y contra servidores distintos."
+              echo "El guion salió con 0: MEDIDA ÚNICA o comparación CONCLUYENTE, según cuántas configuraciones declare el YAML. El veredicto con su nombre está en el resumen."
               exit 0
               ;;
             2)

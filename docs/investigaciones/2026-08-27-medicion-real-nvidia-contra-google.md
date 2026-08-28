@@ -15,8 +15,17 @@ caduca_con:
   - el comportamiento de DuckDuckGo con las IP de los runners de GitHub
   - los nombres de modelo (gemini-3.5-flash, nemotron-3-nano-30b-a3b)
 
-estado: VIGENTE
+estado: PARCIALMENTE CADUCADA
 ---
+
+> **AVISO (28-08-2026, un día después): la mitad del diagnóstico CADUCÓ ya.**
+> Lo que ACERTÓ: el descarte de Google (confirmado con un 429 de cuota agotada
+> al día siguiente) y que el cuello era la búsqueda, no el modelo. Lo que
+> CADUCÓ: el «28,6 %» y el «DuckDuckGo casi no devuelve fuentes» describen el
+> instrumento de aquel día. Con Tavily funcionando y el conteo mirando los DOS
+> registros de la herramienta (PR #382), la misma configuración dio **7/7
+> (100 %) con 23 fuentes de media** (run 33141864710). El número vigente vive
+> en el registro de bloques (S2, cerrado).
 
 # La medición real: NVIDIA contra Google, 27-08-2026
 
