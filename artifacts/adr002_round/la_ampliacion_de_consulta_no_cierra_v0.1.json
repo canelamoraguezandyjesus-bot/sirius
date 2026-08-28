@@ -1,0 +1,62 @@
+{
+  "que_es": "por que ampliar la consulta con el modelo local no cierra la ultima omision critica, medido sobre el banco",
+  "commit": "230367e",
+  "medido_sobre": "resultado_modelo_local_v0.7.json, corrida «6. con la consulta ampliada»",
+  "el_modelo_si_actuo": {
+    "consultas_ampliadas": 43,
+    "de": 47,
+    "lectura": "no es que no respondiera: respondio en 43 de 47"
+  },
+  "lo_que_escribio": {
+    "palabras_propuestas": 256,
+    "de_ellas_variantes_de_la_consulta": 2,
+    "lectura": "el modelo da SINONIMOS TEMATICOS —«gasto» por «presupuesto», «normas» por «reglas»—, que es lo que hace un diccionario de sinonimos. Casi nunca da la OTRA FORMA de la misma palabra, que es lo unico que cierra el caso",
+    "ejemplos_de_variante_encontrados": [
+      {
+        "consulta": "Consultas por occurred_at, valid_time y recorded_at.",
+        "palabra": "valido"
+      },
+      {
+        "consulta": "Par diferencial: misma consulta, dos propósitos.",
+        "palabra": "mismo"
+      }
+    ]
+  },
+  "el_caso_que_habia_que_cerrar": {
+    "caso": "N1-30",
+    "consulta": "Resume mi preferencia de redacción, el presupuesto vigente y la condición de ahorro en escalas, con su razón.",
+    "lo_que_el_modelo_escribio": [
+      "deseo",
+      "limite",
+      "nivel",
+      "mide",
+      "cambio"
+    ],
+    "lo_que_hacia_falta": [
+      "prefiere",
+      "redactes"
+    ],
+    "resultado": "no aparece ninguna; MEMORIA:1 no se recupera"
+  },
+  "instruccion_contaminada": {
+    "hecho": "la instruccion que se le dio al modelo usaba de ejemplo las palabras exactas del caso que fallaba: «si la pregunta dice redaccion, el dato puede decir redactes»",
+    "por_que_se_declara": "se escribio mirando el caso. Fallo igual, de modo que no afecta a ningun resultado, pero si hubiera funcionado habria habido que declararlo como no validable con este banco. Se deja escrito"
+  },
+  "efecto_total_en_el_banco": {
+    "sin_ampliar": {
+      "conjunto_exacto": 29,
+      "lo_correcto_entra_entero": 23,
+      "elementos_de_mas": 21,
+      "omisiones_criticas": 1
+    },
+    "ampliando": {
+      "conjunto_exacto": 29,
+      "lo_correcto_entra_entero": 23,
+      "elementos_de_mas": 22,
+      "omisiones_criticas": 1
+    },
+    "lectura": "cambia exactamente una cosa: un elemento de basura mas. Ninguna ganancia"
+  },
+  "aviso_sobre_la_latencia_de_esta_corrida": "las cifras de latencia de la v0.7 NO incluyen la llamada de ampliacion: el cronometro solo rodeaba el filtro. Corregido despues; la v0.7 no sirve para juzgar el presupuesto",
+  "veredicto": "ampliar la consulta con este modelo NO cierra la ultima omision y solo anade ruido. La via queda cerrada por medicion, como la semantica densa y como la ampliacion al guardar"
+}

@@ -1,0 +1,42 @@
+=== GIT STATUS FINAL ===
+2026-07-25T03:44:01Z
+
+?? artifacts/
+?? experiments/
+
+--- ¿hay algo modificado fuera de experiments/ y artifacts/? ---
+NO. Solo hay rutas experimentales nuevas.
+
+--- ¿algún fichero rastreado de Sirius 0.1 modificado? ---
+(vacio = ningun fichero rastreado modificado)
+
+--- inventario de archivos creados por los spikes ---
+artifacts/adr001_spikes/00_prevuelo.txt
+artifacts/adr001_spikes/01_linea_base_check_antes.txt
+artifacts/adr001_spikes/02_ejecucion_spikes.txt
+artifacts/adr001_spikes/03_pruebas_experimentales.txt
+artifacts/adr001_spikes/04_linea_base_check_despues.txt
+artifacts/adr001_spikes/05_git_status_final.txt
+artifacts/adr001_spikes/evidencia_spikes.json
+experiments/adr001/__init__.py
+experiments/adr001/__pycache__/__init__.cpython-314.pyc
+experiments/adr001/__pycache__/conftest.cpython-314-pytest-9.1.1.pyc
+experiments/adr001/__pycache__/evidence.cpython-314.pyc
+experiments/adr001/__pycache__/fingerprint.cpython-314.pyc
+experiments/adr001/__pycache__/run_all.cpython-314.pyc
+experiments/adr001/__pycache__/spikes_deletion.cpython-314.pyc
+experiments/adr001/__pycache__/spikes_migration.cpython-314.pyc
+experiments/adr001/__pycache__/spikes_model.cpython-314.pyc
+experiments/adr001/__pycache__/synthetic.cpython-314.pyc
+experiments/adr001/__pycache__/test_adr001_spikes.cpython-314-pytest-9.1.1.pyc
+experiments/adr001/__pycache__/xmodel.cpython-314.pyc
+experiments/adr001/conftest.py
+experiments/adr001/evidence.py
+experiments/adr001/fingerprint.py
+experiments/adr001/run_all.py
+experiments/adr001/spikes_deletion.py
+experiments/adr001/spikes_migration.py
+experiments/adr001/spikes_model.py
+experiments/adr001/synthetic.py
+experiments/adr001/test_adr001_spikes.py
+experiments/adr001/xmodel.py

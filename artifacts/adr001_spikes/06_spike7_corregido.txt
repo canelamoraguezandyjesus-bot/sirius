@@ -1,0 +1,72 @@
+SPIKE 7 CORREGIDO — siete dimensiones canónicas
+==============================================================
+
+Dimensiones canónicas empleadas (sustituyen a las experimentales de v0.1):
+  1. confirmación
+  2. validez
+  3. disponibilidad
+  4. sensibilidad
+  5. temporalidad
+  6. ámbito
+  7. autoridad
+
+resultado                 : PASS
+repetición                : reproducido desde base limpia: segunda pasada tambien PASS
+mismo veredicto 3ª/4ª base: True
+evidencia íntegra idéntica: True
+
+Comprobaciones exigidas
+--------------------------------------------------------------
+  True   siete dimensiones representadas de forma independiente
+  True   mutar una deja intactas las otras seis
+  True   el enum monolítico no puede expresar las combinaciones
+  True   colapso incluso en una dimensión que el enum roza
+  True   ámbito y autoridad no se colapsan
+  True   tablas heredadas no alteradas
+  True   huella de Sirius 0.1 idéntica
+  True   sigue siendo modelo experimental
+  False  DDL productivo fijado
+  False  nombres físicos productivos fijados
+
+Barrido dimensión a dimensión
+--------------------------------------------------------------
+  confirmación   confirmada -> provisional  otras 6 intactas: True
+  validez        vigente -> caducada     otras 6 intactas: True
+  disponibilidad activa -> archivada    otras 6 intactas: True
+  sensibilidad   normal -> restringida  otras 6 intactas: True
+  temporalidad   puntual -> duradera     otras 6 intactas: True
+  ámbito         global -> proyecto     otras 6 intactas: True
+  autoridad      usuario -> sistema      otras 6 intactas: True
+
+Expresividad comparada
+--------------------------------------------------------------
+  combinaciones canónicas distintas coexistiendo : 15
+  valores distintos del enum heredado            : ['archived', 'current', 'deleted']
+  mayor grupo que colapsa al mismo valor         : 10
+  ámbitos distintos con el mismo triple heredado : ['conversación', 'global', 'proyecto']
+  autoridades distintas con el mismo triple      : ['derivada', 'sistema', 'usuario']
+  valor heredado de todo ese grupo              : ['current']
+
+Conjunto de los 14 spikes tras la corrección
+--------------------------------------------------------------
+  spike  1  PASS         Afirmacion atomica con varias procedencias
+  spike  2  PASS         Apoyo y refutacion multiples
+  spike  3  PASS         Tiempo valido separado del tiempo de registro
+  spike  4  PASS         Correccion retroactiva sin destruir el estado anterior
+  spike  5  PASS         Consulta valida en T
+  spike  6  PASS         Consulta conocida en T
+  spike  7  PASS         Siete dimensiones canonicas ortogonales de estado sin enum monolitico
+  spike  8  PASS         Ambito multi-proyecto cerrado
+  spike 10  PASS         Borrado duro con FTS5 y todos los derivados
+  spike 15  PASS         Migracion de una base Sirius 0.1 representativa
+  spike 16  PASS         Rollback
+  spike 17  PASS         Fallo inyectado durante una escritura critica
+  spike 18  PASS         Ningun derivado actua como fuente canonica
+  spike 19  PASS         No reconstruibilidad
+
+los 14 en PASS : True
+DECISIÓN       : RATIFICAR A
+evidencia v0.2 : /home/user/sirius/artifacts/adr001_spikes/evidencia_spikes_v0.2.json
+
+Los spikes 1-6, 8, 10 y 15-19 NO se reejecutaron: sus entradas se
+arrastran literalmente desde evidencia_spikes.json (v0.1).

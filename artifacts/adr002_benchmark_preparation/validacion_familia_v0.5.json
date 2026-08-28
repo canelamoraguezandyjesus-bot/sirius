@@ -1,0 +1,735 @@
+{
+ "documento": "Validacion de la familia sucesora de conformidad v0.5",
+ "version_contrato": "0.5",
+ "semantica": "acumula todos los fallos; los abortos declarados se provocan y se comprueban",
+ "comprobaciones": 97,
+ "fallos": 0,
+ "detalle": [
+  {
+   "comprobacion": "v0.4 intacta byte a byte: conformance_corpus_v0_4.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "c21b702cbe613d70ce76b6a8b2e72baf2d4e8a48",
+    "esperado": "c21b702cbe613d70ce76b6a8b2e72baf2d4e8a48"
+   }
+  },
+  {
+   "comprobacion": "v0.4 intacta byte a byte: cases_v0_4.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "072753b96f4162fe88ce9c96660296349225c7be",
+    "esperado": "072753b96f4162fe88ce9c96660296349225c7be"
+   }
+  },
+  {
+   "comprobacion": "v0.4 intacta byte a byte: references_v0_4.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "3fc9a63705144bf543266de129e17a17ab31c568",
+    "esperado": "3fc9a63705144bf543266de129e17a17ab31c568"
+   }
+  },
+  {
+   "comprobacion": "v0.4 intacta byte a byte: pdp_cases_v0_3.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "2eee45a04dee3d72f52ad00dfd46023d7c5e2199",
+    "esperado": "2eee45a04dee3d72f52ad00dfd46023d7c5e2199"
+   }
+  },
+  {
+   "comprobacion": "v0.4 intacta byte a byte: pdp_harness_rules_v0_2.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "86e4f4ea6b4af3d445ec0f71c9772b46751a202b",
+    "esperado": "86e4f4ea6b4af3d445ec0f71c9772b46751a202b"
+   }
+  },
+  {
+   "comprobacion": "v0.4 intacta byte a byte: performance_corpus_v0_2.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "4e9e2746e49b158a43eda7826b47c78c41b36e90",
+    "esperado": "4e9e2746e49b158a43eda7826b47c78c41b36e90"
+   }
+  },
+  {
+   "comprobacion": "v0.4 intacta byte a byte: benchmark_manifest_v0_4.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "fa9a2f2b5d8d65aed811f039b2b279c5350d2132",
+    "esperado": "fa9a2f2b5d8d65aed811f039b2b279c5350d2132"
+   }
+  },
+  {
+   "comprobacion": "ningun artefacto sucesor reutiliza el nombre de uno congelado",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "los heredados sin cambio son congelables de la v0.4",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "conteos del corpus contados sobre los datos",
+   "resultado": "OK",
+   "detalle": {
+    "declarado": {
+     "proyectos": 8,
+     "entidades": 7,
+     "items": 97,
+     "recuerdos": 81,
+     "decisiones": 16,
+     "mensajes": 6,
+     "documentos": 5,
+     "relaciones": 10
+    },
+    "real": {
+     "proyectos": 8,
+     "entidades": 7,
+     "items": 97,
+     "recuerdos": 81,
+     "decisiones": 16,
+     "mensajes": 6,
+     "documentos": 5,
+     "relaciones": 10
+    }
+   }
+  },
+  {
+   "comprobacion": "identidad por elemento recalculada",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "el corpus declara version de contrato 0.5",
+   "resultado": "OK",
+   "detalle": "0.5"
+  },
+  {
+   "comprobacion": "la semilla no cambia",
+   "resultado": "OK",
+   "detalle": 20260726
+  },
+  {
+   "comprobacion": "los dos extremos del delta existen",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "cero tokens indexados compartidos entre los extremos (FTS5 unicode61 rd=1)",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "mismo proyecto en ambos extremos",
+   "resultado": "OK",
+   "detalle": {
+    "origen": "PRJ-DELTA",
+    "destino": "PRJ-DELTA"
+   }
+  },
+  {
+   "comprobacion": "sujetos distintos en los extremos",
+   "resultado": "OK",
+   "detalle": {
+    "origen": [
+     "ENT-ROTOR"
+    ],
+    "destino": [
+     "ENT-BITACORA"
+    ]
+   }
+  },
+  {
+   "comprobacion": "la arista discriminante existe",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "la arista es explicita, tipada y dirigida del origen al destino",
+   "resultado": "OK",
+   "detalle": {
+    "id": "REL-010",
+    "tipo": "DERIVA_DE",
+    "origen": "MEM-950",
+    "destino": "MEM-951",
+    "nota": "Dependencia explicita, tipada y dirigida entre dos sujetos distintos."
+   }
+  },
+  {
+   "comprobacion": "el tipo no es supersesion ni conflicto",
+   "resultado": "OK",
+   "detalle": "DERIVA_DE"
+  },
+  {
+   "comprobacion": "el tipo pertenece al vocabulario aprobado",
+   "resultado": "OK",
+   "detalle": "DERIVA_DE"
+  },
+  {
+   "comprobacion": "la nota de la arista no nombra ningun caso del banco",
+   "resultado": "OK",
+   "detalle": "Dependencia explicita, tipada y dirigida entre dos sujetos distintos."
+  },
+  {
+   "comprobacion": "MEM-950 declara todas las dimensiones P2",
+   "resultado": "OK",
+   "detalle": {
+    "confirmacion": "CONFIRMADA",
+    "validez": "VIGENTE",
+    "disponibilidad": "DISPONIBLE",
+    "ambito": "PROYECTO"
+   }
+  },
+  {
+   "comprobacion": "MEM-950 no lleva etiqueta de candidato",
+   "resultado": "OK",
+   "detalle": "El calibrado del rotor exige una holgura escalonada."
+  },
+  {
+   "comprobacion": "MEM-951 declara todas las dimensiones P2",
+   "resultado": "OK",
+   "detalle": {
+    "confirmacion": "CONFIRMADA",
+    "validez": "VIGENTE",
+    "disponibilidad": "DISPONIBLE",
+    "ambito": "PROYECTO"
+   }
+  },
+  {
+   "comprobacion": "MEM-951 no lleva etiqueta de candidato",
+   "resultado": "OK",
+   "detalle": "Cada bitacora municipal permanece archivada junto al deposito comarcal."
+  },
+  {
+   "comprobacion": "cobertura total del canal de sujeto, null incluido",
+   "resultado": "OK",
+   "detalle": {
+    "faltan": [],
+    "sobran": []
+   }
+  },
+  {
+   "comprobacion": "la proyeccion definitiva coincide con el oraculo",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "toda clave presente respeta el formato cerrado",
+   "resultado": "OK",
+   "detalle": [
+    "bitacora",
+    "juanmolina",
+    "juantorres",
+    "postgresql",
+    "proyectoatlasalfa",
+    "rotor",
+    "vehiculo"
+   ]
+  },
+  {
+   "comprobacion": "ninguna clave es prefijo de otra: la familia de E3 coincide con la entidad",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "identidades distintas con el mismo sujeto real comparten clave",
+   "resultado": "OK",
+   "detalle": {
+    "postgresql": 1,
+    "vehiculo": 3,
+    "proyectoatlasalfa": 1,
+    "juantorres": 1,
+    "juanmolina": 1,
+    "rotor": 1,
+    "bitacora": 1
+   }
+  },
+  {
+   "comprobacion": "la ausencia se representa como null y no como cadena vacia",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "el canal NO repite custodia por item",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "cobertura total del canal lateral, null incluido",
+   "resultado": "OK",
+   "detalle": {
+    "faltan": [],
+    "sobran": []
+   }
+  },
+  {
+   "comprobacion": "property_key coincide con el oraculo independiente",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "formato cerrado y opaco",
+   "resultado": "OK",
+   "detalle": [
+    "PK-e1dbd4b9197c",
+    "PK-aa227ff67a6f",
+    "PK-f137044431b7",
+    "PK-d944c8338268",
+    "PK-bbd009bfa97c"
+   ]
+  },
+  {
+   "comprobacion": "la frontera estructural es exactamente la declarada",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "el canal NO repite custodia por item",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "cobertura total de criticidad aplicada",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "la criticidad segura coincide con el oraculo",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "ningun campo seguro porta identificador de caso del banco",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "la fuente bruta NO cruza al artefacto comun",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "toda fuente de politica pertenece al vocabulario de Q21",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "no aparece ninguna etiqueta de candidato",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "censo de criticidad recomputado por el oraculo",
+   "resultado": "OK",
+   "detalle": {
+    "declarado": {
+     "items": 97,
+     "sin_criticidad": 78,
+     "con_criticidad": 19,
+     "distribucion_por_nivel": {
+      "CRITICO": 18,
+      "IMPORTANTE": 1
+     },
+     "fuentes_de_politica": {
+      "ACTO_EXPLICITO": 4,
+      "ETIQUETA_DE_ESCENARIO": 12,
+      "REGLA_OPERATIVA_APROBADA": 1,
+      "REQUISITO_O_DECISION_APROBADA": 2
+     },
+     "razones_seguras_distintas": 8,
+     "reglas_de_politica_distintas": 7
+    },
+    "recalculado": {
+     "items": 97,
+     "sin_criticidad": 78,
+     "con_criticidad": 19,
+     "distribucion_por_nivel": {
+      "CRITICO": 18,
+      "IMPORTANTE": 1
+     },
+     "fuentes_de_politica": {
+      "ACTO_EXPLICITO": 4,
+      "ETIQUETA_DE_ESCENARIO": 12,
+      "REGLA_OPERATIVA_APROBADA": 1,
+      "REQUISITO_O_DECISION_APROBADA": 2
+     },
+     "razones_seguras_distintas": 8,
+     "reglas_de_politica_distintas": 7
+    }
+   }
+  },
+  {
+   "comprobacion": "el censo NO reutiliza las constantes de la v0.4",
+   "resultado": "OK",
+   "detalle": {
+    "items": 97,
+    "sin_criticidad": 78,
+    "con_criticidad": 19,
+    "distribucion_por_nivel": {
+     "CRITICO": 18,
+     "IMPORTANTE": 1
+    },
+    "fuentes_de_politica": {
+     "ACTO_EXPLICITO": 4,
+     "ETIQUETA_DE_ESCENARIO": 12,
+     "REGLA_OPERATIVA_APROBADA": 1,
+     "REQUISITO_O_DECISION_APROBADA": 2
+    },
+    "razones_seguras_distintas": 8,
+    "reglas_de_politica_distintas": 7
+   }
+  },
+  {
+   "comprobacion": "construir_subject_keys recibe el corpus y nada mas",
+   "resultado": "OK",
+   "detalle": [
+    "corpus"
+   ]
+  },
+  {
+   "comprobacion": "construir_property_keys recibe el corpus y nada mas",
+   "resultado": "OK",
+   "detalle": [
+    "corpus"
+   ]
+  },
+  {
+   "comprobacion": "construir_criticidad_aplicada recibe el corpus y nada mas",
+   "resultado": "OK",
+   "detalle": [
+    "corpus"
+   ]
+  },
+  {
+   "comprobacion": "construir_casos no recibe ningun canal lateral: los consume, no los produce",
+   "resultado": "OK",
+   "detalle": [
+    "canon",
+    "corpus"
+   ]
+  },
+  {
+   "comprobacion": "el orden de materializacion declara los canales antes que casos y referencias",
+   "resultado": "OK",
+   "detalle": [
+    "conformance_corpus_v0_5.json",
+    "subject_keys_v0_1.json",
+    "property_keys_v0_1.json",
+    "applied_criticality_v0_1.json",
+    "cases_v0_5.json",
+    "references_v0_5.json",
+    "benchmark_manifest_v0_5.json"
+   ]
+  },
+  {
+   "comprobacion": "el caso separa entrada y oraculo en bloques distintos",
+   "resultado": "OK",
+   "detalle": {
+    "entrada": [
+     "consulta_propia_del_destino",
+     "extremos",
+     "peticion",
+     "relacion"
+    ],
+    "oraculo": [
+     "alcance_lexico_estructurado",
+     "aportado_por_un_salto_relacional",
+     "estado",
+     "justificacion",
+     "sin_la_arista_no_hay_aporte"
+    ]
+   }
+  },
+  {
+   "comprobacion": "el bloque de entrada no lleva campo de oraculo",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "subject_keys_v0_1.json no porta rastro de oraculo",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "property_keys_v0_1.json no porta rastro de oraculo",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "applied_criticality_v0_1.json no porta rastro de oraculo",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "los atributos entregados a un candidato estan contenidos en la lista blanca",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "ningun atributo vetado viaja en la estructura que recibe un candidato",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "property_key no es legible por ningun candidato",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "subject_key_experimental es legible por common y por A, y por nadie mas",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "los cuatro campos de criticidad segura llegan a B05",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "toda capacidad declarada pertenece al vocabulario cerrado",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "la clasificacion ABORTA ante un campo sin terna asignada",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "la criticidad ABORTA ante una fuente fuera de la tabla cerrada",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "caso y referencia coinciden en el alcance lexico",
+   "resultado": "OK",
+   "detalle": {
+    "caso": [
+     "MEM-950"
+    ],
+    "referencia": [
+     "MEM-950"
+    ]
+   }
+  },
+  {
+   "comprobacion": "el destino NO esta en el alcance lexico",
+   "resultado": "OK",
+   "detalle": [
+    "MEM-950"
+   ]
+  },
+  {
+   "comprobacion": "la semilla SI esta en el alcance lexico",
+   "resultado": "OK",
+   "detalle": [
+    "MEM-950"
+   ]
+  },
+  {
+   "comprobacion": "un salto relacional aporta el destino",
+   "resultado": "OK",
+   "detalle": [
+    "MEM-951"
+   ]
+  },
+  {
+   "comprobacion": "sin la arista no hay aporte",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "el destino es recuperable por una consulta legitima propia",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "la cardinalidad del caso recorre la escalera entera",
+   "resultado": "OK",
+   "detalle": "EXHAUSTIVA"
+  },
+  {
+   "comprobacion": "el limite no puede ser la causa de que falte el destino",
+   "resultado": "OK",
+   "detalle": {
+    "limite_duro": 10,
+    "en_ambito": 2
+   }
+  },
+  {
+   "comprobacion": "el caso declara expresamente que no mide rendimiento",
+   "resultado": "OK",
+   "detalle": [
+    "latencia",
+    "memoria",
+    "almacenamiento",
+    "calidad comparada entre candidatos"
+   ]
+  },
+  {
+   "comprobacion": "el bloque heredado nivel_1 no cambia",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "el bloque heredado nivel_1_pdp no cambia",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "el bloque heredado nivel_2 no cambia",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "el bloque heredado nivel_3 no cambia",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "las 52 referencias heredadas no cambian",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "el corpus heredado conserva sus 95 items y 9 relaciones bajo el delta",
+   "resultado": "OK",
+   "detalle": {
+    "proyectos": 8,
+    "entidades": 7,
+    "items": 97,
+    "recuerdos": 81,
+    "decisiones": 16,
+    "mensajes": 6,
+    "documentos": 5,
+    "relaciones": 10
+   }
+  },
+  {
+   "comprobacion": "el manifiesto lista los siete sucesores",
+   "resultado": "OK",
+   "detalle": [
+    "conformance_corpus_v0_5.json",
+    "subject_keys_v0_1.json",
+    "property_keys_v0_1.json",
+    "applied_criticality_v0_1.json",
+    "cases_v0_5.json",
+    "references_v0_5.json",
+    "benchmark_manifest_v0_5.json"
+   ]
+  },
+  {
+   "comprobacion": "el manifiesto cierra tambien los heredados, por blob",
+   "resultado": "OK",
+   "detalle": [
+    "pdp_cases_v0_3.json",
+    "pdp_harness_rules_v0_2.json",
+    "performance_corpus_v0_2.json"
+   ]
+  },
+  {
+   "comprobacion": "el manifiesto aloja la custodia de los canales UNA SOLA VEZ",
+   "resultado": "OK",
+   "detalle": [
+    "property_key",
+    "subject_key_experimental"
+   ]
+  },
+  {
+   "comprobacion": "las huellas del manifiesto se recalculan",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "el manifiesto declara que NO regenera la proyeccion T0",
+   "resultado": "OK",
+   "detalle": {
+    "regenerada": false,
+    "fichero_no_regenerado": "t0_preexecution_projection_v0_2.json",
+    "blob_observado": "3a241839b7eba84f12a3bbb3c643a17f7b0d0f91",
+    "estado": "NO_NORMATIVO_NO_CONGELABLE",
+    "valor": "observacion sin valor vinculante; no es evidencia congelada",
+    "motivo": "Regenerarla exigiria proyectar el caso discriminante sobre T0, y esa proyeccion presupondria el arnes de conformidad de T0, que NO EXISTE. El acta de congelacion v0.4 §6 prohibe ademas modificar el fichero original. La familia v0.5 declara expresamente que NO lleva proyeccion T0.",
+    "arnes_de_conformidad_de_t0": "NO EXISTE; no se presupone y no se construye aqui"
+   }
+  },
+  {
+   "comprobacion": "el manifiesto no presupone el arnes de conformidad de T0",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "el barrido de impacto declara cero cambios sobre los 66 dominios",
+   "resultado": "OK",
+   "detalle": {
+    "adjudicaciones_recalculadas": 66,
+    "cambios": [],
+    "regla": "ninguna adjudicacion heredada puede cambiar al anadir el delta relacional",
+    "razon_estructural": "64 de los 66 dominios estan acotados a proyectos existentes y no pueden ver un proyecto nuevo. Los dos que usan GLOBAL_TODOS son B04-CA-01, anclado al prefijo 'redact' que el delta no contiene, y B04-CA-14, restringido al grupo homonimo JUAN que las entidades del delta no declaran."
+   }
+  },
+  {
+   "comprobacion": "el rendimiento se hereda byte a byte y no se mide",
+   "resultado": "OK",
+   "detalle": {
+    "fichero": "performance_corpus_v0_2.json",
+    "blob": "4e9e2746e49b158a43eda7826b47c78c41b36e90",
+    "sha256": "c5a161cbdaa7ee150c08e663fa72663324375aa6654f3216a73e90d6b182666b",
+    "regla": "heredado byte a byte; la familia v0.5 no mide rendimiento"
+   }
+  },
+  {
+   "comprobacion": "el manifiesto declara el benchmark bloqueado",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "los vocabularios P2 se declaran locales y no productivos",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "determinismo de conformance_corpus_v0_5.json",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "determinismo de subject_keys_v0_1.json",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "determinismo de property_keys_v0_1.json",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "determinismo de applied_criticality_v0_1.json",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "determinismo de cases_v0_5.json",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "determinismo de references_v0_5.json",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "determinismo de benchmark_manifest_v0_5.json",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "validar no modifica ningun artefacto del arbol",
+   "resultado": "OK",
+   "detalle": []
+  }
+ ]
+}

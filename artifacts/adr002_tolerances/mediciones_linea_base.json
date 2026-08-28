@@ -1,0 +1,352 @@
+{
+  "documento": "Mediciones de linea base FTS5 para ADR-002",
+  "estado": "PROPUESTO",
+  "paquete": "SIRIUS_0.2_ADR_002_PAQUETE_TRABAJO_02_TOLERANCIAS_Y_MEDICION_v0.1",
+  "entorno": {
+    "python": "3.14.6",
+    "sqlite_biblioteca": "3.45.1",
+    "sqlalchemy": "2.0.51",
+    "alembic": "1.18.5",
+    "plataforma": "linux",
+    "maquina": "x86_64",
+    "commit": "e9b975c8762e762a28466cbdf255e6437e4fd7c1",
+    "red": "no utilizada",
+    "datos_reales": "ninguno; corpus sintetico determinista",
+    "embeddings_o_modelos_externos": "ninguno"
+  },
+  "metodologia": {
+    "reloj": "time.perf_counter_ns (monotonico)",
+    "warmup_por_escenario": 5,
+    "repeticiones_minimas_exigidas": 30,
+    "repeticiones_escenario_barato": 100,
+    "repeticiones_escenario_caro": 30,
+    "percentil": "rango mas cercano (nearest-rank); nunca interpolado",
+    "fixtures_fuera_del_cronometro": "el corpus y los repositorios se construyen antes de medir; su coste nunca entra en la latencia de consulta",
+    "pareado": "las ramas de TOL-002 se muestrean intercaladas para anular la deriva",
+    "aleatoriedad": "ninguna; el corpus es determinista y no usa semillas",
+    "aislamiento": "una unica maquina y un unico proceso para todas las comparaciones",
+    "codigo_medido": "codigo real de Sirius 0.1 sin modificar: SqliteKnowledgeSearchRepository y RankRelevantKnowledgeUseCase, sobre el esquema de la cadena canonica de Alembic"
+  },
+  "corpus": {
+    "mensajes": 5000,
+    "recuerdos": 500,
+    "memorias_vigentes": 499,
+    "memorias_con_token_frecuente": 200,
+    "decisiones_aprobadas": 50,
+    "proyectos": 2,
+    "head_alembic": "61be4bb269bf",
+    "tokens_de_control": {
+      "ausencia_real": "zetaausentenoindexado",
+      "resultado_unico": "zetaunicovigente",
+      "alta_frecuencia": "zetafrecuente",
+      "no_reportable_archivado": "zetaocultoarchivado",
+      "proyecto_ajeno": "zetaproyectoajeno"
+    }
+  },
+  "escenarios": {
+    "E-LAT-0_cero_resultados": {
+      "consulta": "zetaausentenoindexado",
+      "aciertos_en_el_indice": 0,
+      "aciertos_esperados_en_el_indice": 0,
+      "resultados_externos_de_rank": 0,
+      "solo_indice_fts5": {
+        "n": 100,
+        "warmup_descartado": 5,
+        "p50_ms": 0.1877,
+        "p95_ms": 0.2593,
+        "p99_ms": 0.3237,
+        "min_ms": 0.1381,
+        "max_ms": 0.5809,
+        "media_ms": 0.1986,
+        "resolucion_p99": "con n=100, el P99 corresponde a la 1.a peor muestra observada",
+        "muestras_ms": []
+      },
+      "recuperacion_completa_rank": {
+        "n": 30,
+        "warmup_descartado": 5,
+        "p50_ms": 122.6486,
+        "p95_ms": 137.7986,
+        "p99_ms": 154.3693,
+        "min_ms": 116.6512,
+        "max_ms": 154.3693,
+        "media_ms": 125.5482,
+        "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; solo acota la cola, no la caracteriza",
+        "muestras_ms": []
+      }
+    },
+    "E-LAT-1_un_resultado_exacto": {
+      "consulta": "zetaunicovigente",
+      "aciertos_en_el_indice": 1,
+      "aciertos_esperados_en_el_indice": 1,
+      "resultados_externos_de_rank": 1,
+      "solo_indice_fts5": {
+        "n": 100,
+        "warmup_descartado": 5,
+        "p50_ms": 0.1724,
+        "p95_ms": 0.2614,
+        "p99_ms": 0.2877,
+        "min_ms": 0.1393,
+        "max_ms": 0.3114,
+        "media_ms": 0.1839,
+        "resolucion_p99": "con n=100, el P99 corresponde a la 1.a peor muestra observada",
+        "muestras_ms": []
+      },
+      "recuperacion_completa_rank": {
+        "n": 30,
+        "warmup_descartado": 5,
+        "p50_ms": 113.2599,
+        "p95_ms": 125.0519,
+        "p99_ms": 128.9782,
+        "min_ms": 107.4039,
+        "max_ms": 128.9782,
+        "media_ms": 114.7465,
+        "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; solo acota la cola, no la caracteriza",
+        "muestras_ms": []
+      }
+    },
+    "E-LAT-N_muchos_candidatos": {
+      "consulta": "zetafrecuente",
+      "aciertos_en_el_indice": 200,
+      "aciertos_esperados_en_el_indice": 200,
+      "resultados_externos_de_rank": 200,
+      "solo_indice_fts5": {
+        "n": 100,
+        "warmup_descartado": 5,
+        "p50_ms": 0.5764,
+        "p95_ms": 0.7303,
+        "p99_ms": 1.4145,
+        "min_ms": 0.5377,
+        "max_ms": 1.5302,
+        "media_ms": 0.6135,
+        "resolucion_p99": "con n=100, el P99 corresponde a la 1.a peor muestra observada",
+        "muestras_ms": []
+      },
+      "recuperacion_completa_rank": {
+        "n": 30,
+        "warmup_descartado": 5,
+        "p50_ms": 117.7548,
+        "p95_ms": 131.1064,
+        "p99_ms": 144.6774,
+        "min_ms": 108.9728,
+        "max_ms": 144.6774,
+        "media_ms": 119.146,
+        "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; solo acota la cola, no la caracteriza",
+        "muestras_ms": []
+      }
+    },
+    "E-BARRIDO_coste_del_barrido_completo": {
+      "descripcion": "Con cero aciertos en el indice, rank() sigue recorriendo todo el conocimiento vigente. La diferencia entre el coste total y el del indice es el barrido.",
+      "p50_solo_indice_ms": 0.1877,
+      "p50_recuperacion_completa_ms": 122.6486,
+      "p50_barrido_ms": 122.4609,
+      "fraccion_del_coste_atribuible_al_barrido": 0.9985,
+      "memorias_vigentes_recorridas": 499,
+      "decisiones_recorridas": 50,
+      "traza_normativa": "B04-RF-14 prohibe el salto a recuperacion amplia"
+    },
+    "E-TOL002_indistinguibilidad": {
+      "modelo_de_amenaza": "Observador externo que solo ve la salida de la recuperacion y puede cronometrarla repetidamente en la misma maquina y proceso. NO se modela un atacante con acceso al fichero, a las trazas internas ni al canal de otra operacion concurrente. Una diferencia temporal repetible atribuible a la existencia protegida FALLA aunque ambas consultas sean rapidas; una diferencia no repetible no prueba lo contrario.",
+      "limites": "Medicion en una sola maquina, un solo proceso y una sola configuracion. No es una garantia criptografica y no sustituye a un analisis de canal lateral: acota lo observable en este entorno, nada mas.",
+      "estado_externo": {
+        "ausencia_real": 0,
+        "no_reportable": 0,
+        "equivalentes": true
+      },
+      "conteo_externo_equivalente": true,
+      "texto_externo_equivalente": true,
+      "control_el_contenido_protegido_existe_en_el_indice": {
+        "aciertos_ausencia_real": 0,
+        "aciertos_no_reportable": 1,
+        "el_control_es_valido": true
+      },
+      "tiempo_recuperacion_completa": {
+        "n_por_rama": 30,
+        "warmup_descartado": 5,
+        "muestreo": "intercalado A,B,A,B para anular deriva",
+        "ausencia_real": {
+          "p50_ms": 119.7627,
+          "p95_ms": 157.8271,
+          "p99_ms": 160.3295,
+          "min_ms": 106.0874,
+          "max_ms": 160.3295,
+          "media_ms": 125.8816
+        },
+        "no_reportable": {
+          "p50_ms": 120.0997,
+          "p95_ms": 173.1957,
+          "p99_ms": 181.8166,
+          "min_ms": 107.349,
+          "max_ms": 181.8166,
+          "media_ms": 127.1413
+        },
+        "diferencia_p50_ms": 0.337,
+        "diferencia_p95_ms": 15.3686,
+        "diferencia_p99_ms": 21.4871,
+        "diferencia_relativa_p50": 0.0028,
+        "diferencia_pareada_mediana_ms": 0.9105,
+        "veces_que_no_reportable_tardo_mas": 16,
+        "fraccion_de_signo": 0.5333,
+        "nota_sobre_el_signo": "Con ramas indistinguibles la fraccion de signo deberia rondar 0,5. Un valor sistematicamente alejado indica diferencia repetible, no ruido."
+      },
+      "tiempo_solo_indice_fts5": {
+        "n_por_rama": 100,
+        "warmup_descartado": 5,
+        "muestreo": "intercalado A,B,A,B para anular deriva",
+        "ausencia_real": {
+          "p50_ms": 0.1545,
+          "p95_ms": 0.2419,
+          "p99_ms": 0.3102,
+          "min_ms": 0.1343,
+          "max_ms": 0.4831,
+          "media_ms": 0.1658
+        },
+        "no_reportable": {
+          "p50_ms": 0.1584,
+          "p95_ms": 0.2192,
+          "p99_ms": 0.2512,
+          "min_ms": 0.138,
+          "max_ms": 0.3932,
+          "media_ms": 0.1684
+        },
+        "diferencia_p50_ms": 0.0039,
+        "diferencia_p95_ms": -0.0227,
+        "diferencia_p99_ms": -0.059,
+        "diferencia_relativa_p50": 0.0252,
+        "diferencia_pareada_mediana_ms": -0.0,
+        "veces_que_no_reportable_tardo_mas": 49,
+        "fraccion_de_signo": 0.49,
+        "nota_sobre_el_signo": "Con ramas indistinguibles la fraccion de signo deberia rondar 0,5. Un valor sistematicamente alejado indica diferencia repetible, no ruido."
+      }
+    },
+    "E-ESTABILIDAD": {
+      "consulta_frecuente": {
+        "consulta": "zetafrecuente",
+        "repeticiones": 30,
+        "tamano_del_resultado": 200,
+        "ordenes_distintos_observados": 1,
+        "conjuntos_distintos_observados": 1,
+        "orden_identico_en_todas": true,
+        "conjunto_identico_en_todas": true
+      },
+      "consulta_unica": {
+        "consulta": "zetaunicovigente",
+        "repeticiones": 30,
+        "tamano_del_resultado": 1,
+        "ordenes_distintos_observados": 1,
+        "conjuntos_distintos_observados": 1,
+        "orden_identico_en_todas": true,
+        "conjunto_identico_en_todas": true
+      },
+      "consulta_vacia": {
+        "consulta": "zetaausentenoindexado",
+        "repeticiones": 30,
+        "tamano_del_resultado": 0,
+        "ordenes_distintos_observados": 1,
+        "conjuntos_distintos_observados": 1,
+        "orden_identico_en_todas": true,
+        "conjunto_identico_en_todas": true
+      },
+      "resumen": {
+        "orden_estable_en_todos_los_escenarios": true,
+        "conjunto_estable_en_todos_los_escenarios": true
+      }
+    },
+    "E-TAMANO": {
+      "metodo": "tabla virtual dbstat, bytes reales por objeto",
+      "tamano_fichero_bytes": 1462272,
+      "bytes_por_objeto_derivado": {
+        "knowledge_fts_config": 4096,
+        "knowledge_fts_content": 57344,
+        "knowledge_fts_data": 45056,
+        "knowledge_fts_docsize": 12288,
+        "knowledge_fts_idx": 4096,
+        "message_fts_config": 4096,
+        "message_fts_data": 184320,
+        "message_fts_docsize": 49152,
+        "message_fts_idx": 4096
+      },
+      "knowledge_fts_bytes": 122880,
+      "message_fts_bytes": 241664,
+      "indices_derivados_bytes": 364544,
+      "canon_indexado_bytes": {
+        "messages": 338890,
+        "memory_revisions_vigentes": 32542,
+        "decision_revisions_vigentes": 2190,
+        "total_knowledge_fts": 34732,
+        "total_message_fts": 338890
+      },
+      "ratio_knowledge_fts_sobre_canon": 3.5379,
+      "ratio_message_fts_sobre_canon": 0.7131,
+      "ratio_derivados_sobre_fichero": 0.2493,
+      "nota_knowledge_fts_guarda_copia": "knowledge_fts es autocontenida: knowledge_fts_content almacena una copia literal del texto canonico. message_fts es external content y no la almacena."
+    },
+    "E-BORRADO_desaparicion_del_derivado": {
+      "ms": 48.7921,
+      "objetos_derivados_antes": [
+        "knowledge_fts",
+        "knowledge_fts_config",
+        "knowledge_fts_content",
+        "knowledge_fts_data",
+        "knowledge_fts_docsize",
+        "knowledge_fts_idx",
+        "message_fts",
+        "message_fts_config",
+        "message_fts_data",
+        "message_fts_docsize",
+        "message_fts_idx"
+      ],
+      "objetos_derivados_despues": [],
+      "desaparicion_completa": true,
+      "tablas_sombra_residuales": [],
+      "sin_rastro_de_sombras": true
+    },
+    "E-CONSTRUCCION_inicial_desde_canon": {
+      "ms": 55.8338,
+      "objetos_creados": [
+        "knowledge_fts",
+        "knowledge_fts_config",
+        "knowledge_fts_content",
+        "knowledge_fts_data",
+        "knowledge_fts_docsize",
+        "knowledge_fts_idx",
+        "message_fts",
+        "message_fts_config",
+        "message_fts_data",
+        "message_fts_docsize",
+        "message_fts_idx"
+      ],
+      "filas_indexadas": {
+        "knowledge_fts": 550,
+        "message_fts": 5000
+      },
+      "filas_identicas_a_las_originales": true,
+      "ddl_procedente_de": "sqlite_master del esquema canonico, no escrito a mano"
+    },
+    "E-RECONSTRUCCION": {
+      "rebuild_interno_ms": 17.0016,
+      "desde_canon_ms": 49.0698,
+      "filas_tras_reconstruir": {
+        "knowledge_fts": 550,
+        "message_fts": 5000
+      },
+      "filas_identicas_a_las_originales": true,
+      "integrity_check": {
+        "knowledge_fts": "OK",
+        "message_fts": "OK"
+      },
+      "nota": "El rebuild interno de knowledge_fts se reconstruye desde su propia tabla de contenido, no desde memory_revisions. La ruta desde el canon se mide aparte porque es la que ADR-001 exige."
+    },
+    "E-CONTROL_fuga_de_ambito": {
+      "consulta": "zetaproyectoajeno",
+      "resultados_totales": 1,
+      "resultados_de_proyecto_ajeno": 1,
+      "hay_fuga": true,
+      "traza_normativa": "B04-RF-06, B04-M06 (aislamiento de proyecto: 100 %)"
+    }
+  },
+  "no_medido": {
+    "coste_incremental_por_etapa_E0_E5": "NO MEDIBLE EN LA LINEA BASE: Sirius 0.1 no tiene etapas. Resuelve en una sola pasada mas un barrido completo, que es exactamente el salto que B04-RF-14 prohibe. Este valor solo puede medirse contra un candidato que implemente E0-E5.",
+    "coste_externo": "ninguno: no se ha usado red, API ni modelo externo",
+    "T1_a_T4": "no ejecutadas en esta ronda"
+  }
+}

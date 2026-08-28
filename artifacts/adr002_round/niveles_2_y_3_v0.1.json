@@ -1,0 +1,589 @@
+{
+ "documento": "Niveles 2 y 3 del banco de ADR-002",
+ "version_esquema": "niveles-2-y-3-adr002-0.1",
+ "estado": "EVIDENCIA",
+ "por_que_faltaban": "la ronda primaria ejecutaba el nivel 1 y nada mas; el nivel 4 se recupero en discriminante_relacional_v0.1.json y estos dos, aqui",
+ "no_mide_tiempo": "ninguna cifra de latencia sale de este artefacto: las publicadas en v0.1 y v0.2 son las unicas, y estas comprobaciones no las tocan",
+ "arquitectonicos": [
+  {
+   "caso": "ARQ-CA-01",
+   "titulo": "Borrado y regeneracion completos de todo indice derivado",
+   "puerta": "puerta 5",
+   "participante": "T0-control",
+   "veredicto": "PASA",
+   "detalle": "30/30 ciclos del FTS5 con inventario y filas restaurados; sin indice propio que regenerar"
+  },
+  {
+   "caso": "ARQ-CA-02",
+   "titulo": "Purga fisica del derivado sin fragmento recuperable",
+   "puerta": "puerta 5",
+   "participante": "T0-control",
+   "veredicto": "NO_APLICABLE",
+   "detalle": "no construye indice derivado propio: no hay derivado que purgar. El FTS5 es del canon y su purga no es una obligacion de este candidato"
+  },
+  {
+   "caso": "ARQ-CA-03",
+   "titulo": "Estabilidad de orden y conjunto ante entradas identicas",
+   "puerta": "puerta 4",
+   "participante": "T0-control",
+   "veredicto": "PASA",
+   "detalle": "1 orden y 1 conjunto en 5 sesiones independientes de 30 repeticiones cada una"
+  },
+  {
+   "caso": "ARQ-CA-04",
+   "titulo": "Declaracion congelada de tamano y ciclo de todo indice adicional",
+   "puerta": "puerta 7",
+   "participante": "T0-control",
+   "veredicto": "NO_APLICABLE",
+   "detalle": "exencion declarada en la ficha: «limites_del_ciclo_de_indice: T0 no anade ningun indice adicional al FTS5 medido: no existe decision que congele limites de ciclo de indice para la linea base» «consumo_de_almacenamiento_previo: declarar el consumo de T0 seria una medicion de T0, que exige el acta de autorizacion expresa e independiente, no esta ficha»"
+  },
+  {
+   "caso": "ARQ-CA-05",
+   "titulo": "Coste incremental declarado por etapa E0-E5",
+   "puerta": "puerta 7",
+   "participante": "T0-control",
+   "veredicto": "NO_APLICABLE",
+   "detalle": "exencion declarada en la ficha: «limites_locales_por_etapa: sin etapas E0-E5 no existe decision alguna que congele limites locales por etapa para T0, y fijarlos ahora seria inventarlos» «etapas_e0_e5: T0 no implementa E0-E5 (Resolucion de la particion §3): no hay etapas cuyas transiciones o condiciones de insuficiencia declarar»"
+  },
+  {
+   "caso": "ARQ-CA-01",
+   "titulo": "Borrado y regeneracion completos de todo indice derivado",
+   "puerta": "puerta 5",
+   "participante": "ADR002-A",
+   "veredicto": "PASA",
+   "detalle": "30/30 ciclos del FTS5 con inventario y filas restaurados; sin indice propio que regenerar"
+  },
+  {
+   "caso": "ARQ-CA-02",
+   "titulo": "Purga fisica del derivado sin fragmento recuperable",
+   "puerta": "puerta 5",
+   "participante": "ADR002-A",
+   "veredicto": "NO_APLICABLE",
+   "detalle": "no construye indice derivado propio: no hay derivado que purgar. El FTS5 es del canon y su purga no es una obligacion de este candidato"
+  },
+  {
+   "caso": "ARQ-CA-03",
+   "titulo": "Estabilidad de orden y conjunto ante entradas identicas",
+   "puerta": "puerta 4",
+   "participante": "ADR002-A",
+   "veredicto": "PASA",
+   "detalle": "1 orden y 1 conjunto en 5 sesiones independientes de 30 repeticiones cada una"
+  },
+  {
+   "caso": "ARQ-CA-04",
+   "titulo": "Declaracion congelada de tamano y ciclo de todo indice adicional",
+   "puerta": "puerta 7",
+   "participante": "ADR002-A",
+   "veredicto": "PASA",
+   "detalle": "ficha congelada y sin indice adicional que declarar: nada que acotar por magnitud"
+  },
+  {
+   "caso": "ARQ-CA-05",
+   "titulo": "Coste incremental declarado por etapa E0-E5",
+   "puerta": "puerta 7",
+   "participante": "ADR002-A",
+   "veredicto": "PASA",
+   "detalle": "seis etapas con local y externo separados; la suma local 23050000 ns explica el extremo a extremo declarado"
+  },
+  {
+   "caso": "ARQ-CA-01",
+   "titulo": "Borrado y regeneracion completos de todo indice derivado",
+   "puerta": "puerta 5",
+   "participante": "ADR002-B",
+   "veredicto": "PASA",
+   "detalle": "30/30 ciclos del FTS5 con inventario y filas restaurados; 30/30 ciclos del sidecar con volcado logico identico"
+  },
+  {
+   "caso": "ARQ-CA-02",
+   "titulo": "Purga fisica del derivado sin fragmento recuperable",
+   "puerta": "puerta 5",
+   "participante": "ADR002-B",
+   "veredicto": "PASA",
+   "detalle": "tras checkpoint, journal y VACUUM no queda .db, -wal, -shm ni -journal, ni rastro de 12 cargas buscadas en bytes crudos"
+  },
+  {
+   "caso": "ARQ-CA-03",
+   "titulo": "Estabilidad de orden y conjunto ante entradas identicas",
+   "puerta": "puerta 4",
+   "participante": "ADR002-B",
+   "veredicto": "PASA",
+   "detalle": "1 orden y 1 conjunto en 5 sesiones independientes de 30 repeticiones cada una"
+  },
+  {
+   "caso": "ARQ-CA-04",
+   "titulo": "Declaracion congelada de tamano y ciclo de todo indice adicional",
+   "puerta": "puerta 7",
+   "participante": "ADR002-B",
+   "veredicto": "PASA",
+   "detalle": "1 indice(s) con limite por magnitud, borrado y ciclo declarados y congelados antes de la primera ejecucion"
+  },
+  {
+   "caso": "ARQ-CA-05",
+   "titulo": "Coste incremental declarado por etapa E0-E5",
+   "puerta": "puerta 7",
+   "participante": "ADR002-B",
+   "veredicto": "PASA",
+   "detalle": "seis etapas con local y externo separados; la suma local 35050000 ns explica el extremo a extremo declarado"
+  },
+  {
+   "caso": "ARQ-CA-01",
+   "titulo": "Borrado y regeneracion completos de todo indice derivado",
+   "puerta": "puerta 5",
+   "participante": "ADR002-C",
+   "veredicto": "PASA",
+   "detalle": "30/30 ciclos del FTS5 con inventario y filas restaurados; sin indice propio que regenerar"
+  },
+  {
+   "caso": "ARQ-CA-02",
+   "titulo": "Purga fisica del derivado sin fragmento recuperable",
+   "puerta": "puerta 5",
+   "participante": "ADR002-C",
+   "veredicto": "NO_APLICABLE",
+   "detalle": "no construye indice derivado propio: no hay derivado que purgar. El FTS5 es del canon y su purga no es una obligacion de este candidato"
+  },
+  {
+   "caso": "ARQ-CA-03",
+   "titulo": "Estabilidad de orden y conjunto ante entradas identicas",
+   "puerta": "puerta 4",
+   "participante": "ADR002-C",
+   "veredicto": "PASA",
+   "detalle": "1 orden y 1 conjunto en 5 sesiones independientes de 30 repeticiones cada una"
+  },
+  {
+   "caso": "ARQ-CA-04",
+   "titulo": "Declaracion congelada de tamano y ciclo de todo indice adicional",
+   "puerta": "puerta 7",
+   "participante": "ADR002-C",
+   "veredicto": "PASA",
+   "detalle": "ficha congelada y sin indice adicional que declarar: nada que acotar por magnitud"
+  },
+  {
+   "caso": "ARQ-CA-05",
+   "titulo": "Coste incremental declarado por etapa E0-E5",
+   "puerta": "puerta 7",
+   "participante": "ADR002-C",
+   "veredicto": "PASA",
+   "detalle": "seis etapas con local y externo separados; la suma local 23050000 ns explica el extremo a extremo declarado"
+  },
+  {
+   "caso": "ARQ-CA-01",
+   "titulo": "Borrado y regeneracion completos de todo indice derivado",
+   "puerta": "puerta 5",
+   "participante": "ADR002-D",
+   "veredicto": "PASA",
+   "detalle": "30/30 ciclos del FTS5 con inventario y filas restaurados; 30/30 ciclos del sidecar con volcado logico identico"
+  },
+  {
+   "caso": "ARQ-CA-02",
+   "titulo": "Purga fisica del derivado sin fragmento recuperable",
+   "puerta": "puerta 5",
+   "participante": "ADR002-D",
+   "veredicto": "PASA",
+   "detalle": "tras checkpoint, journal y VACUUM no queda .db, -wal, -shm ni -journal, ni rastro de 12 cargas buscadas en bytes crudos"
+  },
+  {
+   "caso": "ARQ-CA-03",
+   "titulo": "Estabilidad de orden y conjunto ante entradas identicas",
+   "puerta": "puerta 4",
+   "participante": "ADR002-D",
+   "veredicto": "PASA",
+   "detalle": "1 orden y 1 conjunto en 5 sesiones independientes de 30 repeticiones cada una"
+  },
+  {
+   "caso": "ARQ-CA-04",
+   "titulo": "Declaracion congelada de tamano y ciclo de todo indice adicional",
+   "puerta": "puerta 7",
+   "participante": "ADR002-D",
+   "veredicto": "PASA",
+   "detalle": "1 indice(s) con limite por magnitud, borrado y ciclo declarados y congelados antes de la primera ejecucion"
+  },
+  {
+   "caso": "ARQ-CA-05",
+   "titulo": "Coste incremental declarado por etapa E0-E5",
+   "puerta": "puerta 7",
+   "participante": "ADR002-D",
+   "veredicto": "PASA",
+   "detalle": "seis etapas con local y externo separados; la suma local 35050000 ns explica el extremo a extremo declarado"
+  }
+ ],
+ "ablaciones": [
+  {
+   "ablacion": "AB-6",
+   "participante": "(ninguno: es el azar)",
+   "ejecutada": true,
+   "exactos": 18,
+   "casos": 47,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [
+    "N1-03",
+    "N1-04",
+    "N1-06",
+    "N1-09",
+    "N1-10",
+    "N1-11",
+    "N1-12",
+    "N1-15",
+    "N1-17",
+    "N1-18",
+    "N1-24",
+    "N1-28",
+    "N1-35",
+    "N1-36",
+    "N1-46",
+    "N1-47",
+    "N1-49",
+    "N1-50"
+   ],
+   "motivo_si_no_se_ejecuta": "",
+   "lectura": "seleccion al azar sobre el canon entero, tantos elementos como espera el caso: es el suelo del acierto exacto, y responde «cuanto de este 23/47 lo consigue cualquiera». el suelo recibe la CANTIDAD que el caso espera, que ningun sistema real conoce: es un suelo generoso. 16 de los 47 casos esperan el conjunto vacio, y en ellos conocer la cantidad es conocer la respuesta, de modo que el suelo los acierta todos. La comparacion informativa es la de los 31 casos con contenido"
+  },
+  {
+   "ablacion": "AB-6",
+   "participante": "(ninguno: es el azar)",
+   "ejecutada": true,
+   "exactos": 19,
+   "casos": 19,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [
+    "N1-01",
+    "N1-02",
+    "N1-05",
+    "N1-06",
+    "N1-07",
+    "N1-13",
+    "N1-16",
+    "N1-20",
+    "N1-21",
+    "N1-23",
+    "N1-27",
+    "N1-29",
+    "N1-32",
+    "N1-33",
+    "N1-40",
+    "N1-41",
+    "N1-42",
+    "N1-45",
+    "N1-50"
+   ],
+   "motivo_si_no_se_ejecuta": "",
+   "lectura": "el conjunto correcto entregado en orden barajado: es el suelo del acierto de ORDEN, y responde «cuanto del orden correcto es merito y cuanto azar». Es la lectura literal de «orden aleatorizado con semilla fija». 17 de los 19 casos con orden declarado tienen un solo elemento: en ellos no existe orden que equivocar, y el suelo es del 100 % por construccion, sin depender de la semilla"
+  },
+  {
+   "ablacion": "AB-1",
+   "participante": "T0-control",
+   "ejecutada": true,
+   "exactos": 1,
+   "casos": 47,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-1",
+   "participante": "ADR002-A",
+   "ejecutada": true,
+   "exactos": 24,
+   "casos": 47,
+   "perdidos_respecto_de_la_completa": [
+    "N1-38"
+   ],
+   "ganados_respecto_de_la_completa": [
+    "N1-14",
+    "N1-25"
+   ],
+   "motivo_si_no_se_ejecuta": "",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-1",
+   "participante": "ADR002-B",
+   "ejecutada": true,
+   "exactos": 24,
+   "casos": 47,
+   "perdidos_respecto_de_la_completa": [
+    "N1-38"
+   ],
+   "ganados_respecto_de_la_completa": [
+    "N1-08",
+    "N1-14",
+    "N1-25",
+    "N1-27"
+   ],
+   "motivo_si_no_se_ejecuta": "",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-1",
+   "participante": "ADR002-C",
+   "ejecutada": true,
+   "exactos": 24,
+   "casos": 47,
+   "perdidos_respecto_de_la_completa": [
+    "N1-38"
+   ],
+   "ganados_respecto_de_la_completa": [
+    "N1-14",
+    "N1-25"
+   ],
+   "motivo_si_no_se_ejecuta": "",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-1",
+   "participante": "ADR002-D",
+   "ejecutada": true,
+   "exactos": 24,
+   "casos": 47,
+   "perdidos_respecto_de_la_completa": [
+    "N1-38"
+   ],
+   "ganados_respecto_de_la_completa": [
+    "N1-08",
+    "N1-14",
+    "N1-25",
+    "N1-27"
+   ],
+   "motivo_si_no_se_ejecuta": "",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-3",
+   "participante": "T0-control",
+   "ejecutada": true,
+   "exactos": 1,
+   "casos": 47,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-3",
+   "participante": "ADR002-A",
+   "ejecutada": true,
+   "exactos": 23,
+   "casos": 47,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-3",
+   "participante": "ADR002-B",
+   "ejecutada": true,
+   "exactos": 23,
+   "casos": 47,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [
+    "N1-08",
+    "N1-27"
+   ],
+   "motivo_si_no_se_ejecuta": "",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-3",
+   "participante": "ADR002-C",
+   "ejecutada": true,
+   "exactos": 23,
+   "casos": 47,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-3",
+   "participante": "ADR002-D",
+   "ejecutada": true,
+   "exactos": 23,
+   "casos": 47,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [
+    "N1-08",
+    "N1-27"
+   ],
+   "motivo_si_no_se_ejecuta": "",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-2",
+   "participante": "T0-control",
+   "ejecutada": false,
+   "exactos": 0,
+   "casos": 0,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "desactivar la etapa lexica MANTENIENDO las posteriores exigiria saltar de E1 a E3, y B04-RF-14 prohibe exactamente ese salto. El motor lo hace cumplir: engine.py rompe el bucle en cuanto una etapa no esta autorizada (stops.parada_por_modo devuelve S2 y el for hace break), de modo que espacios_autorizados es una autorizacion por PREFIJO y no un conjunto del que se pueda quitar una etapa intermedia. No es una carencia del arnes: es que la norma prohibe la ablacion que el banco describe, y ejecutarla exigiria un motor que incumpliese RF-14",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-2",
+   "participante": "ADR002-A",
+   "ejecutada": false,
+   "exactos": 0,
+   "casos": 0,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "desactivar la etapa lexica MANTENIENDO las posteriores exigiria saltar de E1 a E3, y B04-RF-14 prohibe exactamente ese salto. El motor lo hace cumplir: engine.py rompe el bucle en cuanto una etapa no esta autorizada (stops.parada_por_modo devuelve S2 y el for hace break), de modo que espacios_autorizados es una autorizacion por PREFIJO y no un conjunto del que se pueda quitar una etapa intermedia. No es una carencia del arnes: es que la norma prohibe la ablacion que el banco describe, y ejecutarla exigiria un motor que incumpliese RF-14",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-2",
+   "participante": "ADR002-B",
+   "ejecutada": false,
+   "exactos": 0,
+   "casos": 0,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "desactivar la etapa lexica MANTENIENDO las posteriores exigiria saltar de E1 a E3, y B04-RF-14 prohibe exactamente ese salto. El motor lo hace cumplir: engine.py rompe el bucle en cuanto una etapa no esta autorizada (stops.parada_por_modo devuelve S2 y el for hace break), de modo que espacios_autorizados es una autorizacion por PREFIJO y no un conjunto del que se pueda quitar una etapa intermedia. No es una carencia del arnes: es que la norma prohibe la ablacion que el banco describe, y ejecutarla exigiria un motor que incumpliese RF-14",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-2",
+   "participante": "ADR002-C",
+   "ejecutada": false,
+   "exactos": 0,
+   "casos": 0,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "desactivar la etapa lexica MANTENIENDO las posteriores exigiria saltar de E1 a E3, y B04-RF-14 prohibe exactamente ese salto. El motor lo hace cumplir: engine.py rompe el bucle en cuanto una etapa no esta autorizada (stops.parada_por_modo devuelve S2 y el for hace break), de modo que espacios_autorizados es una autorizacion por PREFIJO y no un conjunto del que se pueda quitar una etapa intermedia. No es una carencia del arnes: es que la norma prohibe la ablacion que el banco describe, y ejecutarla exigiria un motor que incumpliese RF-14",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-2",
+   "participante": "ADR002-D",
+   "ejecutada": false,
+   "exactos": 0,
+   "casos": 0,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "desactivar la etapa lexica MANTENIENDO las posteriores exigiria saltar de E1 a E3, y B04-RF-14 prohibe exactamente ese salto. El motor lo hace cumplir: engine.py rompe el bucle en cuanto una etapa no esta autorizada (stops.parada_por_modo devuelve S2 y el for hace break), de modo que espacios_autorizados es una autorizacion por PREFIJO y no un conjunto del que se pueda quitar una etapa intermedia. No es una carencia del arnes: es que la norma prohibe la ablacion que el banco describe, y ejecutarla exigiria un motor que incumpliese RF-14",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-4",
+   "participante": "T0-control",
+   "ejecutada": false,
+   "exactos": 0,
+   "casos": 0,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "desactivar la validacion de polaridad, condicion y tiempo MANTENIENDO la senal exige un interruptor que ningun candidato congelado tiene: los dos que exponen (con_senal_relacional y con_senal_vectorial) apagan la senal entera, que es justo lo contrario. Ejecutarla obligaria a modificar los cuatro candidatos y emitir fichas sucesoras: es un acto de gobierno, no de este modulo. Es ademas la unica ablacion que separa la senal de su validacion, de modo que no poder correrla es una carencia real de esta ronda y se declara como tal",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-4",
+   "participante": "ADR002-A",
+   "ejecutada": false,
+   "exactos": 0,
+   "casos": 0,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "desactivar la validacion de polaridad, condicion y tiempo MANTENIENDO la senal exige un interruptor que ningun candidato congelado tiene: los dos que exponen (con_senal_relacional y con_senal_vectorial) apagan la senal entera, que es justo lo contrario. Ejecutarla obligaria a modificar los cuatro candidatos y emitir fichas sucesoras: es un acto de gobierno, no de este modulo. Es ademas la unica ablacion que separa la senal de su validacion, de modo que no poder correrla es una carencia real de esta ronda y se declara como tal",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-4",
+   "participante": "ADR002-B",
+   "ejecutada": false,
+   "exactos": 0,
+   "casos": 0,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "desactivar la validacion de polaridad, condicion y tiempo MANTENIENDO la senal exige un interruptor que ningun candidato congelado tiene: los dos que exponen (con_senal_relacional y con_senal_vectorial) apagan la senal entera, que es justo lo contrario. Ejecutarla obligaria a modificar los cuatro candidatos y emitir fichas sucesoras: es un acto de gobierno, no de este modulo. Es ademas la unica ablacion que separa la senal de su validacion, de modo que no poder correrla es una carencia real de esta ronda y se declara como tal",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-4",
+   "participante": "ADR002-C",
+   "ejecutada": false,
+   "exactos": 0,
+   "casos": 0,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "desactivar la validacion de polaridad, condicion y tiempo MANTENIENDO la senal exige un interruptor que ningun candidato congelado tiene: los dos que exponen (con_senal_relacional y con_senal_vectorial) apagan la senal entera, que es justo lo contrario. Ejecutarla obligaria a modificar los cuatro candidatos y emitir fichas sucesoras: es un acto de gobierno, no de este modulo. Es ademas la unica ablacion que separa la senal de su validacion, de modo que no poder correrla es una carencia real de esta ronda y se declara como tal",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-4",
+   "participante": "ADR002-D",
+   "ejecutada": false,
+   "exactos": 0,
+   "casos": 0,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "desactivar la validacion de polaridad, condicion y tiempo MANTENIENDO la senal exige un interruptor que ningun candidato congelado tiene: los dos que exponen (con_senal_relacional y con_senal_vectorial) apagan la senal entera, que es justo lo contrario. Ejecutarla obligaria a modificar los cuatro candidatos y emitir fichas sucesoras: es un acto de gobierno, no de este modulo. Es ademas la unica ablacion que separa la senal de su validacion, de modo que no poder correrla es una carencia real de esta ronda y se declara como tal",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-5",
+   "participante": "T0-control",
+   "ejecutada": false,
+   "exactos": 0,
+   "casos": 0,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "desactivar G1-G12 de una en una exige una mascara de puertas que el motor comun no tiene: gates.aplicar_previas encadena G1-G10 en orden fijo y no acepta parametro de seleccion, y lo mismo aplicar_g11 y aplicar_g12. Anadirla tocaria la capa comun, congelada y fijada por blob en la custodia de las fichas",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-5",
+   "participante": "ADR002-A",
+   "ejecutada": false,
+   "exactos": 0,
+   "casos": 0,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "desactivar G1-G12 de una en una exige una mascara de puertas que el motor comun no tiene: gates.aplicar_previas encadena G1-G10 en orden fijo y no acepta parametro de seleccion, y lo mismo aplicar_g11 y aplicar_g12. Anadirla tocaria la capa comun, congelada y fijada por blob en la custodia de las fichas",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-5",
+   "participante": "ADR002-B",
+   "ejecutada": false,
+   "exactos": 0,
+   "casos": 0,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "desactivar G1-G12 de una en una exige una mascara de puertas que el motor comun no tiene: gates.aplicar_previas encadena G1-G10 en orden fijo y no acepta parametro de seleccion, y lo mismo aplicar_g11 y aplicar_g12. Anadirla tocaria la capa comun, congelada y fijada por blob en la custodia de las fichas",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-5",
+   "participante": "ADR002-C",
+   "ejecutada": false,
+   "exactos": 0,
+   "casos": 0,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "desactivar G1-G12 de una en una exige una mascara de puertas que el motor comun no tiene: gates.aplicar_previas encadena G1-G10 en orden fijo y no acepta parametro de seleccion, y lo mismo aplicar_g11 y aplicar_g12. Anadirla tocaria la capa comun, congelada y fijada por blob en la custodia de las fichas",
+   "lectura": ""
+  },
+  {
+   "ablacion": "AB-5",
+   "participante": "ADR002-D",
+   "ejecutada": false,
+   "exactos": 0,
+   "casos": 0,
+   "perdidos_respecto_de_la_completa": [],
+   "ganados_respecto_de_la_completa": [],
+   "motivo_si_no_se_ejecuta": "desactivar G1-G12 de una en una exige una mascara de puertas que el motor comun no tiene: gates.aplicar_previas encadena G1-G10 en orden fijo y no acepta parametro de seleccion, y lo mismo aplicar_g11 y aplicar_g12. Anadirla tocaria la capa comun, congelada y fijada por blob en la custodia de las fichas",
+   "lectura": ""
+  }
+ ],
+ "ablaciones_no_ejecutables": {
+  "AB-2": "desactivar la etapa lexica MANTENIENDO las posteriores exigiria saltar de E1 a E3, y B04-RF-14 prohibe exactamente ese salto. El motor lo hace cumplir: engine.py rompe el bucle en cuanto una etapa no esta autorizada (stops.parada_por_modo devuelve S2 y el for hace break), de modo que espacios_autorizados es una autorizacion por PREFIJO y no un conjunto del que se pueda quitar una etapa intermedia. No es una carencia del arnes: es que la norma prohibe la ablacion que el banco describe, y ejecutarla exigiria un motor que incumpliese RF-14",
+  "AB-4": "desactivar la validacion de polaridad, condicion y tiempo MANTENIENDO la senal exige un interruptor que ningun candidato congelado tiene: los dos que exponen (con_senal_relacional y con_senal_vectorial) apagan la senal entera, que es justo lo contrario. Ejecutarla obligaria a modificar los cuatro candidatos y emitir fichas sucesoras: es un acto de gobierno, no de este modulo. Es ademas la unica ablacion que separa la senal de su validacion, de modo que no poder correrla es una carencia real de esta ronda y se declara como tal",
+  "AB-5": "desactivar G1-G12 de una en una exige una mascara de puertas que el motor comun no tiene: gates.aplicar_previas encadena G1-G10 en orden fijo y no acepta parametro de seleccion, y lo mismo aplicar_g11 y aplicar_g12. Anadirla tocaria la capa comun, congelada y fijada por blob en la custodia de las fichas"
+ },
+ "lectura_de_ab_3": "AB-3 apaga la senal tardia con los interruptores congelados del propio candidato (con_senal_relacional / con_senal_vectorial), no retirando E3 del conjunto de espacios: en A y C la E3 contiene tambien expansion lexico-estructurada por terminos puente, que no es senal tardia, y apagar la etapa entera atribuiria a la senal algo que no es suyo",
+ "lecturas_de_ab_6": {
+  "conjunto": "seleccion al azar sobre el canon entero, tantos elementos como espera el caso: es el suelo del acierto exacto, y responde «cuanto de este 23/47 lo consigue cualquiera»",
+  "orden": "el conjunto correcto entregado en orden barajado: es el suelo del acierto de ORDEN, y responde «cuanto del orden correcto es merito y cuanto azar». Es la lectura literal de «orden aleatorizado con semilla fija»"
+ },
+ "las_ablaciones_no_adjudican": "el banco declara el nivel 3 «instrumentos de medida; nunca producen veredicto de conformidad, y por eso no llevan ficha de caso del PDP §7». Aqui no llevan veredicto por eso mismo",
+ "no_elige": "los casos arquitectonicos adjudican puertas y las ablaciones son instrumentos: ninguna de las dos cosas elige alternativa"
+}

@@ -1,0 +1,2703 @@
+{
+  "que_es": "medicion del modelo local sobre el banco de ADR-002: la busqueda sola, el filtro que elige cuales responden, y la compuerta que solo dice si hay algo. La ampliacion al guardar sale aparte y solo si se pide",
+  "commit": "9eb5fe1",
+  "denominador": "47 adjudicables = 50 casos ejecutables menos 3 no adjudicables, segun round/cases.py. El banco contiene otro recuento distinto que tambien vale 47",
+  "procedencia_del_modelo": {
+    "proveedor": "ollama",
+    "modelo": "qwen3:4b-instruct",
+    "huella": "0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"
+  },
+  "vocabulario_de_categoria": [
+    "esencial",
+    "restriccion",
+    "critica",
+    "obligatoria",
+    "imprescindible"
+  ],
+  "linea_base_publicada": {
+    "exactos": 24,
+    "omisiones": 11,
+    "contaminacion": 3
+  },
+  "filas": [
+    {
+      "corrida": "1. busqueda tal cual",
+      "casos_adjudicables": 47,
+      "casos_con_contenido": 31,
+      "casos_de_ausencia": 16,
+      "conjunto_exacto": 24,
+      "lo_correcto_entra_entero": 24,
+      "elementos_hallados": "64/81",
+      "elementos_de_mas": 29,
+      "omisiones_criticas": 11,
+      "contaminacion": 3,
+      "fuga_de_ambito": 0,
+      "ausencia_correcta": 36,
+      "filtro_actuo": 0,
+      "filtro_fallo_abierto": 0,
+      "correctos_quitados": 0,
+      "criticos_quitados": 0,
+      "latencia_mediana_s": null,
+      "latencia_p95_s": null
+    },
+    {
+      "corrida": "2. el filtro que elige, criticas protegidas",
+      "casos_adjudicables": 47,
+      "casos_con_contenido": 31,
+      "casos_de_ausencia": 16,
+      "conjunto_exacto": 30,
+      "lo_correcto_entra_entero": 20,
+      "elementos_hallados": "53/81",
+      "elementos_de_mas": 10,
+      "omisiones_criticas": 11,
+      "contaminacion": 3,
+      "fuga_de_ambito": 0,
+      "ausencia_correcta": 39,
+      "filtro_actuo": 36,
+      "filtro_fallo_abierto": 0,
+      "correctos_quitados": 11,
+      "criticos_quitados": 0,
+      "latencia_mediana_s": 3.45,
+      "latencia_p95_s": 6.55
+    },
+    {
+      "corrida": "3. la compuerta (todo o nada)",
+      "casos_adjudicables": 47,
+      "casos_con_contenido": 31,
+      "casos_de_ausencia": 16,
+      "conjunto_exacto": 26,
+      "lo_correcto_entra_entero": 24,
+      "elementos_hallados": "64/81",
+      "elementos_de_mas": 29,
+      "omisiones_criticas": 11,
+      "contaminacion": 3,
+      "fuga_de_ambito": 0,
+      "ausencia_correcta": 38,
+      "filtro_actuo": 36,
+      "filtro_fallo_abierto": 0,
+      "correctos_quitados": 0,
+      "criticos_quitados": 0,
+      "latencia_mediana_s": 3.97,
+      "latencia_p95_s": 4.83
+    }
+  ],
+  "detalle_por_caso": {
+    "1. busqueda tal cual": [
+      {
+        "caso": "N1-01",
+        "consulta": "¿Cómo prefiero que redactes?",
+        "esperado": [
+          "MEMORIA:1"
+        ],
+        "obtenido": [
+          "MEMORIA:1"
+        ]
+      },
+      {
+        "caso": "N1-02",
+        "consulta": "¿Qué restricciones de transporte tengo?",
+        "esperado": [
+          "MEMORIA:2"
+        ],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-03",
+        "consulta": "¿Qué reglas de calidad aplican a Gamma?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111",
+          "MEMORIA:112"
+        ]
+      },
+      {
+        "caso": "N1-04",
+        "consulta": "¿Qué formato de informe uso?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:906",
+          "MEMORIA:925"
+        ]
+      },
+      {
+        "caso": "N1-05",
+        "consulta": "¿Qué decisión de presupuesto usábamos antes?",
+        "esperado": [
+          "DECISION:2"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "DECISION:2"
+        ]
+      },
+      {
+        "caso": "N1-06",
+        "consulta": "¿Qué proveedor de mensajería aplica?",
+        "esperado": [
+          "DECISION:4"
+        ],
+        "obtenido": [
+          "DECISION:4"
+        ]
+      },
+      {
+        "caso": "N1-07",
+        "consulta": "¿Desde cuándo rige el contrato de mantenimiento?",
+        "esperado": [
+          "MEMORIA:5"
+        ],
+        "obtenido": [
+          "MEMORIA:5"
+        ]
+      },
+      {
+        "caso": "N1-08",
+        "consulta": "¿Cuál es el presupuesto de Beta?",
+        "esperado": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "obtenido": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ]
+      },
+      {
+        "caso": "N1-09",
+        "consulta": "¿Qué preferencia de reuniones tengo?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ]
+      },
+      {
+        "caso": "N1-10",
+        "consulta": "¿Qué horario de entrega tengo fijado?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-11",
+        "consulta": "¿Qué sabes del expediente retirado?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-12",
+        "consulta": "¿Hay información médica del titular?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-13",
+        "consulta": "¿Cuál es el identificador de PAA?",
+        "esperado": [
+          "MEMORIA:11"
+        ],
+        "obtenido": [
+          "MEMORIA:11"
+        ]
+      },
+      {
+        "caso": "N1-14",
+        "consulta": "¿De qué se ocupa Juan?",
+        "esperado": [
+          "MEMORIA:12",
+          "MEMORIA:13"
+        ],
+        "obtenido": [
+          "MEMORIA:25",
+          "MEMORIA:13",
+          "MEMORIA:12",
+          "DECISION:1",
+          "MEMORIA:23",
+          "MEMORIA:27"
+        ]
+      },
+      {
+        "caso": "N1-15",
+        "consulta": "¿Dónde dije exactamente que el alcance no incluye la migración?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:14",
+          "DECISION:10",
+          "MEMORIA:17",
+          "MEMORIA:21",
+          "MEMORIA:5"
+        ]
+      },
+      {
+        "caso": "N1-16",
+        "consulta": "¿Quién cierra el circuito de firmas?",
+        "esperado": [
+          "MEMORIA:27"
+        ],
+        "obtenido": [
+          "MEMORIA:27"
+        ]
+      },
+      {
+        "caso": "N1-17",
+        "consulta": "¿Qué política de teletrabajo tenemos en Alfa?",
+        "esperado": [],
+        "obtenido": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:11"
+        ]
+      },
+      {
+        "caso": "N1-18",
+        "consulta": "¿Qué dice el anexo técnico requerido?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-19",
+        "consulta": "¿Cuál es la plataforma de despliegue aprobada?",
+        "esperado": [
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ],
+        "obtenido": [
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ]
+      },
+      {
+        "caso": "N1-20",
+        "consulta": "¿Puedo usar vuelos con escala?",
+        "esperado": [
+          "MEMORIA:14"
+        ],
+        "obtenido": [
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "DECISION:10"
+        ]
+      },
+      {
+        "caso": "N1-21",
+        "consulta": "¿Acepto escalas?",
+        "esperado": [
+          "MEMORIA:16"
+        ],
+        "obtenido": [
+          "MEMORIA:14",
+          "MEMORIA:16"
+        ]
+      },
+      {
+        "caso": "N1-22",
+        "consulta": "¿Qué decisiones eran válidas entre enero y marzo?",
+        "esperado": [
+          "DECISION:1",
+          "DECISION:5",
+          "DECISION:9",
+          "DECISION:11",
+          "DECISION:14",
+          "DECISION:15"
+        ],
+        "obtenido": [
+          "DECISION:14"
+        ]
+      },
+      {
+        "caso": "N1-23",
+        "consulta": "¿Cuál es la decisión de presupuesto actual y cuál reemplazó?",
+        "esperado": [
+          "DECISION:2",
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "DECISION:2"
+        ]
+      },
+      {
+        "caso": "N1-24",
+        "consulta": "¿Cada cuánto revisamos el alcance?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-25",
+        "consulta": "Atlas",
+        "esperado": [
+          "MEMORIA:11"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:11"
+        ]
+      },
+      {
+        "caso": "N1-26",
+        "consulta": "Enumera las restricciones esenciales del expediente Gamma.",
+        "esperado": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111"
+        ],
+        "obtenido": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111"
+        ]
+      },
+      {
+        "caso": "N1-27",
+        "consulta": "¿Qué presupuesto aplico en Beta según el documento?",
+        "esperado": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "obtenido": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ]
+      },
+      {
+        "caso": "N1-28",
+        "consulta": "¿Qué se dijo en la sesión no guardada?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:14",
+          "DECISION:10",
+          "MEMORIA:16",
+          "MEMORIA:21",
+          "MEMORIA:5",
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:917",
+          "MEMORIA:919",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ]
+      },
+      {
+        "caso": "N1-29",
+        "consulta": "¿Cuál es el plazo legal de entrega?",
+        "esperado": [
+          "MEMORIA:20"
+        ],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-30",
+        "consulta": "Resume mi preferencia de redacción, el presupuesto vigente y la condición de ahorro en escalas, con su razón.",
+        "esperado": [
+          "DECISION:3",
+          "MEMORIA:1",
+          "MEMORIA:16"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "MEMORIA:16",
+          "DECISION:10",
+          "MEMORIA:11"
+        ]
+      },
+      {
+        "caso": "N1-31",
+        "consulta": "Dame todas las restricciones esenciales que debo respetar.",
+        "esperado": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "MEMORIA:25"
+        ],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-32",
+        "consulta": "¿Qué sabía Sirius sobre el aforo el 1 de marzo?",
+        "esperado": [
+          "DECISION:12"
+        ],
+        "obtenido": [
+          "DECISION:12"
+        ]
+      },
+      {
+        "caso": "N1-33",
+        "consulta": "[interna B05] evidencia de límite de gasto",
+        "esperado": [
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "MEMORIA:11"
+        ]
+      },
+      {
+        "caso": "N1-34",
+        "consulta": "Prepara el contexto de planificación de Alfa.",
+        "esperado": [
+          "DECISION:3",
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "MEMORIA:903",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:919"
+        ],
+        "obtenido": [
+          "MEMORIA:903",
+          "MEMORIA:915",
+          "MEMORIA:919",
+          "MEMORIA:931",
+          "MEMORIA:11",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:939"
+        ]
+      },
+      {
+        "caso": "N1-35",
+        "consulta": "¿Qué nota interna hay sobre la prueba?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:917",
+          "MEMORIA:919",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ]
+      },
+      {
+        "caso": "N1-36",
+        "consulta": "Variantes de la misma pregunta con dato histórico, candidata y fuera de ámbito.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-37",
+        "consulta": "¿Hay algo sobre el tema sensible del titular?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-38",
+        "consulta": "Dame las restricciones esenciales, máximo 10.",
+        "esperado": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110"
+        ],
+        "obtenido": [
+          "MEMORIA:110",
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109"
+        ]
+      },
+      {
+        "caso": "N1-39",
+        "consulta": "Ejecuta el mismo corpus con dos implementaciones distintas.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-40",
+        "consulta": "¿Cuál es el presupuesto vigente de Alfa?",
+        "esperado": [
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "MEMORIA:11"
+        ]
+      },
+      {
+        "caso": "N1-41",
+        "consulta": "¿Cada cuánto se revisa el coche de empresa?",
+        "esperado": [
+          "MEMORIA:22"
+        ],
+        "obtenido": [
+          "MEMORIA:22"
+        ]
+      },
+      {
+        "caso": "N1-42",
+        "consulta": "¿Usar PostgreSQL?",
+        "esperado": [
+          "DECISION:10"
+        ],
+        "obtenido": [
+          "DECISION:10"
+        ]
+      },
+      {
+        "caso": "N1-43",
+        "consulta": "¿Quién valida los entregables de calidad?",
+        "esperado": [
+          "MEMORIA:23",
+          "MEMORIA:24"
+        ],
+        "obtenido": [
+          "MEMORIA:23",
+          "MEMORIA:24",
+          "MEMORIA:12"
+        ]
+      },
+      {
+        "caso": "N1-44",
+        "consulta": "Restricciones esenciales, máximo duro 5.",
+        "esperado": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105"
+        ],
+        "obtenido": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105"
+        ]
+      },
+      {
+        "caso": "N1-45",
+        "consulta": "¿Cuál es el presupuesto que manejamos?",
+        "esperado": [
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:3"
+        ]
+      },
+      {
+        "caso": "N1-46",
+        "consulta": "[interna] datos de nómina del equipo Beta",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-47",
+        "consulta": "Consultas por occurred_at, valid_time y recorded_at.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-48",
+        "consulta": "Par diferencial: misma consulta, dos propósitos.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-49",
+        "consulta": "¿Hay algo sobre mi preferencia de reuniones?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:4",
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ]
+      },
+      {
+        "caso": "N1-50",
+        "consulta": "¿Qué condiciones de acceso al almacén hay?",
+        "esperado": [
+          "MEMORIA:25"
+        ],
+        "obtenido": [
+          "MEMORIA:25",
+          "MEMORIA:913",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:930",
+          "MEMORIA:939"
+        ]
+      }
+    ],
+    "2. el filtro que elige, criticas protegidas": [
+      {
+        "caso": "N1-01",
+        "consulta": "¿Cómo prefiero que redactes?",
+        "esperado": [
+          "MEMORIA:1"
+        ],
+        "obtenido": [
+          "MEMORIA:1"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:1"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-02",
+        "consulta": "¿Qué restricciones de transporte tengo?",
+        "esperado": [
+          "MEMORIA:2"
+        ],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-03",
+        "consulta": "¿Qué reglas de calidad aplican a Gamma?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111",
+          "MEMORIA:112"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111",
+          "MEMORIA:112"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-04",
+        "consulta": "¿Qué formato de informe uso?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:906",
+          "MEMORIA:925"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:906",
+          "MEMORIA:925"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-05",
+        "consulta": "¿Qué decisión de presupuesto usábamos antes?",
+        "esperado": [
+          "DECISION:2"
+        ],
+        "obtenido": [
+          "DECISION:3"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "DECISION:2"
+        ],
+        "quitados": [
+          "DECISION:2"
+        ],
+        "quitados_correctos": [
+          "DECISION:2"
+        ],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-06",
+        "consulta": "¿Qué proveedor de mensajería aplica?",
+        "esperado": [
+          "DECISION:4"
+        ],
+        "obtenido": [
+          "DECISION:4"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:4"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-07",
+        "consulta": "¿Desde cuándo rige el contrato de mantenimiento?",
+        "esperado": [
+          "MEMORIA:5"
+        ],
+        "obtenido": [
+          "MEMORIA:5"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:5"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-08",
+        "consulta": "¿Cuál es el presupuesto de Beta?",
+        "esperado": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "obtenido": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-09",
+        "consulta": "¿Qué preferencia de reuniones tengo?",
+        "esperado": [],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ],
+        "quitados": [
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-10",
+        "consulta": "¿Qué horario de entrega tengo fijado?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-11",
+        "consulta": "¿Qué sabes del expediente retirado?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-12",
+        "consulta": "¿Hay información médica del titular?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-13",
+        "consulta": "¿Cuál es el identificador de PAA?",
+        "esperado": [
+          "MEMORIA:11"
+        ],
+        "obtenido": [
+          "MEMORIA:11"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:11"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-14",
+        "consulta": "¿De qué se ocupa Juan?",
+        "esperado": [
+          "MEMORIA:12",
+          "MEMORIA:13"
+        ],
+        "obtenido": [
+          "MEMORIA:25",
+          "MEMORIA:13"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:25",
+          "MEMORIA:13",
+          "MEMORIA:12",
+          "DECISION:1",
+          "MEMORIA:23",
+          "MEMORIA:27"
+        ],
+        "quitados": [
+          "MEMORIA:12",
+          "DECISION:1",
+          "MEMORIA:23",
+          "MEMORIA:27"
+        ],
+        "quitados_correctos": [
+          "MEMORIA:12"
+        ],
+        "quitados_criticos": [],
+        "filtro_actuo": true,
+        "rescatados_por_la_regla": [
+          "MEMORIA:25"
+        ],
+        "obtenido_sin_proteccion": [
+          "MEMORIA:13"
+        ]
+      },
+      {
+        "caso": "N1-15",
+        "consulta": "¿Dónde dije exactamente que el alcance no incluye la migración?",
+        "esperado": [],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "MEMORIA:14",
+          "DECISION:10",
+          "MEMORIA:17",
+          "MEMORIA:21",
+          "MEMORIA:5"
+        ],
+        "quitados": [
+          "MEMORIA:14",
+          "DECISION:10",
+          "MEMORIA:17",
+          "MEMORIA:21",
+          "MEMORIA:5"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-16",
+        "consulta": "¿Quién cierra el circuito de firmas?",
+        "esperado": [
+          "MEMORIA:27"
+        ],
+        "obtenido": [
+          "MEMORIA:27"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:27"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-17",
+        "consulta": "¿Qué política de teletrabajo tenemos en Alfa?",
+        "esperado": [],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:11"
+        ],
+        "quitados": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:11"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-18",
+        "consulta": "¿Qué dice el anexo técnico requerido?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-19",
+        "consulta": "¿Cuál es la plataforma de despliegue aprobada?",
+        "esperado": [
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ],
+        "obtenido": [
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-20",
+        "consulta": "¿Puedo usar vuelos con escala?",
+        "esperado": [
+          "MEMORIA:14"
+        ],
+        "obtenido": [
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "DECISION:10"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "DECISION:10"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true,
+        "rescatados_por_la_regla": [
+          "DECISION:10"
+        ],
+        "obtenido_sin_proteccion": [
+          "MEMORIA:14",
+          "MEMORIA:16"
+        ]
+      },
+      {
+        "caso": "N1-21",
+        "consulta": "¿Acepto escalas?",
+        "esperado": [
+          "MEMORIA:16"
+        ],
+        "obtenido": [
+          "MEMORIA:14",
+          "MEMORIA:16"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:14",
+          "MEMORIA:16"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-22",
+        "consulta": "¿Qué decisiones eran válidas entre enero y marzo?",
+        "esperado": [
+          "DECISION:1",
+          "DECISION:5",
+          "DECISION:9",
+          "DECISION:11",
+          "DECISION:14",
+          "DECISION:15"
+        ],
+        "obtenido": [
+          "DECISION:14"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:14"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-23",
+        "consulta": "¿Cuál es la decisión de presupuesto actual y cuál reemplazó?",
+        "esperado": [
+          "DECISION:2",
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "DECISION:2"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "DECISION:2"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-24",
+        "consulta": "¿Cada cuánto revisamos el alcance?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-25",
+        "consulta": "Atlas",
+        "esperado": [
+          "MEMORIA:11"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:11"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:11"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true,
+        "rescatados_por_la_regla": [
+          "DECISION:3",
+          "DECISION:10"
+        ],
+        "obtenido_sin_proteccion": [
+          "MEMORIA:11"
+        ]
+      },
+      {
+        "caso": "N1-26",
+        "consulta": "Enumera las restricciones esenciales del expediente Gamma.",
+        "esperado": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111"
+        ],
+        "obtenido": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-27",
+        "consulta": "¿Qué presupuesto aplico en Beta según el documento?",
+        "esperado": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "obtenido": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-28",
+        "consulta": "¿Qué se dijo en la sesión no guardada?",
+        "esperado": [],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "MEMORIA:14",
+          "DECISION:10",
+          "MEMORIA:16",
+          "MEMORIA:21",
+          "MEMORIA:5",
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:917",
+          "MEMORIA:919",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ],
+        "quitados": [
+          "MEMORIA:14",
+          "DECISION:10",
+          "MEMORIA:16",
+          "MEMORIA:21",
+          "MEMORIA:5",
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:917",
+          "MEMORIA:919",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-29",
+        "consulta": "¿Cuál es el plazo legal de entrega?",
+        "esperado": [
+          "MEMORIA:20"
+        ],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-30",
+        "consulta": "Resume mi preferencia de redacción, el presupuesto vigente y la condición de ahorro en escalas, con su razón.",
+        "esperado": [
+          "DECISION:3",
+          "MEMORIA:1",
+          "MEMORIA:16"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "MEMORIA:16",
+          "DECISION:10"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "MEMORIA:16",
+          "DECISION:10",
+          "MEMORIA:11"
+        ],
+        "quitados": [
+          "MEMORIA:11"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true,
+        "rescatados_por_la_regla": [
+          "DECISION:10"
+        ],
+        "obtenido_sin_proteccion": [
+          "DECISION:3",
+          "MEMORIA:16"
+        ]
+      },
+      {
+        "caso": "N1-31",
+        "consulta": "Dame todas las restricciones esenciales que debo respetar.",
+        "esperado": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "MEMORIA:25"
+        ],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-32",
+        "consulta": "¿Qué sabía Sirius sobre el aforo el 1 de marzo?",
+        "esperado": [
+          "DECISION:12"
+        ],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "DECISION:12"
+        ],
+        "quitados": [
+          "DECISION:12"
+        ],
+        "quitados_correctos": [
+          "DECISION:12"
+        ],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-33",
+        "consulta": "[interna B05] evidencia de límite de gasto",
+        "esperado": [
+          "DECISION:3"
+        ],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "MEMORIA:11"
+        ],
+        "quitados": [
+          "MEMORIA:11"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-34",
+        "consulta": "Prepara el contexto de planificación de Alfa.",
+        "esperado": [
+          "DECISION:3",
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "MEMORIA:903",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:919"
+        ],
+        "obtenido": [
+          "MEMORIA:11"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:903",
+          "MEMORIA:915",
+          "MEMORIA:919",
+          "MEMORIA:931",
+          "MEMORIA:11",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:939"
+        ],
+        "quitados": [
+          "MEMORIA:903",
+          "MEMORIA:915",
+          "MEMORIA:919",
+          "MEMORIA:931",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:939"
+        ],
+        "quitados_correctos": [
+          "MEMORIA:903",
+          "MEMORIA:915",
+          "MEMORIA:919",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-35",
+        "consulta": "¿Qué nota interna hay sobre la prueba?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:917",
+          "MEMORIA:919",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:917",
+          "MEMORIA:919",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-36",
+        "consulta": "Variantes de la misma pregunta con dato histórico, candidata y fuera de ámbito.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-37",
+        "consulta": "¿Hay algo sobre el tema sensible del titular?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-38",
+        "consulta": "Dame las restricciones esenciales, máximo 10.",
+        "esperado": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110"
+        ],
+        "obtenido": [
+          "MEMORIA:110",
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:110",
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-39",
+        "consulta": "Ejecuta el mismo corpus con dos implementaciones distintas.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-40",
+        "consulta": "¿Cuál es el presupuesto vigente de Alfa?",
+        "esperado": [
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:3"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "MEMORIA:11"
+        ],
+        "quitados": [
+          "MEMORIA:11"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-41",
+        "consulta": "¿Cada cuánto se revisa el coche de empresa?",
+        "esperado": [
+          "MEMORIA:22"
+        ],
+        "obtenido": [
+          "MEMORIA:22"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:22"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-42",
+        "consulta": "¿Usar PostgreSQL?",
+        "esperado": [
+          "DECISION:10"
+        ],
+        "obtenido": [
+          "DECISION:10"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:10"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-43",
+        "consulta": "¿Quién valida los entregables de calidad?",
+        "esperado": [
+          "MEMORIA:23",
+          "MEMORIA:24"
+        ],
+        "obtenido": [
+          "MEMORIA:24",
+          "MEMORIA:12"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:23",
+          "MEMORIA:24",
+          "MEMORIA:12"
+        ],
+        "quitados": [
+          "MEMORIA:23"
+        ],
+        "quitados_correctos": [
+          "MEMORIA:23"
+        ],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-44",
+        "consulta": "Restricciones esenciales, máximo duro 5.",
+        "esperado": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105"
+        ],
+        "obtenido": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true,
+        "rescatados_por_la_regla": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104"
+        ],
+        "obtenido_sin_proteccion": [
+          "MEMORIA:105"
+        ]
+      },
+      {
+        "caso": "N1-45",
+        "consulta": "¿Cuál es el presupuesto que manejamos?",
+        "esperado": [
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:3"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-46",
+        "consulta": "[interna] datos de nómina del equipo Beta",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-47",
+        "consulta": "Consultas por occurred_at, valid_time y recorded_at.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-48",
+        "consulta": "Par diferencial: misma consulta, dos propósitos.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-49",
+        "consulta": "¿Hay algo sobre mi preferencia de reuniones?",
+        "esperado": [],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "MEMORIA:4",
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ],
+        "quitados": [
+          "MEMORIA:4",
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-50",
+        "consulta": "¿Qué condiciones de acceso al almacén hay?",
+        "esperado": [
+          "MEMORIA:25"
+        ],
+        "obtenido": [
+          "MEMORIA:25"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:25",
+          "MEMORIA:913",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:930",
+          "MEMORIA:939"
+        ],
+        "quitados": [
+          "MEMORIA:913",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:930",
+          "MEMORIA:939"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      }
+    ],
+    "3. la compuerta (todo o nada)": [
+      {
+        "caso": "N1-01",
+        "consulta": "¿Cómo prefiero que redactes?",
+        "esperado": [
+          "MEMORIA:1"
+        ],
+        "obtenido": [
+          "MEMORIA:1"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:1"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-02",
+        "consulta": "¿Qué restricciones de transporte tengo?",
+        "esperado": [
+          "MEMORIA:2"
+        ],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-03",
+        "consulta": "¿Qué reglas de calidad aplican a Gamma?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111",
+          "MEMORIA:112"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111",
+          "MEMORIA:112"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-04",
+        "consulta": "¿Qué formato de informe uso?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:906",
+          "MEMORIA:925"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:906",
+          "MEMORIA:925"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-05",
+        "consulta": "¿Qué decisión de presupuesto usábamos antes?",
+        "esperado": [
+          "DECISION:2"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "DECISION:2"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "DECISION:2"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-06",
+        "consulta": "¿Qué proveedor de mensajería aplica?",
+        "esperado": [
+          "DECISION:4"
+        ],
+        "obtenido": [
+          "DECISION:4"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:4"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-07",
+        "consulta": "¿Desde cuándo rige el contrato de mantenimiento?",
+        "esperado": [
+          "MEMORIA:5"
+        ],
+        "obtenido": [
+          "MEMORIA:5"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:5"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-08",
+        "consulta": "¿Cuál es el presupuesto de Beta?",
+        "esperado": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "obtenido": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-09",
+        "consulta": "¿Qué preferencia de reuniones tengo?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-10",
+        "consulta": "¿Qué horario de entrega tengo fijado?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-11",
+        "consulta": "¿Qué sabes del expediente retirado?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-12",
+        "consulta": "¿Hay información médica del titular?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-13",
+        "consulta": "¿Cuál es el identificador de PAA?",
+        "esperado": [
+          "MEMORIA:11"
+        ],
+        "obtenido": [
+          "MEMORIA:11"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:11"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-14",
+        "consulta": "¿De qué se ocupa Juan?",
+        "esperado": [
+          "MEMORIA:12",
+          "MEMORIA:13"
+        ],
+        "obtenido": [
+          "MEMORIA:25",
+          "MEMORIA:13",
+          "MEMORIA:12",
+          "DECISION:1",
+          "MEMORIA:23",
+          "MEMORIA:27"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:25",
+          "MEMORIA:13",
+          "MEMORIA:12",
+          "DECISION:1",
+          "MEMORIA:23",
+          "MEMORIA:27"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-15",
+        "consulta": "¿Dónde dije exactamente que el alcance no incluye la migración?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:14",
+          "DECISION:10",
+          "MEMORIA:17",
+          "MEMORIA:21",
+          "MEMORIA:5"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:14",
+          "DECISION:10",
+          "MEMORIA:17",
+          "MEMORIA:21",
+          "MEMORIA:5"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-16",
+        "consulta": "¿Quién cierra el circuito de firmas?",
+        "esperado": [
+          "MEMORIA:27"
+        ],
+        "obtenido": [
+          "MEMORIA:27"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:27"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-17",
+        "consulta": "¿Qué política de teletrabajo tenemos en Alfa?",
+        "esperado": [],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:11"
+        ],
+        "quitados": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:11"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-18",
+        "consulta": "¿Qué dice el anexo técnico requerido?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-19",
+        "consulta": "¿Cuál es la plataforma de despliegue aprobada?",
+        "esperado": [
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ],
+        "obtenido": [
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:6",
+          "DECISION:7",
+          "DECISION:8"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-20",
+        "consulta": "¿Puedo usar vuelos con escala?",
+        "esperado": [
+          "MEMORIA:14"
+        ],
+        "obtenido": [
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "DECISION:10"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "DECISION:10"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-21",
+        "consulta": "¿Acepto escalas?",
+        "esperado": [
+          "MEMORIA:16"
+        ],
+        "obtenido": [
+          "MEMORIA:14",
+          "MEMORIA:16"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:14",
+          "MEMORIA:16"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-22",
+        "consulta": "¿Qué decisiones eran válidas entre enero y marzo?",
+        "esperado": [
+          "DECISION:1",
+          "DECISION:5",
+          "DECISION:9",
+          "DECISION:11",
+          "DECISION:14",
+          "DECISION:15"
+        ],
+        "obtenido": [
+          "DECISION:14"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:14"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-23",
+        "consulta": "¿Cuál es la decisión de presupuesto actual y cuál reemplazó?",
+        "esperado": [
+          "DECISION:2",
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "DECISION:2"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "DECISION:2"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-24",
+        "consulta": "¿Cada cuánto revisamos el alcance?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-25",
+        "consulta": "Atlas",
+        "esperado": [
+          "MEMORIA:11"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:11"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:11"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-26",
+        "consulta": "Enumera las restricciones esenciales del expediente Gamma.",
+        "esperado": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111"
+        ],
+        "obtenido": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110",
+          "MEMORIA:111"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-27",
+        "consulta": "¿Qué presupuesto aplico en Beta según el documento?",
+        "esperado": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "obtenido": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:5",
+          "MEMORIA:6"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-28",
+        "consulta": "¿Qué se dijo en la sesión no guardada?",
+        "esperado": [],
+        "obtenido": [],
+        "entraron_al_filtro": [
+          "MEMORIA:14",
+          "DECISION:10",
+          "MEMORIA:16",
+          "MEMORIA:21",
+          "MEMORIA:5",
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:917",
+          "MEMORIA:919",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ],
+        "quitados": [
+          "MEMORIA:14",
+          "DECISION:10",
+          "MEMORIA:16",
+          "MEMORIA:21",
+          "MEMORIA:5",
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:917",
+          "MEMORIA:919",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-29",
+        "consulta": "¿Cuál es el plazo legal de entrega?",
+        "esperado": [
+          "MEMORIA:20"
+        ],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-30",
+        "consulta": "Resume mi preferencia de redacción, el presupuesto vigente y la condición de ahorro en escalas, con su razón.",
+        "esperado": [
+          "DECISION:3",
+          "MEMORIA:1",
+          "MEMORIA:16"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "MEMORIA:16",
+          "DECISION:10",
+          "MEMORIA:11"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "MEMORIA:16",
+          "DECISION:10",
+          "MEMORIA:11"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-31",
+        "consulta": "Dame todas las restricciones esenciales que debo respetar.",
+        "esperado": [
+          "DECISION:3",
+          "DECISION:10",
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "MEMORIA:25"
+        ],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-32",
+        "consulta": "¿Qué sabía Sirius sobre el aforo el 1 de marzo?",
+        "esperado": [
+          "DECISION:12"
+        ],
+        "obtenido": [
+          "DECISION:12"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:12"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-33",
+        "consulta": "[interna B05] evidencia de límite de gasto",
+        "esperado": [
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "MEMORIA:11"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:11"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-34",
+        "consulta": "Prepara el contexto de planificación de Alfa.",
+        "esperado": [
+          "DECISION:3",
+          "MEMORIA:14",
+          "MEMORIA:16",
+          "MEMORIA:903",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:919"
+        ],
+        "obtenido": [
+          "MEMORIA:903",
+          "MEMORIA:915",
+          "MEMORIA:919",
+          "MEMORIA:931",
+          "MEMORIA:11",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:939"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:903",
+          "MEMORIA:915",
+          "MEMORIA:919",
+          "MEMORIA:931",
+          "MEMORIA:11",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:939"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-35",
+        "consulta": "¿Qué nota interna hay sobre la prueba?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:917",
+          "MEMORIA:919",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:903",
+          "MEMORIA:906",
+          "MEMORIA:910",
+          "MEMORIA:911",
+          "MEMORIA:912",
+          "MEMORIA:913",
+          "MEMORIA:914",
+          "MEMORIA:915",
+          "MEMORIA:917",
+          "MEMORIA:919",
+          "MEMORIA:921",
+          "MEMORIA:925",
+          "MEMORIA:930",
+          "MEMORIA:931",
+          "MEMORIA:939"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-36",
+        "consulta": "Variantes de la misma pregunta con dato histórico, candidata y fuera de ámbito.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-37",
+        "consulta": "¿Hay algo sobre el tema sensible del titular?",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-38",
+        "consulta": "Dame las restricciones esenciales, máximo 10.",
+        "esperado": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109",
+          "MEMORIA:110"
+        ],
+        "obtenido": [
+          "MEMORIA:110",
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:110",
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105",
+          "MEMORIA:106",
+          "MEMORIA:107",
+          "MEMORIA:108",
+          "MEMORIA:109"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-39",
+        "consulta": "Ejecuta el mismo corpus con dos implementaciones distintas.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-40",
+        "consulta": "¿Cuál es el presupuesto vigente de Alfa?",
+        "esperado": [
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:3",
+          "MEMORIA:11"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3",
+          "MEMORIA:11"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-41",
+        "consulta": "¿Cada cuánto se revisa el coche de empresa?",
+        "esperado": [
+          "MEMORIA:22"
+        ],
+        "obtenido": [
+          "MEMORIA:22"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:22"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-42",
+        "consulta": "¿Usar PostgreSQL?",
+        "esperado": [
+          "DECISION:10"
+        ],
+        "obtenido": [
+          "DECISION:10"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:10"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-43",
+        "consulta": "¿Quién valida los entregables de calidad?",
+        "esperado": [
+          "MEMORIA:23",
+          "MEMORIA:24"
+        ],
+        "obtenido": [
+          "MEMORIA:23",
+          "MEMORIA:24",
+          "MEMORIA:12"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:23",
+          "MEMORIA:24",
+          "MEMORIA:12"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-44",
+        "consulta": "Restricciones esenciales, máximo duro 5.",
+        "esperado": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105"
+        ],
+        "obtenido": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:101",
+          "MEMORIA:102",
+          "MEMORIA:103",
+          "MEMORIA:104",
+          "MEMORIA:105"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-45",
+        "consulta": "¿Cuál es el presupuesto que manejamos?",
+        "esperado": [
+          "DECISION:3"
+        ],
+        "obtenido": [
+          "DECISION:3"
+        ],
+        "entraron_al_filtro": [
+          "DECISION:3"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-46",
+        "consulta": "[interna] datos de nómina del equipo Beta",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-47",
+        "consulta": "Consultas por occurred_at, valid_time y recorded_at.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-48",
+        "consulta": "Par diferencial: misma consulta, dos propósitos.",
+        "esperado": [],
+        "obtenido": []
+      },
+      {
+        "caso": "N1-49",
+        "consulta": "¿Hay algo sobre mi preferencia de reuniones?",
+        "esperado": [],
+        "obtenido": [
+          "MEMORIA:4",
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:4",
+          "MEMORIA:912",
+          "MEMORIA:914"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      },
+      {
+        "caso": "N1-50",
+        "consulta": "¿Qué condiciones de acceso al almacén hay?",
+        "esperado": [
+          "MEMORIA:25"
+        ],
+        "obtenido": [
+          "MEMORIA:25",
+          "MEMORIA:913",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:930",
+          "MEMORIA:939"
+        ],
+        "entraron_al_filtro": [
+          "MEMORIA:25",
+          "MEMORIA:913",
+          "MEMORIA:917",
+          "MEMORIA:921",
+          "MEMORIA:930",
+          "MEMORIA:939"
+        ],
+        "quitados": [],
+        "quitados_correctos": [],
+        "quitados_criticos": [],
+        "filtro_actuo": true
+      }
+    ]
+  },
+  "ampliacion_generada": {}
+}

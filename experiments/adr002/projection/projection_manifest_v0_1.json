@@ -1,0 +1,155 @@
+{
+  "advertencia": "Ninguna puerta de arranque queda satisfecha por esta proyeccion. El benchmark permanece BLOQUEADO, NO AUTORIZADO y NO EJECUTADO.",
+  "artefactos_fuente": [
+    "conformance_corpus_v0_6.json",
+    "subject_keys_v0_2.json",
+    "property_keys_v0_2.json",
+    "applied_criticality_v0_1.json"
+  ],
+  "blobs_de_origen": {
+    "applied_criticality_v0_1.json": "7dcbba0031e76d4f0763e0d0b853e59584fe3077",
+    "conformance_corpus_v0_6.json": "561d9dee8f215e4692d22f194c5972b09b5d3027",
+    "property_keys_v0_2.json": "321383be53dc65859000cf557b5b78e8dafc1901",
+    "subject_keys_v0_2.json": "f6c0f49b4f084d8b5d364d7ec6e1ba7562a5e302"
+  },
+  "campos_que_no_cruzan_a_item_canonico": {
+    "condicion": "identica razon que polaridad: es lo que la lectura semantica debe producir, no lo que recibe",
+    "polaridad": "RF-19 mide si el candidato la deriva; entregarla la convertiria en dato de entrada y el banco no mediria nada"
+  },
+  "deduplicacion_y_agrupacion": {
+    "clases_candidatas": {
+      "plataformadedespliegue|PK-d291da76418f": [
+        "DECISION:6",
+        "DECISION:7",
+        "DECISION:8"
+      ]
+    },
+    "mecanismo_a_identidad_exacta": "clave primaria de los tres planos; una identidad repetida aborta la construccion. No consulta sujeto ni propiedad.",
+    "mecanismo_b_equivalencia": "clases CANDIDATAS por (subject_key_experimental, property_key), ambas no nulas. Son dos de los siete ejes de B04-Q13: los otros cinco los adjudica la capa comun, y esta proyeccion no fusiona nada."
+  },
+  "documento": "Manifiesto de la proyeccion experimental de ADR-002",
+  "estado": "PROPUESTO_NO_CONGELADO",
+  "familia_fuente": "0.6",
+  "generador": "experiments/adr002/projection/build.py",
+  "huella_logica_total": "755cbdfea35969dc570ac9a94a23581f8e433c3575220d344e85c6cb2c47e33d",
+  "independencia_del_oraculo": "construir() recibe por firma el corpus y los tres canales laterales. No abre ficheros ni conoce los nombres de casos, referencias, adjudicaciones o resultados esperados: no puede leerlos.",
+  "perdidas_declaradas": {
+    "ambito_multiproyecto": "memories.project_id y decisions.project_id son una sola clave foranea y no pueden expresar una lista cerrada. El plano entrada guarda el numero del pseudo-proyecto; el ambito verdadero y sus miembros viajan en ejes_p2, y G4 debe leerlos de alli.",
+    "colapso_de_estado": "memories.status tiene tres valores y decisions.status cuatro; el corpus declara confirmacion, validez y disponibilidad por separado. G3, G6, G7 y G9 necesitan los tres ejes y no pueden obtenerlos del estado colapsado: los leen del plano ejes_p2, donde viajan verbatim.",
+    "sin_proyecto_activo": "el corpus no declara proyecto activo; marcar uno decidiria a quien favorece el desempate por proyecto activo. Ninguno lo es.",
+    "sujeto_ausente": "decisions.subject es NOT NULL: la ausencia real de sujeto se proyecta como cadena vacia, que el puerto y las consultas por clave y por prefijo ya tratan como ausencia. Fabricar un sujeto seria P-SUJETO-01, la proyeccion expresamente descartada."
+  },
+  "planos": {
+    "ejes_p2": {
+      "capacidades": [
+        "ENTRADA_DE_CANDIDATO"
+      ],
+      "consumidores": [
+        "common",
+        "ADR002-A",
+        "ADR002-B",
+        "ADR002-C",
+        "ADR002-D"
+      ],
+      "fichero": "ejes_p2.sqlite3",
+      "filas": {
+        "alias_de_entidad": 7,
+        "alias_de_proyecto": 8,
+        "documentos": 5,
+        "ejes_del_item": 97,
+        "ejes_del_mensaje": 6,
+        "ejes_reservados_al_arnes": 97,
+        "entidades": 8,
+        "entidades_del_item": 12,
+        "miembros_de_lista_cerrada": 2,
+        "procedencias": 5,
+        "proyectos": 8,
+        "relaciones": 10
+      },
+      "huella_logica": "2544c8c64dc42de19467ddef1b455e9d7eaa91c39322f32f6a46781bec7093a0",
+      "tablas": [
+        "alias_de_entidad",
+        "alias_de_proyecto",
+        "documentos",
+        "ejes_del_item",
+        "ejes_del_mensaje",
+        "ejes_reservados_al_arnes",
+        "entidades",
+        "entidades_del_item",
+        "miembros_de_lista_cerrada",
+        "procedencias",
+        "proyectos",
+        "relaciones"
+      ]
+    },
+    "entrada": {
+      "capacidades": [
+        "ENTRADA_DE_CANDIDATO",
+        "COMUN_Y_SENAL_DECLARADA_DE_A"
+      ],
+      "consumidores": [
+        "common",
+        "ADR002-A",
+        "ADR002-B",
+        "ADR002-C",
+        "ADR002-D",
+        "T0-control"
+      ],
+      "fichero": "entrada.sqlite3",
+      "filas": {
+        "alembic_version": 1,
+        "conversations": 1,
+        "decision_revisions": 16,
+        "decisions": 16,
+        "events": 0,
+        "identities": 0,
+        "identity_versions": 0,
+        "llm_usage": 0,
+        "memories": 81,
+        "memory_revisions": 81,
+        "messages": 6,
+        "project_revisions": 0,
+        "projects": 8
+      },
+      "huella_logica": "3fe8f653e8eacc3e0c023e0a1c934d9a2e9ed96fdff9070f6e3738ed1688ec44",
+      "tablas": [
+        "alembic_version",
+        "conversations",
+        "decision_revisions",
+        "decisions",
+        "events",
+        "identities",
+        "identity_versions",
+        "llm_usage",
+        "memories",
+        "memory_revisions",
+        "messages",
+        "project_revisions",
+        "projects"
+      ]
+    },
+    "reservado": {
+      "capacidades": [
+        "SOLO_CAPA_COMUN",
+        "HANDOFF_A_B05"
+      ],
+      "consumidores": [
+        "common",
+        "B05"
+      ],
+      "fichero": "reservado.sqlite3",
+      "filas": {
+        "criticidad_aplicada": 97,
+        "property_key": 97
+      },
+      "huella_logica": "f197fb69a61ded0135133935738571c1b0400ec763d887ce127654b654740865",
+      "tablas": [
+        "criticidad_aplicada",
+        "property_key"
+      ]
+    }
+  },
+  "referencias_sin_identidad_canonica": "entidades y proyectos no son elementos del canon de Sirius 0.1 y su referencia canonica es null; inventarles una haria indistinguible «no existe en el canon» de «existe».",
+  "regla_de_identidad": "MEM-<n> -> MEMORIA:<n>, DEC-<n> -> DECISION:<n>, MSG-<n> -> MENSAJE:<n>, DOC-<n> -> DOCUMENTO:<n>. El numero sale del identificador, nunca de un contador de insercion, de modo que no depende del orden de recorrido.",
+  "version": "0.1"
+}

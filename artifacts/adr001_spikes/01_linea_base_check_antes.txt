@@ -1,0 +1,26 @@
+=== LINEA BASE — equivalente literal de scripts/check.ps1 ===
+NOTA: no hay PowerShell en este contenedor Linux (command -v pwsh/powershell => vacio).
+Se ejecutan los 4 comandos del script, en su mismo orden, tal cual estan escritos en scripts/check.ps1.
+
+fecha_utc: 2026-07-25T03:21:24Z
+
+--- [1/4] uv run ruff format --check . ---
+239 files already formatted
+exit=0
+
+--- [2/4] uv run ruff check . ---
+All checks passed!
+exit=0
+
+--- [3/4] uv run mypy src tests ---
+Success: no issues found in 236 source files
+exit=0
+
+--- [4/4] uv run pytest ---
+........................................................................ [ 77%]
+........................................................................ [ 83%]
+........................................................................ [ 89%]
+........................................................................ [ 95%]
+...................................................                      [100%]
+1203 passed in 206.10s (0:03:26)
+exit=0

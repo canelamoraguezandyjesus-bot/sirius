@@ -1,0 +1,132 @@
+{
+ "documento": "Readjudicacion de la ronda primaria de ADR-002 contra el canon",
+ "version_esquema": "readjudicacion-ronda-adr002-0.1",
+ "estado": "READJUDICACION",
+ "resoluciones": "SIRIUS_0.2_ADR_002_TRES_PREGUNTAS_ABIERTAS_RESUELTAS_CONTRA_EL_CANON_v1.0.md",
+ "origen": "artifacts/adr002_round/ronda_primaria_v0.2_evidencia.json",
+ "no_es_una_medicion": "no se ejecuto ninguna consulta: se releen los veredictos congelados de la corrida v0.2 y se vuelven a adjudicar. Las cifras publicadas de v0.1 y v0.2 no se modifican",
+ "resoluciones_aplicadas": {
+  "casos_que_dejan_de_puntuar": {
+   "B04-CA-04": "B04: «Completitud critica antes que reduccion de ruido» y elegibilidad «pertinente al ambito»; los dos DISTRACTOR_RUIDO estan en ambito y no hay eje canonico por el que excluirlos sin leer el oraculo"
+  },
+  "prohibidos_retirados": {
+   "B04-CA-05": {
+    "identidades": [
+     "DECISION:3"
+    ],
+    "cita": "B04 M2 · Historico explicito: «Permite archivado, sustituido y finalizado con marcas temporales; separa tiempo valido de corte de registro y nunca lo presenta como actual». M2 amplia la elegibilidad; la exclusion de lo vigente no esta escrita"
+   }
+  },
+  "etapa_declarada_leida_como_cota": "B04: «Solo se expande cuando falta suficiencia o criticos». Resolver antes de la etapa declarada es obedecer la politica escalonada, no incumplir RF-14, que prohibe el salto y el barrido"
+ },
+ "pendiente_de_medir": [
+  "en M2, lo sustituido debe volver marcado y nunca presentarse como actual (B04 M2): ninguna metrica de esta ronda lo comprueba"
+ ],
+ "por_participante": {
+  "T0-control": {
+   "casos_adjudicados": 46,
+   "casos_retirados": [
+    "N1-04"
+   ],
+   "contaminacion_publicada": 16,
+   "contaminacion_readjudicada": 13,
+   "contaminacion_por_caso": {
+    "N1-03": [
+     "DECISION:1"
+    ],
+    "N1-12": [
+     "MEMORIA:10"
+    ],
+    "N1-20": [
+     "MEMORIA:15"
+    ],
+    "N1-25": [
+     "MEMORIA:18"
+    ],
+    "N1-26": [
+     "MEMORIA:112"
+    ],
+    "N1-32": [
+     "DECISION:13"
+    ],
+    "N1-35": [
+     "MEMORIA:21"
+    ],
+    "N1-36": [
+     "DECISION:13",
+     "DECISION:16",
+     "MEMORIA:18"
+    ],
+    "N1-41": [
+     "MEMORIA:2",
+     "MEMORIA:3"
+    ],
+    "N1-46": [
+     "MEMORIA:26"
+    ]
+   },
+   "etapa_publicada": 0,
+   "etapa_readjudicada": 0,
+   "etapa_puntuable": 45,
+   "contaminacion_cero": false,
+   "conformidad_de_etapa": false
+  },
+  "ADR002-A": {
+   "casos_adjudicados": 46,
+   "casos_retirados": [
+    "N1-04"
+   ],
+   "contaminacion_publicada": 3,
+   "contaminacion_readjudicada": 0,
+   "contaminacion_por_caso": {},
+   "etapa_publicada": 32,
+   "etapa_readjudicada": 43,
+   "etapa_puntuable": 45,
+   "contaminacion_cero": true,
+   "conformidad_de_etapa": false
+  },
+  "ADR002-B": {
+   "casos_adjudicados": 46,
+   "casos_retirados": [
+    "N1-04"
+   ],
+   "contaminacion_publicada": 3,
+   "contaminacion_readjudicada": 0,
+   "contaminacion_por_caso": {},
+   "etapa_publicada": 30,
+   "etapa_readjudicada": 41,
+   "etapa_puntuable": 45,
+   "contaminacion_cero": true,
+   "conformidad_de_etapa": false
+  },
+  "ADR002-C": {
+   "casos_adjudicados": 46,
+   "casos_retirados": [
+    "N1-04"
+   ],
+   "contaminacion_publicada": 3,
+   "contaminacion_readjudicada": 0,
+   "contaminacion_por_caso": {},
+   "etapa_publicada": 32,
+   "etapa_readjudicada": 43,
+   "etapa_puntuable": 45,
+   "contaminacion_cero": true,
+   "conformidad_de_etapa": false
+  },
+  "ADR002-D": {
+   "casos_adjudicados": 46,
+   "casos_retirados": [
+    "N1-04"
+   ],
+   "contaminacion_publicada": 3,
+   "contaminacion_readjudicada": 0,
+   "contaminacion_por_caso": {},
+   "etapa_publicada": 30,
+   "etapa_readjudicada": 41,
+   "etapa_puntuable": 45,
+   "contaminacion_cero": true,
+   "conformidad_de_etapa": false
+  }
+ },
+ "no_elige": "esta readjudicacion no elige alternativa ni cierra ADR-002: corrige el criterio con el que se leen unas cifras que no cambian"
+}

@@ -1,0 +1,73 @@
+{
+  "que_es": "la ultima omision critica que queda, por que ninguna tecnica lexica la cierra, y cual es el atajo que la cerraria y no se usa",
+  "commit": "d39d0a0",
+  "la_puerta_que_esto_decide": {
+    "norma": "B04-M01 · Recall critico, umbral 100 % por caso",
+    "regla": "§14 · R1: una omision critica reproducible elimina la alternativa",
+    "de_donde_sale": "SIRIUS_0.2_ADR_002_CIERRE_v1.0.md",
+    "casos_que_la_cerraban": [
+      "N1-02",
+      "N1-30",
+      "N1-31",
+      "N1-33",
+      "N1-34",
+      "N1-44"
+    ],
+    "estado_ahora": {
+      "N1-02": "resuelto por la categoria buscable",
+      "N1-31": "resuelto por la categoria buscable",
+      "N1-44": "resuelto por la regla de las criticas",
+      "N1-33": "resuelto por la siembra al ensamblar contexto",
+      "N1-34": "resuelto por la siembra al ensamblar contexto",
+      "N1-30": "SIGUE ABIERTO"
+    }
+  },
+  "el_caso": {
+    "caso": "N1-30",
+    "consulta": "Resume mi preferencia de redacción, el presupuesto vigente y la condición de ahorro en escalas, con su razón.",
+    "proposito": "responder_al_usuario",
+    "falta": "MEMORIA:1",
+    "texto_del_dato": "El usuario prefiere que redactes en tono directo y sin adornos.",
+    "nivel": "IMPORTANTE",
+    "ambito": "GLOBAL"
+  },
+  "el_hueco": {
+    "descripcion": "la consulta dice «preferencia de redaccion» y el dato «prefiere que redactes». Es DERIVACION —nombre contra verbo— y ademas con cambio de raiz (prefer/prefier), no flexion",
+    "recorte_de_sufijos": {
+      "preferencia": "preferenci",
+      "prefiere": "prefier",
+      "redaccion": "redaccion",
+      "redactes": "redact",
+      "une": false
+    },
+    "variantes_morfologicas": {
+      "une": false
+    },
+    "lematizador": {
+      "une": false,
+      "por_que": "«prefiere» lematiza a «preferir» (verbo) y «preferencia» a «preferencia» (nombre): son lemas distintos. Un lematizador resuelve flexion, no derivacion"
+    },
+    "trigramas_o_prefijos": {
+      "une": "solo con prefijos de 4 y 5 caracteres",
+      "por_que_no_vale": "elegir esa longitud mirando el caso que falla es fijar la medida sobre el resultado, y ademas «pref» y «redac» arrastran ruido a todo el banco"
+    },
+    "senal_semantica_densa": {
+      "une": "no medido para este par, pero la via esta cerrada",
+      "por_que": "medida entera en SIRIUS_0.2_ADR_002_LA_SEMANTICA_CERRADA_v1.0.md: no supera la busqueda lexica en ningun punto de operacion, ni con modelo de pago"
+    }
+  },
+  "el_atajo_que_NO_se_usa": {
+    "cual": "indexar `criticidad.razon` del corpus",
+    "texto_literal": "Requisito de redacción declarado explícitamente por el usuario.",
+    "por_que_cerraria_el_caso": "contiene la palabra «redaccion», que es exactamente la que usa la consulta",
+    "por_que_esta_prohibido": "es la anotacion que explica POR QUE el elemento importa, escrita por quien construyo el banco. Es informacion equivalente al oraculo: indexarla haria que el banco se aprobase a si mismo y dejaria de medir nada",
+    "queda_declarado": true
+  },
+  "lo_unico_que_quedaria": {
+    "via": "ampliar la CONSULTA con el modelo local en el momento de buscar",
+    "por_que_podria_funcionar": "el modelo si relaciona «preferencia de redaccion» con «prefiere que redactes»; no es un problema de vocabulario para el",
+    "coste": "una llamada al modelo mas por cada busqueda. La latencia actual es de 3,1 s de mediana y 3,6 s de p95, y el presupuesto declarado es de 5 s: duplicarla lo rompe",
+    "estado": "NO medido. No se implementa sin decision"
+  },
+  "conclusion": "el bloqueo de ADR-002 pasa de seis casos a uno. El que queda no es un defecto que se arregle afinando: es un limite de la busqueda por palabras. Cerrarlo exige o el atajo prohibido, o una llamada al modelo por consulta que rompe el presupuesto de latencia"
+}

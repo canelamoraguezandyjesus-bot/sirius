@@ -1,0 +1,709 @@
+{
+ "documento": "Validación v0.2 del benchmark de ADR-002 contra las fuentes canónicas",
+ "version_contrato": "0.2",
+ "estado": "PROPUESTO_NO_CONGELADO",
+ "no_ejecuta": [
+  "T0",
+  "ADR002-A",
+  "ADR002-B",
+  "ADR002-C",
+  "ADR002-D"
+ ],
+ "puertas": {
+  "SRC-ADR002-01": "SATISFECHA",
+  "ADR002-TOL-207": "NO SATISFECHA · no se aprueba en esta ronda",
+  "ADR002-TOL-208": "NO SATISFECHA · el corpus no está congelado y T0 no se ha ejecutado",
+  "ADR002-TOL-209": "NO SATISFECHA",
+  "ADR002-TOL-210": "NO SATISFECHA"
+ },
+ "fuentes_canonicas": {
+  "SIRIUS_0.2_BLOQUE_04_BUSQUEDA_Y_RECUPERACION_v1.0_APROBADO.docx": {
+   "sha256_real": "b28a2cbed62b90f35e28db2412e46939b9bd2cdb8f145a5e9bbb2a8e7a5cbb45",
+   "sha256_manifest": "b28a2cbed62b90f35e28db2412e46939b9bd2cdb8f145a5e9bbb2a8e7a5cbb45",
+   "coincide": true,
+   "bytes": 93326
+  },
+  "SIRIUS_0.2_PLAN_DE_PRUEBAS_Y_REGISTRO_EXTERNO_DE_DELEGACIONES_v1.0_APROBADO.docx": {
+   "sha256_real": "39058c0f5fe50bb4b703411bd5296e1bb8b1ede513ccf2d9eacabb35da3f59fd",
+   "sha256_manifest": "39058c0f5fe50bb4b703411bd5296e1bb8b1ede513ccf2d9eacabb35da3f59fd",
+   "coincide": true,
+   "bytes": 93708
+  },
+  "SIRIUS_0.2_ARQ_00_MARCO_RECTOR_ARQUITECTURA_Y_MAPA_DECISIONES_v1.0_APROBADO.docx": {
+   "sha256_real": "730a5fd13dce18bfcdb8dd4afee23dfe22c067c7cb3b953a9bd115cf73224f49",
+   "sha256_manifest": "730a5fd13dce18bfcdb8dd4afee23dfe22c067c7cb3b953a9bd115cf73224f49",
+   "coincide": true,
+   "bytes": 85951
+  }
+ },
+ "resumen": {
+  "comprobaciones": 62,
+  "ok": 62,
+  "fallos": 0,
+  "veredicto": "VALIDO"
+ },
+ "cobertura": {
+  "ca_b04": {
+   "cubiertos": 50,
+   "de": 50
+  },
+  "pdp_ca": {
+   "pdp_ca_totales": 28,
+   "casos_ejecutados_por_ADR002": 8,
+   "casos_tocados_por_dependencia": 0,
+   "casos_fuera_de_alcance": 20
+  },
+  "ramas_canonicas": 19,
+  "familias_pdp": {
+   "1_destino_directo_adr002_arq00_20": [
+    "F01",
+    "F02",
+    "F03",
+    "F10",
+    "F15",
+    "F22",
+    "F23"
+   ],
+   "2_entradas_obligatorias_declaradas": [
+    "F01",
+    "F02",
+    "F03",
+    "F04",
+    "F05",
+    "F06",
+    "F10",
+    "F11",
+    "F14",
+    "F15",
+    "F22",
+    "F23",
+    "F24"
+   ],
+   "3_tocadas_por_casos_sin_atribuir_cierre": [
+    "F01",
+    "F02",
+    "F03",
+    "F04",
+    "F05",
+    "F06",
+    "F07",
+    "F08",
+    "F09",
+    "F10",
+    "F11",
+    "F12",
+    "F13",
+    "F14",
+    "F15",
+    "F21",
+    "F22",
+    "F23",
+    "F24",
+    "F25"
+   ],
+   "4_fuera_de_alcance_de_adr002": [
+    "F04",
+    "F05",
+    "F06",
+    "F07",
+    "F08",
+    "F09",
+    "F11",
+    "F12",
+    "F13",
+    "F14",
+    "F16",
+    "F17",
+    "F18",
+    "F19",
+    "F20",
+    "F21",
+    "F24",
+    "F25"
+   ]
+  }
+ },
+ "corpus": {
+  "conformidad": {
+   "proyectos": 7,
+   "entidades": 5,
+   "items": 94,
+   "recuerdos": 79,
+   "decisiones": 15,
+   "items_heredados_v0_1": 92,
+   "items_anadidos_v0_2": 2,
+   "mensajes": 6,
+   "documentos": 5,
+   "relaciones": 9
+  },
+  "rendimiento": {
+   "proyectos": 8,
+   "items": 550,
+   "recuerdos": 500,
+   "decisiones": 50,
+   "mensajes": 5000,
+   "documentos": 5,
+   "relaciones": 9,
+   "longitud_media_texto": 85.25,
+   "longitud_minima_texto": 34,
+   "longitud_maxima_texto": 103
+  },
+  "escala_rendimiento": {
+   "n": 500,
+   "regla": "recuerdos(N)=N · decisiones(N)=N//10 · mensajes(N)=N*10",
+   "objetivo": {
+    "recuerdos": 500,
+    "decisiones": 50,
+    "mensajes": 5000
+   },
+   "escala_de_referencia": {
+    "mensajes": 5000,
+    "recuerdos": 500,
+    "decisiones": 50,
+    "proyectos": 2
+   },
+   "fuente_de_la_escala": "SIRIUS_0.2_REGISTRO_TOLERANCIAS_v0.4_PROPUESTO.md · ADR002-TOL-208",
+   "escalas_proyectables": [
+    500,
+    5000,
+    50000
+   ]
+  }
+ },
+ "prevision_t0": {
+  "estado": "NO_MEDIDO",
+  "reparto": {
+   "EXPRESABLE_PREVISTO": [
+    "B04-CA-03",
+    "B04-CA-20",
+    "B04-CA-21",
+    "B04-CA-25",
+    "B04-CA-43"
+   ],
+   "NO_EJECUTABLE_CON_UNA_SOLA_IMPLEMENTACION": [
+    "B04-CA-39"
+   ],
+   "NO_EXPRESABLE_PREVISTO": [
+    "B04-CA-01",
+    "B04-CA-04",
+    "B04-CA-05",
+    "B04-CA-06",
+    "B04-CA-07",
+    "B04-CA-09",
+    "B04-CA-10",
+    "B04-CA-12",
+    "B04-CA-14",
+    "B04-CA-15",
+    "B04-CA-17",
+    "B04-CA-19",
+    "B04-CA-22",
+    "B04-CA-23",
+    "B04-CA-29",
+    "B04-CA-31",
+    "B04-CA-32",
+    "B04-CA-33",
+    "B04-CA-34",
+    "B04-CA-35",
+    "B04-CA-36",
+    "B04-CA-37",
+    "B04-CA-40",
+    "B04-CA-41",
+    "B04-CA-42",
+    "B04-CA-44",
+    "B04-CA-46",
+    "B04-CA-47",
+    "B04-CA-48",
+    "B04-CA-50"
+   ],
+   "PARCIALMENTE_EXPRESABLE_PREVISTO": [
+    "B04-CA-02",
+    "B04-CA-08",
+    "B04-CA-11",
+    "B04-CA-13",
+    "B04-CA-16",
+    "B04-CA-18",
+    "B04-CA-24",
+    "B04-CA-26",
+    "B04-CA-27",
+    "B04-CA-28",
+    "B04-CA-30",
+    "B04-CA-38",
+    "B04-CA-45",
+    "B04-CA-49"
+   ]
+  },
+  "nota": "Previsión, no veredicto. T0 no se ha ejecutado."
+ },
+ "comprobaciones": [
+  {
+   "comprobacion": "SHA-256 de las tres fuentes coincide con el MANIFEST",
+   "resultado": "OK",
+   "detalle": {}
+  },
+  {
+   "comprobacion": "el canon extraído tiene el tamaño que el canon declara",
+   "resultado": "OK",
+   "detalle": {
+    "casos_b04": 50,
+    "filas_anexo_b": 79,
+    "familias": 25,
+    "campos_pdp7": 14,
+    "pdp_ca": 28
+   }
+  },
+  {
+   "comprobacion": "CA-01-50 sin ausencias",
+   "resultado": "OK",
+   "detalle": {
+    "faltan": []
+   }
+  },
+  {
+   "comprobacion": "CA-01-50 sin duplicados",
+   "resultado": "OK",
+   "detalle": {
+    "duplicados": []
+   }
+  },
+  {
+   "comprobacion": "CA-01-50 sin identificadores ajenos",
+   "resultado": "OK",
+   "detalle": {
+    "ajenos": []
+   }
+  },
+  {
+   "comprobacion": "CA-01-50 aparecen exactamente una vez",
+   "resultado": "OK",
+   "detalle": {
+    "total": 50
+   }
+  },
+  {
+   "comprobacion": "los cuatro campos canónicos coinciden carácter a carácter con el DOCX (casos)",
+   "resultado": "OK",
+   "detalle": {
+    "diferencias": [],
+    "total": 0
+   }
+  },
+  {
+   "comprobacion": "los cuatro campos canónicos coinciden carácter a carácter con el DOCX (referencias)",
+   "resultado": "OK",
+   "detalle": {
+    "diferencias": [],
+    "total": 0
+   }
+  },
+  {
+   "comprobacion": "toda asignación del Anexo B está presente en la traza canónica del caso",
+   "resultado": "OK",
+   "detalle": {
+    "perdidas": []
+   }
+  },
+  {
+   "comprobacion": "lo adicional derivado no se solapa con lo canónico del Anexo B",
+   "resultado": "OK",
+   "detalle": {
+    "casos": []
+   }
+  },
+  {
+   "comprobacion": "cada caso traza a un RF canónico",
+   "resultado": "OK",
+   "detalle": {
+    "casos": []
+   }
+  },
+  {
+   "comprobacion": "todo RF citado pertenece a B04-RF-01-32",
+   "resultado": "OK",
+   "detalle": {
+    "rf": []
+   }
+  },
+  {
+   "comprobacion": "RED-027-034 cubiertas por al menos un caso",
+   "resultado": "OK",
+   "detalle": {
+    "faltan": []
+   }
+  },
+  {
+   "comprobacion": "RED-040 no se usa como requisito propio de ADR-002",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "todo modo nombrado literalmente por el canon está instanciado en el caso o una rama",
+   "resultado": "OK",
+   "detalle": {
+    "casos": []
+   }
+  },
+  {
+   "comprobacion": "CA-09, CA-10, CA-24 y CA-49 tienen rama M4",
+   "resultado": "OK",
+   "detalle": {
+    "casos": []
+   }
+  },
+  {
+   "comprobacion": "los cinco modos M1-M5 aparecen al menos una vez",
+   "resultado": "OK",
+   "detalle": {
+    "faltan": []
+   }
+  },
+  {
+   "comprobacion": "CA-36, CA-47 y CA-48 tienen tres ramas con resultado esperado distinto",
+   "resultado": "OK",
+   "detalle": {
+    "casos": []
+   }
+  },
+  {
+   "comprobacion": "CA-47: occurred_at, valid_time y recorded_at devuelven tres conjuntos distintos",
+   "resultado": "OK",
+   "detalle": {
+    "conjuntos": [
+     [
+      "DEC-011",
+      "DEC-015"
+     ],
+     [
+      "DEC-014"
+     ],
+     [
+      "DEC-014",
+      "DEC-015"
+     ]
+    ]
+   }
+  },
+  {
+   "comprobacion": "CA-48: la rama no autorizada y la de ausencia real declaran salida externa equivalente",
+   "resultado": "OK",
+   "detalle": {
+    "no_autorizada": "NO_REPORTABLE",
+    "ausencia_real": "NINGUNO_EN_AMBITO"
+   }
+  },
+  {
+   "comprobacion": "las ramas usan vocabulario canónico",
+   "resultado": "OK",
+   "detalle": {
+    "ramas": []
+   }
+  },
+  {
+   "comprobacion": "el mapa de campos cubre los catorce del PDP §7 leídos del DOCX",
+   "resultado": "OK",
+   "detalle": {
+    "solo_en_esquema": [],
+    "solo_en_canon": []
+   }
+  },
+  {
+   "comprobacion": "cada caso lleva los catorce campos del PDP §7 y la insuficiencia",
+   "resultado": "OK",
+   "detalle": {}
+  },
+  {
+   "comprobacion": "todo campo de la ficha declara un estado válido",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "CA-37, CA-39 y CA-48 declaran su tolerancia como PENDIENTE_TOL209, sin inventar banda",
+   "resultado": "OK",
+   "detalle": {
+    "casos": []
+   }
+  },
+  {
+   "comprobacion": "todo caso que resuelve más allá de E0 declara la condición de insuficiencia por transición",
+   "resultado": "OK",
+   "detalle": {
+    "casos": []
+   }
+  },
+  {
+   "comprobacion": "canon e instanciación están separados y etiquetados",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "ninguna referencia declara instanciación congelada por B04 §17/§17.1",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "la regla canónica «EXHAUSTIVA -> S1 deshabilitado» se lee del DOCX",
+   "resultado": "OK",
+   "detalle": {
+    "regla": "S1 deshabilitado. Deben agotarse los espacios autorizados o terminar por S2–S7 con estado parcial/explicado."
+   }
+  },
+  {
+   "comprobacion": "ninguna instanciación EXHAUSTIVA para por S1",
+   "resultado": "OK",
+   "detalle": {
+    "casos": []
+   }
+  },
+  {
+   "comprobacion": "solo se marca CANONICO el valor que el texto canónico del propio caso nombra",
+   "resultado": "OK",
+   "detalle": {
+    "campos": []
+   }
+  },
+  {
+   "comprobacion": "CA-02, CA-22, CA-39 y CA-47 no atribuyen EXHAUSTIVA ni S5 al canon",
+   "resultado": "OK",
+   "detalle": {
+    "casos": []
+   }
+  },
+  {
+   "comprobacion": "CA-39 no usa vocabulario de cardinalidad ni de parada de recuperación",
+   "resultado": "OK",
+   "detalle": {
+    "cardinalidad": null,
+    "parada": null
+   }
+  },
+  {
+   "comprobacion": "vocabulario canónico de modo, etapa, parada y cardinalidad",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "ningún caso emite veredicto frente a T0",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "CA-39 se declara no ejecutable con una sola implementación",
+   "resultado": "OK",
+   "detalle": {
+    "prevision": "NO_EJECUTABLE_CON_UNA_SOLA_IMPLEMENTACION"
+   }
+  },
+  {
+   "comprobacion": "criterio de expresabilidad único en CA-01, CA-04, CA-09, CA-10 y CA-11",
+   "resultado": "OK",
+   "detalle": {
+    "casos": []
+   }
+  },
+  {
+   "comprobacion": "los veintiocho PDP-CA quedan clasificados sin solapamiento ni hueco",
+   "resultado": "OK",
+   "detalle": {
+    "aplicables": 8,
+    "excluidos": 20,
+    "totales": 28
+   }
+  },
+  {
+   "comprobacion": "todo PDP-CA aplicable está instanciado como nivel 1",
+   "resultado": "OK",
+   "detalle": {
+    "solo_aplicables": []
+   }
+  },
+  {
+   "comprobacion": "todo PDP-CA aplicable declara su criterio",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "todo PDP-CA excluido declara su responsable",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "los PDP-CA instanciados reproducen su texto canónico carácter a carácter",
+   "resultado": "OK",
+   "detalle": {
+    "casos": []
+   }
+  },
+  {
+   "comprobacion": "familias PDP reportadas por los cuatro denominadores, sin agregarlos",
+   "resultado": "OK",
+   "detalle": {
+    "destino_directo": [
+     "F01",
+     "F02",
+     "F03",
+     "F10",
+     "F15",
+     "F22",
+     "F23"
+    ],
+    "entradas": [
+     "F01",
+     "F02",
+     "F03",
+     "F04",
+     "F05",
+     "F06",
+     "F10",
+     "F11",
+     "F14",
+     "F15",
+     "F22",
+     "F23",
+     "F24"
+    ]
+   }
+  },
+  {
+   "comprobacion": "no se declara ninguna cifra agregada de «cobertura de familias de ADR-002»",
+   "resultado": "OK",
+   "detalle": {
+    "advertencia": "No existe una sola cifra de «cobertura de familias de ADR-002». Se reportan cuatro denominadores distintos y no se agregan."
+   }
+  },
+  {
+   "comprobacion": "fenómenos obligatorios representados en el corpus de conformidad",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "las siete dimensiones ortogonales usan vocabulario canónico",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "toda marca crítica lleva nivel, razón, fuente y regla",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "ids del corpus de conformidad sin duplicados",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "sin datos reales, URLs ni secretos",
+   "resultado": "OK",
+   "detalle": {
+    "encontrados": []
+   }
+  },
+  {
+   "comprobacion": "los dos corpus comparten versión de contrato y semilla",
+   "resultado": "OK",
+   "detalle": {
+    "contrato": [
+     "0.2",
+     "0.2"
+    ],
+    "semilla": [
+     20260726,
+     20260726
+    ]
+   }
+  },
+  {
+   "comprobacion": "el corpus de rendimiento alcanza exactamente 5.000 mensajes, 500 recuerdos y 50 decisiones",
+   "resultado": "OK",
+   "detalle": {
+    "proyectos": 8,
+    "items": 550,
+    "recuerdos": 500,
+    "decisiones": 50,
+    "mensajes": 5000,
+    "documentos": 5,
+    "relaciones": 9,
+    "longitud_media_texto": 85.25,
+    "longitud_minima_texto": 34,
+    "longitud_maxima_texto": 103
+   }
+  },
+  {
+   "comprobacion": "la escala de referencia declarada es la de ADR002-TOL-208",
+   "resultado": "OK",
+   "detalle": {
+    "mensajes": 5000,
+    "recuerdos": 500,
+    "decisiones": 50,
+    "proyectos": 2
+   }
+  },
+  {
+   "comprobacion": "las escalas proyectables declaradas son 500 / 5.000 / 50.000",
+   "resultado": "OK",
+   "detalle": [
+    500,
+    5000,
+    50000
+   ]
+  },
+  {
+   "comprobacion": "todo anclaje del corpus de conformidad está en el de rendimiento sin alterar",
+   "resultado": "OK",
+   "detalle": {
+    "alterados": [],
+    "total": 0
+   }
+  },
+  {
+   "comprobacion": "el relleno de volumen vive en el proyecto reservado",
+   "resultado": "OK",
+   "detalle": {
+    "items": []
+   }
+  },
+  {
+   "comprobacion": "ningún texto de volumen contiene un término de anclaje canónico",
+   "resultado": "OK",
+   "detalle": {
+    "items": [],
+    "total": 0
+   }
+  },
+  {
+   "comprobacion": "el corpus de rendimiento declara que no crea referencias funcionales",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "el manifiesto declara la relación entre los dos corpus y su prohibición cruzada",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "el manifiesto no declara satisfecha ninguna puerta de arranque",
+   "resultado": "OK",
+   "detalle": "Ninguna puerta de arranque queda satisfecha por este manifiesto. ADR002-TOL-207 no está aprobada; TOL-208, TOL-209 y TOL-210 siguen NO SATISFECHAS. T0 no se ha ejecutado."
+  },
+  {
+   "comprobacion": "los tres artefactos v0.1 siguen presentes",
+   "resultado": "OK",
+   "detalle": [
+    "corpus_v0_1.json",
+    "cases_v0_1.json",
+    "references_v0_1.json"
+   ]
+  },
+  {
+   "comprobacion": "el contrato del v0.1 sigue cumpliéndose sin cambios",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "regeneración doble byte a byte idéntica",
+   "resultado": "OK",
+   "detalle": {
+    "difieren_primera": [],
+    "difieren_segunda": []
+   }
+  }
+ ]
+}

@@ -1,0 +1,1016 @@
+{
+  "documento": "Mediciones de linea base FTS5 para ADR-002 — remedicion 02B",
+  "version": "0.2",
+  "estado": "PROPUESTO",
+  "paquete": "SIRIUS_0.2_ADR_002_PAQUETE_TRABAJO_02B_CORRECCION_TOLERANCIAS_v0.1",
+  "sustituye_a": "mediciones_linea_base.json",
+  "conserva_sin_modificar": "mediciones_linea_base.json",
+  "alcance": {
+    "LAB-LINUX": "Todas las cifras de esta ronda son umbrales del LABORATORIO COMPARATIVO LINUX. Sirven para comparar T1-T4 entre si en el mismo entorno, y solo para eso.",
+    "ACEPTACION-WINDOWS": "PENDIENTE. Ninguna cifra absoluta de latencia, tamano o ciclo se traslada automaticamente a Windows. La aceptacion del producto exige confirmar el comportamiento sobre el ejecutable o el entorno de referencia Windows, incluidos el tokenizador, secure_delete y la secuencia de purga que ADR-001 dejo pendientes.",
+    "que_si_es_trasladable": "Las comprobaciones booleanas: restitucion identica, integrity-check, desaparicion completa del derivado y estabilidad de orden y conjunto. Son propiedades de comportamiento, no cifras de rendimiento."
+  },
+  "entorno": {
+    "python": "3.14.6",
+    "sqlite_biblioteca": "3.45.1",
+    "sqlalchemy": "2.0.51",
+    "alembic": "1.18.5",
+    "plataforma": "linux",
+    "maquina": "x86_64",
+    "commit": "610d10c5410438ad6251ebf0f813832539a6daef",
+    "red": "no utilizada",
+    "datos_reales": "ninguno; corpus sintetico determinista",
+    "embeddings_o_modelos_externos": "ninguno",
+    "alcance": "LAB-LINUX"
+  },
+  "metodologia": {
+    "reloj": "time.perf_counter_ns (monotonico)",
+    "percentil": "rango mas cercano (nearest-rank); nunca interpolado",
+    "repeticiones_minimas_de_consulta": 30,
+    "repeticiones_escenario_barato": 100,
+    "repeticiones_escenario_caro": 30,
+    "ciclo_de_indice": "minimo 30 repeticiones, cada una sobre una copia limpia e independiente preparada FUERA del cronometro; 2 de warm-up descartadas",
+    "sesiones": "minimo 5 sesiones completas independientes, cada una con fichero, motor, cache y warm-up propios",
+    "formula_de_variacion": "(max - min) / min sobre el mismo percentil en todas las sesiones",
+    "fixtures_fuera_del_cronometro": "copias, conexiones, lectura de DDL y verificaciones nunca entran en el tiempo medido",
+    "codigo_medido": "codigo real de Sirius 0.1 sin modificar, sobre el esquema de la cadena canonica de Alembic"
+  },
+  "corpus": {
+    "mensajes": 5000,
+    "recuerdos": 500,
+    "memorias_vigentes": 499,
+    "memorias_con_token_frecuente": 200,
+    "decisiones_aprobadas": 50,
+    "proyectos": 2,
+    "head_alembic": "61be4bb269bf",
+    "tokens_de_control": {
+      "ausencia_real": "zetaausentenoindexado",
+      "resultado_unico": "zetaunicovigente",
+      "alta_frecuencia": "zetafrecuente",
+      "no_reportable_archivado": "zetaocultoarchivado",
+      "proyecto_ajeno": "zetaproyectoajeno"
+    }
+  },
+  "evidencia_arrastrada_del_paquete_02": {
+    "procedencia": "mediciones_linea_base.json, commit e9b975c8762e762a28466cbdf255e6437e4fd7c1. Secciones que el 02B no corrige, copiadas literalmente y NO reejecutadas.",
+    "E-LAT-0_cero_resultados": {
+      "consulta": "zetaausentenoindexado",
+      "aciertos_en_el_indice": 0,
+      "aciertos_esperados_en_el_indice": 0,
+      "resultados_externos_de_rank": 0,
+      "solo_indice_fts5": {
+        "n": 100,
+        "warmup_descartado": 5,
+        "p50_ms": 0.1877,
+        "p95_ms": 0.2593,
+        "p99_ms": 0.3237,
+        "min_ms": 0.1381,
+        "max_ms": 0.5809,
+        "media_ms": 0.1986,
+        "resolucion_p99": "con n=100, el P99 corresponde a la 1.a peor muestra observada",
+        "muestras_ms": []
+      },
+      "recuperacion_completa_rank": {
+        "n": 30,
+        "warmup_descartado": 5,
+        "p50_ms": 122.6486,
+        "p95_ms": 137.7986,
+        "p99_ms": 154.3693,
+        "min_ms": 116.6512,
+        "max_ms": 154.3693,
+        "media_ms": 125.5482,
+        "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; solo acota la cola, no la caracteriza",
+        "muestras_ms": []
+      }
+    },
+    "E-LAT-1_un_resultado_exacto": {
+      "consulta": "zetaunicovigente",
+      "aciertos_en_el_indice": 1,
+      "aciertos_esperados_en_el_indice": 1,
+      "resultados_externos_de_rank": 1,
+      "solo_indice_fts5": {
+        "n": 100,
+        "warmup_descartado": 5,
+        "p50_ms": 0.1724,
+        "p95_ms": 0.2614,
+        "p99_ms": 0.2877,
+        "min_ms": 0.1393,
+        "max_ms": 0.3114,
+        "media_ms": 0.1839,
+        "resolucion_p99": "con n=100, el P99 corresponde a la 1.a peor muestra observada",
+        "muestras_ms": []
+      },
+      "recuperacion_completa_rank": {
+        "n": 30,
+        "warmup_descartado": 5,
+        "p50_ms": 113.2599,
+        "p95_ms": 125.0519,
+        "p99_ms": 128.9782,
+        "min_ms": 107.4039,
+        "max_ms": 128.9782,
+        "media_ms": 114.7465,
+        "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; solo acota la cola, no la caracteriza",
+        "muestras_ms": []
+      }
+    },
+    "E-LAT-N_muchos_candidatos": {
+      "consulta": "zetafrecuente",
+      "aciertos_en_el_indice": 200,
+      "aciertos_esperados_en_el_indice": 200,
+      "resultados_externos_de_rank": 200,
+      "solo_indice_fts5": {
+        "n": 100,
+        "warmup_descartado": 5,
+        "p50_ms": 0.5764,
+        "p95_ms": 0.7303,
+        "p99_ms": 1.4145,
+        "min_ms": 0.5377,
+        "max_ms": 1.5302,
+        "media_ms": 0.6135,
+        "resolucion_p99": "con n=100, el P99 corresponde a la 1.a peor muestra observada",
+        "muestras_ms": []
+      },
+      "recuperacion_completa_rank": {
+        "n": 30,
+        "warmup_descartado": 5,
+        "p50_ms": 117.7548,
+        "p95_ms": 131.1064,
+        "p99_ms": 144.6774,
+        "min_ms": 108.9728,
+        "max_ms": 144.6774,
+        "media_ms": 119.146,
+        "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; solo acota la cola, no la caracteriza",
+        "muestras_ms": []
+      }
+    },
+    "E-BARRIDO_coste_del_barrido_completo": {
+      "descripcion": "Con cero aciertos en el indice, rank() sigue recorriendo todo el conocimiento vigente. La diferencia entre el coste total y el del indice es el barrido.",
+      "p50_solo_indice_ms": 0.1877,
+      "p50_recuperacion_completa_ms": 122.6486,
+      "p50_barrido_ms": 122.4609,
+      "fraccion_del_coste_atribuible_al_barrido": 0.9985,
+      "memorias_vigentes_recorridas": 499,
+      "decisiones_recorridas": 50,
+      "traza_normativa": "B04-RF-14 prohibe el salto a recuperacion amplia"
+    },
+    "E-TOL002_indistinguibilidad": {
+      "modelo_de_amenaza": "Observador externo que solo ve la salida de la recuperacion y puede cronometrarla repetidamente en la misma maquina y proceso. NO se modela un atacante con acceso al fichero, a las trazas internas ni al canal de otra operacion concurrente. Una diferencia temporal repetible atribuible a la existencia protegida FALLA aunque ambas consultas sean rapidas; una diferencia no repetible no prueba lo contrario.",
+      "limites": "Medicion en una sola maquina, un solo proceso y una sola configuracion. No es una garantia criptografica y no sustituye a un analisis de canal lateral: acota lo observable en este entorno, nada mas.",
+      "estado_externo": {
+        "ausencia_real": 0,
+        "no_reportable": 0,
+        "equivalentes": true
+      },
+      "conteo_externo_equivalente": true,
+      "texto_externo_equivalente": true,
+      "control_el_contenido_protegido_existe_en_el_indice": {
+        "aciertos_ausencia_real": 0,
+        "aciertos_no_reportable": 1,
+        "el_control_es_valido": true
+      },
+      "tiempo_recuperacion_completa": {
+        "n_por_rama": 30,
+        "warmup_descartado": 5,
+        "muestreo": "intercalado A,B,A,B para anular deriva",
+        "ausencia_real": {
+          "p50_ms": 119.7627,
+          "p95_ms": 157.8271,
+          "p99_ms": 160.3295,
+          "min_ms": 106.0874,
+          "max_ms": 160.3295,
+          "media_ms": 125.8816
+        },
+        "no_reportable": {
+          "p50_ms": 120.0997,
+          "p95_ms": 173.1957,
+          "p99_ms": 181.8166,
+          "min_ms": 107.349,
+          "max_ms": 181.8166,
+          "media_ms": 127.1413
+        },
+        "diferencia_p50_ms": 0.337,
+        "diferencia_p95_ms": 15.3686,
+        "diferencia_p99_ms": 21.4871,
+        "diferencia_relativa_p50": 0.0028,
+        "diferencia_pareada_mediana_ms": 0.9105,
+        "veces_que_no_reportable_tardo_mas": 16,
+        "fraccion_de_signo": 0.5333,
+        "nota_sobre_el_signo": "Con ramas indistinguibles la fraccion de signo deberia rondar 0,5. Un valor sistematicamente alejado indica diferencia repetible, no ruido."
+      },
+      "tiempo_solo_indice_fts5": {
+        "n_por_rama": 100,
+        "warmup_descartado": 5,
+        "muestreo": "intercalado A,B,A,B para anular deriva",
+        "ausencia_real": {
+          "p50_ms": 0.1545,
+          "p95_ms": 0.2419,
+          "p99_ms": 0.3102,
+          "min_ms": 0.1343,
+          "max_ms": 0.4831,
+          "media_ms": 0.1658
+        },
+        "no_reportable": {
+          "p50_ms": 0.1584,
+          "p95_ms": 0.2192,
+          "p99_ms": 0.2512,
+          "min_ms": 0.138,
+          "max_ms": 0.3932,
+          "media_ms": 0.1684
+        },
+        "diferencia_p50_ms": 0.0039,
+        "diferencia_p95_ms": -0.0227,
+        "diferencia_p99_ms": -0.059,
+        "diferencia_relativa_p50": 0.0252,
+        "diferencia_pareada_mediana_ms": -0.0,
+        "veces_que_no_reportable_tardo_mas": 49,
+        "fraccion_de_signo": 0.49,
+        "nota_sobre_el_signo": "Con ramas indistinguibles la fraccion de signo deberia rondar 0,5. Un valor sistematicamente alejado indica diferencia repetible, no ruido."
+      }
+    },
+    "E-ESTABILIDAD": {
+      "consulta_frecuente": {
+        "consulta": "zetafrecuente",
+        "repeticiones": 30,
+        "tamano_del_resultado": 200,
+        "ordenes_distintos_observados": 1,
+        "conjuntos_distintos_observados": 1,
+        "orden_identico_en_todas": true,
+        "conjunto_identico_en_todas": true
+      },
+      "consulta_unica": {
+        "consulta": "zetaunicovigente",
+        "repeticiones": 30,
+        "tamano_del_resultado": 1,
+        "ordenes_distintos_observados": 1,
+        "conjuntos_distintos_observados": 1,
+        "orden_identico_en_todas": true,
+        "conjunto_identico_en_todas": true
+      },
+      "consulta_vacia": {
+        "consulta": "zetaausentenoindexado",
+        "repeticiones": 30,
+        "tamano_del_resultado": 0,
+        "ordenes_distintos_observados": 1,
+        "conjuntos_distintos_observados": 1,
+        "orden_identico_en_todas": true,
+        "conjunto_identico_en_todas": true
+      },
+      "resumen": {
+        "orden_estable_en_todos_los_escenarios": true,
+        "conjunto_estable_en_todos_los_escenarios": true
+      }
+    },
+    "E-TAMANO": {
+      "metodo": "tabla virtual dbstat, bytes reales por objeto",
+      "tamano_fichero_bytes": 1462272,
+      "bytes_por_objeto_derivado": {
+        "knowledge_fts_config": 4096,
+        "knowledge_fts_content": 57344,
+        "knowledge_fts_data": 45056,
+        "knowledge_fts_docsize": 12288,
+        "knowledge_fts_idx": 4096,
+        "message_fts_config": 4096,
+        "message_fts_data": 184320,
+        "message_fts_docsize": 49152,
+        "message_fts_idx": 4096
+      },
+      "knowledge_fts_bytes": 122880,
+      "message_fts_bytes": 241664,
+      "indices_derivados_bytes": 364544,
+      "canon_indexado_bytes": {
+        "messages": 338890,
+        "memory_revisions_vigentes": 32542,
+        "decision_revisions_vigentes": 2190,
+        "total_knowledge_fts": 34732,
+        "total_message_fts": 338890
+      },
+      "ratio_knowledge_fts_sobre_canon": 3.5379,
+      "ratio_message_fts_sobre_canon": 0.7131,
+      "ratio_derivados_sobre_fichero": 0.2493,
+      "nota_knowledge_fts_guarda_copia": "knowledge_fts es autocontenida: knowledge_fts_content almacena una copia literal del texto canonico. message_fts es external content y no la almacena."
+    },
+    "E-CONTROL_fuga_de_ambito": {
+      "consulta": "zetaproyectoajeno",
+      "resultados_totales": 1,
+      "resultados_de_proyecto_ajeno": 1,
+      "hay_fuga": true,
+      "traza_normativa": "B04-RF-06, B04-M06 (aislamiento de proyecto: 100 %)"
+    }
+  },
+  "escenarios_remedidos": {
+    "E-CICLO-30_borrado_construccion_reconstruccion": {
+      "descripcion": "Ciclo completo repetido sobre copias limpias independientes. La copia, la apertura de la conexion, la lectura del DDL y todas las verificaciones quedan FUERA del cronometro.",
+      "repeticiones": 30,
+      "warmup_descartado": 2,
+      "base_de_cada_repeticion": "copia limpia e independiente de la base de referencia",
+      "ddl_procedente_de": "sqlite_master del esquema canonico, nunca escrito a mano",
+      "borrado": {
+        "operacion": "borrado completo del derivado",
+        "n": 30,
+        "p50_ms": 43.5637,
+        "p95_ms": 84.3028,
+        "p99_ms": 122.8652,
+        "min_ms": 33.8608,
+        "max_ms": 122.8652,
+        "media_ms": 48.356,
+        "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; acota la cola, no la caracteriza"
+      },
+      "construccion_desde_canon": {
+        "operacion": "construccion inicial desde el canon",
+        "n": 30,
+        "p50_ms": 51.8587,
+        "p95_ms": 96.6446,
+        "p99_ms": 102.5713,
+        "min_ms": 40.3612,
+        "max_ms": 102.5713,
+        "media_ms": 57.8949,
+        "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; acota la cola, no la caracteriza"
+      },
+      "reconstruccion_desde_canon": {
+        "operacion": "reconstruccion desde el canon",
+        "n": 30,
+        "p50_ms": 29.2945,
+        "p95_ms": 41.7454,
+        "p99_ms": 44.5124,
+        "min_ms": 26.2315,
+        "max_ms": 44.5124,
+        "media_ms": 31.4912,
+        "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; acota la cola, no la caracteriza"
+      },
+      "observacion_rebuild_interno": {
+        "operacion": "rebuild interno de FTS5",
+        "n": 30,
+        "p50_ms": 18.7152,
+        "p95_ms": 32.9508,
+        "p99_ms": 269.9121,
+        "min_ms": 16.2714,
+        "max_ms": 269.9121,
+        "media_ms": 29.0995,
+        "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; acota la cola, no la caracteriza",
+        "advertencia": "El rebuild interno reconstruye knowledge_fts desde su propia tabla de contenido, no desde memory_revisions. Se conserva como OBSERVACION y NUNCA como evidencia de reconstruccion desde el canon."
+      },
+      "tasas_de_exito": {
+        "borrado_completo": {
+          "exitos": 30,
+          "de": 30,
+          "tasa": 1.0
+        },
+        "sin_rastro_de_sombras": {
+          "exitos": 30,
+          "de": 30,
+          "tasa": 1.0
+        },
+        "construccion_filas_identicas": {
+          "exitos": 30,
+          "de": 30,
+          "tasa": 1.0
+        },
+        "reconstruccion_filas_identicas": {
+          "exitos": 30,
+          "de": 30,
+          "tasa": 1.0
+        },
+        "integrity_check_ok": {
+          "exitos": 30,
+          "de": 30,
+          "tasa": 1.0
+        }
+      },
+      "todas_las_comprobaciones_al_100": true,
+      "repeticiones_con_fallo": []
+    },
+    "E-SESIONES-5_variacion_entre_ejecuciones": {
+      "descripcion": "Sesiones completas independientes: cada una usa su propio fichero, su propio motor SQLAlchemy, su propia cache y su propio warm-up.",
+      "sesiones": 5,
+      "limite_declarado": "Las sesiones son independientes DENTRO DEL MISMO PROCESO: comparten interprete y maquina. No son procesos separados ni maquinas distintas, asi que acotan la variacion intra-proceso, no la variacion entre entornos.",
+      "corpus_por_sesion": {
+        "mensajes": 5000,
+        "memorias_vigentes": 499,
+        "identico_en_todas": true
+      },
+      "por_sesion": [
+        {
+          "sesion": 1,
+          "escenarios": {
+            "cero_resultados": {
+              "consulta": "zetaausentenoindexado",
+              "solo_indice_fts5": {
+                "n": 100,
+                "warmup_descartado": 5,
+                "p50_ms": 0.1819,
+                "p95_ms": 0.2545,
+                "p99_ms": 0.3575,
+                "min_ms": 0.1345,
+                "max_ms": 0.4049,
+                "media_ms": 0.1952,
+                "resolucion_p99": "con n=100, el P99 corresponde a la 1.a peor muestra observada",
+                "muestras_ms": []
+              },
+              "recuperacion_completa_rank": {
+                "n": 30,
+                "warmup_descartado": 5,
+                "p50_ms": 128.5864,
+                "p95_ms": 143.7122,
+                "p99_ms": 158.4531,
+                "min_ms": 109.4886,
+                "max_ms": 158.4531,
+                "media_ms": 127.1143,
+                "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; solo acota la cola, no la caracteriza",
+                "muestras_ms": []
+              }
+            },
+            "un_resultado_exacto": {
+              "consulta": "zetaunicovigente",
+              "solo_indice_fts5": {
+                "n": 100,
+                "warmup_descartado": 5,
+                "p50_ms": 0.1901,
+                "p95_ms": 0.274,
+                "p99_ms": 0.2833,
+                "min_ms": 0.1417,
+                "max_ms": 0.3359,
+                "media_ms": 0.199,
+                "resolucion_p99": "con n=100, el P99 corresponde a la 1.a peor muestra observada",
+                "muestras_ms": []
+              },
+              "recuperacion_completa_rank": {
+                "n": 30,
+                "warmup_descartado": 5,
+                "p50_ms": 115.5185,
+                "p95_ms": 134.3956,
+                "p99_ms": 137.2889,
+                "min_ms": 106.6739,
+                "max_ms": 137.2889,
+                "media_ms": 117.8666,
+                "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; solo acota la cola, no la caracteriza",
+                "muestras_ms": []
+              }
+            },
+            "muchos_candidatos": {
+              "consulta": "zetafrecuente",
+              "solo_indice_fts5": {
+                "n": 100,
+                "warmup_descartado": 5,
+                "p50_ms": 0.6009,
+                "p95_ms": 0.8501,
+                "p99_ms": 0.987,
+                "min_ms": 0.5481,
+                "max_ms": 1.0327,
+                "media_ms": 0.6293,
+                "resolucion_p99": "con n=100, el P99 corresponde a la 1.a peor muestra observada",
+                "muestras_ms": []
+              },
+              "recuperacion_completa_rank": {
+                "n": 30,
+                "warmup_descartado": 5,
+                "p50_ms": 118.208,
+                "p95_ms": 139.404,
+                "p99_ms": 140.2651,
+                "min_ms": 107.5031,
+                "max_ms": 140.2651,
+                "media_ms": 120.0702,
+                "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; solo acota la cola, no la caracteriza",
+                "muestras_ms": []
+              }
+            }
+          }
+        },
+        {
+          "sesion": 2,
+          "escenarios": {
+            "cero_resultados": {
+              "consulta": "zetaausentenoindexado",
+              "solo_indice_fts5": {
+                "n": 100,
+                "warmup_descartado": 5,
+                "p50_ms": 0.1407,
+                "p95_ms": 0.1884,
+                "p99_ms": 0.2099,
+                "min_ms": 0.1293,
+                "max_ms": 0.2171,
+                "media_ms": 0.1498,
+                "resolucion_p99": "con n=100, el P99 corresponde a la 1.a peor muestra observada",
+                "muestras_ms": []
+              },
+              "recuperacion_completa_rank": {
+                "n": 30,
+                "warmup_descartado": 5,
+                "p50_ms": 121.2508,
+                "p95_ms": 145.663,
+                "p99_ms": 153.141,
+                "min_ms": 109.2967,
+                "max_ms": 153.141,
+                "media_ms": 122.8622,
+                "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; solo acota la cola, no la caracteriza",
+                "muestras_ms": []
+              }
+            },
+            "un_resultado_exacto": {
+              "consulta": "zetaunicovigente",
+              "solo_indice_fts5": {
+                "n": 100,
+                "warmup_descartado": 5,
+                "p50_ms": 0.1718,
+                "p95_ms": 0.2882,
+                "p99_ms": 0.3781,
+                "min_ms": 0.1397,
+                "max_ms": 0.5107,
+                "media_ms": 0.187,
+                "resolucion_p99": "con n=100, el P99 corresponde a la 1.a peor muestra observada",
+                "muestras_ms": []
+              },
+              "recuperacion_completa_rank": {
+                "n": 30,
+                "warmup_descartado": 5,
+                "p50_ms": 119.4088,
+                "p95_ms": 137.5733,
+                "p99_ms": 144.4152,
+                "min_ms": 109.9177,
+                "max_ms": 144.4152,
+                "media_ms": 121.3321,
+                "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; solo acota la cola, no la caracteriza",
+                "muestras_ms": []
+              }
+            },
+            "muchos_candidatos": {
+              "consulta": "zetafrecuente",
+              "solo_indice_fts5": {
+                "n": 100,
+                "warmup_descartado": 5,
+                "p50_ms": 0.6309,
+                "p95_ms": 0.7704,
+                "p99_ms": 1.1722,
+                "min_ms": 0.5566,
+                "max_ms": 2.3934,
+                "media_ms": 0.6642,
+                "resolucion_p99": "con n=100, el P99 corresponde a la 1.a peor muestra observada",
+                "muestras_ms": []
+              },
+              "recuperacion_completa_rank": {
+                "n": 30,
+                "warmup_descartado": 5,
+                "p50_ms": 121.1514,
+                "p95_ms": 145.2058,
+                "p99_ms": 158.5768,
+                "min_ms": 111.8068,
+                "max_ms": 158.5768,
+                "media_ms": 125.2014,
+                "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; solo acota la cola, no la caracteriza",
+                "muestras_ms": []
+              }
+            }
+          }
+        },
+        {
+          "sesion": 3,
+          "escenarios": {
+            "cero_resultados": {
+              "consulta": "zetaausentenoindexado",
+              "solo_indice_fts5": {
+                "n": 100,
+                "warmup_descartado": 5,
+                "p50_ms": 0.1444,
+                "p95_ms": 0.2075,
+                "p99_ms": 0.2655,
+                "min_ms": 0.129,
+                "max_ms": 0.3231,
+                "media_ms": 0.1565,
+                "resolucion_p99": "con n=100, el P99 corresponde a la 1.a peor muestra observada",
+                "muestras_ms": []
+              },
+              "recuperacion_completa_rank": {
+                "n": 30,
+                "warmup_descartado": 5,
+                "p50_ms": 125.6461,
+                "p95_ms": 144.5869,
+                "p99_ms": 147.3135,
+                "min_ms": 112.6645,
+                "max_ms": 147.3135,
+                "media_ms": 126.9728,
+                "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; solo acota la cola, no la caracteriza",
+                "muestras_ms": []
+              }
+            },
+            "un_resultado_exacto": {
+              "consulta": "zetaunicovigente",
+              "solo_indice_fts5": {
+                "n": 100,
+                "warmup_descartado": 5,
+                "p50_ms": 0.1672,
+                "p95_ms": 0.2286,
+                "p99_ms": 0.2488,
+                "min_ms": 0.1401,
+                "max_ms": 0.2812,
+                "media_ms": 0.1751,
+                "resolucion_p99": "con n=100, el P99 corresponde a la 1.a peor muestra observada",
+                "muestras_ms": []
+              },
+              "recuperacion_completa_rank": {
+                "n": 30,
+                "warmup_descartado": 5,
+                "p50_ms": 127.7627,
+                "p95_ms": 142.3318,
+                "p99_ms": 145.2139,
+                "min_ms": 117.4191,
+                "max_ms": 145.2139,
+                "media_ms": 129.1517,
+                "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; solo acota la cola, no la caracteriza",
+                "muestras_ms": []
+              }
+            },
+            "muchos_candidatos": {
+              "consulta": "zetafrecuente",
+              "solo_indice_fts5": {
+                "n": 100,
+                "warmup_descartado": 5,
+                "p50_ms": 0.6139,
+                "p95_ms": 0.7357,
+                "p99_ms": 0.8594,
+                "min_ms": 0.5478,
+                "max_ms": 0.872,
+                "media_ms": 0.6274,
+                "resolucion_p99": "con n=100, el P99 corresponde a la 1.a peor muestra observada",
+                "muestras_ms": []
+              },
+              "recuperacion_completa_rank": {
+                "n": 30,
+                "warmup_descartado": 5,
+                "p50_ms": 120.9198,
+                "p95_ms": 133.1064,
+                "p99_ms": 146.6527,
+                "min_ms": 110.9424,
+                "max_ms": 146.6527,
+                "media_ms": 121.6465,
+                "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; solo acota la cola, no la caracteriza",
+                "muestras_ms": []
+              }
+            }
+          }
+        },
+        {
+          "sesion": 4,
+          "escenarios": {
+            "cero_resultados": {
+              "consulta": "zetaausentenoindexado",
+              "solo_indice_fts5": {
+                "n": 100,
+                "warmup_descartado": 5,
+                "p50_ms": 0.15,
+                "p95_ms": 0.2128,
+                "p99_ms": 0.2395,
+                "min_ms": 0.1302,
+                "max_ms": 0.2562,
+                "media_ms": 0.1598,
+                "resolucion_p99": "con n=100, el P99 corresponde a la 1.a peor muestra observada",
+                "muestras_ms": []
+              },
+              "recuperacion_completa_rank": {
+                "n": 30,
+                "warmup_descartado": 5,
+                "p50_ms": 120.8531,
+                "p95_ms": 128.4774,
+                "p99_ms": 128.7352,
+                "min_ms": 113.3752,
+                "max_ms": 128.7352,
+                "media_ms": 121.3786,
+                "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; solo acota la cola, no la caracteriza",
+                "muestras_ms": []
+              }
+            },
+            "un_resultado_exacto": {
+              "consulta": "zetaunicovigente",
+              "solo_indice_fts5": {
+                "n": 100,
+                "warmup_descartado": 5,
+                "p50_ms": 0.1562,
+                "p95_ms": 0.2169,
+                "p99_ms": 0.2381,
+                "min_ms": 0.1383,
+                "max_ms": 0.2735,
+                "media_ms": 0.1663,
+                "resolucion_p99": "con n=100, el P99 corresponde a la 1.a peor muestra observada",
+                "muestras_ms": []
+              },
+              "recuperacion_completa_rank": {
+                "n": 30,
+                "warmup_descartado": 5,
+                "p50_ms": 117.469,
+                "p95_ms": 127.7773,
+                "p99_ms": 134.8128,
+                "min_ms": 111.7163,
+                "max_ms": 134.8128,
+                "media_ms": 118.6429,
+                "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; solo acota la cola, no la caracteriza",
+                "muestras_ms": []
+              }
+            },
+            "muchos_candidatos": {
+              "consulta": "zetafrecuente",
+              "solo_indice_fts5": {
+                "n": 100,
+                "warmup_descartado": 5,
+                "p50_ms": 0.6759,
+                "p95_ms": 1.0038,
+                "p99_ms": 1.0781,
+                "min_ms": 0.5424,
+                "max_ms": 1.0834,
+                "media_ms": 0.7513,
+                "resolucion_p99": "con n=100, el P99 corresponde a la 1.a peor muestra observada",
+                "muestras_ms": []
+              },
+              "recuperacion_completa_rank": {
+                "n": 30,
+                "warmup_descartado": 5,
+                "p50_ms": 120.5882,
+                "p95_ms": 147.1764,
+                "p99_ms": 147.5596,
+                "min_ms": 111.6706,
+                "max_ms": 147.5596,
+                "media_ms": 122.3026,
+                "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; solo acota la cola, no la caracteriza",
+                "muestras_ms": []
+              }
+            }
+          }
+        },
+        {
+          "sesion": 5,
+          "escenarios": {
+            "cero_resultados": {
+              "consulta": "zetaausentenoindexado",
+              "solo_indice_fts5": {
+                "n": 100,
+                "warmup_descartado": 5,
+                "p50_ms": 0.161,
+                "p95_ms": 0.2301,
+                "p99_ms": 0.2762,
+                "min_ms": 0.1315,
+                "max_ms": 0.2768,
+                "media_ms": 0.1683,
+                "resolucion_p99": "con n=100, el P99 corresponde a la 1.a peor muestra observada",
+                "muestras_ms": []
+              },
+              "recuperacion_completa_rank": {
+                "n": 30,
+                "warmup_descartado": 5,
+                "p50_ms": 116.2863,
+                "p95_ms": 125.8092,
+                "p99_ms": 133.5407,
+                "min_ms": 110.1243,
+                "max_ms": 133.5407,
+                "media_ms": 117.1292,
+                "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; solo acota la cola, no la caracteriza",
+                "muestras_ms": []
+              }
+            },
+            "un_resultado_exacto": {
+              "consulta": "zetaunicovigente",
+              "solo_indice_fts5": {
+                "n": 100,
+                "warmup_descartado": 5,
+                "p50_ms": 0.1558,
+                "p95_ms": 0.2248,
+                "p99_ms": 0.2423,
+                "min_ms": 0.1363,
+                "max_ms": 0.258,
+                "media_ms": 0.1659,
+                "resolucion_p99": "con n=100, el P99 corresponde a la 1.a peor muestra observada",
+                "muestras_ms": []
+              },
+              "recuperacion_completa_rank": {
+                "n": 30,
+                "warmup_descartado": 5,
+                "p50_ms": 120.9827,
+                "p95_ms": 143.5381,
+                "p99_ms": 153.4108,
+                "min_ms": 108.9701,
+                "max_ms": 153.4108,
+                "media_ms": 123.616,
+                "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; solo acota la cola, no la caracteriza",
+                "muestras_ms": []
+              }
+            },
+            "muchos_candidatos": {
+              "consulta": "zetafrecuente",
+              "solo_indice_fts5": {
+                "n": 100,
+                "warmup_descartado": 5,
+                "p50_ms": 0.5962,
+                "p95_ms": 0.7512,
+                "p99_ms": 1.0037,
+                "min_ms": 0.5463,
+                "max_ms": 1.1632,
+                "media_ms": 0.6197,
+                "resolucion_p99": "con n=100, el P99 corresponde a la 1.a peor muestra observada",
+                "muestras_ms": []
+              },
+              "recuperacion_completa_rank": {
+                "n": 30,
+                "warmup_descartado": 5,
+                "p50_ms": 117.8174,
+                "p95_ms": 127.4998,
+                "p99_ms": 127.9717,
+                "min_ms": 109.4674,
+                "max_ms": 127.9717,
+                "media_ms": 118.2746,
+                "resolucion_p99": "con n=30, el P99 por rango mas cercano coincide con el maximo observado; solo acota la cola, no la caracteriza",
+                "muestras_ms": []
+              }
+            }
+          }
+        }
+      ],
+      "variacion_entre_sesiones": {
+        "cero_resultados": {
+          "solo_indice_fts5__p50_ms": {
+            "valores_por_sesion": [
+              0.1819,
+              0.1407,
+              0.1444,
+              0.15,
+              0.161
+            ],
+            "min": 0.1407,
+            "max": 0.1819,
+            "variacion_max_relativa": 0.2928
+          },
+          "solo_indice_fts5__p95_ms": {
+            "valores_por_sesion": [
+              0.2545,
+              0.1884,
+              0.2075,
+              0.2128,
+              0.2301
+            ],
+            "min": 0.1884,
+            "max": 0.2545,
+            "variacion_max_relativa": 0.3508
+          },
+          "recuperacion_completa_rank__p50_ms": {
+            "valores_por_sesion": [
+              128.5864,
+              121.2508,
+              125.6461,
+              120.8531,
+              116.2863
+            ],
+            "min": 116.2863,
+            "max": 128.5864,
+            "variacion_max_relativa": 0.1058
+          },
+          "recuperacion_completa_rank__p95_ms": {
+            "valores_por_sesion": [
+              143.7122,
+              145.663,
+              144.5869,
+              128.4774,
+              125.8092
+            ],
+            "min": 125.8092,
+            "max": 145.663,
+            "variacion_max_relativa": 0.1578
+          }
+        },
+        "un_resultado_exacto": {
+          "solo_indice_fts5__p50_ms": {
+            "valores_por_sesion": [
+              0.1901,
+              0.1718,
+              0.1672,
+              0.1562,
+              0.1558
+            ],
+            "min": 0.1558,
+            "max": 0.1901,
+            "variacion_max_relativa": 0.2202
+          },
+          "solo_indice_fts5__p95_ms": {
+            "valores_por_sesion": [
+              0.274,
+              0.2882,
+              0.2286,
+              0.2169,
+              0.2248
+            ],
+            "min": 0.2169,
+            "max": 0.2882,
+            "variacion_max_relativa": 0.3287
+          },
+          "recuperacion_completa_rank__p50_ms": {
+            "valores_por_sesion": [
+              115.5185,
+              119.4088,
+              127.7627,
+              117.469,
+              120.9827
+            ],
+            "min": 115.5185,
+            "max": 127.7627,
+            "variacion_max_relativa": 0.106
+          },
+          "recuperacion_completa_rank__p95_ms": {
+            "valores_por_sesion": [
+              134.3956,
+              137.5733,
+              142.3318,
+              127.7773,
+              143.5381
+            ],
+            "min": 127.7773,
+            "max": 143.5381,
+            "variacion_max_relativa": 0.1233
+          }
+        },
+        "muchos_candidatos": {
+          "solo_indice_fts5__p50_ms": {
+            "valores_por_sesion": [
+              0.6009,
+              0.6309,
+              0.6139,
+              0.6759,
+              0.5962
+            ],
+            "min": 0.5962,
+            "max": 0.6759,
+            "variacion_max_relativa": 0.1337
+          },
+          "solo_indice_fts5__p95_ms": {
+            "valores_por_sesion": [
+              0.8501,
+              0.7704,
+              0.7357,
+              1.0038,
+              0.7512
+            ],
+            "min": 0.7357,
+            "max": 1.0038,
+            "variacion_max_relativa": 0.3644
+          },
+          "recuperacion_completa_rank__p50_ms": {
+            "valores_por_sesion": [
+              118.208,
+              121.1514,
+              120.9198,
+              120.5882,
+              117.8174
+            ],
+            "min": 117.8174,
+            "max": 121.1514,
+            "variacion_max_relativa": 0.0283
+          },
+          "recuperacion_completa_rank__p95_ms": {
+            "valores_por_sesion": [
+              139.404,
+              145.2058,
+              133.1064,
+              147.1764,
+              127.4998
+            ],
+            "min": 127.4998,
+            "max": 147.1764,
+            "variacion_max_relativa": 0.1543
+          }
+        },
+        "peor_variacion_relativa_observada": 0.3644,
+        "formula": "(max - min) / min sobre el mismo percentil en todas las sesiones"
+      },
+      "estabilidad_entre_sesiones": {
+        "cero_resultados": {
+          "sesiones": 5,
+          "tamano_del_resultado": 0,
+          "ordenes_distintos": 1,
+          "conjuntos_distintos": 1,
+          "orden_identico_entre_sesiones": true,
+          "conjunto_identico_entre_sesiones": true
+        },
+        "un_resultado_exacto": {
+          "sesiones": 5,
+          "tamano_del_resultado": 1,
+          "ordenes_distintos": 1,
+          "conjuntos_distintos": 1,
+          "orden_identico_entre_sesiones": true,
+          "conjunto_identico_entre_sesiones": true
+        },
+        "muchos_candidatos": {
+          "sesiones": 5,
+          "tamano_del_resultado": 200,
+          "ordenes_distintos": 1,
+          "conjuntos_distintos": 1,
+          "orden_identico_entre_sesiones": true,
+          "conjunto_identico_entre_sesiones": true
+        },
+        "resumen": {
+          "orden_estable_entre_sesiones": true,
+          "conjunto_estable_entre_sesiones": true
+        }
+      }
+    }
+  },
+  "no_medido": {
+    "coste_incremental_por_etapa_E0_E5": "NO MEDIBLE EN LA LINEA BASE: Sirius 0.1 no tiene etapas. Resuelve en una sola pasada mas un barrido completo, que es exactamente el salto que B04-RF-14 prohibe. Solo puede medirse contra un candidato que implemente E0-E5.",
+    "aceptacion_windows": "PENDIENTE. Ninguna cifra absoluta de latencia, tamano o ciclo se traslada automaticamente a Windows. La aceptacion del producto exige confirmar el comportamiento sobre el ejecutable o el entorno de referencia Windows, incluidos el tokenizador, secure_delete y la secuencia de purga que ADR-001 dejo pendientes.",
+    "variacion_entre_procesos_o_maquinas": "Las sesiones son independientes dentro del mismo proceso. La variacion entre procesos distintos y entre maquinas distintas NO se ha medido.",
+    "coste_externo": "ninguno: no se ha usado red, API ni modelo externo",
+    "T1_a_T4": "no ejecutadas en esta ronda"
+  }
+}

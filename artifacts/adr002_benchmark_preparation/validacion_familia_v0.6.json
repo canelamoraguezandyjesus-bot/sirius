@@ -1,0 +1,633 @@
+{
+ "documento": "Validacion de la familia sucesora de conformidad v0.6",
+ "version_contrato": "0.6",
+ "defecto_corregido": "B04-CA-19",
+ "semantica": "acumula todos los fallos; no aborta en el primero",
+ "comprobaciones": 75,
+ "fallos": 0,
+ "detalle": [
+  {
+   "comprobacion": "v0.4 intacta byte a byte: conformance_corpus_v0_4.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "c21b702cbe613d70ce76b6a8b2e72baf2d4e8a48",
+    "esperado": "c21b702cbe613d70ce76b6a8b2e72baf2d4e8a48"
+   }
+  },
+  {
+   "comprobacion": "v0.4 intacta byte a byte: cases_v0_4.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "072753b96f4162fe88ce9c96660296349225c7be",
+    "esperado": "072753b96f4162fe88ce9c96660296349225c7be"
+   }
+  },
+  {
+   "comprobacion": "v0.4 intacta byte a byte: references_v0_4.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "3fc9a63705144bf543266de129e17a17ab31c568",
+    "esperado": "3fc9a63705144bf543266de129e17a17ab31c568"
+   }
+  },
+  {
+   "comprobacion": "v0.4 intacta byte a byte: pdp_cases_v0_3.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "2eee45a04dee3d72f52ad00dfd46023d7c5e2199",
+    "esperado": "2eee45a04dee3d72f52ad00dfd46023d7c5e2199"
+   }
+  },
+  {
+   "comprobacion": "v0.4 intacta byte a byte: pdp_harness_rules_v0_2.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "86e4f4ea6b4af3d445ec0f71c9772b46751a202b",
+    "esperado": "86e4f4ea6b4af3d445ec0f71c9772b46751a202b"
+   }
+  },
+  {
+   "comprobacion": "v0.4 intacta byte a byte: performance_corpus_v0_2.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "4e9e2746e49b158a43eda7826b47c78c41b36e90",
+    "esperado": "4e9e2746e49b158a43eda7826b47c78c41b36e90"
+   }
+  },
+  {
+   "comprobacion": "v0.4 intacta byte a byte: benchmark_manifest_v0_4.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "fa9a2f2b5d8d65aed811f039b2b279c5350d2132",
+    "esperado": "fa9a2f2b5d8d65aed811f039b2b279c5350d2132"
+   }
+  },
+  {
+   "comprobacion": "v0.5 intacta byte a byte: conformance_corpus_v0_5.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "324f2976f8d4f4aec1d7634a1e16dcc9782c53b0",
+    "esperado": "324f2976f8d4f4aec1d7634a1e16dcc9782c53b0"
+   }
+  },
+  {
+   "comprobacion": "v0.5 intacta byte a byte: subject_keys_v0_1.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "020c10ced48657f57e7fa85076992c6f950dd0fe",
+    "esperado": "020c10ced48657f57e7fa85076992c6f950dd0fe"
+   }
+  },
+  {
+   "comprobacion": "v0.5 intacta byte a byte: property_keys_v0_1.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "da8953d58a5c17bed7df83e80c5ba3a6b2a27e3f",
+    "esperado": "da8953d58a5c17bed7df83e80c5ba3a6b2a27e3f"
+   }
+  },
+  {
+   "comprobacion": "v0.5 intacta byte a byte: applied_criticality_v0_1.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "7dcbba0031e76d4f0763e0d0b853e59584fe3077",
+    "esperado": "7dcbba0031e76d4f0763e0d0b853e59584fe3077"
+   }
+  },
+  {
+   "comprobacion": "v0.5 intacta byte a byte: cases_v0_5.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "26919e1016c414697664f93455258cb6492ca48c",
+    "esperado": "26919e1016c414697664f93455258cb6492ca48c"
+   }
+  },
+  {
+   "comprobacion": "v0.5 intacta byte a byte: references_v0_5.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "4694ef3bba3a87cae0412895da992ce5e2b54f45",
+    "esperado": "4694ef3bba3a87cae0412895da992ce5e2b54f45"
+   }
+  },
+  {
+   "comprobacion": "v0.5 intacta byte a byte: benchmark_manifest_v0_5.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "d9f97a8153b65f0cedcfc242304fea24570599dd",
+    "esperado": "d9f97a8153b65f0cedcfc242304fea24570599dd"
+   }
+  },
+  {
+   "comprobacion": "ningun artefacto de la v0.6 reutiliza el nombre de uno congelado",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "heredado por blob sin regenerar: cases_v0_5.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "26919e1016c414697664f93455258cb6492ca48c",
+    "esperado": "26919e1016c414697664f93455258cb6492ca48c"
+   }
+  },
+  {
+   "comprobacion": "heredado por blob sin regenerar: references_v0_5.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "4694ef3bba3a87cae0412895da992ce5e2b54f45",
+    "esperado": "4694ef3bba3a87cae0412895da992ce5e2b54f45"
+   }
+  },
+  {
+   "comprobacion": "heredado por blob sin regenerar: applied_criticality_v0_1.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "7dcbba0031e76d4f0763e0d0b853e59584fe3077",
+    "esperado": "7dcbba0031e76d4f0763e0d0b853e59584fe3077"
+   }
+  },
+  {
+   "comprobacion": "heredado por blob sin regenerar: pdp_cases_v0_3.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "2eee45a04dee3d72f52ad00dfd46023d7c5e2199",
+    "esperado": "2eee45a04dee3d72f52ad00dfd46023d7c5e2199"
+   }
+  },
+  {
+   "comprobacion": "heredado por blob sin regenerar: pdp_harness_rules_v0_2.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "86e4f4ea6b4af3d445ec0f71c9772b46751a202b",
+    "esperado": "86e4f4ea6b4af3d445ec0f71c9772b46751a202b"
+   }
+  },
+  {
+   "comprobacion": "heredado por blob sin regenerar: performance_corpus_v0_2.json",
+   "resultado": "OK",
+   "detalle": {
+    "observado": "4e9e2746e49b158a43eda7826b47c78c41b36e90",
+    "esperado": "4e9e2746e49b158a43eda7826b47c78c41b36e90"
+   }
+  },
+  {
+   "comprobacion": "la v0.6 no versiona casos, referencias ni criticidad",
+   "resultado": "OK",
+   "detalle": [
+    "conformance_corpus_v0_6.json",
+    "subject_keys_v0_2.json",
+    "property_keys_v0_2.json",
+    "benchmark_manifest_v0_6.json"
+   ]
+  },
+  {
+   "comprobacion": "conteos del corpus contados sobre los datos",
+   "resultado": "OK",
+   "detalle": {
+    "declarado": {
+     "proyectos": 8,
+     "entidades": 8,
+     "items": 97,
+     "recuerdos": 81,
+     "decisiones": 16,
+     "mensajes": 6,
+     "documentos": 5,
+     "relaciones": 10
+    },
+    "real": {
+     "proyectos": 8,
+     "entidades": 8,
+     "items": 97,
+     "recuerdos": 81,
+     "decisiones": 16,
+     "mensajes": 6,
+     "documentos": 5,
+     "relaciones": 10
+    }
+   }
+  },
+  {
+   "comprobacion": "identidad por elemento recalculada",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "el corpus declara version de contrato 0.6",
+   "resultado": "OK",
+   "detalle": "0.6"
+  },
+  {
+   "comprobacion": "la semilla no cambia",
+   "resultado": "OK",
+   "detalle": 20260726
+  },
+  {
+   "comprobacion": "el corpus v0.6 no anade ni quita items respecto de la v0.5",
+   "resultado": "OK",
+   "detalle": {
+    "v0.5": 97,
+    "v0.6": 97
+   }
+  },
+  {
+   "comprobacion": "el corpus v0.6 no toca relaciones, mensajes, documentos ni proyectos",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "ningun item ajeno a CA-19 cambia un solo byte",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "en los tres de CA-19 lo unico que cambia es entity_ids",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "la entidad sintetica existe y es unica",
+   "resultado": "OK",
+   "detalle": "ENT-PLATAFORMA-DESPLIEGUE"
+  },
+  {
+   "comprobacion": "la entidad no declara alias ni grupo homonimo",
+   "resultado": "OK",
+   "detalle": {
+    "id": "ENT-PLATAFORMA-DESPLIEGUE",
+    "nombre_canonico": "plataforma de despliegue",
+    "alias": [],
+    "grupo_homonimo": null,
+    "nota": "Sujeto sintetico del concepto que DEC-006, DEC-007 y DEC-008 enuncian literalmente. Su justificacion es el texto identico de los tres, no su destino en el banco."
+   }
+  },
+  {
+   "comprobacion": "el nombre canonico es el concepto que los tres enuncian",
+   "resultado": "OK",
+   "detalle": "plataforma de despliegue"
+  },
+  {
+   "comprobacion": "la entidad se asigna EXCLUSIVAMENTE a los tres items de CA-19",
+   "resultado": "OK",
+   "detalle": [
+    "DEC-006",
+    "DEC-007",
+    "DEC-008"
+   ]
+  },
+  {
+   "comprobacion": "los tres comparten el texto que justifica la entidad",
+   "resultado": "OK",
+   "detalle": [
+    "La plataforma de despliegue aprobada es Nimbo.",
+    "La plataforma de despliegue aprobada es Nimbo.",
+    "La plataforma de despliegue aprobada es Nimbo."
+   ]
+  },
+  {
+   "comprobacion": "CA-19 conserva sus tres procedencias distintas",
+   "resultado": "OK",
+   "detalle": {
+    "DEC-006": [
+     "DOC-001"
+    ],
+    "DEC-007": [
+     "DOC-002"
+    ],
+    "DEC-008": [
+     "MSG-030"
+    ]
+   }
+  },
+  {
+   "comprobacion": "los tres comparten subject_key_experimental NO nula",
+   "resultado": "OK",
+   "detalle": {
+    "DEC-006": "plataformadedespliegue",
+    "DEC-007": "plataformadedespliegue",
+    "DEC-008": "plataformadedespliegue"
+   }
+  },
+  {
+   "comprobacion": "los tres comparten property_key NO nula",
+   "resultado": "OK",
+   "detalle": {
+    "DEC-006": "PK-d291da76418f",
+    "DEC-007": "PK-d291da76418f",
+    "DEC-008": "PK-d291da76418f"
+   }
+  },
+  {
+   "comprobacion": "CA-19 es estructuralmente agrupable: ningun eje queda desconocido",
+   "resultado": "OK",
+   "detalle": {
+    "sujeto": "plataformadedespliegue",
+    "propiedad": "PK-d291da76418f"
+   }
+  },
+  {
+   "comprobacion": "en la v0.5 los tres tenian ambas claves nulas: el defecto era real",
+   "resultado": "OK",
+   "detalle": {
+    "DEC-006": [
+     null,
+     null
+    ],
+    "DEC-007": [
+     null,
+     null
+    ],
+    "DEC-008": [
+     null,
+     null
+    ]
+   }
+  },
+  {
+   "comprobacion": "ninguna clave de sujeto ajena a CA-19 cambia respecto de la v0.5",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "ninguna property_key ajena a CA-19 cambia respecto de la v0.5",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "cobertura total del canal de sujeto, null incluido",
+   "resultado": "OK",
+   "detalle": {
+    "faltan": []
+   }
+  },
+  {
+   "comprobacion": "cobertura total del canal de propiedad, null incluido",
+   "resultado": "OK",
+   "detalle": {
+    "faltan": []
+   }
+  },
+  {
+   "comprobacion": "la proyeccion de sujeto coincide con el oraculo independiente",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "property_key coincide con el oraculo independiente",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "toda clave de sujeto respeta el formato cerrado",
+   "resultado": "OK",
+   "detalle": [
+    "bitacora",
+    "juanmolina",
+    "juantorres",
+    "plataformadedespliegue",
+    "postgresql",
+    "proyectoatlasalfa",
+    "rotor",
+    "vehiculo"
+   ]
+  },
+  {
+   "comprobacion": "ninguna clave de sujeto es prefijo de otra",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "toda property_key presente respeta el formato cerrado y opaco",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "la ausencia sigue siendo null y no cadena vacia",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "construir_subject_keys recibe el corpus y nada mas",
+   "resultado": "OK",
+   "detalle": [
+    "corpus"
+   ]
+  },
+  {
+   "comprobacion": "construir_property_keys recibe el corpus y nada mas",
+   "resultado": "OK",
+   "detalle": [
+    "corpus"
+   ]
+  },
+  {
+   "comprobacion": "el orden de materializacion declara los canales antes del manifiesto",
+   "resultado": "OK",
+   "detalle": [
+    "conformance_corpus_v0_6.json",
+    "subject_keys_v0_2.json",
+    "property_keys_v0_2.json",
+    "benchmark_manifest_v0_6.json"
+   ]
+  },
+  {
+   "comprobacion": "subject_keys_v0_2.json no porta rastro de oraculo",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "property_keys_v0_2.json no porta rastro de oraculo",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "MEM-950 identico al de la v0.5",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "MEM-951 identico al de la v0.5",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "la arista discriminante es identica a la de la v0.5",
+   "resultado": "OK",
+   "detalle": {
+    "id": "REL-010",
+    "tipo": "DERIVA_DE",
+    "origen": "MEM-950",
+    "destino": "MEM-951",
+    "nota": "Dependencia explicita, tipada y dirigida entre dos sujetos distintos."
+   }
+  },
+  {
+   "comprobacion": "los extremos siguen sin compartir un solo token indexado",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "las claves de sujeto de los extremos no cambian",
+   "resultado": "OK",
+   "detalle": {
+    "origen": "rotor",
+    "destino": "bitacora"
+   }
+  },
+  {
+   "comprobacion": "un salto relacional sigue aportando el destino",
+   "resultado": "OK",
+   "detalle": [
+    "MEM-951"
+   ]
+  },
+  {
+   "comprobacion": "el manifiesto lista lo versionado",
+   "resultado": "OK",
+   "detalle": [
+    "conformance_corpus_v0_6.json",
+    "subject_keys_v0_2.json",
+    "property_keys_v0_2.json",
+    "benchmark_manifest_v0_6.json"
+   ]
+  },
+  {
+   "comprobacion": "el manifiesto cierra los heredados por blob",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "el manifiesto declara la v0.5 sustituida y la v0.6 vigente",
+   "resultado": "OK",
+   "detalle": {
+    "principio": "append-only",
+    "familia_vigente": "0.6",
+    "familia_sustituida": "0.5",
+    "regla": "La v0.6 se materializa JUNTO A la v0.5 y la v0.4. Ningun artefacto congelado de esas familias se sobrescribe, renombra ni modifica. La v0.5 permanece congelada como identidad historica y queda SUSTITUIDA como familia vigente.",
+    "v0_4_intacta_por_blob": {
+     "conformance_corpus_v0_4.json": "c21b702cbe613d70ce76b6a8b2e72baf2d4e8a48",
+     "cases_v0_4.json": "072753b96f4162fe88ce9c96660296349225c7be",
+     "references_v0_4.json": "3fc9a63705144bf543266de129e17a17ab31c568",
+     "pdp_cases_v0_3.json": "2eee45a04dee3d72f52ad00dfd46023d7c5e2199",
+     "pdp_harness_rules_v0_2.json": "86e4f4ea6b4af3d445ec0f71c9772b46751a202b",
+     "performance_corpus_v0_2.json": "4e9e2746e49b158a43eda7826b47c78c41b36e90",
+     "benchmark_manifest_v0_4.json": "fa9a2f2b5d8d65aed811f039b2b279c5350d2132"
+    },
+    "v0_5_intacta_por_blob": {
+     "conformance_corpus_v0_5.json": "324f2976f8d4f4aec1d7634a1e16dcc9782c53b0",
+     "subject_keys_v0_1.json": "020c10ced48657f57e7fa85076992c6f950dd0fe",
+     "property_keys_v0_1.json": "da8953d58a5c17bed7df83e80c5ba3a6b2a27e3f",
+     "applied_criticality_v0_1.json": "7dcbba0031e76d4f0763e0d0b853e59584fe3077",
+     "cases_v0_5.json": "26919e1016c414697664f93455258cb6492ca48c",
+     "references_v0_5.json": "4694ef3bba3a87cae0412895da992ce5e2b54f45",
+     "benchmark_manifest_v0_5.json": "d9f97a8153b65f0cedcfc242304fea24570599dd"
+    },
+    "heredados_por_blob": {
+     "cases_v0_5.json": "26919e1016c414697664f93455258cb6492ca48c",
+     "references_v0_5.json": "4694ef3bba3a87cae0412895da992ce5e2b54f45",
+     "applied_criticality_v0_1.json": "7dcbba0031e76d4f0763e0d0b853e59584fe3077",
+     "pdp_cases_v0_3.json": "2eee45a04dee3d72f52ad00dfd46023d7c5e2199",
+     "pdp_harness_rules_v0_2.json": "86e4f4ea6b4af3d445ec0f71c9772b46751a202b",
+     "performance_corpus_v0_2.json": "4e9e2746e49b158a43eda7826b47c78c41b36e90"
+    }
+   }
+  },
+  {
+   "comprobacion": "el manifiesto registra el defecto corregido",
+   "resultado": "OK",
+   "detalle": {
+    "caso": "B04-CA-19",
+    "defecto_de_la_v0_5": "B04-CA-19 exige que DEC-006, DEC-007 y DEC-008 formen un grupo con representante justificado y tres procedencias. En la v0.5 los tres tienen subject_key_experimental = null y property_key = null porque ninguno declara entidad, y la regla aprobada prohibe agrupar cuando esos ejes son desconocidos. La v0.5 queda congelada como identidad historica y SUSTITUIDA como familia vigente.",
+    "entidad_anadida": "ENT-PLATAFORMA-DESPLIEGUE",
+    "items_afectados": [
+     "DEC-006",
+     "DEC-007",
+     "DEC-008"
+    ],
+    "alcance": "un solo defecto; nada mas se corrige"
+   }
+  },
+  {
+   "comprobacion": "el manifiesto declara CA-19 agrupable con claves no nulas",
+   "resultado": "OK",
+   "detalle": {
+    "items": [
+     "DEC-006",
+     "DEC-007",
+     "DEC-008"
+    ],
+    "subject_key_experimental": "plataformadedespliegue",
+    "property_key": "PK-d291da76418f",
+    "agrupable": true,
+    "procedencias": {
+     "DEC-006": [
+      "DOC-001"
+     ],
+     "DEC-007": [
+      "DOC-002"
+     ],
+     "DEC-008": [
+      "MSG-030"
+     ]
+    }
+   }
+  },
+  {
+   "comprobacion": "el barrido declara cero cambios sobre los 66 dominios",
+   "resultado": "OK",
+   "detalle": {
+    "adjudicaciones_recalculadas": 66,
+    "cambios": [],
+    "regla": "ninguna adjudicacion heredada puede cambiar al anadir la entidad de CA-19",
+    "razon_estructural": "Los unicos dominios que filtran por entidad lo hacen contra ENT-PROY-ALFA, ENT-VEHICULO, ENT-POSTGRESQL o el grupo homonimo JUAN. Una entidad nueva sin grupo homonimo no coincide con ninguno, y el resto de dominios no mira entity_ids."
+   }
+  },
+  {
+   "comprobacion": "las huellas del manifiesto se recalculan",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "el manifiesto sigue declarando el benchmark bloqueado",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "la proyeccion T0 sigue sin regenerarse",
+   "resultado": "OK",
+   "detalle": {
+    "regenerada": false,
+    "fichero_no_regenerado": "t0_preexecution_projection_v0_2.json",
+    "blob_observado": "3a241839b7eba84f12a3bbb3c643a17f7b0d0f91",
+    "valor": "observacion sin valor vinculante; no es evidencia congelada",
+    "motivo": "Regenerarla exigiria proyectar el caso discriminante sobre T0, y esa proyeccion presupondria el arnes de conformidad de T0, que NO EXISTE. El acta de congelacion v0.4 §6 prohibe ademas modificar el fichero original. La familia v0.5 declara expresamente que NO lleva proyeccion T0.",
+    "arnes_de_conformidad_de_t0": "NO EXISTE; no se presupone y no se construye aqui"
+   }
+  },
+  {
+   "comprobacion": "determinismo de conformance_corpus_v0_6.json",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "determinismo de subject_keys_v0_2.json",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "determinismo de property_keys_v0_2.json",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "determinismo de benchmark_manifest_v0_6.json",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "validar no modifica ningun artefacto del arbol",
+   "resultado": "OK",
+   "detalle": []
+  }
+ ]
+}

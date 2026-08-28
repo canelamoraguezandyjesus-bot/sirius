@@ -1,0 +1,115 @@
+{
+  "que_es": "medicion del cauce hibrido (FTS5 lexico + senal semantica + fusion RRF) sobre el banco de ADR-002, ejecutada despues de congelar el motor y antes de escribir ninguna conclusion",
+  "cuando": "ADR-002, continuacion de la falsacion de la senal semantica real",
+  "linea_base_de_referencia": {
+    "exactos": 24,
+    "de": 47,
+    "omisiones_criticas": 11,
+    "contaminacion": 3,
+    "fuga_de_ambito": 0,
+    "etapa_conforme": "32/46",
+    "ausencia_correcta": "36/47"
+  },
+  "codificador_usado": {
+    "identificador": "determinista-sha256-v1",
+    "por_que": "el contenedor se reinicio y ningun modelo semantico sobrevivio; PyPI y las releases de GitHub son alcanzables pero HuggingFace y api.openai.com no lo son desde este entorno",
+    "que_significa": "la senal semantica es NULA en las corridas 1-3 y ALEATORIA en el barrido; ninguna de las dos mide calidad semantica, y no se presenta como si lo hiciera"
+  },
+  "corridas": [
+    {
+      "corrida": "linea base (solo lexica)",
+      "exactos": 24,
+      "casos": 47,
+      "omisiones_criticas": 11,
+      "contaminacion": 3,
+      "fuga_de_ambito": 0,
+      "etapa_conforme": 32,
+      "etapa_puntuable": 46,
+      "ausencia_correcta": 36
+    },
+    {
+      "corrida": "hibrido CONCATENADO (control)",
+      "exactos": 24,
+      "casos": 47,
+      "omisiones_criticas": 11,
+      "contaminacion": 3,
+      "fuga_de_ambito": 0,
+      "etapa_conforme": 32,
+      "etapa_puntuable": 46,
+      "ausencia_correcta": 36
+    },
+    {
+      "corrida": "hibrido FUSIONADO",
+      "exactos": 24,
+      "casos": 47,
+      "omisiones_criticas": 11,
+      "contaminacion": 3,
+      "fuga_de_ambito": 0,
+      "etapa_conforme": 32,
+      "etapa_puntuable": 46,
+      "ausencia_correcta": 36
+    },
+    {
+      "corrida": "linea base + ampliacion de consulta",
+      "exactos": 26,
+      "casos": 47,
+      "omisiones_criticas": 7,
+      "contaminacion": 3,
+      "fuga_de_ambito": 0,
+      "etapa_conforme": 32,
+      "etapa_puntuable": 46,
+      "ausencia_correcta": 38
+    },
+    {
+      "corrida": "hibrido FUSIONADO + ampliacion de consulta",
+      "exactos": 26,
+      "casos": 47,
+      "omisiones_criticas": 7,
+      "contaminacion": 3,
+      "fuga_de_ambito": 0,
+      "etapa_conforme": 32,
+      "etapa_puntuable": 46,
+      "ausencia_correcta": 38
+    }
+  ],
+  "identidad_de_las_salidas": {
+    "metodo": "comparacion caso a caso del conjunto entregado, no solo de los agregados",
+    "base_vs_concatenado": "0 casos difieren de 47",
+    "base_vs_fusionado": "0 casos difieren de 47",
+    "concatenado_vs_fusionado": "0 casos difieren de 47",
+    "base_mas_ampliacion_vs_fusionado_mas_ampliacion": "0 casos difieren de 47"
+  },
+  "por_que_la_fusion_no_puede_cambiar_nada_en_este_banco": {
+    "afirmacion_previa_refutada": "que concatenar condena a la senal semantica a las ultimas posiciones y el recorte por limite la elimina antes de que ninguna puerta la mire",
+    "medido": {
+      "casos_sin_limite_declarado": "45 de 50; su limite duro es el canon entero (97)",
+      "casos_con_limite_declarado": "5; dos de ellos lo fijan al numero exacto de elementos que su propia respuesta espera (N1-38 con 10 esperando 10, N1-44 con 5 esperando 5)",
+      "casos_que_recorren_E3": "21 de 50",
+      "candidatas_que_E3_propone": "maximo 43, media 5.1",
+      "casos_donde_una_candidata_anadida_al_final_caeria_fuera_del_limite_duro": "0 de 21",
+      "casos_donde_E3_propone_al_menos_las_16_del_contrato_del_puerto": 2
+    },
+    "conclusion": "concatenar no pierde nada en este banco, luego fusionar no puede ganar nada en este banco"
+  },
+  "confirmacion_por_el_otro_lado": {
+    "metodo": "repetir el barrido con senal ACTIVA (codificador determinista, umbrales de coseno 0.25, 0.35, 0.45, 0.55, 0.65) comparando concatenar contra fusionar en cada punto",
+    "resultado": "cifras identicas en los cinco puntos del barrido",
+    "que_prueba": "la inercia de la fusion no depende de que la senal este callada: aunque proponga, el orden no decide nada porque no se recorta nada"
+  },
+  "lo_que_si_queda_establecido": [
+    "el cauce hibrido corre entero sobre el banco real, de punta a punta",
+    "la fusion no introduce ruido propio: con senal nula la salida es identica a la linea base en los 47 casos",
+    "la ampliacion de consulta sigue siendo la unica via que mueve el resultado: 24 a 26 exactos y 11 a 7 omisiones, sin ninguna regresion",
+    "la unica variable que queda sin medir es si un codificador entrenado para recuperar encuentra lo que los tres modelos locales no encontraron"
+  ],
+  "defecto_encontrado_en_el_arnes_congelado": {
+    "que": "la unica identidad global del canon se cuenta como fuga de ambito, que es fallo duro del §6.1, sin que ninguna puerta se haya saltado nada",
+    "identidad": "MEMORIA:1 (MEM-001, 'El usuario prefiere que redactes en tono directo y sin adornos')",
+    "la_proyeccion_dice": "project_id nulo y ejes.ambito GLOBAL, de modo que G4 la deja pasar en cualquier ambito por diseno declarado",
+    "la_metrica_dice": "fuga_de_ambito numera los proyectos del corpus por su posicion y PRJ-GLOBAL ocupa la primera, de modo que le asigna el proyecto '1' y la considera fuera de ambito en toda consulta acotada a otro proyecto",
+    "por_que_no_afloro_antes": "ningun candidato de la ronda publicada llego a entregarla en un caso acotado a proyecto; se observo aqui porque una senal aleatoria si la propuso",
+    "impacto_en_lo_que_viene": "una senal semantica real puede proponerla con facilidad, porque es una memoria de tono cercana a casi cualquier consulta; si lo hace, la corrida marcara fuga de ambito y quien lea la cifra concluira que la via semantica queda descalificada por fallo duro cuando no lo esta",
+    "que_se_ha_hecho": "no se ha tocado la metrica congelada: sigue contando lo que contaba. El guion de la corrida con modelo real separa el recuento en 'fuga real' y 'fuga por el item global' y lo imprime, para que la cifra no se lea mal",
+    "que_queda_pendiente": "decidir cual de las dos lecturas es la correcta y corregir la que no lo sea; es una decision sobre el arnes congelado y no se toma sin acto"
+  }
+}

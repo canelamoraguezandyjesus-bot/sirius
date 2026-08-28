@@ -1,0 +1,216 @@
+{
+  "que_es": "por que el filtro que elige pierde datos criticos, y que da quedarse solo con su veredicto de «aqui no hay nada»",
+  "commit": "2cd20b5",
+  "medido_sobre": "resultado_modelo_local_v0.2.json, corrida «4. solo filtro, sin ampliacion»",
+  "advertencia": "la fila «compuerta» NO es una medicion: es un recomputo sobre los veredictos que el modelo ya dio con la instruccion del que elige. Con su propia instruccion el modelo puede decidir distinto. Se publica como estimacion y hay que medirla",
+  "el_patron": "el dano crece con el tamano de la respuesta correcta: el modelo trata una peticion de lista como una pregunta de una sola cosa y se queda con el candidato que mas se parece",
+  "donde_pierde": [
+    {
+      "caso": "N1-34",
+      "consulta": "Prepara el contexto de planificación de Alfa.",
+      "elementos_esperados": 10,
+      "entraron": [
+        "MEMORIA:903",
+        "MEMORIA:915",
+        "MEMORIA:919",
+        "MEMORIA:931",
+        "MEMORIA:11",
+        "MEMORIA:906",
+        "MEMORIA:910",
+        "MEMORIA:911",
+        "MEMORIA:912",
+        "MEMORIA:913",
+        "MEMORIA:914",
+        "MEMORIA:917",
+        "MEMORIA:921",
+        "MEMORIA:925",
+        "MEMORIA:930",
+        "MEMORIA:939"
+      ],
+      "quedo": [
+        "MEMORIA:11"
+      ],
+      "correctos_tirados": [
+        "MEMORIA:903",
+        "MEMORIA:915",
+        "MEMORIA:919",
+        "MEMORIA:910",
+        "MEMORIA:911",
+        "MEMORIA:912",
+        "MEMORIA:914"
+      ],
+      "criticos_tirados": []
+    },
+    {
+      "caso": "N1-44",
+      "consulta": "Restricciones esenciales, máximo duro 5.",
+      "elementos_esperados": 5,
+      "entraron": [
+        "MEMORIA:101",
+        "MEMORIA:102",
+        "MEMORIA:103",
+        "MEMORIA:104",
+        "MEMORIA:105"
+      ],
+      "quedo": [
+        "MEMORIA:105"
+      ],
+      "correctos_tirados": [
+        "MEMORIA:101",
+        "MEMORIA:102",
+        "MEMORIA:103",
+        "MEMORIA:104"
+      ],
+      "criticos_tirados": [
+        "MEMORIA:101",
+        "MEMORIA:102",
+        "MEMORIA:103",
+        "MEMORIA:104"
+      ]
+    },
+    {
+      "caso": "N1-14",
+      "consulta": "¿De qué se ocupa Juan?",
+      "elementos_esperados": 2,
+      "entraron": [
+        "MEMORIA:25",
+        "MEMORIA:13",
+        "MEMORIA:12",
+        "DECISION:1",
+        "MEMORIA:23",
+        "MEMORIA:27"
+      ],
+      "quedo": [
+        "MEMORIA:13"
+      ],
+      "correctos_tirados": [
+        "MEMORIA:12"
+      ],
+      "criticos_tirados": []
+    },
+    {
+      "caso": "N1-23",
+      "consulta": "¿Cuál es la decisión de presupuesto actual y cuál reemplazó?",
+      "elementos_esperados": 2,
+      "entraron": [
+        "DECISION:3",
+        "DECISION:2"
+      ],
+      "quedo": [
+        "DECISION:2"
+      ],
+      "correctos_tirados": [
+        "DECISION:3"
+      ],
+      "criticos_tirados": [
+        "DECISION:3"
+      ]
+    },
+    {
+      "caso": "N1-27",
+      "consulta": "¿Qué presupuesto aplico en Beta según el documento?",
+      "elementos_esperados": 2,
+      "entraron": [
+        "DECISION:5",
+        "MEMORIA:6"
+      ],
+      "quedo": [
+        "DECISION:5"
+      ],
+      "correctos_tirados": [
+        "MEMORIA:6"
+      ],
+      "criticos_tirados": []
+    },
+    {
+      "caso": "N1-30",
+      "consulta": "Resume mi preferencia de redacción, el presupuesto vigente y la condición de ahorro en escalas, con su razón.",
+      "elementos_esperados": 3,
+      "entraron": [
+        "DECISION:3",
+        "MEMORIA:16",
+        "DECISION:10",
+        "MEMORIA:11"
+      ],
+      "quedo": [
+        "MEMORIA:16"
+      ],
+      "correctos_tirados": [
+        "DECISION:3"
+      ],
+      "criticos_tirados": [
+        "DECISION:3"
+      ]
+    },
+    {
+      "caso": "N1-32",
+      "consulta": "¿Qué sabía Sirius sobre el aforo el 1 de marzo?",
+      "elementos_esperados": 1,
+      "entraron": [
+        "DECISION:12"
+      ],
+      "quedo": [],
+      "correctos_tirados": [
+        "DECISION:12"
+      ],
+      "criticos_tirados": []
+    }
+  ],
+  "de_donde_sale_la_ganancia": {
+    "busqueda_sola": {
+      "contenido": "16/31",
+      "ausencia": "8/16"
+    },
+    "el_filtro_que_elige": {
+      "contenido": "17/31",
+      "ausencia": "12/16"
+    },
+    "lectura": "de los cinco aciertos que gana, cuatro son casos en los que lo correcto era no devolver nada. Elegir cuales aporta uno"
+  },
+  "las_tres_columnas": {
+    "busqueda sola": {
+      "exacto": 24,
+      "adjudicables": 47,
+      "contenido_exacto": 16,
+      "contenido": 31,
+      "ausencia_exacto": 8,
+      "ausencia": 16,
+      "entero": 24,
+      "hallados": 64,
+      "esperados": 81,
+      "de_mas": 29,
+      "omisiones_criticas": 11
+    },
+    "el filtro que elige (medido)": {
+      "exacto": 29,
+      "adjudicables": 47,
+      "contenido_exacto": 17,
+      "contenido": 31,
+      "ausencia_exacto": 12,
+      "ausencia": 16,
+      "entero": 19,
+      "hallados": 48,
+      "esperados": 81,
+      "de_mas": 3,
+      "omisiones_criticas": 17
+    },
+    "la compuerta (estimado, no medido)": {
+      "exacto": 27,
+      "adjudicables": 47,
+      "contenido_exacto": 15,
+      "contenido": 31,
+      "ausencia_exacto": 12,
+      "ausencia": 16,
+      "entero": 23,
+      "hallados": 63,
+      "esperados": 81,
+      "de_mas": 28,
+      "omisiones_criticas": 11
+    }
+  },
+  "la_ampliacion": {
+    "veredicto": "no aporta; deja de medirse por defecto",
+    "prueba": "con ampliacion 29 exactos y 17 omisiones criticas; sin ella 29 y 17. Y a solas quedo por debajo de la linea base las dos veces: 23 y 22 contra 24",
+    "coste": "dos llamadas al modelo por dato guardado, 194 para este canon"
+  }
+}

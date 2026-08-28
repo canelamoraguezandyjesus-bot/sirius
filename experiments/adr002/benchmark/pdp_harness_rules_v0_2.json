@@ -1,0 +1,137 @@
+{
+ "documento": "Reglas canónicas de protocolo del arnés de ADR-002",
+ "version": "0.2",
+ "version_contrato": "0.4",
+ "estado": "PROPUESTO_NO_CONGELADO",
+ "fuente": "Plan de Pruebas + RED/PDP v1.0 APROBADO §9 · casos transversales",
+ "regla_de_separacion": "Estas seis reglas gobiernan CÓMO se ejecuta y se registra el benchmark. No son consultas de recuperación, no tienen conjunto elegible, no tienen etapa ni parada y no reciben previsión frente a T0. Ninguna de ellas es un caso funcional de nivel 1: solo PDP-CA-09 y PDP-CA-22 lo son, por su anclaje canónico vía el Anexo B / RED-017.",
+ "campos_prohibidos": [
+  "consulta",
+  "modo",
+  "cardinalidad",
+  "etapa",
+  "parada",
+  "elegibles",
+  "prohibidos",
+  "orden",
+  "candidatos_elegibles",
+  "candidatos_prohibidos",
+  "t0",
+  "prevision_t0",
+  "expresabilidad_prevista",
+  "ficha_pdp_7"
+ ],
+ "conteos": {
+  "reglas": 6
+ },
+ "reglas": [
+  {
+   "identificador_canonico": "PDP-CA-02",
+   "clase": "REGLA_DE_PROTOCOLO_DEL_ARNES",
+   "texto_canonico": {
+    "entrada_adversarial": "Referencia cambiada tras ver resultado",
+    "resultado_esperado": "La ejecución falla; la corrección crea nueva versión del caso.",
+    "modificable": false
+   },
+   "fuente_pdp": "PDP §9 · PDP-CA-02",
+   "regla_que_lo_importa": "Registro de Tolerancias v0.4 §9 regla 1 y Especificación de benchmark §3 principio 2",
+   "regla_de_ejecucion": "La referencia de cada caso se congela y se sella antes de observar ninguna salida. Ninguna referencia puede editarse después de ver un resultado.",
+   "evidencia_requerida": "huella de la referencia antes y después de cada ejecución",
+   "consecuencia": "la ejecución queda invalidada y debe repetirse desde la referencia sellada",
+   "estado_aplicabilidad": "APLICABLE_TRAS_CONGELACION",
+   "estado_de_la_fuente": "APROBADO",
+   "justificacion_estado_fuente": "Registro de Tolerancias v0.4 §9 regla 1 · aprobado el 26-07-2026 (SIRIUS_0.2_ADR_002_REGISTRO_TOLERANCIAS_APROBACION_v1.0.md)"
+  },
+  {
+   "identificador_canonico": "PDP-CA-03",
+   "clase": "REGLA_DE_PROTOCOLO_DEL_ARNES",
+   "texto_canonico": {
+    "entrada_adversarial": "Repetición sin cambio ni defecto",
+    "resultado_esperado": "La repetición es inválida y el fallo anterior permanece.",
+    "modificable": false
+   },
+   "fuente_pdp": "PDP §9 · PDP-CA-03",
+   "regla_que_lo_importa": "Protocolo de medición v0.1 §6.5, §6.6 y prohibición 8",
+   "regla_de_ejecucion": "Una repetición solo es válida si declara un cambio o un defecto documentado. Repetir hasta obtener un resultado favorable está prohibido.",
+   "evidencia_requerida": "registro de repeticiones con su causa declarada",
+   "consecuencia": "la repetición no computa y la serie de medición queda invalidada",
+   "estado_aplicabilidad": "APLICABLE_TRAS_CONGELACION",
+   "estado_de_la_fuente": "PROPUESTO",
+   "justificacion_estado_fuente": "Protocolo de medición v0.1 PROPUESTO §6.5/§6.6"
+  },
+  {
+   "identificador_canonico": "PDP-CA-06",
+   "clase": "REGLA_DE_PROTOCOLO_DEL_ARNES",
+   "texto_canonico": {
+    "entrada_adversarial": "Candidato cambia durante ejecución",
+    "resultado_esperado": "La ejecución queda inválida.",
+    "modificable": false
+   },
+   "fuente_pdp": "PDP §9 · PDP-CA-06",
+   "regla_que_lo_importa": "ADR002-TOL-210 · punto de congelación antes de la primera ejecución",
+   "regla_de_ejecucion": "La ficha del candidato se congela antes de la primera ejecución. Cambiar el candidato durante la serie invalida la serie completa.",
+   "evidencia_requerida": "huella de la ficha de candidato referenciada por cada medición",
+   "consecuencia": "toda medición posterior al cambio queda invalidada",
+   "estado_aplicabilidad": "APLICABLE_TRAS_CONGELACION",
+   "estado_de_la_fuente": "PUERTA_NO_SATISFECHA",
+   "justificacion_estado_fuente": "ADR002-TOL-210: la regla está aprobada dentro del Registro v0.4, pero la puerta que gobierna sigue NO SATISFECHA"
+  },
+  {
+   "identificador_canonico": "PDP-CA-16",
+   "clase": "REGLA_DE_PROTOCOLO_DEL_ARNES",
+   "texto_canonico": {
+    "entrada_adversarial": "Evidencia no reproduce versión/configuración",
+    "resultado_esperado": "Caso no cuenta.",
+    "modificable": false
+   },
+   "fuente_pdp": "PDP §9 · PDP-CA-16",
+   "regla_que_lo_importa": "Protocolo de medición v0.1 §7 · registro obligatorio",
+   "regla_de_ejecucion": "Toda evidencia debe reproducir versión de corpus, commit, esquema y protocolo. Una evidencia que no los reproduce no cuenta.",
+   "evidencia_requerida": "versión de corpus, commit, head de esquema y protocolo por registro",
+   "consecuencia": "la evidencia se descarta y el caso queda sin adjudicar",
+   "estado_aplicabilidad": "APLICABLE_TRAS_CONGELACION",
+   "estado_de_la_fuente": "PROPUESTO",
+   "justificacion_estado_fuente": "Protocolo de medición v0.1 PROPUESTO §7"
+  },
+  {
+   "identificador_canonico": "PDP-CA-17",
+   "clase": "REGLA_DE_PROTOCOLO_DEL_ARNES",
+   "texto_canonico": {
+    "entrada_adversarial": "Cambio de tolerancia tras salida",
+    "resultado_esperado": "Ejecución inválida.",
+    "modificable": false
+   },
+   "fuente_pdp": "PDP §9 · PDP-CA-17",
+   "regla_que_lo_importa": "Registro de Tolerancias v0.4 §9 reglas 1 y 10",
+   "regla_de_ejecucion": "Cambiar una tolerancia después de observar la salida invalida la ejecución. La versión del Registro de Tolerancias se sella con cada medición.",
+   "evidencia_requerida": "versión del Registro de Tolerancias y de la ficha en cada medición",
+   "consecuencia": "la ejecución queda invalidada para todas las cifras afectadas",
+   "estado_aplicabilidad": "APLICABLE_TRAS_CONGELACION",
+   "estado_de_la_fuente": "APROBADO",
+   "justificacion_estado_fuente": "Registro de Tolerancias v0.4 §9 reglas 1 y 10 · aprobado el 26-07-2026"
+  },
+  {
+   "identificador_canonico": "PDP-CA-18",
+   "clase": "REGLA_DE_PROTOCOLO_DEL_ARNES",
+   "texto_canonico": {
+    "entrada_adversarial": "Caso marcado no evaluable para ocultar fallo",
+    "resultado_esperado": "Permanece en denominador y bloquea.",
+    "modificable": false
+   },
+   "fuente_pdp": "PDP §9 · PDP-CA-18",
+   "regla_que_lo_importa": "ADR002-TOL-107 · salida NO EVALUABLE permanece en el denominador",
+   "regla_de_ejecucion": "Un caso marcado NO EVALUABLE permanece en el denominador. El denominador no se reduce para mejorar un porcentaje.",
+   "evidencia_requerida": "denominador declarado frente a casos adjudicados",
+   "consecuencia": "la cifra publicada se recalcula con el denominador completo",
+   "estado_aplicabilidad": "APLICABLE_TRAS_CONGELACION",
+   "estado_de_la_fuente": "APROBADO",
+   "justificacion_estado_fuente": "ADR002-TOL-107 · fila del Registro de Tolerancias v0.4 aprobado"
+  }
+ ],
+ "hereda_de": "pdp_harness_rules_v0_1.json",
+ "estados_de_fuente": [
+  "APROBADO",
+  "PROPUESTO",
+  "PUERTA_NO_SATISFECHA"
+ ]
+}

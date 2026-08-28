@@ -1,0 +1,50 @@
+{
+  "que_es": "medicion previa a construir el generador de ampliaciones: de que clase son las palabras que hacen falta, y cuanto cuesta pedirlas tarde en vez de siempre",
+  "por_que_primero": "antes de decidir de donde salen las palabras hay que saber que clase de palabra hace falta; construir el generador sin eso habria sido elegir proveedor sin saber que se le pide",
+  "de_que_clase_son_las_palabras_que_funcionan": {
+    "metodo": "las 177 palabras escritas a mano se parten en dos por un criterio mecanico -comparte raiz o variante morfologica con alguna palabra de la consulta, o no- usando el mismo derivador que ya usa el motor. No las clasifico yo a ojo",
+    "derivables_por_morfologia": {
+      "cuantas": 97,
+      "porcentaje": "55%",
+      "exactos": "24/47",
+      "omisiones_criticas": 11,
+      "lectura": "EXACTAMENTE la linea base: no aportan absolutamente nada. Tiene sentido, porque el motor ya hace morfologia en E2 y por tanto eran trabajo repetido"
+    },
+    "palabras_distintas": {
+      "cuantas": 80,
+      "porcentaje": "45%",
+      "exactos": "26/47",
+      "omisiones_criticas": 7,
+      "lectura": "la ganancia entera. Son sinonimos, hiperonimos y asociaciones: presupuesto por gasto, tope y maximo por restriccion, vehiculo por transporte"
+    },
+    "las_dos_juntas": {"exactos": "26/47", "omisiones_criticas": 7},
+    "conclusion": "lo que hay que producir esta acotado y nombrado: no variantes de la misma palabra, sino OTRA palabra que quiera decir lo mismo. Un derivador morfologico no puede darla por construccion, y por eso hace falta una fuente"
+  },
+  "cuando_conviene_pedirlas": {
+    "por_que_importa": "si la fuente es un modelo al otro lado de la red, ampliar en cada busqueda convierte una memoria personal en algo que no funciona sin conexion",
+    "ampliar_siempre": {
+      "exactos": "26/47",
+      "omisiones_criticas": 7,
+      "consultas_ampliadas": "47 de 47"
+    },
+    "ampliar_solo_si_la_primera_busqueda_no_basto": {
+      "exactos": "25/47",
+      "omisiones_criticas": 8,
+      "consultas_ampliadas": "21 de 47",
+      "lectura": "recupera 3 de las 4 omisiones pagando menos de la mitad de las llamadas. El caso que pierde es uno en el que la primera busqueda declaro suficiencia completa sin serlo"
+    },
+    "lo_que_NO_se_hizo": "afinar el disparador para recuperar ese caso. Buscar una condicion que acierte mas mirando el banco es ajustar la medida al resultado, que es lo que §8.1 prohibe. El disparador es el que el motor ya declara, y su coste esta publicado"
+  },
+  "fuentes_locales_descartadas_por_ahora": {
+    "wordnet_en_espanol": "el paquete se instala desde PyPI, pero sus datos se descargan de releases de GitHub y ese trafico esta bloqueado en este entorno: la descarga falla a 0 bytes. Queda sin probar, no descartado por merito",
+    "duda_pendiente_sobre_el": "aunque estuviera disponible, es dudoso que contenga las asociaciones que hacen falta: 'presupuesto' no es sinonimo de 'gasto' en ningun diccionario, y es justo la palabra que resuelve el caso que lleva bloqueando esto desde el principio"
+  },
+  "defecto_propio_encontrado_y_corregido": {
+    "que": "puse el tope de palabras anadidas en 8 afirmando en el comentario que era el que usaba la tabla escrita a mano",
+    "la_verdad": "la tabla llega a 10 palabras en tres casos, y son justamente los tres que el artefacto de la ampliacion senala como los que cargan el peso",
+    "efecto": "el control dejaba de reproducir su cifra publicada: 26/47 con 9 omisiones criticas en vez de 7",
+    "como_se_aislo": "midiendo cada filtro por separado. Quitar las palabras que ya estaban en la consulta: inocuo. Normalizar: inocuo. Tope 12: identico a la referencia. Tope 8: el culpable, y el unico",
+    "correccion": "tope a 12, por encima del maximo de la referencia, que es un dato de la tabla y no una cifra de acierto. Una prueba lee el fichero congelado y falla si alguien anade manana una ampliacion mas larga que el tope"
+  },
+  "lo_que_queda_por_medir": "si un modelo que ve UNICAMENTE el texto de la pregunta produce palabras que igualan el 26/47 de la tabla escrita a mano. Es la hipotesis que el artefacto de la ampliacion dejo declarada y sin comprobar"
+}

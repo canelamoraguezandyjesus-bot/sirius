@@ -1,0 +1,719 @@
+{
+  "documento": "Caracterizacion reproducible del entorno de laboratorio y presupuesto absoluto de almacenamiento v0.2 — ADR002-TOL-207",
+  "version": "0.2",
+  "version_esquema": "storage-0.1",
+  "estado": "PROPUESTO",
+  "estado_detalle": "PROPUESTO · PENDIENTE DE AUDITORIA INDEPENDIENTE",
+  "clasificacion_entorno": "ENVOLVENTE_REPRODUCIBLE",
+  "paquete": "SIRIUS_0.2_ADR_002_PAQUETE_TRABAJO_04_TOL207_CARACTERIZACION_v0.1",
+  "no_autoriza": [
+    "ejecutar T0",
+    "implementar o ejecutar ADR002-A/B/C/D",
+    "aprobar ADR002-TOL-207",
+    "declarar ADR002-TOL-207 SATISFECHA",
+    "fusionar el PR #117"
+  ],
+  "proveniencia": {
+    "medicion_versionada_historica": {
+      "etiqueta": "MEDICION_VERSIONADA_HISTORICA",
+      "fuente": "docs/architecture/SIRIUS_0.2_ADR_002_TOL_207_PRESUPUESTO_ALMACENAMIENTO_v0.1_PROPUESTO.md",
+      "fecha": "2026-07-26",
+      "evidencia_primaria": true,
+      "f_bfree_bytes": 262937780224,
+      "f_bavail_bytes": 31304323072,
+      "reserva_aparente_bytes": 231633457152
+    },
+    "informe_forense_no_versionado": {
+      "etiqueta": "INFORME_FORENSE_NO_VERSIONADO",
+      "fuente": "sesiones previas de revision forense; no versionadas",
+      "evidencia_primaria": false,
+      "captura_independiente_versionada": false,
+      "f_bfree_bytes_aproximado": 262930505728,
+      "f_bavail_bytes_aproximado": 32158220288,
+      "reserva_aparente_bytes": 230772285440
+    },
+    "medicion_paquete_04": {
+      "etiqueta": "MEDICION_PAQUETE_04",
+      "fuente": "captura_cruda de este documento",
+      "evidencia_primaria": true,
+      "nota_auditoria": "la auditoria independiente anadira otra observacion en un contenedor diferente; no se versiona en este commit"
+    }
+  },
+  "captura_cruda": {
+    "utc": "2026-07-27T18:57:55+00:00",
+    "timestamp_monotonico_ns": 2299044523842,
+    "uid_efectivo": 0,
+    "gid_efectivo": 0,
+    "hostname": "vm",
+    "machine_id": "0d0af05ee8fd4dc29275718f2ce4dff1",
+    "boot_id": "6538ea73-92a8-437c-9f81-e6f0fa920951",
+    "so": {
+      "pretty_name": "Ubuntu 24.04.4 LTS",
+      "name": "Ubuntu",
+      "version_id": "24.04",
+      "version": "24.04.4 LTS (Noble Numbat)"
+    },
+    "kernel": "6.18.5",
+    "arquitectura": "x86_64",
+    "cpu": {
+      "numero": 4,
+      "modelo": "Intel(R) Xeon(R) Processor @ 2.10GHz"
+    },
+    "virtualizacion": {
+      "systemd_detect_virt": "docker",
+      "hypervisor_flag_cpuinfo": true,
+      "dockerenv_presente": false,
+      "cgroup_pid1_contenedor": false
+    },
+    "puntos_de_montaje": [
+      {
+        "ruta_observada": "/home/user/sirius",
+        "st_dev": 65024,
+        "observacion_unica": true,
+        "monotonico_ns_antes": 2299044361777,
+        "monotonico_ns_despues": 2299044364789,
+        "statvfs": {
+          "f_bsize": 4096,
+          "f_frsize": 4096,
+          "f_blocks": 66053021,
+          "f_bfree": 63965878,
+          "f_bavail": 7624988,
+          "f_files": 16777216,
+          "f_ffree": 16609465,
+          "f_favail": 16609465,
+          "f_flag": 4096,
+          "f_fsid": 0,
+          "f_namemax": 255
+        },
+        "derivados": {
+          "bytes_totales": 270553174016,
+          "bytes_libres_brutos": 262004236288,
+          "bytes_disponibles": 31231950848,
+          "diferencia_f_bfree_f_bavail_bloques": 56340890,
+          "diferencia_f_bfree_f_bavail_bytes": 230772285440
+        },
+        "dispositivo": "/dev/vda",
+        "punto_de_montaje": "/",
+        "filesystem": "ext4",
+        "opciones": "rw,relatime,resuid=65534,resgid=65534"
+      },
+      {
+        "ruta_observada": "/tmp/tol207_sondas_cwfxnrvv",
+        "st_dev": 65024,
+        "observacion_unica": true,
+        "monotonico_ns_antes": 2299044478755,
+        "monotonico_ns_despues": 2299044480995,
+        "statvfs": {
+          "f_bsize": 4096,
+          "f_frsize": 4096,
+          "f_blocks": 66053021,
+          "f_bfree": 63965878,
+          "f_bavail": 7624988,
+          "f_files": 16777216,
+          "f_ffree": 16609465,
+          "f_favail": 16609465,
+          "f_flag": 4096,
+          "f_fsid": 0,
+          "f_namemax": 255
+        },
+        "derivados": {
+          "bytes_totales": 270553174016,
+          "bytes_libres_brutos": 262004236288,
+          "bytes_disponibles": 31231950848,
+          "diferencia_f_bfree_f_bavail_bloques": 56340890,
+          "diferencia_f_bfree_f_bavail_bytes": 230772285440
+        },
+        "dispositivo": "/dev/vda",
+        "punto_de_montaje": "/",
+        "filesystem": "ext4",
+        "opciones": "rw,relatime,resuid=65534,resgid=65534",
+        "mismo_punto_que": "/home/user/sirius"
+      }
+    ],
+    "cgroups": {
+      "/sys/fs/cgroup/memory.max": "ilegible",
+      "/sys/fs/cgroup/memory/memory.limit_in_bytes": "9223372036854771712",
+      "/sys/fs/cgroup/io.max": "ilegible",
+      "/sys/fs/cgroup/blkio/blkio.throttle.write_bps_device": "",
+      "/sys/fs/cgroup/pids/pids.max": "ilegible"
+    },
+    "ulimit_tamano_fichero": "unlimited",
+    "superbloque_ext4": {
+      "legible": true,
+      "dispositivo": "/dev/vda",
+      "features": "ext_attr resize_inode dir_index sparse_super2 filetype extent 64bit flex_bg sparse_super large_file huge_file dir_nlink extra_isize",
+      "inode_count": 16777216,
+      "block_count": 67108864,
+      "reserved_block_count": 56336794,
+      "free_blocks_superbloque": 64192059,
+      "free_inodes_superbloque": 16620326,
+      "block_size": 4096,
+      "reserved_blocks_uid": 65534,
+      "reserved_blocks_gid": 65534
+    },
+    "herramientas": {
+      "disponibles": [
+        "tune2fs",
+        "dumpe2fs",
+        "df",
+        "lsblk",
+        "findmnt",
+        "systemd-detect-virt"
+      ],
+      "ausentes": []
+    }
+  },
+  "huella_estable_propuesta": {
+    "filesystem": "ext4",
+    "f_frsize": 4096,
+    "f_blocks_statvfs": 66053021,
+    "bytes_totales": 270553174016,
+    "montaje_lectura_escritura": true,
+    "mecanismo_bloques_reservados_observable": true,
+    "inodos_totales": 16777216,
+    "arquitectura": "x86_64",
+    "so_mayor": "Ubuntu 24.04",
+    "suelo_admision_bytes": 30684547072
+  },
+  "campos_efimeros": {
+    "hostname": "vm",
+    "machine_id": "0d0af05ee8fd4dc29275718f2ce4dff1",
+    "boot_id": "6538ea73-92a8-437c-9f81-e6f0fa920951",
+    "kernel_parche_exacto": "6.18.5",
+    "f_fsid": 0
+  },
+  "uso_f_fsid_st_dev": "comprobar que repositorio, temporales y objetos medidos comparten filesystem dentro de una sesion; un contenedor valido no se rechaza solo por tener otro f_fsid",
+  "sondas": {
+    "directorio": "/tmp/tol207_sondas_cwfxnrvv/sondas_tol207",
+    "mismo_filesystem_que_repositorio": true,
+    "st_dev_repositorio": 65024,
+    "st_dev_sondas": 65024,
+    "tamano_maximo_simultaneo_bytes": 67108864,
+    "escritura_densa": {
+      "tamano_escrito_bytes": 33554432,
+      "tamano_aparente_bytes": 33554432,
+      "bloques_asignados_bytes": 33554432,
+      "asignacion_completa": true,
+      "delta_f_bavail_bytes": 33554432,
+      "contabilizacion": "st_blocks*512"
+    },
+    "fichero_sparse": {
+      "tamano_aparente_bytes": 67108864,
+      "bloques_asignados_bytes": 4096,
+      "sparse_soportado": true,
+      "contabilizacion": "st_blocks*512",
+      "nota": "st_size se registra pero no se usa como consumo"
+    },
+    "reflink_ficlone": {
+      "soportado": false,
+      "detalle": "ENOTSUP"
+    },
+    "cow": {
+      "reflink_soportado": false,
+      "sobrescritura_en_sitio": true,
+      "observado": false,
+      "nota": "sin reflink y con sobrescritura en sitio no se observa COW"
+    },
+    "compresion_o_dedup_aparente": {
+      "ceros_escritos_bytes": 33554432,
+      "ceros_asignados_bytes": 33554432,
+      "compresion_aparente": false,
+      "duplicados_escritos_bytes": 16777216,
+      "duplicados_asignados_bytes": 16777216,
+      "deduplicacion_aparente": false,
+      "observada": false
+    },
+    "inodos": {
+      "inodos_creados": 256,
+      "delta_f_favail_observado": 257,
+      "creacion_observable": true,
+      "liberacion_observada": true,
+      "f_favail_antes": 16609464,
+      "f_favail_despues": 16609464
+    },
+    "liberacion_bloques_tras_borrado": {
+      "tamano_bytes": 16777216,
+      "delta_al_escribir_bytes": 16777216,
+      "recuperado_al_borrar_bytes": 16777216,
+      "liberacion_observada": true,
+      "granularidad_bytes": 4096
+    },
+    "ruta_error": {
+      "excepcion_provocada": true,
+      "fichero_residual": false,
+      "limpieza_tras_excepcion": true
+    },
+    "limpieza": {
+      "residuo_bytes": 0,
+      "residuo_inodos": 0,
+      "maximo_admisible_bytes": 65536,
+      "valida": true
+    },
+    "resultado": "VALIDA",
+    "pasadas": 1
+  },
+  "reserva_historica_aparente": {
+    "sesion_26jul_bytes": 231633457152,
+    "sesion_forense_bytes": 230772285440
+  },
+  "anomalia_reserva": {
+    "reserva_aparente_26jul_bytes": 231633457152,
+    "reserva_aparente_forense_bytes": 230772285440,
+    "diferencia_bytes": 861171712,
+    "explicacion": "la diferencia f_bfree - f_bavail refleja los bloques reservados y la configuracion de ext4 (resuid/resgid y clusters reservados del kernel), no contenido ordinario ni .venv",
+    "demostracion_sesion_actual": {
+      "f_bfree_menos_f_bavail_bloques": 56340890,
+      "f_bfree_menos_f_bavail_bytes": 230772285440,
+      "superbloque_reserved_block_count": 56336794,
+      "residual_bloques_no_superbloque": 4096,
+      "interpretacion_residual": "consistente con los clusters reservados por el kernel ext4 para delayed allocation (s_resv_clusters, 4.096 clusters por defecto)",
+      "opciones_montaje": "rw,relatime,resuid=65534,resgid=65534"
+    },
+    "demostrable_retrospectivamente_26jul": false,
+    "motivo_no_retrospectivo": "el superbloque de la sesion del 26-jul ya no esta disponible; la demostracion solo alcanza a la sesion actual",
+    "atribuida_a_contenido_ordinario": false,
+    "oculta": false,
+    "cuota_fija_entre_sesiones": false
+  },
+  "constantes": {
+    "e_min_historico_bytes": 31304323072,
+    "presupuesto_por_candidato_bytes": 1610612736,
+    "presupuesto_agregado_bytes": 8589934592,
+    "reserva_seguridad_bytes": 15652161536,
+    "reserva_operativa_bytes": 6442450944,
+    "suelo_admision_bytes": 30684547072,
+    "holgura_agregado_bytes": 536870912,
+    "margen_suelo_sobre_e_min_bytes": 619776000,
+    "numero_candidatos": 5,
+    "residuo_maximo_sondas_bytes": 65536,
+    "sondas_max_simultaneo_bytes": 67108864,
+    "periodo_muestreo_ns": 5000000,
+    "minimo_intervalos_operacion": 3,
+    "unidades_logicas_primarias": 5670
+  },
+  "objeto_contabilizado": {
+    "unidad_primaria": "st_blocks * 512",
+    "st_size": "se registra pero no se usa como almacenamiento consumido",
+    "hard_links": "un inode fisico se cuenta una vez",
+    "copias_fisicas": "las copias fisicas distintas se cuentan cada una"
+  },
+  "aritmetica_recalculada": {
+    "reserva_seguridad_bytes": 15652161536,
+    "suelo_admision_bytes": 30684547072,
+    "holgura_agregado_bytes": 536870912,
+    "margen_suelo_sobre_e_min_bytes": 619776000,
+    "suma_candidatos_bytes": 8053063680,
+    "total_reservado_bytes": 22094612480,
+    "gib_informativos": {
+      "presupuesto_por_candidato": "1,5",
+      "presupuesto_agregado": "8",
+      "reserva_operativa": "6"
+    },
+    "porcentajes_sobre_e_min_historico": {
+      "por_candidato": "5,15",
+      "agregado": "27,44",
+      "reserva_seguridad": "50,00",
+      "reserva_operativa": "20,58",
+      "total_reservado": "70,58",
+      "margen_no_asignado": "1,98"
+    },
+    "errores_historicos_v0_1": {
+      "reserva_seguridad_bytes": 15652167680,
+      "suelo_bytes": 30684553216,
+      "error_bytes": 6144,
+      "porcentaje_agregado": "27,43",
+      "porcentaje_agregado_correcto": "27,44"
+    }
+  },
+  "admision_sesion": {
+    "formula": "f_bavail * f_frsize >= SUELO_ADMISION",
+    "campo_utilizado": "f_bavail",
+    "f_bavail_bloques": 7624988,
+    "f_frsize": 4096,
+    "bytes_disponibles": 31231950848,
+    "suelo_admision_bytes": 30684547072,
+    "supera_suelo": true,
+    "margen_sobre_suelo_bytes": 547403776,
+    "mismo_filesystem_repo_temporales": true,
+    "st_dev_repositorio": 65024,
+    "st_dev_temporales": 65024,
+    "f_fsid_repositorio": 0,
+    "f_fsid_temporales": 0,
+    "inodos_disponibles": 16609465,
+    "inodos_suficientes": true,
+    "resultado": "ADMITIDA"
+  },
+  "reserva_operativa_desglose": {
+    "presupuesto_bytes": 6442450944,
+    "partidas": [
+      {
+        "partida": "repositorio_sin_git_ni_venv",
+        "cubre": [
+          "repositorio"
+        ],
+        "tipo": "MEDIDO",
+        "bytes_medidos_actualmente": 65671168,
+        "asignacion_maxima_bytes": 134217728
+      },
+      {
+        "partida": "git",
+        "cubre": [
+          "git"
+        ],
+        "tipo": "MEDIDO",
+        "bytes_medidos_actualmente": 4485120,
+        "asignacion_maxima_bytes": 134217728
+      },
+      {
+        "partida": "venv",
+        "cubre": [
+          "venv"
+        ],
+        "tipo": "MEDIDO",
+        "bytes_medidos_actualmente": 839802880,
+        "asignacion_maxima_bytes": 1610612736
+      },
+      {
+        "partida": "corpus_congelado",
+        "cubre": [
+          "corpus_congelado"
+        ],
+        "tipo": "MEDIDO",
+        "bytes_medidos_actualmente": 3751936,
+        "asignacion_maxima_bytes": 3751936,
+        "suma_excluida": true,
+        "nota": "contenido dentro del repositorio; se lista sin sumar dos veces"
+      },
+      {
+        "partida": "base_canonica",
+        "cubre": [
+          "base_canonica"
+        ],
+        "tipo": "PENDIENTE",
+        "bytes_medidos_actualmente": 0,
+        "asignacion_maxima_bytes": 536870912,
+        "nota": "no existe todavía; T0 no se ejecuta en este paquete"
+      },
+      {
+        "partida": "copias_limpias_ciclo",
+        "cubre": [
+          "copias_limpias"
+        ],
+        "tipo": "ASIGNACION_MAXIMA",
+        "bytes_medidos_actualmente": 0,
+        "asignacion_maxima_bytes": 1073741824
+      },
+      {
+        "partida": "artefactos_informes_logs_resultados",
+        "cubre": [
+          "artefactos",
+          "informes",
+          "logs",
+          "resultados"
+        ],
+        "tipo": "MEDIDO",
+        "bytes_medidos_actualmente": 450560,
+        "asignacion_maxima_bytes": 536870912
+      },
+      {
+        "partida": "checkpoints_snapshots",
+        "cubre": [
+          "checkpoints",
+          "snapshots"
+        ],
+        "tipo": "ASIGNACION_MAXIMA",
+        "bytes_medidos_actualmente": 0,
+        "asignacion_maxima_bytes": 536870912
+      },
+      {
+        "partida": "modelos_locales_compartidos",
+        "cubre": [
+          "modelos_locales_compartidos"
+        ],
+        "tipo": "ASIGNACION_MAXIMA",
+        "bytes_medidos_actualmente": 0,
+        "asignacion_maxima_bytes": 1073741824,
+        "nota": "no regenerables desde el canon; no consumen presupuesto individual; se cuentan físicamente una sola vez si son compartidos; se declararán en la ficha TOL-210"
+      },
+      {
+        "partida": "temporales_comunes_no_atribuibles",
+        "cubre": [
+          "temporales_comunes_no_atribuibles"
+        ],
+        "tipo": "ASIGNACION_MAXIMA",
+        "bytes_medidos_actualmente": 0,
+        "asignacion_maxima_bytes": 536870912
+      }
+    ],
+    "suma_asignaciones_maximas_bytes": 6174015488,
+    "bytes_medidos_actualmente_total": 910409728,
+    "margen_restante_bytes": 268435456,
+    "cabe_en_presupuesto": true
+  },
+  "denominador": {
+    "unidades_logicas_primarias": 5670,
+    "definicion": "objeto recuperable portador de contenido del corpus de rendimiento congelado",
+    "desglose": {
+      "items_estructurados": 550,
+      "mensajes": 5000,
+      "documentos": 120
+    },
+    "se_define_sobre": "el corpus de rendimiento congelado, no sobre los objetos que cada candidato decida indexar",
+    "no_modificable_por_candidato": true,
+    "cargas_estructurales_numerador_no_denominador": {
+      "relaciones": 180,
+      "entidades": 24
+    },
+    "metricas_reportadas": [
+      "bytes_por_unidad_logica_primaria",
+      "bytes_por_item_estructurado",
+      "bytes_por_mensaje",
+      "bytes_por_documento",
+      "bytes_por_relacion",
+      "bytes_por_entidad"
+    ],
+    "comparacion_normativa_comun": "bytes_por_unidad_logica_primaria"
+  },
+  "escalas": {
+    "medicion_directa": [
+      {
+        "unidades": 500,
+        "corpus_completo": false,
+        "reparto": {
+          "items_estructurados": 48,
+          "mensajes": 441,
+          "documentos": 11
+        },
+        "reparto_items_por_kind": {
+          "MEMORIA": 44,
+          "DECISION": 4
+        },
+        "rangos_ids": {
+          "MEMORIA": [
+            "MEM-P-00001",
+            "MEM-P-00044"
+          ],
+          "DECISION": [
+            "DEC-P-00001",
+            "DEC-P-00004"
+          ],
+          "mensajes": [
+            "MSG-P-00001",
+            "MSG-P-00441"
+          ],
+          "documentos": [
+            "DOC-P-001",
+            "DOC-P-011"
+          ]
+        }
+      },
+      {
+        "unidades": 5000,
+        "corpus_completo": false,
+        "reparto": {
+          "items_estructurados": 485,
+          "mensajes": 4409,
+          "documentos": 106
+        },
+        "reparto_items_por_kind": {
+          "MEMORIA": 441,
+          "DECISION": 44
+        },
+        "rangos_ids": {
+          "MEMORIA": [
+            "MEM-P-00001",
+            "MEM-P-00441"
+          ],
+          "DECISION": [
+            "DEC-P-00001",
+            "DEC-P-00044"
+          ],
+          "mensajes": [
+            "MSG-P-00001",
+            "MSG-P-04409"
+          ],
+          "documentos": [
+            "DOC-P-001",
+            "DOC-P-106"
+          ]
+        }
+      },
+      {
+        "unidades": 5670,
+        "corpus_completo": true,
+        "reparto": {
+          "items_estructurados": 550,
+          "mensajes": 5000,
+          "documentos": 120
+        },
+        "reparto_items_por_kind": {
+          "MEMORIA": 500,
+          "DECISION": 50
+        },
+        "rangos_ids": {
+          "MEMORIA": [
+            "MEM-P-00001",
+            "MEM-P-00500"
+          ],
+          "DECISION": [
+            "DEC-P-00001",
+            "DEC-P-00050"
+          ],
+          "mensajes": [
+            "MSG-P-00001",
+            "MSG-P-05000"
+          ],
+          "documentos": [
+            "DOC-P-001",
+            "DOC-P-120"
+          ]
+        }
+      }
+    ],
+    "regla_reparto": "resto mayor (cuota de Hare) sobre las colecciones del corpus congelado, empates por orden fijo items/mensajes/documentos; dentro de items, mismo metodo sobre MEMORIA/DECISION; seleccion por orden canonico ascendente de ID",
+    "redondeo": "determinista por resto mayor",
+    "proyeccion": {
+      "unidades": 50000,
+      "etiqueta": "PROYECTADO",
+      "nunca_medido": "salvo que una version futura materialice esa escala"
+    },
+    "contrato_previo_medicion_candidato": {
+      "modelo_crecimiento": "a fijar antes de medir cada candidato",
+      "metrica_ajuste": "residuo relativo maximo frente a minimos cuadrados",
+      "tolerancia_residuo": "a fijar antes de medir cada candidato",
+      "cota_superior_conservadora": "proyeccion * (1 + tolerancia)",
+      "si_no_modelable": "NO_EVALUABLE"
+    }
+  },
+  "matriz_aceptacion": {
+    "condiciones_bloqueantes": [
+      {
+        "id": 1,
+        "condicion": "límite sin bytes exactos"
+      },
+      {
+        "id": 2,
+        "condicion": "sesión sin huella verificable"
+      },
+      {
+        "id": 3,
+        "condicion": "suelo no comprobado"
+      },
+      {
+        "id": 4,
+        "condicion": "derivado, sidecar, temporal o pico omitido"
+      },
+      {
+        "id": 5,
+        "condicion": "denominador ambiguo o modificable por candidato"
+      },
+      {
+        "id": 6,
+        "condicion": "pico publicado sin resolución válida"
+      },
+      {
+        "id": 7,
+        "condicion": "reserva invadida o insuficiente"
+      },
+      {
+        "id": 8,
+        "condicion": "sesgo tecnológico material"
+      },
+      {
+        "id": 9,
+        "condicion": "sparse/COW/compresión sin caracterizar"
+      },
+      {
+        "id": 10,
+        "condicion": "admisión sin captura legible por máquina"
+      },
+      {
+        "id": 11,
+        "condicion": "aritmética incoherente"
+      },
+      {
+        "id": 12,
+        "condicion": "evidencia sin proveniencia"
+      },
+      {
+        "id": 13,
+        "condicion": "anomalía ocultada"
+      },
+      {
+        "id": 14,
+        "condicion": "operación más rápida que la observación sin NO_EVALUABLE"
+      },
+      {
+        "id": 15,
+        "condicion": "co-residencia presentada como canon"
+      },
+      {
+        "id": 16,
+        "condicion": "valores modificados después de observar candidatos"
+      }
+    ],
+    "categorias_no_bloqueantes": [
+      "CORRECCION_NO_BLOQUEANTE",
+      "LIMITACION_CONOCIDA",
+      "TRABAJO_POSTERIOR"
+    ]
+  },
+  "blobs_congelados": {
+    "conformance_corpus_v0_4.json": {
+      "blob_esperado": "c21b702cbe613d70ce76b6a8b2e72baf2d4e8a48",
+      "blob_observado": "c21b702cbe613d70ce76b6a8b2e72baf2d4e8a48",
+      "intacto": true
+    },
+    "cases_v0_4.json": {
+      "blob_esperado": "072753b96f4162fe88ce9c96660296349225c7be",
+      "blob_observado": "072753b96f4162fe88ce9c96660296349225c7be",
+      "intacto": true
+    },
+    "references_v0_4.json": {
+      "blob_esperado": "3fc9a63705144bf543266de129e17a17ab31c568",
+      "blob_observado": "3fc9a63705144bf543266de129e17a17ab31c568",
+      "intacto": true
+    },
+    "pdp_cases_v0_3.json": {
+      "blob_esperado": "2eee45a04dee3d72f52ad00dfd46023d7c5e2199",
+      "blob_observado": "2eee45a04dee3d72f52ad00dfd46023d7c5e2199",
+      "intacto": true
+    },
+    "pdp_harness_rules_v0_2.json": {
+      "blob_esperado": "86e4f4ea6b4af3d445ec0f71c9772b46751a202b",
+      "blob_observado": "86e4f4ea6b4af3d445ec0f71c9772b46751a202b",
+      "intacto": true
+    },
+    "performance_corpus_v0_2.json": {
+      "blob_esperado": "4e9e2746e49b158a43eda7826b47c78c41b36e90",
+      "blob_observado": "4e9e2746e49b158a43eda7826b47c78c41b36e90",
+      "intacto": true,
+      "sha256": "c5a161cbdaa7ee150c08e663fa72663324375aa6654f3216a73e90d6b182666b"
+    },
+    "benchmark_manifest_v0_4.json": {
+      "blob_esperado": "fa9a2f2b5d8d65aed811f039b2b279c5350d2132",
+      "blob_observado": "fa9a2f2b5d8d65aed811f039b2b279c5350d2132",
+      "intacto": true
+    }
+  },
+  "blob_proyeccion_t0_excluida": {
+    "artefacto": "experiments/adr002/benchmark/t0_preexecution_projection_v0_2.json",
+    "blob_observado": "3a241839b7eba84f12a3bbb3c643a17f7b0d0f91",
+    "estado": "NO_NORMATIVO_NO_CONGELABLE"
+  },
+  "limitaciones": [
+    "el superbloque de la sesion del 26-jul no es recuperable; la anomalia solo se demuestra al 100 % para la sesion actual",
+    "el muestreador convive con el GIL de CPython; el intervalo real observado se registra y gobierna la validez, no el solicitado",
+    "la granularidad de observacion de f_bavail es f_frsize (4.096 B)",
+    "el proceso corre como root y podria asignar bloques reservados; la envolvente solo cuenta f_bavail, que es la cifra conservadora",
+    "el entorno es una cuota por sesion compartida; el presupuesto discrimina poco en laboratorio y la restriccion vinculante del producto es TOL-205"
+  ],
+  "estado_puertas": {
+    "SRC-ADR002-01": "SATISFECHA",
+    "ADR002-TOL-207": "NO SATISFECHA — PROPUESTA v0.2 LISTA PARA AUDITORIA INDEPENDIENTE",
+    "ADR002-TOL-208_paso_1": "COMPLETADO",
+    "ADR002-TOL-208_global": "NO SATISFECHA",
+    "ADR002-TOL-209": "NO SATISFECHA",
+    "ADR002-TOL-210": "NO SATISFECHA"
+  }
+}

@@ -1,0 +1,890 @@
+[
+  {
+    "numero": 1,
+    "nombre": "Afirmacion atomica con varias procedencias",
+    "objetivo": "Comprobar si una unidad atomica de conocimiento puede sostener N procedencias distintas y trazables al mismo tiempo.",
+    "incertidumbre": "El modelo heredado guarda la procedencia en un unico TEXT libre (origin) mas un unico FK opcional (source_event_id): capacidad 1. Se ignora si N procedencias se pueden anadir sin rediseñar memory_revisions.",
+    "dataset": "1 afirmacion atomica sujeto/predicado/objeto y 3 procedencias heterogeneas.",
+    "preparacion": "Base 0.1 sintetica + tablas x_ + ambitos.",
+    "operacion": "Insertar la afirmacion y 3 filas en x_provenance (evento, mensaje, manual).",
+    "resultado_esperado": "Las 3 procedencias coexisten y se recuperan juntas; 0.1 intacto.",
+    "criterio_de_fallo": "Que solo pueda registrarse una procedencia, o que haga falta alterar una tabla heredada para registrar mas de una.",
+    "evidencia": {
+      "procedencias_registradas": 3,
+      "detalle": [
+        "evento: derivada de un evento",
+        "mensaje: dicha por el usuario en un mensaje",
+        "manual: confirmada a mano por el usuario"
+      ],
+      "columnas_de_procedencia_en_el_modelo_heredado": 2,
+      "procedencias_simultaneas_que_admite_el_modelo_heredado": 1,
+      "huella_0_1_antes": "f18fbed6e1c4053d60f09db1c7c1f84cac0541413b1f383ec5f764556cf6072d",
+      "huella_0_1_despues": "f18fbed6e1c4053d60f09db1c7c1f84cac0541413b1f383ec5f764556cf6072d",
+      "0_1_intacto": true
+    },
+    "resultado": "PASS",
+    "repeticion_limpia": "reproducido desde base limpia: segunda pasada tambien PASS",
+    "conclusion": "A soporta procedencia multiple por pura adicion: x_provenance es una tabla nueva y memory_revisions no se toca."
+  },
+  {
+    "numero": 2,
+    "nombre": "Apoyo y refutacion multiples",
+    "objetivo": "Comprobar si una afirmacion admite varios apoyos y varias refutaciones a la vez.",
+    "incertidumbre": "El modelo heredado no tiene tabla de relaciones; la unica relacion real es decisions.supersedes_decision_id, que es 1:1 y solo entre decisiones.",
+    "dataset": "1 afirmacion central, 2 afirmaciones que la apoyan y 2 que la refutan.",
+    "preparacion": "Base 0.1 sintetica + tablas x_ + ambitos.",
+    "operacion": "Insertar 5 afirmaciones y 4 aristas tipadas en x_stance.",
+    "resultado_esperado": "Apoyos y refutaciones coexisten, se cuentan y se consultan por tipo.",
+    "criterio_de_fallo": "Que el modelo solo admita una relacion, o ninguna, sin rediseño.",
+    "evidencia": {
+      "apoyos": 2,
+      "refutaciones": 2,
+      "coexisten_ambas_posturas": true,
+      "relaciones_tipadas_en_el_modelo_heredado": 0,
+      "huella_0_1_antes": "e9c0a88155f3a827a2db8dd8638873c743b4f7cd09b494ee7c26d565a4a683f7",
+      "huella_0_1_despues": "e9c0a88155f3a827a2db8dd8638873c743b4f7cd09b494ee7c26d565a4a683f7",
+      "0_1_intacto": true
+    },
+    "resultado": "PASS",
+    "repeticion_limpia": "reproducido desde base limpia: segunda pasada tambien PASS",
+    "conclusion": "A soporta apoyo y refutacion multiples por adicion: x_stance es nueva y no sustituye ninguna relacion heredada."
+  },
+  {
+    "numero": 3,
+    "nombre": "Tiempo valido separado del tiempo de registro",
+    "objetivo": "Comprobar si los dos ejes temporales pueden variar de forma independiente.",
+    "incertidumbre": "Ninguna tabla heredada tiene columna de validez: solo created_at/updated_at, que son tiempo de registro (D-02).",
+    "dataset": "2 afirmaciones con el mismo tiempo valido y distinto tiempo de registro, y 1 con el mismo registro y distinta validez.",
+    "preparacion": "Base 0.1 sintetica + tablas x_ + ambitos.",
+    "operacion": "Insertar afirmaciones variando un eje mientras el otro queda fijo.",
+    "resultado_esperado": "Los dos ejes son ortogonales y se almacenan por separado.",
+    "criterio_de_fallo": "Que un eje quede determinado por el otro o no pueda representarse.",
+    "evidencia": {
+      "misma_validez_distinto_registro": true,
+      "mismo_registro_distinta_validez": true,
+      "columnas_de_validez_en_el_modelo_heredado": 0,
+      "huella_0_1_antes": "e9c0a88155f3a827a2db8dd8638873c743b4f7cd09b494ee7c26d565a4a683f7",
+      "huella_0_1_despues": "e9c0a88155f3a827a2db8dd8638873c743b4f7cd09b494ee7c26d565a4a683f7",
+      "0_1_intacto": true
+    },
+    "resultado": "PASS",
+    "repeticion_limpia": "reproducido desde base limpia: segunda pasada tambien PASS",
+    "conclusion": "A soporta bitemporalidad por adicion: los dos ejes viven en x_assertion sin tocar created_at/updated_at heredados."
+  },
+  {
+    "numero": 4,
+    "nombre": "Correccion retroactiva sin destruir el estado anterior",
+    "objetivo": "Corregir el pasado dejando intacto lo que se creia antes.",
+    "incertidumbre": "En 0.1 la correccion crea una revision nueva y marca la anterior is_current = 0, pero no existe eje de registro para preguntar que se creia en un instante dado.",
+    "dataset": "1 afirmacion registrada en T1 y corregida retroactivamente en T2.",
+    "preparacion": "Base 0.1 sintetica + tablas x_ + ambitos.",
+    "operacion": "Cerrar el registro anterior (recorded_until) e insertar la version corregida.",
+    "resultado_esperado": "La version anterior sigue siendo recuperable con su valor original.",
+    "criterio_de_fallo": "Que corregir destruya, sobrescriba o haga irrecuperable el valor previo.",
+    "evidencia": {
+      "valor_original_antes_de_corregir": "azul",
+      "valor_original_tras_corregir": "azul",
+      "estado_anterior_preservado": true,
+      "registro_anterior_cerrado_en": "2026-03-01T00:00:00",
+      "valor_vigente_ahora": [
+        "verde"
+      ],
+      "correccion_enlazada_al_original": true,
+      "huella_0_1_antes": "e9c0a88155f3a827a2db8dd8638873c743b4f7cd09b494ee7c26d565a4a683f7",
+      "huella_0_1_despues": "e9c0a88155f3a827a2db8dd8638873c743b4f7cd09b494ee7c26d565a4a683f7",
+      "0_1_intacto": true
+    },
+    "resultado": "PASS",
+    "repeticion_limpia": "reproducido desde base limpia: segunda pasada tambien PASS",
+    "conclusion": "A soporta correccion retroactiva no destructiva por adicion."
+  },
+  {
+    "numero": 5,
+    "nombre": "Consulta valida en T",
+    "objetivo": "Responder que era cierto en el mundo en un instante T.",
+    "incertidumbre": "Sin eje de validez, 0.1 no puede distinguir «cierto en T» de «registrado en T».",
+    "dataset": "Tarifa con dos periodos de validez y una correccion posterior.",
+    "preparacion": "Base 0.1 sintetica + tablas x_ + ambitos + escenario bitemporal.",
+    "operacion": "Consultar valid_at en dos instantes distintos del eje de tiempo valido.",
+    "resultado_esperado": "Cada instante devuelve exactamente la afirmacion valida entonces.",
+    "criterio_de_fallo": "Que la consulta devuelva las dos, ninguna, o dependa del eje de registro.",
+    "evidencia": {
+      "valida_en_2021": [
+        1
+      ],
+      "esperado_2021": [
+        1
+      ],
+      "valida_en_2023": [
+        3
+      ],
+      "esperado_2023": [
+        3
+      ],
+      "huella_0_1_antes": "f18fbed6e1c4053d60f09db1c7c1f84cac0541413b1f383ec5f764556cf6072d",
+      "huella_0_1_despues": "f18fbed6e1c4053d60f09db1c7c1f84cac0541413b1f383ec5f764556cf6072d",
+      "0_1_intacto": true
+    },
+    "resultado": "PASS",
+    "repeticion_limpia": "reproducido desde base limpia: segunda pasada tambien PASS",
+    "conclusion": "A soporta la consulta «valida en T» por adicion."
+  },
+  {
+    "numero": 6,
+    "nombre": "Consulta conocida en T",
+    "objetivo": "Responder que creia el sistema en un instante T, aunque hoy sepa otra cosa.",
+    "incertidumbre": "Sin eje de registro cerrado (recorded_until), no se puede reconstruir la creencia pasada: 0.1 solo conserva is_current, que es un booleano del presente.",
+    "dataset": "El mismo escenario bitemporal del spike 5.",
+    "preparacion": "Base 0.1 sintetica + tablas x_ + ambitos + escenario bitemporal.",
+    "operacion": "Consultar known_at antes y despues de la correccion.",
+    "resultado_esperado": "Antes de T2 el sistema creia 15 euros; despues, 18 euros.",
+    "criterio_de_fallo": "Que ambas consultas devuelvan lo mismo o pierdan la creencia anterior.",
+    "evidencia": {
+      "conocidas_antes_de_la_correccion": [
+        1,
+        2
+      ],
+      "conocidas_despues_de_la_correccion": [
+        1,
+        3
+      ],
+      "creencia_anterior_recuperable": true,
+      "creencia_anterior_ya_no_vigente": true,
+      "creencia_nueva_solo_despues": true,
+      "valor_creido_antes": "15 euros",
+      "valor_creido_despues": "18 euros",
+      "huella_0_1_antes": "e9c0a88155f3a827a2db8dd8638873c743b4f7cd09b494ee7c26d565a4a683f7",
+      "huella_0_1_despues": "e9c0a88155f3a827a2db8dd8638873c743b4f7cd09b494ee7c26d565a4a683f7",
+      "0_1_intacto": true
+    },
+    "resultado": "PASS",
+    "repeticion_limpia": "reproducido desde base limpia: segunda pasada tambien PASS",
+    "conclusion": "A soporta la consulta «conocida en T» por adicion."
+  },
+  {
+    "numero": 7,
+    "nombre": "Siete dimensiones canonicas ortogonales de estado sin enum monolitico",
+    "objetivo": "Comprobar si el estado puede descomponerse en las SIETE DIMENSIONES CANONICAS (confirmacion, validez, disponibilidad, sensibilidad, temporalidad, ambito y autoridad) de forma independiente, y si el enum monolitico heredado pierde informacion al proyectarlas.",
+    "incertidumbre": "memories.status es un unico VARCHAR(16) sin CHECK, con un dominio de 3 valores impuesto por la aplicacion, que colapsa varias dimensiones a la vez (D-03). Se ignora si las siete canonicas son representables por adicion y si ambito y autoridad quedan realmente fuera del alcance del enum.",
+    "dataset": "15 afirmaciones coexistentes: una de partida con las 7 dimensiones canonicas fijadas, mas 14 variantes que difieren de ella en una sola dimension. Ademas, 7 afirmaciones independientes para el barrido de mutacion, una por dimension.",
+    "preparacion": "Base 0.1 sintetica creada con la cadena canonica de Alembic + tablas x_ + ambitos. Se capturan huella, esquema heredado y recuentos heredados de partida.",
+    "operacion": "1) Fijar las 7 dimensiones canonicas y releerlas desde SQLite. 2) Barrido: por cada dimension, mutarla en una afirmacion propia y comprobar que las otras seis quedan intactas. 3) Persistir 15 combinaciones distintas simultaneas y proyectarlas al enum heredado. 4) Medir que ambito y autoridad no se derivan de confirmacion, validez ni disponibilidad y que el enum es invariante ante ellas.",
+    "resultado_esperado": "Las 7 dimensiones canonicas se representan de forma independiente; mutar una deja intactas las otras seis; coexisten combinaciones que el enum monolitico no puede expresar; ambito y autoridad no se colapsan con confirmacion, validez ni disponibilidad; y las tablas heredadas quedan intactas.",
+    "criterio_de_fallo": "Que cambiar una dimension arrastre otra, que el enum heredado baste para reconstruir las siete, que ambito o autoridad resulten derivables de las tres dimensiones que el enum roza, o que haga falta tocar memories.",
+    "evidencia": {
+      "dimensiones_canonicas": [
+        "confirmación",
+        "validez",
+        "disponibilidad",
+        "sensibilidad",
+        "temporalidad",
+        "ámbito",
+        "autoridad"
+      ],
+      "son_exactamente_siete": true,
+      "dimensiones_persistidas": 7,
+      "estado_releido_desde_sqlite": {
+        "autoridad": "usuario",
+        "confirmación": "confirmada",
+        "disponibilidad": "activa",
+        "sensibilidad": "normal",
+        "temporalidad": "puntual",
+        "validez": "vigente",
+        "ámbito": "global"
+      },
+      "siete_dimensiones_representadas_de_forma_independiente": true,
+      "barrido_una_dimension_a_la_vez": {
+        "confirmación": {
+          "valor_anterior": "confirmada",
+          "valor_nuevo": "provisional",
+          "cambio_aplicado": true,
+          "otras_dimensiones_comprobadas": 6,
+          "las_otras_seis_intactas": true
+        },
+        "validez": {
+          "valor_anterior": "vigente",
+          "valor_nuevo": "caducada",
+          "cambio_aplicado": true,
+          "otras_dimensiones_comprobadas": 6,
+          "las_otras_seis_intactas": true
+        },
+        "disponibilidad": {
+          "valor_anterior": "activa",
+          "valor_nuevo": "archivada",
+          "cambio_aplicado": true,
+          "otras_dimensiones_comprobadas": 6,
+          "las_otras_seis_intactas": true
+        },
+        "sensibilidad": {
+          "valor_anterior": "normal",
+          "valor_nuevo": "restringida",
+          "cambio_aplicado": true,
+          "otras_dimensiones_comprobadas": 6,
+          "las_otras_seis_intactas": true
+        },
+        "temporalidad": {
+          "valor_anterior": "puntual",
+          "valor_nuevo": "duradera",
+          "cambio_aplicado": true,
+          "otras_dimensiones_comprobadas": 6,
+          "las_otras_seis_intactas": true
+        },
+        "ámbito": {
+          "valor_anterior": "global",
+          "valor_nuevo": "proyecto",
+          "cambio_aplicado": true,
+          "otras_dimensiones_comprobadas": 6,
+          "las_otras_seis_intactas": true
+        },
+        "autoridad": {
+          "valor_anterior": "usuario",
+          "valor_nuevo": "sistema",
+          "cambio_aplicado": true,
+          "otras_dimensiones_comprobadas": 6,
+          "las_otras_seis_intactas": true
+        }
+      },
+      "mutar_una_deja_intactas_las_otras_seis": true,
+      "combinaciones_coexistentes_persistidas": 15,
+      "combinaciones_distintas_releidas": 15,
+      "valores_distintos_del_enum_heredado": [
+        "archived",
+        "current",
+        "deleted"
+      ],
+      "mayor_grupo_de_combinaciones_que_colapsan_al_mismo_valor": 10,
+      "colisiones_por_valor_heredado": {
+        "current": 10,
+        "deleted": 3,
+        "archived": 2
+      },
+      "el_enum_monolitico_no_puede_expresarlas": true,
+      "colapso_incluso_en_una_dimension_que_el_enum_roza": true,
+      "dimensiones_que_el_enum_heredado_alcanza": [
+        "confirmación",
+        "validez",
+        "disponibilidad"
+      ],
+      "ambitos_distintos_con_confirmacion_validez_disponibilidad_iguales": [
+        "conversación",
+        "global",
+        "proyecto"
+      ],
+      "autoridades_distintas_con_confirmacion_validez_disponibilidad_iguales": [
+        "derivada",
+        "sistema",
+        "usuario"
+      ],
+      "valores_heredados_de_ese_grupo": [
+        "current"
+      ],
+      "enum_invariante_ante_ambito": true,
+      "enum_invariante_ante_autoridad": true,
+      "ambito_y_autoridad_no_se_colapsan": true,
+      "ddl_memories_heredado": "CREATE TABLE memories (\n\tid INTEGER NOT NULL, \n\tstatus VARCHAR(16) NOT NULL, \n\tcreated_at DATETIME NOT NULL, \n\tupdated_at DATETIME NOT NULL, subject_key TEXT, project_id INTEGER REFERENCES projects (id), \n\tPRIMARY KEY (id)\n)",
+      "dominio_del_enum_heredado": [
+        "current",
+        "archived",
+        "deleted"
+      ],
+      "valores_distintos_en_datos_heredados": 3,
+      "esquema_heredado_sin_cambios": true,
+      "recuentos_heredados_sin_cambios": true,
+      "tablas_heredadas_no_alteradas": true,
+      "huella_0_1_antes": "f18fbed6e1c4053d60f09db1c7c1f84cac0541413b1f383ec5f764556cf6072d",
+      "huella_0_1_despues": "f18fbed6e1c4053d60f09db1c7c1f84cac0541413b1f383ec5f764556cf6072d",
+      "0_1_intacto": true,
+      "modelo_experimental": true,
+      "ddl_productivo_fijado": false,
+      "nombres_fisicos_productivos_fijados": false,
+      "nota": "Las SIETE DIMENSIONES son las canonicas fijadas para esta correccion. El vocabulario de valores de cada dimension y las tablas x_ siguen siendo EXPERIMENTALES: no fijan DDL definitivo ni nombres fisicos productivos."
+    },
+    "resultado": "PASS",
+    "repeticion_limpia": "reproducido desde base limpia: segunda pasada tambien PASS",
+    "conclusion": "A soporta las siete dimensiones canonicas por pura adicion: cada una se mueve sin arrastrar a las otras seis, coexisten combinaciones que el enum monolitico heredado no puede expresar, y ambito y autoridad quedan fuera de su alcance en lugar de colapsarse con confirmacion, validez o disponibilidad. El enum heredado se conserva intacto y queda como proyeccion lossy, no como fuente."
+  },
+  {
+    "numero": 8,
+    "nombre": "Ambito multi-proyecto cerrado",
+    "objetivo": "Comprobar aislamiento estricto entre proyectos concurrentes con un ambito global.",
+    "incertidumbre": "El modelo heredado impone proyecto unico activo mediante el indice parcial uq_projects_single_active (D-04).",
+    "dataset": "3 proyectos sinteticos, 1 ambito global y afirmaciones en cada ambito.",
+    "preparacion": "Base 0.1 sintetica + tablas x_ + ambitos con visibilidad cerrada.",
+    "operacion": "Consultar desde el ambito de cada proyecto y comprobar que no hay fuga.",
+    "resultado_esperado": "Cada proyecto ve lo suyo y lo global, nunca lo de otro proyecto.",
+    "criterio_de_fallo": "Cualquier fuga entre proyectos, o necesidad de tocar la tabla projects.",
+    "evidencia": {
+      "visibilidad_por_proyecto": {
+        "proyecto:1": [
+          1,
+          4
+        ],
+        "proyecto:2": [
+          2,
+          4
+        ],
+        "proyecto:3": [
+          3,
+          4
+        ]
+      },
+      "afirmacion_global": 4,
+      "aislamiento_sin_fugas": true,
+      "el_modelo_heredado_permite_dos_proyectos_activos": false,
+      "restriccion_heredada": "uq_projects_single_active (indice parcial unico)",
+      "huella_0_1_antes": "e9c0a88155f3a827a2db8dd8638873c743b4f7cd09b494ee7c26d565a4a683f7",
+      "huella_0_1_despues": "e9c0a88155f3a827a2db8dd8638873c743b4f7cd09b494ee7c26d565a4a683f7",
+      "0_1_intacto": true
+    },
+    "resultado": "PASS",
+    "repeticion_limpia": "reproducido desde base limpia: segunda pasada tambien PASS",
+    "conclusion": "A soporta multi-proyecto cerrado por adicion: el ambito vive en x_scope y la tabla projects heredada, con su restriccion de proyecto unico activo, no se toca."
+  },
+  {
+    "numero": 10,
+    "nombre": "Borrado duro con FTS5 y todos los derivados",
+    "objetivo": "Determinar si el contenido puede eliminarse de verdad de todas las capas: canonico, revisiones, procedencias, relaciones, eventos, FTS5, sombras, caches y fichero.",
+    "incertidumbre": "En 0.1 la unica propagacion transaccional a un derivado es knowledge_fts (D-09). Se ignora si FTS5 conserva los terminos borrados en sus segmentos y si VACUUM basta.",
+    "dataset": "Base 0.1 sintetica con un canario en mensaje, memoria, evento, afirmacion y procedencia, mas derivados poblados.",
+    "preparacion": "Sembrar el canario en todas las capas y comprobar que es localizable (control positivo).",
+    "operacion": "Borrado por etapas: logico, canonico, derivados, purga fisica. Escaneo binario de db/wal/shm/journal en cada etapa.",
+    "resultado_esperado": "Tras la purga completa, ningun fichero contiene el canario.",
+    "criterio_de_fallo": "Que el canario siga en algun fichero despues de aplicar el procedimiento completo y documentado de SQLite.",
+    "evidencia": {
+      "control_positivo_canario_localizable_antes": true,
+      "control_positivo_detalle": {
+        "db": {
+          "frase": true,
+          "token_fts": true,
+          "existe": true
+        },
+        "wal": {
+          "existe": false
+        },
+        "shm": {
+          "existe": false
+        },
+        "journal": {
+          "existe": false
+        }
+      },
+      "pasada_sin_rebuild_de_fts5": {
+        "etapa_1_filas_canonicas_con_el_token": 2,
+        "etapa_1_coincidencias_en_derivados": 2,
+        "etapa_1_logico_canario_sigue_en_disco": true,
+        "etapa_1_detalle": {
+          "db": {
+            "frase": true,
+            "token_fts": true,
+            "existe": true
+          },
+          "wal": {
+            "existe": false
+          },
+          "shm": {
+            "existe": false
+          },
+          "journal": {
+            "existe": false
+          }
+        },
+        "etapa_2_sin_filas_canonicas": true,
+        "etapa_2_coincidencias_en_derivados": 2,
+        "etapa_2_coincidencias_en_fts_heredado": 0,
+        "etapa_2_canario_sigue_en_disco": true,
+        "etapa_2_detalle": {
+          "db": {
+            "frase": true,
+            "token_fts": true,
+            "existe": true
+          },
+          "wal": {
+            "existe": false
+          },
+          "shm": {
+            "existe": false
+          },
+          "journal": {
+            "existe": false
+          }
+        },
+        "etapa_3_fts_sin_coincidencias": true,
+        "etapa_3_canario_sigue_en_disco": false,
+        "etapa_3_detalle": {
+          "db": {
+            "frase": false,
+            "token_fts": false,
+            "existe": true
+          },
+          "wal": {
+            "existe": false
+          },
+          "shm": {
+            "existe": false
+          },
+          "journal": {
+            "existe": false
+          }
+        },
+        "etapa_4_canario_tras_vacuum": false,
+        "etapa_4_detalle_por_fichero": {
+          "db": {
+            "frase": false,
+            "token_fts": false,
+            "existe": true
+          },
+          "wal": {
+            "existe": false
+          },
+          "shm": {
+            "existe": false
+          },
+          "journal": {
+            "existe": false
+          }
+        }
+      },
+      "pasada_con_rebuild_de_fts5": {
+        "etapa_1_filas_canonicas_con_el_token": 2,
+        "etapa_1_coincidencias_en_derivados": 2,
+        "etapa_1_logico_canario_sigue_en_disco": true,
+        "etapa_1_detalle": {
+          "db": {
+            "frase": true,
+            "token_fts": true,
+            "existe": true
+          },
+          "wal": {
+            "existe": false
+          },
+          "shm": {
+            "existe": false
+          },
+          "journal": {
+            "existe": false
+          }
+        },
+        "etapa_2_sin_filas_canonicas": true,
+        "etapa_2_coincidencias_en_derivados": 2,
+        "etapa_2_coincidencias_en_fts_heredado": 0,
+        "etapa_2_canario_sigue_en_disco": true,
+        "etapa_2_detalle": {
+          "db": {
+            "frase": true,
+            "token_fts": true,
+            "existe": true
+          },
+          "wal": {
+            "existe": false
+          },
+          "shm": {
+            "existe": false
+          },
+          "journal": {
+            "existe": false
+          }
+        },
+        "etapa_3_fts_sin_coincidencias": true,
+        "etapa_3_canario_sigue_en_disco": false,
+        "etapa_3_detalle": {
+          "db": {
+            "frase": false,
+            "token_fts": false,
+            "existe": true
+          },
+          "wal": {
+            "existe": false
+          },
+          "shm": {
+            "existe": false
+          },
+          "journal": {
+            "existe": false
+          }
+        },
+        "etapa_4_canario_tras_vacuum": false,
+        "etapa_4_detalle_por_fichero": {
+          "db": {
+            "frase": false,
+            "token_fts": false,
+            "existe": true
+          },
+          "wal": {
+            "existe": false
+          },
+          "shm": {
+            "existe": false
+          },
+          "journal": {
+            "existe": false
+          }
+        }
+      },
+      "fts5_retiene_terminos_sin_rebuild": false,
+      "procedimiento_completo_deja_el_fichero_limpio": true,
+      "el_borrado_logico_no_purga": true,
+      "tras_borrar_lo_canonico_el_dato_sobrevive_en_derivados": true,
+      "secuencia_verificada": [
+        "DELETE de las filas canonicas (heredadas y experimentales)",
+        "DROP de los derivados propios (arrastra sus tablas sombra FTS5)",
+        "rebuild de los FTS5 heredados (defensivo, ver nota)",
+        "checkpoint del WAL cuando aplique",
+        "VACUUM"
+      ],
+      "nota_secure_delete": "En este entorno secure_delete vale 1 (valor por defecto de compilacion de esta biblioteca SQLite 3.45.1). Con ese ajuste, el 'rebuild' de FTS5 no fue NECESARIO: ambas pasadas terminaron limpias. secure_delete es un valor por defecto de compilacion y puede diferir en el SQLite que embarque el ejecutable de Windows, por lo que la secuencia se documenta con el rebuild incluido como paso defensivo."
+    },
+    "resultado": "PASS",
+    "repeticion_limpia": "ejecutado sobre bases limpias independientes dentro del propio spike (dos pasadas en el 10; escenarios WAL y secure_delete=0 en el 19)",
+    "conclusion": "El borrado duro es alcanzable con medios propios y documentados de SQLite: no hay limitacion de motor y no se abre C. Dos hallazgos operativos: (a) el borrado logico que hoy hace 0.1 no purga nada del fichero; (b) tras eliminar el contenido canonico, el dato SIGUE VIVO en los derivados hasta que estos se destruyen explicitamente, que es exactamente el riesgo D-09."
+  },
+  {
+    "numero": 15,
+    "nombre": "Migracion de una base Sirius 0.1 representativa",
+    "objetivo": "Demostrar que una base 0.1 real puede expandirse al modelo nuevo conservando la semantica, sin perdidas ni duplicaciones y sin dos autoridades simultaneas.",
+    "incertidumbre": "Se ignora si el backfill puede hacerse sin escribir en las tablas heredadas y sin perder los casos archivado, sustituido, redactado y borrado.",
+    "dataset": "Base sintetica con el esquema real de 0.1: mensajes (incluido uno redactado), memorias con revisiones en los tres estados del enum, decisiones con sustitucion, 3 proyectos con revisiones, eventos, uso de LLM e indices FTS5.",
+    "preparacion": "Linea base: huella de 0.1, recuentos por tabla y head de Alembic.",
+    "operacion": "Expansion aditiva + backfill de solo lectura + reconstruccion de derivados.",
+    "resultado_esperado": "Cada memoria vigente produce exactamente una afirmacion; 0.1 queda byte a byte igual; la autoridad sigue siendo unica.",
+    "criterio_de_fallo": "Perdida, duplicacion, escritura en tablas heredadas, cambio de head, o dos autoridades a la vez.",
+    "evidencia": {
+      "head_alembic_antes": "61be4bb269bf",
+      "head_alembic_despues": "61be4bb269bf",
+      "head_sin_cambios": true,
+      "huella_0_1_antes": "f18fbed6e1c4053d60f09db1c7c1f84cac0541413b1f383ec5f764556cf6072d",
+      "huella_0_1_despues": "f18fbed6e1c4053d60f09db1c7c1f84cac0541413b1f383ec5f764556cf6072d",
+      "0_1_byte_a_byte_igual": true,
+      "recuentos_heredados_iguales": true,
+      "recuentos": {
+        "alembic_version": 1,
+        "conversations": 1,
+        "messages": 8,
+        "projects": 3,
+        "project_revisions": 3,
+        "memories": 5,
+        "memory_revisions": 9,
+        "events": 3,
+        "decisions": 3,
+        "decision_revisions": 3,
+        "identities": 1,
+        "identity_versions": 1,
+        "llm_usage": 1
+      },
+      "memorias_vigentes_en_0_1": 5,
+      "afirmaciones_creadas": 5,
+      "memorias_distintas_cubiertas": 5,
+      "sin_perdidas": true,
+      "sin_duplicaciones": true,
+      "afirmaciones_huerfanas": 0,
+      "afirmaciones_sin_procedencia": 0,
+      "contenido_conservado_en_todas": true,
+      "autoridad_declarada": [
+        "legacy"
+      ],
+      "autoridad_unica": true,
+      "derivados_reconstruidos": 5,
+      "resumen_backfill": {
+        "afirmaciones": 5,
+        "procedencias": 5,
+        "estados": 15
+      }
+    },
+    "resultado": "PASS",
+    "repeticion_limpia": "reproducido desde base limpia: segunda pasada tambien PASS",
+    "conclusion": "La migracion es viable de forma puramente aditiva: 0.1 queda intacto byte a byte, el head de Alembic no cambia, no hay perdidas ni duplicaciones y la autoridad sigue siendo unica. No se decide aqui la estrategia final (ADR-004)."
+  },
+  {
+    "numero": 16,
+    "nombre": "Rollback",
+    "objetivo": "Demostrar que la expansion puede deshacerse por completo y sin residuo.",
+    "incertidumbre": "Se ignora si al revertir queda algun objeto huerfano (indices automaticos, sombras FTS5) que impida volver exactamente al estado anterior.",
+    "dataset": "La misma base migrada del spike 15.",
+    "preparacion": "Capturar el esquema completo y la huella antes de expandir.",
+    "operacion": "Expandir, hacer backfill y despues eliminar todo lo experimental.",
+    "resultado_esperado": "El esquema completo y la huella vuelven a ser identicos a los de partida y la base sigue siendo utilizable por el codigo real de Sirius 0.1.",
+    "criterio_de_fallo": "Cualquier residuo en sqlite_master o cualquier cambio en 0.1.",
+    "evidencia": {
+      "objetos_en_sqlite_master_tras_expandir": 60,
+      "objetos_en_sqlite_master_tras_rollback": 45,
+      "objetos_en_sqlite_master_al_inicio": 45,
+      "esquema_completo_identico_al_inicial": true,
+      "residuo_experimental": [],
+      "huella_0_1_antes": "f18fbed6e1c4053d60f09db1c7c1f84cac0541413b1f383ec5f764556cf6072d",
+      "huella_0_1_tras_rollback": "f18fbed6e1c4053d60f09db1c7c1f84cac0541413b1f383ec5f764556cf6072d",
+      "0_1_byte_a_byte_igual": true,
+      "head_alembic_sin_cambios": true,
+      "base_sigue_siendo_utilizable_por_sirius_0_1": true,
+      "detalle_de_uso_real": "schema_version=61be4bb269bf; conversacion=1; mensajes=8"
+    },
+    "resultado": "PASS",
+    "repeticion_limpia": "reproducido desde base limpia: segunda pasada tambien PASS",
+    "conclusion": "El rollback es total y sin residuo: sqlite_master vuelve a ser identico, 0.1 queda byte a byte igual y el codigo real de Sirius 0.1 sigue leyendo la base sin cambios."
+  },
+  {
+    "numero": 17,
+    "nombre": "Fallo inyectado durante una escritura critica",
+    "objetivo": "Comprobar que un fallo a mitad de una escritura critica no deja estado parcial.",
+    "incertidumbre": "La escritura critica toca varias tablas canonicas y ademas derivados; se ignora si el conjunto revierte de forma atomica.",
+    "dataset": "Una escritura de 4 partes: afirmacion, procedencia, estado y derivado.",
+    "preparacion": "Base 0.1 sintetica + tablas x_ + ambitos + una escritura previa correcta.",
+    "operacion": "Repetir la escritura inyectando una excepcion antes del commit y revertir.",
+    "resultado_esperado": "Cero filas nuevas en todas las tablas implicadas, derivados incluidos.",
+    "criterio_de_fallo": "Cualquier fila parcial superviviente tras el fallo.",
+    "evidencia": {
+      "excepcion_inyectada_y_capturada": true,
+      "conteos_antes": {
+        "x_assertion": 1,
+        "x_provenance": 0,
+        "x_state": 0,
+        "x_stance": 0,
+        "x_assertion_fts": 1,
+        "x_current_cache": 1
+      },
+      "conteos_despues": {
+        "x_assertion": 1,
+        "x_provenance": 0,
+        "x_state": 0,
+        "x_stance": 0,
+        "x_assertion_fts": 1,
+        "x_current_cache": 1
+      },
+      "sin_estado_parcial": true,
+      "huella_0_1_antes": "f18fbed6e1c4053d60f09db1c7c1f84cac0541413b1f383ec5f764556cf6072d",
+      "huella_0_1_despues": "f18fbed6e1c4053d60f09db1c7c1f84cac0541413b1f383ec5f764556cf6072d",
+      "0_1_intacto": true
+    },
+    "resultado": "PASS",
+    "repeticion_limpia": "reproducido desde base limpia: segunda pasada tambien PASS",
+    "conclusion": "La escritura critica es atomica sobre canonico y derivado a la vez; A no se ve comprometida por este vector."
+  },
+  {
+    "numero": 18,
+    "nombre": "Ningun derivado actua como fuente canonica",
+    "objetivo": "Comprobar que los derivados se pueden destruir y reconstruir sin perdida y que ninguna consulta canonica depende de ellos.",
+    "incertidumbre": "En 0.1 el unico derivado con propagacion transaccional es knowledge_fts (D-09); se ignora si un derivado nuevo podria convertirse de facto en canon.",
+    "dataset": "6 afirmaciones con sus derivados poblados.",
+    "preparacion": "Base 0.1 sintetica + tablas x_ + ambitos + derivados reconstruidos.",
+    "operacion": "Hash de derivados, DROP total, consulta canonica sin derivados, reconstruccion.",
+    "resultado_esperado": "Consultas canonicas intactas sin derivados y reconstruccion identica.",
+    "criterio_de_fallo": "Que una consulta canonica falle sin derivados o que el hash no coincida.",
+    "evidencia": {
+      "derivados_eliminados_por_completo": true,
+      "consulta_canonica_con_derivados": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "consulta_canonica_sin_derivados": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "la_consulta_canonica_no_depende_del_derivado": true,
+      "hash_derivado_antes": "ecc4061b95c774e0e2ec2627d4a14b748ff59646808187376c90e205cd109d3f",
+      "hash_derivado_reconstruido": "ecc4061b95c774e0e2ec2627d4a14b748ff59646808187376c90e205cd109d3f",
+      "reconstruccion_identica": true,
+      "huella_0_1_antes": "f18fbed6e1c4053d60f09db1c7c1f84cac0541413b1f383ec5f764556cf6072d",
+      "huella_0_1_despues": "f18fbed6e1c4053d60f09db1c7c1f84cac0541413b1f383ec5f764556cf6072d",
+      "0_1_intacto": true
+    },
+    "resultado": "PASS",
+    "repeticion_limpia": "reproducido desde base limpia: segunda pasada tambien PASS",
+    "conclusion": "Ningun derivado es canon: se destruyen y se reconstruyen identicos desde las tablas canonicas, y las consultas canonicas funcionan sin ellos."
+  },
+  {
+    "numero": 19,
+    "nombre": "No reconstruibilidad",
+    "objetivo": "Comprobar que, tras el borrado duro, el contenido no puede reconstruirse desde ningun resto: derivados, sombras, eventos, paginas libres, WAL, SHM o copias.",
+    "incertidumbre": "Una consulta SQL vacia no prueba nada. Se ignora si quedan fragmentos recuperables en paginas libres, en el WAL o en una copia hecha con VACUUM INTO.",
+    "dataset": "El mismo canario del spike 10, en modo WAL para ejercitar -wal y -shm, y con secure_delete desactivado como contraste.",
+    "preparacion": "Sembrar el canario, verificar control positivo en cada fichero.",
+    "operacion": "Borrado duro completo en WAL con checkpoint, VACUUM y VACUUM INTO; intento explicito de reconstruccion desde cada vector; contraste con secure_delete=0 sin VACUUM.",
+    "resultado_esperado": "Ningun vector reconstruye el contenido y ningun fichero conserva fragmentos tras el procedimiento completo.",
+    "criterio_de_fallo": "Cualquier fragmento recuperable tras el procedimiento completo.",
+    "evidencia": {
+      "modelo_de_amenaza": "lectura de .db/-wal/-shm/-journal y de copias generadas por la aplicacion; excluye recuperacion forense del medio fisico",
+      "control_positivo_wal": {
+        "db": {
+          "frase": true,
+          "token_fts": true,
+          "existe": true
+        },
+        "wal": {
+          "existe": false
+        },
+        "shm": {
+          "existe": false
+        },
+        "journal": {
+          "existe": false
+        }
+      },
+      "traza_borrado_wal": {
+        "etapa_1_filas_canonicas_con_el_token": 2,
+        "etapa_1_coincidencias_en_derivados": 2,
+        "etapa_1_logico_canario_sigue_en_disco": true,
+        "etapa_1_detalle": {
+          "db": {
+            "frase": true,
+            "token_fts": true,
+            "existe": true
+          },
+          "wal": {
+            "frase": false,
+            "token_fts": false,
+            "existe": true
+          },
+          "shm": {
+            "frase": false,
+            "token_fts": false,
+            "existe": true
+          },
+          "journal": {
+            "existe": false
+          }
+        },
+        "etapa_2_sin_filas_canonicas": true,
+        "etapa_2_coincidencias_en_derivados": 2,
+        "etapa_2_coincidencias_en_fts_heredado": 0,
+        "etapa_2_canario_sigue_en_disco": true,
+        "etapa_2_detalle": {
+          "db": {
+            "frase": true,
+            "token_fts": true,
+            "existe": true
+          },
+          "wal": {
+            "frase": false,
+            "token_fts": false,
+            "existe": true
+          },
+          "shm": {
+            "frase": false,
+            "token_fts": false,
+            "existe": true
+          },
+          "journal": {
+            "existe": false
+          }
+        },
+        "etapa_3_fts_sin_coincidencias": true,
+        "etapa_3_canario_sigue_en_disco": true,
+        "etapa_3_detalle": {
+          "db": {
+            "frase": true,
+            "token_fts": true,
+            "existe": true
+          },
+          "wal": {
+            "frase": false,
+            "token_fts": false,
+            "existe": true
+          },
+          "shm": {
+            "frase": false,
+            "token_fts": false,
+            "existe": true
+          },
+          "journal": {
+            "existe": false
+          }
+        },
+        "etapa_4_wal_antes_del_checkpoint": {
+          "frase": false,
+          "token_fts": false,
+          "existe": true
+        },
+        "etapa_4_canario_tras_checkpoint": false,
+        "etapa_4_detalle_tras_checkpoint": {
+          "db": {
+            "frase": false,
+            "token_fts": false,
+            "existe": true
+          },
+          "wal": {
+            "frase": false,
+            "token_fts": false,
+            "existe": true
+          },
+          "shm": {
+            "frase": false,
+            "token_fts": false,
+            "existe": true
+          },
+          "journal": {
+            "existe": false
+          }
+        },
+        "etapa_4_canario_tras_vacuum": false,
+        "etapa_4_detalle_por_fichero": {
+          "db": {
+            "frase": false,
+            "token_fts": false,
+            "existe": true
+          },
+          "wal": {
+            "existe": false
+          },
+          "shm": {
+            "existe": false
+          },
+          "journal": {
+            "existe": false
+          }
+        }
+      },
+      "intentos_de_reconstruccion": {
+        "filas_canonicas_con_el_token": 0,
+        "coincidencias_fts": 0,
+        "eventos_residuales": 0,
+        "derivados_experimentales_presentes": 0,
+        "tablas_sombra_fts5_restantes": [
+          "knowledge_fts_config",
+          "knowledge_fts_content",
+          "knowledge_fts_data",
+          "knowledge_fts_docsize",
+          "knowledge_fts_idx",
+          "message_fts_config",
+          "message_fts_data",
+          "message_fts_docsize",
+          "message_fts_idx"
+        ],
+        "sombras_que_aun_contienen_el_token": 0,
+        "copia_vacuum_into_contiene_el_canario": false
+      },
+      "contraste_secure_delete_0_sin_vacuum": {
+        "db": {
+          "frase": true,
+          "token_fts": true,
+          "existe": true
+        },
+        "wal": {
+          "existe": false
+        },
+        "shm": {
+          "existe": false
+        },
+        "journal": {
+          "existe": false
+        }
+      },
+      "contraste_demuestra_que_el_borrado_logico_no_purga": true,
+      "pragmas_reales_de_sirius_0_1": {
+        "journal_mode": "delete",
+        "secure_delete": 1,
+        "auto_vacuum": 0,
+        "foreign_keys": 1,
+        "synchronous": "FULL"
+      }
+    },
+    "resultado": "PASS",
+    "repeticion_limpia": "ejecutado sobre bases limpias independientes dentro del propio spike (dos pasadas en el 10; escenarios WAL y secure_delete=0 en el 19)",
+    "conclusion": "Dentro del modelo de amenaza declarado, el contenido no es reconstruible tras el procedimiento completo: ni por SQL, ni por FTS5, ni por sombras, ni por WAL/SHM, ni por una copia hecha con VACUUM INTO. No hay limitacion de motor: no se abre C."
+  }
+]

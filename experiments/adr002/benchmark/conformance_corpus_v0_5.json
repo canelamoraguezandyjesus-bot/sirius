@@ -1,0 +1,4038 @@
+{
+ "documento": "Corpus de CONFORMIDAD del benchmark de ADR-002",
+ "proposito": "Adjudicar puertas, exactitud, contaminación, negación, ámbito, tiempo, conflicto, ausencia y explicación. NO se usa para fijar cifras de rendimiento absoluto.",
+ "version": "0.5",
+ "version_contrato": "0.5",
+ "estado": "PROPUESTO_NO_CONGELADO",
+ "semilla": 20260726,
+ "generador": "experiments/adr002/benchmark/build_corpus_v0_5.py",
+ "hereda_de": "conformance_corpus_v0_4.json",
+ "fuente_canonica": {
+  "SIRIUS_0.2_ARQ_00_MARCO_RECTOR_ARQUITECTURA_Y_MAPA_DECISIONES_v1.0_APROBADO.docx": "730a5fd13dce18bfcdb8dd4afee23dfe22c067c7cb3b953a9bd115cf73224f49",
+  "SIRIUS_0.2_BLOQUE_04_BUSQUEDA_Y_RECUPERACION_v1.0_APROBADO.docx": "b28a2cbed62b90f35e28db2412e46939b9bd2cdb8f145a5e9bbb2a8e7a5cbb45",
+  "SIRIUS_0.2_PLAN_DE_PRUEBAS_Y_REGISTRO_EXTERNO_DE_DELEGACIONES_v1.0_APROBADO.docx": "39058c0f5fe50bb4b703411bd5296e1bb8b1ede513ccf2d9eacabb35da3f59fd"
+ },
+ "datos_reales": "ninguno; corpus sintético determinista",
+ "red": "no utilizada",
+ "ahora_declarado": "2026-06-15T00:00:00Z",
+ "cambios_v0_4": {
+  "traslado_critico": {
+   "items": [
+    "MEM-101",
+    "MEM-102",
+    "MEM-103",
+    "MEM-104",
+    "MEM-105",
+    "MEM-106",
+    "MEM-107",
+    "MEM-108",
+    "MEM-109",
+    "MEM-110",
+    "MEM-111",
+    "MEM-112"
+   ],
+   "a_proyecto": "PRJ-GAMMA",
+   "tiempo_valido_escalonado": {
+    "MEM-101": "2026-01-05T00:00:00Z",
+    "MEM-102": "2026-01-05T00:00:00Z",
+    "MEM-103": "2026-01-05T00:00:00Z",
+    "MEM-104": "2026-01-05T00:00:00Z",
+    "MEM-105": "2026-01-05T00:00:00Z",
+    "MEM-106": "2026-01-05T00:00:00Z",
+    "MEM-107": "2026-03-01T00:00:00Z",
+    "MEM-108": "2026-03-01T00:00:00Z",
+    "MEM-109": "2026-03-01T00:00:00Z",
+    "MEM-110": "2026-03-01T00:00:00Z",
+    "MEM-111": "2026-03-01T00:00:00Z",
+    "MEM-112": "2026-05-01T00:00:00Z"
+   },
+   "motivo": "Reconciliar las premisas numéricas canónicas: cinco críticos en ALFA (CA-31) y 6/11/12 vigentes en Gamma en el instante objetivo de CA-44/CA-26/CA-38. Ámbito y tiempo válido son dimensiones duras que el canon ya gobierna."
+  },
+  "anclaje_anadido": {
+   "item": "DEC-016",
+   "motivo": "Hacer verdadera la premisa SOLO_HISTORICO de la rama R1 de B04-CA-36: una decisión expirada sin sucesor en el ámbito consultado."
+  }
+ },
+ "cierre_exhaustivo_ca47": {
+  "R1": {
+   "elegibles": [
+    "DEC-011",
+    "DEC-015"
+   ],
+   "prohibidos": [
+    "DEC-005",
+    "DEC-009",
+    "DEC-013",
+    "DEC-014"
+   ],
+   "universo_en_ambito": [
+    "DEC-005",
+    "DEC-009",
+    "DEC-011",
+    "DEC-013",
+    "DEC-014",
+    "DEC-015"
+   ]
+  },
+  "R2": {
+   "elegibles": [
+    "DEC-005",
+    "DEC-009",
+    "DEC-014"
+   ],
+   "prohibidos": [
+    "DEC-011",
+    "DEC-013",
+    "DEC-015"
+   ],
+   "universo_en_ambito": [
+    "DEC-005",
+    "DEC-009",
+    "DEC-011",
+    "DEC-013",
+    "DEC-014",
+    "DEC-015"
+   ]
+  },
+  "R3": {
+   "elegibles": [
+    "DEC-005",
+    "DEC-014",
+    "DEC-015"
+   ],
+   "prohibidos": [
+    "DEC-009",
+    "DEC-011",
+    "DEC-013"
+   ],
+   "universo_en_ambito": [
+    "DEC-005",
+    "DEC-009",
+    "DEC-011",
+    "DEC-013",
+    "DEC-014",
+    "DEC-015"
+   ]
+  }
+ },
+ "colisiones_por_raiz_declaradas": [
+  {
+   "raiz": "acepta",
+   "items": [
+    "MEM-015",
+    "MEM-016"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA"
+   ]
+  },
+  {
+   "raiz": "almace",
+   "items": [
+    "MEM-025",
+    "MEM-901",
+    "MEM-908",
+    "MEM-913",
+    "MEM-917",
+    "MEM-921",
+    "MEM-926",
+    "MEM-928",
+    "MEM-929",
+    "MEM-930",
+    "MEM-939"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA",
+    "PRJ-GAMMA"
+   ]
+  },
+  {
+   "raiz": "alquil",
+   "items": [
+    "MEM-002",
+    "MEM-003"
+   ],
+   "proyectos": [
+    "PRJ-CANARIAS",
+    "PRJ-MADEIRA"
+   ]
+  },
+  {
+   "raiz": "calend",
+   "items": [
+    "MEM-905",
+    "MEM-909",
+    "MEM-912",
+    "MEM-914",
+    "MEM-920",
+    "MEM-932",
+    "MEM-938"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA",
+    "PRJ-GAMMA"
+   ]
+  },
+  {
+   "raiz": "calida",
+   "items": [
+    "DEC-001",
+    "MEM-012",
+    "MEM-023"
+   ],
+   "proyectos": [
+    "LISTA-CERRADA-AB",
+    "PRJ-ALFA"
+   ]
+  },
+  {
+   "raiz": "contro",
+   "items": [
+    "MEM-910",
+    "MEM-911",
+    "MEM-933"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA"
+   ]
+  },
+  {
+   "raiz": "critic",
+   "items": [
+    "MEM-901",
+    "MEM-902",
+    "MEM-903",
+    "MEM-904",
+    "MEM-905",
+    "MEM-906",
+    "MEM-907",
+    "MEM-908",
+    "MEM-909",
+    "MEM-910",
+    "MEM-911",
+    "MEM-912",
+    "MEM-913",
+    "MEM-914",
+    "MEM-915",
+    "MEM-916",
+    "MEM-917",
+    "MEM-918",
+    "MEM-919",
+    "MEM-920",
+    "MEM-921",
+    "MEM-922",
+    "MEM-923",
+    "MEM-924",
+    "MEM-925",
+    "MEM-926",
+    "MEM-927",
+    "MEM-928",
+    "MEM-929",
+    "MEM-930",
+    "MEM-931",
+    "MEM-932",
+    "MEM-933",
+    "MEM-934",
+    "MEM-935",
+    "MEM-936",
+    "MEM-937",
+    "MEM-938",
+    "MEM-939",
+    "MEM-940"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA",
+    "PRJ-GAMMA"
+   ]
+  },
+  {
+   "raiz": "docume",
+   "items": [
+    "MEM-910",
+    "MEM-911",
+    "MEM-933"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA"
+   ]
+  },
+  {
+   "raiz": "entreg",
+   "items": [
+    "MEM-008",
+    "MEM-018",
+    "MEM-020",
+    "MEM-024"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-GAMMA"
+   ]
+  },
+  {
+   "raiz": "equipo",
+   "items": [
+    "MEM-017",
+    "MEM-023",
+    "MEM-026"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA"
+   ]
+  },
+  {
+   "raiz": "escala",
+   "items": [
+    "MEM-014",
+    "MEM-015",
+    "MEM-016"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA"
+   ]
+  },
+  {
+   "raiz": "expedi",
+   "items": [
+    "DEC-016",
+    "MEM-101",
+    "MEM-102",
+    "MEM-103",
+    "MEM-104",
+    "MEM-105",
+    "MEM-106",
+    "MEM-107",
+    "MEM-108",
+    "MEM-109",
+    "MEM-110",
+    "MEM-111",
+    "MEM-112"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-GAMMA"
+   ]
+  },
+  {
+   "raiz": "format",
+   "items": [
+    "MEM-004",
+    "MEM-906",
+    "MEM-918",
+    "MEM-924",
+    "MEM-925",
+    "MEM-927"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA",
+    "PRJ-GAMMA"
+   ]
+  },
+  {
+   "raiz": "gestio",
+   "items": [
+    "MEM-907",
+    "MEM-916",
+    "MEM-935"
+   ],
+   "proyectos": [
+    "PRJ-BETA",
+    "PRJ-GAMMA"
+   ]
+  },
+  {
+   "raiz": "inform",
+   "items": [
+    "MEM-004",
+    "MEM-906",
+    "MEM-918",
+    "MEM-924",
+    "MEM-925",
+    "MEM-927"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA",
+    "PRJ-GAMMA"
+   ]
+  },
+  {
+   "raiz": "logist",
+   "items": [
+    "MEM-901",
+    "MEM-908",
+    "MEM-913",
+    "MEM-917",
+    "MEM-921",
+    "MEM-926",
+    "MEM-928",
+    "MEM-929",
+    "MEM-930",
+    "MEM-939"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA",
+    "PRJ-GAMMA"
+   ]
+  },
+  {
+   "raiz": "maximo",
+   "items": [
+    "DEC-002",
+    "DEC-003",
+    "DEC-012",
+    "DEC-013"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA"
+   ]
+  },
+  {
+   "raiz": "opcion",
+   "items": [
+    "MEM-014",
+    "MEM-015"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA"
+   ]
+  },
+  {
+   "raiz": "operac",
+   "items": [
+    "DEC-015",
+    "MEM-023",
+    "MEM-024"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA"
+   ]
+  },
+  {
+   "raiz": "ordina",
+   "items": [
+    "MEM-901",
+    "MEM-902",
+    "MEM-903",
+    "MEM-904",
+    "MEM-905",
+    "MEM-906",
+    "MEM-907",
+    "MEM-908",
+    "MEM-909",
+    "MEM-910",
+    "MEM-911",
+    "MEM-912",
+    "MEM-913",
+    "MEM-914",
+    "MEM-915",
+    "MEM-916",
+    "MEM-917",
+    "MEM-918",
+    "MEM-919",
+    "MEM-920",
+    "MEM-921",
+    "MEM-922",
+    "MEM-923",
+    "MEM-924",
+    "MEM-925",
+    "MEM-926",
+    "MEM-927",
+    "MEM-928",
+    "MEM-929",
+    "MEM-930",
+    "MEM-931",
+    "MEM-932",
+    "MEM-933",
+    "MEM-934",
+    "MEM-935",
+    "MEM-936",
+    "MEM-937",
+    "MEM-938",
+    "MEM-939",
+    "MEM-940"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA",
+    "PRJ-GAMMA"
+   ]
+  },
+  {
+   "raiz": "person",
+   "items": [
+    "DEC-012",
+    "DEC-013",
+    "DEC-016"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA"
+   ]
+  },
+  {
+   "raiz": "planif",
+   "items": [
+    "MEM-902",
+    "MEM-903",
+    "MEM-904",
+    "MEM-915",
+    "MEM-919",
+    "MEM-922",
+    "MEM-923",
+    "MEM-931",
+    "MEM-934",
+    "MEM-936",
+    "MEM-937",
+    "MEM-940"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA",
+    "PRJ-GAMMA"
+   ]
+  },
+  {
+   "raiz": "presup",
+   "items": [
+    "DEC-002",
+    "DEC-003",
+    "DEC-005",
+    "MEM-006"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA"
+   ]
+  },
+  {
+   "raiz": "provee",
+   "items": [
+    "DEC-004",
+    "DEC-011",
+    "MEM-907",
+    "MEM-916",
+    "MEM-935"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA",
+    "PRJ-GAMMA"
+   ]
+  },
+  {
+   "raiz": "public",
+   "items": [
+    "DEC-001",
+    "MEM-024"
+   ],
+   "proyectos": [
+    "LISTA-CERRADA-AB",
+    "PRJ-ALFA"
+   ]
+  },
+  {
+   "raiz": "respon",
+   "items": [
+    "MEM-012",
+    "MEM-013",
+    "MEM-025",
+    "MEM-027"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA",
+    "PRJ-GAMMA"
+   ]
+  },
+  {
+   "raiz": "reunio",
+   "items": [
+    "DEC-016",
+    "MEM-006",
+    "MEM-007",
+    "MEM-905",
+    "MEM-909",
+    "MEM-912",
+    "MEM-914",
+    "MEM-920",
+    "MEM-932",
+    "MEM-938"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA",
+    "PRJ-GAMMA"
+   ]
+  },
+  {
+   "raiz": "revisi",
+   "items": [
+    "DEC-001",
+    "DEC-015"
+   ],
+   "proyectos": [
+    "LISTA-CERRADA-AB",
+    "PRJ-BETA"
+   ]
+  },
+  {
+   "raiz": "usuari",
+   "items": [
+    "MEM-001",
+    "MEM-008",
+    "MEM-021"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-GLOBAL"
+   ]
+  },
+  {
+   "raiz": "vacaci",
+   "items": [
+    "MEM-902",
+    "MEM-903",
+    "MEM-904",
+    "MEM-915",
+    "MEM-919",
+    "MEM-922",
+    "MEM-923",
+    "MEM-931",
+    "MEM-934",
+    "MEM-936",
+    "MEM-937",
+    "MEM-940"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA",
+    "PRJ-GAMMA"
+   ]
+  },
+  {
+   "raiz": "versio",
+   "items": [
+    "MEM-910",
+    "MEM-911",
+    "MEM-933"
+   ],
+   "proyectos": [
+    "PRJ-ALFA",
+    "PRJ-BETA"
+   ]
+  }
+ ],
+ "conteos": {
+  "proyectos": 8,
+  "entidades": 7,
+  "items": 97,
+  "recuerdos": 81,
+  "decisiones": 16,
+  "mensajes": 6,
+  "documentos": 5,
+  "relaciones": 10
+ },
+ "proyectos": [
+  {
+   "id": "PRJ-GLOBAL",
+   "nombre": "Ámbito global",
+   "alias": [],
+   "tipo": "GLOBAL",
+   "miembros_lista_cerrada": []
+  },
+  {
+   "id": "PRJ-ALFA",
+   "nombre": "Proyecto Atlas Alfa",
+   "alias": [
+    "Atlas",
+    "ALFA"
+   ],
+   "tipo": "PROYECTO",
+   "miembros_lista_cerrada": []
+  },
+  {
+   "id": "PRJ-BETA",
+   "nombre": "Proyecto Atlas Beta",
+   "alias": [
+    "Atlas",
+    "BETA"
+   ],
+   "tipo": "PROYECTO",
+   "miembros_lista_cerrada": []
+  },
+  {
+   "id": "PRJ-GAMMA",
+   "nombre": "Proyecto Atlas Gamma",
+   "alias": [
+    "Atlas",
+    "GAMMA"
+   ],
+   "tipo": "PROYECTO",
+   "miembros_lista_cerrada": []
+  },
+  {
+   "id": "PRJ-MADEIRA",
+   "nombre": "Viaje Madeira",
+   "alias": [
+    "Madeira"
+   ],
+   "tipo": "PROYECTO",
+   "miembros_lista_cerrada": []
+  },
+  {
+   "id": "PRJ-CANARIAS",
+   "nombre": "Viaje Canarias",
+   "alias": [
+    "Canarias"
+   ],
+   "tipo": "PROYECTO",
+   "miembros_lista_cerrada": []
+  },
+  {
+   "id": "LISTA-CERRADA-AB",
+   "nombre": "Lista cerrada Alfa+Beta v1",
+   "alias": [],
+   "tipo": "MULTI_PROYECTO_CERRADO",
+   "miembros_lista_cerrada": [
+    "PRJ-ALFA",
+    "PRJ-BETA"
+   ]
+  },
+  {
+   "id": "PRJ-DELTA",
+   "nombre": "Proyecto Delta relacional",
+   "alias": [],
+   "tipo": "PROYECTO",
+   "miembros_lista_cerrada": []
+  }
+ ],
+ "entidades": [
+  {
+   "id": "ENT-JUAN-TORRES",
+   "nombre_canonico": "Juan Torres",
+   "alias": [
+    "J. Torres"
+   ],
+   "grupo_homonimo": "JUAN",
+   "nota": "B04-CA-14: homónimo, no fusionable con ENT-JUAN-MOLINA."
+  },
+  {
+   "id": "ENT-JUAN-MOLINA",
+   "nombre_canonico": "Juan Molina",
+   "alias": [
+    "J. Molina"
+   ],
+   "grupo_homonimo": "JUAN",
+   "nota": "B04-CA-14: homónimo, no fusionable con ENT-JUAN-TORRES."
+  },
+  {
+   "id": "ENT-PROY-ALFA",
+   "nombre_canonico": "Proyecto Atlas Alfa",
+   "alias": [
+    "Atlas Alfa",
+    "PAA"
+   ],
+   "grupo_homonimo": null,
+   "nota": "B04-CA-13: alias confirmado; ambos resuelven el mismo ID."
+  },
+  {
+   "id": "ENT-VEHICULO",
+   "nombre_canonico": "vehículo",
+   "alias": [
+    "coche",
+    "automóvil"
+   ],
+   "grupo_homonimo": null,
+   "nota": "B04-CA-41: alias autorizado para expansión léxica en E2."
+  },
+  {
+   "id": "ENT-POSTGRESQL",
+   "nombre_canonico": "PostgreSQL",
+   "alias": [
+    "Postgres"
+   ],
+   "grupo_homonimo": null,
+   "nota": "B04-CA-42: sujeto de una restricción negativa."
+  },
+  {
+   "id": "ENT-ROTOR",
+   "nombre_canonico": "rotor",
+   "alias": [],
+   "grupo_homonimo": null,
+   "nota": "Sujeto sintetico del extremo origen del delta relacional."
+  },
+  {
+   "id": "ENT-BITACORA",
+   "nombre_canonico": "bitacora",
+   "alias": [],
+   "grupo_homonimo": null,
+   "nota": "Sujeto sintetico del extremo destino del delta relacional."
+  }
+ ],
+ "items": [
+  {
+   "id": "MEM-001",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GLOBAL",
+   "entity_ids": [],
+   "text": "El usuario prefiere que redactes en tono directo y sin adornos.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "GLOBAL",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": {
+    "nivel": "IMPORTANTE",
+    "razon": "Requisito de redacción declarado explícitamente por el usuario.",
+    "fuente": "B04-CA-01",
+    "regla": "CRIT-01"
+   },
+   "procedencia": [],
+   "traza": [
+    "B04-CA-01"
+   ]
+  },
+  {
+   "id": "MEM-002",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-MADEIRA",
+   "entity_ids": [
+    "ENT-VEHICULO"
+   ],
+   "text": "En este viaje no se alquila coche.",
+   "polaridad": "NEGATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": {
+    "nivel": "CRITICO",
+    "razon": "Restricción esencial del viaje; omitirla cambia la planificación.",
+    "fuente": "B04-CA-02",
+    "regla": "CRIT-02"
+   },
+   "procedencia": [],
+   "traza": [
+    "B04-CA-02",
+    "B04-CA-25"
+   ]
+  },
+  {
+   "id": "MEM-003",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-CANARIAS",
+   "entity_ids": [
+    "ENT-VEHICULO"
+   ],
+   "text": "En este viaje se alquila coche para los traslados largos.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-02"
+   ]
+  },
+  {
+   "id": "DEC-001",
+   "kind": "DECISION",
+   "project_id": "LISTA-CERRADA-AB",
+   "entity_ids": [],
+   "text": "La revisión de calidad es obligatoria antes de publicar.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "MULTI_PROYECTO_CERRADO",
+   "autoridad": "DOCUMENTO_CANONICO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-03"
+   ]
+  },
+  {
+   "id": "MEM-004",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Preferencia de formato de informe en columnas.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "ARCHIVADA",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-04"
+   ]
+  },
+  {
+   "id": "DEC-002",
+   "kind": "DECISION",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "El presupuesto máximo del proyecto es 2.000 €.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "SUSTITUIDA",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": "2026-04-01T00:00:00Z",
+    "occurred_at": null,
+    "recorded_at": "2026-01-05T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "DOCUMENTO_CANONICO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-05",
+    "B04-CA-23",
+    "B04-CA-45"
+   ]
+  },
+  {
+   "id": "DEC-003",
+   "kind": "DECISION",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "El presupuesto máximo del proyecto es 1.500 €.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-04-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-04-02T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "DOCUMENTO_CANONICO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": {
+    "nivel": "CRITICO",
+    "razon": "Límite de gasto vigente; su omisión causa decisión errónea.",
+    "fuente": "B04-CA-45",
+    "regla": "CRIT-03"
+   },
+   "procedencia": [],
+   "traza": [
+    "B04-CA-05",
+    "B04-CA-23",
+    "B04-CA-45"
+   ]
+  },
+  {
+   "id": "DEC-004",
+   "kind": "DECISION",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "A partir de septiembre el proveedor de mensajería cambia a Norte.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-09-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-05-10T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "DOCUMENTO_CANONICO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-06"
+   ]
+  },
+  {
+   "id": "MEM-005",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "El contrato de mantenimiento se renovó, pero no consta desde cuándo.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": null,
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-03-03T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-07"
+   ]
+  },
+  {
+   "id": "DEC-005",
+   "kind": "DECISION",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "El presupuesto de Beta es 4.000 €.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-02-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "DOCUMENTO_CANONICO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-08",
+    "B04-CA-27"
+   ]
+  },
+  {
+   "id": "MEM-006",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "Comentario en reunión: el presupuesto de Beta es 6.000 €.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-05-20T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "INFORMAL",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-08",
+    "B04-CA-27"
+   ]
+  },
+  {
+   "id": "MEM-007",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Posible preferencia inferida: reuniones cortas por la mañana.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CANDIDATA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "INFORMAL",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [
+    "MSG-020"
+   ],
+   "traza": [
+    "B04-CA-09",
+    "B04-CA-49"
+   ]
+  },
+  {
+   "id": "MEM-008",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Candidata rechazada por el usuario sobre horario de entrega.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "RECHAZADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "INFORMAL",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-10"
+   ]
+  },
+  {
+   "id": "MEM-009",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "PURGADA",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-11"
+   ]
+  },
+  {
+   "id": "MEM-010",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Dato sensible de salud del titular del proyecto.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "RESTRINGIDA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-12",
+    "B04-CA-37",
+    "B04-CA-48"
+   ]
+  },
+  {
+   "id": "MEM-011",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [
+    "ENT-PROY-ALFA"
+   ],
+   "text": "El identificador interno del proyecto Atlas Alfa es PAA-7.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-13"
+   ]
+  },
+  {
+   "id": "MEM-012",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [
+    "ENT-JUAN-TORRES"
+   ],
+   "text": "Juan Torres es el responsable de calidad.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-14"
+   ]
+  },
+  {
+   "id": "MEM-013",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [
+    "ENT-JUAN-MOLINA"
+   ],
+   "text": "Juan Molina es el responsable de compras.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-14"
+   ]
+  },
+  {
+   "id": "DEC-006",
+   "kind": "DECISION",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "La plataforma de despliegue aprobada es Nimbo.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "DOCUMENTO_CANONICO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [
+    "DOC-001"
+   ],
+   "traza": [
+    "B04-CA-19"
+   ]
+  },
+  {
+   "id": "DEC-007",
+   "kind": "DECISION",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "La plataforma de despliegue aprobada es Nimbo.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "DOCUMENTO_CANONICO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [
+    "DOC-002"
+   ],
+   "traza": [
+    "B04-CA-19"
+   ]
+  },
+  {
+   "id": "DEC-008",
+   "kind": "DECISION",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "La plataforma de despliegue aprobada es Nimbo.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "DOCUMENTO_CANONICO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [
+    "MSG-030"
+   ],
+   "traza": [
+    "B04-CA-19"
+   ]
+  },
+  {
+   "id": "MEM-014",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "No uses opciones de vuelo con escala.",
+   "polaridad": "NEGATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": {
+    "nivel": "CRITICO",
+    "razon": "Restricción explícita de viaje; invertirla cambia el resultado.",
+    "fuente": "B04-CA-20",
+    "regla": "CRIT-04"
+   },
+   "procedencia": [],
+   "traza": [
+    "B04-CA-20"
+   ]
+  },
+  {
+   "id": "MEM-015",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "Acepta opciones de vuelo con escala si abaratan el trayecto.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-20"
+   ]
+  },
+  {
+   "id": "MEM-016",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Acepta escala solo si ahorra más de 200 €.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": "ahorro > 200 EUR",
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": {
+    "nivel": "CRITICO",
+    "razon": "Condición material; recuperarla sin condición invierte el sentido.",
+    "fuente": "B04-CA-21",
+    "regla": "CRIT-05"
+   },
+   "procedencia": [],
+   "traza": [
+    "B04-CA-21"
+   ]
+  },
+  {
+   "id": "DEC-009",
+   "kind": "DECISION",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "Se aplica el descuento de invierno a los pedidos.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-10T00:00:00Z",
+    "valid_to": "2026-03-20T00:00:00Z",
+    "occurred_at": null,
+    "recorded_at": "2026-05-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "DOCUMENTO_CANONICO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-22"
+   ]
+  },
+  {
+   "id": "MEM-017",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Resumen: el equipo acordó revisar el alcance cada dos semanas.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "SIN_SOPORTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "INFORMAL",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-24"
+   ]
+  },
+  {
+   "id": "MEM-018",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "El nombre en clave del entregable de Atlas es Faro.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-25"
+   ]
+  },
+  {
+   "id": "MEM-101",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Restricción esencial dispersa número 1 del expediente Gamma.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-05T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-05T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": {
+    "nivel": "CRITICO",
+    "razon": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+    "fuente": "Instanciación compartida por B04-CA-26, B04-CA-38 y B04-CA-44",
+    "regla": "CRIT-06"
+   },
+   "procedencia": [],
+   "traza": [
+    "B04-CA-26",
+    "B04-CA-38",
+    "B04-CA-44"
+   ]
+  },
+  {
+   "id": "MEM-102",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Restricción esencial dispersa número 2 del expediente Gamma.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-05T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-05T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": {
+    "nivel": "CRITICO",
+    "razon": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+    "fuente": "Instanciación compartida por B04-CA-26, B04-CA-38 y B04-CA-44",
+    "regla": "CRIT-06"
+   },
+   "procedencia": [],
+   "traza": [
+    "B04-CA-26",
+    "B04-CA-38",
+    "B04-CA-44"
+   ]
+  },
+  {
+   "id": "MEM-103",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Restricción esencial dispersa número 3 del expediente Gamma.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-05T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-05T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": {
+    "nivel": "CRITICO",
+    "razon": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+    "fuente": "Instanciación compartida por B04-CA-26, B04-CA-38 y B04-CA-44",
+    "regla": "CRIT-06"
+   },
+   "procedencia": [],
+   "traza": [
+    "B04-CA-26",
+    "B04-CA-38",
+    "B04-CA-44"
+   ]
+  },
+  {
+   "id": "MEM-104",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Restricción esencial dispersa número 4 del expediente Gamma.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-05T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-05T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": {
+    "nivel": "CRITICO",
+    "razon": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+    "fuente": "Instanciación compartida por B04-CA-26, B04-CA-38 y B04-CA-44",
+    "regla": "CRIT-06"
+   },
+   "procedencia": [],
+   "traza": [
+    "B04-CA-26",
+    "B04-CA-38",
+    "B04-CA-44"
+   ]
+  },
+  {
+   "id": "MEM-105",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Restricción esencial dispersa número 5 del expediente Gamma.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-05T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-05T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": {
+    "nivel": "CRITICO",
+    "razon": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+    "fuente": "Instanciación compartida por B04-CA-26, B04-CA-38 y B04-CA-44",
+    "regla": "CRIT-06"
+   },
+   "procedencia": [],
+   "traza": [
+    "B04-CA-26",
+    "B04-CA-38",
+    "B04-CA-44"
+   ]
+  },
+  {
+   "id": "MEM-106",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Restricción esencial dispersa número 6 del expediente Gamma.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-05T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-05T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": {
+    "nivel": "CRITICO",
+    "razon": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+    "fuente": "Instanciación compartida por B04-CA-26, B04-CA-38 y B04-CA-44",
+    "regla": "CRIT-06"
+   },
+   "procedencia": [],
+   "traza": [
+    "B04-CA-26",
+    "B04-CA-38",
+    "B04-CA-44"
+   ]
+  },
+  {
+   "id": "MEM-107",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Restricción esencial dispersa número 7 del expediente Gamma.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-03-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-03-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": {
+    "nivel": "CRITICO",
+    "razon": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+    "fuente": "Instanciación compartida por B04-CA-26, B04-CA-38 y B04-CA-44",
+    "regla": "CRIT-06"
+   },
+   "procedencia": [],
+   "traza": [
+    "B04-CA-26",
+    "B04-CA-38",
+    "B04-CA-44"
+   ]
+  },
+  {
+   "id": "MEM-108",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Restricción esencial dispersa número 8 del expediente Gamma.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-03-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-03-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": {
+    "nivel": "CRITICO",
+    "razon": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+    "fuente": "Instanciación compartida por B04-CA-26, B04-CA-38 y B04-CA-44",
+    "regla": "CRIT-06"
+   },
+   "procedencia": [],
+   "traza": [
+    "B04-CA-26",
+    "B04-CA-38",
+    "B04-CA-44"
+   ]
+  },
+  {
+   "id": "MEM-109",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Restricción esencial dispersa número 9 del expediente Gamma.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-03-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-03-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": {
+    "nivel": "CRITICO",
+    "razon": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+    "fuente": "Instanciación compartida por B04-CA-26, B04-CA-38 y B04-CA-44",
+    "regla": "CRIT-06"
+   },
+   "procedencia": [],
+   "traza": [
+    "B04-CA-26",
+    "B04-CA-38",
+    "B04-CA-44"
+   ]
+  },
+  {
+   "id": "MEM-110",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Restricción esencial dispersa número 10 del expediente Gamma.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-03-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-03-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": {
+    "nivel": "CRITICO",
+    "razon": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+    "fuente": "Instanciación compartida por B04-CA-26, B04-CA-38 y B04-CA-44",
+    "regla": "CRIT-06"
+   },
+   "procedencia": [],
+   "traza": [
+    "B04-CA-26",
+    "B04-CA-38",
+    "B04-CA-44"
+   ]
+  },
+  {
+   "id": "MEM-111",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Restricción esencial dispersa número 11 del expediente Gamma.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-03-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-03-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": {
+    "nivel": "CRITICO",
+    "razon": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+    "fuente": "Instanciación compartida por B04-CA-26, B04-CA-38 y B04-CA-44",
+    "regla": "CRIT-06"
+   },
+   "procedencia": [],
+   "traza": [
+    "B04-CA-26",
+    "B04-CA-38",
+    "B04-CA-44"
+   ]
+  },
+  {
+   "id": "MEM-112",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Restricción esencial dispersa número 12 del expediente Gamma.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-05-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-05-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": {
+    "nivel": "CRITICO",
+    "razon": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+    "fuente": "Instanciación compartida por B04-CA-26, B04-CA-38 y B04-CA-44",
+    "regla": "CRIT-06"
+   },
+   "procedencia": [],
+   "traza": [
+    "B04-CA-26",
+    "B04-CA-38",
+    "B04-CA-44"
+   ]
+  },
+  {
+   "id": "MEM-019",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "NO_GUARDADA",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-28"
+   ]
+  },
+  {
+   "id": "MEM-020",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "La fuente externa afirma que el plazo legal de entrega es de 30 días.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CANDIDATA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "FUENTE_EXTERNA",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [
+    "DOC-003"
+   ],
+   "traza": [
+    "B04-CA-29"
+   ]
+  },
+  {
+   "id": "MEM-021",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Nota marcada por el usuario: no uses esto como memoria.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": true,
+   "no_consolidable": true,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-35"
+   ]
+  },
+  {
+   "id": "MEM-022",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [
+    "ENT-VEHICULO"
+   ],
+   "text": "El automóvil de empresa se revisa cada seis meses.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-41"
+   ]
+  },
+  {
+   "id": "DEC-010",
+   "kind": "DECISION",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [
+    "ENT-POSTGRESQL"
+   ],
+   "text": "No usar PostgreSQL en este proyecto.",
+   "polaridad": "NEGATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "DOCUMENTO_CANONICO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": {
+    "nivel": "CRITICO",
+    "razon": "Restricción tecnológica aprobada; invertirla rompe la decisión.",
+    "fuente": "B04-CA-42",
+    "regla": "CRIT-07"
+   },
+   "procedencia": [],
+   "traza": [
+    "B04-CA-42"
+   ]
+  },
+  {
+   "id": "MEM-023",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "El equipo de calidad depende del área de operaciones.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-43"
+   ]
+  },
+  {
+   "id": "MEM-024",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Operaciones valida los entregables antes de la publicación.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-43"
+   ]
+  },
+  {
+   "id": "MEM-025",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "El acceso al almacén requiere autorización previa del responsable.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": {
+    "nivel": "CRITICO",
+    "razon": "Restricción esencial detectada por regla operativa aprobada.",
+    "fuente": "REGLA-CRIT-07",
+    "regla": "CRIT-07"
+   },
+   "procedencia": [],
+   "traza": [
+    "B04-CA-50"
+   ]
+  },
+  {
+   "id": "MEM-026",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "Datos de nómina del equipo de Beta.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "RESTRINGIDA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-46"
+   ]
+  },
+  {
+   "id": "DEC-011",
+   "kind": "DECISION",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "Se aprueba el cambio de proveedor de embalaje.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-02-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": "2026-01-12T00:00:00Z",
+    "recorded_at": "2026-03-08T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "DOCUMENTO_CANONICO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-47"
+   ]
+  },
+  {
+   "id": "DEC-012",
+   "kind": "DECISION",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "El aforo máximo de la sala es de 40 personas.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "SUSTITUIDA",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": "2026-04-10T00:00:00Z",
+    "occurred_at": null,
+    "recorded_at": "2026-02-02T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "DOCUMENTO_CANONICO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-32"
+   ]
+  },
+  {
+   "id": "DEC-013",
+   "kind": "DECISION",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "El aforo máximo de la sala es de 25 personas.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-04-10T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-04-11T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "DOCUMENTO_CANONICO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-32"
+   ]
+  },
+  {
+   "id": "MEM-027",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Nota parcial sobre el circuito de firmas, sin detalle del responsable.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-16"
+   ]
+  },
+  {
+   "id": "MEM-901",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 1 sobre logística de almacén sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-902",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 2 sobre planificación de vacaciones sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-903",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 3 sobre planificación de vacaciones sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-904",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 4 sobre planificación de vacaciones sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-905",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 5 sobre calendario de reuniones sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-906",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 6 sobre formato de informes sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-907",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 7 sobre gestión de proveedores sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-908",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 8 sobre logística de almacén sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-909",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 9 sobre calendario de reuniones sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-910",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 10 sobre control de versiones documentales sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-911",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 11 sobre control de versiones documentales sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-912",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 12 sobre calendario de reuniones sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-913",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 13 sobre logística de almacén sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-914",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 14 sobre calendario de reuniones sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-915",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 15 sobre planificación de vacaciones sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-916",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 16 sobre gestión de proveedores sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-917",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 17 sobre logística de almacén sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-918",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 18 sobre formato de informes sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-919",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 19 sobre planificación de vacaciones sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-920",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 20 sobre calendario de reuniones sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-921",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 21 sobre logística de almacén sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-922",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 22 sobre planificación de vacaciones sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-923",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 23 sobre planificación de vacaciones sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-924",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 24 sobre formato de informes sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-925",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 25 sobre formato de informes sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-926",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 26 sobre logística de almacén sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-927",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 27 sobre formato de informes sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-928",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 28 sobre logística de almacén sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-929",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 29 sobre logística de almacén sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-930",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 30 sobre logística de almacén sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-931",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 31 sobre planificación de vacaciones sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-932",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 32 sobre calendario de reuniones sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-933",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 33 sobre control de versiones documentales sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-934",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 34 sobre planificación de vacaciones sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-935",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 35 sobre gestión de proveedores sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-936",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 36 sobre planificación de vacaciones sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-937",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 37 sobre planificación de vacaciones sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-938",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 38 sobre calendario de reuniones sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-939",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 39 sobre logística de almacén sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "MEM-940",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-GAMMA",
+   "entity_ids": [],
+   "text": "Nota ordinaria 40 sobre planificación de vacaciones sin valor crítico.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-01T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "ACTO_EXPLICITO_USUARIO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "RUIDO"
+   ]
+  },
+  {
+   "id": "DEC-014",
+   "kind": "DECISION",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "Se habilita el turno reducido de enero.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-15T00:00:00Z",
+    "valid_to": "2026-01-31T00:00:00Z",
+    "occurred_at": "2026-03-05T00:00:00Z",
+    "recorded_at": "2026-01-20T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "DOCUMENTO_CANONICO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-47"
+   ]
+  },
+  {
+   "id": "DEC-015",
+   "kind": "DECISION",
+   "project_id": "PRJ-BETA",
+   "entity_ids": [],
+   "text": "Se adjudica la revisión trimestral al área de operaciones.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-03-01T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": "2026-01-20T00:00:00Z",
+    "recorded_at": "2026-01-25T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "DOCUMENTO_CANONICO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-47"
+   ]
+  },
+  {
+   "id": "DEC-016",
+   "kind": "DECISION",
+   "project_id": "PRJ-ALFA",
+   "entity_ids": [],
+   "text": "El aforo de la sala de reuniones del expediente era de 12 personas.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-05T00:00:00Z",
+    "valid_to": "2026-03-01T00:00:00Z",
+    "occurred_at": null,
+    "recorded_at": "2026-01-05T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "DOCUMENTO_CANONICO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": [
+    "B04-CA-36"
+   ]
+  },
+  {
+   "id": "MEM-950",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-DELTA",
+   "entity_ids": [
+    "ENT-ROTOR"
+   ],
+   "text": "El calibrado del rotor exige una holgura escalonada.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-10T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-10T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "DOCUMENTO_CANONICO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": []
+  },
+  {
+   "id": "MEM-951",
+   "kind": "MEMORIA",
+   "project_id": "PRJ-DELTA",
+   "entity_ids": [
+    "ENT-BITACORA"
+   ],
+   "text": "Cada bitacora municipal permanece archivada junto al deposito comarcal.",
+   "polaridad": "AFIRMATIVA",
+   "condicion": null,
+   "confirmacion": "CONFIRMADA",
+   "validez": "VIGENTE",
+   "disponibilidad": "DISPONIBLE",
+   "sensibilidad": "ORDINARIA",
+   "temporalidad": {
+    "valid_from": "2026-01-10T00:00:00Z",
+    "valid_to": null,
+    "occurred_at": null,
+    "recorded_at": "2026-01-10T00:00:00Z"
+   },
+   "ambito": "PROYECTO",
+   "autoridad": "DOCUMENTO_CANONICO",
+   "no_usar_como_memoria": false,
+   "no_consolidable": false,
+   "criticidad": null,
+   "procedencia": [],
+   "traza": []
+  }
+ ],
+ "mensajes": [
+  {
+   "id": "MSG-010",
+   "project_id": "PRJ-ALFA",
+   "texto": "El presupuesto que manejábamos antes era de 2.000 €.",
+   "recorded_at": "2026-01-04T00:00:00Z",
+   "no_guardar": false,
+   "redactado": false,
+   "traza": [
+    "B04-CA-45"
+   ]
+  },
+  {
+   "id": "MSG-011",
+   "project_id": "PRJ-GAMMA",
+   "texto": "El circuito de firmas lo cierra el responsable de operaciones.",
+   "recorded_at": "2026-02-14T00:00:00Z",
+   "no_guardar": false,
+   "redactado": false,
+   "traza": [
+    "B04-CA-16"
+   ]
+  },
+  {
+   "id": "MSG-012",
+   "project_id": "PRJ-ALFA",
+   "texto": "Esto no lo uses como memoria: fue una prueba interna.",
+   "recorded_at": "2026-02-20T00:00:00Z",
+   "no_guardar": false,
+   "redactado": false,
+   "traza": [
+    "B04-CA-35"
+   ]
+  },
+  {
+   "id": "MSG-013",
+   "project_id": "PRJ-ALFA",
+   "texto": "",
+   "recorded_at": "2026-02-21T00:00:00Z",
+   "no_guardar": true,
+   "redactado": true,
+   "traza": [
+    "B04-CA-28"
+   ]
+  },
+  {
+   "id": "MSG-020",
+   "project_id": "PRJ-ALFA",
+   "texto": "Creo que prefiero reuniones cortas por la mañana.",
+   "recorded_at": "2026-03-01T00:00:00Z",
+   "no_guardar": false,
+   "redactado": false,
+   "traza": [
+    "B04-CA-49"
+   ]
+  },
+  {
+   "id": "MSG-030",
+   "project_id": "PRJ-ALFA",
+   "texto": "Confirmado en la reunión: la plataforma aprobada es Nimbo.",
+   "recorded_at": "2026-03-11T00:00:00Z",
+   "no_guardar": false,
+   "redactado": false,
+   "traza": [
+    "B04-CA-19"
+   ]
+  }
+ ],
+ "documentos": [
+  {
+   "id": "DOC-001",
+   "titulo": "Acta de decisión de plataforma",
+   "accesible": true,
+   "texto": "Se aprueba Nimbo como plataforma de despliegue.",
+   "afirmacion_atribuida": null,
+   "traza": [
+    "B04-CA-19"
+   ]
+  },
+  {
+   "id": "DOC-002",
+   "titulo": "Resumen ejecutivo de plataforma",
+   "accesible": true,
+   "texto": "Plataforma aprobada: Nimbo.",
+   "afirmacion_atribuida": null,
+   "traza": [
+    "B04-CA-19"
+   ]
+  },
+  {
+   "id": "DOC-003",
+   "titulo": "Boletín externo de plazos",
+   "accesible": true,
+   "texto": "El plazo legal de entrega es de 30 días.",
+   "afirmacion_atribuida": "La fuente externa afirma que el plazo es 30 días.",
+   "traza": [
+    "B04-CA-29"
+   ]
+  },
+  {
+   "id": "DOC-004",
+   "titulo": "Anexo técnico requerido",
+   "accesible": false,
+   "texto": null,
+   "afirmacion_atribuida": null,
+   "traza": [
+    "B04-CA-18"
+   ]
+  },
+  {
+   "id": "DOC-005",
+   "titulo": "Cita literal del usuario sobre el alcance",
+   "accesible": true,
+   "texto": "El usuario dijo: \"el alcance no incluye la migración de datos\".",
+   "afirmacion_atribuida": null,
+   "traza": [
+    "B04-CA-15"
+   ]
+  }
+ ],
+ "relaciones": [
+  {
+   "id": "REL-001",
+   "tipo": "SUSTITUYE_A",
+   "origen": "DEC-003",
+   "destino": "DEC-002",
+   "nota": "B04-CA-05 / CA-23: relación de sustitución explícita."
+  },
+  {
+   "id": "REL-002",
+   "tipo": "CONFLICTO_CON",
+   "origen": "MEM-006",
+   "destino": "DEC-005",
+   "nota": "B04-CA-08 / CA-27: lados incompatibles, sin resolución."
+  },
+  {
+   "id": "REL-003",
+   "tipo": "APOYA",
+   "origen": "DOC-001",
+   "destino": "DEC-006",
+   "nota": "B04-CA-19: procedencia plural conservada."
+  },
+  {
+   "id": "REL-004",
+   "tipo": "REFUTA",
+   "origen": "MEM-015",
+   "destino": "MEM-014",
+   "nota": "B04-CA-20: apoyo y refutación no se colapsan."
+  },
+  {
+   "id": "REL-005",
+   "tipo": "ALIAS_DE",
+   "origen": "ENT-PROY-ALFA",
+   "destino": "PRJ-ALFA",
+   "nota": "B04-CA-13: alias confirmado."
+  },
+  {
+   "id": "REL-006",
+   "tipo": "DERIVA_DE",
+   "origen": "MEM-017",
+   "destino": "DOC-004",
+   "nota": "B04-CA-24: el resumen perdió su única fuente."
+  },
+  {
+   "id": "REL-007",
+   "tipo": "ORIGINA_CANDIDATA",
+   "origen": "MSG-020",
+   "destino": "MEM-007",
+   "nota": "B04-CA-49: el fragmento enlaza la candidata sin activarla."
+  },
+  {
+   "id": "REL-008",
+   "tipo": "SUSTITUYE_A",
+   "origen": "DEC-013",
+   "destino": "DEC-012",
+   "nota": "B04-CA-32: corrección de abril posterior al corte de marzo."
+  },
+  {
+   "id": "REL-009",
+   "tipo": "CORRIGE",
+   "origen": "DEC-013",
+   "destino": "DEC-012",
+   "nota": "B04-CA-32: la corrección no reescribe lo registrado en marzo."
+  },
+  {
+   "id": "REL-010",
+   "tipo": "DERIVA_DE",
+   "origen": "MEM-950",
+   "destino": "MEM-951",
+   "nota": "Dependencia explicita, tipada y dirigida entre dos sujetos distintos."
+  }
+ ],
+ "identidad": {
+  "items": {
+   "conteo": 97,
+   "huella_coleccion": "2ffcf7126619db8cf42c75ec072e641ba7118033aa8417b4abc41da2f89d732d",
+   "huella_por_elemento": {
+    "MEM-001": "5acd6bd183f178777237653d970e43a70bd07e1488fa206d39a47298804f43ba",
+    "MEM-002": "84c96567c9aa8e1e65ede298801eecf34b54d179280c0143993f8b3f90031254",
+    "MEM-003": "4a1a890a79c614ce7f20520e69619c85ab904fb2d4cea0c19cfa0f4c4434d19d",
+    "DEC-001": "6334c3261a6ee9fb51716db9fb0e25d3a0f4ed72643887d65e519fad240a7203",
+    "MEM-004": "676428ccd95f5756e835bdf6a008db3a702a84e1fb9a538194592cfecc7b973d",
+    "DEC-002": "2219f4156af5e6aa909f097c41965467110740f8f97fa8e8c9deff9a24fe758a",
+    "DEC-003": "0380b16c92b2e6cad0ebe7ff020c4c52a1bfdbf5d97a79d32befaca5ded44c90",
+    "DEC-004": "7a33e6294e1a5ef0b6a42f82f3cc37af2051a808d32b546a77fcc78ce98f0b75",
+    "MEM-005": "df50b24ab024a8b56c00af2f5b7721c7e8365b9b7fe97e2f194538c731dd47b0",
+    "DEC-005": "816b2c64e949cb4e8845ab968c4f6e6a813876c7014c6892ca7a454730f06ea1",
+    "MEM-006": "b94bc2d5681d8812802c02c328bd472caa670030257e0ab053b51b50722ae63d",
+    "MEM-007": "c12fbb04e9d5f25dd1a0951a4103f965b23f9ea4a93024d38fb703f3bc2aeba0",
+    "MEM-008": "35365fd5da4db6dfd61d17e0bbefd03c1981926d838c60862f1fc7a9fe1b21a6",
+    "MEM-009": "1bd13219f3d7d8c13b8f6ce0132ad9f82606247db9d049b918aaf3ce53b2e2c1",
+    "MEM-010": "ea0619cd605a658526a1df6cf2e85299a3c70a575faf9e4b65aff145bb1d9bc6",
+    "MEM-011": "142515073daecf1e9eadf6a862f5eed88cf904bed9ed5594d1f5719595b4f245",
+    "MEM-012": "ed44c49261f63245f245704f0a244d0878de1c75ead8b23d9001f1f2f249e821",
+    "MEM-013": "69e6c29839cb5fe4425c9d77fca45457a8fd8c30c0982239b13d4bb0f885a9b2",
+    "DEC-006": "5e5895ffa988c0e893ddbb41a67091a176a9a536482542032d8fcb5d862146b7",
+    "DEC-007": "29720b38820e327f87d3a1a2e2012a9a6b9edcfffe3bcd7c3eaa2638ff7f7105",
+    "DEC-008": "c09e09da6bedbad642d688e3a9fc3c24272333904ee41bce5f889eb305f51224",
+    "MEM-014": "1046d35b4fc70eb816e94fe1788275627e1e83775939e4665a7adb6cb793a7c1",
+    "MEM-015": "1add8569ebbbda115bd49e3a8458c137a4023d8e9c0de98b33fb174807b40787",
+    "MEM-016": "7dd26127cbfb2d8003096763498ddc6ce88d0d46871a72d265fe5d663488cd61",
+    "DEC-009": "dc68e637fd929b429cc6f5fb17410b056baf7cd2c6bbe6b70f311939ee1992ec",
+    "MEM-017": "929757ec0788488c885e5af562e5e70fdd898afe53d03c2c2dfc6dfa0066f285",
+    "MEM-018": "d5190e474b555126443e085582cbaa1ac204821ebb0d5ff333271ff7a34306b8",
+    "MEM-101": "f5bb0a26b3cd71436cfb1280b8c8a198d1ada3380a4c57f9afc414f9e88169fc",
+    "MEM-102": "3767ae496b69229967e99499535da13ab3e48c2d2b4b9210a2ef74e2e0e3232e",
+    "MEM-103": "48429d6bf3566795a748245a4d9af0e4e0cbd95be2872bf7af49b43b780425b2",
+    "MEM-104": "3442dc0ce273dee6745aa6b8994f64c7187fa60e590524fe60d5b4ab7e5ac40d",
+    "MEM-105": "0484b1eb905d755bbffa7d6f70adabbf71953779f75360fd466983e15be55ae4",
+    "MEM-106": "dc3ba04012a115204ba18ff1da4b322b43e61a9ebc780828798a22892005f753",
+    "MEM-107": "2c847578d384c4b20fe6e10c7a269288a39ce53c2dfa44d9846b0d9e6d6b2a45",
+    "MEM-108": "51c473f9b3f6e10b8599d1cef07ff8374530cc13df9ecdbfd99d1d6fb23ed4f7",
+    "MEM-109": "3894d2a2793ba69978596ada302a0dede41e7004214dae2887db593ea3e8f235",
+    "MEM-110": "3fc3a883913eba3449e6f46018d241380721ad5960b3d28bcff8932072e8a502",
+    "MEM-111": "c08d8028c2ccbf0033aea137639e88606a2e4a101f2ca89647c6bcb1c7d9377e",
+    "MEM-112": "d5759526dc0485538aea785a5af91832c7e88dd530cb85c9d7c5d8331a289e2c",
+    "MEM-019": "444a49dd9ef9f753d27acaf6792a3eb12102c71097a3f207cc84af8a214fc0f6",
+    "MEM-020": "25211377e48521ab5536505c85cc54143e015b00b85575ac52d509baffe39810",
+    "MEM-021": "c191a47dfd1b8e8b800a559abc1f4e5314b4e33e761334ce68ac12851d190e6e",
+    "MEM-022": "9e66091991c582093e5b5b0589ceb39d11b7e4d2b6192030de7880838010f74a",
+    "DEC-010": "adb8b1c8a1e824db4ab6cc1d1da1faa799db096825a5c9672d52eb14126ee073",
+    "MEM-023": "c15cda92db49f0ba79f4f5065daae14ec0b5586b4a82d150dbacdcaca8f3150a",
+    "MEM-024": "f239bc9f74a90953975b7adfaf607ad79decc0641ddaacc9306779cfb3b3879f",
+    "MEM-025": "e747492553964e7a41f8fb3f3ce0fa805dda9a42189b32f116a0a30629671fb3",
+    "MEM-026": "e2276062191b1a7afd7b577d826f219b85949c0442d3e97270c5f9ac5dcb5aa3",
+    "DEC-011": "58d1d56334a491bfa007077400bb5a207ec7bf7d0aaa4641f114422f8bc69a3b",
+    "DEC-012": "e6fd1598453d3709c67a106cba147f8a2bdeb533a742de6b37b8cab8b6742fc0",
+    "DEC-013": "0cdb0494d2816198a2ff0d2ec277ff8abfdb904b549b77254e31acb2292128c1",
+    "MEM-027": "06e125b94d5f565f3dcaa3dce3c6dc62252b63765646f8300b506ea79e414c90",
+    "MEM-901": "58b2e4f187c472bc089157396614ac998ae78cd54a1c5ab303d5d5e6872299c2",
+    "MEM-902": "d101a00903e3cb35565be767ea2fd58927a749b71b1a90656f6e53ff14609b4d",
+    "MEM-903": "b1d6280c000e9c3d2931518a9f39665201f0f7c83b2a09dd25963f08502beef7",
+    "MEM-904": "ba69df5fd5f1276417c966408f5bd66994df471b1edbe199a2660bf2e82c5826",
+    "MEM-905": "70d8434fc3f741784abb0bf69617f78db47e006672bf884d611d3ff84eccfd9c",
+    "MEM-906": "35ebdc336e413846ea91377e31732f8988f083030ed5c2ca77a545308939a0dd",
+    "MEM-907": "b076cdda2260bd611e71b951045567c5ca3e943234942b517b19d3744215308c",
+    "MEM-908": "814cfe9894d6da2b31626878eddf61f913659b9669672a1c2e25b8874be17537",
+    "MEM-909": "c152ce9fa3d4221b1506a9062d9add99f640d67659f5a96d47443c62f8ea8569",
+    "MEM-910": "1a35c69f2a8b56ea83e66bc5d83ff5dfd27ec940e163918d9e05c3eb86e36f85",
+    "MEM-911": "e49900a8c746332eefe5d79b7c0d5a3ad5a04f25c3b8b9bc08d829aeeba637e3",
+    "MEM-912": "aeb257581882384d48ba737ca8cabe2a58d26aaa8ec96928f4952298a297983a",
+    "MEM-913": "ef0f63d794be0d18dd706a05b180e5c36c311dcd7d1f67df0f7962fe95215606",
+    "MEM-914": "f3387f82a07b46fccebe5c1a7e1f742734cf67cb12d2e6ea7f24b0c7ff7ddd14",
+    "MEM-915": "4e2035e65428efb02b8a43794369369d6f3eb8ad2a558c96e2f93e457fe66e7e",
+    "MEM-916": "ac226b6cd8362af26a82369c3accc2c578da7244a3d4cae6093443b54f253853",
+    "MEM-917": "f845e9286dfef42d5fcb5d972f184e0d0879f4fe763ad2b71d35c9709ca61741",
+    "MEM-918": "2f637fa9e761832782b5f90a3c3c67a31b6eabe1c67259d03fa99d6bc15fcf52",
+    "MEM-919": "db5503b6f15c5de821243234d67e8e14977b8f9573885b84191eb59ccbfbf0b2",
+    "MEM-920": "dbe534fcbdd157aeaf2d392d2b36596a7c286187f90b862b982d5119172fb749",
+    "MEM-921": "91121bfd6756090a28a08a481b6be6c68c5fd0fe840afe6ae2c0e43376978061",
+    "MEM-922": "2b3d9b079e69f03064bd41debba53404b3f5f7a3ba4a1d330a9ca829cd318a9f",
+    "MEM-923": "b5e3b88120b12f74b9efe1123ea2cc0b59f03237335a6056dbcda41697b78cd4",
+    "MEM-924": "421994565111bbc5d999de5754e924b2e04f8e69831cf95ca5f148430c1d9885",
+    "MEM-925": "4bbd48cec228d27a81dee21eba083f567a7c268470341c620bc400a864fadc56",
+    "MEM-926": "3f0417bdf5e71705c97b5aa088643de256c2d8a459e281e0e819d7dc25f08cbc",
+    "MEM-927": "028a72eb1ae2a82510b1d5281f6cdde89df60396764b1d130571198e655db4dd",
+    "MEM-928": "6b97b0cba13840b6f965697ef60a9a64c04338b0b8b5fbb3920ec880a71ade2c",
+    "MEM-929": "c4ae0be280f3c04f584b5114948cd1bdebdf2c1625a89075a62bada63454fa07",
+    "MEM-930": "f8e2b1328a34659674bfd96965dabb2da0cf72a8434ad02eab9c110a677fc440",
+    "MEM-931": "d40df47e31d8de5c9de05290bf343d002f4f360c39dbbc7ca97a7faad6e6c991",
+    "MEM-932": "abe3ed5a6a7ebef0359c357b73ea1d16907df8736ee99e99314367ac319114c7",
+    "MEM-933": "7fe7791b12ad4743c5848721d4ff1538ea2ea8b650cc939dbc01e6f21bb2c4f1",
+    "MEM-934": "103d962a26c6215d70c77ec44fe5851921abe43f72435c05e47aeee19eea8614",
+    "MEM-935": "651118afbb838efe02ca7d293d80405839f258ff82320e5cea7acf8694b4210a",
+    "MEM-936": "78cf1dbb99e52e3a03af14a8a193c6d9bf58bd52c8de936be5e2ad82ceb8260f",
+    "MEM-937": "809e123dbb95ae34ab04e0e2b0a675014c088b35cbb81e4d48d46f63704940d9",
+    "MEM-938": "fd542c7f1d39d103aed765d56324593e1c5c0f4c46dcbee0aacd9b19b5be7ca4",
+    "MEM-939": "452f3e41cc88a593535df844716a7990d9c53694b1cc685610af11f74211a43a",
+    "MEM-940": "69419f55144090af62259e97df9d83dac899513770752b696ee7be3d8378db9f",
+    "DEC-014": "9340fefb849d181d6c0f2a5ce97ffec977c96c5abee4f0c60a0880dc9731bf33",
+    "DEC-015": "3d36bc78f552d082a7b6e9707bef56f32ccb51bd56c1400766cb5b42e72a3138",
+    "DEC-016": "2c6e182b9cf37f967c56ec3535339cacc86be952beab1c9e50abb7736b7171c4",
+    "MEM-950": "4e450a24278dd686b2fce11ae33083f5c6d2f979244c1c3df674b54903ebb4c0",
+    "MEM-951": "0e982febc189208f60723fb0bfd52e004fcc692096e2e19b1d2552ef5a8de863"
+   }
+  },
+  "mensajes": {
+   "conteo": 6,
+   "huella_coleccion": "afc9475e1e0e8ab4999297a3fa807db33bee01cb6b6288cb18560454ecc666a7",
+   "huella_por_elemento": {
+    "MSG-010": "4fc026faf467329e4632760a566e4ea874ab18963d3ba84e6aaececa9876fae1",
+    "MSG-011": "a36716ef646aa2abef5869e064c93fec3c7a6bd127f88a1ae3f4b5265a80c4cb",
+    "MSG-012": "f712be8036292b7f258fc323780ff9d29378b6c4f326405db52c30d2a5a3d57f",
+    "MSG-013": "2ca1b08d785b43b8bfa3877db4fe3716688c951bdc28994d87e94799fbea2505",
+    "MSG-020": "b68f3f5872708cf5fc020af2a37c6effad701a79e4c0a82955c3d28dfaf36e14",
+    "MSG-030": "6abfe6f01f2f1fc25ddcd8f456c72ac5f58c345b9cf00014f61947360f2984ce"
+   }
+  },
+  "documentos": {
+   "conteo": 5,
+   "huella_coleccion": "3bcc620e616dc3e181ce991f9ce60f49a1a95a56329708053fb8f89cff845833",
+   "huella_por_elemento": {
+    "DOC-001": "1a2f5b135fbb94a5aad62f357381e39bca5fc8a4ae6d0b7ecf9253aad3189a51",
+    "DOC-002": "8cd0c1d136d4b1a73a9ab847eb1babbca8187860057221bff10301efe229bd01",
+    "DOC-003": "7930b56e83dd776821864b88ca826530002dcaf98ab2f1302597937c76951db6",
+    "DOC-004": "556eab1d136dc7691ad92f9aadaae98c8f000ef8b1f2387cd59ee6f6f41738b6",
+    "DOC-005": "b0b2ebb2a6657de789e7a3f17a989e261fea60757660935c989947e65b40a2ee"
+   }
+  },
+  "relaciones": {
+   "conteo": 10,
+   "huella_coleccion": "396d600430d77b481a0902c9a1c39f95f724117a22e63e929c9a246f78dceb9e",
+   "huella_por_elemento": {
+    "REL-001": "3a08f54aa0947d44dafe47d81aa9bf4d85fe18fc576e8ad6c8e1fa7bbb3b0192",
+    "REL-002": "727a15f8fb53af2469835e62abb49aa1faef0a236bd8fc8a20d0f8f14b2593ee",
+    "REL-003": "fe8dfd9225f9343adcd324e8366c088e666612de9012870931c193483aa775a7",
+    "REL-004": "582cc64c19c56c662b5480a11ca80d4a02c39f52d92874dae0c192fe630b3ff6",
+    "REL-005": "6c8a68ce70b3ee0f1c9276231f3c048b8f1ae94c9eef162db4ccf5cce19ae995",
+    "REL-006": "61ebd8ffc1040cd379db9b06a7a31792c48d5a2c705c7ff43555a1da8969b552",
+    "REL-007": "6c9c1b1a428f32763cd50dc3672bd9d9891b788624f759470423f23855b5195e",
+    "REL-008": "79c347a030e674ba8b5b96db1cf45fea6f8cc6c76e7066da833d12677baf8719",
+    "REL-009": "5f8f0e782de0da2e7b1afedd1b447783815aa761014a877f8f988c28734b29ad",
+    "REL-010": "a6e67ec4a3f9b3d72197708489e03c3564fe7f9fc12939863f66ef992b61ed41"
+   }
+  },
+  "entidades": {
+   "conteo": 7,
+   "huella_coleccion": "ede7f01a1e195042a59c1662964ae73b41fe5b67177d2da566e84a5a02b1364d",
+   "huella_por_elemento": {
+    "ENT-JUAN-TORRES": "79da44d68110894554d619f81d44a890ad33fc1d9988f6edb9f0f4eb4aa476ec",
+    "ENT-JUAN-MOLINA": "b4d8f455471d083e357076b4c1f0c785a249909cb48e8017edf8ab5ae1a9039f",
+    "ENT-PROY-ALFA": "560f136d311a91c42970c91e1c48c16697fce6a43300a947e148a82294a96bd9",
+    "ENT-VEHICULO": "323daa446b616e328588d465593f2a397bc2b278daa6b3dd83ab578f91a0ea06",
+    "ENT-POSTGRESQL": "d7bcce1649092854fada5b60b95e2b22a9d7c93c1358648e9143455df879bba6",
+    "ENT-ROTOR": "840f6faba193796fd56123f9cf036e8515a244748965869e36a9c9f642d53ccd",
+    "ENT-BITACORA": "00e573ba12db4b6a6fe89c8f053856f741ddc859a4d26080ca799d3105210b6b"
+   }
+  },
+  "proyectos": {
+   "conteo": 8,
+   "huella_coleccion": "bf92fa14448efb28600a2877048b081f51686d689c64d4b7b15f58a6a1157872",
+   "huella_por_elemento": {
+    "PRJ-GLOBAL": "c7651026daf7a2edcc9b27cb59675dd52c44533a7a66accd3edfdb8a0d411ebe",
+    "PRJ-ALFA": "563f1bc18ebf0d639dfaaffa168be9e2cf0464e402686e26555cd96cc741c3ea",
+    "PRJ-BETA": "4a6af4b8123c070db5d7ee282dfb8f1558cb3a1c2ffb58bb446707fafca6d676",
+    "PRJ-GAMMA": "240f5a62138ae69f77d0d6e7b3e82e59824c84ea9eb0efffb8c53c538a288a46",
+    "PRJ-MADEIRA": "497196ff9fd72d400ea0fa54b2728f70e44f348a1b17ff296d6ae9ff69c7f408",
+    "PRJ-CANARIAS": "4e4ff1ef6f20919b16514aa0ad6a27e0241fed2d39fb1ff1a4a49cf9e2de4250",
+    "LISTA-CERRADA-AB": "6859e253144275f261a777cd5c6d184b2b82f19c971e914e5c9eebc0eb86782d",
+    "PRJ-DELTA": "064de5d810041fb1e9c44bf30b205024a0b33dcb99562e3a96f8073b9955c304"
+   }
+  }
+ },
+ "delta_v0_5": {
+  "motivo": "Delta relacional discriminante de ADR002-C: dos extremos sinteticos con cero tokens indexados compartidos, unidos por una dependencia explicita, tipada y dirigida. Permite falsar una senal exclusivamente lexica-estructurada sin alterar ninguna adjudicacion heredada.",
+  "proyecto": "PRJ-DELTA",
+  "entidades": [
+   "ENT-ROTOR",
+   "ENT-BITACORA"
+  ],
+  "items": [
+   "MEM-950",
+   "MEM-951"
+  ],
+  "relacion": "REL-010",
+  "tipo_de_relacion": "DERIVA_DE",
+  "tipos_excluidos": [
+   "SUSTITUYE_A",
+   "CONFLICTO_CON"
+  ]
+ }
+}

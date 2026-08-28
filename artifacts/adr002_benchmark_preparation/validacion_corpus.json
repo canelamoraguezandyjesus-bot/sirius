@@ -1,0 +1,512 @@
+{
+ "documento": "Validación del corpus ejecutable de ADR-002",
+ "version_corpus": "0.1",
+ "estado": "PROPUESTO",
+ "semilla": 20260726,
+ "no_ejecuta": [
+  "T0",
+  "T1",
+  "T2",
+  "T3",
+  "T4"
+ ],
+ "resumen": {
+  "comprobaciones": 33,
+  "ok": 33,
+  "fallos": 0,
+  "veredicto": "VALIDO"
+ },
+ "cobertura": {
+  "ca_b04": {
+   "cubiertos": 50,
+   "de": 50,
+   "faltan": [],
+   "duplicados": []
+  },
+  "rf_b04": {
+   "cubiertos": 32,
+   "de": 32,
+   "lista": [
+    "B04-RF-01",
+    "B04-RF-02",
+    "B04-RF-03",
+    "B04-RF-04",
+    "B04-RF-05",
+    "B04-RF-06",
+    "B04-RF-07",
+    "B04-RF-08",
+    "B04-RF-09",
+    "B04-RF-10",
+    "B04-RF-11",
+    "B04-RF-12",
+    "B04-RF-13",
+    "B04-RF-14",
+    "B04-RF-15",
+    "B04-RF-16",
+    "B04-RF-17",
+    "B04-RF-18",
+    "B04-RF-19",
+    "B04-RF-20",
+    "B04-RF-21",
+    "B04-RF-22",
+    "B04-RF-23",
+    "B04-RF-24",
+    "B04-RF-25",
+    "B04-RF-26",
+    "B04-RF-27",
+    "B04-RF-28",
+    "B04-RF-29",
+    "B04-RF-30",
+    "B04-RF-31",
+    "B04-RF-32"
+   ],
+   "no_cubiertos": []
+  },
+  "m_b04": {
+   "cubiertas": 21,
+   "de": 21,
+   "lista": [
+    "B04-M01",
+    "B04-M02",
+    "B04-M03",
+    "B04-M04",
+    "B04-M05",
+    "B04-M06",
+    "B04-M07",
+    "B04-M08",
+    "B04-M09",
+    "B04-M10",
+    "B04-M11",
+    "B04-M12",
+    "B04-M13",
+    "B04-M14",
+    "B04-M15",
+    "B04-M16",
+    "B04-M17",
+    "B04-M18",
+    "B04-M19",
+    "B04-M20",
+    "B04-M21"
+   ],
+   "no_cubiertas": []
+  },
+  "familias_pdp": {
+   "cubiertas": 18,
+   "de": 25,
+   "lista": [
+    "F01",
+    "F02",
+    "F03",
+    "F04",
+    "F05",
+    "F06",
+    "F07",
+    "F08",
+    "F09",
+    "F10",
+    "F11",
+    "F12",
+    "F13",
+    "F14",
+    "F15",
+    "F22",
+    "F23",
+    "F24"
+   ],
+   "no_cubiertas": [
+    "F16",
+    "F17",
+    "F18",
+    "F19",
+    "F20",
+    "F21",
+    "F25"
+   ],
+   "nota": "Denominador de nivel 1. Las familias no cubiertas por B04-CA-01-50 pertenecen a otros bloques; ver familias_pdp_todos_los_niveles."
+  },
+  "familias_pdp_todos_los_niveles": {
+   "cubiertas": 20,
+   "de": 25,
+   "lista": [
+    "F01",
+    "F02",
+    "F03",
+    "F04",
+    "F05",
+    "F06",
+    "F07",
+    "F08",
+    "F09",
+    "F10",
+    "F11",
+    "F12",
+    "F13",
+    "F14",
+    "F15",
+    "F21",
+    "F22",
+    "F23",
+    "F24",
+    "F25"
+   ],
+   "no_cubiertas": [
+    "F16",
+    "F17",
+    "F18",
+    "F19",
+    "F20"
+   ],
+   "nota": "PDP-M03 exige 25/25 para cerrar el Plan de Pruebas completo, no para el benchmark de ADR-002. Las familias que faltan aquí son de B03, B06, B07 y B08 y no las materializa ADR-002."
+  },
+  "red": {
+   "cubiertas": [
+    "RED-009",
+    "RED-010",
+    "RED-011",
+    "RED-012",
+    "RED-013",
+    "RED-014",
+    "RED-015",
+    "RED-018",
+    "RED-022",
+    "RED-025",
+    "RED-027",
+    "RED-028",
+    "RED-029",
+    "RED-030",
+    "RED-031",
+    "RED-032",
+    "RED-033",
+    "RED-034"
+   ],
+   "adr002_exigidas": [
+    "RED-027",
+    "RED-028",
+    "RED-029",
+    "RED-030",
+    "RED-031",
+    "RED-032",
+    "RED-033",
+    "RED-034"
+   ],
+   "no_cubiertas_de_adr002": [],
+   "interfaz_registrada": [
+    "RED-040"
+   ]
+  }
+ },
+ "reparto_t0": {
+  "NO_EXPRESABLE": [
+   "B04-CA-03",
+   "B04-CA-05",
+   "B04-CA-06",
+   "B04-CA-07",
+   "B04-CA-08",
+   "B04-CA-09",
+   "B04-CA-10",
+   "B04-CA-12",
+   "B04-CA-13",
+   "B04-CA-14",
+   "B04-CA-15",
+   "B04-CA-16",
+   "B04-CA-18",
+   "B04-CA-22",
+   "B04-CA-23",
+   "B04-CA-24",
+   "B04-CA-26",
+   "B04-CA-27",
+   "B04-CA-28",
+   "B04-CA-29",
+   "B04-CA-31",
+   "B04-CA-32",
+   "B04-CA-33",
+   "B04-CA-34",
+   "B04-CA-35",
+   "B04-CA-36",
+   "B04-CA-37",
+   "B04-CA-38",
+   "B04-CA-43",
+   "B04-CA-44",
+   "B04-CA-45",
+   "B04-CA-46",
+   "B04-CA-47",
+   "B04-CA-48",
+   "B04-CA-49",
+   "B04-CA-50"
+  ],
+  "SI": [
+   "B04-CA-04",
+   "B04-CA-11",
+   "B04-CA-39"
+  ],
+  "SI_CON_FALLO_PARCIAL": [
+   "B04-CA-01",
+   "B04-CA-17",
+   "B04-CA-19",
+   "B04-CA-21",
+   "B04-CA-30",
+   "B04-CA-41"
+  ],
+  "SI_FALLO_DURO": [
+   "B04-CA-02",
+   "B04-CA-20",
+   "B04-CA-25",
+   "B04-CA-40",
+   "B04-CA-42"
+  ]
+ },
+ "conteos_corpus": {
+  "proyectos": 7,
+  "entidades": 5,
+  "items": 92,
+  "items_significativos": 52,
+  "items_ruido": 40,
+  "mensajes": 6,
+  "documentos": 5,
+  "relaciones": 9
+ },
+ "conteos_casos": {
+  "nivel_1": 50,
+  "nivel_2": 5,
+  "nivel_3": 7
+ },
+ "comprobaciones": [
+  {
+   "comprobacion": "CA-01-50 sin ausencias",
+   "resultado": "OK",
+   "detalle": {
+    "faltan": []
+   }
+  },
+  {
+   "comprobacion": "CA-01-50 sin duplicados",
+   "resultado": "OK",
+   "detalle": {
+    "duplicados": []
+   }
+  },
+  {
+   "comprobacion": "CA-01-50 sin identificadores ajenos",
+   "resultado": "OK",
+   "detalle": {
+    "sobran": []
+   }
+  },
+  {
+   "comprobacion": "CA-01-50 aparecen exactamente una vez",
+   "resultado": "OK",
+   "detalle": {
+    "total": 50
+   }
+  },
+  {
+   "comprobacion": "todos los campos obligatorios por caso",
+   "resultado": "OK",
+   "detalle": {}
+  },
+  {
+   "comprobacion": "vocabulario canónico de modo",
+   "resultado": "OK",
+   "detalle": {
+    "casos": []
+   }
+  },
+  {
+   "comprobacion": "vocabulario canónico de etapa",
+   "resultado": "OK",
+   "detalle": {
+    "casos": []
+   }
+  },
+  {
+   "comprobacion": "vocabulario canónico de parada",
+   "resultado": "OK",
+   "detalle": {
+    "casos": []
+   }
+  },
+  {
+   "comprobacion": "vocabulario canónico de cardinalidad",
+   "resultado": "OK",
+   "detalle": {
+    "casos": []
+   }
+  },
+  {
+   "comprobacion": "ninguna EXHAUSTIVA para por S1",
+   "resultado": "OK",
+   "detalle": {
+    "casos": []
+   }
+  },
+  {
+   "comprobacion": "todo ID citado existe en el corpus",
+   "resultado": "OK",
+   "detalle": {}
+  },
+  {
+   "comprobacion": "elegibles y prohibidos disjuntos",
+   "resultado": "OK",
+   "detalle": {}
+  },
+  {
+   "comprobacion": "las siete dimensiones usan vocabulario canónico",
+   "resultado": "OK",
+   "detalle": {}
+  },
+  {
+   "comprobacion": "temporalidad separa valid_from/valid_to/occurred_at/recorded_at",
+   "resultado": "OK",
+   "detalle": {
+    "items": []
+   }
+  },
+  {
+   "comprobacion": "toda marca crítica lleva nivel, razón, fuente y regla",
+   "resultado": "OK",
+   "detalle": {
+    "items": []
+   }
+  },
+  {
+   "comprobacion": "existen críticos elegibles en el corpus",
+   "resultado": "OK",
+   "detalle": {
+    "n": 19
+   }
+  },
+  {
+   "comprobacion": "fenómenos obligatorios representados",
+   "resultado": "OK",
+   "detalle": {
+    "faltan": []
+   }
+  },
+  {
+   "comprobacion": "casos exactos, acotados y exhaustivos",
+   "resultado": "OK",
+   "detalle": {
+    "presentes": [
+     "ACOTADA",
+     "EXACTA",
+     "EXHAUSTIVA"
+    ]
+   }
+  },
+  {
+   "comprobacion": "ausencia real, no reportable y fuente inaccesible presentes",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "cada caso traza a un RF canónico",
+   "resultado": "OK",
+   "detalle": {
+    "casos": []
+   }
+  },
+  {
+   "comprobacion": "cada caso traza a una métrica canónica",
+   "resultado": "OK",
+   "detalle": {
+    "casos": []
+   }
+  },
+  {
+   "comprobacion": "cada caso traza a una familia PDP",
+   "resultado": "OK",
+   "detalle": {
+    "casos": []
+   }
+  },
+  {
+   "comprobacion": "cada caso traza a una fila RED",
+   "resultado": "OK",
+   "detalle": {
+    "casos": []
+   }
+  },
+  {
+   "comprobacion": "todo RF citado pertenece a B04-RF-01-32",
+   "resultado": "OK",
+   "detalle": {
+    "rf": []
+   }
+  },
+  {
+   "comprobacion": "toda métrica citada pertenece a B04-M01-21",
+   "resultado": "OK",
+   "detalle": {
+    "m": []
+   }
+  },
+  {
+   "comprobacion": "toda familia citada pertenece a F01-F25",
+   "resultado": "OK",
+   "detalle": {
+    "familias": []
+   }
+  },
+  {
+   "comprobacion": "RED-027-034 cubiertas por al menos un caso",
+   "resultado": "OK",
+   "detalle": {
+    "cubiertas": [
+     "RED-027",
+     "RED-028",
+     "RED-029",
+     "RED-030",
+     "RED-031",
+     "RED-032",
+     "RED-033",
+     "RED-034"
+    ],
+    "faltan": []
+   }
+  },
+  {
+   "comprobacion": "una referencia congelada por caso de nivel 1",
+   "resultado": "OK",
+   "detalle": {
+    "solo_en_casos": [],
+    "solo_en_refs": []
+   }
+  },
+  {
+   "comprobacion": "ninguna referencia de nivel 1 es modificable",
+   "resultado": "OK",
+   "detalle": {
+    "casos": []
+   }
+  },
+  {
+   "comprobacion": "sin datos reales, URLs ni secretos",
+   "resultado": "OK",
+   "detalle": {
+    "encontrados": []
+   }
+  },
+  {
+   "comprobacion": "semilla declarada y fija",
+   "resultado": "OK",
+   "detalle": {
+    "semilla": 20260726
+   }
+  },
+  {
+   "comprobacion": "regeneración determinista byte a byte",
+   "resultado": "OK",
+   "detalle": {
+    "returncode": 0,
+    "difieren": []
+   }
+  },
+  {
+   "comprobacion": "ningún caso no expresable ha sido eliminado",
+   "resultado": "OK",
+   "detalle": {
+    "total": 50
+   }
+  }
+ ]
+}

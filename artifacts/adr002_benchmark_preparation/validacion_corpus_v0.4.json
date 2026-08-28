@@ -1,0 +1,492 @@
+{
+ "documento": "Validación v0.4 del benchmark de ADR-002 contra las fuentes canónicas",
+ "version_contrato": "0.4",
+ "estado": "PROPUESTO_NO_CONGELADO",
+ "no_ejecuta": [
+  "T0",
+  "ADR002-A",
+  "ADR002-B",
+  "ADR002-C",
+  "ADR002-D"
+ ],
+ "independencia": "El validador no importa evaluar_universo ni ninguna función de cierre del generador: recalcula las 66 adjudicaciones, huellas, colisiones y guardas con un oráculo propio que lee los dominios declarados en los artefactos.",
+ "puertas": {
+  "SRC-ADR002-01": "SATISFECHA",
+  "ADR002-TOL-207": "NO SATISFECHA · no se aprueba en esta ronda",
+  "ADR002-TOL-208": "NO SATISFECHA · nada se congela; nueva auditoría pendiente",
+  "ADR002-TOL-209": "NO SATISFECHA",
+  "ADR002-TOL-210": "NO SATISFECHA"
+ },
+ "fuentes_canonicas": {
+  "SIRIUS_0.2_BLOQUE_04_BUSQUEDA_Y_RECUPERACION_v1.0_APROBADO.docx": {
+   "sha256_real": "b28a2cbed62b90f35e28db2412e46939b9bd2cdb8f145a5e9bbb2a8e7a5cbb45",
+   "sha256_manifest": "b28a2cbed62b90f35e28db2412e46939b9bd2cdb8f145a5e9bbb2a8e7a5cbb45",
+   "coincide": true,
+   "bytes": 93326
+  },
+  "SIRIUS_0.2_PLAN_DE_PRUEBAS_Y_REGISTRO_EXTERNO_DE_DELEGACIONES_v1.0_APROBADO.docx": {
+   "sha256_real": "39058c0f5fe50bb4b703411bd5296e1bb8b1ede513ccf2d9eacabb35da3f59fd",
+   "sha256_manifest": "39058c0f5fe50bb4b703411bd5296e1bb8b1ede513ccf2d9eacabb35da3f59fd",
+   "coincide": true,
+   "bytes": 93708
+  },
+  "SIRIUS_0.2_ARQ_00_MARCO_RECTOR_ARQUITECTURA_Y_MAPA_DECISIONES_v1.0_APROBADO.docx": {
+   "sha256_real": "730a5fd13dce18bfcdb8dd4afee23dfe22c067c7cb3b953a9bd115cf73224f49",
+   "sha256_manifest": "730a5fd13dce18bfcdb8dd4afee23dfe22c067c7cb3b953a9bd115cf73224f49",
+   "coincide": true,
+   "bytes": 85951
+  }
+ },
+ "resumen": {
+  "comprobaciones": 50,
+  "ok": 50,
+  "fallos": 0,
+  "veredicto": "VALIDO"
+ },
+ "universo_critico": {
+  "premisas": {
+   "B04-CA-31": {
+    "ambito": "PRJ-ALFA",
+    "elegibles": 5,
+    "devueltos": 5,
+    "pendientes": 0
+   },
+   "B04-CA-44": {
+    "ambito": "PRJ-GAMMA",
+    "elegibles": 6,
+    "devueltos": 5,
+    "pendientes": 1
+   },
+   "B04-CA-26": {
+    "ambito": "PRJ-GAMMA",
+    "elegibles": 11,
+    "devueltos": 11,
+    "pendientes": 0
+   },
+   "B04-CA-38": {
+    "ambito": "PRJ-GAMMA",
+    "elegibles": 12,
+    "devueltos": 10,
+    "pendientes": 2
+   }
+  },
+  "criticos_alfa": [
+   "DEC-003",
+   "DEC-010",
+   "MEM-014",
+   "MEM-016",
+   "MEM-025"
+  ],
+  "criticos_gamma": [
+   "MEM-101",
+   "MEM-102",
+   "MEM-103",
+   "MEM-104",
+   "MEM-105",
+   "MEM-106",
+   "MEM-107",
+   "MEM-108",
+   "MEM-109",
+   "MEM-110",
+   "MEM-111",
+   "MEM-112"
+  ],
+  "tiempo_valido_escalonado": {
+   "MEM-101": "2026-01-05T00:00:00Z",
+   "MEM-102": "2026-01-05T00:00:00Z",
+   "MEM-103": "2026-01-05T00:00:00Z",
+   "MEM-104": "2026-01-05T00:00:00Z",
+   "MEM-105": "2026-01-05T00:00:00Z",
+   "MEM-106": "2026-01-05T00:00:00Z",
+   "MEM-107": "2026-03-01T00:00:00Z",
+   "MEM-108": "2026-03-01T00:00:00Z",
+   "MEM-109": "2026-03-01T00:00:00Z",
+   "MEM-110": "2026-03-01T00:00:00Z",
+   "MEM-111": "2026-03-01T00:00:00Z",
+   "MEM-112": "2026-05-01T00:00:00Z"
+  }
+ },
+ "barrido_impacto_dec016": {
+  "adjudicaciones_recalculadas": 66,
+  "cambios": [
+   "B04-CA-36/R1"
+  ],
+  "regla": "solo la rama R1 de B04-CA-36 puede cambiar al añadir DEC-016"
+ },
+ "guardas_rendimiento": {
+  "nombre": "GUARDAS_DERIVADAS_DE_NEUTRALIDAD_SINTETICA",
+  "cotas": {
+   "im_tema_proyecto_bits_max": 0.01,
+   "exceso_estado_palabra_max": 0.25,
+   "n_minimo_exceso": 40,
+   "proyectos_minimos_por_entidad_con_alias": 2,
+   "cuota_maxima_tipo_relacion": 0.4,
+   "intra_proyecto_min": 0.35,
+   "intra_proyecto_max": 0.65
+  },
+  "medidas": {
+   "im_tema_proyecto_bits": 0.002858,
+   "exceso_estado_palabra_max": 0.1336,
+   "proyectos_minimos_por_entidad_con_alias": 2,
+   "cuota_maxima_tipo_relacion": 0.1667,
+   "relaciones_intra_proyecto": 0.5222
+  }
+ },
+ "comprobaciones": [
+  {
+   "comprobacion": "SHA-256 de las tres fuentes coincide con el MANIFEST",
+   "resultado": "OK",
+   "detalle": {}
+  },
+  {
+   "comprobacion": "censo global de cabeceras: tablas reales == identidades que las reclaman",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "las 79 celdas de métricas expanden de forma estricta, sin texto crudo",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "el manifiesto reproduce censo e inventario del lector",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "B04-CA-01-50 aparecen exactamente una vez",
+   "resultado": "OK",
+   "detalle": {
+    "total": 50
+   }
+  },
+  {
+   "comprobacion": "los campos canónicos coinciden carácter a carácter con el DOCX",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "Anexo B canon -> artefacto sin pérdidas",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "Anexo B artefacto -> canon sin invenciones",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "B05-M16 y B08-M25 conservadas como referencias externas",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "el oráculo independiente reproduce las 66 adjudicaciones declaradas",
+   "resultado": "OK",
+   "detalle": {
+    "total": 66,
+    "diferencias": []
+   }
+  },
+  {
+   "comprobacion": "los 13 casos EXHAUSTIVA declaran dominio y cierre calculable",
+   "resultado": "OK",
+   "detalle": {
+    "exhaustiva": [
+     "B04-CA-02",
+     "B04-CA-03",
+     "B04-CA-08",
+     "B04-CA-11",
+     "B04-CA-14",
+     "B04-CA-17",
+     "B04-CA-22",
+     "B04-CA-25",
+     "B04-CA-27",
+     "B04-CA-28",
+     "B04-CA-31",
+     "B04-CA-36",
+     "B04-CA-47"
+    ],
+    "sin_cierre": []
+   }
+  },
+  {
+   "comprobacion": "invariantes de adjudicación (EXHAUSTIVA/ACOTADA/EXACTA, pendientes, decoys)",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "las ramas EXHAUSTIVAS de CA-36 y CA-47 cierran con complemento exacto",
+   "resultado": "OK",
+   "detalle": {
+    "ramas_y_casos_exhaustivos_adjudicados": 17
+   }
+  },
+  {
+   "comprobacion": "PRJ-ALFA contiene exactamente los cinco críticos del canon de CA-31",
+   "resultado": "OK",
+   "detalle": [
+    "DEC-003",
+    "DEC-010",
+    "MEM-014",
+    "MEM-016",
+    "MEM-025"
+   ]
+  },
+  {
+   "comprobacion": "MEM-101…112 viven en PRJ-GAMMA con tiempo válido escalonado y texto Gamma",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "ninguna mención atribuye MEM-101…112 a CA-31; traza y criticidad compartidas",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "puente canon<->censo: CA-31 5/5, CA-44 6/5/1, CA-26 11/11, CA-38 12/10/2",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "barrido de impacto de DEC-016: solo la rama R1 de B04-CA-36 cambia",
+   "resultado": "OK",
+   "detalle": [
+    "B04-CA-36/R1"
+   ]
+  },
+  {
+   "comprobacion": "el manifiesto registra el barrido con la misma conclusión",
+   "resultado": "OK",
+   "detalle": {
+    "adjudicaciones_recalculadas": 66,
+    "cambios": [
+     "B04-CA-36/R1"
+    ],
+    "regla": "solo la rama R1 de B04-CA-36 puede cambiar al añadir DEC-016"
+   }
+  },
+  {
+   "comprobacion": "DEC-016 existe, expira antes de AHORA, no tiene sucesor y traza solo a CA-36",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "cada modo se clasifica individualmente: CANONICO solo si el canon lo nombra",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "insuficiencia por rama: vocabulario cerrado, M3/M4 sin escalera heredada",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "tolerancias: distinción id/pendiente y prohibición de magnitudes inventadas",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "solo PDP-CA-09 y PDP-CA-22 son casos funcionales",
+   "resultado": "OK",
+   "detalle": [
+    "PDP-CA-09",
+    "PDP-CA-22"
+   ]
+  },
+  {
+   "comprobacion": "PDP-CA-09/22: recuento de independencia falsable, sin vocabulario de recuperación",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "references_v0_4 contiene 52 referencias: 50 de recuperación y 2 de recuento",
+   "resultado": "OK",
+   "detalle": {
+    "referencias_totales": 52,
+    "referencias_recuperacion_b04": 50,
+    "referencias_recuento_pdp": 2
+   }
+  },
+  {
+   "comprobacion": "los dos tipos de referencia no se confunden entre sí",
+   "resultado": "OK",
+   "detalle": {
+    "RECUPERACION_B04": 50,
+    "RECUENTO_INDEPENDENCIA_DE_CONSUMIDORES": 2
+   }
+  },
+  {
+   "comprobacion": "los 28 PDP-CA quedan en tres clases disjuntas (2/6/20)",
+   "resultado": "OK",
+   "detalle": {
+    "funcionales": 2,
+    "reglas": 6,
+    "fuera": 20
+   }
+  },
+  {
+   "comprobacion": "los PDP-CA sin fila RED llevan el motivo exacto",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "responsable_de_familia aclarado donde incluye ADR-002",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "cada regla del arnés declara y justifica el estado de su fuente",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "ningún congelable —manifiesto incluido— contiene previsión sobre T0",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "la proyección T0 sigue no normativa, no congelable y fuera de la lista",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "la proyección cubre los 52 casos funcionales y ninguna regla del arnés",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "todo caso declara estado_t0 = NO_MEDIDO",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "performance_corpus_v0_2.json es byte a byte el congelado (SHA-256)",
+   "resultado": "OK",
+   "detalle": {
+    "sha256": "c5a161cbdaa7ee150c08e663fa72663324375aa6654f3216a73e90d6b182666b"
+   }
+  },
+  {
+   "comprobacion": "el manifiesto delimita qué mide y qué NO mide el corpus de rendimiento",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "guardas de neutralidad sintética dentro de cota (oráculo independiente)",
+   "resultado": "OK",
+   "detalle": {
+    "fallan": [],
+    "medidas": {
+     "im_tema_proyecto_bits": 0.002858,
+     "exceso_estado_palabra_max": 0.1336,
+     "proyectos_minimos_por_entidad_con_alias": 2,
+     "cuota_maxima_tipo_relacion": 0.1667,
+     "relaciones_intra_proyecto": 0.5222
+    }
+   }
+  },
+  {
+   "comprobacion": "conteos contados sobre los datos: 95 items (79+16) tras añadir DEC-016",
+   "resultado": "OK",
+   "detalle": {
+    "declarado": {
+     "proyectos": 7,
+     "entidades": 5,
+     "items": 95,
+     "recuerdos": 79,
+     "decisiones": 16,
+     "mensajes": 6,
+     "documentos": 5,
+     "relaciones": 9
+    },
+    "real": {
+     "proyectos": 7,
+     "entidades": 5,
+     "items": 95,
+     "recuerdos": 79,
+     "decisiones": 16,
+     "mensajes": 6,
+     "documentos": 5,
+     "relaciones": 9
+    }
+   }
+  },
+  {
+   "comprobacion": "identidad por elemento intacta (huellas recalculadas por el oráculo)",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "las colisiones por raíz declaradas coinciden con las recalculadas",
+   "resultado": "OK",
+   "detalle": {
+    "recalculadas": 31,
+    "declaradas": 31
+   }
+  },
+  {
+   "comprobacion": "fenómenos obligatorios representados",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "las siete dimensiones usan vocabulario canónico",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "toda marca crítica lleva nivel, razón, fuente y regla",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "el cierre de CA-47 del corpus conserva R1/R2/R3 verificados",
+   "resultado": "OK",
+   "detalle": {
+    "R1": [
+     "DEC-011",
+     "DEC-015"
+    ],
+    "R2": [
+     "DEC-005",
+     "DEC-009",
+     "DEC-014"
+    ],
+    "R3": [
+     "DEC-005",
+     "DEC-014",
+     "DEC-015"
+    ]
+   }
+  },
+  {
+   "comprobacion": "los artefactos v0.1, v0.2 y v0.3 siguen presentes",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "comportamiento mutante de validate_corpus_v0_2 documentado en el manifiesto",
+   "resultado": "OK",
+   "detalle": null
+  },
+  {
+   "comprobacion": "doble regeneración en temporal, byte a byte idéntica",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "los artefactos comprometidos coinciden con la regeneración",
+   "resultado": "OK",
+   "detalle": []
+  },
+  {
+   "comprobacion": "validar no escribió en el árbol de trabajo",
+   "resultado": "OK",
+   "detalle": {
+    "cambiados": [],
+    "nuevos": []
+   }
+  }
+ ]
+}
