@@ -357,3 +357,83 @@ defectos:
       familia que H-24, asi que se para a nombrar la raiz (ADR-001, regla de las
       dos rondas): el verificador diario mete en DIVERGENCIA todo lo que no es
       COINCIDE, y cada caso nuevo se ha ido tapando con una ventana mas.
+
+  # --- Auditoria externa del 28-08-2026, verificada en
+  # docs/audits/verificacion-auditoria-externa-20260828.md (7 de 7 CONFIRMADOS,
+  # cada uno intentando refutarse primero). Todos siguen la incidencia #396;
+  # la fase de correccion espera la autorizacion del propietario.
+
+  - id: H-26
+    titulo: Un Run con cancelacion sin confirmar que cae a LOST pierde la exclusion del recurso mutable
+    bloque: motor
+    gravedad: alta
+    estado: abierto
+    incidencia: 396
+    ficheros:
+      - src/sirius_engine/domain/run.py
+      - src/sirius_engine/adapters/durable/store.py
+      - src/sirius_engine/adapters/memory_store.py
+      - src/sirius_engine/supervisor.py
+
+  - id: H-27
+    titulo: La consistencia WorkItem-Run no tiene guarda transversal (padre terminal con hijos vivos y viceversa)
+    bloque: motor
+    gravedad: alta
+    estado: abierto
+    incidencia: 396
+    ficheros:
+      - src/sirius_engine/adapters/durable/store.py
+      - src/sirius_engine/adapters/memory_store.py
+      - src/sirius_engine/domain/work_item.py
+
+  - id: H-28
+    titulo: La version del perfil (rol@N) se registra pero el workflow ejecuta el prompt vigente de main
+    bloque: ciclo
+    gravedad: alta
+    estado: abierto
+    incidencia: 396
+    ficheros:
+      - .github/workflows/implement-sirius-work.yml
+      - .github/workflows/review-sirius-work.yml
+      - src/sirius_engine/profile_field.py
+
+  - id: H-29
+    titulo: El despacho produce efectos en GitHub antes de grabar el episodio durable, y una caida en medio duplica
+    bloque: motor
+    gravedad: alta
+    estado: abierto
+    incidencia: 396
+    ficheros:
+      - src/sirius_engine/dispatcher.py
+      - src/sirius_engine/ports/dispatch_journal.py
+
+  - id: H-30
+    titulo: El presupuesto comprueba y gasta en dos pasos sin reserva, y dos peticiones al borde pasan las dos
+    bloque: producto
+    gravedad: media
+    estado: abierto
+    incidencia: 396
+    ficheros:
+      - src/sirius/adapters/llm/budget.py
+      - src/sirius/adapters/llm/openai_responses.py
+      - src/sirius/application/studio_voice.py
+
+  - id: H-31
+    titulo: Si behind_by no se puede leer, el merge sigue (fail-open deliberado que la auditoria impugna)
+    bloque: ciclo
+    gravedad: media
+    estado: abierto
+    incidencia: 396
+    ficheros:
+      - scripts/automation/sirius_merge_on_command.sh
+      - tests/automation/test_sirius_merge.py
+
+  - id: H-32
+    titulo: STATUS.md contradice a PLAN.md sobre si Sirius 0.1 esta terminado y aceptado
+    bloque: documentacion
+    gravedad: baja
+    estado: abierto
+    incidencia: 396
+    ficheros:
+      - docs/canonical/STATUS.md
+      - docs/implementation/PLAN.md
