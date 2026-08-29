@@ -3,11 +3,19 @@
 **Estado documental:** APROBADO  
 **Documento rector vigente:** v1.0  
 **Fecha de aprobación:** 22 de julio de 2026  
-**Estado de ejecución:** INACTIVO / NO AUTORIZADO, con una única excepción registrada el
-15 de agosto de 2026 y ampliada el 23 de agosto de 2026: la implementación del Sirius Work
-Engine, estrictamente según ADR-019, ADR-020 y su plan aprobado, con las enmiendas que
-ADR-082 introduce sobre el despliegue del motor y la ubicación de su diario (decisión I4
-del propietario en la incidencia #270). El resto del roadmap post-0.1 sigue sin autorizar.
+**Estado de ejecución:** INACTIVO / NO AUTORIZADO, con dos excepciones vigentes. La
+primera, registrada el 15 de agosto de 2026 y ampliada el 23 de agosto de 2026: la
+implementación del Sirius Work Engine, estrictamente según ADR-019, ADR-020 y su plan
+aprobado, con las enmiendas que ADR-082 introduce sobre el despliegue del motor y la
+ubicación de su diario (decisión I4 del propietario en la incidencia #270). La segunda,
+registrada el 28 de agosto de 2026: la implementación de **Sirius 0.2 — Memoria útil**,
+estrictamente según la Definición de Producto
+`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md` v0.1 (aprobada por la
+fusión de la PR #410 por el propietario el 28-08-2026) y limitada a sus cinco bloques —
+búsqueda mejorada, mejor recuperación, sugerencias confirmadas, conflictos asistidos y
+proyectos históricos consultables
+(`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:52-249`) —, por orden
+del propietario en la incidencia #412. El resto del roadmap post-0.1 sigue sin autorizar.
 
 ## Vigente
 
@@ -23,8 +31,8 @@ del propietario en la incidencia #270). El resto del roadmap post-0.1 sigue sin 
 ## No autorizado todavía
 
 - ampliar Sirius 0.1;
-- implementar el roadmap post-0.1, salvo lo que ampara expresamente la excepción del
-  Sirius Work Engine descrita más abajo;
+- implementar el roadmap post-0.1, salvo lo que amparan expresamente las excepciones del
+  Sirius Work Engine y de Sirius 0.2 — Memoria útil descritas más abajo;
 - seleccionar proveedores o frameworks para agentes;
 - diseñar una arquitectura técnica multiagente — con una única excepción registrada el
   15 de agosto de 2026, ampliada ese mismo día y enmendada el 23 de agosto de 2026: el
@@ -38,6 +46,22 @@ del propietario en la incidencia #270). El resto del roadmap post-0.1 sigue sin 
   NO autorizados: adoptar frameworks o proveedores no aprobados, cualquier multiagente
   abierto más allá de la delegación supervisada descrita en ese diseño, y el resto del
   roadmap post-0.1;
+- implementar el resto del roadmap post-0.1 más allá de Sirius 0.2 — con una segunda
+  excepción registrada el 28 de agosto de 2026: la **implementación** de Sirius 0.2 —
+  Memoria útil queda autorizada por la orden explícita del propietario en la incidencia
+  #412, estrictamente según la Definición de Producto
+  `docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md` v0.1 (aprobada por
+  la fusión de la PR #410 por el propietario el 28-08-2026) y **limitada a sus cinco
+  bloques**: búsqueda mejorada, mejor recuperación, sugerencias confirmadas, conflictos
+  asistidos y proyectos históricos consultables
+  (`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:52-249`), que esa
+  misma Definición declara indivisibles: los cinco, sin excepción, deben estar
+  incorporados y comprobados en `main` antes de evaluar la puerta de salida del Rector
+  (`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:267-275`); fuera de
+  ese alcance siguen NO autorizados: incorporar a `main` la evidencia experimental de la
+  PR #117, decidir sobre la dependencia de Ollama del filtro de relevancia de búsqueda
+  mejorada, y el resto del roadmap post-0.1
+  (`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:297-310`);
 - dar permisos generales sobre el ordenador;
 - activar percepción continua;
 - integrar Sirius con HEAD-R1;
@@ -47,7 +71,7 @@ del propietario en la incidencia #270). El resto del roadmap post-0.1 sigue sin 
 
 **Sirius 0.1 está ACEPTADO y TERMINADO** por declaración del propietario del **10 de agosto de 2026**, con sus pruebas de aceptación ejecutadas sobre el paquete `Sirius-0.1.0.dev0-3432253-windows-x64` con clave y proveedor reales. La declaración, las pruebas superadas una por una y las salvedades declaradas están en `docs/implementation/V8_EXECUTION.md`.
 
-Queda por tanto **abierta la definición de producto Sirius 0.2 — Memoria útil**, que era lo único que esa aceptación condicionaba.
+La **definición de producto Sirius 0.2 — Memoria útil**, que era lo único que esa aceptación condicionaba, ya no está abierta: existe y está aprobada desde la fusión de la PR #410 por el propietario el 28-08-2026 (ver «Próximo paso» más abajo).
 
 > Esta línea dijo «pendiente de aceptación formal» desde el 22 de julio hasta el
 > 25 de agosto: **quince días después de que el propietario cerrara 0.1**. Se deja
@@ -57,4 +81,23 @@ Queda por tanto **abierta la definición de producto Sirius 0.2 — Memoria úti
 
 ## Próximo paso
 
-Crear la **Definición de Producto Sirius 0.2 — Memoria útil**, con requisitos y pruebas propios. Ya no es «futuro» ni está condicionado: la aceptación de 0.1 que lo condicionaba ocurrió el 10-08-2026.
+La **Definición de Producto Sirius 0.2 — Memoria útil** que este apartado pedía crear ya
+existe y está aprobada: `docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md`
+v0.1, fusionada en la PR #410 por el propietario el 28-08-2026. Antes de implementar por
+encargos cualquiera de sus cinco bloques
+(`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:52-249`), la regla de
+activación vigente (`docs/evolution/RECTOR.md:282-290`) exige además pruebas de aceptación
+reproducibles y una arquitectura técnica aprobada; hoy solo existe el paquete de spikes
+`docs/implementation/SIRIUS_0.2_ADR001_PAQUETE_OPERATIVO_SPIKES_v1.0.md`, que autoriza
+únicamente experimentación aislada y no autoriza implementación productiva
+(`docs/implementation/SIRIUS_0.2_ADR001_PAQUETE_OPERATIVO_SPIKES_v1.0.md:4-6`). El próximo
+paso es, por tanto, completar y someter a aprobación esas dos puertas —no escribir código
+productivo de los cinco bloques todavía—, dejando como cuatro decisiones abiertas del
+propietario, ninguna resuelta por este documento: fusionar o no la evidencia experimental
+de la PR #117, la dependencia de Ollama del filtro de relevancia de búsqueda mejorada, el
+cierre de la última omisión crítica de recuperación
+(`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:303-305`) y el origen de
+los estados `CANDIDATA`/`RECHAZADA` de sugerencias confirmadas
+(`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:306-310`), todas
+enumeradas en
+`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:297-310`.
