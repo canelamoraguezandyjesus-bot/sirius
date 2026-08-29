@@ -75,11 +75,30 @@ def _bootstrapped_database(database_path: Path) -> Path:
     return database_path
 
 
-def _build_window(database_path: Path, *, proposed_content: str | None) -> MainWindow:
+class _PromptMultilineRecorder:
+    """Spy for ``prompt_multiline_with_default`` that records the precharge
+    argument (``initial``), so tests can assert MainWindow really precharges
+    the dialog with the completed message's own content (SIRIUS-ARQ-0.2
+    §3.6) — a fixed-return lambda would pass even if the precharge were
+    empty, stale, or from a different message."""
+
+    def __init__(self, response: str | None) -> None:
+        self._response = response
+        self.calls: list[tuple[str, str, str]] = []
+
+    def __call__(self, title: str, label: str, initial: str) -> str | None:
+        self.calls.append((title, label, initial))
+        return self._response
+
+
+def _build_window(
+    database_path: Path, *, proposed_content: str | None
+) -> tuple[MainWindow, _PromptMultilineRecorder]:
     dependencies = build_conversation_dependencies(
         database_path, database_path.parent / "backups", secret_store=FakeSecretStore()
     )
-    return MainWindow(
+    prompt_recorder = _PromptMultilineRecorder(proposed_content)
+    window = MainWindow(
         send_message_use_case=dependencies.send_message_use_case,
         get_history_use_case=dependencies.get_history_use_case,
         get_budget_status_use_case=dependencies.get_budget_status_use_case,
@@ -109,10 +128,12 @@ def _build_window(database_path: Path, *, proposed_content: str | None) -> MainW
         close_database_connections=dependencies.close_database_connections,
         show_warning=lambda title, text: None,
         show_information=lambda title, text: None,
-        # Same seam MainWindow's real dialog uses; the test always confirms
-        # with the message's own content (or None to simulate a cancel).
-        prompt_multiline_with_default=lambda title, label, initial: proposed_content,
+        # Same seam MainWindow's real dialog uses; the recorder confirms
+        # with the message's own content (or None to simulate a cancel) and
+        # records the precharge (``initial``) it received.
+        prompt_multiline_with_default=prompt_recorder,
     )
+    return window, prompt_recorder
 
 
 def _sirius_widget(window: MainWindow) -> MessageItemWidget:
@@ -127,7 +148,9 @@ def test_manual_propose_confirm_flow_never_resends_or_blocks_the_first_turn(
     qtbot: QtBot, tmp_path: Path
 ) -> None:
     database_path = _bootstrapped_database(tmp_path / "sirius.db")
-    window = _build_window(database_path, proposed_content="El usuario prefiere respuestas breves")
+    window, prompt_recorder = _build_window(
+        database_path, proposed_content="El usuario prefiere respuestas breves"
+    )
     qtbot.addWidget(window)
     window.show()
     provider = _CountingProvider("Entendido.")
@@ -143,6 +166,14 @@ def test_manual_propose_confirm_flow_never_resends_or_blocks_the_first_turn(
     assert sirius_widget.propose_suggestion_button().isVisible()
 
     sirius_widget.propose_suggestion_button().click()
+
+    # El diálogo se precarga con el contenido real del mensaje de Sirius ya
+    # completado ("Entendido."), no con un texto vacío, obsoleto o de otro
+    # mensaje (SIRIUS-ARQ-0.2 §3.6): "editable antes de confirmar" presupone
+    # que arranca con el contenido real.
+    assert prompt_recorder.calls == [
+        ("Proponer guardar…", "Contenido a proponer como recuerdo:", "Entendido.")
+    ]
 
     assert window.knowledge_widget.suggestions_list.count() == 1
     assert (
@@ -171,7 +202,7 @@ def test_manual_propose_confirm_flow_never_resends_or_blocks_the_first_turn(
 @pytest.mark.gui
 def test_cancelling_the_propose_dialog_creates_no_suggestion(qtbot: QtBot, tmp_path: Path) -> None:
     database_path = _bootstrapped_database(tmp_path / "sirius.db")
-    window = _build_window(database_path, proposed_content=None)
+    window, _prompt_recorder = _build_window(database_path, proposed_content=None)
     qtbot.addWidget(window)
 
     window.message_input.setText("hola")
@@ -186,7 +217,7 @@ def test_cancelling_the_propose_dialog_creates_no_suggestion(qtbot: QtBot, tmp_p
 @pytest.mark.gui
 def test_propose_button_is_hidden_on_the_user_message(qtbot: QtBot, tmp_path: Path) -> None:
     database_path = _bootstrapped_database(tmp_path / "sirius.db")
-    window = _build_window(database_path, proposed_content=None)
+    window, _prompt_recorder = _build_window(database_path, proposed_content=None)
     qtbot.addWidget(window)
     window.show()
 

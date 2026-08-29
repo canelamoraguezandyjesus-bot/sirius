@@ -347,6 +347,55 @@ def test_response_failed_after_the_full_delimiter_already_streamed_has_no_delimi
     assert "secreto" not in last_event.partial_text
 
 
+def test_response_failed_mid_delimiter_does_not_leak_the_partial_marker() -> None:
+    """A raw chunk can end mid-delimiter (§3.2): the splitter must hold back
+    only that suspicious suffix, never more. If the stream then fails before
+    the delimiter is ever completed, that held-back suffix could still have
+    turned into the delimiter — it must be discarded, not surfaced as visible
+    text in ``LLMError.partial_text``."""
+    visible = "Respuesta. "
+    partial_marker = MEMORY_SUGGESTION_DELIMITER[:-1]
+    provider, _client = _build_provider(
+        lambda **kwargs: _FakeStream([_delta_event(visible + partial_marker), _failed_event()])
+    )
+
+    events = list(provider.stream_response(_request()))
+
+    assert [e.text for e in events if isinstance(e, LLMTextDelta)] == [visible]
+    last_event = events[-1]
+    assert isinstance(last_event, LLMError)
+    assert last_event.kind is LLMErrorKind.INVALID_RESPONSE
+    assert last_event.partial_text == visible
+    assert MEMORY_SUGGESTION_DELIMITER[:-1] not in last_event.partial_text
+
+
+def test_cancelled_mid_delimiter_does_not_leak_the_partial_marker() -> None:
+    """Same leak as above, but for a cancellation landing right after a raw
+    chunk that ends mid-delimiter, before any terminal event arrives."""
+    visible = "Respuesta. "
+    partial_marker = MEMORY_SUGGESTION_DELIMITER[:-1]
+    request = _request(operation_id="op-cancel-mid-delimiter")
+    provider_box: list[OpenAIResponsesProvider] = []
+
+    def _create(**kwargs: Any) -> object:
+        return _CancelAfterNPullsStream(
+            [_delta_event(visible + partial_marker), _completed_event(visible)],
+            cancel_after=1,
+            on_cancel=lambda: provider_box[0].cancel(request.operation_id),
+        )
+
+    provider, _client = _build_provider(_create)
+    provider_box.append(provider)
+
+    events = list(provider.stream_response(request))
+
+    assert [e.text for e in events if isinstance(e, LLMTextDelta)] == [visible]
+    last_event = events[-1]
+    assert isinstance(last_event, LLMCancelled)
+    assert last_event.partial_text == visible
+    assert MEMORY_SUGGESTION_DELIMITER[:-1] not in last_event.partial_text
+
+
 def test_failure_before_first_delta_is_classified_and_safe(monkeypatch: pytest.MonkeyPatch) -> None:
     secret_message = "sk-should-never-leak-1234567890"
 

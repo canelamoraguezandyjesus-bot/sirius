@@ -150,8 +150,17 @@ class _MemorySuggestionSplitter:
         safe, self._pending = self._pending[:-overlap], self._pending[-overlap:]
         return safe
 
-    def finish(self) -> tuple[str, str | None]:
+    def finish(self, *, completed: bool) -> tuple[str, str | None]:
         """Call once the raw stream ends (successfully, cancelled, or failed).
+
+        ``completed`` must be ``True`` only for a genuine ``response.completed``
+        terminal event; ``False`` for cancellation, failure, or any other
+        anomalous end. When ``self._pending`` still holds text (at most
+        ``len(delimiter) - 1`` characters — see the class docstring), that
+        text is only known to be ordinary trailing content once the stream
+        has truly completed with no more raw output coming; on any anomalous
+        end it could still turn into the delimiter, so it must be discarded
+        rather than surfacing it as visible/persisted text.
 
         Returns ``(trailing_safe_text, memory_suggestion)``: whatever safe
         text was still held back, and the proposal — stripped, or ``None`` if
@@ -161,7 +170,7 @@ class _MemorySuggestionSplitter:
         if self._found:
             return "", "".join(self._suggestion_parts).strip() or None
         trailing, self._pending = self._pending, ""
-        return trailing, None
+        return (trailing, None) if completed else ("", None)
 
 
 class OpenAIResponsesProvider:
@@ -282,7 +291,7 @@ class OpenAIResponsesProvider:
         try:
             for event in stream:
                 if self._is_cancelled(request.operation_id):
-                    trailing, _ = splitter.finish()
+                    trailing, _ = splitter.finish(completed=False)
                     if trailing:
                         accumulated.append(trailing)
                     yield LLMCancelled(partial_text="".join(accumulated))
@@ -296,7 +305,7 @@ class OpenAIResponsesProvider:
                         accumulated.append(safe_text)
                         yield LLMTextDelta(text=safe_text)
                 elif event_type == "response.completed":
-                    trailing, memory_suggestion = splitter.finish()
+                    trailing, memory_suggestion = splitter.finish(completed=True)
                     if trailing:
                         accumulated.append(trailing)
                         yield LLMTextDelta(text=trailing)
@@ -304,7 +313,7 @@ class OpenAIResponsesProvider:
                     yield completed
                     return
                 elif event_type in ("response.failed", "response.incomplete"):
-                    trailing, _ = splitter.finish()
+                    trailing, _ = splitter.finish(completed=False)
                     if trailing:
                         accumulated.append(trailing)
                     _logger.error(
@@ -313,7 +322,7 @@ class OpenAIResponsesProvider:
                     yield _build_error(LLMErrorKind.INVALID_RESPONSE, "".join(accumulated))
                     return
                 elif event_type == "error":
-                    trailing, _ = splitter.finish()
+                    trailing, _ = splitter.finish(completed=False)
                     if trailing:
                         accumulated.append(trailing)
                     _logger.error(
@@ -322,7 +331,7 @@ class OpenAIResponsesProvider:
                     yield _build_error(LLMErrorKind.UNKNOWN, "".join(accumulated))
                     return
         except Exception as exc:  # translated to a safe, typed event; never re-raised
-            trailing, _ = splitter.finish()
+            trailing, _ = splitter.finish(completed=False)
             if trailing:
                 accumulated.append(trailing)
             kind = _classify_exception(exc)
@@ -333,7 +342,7 @@ class OpenAIResponsesProvider:
             return
 
         # The stream ended without ever reaching a terminal event.
-        trailing, _ = splitter.finish()
+        trailing, _ = splitter.finish(completed=False)
         if trailing:
             accumulated.append(trailing)
         yield _build_error(LLMErrorKind.INVALID_RESPONSE, "".join(accumulated))
