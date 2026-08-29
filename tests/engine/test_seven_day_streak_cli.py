@@ -43,6 +43,7 @@ from sirius_engine.seven_day_streak import leer_registro
 _AHORA = datetime(2026, 8, 22, 3, 17, tzinfo=UTC)
 _REPO = "canelamoraguezandyjesus-bot/sirius"
 _NUMERO = 268
+_RAIZ_REPOSITORIO = Path(__file__).resolve().parents[2]
 
 
 def _correr(
@@ -470,3 +471,49 @@ def test_h25_declarar_una_clase_devuelve_la_comparacion_real_por_el_cli(
     lineas = leer_registro(registro)
     assert len(lineas) == 1
     assert lineas[0].es_verde is True
+
+
+# --- #416: el docstring de este módulo cita la cadencia real de motor-sirius.yml ---
+
+
+def test_docstring_no_afirma_que_el_motor_arranca_solo_a_mano() -> None:
+    """El docstring dijo, hasta el #416, que ``motor-sirius.yml`` «arranca solo a
+    mano, sin horario» -falso desde #343 (25-08-2026): el motor tiene cadencia
+    real (D2, ADR-090). Esa frase obsoleta llegó a generar un parte erróneo al
+    propietario el 28-08 (ver docs/audits/evidencia-el-motor-esta-preparado.md).
+
+    Esta prueba no fija un texto suelto: lee el cron REAL de
+    ``motor-sirius.yml`` y comprueba que el docstring lo cita. Si alguien
+    cambia el minuto del motor sin tocar este docstring -o revierte la
+    afirmación a «solo a mano» mientras el workflow sigue con horario-, esto
+    rompe en vez de quedarse obsoleto en silencio.
+    """
+    workflow = dict(
+        yaml.safe_load(
+            (_RAIZ_REPOSITORIO / ".github" / "workflows" / "motor-sirius.yml").read_text(
+                encoding="utf-8"
+            )
+        )
+    )
+    disparadores = workflow.get("on") or workflow.get(True)
+    assert isinstance(disparadores, dict), f"motor-sirius.yml no declara disparadores: {workflow}"
+    crones = [str(entrada["cron"]) for entrada in disparadores.get("schedule") or []]
+    assert crones, (
+        "motor-sirius.yml ya no tiene cadencia programada: el docstring de "
+        "seven_day_streak_cli tendría que volver a decir que arranca solo a mano"
+    )
+
+    docstring = seven_day_streak_cli.__doc__ or ""
+    cron_real = crones[0]
+    assert cron_real in docstring, (
+        f"el docstring no cita el cron real de motor-sirius.yml ({cron_real!r}); "
+        "si el horario cambió sin actualizar el docstring, vuelve a quedar obsoleto"
+    )
+    assert "workflow_dispatch" in disparadores, (
+        "motor-sirius.yml perdió el arranque manual: el docstring afirma que la "
+        "cadencia programada convive con él"
+    )
+    assert "ya no arranca solo a mano" in docstring, (
+        "el docstring dejó de afirmar la cadencia real: no cita la frase que "
+        "corrige la afirmación falsa (#416)"
+    )

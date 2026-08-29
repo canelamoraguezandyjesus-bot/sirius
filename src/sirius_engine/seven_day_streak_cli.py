@@ -41,13 +41,19 @@ ADR-074 documentó que el almacén del motor no era todavía la maquinaria que
 hace avanzar el ciclo. Desde D2 existe ``motor-sirius.yml``, que invoca
 ``sirius-supervisar`` y confirma el diario en el repositorio.
 
-Pero **el contador sigue sin poder contar de verdad**, y por un motivo
-distinto al de antes: ese workflow arranca **solo a mano**, sin horario,
-mientras se comprueba que da bien un turno. Un motor que no corre por su
-cuenta no lleva el ciclo, así que una pasada real seguirá midiendo con
+Hasta el 25-08-2026 **el contador seguía sin poder contar de verdad**, y por
+un motivo distinto al de antes: ese workflow arrancaba **solo a mano**, sin
+horario, mientras se comprobaba que daba bien un turno. Un motor que no corre
+por su cuenta no lleva el ciclo, así que una pasada real seguía midiendo con
 honestidad ``sin línea registrada`` o divergencias estructurales de fase;
-nunca un falso verde. Lo que falta ya no es el cableado: es la cadencia, y es
-la decisión siguiente de D2.
+nunca un falso verde. Lo que faltaba ya no era el cableado: era la cadencia,
+y esa fue la decisión siguiente de D2.
+
+**Y esa decisión ya se tomó (D2, ADR-090, #343).** Desde el 25-08-2026
+``motor-sirius.yml`` ya no arranca solo a mano: tiene cadencia programada
+-``cron: 32 */6 * * *``, cada seis horas- además del arranque manual que ya
+tenía, y ha dado turnos programados reales en verde. Lo que faltaba en el
+párrafo anterior está cerrado.
 """
 
 from __future__ import annotations
