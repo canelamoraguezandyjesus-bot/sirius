@@ -182,11 +182,11 @@ disparador de sugerencias»): **dos vías, no una**, que convergen en el mismo e
      (`src/sirius/ports/llm.py:69-79`) contienen jamás el delimitador ni la propuesta cruda.
      Esto no es una extensión opcional del contrato: `SendMessageUseCase` persiste
      `LLMCancelled.partial_text`/`LLMError.partial_text` tal cual, con estado `CANCELLED`/
-     `FAILED`, en la misma llamada que los recibe
-     (`src/sirius/application/send_message.py:188-210`), y ese texto vuelve a entrar en un
-     contexto futuro exactamente igual que `LLMCompleted.text`
-     (`src/sirius/application/context.py:169-174`); dejar sin sanear el turno cancelado o
-     fallido reabriría, para esas dos rutas, el mismo defecto que CODEX-001 señaló para el
+     `FAILED`, en la misma llamada que los recibe, para trazabilidad
+     (`src/sirius/application/send_message.py:188-210`), y esos mismos fragmentos ya se
+     pintaron en pantalla mientras llegaban, exactamente igual que los de `LLMCompleted.text`
+     (`src/sirius/presentation/main_window.py:1400-1413`); dejar sin sanear el turno cancelado
+     o fallido reabriría, para esas dos rutas, el mismo defecto que CODEX-001 señaló para el
      turno completado.
      `SendMessageResult` (`src/sirius/application/send_message.py:50-63`) gana el campo
      espejo `memory_suggestion: str | None`, copiado de `LLMCompleted.memory_suggestion`
