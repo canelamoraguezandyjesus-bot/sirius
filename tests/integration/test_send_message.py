@@ -92,8 +92,9 @@ class _StaticLLMProvider:
     SendMessageUseCase only depends on the port, never on a concrete adapter.
     """
 
-    def __init__(self, fixed_reply: str) -> None:
+    def __init__(self, fixed_reply: str, *, memory_suggestion: str | None = None) -> None:
         self._fixed_reply = fixed_reply
+        self._memory_suggestion = memory_suggestion
 
     def health_check(self) -> bool:
         return True
@@ -102,7 +103,10 @@ class _StaticLLMProvider:
         del request
         yield LLMTextDelta(text=self._fixed_reply)
         yield LLMCompleted(
-            text=self._fixed_reply, input_tokens=1, output_tokens=len(self._fixed_reply)
+            text=self._fixed_reply,
+            input_tokens=1,
+            output_tokens=len(self._fixed_reply),
+            memory_suggestion=self._memory_suggestion,
         )
 
     def cancel(self, operation_id: str) -> None:
@@ -772,3 +776,50 @@ def test_database_rejects_two_sirius_rows_for_the_same_operation_id(tmp_path: Pa
 
     messages = conversation_repository.list_messages(conversation.id)
     assert len(messages) == 1
+
+
+@pytest.mark.integration
+def test_send_message_mirrors_the_memory_suggestion_when_the_turn_completes_with_one(
+    tmp_path: Path,
+) -> None:
+    """SIRIUS-ARQ-0.2 §3.2/§3.6 (M6): the mirror field is a verbatim copy of
+    ``LLMCompleted.memory_suggestion`` — ``SendMessageUseCase`` transports it
+    without interpreting it or calling ``ProposeMemorySuggestionUseCase``
+    itself (that decision belongs to the interface surface, never here)."""
+    database_path = tmp_path / "sirius.db"
+    use_case = _build_use_case(
+        database_path,
+        _StaticLLMProvider("respuesta", memory_suggestion="recuerda esto"),
+    )
+
+    result = use_case.send_message("hola")
+
+    assert result.outcome is MessageStatus.COMPLETED
+    assert result.memory_suggestion == "recuerda esto"
+
+
+@pytest.mark.integration
+def test_send_message_mirror_is_none_when_the_provider_proposes_nothing(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    use_case = _build_use_case(database_path, _StaticLLMProvider("respuesta"))
+
+    result = use_case.send_message("hola")
+
+    assert result.outcome is MessageStatus.COMPLETED
+    assert result.memory_suggestion is None
+
+
+@pytest.mark.integration
+def test_send_message_mirror_is_none_for_a_failed_turn_even_if_a_completed_double_would_carry_one(
+    tmp_path: Path,
+) -> None:
+    """Only ``outcome is COMPLETED`` ever copies the mirror field (§3.2):
+    ``LLMCancelled``/``LLMError`` carry no ``memory_suggestion`` field at all
+    — there is nothing to copy, and the mirror stays ``None``."""
+    database_path = tmp_path / "sirius.db"
+    use_case = _build_use_case(database_path, _FailAfterDeltasProvider())
+
+    result = use_case.send_message("hola")
+
+    assert result.outcome is MessageStatus.FAILED
+    assert result.memory_suggestion is None

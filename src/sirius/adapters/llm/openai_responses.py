@@ -22,6 +22,7 @@ import openai
 from sirius.adapters.llm.budget import BudgetTracker
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.llm import (
+    MEMORY_SUGGESTION_DELIMITER,
     LLMCancelled,
     LLMCompleted,
     LLMError,
@@ -84,6 +85,92 @@ def _classify_exception(exc: Exception) -> LLMErrorKind:
 
 def _build_error(kind: LLMErrorKind, partial_text: str = "") -> LLMError:
     return LLMError(kind=kind, message=_SAFE_MESSAGES[kind], partial_text=partial_text)
+
+
+def _split_delimiter(
+    raw: str, delimiter: str = MEMORY_SUGGESTION_DELIMITER
+) -> tuple[str, str | None]:
+    """One-shot split of an already-complete raw string (§3.2). Used only as
+    the defensive fallback for a response with no incremental deltas at all;
+    the real streaming path uses ``_MemorySuggestionSplitter`` instead, which
+    stays safe across chunk boundaries."""
+    index = raw.find(delimiter)
+    if index == -1:
+        return raw, None
+    return raw[:index], raw[index + len(delimiter) :].strip() or None
+
+
+def _longest_delimiter_prefix_as_suffix(text: str, delimiter: str) -> int:
+    """Length of the longest suffix of ``text`` that is also a prefix of
+    ``delimiter`` — the only part of ``text`` that could still turn into the
+    delimiter once more raw output arrives."""
+    max_check = min(len(text), len(delimiter) - 1)
+    for length in range(max_check, 0, -1):
+        if text.endswith(delimiter[:length]):
+            return length
+    return 0
+
+
+class _MemorySuggestionSplitter:
+    """Splits a raw provider text stream into delimiter-free chunks plus an
+    optional trailing memory suggestion (SIRIUS-ARQ-0.2 §3.2).
+
+    Streaming-safe: at most ``len(delimiter) - 1`` trailing characters are
+    ever held back between calls to ``feed``, so an occurrence of the
+    delimiter split across two (or more) consecutive raw chunks is still
+    detected — the safe prefix already returned by an earlier call never
+    contains the delimiter or any part of the raw proposal.
+    """
+
+    def __init__(self, delimiter: str = MEMORY_SUGGESTION_DELIMITER) -> None:
+        self._delimiter = delimiter
+        self._pending = ""
+        self._found = False
+        self._suggestion_parts: list[str] = []
+
+    def feed(self, raw_chunk: str) -> str:
+        """Consume one raw chunk; return the portion, if any, safe to show/persist now."""
+        if self._found:
+            self._suggestion_parts.append(raw_chunk)
+            return ""
+        self._pending += raw_chunk
+        index = self._pending.find(self._delimiter)
+        if index != -1:
+            safe = self._pending[:index]
+            after = self._pending[index + len(self._delimiter) :]
+            self._found = True
+            self._pending = ""
+            if after:
+                self._suggestion_parts.append(after)
+            return safe
+        overlap = _longest_delimiter_prefix_as_suffix(self._pending, self._delimiter)
+        if overlap == 0:
+            safe, self._pending = self._pending, ""
+            return safe
+        safe, self._pending = self._pending[:-overlap], self._pending[-overlap:]
+        return safe
+
+    def finish(self, *, completed: bool) -> tuple[str, str | None]:
+        """Call once the raw stream ends (successfully, cancelled, or failed).
+
+        ``completed`` must be ``True`` only for a genuine ``response.completed``
+        terminal event; ``False`` for cancellation, failure, or any other
+        anomalous end. When ``self._pending`` still holds text (at most
+        ``len(delimiter) - 1`` characters — see the class docstring), that
+        text is only known to be ordinary trailing content once the stream
+        has truly completed with no more raw output coming; on any anomalous
+        end it could still turn into the delimiter, so it must be discarded
+        rather than surfacing it as visible/persisted text.
+
+        Returns ``(trailing_safe_text, memory_suggestion)``: whatever safe
+        text was still held back, and the proposal — stripped, or ``None`` if
+        empty or the delimiter never appeared. Idempotent-shaped: safe to call
+        exactly once per stream, which every call site here does.
+        """
+        if self._found:
+            return "", "".join(self._suggestion_parts).strip() or None
+        trailing, self._pending = self._pending, ""
+        return (trailing, None) if completed else ("", None)
 
 
 class OpenAIResponsesProvider:
@@ -195,34 +282,58 @@ class OpenAIResponsesProvider:
         self, request: LLMRequest, stream: Iterable[object]
     ) -> Iterable[LLMStreamEvent]:
         accumulated: list[str] = []
+        # §3.2: every raw chunk passes through this splitter before it can
+        # ever become an ``LLMTextDelta`` or reach a terminal event's text —
+        # the delimiter and the raw proposal after it never leak into either,
+        # even split across chunk boundaries or cut short by a cancellation
+        # or failure mid-delimiter.
+        splitter = _MemorySuggestionSplitter()
         try:
             for event in stream:
                 if self._is_cancelled(request.operation_id):
+                    trailing, _ = splitter.finish(completed=False)
+                    if trailing:
+                        accumulated.append(trailing)
                     yield LLMCancelled(partial_text="".join(accumulated))
                     return
 
                 event_type = getattr(event, "type", "")
                 if event_type == "response.output_text.delta":
                     delta_text = getattr(event, "delta", "")
-                    accumulated.append(delta_text)
-                    yield LLMTextDelta(text=delta_text)
+                    safe_text = splitter.feed(delta_text)
+                    if safe_text:
+                        accumulated.append(safe_text)
+                        yield LLMTextDelta(text=safe_text)
                 elif event_type == "response.completed":
-                    completed = self._handle_completed(event, accumulated)
+                    trailing, memory_suggestion = splitter.finish(completed=True)
+                    if trailing:
+                        accumulated.append(trailing)
+                        yield LLMTextDelta(text=trailing)
+                    completed = self._handle_completed(event, accumulated, memory_suggestion)
                     yield completed
                     return
                 elif event_type in ("response.failed", "response.incomplete"):
+                    trailing, _ = splitter.finish(completed=False)
+                    if trailing:
+                        accumulated.append(trailing)
                     _logger.error(
                         "Operación %s: respuesta inválida del proveedor", request.operation_id
                     )
                     yield _build_error(LLMErrorKind.INVALID_RESPONSE, "".join(accumulated))
                     return
                 elif event_type == "error":
+                    trailing, _ = splitter.finish(completed=False)
+                    if trailing:
+                        accumulated.append(trailing)
                     _logger.error(
                         "Operación %s: error no clasificado del proveedor", request.operation_id
                     )
                     yield _build_error(LLMErrorKind.UNKNOWN, "".join(accumulated))
                     return
         except Exception as exc:  # translated to a safe, typed event; never re-raised
+            trailing, _ = splitter.finish(completed=False)
+            if trailing:
+                accumulated.append(trailing)
             kind = _classify_exception(exc)
             _logger.error(
                 "Operación %s falló durante el streaming (%s)", request.operation_id, kind.value
@@ -231,9 +342,14 @@ class OpenAIResponsesProvider:
             return
 
         # The stream ended without ever reaching a terminal event.
+        trailing, _ = splitter.finish(completed=False)
+        if trailing:
+            accumulated.append(trailing)
         yield _build_error(LLMErrorKind.INVALID_RESPONSE, "".join(accumulated))
 
-    def _handle_completed(self, event: object, accumulated: list[str]) -> LLMCompleted | LLMError:
+    def _handle_completed(
+        self, event: object, accumulated: list[str], memory_suggestion: str | None
+    ) -> LLMCompleted | LLMError:
         response = event.response  # type: ignore[attr-defined]
         usage = response.usage
         input_tokens = usage.input_tokens if usage is not None else 0
@@ -241,7 +357,17 @@ class OpenAIResponsesProvider:
         if usage is not None:
             self._budget_tracker.record_usage(input_tokens, output_tokens)
 
-        full_text = "".join(accumulated) or (response.output_text or "")
+        full_text = "".join(accumulated)
+        if not full_text:
+            # No incremental delta ever arrived (defensive fallback only): the
+            # full raw output still goes through the same delimiter contract,
+            # so it can never leak here either (§3.2).
+            full_text, memory_suggestion = _split_delimiter(response.output_text or "")
         if not full_text:
             return _build_error(LLMErrorKind.INVALID_RESPONSE)
-        return LLMCompleted(text=full_text, input_tokens=input_tokens, output_tokens=output_tokens)
+        return LLMCompleted(
+            text=full_text,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            memory_suggestion=memory_suggestion,
+        )

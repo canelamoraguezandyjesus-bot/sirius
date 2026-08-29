@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -37,6 +38,7 @@ from sirius.application.archive_memory import ArchiveMemoryUseCase
 from sirius.application.budget_status import GetBudgetStatusUseCase
 from sirius.application.capture_commands import CaptureCommand, CaptureIntent, interpret
 from sirius.application.capture_replies import spoken_confirmation
+from sirius.application.confirm_memory_suggestion import ConfirmMemorySuggestionUseCase
 from sirius.application.correct_memory import CorrectMemoryUseCase
 from sirius.application.create_backup import CreateBackupUseCase
 from sirius.application.decision_origin import GetDecisionOriginUseCase
@@ -54,6 +56,11 @@ from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.project_errors import ProjectContinuityError
 from sirius.application.project_lifecycle import ProjectLifecycleUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
+from sirius.application.propose_memory_suggestion import (
+    InvalidMemorySuggestionProposalDataError,
+    ProposeMemorySuggestionUseCase,
+)
+from sirius.application.reject_memory_suggestion import RejectMemorySuggestionUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageResult, SendMessageUseCase
@@ -97,6 +104,7 @@ from sirius.presentation.error_messages import failed_send_message
 from sirius.presentation.export_worker import ExportWorker
 from sirius.presentation.historical_projects_widget import HistoricalProjectsWidget
 from sirius.presentation.knowledge_widget import KnowledgeWidget
+from sirius.presentation.memory_suggestion_trigger import propose_suggestion_if_completed_with_one
 from sirius.presentation.message_view import MessageItemDelegate, MessageItemWidget
 from sirius.presentation.model_studio.settings_dialog import StudioSettingsDialog
 from sirius.presentation.model_studio.studio_page import StudioPage
@@ -152,6 +160,8 @@ Cinco segundos es el compromiso: lo bastante corto para que un OBS cerrado se
 note enseguida —y no veinte minutos después—, y lo bastante largo para que no
 sea un goteo constante de peticiones mientras se graba.
 """
+
+_MEMORY_SUGGESTION_GENERIC_ERROR_TEXT = "No se pudo completar la operación. Inténtalo de nuevo."
 
 # Estados con los que termina cualquier operación de copia de seguridad. Se
 # guardan además en la propiedad ``siriusBackupState`` de la etiqueta que los
@@ -234,6 +244,9 @@ class MainWindow(QMainWindow):
         archive_decision_use_case: ArchiveDecisionUseCase,
         detect_precedence_conflicts_use_case: DetectPrecedenceConflictsUseCase,
         get_knowledge_overview_use_case: GetKnowledgeOverviewUseCase,
+        propose_memory_suggestion_use_case: ProposeMemorySuggestionUseCase,
+        confirm_memory_suggestion_use_case: ConfirmMemorySuggestionUseCase,
+        reject_memory_suggestion_use_case: RejectMemorySuggestionUseCase,
         create_backup_use_case: CreateBackupUseCase,
         validate_backup_use_case: ValidateBackupUseCase,
         restore_backup_use_case: RestoreBackupUseCase,
@@ -246,6 +259,7 @@ class MainWindow(QMainWindow):
         save_studio_voice: Callable[[str], None] | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
+        prompt_multiline_with_default: Callable[[str, str, str], str | None] | None = None,
         confirm_restore: Callable[[str, str], bool] | None = None,
         choose_backup_file: Callable[[str], str] | None = None,
         open_containing_folder: Callable[[Path], None] | None = None,
@@ -271,6 +285,9 @@ class MainWindow(QMainWindow):
         self._archive_decision_use_case = archive_decision_use_case
         self._detect_precedence_conflicts_use_case = detect_precedence_conflicts_use_case
         self._get_knowledge_overview_use_case = get_knowledge_overview_use_case
+        self._propose_memory_suggestion_use_case = propose_memory_suggestion_use_case
+        self._confirm_memory_suggestion_use_case = confirm_memory_suggestion_use_case
+        self._reject_memory_suggestion_use_case = reject_memory_suggestion_use_case
         self._create_backup_use_case = create_backup_use_case
         self._validate_backup_use_case = validate_backup_use_case
         self._restore_backup_use_case = restore_backup_use_case
@@ -316,6 +333,9 @@ class MainWindow(QMainWindow):
         # scripts/check.ps1 never opens a real window on the desktop.
         self._show_warning = show_warning or self._default_show_warning
         self._show_information = show_information or self._default_show_information
+        self._prompt_multiline_with_default = (
+            prompt_multiline_with_default or self._default_prompt_multiline_with_default
+        )
         self._confirm_restore = confirm_restore or self._default_confirm_restore
         self._choose_backup_file = choose_backup_file or self._default_choose_backup_file
         self._open_containing_folder = (
@@ -387,6 +407,12 @@ class MainWindow(QMainWindow):
 
     def _default_show_information(self, title: str, text: str) -> None:
         QMessageBox.information(self, title, text)
+
+    def _default_prompt_multiline_with_default(
+        self, title: str, label: str, initial_text: str
+    ) -> str | None:
+        text, ok = QInputDialog.getMultiLineText(self, title, label, initial_text)
+        return text if ok else None
 
     def _default_confirm_restore(self, title: str, text: str) -> bool:
         answer = QMessageBox.question(
@@ -1161,6 +1187,8 @@ class MainWindow(QMainWindow):
             self._archive_decision_use_case,
             self._detect_precedence_conflicts_use_case,
             self._project_continuity_use_case,
+            self._confirm_memory_suggestion_use_case,
+            self._reject_memory_suggestion_use_case,
             show_warning=self._show_warning,
             show_information=self._show_information,
         )
@@ -1226,7 +1254,9 @@ class MainWindow(QMainWindow):
             return
 
         for message in messages:
-            self._append_message_item(message.role, message.content, message.status)
+            self._append_message_item(
+                message.role, message.content, message.status, message_id=message.id
+            )
 
         # Al abrir o recargar, el punto útil del historial es el final: lo
         # último dicho. Sin esto la vista se queda arriba y el usuario cree que
@@ -1275,6 +1305,8 @@ class MainWindow(QMainWindow):
         role: MessageRole,
         content: str | None,
         status: MessageStatus = MessageStatus.COMPLETED,
+        *,
+        message_id: int | None = None,
     ) -> QListWidgetItem:
         item = QListWidgetItem("")
         self._set_item_text(item, role, content, status)
@@ -1297,9 +1329,17 @@ class MainWindow(QMainWindow):
         # reflow tardío (ancho real, streaming, o un resize posterior) y
         # mantener el sizeHint del item siempre al día con la altura real.
         widget.size_changed.connect(lambda: self._sync_item_height(item, widget))
+        # M6, §3.6: solo un turno de Sirius ya completado puede proponerse
+        # como recuerdo — nunca uno del usuario ni uno todavía en streaming.
+        widget.propose_suggestion_requested.connect(self._handle_propose_suggestion_clicked)
         self.message_list.setItemWidget(item, widget)
         widget.set_message(
-            prefix, self._compose_markdown_body(content, status), bold=role is MessageRole.SIRIUS
+            prefix,
+            self._compose_markdown_body(content, status),
+            bold=role is MessageRole.SIRIUS,
+            message_id=message_id,
+            show_propose_suggestion=role is MessageRole.SIRIUS
+            and status is MessageStatus.COMPLETED,
         )
         item.setSizeHint(widget.sizeHint())
 
@@ -1461,7 +1501,10 @@ class MainWindow(QMainWindow):
         # whatever partial text streamed) — authoritative, no need to reload.
         if self._streaming_item is None:
             self._streaming_item = self._append_message_item(
-                MessageRole.SIRIUS, result.sirius_message.content, result.sirius_message.status
+                MessageRole.SIRIUS,
+                result.sirius_message.content,
+                result.sirius_message.status,
+                message_id=result.sirius_message.id,
             )
         else:
             self._set_item_text(
@@ -1478,11 +1521,30 @@ class MainWindow(QMainWindow):
                         result.sirius_message.content, result.sirius_message.status
                     ),
                     bold=True,
+                    message_id=result.sirius_message.id,
+                    show_propose_suggestion=result.outcome is MessageStatus.COMPLETED,
                 )
                 self._sync_item_height(self._streaming_item, widget)
             self.studio_page.update_last_message(
                 result.sirius_message.content, result.sirius_message.status
             )
+
+        # M6, §3.2: la superficie que orquesta el envío —nunca
+        # SendMessageUseCase— llama a ProposeMemorySuggestionUseCase cuando el
+        # turno completó con una propuesta del proveedor; nunca en
+        # CANCELLED/FAILED ni cuando no hay propuesta. Un fallo al proponer no
+        # deshace ni bloquea el turno ya completado: solo se registra.
+        if result.outcome is MessageStatus.COMPLETED and result.memory_suggestion is not None:
+            try:
+                propose_suggestion_if_completed_with_one(
+                    result, self._propose_memory_suggestion_use_case
+                )
+            except Exception as exc:
+                _logger.error(
+                    "No se pudo proponer la sugerencia automática (%s)", type(exc).__name__
+                )
+            else:
+                self.knowledge_widget.refresh()
 
         operation_id = result.sirius_message.operation_id
         if result.outcome is MessageStatus.CANCELLED:
@@ -1499,6 +1561,32 @@ class MainWindow(QMainWindow):
         # Después de _finish_sending, que es quien devuelve el estado a
         # PREPARADO: si se hablara antes, ese reajuste borraría SINTETIZANDO.
         self._speak_if_studio_is_open(result.sirius_message.content, result.sirius_message.status)
+
+    def _handle_propose_suggestion_clicked(self, message_id: int, content: str) -> None:
+        """«Proponer guardar…» (M6, §3.6): vía manual, complementaria a la
+        automática de ``_on_finished`` y nunca su sustituta. Precarga el mismo
+        tipo de diálogo que ``KnowledgeWidget`` usa para guardado manual, con
+        el contenido del mensaje ya completado, editable antes de confirmar.
+        """
+        if self._is_sending or self._is_backup_busy or self._is_export_busy:
+            return
+        edited_content = self._prompt_multiline_with_default(
+            "Proponer guardar…", "Contenido a proponer como recuerdo:", content
+        )
+        if edited_content is None:
+            return
+        try:
+            self._propose_memory_suggestion_use_case.propose(edited_content, message_id=message_id)
+        except InvalidMemorySuggestionProposalDataError as exc:
+            self._show_warning("No se pudo proponer la sugerencia", str(exc))
+            return
+        except Exception as exc:
+            _logger.error("No se pudo proponer la sugerencia (%s)", type(exc).__name__)
+            self._show_warning(
+                "No se pudo proponer la sugerencia", _MEMORY_SUGGESTION_GENERIC_ERROR_TEXT
+            )
+            return
+        self.knowledge_widget.refresh()
 
     def _on_crashed(self, error_message: str) -> None:
         del error_message  # not shown verbatim: keep the user-facing message safe and generic

@@ -36,6 +36,9 @@ from sirius.adapters.persistence.sqlite_knowledge_search_repository import (
     build_sqlite_knowledge_search_repository,
 )
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
+from sirius.adapters.persistence.sqlite_memory_suggestion_repository import (
+    build_sqlite_memory_suggestion_repository,
+)
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
 from sirius.application.approve_decision import ApproveDecisionUseCase
@@ -90,7 +93,9 @@ class _Fixture:
         self.supersede = SupersedeDecisionUseCase(unit_of_work)
         self.decisions = build_sqlite_decision_repository(database_path)
         self.overview = GetKnowledgeOverviewUseCase(
-            build_sqlite_memory_repository(database_path), self.decisions
+            build_sqlite_memory_repository(database_path),
+            self.decisions,
+            build_sqlite_memory_suggestion_repository(database_path),
         )
 
     def approved_decision(self, content: str, *, subject: str = SUBJECT) -> Decision:
