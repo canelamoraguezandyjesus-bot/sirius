@@ -120,19 +120,7 @@ quedaron **resueltas por el propietario el 29 de agosto de 2026** en su sesión 
 — ver «Decisiones del propietario registradas el 29 de agosto de 2026» más abajo —; esa
 resolución fija el contenido de cada decisión y, junto con la aprobación ya cumplida de las
 dos puertas de activación citadas en este mismo párrafo, deja sin premisas pendientes el
-comienzo de la implementación de los cinco bloques — **con una excepción explícita**: los
-encargos M8, M9, M10 y M11 del bloque de búsqueda mejorada y mejor recuperación
-(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md` §8) no pueden ordenarse
-al Work Engine. M8 y M9 se cablean, cada uno, en el método real de producción que procesa
-`Memory`/`Decision` — `RankRelevantKnowledgeUseCase.rank()` y
-`ContextBuilder._rank_related_knowledge` respectivamente —, no en una vía aislada, porque el
-origen y el ciclo de vida de las categorías del candidato y de la consulta que
-`category_match` necesita siguen sin decidir por el propietario
-(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md` §6.1, §6.2 y §9); M10
-integra ambos en ese mismo camino, y M11 se apoya en el pipeline que M7–M10 dejan integrado,
-así que hereda el mismo bloqueo. Mientras esa séptima decisión no llegue, M8, M9, M10 y M11
-quedan **bloqueados** por completo, sin excepción de construcción aislada; M1–M7 no dependen
-de esa decisión y pueden ordenarse sin ella.
+comienzo de la implementación de los cinco bloques.
 
 ## Decisiones del propietario registradas el 29 de agosto de 2026
 
@@ -154,15 +142,15 @@ mediante la fusión directa de esa PR sino mediante órdenes nuevas al Work Engi
 ese trabajo como código de producto con sus pruebas. Esas órdenes futuras deben respetar
 los puntos de integración que la Arquitectura Técnica 0.2 §6 deja señalados sin decidir
 — el índice de categoría como cuarta señal de `RankedKnowledge`
-(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md` §6.1) y el filtro de
+(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:614-626`) y el filtro de
 relevancia como segundo filtro en `ContextBuilder._rank_related_knowledge`, después de la
 exclusión por precedencia
-(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md` §6.2) — y el
+(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:628-641`) — y el
 presupuesto de latencia RNF-003, 300 ms P95
 (`docs/decisions/ADR-008-cargar-en-lote-las-revisiones-vigentes-al-listar.md:111-117`,
 `docs/implementation/V8_EXECUTION.md:44-48`), restricción que la propia Arquitectura fija
 para ambos puntos
-(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md` §6.3). El corpus del
+(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:643-648`). El corpus del
 banco congelado de 47 casos y sus resultados esperados
 (`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:63-75`) se porta sin
 modificarse. Esta decisión resuelve, con esta respuesta, las dos primeras de las cuatro
@@ -209,10 +197,10 @@ esos estados en `main`
 Arquitectura Técnica 0.2 §3.1 ya apunta en esa misma dirección, con una redacción que este
 registro cita tal cual sin corregirla: «el origen de Sirius Work Engine (equipo de la sesión
 del propietario) es la rama de evidencia sin fusionar, no el producto»
-(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md` §3.1). El propietario
+(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:116-119`). El propietario
 cierra ahora esa decisión abierta
 (`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:306-310`;
-`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md` §9): esos estados
+`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:814-819`): esos estados
 provienen del corpus del banco de la rama de evidencia, no del producto — «sugerencias
 confirmadas» sigue partiendo de cero en `main` en este punto, tal como ya registraba §4.1.
 
@@ -221,9 +209,9 @@ esta sesión señala explícitamente que esa decisión no se repite en este regi
 consta en la Arquitectura Técnica 0.2 §3.2: el propietario la resolvió en un comentario
 anterior, 2026-08-29T02:24:52Z, con dos vías (disparador automático tras la conversación y
 botón manual) que convergen en el mismo estado `PENDING`
-(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md` §3.2), y la propia
+(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:132-137`), y la propia
 Arquitectura la marca como «ya resuelta, no pendiente»
-(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md` §9).
+(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:821-827`).
 
 **D5 — Orden de la pieza (C) del contador de racha (ADR-101).** ADR-101, APROBADO el
 28-08-2026 (`docs/decisions/ADR-101-declarar-la-precondicion-del-contador-de-siete-dias-en-vez-de-inferirla-por-caso.md:1-7`),
@@ -232,7 +220,7 @@ declarar la clase correspondiente— como «bloque propio, a la orden del propie
 (`docs/decisions/ADR-101-declarar-la-precondicion-del-contador-de-siete-dias-en-vez-de-inferirla-por-caso.md:83-85`).
 El propietario decide ahora el orden: la pieza (C) **se ordenará después de las oleadas de
 construcción de Sirius 0.2** descritas en la Arquitectura Técnica 0.2 §8
-(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md` §8), no antes ni en
+(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:692-696`), no antes ni en
 paralelo con ellas.
 
 **D6 — Separación de la memoria del producto y la memoria del motor.** Resuelve la
