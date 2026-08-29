@@ -88,7 +88,7 @@ vigente (`docs/evolution/RECTOR.md:282-290`) exige, antes de implementar por enc
 cualquiera de sus cinco bloques
 (`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:52-249`), que **existan**
 pruebas de aceptación reproducibles y que se apruebe la arquitectura técnica
-correspondiente (`docs/evolution/RECTOR.md:288`) — que existan, no que se hayan ejecutado
+correspondiente (`docs/evolution/RECTOR.md:289`) — que existan, no que se hayan ejecutado
 antes de implementar. Ambas puertas ya están cumplidas. La **Arquitectura Técnica 0.2**
 (`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md`) fija en su propia
 cabecera que su aprobación es la fusión de la PR que la introduce
