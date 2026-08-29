@@ -677,19 +677,31 @@ se encola **después** de que el caso de uso de guardado (`SaveManualMemoryUseCa
 nunca dentro de esa misma llamada ni de su transacción de `UnitOfWork` (§0.1 punto 4
 gobierna evento+estado en la misma transacción; etiquetar no es ninguno de los dos). El
 worker llama, fuera del hilo de interfaz, a un nuevo caso de uso
-`TagCategoryUseCase.tag(kind, item_id)`: lee el elemento, invoca
+`TagCategoryUseCase.tag(kind, item_id)`: lee el elemento —registrando, en ese mismo
+instante y antes de invocar `classify()`, la versión de su revisión vigente
+(`MemoryRevision.version`/`DecisionRevision.version`, §0.1) que está clasificando—, invoca
 `CategoryClassifierPort.classify`, y si devuelve una categoría del vocabulario la escribe
 mediante un método nuevo del repositorio
 (`MemoryRepository.set_category`/`DecisionRepository.set_category`) — una actualización de
 campo plano, nunca una revisión nueva, y una única sentencia condicional en el motor de
-persistencia (`UPDATE ... SET category = ?, ... WHERE id = ? AND category_locked = 0`, o la
-transacción equivalente) que solo escribe si, en ese mismo statement, `category_locked`
-sigue siendo `False`: comprobar y escribir son una sola operación atómica de la base de
-datos, nunca una lectura en Python seguida de una escritura separada, así que ninguna
-corrección del usuario que ocurra entre ambas puede perderse ni ganarle la carrera al
-worker — y emite una señal Qt para que `KnowledgeWidget.refresh()` la muestre. Guardar nunca
-espera a este worker: la llamada de guardado ya devolvió su resultado por su propio camino
-antes de que el worker se encole.
+persistencia (`UPDATE ... SET category = ?, ... WHERE id = ? AND category_locked = 0 AND
+<versión de revisión vigente> = ?`, o la transacción equivalente) que solo escribe si, en
+ese mismo statement, `category_locked` sigue siendo `False` **y** la revisión vigente del
+elemento sigue siendo la misma que se leyó antes de clasificar: comprobar y escribir son una
+sola operación atómica de la base de datos, nunca una lectura en Python seguida de una
+escritura separada, así que ninguna corrección del usuario que ocurra entre ambas puede
+perderse ni ganarle la carrera al worker (punto 3). La misma condición de versión cierra
+además una segunda carrera distinta, entre dos generaciones del propio etiquetado
+automático: si este worker quedó en vuelo clasificando una revisión que una corrección
+(`CorrectMemoryUseCase.correct()`, más abajo) ya sustituyó por una revisión nueva — que a su
+vez ya encoló y dejó completar a otro `TagCategoryUseCase` sobre esa revisión nueva —, la
+escritura tardía de este worker ya no encuentra ninguna fila cuya revisión vigente coincida
+con la que leyó, y no sobrescribe con una clasificación obsoleta la que ya escribió el
+worker más reciente; ninguna de las dos escrituras se cancela ni se vuelve síncrona para
+lograrlo, solo se amplía la misma condición atómica del `UPDATE`. La escritura exitosa emite
+además una señal Qt para que `KnowledgeWidget.refresh()` la muestre. Guardar nunca espera a
+este worker: la llamada de guardado ya devolvió su resultado por su propio camino antes de
+que el worker se encole.
 
 **3. Etiqueta visible, editable, y definitiva si es del usuario.** `KnowledgeWidget`
 (`_build_memories_section`, `src/sirius/presentation/knowledge_widget.py:318-355`;
@@ -724,14 +736,24 @@ contenido que la originó cambia — `CorrectMemoryUseCase.correct()`
 revisión nueva (RF-022), y el contenido que `CategoryClassifierPort.classify` clasificó ya
 no describe el elemento corregido. Si `category_locked` es `False` — la categoría vigente
 la puso Ollama, no el usuario —, `correct()` limpia `category` a `None` en la misma
-transacción de `UnitOfWork` que crea la revisión nueva (§0.1 punto 4) y, tras devolver su
-resultado, encola el mismo `CategoryTaggingWorker` del punto 2 sobre el elemento corregido —
-mismo patrón asíncrono y diferido, nunca dentro de esa transacción. Si `category_locked` es
-`True` — el usuario ya la fijó o corrigió —, `correct()` no toca ni `category` ni
-`category_locked`: corregir el contenido nunca reabre una categoría que el usuario ya cerró
-(punto 3). Ninguna de las dos ramas añade un campo nuevo: usa exactamente los que el punto 1
-ya define. M8 (§8) construye también esta rama de `CorrectMemoryUseCase`, con una prueba
-dedicada.
+transacción de `UnitOfWork` que crea la revisión nueva (§0.1 punto 4): eso, limpiar el
+campo, es todo el trabajo transaccional del caso de uso, y todo lo que `correct()` necesita
+hacer. Encolar el `CategoryTaggingWorker` del punto 2 no es trabajo de `correct()` —ese
+`QRunnable` y el `QThreadPool` que lo ejecuta pertenecen a `sirius.presentation`, y
+`CorrectMemoryUseCase`, en `sirius.application`, no importa Qt ni lo conoce, igual que
+ningún otro caso de uso de esta arquitectura (§0.1)—: es
+`KnowledgeWidget._handle_correct_memory_clicked`
+(`src/sirius/presentation/knowledge_widget.py:388-407`), la
+misma función que ya llama a `correct()` de forma síncrona y luego refresca la vista, quien
+lo encola justo después de que esa llamada devuelva, cuando el `Memory`/`Decision` que
+`correct()` devolvió trae `category is None` — la misma condición que disparó la limpieza,
+visible en el resultado ya devuelto, sin que `correct()` tenga que señalarla por ningún canal
+adicional. Si `category_locked` es `True` — el usuario ya la fijó o corrigió —, `correct()`
+no toca ni `category` ni `category_locked`, y `_handle_correct_memory_clicked` no encola
+nada: corregir el contenido nunca reabre una categoría que el usuario ya cerró (punto 3).
+Ninguna de las dos ramas añade un campo nuevo: usa exactamente los que el punto 1 ya define.
+M8 (§8) construye la rama transaccional de `CorrectMemoryUseCase` y la orquestación de
+`_handle_correct_memory_clicked`, cada una con su prueba.
 
 **5. El proveedor de pago no interviene.** Ninguno de los componentes anteriores llama a
 `LLMProvider` (`src/sirius/ports/llm.py:106-119`) ni a ningún adaptador de pago:
@@ -883,6 +905,29 @@ banco de §6.5 mientras tanto, que tiene su propio canon y no depende de este um
 puerta —dejar que una categoría no crítica exponga al candidato al filtro, y que
 `category_match` compare categorías reales— es exclusivamente lo que el registro del umbral
 en `STATUS.md` autoriza; M11 (§8) no la abre por sí solo con solo publicar la cifra.
+
+**Fuente de activación que el runtime consume.** Registrar el umbral en `STATUS.md` es un
+hecho documental: por sí solo no cambia ningún comportamiento en ejecución si ningún camino
+de código lo lee, y una implementación conforme a solo lo anterior podría dejar la puerta
+cerrada para siempre sin incumplir ninguna prueba. Esta arquitectura fija esa fuente
+reutilizando el mecanismo ya existente para conmutar comportamiento en tiempo de
+construcción según una decisión persistida — el mismo `sirius.config.settings`
+(`load_settings()`/`save_settings()`, `src/sirius/config/settings.py`) que ya decide, por
+ejemplo, qué `LLMProviderKind` construye `composition_root._build_llm_provider`
+(`src/sirius/composition_root.py:189-233`) —, con una clave nueva,
+`category_matching_enabled: bool`, ausente o `False` por defecto. `composition_root` la lee
+una vez, igual que ya lee `llm_provider`, y la pasa como parámetro de construcción a
+`RankRelevantKnowledgeUseCase`/`ContextBuilder`; con la clave en `False` o ausente,
+`category_match` (§6.2) y el candado (§6.3) se comportan exactamente como el fallback
+cerrado descrito arriba, sin ninguna rama de código adicional para el estado cerrado — es el
+mismo camino que ya corre hoy. M11 (§8) construye ese parámetro de construcción y lo cablea
+con su valor por defecto, `False`: escribir la clave a `True` en `settings.json` no es
+trabajo de M11 ni de ningún otro encargo M1–M12 — es la acción separada, explícita y manual
+que traduce el registro del umbral en `STATUS.md` a comportamiento real, y queda, igual que
+las decisiones que §9 deja pendientes de un encargo futuro, asignada a quien registre el
+umbral y confirme que la cifra medida lo alcanza, no a este documento ni a un número de
+encargo fijado por adelantado; este documento no elige el valor del umbral ni decide cuándo
+se cumple, solo el contrato de cómo esa decisión, una vez tomada, llega al runtime.
 
 Ninguno de los dos puntos de integración puede sacar a `ContextBuilder` de RNF-003, 300 ms
 P95 (`docs/decisions/ADR-008-cargar-en-lote-las-revisiones-vigentes-al-listar.md:111-117`,
@@ -1233,9 +1278,10 @@ migración aditiva; `CategoryClassifierPort` y `OllamaCategoryClassifierAdapter`
 `TagCategoryUseCase` y `CategoryTaggingWorker` sobre el `QThreadPool` ya existente, encolado
 después del guardado, nunca dentro de su transacción; `SetCategoryUseCase` para la edición
 del usuario, que fija `category_locked = True`; `list_uncategorized()` y el pase retroactivo
-sobre elementos ya guardados; la rama de `CorrectMemoryUseCase.correct()` que limpia
-`category` y reencola el etiquetado cuando no está bloqueada (§6.1, «Corrección de
-contenido y reetiquetado»).
+sobre elementos ya guardados; la rama transaccional de `CorrectMemoryUseCase.correct()` que
+limpia `category` cuando no está bloqueada, y la orquestación en
+`KnowledgeWidget._handle_correct_memory_clicked` que reencola el etiquetado tras el retorno
+(§6.1, «Corrección de contenido y reetiquetado»).
 
 **Criterio de aceptación:** prueba de dominio de que `category_locked` se fija al
 establecer una categoría manual y de que, una vez fijado, ninguna llamada posterior de
@@ -1246,7 +1292,17 @@ carrera exacta que motiva la escritura condicional (§6.1 punto 2) — pausar la
 su intento de escritura, ejecutar `SetCategoryUseCase.set()` con una categoría distinta, y
 solo entonces dejar que `TagCategoryUseCase` continúe — y confirma que la categoría final es
 la del usuario, nunca la de Ollama, porque el `UPDATE ... WHERE category_locked = 0`
-condicional no encuentra fila que actualizar; prueba de integración de migración que sube y
+condicional no encuentra fila que actualizar; una segunda prueba de repositorio determinista
+que reproduce la carrera distinta entre dos generaciones del propio etiquetado automático, la
+que motiva atar esa misma escritura condicional a la revisión observada (§6.1 punto 2) —
+sobre una memoria en su revisión 1, iniciar un primer `TagCategoryUseCase`, pausarlo justo
+después de `classify()` y antes de su intento de escritura, corregir la memoria con
+`CorrectMemoryUseCase.correct()` (que limpia `category` y crea la revisión 2), dejar que un
+segundo `TagCategoryUseCase` clasifique y escriba sobre la revisión 2, y solo entonces dejar
+que el primer `TagCategoryUseCase` —todavía anclado a la revisión 1— intente su escritura
+tardía — y confirma que esa escritura tardía no encuentra fila que actualizar porque la
+revisión vigente ya no es la 1, y que la categoría final es la que escribió el segundo
+worker, nunca la del primero; prueba de integración de migración que sube y
 baja las dos columnas nuevas en ambas tablas sin afectar ninguna existente; prueba de
 `TagCategoryUseCase` con un doble del puerto que cubre categoría devuelta con éxito, Ollama
 no disponible (`None`, sin excepción) y respuesta fuera del vocabulario cerrado (tratada
@@ -1255,10 +1311,14 @@ el worker de etiquetado termine — el resultado de guardado ya está disponible
 se resuelva el etiquetado, verificado con un doble del puerto que bloquea deliberadamente
 hasta que la prueba lo libera; prueba de que `list_uncategorized()` no devuelve un elemento
 ya etiquetado ni uno con `category_locked = True` aunque no tenga categoría; prueba de
-`CorrectMemoryUseCase.correct()` que confirma que corregir el contenido de una memoria con
-`category_locked = False` limpia `category` a `None` y encola un `CategoryTaggingWorker`
-nuevo, y que corregir una memoria con `category_locked = True` deja `category` y
-`category_locked` intactos.
+`CorrectMemoryUseCase.correct()`, sin ningún doble ni importación de Qt, que confirma que
+corregir el contenido de una memoria con `category_locked = False` limpia `category` a
+`None` dentro de la misma transacción, y que corregir una memoria con `category_locked =
+True` deja `category` y `category_locked` intactos; prueba de
+`KnowledgeWidget._handle_correct_memory_clicked`, con un doble de `CorrectMemoryUseCase`,
+que confirma que la interfaz encola un `CategoryTaggingWorker` nuevo sobre el elemento
+corregido cuando el resultado devuelto trae `category is None`, y que no encola nada cuando
+el resultado devuelto conserva `category_locked = True`.
 
 ### M9 — Búsqueda mejorada: índice de categoría determinista
 
@@ -1317,8 +1377,12 @@ M11 ejecuta además la medición de coincidencia del etiquetado que D7 punto 6 e
 canónica, publicando la cifra (aciertos/47) sin fijar un umbral por su cuenta. Cablear M9 y
 M10 en `ContextBuilder._rank_related_knowledge` dentro de este mismo encargo no abre, por sí
 solo, la puerta de activación contra datos reales que §6.3 deja cerrada por defecto: M11
-cablea el circuito completo con la puerta cerrada, publica la cifra, y es el propietario
-quien la abre después, registrando el umbral en `STATUS.md` (§9) — nunca este encargo.
+construye el parámetro `category_matching_enabled` que §6.3 define y lo cablea con su valor
+por defecto, `False` — el circuito completo queda armado con la puerta cerrada, la cifra
+queda publicada, y es el propietario quien abre la puerta después, en dos pasos separados de
+este encargo: registra el umbral en `STATUS.md` (§9) y, por separado, alguien fija
+`category_matching_enabled = True` en `settings.json` (§6.3) — ninguno de los dos ocurre
+dentro de M11.
 
 **Criterio de aceptación:** tabla de medición con el mismo formato que la de ADR-008
 (`docs/decisions/ADR-008-cargar-en-lote-las-revisiones-vigentes-al-listar.md:111-117`), con
@@ -1329,10 +1393,17 @@ en la prueba tras este encargo es la cifra medida en esta primera ejecución rea
 `main`, no 63/81 salvo que ambas coincidan; la cifra de coincidencia del etiquetado
 (aciertos/47) queda publicada en la evidencia del encargo y registrada en `STATUS.md` junto
 a D7, sin que este encargo fije por su cuenta el umbral exigible — eso queda para el
-propietario, a la vista de la cifra (§9); una prueba adicional confirma que, con la puerta
-todavía cerrada (sin umbral registrado), un candidato real con categoría no crítica sigue
-protegido por el candado y `category_match` es `False` para candidatos reales, exactamente
-el fallback que §6.3 fija.
+propietario, a la vista de la cifra (§9); una prueba adicional confirma que, con
+`category_matching_enabled` ausente o `False` (puerta cerrada, el valor con el que M11
+cablea el parámetro), un candidato real con categoría no crítica sigue protegido por el
+candado y `category_match` es `False` para candidatos reales, exactamente el fallback que
+§6.3 fija; una prueba simétrica, construyendo `RankRelevantKnowledgeUseCase`/`ContextBuilder`
+con `category_matching_enabled=True`, confirma el estado abierto: un candidato real ya
+clasificado en una categoría no crítica queda expuesto a `RelevanceFilterPort` (con un doble
+de prueba del puerto que lo descarta) y el resultado final lo excluye, y `category_match`
+compara la categoría real del candidato contra la que activa la consulta — esta prueba
+verifica el contrato del parámetro en ambos valores, sin que M11 fije `True` en la
+construcción con la que Sirius arranca por defecto.
 
 ### M12 — Mejor recuperación: intento de cierre de la última omisión crítica (D3)
 
@@ -1385,7 +1456,11 @@ traduce a diseño sin reabrirlas:
   de activación que §6.3 deja cerrada por defecto permanece cerrada: `category_match` (§6.2)
   y el candado (§6.3) no consumen la categoría de ningún candidato real, solo la del banco de
   medición — M8–M11 se construyen y se miden igual mientras tanto, sin que esta puerta los
-  bloquee (§6.3).
+  bloquee (§6.3). Registrar el umbral en `STATUS.md` es la decisión; traducirla a
+  comportamiento real es la clave `category_matching_enabled` de `settings.json` que §6.3
+  define — fijarla a `True` es una acción separada del registro documental, no asignada a
+  ningún encargo M1–M12, que corresponde a quien registre el umbral y confirme que la cifra
+  medida lo alcanza.
 
 Sigue sin resolver, fuera del alcance de esta actualización — §3.1 de este documento la deja
 donde estaba, sin recaracterizarla:
