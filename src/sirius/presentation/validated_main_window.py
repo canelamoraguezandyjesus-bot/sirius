@@ -13,6 +13,7 @@ from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.archive_decision import ArchiveDecisionUseCase
 from sirius.application.archive_memory import ArchiveMemoryUseCase
 from sirius.application.budget_status import GetBudgetStatusUseCase
+from sirius.application.confirm_memory_suggestion import ConfirmMemorySuggestionUseCase
 from sirius.application.correct_memory import CorrectMemoryUseCase
 from sirius.application.create_backup import CreateBackupUseCase
 from sirius.application.decision_origin import GetDecisionOriginUseCase
@@ -26,6 +27,8 @@ from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.project_lifecycle import ProjectLifecycleUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
+from sirius.application.propose_memory_suggestion import ProposeMemorySuggestionUseCase
+from sirius.application.reject_memory_suggestion import RejectMemorySuggestionUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageUseCase
@@ -62,6 +65,9 @@ class ValidatedMainWindow(MainWindow):
         archive_decision_use_case: ArchiveDecisionUseCase,
         detect_precedence_conflicts_use_case: DetectPrecedenceConflictsUseCase,
         get_knowledge_overview_use_case: GetKnowledgeOverviewUseCase,
+        propose_memory_suggestion_use_case: ProposeMemorySuggestionUseCase,
+        confirm_memory_suggestion_use_case: ConfirmMemorySuggestionUseCase,
+        reject_memory_suggestion_use_case: RejectMemorySuggestionUseCase,
         create_backup_use_case: CreateBackupUseCase,
         validate_backup_use_case: ValidateBackupUseCase,
         restore_backup_use_case: RestoreBackupUseCase,
@@ -103,6 +109,9 @@ class ValidatedMainWindow(MainWindow):
             archive_decision_use_case=archive_decision_use_case,
             detect_precedence_conflicts_use_case=detect_precedence_conflicts_use_case,
             get_knowledge_overview_use_case=get_knowledge_overview_use_case,
+            propose_memory_suggestion_use_case=propose_memory_suggestion_use_case,
+            confirm_memory_suggestion_use_case=confirm_memory_suggestion_use_case,
+            reject_memory_suggestion_use_case=reject_memory_suggestion_use_case,
             create_backup_use_case=create_backup_use_case,
             validate_backup_use_case=validate_backup_use_case,
             restore_backup_use_case=restore_backup_use_case,

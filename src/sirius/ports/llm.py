@@ -14,6 +14,16 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
 
+# SIRIUS-ARQ-0.2 §3.2/§3.6 (M6): the literal token ``render_instructions()``
+# asks the provider to append, in the same response, when it has a memory
+# worth proposing. Shared between the application layer (which asks for it in
+# the instructions) and every concrete ``LLMProvider`` adapter (which must
+# strip it — and anything after it — from the raw output before a single
+# ``LLMTextDelta`` or terminal event exists, per the same section). Never
+# reaches ``LLMTextDelta.text``, ``LLMCompleted.text``,
+# ``LLMCancelled.partial_text`` or ``LLMError.partial_text``.
+MEMORY_SUGGESTION_DELIMITER = "<<<SIRIUS_MEMORY_SUGGESTION>>>"
+
 
 @dataclass(frozen=True, slots=True)
 class LLMRequest:
@@ -33,11 +43,19 @@ class LLMTextDelta:
 
 @dataclass(frozen=True, slots=True)
 class LLMCompleted:
-    """The stream finished successfully with a full, valid response."""
+    """The stream finished successfully with a full, valid response.
+
+    ``memory_suggestion`` (§3.2/§3.6, M6) is the automatic-path proposal the
+    concrete adapter already separated from ``text`` using
+    ``MEMORY_SUGGESTION_DELIMITER``, or ``None`` when the provider proposed
+    nothing this turn. ``text`` never contains the delimiter or the raw
+    proposal, regardless of ``memory_suggestion``.
+    """
 
     text: str
     input_tokens: int
     output_tokens: int
+    memory_suggestion: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

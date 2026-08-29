@@ -107,6 +107,8 @@ def _build_widget(
         dependencies.archive_decision_use_case,
         dependencies.detect_precedence_conflicts_use_case,
         dependencies.project_continuity_use_case,
+        dependencies.confirm_memory_suggestion_use_case,
+        dependencies.reject_memory_suggestion_use_case,
         show_warning=recorder.show_warning,
         show_information=recorder.show_information,
         confirm_action=lambda title, text: confirm_action,
@@ -1297,3 +1299,106 @@ def test_set_external_busy_disables_every_action_button(qtbot: QtBot, tmp_path: 
     assert widget.save_memory_button.isEnabled()
     assert widget.propose_decision_button.isEnabled()
     assert widget.detect_conflicts_button.isEnabled()
+
+
+# --- Sugerencias pendientes (M6, SIRIUS-ARQ-0.2 §3.6) ---------------------------
+
+
+@pytest.mark.gui
+def test_refresh_lists_pending_suggestions_only(qtbot: QtBot, tmp_path: Path) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    pending = dependencies.propose_memory_suggestion_use_case.propose("sugerencia pendiente")
+    confirmed = dependencies.propose_memory_suggestion_use_case.propose("sugerencia a confirmar")
+    dependencies.confirm_memory_suggestion_use_case.confirm(confirmed.id)
+    rejected = dependencies.propose_memory_suggestion_use_case.propose("sugerencia a rechazar")
+    dependencies.reject_memory_suggestion_use_case.reject(rejected.id)
+    widget = _build_widget(dependencies, _Recorder())
+    qtbot.addWidget(widget)
+
+    assert widget.suggestions_list.count() == 1
+    assert "sugerencia pendiente" in widget.suggestions_list.item(0).text()
+    assert f"#{pending.id}" in widget.suggestions_list.item(0).text()
+
+
+@pytest.mark.gui
+def test_confirm_suggestion_creates_a_memory_and_removes_it_from_pending(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.propose_memory_suggestion_use_case.propose("recordar esto")
+    widget = _build_widget(dependencies, _Recorder())
+    qtbot.addWidget(widget)
+    widget.suggestions_list.setCurrentRow(0)
+
+    widget.confirm_suggestion_button.click()
+
+    assert widget.suggestions_list.count() == 0
+    assert widget.memories_list.count() == 1
+    assert "recordar esto" in widget.memories_list.item(0).text()
+
+
+@pytest.mark.gui
+def test_reject_suggestion_removes_it_from_pending_without_creating_a_memory(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.propose_memory_suggestion_use_case.propose("no guardar esto")
+    widget = _build_widget(dependencies, _Recorder())
+    qtbot.addWidget(widget)
+    widget.suggestions_list.setCurrentRow(0)
+
+    widget.reject_suggestion_button.click()
+
+    assert widget.suggestions_list.count() == 0
+    assert widget.memories_list.count() == 0
+
+
+@pytest.mark.gui
+def test_confirm_suggestion_without_a_selection_warns_and_creates_nothing(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.propose_memory_suggestion_use_case.propose("sugerencia pendiente")
+    recorder = _Recorder()
+    widget = _build_widget(dependencies, recorder)
+    qtbot.addWidget(widget)
+
+    widget.confirm_suggestion_button.click()
+
+    assert recorder.warnings
+    assert widget.suggestions_list.count() == 1
+    assert widget.memories_list.count() == 0
+
+
+@pytest.mark.gui
+def test_reject_suggestion_without_a_selection_warns_and_changes_nothing(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.propose_memory_suggestion_use_case.propose("sugerencia pendiente")
+    recorder = _Recorder()
+    widget = _build_widget(dependencies, recorder)
+    qtbot.addWidget(widget)
+
+    widget.reject_suggestion_button.click()
+
+    assert recorder.warnings
+    assert widget.suggestions_list.count() == 1
+
+
+@pytest.mark.gui
+def test_set_external_busy_disables_suggestion_buttons_too(qtbot: QtBot, tmp_path: Path) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.propose_memory_suggestion_use_case.propose("sugerencia pendiente")
+    widget = _build_widget(dependencies, _Recorder())
+    qtbot.addWidget(widget)
+
+    widget.set_external_busy(True)
+
+    assert not widget.confirm_suggestion_button.isEnabled()
+    assert not widget.reject_suggestion_button.isEnabled()
+
+    widget.set_external_busy(False)
+
+    assert widget.confirm_suggestion_button.isEnabled()
+    assert widget.reject_suggestion_button.isEnabled()

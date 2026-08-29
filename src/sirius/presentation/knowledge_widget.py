@@ -51,6 +51,7 @@ from sirius.application.archive_decision import (
     DecisionNotArchivableError,
 )
 from sirius.application.archive_memory import ArchiveMemoryUseCase, MemoryNotArchivableError
+from sirius.application.confirm_memory_suggestion import ConfirmMemorySuggestionUseCase
 from sirius.application.correct_memory import (
     CorrectMemoryUseCase,
     InvalidMemoryCorrectionDataError,
@@ -75,6 +76,7 @@ from sirius.application.propose_decision import (
     InvalidDecisionProposalDataError,
     ProposeDecisionUseCase,
 )
+from sirius.application.reject_memory_suggestion import RejectMemorySuggestionUseCase
 from sirius.application.save_manual_memory import (
     InvalidManualMemoryDataError,
     SaveManualMemoryUseCase,
@@ -86,6 +88,7 @@ from sirius.application.supersede_decision import (
 )
 from sirius.domain.decision import Decision, is_same_subject_and_project
 from sirius.domain.memory import Memory
+from sirius.domain.memory_suggestion import MemorySuggestion
 from sirius.domain.precedence import PrecedenceOutcome
 from sirius.infrastructure.logging import get_logger
 
@@ -118,6 +121,10 @@ def _decision_label(decision: Decision) -> str:
         f"#{decision.id} ({decision.status.value}) v{decision.current_revision.version} — "
         f"{decision.subject}: {_short(decision.current_revision.content)}"
     )
+
+
+def _suggestion_label(suggestion: MemorySuggestion) -> str:
+    return f"#{suggestion.id} — {_short(suggestion.content)}"
 
 
 class _DeleteMemoryDialog(QDialog):
@@ -213,6 +220,8 @@ class KnowledgeWidget(QGroupBox):
         archive_decision_use_case: ArchiveDecisionUseCase,
         detect_precedence_conflicts_use_case: DetectPrecedenceConflictsUseCase,
         project_continuity_use_case: ProjectContinuityUseCase,
+        confirm_memory_suggestion_use_case: ConfirmMemorySuggestionUseCase,
+        reject_memory_suggestion_use_case: RejectMemorySuggestionUseCase,
         *,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
@@ -236,6 +245,8 @@ class KnowledgeWidget(QGroupBox):
         self._archive_decision_use_case = archive_decision_use_case
         self._detect_precedence_conflicts_use_case = detect_precedence_conflicts_use_case
         self._project_continuity_use_case = project_continuity_use_case
+        self._confirm_memory_suggestion_use_case = confirm_memory_suggestion_use_case
+        self._reject_memory_suggestion_use_case = reject_memory_suggestion_use_case
 
         self._show_warning = show_warning or self._default_show_warning
         self._show_information = show_information or self._default_show_information
@@ -255,6 +266,7 @@ class KnowledgeWidget(QGroupBox):
         layout = QVBoxLayout(self)
         layout.addWidget(self._build_memories_section())
         layout.addWidget(self._build_decisions_section())
+        layout.addWidget(self._build_suggestions_section())
         layout.addWidget(self._build_conflicts_section())
 
         self.refresh()
@@ -673,6 +685,84 @@ class KnowledgeWidget(QGroupBox):
             f"Mensaje: {origin.message_content or '(sin mensaje asociado)'}",
         )
 
+    # --- Sugerencias pendientes (M6, SIRIUS-ARQ-0.2 §3.6) ---------------------
+
+    def _build_suggestions_section(self) -> QWidget:
+        self.suggestions_list = QListWidget()
+        self.suggestions_list.setAccessibleName("Sugerencias pendientes")
+        self.suggestions_list.currentItemChanged.connect(
+            self._handle_suggestions_list_selection_changed
+        )
+        # Ver comentario equivalente en _build_memories_section (CODEX-001).
+        self.suggestions_list.itemClicked.connect(self._handle_suggestions_list_selection_changed)
+        # Ver comentario equivalente en _build_memories_section (CODEX-002).
+        self.suggestions_list.installEventFilter(self)
+
+        self.confirm_suggestion_button = QPushButton("Confirmar")
+        self.confirm_suggestion_button.clicked.connect(self._handle_confirm_suggestion_clicked)
+        self.reject_suggestion_button = QPushButton("Rechazar")
+        self.reject_suggestion_button.clicked.connect(self._handle_reject_suggestion_clicked)
+
+        buttons_row = QHBoxLayout()
+        buttons_row.addWidget(self.confirm_suggestion_button)
+        buttons_row.addWidget(self.reject_suggestion_button)
+
+        group = QGroupBox("Sugerencias pendientes")
+        layout = QVBoxLayout(group)
+        layout.addWidget(self.suggestions_list)
+        layout.addLayout(buttons_row)
+        return group
+
+    def _selected_suggestion(self) -> MemorySuggestion | None:
+        item = self.suggestions_list.currentItem()
+        if item is None:
+            return None
+        suggestion = item.data(Qt.ItemDataRole.UserRole)
+        return suggestion if isinstance(suggestion, MemorySuggestion) else None
+
+    def _handle_suggestions_list_selection_changed(
+        self,
+        current: QListWidgetItem | None = None,
+        previous: QListWidgetItem | None = None,
+    ) -> None:
+        self._last_touched_list = self.suggestions_list
+
+    def _handle_confirm_suggestion_clicked(self) -> None:
+        if self._is_busy or self._is_externally_busy:
+            return
+        suggestion = self._selected_suggestion()
+        if suggestion is None:
+            self._show_warning(_NO_SELECTION_TITLE, "Selecciona primero una sugerencia.")
+            return
+        try:
+            self._confirm_memory_suggestion_use_case.confirm(suggestion.id)
+        except ValueError as exc:
+            self._show_warning("No se pudo confirmar la sugerencia", str(exc))
+            return
+        except Exception as exc:
+            _logger.error("No se pudo confirmar la sugerencia (%s)", type(exc).__name__)
+            self._show_warning("No se pudo confirmar la sugerencia", _GENERIC_ERROR_TEXT)
+            return
+        self.refresh()
+
+    def _handle_reject_suggestion_clicked(self) -> None:
+        if self._is_busy or self._is_externally_busy:
+            return
+        suggestion = self._selected_suggestion()
+        if suggestion is None:
+            self._show_warning(_NO_SELECTION_TITLE, "Selecciona primero una sugerencia.")
+            return
+        try:
+            self._reject_memory_suggestion_use_case.reject(suggestion.id)
+        except ValueError as exc:
+            self._show_warning("No se pudo rechazar la sugerencia", str(exc))
+            return
+        except Exception as exc:
+            _logger.error("No se pudo rechazar la sugerencia (%s)", type(exc).__name__)
+            self._show_warning("No se pudo rechazar la sugerencia", _GENERIC_ERROR_TEXT)
+            return
+        self.refresh()
+
     # --- Conflictos de precedencia -------------------------------------------
 
     def _build_conflicts_section(self) -> QWidget:
@@ -745,6 +835,8 @@ class KnowledgeWidget(QGroupBox):
                 self._handle_decisions_list_selection_changed(self.decisions_list.currentItem())
             elif watched is self.conflicts_list:
                 self._handle_conflict_selection_changed(self.conflicts_list.currentItem())
+            elif watched is self.suggestions_list:
+                self._handle_suggestions_list_selection_changed(self.suggestions_list.currentItem())
         return super().eventFilter(watched, event)
 
     def _active_conflict_entity(self) -> Memory | Decision | None:
@@ -858,6 +950,16 @@ class KnowledgeWidget(QGroupBox):
         finally:
             self.decisions_list.blockSignals(False)
 
+        self.suggestions_list.blockSignals(True)
+        try:
+            self.suggestions_list.clear()
+            for suggestion in overview.pending_suggestions:
+                item = QListWidgetItem(_suggestion_label(suggestion))
+                item.setData(Qt.ItemDataRole.UserRole, suggestion)
+                self.suggestions_list.addItem(item)
+        finally:
+            self.suggestions_list.blockSignals(False)
+
     def set_external_busy(self, is_busy: bool) -> None:
         """Coordinate with a ``MainWindow``-level operation this widget does
         not own (sending a message, or a backup/restore in flight): mirrors
@@ -874,6 +976,8 @@ class KnowledgeWidget(QGroupBox):
             self.propose_decision_button,
             self.decision_origin_button,
             self.detect_conflicts_button,
+            self.confirm_suggestion_button,
+            self.reject_suggestion_button,
         ):
             button.setEnabled(enabled)
         # Los cinco botones de resolución no se fijan aquí a ciegas: mientras

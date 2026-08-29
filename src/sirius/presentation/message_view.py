@@ -254,13 +254,34 @@ class MessageItemWidget(QWidget):
     # lo que el contenido necesita.
     size_changed = Signal()
 
+    # SIRIUS-ARQ-0.2 §3.6 (M6): emitida al pulsar «Proponer guardar…», solo
+    # visible para un turno de Sirius ya completado (``set_message`` con
+    # ``show_propose_suggestion=True``). Lleva el id del mensaje y su
+    # contenido tal cual, para que quien la escuche —``MainWindow``— pueda
+    # precargar el diálogo y llamar a
+    # ``ProposeMemorySuggestionUseCase.propose(...)`` sin volver a leer nada
+    # de este widget.
+    propose_suggestion_requested = Signal(int, str)
+
     def __init__(self) -> None:
         super().__init__()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 2, 4, 6)
         layout.setSpacing(2)
+
+        header = QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
         self._prefix_label = QLabel()
-        layout.addWidget(self._prefix_label)
+        header.addWidget(self._prefix_label)
+        header.addStretch(1)
+        self._propose_suggestion_button = QPushButton("Proponer guardar…")
+        self._propose_suggestion_button.setToolTip(
+            "Proponer este mensaje como recuerdo, pendiente de confirmación."
+        )
+        self._propose_suggestion_button.setVisible(False)
+        self._propose_suggestion_button.clicked.connect(self._emit_propose_suggestion_requested)
+        header.addWidget(self._propose_suggestion_button)
+        layout.addLayout(header)
 
         self._content_container = QWidget()
         self._content_layout = QVBoxLayout(self._content_container)
@@ -274,12 +295,36 @@ class MessageItemWidget(QWidget):
         self._syncing_size = False
         # Último tamaño anunciado: solo se avisa cuando cambia de verdad.
         self._last_hint = QSize()
+        self._message_id: int | None = None
+        self._raw_content = ""
 
-    def set_message(self, prefix: str, body_text: str, *, bold: bool) -> None:
+    def _emit_propose_suggestion_requested(self) -> None:
+        if self._message_id is not None:
+            self.propose_suggestion_requested.emit(self._message_id, self._raw_content)
+
+    def set_message(
+        self,
+        prefix: str,
+        body_text: str,
+        *,
+        bold: bool,
+        message_id: int | None = None,
+        show_propose_suggestion: bool = False,
+    ) -> None:
         """Renderiza el contenido final consolidado, segmentado en prosa Markdown
-        segura (B8a) y bloques de código copiables (B8b), en el orden original."""
+        segura (B8a) y bloques de código copiables (B8b), en el orden original.
+
+        ``show_propose_suggestion`` (M6, §3.6) solo la marca ``True`` el
+        llamador para un turno de Sirius ya completado; ``message_id`` es
+        entonces el id de ese mensaje, el que
+        ``ProposeMemorySuggestionUseCase.propose(...)`` recibirá como
+        ``message_id`` si se pulsa el botón.
+        """
         self._set_prefix(prefix, bold=bold)
         self._clear_content()
+        self._message_id = message_id
+        self._raw_content = body_text
+        self._propose_suggestion_button.setVisible(show_propose_suggestion)
         for segment in _segment_message(body_text):
             if segment.is_code:
                 block = _CodeBlockWidget(segment.text)
@@ -296,9 +341,15 @@ class MessageItemWidget(QWidget):
 
     def set_streaming_text(self, prefix: str, body_text: str, *, bold: bool) -> None:
         """Renderiza el texto parcial en streaming como texto plano, en un único
-        tramo sin segmentar (más simple y estable, decisión de B8a)."""
+        tramo sin segmentar (más simple y estable, decisión de B8a).
+
+        Un turno todavía en streaming no está completado, así que
+        «Proponer guardar…» (M6, §3.6) se mantiene oculto aquí sin
+        excepción; solo ``set_message`` puede volver a mostrarlo.
+        """
         self._set_prefix(prefix, bold=bold)
         self._clear_content()
+        self._propose_suggestion_button.setVisible(False)
         plain = _MessageBody()
         plain.height_changed.connect(self._on_segment_height_changed)
         plain.set_plain_content(body_text)
@@ -315,6 +366,11 @@ class MessageItemWidget(QWidget):
         """The concatenated rich text of every segment — e.g. to assert raw HTML
         stayed escaped everywhere (SP-07), including inside a code block."""
         return "".join(body.toHtml() for body in self._segment_bodies)
+
+    def propose_suggestion_button(self) -> QPushButton:
+        """«Proponer guardar…» (M6, §3.6) — visible only when ``set_message``
+        was last called with ``show_propose_suggestion=True``."""
+        return self._propose_suggestion_button
 
     def copy_buttons(self) -> list[QPushButton]:
         """The "Copiar" buttons currently shown, one per code block, in order."""

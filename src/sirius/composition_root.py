@@ -57,6 +57,9 @@ from sirius.adapters.persistence.sqlite_llm_usage_repository import (
     build_sqlite_llm_usage_repository,
 )
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
+from sirius.adapters.persistence.sqlite_memory_suggestion_repository import (
+    build_sqlite_memory_suggestion_repository,
+)
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
 from sirius.adapters.secrets.keyring_store import build_keyring_secret_store
@@ -65,6 +68,7 @@ from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.archive_decision import ArchiveDecisionUseCase
 from sirius.application.archive_memory import ArchiveMemoryUseCase
 from sirius.application.budget_status import GetBudgetStatusUseCase
+from sirius.application.confirm_memory_suggestion import ConfirmMemorySuggestionUseCase
 from sirius.application.context import ContextBuilder
 from sirius.application.correct_memory import CorrectMemoryUseCase
 from sirius.application.create_backup import CreateBackupUseCase
@@ -80,7 +84,9 @@ from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.project_lifecycle import ProjectLifecycleUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
+from sirius.application.propose_memory_suggestion import ProposeMemorySuggestionUseCase
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
+from sirius.application.reject_memory_suggestion import RejectMemorySuggestionUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageUseCase
@@ -166,6 +172,9 @@ class ConversationDependencies:
     archive_decision_use_case: ArchiveDecisionUseCase
     detect_precedence_conflicts_use_case: DetectPrecedenceConflictsUseCase
     get_knowledge_overview_use_case: GetKnowledgeOverviewUseCase
+    propose_memory_suggestion_use_case: ProposeMemorySuggestionUseCase
+    confirm_memory_suggestion_use_case: ConfirmMemorySuggestionUseCase
+    reject_memory_suggestion_use_case: RejectMemorySuggestionUseCase
     create_backup_use_case: CreateBackupUseCase
     validate_backup_use_case: ValidateBackupUseCase
     restore_backup_use_case: RestoreBackupUseCase
@@ -376,13 +385,15 @@ def build_conversation_dependencies(
     memory_repository = build_sqlite_memory_repository(database_path)
     event_repository = build_sqlite_event_repository(database_path)
     decision_repository = build_sqlite_decision_repository(database_path)
+    memory_suggestion_repository = build_sqlite_memory_suggestion_repository(database_path)
     knowledge_search_repository = build_sqlite_knowledge_search_repository(database_path)
     llm_usage_repository = build_sqlite_llm_usage_repository(database_path)
     # Shared by every use case that must write more than one repository
     # atomically: SaveManualMemoryUseCase (B4a); ProposeDecisionUseCase and
     # ApproveDecisionUseCase (B4b); CorrectMemoryUseCase and
     # SupersedeDecisionUseCase (B4c); ArchiveMemoryUseCase,
-    # DeleteMemoryUseCase and ArchiveDecisionUseCase (B4d).
+    # DeleteMemoryUseCase and ArchiveDecisionUseCase (B4d); ProposeMemorySuggestionUseCase,
+    # ConfirmMemorySuggestionUseCase and RejectMemorySuggestionUseCase (M5).
     unit_of_work = build_sqlite_unit_of_work(database_path)
 
     rank_relevant_knowledge_use_case = RankRelevantKnowledgeUseCase(
@@ -442,6 +453,7 @@ def build_conversation_dependencies(
         memory_repository,
         event_repository,
         decision_repository,
+        memory_suggestion_repository,
         knowledge_search_repository,
         llm_usage_repository,
         unit_of_work,
@@ -498,8 +510,11 @@ def build_conversation_dependencies(
             memory_repository, decision_repository
         ),
         get_knowledge_overview_use_case=GetKnowledgeOverviewUseCase(
-            memory_repository, decision_repository
+            memory_repository, decision_repository, memory_suggestion_repository
         ),
+        propose_memory_suggestion_use_case=ProposeMemorySuggestionUseCase(unit_of_work),
+        confirm_memory_suggestion_use_case=ConfirmMemorySuggestionUseCase(unit_of_work),
+        reject_memory_suggestion_use_case=RejectMemorySuggestionUseCase(unit_of_work),
         create_backup_use_case=CreateBackupUseCase(backup_service),
         validate_backup_use_case=ValidateBackupUseCase(backup_service),
         restore_backup_use_case=RestoreBackupUseCase(backup_service),
