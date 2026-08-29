@@ -763,7 +763,7 @@ de Producto. RNF-003 en `main` es 300 ms, no 5 s; M10 mide contra la fuente vige
 
 El corpus congelado de 47 casos y sus resultados esperados
 (`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:63-75`) se porta **sin
-modificarse** (D1, `docs/evolution/STATUS.md:161-163`) a
+modificarse** (D1, `docs/evolution/STATUS.md:165-168`) a
 `tests/acceptance/fixtures/evidence_bank_47_casos.json`, siguiendo el mismo patrón de
 fixture versionado que ya usa `tests/engine/fixtures/github_issue_186.json`. Cada caso
 conserva su clasificación de criticidad tal como la porta la rama de evidencia, incluido un
@@ -793,7 +793,7 @@ cobertura no por debajo de 63/81 — este segundo suelo es **provisional**, no u
 definitiva: D2 lo registra expresamente como el piso más bajo de las dos cifras que cita la
 Definición de Producto, «hasta que la primera medición real de PA-0.2-REC-01 sobre `main`
 registre la cifra medida, momento en el que esa cifra medida sustituye a este provisional sin
-necesidad de una nueva decisión del propietario» (`docs/evolution/STATUS.md:170-180`). M10
+necesidad de una nueva decisión del propietario» (`docs/evolution/STATUS.md:182-184`). M10
 (§8) es quien ejecuta esa primera medición real; a partir de ahí la aserción dura de esta
 prueba pasa a ser la cifra que M10 mida, no 63/81, y las ejecuciones posteriores a M10 no
 pueden seguir pasando con 63/81 si la medición real fue distinta. Omisiones críticas: el
@@ -804,7 +804,7 @@ nunca relajada en silencio— y PA-0.2-REC-01 permanece no superada, tal como ex
 
 ### 6.5 Decisión D3: intento de cierre de la última omisión crítica
 
-D3 (`docs/evolution/STATUS.md:182-196`) decide que la omisión crítica por derivación léxica
+D3 (`docs/evolution/STATUS.md:186-198`) decide que la omisión crítica por derivación léxica
 que la Definición de Producto §3.2(b) caracteriza («preferencia de redacción» frente a
 «prefiere que redactes», `docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:107-108`)
 **se intenta cerrar** dentro del mismo paquete de incorporación de D1, no se caracteriza sin
@@ -1136,7 +1136,7 @@ a «prefiere que redactes», ver §6.5), dentro del presupuesto de latencia de �
 construir un diccionario a medida no acotado (Producto §3.3).
 
 **Criterio de aceptación — salida explícita en los dos sentidos, por decisión D3
-(`docs/evolution/STATUS.md:182-196`):**
+(`docs/evolution/STATUS.md:186-198`):**
 
 - si se cierra: el caso del banco de M7 que hoy la registra como omisión pasa a acierto, la
   prueba de M7 se actualiza para exigir 0 omisiones críticas como suelo duro, y
@@ -1163,7 +1163,7 @@ documento las traduce a diseño sin reabrirlas:
 - **La dependencia de Ollama en el filtro de relevancia** — resuelta por D1: se adopta;
   §6.2 diseña su puerto, su adaptador y el contrato de fallo abierto.
 - **La última omisión crítica de recuperación** caracterizada en la Definición de Producto
-  §3.3 — resuelta por D3 (`docs/evolution/STATUS.md:182-196`): se intenta cerrar dentro del
+  §3.3 — resuelta por D3 (`docs/evolution/STATUS.md:186-198`): se intenta cerrar dentro del
   mismo paquete de incorporación (M11, §6.5); si no se consigue, queda documentada como
   abierta y aplazada por decisión del propietario, sin bloquear el resto — nunca como
   defecto sin diagnosticar.
