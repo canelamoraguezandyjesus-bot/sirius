@@ -121,14 +121,18 @@ quedaron **resueltas por el propietario el 29 de agosto de 2026** en su sesión 
 resolución fija el contenido de cada decisión y, junto con la aprobación ya cumplida de las
 dos puertas de activación citadas en este mismo párrafo, deja sin premisas pendientes el
 comienzo de la implementación de los cinco bloques — **con una excepción explícita**: los
-encargos M8, M9 y M10 del bloque de búsqueda mejorada y mejor recuperación
+encargos M8, M9, M10 y M11 del bloque de búsqueda mejorada y mejor recuperación
 (`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md` §8) no pueden ordenarse
-contra conocimiento real de producción, porque el origen y el ciclo de vida de las
-categorías del candidato y de la consulta que `category_match` necesita siguen sin decidir
-por el propietario (`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md` §6.1
-y §9). Mientras esa séptima decisión no llegue, M8, M9 y M10 quedan **bloqueados** salvo su
-construcción y verificación contra el banco de evidencia versionado de §6.4 de esa misma
-Arquitectura; M1–M7 y M11 no dependen de esa decisión y pueden ordenarse sin ella.
+al Work Engine. M8 y M9 se cablean, cada uno, en el método real de producción que procesa
+`Memory`/`Decision` — `RankRelevantKnowledgeUseCase.rank()` y
+`ContextBuilder._rank_related_knowledge` respectivamente —, no en una vía aislada, porque el
+origen y el ciclo de vida de las categorías del candidato y de la consulta que
+`category_match` necesita siguen sin decidir por el propietario
+(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md` §6.1, §6.2 y §9); M10
+integra ambos en ese mismo camino, y M11 se apoya en el pipeline que M7–M10 dejan integrado,
+así que hereda el mismo bloqueo. Mientras esa séptima decisión no llegue, M8, M9, M10 y M11
+quedan **bloqueados** por completo, sin excepción de construcción aislada; M1–M7 no dependen
+de esa decisión y pueden ordenarse sin ella.
 
 ## Decisiones del propietario registradas el 29 de agosto de 2026
 

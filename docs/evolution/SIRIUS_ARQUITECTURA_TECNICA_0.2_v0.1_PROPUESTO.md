@@ -658,8 +658,10 @@ candidato real de producción — no del banco de fixture de §6.4 —, el dato 
 no dispone de ese dato al construir cada `RankedKnowledge`. Cerrar este vacío exige que el
 propietario decida entre persistir un campo nuevo en `Memory`/`Decision` con su migración, o
 definir un mecanismo de clasificación determinista distinto — decisión que este documento no
-toma por su cuenta (§9). Hasta que se tome, M8 solo puede construirse y verificarse contra el
-banco de evidencia versionado de §6.4, nunca contra conocimiento real de producción.
+toma por su cuenta (§9). Hasta que se tome, M8 queda bloqueado para ordenarse al Work Engine
+(§8, §9): el propio cálculo de `category_match` vive en `RankRelevantKnowledgeUseCase.rank()`,
+el método real que procesa `Memory`/`Decision` de producción, así que no existe una versión
+aislada de M8 que se pueda construir sin ese dato.
 
 ### 6.2 Filtro de relevancia con modelo local vía Ollama: puerto, adaptador, fallo abierto y candado
 
@@ -710,11 +712,13 @@ adaptador y este candado.
 canon que alimenta el índice de categoría de §6.1, no una fuente independiente: hereda
 exactamente la misma limitación que allí queda declarada pendiente de decisión del
 propietario. Ni `Memory` ni `Decision` tienen hoy un campo de criticidad o categoría
-(`src/sirius/domain/memory.py`, `src/sirius/domain/decision.py`), así que, igual que M8, M9
-solo puede construirse y verificarse contra el banco de evidencia versionado de §6.4; contra
-`Memory`/`Decision` reales de `main` el candado no tiene ningún candidato de "categoría de
-máxima criticidad" que proteger, porque esa clasificación no existe todavía para
-conocimiento real. §9 registra esta misma decisión pendiente para M8 y M9 a la vez.
+(`src/sirius/domain/memory.py`, `src/sirius/domain/decision.py`), y el candado vive en
+`ContextBuilder._rank_related_knowledge`, el método real que procesa `Memory`/`Decision` de
+producción: contra `Memory`/`Decision` reales de `main` el candado no tiene ningún candidato
+de «categoría de máxima criticidad» que proteger, porque esa clasificación no existe todavía
+para conocimiento real. Igual que M8, M9 queda bloqueado para ordenarse al Work Engine
+mientras esa decisión no llegue (§8, §9); §9 registra esta misma decisión pendiente para M8 y
+M9 a la vez.
 
 ### 6.3 Presupuesto de latencia: RNF-003 y cómo se mide
 
@@ -890,16 +894,23 @@ línea base antes de medir cualquier cambio); M8 y M9 antes que M10 (mide la int
 completa, no cada pieza suelta); M11 al final, porque su intento de cierre se apoya en el
 pipeline ya integrado por M7–M10.
 
-**M8, M9 y M10 quedan bloqueados contra conocimiento real de producción.** El orden anterior
-fija dependencias de secuencia, no autorización para ordenar los tres al Work Engine: M8
-(§6.1) y M9 (§6.2) comparten la misma premisa pendiente — el origen y el ciclo de vida de las
-categorías del candidato y de la consulta que `category_match` necesita no están decididos
-por el propietario (§9) —, y M10 cablea ambos en `ContextBuilder._rank_related_knowledge`,
-el camino que sí procesa `Memory`/`Decision` reales. Mientras esa decisión no llegue, M8 y M9
-solo pueden construirse y verificarse contra el banco de evidencia versionado de §6.4, y M10
-no puede ordenarse en absoluto: cablear en producción un índice y un candado que no
-distinguen categorías reales no cierra el defecto, lo esconde detrás de una prueba que solo
-ejercita candidatos artificiales. `docs/evolution/STATUS.md` registra este mismo bloqueo.
+**M8, M9, M10 y M11 quedan bloqueados contra conocimiento real de producción.** El orden
+anterior fija dependencias de secuencia, no autorización para ordenar ninguno de los cuatro
+al Work Engine: M8 (§6.1) y M9 (§6.2) comparten la misma premisa pendiente — el origen y el
+ciclo de vida de las categorías del candidato y de la consulta que `category_match` necesita
+no están decididos por el propietario (§9) —, y ambos exigen cablearse en el mismo método de
+producción que procesa `Memory`/`Decision` reales
+(`RankRelevantKnowledgeUseCase.rank()` para M8, `ContextBuilder._rank_related_knowledge` para
+M9), no en una copia aislada de ese camino: no existe hoy ningún banco de fixture que sirva
+de sustituto para «construir» M8 o M9 sin tocar ese método real, así que ninguno de los dos
+puede ordenarse al Work Engine — ni siquiera para construcción — mientras esa decisión no
+llegue. M10 cablea ambos en ese mismo método; ordenarlo antes pondría en producción un índice
+y un candado que no distinguen categorías reales, sin cerrar el defecto. M11 se apoya en el
+pipeline ya integrado por M7–M10 (línea base de M7, señal de M8, filtro de M9, medición de
+M10): sin M10 integrado no hay pipeline sobre el que M11 pueda intentar su cierre, así que
+M11 queda bloqueado exactamente igual que M8, M9 y M10, no solo en la secuencia sino en la
+autorización de ordenación. `docs/evolution/STATUS.md` registra este mismo bloqueo de los
+cuatro encargos.
 
 ### M1 — Proyectos históricos: puerto y aplicación
 
@@ -1027,6 +1038,14 @@ pipeline bajo prueba, solo por el arnés de evaluación, y únicamente para `cri
 
 ### M8 — Búsqueda mejorada: índice de categoría determinista
 
+**Bloqueado hasta que el propietario decida el origen de categoría (§6.1, §9).** El propio
+cálculo de `category_match` se cablea en `RankRelevantKnowledgeUseCase.rank()`, el método
+real que construye cada `RankedKnowledge` para `Memory`/`Decision` de producción, no en una
+copia aislada de ese método: no hay forma de "construir" M8 sin tocar ese camino productivo,
+así que este encargo no puede ordenarse al Work Engine mientras esa decisión no llegue. El
+resto de esta sección describe el trabajo para cuando se ordene, no una autorización para
+ordenarlo ya.
+
 `category_match` en `RankedKnowledge`, la función determinista que lo calcula en
 `sirius.domain.relevance`, su cableado en `RankRelevantKnowledgeUseCase.rank()` y su lugar
 en `_sort_key` (§6.1).
@@ -1036,11 +1055,19 @@ distintas que confirma el nuevo lugar de `category_match` en la tupla de orden (
 `fts_match`, antes de la recencia); re-ejecutar la prueba de M7 sobre el banco y comprobar
 que las omisiones críticas bajan frente a la línea base de M7 (la cifra exacta es objetivo
 conjunto de M7–M11, no de M8 aislado). Este criterio se verifica contra el banco de
-evidencia versionado de §6.4: mientras el origen de categoría para candidatos reales de
-producción siga pendiente de decisión del propietario (§6.1, §9), M8 no se verifica contra
-`Memory`/`Decision` reales de `main`.
+evidencia versionado de §6.4 una vez que el origen de categoría para candidatos reales de
+producción esté decidido por el propietario (§6.1, §9): hasta entonces M8 no tiene dato de
+categoría con el que ejercitar `Memory`/`Decision` reales de `main`, ni siquiera de forma
+aislada.
 
 ### M9 — Búsqueda mejorada: filtro de relevancia con Ollama — puerto, adaptador y candado
+
+**Bloqueado hasta que el propietario decida el origen de categoría (§6.1, §6.2, §9).** El
+candado se cablea en `ContextBuilder._rank_related_knowledge`, el método real que procesa
+`Memory`/`Decision` de producción, no en una copia aislada de ese método: no hay forma de
+"construir" M9 sin tocar ese camino productivo, así que este encargo no puede ordenarse al
+Work Engine mientras esa decisión no llegue. El resto de esta sección describe el trabajo
+para cuando se ordene, no una autorización para ordenarlo ya.
 
 `RelevanceFilterPort`, `OllamaRelevanceFilterAdapter` (local-only, con presupuesto de
 tiempo configurable, fallo abierto) y el candado sobre la categoría de máxima criticidad del
@@ -1055,19 +1082,19 @@ ninguna excepción propagada fuera del adaptador; una prueba adicional confirma 
 candidato de la categoría de máxima criticidad del canon sobrevive aunque el doble de
 prueba del filtro intente descartarlo. Este criterio se verifica, igual que el de M8, contra
 el banco de evidencia versionado de §6.4 y contra dobles de prueba con candidatos
-artificiales: mientras el origen de categoría para candidatos reales de producción siga
-pendiente de decisión del propietario (§6.1, §6.2, §9), M9 no se verifica contra
-`Memory`/`Decision` reales de `main`, porque no existe todavía ningún candidato real
-clasificado como «categoría de máxima criticidad» que el candado pueda proteger.
+artificiales una vez que el origen de categoría para candidatos reales de producción esté
+decidido por el propietario (§6.1, §6.2, §9): hasta entonces no existe todavía ningún
+candidato real clasificado como «categoría de máxima criticidad» que el candado pueda
+proteger.
 
 ### M10 — Búsqueda mejorada y Mejor recuperación: integración y medición de RNF-003
 
 **Bloqueado hasta que el propietario decida el origen de categoría (§6.1, §9).** M10 cablea
-M8 y M9 en `ContextBuilder._rank_related_knowledge`, el único de los tres encargos que toca
-el camino de producción que sí procesa `Memory`/`Decision` reales — M8 y M9, aislados, solo
-se ejercitan contra el banco de fixture de §6.4. Ordenar M10 antes de esa decisión pondría en
-producción un índice de categoría y un candado que nunca distinguen nada en conocimiento
-real, porque ningún candidato real tiene todavía el dato de categoría o criticidad que ambos
+M8 y M9 en `ContextBuilder._rank_related_knowledge`, igual que M8 y M9 se cablean cada uno en
+su propio método de producción — ninguno de los tres tiene una vía aislada que no toque
+`Memory`/`Decision` reales. Ordenar M10 antes de esa decisión pondría en producción un índice
+de categoría y un candado que nunca distinguen nada en conocimiento real, porque ningún
+candidato real tiene todavía el dato de categoría o criticidad que ambos
 necesitan: no es una integración vacía sino una que aparenta funcionar (la medición de
 RNF-003 y la prueba de M7 seguirían pasando) sin aportar lo que D1 decidió incorporar. Este
 encargo no puede ordenarse al Work Engine mientras esa decisión no llegue; el resto de esta
@@ -1096,6 +1123,12 @@ prueba tras este encargo es la cifra medida en esta primera ejecución real sobr
 medición, y este encargo es esa medición.
 
 ### M11 — Mejor recuperación: intento de cierre de la última omisión crítica (D3)
+
+**Bloqueado hasta que el propietario decida el origen de categoría (§6.1, §9) y M10 quede
+integrado.** El encargo empieza «sobre el pipeline ya integrado por M7–M10»: sin M8, M9 y
+M10 ordenados y construidos no existe ese pipeline, así que M11 hereda el mismo bloqueo que
+ellos y no puede ordenarse al Work Engine hasta que se resuelva. El resto de esta sección
+describe el trabajo para cuando se ordene, no una autorización para ordenarlo ya.
 
 Sobre el pipeline ya integrado por M7–M10, intentar cerrar la omisión crítica por derivación
 léxica que la Definición de Producto §3.2(b) caracteriza («preferencia de redacción» frente
@@ -1154,9 +1187,10 @@ donde estaba, sin recaracterizarla:
   o de criticidad, y `RankRelevantKnowledgeUseCase.rank()` solo recibe `query_text`
   (`src/sirius/application/rank_relevant_knowledge.py:47-59`) — no dispone de ese dato para
   construir la señal. El candado de M9 (§6.2) reutiliza la misma clasificación, así que
-  hereda el mismo vacío. M8 y M9 solo pueden construirse y verificarse contra el banco de
-  fixture de §6.4, y **M8, M9 y M10 quedan bloqueados** para ordenarse al Work Engine contra
-  conocimiento real de producción (§8, `docs/evolution/STATUS.md`) hasta que se resuelva.
+  hereda el mismo vacío. M8 y M9 se cablean, cada uno, en el método real de producción que
+  procesa `Memory`/`Decision` — no existe una vía aislada que los construya sin ese dato —, y
+  M10 integra ambos en ese mismo camino, así que **M8, M9, M10 y M11 quedan bloqueados** para
+  ordenarse al Work Engine (§8, `docs/evolution/STATUS.md`) hasta que se resuelva.
   Persistir un campo nuevo con su migración, o definir un mecanismo de clasificación
   determinista distinto, es una decisión del propietario que ningún encargo M1–M11 toma ni
   asigna; hasta que llegue, ningún encargo puede alimentar producción con los metadatos del
