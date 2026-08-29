@@ -447,7 +447,13 @@ Resolverlo (archivar una memoria, o archivar/sustituir una decisión) reutiliza 
 `_handle_archive_memory_clicked`, `_handle_supersede_decision_clicked` y
 `_handle_archive_decision_clicked` ya escritos — llamando a los mismos métodos internos sobre
 la entidad única seleccionada desde `conflicts_list` en vez de exigir que el usuario la
-vuelva a buscar en `memories_list`/`decisions_list`. `_handle_correct_memory_clicked` y
+vuelva a buscar en `memories_list`/`decisions_list`. Esto exige separar, en cada manejador
+afectado, la obtención de la entidad de la acción sobre ella: la lógica interna que archiva o
+sustituye pasa a aceptar la entidad como parámetro explícito, y cada botón se la resuelve
+desde la lista que lo originó —`conflicts_list` vía `_selected_conflict_entity`,
+`memories_list`/`decisions_list` vía `_selected_memory`/`_selected_decision`—, de modo que
+actuar desde `conflicts_list` nunca dependa de lo que esté seleccionado en el panel general.
+`_handle_correct_memory_clicked` y
 `_handle_approve_decision_clicked` siguen existiendo tal cual y siguen operando sobre
 `memories_list`/`decisions_list` fuera de este flujo — este diseño no los elimina, solo no
 los ofrece como resolución de un conflicto desde `conflicts_list`. Tras cualquier
@@ -687,7 +693,13 @@ conflicto activo (dos decisiones `APPROVED` del mismo asunto/proyecto) y comprue
 `correct_memory_button` y `approve_decision_button` quedan deshabilitados desde
 `conflicts_list`, mientras que `archive_memory_button`, `supersede_decision_button` y
 `archive_decision_button` sí lo están — cubriendo la ruta que «Corregir»/«Aprobar» no
-resuelven (§4.2).
+resuelven (§4.2). Una tercera prueba deja seleccionada, a la vez, una `Decision` distinta en
+`decisions_list` (el panel general) y la `Decision` en conflicto en `conflicts_list`; pulsa
+`archive_decision_button` (o `supersede_decision_button`) con esa selección de
+`conflicts_list` activa y comprueba que la decisión modificada es la que devuelve
+`_selected_conflict_entity` —su `id` coincide con la del conflicto, no con la de
+`_selected_decision()` sobre `decisions_list`— y que una detección posterior
+(`_handle_detect_conflicts_clicked`) ya no reporta ese conflicto.
 
 ### M4 — Sugerencias confirmadas: dominio, puerto y migración
 
@@ -713,13 +725,24 @@ no referencia la sugerencia rechazada en ningún campo de `Context`.
 ### M6 — Sugerencias confirmadas: interfaz
 
 Botón «Proponer guardar…» en `MessageItemWidget` (§3.6), sección «Sugerencias pendientes»
-en `KnowledgeWidget` con sus botones «Confirmar»/«Rechazar».
+en `KnowledgeWidget` con sus botones «Confirmar»/«Rechazar», y el contrato de la vía
+automática de §3.2: extensión de `render_instructions()` para pedir al proveedor que, cuando
+proceda, incluya una propuesta distinguible dentro del mismo `text` de `LLMCompleted`, y la
+extracción de esa propuesta —antes de mostrar o persistir la respuesta— que decide si se
+llama a `ProposeMemorySuggestionUseCase.propose(...)`. Sin este contrato la vía automática no
+existe: queda asignada a M6, no como un detalle sin dueño.
 
 **Criterio de aceptación:** prueba GUI que, sobre un turno de conversación ya completado,
 propone una sugerencia desde el botón del mensaje, la ve aparecer en «Sugerencias
 pendientes», la confirma, y comprueba que aparece en la lista de recuerdos vigentes del
 mismo panel tras `refresh()` — sin que en ningún punto de la prueba se haya invocado
-`SendMessageUseCase` una segunda vez ni se haya bloqueado la primera.
+`SendMessageUseCase` una segunda vez ni se haya bloqueado la primera. Además, cuatro pruebas
+sobre la vía automática (§3.2), sin interfaz, ejercitando directamente la superficie que
+orquesta el envío de un turno: una respuesta `COMPLETED` con propuesta candidata dispara
+`ProposeMemorySuggestionUseCase.propose(...)` exactamente una vez con su contenido; una
+respuesta `COMPLETED` sin propuesta candidata no dispara ninguna llamada; un resultado
+`CANCELLED` no dispara ninguna llamada; un resultado `FAILED` no dispara ninguna llamada — en
+los cuatro casos, el proveedor se invoca una sola vez por turno.
 
 ## 9. Decisiones pendientes del propietario
 
