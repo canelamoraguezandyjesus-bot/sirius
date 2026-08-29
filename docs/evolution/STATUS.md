@@ -120,16 +120,35 @@ quedaron **resueltas por el propietario el 29 de agosto de 2026** en su sesión 
 — ver «Decisiones del propietario registradas el 29 de agosto de 2026» más abajo —; esa
 resolución fija el contenido de cada decisión y, junto con la aprobación ya cumplida de las
 dos puertas de activación citadas en este mismo párrafo, deja sin premisas pendientes el
-comienzo de la implementación de los cinco bloques.
+comienzo de la implementación de los cinco bloques. El diseño detallado que D1 encargó para
+el paquete de búsqueda mejorada y mejor recuperación introdujo, por su cuenta, una quinta
+premisa que las cuatro decisiones originales no cubrían — de dónde sale, para un candidato
+real, el dato de categoría que el índice y su candado necesitan —; el propietario la
+resolvió igualmente, como **D7** (ver «Decisiones del propietario registradas el 29 de
+agosto de 2026» más abajo, fuente: incidencia #435). Con D1–D7 registradas, las premisas de
+búsqueda mejorada y mejor recuperación quedan resueltas sin contradicción: los encargos
+M1–M12 de la Arquitectura Técnica 0.2
+(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md`, §8) pueden ordenarse al
+Work Engine sin ninguno bloqueado a la espera de una decisión pendiente — **construirlos y
+medirlos**, se entiende: D7 punto 6 deja, además, una puerta de activación distinta y
+posterior, que no bloquea M8–M11. Antes de que `category_match` (§6.2) o el candado (§6.3)
+puedan tratar de forma distinta a un candidato real según su categoría persistida, el
+propietario debe registrar aquí el umbral de coincidencia exigible a la vista de la cifra
+que M11 mida y publique (D7 punto 6, §9 de la Arquitectura Técnica 0.2); hasta que ese
+umbral quede registrado en este documento, la Arquitectura Técnica 0.2 mantiene esa puerta
+cerrada con su fallback más seguro — `category_match` inerte y el candado protegiendo a todo
+candidato real, con categoría o sin ella (§6.3) —, así que completar M11 no deja el ranking
+ni el candado operando sobre una medición todavía no aceptada.
 
 ## Decisiones del propietario registradas el 29 de agosto de 2026
 
-Fuente autorizada: sesión interactiva (`sesion-cli`), Work ID `WI-20260829-123248`. Las
-seis decisiones que siguen son hechos declarados por el propietario, no autorizaciones de
-implementación nuevas: ninguna de las seis abre por sí sola la puerta de activación del
-Rector, que exige arquitectura técnica aprobada y pruebas de aceptación reproducibles y que
-ya está cumplida, pero por la fusión de las PR #418 y #420, no por estas seis decisiones
-(ver «Próximo paso» arriba). Cuando esta sección cita una cifra o un estado como evidencia de la
+Fuente autorizada: sesión interactiva (`sesion-cli`), Work ID `WI-20260829-123248`, salvo D7
+(fuente propia: incidencia #435, ver D7 más abajo). Las siete decisiones que siguen son
+hechos declarados por el propietario, no autorizaciones de implementación nuevas: ninguna de
+las siete abre por sí sola la puerta de activación del Rector, que exige arquitectura
+técnica aprobada y pruebas de aceptación reproducibles y que ya está cumplida, pero por la
+fusión de las PR #418 y #420, no por estas siete decisiones (ver «Próximo paso» arriba).
+Cuando esta sección cita una cifra o un estado como evidencia de la
 PR #117, se cita tal como la registra la Definición de Producto — «evidencia reportada, no
 verificada» contra la rama `evidence/adr001-spikes`, que este documento tampoco lee
 directamente (`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:41-47`).
@@ -140,17 +159,17 @@ fusionar como archivo de evidencia) se incorpora a `main` **completa** — el í
 categoría determinista **y** el filtro de relevancia con modelo local vía Ollama —, no
 mediante la fusión directa de esa PR sino mediante órdenes nuevas al Work Engine que porten
 ese trabajo como código de producto con sus pruebas. Esas órdenes futuras deben respetar
-los puntos de integración que la Arquitectura Técnica 0.2 §6 deja señalados sin decidir
-— el índice de categoría como cuarta señal de `RankedKnowledge`
-(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:614-626`) y el filtro de
+los puntos de integración que la Arquitectura Técnica 0.2 §6 deja fijados — el índice de
+categoría como cuarta señal de `RankedKnowledge`
+(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md`, §6.2) y el filtro de
 relevancia como segundo filtro en `ContextBuilder._rank_related_knowledge`, después de la
 exclusión por precedencia
-(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:628-641`) — y el
+(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md`, §6.3) — y el
 presupuesto de latencia RNF-003, 300 ms P95
 (`docs/decisions/ADR-008-cargar-en-lote-las-revisiones-vigentes-al-listar.md:111-117`,
 `docs/implementation/V8_EXECUTION.md:44-48`), restricción que la propia Arquitectura fija
 para ambos puntos
-(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:643-648`). El corpus del
+(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md`, §6.4). El corpus del
 banco congelado de 47 casos y sus resultados esperados
 (`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:63-75`) se porta sin
 modificarse. Esta decisión resuelve, con esta respuesta, las dos primeras de las cuatro
@@ -197,10 +216,10 @@ esos estados en `main`
 Arquitectura Técnica 0.2 §3.1 ya apunta en esa misma dirección, con una redacción que este
 registro cita tal cual sin corregirla: «el origen de Sirius Work Engine (equipo de la sesión
 del propietario) es la rama de evidencia sin fusionar, no el producto»
-(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:116-119`). El propietario
+(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md`, §3.1). El propietario
 cierra ahora esa decisión abierta
 (`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:306-310`;
-`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:814-819`): esos estados
+`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md`, §9): esos estados
 provienen del corpus del banco de la rama de evidencia, no del producto — «sugerencias
 confirmadas» sigue partiendo de cero en `main` en este punto, tal como ya registraba §4.1.
 
@@ -209,9 +228,9 @@ esta sesión señala explícitamente que esa decisión no se repite en este regi
 consta en la Arquitectura Técnica 0.2 §3.2: el propietario la resolvió en un comentario
 anterior, 2026-08-29T02:24:52Z, con dos vías (disparador automático tras la conversación y
 botón manual) que convergen en el mismo estado `PENDING`
-(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:132-137`), y la propia
+(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md`, §3.2), y la propia
 Arquitectura la marca como «ya resuelta, no pendiente»
-(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:821-827`).
+(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md`, §9).
 
 **D5 — Orden de la pieza (C) del contador de racha (ADR-101).** ADR-101, APROBADO el
 28-08-2026 (`docs/decisions/ADR-101-declarar-la-precondicion-del-contador-de-siete-dias-en-vez-de-inferirla-por-caso.md:1-7`),
@@ -219,8 +238,8 @@ deja la pieza (C) —cablear el retorno del desenlace de GitHub al almacén del 
 declarar la clase correspondiente— como «bloque propio, a la orden del propietario»
 (`docs/decisions/ADR-101-declarar-la-precondicion-del-contador-de-siete-dias-en-vez-de-inferirla-por-caso.md:83-85`).
 El propietario decide ahora el orden: la pieza (C) **se ordenará después de las oleadas de
-construcción de Sirius 0.2** descritas en la Arquitectura Técnica 0.2 §8
-(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:692-696`), no antes ni en
+construcción de Sirius 0.2** descritas en la Arquitectura Técnica 0.2
+(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md`, §8), no antes ni en
 paralelo con ellas.
 
 **D6 — Separación de la memoria del producto y la memoria del motor.** Resuelve la
@@ -242,3 +261,30 @@ replanteará **solo si algún día se unifican motor y producto**; hasta entonce
 que la auditoría de `DONDE_ESTAMOS_2026-08-21.md` dejó sin cerrar
 (`docs/implementation/DONDE_ESTAMOS_2026-08-21.md:524-527`) queda resuelta por esta decisión
 del propietario, no por evidencia de código nueva.
+
+**D7 — Etiquetado automático de categoría con el modelo local (Ollama).** Continuación de
+este mismo registro del 29 de agosto de 2026, con fuente propia y distinta de las seis
+decisiones anteriores: el comentario del propietario en la incidencia #435
+(2026-08-29T17:08:12Z), «DECISIÓN DEL PROPIETARIO (resuelve la decisión pendiente sobre el
+origen de la categoría de los candidatos reales — la que hoy bloquea M8-M11)... Etiqueta el
+modelo local (Ollama), automáticamente; el usuario corrige y su corrección manda», con siete
+puntos literales: (1) campo opcional de categoría en `Memory` y `Decision`, con migración
+aditiva y el vocabulario cerrado del banco de 47 casos, para que las cifras medidas sigan
+siendo comparables; (2) el modelo local ya decidido en D1 (Ollama) lo etiqueta
+automáticamente, de forma asíncrona y diferida tras el guardado — guardar nunca se bloquea
+ni espera al etiquetado, y todo falla abierto si Ollama no está o no responde; (3) la
+etiqueta es visible y editable, y una etiqueta puesta o corregida por el usuario es
+definitiva y el modelo local nunca la sobrescribe; (4) los elementos ya guardados se
+etiquetan igual, en local y sin coste; (5) el proveedor de pago no interviene en el
+etiquetado; (6) antes de fiarse de la señal en datos reales, se mide la coincidencia del
+etiquetado de Ollama contra las etiquetas canónicas del banco de 47 casos, se registra el
+resultado, y el umbral exigible lo registra el propietario a la vista de esa medición —
+mismo patrón que D2; (7) la detección semántica de contradicciones entre recuerdos con el
+modelo local queda registrada como idea futura, fuera del alcance de este paquete. Esta
+decisión resuelve, con esta respuesta, el vacío que dejaba bloqueados los encargos M8-M11
+del paquete que abrió D1 — de dónde sale, para un candidato real, el dato de categoría que
+el índice y su candado necesitan —, y la Arquitectura Técnica 0.2 lo traduce a diseño
+completo (`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md`, §6.1),
+incluida la migración aditiva, el puerto y el adaptador de Ollama, la orquestación
+asíncrona sobre el `QThreadPool` ya existente, la edición del usuario y el pase
+retroactivo. Esta decisión no reabre D1 ni ninguna otra de las seis decisiones anteriores.
