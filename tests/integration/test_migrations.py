@@ -39,6 +39,7 @@ def test_upgrade_head_creates_the_expected_tables(tmp_path: Path) -> None:
         "identities",
         "identity_versions",
         "llm_usage",
+        "memory_suggestions",
     }.issubset(set(inspector.get_table_names()))
 
 
@@ -145,6 +146,18 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
         "source_event_id",
         "is_current",
         "created_at",
+    }
+    memory_suggestion_columns = {c["name"] for c in inspector.get_columns("memory_suggestions")}
+    assert memory_suggestion_columns == {
+        "id",
+        "content",
+        "status",
+        "subject_key",
+        "project_id",
+        "source_event_id",
+        "resulting_memory_id",
+        "created_at",
+        "resolved_at",
     }
     assert identity_columns == {"id", "created_at"}
     assert identity_version_columns == {
@@ -1314,3 +1327,195 @@ def test_upgrading_from_the_previous_head_backfills_existing_memories_and_decisi
     assert [row.item_id for row in current_memory_match] == [1]
     assert stale_memory_match == []
     assert [row.item_id for row in decision_match] == [1]
+
+
+_M4_PREVIOUS_HEAD_REVISION = "61be4bb269bf"  # head immediately before M4's memory_suggestions
+
+
+@pytest.mark.integration
+def test_upgrade_head_creates_memory_suggestions_project_id_as_a_physical_foreign_key(
+    tmp_path: Path,
+) -> None:
+    """M4, SIRIUS-ARQ-0.2 §3.7: memory_suggestions.project_id is a real,
+    enforced link to projects, not just a free-standing integer."""
+    database_path = tmp_path / "sirius.db"
+
+    command.upgrade(_alembic_config(database_path), "head")
+
+    inspector = inspect(build_engine(database_path))
+    foreign_keys = inspector.get_foreign_keys("memory_suggestions")
+    project_fks = [fk for fk in foreign_keys if fk["referred_table"] == "projects"]
+
+    assert len(project_fks) == 1
+    assert project_fks[0]["constrained_columns"] == ["project_id"]
+    assert project_fks[0]["referred_columns"] == ["id"]
+
+
+@pytest.mark.integration
+def test_upgrade_head_creates_memory_suggestions_source_event_id_as_a_physical_foreign_key(
+    tmp_path: Path,
+) -> None:
+    """M4: memory_suggestions.source_event_id is a real, enforced link to events."""
+    database_path = tmp_path / "sirius.db"
+
+    command.upgrade(_alembic_config(database_path), "head")
+
+    inspector = inspect(build_engine(database_path))
+    foreign_keys = inspector.get_foreign_keys("memory_suggestions")
+    source_event_fks = [fk for fk in foreign_keys if fk["referred_table"] == "events"]
+
+    assert len(source_event_fks) == 1
+    assert source_event_fks[0]["constrained_columns"] == ["source_event_id"]
+    assert source_event_fks[0]["referred_columns"] == ["id"]
+
+
+@pytest.mark.integration
+def test_upgrade_head_creates_memory_suggestions_resulting_memory_id_as_a_physical_foreign_key(
+    tmp_path: Path,
+) -> None:
+    """M4, SIRIUS-ARQ-0.2 §3.4: memory_suggestions.resulting_memory_id is a
+    real, enforced link to memories, set only once a suggestion is confirmed."""
+    database_path = tmp_path / "sirius.db"
+
+    command.upgrade(_alembic_config(database_path), "head")
+
+    inspector = inspect(build_engine(database_path))
+    foreign_keys = inspector.get_foreign_keys("memory_suggestions")
+    resulting_memory_fks = [fk for fk in foreign_keys if fk["referred_table"] == "memories"]
+
+    assert len(resulting_memory_fks) == 1
+    assert resulting_memory_fks[0]["constrained_columns"] == ["resulting_memory_id"]
+    assert resulting_memory_fks[0]["referred_columns"] == ["id"]
+
+
+@pytest.mark.integration
+def test_memory_suggestions_has_no_unique_index_on_status(tmp_path: Path) -> None:
+    """M4, SIRIUS-ARQ-0.2 §3.7: unlike ``projects``/``conversations``, nothing
+    stops several suggestions from being PENDING at the same time — no
+    unique index is created on this table at all."""
+    database_path = tmp_path / "sirius.db"
+
+    command.upgrade(_alembic_config(database_path), "head")
+
+    inspector = inspect(build_engine(database_path))
+    indexes = inspector.get_indexes("memory_suggestions")
+
+    assert not any(index["unique"] for index in indexes)
+
+
+@pytest.mark.integration
+def test_downgrade_to_previous_head_removes_only_the_memory_suggestions_table(
+    tmp_path: Path,
+) -> None:
+    """M4: downgrading past this migration removes only ``memory_suggestions``;
+    every other table (including ``memories`` and ``decisions``) is unaffected."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+
+    command.upgrade(config, "head")
+    command.downgrade(config, _M4_PREVIOUS_HEAD_REVISION)
+
+    table_names = set(inspect(build_engine(database_path)).get_table_names())
+    assert "memory_suggestions" not in table_names
+    assert {
+        "memories",
+        "memory_revisions",
+        "decisions",
+        "decision_revisions",
+        "events",
+        "projects",
+    }.issubset(table_names)
+
+
+@pytest.mark.integration
+def test_upgrading_from_the_previous_head_preserves_existing_memories_and_decisions(
+    tmp_path: Path,
+) -> None:
+    """M4 compatibility: a base created before this migration existed (still
+    at the previous head) upgrades to the new head without losing any
+    existing memory or decision; the new table starts empty."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+    command.upgrade(config, _M4_PREVIOUS_HEAD_REVISION)
+
+    now = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO memories (id, status, created_at, updated_at) "
+                "VALUES (1, 'current', :now, :now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO memory_revisions "
+                "(memory_id, version, content, origin, is_current, created_at) "
+                "VALUES (1, 1, 'recuerdo previo a M4', 'manual', 1, :now)"
+            ),
+            {"now": now},
+        )
+
+    command.upgrade(config, "head")
+
+    with engine.begin() as connection:
+        memory_rows = connection.execute(text("SELECT id, status FROM memories")).fetchall()
+        suggestion_rows = connection.execute(text("SELECT id FROM memory_suggestions")).fetchall()
+
+    assert len(memory_rows) == 1
+    assert memory_rows[0].id == 1
+    assert memory_rows[0].status == "current"
+    assert suggestion_rows == []
+
+
+@pytest.mark.integration
+def test_memory_suggestion_can_be_inserted_and_read_back(tmp_path: Path) -> None:
+    """M4: a full round trip through the new table, independent of the
+    application/adapter layer — a pending suggestion with no resolution
+    yet, and a confirmed one linked to a real memory."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+    command.upgrade(config, "head")
+
+    now = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO memory_suggestions (id, content, status, created_at) "
+                "VALUES (1, 'sugerencia pendiente', 'pending', :now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO memories (id, status, created_at, updated_at) "
+                "VALUES (1, 'current', :now, :now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO memory_suggestions "
+                "(id, content, status, resulting_memory_id, created_at, resolved_at) "
+                "VALUES (2, 'sugerencia confirmada', 'confirmed', 1, :now, :now)"
+            ),
+            {"now": now},
+        )
+        rows = connection.execute(
+            text(
+                "SELECT id, content, status, resulting_memory_id, resolved_at "
+                "FROM memory_suggestions ORDER BY id"
+            )
+        ).fetchall()
+
+    assert len(rows) == 2
+    assert rows[0].id == 1
+    assert rows[0].status == "pending"
+    assert rows[0].resulting_memory_id is None
+    assert rows[0].resolved_at is None
+    assert rows[1].id == 2
+    assert rows[1].status == "confirmed"
+    assert rows[1].resulting_memory_id == 1
+    assert rows[1].resolved_at == now

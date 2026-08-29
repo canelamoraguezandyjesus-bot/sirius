@@ -15,6 +15,7 @@ from sirius.domain.conversation import Conversation, Message, MessageRole, Messa
 from sirius.domain.decision import Decision
 from sirius.domain.event import MEMORY_ARCHIVED_EVENT_TYPE, USER_ACTOR, Event
 from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
+from sirius.domain.memory_suggestion import MemorySuggestion
 
 
 def _memory(status: MemoryStatus, *, memory_id: int = 1) -> Memory:
@@ -177,6 +178,34 @@ class _UnusedConversationRepository:
         raise AssertionError("archive() must never redact a message")
 
 
+class _UnusedMemorySuggestionRepository:
+    """M4's ``UnitOfWork.memory_suggestion_repository``; ``archive()`` never touches it."""
+
+    def create_suggestion(
+        self,
+        content: str,
+        *,
+        source_event_id: int | None = None,
+        subject_key: str | None = None,
+        project_id: int | None = None,
+    ) -> MemorySuggestion:
+        raise AssertionError("archive() must never create a memory suggestion")
+
+    def get_suggestion(self, suggestion_id: int) -> MemorySuggestion:
+        raise AssertionError("archive() must never read a memory suggestion")
+
+    def list_pending_suggestions(self) -> list[MemorySuggestion]:
+        raise AssertionError("archive() must never list memory suggestions")
+
+    def confirm_suggestion(
+        self, suggestion_id: int, *, resulting_memory_id: int, resolved_at: datetime
+    ) -> MemorySuggestion:
+        raise AssertionError("archive() must never confirm a memory suggestion")
+
+    def reject_suggestion(self, suggestion_id: int, *, resolved_at: datetime) -> MemorySuggestion:
+        raise AssertionError("archive() must never reject a memory suggestion")
+
+
 class _FakeUnitOfWork:
     """In-memory stand-in for ``SqliteUnitOfWork``: same commit/rollback contract."""
 
@@ -189,6 +218,7 @@ class _FakeUnitOfWork:
         self.event_repository = event_repository
         self.decision_repository = _UnusedDecisionRepository()
         self.conversation_repository = _UnusedConversationRepository()
+        self.memory_suggestion_repository = _UnusedMemorySuggestionRepository()
         self.enter_count = 0
         self.committed = False
         self.rollback_count = 0
