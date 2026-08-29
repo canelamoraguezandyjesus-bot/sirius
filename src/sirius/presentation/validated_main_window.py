@@ -35,6 +35,7 @@ from sirius.application.send_message import SendMessageUseCase
 from sirius.application.studio_capture import StudioCaptureUseCase
 from sirius.application.studio_voice import StudioVoiceUseCase
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
+from sirius.application.tag_category import TagCategoryUseCase
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
 from sirius.presentation.credential_validation_worker import CredentialValidationWorker
@@ -75,6 +76,7 @@ class ValidatedMainWindow(MainWindow):
         historical_projects_use_case: HistoricalProjectsUseCase,
         close_database_connections: Callable[[], None],
         *,
+        tag_category_use_case: TagCategoryUseCase | None = None,
         studio_voice_use_case: StudioVoiceUseCase | None = None,
         studio_capture_use_case: StudioCaptureUseCase | None = None,
         save_studio_voice: Callable[[str], None] | None = None,
@@ -118,6 +120,7 @@ class ValidatedMainWindow(MainWindow):
             export_structured_use_case=export_structured_use_case,
             historical_projects_use_case=historical_projects_use_case,
             close_database_connections=close_database_connections,
+            tag_category_use_case=tag_category_use_case,
             studio_voice_use_case=studio_voice_use_case,
             studio_capture_use_case=studio_capture_use_case,
             save_studio_voice=save_studio_voice,

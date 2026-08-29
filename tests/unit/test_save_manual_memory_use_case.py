@@ -108,6 +108,17 @@ class _RecordingMemoryRepository:
     def list_archived_memories(self) -> list[Memory]:
         raise AssertionError("save() must never list archived memories")
 
+    def set_category(
+        self, memory_id: int, category: str, *, observed_revision_version: int
+    ) -> bool:
+        raise AssertionError("save() must never set a category")
+
+    def set_user_category(self, memory_id: int, category: str) -> Memory:
+        raise AssertionError("save() must never set a category")
+
+    def list_uncategorized(self) -> list[Memory]:
+        raise AssertionError("save() must never list uncategorized memories")
+
 
 class _UnusedDecisionRepository:
     """B4b/B4c's ``UnitOfWork.decision_repository``; ``save()`` never touches it."""
@@ -142,6 +153,17 @@ class _UnusedDecisionRepository:
 
     def list_proposed_decisions(self) -> list[Decision]:
         raise AssertionError("save() must never list proposed decisions")
+
+    def set_category(
+        self, decision_id: int, category: str, *, observed_revision_version: int
+    ) -> bool:
+        raise AssertionError("save() must never set a category")
+
+    def set_user_category(self, decision_id: int, category: str) -> Decision:
+        raise AssertionError("save() must never set a category")
+
+    def list_uncategorized(self) -> list[Decision]:
+        raise AssertionError("save() must never list uncategorized decisions")
 
 
 class _UnusedConversationRepository:

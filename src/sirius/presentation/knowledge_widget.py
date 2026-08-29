@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
-from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtCore import QEvent, QObject, Qt, QThreadPool
 from PySide6.QtGui import QFocusEvent
 from PySide6.QtWidgets import (
     QComboBox,
@@ -86,11 +86,13 @@ from sirius.application.supersede_decision import (
     InvalidDecisionSupersessionError,
     SupersedeDecisionUseCase,
 )
+from sirius.application.tag_category import CategoryTargetKind, TagCategoryUseCase
 from sirius.domain.decision import Decision, is_same_subject_and_project
 from sirius.domain.memory import Memory
 from sirius.domain.memory_suggestion import MemorySuggestion
 from sirius.domain.precedence import PrecedenceOutcome
 from sirius.infrastructure.logging import get_logger
+from sirius.presentation.category_tagging_worker import CategoryTaggingWorker
 
 _logger = get_logger(__name__)
 
@@ -223,6 +225,8 @@ class KnowledgeWidget(QGroupBox):
         confirm_memory_suggestion_use_case: ConfirmMemorySuggestionUseCase,
         reject_memory_suggestion_use_case: RejectMemorySuggestionUseCase,
         *,
+        tag_category_use_case: TagCategoryUseCase | None = None,
+        thread_pool: QThreadPool | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
         confirm_action: Callable[[str, str], bool] | None = None,
@@ -247,6 +251,8 @@ class KnowledgeWidget(QGroupBox):
         self._project_continuity_use_case = project_continuity_use_case
         self._confirm_memory_suggestion_use_case = confirm_memory_suggestion_use_case
         self._reject_memory_suggestion_use_case = reject_memory_suggestion_use_case
+        self._tag_category_use_case = tag_category_use_case
+        self._thread_pool = thread_pool
 
         self._show_warning = show_warning or self._default_show_warning
         self._show_information = show_information or self._default_show_information
@@ -396,7 +402,7 @@ class KnowledgeWidget(QGroupBox):
         if content is None:
             return
         try:
-            self._correct_memory_use_case.correct(memory.id, content)
+            corrected = self._correct_memory_use_case.correct(memory.id, content)
         except (InvalidMemoryCorrectionDataError, MemoryNotCorrectableError) as exc:
             self._show_warning("No se pudo corregir el recuerdo", str(exc))
             return
@@ -404,7 +410,24 @@ class KnowledgeWidget(QGroupBox):
             _logger.error("No se pudo corregir el recuerdo (%s)", type(exc).__name__)
             self._show_warning("No se pudo corregir el recuerdo", _GENERIC_ERROR_TEXT)
             return
+        self._enqueue_category_tagging_if_needed(corrected)
         self.refresh()
+
+    def _enqueue_category_tagging_if_needed(self, corrected: Memory) -> None:
+        """Reencola el etiquetado automático tras una corrección (D7, §6.1
+        "Corrección de contenido y reetiquetado"). Nunca confía solo en
+        ``category is None``: también comprueba ``category_locked``, para no
+        encolar si algún camino llegara a devolver esa combinación con
+        ``category_locked`` en ``True`` — aunque la rama transaccional de
+        ``CorrectMemoryUseCase`` garantice hoy que eso no ocurre."""
+        if corrected.category is not None or corrected.category_locked:
+            return
+        if self._tag_category_use_case is None or self._thread_pool is None:
+            return
+        worker = CategoryTaggingWorker(
+            self._tag_category_use_case, CategoryTargetKind.MEMORY, corrected.id
+        )
+        self._thread_pool.start(worker)
 
     def _memory_for_resolution(self) -> Memory | None:
         """Prefer the ``conflicts_list`` entity (§4.2) only while it is the

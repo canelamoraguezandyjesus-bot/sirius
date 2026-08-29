@@ -89,6 +89,17 @@ class _StaticMemoryRepository:
     def list_archived_memories(self) -> list[Memory]:
         raise AssertionError("get_origin() must never list archived memories")
 
+    def set_category(
+        self, memory_id: int, category: str, *, observed_revision_version: int
+    ) -> bool:
+        raise AssertionError("get_origin() must never set a category")
+
+    def set_user_category(self, memory_id: int, category: str) -> Memory:
+        raise AssertionError("get_origin() must never set a category")
+
+    def list_uncategorized(self) -> list[Memory]:
+        raise AssertionError("get_origin() must never list uncategorized memories")
+
 
 class _StaticEventRepository:
     def __init__(self, event: Event | None) -> None:

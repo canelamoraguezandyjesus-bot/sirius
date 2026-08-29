@@ -234,6 +234,8 @@ class MemoryModel(Base):
     project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
     updated_at: Mapped[datetime] = mapped_column(nullable=False)
+    category: Mapped[str | None] = mapped_column(Text, nullable=True)
+    category_locked: Mapped[bool] = mapped_column(nullable=False, default=False)
 
 
 class MemoryRevisionModel(Base):
@@ -314,6 +316,8 @@ class DecisionModel(Base):
     )
     created_at: Mapped[datetime] = mapped_column(nullable=False)
     updated_at: Mapped[datetime] = mapped_column(nullable=False)
+    category: Mapped[str | None] = mapped_column(Text, nullable=True)
+    category_locked: Mapped[bool] = mapped_column(nullable=False, default=False)
 
 
 class DecisionRevisionModel(Base):
