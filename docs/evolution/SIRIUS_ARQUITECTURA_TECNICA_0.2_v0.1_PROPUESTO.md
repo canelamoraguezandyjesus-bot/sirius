@@ -678,25 +678,36 @@ nunca dentro de esa misma llamada ni de su transacción de `UnitOfWork` (§0.1 p
 gobierna evento+estado en la misma transacción; etiquetar no es ninguno de los dos). El
 worker llama, fuera del hilo de interfaz, a un nuevo caso de uso
 `TagCategoryUseCase.tag(kind, item_id)`: lee el elemento, invoca
-`CategoryClassifierPort.classify`, y si devuelve una categoría del vocabulario y
-`category_locked` sigue siendo `False`, la escribe mediante un método nuevo del repositorio
+`CategoryClassifierPort.classify`, y si devuelve una categoría del vocabulario la escribe
+mediante un método nuevo del repositorio
 (`MemoryRepository.set_category`/`DecisionRepository.set_category`) — una actualización de
-campo plano, nunca una revisión nueva — y emite una señal Qt para que
-`KnowledgeWidget.refresh()` la muestre. Guardar nunca espera a este worker: la llamada de
-guardado ya devolvió su resultado por su propio camino antes de que el worker se encole.
+campo plano, nunca una revisión nueva, y una única sentencia condicional en el motor de
+persistencia (`UPDATE ... SET category = ?, ... WHERE id = ? AND category_locked = 0`, o la
+transacción equivalente) que solo escribe si, en ese mismo statement, `category_locked`
+sigue siendo `False`: comprobar y escribir son una sola operación atómica de la base de
+datos, nunca una lectura en Python seguida de una escritura separada, así que ninguna
+corrección del usuario que ocurra entre ambas puede perderse ni ganarle la carrera al
+worker — y emite una señal Qt para que `KnowledgeWidget.refresh()` la muestre. Guardar nunca
+espera a este worker: la llamada de guardado ya devolvió su resultado por su propio camino
+antes de que el worker se encole.
 
 **3. Etiqueta visible, editable, y definitiva si es del usuario.** `KnowledgeWidget`
-(`_build_memories_section`/`_build_decisions_section`,
-`src/sirius/presentation/knowledge_widget.py:304-326`) gana, por elemento, la categoría
+(`_build_memories_section`, `src/sirius/presentation/knowledge_widget.py:318-355`;
+`_build_decisions_section`, `src/sirius/presentation/knowledge_widget.py:485-519`) gana, por elemento, la categoría
 visible y una acción para editarla, que llama a un nuevo
 `SetCategoryUseCase.set(kind, item_id, category)`: escribe `category` **y** pone
-`category_locked = True` en la misma llamada. Desde ese momento, `TagCategoryUseCase`
-**nunca** vuelve a escribir sobre ese elemento — el propio caso de uso comprueba
-`category_locked` antes de escribir, no solo antes de encolarse, para que una respuesta de
-Ollama que ya estaba en vuelo cuando el usuario corrigió no gane la carrera. El dominio de
-Sirius sigue sin juicio semántico propio (§0.1 punto 3): la clasificación entera vive en el
-adaptador, detrás del puerto, y ninguna regla determinista de `sirius.domain.precedence`
-cambia.
+`category_locked = True` en la misma llamada, siempre — a diferencia del punto 2, esta
+escritura nunca está condicionada: la corrección del usuario manda incondicionalmente.
+Desde ese momento, `TagCategoryUseCase` **nunca** vuelve a escribir sobre ese elemento — no
+porque el caso de uso compruebe `category_locked` en un paso previo y separado (esa
+comprobación en dos pasos es exactamente la carrera que dejaba perder una corrección del
+usuario llegada entre medias), sino porque la sentencia condicional del punto 2 hace de la
+comprobación y la escritura una sola operación: si el usuario corrige entre el `classify()`
+del worker y el intento de escritura de `TagCategoryUseCase`, ese `UPDATE` condicional ya no
+encuentra ninguna fila con `category_locked = 0` que actualizar y no escribe nada, sin
+ninguna ventana en la que ambas escrituras puedan competir. El dominio de Sirius sigue sin
+juicio semántico propio (§0.1 punto 3): la clasificación entera vive en el adaptador,
+detrás del puerto, y ninguna regla determinista de `sirius.domain.precedence` cambia.
 
 **4. Retroactivo.** `MemoryRepository`/`DecisionRepository` ganan una consulta de solo
 lectura, `list_uncategorized()`, que devuelve todo elemento con `category is None` y
@@ -706,8 +717,24 @@ encola en el mismo `self._thread_pool`, un `CategoryTaggingWorker` por elemento 
 mecanismo, mismo contrato de fallo abierto, sin tratamiento especial para datos antiguos,
 en local y sin coste (D7 punto 4).
 
+**Corrección de contenido y reetiquetado.** D7 fija el origen y ciclo de vida de la
+categoría, pero no cubre por sí sola qué pasa con una categoría ya asignada cuando el
+contenido que la originó cambia — `CorrectMemoryUseCase.correct()`
+(`src/sirius/application/correct_memory.py:64-108`) sustituye el contenido vigente por una
+revisión nueva (RF-022), y el contenido que `CategoryClassifierPort.classify` clasificó ya
+no describe el elemento corregido. Si `category_locked` es `False` — la categoría vigente
+la puso Ollama, no el usuario —, `correct()` limpia `category` a `None` en la misma
+transacción de `UnitOfWork` que crea la revisión nueva (§0.1 punto 4) y, tras devolver su
+resultado, encola el mismo `CategoryTaggingWorker` del punto 2 sobre el elemento corregido —
+mismo patrón asíncrono y diferido, nunca dentro de esa transacción. Si `category_locked` es
+`True` — el usuario ya la fijó o corrigió —, `correct()` no toca ni `category` ni
+`category_locked`: corregir el contenido nunca reabre una categoría que el usuario ya cerró
+(punto 3). Ninguna de las dos ramas añade un campo nuevo: usa exactamente los que el punto 1
+ya define. M8 (§8) construye también esta rama de `CorrectMemoryUseCase`, con una prueba
+dedicada.
+
 **5. El proveedor de pago no interviene.** Ninguno de los componentes anteriores llama a
-`LLMProvider` (`src/sirius/ports/llm.py:88-101`) ni a ningún adaptador de pago:
+`LLMProvider` (`src/sirius/ports/llm.py:106-119`) ni a ningún adaptador de pago:
 `CategoryClassifierPort`/`OllamaCategoryClassifierAdapter` son los únicos implicados,
 exactamente como §6.3 ya mantiene la llamada de Ollama del filtro fuera de la superficie
 del proveedor de pago. Ninguna llamada nueva, ningún coste nuevo, ninguna superficie de
@@ -814,10 +841,11 @@ vive en el adaptador —el filtro con modelo nunca decide solo— sino en
 `ContextBuilder._rank_related_knowledge` mismo, inmediatamente después de invocar el
 puerto: reutiliza el mismo campo `category` que §6.1/D7 ya persiste (la categoría de máxima
 criticidad del vocabulario cerrado del banco, §6.5), y garantiza que todo candidato de esa
-categoría sigue presente en el resultado, calcule lo que calcule
-`RelevanceFilterPort.filter_candidates`. El candado es una unión de conjuntos sobre el
-resultado del filtro y los candidatos protegidos, preservando el orden que §6.2 ya fijó, no
-una segunda llamada al filtro ni una excepción a su criterio.
+categoría, **y todo candidato sin `category` todavía**, sigue presente en el resultado,
+calcule lo que calcule `RelevanceFilterPort.filter_candidates`. El candado es una unión de
+tres conjuntos —el resultado del filtro, los candidatos de la categoría de máxima
+criticidad, y los candidatos con `category is None`—, preservando el orden que §6.2 ya
+fijó, no una segunda llamada al filtro ni una excepción a su criterio.
 
 **La premisa que bloqueaba este candado ya está resuelta.** Una ronda anterior de este
 documento dejaba aquí una decisión pendiente del propietario — de dónde sale, para
@@ -825,12 +853,36 @@ documento dejaba aquí una decisión pendiente del propietario — de dónde sal
 porque ni `Memory` ni `Decision` tenían ese campo. D7 la resuelve: el campo `category` de
 §6.1, etiquetado por Ollama de forma asíncrona y diferida, es la fuente para candidatos
 reales, exactamente igual que para el índice de §6.2. Un candidato sin categoría todavía
-(etiquetado pendiente, o Ollama nunca disponible) simplemente no es protegido por el
-candado — el mismo fallo abierto de D7 punto 2 —, pero tampoco lo descarta el filtro con
-más agresividad que hoy: sigue siendo evaluado por `RelevanceFilterPort` como cualquier
-otro candidato. M10 (§8) construye el puerto, el adaptador y este candado.
+(etiquetado pendiente, o Ollama nunca disponible) **también** queda protegido por el
+candado, nunca expuesto al filtro destructivo: hoy `ContextBuilder` no aplica ningún filtro
+de este tipo, y la Definición de Producto exige que ningún elemento crítico recuperado
+pueda descartarse
+(`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:69-71`) — sin categoría
+todavía no hay forma de excluir con seguridad que sea justo ese elemento crítico. Solo un
+candidato ya clasificado por Ollama en una categoría que no es la de máxima criticidad
+queda expuesto a `RelevanceFilterPort`; en cuanto `TagCategoryUseCase` (§6.1 punto 2) le
+asigna esa categoría, el candidato pasa del conjunto protegido al conjunto expuesto (o se
+mantiene protegido, si la categoría asignada es la de máxima criticidad), nunca antes de
+que la clasificación exista. M10 (§8) construye el puerto, el adaptador y este candado, con
+una prueba que demuestra que un candidato con `category=None` sobrevive al doble del filtro
+aunque el doble lo excluya explícitamente.
 
-### 6.4 Presupuesto de latencia: RNF-003 y cómo se mide
+**Puerta de activación pendiente contra datos reales (D7 punto 6).** Todo lo anterior — que
+un candidato ya clasificado en una categoría no crítica quede expuesto a
+`RelevanceFilterPort`, y que `category_match` (§6.2) compare la categoría de un candidato
+real — presupone que la clasificación de Ollama es lo bastante fiable como para actuar sobre
+ella; D7 punto 6 exige medir esa fiabilidad antes de confiar en la señal contra
+`Memory`/`Decision` reales, y M11 (§8, §6.5) mide y publica la cifra sin fijar el umbral
+exigible por su cuenta — lo registra el propietario a la vista de esa medición (§9). Hasta
+que el propietario registre ese umbral en `STATUS.md`, esta arquitectura mantiene la puerta
+cerrada con el fallback más seguro, que no consume la categoría de ningún candidato real: el
+candado protege a **todo** candidato real, con categoría o sin ella, exactamente como si
+ninguno tuviera todavía una clasificación no crítica, y `category_match` es `False` para
+todo candidato real (§6.2) — ninguno de los dos deja de construirse ni de medirse contra el
+banco de §6.5 mientras tanto, que tiene su propio canon y no depende de este umbral. Abrir la
+puerta —dejar que una categoría no crítica exponga al candidato al filtro, y que
+`category_match` compare categorías reales— es exclusivamente lo que el registro del umbral
+en `STATUS.md` autoriza; M11 (§8) no la abre por sí solo con solo publicar la cifra.
 
 Ninguno de los dos puntos de integración puede sacar a `ContextBuilder` de RNF-003, 300 ms
 P95 (`docs/decisions/ADR-008-cargar-en-lote-las-revisiones-vigentes-al-listar.md:111-117`,
@@ -938,6 +990,19 @@ categoría canónica que cada caso ya trae, publicando la cifra de coincidencia 
 como evidencia del encargo. El umbral exigible para fiarse de esta señal contra
 `Memory`/`Decision` reales no lo fija este documento: lo registra el propietario a la vista
 de esa medición, mismo patrón que D2 fija para el suelo de cobertura (§9).
+
+**Prueba del adaptador contra una respuesta Ollama válida.** La prueba del banco
+(`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`, arriba) y la de M10 (§8) sustituyen
+`RelevanceFilterPort` por un doble determinista para no depender de Ollama real dentro de la
+suite; ninguna de las dos, por tanto, atraviesa nunca el parseo de una respuesta HTTP real de
+Ollama que hace `OllamaRelevanceFilterAdapter` — una implementación que siempre se comportara
+como si hubiera fallado (devolviendo `candidates` sin modificar) pasaría igualmente esas
+pruebas y la medición de latencia de §6.4/M11, dejando el filtro real inoperante sin que
+ninguna prueba lo detecte. M10 (§8) añade, además de las pruebas con doble del puerto, una
+prueba propia de `OllamaRelevanceFilterAdapter` contra un transporte o servidor HTTP local de
+prueba (nunca Ollama real ni ningún proveedor externo) que entrega una respuesta válida con
+la forma que Ollama produce, y verifica que el adaptador la parsea en el subconjunto y el
+orden esperados.
 
 ### 6.6 Decisión D3: intento de cierre de la última omisión crítica
 
@@ -1168,20 +1233,32 @@ migración aditiva; `CategoryClassifierPort` y `OllamaCategoryClassifierAdapter`
 `TagCategoryUseCase` y `CategoryTaggingWorker` sobre el `QThreadPool` ya existente, encolado
 después del guardado, nunca dentro de su transacción; `SetCategoryUseCase` para la edición
 del usuario, que fija `category_locked = True`; `list_uncategorized()` y el pase retroactivo
-sobre elementos ya guardados.
+sobre elementos ya guardados; la rama de `CorrectMemoryUseCase.correct()` que limpia
+`category` y reencola el etiquetado cuando no está bloqueada (§6.1, «Corrección de
+contenido y reetiquetado»).
 
 **Criterio de aceptación:** prueba de dominio de que `category_locked` se fija al
 establecer una categoría manual y de que, una vez fijado, ninguna llamada posterior de
 `TagCategoryUseCase` lo sobrescribe (incluida una que llega después, simulando una
-respuesta de Ollama en vuelo); prueba de integración de migración que sube y baja las dos
-columnas nuevas en ambas tablas sin afectar ninguna existente; prueba de
+respuesta de Ollama en vuelo); una prueba de repositorio determinista que reproduce la
+carrera exacta que motiva la escritura condicional (§6.1 punto 2) — pausar la ejecución de
+`TagCategoryUseCase` justo después de invocar `CategoryClassifierPort.classify` y antes de
+su intento de escritura, ejecutar `SetCategoryUseCase.set()` con una categoría distinta, y
+solo entonces dejar que `TagCategoryUseCase` continúe — y confirma que la categoría final es
+la del usuario, nunca la de Ollama, porque el `UPDATE ... WHERE category_locked = 0`
+condicional no encuentra fila que actualizar; prueba de integración de migración que sube y
+baja las dos columnas nuevas en ambas tablas sin afectar ninguna existente; prueba de
 `TagCategoryUseCase` con un doble del puerto que cubre categoría devuelta con éxito, Ollama
 no disponible (`None`, sin excepción) y respuesta fuera del vocabulario cerrado (tratada
 igual que `None`); prueba de que guardar una memoria o una decisión no espera nunca a que
 el worker de etiquetado termine — el resultado de guardado ya está disponible antes de que
 se resuelva el etiquetado, verificado con un doble del puerto que bloquea deliberadamente
 hasta que la prueba lo libera; prueba de que `list_uncategorized()` no devuelve un elemento
-ya etiquetado ni uno con `category_locked = True` aunque no tenga categoría.
+ya etiquetado ni uno con `category_locked = True` aunque no tenga categoría; prueba de
+`CorrectMemoryUseCase.correct()` que confirma que corregir el contenido de una memoria con
+`category_locked = False` limpia `category` a `None` y encola un `CategoryTaggingWorker`
+nuevo, y que corregir una memoria con `category_locked = True` deja `category` y
+`category_locked` intactos.
 
 ### M9 — Búsqueda mejorada: índice de categoría determinista
 
@@ -1215,8 +1292,12 @@ resultado de `ContextBuilder._rank_related_knowledge` es idéntico al de antes d
 filtro, sin ninguna excepción propagada fuera del adaptador; una prueba adicional confirma
 que un candidato con `category` igual a la de máxima criticidad del canon (persistida por
 M8) sobrevive aunque el doble de prueba del filtro intente descartarlo, y que un candidato
-sin `category` todavía no queda protegido por el candado pero tampoco es tratado peor que
-hoy por el filtro.
+sin `category` todavía **también** sobrevive aunque el doble de prueba del filtro intente
+descartarlo, hasta que `TagCategoryUseCase` le asigne una categoría que no sea la de máxima
+criticidad. Además de las pruebas con doble, una prueba propia de
+`OllamaRelevanceFilterAdapter` contra un transporte o servidor HTTP local de prueba (nunca
+Ollama real) que entrega una respuesta válida, verificando que el adaptador la parsea en el
+subconjunto y el orden esperados (§6.5).
 
 ### M11 — Búsqueda mejorada y Mejor recuperación: integración, medición de RNF-003 y de coincidencia del etiquetado
 
@@ -1233,7 +1314,11 @@ sustituyendo 63/81. Solo si la medición coincide con 63/81 el suelo queda liter
 igual; en cualquier otro caso, 63/81 deja de ser el suelo desde este encargo en adelante.
 M11 ejecuta además la medición de coincidencia del etiquetado que D7 punto 6 exige (§6.1,
 §6.5): `CategoryClassifierPort` sobre los 47 casos del banco, comparado contra su categoría
-canónica, publicando la cifra (aciertos/47) sin fijar un umbral por su cuenta.
+canónica, publicando la cifra (aciertos/47) sin fijar un umbral por su cuenta. Cablear M9 y
+M10 en `ContextBuilder._rank_related_knowledge` dentro de este mismo encargo no abre, por sí
+solo, la puerta de activación contra datos reales que §6.3 deja cerrada por defecto: M11
+cablea el circuito completo con la puerta cerrada, publica la cifra, y es el propietario
+quien la abre después, registrando el umbral en `STATUS.md` (§9) — nunca este encargo.
 
 **Criterio de aceptación:** tabla de medición con el mismo formato que la de ADR-008
 (`docs/decisions/ADR-008-cargar-en-lote-las-revisiones-vigentes-al-listar.md:111-117`), con
@@ -1244,7 +1329,10 @@ en la prueba tras este encargo es la cifra medida en esta primera ejecución rea
 `main`, no 63/81 salvo que ambas coincidan; la cifra de coincidencia del etiquetado
 (aciertos/47) queda publicada en la evidencia del encargo y registrada en `STATUS.md` junto
 a D7, sin que este encargo fije por su cuenta el umbral exigible — eso queda para el
-propietario, a la vista de la cifra (§9).
+propietario, a la vista de la cifra (§9); una prueba adicional confirma que, con la puerta
+todavía cerrada (sin umbral registrado), un candidato real con categoría no crítica sigue
+protegido por el candado y `category_match` es `False` para candidatos reales, exactamente
+el fallback que §6.3 fija.
 
 ### M12 — Mejor recuperación: intento de cierre de la última omisión crítica (D3)
 
@@ -1293,7 +1381,11 @@ traduce a diseño sin reabrirlas:
   fija que se mide, no que se decide ya: M11 (§8) mide la coincidencia contra el banco de 47
   casos y publica la cifra; el propietario registra el umbral exigible a la vista de esa
   medición, mismo patrón que D2 ya usó para el suelo de cobertura. Este documento no elige
-  un umbral por su cuenta.
+  un umbral por su cuenta. Mientras ese umbral no esté registrado en `STATUS.md`, la puerta
+  de activación que §6.3 deja cerrada por defecto permanece cerrada: `category_match` (§6.2)
+  y el candado (§6.3) no consumen la categoría de ningún candidato real, solo la del banco de
+  medición — M8–M11 se construyen y se miden igual mientras tanto, sin que esta puerta los
+  bloquee (§6.3).
 
 Sigue sin resolver, fuera del alcance de esta actualización — §3.1 de este documento la deja
 donde estaba, sin recaracterizarla:

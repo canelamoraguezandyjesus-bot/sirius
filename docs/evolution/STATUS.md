@@ -129,7 +129,16 @@ agosto de 2026» más abajo, fuente: incidencia #435). Con D1–D7 registradas, 
 búsqueda mejorada y mejor recuperación quedan resueltas sin contradicción: los encargos
 M1–M12 de la Arquitectura Técnica 0.2
 (`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md`, §8) pueden ordenarse al
-Work Engine sin ninguno bloqueado a la espera de una decisión pendiente.
+Work Engine sin ninguno bloqueado a la espera de una decisión pendiente — **construirlos y
+medirlos**, se entiende: D7 punto 6 deja, además, una puerta de activación distinta y
+posterior, que no bloquea M8–M11. Antes de que `category_match` (§6.2) o el candado (§6.3)
+puedan tratar de forma distinta a un candidato real según su categoría persistida, el
+propietario debe registrar aquí el umbral de coincidencia exigible a la vista de la cifra
+que M11 mida y publique (D7 punto 6, §9 de la Arquitectura Técnica 0.2); hasta que ese
+umbral quede registrado en este documento, la Arquitectura Técnica 0.2 mantiene esa puerta
+cerrada con su fallback más seguro — `category_match` inerte y el candado protegiendo a todo
+candidato real, con categoría o sin ella (§6.3) —, así que completar M11 no deja el ranking
+ni el candado operando sobre una medición todavía no aceptada.
 
 ## Decisiones del propietario registradas el 29 de agosto de 2026
 
