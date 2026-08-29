@@ -28,6 +28,9 @@ DECISION_PROPOSED_EVENT_TYPE = "decision.proposed"
 DECISION_APPROVED_EVENT_TYPE = "decision.approved"
 DECISION_SUPERSEDED_EVENT_TYPE = "decision.superseded"
 DECISION_ARCHIVED_EVENT_TYPE = "decision.archived"
+MEMORY_SUGGESTION_PROPOSED_EVENT_TYPE = "memory_suggestion.proposed"
+MEMORY_SUGGESTION_CONFIRMED_EVENT_TYPE = "memory_suggestion.confirmed"
+MEMORY_SUGGESTION_REJECTED_EVENT_TYPE = "memory_suggestion.rejected"
 USER_ACTOR = "user"
 
 
