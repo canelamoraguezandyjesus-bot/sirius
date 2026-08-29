@@ -417,8 +417,8 @@ Ninguna PA de este plan da una de estas decisiones por tomada:
   observable — resultado, captura, log de prueba o evaluación registrada — no por
   inspección, y solo después PA-0.2-PUERTA-01 superada en las mismas condiciones: son
   siete PA en total, y la puerta integral no sustituye a ninguna de las seis anteriores
-  ni puede darse por superada sin ellas (precondición 1 de PA-0.2-PUERTA-01, líneas
-  306-311 de este mismo documento).
+  ni puede darse por superada sin ellas (precondición 1 de PA-0.2-PUERTA-01, §8 de
+  este mismo documento).
 - Ninguna PA se declara superada mientras su precondición dependiente de una decisión
   pendiente (sección 10) siga sin resolver.
 - La trazabilidad de la sección 9 no contiene ningún criterio de comprobación de la
