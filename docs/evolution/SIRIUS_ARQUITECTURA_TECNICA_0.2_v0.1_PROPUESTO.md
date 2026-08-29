@@ -154,15 +154,39 @@ disparador de sugerencias»): **dos vías, no una**, que convergen en el mismo e
    - **Ningún proveedor ni tercero nuevo.** Solo el `LLMProvider` ya configurado, el mismo que
      ya ve la conversación para generar la respuesta; la superficie de privacidad de §7.2 no
      cambia.
-   - **Sin llamada adicional por conversación.** El contenido de la propuesta viaja en la misma
-     respuesta que ya produce el turno — nunca en una segunda llamada al proveedor. El contrato
-     actual de `LLMProvider.stream_response`/`LLMCompleted` (`src/sirius/ports/llm.py:34-40,
-     88-101`) solo transporta un `text` por turno; extenderlo para que ese mismo `text` incluya,
-     cuando el proveedor la genera, una propuesta distinguible es un detalle de construcción de
-     M6 que este documento no fija en su forma exacta — lo que sí fija, sin margen, es la
-     restricción: si esa extensión exigiera una segunda llamada al proveedor por conversación,
-     quien construya M6 se detiene y vuelve a consultar al propietario (§9), porque el coste es
-     su decisión, no una que este documento tome por él.
+   - **Sin llamada adicional por conversación, y sin que la propuesta cruce nunca como texto
+     visible o persistido.** El contenido de la propuesta viaja en la misma respuesta que ya
+     produce el turno — nunca en una segunda llamada al proveedor — pero **nunca dentro de
+     `text`/`LLMTextDelta`**: esto no es un detalle que este documento deje sin fijar, porque
+     dejarlo sin fijar es exactamente el defecto que la revisión de esta PR señaló
+     (CODEX-001) contra la ronda anterior. `SendMessageUseCase.send_message` persiste
+     `event.text` mediante `append_message` en la misma llamada que lo recibe, antes de
+     devolver `SendMessageResult` (`src/sirius/application/send_message.py:184-210`), y
+     reenvía cada `LLMTextDelta.text` a `on_delta` según llega, fragmento a fragmento
+     (`src/sirius/application/send_message.py:196-198`) — que a su vez ya se pinta en pantalla
+     en cuanto llega (`src/sirius/presentation/main_window.py:1400-1413`). Cualquier
+     extracción que ocurra después de que ese texto exista como `LLMTextDelta`/
+     `LLMCompleted.text` —incluida una extracción hecha por la superficie de interfaz de
+     §3.6— llega tarde: el fragmento con el delimitador o la propuesta cruda ya se mostró y,
+     si formaba parte de `LLMCompleted.text`, ya quedó grabado en la conversación
+     (`src/sirius/application/send_message.py:203-210`) y volverá a entrar en un contexto
+     futuro (`src/sirius/application/context.py:169-174`). La separación solo puede ocurrir
+     en la frontera del adaptador concreto de `LLMProvider`, antes de que ese texto exista
+     como evento del puerto. Por eso `LLMCompleted` (`src/sirius/ports/llm.py:34-40`) gana un
+     campo nuevo, `memory_suggestion: str | None = None`: el adaptador concreto —nunca
+     `SendMessageUseCase`, nunca la superficie de interfaz— detecta el delimitador
+     distinguible en la salida cruda del proveedor y lo separa antes de emitir un solo
+     `LLMTextDelta` o de construir el `LLMCompleted` final, de modo que ni un delta ni
+     `LLMCompleted.text` contienen jamás el delimitador ni la propuesta cruda.
+     `SendMessageResult` (`src/sirius/application/send_message.py:50-63`) gana el campo
+     espejo `memory_suggestion: str | None`, copiado de `LLMCompleted.memory_suggestion`
+     únicamente cuando `outcome` es `COMPLETED` — `SendMessageUseCase` se limita a
+     transportarlo sin interpretarlo ni llamar con él a `ProposeMemorySuggestionUseCase`
+     (§0.1.2, §3.5): quien decide llamar sigue siendo la superficie de interfaz de §3.6, ahora
+     leyendo este campo ya separado en vez de volver a analizar el texto que ya se mostró y
+     persistió. Si separar el delimitador dentro del adaptador exigiera una segunda llamada al
+     proveedor por conversación, quien construya M6 se detiene y vuelve a consultar al
+     propietario (§9), porque el coste es su decisión, no una que este documento tome por él.
 
 2. **Botón manual «Proponer guardar…»** (§3.6), la vía que esta arquitectura ya diseñaba en la
    ronda anterior, se conserva **además** de la automática, como vía complementaria iniciada
@@ -309,13 +333,16 @@ MEMORY_SUGGESTION_REJECTED_EVENT_TYPE = "memory_suggestion.rejected"
 **Proponer — dos vías, convergen en el mismo estado pendiente (§3.2).**
 
 *Automática.* Al terminar un turno con `outcome` `COMPLETED`
-(`SendMessageResult.outcome`, `src/sirius/application/send_message.py:50-61`), si la
-respuesta del proveedor trajo una propuesta candidata (§3.2), la superficie que ya orquesta
-el envío del mensaje —nunca `SendMessageUseCase` en sí— llama automáticamente, sin que el
-usuario pulse nada, a `ProposeMemorySuggestionUseCase.propose(content, message_id=...)` con
-el contenido de esa propuesta y el `message_id` del turno de Sirius recién completado. Si el
-turno no completa (`CANCELLED`/`FAILED`) o el proveedor no trajo propuesta, no se llama a
-nada — igual que hoy no se persiste una `Memory` cuando no hay guardado manual.
+(`SendMessageResult.outcome`, `src/sirius/application/send_message.py:50-63`) y con
+`SendMessageResult.memory_suggestion` no nulo (§3.2 — el campo que `SendMessageUseCase`
+transporta ya separado por el adaptador de `LLMProvider`, nunca extraído a posteriori de
+`sirius_message.content` ni de los fragmentos ya mostrados por `on_delta`), la superficie
+que ya orquesta el envío del mensaje —nunca `SendMessageUseCase` en sí— llama
+automáticamente, sin que el usuario pulse nada, a
+`ProposeMemorySuggestionUseCase.propose(result.memory_suggestion,
+message_id=result.sirius_message.id)`. Si el turno no completa (`CANCELLED`/`FAILED`) o
+`memory_suggestion` es `None`, no se llama a nada — igual que hoy no se persiste una
+`Memory` cuando no hay guardado manual.
 
 *Manual.* `MessageItemWidget` (`src/sirius/presentation/message_view.py:247-321`) ya
 tiene, por mensaje, una fila de acciones (`copy_buttons`,
@@ -727,22 +754,39 @@ no referencia la sugerencia rechazada en ningún campo de `Context`.
 Botón «Proponer guardar…» en `MessageItemWidget` (§3.6), sección «Sugerencias pendientes»
 en `KnowledgeWidget` con sus botones «Confirmar»/«Rechazar», y el contrato de la vía
 automática de §3.2: extensión de `render_instructions()` para pedir al proveedor que, cuando
-proceda, incluya una propuesta distinguible dentro del mismo `text` de `LLMCompleted`, y la
-extracción de esa propuesta —antes de mostrar o persistir la respuesta— que decide si se
-llama a `ProposeMemorySuggestionUseCase.propose(...)`. Sin este contrato la vía automática no
-existe: queda asignada a M6, no como un detalle sin dueño.
+proceda, incluya una propuesta distinguible en su respuesta cruda mediante un delimitador
+acordado; extensión del puerto `LLMCompleted` (`src/sirius/ports/llm.py:34-40`) con el campo
+`memory_suggestion: str | None`, separado del delimitador por el adaptador concreto —nunca
+por `SendMessageUseCase` ni por la superficie de interfaz— antes de que exista un solo
+`LLMTextDelta` o el `LLMCompleted` final, de modo que ni `on_delta` ni
+`sirius_message.content` contienen jamás el delimitador ni la propuesta cruda (§3.2); y el
+campo espejo `SendMessageResult.memory_suggestion` (`src/sirius/application/send_message.py:50-63`)
+que la superficie de interfaz de §3.6 lee, ya separado, para decidir si llama a
+`ProposeMemorySuggestionUseCase.propose(...)`. Sin este contrato la vía automática no existe:
+queda asignada a M6, no como un detalle sin dueño.
 
 **Criterio de aceptación:** prueba GUI que, sobre un turno de conversación ya completado,
 propone una sugerencia desde el botón del mensaje, la ve aparecer en «Sugerencias
 pendientes», la confirma, y comprueba que aparece en la lista de recuerdos vigentes del
 mismo panel tras `refresh()` — sin que en ningún punto de la prueba se haya invocado
-`SendMessageUseCase` una segunda vez ni se haya bloqueado la primera. Además, cuatro pruebas
+`SendMessageUseCase` una segunda vez ni se haya bloqueado la primera. Además, cinco pruebas
 sobre la vía automática (§3.2), sin interfaz, ejercitando directamente la superficie que
-orquesta el envío de un turno: una respuesta `COMPLETED` con propuesta candidata dispara
-`ProposeMemorySuggestionUseCase.propose(...)` exactamente una vez con su contenido; una
-respuesta `COMPLETED` sin propuesta candidata no dispara ninguna llamada; un resultado
+orquesta el envío de un turno con un `LLMProvider` de prueba que ya expone el contrato
+separado (`LLMCompleted.text` limpio y `LLMCompleted.memory_suggestion` aparte, nunca el
+delimitador mezclado en ninguno de los dos): una respuesta `COMPLETED` con
+`memory_suggestion` no nulo dispara `ProposeMemorySuggestionUseCase.propose(...)`
+exactamente una vez con ese contenido, y además `result.sirius_message.content` —el texto
+realmente persistido— y la concatenación de todo lo recibido por `on_delta` —el texto
+realmente mostrado— son ambos exactamente `LLMCompleted.text`, sin el delimitador ni la
+propuesta cruda en ninguno de los dos, cerrando el hallazgo de revisión CODEX-001 de que una
+prueba que solo cuenta llamadas a `propose()` acepta esa corrupción; una respuesta
+`COMPLETED` con `memory_suggestion` nulo no dispara ninguna llamada; un resultado
 `CANCELLED` no dispara ninguna llamada; un resultado `FAILED` no dispara ninguna llamada — en
-los cuatro casos, el proveedor se invoca una sola vez por turno.
+los cuatro últimos casos, el proveedor se invoca una sola vez por turno. El adaptador
+concreto de `LLMProvider` que construya M6 añade, además, su propia prueba de que un
+delimitador partido entre dos fragmentos consecutivos de la salida cruda del proveedor
+tampoco llega a `on_delta` ni a `LLMCompleted.text`: la separación descrita en §3.2 no puede
+depender de que el delimitador llegue entero en un único fragmento.
 
 ## 9. Decisiones pendientes del propietario
 
