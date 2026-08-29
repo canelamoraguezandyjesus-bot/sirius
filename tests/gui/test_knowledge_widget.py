@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
 from pytestqt.qtbot import QtBot
 
 from sirius.adapters.persistence.database import build_engine
@@ -792,6 +793,131 @@ def test_selecting_decision_in_general_panel_after_conflict_cedes_priority_back_
 
     texts = [widget.decisions_list.item(row).text() for row in range(widget.decisions_list.count())]
     assert any(f"#{unrelated.id} " in text and "(archived)" in text for text in texts)
+    assert not any(f"#{conflicting_first.id} " in text and "(archived)" in text for text in texts)
+    assert any(f"#{conflicting_first.id} " in text and "(approved)" in text for text in texts)
+
+
+@pytest.mark.gui
+def test_clicking_the_already_current_memory_row_cedes_priority_back_to_it(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CODEX-001: ``currentItemChanged`` no se emite al pulsar una fila que ya
+    es ``currentItem()``. Secuencia: se selecciona una memoria del panel
+    general, después un miembro de ``conflicts_list`` (que toma la
+    prioridad), y por último se vuelve a pulsar —con un clic real, no
+    ``setCurrentRow``— la misma fila ya seleccionada en ``memories_list``.
+    Ese clic real debe ceder la prioridad de vuelta al panel general, igual
+    que lo haría seleccionar una fila distinta."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    project_id = dependencies.project_continuity_use_case.get_summary().project_id
+    dependencies.save_manual_memory_use_case.save(
+        "usar SQLite local", subject_key="Motor de persistencia", project_id=project_id
+    )
+    dependencies.save_manual_memory_use_case.save(
+        "usar un servidor remoto", subject_key="Motor de persistencia", project_id=project_id
+    )
+    already_selected = dependencies.save_manual_memory_use_case.save(
+        "el equipo se reúne los martes", subject_key="Calendario", project_id=project_id
+    )
+    widget = _build_widget(dependencies, _Recorder(), confirm_action=True)
+    qtbot.addWidget(widget)
+    widget.show()
+    qtbot.waitUntil(lambda: widget.memories_list.viewport().width() > 0)
+
+    already_selected_row = next(
+        row
+        for row in range(widget.memories_list.count())
+        if f"#{already_selected.id} " in widget.memories_list.item(row).text()
+    )
+    widget.memories_list.setCurrentRow(already_selected_row)
+    assert widget._last_touched_list is widget.memories_list
+
+    widget.detect_conflicts_button.click()
+    memory_row = next(
+        row
+        for row in range(widget.conflicts_list.count())
+        if isinstance(widget.conflicts_list.item(row).data(Qt.ItemDataRole.UserRole), Memory)
+    )
+    widget.conflicts_list.setCurrentRow(memory_row)
+    assert widget._last_touched_list is widget.conflicts_list
+
+    # memories_list.currentItem() sigue siendo already_selected: setCurrentRow
+    # nunca se llamó a nada distinto en esta lista, así que un clic real sobre
+    # esa misma fila no dispara currentItemChanged — solo itemClicked.
+    already_selected_item = widget.memories_list.item(already_selected_row)
+    assert widget.memories_list.currentItem() is already_selected_item
+    QTest.mouseClick(
+        widget.memories_list.viewport(),
+        Qt.MouseButton.LeftButton,
+        pos=widget.memories_list.visualItemRect(already_selected_item).center(),
+    )
+    assert widget._last_touched_list is widget.memories_list
+
+    widget.archive_memory_button.click()
+
+    texts = [widget.memories_list.item(row).text() for row in range(widget.memories_list.count())]
+    assert any(f"#{already_selected.id} " in text and "(archived)" in text for text in texts)
+    assert not any("Motor de persistencia" in text and "(archived)" in text for text in texts)
+
+
+@pytest.mark.gui
+def test_clicking_the_already_current_decision_row_cedes_priority_back_to_it(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CODEX-001, caso simétrico de decisiones: ``currentItemChanged`` no se
+    emite al pulsar una fila ya seleccionada en ``decisions_list``, así que un
+    clic real sobre ella debe ceder la prioridad de vuelta al panel general
+    igual que en ``test_clicking_the_already_current_memory_row_cedes_priority_back_to_it``."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    project_id = dependencies.project_continuity_use_case.get_summary().project_id
+    conflicting_first = dependencies.propose_decision_use_case.propose(
+        "Motor de persistencia", project_id, "Usar SQLite"
+    )
+    dependencies.approve_decision_use_case.approve(conflicting_first.id, confirmed=True)
+    conflicting_second = dependencies.propose_decision_use_case.propose(
+        "Motor de persistencia", project_id, "Usar PostgreSQL"
+    )
+    dependencies.approve_decision_use_case.approve(conflicting_second.id, confirmed=True)
+    already_selected = dependencies.propose_decision_use_case.propose(
+        "Día de la reunión", project_id, "La reunión es los martes"
+    )
+    dependencies.approve_decision_use_case.approve(already_selected.id, confirmed=True)
+
+    widget = _build_widget(dependencies, _Recorder(), confirm_action=True)
+    qtbot.addWidget(widget)
+    widget.show()
+    qtbot.waitUntil(lambda: widget.decisions_list.viewport().width() > 0)
+
+    already_selected_row = next(
+        row
+        for row in range(widget.decisions_list.count())
+        if f"#{already_selected.id} " in widget.decisions_list.item(row).text()
+    )
+    widget.decisions_list.setCurrentRow(already_selected_row)
+    assert widget._last_touched_list is widget.decisions_list
+
+    widget.detect_conflicts_button.click()
+    conflict_row = next(
+        row
+        for row in range(widget.conflicts_list.count())
+        if f"#{conflicting_first.id} " in widget.conflicts_list.item(row).text()
+    )
+    widget.conflicts_list.setCurrentRow(conflict_row)
+    assert widget._last_touched_list is widget.conflicts_list
+
+    already_selected_item = widget.decisions_list.item(already_selected_row)
+    assert widget.decisions_list.currentItem() is already_selected_item
+    QTest.mouseClick(
+        widget.decisions_list.viewport(),
+        Qt.MouseButton.LeftButton,
+        pos=widget.decisions_list.visualItemRect(already_selected_item).center(),
+    )
+    assert widget._last_touched_list is widget.decisions_list
+
+    widget.archive_decision_button.click()
+
+    texts = [widget.decisions_list.item(row).text() for row in range(widget.decisions_list.count())]
+    assert any(f"#{already_selected.id} " in text and "(archived)" in text for text in texts)
     assert not any(f"#{conflicting_first.id} " in text and "(archived)" in text for text in texts)
     assert any(f"#{conflicting_first.id} " in text and "(approved)" in text for text in texts)
 

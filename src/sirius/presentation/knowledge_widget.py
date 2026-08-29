@@ -306,6 +306,10 @@ class KnowledgeWidget(QGroupBox):
         self.memories_list = QListWidget()
         self.memories_list.setAccessibleName("Recuerdos")
         self.memories_list.currentItemChanged.connect(self._handle_memories_list_selection_changed)
+        # currentItemChanged no se emite al pulsar una fila que ya es
+        # currentItem() (CODEX-001); itemClicked sí, así que un clic real
+        # sobre la misma fila también cede la prioridad a este panel.
+        self.memories_list.itemClicked.connect(self._handle_memories_list_selection_changed)
 
         self.save_memory_button = QPushButton("Guardar recuerdo…")
         self.save_memory_button.clicked.connect(self._handle_save_memory_clicked)
@@ -466,6 +470,8 @@ class KnowledgeWidget(QGroupBox):
         self.decisions_list.currentItemChanged.connect(
             self._handle_decisions_list_selection_changed
         )
+        # Ver comentario equivalente en _build_memories_section (CODEX-001).
+        self.decisions_list.itemClicked.connect(self._handle_decisions_list_selection_changed)
 
         self.propose_decision_button = QPushButton("Proponer decisión…")
         self.propose_decision_button.clicked.connect(self._handle_propose_decision_clicked)
@@ -668,6 +674,8 @@ class KnowledgeWidget(QGroupBox):
         self.conflicts_list = QListWidget()
         self.conflicts_list.setAccessibleName("Conflictos de precedencia")
         self.conflicts_list.currentItemChanged.connect(self._handle_conflict_selection_changed)
+        # Ver comentario equivalente en _build_memories_section (CODEX-001).
+        self.conflicts_list.itemClicked.connect(self._handle_conflict_selection_changed)
 
         self.conflicts_status_label = QLabel("")
         self.conflicts_status_label.setWordWrap(True)
