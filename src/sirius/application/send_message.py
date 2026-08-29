@@ -38,6 +38,7 @@ from sirius.domain.conversation import Message, MessageRole, MessageStatus
 from sirius.domain.project import blockers_to_text
 from sirius.ports.conversation_repository import ConversationRepository
 from sirius.ports.llm import (
+    MEMORY_SUGGESTION_DELIMITER,
     LLMCancelled,
     LLMCompleted,
     LLMError,
@@ -54,6 +55,12 @@ class SendMessageResult:
     ``sirius_message.status`` mirrors ``outcome``: ``COMPLETED`` only when
     the stream finished successfully; ``CANCELLED``/``FAILED`` messages
     carry whatever partial text streamed, kept for traceability.
+
+    ``memory_suggestion`` (§3.2/§3.6, M6) mirrors ``LLMCompleted.memory_suggestion``
+    verbatim, copied only when ``outcome`` is ``COMPLETED`` — this class never
+    interprets it or calls ``ProposeMemorySuggestionUseCase`` itself; that
+    decision belongs to the interface surface that orchestrates sending
+    (§0.1.2), never to this use case.
     """
 
     outcome: MessageStatus
@@ -61,6 +68,7 @@ class SendMessageResult:
     sirius_message: Message
     context: Context
     error_kind: LLMErrorKind | None = None
+    memory_suggestion: str | None = None
 
 
 _NO_BLOCKERS_CONTEXT_TEXT = "Ninguno registrado."
@@ -109,6 +117,13 @@ def render_instructions(context: Context) -> str:
         "",
         "# Mensajes recientes",
         *(f"[{message.role.value}] {message.content}" for message in context.recent_messages),
+        "",
+        "# Sugerir un recuerdo (opcional, SIRIUS-ARQ-0.2 §3.2)",
+        "Si, y solo si, esta conversación contiene una preferencia o un dato "
+        "del usuario que merezca guardarse como recuerdo duradero, añade al "
+        "final de tu respuesta, dentro de la misma contestación, el texto "
+        f"exacto {MEMORY_SUGGESTION_DELIMITER} seguido del contenido propuesto. "
+        "No lo incluyas si no hay nada que proponer.",
     ]
     return "\n".join(lines)
 
@@ -180,11 +195,13 @@ class SendMessageUseCase:
         status = MessageStatus.FAILED
         error_kind: LLMErrorKind | None = None
         final_text = ""
+        memory_suggestion: str | None = None
 
         for event in self._llm_provider.stream_response(request):
             if isinstance(event, LLMCompleted):
                 status = MessageStatus.COMPLETED
                 final_text = event.text
+                memory_suggestion = event.memory_suggestion
             elif isinstance(event, LLMCancelled):
                 status = MessageStatus.CANCELLED
                 final_text = event.partial_text
@@ -215,6 +232,7 @@ class SendMessageUseCase:
             sirius_message=sirius_message,
             context=context,
             error_kind=error_kind,
+            memory_suggestion=memory_suggestion,
         )
 
     def cancel(self, operation_id: str) -> None:

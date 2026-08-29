@@ -21,8 +21,10 @@ from dataclasses import dataclass
 
 from sirius.domain.decision import Decision
 from sirius.domain.memory import Memory
+from sirius.domain.memory_suggestion import MemorySuggestion
 from sirius.ports.decision_repository import DecisionRepository
 from sirius.ports.memory_repository import MemoryRepository
+from sirius.ports.memory_suggestion_repository import MemorySuggestionRepository
 
 __all__ = ["GetKnowledgeOverviewUseCase", "KnowledgeOverview"]
 
@@ -39,6 +41,11 @@ class KnowledgeOverview:
     deletion never applies to decisions), and their supersession link is
     already reachable, when needed, through
     ``DecisionRepository.get_superseding_decision``.
+
+    ``pending_suggestions`` (SIRIUS-ARQ-0.2 §3.6, M6) are PENDING
+    ``MemorySuggestion``s a caller can confirm or reject; a confirmed or
+    rejected suggestion is never listed here, mirroring how superseded
+    decisions are excluded above.
     """
 
     current_memories: tuple[Memory, ...]
@@ -46,23 +53,31 @@ class KnowledgeOverview:
     proposed_decisions: tuple[Decision, ...]
     current_decisions: tuple[Decision, ...]
     archived_decisions: tuple[Decision, ...]
+    pending_suggestions: tuple[MemorySuggestion, ...]
 
 
 class GetKnowledgeOverviewUseCase:
-    """Reúne los recuerdos y decisiones observables en una sola consulta."""
+    """Reúne los recuerdos, decisiones y sugerencias observables en una sola consulta."""
 
     def __init__(
-        self, memory_repository: MemoryRepository, decision_repository: DecisionRepository
+        self,
+        memory_repository: MemoryRepository,
+        decision_repository: DecisionRepository,
+        memory_suggestion_repository: MemorySuggestionRepository,
     ) -> None:
         self._memory_repository = memory_repository
         self._decision_repository = decision_repository
+        self._memory_suggestion_repository = memory_suggestion_repository
 
     def get_overview(self) -> KnowledgeOverview:
-        """Return every memory/decision the observable surface must render."""
+        """Return every memory/decision/suggestion the observable surface must render."""
         return KnowledgeOverview(
             current_memories=tuple(self._memory_repository.list_current_memories()),
             archived_memories=tuple(self._memory_repository.list_archived_memories()),
             proposed_decisions=tuple(self._decision_repository.list_proposed_decisions()),
             current_decisions=tuple(self._decision_repository.list_current_decisions()),
             archived_decisions=tuple(self._decision_repository.list_archived_decisions()),
+            pending_suggestions=tuple(
+                self._memory_suggestion_repository.list_pending_suggestions()
+            ),
         )

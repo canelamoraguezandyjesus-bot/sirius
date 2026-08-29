@@ -14,6 +14,7 @@ from sirius.application.send_message import render_instructions
 from sirius.domain.decision import Decision, DecisionRevision, DecisionStatus
 from sirius.domain.identity import INITIAL_PERSONALITY_INSTRUCTIONS, Identity, IdentityVersion
 from sirius.domain.project import Project, ProjectRevision, ProjectStatus, normalize_blockers
+from sirius.ports.llm import MEMORY_SUGGESTION_DELIMITER
 
 _NOW = datetime.now(UTC)
 
@@ -285,3 +286,22 @@ def test_render_instructions_includes_the_external_actions_policy_from_the_canon
         "archivos, comandos, web o automatizaciones, por estar fuera del "
         "alcance de 0.1." in text
     )
+
+
+def test_render_instructions_asks_the_provider_to_use_the_memory_suggestion_delimiter() -> None:
+    """SIRIUS-ARQ-0.2 §3.2/§3.6 (M6): the automatic path only exists if the
+    provider is actually asked, in the same response, to mark an optional
+    proposal with the agreed delimiter — this is the only place that ask is
+    made."""
+    text = render_instructions(_context_without_project())
+
+    assert MEMORY_SUGGESTION_DELIMITER in text
+
+
+def test_render_instructions_places_the_memory_suggestion_ask_after_recent_messages() -> None:
+    text = render_instructions(_context_without_project())
+
+    messages_index = text.index("# Mensajes recientes")
+    delimiter_index = text.index(MEMORY_SUGGESTION_DELIMITER)
+
+    assert messages_index < delimiter_index

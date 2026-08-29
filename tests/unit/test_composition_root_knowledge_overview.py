@@ -60,6 +60,20 @@ def test_knowledge_overview_reflects_memories_and_decisions_through_the_wired_us
     archived_memory = dependencies.save_manual_memory_use_case.save("recuerdo a archivar")
     dependencies.archive_memory_use_case.archive(archived_memory.id)
 
+    pending_suggestion = dependencies.propose_memory_suggestion_use_case.propose(
+        "sugerencia pendiente"
+    )
+    confirmed_suggestion = dependencies.propose_memory_suggestion_use_case.propose(
+        "sugerencia a confirmar"
+    )
+    memory_from_confirmed_suggestion = dependencies.confirm_memory_suggestion_use_case.confirm(
+        confirmed_suggestion.id
+    )
+    rejected_suggestion = dependencies.propose_memory_suggestion_use_case.propose(
+        "sugerencia a rechazar"
+    )
+    dependencies.reject_memory_suggestion_use_case.reject(rejected_suggestion.id)
+
     proposed_decision = dependencies.propose_decision_use_case.propose(
         "Asunto propuesto", project.id, "contenido propuesto"
     )
@@ -75,7 +89,10 @@ def test_knowledge_overview_reflects_memories_and_decisions_through_the_wired_us
 
     overview = dependencies.get_knowledge_overview_use_case.get_overview()
 
-    assert [memory.id for memory in overview.current_memories] == [current_memory.id]
+    assert [memory.id for memory in overview.current_memories] == [
+        current_memory.id,
+        memory_from_confirmed_suggestion.id,
+    ]
     assert [memory.id for memory in overview.archived_memories] == [archived_memory.id]
     assert all(memory.status is MemoryStatus.CURRENT for memory in overview.current_memories)
     assert all(memory.status is MemoryStatus.ARCHIVED for memory in overview.archived_memories)
@@ -92,3 +109,5 @@ def test_knowledge_overview_reflects_memories_and_decisions_through_the_wired_us
     assert all(
         decision.status is DecisionStatus.ARCHIVED for decision in overview.archived_decisions
     )
+
+    assert [suggestion.id for suggestion in overview.pending_suggestions] == [pending_suggestion.id]

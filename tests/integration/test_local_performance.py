@@ -87,6 +87,9 @@ from sirius.adapters.persistence.sqlite_knowledge_search_repository import (
     build_sqlite_knowledge_search_repository,
 )
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
+from sirius.adapters.persistence.sqlite_memory_suggestion_repository import (
+    build_sqlite_memory_suggestion_repository,
+)
 from sirius.adapters.persistence.sqlite_project_repository import (
     build_sqlite_project_repository,
 )
@@ -179,6 +182,7 @@ class BancoDePruebas:
         self.knowledge_overview = GetKnowledgeOverviewUseCase(
             memory_repository=self.memory_repository,
             decision_repository=self.decision_repository,
+            memory_suggestion_repository=build_sqlite_memory_suggestion_repository(database_path),
         )
 
 

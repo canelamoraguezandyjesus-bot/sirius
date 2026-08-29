@@ -17,6 +17,7 @@ import pytest
 from sirius.adapters.llm.budget import BudgetPolicy, BudgetTracker
 from sirius.adapters.llm.openai_responses import OpenAIResponsesProvider, _build_error
 from sirius.ports.llm import (
+    MEMORY_SUGGESTION_DELIMITER,
     LLMCancelled,
     LLMCompleted,
     LLMError,
@@ -193,6 +194,206 @@ def test_completed_event_produces_final_text_and_records_usage() -> None:
     assert completed.input_tokens == 100
     assert completed.output_tokens == 50
     assert budget.spent_usd > 0
+
+
+class _CancelAfterNPullsStream:
+    """Yields ``events`` normally; right before the ``(cancel_after + 1)``-th
+    pull, invokes ``on_cancel()``. Lets a test put the provider's cancel flag
+    up exactly between two already-consumed raw events and the next one —
+    i.e. after a full delimiter has already been fed to the splitter, but
+    before the terminal event that would otherwise complete the turn."""
+
+    def __init__(
+        self, events: list[object], cancel_after: int, on_cancel: Callable[[], None]
+    ) -> None:
+        self._events = list(events)
+        self._cancel_after = cancel_after
+        self._on_cancel = on_cancel
+        self._pulled = 0
+        self.closed = False
+
+    def __iter__(self) -> Iterator[object]:
+        return self
+
+    def __next__(self) -> object:
+        if self._pulled == self._cancel_after:
+            self._on_cancel()
+        if not self._events:
+            raise StopIteration
+        self._pulled += 1
+        return self._events.pop(0)
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def test_completed_event_separates_the_memory_suggestion_from_the_clean_text() -> None:
+    """SIRIUS-ARQ-0.2 §3.2/§3.6 (M6): the delimiter and the raw proposal after
+    it never reach ``LLMTextDelta`` or ``LLMCompleted.text``, and the
+    proposal itself lands, clean, in ``LLMCompleted.memory_suggestion``."""
+    visible = "Respuesta visible. "
+    suggestion = "recordar esto"
+    raw = f"{visible}{MEMORY_SUGGESTION_DELIMITER}{suggestion}"
+    provider, _client = _build_provider(
+        lambda **kwargs: _FakeStream([_delta_event(raw), _completed_event(raw)])
+    )
+
+    events = list(provider.stream_response(_request()))
+
+    deltas = [e.text for e in events if isinstance(e, LLMTextDelta)]
+    assert deltas == [visible]
+    completed = events[-1]
+    assert isinstance(completed, LLMCompleted)
+    assert completed.text == visible
+    assert completed.memory_suggestion == suggestion
+    assert MEMORY_SUGGESTION_DELIMITER not in completed.text
+
+
+def test_completed_event_without_a_delimiter_has_no_memory_suggestion() -> None:
+    provider, _client = _build_provider(
+        lambda **kwargs: _FakeStream([_delta_event("solo texto"), _completed_event("solo texto")])
+    )
+
+    events = list(provider.stream_response(_request()))
+
+    completed = events[-1]
+    assert isinstance(completed, LLMCompleted)
+    assert completed.memory_suggestion is None
+
+
+def test_memory_suggestion_delimiter_split_across_two_deltas_never_leaks() -> None:
+    """The adapter's own proof (§8-M6) that the split-safety of §3.2 does not
+    depend on the delimiter arriving whole in a single raw fragment: it is
+    split here across the boundary between two consecutive deltas, and still
+    never reaches ``LLMTextDelta`` or ``LLMCompleted.text``."""
+    visible = "Respuesta. "
+    suggestion = "recordar esto"
+    split_point = len(MEMORY_SUGGESTION_DELIMITER) - 5
+    first_chunk = visible + MEMORY_SUGGESTION_DELIMITER[:split_point]
+    second_chunk = MEMORY_SUGGESTION_DELIMITER[split_point:] + suggestion
+    raw = first_chunk + second_chunk
+    provider, _client = _build_provider(
+        lambda **kwargs: _FakeStream(
+            [_delta_event(first_chunk), _delta_event(second_chunk), _completed_event(raw)]
+        )
+    )
+
+    events = list(provider.stream_response(_request()))
+
+    deltas = [e.text for e in events if isinstance(e, LLMTextDelta)]
+    assert deltas == [visible]
+    for delta_text in deltas:
+        assert MEMORY_SUGGESTION_DELIMITER not in delta_text
+    completed = events[-1]
+    assert isinstance(completed, LLMCompleted)
+    assert completed.text == visible
+    assert MEMORY_SUGGESTION_DELIMITER not in completed.text
+    assert completed.memory_suggestion == suggestion
+
+
+def test_cancelled_after_the_full_delimiter_already_streamed_has_no_delimiter_in_partial_text() -> (
+    None
+):
+    """§3.2: even once the delimiter and the raw proposal already streamed in
+    full, a cancellation arriving right after must never persist either in
+    ``LLMCancelled.partial_text``."""
+    visible = "Respuesta. "
+    request = _request(operation_id="op-cancel-after-delimiter")
+    provider_box: list[OpenAIResponsesProvider] = []
+
+    def _create(**kwargs: Any) -> object:
+        return _CancelAfterNPullsStream(
+            [
+                _delta_event(visible),
+                _delta_event(f"{MEMORY_SUGGESTION_DELIMITER}secreto"),
+                _completed_event(f"{visible}{MEMORY_SUGGESTION_DELIMITER}secreto"),
+            ],
+            cancel_after=2,
+            on_cancel=lambda: provider_box[0].cancel(request.operation_id),
+        )
+
+    provider, _client = _build_provider(_create)
+    provider_box.append(provider)
+
+    events = list(provider.stream_response(request))
+
+    assert [e.text for e in events if isinstance(e, LLMTextDelta)] == [visible]
+    last_event = events[-1]
+    assert isinstance(last_event, LLMCancelled)
+    assert last_event.partial_text == visible
+    assert MEMORY_SUGGESTION_DELIMITER not in last_event.partial_text
+    assert "secreto" not in last_event.partial_text
+
+
+def test_response_failed_after_the_full_delimiter_already_streamed_has_no_delimiter() -> None:
+    visible = "Respuesta. "
+    provider, _client = _build_provider(
+        lambda **kwargs: _FakeStream(
+            [
+                _delta_event(visible),
+                _delta_event(f"{MEMORY_SUGGESTION_DELIMITER}secreto"),
+                _failed_event(),
+            ]
+        )
+    )
+
+    events = list(provider.stream_response(_request()))
+
+    assert [e.text for e in events if isinstance(e, LLMTextDelta)] == [visible]
+    last_event = events[-1]
+    assert isinstance(last_event, LLMError)
+    assert last_event.partial_text == visible
+    assert MEMORY_SUGGESTION_DELIMITER not in last_event.partial_text
+    assert "secreto" not in last_event.partial_text
+
+
+def test_response_failed_mid_delimiter_does_not_leak_the_partial_marker() -> None:
+    """A raw chunk can end mid-delimiter (§3.2): the splitter must hold back
+    only that suspicious suffix, never more. If the stream then fails before
+    the delimiter is ever completed, that held-back suffix could still have
+    turned into the delimiter — it must be discarded, not surfaced as visible
+    text in ``LLMError.partial_text``."""
+    visible = "Respuesta. "
+    partial_marker = MEMORY_SUGGESTION_DELIMITER[:-1]
+    provider, _client = _build_provider(
+        lambda **kwargs: _FakeStream([_delta_event(visible + partial_marker), _failed_event()])
+    )
+
+    events = list(provider.stream_response(_request()))
+
+    assert [e.text for e in events if isinstance(e, LLMTextDelta)] == [visible]
+    last_event = events[-1]
+    assert isinstance(last_event, LLMError)
+    assert last_event.kind is LLMErrorKind.INVALID_RESPONSE
+    assert last_event.partial_text == visible
+    assert MEMORY_SUGGESTION_DELIMITER[:-1] not in last_event.partial_text
+
+
+def test_cancelled_mid_delimiter_does_not_leak_the_partial_marker() -> None:
+    """Same leak as above, but for a cancellation landing right after a raw
+    chunk that ends mid-delimiter, before any terminal event arrives."""
+    visible = "Respuesta. "
+    partial_marker = MEMORY_SUGGESTION_DELIMITER[:-1]
+    request = _request(operation_id="op-cancel-mid-delimiter")
+    provider_box: list[OpenAIResponsesProvider] = []
+
+    def _create(**kwargs: Any) -> object:
+        return _CancelAfterNPullsStream(
+            [_delta_event(visible + partial_marker), _completed_event(visible)],
+            cancel_after=1,
+            on_cancel=lambda: provider_box[0].cancel(request.operation_id),
+        )
+
+    provider, _client = _build_provider(_create)
+    provider_box.append(provider)
+
+    events = list(provider.stream_response(request))
+
+    assert [e.text for e in events if isinstance(e, LLMTextDelta)] == [visible]
+    last_event = events[-1]
+    assert isinstance(last_event, LLMCancelled)
+    assert last_event.partial_text == visible
+    assert MEMORY_SUGGESTION_DELIMITER[:-1] not in last_event.partial_text
 
 
 def test_failure_before_first_delta_is_classified_and_safe(monkeypatch: pytest.MonkeyPatch) -> None:
