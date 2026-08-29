@@ -108,7 +108,7 @@ estado real de `main` en esta revisión:
   `tests/integration/test_decision_lifecycle.py:62:def test_debating_alternatives_never_creates_a_decision`,
   `tests/gui/test_knowledge_widget.py:517-535` (existencia del archivo y del
   rango confirmada; contenido tomado de
-  `docs/implementation/TRAZABILIDAD_PA_SP.md:47,50`, tabla que su propio
+  `docs/implementation/TRAZABILIDAD_PA_SP.md:46,50`, tabla que su propio
   README declara comprobada por
   `tests/unit/test_pa_sp_traceability.py`), `tests/integration/test_initial_project_persistence.py`
   (existencia del archivo confirmada con `ls`).

@@ -126,10 +126,24 @@ Desarrolla `SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md` §3.4 (líneas 1
      recuperación de `main`.
   2. Medir omisiones críticas conocidas, aciertos exactos y cobertura.
 - **Resultado esperado verificable:** 0 omisiones críticas conocidas; aciertos exactos y
-  cobertura no por debajo de la última cifra incorporada a `main` (metodología de la
-  sección 2 de este plan). La omisión crítica por derivación léxica que §3.2 documenta
-  como conocida (`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:107-108`) debe quedar
-  cerrada, no solo caracterizada.
+  cobertura no por debajo de lo medido en la PR #117 — cita literal del criterio de §3.4
+  (`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:123-124`), que fija ese piso de
+  forma distinta a como lo hace la puerta integral §7.1
+  (`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:279-282`): esta PA no usa «la
+  última cifra incorporada a `main`» como piso, porque esa regla es la de PUERTA-01, no la
+  de §3.4, y aceptarla aquí permitiría aprobar esta PA con una regresión, o sin piso
+  reproducible, cuando `main` aún no tenga cifra propia para este banco. El propio
+  documento de origen no distingue con certeza cuál de las dos cifras de cobertura que
+  cita para el paquete completo —63/81 o 64/81
+  (`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:74`)— es la alcanzada bajo el
+  paquete activo (§1 de ese documento declara esas cifras como evidencia reportada, no
+  verificada, que no se completa con ninguna cifra adicional): esta prueba no fija a
+  ciegas una de las dos, sino que exige releer la medición original de la PR #117 en el
+  momento de ejecutar la prueba, contra el banco versionado real, para fijar el piso
+  exacto antes de declarar el criterio cumplido. La omisión crítica por derivación léxica
+  que §3.2 documenta como conocida
+  (`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:107-108`) debe quedar cerrada, no
+  solo caracterizada.
 - **Automatizable:** sí — misma forma que PA-0.2-BUS-01, sin proveedor real.
 - **Depende de:** la resolución de las dos puertas que ADR-002 (de la rama de evidencia,
   no `docs/decisions/ADR-002`) dejó NO CONFORME y de la decisión del propietario sobre la
@@ -217,9 +231,14 @@ esta PA nueva cubre, es la acción de resolución sobre ese listado (§5.3,
 ### PA-0.2-CONF-01 · Resolver un conflicto listado lo retira de la siguiente detección
 
 - **Precondiciones:**
-  1. Dos memorias vigentes (o una memoria y una decisión aprobada) del mismo
-     `subject_key`/`project_id`, en conflicto según `evaluate_subject_precedence`
-     (`src/sirius/domain/precedence.py:123-163`).
+  1. Dos memorias vigentes del mismo `subject_key`/`project_id`, sin ninguna decisión
+     aprobada para ese mismo asunto — o, alternativamente, más de una decisión aprobada
+     para el mismo asunto —, de forma que `evaluate_subject_precedence` devuelva
+     `CONFLICT` (`src/sirius/domain/precedence.py:150-157`) y no `DECISION_PRECEDENCE`.
+     Exactamente una decisión aprobada produce siempre `DECISION_PRECEDENCE`, con
+     independencia de cuántas memorias haya
+     (`src/sirius/domain/precedence.py:142-148`), así que «una memoria y una decisión
+     aprobada» nunca es una configuración de conflicto y no vale como precondición.
   2. Las acciones de resolución (corregir, archivar, aprobar/sustituir una decisión) están
      cableadas desde el listado de `KnowledgeWidget` a los casos de uso ya existentes de
      corrección, archivado o aprobación — pendiente de construir (§5.3).
@@ -228,8 +247,13 @@ esta PA nueva cubre, es la acción de resolución sobre ese listado (§5.3,
   2. Pulsar «Detectar conflictos de precedencia» y confirmar que el conflicto aparece
      listado (comportamiento ya cubierto hoy por
      `tests/gui/test_knowledge_widget.py:517-535`).
-  3. Elegir, sobre el conflicto listado, una acción de resolución (corregir o archivar una
-     memoria, o aprobar/sustituir la decisión en conflicto).
+  3. Elegir, sobre el conflicto listado, una acción de resolución que elimine la
+     ambigüedad estructural que causa el conflicto — archivar una de las memorias en
+     conflicto, o aprobar/sustituir la decisión cuando el conflicto es entre decisiones
+     aprobadas. Corregir el contenido de una memoria no sirve para este paso: la
+     corrección crea una nueva revisión vigente sin cambiar su `subject_key`
+     (`src/sirius/domain/memory.py:49-59`) ni reducir el número de memorias vigentes del
+     mismo asunto, así que la segunda detección seguiría reportando el conflicto.
   4. Repetir la detección del paso 2.
 - **Resultado esperado verificable:** tras el paso 3, la detección del paso 4 ya no
   reporta ese conflicto; en ningún paso se elige un ganador automáticamente — cita literal
@@ -358,8 +382,13 @@ Ninguna PA de este plan da una de estas decisiones por tomada:
 
 ## 11. Criterios de salida de este plan
 
-- Las seis PA de este documento superadas con evidencia observable — resultado, captura,
-  log de prueba o evaluación registrada — no por inspección.
+- Las seis PA de bloque de este documento — PA-0.2-BUS-01, PA-0.2-REC-01,
+  PA-0.2-SUG-01, PA-0.2-SUG-02, PA-0.2-CONF-01 y PA-0.2-HIST-01 — superadas con evidencia
+  observable — resultado, captura, log de prueba o evaluación registrada — no por
+  inspección, y solo después PA-0.2-PUERTA-01 superada en las mismas condiciones: son
+  siete PA en total, y la puerta integral no sustituye a ninguna de las seis anteriores
+  ni puede darse por superada sin ellas (precondición 1 de PA-0.2-PUERTA-01, líneas
+  306-311 de este mismo documento).
 - Ninguna PA se declara superada mientras su precondición dependiente de una decisión
   pendiente (sección 10) siga sin resolver.
 - La trazabilidad de la sección 9 no contiene ningún criterio de comprobación de la
