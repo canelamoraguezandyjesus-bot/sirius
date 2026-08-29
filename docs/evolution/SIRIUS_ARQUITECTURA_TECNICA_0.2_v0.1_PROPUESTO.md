@@ -650,6 +650,17 @@ una señal de categoría en su lista de prioridad
 una coincidencia FTS5 explícita sobre la consulta del usuario, porque la categoría deriva de
 una clasificación del canon, no de la consulta en sí. M8 (§8) construye esta señal.
 
+**Pendiente de decisión del propietario, no diseñado aquí:** de dónde sale, para un
+candidato real de producción — no del banco de fixture de §6.4 —, el dato de categoría que
+`category_match` compara. Ni `Memory` (`src/sirius/domain/memory.py`) ni `Decision`
+(`src/sirius/domain/decision.py`) tienen hoy un campo de categoría, y
+`RankRelevantKnowledgeUseCase.rank()` (`src/sirius/application/rank_relevant_knowledge.py:47-86`)
+no dispone de ese dato al construir cada `RankedKnowledge`. Cerrar este vacío exige que el
+propietario decida entre persistir un campo nuevo en `Memory`/`Decision` con su migración, o
+definir un mecanismo de clasificación determinista distinto — decisión que este documento no
+toma por su cuenta (§9). Hasta que se tome, M8 solo puede construirse y verificarse contra el
+banco de evidencia versionado de §6.4, nunca contra conocimiento real de producción.
+
 ### 6.2 Filtro de relevancia con modelo local vía Ollama: puerto, adaptador, fallo abierto y candado
 
 El punto de integración es exactamente el que la ronda anterior ya fijaba: un paso
@@ -1003,7 +1014,10 @@ en `_sort_key` (§6.1).
 distintas que confirma el nuevo lugar de `category_match` en la tupla de orden (después de
 `fts_match`, antes de la recencia); re-ejecutar la prueba de M7 sobre el banco y comprobar
 que las omisiones críticas bajan frente a la línea base de M7 (la cifra exacta es objetivo
-conjunto de M7–M11, no de M8 aislado).
+conjunto de M7–M11, no de M8 aislado). Este criterio se verifica contra el banco de
+evidencia versionado de §6.4: mientras el origen de categoría para candidatos reales de
+producción siga pendiente de decisión del propietario (§6.1, §9), M8 no se verifica contra
+`Memory`/`Decision` reales de `main`.
 
 ### M9 — Búsqueda mejorada: filtro de relevancia con Ollama — puerto, adaptador y candado
 
@@ -1098,6 +1112,11 @@ donde estaba, sin recaracterizarla:
   que las aplace, igual que D3 aplaza la omisión léxica si M11 no la cierra. PA-0.2-REC-01 no
   puede declararse superada mientras sigan pendientes, con independencia de si M11 cierra o
   no la omisión léxica.
+- **El origen productivo de `category_match` para candidatos reales** (§6.1): ni `Memory` ni
+  `Decision` tienen hoy un campo de categoría, y M8 solo puede construirse y verificarse
+  contra el banco de fixture de §6.4. Persistir un campo nuevo con su migración, o definir un
+  mecanismo de clasificación determinista distinto, es una decisión del propietario que
+  ningún encargo M1–M11 toma ni asigna.
 
 Ya resuelta, no pendiente: el disparador de sugerencias —si Sirius debía proponer solo por
 una acción explícita del usuario, o también automáticamente tras la conversación— era, en la
