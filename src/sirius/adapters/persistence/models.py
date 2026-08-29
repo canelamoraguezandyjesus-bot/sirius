@@ -11,6 +11,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sirius.domain.conversation import MessageRole, MessageStatus
 from sirius.domain.decision import DecisionStatus
 from sirius.domain.memory import MemoryStatus
+from sirius.domain.memory_suggestion import MemorySuggestionStatus
 from sirius.domain.project import ProjectStatus
 
 
@@ -343,6 +344,43 @@ class DecisionRevisionModel(Base):
     source_event_id: Mapped[int | None] = mapped_column(ForeignKey("events.id"), nullable=True)
     is_current: Mapped[bool] = mapped_column(nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
+class MemorySuggestionModel(Base):
+    """A proposed memory awaiting the user's explicit confirmation or
+    rejection (SIRIUS-ARQ-0.2 §3.3/§3.7).
+
+    No revision table: unlike ``MemoryModel``/``DecisionModel``, a
+    suggestion's content is fixed at proposal time (§3.3). No unique index
+    on ``status`` — several suggestions may be PENDING at once, even of the
+    same subject (§3.7); ambiguity between them is resolved by the user
+    confirming or rejecting each one, not by a database constraint.
+
+    ``resulting_memory_id`` stays ``NULL`` until (and unless) the suggestion
+    is CONFIRMED, when it links the real ``Memory`` the confirmation created.
+    """
+
+    __tablename__ = "memory_suggestions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[MemorySuggestionStatus] = mapped_column(
+        SAEnum(
+            MemorySuggestionStatus,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+            native_enum=False,
+            length=16,
+        ),
+        nullable=False,
+    )
+    subject_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), nullable=True)
+    source_event_id: Mapped[int | None] = mapped_column(ForeignKey("events.id"), nullable=True)
+    resulting_memory_id: Mapped[int | None] = mapped_column(
+        ForeignKey("memories.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
 
 class IdentityModel(Base):

@@ -16,6 +16,7 @@ from sirius.domain.conversation import Conversation, Message, MessageRole, Messa
 from sirius.domain.decision import Decision, DecisionRevision, DecisionStatus
 from sirius.domain.event import DECISION_APPROVED_EVENT_TYPE, USER_ACTOR, Event
 from sirius.domain.memory import Memory, MemoryRevision
+from sirius.domain.memory_suggestion import MemorySuggestion
 
 
 def _decision(decision_id: int, status: DecisionStatus) -> Decision:
@@ -182,6 +183,34 @@ class _UnusedConversationRepository:
         raise AssertionError("approve() must never redact a message")
 
 
+class _UnusedMemorySuggestionRepository:
+    """M4's ``UnitOfWork.memory_suggestion_repository``; ``approve()`` never touches it."""
+
+    def create_suggestion(
+        self,
+        content: str,
+        *,
+        source_event_id: int | None = None,
+        subject_key: str | None = None,
+        project_id: int | None = None,
+    ) -> MemorySuggestion:
+        raise AssertionError("approve() must never create a memory suggestion")
+
+    def get_suggestion(self, suggestion_id: int) -> MemorySuggestion:
+        raise AssertionError("approve() must never read a memory suggestion")
+
+    def list_pending_suggestions(self) -> list[MemorySuggestion]:
+        raise AssertionError("approve() must never list memory suggestions")
+
+    def confirm_suggestion(
+        self, suggestion_id: int, *, resulting_memory_id: int, resolved_at: datetime
+    ) -> MemorySuggestion:
+        raise AssertionError("approve() must never confirm a memory suggestion")
+
+    def reject_suggestion(self, suggestion_id: int, *, resolved_at: datetime) -> MemorySuggestion:
+        raise AssertionError("approve() must never reject a memory suggestion")
+
+
 class _FakeUnitOfWork:
     def __init__(
         self,
@@ -192,6 +221,7 @@ class _FakeUnitOfWork:
         self.event_repository = event_repository
         self.memory_repository = _UnusedMemoryRepository()
         self.conversation_repository = _UnusedConversationRepository()
+        self.memory_suggestion_repository = _UnusedMemorySuggestionRepository()
         self.enter_count = 0
         self.committed = False
         self.rollback_count = 0

@@ -27,6 +27,7 @@ from sirius.ports.conversation_repository import ConversationRepository
 from sirius.ports.decision_repository import DecisionRepository
 from sirius.ports.event_repository import EventRepository
 from sirius.ports.memory_repository import MemoryRepository
+from sirius.ports.memory_suggestion_repository import MemorySuggestionRepository
 
 __all__ = ["UnitOfWork"]
 
@@ -36,11 +37,12 @@ class UnitOfWork(Protocol):
 
     Used as a context manager: entering (``begin()``, done by ``__enter__``)
     opens the shared transaction and binds ``memory_repository``/
-    ``event_repository``/``decision_repository``/``conversation_repository``
-    to it; exiting without a prior ``commit()`` rolls back everything
-    written through any of them — mirroring
-    ``sirius.adapters.persistence.database.session_scope`` but spanning more
-    than one repository instead of committing after a single call.
+    ``event_repository``/``decision_repository``/``conversation_repository``/
+    ``memory_suggestion_repository`` to it; exiting without a prior
+    ``commit()`` rolls back everything written through any of them —
+    mirroring ``sirius.adapters.persistence.database.session_scope`` but
+    spanning more than one repository instead of committing after a single
+    call.
     """
 
     @property
@@ -61,6 +63,11 @@ class UnitOfWork(Protocol):
     @property
     def conversation_repository(self) -> ConversationRepository:
         """The conversation repository bound to this unit of work's shared transaction."""
+        ...
+
+    @property
+    def memory_suggestion_repository(self) -> MemorySuggestionRepository:
+        """The memory suggestion repository bound to this unit of work's shared transaction."""
         ...
 
     def __enter__(self) -> Self:

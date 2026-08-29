@@ -35,6 +35,10 @@ from sirius.adapters.persistence.sqlite_memory_repository import (
     SqliteMemoryRepository,
     bind_sqlite_memory_repository,
 )
+from sirius.adapters.persistence.sqlite_memory_suggestion_repository import (
+    SqliteMemorySuggestionRepository,
+    bind_sqlite_memory_suggestion_repository,
+)
 
 __all__ = ["SqliteUnitOfWork", "build_sqlite_unit_of_work"]
 
@@ -57,6 +61,7 @@ class SqliteUnitOfWork:
         self.event_repository: SqliteEventRepository
         self.decision_repository: SqliteDecisionRepository
         self.conversation_repository: SqliteConversationRepository
+        self.memory_suggestion_repository: SqliteMemorySuggestionRepository
 
     def close(self) -> None:
         """Release every pooled connection this unit of work's engine holds."""
@@ -70,6 +75,7 @@ class SqliteUnitOfWork:
         self.event_repository = bind_sqlite_event_repository(self._session)
         self.decision_repository = bind_sqlite_decision_repository(self._session)
         self.conversation_repository = bind_sqlite_conversation_repository(self._session)
+        self.memory_suggestion_repository = bind_sqlite_memory_suggestion_repository(self._session)
 
     def __enter__(self) -> Self:
         self.begin()
