@@ -1,0 +1,1444 @@
+{
+  "documento": "Banco de 47 casos de recuperacion y sus resultados esperados, portado sin modificar desde evidence/adr001-spikes (PR #117) a tests/acceptance/fixtures/evidence_bank_47_casos.json (AT 0.2 SS6.5, M7).",
+  "fuente": {
+    "rama": "evidence/adr001-spikes",
+    "commit": "dfdcdaff04dcba10939cc0b0569c55b6a636296f",
+    "ficheros": [
+      "experiments/adr002/benchmark/cases_v0_5.json",
+      "experiments/adr002/benchmark/references_v0_5.json",
+      "experiments/adr002/benchmark/conformance_corpus_v0_6.json",
+      "experiments/adr002/benchmark/applied_criticality_v0_1.json"
+    ],
+    "nota": "consulta y ambito de cada caso proceden de cases_v0_5.json (instanciacion); resultado_esperado procede de la adjudicacion calculada en references_v0_5.json, restringido a identidades del canon (MEM-/DEC-), que es exactamente el filtro que aplica el propio arnes de la rama de evidencia (experiments/adr002/round/cases.py:_identidades_canonicas). criticidad.razon_segura procede de applied_criticality_v0_1.json, el plano ya seguro que la propia rama de evidencia deriva del campo criticidad.razon del canon para este uso exacto; el campo criticidad.fuente del canon (que contiene un identificador de caso) no se porta."
+  },
+  "conteos": {
+    "casos": 47,
+    "elementos_esperados_total": 81,
+    "items_del_canon": 97
+  },
+  "casos": [
+    {
+      "id": "B04-CA-01",
+      "consulta": "¿Cómo prefiero que redactes?",
+      "ambito": "GLOBAL",
+      "resultado_esperado": [
+        "MEM-001"
+      ]
+    },
+    {
+      "id": "B04-CA-02",
+      "consulta": "¿Qué restricciones de transporte tengo?",
+      "ambito": "PRJ-MADEIRA",
+      "resultado_esperado": [
+        "MEM-002"
+      ]
+    },
+    {
+      "id": "B04-CA-03",
+      "consulta": "¿Qué reglas de calidad aplican a Gamma?",
+      "ambito": "PRJ-GAMMA",
+      "resultado_esperado": []
+    },
+    {
+      "id": "B04-CA-04",
+      "consulta": "¿Qué formato de informe uso?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": []
+    },
+    {
+      "id": "B04-CA-05",
+      "consulta": "¿Qué decisión de presupuesto usábamos antes?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": [
+        "DEC-002"
+      ]
+    },
+    {
+      "id": "B04-CA-06",
+      "consulta": "¿Qué proveedor de mensajería aplica?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": [
+        "DEC-004"
+      ]
+    },
+    {
+      "id": "B04-CA-07",
+      "consulta": "¿Desde cuándo rige el contrato de mantenimiento?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": [
+        "MEM-005"
+      ]
+    },
+    {
+      "id": "B04-CA-08",
+      "consulta": "¿Cuál es el presupuesto de Beta?",
+      "ambito": "PRJ-BETA",
+      "resultado_esperado": [
+        "DEC-005",
+        "MEM-006"
+      ]
+    },
+    {
+      "id": "B04-CA-09",
+      "consulta": "¿Qué preferencia de reuniones tengo?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": []
+    },
+    {
+      "id": "B04-CA-10",
+      "consulta": "¿Qué horario de entrega tengo fijado?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": []
+    },
+    {
+      "id": "B04-CA-11",
+      "consulta": "¿Qué sabes del expediente retirado?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": []
+    },
+    {
+      "id": "B04-CA-12",
+      "consulta": "¿Hay información médica del titular?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": []
+    },
+    {
+      "id": "B04-CA-13",
+      "consulta": "¿Cuál es el identificador de PAA?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": [
+        "MEM-011"
+      ]
+    },
+    {
+      "id": "B04-CA-14",
+      "consulta": "¿De qué se ocupa Juan?",
+      "ambito": "GLOBAL",
+      "resultado_esperado": [
+        "MEM-012",
+        "MEM-013"
+      ]
+    },
+    {
+      "id": "B04-CA-15",
+      "consulta": "¿Dónde dije exactamente que el alcance no incluye la migración?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": []
+    },
+    {
+      "id": "B04-CA-16",
+      "consulta": "¿Quién cierra el circuito de firmas?",
+      "ambito": "PRJ-GAMMA",
+      "resultado_esperado": [
+        "MEM-027"
+      ]
+    },
+    {
+      "id": "B04-CA-17",
+      "consulta": "¿Qué política de teletrabajo tenemos en Alfa?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": []
+    },
+    {
+      "id": "B04-CA-18",
+      "consulta": "¿Qué dice el anexo técnico requerido?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": []
+    },
+    {
+      "id": "B04-CA-19",
+      "consulta": "¿Cuál es la plataforma de despliegue aprobada?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": [
+        "DEC-006",
+        "DEC-007",
+        "DEC-008"
+      ]
+    },
+    {
+      "id": "B04-CA-20",
+      "consulta": "¿Puedo usar vuelos con escala?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": [
+        "MEM-014"
+      ]
+    },
+    {
+      "id": "B04-CA-21",
+      "consulta": "¿Acepto escalas?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": [
+        "MEM-016"
+      ]
+    },
+    {
+      "id": "B04-CA-22",
+      "consulta": "¿Qué decisiones eran válidas entre enero y marzo?",
+      "ambito": "PRJ-BETA",
+      "resultado_esperado": [
+        "DEC-001",
+        "DEC-005",
+        "DEC-009",
+        "DEC-011",
+        "DEC-014",
+        "DEC-015"
+      ]
+    },
+    {
+      "id": "B04-CA-23",
+      "consulta": "¿Cuál es la decisión de presupuesto actual y cuál reemplazó?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": [
+        "DEC-002",
+        "DEC-003"
+      ]
+    },
+    {
+      "id": "B04-CA-24",
+      "consulta": "¿Cada cuánto revisamos el alcance?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": []
+    },
+    {
+      "id": "B04-CA-25",
+      "consulta": "Atlas",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": [
+        "MEM-011"
+      ]
+    },
+    {
+      "id": "B04-CA-26",
+      "consulta": "Enumera las restricciones esenciales del expediente Gamma.",
+      "ambito": "PRJ-GAMMA",
+      "resultado_esperado": [
+        "MEM-101",
+        "MEM-102",
+        "MEM-103",
+        "MEM-104",
+        "MEM-105",
+        "MEM-106",
+        "MEM-107",
+        "MEM-108",
+        "MEM-109",
+        "MEM-110",
+        "MEM-111"
+      ]
+    },
+    {
+      "id": "B04-CA-27",
+      "consulta": "¿Qué presupuesto aplico en Beta según el documento?",
+      "ambito": "PRJ-BETA",
+      "resultado_esperado": [
+        "DEC-005",
+        "MEM-006"
+      ]
+    },
+    {
+      "id": "B04-CA-28",
+      "consulta": "¿Qué se dijo en la sesión no guardada?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": []
+    },
+    {
+      "id": "B04-CA-29",
+      "consulta": "¿Cuál es el plazo legal de entrega?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": [
+        "MEM-020"
+      ]
+    },
+    {
+      "id": "B04-CA-30",
+      "consulta": "Resume mi preferencia de redacción, el presupuesto vigente y la condición de ahorro en escalas, con su razón.",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": [
+        "DEC-003",
+        "MEM-001",
+        "MEM-016"
+      ]
+    },
+    {
+      "id": "B04-CA-31",
+      "consulta": "Dame todas las restricciones esenciales que debo respetar.",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": [
+        "DEC-003",
+        "DEC-010",
+        "MEM-014",
+        "MEM-016",
+        "MEM-025"
+      ]
+    },
+    {
+      "id": "B04-CA-32",
+      "consulta": "¿Qué sabía Sirius sobre el aforo el 1 de marzo?",
+      "ambito": "PRJ-BETA",
+      "resultado_esperado": [
+        "DEC-012"
+      ]
+    },
+    {
+      "id": "B04-CA-33",
+      "consulta": "[interna B05] evidencia de límite de gasto",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": [
+        "DEC-003"
+      ]
+    },
+    {
+      "id": "B04-CA-34",
+      "consulta": "Prepara el contexto de planificación de Alfa.",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": [
+        "DEC-003",
+        "MEM-014",
+        "MEM-016",
+        "MEM-903",
+        "MEM-910",
+        "MEM-911",
+        "MEM-912",
+        "MEM-914",
+        "MEM-915",
+        "MEM-919"
+      ]
+    },
+    {
+      "id": "B04-CA-35",
+      "consulta": "¿Qué nota interna hay sobre la prueba?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": []
+    },
+    {
+      "id": "B04-CA-36",
+      "consulta": "Variantes de la misma pregunta con dato histórico, candidata y fuera de ámbito.",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": []
+    },
+    {
+      "id": "B04-CA-38",
+      "consulta": "Dame las restricciones esenciales, máximo 10.",
+      "ambito": "PRJ-GAMMA",
+      "resultado_esperado": [
+        "MEM-101",
+        "MEM-102",
+        "MEM-103",
+        "MEM-104",
+        "MEM-105",
+        "MEM-106",
+        "MEM-107",
+        "MEM-108",
+        "MEM-109",
+        "MEM-110"
+      ]
+    },
+    {
+      "id": "B04-CA-40",
+      "consulta": "¿Cuál es el presupuesto vigente de Alfa?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": [
+        "DEC-003"
+      ]
+    },
+    {
+      "id": "B04-CA-41",
+      "consulta": "¿Cada cuánto se revisa el coche de empresa?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": [
+        "MEM-022"
+      ]
+    },
+    {
+      "id": "B04-CA-42",
+      "consulta": "¿Usar PostgreSQL?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": [
+        "DEC-010"
+      ]
+    },
+    {
+      "id": "B04-CA-43",
+      "consulta": "¿Quién valida los entregables de calidad?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": [
+        "MEM-023",
+        "MEM-024"
+      ]
+    },
+    {
+      "id": "B04-CA-44",
+      "consulta": "Restricciones esenciales, máximo duro 5.",
+      "ambito": "PRJ-GAMMA",
+      "resultado_esperado": [
+        "MEM-101",
+        "MEM-102",
+        "MEM-103",
+        "MEM-104",
+        "MEM-105"
+      ]
+    },
+    {
+      "id": "B04-CA-45",
+      "consulta": "¿Cuál es el presupuesto que manejamos?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": [
+        "DEC-003"
+      ]
+    },
+    {
+      "id": "B04-CA-46",
+      "consulta": "[interna] datos de nómina del equipo Beta",
+      "ambito": "PRJ-BETA",
+      "resultado_esperado": []
+    },
+    {
+      "id": "B04-CA-47",
+      "consulta": "Consultas por occurred_at, valid_time y recorded_at.",
+      "ambito": "PRJ-BETA",
+      "resultado_esperado": []
+    },
+    {
+      "id": "B04-CA-49",
+      "consulta": "¿Hay algo sobre mi preferencia de reuniones?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": []
+    },
+    {
+      "id": "B04-CA-50",
+      "consulta": "¿Qué condiciones de acceso al almacén hay?",
+      "ambito": "PRJ-ALFA",
+      "resultado_esperado": [
+        "MEM-025"
+      ]
+    }
+  ],
+  "items": [
+    {
+      "id": "MEM-001",
+      "kind": "MEMORIA",
+      "project": "PRJ-GLOBAL",
+      "text": "El usuario prefiere que redactes en tono directo y sin adornos.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": {
+        "nivel": "IMPORTANTE",
+        "razon_segura": "Requisito de redacción declarado explícitamente por el usuario."
+      }
+    },
+    {
+      "id": "MEM-002",
+      "kind": "MEMORIA",
+      "project": "PRJ-MADEIRA",
+      "text": "En este viaje no se alquila coche.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": {
+        "nivel": "CRITICO",
+        "razon_segura": "Restricción esencial del viaje; omitirla cambia la planificación."
+      }
+    },
+    {
+      "id": "MEM-003",
+      "kind": "MEMORIA",
+      "project": "PRJ-CANARIAS",
+      "text": "En este viaje se alquila coche para los traslados largos.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "DEC-001",
+      "kind": "DECISION",
+      "project": "LISTA-CERRADA-AB",
+      "text": "La revisión de calidad es obligatoria antes de publicar.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-004",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Preferencia de formato de informe en columnas.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "ARCHIVADA",
+      "criticidad": null
+    },
+    {
+      "id": "DEC-002",
+      "kind": "DECISION",
+      "project": "PRJ-ALFA",
+      "text": "El presupuesto máximo del proyecto es 2.000 €.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "SUSTITUIDA",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "DEC-003",
+      "kind": "DECISION",
+      "project": "PRJ-ALFA",
+      "text": "El presupuesto máximo del proyecto es 1.500 €.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": {
+        "nivel": "CRITICO",
+        "razon_segura": "Límite de gasto vigente; su omisión causa decisión errónea."
+      }
+    },
+    {
+      "id": "DEC-004",
+      "kind": "DECISION",
+      "project": "PRJ-ALFA",
+      "text": "A partir de septiembre el proveedor de mensajería cambia a Norte.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-005",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "El contrato de mantenimiento se renovó, pero no consta desde cuándo.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "DEC-005",
+      "kind": "DECISION",
+      "project": "PRJ-BETA",
+      "text": "El presupuesto de Beta es 4.000 €.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-006",
+      "kind": "MEMORIA",
+      "project": "PRJ-BETA",
+      "text": "Comentario en reunión: el presupuesto de Beta es 6.000 €.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-007",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Posible preferencia inferida: reuniones cortas por la mañana.",
+      "confirmacion": "CANDIDATA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-008",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Candidata rechazada por el usuario sobre horario de entrega.",
+      "confirmacion": "RECHAZADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-009",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "PURGADA",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-010",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Dato sensible de salud del titular del proyecto.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-011",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "El identificador interno del proyecto Atlas Alfa es PAA-7.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-012",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Juan Torres es el responsable de calidad.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-013",
+      "kind": "MEMORIA",
+      "project": "PRJ-BETA",
+      "text": "Juan Molina es el responsable de compras.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "DEC-006",
+      "kind": "DECISION",
+      "project": "PRJ-ALFA",
+      "text": "La plataforma de despliegue aprobada es Nimbo.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "DEC-007",
+      "kind": "DECISION",
+      "project": "PRJ-ALFA",
+      "text": "La plataforma de despliegue aprobada es Nimbo.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "DEC-008",
+      "kind": "DECISION",
+      "project": "PRJ-ALFA",
+      "text": "La plataforma de despliegue aprobada es Nimbo.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-014",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "No uses opciones de vuelo con escala.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": {
+        "nivel": "CRITICO",
+        "razon_segura": "Restricción explícita de viaje; invertirla cambia el resultado."
+      }
+    },
+    {
+      "id": "MEM-015",
+      "kind": "MEMORIA",
+      "project": "PRJ-BETA",
+      "text": "Acepta opciones de vuelo con escala si abaratan el trayecto.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-016",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Acepta escala solo si ahorra más de 200 €.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": {
+        "nivel": "CRITICO",
+        "razon_segura": "Condición material; recuperarla sin condición invierte el sentido."
+      }
+    },
+    {
+      "id": "DEC-009",
+      "kind": "DECISION",
+      "project": "PRJ-BETA",
+      "text": "Se aplica el descuento de invierno a los pedidos.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-017",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Resumen: el equipo acordó revisar el alcance cada dos semanas.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "SIN_SOPORTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-018",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "El nombre en clave del entregable de Atlas es Faro.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-101",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Restricción esencial dispersa número 1 del expediente Gamma.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": {
+        "nivel": "CRITICO",
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+      }
+    },
+    {
+      "id": "MEM-102",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Restricción esencial dispersa número 2 del expediente Gamma.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": {
+        "nivel": "CRITICO",
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+      }
+    },
+    {
+      "id": "MEM-103",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Restricción esencial dispersa número 3 del expediente Gamma.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": {
+        "nivel": "CRITICO",
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+      }
+    },
+    {
+      "id": "MEM-104",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Restricción esencial dispersa número 4 del expediente Gamma.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": {
+        "nivel": "CRITICO",
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+      }
+    },
+    {
+      "id": "MEM-105",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Restricción esencial dispersa número 5 del expediente Gamma.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": {
+        "nivel": "CRITICO",
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+      }
+    },
+    {
+      "id": "MEM-106",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Restricción esencial dispersa número 6 del expediente Gamma.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": {
+        "nivel": "CRITICO",
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+      }
+    },
+    {
+      "id": "MEM-107",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Restricción esencial dispersa número 7 del expediente Gamma.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": {
+        "nivel": "CRITICO",
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+      }
+    },
+    {
+      "id": "MEM-108",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Restricción esencial dispersa número 8 del expediente Gamma.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": {
+        "nivel": "CRITICO",
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+      }
+    },
+    {
+      "id": "MEM-109",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Restricción esencial dispersa número 9 del expediente Gamma.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": {
+        "nivel": "CRITICO",
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+      }
+    },
+    {
+      "id": "MEM-110",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Restricción esencial dispersa número 10 del expediente Gamma.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": {
+        "nivel": "CRITICO",
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+      }
+    },
+    {
+      "id": "MEM-111",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Restricción esencial dispersa número 11 del expediente Gamma.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": {
+        "nivel": "CRITICO",
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+      }
+    },
+    {
+      "id": "MEM-112",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Restricción esencial dispersa número 12 del expediente Gamma.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": {
+        "nivel": "CRITICO",
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+      }
+    },
+    {
+      "id": "MEM-019",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "NO_GUARDADA",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-020",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "La fuente externa afirma que el plazo legal de entrega es de 30 días.",
+      "confirmacion": "CANDIDATA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-021",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Nota marcada por el usuario: no uses esto como memoria.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-022",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "El automóvil de empresa se revisa cada seis meses.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "DEC-010",
+      "kind": "DECISION",
+      "project": "PRJ-ALFA",
+      "text": "No usar PostgreSQL en este proyecto.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": {
+        "nivel": "CRITICO",
+        "razon_segura": "Restricción tecnológica aprobada; invertirla rompe la decisión."
+      }
+    },
+    {
+      "id": "MEM-023",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "El equipo de calidad depende del área de operaciones.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-024",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Operaciones valida los entregables antes de la publicación.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-025",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "El acceso al almacén requiere autorización previa del responsable.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": {
+        "nivel": "CRITICO",
+        "razon_segura": "Restricción esencial detectada por regla operativa aprobada."
+      }
+    },
+    {
+      "id": "MEM-026",
+      "kind": "MEMORIA",
+      "project": "PRJ-BETA",
+      "text": "Datos de nómina del equipo de Beta.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "DEC-011",
+      "kind": "DECISION",
+      "project": "PRJ-BETA",
+      "text": "Se aprueba el cambio de proveedor de embalaje.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "DEC-012",
+      "kind": "DECISION",
+      "project": "PRJ-BETA",
+      "text": "El aforo máximo de la sala es de 40 personas.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "SUSTITUIDA",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "DEC-013",
+      "kind": "DECISION",
+      "project": "PRJ-BETA",
+      "text": "El aforo máximo de la sala es de 25 personas.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-027",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Nota parcial sobre el circuito de firmas, sin detalle del responsable.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-901",
+      "kind": "MEMORIA",
+      "project": "PRJ-BETA",
+      "text": "Nota ordinaria 1 sobre logística de almacén sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-902",
+      "kind": "MEMORIA",
+      "project": "PRJ-BETA",
+      "text": "Nota ordinaria 2 sobre planificación de vacaciones sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-903",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Nota ordinaria 3 sobre planificación de vacaciones sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-904",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Nota ordinaria 4 sobre planificación de vacaciones sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-905",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Nota ordinaria 5 sobre calendario de reuniones sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-906",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Nota ordinaria 6 sobre formato de informes sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-907",
+      "kind": "MEMORIA",
+      "project": "PRJ-BETA",
+      "text": "Nota ordinaria 7 sobre gestión de proveedores sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-908",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Nota ordinaria 8 sobre logística de almacén sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-909",
+      "kind": "MEMORIA",
+      "project": "PRJ-BETA",
+      "text": "Nota ordinaria 9 sobre calendario de reuniones sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-910",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Nota ordinaria 10 sobre control de versiones documentales sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-911",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Nota ordinaria 11 sobre control de versiones documentales sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-912",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Nota ordinaria 12 sobre calendario de reuniones sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-913",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Nota ordinaria 13 sobre logística de almacén sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-914",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Nota ordinaria 14 sobre calendario de reuniones sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-915",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Nota ordinaria 15 sobre planificación de vacaciones sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-916",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Nota ordinaria 16 sobre gestión de proveedores sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-917",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Nota ordinaria 17 sobre logística de almacén sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-918",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Nota ordinaria 18 sobre formato de informes sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-919",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Nota ordinaria 19 sobre planificación de vacaciones sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-920",
+      "kind": "MEMORIA",
+      "project": "PRJ-BETA",
+      "text": "Nota ordinaria 20 sobre calendario de reuniones sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-921",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Nota ordinaria 21 sobre logística de almacén sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-922",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Nota ordinaria 22 sobre planificación de vacaciones sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-923",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Nota ordinaria 23 sobre planificación de vacaciones sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-924",
+      "kind": "MEMORIA",
+      "project": "PRJ-BETA",
+      "text": "Nota ordinaria 24 sobre formato de informes sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-925",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Nota ordinaria 25 sobre formato de informes sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-926",
+      "kind": "MEMORIA",
+      "project": "PRJ-BETA",
+      "text": "Nota ordinaria 26 sobre logística de almacén sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-927",
+      "kind": "MEMORIA",
+      "project": "PRJ-BETA",
+      "text": "Nota ordinaria 27 sobre formato de informes sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-928",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Nota ordinaria 28 sobre logística de almacén sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-929",
+      "kind": "MEMORIA",
+      "project": "PRJ-BETA",
+      "text": "Nota ordinaria 29 sobre logística de almacén sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-930",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Nota ordinaria 30 sobre logística de almacén sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-931",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Nota ordinaria 31 sobre planificación de vacaciones sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-932",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Nota ordinaria 32 sobre calendario de reuniones sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-933",
+      "kind": "MEMORIA",
+      "project": "PRJ-BETA",
+      "text": "Nota ordinaria 33 sobre control de versiones documentales sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-934",
+      "kind": "MEMORIA",
+      "project": "PRJ-BETA",
+      "text": "Nota ordinaria 34 sobre planificación de vacaciones sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-935",
+      "kind": "MEMORIA",
+      "project": "PRJ-BETA",
+      "text": "Nota ordinaria 35 sobre gestión de proveedores sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-936",
+      "kind": "MEMORIA",
+      "project": "PRJ-BETA",
+      "text": "Nota ordinaria 36 sobre planificación de vacaciones sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-937",
+      "kind": "MEMORIA",
+      "project": "PRJ-BETA",
+      "text": "Nota ordinaria 37 sobre planificación de vacaciones sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-938",
+      "kind": "MEMORIA",
+      "project": "PRJ-BETA",
+      "text": "Nota ordinaria 38 sobre calendario de reuniones sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-939",
+      "kind": "MEMORIA",
+      "project": "PRJ-ALFA",
+      "text": "Nota ordinaria 39 sobre logística de almacén sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-940",
+      "kind": "MEMORIA",
+      "project": "PRJ-GAMMA",
+      "text": "Nota ordinaria 40 sobre planificación de vacaciones sin valor crítico.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "DEC-014",
+      "kind": "DECISION",
+      "project": "PRJ-BETA",
+      "text": "Se habilita el turno reducido de enero.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "DEC-015",
+      "kind": "DECISION",
+      "project": "PRJ-BETA",
+      "text": "Se adjudica la revisión trimestral al área de operaciones.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "DEC-016",
+      "kind": "DECISION",
+      "project": "PRJ-ALFA",
+      "text": "El aforo de la sala de reuniones del expediente era de 12 personas.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-950",
+      "kind": "MEMORIA",
+      "project": "PRJ-DELTA",
+      "text": "El calibrado del rotor exige una holgura escalonada.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    },
+    {
+      "id": "MEM-951",
+      "kind": "MEMORIA",
+      "project": "PRJ-DELTA",
+      "text": "Cada bitacora municipal permanece archivada junto al deposito comarcal.",
+      "confirmacion": "CONFIRMADA",
+      "validez": "VIGENTE",
+      "disponibilidad": "DISPONIBLE",
+      "criticidad": null
+    }
+  ]
+}
