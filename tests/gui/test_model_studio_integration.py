@@ -115,6 +115,7 @@ def _build_window(
         validate_backup_use_case=dependencies.validate_backup_use_case,
         restore_backup_use_case=dependencies.restore_backup_use_case,
         export_structured_use_case=dependencies.export_structured_use_case,
+        historical_projects_use_case=dependencies.historical_projects_use_case,
         close_database_connections=dependencies.close_database_connections,
         studio_voice_use_case=studio_voice_use_case,
         show_warning=lambda title, text: None,
@@ -209,12 +210,12 @@ def test_leaving_model_studio_also_leaves_clean_mode(qtbot: QtBot, tmp_path: Pat
 
 @pytest.mark.gui
 def test_the_technical_interface_is_untouched(qtbot: QtBot, tmp_path: Path) -> None:
-    """La página 0 conserva sus tres pestañas y su conversación de siempre."""
+    """La página 0 conserva sus pestañas y su conversación de siempre."""
     window = _build_window(_bootstrapped_database(tmp_path / "sirius.db"))
     qtbot.addWidget(window)
 
     assert isinstance(window.tabs, QTabWidget)
-    assert window.tabs.count() == 3
+    assert window.tabs.count() == 4
     assert window.tabs.tabText(0) == "Conversación"
     assert window.message_list is not None
 

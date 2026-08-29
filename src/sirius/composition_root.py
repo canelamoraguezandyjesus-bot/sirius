@@ -73,6 +73,7 @@ from sirius.application.delete_memory import DeleteMemoryUseCase
 from sirius.application.detect_precedence_conflicts import DetectPrecedenceConflictsUseCase
 from sirius.application.export_structured import ExportStructuredUseCase
 from sirius.application.get_conversation_history import GetConversationHistoryUseCase
+from sirius.application.historical_projects import HistoricalProjectsUseCase
 from sirius.application.initial_project import InitialProjectUseCase
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
 from sirius.application.memory_origin import GetMemoryOriginUseCase
@@ -169,6 +170,7 @@ class ConversationDependencies:
     validate_backup_use_case: ValidateBackupUseCase
     restore_backup_use_case: RestoreBackupUseCase
     export_structured_use_case: ExportStructuredUseCase
+    historical_projects_use_case: HistoricalProjectsUseCase
     studio_voice_use_case: StudioVoiceUseCase
     studio_capture_use_case: StudioCaptureUseCase
     close_database_connections: Callable[[], None]
@@ -508,6 +510,7 @@ def build_conversation_dependencies(
             memory_repository,
             decision_repository,
         ),
+        historical_projects_use_case=HistoricalProjectsUseCase(project_repository),
         close_database_connections=close_database_connections,
         studio_voice_use_case=studio_voice_use_case,
         studio_capture_use_case=studio_capture_use_case,

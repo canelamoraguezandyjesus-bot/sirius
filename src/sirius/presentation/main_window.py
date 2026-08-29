@@ -47,6 +47,7 @@ from sirius.application.get_conversation_history import (
     ConversationNotInitializedError,
     GetConversationHistoryUseCase,
 )
+from sirius.application.historical_projects import HistoricalProjectsUseCase
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
 from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.project_continuity import ProjectContinuityUseCase
@@ -94,6 +95,7 @@ from sirius.presentation.context_panel_widget import ContextPanelWidget
 from sirius.presentation.conversation_worker import SendMessageWorker
 from sirius.presentation.error_messages import failed_send_message
 from sirius.presentation.export_worker import ExportWorker
+from sirius.presentation.historical_projects_widget import HistoricalProjectsWidget
 from sirius.presentation.knowledge_widget import KnowledgeWidget
 from sirius.presentation.message_view import MessageItemDelegate, MessageItemWidget
 from sirius.presentation.model_studio.settings_dialog import StudioSettingsDialog
@@ -236,6 +238,7 @@ class MainWindow(QMainWindow):
         validate_backup_use_case: ValidateBackupUseCase,
         restore_backup_use_case: RestoreBackupUseCase,
         export_structured_use_case: ExportStructuredUseCase,
+        historical_projects_use_case: HistoricalProjectsUseCase,
         close_database_connections: Callable[[], None],
         *,
         studio_voice_use_case: StudioVoiceUseCase | None = None,
@@ -272,6 +275,7 @@ class MainWindow(QMainWindow):
         self._validate_backup_use_case = validate_backup_use_case
         self._restore_backup_use_case = restore_backup_use_case
         self._export_structured_use_case = export_structured_use_case
+        self._historical_projects_use_case = historical_projects_use_case
         # Not a use case: the minimal SQLAlchemy-lifecycle mechanism a safe
         # restoration needs (see ConversationDependencies' docstring). Called
         # right before RestoreBackupUseCase so the atomic file replace is not
@@ -363,6 +367,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self._build_conversation_tab(), "Conversación")
         self.tabs.addTab(self._build_knowledge_tab(), "Memoria y decisiones")
         self.tabs.addTab(self._build_settings_tab(), "Configuración")
+        self.tabs.addTab(self._build_historical_projects_tab(), "Proyectos históricos")
 
         # Model Studio es una página conmutable de esta misma ventana, no una
         # segunda aplicación (SIRIUS-MODEL-STUDIO-UI-001 §2): mismo proceso,
@@ -1163,6 +1168,20 @@ class MainWindow(QMainWindow):
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.addWidget(self.knowledge_widget)
+        return container
+
+    def _build_historical_projects_tab(self) -> QWidget:
+        # Pestaña propia y separada de "Conversación" (§5.4/§6.4): nunca
+        # comparte espacio de pantalla con project_continuity_widget, así que
+        # consultar un proyecto cerrado no puede modificar ni contaminar el
+        # proyecto activo.
+        self.historical_projects_widget = HistoricalProjectsWidget(
+            self._historical_projects_use_case
+        )
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.addWidget(self.historical_projects_widget)
         return container
 
     def _load_history(self) -> None:

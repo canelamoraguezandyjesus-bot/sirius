@@ -65,6 +65,7 @@ def _build_main_window(
         validate_backup_use_case=dependencies.validate_backup_use_case,
         restore_backup_use_case=dependencies.restore_backup_use_case,
         export_structured_use_case=dependencies.export_structured_use_case,
+        historical_projects_use_case=dependencies.historical_projects_use_case,
         close_database_connections=dependencies.close_database_connections,
         studio_voice_use_case=dependencies.studio_voice_use_case,
         studio_capture_use_case=dependencies.studio_capture_use_case,
