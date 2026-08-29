@@ -173,6 +173,23 @@ def citas_de(texto: str) -> list[str]:
     return list(vistas)
 
 
+_SUFIJO_DE_SIMBOLO = re.compile(r":[A-Za-z_]\w*$")
+
+
+def _ruta_de_fichero(ruta: str) -> str:
+    """La parte de ``ruta`` que el sistema de archivos puede resolver.
+
+    `ruta_citada()` no recorta un sufijo `:símbolo` (`:_traducir`,
+    `:referencia_canonica`): solo recorta `:número` o `::algo`
+    (`SUFIJO_DE_CITA`), a propósito, porque en `RAMA_DE_ORIGEN_NO_FUSIONADA`
+    ese sufijo sigue haciendo falta en la clave para restringir qué símbolo
+    exacto autoriza qué ADR. Pero un símbolo no es una ruta: comprobar la
+    cadena tal cual contra el sistema de archivos nunca encuentra el fichero,
+    ni aunque llegara a `main`. Esta función solo se usa para esa comprobación
+    de archivos; la clave del diccionario no se toca."""
+    return _SUFIJO_DE_SIMBOLO.sub("", ruta)
+
+
 def _adrs() -> list[Path]:
     return sorted(REGISTRO.glob("ADR-*.md"))
 
@@ -227,7 +244,9 @@ def test_lo_fijado_como_borrado_lo_cita_de_verdad_quien_dice_citarlo() -> None:
 
 def test_lo_fijado_como_rama_de_origen_no_fusionada_sigue_sin_existir_en_main() -> None:
     """Si el fichero llega a fusionarse a `main`, la excepción sobra y hay que quitarla."""
-    fusionados = sorted(ruta for ruta in RAMA_DE_ORIGEN_NO_FUSIONADA if (RAIZ / ruta).exists())
+    fusionados = sorted(
+        ruta for ruta in RAMA_DE_ORIGEN_NO_FUSIONADA if (RAIZ / _ruta_de_fichero(ruta)).exists()
+    )
     assert fusionados == [], (
         f"estas rutas ya existen en main: {fusionados}. Quítalas de "
         "RAMA_DE_ORIGEN_NO_FUSIONADA: una excepción que ya no excepciona nada solo sirve "
@@ -343,6 +362,40 @@ def test_las_raices_declaradas_son_directorios_de_verdad() -> None:
     """Una raíz que ya no existe deja de mirar sus citas sin que nadie se entere."""
     fantasmas = [raiz for raiz in RAICES_DEL_REPOSITORIO if not (RAIZ / raiz).is_dir()]
     assert fantasmas == [], f"raíces declaradas que ya no son directorios: {fantasmas}"
+
+
+def test_ruta_de_fichero_recorta_el_sufijo_de_simbolo_para_el_sistema_de_archivos() -> None:
+    """El defecto exacto (incidencia #445, hallazgo CODEX-002): comprobar la
+    ruta con el sufijo de símbolo pegado nunca encuentra el fichero, así que
+    `test_lo_fijado_como_rama_de_origen_no_fusionada_sigue_sin_existir_en_main`
+    no detectaría jamás que el fichero llegó a `main`.
+
+    Se reproduce con un fichero real (`context_recall.py`, existe en `src/`)
+    en vez de con las cuatro rutas reales de `RAMA_DE_ORIGEN_NO_FUSIONADA`,
+    que a propósito no existen en `main` hoy y no sirven para demostrar el
+    caso "sí existe" sin fusionar nada de verdad.
+    """
+    con_simbolo = "src/sirius_engine/context_recall.py:una_funcion_cualquiera"
+    assert not (RAIZ / con_simbolo).exists(), "una ruta con sufijo nunca es un fichero de verdad"
+    assert (RAIZ / _ruta_de_fichero(con_simbolo)).exists()
+
+
+@pytest.mark.parametrize(
+    ("ruta", "esperado"),
+    [
+        ("experiments/adr002/round/cases.py", "experiments/adr002/round/cases.py"),
+        (
+            "experiments/adr002/round/cases.py:_traducir",
+            "experiments/adr002/round/cases.py",
+        ),
+        (
+            "experiments/adr002/projection/contracts.py:referencia_canonica",
+            "experiments/adr002/projection/contracts.py",
+        ),
+    ],
+)
+def test_ruta_de_fichero_no_toca_rutas_sin_sufijo_de_simbolo(ruta: str, esperado: str) -> None:
+    assert _ruta_de_fichero(ruta) == esperado
 
 
 def test_una_excepcion_de_todavia_no_existe_se_retira_cuando_el_fichero_nace() -> None:

@@ -18,9 +18,15 @@ evidencia, pero nunca se lee: el cargador que construye los `Memory`/
 `Decision` reales (`_load_canon_item`) no toca `criticidad` en absoluto, y el
 arnés de evaluación (`_es_critico`) solo lee `criticidad.nivel` para puntuar
 la métrica de omisiones críticas. `test_el_cargador_no_lee_criticidad`
-demuestra las dos cosas por construcción, no por convención (replica la
-garantía de `experiments/adr002/candidates/test_adr002_categoria.py` en
-`evidence/adr001-spikes`).
+demuestra por construcción, no por convención, que el cargador nunca toca
+`criticidad` (replica la garantía de
+`experiments/adr002/candidates/test_adr002_categoria.py` en
+`evidence/adr001-spikes`); `test_es_critico_lee_nivel_pero_nunca_razon_segura`
+demuestra, con un caso controlado independiente de la ejecución real del
+banco, que `_es_critico` lee `nivel` y nunca `razon_segura` — la ejecución
+real del banco no siempre produce una omisión crítica (M12 puede cerrarlas
+todas, ver `docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md`
+§8 M12), así que esa garantía no puede depender de que aparezca una.
 """
 
 from __future__ import annotations
@@ -340,6 +346,24 @@ def test_el_cargador_no_lee_criticidad(ejecucion_del_banco: _EjecucionDelBanco) 
     rutas_del_cargador = {ruta[0] for ruta in ejecucion_del_banco.accesos_del_cargador}
     assert "criticidad" not in rutas_del_cargador
 
+    # `razon_segura` nunca debe leerse, la produzca o no una omisión crítica
+    # real esta ejecución concreta del banco (ver módulo: M12 puede cerrarlas
+    # todas). Qué se lee cuando sí hay una omisión crítica lo demuestra, con
+    # un caso controlado independiente, `test_es_critico_lee_nivel_pero_nunca_razon_segura`.
     rutas_del_arnes = set(ejecucion_del_banco.accesos_del_arnes)
     assert ("criticidad", "razon_segura") not in rutas_del_arnes
-    assert ("criticidad", "nivel") in rutas_del_arnes
+
+
+def test_es_critico_lee_nivel_pero_nunca_razon_segura() -> None:
+    """Acceso permitido y prohibido de `_es_critico`, con un caso controlado
+    independiente de la ejecución real del banco: no depende de que esa
+    ejecución concreta produzca una omisión crítica (ver módulo, M12)."""
+    accesos: list[tuple[str, ...]] = []
+    item = {"criticidad": {"nivel": "CRITICO", "razon_segura": "no debe leerse"}}
+    vigilado = _TrackingMapping(item, accesos)
+
+    assert _es_critico(vigilado) is True
+
+    rutas = set(accesos)
+    assert ("criticidad", "nivel") in rutas
+    assert ("criticidad", "razon_segura") not in rutas
