@@ -129,18 +129,51 @@ sugerencia pendiente o rechazada nunca debe ser candidata a conflicto de precede
 lo que `ConfirmSuggestionUseCase` (§3.5) llega a materializar como `Memory` real entra,
 desde ese momento, en el camino ya existente.
 
-Quién decide *cuándo* proponer una sugerencia importa tanto como el resto del diseño: dado
-que Sirius «no tiene juicio semántico propio» (§0.1.3,
-`src/sirius/domain/precedence.py:9-10`), este documento **no** diseña un clasificador ni una
-heurística que decida por sí sola qué conversación merece una sugerencia — eso sería
-exactamente el juicio que la arquitectura de 0.1 excluye deliberadamente, y decidir
-incorporarlo sería una decisión de producto/arquitectura nueva, no cubierta por el alcance
-de esta incidencia. El disparador que este documento diseña es una acción explícita del
-usuario sobre un turno de conversación ya completado (§3.6), simétrica a como
-`SaveManualMemoryUseCase` ya exige una orden explícita para crear una memoria
-(`src/sirius/application/save_manual_memory.py:9-13`). Si en el futuro se quiere que Sirius
-proponga sin ese gesto explícito, esa es una decisión de producto nueva que corresponde al
-propietario, no a este documento (ver §11).
+Quién decide *cuándo* proponer una sugerencia importa tanto como el resto del diseño. La
+ronda anterior de este documento dejaba esto como decisión pendiente del propietario; el
+propietario la resolvió explícitamente en la incidencia de origen (comentario del
+propietario, 2026-08-29T02:24:52Z, «DECISIÓN DEL PROPIETARIO... resuelve CODEX-001, el
+disparador de sugerencias»): **dos vías, no una**, que convergen en el mismo estado
+`PENDING` y el mismo flujo de confirmación/rechazo de §3.5.
+
+1. **Disparador automático tras la conversación.** Al completarse un turno, la superficie de
+   interfaz de §3.6 —nunca `SendMessageUseCase` en sí (§0.1.2)— llama, además del flujo ya
+   existente, a `ProposeMemorySuggestionUseCase.propose(...)` cuando la respuesta del
+   proveedor trae una propuesta candidata. Redacta esa propuesta el mismo proveedor de IA que
+   ya procesa la conversación en 0.1 (`LLMProvider`, `src/sirius/ports/llm.py:88-101`) —
+   nunca un clasificador o heurística nuevos de `sirius.domain`: el juicio de qué proponer lo
+   hace el proveedor externo que ya redacta la respuesta al usuario, el mismo que hoy produce
+   `LLMCompleted.text` (`src/sirius/ports/llm.py:34-40`), no el dominio de Sirius, que sigue
+   sin juicio semántico propio (§0.1.3, `src/sirius/domain/precedence.py:9-10`). Tres
+   condiciones de diseño, tal como las fijó el propietario, que cualquier construcción de este
+   bloque debe respetar sin excepción:
+   - **Nunca se autoguarda.** El disparador automático solo *propone*: la propuesta queda
+     `PENDING` hasta que el usuario la confirme o la rechace explícitamente (§3.5,
+     `ConfirmMemorySuggestionUseCase`/`RejectMemorySuggestionUseCase`) — el mismo camino que ya
+     recorre la vía manual. El juicio final sigue siendo del usuario.
+   - **Ningún proveedor ni tercero nuevo.** Solo el `LLMProvider` ya configurado, el mismo que
+     ya ve la conversación para generar la respuesta; la superficie de privacidad de §7.2 no
+     cambia.
+   - **Sin llamada adicional por conversación.** El contenido de la propuesta viaja en la misma
+     respuesta que ya produce el turno — nunca en una segunda llamada al proveedor. El contrato
+     actual de `LLMProvider.stream_response`/`LLMCompleted` (`src/sirius/ports/llm.py:34-40,
+     88-101`) solo transporta un `text` por turno; extenderlo para que ese mismo `text` incluya,
+     cuando el proveedor la genera, una propuesta distinguible es un detalle de construcción de
+     M6 que este documento no fija en su forma exacta — lo que sí fija, sin margen, es la
+     restricción: si esa extensión exigiera una segunda llamada al proveedor por conversación,
+     quien construya M6 se detiene y vuelve a consultar al propietario (§9), porque el coste es
+     su decisión, no una que este documento tome por él.
+
+2. **Botón manual «Proponer guardar…»** (§3.6), la vía que esta arquitectura ya diseñaba en la
+   ronda anterior, se conserva **además** de la automática, como vía complementaria iniciada
+   por el propio usuario — para ideas de mejora, herramientas a evaluar o cualquier apunte que
+   quiera proponer por sí mismo, sin esperar a que el proveedor lo sugiera.
+
+Esta es una excepción explícita y acotada a esta única capacidad, decidida por el
+propietario, no una relajación general: el principio §0.1.2 («ninguna capacidad nueva es
+automática por diseño») sigue gobernando sin cambios todo lo demás que diseña este
+documento — el disparador automático de sugerencias no lo reabre; lo autoriza el propietario
+punto por punto, para este bloque y ningún otro.
 
 ### 3.3 Dominio nuevo: `MemorySuggestion`
 
@@ -273,7 +306,18 @@ MEMORY_SUGGESTION_REJECTED_EVENT_TYPE = "memory_suggestion.rejected"
 
 ### 3.6 Superficie de interfaz
 
-**Proponer.** `MessageItemWidget` (`src/sirius/presentation/message_view.py:247-321`) ya
+**Proponer — dos vías, convergen en el mismo estado pendiente (§3.2).**
+
+*Automática.* Al terminar un turno con `outcome` `COMPLETED`
+(`SendMessageResult.outcome`, `src/sirius/application/send_message.py:50-61`), si la
+respuesta del proveedor trajo una propuesta candidata (§3.2), la superficie que ya orquesta
+el envío del mensaje —nunca `SendMessageUseCase` en sí— llama automáticamente, sin que el
+usuario pulse nada, a `ProposeMemorySuggestionUseCase.propose(content, message_id=...)` con
+el contenido de esa propuesta y el `message_id` del turno de Sirius recién completado. Si el
+turno no completa (`CANCELLED`/`FAILED`) o el proveedor no trajo propuesta, no se llama a
+nada — igual que hoy no se persiste una `Memory` cuando no hay guardado manual.
+
+*Manual.* `MessageItemWidget` (`src/sirius/presentation/message_view.py:247-321`) ya
 tiene, por mensaje, una fila de acciones (`copy_buttons`,
 `src/sirius/presentation/message_view.py:319-321`); un turno de Sirius completado gana ahí
 un botón «Proponer guardar…» que abre el mismo diálogo de texto que
@@ -281,8 +325,8 @@ un botón «Proponer guardar…» que abre el mismo diálogo de texto que
 (`src/sirius/presentation/knowledge_widget.py:308-309` y su manejador), precargado con el
 contenido del mensaje, editable antes de confirmarlo, y llama a
 `ProposeMemorySuggestionUseCase.propose(content, message_id=...)`. Es una acción explícita
-del usuario sobre un turno ya completado — no automática, no disparada por
-`SendMessageUseCase` (§3.2).
+del usuario sobre un turno ya completado, complementaria a la automática y nunca su
+sustituta (§3.2).
 
 **Confirmar/rechazar.** `KnowledgeOverview` (`src/sirius/application/knowledge_overview.py:30-48`)
 gana un campo `pending_suggestions: tuple[MemorySuggestion, ...]`, y
@@ -377,20 +421,39 @@ Un nuevo `_selected_conflict_entity`, mirroring literalmente `_selected_memory`/
 `conflicts_list.currentItem()` y devuelve ese dato solo si es una instancia de `Memory` o de
 `Decision`; la cabecera nunca lo produce, porque al no llevar `ItemIsSelectable` no puede
 convertirse en `currentItem()`. Seleccionar uno de esos ítems hijos habilita, sobre la
-entidad concreta que devuelve `_selected_conflict_entity`, exactamente los botones que ya
-existen para memorias (`correct_memory_button`, `archive_memory_button`,
-`src/sirius/presentation/knowledge_widget.py:310-313`) o decisiones
-(`approve_decision_button`, `supersede_decision_button`, `archive_decision_button` —
-mismos nombres que sus manejadores) según si la entidad es una `Memory` o una `Decision`;
-resolverlo (corregir/archivar una memoria, o aprobar/archivar/sustituir una decisión)
-reutiliza literalmente `_handle_correct_memory_clicked`, `_handle_archive_memory_clicked`,
-`_handle_approve_decision_clicked`, `_handle_supersede_decision_clicked` y
+entidad concreta que devuelve `_selected_conflict_entity`, **únicamente los botones que de
+verdad pueden resolver el conflicto desde esa selección** — nunca los cuatro que ya existen
+en el panel general:
+
+- Para una `Memory`, solo `archive_memory_button`
+  (`src/sirius/presentation/knowledge_widget.py:310-313`). `correct_memory_button` queda
+  deshabilitado desde `conflicts_list`: `CorrectMemoryUseCase.correct()` solo crea una
+  revisión nueva y conserva `status`, `subject_key` y `project_id`
+  (`src/sirius/application/correct_memory.py:64-108`), así que una memoria corregida sigue
+  siendo `CURRENT` del mismo asunto/proyecto y `find_subject_conflicts()`
+  (`src/sirius/domain/precedence.py:166-192`) la sigue contando — el conflicto reaparece
+  intacto. Solo `ArchiveMemoryUseCase`, al mover la memoria fuera de `CURRENT`, la retira de
+  esa cuenta.
+- Para una `Decision`, solo `supersede_decision_button` y `archive_decision_button` (mismos
+  nombres que sus manejadores). `approve_decision_button` queda deshabilitado desde
+  `conflicts_list`: toda decisión que aparece en `conflicting_decisions` ya es `APPROVED` —
+  es la única condición que admite `_approved_decisions_for_subject`
+  (`src/sirius/domain/precedence.py:98-108`) —, y `ApproveDecisionUseCase.approve()` solo
+  transiciona una decisión `PROPOSED` (`src/sirius/application/approve_decision.py:55-79`);
+  pulsar «Aprobar» sobre una decisión ya aprobada terminaría siempre en
+  `InvalidDecisionStatusError`, nunca en una resolución.
+
+Resolverlo (archivar una memoria, o archivar/sustituir una decisión) reutiliza literalmente
+`_handle_archive_memory_clicked`, `_handle_supersede_decision_clicked` y
 `_handle_archive_decision_clicked` ya escritos — llamando a los mismos métodos internos sobre
 la entidad única seleccionada desde `conflicts_list` en vez de exigir que el usuario la
-vuelva a buscar en `memories_list`/`decisions_list`. Tras cualquier resolución,
-`self.refresh()` (`src/sirius/presentation/knowledge_widget.py:673-679`) ya vuelve a llamar a
-`GetKnowledgeOverviewUseCase` y `_handle_detect_conflicts_clicked` puede volver a
-invocarse — una detección posterior ya no reporta el conflicto resuelto, porque
+vuelva a buscar en `memories_list`/`decisions_list`. `_handle_correct_memory_clicked` y
+`_handle_approve_decision_clicked` siguen existiendo tal cual y siguen operando sobre
+`memories_list`/`decisions_list` fuera de este flujo — este diseño no los elimina, solo no
+los ofrece como resolución de un conflicto desde `conflicts_list`. Tras cualquier
+resolución, `self.refresh()` (`src/sirius/presentation/knowledge_widget.py:673-679`) ya
+vuelve a llamar a `GetKnowledgeOverviewUseCase` y `_handle_detect_conflicts_clicked` puede
+volver a invocarse — una detección posterior ya no reporta el conflicto resuelto, porque
 `find_subject_conflicts` (`src/sirius/domain/precedence.py:166-192`) vuelve a evaluarlo
 sobre el estado ya actualizado, sin ningún cambio en esa función.
 
@@ -619,7 +682,12 @@ aplicación.
 `subject_key`/`project_id` (conflicto), detecta el conflicto, archiva una de las dos
 memorias en conflicto desde la selección de `conflicts_list`, vuelve a detectar y comprueba
 que el conflicto ya no aparece — sin que `sirius.domain.precedence` haya cambiado una sola
-línea.
+línea. Una segunda prueba selecciona un miembro `Memory` y un miembro `Decision` de un
+conflicto activo (dos decisiones `APPROVED` del mismo asunto/proyecto) y comprueba que
+`correct_memory_button` y `approve_decision_button` quedan deshabilitados desde
+`conflicts_list`, mientras que `archive_memory_button`, `supersede_decision_button` y
+`archive_decision_button` sí lo están — cubriendo la ruta que «Corregir»/«Aprobar» no
+resuelven (§4.2).
 
 ### M4 — Sugerencias confirmadas: dominio, puerto y migración
 
@@ -667,13 +735,13 @@ añade contenido nuevo a ninguna de ellas:
 - El origen de los estados `CANDIDATA`/`RECHAZADA` que una orden anterior daba por
   existentes (§3.1 de este documento).
 
-Una quinta, que surge de este diseño y no estaba en la Definición de Producto: **si alguna
-vez se quiere que Sirius proponga una sugerencia sin que el usuario pulse un botón sobre un
-turno ya completado** (una heurística o un juicio propio de qué conversación merece
-guardarse), eso es una capacidad nueva que rompe el principio §0.1.3 («Sirius no tiene
-juicio semántico propio», ya estable desde `sirius.domain.precedence`) y requiere su propia
-decisión de producto y arquitectura — este documento diseña únicamente el disparador
-explícito descrito en §3.6.
+Ya resuelta, no pendiente: el disparador de sugerencias —si Sirius debía proponer solo por
+una acción explícita del usuario, o también automáticamente tras la conversación— era, en la
+ronda anterior de este documento, una quinta decisión pendiente que surgía de este diseño y
+no estaba en la Definición de Producto. El propietario la resolvió explícitamente en la
+incidencia de origen (comentario del propietario, 2026-08-29T02:24:52Z): las dos vías,
+automática y manual, con las tres condiciones que fija §3.2. Se deja aquí la traza, no la
+decisión: el diseño resultante vive en §3.2 y §3.6, no en este apartado.
 
 ## 10. Cierre
 
