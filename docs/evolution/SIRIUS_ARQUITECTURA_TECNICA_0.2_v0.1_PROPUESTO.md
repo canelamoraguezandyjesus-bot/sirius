@@ -82,7 +82,7 @@ Cubre, en este orden, los cinco bloques de `RECTOR.md` §9.1
   existente, sin tocar `precedence.py`.
 - §6 Proyectos históricos consultables — diseño completo (puerto, aplicación, interfaz).
 - §7 Búsqueda mejorada y §8 Mejor recuperación — diseña la incorporación completa que
-  decide el propietario en D1 (`docs/evolution/STATUS.md:137-160`): el índice de categoría
+  decide el propietario en D1 (`docs/evolution/STATUS.md:145-168`): el índice de categoría
   determinista y el filtro de relevancia con modelo local vía Ollama, respetando los puntos
   de integración que la ronda anterior de este documento ya dejaba fijados, más sus
   encargos de construcción (§8, M7–M11) y la forma de medirlos contra el presupuesto de
@@ -607,14 +607,14 @@ consultarlos nunca modifica ni contamina el estado o el contexto del proyecto vi
 ## 6. Búsqueda mejorada y Mejor recuperación — diseño de la incorporación decidida (D1)
 
 `docs/evolution/STATUS.md` registra la decisión del propietario **D1**
-(`docs/evolution/STATUS.md:137-160`), tomada el 29 de agosto de 2026: la evidencia de la
+(`docs/evolution/STATUS.md:145-168`), tomada el 29 de agosto de 2026: la evidencia de la
 rama `evidence/adr001-spikes` (PR #117, que permanece abierta y sin fusionar como archivo)
 se incorpora a `main` **completa** — el índice de categoría determinista **y** el filtro de
 relevancia con modelo local vía Ollama —, no mediante la fusión directa de esa PR sino
 mediante encargos nuevos al Work Engine que porten ese trabajo como código de producto con
 sus pruebas (§8, M7–M11). D1 exige respetar, sin reabrirlos, los dos puntos de integración
 que la ronda anterior de este documento ya dejaba fijados sin elegir entre opciones
-(`docs/evolution/STATUS.md:143-148`): el índice como cuarta señal de `RankedKnowledge`
+(`docs/evolution/STATUS.md:151-156`): el índice como cuarta señal de `RankedKnowledge`
 (§6.1) y el filtro como segundo filtro en `ContextBuilder._rank_related_knowledge`, después
 de la exclusión por precedencia (§6.2). Este documento sigue sin leer
 `evidence/adr001-spikes` ni la PR #117 directamente (§0): lo que sigue cita contra `main` y
@@ -706,6 +706,16 @@ resultado del filtro y los candidatos protegidos, preservando el orden que §6.1
 una segunda llamada al filtro ni una excepción a su criterio. M9 (§8) construye el puerto, el
 adaptador y este candado.
 
+**Misma premisa pendiente que §6.1.** El candado reutiliza la clasificación de criticidad del
+canon que alimenta el índice de categoría de §6.1, no una fuente independiente: hereda
+exactamente la misma limitación que allí queda declarada pendiente de decisión del
+propietario. Ni `Memory` ni `Decision` tienen hoy un campo de criticidad o categoría
+(`src/sirius/domain/memory.py`, `src/sirius/domain/decision.py`), así que, igual que M8, M9
+solo puede construirse y verificarse contra el banco de evidencia versionado de §6.4; contra
+`Memory`/`Decision` reales de `main` el candado no tiene ningún candidato de "categoría de
+máxima criticidad" que proteger, porque esa clasificación no existe todavía para
+conocimiento real. §9 registra esta misma decisión pendiente para M8 y M9 a la vez.
+
 ### 6.3 Presupuesto de latencia: RNF-003 y cómo se mide
 
 Ninguno de los dos puntos de integración puede sacar a `ContextBuilder` de RNF-003, 300 ms
@@ -749,7 +759,7 @@ de Producto. RNF-003 en `main` es 300 ms, no 5 s; M10 mide contra la fuente vige
 
 El corpus congelado de 47 casos y sus resultados esperados
 (`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:63-75`) se porta **sin
-modificarse** (D1, `docs/evolution/STATUS.md:153-155`) a
+modificarse** (D1, `docs/evolution/STATUS.md:161-163`) a
 `tests/acceptance/fixtures/evidence_bank_47_casos.json`, siguiendo el mismo patrón de
 fixture versionado que ya usa `tests/engine/fixtures/github_issue_186.json`. Cada caso
 conserva su clasificación de criticidad tal como la porta la rama de evidencia, incluido un
@@ -771,15 +781,15 @@ nunca una llamada real a Ollama dentro de la suite) y mide, agregado sobre los 4
 - **omisiones críticas**: elementos esperados marcados como críticos (`criticidad.nivel`)
   que faltan en el resultado;
 - **cobertura**: fracción de los elementos esperados (81 en total sobre los 47 casos,
-  `docs/evolution/STATUS.md:162-172`) presentes en algún resultado.
+  `docs/evolution/STATUS.md:170-180`) presentes en algún resultado.
 
-Suelos exigidos por D1/D2 (`docs/evolution/STATUS.md:137-172`), afirmados como aserciones
+Suelos exigidos por D1/D2 (`docs/evolution/STATUS.md:145-180`), afirmados como aserciones
 duras que hacen fallar la prueba si se incumplen: aciertos exactos no por debajo de 29/47;
 cobertura no por debajo de 63/81 — este segundo suelo es **provisional**, no una cifra
 definitiva: D2 lo registra expresamente como el piso más bajo de las dos cifras que cita la
 Definición de Producto, «hasta que la primera medición real de PA-0.2-REC-01 sobre `main`
 registre la cifra medida, momento en el que esa cifra medida sustituye a este provisional sin
-necesidad de una nueva decisión del propietario» (`docs/evolution/STATUS.md:162-172`). M10
+necesidad de una nueva decisión del propietario» (`docs/evolution/STATUS.md:170-180`). M10
 (§8) es quien ejecuta esa primera medición real; a partir de ahí la aserción dura de esta
 prueba pasa a ser la cifra que M10 mida, no 63/81, y las ejecuciones posteriores a M10 no
 pueden seguir pasando con 63/81 si la medición real fue distinta. Omisiones críticas: el
@@ -790,7 +800,7 @@ nunca relajada en silencio— y PA-0.2-REC-01 permanece no superada, tal como ex
 
 ### 6.5 Decisión D3: intento de cierre de la última omisión crítica
 
-D3 (`docs/evolution/STATUS.md:174-188`) decide que la omisión crítica por derivación léxica
+D3 (`docs/evolution/STATUS.md:182-196`) decide que la omisión crítica por derivación léxica
 que la Definición de Producto §3.2(b) caracteriza («preferencia de redacción» frente a
 «prefiere que redactes», `docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:107-108`)
 **se intenta cerrar** dentro del mismo paquete de incorporación de D1, no se caracteriza sin
@@ -845,7 +855,7 @@ SQLite que ya usa Sirius 0.1 (`src/sirius/adapters/persistence/database.py`,
 (§6.2) introduce el único componente no-local que contempla la Definición de Producto: un
 modelo local vía Ollama (`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md`
 §2.2) — local a la máquina, no un servicio remoto nuevo. D1 adopta esa dependencia
-(`docs/evolution/STATUS.md:137-160`) y §6.2 la diseña con esa restricción como propiedad
+(`docs/evolution/STATUS.md:145-168`) y §6.2 la diseña con esa restricción como propiedad
 estructural del adaptador, no como opción de configuración: apunta en exclusiva a
 `localhost`, sin destino de red fuera del equipo del propietario.
 
@@ -874,11 +884,22 @@ fusionar).
 
 Encargos del tamaño de una vertical de Sirius 0.1 (ver §2 sobre la numeración `M1`…`M11`).
 M1–M6 son independientes de los bloques de §6. M7–M11 (búsqueda mejorada y mejor
-recuperación, decisión D1, `docs/evolution/STATUS.md:137-188`) se añaden a continuación y sí
+recuperación, decisión D1, `docs/evolution/STATUS.md:145-196`) se añaden a continuación y sí
 dependen entre sí, en este orden: M7 antes que M8 y M9 (necesita el pipeline de hoy como
 línea base antes de medir cualquier cambio); M8 y M9 antes que M10 (mide la integración
 completa, no cada pieza suelta); M11 al final, porque su intento de cierre se apoya en el
 pipeline ya integrado por M7–M10.
+
+**M8, M9 y M10 quedan bloqueados contra conocimiento real de producción.** El orden anterior
+fija dependencias de secuencia, no autorización para ordenar los tres al Work Engine: M8
+(§6.1) y M9 (§6.2) comparten la misma premisa pendiente — el origen y el ciclo de vida de las
+categorías del candidato y de la consulta que `category_match` necesita no están decididos
+por el propietario (§9) —, y M10 cablea ambos en `ContextBuilder._rank_related_knowledge`,
+el camino que sí procesa `Memory`/`Decision` reales. Mientras esa decisión no llegue, M8 y M9
+solo pueden construirse y verificarse contra el banco de evidencia versionado de §6.4, y M10
+no puede ordenarse en absoluto: cablear en producción un índice y un candado que no
+distinguen categorías reales no cierra el defecto, lo esconde detrás de una prueba que solo
+ejercita candidatos artificiales. `docs/evolution/STATUS.md` registra este mismo bloqueo.
 
 ### M1 — Proyectos históricos: puerto y aplicación
 
@@ -1032,9 +1053,25 @@ presupuesto de tiempo; (iv) respuesta con forma inesperada — en (ii)-(iv) el r
 `ContextBuilder._rank_related_knowledge` es idéntico al de antes de invocar el filtro, sin
 ninguna excepción propagada fuera del adaptador; una prueba adicional confirma que un
 candidato de la categoría de máxima criticidad del canon sobrevive aunque el doble de
-prueba del filtro intente descartarlo.
+prueba del filtro intente descartarlo. Este criterio se verifica, igual que el de M8, contra
+el banco de evidencia versionado de §6.4 y contra dobles de prueba con candidatos
+artificiales: mientras el origen de categoría para candidatos reales de producción siga
+pendiente de decisión del propietario (§6.1, §6.2, §9), M9 no se verifica contra
+`Memory`/`Decision` reales de `main`, porque no existe todavía ningún candidato real
+clasificado como «categoría de máxima criticidad» que el candado pueda proteger.
 
 ### M10 — Búsqueda mejorada y Mejor recuperación: integración y medición de RNF-003
+
+**Bloqueado hasta que el propietario decida el origen de categoría (§6.1, §9).** M10 cablea
+M8 y M9 en `ContextBuilder._rank_related_knowledge`, el único de los tres encargos que toca
+el camino de producción que sí procesa `Memory`/`Decision` reales — M8 y M9, aislados, solo
+se ejercitan contra el banco de fixture de §6.4. Ordenar M10 antes de esa decisión pondría en
+producción un índice de categoría y un candado que nunca distinguen nada en conocimiento
+real, porque ningún candidato real tiene todavía el dato de categoría o criticidad que ambos
+necesitan: no es una integración vacía sino una que aparenta funcionar (la medición de
+RNF-003 y la prueba de M7 seguirían pasando) sin aportar lo que D1 decidió incorporar. Este
+encargo no puede ordenarse al Work Engine mientras esa decisión no llegue; el resto de esta
+sección describe el trabajo para cuando se ordene, no una autorización para ordenarlo ya.
 
 Cablear M8 y M9 en `ContextBuilder._rank_related_knowledge`; medir contra RNF-003 con la
 metodología de ADR-008 en los dos escenarios que fija §6.3 (Ollama disponible dentro de su
@@ -1043,7 +1080,7 @@ hasta que ambos escenarios cumplan el presupuesto; re-ejecutar la prueba de M7 c
 pipeline ya integrado y confirmar el suelo de D1 (aciertos exactos ≥ 29/47). Esta
 re-ejecución **es**, además, la primera medición real de cobertura de PA-0.2-REC-01 sobre
 `main` que D2 exige para sustituir su suelo provisional (§6.4,
-`docs/evolution/STATUS.md:162-172`): M10 registra el valor de cobertura que mida —no elige
+`docs/evolution/STATUS.md:170-180`): M10 registra el valor de cobertura que mida —no elige
 64/81 ni ninguna otra cifra por adelantado— y actualiza la aserción dura de la prueba de §6.4
 a ese valor medido, sustituyendo 63/81. Solo si la medición coincide con 63/81 el suelo queda
 literalmente igual; en cualquier otro caso, 63/81 deja de ser el suelo desde este encargo en
@@ -1066,7 +1103,7 @@ a «prefiere que redactes», ver §6.5), dentro del presupuesto de latencia de �
 construir un diccionario a medida no acotado (Producto §3.3).
 
 **Criterio de aceptación — salida explícita en los dos sentidos, por decisión D3
-(`docs/evolution/STATUS.md:174-188`):**
+(`docs/evolution/STATUS.md:182-196`):**
 
 - si se cierra: el caso del banco de M7 que hoy la registra como omisión pasa a acierto, la
   prueba de M7 se actualiza para exigir 0 omisiones críticas como suelo duro, y
@@ -1088,12 +1125,12 @@ propietario, registradas en `docs/evolution/STATUS.md` el 29 de agosto de 2026, 
 documento las traduce a diseño sin reabrirlas:
 
 - **Fusionar o no la PR #117 como vía de entrada de su evidencia** — resuelta por D1
-  (`docs/evolution/STATUS.md:137-160`): se incorpora completa, por encargos nuevos al Work
+  (`docs/evolution/STATUS.md:145-168`): se incorpora completa, por encargos nuevos al Work
   Engine (M7–M11), no por fusión directa de esa PR.
 - **La dependencia de Ollama en el filtro de relevancia** — resuelta por D1: se adopta;
   §6.2 diseña su puerto, su adaptador y el contrato de fallo abierto.
 - **La última omisión crítica de recuperación** caracterizada en la Definición de Producto
-  §3.3 — resuelta por D3 (`docs/evolution/STATUS.md:174-188`): se intenta cerrar dentro del
+  §3.3 — resuelta por D3 (`docs/evolution/STATUS.md:182-196`): se intenta cerrar dentro del
   mismo paquete de incorporación (M11, §6.5); si no se consigue, queda documentada como
   abierta y aplazada por decisión del propietario, sin bloquear el resto — nunca como
   defecto sin diagnosticar.
@@ -1112,11 +1149,18 @@ donde estaba, sin recaracterizarla:
   que las aplace, igual que D3 aplaza la omisión léxica si M11 no la cierra. PA-0.2-REC-01 no
   puede declararse superada mientras sigan pendientes, con independencia de si M11 cierra o
   no la omisión léxica.
-- **El origen productivo de `category_match` para candidatos reales** (§6.1): ni `Memory` ni
-  `Decision` tienen hoy un campo de categoría, y M8 solo puede construirse y verificarse
-  contra el banco de fixture de §6.4. Persistir un campo nuevo con su migración, o definir un
-  mecanismo de clasificación determinista distinto, es una decisión del propietario que
-  ningún encargo M1–M11 toma ni asigna.
+- **El origen y el ciclo de vida de las categorías del candidato y de la consulta para
+  `category_match`** (§6.1, §6.2): ni `Memory` ni `Decision` tienen hoy un campo de categoría
+  o de criticidad, y `RankRelevantKnowledgeUseCase.rank()` solo recibe `query_text`
+  (`src/sirius/application/rank_relevant_knowledge.py:47-59`) — no dispone de ese dato para
+  construir la señal. El candado de M9 (§6.2) reutiliza la misma clasificación, así que
+  hereda el mismo vacío. M8 y M9 solo pueden construirse y verificarse contra el banco de
+  fixture de §6.4, y **M8, M9 y M10 quedan bloqueados** para ordenarse al Work Engine contra
+  conocimiento real de producción (§8, `docs/evolution/STATUS.md`) hasta que se resuelva.
+  Persistir un campo nuevo con su migración, o definir un mecanismo de clasificación
+  determinista distinto, es una decisión del propietario que ningún encargo M1–M11 toma ni
+  asigna; hasta que llegue, ningún encargo puede alimentar producción con los metadatos del
+  fixture ni introducir esa persistencia o esa clasificación por su cuenta.
 
 Ya resuelta, no pendiente: el disparador de sugerencias —si Sirius debía proponer solo por
 una acción explícita del usuario, o también automáticamente tras la conversación— era, en la

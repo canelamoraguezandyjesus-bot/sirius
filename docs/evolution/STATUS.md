@@ -120,7 +120,15 @@ quedaron **resueltas por el propietario el 29 de agosto de 2026** en su sesión 
 — ver «Decisiones del propietario registradas el 29 de agosto de 2026» más abajo —; esa
 resolución fija el contenido de cada decisión y, junto con la aprobación ya cumplida de las
 dos puertas de activación citadas en este mismo párrafo, deja sin premisas pendientes el
-comienzo de la implementación de los cinco bloques.
+comienzo de la implementación de los cinco bloques — **con una excepción explícita**: los
+encargos M8, M9 y M10 del bloque de búsqueda mejorada y mejor recuperación
+(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md` §8) no pueden ordenarse
+contra conocimiento real de producción, porque el origen y el ciclo de vida de las
+categorías del candidato y de la consulta que `category_match` necesita siguen sin decidir
+por el propietario (`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md` §6.1
+y §9). Mientras esa séptima decisión no llegue, M8, M9 y M10 quedan **bloqueados** salvo su
+construcción y verificación contra el banco de evidencia versionado de §6.4 de esa misma
+Arquitectura; M1–M7 y M11 no dependen de esa decisión y pueden ordenarse sin ella.
 
 ## Decisiones del propietario registradas el 29 de agosto de 2026
 
