@@ -318,6 +318,15 @@ class SqliteProjectRepository:
 
             return _to_domain_project(model, revision_model)
 
+    def list_completed_projects(self) -> tuple[Project, ...]:
+        with session_scope(self._session_factory) as session:
+            models = session.scalars(
+                select(ProjectModel)
+                .where(ProjectModel.status == ProjectStatus.COMPLETED)
+                .order_by(ProjectModel.completed_at.desc())
+            ).all()
+            return tuple(_load_project(session, model) for model in models)
+
 
 def build_sqlite_project_repository(database_path: Path) -> SqliteProjectRepository:
     """Build a repository backed by a SQLite file at the given path."""

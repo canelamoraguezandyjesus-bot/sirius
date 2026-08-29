@@ -147,6 +147,9 @@ class _StaticProjectRepository:
     def complete_active_project(self, project_id: int) -> Project:
         raise AssertionError("export_structured() must never complete a project")
 
+    def list_completed_projects(self) -> tuple[Project, ...]:
+        raise AssertionError("export_structured() must never list completed projects")
+
 
 class _StaticMemoryRepository:
     def __init__(self, memories: list[Memory]) -> None:

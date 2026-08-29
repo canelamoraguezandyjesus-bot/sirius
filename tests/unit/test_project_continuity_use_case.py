@@ -61,6 +61,9 @@ class _FakeProjectRepository:
     def complete_active_project(self, project_id: int) -> Project:
         raise AssertionError("must never be called by ProjectContinuityUseCase")
 
+    def list_completed_projects(self) -> tuple[Project, ...]:
+        raise AssertionError("must never be called by ProjectContinuityUseCase")
+
     def append_revision(
         self,
         project_id: int,

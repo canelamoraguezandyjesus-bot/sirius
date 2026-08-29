@@ -64,6 +64,9 @@ class _FakeProjectRepository:
     def complete_active_project(self, project_id: int) -> Project:
         raise AssertionError("must never be called by InitialProjectWindow")
 
+    def list_completed_projects(self) -> tuple[Project, ...]:
+        raise AssertionError("must never be called by InitialProjectWindow")
+
     def create_project(
         self,
         name: str,

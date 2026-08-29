@@ -488,6 +488,61 @@ def test_list_project_revisions_rejects_an_unknown_project(tmp_path: Path) -> No
         repository.list_project_revisions(999)
 
 
+# --- list_completed_projects ----------------------------------------------------
+
+
+@pytest.mark.integration
+def test_list_completed_projects_is_empty_when_nothing_has_been_completed(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    _create_configured_project(repository)
+
+    assert repository.list_completed_projects() == ()
+
+
+@pytest.mark.integration
+def test_list_completed_projects_returns_both_most_recently_completed_first(
+    tmp_path: Path,
+) -> None:
+    """Literal §8-M1 acceptance criterion: create a project, complete it, create
+    and complete a second, and check that ``list_completed_projects()`` returns
+    both, most recently completed first, while ``get_active_project()`` still
+    returns neither."""
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+
+    first = _create_configured_project(repository, name="Primero")
+    repository.complete_active_project(first.id)
+    time.sleep(0.01)
+
+    second = _create_configured_project(repository, name="Segundo")
+    repository.complete_active_project(second.id)
+
+    completed = repository.list_completed_projects()
+
+    assert [project.id for project in completed] == [second.id, first.id]
+    assert all(project.status is ProjectStatus.COMPLETED for project in completed)
+    active = repository.get_active_project()
+    assert active is None or active.id not in {first.id, second.id}
+
+
+@pytest.mark.integration
+def test_list_completed_projects_never_includes_the_active_project(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    completed = _create_configured_project(repository, name="Cerrado")
+    repository.complete_active_project(completed.id)
+
+    active = repository.create_project(
+        "Activo", "objetivo", state_summary="estado", blockers=(), next_step="siguiente"
+    )
+
+    result = repository.list_completed_projects()
+
+    assert [project.id for project in result] == [completed.id]
+    assert active.id not in {project.id for project in result}
+
+
 # --- blockers JSON codec / corruption -------------------------------------------
 
 

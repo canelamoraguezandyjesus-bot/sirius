@@ -100,3 +100,11 @@ class ProjectRepository(Protocol):
         exist, is not configured, or is not currently ``ACTIVE``.
         """
         ...
+
+    def list_completed_projects(self) -> tuple[Project, ...]:
+        """Return every ``COMPLETED`` project, most recently completed first.
+
+        Never includes the ``ACTIVE`` project. Empty tuple when none has
+        been completed yet.
+        """
+        ...

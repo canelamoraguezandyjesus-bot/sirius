@@ -75,6 +75,9 @@ class _FakeProjectRepository:
         )
         return self._project
 
+    def list_completed_projects(self) -> tuple[Project, ...]:
+        raise AssertionError("must never be called by ProjectLifecycleUseCase")
+
 
 def _placeholder(project_id: int = 1) -> Project:
     now = datetime.now(UTC)
