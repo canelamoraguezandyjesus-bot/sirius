@@ -176,8 +176,18 @@ disparador de sugerencias»): **dos vías, no una**, que convergen en el mismo e
      campo nuevo, `memory_suggestion: str | None = None`: el adaptador concreto —nunca
      `SendMessageUseCase`, nunca la superficie de interfaz— detecta el delimitador
      distinguible en la salida cruda del proveedor y lo separa antes de emitir un solo
-     `LLMTextDelta` o de construir el `LLMCompleted` final, de modo que ni un delta ni
-     `LLMCompleted.text` contienen jamás el delimitador ni la propuesta cruda.
+     `LLMTextDelta` o de construir el `LLMCompleted`, `LLMCancelled` o `LLMError` final, de
+     modo que ni un delta, ni `LLMCompleted.text`, ni `LLMCancelled.partial_text`
+     (`src/sirius/ports/llm.py:41-49`) ni `LLMError.partial_text`
+     (`src/sirius/ports/llm.py:69-79`) contienen jamás el delimitador ni la propuesta cruda.
+     Esto no es una extensión opcional del contrato: `SendMessageUseCase` persiste
+     `LLMCancelled.partial_text`/`LLMError.partial_text` tal cual, con estado `CANCELLED`/
+     `FAILED`, en la misma llamada que los recibe
+     (`src/sirius/application/send_message.py:188-210`), y ese texto vuelve a entrar en un
+     contexto futuro exactamente igual que `LLMCompleted.text`
+     (`src/sirius/application/context.py:169-174`); dejar sin sanear el turno cancelado o
+     fallido reabriría, para esas dos rutas, el mismo defecto que CODEX-001 señaló para el
+     turno completado.
      `SendMessageResult` (`src/sirius/application/send_message.py:50-63`) gana el campo
      espejo `memory_suggestion: str | None`, copiado de `LLMCompleted.memory_suggestion`
      únicamente cuando `outcome` es `COMPLETED` — `SendMessageUseCase` se limita a
@@ -781,12 +791,18 @@ realmente mostrado— son ambos exactamente `LLMCompleted.text`, sin el delimita
 propuesta cruda en ninguno de los dos, cerrando el hallazgo de revisión CODEX-001 de que una
 prueba que solo cuenta llamadas a `propose()` acepta esa corrupción; una respuesta
 `COMPLETED` con `memory_suggestion` nulo no dispara ninguna llamada; un resultado
-`CANCELLED` no dispara ninguna llamada; un resultado `FAILED` no dispara ninguna llamada — en
-los cuatro últimos casos, el proveedor se invoca una sola vez por turno. El adaptador
-concreto de `LLMProvider` que construya M6 añade, además, su propia prueba de que un
-delimitador partido entre dos fragmentos consecutivos de la salida cruda del proveedor
-tampoco llega a `on_delta` ni a `LLMCompleted.text`: la separación descrita en §3.2 no puede
-depender de que el delimitador llegue entero en un único fragmento.
+`CANCELLED` no dispara ninguna llamada, con un proveedor de prueba que ya empezó a emitir el
+delimitador en la salida cruda antes de cancelar, y comprueba además que
+`result.sirius_message.content` —el texto persistido con estado `CANCELLED`— no contiene el
+delimitador ni la propuesta cruda; un resultado `FAILED` no dispara ninguna llamada, con el
+mismo proveedor de prueba emitiendo el delimitador antes de fallar, y la misma comprobación
+sobre `result.sirius_message.content` con estado `FAILED` — en los cuatro últimos casos, el
+proveedor se invoca una sola vez por turno. El adaptador concreto de `LLMProvider` que
+construya M6 añade, además, su propia prueba de que un delimitador partido entre dos
+fragmentos consecutivos de la salida cruda del proveedor tampoco llega a `on_delta`, a
+`LLMCompleted.text`, a `LLMCancelled.partial_text` ni a `LLMError.partial_text`: la
+separación descrita en §3.2 no puede depender de que el delimitador llegue entero en un único
+fragmento, ni de que el turno complete.
 
 ## 9. Decisiones pendientes del propietario
 
