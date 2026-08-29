@@ -89,10 +89,17 @@ umbral que la Definición no sostiene.
 Cada afirmación comprobable del plan de pruebas cita fichero y línea contra el
 estado real de `main` en esta revisión:
 
-- Las cinco decisiones pendientes citadas se verificaron contra
+- Las seis decisiones pendientes citadas en el plan (§10) se verificaron: las
+  cinco primeras contra
   `SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:297-310` (§7.3) y contra
   el objetivo literal de la incidencia #419 (la quinta, el disparador de
-  sugerencias, que #419 atribuye a la Arquitectura en curso).
+  sugerencias, que #419 atribuye a la Arquitectura en curso); la sexta —cuál
+  de las dos cifras de cobertura, 63/81 o 64/81, es la alcanzada bajo el
+  paquete activo, que bloquea el componente de cobertura de PA-0.2-REC-01— no
+  proviene de §7.3 ni de la incidencia #419, sino de la propia ambigüedad de
+  evidencia que `SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:46` (§1)
+  deja sin resolver; se documenta en «Decisión» arriba y en
+  `SIRIUS_PLAN_PRUEBAS_0.2_v0.1_PROPUESTO.md` §10, punto 6.
 - Los seis criterios de comprobación operacionalizados se citan literalmente
   de `SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md` líneas 84-90,
   120-125, 167-172, 216-220, 245-249 y 253-290.
@@ -125,8 +132,10 @@ estado real de `main` en esta revisión:
 ## Consecuencias
 
 - El plan de pruebas queda válido con independencia de cómo el propietario
-  resuelva las cinco decisiones pendientes: no habrá que reescribirlo cuando
-  se decidan, solo completar las precondiciones que hoy declara abiertas.
+  resuelva las seis decisiones pendientes (las cinco de §7.3/Arquitectura más
+  la sexta, la ambigüedad de cobertura descrita arriba): no habrá que
+  reescribirlo cuando se decidan, solo completar las precondiciones que hoy
+  declara abiertas.
 - Ninguna PA de este plan puede declararse superada hoy: seis de seis
   dependen de trabajo de implementación que todavía no existe (§4.1 de la
   Definición: «nada» cubre sugerencias confirmadas en 0.1) o de decisiones sin
