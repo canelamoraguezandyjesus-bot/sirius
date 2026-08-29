@@ -63,16 +63,24 @@ Este plan de pruebas hereda esa misma cautela y no las trata como hechos de `mai
 Las pruebas PA-0.2-BUS-01, PA-0.2-REC-01 y PA-0.2-PUERTA-01 (más abajo) dependen de ese
 banco. Se ejecutan **cuando** el paquete correspondiente se incorpore a `main` — no antes
 — contra «el mismo banco de 47 casos (o su sucesor versionado)»
-(`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:87-88`). El piso de no-regresión que
-usan no es una cifra fija tomada literalmente de la PR #117: la propia Definición define el
-piso como «la última cifra incorporada a `main`» en la puerta integral
-(`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:279-280,282`), y este plan aplica esa
-misma regla a §2.4 y §3.4 para no fijar un número que la propia Definición no fija con
-certeza — su línea 74 cita la cobertura como «63/81 frente a 64/81» sin declarar cuál de
-las dos es la cifra bajo el paquete activo. Las cifras de la PR #117 (aciertos exactos
-24/47→29/47, elementos de más 29→21, omisiones críticas 11→1,
-`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:73-75`) se citan aquí solo como
-contexto de la magnitud del salto esperado, no como el umbral que la prueba exige.
+(`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:87-88`). PA-0.2-PUERTA-01 usa como
+piso de no-regresión «la última cifra incorporada a `main`», tal como la propia Definición
+lo fija en la puerta integral
+(`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:279-280,282`); esa regla solo tiene
+sentido ahí porque, para cuando PUERTA-01 se ejecuta, las seis PA anteriores ya la
+superaron en `main` con una cifra propia que sirve de referencia.
+PA-0.2-REC-01 (§3.4) no puede aplicar la misma regla: es la primera prueba en establecer
+esa cifra en `main`, así que «la última cifra incorporada a `main`» no existiría todavía y
+el criterio quedaría vacío, dejando pasar cualquier regresión frente a lo que demostró la
+PR #117. §3.4 fija en su lugar el piso literal de la propia PR #117. De esas cifras
+(aciertos exactos 24/47→29/47, elementos de más 29→21, omisiones críticas 11→1, cobertura
+63/81 frente a 64/81, `SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:73-75`), solo la
+de cobertura es ambigua: la propia Definición no distingue con certeza cuál de las dos
+cifras —63/81 o 64/81— es la alcanzada bajo el paquete activo. Por eso PA-0.2-REC-01 (§4)
+exige el resto de cifras exactas y deja bloqueado únicamente el componente de cobertura
+hasta que el propietario registre en el repositorio cuál de las dos es la correcta
+(decisión pendiente 6 de la sección 10); ni esta sección ni PA-0.2-REC-01 fijan una de las
+dos a ciegas ni delegan la elección a quien ejecute la prueba.
 
 ## 3. PA-0.2-BUS — Búsqueda mejorada
 
@@ -121,35 +129,40 @@ Desarrolla `SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md` §3.4 (líneas 1
      (`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:105-106,124-125`). Sin esta
      precondición cumplida, esta PA no puede declararse superada — la propia Definición lo
      exige como condición previa, no solo deseable.
+  3. El propietario ha registrado en el repositorio cuál de las dos cifras de cobertura
+     que cita la Definición para el paquete completo —63/81 o 64/81
+     (`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:74`)— es la alcanzada bajo el
+     paquete activo. §1 de esa Definición declara esas cifras como evidencia reportada, no
+     verificada, que no se completa con ninguna cifra adicional
+     (`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:46`), así que ni este plan ni
+     quien ejecute la prueba pueden fijar una de las dos a ciegas: sin esta precondición,
+     el componente de cobertura de esta PA no tiene un piso reproducible y no puede
+     evaluarse (decisión pendiente 6 de la sección 10).
 - **Pasos:**
   1. Ejecutar el banco de 47 casos, o su sucesor versionado, contra el pipeline de
      recuperación de `main`.
   2. Medir omisiones críticas conocidas, aciertos exactos y cobertura.
-- **Resultado esperado verificable:** 0 omisiones críticas conocidas; aciertos exactos y
-  cobertura no por debajo de lo medido en la PR #117 — cita literal del criterio de §3.4
-  (`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:123-124`), que fija ese piso de
-  forma distinta a como lo hace la puerta integral §7.1
-  (`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:279-282`): esta PA no usa «la
-  última cifra incorporada a `main`» como piso, porque esa regla es la de PUERTA-01, no la
-  de §3.4, y aceptarla aquí permitiría aprobar esta PA con una regresión, o sin piso
-  reproducible, cuando `main` aún no tenga cifra propia para este banco. El propio
-  documento de origen no distingue con certeza cuál de las dos cifras de cobertura que
-  cita para el paquete completo —63/81 o 64/81
-  (`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:74`)— es la alcanzada bajo el
-  paquete activo (§1 de ese documento declara esas cifras como evidencia reportada, no
-  verificada, que no se completa con ninguna cifra adicional): esta prueba no fija a
-  ciegas una de las dos, sino que exige releer la medición original de la PR #117 en el
-  momento de ejecutar la prueba, contra el banco versionado real, para fijar el piso
-  exacto antes de declarar el criterio cumplido. La omisión crítica por derivación léxica
-  que §3.2 documenta como conocida
+- **Resultado esperado verificable:** 0 omisiones críticas conocidas; aciertos exactos no
+  por debajo de 29/47 — cifra literal medida en la PR #117 para el paquete completo
+  (`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:73`), que no está afectada por la
+  ambigüedad de cobertura y por eso sí es exigible tal cual; cobertura no por debajo de la
+  cifra que el propietario registre al resolver la precondición 3 — cita literal del
+  criterio de §3.4 (`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:123-124`), que fija
+  ese piso de forma distinta a como lo hace la puerta integral §7.1
+  (`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:279-282`): esta PA no usa «la última
+  cifra incorporada a `main`» como piso, porque es la primera en establecer esa cifra en
+  `main` y la regla de PUERTA-01 dejaría el criterio vacío (ver §2 de este plan). La
+  omisión crítica por derivación léxica que §3.2 documenta como conocida
   (`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:107-108`) debe quedar cerrada, no
   solo caracterizada.
-- **Automatizable:** sí — misma forma que PA-0.2-BUS-01, sin proveedor real.
+- **Automatizable:** sí — misma forma que PA-0.2-BUS-01, sin proveedor real, una vez
+  resuelta la precondición 3.
 - **Depende de:** la resolución de las dos puertas que ADR-002 (de la rama de evidencia,
-  no `docs/decisions/ADR-002`) dejó NO CONFORME y de la decisión del propietario sobre la
-  última omisión crítica (`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:303-305`).
-  Esta PA no resuelve esa decisión: se limita a medir si, una vez tomada e implementada,
-  el banco pasa con 0 omisiones críticas.
+  no `docs/decisions/ADR-002`) dejó NO CONFORME, de la decisión del propietario sobre la
+  última omisión crítica (`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:303-305`) y
+  del registro de la cifra exacta de cobertura de la precondición 3. Esta PA no resuelve
+  ninguna de esas decisiones: se limita a medir si, una vez tomadas e implementadas, el
+  banco pasa con 0 omisiones críticas y sin degradar los pisos que quedan fijados.
 
 ## 5. PA-0.2-SUG — Sugerencias confirmadas
 
@@ -232,13 +245,19 @@ esta PA nueva cubre, es la acción de resolución sobre ese listado (§5.3,
 
 - **Precondiciones:**
   1. Dos memorias vigentes del mismo `subject_key`/`project_id`, sin ninguna decisión
-     aprobada para ese mismo asunto — o, alternativamente, más de una decisión aprobada
-     para el mismo asunto —, de forma que `evaluate_subject_precedence` devuelva
+     aprobada para ese mismo asunto — o, alternativamente, exactamente dos decisiones
+     aprobadas para el mismo asunto —, de forma que `evaluate_subject_precedence` devuelva
      `CONFLICT` (`src/sirius/domain/precedence.py:150-157`) y no `DECISION_PRECEDENCE`.
      Exactamente una decisión aprobada produce siempre `DECISION_PRECEDENCE`, con
      independencia de cuántas memorias haya
      (`src/sirius/domain/precedence.py:142-148`), así que «una memoria y una decisión
-     aprobada» nunca es una configuración de conflicto y no vale como precondición.
+     aprobada» nunca es una configuración de conflicto y no vale como precondición. Más de
+     dos decisiones aprobadas tampoco vale: el paso 3 ejecuta una sola acción de
+     resolución, y sustituir solo una de tres deja las otras dos aprobadas
+     (`src/sirius/application/supersede_decision.py:118-121`), con lo que
+     `evaluate_subject_precedence` seguiría devolviendo `CONFLICT`
+     (`src/sirius/domain/precedence.py:150-157`); exactamente dos es el único número para
+     el que una sola sustitución basta.
   2. Las acciones de resolución (corregir, archivar, aprobar/sustituir una decisión) están
      cableadas desde el listado de `KnowledgeWidget` a los casos de uso ya existentes de
      corrección, archivado o aprobación — pendiente de construir (§5.3).
@@ -248,12 +267,16 @@ esta PA nueva cubre, es la acción de resolución sobre ese listado (§5.3,
      listado (comportamiento ya cubierto hoy por
      `tests/gui/test_knowledge_widget.py:517-535`).
   3. Elegir, sobre el conflicto listado, una acción de resolución que elimine la
-     ambigüedad estructural que causa el conflicto — archivar una de las memorias en
-     conflicto, o aprobar/sustituir la decisión cuando el conflicto es entre decisiones
-     aprobadas. Corregir el contenido de una memoria no sirve para este paso: la
-     corrección crea una nueva revisión vigente sin cambiar su `subject_key`
-     (`src/sirius/domain/memory.py:49-59`) ni reducir el número de memorias vigentes del
-     mismo asunto, así que la segunda detección seguiría reportando el conflicto.
+     ambigüedad estructural que causa el conflicto — archivar una de las dos memorias en
+     conflicto, o sustituir una de las dos decisiones aprobadas por la otra
+     (`SupersedeDecisionUseCase.supersede`,
+     `src/sirius/application/supersede_decision.py:70-77`) cuando el conflicto es entre
+     decisiones aprobadas, dejando una sola `APPROVED` para el asunto. Corregir el
+     contenido de una memoria no sirve para este paso: la corrección crea una nueva
+     revisión vigente sin cambiar su `subject_key` (`src/sirius/domain/memory.py:49-59`)
+     ni reducir el número de memorias vigentes del mismo asunto, así que la segunda
+     detección seguiría reportando el conflicto. Aprobar una decisión adicional tampoco
+     sirve: aumenta, no reduce, el número de decisiones aprobadas para el asunto.
   4. Repetir la detección del paso 2.
 - **Resultado esperado verificable:** tras el paso 3, la detección del paso 4 ya no
   reporta ese conflicto; en ningún paso se elige un ganador automáticamente — cita literal
@@ -379,6 +402,13 @@ Ninguna PA de este plan da una de estas decisiones por tomada:
    en curso (PR #418, no aprobada) deja como decisión pendiente — afecta al paso 1 de
    PA-0.2-SUG-01 y PA-0.2-SUG-02; ambas pruebas se definieron para valer con cualquier
    mecanismo de disparo.
+6. **Cuál de las dos cifras de cobertura que cita la Definición para el paquete
+   completo** —63/81 o 64/81 (`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:74`)— es
+   la alcanzada bajo el paquete activo. No proviene de §7.3 ni de la Arquitectura: es una
+   ambigüedad de la propia evidencia de la PR #117 (§1 de esa Definición,
+   `SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:46`), que este plan no resuelve
+   inventando una de las dos. Afecta al componente de cobertura del piso de no-regresión
+   de PA-0.2-REC-01 (precondición 3).
 
 ## 11. Criterios de salida de este plan
 

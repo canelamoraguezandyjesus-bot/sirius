@@ -69,15 +69,20 @@ citable de la Definición (el objetivo, el resultado esperado, los casos de
 uso existentes que sirven de patrón); dejarlas en blanco desperdiciaría eso.
 
 Una segunda decisión, menor, tomada al mismo tiempo: el piso de no-regresión
-de los bloques que dependen del banco de 47 casos (PA-0.2-BUS-01,
-PA-0.2-REC-01, PA-0.2-PUERTA-01) no es una cifra fija copiada de la PR #117,
-sino «la última cifra incorporada a `main`», siguiendo literalmente la
-metodología que la propia Definición ya fija para la puerta integral §7.1
-(`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:279-280,282`). Se aplicó
-esa misma regla a §2.4 y §3.4 porque la Definición no distingue con certeza,
-en su propio texto, cuál de las dos cifras de cobertura que cita («63/81
-frente a 64/81», línea 74) es la alcanzada bajo el paquete activo — fijar una
-de las dos a ciegas sería inventar un umbral que la Definición no sostiene.
+de PA-0.2-PUERTA-01 no es una cifra fija copiada de la PR #117, sino «la
+última cifra incorporada a `main`», siguiendo literalmente la metodología que
+la propia Definición ya fija para la puerta integral §7.1
+(`SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:279-280,282`); esa regla
+solo es aplicable ahí porque, para cuando PUERTA-01 se ejecuta, las seis PA
+anteriores ya la establecieron en `main`. PA-0.2-REC-01 no puede usar la
+misma regla — es la primera prueba en fijar esa cifra en `main`, así que
+«la última cifra incorporada a `main`» estaría vacía — y mantiene en su lugar
+el piso literal de la PR #117 de §3.4, exacto para aciertos exactos (29/47),
+pero bloqueado para cobertura hasta que el propietario registre cuál de las
+dos cifras que la Definición cita sin distinguir («63/81 frente a 64/81»,
+línea 74) es la alcanzada bajo el paquete activo — fijar una de las dos a
+ciegas, o delegar la elección a quien ejecute la prueba, sería inventar un
+umbral que la Definición no sostiene.
 
 ## Comprobación que la sostiene
 
