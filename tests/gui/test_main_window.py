@@ -102,6 +102,7 @@ def _build_window(database_path: Path) -> MainWindow:
         validate_backup_use_case=dependencies.validate_backup_use_case,
         restore_backup_use_case=dependencies.restore_backup_use_case,
         export_structured_use_case=dependencies.export_structured_use_case,
+        historical_projects_use_case=dependencies.historical_projects_use_case,
         close_database_connections=dependencies.close_database_connections,
         show_warning=lambda title, text: None,
         show_information=lambda title, text: None,
@@ -137,6 +138,7 @@ def _build_window_with_backup_use_case(
         validate_backup_use_case=dependencies.validate_backup_use_case,
         restore_backup_use_case=dependencies.restore_backup_use_case,
         export_structured_use_case=dependencies.export_structured_use_case,
+        historical_projects_use_case=dependencies.historical_projects_use_case,
         close_database_connections=dependencies.close_database_connections,
         show_warning=lambda title, text: None,
         show_information=lambda title, text: None,
@@ -156,18 +158,20 @@ def test_main_window_has_expected_title(qtbot: QtBot, tmp_path: Path) -> None:
 def test_main_window_shows_the_project_continuity_widget_in_the_conversation_tab(
     qtbot: QtBot, tmp_path: Path
 ) -> None:
-    """B3b: the section lives in "Conversación" — no new tab is created."""
+    """B3b: the section lives in "Conversación" — no new tab for it is created."""
     database_path = _bootstrapped_database(tmp_path / "sirius.db")
     window = _build_window(database_path)
     qtbot.addWidget(window)
 
     # El widget central es el conmutador entre la interfaz técnica y Model
     # Studio; las pestañas siguen existiendo igual, ahora con acceso directo.
+    # M2 añade "Proyectos históricos" como cuarta pestaña, separada de esta.
     tabs = window.tabs
-    assert tabs.count() == 3
+    assert tabs.count() == 4
     assert tabs.tabText(0) == "Conversación"
     assert tabs.tabText(1) == "Memoria y decisiones"
     assert tabs.tabText(2) == "Configuración"
+    assert tabs.tabText(3) == "Proyectos históricos"
     assert isinstance(window.project_continuity_widget, ProjectContinuityWidget)
     assert window.project_continuity_widget.name_label.text() == "Sirius 0.1"
     assert window.project_continuity_widget.next_step_label.text() == "Ahora toca: escribir pruebas"

@@ -20,6 +20,7 @@ from sirius.application.delete_memory import DeleteMemoryUseCase
 from sirius.application.detect_precedence_conflicts import DetectPrecedenceConflictsUseCase
 from sirius.application.export_structured import ExportStructuredUseCase
 from sirius.application.get_conversation_history import GetConversationHistoryUseCase
+from sirius.application.historical_projects import HistoricalProjectsUseCase
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
 from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.project_continuity import ProjectContinuityUseCase
@@ -65,6 +66,7 @@ class ValidatedMainWindow(MainWindow):
         validate_backup_use_case: ValidateBackupUseCase,
         restore_backup_use_case: RestoreBackupUseCase,
         export_structured_use_case: ExportStructuredUseCase,
+        historical_projects_use_case: HistoricalProjectsUseCase,
         close_database_connections: Callable[[], None],
         *,
         studio_voice_use_case: StudioVoiceUseCase | None = None,
@@ -105,6 +107,7 @@ class ValidatedMainWindow(MainWindow):
             validate_backup_use_case=validate_backup_use_case,
             restore_backup_use_case=restore_backup_use_case,
             export_structured_use_case=export_structured_use_case,
+            historical_projects_use_case=historical_projects_use_case,
             close_database_connections=close_database_connections,
             studio_voice_use_case=studio_voice_use_case,
             studio_capture_use_case=studio_capture_use_case,

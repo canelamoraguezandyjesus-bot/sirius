@@ -132,6 +132,7 @@ def _build_window(
         restore_backup_use_case=dependencies.restore_backup_use_case,
         export_structured_use_case=export_structured_use_case
         or dependencies.export_structured_use_case,
+        historical_projects_use_case=dependencies.historical_projects_use_case,
         close_database_connections=dependencies.close_database_connections,
         show_warning=show_warning or (lambda title, text: None),
         show_information=show_information or (lambda title, text: None),
