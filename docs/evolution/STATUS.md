@@ -83,18 +83,34 @@ La **definición de producto Sirius 0.2 — Memoria útil**, que era lo único q
 
 La **Definición de Producto Sirius 0.2 — Memoria útil** que este apartado pedía crear ya
 existe y está aprobada: `docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md`
-v0.1, fusionada en la PR #410 por el propietario el 28-08-2026. Antes de implementar por
-encargos cualquiera de sus cinco bloques
-(`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:52-249`), la regla de
-activación vigente (`docs/evolution/RECTOR.md:282-290`) exige además pruebas de aceptación
-reproducibles y una arquitectura técnica aprobada; hoy solo existe el paquete de spikes
-`docs/implementation/SIRIUS_0.2_ADR001_PAQUETE_OPERATIVO_SPIKES_v1.0.md`, que autoriza
-únicamente experimentación aislada y no autoriza implementación productiva
-(`docs/implementation/SIRIUS_0.2_ADR001_PAQUETE_OPERATIVO_SPIKES_v1.0.md:4-6`). El próximo
-paso es, por tanto, completar y someter a aprobación esas dos puertas —no escribir código
-productivo de los cinco bloques todavía—, sobre cuatro decisiones abiertas del propietario:
-fusionar o no la evidencia experimental de la PR #117, la dependencia de Ollama del filtro
-de relevancia de búsqueda mejorada, el cierre de la última omisión crítica de recuperación
+v0.1, fusionada en la PR #410 por el propietario el 28-08-2026. La regla de activación
+vigente (`docs/evolution/RECTOR.md:282-290`) exige, antes de implementar por encargos
+cualquiera de sus cinco bloques
+(`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:52-249`), que **existan**
+pruebas de aceptación reproducibles y que se apruebe la arquitectura técnica
+correspondiente (`docs/evolution/RECTOR.md:288`) — que existan, no que se hayan ejecutado
+antes de implementar. Ambas puertas ya están cumplidas. La **Arquitectura Técnica 0.2**
+(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md`) fija en su propia
+cabecera que su aprobación es la fusión de la PR que la introduce
+(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:9-15`), y esa fusión ya
+ocurrió: PR #418, por el propietario, el 29-08-2026 (`80611d5`). El **Plan de Pruebas de
+Aceptación 0.2** (`docs/evolution/SIRIUS_PLAN_PRUEBAS_0.2_v0.1_PROPUESTO.md`), que
+operacionaliza esas pruebas de aceptación reproducibles, fija la misma regla de aprobación
+(`docs/evolution/SIRIUS_PLAN_PRUEBAS_0.2_v0.1_PROPUESTO.md:9-11`) y también ya se fusionó:
+PR #420, por el propietario, ese mismo día (`c2a44f8`). Ambos documentos conservan
+literalmente la cabecera «Estado: PROPUESTO» — no se reescribe tras la fusión, igual que
+ADR-082 (`docs/decisions/ADR-082-el-motor-corre-dentro-de-github-actions-y-su-memoria-vive-en-el-repositorio.md:3`) —,
+pero la condición de aprobación que cada uno fija en su propio encabezado es la fusión ya
+ocurrida, no la palabra de la cabecera. El paquete de spikes
+`docs/implementation/SIRIUS_0.2_ADR001_PAQUETE_OPERATIVO_SPIKES_v1.0.md`, que solo autoriza
+experimentación aislada
+(`docs/implementation/SIRIUS_0.2_ADR001_PAQUETE_OPERATIVO_SPIKES_v1.0.md:4-6`), queda así
+superado por estas dos aprobaciones a efectos de la regla de activación. El próximo paso es,
+por tanto, ordenar al Work Engine la implementación de los cinco bloques ya autorizada por
+el propietario en la incidencia #412 (ver «No autorizado todavía» arriba), aplicando las
+cuatro decisiones abiertas del propietario que quedaban pendientes: fusionar o no la
+evidencia experimental de la PR #117, la dependencia de Ollama del filtro de relevancia de
+búsqueda mejorada, el cierre de la última omisión crítica de recuperación
 (`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:303-305`) y el origen de
 los estados `CANDIDATA`/`RECHAZADA` de sugerencias confirmadas
 (`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:306-310`), todas
@@ -102,21 +118,18 @@ enumeradas en
 `docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:297-310`. Las cuatro
 quedaron **resueltas por el propietario el 29 de agosto de 2026** en su sesión interactiva
 — ver «Decisiones del propietario registradas el 29 de agosto de 2026» más abajo —; esa
-resolución fija el contenido de cada decisión y no sustituye ninguna de las dos puertas de
-activación citadas en este mismo párrafo, que siguen sin cumplirse: la Arquitectura Técnica
-0.2 sigue en estado PROPUESTO
-(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:5`) y las pruebas de
-aceptación reproducibles de
-`docs/evolution/SIRIUS_PLAN_PRUEBAS_0.2_v0.1_PROPUESTO.md` no se han ejecutado todavía
-contra `main`.
+resolución fija el contenido de cada decisión y, junto con la aprobación ya cumplida de las
+dos puertas de activación citadas en este mismo párrafo, deja sin premisas pendientes el
+comienzo de la implementación de los cinco bloques.
 
 ## Decisiones del propietario registradas el 29 de agosto de 2026
 
 Fuente autorizada: sesión interactiva (`sesion-cli`), Work ID `WI-20260829-123248`. Las
 seis decisiones que siguen son hechos declarados por el propietario, no autorizaciones de
-implementación nuevas: ninguna abre por sí sola la puerta de activación del Rector, que
-sigue exigiendo arquitectura técnica aprobada y pruebas de aceptación reproducibles (ver
-«Próximo paso» arriba). Cuando esta sección cita una cifra o un estado como evidencia de la
+implementación nuevas: ninguna de las seis abre por sí sola la puerta de activación del
+Rector, que exige arquitectura técnica aprobada y pruebas de aceptación reproducibles y que
+ya está cumplida, pero por la fusión de las PR #418 y #420, no por estas seis decisiones
+(ver «Próximo paso» arriba). Cuando esta sección cita una cifra o un estado como evidencia de la
 PR #117, se cita tal como la registra la Definición de Producto — «evidencia reportada, no
 verificada» contra la rama `evidence/adr001-spikes`, que este documento tampoco lee
 directamente (`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:41-47`).
@@ -218,9 +231,13 @@ del motor y «la memoria del producto Sirius (una base de datos con 12 tablas, e
 (`docs/implementation/DONDE_ESTAMOS_2026-08-21.md:512-516`). El propietario decide: **la
 memoria del producto y la memoria del motor permanecen separadas** — la del producto vive
 en el equipo del propietario, la del motor en su diario del repositorio, cuya ubicación
-técnica (rama propia, no `main`) describe ADR-083, estado PROPUESTO en el árbol a fecha de
-este registro
-(`docs/decisions/ADR-083-la-memoria-del-motor-vive-en-su-propia-rama-no-en-main.md:1-9`). Se
+técnica (rama propia, no `main`) describe ADR-083 — aprobada por la fusión de su PR #301 por
+el propietario el 24-08-2026 (`bb851b8`) y cerrada por ejecución ese mismo día en la PR #304
+(`a6f8e49`), que prueba por ejecución el camino de escritura a esa rama
+(`docs/decisions/ADR-083-la-memoria-del-motor-vive-en-su-propia-rama-no-en-main.md:97-134`).
+ADR-083 conserva literalmente la cabecera «Estado: PROPUESTO»
+(`docs/decisions/ADR-083-la-memoria-del-motor-vive-en-su-propia-rama-no-en-main.md:1-9`), pero
+`docs/operations/MOTOR_DE_SIRIUS.md:80-91` ya documenta esa rama como operación vigente. Se
 replanteará **solo si algún día se unifican motor y producto**; hasta entonces, la objeción
 que la auditoría de `DONDE_ESTAMOS_2026-08-21.md` dejó sin cerrar
 (`docs/implementation/DONDE_ESTAMOS_2026-08-21.md:524-527`) queda resuelta por esta decisión
