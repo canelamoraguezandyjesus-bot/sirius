@@ -97,7 +97,7 @@ decisión ATD. No cambia comportamiento de código: es diseño, no implementaci�
 Sirius 0.1 numeró sus verticales `B1`…`B16` (`docs/implementation/V8_EXECUTION.md`); el
 Sirius Work Engine usa su propio prefijo `C` para otra cosa (contradicciones de contrato,
 `docs/implementation/SIRIUS_WORK_ENGINE_ARQUITECTURA_MINIMA.md:731-827`) y también `C` para
-concentraciones de su plan de implementación
+bloques de su plan de implementación
 (`docs/implementation/SIRIUS_WORK_ENGINE_PLAN_IMPLEMENTACION.md:417-497`). Para no colisionar
 con ninguno de los dos, §10 numera los encargos de esta versión como `M1`…`M6`
 («Memoria útil»); es una convención propia de este documento, no continúa la serie `B` de
@@ -356,28 +356,40 @@ puerto nuevo, ninguna migración: los cuatro casos de uso de resolución
 `src/sirius/domain/precedence.py` cambia.
 
 El único cambio: `conflicts_list` (`src/sirius/presentation/knowledge_widget.py:631`) deja
-de ser un `QListWidget` puramente informativo. Cada `QListWidgetItem` que
-`_handle_detect_conflicts_clicked` construye (`src/sirius/presentation/knowledge_widget.py:660-669`)
-guarda además, como dato asociado (`Qt.ItemDataRole.UserRole`), la lista de
-`conflict.conflicting_memories`/`conflict.conflicting_decisions` que ya trae el propio
-`SubjectPrecedenceResult` (`src/sirius/domain/precedence.py:61-79`) — ese dato ya existe en
-memoria, solo falta adjuntarlo al ítem de la lista en vez de descartarlo tras construir el
-texto.
+de construir una única línea de texto por conflicto
+(`src/sirius/presentation/knowledge_widget.py:660-669`), porque esa única línea no permite
+seleccionar un miembro concreto: representa a la vez a todos los `Memory`/`Decision` en
+conflicto, y ninguno de los manejadores de resolución acepta una colección. Por cada
+`SubjectPrecedenceResult` en `CONFLICT`, `_handle_detect_conflicts_clicked` añade primero un
+`QListWidgetItem` de cabecera no seleccionable (sin el flag `Qt.ItemFlag.ItemIsSelectable`,
+texto «Asunto «{subject_key}» (proyecto {project_id})»`, igual al que hoy construyen `parts`)
+y a continuación un `QListWidgetItem` seleccionable por cada miembro individual de
+`conflict.conflicting_memories`/`conflict.conflicting_decisions` — nunca uno por el conflicto
+completo. Cada ítem hijo guarda, como dato asociado (`Qt.ItemDataRole.UserRole`), exactamente
+un objeto `Memory` o `Decision` (nunca la tupla completa que trae el propio
+`SubjectPrecedenceResult`, `src/sirius/domain/precedence.py:61-79`) — mismo patrón que ya usan
+`memories_list`/`decisions_list` (`src/sirius/presentation/knowledge_widget.py:684-688` y
+`src/sirius/presentation/knowledge_widget.py:690-698`).
 
-Seleccionar un elemento de `conflicts_list` habilita, sobre esa misma selección, exactamente
-los botones que ya existen para memorias (`correct_memory_button`, `archive_memory_button`,
+Un nuevo `_selected_conflict_entity`, mirroring literalmente `_selected_memory`/
+`_selected_decision` (`src/sirius/presentation/knowledge_widget.py:332-337` y
+`src/sirius/presentation/knowledge_widget.py:473-478`), lee
+`conflicts_list.currentItem()` y devuelve ese dato solo si es una instancia de `Memory` o de
+`Decision`; la cabecera nunca lo produce, porque al no llevar `ItemIsSelectable` no puede
+convertirse en `currentItem()`. Seleccionar uno de esos ítems hijos habilita, sobre la
+entidad concreta que devuelve `_selected_conflict_entity`, exactamente los botones que ya
+existen para memorias (`correct_memory_button`, `archive_memory_button`,
 `src/sirius/presentation/knowledge_widget.py:310-313`) o decisiones
 (`approve_decision_button`, `supersede_decision_button`, `archive_decision_button` —
-mismos nombres que sus manejadores) según si el elemento en conflicto es una `Memory` o una
-`Decision`; resolverlo (corregir/archivar una memoria, o aprobar/archivar/sustituir una
-decisión) reutiliza literalmente `_handle_correct_memory_clicked`,
-`_handle_archive_memory_clicked`, `_handle_approve_decision_clicked`,
-`_handle_supersede_decision_clicked` y `_handle_archive_decision_clicked` ya escritos —
-llamando a los mismos métodos internos sobre el elemento seleccionado desde
-`conflicts_list` en vez de exigir que el usuario lo vuelva a buscar en
-`memories_list`/`decisions_list`. Tras cualquier resolución, `self.refresh()`
-(`src/sirius/presentation/knowledge_widget.py:673-679`) ya vuelve a llamar a
-`GetKnowledgeOverviewUseCase` y a `_handle_detect_conflicts_clicked` puede volver a
+mismos nombres que sus manejadores) según si la entidad es una `Memory` o una `Decision`;
+resolverlo (corregir/archivar una memoria, o aprobar/archivar/sustituir una decisión)
+reutiliza literalmente `_handle_correct_memory_clicked`, `_handle_archive_memory_clicked`,
+`_handle_approve_decision_clicked`, `_handle_supersede_decision_clicked` y
+`_handle_archive_decision_clicked` ya escritos — llamando a los mismos métodos internos sobre
+la entidad única seleccionada desde `conflicts_list` en vez de exigir que el usuario la
+vuelva a buscar en `memories_list`/`decisions_list`. Tras cualquier resolución,
+`self.refresh()` (`src/sirius/presentation/knowledge_widget.py:673-679`) ya vuelve a llamar a
+`GetKnowledgeOverviewUseCase` y `_handle_detect_conflicts_clicked` puede volver a
 invocarse — una detección posterior ya no reporta el conflicto resuelto, porque
 `find_subject_conflicts` (`src/sirius/domain/precedence.py:166-192`) vuelve a evaluarlo
 sobre el estado ya actualizado, sin ningún cambio en esa función.
