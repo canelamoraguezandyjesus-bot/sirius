@@ -22,7 +22,8 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtGui import QFocusEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -249,6 +250,7 @@ class KnowledgeWidget(QGroupBox):
         self._is_busy = False
         self._is_externally_busy = False
         self._overview: KnowledgeOverview | None = None
+        self._last_touched_list: QListWidget | None = None
 
         layout = QVBoxLayout(self)
         layout.addWidget(self._build_memories_section())
@@ -304,6 +306,16 @@ class KnowledgeWidget(QGroupBox):
     def _build_memories_section(self) -> QWidget:
         self.memories_list = QListWidget()
         self.memories_list.setAccessibleName("Recuerdos")
+        self.memories_list.currentItemChanged.connect(self._handle_memories_list_selection_changed)
+        # currentItemChanged no se emite al pulsar una fila que ya es
+        # currentItem() (CODEX-001); itemClicked sí, así que un clic real
+        # sobre la misma fila también cede la prioridad a este panel.
+        self.memories_list.itemClicked.connect(self._handle_memories_list_selection_changed)
+        # Tab/Shift+Tab devuelven el foco a una fila que ya es currentItem()
+        # sin emitir currentItemChanged ni itemClicked (CODEX-002); un
+        # eventFilter (ver eventFilter()) cubre también ese regreso por
+        # teclado.
+        self.memories_list.installEventFilter(self)
 
         self.save_memory_button = QPushButton("Guardar recuerdo…")
         self.save_memory_button.clicked.connect(self._handle_save_memory_clicked)
@@ -335,6 +347,14 @@ class KnowledgeWidget(QGroupBox):
             return None
         memory = item.data(Qt.ItemDataRole.UserRole)
         return memory if isinstance(memory, Memory) else None
+
+    def _handle_memories_list_selection_changed(
+        self,
+        current: QListWidgetItem | None = None,
+        previous: QListWidgetItem | None = None,
+    ) -> None:
+        self._last_touched_list = self.memories_list
+        self._refresh_action_buttons_enabled()
 
     def _handle_save_memory_clicked(self) -> None:
         if self._is_busy or self._is_externally_busy:
@@ -374,10 +394,18 @@ class KnowledgeWidget(QGroupBox):
             return
         self.refresh()
 
+    def _memory_for_resolution(self) -> Memory | None:
+        """Prefer the ``conflicts_list`` entity (§4.2) only while it is the
+        list the user last touched: acting on a conflict never depends on a
+        stale ``memories_list`` selection, but selecting a memory in the
+        general panel afterward cedes priority back to it."""
+        entity = self._active_conflict_entity()
+        return entity if isinstance(entity, Memory) else self._selected_memory()
+
     def _handle_archive_memory_clicked(self) -> None:
         if self._is_busy or self._is_externally_busy:
             return
-        memory = self._selected_memory()
+        memory = self._memory_for_resolution()
         if memory is None:
             self._show_warning(_NO_SELECTION_TITLE, "Selecciona primero un recuerdo.")
             return
@@ -445,6 +473,13 @@ class KnowledgeWidget(QGroupBox):
     def _build_decisions_section(self) -> QWidget:
         self.decisions_list = QListWidget()
         self.decisions_list.setAccessibleName("Decisiones")
+        self.decisions_list.currentItemChanged.connect(
+            self._handle_decisions_list_selection_changed
+        )
+        # Ver comentario equivalente en _build_memories_section (CODEX-001).
+        self.decisions_list.itemClicked.connect(self._handle_decisions_list_selection_changed)
+        # Ver comentario equivalente en _build_memories_section (CODEX-002).
+        self.decisions_list.installEventFilter(self)
 
         self.propose_decision_button = QPushButton("Proponer decisión…")
         self.propose_decision_button.clicked.connect(self._handle_propose_decision_clicked)
@@ -476,6 +511,14 @@ class KnowledgeWidget(QGroupBox):
             return None
         decision = item.data(Qt.ItemDataRole.UserRole)
         return decision if isinstance(decision, Decision) else None
+
+    def _handle_decisions_list_selection_changed(
+        self,
+        current: QListWidgetItem | None = None,
+        previous: QListWidgetItem | None = None,
+    ) -> None:
+        self._last_touched_list = self.decisions_list
+        self._refresh_action_buttons_enabled()
 
     def _active_project_id(self) -> int | None:
         try:
@@ -530,10 +573,18 @@ class KnowledgeWidget(QGroupBox):
             return
         self.refresh()
 
+    def _decision_for_resolution(self) -> Decision | None:
+        """Prefer the ``conflicts_list`` entity (§4.2) only while it is the
+        list the user last touched: acting on a conflict never depends on a
+        stale ``decisions_list`` selection, but selecting a decision in the
+        general panel afterward cedes priority back to it."""
+        entity = self._active_conflict_entity()
+        return entity if isinstance(entity, Decision) else self._selected_decision()
+
     def _handle_supersede_decision_clicked(self) -> None:
         if self._is_busy or self._is_externally_busy:
             return
-        superseded = self._selected_decision()
+        superseded = self._decision_for_resolution()
         if superseded is None:
             self._show_warning(
                 _NO_SELECTION_TITLE, "Selecciona primero la decisión vigente a sustituir."
@@ -583,7 +634,7 @@ class KnowledgeWidget(QGroupBox):
     def _handle_archive_decision_clicked(self) -> None:
         if self._is_busy or self._is_externally_busy:
             return
-        decision = self._selected_decision()
+        decision = self._decision_for_resolution()
         if decision is None:
             self._show_warning(_NO_SELECTION_TITLE, "Selecciona primero una decisión.")
             return
@@ -630,6 +681,11 @@ class KnowledgeWidget(QGroupBox):
 
         self.conflicts_list = QListWidget()
         self.conflicts_list.setAccessibleName("Conflictos de precedencia")
+        self.conflicts_list.currentItemChanged.connect(self._handle_conflict_selection_changed)
+        # Ver comentario equivalente en _build_memories_section (CODEX-001).
+        self.conflicts_list.itemClicked.connect(self._handle_conflict_selection_changed)
+        # Ver comentario equivalente en _build_memories_section (CODEX-002).
+        self.conflicts_list.installEventFilter(self)
 
         self.conflicts_status_label = QLabel("")
         self.conflicts_status_label.setWordWrap(True)
@@ -641,6 +697,83 @@ class KnowledgeWidget(QGroupBox):
         layout.addWidget(self.conflicts_status_label)
         return group
 
+    def _selected_conflict_entity(self) -> Memory | Decision | None:
+        item = self.conflicts_list.currentItem()
+        if item is None:
+            return None
+        entity = item.data(Qt.ItemDataRole.UserRole)
+        return entity if isinstance(entity, Memory | Decision) else None
+
+    def _handle_conflict_selection_changed(
+        self,
+        current: QListWidgetItem | None = None,
+        previous: QListWidgetItem | None = None,
+    ) -> None:
+        # La cabecera de un conflicto no lleva ItemIsSelectable pero sí emite
+        # itemClicked al pulsarla (CLAUDE-REV-001/CODEX-001 ronda 4): un clic
+        # sobre ella no produce ninguna entidad y no debe ceder la prioridad
+        # de resolución a conflicts_list, o una fila previamente tocada en
+        # otra lista se pisaría sin que el usuario haya seleccionado nada
+        # nuevo aquí.
+        if current is None or not isinstance(
+            current.data(Qt.ItemDataRole.UserRole), Memory | Decision
+        ):
+            return
+        self._last_touched_list = self.conflicts_list
+        self._refresh_action_buttons_enabled()
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        # Tab/Shift+Tab pueden devolver el foco a una lista cuya fila ya era
+        # currentItem(): ni currentItemChanged ni itemClicked se emiten en
+        # ese caso, así que sin esto _last_touched_list se queda apuntando a
+        # la lista tocada antes por última vez (CODEX-002). Se excluye
+        # explícitamente el foco ganado por clic de ratón (CODEX-001, ronda
+        # 5): ese FocusIn llega antes que el itemClicked del mismo clic, así
+        # que reaccionar a él reactivaría conflicts_list con su
+        # currentItem() todavía desactualizado (el miembro tocado antes del
+        # clic) cuando el clic real cae sobre la cabecera no seleccionable;
+        # itemClicked ya cede la prioridad correctamente una vez procesado
+        # el clic, así que basta con dejarle ese caso a él.
+        if (
+            event.type() == QEvent.Type.FocusIn
+            and isinstance(event, QFocusEvent)
+            and event.reason() != Qt.FocusReason.MouseFocusReason
+        ):
+            if watched is self.memories_list:
+                self._handle_memories_list_selection_changed(self.memories_list.currentItem())
+            elif watched is self.decisions_list:
+                self._handle_decisions_list_selection_changed(self.decisions_list.currentItem())
+            elif watched is self.conflicts_list:
+                self._handle_conflict_selection_changed(self.conflicts_list.currentItem())
+        return super().eventFilter(watched, event)
+
+    def _active_conflict_entity(self) -> Memory | Decision | None:
+        """The conflict member the user is currently resolving: only while
+        ``conflicts_list`` is the list most recently touched (§4.2). Selecting
+        something in ``memories_list``/``decisions_list`` afterward cedes
+        priority back to that general panel, exactly like
+        ``_handle_correct_memory_clicked``/``_handle_approve_decision_clicked``
+        already do outside this flow."""
+        if self._last_touched_list is not self.conflicts_list:
+            return None
+        return self._selected_conflict_entity()
+
+    def _refresh_action_buttons_enabled(self) -> None:
+        if self._is_busy or self._is_externally_busy:
+            return
+        # Solo las acciones que de verdad resuelven el conflicto quedan
+        # habilitadas desde aquí (§4.2): corregir conserva subject_key/
+        # project_id (el conflicto reaparecería) y toda decisión en conflicto
+        # ya está APPROVED (aprobarla de nuevo siempre falla); simétricamente,
+        # archivar un recuerdo no resuelve un conflicto de decisiones ni
+        # sustituir/archivar una decisión resuelve uno de recuerdos.
+        entity = self._active_conflict_entity()
+        self.correct_memory_button.setEnabled(entity is None)
+        self.approve_decision_button.setEnabled(entity is None)
+        self.archive_memory_button.setEnabled(not isinstance(entity, Decision))
+        self.supersede_decision_button.setEnabled(not isinstance(entity, Memory))
+        self.archive_decision_button.setEnabled(not isinstance(entity, Memory))
+
     def _handle_detect_conflicts_clicked(self) -> None:
         try:
             conflicts = self._detect_precedence_conflicts_use_case.detect()
@@ -649,24 +782,40 @@ class KnowledgeWidget(QGroupBox):
             self.conflicts_status_label.setText(_GENERIC_ERROR_TEXT)
             return
 
-        self.conflicts_list.clear()
+        self.conflicts_list.blockSignals(True)
+        try:
+            self.conflicts_list.clear()
+            if conflicts:
+                self.conflicts_status_label.setText(
+                    "Sirius no elige entre estos elementos: requieren aclaración explícita."
+                )
+                for conflict in conflicts:
+                    assert conflict.outcome is PrecedenceOutcome.CONFLICT
+                    header = QListWidgetItem(
+                        f"Asunto «{conflict.subject_key}» (proyecto {conflict.project_id})"
+                    )
+                    header.setFlags(header.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+                    self.conflicts_list.addItem(header)
+                    for memory in conflict.conflicting_memories:
+                        item = QListWidgetItem(_memory_label(memory))
+                        item.setData(Qt.ItemDataRole.UserRole, memory)
+                        self.conflicts_list.addItem(item)
+                    for decision in conflict.conflicting_decisions:
+                        item = QListWidgetItem(_decision_label(decision))
+                        item.setData(Qt.ItemDataRole.UserRole, decision)
+                        self.conflicts_list.addItem(item)
+        finally:
+            self.conflicts_list.blockSignals(False)
+
         if not conflicts:
             self.conflicts_status_label.setText("No hay conflictos de precedencia pendientes.")
-            return
-
-        self.conflicts_status_label.setText(
-            "Sirius no elige entre estos elementos: requieren aclaración explícita."
-        )
-        for conflict in conflicts:
-            assert conflict.outcome is PrecedenceOutcome.CONFLICT
-            memory_ids = ", ".join(f"#{memory.id}" for memory in conflict.conflicting_memories)
-            decision_ids = ", ".join(f"#{d.id}" for d in conflict.conflicting_decisions)
-            parts = [f"Asunto «{conflict.subject_key}» (proyecto {conflict.project_id})"]
-            if memory_ids:
-                parts.append(f"recuerdos en conflicto: {memory_ids}")
-            if decision_ids:
-                parts.append(f"decisiones en conflicto: {decision_ids}")
-            self.conflicts_list.addItem(QListWidgetItem(" — ".join(parts)))
+        # Detectar de nuevo nunca deja seleccionado un ítem del conflicto
+        # (blockSignals evita que clear()/addItem() disparen
+        # currentItemChanged), así que la prioridad de conflicts_list no
+        # sobrevive artificialmente a una redetección.
+        if self._last_touched_list is self.conflicts_list:
+            self._last_touched_list = None
+        self._refresh_action_buttons_enabled()
 
     # --- Actualización y coordinación de estado ocupado ----------------------
 
@@ -681,21 +830,33 @@ class KnowledgeWidget(QGroupBox):
 
         self._overview = overview
 
-        self.memories_list.clear()
-        for memory in (*overview.current_memories, *overview.archived_memories):
-            item = QListWidgetItem(_memory_label(memory))
-            item.setData(Qt.ItemDataRole.UserRole, memory)
-            self.memories_list.addItem(item)
+        # Signals blocked while repopulating: clear()/addItem() must never be
+        # mistaken for the user touching this list, or a refresh triggered by
+        # an unrelated action (e.g. resolving a conflict) would silently
+        # reassign _last_touched_list and its resolution priority (§4.2).
+        self.memories_list.blockSignals(True)
+        try:
+            self.memories_list.clear()
+            for memory in (*overview.current_memories, *overview.archived_memories):
+                item = QListWidgetItem(_memory_label(memory))
+                item.setData(Qt.ItemDataRole.UserRole, memory)
+                self.memories_list.addItem(item)
+        finally:
+            self.memories_list.blockSignals(False)
 
-        self.decisions_list.clear()
-        for decision in (
-            *overview.proposed_decisions,
-            *overview.current_decisions,
-            *overview.archived_decisions,
-        ):
-            item = QListWidgetItem(_decision_label(decision))
-            item.setData(Qt.ItemDataRole.UserRole, decision)
-            self.decisions_list.addItem(item)
+        self.decisions_list.blockSignals(True)
+        try:
+            self.decisions_list.clear()
+            for decision in (
+                *overview.proposed_decisions,
+                *overview.current_decisions,
+                *overview.archived_decisions,
+            ):
+                item = QListWidgetItem(_decision_label(decision))
+                item.setData(Qt.ItemDataRole.UserRole, decision)
+                self.decisions_list.addItem(item)
+        finally:
+            self.decisions_list.blockSignals(False)
 
     def set_external_busy(self, is_busy: bool) -> None:
         """Coordinate with a ``MainWindow``-level operation this widget does
@@ -708,18 +869,29 @@ class KnowledgeWidget(QGroupBox):
     def _set_controls_enabled(self, enabled: bool) -> None:
         for button in (
             self.save_memory_button,
-            self.correct_memory_button,
-            self.archive_memory_button,
             self.delete_memory_button,
             self.memory_origin_button,
             self.propose_decision_button,
-            self.approve_decision_button,
-            self.supersede_decision_button,
-            self.archive_decision_button,
             self.decision_origin_button,
             self.detect_conflicts_button,
         ):
             button.setEnabled(enabled)
+        # Los cinco botones de resolución no se fijan aquí a ciegas: mientras
+        # ocupado quedan forzados a False (ninguna selección posterior en
+        # conflicts_list debe reactivarlos, CODEX-003); al dejar de estarlo,
+        # _refresh_action_buttons_enabled vuelve a aplicar la restricción por
+        # tipo de miembro en conflicto (§4.2) en vez de reactivarlos todos.
+        if enabled:
+            self._refresh_action_buttons_enabled()
+        else:
+            for button in (
+                self.correct_memory_button,
+                self.approve_decision_button,
+                self.archive_memory_button,
+                self.supersede_decision_button,
+                self.archive_decision_button,
+            ):
+                button.setEnabled(False)
 
 
 __all__ = ["KnowledgeWidget"]
