@@ -764,7 +764,15 @@ nunca una llamada real a Ollama dentro de la suite) y mide, agregado sobre los 4
 
 Suelos exigidos por D1/D2 (`docs/evolution/STATUS.md:137-172`), afirmados como aserciones
 duras que hacen fallar la prueba si se incumplen: aciertos exactos no por debajo de 29/47;
-cobertura no por debajo de 63/81. Omisiones críticas: el objetivo de PA-0.2-REC-01 es 0
+cobertura no por debajo de 63/81 — este segundo suelo es **provisional**, no una cifra
+definitiva: D2 lo registra expresamente como el piso más bajo de las dos cifras que cita la
+Definición de Producto, «hasta que la primera medición real de PA-0.2-REC-01 sobre `main`
+registre la cifra medida, momento en el que esa cifra medida sustituye a este provisional sin
+necesidad de una nueva decisión del propietario» (`docs/evolution/STATUS.md:162-172`). M10
+(§8) es quien ejecuta esa primera medición real; a partir de ahí la aserción dura de esta
+prueba pasa a ser la cifra que M10 mida, no 63/81, y las ejecuciones posteriores a M10 no
+pueden seguir pasando con 63/81 si la medición real fue distinta. Omisiones críticas: el
+objetivo de PA-0.2-REC-01 es 0
 (`docs/evolution/SIRIUS_PLAN_PRUEBAS_0.2_v0.1_PROPUESTO.md:145-157`); si M11 (§8/§6.5) no lo
 alcanza, esta misma prueba se actualiza para afirmar explícitamente el conteo real medido —
 nunca relajada en silencio— y PA-0.2-REC-01 permanece no superada, tal como exige D3.
@@ -781,6 +789,30 @@ la prueba lo exige; si no se cierra dentro de los límites de latencia y sin un 
 medida no acotado (Producto §3.3), queda documentada como abierta y aplazada por decisión
 del propietario, sin bloquear M7–M10 ni el resto de Sirius 0.2, y PA-0.2-REC-01 permanece no
 superada.
+
+**Cerrar (o no) esa única omisión léxica no agota lo que Producto exige para «Mejor
+recuperación».** La Definición de Producto §3.3-§3.4
+(`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:113-125`) y las
+precondiciones que PA-0.2-REC-01 fija explícitamente
+(`docs/evolution/SIRIUS_PLAN_PRUEBAS_0.2_v0.1_PROPUESTO.md:124-131,160-164`) exigen además dos
+condiciones que ningún encargo M1–M11 asigna ni resuelve:
+
+- Las dos puertas que ADR-002 (de la rama de evidencia, no `docs/decisions/ADR-002` de
+  `main`) dejó **NO CONFORME**: recall crítico al 100 % en un caso, y conformidad de etapa
+  14/46 (Producto §3.2(c)).
+- La decisión sobre la «siembra al ensamblar contexto» (Producto §3.2(a)) — validarla con un
+  banco ampliado que la ejercite, o retirarla del código —, que PA-0.2-REC-01 fija como su
+  precondición 2 explícita: «sin esta precondición cumplida, esta PA no puede declararse
+  superada» (`docs/evolution/SIRIUS_PLAN_PRUEBAS_0.2_v0.1_PROPUESTO.md:127-131`).
+
+Ninguna de las dos entra en el paquete D1 que originó M7–M11 (§6, primer párrafo), y este
+documento no las asigna a un encargo nuevo por la misma razón que no reabre D1: ampliar el
+paquete es una decisión del propietario, no de este documento. Quedan, en su lugar,
+explícitamente pendientes: **incluso si M11 cierra la omisión léxica, PA-0.2-REC-01 sigue sin
+poder declararse superada** mientras estas dos condiciones no tengan encargo y criterio
+propios, o una decisión explícita del propietario que las deje aplazadas — exactamente igual
+que D3 ya deja aplazada la omisión léxica si M11 no la cierra. El cierre de M11, si ocurre, no
+equivale al cierre de «Mejor recuperación» en su conjunto; ver también §9.
 
 ## 7. Impactos transversales
 
@@ -994,14 +1026,23 @@ Cablear M8 y M9 en `ContextBuilder._rank_related_knowledge`; medir contra RNF-00
 metodología de ADR-008 en los dos escenarios que fija §6.3 (Ollama disponible dentro de su
 presupuesto, Ollama ausente con fallo abierto forzado); ajustar el `timeout` del adaptador
 hasta que ambos escenarios cumplan el presupuesto; re-ejecutar la prueba de M7 con el
-pipeline ya integrado y confirmar los suelos de D1/D2 (aciertos exactos ≥ 29/47, cobertura ≥
-63/81, `docs/evolution/STATUS.md:137-172`).
+pipeline ya integrado y confirmar el suelo de D1 (aciertos exactos ≥ 29/47). Esta
+re-ejecución **es**, además, la primera medición real de cobertura de PA-0.2-REC-01 sobre
+`main` que D2 exige para sustituir su suelo provisional (§6.4,
+`docs/evolution/STATUS.md:162-172`): M10 registra el valor de cobertura que mida —no elige
+64/81 ni ninguna otra cifra por adelantado— y actualiza la aserción dura de la prueba de §6.4
+a ese valor medido, sustituyendo 63/81. Solo si la medición coincide con 63/81 el suelo queda
+literalmente igual; en cualquier otro caso, 63/81 deja de ser el suelo desde este encargo en
+adelante.
 
 **Criterio de aceptación:** tabla de medición con el mismo formato que la de ADR-008
 (`docs/decisions/ADR-008-cargar-en-lote-las-revisiones-vigentes-al-listar.md:111-117`), con
 «construir contexto» P95 ≤ 300 ms en ambos escenarios, publicada como evidencia del encargo;
-la prueba de M7, re-ejecutada, confirma los suelos de aciertos exactos y cobertura sin
-exigir todavía 0 omisiones críticas (eso es M11).
+la prueba de M7, re-ejecutada, confirma el suelo de aciertos exactos (≥ 29/47) sin exigir
+todavía 0 omisiones críticas (eso es M11); el suelo de cobertura que queda codificado en la
+prueba tras este encargo es la cifra medida en esta primera ejecución real sobre `main`, no
+63/81 salvo que ambas coincidan — D2 fija 63/81 solo como piso provisional hasta esta
+medición, y este encargo es esa medición.
 
 ### M11 — Mejor recuperación: intento de cierre de la última omisión crítica (D3)
 
@@ -1048,6 +1089,15 @@ donde estaba, sin recaracterizarla:
 
 - El origen de los estados `CANDIDATA`/`RECHAZADA` que una orden anterior daba por
   existentes (§3.1 de este documento).
+- **Las dos puertas que ADR-002 (de la rama de evidencia, no `docs/decisions/ADR-002` de
+  `main`) dejó NO CONFORME** — recall crítico al 100 % en un caso, y conformidad de etapa
+  14/46 (Producto §3.2(c)) — **y la decisión sobre la «siembra al ensamblar contexto»**
+  (Producto §3.2(a)), que PA-0.2-REC-01 fija como su precondición 2 explícita
+  (`docs/evolution/SIRIUS_PLAN_PRUEBAS_0.2_v0.1_PROPUESTO.md:124-131`). Ningún encargo M1–M11
+  las asigna (§6.5): quedan pendientes de un encargo futuro o de una decisión del propietario
+  que las aplace, igual que D3 aplaza la omisión léxica si M11 no la cierra. PA-0.2-REC-01 no
+  puede declararse superada mientras sigan pendientes, con independencia de si M11 cierra o
+  no la omisión léxica.
 
 Ya resuelta, no pendiente: el disparador de sugerencias —si Sirius debía proponer solo por
 una acción explícita del usuario, o también automáticamente tras la conversación— era, en la
