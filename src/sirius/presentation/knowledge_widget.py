@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -310,6 +310,11 @@ class KnowledgeWidget(QGroupBox):
         # currentItem() (CODEX-001); itemClicked sí, así que un clic real
         # sobre la misma fila también cede la prioridad a este panel.
         self.memories_list.itemClicked.connect(self._handle_memories_list_selection_changed)
+        # Tab/Shift+Tab devuelven el foco a una fila que ya es currentItem()
+        # sin emitir currentItemChanged ni itemClicked (CODEX-002); un
+        # eventFilter (ver eventFilter()) cubre también ese regreso por
+        # teclado.
+        self.memories_list.installEventFilter(self)
 
         self.save_memory_button = QPushButton("Guardar recuerdo…")
         self.save_memory_button.clicked.connect(self._handle_save_memory_clicked)
@@ -472,6 +477,8 @@ class KnowledgeWidget(QGroupBox):
         )
         # Ver comentario equivalente en _build_memories_section (CODEX-001).
         self.decisions_list.itemClicked.connect(self._handle_decisions_list_selection_changed)
+        # Ver comentario equivalente en _build_memories_section (CODEX-002).
+        self.decisions_list.installEventFilter(self)
 
         self.propose_decision_button = QPushButton("Proponer decisión…")
         self.propose_decision_button.clicked.connect(self._handle_propose_decision_clicked)
@@ -676,6 +683,8 @@ class KnowledgeWidget(QGroupBox):
         self.conflicts_list.currentItemChanged.connect(self._handle_conflict_selection_changed)
         # Ver comentario equivalente en _build_memories_section (CODEX-001).
         self.conflicts_list.itemClicked.connect(self._handle_conflict_selection_changed)
+        # Ver comentario equivalente en _build_memories_section (CODEX-002).
+        self.conflicts_list.installEventFilter(self)
 
         self.conflicts_status_label = QLabel("")
         self.conflicts_status_label.setWordWrap(True)
@@ -699,8 +708,32 @@ class KnowledgeWidget(QGroupBox):
         current: QListWidgetItem | None = None,
         previous: QListWidgetItem | None = None,
     ) -> None:
+        # La cabecera de un conflicto no lleva ItemIsSelectable pero sí emite
+        # itemClicked al pulsarla (CLAUDE-REV-001/CODEX-001 ronda 4): un clic
+        # sobre ella no produce ninguna entidad y no debe ceder la prioridad
+        # de resolución a conflicts_list, o una fila previamente tocada en
+        # otra lista se pisaría sin que el usuario haya seleccionado nada
+        # nuevo aquí.
+        if current is None or not isinstance(
+            current.data(Qt.ItemDataRole.UserRole), Memory | Decision
+        ):
+            return
         self._last_touched_list = self.conflicts_list
         self._refresh_action_buttons_enabled()
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        # Tab/Shift+Tab pueden devolver el foco a una lista cuya fila ya era
+        # currentItem(): ni currentItemChanged ni itemClicked se emiten en
+        # ese caso, así que sin esto _last_touched_list se queda apuntando a
+        # la lista tocada antes por última vez (CODEX-002).
+        if event.type() == QEvent.Type.FocusIn:
+            if watched is self.memories_list:
+                self._handle_memories_list_selection_changed(self.memories_list.currentItem())
+            elif watched is self.decisions_list:
+                self._handle_decisions_list_selection_changed(self.decisions_list.currentItem())
+            elif watched is self.conflicts_list:
+                self._handle_conflict_selection_changed(self.conflicts_list.currentItem())
+        return super().eventFilter(watched, event)
 
     def _active_conflict_entity(self) -> Memory | Decision | None:
         """The conflict member the user is currently resolving: only while
@@ -723,8 +756,8 @@ class KnowledgeWidget(QGroupBox):
         # archivar un recuerdo no resuelve un conflicto de decisiones ni
         # sustituir/archivar una decisión resuelve uno de recuerdos.
         entity = self._active_conflict_entity()
-        self.correct_memory_button.setEnabled(not isinstance(entity, Memory))
-        self.approve_decision_button.setEnabled(not isinstance(entity, Decision))
+        self.correct_memory_button.setEnabled(entity is None)
+        self.approve_decision_button.setEnabled(entity is None)
         self.archive_memory_button.setEnabled(not isinstance(entity, Decision))
         self.supersede_decision_button.setEnabled(not isinstance(entity, Memory))
         self.archive_decision_button.setEnabled(not isinstance(entity, Memory))

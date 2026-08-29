@@ -615,6 +615,10 @@ def test_conflicts_list_selection_disables_actions_that_do_not_resolve_the_confl
 
     assert widget.correct_memory_button.isEnabled() is False
     assert widget.archive_memory_button.isEnabled() is True
+    # CLAUDE-REV-001: approve_decision_button no resuelve un conflicto de
+    # recuerdos tampoco, así que debe quedar deshabilitado igual que
+    # correct_memory_button, no solo cuando el miembro activo es una Decision.
+    assert widget.approve_decision_button.isEnabled() is False
 
     def _is_first_decision_row(row: int) -> bool:
         entity = widget.conflicts_list.item(row).data(Qt.ItemDataRole.UserRole)
@@ -628,6 +632,10 @@ def test_conflicts_list_selection_disables_actions_that_do_not_resolve_the_confl
     assert widget.approve_decision_button.isEnabled() is False
     assert widget.supersede_decision_button.isEnabled() is True
     assert widget.archive_decision_button.isEnabled() is True
+    # CLAUDE-REV-001: correct_memory_button no resuelve un conflicto de
+    # decisiones tampoco, así que debe quedar deshabilitado igual que
+    # approve_decision_button, no solo cuando el miembro activo es una Memory.
+    assert widget.correct_memory_button.isEnabled() is False
 
 
 @pytest.mark.gui
@@ -912,6 +920,185 @@ def test_clicking_the_already_current_decision_row_cedes_priority_back_to_it(
         Qt.MouseButton.LeftButton,
         pos=widget.decisions_list.visualItemRect(already_selected_item).center(),
     )
+    assert widget._last_touched_list is widget.decisions_list
+
+    widget.archive_decision_button.click()
+
+    texts = [widget.decisions_list.item(row).text() for row in range(widget.decisions_list.count())]
+    assert any(f"#{already_selected.id} " in text and "(archived)" in text for text in texts)
+    assert not any(f"#{conflicting_first.id} " in text and "(archived)" in text for text in texts)
+    assert any(f"#{conflicting_first.id} " in text and "(approved)" in text for text in texts)
+
+
+@pytest.mark.gui
+def test_clicking_the_conflict_header_does_not_touch_conflicts_list(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CODEX-001 (ronda 4): la cabecera de un conflicto («Asunto «...»
+    (proyecto ...)») no lleva ``ItemIsSelectable`` pero sí emite
+    ``itemClicked`` al pulsarla. Secuencia: se selecciona un miembro A en
+    ``conflicts_list`` (que toma la prioridad), después una memoria B
+    distinta en ``memories_list`` (que cede la prioridad de vuelta al panel
+    general), y por último se pulsa la cabecera del conflicto. Ese clic sobre
+    la cabecera no produce ninguna entidad y no debe devolver la prioridad a
+    ``conflicts_list``: archivar debe seguir actuando sobre B, no sobre A."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    project_id = dependencies.project_continuity_use_case.get_summary().project_id
+    dependencies.save_manual_memory_use_case.save(
+        "usar SQLite local", subject_key="Motor de persistencia", project_id=project_id
+    )
+    dependencies.save_manual_memory_use_case.save(
+        "usar un servidor remoto", subject_key="Motor de persistencia", project_id=project_id
+    )
+    unrelated = dependencies.save_manual_memory_use_case.save(
+        "el equipo se reúne los martes", subject_key="Calendario", project_id=project_id
+    )
+    widget = _build_widget(dependencies, _Recorder(), confirm_action=True)
+    qtbot.addWidget(widget)
+    widget.show()
+    qtbot.waitUntil(lambda: widget.conflicts_list.viewport().width() > 0)
+
+    widget.detect_conflicts_button.click()
+    memory_row = next(
+        row
+        for row in range(widget.conflicts_list.count())
+        if isinstance(widget.conflicts_list.item(row).data(Qt.ItemDataRole.UserRole), Memory)
+    )
+    widget.conflicts_list.setCurrentRow(memory_row)
+    assert widget._last_touched_list is widget.conflicts_list
+
+    unrelated_row = next(
+        row
+        for row in range(widget.memories_list.count())
+        if f"#{unrelated.id} " in widget.memories_list.item(row).text()
+    )
+    widget.memories_list.setCurrentRow(unrelated_row)
+    assert widget._last_touched_list is widget.memories_list
+
+    header_item = widget.conflicts_list.item(0)
+    assert not (header_item.flags() & Qt.ItemFlag.ItemIsSelectable)
+    QTest.mouseClick(
+        widget.conflicts_list.viewport(),
+        Qt.MouseButton.LeftButton,
+        pos=widget.conflicts_list.visualItemRect(header_item).center(),
+    )
+    assert widget._last_touched_list is widget.memories_list
+
+    widget.archive_memory_button.click()
+
+    texts = [widget.memories_list.item(row).text() for row in range(widget.memories_list.count())]
+    assert any(f"#{unrelated.id} " in text and "(archived)" in text for text in texts)
+    assert not any("Motor de persistencia" in text and "(archived)" in text for text in texts)
+
+
+@pytest.mark.gui
+def test_returning_keyboard_focus_to_the_current_row_touches_the_memories_list(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CODEX-002 (ronda 4): Tab/Shift+Tab pueden devolver el foco a una fila
+    que ya es ``currentItem()`` sin emitir ``currentItemChanged`` ni
+    ``itemClicked``. Secuencia: se selecciona una memoria del panel general,
+    después un miembro de ``conflicts_list`` (que toma la prioridad), y por
+    último el foco de teclado vuelve a ``memories_list`` sin cambiar su
+    selección. Ese regreso de foco debe ceder la prioridad de vuelta al panel
+    general igual que un clic o una nueva selección."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    project_id = dependencies.project_continuity_use_case.get_summary().project_id
+    dependencies.save_manual_memory_use_case.save(
+        "usar SQLite local", subject_key="Motor de persistencia", project_id=project_id
+    )
+    dependencies.save_manual_memory_use_case.save(
+        "usar un servidor remoto", subject_key="Motor de persistencia", project_id=project_id
+    )
+    already_selected = dependencies.save_manual_memory_use_case.save(
+        "el equipo se reúne los martes", subject_key="Calendario", project_id=project_id
+    )
+    widget = _build_widget(dependencies, _Recorder(), confirm_action=True)
+    qtbot.addWidget(widget)
+    widget.show()
+    qtbot.waitUntil(lambda: widget.memories_list.viewport().width() > 0)
+
+    already_selected_row = next(
+        row
+        for row in range(widget.memories_list.count())
+        if f"#{already_selected.id} " in widget.memories_list.item(row).text()
+    )
+    widget.memories_list.setCurrentRow(already_selected_row)
+    assert widget._last_touched_list is widget.memories_list
+
+    widget.detect_conflicts_button.click()
+    memory_row = next(
+        row
+        for row in range(widget.conflicts_list.count())
+        if isinstance(widget.conflicts_list.item(row).data(Qt.ItemDataRole.UserRole), Memory)
+    )
+    widget.conflicts_list.setCurrentRow(memory_row)
+    assert widget._last_touched_list is widget.conflicts_list
+
+    # memories_list.currentItem() sigue siendo already_selected_row: no se
+    # simula un clic ni una selección nueva, solo el foco de teclado
+    # regresando a la lista (setFocus es lo que dispara QEvent.FocusIn).
+    already_selected_item = widget.memories_list.item(already_selected_row)
+    assert widget.memories_list.currentItem() is already_selected_item
+    widget.memories_list.setFocus(Qt.FocusReason.TabFocusReason)
+    qtbot.waitUntil(lambda: widget.memories_list.hasFocus())
+    assert widget._last_touched_list is widget.memories_list
+
+    widget.archive_memory_button.click()
+
+    texts = [widget.memories_list.item(row).text() for row in range(widget.memories_list.count())]
+    assert any(f"#{already_selected.id} " in text and "(archived)" in text for text in texts)
+    assert not any("Motor de persistencia" in text and "(archived)" in text for text in texts)
+
+
+@pytest.mark.gui
+def test_returning_keyboard_focus_to_the_current_row_touches_the_decisions_list(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CODEX-002 (ronda 4), caso simétrico de decisiones: el mismo regreso de
+    foco por teclado a una fila ya seleccionada en ``decisions_list`` debe
+    ceder la prioridad de vuelta al panel general."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    project_id = dependencies.project_continuity_use_case.get_summary().project_id
+    conflicting_first = dependencies.propose_decision_use_case.propose(
+        "Motor de persistencia", project_id, "Usar SQLite"
+    )
+    dependencies.approve_decision_use_case.approve(conflicting_first.id, confirmed=True)
+    conflicting_second = dependencies.propose_decision_use_case.propose(
+        "Motor de persistencia", project_id, "Usar PostgreSQL"
+    )
+    dependencies.approve_decision_use_case.approve(conflicting_second.id, confirmed=True)
+    already_selected = dependencies.propose_decision_use_case.propose(
+        "Día de la reunión", project_id, "La reunión es los martes"
+    )
+    dependencies.approve_decision_use_case.approve(already_selected.id, confirmed=True)
+
+    widget = _build_widget(dependencies, _Recorder(), confirm_action=True)
+    qtbot.addWidget(widget)
+    widget.show()
+    qtbot.waitUntil(lambda: widget.decisions_list.viewport().width() > 0)
+
+    already_selected_row = next(
+        row
+        for row in range(widget.decisions_list.count())
+        if f"#{already_selected.id} " in widget.decisions_list.item(row).text()
+    )
+    widget.decisions_list.setCurrentRow(already_selected_row)
+    assert widget._last_touched_list is widget.decisions_list
+
+    widget.detect_conflicts_button.click()
+    conflict_row = next(
+        row
+        for row in range(widget.conflicts_list.count())
+        if f"#{conflicting_first.id} " in widget.conflicts_list.item(row).text()
+    )
+    widget.conflicts_list.setCurrentRow(conflict_row)
+    assert widget._last_touched_list is widget.conflicts_list
+
+    already_selected_item = widget.decisions_list.item(already_selected_row)
+    assert widget.decisions_list.currentItem() is already_selected_item
+    widget.decisions_list.setFocus(Qt.FocusReason.TabFocusReason)
+    qtbot.waitUntil(lambda: widget.decisions_list.hasFocus())
     assert widget._last_touched_list is widget.decisions_list
 
     widget.archive_decision_button.click()
