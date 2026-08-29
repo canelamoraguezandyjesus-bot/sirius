@@ -326,7 +326,7 @@ exigida («recupera información correcta a través de varias sesiones sin aumen
 ### PA-0.2-PUERTA-01 · Paquete de contexto fiable para una tarea externa real
 
 - **Precondiciones:**
-  1. Las cinco PA de este plan que cubren las secciones 2 a 6 de la Definición —
+  1. Las seis PA de este plan que cubren las secciones 2 a 6 de la Definición —
      PA-0.2-BUS-01, PA-0.2-REC-01, PA-0.2-SUG-01, PA-0.2-SUG-02, PA-0.2-CONF-01 y
      PA-0.2-HIST-01 — están superadas en `main`, sin excepción. Un subconjunto no basta:
      «el alcance de Sirius 0.2 es indivisible»
@@ -353,7 +353,7 @@ exigida («recupera información correcta a través de varias sesiones sin aumen
   4. cada elemento del paquete tiene origen localizable, ninguno sin origen.
 - **Automatizable:** parcial. Las condiciones 2 a 4 son automatizables contra el banco
   versionado y el mecanismo de origen ya existente. La condición 1 es una comprobación de
-  estado del repositorio (las cinco PA anteriores superadas), no una prueba en sí. Elegir
+  estado del repositorio (las seis PA anteriores superadas), no una prueba en sí. Elegir
   y ejecutar «una tarea externa real» (paso 1) es evaluación humana por definición — mismo
   motivo que PA-E2E-01 del plan de 0.1 (sección 7 de
   `docs/canonical/SIRIUS_PLAN_PRUEBAS_TRAZABILIDAD_0.1_v1.0_PROPUESTO.docx`): una tarea
