@@ -98,6 +98,36 @@ TODAVIA_NO_EXISTEN: dict[str, list[str]] = {
     ]
 }
 
+# Tercera categoría (ADR-105, incidencia #445): una ruta que existe, hoy mismo,
+# en OTRA rama del repositorio — no en `main` ni antes ni después — porque el
+# ADR la cita para contar de dónde vino un dato, no para exigir que ese dato
+# viva en `main`. No es BORRADOS_A_PROPOSITO (nunca existió en `main`, así que
+# no se «borró» de ningún sitio que este árbol conociera) ni TODAVIA_NO_EXISTEN
+# (no describe una ausencia futura: describe una rama de origen que, a
+# propósito, nunca se fusiona entera).
+#
+# ADR-104 porta, intocable por decisión D1, el banco de 47 casos de
+# `evidence/adr001-spikes` a `tests/acceptance/fixtures/evidence_bank_47_casos.json`
+# y documenta esa procedencia citando cuatro rutas de `experiments/adr002/` tal
+# como existen en esa rama de origen — nunca se copian a `main`, porque el
+# encargo prohíbe tocar producto en M7. Confundir esta categoría con las otras
+# dos de arriba dejaría el aviso de "resucitó" mal etiquetado: estos ficheros
+# no van a "volver" nunca a `main` — viven donde siempre vivieron.
+RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
+    "experiments/adr002/round/cases.py": [
+        "ADR-104-portar-el-banco-de-47-casos-de-evidence-adr001-spikes-al-modelo-real-de-sirius.md",
+    ],
+    "experiments/adr002/round/cases.py:_traducir": [
+        "ADR-104-portar-el-banco-de-47-casos-de-evidence-adr001-spikes-al-modelo-real-de-sirius.md",
+    ],
+    "experiments/adr002/benchmark/cases_v0_5.json": [
+        "ADR-104-portar-el-banco-de-47-casos-de-evidence-adr001-spikes-al-modelo-real-de-sirius.md",
+    ],
+    "experiments/adr002/projection/contracts.py:referencia_canonica": [
+        "ADR-104-portar-el-banco-de-47-casos-de-evidence-adr001-spikes-al-modelo-real-de-sirius.md",
+    ],
+}
+
 
 def _fuera_de_los_bloques(texto: str) -> Iterator[str]:
     """Las líneas del documento que NO están dentro de un bloque de código.
@@ -154,6 +184,7 @@ def _rotas(adr: Path) -> list[str]:
         if not (RAIZ / ruta).exists()
         and adr.name not in BORRADOS_A_PROPOSITO.get(ruta, [])
         and adr.name not in TODAVIA_NO_EXISTEN.get(ruta, [])
+        and adr.name not in RAMA_DE_ORIGEN_NO_FUSIONADA.get(ruta, [])
     ]
 
 
@@ -166,7 +197,9 @@ def test_toda_ruta_citada_por_un_adr_existe(adr: Path) -> None:
     assert _rotas(adr) == [], (
         f"{adr.name} cita rutas que ya no existen: {_rotas(adr)}. "
         "Si el fichero solo se movió, actualiza el ADR. Si se borró a propósito y el ADR "
-        "lo cita como historia, añádelo a BORRADOS_A_PROPOSITO explicando por qué."
+        "lo cita como historia, añádelo a BORRADOS_A_PROPOSITO explicando por qué. Si vive "
+        "en otra rama que nunca se fusiona entera a propósito, añádelo a "
+        "RAMA_DE_ORIGEN_NO_FUSIONADA explicando por qué."
     )
 
 
@@ -183,6 +216,29 @@ def test_lo_fijado_como_borrado_lo_cita_de_verdad_quien_dice_citarlo() -> None:
     """Una excepción que nadie usa es un permiso abierto para el futuro."""
     sobrantes: list[str] = []
     for ruta, adrs in BORRADOS_A_PROPOSITO.items():
+        for nombre in adrs:
+            documento = REGISTRO / nombre
+            if not documento.is_file() or ruta not in citas_de(
+                documento.read_text(encoding="utf-8")
+            ):
+                sobrantes.append(f"{nombre} ya no cita {ruta}")
+    assert sobrantes == [], f"excepciones que sobran: {sobrantes}"
+
+
+def test_lo_fijado_como_rama_de_origen_no_fusionada_sigue_sin_existir_en_main() -> None:
+    """Si el fichero llega a fusionarse a `main`, la excepción sobra y hay que quitarla."""
+    fusionados = sorted(ruta for ruta in RAMA_DE_ORIGEN_NO_FUSIONADA if (RAIZ / ruta).exists())
+    assert fusionados == [], (
+        f"estas rutas ya existen en main: {fusionados}. Quítalas de "
+        "RAMA_DE_ORIGEN_NO_FUSIONADA: una excepción que ya no excepciona nada solo sirve "
+        "para tapar la siguiente."
+    )
+
+
+def test_lo_fijado_como_rama_de_origen_no_fusionada_lo_cita_de_verdad_quien_dice_citarlo() -> None:
+    """Una excepción que nadie usa es un permiso abierto para el futuro."""
+    sobrantes: list[str] = []
+    for ruta, adrs in RAMA_DE_ORIGEN_NO_FUSIONADA.items():
         for nombre in adrs:
             documento = REGISTRO / nombre
             if not documento.is_file() or ruta not in citas_de(
