@@ -81,10 +81,12 @@ Cubre, en este orden, los cinco bloques de `RECTOR.md` §9.1
 - §5 Conflictos asistidos — diseño de las acciones de resolución sobre el panel ya
   existente, sin tocar `precedence.py`.
 - §6 Proyectos históricos consultables — diseño completo (puerto, aplicación, interfaz).
-- §7 Búsqueda mejorada y §8 Mejor recuperación — **no** diseña la incorporación de la
-  evidencia de la PR #117 ni la dependencia de Ollama (decisión del propietario, ver
-  `docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md` §7.3); se limita a
-  señalar los puntos de integración que el resto del diseño debe respetar.
+- §7 Búsqueda mejorada y §8 Mejor recuperación — diseña la incorporación completa que
+  decide el propietario en D1 (`docs/evolution/STATUS.md:137-160`): el índice de categoría
+  determinista y el filtro de relevancia con modelo local vía Ollama, respetando los puntos
+  de integración que la ronda anterior de este documento ya dejaba fijados, más sus
+  encargos de construcción (§8, M7–M11) y la forma de medirlos contra el presupuesto de
+  latencia.
 - §9 Impactos transversales.
 - §10 Orden de construcción propuesto, con criterio de aceptación por encargo.
 - §11 Decisiones pendientes del propietario.
@@ -99,7 +101,7 @@ Sirius Work Engine usa su propio prefijo `C` para otra cosa (contradicciones de 
 `docs/implementation/SIRIUS_WORK_ENGINE_ARQUITECTURA_MINIMA.md:731-827`) y también `C` para
 bloques de su plan de implementación
 (`docs/implementation/SIRIUS_WORK_ENGINE_PLAN_IMPLEMENTACION.md:417-497`). Para no colisionar
-con ninguno de los dos, §10 numera los encargos de esta versión como `M1`…`M6`
+con ninguno de los dos, §10 numera los encargos de esta versión como `M1`…`M11`
 («Memoria útil»); es una convención propia de este documento, no continúa la serie `B` de
 0.1 ni la serie `C` del motor.
 
@@ -602,50 +604,183 @@ proyecto vivo — satisface literalmente el criterio de comprobación de la Defi
 Producto §6.4: «la interfaz los presenta en una vista distinta de la del proyecto activo, y
 consultarlos nunca modifica ni contamina el estado o el contexto del proyecto vivo».
 
-## 6. Búsqueda mejorada y Mejor recuperación — puntos de integración, sin decidir
+## 6. Búsqueda mejorada y Mejor recuperación — diseño de la incorporación decidida (D1)
 
-Por instrucción explícita de la incidencia de origen, este documento **no** diseña la
-incorporación de la evidencia de la PR #117 ni decide la dependencia de Ollama — es la
-decisión única del propietario, registrada en `docs/evolution/STATUS.md` cuando se tome
-(ver Definición de Producto §2.3/§2.4/§3.3/§3.4/§7.3). Lo que sigue son los puntos exactos
-de la arquitectura ya existente donde encajaría cada pieza, presentados como opciones, sin
-elegir ninguna.
+`docs/evolution/STATUS.md` registra la decisión del propietario **D1**
+(`docs/evolution/STATUS.md:137-160`), tomada el 29 de agosto de 2026: la evidencia de la
+rama `evidence/adr001-spikes` (PR #117, que permanece abierta y sin fusionar como archivo)
+se incorpora a `main` **completa** — el índice de categoría determinista **y** el filtro de
+relevancia con modelo local vía Ollama —, no mediante la fusión directa de esa PR sino
+mediante encargos nuevos al Work Engine que porten ese trabajo como código de producto con
+sus pruebas (§8, M7–M11). D1 exige respetar, sin reabrirlos, los dos puntos de integración
+que la ronda anterior de este documento ya dejaba fijados sin elegir entre opciones
+(`docs/evolution/STATUS.md:143-148`): el índice como cuarta señal de `RankedKnowledge`
+(§6.1) y el filtro como segundo filtro en `ContextBuilder._rank_related_knowledge`, después
+de la exclusión por precedencia (§6.2). Este documento sigue sin leer
+`evidence/adr001-spikes` ni la PR #117 directamente (§0): lo que sigue cita contra `main` y
+contra el registro de `STATUS.md`; quienes construyan los encargos de §8 sí pueden leer esa
+rama del propio repositorio para portar el trabajo (instrucción explícita de la incidencia
+de origen de esta ronda).
 
-### 6.1 Dónde encajaría un índice lateral de categoría
+### 6.1 Índice de categoría determinista: cuarta señal de `RankedKnowledge`
 
 `RankRelevantKnowledgeUseCase.rank()` (`src/sirius/application/rank_relevant_knowledge.py:47-86`)
 construye, para cada `Memory`/`Decision` vigente, un `RankedKnowledge`
 (`src/sirius/domain/relevance.py:59-74`) con tres señales estructurales ya existentes:
 `subject_matches_query`, `project_matches_active`, `fts_match`
-(`src/sirius/application/rank_relevant_knowledge.py:65-84`). Un índice de categoría
-determinista (la mitad del paquete de la PR #117 que no depende de Ollama, según la
-Definición de Producto §2.2) encajaría como una cuarta señal estructural en ese mismo punto
-— una nueva propiedad de `RankedKnowledge` calculada, igual que las otras tres, sin tocar
-`ContextBuilder` ni `SendMessageUseCase` directamente, y consumida por
-`sirius.domain.relevance.rank_relevant_knowledge`
-(`src/sirius/domain/relevance.py:141`) como un criterio adicional de orden.
+(`src/sirius/application/rank_relevant_knowledge.py:65-84`). El índice de categoría
+determinista — la mitad del paquete de la PR #117 que no depende de Ollama, según la
+Definición de Producto §2.2 (`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:67-68`)
+— se incorpora como una cuarta señal estructural en ese mismo punto: una nueva propiedad
+`category_match: bool` de `RankedKnowledge` (`src/sirius/domain/relevance.py:59-74`),
+calculada por el mismo caso de uso que ya calcula las otras tres
+(`src/sirius/application/rank_relevant_knowledge.py:65-84`), sin tocar `ContextBuilder` ni
+`SendMessageUseCase` directamente. El cálculo — derivar la categoría de la criticidad del
+canon que porta el propio paquete de la PR #117 y compararla contra la categoría que la
+consulta activa — es una comparación de valores discretos y deterministas, nunca una
+similitud ni un modelo: vive en `sirius.domain.relevance`, junto a la función que ya hace lo
+mismo para el asunto de una decisión, `subject_matches_query`
+(`src/sirius/domain/relevance.py:108-117`), respetando el principio transversal de que
+Sirius no tiene juicio semántico propio (§0.1 punto 3, `src/sirius/domain/precedence.py:9-10`).
+`rank_relevant_knowledge` (`src/sirius/domain/relevance.py:141`) la consume como un cuarto
+término en la tupla de orden de `_sort_key` (`src/sirius/domain/relevance.py:131-138`),
+insertado **después** de `fts_match` y **antes** de la recencia: S7.5 no fija dónde entraría
+una señal de categoría en su lista de prioridad
+(`src/sirius/domain/relevance.py:7-14`), así que este documento la fija aquí — más débil que
+una coincidencia FTS5 explícita sobre la consulta del usuario, porque la categoría deriva de
+una clasificación del canon, no de la consulta en sí. M8 (§8) construye esta señal.
 
-### 6.2 Dónde encajaría un filtro de relevancia con modelo local
+### 6.2 Filtro de relevancia con modelo local vía Ollama: puerto, adaptador, fallo abierto y candado
 
-Si se decide adoptarlo, el punto de integración natural es un paso **posterior** a
-`RankRelevantKnowledgeUseCase.rank()` y **anterior** a `apply_context_budget`
-(`src/sirius/application/context_budget.py:149-195`), dentro de
-`ContextBuilder._rank_related_knowledge`
-(`src/sirius/application/context.py:210-221`), que ya filtra el resultado de `rank()` una
-vez (la exclusión por precedencia, `src/sirius/application/context.py:223-235`) antes de
-pasarlo al presupuesto. Un filtro de relevancia por modelo local sería un segundo filtro en
-ese mismo método, después del de precedencia — nunca antes, para no descartar un elemento
-que la precedencia ya habría excluido igualmente. La Definición de Producto §2.2 exige que
-ese filtro «falle abierto» y que «una regla en código... impida al filtro descartar un
-elemento crítico que la búsqueda trajo»: ese candado de código, si se construye, vive en el
-mismo método, no en el filtro con modelo — el filtro nunca decide solo.
+El punto de integración es exactamente el que la ronda anterior ya fijaba: un paso
+**posterior** a `RankRelevantKnowledgeUseCase.rank()` y **anterior** a
+`apply_context_budget` (`src/sirius/application/context_budget.py:149-195`), dentro de
+`ContextBuilder._rank_related_knowledge` (`src/sirius/application/context.py:210-221`), que
+ya filtra el resultado de `rank()` una vez — la exclusión por precedencia
+(`src/sirius/application/context.py:223-235`) — antes de pasarlo al presupuesto. El filtro
+de relevancia por modelo local es un segundo filtro en ese mismo método, después del de
+precedencia, nunca antes, para no evaluar con Ollama un candidato que la precedencia ya
+habría excluido igualmente.
 
-### 6.3 Restricción que ambos puntos deben respetar
+**Puerto.** `RelevanceFilterPort` (nuevo, `src/sirius/ports/relevance_filter.py`), un
+protocolo con un único método, `filter_candidates(query_text, candidates) -> Sequence[RankedKnowledge]`,
+que devuelve el subconjunto a **conservar** — nunca reordena; el orden sigue siendo
+responsabilidad exclusiva de §6.1. El contrato del puerto declara, por firma y por
+documentación, que **nunca propaga una excepción**: cualquier fallo interno se traduce en
+devolver `candidates` sin modificar.
 
-Ninguno de los dos puntos de integración puede aumentar el coste por encima del presupuesto
-de latencia de `ContextBuilder` (RNF-003, ver §9.3) ni requerir tocar
-`sirius.domain.precedence` (§0.1.3): ambos son puntos de **ranking o filtrado**, nunca de
-decisión de conflicto.
+**Adaptador.** `OllamaRelevanceFilterAdapter` (nuevo, `src/sirius/adapters/ollama_relevance_filter.py`)
+implementa ese puerto contra un modelo local vía Ollama. «Sin destino de red fuera del
+equipo» es una propiedad estructural del adaptador, no una opción de configuración: apunta
+en exclusiva al Ollama local (`http://localhost:11434`, el puerto por defecto de Ollama),
+sin parámetro que permita apuntarlo a un host remoto. Falla abierto exactamente como exige
+la Definición de Producto §2.2 (`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:69`):
+si Ollama no está instalado, si la conexión se rechaza, si no responde dentro del
+presupuesto de tiempo que M10 fija (§6.3), o si la respuesta no tiene la forma esperada, el
+adaptador captura ese fallo internamente y devuelve `candidates` sin modificar — la
+construcción de contexto continúa exactamente como hoy, sin excepción visible para
+`ContextBuilder` y sin descartar nada.
+
+**Candado.** La Definición de Producto §2.2 exige, además, «una regla en código... que
+impida al filtro descartar un elemento crítico que la búsqueda trajo»
+(`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:70-71`). Ese candado no
+vive en el adaptador —el filtro con modelo nunca decide solo— sino en
+`ContextBuilder._rank_related_knowledge` mismo, inmediatamente después de invocar el
+puerto: reutiliza la misma clasificación de criticidad del canon que ya calcula el índice de
+categoría de §6.1 (la que, según la Definición de Producto §2.2, por sí sola baja las
+omisiones críticas de 11 a 5), y garantiza que todo candidato de la categoría de máxima
+criticidad del canon sigue presente en el resultado, calcule lo que calcule
+`RelevanceFilterPort.filter_candidates`. El candado es una unión de conjuntos sobre el
+resultado del filtro y los candidatos protegidos, preservando el orden que §6.1 ya fijó, no
+una segunda llamada al filtro ni una excepción a su criterio. M9 (§8) construye el puerto, el
+adaptador y este candado.
+
+### 6.3 Presupuesto de latencia: RNF-003 y cómo se mide
+
+Ninguno de los dos puntos de integración puede sacar a `ContextBuilder` de RNF-003, 300 ms
+P95 (`docs/decisions/ADR-008-cargar-en-lote-las-revisiones-vigentes-al-listar.md:111-117`,
+`docs/implementation/V8_EXECUTION.md:44-48`), ni requiere tocar `sirius.domain.precedence`
+(§0.1 punto 3): ambos son puntos de **ranking o filtrado**, nunca de decisión de conflicto.
+Hoy construir el contexto usa el 40 % de ese presupuesto, ~120,9 ms P95 medidos con el
+mismo conjunto de referencia del Plan de Pruebas —5.000 mensajes, 500 recuerdos, 100
+decisiones, 10 proyectos, 30 repeticiones—, misma máquina
+(`docs/decisions/ADR-008-cargar-en-lote-las-revisiones-vigentes-al-listar.md:107-117`).
+
+El índice de categoría (§6.1) es una comparación en memoria del mismo orden de magnitud que
+las tres señales estructurales que ya calcula `RankRelevantKnowledgeUseCase.rank()`: no
+exige una medición separada más allá de volver a correr el benchmark de ADR-008 una vez
+construido (M8), con el mismo formato de tabla, para confirmar que sigue dentro del 40 %.
+
+El filtro con Ollama (§6.2) sí es el riesgo real de latencia, por ser una llamada fuera de
+proceso. Cómo se mide, asignado a M10 (§8):
+
+1. Medir el P95 de «construir contexto» con el mismo benchmark de ADR-008 justo antes de
+   cablear el filtro (línea base con M7/M8 ya integrados, sin M9).
+2. Fijar el presupuesto de tiempo (`timeout`) del adaptador de forma que, incluso en el
+   peor caso —Ollama disponible pero lento, tardando el `timeout` completo—, el P95 total
+   se mantenga bajo 300 ms sumado a la línea base del paso 1; el valor exacto del `timeout`
+   lo decide la medición de M10, no este documento.
+3. Repetir el benchmark de ADR-008 en **dos** escenarios, no solo el favorable: con Ollama
+   disponible respondiendo dentro de su presupuesto, y con Ollama ausente (fallo abierto
+   forzado) — el camino de fallo abierto también tiene un coste (el `timeout` agotado) y
+   debe medirse, no darse por gratuito.
+4. Publicar ambas filas en una tabla con el mismo formato que la de ADR-008
+   (`docs/decisions/ADR-008-cargar-en-lote-las-revisiones-vigentes-al-listar.md:111-117`),
+   como evidencia del encargo M10, antes de declararlo cerrado.
+
+La Definición de Producto también cita «latencia dentro del presupuesto de 5 s»
+(`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md` §2.2) — esa cifra es la
+del banco de evidencia de la PR #117, no verificada contra `main` por esa misma Definición
+de Producto. RNF-003 en `main` es 300 ms, no 5 s; M10 mide contra la fuente vigente
+(`docs/implementation/V8_EXECUTION.md:47`), no contra el banco de la rama sin fusionar.
+
+### 6.4 Banco versionado de 47 casos: dónde vive y qué mide la prueba automática
+
+El corpus congelado de 47 casos y sus resultados esperados
+(`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:63-75`) se porta **sin
+modificarse** (D1, `docs/evolution/STATUS.md:153-155`) a
+`tests/acceptance/fixtures/evidence_bank_47_casos.json`, siguiendo el mismo patrón de
+fixture versionado que ya usa `tests/engine/fixtures/github_issue_186.json`. Cada caso
+conserva su clasificación de criticidad tal como la porta la rama de evidencia, incluido un
+campo `criticidad.razon_segura`: ese campo **nunca se lee ni se indexa** por ningún camino de
+producción — ni el índice de categoría (§6.1), ni el candado (§6.2), ni el cargador que la
+prueba automática usa para ejecutar el pipeline lo deserializan; solo el arnés de evaluación
+que calcula las cuatro métricas (más abajo) puede leer `criticidad.nivel` para puntuar, nunca
+`criticidad.razon_segura`. M7 (§8) incluye una prueba dedicada que demuestra esa exclusión
+por construcción, no solo por convención.
+
+`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py` (nuevo, M7) ejecuta, para cada uno
+de los 47 casos, el mismo pipeline de recuperación que usa `ContextBuilder`
+(`RankRelevantKnowledgeUseCase.rank()` → índice de categoría §6.1 → exclusión por
+precedencia → filtro de relevancia §6.2, con un doble de prueba determinista del puerto,
+nunca una llamada real a Ollama dentro de la suite) y mide, agregado sobre los 47 casos:
+
+- **aciertos exactos**: casos cuyo resultado completo coincide exactamente con el esperado;
+- **elementos de más**: elementos devueltos que el caso no esperaba, sumados across los 47;
+- **omisiones críticas**: elementos esperados marcados como críticos (`criticidad.nivel`)
+  que faltan en el resultado;
+- **cobertura**: fracción de los elementos esperados (81 en total sobre los 47 casos,
+  `docs/evolution/STATUS.md:162-172`) presentes en algún resultado.
+
+Suelos exigidos por D1/D2 (`docs/evolution/STATUS.md:137-172`), afirmados como aserciones
+duras que hacen fallar la prueba si se incumplen: aciertos exactos no por debajo de 29/47;
+cobertura no por debajo de 63/81. Omisiones críticas: el objetivo de PA-0.2-REC-01 es 0
+(`docs/evolution/SIRIUS_PLAN_PRUEBAS_0.2_v0.1_PROPUESTO.md:145-157`); si M11 (§8/§6.5) no lo
+alcanza, esta misma prueba se actualiza para afirmar explícitamente el conteo real medido —
+nunca relajada en silencio— y PA-0.2-REC-01 permanece no superada, tal como exige D3.
+
+### 6.5 Decisión D3: intento de cierre de la última omisión crítica
+
+D3 (`docs/evolution/STATUS.md:174-188`) decide que la omisión crítica por derivación léxica
+que la Definición de Producto §3.2(b) caracteriza («preferencia de redacción» frente a
+«prefiere que redactes», `docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:107-108`)
+**se intenta cerrar** dentro del mismo paquete de incorporación de D1, no se caracteriza sin
+más. M11 (§8) es ese intento, con salida explícita en los dos sentidos que D3 fija — ver el
+criterio de aceptación de M11: si se cierra, el banco de §6.4 pasa a 0 omisiones críticas y
+la prueba lo exige; si no se cierra dentro de los límites de latencia y sin un diccionario a
+medida no acotado (Producto §3.3), queda documentada como abierta y aplazada por decisión
+del propietario, sin bloquear M7–M10 ni el resto de Sirius 0.2, y PA-0.2-REC-01 permanece no
+superada.
 
 ## 7. Impactos transversales
 
@@ -659,16 +794,17 @@ o interfaz sobre columnas y tablas ya existentes.
 
 ### 7.2 Privacidad
 
-Ninguno de los tres bloques diseñados aquí (§3, §4, §5) introduce una llamada de red nueva
-ni un destino de datos nuevo: `MemorySuggestionRepository`, `ProjectRepository.list_completed_projects`
+Ninguno de los tres bloques diseñados en §3–§5 introduce una llamada de red nueva ni un
+destino de datos nuevo: `MemorySuggestionRepository`, `ProjectRepository.list_completed_projects`
 y la interfaz de resolución de conflictos son todas operaciones locales sobre el mismo
 SQLite que ya usa Sirius 0.1 (`src/sirius/adapters/persistence/database.py`,
-`src/sirius/ports/data_location.py`). Los dos bloques que este documento **no** diseña (§6)
-son los únicos que, si el propietario decide incorporarlos, introducirían el único
-componente no-local ya contemplado por la Definición de Producto: un modelo local vía
-Ollama (`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md` §2.2) — local
-a la máquina, no un servicio remoto nuevo, pero es exactamente la pieza que este documento
-deja sin decidir (§11).
+`src/sirius/ports/data_location.py`). De los dos bloques de §6, solo el filtro de relevancia
+(§6.2) introduce el único componente no-local que contempla la Definición de Producto: un
+modelo local vía Ollama (`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md`
+§2.2) — local a la máquina, no un servicio remoto nuevo. D1 adopta esa dependencia
+(`docs/evolution/STATUS.md:137-160`) y §6.2 la diseña con esa restricción como propiedad
+estructural del adaptador, no como opción de configuración: apunta en exclusiva a
+`localhost`, sin destino de red fuera del equipo del propietario.
 
 ### 7.3 Presupuesto de latencia de `ContextBuilder`
 
@@ -680,20 +816,26 @@ camino de construcción de contexto (una `MemorySuggestion` nunca se lee desde a
 §4 (conflictos) es interfaz sobre una consulta ya excluida de `ContextBuilder`
 (`src/sirius/application/detect_precedence_conflicts.py:14-16`); §5 (proyectos históricos)
 usa un caso de uso separado que `ContextBuilder` no inyecta. Ninguno de los tres añade
-coste al 40 % ya medido. Los dos bloques no diseñados aquí (§6) sí tocarían ese camino
-directamente (§6.1/§6.2) y son, por tanto, los que deben volver a medirse contra RNF-003
-antes de incorporarse — la Definición de Producto ya lo exige («latencia dentro del
-presupuesto de 5 s», `docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md`
-§2.2; nota: esa cifra de 5 s es la del banco de evidencia de la PR #117, no verificada
-contra `main` por esa misma Definición de Producto — RNF-003 en `main` es 300 ms, no 5 s;
-quien construya §6 debe conciliar ambas cifras contra la fuente vigente,
-`docs/implementation/V8_EXECUTION.md:47`, no contra el banco de la rama sin fusionar).
+coste al 40 % ya medido. Los dos bloques de §6 sí tocan ese camino directamente
+(§6.1/§6.2) y son, por tanto, los que deben volver a medirse contra RNF-003 antes de
+incorporarse — §6.3 fija cómo se mide (metodología de ADR-008, con y sin Ollama disponible)
+y asigna esa medición al encargo M10 (§8); la Definición de Producto ya exige esa medición
+(«latencia dentro del presupuesto de 5 s»,
+`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md` §2.2; nota: esa cifra de
+5 s es la del banco de evidencia de la PR #117, no verificada contra `main` por esa misma
+Definición de Producto — RNF-003 en `main` es 300 ms, no 5 s; M10 mide contra la fuente
+vigente, `docs/implementation/V8_EXECUTION.md:47`, no contra el banco de la rama sin
+fusionar).
 
 ## 8. Orden de construcción propuesto
 
-Encargos del tamaño de una vertical de Sirius 0.1 (ver §2 sobre la numeración `M1`…`M6`).
-Cada uno es independiente de los bloques no diseñados en §6, que quedan fuera de este orden
-hasta que el propietario decida §11.
+Encargos del tamaño de una vertical de Sirius 0.1 (ver §2 sobre la numeración `M1`…`M11`).
+M1–M6 son independientes de los bloques de §6. M7–M11 (búsqueda mejorada y mejor
+recuperación, decisión D1, `docs/evolution/STATUS.md:137-188`) se añaden a continuación y sí
+dependen entre sí, en este orden: M7 antes que M8 y M9 (necesita el pipeline de hoy como
+línea base antes de medir cualquier cambio); M8 y M9 antes que M10 (mide la integración
+completa, no cada pieza suelta); M11 al final, porque su intento de cierre se apoya en el
+pipeline ya integrado por M7–M10.
 
 ### M1 — Proyectos históricos: puerto y aplicación
 
@@ -804,17 +946,106 @@ fragmentos consecutivos de la salida cruda del proveedor tampoco llega a `on_del
 separación descrita en §3.2 no puede depender de que el delimitador llegue entero en un único
 fragmento, ni de que el turno complete.
 
+### M7 — Búsqueda mejorada: banco de evidencia portado y prueba automática
+
+Portar el corpus de 47 casos y sus resultados esperados, sin modificarlos, desde
+`evidence/adr001-spikes` a `tests/acceptance/fixtures/evidence_bank_47_casos.json` (§6.4);
+`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`, que ejecuta ese banco contra el
+pipeline de recuperación de `main` **tal como existe hoy** (antes de M8/M9) y reporta la
+línea base de aciertos exactos, elementos de más, omisiones críticas y cobertura.
+
+**Criterio de aceptación:** una prueba de forma del fichero confirma 47 casos y 81
+elementos esperados en total; la prueba automática de §6.4 existe, ejecuta y reporta las
+cuatro métricas sin exigir todavía los suelos de D1/D2 (el pipeline de M7 es el de hoy, sin
+índice ni filtro, y puede no alcanzarlos aún — exigirlos es criterio de M10); una prueba
+dedicada demuestra que `criticidad.razon_segura` no es leído por el cargador que alimenta el
+pipeline bajo prueba, solo por el arnés de evaluación, y únicamente para `criticidad.nivel`.
+
+### M8 — Búsqueda mejorada: índice de categoría determinista
+
+`category_match` en `RankedKnowledge`, la función determinista que lo calcula en
+`sirius.domain.relevance`, su cableado en `RankRelevantKnowledgeUseCase.rank()` y su lugar
+en `_sort_key` (§6.1).
+
+**Criterio de aceptación:** prueba unitaria de dominio con candidatos de categorías
+distintas que confirma el nuevo lugar de `category_match` en la tupla de orden (después de
+`fts_match`, antes de la recencia); re-ejecutar la prueba de M7 sobre el banco y comprobar
+que las omisiones críticas bajan frente a la línea base de M7 (la cifra exacta es objetivo
+conjunto de M7–M11, no de M8 aislado).
+
+### M9 — Búsqueda mejorada: filtro de relevancia con Ollama — puerto, adaptador y candado
+
+`RelevanceFilterPort`, `OllamaRelevanceFilterAdapter` (local-only, con presupuesto de
+tiempo configurable, fallo abierto) y el candado sobre la categoría de máxima criticidad del
+canon en `ContextBuilder._rank_related_knowledge` (§6.2).
+
+**Criterio de aceptación:** pruebas unitarias con un doble de prueba del puerto que cubren
+(i) filtro disponible que descarta candidatos no críticos, comprobando que el resultado
+final los excluye; (ii) Ollama no instalado o conexión rechazada; (iii) Ollama excede su
+presupuesto de tiempo; (iv) respuesta con forma inesperada — en (ii)-(iv) el resultado de
+`ContextBuilder._rank_related_knowledge` es idéntico al de antes de invocar el filtro, sin
+ninguna excepción propagada fuera del adaptador; una prueba adicional confirma que un
+candidato de la categoría de máxima criticidad del canon sobrevive aunque el doble de
+prueba del filtro intente descartarlo.
+
+### M10 — Búsqueda mejorada y Mejor recuperación: integración y medición de RNF-003
+
+Cablear M8 y M9 en `ContextBuilder._rank_related_knowledge`; medir contra RNF-003 con la
+metodología de ADR-008 en los dos escenarios que fija §6.3 (Ollama disponible dentro de su
+presupuesto, Ollama ausente con fallo abierto forzado); ajustar el `timeout` del adaptador
+hasta que ambos escenarios cumplan el presupuesto; re-ejecutar la prueba de M7 con el
+pipeline ya integrado y confirmar los suelos de D1/D2 (aciertos exactos ≥ 29/47, cobertura ≥
+63/81, `docs/evolution/STATUS.md:137-172`).
+
+**Criterio de aceptación:** tabla de medición con el mismo formato que la de ADR-008
+(`docs/decisions/ADR-008-cargar-en-lote-las-revisiones-vigentes-al-listar.md:111-117`), con
+«construir contexto» P95 ≤ 300 ms en ambos escenarios, publicada como evidencia del encargo;
+la prueba de M7, re-ejecutada, confirma los suelos de aciertos exactos y cobertura sin
+exigir todavía 0 omisiones críticas (eso es M11).
+
+### M11 — Mejor recuperación: intento de cierre de la última omisión crítica (D3)
+
+Sobre el pipeline ya integrado por M7–M10, intentar cerrar la omisión crítica por derivación
+léxica que la Definición de Producto §3.2(b) caracteriza («preferencia de redacción» frente
+a «prefiere que redactes», ver §6.5), dentro del presupuesto de latencia de §6.3 y sin
+construir un diccionario a medida no acotado (Producto §3.3).
+
+**Criterio de aceptación — salida explícita en los dos sentidos, por decisión D3
+(`docs/evolution/STATUS.md:174-188`):**
+
+- si se cierra: el caso del banco de M7 que hoy la registra como omisión pasa a acierto, la
+  prueba de M7 se actualiza para exigir 0 omisiones críticas como suelo duro, y
+  PA-0.2-REC-01 puede declararse superada si el resto de sus condiciones también lo están;
+- si no se cierra dentro de esos límites: el encargo no falla por eso — cierra
+  documentando el intento, las vías probadas y el motivo medido (no supuesto) por el que no
+  se alcanzó, actualiza este documento (§6.5) y `docs/evolution/STATUS.md` dejando la
+  omisión «abierta y aplazada por decisión del propietario», y actualiza la prueba de M7
+  para afirmar explícitamente el conteo real de omisiones críticas medido — nunca relajado
+  en silencio. PA-0.2-REC-01 permanece no superada en ese caso, tal como D3 exige
+  literalmente, sin que eso bloquee M1–M10 ni el resto de Sirius 0.2.
+
 ## 9. Decisiones pendientes del propietario
 
-Esta arquitectura no toma ninguna de las siguientes decisiones; quedan exactamente donde la
-Definición de Producto ya las dejó (§7.3 de
-`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md`), y este documento no
-añade contenido nuevo a ninguna de ellas:
+Esta arquitectura no toma decisiones de producto, arquitectura o seguridad por su cuenta.
+Las que la Definición de Producto dejaba abiertas para el bloque de este documento (§7.3 de
+`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md`) ya las resolvió el
+propietario, registradas en `docs/evolution/STATUS.md` el 29 de agosto de 2026, y este
+documento las traduce a diseño sin reabrirlas:
 
-- Fusionar o no la PR #117 como vía de entrada de su evidencia.
-- La dependencia de Ollama en el filtro de relevancia (§6.2 de este documento señala dónde
-  encajaría, sin decidir si se adopta).
-- La última omisión crítica de recuperación caracterizada en la Definición de Producto §3.3.
+- **Fusionar o no la PR #117 como vía de entrada de su evidencia** — resuelta por D1
+  (`docs/evolution/STATUS.md:137-160`): se incorpora completa, por encargos nuevos al Work
+  Engine (M7–M11), no por fusión directa de esa PR.
+- **La dependencia de Ollama en el filtro de relevancia** — resuelta por D1: se adopta;
+  §6.2 diseña su puerto, su adaptador y el contrato de fallo abierto.
+- **La última omisión crítica de recuperación** caracterizada en la Definición de Producto
+  §3.3 — resuelta por D3 (`docs/evolution/STATUS.md:174-188`): se intenta cerrar dentro del
+  mismo paquete de incorporación (M11, §6.5); si no se consigue, queda documentada como
+  abierta y aplazada por decisión del propietario, sin bloquear el resto — nunca como
+  defecto sin diagnosticar.
+
+Sigue sin resolver, fuera del alcance de esta actualización — §3.1 de este documento la deja
+donde estaba, sin recaracterizarla:
+
 - El origen de los estados `CANDIDATA`/`RECHAZADA` que una orden anterior daba por
   existentes (§3.1 de este documento).
 
