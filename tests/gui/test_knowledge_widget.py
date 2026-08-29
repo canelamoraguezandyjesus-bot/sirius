@@ -16,6 +16,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import Qt
 from pytestqt.qtbot import QtBot
 
 from sirius.adapters.persistence.database import build_engine
@@ -31,6 +32,7 @@ from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.delete_memory import OLD_BACKUP_WARNING, SourceMessageChoice
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
 from sirius.domain.decision import Decision
+from sirius.domain.memory import Memory
 from sirius.presentation.knowledge_widget import KnowledgeWidget, _DeleteMemoryDialog
 
 
@@ -530,9 +532,157 @@ def test_detect_conflicts_lists_unresolved_conflicts_without_choosing_a_winner(
 
     widget.detect_conflicts_button.click()
 
-    assert widget.conflicts_list.count() == 1
-    assert "Motor de persistencia" in widget.conflicts_list.item(0).text()
+    # Una cabecera no seleccionable por conflicto, más un ítem seleccionable
+    # por cada miembro individual (§4.2) — nunca una única línea combinada.
+    assert widget.conflicts_list.count() == 3
+    header = widget.conflicts_list.item(0)
+    assert "Motor de persistencia" in header.text()
+    assert not (header.flags() & Qt.ItemFlag.ItemIsSelectable)
+    member_texts = [widget.conflicts_list.item(row).text() for row in (1, 2)]
+    assert any("usar SQLite local" in text for text in member_texts)
+    assert any("usar un servidor remoto" in text for text in member_texts)
     assert "requieren aclaración" in widget.conflicts_status_label.text()
+
+
+@pytest.mark.gui
+def test_archive_memory_from_conflicts_list_resolves_the_conflict(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Criterio 1 de §8-M3: archivar una memoria en conflicto desde
+    ``conflicts_list`` hace que una detección posterior deje de reportarlo,
+    sin que ``sirius.domain.precedence`` cambie una sola línea."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    project_id = dependencies.project_continuity_use_case.get_summary().project_id
+    dependencies.save_manual_memory_use_case.save(
+        "usar SQLite local", subject_key="Motor de persistencia", project_id=project_id
+    )
+    dependencies.save_manual_memory_use_case.save(
+        "usar un servidor remoto", subject_key="Motor de persistencia", project_id=project_id
+    )
+    widget = _build_widget(dependencies, _Recorder(), confirm_action=True)
+    qtbot.addWidget(widget)
+    widget.detect_conflicts_button.click()
+    assert widget.conflicts_list.count() == 3
+
+    widget.conflicts_list.setCurrentRow(1)
+    widget.archive_memory_button.click()
+
+    widget.detect_conflicts_button.click()
+
+    assert widget.conflicts_list.count() == 0
+    assert "No hay conflictos" in widget.conflicts_status_label.text()
+
+
+@pytest.mark.gui
+def test_conflicts_list_selection_disables_actions_that_do_not_resolve_the_conflict(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Criterio 2 de §8-M3: con un miembro Memory de un conflicto activo
+    seleccionado, ``correct_memory_button`` queda deshabilitado (la
+    corrección conserva ``subject_key``/``project_id`` y el conflicto
+    reaparecería) mientras ``archive_memory_button`` sigue habilitado; con un
+    miembro Decision seleccionado, ``approve_decision_button`` queda
+    deshabilitado (toda decisión en conflicto ya está APPROVED) mientras
+    ``supersede_decision_button``/``archive_decision_button`` siguen
+    habilitados."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    project_id = dependencies.project_continuity_use_case.get_summary().project_id
+    dependencies.save_manual_memory_use_case.save(
+        "usar SQLite local", subject_key="Motor de persistencia", project_id=project_id
+    )
+    first = dependencies.propose_decision_use_case.propose(
+        "Motor de persistencia", project_id, "Usar SQLite"
+    )
+    dependencies.approve_decision_use_case.approve(first.id, confirmed=True)
+    second = dependencies.propose_decision_use_case.propose(
+        "Motor de persistencia", project_id, "Usar PostgreSQL"
+    )
+    dependencies.approve_decision_use_case.approve(second.id, confirmed=True)
+    widget = _build_widget(dependencies, _Recorder())
+    qtbot.addWidget(widget)
+    widget.detect_conflicts_button.click()
+
+    # Memory/Decision ids are independent sequences that can coincide (both
+    # start at 1), so rows are told apart by the type of the associated
+    # entity, never by matching "#<id>" against the rendered text.
+    memory_row = next(
+        row
+        for row in range(widget.conflicts_list.count())
+        if isinstance(widget.conflicts_list.item(row).data(Qt.ItemDataRole.UserRole), Memory)
+    )
+    widget.conflicts_list.setCurrentRow(memory_row)
+
+    assert widget.correct_memory_button.isEnabled() is False
+    assert widget.archive_memory_button.isEnabled() is True
+
+    def _is_first_decision_row(row: int) -> bool:
+        entity = widget.conflicts_list.item(row).data(Qt.ItemDataRole.UserRole)
+        return isinstance(entity, Decision) and entity.id == first.id
+
+    decision_row = next(
+        row for row in range(widget.conflicts_list.count()) if _is_first_decision_row(row)
+    )
+    widget.conflicts_list.setCurrentRow(decision_row)
+
+    assert widget.approve_decision_button.isEnabled() is False
+    assert widget.supersede_decision_button.isEnabled() is True
+    assert widget.archive_decision_button.isEnabled() is True
+
+
+@pytest.mark.gui
+def test_archive_decision_from_conflicts_list_ignores_the_general_panel_selection(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Criterio 3 de §8-M3: con una Decision distinta seleccionada a la vez en
+    ``decisions_list`` (el panel general), archivar con la selección de
+    ``conflicts_list`` activa modifica la decisión del conflicto — su id
+    coincide con el de ``_selected_conflict_entity``, no con el de
+    ``_selected_decision()`` sobre ``decisions_list`` — y una detección
+    posterior ya no reporta ese conflicto."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    project_id = dependencies.project_continuity_use_case.get_summary().project_id
+    conflicting_first = dependencies.propose_decision_use_case.propose(
+        "Motor de persistencia", project_id, "Usar SQLite"
+    )
+    dependencies.approve_decision_use_case.approve(conflicting_first.id, confirmed=True)
+    conflicting_second = dependencies.propose_decision_use_case.propose(
+        "Motor de persistencia", project_id, "Usar PostgreSQL"
+    )
+    dependencies.approve_decision_use_case.approve(conflicting_second.id, confirmed=True)
+    unrelated = dependencies.propose_decision_use_case.propose(
+        "Día de la reunión", project_id, "La reunión es los martes"
+    )
+    dependencies.approve_decision_use_case.approve(unrelated.id, confirmed=True)
+
+    widget = _build_widget(dependencies, _Recorder(), confirm_action=True)
+    qtbot.addWidget(widget)
+    widget.detect_conflicts_button.click()
+
+    unrelated_row = next(
+        row
+        for row in range(widget.decisions_list.count())
+        if f"#{unrelated.id} " in widget.decisions_list.item(row).text()
+    )
+    widget.decisions_list.setCurrentRow(unrelated_row)
+    selected_in_general_panel = widget._selected_decision()
+    assert selected_in_general_panel is not None
+    assert selected_in_general_panel.id == unrelated.id
+
+    conflict_row = next(
+        row
+        for row in range(widget.conflicts_list.count())
+        if f"#{conflicting_first.id} " in widget.conflicts_list.item(row).text()
+    )
+    widget.conflicts_list.setCurrentRow(conflict_row)
+
+    widget.archive_decision_button.click()
+
+    texts = [widget.decisions_list.item(row).text() for row in range(widget.decisions_list.count())]
+    assert not any(f"#{conflicting_first.id} " in text and "(approved)" in text for text in texts)
+    assert any(f"#{unrelated.id} " in text and "(approved)" in text for text in texts)
+
+    widget.detect_conflicts_button.click()
+    assert widget.conflicts_list.count() == 0
 
 
 @pytest.mark.gui

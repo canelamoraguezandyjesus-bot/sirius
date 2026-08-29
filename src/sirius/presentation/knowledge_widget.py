@@ -374,10 +374,17 @@ class KnowledgeWidget(QGroupBox):
             return
         self.refresh()
 
+    def _memory_for_resolution(self) -> Memory | None:
+        """Prefer the entity selected in ``conflicts_list`` (§4.2): acting on a
+        conflict never depends on what happens to be selected in the general
+        ``memories_list`` panel."""
+        entity = self._selected_conflict_entity()
+        return entity if isinstance(entity, Memory) else self._selected_memory()
+
     def _handle_archive_memory_clicked(self) -> None:
         if self._is_busy or self._is_externally_busy:
             return
-        memory = self._selected_memory()
+        memory = self._memory_for_resolution()
         if memory is None:
             self._show_warning(_NO_SELECTION_TITLE, "Selecciona primero un recuerdo.")
             return
@@ -530,10 +537,17 @@ class KnowledgeWidget(QGroupBox):
             return
         self.refresh()
 
+    def _decision_for_resolution(self) -> Decision | None:
+        """Prefer the entity selected in ``conflicts_list`` (§4.2): acting on a
+        conflict never depends on what happens to be selected in the general
+        ``decisions_list`` panel."""
+        entity = self._selected_conflict_entity()
+        return entity if isinstance(entity, Decision) else self._selected_decision()
+
     def _handle_supersede_decision_clicked(self) -> None:
         if self._is_busy or self._is_externally_busy:
             return
-        superseded = self._selected_decision()
+        superseded = self._decision_for_resolution()
         if superseded is None:
             self._show_warning(
                 _NO_SELECTION_TITLE, "Selecciona primero la decisión vigente a sustituir."
@@ -583,7 +597,7 @@ class KnowledgeWidget(QGroupBox):
     def _handle_archive_decision_clicked(self) -> None:
         if self._is_busy or self._is_externally_busy:
             return
-        decision = self._selected_decision()
+        decision = self._decision_for_resolution()
         if decision is None:
             self._show_warning(_NO_SELECTION_TITLE, "Selecciona primero una decisión.")
             return
@@ -630,6 +644,7 @@ class KnowledgeWidget(QGroupBox):
 
         self.conflicts_list = QListWidget()
         self.conflicts_list.setAccessibleName("Conflictos de precedencia")
+        self.conflicts_list.currentItemChanged.connect(self._handle_conflict_selection_changed)
 
         self.conflicts_status_label = QLabel("")
         self.conflicts_status_label.setWordWrap(True)
@@ -640,6 +655,26 @@ class KnowledgeWidget(QGroupBox):
         layout.addWidget(self.conflicts_list)
         layout.addWidget(self.conflicts_status_label)
         return group
+
+    def _selected_conflict_entity(self) -> Memory | Decision | None:
+        item = self.conflicts_list.currentItem()
+        if item is None:
+            return None
+        entity = item.data(Qt.ItemDataRole.UserRole)
+        return entity if isinstance(entity, Memory | Decision) else None
+
+    def _handle_conflict_selection_changed(
+        self,
+        current: QListWidgetItem | None = None,
+        previous: QListWidgetItem | None = None,
+    ) -> None:
+        # Solo las acciones que de verdad resuelven el conflicto quedan
+        # habilitadas desde aquí (§4.2): corregir conserva subject_key/
+        # project_id (el conflicto reaparecería) y toda decisión en conflicto
+        # ya está APPROVED (aprobarla de nuevo siempre falla).
+        entity = self._selected_conflict_entity()
+        self.correct_memory_button.setEnabled(not isinstance(entity, Memory))
+        self.approve_decision_button.setEnabled(not isinstance(entity, Decision))
 
     def _handle_detect_conflicts_clicked(self) -> None:
         try:
@@ -659,14 +694,19 @@ class KnowledgeWidget(QGroupBox):
         )
         for conflict in conflicts:
             assert conflict.outcome is PrecedenceOutcome.CONFLICT
-            memory_ids = ", ".join(f"#{memory.id}" for memory in conflict.conflicting_memories)
-            decision_ids = ", ".join(f"#{d.id}" for d in conflict.conflicting_decisions)
-            parts = [f"Asunto «{conflict.subject_key}» (proyecto {conflict.project_id})"]
-            if memory_ids:
-                parts.append(f"recuerdos en conflicto: {memory_ids}")
-            if decision_ids:
-                parts.append(f"decisiones en conflicto: {decision_ids}")
-            self.conflicts_list.addItem(QListWidgetItem(" — ".join(parts)))
+            header = QListWidgetItem(
+                f"Asunto «{conflict.subject_key}» (proyecto {conflict.project_id})"
+            )
+            header.setFlags(header.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+            self.conflicts_list.addItem(header)
+            for memory in conflict.conflicting_memories:
+                item = QListWidgetItem(_memory_label(memory))
+                item.setData(Qt.ItemDataRole.UserRole, memory)
+                self.conflicts_list.addItem(item)
+            for decision in conflict.conflicting_decisions:
+                item = QListWidgetItem(_decision_label(decision))
+                item.setData(Qt.ItemDataRole.UserRole, decision)
+                self.conflicts_list.addItem(item)
 
     # --- Actualización y coordinación de estado ocupado ----------------------
 
