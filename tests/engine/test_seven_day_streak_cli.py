@@ -517,3 +517,15 @@ def test_docstring_no_afirma_que_el_motor_arranca_solo_a_mano() -> None:
         "el docstring dejó de afirmar la cadencia real: no cita la frase que "
         "corrige la afirmación falsa (#416)"
     )
+    # CODEX-001 (ronda 2, #416): la cadencia (D2, ADR-090) y el contador (D1,
+    # ADR-101) son dos precondiciones distintas. Cerrar la primera no cierra
+    # la segunda, y el docstring tiene que decir las dos cosas por separado en
+    # vez de dejar que «lo que faltaba está cerrado» se lea como las dos.
+    assert "CLASES_CON_ESTADO_PROPIO" in docstring, (
+        "el docstring tiene que nombrar la precondición que sigue bloqueando "
+        "el contador (H-25, ADR-101, #376), no solo la cadencia ya cerrada"
+    )
+    assert "NO_COMPARABLE" in docstring, (
+        "el docstring tiene que decir con qué resultado sigue midiendo la "
+        "pasada mientras el contador siga bloqueado, no dejarlo implícito"
+    )

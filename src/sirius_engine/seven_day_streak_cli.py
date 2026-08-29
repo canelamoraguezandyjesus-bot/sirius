@@ -53,7 +53,16 @@ y esa fue la decisión siguiente de D2.
 ``motor-sirius.yml`` ya no arranca solo a mano: tiene cadencia programada
 -``cron: 32 */6 * * *``, cada seis horas- además del arranque manual que ya
 tenía, y ha dado turnos programados reales en verde. Lo que faltaba en el
-párrafo anterior está cerrado.
+párrafo anterior -la cadencia- está cerrado.
+
+**Eso no reabre el contador.** La cadencia es una precondición distinta de la
+que sigue bloqueando D1: :data:`sirius_engine.projection_verifier.CLASES_CON_ESTADO_PROPIO`
+sigue vacío hoy (H-25, ADR-101, #376), porque nada escribe todavía en el
+almacén del motor el desenlace real de cada clase -tenerlo corriendo solo no
+es lo mismo que tenerlo llevando ese estado-. Mientras el conjunto esté
+vacío, cada línea de esta pasada sale ``NO_COMPARABLE`` citando el §11.2: la
+etapa que el contador mide no ha empezado. Eso queda como bloque propio -la
+pieza (C) de #376- y no lo toca este módulo.
 """
 
 from __future__ import annotations
