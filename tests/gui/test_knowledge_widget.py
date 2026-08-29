@@ -992,6 +992,80 @@ def test_clicking_the_conflict_header_does_not_touch_conflicts_list(
 
 
 @pytest.mark.gui
+def test_clicking_the_conflict_header_while_unfocused_does_not_touch_conflicts_list(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CODEX-001 (ronda 5): el clic real sobre la cabecera de un conflicto
+    cuando ``conflicts_list`` NO tiene el foco (a diferencia del test
+    anterior, que solo usaba ``setCurrentRow`` y por eso no reproducía el
+    fallo) entrega primero un ``QEvent.FocusIn`` al widget. El
+    ``eventFilter`` reaccionaba a *cualquier* ``FocusIn`` leyendo
+    ``currentItem()`` — todavía el miembro A, porque la cabecera no es
+    seleccionable — y reactivaba ``conflicts_list`` antes de que
+    ``itemClicked`` pudiera ignorar la cabecera. Secuencia: se selecciona un
+    miembro A en ``conflicts_list``, se selecciona una memoria B en
+    ``memories_list`` y se le da el foco explícitamente (para forzar el
+    ``QEvent.FocusIn`` por ratón que el clic siguiente genera en
+    ``conflicts_list``), y por
+    último se pulsa con el ratón la cabecera del conflicto (sin haber tocado
+    ``conflicts_list`` de nuevo). Archivar debe seguir actuando sobre B."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    project_id = dependencies.project_continuity_use_case.get_summary().project_id
+    dependencies.save_manual_memory_use_case.save(
+        "usar SQLite local", subject_key="Motor de persistencia", project_id=project_id
+    )
+    dependencies.save_manual_memory_use_case.save(
+        "usar un servidor remoto", subject_key="Motor de persistencia", project_id=project_id
+    )
+    unrelated = dependencies.save_manual_memory_use_case.save(
+        "el equipo se reúne los martes", subject_key="Calendario", project_id=project_id
+    )
+    widget = _build_widget(dependencies, _Recorder(), confirm_action=True)
+    qtbot.addWidget(widget)
+    widget.show()
+    qtbot.waitUntil(lambda: widget.conflicts_list.viewport().width() > 0)
+
+    widget.detect_conflicts_button.click()
+    memory_row = next(
+        row
+        for row in range(widget.conflicts_list.count())
+        if isinstance(widget.conflicts_list.item(row).data(Qt.ItemDataRole.UserRole), Memory)
+    )
+    widget.conflicts_list.setCurrentRow(memory_row)
+    assert widget._last_touched_list is widget.conflicts_list
+
+    unrelated_row = next(
+        row
+        for row in range(widget.memories_list.count())
+        if f"#{unrelated.id} " in widget.memories_list.item(row).text()
+    )
+    widget.memories_list.setCurrentRow(unrelated_row)
+    assert widget._last_touched_list is widget.memories_list
+
+    # A diferencia de test_clicking_the_conflict_header_does_not_touch_conflicts_list,
+    # aquí se fuerza explícitamente el foco a memories_list para que el clic
+    # posterior sobre conflicts_list dispare un QEvent.FocusIn real (por
+    # ratón) antes del itemClicked de la cabecera.
+    widget.memories_list.setFocus(Qt.FocusReason.MouseFocusReason)
+    qtbot.waitUntil(lambda: widget.memories_list.hasFocus())
+
+    header_item = widget.conflicts_list.item(0)
+    assert not (header_item.flags() & Qt.ItemFlag.ItemIsSelectable)
+    QTest.mouseClick(
+        widget.conflicts_list.viewport(),
+        Qt.MouseButton.LeftButton,
+        pos=widget.conflicts_list.visualItemRect(header_item).center(),
+    )
+    assert widget._last_touched_list is widget.memories_list
+
+    widget.archive_memory_button.click()
+
+    texts = [widget.memories_list.item(row).text() for row in range(widget.memories_list.count())]
+    assert any(f"#{unrelated.id} " in text and "(archived)" in text for text in texts)
+    assert not any("Motor de persistencia" in text and "(archived)" in text for text in texts)
+
+
+@pytest.mark.gui
 def test_returning_keyboard_focus_to_the_current_row_touches_the_memories_list(
     qtbot: QtBot, tmp_path: Path
 ) -> None:

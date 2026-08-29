@@ -23,6 +23,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 
 from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtGui import QFocusEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -725,8 +726,19 @@ class KnowledgeWidget(QGroupBox):
         # Tab/Shift+Tab pueden devolver el foco a una lista cuya fila ya era
         # currentItem(): ni currentItemChanged ni itemClicked se emiten en
         # ese caso, así que sin esto _last_touched_list se queda apuntando a
-        # la lista tocada antes por última vez (CODEX-002).
-        if event.type() == QEvent.Type.FocusIn:
+        # la lista tocada antes por última vez (CODEX-002). Se excluye
+        # explícitamente el foco ganado por clic de ratón (CODEX-001, ronda
+        # 5): ese FocusIn llega antes que el itemClicked del mismo clic, así
+        # que reaccionar a él reactivaría conflicts_list con su
+        # currentItem() todavía desactualizado (el miembro tocado antes del
+        # clic) cuando el clic real cae sobre la cabecera no seleccionable;
+        # itemClicked ya cede la prioridad correctamente una vez procesado
+        # el clic, así que basta con dejarle ese caso a él.
+        if (
+            event.type() == QEvent.Type.FocusIn
+            and isinstance(event, QFocusEvent)
+            and event.reason() != Qt.FocusReason.MouseFocusReason
+        ):
             if watched is self.memories_list:
                 self._handle_memories_list_selection_changed(self.memories_list.currentItem())
             elif watched is self.decisions_list:
