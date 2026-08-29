@@ -20,13 +20,24 @@ REFERENCIA_ESTABLE = re.compile(
 )
 
 
-def _texto() -> str:
-    return DOCUMENTO.read_text(encoding="utf-8")
+SECCION_11 = re.compile(
+    r"^## 11\. Criterios de salida de este plan\n(?P<cuerpo>.*?)(?=\n## |\Z)",
+    re.DOTALL | re.MULTILINE,
+)
+
+
+def _seccion_11() -> str:
+    texto = DOCUMENTO.read_text(encoding="utf-8")
+    coincidencia = SECCION_11.search(texto)
+    assert coincidencia is not None, (
+        "No se encontró el encabezado '## 11. Criterios de salida de este plan' en el documento."
+    )
+    return coincidencia.group("cuerpo")
 
 
 def test_la_seccion_11_no_cita_un_numero_de_linea_para_la_precondicion_1() -> None:
-    texto = _texto()
-    assert not REFERENCIA_DESFASADA.search(texto), (
+    seccion_11 = _seccion_11()
+    assert not REFERENCIA_DESFASADA.search(seccion_11), (
         "La sección 11 cita un número de línea para la precondición 1 de "
         "PA-0.2-PUERTA-01; ese número se desfasa en cada edición del documento "
         "(incidencia #424). Debe citar la sección (§8), no líneas."
@@ -34,4 +45,4 @@ def test_la_seccion_11_no_cita_un_numero_de_linea_para_la_precondicion_1() -> No
 
 
 def test_la_seccion_11_cita_la_precondicion_1_por_seccion() -> None:
-    assert REFERENCIA_ESTABLE.search(_texto())
+    assert REFERENCIA_ESTABLE.search(_seccion_11())
