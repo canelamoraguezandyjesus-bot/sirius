@@ -109,6 +109,9 @@ class _FakeProjectRepository:
         )
         return self._project
 
+    def list_completed_projects(self) -> tuple[Project, ...]:
+        raise AssertionError("must never be called from this widget")
+
 
 def _configured_project(
     *, name: str = "Sirius 0.1", objective: str = "Cerrar B3b", blockers: str = ""
