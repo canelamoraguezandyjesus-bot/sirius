@@ -646,7 +646,7 @@ siete puntos a diseño, uno por uno.
 **1. Campo nuevo y vocabulario cerrado.** `Memory` y `Decision` ganan dos campos nuevos,
 opcionales, en la propia entidad —no en su revisión, mismo patrón que
 `subject_key`/`project_id` (`src/sirius/domain/memory.py:67-68`,
-`src/sirius/domain/decision.py:91-93`), porque clasificar la categoría de un elemento no es
+`src/sirius/domain/decision.py:87-88`), porque clasificar la categoría de un elemento no es
 corregir su contenido—: `category: str | None = None` y `category_locked: bool = False`. El
 vocabulario de `category` es exactamente el que porta el banco de 47 casos que M7 (§8)
 versiona en `tests/acceptance/fixtures/evidence_bank_47_casos.json` (§6.5): este documento
@@ -746,14 +746,19 @@ ningún otro caso de uso de esta arquitectura (§0.1)—: es
 (`src/sirius/presentation/knowledge_widget.py:388-407`), la
 misma función que ya llama a `correct()` de forma síncrona y luego refresca la vista, quien
 lo encola justo después de que esa llamada devuelva, cuando el `Memory`/`Decision` que
-`correct()` devolvió trae `category is None` — la misma condición que disparó la limpieza,
-visible en el resultado ya devuelto, sin que `correct()` tenga que señalarla por ningún canal
-adicional. Si `category_locked` es `True` — el usuario ya la fijó o corrigió —, `correct()`
-no toca ni `category` ni `category_locked`, y `_handle_correct_memory_clicked` no encola
-nada: corregir el contenido nunca reabre una categoría que el usuario ya cerró (punto 3).
+`correct()` devolvió trae `category is None` **y** `category_locked is False` — la condición
+de presentación nunca confía solo en `category is None`, comprueba también el candado, para
+no encolar si algún otro camino llegara a devolver esa combinación con `category_locked` en
+`True`, aunque la rama transaccional del punto anterior garantice que hoy no ocurre. Si
+`category_locked` es `True` — el usuario ya la fijó o corrigió —, `correct()` no toca ni
+`category` ni `category_locked`, y `_handle_correct_memory_clicked` no encola nada: corregir
+el contenido nunca reabre una categoría que el usuario ya cerró (punto 3).
 Ninguna de las dos ramas añade un campo nuevo: usa exactamente los que el punto 1 ya define.
 M8 (§8) construye la rama transaccional de `CorrectMemoryUseCase` y la orquestación de
-`_handle_correct_memory_clicked`, cada una con su prueba.
+`_handle_correct_memory_clicked`, cada una con su prueba — incluida una prueba de
+`_handle_correct_memory_clicked` con un doble de `CorrectMemoryUseCase` que devuelva
+`category=None` y `category_locked=True`, que confirma que no se encola ningún
+`CategoryTaggingWorker` en ese caso.
 
 **5. El proveedor de pago no interviene.** Ninguno de los componentes anteriores llama a
 `LLMProvider` (`src/sirius/ports/llm.py:106-119`) ni a ningún adaptador de pago:
@@ -928,6 +933,26 @@ las decisiones que §9 deja pendientes de un encargo futuro, asignada a quien re
 umbral y confirme que la cifra medida lo alcanza, no a este documento ni a un número de
 encargo fijado por adelantado; este documento no elige el valor del umbral ni decide cuándo
 se cumple, solo el contrato de cómo esa decisión, una vez tomada, llega al runtime.
+
+**La activación no puede perderse en un guardado posterior.** El propietario activa la
+puerta editando `settings.json` directamente, no desde la interfaz (párrafo anterior); pero
+`MainWindow._save_configuration()` ya construye hoy, para cualquier guardado desde el diálogo
+de preferencias, un diccionario nuevo con solo las seis claves que esa vista conoce y se lo
+pasa entero a `save_settings()` (`src/sirius/presentation/main_window.py:2476-2484`), que a
+su vez sobrescribe `settings.json` por completo (`src/sirius/config/settings.py:27-34`):
+guardar cualquier otro ajuste desde la interfaz después de activar la puerta la cerraría de
+nuevo sin que nadie lo pidiera, porque `category_matching_enabled` no es una de esas seis
+claves. Esta arquitectura exige que `_save_configuration()` deje de construir ese diccionario
+desde cero y en su lugar parta de `load_settings()`, actualizando solo las claves que la
+vista conoce y conservando cualquier otra clave ya presente en el fichero —
+`category_matching_enabled` incluida, sin que `_save_configuration()` necesite conocer su
+nombre ni su significado. Una activación explícita persiste así hasta otra desactivación
+explícita, nunca hasta el próximo guardado de un ajuste no relacionado. M11 (§8) corrige
+`_save_configuration()` en este sentido y añade la prueba que lo demuestra: activar la clave,
+guardar un ajuste cualquiera desde `_save_configuration()`, y confirmar que la clave sigue en
+`True` después.
+
+### 6.4 Presupuesto de latencia: RNF-003 y metodología de medición de M11
 
 Ninguno de los dos puntos de integración puede sacar a `ContextBuilder` de RNF-003, 300 ms
 P95 (`docs/decisions/ADR-008-cargar-en-lote-las-revisiones-vigentes-al-listar.md:111-117`,
@@ -1382,7 +1407,10 @@ por defecto, `False` — el circuito completo queda armado con la puerta cerrada
 queda publicada, y es el propietario quien abre la puerta después, en dos pasos separados de
 este encargo: registra el umbral en `STATUS.md` (§9) y, por separado, alguien fija
 `category_matching_enabled = True` en `settings.json` (§6.3) — ninguno de los dos ocurre
-dentro de M11.
+dentro de M11. Lo que sí ocurre dentro de M11, para que esa activación manual sobreviva, es
+la corrección de `MainWindow._save_configuration()` que §6.3 exige: partir de
+`load_settings()` en vez de construir el diccionario desde cero, conservando cualquier clave
+ajena a las seis que la vista conoce.
 
 **Criterio de aceptación:** tabla de medición con el mismo formato que la de ADR-008
 (`docs/decisions/ADR-008-cargar-en-lote-las-revisiones-vigentes-al-listar.md:111-117`), con
@@ -1403,7 +1431,10 @@ clasificado en una categoría no crítica queda expuesto a `RelevanceFilterPort`
 de prueba del puerto que lo descarta) y el resultado final lo excluye, y `category_match`
 compara la categoría real del candidato contra la que activa la consulta — esta prueba
 verifica el contrato del parámetro en ambos valores, sin que M11 fije `True` en la
-construcción con la que Sirius arranca por defecto.
+construcción con la que Sirius arranca por defecto; una última prueba cubre
+`_save_configuration()` (§6.3): con `category_matching_enabled=True` ya en `settings.json`,
+guardar cualquier otro ajuste desde ese método deja la clave intacta, en vez de perderla como
+ocurre hoy.
 
 ### M12 — Mejor recuperación: intento de cierre de la última omisión crítica (D3)
 
