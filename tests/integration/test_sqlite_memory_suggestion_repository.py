@@ -79,6 +79,31 @@ def test_create_suggestion_carries_subject_key_project_id_and_source_event_id(
 
 
 @pytest.mark.integration
+def test_create_suggestion_with_a_subject_key_but_no_project_id_is_rejected(
+    tmp_path: Path,
+) -> None:
+    """A pending subject_key with no project could never be confirmed:
+    ``SqliteMemoryRepository.create_memory()`` enforces the same invariant
+    (``src/sirius/domain/memory.py``), so the suggestion must reject it up
+    front rather than leave an unconfirmable suggestion pending."""
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+
+    with pytest.raises(ValueError, match="must also be associated with a project"):
+        repository.create_suggestion("usar SQLite local", subject_key="Motor de persistencia")
+
+
+@pytest.mark.integration
+def test_create_suggestion_with_a_blank_subject_key_is_rejected(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    project_id = _project_id(database_path)
+
+    with pytest.raises(ValueError, match="cannot be blank"):
+        repository.create_suggestion("usar SQLite local", subject_key="   ", project_id=project_id)
+
+
+@pytest.mark.integration
 def test_get_suggestion_for_an_unknown_id_raises(tmp_path: Path) -> None:
     database_path = tmp_path / "sirius.db"
     repository = _build_repository(database_path)

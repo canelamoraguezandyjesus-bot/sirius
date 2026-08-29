@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from sirius.adapters.persistence.database import build_engine, build_session_factory, session_scope
 from sirius.adapters.persistence.models import MemorySuggestionModel
+from sirius.domain.memory import ensure_subject_key_has_a_project, ensure_valid_subject_key
 from sirius.domain.memory_suggestion import (
     MemorySuggestion,
     MemorySuggestionStatus,
@@ -94,6 +95,8 @@ class SqliteMemorySuggestionRepository:
         subject_key: str | None = None,
         project_id: int | None = None,
     ) -> MemorySuggestion:
+        ensure_valid_subject_key(subject_key)
+        ensure_subject_key_has_a_project(subject_key, project_id)
         with self._scope() as session:
             model = MemorySuggestionModel(
                 content=content,
