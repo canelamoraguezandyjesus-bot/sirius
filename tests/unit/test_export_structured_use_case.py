@@ -179,6 +179,17 @@ class _StaticMemoryRepository:
     def delete_memory(self, memory_id: int) -> Memory:
         raise AssertionError("export_structured() must never delete a memory")
 
+    def set_category(
+        self, memory_id: int, category: str, *, observed_revision_version: int
+    ) -> bool:
+        raise AssertionError("export() must never set a category")
+
+    def set_user_category(self, memory_id: int, category: str) -> Memory:
+        raise AssertionError("export() must never set a category")
+
+    def list_uncategorized(self) -> list[Memory]:
+        raise AssertionError("export() must never list uncategorized memories")
+
 
 class _StaticDecisionRepository:
     def __init__(self, decisions: list[Decision]) -> None:
@@ -212,6 +223,17 @@ class _StaticDecisionRepository:
 
     def get_superseding_decision(self, decision_id: int) -> Decision | None:
         raise AssertionError("export_structured() must never look up a superseding decision")
+
+    def set_category(
+        self, decision_id: int, category: str, *, observed_revision_version: int
+    ) -> bool:
+        raise AssertionError("export() must never set a category")
+
+    def set_user_category(self, decision_id: int, category: str) -> Decision:
+        raise AssertionError("export() must never set a category")
+
+    def list_uncategorized(self) -> list[Decision]:
+        raise AssertionError("export() must never list uncategorized decisions")
 
 
 class _RecordingExportService:

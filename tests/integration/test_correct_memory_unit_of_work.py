@@ -123,3 +123,50 @@ def test_a_valid_correction_succeeds_after_a_rolled_back_attempt(
 
     assert corrected.current_revision.content == "segundo intento, correcto"
     assert corrected.current_revision.version == 2
+
+
+@pytest.mark.integration
+def test_correcting_an_unlocked_category_clears_it_in_the_same_transaction(
+    tmp_path: Path,
+) -> None:
+    """D7, SIRIUS-ARQ-0.2 §6.1 "Corrección de contenido y reetiquetado": the
+    content that produced an automatic (unlocked) category no longer
+    describes the memory once corrected — no double, no Qt import, only the
+    real ``CorrectMemoryUseCase``/``SqliteUnitOfWork``."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    memory_id = _create_memory(database_path)
+
+    setup_unit_of_work = build_sqlite_unit_of_work(database_path)
+    with setup_unit_of_work as uow:
+        wrote = uow.memory_repository.set_category(
+            memory_id, "trabajo", observed_revision_version=1
+        )
+        uow.commit()
+    assert wrote is True
+
+    use_case = CorrectMemoryUseCase(build_sqlite_unit_of_work(database_path))
+    corrected = use_case.correct(memory_id, "contenido corregido")
+
+    assert corrected.category is None
+    assert corrected.category_locked is False
+
+
+@pytest.mark.integration
+def test_correcting_a_locked_category_leaves_it_untouched(tmp_path: Path) -> None:
+    """D7 point 3: a category the user already set or corrected is
+    definitive — correcting the memory's content never reopens it."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    memory_id = _create_memory(database_path)
+
+    setup_unit_of_work = build_sqlite_unit_of_work(database_path)
+    with setup_unit_of_work as uow:
+        uow.memory_repository.set_user_category(memory_id, "personal")
+        uow.commit()
+
+    use_case = CorrectMemoryUseCase(build_sqlite_unit_of_work(database_path))
+    corrected = use_case.correct(memory_id, "contenido corregido de nuevo")
+
+    assert corrected.category == "personal"
+    assert corrected.category_locked is True

@@ -106,3 +106,27 @@ class DecisionRepository(Protocol):
         queryable from either side without a second, redundant column.
         """
         ...
+
+    def set_category(
+        self, decision_id: int, category: str, *, observed_revision_version: int
+    ) -> bool:
+        """Conditionally write an automatic category (D7 point 2,
+        SIRIUS-ARQ-0.2 §6.1), for ``TagCategoryUseCase`` only. Mirrors
+        ``MemoryRepository.set_category``: a single atomic conditional
+        statement, never a read followed by a separate write.
+        """
+        ...
+
+    def set_user_category(self, decision_id: int, category: str) -> Decision:
+        """Unconditionally write ``category`` and set ``category_locked`` to
+        ``True``, in the same call, for ``SetCategoryUseCase`` only (D7 point
+        3). Mirrors ``MemoryRepository.set_user_category``.
+        """
+        ...
+
+    def list_uncategorized(self) -> list[Decision]:
+        """Return every decision with ``category is None`` and
+        ``category_locked is False`` (D7 point 4). Mirrors
+        ``MemoryRepository.list_uncategorized``.
+        """
+        ...

@@ -39,6 +39,7 @@ from sirius.adapters.llm.openai_credential_validator import OpenAICredentialVali
 from sirius.adapters.llm.openai_responses import OpenAIResponsesProvider
 from sirius.adapters.llm.token_counter import CharacterHeuristicTokenCounter
 from sirius.adapters.llm.unconfigured import UnconfiguredLLMProvider
+from sirius.adapters.ollama_category_classifier import OllamaCategoryClassifierAdapter
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
 )
@@ -90,9 +91,11 @@ from sirius.application.reject_memory_suggestion import RejectMemorySuggestionUs
 from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageUseCase
+from sirius.application.set_category import SetCategoryUseCase
 from sirius.application.studio_capture import StudioCaptureUseCase
 from sirius.application.studio_voice import StudioVoiceUseCase, VoiceSettings
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
+from sirius.application.tag_category import TagCategoryUseCase
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
 from sirius.capture_setup import leer_contrasena_guardada
@@ -114,6 +117,20 @@ _logger = get_logger(__name__)
 
 STUDIO_VOICE_SETTING = "model_studio_voice"
 """Dónde vive la voz elegida en los ajustes rápidos de Model Studio."""
+
+# D7 punto 1 (SIRIUS-ARQ-0.2 §6.1): el vocabulario cerrado real es el que
+# porta el banco de 47 casos que M7 versiona en
+# tests/acceptance/fixtures/evidence_bank_47_casos.json — un fixture que ese
+# encargo, independiente de M8, todavía no ha portado a este repositorio.
+# Este es un valor provisional, confinado a esta única raíz de composición
+# (nunca al dominio ni a ningún puerto/adaptador, que reciben el vocabulario
+# y el modelo como parámetros explícitos): en cuanto M7 exista, sustituir
+# esta constante por el vocabulario real del banco es el único cambio que
+# M8/M9/M10 necesitan.
+_CATEGORY_VOCABULARY: frozenset[str] = frozenset(
+    {"trabajo", "personal", "salud", "finanzas", "proyecto", "aprendizaje", "otros"}
+)
+_CATEGORY_CLASSIFIER_MODEL = "llama3.2"
 
 
 def save_studio_voice(voice: str) -> None:
@@ -175,6 +192,8 @@ class ConversationDependencies:
     propose_memory_suggestion_use_case: ProposeMemorySuggestionUseCase
     confirm_memory_suggestion_use_case: ConfirmMemorySuggestionUseCase
     reject_memory_suggestion_use_case: RejectMemorySuggestionUseCase
+    tag_category_use_case: TagCategoryUseCase
+    set_category_use_case: SetCategoryUseCase
     create_backup_use_case: CreateBackupUseCase
     validate_backup_use_case: ValidateBackupUseCase
     restore_backup_use_case: RestoreBackupUseCase
@@ -446,6 +465,18 @@ def build_conversation_dependencies(
     backup_service = build_sqlite_backup_service(database_path, backups_dir)
     export_service = build_filesystem_export_service(build_system_clock())
 
+    # D7 (SIRIUS-ARQ-0.2 §6.1): the only two use cases allowed to touch
+    # category/category_locked. Built on the plain repositories, never
+    # unit_of_work — writing a classification is neither "event + memory"
+    # nor "event + decision" (§0.1 point 4), and TagCategoryUseCase's
+    # classifier call must never run inside an open database transaction.
+    tag_category_use_case = TagCategoryUseCase(
+        memory_repository,
+        decision_repository,
+        OllamaCategoryClassifierAdapter(_CATEGORY_CLASSIFIER_MODEL, _CATEGORY_VOCABULARY),
+    )
+    set_category_use_case = SetCategoryUseCase(memory_repository, decision_repository)
+
     repositories = (
         conversation_repository,
         identity_repository,
@@ -515,6 +546,8 @@ def build_conversation_dependencies(
         propose_memory_suggestion_use_case=ProposeMemorySuggestionUseCase(unit_of_work),
         confirm_memory_suggestion_use_case=ConfirmMemorySuggestionUseCase(unit_of_work),
         reject_memory_suggestion_use_case=RejectMemorySuggestionUseCase(unit_of_work),
+        tag_category_use_case=tag_category_use_case,
+        set_category_use_case=set_category_use_case,
         create_backup_use_case=CreateBackupUseCase(backup_service),
         validate_backup_use_case=ValidateBackupUseCase(backup_service),
         restore_backup_use_case=RestoreBackupUseCase(backup_service),

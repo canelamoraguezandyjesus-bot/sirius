@@ -6,8 +6,9 @@ from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
-from sqlalchemy import Engine, select
+from sqlalchemy import CursorResult, Engine, exists, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from sirius.adapters.persistence.database import (
@@ -57,6 +58,8 @@ def _to_domain_memory(model: MemoryModel, revision_model: MemoryRevisionModel) -
         updated_at=model.updated_at.replace(tzinfo=UTC),
         subject_key=model.subject_key,
         project_id=model.project_id,
+        category=model.category,
+        category_locked=model.category_locked,
     )
 
 
@@ -251,6 +254,14 @@ class SqliteMemoryRepository:
             )
             session.add(new_revision_model)
             memory_model.updated_at = _utc_now_naive()
+            # D7, "Corrección de contenido y reetiquetado" (SIRIUS-ARQ-0.2
+            # §6.1): the content that produced the current category no
+            # longer describes this memory once corrected. If the category
+            # is still the automatic one (category_locked is False), clear
+            # it in this same transaction; a user-locked category is never
+            # touched by a correction (point 3).
+            if not memory_model.category_locked:
+                memory_model.category = None
             session.flush()
 
             return _to_domain_memory(memory_model, new_revision_model)
@@ -292,6 +303,54 @@ class SqliteMemoryRepository:
             session.flush()
 
             return _load_memory(session, memory_model)
+
+    def set_category(
+        self, memory_id: int, category: str, *, observed_revision_version: int
+    ) -> bool:
+        with self._scope() as session:
+            # Single atomic UPDATE: the EXISTS subquery re-checks, in the
+            # same statement, that the current revision is still the one
+            # that was classified — comprobar y escribir son una sola
+            # operación atómica de la base de datos (D7 point 2), never a
+            # read in Python followed by a separate write.
+            statement = (
+                update(MemoryModel)
+                .where(
+                    MemoryModel.id == memory_id,
+                    MemoryModel.category_locked.is_(False),
+                    exists().where(
+                        MemoryRevisionModel.memory_id == MemoryModel.id,
+                        MemoryRevisionModel.is_current.is_(True),
+                        MemoryRevisionModel.version == observed_revision_version,
+                    ),
+                )
+                .values(category=category)
+            )
+            result = cast(CursorResult[None], session.execute(statement))
+            return result.rowcount > 0
+
+    def set_user_category(self, memory_id: int, category: str) -> Memory:
+        with self._scope() as session:
+            memory_model = session.get(MemoryModel, memory_id)
+            if memory_model is None:
+                msg = f"Unknown memory id: {memory_id}"
+                raise ValueError(msg)
+            memory_model.category = category
+            memory_model.category_locked = True
+            session.flush()
+            return _load_memory(session, memory_model)
+
+    def list_uncategorized(self) -> list[Memory]:
+        with self._scope() as session:
+            models = session.scalars(
+                select(MemoryModel)
+                .where(
+                    MemoryModel.category.is_(None),
+                    MemoryModel.category_locked.is_(False),
+                )
+                .order_by(MemoryModel.id)
+            ).all()
+            return _load_memories(session, models)
 
 
 def build_sqlite_memory_repository(database_path: Path) -> SqliteMemoryRepository:

@@ -6,8 +6,9 @@ from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
-from sqlalchemy import Engine, select
+from sqlalchemy import CursorResult, Engine, exists, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from sirius.adapters.persistence.database import (
@@ -55,6 +56,8 @@ def _to_domain_decision(model: DecisionModel, revision_model: DecisionRevisionMo
         created_at=model.created_at.replace(tzinfo=UTC),
         updated_at=model.updated_at.replace(tzinfo=UTC),
         supersedes_decision_id=model.supersedes_decision_id,
+        category=model.category,
+        category_locked=model.category_locked,
     )
 
 
@@ -275,6 +278,49 @@ class SqliteDecisionRepository:
             if model is None:
                 return None
             return _load_decision(session, model)
+
+    def set_category(
+        self, decision_id: int, category: str, *, observed_revision_version: int
+    ) -> bool:
+        with self._scope() as session:
+            statement = (
+                update(DecisionModel)
+                .where(
+                    DecisionModel.id == decision_id,
+                    DecisionModel.category_locked.is_(False),
+                    exists().where(
+                        DecisionRevisionModel.decision_id == DecisionModel.id,
+                        DecisionRevisionModel.is_current.is_(True),
+                        DecisionRevisionModel.version == observed_revision_version,
+                    ),
+                )
+                .values(category=category)
+            )
+            result = cast(CursorResult[None], session.execute(statement))
+            return result.rowcount > 0
+
+    def set_user_category(self, decision_id: int, category: str) -> Decision:
+        with self._scope() as session:
+            decision_model = session.get(DecisionModel, decision_id)
+            if decision_model is None:
+                msg = f"Unknown decision id: {decision_id}"
+                raise ValueError(msg)
+            decision_model.category = category
+            decision_model.category_locked = True
+            session.flush()
+            return _load_decision(session, decision_model)
+
+    def list_uncategorized(self) -> list[Decision]:
+        with self._scope() as session:
+            models = session.scalars(
+                select(DecisionModel)
+                .where(
+                    DecisionModel.category.is_(None),
+                    DecisionModel.category_locked.is_(False),
+                )
+                .order_by(DecisionModel.id)
+            ).all()
+            return _load_decisions(session, models)
 
 
 def build_sqlite_decision_repository(database_path: Path) -> SqliteDecisionRepository:

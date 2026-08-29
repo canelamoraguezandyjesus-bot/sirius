@@ -75,6 +75,7 @@ from sirius.application.studio_voice import (
     VoiceFailure,
 )
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
+from sirius.application.tag_category import TagCategoryUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
 from sirius.config.llm_provider_settings import (
     LLMProviderConfigurationError,
@@ -254,6 +255,7 @@ class MainWindow(QMainWindow):
         historical_projects_use_case: HistoricalProjectsUseCase,
         close_database_connections: Callable[[], None],
         *,
+        tag_category_use_case: TagCategoryUseCase | None = None,
         studio_voice_use_case: StudioVoiceUseCase | None = None,
         studio_capture_use_case: StudioCaptureUseCase | None = None,
         save_studio_voice: Callable[[str], None] | None = None,
@@ -293,6 +295,7 @@ class MainWindow(QMainWindow):
         self._restore_backup_use_case = restore_backup_use_case
         self._export_structured_use_case = export_structured_use_case
         self._historical_projects_use_case = historical_projects_use_case
+        self._tag_category_use_case = tag_category_use_case
         # Not a use case: the minimal SQLAlchemy-lifecycle mechanism a safe
         # restoration needs (see ConversationDependencies' docstring). Called
         # right before RestoreBackupUseCase so the atomic file replace is not
@@ -1189,6 +1192,8 @@ class MainWindow(QMainWindow):
             self._project_continuity_use_case,
             self._confirm_memory_suggestion_use_case,
             self._reject_memory_suggestion_use_case,
+            tag_category_use_case=self._tag_category_use_case,
+            thread_pool=self._thread_pool,
             show_warning=self._show_warning,
             show_information=self._show_information,
         )

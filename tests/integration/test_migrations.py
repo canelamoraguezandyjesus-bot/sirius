@@ -110,6 +110,8 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
         "project_id",
         "created_at",
         "updated_at",
+        "category",
+        "category_locked",
     }
     assert memory_revision_columns == {
         "id",
@@ -137,6 +139,8 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
         "supersedes_decision_id",
         "created_at",
         "updated_at",
+        "category",
+        "category_locked",
     }
     assert decision_revision_columns == {
         "id",
@@ -1519,3 +1523,136 @@ def test_memory_suggestion_can_be_inserted_and_read_back(tmp_path: Path) -> None
     assert rows[1].status == "confirmed"
     assert rows[1].resulting_memory_id == 1
     assert rows[1].resolved_at == now
+
+
+_M8_PREVIOUS_HEAD_REVISION = "1975a5496c12"  # head immediately before M8's category columns
+
+
+@pytest.mark.integration
+def test_upgrade_head_adds_category_columns_to_memories_and_decisions(tmp_path: Path) -> None:
+    """M8, SIRIUS-ARQ-0.2 §6.1/§8-M8, D7 point 1: the two new columns exist
+    on both tables after upgrading to head, purely additive."""
+    database_path = tmp_path / "sirius.db"
+
+    command.upgrade(_alembic_config(database_path), "head")
+
+    inspector = inspect(build_engine(database_path))
+    memory_columns = {c["name"] for c in inspector.get_columns("memories")}
+    decision_columns = {c["name"] for c in inspector.get_columns("decisions")}
+    assert {"category", "category_locked"}.issubset(memory_columns)
+    assert {"category", "category_locked"}.issubset(decision_columns)
+
+
+@pytest.mark.integration
+def test_downgrade_to_previous_head_removes_only_the_category_columns(tmp_path: Path) -> None:
+    """M8: downgrading past this migration removes only ``category``/
+    ``category_locked`` from ``memories`` and ``decisions``; every other
+    table and column (including both tables themselves) is unaffected."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+
+    command.upgrade(config, "head")
+    command.downgrade(config, _M8_PREVIOUS_HEAD_REVISION)
+
+    inspector = inspect(build_engine(database_path))
+    memory_columns = {c["name"] for c in inspector.get_columns("memories")}
+    decision_columns = {c["name"] for c in inspector.get_columns("decisions")}
+    assert not {"category", "category_locked"}.intersection(memory_columns)
+    assert not {"category", "category_locked"}.intersection(decision_columns)
+    assert memory_columns == {
+        "id",
+        "status",
+        "subject_key",
+        "project_id",
+        "created_at",
+        "updated_at",
+    }
+    assert decision_columns == {
+        "id",
+        "subject",
+        "project_id",
+        "status",
+        "supersedes_decision_id",
+        "created_at",
+        "updated_at",
+    }
+    table_names = set(inspector.get_table_names())
+    assert {"memories", "memory_revisions", "decisions", "decision_revisions"}.issubset(table_names)
+
+
+@pytest.mark.integration
+def test_upgrading_from_the_previous_head_preserves_memories_and_decisions_and_backfills_category(
+    tmp_path: Path,
+) -> None:
+    """M8 compatibility: a base created before this migration existed (still
+    at the previous head) upgrades to the new head without losing any
+    existing memory or decision; ``category`` backfills to ``NULL`` and
+    ``category_locked`` to ``False`` (D7 point 4: immediately eligible for
+    the retroactive tagging pass)."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+    command.upgrade(config, _M8_PREVIOUS_HEAD_REVISION)
+
+    now = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO memories (id, status, created_at, updated_at) "
+                "VALUES (1, 'current', :now, :now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO memory_revisions "
+                "(memory_id, version, content, origin, is_current, created_at) "
+                "VALUES (1, 1, 'recuerdo previo a M8', 'manual', 1, :now)"
+            ),
+            {"now": now},
+        )
+        project_id = connection.execute(
+            text(
+                "INSERT INTO projects "
+                "(name, objective, current_state, next_step, is_active, status, created_at, "
+                "updated_at) VALUES ('Sirius 0.1', '', '', '', 1, 'active', :now, :now)"
+            ),
+            {"now": now},
+        ).lastrowid
+        connection.execute(
+            text(
+                "INSERT INTO decisions (id, subject, project_id, status, created_at, updated_at) "
+                "VALUES (1, 'asunto previo a M8', :project_id, 'approved', :now, :now)"
+            ),
+            {"project_id": project_id, "now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO decision_revisions "
+                "(decision_id, version, content, is_current, created_at) "
+                "VALUES (1, 1, 'decision previa a M8', 1, :now)"
+            ),
+            {"now": now},
+        )
+
+    command.upgrade(config, "head")
+
+    with engine.begin() as connection:
+        memory_rows = connection.execute(
+            text("SELECT id, status, category, category_locked FROM memories")
+        ).fetchall()
+        decision_rows = connection.execute(
+            text("SELECT id, subject, category, category_locked FROM decisions")
+        ).fetchall()
+
+    assert len(memory_rows) == 1
+    assert memory_rows[0].id == 1
+    assert memory_rows[0].status == "current"
+    assert memory_rows[0].category is None
+    assert memory_rows[0].category_locked == 0
+
+    assert len(decision_rows) == 1
+    assert decision_rows[0].id == 1
+    assert decision_rows[0].subject == "asunto previo a M8"
+    assert decision_rows[0].category is None
+    assert decision_rows[0].category_locked == 0

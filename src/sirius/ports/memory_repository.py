@@ -72,3 +72,38 @@ class MemoryRepository(Protocol):
     def delete_memory(self, memory_id: int) -> Memory:
         """Redact the structured content of every revision and mark the memory deleted."""
         ...
+
+    def set_category(
+        self, memory_id: int, category: str, *, observed_revision_version: int
+    ) -> bool:
+        """Conditionally write an automatic category (D7 point 2,
+        SIRIUS-ARQ-0.2 §6.1), for ``TagCategoryUseCase`` only.
+
+        A single atomic conditional statement in the persistence engine —
+        never a read in Python followed by a separate write — writes
+        ``category`` only if, in that same statement, ``category_locked`` is
+        still ``False`` **and** the memory's current revision is still the
+        one whose version is ``observed_revision_version``. Returns ``True``
+        if the write happened, ``False`` otherwise (the user already locked
+        the category, or a newer revision superseded the one that was
+        classified) — in the ``False`` case nothing is written, so neither a
+        user's correction nor a newer generation of automatic tagging can
+        ever be overwritten by a stale classification.
+        """
+        ...
+
+    def set_user_category(self, memory_id: int, category: str) -> Memory:
+        """Unconditionally write ``category`` and set ``category_locked`` to
+        ``True``, in the same call, for ``SetCategoryUseCase`` only (D7 point
+        3): a user's category always wins, whatever the current value of
+        ``category_locked`` was.
+        """
+        ...
+
+    def list_uncategorized(self) -> list[Memory]:
+        """Return every memory with ``category is None`` and
+        ``category_locked is False`` (D7 point 4): the retroactive pass's
+        input, and a memory already tagged or already locked is excluded
+        even without a category.
+        """
+        ...
