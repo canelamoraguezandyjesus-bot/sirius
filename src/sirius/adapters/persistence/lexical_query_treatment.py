@@ -2,8 +2,8 @@
 
 Portado, sin alterar su algoritmo, desde
 ``experiments/adr002/candidates/adr002_a/lexical.py`` (rama
-``evidence/adr001-spikes``, PR #117): la pieza que ADR-108 localiza como
-ausente en ``sanitize_fts5_query`` y que el candidato A del laboratorio usaba
+``evidence/adr001-spikes``, PR #117): la pieza que la incidencia #455 localiza
+como ausente en ``sanitize_fts5_query`` y que el candidato A del laboratorio usaba
 para alcanzar el suelo D1 (aciertos exactos >= 29/47) sobre el banco de 47
 casos. Solo se porta lo que ``sanitize_fts5_query`` necesita para limpiar una
 consulta de palabras vacías y emparejarla por raíces/variantes en vez de por
@@ -12,8 +12,8 @@ tokenización por corridas alfanuméricas, la raíz por recorte de sufijos
 flexivos y las variantes morfológicas. El resto del laboratorio (lectura de
 polaridad/condición, solapamiento entre consulta y texto ya recuperado,
 familias de sujeto) pertenece a las etapas E3/E4 de un motor por etapas que
-Sirius 0.1 no tiene, y no se porta aquí (ADR-108, alcance de la incidencia
-que cierra ese hallazgo).
+Sirius 0.1 no tiene, y no se porta aquí (fuera del alcance de la incidencia
+#455 que cierra ese hallazgo).
 """
 
 from __future__ import annotations

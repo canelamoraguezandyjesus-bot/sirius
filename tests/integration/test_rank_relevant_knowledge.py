@@ -283,7 +283,7 @@ def test_an_empty_query_returns_no_matches_without_erroring(tmp_path: Path) -> N
 
 @pytest.mark.integration
 def test_a_query_made_only_of_spanish_stopwords_matches_nothing(tmp_path: Path) -> None:
-    """ADR-108/ADR-109: before the lexical treatment, ``sanitize_fts5_query``
+    """Issue #455 (ADR-109): before the lexical treatment, ``sanitize_fts5_query``
     OR-ed every raw token, so a query of only function words ("de", "la",
     "el", ...) would match any memory that happened to contain one of them —
     virtually the entire canon. Once VACIAS is stripped, a query with no
@@ -302,7 +302,7 @@ def test_a_query_made_only_of_spanish_stopwords_matches_nothing(tmp_path: Path) 
 def test_stopwords_shared_with_unrelated_content_never_match_by_themselves(
     tmp_path: Path,
 ) -> None:
-    """ADR-108/ADR-109: joining every raw token with ``OR`` meant a query
+    """Issue #455 (ADR-109): joining every raw token with ``OR`` meant a query
     sharing only Spanish function words with an unrelated memory ("de", "en",
     "la", ...) still matched it via FTS5. Cleaning the query of ``VACIAS``
     before building the ``MATCH`` expression means only a memory that shares

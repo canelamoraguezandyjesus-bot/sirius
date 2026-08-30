@@ -12,8 +12,8 @@ exclusión por precedencia que `ContextBuilder` ya aplica (B4e) — **sin**
 módulo fija es la medición: cuatro métricas agregadas sobre los 47 casos,
 reportadas.
 
-ADR-108 localizó, sobre este mismo pipeline, la causa por la que el suelo de
-D1 (aciertos exactos ≥ 29/47) no se alcanzaba: `sanitize_fts5_query`
+La incidencia #455 localizó, sobre este mismo pipeline, la causa por la que
+el suelo de D1 (aciertos exactos ≥ 29/47) no se alcanzaba: `sanitize_fts5_query`
 (B6a) unía todos los tokens de la consulta con `OR`, incluidas las palabras
 vacías del castellano, así que casi cualquier consulta emparejaba con la
 mayoría del canon (1/47, 2141 elementos de más). ADR-109 porta el
@@ -340,13 +340,13 @@ def test_el_fichero_de_forma_tiene_47_casos_y_81_elementos_esperados() -> None:
 def test_el_banco_se_ejecuta_contra_el_pipeline_actual_y_reporta_las_cuatro_metricas(
     ejecucion_del_banco: _EjecucionDelBanco,
 ) -> None:
-    """M7 pipeline, con el disparador FTS5 ya corregido (ADR-108/ADR-109):
-    ``sanitize_fts5_query`` limpia la consulta de palabras vacías del
-    castellano y la empareja por raíces/variantes en vez de por ``OR`` de
+    """M7 pipeline, con el disparador FTS5 ya corregido (incidencia #455,
+    ADR-109): ``sanitize_fts5_query`` limpia la consulta de palabras vacías
+    del castellano y la empareja por raíces/variantes en vez de por ``OR`` de
     todos sus tokens. Medido: aciertos_exactos=10/47, elementos_de_mas=218,
     omisiones_criticas=10, cobertura=57/81 (70.4%) — una mejora real y
-    sustancial frente a la línea base de ADR-108 (1/47, 2141, 21, 51/81),
-    pero todavía por debajo del suelo de D1 (aciertos exactos ≥ 29/47).
+    sustancial frente a la línea base medida antes del porte (1/47, 2141, 21,
+    51/81), pero todavía por debajo del suelo de D1 (aciertos exactos ≥ 29/47).
 
     El suelo de D1 **no** queda afirmado aquí como aserción dura: ADR-109
     diagnostica, con desglose caso a caso, que la brecha restante ya no es
@@ -363,7 +363,8 @@ def test_el_banco_se_ejecuta_contra_el_pipeline_actual_y_reporta_las_cuatro_metr
     metricas = ejecucion_del_banco.metricas
 
     print(
-        "\nPA-0.2-REC-01 (M7, disparador FTS5 corregido por ADR-108/ADR-109; "
+        "\nPA-0.2-REC-01 (M7, disparador FTS5 corregido para la incidencia "
+        "#455 (ADR-109); "
         "sin índice de categoría ni filtro de relevancia): "
         f"aciertos_exactos={metricas.aciertos_exactos}/47 "
         f"elementos_de_mas={metricas.elementos_de_mas} "

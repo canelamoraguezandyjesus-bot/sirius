@@ -1,5 +1,5 @@
-"""Unit tests for the lexical query treatment ported for ADR-108/ADR-109
-(``experiments/adr002/candidates/adr002_a/lexical.py``,
+"""Unit tests for the lexical query treatment ported for issue #455 (see
+ADR-109) (``experiments/adr002/candidates/adr002_a/lexical.py``,
 ``evidence/adr001-spikes``, PR #117) into
 ``sirius.adapters.persistence.lexical_query_treatment``. Pure functions, no
 SQLite, no FTS5 — the adapter-level behaviour these support is exercised in

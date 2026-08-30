@@ -27,8 +27,9 @@ __all__ = [
 def sanitize_fts5_query(query_text: str) -> str:
     """Turn free-form user text into a safe FTS5 ``MATCH`` argument.
 
-    ADR-108: joining every raw token with ``OR`` — including Spanish
-    function words (articles, prepositions, ...) — made almost any query
+    Diagnosed in issue #455: joining every raw token with ``OR`` —
+    including Spanish function words (articles, prepositions, ...) — made
+    almost any query
     match almost the entire canon (~45 elements de más per case on the
     47-case bank, 1/47 exact hits). ``query_text`` is instead run through
     ``lexical_query_treatment`` (ported from

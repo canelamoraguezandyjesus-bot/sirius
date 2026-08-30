@@ -16,7 +16,8 @@ La incidencia #455 pide portar el tratamiento léxico de
 `evidence/adr001-spikes`, PR #117) — `VACIAS`, `plegar`, `tokenizar`, `raiz`
 con `RAIZ_MINIMA=4`, `variantes` — a `sanitize_fts5_query`
 (`src/sirius/adapters/persistence/sqlite_knowledge_search_repository.py`),
-para cerrar el hallazgo bloqueante de ADR-108: `sanitize_fts5_query` unía
+para cerrar el hallazgo bloqueante descrito en la incidencia #455:
+`sanitize_fts5_query` unía
 todos los tokens de la consulta con `OR`, incluidas las palabras vacías del
 castellano, y casi cualquier consulta emparejaba con la mayoría del canon
 (1/47 aciertos exactos, ~45 elementos de más por caso). El criterio de
@@ -29,20 +30,20 @@ algoritmo que el laboratorio, sin alterarlo) y `sanitize_fts5_query` ahora
 limpia la consulta de `VACIAS` y la empareja por las variantes morfológicas
 de cada término significativo — el mismo mecanismo, literal, que
 `PuertoSqlite.por_termino_lexico` del laboratorio usa contra el mismo
-`knowledge_fts` (`experiments/adr002/candidates/common/port.py:187-208`):
+`knowledge_fts` (`experiments/adr002/candidates/common/port.py:434-455`):
 cada variante se cita como literal de FTS5 y se combinan con `OR`.
 
 **Resultado medido**, `uv run pytest tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py -q -s`:
 
-| métrica | antes (ADR-108) | después de este porte |
+| métrica | antes (medido antes del porte) | después de este porte |
 |---|---|---|
 | aciertos_exactos | 1/47 | **10/47** |
 | elementos_de_mas | 2141 | **218** |
 | omisiones_criticas | 21 | 10 |
 | cobertura | 51/81 (63.0%) | **57/81 (70.4%)** |
 
-Mejora real y sustancial en las cuatro métricas — la causa raíz de ADR-108
-era exactamente la que se diagnosticó, y cerrarla a nivel léxico cierra buena
+Mejora real y sustancial en las cuatro métricas — la causa raíz descrita en
+la incidencia #455 era exactamente la que se diagnosticó, y cerrarla a nivel léxico cierra buena
 parte de la brecha. **Pero 10/47 sigue por debajo del suelo D1 (≥ 29/47)**,
 así que este ADR es el diagnóstico que el objetivo de la incidencia pide para
 ese caso: "diagnostica QUÉ etapa del laboratorio falta todavía... nómbrala
@@ -90,7 +91,8 @@ el módulo que esta incidencia autoriza portar:
    consulta, y es precisamente el paso que le falta a `sanitize_fts5_query`:
    sin él, un candidato negado o condicionado se recupera igual que uno
    afirmado sin condición, y cuenta como elemento de más.
-2. **`G4` (ámbito) y `G8` (tiempo)** (`gates.py:47-54`), que exigen que un
+2. **`G4` (ámbito) y `G8` (tiempo)** (`gates.py:152-176` y `gates.py:228-256`
+   respectivamente, las funciones que evalúan cada puerta), que exigen que un
    candidato coincida en ámbito (global/proyecto/lista cerrada) y en
    aplicabilidad temporal — ejes que el esquema real de Sirius 0.1 no
    persiste hoy para memorias/decisiones (no hay columna `ambito` ni
@@ -153,9 +155,9 @@ arriba, publicado en este ADR, en la PR y en la incidencia.
    el objetivo, con sus pruebas, y nada más"; "no rediseñes Sirius por
    iniciativa propia") no autoriza.
 3. **Fabricar un filtro ad hoc que descarte selectivamente los elementos de
-   más de cada caso hasta llegar a 29/47** — descartada por la misma razón
-   que ADR-108 la descartó: codificar el resultado esperado dentro del
-   filtro no mide nada real y falsea la evidencia.
+   más de cada caso hasta llegar a 29/47** — descartada: codificar el
+   resultado esperado dentro del filtro no mide nada real y falsea la
+   evidencia.
 4. **Detener aquí, dejar el porte del tratamiento léxico completo y medido,
    documentar el diagnóstico con su localización exacta, y no tocar el
    suelo D1 de la prueba** — elegida. El objetivo aprobado de esta
@@ -185,7 +187,7 @@ la agrupación de equivalentes y la ampliación de esquema que exigen.
   antes del porte (revirtiendo `sqlite_knowledge_search_repository.py` y
   `lexical_query_treatment.py`, que no existía): imprime
   `aciertos_exactos=1/47 elementos_de_mas=2141 omisiones_criticas=21
-  cobertura=51/81 (63.0%)` — idéntico a la cifra que ADR-108 ya registró.
+  cobertura=51/81 (63.0%)`.
 - La misma orden con el porte aplicado: imprime `aciertos_exactos=10/47
   elementos_de_mas=218 omisiones_criticas=10 cobertura=57/81 (70.4%)`.
 - Desglose caso a caso (`rank()` puro, sin filtro de relevancia ni
