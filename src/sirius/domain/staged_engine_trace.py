@@ -53,6 +53,19 @@ PROMOCION_DE_REPRESENTANTE_DECLARADA: Final[str] = (
     "mismo nivel de criticidad, hasta encabezar solo a sus propios miembros"
 )
 
+#: Complemento de ``PROMOCION_DE_REPRESENTANTE_DECLARADA`` (CODEX-001,
+#: incidencia #457, cuarta ronda): ``explicar()`` solo puede afirmar la
+#: promoción cuando de verdad ocurrió —resultado sin grupo, o miembro cuyo
+#: representante queda en otro nivel de criticidad, nunca la disparan
+#: (``_con_representante_al_frente`` en ``staged_engine.py``)—, así que
+#: necesita esta segunda frase para los demás casos en vez de callar o
+#: repetir la primera sin que aplique.
+SIN_PROMOCION_DE_REPRESENTANTE_DECLARADA: Final[str] = (
+    "no hay adelantamiento de representante que describir: este resultado "
+    "no pertenece a ningún grupo de equivalentes, o su representante queda "
+    "en otro nivel de criticidad"
+)
+
 #: Marca base cuando el elemento es actual.
 MARCA_VIGENTE: Final = "vigente"
 
@@ -209,11 +222,16 @@ def explicar(
     orden: int,
     criticidad: CriticidadAplicada | None = None,
     grupo: GrupoDeEquivalentes | None = None,
+    promocion_real: bool = False,
 ) -> Explicacion:
     """Los campos de la explicación mínima, todos poblados.
 
     Ninguno transcribe el texto del item: describen por qué ese resultado
-    está ahí.
+    está ahí. ``promocion_real`` es responsabilidad exclusiva de quien llama
+    (``recuperar()`` en ``staged_engine.py``, que sabe si
+    ``_con_representante_al_frente`` de verdad promovió este resultado):
+    esta función solo elige, entre las dos frases ya escritas, cuál describe
+    lo que realmente ocurrió (CODEX-001, incidencia #457, cuarta ronda).
     """
     item = candidata.item
     atribuida = item.clase_de_evidencia is not ClaseDeEvidencia.CANONICA
@@ -221,6 +239,11 @@ def explicar(
     procedencias = [f"{item.clase.value} {origen} via {candidata.lectura.medio}"]
     if grupo is not None:
         procedencias.extend(grupo.procedencias_adicionales)
+    promocion = (
+        PROMOCION_DE_REPRESENTANTE_DECLARADA
+        if promocion_real
+        else SIN_PROMOCION_DE_REPRESENTANTE_DECLARADA
+    )
     return Explicacion(
         item_id=item.id,
         coincidencia=f"{candidata.etapa.value} por {candidata.senal}",
@@ -236,8 +259,8 @@ def explicar(
         ),
         razon_de_orden=(
             f"posicion {orden} por clave de desempate "
-            f"({', '.join(EJES_DE_ORDEN_DECLARADOS)}); tras esa clave, "
-            f"{PROMOCION_DE_REPRESENTANTE_DECLARADA}; {candidata.razon}"
+            f"({', '.join(EJES_DE_ORDEN_DECLARADOS)}); tras esa clave, {promocion}; "
+            f"{candidata.razon}"
         ),
         grupo=("" if grupo is None else grupo.identificador),
     )

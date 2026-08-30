@@ -423,12 +423,13 @@ def build_conversation_dependencies(
     # M11) que ya gobierna la categoría — construirlo aquí no cambia nada
     # del comportamiento de hoy, porque la puerta sigue cerrada hasta que
     # M11 (incidencia #453, bloqueada) la abra desde ajustes persistidos.
+    staged_engine_port = build_staged_engine_port(database_path)
     rank_relevant_knowledge_use_case = RankRelevantKnowledgeUseCase(
         memory_repository=memory_repository,
         decision_repository=decision_repository,
         project_repository=project_repository,
         knowledge_search_repository=knowledge_search_repository,
-        staged_engine_port=build_staged_engine_port(database_path),
+        staged_engine_port=staged_engine_port,
         staged_engine_candidate=staged_engine_candidato(),
     )
     context_builder = ContextBuilder(
@@ -498,6 +499,7 @@ def build_conversation_dependencies(
         knowledge_search_repository,
         llm_usage_repository,
         unit_of_work,
+        staged_engine_port,
     )
 
     def close_database_connections() -> None:

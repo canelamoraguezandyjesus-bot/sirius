@@ -48,6 +48,8 @@ from sirius.domain.staged_engine_contracts import (
 from sirius.domain.staged_engine_trace import (
     EJES_DE_ORDEN_DECLARADOS,
     PROMOCION_DE_REPRESENTANTE_DECLARADA,
+    SIN_PROMOCION_DE_REPRESENTANTE_DECLARADA,
+    explicar,
 )
 
 
@@ -418,6 +420,60 @@ def test_explicacion_documents_the_two_step_order_for_a_promoted_representative(
     razon = representante_resultado.explicacion.razon_de_orden
     assert ", ".join(EJES_DE_ORDEN_DECLARADOS) in razon
     assert PROMOCION_DE_REPRESENTANTE_DECLARADA in razon
+
+
+def test_explicar_never_claims_promotion_for_a_result_without_a_group() -> None:
+    """CODEX-001 (incidencia #457, cuarta ronda): antes de esta corrección,
+    ``explicar(..., grupo=None)`` afirmaba incondicionalmente
+    ``PROMOCION_DE_REPRESENTANTE_DECLARADA`` aunque
+    ``_con_representante_al_frente`` nunca actúa sobre un resultado sin
+    grupo —no hay ningún representante que adelantar—, de modo que la
+    explicación atribuía una causa de posición inexistente."""
+    item = _item("MEMORIA:1")
+    explicacion = explicar(_candidata(item), _peticion(), orden=1, grupo=None)
+
+    assert explicacion.grupo == ""
+    assert PROMOCION_DE_REPRESENTANTE_DECLARADA not in explicacion.razon_de_orden
+    assert SIN_PROMOCION_DE_REPRESENTANTE_DECLARADA in explicacion.razon_de_orden
+
+
+def test_recuperar_does_not_claim_promotion_for_a_member_with_a_different_criticality() -> None:
+    """CODEX-001 (incidencia #457, cuarta ronda): ``_con_representante_al_
+    frente`` solo promueve dentro del mismo nivel de criticidad
+    (``staged_engine.py``, líneas 152-159 citadas por el hallazgo); fuera de
+    él el representante nunca se adelanta para ese miembro, así que su
+    explicación tampoco puede afirmarlo. MEMORIA:1 (representante) queda
+    ORDINARIA y MEMORIA:2 (miembro) CRITICA: niveles distintos, sin
+    promoción para MEMORIA:2."""
+    en_e1 = _item("MEMORIA:2")
+    en_e2 = _item("MEMORIA:1")
+    peticion = _peticion(limite_duro=2)
+
+    class _PlanoConCriticidadDispar:
+        def property_key(self, identidad: str) -> str | None:
+            return "PK-1"
+
+        def criticidad_aplicada(self, identidad: str) -> CriticidadAplicada | None:
+            if identidad != "MEMORIA:2":
+                return None
+            return CriticidadAplicada(
+                nivel=Criticidad.CRITICA,
+                razon_segura="prueba",
+                fuente_de_politica="prueba",
+                regla_de_politica="prueba",
+            )
+
+    recuperacion = recuperar(
+        peticion,
+        _PuertoDePrueba([en_e1, en_e2]),
+        _CandidatoDeDosEtapas({Etapa.E1: [en_e1], Etapa.E2: [en_e2]}),
+        _PlanoConCriticidadDispar(),
+    )
+
+    miembro_resultado = next(r for r in recuperacion.resultados if r.item.id == "MEMORIA:2")
+    razon = miembro_resultado.explicacion.razon_de_orden
+    assert PROMOCION_DE_REPRESENTANTE_DECLARADA not in razon
+    assert SIN_PROMOCION_DE_REPRESENTANTE_DECLARADA in razon
 
 
 def test_con_representante_al_frente_never_relegates_a_member_behind_an_unrelated_item() -> None:

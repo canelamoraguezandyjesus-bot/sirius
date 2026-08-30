@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
+from sirius.adapters.persistence import staged_engine_port as staged_engine_port_module
 from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.create_backup import CreateBackupUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
@@ -46,3 +49,41 @@ def test_close_database_connections_is_safe_to_call_more_than_once(tmp_path: Pat
 
     dependencies.close_database_connections()
     dependencies.close_database_connections()  # Engine.dispose() is idempotent
+
+
+def test_close_database_connections_also_disposes_the_staged_engine_port_pool(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CLAUDE-REVISOR-001: build_conversation_dependencies wires a private
+    Engine for staged_engine_port (RankRelevantKnowledgeUseCase) that isn't
+    part of ``repositories``. On Windows an undisposed pool here would block
+    RestoreBackupUseCase's atomic file replace exactly like an undisposed
+    repository pool would, so it must be disposed too.
+    """
+    built_ports = []
+    original_build_staged_engine_port = staged_engine_port_module.build_staged_engine_port
+
+    def capturing_build_staged_engine_port(*args: object, **kwargs: object):  # type: ignore[no-untyped-def]
+        port = original_build_staged_engine_port(*args, **kwargs)  # type: ignore[arg-type]
+        built_ports.append(port)
+        return port
+
+    monkeypatch.setattr(
+        "sirius.composition_root.build_staged_engine_port", capturing_build_staged_engine_port
+    )
+
+    dependencies = build_conversation_dependencies(
+        tmp_path / "sirius.db", tmp_path / "backups", secret_store=FakeSecretStore()
+    )
+
+    assert len(built_ports) == 1
+    engine = built_ports[0]._engine
+    assert engine is not None
+    pool_before_close = engine.pool
+
+    dependencies.close_database_connections()
+
+    # SQLAlchemy's Engine.dispose() replaces the pool with a fresh, empty one,
+    # discarding every connection the old pool held open. A different pool
+    # identity is the observable proof this engine's pool was disposed.
+    assert engine.pool is not pool_before_close

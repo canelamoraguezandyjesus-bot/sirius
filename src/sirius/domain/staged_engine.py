@@ -167,6 +167,27 @@ def _con_representante_al_frente(
     return tuple(resultado)
 
 
+def _promocion_real(
+    identidad: str,
+    grupo: GrupoDeEquivalentes | None,
+    criticidad_de: Callable[[str], Criticidad],
+) -> bool:
+    """Refleja, sin ejecutarlo de nuevo, el mismo criterio que decide si
+    ``_con_representante_al_frente`` promueve a alguien: sin grupo no hay
+    promoción; el representante siempre encabeza el suyo; un miembro solo se
+    beneficia cuando su representante comparte su nivel de criticidad —
+    exactamente las dos condiciones que allí valen ``continue`` (líneas
+    152-159). Es plomería de la traza (CODEX-001, incidencia #457, cuarta
+    ronda), no una segunda fuente de verdad sobre el orden: ninguna llamada
+    aquí puede cambiar qué posición ocupa nadie.
+    """
+    if grupo is None:
+        return False
+    if identidad == grupo.representante:
+        return True
+    return criticidad_de(grupo.representante) == criticidad_de(identidad)
+
+
 def _suficiente(contadas: int, peticion: Peticion) -> bool:
     """Condición de insuficiencia entre etapas.
 
@@ -323,6 +344,9 @@ def recuperar(
                 orden,
                 criticidad=plano.criticidad_aplicada(candidata.item.id),
                 grupo=grupo_por_item.get(candidata.item.id),
+                promocion_real=_promocion_real(
+                    candidata.item.id, grupo_por_item.get(candidata.item.id), criticidad_de
+                ),
             ),
             posicion=orden,
             grupo=grupo_por_item.get(candidata.item.id),
