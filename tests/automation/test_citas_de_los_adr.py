@@ -126,11 +126,16 @@ _ADR_110 = (
     "ADR-110-el-motor-por-etapas-portado-mejora-el-banco-a-11-47-pero-no-alcanza-el-suelo-"
     "d1-porque-la-peticion-por-caso-del-laboratorio-no-esta-autorizada-a-portarse.md"
 )
+_ADR_111 = (
+    "ADR-111-la-peticion-por-caso-portada-mejora-el-banco-a-23-47-pero-d1-exige-ademas-"
+    "el-indice-de-categoria-y-el-filtro-de-relevancia-ollama.md"
+)
 
 RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     "experiments/adr002/round/cases.py": [
         "ADR-104-portar-el-banco-de-47-casos-de-evidence-adr001-spikes-al-modelo-real-de-sirius.md",
         _ADR_110,
+        _ADR_111,
     ],
     "experiments/adr002/round/cases.py:_traducir": [
         "ADR-104-portar-el-banco-de-47-casos-de-evidence-adr001-spikes-al-modelo-real-de-sirius.md",
@@ -177,6 +182,13 @@ RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     # Citado solo para documentar dónde vive la petición por caso que ADR-110
     # diagnostica como no portada (no se lee ni se porta ningún dato suyo).
     "experiments/adr002/benchmark/references_v0_5.json": [_ADR_110],
+    # ADR-111 (incidencia #461) porta la petición por caso que ADR-110
+    # diagnosticó y mide 23/47, todavía por debajo del suelo D1. Cita este
+    # fichero —un experimento de filtro de relevancia con modelo local
+    # completamente distinto del motor por etapas, nunca portado a
+    # Sirius— para documentar dónde consta que el salto de 24/47 a 29/47
+    # depende de ese filtro y no del motor de búsqueda.
+    "experiments/adr002/modelo_local/filtro.py": [_ADR_111],
 }
 
 

@@ -35,20 +35,46 @@ La incidencia #457 porta esas tres piezas —el resto del tratamiento léxico
 `_ejecutar_banco_motor_portado`, que ejecuta el mismo banco con ese motor
 activo (el mismo camino que `RankRelevantKnowledgeUseCase.
 _rank_via_staged_engine` toma con la puerta D7 punto 6 abierta) en vez del
-filtro-y-orden de M7. Mide: **11/47**, 186 elementos de más, 9 omisiones
-críticas, cobertura 60/81 (74.1%) — mejora real en las cuatro métricas
-frente a M7, pero todavía muy por debajo de los cuatro objetivos de la
-incidencia. ADR-110 diagnostica, con las cifras de cada configuración
-probada, que la petición **por caso** (modo, permiso, cardinalidad, límite)
-que el laboratorio usó para medir 29/47 vive en ficheros
-(`experiments/adr002/benchmark/cases_v0_5.json`/`references_v0_5.json`) y en
-un traductor (`experiments/adr002/round/cases.py`) que el alcance permitido
-de esta incidencia no autoriza portar; sin ellos, este arnés solo puede
-interrogar al motor con una política uniforme, y esa política no reproduce
-las cifras del laboratorio. Por eso D1/D2 siguen sin aserción de suelo aquí:
-D1 no se alcanza con ninguno de los dos pipelines medidos (ADR-109/ADR-110)
-y D2 es competencia de M11 sobre el pipeline íntegro que M8-M10 integren, no
-de este módulo.
+filtro-y-orden de M7. Con una política **uniforme** para las 47 consultas
+(modo M1, cardinalidad EXHAUSTIVA, límite sin atar), mide: **11/47**, 186
+elementos de más, 9 omisiones críticas, cobertura 60/81 (74.1%) — mejora
+real en las cuatro métricas frente a M7, pero todavía muy por debajo de los
+cuatro objetivos de la incidencia. ADR-110 diagnostica, con las cifras de
+cada configuración probada, que la petición **por caso** (modo, permiso,
+cardinalidad, límite) que el laboratorio usó para medir 29/47 vive en
+ficheros (`experiments/adr002/benchmark/cases_v0_5.json`/
+`references_v0_5.json`) y en un traductor
+(`experiments/adr002/round/cases.py`) que el alcance permitido de la
+incidencia #457 no autorizaba portar.
+
+La incidencia #461 autoriza portar esa petición por caso: los campos
+`peticion_p2` del fixture (verbatim de `cases_v0_5.json`/
+`references_v0_5.json`), el traductor
+(`tests/acceptance/staged_engine_case_translation.py`, portado de
+`experiments/adr002/round/cases.py:334-366`), y el cableado de
+`_ejecutar_banco_motor_portado` para construir la `Peticion` de cada caso
+con esos campos en vez de la política uniforme de ADR-110. Mide: **23/47**,
+90 elementos de más, 10 omisiones críticas, cobertura 63/81 (77.8%) — tres
+de las cuatro métricas mejoran de forma sustancial frente a la política
+uniforme (11/47, 186, 60/81), la cuarta (omisiones críticas) empeora en una
+unidad (9 → 10); ninguna alcanza el suelo de D1 (aciertos exactos ≥ 29/47,
+elementos de más ≤ 21, omisiones críticas ≤ 1). ADR-111 diagnostica, con
+cita de fichero y línea, que la petición por caso ya es idéntica a la del
+laboratorio (mismo traductor, mismos campos, mismo corpus) y que la brecha
+restante no es de traducción: el propio 29/47 que la Definición de
+Producto registra
+(`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:63-74`)
+es el resultado conjunto del motor de búsqueda **con** el índice de
+categoría (M8) **y** el filtro de relevancia con modelo local vía Ollama
+(M9/M10) — "búsqueda sola" mide 24/47 en el laboratorio
+(`experiments/adr002/modelo_local/filtro.py:76-89` en
+`evidence/adr001-spikes`); el salto a 29/47 lo produce el filtro, no el
+motor. Ninguna de esas dos piezas está en el alcance de esta incidencia ni
+de la #457 anterior. Por eso D1/D2 siguen sin aserción de suelo aquí: D1 no
+se alcanza con ninguno de los tres pipelines medidos (ADR-109/ADR-110/
+ADR-111) y D2 es competencia de M11 sobre el pipeline íntegro que M8-M10
+integren, no de este módulo — aunque la cifra de cobertura de este ADR
+(63/81) ya alcanza, de forma aislada, el suelo provisional que D2 registra.
 
 `criticidad.razon_segura` viaja en el fixture porque así la porta la rama de
 evidencia, pero nunca se lee: el cargador que construye los `Memory`/
@@ -75,6 +101,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
+from staged_engine_case_translation import peticion_desde_caso
 
 from sirius.adapters.persistence import staged_engine_candidate
 from sirius.adapters.persistence.database import build_engine, build_session_factory
@@ -100,14 +127,10 @@ from sirius.domain.relevance import KnowledgeKind, RankedKnowledge
 from sirius.domain.staged_engine import recuperar
 from sirius.domain.staged_engine_contracts import (
     Ambito,
-    Cardinalidad,
     Clase,
     Criticidad,
     CriticidadAplicada,
     EjesDeclarados,
-    Modo,
-    Peticion,
-    VentanaTemporal,
 )
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "evidence_bank_47_casos.json"
@@ -123,11 +146,13 @@ _MINIMO_ELEMENTOS_HALLADOS_M7: Final[int] = 57
 
 #: Medición actual publicada en el docstring de
 #: `test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metricas`
-#: (motor por etapas, incidencia #457/ADR-109/ADR-110). Misma convención.
-_MINIMO_ACIERTOS_EXACTOS_MOTOR: Final[int] = 11
-_MAXIMO_ELEMENTOS_DE_MAS_MOTOR: Final[int] = 186
-_MAXIMO_OMISIONES_CRITICAS_MOTOR: Final[int] = 9
-_MINIMO_ELEMENTOS_HALLADOS_MOTOR: Final[int] = 60
+#: (motor por etapas con petición por caso, incidencia #461/ADR-111). Misma
+#: convención de cotas unidireccionales de no regresión, no el suelo de D1
+#: (29/47) que ADR-111 diagnostica que esta incidencia tampoco alcanza.
+_MINIMO_ACIERTOS_EXACTOS_MOTOR: Final[int] = 23
+_MAXIMO_ELEMENTOS_DE_MAS_MOTOR: Final[int] = 90
+_MAXIMO_OMISIONES_CRITICAS_MOTOR: Final[int] = 10
+_MINIMO_ELEMENTOS_HALLADOS_MOTOR: Final[int] = 63
 
 pytestmark = [pytest.mark.acceptance, pytest.mark.integration]
 
@@ -462,10 +487,14 @@ def _ejecutar_banco_motor_portado(database_path: Path) -> _EjecucionDelBanco:
     leídos del corpus congelado que `evidence_bank_47_casos.json` porta
     (incidencia #457) — nunca inventados por este arnés.
 
-    Cada caso interroga al motor con su propia petición: modo M1 (ordinario,
-    igual que el pipeline de producto), cardinalidad EXHAUSTIVA (`rank()` no
-    declara una cuota de resultados, así que "todo lo relevante, sin cuota"
-    es la semántica más fiel) y el ámbito que el propio caso declara
+    Cada caso interroga al motor con su propia petición **por caso**
+    (incidencia #461/ADR-111): modo, propósito, permiso, cardinalidad,
+    límite y tiempo objetivo, los mismos campos que
+    `experiments/adr002/round/cases.py:334-366` traduce en el laboratorio,
+    portados verbatim al fixture bajo `peticion_p2` y traducidos aquí por
+    `tests.acceptance.staged_engine_case_translation.peticion_desde_caso` —
+    no una política uniforme para las 47 consultas (la que ADR-110 medía).
+    El ámbito sigue resolviéndose contra el propio caso
     (`caso["ambito"]`, portado desde `cases_v0_5.json` — `GLOBAL` o el
     nombre de un proyecto del banco), no un ámbito global uniforme: es la
     puerta `G4` la que debe decidir si un ítem de otro proyecto cuenta como
@@ -522,7 +551,6 @@ def _ejecutar_banco_motor_portado(database_path: Path) -> _EjecucionDelBanco:
     #: `experiments/adr002/round/cases.py`): el tamaño del canon, para que
     #: nunca sea la causa de que algo se omita.
     limite_sin_atar = banco["conteos"]["items_del_canon"]
-    tiempo_objetivo = banco["ahora_declarado"]
 
     aciertos_exactos = 0
     elementos_de_mas = 0
@@ -537,16 +565,11 @@ def _ejecutar_banco_motor_portado(database_path: Path) -> _EjecucionDelBanco:
                 if ambito_declarado == "GLOBAL"
                 else Ambito(global_=False, proyectos=(str(project_ids[ambito_declarado]),))
             )
-            peticion = Peticion(
+            peticion = peticion_desde_caso(
+                caso,
                 operation_id=f"banco:{caso['id']}",
-                consulta=caso["consulta"],
-                proposito="medicion PA-0.2-REC-01: banco de 47 casos con el motor portado",
-                modo=Modo.M1_ORDINARIO,
                 ambito=ambito,
-                ventana=VentanaTemporal(tiempo_objetivo=tiempo_objetivo, corte_de_registro=None),
-                cardinalidad=Cardinalidad.EXHAUSTIVA,
-                limite_objetivo=limite_sin_atar,
-                limite_duro=limite_sin_atar,
+                limite_sin_atar=limite_sin_atar,
             )
             recuperacion = recuperar(peticion, puerto, candidato, plano)
             obtenido = {
@@ -608,6 +631,120 @@ def test_el_fichero_de_forma_tiene_47_casos_y_81_elementos_esperados() -> None:
             assert identidad in identidades_del_canon
 
 
+#: ADR-111: los cinco casos cuyo dominio adjudicado declara `limite`.
+_CASOS_CON_LIMITE_DECLARADO: Final[frozenset[str]] = frozenset(
+    {"B04-CA-26", "B04-CA-30", "B04-CA-34", "B04-CA-38", "B04-CA-44"}
+)
+
+
+def test_el_fichero_de_forma_tiene_42_limites_null_y_5_declarados() -> None:
+    """CODEX-001/CLAUDE-SIRIUS-461-001: la nota de procedencia del fixture
+    (`metadata.nota_incidencia_461`) afirma que 42 de los 47 casos tienen
+    `peticion_p2.limite` null. Fija ambos conteos en una prueba de forma
+    para que la evidencia congelada no vuelva a contradecir su propia
+    documentación: los cinco casos que sí lo declaran son, verbatim, los
+    que ADR-111 nombra."""
+    banco = _fixture()
+    casos = banco["casos"]
+
+    con_limite = {caso["id"] for caso in casos if caso["peticion_p2"]["limite"] is not None}
+    assert con_limite == _CASOS_CON_LIMITE_DECLARADO
+    assert len(casos) - len(con_limite) == 42
+
+
+def test_peticion_desde_caso_propaga_objetivos_de_exacta() -> None:
+    """CODEX-002: un caso de cardinalidad `EXACTA` con más de un elemento
+    esperado debe transportar esa cuota a `Peticion.objetivos`, no
+    quedarse en el valor por defecto (1) — si no,
+    `_suficiente`/`evaluar_suficiencia` (`sirius.domain.staged_engine`)
+    detienen la expansión en cuanto aparece el primer grupo semántico,
+    aunque el caso pida más."""
+    banco = _fixture()
+    casos_por_id = {caso["id"]: caso for caso in banco["casos"]}
+    ambito = Ambito(global_=True, proyectos=())
+    limite_sin_atar = banco["conteos"]["items_del_canon"]
+
+    casos_exacta_con_varios_objetivos = {
+        "B04-CA-19": 3,
+        "B04-CA-23": 2,
+        "B04-CA-43": 2,
+    }
+    for identidad, objetivos_esperados in casos_exacta_con_varios_objetivos.items():
+        caso = casos_por_id[identidad]
+        assert caso["peticion_p2"]["cardinalidad"] == "EXACTA"
+        assert len(caso["resultado_esperado"]) == objetivos_esperados
+        peticion = peticion_desde_caso(
+            caso, operation_id="test", ambito=ambito, limite_sin_atar=limite_sin_atar
+        )
+        assert peticion.objetivos == objetivos_esperados
+
+    # Un caso EXACTA de un único objetivo sigue en el valor histórico (1).
+    caso_unico = casos_por_id["B04-CA-01"]
+    assert caso_unico["peticion_p2"]["cardinalidad"] == "EXACTA"
+    assert len(caso_unico["resultado_esperado"]) == 1
+    peticion_unica = peticion_desde_caso(
+        caso_unico, operation_id="test", ambito=ambito, limite_sin_atar=limite_sin_atar
+    )
+    assert peticion_unica.objetivos == 1
+
+    # Una cardinalidad no EXACTA no usa `objetivos` (`_suficiente` nunca lo
+    # consulta fuera de EXACTA); el traductor conserva el valor por defecto.
+    caso_exhaustiva = casos_por_id["B04-CA-02"]
+    assert caso_exhaustiva["peticion_p2"]["cardinalidad"] == "EXHAUSTIVA"
+    peticion_exhaustiva = peticion_desde_caso(
+        caso_exhaustiva, operation_id="test", ambito=ambito, limite_sin_atar=limite_sin_atar
+    )
+    assert peticion_exhaustiva.objetivos == 1
+
+
+#: CODEX-001: los diez casos `EXACTA` cuyo `resultado_esperado` está vacío.
+_CASOS_EXACTA_SIN_RESULTADO_ESPERADO: Final[frozenset[str]] = frozenset(
+    {
+        "B04-CA-04",
+        "B04-CA-09",
+        "B04-CA-10",
+        "B04-CA-12",
+        "B04-CA-15",
+        "B04-CA-18",
+        "B04-CA-24",
+        "B04-CA-35",
+        "B04-CA-46",
+        "B04-CA-49",
+    }
+)
+
+
+def test_peticion_desde_caso_no_asigna_cuota_cero_a_exacta_sin_resultado() -> None:
+    """CODEX-001: diez casos `EXACTA` declaran `resultado_esperado=[]`, no
+    solo los tres multiobjetivo que ADR-111 describe. `len([])` los dejaría
+    en `objetivos=0`, y `_suficiente`/`evaluar_suficiencia`
+    (`sirius.domain.staged_engine`) declaran esa cuota cumplida de forma
+    trivial (`0 >= 0`) nada más terminar la primera etapa, deteniendo la
+    expansión antes de recorrer las etapas que sí recorre cualquier otro
+    caso — una divergencia de `_traducir` (que nunca adjudica una cuota,
+    ni cero) que ADR-111 no documentaba ni esta prueba cubría. El traductor
+    conserva el suelo histórico (1) para estos diez casos en vez de
+    `len(resultado_esperado)`."""
+    banco = _fixture()
+    casos_por_id = {caso["id"]: caso for caso in banco["casos"]}
+    ambito = Ambito(global_=True, proyectos=())
+    limite_sin_atar = banco["conteos"]["items_del_canon"]
+
+    casos_exacta_sin_resultado = {
+        caso["id"]
+        for caso in banco["casos"]
+        if caso["peticion_p2"]["cardinalidad"] == "EXACTA" and not caso["resultado_esperado"]
+    }
+    assert casos_exacta_sin_resultado == _CASOS_EXACTA_SIN_RESULTADO_ESPERADO
+
+    for identidad in _CASOS_EXACTA_SIN_RESULTADO_ESPERADO:
+        caso = casos_por_id[identidad]
+        peticion = peticion_desde_caso(
+            caso, operation_id="test", ambito=ambito, limite_sin_atar=limite_sin_atar
+        )
+        assert peticion.objetivos == 1
+
+
 def test_el_banco_se_ejecuta_contra_el_pipeline_actual_y_reporta_las_cuatro_metricas(
     ejecucion_del_banco: _EjecucionDelBanco,
 ) -> None:
@@ -658,46 +795,58 @@ def test_el_banco_se_ejecuta_contra_el_pipeline_actual_y_reporta_las_cuatro_metr
 def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metricas(
     ejecucion_del_banco_motor_portado: _EjecucionDelBanco,
 ) -> None:
-    """Incidencia #457/ADR-109/ADR-110: el mismo banco, con el motor por
-    etapas (`sirius.domain.staged_engine.recuperar`), las doce puertas
-    (`staged_engine_gates`) y la agrupación de equivalentes
+    """Incidencia #457/#461/ADR-109/ADR-110/ADR-111: el mismo banco, con el
+    motor por etapas (`sirius.domain.staged_engine.recuperar`), las doce
+    puertas (`staged_engine_gates`) y la agrupación de equivalentes
     (`staged_engine_grouping`) activos en el arnés, en vez del
     filtro-y-orden de M7 que mide el test anterior.
 
-    Medido: aciertos_exactos=11/47, elementos_de_mas=186,
-    omisiones_criticas=9, cobertura=60/81 (74.1%) — mejora real en las
-    cuatro métricas frente a M7 (10/47, 218, 10, 57/81), pero todavía muy
-    por debajo del suelo de D1 (aciertos exactos ≥ 29/47) y de los otros
-    tres objetivos de la incidencia (elementos de más ≤ 21, omisiones
-    críticas ≤ 1, cobertura ≥ 63/81).
-
-    ADR-110 documenta el diagnóstico completo con cifras de cada
-    configuración probada (EXHAUSTIVA, ACOTADA con varios límites, y con
-    ``E2`` desactivada). La causa raíz: el 29/47 que PR #117 midió depende
-    de una petición **por caso** (modo, permiso, cardinalidad y límite
-    declarados en ``experiments/adr002/benchmark/cases_v0_5.json`` y
+    ADR-110 (incidencia #457) midió este mismo motor con una política
+    **uniforme** para las 47 consultas (modo M1, cardinalidad EXHAUSTIVA,
+    límite sin atar): 11/47, 186 elementos de más, 9 omisiones críticas,
+    cobertura 60/81 (74.1%). Su diagnóstico: el 29/47 que PR #117 midió
+    depende de una petición **por caso** (modo, permiso, cardinalidad y
+    límite declarados en ``experiments/adr002/benchmark/cases_v0_5.json`` y
     adjudicados en ``references_v0_5.json``, traducidos a ``Peticion`` por
-    ``experiments/adr002/round/cases.py:334-366``) — ninguno de esos dos
-    ficheros ni ese traductor están entre lo que el alcance permitido de
-    esta incidencia autoriza portar (solo el tratamiento léxico restante,
-    las puertas, la agrupación y el motor). Sin esa petición por caso, este
-    arnés solo puede interrogar al motor con una política **uniforme**
-    (misma para las 47 consultas): ``sirius.application.rank_relevant_
-    knowledge._peticion_ordinaria`` — la misma que el camino real del
-    producto usaría con la puerta abierta, cardinalidad EXHAUSTIVA (la
-    semántica de "todo lo relevante, sin cuota" que ``rank()`` ya tiene) —
-    y esa política uniforme no reproduce las cifras que una política
-    ajustada caso a caso alcanzó.
+    ``experiments/adr002/round/cases.py:334-366``), que el alcance de la
+    incidencia #457 no autorizaba portar.
 
-    Igual que ADR-109 con el porte léxico: el suelo de D1 **no** queda
-    afirmado aquí como aserción dura. Afirmar 29/47 dejaría `uv run pytest`
-    en rojo; debilitarlo a 11 falsearía la prueba declarando cumplido un
-    suelo que D1 fija en 29. Queda medido y publicado, nunca exigido."""
+    La incidencia #461 porta esa petición por caso: los campos
+    ``peticion_p2`` del fixture, el traductor
+    (``tests.acceptance.staged_engine_case_translation.peticion_desde_caso``,
+    portado de ``cases.py:334-366``) y el cableado de
+    ``_ejecutar_banco_motor_portado`` para usarlos en vez de la política
+    uniforme. Medido: aciertos_exactos=23/47, elementos_de_mas=90,
+    omisiones_criticas=10, cobertura=63/81 (77.8%) — tres de las cuatro
+    métricas mejoran de forma sustancial frente a la política uniforme
+    (11/47, 186, 60/81; la cobertura alcanza exactamente el suelo
+    provisional de D2), la cuarta (omisiones críticas) empeora en una
+    unidad (9 → 10); ninguna alcanza el suelo de D1 (aciertos exactos ≥
+    29/47, elementos de más ≤ 21, omisiones críticas ≤ 1).
+
+    ADR-111 diagnostica, con cita de fichero y línea, que la petición por
+    caso ya es idéntica a la del laboratorio (mismo traductor, mismos
+    campos, mismo corpus) y que la brecha restante no es de traducción: el
+    29/47 que la Definición de Producto registra
+    (``docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:63-74``)
+    es el resultado conjunto del motor de búsqueda **con** el índice de
+    categoría (M8) **y** el filtro de relevancia con modelo local vía
+    Ollama (M9/M10) — la propia rama de laboratorio documenta que
+    "búsqueda sola" mide 24/47 y que el filtro es lo que sube a 29/47
+    (``experiments/adr002/modelo_local/filtro.py:76-89`` en
+    ``evidence/adr001-spikes``). Ninguna de esas dos piezas está en el
+    alcance de esta incidencia ni de la #457 anterior.
+
+    Igual que ADR-109/ADR-110: el suelo de D1 **no** queda afirmado aquí
+    como aserción dura. Afirmar 29/47 dejaría `uv run pytest` en rojo;
+    debilitarlo a 23 falsearía la prueba declarando cumplido un suelo que
+    D1 fija en 29. Queda medido y publicado, nunca exigido."""
     metricas = ejecucion_del_banco_motor_portado.metricas
 
     print(
-        "\nPA-0.2-REC-01 (motor por etapas portado, ADR-109/#457; "
-        "puertas G1-G12 y agrupación de equivalentes activas en el arnés): "
+        "\nPA-0.2-REC-01 (motor por etapas portado con petición por caso, "
+        "ADR-109/ADR-110/ADR-111/#461; puertas G1-G12 y agrupación de "
+        "equivalentes activas en el arnés): "
         f"aciertos_exactos={metricas.aciertos_exactos}/47 "
         f"elementos_de_mas={metricas.elementos_de_mas} "
         f"omisiones_criticas={metricas.omisiones_criticas} "
@@ -706,7 +855,7 @@ def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metric
     )
 
     # CODEX-003: misma convención que el test anterior, sobre la medición ya
-    # publicada arriba (11/47, 186, 9, 60/81).
+    # publicada arriba (23/47, 90, 10, 63/81).
     assert metricas.aciertos_exactos >= _MINIMO_ACIERTOS_EXACTOS_MOTOR
     assert metricas.elementos_de_mas <= _MAXIMO_ELEMENTOS_DE_MAS_MOTOR
     assert metricas.omisiones_criticas <= _MAXIMO_OMISIONES_CRITICAS_MOTOR

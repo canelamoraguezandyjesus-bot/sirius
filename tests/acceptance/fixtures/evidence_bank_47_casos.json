@@ -11,7 +11,8 @@
       "experiments/adr002/benchmark/property_keys_v0_2.json"
     ],
     "nota": "consulta y ambito de cada caso proceden de cases_v0_5.json (instanciacion); resultado_esperado procede de la adjudicacion calculada en references_v0_5.json, restringido a identidades del canon (MEM-/DEC-), que es exactamente el filtro que aplica el propio arnes de la rama de evidencia (experiments/adr002/round/cases.py:_identidades_canonicas). criticidad.razon_segura procede de applied_criticality_v0_1.json, el plano ya seguro que la propia rama de evidencia deriva del campo criticidad.razon del canon para este uso exacto; el campo criticidad.fuente del canon (que contiene un identificador de caso) no se porta.",
-    "nota_incidencia_457": "ejes_p2 por item (polaridad, condicion, sensibilidad, ambito, autoridad, no_usar_como_memoria, no_consolidable, valid_from, valid_to, procedencia, property_key), portados sin modificar desde conformance_corpus_v0_6.json y property_keys_v0_2.json, y criticidad.fuente_de_politica/regla_de_politica desde applied_criticality_v0_1.json (el plano ya seguro, no el campo criticidad.fuente crudo del corpus, que contiene un identificador de caso y que la nota anterior de este mismo fichero ya declara que no se porta) (mismo commit dfdcdaff04dcba10939cc0b0569c55b6a636296f de evidence/adr001-spikes) para que el arnes del banco pueda declarar los ejes que las puertas G4/G8/G9/G11 y la agrupacion de equivalentes del motor por etapas (incidencia #457/ADR-109) necesitan y que el esquema canonico real de Sirius 0.1 no persiste. ambito_declarado de la unica decision con ambito MULTI_PROYECTO_CERRADO (DEC-001, project_id 'LISTA-CERRADA-AB' en el corpus) no trae miembros resueltos: el corpus portado no declara la tabla de membresia de listas cerradas del laboratorio (experiments/adr002/projection/build.py no la expone como JSON), asi que G4 la trata como lista sin miembros resueltos y la descarta (staged_engine_gates._g4: 'la duda no abre ambito') en vez de inventar una membresia."
+    "nota_incidencia_457": "ejes_p2 por item (polaridad, condicion, sensibilidad, ambito, autoridad, no_usar_como_memoria, no_consolidable, valid_from, valid_to, procedencia, property_key), portados sin modificar desde conformance_corpus_v0_6.json y property_keys_v0_2.json, y criticidad.fuente_de_politica/regla_de_politica desde applied_criticality_v0_1.json (el plano ya seguro, no el campo criticidad.fuente crudo del corpus, que contiene un identificador de caso y que la nota anterior de este mismo fichero ya declara que no se porta) (mismo commit dfdcdaff04dcba10939cc0b0569c55b6a636296f de evidence/adr001-spikes) para que el arnes del banco pueda declarar los ejes que las puertas G4/G8/G9/G11 y la agrupacion de equivalentes del motor por etapas (incidencia #457/ADR-109) necesitan y que el esquema canonico real de Sirius 0.1 no persiste. ambito_declarado de la unica decision con ambito MULTI_PROYECTO_CERRADO (DEC-001, project_id 'LISTA-CERRADA-AB' en el corpus) no trae miembros resueltos: el corpus portado no declara la tabla de membresia de listas cerradas del laboratorio (experiments/adr002/projection/build.py no la expone como JSON), asi que G4 la trata como lista sin miembros resueltos y la descarta (staged_engine_gates._g4: 'la duda no abre ambito') en vez de inventar una membresia.",
+    "nota_incidencia_461": "peticion_p2 por caso (modo, proposito, permiso, tiempo_objetivo, corte_registro, cardinalidad, limite), portados sin modificar desde cases_v0_5.json (instanciacion, por identificador_canonico) y references_v0_5.json (adjudicacion.dominio.limite) (mismo commit dfdcdaff04dcba10939cc0b0569c55b6a636296f de evidence/adr001-spikes que ya citaba la nota de procedencia del fixture), para que el arnes del banco pueda construir la Peticion de cada caso con el traductor portado de experiments/adr002/round/cases.py:334-366 (incidencia #461) en vez de una politica uniforme para las 47. limite es null cuando el dominio adjudicado no declara ninguno (42 de los 47 casos); cuando lo declara, es el objeto {n, tipo, desempate} verbatim de references_v0_5.json."
   },
   "conteos": {
     "casos": 47,
@@ -25,7 +26,16 @@
       "ambito": "GLOBAL",
       "resultado_esperado": [
         "MEM-001"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-02",
@@ -33,19 +43,46 @@
       "ambito": "PRJ-MADEIRA",
       "resultado_esperado": [
         "MEM-002"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "planificar_viaje",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXHAUSTIVA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-03",
       "consulta": "¿Qué reglas de calidad aplican a Gamma?",
       "ambito": "PRJ-GAMMA",
-      "resultado_esperado": []
+      "resultado_esperado": [],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "planificar_entrega",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXHAUSTIVA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-04",
       "consulta": "¿Qué formato de informe uso?",
       "ambito": "PRJ-ALFA",
-      "resultado_esperado": []
+      "resultado_esperado": [],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-05",
@@ -53,7 +90,16 @@
       "ambito": "PRJ-ALFA",
       "resultado_esperado": [
         "DEC-002"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M2",
+        "proposito": "revisar_historial",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-06",
@@ -61,7 +107,16 @@
       "ambito": "PRJ-ALFA",
       "resultado_esperado": [
         "DEC-004"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "planificar_entrega",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-09-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-07",
@@ -69,7 +124,16 @@
       "ambito": "PRJ-ALFA",
       "resultado_esperado": [
         "MEM-005"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-08",
@@ -78,31 +142,76 @@
       "resultado_esperado": [
         "DEC-005",
         "MEM-006"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXHAUSTIVA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-09",
       "consulta": "¿Qué preferencia de reuniones tengo?",
       "ambito": "PRJ-ALFA",
-      "resultado_esperado": []
+      "resultado_esperado": [],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-10",
       "consulta": "¿Qué horario de entrega tengo fijado?",
       "ambito": "PRJ-ALFA",
-      "resultado_esperado": []
+      "resultado_esperado": [],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-11",
       "consulta": "¿Qué sabes del expediente retirado?",
       "ambito": "PRJ-ALFA",
-      "resultado_esperado": []
+      "resultado_esperado": [],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXHAUSTIVA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-12",
       "consulta": "¿Hay información médica del titular?",
       "ambito": "PRJ-ALFA",
-      "resultado_esperado": []
+      "resultado_esperado": [],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "NO_AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-13",
@@ -110,7 +219,16 @@
       "ambito": "PRJ-ALFA",
       "resultado_esperado": [
         "MEM-011"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-14",
@@ -119,13 +237,31 @@
       "resultado_esperado": [
         "MEM-012",
         "MEM-013"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXHAUSTIVA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-15",
       "consulta": "¿Dónde dije exactamente que el alcance no incluye la migración?",
       "ambito": "PRJ-ALFA",
-      "resultado_esperado": []
+      "resultado_esperado": [],
+      "peticion_p2": {
+        "modo": "M3",
+        "proposito": "verificar_fuente",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-16",
@@ -133,19 +269,46 @@
       "ambito": "PRJ-GAMMA",
       "resultado_esperado": [
         "MEM-027"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-17",
       "consulta": "¿Qué política de teletrabajo tenemos en Alfa?",
       "ambito": "PRJ-ALFA",
-      "resultado_esperado": []
+      "resultado_esperado": [],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXHAUSTIVA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-18",
       "consulta": "¿Qué dice el anexo técnico requerido?",
       "ambito": "PRJ-ALFA",
-      "resultado_esperado": []
+      "resultado_esperado": [],
+      "peticion_p2": {
+        "modo": "M3",
+        "proposito": "verificar_fuente",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-19",
@@ -155,7 +318,16 @@
         "DEC-006",
         "DEC-007",
         "DEC-008"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-20",
@@ -163,7 +335,16 @@
       "ambito": "PRJ-ALFA",
       "resultado_esperado": [
         "MEM-014"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "planificar_viaje",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-21",
@@ -171,7 +352,16 @@
       "ambito": "PRJ-ALFA",
       "resultado_esperado": [
         "MEM-016"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "planificar_viaje",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-22",
@@ -184,7 +374,16 @@
         "DEC-011",
         "DEC-014",
         "DEC-015"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M2",
+        "proposito": "revisar_historial",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-01-10T00:00:00Z/2026-03-20T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXHAUSTIVA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-23",
@@ -193,13 +392,31 @@
       "resultado_esperado": [
         "DEC-002",
         "DEC-003"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M2",
+        "proposito": "revisar_historial",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-24",
       "consulta": "¿Cada cuánto revisamos el alcance?",
       "ambito": "PRJ-ALFA",
-      "resultado_esperado": []
+      "resultado_esperado": [],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-25",
@@ -207,7 +424,16 @@
       "ambito": "PRJ-ALFA",
       "resultado_esperado": [
         "MEM-011"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXHAUSTIVA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-26",
@@ -225,7 +451,20 @@
         "MEM-109",
         "MEM-110",
         "MEM-111"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-04-01T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "ACOTADA",
+        "limite": {
+          "n": 10,
+          "tipo": "OBJETIVO",
+          "desempate": "CRITICOS_PRIMERO_LUEGO_ID"
+        }
+      }
     },
     {
       "id": "B04-CA-27",
@@ -234,13 +473,31 @@
       "resultado_esperado": [
         "DEC-005",
         "MEM-006"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M5",
+        "proposito": "revisar_conflicto",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXHAUSTIVA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-28",
       "consulta": "¿Qué se dijo en la sesión no guardada?",
       "ambito": "PRJ-ALFA",
-      "resultado_esperado": []
+      "resultado_esperado": [],
+      "peticion_p2": {
+        "modo": "M3",
+        "proposito": "verificar_fuente",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXHAUSTIVA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-29",
@@ -248,7 +505,16 @@
       "ambito": "PRJ-ALFA",
       "resultado_esperado": [
         "MEM-020"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-30",
@@ -258,7 +524,20 @@
         "DEC-003",
         "MEM-001",
         "MEM-016"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "ACOTADA",
+        "limite": {
+          "n": 3,
+          "tipo": "OBJETIVO",
+          "desempate": "CRITICOS_PRIMERO_LUEGO_ID"
+        }
+      }
     },
     {
       "id": "B04-CA-31",
@@ -270,7 +549,16 @@
         "MEM-014",
         "MEM-016",
         "MEM-025"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "planificar_entrega",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXHAUSTIVA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-32",
@@ -278,7 +566,16 @@
       "ambito": "PRJ-BETA",
       "resultado_esperado": [
         "DEC-012"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M2",
+        "proposito": "revisar_historial",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": "2026-03-01T00:00:00Z",
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-33",
@@ -286,7 +583,16 @@
       "ambito": "PRJ-ALFA",
       "resultado_esperado": [
         "DEC-003"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "ensamblar_contexto_b05",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-34",
@@ -303,19 +609,50 @@
         "MEM-914",
         "MEM-915",
         "MEM-919"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "ensamblar_contexto_b05",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "ACOTADA",
+        "limite": {
+          "n": 10,
+          "tipo": "OBJETIVO",
+          "desempate": "CRITICOS_PRIMERO_LUEGO_ID"
+        }
+      }
     },
     {
       "id": "B04-CA-35",
       "consulta": "¿Qué nota interna hay sobre la prueba?",
       "ambito": "PRJ-ALFA",
-      "resultado_esperado": []
+      "resultado_esperado": [],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-36",
       "consulta": "Variantes de la misma pregunta con dato histórico, candidata y fuera de ámbito.",
       "ambito": "PRJ-ALFA",
-      "resultado_esperado": []
+      "resultado_esperado": [],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXHAUSTIVA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-38",
@@ -332,7 +669,20 @@
         "MEM-108",
         "MEM-109",
         "MEM-110"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "ACOTADA",
+        "limite": {
+          "n": 10,
+          "tipo": "DURO",
+          "desempate": "ID"
+        }
+      }
     },
     {
       "id": "B04-CA-40",
@@ -340,7 +690,16 @@
       "ambito": "PRJ-ALFA",
       "resultado_esperado": [
         "DEC-003"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-41",
@@ -348,7 +707,16 @@
       "ambito": "PRJ-ALFA",
       "resultado_esperado": [
         "MEM-022"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-42",
@@ -356,7 +724,16 @@
       "ambito": "PRJ-ALFA",
       "resultado_esperado": [
         "DEC-010"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-43",
@@ -365,7 +742,16 @@
       "resultado_esperado": [
         "MEM-023",
         "MEM-024"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-44",
@@ -377,7 +763,20 @@
         "MEM-103",
         "MEM-104",
         "MEM-105"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-02-01T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "ACOTADA",
+        "limite": {
+          "n": 5,
+          "tipo": "DURO",
+          "desempate": "ID"
+        }
+      }
     },
     {
       "id": "B04-CA-45",
@@ -385,25 +784,61 @@
       "ambito": "PRJ-ALFA",
       "resultado_esperado": [
         "DEC-003"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "responder_al_usuario",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-46",
       "consulta": "[interna] datos de nómina del equipo Beta",
       "ambito": "PRJ-BETA",
-      "resultado_esperado": []
+      "resultado_esperado": [],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "planificar_entrega",
+        "permiso": "NO_AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-47",
       "consulta": "Consultas por occurred_at, valid_time y recorded_at.",
       "ambito": "PRJ-BETA",
-      "resultado_esperado": []
+      "resultado_esperado": [],
+      "peticion_p2": {
+        "modo": "M2",
+        "proposito": "revisar_historial",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": "2026-02-15T00:00:00Z",
+        "cardinalidad": "EXHAUSTIVA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-49",
       "consulta": "¿Hay algo sobre mi preferencia de reuniones?",
       "ambito": "PRJ-ALFA",
-      "resultado_esperado": []
+      "resultado_esperado": [],
+      "peticion_p2": {
+        "modo": "M3",
+        "proposito": "verificar_fuente",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     },
     {
       "id": "B04-CA-50",
@@ -411,7 +846,16 @@
       "ambito": "PRJ-ALFA",
       "resultado_esperado": [
         "MEM-025"
-      ]
+      ],
+      "peticion_p2": {
+        "modo": "M1",
+        "proposito": "planificar_entrega",
+        "permiso": "AUTORIZADO",
+        "tiempo_objetivo": "2026-06-15T00:00:00Z",
+        "corte_registro": null,
+        "cardinalidad": "EXACTA",
+        "limite": null
+      }
     }
   ],
   "items": [
