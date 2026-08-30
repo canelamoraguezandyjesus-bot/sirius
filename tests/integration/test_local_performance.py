@@ -60,6 +60,28 @@ prueba mide tiempo sobre el conjunto de referencia completo, aquella fija el
 número de consultas de cada método de forma aislada y barata. Detalle
 completo en ADR-008 y en la sección de rendimiento de
 `docs/implementation/V8_EXECUTION.md`.
+
+**Vuelto a correr en M9** (SIRIUS-ARQ-0.2 §6.2/§8-M9, incidencia #449): el
+índice de categoría determinista añade una cuarta señal estructural a
+`RankRelevantKnowledgeUseCase.rank()`, calculada con la misma puerta de
+activación de D7 punto 6 cerrada por defecto (`category_matching_enabled=False`)
+que este mismo banco usa al construir `ContextBuilder` — la línea base que
+M11 (§6.4) necesita antes de cablear el filtro con Ollama. Medición del 30 de
+agosto de 2026, mismo conjunto de referencia y misma máquina, tres pasadas del
+mismo código:
+
+| Operación | P95 (tres pasadas) | Límite | Uso |
+|---|---|---|---|
+| **construir contexto** | **129,1 / 120,6 / 121,9 ms** | **300 ms** | **40 a 43 %** |
+
+Sigue en la misma banda que B12e (120,9 ms, 40 %): con la puerta cerrada,
+`category_match` nunca compara nada (el `and` de
+`RankRelevantKnowledgeUseCase.rank()` corta antes de llamar a
+`category_matches_query`), así que el coste añadido es un `bool` extra por
+candidato en la tupla de `_sort_key`, no una comparación nueva. Entre el 40 %
+y el 43 % del límite queda en la banda del 10-100 % de ADR-007: se registra
+la medida como evidencia, pero no se afirma aquí que RNF-003 se cumple —eso
+lo comprueba PA-025 en la máquina real.
 """
 
 from __future__ import annotations

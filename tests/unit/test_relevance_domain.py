@@ -14,6 +14,7 @@ from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
 from sirius.domain.relevance import (
     KnowledgeKind,
     RankedKnowledge,
+    category_matches_query,
     rank_relevant_knowledge,
     subject_matches_query,
 )
@@ -21,6 +22,7 @@ from sirius.domain.relevance import (
 _NOW = datetime(2026, 7, 21, tzinfo=UTC)
 _PROJECT = 1
 _OTHER_PROJECT = 2
+_VOCABULARY = frozenset({"trabajo", "personal", "salud"})
 
 
 def _memory(
@@ -78,7 +80,11 @@ def _decision(
 
 
 def _ranked_memory(
-    memory: Memory, *, project_matches_active: bool = False, fts_match: bool = False
+    memory: Memory,
+    *,
+    project_matches_active: bool = False,
+    fts_match: bool = False,
+    category_match: bool = False,
 ) -> RankedKnowledge:
     return RankedKnowledge(
         kind=KnowledgeKind.MEMORY,
@@ -86,6 +92,7 @@ def _ranked_memory(
         subject_matches_query=False,
         project_matches_active=project_matches_active,
         fts_match=fts_match,
+        category_match=category_match,
     )
 
 
@@ -95,6 +102,7 @@ def _ranked_decision(
     subject_matches_query: bool = False,
     project_matches_active: bool = False,
     fts_match: bool = False,
+    category_match: bool = False,
 ) -> RankedKnowledge:
     return RankedKnowledge(
         kind=KnowledgeKind.DECISION,
@@ -102,6 +110,7 @@ def _ranked_decision(
         subject_matches_query=subject_matches_query,
         project_matches_active=project_matches_active,
         fts_match=fts_match,
+        category_match=category_match,
     )
 
 
@@ -256,3 +265,104 @@ def test_an_unrelated_current_item_is_excluded_even_though_it_is_vigente() -> No
 
 def test_an_empty_candidate_list_ranks_to_nothing() -> None:
     assert rank_relevant_knowledge([]) == ()
+
+
+# --- M9 (§6.2): category_matches_query, la clasificación determinista de la ---
+# --- consulta contra el vocabulario cerrado — sin modelo, sin puerto. ---
+
+
+def test_category_matches_query_when_the_single_activated_category_equals_the_candidate() -> None:
+    assert category_matches_query("trabajo", "hablemos de trabajo hoy", _VOCABULARY)
+
+
+def test_category_matches_query_is_false_when_the_candidate_has_no_category_yet() -> None:
+    assert not category_matches_query(None, "hablemos de trabajo hoy", _VOCABULARY)
+
+
+def test_category_matches_query_is_false_when_the_query_activates_no_category() -> None:
+    assert not category_matches_query("trabajo", "receta de cocina", _VOCABULARY)
+
+
+def test_category_matches_query_is_false_when_the_activated_category_differs() -> None:
+    assert not category_matches_query("salud", "hablemos de trabajo hoy", _VOCABULARY)
+
+
+def test_category_matches_query_is_false_when_the_query_activates_more_than_one_category() -> None:
+    assert not category_matches_query("trabajo", "trabajo y salud a la vez", _VOCABULARY)
+
+
+@pytest.mark.parametrize("query_text", ["", "   "])
+def test_category_matches_query_is_false_for_a_blank_query(query_text: str) -> None:
+    assert not category_matches_query("trabajo", query_text, _VOCABULARY)
+
+
+def test_category_matches_query_is_case_insensitive_against_the_persisted_category() -> None:
+    # The persisted category (SetCategoryUseCase accepts any string, D7 punto
+    # 3) may differ in capitalization from the closed vocabulary's own term.
+    assert category_matches_query("Trabajo", "hablemos de Trabajo hoy", _VOCABULARY)
+
+
+# --- Criterio 3.5 (M9, §6.2): category_match entra después de fts_match y ---
+# --- antes de la recencia en la tupla de orden. ---
+
+
+def test_a_category_match_outranks_a_non_match_when_everything_else_ties() -> None:
+    matching = _ranked_decision(_decision(1), fts_match=True, category_match=True)
+    non_matching = _ranked_decision(_decision(2), fts_match=True, category_match=False)
+
+    result = rank_relevant_knowledge([non_matching, matching])
+
+    assert result == (matching, non_matching)
+
+
+def test_active_project_membership_still_outranks_a_category_match() -> None:
+    other_project_with_category = _ranked_decision(
+        _decision(1, project_id=_OTHER_PROJECT),
+        fts_match=True,
+        project_matches_active=False,
+        category_match=True,
+    )
+    active_project_without_category = _ranked_decision(
+        _decision(2, project_id=_PROJECT),
+        fts_match=True,
+        project_matches_active=True,
+        category_match=False,
+    )
+
+    result = rank_relevant_knowledge([other_project_with_category, active_project_without_category])
+
+    assert result == (active_project_without_category, other_project_with_category)
+
+
+def test_a_category_match_still_outranks_a_more_recent_non_match() -> None:
+    older_with_category = _ranked_memory(
+        _memory(1, updated_at=_NOW), fts_match=True, category_match=True
+    )
+    newer_without_category = _ranked_memory(
+        _memory(2, updated_at=_NOW + timedelta(days=1)), fts_match=True, category_match=False
+    )
+
+    result = rank_relevant_knowledge([newer_without_category, older_with_category])
+
+    assert result == (older_with_category, newer_without_category)
+
+
+# --- Criterio 3.6 (M9, §6.2): category_match también amplía "relacionado" ---
+# --- (is_related), no solo el orden — un candidato puede encontrarse solo ---
+# --- por su categoría, sin asunto ni FTS5. ---
+
+
+def test_a_category_match_alone_makes_an_otherwise_unrelated_candidate_related() -> None:
+    candidate = _ranked_memory(_memory(1), fts_match=False, category_match=True)
+
+    assert rank_relevant_knowledge([candidate]) == (candidate,)
+
+
+def test_a_category_match_alone_is_not_enough_when_the_gate_is_closed() -> None:
+    # category_match is always False for every real candidate while D7
+    # punto 6's activation gate stays closed (application layer) — this
+    # documents the domain side of that: without any of the three signals,
+    # a candidate stays excluded exactly like before M9.
+    candidate = _ranked_memory(_memory(1), fts_match=False, category_match=False)
+
+    assert rank_relevant_knowledge([candidate]) == ()
