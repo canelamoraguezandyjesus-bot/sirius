@@ -28,6 +28,18 @@ módulo original:
 - **El tiempo.** Un caso puede declarar su instante objetivo como un
   intervalo; se toma **el extremo final** como instante objetivo.
 
+Una cuarta, no heredada del comentario original sino cerrada por la
+revisión de la incidencia #461 (el porte inicial la dejaba en su valor por
+defecto): **los objetivos de ``EXACTA``**. ``Peticion.objetivos`` es la
+cuota que ``_suficiente``/``evaluar_suficiencia`` exigen antes de detener
+la expansión en cardinalidad ``EXACTA`` (``staged_engine.py``); por
+defecto vale 1. El fixture no trae un campo de adjudicación separado para
+esta cuota (a diferencia del límite, que sí lo trae en
+``peticion_p2.limite``), pero por construcción del banco coincide con el
+número de elementos que ``resultado_esperado`` adjudica al caso, así que
+``EXACTA`` toma ``len(caso["resultado_esperado"])`` en vez del valor por
+defecto.
+
 Ámbito no se traduce aquí: a diferencia del laboratorio (que numera
 proyectos del corpus), el arnés del banco ya resuelve ``caso["ambito"]``
 contra los ``Project`` reales que él mismo crea, así que el llamador
@@ -107,6 +119,8 @@ def peticion_desde_caso(
     proposito = "" if permiso == PERMISO_SIN_AUTORIZAR else str(peticion_p2["proposito"])
     objetivo, duro = _limites(peticion_p2["limite"], sin_atar=limite_sin_atar)
     corte_registro = peticion_p2["corte_registro"]
+    cardinalidad = _cardinalidad(str(peticion_p2["cardinalidad"]))
+    objetivos = len(caso["resultado_esperado"]) if cardinalidad is Cardinalidad.EXACTA else 1
     return Peticion(
         operation_id=operation_id,
         consulta=str(caso["consulta"]),
@@ -117,10 +131,11 @@ def peticion_desde_caso(
             tiempo_objetivo=_instante(str(peticion_p2["tiempo_objetivo"])),
             corte_de_registro=None if corte_registro is None else str(corte_registro),
         ),
-        cardinalidad=_cardinalidad(str(peticion_p2["cardinalidad"])),
+        cardinalidad=cardinalidad,
         limite_objetivo=objetivo,
         limite_duro=duro,
         admite_no_vigentes=modo_declarado == MODO_HISTORICO,
+        objetivos=objetivos,
     )
 
 

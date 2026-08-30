@@ -631,6 +631,72 @@ def test_el_fichero_de_forma_tiene_47_casos_y_81_elementos_esperados() -> None:
             assert identidad in identidades_del_canon
 
 
+#: ADR-111: los cinco casos cuyo dominio adjudicado declara `limite`.
+_CASOS_CON_LIMITE_DECLARADO: Final[frozenset[str]] = frozenset(
+    {"B04-CA-26", "B04-CA-30", "B04-CA-34", "B04-CA-38", "B04-CA-44"}
+)
+
+
+def test_el_fichero_de_forma_tiene_42_limites_null_y_5_declarados() -> None:
+    """CODEX-001/CLAUDE-SIRIUS-461-001: la nota de procedencia del fixture
+    (`metadata.nota_incidencia_461`) afirma que 42 de los 47 casos tienen
+    `peticion_p2.limite` null. Fija ambos conteos en una prueba de forma
+    para que la evidencia congelada no vuelva a contradecir su propia
+    documentación: los cinco casos que sí lo declaran son, verbatim, los
+    que ADR-111 nombra."""
+    banco = _fixture()
+    casos = banco["casos"]
+
+    con_limite = {caso["id"] for caso in casos if caso["peticion_p2"]["limite"] is not None}
+    assert con_limite == _CASOS_CON_LIMITE_DECLARADO
+    assert len(casos) - len(con_limite) == 42
+
+
+def test_peticion_desde_caso_propaga_objetivos_de_exacta() -> None:
+    """CODEX-002: un caso de cardinalidad `EXACTA` con más de un elemento
+    esperado debe transportar esa cuota a `Peticion.objetivos`, no
+    quedarse en el valor por defecto (1) — si no,
+    `_suficiente`/`evaluar_suficiencia` (`sirius.domain.staged_engine`)
+    detienen la expansión en cuanto aparece el primer grupo semántico,
+    aunque el caso pida más."""
+    banco = _fixture()
+    casos_por_id = {caso["id"]: caso for caso in banco["casos"]}
+    ambito = Ambito(global_=True, proyectos=())
+    limite_sin_atar = banco["conteos"]["items_del_canon"]
+
+    casos_exacta_con_varios_objetivos = {
+        "B04-CA-19": 3,
+        "B04-CA-23": 2,
+        "B04-CA-43": 2,
+    }
+    for identidad, objetivos_esperados in casos_exacta_con_varios_objetivos.items():
+        caso = casos_por_id[identidad]
+        assert caso["peticion_p2"]["cardinalidad"] == "EXACTA"
+        assert len(caso["resultado_esperado"]) == objetivos_esperados
+        peticion = peticion_desde_caso(
+            caso, operation_id="test", ambito=ambito, limite_sin_atar=limite_sin_atar
+        )
+        assert peticion.objetivos == objetivos_esperados
+
+    # Un caso EXACTA de un único objetivo sigue en el valor histórico (1).
+    caso_unico = casos_por_id["B04-CA-01"]
+    assert caso_unico["peticion_p2"]["cardinalidad"] == "EXACTA"
+    assert len(caso_unico["resultado_esperado"]) == 1
+    peticion_unica = peticion_desde_caso(
+        caso_unico, operation_id="test", ambito=ambito, limite_sin_atar=limite_sin_atar
+    )
+    assert peticion_unica.objetivos == 1
+
+    # Una cardinalidad no EXACTA no usa `objetivos` (`_suficiente` nunca lo
+    # consulta fuera de EXACTA); el traductor conserva el valor por defecto.
+    caso_exhaustiva = casos_por_id["B04-CA-02"]
+    assert caso_exhaustiva["peticion_p2"]["cardinalidad"] == "EXHAUSTIVA"
+    peticion_exhaustiva = peticion_desde_caso(
+        caso_exhaustiva, operation_id="test", ambito=ambito, limite_sin_atar=limite_sin_atar
+    )
+    assert peticion_exhaustiva.objetivos == 1
+
+
 def test_el_banco_se_ejecuta_contra_el_pipeline_actual_y_reporta_las_cuatro_metricas(
     ejecucion_del_banco: _EjecucionDelBanco,
 ) -> None:

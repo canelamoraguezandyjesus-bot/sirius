@@ -40,10 +40,12 @@ con esos campos en vez de la política uniforme de ADR-110.
   `resultado_esperado` ni adjudicación existente.
 - `tests/acceptance/staged_engine_case_translation.py` — módulo nuevo del
   arnés de aceptación, citando su origen
-  (`experiments/adr002/round/cases.py:334-366`, `_traducir`), con las tres
+  (`experiments/adr002/round/cases.py:334-366`, `_traducir`), con las cuatro
   traducciones no obvias del original (permiso `NO_AUTORIZADO` → propósito
   vacío; límite no declarado → límite que no ata; tiempo en intervalo →
-  extremo final). No porta la carga de los tres artefactos congelados
+  extremo final; objetivos de cardinalidad `EXACTA` →
+  `len(caso["resultado_esperado"])`, la cuota que `_suficiente`/
+  `evaluar_suficiencia` exigen antes de detener la expansión). No porta la carga de los tres artefactos congelados
   (`cargar_artefactos`/`casos_ejecutables`): el fixture ya trae los campos
   verbatim, así que solo se porta la traducción.
 - `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py` (`_ejecutar_banco_motor_portado`)
@@ -80,9 +82,23 @@ propósito (vacío exactamente cuando el permiso es `NO_AUTORIZADO`, las
 cinco casos que lo declaran —`B04-CA-26`, `B04-CA-30`, `B04-CA-34`,
 `B04-CA-38`, `B04-CA-44`— reciben exactamente el objetivo/duro que
 `references_v0_5.json` adjudica), mismo tiempo objetivo (con el mismo
-extremo final para el único caso que lo declara como intervalo). No hay
-ninguna diferencia de traducción pendiente: `peticion_desde_caso` es
-`_traducir` línea a línea sobre los mismos campos.
+extremo final para el único caso que lo declara como intervalo).
+
+La revisión de esta incidencia detectó una diferencia real que sí quedaba
+pendiente: los tres casos con cardinalidad `EXACTA` y más de un elemento
+esperado (`B04-CA-19` con 3, `B04-CA-23` y `B04-CA-43` con 2) recibían
+`Peticion.objetivos` en su valor por defecto (1) en vez de la cuota real
+adjudicada, porque el porte inicial no la transportaba. Corregido —
+`objetivos` toma ahora `len(caso["resultado_esperado"])` cuando la
+cardinalidad es `EXACTA` (`tests/acceptance/staged_engine_case_translation.py`)—,
+la medición no cambia: `uv run pytest
+tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py -q -s` sigue
+imprimiendo 23/47, 90, 10, 63/81, idéntico al porte inicial, porque en los
+tres casos la etapa que ya satisfacía la cuota antigua (1) contenía, sin
+necesidad de expansión adicional, los mismos elementos que la cuota
+corregida permite seguir buscando. No hay ninguna otra diferencia de
+traducción pendiente: `peticion_desde_caso` es `_traducir` línea a línea
+sobre los mismos campos.
 
 La diferencia que queda no está en el traductor ni en el arnés: está en
 **qué mide el banco de 47 casos frente a qué mide D1**. El propio 29/47 que
@@ -229,10 +245,18 @@ el motor de búsqueda para alcanzar 29/47, o si prefiere una vía distinta.
 - Lectura de `experiments/adr002/round/cases.py:334-366` (`_traducir`) en
   `evidence/adr001-spikes`, comparada línea a línea con `peticion_desde_caso`
   de `tests/acceptance/staged_engine_case_translation.py`:
-  mismas tres traducciones no obvias (permiso, límite, tiempo), mismos
-  campos de entrada (`peticion_p2` del fixture, verbatim de
-  `cases_v0_5.json`/`references_v0_5.json`, commit
+  mismas cuatro traducciones no obvias (permiso, límite, tiempo, objetivos
+  de `EXACTA`), mismos campos de entrada (`peticion_p2` del fixture,
+  verbatim de `cases_v0_5.json`/`references_v0_5.json`, commit
   `dfdcdaff04dcba10939cc0b0569c55b6a636296f`).
+- Tras cerrar el hallazgo de revisión sobre `objetivos` (ver «Diagnóstico»),
+  se repitió `uv run pytest
+  tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py -q -s`: misma
+  medición, `aciertos_exactos=23/47 elementos_de_mas=90
+  omisiones_criticas=10 cobertura=63/81 (77.8%)`, con `git stash` del
+  cambio y repetición para confirmar que el resultado no dependía de la
+  corrección — no la mueve, así que las cotas de no regresión y la tabla de
+  arriba no cambian.
 - Lectura de
   `docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:63-74`,
   `docs/evolution/SIRIUS_PLAN_PRUEBAS_0.2_v0.1_PROPUESTO.md:76` y
