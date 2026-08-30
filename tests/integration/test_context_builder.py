@@ -1,8 +1,9 @@
 import dataclasses
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from sirius.adapters.llm.token_counter import CharacterHeuristicTokenCounter
 from sirius.adapters.persistence.database import build_engine, build_session_factory, session_scope
@@ -38,6 +39,8 @@ from sirius.domain.identity import (
     INITIAL_PERSONALITY_INSTRUCTIONS,
 )
 from sirius.domain.project import blockers_to_text
+from sirius.domain.relevance import RankedKnowledge
+from sirius.ports.relevance_filter import RelevanceFilterPort
 
 
 def _prepare_schema(database_path: Path) -> None:
@@ -82,6 +85,8 @@ def _build_context_builder(
     *,
     token_budget: int = 12000,
     max_knowledge_items: int = 12,
+    relevance_filter_port: RelevanceFilterPort | None = None,
+    max_criticality_category: str | None = None,
 ) -> ContextBuilder:
     memory_repository = build_sqlite_memory_repository(database_path)
     decision_repository = build_sqlite_decision_repository(database_path)
@@ -104,7 +109,42 @@ def _build_context_builder(
         recent_messages_limit=recent_messages_limit,
         token_budget=token_budget,
         max_knowledge_items=max_knowledge_items,
+        relevance_filter_port=relevance_filter_port,
+        max_criticality_category=max_criticality_category,
     )
+
+
+def _set_updated_at(database_path: Path, row_id: int, updated_at: str) -> None:
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE memories SET updated_at = :updated_at WHERE id = :id"),
+            {"updated_at": updated_at, "id": row_id},
+        )
+
+
+class _ExcludeAllRelevanceFilterPort:
+    """Test double for RelevanceFilterPort (§8-M10): discards every
+    candidate it sees, standing in for whatever destructive verdict a real
+    Ollama response might produce — proves the candado actually adds
+    candidates back, never a lenient double that happens to keep them."""
+
+    def filter_candidates(
+        self, query_text: str, candidates: Sequence[RankedKnowledge]
+    ) -> Sequence[RankedKnowledge]:
+        return ()
+
+
+class _FailOpenRelevanceFilterPort:
+    """Test double standing in for an adapter that already failed open
+    (§6.3 scenarios (ii)-(iv): not installed/connection refused, timed out,
+    malformed response) — its contract-mandated answer to any internal
+    problem is ``candidates`` unmodified."""
+
+    def filter_candidates(
+        self, query_text: str, candidates: Sequence[RankedKnowledge]
+    ) -> Sequence[RankedKnowledge]:
+        return candidates
 
 
 def _row_counts(database_path: Path) -> dict[str, int]:
@@ -551,3 +591,154 @@ def test_build_fills_remaining_budget_with_recent_messages_dropping_oldest_first
     context = builder.build(query)
 
     assert [m.content for m in context.recent_messages] == ["reciente"]
+
+
+# --- M10 (SIRIUS-ARQ-0.2 §6.3, §8): the relevance filter's candado -----------
+
+
+@pytest.mark.integration
+def test_no_relevance_filter_port_leaves_ranking_untouched(tmp_path: Path) -> None:
+    """Default constructors keep today's exact behaviour (§6.3): with no
+    ``relevance_filter_port`` at all, the second filter step never runs."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    memory = memory_repository.create_memory("candidato sin filtro", "manual")
+    builder = _build_context_builder(database_path)
+
+    context = builder.build("candidato")
+
+    assert [m.id for m in context.memories] == [memory.id]
+
+
+@pytest.mark.integration
+def test_relevance_filter_excludes_a_non_critical_candidate_the_double_discards(
+    tmp_path: Path,
+) -> None:
+    """§8-M10 criterion (i): a filter double that discards every candidate
+    it sees still excludes one whose category is neither ``None`` nor the
+    max-criticality category — the candado only ever adds candidates back,
+    never overrides a discard for one it does not protect."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    non_critical = memory_repository.create_memory("candidato descartable", "manual")
+    memory_repository.set_user_category(non_critical.id, "otros")
+    builder = _build_context_builder(
+        database_path,
+        relevance_filter_port=_ExcludeAllRelevanceFilterPort(),
+        max_criticality_category="salud",
+    )
+
+    context = builder.build("candidato")
+
+    assert context.memories == ()
+
+
+@pytest.mark.integration
+def test_relevance_filter_fail_open_result_matches_no_filter_at_all(tmp_path: Path) -> None:
+    """§8-M10 criteria (ii)-(iv): whatever internal problem made the real
+    adapter fail open, ``ContextBuilder`` only ever sees ``candidates``
+    unmodified come back — the result is identical to never having invoked
+    the filter, with no exception propagated out of ``build()``."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    non_critical = memory_repository.create_memory("candidato normal", "manual")
+    memory_repository.set_user_category(non_critical.id, "otros")
+    builder = _build_context_builder(
+        database_path,
+        relevance_filter_port=_FailOpenRelevanceFilterPort(),
+        max_criticality_category="salud",
+    )
+
+    context = builder.build("candidato")
+
+    assert [m.id for m in context.memories] == [non_critical.id]
+
+
+@pytest.mark.integration
+def test_relevance_filter_candado_protects_the_max_criticality_category(tmp_path: Path) -> None:
+    """§8-M10: a candidate whose category equals the max-criticality
+    category (persisted by M8) survives even though the filter double
+    explicitly discards every candidate it sees."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    critical = memory_repository.create_memory("candidato critico", "manual")
+    memory_repository.set_user_category(critical.id, "salud")
+    builder = _build_context_builder(
+        database_path,
+        relevance_filter_port=_ExcludeAllRelevanceFilterPort(),
+        max_criticality_category="salud",
+    )
+
+    context = builder.build("candidato")
+
+    assert [m.id for m in context.memories] == [critical.id]
+
+
+@pytest.mark.integration
+def test_relevance_filter_candado_protects_a_candidate_without_a_category_yet(
+    tmp_path: Path,
+) -> None:
+    """§8-M10: a candidate with ``category is None`` (classification still
+    pending, or Ollama never available) survives even though the filter
+    double explicitly discards every candidate it sees — until
+    ``TagCategoryUseCase`` assigns it a non-critical category, it is never
+    exposed to the destructive filter."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    uncategorized = memory_repository.create_memory("candidato sin categoria", "manual")
+    builder = _build_context_builder(
+        database_path,
+        relevance_filter_port=_ExcludeAllRelevanceFilterPort(),
+        max_criticality_category="salud",
+    )
+
+    context = builder.build("candidato")
+
+    assert [m.id for m in context.memories] == [uncategorized.id]
+
+
+@pytest.mark.integration
+def test_relevance_filter_candado_preserves_rank_order_not_the_filter_or_set_order(
+    tmp_path: Path,
+) -> None:
+    """The candado is a union of three sets recombined over ``candidates``,
+    never a second call to the filter and never a reorder: the result keeps
+    the same relative order §6.2 already fixed, oldest-created last once
+    every other ranking criterion ties."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    project_id = _seed_bootstrap_singletons(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    critical = memory_repository.create_memory("candidato uno", "manual", project_id=project_id)
+    memory_repository.set_user_category(critical.id, "salud")
+    uncategorized = memory_repository.create_memory(
+        "candidato dos", "manual", project_id=project_id
+    )
+    non_critical = memory_repository.create_memory(
+        "candidato tres", "manual", project_id=project_id
+    )
+    memory_repository.set_user_category(non_critical.id, "otros")
+    # Pin recency so the rank is deterministic and known ahead of time
+    # (newest first): critical, then uncategorized, then non_critical.
+    _set_updated_at(database_path, critical.id, "2026-01-03T00:00:00")
+    _set_updated_at(database_path, uncategorized.id, "2026-01-02T00:00:00")
+    _set_updated_at(database_path, non_critical.id, "2026-01-01T00:00:00")
+    builder = _build_context_builder(
+        database_path,
+        relevance_filter_port=_ExcludeAllRelevanceFilterPort(),
+        max_criticality_category="salud",
+    )
+
+    context = builder.build("candidato")
+
+    assert [m.id for m in context.memories] == [critical.id, uncategorized.id]

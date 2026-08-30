@@ -44,6 +44,7 @@ from sirius.ports.event_repository import EventRepository
 from sirius.ports.identity_repository import IdentityRepository
 from sirius.ports.memory_repository import MemoryRepository
 from sirius.ports.project_repository import ProjectRepository
+from sirius.ports.relevance_filter import RelevanceFilterPort
 from sirius.ports.token_counter import TokenCounter
 
 _DEFAULT_RECENT_MESSAGES_LIMIT = 20
@@ -127,6 +128,8 @@ class ContextBuilder:
         recent_messages_limit: int = _DEFAULT_RECENT_MESSAGES_LIMIT,
         token_budget: int = DEFAULT_TOKEN_BUDGET,
         max_knowledge_items: int = DEFAULT_MAX_KNOWLEDGE_ITEMS,
+        relevance_filter_port: RelevanceFilterPort | None = None,
+        max_criticality_category: str | None = None,
     ) -> None:
         self._identity_repository = identity_repository
         self._project_repository = project_repository
@@ -139,6 +142,14 @@ class ContextBuilder:
         self._recent_messages_limit = recent_messages_limit
         self._token_budget = token_budget
         self._max_knowledge_items = max_knowledge_items
+        # M10 (SIRIUS-ARQ-0.2 §6.3): both default to the closed D7 point 6
+        # gate — no relevance filter runs at all, so every existing caller
+        # that never passes them keeps building the exact same Context it
+        # does today. Wiring a real adapter and the real max-criticality
+        # category from settings is M11's job (composition_root), not this
+        # constructor's.
+        self._relevance_filter_port = relevance_filter_port
+        self._max_criticality_category = max_criticality_category
 
     def build(self, current_user_message: str) -> Context:
         """Assemble a Context; deterministic for the same underlying data.
@@ -211,14 +222,40 @@ class ContextBuilder:
         """B6b-ranked vigente knowledge related to ``current_user_message``,
         minus any memory B4e's precedence filter excludes (see the class
         docstring) — decisions are never excluded by that filter, only
-        memories."""
+        memories — and then M10's relevance filter (§6.3), a second filter
+        after precedence and before ``apply_context_budget``, guarded by its
+        own candado."""
         ranked_knowledge = self._rank_relevant_knowledge_use_case.rank(current_user_message)
         current_decisions = self._decision_repository.list_current_decisions()
-        return tuple(
+        after_precedence = tuple(
             candidate
             for candidate in ranked_knowledge
             if not self._excluded_by_precedence(candidate, current_decisions)
         )
+        if self._relevance_filter_port is None:
+            return after_precedence
+        return self._apply_relevance_filter(current_user_message, after_precedence)
+
+    def _apply_relevance_filter(
+        self, current_user_message: str, candidates: tuple[RankedKnowledge, ...]
+    ) -> tuple[RankedKnowledge, ...]:
+        """The candado (§6.3): a single call to ``RelevanceFilterPort``,
+        never a second one, recombined as the union of three sets — what the
+        filter kept, every candidate of the vocabulary's max-criticality
+        category, and every candidate with no category yet — preserving the
+        order §6.2 already fixed on ``candidates``. A candidate the filter
+        would have discarded still survives here if either of the other two
+        sets protects it; the filter alone never has the final word."""
+        assert self._relevance_filter_port is not None
+        filtered = self._relevance_filter_port.filter_candidates(current_user_message, candidates)
+        kept_positions = {id(candidate) for candidate in filtered}
+        kept_positions.update(
+            id(candidate)
+            for candidate in candidates
+            if candidate.item.category is None
+            or candidate.item.category == self._max_criticality_category
+        )
+        return tuple(candidate for candidate in candidates if id(candidate) in kept_positions)
 
     @staticmethod
     def _excluded_by_precedence(
