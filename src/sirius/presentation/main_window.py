@@ -356,6 +356,14 @@ class MainWindow(QMainWindow):
         self._is_sending = False
         self._is_backup_busy = False
         self._is_export_busy = False
+        # CODEX-001 (ronda 5): el proyecto ya se completó (RF-018) y esta
+        # ventana está de camino a cerrarse en cuanto termine de esperar al
+        # etiquetador de categorías pendiente (ver _handle_project_completed).
+        # Mientras tanto no puede iniciarse ningún envío, exportación o
+        # copia/restauración: la ventana siguiente comparte los mismos
+        # repositorios y arrancaría una operación sobre un proyecto que ya no
+        # es el activo.
+        self._is_completing_project = False
         self._close_requested = False
         # Ruta de la última copia creada en esta sesión. Es lo que permite
         # abrir su carpeta, reutilizarla sin volver a buscarla a mano y
@@ -971,7 +979,12 @@ class MainWindow(QMainWindow):
         """
         if not text.strip():
             return
-        if self._is_sending or self._is_backup_busy or self._is_export_busy:
+        if (
+            self._is_sending
+            or self._is_backup_busy
+            or self._is_export_busy
+            or self._is_completing_project
+        ):
             # La caja ya se vació al emitir, así que salir en silencio borraba
             # lo escrito sin decir nada. Se devuelve el texto y se explica.
             self.studio_page.set_input_text(text)
@@ -1056,7 +1069,7 @@ class MainWindow(QMainWindow):
             self._project_lifecycle_use_case,
             show_warning=self._show_warning,
         )
-        self.project_continuity_widget.project_completed.connect(self.project_completed.emit)
+        self.project_continuity_widget.project_completed.connect(self._handle_project_completed)
 
         # B5: panel de contexto completo, de solo lectura, junto al bloque de
         # continuidad. Reutiliza casos de uso ya recibidos; no crea ninguno.
@@ -1393,7 +1406,12 @@ class MainWindow(QMainWindow):
         text = self.message_input.text()
         if not text.strip():
             return
-        if self._is_sending or self._is_backup_busy or self._is_export_busy:
+        if (
+            self._is_sending
+            or self._is_backup_busy
+            or self._is_export_busy
+            or self._is_completing_project
+        ):
             return
 
         self.message_input.clear()
@@ -1405,7 +1423,12 @@ class MainWindow(QMainWindow):
         # touches message_input, which may hold an unrelated draft.
         if self._last_failed_text is None:
             return
-        if self._is_sending or self._is_backup_busy or self._is_export_busy:
+        if (
+            self._is_sending
+            or self._is_backup_busy
+            or self._is_export_busy
+            or self._is_completing_project
+        ):
             return
 
         self._start_send(self._last_failed_text)
@@ -1454,6 +1477,7 @@ class MainWindow(QMainWindow):
             and not self._is_sending
             and not self._is_backup_busy
             and not self._is_export_busy
+            and not self._is_completing_project
         )
 
     def _handle_cancel_clicked(self) -> None:
@@ -1637,6 +1661,28 @@ class MainWindow(QMainWindow):
         if self._close_requested:
             self._close_requested = False
             self.close()
+
+    def _handle_project_completed(self) -> None:
+        """RF-018: el proyecto activo acaba de completarse.
+
+        ``sirius.main`` puede tardar en sustituir esta ventana si un
+        ``CategoryTaggingWorker`` sigue en vuelo (ver el comentario CODEX-002
+        en su ``_on_project_completed``): espera a que termine antes de
+        mostrar la ventana siguiente y cerrar esta. Durante esa espera no
+        puede arrancar ningún envío, exportación ni copia/restauración —la
+        ventana siguiente ya comparte los mismos repositorios que esta, así
+        que una operación iniciada aquí seguiría corriendo sobre un proyecto
+        que ya dejó de ser el activo (CODEX-001, ronda 5). Deliberadamente no
+        se revierte: esta ventana está de camino a cerrarse y no vuelve a
+        aceptar estas operaciones.
+        """
+        self._is_completing_project = True
+        self.send_button.setEnabled(False)
+        self.message_input.setEnabled(False)
+        self.export_button.setEnabled(False)
+        self._set_backup_controls_enabled(False)
+        self._update_retry_button()
+        self.project_completed.emit()
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Cierra micrófono y voz, y luego aplica el cierre diferido de siempre.
@@ -2021,7 +2067,12 @@ class MainWindow(QMainWindow):
     # --- Crear copia -------------------------------------------------------
 
     def _handle_create_backup_clicked(self) -> None:
-        if self._is_sending or self._is_backup_busy or self._is_export_busy:
+        if (
+            self._is_sending
+            or self._is_backup_busy
+            or self._is_export_busy
+            or self._is_completing_project
+        ):
             return
 
         password = self.create_backup_password_input.text()
@@ -2109,7 +2160,12 @@ class MainWindow(QMainWindow):
             self.validate_backup_path_input.setText(path_text)
 
     def _handle_validate_backup_clicked(self) -> None:
-        if self._is_sending or self._is_backup_busy or self._is_export_busy:
+        if (
+            self._is_sending
+            or self._is_backup_busy
+            or self._is_export_busy
+            or self._is_completing_project
+        ):
             return
 
         path_text = self.validate_backup_path_input.text().strip()
@@ -2169,7 +2225,12 @@ class MainWindow(QMainWindow):
             self.restore_backup_path_input.setText(path_text)
 
     def _handle_restore_backup_clicked(self) -> None:
-        if self._is_sending or self._is_backup_busy or self._is_export_busy:
+        if (
+            self._is_sending
+            or self._is_backup_busy
+            or self._is_export_busy
+            or self._is_completing_project
+        ):
             return
 
         path_text = self.restore_backup_path_input.text().strip()
@@ -2355,7 +2416,12 @@ class MainWindow(QMainWindow):
         return group
 
     def _handle_export_clicked(self) -> None:
-        if self._is_sending or self._is_backup_busy or self._is_export_busy:
+        if (
+            self._is_sending
+            or self._is_backup_busy
+            or self._is_export_busy
+            or self._is_completing_project
+        ):
             return
 
         # S12.1: the personal-data/no-API-key notice is mandatory and must

@@ -517,6 +517,57 @@ def test_project_lifecycle_use_case_never_runs_while_a_send_is_in_progress(
     qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
 
 
+@pytest.mark.gui
+def test_completing_the_project_blocks_starting_new_send_export_and_backup_operations(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CODEX-001 (ronda 5): ``sirius.main`` puede tardar en sustituir esta
+    ventana por una ``InitialProjectWindow`` que comparte los mismos
+    repositorios (espera a un ``CategoryTaggingWorker`` en vuelo antes de
+    hacerlo). Mientras tanto no puede arrancar ningún envío, exportación ni
+    copia/restauración sobre el proyecto que ya se completó: esa operación
+    seguiría corriendo sobre los mismos repositorios que ya usa la ventana
+    siguiente."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    spy_lifecycle_use_case = _SpyProjectLifecycleUseCase()
+    window.project_continuity_widget._lifecycle_use_case = spy_lifecycle_use_case  # type: ignore[assignment]
+    window.project_continuity_widget._confirm_completion = lambda title, text: True
+
+    received: list[None] = []
+    window.project_completed.connect(lambda: received.append(None))
+
+    window.project_continuity_widget.complete_button.click()
+
+    # MainWindow.project_completed still bubbles up exactly as before —
+    # sirius.main keeps deciding when to open the next window and close
+    # this one, only what this window itself allows while it waits changes.
+    assert received == [None]
+
+    assert window.send_button.isEnabled() is False
+    assert window.message_input.isEnabled() is False
+    assert window.export_button.isEnabled() is False
+    assert window.create_backup_button.isEnabled() is False
+    assert window.validate_backup_button.isEnabled() is False
+    assert window.restore_backup_button.isEnabled() is False
+
+    window.message_input.setText("hola, ¿sigues ahí?")
+    window.send_button.click()
+    assert window.message_list.count() == 0, (
+        "un envío arrancó sobre un proyecto que ya se completó, mientras la "
+        "ventana siguiente comparte los mismos repositorios"
+    )
+
+    window.export_button.click()
+    window.create_backup_button.click()
+    window.validate_backup_button.click()
+    window.restore_backup_button.click()
+    assert window._is_sending is False
+    assert window._is_export_busy is False
+    assert window._is_backup_busy is False
+
+
 # --- Aviso de presupuesto (B7c, RF-030/PA-018) ---------------------------
 
 
