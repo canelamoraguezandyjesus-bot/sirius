@@ -30,6 +30,7 @@ from sirius.domain.staged_engine_contracts import (
 #: Los ejes de la clave de desempate, en su orden real.
 EJES_DE_ORDEN_DECLARADOS: Final[tuple[str, ...]] = (
     "criticidad aplicada",
+    "representante del grupo de equivalentes",
     "autoridad de la etapa de origen",
     "clave de sujeto",
     "identidad estable",

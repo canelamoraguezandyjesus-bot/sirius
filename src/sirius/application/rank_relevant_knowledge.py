@@ -158,6 +158,21 @@ class RankRelevantKnowledgeUseCase:
         ``RankedKnowledge`` con las mismas cuatro señales estructurales que
         el camino de siempre calcula, para que el orden final sea el mismo
         tipo de dato pase lo que pase por la puerta.
+
+        El motor por etapas nunca genera un candidato solo por su
+        categoría: sus etapas de expansión buscan por asunto exacto y FTS5,
+        nunca por ``category``. M9 (§6.2) exige que ``category_match`` por sí
+        solo siga bastando para que un candidato se encuentre
+        (``rank_relevant_knowledge.is_related``) y para que decida su orden
+        frente a la recencia — ninguna de las dos cosas que el motor por sí
+        mismo puede dar, porque nunca ve esos candidatos. Por eso, tras
+        traducir lo que el motor sí admitió, esta función completa la
+        ampliación de M9 por separado: recorre el conocimiento vigente que
+        el motor no admitió y añade el que coincide solo por categoría,
+        ordenado entre sí con la misma prioridad de siempre
+        (``rank_relevant_knowledge``). El orden que las doce puertas y la
+        agrupación de equivalentes ya decidieron para lo que el motor sí
+        admitió no se toca.
         """
         assert self._staged_engine_port is not None
         assert self._staged_engine_candidate is not None
@@ -175,11 +190,13 @@ class RankRelevantKnowledgeUseCase:
             )
 
         ranked: list[RankedKnowledge] = []
+        admitidos_por_el_motor: set[tuple[KnowledgeKind, int]] = set()
         for resultado in recuperacion.resultados:
             clase, _, numero = resultado.item.id.partition(":")
             item_id = int(numero)
             if clase == Clase.MEMORIA.value:
                 memory = self._memory_repository.get_memory(item_id)
+                admitidos_por_el_motor.add((KnowledgeKind.MEMORY, item_id))
                 ranked.append(
                     RankedKnowledge(
                         kind=KnowledgeKind.MEMORY,
@@ -194,6 +211,7 @@ class RankRelevantKnowledgeUseCase:
                 )
             else:
                 decision = self._decision_repository.get_decision(item_id)
+                admitidos_por_el_motor.add((KnowledgeKind.DECISION, item_id))
                 ranked.append(
                     RankedKnowledge(
                         kind=KnowledgeKind.DECISION,
@@ -207,7 +225,47 @@ class RankRelevantKnowledgeUseCase:
                         category_match=category_match(decision.category),
                     )
                 )
-        return tuple(ranked)
+
+        solo_por_categoria: list[RankedKnowledge] = []
+        if self._category_matching_enabled:
+            for memory in self._memory_repository.list_current_memories():
+                if (KnowledgeKind.MEMORY, memory.id) in admitidos_por_el_motor:
+                    continue
+                if category_match(memory.category):
+                    solo_por_categoria.append(
+                        RankedKnowledge(
+                            kind=KnowledgeKind.MEMORY,
+                            item=memory,
+                            subject_matches_query=False,
+                            project_matches_active=(
+                                active_project_id is not None
+                                and memory.project_id == active_project_id
+                            ),
+                            fts_match=False,
+                            category_match=True,
+                        )
+                    )
+            for decision in self._decision_repository.list_current_decisions():
+                if (KnowledgeKind.DECISION, decision.id) in admitidos_por_el_motor:
+                    continue
+                if category_match(decision.category):
+                    solo_por_categoria.append(
+                        RankedKnowledge(
+                            kind=KnowledgeKind.DECISION,
+                            item=decision,
+                            subject_matches_query=subject_matches_query(
+                                decision.subject, query_text
+                            ),
+                            project_matches_active=(
+                                active_project_id is not None
+                                and decision.project_id == active_project_id
+                            ),
+                            fts_match=False,
+                            category_match=True,
+                        )
+                    )
+
+        return tuple(ranked) + rank_relevant_knowledge(solo_por_categoria)
 
     def _rank_via_current_pipeline(self, query_text: str) -> tuple[RankedKnowledge, ...]:
         """El filtro-y-orden de S7.5/M9, sin cambios: lo que ``rank()``

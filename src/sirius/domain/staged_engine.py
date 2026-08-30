@@ -95,6 +95,7 @@ class Recuperacion:
 #: Razón de orden, en el mismo orden que la clave.
 EJES_DE_ORDEN: Final[tuple[str, ...]] = (
     "criticidad aplicada",
+    "representante del grupo de equivalentes",
     "autoridad de la etapa de origen",
     "clave de sujeto",
     "identidad estable",
@@ -102,17 +103,35 @@ EJES_DE_ORDEN: Final[tuple[str, ...]] = (
 
 
 def _clave_de_orden(
-    candidata: Candidata, criticidad_de: Callable[[str], Criticidad]
-) -> tuple[int, int, str, str]:
+    candidata: Candidata,
+    criticidad_de: Callable[[str], Criticidad],
+    representante_de: Callable[[str], str | None],
+) -> tuple[int, int, int, str, str]:
     """Desempate estable y registrado.
 
-    Por criticidad aplicada, luego por etapa de origen —la autoridad decrece
-    de ``E1`` a ``E4``—, luego por sujeto e identidad estable. Nunca por el
-    orden de llegada, que dependería del motor de base de datos.
+    Por criticidad aplicada, luego —si el elegible pertenece a un grupo de
+    equivalentes— por si es su representante: ``GrupoDeEquivalentes``
+    (``staged_engine_contracts``) exige que "el representante encabeza", y
+    ese orden es lo único que lo garantiza cuando ``G12`` recorta por límite
+    duro (de lo contrario un miembro no representante de otra etapa podría
+    quedar dentro mientras el representante del mismo grupo queda fuera).
+    Luego por etapa de origen —la autoridad decrece de ``E1`` a ``E4``—,
+    luego por sujeto e identidad estable. Nunca por el orden de llegada, que
+    dependería del motor de base de datos.
     """
     nivel = ORDEN_DE_CRITICIDAD.index(criticidad_de(candidata.item.id))
+    representante = representante_de(candidata.item.id)
+    no_es_representante = (
+        1 if representante is not None and representante != candidata.item.id else 0
+    )
     autoridad = list(ETAPAS_DE_EXPANSION).index(candidata.etapa)
-    return (-nivel, autoridad, candidata.item.subject_key or "", candidata.item.id)
+    return (
+        -nivel,
+        no_es_representante,
+        autoridad,
+        candidata.item.subject_key or "",
+        candidata.item.id,
+    )
 
 
 def _suficiente(contadas: int, peticion: Peticion) -> bool:
@@ -221,8 +240,15 @@ def recuperar(
         msg = "la agrupacion perdio elegibles: los miembros no cubren lo admitido"
         raise RecuperacionInvalidaError(msg)
 
-    ordenadas = sorted(unicas, key=lambda c: _clave_de_orden(c, criticidad_de))
     grupo_por_item = {m: g for g in agrupacion.grupos for m in g.miembros}
+    ordenadas = sorted(
+        unicas,
+        key=lambda c: _clave_de_orden(
+            c,
+            criticidad_de,
+            lambda i: grupo_por_item[i].representante if i in grupo_por_item else None,
+        ),
+    )
     g12 = gates.aplicar_g12(ordenadas, peticion, criticidad_de, lambda i: i in grupo_por_item)
     traza.desbordamiento = g12.desbordamiento_declarado
     traza.desbordamiento_critico = g12.desbordamiento_critico

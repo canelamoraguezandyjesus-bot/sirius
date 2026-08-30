@@ -235,6 +235,29 @@ class _CandidatoDeUnaEtapa:
         return _candidata(item).lectura
 
 
+class _CandidatoDeDosEtapas:
+    """Fuente de prueba: aporta un grupo de items distinto por etapa, para
+    reproducir un grupo de equivalentes cuyos miembros llegan de etapas de
+    autoridad distinta (CODEX-002)."""
+
+    identificador = "prueba"
+    senal_tardia_habilitada = "ninguna_adicional"
+
+    def __init__(self, por_etapa: dict[Etapa, Sequence[ItemCanonico]]) -> None:
+        self._por_etapa = por_etapa
+
+    def candidatas(self, contexto: ContextoDeEtapa) -> Sequence[Candidata]:
+        items = self._por_etapa.get(contexto.etapa, ())
+        return [
+            _candidata(i, etapa=contexto.etapa)
+            for i in items
+            if i.id not in contexto.ya_recuperados
+        ]
+
+    def leer(self, item: ItemCanonico, consulta: str) -> LecturaSemantica:
+        return _candidata(item).lectura
+
+
 class _PuertoDePrueba:
     def __init__(self, items: Sequence[ItemCanonico]) -> None:
         self._items = tuple(items)
@@ -307,6 +330,47 @@ def test_recuperar_never_lets_a_critical_item_vanish_without_declaring_overflow(
     # abortaria en vez de devolver un resultado incompleto sin declararlo.
     assert recuperacion.ids == ("MEMORIA:1",)
     assert recuperacion.suficiencia.value in {"PARCIAL", "COMPLETA"}
+
+
+def test_recuperar_orders_the_group_representative_ahead_of_a_higher_authority_member() -> None:
+    """CODEX-002: `_elegir_representante` (staged_engine_grouping) puede
+    elegir un representante distinto del miembro de mayor autoridad de
+    etapa, y `GrupoDeEquivalentes` exige que ese representante encabece
+    (staged_engine_contracts.py: "el representante encabeza"). Se reproduce
+    con `MEMORIA:2` en `E1`, `MEMORIA:1` equivalente en `E2` (el desempate
+    por id nombra representante a `MEMORIA:1`) y un tercer elegible ajeno al
+    grupo (`MEMORIA:3`, también en `E2`) que antes de esta corrección
+    ordenaba por delante del representante solo por venir de una etapa de
+    mayor autoridad. Con límite duro 2, un orden que solo mirara autoridad
+    de etapa entrega `[MEMORIA:2, MEMORIA:3]` y excluye al representante;
+    el orden corregido antepone al representante dentro de su nivel de
+    criticidad y entrega `[MEMORIA:3, MEMORIA:1]`, truncando el grupo (no
+    todos sus miembros caben) pero sin dejar fuera a quien lo encabeza."""
+    en_e1 = _item("MEMORIA:2")
+    en_e2 = _item("MEMORIA:1")
+    ajeno = _item("MEMORIA:3", subject_key="ancho-sujeto")
+    peticion = _peticion(limite_duro=2)
+
+    class _PlanoConPropiedad:
+        def property_key(self, identidad: str) -> str | None:
+            return "PK-1"
+
+        def criticidad_aplicada(self, identidad: str) -> CriticidadAplicada | None:
+            return None
+
+    recuperacion = recuperar(
+        peticion,
+        _PuertoDePrueba([en_e1, en_e2, ajeno]),
+        _CandidatoDeDosEtapas({Etapa.E1: [en_e1], Etapa.E2: [en_e2, ajeno]}),
+        _PlanoConPropiedad(),
+    )
+
+    assert len(recuperacion.grupos) == 1
+    grupo = recuperacion.grupos[0]
+    assert grupo.representante == "MEMORIA:1"
+    assert set(grupo.miembros) == {"MEMORIA:1", "MEMORIA:2"}
+    assert recuperacion.ids == ("MEMORIA:3", "MEMORIA:1")
+    assert grupo.identificador in recuperacion.traza.grupos_truncados
 
 
 def test_recuperar_raises_if_a_candidate_reads_no_subject_at_all() -> None:

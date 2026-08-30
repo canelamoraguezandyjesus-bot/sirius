@@ -112,6 +112,23 @@ from sirius.domain.staged_engine_contracts import (
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "evidence_bank_47_casos.json"
 
+#: Medición actual publicada en el docstring de
+#: `test_el_banco_se_ejecuta_contra_el_pipeline_actual_y_reporta_las_cuatro_metricas`
+#: (M7, incidencia #455/ADR-109). CODEX-003: cotas unidireccionales de no
+#: regresión, no el suelo de D1 (29/47) que esta incidencia no alcanza.
+_MINIMO_ACIERTOS_EXACTOS_M7: Final[int] = 10
+_MAXIMO_ELEMENTOS_DE_MAS_M7: Final[int] = 218
+_MAXIMO_OMISIONES_CRITICAS_M7: Final[int] = 10
+_MINIMO_ELEMENTOS_HALLADOS_M7: Final[int] = 57
+
+#: Medición actual publicada en el docstring de
+#: `test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metricas`
+#: (motor por etapas, incidencia #457/ADR-109/ADR-110). Misma convención.
+_MINIMO_ACIERTOS_EXACTOS_MOTOR: Final[int] = 11
+_MAXIMO_ELEMENTOS_DE_MAS_MOTOR: Final[int] = 186
+_MAXIMO_OMISIONES_CRITICAS_MOTOR: Final[int] = 9
+_MINIMO_ELEMENTOS_HALLADOS_MOTOR: Final[int] = 60
+
 pytestmark = [pytest.mark.acceptance, pytest.mark.integration]
 
 
@@ -366,6 +383,15 @@ _NIVELES_DE_CRITICIDAD: Final[dict[str, Criticidad]] = {
     "CRITICO": Criticidad.CRITICA,
 }
 
+#: Sustituto fijo, ajeno al corpus, del `razon_segura` que el motor exige
+#: para construir `CriticidadAplicada` (incidencia #457: "el corpus sigue
+#: intocable y criticidad.razon_segura sin leerse jamás"). El motor decide
+#: por `nivel`, nunca por `razon_segura` (viaja íntegro solo hasta la
+#: explicación/traza), así que este valor fijo no cambia ninguna métrica.
+_RAZON_SEGURA_NO_LEIDA_DEL_CORPUS: Final[str] = (
+    "no leído del corpus: incidencia #457 prohíbe leer criticidad.razon_segura"
+)
+
 
 def _identidad_del_motor(kind: str, real_id: int) -> str:
     """La identidad `CLASE:n` que `StagedEnginePort`/`ItemCanonico` usan,
@@ -465,16 +491,23 @@ def _ejecutar_banco_motor_portado(database_path: Path) -> _EjecucionDelBanco:
     ejes_por_identidad: dict[str, EjesDeclarados] = {}
     propiedades: dict[str, str | None] = {}
     criticidad_aplicada: dict[str, CriticidadAplicada] = {}
+    accesos_del_motor_portado: list[tuple[str, ...]] = []
     for (kind, real_id), corpus_id in real_a_canonico.items():
         identidad = _identidad_del_motor(kind, real_id)
-        item = items_por_id[corpus_id]
+        item = _TrackingMapping(items_por_id[corpus_id], accesos_del_motor_portado)
         ejes_por_identidad[identidad] = _ejes_declarados(item)
         propiedades[identidad] = item["ejes_p2"]["property_key"]
         nivel_bruto = item["criticidad"]["nivel"] if item["criticidad"] else None
         if nivel_bruto is not None:
             criticidad_aplicada[identidad] = CriticidadAplicada(
                 nivel=_NIVELES_DE_CRITICIDAD[nivel_bruto],
-                razon_segura=item["criticidad"]["razon_segura"],
+                # incidencia #457: "el corpus sigue intocable y
+                # criticidad.razon_segura sin leerse jamás" — este arnés
+                # nunca pide item["criticidad"]["razon_segura"]; el motor
+                # solo necesita el campo para construirse (ver
+                # `CriticidadAplicada`), no para decidir nada (decide por
+                # `nivel`), así que un valor fijo ajeno al corpus lo satisface.
+                razon_segura=_RAZON_SEGURA_NO_LEIDA_DEL_CORPUS,
                 fuente_de_politica=item["criticidad"]["fuente_de_politica"],
                 regla_de_politica=item["criticidad"]["regla_de_politica"],
             )
@@ -544,7 +577,7 @@ def _ejecutar_banco_motor_portado(database_path: Path) -> _EjecucionDelBanco:
         elementos_hallados=elementos_hallados,
         elementos_esperados_total=banco["conteos"]["elementos_esperados_total"],
     )
-    return _EjecucionDelBanco(metricas=metricas)
+    return _EjecucionDelBanco(metricas=metricas, accesos_del_arnes=accesos_del_motor_portado)
 
 
 @pytest.fixture(scope="module")
@@ -611,10 +644,15 @@ def test_el_banco_se_ejecuta_contra_el_pipeline_actual_y_reporta_las_cuatro_metr
         f"({metricas.cobertura:.1%})"
     )
 
-    assert 0 <= metricas.aciertos_exactos <= 47
-    assert metricas.elementos_de_mas >= 0
-    assert metricas.omisiones_criticas >= 0
-    assert 0 <= metricas.elementos_hallados <= metricas.elementos_esperados_total
+    # CODEX-003: cotas unidireccionales de no regresión sobre la medición ya
+    # publicada arriba (10/47, 218, 10, 57/81) — no el suelo de D1 (29/47),
+    # que esta incidencia sigue sin alcanzar. Una modificación que rompiera
+    # el pipeline debe dejar este banco en rojo, no en verde con cifras
+    # falseadas.
+    assert metricas.aciertos_exactos >= _MINIMO_ACIERTOS_EXACTOS_M7
+    assert metricas.elementos_de_mas <= _MAXIMO_ELEMENTOS_DE_MAS_M7
+    assert metricas.omisiones_criticas <= _MAXIMO_OMISIONES_CRITICAS_M7
+    assert metricas.elementos_hallados >= _MINIMO_ELEMENTOS_HALLADOS_M7
 
 
 def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metricas(
@@ -667,10 +705,12 @@ def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metric
         f"({metricas.cobertura:.1%})"
     )
 
-    assert 0 <= metricas.aciertos_exactos <= 47
-    assert metricas.elementos_de_mas >= 0
-    assert metricas.omisiones_criticas >= 0
-    assert 0 <= metricas.elementos_hallados <= metricas.elementos_esperados_total
+    # CODEX-003: misma convención que el test anterior, sobre la medición ya
+    # publicada arriba (11/47, 186, 9, 60/81).
+    assert metricas.aciertos_exactos >= _MINIMO_ACIERTOS_EXACTOS_MOTOR
+    assert metricas.elementos_de_mas <= _MAXIMO_ELEMENTOS_DE_MAS_MOTOR
+    assert metricas.omisiones_criticas <= _MAXIMO_OMISIONES_CRITICAS_MOTOR
+    assert metricas.elementos_hallados >= _MINIMO_ELEMENTOS_HALLADOS_MOTOR
 
 
 def test_el_cargador_no_lee_criticidad(ejecucion_del_banco: _EjecucionDelBanco) -> None:
@@ -683,6 +723,19 @@ def test_el_cargador_no_lee_criticidad(ejecucion_del_banco: _EjecucionDelBanco) 
     # un caso controlado independiente, `test_es_critico_lee_nivel_pero_nunca_razon_segura`.
     rutas_del_arnes = set(ejecucion_del_banco.accesos_del_arnes)
     assert ("criticidad", "razon_segura") not in rutas_del_arnes
+
+
+def test_el_arnes_del_motor_portado_no_lee_razon_segura(
+    ejecucion_del_banco_motor_portado: _EjecucionDelBanco,
+) -> None:
+    """Igual que `test_el_cargador_no_lee_criticidad`, pero para el segundo
+    arnés (incidencia #457): construir `CriticidadAplicada` para el motor
+    portado exige `nivel`, `fuente_de_politica` y `regla_de_politica` del
+    corpus, pero nunca `razon_segura` — ese campo llega al motor con
+    `_RAZON_SEGURA_NO_LEIDA_DEL_CORPUS`, ajeno al fixture."""
+    rutas = set(ejecucion_del_banco_motor_portado.accesos_del_arnes)
+    assert ("criticidad", "razon_segura") not in rutas
+    assert ("criticidad", "nivel") in rutas
 
 
 def test_es_critico_lee_nivel_pero_nunca_razon_segura() -> None:

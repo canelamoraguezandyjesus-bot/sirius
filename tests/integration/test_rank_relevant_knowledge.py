@@ -510,6 +510,44 @@ def test_staged_engine_is_used_with_the_gate_open_and_wired(tmp_path: Path) -> N
 
 
 @pytest.mark.integration
+def test_staged_engine_path_still_finds_a_category_only_match(tmp_path: Path) -> None:
+    """CODEX-001 (incidencia #457): el motor por etapas solo genera
+    candidatos por asunto exacto o FTS5, nunca por categoría, así que con
+    la puerta abierta y el motor cableado un candidato que solo coincide
+    por categoría (M9, §6.2) desaparecía en vez de encontrarse, contra
+    ``test_a_category_match_alone_makes_an_otherwise_unrelated_candidate_
+    related`` (``tests/unit/test_relevance_domain.py``)."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    memoria_categorizada = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido sin ninguna palabra en comun con la consulta"
+    )
+    SetCategoryUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CategoryTargetKind.MEMORY, memoria_categorizada.id, "trabajo")
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            category_vocabulary=_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("trabajo")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [memoria_categorizada.id]
+    assert resultado[0].category_match is True
+
+
+@pytest.mark.integration
 def test_staged_engine_gate_open_without_a_configured_port_falls_back_to_current_pipeline(
     tmp_path: Path,
 ) -> None:
