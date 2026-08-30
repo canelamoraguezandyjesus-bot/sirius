@@ -86,14 +86,17 @@ lo comprueba PA-025 en la máquina real.
 
 from __future__ import annotations
 
+import json
 import statistics
 import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
+import httpx
 import pytest
 
 from sirius.adapters.llm.token_counter import CharacterHeuristicTokenCounter
+from sirius.adapters.ollama_relevance_filter import OllamaRelevanceFilterAdapter
 from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
@@ -118,6 +121,12 @@ from sirius.adapters.persistence.sqlite_project_repository import (
 from sirius.application.context import ContextBuilder
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
+from sirius.composition_root import (
+    _CATEGORY_VOCABULARY,
+    _MAX_CRITICALITY_CATEGORY,
+    _RELEVANCE_FILTER_MODEL,
+    _RELEVANCE_FILTER_TIMEOUT_SECONDS,
+)
 from sirius.domain.conversation import MessageRole, MessageStatus
 from sirius.infrastructure.paths import resolve_paths
 
@@ -415,4 +424,140 @@ def test_listar_decisiones_vigentes_cumple_el_limite_aprobado(banco: BancoDePrue
     )
     assert medicion.p95 <= LIMITE_OPERACION_MS, (
         f"{medicion} supera el límite aprobado de {LIMITE_OPERACION_MS:.0f} ms."
+    )
+
+
+# --- M11 (SIRIUS-ARQ-0.2 §6.4, §8-M11): RNF-003 con el paquete completo -----
+# --- activo, en los tres escenarios que §6.4 exige. -------------------------
+
+
+def _build_context_builder_with_relevance_filter(
+    database_path: Path, relevance_filter_port: OllamaRelevanceFilterAdapter
+) -> ContextBuilder:
+    """El mismo cableado que ``composition_root`` produce con la puerta de
+    D7 punto 6 abierta (§6.3): ``RankRelevantKnowledgeUseCase`` con el
+    vocabulario real y la puerta activa, ``ContextBuilder`` con el filtro de
+    relevancia y la categoría de máxima criticidad — reutiliza las mismas
+    constantes de ``composition_root`` para que esta medición mida de verdad
+    lo que produciría la construcción de producción, no una aproximación."""
+    memory_repository = build_sqlite_memory_repository(database_path)
+    decision_repository = build_sqlite_decision_repository(database_path)
+    project_repository = build_sqlite_project_repository(database_path)
+    rank_relevant_knowledge_use_case = RankRelevantKnowledgeUseCase(
+        memory_repository=memory_repository,
+        decision_repository=decision_repository,
+        project_repository=project_repository,
+        knowledge_search_repository=build_sqlite_knowledge_search_repository(database_path),
+        category_vocabulary=_CATEGORY_VOCABULARY,
+        category_matching_enabled=True,
+    )
+    return ContextBuilder(
+        identity_repository=build_sqlite_identity_repository(database_path),
+        project_repository=project_repository,
+        memory_repository=memory_repository,
+        conversation_repository=build_sqlite_conversation_repository(database_path),
+        decision_repository=decision_repository,
+        rank_relevant_knowledge_use_case=rank_relevant_knowledge_use_case,
+        event_repository=build_sqlite_event_repository(database_path),
+        token_counter=CharacterHeuristicTokenCounter(),
+        relevance_filter_port=relevance_filter_port,
+        max_criticality_category=_MAX_CRITICALITY_CATEGORY,
+    )
+
+
+def _cliente_ollama_disponible_dentro_del_presupuesto(timeout_seconds: float) -> httpx.Client:
+    """Escenario (a): Ollama responde con una latencia local realista, muy
+    por debajo del ``timeout``, con una respuesta válida con la forma que
+    Ollama produce de verdad."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        time.sleep(min(0.02, timeout_seconds / 2))
+        return httpx.Response(200, json={"response": json.dumps({"keep": []})})
+
+    return httpx.Client(transport=httpx.MockTransport(handler), timeout=timeout_seconds)
+
+
+def _cliente_ollama_ausente(timeout_seconds: float) -> httpx.Client:
+    """Escenario (b): conexión rechazada de inmediato — nunca espera al
+    ``timeout``, el fallo abierto más barato de los tres."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("conexión rechazada (doble de prueba, M11 §6.4)", request=request)
+
+    return httpx.Client(transport=httpx.MockTransport(handler), timeout=timeout_seconds)
+
+
+def _cliente_ollama_acepta_y_agota_el_timeout(timeout_seconds: float) -> httpx.Client:
+    """Escenario (c) — incidencia #435, hallazgo CODEX-003: Ollama acepta la
+    conexión y no responde hasta agotar el presupuesto de tiempo completo, a
+    diferencia de un rechazo inmediato. Es el peor caso real que RNF-003 debe
+    soportar, y el único de los tres que paga el coste íntegro del
+    ``timeout``."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        time.sleep(timeout_seconds)
+        raise httpx.ReadTimeout(
+            "Ollama acepta la conexión y no responde (doble de prueba, M11 §6.4)", request=request
+        )
+
+    return httpx.Client(transport=httpx.MockTransport(handler), timeout=timeout_seconds)
+
+
+_ESCENARIOS_RNF_003: tuple[tuple[str, Callable[[float], httpx.Client]], ...] = (
+    ("Ollama disponible dentro del presupuesto", _cliente_ollama_disponible_dentro_del_presupuesto),
+    ("Ollama ausente (conexión rechazada)", _cliente_ollama_ausente),
+    ("Ollama acepta la conexión y agota el timeout", _cliente_ollama_acepta_y_agota_el_timeout),
+)
+
+
+@pytest.mark.integration
+def test_construir_contexto_con_el_paquete_completo_activo_en_los_tres_escenarios(  # type: ignore[no-untyped-def]
+    banco: BancoDePruebas, capsys
+) -> None:
+    """M11 (§6.4): con la puerta de D7 punto 6 abierta y el filtro de
+    relevancia cableado de verdad —nunca Ollama real dentro de la suite, un
+    doble determinista del transporte HTTP por escenario, igual que exige
+    §6.5 sobre la prueba del banco— mide «construir contexto» sobre el mismo
+    conjunto de referencia de ADR-008 en los tres escenarios que §6.4 fija:
+    ninguno se da por gratuito, ni siquiera el rechazo inmediato.
+
+    ``timeout_seconds`` es ``composition_root._RELEVANCE_FILTER_TIMEOUT_SECONDS``
+    — el valor real con el que produción construye el adaptador — para que
+    esta medición sea la que de verdad decide ese valor (§6.4 punto 2), no
+    una aproximación con un número distinto.
+    """
+    timeout_seconds = _RELEVANCE_FILTER_TIMEOUT_SECONDS
+    mediciones: list[tuple[str, Medicion]] = []
+    for nombre, construir_cliente in _ESCENARIOS_RNF_003:
+        adapter = OllamaRelevanceFilterAdapter(
+            _RELEVANCE_FILTER_MODEL,
+            timeout_seconds=timeout_seconds,
+            client=construir_cliente(timeout_seconds),
+        )
+        builder = _build_context_builder_with_relevance_filter(banco.database_path, adapter)
+
+        def _construir(builder: ContextBuilder = builder) -> object:
+            return builder.build("cómo vamos con el despliegue")
+
+        medicion = _medir("construir contexto", _construir)
+        mediciones.append((nombre, medicion))
+
+    with capsys.disabled():
+        print(
+            f"\n  M11 — RNF-003, paquete completo activo, timeout={timeout_seconds * 1000:.0f} ms:"
+        )
+        print("  | Escenario | P95 | Límite |")
+        print("  |---|---|---|")
+        for nombre, medicion in mediciones:
+            print(f"  | {nombre} | {medicion.p95:.1f} ms | {LIMITE_OPERACION_MS:.0f} ms |")
+
+    # Guardarraíl (ADR-007), no el requisito: el requisito de 300 ms lo
+    # comprueba PA-025 en la máquina real; el margen del escenario (c) sobre
+    # este conjunto de referencia y esta máquina no llega al orden de
+    # magnitud que ADR-007 exige para afirmarlo aquí como aserción dura. La
+    # tabla impresa arriba es la evidencia publicada del encargo M11.
+    excedidas = [(nombre, m) for nombre, m in mediciones if m.p95 > GUARDARRAIL_MS]
+    assert not excedidas, (
+        "Escenarios de RNF-003 por encima del guardarraíl de "
+        f"{GUARDARRAIL_MS:.0f} ms: {[(n, str(m)) for n, m in excedidas]}."
     )

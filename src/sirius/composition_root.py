@@ -40,6 +40,7 @@ from sirius.adapters.llm.openai_responses import OpenAIResponsesProvider
 from sirius.adapters.llm.token_counter import CharacterHeuristicTokenCounter
 from sirius.adapters.llm.unconfigured import UnconfiguredLLMProvider
 from sirius.adapters.ollama_category_classifier import OllamaCategoryClassifierAdapter
+from sirius.adapters.ollama_relevance_filter import OllamaRelevanceFilterAdapter
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
 )
@@ -131,6 +132,25 @@ _CATEGORY_VOCABULARY: frozenset[str] = frozenset(
     {"trabajo", "personal", "salud", "finanzas", "proyecto", "aprendizaje", "otros"}
 )
 _CATEGORY_CLASSIFIER_MODEL = "llama3.2"
+
+# ADR-107: "salud" es, dentro del vocabulario provisional de arriba, la
+# categoría de máxima criticidad que el candado de §6.3 protege siempre —
+# igual de provisional y confinada a esta única raíz de composición que
+# _CATEGORY_VOCABULARY, y sustituible por el mismo camino el día que exista
+# una taxonomía real portada desde el banco de 47 casos.
+_MAX_CRITICALITY_CATEGORY = "salud"
+
+# El mismo modelo local que ya clasifica categorías (D7 punto 5, §6.3): un
+# segundo cliente del mismo servicio Ollama, nunca un segundo componente de
+# red.
+_RELEVANCE_FILTER_MODEL = _CATEGORY_CLASSIFIER_MODEL
+
+# M11 (§6.4): valor medido para que, incluso en el peor caso —Ollama acepta
+# la conexión y no responde hasta agotar el timeout completo—, el P95 de
+# «construir contexto» se mantenga por debajo de los 300 ms de RNF-003 sobre
+# el conjunto de referencia de ADR-008. Ver la tabla de medición de los tres
+# escenarios en el PR de M11.
+_RELEVANCE_FILTER_TIMEOUT_SECONDS = 0.05
 
 
 def save_studio_voice(voice: str) -> None:
@@ -416,11 +436,20 @@ def build_conversation_dependencies(
     # ConfirmMemorySuggestionUseCase and RejectMemorySuggestionUseCase (M5).
     unit_of_work = build_sqlite_unit_of_work(database_path)
 
+    # D7 punto 6 / §6.3: puerta de activación contra datos reales, cerrada
+    # por defecto. Con la clave ausente o en False, ambos objetos se
+    # construyen con exactamente los mismos parámetros que sus valores por
+    # defecto ya producen — ningún camino de código nuevo para el estado
+    # cerrado. M11 cablea el parámetro; abrirlo en `settings.json` no es
+    # trabajo suyo (§6.3, `docs/evolution/STATUS.md`).
+    category_matching_enabled = bool(load_settings().get("category_matching_enabled", False))
     rank_relevant_knowledge_use_case = RankRelevantKnowledgeUseCase(
         memory_repository=memory_repository,
         decision_repository=decision_repository,
         project_repository=project_repository,
         knowledge_search_repository=knowledge_search_repository,
+        category_vocabulary=_CATEGORY_VOCABULARY if category_matching_enabled else frozenset(),
+        category_matching_enabled=category_matching_enabled,
     )
     context_builder = ContextBuilder(
         identity_repository=identity_repository,
@@ -431,6 +460,14 @@ def build_conversation_dependencies(
         rank_relevant_knowledge_use_case=rank_relevant_knowledge_use_case,
         event_repository=event_repository,
         token_counter=CharacterHeuristicTokenCounter(),
+        relevance_filter_port=(
+            OllamaRelevanceFilterAdapter(
+                _RELEVANCE_FILTER_MODEL, timeout_seconds=_RELEVANCE_FILTER_TIMEOUT_SECONDS
+            )
+            if category_matching_enabled
+            else None
+        ),
+        max_criticality_category=(_MAX_CRITICALITY_CATEGORY if category_matching_enabled else None),
     )
     send_message_use_case = SendMessageUseCase(
         context_builder=context_builder,
