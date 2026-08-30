@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QMainWindow
 
 from sirius.adapters.persistence.bootstrap import initialize_persistence
@@ -36,6 +37,17 @@ def _build_main_window(
     """
 
     def _on_project_completed() -> None:
+        # CODEX-002: si un CategoryTaggingWorker de esta ventana sigue en
+        # vuelo, esperar a que termine antes de cerrarla y abrir la
+        # siguiente. Las dos ventanas comparten las mismas dependencias
+        # (mismos repositorios), así que sin esta espera ese worker podría
+        # seguir llamando a set_category() después de que la ventana nueva
+        # ya considere el etiquetado inactivo.
+        if main_window.knowledge_widget.has_pending_category_tagging:
+            main_window.knowledge_widget.category_tagging_idle.connect(
+                _on_project_completed, Qt.ConnectionType.SingleShotConnection
+            )
+            return
         next_window = _build_initial_project_window(dependencies, windows)
         windows.append(next_window)
         next_window.show()

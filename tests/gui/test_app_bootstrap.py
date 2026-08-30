@@ -11,8 +11,9 @@ or the real OpenAI API.
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from PySide6.QtCore import QRunnable, QThreadPool
@@ -31,6 +32,7 @@ from sirius.adapters.persistence.sqlite_identity_repository import (
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.data_location import DataLocationUseCase
+from sirius.application.tag_category import CategoryTargetKind
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
 from sirius.composition_root import build_conversation_dependencies
 from sirius.config.secrets_config import OPENAI_API_KEY_SECRET_NAME
@@ -594,3 +596,72 @@ def test_the_real_app_wires_manual_category_editing_into_the_knowledge_widget(
         "la aplicación real montó KnowledgeWidget sin SetCategoryUseCase: el "
         "usuario no podría corregir una clasificación (CODEX-001)"
     )
+
+
+# --- Fin de proyecto espera al etiquetado en vuelo (CODEX-002) -------------
+#
+# _on_project_completed cierra la ventana actual y abre otra con las mismas
+# dependencias (mismos repositorios). Si un CategoryTaggingWorker de la
+# ventana actual sigue en vuelo, esa carrera le permitiría seguir llamando a
+# set_category() sobre esos repositorios después de que la ventana nueva ya
+# considere el etiquetado inactivo.
+
+
+class _BlockingTagCategoryUseCase:
+    """Bloquea ``tag()`` hasta que el test llame a ``release()``, para poder
+    mantener un ``CategoryTaggingWorker`` en vuelo de forma determinista —
+    mismo patrón que ``tests/gui/test_backup_recovery_ui.py``."""
+
+    def __init__(self) -> None:
+        self._continue_event = threading.Event()
+        self.calls: list[tuple[CategoryTargetKind, int]] = []
+
+    def tag(self, kind: CategoryTargetKind, item_id: int) -> bool:
+        self.calls.append((kind, item_id))
+        self._continue_event.wait(timeout=5)
+        return False
+
+    def release(self) -> None:
+        self._continue_event.set()
+
+
+@pytest.mark.gui
+def test_completing_the_project_waits_for_pending_category_tagging_before_transitioning(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CODEX-002: ``_on_project_completed`` no debe cerrar la ventana actual
+    ni abrir la siguiente mientras el ``KnowledgeWidget`` de esa ventana
+    tenga un etiquetador en vuelo."""
+    from sirius.main import _build_main_window
+
+    paths = resolve_paths(tmp_path)
+    initialize_persistence(paths)
+    project_repository = build_sqlite_project_repository(paths.data_dir / "sirius.db")
+    project_repository.create_project(
+        "HEAD-R1", "Cabeza", state_summary="montando", blockers=(), next_step="probar"
+    )
+    dependencies = build_conversation_dependencies(
+        paths.data_dir / "sirius.db", paths.backups_dir, secret_store=FakeSecretStore()
+    )
+
+    windows: list[QMainWindow] = []
+    window = _build_main_window(dependencies, windows)
+    qtbot.addWidget(window)
+    window.show()
+
+    tag_category_use_case: Any = _BlockingTagCategoryUseCase()
+    window.knowledge_widget._tag_category_use_case = tag_category_use_case
+    window.knowledge_widget._start_tagging_worker(CategoryTargetKind.MEMORY, 1)
+    assert window.knowledge_widget.has_pending_category_tagging
+
+    window.project_completed.emit()
+
+    # Genuinely blocked mid-tag: neither window transition may have happened yet.
+    assert windows == []
+    assert window.isVisible()
+
+    tag_category_use_case.release()
+
+    qtbot.waitUntil(lambda: windows != [], timeout=5000)
+    assert isinstance(windows[0], InitialProjectWindow)
+    qtbot.waitUntil(lambda: not window.isVisible(), timeout=5000)

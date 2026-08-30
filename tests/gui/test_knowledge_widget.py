@@ -12,6 +12,7 @@ test ever opens a real Qt dialog.
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -1659,6 +1660,80 @@ def test_tagging_worker_finished_signal_refreshes_the_panel(qtbot: QtBot, tmp_pa
     assert thread_pool.waitForDone(5000)
 
     qtbot.waitUntil(lambda: "trabajo" in widget.memories_list.item(0).text(), timeout=5000)
+
+
+# --- Referencia fuerte a los workers en vuelo (CODEX-001) -------------------
+#
+# QThreadPool.start() no conserva la referencia Python a un QRunnable (el
+# mismo problema ya documentado para _active_send_worker en main_window.py):
+# un CategoryTaggingWorker cuyo run() termine muy rápido puede recolectarse
+# antes de que su señal finished, encolada entre hilos, llegue a procesarse,
+# y _handle_tagging_worker_finished() nunca se ejecuta.
+
+
+class _BlockingTagCategoryUseCase:
+    """Bloquea ``tag()`` hasta que el test llame a ``release()``, para poder
+    observar el worker mientras sigue en vuelo — mismo patrón que
+    ``tests/gui/test_backup_recovery_ui.py``."""
+
+    def __init__(self) -> None:
+        self._continue_event = threading.Event()
+        self.calls: list[tuple[CategoryTargetKind, int]] = []
+
+    def tag(self, kind: CategoryTargetKind, item_id: int) -> bool:
+        self.calls.append((kind, item_id))
+        self._continue_event.wait(timeout=5)
+        return False
+
+    def list_uncategorized_memories(self) -> list[Memory]:
+        return []
+
+    def list_uncategorized_decisions(self) -> list[Decision]:
+        return []
+
+    def release(self) -> None:
+        self._continue_event.set()
+
+
+@pytest.mark.gui
+def test_tagging_worker_reference_is_retained_while_in_flight_and_released_on_completion(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Mirrors tests/gui/test_conversation_ui.py's
+    test_send_worker_reference_is_retained_while_blocked_and_released_on_completion
+    for CategoryTaggingWorker: without a strong Python-level reference to
+    every in-flight worker, a fast-finishing one can be garbage-collected
+    before its queued cross-thread signal is delivered, and
+    category_tagging_idle would never fire."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    tag_category_use_case = _BlockingTagCategoryUseCase()
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        prompt_multiline_value="recuerda esto por favor",
+        tag_category_use_case=tag_category_use_case,
+        thread_pool=thread_pool,
+    )
+    qtbot.addWidget(widget)
+
+    assert widget._active_tagging_workers == []
+
+    widget.save_memory_button.click()
+    qtbot.waitUntil(lambda: tag_category_use_case.calls != [], timeout=5000)
+
+    # The worker is genuinely blocked mid-run: the reference must still be held.
+    assert len(widget._active_tagging_workers) == 1
+    assert widget.has_pending_category_tagging
+
+    idle_signals: list[None] = []
+    widget.category_tagging_idle.connect(lambda: idle_signals.append(None))
+
+    tag_category_use_case.release()
+
+    qtbot.waitUntil(lambda: len(idle_signals) == 1, timeout=5000)
+    assert widget._active_tagging_workers == []
+    assert not widget.has_pending_category_tagging
 
 
 # --- Pase retroactivo de arranque -------------------------------------------

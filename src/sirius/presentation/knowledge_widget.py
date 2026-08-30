@@ -284,6 +284,15 @@ class KnowledgeWidget(QGroupBox):
         self._is_busy = False
         self._is_externally_busy = False
         self._pending_tagging_workers = 0
+        # QThreadPool.start() no conserva la referencia Python a un
+        # QRunnable (CODEX-001, ver el comentario equivalente en
+        # main_window.py sobre _active_send_worker): sin esta lista, un
+        # CategoryTaggingWorker cuyo run() termine muy rápido puede
+        # recolectarse antes de que su señal finished, encolada entre
+        # hilos, llegue a procesarse — y _handle_tagging_worker_finished()
+        # nunca se ejecuta. Cada worker se retira de aquí exactamente
+        # cuando esa señal se procesa.
+        self._active_tagging_workers: list[CategoryTaggingWorker] = []
         self._overview: KnowledgeOverview | None = None
         self._last_touched_list: QListWidget | None = None
 
@@ -460,7 +469,10 @@ class KnowledgeWidget(QGroupBox):
             return
         worker = CategoryTaggingWorker(self._tag_category_use_case, kind, item_id)
         self._pending_tagging_workers += 1
-        worker.signals.finished.connect(self._handle_tagging_worker_finished)
+        self._active_tagging_workers.append(worker)
+        worker.signals.finished.connect(
+            lambda tagged, worker=worker: self._handle_tagging_worker_finished(worker, tagged)
+        )
         self._thread_pool.start(worker)
 
     @property
@@ -470,7 +482,8 @@ class KnowledgeWidget(QGroupBox):
         comprobarlo antes de cerrar las conexiones a sirius.db."""
         return self._pending_tagging_workers > 0
 
-    def _handle_tagging_worker_finished(self, tagged: bool) -> None:
+    def _handle_tagging_worker_finished(self, worker: CategoryTaggingWorker, tagged: bool) -> None:
+        self._active_tagging_workers.remove(worker)
         self._pending_tagging_workers -= 1
         if tagged:
             self.refresh()
