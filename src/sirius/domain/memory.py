@@ -57,6 +57,15 @@ class Memory:
     not its revision, mirroring ``Decision.subject``/``Decision.project_id``:
     correcting a memory's content (B4c) never changes what asunto it is
     about.
+
+    ``category``/``category_locked`` (D7, SIRIUS-ARQ-0.2 §6.1) are likewise
+    optional and live on the memory itself, not its revision: classifying a
+    memory's category is not correcting its content. ``category`` is
+    ``None`` until something writes it — automatically
+    (``TagCategoryUseCase``) or manually (``SetCategoryUseCase``).
+    ``category_locked`` starts ``False`` and becomes ``True`` only through an
+    explicit user edit (``SetCategoryUseCase``); once ``True``, no automatic
+    classification may ever overwrite ``category`` again.
     """
 
     id: int
@@ -66,6 +75,8 @@ class Memory:
     updated_at: datetime
     subject_key: str | None = None
     project_id: int | None = None
+    category: str | None = None
+    category_locked: bool = False
 
 
 def ensure_valid_origin(origin: str) -> None:

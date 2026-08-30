@@ -232,6 +232,38 @@ class _BlockingValidateBackupUseCase:
         return self._result
 
 
+class _StubUncategorizedItem:
+    def __init__(self, item_id: int) -> None:
+        self.id = item_id
+
+
+class _BlockingTagCategoryUseCase:
+    """Simula un ``CategoryTaggingWorker`` en vuelo (CODEX-001): el pase
+    retroactivo de arranque de ``KnowledgeWidget`` encola uno sobre este
+    recuerdo falso, y ``tag()`` bloquea hasta que el test llame a
+    ``release()``, igual que ``_BlockingValidateBackupUseCase`` bloquea la
+    validación."""
+
+    def __init__(self) -> None:
+        import threading
+
+        self._continue_event = threading.Event()
+
+    def list_uncategorized_memories(self) -> list[_StubUncategorizedItem]:
+        return [_StubUncategorizedItem(1)]
+
+    def list_uncategorized_decisions(self) -> list[_StubUncategorizedItem]:
+        return []
+
+    def release(self) -> None:
+        self._continue_event.set()
+
+    def tag(self, kind: Any, item_id: int) -> bool:
+        del kind, item_id
+        self._continue_event.wait(timeout=5)
+        return False
+
+
 class _FakeRestoreBackupUseCase:
     def __init__(
         self, result: BackupRestoreResult | None = None, error: Exception | None = None
@@ -262,6 +294,7 @@ def _build_window(
     confirm_restore: Any = None,
     choose_backup_file: Any = None,
     open_containing_folder: Any = None,
+    tag_category_use_case: Any = None,
 ) -> MainWindow:
     dependencies = build_conversation_dependencies(
         database_path, database_path.parent / "backups", secret_store=FakeSecretStore()
@@ -302,6 +335,7 @@ def _build_window(
         confirm_restore=confirm_restore or (lambda title, text: False),
         choose_backup_file=choose_backup_file or (lambda title: ""),
         open_containing_folder=open_containing_folder or (lambda path: None),
+        tag_category_use_case=tag_category_use_case,
     )
 
 
@@ -729,6 +763,49 @@ def test_restore_backup_disposes_connections_before_calling_restore(
 
     qtbot.waitUntil(lambda: "restore" in order, timeout=5000)
     assert order == ["close", "restore"]
+
+
+@pytest.mark.gui
+def test_restore_backup_waits_for_pending_category_tagging_before_closing_connections(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CODEX-001: si queda un ``CategoryTaggingWorker`` en vuelo (aquí, el
+    pase retroactivo del arranque), la restauración no debe cerrar las
+    conexiones a sirius.db ni empezar a reemplazar el fichero hasta que
+    termine — ``TagCategoryUseCase.tag()`` sigue usando los repositorios
+    mientras corre, y podría reabrir una conexión contra la generación
+    equivocada de la base de datos.
+    """
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    backup_path = tmp_path / "b.siriusbackup"
+    validate_use_case = _FakeValidateBackupUseCase(result=_fake_validation_result(backup_path))
+    restore_use_case = _FakeRestoreBackupUseCase(result=_fake_restore_result(backup_path, None))
+    tag_category_use_case = _BlockingTagCategoryUseCase()
+    close_calls: list[bool] = []
+    window = _build_window(
+        database_path,
+        validate_backup_use_case=validate_use_case,
+        restore_backup_use_case=restore_use_case,
+        confirm_restore=lambda title, text: True,
+        close_database_connections=lambda: close_calls.append(True),
+        tag_category_use_case=tag_category_use_case,
+    )
+    qtbot.addWidget(window)
+    window.show()
+    assert window.knowledge_widget.has_pending_category_tagging
+
+    window.restore_backup_path_input.setText(str(backup_path))
+    window.restore_backup_password_input.setText(_PASSWORD)
+    window.restore_backup_button.click()
+
+    assert close_calls == []
+    assert restore_use_case.calls == []
+
+    tag_category_use_case.release()
+
+    qtbot.waitUntil(lambda: restore_use_case.calls != [], timeout=5000)
+    assert close_calls == [True]
+    assert restore_use_case.calls == [(backup_path, _PASSWORD, True)]
 
 
 @pytest.mark.gui

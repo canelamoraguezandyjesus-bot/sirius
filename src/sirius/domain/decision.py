@@ -91,6 +91,8 @@ class Decision:
     created_at: datetime
     updated_at: datetime
     supersedes_decision_id: int | None = None
+    category: str | None = None
+    category_locked: bool = False
 
 
 def ensure_valid_subject(subject: str) -> None:

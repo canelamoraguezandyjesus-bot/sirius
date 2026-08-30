@@ -89,6 +89,17 @@ class _StaticDecisionRepository:
     def list_proposed_decisions(self) -> list[Decision]:
         raise AssertionError("get_origin() must never list proposed decisions")
 
+    def set_category(
+        self, decision_id: int, category: str, *, observed_revision_version: int
+    ) -> bool:
+        raise AssertionError("get_origin() must never set a category")
+
+    def set_user_category(self, decision_id: int, category: str) -> Decision:
+        raise AssertionError("get_origin() must never set a category")
+
+    def list_uncategorized(self) -> list[Decision]:
+        raise AssertionError("get_origin() must never list uncategorized decisions")
+
 
 class _StaticEventRepository:
     def __init__(self, event: Event | None) -> None:
