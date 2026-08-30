@@ -168,11 +168,17 @@ class RankRelevantKnowledgeUseCase:
         mismo puede dar, porque nunca ve esos candidatos. Por eso, tras
         traducir lo que el motor sí admitió, esta función completa la
         ampliación de M9 por separado: recorre el conocimiento vigente que
-        el motor no admitió y añade el que coincide solo por categoría,
-        ordenado entre sí con la misma prioridad de siempre
-        (``rank_relevant_knowledge``). El orden que las doce puertas y la
-        agrupación de equivalentes ya decidieron para lo que el motor sí
-        admitió no se toca.
+        el motor no admitió y añade el que coincide solo por categoría.
+
+        Las puertas y la agrupación del motor (qué se admite y qué se
+        trunca por ``limite_duro``) no se tocan: ``ranked`` es exactamente
+        lo que el motor admitió. Pero el orden final de ambos bloques juntos
+        sí es el mismo criterio S7.5/M9 de siempre
+        (``rank_relevant_knowledge``): sujeto, proyecto activo, FTS5,
+        categoría, recencia — nunca "todo lo admitido por el motor antes que
+        todo lo hallado solo por categoría" con independencia de esas
+        señales, que es lo que una simple concatenación de bloques
+        produciría.
         """
         assert self._staged_engine_port is not None
         assert self._staged_engine_candidate is not None
@@ -265,7 +271,7 @@ class RankRelevantKnowledgeUseCase:
                         )
                     )
 
-        return tuple(ranked) + rank_relevant_knowledge(solo_por_categoria)
+        return rank_relevant_knowledge(tuple(ranked) + tuple(solo_por_categoria))
 
     def _rank_via_current_pipeline(self, query_text: str) -> tuple[RankedKnowledge, ...]:
         """El filtro-y-orden de S7.5/M9, sin cambios: lo que ``rank()``

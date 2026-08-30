@@ -19,7 +19,12 @@ import pytest
 
 from sirius.domain import staged_engine_gates as gates
 from sirius.domain import staged_engine_grouping as grouping
-from sirius.domain.staged_engine import RecuperacionInvalidaError, recuperar
+from sirius.domain.staged_engine import (
+    RecuperacionInvalidaError,
+    _clave_de_orden,
+    _con_representante_al_frente,
+    recuperar,
+)
 from sirius.domain.staged_engine_contracts import (
     PLANO_COMUN_VACIO,
     Ambito,
@@ -339,13 +344,11 @@ def test_recuperar_orders_the_group_representative_ahead_of_a_higher_authority_m
     (staged_engine_contracts.py: "el representante encabeza"). Se reproduce
     con `MEMORIA:2` en `E1`, `MEMORIA:1` equivalente en `E2` (el desempate
     por id nombra representante a `MEMORIA:1`) y un tercer elegible ajeno al
-    grupo (`MEMORIA:3`, también en `E2`) que antes de esta corrección
-    ordenaba por delante del representante solo por venir de una etapa de
-    mayor autoridad. Con límite duro 2, un orden que solo mirara autoridad
-    de etapa entrega `[MEMORIA:2, MEMORIA:3]` y excluye al representante;
-    el orden corregido antepone al representante dentro de su nivel de
-    criticidad y entrega `[MEMORIA:3, MEMORIA:1]`, truncando el grupo (no
-    todos sus miembros caben) pero sin dejar fuera a quien lo encabeza."""
+    grupo (`MEMORIA:3`, también en `E2`). El orden corregido antepone al
+    representante dentro de su propio grupo sin relegar a `MEMORIA:2` (su
+    miembro de mayor autoridad) detrás de `MEMORIA:3`: con límite duro 2 el
+    grupo entero cabe (`[MEMORIA:1, MEMORIA:2]`) y es `MEMORIA:3` —ajeno al
+    grupo, sin ninguna señal que lo prefiera— quien queda fuera."""
     en_e1 = _item("MEMORIA:2")
     en_e2 = _item("MEMORIA:1")
     ajeno = _item("MEMORIA:3", subject_key="ancho-sujeto")
@@ -369,8 +372,46 @@ def test_recuperar_orders_the_group_representative_ahead_of_a_higher_authority_m
     grupo = recuperacion.grupos[0]
     assert grupo.representante == "MEMORIA:1"
     assert set(grupo.miembros) == {"MEMORIA:1", "MEMORIA:2"}
-    assert recuperacion.ids == ("MEMORIA:3", "MEMORIA:1")
-    assert grupo.identificador in recuperacion.traza.grupos_truncados
+    assert recuperacion.ids == ("MEMORIA:1", "MEMORIA:2")
+    assert grupo.identificador not in recuperacion.traza.grupos_truncados
+    assert recuperacion.omitidos_por_limite == ("MEMORIA:3",)
+
+
+def test_con_representante_al_frente_never_relegates_a_member_behind_an_unrelated_item() -> None:
+    """CODEX-002 (segunda ronda): la corrección anterior anteponía el
+    representante a *todo* miembro no representante, no solo a los de su
+    propio grupo — con `no_es_representante` antes que la autoridad de
+    etapa en la clave de orden, cualquier suelto quedaba por delante de un
+    miembro de mayor autoridad de otro grupo. Reproduce el ejemplo exacto
+    del hallazgo directamente sobre la función de orden: representante y
+    miembro equivalentes, ambos en `E1`, y un suelto ajeno al grupo en `E4`
+    (menor autoridad). `recuperar()` no puede reproducir este caso de punta
+    a punta con `limite_duro=2`: el mecanismo de parada por límite duro
+    (S4) corta la expansión nada más admitir el grupo completo en `E1`, sin
+    llegar a `E4` — precisamente la razón por la que el hallazgo original
+    solo pudo demostrarse sobre `_clave_de_orden`/`_con_representante_al_
+    frente`, no sobre un caso íntegro de `recuperar()`. El orden corregido
+    debe anteponer el representante a su propio miembro sin relegar a ese
+    miembro (mayor autoridad) detrás del suelto (menor autoridad)."""
+    representante_candidata = _candidata(_item("MEMORIA:1"), etapa=Etapa.E1)
+    miembro_candidata = _candidata(_item("MEMORIA:2"), etapa=Etapa.E1)
+    suelto_candidata = _candidata(_item("MEMORIA:3", subject_key="otro-sujeto"), etapa=Etapa.E4)
+
+    def criticidad_de(identidad: str) -> Criticidad:
+        return Criticidad.ORDINARIA
+
+    def representante_de(identidad: str) -> str | None:
+        return "MEMORIA:1" if identidad in {"MEMORIA:1", "MEMORIA:2"} else None
+
+    ordenadas_por_criticidad = sorted(
+        [miembro_candidata, suelto_candidata, representante_candidata],
+        key=lambda c: _clave_de_orden(c, criticidad_de),
+    )
+    ordenadas = _con_representante_al_frente(
+        ordenadas_por_criticidad, criticidad_de, representante_de
+    )
+
+    assert [c.item.id for c in ordenadas] == ["MEMORIA:1", "MEMORIA:2", "MEMORIA:3"]
 
 
 def test_recuperar_raises_if_a_candidate_reads_no_subject_at_all() -> None:

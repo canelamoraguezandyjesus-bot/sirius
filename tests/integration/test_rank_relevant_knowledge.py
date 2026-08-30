@@ -548,6 +548,58 @@ def test_staged_engine_path_still_finds_a_category_only_match(tmp_path: Path) ->
 
 
 @pytest.mark.integration
+def test_staged_engine_path_orders_by_the_full_m9_tuple_not_by_block(tmp_path: Path) -> None:
+    """CODEX-001 (incidencia #457): con la puerta abierta y el motor
+    cableado, ``_rank_via_staged_engine`` concatenaba ``ranked`` (lo
+    admitido por el motor) delante de ``solo_por_categoria`` sin más,
+    colocando siempre todo lo admitido por el motor antes que lo hallado
+    solo por categoría con independencia de las demás señales (S7.5/M9:
+    sujeto, proyecto activo, FTS5, categoría, recencia). Aquí el candidato
+    hallado solo por categoría pertenece al proyecto activo (una señal que
+    el orden aprobado sitúa por delante de un simple acierto FTS5) mientras
+    que el admitido por el motor no pertenece a ningún proyecto activo: el
+    orden corregido debe anteponer el primero pese a haber llegado por el
+    bloque de categoría, no por el del motor."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    active_project_id, other_project_id = _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    memoria_por_categoria = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido sin ninguna palabra en comun con la consulta",
+        project_id=active_project_id,
+    )
+    SetCategoryUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CategoryTargetKind.MEMORY, memoria_por_categoria.id, "trabajo")
+    memoria_por_motor = SaveManualMemoryUseCase(unit_of_work).save(
+        "trabajo intenso esta semana en la fabrica", project_id=other_project_id
+    )
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            category_vocabulary=_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("trabajo")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [memoria_por_categoria.id, memoria_por_motor.id]
+    encontrada_por_categoria = next(c for c in resultado if c.item_id == memoria_por_categoria.id)
+    encontrada_por_motor = next(c for c in resultado if c.item_id == memoria_por_motor.id)
+    assert encontrada_por_categoria.category_match is True
+    assert encontrada_por_categoria.project_matches_active is True
+    assert encontrada_por_motor.fts_match is True
+    assert encontrada_por_motor.project_matches_active is False
+
+
+@pytest.mark.integration
 def test_staged_engine_gate_open_without_a_configured_port_falls_back_to_current_pipeline(
     tmp_path: Path,
 ) -> None:

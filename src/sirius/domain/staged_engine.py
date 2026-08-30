@@ -105,33 +105,63 @@ EJES_DE_ORDEN: Final[tuple[str, ...]] = (
 def _clave_de_orden(
     candidata: Candidata,
     criticidad_de: Callable[[str], Criticidad],
-    representante_de: Callable[[str], str | None],
-) -> tuple[int, int, int, str, str]:
+) -> tuple[int, int, str, str]:
     """Desempate estable y registrado.
 
-    Por criticidad aplicada, luego —si el elegible pertenece a un grupo de
-    equivalentes— por si es su representante: ``GrupoDeEquivalentes``
-    (``staged_engine_contracts``) exige que "el representante encabeza", y
-    ese orden es lo único que lo garantiza cuando ``G12`` recorta por límite
-    duro (de lo contrario un miembro no representante de otra etapa podría
-    quedar dentro mientras el representante del mismo grupo queda fuera).
-    Luego por etapa de origen —la autoridad decrece de ``E1`` a ``E4``—,
-    luego por sujeto e identidad estable. Nunca por el orden de llegada, que
-    dependería del motor de base de datos.
+    Por criticidad aplicada, luego por etapa de origen —la autoridad decrece
+    de ``E1`` a ``E4``—, luego por sujeto e identidad estable. Nunca por el
+    orden de llegada, que dependería del motor de base de datos.
+
+    No compara si el elegible es representante de un grupo de equivalentes:
+    esa prioridad la aplica ``_con_representante_al_frente`` aparte, después
+    de este ordenamiento, precisamente para que nunca alcance a candidatos
+    ajenos al grupo (CODEX-002, incidencia #457) — si estuviera aquí, un
+    representante o suelto de cualquier grupo se antepondría a todo miembro
+    no representante de cualquier otro grupo, no solo al suyo.
     """
     nivel = ORDEN_DE_CRITICIDAD.index(criticidad_de(candidata.item.id))
-    representante = representante_de(candidata.item.id)
-    no_es_representante = (
-        1 if representante is not None and representante != candidata.item.id else 0
-    )
     autoridad = list(ETAPAS_DE_EXPANSION).index(candidata.etapa)
     return (
         -nivel,
-        no_es_representante,
         autoridad,
         candidata.item.subject_key or "",
         candidata.item.id,
     )
+
+
+def _con_representante_al_frente(
+    ordenadas: Sequence[Candidata],
+    criticidad_de: Callable[[str], Criticidad],
+    representante_de: Callable[[str], str | None],
+) -> tuple[Candidata, ...]:
+    """``GrupoDeEquivalentes`` exige que "el representante encabeza": este
+    paso, aparte de ``_clave_de_orden``, adelanta cada representante hasta
+    justo delante del primero de sus propios miembros —en el mismo orden en
+    que ``ordenadas`` ya los entrega— sin tocar la posición relativa de
+    ningún otro par de candidatos. Solo actúa dentro del mismo nivel de
+    criticidad, la única dimensión que ya dominaba el orden antes de esta
+    corrección; ``G12`` protege el resto.
+    """
+    resultado = list(ordenadas)
+    representantes_ya_al_frente: set[str] = set()
+    for candidata in ordenadas:
+        representante = representante_de(candidata.item.id)
+        if (
+            representante is None
+            or representante == candidata.item.id
+            or representante in representantes_ya_al_frente
+        ):
+            continue
+        if criticidad_de(representante) != criticidad_de(candidata.item.id):
+            continue
+        indice_representante = next(
+            i for i, c in enumerate(resultado) if c.item.id == representante
+        )
+        indice_miembro = next(i for i, c in enumerate(resultado) if c.item.id == candidata.item.id)
+        if indice_representante > indice_miembro:
+            resultado.insert(indice_miembro, resultado.pop(indice_representante))
+        representantes_ya_al_frente.add(representante)
+    return tuple(resultado)
 
 
 def _suficiente(contadas: int, peticion: Peticion) -> bool:
@@ -241,13 +271,13 @@ def recuperar(
         raise RecuperacionInvalidaError(msg)
 
     grupo_por_item = {m: g for g in agrupacion.grupos for m in g.miembros}
-    ordenadas = sorted(
-        unicas,
-        key=lambda c: _clave_de_orden(
-            c,
-            criticidad_de,
-            lambda i: grupo_por_item[i].representante if i in grupo_por_item else None,
-        ),
+
+    def representante_de(identidad: str) -> str | None:
+        return grupo_por_item[identidad].representante if identidad in grupo_por_item else None
+
+    ordenadas_por_criticidad = sorted(unicas, key=lambda c: _clave_de_orden(c, criticidad_de))
+    ordenadas = _con_representante_al_frente(
+        ordenadas_por_criticidad, criticidad_de, representante_de
     )
     g12 = gates.aplicar_g12(ordenadas, peticion, criticidad_de, lambda i: i in grupo_por_item)
     traza.desbordamiento = g12.desbordamiento_declarado
