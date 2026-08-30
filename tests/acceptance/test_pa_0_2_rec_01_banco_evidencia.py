@@ -8,10 +8,27 @@ midió (Producto 0.2 §2.2/§3.2; Arquitectura Técnica 0.2 §6.5).
 Este módulo ejecuta ese banco contra el pipeline de recuperación de `main`
 tal como existe hoy — `RankRelevantKnowledgeUseCase.rank()` seguido de la
 exclusión por precedencia que `ContextBuilder` ya aplica (B4e) — **sin**
-índice de categoría (M8), sin filtro de relevancia (M9/M10) y sin ninguna
-aserción de suelo: eso es D1/D2, y los exige M11 sobre el pipeline que M8-M10
-integren, no este. Lo que este módulo fija es la medición: cuatro métricas
-agregadas sobre los 47 casos, reportadas, nunca todavía exigidas.
+índice de categoría (M8) ni filtro de relevancia (M9/M10). Lo que este
+módulo fija es la medición: cuatro métricas agregadas sobre los 47 casos,
+reportadas.
+
+La incidencia #455 localizó, sobre este mismo pipeline, la causa por la que
+el suelo de D1 (aciertos exactos ≥ 29/47) no se alcanzaba: `sanitize_fts5_query`
+(B6a) unía todos los tokens de la consulta con `OR`, incluidas las palabras
+vacías del castellano, así que casi cualquier consulta emparejaba con la
+mayoría del canon (1/47, 2141 elementos de más). ADR-109 porta el
+tratamiento léxico que cierra esa causa raíz
+(`sirius.adapters.persistence.lexical_query_treatment`, desde
+`experiments/adr002/candidates/adr002_a/lexical.py` en
+`evidence/adr001-spikes`) y mide de nuevo: **10/47**, 218 elementos de más —
+una mejora real y sustancial, pero todavía por debajo del suelo de D1. ADR-109
+diagnostica, con desglose caso a caso, que la brecha restante no es ya de
+cobertura (57/81, 70.4%) sino de precisión, y que cerrarla exige portar las
+puertas `G1-G12` y la agrupación de equivalentes del motor por etapas del
+laboratorio — fuera del alcance léxico que esa incidencia autoriza. Por eso
+D1/D2 siguen sin aserción de suelo aquí: D1 no se alcanza (ADR-109) y D2 es
+competencia de M11 sobre el pipeline íntegro que M8-M10 integren, no de
+este módulo.
 
 `criticidad.razon_segura` viaja en el fixture porque así la porta la rama de
 evidencia, pero nunca se lee: el cargador que construye los `Memory`/
@@ -323,12 +340,32 @@ def test_el_fichero_de_forma_tiene_47_casos_y_81_elementos_esperados() -> None:
 def test_el_banco_se_ejecuta_contra_el_pipeline_actual_y_reporta_las_cuatro_metricas(
     ejecucion_del_banco: _EjecucionDelBanco,
 ) -> None:
+    """M7 pipeline, con el disparador FTS5 ya corregido (incidencia #455,
+    ADR-109): ``sanitize_fts5_query`` limpia la consulta de palabras vacías
+    del castellano y la empareja por raíces/variantes en vez de por ``OR`` de
+    todos sus tokens. Medido: aciertos_exactos=10/47, elementos_de_mas=218,
+    omisiones_criticas=10, cobertura=57/81 (70.4%) — una mejora real y
+    sustancial frente a la línea base medida antes del porte (1/47, 2141, 21,
+    51/81), pero todavía por debajo del suelo de D1 (aciertos exactos ≥ 29/47).
+
+    El suelo de D1 **no** queda afirmado aquí como aserción dura: ADR-109
+    diagnostica, con desglose caso a caso, que la brecha restante ya no es
+    de cobertura sino de precisión (27 de los 37 casos fallidos encuentran
+    el 100% de lo esperado y solo fallan por elementos de más), y que
+    cerrarla exige portar las puertas `G1-G12` y la agrupación de
+    equivalentes del motor por etapas del laboratorio —fuera del alcance
+    léxico de la incidencia que corrigió `sanitize_fts5_query`—, no una
+    corrección adicional de ese disparador. Afirmar 29/47 dejaría
+    `uv run pytest` en rojo; debilitarlo a 10 falsearía la prueba
+    declarando cumplido un suelo que D1 fija en 29, no en "lo que se mida"
+    (a diferencia de D2). Queda medido y publicado, nunca exigido, hasta
+    que el propietario decida cómo cerrar esa brecha (ADR-109)."""
     metricas = ejecucion_del_banco.metricas
 
-    # Línea base medida (M7): se reporta, no se exige — D1/D2 son cosa de M11
-    # sobre el pipeline que M8-M10 integren, no de este.
     print(
-        "\nPA-0.2-REC-01 (M7, pipeline de hoy sin categoría/filtro): "
+        "\nPA-0.2-REC-01 (M7, disparador FTS5 corregido para la incidencia "
+        "#455 (ADR-109); "
+        "sin índice de categoría ni filtro de relevancia): "
         f"aciertos_exactos={metricas.aciertos_exactos}/47 "
         f"elementos_de_mas={metricas.elementos_de_mas} "
         f"omisiones_criticas={metricas.omisiones_criticas} "

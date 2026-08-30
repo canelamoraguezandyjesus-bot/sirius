@@ -126,6 +126,27 @@ RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     "experiments/adr002/projection/contracts.py:referencia_canonica": [
         "ADR-104-portar-el-banco-de-47-casos-de-evidence-adr001-spikes-al-modelo-real-de-sirius.md",
     ],
+    # ADR-109 diagnostica por qué portar `lexical.py` (incidencia #455) no
+    # basta para alcanzar el suelo D1, y para eso cita, tal como existen en
+    # `evidence/adr001-spikes`, el módulo portado y las tres piezas del motor
+    # por etapas que se quedan sin portar (puertas, agrupación, motor) — nunca
+    # se copian a `main`, porque hacerlo sería el rediseño de B6a/B6b que el
+    # alcance de la incidencia #455 que cierra con ADR-109 no autoriza.
+    "experiments/adr002/candidates/adr002_a/lexical.py": [
+        "ADR-109-el-tratamiento-lexico-portado-mejora-el-banco-de-1-47-a-10-47-pero-no-alcanza-el-suelo-d1-porque-la-precision-restante-vive-en-las-puertas-del-motor-por-etapas.md",
+    ],
+    "experiments/adr002/candidates/common/port.py": [
+        "ADR-109-el-tratamiento-lexico-portado-mejora-el-banco-de-1-47-a-10-47-pero-no-alcanza-el-suelo-d1-porque-la-precision-restante-vive-en-las-puertas-del-motor-por-etapas.md",
+    ],
+    "experiments/adr002/candidates/common/gates.py": [
+        "ADR-109-el-tratamiento-lexico-portado-mejora-el-banco-de-1-47-a-10-47-pero-no-alcanza-el-suelo-d1-porque-la-precision-restante-vive-en-las-puertas-del-motor-por-etapas.md",
+    ],
+    "experiments/adr002/candidates/common/grouping.py": [
+        "ADR-109-el-tratamiento-lexico-portado-mejora-el-banco-de-1-47-a-10-47-pero-no-alcanza-el-suelo-d1-porque-la-precision-restante-vive-en-las-puertas-del-motor-por-etapas.md",
+    ],
+    "experiments/adr002/candidates/common/engine.py": [
+        "ADR-109-el-tratamiento-lexico-portado-mejora-el-banco-de-1-47-a-10-47-pero-no-alcanza-el-suelo-d1-porque-la-precision-restante-vive-en-las-puertas-del-motor-por-etapas.md",
+    ],
 }
 
 

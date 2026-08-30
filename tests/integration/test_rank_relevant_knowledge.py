@@ -281,6 +281,52 @@ def test_an_empty_query_returns_no_matches_without_erroring(tmp_path: Path) -> N
     assert sanitize_fts5_query("***") == ""
 
 
+@pytest.mark.integration
+def test_a_query_made_only_of_spanish_stopwords_matches_nothing(tmp_path: Path) -> None:
+    """Issue #455 (ADR-109): before the lexical treatment, ``sanitize_fts5_query``
+    OR-ed every raw token, so a query of only function words ("de", "la",
+    "el", ...) would match any memory that happened to contain one of them —
+    virtually the entire canon. Once VACIAS is stripped, a query with no
+    discriminating term matches nothing, exactly like a blank query."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    SaveManualMemoryUseCase(unit_of_work).save("contenido de la reunión de mañana")
+
+    assert sanitize_fts5_query("de la el en") == ""
+    assert _use_case(database_path).rank("¿De qué se trata?") == ()
+
+
+@pytest.mark.integration
+def test_stopwords_shared_with_unrelated_content_never_match_by_themselves(
+    tmp_path: Path,
+) -> None:
+    """Issue #455 (ADR-109): joining every raw token with ``OR`` meant a query
+    sharing only Spanish function words with an unrelated memory ("de", "en",
+    "la", ...) still matched it via FTS5. Cleaning the query of ``VACIAS``
+    before building the ``MATCH`` expression means only a memory that shares
+    an actual discriminating term (or one of its morphological variants) is
+    returned."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    unrelated = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido de la reunión sobre otro asunto en la oficina"
+    )
+    matching = SaveManualMemoryUseCase(unit_of_work).save(
+        "política de teletrabajo vigente en la sede"
+    )
+
+    result = _use_case(database_path).rank("¿Qué política de teletrabajo tenemos?")
+
+    returned_ids = {(candidate.kind.value, candidate.item_id) for candidate in result}
+    assert ("memory", matching.id) in returned_ids
+    assert ("memory", unrelated.id) not in returned_ids
+
+
 # --- M9 (§6.2, D7 punto 6): category_match y su puerta de activación, en --
 # --- ambos estados — cerrada (por defecto) y abierta. -----------------------
 
