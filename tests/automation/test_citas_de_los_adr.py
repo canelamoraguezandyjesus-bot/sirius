@@ -113,15 +113,31 @@ TODAVIA_NO_EXISTEN: dict[str, list[str]] = {
 # encargo prohíbe tocar producto en M7. Confundir esta categoría con las otras
 # dos de arriba dejaría el aviso de "resucitó" mal etiquetado: estos ficheros
 # no van a "volver" nunca a `main` — viven donde siempre vivieron.
+#: ADR-109 (incidencia #455) y ADR-110 (incidencia #457) citan varias de las
+#: mismas rutas de `evidence/adr001-spikes`: la segunda porta lo que la
+#: primera diagnosticó como pendiente. Nombrar la constante evita repetir el
+#: nombre de fichero completo (largo, y fácil de desalinear entre entradas)
+#: en cada entrada que ambos ADR comparten.
+_ADR_109 = (
+    "ADR-109-el-tratamiento-lexico-portado-mejora-el-banco-de-1-47-a-10-47-pero-no-alcanza-"
+    "el-suelo-d1-porque-la-precision-restante-vive-en-las-puertas-del-motor-por-etapas.md"
+)
+_ADR_110 = (
+    "ADR-110-el-motor-por-etapas-portado-mejora-el-banco-a-11-47-pero-no-alcanza-el-suelo-"
+    "d1-porque-la-peticion-por-caso-del-laboratorio-no-esta-autorizada-a-portarse.md"
+)
+
 RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     "experiments/adr002/round/cases.py": [
         "ADR-104-portar-el-banco-de-47-casos-de-evidence-adr001-spikes-al-modelo-real-de-sirius.md",
+        _ADR_110,
     ],
     "experiments/adr002/round/cases.py:_traducir": [
         "ADR-104-portar-el-banco-de-47-casos-de-evidence-adr001-spikes-al-modelo-real-de-sirius.md",
     ],
     "experiments/adr002/benchmark/cases_v0_5.json": [
         "ADR-104-portar-el-banco-de-47-casos-de-evidence-adr001-spikes-al-modelo-real-de-sirius.md",
+        _ADR_110,
     ],
     "experiments/adr002/projection/contracts.py:referencia_canonica": [
         "ADR-104-portar-el-banco-de-47-casos-de-evidence-adr001-spikes-al-modelo-real-de-sirius.md",
@@ -132,21 +148,35 @@ RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     # por etapas que se quedan sin portar (puertas, agrupación, motor) — nunca
     # se copian a `main`, porque hacerlo sería el rediseño de B6a/B6b que el
     # alcance de la incidencia #455 que cierra con ADR-109 no autoriza.
-    "experiments/adr002/candidates/adr002_a/lexical.py": [
-        "ADR-109-el-tratamiento-lexico-portado-mejora-el-banco-de-1-47-a-10-47-pero-no-alcanza-el-suelo-d1-porque-la-precision-restante-vive-en-las-puertas-del-motor-por-etapas.md",
-    ],
-    "experiments/adr002/candidates/common/port.py": [
-        "ADR-109-el-tratamiento-lexico-portado-mejora-el-banco-de-1-47-a-10-47-pero-no-alcanza-el-suelo-d1-porque-la-precision-restante-vive-en-las-puertas-del-motor-por-etapas.md",
-    ],
-    "experiments/adr002/candidates/common/gates.py": [
-        "ADR-109-el-tratamiento-lexico-portado-mejora-el-banco-de-1-47-a-10-47-pero-no-alcanza-el-suelo-d1-porque-la-precision-restante-vive-en-las-puertas-del-motor-por-etapas.md",
-    ],
-    "experiments/adr002/candidates/common/grouping.py": [
-        "ADR-109-el-tratamiento-lexico-portado-mejora-el-banco-de-1-47-a-10-47-pero-no-alcanza-el-suelo-d1-porque-la-precision-restante-vive-en-las-puertas-del-motor-por-etapas.md",
-    ],
-    "experiments/adr002/candidates/common/engine.py": [
-        "ADR-109-el-tratamiento-lexico-portado-mejora-el-banco-de-1-47-a-10-47-pero-no-alcanza-el-suelo-d1-porque-la-precision-restante-vive-en-las-puertas-del-motor-por-etapas.md",
-    ],
+    #
+    # ADR-110 (incidencia #457) porta esas tres piezas de verdad
+    # (`sirius.domain.staged_engine_gates`/`_grouping`/`sirius.domain.
+    # staged_engine`) y cita las mismas rutas de origen para documentar de
+    # dónde vino cada módulo — el porte cita su fuente; la fuente en sí
+    # sigue sin fusionarse a `main`.
+    "experiments/adr002/candidates/adr002_a/lexical.py": [_ADR_109, _ADR_110],
+    "experiments/adr002/candidates/common/port.py": [_ADR_109, _ADR_110],
+    "experiments/adr002/candidates/common/gates.py": [_ADR_109, _ADR_110],
+    "experiments/adr002/candidates/common/grouping.py": [_ADR_109, _ADR_110],
+    "experiments/adr002/candidates/common/engine.py": [_ADR_109, _ADR_110],
+    # Piezas que ADR-110 cita por primera vez: dependencias de origen del
+    # motor por etapas (contracts/stops/trace) y la fuente de candidatas
+    # léxico-estructurada (`adr002_a/candidate.py`), ninguna nombrada por
+    # ADR-109 porque su diagnóstico se detuvo antes de portarlas.
+    "experiments/adr002/candidates/common/contracts.py": [_ADR_110],
+    "experiments/adr002/candidates/common/stops.py": [_ADR_110],
+    "experiments/adr002/candidates/common/trace.py": [_ADR_110],
+    "experiments/adr002/candidates/adr002_a/candidate.py": [_ADR_110],
+    # El corpus congelado y los dos planos de proyección (property_key,
+    # criticidad aplicada) que ADR-110 porta hacia
+    # `tests/acceptance/fixtures/evidence_bank_47_casos.json` para que el
+    # arnés del banco pueda declarar los ejes P2 que las puertas necesitan.
+    "experiments/adr002/benchmark/conformance_corpus_v0_6.json": [_ADR_110],
+    "experiments/adr002/benchmark/property_keys_v0_2.json": [_ADR_110],
+    "experiments/adr002/benchmark/applied_criticality_v0_1.json": [_ADR_110],
+    # Citado solo para documentar dónde vive la petición por caso que ADR-110
+    # diagnostica como no portada (no se lee ni se porta ningún dato suyo).
+    "experiments/adr002/benchmark/references_v0_5.json": [_ADR_110],
 }
 
 

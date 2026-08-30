@@ -24,9 +24,22 @@ category vocabulary and flipping the gate from persisted settings is M11's
 job (``composition_root``), not this one: both constructor parameters below
 default to the closed state, so every existing caller keeps building the
 exact same behaviour it has today.
+
+Incidencia #457/ADR-109: la misma puerta cerrada por defecto también
+gobierna el motor por etapas portado desde el laboratorio
+(``sirius.domain.staged_engine.recuperar``), que ADR-109 diagnosticó
+necesario para cerrar la brecha de precisión que el tratamiento léxico
+(#455/#456) por sí solo no cierra. Con la puerta cerrada —el estado por
+defecto de todo caller existente, incluido este mismo repositorio hasta que
+M11 (incidencia #453, bloqueada) decida abrirla desde ajustes— ``rank()``
+sigue exactamente el camino de siempre, sin ejecutar ni importar nada del
+motor. ``staged_engine_port``/``staged_engine_candidate`` son opcionales
+porque un caller que nunca abre la puerta no tiene por qué construirlos.
 """
 
 from __future__ import annotations
+
+from datetime import UTC, datetime
 
 from sirius.domain.relevance import (
     KnowledgeKind,
@@ -35,12 +48,60 @@ from sirius.domain.relevance import (
     rank_relevant_knowledge,
     subject_matches_query,
 )
+from sirius.domain.staged_engine import recuperar
+from sirius.domain.staged_engine_contracts import (
+    PLANO_COMUN_VACIO,
+    Ambito,
+    Cardinalidad,
+    Clase,
+    Modo,
+    Peticion,
+    PuertoDeRecuperacion,
+    SenalesDeCandidato,
+    VentanaTemporal,
+)
 from sirius.ports.decision_repository import DecisionRepository
 from sirius.ports.knowledge_search_repository import KnowledgeSearchRepository
 from sirius.ports.memory_repository import MemoryRepository
 from sirius.ports.project_repository import ProjectRepository
 
 __all__ = ["RankRelevantKnowledgeUseCase"]
+
+#: Propósito declarado de toda petición al motor por etapas: E0 exige uno no
+#: vacío (G1) y Sirius 0.1 no tiene hoy un permiso explícito por llamada —
+#: cada llamada a ``rank()`` es, por construcción, una recuperación de
+#: contexto ordinaria.
+_PROPOSITO_RECUPERACION_ORDINARIA = "recuperacion de contexto relevante (B6b)"
+
+#: Límite que "no ata" (misma convención que
+#: ``experiments/adr002/round/cases.py``: "los casos que no declaran limite
+#: reciben un limite que no ata"): mayor que cualquier canon real de Sirius
+#: 0.1 hoy, así que nunca es la causa de que algo se omita.
+_LIMITE_SIN_ATAR = 100_000
+
+
+def _peticion_ordinaria(query_text: str, operation_id: str) -> Peticion:
+    """La política uniforme con la que ``rank()`` interroga al motor.
+
+    Modo M1 (ordinario), ámbito global (``rank()`` nunca restringió por
+    proyecto: ``project_matches_active`` es una señal de orden, no un
+    filtro) y cardinalidad EXHAUSTIVA — la misma semántica de "todo lo
+    relevante, sin cuota" que la política de hoy ya tiene, y la que menos
+    depende de un objetivo de resultados que ninguna llamada a ``rank()``
+    declara.
+    """
+    ahora = datetime.now(UTC).isoformat()
+    return Peticion(
+        operation_id=operation_id,
+        consulta=query_text,
+        proposito=_PROPOSITO_RECUPERACION_ORDINARIA,
+        modo=Modo.M1_ORDINARIO,
+        ambito=Ambito(global_=True, proyectos=()),
+        ventana=VentanaTemporal(tiempo_objetivo=ahora, corte_de_registro=None),
+        cardinalidad=Cardinalidad.EXHAUSTIVA,
+        limite_objetivo=_LIMITE_SIN_ATAR,
+        limite_duro=_LIMITE_SIN_ATAR,
+    )
 
 
 class RankRelevantKnowledgeUseCase:
@@ -55,6 +116,8 @@ class RankRelevantKnowledgeUseCase:
         *,
         category_vocabulary: frozenset[str] = frozenset(),
         category_matching_enabled: bool = False,
+        staged_engine_port: PuertoDeRecuperacion | None = None,
+        staged_engine_candidate: SenalesDeCandidato | None = None,
     ) -> None:
         self._memory_repository = memory_repository
         self._decision_repository = decision_repository
@@ -62,6 +125,8 @@ class RankRelevantKnowledgeUseCase:
         self._knowledge_search_repository = knowledge_search_repository
         self._category_vocabulary = category_vocabulary
         self._category_matching_enabled = category_matching_enabled
+        self._staged_engine_port = staged_engine_port
+        self._staged_engine_candidate = staged_engine_candidate
 
     def rank(self, query_text: str) -> tuple[RankedKnowledge, ...]:
         """Return every vigente memory/decision related to ``query_text``,
@@ -71,7 +136,83 @@ class RankRelevantKnowledgeUseCase:
         matches nothing via FTS5, and any candidate that also has no
         matching subject is filtered out as "no relacionado" (see
         ``sirius.domain.relevance``) — an empty result, never an error.
+
+        Con la puerta D7 punto 6 abierta y un puerto/candidato del motor por
+        etapas configurados, delega en ``_rank_via_staged_engine`` (ADR-109)
+        en vez de en el filtro-y-orden de siempre.
         """
+        if (
+            self._category_matching_enabled
+            and self._staged_engine_port is not None
+            and self._staged_engine_candidate is not None
+        ):
+            return self._rank_via_staged_engine(query_text)
+        return self._rank_via_current_pipeline(query_text)
+
+    def _rank_via_staged_engine(self, query_text: str) -> tuple[RankedKnowledge, ...]:
+        """ADR-109: recuperación por ``E0-E5`` con las doce puertas y la
+        agrupación de equivalentes, en vez del filtro-y-orden de S7.5.
+
+        Traduce cada ``Resultado`` (identidad canónica ``CLASE:n``) de
+        vuelta al ``Memory``/``Decision`` real por el mismo id, y construye
+        ``RankedKnowledge`` con las mismas cuatro señales estructurales que
+        el camino de siempre calcula, para que el orden final sea el mismo
+        tipo de dato pase lo que pase por la puerta.
+        """
+        assert self._staged_engine_port is not None
+        assert self._staged_engine_candidate is not None
+        active_project = self._project_repository.get_active_project()
+        active_project_id = active_project.id if active_project is not None else None
+
+        peticion = _peticion_ordinaria(query_text, operation_id=f"rank:{query_text[:64]}")
+        recuperacion = recuperar(
+            peticion, self._staged_engine_port, self._staged_engine_candidate, PLANO_COMUN_VACIO
+        )
+
+        def category_match(category: str | None) -> bool:
+            return self._category_matching_enabled and category_matches_query(
+                category, query_text, self._category_vocabulary
+            )
+
+        ranked: list[RankedKnowledge] = []
+        for resultado in recuperacion.resultados:
+            clase, _, numero = resultado.item.id.partition(":")
+            item_id = int(numero)
+            if clase == Clase.MEMORIA.value:
+                memory = self._memory_repository.get_memory(item_id)
+                ranked.append(
+                    RankedKnowledge(
+                        kind=KnowledgeKind.MEMORY,
+                        item=memory,
+                        subject_matches_query=False,
+                        project_matches_active=(
+                            active_project_id is not None and memory.project_id == active_project_id
+                        ),
+                        fts_match=True,
+                        category_match=category_match(memory.category),
+                    )
+                )
+            else:
+                decision = self._decision_repository.get_decision(item_id)
+                ranked.append(
+                    RankedKnowledge(
+                        kind=KnowledgeKind.DECISION,
+                        item=decision,
+                        subject_matches_query=subject_matches_query(decision.subject, query_text),
+                        project_matches_active=(
+                            active_project_id is not None
+                            and decision.project_id == active_project_id
+                        ),
+                        fts_match=True,
+                        category_match=category_match(decision.category),
+                    )
+                )
+        return tuple(ranked)
+
+    def _rank_via_current_pipeline(self, query_text: str) -> tuple[RankedKnowledge, ...]:
+        """El filtro-y-orden de S7.5/M9, sin cambios: lo que ``rank()``
+        ejecutaba antes de esta incidencia y lo que sigue ejecutando con la
+        puerta D7 punto 6 cerrada."""
         active_project = self._project_repository.get_active_project()
         active_project_id = active_project.id if active_project is not None else None
 

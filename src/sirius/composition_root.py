@@ -63,6 +63,8 @@ from sirius.adapters.persistence.sqlite_memory_suggestion_repository import (
 )
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
+from sirius.adapters.persistence.staged_engine_candidate import candidato as staged_engine_candidato
+from sirius.adapters.persistence.staged_engine_port import build_staged_engine_port
 from sirius.adapters.secrets.keyring_store import build_keyring_secret_store
 from sirius.application.api_key_settings import ApiKeySettingsUseCase
 from sirius.application.approve_decision import ApproveDecisionUseCase
@@ -416,11 +418,18 @@ def build_conversation_dependencies(
     # ConfirmMemorySuggestionUseCase and RejectMemorySuggestionUseCase (M5).
     unit_of_work = build_sqlite_unit_of_work(database_path)
 
+    # Incidencia #457/ADR-109: el motor por etapas queda cableado detrás de
+    # la misma puerta cerrada por defecto (category_matching_enabled, M9/
+    # M11) que ya gobierna la categoría — construirlo aquí no cambia nada
+    # del comportamiento de hoy, porque la puerta sigue cerrada hasta que
+    # M11 (incidencia #453, bloqueada) la abra desde ajustes persistidos.
     rank_relevant_knowledge_use_case = RankRelevantKnowledgeUseCase(
         memory_repository=memory_repository,
         decision_repository=decision_repository,
         project_repository=project_repository,
         knowledge_search_repository=knowledge_search_repository,
+        staged_engine_port=build_staged_engine_port(database_path),
+        staged_engine_candidate=staged_engine_candidato(),
     )
     context_builder = ContextBuilder(
         identity_repository=identity_repository,

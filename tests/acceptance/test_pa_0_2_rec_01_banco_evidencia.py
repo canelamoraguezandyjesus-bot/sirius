@@ -25,10 +25,30 @@ una mejora real y sustancial, pero todavía por debajo del suelo de D1. ADR-109
 diagnostica, con desglose caso a caso, que la brecha restante no es ya de
 cobertura (57/81, 70.4%) sino de precisión, y que cerrarla exige portar las
 puertas `G1-G12` y la agrupación de equivalentes del motor por etapas del
-laboratorio — fuera del alcance léxico que esa incidencia autoriza. Por eso
-D1/D2 siguen sin aserción de suelo aquí: D1 no se alcanza (ADR-109) y D2 es
-competencia de M11 sobre el pipeline íntegro que M8-M10 integren, no de
-este módulo.
+laboratorio — fuera del alcance léxico que esa incidencia autoriza.
+
+La incidencia #457 porta esas tres piezas —el resto del tratamiento léxico
+(`polaridad_negativa`, `condicion_declarada`), las doce puertas
+(`sirius.domain.staged_engine_gates`), la agrupación de equivalentes
+(`sirius.domain.staged_engine_grouping`) y el motor que las orquesta
+(`sirius.domain.staged_engine`)— y añade un segundo arnés,
+`_ejecutar_banco_motor_portado`, que ejecuta el mismo banco con ese motor
+activo (el mismo camino que `RankRelevantKnowledgeUseCase.
+_rank_via_staged_engine` toma con la puerta D7 punto 6 abierta) en vez del
+filtro-y-orden de M7. Mide: **11/47**, 186 elementos de más, 9 omisiones
+críticas, cobertura 60/81 (74.1%) — mejora real en las cuatro métricas
+frente a M7, pero todavía muy por debajo de los cuatro objetivos de la
+incidencia. ADR-110 diagnostica, con las cifras de cada configuración
+probada, que la petición **por caso** (modo, permiso, cardinalidad, límite)
+que el laboratorio usó para medir 29/47 vive en ficheros
+(`experiments/adr002/benchmark/cases_v0_5.json`/`references_v0_5.json`) y en
+un traductor (`experiments/adr002/round/cases.py`) que el alcance permitido
+de esta incidencia no autoriza portar; sin ellos, este arnés solo puede
+interrogar al motor con una política uniforme, y esa política no reproduce
+las cifras del laboratorio. Por eso D1/D2 siguen sin aserción de suelo aquí:
+D1 no se alcanza con ninguno de los dos pipelines medidos (ADR-109/ADR-110)
+y D2 es competencia de M11 sobre el pipeline íntegro que M8-M10 integren, no
+de este módulo.
 
 `criticidad.razon_segura` viaja en el fixture porque así la porta la rama de
 evidencia, pero nunca se lee: el cargador que construye los `Memory`/
@@ -52,10 +72,12 @@ import json
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
 
+from sirius.adapters.persistence import staged_engine_candidate
+from sirius.adapters.persistence.database import build_engine, build_session_factory
 from sirius.adapters.persistence.migrations import upgrade_to_head
 from sirius.adapters.persistence.sqlite_decision_repository import (
     build_sqlite_decision_repository,
@@ -66,6 +88,7 @@ from sirius.adapters.persistence.sqlite_knowledge_search_repository import (
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
+from sirius.adapters.persistence.staged_engine_port import StagedEnginePort
 from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.archive_memory import ArchiveMemoryUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
@@ -74,6 +97,18 @@ from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.domain.memory import Memory
 from sirius.domain.precedence import find_prevailing_decision
 from sirius.domain.relevance import KnowledgeKind, RankedKnowledge
+from sirius.domain.staged_engine import recuperar
+from sirius.domain.staged_engine_contracts import (
+    Ambito,
+    Cardinalidad,
+    Clase,
+    Criticidad,
+    CriticidadAplicada,
+    EjesDeclarados,
+    Modo,
+    Peticion,
+    VentanaTemporal,
+)
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "evidence_bank_47_casos.json"
 
@@ -317,6 +352,209 @@ def ejecucion_del_banco(tmp_path_factory: pytest.TempPathFactory) -> _EjecucionD
     return _ejecutar_banco(database_path)
 
 
+# -- Arnés del motor por etapas (incidencia #457/ADR-109) --------------------
+
+
+#: Traducción cerrada del vocabulario de niveles del fixture (idéntica a la
+#: que `experiments/adr002/projection/plane.py` aplica en
+#: `evidence/adr001-spikes`, `NIVELES`): un nivel del fixture que no figure
+#: aquí no debe traducirse "al más parecido". El fixture nunca declara el
+#: nivel `ORDINARIO` explícito (`criticidad` es `None` para todo lo que no
+#: es `IMPORTANTE` ni `CRITICO`), así que no hace falta esa entrada.
+_NIVELES_DE_CRITICIDAD: Final[dict[str, Criticidad]] = {
+    "IMPORTANTE": Criticidad.IMPORTANTE,
+    "CRITICO": Criticidad.CRITICA,
+}
+
+
+def _identidad_del_motor(kind: str, real_id: int) -> str:
+    """La identidad `CLASE:n` que `StagedEnginePort`/`ItemCanonico` usan,
+    construida desde el mismo par `(kind, id)` que `_load_canon_item`
+    devuelve y que `real_a_canonico` ya indexa."""
+    clase = Clase.MEMORIA.value if kind == "memory" else Clase.DECISION.value
+    return f"{clase}:{real_id}"
+
+
+def _ejes_declarados(item: Mapping[str, Any]) -> EjesDeclarados:
+    """Los ejes P2 que el ítem del corpus congelado declara (ver
+    `ejes_p2` en el fixture, incidencia #457): el mismo eje que
+    `staged_engine_gates` necesita, tal como el corpus lo fija."""
+    ejes = item["ejes_p2"]
+    return EjesDeclarados(
+        confirmacion=item["confirmacion"],
+        validez=item["validez"],
+        disponibilidad=item["disponibilidad"],
+        valid_from=ejes["valid_from"],
+        valid_to=ejes["valid_to"],
+        sensibilidad=ejes["sensibilidad"],
+        autoridad=ejes["autoridad"],
+        ambito=ejes["ambito"],
+        no_usar_como_memoria=ejes["no_usar_como_memoria"],
+        no_consolidable=ejes["no_consolidable"],
+        procedencia=tuple(ejes["procedencia"]),
+        # La única decisión `MULTI_PROYECTO_CERRADO` del banco (`DEC-001`)
+        # no trae miembros resueltos: el corpus portado no declara la
+        # membresía de listas cerradas del laboratorio (ver
+        # "nota_incidencia_457" del fixture). `G4` la trata como lista sin
+        # miembros y la descarta ("la duda no abre ámbito"), en vez de que
+        # este arnés invente una membresía que no está en la fuente.
+        miembros_de_ambito=(),
+    )
+
+
+class _PlanoDelBanco:
+    """`PlanoComun` del arnés: `property_key` y criticidad aplicada, las
+    dos leídas del corpus congelado (`ejes_p2.property_key`, `criticidad`)
+    — nunca calculadas ni inferidas por este módulo."""
+
+    def __init__(
+        self,
+        propiedades: Mapping[str, str | None],
+        criticidad: Mapping[str, CriticidadAplicada],
+    ) -> None:
+        self._propiedades = propiedades
+        self._criticidad = criticidad
+
+    def property_key(self, identidad: str) -> str | None:
+        return self._propiedades.get(identidad)
+
+    def criticidad_aplicada(self, identidad: str) -> CriticidadAplicada | None:
+        return self._criticidad.get(identidad)
+
+
+def _ejecutar_banco_motor_portado(database_path: Path) -> _EjecucionDelBanco:
+    """El mismo banco de 47 casos, con el motor por etapas (ADR-109) activo
+    en el arnés — el mismo camino que
+    `RankRelevantKnowledgeUseCase._rank_via_staged_engine` toma con la
+    puerta D7 punto 6 abierta — en vez del filtro-y-orden de M7 que
+    `_ejecutar_banco` mide.
+
+    Construye el canon exactamente igual que `_ejecutar_banco` (mismos
+    `Memory`/`Decision` reales, por los mismos casos de uso), y añade lo que
+    el motor por etapas necesita y que el esquema real de Sirius 0.1 no
+    persiste: los ejes P2, `property_key` y la criticidad aplicada, los tres
+    leídos del corpus congelado que `evidence_bank_47_casos.json` porta
+    (incidencia #457) — nunca inventados por este arnés.
+
+    Cada caso interroga al motor con su propia petición: modo M1 (ordinario,
+    igual que el pipeline de producto), cardinalidad EXHAUSTIVA (`rank()` no
+    declara una cuota de resultados, así que "todo lo relevante, sin cuota"
+    es la semántica más fiel) y el ámbito que el propio caso declara
+    (`caso["ambito"]`, portado desde `cases_v0_5.json` — `GLOBAL` o el
+    nombre de un proyecto del banco), no un ámbito global uniforme: es la
+    puerta `G4` la que debe decidir si un ítem de otro proyecto cuenta como
+    elemento de más, no un filtro añadido por este arnés.
+    """
+    banco = _fixture()
+    upgrade_to_head(database_path)
+
+    nombres_de_proyecto = sorted(
+        {i["project"] for i in banco["items"] if i["project"] != "PRJ-GLOBAL"}
+    )
+    project_ids = _create_projects(database_path, nombres_de_proyecto)
+
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    real_a_canonico: dict[tuple[str, int], str] = {}
+    for item in banco["items"]:
+        real = _load_canon_item(item, project_ids=project_ids, unit_of_work=unit_of_work)
+        if real is None:
+            continue
+        real_a_canonico[real] = item["id"]
+
+    items_por_id = {item["id"]: item for item in banco["items"]}
+    ejes_por_identidad: dict[str, EjesDeclarados] = {}
+    propiedades: dict[str, str | None] = {}
+    criticidad_aplicada: dict[str, CriticidadAplicada] = {}
+    for (kind, real_id), corpus_id in real_a_canonico.items():
+        identidad = _identidad_del_motor(kind, real_id)
+        item = items_por_id[corpus_id]
+        ejes_por_identidad[identidad] = _ejes_declarados(item)
+        propiedades[identidad] = item["ejes_p2"]["property_key"]
+        nivel_bruto = item["criticidad"]["nivel"] if item["criticidad"] else None
+        if nivel_bruto is not None:
+            criticidad_aplicada[identidad] = CriticidadAplicada(
+                nivel=_NIVELES_DE_CRITICIDAD[nivel_bruto],
+                razon_segura=item["criticidad"]["razon_segura"],
+                fuente_de_politica=item["criticidad"]["fuente_de_politica"],
+                regla_de_politica=item["criticidad"]["regla_de_politica"],
+            )
+
+    engine = build_engine(database_path)
+    session_factory = build_session_factory(engine)
+    puerto = StagedEnginePort(session_factory, engine, ejes_por_identidad=ejes_por_identidad)
+    candidato = staged_engine_candidate.candidato()
+    plano = _PlanoDelBanco(propiedades, criticidad_aplicada)
+
+    #: "Un límite que no ata" (misma convención que
+    #: `experiments/adr002/round/cases.py`): el tamaño del canon, para que
+    #: nunca sea la causa de que algo se omita.
+    limite_sin_atar = banco["conteos"]["items_del_canon"]
+    tiempo_objetivo = banco["ahora_declarado"]
+
+    aciertos_exactos = 0
+    elementos_de_mas = 0
+    omisiones_criticas = 0
+    elementos_hallados = 0
+
+    try:
+        for caso in banco["casos"]:
+            ambito_declarado = caso["ambito"]
+            ambito = (
+                Ambito(global_=True, proyectos=())
+                if ambito_declarado == "GLOBAL"
+                else Ambito(global_=False, proyectos=(str(project_ids[ambito_declarado]),))
+            )
+            peticion = Peticion(
+                operation_id=f"banco:{caso['id']}",
+                consulta=caso["consulta"],
+                proposito="medicion PA-0.2-REC-01: banco de 47 casos con el motor portado",
+                modo=Modo.M1_ORDINARIO,
+                ambito=ambito,
+                ventana=VentanaTemporal(tiempo_objetivo=tiempo_objetivo, corte_de_registro=None),
+                cardinalidad=Cardinalidad.EXHAUSTIVA,
+                limite_objetivo=limite_sin_atar,
+                limite_duro=limite_sin_atar,
+            )
+            recuperacion = recuperar(peticion, puerto, candidato, plano)
+            obtenido = {
+                real_a_canonico[
+                    (
+                        "memory" if resultado.item.clase is Clase.MEMORIA else "decision",
+                        int(resultado.item.id.partition(":")[2]),
+                    )
+                ]
+                for resultado in recuperacion.resultados
+            }
+            esperado = set(caso["resultado_esperado"])
+
+            if obtenido == esperado:
+                aciertos_exactos += 1
+            elementos_de_mas += len(obtenido - esperado)
+            elementos_hallados += len(obtenido & esperado)
+            for identidad in esperado - obtenido:
+                if _es_critico(items_por_id[identidad]):
+                    omisiones_criticas += 1
+    finally:
+        puerto.close()
+
+    metricas = _Metricas(
+        aciertos_exactos=aciertos_exactos,
+        elementos_de_mas=elementos_de_mas,
+        omisiones_criticas=omisiones_criticas,
+        elementos_hallados=elementos_hallados,
+        elementos_esperados_total=banco["conteos"]["elementos_esperados_total"],
+    )
+    return _EjecucionDelBanco(metricas=metricas)
+
+
+@pytest.fixture(scope="module")
+def ejecucion_del_banco_motor_portado(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> _EjecucionDelBanco:
+    database_path = tmp_path_factory.mktemp("evidence_bank_47_casos_motor") / "sirius.db"
+    return _ejecutar_banco_motor_portado(database_path)
+
+
 def test_el_fichero_de_forma_tiene_47_casos_y_81_elementos_esperados() -> None:
     banco = _fixture()
     casos = banco["casos"]
@@ -366,6 +604,62 @@ def test_el_banco_se_ejecuta_contra_el_pipeline_actual_y_reporta_las_cuatro_metr
         "\nPA-0.2-REC-01 (M7, disparador FTS5 corregido para la incidencia "
         "#455 (ADR-109); "
         "sin índice de categoría ni filtro de relevancia): "
+        f"aciertos_exactos={metricas.aciertos_exactos}/47 "
+        f"elementos_de_mas={metricas.elementos_de_mas} "
+        f"omisiones_criticas={metricas.omisiones_criticas} "
+        f"cobertura={metricas.elementos_hallados}/{metricas.elementos_esperados_total} "
+        f"({metricas.cobertura:.1%})"
+    )
+
+    assert 0 <= metricas.aciertos_exactos <= 47
+    assert metricas.elementos_de_mas >= 0
+    assert metricas.omisiones_criticas >= 0
+    assert 0 <= metricas.elementos_hallados <= metricas.elementos_esperados_total
+
+
+def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metricas(
+    ejecucion_del_banco_motor_portado: _EjecucionDelBanco,
+) -> None:
+    """Incidencia #457/ADR-109/ADR-110: el mismo banco, con el motor por
+    etapas (`sirius.domain.staged_engine.recuperar`), las doce puertas
+    (`staged_engine_gates`) y la agrupación de equivalentes
+    (`staged_engine_grouping`) activos en el arnés, en vez del
+    filtro-y-orden de M7 que mide el test anterior.
+
+    Medido: aciertos_exactos=11/47, elementos_de_mas=186,
+    omisiones_criticas=9, cobertura=60/81 (74.1%) — mejora real en las
+    cuatro métricas frente a M7 (10/47, 218, 10, 57/81), pero todavía muy
+    por debajo del suelo de D1 (aciertos exactos ≥ 29/47) y de los otros
+    tres objetivos de la incidencia (elementos de más ≤ 21, omisiones
+    críticas ≤ 1, cobertura ≥ 63/81).
+
+    ADR-110 documenta el diagnóstico completo con cifras de cada
+    configuración probada (EXHAUSTIVA, ACOTADA con varios límites, y con
+    ``E2`` desactivada). La causa raíz: el 29/47 que PR #117 midió depende
+    de una petición **por caso** (modo, permiso, cardinalidad y límite
+    declarados en ``experiments/adr002/benchmark/cases_v0_5.json`` y
+    adjudicados en ``references_v0_5.json``, traducidos a ``Peticion`` por
+    ``experiments/adr002/round/cases.py:334-366``) — ninguno de esos dos
+    ficheros ni ese traductor están entre lo que el alcance permitido de
+    esta incidencia autoriza portar (solo el tratamiento léxico restante,
+    las puertas, la agrupación y el motor). Sin esa petición por caso, este
+    arnés solo puede interrogar al motor con una política **uniforme**
+    (misma para las 47 consultas): ``sirius.application.rank_relevant_
+    knowledge._peticion_ordinaria`` — la misma que el camino real del
+    producto usaría con la puerta abierta, cardinalidad EXHAUSTIVA (la
+    semántica de "todo lo relevante, sin cuota" que ``rank()`` ya tiene) —
+    y esa política uniforme no reproduce las cifras que una política
+    ajustada caso a caso alcanzó.
+
+    Igual que ADR-109 con el porte léxico: el suelo de D1 **no** queda
+    afirmado aquí como aserción dura. Afirmar 29/47 dejaría `uv run pytest`
+    en rojo; debilitarlo a 11 falsearía la prueba declarando cumplido un
+    suelo que D1 fija en 29. Queda medido y publicado, nunca exigido."""
+    metricas = ejecucion_del_banco_motor_portado.metricas
+
+    print(
+        "\nPA-0.2-REC-01 (motor por etapas portado, ADR-109/#457; "
+        "puertas G1-G12 y agrupación de equivalentes activas en el arnés): "
         f"aciertos_exactos={metricas.aciertos_exactos}/47 "
         f"elementos_de_mas={metricas.elementos_de_mas} "
         f"omisiones_criticas={metricas.omisiones_criticas} "
