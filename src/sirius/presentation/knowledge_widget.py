@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
-from PySide6.QtCore import QEvent, QObject, Qt, QThreadPool
+from PySide6.QtCore import QEvent, QObject, Qt, QThreadPool, Signal
 from PySide6.QtGui import QFocusEvent
 from PySide6.QtWidgets import (
     QComboBox,
@@ -213,6 +213,13 @@ class _ChooseSupersedingDecisionDialog(QDialog):
 class KnowledgeWidget(QGroupBox):
     """Panel observable de recuerdos, decisiones y conflictos de precedencia."""
 
+    #: Emitida cuando el último ``CategoryTaggingWorker`` en vuelo termina
+    #: (CODEX-001): una restauración de copia de seguridad debe esperar a
+    #: esta señal antes de cerrar las conexiones a sirius.db, porque
+    #: ``TagCategoryUseCase.tag()`` sigue usando los repositorios mientras
+    #: haya etiquetadores pendientes.
+    category_tagging_idle = Signal()
+
     def __init__(
         self,
         get_knowledge_overview_use_case: GetKnowledgeOverviewUseCase,
@@ -233,6 +240,7 @@ class KnowledgeWidget(QGroupBox):
         *,
         tag_category_use_case: TagCategoryUseCase | None = None,
         set_category_use_case: SetCategoryUseCase | None = None,
+        category_vocabulary: frozenset[str] | None = None,
         thread_pool: QThreadPool | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
@@ -260,6 +268,7 @@ class KnowledgeWidget(QGroupBox):
         self._reject_memory_suggestion_use_case = reject_memory_suggestion_use_case
         self._tag_category_use_case = tag_category_use_case
         self._set_category_use_case = set_category_use_case
+        self._category_vocabulary = category_vocabulary
         self._thread_pool = thread_pool
 
         self._show_warning = show_warning or self._default_show_warning
@@ -274,6 +283,7 @@ class KnowledgeWidget(QGroupBox):
 
         self._is_busy = False
         self._is_externally_busy = False
+        self._pending_tagging_workers = 0
         self._overview: KnowledgeOverview | None = None
         self._last_touched_list: QListWidget | None = None
 
@@ -449,12 +459,23 @@ class KnowledgeWidget(QGroupBox):
         if self._tag_category_use_case is None or self._thread_pool is None:
             return
         worker = CategoryTaggingWorker(self._tag_category_use_case, kind, item_id)
+        self._pending_tagging_workers += 1
         worker.signals.finished.connect(self._handle_tagging_worker_finished)
         self._thread_pool.start(worker)
 
+    @property
+    def has_pending_category_tagging(self) -> bool:
+        """``True`` mientras quede al menos un ``CategoryTaggingWorker`` en
+        vuelo (CODEX-001): una restauración de copia de seguridad debe
+        comprobarlo antes de cerrar las conexiones a sirius.db."""
+        return self._pending_tagging_workers > 0
+
     def _handle_tagging_worker_finished(self, tagged: bool) -> None:
+        self._pending_tagging_workers -= 1
         if tagged:
             self.refresh()
+        if self._pending_tagging_workers == 0:
+            self.category_tagging_idle.emit()
 
     def _enqueue_retroactive_category_tagging(self) -> None:
         """Pase de arranque sobre lo ya guardado antes de esta migración (D7,
@@ -476,16 +497,34 @@ class KnowledgeWidget(QGroupBox):
         """Edición manual de categoría (D7 punto 3, §6.1): a través de
         ``SetCategoryUseCase``, cuya escritura es siempre incondicional y deja
         ``category_locked`` en ``True`` — ninguna clasificación automática
-        posterior puede sobrescribirla ya."""
+        posterior puede sobrescribirla ya.
+
+        CODEX-002: restringida al mismo vocabulario cerrado que usa el
+        clasificador automático (D7 exige un vocabulario cerrado para que las
+        categorías sigan siendo comparables); un valor fuera de él nunca llega
+        a ``SetCategoryUseCase.set()``."""
         if self._set_category_use_case is None:
             return
-        category = self._prompt_line("Editar categoría", "Categoría:")
+        label = "Categoría:"
+        if self._category_vocabulary:
+            label = f"Categoría (una de: {', '.join(sorted(self._category_vocabulary))}):"
+        category = self._prompt_line("Editar categoría", label)
         if category is None:
             return
         clean_category = category.strip()
         if not clean_category:
             self._show_warning(
                 "No se pudo editar la categoría", "La categoría no puede estar vacía."
+            )
+            return
+        if (
+            self._category_vocabulary is not None
+            and clean_category not in self._category_vocabulary
+        ):
+            options = ", ".join(sorted(self._category_vocabulary))
+            self._show_warning(
+                "No se pudo editar la categoría",
+                f"La categoría debe ser una de: {options}.",
             )
             return
         try:

@@ -556,6 +556,7 @@ def test_the_real_app_offers_the_two_studio_buttons(tmp_path: Path, qtbot: QtBot
     window = _real_main_window(tmp_path, qtbot)
 
     assert window.studio_page.read_all_button.isEnabled()
+    assert window.studio_page.settings_button.isEnabled()
 
 
 # --- D7 (M8) llega a KnowledgeWidget por el camino completo de producción --
@@ -593,4 +594,3 @@ def test_the_real_app_wires_manual_category_editing_into_the_knowledge_widget(
         "la aplicación real montó KnowledgeWidget sin SetCategoryUseCase: el "
         "usuario no podría corregir una clasificación (CODEX-001)"
     )
-    assert window.studio_page.settings_button.isEnabled()

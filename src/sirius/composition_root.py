@@ -194,6 +194,7 @@ class ConversationDependencies:
     reject_memory_suggestion_use_case: RejectMemorySuggestionUseCase
     tag_category_use_case: TagCategoryUseCase
     set_category_use_case: SetCategoryUseCase
+    category_vocabulary: frozenset[str]
     create_backup_use_case: CreateBackupUseCase
     validate_backup_use_case: ValidateBackupUseCase
     restore_backup_use_case: RestoreBackupUseCase
@@ -548,6 +549,7 @@ def build_conversation_dependencies(
         reject_memory_suggestion_use_case=RejectMemorySuggestionUseCase(unit_of_work),
         tag_category_use_case=tag_category_use_case,
         set_category_use_case=set_category_use_case,
+        category_vocabulary=_CATEGORY_VOCABULARY,
         create_backup_use_case=CreateBackupUseCase(backup_service),
         validate_backup_use_case=ValidateBackupUseCase(backup_service),
         restore_backup_use_case=RestoreBackupUseCase(backup_service),

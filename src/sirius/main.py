@@ -72,6 +72,7 @@ def _build_main_window(
         close_database_connections=dependencies.close_database_connections,
         tag_category_use_case=dependencies.tag_category_use_case,
         set_category_use_case=dependencies.set_category_use_case,
+        category_vocabulary=dependencies.category_vocabulary,
         studio_voice_use_case=dependencies.studio_voice_use_case,
         studio_capture_use_case=dependencies.studio_capture_use_case,
         save_studio_voice=save_studio_voice,

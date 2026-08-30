@@ -97,6 +97,7 @@ def _build_widget(
     correct_memory_use_case: Any = None,
     tag_category_use_case: Any = None,
     set_category_use_case: Any = None,
+    category_vocabulary: frozenset[str] | None = None,
     thread_pool: QThreadPool | None = None,
 ) -> KnowledgeWidget:
     def _choose_superseding(candidates: Sequence[Decision]) -> Decision | None:
@@ -122,6 +123,7 @@ def _build_widget(
         dependencies.reject_memory_suggestion_use_case,
         tag_category_use_case=tag_category_use_case,
         set_category_use_case=set_category_use_case,
+        category_vocabulary=category_vocabulary,
         thread_pool=thread_pool,
         show_warning=recorder.show_warning,
         show_information=recorder.show_information,
@@ -1538,6 +1540,11 @@ def test_set_external_busy_disables_suggestion_buttons_too(qtbot: QtBot, tmp_pat
     assert not widget.confirm_suggestion_button.isEnabled()
     assert not widget.reject_suggestion_button.isEnabled()
 
+    widget.set_external_busy(False)
+
+    assert widget.confirm_suggestion_button.isEnabled()
+    assert widget.reject_suggestion_button.isEnabled()
+
 
 # --- Etiquetado automático tras cada guardado/confirmación/propuesta -------
 #
@@ -1758,6 +1765,54 @@ def test_edit_memory_category_button_sets_and_locks_a_manual_category(
 
 
 @pytest.mark.gui
+def test_edit_memory_category_rejects_a_value_outside_the_closed_vocabulary(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CODEX-002: D7 exige un vocabulario cerrado (mismo que usa el
+    clasificador automático) para que las categorías sigan siendo
+    comparables; un valor ajeno como "inventada" nunca debe llegar a
+    ``SetCategoryUseCase.set()``."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.save_manual_memory_use_case.save("preferencia a categorizar")
+    recorder = _Recorder()
+    widget = _build_widget(
+        dependencies,
+        recorder,
+        prompt_line_value="inventada",
+        set_category_use_case=dependencies.set_category_use_case,
+        category_vocabulary=dependencies.category_vocabulary,
+    )
+    qtbot.addWidget(widget)
+    widget.memories_list.setCurrentRow(0)
+
+    widget.edit_memory_category_button.click()
+
+    assert " · " not in widget.memories_list.item(0).text()
+    assert len(recorder.warnings) == 1
+
+
+@pytest.mark.gui
+def test_edit_memory_category_accepts_a_value_from_the_closed_vocabulary(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.save_manual_memory_use_case.save("preferencia a categorizar")
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        prompt_line_value="personal",
+        set_category_use_case=dependencies.set_category_use_case,
+        category_vocabulary=dependencies.category_vocabulary,
+    )
+    qtbot.addWidget(widget)
+    widget.memories_list.setCurrentRow(0)
+
+    widget.edit_memory_category_button.click()
+
+    assert "personal" in widget.memories_list.item(0).text()
+
+
+@pytest.mark.gui
 def test_edit_decision_category_button_sets_and_locks_a_manual_category(
     qtbot: QtBot, tmp_path: Path
 ) -> None:
@@ -1812,8 +1867,3 @@ def test_edit_memory_category_cancelled_prompt_changes_nothing(
     widget.edit_memory_category_button.click()
 
     assert " · " not in widget.memories_list.item(0).text()
-
-    widget.set_external_busy(False)
-
-    assert widget.confirm_suggestion_button.isEnabled()
-    assert widget.reject_suggestion_button.isEnabled()

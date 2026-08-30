@@ -258,6 +258,7 @@ class MainWindow(QMainWindow):
         *,
         tag_category_use_case: TagCategoryUseCase | None = None,
         set_category_use_case: SetCategoryUseCase | None = None,
+        category_vocabulary: frozenset[str] | None = None,
         studio_voice_use_case: StudioVoiceUseCase | None = None,
         studio_capture_use_case: StudioCaptureUseCase | None = None,
         save_studio_voice: Callable[[str], None] | None = None,
@@ -299,6 +300,7 @@ class MainWindow(QMainWindow):
         self._historical_projects_use_case = historical_projects_use_case
         self._tag_category_use_case = tag_category_use_case
         self._set_category_use_case = set_category_use_case
+        self._category_vocabulary = category_vocabulary
         # Not a use case: the minimal SQLAlchemy-lifecycle mechanism a safe
         # restoration needs (see ConversationDependencies' docstring). Called
         # right before RestoreBackupUseCase so the atomic file replace is not
@@ -1197,6 +1199,7 @@ class MainWindow(QMainWindow):
             self._reject_memory_suggestion_use_case,
             tag_category_use_case=self._tag_category_use_case,
             set_category_use_case=self._set_category_use_case,
+            category_vocabulary=self._category_vocabulary,
             thread_pool=self._thread_pool,
             show_warning=self._show_warning,
             show_information=self._show_information,
@@ -2231,6 +2234,27 @@ class MainWindow(QMainWindow):
             )
             return
 
+        if self.knowledge_widget.has_pending_category_tagging:
+            # CODEX-001: un CategoryTaggingWorker en vuelo sigue usando los
+            # repositorios (TagCategoryUseCase.tag() -> *Repository.set_category())
+            # y podría reabrir una conexión a sirius.db mientras se cierra o se
+            # reemplaza el fichero. Esperar aquí a category_tagging_idle en vez
+            # de cerrar las conexiones ahora mismo; no se toca el guardado, que
+            # sigue siendo asíncrono.
+            self._set_backup_feedback(
+                self.restore_backup_status_label,
+                BACKUP_STATE_IN_PROGRESS,
+                "Esperando a que termine el etiquetado automático de categorías...",
+            )
+            self.knowledge_widget.category_tagging_idle.connect(
+                lambda: self._close_connections_and_start_restore(backup_path, password),
+                Qt.ConnectionType.SingleShotConnection,
+            )
+            return
+
+        self._close_connections_and_start_restore(backup_path, password)
+
+    def _close_connections_and_start_restore(self, backup_path: Path, password: str) -> None:
         self._set_backup_feedback(
             self.restore_backup_status_label, BACKUP_STATE_IN_PROGRESS, "Restaurando..."
         )
