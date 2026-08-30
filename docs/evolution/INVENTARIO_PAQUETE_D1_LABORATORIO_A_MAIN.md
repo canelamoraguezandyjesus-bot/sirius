@@ -1,7 +1,13 @@
 # Inventario del paquete D1: del laboratorio (`evidence/adr001-spikes`) a `main`
 
-Incidencia #459 (Work ID `WI-20260830-170933`). Este documento es **inventario, no
-autorización**: no cambia ninguna decisión ni activa nada. Existe para que nunca más se
+**Instantánea de cierre con fecha 2026-08-30, de un solo uso.** Este documento es
+**inventario, no autorización**: no cambia ninguna decisión ni activa nada, y **no es un
+registro vivo que haya que mantener** — no adquiere ninguna obligación de actualización
+futura; el registro continuo de lo que se hace lo llevan el diario del motor y las
+incidencias. Carácter de acta puntual según aclaración del propietario en la incidencia #459
+(comentario del 2026-08-30T17:12:29Z).
+
+Incidencia #459 (Work ID `WI-20260830-170933`). Existe para que nunca más se
 descubra por sorpresa una pieza del laboratorio que el paquete D1 necesitaba — ya pasó dos
 veces: el tratamiento léxico de consultas que ningún documento enumeraba (incidencia #455,
 diagnosticado como ADR-108 pero sin existir ese ADR en el registro — véase
