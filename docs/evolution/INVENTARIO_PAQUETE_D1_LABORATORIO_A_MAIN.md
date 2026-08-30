@@ -12,7 +12,9 @@ descubra por sorpresa una pieza del laboratorio que el paquete D1 necesitaba —
 veces: el tratamiento léxico de consultas que ningún documento enumeraba (incidencia #455,
 diagnosticado como ADR-108 pero sin existir ese ADR en el registro — véase
 [Nota sobre ADR-108](#nota-sobre-adr-108) más abajo) y los campos de petición por caso del
-banco (ADR-110, borrador sin fusionar).
+banco (ADR-110, fusionado como fichero en la PR #458 el 2026-08-30T19:53:47Z, aunque su
+campo `Estado` interno siga en `PROPUESTO` — son dos afirmaciones distintas, ver
+[Nota sobre una cita desactualizada en ADR-110](#nota-sobre-una-cita-desactualizada-en-adr-110)).
 
 ## 0. Qué es el paquete D1, y cómo se construyó este inventario
 
@@ -34,9 +36,16 @@ traduce esa decisión a los encargos M7–M12 (§8).
 - `main` en el commit `5c593b55c281c57573c59a04d9cf93efecd4be45` (el mismo commit que cita
   `tests/acceptance/fixtures/evidence_bank_47_casos.json:5` como fuente, coincidencia
   verificada, no asumida).
-- La PR abierta #458 (rama `feature/457-motor-por-etapas-portado-adr109`, **sin fusionar**)
-  se leyó también, porque contiene trabajo ya escrito pero todavía no incorporado a `main` —
-  necesario para no declarar «no existe» algo que ya está escrito y en revisión.
+- La PR #458 (rama `feature/457-motor-por-etapas-portado-adr109`) se leyó también: al
+  construirse la comparación original de este inventario seguía abierta, sin fusionar, y
+  contenía trabajo ya escrito pero todavía no incorporado a `main` — necesario para no
+  declarar «no existe» algo que ya estaba escrito y en revisión. La PR #458 se fusionó a
+  `main` en el commit `05dbee9922c01f4271f83cf912f49b03b3391857` (2026-08-30T19:53:47Z,
+  `gh pr view 458 --json mergedAt,mergeCommit`) mientras este documento seguía en revisión.
+  Esta ronda de corrección (CLAUDE-REVISOR-INDEP-001, incidencia #459) reverifica contra
+  `main` en ese commit cada fila que citaba la PR #458 como «abierta, sin fusionar» y
+  reclasifica a **PORTADO**, citando el fichero real de `main`, las que efectivamente viven
+  ahí hoy.
 
 **Cada afirmación comprobable cita fichero y línea.** Donde una cita de un ADR existente no
 coincidió con lo que este inventario verificó directamente sobre el código, se declara la
@@ -74,22 +83,23 @@ el propietario la confirme o la corrija).
 
 | Módulo / pieza del laboratorio | Estado | Dónde vive en `main` / PR |
 |---|---|---|
-| `lexical.py` — `VACIAS`, `plegar`, `tokenizar`, `terminos_significativos`, `raiz` (`RAIZ_MINIMA=4`), `variantes` (`lexical.py:26-219`, rama `evidence/adr001-spikes`; rango aproximado y no exclusivo — dentro de él conviven `MARCADORES_NEGACION`/`MARCADORES_CONDICION` y los ayudantes privados de `polaridad_negativa`, que la fila siguiente cita aparte como PENDIENTE con su propio rango) | **PORTADO** | `src/sirius/adapters/persistence/lexical_query_treatment.py:31-186` — PR #456 (fusionada, commit `c6e34a3`/`5c593b5`) |
-| `lexical.py` — `MARCADORES_NEGACION` (115-126), `MARCADORES_CONDICION` (128-137), `polaridad_negativa` (222-274), `condicion_declarada` (276-286), `sujeto_estructural` (288-298), `solapamiento`/`comparten_estructura` (300-316), `ordenar_estable` (318-329) | **PENDIENTE** | Escrito en PR #458 (rama `feature/457-motor-por-etapas-portado-adr109`, **abierta, sin fusionar**), que amplía el mismo `lexical_query_treatment.py` con `MARCADORES_NEGACION`, `MARCADORES_CONDICION`, `polaridad_negativa`, `condicion_declarada`, `sujeto_estructural`, `ordenar_estable`. No está en `main` hoy (verificado: `grep -n "^def " src/sirius/adapters/persistence/lexical_query_treatment.py` solo devuelve `plegar`, `tokenizar`, `terminos_significativos`, `raiz`, `variantes`). |
-| `candidate.py` — `CandidatoA` (`candidate.py:68-345`) | **PENDIENTE** | Escrito en PR #458 como `sirius.adapters.persistence.staged_engine_candidate` (nombre citado en el propio diff de la PR); no existe en `main` (`git ls-tree HEAD -- src/sirius/adapters/persistence/ | grep staged` no devuelve nada). |
+| `lexical.py` — `VACIAS`, `plegar`, `tokenizar`, `terminos_significativos`, `raiz` (`RAIZ_MINIMA=4`), `variantes` (`lexical.py:26-219`, rama `evidence/adr001-spikes`; rango aproximado y no exclusivo — dentro de él conviven `MARCADORES_NEGACION`/`MARCADORES_CONDICION` y los ayudantes privados de `polaridad_negativa`, que las dos filas siguientes citan aparte con su propio rango) | **PORTADO** | `src/sirius/adapters/persistence/lexical_query_treatment.py:31-186` — PR #456 (fusionada, commit `c6e34a3`/`5c593b5`) |
+| `lexical.py` — `MARCADORES_NEGACION` (115-126), `MARCADORES_CONDICION` (128-137), `polaridad_negativa` (222-274), `condicion_declarada` (276-286), `sujeto_estructural` (288-298), `ordenar_estable` (318-329) | **PORTADO** | `src/sirius/adapters/persistence/lexical_query_treatment.py:159-169` (`MARCADORES_NEGACION`), `:172-181` (`MARCADORES_CONDICION`), `:237-273` (`polaridad_negativa`), `:276-285` (`condicion_declarada`), `:288-294` (`sujeto_estructural`), `:297-299` (`ordenar_estable`) — PR #458 (fusionada, commit `05dbee9`, 2026-08-30T19:53:47Z). |
+| `lexical.py` — `solapamiento`/`comparten_estructura` (300-316) | **PENDIENTE (bajo esos nombres)** | No existen esas dos funciones en `main` hoy, tampoco en `lexical_query_treatment.py` de la PR #458 fusionada (verificado: `git grep -n 'def solapamiento\|def comparten_estructura'` no devuelve nada). La lógica de agrupar por estructura compartida sí se rediseñó y se portó, pero como `agrupar_equivalentes`/`_clave_de_equivalencia` en `src/sirius/domain/staged_engine_grouping.py` (ver fila `grouping.py` en §1.2, **PORTADO**), no como funciones literales de `lexical_query_treatment.py`. |
+| `candidate.py` — `CandidatoA` (`candidate.py:68-345`) | **PORTADO** | `src/sirius/adapters/persistence/staged_engine_candidate.py:51` (clase `CandidatoLexicoEstructurado`, el destino de puerto de `CandidatoA`) — PR #458 (fusionada, commit `05dbee9`). |
 
 ### 1.2 Capa común (`candidates/common/`)
 
 | Módulo | Estado | Dónde vive en `main` / PR |
 |---|---|---|
-| `contracts.py` (686 líneas: `Peticion`, `Candidata`, `ItemCanonico`, `EjesDeclarados`, `PlanoComun`, ...) | **PENDIENTE** | PR #458 → `sirius.domain.staged_engine_contracts` (no fusionada). |
-| `gates.py` (406 líneas: `_g1`..`_g10` líneas 100-287, `aplicar_previas` 292-303, `aplicar_g11` **306-323**, `aplicar_g12` 356+) | **PENDIENTE** | PR #458 → `sirius.domain.staged_engine_gates` (no fusionada). Las doce puertas `G1-G12`. |
-| `grouping.py` (248 líneas: `deduplicar_por_identidad:84`, `agrupar_equivalentes:170`) | **PENDIENTE** | PR #458 → `sirius.domain.staged_engine_grouping` (no fusionada). |
-| `stops.py` (172 líneas: criterios de parada `S1`-`S7`, `evaluar_suficiencia:71`) | **PENDIENTE** | PR #458 → `sirius.domain.staged_engine_stops` (no fusionada; dependencia directa de `engine.py`, no nombrada por separado en el objetivo de la incidencia #457 pero necesaria para que el motor funcione, según el propio borrador de ADR-110). |
-| `trace.py` (308 líneas: `Traza`, `explicar:213`, `fallos_de_minimizacion:264`) | **PENDIENTE** | PR #458 → `sirius.domain.staged_engine_trace` (no fusionada; misma razón que `stops.py`). |
-| `engine.py` (400 líneas: `recuperar:134`, motor por etapas `E0`-`E5`) | **PENDIENTE** | PR #458 → `sirius.domain.staged_engine` (no fusionada). |
+| `contracts.py` (686 líneas: `Peticion`, `Candidata`, `ItemCanonico`, `EjesDeclarados`, `PlanoComun`, ...) | **PORTADO** | `src/sirius/domain/staged_engine_contracts.py` (577 líneas) — PR #458 (fusionada, commit `05dbee9`, 2026-08-30T19:53:47Z). |
+| `gates.py` (406 líneas: `_g1`..`_g10` líneas 100-287, `aplicar_previas` 292-303, `aplicar_g11` **306-323**, `aplicar_g12` 356+) | **PORTADO** | `src/sirius/domain/staged_engine_gates.py` (347 líneas: `_g1`:101..`_g10`:233, `aplicar_previas`:243, `aplicar_g11`:260, `aplicar_g12`:304) — PR #458 (fusionada, commit `05dbee9`). Las doce puertas `G1-G12`. |
+| `grouping.py` (248 líneas: `deduplicar_por_identidad:84`, `agrupar_equivalentes:170`) | **PORTADO** | `src/sirius/domain/staged_engine_grouping.py` (233 líneas: `deduplicar_por_identidad:79`, `agrupar_equivalentes:162`) — PR #458 (fusionada, commit `05dbee9`). |
+| `stops.py` (172 líneas: criterios de parada `S1`-`S7`, `evaluar_suficiencia:71`) | **PORTADO** | `src/sirius/domain/staged_engine_stops.py` (159 líneas: `evaluar_suficiencia:67`) — PR #458 (fusionada, commit `05dbee9`; dependencia directa de `engine.py`, no nombrada por separado en el objetivo de la incidencia #457 pero necesaria para que el motor funcione, según ADR-110). |
+| `trace.py` (308 líneas: `Traza`, `explicar:213`, `fallos_de_minimizacion:264`) | **PORTADO** | `src/sirius/domain/staged_engine_trace.py` (332 líneas: `Traza:128`, `explicar:235`, `fallos_de_minimizacion:290`) — PR #458 (fusionada, commit `05dbee9`; misma razón que `stops.py`). |
+| `engine.py` (400 líneas: `recuperar:134`, motor por etapas `E0`-`E5`) | **PORTADO** | `src/sirius/domain/staged_engine.py` (487 líneas: `recuperar:253`) — PR #458 (fusionada, commit `05dbee9`). |
 | `port.py` — `PuertoSqlite.por_termino_lexico` (`port.py:434-455`): el **mecanismo** (citar variantes de FTS5 y combinarlas con `OR` contra `knowledge_fts`) | **PORTADO** (el mecanismo, no el módulo) | Reescrito, literal en su lógica, dentro de `sanitize_fts5_query` — `src/sirius/adapters/persistence/sqlite_knowledge_search_repository.py:27-64` — PR #456 (fusionada). El docstring de `lexical_query_treatment.py:1-17` documenta esta procedencia. |
-| `port.py` — el resto de `PuertoSqlite` (640 líneas: `ConsultaRegistrada`, `RegistroDeConsultas`, resto de métodos de consulta) | **PENDIENTE** | PR #458 → `sirius.adapters.persistence.staged_engine_port` (`PuertoDeRecuperacion`, adaptado al acceso `sqlalchemy.text`/`session_scope` ya existente; no toca el contrato de `KnowledgeSearchRepository`). No fusionada. |
+| `port.py` — el resto de `PuertoSqlite` (640 líneas: `ConsultaRegistrada`, `RegistroDeConsultas`, resto de métodos de consulta) | **PORTADO (adaptado, no literal)** | `src/sirius/adapters/persistence/staged_engine_port.py` (349 líneas, clase `StagedEnginePort:163`, adaptada al acceso `sqlalchemy.text`/`session_scope` ya existente; no toca el contrato de `KnowledgeSearchRepository`) — PR #458 (fusionada, commit `05dbee9`). `ConsultaRegistrada`/`RegistroDeConsultas` no aparecen bajo esos nombres (`git grep` no devuelve nada); el módulo portado resuelve la misma responsabilidad con otra forma interna, no es un calco literal del laboratorio. |
 | `derived.py` (inventario/borrado/reconstrucción de las tablas sombra FTS5 del corpus experimental, DDL leído de `sqlite_master`) | **NO SE PORTA** | Decisión del propietario en la incidencia #459 (comentario del 2026-08-30T18:46:44Z): `derived.py` se nombra explícitamente entre las «exploraciones sin resultado publicado» que se quedan en el laboratorio. Razonamiento técnico de apoyo (no la fuente de la decisión): infraestructura de reconstrucción específica del corpus experimental del laboratorio; Sirius 0.1 tiene sus propias migraciones canónicas (p. ej. `61be4bb269bf`, citada por el propio `derived.py:11` del laboratorio) y no necesita reconstruir tablas sombra por fuera de Alembic. |
 | `neutrality.py` (autocomprobación: la capa común no nombra candidatos, no tiene señal vectorial, no coordina espacios tardíos simultáneamente, no abre red) | **NO SE PORTA** | Decisión del propietario en la incidencia #459 (comentario del 2026-08-30T18:46:44Z): las «comprobaciones de neutralidad del experimento» se nombran explícitamente entre lo que se queda en el laboratorio. Razonamiento técnico de apoyo (no la fuente de la decisión): herramienta metodológica del propio laboratorio para verificar la neutralidad de su capa común entre candidatos A/B/C/D; no aplica a producto, donde no hay «candidatos» compitiendo (`grep -rn neutrality docs/decisions/` no devuelve nada en ningún ADR fusionado). |
 
@@ -97,20 +107,20 @@ el propietario la confirme o la corrija).
 
 | Fichero | Estado | Dónde vive en `main` / PR |
 |---|---|---|
-| `cases_v0_5.json` — bloque `instanciacion` (`consulta`, `ambito`, `modo`, `permiso`, `cardinalidad`, `limite`, `tiempo_objetivo` por caso) | **PARCIALMENTE PORTADO** | `consulta` y `ambito` ya extraídos, caso a caso, a `tests/acceptance/fixtures/evidence_bank_47_casos.json` (verificado: el primer caso, `B04-CA-01`, solo trae `id`/`consulta`/`ambito`/`resultado_esperado` — ni `modo`, ni `permiso`, ni `cardinalidad`, ni `limite`) — PR #446 (fusionada), documentado en `docs/decisions/ADR-104-...md:52-61`. `modo`/`permiso`/`cardinalidad`/`limite` — **PENDIENTE**, diagnosticado por el borrador de ADR-110 (PR #458, sin fusionar) como la pieza que falta para reproducir el suelo D1. |
+| `cases_v0_5.json` — bloque `instanciacion` (`consulta`, `ambito`, `modo`, `permiso`, `cardinalidad`, `limite`, `tiempo_objetivo` por caso) | **PARCIALMENTE PORTADO** | `consulta` y `ambito` ya extraídos, caso a caso, a `tests/acceptance/fixtures/evidence_bank_47_casos.json` (verificado: el primer caso, `B04-CA-01`, solo trae `id`/`consulta`/`ambito`/`resultado_esperado` — ni `modo`, ni `permiso`, ni `cardinalidad`, ni `limite`) — PR #446 (fusionada), documentado en `docs/decisions/ADR-104-...md:52-61`. `modo`/`permiso`/`cardinalidad`/`limite` — **PENDIENTE** (verificado: `grep -c '"modo"\|"permiso"\|"cardinalidad"\|"limite"' tests/acceptance/fixtures/evidence_bank_47_casos.json` → 0), diagnosticado por ADR-110 (fusionado como fichero en PR #458, con su `Estado` interno aún en `PROPUESTO`) como la pieza que falta para reproducir el suelo D1. |
 | `references_v0_5.json` — `adjudicacion.dominio.resultado_esperado` | **PORTADO** | `resultado_esperado` en `evidence_bank_47_casos.json` — PR #446, `ADR-104:60-61`. |
-| `references_v0_5.json` — `adjudicacion.dominio.limite` (límite duro/objetivo por caso, leído en `experiments/adr002/round/cases.py:349-350` del laboratorio) | **PENDIENTE** | No extraído; PENDIENTE según el borrador de ADR-110. |
-| `conformance_corpus_v0_6.json` (97 ítems del canon: id, tipo, proyecto, criticidad...) | **PARCIALMENTE PORTADO** | Los 97 ítems base ya se citan como fuente en `evidence_bank_47_casos.json:5-10` (PR #446); los ejes `ejes_p2` completos (polaridad, condición, ámbito, sensibilidad, autoridad, marcas de no uso, vigencia, procedencia, `property_key`) **no** están en `main` hoy (verificado: `grep -c ejes_p2 tests/acceptance/fixtures/evidence_bank_47_casos.json` → 0). Ese enriquecimiento solo existe en el borrador de PR #458, sin fusionar. |
+| `references_v0_5.json` — `adjudicacion.dominio.limite` (límite duro/objetivo por caso, leído en `experiments/adr002/round/cases.py:349-350` del laboratorio) | **PENDIENTE** | No extraído; PENDIENTE según ADR-110 (fusionado como fichero en PR #458, `Estado` interno aún `PROPUESTO`). |
+| `conformance_corpus_v0_6.json` (97 ítems del canon: id, tipo, proyecto, criticidad...) | **PORTADO** | Los 97 ítems base ya se citan como fuente en `evidence_bank_47_casos.json:5-10` (PR #446); los ejes `ejes_p2` completos (polaridad, condición, ámbito, sensibilidad, autoridad, marcas de no uso, vigencia, procedencia, `property_key`) sí están en `main` hoy (verificado: `grep -c ejes_p2 tests/acceptance/fixtures/evidence_bank_47_casos.json` → 98). Ese enriquecimiento se portó en PR #458 (fusionada, commit `05dbee9`, 2026-08-30T19:53:47Z); el propio fixture (línea 14) documenta que se añadió en el mismo commit `dfdcdaf` para que el arnés del banco pueda declarar los ejes que las puertas G4/G8/G9/G11 necesitan. |
 | `applied_criticality_v0_1.json` | **PORTADO** | `criticidad.razon_segura` en `evidence_bank_47_casos.json` — PR #446, `ADR-104:80,131-133`. Nunca se lee `criticidad.fuente` (contiene un identificador de caso) ni `criticidad.razon` cruda. |
-| `property_keys_v0_2.json` | **PENDIENTE** | Solo en el borrador de PR #458 (campo `property_key` por ítem, parte de `ejes_p2`). |
+| `property_keys_v0_2.json` | **PORTADO** | Campo `property_key` por ítem, parte de `ejes_p2`, en `evidence_bank_47_casos.json` (verificado: `grep -c property_key tests/acceptance/fixtures/evidence_bank_47_casos.json` → 99) — PR #458 (fusionada, commit `05dbee9`). |
 | `schema_v0_5.py`, `build_corpus_v0_5.py`, `validate_corpus_v0_5.py`, `test_corpus_contract_v0_5.py`, `canonical_source_v0_4.py` (reutilizado por `build_corpus_v0_5.py:39`; no existe `canonical_source_v0_5.py`), `benchmark_manifest_v0_5.json` | **NO SE PORTA** | Decisión del propietario en la incidencia #459 (comentario del 2026-08-30T18:46:44Z): la «maquinaria de construcción y validación del corpus» se nombra explícitamente entre lo que se queda en el laboratorio. Razonamiento técnico de apoyo (no la fuente de la decisión): `main` no reconstruye el corpus, lo recibió ya calculado, sin modificar, tal como exige D1 (`ADR-104`). Esta fila, y por tanto esta decisión, cubren únicamente los ficheros `v0_5`/`v0_4` nombrados arriba; la familia `v0_6` equivalente no está nombrada por la decisión del propietario ni se enumera en esta fila (ver nota debajo sobre por qué `v0_6` queda fuera). |
 
 Nota: `cases_v0_5.json` es la última versión de la familia de instanciación de casos —no
 existe `cases_v0_6.json` en el laboratorio (verificado por `git ls-tree`)—, así que es la
 «familia vigente» que pide el objetivo de la incidencia. Las versiones `v0_6` de
 `schema.py`/`build_corpus.py`/`conformance_corpus.json`/`benchmark_manifest.json` sí existen,
-pero solo `conformance_corpus_v0_6.json` es citado como fuente por un documento fusionado o
-en borrador (`ADR-104`, el borrador de ADR-110); el resto de la familia `v0_6` no se cita en
+pero solo `conformance_corpus_v0_6.json` es citado como fuente por un documento fusionado
+(`ADR-104`, ADR-110); el resto de la familia `v0_6` no se cita en
 ningún sitio como relevante al paquete D1 y no se enumera aquí como pendiente por falta de
 esa referencia — si el propietario confirma que sí lo es, esta fila debería ampliarse.
 
@@ -118,7 +128,7 @@ esa referencia — si el propietario confirma que sí lo es, esta fila debería 
 
 | Módulo | Estado | Dónde vive en `main` / PR |
 |---|---|---|
-| `round/cases.py` — `_traducir` (`cases.py:313-401`, construcción de la `Peticion` en `334-366`) y `CARDINALIDAD_SIN_DECLARAR` (`cases.py:104`) | **PENDIENTE** | Sin destino en `main`. El borrador de ADR-110 (PR #458, sin fusionar) lo identifica como la causa raíz de que la ronda del laboratorio alcance 29/47 y el arnés del banco de `main` (política uniforme, sin petición por caso) no pase de 11/47: «la petición por caso ... `round/cases.py:334-366` (`_traducir`) construye a partir de dos ficheros ... ninguno de esos dos ficheros, ni el traductor que los combina, está entre lo que el alcance permitido de la incidencia #457 autoriza portar». |
+| `round/cases.py` — `_traducir` (`cases.py:313-401`, construcción de la `Peticion` en `334-366`) y `CARDINALIDAD_SIN_DECLARAR` (`cases.py:104`) | **PENDIENTE** | Sin destino en `main` (verificado hoy contra `main` en `05dbee9`: `git grep -l 'CARDINALIDAD_SIN_DECLARAR\|_traducir' -- src/` no devuelve nada). ADR-110 (fusionado como fichero en PR #458 — commit `05dbee9`, 2026-08-30T19:53:47Z —, con su `Estado` interno aún en `PROPUESTO`) lo identifica como la causa raíz de que la ronda del laboratorio alcance 29/47 y el arnés del banco de `main` (política uniforme, sin petición por caso) no pase de 11/47: «la petición por caso ... `round/cases.py:334-366` (`_traducir`) construye a partir de dos ficheros ... ninguno de esos dos ficheros, ni el traductor que los combina, está entre lo que el alcance permitido de la incidencia #457 autoriza portar». |
 | `round/execute_round.py`, `round_protocol.py`, `participants.py`, `metrics.py`, `closure.py`, `levels.py`, `execute_levels.py`, `discriminant.py`, `m2_marking.py`, `readjudication.py`, `execute_m2.py`, `run_round.py` | **NO SE PORTA** | Protocolo y arnés de la «ronda primaria de ADR-002»: preinscripción (`round_protocol.py`), ejecución real con cinco participantes T0 (control, Sirius 0.1 sin motor) + A + B + C + D (`participants.py:32-46`, `execute_round.py`), métricas del §9 (`metrics.py`) y adjudicación de cierre (`closure.py`). Este arnés es el que produjo las cifras que fijaron el suelo D1 (29/47 aciertos exactos, tabla de PR #117). No portarlo es consecuencia del diseño ya aprobado, no una inferencia de este inventario: el encargo M7 de la Arquitectura Técnica (`SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:1283-1297`) define el arnés de producto sustituto — `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`, que porta el corpus y lo ejecuta contra el pipeline real de `main` (`rank()`/`_ejecutar_banco`, `test_pa_0_2_rec_01_banco_evidencia.py:227`; PR #446/#456) — y M11 (líneas 1387-1424) ordena reejecutar justamente ese arnés sustituto, no el de la ronda primaria, para confirmar el suelo D1. `docs/evolution/STATUS.md:119-132` confirma que no queda ninguna premisa pendiente para ordenar los encargos M1-M12 al Work Engine. Aunque ningún ADR enumere estos doce nombres uno a uno, la sustitución explícita por un arnés distinto en el diseño ya aprobado es la decisión, no su ausencia. |
 
 ### 1.5 Candidatos descartados y mecanismos no adoptados
@@ -153,7 +163,7 @@ esta incidencia) y los ficheros `resultado_modelo_local*.json` en la raíz de
 congelada: seis mediciones «conservadas enteras y ninguna pisada» (PR #117, sección
 «Custodia de la evidencia»; el arnés del laboratorio «se niega a sobrescribir un artefacto ya
 medido»). Nunca se portan como código — se citan como fuente de un hecho medido (así los cita
-`ADR-104`, `ADR-109` y el borrador de `ADR-110`), nunca se copian ni se ejecutan en `main`.
+`ADR-104`, `ADR-109` y `ADR-110`), nunca se copian ni se ejecutan en `main`.
 
 ## 2. Clasificador y filtro (M8–M10) — ya portados, fuera de `candidates/common/`
 
@@ -213,18 +223,24 @@ no como decisión vigente.
 
 ## Nota sobre una cita desactualizada en ADR-110
 
-El borrador de ADR-110 (PR #458, sin fusionar), en su diagnóstico de `G11`, cita
+ADR-110, en su diagnóstico de `G11`, cita
 `experiments/adr002/candidates/common/gates.py:262-278`. Verificado a máquina sobre el commit
 `dfdcdaff04dcba10939cc0b0569c55b6a636296f` de `evidence/adr001-spikes`: esas líneas
 corresponden a la función `_g9` (sensibilidad), no a `aplicar_g11`. `aplicar_g11` vive en
-`gates.py:306-323`, y su cuerpo sí coincide con lo que ADR-110 describe («solo rechaza una
+`gates.py:306-323` del laboratorio (portado a `src/sirius/domain/staged_engine_gates.py:260`
+en `main`), y su cuerpo sí coincide con lo que ADR-110 describe («solo rechaza una
 lectura incompleta, no compara polaridad/condición con la consulta»:
 `if not lectura.sujeto.strip() or not lectura.medio.strip(): descartes.append(...)`). Este
-inventario usa la línea verificada (`306-323`), no la citada en el borrador, y dado que
-ADR-110 sigue en estado `PROPUESTO` (sin fusionar), esta discrepancia queda señalada aquí en
-vez de corregida en el propio ADR — corregirlo no está en el alcance de esta incidencia
-documental. El resto de citas de ADR-110 verificadas por este inventario (`port.py:434-455`,
-`round/cases.py:334-366` y `101-103`) sí coinciden con el código actual.
+inventario usa la línea verificada (`306-323`), no la citada en el ADR. Nótese que aquí
+conviven dos afirmaciones distintas sobre ADR-110 que no deben confundirse: el **fichero**
+`docs/decisions/ADR-110-...md` ya vive fusionado en `main` desde la PR #458 (commit `05dbee9`,
+2026-08-30T19:53:47Z), pero su campo interno **`Estado` sigue en `PROPUESTO`** — la decisión
+que documenta no está aprobada, aunque el texto ya esté incorporado al repositorio. Por eso
+esta discrepancia de cita queda señalada aquí en vez de corregida en el propio ADR — corregir
+el contenido de ADR-110 no está en el alcance de esta incidencia documental, que solo
+inventaría dónde vive cada pieza, no aprueba decisiones. El resto de citas de ADR-110
+verificadas por este inventario (`port.py:434-455`, `round/cases.py:334-366` y `101-103`) sí
+coinciden con el código actual.
 
 ## Resumen por estado
 
@@ -232,13 +248,17 @@ documental. El resto de citas de ADR-110 verificadas por este inventario (`port.
   PR #456), el mecanismo de `por_termino_lexico` dentro de `sanitize_fts5_query` (PR #456),
   `consulta`/`ambito`/`resultado_esperado`/`criticidad.razon_segura` del banco de 47 casos
   (PR #446), el clasificador de categoría (PR #448), el índice de categoría (PR #450), el
-  filtro de relevancia con Ollama (PR #452).
-- **PENDIENTE**: el resto del tratamiento léxico (polaridad/condición/marcadores), el
-  candidato A completo, toda la capa común (`contracts`/`gates`/`grouping`/`stops`/`trace`/
-  `engine`/resto de `port`) — todo escrito y en revisión en la PR #458, sin fusionar —, los
-  campos de petición por caso (`modo`/`permiso`/`cardinalidad`/`limite`) y `ejes_p2`/
-  `property_key` del banco, el traductor `round/cases.py`, y la integración M11 (PR #454,
-  bloqueada).
+  filtro de relevancia con Ollama (PR #452); y, desde la fusión de la PR #458 (commit
+  `05dbee9`, 2026-08-30T19:53:47Z, incidencia #457/ADR-109/ADR-110): el resto del tratamiento
+  léxico (`MARCADORES_NEGACION`/`MARCADORES_CONDICION`/`polaridad_negativa`/
+  `condicion_declarada`/`sujeto_estructural`/`ordenar_estable`), el candidato A
+  (`CandidatoLexicoEstructurado`), toda la capa común (`contracts`/`gates`/`grouping`/`stops`/
+  `trace`/`engine`/resto de `port`, ver §1.2) y `ejes_p2`/`property_key` del banco de 47 casos
+  (ver §1.3).
+- **PENDIENTE**: `solapamiento`/`comparten_estructura` bajo esos nombres literales (la lógica
+  equivalente se rediseñó como `agrupar_equivalentes` dentro de `grouping.py`, ya PORTADO —
+  ver §1.1), los campos de petición por caso del banco (`modo`/`permiso`/`cardinalidad`/
+  `limite`), el traductor `round/cases.py`, y la integración M11 (PR #454, bloqueada).
 - **NO SE PORTA**: candidatos B, C y D; la ampliación de consulta al guardar; la fusión
   híbrida RRF; el modo «compuerta» del filtro; el arnés y protocolo de la ronda primaria
   (`round/execute_round.py` y familia, excepto `cases.py`) — sustituido en el diseño ya
