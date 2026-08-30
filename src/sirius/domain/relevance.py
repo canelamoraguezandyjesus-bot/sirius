@@ -33,7 +33,11 @@ M9 (SIRIUS-ARQ-0.2 §6.2, D7) adds a fourth structural signal,
 ``category_match``, inserted after the FTS5 hit and before recency in
 ``_sort_key`` — weaker than an explicit query match, because a candidate's
 category comes from a save-time classification, not from the query itself.
-``category_matches_query`` computes it deterministically, without a model.
+``category_matches_query`` computes it deterministically, without a model. It
+also widens "elemento general no relacionado" (``is_related``): a candidate
+with neither a matching subject nor an FTS5 hit can still be related through
+a category match alone, so it stays found by that signal even when the other
+two are absent.
 """
 
 from __future__ import annotations
@@ -115,9 +119,12 @@ class RankedKnowledge:
     def is_related(self) -> bool:
         """Whether this candidate is related to the query at all. A
         ``False`` here is S7.5's other negative term, "elemento general no
-        relacionado" — a matching subject or an actual FTS5 hit, never
-        project membership or recency alone."""
-        return self.subject_matches_query or self.fts_match
+        relacionado" — a matching subject, an actual FTS5 hit, or (M9,
+        SIRIUS-ARQ-0.2 §6.2) a category match, never project membership or
+        recency alone. ``category_match`` can only ever add a candidate here,
+        never remove one the other two already keep: it stays ``False`` for
+        every real candidate while D7 point 6's activation gate is closed."""
+        return self.subject_matches_query or self.fts_match or self.category_match
 
 
 def subject_matches_query(subject: str, query_text: str) -> bool:
@@ -158,10 +165,10 @@ def category_matches_query(
     normalized_query = query_text.strip().casefold()
     if not normalized_query:
         return False
-    activated = {term for term in vocabulary if term.casefold() in normalized_query}
+    activated = {term.casefold() for term in vocabulary if term.casefold() in normalized_query}
     if len(activated) != 1:
         return False
-    return category in activated
+    return category.casefold() in activated
 
 
 def _synthetic_id(candidate: RankedKnowledge) -> int:

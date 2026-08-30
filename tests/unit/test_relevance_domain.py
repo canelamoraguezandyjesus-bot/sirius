@@ -296,6 +296,12 @@ def test_category_matches_query_is_false_for_a_blank_query(query_text: str) -> N
     assert not category_matches_query("trabajo", query_text, _VOCABULARY)
 
 
+def test_category_matches_query_is_case_insensitive_against_the_persisted_category() -> None:
+    # The persisted category (SetCategoryUseCase accepts any string, D7 punto
+    # 3) may differ in capitalization from the closed vocabulary's own term.
+    assert category_matches_query("Trabajo", "hablemos de Trabajo hoy", _VOCABULARY)
+
+
 # --- Criterio 3.5 (M9, §6.2): category_match entra después de fts_match y ---
 # --- antes de la recencia en la tupla de orden. ---
 
@@ -339,3 +345,24 @@ def test_a_category_match_still_outranks_a_more_recent_non_match() -> None:
     result = rank_relevant_knowledge([newer_without_category, older_with_category])
 
     assert result == (older_with_category, newer_without_category)
+
+
+# --- Criterio 3.6 (M9, §6.2): category_match también amplía "relacionado" ---
+# --- (is_related), no solo el orden — un candidato puede encontrarse solo ---
+# --- por su categoría, sin asunto ni FTS5. ---
+
+
+def test_a_category_match_alone_makes_an_otherwise_unrelated_candidate_related() -> None:
+    candidate = _ranked_memory(_memory(1), fts_match=False, category_match=True)
+
+    assert rank_relevant_knowledge([candidate]) == (candidate,)
+
+
+def test_a_category_match_alone_is_not_enough_when_the_gate_is_closed() -> None:
+    # category_match is always False for every real candidate while D7
+    # punto 6's activation gate stays closed (application layer) — this
+    # documents the domain side of that: without any of the three signals,
+    # a candidate stays excluded exactly like before M9.
+    candidate = _ranked_memory(_memory(1), fts_match=False, category_match=False)
+
+    assert rank_relevant_knowledge([candidate]) == ()
