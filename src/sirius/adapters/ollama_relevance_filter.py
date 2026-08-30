@@ -56,8 +56,11 @@ class OllamaRelevanceFilterAdapter:
         if not candidates:
             return candidates
         try:
+            # Absolute URL, not a path relative to ``self._client``'s own
+            # ``base_url``: an injected client's ``base_url`` must never be
+            # able to redirect the actual request away from localhost.
             response = self._client.post(
-                "/api/generate",
+                f"{_OLLAMA_LOCAL_BASE_URL}/api/generate",
                 json={
                     "model": self._model,
                     "prompt": _build_prompt(query_text, candidates),
@@ -106,7 +109,9 @@ def _parse_kept_positions(payload: object, candidate_count: int) -> set[int]:
         msg = "el texto del modelo no es un objeto JSON"
         raise ValueError(msg)
     kept = decision.get("keep")
-    if not isinstance(kept, list) or not all(isinstance(value, int) for value in kept):
+    if not isinstance(kept, list) or not all(
+        isinstance(value, int) and not isinstance(value, bool) for value in kept
+    ):
         msg = "'keep' no es una lista de enteros"
         raise ValueError(msg)
     if any(value < 1 or value > candidate_count for value in kept):

@@ -171,3 +171,40 @@ def test_filter_candidates_never_targets_a_remote_host() -> None:
     assert "host" not in signature.parameters
     assert "url" not in signature.parameters
     assert "base_url" not in signature.parameters
+
+
+def test_filter_candidates_ignores_an_injected_clients_remote_base_url() -> None:
+    """§6.3's structural property, at the request level: even the test seam
+    must not let an injected ``httpx.Client`` with a remote ``base_url``
+    redirect the actual request away from localhost."""
+    candidates = (_candidate(1, "contenido"),)
+    seen_hosts: list[str | None] = []
+
+    def _handle(request: httpx.Request) -> httpx.Response:
+        seen_hosts.append(request.url.host)
+        return httpx.Response(200, json={"response": json.dumps({"keep": [1]})})
+
+    client = httpx.Client(
+        transport=httpx.MockTransport(_handle), base_url="https://servidor-remoto.example"
+    )
+    adapter = OllamaRelevanceFilterAdapter("llama3.2", client=client)
+
+    result = adapter.filter_candidates("consulta", candidates)
+
+    assert seen_hosts == ["localhost"]
+    assert result == candidates
+
+
+def test_filter_candidates_returns_candidates_unmodified_when_keep_contains_booleans() -> None:
+    """``bool`` is a subclass of ``int`` in Python; a response shaped as
+    ``{"keep": [true]}`` is well-formed JSON but not the list of integer
+    positions the contract requires, so it must fail open like any other
+    unexpected shape rather than being silently accepted as position 1."""
+    candidates = (_candidate(1, "primero"), _candidate(2, "segundo"))
+
+    def _handle(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"response": json.dumps({"keep": [True]})})
+
+    adapter = _adapter(httpx.MockTransport(_handle))
+
+    assert adapter.filter_candidates("consulta", candidates) == candidates
