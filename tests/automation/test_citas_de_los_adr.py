@@ -135,6 +135,11 @@ _ADR_112 = (
     "banco-incidencia-463-mejoran-cobertura-y-omisiones-criticas-pero-empeoran-los-"
     "elementos-de-mas-y-no-alcanzan-d1.md"
 )
+_ADR_113 = (
+    "ADR-113-el-indice-de-categoria-buscable-la-regla-de-las-criticas-original-y-la-"
+    "siembra-en-contexto-cierran-las-dos-causas-de-adr-112-pero-no-alcanzan-d1-"
+    "incidencia-465.md"
+)
 
 RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     "experiments/adr002/round/cases.py": [
@@ -203,9 +208,9 @@ RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     # congelado de una corrida concreta del experimento del laboratorio —
     # ninguna de las dos rutas siguientes se copia a Sirius; el ADR las cita
     # solo para documentar de dónde salió cada dato portado.
-    "experiments/adr002/modelo_local/filtro.py:filtrar": [_ADR_112],
-    "experiments/adr002/lateral/categoria.py": [_ADR_112],
-    "experiments/adr002/lateral/categoria.py:_pide_contexto": [_ADR_112],
+    "experiments/adr002/modelo_local/filtro.py:filtrar": [_ADR_112, _ADR_113],
+    "experiments/adr002/lateral/categoria.py": [_ADR_112, _ADR_113],
+    "experiments/adr002/lateral/categoria.py:_pide_contexto": [_ADR_112, _ADR_113],
 }
 
 

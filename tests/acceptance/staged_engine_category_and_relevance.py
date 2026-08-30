@@ -1,23 +1,25 @@
-"""Índice de categoría (M9, §6.2) y filtro de relevancia (M10, §6.3),
-conectados al arnés del banco de 47 casos — incidencia #463.
+"""Índice de categoría (M9, §6.2), filtro de relevancia (M10, §6.3) y las
+dos causas que ADR-112 dejó nombradas con fichero y línea — conectados al
+arnés del banco de 47 casos, incidencia #463 y su cierre, incidencia #465.
 
-Las dos piezas ya están portadas a `main` como código de producto, ambas
-detrás de la puerta de activación de D7 punto 6 (`category_matching_enabled`,
-`False` por defecto): `sirius.domain.relevance.category_matches_query` (M9)
-y el candado de `ContextBuilder._apply_relevance_filter`
+Las dos piezas de producto ya están portadas a `main`, ambas detrás de la
+puerta de activación de D7 punto 6 (`category_matching_enabled`, `False` por
+defecto): `sirius.domain.relevance.category_matches_query` (M9) y el candado
+de `ContextBuilder._apply_relevance_filter`
 (`src/sirius/application/context.py:239-258`, M10). Este módulo no toca
-ninguna de las dos ni la puerta que las cierra: solo las invoca, con datos del
-propio arnés, para que `_ejecutar_banco_motor_portado`
-(`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`) mida qué producen
-sobre el banco — nunca para abrir la puerta contra `Memory`/`Decision` reales.
+ninguna de las dos ni la puerta que las cierra. Lo que sí hace, únicamente en
+este arnés (nunca contra `Memory`/`Decision` reales), es reproducir la
+semántica que el laboratorio medía y que ADR-112 diagnosticó que el producto,
+tal como está aprobado, no puede reproducir sobre este banco concreto — las
+dos causas que la incidencia #465 autoriza a cerrar aquí, sin ampliar ningún
+diseño de producto.
 
-ÍNDICE DE CATEGORÍA: VOCABULARIO Y CATEGORÍA, DERIVADOS DE LA CRITICIDAD
+CAUSA 1 — ÍNDICE DE CATEGORÍA: LA «CATEGORÍA BUSCABLE» DE LA PR #117
 =========================================================================
 
 `SIRIUS-ARQ-0.2 §6.1 punto 1` fija que "el vocabulario de `category` es
-exactamente el que porta el banco de 47 casos" y que este documento "no
-inventa categorías nuevas ni las enumera". El vocabulario que el banco porta
-es el que el laboratorio ya congeló antes de medir, en
+exactamente el que porta el banco de 47 casos". El vocabulario que el banco
+porta es el que el laboratorio ya congeló antes de medir, en
 `experiments/adr002/lateral/categoria.py:72-78` (rama `evidence/adr001-spikes`,
 `VOCABULARIO`) — las cinco palabras con las que alguien pediría la única
 categoría que el laboratorio deriva de la criticidad del canon, nunca de un
@@ -31,17 +33,52 @@ criticidad" como un conjunto de sinónimos: comparan la categoría persistida
 del candidato, como cadena única, contra el **único** término del vocabulario
 que la consulta activa — `len(activated) != 1` no cuenta como activación
 (`test_category_matches_query_is_false_when_the_query_activates_more_than_one_category`,
-`tests/unit/test_relevance_domain.py`). Por eso `CATEGORIA_DE_MAXIMA_
-CRITICIDAD` aquí es literalmente `"restriccion"`, no un nombre nuevo: de las
-cinco palabras del vocabulario congelado, es la única que activa sola (sin
-`"esencial"` a la vez) en alguna consulta del banco (`B04-CA-02`, "¿Qué
-restricciones de transporte tengo?"); las otras cuatro palabras nunca
-aparecen solas en ninguna de las 47 consultas, así que asignarles la
-categoría no habría activado ninguna coincidencia. Esta es una decisión de
-este arnés, no del laboratorio (que indexaba las cinco palabras juntas sobre
-FTS5 y no exigía activación única): documentada aquí y en ADR-112 porque
-`category_matches_query` es la señal ya aprobada y no se modifica para esta
-incidencia.
+`tests/unit/test_relevance_domain.py`). Es diseño ya aprobado (PR #450, M9) y
+sigue intacto, sin tocar, detrás de la puerta — esta incidencia no lo toca.
+
+ADR-112 diagnosticó, con esa cita de fichero y línea, que esa regla de
+activación única deja sin señal a cuatro de las cinco consultas del banco que
+contienen alguna palabra del vocabulario (`B04-CA-26/31/38/44` activan
+`"esencial"` y `"restriccion"` a la vez). El laboratorio no tenía esa
+restricción: indexaba las cinco palabras juntas sobre una tabla FTS5 lateral
+(`experiments/adr002/lateral/categoria.py:construir`, `palabras_de_categoria`)
+como el **mismo contenido** para toda identidad no ordinaria, así que
+cualquier coincidencia con **cualquiera** de las cinco palabras activaba la
+categoría para todas ellas — nunca "el único término que activa la consulta".
+Esa es la pieza que PR #117 llama **la categoría buscable** ("medida, sin
+modelo... por sí sola lleva las omisiones de 11 a 5. No requiere Ollama").
+
+La incidencia #465 autoriza reproducir ESA semántica —únicamente en el
+camino de este arnés, nunca en `category_matches_query` ni en ninguna pieza
+de producto, que sigue siendo la regla estricta ya aprobada— con
+`activa_categoria_buscable`: activa la categoría si la consulta contiene
+**cualquiera** de las cinco palabras del vocabulario, sin exigir que sea la
+única. `indice_de_categoria` la usa en vez de `category_matches_query`.
+
+CAUSA 1 (CONTINUACIÓN) — LA REGLA DE LAS CRÍTICAS ORIGINAL (RF-25/RF-26)
+=========================================================================
+
+ADR-112 también diagnosticó, con cita de fichero y línea
+(`src/sirius/application/context.py:239-258`), que el candado de M10 protege
+la unión de "conservado por el filtro", "categoría de máxima criticidad" y
+"sin categoría todavía" — y que, con solo dos estados de categoría posibles
+en este banco (`"restriccion"` o `None`), esa unión cubre el 100% de los
+candidatos: el filtro de relevancia queda neutralizado por completo,
+cualquiera que sea su veredicto (`aplicar_candado`, más abajo, y
+`test_el_candado_protege_todo_candidato_de_este_banco` lo fijan como prueba).
+
+La incidencia #465 autoriza, para este arnés y en su lugar, la regla de las
+críticas ORIGINAL del laboratorio — la primera de las tres piezas que PR
+#117 declara "medida y confirmada": «si el filtro conserva algunas, no puede
+descartar una crítica [`RF-25`]; si declara que ninguna responde, ese
+veredicto se respeta entero [`RF-26`]» (`experiments/adr002/modelo_local/
+filtro.py:filtrar`, docstring del módulo y de la función). A diferencia del
+candado de M10 (que protege TODO lo no clasificado en una categoría no
+crítica, sin mirar el veredicto del filtro), esta regla solo protege lo que
+el canon ya marca como no ordinario, y solo cuando el filtro sí actuó
+seleccionando algo — nunca cuando declaró ausencia total, que se respeta sin
+rescate. `aplicar_regla_de_criticas_original` la reproduce sobre el doble
+determinista de la corrida congelada.
 
 FILTRO DE RELEVANCIA: DOBLE DETERMINISTA DE LA CORRIDA CONGELADA
 =================================================================
@@ -61,23 +98,49 @@ que puede presentarle al doble una identidad que la corrida congelada nunca
 examinó para ese caso. El doble falla abierto en ese caso exacto — la misma
 garantía contractual que `RelevanceFilterPort.filter_candidates` exige
 (`src/sirius/ports/relevance_filter.py:19-40`): nunca descarta lo que no supo
-decidir.
+decidir. `aplicar_regla_de_criticas_original` hereda esa misma apertura: una
+identidad que la corrida congelada nunca examinó para el caso pasa intacta.
 
 EL CANDADO (M10): LA MISMA UNIÓN DE TRES CONJUNTOS QUE `ContextBuilder`
 =========================================================================
 
-`aplicar_candado` reproduce exactamente la fórmula de
+`aplicar_candado` sigue reproduciendo, sin cambios, la fórmula de
 `ContextBuilder._apply_relevance_filter`
 (`src/sirius/application/context.py:239-258`): el resultado del filtro, unido
 a todo candidato de la categoría de máxima criticidad, unido a todo candidato
-sin categoría todavía. Con solo dos estados posibles de categoría en este
-arnés (`"restriccion"` o `None`, nunca una tercera categoría no crítica), el
-candado protege, por construcción, a todo candidato: no hay ningún elemento
-clasificado en una categoría no crítica al que este arnés pueda exponer el
-veredicto del filtro. Esto no es un defecto de esta incidencia: es la lectura
-literal de la fórmula aprobada sobre un banco que solo declara una categoría.
-ADR-112 lo cita como el motivo exacto por el que el filtro no mueve ninguna
-métrica más allá de lo que ya mueve el índice de categoría.
+sin categoría todavía. Se conserva en este módulo, con su prueba de forma,
+como la evidencia exacta de por qué ADR-112 diagnosticó la causa 2 —pero
+`_ejecutar_banco_motor_portado` ya no la invoca: usa
+`aplicar_regla_de_criticas_original` en su lugar, según autoriza la
+incidencia #465.
+
+CAUSA 2 — LA SIEMBRA AL ENSAMBLAR CONTEXTO
+=========================================================================
+
+La tercera pieza que PR #117 declara, con estatuto propio: «se escribió
+después de ver qué casos fallaban y los dos únicos casos con ese propósito
+son esos dos, de modo que el banco la confirmaría por construcción. Se
+sostiene por diseño, y una prueba deja ese hecho asertado» —portada de
+`experiments/adr002/lateral/categoria.py:_pide_contexto` (rama
+`evidence/adr001-spikes`): si la petición declara, en su propio campo
+`proposito`, que ensambla el contexto de un proyecto
+(`PROPOSITO_DE_CONTEXTO in proposito`), se suman al conjunto admitido todas
+las identidades vigentes de categoría no ordinaria dentro del ámbito de la
+petición (más las de ámbito global, que `G4` admite siempre,
+`src/sirius/domain/staged_engine_gates.py:_g4`) — nunca fuera de él.
+`siembra_de_contexto` lo reproduce en este arnés.
+
+**Estatuto, sin ocultarlo**: de las 47 consultas del banco, únicamente
+`B04-CA-33` y `B04-CA-34` declaran ese propósito
+(`test_la_siembra_en_contexto_la_confirman_solo_los_dos_casos_por_
+construccion`,
+`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`) — los mismos dos
+que PR #117 nombra. El banco no puede confirmar esta regla de forma
+independiente: la confirma por construcción, porque se escribió después de
+ver que esos dos casos fallaban. La salvedad (a) de la Definición §3.2
+(ampliar el banco con casos independientes de la siembra, o retirarla) queda
+citada aquí como pendiente registrada del propietario para la declaración
+formal de PA-0.2-REC-01 — esta incidencia no la resuelve.
 """
 
 from __future__ import annotations
@@ -87,8 +150,6 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
-
-from sirius.domain.relevance import category_matches_query
 
 #: Portado sin modificar de ``experiments/adr002/lateral/categoria.py:72-78``
 #: (rama ``evidence/adr001-spikes``): las palabras con las que alguien
@@ -102,6 +163,11 @@ VOCABULARIO_DE_CATEGORIA: Final[frozenset[str]] = frozenset(
         "imprescindible",
     }
 )
+
+#: Portado de ``experiments/adr002/lateral/categoria.py:_pide_contexto``
+#: (rama ``evidence/adr001-spikes``): el propósito que declara que la
+#: petición ensambla el contexto de un proyecto (incidencia #465, causa 2).
+PROPOSITO_DE_CONTEXTO: Final = "contexto"
 
 #: La única categoría que este arnés asigna (ver docstring del módulo: la
 #: única palabra del vocabulario que activa sola, sin ambigüedad, en alguna
@@ -161,27 +227,98 @@ def filtro_congelado_conserva(caso_id: str, identidad: str) -> bool:
     return identidad in veredicto.conservados_por_el_modelo
 
 
+def activa_categoria_buscable(
+    consulta: str, vocabulario: frozenset[str] = VOCABULARIO_DE_CATEGORIA
+) -> bool:
+    """La «categoría buscable» de la PR #117, réplica de la indexación FTS5
+    de ``experiments/adr002/lateral/categoria.py`` (rama
+    ``evidence/adr001-spikes``): el índice no guarda, por identidad, el
+    término único que la activa — guarda **las cinco palabras del
+    vocabulario juntas** como el mismo contenido para toda identidad no
+    ordinaria (``palabras_de_categoria``, `categoria.py:88-101`), así que
+    cualquier coincidencia de la consulta con **cualquiera** de ellas activa
+    la categoría para todas. Una consulta con dos o más términos a la vez
+    sigue contando — a diferencia de la regla de activación única que
+    ``category_matches_query`` exige para el producto real
+    (`src/sirius/domain/relevance.py:142-171`, PR #450/M9, sin tocar aquí:
+    esta función nunca la llama ni reproduce su restricción). Incidencia
+    #465, causa 1."""
+    normalizada = consulta.strip().casefold()
+    if not normalizada:
+        return False
+    return any(termino.casefold() in normalizada for termino in vocabulario)
+
+
 def indice_de_categoria(
     *,
     consulta: str,
     ya_admitidos: Iterable[str],
     categoria_por_identidad: Mapping[str, str | None],
 ) -> frozenset[str]:
-    """La ampliación de M9 (§6.2): toda identidad no admitida todavía por el
-    motor cuya categoría coincida con la que ``consulta`` activa —misma
-    lógica de conjunto que ``RankRelevantKnowledgeUseCase._rank_via_staged_
+    """La ampliación de M9 (§6.2) con la semántica del laboratorio: toda
+    identidad no admitida todavía por el motor, de la categoría de máxima
+    criticidad, si ``consulta`` activa la «categoría buscable»
+    (``activa_categoria_buscable``, incidencia #465 causa 1) — misma lógica
+    de conjunto que ``RankRelevantKnowledgeUseCase._rank_via_staged_
     engine``'s ``solo_por_categoria`` (`src/sirius/application/
     rank_relevant_knowledge.py:243-280`), sin su reordenación posterior
     (irrelevante aquí: las cuatro métricas del banco comparan conjuntos, no
     orden). Como esa misma referencia, no restringe por ámbito: `category_
     match` es una señal de M9, no un filtro de alcance —esa es tarea de las
     puertas del motor, ya aplicadas antes de esta llamada."""
+    if not activa_categoria_buscable(consulta):
+        return frozenset()
     ya_admitidos_set = frozenset(ya_admitidos)
     return frozenset(
         identidad
         for identidad, categoria in categoria_por_identidad.items()
+        if identidad not in ya_admitidos_set and categoria == CATEGORIA_DE_MAXIMA_CRITICIDAD
+    )
+
+
+def pide_contexto(proposito: str) -> bool:
+    """Réplica de ``experiments/adr002/lateral/categoria.py:_pide_contexto``
+    (rama ``evidence/adr001-spikes``): si ``proposito`` —el campo propio de
+    la petición, nunca una adivinanza sobre el texto de la consulta—
+    declara que se ensambla el contexto de un proyecto. Incidencia #465,
+    causa 2 («la siembra al ensamblar contexto»)."""
+    return PROPOSITO_DE_CONTEXTO in proposito.casefold()
+
+
+def siembra_de_contexto(
+    *,
+    proposito: str,
+    ambito_declarado: str,
+    ya_admitidos: Iterable[str],
+    categoria_por_identidad: Mapping[str, str | None],
+    proyecto_por_identidad: Mapping[str, str],
+) -> frozenset[str]:
+    """La tercera pieza de la PR #117 («se sostiene por diseño, y una prueba
+    deja ese hecho asertado»): si ``proposito`` declara que la petición
+    ensambla contexto (``pide_contexto``), siembra toda identidad vigente de
+    categoría no ordinaria dentro del ámbito declarado —más las de ámbito
+    global, que ``G4`` admite siempre
+    (`src/sirius/domain/staged_engine_gates.py:_g4`)—, nunca fuera de él.
+    Sin propósito de contexto, no siembra nada: ``frozenset()``.
+
+    **Estatuto, sin ocultarlo** (ver docstring del módulo): el banco solo
+    tiene dos casos con este propósito (`B04-CA-33`, `B04-CA-34`), así que
+    no puede confirmar esta regla de forma independiente — la confirma por
+    construcción, tal como PR #117 lo declara. Incidencia #465, causa 2."""
+    if not pide_contexto(proposito):
+        return frozenset()
+    ya_admitidos_set = frozenset(ya_admitidos)
+
+    def _en_ambito(identidad: str) -> bool:
+        proyecto = proyecto_por_identidad.get(identidad)
+        return ambito_declarado == "GLOBAL" or proyecto in ("PRJ-GLOBAL", ambito_declarado)
+
+    return frozenset(
+        identidad
+        for identidad, categoria in categoria_por_identidad.items()
         if identidad not in ya_admitidos_set
-        and category_matches_query(categoria, consulta, VOCABULARIO_DE_CATEGORIA)
+        and categoria == CATEGORIA_DE_MAXIMA_CRITICIDAD
+        and _en_ambito(identidad)
     )
 
 
@@ -195,7 +332,11 @@ def aplicar_candado(
     ``ContextBuilder._apply_relevance_filter``
     (`src/sirius/application/context.py:239-258`) — lo que el filtro
     conservó, todo candidato de la categoría de máxima criticidad, y todo
-    candidato sin categoría todavía —, nunca una segunda llamada al filtro."""
+    candidato sin categoría todavía —, nunca una segunda llamada al filtro.
+
+    Conservada como evidencia de ADR-112 (causa 2): ``_ejecutar_banco_motor_
+    portado`` ya no la invoca, usa ``aplicar_regla_de_criticas_original`` en
+    su lugar (incidencia #465)."""
     return frozenset(
         identidad
         for identidad in candidatos
@@ -205,12 +346,61 @@ def aplicar_candado(
     )
 
 
+def aplicar_regla_de_criticas_original(
+    *,
+    caso_id: str,
+    candidatos: Iterable[str],
+    categoria_por_identidad: Mapping[str, str | None],
+) -> frozenset[str]:
+    """La regla de las críticas ORIGINAL del laboratorio
+    (``experiments/adr002/modelo_local/filtro.py:filtrar``, RF-25/RF-26),
+    en lugar del candado de M10 (incidencia #465, causa 1): si el filtro
+    conserva algunas, no puede descartar una crítica (se rescata); si
+    declara que ninguna responde, ese veredicto se respeta entero, sin
+    rescate. Solo protege lo que el canon ya marca como no ordinario
+    (``categoria_por_identidad`` == ``CATEGORIA_DE_MAXIMA_CRITICIDAD``), a
+    diferencia del candado de M10 que protege también lo sin categoría.
+
+    Falla abierto —misma garantía que ``filtro_congelado_conserva``— para
+    cualquier caso, o candidato, que la corrida congelada nunca examinó:
+    ese candidato pasa intacto, nunca se descarta sin veredicto."""
+    candidatos_set = frozenset(candidatos)
+    veredicto = FILTRO_CONGELADO.get(caso_id)
+    if veredicto is None:
+        return candidatos_set
+
+    entraron = veredicto.entraron_al_filtro & candidatos_set
+    no_entraron = candidatos_set - entraron
+    if not entraron:
+        return candidatos_set
+
+    conservados = veredicto.conservados_por_el_modelo & entraron
+    if not conservados:
+        # RF-26: el modelo declara ausencia total. Se respeta entera, sin
+        # rescate — lo que no entró al filtro sigue intacto.
+        return no_entraron
+
+    # RF-25: el modelo eligió algunas. No puede tirar una crítica: se
+    # rescata lo que el canon marca como no ordinario y el modelo descartó.
+    rescatadas = frozenset(
+        identidad
+        for identidad in entraron - conservados
+        if categoria_por_identidad.get(identidad) == CATEGORIA_DE_MAXIMA_CRITICIDAD
+    )
+    return no_entraron | conservados | rescatadas
+
+
 __all__ = [
     "CATEGORIA_DE_MAXIMA_CRITICIDAD",
     "FILTRO_CONGELADO",
+    "PROPOSITO_DE_CONTEXTO",
     "VOCABULARIO_DE_CATEGORIA",
+    "activa_categoria_buscable",
     "aplicar_candado",
+    "aplicar_regla_de_criticas_original",
     "categoria_del_item",
     "filtro_congelado_conserva",
     "indice_de_categoria",
+    "pide_contexto",
+    "siembra_de_contexto",
 ]
