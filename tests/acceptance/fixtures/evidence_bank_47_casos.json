@@ -7,9 +7,11 @@
       "experiments/adr002/benchmark/cases_v0_5.json",
       "experiments/adr002/benchmark/references_v0_5.json",
       "experiments/adr002/benchmark/conformance_corpus_v0_6.json",
-      "experiments/adr002/benchmark/applied_criticality_v0_1.json"
+      "experiments/adr002/benchmark/applied_criticality_v0_1.json",
+      "experiments/adr002/benchmark/property_keys_v0_2.json"
     ],
-    "nota": "consulta y ambito de cada caso proceden de cases_v0_5.json (instanciacion); resultado_esperado procede de la adjudicacion calculada en references_v0_5.json, restringido a identidades del canon (MEM-/DEC-), que es exactamente el filtro que aplica el propio arnes de la rama de evidencia (experiments/adr002/round/cases.py:_identidades_canonicas). criticidad.razon_segura procede de applied_criticality_v0_1.json, el plano ya seguro que la propia rama de evidencia deriva del campo criticidad.razon del canon para este uso exacto; el campo criticidad.fuente del canon (que contiene un identificador de caso) no se porta."
+    "nota": "consulta y ambito de cada caso proceden de cases_v0_5.json (instanciacion); resultado_esperado procede de la adjudicacion calculada en references_v0_5.json, restringido a identidades del canon (MEM-/DEC-), que es exactamente el filtro que aplica el propio arnes de la rama de evidencia (experiments/adr002/round/cases.py:_identidades_canonicas). criticidad.razon_segura procede de applied_criticality_v0_1.json, el plano ya seguro que la propia rama de evidencia deriva del campo criticidad.razon del canon para este uso exacto; el campo criticidad.fuente del canon (que contiene un identificador de caso) no se porta.",
+    "nota_incidencia_457": "ejes_p2 por item (polaridad, condicion, sensibilidad, ambito, autoridad, no_usar_como_memoria, no_consolidable, valid_from, valid_to, procedencia, property_key), portados sin modificar desde conformance_corpus_v0_6.json y property_keys_v0_2.json, y criticidad.fuente_de_politica/regla_de_politica desde applied_criticality_v0_1.json (el plano ya seguro, no el campo criticidad.fuente crudo del corpus, que contiene un identificador de caso y que la nota anterior de este mismo fichero ya declara que no se porta) (mismo commit dfdcdaff04dcba10939cc0b0569c55b6a636296f de evidence/adr001-spikes) para que el arnes del banco pueda declarar los ejes que las puertas G4/G8/G9/G11 y la agrupacion de equivalentes del motor por etapas (incidencia #457/ADR-109) necesitan y que el esquema canonico real de Sirius 0.1 no persiste. ambito_declarado de la unica decision con ambito MULTI_PROYECTO_CERRADO (DEC-001, project_id 'LISTA-CERRADA-AB' en el corpus) no trae miembros resueltos: el corpus portado no declara la tabla de membresia de listas cerradas del laboratorio (experiments/adr002/projection/build.py no la expone como JSON), asi que G4 la trata como lista sin miembros resueltos y la descarta (staged_engine_gates._g4: 'la duda no abre ambito') en vez de inventar una membresia."
   },
   "conteos": {
     "casos": 47,
@@ -423,7 +425,22 @@
       "disponibilidad": "DISPONIBLE",
       "criticidad": {
         "nivel": "IMPORTANTE",
-        "razon_segura": "Requisito de redacción declarado explícitamente por el usuario."
+        "razon_segura": "Requisito de redacción declarado explícitamente por el usuario.",
+        "fuente_de_politica": "ACTO_EXPLICITO",
+        "regla_de_politica": "CRIT-01"
+      },
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "GLOBAL",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
       }
     },
     {
@@ -436,7 +453,22 @@
       "disponibilidad": "DISPONIBLE",
       "criticidad": {
         "nivel": "CRITICO",
-        "razon_segura": "Restricción esencial del viaje; omitirla cambia la planificación."
+        "razon_segura": "Restricción esencial del viaje; omitirla cambia la planificación.",
+        "fuente_de_politica": "ACTO_EXPLICITO",
+        "regla_de_politica": "CRIT-02"
+      },
+      "ejes_p2": {
+        "polaridad": "NEGATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": "PK-aa227ff67a6f"
       }
     },
     {
@@ -447,7 +479,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": "PK-f137044431b7"
+      }
     },
     {
       "id": "DEC-001",
@@ -457,7 +502,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "MULTI_PROYECTO_CERRADO",
+        "autoridad": "DOCUMENTO_CANONICO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-004",
@@ -467,7 +525,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "ARCHIVADA",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "DEC-002",
@@ -477,7 +548,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "SUSTITUIDA",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "DOCUMENTO_CANONICO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": "2026-04-01T00:00:00Z",
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "DEC-003",
@@ -489,7 +573,22 @@
       "disponibilidad": "DISPONIBLE",
       "criticidad": {
         "nivel": "CRITICO",
-        "razon_segura": "Límite de gasto vigente; su omisión causa decisión errónea."
+        "razon_segura": "Límite de gasto vigente; su omisión causa decisión errónea.",
+        "fuente_de_politica": "REQUISITO_O_DECISION_APROBADA",
+        "regla_de_politica": "CRIT-03"
+      },
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "DOCUMENTO_CANONICO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-04-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
       }
     },
     {
@@ -500,7 +599,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "DOCUMENTO_CANONICO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-09-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-005",
@@ -510,7 +622,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": null,
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "DEC-005",
@@ -520,7 +645,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "DOCUMENTO_CANONICO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-006",
@@ -530,7 +668,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "INFORMAL",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-007",
@@ -540,7 +691,22 @@
       "confirmacion": "CANDIDATA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "INFORMAL",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [
+          "MSG-020"
+        ],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-008",
@@ -550,7 +716,20 @@
       "confirmacion": "RECHAZADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "INFORMAL",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-009",
@@ -560,7 +739,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "PURGADA",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-010",
@@ -570,7 +762,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "RESTRINGIDA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-011",
@@ -580,7 +785,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": "PK-d944c8338268"
+      }
     },
     {
       "id": "MEM-012",
@@ -590,7 +808,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": "PK-bbd009bfa97c"
+      }
     },
     {
       "id": "MEM-013",
@@ -600,7 +831,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": "PK-27c35f931d3b"
+      }
     },
     {
       "id": "DEC-006",
@@ -610,7 +854,22 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "DOCUMENTO_CANONICO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [
+          "DOC-001"
+        ],
+        "property_key": "PK-d291da76418f"
+      }
     },
     {
       "id": "DEC-007",
@@ -620,7 +879,22 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "DOCUMENTO_CANONICO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [
+          "DOC-002"
+        ],
+        "property_key": "PK-d291da76418f"
+      }
     },
     {
       "id": "DEC-008",
@@ -630,7 +904,22 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "DOCUMENTO_CANONICO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [
+          "MSG-030"
+        ],
+        "property_key": "PK-d291da76418f"
+      }
     },
     {
       "id": "MEM-014",
@@ -642,7 +931,22 @@
       "disponibilidad": "DISPONIBLE",
       "criticidad": {
         "nivel": "CRITICO",
-        "razon_segura": "Restricción explícita de viaje; invertirla cambia el resultado."
+        "razon_segura": "Restricción explícita de viaje; invertirla cambia el resultado.",
+        "fuente_de_politica": "ACTO_EXPLICITO",
+        "regla_de_politica": "CRIT-04"
+      },
+      "ejes_p2": {
+        "polaridad": "NEGATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
       }
     },
     {
@@ -653,7 +957,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-016",
@@ -665,7 +982,22 @@
       "disponibilidad": "DISPONIBLE",
       "criticidad": {
         "nivel": "CRITICO",
-        "razon_segura": "Condición material; recuperarla sin condición invierte el sentido."
+        "razon_segura": "Condición material; recuperarla sin condición invierte el sentido.",
+        "fuente_de_politica": "ACTO_EXPLICITO",
+        "regla_de_politica": "CRIT-05"
+      },
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": "ahorro > 200 EUR",
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
       }
     },
     {
@@ -676,7 +1008,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "DOCUMENTO_CANONICO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-10T00:00:00Z",
+        "valid_to": "2026-03-20T00:00:00Z",
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-017",
@@ -686,7 +1031,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "SIN_SOPORTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "INFORMAL",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-018",
@@ -696,7 +1054,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-101",
@@ -708,7 +1079,22 @@
       "disponibilidad": "DISPONIBLE",
       "criticidad": {
         "nivel": "CRITICO",
-        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+        "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+        "regla_de_politica": "CRIT-06"
+      },
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-05T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
       }
     },
     {
@@ -721,7 +1107,22 @@
       "disponibilidad": "DISPONIBLE",
       "criticidad": {
         "nivel": "CRITICO",
-        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+        "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+        "regla_de_politica": "CRIT-06"
+      },
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-05T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
       }
     },
     {
@@ -734,7 +1135,22 @@
       "disponibilidad": "DISPONIBLE",
       "criticidad": {
         "nivel": "CRITICO",
-        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+        "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+        "regla_de_politica": "CRIT-06"
+      },
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-05T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
       }
     },
     {
@@ -747,7 +1163,22 @@
       "disponibilidad": "DISPONIBLE",
       "criticidad": {
         "nivel": "CRITICO",
-        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+        "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+        "regla_de_politica": "CRIT-06"
+      },
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-05T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
       }
     },
     {
@@ -760,7 +1191,22 @@
       "disponibilidad": "DISPONIBLE",
       "criticidad": {
         "nivel": "CRITICO",
-        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+        "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+        "regla_de_politica": "CRIT-06"
+      },
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-05T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
       }
     },
     {
@@ -773,7 +1219,22 @@
       "disponibilidad": "DISPONIBLE",
       "criticidad": {
         "nivel": "CRITICO",
-        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+        "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+        "regla_de_politica": "CRIT-06"
+      },
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-05T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
       }
     },
     {
@@ -786,7 +1247,22 @@
       "disponibilidad": "DISPONIBLE",
       "criticidad": {
         "nivel": "CRITICO",
-        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+        "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+        "regla_de_politica": "CRIT-06"
+      },
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-03-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
       }
     },
     {
@@ -799,7 +1275,22 @@
       "disponibilidad": "DISPONIBLE",
       "criticidad": {
         "nivel": "CRITICO",
-        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+        "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+        "regla_de_politica": "CRIT-06"
+      },
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-03-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
       }
     },
     {
@@ -812,7 +1303,22 @@
       "disponibilidad": "DISPONIBLE",
       "criticidad": {
         "nivel": "CRITICO",
-        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+        "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+        "regla_de_politica": "CRIT-06"
+      },
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-03-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
       }
     },
     {
@@ -825,7 +1331,22 @@
       "disponibilidad": "DISPONIBLE",
       "criticidad": {
         "nivel": "CRITICO",
-        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+        "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+        "regla_de_politica": "CRIT-06"
+      },
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-03-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
       }
     },
     {
@@ -838,7 +1359,22 @@
       "disponibilidad": "DISPONIBLE",
       "criticidad": {
         "nivel": "CRITICO",
-        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+        "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+        "regla_de_politica": "CRIT-06"
+      },
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-03-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
       }
     },
     {
@@ -851,7 +1387,22 @@
       "disponibilidad": "DISPONIBLE",
       "criticidad": {
         "nivel": "CRITICO",
-        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar."
+        "razon_segura": "Restricción esencial etiquetada por el corpus antes de ejecutar.",
+        "fuente_de_politica": "ETIQUETA_DE_ESCENARIO",
+        "regla_de_politica": "CRIT-06"
+      },
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-05-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
       }
     },
     {
@@ -862,7 +1413,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "NO_GUARDADA",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-020",
@@ -872,7 +1436,22 @@
       "confirmacion": "CANDIDATA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "FUENTE_EXTERNA",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [
+          "DOC-003"
+        ],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-021",
@@ -882,7 +1461,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": true,
+        "no_consolidable": true,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-022",
@@ -892,7 +1484,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": "PK-d3f697cace4d"
+      }
     },
     {
       "id": "DEC-010",
@@ -904,7 +1509,22 @@
       "disponibilidad": "DISPONIBLE",
       "criticidad": {
         "nivel": "CRITICO",
-        "razon_segura": "Restricción tecnológica aprobada; invertirla rompe la decisión."
+        "razon_segura": "Restricción tecnológica aprobada; invertirla rompe la decisión.",
+        "fuente_de_politica": "REQUISITO_O_DECISION_APROBADA",
+        "regla_de_politica": "CRIT-07"
+      },
+      "ejes_p2": {
+        "polaridad": "NEGATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "DOCUMENTO_CANONICO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": "PK-e1dbd4b9197c"
       }
     },
     {
@@ -915,7 +1535,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-024",
@@ -925,7 +1558,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-025",
@@ -937,7 +1583,22 @@
       "disponibilidad": "DISPONIBLE",
       "criticidad": {
         "nivel": "CRITICO",
-        "razon_segura": "Restricción esencial detectada por regla operativa aprobada."
+        "razon_segura": "Restricción esencial detectada por regla operativa aprobada.",
+        "fuente_de_politica": "REGLA_OPERATIVA_APROBADA",
+        "regla_de_politica": "CRIT-07"
+      },
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
       }
     },
     {
@@ -948,7 +1609,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "RESTRINGIDA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "DEC-011",
@@ -958,7 +1632,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "DOCUMENTO_CANONICO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-02-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "DEC-012",
@@ -968,7 +1655,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "SUSTITUIDA",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "DOCUMENTO_CANONICO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": "2026-04-10T00:00:00Z",
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "DEC-013",
@@ -978,7 +1678,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "DOCUMENTO_CANONICO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-04-10T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-027",
@@ -988,7 +1701,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-901",
@@ -998,7 +1724,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-902",
@@ -1008,7 +1747,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-903",
@@ -1018,7 +1770,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-904",
@@ -1028,7 +1793,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-905",
@@ -1038,7 +1816,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-906",
@@ -1048,7 +1839,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-907",
@@ -1058,7 +1862,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-908",
@@ -1068,7 +1885,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-909",
@@ -1078,7 +1908,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-910",
@@ -1088,7 +1931,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-911",
@@ -1098,7 +1954,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-912",
@@ -1108,7 +1977,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-913",
@@ -1118,7 +2000,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-914",
@@ -1128,7 +2023,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-915",
@@ -1138,7 +2046,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-916",
@@ -1148,7 +2069,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-917",
@@ -1158,7 +2092,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-918",
@@ -1168,7 +2115,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-919",
@@ -1178,7 +2138,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-920",
@@ -1188,7 +2161,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-921",
@@ -1198,7 +2184,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-922",
@@ -1208,7 +2207,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-923",
@@ -1218,7 +2230,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-924",
@@ -1228,7 +2253,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-925",
@@ -1238,7 +2276,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-926",
@@ -1248,7 +2299,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-927",
@@ -1258,7 +2322,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-928",
@@ -1268,7 +2345,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-929",
@@ -1278,7 +2368,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-930",
@@ -1288,7 +2391,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-931",
@@ -1298,7 +2414,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-932",
@@ -1308,7 +2437,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-933",
@@ -1318,7 +2460,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-934",
@@ -1328,7 +2483,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-935",
@@ -1338,7 +2506,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-936",
@@ -1348,7 +2529,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-937",
@@ -1358,7 +2552,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-938",
@@ -1368,7 +2575,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-939",
@@ -1378,7 +2598,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-940",
@@ -1388,7 +2621,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "ACTO_EXPLICITO_USUARIO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "DEC-014",
@@ -1398,7 +2644,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "DOCUMENTO_CANONICO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-15T00:00:00Z",
+        "valid_to": "2026-01-31T00:00:00Z",
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "DEC-015",
@@ -1408,7 +2667,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "DOCUMENTO_CANONICO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-03-01T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "DEC-016",
@@ -1418,7 +2690,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "DOCUMENTO_CANONICO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-05T00:00:00Z",
+        "valid_to": "2026-03-01T00:00:00Z",
+        "procedencia": [],
+        "property_key": null
+      }
     },
     {
       "id": "MEM-950",
@@ -1428,7 +2713,20 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "DOCUMENTO_CANONICO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-10T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": "PK-c1e86586be7c"
+      }
     },
     {
       "id": "MEM-951",
@@ -1438,7 +2736,21 @@
       "confirmacion": "CONFIRMADA",
       "validez": "VIGENTE",
       "disponibilidad": "DISPONIBLE",
-      "criticidad": null
+      "criticidad": null,
+      "ejes_p2": {
+        "polaridad": "AFIRMATIVA",
+        "condicion": null,
+        "sensibilidad": "ORDINARIA",
+        "ambito": "PROYECTO",
+        "autoridad": "DOCUMENTO_CANONICO",
+        "no_usar_como_memoria": false,
+        "no_consolidable": false,
+        "valid_from": "2026-01-10T00:00:00Z",
+        "valid_to": null,
+        "procedencia": [],
+        "property_key": "PK-8a0512bef57a"
+      }
     }
-  ]
+  ],
+  "ahora_declarado": "2026-06-15T00:00:00Z"
 }

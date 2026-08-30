@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import text
 
+from sirius.adapters.persistence import staged_engine_candidate
 from sirius.adapters.persistence.database import build_engine
 from sirius.adapters.persistence.migrations import upgrade_to_head
 from sirius.adapters.persistence.sqlite_decision_repository import (
@@ -27,6 +28,7 @@ from sirius.adapters.persistence.sqlite_knowledge_search_repository import (
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
+from sirius.adapters.persistence.staged_engine_port import build_staged_engine_port
 from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.archive_decision import ArchiveDecisionUseCase
 from sirius.application.archive_memory import ArchiveMemoryUseCase
@@ -38,6 +40,7 @@ from sirius.application.set_category import SetCategoryUseCase
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
 from sirius.application.tag_category import CategoryTargetKind
 from sirius.domain.conversation import SourceMessageChoice
+from sirius.domain.staged_engine_contracts import PuertoDeRecuperacion, SenalesDeCandidato
 
 
 def _bootstrap(database_path: Path) -> None:
@@ -66,6 +69,8 @@ def _use_case(
     *,
     category_vocabulary: frozenset[str] = frozenset(),
     category_matching_enabled: bool = False,
+    staged_engine_port: PuertoDeRecuperacion | None = None,
+    staged_engine_candidate: SenalesDeCandidato | None = None,
 ) -> RankRelevantKnowledgeUseCase:
     return RankRelevantKnowledgeUseCase(
         memory_repository=build_sqlite_memory_repository(database_path),
@@ -74,6 +79,8 @@ def _use_case(
         knowledge_search_repository=build_sqlite_knowledge_search_repository(database_path),
         category_vocabulary=category_vocabulary,
         category_matching_enabled=category_matching_enabled,
+        staged_engine_port=staged_engine_port,
+        staged_engine_candidate=staged_engine_candidate,
     )
 
 
@@ -445,3 +452,217 @@ def test_category_match_stays_false_when_the_query_activates_no_vocabulary_categ
 
     assert len(result) == 1
     assert result[0].category_match is False
+
+
+# -- El motor por etapas detrás de la puerta D7 punto 6 (incidencia #457) ----
+
+
+@pytest.mark.integration
+def test_staged_engine_stays_unused_with_the_gate_closed_even_if_wired(tmp_path: Path) -> None:
+    """Con la puerta cerrada (el valor por defecto que
+    ``composition_root`` sigue construyendo), ``rank()`` da exactamente el
+    mismo resultado tenga o no un puerto/candidato del motor por etapas
+    configurados — la garantía literal de "con la puerta cerrada, el
+    comportamiento del producto es idéntico al de hoy" (incidencia #457)."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    SaveManualMemoryUseCase(unit_of_work).save("faroquenopalabraunica sobre la costa")
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        sin_motor = _use_case(database_path).rank("faroquenopalabraunica")
+        con_motor_pero_cerrada = _use_case(
+            database_path, staged_engine_port=puerto, staged_engine_candidate=candidato
+        ).rank("faroquenopalabraunica")
+    finally:
+        puerto.close()
+
+    assert con_motor_pero_cerrada == sin_motor
+
+
+@pytest.mark.integration
+def test_staged_engine_is_used_with_the_gate_open_and_wired(tmp_path: Path) -> None:
+    """Con la puerta abierta y el puerto/candidato configurados,
+    ``rank()`` delega en ``sirius.domain.staged_engine.recuperar`` (ADR-109)
+    en vez del filtro-y-orden de siempre."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    memoria = SaveManualMemoryUseCase(unit_of_work).save("faroquenopalabraunica sobre la costa")
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("faroquenopalabraunica")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [memoria.id]
+
+
+@pytest.mark.integration
+def test_staged_engine_path_still_finds_a_category_only_match(tmp_path: Path) -> None:
+    """CODEX-001 (incidencia #457): el motor por etapas solo genera
+    candidatos por asunto exacto o FTS5, nunca por categoría, así que con
+    la puerta abierta y el motor cableado un candidato que solo coincide
+    por categoría (M9, §6.2) desaparecía en vez de encontrarse, contra
+    ``test_a_category_match_alone_makes_an_otherwise_unrelated_candidate_
+    related`` (``tests/unit/test_relevance_domain.py``)."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    memoria_categorizada = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido sin ninguna palabra en comun con la consulta"
+    )
+    SetCategoryUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CategoryTargetKind.MEMORY, memoria_categorizada.id, "trabajo")
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            category_vocabulary=_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("trabajo")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [memoria_categorizada.id]
+    assert resultado[0].category_match is True
+
+
+@pytest.mark.integration
+def test_staged_engine_path_orders_by_the_full_m9_tuple_not_by_block(tmp_path: Path) -> None:
+    """CODEX-001 (incidencia #457): con la puerta abierta y el motor
+    cableado, ``_rank_via_staged_engine`` concatenaba ``ranked`` (lo
+    admitido por el motor) delante de ``solo_por_categoria`` sin más,
+    colocando siempre todo lo admitido por el motor antes que lo hallado
+    solo por categoría con independencia de las demás señales (S7.5/M9:
+    sujeto, proyecto activo, FTS5, categoría, recencia). Aquí el candidato
+    hallado solo por categoría pertenece al proyecto activo (una señal que
+    el orden aprobado sitúa por delante de un simple acierto FTS5) mientras
+    que el admitido por el motor no pertenece a ningún proyecto activo: el
+    orden corregido debe anteponer el primero pese a haber llegado por el
+    bloque de categoría, no por el del motor."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    active_project_id, other_project_id = _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    memoria_por_categoria = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido sin ninguna palabra en comun con la consulta",
+        project_id=active_project_id,
+    )
+    SetCategoryUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CategoryTargetKind.MEMORY, memoria_por_categoria.id, "trabajo")
+    memoria_por_motor = SaveManualMemoryUseCase(unit_of_work).save(
+        "trabajo intenso esta semana en la fabrica", project_id=other_project_id
+    )
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            category_vocabulary=_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("trabajo")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [memoria_por_categoria.id, memoria_por_motor.id]
+    encontrada_por_categoria = next(c for c in resultado if c.item_id == memoria_por_categoria.id)
+    encontrada_por_motor = next(c for c in resultado if c.item_id == memoria_por_motor.id)
+    assert encontrada_por_categoria.category_match is True
+    assert encontrada_por_categoria.project_matches_active is True
+    assert encontrada_por_motor.fts_match is True
+    assert encontrada_por_motor.project_matches_active is False
+
+
+@pytest.mark.integration
+def test_staged_engine_path_preserves_engine_order_between_two_admitted_candidates(
+    tmp_path: Path,
+) -> None:
+    """CODEX-001 (incidencia #457, tercera ronda): la corrección anterior
+    intercalaba ``solo_por_categoria`` volviendo a ordenar también
+    ``ranked`` entero con ``rank_relevant_knowledge`` (sujeto, proyecto
+    activo, FTS5, categoría, recencia), sustituyendo la prioridad que el
+    motor ya adjudicó a lo que él mismo admitió —criticidad, representante y
+    autoridad de la etapa de origen (``staged_engine.py``)— incluso cuando
+    ``solo_por_categoria`` está vacío. Se reproduce con dos memorias que el
+    motor admite en etapas distintas: una en ``E1`` (coincidencia literal,
+    mayor autoridad) y otra en ``E2`` (variante morfológica "trabajos" de
+    "trabajo", menor autoridad), donde la de menor autoridad pertenece al
+    proyecto activo. Un ``rank_relevant_knowledge`` global sobre ambas las
+    invertiría por esa señal de proyecto; el orden corregido debe conservar
+    el que el motor ya fijó por autoridad de etapa."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    active_project_id, other_project_id = _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    encontrada_en_e1 = SaveManualMemoryUseCase(unit_of_work).save(
+        "trabajo intenso en la fabrica", project_id=other_project_id
+    )
+    encontrada_en_e2 = SaveManualMemoryUseCase(unit_of_work).save(
+        "trabajos pendientes de revision", project_id=active_project_id
+    )
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("trabajo")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [encontrada_en_e1.id, encontrada_en_e2.id]
+    encontrada_por_e2 = next(c for c in resultado if c.item_id == encontrada_en_e2.id)
+    encontrada_por_e1 = next(c for c in resultado if c.item_id == encontrada_en_e1.id)
+    assert encontrada_por_e2.project_matches_active is True
+    assert encontrada_por_e1.project_matches_active is False
+
+
+@pytest.mark.integration
+def test_staged_engine_gate_open_without_a_configured_port_falls_back_to_current_pipeline(
+    tmp_path: Path,
+) -> None:
+    """La puerta sola no basta: sin puerto/candidato configurados (ningún
+    caller real de hoy los construye), ``rank()`` sigue el camino de
+    siempre en vez de fallar."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    SaveManualMemoryUseCase(unit_of_work).save("faroquenopalabraunica sobre la costa")
+
+    con_puerta_abierta_sin_motor = _use_case(database_path, category_matching_enabled=True).rank(
+        "faroquenopalabraunica"
+    )
+    sin_puerta = _use_case(database_path).rank("faroquenopalabraunica")
+
+    assert con_puerta_abierta_sin_motor == sin_puerta
