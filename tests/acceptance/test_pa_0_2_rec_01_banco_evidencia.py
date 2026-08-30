@@ -95,14 +95,26 @@ todas, ver `docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md`
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from typing import Any, Final
 
 import pytest
 from staged_engine_case_translation import peticion_desde_caso
+from staged_engine_category_and_relevance import (
+    CATEGORIA_DE_MAXIMA_CRITICIDAD,
+    VOCABULARIO_DE_CATEGORIA,
+    aplicar_candado,
+    categoria_del_item,
+    filtro_congelado_conserva,
+    indice_de_categoria,
+)
 
+from sirius.adapters.ollama_relevance_filter import OllamaRelevanceFilterAdapter
 from sirius.adapters.persistence import staged_engine_candidate
 from sirius.adapters.persistence.database import build_engine, build_session_factory
 from sirius.adapters.persistence.migrations import upgrade_to_head
@@ -121,9 +133,9 @@ from sirius.application.archive_memory import ArchiveMemoryUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
-from sirius.domain.memory import Memory
+from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
 from sirius.domain.precedence import find_prevailing_decision
-from sirius.domain.relevance import KnowledgeKind, RankedKnowledge
+from sirius.domain.relevance import KnowledgeKind, RankedKnowledge, category_matches_query
 from sirius.domain.staged_engine import recuperar
 from sirius.domain.staged_engine_contracts import (
     Ambito,
@@ -146,13 +158,14 @@ _MINIMO_ELEMENTOS_HALLADOS_M7: Final[int] = 57
 
 #: Medición actual publicada en el docstring de
 #: `test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metricas`
-#: (motor por etapas con petición por caso, incidencia #461/ADR-111). Misma
-#: convención de cotas unidireccionales de no regresión, no el suelo de D1
-#: (29/47) que ADR-111 diagnostica que esta incidencia tampoco alcanza.
+#: (motor por etapas con petición por caso, índice de categoría y filtro de
+#: relevancia, incidencia #463/ADR-112). Misma convención de cotas
+#: unidireccionales de no regresión, no el suelo de D1 (29/47) que ADR-112
+#: diagnostica que esta incidencia tampoco alcanza.
 _MINIMO_ACIERTOS_EXACTOS_MOTOR: Final[int] = 23
-_MAXIMO_ELEMENTOS_DE_MAS_MOTOR: Final[int] = 90
-_MAXIMO_OMISIONES_CRITICAS_MOTOR: Final[int] = 10
-_MINIMO_ELEMENTOS_HALLADOS_MOTOR: Final[int] = 63
+_MAXIMO_ELEMENTOS_DE_MAS_MOTOR: Final[int] = 108
+_MAXIMO_OMISIONES_CRITICAS_MOTOR: Final[int] = 9
+_MINIMO_ELEMENTOS_HALLADOS_MOTOR: Final[int] = 64
 
 pytestmark = [pytest.mark.acceptance, pytest.mark.integration]
 
@@ -499,6 +512,17 @@ def _ejecutar_banco_motor_portado(database_path: Path) -> _EjecucionDelBanco:
     nombre de un proyecto del banco), no un ámbito global uniforme: es la
     puerta `G4` la que debe decidir si un ítem de otro proyecto cuenta como
     elemento de más, no un filtro añadido por este arnés.
+
+    Incidencia #463: tras lo que el motor admite, este arnés activa las dos
+    piezas que el laboratorio usaba junto al motor para medir 29/47 — el
+    índice de categoría (M9, §6.2) y el filtro de relevancia con su candado
+    (M10, §6.3) —, ambas ya portadas a `main` como código de producto detrás
+    de la misma puerta `category_matching_enabled` que ADR-109/110/111 ya
+    citaban cerrada. Solo este arnés las invoca; la puerta sigue cerrada
+    para `Memory`/`Decision` reales (`sirius.application.
+    rank_relevant_knowledge`, sin cambios). Ver
+    `tests.acceptance.staged_engine_category_and_relevance` para el porqué de
+    cada pieza y ADR-112 para la medición y su diagnóstico.
     """
     banco = _fixture()
     upgrade_to_head(database_path)
@@ -517,6 +541,17 @@ def _ejecutar_banco_motor_portado(database_path: Path) -> _EjecucionDelBanco:
         real_a_canonico[real] = item["id"]
 
     items_por_id = {item["id"]: item for item in banco["items"]}
+    #: M9 (§6.2): la categoría de cada item vigente y realmente creado, por
+    #: identidad canónica del corpus (no la del motor: el índice de
+    #: categoría y el candado operan sobre el mismo espacio de identidades
+    #: que `obtenido`/`esperado`). Solo vigentes: `RankRelevantKnowledgeUse
+    #: Case._rank_via_staged_engine` amplía sobre `list_current_memories`/
+    #: `list_current_decisions`, nunca sobre lo archivado o no aprobado.
+    categoria_por_identidad: dict[str, str | None] = {
+        corpus_id: categoria_del_item(items_por_id[corpus_id])
+        for corpus_id in real_a_canonico.values()
+        if _vigente(items_por_id[corpus_id])
+    }
     ejes_por_identidad: dict[str, EjesDeclarados] = {}
     propiedades: dict[str, str | None] = {}
     criticidad_aplicada: dict[str, CriticidadAplicada] = {}
@@ -572,7 +607,7 @@ def _ejecutar_banco_motor_portado(database_path: Path) -> _EjecucionDelBanco:
                 limite_sin_atar=limite_sin_atar,
             )
             recuperacion = recuperar(peticion, puerto, candidato, plano)
-            obtenido = {
+            obtenido_por_el_motor = {
                 real_a_canonico[
                     (
                         "memory" if resultado.item.clase is Clase.MEMORIA else "decision",
@@ -581,6 +616,21 @@ def _ejecutar_banco_motor_portado(database_path: Path) -> _EjecucionDelBanco:
                 ]
                 for resultado in recuperacion.resultados
             }
+            # Incidencia #463: índice de categoría (M9) primero, ampliando
+            # sobre lo que el motor no admitió; filtro de relevancia (M10)
+            # después, con su candado — mismo orden que `ContextBuilder.
+            # _rank_related_knowledge` (precedencia/motor, después M9 vía
+            # `rank()`, después M10).
+            obtenido_tras_categoria = obtenido_por_el_motor | indice_de_categoria(
+                consulta=caso["consulta"],
+                ya_admitidos=obtenido_por_el_motor,
+                categoria_por_identidad=categoria_por_identidad,
+            )
+            obtenido = aplicar_candado(
+                candidatos=obtenido_tras_categoria,
+                conserva_el_filtro=partial(filtro_congelado_conserva, caso["id"]),
+                categoria_por_identidad=categoria_por_identidad,
+            )
             esperado = set(caso["resultado_esperado"])
 
             if obtenido == esperado:
@@ -795,58 +845,71 @@ def test_el_banco_se_ejecuta_contra_el_pipeline_actual_y_reporta_las_cuatro_metr
 def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metricas(
     ejecucion_del_banco_motor_portado: _EjecucionDelBanco,
 ) -> None:
-    """Incidencia #457/#461/ADR-109/ADR-110/ADR-111: el mismo banco, con el
-    motor por etapas (`sirius.domain.staged_engine.recuperar`), las doce
-    puertas (`staged_engine_gates`) y la agrupación de equivalentes
-    (`staged_engine_grouping`) activos en el arnés, en vez del
-    filtro-y-orden de M7 que mide el test anterior.
+    """Incidencia #457/#461/#463/ADR-109/ADR-110/ADR-111/ADR-112: el mismo
+    banco, con el motor por etapas (`sirius.domain.staged_engine.recuperar`),
+    las doce puertas (`staged_engine_gates`), la agrupación de equivalentes
+    (`staged_engine_grouping`), el índice de categoría (M9, §6.2) y el
+    filtro de relevancia con su candado (M10, §6.3) activos en el arnés, en
+    vez del filtro-y-orden de M7 que mide el test anterior.
 
-    ADR-110 (incidencia #457) midió este mismo motor con una política
-    **uniforme** para las 47 consultas (modo M1, cardinalidad EXHAUSTIVA,
-    límite sin atar): 11/47, 186 elementos de más, 9 omisiones críticas,
-    cobertura 60/81 (74.1%). Su diagnóstico: el 29/47 que PR #117 midió
-    depende de una petición **por caso** (modo, permiso, cardinalidad y
-    límite declarados en ``experiments/adr002/benchmark/cases_v0_5.json`` y
-    adjudicados en ``references_v0_5.json``, traducidos a ``Peticion`` por
-    ``experiments/adr002/round/cases.py:334-366``), que el alcance de la
-    incidencia #457 no autorizaba portar.
+    ADR-111 (incidencia #461) midió el motor con la petición por caso ya
+    idéntica a la del laboratorio, pero **sin** índice de categoría ni
+    filtro: 23/47, 90 elementos de más, 10 omisiones críticas, cobertura
+    63/81 (77.8%). Su diagnóstico, con cita de fichero y línea: el 29/47 que
+    la Definición de Producto registra es el resultado conjunto del motor
+    **con** el índice de categoría (M9) **y** el filtro de relevancia con
+    modelo local vía Ollama (M10) — ninguna de las dos piezas estaba
+    conectada a este arnés todavía.
 
-    La incidencia #461 porta esa petición por caso: los campos
-    ``peticion_p2`` del fixture, el traductor
-    (``tests.acceptance.staged_engine_case_translation.peticion_desde_caso``,
-    portado de ``cases.py:334-366``) y el cableado de
-    ``_ejecutar_banco_motor_portado`` para usarlos en vez de la política
-    uniforme. Medido: aciertos_exactos=23/47, elementos_de_mas=90,
-    omisiones_criticas=10, cobertura=63/81 (77.8%) — tres de las cuatro
-    métricas mejoran de forma sustancial frente a la política uniforme
-    (11/47, 186, 60/81; la cobertura alcanza exactamente el suelo
-    provisional de D2), la cuarta (omisiones críticas) empeora en una
-    unidad (9 → 10); ninguna alcanza el suelo de D1 (aciertos exactos ≥
-    29/47, elementos de más ≤ 21, omisiones críticas ≤ 1).
+    La incidencia #463 conecta esas dos piezas — ya portadas a `main` como
+    código de producto detrás de la misma puerta `category_matching_enabled`
+    (ADR-109/110/111), nunca abierta contra `Memory`/`Decision` reales —: el
+    índice de categoría (`sirius.domain.relevance.category_matches_query`,
+    vocabulario y categoría documentados en
+    `tests.acceptance.staged_engine_category_and_relevance`) y un doble
+    determinista del filtro de relevancia que reproduce, elemento a
+    elemento, la corrida congelada que produjo las cifras de D1
+    (`tests/acceptance/fixtures/relevance_filter_frozen_run.json`), con el
+    mismo candado que `ContextBuilder._apply_relevance_filter`
+    (`src/sirius/application/context.py:239-258`).
 
-    ADR-111 diagnostica, con cita de fichero y línea, que la petición por
-    caso ya es idéntica a la del laboratorio (mismo traductor, mismos
-    campos, mismo corpus) y que la brecha restante no es de traducción: el
-    29/47 que la Definición de Producto registra
-    (``docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:63-74``)
-    es el resultado conjunto del motor de búsqueda **con** el índice de
-    categoría (M8) **y** el filtro de relevancia con modelo local vía
-    Ollama (M9/M10) — la propia rama de laboratorio documenta que
-    "búsqueda sola" mide 24/47 y que el filtro es lo que sube a 29/47
-    (``experiments/adr002/modelo_local/filtro.py:76-89`` en
-    ``evidence/adr001-spikes``). Ninguna de esas dos piezas está en el
-    alcance de esta incidencia ni de la #457 anterior.
+    Medido: aciertos_exactos=23/47 (sin cambio), elementos_de_mas=108 (90 →
+    108, empeora), omisiones_criticas=9 (10 → 9, mejora), cobertura=64/81,
+    79.0% (63/81 → 64/81, mejora). ADR-112 diagnostica, con cita de fichero
+    y línea, por qué: `category_matches_query` (`src/sirius/domain/
+    relevance.py:142-171`) exige que la consulta active exactamente un
+    término del vocabulario congelado (`experiments/adr002/lateral/
+    categoria.py:72-78` en `evidence/adr001-spikes`) para contar como
+    coincidencia — cuatro de las cinco consultas del banco que ese
+    vocabulario debería alcanzar activan **dos** términos a la vez
+    (`"esencial"` y `"restriccion"` juntos) y quedan sin señal por diseño ya
+    aprobado de M9, no por un defecto de esta incidencia
+    (`tests/unit/test_relevance_domain.py::
+    test_category_matches_query_is_false_when_the_query_activates_more_than_one_category`).
+    Y el candado de M10 (`src/sirius/application/context.py:239-258`)
+    protege la unión de "conservado por el filtro", "categoría de máxima
+    criticidad" y "sin categoría todavía": con solo dos categorías posibles
+    en este banco (la única que el arnés deriva de la criticidad, o
+    ninguna), esa unión cubre el 100 % de los candidatos, así que el filtro
+    de relevancia nunca descarta nada aquí — todo el movimiento medido lo
+    produce el índice de categoría por sí solo, ampliando el conjunto
+    admitido (por eso mejoran cobertura y omisiones críticas a la vez que
+    empeoran los elementos de más). Ninguna de las cuatro cifras alcanza el
+    suelo de D1 (aciertos exactos ≥ 29/47, elementos de más ≤ 21, omisiones
+    críticas ≤ 1); la cobertura sí supera el suelo provisional de D2 (64/81
+    > 63/81), como ya ocurría con ADR-111.
 
-    Igual que ADR-109/ADR-110: el suelo de D1 **no** queda afirmado aquí
+    Igual que ADR-109/110/111: el suelo de D1 **no** queda afirmado aquí
     como aserción dura. Afirmar 29/47 dejaría `uv run pytest` en rojo;
-    debilitarlo a 23 falsearía la prueba declarando cumplido un suelo que
-    D1 fija en 29. Queda medido y publicado, nunca exigido."""
+    debilitar cualquiera de las cuatro cotas por debajo de lo medido
+    falsearía la prueba. Queda medido y publicado, nunca exigido."""
     metricas = ejecucion_del_banco_motor_portado.metricas
 
     print(
         "\nPA-0.2-REC-01 (motor por etapas portado con petición por caso, "
-        "ADR-109/ADR-110/ADR-111/#461; puertas G1-G12 y agrupación de "
-        "equivalentes activas en el arnés): "
+        "índice de categoría y filtro de relevancia, ADR-109/ADR-110/"
+        "ADR-111/ADR-112/#463; puertas G1-G12, agrupación de equivalentes, "
+        "M9 y M10 activos en el arnés): "
         f"aciertos_exactos={metricas.aciertos_exactos}/47 "
         f"elementos_de_mas={metricas.elementos_de_mas} "
         f"omisiones_criticas={metricas.omisiones_criticas} "
@@ -855,7 +918,7 @@ def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metric
     )
 
     # CODEX-003: misma convención que el test anterior, sobre la medición ya
-    # publicada arriba (23/47, 90, 10, 63/81).
+    # publicada arriba (23/47, 108, 9, 64/81).
     assert metricas.aciertos_exactos >= _MINIMO_ACIERTOS_EXACTOS_MOTOR
     assert metricas.elementos_de_mas <= _MAXIMO_ELEMENTOS_DE_MAS_MOTOR
     assert metricas.omisiones_criticas <= _MAXIMO_OMISIONES_CRITICAS_MOTOR
@@ -900,3 +963,154 @@ def test_es_critico_lee_nivel_pero_nunca_razon_segura() -> None:
     rutas = set(accesos)
     assert ("criticidad", "nivel") in rutas
     assert ("criticidad", "razon_segura") not in rutas
+
+
+# -- Índice de categoría y filtro de relevancia (incidencia #463) -----------
+
+
+def test_solo_una_consulta_del_banco_activa_el_indice_de_categoria_sin_ambiguedad() -> None:
+    """CODEX-004: de las cinco consultas del banco que contienen alguna
+    palabra del vocabulario congelado (`VOCABULARIO_DE_CATEGORIA`), cuatro
+    contienen dos a la vez (`"esencial"` y `"restriccion"`) y quedan sin
+    activación porque `category_matches_query` exige exactamente un término
+    activado (`src/sirius/domain/relevance.py:142-171`) — diseño ya
+    aprobado de M9, no una laguna de este arnés. Fija el hallazgo como
+    prueba de forma para que ADR-112 no quede sin cobertura si el fixture
+    del banco cambia."""
+    banco = _fixture()
+    activan_sin_ambiguedad = []
+    activan_con_ambiguedad = []
+    for caso in banco["casos"]:
+        consulta = caso["consulta"].casefold()
+        terminos = {t for t in VOCABULARIO_DE_CATEGORIA if t in consulta}
+        if not terminos:
+            continue
+        if len(terminos) == 1:
+            activan_sin_ambiguedad.append(caso["id"])
+        else:
+            activan_con_ambiguedad.append(caso["id"])
+
+    assert activan_sin_ambiguedad == ["B04-CA-02"]
+    assert set(activan_con_ambiguedad) == {"B04-CA-26", "B04-CA-31", "B04-CA-38", "B04-CA-44"}
+    # La única activación sin ambigüedad debe ser, verbatim, el único término
+    # que este arnés asigna como categoría — si no, ninguna coincidencia real
+    # sería posible.
+    caso_no_ambiguo = next(c for c in banco["casos"] if c["id"] == "B04-CA-02")
+    assert category_matches_query(
+        CATEGORIA_DE_MAXIMA_CRITICIDAD,
+        caso_no_ambiguo["consulta"],
+        VOCABULARIO_DE_CATEGORIA,
+    )
+
+
+def test_el_doble_del_filtro_de_relevancia_reproduce_la_corrida_congelada() -> None:
+    """El doble determinista (`filtro_congelado_conserva`) da, para cada
+    identidad que la corrida congelada examinó en cada caso, la misma
+    decisión (conservar/descartar) que esa corrida — la garantía que la
+    incidencia #463 pide ("misma decisión por elemento que aquella
+    corrida"), verificada directamente contra el fixture portado."""
+    datos = json.loads(
+        (Path(__file__).parent / "fixtures" / "relevance_filter_frozen_run.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    casos = datos["casos"]
+    assert len(casos) == 47
+
+    comprobaciones = 0
+    for caso_id, veredicto in casos.items():
+        entraron = set(veredicto["entraron_al_filtro"])
+        conservados = set(veredicto["conservados_por_el_modelo"])
+        assert conservados <= entraron
+        for identidad in entraron:
+            esperado = identidad in conservados
+            assert filtro_congelado_conserva(caso_id, identidad) is esperado
+            comprobaciones += 1
+    assert comprobaciones > 0
+
+    # Identidad nunca examinada por la corrida congelada para ese caso: el
+    # doble falla abierto, igual que `RelevanceFilterPort` ante cualquier
+    # fallo real.
+    assert filtro_congelado_conserva("B04-CA-01", "MEM-999") is True
+    # Caso que la corrida congelada nunca adjudicó: también falla abierto.
+    assert filtro_congelado_conserva("CASO-INEXISTENTE", "MEM-001") is True
+
+
+def test_el_candado_protege_todo_candidato_de_este_banco() -> None:
+    """ADR-112: con solo dos categorías posibles en este banco —la única
+    categoría de máxima criticidad que el arnés deriva de la criticidad del
+    canon, o ninguna—, el candado de M10 (`aplicar_candado`, misma unión de
+    tres conjuntos que `ContextBuilder._apply_relevance_filter`,
+    `src/sirius/application/context.py:239-258`) protege el 100 % de los
+    candidatos de este banco, incluso frente a un filtro que dijera que no
+    conserva nada. Es la razón exacta, fijada como prueba de forma, de que
+    el filtro de relevancia nunca descarte nada en la medición del banco."""
+    banco = _fixture()
+    categoria_por_identidad = {item["id"]: categoria_del_item(item) for item in banco["items"]}
+    assert set(categoria_por_identidad.values()) <= {CATEGORIA_DE_MAXIMA_CRITICIDAD, None}
+
+    candidatos = list(categoria_por_identidad)
+    protegido_de_todo = aplicar_candado(
+        candidatos=candidatos,
+        conserva_el_filtro=lambda _identidad: False,
+        categoria_por_identidad=categoria_por_identidad,
+    )
+    assert protegido_de_todo == frozenset(candidatos)
+
+
+@pytest.mark.skipif(
+    os.environ.get("SIRIUS_OLLAMA_LIVE_TESTS") != "1",
+    reason=(
+        "Modo opcional contra Ollama real en localhost (incidencia #463, "
+        "mismo patrón de activación explícita que usará la futura medición "
+        "de coincidencia de M11, SIRIUS-ARQ-0.2 §6.1 punto 6): se salta en "
+        "CI salvo que SIRIUS_OLLAMA_LIVE_TESTS=1, porque exige un servidor "
+        "Ollama real en http://localhost:11434."
+    ),
+)
+def test_el_filtro_ollama_real_no_rompe_el_banco() -> None:
+    """Sanity check opcional del adaptador real (`OllamaRelevanceFilterAdapter`,
+    ya portado a `main`, M10) contra un puñado de casos del banco, con un
+    modelo local de verdad en vez del doble determinista. No sustituye la
+    medición determinista de arriba —el resultado de un modelo real no es
+    reproducible entre corridas— y no afirma ninguna de las cuatro métricas
+    de D1: solo confirma que el adaptador real, invocado con datos del
+    banco, sigue cumpliendo su contrato de fallo abierto (nunca una
+    excepción, siempre un subconjunto de lo recibido)."""
+    banco = _fixture()
+    items_por_id = {item["id"]: item for item in banco["items"]}
+    ahora = datetime.now(UTC)
+
+    def _memoria(item_id: str, numero: int) -> RankedKnowledge:
+        item = items_por_id[item_id]
+        revision = MemoryRevision(
+            id=numero,
+            memory_id=numero,
+            version=1,
+            content=item["text"],
+            origin="banco de evidencia (incidencia #463)",
+            source_event_id=None,
+            created_at=ahora,
+        )
+        memoria = Memory(
+            id=numero,
+            status=MemoryStatus.CURRENT,
+            current_revision=revision,
+            created_at=ahora,
+            updated_at=ahora,
+        )
+        return RankedKnowledge(
+            kind=KnowledgeKind.MEMORY,
+            item=memoria,
+            subject_matches_query=False,
+            project_matches_active=False,
+            fts_match=True,
+        )
+
+    caso = next(c for c in banco["casos"] if c["id"] == "B04-CA-01")
+    candidatos = (_memoria("MEM-001", 1),)
+
+    adaptador = OllamaRelevanceFilterAdapter(model="llama3.2")
+    conservados = adaptador.filter_candidates(caso["consulta"], candidatos)
+
+    assert set(conservados) <= set(candidatos)
