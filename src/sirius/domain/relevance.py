@@ -28,6 +28,12 @@ caller-supplied booleans computed by the application layer (plain-string
 subject containment, and a real FTS5 ``MATCH`` against ``knowledge_fts``
 respectively) — nothing here inspects ``content`` itself or scores anything
 by similarity.
+
+M9 (SIRIUS-ARQ-0.2 §6.2, D7) adds a fourth structural signal,
+``category_match``, inserted after the FTS5 hit and before recency in
+``_sort_key`` — weaker than an explicit query match, because a candidate's
+category comes from a save-time classification, not from the query itself.
+``category_matches_query`` computes it deterministically, without a model.
 """
 
 from __future__ import annotations
@@ -42,6 +48,7 @@ from sirius.domain.memory import Memory, MemoryStatus
 __all__ = [
     "KnowledgeKind",
     "RankedKnowledge",
+    "category_matches_query",
     "rank_relevant_knowledge",
     "subject_matches_query",
 ]
@@ -72,6 +79,14 @@ class RankedKnowledge:
     subject_matches_query: bool
     project_matches_active: bool
     fts_match: bool
+    category_match: bool = False
+    """The fourth structural signal (M9, SIRIUS-ARQ-0.2 §6.2): whether the
+    candidate's already-persisted ``category`` (D7, §6.1) equals the single
+    category ``category_matches_query`` deterministically activates from the
+    query text. ``False`` by default so every existing caller that never
+    passes it keeps building a valid ``RankedKnowledge`` — the same "no
+    signal, never a penalty" default the other three booleans imply through
+    an unrelated/non-current candidate being filtered instead."""
 
     def __post_init__(self) -> None:
         if self.kind is KnowledgeKind.MEMORY and self.subject_matches_query:
@@ -117,6 +132,38 @@ def subject_matches_query(subject: str, query_text: str) -> bool:
     return normalized_subject in normalized_query or normalized_query in normalized_subject
 
 
+def category_matches_query(
+    category: str | None, query_text: str, vocabulary: frozenset[str]
+) -> bool:
+    """Whether a candidate's already-persisted ``category`` (D7, §6.1)
+    equals the single category ``query_text`` deterministically activates
+    against the closed vocabulary (M9, SIRIUS-ARQ-0.2 §6.2) — plain,
+    case-insensitive substring containment against ``vocabulary``, never a
+    call to ``CategoryClassifierPort`` or Ollama: classifying a candidate at
+    save time (§6.1) and comparing two already-known values at query time
+    (here) are deliberately two different operations, and only the first
+    ever uses a model.
+
+    ``category`` is ``None`` when the candidate has no classification yet
+    (D7 point 2's open failure) — never a match, the candidate keeps being
+    found through the other three signals instead. A blank query, or one
+    that activates no vocabulary term at all, matches nothing — it does not
+    penalize, exactly like ``subject_matches_query`` when the query names no
+    subject. A query that activates more than one vocabulary term at once is
+    ambiguous and also matches nothing: this function only ever affirms a
+    single, unambiguous activation, never guesses among several.
+    """
+    if category is None:
+        return False
+    normalized_query = query_text.strip().casefold()
+    if not normalized_query:
+        return False
+    activated = {term for term in vocabulary if term.casefold() in normalized_query}
+    if len(activated) != 1:
+        return False
+    return category in activated
+
+
 def _synthetic_id(candidate: RankedKnowledge) -> int:
     """The same synthetic id space ``knowledge_fts`` itself uses (B6a):
     ``memory_id * 2`` (even) for memories, ``decision_id * 2 + 1`` (odd) for
@@ -128,11 +175,12 @@ def _synthetic_id(candidate: RankedKnowledge) -> int:
     return candidate.item_id * 2 + 1
 
 
-def _sort_key(candidate: RankedKnowledge) -> tuple[bool, bool, bool, float, int]:
+def _sort_key(candidate: RankedKnowledge) -> tuple[bool, bool, bool, bool, float, int]:
     return (
         not candidate.subject_matches_query,
         not candidate.project_matches_active,
         not candidate.fts_match,
+        not candidate.category_match,
         -candidate.item.updated_at.timestamp(),
         _synthetic_id(candidate),
     )

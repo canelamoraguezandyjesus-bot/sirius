@@ -34,7 +34,9 @@ from sirius.application.delete_memory import DeleteMemoryUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
+from sirius.application.set_category import SetCategoryUseCase
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
+from sirius.application.tag_category import CategoryTargetKind
 from sirius.domain.conversation import SourceMessageChoice
 
 
@@ -59,12 +61,19 @@ def _two_projects(database_path: Path) -> tuple[int, int]:
     return active.id, other.id
 
 
-def _use_case(database_path: Path) -> RankRelevantKnowledgeUseCase:
+def _use_case(
+    database_path: Path,
+    *,
+    category_vocabulary: frozenset[str] = frozenset(),
+    category_matching_enabled: bool = False,
+) -> RankRelevantKnowledgeUseCase:
     return RankRelevantKnowledgeUseCase(
         memory_repository=build_sqlite_memory_repository(database_path),
         decision_repository=build_sqlite_decision_repository(database_path),
         project_repository=build_sqlite_project_repository(database_path),
         knowledge_search_repository=build_sqlite_knowledge_search_repository(database_path),
+        category_vocabulary=category_vocabulary,
+        category_matching_enabled=category_matching_enabled,
     )
 
 
@@ -270,3 +279,123 @@ def test_an_empty_query_returns_no_matches_without_erroring(tmp_path: Path) -> N
     assert sanitize_fts5_query("") == ""
     assert sanitize_fts5_query("   ") == ""
     assert sanitize_fts5_query("***") == ""
+
+
+# --- M9 (§6.2, D7 punto 6): category_match y su puerta de activación, en --
+# --- ambos estados — cerrada (por defecto) y abierta. -----------------------
+
+_VOCABULARY = frozenset({"trabajo", "personal", "salud"})
+
+
+@pytest.mark.integration
+def test_category_match_is_inert_against_a_real_candidate_while_the_gate_stays_closed(
+    tmp_path: Path,
+) -> None:
+    """D7 punto 6: mientras el propietario no registre el umbral de
+    coincidencia en STATUS.md, la puerta se queda cerrada — el repliegue más
+    seguro del diseño (§6.2/§6.3) — y ``category_match`` es ``False`` para
+    todo candidato real, sin alterar el orden de ninguno, aunque su
+    categoría persistida coincida exactamente con la que activa la
+    consulta. ``_use_case`` sin argumentos reproduce exactamente la
+    construcción de producción de hoy (los dos parámetros nuevos son
+    ``False``/vacío por defecto)."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    matching_category = SaveManualMemoryUseCase(unit_of_work).save(
+        "palabraunicacompartida con categoría trabajo"
+    )
+    SetCategoryUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CategoryTargetKind.MEMORY, matching_category.id, "trabajo")
+    no_category = SaveManualMemoryUseCase(unit_of_work).save("palabraunicacompartida sin categoría")
+    _set_updated_at(database_path, "memories", matching_category.id, "2020-01-01 00:00:00")
+    _set_updated_at(database_path, "memories", no_category.id, "2026-01-01 00:00:00")
+
+    result = _use_case(database_path).rank("palabraunicacompartida trabajo")
+
+    # Only recency (the categorized memory is older) decides — exactly the
+    # order the pipeline would produce with no category signal at all.
+    assert [candidate.item_id for candidate in result] == [no_category.id, matching_category.id]
+    assert all(candidate.category_match is False for candidate in result)
+
+
+@pytest.mark.integration
+def test_category_match_reorders_a_real_candidate_once_the_gate_is_open(tmp_path: Path) -> None:
+    """Simétrica de la anterior: con ``category_matching_enabled=True`` y el
+    vocabulario real, ``category_match`` sí compara la categoría persistida
+    de un candidato real contra la que activa la consulta, y sí decide el
+    orden — la misma pareja de recuerdos que, con la puerta cerrada, solo se
+    ordenaba por recencia."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    matching_category = SaveManualMemoryUseCase(unit_of_work).save(
+        "palabraunicacompartida con categoría trabajo"
+    )
+    SetCategoryUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CategoryTargetKind.MEMORY, matching_category.id, "trabajo")
+    no_category = SaveManualMemoryUseCase(unit_of_work).save("palabraunicacompartida sin categoría")
+    _set_updated_at(database_path, "memories", matching_category.id, "2020-01-01 00:00:00")
+    _set_updated_at(database_path, "memories", no_category.id, "2026-01-01 00:00:00")
+
+    result = _use_case(
+        database_path, category_vocabulary=_VOCABULARY, category_matching_enabled=True
+    ).rank("palabraunicacompartida trabajo")
+
+    # The older, categorized memory now outranks the newer, uncategorized
+    # one: category_match sits above recency in the sort tuple (§6.2).
+    assert [candidate.item_id for candidate in result] == [matching_category.id, no_category.id]
+    matched = next(c for c in result if c.item_id == matching_category.id)
+    uncategorized = next(c for c in result if c.item_id == no_category.id)
+    assert matched.category_match is True
+    assert uncategorized.category_match is False
+
+
+@pytest.mark.integration
+def test_category_match_stays_false_for_a_candidate_without_category_yet_even_with_the_gate_open(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    SaveManualMemoryUseCase(unit_of_work).save("recuerdosincategoriaunico trabajo")
+
+    result = _use_case(
+        database_path, category_vocabulary=_VOCABULARY, category_matching_enabled=True
+    ).rank("recuerdosincategoriaunico trabajo")
+
+    assert len(result) == 1
+    assert result[0].category_match is False
+
+
+@pytest.mark.integration
+def test_category_match_stays_false_when_the_query_activates_no_vocabulary_category(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    categorized = SaveManualMemoryUseCase(unit_of_work).save("recuerdoetiquetadounico")
+    SetCategoryUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CategoryTargetKind.MEMORY, categorized.id, "trabajo")
+
+    result = _use_case(
+        database_path, category_vocabulary=_VOCABULARY, category_matching_enabled=True
+    ).rank("recuerdoetiquetadounico sin ninguna categoría del vocabulario")
+
+    assert len(result) == 1
+    assert result[0].category_match is False
