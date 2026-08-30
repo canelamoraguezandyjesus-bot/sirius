@@ -28,17 +28,31 @@ módulo original:
 - **El tiempo.** Un caso puede declarar su instante objetivo como un
   intervalo; se toma **el extremo final** como instante objetivo.
 
-Una cuarta, no heredada del comentario original sino cerrada por la
-revisión de la incidencia #461 (el porte inicial la dejaba en su valor por
-defecto): **los objetivos de ``EXACTA``**. ``Peticion.objetivos`` es la
-cuota que ``_suficiente``/``evaluar_suficiencia`` exigen antes de detener
-la expansión en cardinalidad ``EXACTA`` (``staged_engine.py``); por
-defecto vale 1. El fixture no trae un campo de adjudicación separado para
-esta cuota (a diferencia del límite, que sí lo trae en
-``peticion_p2.limite``), pero por construcción del banco coincide con el
-número de elementos que ``resultado_esperado`` adjudica al caso, así que
-``EXACTA`` toma ``len(caso["resultado_esperado"])`` en vez del valor por
-defecto.
+Una cuarta, no heredada del comentario original ni de ``_traducir`` (que
+nunca asigna ``objetivos`` y lo deja siempre en su valor por defecto)
+sino lógica nueva de la incidencia #461, cerrada por su revisión: **los
+objetivos de ``EXACTA``**. ``Peticion.objetivos`` es la cuota que
+``_suficiente``/``evaluar_suficiencia`` exigen antes de detener la
+expansión en cardinalidad ``EXACTA`` (``staged_engine.py``); por defecto
+vale 1. El fixture no trae un campo de adjudicación separado para esta
+cuota (a diferencia del límite, que sí lo trae en ``peticion_p2.limite``),
+pero por construcción del banco, para los casos con algún elemento
+esperado, coincide con el número de elementos que ``resultado_esperado``
+adjudica al caso: ``EXACTA`` toma ``max(1, len(caso["resultado_esperado"]))``
+en vez del valor por defecto. El ``max(1, …)`` importa para los diez casos
+``EXACTA`` cuyo ``resultado_esperado`` está vacío (ninguno de los 47 debe
+igualarlo a cero): una cuota 0 satisface ``_suficiente`` de forma trivial
+tras la primera etapa (``0 >= 0``), deteniendo la expansión antes de
+recorrer las etapas que sí recorre un caso con cuota 1, y esa expansión
+más corta no es la traducción que ``_traducir`` produce — el original
+nunca adjudica una cuota, ni siquiera cero. Medido contra el banco
+(``test_peticion_desde_caso_no_asigna_cuota_cero_a_exacta_sin_resultado``
+y las cuatro métricas de ``test_pa_0_2_rec_01_banco_evidencia.py``),
+``max(1, …)`` no cambia ninguna de las cuatro cifras que ADR-111
+publica frente a tomar ``len(...)`` sin ese suelo: para estos diez casos
+el banco no tiene nada que el motor pueda encontrar en ninguna etapa
+autorizada, así que detenerse antes o después no cambia el conjunto
+final admitido.
 
 Ámbito no se traduce aquí: a diferencia del laboratorio (que numera
 proyectos del corpus), el arnés del banco ya resuelve ``caso["ambito"]``
@@ -120,7 +134,9 @@ def peticion_desde_caso(
     objetivo, duro = _limites(peticion_p2["limite"], sin_atar=limite_sin_atar)
     corte_registro = peticion_p2["corte_registro"]
     cardinalidad = _cardinalidad(str(peticion_p2["cardinalidad"]))
-    objetivos = len(caso["resultado_esperado"]) if cardinalidad is Cardinalidad.EXACTA else 1
+    objetivos = (
+        max(1, len(caso["resultado_esperado"])) if cardinalidad is Cardinalidad.EXACTA else 1
+    )
     return Peticion(
         operation_id=operation_id,
         consulta=str(caso["consulta"]),

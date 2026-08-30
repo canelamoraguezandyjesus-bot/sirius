@@ -40,14 +40,19 @@ con esos campos en vez de la política uniforme de ADR-110.
   `resultado_esperado` ni adjudicación existente.
 - `tests/acceptance/staged_engine_case_translation.py` — módulo nuevo del
   arnés de aceptación, citando su origen
-  (`experiments/adr002/round/cases.py:334-366`, `_traducir`), con las cuatro
-  traducciones no obvias del original (permiso `NO_AUTORIZADO` → propósito
-  vacío; límite no declarado → límite que no ata; tiempo en intervalo →
-  extremo final; objetivos de cardinalidad `EXACTA` →
-  `len(caso["resultado_esperado"])`, la cuota que `_suficiente`/
-  `evaluar_suficiencia` exigen antes de detener la expansión). No porta la carga de los tres artefactos congelados
-  (`cargar_artefactos`/`casos_ejecutables`): el fixture ya trae los campos
-  verbatim, así que solo se porta la traducción.
+  (`experiments/adr002/round/cases.py:334-366`, `_traducir`), con las tres
+  traducciones no obvias del original, heredadas literalmente de su
+  comentario (permiso `NO_AUTORIZADO` → propósito vacío; límite no
+  declarado → límite que no ata; tiempo en intervalo → extremo final), más
+  una cuarta pieza que **no** está en `_traducir` (que nunca asigna
+  `objetivos`, dejándolo siempre en su valor por defecto): los objetivos de
+  cardinalidad `EXACTA` toman `max(1, len(caso["resultado_esperado"]))`, la
+  cuota que `_suficiente`/`evaluar_suficiencia` exigen antes de detener la
+  expansión — lógica nueva de esta incidencia, cerrada por su revisión (ver
+  «Diagnóstico»), no una traducción heredada del original. No porta la
+  carga de los tres artefactos congelados (`cargar_artefactos`/
+  `casos_ejecutables`): el fixture ya trae los campos verbatim, así que
+  solo se porta la traducción.
 - `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py` (`_ejecutar_banco_motor_portado`)
   — cableado para construir la `Peticion` de cada caso con
   `peticion_desde_caso(caso, ...)` en vez de la política uniforme
@@ -87,18 +92,48 @@ extremo final para el único caso que lo declara como intervalo).
 La revisión de esta incidencia detectó una diferencia real que sí quedaba
 pendiente: los tres casos con cardinalidad `EXACTA` y más de un elemento
 esperado (`B04-CA-19` con 3, `B04-CA-23` y `B04-CA-43` con 2) recibían
-`Peticion.objetivos` en su valor por defecto (1) en vez de la cuota real
-adjudicada, porque el porte inicial no la transportaba. Corregido —
-`objetivos` toma ahora `len(caso["resultado_esperado"])` cuando la
-cardinalidad es `EXACTA` (`tests/acceptance/staged_engine_case_translation.py`)—,
-la medición no cambia: `uv run pytest
+`Peticion.objetivos` en su valor por defecto (1), que aquí sí se quedaba
+corto: con menos elementos de los que el caso declara en
+`resultado_esperado`, la expansión se detenía antes de buscar el resto.
+Esto **no** es una traducción que `_traducir` hiciera y el porte inicial
+hubiera perdido — el original nunca asigna `objetivos`, así que no hay
+ninguna "cuota real adjudicada" que transportar desde `cases.py`; es lógica
+nueva, cerrada por esta revisión, que corrige una limitación que el propio
+`_traducir` también tenía (nunca detectada porque el laboratorio no medía
+estos tres casos con la petición por caso completa). Corregido — `objetivos`
+toma ahora `max(1, len(caso["resultado_esperado"]))` cuando la cardinalidad
+es `EXACTA` (`tests/acceptance/staged_engine_case_translation.py`)—, la
+medición no cambia: `uv run pytest
 tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py -q -s` sigue
 imprimiendo 23/47, 90, 10, 63/81, idéntico al porte inicial, porque en los
 tres casos la etapa que ya satisfacía la cuota antigua (1) contenía, sin
 necesidad de expansión adicional, los mismos elementos que la cuota
-corregida permite seguir buscando. No hay ninguna otra diferencia de
-traducción pendiente: `peticion_desde_caso` es `_traducir` línea a línea
-sobre los mismos campos.
+corregida permite seguir buscando.
+
+La misma revisión detectó una segunda pieza, no descrita en la primera
+versión de este ADR: diez casos `EXACTA` declaran `resultado_esperado=[]`
+(`B04-CA-04/09/10/12/15/18/24/35/46/49`), no solo los tres multiobjetivo de
+arriba. `len(caso["resultado_esperado"])` los habría dejado en
+`objetivos=0`, y una cuota 0 satisface `_suficiente`/`evaluar_suficiencia`
+de forma trivial (`0 >= 0`) nada más terminar la primera etapa, deteniendo
+la expansión antes de recorrer las etapas que sí recorre cualquier caso con
+cuota 1 — otra divergencia de `_traducir`, que nunca adjudica una cuota, ni
+siquiera cero. El `max(1, …)` cubre también estos diez casos, conservando
+el suelo histórico (1) en vez de dejarlos en cero. Verificado con `git
+stash` del `max(1, …)` (dejando `len(...)` sin suelo) y repetición de `uv
+run pytest tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py -q -s`:
+misma medición exacta, 23/47, 90, 10, 63/81 — para estos diez casos el
+banco no tiene nada que el motor pueda encontrar en ninguna etapa
+autorizada, así que detenerse antes (cuota 0) o después (cuota 1) no cambia
+el conjunto final admitido. `test_peticion_desde_caso_no_asigna_cuota_cero_a_exacta_sin_resultado`
+(`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`) fija los diez
+casos y su cuota (1) como prueba de forma, para que esta divergencia no
+vuelva a quedar sin cubrir.
+
+Con las dos piezas cerradas, no hay ninguna otra diferencia de traducción
+pendiente entre lo heredado literalmente de `_traducir` (permiso, límite,
+tiempo) y lo que `peticion_desde_caso` añade por revisión de esta
+incidencia (objetivos de `EXACTA`, con su suelo de 1).
 
 La diferencia que queda no está en el traductor ni en el arnés: está en
 **qué mide el banco de 47 casos frente a qué mide D1**. El propio 29/47 que
@@ -244,19 +279,31 @@ el motor de búsqueda para alcanzar 29/47, o si prefiere una vía distinta.
   cobertura=63/81 (77.8%)` para la petición por caso portada (este ADR).
 - Lectura de `experiments/adr002/round/cases.py:334-366` (`_traducir`) en
   `evidence/adr001-spikes`, comparada línea a línea con `peticion_desde_caso`
-  de `tests/acceptance/staged_engine_case_translation.py`:
-  mismas cuatro traducciones no obvias (permiso, límite, tiempo, objetivos
-  de `EXACTA`), mismos campos de entrada (`peticion_p2` del fixture,
-  verbatim de `cases_v0_5.json`/`references_v0_5.json`, commit
-  `dfdcdaff04dcba10939cc0b0569c55b6a636296f`).
-- Tras cerrar el hallazgo de revisión sobre `objetivos` (ver «Diagnóstico»),
-  se repitió `uv run pytest
+  de `tests/acceptance/staged_engine_case_translation.py`: mismas tres
+  traducciones no obvias heredadas literalmente (permiso, límite, tiempo),
+  mismos campos de entrada (`peticion_p2` del fixture, verbatim de
+  `cases_v0_5.json`/`references_v0_5.json`, commit
+  `dfdcdaff04dcba10939cc0b0569c55b6a636296f`); `_traducir` nunca asigna
+  `objetivos` (confirmado con `git show
+  dfdcdaff04dcba10939cc0b0569c55b6a636296f:experiments/adr002/round/cases.py
+  | grep -n objetivos`, sin resultados dentro de la función), así que la
+  cuarta pieza (objetivos de `EXACTA`) es lógica nueva de esta incidencia,
+  no una traducción heredada.
+- Tras cerrar el hallazgo de revisión sobre `objetivos` para los tres casos
+  multiobjetivo (ver «Diagnóstico»), se repitió `uv run pytest
   tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py -q -s`: misma
   medición, `aciertos_exactos=23/47 elementos_de_mas=90
   omisiones_criticas=10 cobertura=63/81 (77.8%)`, con `git stash` del
   cambio y repetición para confirmar que el resultado no dependía de la
   corrección — no la mueve, así que las cotas de no regresión y la tabla de
   arriba no cambian.
+- Tras cerrar el segundo hallazgo (los diez casos `EXACTA` con
+  `resultado_esperado=[]`, cambiando `len(...)` por `max(1, len(...))`), se
+  repitió la misma prueba con y sin el suelo (`git stash`): misma medición
+  exacta en ambos casos, `aciertos_exactos=23/47 elementos_de_mas=90
+  omisiones_criticas=10 cobertura=63/81 (77.8%)` — el suelo no mueve
+  ninguna de las cuatro métricas, así que las cotas de no regresión
+  tampoco cambian.
 - Lectura de
   `docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:63-74`,
   `docs/evolution/SIRIUS_PLAN_PRUEBAS_0.2_v0.1_PROPUESTO.md:76` y

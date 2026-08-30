@@ -697,6 +697,54 @@ def test_peticion_desde_caso_propaga_objetivos_de_exacta() -> None:
     assert peticion_exhaustiva.objetivos == 1
 
 
+#: CODEX-001: los diez casos `EXACTA` cuyo `resultado_esperado` está vacío.
+_CASOS_EXACTA_SIN_RESULTADO_ESPERADO: Final[frozenset[str]] = frozenset(
+    {
+        "B04-CA-04",
+        "B04-CA-09",
+        "B04-CA-10",
+        "B04-CA-12",
+        "B04-CA-15",
+        "B04-CA-18",
+        "B04-CA-24",
+        "B04-CA-35",
+        "B04-CA-46",
+        "B04-CA-49",
+    }
+)
+
+
+def test_peticion_desde_caso_no_asigna_cuota_cero_a_exacta_sin_resultado() -> None:
+    """CODEX-001: diez casos `EXACTA` declaran `resultado_esperado=[]`, no
+    solo los tres multiobjetivo que ADR-111 describe. `len([])` los dejaría
+    en `objetivos=0`, y `_suficiente`/`evaluar_suficiencia`
+    (`sirius.domain.staged_engine`) declaran esa cuota cumplida de forma
+    trivial (`0 >= 0`) nada más terminar la primera etapa, deteniendo la
+    expansión antes de recorrer las etapas que sí recorre cualquier otro
+    caso — una divergencia de `_traducir` (que nunca adjudica una cuota,
+    ni cero) que ADR-111 no documentaba ni esta prueba cubría. El traductor
+    conserva el suelo histórico (1) para estos diez casos en vez de
+    `len(resultado_esperado)`."""
+    banco = _fixture()
+    casos_por_id = {caso["id"]: caso for caso in banco["casos"]}
+    ambito = Ambito(global_=True, proyectos=())
+    limite_sin_atar = banco["conteos"]["items_del_canon"]
+
+    casos_exacta_sin_resultado = {
+        caso["id"]
+        for caso in banco["casos"]
+        if caso["peticion_p2"]["cardinalidad"] == "EXACTA" and not caso["resultado_esperado"]
+    }
+    assert casos_exacta_sin_resultado == _CASOS_EXACTA_SIN_RESULTADO_ESPERADO
+
+    for identidad in _CASOS_EXACTA_SIN_RESULTADO_ESPERADO:
+        caso = casos_por_id[identidad]
+        peticion = peticion_desde_caso(
+            caso, operation_id="test", ambito=ambito, limite_sin_atar=limite_sin_atar
+        )
+        assert peticion.objetivos == 1
+
+
 def test_el_banco_se_ejecuta_contra_el_pipeline_actual_y_reporta_las_cuatro_metricas(
     ejecucion_del_banco: _EjecucionDelBanco,
 ) -> None:
