@@ -55,15 +55,31 @@ PROMOCION_DE_REPRESENTANTE_DECLARADA: Final[str] = (
 
 #: Complemento de ``PROMOCION_DE_REPRESENTANTE_DECLARADA`` (CODEX-001,
 #: incidencia #457, cuarta ronda): ``explicar()`` solo puede afirmar la
-#: promoción cuando de verdad ocurrió —resultado sin grupo, o miembro cuyo
-#: representante queda en otro nivel de criticidad, nunca la disparan
-#: (``_con_representante_al_frente`` en ``staged_engine.py``)—, así que
-#: necesita esta segunda frase para los demás casos en vez de callar o
-#: repetir la primera sin que aplique.
+#: promoción cuando de verdad ocurrió. Esta frase cubre exclusivamente los
+#: dos casos en los que el adelanto ni siquiera se habilita —resultado sin
+#: grupo, o miembro cuyo representante queda en otro nivel de
+#: criticidad—; no cubre el caso en que sí se habilita pero no se ejecuta
+#: ningún movimiento, que tiene su propia frase,
+#: ``REPRESENTANTE_YA_AL_FRENTE_DECLARADO`` (CODEX-001, incidencia #457,
+#: séptima ronda): antes de esa separación, esta frase se usaba también
+#: para ese tercer caso y afirmaba una causa falsa —negaba pertenencia a un
+#: grupo o coincidencia de criticidad que sí existían.
 SIN_PROMOCION_DE_REPRESENTANTE_DECLARADA: Final[str] = (
     "no hay adelantamiento de representante que describir: este resultado "
     "no pertenece a ningún grupo de equivalentes, o su representante queda "
     "en otro nivel de criticidad"
+)
+
+#: Tercer caso, distinto de los dos anteriores (CODEX-001, incidencia #457,
+#: séptima ronda): el resultado sí pertenece a un grupo de equivalentes y su
+#: representante sí comparte su nivel de criticidad —las dos condiciones que
+#: habilitan el adelanto en ``_con_representante_al_frente``—, pero el
+#: representante ya encabezaba a este resultado antes de aplicarlo, así que
+#: el ``insert`` nunca se ejecutó y no hay movimiento real que declarar.
+REPRESENTANTE_YA_AL_FRENTE_DECLARADO: Final[str] = (
+    "no hay adelantamiento de representante que describir: el representante "
+    "de su grupo de equivalentes ya encabezaba esta posición, dentro de su "
+    "mismo nivel de criticidad, antes de aplicar la promoción"
 )
 
 #: Marca base cuando el elemento es actual.
@@ -223,15 +239,19 @@ def explicar(
     criticidad: CriticidadAplicada | None = None,
     grupo: GrupoDeEquivalentes | None = None,
     promocion_real: bool = False,
+    representante_ya_al_frente: bool = False,
 ) -> Explicacion:
     """Los campos de la explicación mínima, todos poblados.
 
     Ninguno transcribe el texto del item: describen por qué ese resultado
-    está ahí. ``promocion_real`` es responsabilidad exclusiva de quien llama
-    (``recuperar()`` en ``staged_engine.py``, que sabe si
-    ``_con_representante_al_frente`` de verdad promovió este resultado):
-    esta función solo elige, entre las dos frases ya escritas, cuál describe
-    lo que realmente ocurrió (CODEX-001, incidencia #457, cuarta ronda).
+    está ahí. ``promocion_real`` y ``representante_ya_al_frente`` son
+    responsabilidad exclusiva de quien llama (``recuperar()`` en
+    ``staged_engine.py``, que sabe si ``_con_representante_al_frente`` de
+    verdad promovió este resultado, y si no lo hizo porque el adelanto ni
+    se habilitó o porque se habilitó sin llegar a ejecutarse): esta función
+    solo elige, entre las tres frases ya escritas, cuál describe lo que
+    realmente ocurrió (CODEX-001, incidencia #457, cuarta y séptima ronda).
+    Como mucho uno de los dos parámetros es verdadero.
     """
     item = candidata.item
     atribuida = item.clase_de_evidencia is not ClaseDeEvidencia.CANONICA
@@ -239,11 +259,12 @@ def explicar(
     procedencias = [f"{item.clase.value} {origen} via {candidata.lectura.medio}"]
     if grupo is not None:
         procedencias.extend(grupo.procedencias_adicionales)
-    promocion = (
-        PROMOCION_DE_REPRESENTANTE_DECLARADA
-        if promocion_real
-        else SIN_PROMOCION_DE_REPRESENTANTE_DECLARADA
-    )
+    if promocion_real:
+        promocion = PROMOCION_DE_REPRESENTANTE_DECLARADA
+    elif representante_ya_al_frente:
+        promocion = REPRESENTANTE_YA_AL_FRENTE_DECLARADO
+    else:
+        promocion = SIN_PROMOCION_DE_REPRESENTANTE_DECLARADA
     return Explicacion(
         item_id=item.id,
         coincidencia=f"{candidata.etapa.value} por {candidata.senal}",
@@ -299,6 +320,8 @@ def fallos_de_explicacion(resultados: Sequence[Resultado]) -> list[str]:
 __all__ = [
     "EJES_DE_ORDEN_DECLARADOS",
     "PROMOCION_DE_REPRESENTANTE_DECLARADA",
+    "REPRESENTANTE_YA_AL_FRENTE_DECLARADO",
+    "SIN_PROMOCION_DE_REPRESENTANTE_DECLARADA",
     "PasoDeEtapa",
     "Traza",
     "estado_publicado",

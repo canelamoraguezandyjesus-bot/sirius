@@ -54,6 +54,7 @@ from sirius.domain.staged_engine_contracts import (
     ContextoDeEtapa,
     Criticidad,
     Etapa,
+    Explicacion,
     GrupoDeEquivalentes,
     Peticion,
     PlanoComun,
@@ -136,7 +137,7 @@ def _con_representante_al_frente(
     ordenadas: Sequence[Candidata],
     criticidad_de: Callable[[str], Criticidad],
     representante_de: Callable[[str], str | None],
-) -> tuple[tuple[Candidata, ...], frozenset[str]]:
+) -> tuple[tuple[Candidata, ...], frozenset[str], frozenset[str]]:
     """``GrupoDeEquivalentes`` exige que "el representante encabeza": este
     paso, aparte de ``_clave_de_orden``, adelanta cada representante hasta
     justo delante del primero de sus propios miembros —en el mismo orden en
@@ -145,22 +146,30 @@ def _con_representante_al_frente(
     criticidad, la única dimensión que ya dominaba el orden antes de esta
     corrección; ``G12`` protege el resto.
 
-    Devuelve, junto al orden resultante, el conjunto de representantes que
-    de verdad cambiaron de posición (CODEX-001, incidencia #457, quinta
-    ronda): compartir nivel de criticidad con el candidato es la condición
-    que habilita el adelanto, no la prueba de que ocurrió — si el
+    Devuelve, junto al orden resultante, dos conjuntos de representantes
+    (CODEX-001, incidencia #457, quinta y séptima ronda). El primero,
+    ``representantes_promovidos``, son los que de verdad cambiaron de
+    posición: compartir nivel de criticidad con el candidato es la
+    condición que habilita el adelanto, no la prueba de que ocurrió — si el
     representante ya encabezaba a ese miembro, el ``insert`` de abajo nunca
-    se ejecuta y no hay movimiento real que declarar.
+    se ejecuta y no hay movimiento real que declarar. El segundo,
+    ``representantes_con_adelanto_habilitado``, son los que llegaron a esa
+    condición —al menos un miembro propio comparte su nivel de
+    criticidad— con independencia de si el ``insert`` se ejecutó: sirve
+    para que la traza distinga, sobre el propio representante, entre "no
+    tiene ningún miembro en su nivel de criticidad" (mecanismo inaplicable)
+    y "tiene uno, pero ya lo encabezaba" (mecanismo aplicable, sin
+    movimiento).
     """
     resultado = list(ordenadas)
-    representantes_ya_al_frente: set[str] = set()
+    representantes_con_adelanto_habilitado: set[str] = set()
     representantes_promovidos: set[str] = set()
     for candidata in ordenadas:
         representante = representante_de(candidata.item.id)
         if (
             representante is None
             or representante == candidata.item.id
-            or representante in representantes_ya_al_frente
+            or representante in representantes_con_adelanto_habilitado
         ):
             continue
         if criticidad_de(representante) != criticidad_de(candidata.item.id):
@@ -172,33 +181,60 @@ def _con_representante_al_frente(
         if indice_representante > indice_miembro:
             resultado.insert(indice_miembro, resultado.pop(indice_representante))
             representantes_promovidos.add(representante)
-        representantes_ya_al_frente.add(representante)
-    return tuple(resultado), frozenset(representantes_promovidos)
+        representantes_con_adelanto_habilitado.add(representante)
+    return (
+        tuple(resultado),
+        frozenset(representantes_promovidos),
+        frozenset(representantes_con_adelanto_habilitado),
+    )
 
 
-def _promocion_real(
+def _estado_de_promocion(
     identidad: str,
     grupo: GrupoDeEquivalentes | None,
     criticidad_de: Callable[[str], Criticidad],
     representantes_promovidos: frozenset[str],
-) -> bool:
+    representantes_con_adelanto_habilitado: frozenset[str],
+) -> tuple[bool, bool]:
     """Refleja el movimiento que de verdad ejecutó
-    ``_con_representante_al_frente`` (CODEX-001, incidencia #457, quinta
-    ronda), no las condiciones que lo habilitan: sin grupo no hay promoción;
-    y compartir nivel de criticidad con el representante no basta, porque el
-    representante puede ya encabezar el orden sin que se haya ejecutado
-    ningún ``insert``. Solo ``representantes_promovidos`` —el conjunto que
-    ese paso devuelve cuando sí lo ejecuta— certifica que hubo movimiento.
-    Es plomería de la traza, no una segunda fuente de verdad sobre el orden:
-    ninguna llamada aquí puede cambiar qué posición ocupa nadie.
+    ``_con_representante_al_frente`` (CODEX-001, incidencia #457, quinta y
+    séptima ronda), no las condiciones que lo habilitan: sin grupo, o con el
+    representante en otro nivel de criticidad, no hay promoción posible.
+    Compartir nivel de criticidad con el representante tampoco basta por sí
+    solo, porque el representante puede ya encabezar el orden sin que se
+    haya ejecutado ningún ``insert`` — ese tercer caso (mismo grupo, misma
+    criticidad, sin movimiento) es distinto de los dos anteriores y necesita
+    su propia frase en ``explicar()``, no la de "no pertenece a un grupo o
+    tiene otra criticidad", que sería falsa para él. Solo
+    ``representantes_promovidos`` —el conjunto que ``_con_representante_al_
+    frente`` devuelve cuando sí ejecuta el ``insert``— certifica que hubo
+    movimiento. Es plomería de la traza, no una segunda fuente de verdad
+    sobre el orden: ninguna llamada aquí puede cambiar qué posición ocupa
+    nadie.
+
+    Cuando ``identidad`` es el propio representante, comparar su criticidad
+    contra la suya propia es una tautología —siempre coincide— y no dice
+    nada sobre si el grupo tiene algún miembro en su nivel de criticidad.
+    Por eso ese caso no usa la comparación de criticidad: usa
+    ``representantes_con_adelanto_habilitado``, que solo contiene
+    representantes con al menos un miembro propio en su mismo nivel.
+
+    Devuelve ``(promocion_real, representante_ya_al_frente)``: como mucho
+    uno de los dos es verdadero.
     """
     if grupo is None:
-        return False
-    if grupo.representante not in representantes_promovidos:
-        return False
+        return False, False
     if identidad == grupo.representante:
-        return True
-    return criticidad_de(grupo.representante) == criticidad_de(identidad)
+        if grupo.representante in representantes_promovidos:
+            return True, False
+        if grupo.representante in representantes_con_adelanto_habilitado:
+            return False, True
+        return False, False
+    if criticidad_de(grupo.representante) != criticidad_de(identidad):
+        return False, False
+    if grupo.representante in representantes_promovidos:
+        return True, False
+    return False, True
 
 
 def _suficiente(contadas: int, peticion: Peticion) -> bool:
@@ -313,9 +349,11 @@ def recuperar(
         return grupo_por_item[identidad].representante if identidad in grupo_por_item else None
 
     ordenadas_por_criticidad = sorted(unicas, key=lambda c: _clave_de_orden(c, criticidad_de))
-    ordenadas, representantes_promovidos = _con_representante_al_frente(
-        ordenadas_por_criticidad, criticidad_de, representante_de
-    )
+    (
+        ordenadas,
+        representantes_promovidos,
+        representantes_con_adelanto_habilitado,
+    ) = _con_representante_al_frente(ordenadas_por_criticidad, criticidad_de, representante_de)
     g12 = gates.aplicar_g12(ordenadas, peticion, criticidad_de, lambda i: i in grupo_por_item)
     traza.desbordamiento = g12.desbordamiento_declarado
     traza.desbordamiento_critico = g12.desbordamiento_critico
@@ -346,24 +384,30 @@ def recuperar(
         else:
             parada = stops.parada_por_agotamiento(peticion)
 
+    def _explicacion_de(orden: int, candidata: Candidata) -> Explicacion:
+        promocion_real, representante_ya_al_frente = _estado_de_promocion(
+            candidata.item.id,
+            grupo_por_item.get(candidata.item.id),
+            criticidad_de,
+            representantes_promovidos,
+            representantes_con_adelanto_habilitado,
+        )
+        return explicar(
+            candidata,
+            peticion,
+            orden,
+            criticidad=plano.criticidad_aplicada(candidata.item.id),
+            grupo=grupo_por_item.get(candidata.item.id),
+            promocion_real=promocion_real,
+            representante_ya_al_frente=representante_ya_al_frente,
+        )
+
     resultados = tuple(
         Resultado(
             item=candidata.item,
             etapa_de_origen=candidata.etapa,
             lectura=candidata.lectura,
-            explicacion=explicar(
-                candidata,
-                peticion,
-                orden,
-                criticidad=plano.criticidad_aplicada(candidata.item.id),
-                grupo=grupo_por_item.get(candidata.item.id),
-                promocion_real=_promocion_real(
-                    candidata.item.id,
-                    grupo_por_item.get(candidata.item.id),
-                    criticidad_de,
-                    representantes_promovidos,
-                ),
-            ),
+            explicacion=_explicacion_de(orden, candidata),
             posicion=orden,
             grupo=grupo_por_item.get(candidata.item.id),
             criticidad=plano.criticidad_aplicada(candidata.item.id),

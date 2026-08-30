@@ -48,6 +48,7 @@ from sirius.domain.staged_engine_contracts import (
 from sirius.domain.staged_engine_trace import (
     EJES_DE_ORDEN_DECLARADOS,
     PROMOCION_DE_REPRESENTANTE_DECLARADA,
+    REPRESENTANTE_YA_AL_FRENTE_DECLARADO,
     SIN_PROMOCION_DE_REPRESENTANTE_DECLARADA,
     explicar,
 )
@@ -485,15 +486,20 @@ def test_recuperar_does_not_claim_promotion_for_a_member_with_a_different_critic
 
 
 def test_recuperar_does_not_claim_promotion_when_the_representative_was_already_ahead() -> None:
-    """CODEX-001 (incidencia #457, quinta ronda): compartir nivel de
-    criticidad con el representante habilita el adelanto en
+    """CODEX-001 (incidencia #457, quinta y séptima ronda): compartir nivel
+    de criticidad con el representante habilita el adelanto en
     ``_con_representante_al_frente``, pero no demuestra que se haya
     ejecutado. Con MEMORIA:1 y MEMORIA:2 equivalentes, ambos en ``E1`` y
     ordenados ya como MEMORIA:1, MEMORIA:2 por ``_clave_de_orden`` (mismo
     sujeto, misma etapa, desempate por ``item.id``), el representante ya
     encabeza a su miembro antes de este paso: el ``insert`` de
     ``staged_engine.py`` nunca se ejecuta y ninguna de las dos explicaciones
-    puede afirmar que el representante se adelantó."""
+    puede afirmar que el representante se adelantó. Pero sí pertenecen a un
+    grupo existente y comparten nivel de criticidad, así que
+    ``SIN_PROMOCION_DE_REPRESENTANTE_DECLARADA`` —que niega justo eso—
+    publicaría una causa falsa (séptima ronda); la frase correcta es
+    ``REPRESENTANTE_YA_AL_FRENTE_DECLARADO``, que describe el tercer caso:
+    adelanto habilitado pero sin movimiento porque ya encabezaba."""
     en_e1_uno = _item("MEMORIA:1")
     en_e1_dos = _item("MEMORIA:2")
     peticion = _peticion(limite_duro=2)
@@ -516,7 +522,8 @@ def test_recuperar_does_not_claim_promotion_when_the_representative_was_already_
     for resultado in recuperacion.resultados:
         razon = resultado.explicacion.razon_de_orden
         assert PROMOCION_DE_REPRESENTANTE_DECLARADA not in razon
-        assert SIN_PROMOCION_DE_REPRESENTANTE_DECLARADA in razon
+        assert SIN_PROMOCION_DE_REPRESENTANTE_DECLARADA not in razon
+        assert REPRESENTANTE_YA_AL_FRENTE_DECLARADO in razon
 
 
 def test_con_representante_al_frente_never_relegates_a_member_behind_an_unrelated_item() -> None:
@@ -549,7 +556,7 @@ def test_con_representante_al_frente_never_relegates_a_member_behind_an_unrelate
         [miembro_candidata, suelto_candidata, representante_candidata],
         key=lambda c: _clave_de_orden(c, criticidad_de),
     )
-    ordenadas, representantes_promovidos = _con_representante_al_frente(
+    ordenadas, representantes_promovidos, _ = _con_representante_al_frente(
         ordenadas_por_criticidad, criticidad_de, representante_de
     )
 
