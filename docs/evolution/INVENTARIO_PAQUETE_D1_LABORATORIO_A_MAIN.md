@@ -43,8 +43,10 @@ discrepancia en vez de repetir la cita sin comprobar (ver
 produjo las cifras de D1, los candidatos B/C/D descartados, la ampliación descartada, y los
 artefactos de medición. La tabla cubre exactamente eso. Otros subdirectorios de
 `experiments/adr002/` (`cards/`, `rederivation/`, `storage/`, `tolerances/`, `t0_control/`)
-pertenecen a otras piezas de ADR-002 no relacionadas con el paquete de recuperación medido
-aquí y se listan solo como exclusión declarada, no fichero a fichero. `projection/` es la
+parecen, por razonamiento técnico de este inventario, pertenecer a otras piezas de ADR-002
+no relacionadas con el paquete de recuperación medido aquí, y se listan solo como grupo, no
+fichero a fichero — su estado exacto (pendiente de confirmar, no excluido por decisión) se
+detalla en [§1.5](#15-candidatos-descartados-y-mecanismos-no-adoptados). `projection/` es la
 excepción: `projection/contracts.py:referencia_canonica` sí es parte del paquete D1 —
 `docs/decisions/ADR-104-portar-el-banco-de-47-casos-de-evidence-adr001-spikes-al-modelo-real-de-sirius.md:58-68`
 la usa explícitamente para filtrar `resultado_esperado` a identidades del canon (`MEM-`/
@@ -133,8 +135,8 @@ verificada.
 | `modelo_local/filtro.py` — modo «compuerta» (el modelo solo dice si hay algo, no elige) | **NO SE PORTA** | PR #117: «compuerta sí/no (segura pero casi inerte)». `modelo_local/medir.py:36-39` (laboratorio): «cero elementos correctos perdidos [...] pero gana poco, 25 y 26 de 47». El **filtro que elige** (no la compuerta) es justamente la pieza que M10/PR #452 sí porta como `ollama_relevance_filter.py` (§1.6 más abajo). |
 | `lateral/` (`candidato.py`, `categoria.py`, `medir_categoria.py`, `texto.py`) — índices laterales adicionales en `E1` | **NO SE PORTA** | No citado como adoptado por PR #117 ni por ningún ADR fusionado; exploración declarada como tal en su propio docstring (`lateral/candidato.py:1`: «`ADR002-A` más uno o varios índices laterales»), sin resultado publicado que lo respalde. |
 | `projection/contracts.py` — `referencia_canonica` (`contracts.py:161-170`, filtra un identificador de corpus a su identidad canónica `MEM-`/`DEC-`, o `None` si no es del canon) | **NO SE PORTA (lógica reconstruida a mano)** | Sí forma parte del paquete D1: `ADR-104:58-68` la usa explícitamente para filtrar `resultado_esperado` a identidades del canon al reconstruir los 81 elementos esperados del banco portado (PR #446). Su lógica quedó materializada, una sola vez y a mano, en el propio contenido estático de `tests/acceptance/fixtures/evidence_bank_47_casos.json` (ya filtrado) — el módulo en sí no vive en `main` como código: no hay script de construcción de fixtures en `main` que lo invoque, así que si el banco necesitara reconstruirse desde cero (más casos, otra versión del canon) habría que volver a aplicar este filtro, a mano o portando el módulo. |
-| `projection/contracts.py` — el resto del módulo (planos `Plano`/`FICHEROS`, capacidades `CAPACIDAD_DEL_PLANO`/`CONSUMIDORES_DEL_PLANO`, `estado_de_memoria`, `estado_de_decision`, control de acceso por plano) | **NO SE PORTA** | No citado por `ADR-104` ni por ningún otro ADR fusionado o en borrador; gobierna planos reservados (`ejes_p2`, `reservado`) y control de acceso entre candidatos del laboratorio, ajeno al banco portado. |
-| `cards/`, `rederivation/`, `storage/`, `tolerances/`, `t0_control/`, y el resto de `projection/` (`__init__.py`, `build.py`, `conftest.py`, `plane.py`, `projection_manifest_v0_1.json`, `test_adr002_proyeccion.py`) | **NO SE PORTA** | Piezas de otras investigaciones de ADR-002 (fichas de candidato, re-derivación controlada, contabilidad de almacenamiento, bandas de tolerancia de medición, control de falsación T0) no relacionadas con el paquete de recuperación D1 que este inventario cubre. |
+| `projection/contracts.py` — el resto del módulo (planos `Plano`/`FICHEROS`, capacidades `CAPACIDAD_DEL_PLANO`/`CONSUMIDORES_DEL_PLANO`, `estado_de_memoria`, `estado_de_decision`, control de acceso por plano) | **PENDIENTE DE CONFIRMAR** | Gobierna planos reservados (`ejes_p2`, `reservado`) y control de acceso entre candidatos del laboratorio, y este inventario razona que es ajeno al banco portado. Pero eso es una inferencia técnica, no una decisión ya tomada: ningún ADR fusionado ni en borrador nombra el resto de `contracts.py`, ni para portarlo ni para excluirlo. Queda señalado como estado no encontrado en el registro de decisiones, para que el propietario lo confirme o lo corrija. |
+| `cards/`, `rederivation/`, `storage/`, `tolerances/`, `t0_control/`, y el resto de `projection/` (`__init__.py`, `build.py`, `conftest.py`, `plane.py`, `projection_manifest_v0_1.json`, `test_adr002_proyeccion.py`) | **PENDIENTE DE CONFIRMAR** | Piezas de otras investigaciones de ADR-002 (fichas de candidato, re-derivación controlada, contabilidad de almacenamiento, bandas de tolerancia de medición, control de falsación T0) que este inventario razona como ajenas al paquete de recuperación D1 que cubre. Pero eso es una hipótesis técnica, no una decisión ya tomada: ningún ADR fusionado ni en borrador nombra estas piezas, ni para portarlas ni para excluirlas. Quedan señaladas como estado no encontrado en el registro de decisiones, para que el propietario lo confirme o lo corrija. |
 
 ### 1.6 Artefactos de medición (evidencia congelada)
 
@@ -236,9 +238,13 @@ documental. El resto de citas de ADR-110 verificadas por este inventario (`port.
   `canonical_source_*`); el arnés y protocolo de la ronda primaria (`round/execute_round.py`
   y familia, excepto `cases.py`); `neutrality.py` de la capa común; `projection/contracts.py:referencia_canonica`
   (su lógica sí es parte de D1 por `ADR-104`, pero solo quedó reconstruida a mano en el
-  fixture estático, no portada como código — ver §1.5) y el resto de `projection/`; los
-  demás subdirectorios de ADR-002 ajenos al paquete D1 (`cards/`, `rederivation/`,
-  `storage/`, `tolerances/`, `t0_control/`); y todos los artefactos de medición congelados.
+  fixture estático, no portada como código — ver §1.5); y todos los artefactos de medición
+  congelados.
 - **PENDIENTE DE CONFIRMAR**: `derived.py` de la capa común — ningún ADR ni PR fusionada lo
   nombra, ni para portarlo ni para excluirlo; este inventario razona por qué probablemente no
-  hace falta, pero no lo trata como decisión ya tomada (ver §1.2).
+  hace falta, pero no lo trata como decisión ya tomada (ver §1.2). El resto de
+  `projection/contracts.py` (planos, capacidades y control de acceso por plano) y el resto de
+  `projection/` junto con `cards/`, `rederivation/`, `storage/`, `tolerances/` y
+  `t0_control/` — ningún ADR fusionado ni en borrador los nombra, ni para portarlos ni para
+  excluirlos; este inventario razona por qué parecen ajenos al paquete D1, pero no lo trata
+  como decisión ya tomada (ver §1.5).
