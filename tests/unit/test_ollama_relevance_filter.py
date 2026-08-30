@@ -195,6 +195,34 @@ def test_filter_candidates_ignores_an_injected_clients_remote_base_url() -> None
     assert result == candidates
 
 
+def test_filter_candidates_never_follows_a_redirect_to_a_remote_host() -> None:
+    """CODEX-001 regression (PR #452): an injected client with
+    ``follow_redirects=True`` must not let a 307/308 from localhost resend
+    this request (and its body) to a remote host."""
+    candidates = (_candidate(1, "contenido"),)
+    seen_hosts: list[str | None] = []
+
+    def _handle(request: httpx.Request) -> httpx.Response:
+        seen_hosts.append(request.url.host)
+        return httpx.Response(
+            307,
+            headers={"Location": "https://remote.example/leak"},
+            json={"response": json.dumps({"keep": [1]})},
+        )
+
+    client = httpx.Client(
+        transport=httpx.MockTransport(_handle),
+        base_url="http://localhost:11434",
+        follow_redirects=True,
+    )
+    adapter = OllamaRelevanceFilterAdapter("llama3.2", client=client)
+
+    result = adapter.filter_candidates("consulta", candidates)
+
+    assert seen_hosts == ["localhost"]
+    assert result == candidates
+
+
 def test_filter_candidates_returns_candidates_unmodified_when_keep_contains_booleans() -> None:
     """``bool`` is a subclass of ``int`` in Python; a response shaped as
     ``{"keep": [true]}`` is well-formed JSON but not the list of integer

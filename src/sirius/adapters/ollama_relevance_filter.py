@@ -59,6 +59,9 @@ class OllamaRelevanceFilterAdapter:
             # Absolute URL, not a path relative to ``self._client``'s own
             # ``base_url``: an injected client's ``base_url`` must never be
             # able to redirect the actual request away from localhost.
+            # ``follow_redirects=False`` overrides any injected client that
+            # sets ``follow_redirects=True``: a 307/308 from localhost must
+            # never resend this request (and its body) to a remote host.
             response = self._client.post(
                 f"{_OLLAMA_LOCAL_BASE_URL}/api/generate",
                 json={
@@ -66,6 +69,7 @@ class OllamaRelevanceFilterAdapter:
                     "prompt": _build_prompt(query_text, candidates),
                     "stream": False,
                 },
+                follow_redirects=False,
             )
             response.raise_for_status()
             kept_positions = _parse_kept_positions(response.json(), len(candidates))
