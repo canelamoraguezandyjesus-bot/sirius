@@ -1,0 +1,537 @@
+{
+  "documento": "Veredicto congelado del filtro de relevancia con modelo local (fila \"4. filtro con regla, con categoria\"), portado sin modificar desde evidence/adr001-spikes a tests/acceptance/fixtures/relevance_filter_frozen_run.json (incidencia #463).",
+  "fuente": {
+    "rama": "evidence/adr001-spikes",
+    "commit": "a4c910a9773b9c9e2f0016e462eb709b81805d50",
+    "fichero": "resultado_modelo_local_v0.7.json",
+    "fila": "4. filtro con regla, con categoria",
+    "nota": "Es la corrida que combina el indice de categoria (M8/M9) y el filtro con modelo local (M9/M10) sobre el mismo corpus congelado que porta este fixture (mismo commit dfdcdaff04dcba10939cc0b0569c55b6a636296f para cases_v0_5.json/references_v0_5.json/conformance_corpus_v0_6.json/property_keys_v0_2.json/applied_criticality_v0_1.json, verificado byte a byte sin diferencias entre ambos commits). No se porta la fila \"5. con siembra en contexto\": esa fila anade una siembra de las criticas del ambito cuando la peticion declara proposito de ensamblar contexto (experiments/adr002/lateral/categoria.py:_pide_contexto), mecanismo que no forma parte del diseno aprobado de category_match (SIRIUS-ARQ-0.2 SS6.2), que compara unicamente el texto de la consulta contra el vocabulario cerrado, nunca el proposito de la peticion.",
+    "mapeo_de_identidades": "N1-NN -> identificador_canonico via experiments/adr002/benchmark/cases_v0_5.json (nivel_1[].identificador_canonico); MEMORIA:n/DECISION:n -> MEM-NNN/DEC-NNN via experiments/adr002/projection/contracts.py:identidad_canonica (MEM-007 -> MEMORIA:7).",
+    "campos": {
+      "entraron_al_filtro": "los candidatos, ya con el indice de categoria aplicado, que la corrida entrego al modelo para decidir.",
+      "conservados_por_el_modelo": "el veredicto crudo del modelo (obtenido_sin_proteccion en la corrida original si el modelo quito algo, o obtenido si no quito nada), antes de cualquier candado."
+    }
+  },
+  "casos": {
+    "B04-CA-01": {
+      "entraron_al_filtro": [
+        "MEM-001"
+      ],
+      "conservados_por_el_modelo": [
+        "MEM-001"
+      ]
+    },
+    "B04-CA-02": {
+      "entraron_al_filtro": [
+        "MEM-001",
+        "MEM-002"
+      ],
+      "conservados_por_el_modelo": [
+        "MEM-002"
+      ]
+    },
+    "B04-CA-03": {
+      "entraron_al_filtro": [
+        "MEM-101",
+        "MEM-102",
+        "MEM-103",
+        "MEM-104",
+        "MEM-105",
+        "MEM-106",
+        "MEM-107",
+        "MEM-108",
+        "MEM-109",
+        "MEM-110",
+        "MEM-111",
+        "MEM-112"
+      ],
+      "conservados_por_el_modelo": [
+        "MEM-101",
+        "MEM-102",
+        "MEM-103",
+        "MEM-104",
+        "MEM-105",
+        "MEM-106",
+        "MEM-107",
+        "MEM-108",
+        "MEM-109",
+        "MEM-110",
+        "MEM-111",
+        "MEM-112"
+      ]
+    },
+    "B04-CA-04": {
+      "entraron_al_filtro": [
+        "MEM-906",
+        "MEM-925"
+      ],
+      "conservados_por_el_modelo": [
+        "MEM-906",
+        "MEM-925"
+      ]
+    },
+    "B04-CA-05": {
+      "entraron_al_filtro": [
+        "DEC-002",
+        "DEC-003"
+      ],
+      "conservados_por_el_modelo": [
+        "DEC-003"
+      ]
+    },
+    "B04-CA-06": {
+      "entraron_al_filtro": [
+        "DEC-004"
+      ],
+      "conservados_por_el_modelo": [
+        "DEC-004"
+      ]
+    },
+    "B04-CA-07": {
+      "entraron_al_filtro": [
+        "MEM-005"
+      ],
+      "conservados_por_el_modelo": [
+        "MEM-005"
+      ]
+    },
+    "B04-CA-08": {
+      "entraron_al_filtro": [
+        "DEC-005",
+        "MEM-006"
+      ],
+      "conservados_por_el_modelo": [
+        "DEC-005",
+        "MEM-006"
+      ]
+    },
+    "B04-CA-09": {
+      "entraron_al_filtro": [
+        "MEM-912",
+        "MEM-914"
+      ],
+      "conservados_por_el_modelo": []
+    },
+    "B04-CA-10": {
+      "entraron_al_filtro": [],
+      "conservados_por_el_modelo": []
+    },
+    "B04-CA-11": {
+      "entraron_al_filtro": [],
+      "conservados_por_el_modelo": []
+    },
+    "B04-CA-12": {
+      "entraron_al_filtro": [],
+      "conservados_por_el_modelo": []
+    },
+    "B04-CA-13": {
+      "entraron_al_filtro": [
+        "MEM-011"
+      ],
+      "conservados_por_el_modelo": [
+        "MEM-011"
+      ]
+    },
+    "B04-CA-14": {
+      "entraron_al_filtro": [
+        "DEC-001",
+        "MEM-012",
+        "MEM-013",
+        "MEM-023",
+        "MEM-025",
+        "MEM-027"
+      ],
+      "conservados_por_el_modelo": [
+        "MEM-013"
+      ]
+    },
+    "B04-CA-15": {
+      "entraron_al_filtro": [
+        "DEC-010",
+        "MEM-005",
+        "MEM-014",
+        "MEM-017",
+        "MEM-021"
+      ],
+      "conservados_por_el_modelo": []
+    },
+    "B04-CA-16": {
+      "entraron_al_filtro": [
+        "MEM-027"
+      ],
+      "conservados_por_el_modelo": [
+        "MEM-027"
+      ]
+    },
+    "B04-CA-17": {
+      "entraron_al_filtro": [
+        "DEC-003",
+        "DEC-010",
+        "MEM-011"
+      ],
+      "conservados_por_el_modelo": []
+    },
+    "B04-CA-18": {
+      "entraron_al_filtro": [],
+      "conservados_por_el_modelo": []
+    },
+    "B04-CA-19": {
+      "entraron_al_filtro": [
+        "DEC-006",
+        "DEC-007",
+        "DEC-008"
+      ],
+      "conservados_por_el_modelo": [
+        "DEC-006",
+        "DEC-007",
+        "DEC-008"
+      ]
+    },
+    "B04-CA-20": {
+      "entraron_al_filtro": [
+        "DEC-010",
+        "MEM-014",
+        "MEM-016"
+      ],
+      "conservados_por_el_modelo": [
+        "MEM-014",
+        "MEM-016"
+      ]
+    },
+    "B04-CA-21": {
+      "entraron_al_filtro": [
+        "MEM-014",
+        "MEM-016"
+      ],
+      "conservados_por_el_modelo": [
+        "MEM-014",
+        "MEM-016"
+      ]
+    },
+    "B04-CA-22": {
+      "entraron_al_filtro": [
+        "DEC-014"
+      ],
+      "conservados_por_el_modelo": [
+        "DEC-014"
+      ]
+    },
+    "B04-CA-23": {
+      "entraron_al_filtro": [
+        "DEC-002",
+        "DEC-003"
+      ],
+      "conservados_por_el_modelo": [
+        "DEC-002",
+        "DEC-003"
+      ]
+    },
+    "B04-CA-24": {
+      "entraron_al_filtro": [],
+      "conservados_por_el_modelo": []
+    },
+    "B04-CA-25": {
+      "entraron_al_filtro": [
+        "DEC-003",
+        "DEC-010",
+        "MEM-011"
+      ],
+      "conservados_por_el_modelo": [
+        "MEM-011"
+      ]
+    },
+    "B04-CA-26": {
+      "entraron_al_filtro": [
+        "MEM-001",
+        "MEM-101",
+        "MEM-102",
+        "MEM-103",
+        "MEM-104",
+        "MEM-105",
+        "MEM-106",
+        "MEM-107",
+        "MEM-108",
+        "MEM-109",
+        "MEM-110",
+        "MEM-111"
+      ],
+      "conservados_por_el_modelo": [
+        "MEM-101",
+        "MEM-102",
+        "MEM-103",
+        "MEM-104",
+        "MEM-105",
+        "MEM-106",
+        "MEM-107",
+        "MEM-108",
+        "MEM-109",
+        "MEM-110",
+        "MEM-111"
+      ]
+    },
+    "B04-CA-27": {
+      "entraron_al_filtro": [
+        "DEC-005",
+        "MEM-006"
+      ],
+      "conservados_por_el_modelo": [
+        "DEC-005",
+        "MEM-006"
+      ]
+    },
+    "B04-CA-28": {
+      "entraron_al_filtro": [
+        "DEC-010",
+        "MEM-005",
+        "MEM-014",
+        "MEM-016",
+        "MEM-021",
+        "MEM-903",
+        "MEM-906",
+        "MEM-910",
+        "MEM-911",
+        "MEM-912",
+        "MEM-913",
+        "MEM-914",
+        "MEM-915",
+        "MEM-917",
+        "MEM-919",
+        "MEM-921",
+        "MEM-925",
+        "MEM-930",
+        "MEM-931",
+        "MEM-939"
+      ],
+      "conservados_por_el_modelo": []
+    },
+    "B04-CA-29": {
+      "entraron_al_filtro": [],
+      "conservados_por_el_modelo": []
+    },
+    "B04-CA-30": {
+      "entraron_al_filtro": [
+        "DEC-003",
+        "DEC-010",
+        "MEM-011",
+        "MEM-016"
+      ],
+      "conservados_por_el_modelo": [
+        "DEC-003",
+        "MEM-016"
+      ]
+    },
+    "B04-CA-31": {
+      "entraron_al_filtro": [
+        "DEC-003",
+        "DEC-010",
+        "MEM-001",
+        "MEM-014",
+        "MEM-016",
+        "MEM-025",
+        "MEM-913",
+        "MEM-917",
+        "MEM-921",
+        "MEM-930",
+        "MEM-939"
+      ],
+      "conservados_por_el_modelo": [
+        "DEC-003",
+        "DEC-010",
+        "MEM-001",
+        "MEM-014",
+        "MEM-016",
+        "MEM-025"
+      ]
+    },
+    "B04-CA-32": {
+      "entraron_al_filtro": [
+        "DEC-012"
+      ],
+      "conservados_por_el_modelo": []
+    },
+    "B04-CA-33": {
+      "entraron_al_filtro": [
+        "MEM-011"
+      ],
+      "conservados_por_el_modelo": []
+    },
+    "B04-CA-34": {
+      "entraron_al_filtro": [
+        "MEM-011",
+        "MEM-903",
+        "MEM-906",
+        "MEM-910",
+        "MEM-911",
+        "MEM-912",
+        "MEM-913",
+        "MEM-914",
+        "MEM-915",
+        "MEM-917",
+        "MEM-919",
+        "MEM-921",
+        "MEM-925",
+        "MEM-930",
+        "MEM-931",
+        "MEM-939"
+      ],
+      "conservados_por_el_modelo": [
+        "MEM-011"
+      ]
+    },
+    "B04-CA-35": {
+      "entraron_al_filtro": [
+        "MEM-903",
+        "MEM-906",
+        "MEM-910",
+        "MEM-911",
+        "MEM-912",
+        "MEM-913",
+        "MEM-914",
+        "MEM-915",
+        "MEM-917",
+        "MEM-919",
+        "MEM-921",
+        "MEM-925",
+        "MEM-930",
+        "MEM-931",
+        "MEM-939"
+      ],
+      "conservados_por_el_modelo": [
+        "MEM-903",
+        "MEM-906",
+        "MEM-910",
+        "MEM-911",
+        "MEM-912",
+        "MEM-913",
+        "MEM-914",
+        "MEM-915",
+        "MEM-917",
+        "MEM-919",
+        "MEM-921",
+        "MEM-925",
+        "MEM-930",
+        "MEM-931",
+        "MEM-939"
+      ]
+    },
+    "B04-CA-36": {
+      "entraron_al_filtro": [],
+      "conservados_por_el_modelo": []
+    },
+    "B04-CA-38": {
+      "entraron_al_filtro": [
+        "MEM-101",
+        "MEM-102",
+        "MEM-103",
+        "MEM-104",
+        "MEM-105",
+        "MEM-106",
+        "MEM-107",
+        "MEM-108",
+        "MEM-109",
+        "MEM-110"
+      ],
+      "conservados_por_el_modelo": [
+        "MEM-101",
+        "MEM-102",
+        "MEM-103",
+        "MEM-104",
+        "MEM-105",
+        "MEM-106",
+        "MEM-107",
+        "MEM-108",
+        "MEM-109",
+        "MEM-110"
+      ]
+    },
+    "B04-CA-40": {
+      "entraron_al_filtro": [
+        "DEC-003",
+        "MEM-011"
+      ],
+      "conservados_por_el_modelo": [
+        "DEC-003"
+      ]
+    },
+    "B04-CA-41": {
+      "entraron_al_filtro": [
+        "MEM-022"
+      ],
+      "conservados_por_el_modelo": [
+        "MEM-022"
+      ]
+    },
+    "B04-CA-42": {
+      "entraron_al_filtro": [
+        "DEC-010"
+      ],
+      "conservados_por_el_modelo": [
+        "DEC-010"
+      ]
+    },
+    "B04-CA-43": {
+      "entraron_al_filtro": [
+        "MEM-012",
+        "MEM-023",
+        "MEM-024"
+      ],
+      "conservados_por_el_modelo": [
+        "MEM-012",
+        "MEM-024"
+      ]
+    },
+    "B04-CA-44": {
+      "entraron_al_filtro": [
+        "MEM-101",
+        "MEM-102",
+        "MEM-103",
+        "MEM-104",
+        "MEM-105"
+      ],
+      "conservados_por_el_modelo": [
+        "MEM-101",
+        "MEM-102",
+        "MEM-103",
+        "MEM-104",
+        "MEM-105"
+      ]
+    },
+    "B04-CA-45": {
+      "entraron_al_filtro": [
+        "DEC-003"
+      ],
+      "conservados_por_el_modelo": [
+        "DEC-003"
+      ]
+    },
+    "B04-CA-46": {
+      "entraron_al_filtro": [],
+      "conservados_por_el_modelo": []
+    },
+    "B04-CA-47": {
+      "entraron_al_filtro": [],
+      "conservados_por_el_modelo": []
+    },
+    "B04-CA-49": {
+      "entraron_al_filtro": [
+        "MEM-004",
+        "MEM-912",
+        "MEM-914"
+      ],
+      "conservados_por_el_modelo": []
+    },
+    "B04-CA-50": {
+      "entraron_al_filtro": [
+        "MEM-025",
+        "MEM-913",
+        "MEM-917",
+        "MEM-921",
+        "MEM-930",
+        "MEM-939"
+      ],
+      "conservados_por_el_modelo": [
+        "MEM-025"
+      ]
+    }
+  }
+}

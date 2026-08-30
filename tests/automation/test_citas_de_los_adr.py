@@ -130,6 +130,11 @@ _ADR_111 = (
     "ADR-111-la-peticion-por-caso-portada-mejora-el-banco-a-23-47-pero-d1-exige-ademas-"
     "el-indice-de-categoria-y-el-filtro-de-relevancia-ollama.md"
 )
+_ADR_112 = (
+    "ADR-112-el-indice-de-categoria-y-el-filtro-de-relevancia-conectados-al-arnes-del-"
+    "banco-incidencia-463-mejoran-cobertura-y-omisiones-criticas-pero-empeoran-los-"
+    "elementos-de-mas-y-no-alcanzan-d1.md"
+)
 
 RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     "experiments/adr002/round/cases.py": [
@@ -143,6 +148,10 @@ RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     "experiments/adr002/benchmark/cases_v0_5.json": [
         "ADR-104-portar-el-banco-de-47-casos-de-evidence-adr001-spikes-al-modelo-real-de-sirius.md",
         _ADR_110,
+        # ADR-112 cita el mismo fichero para documentar el mapeo
+        # `N1-NN -> identificador_canonico` que usó para portar el veredicto
+        # congelado del filtro de relevancia (`nivel_1[].identificador_canonico`).
+        _ADR_112,
     ],
     "experiments/adr002/projection/contracts.py:referencia_canonica": [
         "ADR-104-portar-el-banco-de-47-casos-de-evidence-adr001-spikes-al-modelo-real-de-sirius.md",
@@ -189,6 +198,14 @@ RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     # Sirius— para documentar dónde consta que el salto de 24/47 a 29/47
     # depende de ese filtro y no del motor de búsqueda.
     "experiments/adr002/modelo_local/filtro.py": [_ADR_111],
+    # ADR-112 (incidencia #463) conecta el índice de categoría y el filtro
+    # de relevancia al arnés del banco, portando como fixture el veredicto
+    # congelado de una corrida concreta del experimento del laboratorio —
+    # ninguna de las dos rutas siguientes se copia a Sirius; el ADR las cita
+    # solo para documentar de dónde salió cada dato portado.
+    "experiments/adr002/modelo_local/filtro.py:filtrar": [_ADR_112],
+    "experiments/adr002/lateral/categoria.py": [_ADR_112],
+    "experiments/adr002/lateral/categoria.py:_pide_contexto": [_ADR_112],
 }
 
 
