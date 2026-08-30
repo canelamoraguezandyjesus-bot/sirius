@@ -39,6 +39,7 @@ porque un caller que nunca abre la puerta no tiene por qué construirlos.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from sirius.domain.relevance import (
@@ -172,13 +173,20 @@ class RankRelevantKnowledgeUseCase:
 
         Las puertas y la agrupación del motor (qué se admite y qué se
         trunca por ``limite_duro``) no se tocan: ``ranked`` es exactamente
-        lo que el motor admitió. Pero el orden final de ambos bloques juntos
-        sí es el mismo criterio S7.5/M9 de siempre
-        (``rank_relevant_knowledge``): sujeto, proyecto activo, FTS5,
-        categoría, recencia — nunca "todo lo admitido por el motor antes que
-        todo lo hallado solo por categoría" con independencia de esas
-        señales, que es lo que una simple concatenación de bloques
-        produciría.
+        lo que el motor admitió, en el orden que ya le adjudicó —
+        criticidad, representante del grupo y autoridad de etapa
+        (``staged_engine.py``), ninguno de los cuales conoce
+        ``rank_relevant_knowledge``. Por eso el bloque de M9 nunca se
+        intercala volviendo a ordenar ``ranked`` entero por el criterio
+        S7.5/M9 (sujeto, proyecto activo, FTS5, categoría, recencia): eso
+        sustituiría la prioridad del motor por la de M9 incluso entre dos
+        elementos que el motor ya admitió (CODEX-001, incidencia #457,
+        tercera ronda). En vez de eso, ``_intercalar_por_categoria`` decide,
+        candidato por candidato del bloque de categoría, dónde encaja
+        respecto de ``ranked`` según ese mismo criterio S7.5/M9 — sin tocar
+        jamás la posición relativa de dos elementos de ``ranked`` entre sí,
+        y sin la ceguera a las demás señales que una simple concatenación de
+        bloques produciría.
         """
         assert self._staged_engine_port is not None
         assert self._staged_engine_candidate is not None
@@ -271,7 +279,7 @@ class RankRelevantKnowledgeUseCase:
                         )
                     )
 
-        return rank_relevant_knowledge(tuple(ranked) + tuple(solo_por_categoria))
+        return _intercalar_por_categoria(ranked, solo_por_categoria)
 
     def _rank_via_current_pipeline(self, query_text: str) -> tuple[RankedKnowledge, ...]:
         """El filtro-y-orden de S7.5/M9, sin cambios: lo que ``rank()``
@@ -319,3 +327,37 @@ class RankRelevantKnowledgeUseCase:
         )
 
         return rank_relevant_knowledge(candidates)
+
+
+def _intercalar_por_categoria(
+    ranked: Sequence[RankedKnowledge], solo_por_categoria: Sequence[RankedKnowledge]
+) -> tuple[RankedKnowledge, ...]:
+    """Combina lo admitido por el motor por etapas con la ampliación de M9
+    (CODEX-001, incidencia #457, tercera ronda) sin alterar la precedencia
+    relativa que el motor ya adjudicó a ``ranked``.
+
+    ``solo_por_categoria`` se ordena primero por su cuenta con el criterio
+    S7.5/M9 de siempre. Después, una fusión de dos punteros recorre ambos
+    bloques y en cada paso decide cuál va primero comparando únicamente el
+    candidato actual de cada lado con ese mismo criterio
+    (``rank_relevant_knowledge`` sobre el par) — nunca compara dos elementos
+    de ``ranked`` entre sí, así que su orden de entrada nunca cambia. En
+    empate gana ``ranked``: ``rank_relevant_knowledge`` es una ordenación
+    estable y el par siempre se le pasa con el elemento de ``ranked``
+    primero.
+    """
+    categoria = list(rank_relevant_knowledge(tuple(solo_por_categoria)))
+    motor = list(ranked)
+    intercalado: list[RankedKnowledge] = []
+    i = j = 0
+    while i < len(motor) and j < len(categoria):
+        primero = rank_relevant_knowledge((motor[i], categoria[j]))[0]
+        if primero is motor[i]:
+            intercalado.append(motor[i])
+            i += 1
+        else:
+            intercalado.append(categoria[j])
+            j += 1
+    intercalado.extend(motor[i:])
+    intercalado.extend(categoria[j:])
+    return tuple(intercalado)

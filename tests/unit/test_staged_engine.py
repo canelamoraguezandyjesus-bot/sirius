@@ -45,6 +45,10 @@ from sirius.domain.staged_engine_contracts import (
     Polaridad,
     VentanaTemporal,
 )
+from sirius.domain.staged_engine_trace import (
+    EJES_DE_ORDEN_DECLARADOS,
+    PROMOCION_DE_REPRESENTANTE_DECLARADA,
+)
 
 
 def _item(
@@ -375,6 +379,45 @@ def test_recuperar_orders_the_group_representative_ahead_of_a_higher_authority_m
     assert recuperacion.ids == ("MEMORIA:1", "MEMORIA:2")
     assert grupo.identificador not in recuperacion.traza.grupos_truncados
     assert recuperacion.omitidos_por_limite == ("MEMORIA:3",)
+
+
+def test_explicacion_documents_the_two_step_order_for_a_promoted_representative() -> None:
+    """CODEX-002 (incidencia #457, tercera ronda): al sacar la prioridad
+    del representante de ``_clave_de_orden`` hacia un segundo paso
+    (``_con_representante_al_frente``, segunda ronda), ``EJES_DE_ORDEN_
+    DECLARADOS`` seguía nombrando al representante como su segundo eje y
+    ``explicar()`` seguía afirmando que la posición se debía solo a esa
+    clave de desempate de cinco ejes — una descripción que ya no coincidía
+    con el algoritmo real. Reutiliza el caso de
+    ``test_recuperar_orders_the_group_representative_ahead_of_a_higher_
+    authority_member``: MEMORIA:1 (``E2``) encabeza a MEMORIA:2 (``E1``,
+    mayor autoridad de etapa) solo por la promoción intragrupo del segundo
+    paso, no por la clave de desempate base."""
+    en_e1 = _item("MEMORIA:2")
+    en_e2 = _item("MEMORIA:1")
+    peticion = _peticion(limite_duro=2)
+
+    class _PlanoConPropiedad:
+        def property_key(self, identidad: str) -> str | None:
+            return "PK-1"
+
+        def criticidad_aplicada(self, identidad: str) -> CriticidadAplicada | None:
+            return None
+
+    recuperacion = recuperar(
+        peticion,
+        _PuertoDePrueba([en_e1, en_e2]),
+        _CandidatoDeDosEtapas({Etapa.E1: [en_e1], Etapa.E2: [en_e2]}),
+        _PlanoConPropiedad(),
+    )
+
+    assert recuperacion.ids == ("MEMORIA:1", "MEMORIA:2")
+    assert "representante" not in EJES_DE_ORDEN_DECLARADOS
+
+    representante_resultado = next(r for r in recuperacion.resultados if r.item.id == "MEMORIA:1")
+    razon = representante_resultado.explicacion.razon_de_orden
+    assert ", ".join(EJES_DE_ORDEN_DECLARADOS) in razon
+    assert PROMOCION_DE_REPRESENTANTE_DECLARADA in razon
 
 
 def test_con_representante_al_frente_never_relegates_a_member_behind_an_unrelated_item() -> None:

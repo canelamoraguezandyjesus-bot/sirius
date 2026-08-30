@@ -92,10 +92,13 @@ class Recuperacion:
         return tuple(r.item.id for r in self.resultados)
 
 
-#: Razón de orden, en el mismo orden que la clave.
+#: Razón de orden de ``_clave_de_orden``, en el mismo orden que la clave.
+#: El representante no es uno de estos ejes (CODEX-002, incidencia #457,
+#: tercera ronda): ``EJES_DE_ORDEN_DECLARADOS``/``PROMOCION_DE_
+#: REPRESENTANTE_DECLARADA`` en ``staged_engine_trace.py`` documentan el
+#: mismo orden en dos pasos para la traza pública.
 EJES_DE_ORDEN: Final[tuple[str, ...]] = (
     "criticidad aplicada",
-    "representante del grupo de equivalentes",
     "autoridad de la etapa de origen",
     "clave de sujeto",
     "identidad estable",

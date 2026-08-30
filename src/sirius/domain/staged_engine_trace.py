@@ -27,13 +27,30 @@ from sirius.domain.staged_engine_contracts import (
     Resultado,
 )
 
-#: Los ejes de la clave de desempate, en su orden real.
+#: Los ejes de la clave de desempate base, en su orden real. El
+#: representante del grupo de equivalentes no es uno de estos ejes: no
+#: participa en esta clave en absoluto (CODEX-002, incidencia #457, tercera
+#: ronda). Su prioridad se aplica aparte, en un segundo paso —
+#: ``_con_representante_al_frente`` en ``staged_engine.py`` — que adelanta a
+#: cada representante hasta encabezar solo a sus propios miembros, dentro
+#: del mismo nivel de criticidad que esta clave ya fijó. ``explicar()``
+#: describe las dos etapas por separado en ``razon_de_orden`` en vez de
+#: nombrar al representante aquí, precisamente para no volver a declarar un
+#: único orden de cinco ejes que el algoritmo ya no aplica.
 EJES_DE_ORDEN_DECLARADOS: Final[tuple[str, ...]] = (
     "criticidad aplicada",
-    "representante del grupo de equivalentes",
     "autoridad de la etapa de origen",
     "clave de sujeto",
     "identidad estable",
+)
+
+#: Segundo paso, aparte de la clave de desempate anterior: dentro del mismo
+#: nivel de criticidad, el representante de un grupo de equivalentes se
+#: adelanta hasta encabezar solo a sus propios miembros, sin tocar la
+#: posición relativa de ningún candidato ajeno al grupo.
+PROMOCION_DE_REPRESENTANTE_DECLARADA: Final[str] = (
+    "el representante de un grupo de equivalentes se adelanta, dentro de su "
+    "mismo nivel de criticidad, hasta encabezar solo a sus propios miembros"
 )
 
 #: Marca base cuando el elemento es actual.
@@ -218,8 +235,9 @@ def explicar(
             else Criticidad.ORDINARIA.value
         ),
         razon_de_orden=(
-            f"posicion {orden} por clave de desempate ({', '.join(EJES_DE_ORDEN_DECLARADOS)}); "
-            f"{candidata.razon}"
+            f"posicion {orden} por clave de desempate "
+            f"({', '.join(EJES_DE_ORDEN_DECLARADOS)}); tras esa clave, "
+            f"{PROMOCION_DE_REPRESENTANTE_DECLARADA}; {candidata.razon}"
         ),
         grupo=("" if grupo is None else grupo.identificador),
     )
@@ -257,6 +275,7 @@ def fallos_de_explicacion(resultados: Sequence[Resultado]) -> list[str]:
 
 __all__ = [
     "EJES_DE_ORDEN_DECLARADOS",
+    "PROMOCION_DE_REPRESENTANTE_DECLARADA",
     "PasoDeEtapa",
     "Traza",
     "estado_publicado",

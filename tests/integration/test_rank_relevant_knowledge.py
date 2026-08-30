@@ -600,6 +600,54 @@ def test_staged_engine_path_orders_by_the_full_m9_tuple_not_by_block(tmp_path: P
 
 
 @pytest.mark.integration
+def test_staged_engine_path_preserves_engine_order_between_two_admitted_candidates(
+    tmp_path: Path,
+) -> None:
+    """CODEX-001 (incidencia #457, tercera ronda): la corrección anterior
+    intercalaba ``solo_por_categoria`` volviendo a ordenar también
+    ``ranked`` entero con ``rank_relevant_knowledge`` (sujeto, proyecto
+    activo, FTS5, categoría, recencia), sustituyendo la prioridad que el
+    motor ya adjudicó a lo que él mismo admitió —criticidad, representante y
+    autoridad de la etapa de origen (``staged_engine.py``)— incluso cuando
+    ``solo_por_categoria`` está vacío. Se reproduce con dos memorias que el
+    motor admite en etapas distintas: una en ``E1`` (coincidencia literal,
+    mayor autoridad) y otra en ``E2`` (variante morfológica "trabajos" de
+    "trabajo", menor autoridad), donde la de menor autoridad pertenece al
+    proyecto activo. Un ``rank_relevant_knowledge`` global sobre ambas las
+    invertiría por esa señal de proyecto; el orden corregido debe conservar
+    el que el motor ya fijó por autoridad de etapa."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    active_project_id, other_project_id = _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    encontrada_en_e1 = SaveManualMemoryUseCase(unit_of_work).save(
+        "trabajo intenso en la fabrica", project_id=other_project_id
+    )
+    encontrada_en_e2 = SaveManualMemoryUseCase(unit_of_work).save(
+        "trabajos pendientes de revision", project_id=active_project_id
+    )
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("trabajo")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [encontrada_en_e1.id, encontrada_en_e2.id]
+    encontrada_por_e2 = next(c for c in resultado if c.item_id == encontrada_en_e2.id)
+    encontrada_por_e1 = next(c for c in resultado if c.item_id == encontrada_en_e1.id)
+    assert encontrada_por_e2.project_matches_active is True
+    assert encontrada_por_e1.project_matches_active is False
+
+
+@pytest.mark.integration
 def test_staged_engine_gate_open_without_a_configured_port_falls_back_to_current_pipeline(
     tmp_path: Path,
 ) -> None:
