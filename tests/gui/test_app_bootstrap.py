@@ -556,4 +556,41 @@ def test_the_real_app_offers_the_two_studio_buttons(tmp_path: Path, qtbot: QtBot
     window = _real_main_window(tmp_path, qtbot)
 
     assert window.studio_page.read_all_button.isEnabled()
+
+
+# --- D7 (M8) llega a KnowledgeWidget por el camino completo de producción --
+#
+# CLAUDE-M8-002: ninguna prueba usaba _real_main_window para comprobar que
+# tag_category_use_case/set_category_use_case/thread_pool llegan de verdad,
+# por el camino completo (composition_root -> main.py -> ValidatedMainWindow
+# -> MainWindow -> KnowledgeWidget), hasta KnowledgeWidget. Todas las pruebas
+# de etiquetado en KnowledgeWidget construían el widget a mano, inyectando
+# sus propios dobles, así que una regresión que olvidara pasar
+# tag_category_use_case/set_category_use_case en cualquiera de esos pasos
+# pasaría la suite completa en verde, igual que ocurrió antes con la voz de
+# Model Studio.
+
+
+@pytest.mark.gui
+def test_the_real_app_wires_category_tagging_into_the_knowledge_widget(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    window = _real_main_window(tmp_path, qtbot)
+
+    assert window.knowledge_widget._tag_category_use_case is not None, (
+        "la aplicación real montó KnowledgeWidget sin TagCategoryUseCase: un "
+        "recuerdo o decisión nuevo nunca recibiría categoría automática"
+    )
+
+
+@pytest.mark.gui
+def test_the_real_app_wires_manual_category_editing_into_the_knowledge_widget(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    window = _real_main_window(tmp_path, qtbot)
+
+    assert window.knowledge_widget._set_category_use_case is not None, (
+        "la aplicación real montó KnowledgeWidget sin SetCategoryUseCase: el "
+        "usuario no podría corregir una clasificación (CODEX-001)"
+    )
     assert window.studio_page.settings_button.isEnabled()

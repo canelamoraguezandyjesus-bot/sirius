@@ -23,6 +23,8 @@ from __future__ import annotations
 
 from enum import StrEnum
 
+from sirius.domain.decision import Decision
+from sirius.domain.memory import Memory
 from sirius.ports.category_classifier import CategoryClassifierPort
 from sirius.ports.decision_repository import DecisionRepository
 from sirius.ports.memory_repository import MemoryRepository
@@ -79,3 +81,14 @@ class TagCategoryUseCase:
             category,
             observed_revision_version=decision.current_revision.version,
         )
+
+    def list_uncategorized_memories(self) -> list[Memory]:
+        """Recuerdos sin categoría automática ni manual (§6.1 punto 4): los
+        candidatos del pase retroactivo de arranque que encola un
+        ``CategoryTaggingWorker`` por elemento, exactamente igual que tras un
+        guardado o corrección."""
+        return self._memory_repository.list_uncategorized()
+
+    def list_uncategorized_decisions(self) -> list[Decision]:
+        """Mirrors ``list_uncategorized_memories`` for decisions."""
+        return self._decision_repository.list_uncategorized()

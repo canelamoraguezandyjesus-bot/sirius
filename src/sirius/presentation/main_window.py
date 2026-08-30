@@ -64,6 +64,7 @@ from sirius.application.reject_memory_suggestion import RejectMemorySuggestionUs
 from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageResult, SendMessageUseCase
+from sirius.application.set_category import SetCategoryUseCase
 from sirius.application.studio_brief import MODEL_STUDIO_BRIEF
 from sirius.application.studio_capture import CaptureFeedback, StudioCaptureUseCase
 from sirius.application.studio_voice import (
@@ -256,6 +257,7 @@ class MainWindow(QMainWindow):
         close_database_connections: Callable[[], None],
         *,
         tag_category_use_case: TagCategoryUseCase | None = None,
+        set_category_use_case: SetCategoryUseCase | None = None,
         studio_voice_use_case: StudioVoiceUseCase | None = None,
         studio_capture_use_case: StudioCaptureUseCase | None = None,
         save_studio_voice: Callable[[str], None] | None = None,
@@ -296,6 +298,7 @@ class MainWindow(QMainWindow):
         self._export_structured_use_case = export_structured_use_case
         self._historical_projects_use_case = historical_projects_use_case
         self._tag_category_use_case = tag_category_use_case
+        self._set_category_use_case = set_category_use_case
         # Not a use case: the minimal SQLAlchemy-lifecycle mechanism a safe
         # restoration needs (see ConversationDependencies' docstring). Called
         # right before RestoreBackupUseCase so the atomic file replace is not
@@ -1193,6 +1196,7 @@ class MainWindow(QMainWindow):
             self._confirm_memory_suggestion_use_case,
             self._reject_memory_suggestion_use_case,
             tag_category_use_case=self._tag_category_use_case,
+            set_category_use_case=self._set_category_use_case,
             thread_pool=self._thread_pool,
             show_warning=self._show_warning,
             show_information=self._show_information,
