@@ -78,8 +78,10 @@ Sigue en la misma banda que B12e (120,9 ms, 40 %): con la puerta cerrada,
 `category_match` nunca compara nada (el `and` de
 `RankRelevantKnowledgeUseCase.rank()` corta antes de llamar a
 `category_matches_query`), así que el coste añadido es un `bool` extra por
-candidato en la tupla de `_sort_key`, no una comparación nueva. RNF-003 (≤ 300
-ms P95) se sigue cumpliendo con margen.
+candidato en la tupla de `_sort_key`, no una comparación nueva. Entre el 40 %
+y el 43 % del límite queda en la banda del 10-100 % de ADR-007: se registra
+la medida como evidencia, pero no se afirma aquí que RNF-003 se cumple —eso
+lo comprueba PA-025 en la máquina real.
 """
 
 from __future__ import annotations
