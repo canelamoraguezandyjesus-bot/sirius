@@ -42,15 +42,24 @@ discrepancia en vez de repetir la cita sin comprobar (ver
 `references_v0_5.json` y su familia vigente, `round/cases.py`, el arnés de medición que
 produjo las cifras de D1, los candidatos B/C/D descartados, la ampliación descartada, y los
 artefactos de medición. La tabla cubre exactamente eso. Otros subdirectorios de
-`experiments/adr002/` (`cards/`, `projection/`, `rederivation/`, `storage/`, `tolerances/`,
-`t0_control/`) pertenecen a otras piezas de ADR-002 no relacionadas con el paquete de
-recuperación medido aquí y se listan solo como exclusión declarada, no fichero a fichero.
+`experiments/adr002/` (`cards/`, `rederivation/`, `storage/`, `tolerances/`, `t0_control/`)
+pertenecen a otras piezas de ADR-002 no relacionadas con el paquete de recuperación medido
+aquí y se listan solo como exclusión declarada, no fichero a fichero. `projection/` es la
+excepción: `projection/contracts.py:referencia_canonica` sí es parte del paquete D1 —
+`docs/decisions/ADR-104-portar-el-banco-de-47-casos-de-evidence-adr001-spikes-al-modelo-real-de-sirius.md:58-68`
+la usa explícitamente para filtrar `resultado_esperado` a identidades del canon (`MEM-`/
+`DEC-`, excluyendo `DOC-`/`MSG-`) al reconstruir los 81 elementos esperados del banco
+portado — y se enumera fichero a fichero en [§1.5](#15-candidatos-descartados-y-mecanismos-no-adoptados),
+separada del resto de `projection/`.
 
 ## 1. Tabla de inventario
 
 Leyenda: **PORTADO** (vive en `main`, cita el fichero y la PR que lo trajo) · **PENDIENTE**
 (no vive en `main` hoy; si ya está escrito en una PR abierta sin fusionar, se cita) ·
-**NO SE PORTA** (decisión ya tomada, con su porqué y su fuente).
+**NO SE PORTA** (decisión ya tomada, con su porqué y su fuente) · **PENDIENTE DE CONFIRMAR**
+(ningún ADR ni PR fusionada nombra la pieza ni para portarla ni para excluirla; este
+inventario razona una hipótesis técnica pero no la trata como decisión, y la deja para que
+el propietario la confirme o la corrija).
 
 ### 1.1 Candidato A y tratamiento léxico (`candidates/adr002_a/`)
 
@@ -72,7 +81,7 @@ Leyenda: **PORTADO** (vive en `main`, cita el fichero y la PR que lo trajo) · *
 | `engine.py` (400 líneas: `recuperar:134`, motor por etapas `E0`-`E5`) | **PENDIENTE** | PR #458 → `sirius.domain.staged_engine` (no fusionada). |
 | `port.py` — `PuertoSqlite.por_termino_lexico` (`port.py:434-455`): el **mecanismo** (citar variantes de FTS5 y combinarlas con `OR` contra `knowledge_fts`) | **PORTADO** (el mecanismo, no el módulo) | Reescrito, literal en su lógica, dentro de `sanitize_fts5_query` — `src/sirius/adapters/persistence/sqlite_knowledge_search_repository.py:27-64` — PR #456 (fusionada). El docstring de `lexical_query_treatment.py:1-17` documenta esta procedencia. |
 | `port.py` — el resto de `PuertoSqlite` (640 líneas: `ConsultaRegistrada`, `RegistroDeConsultas`, resto de métodos de consulta) | **PENDIENTE** | PR #458 → `sirius.adapters.persistence.staged_engine_port` (`PuertoDeRecuperacion`, adaptado al acceso `sqlalchemy.text`/`session_scope` ya existente; no toca el contrato de `KnowledgeSearchRepository`). No fusionada. |
-| `derived.py` (inventario/borrado/reconstrucción de las tablas sombra FTS5 del corpus experimental, DDL leído de `sqlite_master`) | **NO SE PORTA** | Infraestructura de reconstrucción específica del corpus experimental del laboratorio. Sirius 0.1 tiene sus propias migraciones canónicas (p. ej. `61be4bb269bf`, citada por el propio `derived.py:11` del laboratorio) y no necesita reconstruir tablas sombra por fuera de Alembic. Ningún ADR ni PR fusionada lo nombra como pendiente. |
+| `derived.py` (inventario/borrado/reconstrucción de las tablas sombra FTS5 del corpus experimental, DDL leído de `sqlite_master`) | **PENDIENTE DE CONFIRMAR** | Infraestructura de reconstrucción específica del corpus experimental del laboratorio: Sirius 0.1 tiene sus propias migraciones canónicas (p. ej. `61be4bb269bf`, citada por el propio `derived.py:11` del laboratorio) y no necesita reconstruir tablas sombra por fuera de Alembic. Pero esto es una inferencia técnica de este inventario, no una decisión ya tomada: ningún ADR ni PR fusionada nombra `derived.py`, ni para portarlo ni para excluirlo, y `docs/evolution/STATUS.md:156-161` pide incorporar D1 de forma completa. Queda señalado como estado no encontrado en el registro de decisiones, para que el propietario lo confirme o lo corrija; este inventario no lo excluye por iniciativa propia. |
 | `neutrality.py` (autocomprobación: la capa común no nombra candidatos, no tiene señal vectorial, no coordina espacios tardíos simultáneamente, no abre red) | **NO SE PORTA** | Herramienta metodológica del propio laboratorio para verificar la neutralidad de su capa común entre candidatos A/B/C/D; no aplica a producto, donde no hay «candidatos» compitiendo. |
 
 ### 1.3 Banco de casos y su familia (`benchmark/`)
@@ -101,7 +110,7 @@ esa referencia — si el propietario confirma que sí lo es, esta fila debería 
 | Módulo | Estado | Dónde vive en `main` / PR |
 |---|---|---|
 | `round/cases.py` — `_traducir` (`cases.py:313-401`, construcción de la `Peticion` en `334-366`) y `CARDINALIDAD_SIN_DECLARAR` (`cases.py:104`) | **PENDIENTE** | Sin destino en `main`. El borrador de ADR-110 (PR #458, sin fusionar) lo identifica como la causa raíz de que la ronda del laboratorio alcance 29/47 y el arnés del banco de `main` (política uniforme, sin petición por caso) no pase de 11/47: «la petición por caso ... `round/cases.py:334-366` (`_traducir`) construye a partir de dos ficheros ... ninguno de esos dos ficheros, ni el traductor que los combina, está entre lo que el alcance permitido de la incidencia #457 autoriza portar». |
-| `round/execute_round.py`, `round_protocol.py`, `participants.py`, `metrics.py`, `closure.py`, `levels.py`, `execute_levels.py`, `discriminant.py`, `m2_marking.py`, `readjudication.py`, `execute_m2.py`, `run_round.py` | **NO SE PORTA** | Protocolo y arnés de la «ronda primaria de ADR-002»: preinscripción (`round_protocol.py`), ejecución real con cinco participantes T0 (control, Sirius 0.1 sin motor) + A + B + C + D (`participants.py:32-46`, `execute_round.py`), métricas del §9 (`metrics.py`) y adjudicación de cierre (`closure.py`). Este arnés es el que produjo las cifras que fijaron el suelo D1 (29/47 aciertos exactos, tabla de PR #117). Es maquinaria de medición del propio laboratorio, no código de producto: el banco que corre hoy en `main` (`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`, PR #446/#456) implementa su **propio** arnés (`rank()`/`_ejecutar_banco_motor_portado`) contra el pipeline real de Sirius, y no reutiliza estos módulos. Ningún ADR ni PR fusionada lo cita como pendiente de portar — el borrador de ADR-110 cita `round/cases.py` como pendiente, pero no el resto de este grupo. |
+| `round/execute_round.py`, `round_protocol.py`, `participants.py`, `metrics.py`, `closure.py`, `levels.py`, `execute_levels.py`, `discriminant.py`, `m2_marking.py`, `readjudication.py`, `execute_m2.py`, `run_round.py` | **NO SE PORTA** | Protocolo y arnés de la «ronda primaria de ADR-002»: preinscripción (`round_protocol.py`), ejecución real con cinco participantes T0 (control, Sirius 0.1 sin motor) + A + B + C + D (`participants.py:32-46`, `execute_round.py`), métricas del §9 (`metrics.py`) y adjudicación de cierre (`closure.py`). Este arnés es el que produjo las cifras que fijaron el suelo D1 (29/47 aciertos exactos, tabla de PR #117). Es maquinaria de medición del propio laboratorio, no código de producto: el banco que corre hoy en `main` (`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`, PR #446/#456) implementa su **propio** arnés (`rank()`/`_ejecutar_banco`, `test_pa_0_2_rec_01_banco_evidencia.py:227`) contra el pipeline real de Sirius, y no reutiliza estos módulos. Ningún ADR ni PR fusionada lo cita como pendiente de portar — el borrador de ADR-110 cita `round/cases.py` como pendiente, pero no el resto de este grupo. |
 
 ### 1.5 Candidatos descartados y mecanismos no adoptados
 
@@ -123,7 +132,9 @@ verificada.
 | `hibrido/` (`fusion.py` — Reciprocal Rank Fusion, `buscador.py`, `codificador_openai.py`, `medir_con_openai.py`) | **NO SE PORTA** | PR #117: «Fusión híbrida RRF (inerte)». `hibrido/fusion.py:1-12` explica el mecanismo (RRF, Cormack/Clarke/Buettcher 2009) sin medir una mejora que lo justifique. |
 | `modelo_local/filtro.py` — modo «compuerta» (el modelo solo dice si hay algo, no elige) | **NO SE PORTA** | PR #117: «compuerta sí/no (segura pero casi inerte)». `modelo_local/medir.py:36-39` (laboratorio): «cero elementos correctos perdidos [...] pero gana poco, 25 y 26 de 47». El **filtro que elige** (no la compuerta) es justamente la pieza que M10/PR #452 sí porta como `ollama_relevance_filter.py` (§1.6 más abajo). |
 | `lateral/` (`candidato.py`, `categoria.py`, `medir_categoria.py`, `texto.py`) — índices laterales adicionales en `E1` | **NO SE PORTA** | No citado como adoptado por PR #117 ni por ningún ADR fusionado; exploración declarada como tal en su propio docstring (`lateral/candidato.py:1`: «`ADR002-A` más uno o varios índices laterales»), sin resultado publicado que lo respalde. |
-| `cards/`, `projection/`, `rederivation/`, `storage/`, `tolerances/`, `t0_control/` | **NO SE PORTA** | Piezas de otras investigaciones de ADR-002 (fichas de candidato, proyección experimental, re-derivación controlada, contabilidad de almacenamiento, bandas de tolerancia de medición, control de falsación T0) no relacionadas con el paquete de recuperación D1 que este inventario cubre. |
+| `projection/contracts.py` — `referencia_canonica` (`contracts.py:161-170`, filtra un identificador de corpus a su identidad canónica `MEM-`/`DEC-`, o `None` si no es del canon) | **NO SE PORTA (lógica reconstruida a mano)** | Sí forma parte del paquete D1: `ADR-104:58-68` la usa explícitamente para filtrar `resultado_esperado` a identidades del canon al reconstruir los 81 elementos esperados del banco portado (PR #446). Su lógica quedó materializada, una sola vez y a mano, en el propio contenido estático de `tests/acceptance/fixtures/evidence_bank_47_casos.json` (ya filtrado) — el módulo en sí no vive en `main` como código: no hay script de construcción de fixtures en `main` que lo invoque, así que si el banco necesitara reconstruirse desde cero (más casos, otra versión del canon) habría que volver a aplicar este filtro, a mano o portando el módulo. |
+| `projection/contracts.py` — el resto del módulo (planos `Plano`/`FICHEROS`, capacidades `CAPACIDAD_DEL_PLANO`/`CONSUMIDORES_DEL_PLANO`, `estado_de_memoria`, `estado_de_decision`, control de acceso por plano) | **NO SE PORTA** | No citado por `ADR-104` ni por ningún otro ADR fusionado o en borrador; gobierna planos reservados (`ejes_p2`, `reservado`) y control de acceso entre candidatos del laboratorio, ajeno al banco portado. |
+| `cards/`, `rederivation/`, `storage/`, `tolerances/`, `t0_control/`, y el resto de `projection/` (`__init__.py`, `build.py`, `conftest.py`, `plane.py`, `projection_manifest_v0_1.json`, `test_adr002_proyeccion.py`) | **NO SE PORTA** | Piezas de otras investigaciones de ADR-002 (fichas de candidato, re-derivación controlada, contabilidad de almacenamiento, bandas de tolerancia de medición, control de falsación T0) no relacionadas con el paquete de recuperación D1 que este inventario cubre. |
 
 ### 1.6 Artefactos de medición (evidencia congelada)
 
@@ -162,7 +173,7 @@ categoría determinista **y** el filtro de relevancia con modelo local vía Olla
   "ollama", "modelo": "qwen3:4b-instruct", "huella":
   "0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0"}`.
 - **Las mediciones se ejecutaron contra un Ollama local (`localhost`), ya instalado en la
-  máquina del propietario — no hay que pedirle instalarlo de nuevo.**
+  máquina que las corrió — hecho histórico, no un estado verificado hoy.**
   `experiments/adr002/modelo_local/puerto.py:67`: `SERVIDOR_POR_DEFECTO: Final =
   "http://localhost:11434"` (nunca un host remoto configurable). PR #117, sección «Lo que
   queda por decidir»: «el filtro exige que Ollama esté arrancado, y `AGENTS.md` obliga a
@@ -171,7 +182,11 @@ categoría determinista **y** el filtro de relevancia con modelo local vía Olla
   laboratorio ni de un servicio en la nube. Este inventario no verifica de forma
   independiente *qué máquina física* ejecutó cada medición (ese dato no está en ningún
   fichero versionado accesible) — se declara **no verificado** por esa parte y se deja tal
-  como lo afirma el objetivo de la incidencia.
+  como lo afirma el objetivo de la incidencia. Por eso mismo, este hecho histórico **no es
+  una instrucción operativa para hoy**: no acredita que Ollama siga instalado en la máquina
+  del propietario ni que no haya que instalarlo — ADR-095:89-97 exige consultar el servicio
+  para afirmar un estado vivo, y este inventario no lo ha consultado. Cualquier trabajo que
+  dependa de tener Ollama arrancado debe comprobarlo en el momento, no asumirlo por esta nota.
 
 ## Nota sobre ADR-108
 
@@ -219,6 +234,11 @@ documental. El resto de citas de ADR-110 verificadas por este inventario (`port.
   híbrida RRF; el modo «compuerta» del filtro; los índices laterales; la maquinaria de
   construcción/validación del corpus (`build_corpus_*`, `validate_corpus_*`, `schema_*`,
   `canonical_source_*`); el arnés y protocolo de la ronda primaria (`round/execute_round.py`
-  y familia, excepto `cases.py`); `derived.py` y `neutrality.py` de la capa común; los
-  subdirectorios de ADR-002 ajenos al paquete D1 (`cards/`, `projection/`, `rederivation/`,
+  y familia, excepto `cases.py`); `neutrality.py` de la capa común; `projection/contracts.py:referencia_canonica`
+  (su lógica sí es parte de D1 por `ADR-104`, pero solo quedó reconstruida a mano en el
+  fixture estático, no portada como código — ver §1.5) y el resto de `projection/`; los
+  demás subdirectorios de ADR-002 ajenos al paquete D1 (`cards/`, `rederivation/`,
   `storage/`, `tolerances/`, `t0_control/`); y todos los artefactos de medición congelados.
+- **PENDIENTE DE CONFIRMAR**: `derived.py` de la capa común — ningún ADR ni PR fusionada lo
+  nombra, ni para portarlo ni para excluirlo; este inventario razona por qué probablemente no
+  hace falta, pero no lo trata como decisión ya tomada (ver §1.2).
