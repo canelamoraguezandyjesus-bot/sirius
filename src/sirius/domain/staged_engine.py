@@ -136,7 +136,7 @@ def _con_representante_al_frente(
     ordenadas: Sequence[Candidata],
     criticidad_de: Callable[[str], Criticidad],
     representante_de: Callable[[str], str | None],
-) -> tuple[Candidata, ...]:
+) -> tuple[tuple[Candidata, ...], frozenset[str]]:
     """``GrupoDeEquivalentes`` exige que "el representante encabeza": este
     paso, aparte de ``_clave_de_orden``, adelanta cada representante hasta
     justo delante del primero de sus propios miembros —en el mismo orden en
@@ -144,9 +144,17 @@ def _con_representante_al_frente(
     ningún otro par de candidatos. Solo actúa dentro del mismo nivel de
     criticidad, la única dimensión que ya dominaba el orden antes de esta
     corrección; ``G12`` protege el resto.
+
+    Devuelve, junto al orden resultante, el conjunto de representantes que
+    de verdad cambiaron de posición (CODEX-001, incidencia #457, quinta
+    ronda): compartir nivel de criticidad con el candidato es la condición
+    que habilita el adelanto, no la prueba de que ocurrió — si el
+    representante ya encabezaba a ese miembro, el ``insert`` de abajo nunca
+    se ejecuta y no hay movimiento real que declarar.
     """
     resultado = list(ordenadas)
     representantes_ya_al_frente: set[str] = set()
+    representantes_promovidos: set[str] = set()
     for candidata in ordenadas:
         representante = representante_de(candidata.item.id)
         if (
@@ -163,25 +171,30 @@ def _con_representante_al_frente(
         indice_miembro = next(i for i, c in enumerate(resultado) if c.item.id == candidata.item.id)
         if indice_representante > indice_miembro:
             resultado.insert(indice_miembro, resultado.pop(indice_representante))
+            representantes_promovidos.add(representante)
         representantes_ya_al_frente.add(representante)
-    return tuple(resultado)
+    return tuple(resultado), frozenset(representantes_promovidos)
 
 
 def _promocion_real(
     identidad: str,
     grupo: GrupoDeEquivalentes | None,
     criticidad_de: Callable[[str], Criticidad],
+    representantes_promovidos: frozenset[str],
 ) -> bool:
-    """Refleja, sin ejecutarlo de nuevo, el mismo criterio que decide si
-    ``_con_representante_al_frente`` promueve a alguien: sin grupo no hay
-    promoción; el representante siempre encabeza el suyo; un miembro solo se
-    beneficia cuando su representante comparte su nivel de criticidad —
-    exactamente las dos condiciones que allí valen ``continue`` (líneas
-    152-159). Es plomería de la traza (CODEX-001, incidencia #457, cuarta
-    ronda), no una segunda fuente de verdad sobre el orden: ninguna llamada
-    aquí puede cambiar qué posición ocupa nadie.
+    """Refleja el movimiento que de verdad ejecutó
+    ``_con_representante_al_frente`` (CODEX-001, incidencia #457, quinta
+    ronda), no las condiciones que lo habilitan: sin grupo no hay promoción;
+    y compartir nivel de criticidad con el representante no basta, porque el
+    representante puede ya encabezar el orden sin que se haya ejecutado
+    ningún ``insert``. Solo ``representantes_promovidos`` —el conjunto que
+    ese paso devuelve cuando sí lo ejecuta— certifica que hubo movimiento.
+    Es plomería de la traza, no una segunda fuente de verdad sobre el orden:
+    ninguna llamada aquí puede cambiar qué posición ocupa nadie.
     """
     if grupo is None:
+        return False
+    if grupo.representante not in representantes_promovidos:
         return False
     if identidad == grupo.representante:
         return True
@@ -300,7 +313,7 @@ def recuperar(
         return grupo_por_item[identidad].representante if identidad in grupo_por_item else None
 
     ordenadas_por_criticidad = sorted(unicas, key=lambda c: _clave_de_orden(c, criticidad_de))
-    ordenadas = _con_representante_al_frente(
+    ordenadas, representantes_promovidos = _con_representante_al_frente(
         ordenadas_por_criticidad, criticidad_de, representante_de
     )
     g12 = gates.aplicar_g12(ordenadas, peticion, criticidad_de, lambda i: i in grupo_por_item)
@@ -345,7 +358,10 @@ def recuperar(
                 criticidad=plano.criticidad_aplicada(candidata.item.id),
                 grupo=grupo_por_item.get(candidata.item.id),
                 promocion_real=_promocion_real(
-                    candidata.item.id, grupo_por_item.get(candidata.item.id), criticidad_de
+                    candidata.item.id,
+                    grupo_por_item.get(candidata.item.id),
+                    criticidad_de,
+                    representantes_promovidos,
                 ),
             ),
             posicion=orden,

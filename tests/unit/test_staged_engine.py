@@ -438,13 +438,16 @@ def test_explicar_never_claims_promotion_for_a_result_without_a_group() -> None:
 
 
 def test_recuperar_does_not_claim_promotion_for_a_member_with_a_different_criticality() -> None:
-    """CODEX-001 (incidencia #457, cuarta ronda): ``_con_representante_al_
-    frente`` solo promueve dentro del mismo nivel de criticidad
-    (``staged_engine.py``, líneas 152-159 citadas por el hallazgo); fuera de
-    él el representante nunca se adelanta para ese miembro, así que su
-    explicación tampoco puede afirmarlo. MEMORIA:1 (representante) queda
-    ORDINARIA y MEMORIA:2 (miembro) CRITICA: niveles distintos, sin
-    promoción para MEMORIA:2."""
+    """CODEX-001 (incidencia #457, cuarta y quinta ronda): ``_con_
+    representante_al_frente`` solo promueve dentro del mismo nivel de
+    criticidad; fuera de él el representante nunca se adelanta para ese
+    miembro, así que su explicación tampoco puede afirmarlo. MEMORIA:1
+    (representante) queda ORDINARIA y MEMORIA:2 (miembro) CRITICA: niveles
+    distintos, sin promoción para MEMORIA:2. La quinta ronda añade la
+    comprobación simétrica sobre el propio representante: al no ejecutarse
+    ningún adelanto (el ``continue`` por criticidad dispar impide siquiera
+    evaluar el índice), MEMORIA:1 tampoco puede declararse promovido, aunque
+    ``identidad == grupo.representante`` siga siendo cierto para él."""
     en_e1 = _item("MEMORIA:2")
     en_e2 = _item("MEMORIA:1")
     peticion = _peticion(limite_duro=2)
@@ -474,6 +477,46 @@ def test_recuperar_does_not_claim_promotion_for_a_member_with_a_different_critic
     razon = miembro_resultado.explicacion.razon_de_orden
     assert PROMOCION_DE_REPRESENTANTE_DECLARADA not in razon
     assert SIN_PROMOCION_DE_REPRESENTANTE_DECLARADA in razon
+
+    representante_resultado = next(r for r in recuperacion.resultados if r.item.id == "MEMORIA:1")
+    razon_representante = representante_resultado.explicacion.razon_de_orden
+    assert PROMOCION_DE_REPRESENTANTE_DECLARADA not in razon_representante
+    assert SIN_PROMOCION_DE_REPRESENTANTE_DECLARADA in razon_representante
+
+
+def test_recuperar_does_not_claim_promotion_when_the_representative_was_already_ahead() -> None:
+    """CODEX-001 (incidencia #457, quinta ronda): compartir nivel de
+    criticidad con el representante habilita el adelanto en
+    ``_con_representante_al_frente``, pero no demuestra que se haya
+    ejecutado. Con MEMORIA:1 y MEMORIA:2 equivalentes, ambos en ``E1`` y
+    ordenados ya como MEMORIA:1, MEMORIA:2 por ``_clave_de_orden`` (mismo
+    sujeto, misma etapa, desempate por ``item.id``), el representante ya
+    encabeza a su miembro antes de este paso: el ``insert`` de
+    ``staged_engine.py`` nunca se ejecuta y ninguna de las dos explicaciones
+    puede afirmar que el representante se adelantó."""
+    en_e1_uno = _item("MEMORIA:1")
+    en_e1_dos = _item("MEMORIA:2")
+    peticion = _peticion(limite_duro=2)
+
+    class _PlanoConPropiedad:
+        def property_key(self, identidad: str) -> str | None:
+            return "PK-1"
+
+        def criticidad_aplicada(self, identidad: str) -> CriticidadAplicada | None:
+            return None
+
+    recuperacion = recuperar(
+        peticion,
+        _PuertoDePrueba([en_e1_uno, en_e1_dos]),
+        _CandidatoDeUnaEtapa([en_e1_uno, en_e1_dos]),
+        _PlanoConPropiedad(),
+    )
+
+    assert recuperacion.ids == ("MEMORIA:1", "MEMORIA:2")
+    for resultado in recuperacion.resultados:
+        razon = resultado.explicacion.razon_de_orden
+        assert PROMOCION_DE_REPRESENTANTE_DECLARADA not in razon
+        assert SIN_PROMOCION_DE_REPRESENTANTE_DECLARADA in razon
 
 
 def test_con_representante_al_frente_never_relegates_a_member_behind_an_unrelated_item() -> None:
@@ -506,11 +549,12 @@ def test_con_representante_al_frente_never_relegates_a_member_behind_an_unrelate
         [miembro_candidata, suelto_candidata, representante_candidata],
         key=lambda c: _clave_de_orden(c, criticidad_de),
     )
-    ordenadas = _con_representante_al_frente(
+    ordenadas, representantes_promovidos = _con_representante_al_frente(
         ordenadas_por_criticidad, criticidad_de, representante_de
     )
 
     assert [c.item.id for c in ordenadas] == ["MEMORIA:1", "MEMORIA:2", "MEMORIA:3"]
+    assert representantes_promovidos == frozenset()
 
 
 def test_recuperar_raises_if_a_candidate_reads_no_subject_at_all() -> None:
