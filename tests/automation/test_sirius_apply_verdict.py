@@ -723,6 +723,67 @@ def test_drip_guard_does_not_mark_a_finding_on_an_added_line(tmp_path: Path) -> 
     assert "Guardián de goteo" not in comments
 
 
+def test_drip_guard_cli_total_failure_does_not_leak_foreign_posible_goteo(
+    tmp_path: Path,
+) -> None:
+    """CLAUDE-001 (incidencia #501, ronda 4).
+
+    Si la invocación completa del CLI del guardián falla (aquí: `python3` no
+    disponible para ese script en concreto), el `else` de
+    `sirius_apply_verdict.sh` cae a `$observations` tal cual. Si el revisor
+    ya incluía una clave `posible_goteo` ajena, esa rama no debe reenviarla
+    como si el guardián la hubiera marcado sin haber evaluado nada.
+    """
+    head1, head2 = "5555eeee5555", "6666ffff6666"
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:reviewing"], comments=_seed_round1_history(head1, head2))
+    _seed_pr(env, 9, head=head2)
+    _seed_compare(env, files=[])
+
+    # `python3` real sigue disponible para sirius_convergence.py (record,
+    # family-check): solo se simula el fallo del CLI del guardián en
+    # concreto, para no tapar el resto de la ronda con un entorno sin Python.
+    real_python3 = shutil.which("python3")
+    assert real_python3 is not None
+    bin_dir = Path(env["PATH"].split(os.pathsep, 1)[0])
+    fake_python3 = bin_dir / "python3"
+    fake_python3.write_text(
+        "#!/usr/bin/env bash\n"
+        "if printf '%s' \"$*\" | grep -q sirius_drip_guard_cli.py; then\n"
+        "  echo 'python3 no disponible (simulado)' >&2\n"
+        "  exit 127\n"
+        "fi\n"
+        f'exec "{real_python3}" "$@"\n',
+        encoding="utf-8",
+    )
+    fake_python3.chmod(0o755)
+
+    vf = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "CHANGES_REQUESTED",
+            "summary": "hay defectos",
+            "reviewed_head_sha": head2,
+            "observations": [
+                {
+                    "id": "CLAUDE-REV-003",
+                    "severidad": "alta",
+                    "archivo": "src/x.py:10",
+                    "problema": "vuelve a citar la misma línea",
+                    "criterio_esperado": "debe validar",
+                    "prueba": "test_x_invalid",
+                    "limites_correccion": "solo src/x.py",
+                    "posible_goteo": "marca ajena inventada por el revisor",
+                }
+            ],
+        },
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    comments = _comments(env)
+    assert "Guardián de goteo" not in comments
+
+
 def test_reviewer_changes_requested_increments_the_round_number(tmp_path: Path) -> None:
     env = _setup(tmp_path)
     _seed_issue(

@@ -495,7 +495,14 @@ case "$verdict" in
       && [ -s "$drip_out_file" ] && jq -e . "$drip_out_file" >/dev/null 2>&1; then
       readable_observations="$(cat "$drip_out_file")"
     else
-      readable_observations="$observations"
+      # `posible_goteo` está reservada al guardián (mismo criterio que
+      # `_escribir_sin_anotar` en sirius_drip_guard_cli.py): si la invocación
+      # completa del CLI falla -python3 no disponible, el script no escribe
+      # salida válida-, hay que retirar cualquier clave `posible_goteo` que
+      # ya trajera `$observations` desde el revisor antes de usarla, para que
+      # `readable` no la renderice como un aviso del guardián que en
+      # realidad nadie evaluó.
+      readable_observations="$(printf '%s' "$observations" | jq -c 'map(if type == "object" then del(.posible_goteo) else . end)')"
     fi
     rm -f "$drip_obs_file" "$drip_out_file"
     readable="$(printf '%s' "$readable_observations" | jq -r '.[] | "- **\(.id // "?")** (\(.severidad // "?")) \(.archivo // "?"): \(.problema // "?")\n  - Criterio esperado: \(.criterio_esperado // "?")\n  - Prueba: \(.prueba // "?")\n  - Límites de corrección: \(.limites_correccion // "?")" + (if .posible_goteo then "\n  - ⚠️ Guardián de goteo: \(.posible_goteo)" else "" end)')"
