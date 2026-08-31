@@ -236,15 +236,21 @@ para el resultado completo.
    superficie de código portado —con más riesgo de apartarse del laboratorio
    sin que ninguna medición lo exigiera— que reproducir directamente las dos
    puertas que sí hacen falta, citando su fuente exacta.
-4. **Afirmar el suelo D1 igualmente sobre las cuatro métricas, o debilitar
-   la cota de no regresión de `elementos_de_mas` por debajo de lo medido
-   (50)** — descartada explícitamente por la incidencia y por la disciplina
-   de evidencia de `CLAUDE.md`.
+4. **Aplicar el suelo D1 (≤21) de `elementos_de_mas` sobre las 47 filas sin
+   la salvedad de población que lo publicó, o debilitar la cota de no
+   regresión de `elementos_de_mas` sobre esas 47 filas por debajo de lo
+   medido (50)** — descartada explícitamente por la incidencia y por la
+   disciplina de evidencia de `CLAUDE.md`: mezclaría la población que fija
+   el suelo D1 (los 31 `casos_con_contenido`) con la de la cota de no
+   regresión (las 47 filas), sustituyendo la métrica aprobada por otra más
+   favorable.
 5. **Cerrar la causa exactamente donde el diagnóstico elemento a elemento la
    localiza (`G8`/`G12` sobre la ampliación), afirmar `aciertos_exactos` como
-   aserción dura ahora que alcanza su suelo D1, bajar la cota de no
-   regresión de `elementos_de_mas` a 50, y documentar con la prueba de forma
-   que los 50 restantes son ruido propio del laboratorio** — elegida.
+   aserción dura ahora que alcanza su suelo D1, afirmar `elementos_de_mas`
+   ≤21 como aserción dura sobre los 31 `casos_con_contenido` que originaron
+   ese suelo (CODEX-001), bajar la cota de no regresión de `elementos_de_mas`
+   sobre las 47 filas a 50, y documentar con la prueba de forma que los 50
+   restantes son ruido propio del laboratorio** — elegida.
 
 ## Decisión
 
