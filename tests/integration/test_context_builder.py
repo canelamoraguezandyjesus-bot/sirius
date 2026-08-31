@@ -30,6 +30,7 @@ from sirius.adapters.persistence.sqlite_knowledge_search_repository import (
 )
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
+from sirius.application import context as context_module
 from sirius.application.context import Context, ContextAssemblyError, ContextBuilder
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.domain.conversation import MessageRole
@@ -87,6 +88,7 @@ def _build_context_builder(
     max_knowledge_items: int = 12,
     relevance_filter_port: RelevanceFilterPort | None = None,
     max_criticality_category: str | None = None,
+    category_matching_enabled: bool = False,
 ) -> ContextBuilder:
     memory_repository = build_sqlite_memory_repository(database_path)
     decision_repository = build_sqlite_decision_repository(database_path)
@@ -111,6 +113,7 @@ def _build_context_builder(
         max_knowledge_items=max_knowledge_items,
         relevance_filter_port=relevance_filter_port,
         max_criticality_category=max_criticality_category,
+        category_matching_enabled=category_matching_enabled,
     )
 
 
@@ -145,6 +148,28 @@ class _FailOpenRelevanceFilterPort:
         self, query_text: str, candidates: Sequence[RankedKnowledge]
     ) -> Sequence[RankedKnowledge]:
         return candidates
+
+
+class _KeepOnlyRelevanceFilterPort:
+    """Test double for RF-25/RF-26 (§8-M15): conserves only the candidates
+    whose ``item_id`` is in ``kept_ids`` — standing in for a real model
+    verdict that judged some candidates relevant and discarded the rest, so
+    RF-25's rescue (only when the filter conserved *something*) can be
+    told apart from RF-26 (total absence, no rescue). Also a spy: records
+    the ``item_id``s it was actually called with on each invocation, so a
+    test can assert that a G12-excluded candidate never reached the filter
+    in the first place — not just that it is absent from the final result,
+    which a filter-side change could produce for the wrong reason."""
+
+    def __init__(self, kept_ids: frozenset[int]) -> None:
+        self._kept_ids = kept_ids
+        self.received_item_ids: list[frozenset[int]] = []
+
+    def filter_candidates(
+        self, query_text: str, candidates: Sequence[RankedKnowledge]
+    ) -> Sequence[RankedKnowledge]:
+        self.received_item_ids.append(frozenset(c.item_id for c in candidates))
+        return tuple(c for c in candidates if c.item_id in self._kept_ids)
 
 
 def _row_counts(database_path: Path) -> dict[str, int]:
@@ -742,3 +767,193 @@ def test_relevance_filter_candado_preserves_rank_order_not_the_filter_or_set_ord
     context = builder.build("candidato")
 
     assert [m.id for m in context.memories] == [critical.id, uncategorized.id]
+
+
+# --- M15 (SIRIUS-ARQ-0.2 §11.2/§11.5, incidencia #490): RF-25/RF-26 -----------
+# --- replaces the candado-union for the max-criticality category, and G8/G12 -
+# --- gate the combined set first — only when category_matching_enabled ------
+# --- is True. -----------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_category_matching_enabled_false_keeps_the_old_candado_byte_for_byte(
+    tmp_path: Path,
+) -> None:
+    """With the gate closed (the default), passing the same port and
+    max_criticality_category as the M10 tests above must produce exactly
+    the same result as before this incidence — RF-26 never applies."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    critical = memory_repository.create_memory("candidato critico", "manual")
+    memory_repository.set_user_category(critical.id, "salud")
+    builder = _build_context_builder(
+        database_path,
+        relevance_filter_port=_ExcludeAllRelevanceFilterPort(),
+        max_criticality_category="salud",
+        category_matching_enabled=False,
+    )
+
+    context = builder.build("candidato")
+
+    # The old candado protects every max-criticality candidate unconditionally,
+    # even though the filter discarded it — unlike RF-26 below.
+    assert [m.id for m in context.memories] == [critical.id]
+
+
+@pytest.mark.integration
+def test_rf25_rescues_a_max_criticality_candidate_the_filter_discarded(tmp_path: Path) -> None:
+    """RF-25: with the gate open, a max-criticality candidate the filter
+    discarded is still rescued, but only because the filter did conserve a
+    different candidate for the same query."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    kept = memory_repository.create_memory("candidato conservado", "manual")
+    discarded_critical = memory_repository.create_memory("candidato critico", "manual")
+    memory_repository.set_user_category(discarded_critical.id, "salud")
+    builder = _build_context_builder(
+        database_path,
+        relevance_filter_port=_KeepOnlyRelevanceFilterPort(frozenset({kept.id})),
+        max_criticality_category="salud",
+        category_matching_enabled=True,
+    )
+
+    context = builder.build("candidato")
+
+    assert {m.id for m in context.memories} == {kept.id, discarded_critical.id}
+
+
+@pytest.mark.integration
+def test_rf26_does_not_rescue_when_the_filter_declared_total_absence(tmp_path: Path) -> None:
+    """RF-26: with the gate open, a filter that conserved nothing at all
+    for this query is respected whole — even a max-criticality candidate
+    is not rescued. This is exactly where RF-25/RF-26 diverges from M10's
+    candado (see the byte-for-byte test above, same scenario, gate closed)."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    critical = memory_repository.create_memory("candidato critico", "manual")
+    memory_repository.set_user_category(critical.id, "salud")
+    builder = _build_context_builder(
+        database_path,
+        relevance_filter_port=_ExcludeAllRelevanceFilterPort(),
+        max_criticality_category="salud",
+        category_matching_enabled=True,
+    )
+
+    context = builder.build("candidato")
+
+    assert context.memories == ()
+
+
+@pytest.mark.integration
+def test_g12_hard_limit_exclusion_survives_the_real_context_builder_composition(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """G12's hard-limit exclusion (``truncate_to_hard_limit``) runs before
+    RF-25/RF-26 (``rescue_max_criticality_candidates``) inside the real
+    ``ContextBuilder._apply_relevance_filter`` composition, and is final: a
+    candidate G12 already dropped is never brought back by RF-25, even
+    though the filter conserved something else for this query — exactly
+    the condition that does trigger RF-25 for a candidate G12 still let
+    through. Unlike the domain-only test of the same two functions
+    (``test_g12_hard_limit_exclusion_is_final_and_is_never_undone_by_rf25_rescue``
+    in ``tests/unit/test_relevance_domain.py``), this calls
+    ``ContextBuilder.build`` itself, so it would catch a wiring regression
+    in ``_apply_relevance_filter`` (``src/sirius/application/context.py``)
+    that lets a G12-excluded candidate leak back into the result through
+    RF-25's rescue path — something the domain-only test, which never
+    executes that composition, cannot see. Only the test double's hard
+    limit is lowered via ``monkeypatch``, never the production constant or
+    policy.
+    """
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    kept_by_filter = memory_repository.create_memory("candidato uno", "manual")
+    memory_repository.set_user_category(kept_by_filter.id, "salud")
+    rescuable_by_rf25 = memory_repository.create_memory("candidato dos", "manual")
+    memory_repository.set_user_category(rescuable_by_rf25.id, "salud")
+    excluded_by_g12 = memory_repository.create_memory("candidato tres", "manual")
+    memory_repository.set_user_category(excluded_by_g12.id, "salud")
+    # Pin recency so G12's hard limit (below) deterministically keeps the
+    # first two and drops the third: kept_by_filter, then rescuable_by_rf25,
+    # then excluded_by_g12.
+    _set_updated_at(database_path, kept_by_filter.id, "2026-01-03T00:00:00")
+    _set_updated_at(database_path, rescuable_by_rf25.id, "2026-01-02T00:00:00")
+    _set_updated_at(database_path, excluded_by_g12.id, "2026-01-01T00:00:00")
+    # Only two of the three max-criticality candidates fit under this
+    # lowered hard limit, so excluded_by_g12 never reaches the filter or
+    # RF-25 inside the real composition.
+    monkeypatch.setattr(context_module, "_HARD_LIMIT_SIN_ATAR", 2)
+    relevance_filter_port = _KeepOnlyRelevanceFilterPort(frozenset({kept_by_filter.id}))
+    builder = _build_context_builder(
+        database_path,
+        relevance_filter_port=relevance_filter_port,
+        max_criticality_category="salud",
+        category_matching_enabled=True,
+    )
+
+    context = builder.build("candidato")
+
+    # The precondition this test is named after: G12 must drop
+    # excluded_by_g12 *before* the filter is even called, not merely end up
+    # excluding it from the final result some other way. A spy on the
+    # filter double, not just the final assertion below, is what would
+    # catch a wiring regression that calls the filter with all three
+    # candidates and still happens to land on the same two survivors.
+    assert relevance_filter_port.received_item_ids == [
+        frozenset({kept_by_filter.id, rescuable_by_rf25.id})
+    ]
+    result_ids = {m.id for m in context.memories}
+    assert result_ids == {kept_by_filter.id, rescuable_by_rf25.id}
+    assert excluded_by_g12.id not in result_ids
+
+
+@pytest.mark.integration
+def test_a_candidate_without_a_category_yet_stays_protected_even_under_rf26(
+    tmp_path: Path,
+) -> None:
+    """The unconditional no-category protection is untouched by this
+    incidence: it survives even a total-absence filter verdict (RF-26),
+    which is exactly the scenario where the max-criticality protection
+    above no longer does."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    uncategorized = memory_repository.create_memory("candidato sin categoria", "manual")
+    builder = _build_context_builder(
+        database_path,
+        relevance_filter_port=_ExcludeAllRelevanceFilterPort(),
+        max_criticality_category="salud",
+        category_matching_enabled=True,
+    )
+
+    context = builder.build("candidato")
+
+    assert [m.id for m in context.memories] == [uncategorized.id]
+
+
+@pytest.mark.integration
+def test_category_matching_enabled_without_a_port_never_calls_the_filter_at_all(
+    tmp_path: Path,
+) -> None:
+    """``category_matching_enabled`` alone never opens anything: M10's own
+    gate — ``relevance_filter_port is not None`` — still decides whether
+    ``_apply_relevance_filter`` runs at all."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    memory = memory_repository.create_memory("candidato sin filtro", "manual")
+    builder = _build_context_builder(database_path, category_matching_enabled=True)
+
+    context = builder.build("candidato")
+
+    assert [m.id for m in context.memories] == [memory.id]
