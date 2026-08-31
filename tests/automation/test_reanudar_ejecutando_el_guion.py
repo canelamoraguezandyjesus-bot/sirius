@@ -635,3 +635,30 @@ def test_un_implementador_bloqueado_sin_pr_repite_su_fase_desde_cero(tmp_path: P
     assert "sirius-restart-sin-pr" in _comentarios(env), (
         "sin PR el permiso publicado es el de reinicio desde cero, sin head"
     )
+
+
+def test_un_marcador_de_una_parada_ya_reanudada_no_decide_la_vuelta(tmp_path: Path) -> None:
+    """PR #477 ronda 7 (P2): si la parada actual aplicó su etiqueta pero su
+    marcador no llegó a publicarse, el marcador de una parada YA REANUDADA
+    (anterior al último permiso de reanudación) no puede decidir la vuelta:
+    sin marcador de esta época, manda la vuelta histórica al corrector."""
+    env = _setup(tmp_path)
+    _sembrar(
+        env,
+        etiquetas=["sirius:blocked-decision"],
+        historial=(
+            f"https://github.com/{REPO}/pull/{PR}\n"
+            f"- Head SHA: `{HEAD}`\n"
+            "<!-- sirius-verdict:implementer:blocked:run-1 -->\n"
+            f"<!-- sirius-convergence-reset:{HEAD} -->\n"
+            "(la parada actual no llegó a publicar marcador)\n"
+        ),
+    )
+    resultado = _ejecutar(env)
+    assert resultado.returncode == 0, resultado.stderr
+    assert "sirius:repair-requested" in _etiquetas(env), (
+        "un marcador anterior al último permiso de reanudación decidió la "
+        "vuelta: reanudaría el rol equivocado y saltaría el reset de "
+        "convergencia"
+    )
+    assert "sirius:implement-requested" not in _etiquetas(env)

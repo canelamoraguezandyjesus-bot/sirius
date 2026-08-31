@@ -227,8 +227,23 @@ case "$parada" in
       echo "::error::No se pudieron leer los comentarios de #${ISSUE}; no puedo saber que fase se detuvo. Reintentable."
       exit 1
     fi
+    # Solo cuentan los marcadores de parada de la EPOCA actual: los
+    # posteriores al ultimo permiso de reanudacion publicado por este mismo
+    # guion (revision de la PR #477, P2). Si la parada actual aplico su
+    # etiqueta pero su marcador no llego a publicarse (estado parcial que
+    # sirius_transition admite), un marcador de una parada YA REANUDADA no
+    # puede decidir la vuelta: sin marcador de esta epoca, se conserva la
+    # vuelta historica al corrector con su reset de convergencia.
+    ultima_reanudacion="$(grep -nE 'sirius-(convergence-reset|resume-stop|restart-sin-pr)' "$dump_file" | tail -n 1 | cut -d: -f1)"
+    if [ -n "${ultima_reanudacion:-}" ]; then
+      epoca_file="$(mktemp)"
+      tail -n "+$((ultima_reanudacion + 1))" "$dump_file" >"$epoca_file"
+    else
+      epoca_file="$dump_file"
+    fi
     marcador_vigente="$(grep -oE '<!-- sirius-verdict:(implementer|reviewer|corrector):(FAILED_SAFELY|precheck|blocked)[^>]*-->' \
-      "$dump_file" | tail -n 1)"
+      "$epoca_file" | tail -n 1)"
+    [ "$epoca_file" != "$dump_file" ] && rm -f "$epoca_file"
     rol_parado="$(printf '%s' "$marcador_vigente" | cut -d: -f2)"
     rm -f "$dump_file"
     # El reset del liston de convergencia solo corresponde cuando el bloqueo

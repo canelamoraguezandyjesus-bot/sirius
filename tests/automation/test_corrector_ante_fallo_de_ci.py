@@ -308,15 +308,16 @@ def test_el_rerun_va_con_el_token_del_workflow_no_con_el_pat() -> None:
 
     doc = _yaml.safe_load(CORRECTOR.read_text(encoding="utf-8"))
     permisos = doc.get("permissions") or {}
-    assert permisos.get("actions") == "write", (
-        "sin actions:write el relanzamiento devuelve 403 en silencio y el "
-        "verde espera horas al reconciliador"
+    assert permisos.get("actions") == "read", (
+        "el GET de runs va con el github.token del paso y necesita "
+        "actions:read; write no hace falta porque el POST va con el PAT"
     )
     guion = _paso_de_la_puerta()
-    tramo = guion[guion.index("run_terminado=") : guion.index("/rerun")]
-    assert "SIRIUS_TRIGGER_TOKEN" not in tramo, (
-        "el POST de rerun no puede ir con el PAT: no tiene alcance de Actions "
-        "y devolvería 403 en silencio"
+    tramo = guion[guion.index("run_terminado=") : guion.rindex("/rerun")]
+    assert "SIRIUS_TRIGGER_TOKEN" in tramo, (
+        "el POST de rerun tiene que ir con el PAT: un workflow_run emitido a "
+        "partir del GITHUB_TOKEN no despierta al avance (anti-recursión, la "
+        "misma restricción que sirius_apply_verdict.sh documenta y aplica)"
     )
 
 

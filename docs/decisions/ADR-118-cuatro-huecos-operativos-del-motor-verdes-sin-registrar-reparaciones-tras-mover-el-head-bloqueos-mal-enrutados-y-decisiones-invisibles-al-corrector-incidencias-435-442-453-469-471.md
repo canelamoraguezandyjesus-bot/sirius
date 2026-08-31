@@ -149,6 +149,18 @@ La tercera pasada endureció cuatro bordes más:
     transición parcial anterior no fabrica una falsa ambigüedad, y la
     etiqueta sobrante se retira tras la transición de éxito.
 
+Las dos últimas pasadas cerraron la cola de bordes (22 hallazgos en total,
+todos corregidos con su prueba): toda lectura del emparejado y de la rama
+del head movido propaga su fallo como reintentable en vez de disfrazarse de
+resultado vacío; el relanzamiento vuelve al PAT — la restricción real es la
+anti-recursión del GITHUB_TOKEN, documentada y en producción en
+`sirius_apply_verdict.sh`, no el alcance del PAT — con `actions: read` para
+la consulta; el reanudador solo acepta marcadores de parada de la época
+actual (posteriores al último permiso de reanudación), con la vuelta
+histórica al corrector como respaldo; y la salida idempotente de
+`sirius_transition` exige también las retiradas de `remove_csv`, para que
+una transición parcial no certifique como completa una parada falsa.
+
 ## Consecuencias
 
 - Positivas: las cuatro paradas mudas de la noche pasan a resolverse solas o

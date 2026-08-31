@@ -33,11 +33,13 @@ permissions:
   issues: write
   pull-requests: write
   id-token: write
-  # Para relanzar el run de Quality ya terminado en la rama
-  # head-movido-tras-ci (revision de la PR #477): el PAT no tiene alcance de
-  # Actions (ver la nota en advance-sirius-after-quality.yml), asi que el
-  # relanzamiento va con el GITHUB_TOKEN, que necesita este permiso.
-  actions: write
+  # Para CONSULTAR los runs de Quality en la rama head-movido-tras-ci
+  # (revision de la PR #477): el GET va con el github.token ambiente del
+  # paso. El RELANZAMIENTO, en cambio, va con el PAT — un workflow_run
+  # emitido a partir del GITHUB_TOKEN no despertaria al avance (regla
+  # anti-recursion; es la misma razon documentada y en produccion en
+  # sirius_apply_verdict.sh, reejecucion de CHECKS_UNRELATED).
+  actions: read
 
 concurrency:
   group: sirius-repair-${{ github.event.issue.number }}-${{ github.event.label.name }}
@@ -442,11 +444,13 @@ jobs:
               # head actual TERMINO antes de esta transicion, su workflow_run
               # ya se consumio con la incidencia todavia en repair-requested y
               # nadie volvera a disparar el enrutado hasta el reconciliador.
-              # Se relanza ese run terminado con el GITHUB_TOKEN (el PAT no
-              # tiene alcance de Actions; el permiso actions:write de este
-              # workflow existe para esto): su nueva finalizacion vuelve a
-              # emitir workflow_run y el avance, ahora si, encuentra la
-              # incidencia en ci-pending. Si no hay run terminado (sigue en
+              # Se relanza ese run terminado con el PAT: un workflow_run
+              # emitido a partir del GITHUB_TOKEN no despertaria al avance
+              # (regla anti-recursion de GitHub) — exactamente la restriccion
+              # que sirius_apply_verdict.sh documenta y aplica en produccion
+              # para la reejecucion de CHECKS_UNRELATED. Su nueva finalizacion
+              # vuelve a emitir workflow_run y el avance, ahora si, encuentra
+              # la incidencia en ci-pending. Si no hay run terminado (sigue en
               # cola o corriendo), no hace falta nada: su finalizacion natural
               # disparara el enrutado.
               # La lectura con su codigo comprobado (revision de la PR #477,
@@ -461,8 +465,9 @@ jobs:
                 exit 1
               fi
               if [ -n "${run_terminado:-}" ]; then
-                if ! sirius_retry gh api -X POST \
-                  "repos/${GH_REPO}/actions/runs/${run_terminado}/rerun" >/dev/null; then
+                if ! ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"
+                  sirius_retry gh api -X POST \
+                  "repos/${GH_REPO}/actions/runs/${run_terminado}/rerun" >/dev/null ); then
                   # El reconciliador solo auto-recupera VERDES; un run rojo sin
                   # relanzar dejaria la correccion sin arrancar (revision de la
                   # PR #477, P1). Se propaga el fallo: el job queda en rojo y
