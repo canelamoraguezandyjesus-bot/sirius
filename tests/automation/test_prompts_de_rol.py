@@ -387,12 +387,29 @@ def test_el_prompt_cuyo_workflow_no_prepara_el_entorno_lo_advierte(
 # primera — convierte cada gota en un ciclo entero de máquina.
 # --------------------------------------------------------------------------- #
 
-_REVISORES = ("reviewer.md", "revisor-documental.md")
+
+def _prompts_de_revision_mas_nuevos() -> list[Path]:
+    """Un fichero por perfil: el de la versión @N más alta del carril revisión.
+
+    Se resuelve contra el manifiesto (H-28) y no contra nombres fijos: al
+    registrar rol@N+1 el guardián sigue vigilando el texto que de verdad se
+    entrega, no una copia vieja."""
+    import json
+
+    manifiesto = json.loads((PROMPTS_DIR / "manifiesto.json").read_text(encoding="utf-8"))
+    mas_nuevas: dict[str, tuple[int, Path]] = {}
+    for clave, fila in manifiesto["carriles"]["revision"].items():
+        rol, _, version = clave.partition("@")
+        candidata = (int(version), REPO_ROOT / fila["fichero"])
+        if rol not in mas_nuevas or candidata[0] > mas_nuevas[rol][0]:
+            mas_nuevas[rol] = candidata
+    return sorted({ruta for _, ruta in mas_nuevas.values()})
 
 
-@pytest.mark.parametrize("nombre", _REVISORES)
-def test_todo_revisor_manda_una_pasada_exhaustiva(nombre: str) -> None:
-    texto = (PROMPTS_DIR / nombre).read_text(encoding="utf-8")
+@pytest.mark.parametrize("prompt_path", _prompts_de_revision_mas_nuevos(), ids=lambda p: p.name)
+def test_todo_revisor_manda_una_pasada_exhaustiva(prompt_path: Path) -> None:
+    nombre = prompt_path.name
+    texto = prompt_path.read_text(encoding="utf-8")
     assert "EXHAUSTIVA" in texto, (
         f"{nombre} ya no manda la pasada exhaustiva: el goteo de un hallazgo "
         "por ronda volvería, y cada gota cuesta un ciclo entero"

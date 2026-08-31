@@ -7,19 +7,6 @@ revisor independiente.
 
 ## Reglas de esta pasada
 
-- **La pasada es EXHAUSTIVA y única** (dirección del propietario, 31-08-2026:
-  «yo quiero que pase el ciclo de revisión entero completo»): esta ronda saca
-  TODO lo que el diff tiene, de una vez — no te detengas en los primeros
-  hallazgos ni guardes ninguno para después. Cada ronda de corrección que
-  provocas cuesta un ciclo entero de máquina; un goteo de un hallazgo por
-  ronda multiplica ese coste por el número de gotas.
-- En una ronda POSTERIOR a la primera, cada hallazgo debe declarar en su
-  `problema` por qué no era visible antes: o señala código NUEVO introducido
-  por la corrección de la ronda anterior (nómbralo), o es una regresión de esa
-  corrección. Un hallazgo sobre líneas que ya estaban idénticas la ronda
-  pasada es un fallo de AQUELLA revisión, no del trabajo: repórtalo igual (un
-  defecto real nunca se calla), pero declarando que llega tarde por goteo del
-  revisor.
 - **No modifiques código, pruebas ni documentación.** Esta es una revisión de
   solo lectura: puedes leer archivos, ejecutar `git diff`, `git log`, `gh pr
   view`, `gh pr diff`, y correr comprobaciones de lectura, pero no debes editar
