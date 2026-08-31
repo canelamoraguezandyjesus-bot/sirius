@@ -114,6 +114,8 @@ from staged_engine_category_and_relevance import (
     filtro_congelado_conserva,
     indice_de_categoria,
     siembra_de_contexto,
+    truncar_por_limite_duro,
+    vigente_en_tiempo_objetivo,
 )
 
 from sirius.adapters.ollama_relevance_filter import OllamaRelevanceFilterAdapter
@@ -145,9 +147,14 @@ from sirius.domain.staged_engine_contracts import (
     Criticidad,
     CriticidadAplicada,
     EjesDeclarados,
+    Peticion,
 )
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "evidence_bank_47_casos.json"
+#: Incidencia #469: corrida final por caso del laboratorio (fila "5. con
+#: siembra en contexto"), portada verbatim — ver `documento`/`fuente` dentro
+#: del propio fichero para la cita completa.
+LAB_FINAL_RUN_ROW5_PATH = Path(__file__).parent / "fixtures" / "lab_final_run_row5.json"
 
 #: Medición actual publicada en el docstring de
 #: `test_el_banco_se_ejecuta_contra_el_pipeline_actual_y_reporta_las_cuatro_metricas`
@@ -161,14 +168,22 @@ _MINIMO_ELEMENTOS_HALLADOS_M7: Final[int] = 57
 #: Medición actual publicada en el docstring de
 #: `test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metricas`
 #: (motor por etapas con petición por caso, categoría buscable, regla de las
-#: críticas original, siembra al ensamblar contexto y restricción por ámbito
-#: del índice de categoría — incidencias #465/#467, ADR-113/ADR-114). Misma
-#: convención de cotas unidireccionales de no regresión, no el suelo de D1
-#: (29/47, ≤21, ≤1, ≥63/81) que ADR-114 diagnostica que `aciertos_exactos` y
-#: `elementos_de_mas` todavía no alcanzan — aunque `omisiones_criticas` y
-#: `cobertura` sí lo alcanzan (0 ≤ 1, 63/81 ≥ 63/81).
-_MINIMO_ACIERTOS_EXACTOS_MOTOR: Final[int] = 27
-_MAXIMO_ELEMENTOS_DE_MAS_MOTOR: Final[int] = 62
+#: críticas original, siembra al ensamblar contexto, restricción por ámbito
+#: del índice de categoría y las dos puertas (G8/G12) que la ampliación del
+#: arnés no heredaba — incidencias #465/#467/#469, ADR-113/ADR-114/ADR-115).
+#: Misma convención de cotas unidireccionales de no regresión, no el suelo de
+#: D1 (29/47, ≤21, ≤1, ≥63/81): `aciertos_exactos` alcanza su suelo (29/47) y
+#: se afirma como aserción dura aparte, más abajo; `omisiones_criticas` y
+#: `cobertura` también (0 ≤ 1, 63/81 ≥ 63/81). `elementos_de_mas` mide 50
+#: sobre las 47 filas sin salvedad, por encima de 21 — pero el umbral D1
+#: publicado de ≤21 lo fija la fuente sumando solo sobre los 31 `casos_con_
+#: contenido` (CODEX-001): medido con esa misma población (`test_elementos_
+#: de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publicado`, más
+#: abajo), el arnés mide 21 y sí alcanza su suelo D1. `_MAXIMO_ELEMENTOS_DE_
+#: MAS_MOTOR` (50) sigue siendo la cota de no regresión de la métrica sin esa
+#: salvedad, que el arnés también reporta.
+_MINIMO_ACIERTOS_EXACTOS_MOTOR: Final[int] = 29
+_MAXIMO_ELEMENTOS_DE_MAS_MOTOR: Final[int] = 50
 _MAXIMO_OMISIONES_CRITICAS_MOTOR: Final[int] = 0
 _MINIMO_ELEMENTOS_HALLADOS_MOTOR: Final[int] = 63
 
@@ -317,6 +332,11 @@ class _EjecucionDelBanco:
     metricas: _Metricas
     accesos_del_cargador: list[tuple[str, ...]] = field(default_factory=list)
     accesos_del_arnes: list[tuple[str, ...]] = field(default_factory=list)
+    #: Incidencia #469: `obtenido` final por caso, solo poblado por
+    #: `_ejecutar_banco_motor_portado` — permite comprobar, sin reconstruir
+    #: el motor una segunda vez, que cada `elementos_de_mas` restante es un
+    #: elemento que el laboratorio también producía (`lab_final_run_row5.json`).
+    obtenido_por_caso: Mapping[str, frozenset[str]] = field(default_factory=dict)
 
 
 def _ejecutar_banco(database_path: Path) -> _EjecucionDelBanco:
@@ -589,6 +609,34 @@ def _ejecutar_banco_motor_portado(database_path: Path) -> _EjecucionDelBanco:
                 regla_de_politica=item["criticidad"]["regla_de_politica"],
             )
 
+    #: Incidencia #469, grupo B: `indice_de_categoria`/`siembra_de_contexto`
+    #: operan en el espacio de identidades del corpus (`MEM-101`, `DEC-003`),
+    #: no en el del motor (`MEMORIA:18`, `DECISION:3`) que `ejes_por_
+    #: identidad`/`criticidad_aplicada` indexan — necesaria para que
+    #: `vigente_en_tiempo_objetivo`/`truncar_por_limite_duro` puedan mirar
+    #: los mismos ejes que el motor ya mira para lo que genera él mismo.
+    identidad_motor_por_canonico: dict[str, str] = {
+        corpus_id: _identidad_del_motor(kind, real_id)
+        for (kind, real_id), corpus_id in real_a_canonico.items()
+    }
+
+    def _criticidad_de(identidad_canonica: str) -> Criticidad:
+        motor_id = identidad_motor_por_canonico.get(identidad_canonica)
+        aplicada = criticidad_aplicada.get(motor_id) if motor_id is not None else None
+        return Criticidad.ORDINARIA if aplicada is None else aplicada.nivel
+
+    def _vigente_en_tiempo_objetivo(identidad_canonica: str, peticion: Peticion) -> bool:
+        motor_id = identidad_motor_por_canonico.get(identidad_canonica)
+        ejes = ejes_por_identidad.get(motor_id) if motor_id is not None else None
+        if ejes is None:
+            return True
+        return vigente_en_tiempo_objetivo(
+            valid_from=ejes.valid_from,
+            valid_to=ejes.valid_to,
+            tiempo_objetivo=peticion.ventana.tiempo_objetivo,
+            admite_no_vigentes=peticion.admite_no_vigentes,
+        )
+
     engine = build_engine(database_path)
     session_factory = build_session_factory(engine)
     puerto = StagedEnginePort(session_factory, engine, ejes_por_identidad=ejes_por_identidad)
@@ -604,6 +652,7 @@ def _ejecutar_banco_motor_portado(database_path: Path) -> _EjecucionDelBanco:
     elementos_de_mas = 0
     omisiones_criticas = 0
     elementos_hallados = 0
+    obtenido_por_caso: dict[str, frozenset[str]] = {}
 
     try:
         for caso in banco["casos"]:
@@ -639,19 +688,39 @@ def _ejecutar_banco_motor_portado(database_path: Path) -> _EjecucionDelBanco:
             # knowledge` (precedencia/motor, después M9 vía `rank()`,
             # después M10), con las dos piezas del arnés que #465 autoriza
             # en vez de la semántica estricta de M9 y el candado de M10.
-            obtenido_tras_categoria = obtenido_por_el_motor | indice_de_categoria(
+            categoria = indice_de_categoria(
                 consulta=caso["consulta"],
                 ya_admitidos=obtenido_por_el_motor,
                 categoria_por_identidad=categoria_por_identidad,
                 ambito_declarado=ambito_declarado,
                 proyecto_por_identidad=proyecto_por_identidad,
             )
-            obtenido_tras_siembra = obtenido_tras_categoria | siembra_de_contexto(
+            obtenido_tras_categoria = obtenido_por_el_motor | categoria
+            siembra = siembra_de_contexto(
                 proposito=peticion.proposito,
                 ambito_declarado=ambito_declarado,
                 ya_admitidos=obtenido_tras_categoria,
                 categoria_por_identidad=categoria_por_identidad,
                 proyecto_por_identidad=proyecto_por_identidad,
+            )
+            # Incidencia #469, grupo B: la ampliación (índice de categoría +
+            # siembra) nunca pasaba por G8 (vigencia temporal) ni G12
+            # (límite duro) — las dos puertas que el motor ya aplica a lo
+            # que genera él mismo (`sirius.domain.staged_engine.recuperar`,
+            # vía `staged_engine_gates`). Sin esta corrección, la ampliación
+            # podía admitir una identidad que la corrida congelada nunca
+            # examinó porque el laboratorio nunca la generó: aún no vigente
+            # en el tiempo objetivo (G8), o por encima del límite duro que
+            # la petición declara (G12).
+            ampliacion_vigente = frozenset(
+                identidad
+                for identidad in categoria | siembra
+                if _vigente_en_tiempo_objetivo(identidad, peticion)
+            )
+            obtenido_tras_siembra = truncar_por_limite_duro(
+                obtenido_por_el_motor | ampliacion_vigente,
+                limite_duro=peticion.limite_duro,
+                criticidad_de=_criticidad_de,
             )
             obtenido = aplicar_regla_de_criticas_original(
                 caso_id=caso["id"],
@@ -659,6 +728,7 @@ def _ejecutar_banco_motor_portado(database_path: Path) -> _EjecucionDelBanco:
                 categoria_por_identidad=categoria_por_identidad,
             )
             esperado = set(caso["resultado_esperado"])
+            obtenido_por_caso[caso["id"]] = frozenset(obtenido)
 
             if obtenido == esperado:
                 aciertos_exactos += 1
@@ -677,7 +747,11 @@ def _ejecutar_banco_motor_portado(database_path: Path) -> _EjecucionDelBanco:
         elementos_hallados=elementos_hallados,
         elementos_esperados_total=banco["conteos"]["elementos_esperados_total"],
     )
-    return _EjecucionDelBanco(metricas=metricas, accesos_del_arnes=accesos_del_motor_portado)
+    return _EjecucionDelBanco(
+        metricas=metricas,
+        accesos_del_arnes=accesos_del_motor_portado,
+        obtenido_por_caso=obtenido_por_caso,
+    )
 
 
 @pytest.fixture(scope="module")
@@ -872,15 +946,17 @@ def test_el_banco_se_ejecuta_contra_el_pipeline_actual_y_reporta_las_cuatro_metr
 def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metricas(
     ejecucion_del_banco_motor_portado: _EjecucionDelBanco,
 ) -> None:
-    """Incidencia #457/#461/#463/#465/#467/ADR-109/ADR-110/ADR-111/ADR-112/
-    ADR-113/ADR-114: el mismo banco, con el motor por etapas
+    """Incidencia #457/#461/#463/#465/#467/#469/ADR-109/ADR-110/ADR-111/
+    ADR-112/ADR-113/ADR-114: el mismo banco, con el motor por etapas
     (`sirius.domain.staged_engine.recuperar`), las doce puertas
     (`staged_engine_gates`), la agrupación de equivalentes
     (`staged_engine_grouping`), el índice de categoría con la semántica de
-    la «categoría buscable» de la PR #117 y restricción por ámbito, la regla
-    de las críticas original del laboratorio (RF-25/RF-26) y la siembra al
-    ensamblar contexto activos en el arnés, en vez del filtro-y-orden de M7
-    que mide el test anterior.
+    la «categoría buscable» de la PR #117, restricción por ámbito, las dos
+    puertas de vigencia temporal y límite duro que la ampliación heredaba
+    del motor (`G8`/`G12`, incidencia #469), la regla de las críticas
+    original del laboratorio (RF-25/RF-26) y la siembra al ensamblar
+    contexto activos en el arnés, en vez del filtro-y-orden de M7 que mide
+    el test anterior.
 
     ADR-112 (incidencia #463) conectó el índice de categoría (M9) y el
     filtro de relevancia con el candado de M10, con la semántica estricta
@@ -913,79 +989,110 @@ def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metric
     | 1. + categoría buscable (causa 1) | 20/47 | 153 | 4 | 69/81 |
     | 2. + regla RF-25/RF-26 (causa 1) | 27/47 | 102 | 4 | 59/81 |
     | 3. + siembra en contexto (causa 2, ADR-113) | 27/47 | 110 | 0 | 63/81 |
-    | 4. + índice de categoría por ámbito (#467, ADR-114) | 27/47 | **62** | 0 | 63/81 |
+    | 4. + índice de categoría por ámbito (#467, ADR-114) | 27/47 | 62 | 0 | 63/81 |
+    | 5. + G8/G12 sobre la ampliación (#469) | **29/47** | **50** | 0 | 63/81 |
 
-    La fila 4 es la medición final de este test. `omisiones_criticas` (0 ≤ 1)
-    y `cobertura` (63/81 ≥ 63/81) alcanzan el suelo de D1/D2; `aciertos_
-    exactos` (27 < 29) y `elementos_de_mas` (62 > 21) no, aunque
-    `elementos_de_mas` casi se reduce a la mitad frente a la fila 3 (110 →
-    62) al cerrar la causa que ADR-113 dejó diagnosticada.
+    La fila 5 es la medición final de este test. `aciertos_exactos` (29/47),
+    `omisiones_criticas` (0 ≤ 1) y `cobertura` (63/81 ≥ 63/81) alcanzan su
+    suelo D1/D2 sobre las 47 filas sin salvedad. `elementos_de_mas` mide 50
+    sobre las 47 filas — por encima del ≤21 publicado si se compara sin más—,
+    pero el umbral D1 de ≤21 lo fija la fuente sobre una población distinta
+    (los 31 `casos_con_contenido`, no los 47): medido con esa misma
+    población, el arnés mide exactamente 21 y sí alcanza su suelo D1
+    (CODEX-001,
+    `test_elementos_de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publicado`,
+    más abajo). Las cuatro métricas D1/D2 quedan así alcanzadas por este
+    arnés, cada una medida bajo la población que su propio umbral publicado
+    usa — sin que eso cierre PA-0.2-REC-01 en `main`, que exige el pipeline
+    de producto integrado (M8-M12), no este arnés de evaluación (ver
+    docstring del módulo). `elementos_de_mas` baja además un 19% frente a la
+    fila 4 (62 → 50) al cerrar la infidelidad de porte que ADR-114 dejó sin
+    explicar.
 
-    **Diagnóstico mecánico de la brecha restante, con fichero y línea**
-    (ADR-114 la reproduce con detalle completo): comparación elemento a
-    elemento contra el fixture (`tests/acceptance/fixtures/
-    evidence_bank_47_casos.json` y `relevance_filter_frozen_run.json`) de
-    los 62 elementos de más de la fila 4, agrupados por la etapa del arnés
-    que los produjo y por qué la regla RF-25/RF-26 no los descarta:
+    **Método de la incidencia #469**: para cada uno de los 62 elementos de
+    más que ADR-114 nombró (elemento a elemento, agrupados A/B/C), comprobar
+    contra la corrida final por caso del laboratorio
+    (`tests/acceptance/fixtures/lab_final_run_row5.json`, fila "5. con
+    siembra en contexto" de `resultado_modelo_local_v0.7.json`, rama
+    `evidence/adr001-spikes`, portada ahora verbatim) si el laboratorio
+    también lo producía:
 
-    - **39 elementos — el motor por etapas los admite directamente**
-      (`sirius.domain.staged_engine.recuperar`), antes de que
-      `indice_de_categoria`/`siembra_de_contexto` intervengan: 34 porque el
-      doble del filtro los conserva (`filtro_congelado_conserva`;
-      `B04-CA-03` 12, `B04-CA-35` 15 —los mismos dos casos y las mismas
-      cifras que ADR-113 ya nombraba como "motor solo, ajeno a la
-      categoría"—, más `B04-CA-04` 2, `B04-CA-05` 1, `B04-CA-20` 1,
-      `B04-CA-21` 1, `B04-CA-34` 1, `B04-CA-43` 1) y 5 porque RF-25 los
-      rescata al ser de categoría no ordinaria y el modelo sí conservó otros
-      candidatos del caso (`B04-CA-14` 1, `B04-CA-20` 1, `B04-CA-25` 2,
-      `B04-CA-30` 1). Ninguno pasa por `indice_de_categoria` ni por
-      `siembra_de_contexto`: `indice_de_categoria` y `aplicar_regla_de_
-      criticas_original` no tienen autoridad sobre lo que el motor ya
-      admitió, y esta incidencia no autoriza tocar el motor.
-    - **20 elementos — fallo abierto de `aplicar_regla_de_criticas_original`
-      sobre candidatos que la corrida congelada nunca examinó para ese
-      caso** (`tests/acceptance/staged_engine_category_and_relevance.py:
-      420-461`, mismo contrato de apertura que `filtro_congelado_conserva`):
-      12 los admite `indice_de_categoria` (`B04-CA-26` 1, `B04-CA-38` 3,
-      `B04-CA-44` 8, todas dentro del ámbito declarado del caso) y 8 los
-      admite `siembra_de_contexto` (`B04-CA-33` 5, `B04-CA-34` 3) — la
-      segunda causa residual que ADR-113 ya anticipaba por nombre. La
-      restricción de ámbito de esta incidencia no puede cerrar esta causa:
-      las 20 identidades ya están dentro del ámbito correcto (si no lo
-      estuvieran, `indice_de_categoria`/`siembra_de_contexto` las habría
-      excluido); lo que falta es que la corrida congelada las hubiera
-      examinado, y esta incidencia no autoriza tocar
-      `aplicar_regla_de_criticas_original` ni el fixture congelado.
-    - **3 elementos — la «categoría buscable» activa una consulta y admite
-      una identidad de su propio ámbito que aun así el resultado esperado no
-      incluye** (`B04-CA-02` 1, `B04-CA-26` 1, `B04-CA-31` 1, las tres vía
-      `indice_de_categoria`, ya dentro de ámbito): el precio de precisión ya
-      diagnosticado por ADR-112/ADR-113 para la causa 1 (activar por
-      **cualquiera** de las cinco palabras, no por una sola) — la restricción
-      de ámbito de esta incidencia no lo toca porque no es un problema de
-      ámbito, es un problema de qué consultas activan la categoría.
+    - **50 elementos — el laboratorio también los produce** (están en su
+      `obtenido` de esa fila): no son infidelidad del porte, son parte de
+      los `elementos_de_mas` propios del laboratorio. La fuente publica 21
+      para esta fila, pero esa cifra excluye los 16 `casos_de_ausencia`
+      (`resultado_esperado` vacío) y solo suma sobre los 31 `casos_con_
+      contenido` (`experiments/adr002/modelo_local/medir.py:255-269`, rama
+      `evidence/adr001-spikes`); incluyendo también los `casos_de_ausencia`
+      (29 más) da exactamente 50 — CODEX-001,
+      `test_la_corrida_del_laboratorio_reproduce_las_metricas_publicadas_de_la_fuente`,
+      más abajo, lo comprueba mecánicamente contra el fixture, junto con
+      `aciertos_exactos`/`cobertura` (que sí coinciden sin salvedad) y
+      documenta por qué `omisiones_criticas` (1 en la fuente) tampoco se
+      reproduce contra el banco portado. Se quedan, anotados —
+      `test_los_elementos_de_mas_restantes_son_los_del_laboratorio`, más
+      abajo, lo fija como prueba de forma sobre el banco completo. Grupo A
+      completo (39: `sirius.domain.staged_engine.recuperar` los admite antes
+      de que `indice_de_categoria`/`siembra_de_contexto` intervengan, fuera
+      del alcance de #469 igual que lo estaba del de #467), grupo C completo
+      (3: `B04-CA-02`/`26`/`31`, el precio de precisión de activar la
+      categoría por cualquiera de las cinco palabras, ya diagnosticado por
+      ADR-112/ADR-113) y 8 del grupo B (`B04-CA-33` 5, `B04-CA-34` 3, vía
+      `siembra_de_contexto`, que nunca pasa por el filtro de relevancia
+      porque el laboratorio tampoco lo hace pasar).
+    - **12 elementos — el laboratorio NO los produce** (grupo B,
+      `B04-CA-26`/`MEM-112`; `B04-CA-38`/`MEM-001,111,112`;
+      `B04-CA-44`/`MEM-001,106..112`, todos vía `indice_de_categoria`): la
+      pieza portada que traicionaba la regla del laboratorio era `indice_de_
+      categoria`/`siembra_de_contexto`, que ampliaban el conjunto admitido
+      por un camino que nunca pasaba por `G8` (tiempo:
+      `experiments/adr002/candidates/common/gates.py:228-256`, portada en
+      `src/sirius/domain/staged_engine_gates.py:194-210`) ni por `G12`
+      (criticidad y límite duro: `experiments/adr002/candidates/common/
+      gates.py:356-386`, portada en `src/sirius/domain/staged_engine_gates.py
+      :304-332`) — las dos puertas que el motor ya aplica a lo que genera él
+      mismo. `vigente_en_tiempo_objetivo`/`truncar_por_limite_duro`
+      (`tests.acceptance.staged_engine_category_and_relevance`, sección
+      "INCIDENCIA #469") reproducen la mitad de cada puerta que le faltaba a
+      la ampliación, aplicadas sobre el conjunto combinado (motor más
+      ampliación) antes de `aplicar_regla_de_criticas_original`. Al cerrar
+      esta causa, `B04-CA-38` y `B04-CA-44` pasan a coincidir exactamente con
+      lo esperado — los 2 aciertos exactos que suben `aciertos_exactos` de
+      27 a 29/47, el suelo de D1 para esa métrica.
 
-    Ninguna de las tres causas anteriores es un defecto de esta incidencia ni
-    de su implementación: son la lectura literal de lo que la incidencia
-    #467 autoriza (restringir por ámbito, nada más) aplicada sobre un arnés
-    cuyas otras piezas (el motor, la corrida congelada, la activación de la
-    categoría buscable) ya estaban fuera de su alcance antes de empezar.
-    Restringir el índice de categoría por ámbito **sí** era, hasta esta
-    incidencia, una ampliación de diseño no autorizada (ADR-113 lo descartó
-    explícitamente); #467 la autoriza igual que #465 autorizó cerrar las
-    otras dos causas de ADR-112.
+    Ningún elemento de los 62 queda sin explicar: 50 son del laboratorio, 12
+    eran infidelidad del porte y ya están corregidos. Los 50 que quedan sobre
+    las 47 filas sin salvedad (por encima del 21 publicado si se compara
+    contra esa cifra sin restringir la población) no son un defecto de esta
+    incidencia: son la diferencia irreducible entre lo que este arnés puede
+    reproducir sin tocar el motor, la corrida congelada o la activación de la
+    categoría buscable (grupos A/C, 42 elementos) y lo que el laboratorio
+    consigue con esas piezas conectadas de otra forma — cerrarla exigiría
+    autorización sobre piezas que #469 deja fuera de alcance, igual que #467
+    ya lo declaró para el grupo A/C. Bajo la población que sí originó el
+    umbral D1 (los 31 `casos_con_contenido`), esos mismos 50 se reparten en
+    21 dentro de esa población y 29 en los 16 `casos_de_ausencia` que el
+    umbral nunca contó — el suelo D1 de `elementos_de_mas` (≤21) sí se
+    alcanza, medido así (CODEX-001, más abajo).
 
-    El suelo de D1 **no** queda afirmado aquí como aserción dura sobre las
-    cuatro métricas a la vez —dos de las cuatro no lo alcanzan—; las cotas
-    de no regresión se actualizan a la medición de la fila 4
-    (27/47, ≤62, ≤0, ≥63/81), nunca por debajo de lo medido."""
+    Las cotas de no regresión se actualizan a la medición de la fila 5 sobre
+    las 47 filas sin salvedad (≥29/47, ≤50, ≤0, ≥63/81), nunca por debajo de
+    lo medido; `aciertos_exactos`, `omisiones_criticas` y `cobertura` se
+    afirman además como aserción dura aparte, cada una sobre esa misma
+    medición de 47 filas, que ya alcanza su suelo D1/D2 sin ninguna
+    salvedad de población. `elementos_de_mas` no se afirma como aserción
+    dura aquí frente a ≤21 sobre las 47 filas —esa comparación mezclaría
+    poblaciones distintas, el defecto que corrige CODEX-001—; su suelo D1 se
+    afirma como aserción dura por separado, sobre la población que lo
+    origina, en
+    `test_elementos_de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publicado`."""
     metricas = ejecucion_del_banco_motor_portado.metricas
 
     print(
         "\nPA-0.2-REC-01 (motor por etapas portado con petición por caso, "
-        "categoría buscable con restricción por ámbito, regla de las "
-        "críticas original y siembra en contexto, "
-        "ADR-109/ADR-110/ADR-111/ADR-112/ADR-113/ADR-114/#463/#465/#467; "
+        "categoría buscable con restricción por ámbito, G8/G12 sobre la "
+        "ampliación, regla de las críticas original y siembra en contexto, "
+        "ADR-109/ADR-110/ADR-111/ADR-112/ADR-113/ADR-114/#463/#465/#467/#469; "
         "puertas G1-G12, agrupación de equivalentes activas en el arnés): "
         f"aciertos_exactos={metricas.aciertos_exactos}/47 "
         f"elementos_de_mas={metricas.elementos_de_mas} "
@@ -995,17 +1102,173 @@ def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metric
     )
 
     # CODEX-003: misma convención que el test anterior, sobre la medición ya
-    # publicada arriba (27/47, 62, 0, 63/81).
+    # publicada arriba (29/47, 50, 0, 63/81).
     assert metricas.aciertos_exactos >= _MINIMO_ACIERTOS_EXACTOS_MOTOR
     assert metricas.elementos_de_mas <= _MAXIMO_ELEMENTOS_DE_MAS_MOTOR
     assert metricas.omisiones_criticas <= _MAXIMO_OMISIONES_CRITICAS_MOTOR
     assert metricas.elementos_hallados >= _MINIMO_ELEMENTOS_HALLADOS_MOTOR
-    # Incidencia #465: dos de las cuatro métricas de D1/D2 sí se alcanzan
-    # sobre esta medición, y se afirman como aserciones duras aparte de las
-    # cotas de no regresión de arriba (D1: omisiones críticas ≤ 1; D1/D2:
-    # cobertura ≥ 63/81) — nunca las otras dos, que quedarían falseadas.
+    # Incidencia #465/#469: de las cuatro métricas de D1/D2, tres se afirman
+    # aquí como aserciones duras aparte de las cotas de no regresión de
+    # arriba (D1: aciertos exactos ≥ 29/47, omisiones críticas ≤ 1; D1/D2:
+    # cobertura ≥ 63/81) — nunca `metricas.elementos_de_mas <= 21` aquí, que
+    # compararía las 47 filas sin salvedad (50) contra un umbral que la
+    # fuente fija solo sobre los 31 `casos_con_contenido` (CODEX-001). El
+    # suelo D1 de `elementos_de_mas` sí se afirma como aserción dura, sobre
+    # esa misma población, en
+    # `test_elementos_de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publicado`.
+    assert metricas.aciertos_exactos >= 29
     assert metricas.omisiones_criticas <= 1
     assert metricas.cobertura >= 63 / 81
+
+
+def test_la_corrida_del_laboratorio_reproduce_las_metricas_publicadas_de_la_fuente() -> None:
+    """CODEX-001: antes de usar `lab_final_run_row5.json` como oráculo para
+    diagnosticar `elementos_de_mas` (como hace el test siguiente), esta
+    prueba comprueba que el propio fixture reproduce las cuatro métricas que
+    ADR-112 cita como publicadas para esta fila (29/47, 21, 1, 63/81) —no
+    solo que la traducción por caso coincide byte a byte con la fuente, que
+    ya está verificado manualmente caso a caso.
+
+    `aciertos_exactos` (29/47) y `cobertura` (63/81) se reproducen
+    directamente, sumando sobre las 47 filas sin ninguna salvedad.
+    `elementos_de_mas` NO se reproduce sin matiz: sumar `obtenido - esperado`
+    sobre las 47 filas da 50, no 21. La razón no es un fallo del porte: la
+    fuente (`experiments/adr002/modelo_local/medir.py:255-269`, rama
+    `evidence/adr001-spikes` — `sobrantes = sum(... for v in con_contenido)`)
+    excluye del cómputo los `casos_de_ausencia` (`resultado_esperado` vacío;
+    16 de los 47) y solo suma sobre los 31 `casos_con_contenido`. Repitiendo
+    ese mismo filtro sobre el fixture SÍ da 21; sumando también los 16 casos
+    de ausencia (29 más) da 50 — el número que mide el arnés. ADR-112/ADR-115
+    citaban el "21" de la fuente sin esa salvedad, dando la falsa impresión
+    de que debía coincidir con el "50" del arnés bajo el mismo criterio;
+    ahora queda comprobable en vez de solo afirmado en prosa.
+
+    `omisiones_criticas` (1 en la fuente) tampoco se reproduce, y esta prueba
+    no lo fuerza: de los elementos que faltan en `obtenido` a través de las
+    47 filas, ninguno tiene `criticidad.nivel == "CRITICO"` en
+    `evidence_bank_47_casos.json` (el más cercano, `MEM-001` en `B04-CA-30`,
+    es `IMPORTANTE`). La fuente decide "crítico" contra su propia lista
+    (`experiments/adr002/round/metrics.py:296-316`, rama
+    `evidence/adr001-spikes`), no contra el campo `criticidad` que porta este
+    banco — una diferencia de clasificación ya existente en
+    `evidence_bank_47_casos.json` desde incidencias anteriores (#457/#461/
+    #463), fuera del alcance de #469, que no autoriza tocar el banco ni sus
+    `resultado_esperado`."""
+    banco = _fixture()
+    lab = json.loads(LAB_FINAL_RUN_ROW5_PATH.read_text(encoding="utf-8"))["casos"]
+    items_por_id = {item["id"]: item for item in banco["items"]}
+
+    casos_con_contenido = 0
+    casos_de_ausencia = 0
+    aciertos_exactos = 0
+    elementos_de_mas_con_contenido = 0
+    elementos_de_mas_ausencia = 0
+    elementos_hallados = 0
+    elementos_esperados_total = 0
+    omisiones_criticas = 0
+
+    for caso in banco["casos"]:
+        esperado = set(caso["resultado_esperado"])
+        obtenido = set(lab[caso["id"]]["obtenido"])
+        elementos_esperados_total += len(esperado)
+        elementos_hallados += len(obtenido & esperado)
+        if obtenido == esperado:
+            aciertos_exactos += 1
+        de_mas = len(obtenido - esperado)
+        if esperado:
+            casos_con_contenido += 1
+            elementos_de_mas_con_contenido += de_mas
+        else:
+            casos_de_ausencia += 1
+            elementos_de_mas_ausencia += de_mas
+        for identidad in esperado - obtenido:
+            criticidad = items_por_id[identidad].get("criticidad")
+            if criticidad is not None and criticidad["nivel"] == "CRITICO":
+                omisiones_criticas += 1
+
+    assert (casos_con_contenido, casos_de_ausencia) == (31, 16)
+    assert aciertos_exactos == 29
+    assert (elementos_hallados, elementos_esperados_total) == (63, 81)
+    assert elementos_de_mas_con_contenido == 21
+    assert elementos_de_mas_ausencia == 29
+    assert elementos_de_mas_con_contenido + elementos_de_mas_ausencia == 50
+    assert omisiones_criticas == 0
+
+
+def test_los_elementos_de_mas_restantes_son_los_del_laboratorio(
+    ejecucion_del_banco_motor_portado: _EjecucionDelBanco,
+) -> None:
+    """Incidencia #469: el método que pide la incidencia, fijado como prueba
+    de forma sobre el banco completo — para cada uno de los 47 casos, todo
+    elemento de más que el arnés produce (`obtenido - esperado`) también
+    aparece en `obtenido` de la corrida final del laboratorio
+    (`lab_final_run_row5.json`, fila "5. con siembra en contexto"). Si algún
+    elemento de más NO estuviera en la corrida del laboratorio, sería
+    infidelidad del porte todavía sin cerrar — exactamente lo que esta
+    incidencia corrige para `B04-CA-26`/`B04-CA-38`/`B04-CA-44` (ver el
+    docstring del test anterior). Se vio fallar antes del cambio: el arnés
+    sin `vigente_en_tiempo_objetivo`/`truncar_por_limite_duro` producía
+    `MEM-112` para `B04-CA-26` y `MEM-001`/`MEM-111`/`MEM-112` para
+    `B04-CA-38`, ninguno en la corrida del laboratorio para esos casos."""
+    banco = _fixture()
+    lab = json.loads(LAB_FINAL_RUN_ROW5_PATH.read_text(encoding="utf-8"))["casos"]
+    obtenido_por_caso = ejecucion_del_banco_motor_portado.obtenido_por_caso
+
+    sin_explicar: dict[str, list[str]] = {}
+    for caso in banco["casos"]:
+        caso_id = caso["id"]
+        esperado = set(caso["resultado_esperado"])
+        de_mas = obtenido_por_caso[caso_id] - esperado
+        del_laboratorio = set(lab[caso_id]["obtenido"])
+        no_explicados = sorted(de_mas - del_laboratorio)
+        if no_explicados:
+            sin_explicar[caso_id] = no_explicados
+
+    assert sin_explicar == {}
+
+
+def test_elementos_de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publicado(
+    ejecucion_del_banco_motor_portado: _EjecucionDelBanco,
+) -> None:
+    """CODEX-001: el umbral D1 publicado para `elementos_de_mas` (≤21) lo fija
+    la fuente (`experiments/adr002/modelo_local/medir.py:255-269`) sumando
+    `obtenido - esperado` solo sobre los 31 `casos_con_contenido`
+    (`resultado_esperado` no vacío) — nunca sobre los 47. El `elementos_de_
+    mas=50` que reporta `test_el_banco_se_ejecuta_contra_el_motor_portado_y_
+    reporta_las_cuatro_metricas` suma sobre las 47 filas sin esa salvedad, así
+    que compararlo contra ≤21 compara dos poblaciones distintas — el defecto
+    que corrige esta prueba, midiendo la misma población que originó el
+    umbral directamente sobre la ejecución real del arnés (`obtenido_por_
+    caso`), no sobre el fixture del laboratorio.
+
+    `test_la_corrida_del_laboratorio_reproduce_las_metricas_publicadas_de_la_
+    fuente` ya demuestra que, sobre esa misma población, el laboratorio mide
+    exactamente 21. `test_los_elementos_de_mas_restantes_son_los_del_
+    laboratorio` demuestra que, para cada caso, los sobrantes del arnés
+    (`obtenido - esperado`) son subconjunto de `obtenido` del laboratorio —y
+    como ambos comparten el mismo `esperado` por caso, un sobrante del arnés
+    nunca puede ser un elemento esperado, así que ese subconjunto cae dentro
+    de `obtenido - esperado` del laboratorio, acotando el recuento de
+    sobrantes del arnés por el recuento de sobrantes del laboratorio, caso a
+    caso. Sumando esa cota sobre los 31 `casos_con_contenido`, el arnés no
+    puede medir más de 21 bajo esta población — esta prueba lo confirma
+    midiéndolo directamente en vez de solo derivarlo por cota, y lo mide en
+    exactamente 21: bajo la definición de población que originó el umbral
+    D1 de `elementos_de_mas`, el arnés SÍ lo alcanza (≤21), aunque el total
+    sin esa salvedad sobre las 47 filas (50) siga por encima — son dos
+    métricas distintas, no la misma con dos resultados."""
+    banco = _fixture()
+    obtenido_por_caso = ejecucion_del_banco_motor_portado.obtenido_por_caso
+
+    elementos_de_mas_con_contenido = 0
+    for caso in banco["casos"]:
+        esperado = set(caso["resultado_esperado"])
+        if not esperado:
+            continue
+        elementos_de_mas_con_contenido += len(obtenido_por_caso[caso["id"]] - esperado)
+
+    assert elementos_de_mas_con_contenido == 21
+    assert elementos_de_mas_con_contenido <= 21  # suelo D1, sobre la población publicada
 
 
 def test_el_cargador_no_lee_criticidad(ejecucion_del_banco: _EjecucionDelBanco) -> None:
@@ -1326,6 +1589,104 @@ def test_indice_de_categoria_respeta_el_ambito_declarado() -> None:
         )
         == frozenset()
     )
+
+
+def test_vigente_en_tiempo_objetivo_excluye_lo_aun_no_vigente() -> None:
+    """Incidencia #469, grupo B (`B04-CA-26`/`MEM-112`): la mitad de
+    aplicabilidad temporal de `G8` (`src/sirius/domain/staged_engine_gates.py
+    :194-210`, `_g8`, portada de `experiments/adr002/candidates/common/
+    gates.py:228-256`, rama `evidence/adr001-spikes`) que `indice_de_
+    categoria`/`siembra_de_contexto` no heredaban al ampliar el conjunto
+    admitido por fuera del motor. Se vio fallar antes del cambio: el banco
+    medía `elementos_de_mas=62` porque `MEM-112` (`valid_from` 2026-05-01)
+    entraba para `B04-CA-26` (tiempo objetivo 2026-04-01), algo que la
+    corrida congelada del laboratorio nunca produjo."""
+    assert (
+        vigente_en_tiempo_objetivo(
+            valid_from="2026-05-01T00:00:00Z",
+            valid_to=None,
+            tiempo_objetivo="2026-04-01T00:00:00Z",
+            admite_no_vigentes=False,
+        )
+        is False
+    )
+    assert (
+        vigente_en_tiempo_objetivo(
+            valid_from="2026-01-05T00:00:00Z",
+            valid_to=None,
+            tiempo_objetivo="2026-04-01T00:00:00Z",
+            admite_no_vigentes=False,
+        )
+        is True
+    )
+    # `valid_to` expirado en el tiempo objetivo excluye, salvo que la
+    # petición admita lo no vigente — mismas dos ramas que `_g8`.
+    assert (
+        vigente_en_tiempo_objetivo(
+            valid_from=None,
+            valid_to="2026-02-01T00:00:00Z",
+            tiempo_objetivo="2026-04-01T00:00:00Z",
+            admite_no_vigentes=False,
+        )
+        is False
+    )
+    assert (
+        vigente_en_tiempo_objetivo(
+            valid_from=None,
+            valid_to="2026-02-01T00:00:00Z",
+            tiempo_objetivo="2026-04-01T00:00:00Z",
+            admite_no_vigentes=True,
+        )
+        is True
+    )
+    # Sin ejes declarados, degrada a vigente (misma garantía de apertura que
+    # el resto de la ampliación de este arnés).
+    assert (
+        vigente_en_tiempo_objetivo(
+            valid_from=None,
+            valid_to=None,
+            tiempo_objetivo="2026-04-01T00:00:00Z",
+            admite_no_vigentes=False,
+        )
+        is True
+    )
+
+
+def test_truncar_por_limite_duro_prioriza_criticidad_y_luego_identidad() -> None:
+    """Incidencia #469, grupo B (`B04-CA-38`/`B04-CA-44`): la mitad de
+    límite de `G12` (`src/sirius/domain/staged_engine_gates.py:304-332`,
+    `aplicar_g12`, portada de `experiments/adr002/candidates/common/
+    gates.py:356-386`, rama `evidence/adr001-spikes`) que `indice_de_
+    categoria` no heredaba: seguía añadiendo identidades por encima del
+    límite duro que la petición declara. Se vio fallar antes del cambio: el
+    banco admitía `MEM-001` (IMPORTANTE), `MEM-111` y `MEM-112` (CRÍTICO,
+    pero fuera del límite duro de 10) para `B04-CA-38`, algo que la corrida
+    congelada nunca produjo — su límite duro ya los había excluido antes
+    incluso del filtro de relevancia."""
+
+    def criticidad_de(identidad: str) -> Criticidad:
+        return {
+            "MEM-001": Criticidad.IMPORTANTE,
+            "MEM-101": Criticidad.CRITICA,
+            "MEM-102": Criticidad.CRITICA,
+            "MEM-111": Criticidad.CRITICA,
+            "MEM-112": Criticidad.CRITICA,
+        }[identidad]
+
+    admitido = truncar_por_limite_duro(
+        ["MEM-112", "MEM-001", "MEM-111", "MEM-101", "MEM-102"],
+        limite_duro=2,
+        criticidad_de=criticidad_de,
+    )
+    # Los dos críticos de identidad menor entran; el crítico de identidad
+    # mayor y el importante quedan fuera, aunque `MEM-001` llegara antes en
+    # el iterable de entrada: la criticidad manda sobre el orden de llegada.
+    assert admitido == frozenset({"MEM-101", "MEM-102"})
+
+    # Un límite que no ata (mayor que el conjunto) no descarta nada.
+    assert truncar_por_limite_duro(
+        ["MEM-112", "MEM-001"], limite_duro=97, criticidad_de=criticidad_de
+    ) == frozenset({"MEM-112", "MEM-001"})
 
 
 @pytest.mark.skipif(

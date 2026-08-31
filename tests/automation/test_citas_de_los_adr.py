@@ -144,6 +144,11 @@ _ADR_114 = (
     "ADR-114-la-restriccion-por-ambito-del-indice-de-categoria-baja-los-elementos-de-"
     "mas-de-110-a-62-pero-no-alcanza-d1-incidencia-467.md"
 )
+_ADR_115 = (
+    "ADR-115-las-dos-puertas-que-la-ampliacion-del-arnes-no-heredaba-bajan-los-aciertos-"
+    "exactos-a-29-47-y-elementos-de-mas-alcanza-d1-bajo-la-poblacion-del-umbral-publicado-"
+    "incidencia-469.md"
+)
 
 RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     "experiments/adr002/round/cases.py": [
@@ -179,7 +184,7 @@ RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     # sigue sin fusionarse a `main`.
     "experiments/adr002/candidates/adr002_a/lexical.py": [_ADR_109, _ADR_110],
     "experiments/adr002/candidates/common/port.py": [_ADR_109, _ADR_110],
-    "experiments/adr002/candidates/common/gates.py": [_ADR_109, _ADR_110],
+    "experiments/adr002/candidates/common/gates.py": [_ADR_109, _ADR_110, _ADR_115],
     "experiments/adr002/candidates/common/grouping.py": [_ADR_109, _ADR_110],
     "experiments/adr002/candidates/common/engine.py": [_ADR_109, _ADR_110],
     # Piezas que ADR-110 cita por primera vez: dependencias de origen del
@@ -213,12 +218,17 @@ RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     # ninguna de las dos rutas siguientes se copia a Sirius; el ADR las cita
     # solo para documentar de dónde salió cada dato portado.
     "experiments/adr002/modelo_local/filtro.py:filtrar": [_ADR_112, _ADR_113],
+    # ADR-115 (incidencia #469, CODEX-001) cita el script de medición del
+    # laboratorio para documentar que el ≤21 publicado para `elementos_de_
+    # mas` lo fijó sumando solo sobre los 31 `casos_con_contenido`, nunca
+    # sobre los 47 — nunca se copia el fichero a Sirius.
+    "experiments/adr002/modelo_local/medir.py": [_ADR_115],
     # ADR-114 (incidencia #467) cita la misma fuente para justificar la
     # restricción por ámbito del índice de categoría del arnés: la cita
     # documenta de dónde sale la semántica portada, nunca se copia el
     # fichero a Sirius.
     "experiments/adr002/lateral/categoria.py": [_ADR_112, _ADR_113, _ADR_114],
-    "experiments/adr002/lateral/categoria.py:_pide_contexto": [_ADR_112, _ADR_113],
+    "experiments/adr002/lateral/categoria.py:_pide_contexto": [_ADR_112, _ADR_113, _ADR_115],
 }
 
 

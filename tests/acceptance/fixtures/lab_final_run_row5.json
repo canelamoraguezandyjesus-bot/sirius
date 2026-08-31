@@ -1,0 +1,547 @@
+{
+  "documento": "Corrida final por caso del laboratorio, fila \"5. con siembra en contexto\", portada VERBATIM desde evidence/adr001-spikes a tests/acceptance/fixtures/lab_final_run_row5.json (incidencia #469). Es la fila que combina el indice de categoria, el filtro con modelo local (RF-25/RF-26) y la siembra al ensamblar contexto -- el mismo conjunto de piezas que _ejecutar_banco_motor_portado activa en el arnes (incidencias #463/#465/#467). Sirve para comprobar, elemento a elemento, si el laboratorio TAMBIEN producia cada elemento_de_mas que ADR-114 diagnostico (metodo pedido por la incidencia #469): si esta en 'obtenido' aqui, el laboratorio lo producia tambien y no es infidelidad del porte.",
+  "fuente": {
+    "rama": "evidence/adr001-spikes",
+    "commit": "8ff535b91dc6a7a2c42eb886699ebdefd902e4fd",
+    "fichero": "resultado_modelo_local_v0.7.json",
+    "fila": "5. con siembra en contexto",
+    "nota": "detalle_por_caso['5. con siembra en contexto'] del fichero origen, restringido a los casos que tambien porta evidence_bank_47_casos.json (47 de los 50 casos N1-NN del laboratorio; los 3 restantes -N1-37/39/48- no fueron portados al banco por la incidencia #457/#461 y no se incluyen aqui tampoco) y traducido de identidades N1-NN/MEMORIA:n/DECISION:n a B04-CA-NN/MEM-NNN/DEC-NNN via la misma correspondencia verbatim que evidence_bank_47_casos.json ya porta (mismo orden de consulta, verificado texto a texto).",
+    "campos": {
+      "obtenido": "el conjunto final que esa corrida entrego para el caso, tras indice de categoria + filtro con modelo local + siembra en contexto.",
+      "entraron_al_filtro": "los candidatos que la corrida entrego al modelo para decidir, antes del filtro (ausente cuando la corrida no invoco el filtro para ese caso)."
+    }
+  },
+  "casos": {
+    "B04-CA-01": {
+      "obtenido": [
+        "MEM-001"
+      ],
+      "entraron_al_filtro": [
+        "MEM-001"
+      ]
+    },
+    "B04-CA-02": {
+      "obtenido": [
+        "MEM-001",
+        "MEM-002"
+      ],
+      "entraron_al_filtro": [
+        "MEM-001",
+        "MEM-002"
+      ]
+    },
+    "B04-CA-03": {
+      "obtenido": [
+        "MEM-101",
+        "MEM-102",
+        "MEM-103",
+        "MEM-104",
+        "MEM-105",
+        "MEM-106",
+        "MEM-107",
+        "MEM-108",
+        "MEM-109",
+        "MEM-110",
+        "MEM-111",
+        "MEM-112"
+      ],
+      "entraron_al_filtro": [
+        "MEM-101",
+        "MEM-102",
+        "MEM-103",
+        "MEM-104",
+        "MEM-105",
+        "MEM-106",
+        "MEM-107",
+        "MEM-108",
+        "MEM-109",
+        "MEM-110",
+        "MEM-111",
+        "MEM-112"
+      ]
+    },
+    "B04-CA-04": {
+      "obtenido": [
+        "MEM-906",
+        "MEM-925"
+      ],
+      "entraron_al_filtro": [
+        "MEM-906",
+        "MEM-925"
+      ]
+    },
+    "B04-CA-05": {
+      "obtenido": [
+        "DEC-003"
+      ],
+      "entraron_al_filtro": [
+        "DEC-002",
+        "DEC-003"
+      ]
+    },
+    "B04-CA-06": {
+      "obtenido": [
+        "DEC-004"
+      ],
+      "entraron_al_filtro": [
+        "DEC-004"
+      ]
+    },
+    "B04-CA-07": {
+      "obtenido": [
+        "MEM-005"
+      ],
+      "entraron_al_filtro": [
+        "MEM-005"
+      ]
+    },
+    "B04-CA-08": {
+      "obtenido": [
+        "DEC-005",
+        "MEM-006"
+      ],
+      "entraron_al_filtro": [
+        "DEC-005",
+        "MEM-006"
+      ]
+    },
+    "B04-CA-09": {
+      "obtenido": [],
+      "entraron_al_filtro": [
+        "MEM-912",
+        "MEM-914"
+      ]
+    },
+    "B04-CA-10": {
+      "obtenido": []
+    },
+    "B04-CA-11": {
+      "obtenido": []
+    },
+    "B04-CA-12": {
+      "obtenido": []
+    },
+    "B04-CA-13": {
+      "obtenido": [
+        "MEM-011"
+      ],
+      "entraron_al_filtro": [
+        "MEM-011"
+      ]
+    },
+    "B04-CA-14": {
+      "obtenido": [
+        "MEM-013",
+        "MEM-025"
+      ],
+      "entraron_al_filtro": [
+        "DEC-001",
+        "MEM-012",
+        "MEM-013",
+        "MEM-023",
+        "MEM-025",
+        "MEM-027"
+      ]
+    },
+    "B04-CA-15": {
+      "obtenido": [],
+      "entraron_al_filtro": [
+        "DEC-010",
+        "MEM-005",
+        "MEM-014",
+        "MEM-017",
+        "MEM-021"
+      ]
+    },
+    "B04-CA-16": {
+      "obtenido": [
+        "MEM-027"
+      ],
+      "entraron_al_filtro": [
+        "MEM-027"
+      ]
+    },
+    "B04-CA-17": {
+      "obtenido": [],
+      "entraron_al_filtro": [
+        "DEC-003",
+        "DEC-010",
+        "MEM-011"
+      ]
+    },
+    "B04-CA-18": {
+      "obtenido": []
+    },
+    "B04-CA-19": {
+      "obtenido": [
+        "DEC-006",
+        "DEC-007",
+        "DEC-008"
+      ],
+      "entraron_al_filtro": [
+        "DEC-006",
+        "DEC-007",
+        "DEC-008"
+      ]
+    },
+    "B04-CA-20": {
+      "obtenido": [
+        "DEC-010",
+        "MEM-014",
+        "MEM-016"
+      ],
+      "entraron_al_filtro": [
+        "DEC-010",
+        "MEM-014",
+        "MEM-016"
+      ]
+    },
+    "B04-CA-21": {
+      "obtenido": [
+        "MEM-014",
+        "MEM-016"
+      ],
+      "entraron_al_filtro": [
+        "MEM-014",
+        "MEM-016"
+      ]
+    },
+    "B04-CA-22": {
+      "obtenido": [
+        "DEC-014"
+      ],
+      "entraron_al_filtro": [
+        "DEC-014"
+      ]
+    },
+    "B04-CA-23": {
+      "obtenido": [
+        "DEC-002",
+        "DEC-003"
+      ],
+      "entraron_al_filtro": [
+        "DEC-002",
+        "DEC-003"
+      ]
+    },
+    "B04-CA-24": {
+      "obtenido": []
+    },
+    "B04-CA-25": {
+      "obtenido": [
+        "DEC-003",
+        "DEC-010",
+        "MEM-011"
+      ],
+      "entraron_al_filtro": [
+        "DEC-003",
+        "DEC-010",
+        "MEM-011"
+      ]
+    },
+    "B04-CA-26": {
+      "obtenido": [
+        "MEM-001",
+        "MEM-101",
+        "MEM-102",
+        "MEM-103",
+        "MEM-104",
+        "MEM-105",
+        "MEM-106",
+        "MEM-107",
+        "MEM-108",
+        "MEM-109",
+        "MEM-110",
+        "MEM-111"
+      ],
+      "entraron_al_filtro": [
+        "MEM-001",
+        "MEM-101",
+        "MEM-102",
+        "MEM-103",
+        "MEM-104",
+        "MEM-105",
+        "MEM-106",
+        "MEM-107",
+        "MEM-108",
+        "MEM-109",
+        "MEM-110",
+        "MEM-111"
+      ]
+    },
+    "B04-CA-27": {
+      "obtenido": [
+        "DEC-005",
+        "MEM-006"
+      ],
+      "entraron_al_filtro": [
+        "DEC-005",
+        "MEM-006"
+      ]
+    },
+    "B04-CA-28": {
+      "obtenido": [],
+      "entraron_al_filtro": [
+        "DEC-010",
+        "MEM-005",
+        "MEM-014",
+        "MEM-016",
+        "MEM-021",
+        "MEM-903",
+        "MEM-906",
+        "MEM-910",
+        "MEM-911",
+        "MEM-912",
+        "MEM-913",
+        "MEM-914",
+        "MEM-915",
+        "MEM-917",
+        "MEM-919",
+        "MEM-921",
+        "MEM-925",
+        "MEM-930",
+        "MEM-931",
+        "MEM-939"
+      ]
+    },
+    "B04-CA-29": {
+      "obtenido": []
+    },
+    "B04-CA-30": {
+      "obtenido": [
+        "DEC-003",
+        "DEC-010",
+        "MEM-016"
+      ],
+      "entraron_al_filtro": [
+        "DEC-003",
+        "DEC-010",
+        "MEM-011",
+        "MEM-016"
+      ]
+    },
+    "B04-CA-31": {
+      "obtenido": [
+        "DEC-003",
+        "DEC-010",
+        "MEM-001",
+        "MEM-014",
+        "MEM-016",
+        "MEM-025"
+      ],
+      "entraron_al_filtro": [
+        "DEC-003",
+        "DEC-010",
+        "MEM-001",
+        "MEM-014",
+        "MEM-016",
+        "MEM-025",
+        "MEM-913",
+        "MEM-917",
+        "MEM-921",
+        "MEM-930",
+        "MEM-939"
+      ]
+    },
+    "B04-CA-32": {
+      "obtenido": [],
+      "entraron_al_filtro": [
+        "DEC-012"
+      ]
+    },
+    "B04-CA-33": {
+      "obtenido": [
+        "DEC-003",
+        "DEC-010",
+        "MEM-001",
+        "MEM-014",
+        "MEM-016",
+        "MEM-025"
+      ],
+      "entraron_al_filtro": [
+        "DEC-003",
+        "DEC-010",
+        "MEM-001",
+        "MEM-014",
+        "MEM-016",
+        "MEM-025"
+      ]
+    },
+    "B04-CA-34": {
+      "obtenido": [
+        "DEC-003",
+        "DEC-010",
+        "MEM-001",
+        "MEM-011",
+        "MEM-014",
+        "MEM-016",
+        "MEM-025"
+      ],
+      "entraron_al_filtro": [
+        "DEC-003",
+        "DEC-010",
+        "MEM-001",
+        "MEM-011",
+        "MEM-014",
+        "MEM-016",
+        "MEM-025",
+        "MEM-903",
+        "MEM-915",
+        "MEM-919",
+        "MEM-931"
+      ]
+    },
+    "B04-CA-35": {
+      "obtenido": [
+        "MEM-903",
+        "MEM-906",
+        "MEM-910",
+        "MEM-911",
+        "MEM-912",
+        "MEM-913",
+        "MEM-914",
+        "MEM-915",
+        "MEM-917",
+        "MEM-919",
+        "MEM-921",
+        "MEM-925",
+        "MEM-930",
+        "MEM-931",
+        "MEM-939"
+      ],
+      "entraron_al_filtro": [
+        "MEM-903",
+        "MEM-906",
+        "MEM-910",
+        "MEM-911",
+        "MEM-912",
+        "MEM-913",
+        "MEM-914",
+        "MEM-915",
+        "MEM-917",
+        "MEM-919",
+        "MEM-921",
+        "MEM-925",
+        "MEM-930",
+        "MEM-931",
+        "MEM-939"
+      ]
+    },
+    "B04-CA-36": {
+      "obtenido": []
+    },
+    "B04-CA-38": {
+      "obtenido": [
+        "MEM-101",
+        "MEM-102",
+        "MEM-103",
+        "MEM-104",
+        "MEM-105",
+        "MEM-106",
+        "MEM-107",
+        "MEM-108",
+        "MEM-109",
+        "MEM-110"
+      ],
+      "entraron_al_filtro": [
+        "MEM-101",
+        "MEM-102",
+        "MEM-103",
+        "MEM-104",
+        "MEM-105",
+        "MEM-106",
+        "MEM-107",
+        "MEM-108",
+        "MEM-109",
+        "MEM-110"
+      ]
+    },
+    "B04-CA-40": {
+      "obtenido": [
+        "DEC-003"
+      ],
+      "entraron_al_filtro": [
+        "DEC-003",
+        "MEM-011"
+      ]
+    },
+    "B04-CA-41": {
+      "obtenido": [
+        "MEM-022"
+      ],
+      "entraron_al_filtro": [
+        "MEM-022"
+      ]
+    },
+    "B04-CA-42": {
+      "obtenido": [
+        "DEC-010"
+      ],
+      "entraron_al_filtro": [
+        "DEC-010"
+      ]
+    },
+    "B04-CA-43": {
+      "obtenido": [
+        "MEM-012",
+        "MEM-024"
+      ],
+      "entraron_al_filtro": [
+        "MEM-012",
+        "MEM-023",
+        "MEM-024"
+      ]
+    },
+    "B04-CA-44": {
+      "obtenido": [
+        "MEM-101",
+        "MEM-102",
+        "MEM-103",
+        "MEM-104",
+        "MEM-105"
+      ],
+      "entraron_al_filtro": [
+        "MEM-101",
+        "MEM-102",
+        "MEM-103",
+        "MEM-104",
+        "MEM-105"
+      ]
+    },
+    "B04-CA-45": {
+      "obtenido": [
+        "DEC-003"
+      ],
+      "entraron_al_filtro": [
+        "DEC-003"
+      ]
+    },
+    "B04-CA-46": {
+      "obtenido": []
+    },
+    "B04-CA-47": {
+      "obtenido": []
+    },
+    "B04-CA-49": {
+      "obtenido": [],
+      "entraron_al_filtro": [
+        "MEM-004",
+        "MEM-912",
+        "MEM-914"
+      ]
+    },
+    "B04-CA-50": {
+      "obtenido": [
+        "MEM-025"
+      ],
+      "entraron_al_filtro": [
+        "MEM-025",
+        "MEM-913",
+        "MEM-917",
+        "MEM-921",
+        "MEM-930",
+        "MEM-939"
+      ]
+    }
+  }
+}

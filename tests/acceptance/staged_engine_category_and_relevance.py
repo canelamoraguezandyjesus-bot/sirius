@@ -176,6 +176,56 @@ petición declara, o de ámbito global (`PRJ-GLOBAL`), que `G4` admite siempre
 no se mueven. D1 (aciertos exactos ≥ 29/47, elementos de más ≤ 21) sigue sin
 alcanzarse; ADR-114 diagnostica, elemento a elemento contra el fixture, las
 tres causas residuales que quedan tras cerrar esta.
+
+INCIDENCIA #469 — LAS DOS PUERTAS QUE LA AMPLIACIÓN DEL ARNÉS NO HEREDABA
+=========================================================================
+
+ADR-114 agrupó los 62 `elementos_de_mas` en tres causas (A: 39, admitidos
+por el motor mismo, fuera de este arnés; B: 20, la corrida congelada nunca
+los examinó; C: 3, precio de precisión de la «categoría buscable»). La
+incidencia #469 pide comprobar, elemento a elemento contra los artefactos
+congelados —incluida la corrida final por caso de
+`resultado_modelo_local_v0.7.json` fila "5. con siembra en contexto" (rama
+`evidence/adr001-spikes`), portada ahora **verbatim** como
+`tests/acceptance/fixtures/lab_final_run_row5.json`—, si el laboratorio
+también producía cada uno.
+
+Grupos A y C, y 8 de los 20 del grupo B (`B04-CA-33`/`B04-CA-34`, la siembra
+al ensamblar contexto): el laboratorio **también** los produce —están en su
+`obtenido` de esa fila—, así que no son infidelidad del porte: son parte de
+los `elementos_de_mas` propios del laboratorio. La fuente publica 21 para
+esta fila, pero esa cifra excluye los 16 `casos_de_ausencia` y solo suma
+sobre los 31 `casos_con_contenido`
+(`experiments/adr002/modelo_local/medir.py:255-269`, rama
+`evidence/adr001-spikes`); sumando también los casos de ausencia da 50, el
+número medido aquí —
+`tests.acceptance.test_pa_0_2_rec_01_banco_evidencia.test_la_corrida_del_laboratorio_reproduce_las_metricas_publicadas_de_la_fuente`
+(CODEX-001) lo comprueba mecánicamente contra el fixture— y se quedan,
+anotados.
+
+Los 12 elementos restantes del grupo B (`B04-CA-26`/`MEM-112`;
+`B04-CA-38`/`MEM-001,111,112`; `B04-CA-44`/`MEM-001,106..112`) el
+laboratorio **no** los produce — ausentes de su `obtenido` en esa misma
+fila. La regla exacta que los excluye no es de ámbito (`G4`, ya cerrada por
+#467): es `G8` (tiempo: `MEM-112` aún no vigente en el tiempo objetivo de
+`B04-CA-26`, `experiments/adr002/candidates/common/gates.py:228-256`,
+portada en `src/sirius/domain/staged_engine_gates.py:194-210`) y `G12`
+(criticidad y límite duro: `B04-CA-38`/`B04-CA-44` declaran
+`limite.tipo="DURO"`, y el motor ya trunca lo que él mismo genera a ese
+límite —`recuperar()` llama a `gates.aplicar_g12`—, pero `indice_de_
+categoria` seguía añadiendo por encima de él, sin pasar nunca por la puerta;
+`experiments/adr002/candidates/common/gates.py:356-386`, portada en
+`src/sirius/domain/staged_engine_gates.py:304-332`). La pieza portada que
+traicionaba esas dos reglas era `indice_de_categoria`/`siembra_de_contexto`:
+ampliaban el conjunto admitido por un camino que nunca pasaba por `G8` ni
+por `G12`, las dos puertas que el motor sí aplica a lo que genera él mismo.
+`vigente_en_tiempo_objetivo` y `truncar_por_limite_duro`, más abajo,
+reproducen la mitad de cada puerta que le falta a la ampliación —la otra
+mitad (corte de registro, desbordamiento declarado) no la ejerce ninguna de
+las 47 peticiones del banco— y `_ejecutar_banco_motor_portado`
+(`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`) las aplica sobre
+el conjunto combinado (motor más ampliación), después de `siembra_de_
+contexto` y antes de `aplicar_regla_de_criticas_original`.
 """
 
 from __future__ import annotations
@@ -185,6 +235,8 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
+
+from sirius.domain.staged_engine_contracts import ORDEN_DE_CRITICIDAD, Criticidad
 
 #: Portado sin modificar de ``experiments/adr002/lateral/categoria.py:72-78``
 #: (rama ``evidence/adr001-spikes``): las palabras con las que alguien
@@ -461,6 +513,67 @@ def aplicar_regla_de_criticas_original(
     return no_entraron | conservados | rescatadas
 
 
+def vigente_en_tiempo_objetivo(
+    *,
+    valid_from: str | None,
+    valid_to: str | None,
+    tiempo_objetivo: str,
+    admite_no_vigentes: bool,
+) -> bool:
+    """La mitad de aplicabilidad temporal de ``G8`` — ``valid_from``/
+    ``valid_to`` frente al tiempo objetivo de la petición, sin el corte de
+    registro (que ninguna de las 47 peticiones del banco declara) —
+    reproducida de `src/sirius/domain/staged_engine_gates.py:194-210`
+    (``_g8``), a su vez portada de `experiments/adr002/candidates/common/
+    gates.py:228-256` (rama `evidence/adr001-spikes`).
+
+    El motor por etapas (`sirius.domain.staged_engine.recuperar`) ya aplica
+    ``G8`` completa a lo que él mismo genera
+    (`sirius.adapters.persistence.staged_engine_candidate`); `indice_de_
+    categoria`/`siembra_de_contexto` amplían el conjunto admitido por otro
+    camino que nunca pasa por esa puerta. Incidencia #469, grupo B:
+    `B04-CA-26`/`MEM-112` es la identidad que esta función excluye —
+    `valid_from` 2026-05-01 es posterior al tiempo objetivo 2026-04-01 de
+    esa petición, y la corrida congelada del laboratorio nunca la
+    produjo."""
+    if valid_from is not None and valid_from > tiempo_objetivo:
+        return False
+    return not (valid_to is not None and valid_to <= tiempo_objetivo and not admite_no_vigentes)
+
+
+def truncar_por_limite_duro(
+    candidatos: Iterable[str],
+    *,
+    limite_duro: int,
+    criticidad_de: Callable[[str], Criticidad],
+) -> frozenset[str]:
+    """La mitad de límite de ``G12`` — sin la declaración de desbordamiento,
+    que solo interesa a la traza — reproducida de `src/sirius/domain/
+    staged_engine_gates.py:304-332` (``aplicar_g12``), a su vez portada de
+    `experiments/adr002/candidates/common/gates.py:356-386` (rama
+    `evidence/adr001-spikes`): ordena por criticidad (los críticos primero)
+    y, dentro del mismo nivel, por identidad estable — el mismo desempate de
+    última instancia que `sirius.domain.staged_engine._clave_de_orden` usa
+    para candidatos del motor —, y se queda con los primeros
+    ``limite_duro``.
+
+    El motor ya trunca a ``limite_duro`` lo que él mismo genera
+    (`recuperar()` llama a `gates.aplicar_g12`); `indice_de_categoria`/
+    `siembra_de_contexto` amplían el conjunto admitido por otro camino que
+    nunca pasa por esa puerta, así que esta función aplica el mismo límite
+    sobre el conjunto combinado —lo que el motor admitió más la
+    ampliación—, no solo sobre lo que el motor generó por su cuenta.
+    Incidencia #469, grupo B: `B04-CA-38`/`B04-CA-44` declaran
+    `limite.tipo="DURO"` (10 y 5); sin esta función, `indice_de_categoria`
+    añadía identidades por encima de ese límite que la corrida congelada
+    nunca llegó a examinar porque el laboratorio nunca las generó."""
+    ordenados = sorted(
+        candidatos,
+        key=lambda identidad: (-ORDEN_DE_CRITICIDAD.index(criticidad_de(identidad)), identidad),
+    )
+    return frozenset(ordenados[:limite_duro])
+
+
 __all__ = [
     "CATEGORIA_DE_MAXIMA_CRITICIDAD",
     "FILTRO_CONGELADO",
@@ -474,4 +587,6 @@ __all__ = [
     "indice_de_categoria",
     "pide_contexto",
     "siembra_de_contexto",
+    "truncar_por_limite_duro",
+    "vigente_en_tiempo_objetivo",
 ]
