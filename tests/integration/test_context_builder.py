@@ -30,6 +30,7 @@ from sirius.adapters.persistence.sqlite_knowledge_search_repository import (
 )
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
+from sirius.application import context as context_module
 from sirius.application.context import Context, ContextAssemblyError, ContextBuilder
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.domain.conversation import MessageRole
@@ -841,6 +842,61 @@ def test_rf26_does_not_rescue_when_the_filter_declared_total_absence(tmp_path: P
     context = builder.build("candidato")
 
     assert context.memories == ()
+
+
+@pytest.mark.integration
+def test_g12_hard_limit_exclusion_survives_the_real_context_builder_composition(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """G12's hard-limit exclusion (``truncate_to_hard_limit``) runs before
+    RF-25/RF-26 (``rescue_max_criticality_candidates``) inside the real
+    ``ContextBuilder._apply_relevance_filter`` composition, and is final: a
+    candidate G12 already dropped is never brought back by RF-25, even
+    though the filter conserved something else for this query — exactly
+    the condition that does trigger RF-25 for a candidate G12 still let
+    through. Unlike the domain-only test of the same two functions
+    (``test_g12_hard_limit_exclusion_is_final_and_is_never_undone_by_rf25_rescue``
+    in ``tests/unit/test_relevance_domain.py``), this calls
+    ``ContextBuilder.build`` itself, so it would catch a wiring regression
+    in ``_apply_relevance_filter`` (``src/sirius/application/context.py``)
+    that lets a G12-excluded candidate leak back into the result through
+    RF-25's rescue path — something the domain-only test, which never
+    executes that composition, cannot see. Only the test double's hard
+    limit is lowered via ``monkeypatch``, never the production constant or
+    policy.
+    """
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    kept_by_filter = memory_repository.create_memory("candidato uno", "manual")
+    memory_repository.set_user_category(kept_by_filter.id, "salud")
+    rescuable_by_rf25 = memory_repository.create_memory("candidato dos", "manual")
+    memory_repository.set_user_category(rescuable_by_rf25.id, "salud")
+    excluded_by_g12 = memory_repository.create_memory("candidato tres", "manual")
+    memory_repository.set_user_category(excluded_by_g12.id, "salud")
+    # Pin recency so G12's hard limit (below) deterministically keeps the
+    # first two and drops the third: kept_by_filter, then rescuable_by_rf25,
+    # then excluded_by_g12.
+    _set_updated_at(database_path, kept_by_filter.id, "2026-01-03T00:00:00")
+    _set_updated_at(database_path, rescuable_by_rf25.id, "2026-01-02T00:00:00")
+    _set_updated_at(database_path, excluded_by_g12.id, "2026-01-01T00:00:00")
+    # Only two of the three max-criticality candidates fit under this
+    # lowered hard limit, so excluded_by_g12 never reaches the filter or
+    # RF-25 inside the real composition.
+    monkeypatch.setattr(context_module, "_HARD_LIMIT_SIN_ATAR", 2)
+    builder = _build_context_builder(
+        database_path,
+        relevance_filter_port=_KeepOnlyRelevanceFilterPort(frozenset({kept_by_filter.id})),
+        max_criticality_category="salud",
+        category_matching_enabled=True,
+    )
+
+    context = builder.build("candidato")
+
+    result_ids = {m.id for m in context.memories}
+    assert result_ids == {kept_by_filter.id, rescuable_by_rf25.id}
+    assert excluded_by_g12.id not in result_ids
 
 
 @pytest.mark.integration

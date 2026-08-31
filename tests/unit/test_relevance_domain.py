@@ -580,8 +580,14 @@ def test_rescue_never_rescues_anything_without_a_max_criticality_category() -> N
 # --- and is final — a candidate G12 already dropped is never brought back ---
 # --- by RF-25, even when the filter conserved something else for the same ---
 # --- query (the exact condition that would trigger RF-25 if the candidate ---
-# --- were still available). Mirrors the composition ContextBuilder. ---
-# --- _apply_relevance_filter performs (src/sirius/application/context.py). ---
+# --- were still available). This is a domain-only test of the two pure ---
+# --- functions and the union this test reconstructs by hand — it does not ---
+# --- call ContextBuilder._apply_relevance_filter, so it cannot catch a ---
+# --- wiring regression there that leaks a G12-excluded candidate back into ---
+# --- the result through RF-25's rescue path. That composition is exercised ---
+# --- for real, through ContextBuilder itself, by ---
+# --- test_g12_hard_limit_exclusion_survives_the_real_context_builder_composition ---
+# --- in tests/integration/test_context_builder.py. ---
 
 
 def test_g12_hard_limit_exclusion_is_final_and_is_never_undone_by_rf25_rescue() -> None:
