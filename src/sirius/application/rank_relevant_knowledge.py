@@ -46,7 +46,7 @@ from sirius.domain.relevance import (
     KnowledgeKind,
     RankedKnowledge,
     candidate_in_declared_scope,
-    category_index_matches_query,
+    category_index_activated,
     category_matches_query,
     rank_relevant_knowledge,
     subject_matches_query,
@@ -176,8 +176,7 @@ class RankRelevantKnowledgeUseCase:
         M14 (§11.2/§11.5, incidencia #486) sustituye la regla de esa
         ampliación: en vez de la activación única de ``category_matches_query``
         sin restricción de ámbito que M9 portaba aquí, usa el índice de
-        categoría buscable de activación múltiple
-        (``category_index_matches_query`` — cualquier término del
+        categoría buscable de activación múltiple (cualquier término del
         vocabulario, no uno único) con restricción por ámbito
         (``candidate_in_declared_scope`` — el proyecto activo de la petición
         más el ámbito global siempre admitido), réplica de
@@ -188,6 +187,31 @@ class RankRelevantKnowledgeUseCase:
         cambios, tanto para el estado-cerrado (``_rank_via_current_pipeline``)
         como para la señal ``category_match`` de los candidatos que el motor
         ya admitió arriba — solo la ampliación de este bloque cambia.
+
+        M13 (§11.5, incidencia #489) optimiza cómo se calcula esa
+        ampliación, sin tocar qué admite: en vez de recorrer la totalidad de
+        ``list_current_memories()``/``list_current_decisions()`` en Python
+        para filtrar candidato a candidato con
+        ``category_index_matches_query``, primero decide en Python — sin
+        tocar el repositorio — si la consulta activa el índice en absoluto
+        (``category_index_activated``, la misma condición que
+        ``category_index_matches_query`` exige junto con
+        ``category is not None``); si no lo activa, el resultado es vacío
+        sin ejecutar ninguna consulta, igual que antes. Si lo activa,
+        interroga el repositorio filtrado en SQL por
+        ``self._category_vocabulary`` (D7 punto 1: el vocabulario cerrado
+        que toda categoría real ya respeta, tanto la que asigna el
+        clasificador automático como la que un usuario fija a mano —
+        ``list_current_memories_by_category``/``list_current_decisions_by_category``,
+        ``WHERE category IN (...)`` insensible a mayúsculas), que solo
+        devuelve los candidatos con categoría vigente en vez del corpus
+        completo — exactamente la subcondición que
+        ``category_index_matches_query`` comprueba candidato a candidato
+        (``category is not None``, sin comparar contra un término
+        concreto), ahora resuelta en SQL. La restricción de ámbito
+        (``candidate_in_declared_scope``) sigue aplicándose en Python sobre
+        ese subconjunto ya filtrado, no en SQL: es sobre filas que ya dejaron
+        de depender del tamaño del corpus.
 
         Las puertas y la agrupación del motor (qué se admite y qué se
         trunca por ``limite_duro``) no se tocan: ``ranked`` es exactamente
@@ -259,13 +283,14 @@ class RankRelevantKnowledgeUseCase:
                 )
 
         solo_por_categoria: list[RankedKnowledge] = []
-        if self._category_matching_enabled:
-            for memory in self._memory_repository.list_current_memories():
+        if self._category_matching_enabled and category_index_activated(
+            query_text, self._category_vocabulary
+        ):
+            categorias = tuple(self._category_vocabulary)
+            for memory in self._memory_repository.list_current_memories_by_category(categorias):
                 if (KnowledgeKind.MEMORY, memory.id) in admitidos_por_el_motor:
                     continue
-                if category_index_matches_query(
-                    memory.category, query_text, self._category_vocabulary
-                ) and candidate_in_declared_scope(
+                if candidate_in_declared_scope(
                     memory.project_id, active_project_id=active_project_id
                 ):
                     solo_por_categoria.append(
@@ -281,12 +306,12 @@ class RankRelevantKnowledgeUseCase:
                             category_match=True,
                         )
                     )
-            for decision in self._decision_repository.list_current_decisions():
+            for decision in self._decision_repository.list_current_decisions_by_category(
+                categorias
+            ):
                 if (KnowledgeKind.DECISION, decision.id) in admitidos_por_el_motor:
                     continue
-                if category_index_matches_query(
-                    decision.category, query_text, self._category_vocabulary
-                ) and candidate_in_declared_scope(
+                if candidate_in_declared_scope(
                     decision.project_id, active_project_id=active_project_id
                 ):
                     solo_por_categoria.append(

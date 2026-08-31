@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
-from sqlalchemy import CursorResult, Engine, exists, select, update
+from sqlalchemy import CursorResult, Engine, exists, func, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from sirius.adapters.persistence.database import (
@@ -201,6 +201,21 @@ class SqliteMemoryRepository:
             models = session.scalars(
                 select(MemoryModel)
                 .where(MemoryModel.status == MemoryStatus.CURRENT)
+                .order_by(MemoryModel.id)
+            ).all()
+            return _load_memories(session, models)
+
+    def list_current_memories_by_category(self, categories: Sequence[str]) -> list[Memory]:
+        if not categories:
+            return []
+        normalized = [category.casefold() for category in categories]
+        with self._scope() as session:
+            models = session.scalars(
+                select(MemoryModel)
+                .where(
+                    MemoryModel.status == MemoryStatus.CURRENT,
+                    func.lower(MemoryModel.category).in_(normalized),
+                )
                 .order_by(MemoryModel.id)
             ).all()
             return _load_memories(session, models)

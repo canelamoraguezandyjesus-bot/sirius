@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 import pytest
@@ -75,6 +76,9 @@ class _StaticDecisionRepository:
         raise AssertionError("get_origin() must never supersede a decision")
 
     def list_current_decisions(self) -> list[Decision]:
+        raise AssertionError("get_origin() must never list decisions")
+
+    def list_current_decisions_by_category(self, categories: Sequence[str]) -> list[Decision]:
         raise AssertionError("get_origin() must never list decisions")
 
     def get_superseding_decision(self, decision_id: int) -> Decision | None:
