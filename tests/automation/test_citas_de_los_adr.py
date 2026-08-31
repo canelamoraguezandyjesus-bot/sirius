@@ -146,8 +146,7 @@ _ADR_114 = (
 )
 _ADR_115 = (
     "ADR-115-las-dos-puertas-que-la-ampliacion-del-arnes-no-heredaba-bajan-los-aciertos-"
-    "exactos-a-29-47-y-elementos-de-mas-alcanza-d1-bajo-la-poblacion-del-umbral-publicado-"
-    "incidencia-469.md"
+    "exactos-a-29-47-pero-elementos-de-mas-no-alcanza-d1-incidencia-469.md"
 )
 
 RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
@@ -218,6 +217,11 @@ RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     # ninguna de las dos rutas siguientes se copia a Sirius; el ADR las cita
     # solo para documentar de dónde salió cada dato portado.
     "experiments/adr002/modelo_local/filtro.py:filtrar": [_ADR_112, _ADR_113],
+    # ADR-115 (incidencia #469, CODEX-001) cita el script de medición del
+    # laboratorio para documentar que el ≤21 publicado para `elementos_de_
+    # mas` lo fijó sumando solo sobre los 31 `casos_con_contenido`, nunca
+    # sobre los 47 — nunca se copia el fichero a Sirius.
+    "experiments/adr002/modelo_local/medir.py": [_ADR_115],
     # ADR-114 (incidencia #467) cita la misma fuente para justificar la
     # restricción por ámbito del índice de categoría del arnés: la cita
     # documenta de dónde sale la semántica portada, nunca se copia el
