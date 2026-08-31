@@ -1558,7 +1558,7 @@ incidencia:
   ADR-109..ADR-115) blinda como aserción dura, sobre su propia traducción de laboratorio
   —que nunca se ejecuta en producción—, **aciertos exactos ≥ 29/47**, **omisiones críticas
   ≤ 1** y **cobertura ≥ 63/81**
-  (`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:1148-1151`, función
+  (`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:1148-1153`, función
   `test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metricas`).
 - La línea de llegada de esta ola ya existe como conocimiento ejecutable: dos pruebas
   `pytest.mark.xfail(strict=True)` que hoy fallan-como-se-espera sobre el camino real de
@@ -1570,8 +1570,10 @@ incidencia:
   (`test_el_suelo_de_rnf_003_p95_300ms_en_los_tres_escenarios_del_paquete_completo`, afirma
   `medicion.p95 <= LIMITE_OPERACION_MS` —300 ms, `tests/integration/test_local_performance.py:187`—
   en los tres escenarios, líneas 651-658)—, ambas citando ADR-117 en su `reason` (ADR-117
-  §«Estado del hito: decisión»). Esta ola termina cuando ambas pasan inesperadamente
-  (XPASS) y `strict=True` obliga a retirar la marca (§11.5, M17).
+  §«Estado del hito: decisión»). Esta ola no termina solo con estas dos: §11.5 (M17) exige
+  además, como aserciones duras propias del propio M17, que `omisiones_criticas <= 1` y
+  `cobertura >= 63 / 81` pasen sobre el mismo camino real antes de declarar la ola cerrada
+  (§11.5, M17).
 - Ninguna de las piezas que faltan es trabajo nuevo por inventar: **todas están ya
   fusionadas en `main`**, viviendo en el arnés de examen
   (`tests/acceptance/staged_engine_category_and_relevance.py`,
@@ -1852,10 +1854,13 @@ que el escenario (b), sin Ollama, mida en la misma banda que (a)/(c)).
    `_por_ids_mixtos` ya usa para ids (`src/sirius/adapters/persistence/staged_engine_port.py:201-219`,
    marcas de parámetro nombradas `:m0`, `:m1`, …).
 2. **M13** (mismo encargo, misma causa) — evitar el segundo barrido completo del corpus en
-   `solo_por_categoria`: construir, una sola vez por llamada a `rank()`, un índice en
-   memoria de candidatos por categoría (o reutilizar el resultado ya cargado por el motor
-   en vez de volver a listar), en vez de iterar `list_current_memories()`/
-   `list_current_decisions()` enteros de nuevo.
+   `solo_por_categoria`: sustituir `list_current_memories()`/`list_current_decisions()`
+   (que ya se invocan una sola vez por llamada a `rank()` hoy — construir un índice en
+   memoria a partir de esa misma llamada no reduce nada, sigue leyendo el corpus completo)
+   por una consulta al puerto de persistencia filtrada por categoría, ejecutada en SQL
+   (`WHERE category IN (...)`, mismo patrón por lote que el punto 1), que solo devuelve los
+   candidatos de las categorías relevantes en vez de cargar el corpus completo en memoria
+   para filtrarlo en Python.
 3. **M17** (medición) mide si M13 basta para bajar de los ~450-780 ms actuales a ≤ 300 ms
    P95 en los tres escenarios; si no basta, M17 lo registra tal cual —igual que ADR-117
    registró el incumplimiento de M11— y esta arquitectura no promete de antemano que M13
@@ -1888,19 +1893,28 @@ M9/M10).
 
 `StagedEnginePort.por_clave_exacta`/`por_prefijo_de_sujeto` en consulta por lote (§11.4,
 punto 1); eliminar el segundo barrido completo del corpus de `solo_por_categoria` (§11.4,
-punto 2), sustituyéndolo por un índice en memoria construido una vez por llamada.
+punto 2), sustituyendo `list_current_memories()`/`list_current_decisions()` por una
+consulta al puerto de persistencia filtrada por categoría, ejecutada en SQL, que devuelve
+solo los candidatos de las categorías relevantes en vez de cargar el corpus completo en
+memoria para filtrarlo en Python.
 
 **Criterio de aceptación:** una prueba de integración con un doble instrumentado del
 puerto (o un contador de consultas SQL reales sobre SQLite) confirma que el número de
 consultas ejecutadas por `por_clave_exacta`/`por_prefijo_de_sujeto` para *n* claves/prefijos
 deja de crecer linealmente con *n* (una consulta por lote, no dos por clave); una prueba
-sobre `_rank_via_staged_engine` con un repositorio instrumentado confirma que
-`list_current_memories()`/`list_current_decisions()` se invocan como máximo una vez por
-llamada a `rank()` con la puerta abierta, nunca dos; ninguna prueba de identidad existente
+sobre `_rank_via_staged_engine` con un repositorio instrumentado confirma que la ampliación
+por categoría deja de enumerar la totalidad del corpus — contando las filas que el
+repositorio devuelve (o las filas que SQLite lee) para un corpus con muchos más elementos
+fuera de la categoría solicitada que dentro, y comprobando que ese número depende del
+tamaño del subconjunto que coincide con la categoría, no del tamaño total de recuerdos o
+decisiones vigentes; contar solo las invocaciones a `list_current_memories()`/
+`list_current_decisions()` no basta, porque ambas ya se invocan una sola vez por llamada a
+`rank()` antes de este encargo y esa cuenta no cambiaría aunque el corpus completo se
+siguiera enumerando. Ninguna prueba de identidad existente
 (`tests/integration/test_rank_relevant_knowledge.py`,
 `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`, el arnés de examen) cambia de
 resultado — la optimización no puede alterar qué se admite ni en qué orden, solo cuántas
-consultas cuesta calcularlo.
+filas cuesta calcularlo.
 
 **M14 — Índice de categoría buscable de activación múltiple, con restricción de ámbito, tras la puerta**
 
@@ -1924,24 +1938,37 @@ encargo, byte a byte sobre el mismo caso de prueba.
 **M15 — Regla de críticas original (RF-25/RF-26) y siembra en contexto, tras la puerta**
 
 RF-25/RF-26 sustituyendo el candado-unión de `ContextBuilder._apply_relevance_filter`
-**solo** cuando la puerta está abierta (§11.2); siembra en contexto activada quando la
-petición declara el propósito de ensamblar contexto (§11.3); G8/G12 sobre el conjunto
-combinado motor+categoría+siembra antes de aplicar RF-25/RF-26 (§11.2, último punto).
+**solo** cuando la puerta está abierta (§11.2); G8/G12 sobre el conjunto combinado
+motor+categoría antes de aplicar RF-25/RF-26 (§11.2, último punto).
+
+**Precondición pendiente sobre la siembra en contexto — no forma parte de este encargo
+todavía:** la definición aprobada documenta que `siembra_de_contexto` se escribió tras
+observar fallos y que solo dos de los 47 casos del banco la ejercitan, por lo que se
+confirma «por construcción», no de forma independiente
+(`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:100-106`); el plan de
+pruebas fija como precondición de PA-0.2-REC-01, antes de poder declarar superada esa PA,
+que el banco se amplíe con casos independientes que ejerciten la siembra, o que la siembra
+se retire del código
+(`docs/evolution/SIRIUS_PLAN_PRUEBAS_0.2_v0.1_PROPUESTO.md:124-131`). M15 **no** porta la
+siembra a producción mientras esa precondición siga sin resolverse: construye únicamente
+RF-25/RF-26 y G8/G12 sobre el conjunto motor+categoría (sin siembra). Portar
+`siembra_de_contexto` queda como alcance de un encargo posterior, condicionado a que el
+propietario registre la decisión y se cumpla una de las dos alternativas — ampliar el
+banco o retirar la siembra —, igual que D3 (§6.6) deja aplazada la omisión léxica hasta
+que se registre su propia decisión.
 
 **Criterio de aceptación:** una prueba con un doble determinista de `RelevanceFilterPort`
 que descarta explícitamente una identidad de categoría de máxima criticidad confirma que
 se rescata cuando el filtro sí conservó algo de la misma consulta, y que **no** se rescata
 cuando el filtro declaró ausencia total para esa consulta (RF-26); una prueba confirma que
 un candidato sin categoría todavía sigue protegido siempre, sin condición, igual que hoy;
-una prueba con `proposito` declarando ensamblar contexto confirma que se siembra una
-identidad de categoría de máxima criticidad no admitida por ningún otro camino, dentro del
-ámbito declarado, y que no se siembra fuera de ese ámbito ni cuando `proposito` no lo
-declara; una prueba confirma que una identidad sembrada o admitida por categoría, pero no
-vigente en el tiempo objetivo de la petición, se descarta (G8) y que el conjunto combinado
-se trunca al límite duro de la petición ordenando por criticidad (G12) antes de que
-RF-25/RF-26 actúe; con la puerta cerrada, una prueba de identidad confirma que
+una prueba confirma que una identidad admitida por categoría, pero no vigente en el tiempo
+objetivo de la petición, se descarta (G8) y que el conjunto combinado se trunca al límite
+duro de la petición ordenando por criticidad (G12) antes de que RF-25/RF-26 actúe; con la
+puerta cerrada, una prueba de identidad confirma que
 `ContextBuilder._apply_relevance_filter` produce exactamente el mismo resultado que antes
-de este encargo.
+de este encargo. Ninguna prueba de este encargo ejercita `siembra_de_contexto`: esa
+cobertura queda pendiente del encargo posterior que resuelva la precondición de arriba.
 
 **M16 — Petición de producción: ámbito real, propósito real, cableado en `ContextBuilder`/`RankRelevantKnowledgeUseCase`**
 
@@ -1962,33 +1989,35 @@ y publicar el P95 medido con las piezas ya integradas.
 
 **M17 — Medición final: cierre de la ola**
 
-Sobre el pipeline con M13-M16 integrados, ejecutar exactamente las dos pruebas
-`xfail(strict=True)` de M11
-(`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:2135`,
-`tests/integration/test_local_performance.py:631`) y comprobar su resultado. Además,
-sobre la misma ejecución del banco, registrar `omisiones_criticas` y `cobertura` como
-evidencia adicional del encargo — ninguna de las dos figura como aserción dura en esas dos
-pruebas `xfail` (§11.0 lo señala explícitamente: solo afirman `aciertos_exactos >= 29` y
-`P95 <= 300 ms`), pero sí forman parte de las cifras que el objetivo de esta ola fija como
-destino (`críticas ≤ 1`, `cobertura ≥ 63/81`, mismo suelo que ADR-115 ya blinda en el
-arnés) — si alguna de las dos no se alcanza sobre el camino real aunque las dos `xfail`
-sí pasen, este encargo lo registra igual, sin ocultarlo, y decide si corresponde una
-prueba nueva que la afirme como aserción dura sobre el paquete de producción (fuera del
-alcance de M17 decidir eso por su cuenta sin registrarlo primero).
+Sobre el pipeline con M13-M16 integrados, ejecutar las dos pruebas `xfail(strict=True)` de
+M11 (`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:2135`,
+`tests/integration/test_local_performance.py:631`) y comprobar su resultado. Además, sobre
+esa misma ejecución del banco, M17 añade dos aserciones duras nuevas, también bajo
+`xfail(strict=True)`, que hoy no existen sobre el camino real: `omisiones_criticas <= 1` y
+`cobertura >= 63 / 81` (mismo suelo que ADR-115 ya blinda en el arnés, §11.0). Ninguna de
+las dos figura como aserción dura en las dos pruebas de M11 (§11.0 lo señala
+explícitamente: solo afirman `aciertos_exactos >= 29` y `P95 <= 300 ms`), pero sí forman
+parte de las cifras que el objetivo de esta ola fija como destino, así que M17 no se limita
+a registrarlas como evidencia adicional: las convierte en la misma clase de aserción dura y
+aplazable que las otras dos, para que un resultado incompleto (por ejemplo, las dos XPASS
+de M11 pero `omisiones_criticas > 1` o `cobertura < 63/81`) no pueda cerrar la ola.
 
 **Criterio de aceptación — exactamente el que fija el objetivo de la incidencia #478:**
-las dos pruebas `xfail(strict=True)` de M11 pasan inesperadamente (XPASS) y, por
-`strict=True`, la suite falla hasta que se retiren sus marcas; al retirarlas (sustituyendo
-`@pytest.mark.xfail(strict=True, reason=...)` por una aserción ordinaria, sin debilitar el
-umbral que afirman), la suite completa queda en verde. Si M13-M16 no bastan para alcanzar
-el suelo —el propio §11.4 ya advierte que optimizar las causas conocidas no garantiza
-llegar a 300 ms, y que la Producción de M14/M15 podría no cerrar el 29/47 si la parte no
-cerrable de §11.3 resulta ser la causa dominante—, M17 no fuerza el verde: registra la
-cifra real alcanzada, actualiza este documento y `docs/evolution/STATUS.md` con el
-resultado, y dejar las dos pruebas `xfail` en pie es la única salida honesta, exactamente
-como D3 (§6.6) ya deja abierta y aplazada la omisión léxica si M12 no la cierra. La ola no
-se declara cerrada por decisión de M17 mismo: se declara cerrada cuando las pruebas lo
-digan, no antes.
+las cuatro pruebas `xfail(strict=True)` — las dos ya existentes de M11 y las dos que M17
+añade — pasan inesperadamente (XPASS) y, por `strict=True`, la suite falla hasta que se
+retiren sus cuatro marcas; al retirarlas todas (sustituyendo cada
+`@pytest.mark.xfail(strict=True, reason=...)` por una aserción ordinaria, sin debilitar
+ningún umbral que afirman), la suite completa queda en verde. Si M13-M16 no bastan para
+alcanzar alguno de los cuatro suelos —el propio §11.4 ya advierte que optimizar las causas
+conocidas no garantiza llegar a 300 ms, y que la Producción de M14/M15 podría no cerrar el
+29/47 ni las otras dos métricas si la parte no cerrable de §11.3 resulta ser la causa
+dominante—, M17 no fuerza el verde: registra la cifra real alcanzada para cada una de las
+cuatro métricas, actualiza este documento y `docs/evolution/STATUS.md` con el resultado, y
+dejar en pie las marcas `xfail` que no hayan pasado es la única salida honesta,
+exactamente como D3 (§6.6) ya deja abierta y aplazada la omisión léxica si M12 no la
+cierra. La ola no se declara cerrada por decisión de M17 mismo, ni de forma parcial sobre
+solo dos de las cuatro métricas: se declara cerrada cuando las cuatro pruebas lo digan, no
+antes.
 
 ### 11.6 Qué no decide esta ampliación
 
