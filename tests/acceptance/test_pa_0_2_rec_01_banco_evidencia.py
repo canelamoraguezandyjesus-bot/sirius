@@ -1002,8 +1002,17 @@ def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metric
 
     - **50 elementos — el laboratorio también los produce** (están en su
       `obtenido` de esa fila): no son infidelidad del porte, son parte de
-      los `elementos_de_mas` propios del laboratorio (su corrida terminó con
-      21, no con 0) y se quedan, anotados —
+      los `elementos_de_mas` propios del laboratorio. La fuente publica 21
+      para esta fila, pero esa cifra excluye los 16 `casos_de_ausencia`
+      (`resultado_esperado` vacío) y solo suma sobre los 31 `casos_con_
+      contenido` (`experiments/adr002/modelo_local/medir.py:255-269`, rama
+      `evidence/adr001-spikes`); incluyendo también los `casos_de_ausencia`
+      (29 más) da exactamente 50 — CODEX-001,
+      `test_la_corrida_del_laboratorio_reproduce_las_metricas_publicadas_de_la_fuente`,
+      más abajo, lo comprueba mecánicamente contra el fixture, junto con
+      `aciertos_exactos`/`cobertura` (que sí coinciden sin salvedad) y
+      documenta por qué `omisiones_criticas` (1 en la fuente) tampoco se
+      reproduce contra el banco portado. Se quedan, anotados —
       `test_los_elementos_de_mas_restantes_son_los_del_laboratorio`, más
       abajo, lo fija como prueba de forma sobre el banco completo. Grupo A
       completo (39: `sirius.domain.staged_engine.recuperar` los admite antes
@@ -1078,6 +1087,80 @@ def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metric
     assert metricas.aciertos_exactos >= 29
     assert metricas.omisiones_criticas <= 1
     assert metricas.cobertura >= 63 / 81
+
+
+def test_la_corrida_del_laboratorio_reproduce_las_metricas_publicadas_de_la_fuente() -> None:
+    """CODEX-001: antes de usar `lab_final_run_row5.json` como oráculo para
+    diagnosticar `elementos_de_mas` (como hace el test siguiente), esta
+    prueba comprueba que el propio fixture reproduce las cuatro métricas que
+    ADR-112 cita como publicadas para esta fila (29/47, 21, 1, 63/81) —no
+    solo que la traducción por caso coincide byte a byte con la fuente, que
+    ya está verificado manualmente caso a caso.
+
+    `aciertos_exactos` (29/47) y `cobertura` (63/81) se reproducen
+    directamente, sumando sobre las 47 filas sin ninguna salvedad.
+    `elementos_de_mas` NO se reproduce sin matiz: sumar `obtenido - esperado`
+    sobre las 47 filas da 50, no 21. La razón no es un fallo del porte: la
+    fuente (`experiments/adr002/modelo_local/medir.py:255-269`, rama
+    `evidence/adr001-spikes` — `sobrantes = sum(... for v in con_contenido)`)
+    excluye del cómputo los `casos_de_ausencia` (`resultado_esperado` vacío;
+    16 de los 47) y solo suma sobre los 31 `casos_con_contenido`. Repitiendo
+    ese mismo filtro sobre el fixture SÍ da 21; sumando también los 16 casos
+    de ausencia (29 más) da 50 — el número que mide el arnés. ADR-112/ADR-115
+    citaban el "21" de la fuente sin esa salvedad, dando la falsa impresión
+    de que debía coincidir con el "50" del arnés bajo el mismo criterio;
+    ahora queda comprobable en vez de solo afirmado en prosa.
+
+    `omisiones_criticas` (1 en la fuente) tampoco se reproduce, y esta prueba
+    no lo fuerza: de los elementos que faltan en `obtenido` a través de las
+    47 filas, ninguno tiene `criticidad.nivel == "CRITICO"` en
+    `evidence_bank_47_casos.json` (el más cercano, `MEM-001` en `B04-CA-30`,
+    es `IMPORTANTE`). La fuente decide "crítico" contra su propia lista
+    (`experiments/adr002/round/metrics.py:296-316`, rama
+    `evidence/adr001-spikes`), no contra el campo `criticidad` que porta este
+    banco — una diferencia de clasificación ya existente en
+    `evidence_bank_47_casos.json` desde incidencias anteriores (#457/#461/
+    #463), fuera del alcance de #469, que no autoriza tocar el banco ni sus
+    `resultado_esperado`."""
+    banco = _fixture()
+    lab = json.loads(LAB_FINAL_RUN_ROW5_PATH.read_text(encoding="utf-8"))["casos"]
+    items_por_id = {item["id"]: item for item in banco["items"]}
+
+    casos_con_contenido = 0
+    casos_de_ausencia = 0
+    aciertos_exactos = 0
+    elementos_de_mas_con_contenido = 0
+    elementos_de_mas_ausencia = 0
+    elementos_hallados = 0
+    elementos_esperados_total = 0
+    omisiones_criticas = 0
+
+    for caso in banco["casos"]:
+        esperado = set(caso["resultado_esperado"])
+        obtenido = set(lab[caso["id"]]["obtenido"])
+        elementos_esperados_total += len(esperado)
+        elementos_hallados += len(obtenido & esperado)
+        if obtenido == esperado:
+            aciertos_exactos += 1
+        de_mas = len(obtenido - esperado)
+        if esperado:
+            casos_con_contenido += 1
+            elementos_de_mas_con_contenido += de_mas
+        else:
+            casos_de_ausencia += 1
+            elementos_de_mas_ausencia += de_mas
+        for identidad in esperado - obtenido:
+            criticidad = items_por_id[identidad].get("criticidad")
+            if criticidad is not None and criticidad["nivel"] == "CRITICO":
+                omisiones_criticas += 1
+
+    assert (casos_con_contenido, casos_de_ausencia) == (31, 16)
+    assert aciertos_exactos == 29
+    assert (elementos_hallados, elementos_esperados_total) == (63, 81)
+    assert elementos_de_mas_con_contenido == 21
+    assert elementos_de_mas_ausencia == 29
+    assert elementos_de_mas_con_contenido + elementos_de_mas_ausencia == 50
+    assert omisiones_criticas == 0
 
 
 def test_los_elementos_de_mas_restantes_son_los_del_laboratorio(

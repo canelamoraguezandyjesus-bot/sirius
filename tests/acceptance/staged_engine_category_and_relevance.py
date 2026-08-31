@@ -193,8 +193,15 @@ también producía cada uno.
 Grupos A y C, y 8 de los 20 del grupo B (`B04-CA-33`/`B04-CA-34`, la siembra
 al ensamblar contexto): el laboratorio **también** los produce —están en su
 `obtenido` de esa fila—, así que no son infidelidad del porte: son parte de
-los `elementos_de_mas` propios del laboratorio (su corrida terminó con 21,
-no con 0) y se quedan, anotados.
+los `elementos_de_mas` propios del laboratorio. La fuente publica 21 para
+esta fila, pero esa cifra excluye los 16 `casos_de_ausencia` y solo suma
+sobre los 31 `casos_con_contenido`
+(`experiments/adr002/modelo_local/medir.py:255-269`, rama
+`evidence/adr001-spikes`); sumando también los casos de ausencia da 50, el
+número medido aquí —
+`tests.acceptance.test_pa_0_2_rec_01_banco_evidencia.test_la_corrida_del_laboratorio_reproduce_las_metricas_publicadas_de_la_fuente`
+(CODEX-001) lo comprueba mecánicamente contra el fixture— y se quedan,
+anotados.
 
 Los 12 elementos restantes del grupo B (`B04-CA-26`/`MEM-112`;
 `B04-CA-38`/`MEM-001,111,112`; `B04-CA-44`/`MEM-001,106..112`) el

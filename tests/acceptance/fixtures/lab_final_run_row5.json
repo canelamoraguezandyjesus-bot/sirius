@@ -2,7 +2,7 @@
   "documento": "Corrida final por caso del laboratorio, fila \"5. con siembra en contexto\", portada VERBATIM desde evidence/adr001-spikes a tests/acceptance/fixtures/lab_final_run_row5.json (incidencia #469). Es la fila que combina el indice de categoria, el filtro con modelo local (RF-25/RF-26) y la siembra al ensamblar contexto -- el mismo conjunto de piezas que _ejecutar_banco_motor_portado activa en el arnes (incidencias #463/#465/#467). Sirve para comprobar, elemento a elemento, si el laboratorio TAMBIEN producia cada elemento_de_mas que ADR-114 diagnostico (metodo pedido por la incidencia #469): si esta en 'obtenido' aqui, el laboratorio lo producia tambien y no es infidelidad del porte.",
   "fuente": {
     "rama": "evidence/adr001-spikes",
-    "commit": "a4c910a9773b9c9e2f0016e462eb709b81805d50",
+    "commit": "8ff535b91dc6a7a2c42eb886699ebdefd902e4fd",
     "fichero": "resultado_modelo_local_v0.7.json",
     "fila": "5. con siembra en contexto",
     "nota": "detalle_por_caso['5. con siembra en contexto'] del fichero origen, restringido a los casos que tambien porta evidence_bank_47_casos.json (47 de los 50 casos N1-NN del laboratorio; los 3 restantes -N1-37/39/48- no fueron portados al banco por la incidencia #457/#461 y no se incluyen aqui tampoco) y traducido de identidades N1-NN/MEMORIA:n/DECISION:n a B04-CA-NN/MEM-NNN/DEC-NNN via la misma correspondencia verbatim que evidence_bank_47_casos.json ya porta (mismo orden de consulta, verificado texto a texto).",

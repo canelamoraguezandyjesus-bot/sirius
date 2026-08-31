@@ -29,7 +29,7 @@ filtro con regla, con categoria" — sin la siembra al ensamblar contexto que
 el arnés también activa (incidencia #465, causa 2). Para poder comparar
 `obtenido` final contra final, hacía falta la fila "5. con siembra en
 contexto" de `resultado_modelo_local_v0.7.json` (rama
-`evidence/adr001-spikes`, commit `a4c910a9773b9c9e2f0016e462eb709b81805d50`),
+`evidence/adr001-spikes`, commit `8ff535b91dc6a7a2c42eb886699ebdefd902e4fd`),
 que sí combina las mismas piezas que el arnés activa. Se porta ahora
 verbatim, restringida a los 47 casos del banco, como
 `tests/acceptance/fixtures/lab_final_run_row5.json` — sin tocar
@@ -87,8 +87,22 @@ fila "5. con siembra en contexto" del laboratorio, por caso):
 
 **50 elementos — el laboratorio también los produce.** Están en su
 `obtenido` para el mismo caso, así que no son infidelidad del porte: son
-parte de los `elementos_de_mas` propios del laboratorio (su corrida terminó
-con 21 `elementos_de_mas`, no con 0) y se quedan, anotados —
+parte de los `elementos_de_mas` propios del laboratorio. La fuente publica
+21 `elementos_de_mas` para esta fila, pero esa cifra excluye los 16 `casos_
+de_ausencia` (`resultado_esperado` vacío) y solo suma sobre los 31 `casos_
+con_contenido` (`experiments/adr002/modelo_local/medir.py:255-269`, rama
+`evidence/adr001-spikes`); sumando también los 16 casos de ausencia (29 más)
+da exactamente 50, el número medido aquí — CODEX-001,
+`test_la_corrida_del_laboratorio_reproduce_las_metricas_publicadas_de_la_fuente`
+(`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`), comprueba esto
+mecánicamente contra el fixture, junto con `aciertos_exactos`/`cobertura`
+(que sí coinciden con la fuente sin salvedad) y documenta por qué
+`omisiones_criticas` (1 en la fuente) tampoco se reproduce contra el banco
+portado: ninguno de los elementos que faltan en `obtenido` es `CRITICO` en
+`evidence_bank_47_casos.json`, una diferencia de clasificación entre la
+lista de críticos de la fuente y el campo `criticidad` de ese banco que ya
+existía antes de esta incidencia (#457/#461/#463) y que #469 no autoriza a
+tocar. Los 50 se quedan, anotados —
 `test_los_elementos_de_mas_restantes_son_los_del_laboratorio`
 (`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`) lo fija como
 prueba de forma sobre el banco completo: para todo caso, `obtenido - esperado`
