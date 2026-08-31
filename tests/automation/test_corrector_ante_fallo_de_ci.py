@@ -208,9 +208,14 @@ def test_un_head_movido_tras_el_fallo_devuelve_a_ci_pending() -> None:
         "incidencia volvería a morir en failed-safely con una corrección "
         "legítima pendiente (H-36, #441/#442)"
     )
-    assert "sirius-quality:[0-9a-f]+:(failure|timed_out)" in guion, (
+    assert "quality:[0-9a-f]+:(failure|timed_out)" in guion, (
         "la detección del fallo-de-cualquier-head tiene que ser el mismo "
         "marcador que publica el avance, no una heurística nueva"
+    )
+    assert "verdict:reviewer:changes" in guion, (
+        "la rama tiene que decidir por el ÚLTIMO disparador (revisión o CI): "
+        "sin eso, un fallo histórico de Quality consumiría una ronda cuyo "
+        "disparador real fue una revisión con observaciones (PR #477, P2)"
     )
     despues = guion[guion.index("head-movido-tras-ci") :]
     assert '"sirius:ci-pending"' in despues.split("sin-observaciones")[0], (
@@ -283,4 +288,44 @@ def test_una_lectura_caida_de_decisiones_para_en_seguro() -> None:
     assert "decisiones-ilegibles" in guion, (
         "desapareció la parada segura ante decisiones ilegibles: el corrector "
         "podría revertir una decisión que nunca llegó a leer"
+    )
+
+
+def test_la_transicion_fallida_no_consume_el_evento() -> None:
+    """PR #477 (P1): relanzar Quality con la transición a ci-pending fallida
+    consumiría el nuevo evento con la incidencia aún en repair-requested."""
+    guion = _sin_comentarios(_paso_de_la_puerta())
+    assert "rc_parada" in guion, (
+        "la rama head-movido-tras-ci ya no comprueba si la transición se "
+        "completó antes de relanzar: recrearía el atasco que viene a cerrar"
+    )
+
+
+def test_el_rerun_va_con_el_token_del_workflow_no_con_el_pat() -> None:
+    """PR #477 (P1): el PAT no tiene alcance de Actions (nota en el avance);
+    el relanzamiento necesita el GITHUB_TOKEN y el permiso actions:write."""
+    import yaml as _yaml
+
+    doc = _yaml.safe_load(CORRECTOR.read_text(encoding="utf-8"))
+    permisos = doc.get("permissions") or {}
+    assert permisos.get("actions") == "write", (
+        "sin actions:write el relanzamiento devuelve 403 en silencio y el "
+        "verde espera horas al reconciliador"
+    )
+    guion = _paso_de_la_puerta()
+    tramo = guion[guion.index("run_terminado=") : guion.index("/rerun")]
+    assert "SIRIUS_TRIGGER_TOKEN" not in tramo, (
+        "el POST de rerun no puede ir con el PAT: no tiene alcance de Actions "
+        "y devolvería 403 en silencio"
+    )
+
+
+def test_una_revision_ilegible_no_se_confunde_con_un_head_movido() -> None:
+    """PR #477 (P2): si el último disparador fue una revisión, unas
+    observaciones vacías son una lectura caída — parada reintentable, no
+    consumo de la ronda."""
+    guion = _sin_comentarios(_paso_de_la_puerta())
+    assert "observaciones-ilegibles" in guion, (
+        "desapareció la parada para la revisión ilegible: una lectura caída "
+        "de observaciones se trataría como head movido y saltaría la corrección"
     )

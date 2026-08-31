@@ -33,6 +33,11 @@ permissions:
   issues: write
   pull-requests: write
   id-token: write
+  # Para relanzar el run de Quality ya terminado en la rama
+  # head-movido-tras-ci (revision de la PR #477): el PAT no tiene alcance de
+  # Actions (ver la nota en advance-sirius-after-quality.yml), asi que el
+  # relanzamiento va con el GITHUB_TOKEN, que necesita este permiso.
+  actions: write
 
 concurrency:
   group: sirius-repair-${{ github.event.issue.number }}-${{ github.event.label.name }}
@@ -385,7 +390,17 @@ jobs:
             if sirius_ronda_disparada_por_ci "$comments_file" "$pr_head"; then
               echo "Sin observaciones estructuradas, pero hay un fallo de Quality registrado"
               echo "para el head ${pr_head}: la causa corregible es ese run (H-14). Sigo."
-            elif grep -qiE '<!--[[:space:]]*sirius-quality:[0-9a-f]+:(failure|timed_out)[[:space:]]*-->' "$comments_file"; then
+            elif ultimo_disparador="$(grep -oiE '<!--[[:space:]]*sirius-(verdict:reviewer:changes|quality:[0-9a-f]+:(failure|timed_out))[^>]*-->' \
+                "$comments_file" | tail -n 1)" && [ -n "$ultimo_disparador" ]; then
+              # ¿Que disparo ESTA ronda? Manda el ultimo marcador publicado
+              # (revision de la PR #477, P2): un fallo historico de Quality no
+              # convierte en "head movido" una ronda cuyo ultimo disparador fue
+              # una revision con observaciones — si estas no se pudieron LEER,
+              # eso es una lectura caida, no una ronda de CI, y se para en
+              # seguro reintentable en vez de consumir la correccion. Sin
+              # ningun disparador publicado, cae a la parada clasica de abajo.
+              case "$ultimo_disparador" in
+              *quality*)
               # H-36 (incidencias #441 y #442): la ronda SI nacio de un fallo de
               # Quality, pero el head se movio despues (update-branch o un push
               # nuevo) y el fallo registrado ya no corresponde al head actual.
@@ -399,30 +414,67 @@ jobs:
               printf '%s\n\n%s\n\n%s\n' \
                 "$marker" "🟡 **El fallo de Quality registrado es de un head anterior**" \
                 "No hay observaciones estructuradas y el fallo de Quality registrado no corresponde al head actual de la PR (el head se movió después). Devuelvo la incidencia a \\`sirius:ci-pending\\`: el resultado de Quality del head actual la encaminará por el camino normal." >"$body_file"
+              rc_parada=0
               parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
                 "sirius:ci-pending" "FBCA04" "Evento consumible: en espera de Quality" \
-                "noclose" "sirius:repair-requested" || echo "::error::No se pudo devolver la incidencia a ci-pending (head-movido-tras-ci)."
+                "noclose" "sirius:repair-requested" || rc_parada=1
+              if [ "$rc_parada" -ne 0 ]; then
+                # Sin la transicion hecha, relanzar consumiria el nuevo evento
+                # con la incidencia aun en repair-requested — el mismo atasco
+                # que esta rama viene a cerrar (revision de la PR #477, P1).
+                # Se sale reintentable, sin marcar el evento como consumido.
+                echo "::error::No se pudo devolver la incidencia a ci-pending (head-movido-tras-ci); reintentable."
+                rm -f "$body_file" "$comments_file"
+                exit 1
+              fi
               # Carrera de eventos (revision de la PR #477): si el Quality del
               # head actual TERMINO antes de esta transicion, su workflow_run
               # ya se consumio con la incidencia todavia en repair-requested y
               # nadie volvera a disparar el enrutado hasta el reconciliador.
-              # Se relanza ese run terminado con el PAT (identidad real): su
-              # nueva finalizacion vuelve a emitir workflow_run y el avance,
-              # ahora si, encuentra la incidencia en ci-pending. Si no hay run
-              # terminado (sigue en cola o corriendo), no hace falta nada: su
-              # finalizacion natural disparara el enrutado.
+              # Se relanza ese run terminado con el GITHUB_TOKEN (el PAT no
+              # tiene alcance de Actions; el permiso actions:write de este
+              # workflow existe para esto): su nueva finalizacion vuelve a
+              # emitir workflow_run y el avance, ahora si, encuentra la
+              # incidencia en ci-pending. Si no hay run terminado (sigue en
+              # cola o corriendo), no hace falta nada: su finalizacion natural
+              # disparara el enrutado.
               run_terminado="$(sirius_retry gh api \
                 "repos/${GH_REPO}/actions/workflows/quality.yml/runs?head_sha=${pr_head}&status=completed&per_page=1" \
                 --jq '.workflow_runs[0].id // empty' 2>/dev/null || true)"
               if [ -n "${run_terminado:-}" ]; then
-                ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"
-                  sirius_retry gh api -X POST \
-                    "repos/${GH_REPO}/actions/runs/${run_terminado}/rerun" >/dev/null ) \
+                sirius_retry gh api -X POST \
+                  "repos/${GH_REPO}/actions/runs/${run_terminado}/rerun" >/dev/null \
                   || echo "::warning::No se pudo relanzar el run ${run_terminado}; el reconciliador lo recogera."
               fi
               rm -f "$body_file" "$comments_file"
               echo "valid=false" >> "$GITHUB_OUTPUT"
               exit 0
+              ;;
+              *verdict:reviewer:changes*)
+                # El ultimo disparador fue una revision CON observaciones que
+                # no se pudieron extraer: lectura caida, no ronda de CI. Parada
+                # segura reintentable; consumir la ronda saltaria la correccion
+                # que la revision pidio.
+                marker="<!-- sirius-verdict:corrector:precheck:observaciones-ilegibles:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
+                body_file="$(mktemp)"
+                printf '%s\n\n%s\n\n%s\n' \
+                  "$marker" "🔴 **Me he detenido de forma segura**" \
+                  "La última ronda la abrió una revisión con observaciones, pero no pude extraerlas (lectura caída). Corregir sin ellas saltaría lo que la revisión pidió, así que me detengo. Reintentable con \\`continua\\`." >"$body_file"
+                parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+                  "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
+                  "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar la parada segura (observaciones-ilegibles)."
+                rm -f "$body_file" "$comments_file"
+                echo "valid=false" >> "$GITHUB_OUTPUT"
+                exit 0
+              ;;
+              *)
+                # Inalcanzable por la condicion del elif; por higiene, parada
+                # clasica reintentable si algun dia el patron cambiara.
+                echo "::error::Disparador no reconocido: ${ultimo_disparador}"
+                rm -f "$comments_file"
+                exit 1
+              ;;
+              esac
             else
               marker="<!-- sirius-verdict:corrector:precheck:sin-observaciones -->"
               body_file="$(mktemp)"

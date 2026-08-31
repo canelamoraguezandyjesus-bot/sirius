@@ -120,6 +120,20 @@ La revisión de Codex afinó tres piezas, incorporadas antes de fusionar:
    (historiales anteriores al convenio) se conserva el comportamiento
    histórico.
 
+La segunda pasada de la revisión afinó tres más, también incorporadas:
+
+4. **El relanzamiento va con el token del workflow**: el PAT no tiene
+   alcance de Actions (documentado en el propio avance) y el POST habría
+   devuelto 403 en silencio; el workflow gana el permiso `actions: write`
+   exactamente para esto.
+5. **Sin transición no hay relanzamiento**: si devolver la incidencia a
+   `ci-pending` falla, la rama sale reintentable en vez de consumir el
+   nuevo evento con la incidencia aún en `repair-requested`.
+6. **Manda el último disparador**: un fallo histórico de Quality no
+   convierte en «head movido» una ronda cuyo último disparador fue una
+   revisión con observaciones; si estas no se pudieron leer, la parada es
+   «observaciones-ilegibles», reintentable, no un consumo de la ronda.
+
 ## Consecuencias
 
 - Positivas: las cuatro paradas mudas de la noche pasan a resolverse solas o
