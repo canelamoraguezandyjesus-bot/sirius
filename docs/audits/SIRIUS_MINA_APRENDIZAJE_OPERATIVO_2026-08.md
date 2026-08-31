@@ -69,7 +69,7 @@ gh search issues "RONDA_HALLAZGOS" --repo canelamoraguezandyjesus-bot/sirius --m
 gh search issues "OBSERVACIONES_ESTRUCTURADAS" --repo canelamoraguezandyjesus-bot/sirius --match comments --limit 200 --json number,title,state,url
 # para cada número candidato N:
 gh api "repos/canelamoraguezandyjesus-bot/sirius/issues/$N/comments" --paginate \
-  --jq '.[] | select(.author_association=="OWNER" or ((.user.login // "") | ltrimstr("app/"))=="github-actions") | .body'
+  --jq '.[] | select(.author_association=="OWNER" or (.user.login // "")=="github-actions[bot]") | .body'
 # y sobre el texto concatenado en orden cronológico:
 uv run python3 -c "
 from sirius_engine.round_history import parse_round_records
@@ -77,6 +77,24 @@ import sys
 print(parse_round_records(sys.stdin.read()))
 "
 ```
+
+Nota de corrección: la receta anterior usaba `((.user.login // "") | ltrimstr("app/"))=="github-actions"`,
+un filtro pensado para el campo `author.login` de la API de GraphQL (donde
+las apps se prefijan con `app/`), aplicado por error sobre la API REST — ahí
+el login del bot ya viene como `github-actions[bot]`, sin prefijo, tal como
+usan `scripts/automation/sirius_issue.sh:87` y
+`tests/automation/test_sirius_issue.py:895-906`. El filtro original nunca
+igualaba y descartaba en silencio cualquier comentario de `github-actions[bot]`.
+Verificado sobre las 12 incidencias de la muestra de §3 (y una comprobación
+adicional en las incidencias #148, #177, #193, #268): todo bloque
+`RONDA_HALLAZGOS`/`OBSERVACIONES_ESTRUCTURADAS`/`CORRECCION_APLICADA` lo
+publica el propio propietario (`author_association=="OWNER"`, usuario
+`canelamoraguezandyjesus-bot`); los comentarios de `github-actions[bot]`
+encontrados son notificaciones de estado del flujo (activación, inicio,
+parada segura), no datos de ronda. La cláusula `OWNER` del filtro ya
+capturaba, sola, todo el contenido que alimenta las cifras de este informe,
+así que el error no afecta ninguna métrica publicada aquí; se corrige la
+receta para que sea reproducible tal cual está escrita.
 
 ### 1.1 Por fuente
 
@@ -166,30 +184,50 @@ de la ronda 1.
 
 Muestra: 12 incidencias multi-ronda — las 8 con más rondas del repositorio
 (#459, #182, #186, #435, #469, #202, #246, #415) más 4 adicionales para
-diversidad temporal (#148, #177, #193, #268), coincidiendo con el conjunto ya
-auditado independientemente por `docs/decisions/ADR-078-tres-rondas-consecutivas-sobre-el-mismo-archivo-son-la-familia-repetida-medido-antes-de-fijarlo.md:98-99`
-(comprobación cruzada: la lista de incidencias con más de una ronda que
-produce este informe coincide con la de ADR-078). Total: **89 hallazgos de
-ronda N>1** a clasificar.
+diversidad temporal (#148, #177, #193, #268). De estas 12, **8 coinciden**
+con las 14 incidencias multi-ronda que enumera
+`docs/decisions/ADR-078-tres-rondas-consecutivas-sobre-el-mismo-archivo-son-la-familia-repetida-medido-antes-de-fijarlo.md:98-99`
+(#148, #177, #182, #186, #193, #202, #246, #268); las otras 4 de esta muestra
+(#459, #435, #469, #415) son incidencias posteriores a la medición de
+ADR-078 (agosto) y no aparecen en su lista, mientras que 6 incidencias de
+ADR-078 (#206, #211, #232, #240, #247, #265) no entraron en esta muestra.
+Es un solapamiento parcial, no una comprobación cruzada de que ambas
+mediciones coincidan de forma independiente: ADR-078 no valida esta muestra
+de 12, solo confirma que 8 de sus incidencias ya eran conocidas como
+multi-ronda en agosto. Total: **89 hallazgos de ronda N>1** a clasificar.
 
 Clasificación en dos niveles:
 
-- **Mecánico (22 de 89 hallazgos, el 24.7%):** cuando el hallazgo cita un
-  número de línea (o rango), se compara el head de la ronda 1 con el head de
-  la ronda N vía `gh api repos/.../compare/{head1}...{headN}`, restringido al
-  fichero citado. Si el fichero no aparece en el diff → `GOTEO_REAL`
-  (evidencia binaria: el fichero no cambió, punto). Si aparece y la línea
-  citada cae dentro de un `hunk` modificado → `LEGITIMO`. Si aparece pero la
-  línea citada queda fuera de todo `hunk` → `GOTEO_REAL` (esa línea en
-  concreto no cambió, aunque el fichero sí en otro punto). Este nivel no
-  tiene ambigüedad: es lectura directa del diff real, no juicio.
-- **Manual (67 de 89, el 75.3%):** cuando el hallazgo no cita línea (la
-  mayoría — reviewers describen el documento o función, no el número), se
-  comparó a mano el texto completo de `problema` contra el `patch` real
-  ronda1→rondaN del fichero citado, con la regla explícita de clasificar
-  `GOTEO_REAL` por defecto ante la duda razonable, y `INDETERMINADO` solo
-  cuando el patch se cortó (límite de 6000 caracteres por fichero) antes de
-  alcanzar el contenido relevante.
+- **Mecánico (17 de 89 hallazgos, el 19.1%):** cuando el hallazgo cita un
+  número de línea (o rango) **sobre una ruta real del repositorio**, se
+  compara el head de la ronda 1 con el head de la ronda N vía
+  `gh api repos/.../compare/{head1}...{headN}`, restringido al fichero
+  citado. Si el fichero no aparece en el diff → `GOTEO_REAL` (evidencia
+  binaria: el fichero no cambió, punto). Si aparece y la línea citada cae
+  dentro de un `hunk` modificado **y esa línea concreta es una adición o
+  modificación real (no una línea de contexto sin tocar)** → `LEGITIMO`. Si
+  aparece pero la línea citada queda fuera de todo `hunk`, o es una línea de
+  contexto sin cambios dentro de un `hunk` cuyo contenido relacionado no fue
+  tocado por esa misma corrección → `GOTEO_REAL`. Estar dentro del rango de
+  un `hunk` no basta por sí solo: un diff unificado incluye líneas de
+  contexto intactas, así que cada veredicto mecánico exige además leer el
+  contenido de la línea exacta (revisión que corrigió cuatro filas mal
+  clasificadas y dos filas con método mal etiquetado en la ronda 2 de esta
+  incidencia, ver historial de correcciones). Cuando el `archivo` citado por
+  un hallazgo no es una ruta del repositorio (p. ej. el cuerpo de una Pull
+  Request, un mensaje de commit, un título de ADR), el nivel mecánico no es
+  aplicable — `gh api compare` nunca podrá contener ese contenido — y el
+  hallazgo se reclasifica al nivel manual.
+- **Manual (72 de 89, el 80.9%):** cuando el hallazgo no cita línea sobre una
+  ruta real del repositorio (la mayoría — reviewers describen el documento o
+  función, no el número, o citan contenido que no es un fichero del árbol),
+  se comparó a mano el texto completo de `problema` contra el `patch` real
+  ronda1→rondaN del fichero citado (o, si el `archivo` no es una ruta del
+  repositorio, contra los comentarios de la incidencia que documentan cuándo
+  cambió ese contenido), con la regla explícita de clasificar `GOTEO_REAL`
+  por defecto ante la duda razonable, y `INDETERMINADO` solo cuando el patch
+  se cortó (límite de 6000 caracteres por fichero) antes de alcanzar el
+  contenido relevante.
 
 Comandos reproducibles:
 
@@ -203,15 +241,20 @@ gh api "repos/canelamoraguezandyjesus-bot/sirius/compare/{head_ronda_1}...{head_
 | Fuente | LEGITIMO | GOTEO_REAL | INDETERMINADO | Total | Tasa de goteo (sobre clasificables) |
 |---|---|---|---|---|---|
 | CODEX | 45 | 1 | 7 | 53 | **2.2%** (1/46) |
-| CLAUDE | 21 | 15 | 0 | 36 | **41.7%** (15/36) |
-| **Total** | 66 | 16 | 7 | 89 | 19.5% (16/82) |
+| CLAUDE | 25 | 11 | 0 | 36 | **30.6%** (11/36) |
+| **Total** | 70 | 12 | 7 | 89 | 14.6% (12/82) |
 
-Los 15 goteos de CLAUDE se reparten en 8 incidencias distintas de las 12
-muestreadas (#182, #186, #202, #246, #415, #435, #459, #469), no en una
-sola — no es un artefacto de un caso aislado. De los 16 goteos reales
-totales, 14 (87.5%) los detectó el nivel mecánico sin necesitar lectura
-alguna: el propio mecanismo de §3.1 usado en vivo es exactamente el guardián
-propuesto en §7.2.
+Los 11 goteos de CLAUDE se reparten en 7 incidencias distintas de las 12
+muestreadas (#182, #186, #202, #246, #415, #435, #459), no en una sola — no
+es un artefacto de un caso aislado (la incidencia #469, que en una versión
+anterior de esta tabla aparecía con 3 goteos, quedó reclasificada: sus tres
+hallazgos citaban el cuerpo de la Pull Request #470, no un fichero del
+repositorio, y correspondían a correcciones reales de rondas 2 a 5 — ver
+§3.1 y la fila de #469 en §3.3). De los 12 goteos reales totales, 10 (83.3%)
+los detectó el nivel mecánico sin necesitar lectura del contenido más allá
+de comprobar que la línea citada cae fuera de todo `hunk` modificado: el
+propio mecanismo de §3.1 usado en vivo es exactamente el guardián propuesto
+en §7.1.
 
 ### 3.3 Lista clasificada completa (89 hallazgos)
 
@@ -232,7 +275,7 @@ propuesto en §7.2.
 | #182 | 5 | CLAUDE-REVIEWER182-001 | CLAUDE | LEGITIMO | manual (revisión de diff + texto) | La cifra de pruebas (18→22) y la matriz de RESULTADOS.md cambian en este mismo diff; se critica que otra cifra no siguió el mismo ritmo. |
 | #182 | 5 | CODEX-001 | CODEX | LEGITIMO | manual (revisión de diff + texto) | La reescritura de RESULTADOS.md (matriz, sección 'Cobertura de Run') es nueva; se señala un vacío dentro de ese contenido nuevo. |
 | #182 | 6 | CODEX-001 | CODEX | LEGITIMO | manual (revisión de diff + texto) | Todo el mecanismo recover_invalid_tail/InternalCorruptionError es nuevo desde ronda 1; se señala un caso de escritura corta no cubierto por esa lógica nueva. |
-| #182 | 7 | CLAUDE-REVIEW-001 | CLAUDE | GOTEO_REAL | mecánico (diff ronda1 vs rondaN) | fichero sin cambios entre ronda 1 y esta ronda |
+| #182 | 7 | CLAUDE-REVIEW-001 | CLAUDE | LEGITIMO | mecánico (diff ronda1 vs rondaN) | RESULTADOS.md y ADR-026 SÍ cambiaron entre ronda 1 y esta ronda; el hunk `@@ -185,7 +207,7 @@` de ADR-026 modifica exactamente la línea con la cifra de pytest ('2229'→'2242 passed') que el hallazgo cita como desactualizada ('debería decir 2243') — línea citada dentro de un hunk modificado, por regla propia de §3.1 |
 | #186 | 2 | CODEX-001 | CODEX | LEGITIMO | manual (revisión de diff + texto) | _fsync_directory es código enteramente nuevo; el hallazgo es consecuencia directa de introducirlo sin manejar su fallo posterior. |
 | #186 | 2 | CODEX-002 | CODEX | LEGITIMO | manual (revisión de diff + texto) | El bloque 'created = not journal_path.exists() ... _fsync_directory(...)' es nuevo en este diff. |
 | #186 | 3 | CODEX-001 | CODEX | LEGITIMO | manual (revisión de diff + texto) | El patrón try/except DirectorySyncError con _absorb es nuevo (introducido para corregir el hallazgo de la ronda 2). |
@@ -284,10 +327,10 @@ propuesto en §7.2.
 | #435 | 7 | CODEX-003 | CODEX | INDETERMINADO | manual (revisión de diff + texto) | El contenido sobre M10/timeout de Ollama no aparece en el diff truncado a 6000 caracteres. |
 | #435 | 7 | CODEX-004 | CODEX | INDETERMINADO | manual (revisión de diff + texto) | El contenido sobre el 40% de ADR-008 y M8 no aparece en el diff truncado a 6000 caracteres. |
 | #459 | 2 | CODEX-001 | CODEX | LEGITIMO | manual (revisión de diff + texto) | El propio hallazgo indica que la clasificación desglosada de projection/ es introducida por este commit, y el diff añade PENDIENTE DE CONFIRMAR como estado nuevo. |
-| #459 | 3 | CLAUDE-REVISOR-001 | CLAUDE | LEGITIMO | mecánico (diff ronda1 vs rondaN) | línea citada dentro de un hunk modificado |
-| #459 | 3 | CLAUDE-REVISOR-002 | CLAUDE | LEGITIMO | mecánico (diff ronda1 vs rondaN) | línea citada dentro de un hunk modificado |
+| #459 | 3 | CLAUDE-REVISOR-001 | CLAUDE | LEGITIMO | manual (la línea 87 citada es una línea de contexto sin tocar, no una adición; el mecanismo de mera pertenencia al hunk no basta) | La fila `neutrality.py` (línea 87) en sí no cambió, pero esta misma ronda reclasificó a `PENDIENTE DE CONFIRMAR` la fila hermana `derived.py` dentro del mismo hunk, dejando visible por primera vez la inconsistencia de no aplicar el mismo criterio a `neutrality.py` — inconsistencia que la propia corrección de esta ronda introdujo |
+| #459 | 3 | CLAUDE-REVISOR-002 | CLAUDE | LEGITIMO | mecánico (diff ronda1 vs rondaN) | línea citada (115) es la propia línea añadida que cambia la cita a `test_pa_0_2_rec_01_banco_evidencia.py:227` |
 | #459 | 4 | CLAUDE-REVISOR-003 | CLAUDE | GOTEO_REAL | mecánico (diff ronda1 vs rondaN) | línea citada fuera de todo hunk modificado (fichero cambió en otro punto) |
-| #459 | 4 | CLAUDE-REVISOR-004 | CLAUDE | LEGITIMO | mecánico (diff ronda1 vs rondaN) | línea citada dentro de un hunk modificado |
+| #459 | 4 | CLAUDE-REVISOR-004 | CLAUDE | LEGITIMO | manual (la línea 136 citada es una línea de contexto sin tocar, no una adición; el mecanismo de mera pertenencia al hunk no basta) | La fila `lateral/` (línea 136) en sí no cambió, pero esta misma ronda reclasificó a `PENDIENTE DE CONFIRMAR` las filas hermanas `projection/contracts.py` y `cards/`/`rederivation/`/etc. dentro del mismo hunk, dejando visible por primera vez la inconsistencia de no aplicar el mismo criterio a `lateral/` — inconsistencia que la propia corrección de esta ronda introdujo |
 | #459 | 4 | CODEX-001 | CODEX | INDETERMINADO | manual (revisión de diff + texto) | El contenido sobre el arnés round/execute_round.py etc. no aparece dentro del diff truncado a 6000 caracteres. |
 | #459 | 5 | CLAUDE-REVISOR-001 | CLAUDE | LEGITIMO | mecánico (diff ronda1 vs rondaN) | línea citada dentro de un hunk modificado |
 | #459 | 5 | CODEX-001 | CODEX | INDETERMINADO | manual (revisión de diff + texto) | El diff se corta justo antes de alcanzar el resumen con comodines v0.6 que el hallazgo critica. |
@@ -298,11 +341,11 @@ propuesto en §7.2.
 | #459 | 9 | CODEX-001 | CODEX | INDETERMINADO | manual (revisión de diff + texto) | Los términos 'solapamiento', 'comparten_estructura' y 'grouping.py' no aparecen en el diff truncado a 6000 caracteres. |
 | #459 | 9 | CODEX-002 | CODEX | LEGITIMO | manual (revisión de diff + texto) | El texto nuevo sobre 'Estado... PROPUESTO' y la nota de cita desactualizada de ADR-110 es visible y nuevo en este diff. |
 | #469 | 2 | CODEX-001 | CODEX | LEGITIMO | manual (revisión de diff + texto) | El párrafo nuevo que suma los 16 casos de ausencia a los 21 para dar 50 es contenido añadido en este diff. |
-| #469 | 3 | CLAUDE-REVISOR-469-001 | CLAUDE | GOTEO_REAL | mecánico (diff ronda1 vs rondaN) | fichero sin cambios entre ronda 1 y esta ronda |
+| #469 | 3 | CLAUDE-REVISOR-469-001 | CLAUDE | LEGITIMO | manual (el 'archivo' citado es el cuerpo de la PR #470, no una ruta del repositorio: el nivel mecánico no es aplicable) | El hallazgo señala que el cuerpo de la PR #470 no se actualizó tras la corrección de la ronda 3 (commit ae435a9, que resolvió CODEX-001), que sí cambió la conclusión real del ADR-115 fusionado — discrepancia introducida por una corrección posterior a la ronda 1 |
 | #469 | 3 | CODEX-001 | CODEX | LEGITIMO | manual (revisión de diff + texto) | La reescritura del docstring/test sobre la población de 31 vs 47 casos es nueva en este diff. |
 | #469 | 4 | CLAUDE-REVISOR-469-001 | CLAUDE | LEGITIMO | manual (revisión de diff + texto) | El diff de esta ronda muestra el reverso criticado: renombrado del test y vuelta a 'el suelo D1 sigue sin alcanzarse'. |
-| #469 | 5 | CLAUDE-REVISOR-469-001 | CLAUDE | GOTEO_REAL | mecánico (diff ronda1 vs rondaN) | fichero sin cambios entre ronda 1 y esta ronda |
-| #469 | 5 | CLAUDE-REVISOR-469-002 | CLAUDE | GOTEO_REAL | mecánico (diff ronda1 vs rondaN) | fichero sin cambios entre ronda 1 y esta ronda |
+| #469 | 5 | CLAUDE-REVISOR-469-001 | CLAUDE | LEGITIMO | manual (el 'archivo' citado es el cuerpo de la PR #470, no una ruta del repositorio: el nivel mecánico no es aplicable) | El hallazgo señala que el cuerpo de la PR #470 sigue citando el commit `a4c910a9...` que la propia ronda 1 demostró que no contiene el fichero, pese a que la corrección de ronda 2 (commit aeb42b2) ya lo sustituyó por el commit correcto en el diff fusionado — discrepancia introducida por una corrección posterior a la ronda 1 |
+| #469 | 5 | CLAUDE-REVISOR-469-002 | CLAUDE | LEGITIMO | manual (el 'archivo' citado es el cuerpo de la PR #470, no una ruta del repositorio: el nivel mecánico no es aplicable) | El hallazgo señala que el cuerpo de la PR #470 sigue afirmando que 'elementos_de_mas' no alcanza D1, posición del head de ronda 4 que la propia corrección de ronda 5 (head 477c091) revirtió explícitamente por decisión del propietario del 2026-08-31T02:56:16Z — discrepancia introducida por una corrección posterior a la ronda 1 |
 | #469 | 5 | CODEX-001 | CODEX | LEGITIMO | manual (revisión de diff + texto) | La nueva conclusión ('las cuatro quedan afirmadas') añadida en este diff contradice la sección de Opciones consideradas, no tocada. |
 | #469 | 6 | CODEX-001 | CODEX | LEGITIMO | manual (revisión de diff + texto) | El propio hallazgo declara que este commit introduce la justificación de la opción 5 que se critica. |
 | #469 | 7 | CLAUDE-REVISOR-469-002 | CLAUDE | LEGITIMO | manual (revisión de diff + texto) | El cambio de título (H1) que desincroniza con el nombre de archivo es una edición visible del diff de esta ronda (y rondas previas). |
@@ -392,7 +435,7 @@ guardián en ejecución.
 | Familia | Guardián candidato | Aciertos reales estimados | Falsos positivos estimados | Evidencia |
 |---|---|---|---|---|
 | F4 (rondas repetidas) | Conectar `round_family_detector` (ya construido) al flujo de revisión | 4 de 14 incidencias candidatas | 0 | Medición ya publicada y verificada a mano en ADR-078 — no es una estimación, es un resultado. |
-| §3 (goteo) | Marcar como posible goteo un hallazgo de ronda N>1 cuyo fichero/línea citados no cambiaron desde el head de la ronda 1 (exactamente el mecanismo de §3.1) | 14 de 16 goteos reales confirmados en la muestra de este informe (87.5%) | 0 sobre el subconjunto mecánico — es lectura directa de un diff real, no hay ambigüedad posible | §3.2 de este mismo informe. |
+| §3 (goteo) | Marcar como posible goteo un hallazgo de ronda N>1 cuyo fichero/línea citados no cambiaron desde el head de la ronda 1 (exactamente el mecanismo de §3.1) | 10 de 12 goteos reales confirmados en la muestra de este informe (83.3%) | 0 sobre el subconjunto mecánico corregido y reverificado línea a línea — ver §3.1 | §3.2 de este mismo informe. |
 | F1 (fuera de alcance) | Ningún fichero tocado por la PR aparece citado textualmente en la sección "Fuera de alcance" de la incidencia | 1 de 7 hallazgos de la familia (#193, que nombra `scripts/automation/**` en prosa) | Bajo si se exige coincidencia literal de ruta, pero la cobertura es baja: la mayoría de las secciones de alcance de este repositorio son prosa sin rutas literales (incluida la de esta misma incidencia #493), así que el guardián callaría casi siempre sin poder afirmar nada. | Lectura directa de los cuerpos de incidencia citados en F1. |
 | F2/F5 (citas y cifras) | Ampliar el guardián de citas ya existente (`tests/automation/test_citas_de_los_adr.py`, hoy limitado a `docs/decisions/ADR-*.md` y solo a existencia de ruta — no de línea, `tests/automation/test_citas_de_los_adr.py:296-320`) a todo `docs/**.md` | 0 aciertos directos sobre los ejemplos de F2/F5 de este informe (ninguno es una ruta inexistente; todos son desplazamiento de línea o contradicción semántica, que un guardián de mera existencia no distingue) | Bajo: mismo mecanismo ya en producción sobre ADR, que midió 0 falsos y evitó 18 abstenciones deliberadas (ADR-052) | El guardián actual seguiría sin cazar los casos reales encontrados; es una mejora de higiene general, no una respuesta directa a F2/F5. |
 | F3 (sin lector) | Analizador estático de referencias (tipo `vulture`) sobre `src/` | Potencialmente alto — la familia ya mordió 7 veces documentadas | Alto sin medir: la arquitectura de puertos/adaptadores invoca implementaciones por inyección de dependencias, no por llamada directa por nombre, así que un analizador ingenuo marcaría adaptadores legítimos como "sin uso". No cumple el criterio de la incidencia #267 sin antes medirse contra el árbol real. | `AGENTS.md:17-20`, `docs/audits/registro_defectos.yml:312-334` (H-24). |
@@ -439,23 +482,23 @@ descendente. **Ninguna se implementa en esta incidencia**: son candidatas
 para encargos aparte, sujetas a la aprobación del propietario, tal como
 exige el objetivo de la incidencia #493.
 
-1. **Conectar `round_family_detector` (ya construido en ADR-078) al flujo de
+1. **Guardián de goteo en vivo:** cuando una ronda N>1 reporta un hallazgo
+   cuyo fichero y línea citados no cambiaron desde el head de la ronda 1 de
+   la misma incidencia (mismo mecanismo de §3.1: `gh api .../compare/{head1}...{headN}`
+   restringido al fichero), marcarlo explícitamente como «posible goteo,
+   ¿por qué no se vio en la ronda 1?» antes de aceptarlo como bloqueante.
+   Sobre la muestra de este informe habría señalado 10 de los 12 goteos
+   reales confirmados, sin ningún falso positivo en el subconjunto mecánico
+   ya reverificado línea a línea (§3.1). Aplicaría sobre todo al revisor
+   CLAUDE, cuya tasa de goteo medida (30.6%) es aproximadamente 14 veces la
+   de CODEX (2.2%).
+2. **Conectar `round_family_detector` (ya construido en ADR-078) al flujo de
    revisión real.** Ya mide 4 aciertos y 0 falsos sobre 14 incidencias
    candidatas, con verificación manual publicada. No hace falta diseñar ni
    medir nada nuevo: hace falta cablear un CLI ya existente
    (`sirius-familia-repetida`) a `.github/workflows/repair-sirius-work.yml`
    o equivalente, que ADR-078 dejó fuera a propósito por ser trabajo de
    `.github/**` (ADR-002).
-2. **Guardián de goteo en vivo:** cuando una ronda N>1 reporta un hallazgo
-   cuyo fichero y línea citados no cambiaron desde el head de la ronda 1 de
-   la misma incidencia (mismo mecanismo de §3.1: `gh api .../compare/{head1}...{headN}`
-   restringido al fichero), marcarlo explícitamente como «posible goteo,
-   ¿por qué no se vio en la ronda 1?» antes de aceptarlo como bloqueante.
-   Sobre la muestra de este informe habría señalado 14 de los 16 goteos
-   reales confirmados, sin ningún falso positivo posible en el subconjunto
-   mecánico (es lectura directa de un diff, no heurística). Aplicaría sobre
-   todo al revisor CLAUDE, cuya tasa de goteo medida (41.7%) es 19 veces la
-   de CODEX (2.2%).
 3. **Ampliar el guardián de citas de fichero** (`tests/automation/test_citas_de_los_adr.py`)
    de `docs/decisions/ADR-*.md` a todo `docs/**.md`, con la misma regla
    conservadora ya probada (solo existencia de ruta, sin razonar sobre
