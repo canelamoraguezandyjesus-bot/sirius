@@ -5,6 +5,7 @@ D-11). No fakes, no SQLite — only ``Memory``/``Decision`` value objects and
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -14,11 +15,14 @@ from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
 from sirius.domain.relevance import (
     KnowledgeKind,
     RankedKnowledge,
+    candidate_currently_valid,
     candidate_in_declared_scope,
     category_index_matches_query,
     category_matches_query,
     rank_relevant_knowledge,
+    rescue_max_criticality_candidates,
     subject_matches_query,
+    truncate_to_hard_limit,
 )
 
 _NOW = datetime(2026, 7, 21, tzinfo=UTC)
@@ -428,3 +432,144 @@ def test_a_category_match_alone_is_not_enough_when_the_gate_is_closed() -> None:
     candidate = _ranked_memory(_memory(1), fts_match=False, category_match=False)
 
     assert rank_relevant_knowledge([candidate]) == ()
+
+
+# --- M15 (§11.2/§11.5, incidencia #490): candidate_currently_valid, the ---
+# --- temporal-applicability half of G8, replica of vigente_en_tiempo_ ---
+# --- objetivo (ADR-115). ---
+
+_TARGET_TIME = _NOW
+
+
+def test_candidate_currently_valid_with_no_axes_declared_at_all() -> None:
+    # SIN_EJES: every real Memory/Decision today (no valid_from/valid_to
+    # persisted yet) always passes this — the gate runs, faithfully, but
+    # degrades to always True until a schema migration adds the axis.
+    assert candidate_currently_valid(None, None, target_time=_TARGET_TIME)
+
+
+def test_candidate_currently_valid_rejects_a_valid_from_after_the_target_time() -> None:
+    assert not candidate_currently_valid(
+        _TARGET_TIME + timedelta(days=1), None, target_time=_TARGET_TIME
+    )
+
+
+def test_candidate_currently_valid_admits_a_valid_from_at_or_before_the_target_time() -> None:
+    assert candidate_currently_valid(_TARGET_TIME, None, target_time=_TARGET_TIME)
+    assert candidate_currently_valid(
+        _TARGET_TIME - timedelta(days=1), None, target_time=_TARGET_TIME
+    )
+
+
+def test_candidate_currently_valid_rejects_a_valid_to_at_or_before_the_target_time() -> None:
+    assert not candidate_currently_valid(None, _TARGET_TIME, target_time=_TARGET_TIME)
+    assert not candidate_currently_valid(
+        None, _TARGET_TIME - timedelta(days=1), target_time=_TARGET_TIME
+    )
+
+
+def test_candidate_currently_valid_admits_a_valid_to_after_the_target_time() -> None:
+    assert candidate_currently_valid(
+        None, _TARGET_TIME + timedelta(days=1), target_time=_TARGET_TIME
+    )
+
+
+# --- M15 (§11.2/§11.5, incidencia #490): truncate_to_hard_limit, the hard- ---
+# --- limit half of G12, replica of truncar_por_limite_duro (ADR-115). ---
+
+
+def test_truncate_to_hard_limit_keeps_everything_under_the_limit() -> None:
+    ordinary = _ranked_memory(_memory(1))
+    critical = _ranked_memory(dataclasses.replace(_memory(2), category="salud"))
+
+    result = truncate_to_hard_limit(
+        [ordinary, critical], hard_limit=5, max_criticality_category="salud"
+    )
+
+    assert result == (ordinary, critical)
+
+
+def test_truncate_to_hard_limit_keeps_the_max_criticality_candidate_over_an_ordinary_one() -> None:
+    ordinary = _ranked_memory(_memory(1))
+    critical = _ranked_memory(dataclasses.replace(_memory(2), category="salud"))
+
+    result = truncate_to_hard_limit(
+        [ordinary, critical], hard_limit=1, max_criticality_category="salud"
+    )
+
+    assert result == (critical,)
+
+
+def test_truncate_to_hard_limit_preserves_original_relative_order_of_survivors() -> None:
+    # G12 decides WHO survives (criticidad-first); it never reorders the
+    # result into that criticidad-first order — same "who, not how it's
+    # displayed" contract the candado/filter union already relies on.
+    first_ordinary = _ranked_memory(_memory(1))
+    critical = _ranked_memory(dataclasses.replace(_memory(2), category="salud"))
+    second_ordinary = _ranked_memory(_memory(3))
+
+    result = truncate_to_hard_limit(
+        [first_ordinary, critical, second_ordinary],
+        hard_limit=3,
+        max_criticality_category="salud",
+    )
+
+    assert result == (first_ordinary, critical, second_ordinary)
+
+
+def test_truncate_to_hard_limit_without_a_max_criticality_category() -> None:
+    first = _ranked_memory(dataclasses.replace(_memory(1), category="salud"))
+    second = _ranked_memory(_memory(2))
+
+    result = truncate_to_hard_limit([first, second], hard_limit=1, max_criticality_category=None)
+
+    assert result == (first,)
+
+
+# --- M15 (RF-25/RF-26, §11.2/§11.5, incidencia #490): rescue_max_criticality ---
+# --- _candidates, replica of aplicar_regla_de_criticas_original (ADR-112/113). ---
+
+
+def test_rf25_rescues_a_discarded_max_criticality_candidate_when_the_filter_kept_something() -> (
+    None
+):
+    kept = _ranked_memory(_memory(1))
+    discarded_critical = _ranked_memory(dataclasses.replace(_memory(2), category="salud"))
+
+    rescued = rescue_max_criticality_candidates(
+        [kept, discarded_critical], [kept], max_criticality_category="salud"
+    )
+
+    assert rescued == (discarded_critical,)
+
+
+def test_rf26_does_not_rescue_when_the_filter_conserved_nothing_at_all() -> None:
+    discarded_critical = _ranked_memory(dataclasses.replace(_memory(1), category="salud"))
+
+    rescued = rescue_max_criticality_candidates(
+        [discarded_critical], [], max_criticality_category="salud"
+    )
+
+    assert rescued == ()
+
+
+def test_rescue_never_rescues_a_non_critical_candidate() -> None:
+    kept = _ranked_memory(_memory(1))
+    discarded_non_critical = _ranked_memory(dataclasses.replace(_memory(2), category="otros"))
+
+    rescued = rescue_max_criticality_candidates(
+        [kept, discarded_non_critical], [kept], max_criticality_category="salud"
+    )
+
+    assert rescued == ()
+
+
+def test_rescue_never_rescues_anything_without_a_max_criticality_category() -> None:
+    kept = _ranked_memory(_memory(1))
+    discarded_critical = _ranked_memory(dataclasses.replace(_memory(2), category="salud"))
+
+    rescued = rescue_max_criticality_candidates(
+        [kept, discarded_critical], [kept], max_criticality_category=None
+    )
+
+    assert rescued == ()

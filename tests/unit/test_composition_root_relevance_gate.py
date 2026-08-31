@@ -103,6 +103,9 @@ def test_gate_closed_by_default_builds_exactly_todays_construction(
     context_kwargs = _RecordingContextBuilder.captured[0]
     assert context_kwargs["relevance_filter_port"] is None
     assert context_kwargs["max_criticality_category"] is None
+    # M15 (§11.2/§11.5, incidencia #490): the same gate now also threads
+    # into ContextBuilder's own RF-25/RF-26 switch.
+    assert context_kwargs["category_matching_enabled"] is False
 
 
 def test_gate_closed_explicitly_in_settings_builds_the_same_way(
@@ -140,6 +143,7 @@ def test_gate_stays_closed_on_a_truthy_but_non_boolean_value(
     assert _RecordingRankUseCase.captured[0]["category_vocabulary"] == frozenset()
     assert _RecordingContextBuilder.captured[0]["relevance_filter_port"] is None
     assert _RecordingContextBuilder.captured[0]["max_criticality_category"] is None
+    assert _RecordingContextBuilder.captured[0]["category_matching_enabled"] is False
 
 
 def test_gate_open_wires_the_real_vocabulary_and_the_ollama_relevance_filter(
@@ -166,6 +170,7 @@ def test_gate_open_wires_the_real_vocabulary_and_the_ollama_relevance_filter(
     context_kwargs = _RecordingContextBuilder.captured[0]
     assert isinstance(context_kwargs["relevance_filter_port"], _RecordingRelevanceFilterAdapter)
     assert context_kwargs["max_criticality_category"] == _MAX_CRITICALITY_CATEGORY
+    assert context_kwargs["category_matching_enabled"] is True
 
 
 def test_gate_wiring_never_breaks_the_relevance_filter_port_contract(tmp_path: Path) -> None:

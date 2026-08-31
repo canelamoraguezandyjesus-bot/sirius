@@ -18,11 +18,22 @@ filter (``find_prevailing_decision``). ``current_user_message`` is the B6b
 relevance query text; the budget's ``protected_tokens`` covers exactly the
 sections that are never trimmed here — identity/rules, the active project (if
 any), and the current user message itself.
+
+M15 (SIRIUS-ARQ-0.2 §11.2/§11.5, incidencia #490) explicitly does not port
+``siembra_de_contexto`` here: the architecture's own precondition
+(``docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:1744-1759``)
+requires the owner to first resolve, by one of two mutually exclusive
+routes, ``docs/evolution/SIRIUS_PLAN_PRUEBAS_0.2_v0.1_PROPUESTO.md:124-131``'s
+open precondition on PA-0.2-REC-01 — expanding the 47-case bank with
+independent cases that exercise the seeding, or removing it from the code —
+before any encargo may port it into production. This class stays exactly as
+before this incidence in that respect: no seeding of any kind happens here.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from sirius.application.context_budget import (
     DEFAULT_MAX_KNOWLEDGE_ITEMS,
@@ -37,7 +48,13 @@ from sirius.domain.identity import Identity
 from sirius.domain.memory import Memory
 from sirius.domain.precedence import find_prevailing_decision
 from sirius.domain.project import Project, blockers_to_text, is_configured
-from sirius.domain.relevance import KnowledgeKind, RankedKnowledge
+from sirius.domain.relevance import (
+    KnowledgeKind,
+    RankedKnowledge,
+    candidate_currently_valid,
+    rescue_max_criticality_candidates,
+    truncate_to_hard_limit,
+)
 from sirius.ports.conversation_repository import ConversationRepository
 from sirius.ports.decision_repository import DecisionRepository
 from sirius.ports.event_repository import EventRepository
@@ -48,6 +65,16 @@ from sirius.ports.relevance_filter import RelevanceFilterPort
 from sirius.ports.token_counter import TokenCounter
 
 _DEFAULT_RECENT_MESSAGES_LIMIT = 20
+
+#: M15 (SIRIUS-ARQ-0.2 §11.2/§11.5, incidencia #490): G12's hard limit,
+#: applied over the combined motor+categoría set before RF-25/RF-26. §11.3
+#: fixes product policy for this whole ola: "el límite se mantiene sin
+#: atar... ningún encargo de esta ola introduce un límite duro por consulta
+#: real" — same convention and same value as
+#: ``rank_relevant_knowledge._LIMITE_SIN_ATAR``, so G12 stays a faithfully
+#: wired, currently inert gate rather than a new per-turn limit this
+#: incidence does not have authority to design.
+_HARD_LIMIT_SIN_ATAR = 100_000
 
 
 class ContextAssemblyError(RuntimeError):
@@ -130,6 +157,7 @@ class ContextBuilder:
         max_knowledge_items: int = DEFAULT_MAX_KNOWLEDGE_ITEMS,
         relevance_filter_port: RelevanceFilterPort | None = None,
         max_criticality_category: str | None = None,
+        category_matching_enabled: bool = False,
     ) -> None:
         self._identity_repository = identity_repository
         self._project_repository = project_repository
@@ -150,6 +178,13 @@ class ContextBuilder:
         # constructor's.
         self._relevance_filter_port = relevance_filter_port
         self._max_criticality_category = max_criticality_category
+        # M15 (§11.2/§11.5, incidencia #490): defaults to False so every
+        # existing caller that never passes it — including the M10 tests
+        # that construct a ContextBuilder directly with a port and a
+        # max_criticality_category — keeps exercising the exact candado-
+        # union of before this incidence. Only composition_root, wiring the
+        # real category_matching_enabled setting, ever passes True.
+        self._category_matching_enabled = category_matching_enabled
 
     def build(self, current_user_message: str) -> Context:
         """Assemble a Context; deterministic for the same underlying data.
@@ -239,23 +274,69 @@ class ContextBuilder:
     def _apply_relevance_filter(
         self, current_user_message: str, candidates: tuple[RankedKnowledge, ...]
     ) -> tuple[RankedKnowledge, ...]:
-        """The candado (§6.3): a single call to ``RelevanceFilterPort``,
-        never a second one, recombined as the union of three sets — what the
-        filter kept, every candidate of the vocabulary's max-criticality
-        category, and every candidate with no category yet — preserving the
-        order §6.2 already fixed on ``candidates``. A candidate the filter
-        would have discarded still survives here if either of the other two
-        sets protects it; the filter alone never has the final word."""
+        """The integrity mechanism after B6b's ranking (§6.3): a single call
+        to ``RelevanceFilterPort``, never a second one.
+
+        With ``category_matching_enabled`` closed (the default every
+        existing caller keeps, see ``__init__``), this is exactly M10's
+        candado — the union of what the filter kept, every candidate of the
+        max-criticality category, and every candidate with no category yet
+        — unchanged since before this incidence.
+
+        With the gate open, M15 (§11.2/§11.5, incidencia #490) replaces the
+        max-criticality half of that union with RF-25/RF-26
+        (``rescue_max_criticality_candidates``): the filter's own verdict on
+        a max-criticality candidate is only overridden if it conserved
+        something else for this query, never when it declared total
+        absence. A candidate with no category yet stays unconditionally
+        protected either way — this ola does not change that. G8/G12
+        (``candidate_currently_valid``/``truncate_to_hard_limit``) gate the
+        combined motor+categoría set first, before either mechanism sees it
+        — same order ``_rank_via_staged_engine``'s harness twin already
+        established (ADR-115).
+
+        Either path preserves the order §6.2 already fixed on ``candidates``
+        for every survivor.
+        """
         assert self._relevance_filter_port is not None
-        filtered = self._relevance_filter_port.filter_candidates(current_user_message, candidates)
-        kept_positions = {id(candidate) for candidate in filtered}
-        kept_positions.update(
-            id(candidate)
+        if not self._category_matching_enabled:
+            filtered = self._relevance_filter_port.filter_candidates(
+                current_user_message, candidates
+            )
+            kept_positions = {id(candidate) for candidate in filtered}
+            kept_positions.update(
+                id(candidate)
+                for candidate in candidates
+                if candidate.item.category is None
+                or candidate.item.category == self._max_criticality_category
+            )
+            return tuple(candidate for candidate in candidates if id(candidate) in kept_positions)
+
+        target_time = datetime.now(UTC)
+        gated = tuple(
+            candidate
             for candidate in candidates
-            if candidate.item.category is None
-            or candidate.item.category == self._max_criticality_category
+            # SIN_EJES (see candidate_currently_valid): Memory/Decision
+            # declare no valid_from/valid_to axis yet, so this is always
+            # True today — the gate still runs, faithfully, rather than
+            # being skipped.
+            if candidate_currently_valid(None, None, target_time=target_time)
         )
-        return tuple(candidate for candidate in candidates if id(candidate) in kept_positions)
+        gated = truncate_to_hard_limit(
+            gated,
+            hard_limit=_HARD_LIMIT_SIN_ATAR,
+            max_criticality_category=self._max_criticality_category,
+        )
+        filtered = self._relevance_filter_port.filter_candidates(current_user_message, gated)
+        rescued = rescue_max_criticality_candidates(
+            gated, filtered, max_criticality_category=self._max_criticality_category
+        )
+        kept_positions = {id(candidate) for candidate in filtered}
+        kept_positions.update(id(candidate) for candidate in rescued)
+        kept_positions.update(
+            id(candidate) for candidate in gated if candidate.item.category is None
+        )
+        return tuple(candidate for candidate in gated if id(candidate) in kept_positions)
 
     @staticmethod
     def _excluded_by_precedence(

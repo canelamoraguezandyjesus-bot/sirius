@@ -480,6 +480,7 @@ def build_conversation_dependencies(
             else None
         ),
         max_criticality_category=(_MAX_CRITICALITY_CATEGORY if category_matching_enabled else None),
+        category_matching_enabled=category_matching_enabled,
     )
     send_message_use_case = SendMessageUseCase(
         context_builder=context_builder,

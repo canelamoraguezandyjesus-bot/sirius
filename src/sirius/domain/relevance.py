@@ -46,12 +46,21 @@ category amplification behind the same gate: ``category_index_matches_query``
 keeps its single-activation rule for the closed-gate state) and
 ``candidate_in_declared_scope`` (the scope restriction over that
 amplification). Neither one is used by ``rank_relevant_knowledge`` itself.
+
+M15 (SIRIUS-ARQ-0.2 §11.2/§11.5, incidencia #490) adds three more pure
+functions, wired only in ``ContextBuilder._apply_relevance_filter`` behind
+the same gate: ``candidate_currently_valid`` (G8's temporal-applicability
+half), ``truncate_to_hard_limit`` (G12's hard-limit half) and
+``rescue_max_criticality_candidates`` (RF-25/RF-26, replacing M10's
+candado-union as the integrity mechanism for max-criticality candidates).
+None of the three is used by ``rank_relevant_knowledge`` itself.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 
 from sirius.domain.decision import Decision, DecisionStatus
@@ -60,11 +69,14 @@ from sirius.domain.memory import Memory, MemoryStatus
 __all__ = [
     "KnowledgeKind",
     "RankedKnowledge",
+    "candidate_currently_valid",
     "candidate_in_declared_scope",
     "category_index_matches_query",
     "category_matches_query",
     "rank_relevant_knowledge",
+    "rescue_max_criticality_candidates",
     "subject_matches_query",
+    "truncate_to_hard_limit",
 ]
 
 
@@ -226,6 +238,105 @@ def candidate_in_declared_scope(
     if active_project_id is None:
         return True
     return candidate_project_id is None or candidate_project_id == active_project_id
+
+
+def candidate_currently_valid(
+    valid_from: datetime | None, valid_to: datetime | None, *, target_time: datetime
+) -> bool:
+    """M15 (SIRIUS-ARQ-0.2 §11.2/§11.5, incidencia #490): the temporal-
+    applicability half of ``G8`` — ``valid_from``/``valid_to`` against the
+    request's target time, without the corte-de-registro half, which no
+    real request declares either. Replica of ``_g8``
+    (``src/sirius/domain/staged_engine_gates.py:194-210``) and its harness
+    twin ``vigente_en_tiempo_objetivo``
+    (``tests/acceptance/staged_engine_category_and_relevance.py:516-541``,
+    ADR-115).
+
+    ``Memory``/``Decision`` declare no ``valid_from``/``valid_to`` axis yet
+    (SIN_EJES — ``staged_engine_gates.py``'s own module docstring already
+    documents this degradation for every gate that needs an axis Sirius
+    does not persist today): every real caller passes ``None, None`` here,
+    so this degrades to always ``True`` — the same "falla abierta, no
+    descarta" contract the gate already has for ``SIN_EJES``, not a new
+    policy invented for this incidence.
+    """
+    if valid_from is not None and valid_from > target_time:
+        return False
+    return not (valid_to is not None and valid_to <= target_time)
+
+
+def truncate_to_hard_limit(
+    candidates: Sequence[RankedKnowledge],
+    *,
+    hard_limit: int,
+    max_criticality_category: str | None,
+) -> tuple[RankedKnowledge, ...]:
+    """M15 (SIRIUS-ARQ-0.2 §11.2/§11.5, incidencia #490): the hard-limit
+    half of ``G12`` — keep only the first ``hard_limit`` candidates,
+    prioritising the max-criticality category (the only criticidad axis a
+    real ``Memory``/``Decision`` carries; D7's vocabulary has no
+    ``IMPORTANTE`` tier). Replica of ``aplicar_g12``
+    (``src/sirius/domain/staged_engine_gates.py:304-332``) and its harness
+    twin ``truncar_por_limite_duro``
+    (``tests/acceptance/staged_engine_category_and_relevance.py:544-574``,
+    ADR-115).
+
+    Returns the survivors in their ORIGINAL relative order (never the
+    criticidad-first order used only to decide who survives): who is kept
+    is this function's only concern, never how the result is displayed —
+    the same contract ``_apply_relevance_filter`` already relies on for the
+    filter/candado union.
+    """
+
+    def is_max_criticality(candidate: RankedKnowledge) -> bool:
+        return (
+            max_criticality_category is not None
+            and candidate.item.category == max_criticality_category
+        )
+
+    prioritised = sorted(candidates, key=lambda candidate: not is_max_criticality(candidate))
+    survivors = {id(candidate) for candidate in prioritised[:hard_limit]}
+    return tuple(candidate for candidate in candidates if id(candidate) in survivors)
+
+
+def rescue_max_criticality_candidates(
+    candidates: Sequence[RankedKnowledge],
+    kept_by_filter: Sequence[RankedKnowledge],
+    *,
+    max_criticality_category: str | None,
+) -> tuple[RankedKnowledge, ...]:
+    """M15 (RF-25/RF-26, SIRIUS-ARQ-0.2 §11.2/§11.5, incidencia #490): the
+    ORIGINAL critics rule the laboratory measured
+    (``experiments/adr002/modelo_local/filtro.py:filtrar``, rama
+    ``evidence/adr001-spikes``), replacing M10's candado-union as the
+    integrity mechanism for max-criticality candidates when the gate is
+    open. Replica of ``aplicar_regla_de_criticas_original``
+    (``tests/acceptance/staged_engine_category_and_relevance.py:472-513``,
+    ADR-112/113).
+
+    RF-25: if ``kept_by_filter`` conserved at least one of ``candidates``,
+    a max-criticality candidate the filter discarded is rescued back — the
+    filter can never be allowed to drop a critical identity while it did
+    conserve something else for the same query. RF-26: if the filter
+    conserved none of ``candidates`` at all, that verdict is respected
+    whole — no rescue, not even for a max-criticality candidate.
+
+    This never touches a candidate with no category yet — that one stays
+    unconditionally protected regardless of the filter's verdict, exactly
+    as before this incidence (see ``ContextBuilder._apply_relevance_filter``,
+    which unions this function's result with that unconditional set rather
+    than folding it in here).
+    """
+    if not kept_by_filter:
+        return ()
+    kept_ids = {id(candidate) for candidate in kept_by_filter}
+    return tuple(
+        candidate
+        for candidate in candidates
+        if id(candidate) not in kept_ids
+        and max_criticality_category is not None
+        and candidate.item.category == max_criticality_category
+    )
 
 
 def _synthetic_id(candidate: RankedKnowledge) -> int:
