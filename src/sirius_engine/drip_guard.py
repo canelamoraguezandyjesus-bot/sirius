@@ -34,6 +34,7 @@ red.
 
 from __future__ import annotations
 
+import functools
 import json
 import re
 import subprocess
@@ -105,34 +106,48 @@ def parse_archivo_location(archivo: object) -> tuple[str, int | None]:
     return match.group(1), int(match.group(2))
 
 
-_HUNK_HEADER_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+_HUNK_HEADER_RE = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 
 
 def _line_kind_in_patch(patch: str, line: int) -> str:
-    """``"added"``, ``"context"`` o ``"outside"`` para ``line`` (numeración del lado nuevo).
+    """``"added"``, ``"context"``, ``"removed"`` u ``"outside"`` para ``line``.
 
     Recorre el ``patch`` unificado que devuelve la API de comparación de
-    GitHub para un fichero. Las líneas eliminadas (``-``) no consumen
-    numeración del lado nuevo; las de contexto (``" "``) y las añadidas
-    (``+``) sí. Una línea con guion final (``\\ No newline at end of file``)
-    no es una línea de diff y no consume numeración.
+    GitHub para un fichero, siguiendo DOS numeraciones en paralelo: la del
+    lado viejo (para detectar ``"removed"``) y la del lado nuevo (para
+    ``"added"``/``"context"``, numeración con la que ``line`` se interpreta
+    por defecto). Un comentario inline de Codex puede citar, en cambio, la
+    numeración del lado viejo (`original_line`) cuando apunta a contenido
+    eliminado (`sirius_codex_review.py`); como el ``archivo:línea`` de un
+    hallazgo no conserva de qué lado vino el número, una línea que coincide
+    con la posición vieja de un ``-`` se declara ``"removed"`` -contenido que
+    SÍ cambió entre la ronda 1 y ahora, así que nunca es goteo, sea cual sea
+    el lado que el número realmente representaba-. Una línea con guion final
+    (``\\ No newline at end of file``) no es una línea de diff y no consume
+    numeración.
     """
+    numero_viejo: int | None = None
     numero_nuevo: int | None = None
     for cruda in patch.splitlines():
         cabecera = _HUNK_HEADER_RE.match(cruda)
         if cabecera:
-            numero_nuevo = int(cabecera.group(1))
+            numero_viejo = int(cabecera.group(1))
+            numero_nuevo = int(cabecera.group(2))
             continue
-        if numero_nuevo is None:
+        if numero_nuevo is None or numero_viejo is None:
             continue
         if cruda.startswith("\\"):
             continue
         marca = cruda[0] if cruda else " "
         if marca == "-":
+            if numero_viejo == line:
+                return "removed"
+            numero_viejo += 1
             continue
         if numero_nuevo == line:
             return "added" if marca == "+" else "context"
         numero_nuevo += 1
+        numero_viejo += 1
     return "outside"
 
 
@@ -187,7 +202,11 @@ def evaluate_finding(
         return DripVerdict.SIN_MARCA
 
     kind = _line_kind_in_patch(resultado.patch, linea)
-    if kind == "added":
+    if kind in ("added", "removed"):
+        # "added": la línea es contenido nuevo, no puede ser goteo. "removed":
+        # la línea citada coincide con la posición vieja de contenido
+        # eliminado entre la ronda 1 y ahora -cambió, así que declararla
+        # goteo sería justo el error que corrige CODEX-003-.
         return DripVerdict.SIN_MARCA
     # "context" (línea sin tocar dentro de un hunk modificado) y "outside"
     # (fuera de todo hunk) se tratan igual, siguiendo la regla mecánica pura
@@ -195,6 +214,24 @@ def evaluate_finding(
     # en el docstring del módulo sobre líneas de contexto con una hermana
     # modificada en el mismo hunk (`§459` rondas 3 y 4)-.
     return DripVerdict.POSIBLE_GOTEO
+
+
+@dataclass(frozen=True, slots=True)
+class AnnotationSummary:
+    """Resultado de :func:`annotate_observations`: las observaciones y su diagnóstico.
+
+    ``sin_informacion`` cuenta cuántas observaciones evaluaron a
+    :data:`DripVerdict.SIN_INFORMACION` -típicamente porque
+    :data:`CompareFetcher` falló al leer la comparación-, para que el CLI
+    pueda declarar ese fallo por stderr de forma distinguible de "0 marcadas
+    porque no hubo goteo" (regla (c) de la incidencia #496, hallazgo
+    CLAUDE-REVIEW-499-001/CODEX-004 de la revisión de la PR #499). No añade
+    marcas, no bloquea la ronda ni modifica las observaciones estructuradas:
+    solo hace observable un dato que antes se descartaba en silencio.
+    """
+
+    observations: list[dict[str, Any]]
+    sin_informacion: int
 
 
 def annotate_observations(
@@ -205,7 +242,7 @@ def annotate_observations(
     current_head: str,
     repo: str,
     fetch: CompareFetcher,
-) -> list[dict[str, Any]]:
+) -> AnnotationSummary:
     """Copia ``observations`` añadiendo ``posible_goteo`` donde corresponda.
 
     No muta la entrada. Cada observación que evalúa a
@@ -214,6 +251,7 @@ def annotate_observations(
     devuelven sin ese campo, sin ningún otro cambio.
     """
     anotadas: list[dict[str, Any]] = []
+    sin_informacion = 0
     for observation in observations:
         copia = dict(observation)
         veredicto = evaluate_finding(
@@ -226,14 +264,33 @@ def annotate_observations(
         )
         if veredicto is DripVerdict.POSIBLE_GOTEO:
             copia["posible_goteo"] = MENSAJE_POSIBLE_GOTEO
+        elif veredicto is DripVerdict.SIN_INFORMACION:
+            sin_informacion += 1
         anotadas.append(copia)
-    return anotadas
+    return AnnotationSummary(observations=anotadas, sin_informacion=sin_informacion)
 
 
-def gh_compare_file(
-    repo: str, head1: str, head2: str, file_path: str, *, timeout: float = 30.0
-) -> FileCompareResult | None:
-    """Implementación real de :data:`CompareFetcher`, vía ``gh api compare``.
+#: Tope documentado de la API de comparación de GitHub: la lista ``files``
+#: solo cubre la primera página e incluye como máximo 300 entradas para toda
+#: la comparación (https://docs.github.com/en/rest/commits/commits#compare-two-commits).
+#: Si el fichero buscado no aparece y la lista llega a este tope, su ausencia
+#: no demuestra que no cambió -pudo quedar fuera por el límite- (CODEX-002).
+_MAX_FILES_PER_PAGE = 300
+
+
+@functools.lru_cache(maxsize=32)
+def _gh_compare_raw(repo: str, head1: str, head2: str, timeout: float) -> dict[str, Any] | None:
+    """Ejecuta ``gh api compare`` UNA vez por ``(repo, head1, head2, timeout)``.
+
+    Memoizado a propósito (CODEX-001): dentro de una misma ejecución del CLI,
+    todas las observaciones de la ronda comparan el mismo par de heads -solo
+    cambia el fichero, que se filtra en memoria a partir de esta respuesta,
+    no en la URL-, así que repetir la llamada por cada observación multiplica
+    el coste (hasta el timeout de 30s) sin motivo: con el endpoint bloqueado
+    y 20 observaciones se agotarían los 10 minutos del paso "Aplicar el
+    veredicto" (`review-sirius-work.yml`) antes de poder aplicar el
+    fallback. Memoizar aquí, y no imponer un presupuesto global, evita ese
+    consumo sin tocar el timeout del workflow.
 
     Traduce CUALQUIER fallo -proceso, tiempo de espera, JSON ilegible,
     forma inesperada de la respuesta- a ``None``. Es la única función impura
@@ -264,6 +321,21 @@ def gh_compare_file(
         return None
     if not isinstance(datos, dict):
         return None
+    return datos
+
+
+def gh_compare_file(
+    repo: str, head1: str, head2: str, file_path: str, *, timeout: float = 30.0
+) -> FileCompareResult | None:
+    """Implementación real de :data:`CompareFetcher`, vía ``gh api compare``.
+
+    La llamada a `gh` en sí la hace :func:`_gh_compare_raw`, memoizada por
+    ``(repo, head1, head2, timeout)``; esta función solo filtra la respuesta
+    ya obtenida para ``file_path``.
+    """
+    datos = _gh_compare_raw(repo, head1, head2, timeout)
+    if datos is None:
+        return None
     ficheros = datos.get("files")
     if not isinstance(ficheros, list):
         return None
@@ -274,4 +346,6 @@ def gh_compare_file(
             continue
         patch = entrada.get("patch")
         return FileCompareResult(changed=True, patch=patch if isinstance(patch, str) else None)
+    if len(ficheros) >= _MAX_FILES_PER_PAGE:
+        return None
     return FileCompareResult(changed=False, patch=None)

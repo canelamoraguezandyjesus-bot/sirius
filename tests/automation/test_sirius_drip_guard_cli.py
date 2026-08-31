@@ -39,6 +39,18 @@ def _module() -> Any:
     return module
 
 
+@pytest.fixture(autouse=True)
+def _sin_cache_de_gh_compare_entre_pruebas() -> None:
+    # `_module()` y el `sirius_drip_guard` que carga por ruta se registran en
+    # `sys.modules` la primera vez y se reutilizan en el resto de pruebas de
+    # este archivo (mismo proceso de pytest); como `HEAD1`/`HEAD2`/`REPO` se
+    # repiten entre pruebas, la memoización de `_gh_compare_raw` (CODEX-001)
+    # filtraría, sin esto, la respuesta de `gh` de una prueba a la siguiente.
+    modulo = sys.modules.get("sirius_drip_guard")
+    if modulo is not None:
+        modulo._gh_compare_raw.cache_clear()
+
+
 _GH_STUB = """#!/usr/bin/env bash
 # Simula `gh api repos/.../compare/{h1}...{h2}`: devuelve el fichero que
 # indique GH_STUB_RESPONSE (o "{\\"files\\": []}" si no está definida).
@@ -60,6 +72,37 @@ def _instalar_gh_stub(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, respuesta
     respuesta_file.write_text(respuesta, encoding="utf-8")
     monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("GH_STUB_RESPONSE", str(respuesta_file))
+
+
+_GH_STUB_CONTADOR = """#!/usr/bin/env bash
+# Igual que _GH_STUB, pero cuenta cada invocación en GH_STUB_CALLS (una línea
+# por llamada) para poder afirmar que `gh` se invocó una sola vez por
+# (repo, head1, head2) aunque haya varias observaciones (CODEX-001).
+echo call >>"${GH_STUB_CALLS}"
+if [ -n "${GH_STUB_RESPONSE:-}" ]; then
+  cat "$GH_STUB_RESPONSE"
+else
+  printf '{"files": []}'
+fi
+"""
+
+
+def _instalar_gh_stub_contador(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, respuesta: str
+) -> Path:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    gh = bin_dir / "gh"
+    gh.write_text(_GH_STUB_CONTADOR, encoding="utf-8")
+    gh.chmod(0o755)
+    respuesta_file = tmp_path / "gh_response.json"
+    respuesta_file.write_text(respuesta, encoding="utf-8")
+    llamadas_file = tmp_path / "gh_calls.txt"
+    llamadas_file.write_text("", encoding="utf-8")
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("GH_STUB_RESPONSE", str(respuesta_file))
+    monkeypatch.setenv("GH_STUB_CALLS", str(llamadas_file))
+    return llamadas_file
 
 
 def _round1_history(head: str = HEAD1) -> str:
@@ -207,6 +250,13 @@ def test_gh_no_disponible_se_calla_y_no_bloquea(
     assert codigo == 0
     anotadas = json.loads(output.read_text(encoding="utf-8"))
     assert "posible_goteo" not in anotadas[0]
+    # CLAUDE-REVIEW-499-001 / CODEX-004 (revisión de la PR #499): el fallo de
+    # lectura tiene que declararse por stderr de forma distinguible de "0
+    # marcadas porque no hubo goteo", para que quien mida la tasa en
+    # producción (incidencia #267) pueda distinguir ambos casos.
+    stderr = capsys.readouterr().err
+    assert "0 de 1 observación" in stderr
+    assert "1 sin información" in stderr
 
 
 def test_observaciones_ilegibles_publica_sin_anotar_y_no_falla(
@@ -268,3 +318,85 @@ def test_historial_ilegible_publica_las_observaciones_sin_anotar(
     assert codigo == 0
     anotadas = json.loads(output.read_text(encoding="utf-8"))
     assert anotadas == [_observation()]
+
+
+def test_varias_observaciones_reutilizan_una_unica_comparacion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # CODEX-001 (revisión de la PR #499): todas las observaciones de una
+    # misma ronda comparan el mismo par de heads -solo cambia el fichero, que
+    # se filtra en memoria, no en la URL de `gh api compare`-, así que `gh`
+    # debe invocarse una sola vez aunque haya varias observaciones, incluso
+    # citando ficheros distintos.
+    llamadas_file = _instalar_gh_stub_contador(tmp_path, monkeypatch, respuesta='{"files": []}')
+    comments = tmp_path / "comments.txt"
+    comments.write_text(_round1_history(), encoding="utf-8")
+    observations = tmp_path / "observations.json"
+    _write_json(
+        observations,
+        [_observation("src/a.py:10"), _observation("src/b.py:20"), _observation("src/c.py:30")],
+    )
+    output = tmp_path / "output.json"
+
+    codigo = _module().main(
+        [
+            "--repo",
+            "owner/repo",
+            "--comments-file",
+            str(comments),
+            "--round",
+            "2",
+            "--head",
+            HEAD2,
+            "--observations",
+            str(observations),
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert codigo == 0
+    llamadas = [linea for linea in llamadas_file.read_text(encoding="utf-8").splitlines() if linea]
+    assert len(llamadas) == 1
+
+
+def test_fichero_ausente_en_lista_truncada_al_limite_de_la_api_no_marca(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # CODEX-002 (revisión de la PR #499): la API de comparación de GitHub
+    # solo devuelve como máximo 300 ficheros; si el buscado no aparece y la
+    # lista llega a ese tope, su ausencia no demuestra que no cambió -pudo
+    # quedar fuera por el límite-, así que debe declararse SIN_INFORMACION
+    # (no anotar), no "no cambió" (marcar).
+    ficheros = [
+        {"filename": f"src/otro_{i}.py", "status": "modified", "patch": "@@ -1,1 +1,1 @@\n-x\n+y"}
+        for i in range(300)
+    ]
+    respuesta = json.dumps({"files": ficheros})
+    _instalar_gh_stub(tmp_path, monkeypatch, respuesta=respuesta)
+    comments = tmp_path / "comments.txt"
+    comments.write_text(_round1_history(), encoding="utf-8")
+    observations = tmp_path / "observations.json"
+    _write_json(observations, [_observation("src/no_esta_en_la_lista.py:10")])
+    output = tmp_path / "output.json"
+
+    codigo = _module().main(
+        [
+            "--repo",
+            "owner/repo",
+            "--comments-file",
+            str(comments),
+            "--round",
+            "2",
+            "--head",
+            HEAD2,
+            "--observations",
+            str(observations),
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert codigo == 0
+    anotadas = json.loads(output.read_text(encoding="utf-8"))
+    assert "posible_goteo" not in anotadas[0]

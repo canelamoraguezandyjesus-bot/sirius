@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from sirius_engine.drip_guard import (
     MENSAJE_POSIBLE_GOTEO,
+    AnnotationSummary,
     CompareFetcher,
     DripVerdict,
     FileCompareResult,
@@ -124,6 +125,27 @@ def test_linea_dentro_de_un_hunk_anadido_no_marca() -> None:
     assert veredicto is DripVerdict.SIN_MARCA
 
 
+def test_linea_citada_sobre_contenido_eliminado_no_marca() -> None:
+    # CODEX-003 (revisión de la PR #499): los comentarios inline de Codex
+    # pueden citar `original_line` (lado viejo) para contenido eliminado; el
+    # `archivo:línea` de un hallazgo no conserva de qué lado vino el número,
+    # así que una línea que coincide con la posición vieja de un `-` no
+    # puede declararse goteo -ese contenido SÍ cambió entre la ronda 1 y
+    # ahora, aunque el guardián lo estuviera interpretando como numeración
+    # del lado nuevo-.
+    patch = "@@ -10,1 +10,0 @@\n-bad"
+    fetch = _fetch_devolviendo(FileCompareResult(changed=True, patch=patch))
+    veredicto = evaluate_finding(
+        round_number=2,
+        round_records=[_registro_ronda_1()],
+        current_head=HEAD2,
+        repo=REPO,
+        archivo="src/x.py:10",
+        fetch=fetch,
+    )
+    assert veredicto is DripVerdict.SIN_MARCA
+
+
 def test_lectura_de_la_api_caida_no_marca_y_se_declara_distinta_de_sin_cambios() -> None:
     fetch = _fetch_devolviendo(None)
     veredicto = evaluate_finding(
@@ -209,7 +231,7 @@ def test_fichero_cambiado_sin_patch_textual_no_marca() -> None:
 def test_annotate_observations_anade_el_mensaje_exacto_cuando_marca() -> None:
     fetch = _fetch_devolviendo(FileCompareResult(changed=False, patch=None))
     observations = [{"id": "R1", "archivo": "src/x.py:10", "problema": "..."}]
-    anotadas = annotate_observations(
+    resumen = annotate_observations(
         observations,
         round_number=2,
         round_records=[_registro_ronda_1()],
@@ -217,14 +239,16 @@ def test_annotate_observations_anade_el_mensaje_exacto_cuando_marca() -> None:
         repo=REPO,
         fetch=fetch,
     )
-    assert anotadas[0]["posible_goteo"] == MENSAJE_POSIBLE_GOTEO
+    assert isinstance(resumen, AnnotationSummary)
+    assert resumen.observations[0]["posible_goteo"] == MENSAJE_POSIBLE_GOTEO
+    assert resumen.sin_informacion == 0
 
 
 def test_annotate_observations_no_anade_el_campo_cuando_no_marca() -> None:
     patch = "@@ -8,2 +8,4 @@\n context\n+añadida\n+línea 10 añadida\n context"
     fetch = _fetch_devolviendo(FileCompareResult(changed=True, patch=patch))
     observations = [{"id": "R1", "archivo": "src/x.py:10", "problema": "..."}]
-    anotadas = annotate_observations(
+    resumen = annotate_observations(
         observations,
         round_number=2,
         round_records=[_registro_ronda_1()],
@@ -232,7 +256,8 @@ def test_annotate_observations_no_anade_el_campo_cuando_no_marca() -> None:
         repo=REPO,
         fetch=fetch,
     )
-    assert "posible_goteo" not in anotadas[0]
+    assert "posible_goteo" not in resumen.observations[0]
+    assert resumen.sin_informacion == 0
 
 
 def test_annotate_observations_no_muta_la_entrada() -> None:
@@ -248,3 +273,24 @@ def test_annotate_observations_no_muta_la_entrada() -> None:
         fetch=fetch,
     )
     assert "posible_goteo" not in original
+
+
+def test_annotate_observations_cuenta_sin_informacion_por_separado_de_marcadas() -> None:
+    # CLAUDE-REVIEW-499-001 / CODEX-004 (revisión de la PR #499): un fallo de
+    # lectura no puede quedar indistinguible de "no hubo goteo" en el
+    # resumen que consume el CLI.
+    fetch = _fetch_devolviendo(None)
+    observations = [
+        {"id": "R1", "archivo": "src/x.py:10", "problema": "..."},
+        {"id": "R2", "archivo": "src/x.py:11", "problema": "..."},
+    ]
+    resumen = annotate_observations(
+        observations,
+        round_number=2,
+        round_records=[_registro_ronda_1()],
+        current_head=HEAD2,
+        repo=REPO,
+        fetch=fetch,
+    )
+    assert resumen.sin_informacion == 2
+    assert all("posible_goteo" not in obs for obs in resumen.observations)

@@ -100,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         texto_historial = Path(args.comments_file).read_text(encoding="utf-8")
         round_records = parse_round_records(texto_historial)
-        anotadas = annotate_observations(
+        resumen = annotate_observations(
             observations,
             round_number=args.round,
             round_records=round_records,
@@ -116,9 +116,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         return _escribir_sin_anotar(observations, args.output)
 
+    anotadas = resumen.observations
     marcadas = sum(1 for item in anotadas if isinstance(item, dict) and item.get("posible_goteo"))
+    # Dos cifras, no una: "N marcadas" por sí solo no distingue "no hubo
+    # goteo" de "no se pudo comprobar" (regla (c) de la incidencia #496,
+    # hallazgo CLAUDE-REVIEW-499-001/CODEX-004 de la revisión de la PR #499).
     print(
-        f"sirius_drip_guard_cli: {marcadas} de {len(anotadas)} observación(es) marcadas.",
+        f"sirius_drip_guard_cli: {marcadas} de {len(anotadas)} observación(es) marcadas; "
+        f"{resumen.sin_informacion} sin información por fallo de lectura de la comparación.",
         file=sys.stderr,
     )
     Path(args.output).write_text(json.dumps(anotadas, ensure_ascii=False), encoding="utf-8")
