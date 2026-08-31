@@ -288,3 +288,55 @@ completo (`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md`, §
 incluida la migración aditiva, el puerto y el adaptador de Ollama, la orquestación
 asíncrona sobre el `QThreadPool` ya existente, la edición del usuario y el pase
 retroactivo. Esta decisión no reabre D1 ni ninguna otra de las seis decisiones anteriores.
+
+## Decisión de rumbo — Ola de paridad en producción (31 de agosto de 2026)
+
+> Añadido al final del documento, sin tocar una sola línea de lo anterior: ADR-111 cita
+> `docs/evolution/STATUS.md:156-166` y `:202`, y la Definición de Producto 0.2 cita
+> `docs/evolution/STATUS.md:48-60` — insertar contenido antes de esas líneas las habría
+> desplazado y falseado esas citas ya publicadas. Esta sección **continúa** el «Próximo
+> paso» de arriba (línea 82); no lo sustituye ni lo contradice, lo actualiza con lo que el
+> propietario decidió después.
+
+M11 (incidencias #471/#473, ADR-117) dejó el circuito de la puerta
+`category_matching_enabled` cableado pero con su criterio de suelo explícitamente NO
+aprobado: con la puerta abierta, el camino real de producción mide 4/47 aciertos exactos y
+P95 438-780 ms, frente al 29/47, ≤1 crítica y 63/81 de cobertura que el arnés de examen ya
+fusionado (ADR-109..ADR-115) blinda sobre su propia traducción de laboratorio (ADR-117
+§«Estado del hito: decisión»). El propietario decide el rumbo de la siguiente ola, en la
+incidencia #478 (31-08-2026, referencia `sesion-cli`), con esta cita textual: «si recuerda
+29 cosas de 47 a mí no me vale… necesito que lo recuerde bien». La incidencia ordena
+diseñar cómo el camino real alcanza esas cifras con la puerta abierta, conservando
+exactamente el comportamiento actual con la puerta cerrada, y fija que la ola termina
+cuando las dos pruebas `pytest.mark.xfail(strict=True)` que ADR-117 dejó como suelo
+ejecutable
+(`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py::test_el_suelo_del_criterio_de_m11_aciertos_exactos_29_47_en_el_paquete_completo`,
+`tests/integration/test_local_performance.py::test_el_suelo_de_rnf_003_p95_300ms_en_los_tres_escenarios_del_paquete_completo`)
+pasen inesperadamente (XPASS) y obliguen a retirar la marca.
+
+Esta decisión de rumbo no reabre D1 ni D7: no cambia qué se incorpora ni de dónde sale la
+categoría de un candidato real, decide únicamente que el camino real debe alcanzar, tras
+la puerta, las cifras que hasta ahora solo el arnés de examen demuestra alcanzables.
+Tampoco adelanta el registro del umbral de coincidencia del etiquetado (D7 punto 6, todavía
+pendiente, ver «Próximo paso» arriba) ni activa la puerta por sí sola: `category_matching_enabled`
+sigue en `False` por defecto, y seguirá estándolo hasta que ambas decisiones —el umbral de
+D7 punto 6 y esta ola alcanzando su suelo— estén satisfechas.
+
+El diseño que traduce esta decisión —qué piezas del arnés se portan al camino real tras la
+puerta, cómo se diseña la petición de producción, y el plan de optimización de RNF-003— vive
+en `docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md` §11 («Ola de paridad
+en producción — M13 en adelante»), añadido igualmente al final de ese documento por la misma
+restricción de citas. El registro de la decisión de diseño en sí —sustituir la activación
+única y el candado-unión de M10 por la semántica del arnés detrás de la puerta, y por qué—
+es `docs/decisions/ADR-119-disenar-la-ola-de-paridad-en-produccion-portar-la-semantica-del-arnes-tras-la-puerta-category-matching-enabled-la-peticion-de-contexto-real-y-el-plan-de-optimizacion-de-rnf-003-incidencia-478.md`
+(PROPUESTO).
+
+**Próximo paso (actualización del 31 de agosto de 2026):** ordenar al Work Engine los
+encargos M13-M17 que la Arquitectura Técnica 0.2 §11.5 fija, en su orden de dependencias
+(M13/M14 en paralelo; M15 tras M14; M16 tras M14 y M15; M17, medición final, tras M13-M16
+completos). Ninguno de los cinco activa la puerta en `settings.json`: esa acción sigue
+siendo, como ya fijaba el «Próximo paso» original, un paso separado y explícito, posterior
+tanto al registro del umbral de D7 punto 6 como al cierre de esta ola. M17 es el punto de
+control: si las dos pruebas `xfail(strict=True)` de M11 no pasan tras M13-M16, este
+documento se actualiza de nuevo con la cifra real alcanzada, sin dar la ola por cerrada por
+declaración — se cierra cuando las pruebas lo confirmen, no antes.
