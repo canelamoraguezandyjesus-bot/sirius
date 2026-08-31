@@ -573,3 +573,42 @@ def test_rescue_never_rescues_anything_without_a_max_criticality_category() -> N
     )
 
     assert rescued == ()
+
+
+# --- M15 (§11.5, incidencia #490): G12's hard-limit exclusion (truncate_to_ ---
+# --- hard_limit) runs BEFORE RF-25/RF-26 (rescue_max_criticality_candidates) ---
+# --- and is final — a candidate G12 already dropped is never brought back ---
+# --- by RF-25, even when the filter conserved something else for the same ---
+# --- query (the exact condition that would trigger RF-25 if the candidate ---
+# --- were still available). Mirrors the composition ContextBuilder. ---
+# --- _apply_relevance_filter performs (src/sirius/application/context.py). ---
+
+
+def test_g12_hard_limit_exclusion_is_final_and_is_never_undone_by_rf25_rescue() -> None:
+    kept_by_filter = _ranked_memory(dataclasses.replace(_memory(1), category="salud"))
+    rescuable_by_rf25 = _ranked_memory(dataclasses.replace(_memory(2), category="salud"))
+    excluded_by_g12 = _ranked_memory(dataclasses.replace(_memory(3), category="salud"))
+
+    # G12 first: only two of the three max-criticality candidates fit the
+    # hard limit, so `excluded_by_g12` never reaches the filter or RF-25.
+    gated = truncate_to_hard_limit(
+        [kept_by_filter, rescuable_by_rf25, excluded_by_g12],
+        hard_limit=2,
+        max_criticality_category="salud",
+    )
+    assert excluded_by_g12 not in gated
+
+    # The filter conserves `kept_by_filter` and drops `rescuable_by_rf25` —
+    # exactly the "conserved something else for this query" condition that
+    # makes RF-25 rescue a discarded max-criticality candidate.
+    filtered = (kept_by_filter,)
+    rescued = rescue_max_criticality_candidates(gated, filtered, max_criticality_category="salud")
+    assert rescued == (rescuable_by_rf25,)
+
+    kept_positions = {id(candidate) for candidate in filtered}
+    kept_positions.update(id(candidate) for candidate in rescued)
+    kept_positions.update(id(candidate) for candidate in gated if candidate.item.category is None)
+    result = tuple(candidate for candidate in gated if id(candidate) in kept_positions)
+
+    assert result == (kept_by_filter, rescuable_by_rf25)
+    assert excluded_by_g12 not in result

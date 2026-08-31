@@ -1,8 +1,8 @@
 # ADR-120 — M15: RF-25/RF-26 sustituye el candado de M10 y G8/G12 se aplican sobre el conjunto combinado, ambos tras la puerta
 
-- Estado: PROPUESTO | APROBADO | RECHAZADO | SUPERADO por ADR-NNN
+- Estado: PROPUESTO
 - Fecha: 2026-08-31
-- Aprobación: [quién y cómo; en este repositorio, la fusión de la PR por el propietario]
+- Aprobación: fusión de la PR por el propietario
 
 ## Contexto y problema
 
