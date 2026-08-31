@@ -141,6 +141,41 @@ ver que esos dos casos fallaban. La salvedad (a) de la Definición §3.2
 (ampliar el banco con casos independientes de la siembra, o retirarla) queda
 citada aquí como pendiente registrada del propietario para la declaración
 formal de PA-0.2-REC-01 — esta incidencia no la resuelve.
+
+INCIDENCIA #467 — RESTRICCIÓN POR ÁMBITO DEL ÍNDICE DE CATEGORÍA
+=========================================================================
+
+ADR-113 diagnosticó, con cita de fichero y línea, que `indice_de_categoria`
+era la causa dominante de `elementos_de_mas`: admitía **todas** las
+identidades de máxima criticidad del banco en cuanto la consulta activaba la
+«categoría buscable», sin mirar su proyecto — la misma falta de restricción
+de `RankRelevantKnowledgeUseCase._rank_via_staged_engine`'s `solo_por_
+categoria` (`src/sirius/application/rank_relevant_knowledge.py:243-280`,
+diseño ya aprobado de producto: "`category_match` es una señal de M9, no un
+filtro de alcance"). La incidencia #467 autoriza cerrar esa causa
+**únicamente en este arnés**, reproduciendo la semántica de ámbito que el
+laboratorio aplicaba aguas abajo del índice de categoría —nunca dentro de
+`categoria.py` mismo, que no filtra por ámbito porque no es su trabajo—:
+`experiments/adr002/lateral/categoria.py:46-49` (rama
+`evidence/adr001-spikes`): "la razon es el ambito: `G4` filtra por proyecto
+antes de entregar, de modo que `N1-31` se queda con los criticos **de su
+ambito**"; y `categoria.py:174-175`, en `_pide_contexto`: "El ambito hace el
+resto: `G4` filtra por proyecto, de modo que entran las criticas de ese
+proyecto y no las de otro". Es la **misma** fuente y la **misma** cita que
+ya sostenía `siembra_de_contexto` (incidencia #465, causa 2, más arriba): el
+laboratorio nunca tuvo dos reglas de ámbito distintas para el índice de
+categoría y para la siembra, tuvo una sola —`G4`, aguas abajo de ambas—, así
+que `indice_de_categoria` y `siembra_de_contexto` comparten aquí el mismo
+criterio de ámbito, `_en_ambito_declarado`: dentro del proyecto que la
+petición declara, o de ámbito global (`PRJ-GLOBAL`), que `G4` admite siempre
+(`src/sirius/domain/staged_engine_gates.py:135-152`, la clase
+`AMBITO_GLOBAL` de la puerta).
+
+**Resultado medido** (ADR-114): `elementos_de_mas` baja de 110 a 62;
+`aciertos_exactos` (27/47), `omisiones_criticas` (0) y `cobertura` (63/81)
+no se mueven. D1 (aciertos exactos ≥ 29/47, elementos de más ≤ 21) sigue sin
+alcanzarse; ADR-114 diagnostica, elemento a elemento contra el fixture, las
+dos causas residuales que quedan tras cerrar esta.
 """
 
 from __future__ import annotations
@@ -249,30 +284,67 @@ def activa_categoria_buscable(
     return any(termino.casefold() in normalizada for termino in vocabulario)
 
 
+def _en_ambito_declarado(
+    identidad: str,
+    *,
+    ambito_declarado: str,
+    proyecto_por_identidad: Mapping[str, str],
+) -> bool:
+    """Si ``identidad`` cae dentro del ámbito que la petición declara:
+    ``ambito_declarado`` es ``GLOBAL`` (entra todo), la identidad pertenece
+    al mismo proyecto que ``ambito_declarado``, o la identidad es de ámbito
+    global (``PRJ-GLOBAL``) — la misma clase de ámbito que `G4`
+    (`src/sirius/domain/staged_engine_gates.py:135-152`) admite siempre,
+    cualquiera que sea el ámbito de la petición. Compartido por
+    ``indice_de_categoria`` (incidencia #467) y ``siembra_de_contexto``
+    (incidencia #465, causa 2), que ya aplicaba este mismo criterio."""
+    if ambito_declarado == "GLOBAL":
+        return True
+    proyecto = proyecto_por_identidad.get(identidad)
+    return proyecto in ("PRJ-GLOBAL", ambito_declarado)
+
+
 def indice_de_categoria(
     *,
     consulta: str,
     ya_admitidos: Iterable[str],
     categoria_por_identidad: Mapping[str, str | None],
+    ambito_declarado: str,
+    proyecto_por_identidad: Mapping[str, str],
 ) -> frozenset[str]:
     """La ampliación de M9 (§6.2) con la semántica del laboratorio: toda
     identidad no admitida todavía por el motor, de la categoría de máxima
-    criticidad, si ``consulta`` activa la «categoría buscable»
-    (``activa_categoria_buscable``, incidencia #465 causa 1) — misma lógica
-    de conjunto que ``RankRelevantKnowledgeUseCase._rank_via_staged_
-    engine``'s ``solo_por_categoria`` (`src/sirius/application/
-    rank_relevant_knowledge.py:243-280`), sin su reordenación posterior
-    (irrelevante aquí: las cuatro métricas del banco comparan conjuntos, no
-    orden). Como esa misma referencia, no restringe por ámbito: `category_
-    match` es una señal de M9, no un filtro de alcance —esa es tarea de las
-    puertas del motor, ya aplicadas antes de esta llamada."""
+    criticidad y dentro del ámbito declarado de la consulta (más las de
+    ámbito global, que `G4` admite siempre), si ``consulta`` activa la
+    «categoría buscable» (``activa_categoria_buscable``, incidencia #465
+    causa 1) — misma lógica de conjunto que ``RankRelevantKnowledgeUseCase.
+    _rank_via_staged_engine``'s ``solo_por_categoria`` (`src/sirius/
+    application/rank_relevant_knowledge.py:243-280`), sin su reordenación
+    posterior (irrelevante aquí: las cuatro métricas del banco comparan
+    conjuntos, no orden) y sin su ausencia de restricción de ámbito, que
+    sigue intacta como diseño de producto detrás de la puerta
+    (`solo_por_categoria` no filtra por ámbito porque `category_match` "no
+    es un filtro de alcance"; esta función del arnés sí lo hace, porque la
+    incidencia #467 autoriza reproducir aquí, únicamente en este arnés, la
+    semántica de ámbito que el laboratorio aplicaba aguas abajo del índice
+    de categoría: `experiments/adr002/lateral/categoria.py:46-49` y
+    `:158-159` (rama `evidence/adr001-spikes`) — "la razon es el ambito: G4
+    filtra por proyecto antes de entregar" / "El ambito hace el resto: G4
+    filtra por proyecto, de modo que entran las criticas de ese proyecto y
+    no las de otro")."""
     if not activa_categoria_buscable(consulta):
         return frozenset()
     ya_admitidos_set = frozenset(ya_admitidos)
     return frozenset(
         identidad
         for identidad, categoria in categoria_por_identidad.items()
-        if identidad not in ya_admitidos_set and categoria == CATEGORIA_DE_MAXIMA_CRITICIDAD
+        if identidad not in ya_admitidos_set
+        and categoria == CATEGORIA_DE_MAXIMA_CRITICIDAD
+        and _en_ambito_declarado(
+            identidad,
+            ambito_declarado=ambito_declarado,
+            proyecto_por_identidad=proyecto_por_identidad,
+        )
     )
 
 
@@ -308,17 +380,16 @@ def siembra_de_contexto(
     if not pide_contexto(proposito):
         return frozenset()
     ya_admitidos_set = frozenset(ya_admitidos)
-
-    def _en_ambito(identidad: str) -> bool:
-        proyecto = proyecto_por_identidad.get(identidad)
-        return ambito_declarado == "GLOBAL" or proyecto in ("PRJ-GLOBAL", ambito_declarado)
-
     return frozenset(
         identidad
         for identidad, categoria in categoria_por_identidad.items()
         if identidad not in ya_admitidos_set
         and categoria == CATEGORIA_DE_MAXIMA_CRITICIDAD
-        and _en_ambito(identidad)
+        and _en_ambito_declarado(
+            identidad,
+            ambito_declarado=ambito_declarado,
+            proyecto_por_identidad=proyecto_por_identidad,
+        )
     )
 
 

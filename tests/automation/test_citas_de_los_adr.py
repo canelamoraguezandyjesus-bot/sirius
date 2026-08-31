@@ -140,6 +140,10 @@ _ADR_113 = (
     "siembra-en-contexto-cierran-las-dos-causas-de-adr-112-pero-no-alcanzan-d1-"
     "incidencia-465.md"
 )
+_ADR_114 = (
+    "ADR-114-la-restriccion-por-ambito-del-indice-de-categoria-baja-los-elementos-de-"
+    "mas-de-110-a-62-pero-no-alcanza-d1-incidencia-467.md"
+)
 
 RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     "experiments/adr002/round/cases.py": [
@@ -209,7 +213,11 @@ RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     # ninguna de las dos rutas siguientes se copia a Sirius; el ADR las cita
     # solo para documentar de dónde salió cada dato portado.
     "experiments/adr002/modelo_local/filtro.py:filtrar": [_ADR_112, _ADR_113],
-    "experiments/adr002/lateral/categoria.py": [_ADR_112, _ADR_113],
+    # ADR-114 (incidencia #467) cita la misma fuente para justificar la
+    # restricción por ámbito del índice de categoría del arnés: la cita
+    # documenta de dónde sale la semántica portada, nunca se copia el
+    # fichero a Sirius.
+    "experiments/adr002/lateral/categoria.py": [_ADR_112, _ADR_113, _ADR_114],
     "experiments/adr002/lateral/categoria.py:_pide_contexto": [_ADR_112, _ADR_113],
 }
 

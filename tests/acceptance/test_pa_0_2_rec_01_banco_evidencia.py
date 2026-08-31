@@ -161,13 +161,14 @@ _MINIMO_ELEMENTOS_HALLADOS_M7: Final[int] = 57
 #: Medición actual publicada en el docstring de
 #: `test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metricas`
 #: (motor por etapas con petición por caso, categoría buscable, regla de las
-#: críticas original y siembra al ensamblar contexto — incidencia #465,
-#: ADR-113). Misma convención de cotas unidireccionales de no regresión, no
-#: el suelo de D1 (29/47, ≤21, ≤1, ≥63/81) que ADR-113 diagnostica que
-#: `aciertos_exactos` y `elementos_de_mas` todavía no alcanzan — aunque
-#: `omisiones_criticas` y `cobertura` sí lo alcanzan (0 ≤ 1, 63/81 ≥ 63/81).
+#: críticas original, siembra al ensamblar contexto y restricción por ámbito
+#: del índice de categoría — incidencias #465/#467, ADR-113/ADR-114). Misma
+#: convención de cotas unidireccionales de no regresión, no el suelo de D1
+#: (29/47, ≤21, ≤1, ≥63/81) que ADR-114 diagnostica que `aciertos_exactos` y
+#: `elementos_de_mas` todavía no alcanzan — aunque `omisiones_criticas` y
+#: `cobertura` sí lo alcanzan (0 ≤ 1, 63/81 ≥ 63/81).
 _MINIMO_ACIERTOS_EXACTOS_MOTOR: Final[int] = 27
-_MAXIMO_ELEMENTOS_DE_MAS_MOTOR: Final[int] = 110
+_MAXIMO_ELEMENTOS_DE_MAS_MOTOR: Final[int] = 62
 _MAXIMO_OMISIONES_CRITICAS_MOTOR: Final[int] = 0
 _MINIMO_ELEMENTOS_HALLADOS_MOTOR: Final[int] = 63
 
@@ -642,6 +643,8 @@ def _ejecutar_banco_motor_portado(database_path: Path) -> _EjecucionDelBanco:
                 consulta=caso["consulta"],
                 ya_admitidos=obtenido_por_el_motor,
                 categoria_por_identidad=categoria_por_identidad,
+                ambito_declarado=ambito_declarado,
+                proyecto_por_identidad=proyecto_por_identidad,
             )
             obtenido_tras_siembra = obtenido_tras_categoria | siembra_de_contexto(
                 proposito=peticion.proposito,
@@ -869,14 +872,15 @@ def test_el_banco_se_ejecuta_contra_el_pipeline_actual_y_reporta_las_cuatro_metr
 def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metricas(
     ejecucion_del_banco_motor_portado: _EjecucionDelBanco,
 ) -> None:
-    """Incidencia #457/#461/#463/#465/ADR-109/ADR-110/ADR-111/ADR-112/
-    ADR-113: el mismo banco, con el motor por etapas
+    """Incidencia #457/#461/#463/#465/#467/ADR-109/ADR-110/ADR-111/ADR-112/
+    ADR-113/ADR-114: el mismo banco, con el motor por etapas
     (`sirius.domain.staged_engine.recuperar`), las doce puertas
     (`staged_engine_gates`), la agrupación de equivalentes
     (`staged_engine_grouping`), el índice de categoría con la semántica de
-    la «categoría buscable» de la PR #117, la regla de las críticas original
-    del laboratorio (RF-25/RF-26) y la siembra al ensamblar contexto activos
-    en el arnés, en vez del filtro-y-orden de M7 que mide el test anterior.
+    la «categoría buscable» de la PR #117 y restricción por ámbito, la regla
+    de las críticas original del laboratorio (RF-25/RF-26) y la siembra al
+    ensamblar contexto activos en el arnés, en vez del filtro-y-orden de M7
+    que mide el test anterior.
 
     ADR-112 (incidencia #463) conectó el índice de categoría (M9) y el
     filtro de relevancia con el candado de M10, con la semántica estricta
@@ -889,7 +893,16 @@ def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metric
     100% de los candidatos de este banco, así que el filtro nunca descarta
     nada. La incidencia #465 autoriza cerrar ambas causas —únicamente en
     este arnés— y portar una tercera pieza que ADR-112 dejó fuera de
-    alcance: la siembra al ensamblar contexto.
+    alcance: la siembra al ensamblar contexto. ADR-113 midió el resultado
+    conjunto (27/47, 110, 0, 63/81) y diagnosticó que la causa dominante de
+    `elementos_de_mas` restante era que `indice_de_categoria` no restringía
+    por ámbito; la incidencia #467 autoriza cerrar esa causa, únicamente en
+    este arnés, reproduciendo la semántica de ámbito que el laboratorio
+    aplicaba aguas abajo del índice de categoría
+    (`experiments/adr002/lateral/categoria.py:46-49`/`:158-159`, rama
+    `evidence/adr001-spikes` — ver
+    `tests.acceptance.staged_engine_category_and_relevance`, sección
+    "INCIDENCIA #467").
 
     Medido, por causa, sobre el motor con petición por caso (ADR-111,
     23/47, 90, 10, 63/81) como línea base:
@@ -899,47 +912,80 @@ def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metric
     | 0. motor solo (ADR-111) | 23/47 | 90 | 10 | 63/81 |
     | 1. + categoría buscable (causa 1) | 20/47 | 153 | 4 | 69/81 |
     | 2. + regla RF-25/RF-26 (causa 1) | 27/47 | 102 | 4 | 59/81 |
-    | 3. + siembra en contexto (causa 2) | 27/47 | 110 | 0 | 63/81 |
+    | 3. + siembra en contexto (causa 2, ADR-113) | 27/47 | 110 | 0 | 63/81 |
+    | 4. + índice de categoría por ámbito (#467, ADR-114) | 27/47 | **62** | 0 | 63/81 |
 
-    La fila 3 es la medición final de este test. `omisiones_criticas` (0 ≤ 1)
+    La fila 4 es la medición final de este test. `omisiones_criticas` (0 ≤ 1)
     y `cobertura` (63/81 ≥ 63/81) alcanzan el suelo de D1/D2; `aciertos_
-    exactos` (27 < 29) y `elementos_de_mas` (110 > 21) no.
+    exactos` (27 < 29) y `elementos_de_mas` (62 > 21) no, aunque
+    `elementos_de_mas` casi se reduce a la mitad frente a la fila 3 (110 →
+    62) al cerrar la causa que ADR-113 dejó diagnosticada.
 
-    **Diagnóstico mecánico de la brecha restante, con fichero y línea**: la
-    causa dominante de `elementos_de_mas` es que `indice_de_categoria`
-    (`tests/acceptance/staged_engine_category_and_relevance.py`) —igual que
-    la referencia de producto que replica,
-    `RankRelevantKnowledgeUseCase._rank_via_staged_engine`'s `solo_por_
-    categoria` (`src/sirius/application/rank_relevant_knowledge.py:
-    243-280`)— no restringe por ámbito: activa la categoría, admite **todas**
-    las identidades de máxima criticidad del banco, sin importar su
-    proyecto. Con la activación única (ADR-112) solo una consulta
-    (`B04-CA-02`) disparaba esa admisión sin ámbito; con la «categoría
-    buscable» de la causa 1 la disparan cinco (`B04-CA-02/26/31/38/44`), lo
-    que multiplica la contaminación de proyectos ajenos (comparación
-    elemento a elemento contra el fixture: `B04-CA-02` sola aporta 18
-    elementos de más, `B04-CA-31`/`B04-CA-44` 14 cada una, `B04-CA-35` 15).
-    La regla RF-25/RF-26 (causa 1) sí filtra ese ruido —de ahí que
-    `elementos_de_mas` baje de 153 a 102 al aplicarla—, pero no lo suficiente
-    para bajar de 21 porque el filtro solo actúa sobre lo que la corrida
-    congelada examinó para cada caso (`relevance_filter_frozen_run.json`) y
-    falla abierto para el resto (`aplicar_regla_de_criticas_original`,
-    mismo contrato que `filtro_congelado_conserva`). Esta incidencia no
-    autoriza restringir `indice_de_categoria` por ámbito (ampliaría el
-    diseño ya aprobado de `category_match`/`solo_por_categoria` por
-    iniciativa propia, que `CLAUDE.md` prohíbe): queda medido, publicado y
-    sin forzar, igual que ADR-109/110/111/112.
+    **Diagnóstico mecánico de la brecha restante, con fichero y línea**
+    (ADR-114 la reproduce con detalle completo): comparación elemento a
+    elemento contra el fixture (`tests/acceptance/fixtures/
+    evidence_bank_47_casos.json` y `relevance_filter_frozen_run.json`) de
+    los 62 elementos de más de la fila 4, agrupados por la etapa del arnés
+    que los produjo y por qué la regla RF-25/RF-26 no los descarta:
+
+    - **39 elementos — el motor por etapas los admite directamente**
+      (`sirius.domain.staged_engine.recuperar`), antes de que
+      `indice_de_categoria`/`siembra_de_contexto` intervengan: 34 porque el
+      doble del filtro los conserva (`filtro_congelado_conserva`;
+      `B04-CA-03` 12, `B04-CA-35` 15 —los mismos dos casos y las mismas
+      cifras que ADR-113 ya nombraba como "motor solo, ajeno a la
+      categoría"—, más `B04-CA-04` 2, `B04-CA-05` 1, `B04-CA-20` 1,
+      `B04-CA-21` 1, `B04-CA-34` 1, `B04-CA-43` 1) y 5 porque RF-25 los
+      rescata al ser de categoría no ordinaria y el modelo sí conservó otros
+      candidatos del caso (`B04-CA-14` 1, `B04-CA-20` 1, `B04-CA-25` 2,
+      `B04-CA-30` 1). Ninguno pasa por `indice_de_categoria` ni por
+      `siembra_de_contexto`: `indice_de_categoria` y `aplicar_regla_de_
+      criticas_original` no tienen autoridad sobre lo que el motor ya
+      admitió, y esta incidencia no autoriza tocar el motor.
+    - **20 elementos — fallo abierto de `aplicar_regla_de_criticas_original`
+      sobre candidatos que la corrida congelada nunca examinó para ese
+      caso** (`tests/acceptance/staged_engine_category_and_relevance.py:
+      420-461`, mismo contrato de apertura que `filtro_congelado_conserva`):
+      12 los admite `indice_de_categoria` (`B04-CA-26` 1, `B04-CA-38` 3,
+      `B04-CA-44` 8, todas dentro del ámbito declarado del caso) y 8 los
+      admite `siembra_de_contexto` (`B04-CA-33` 5, `B04-CA-34` 3) — la
+      segunda causa residual que ADR-113 ya anticipaba por nombre. La
+      restricción de ámbito de esta incidencia no puede cerrar esta causa:
+      las 20 identidades ya están dentro del ámbito correcto (si no lo
+      estuvieran, `indice_de_categoria`/`siembra_de_contexto` las habría
+      excluido); lo que falta es que la corrida congelada las hubiera
+      examinado, y esta incidencia no autoriza tocar
+      `aplicar_regla_de_criticas_original` ni el fixture congelado.
+    - **3 elementos — la «categoría buscable» activa una consulta y admite
+      una identidad de su propio ámbito que aun así el resultado esperado no
+      incluye** (`B04-CA-02` 1, `B04-CA-26` 1, `B04-CA-31` 1, las tres vía
+      `indice_de_categoria`, ya dentro de ámbito): el precio de precisión ya
+      diagnosticado por ADR-112/ADR-113 para la causa 1 (activar por
+      **cualquiera** de las cinco palabras, no por una sola) — la restricción
+      de ámbito de esta incidencia no lo toca porque no es un problema de
+      ámbito, es un problema de qué consultas activan la categoría.
+
+    Ninguna de las tres causas anteriores es un defecto de esta incidencia ni
+    de su implementación: son la lectura literal de lo que la incidencia
+    #467 autoriza (restringir por ámbito, nada más) aplicada sobre un arnés
+    cuyas otras piezas (el motor, la corrida congelada, la activación de la
+    categoría buscable) ya estaban fuera de su alcance antes de empezar.
+    Restringir el índice de categoría por ámbito **sí** era, hasta esta
+    incidencia, una ampliación de diseño no autorizada (ADR-113 lo descartó
+    explícitamente); #467 la autoriza igual que #465 autorizó cerrar las
+    otras dos causas de ADR-112.
 
     El suelo de D1 **no** queda afirmado aquí como aserción dura sobre las
     cuatro métricas a la vez —dos de las cuatro no lo alcanzan—; las cotas
-    de no regresión se actualizan a la medición de la fila 3
-    (27/47, ≤110, ≤0, ≥63/81), nunca por debajo de lo medido."""
+    de no regresión se actualizan a la medición de la fila 4
+    (27/47, ≤62, ≤0, ≥63/81), nunca por debajo de lo medido."""
     metricas = ejecucion_del_banco_motor_portado.metricas
 
     print(
         "\nPA-0.2-REC-01 (motor por etapas portado con petición por caso, "
-        "categoría buscable, regla de las críticas original y siembra en "
-        "contexto, ADR-109/ADR-110/ADR-111/ADR-112/ADR-113/#463/#465; "
+        "categoría buscable con restricción por ámbito, regla de las "
+        "críticas original y siembra en contexto, "
+        "ADR-109/ADR-110/ADR-111/ADR-112/ADR-113/ADR-114/#463/#465/#467; "
         "puertas G1-G12, agrupación de equivalentes activas en el arnés): "
         f"aciertos_exactos={metricas.aciertos_exactos}/47 "
         f"elementos_de_mas={metricas.elementos_de_mas} "
@@ -949,7 +995,7 @@ def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metric
     )
 
     # CODEX-003: misma convención que el test anterior, sobre la medición ya
-    # publicada arriba (27/47, 110, 0, 63/81).
+    # publicada arriba (27/47, 62, 0, 63/81).
     assert metricas.aciertos_exactos >= _MINIMO_ACIERTOS_EXACTOS_MOTOR
     assert metricas.elementos_de_mas <= _MAXIMO_ELEMENTOS_DE_MAS_MOTOR
     assert metricas.omisiones_criticas <= _MAXIMO_OMISIONES_CRITICAS_MOTOR
@@ -1216,6 +1262,66 @@ def test_siembra_de_contexto_respeta_el_ambito_declarado() -> None:
             ambito_declarado="PRJ-ALFA",
             ya_admitidos=(),
             categoria_por_identidad=categoria_por_identidad,
+            proyecto_por_identidad=proyecto_por_identidad,
+        )
+        == frozenset()
+    )
+
+
+def test_indice_de_categoria_respeta_el_ambito_declarado() -> None:
+    """Incidencia #467: `indice_de_categoria` solo admite identidades del
+    proyecto que la consulta declara (o de ámbito global, que `G4` admite
+    siempre, `src/sirius/domain/staged_engine_gates.py:135-149`) — misma
+    semántica de ámbito que `siembra_de_contexto` ya aplicaba (test
+    anterior) y que el laboratorio aplicaba aguas abajo del índice de
+    categoría (`experiments/adr002/lateral/categoria.py:46-49`, rama
+    `evidence/adr001-spikes`: "la razon es el ambito: G4 filtra por proyecto
+    antes de entregar, de modo que N1-31 se queda con los criticos de su
+    ambito"; `categoria.py:174-175`: "El ambito hace el resto: G4 filtra por
+    proyecto, de modo que entran las criticas de ese proyecto y no las de
+    otro"). Una identidad de categoría no ordinaria de otro proyecto no
+    entra, aunque la consulta active la categoría buscable."""
+    categoria_por_identidad = {
+        "DEC-003": CATEGORIA_DE_MAXIMA_CRITICIDAD,
+        "MEM-101": CATEGORIA_DE_MAXIMA_CRITICIDAD,
+        "MEM-001": CATEGORIA_DE_MAXIMA_CRITICIDAD,
+    }
+    proyecto_por_identidad = {
+        "DEC-003": "PRJ-ALFA",
+        "MEM-101": "PRJ-GAMMA",
+        "MEM-001": "PRJ-GLOBAL",
+    }
+
+    admitido = indice_de_categoria(
+        consulta="¿Cuáles son las restricciones esenciales?",
+        ya_admitidos=(),
+        categoria_por_identidad=categoria_por_identidad,
+        ambito_declarado="PRJ-ALFA",
+        proyecto_por_identidad=proyecto_por_identidad,
+    )
+    # DEC-003 (mismo proyecto) y MEM-001 (ámbito global) entran; MEM-101
+    # (otro proyecto) no.
+    assert admitido == frozenset({"DEC-003", "MEM-001"})
+
+    # Ámbito GLOBAL: todas las identidades de máxima criticidad entran,
+    # cualquiera que sea su proyecto.
+    admitido_global = indice_de_categoria(
+        consulta="¿Cuáles son las restricciones esenciales?",
+        ya_admitidos=(),
+        categoria_por_identidad=categoria_por_identidad,
+        ambito_declarado="GLOBAL",
+        proyecto_por_identidad=proyecto_por_identidad,
+    )
+    assert admitido_global == frozenset({"DEC-003", "MEM-101", "MEM-001"})
+
+    # Sin activación de la categoría buscable, no admite nada, sin importar
+    # el ámbito.
+    assert (
+        indice_de_categoria(
+            consulta="¿Cuál es el presupuesto de Beta?",
+            ya_admitidos=(),
+            categoria_por_identidad=categoria_por_identidad,
+            ambito_declarado="PRJ-ALFA",
             proyecto_por_identidad=proyecto_por_identidad,
         )
         == frozenset()
