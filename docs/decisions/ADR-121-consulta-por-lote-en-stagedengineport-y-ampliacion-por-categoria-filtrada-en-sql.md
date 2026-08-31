@@ -227,6 +227,37 @@ introdujo, sin tocarla.
   skipped (Ollama real, no disponible en CI), 1 xfailed (mismo xfail
   preexistente de M11) — mismo resultado que antes de este encargo.
 
+## Reconciliación con la especificación de arquitectura (ronda 4, CODEX-001, incidencia #489)
+
+`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:1888-1895` (§11.4, punto
+2 del plan de optimización) y `:1937-1948` (§11.5, criterio de aceptación de M13) fijan
+`WHERE category IN (...)` y miden "las filas que coinciden con la categoría solicitada".
+Ese texto describe correctamente el encargo M13 tal como estaba planteado frente a la regla
+de coincidencia vigente cuando se escribió: `category_matches_query`, que compara la
+categoría de un candidato contra el único término presente en la consulta (activación
+simple, M9).
+
+Ese contrato quedó sustituido por la fusión de M14 (incidencia #486, PR #488, aprobada por
+el propietario mediante fusión de la PR — mismo mecanismo de aprobación que esta ADR declara
+arriba), que introdujo `category_index_matches_query` (ADR-113, ADR-114): activación
+múltiple que ya no compara la categoría de un candidato contra un término concreto — activa
+la ampliación para **todo** candidato ya categorizado en cuanto la consulta contiene
+cualquier término del vocabulario. M14 se fusionó antes de que esta incidencia (#489)
+implementara la parte SQL de M13, así que el filtro SQL que este ADR decide (`WHERE
+category IS NOT NULL`, sección «Decisión» arriba) expresa la regla de M14 ya aprobada y
+fusionada, no la de `category_matches_query` que el texto de §11.4/§11.5 seguía
+describiendo.
+
+Queda supersedido, únicamente en la expresión SQL del filtro de `solo_por_categoria` y en
+la lectura de "la categoría solicitada" como una categoría única, el texto de
+`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md` en §11.4 punto 2 y
+§11.5-M13 citado arriba, por la regla de M14 que ese mismo documento fija en §11.5-M14
+(ADR-113/ADR-114, ya aprobadas y fusionadas). El resto de esos dos puntos —consulta en lote
+por `IN (...)`/`OR` para claves/prefijos, y el criterio de que el número de filas no
+dependa del tamaño total del corpus— sigue vigente sin cambios; esta reconciliación no
+altera ámbito, orden ni ninguna otra pieza de M13/M14. El documento de arquitectura lleva,
+en el propio texto supersedido, una nota que remite a esta sección.
+
 ## Consecuencias
 
 `StagedEnginePort` y los repositorios de memoria/decisión ganan un método

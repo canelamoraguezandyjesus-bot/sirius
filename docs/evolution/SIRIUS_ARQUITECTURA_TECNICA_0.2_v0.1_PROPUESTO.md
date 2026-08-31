@@ -1893,6 +1893,18 @@ que el escenario (b), sin Ollama, mida en la misma banda que (a)/(c)).
    (`WHERE category IN (...)`, mismo patrón por lote que el punto 1), que solo devuelve los
    candidatos de las categorías relevantes en vez de cargar el corpus completo en memoria
    para filtrarlo en Python.
+
+   > **Nota de reconciliación post-M14 (ADR-121, incidencia #489, ronda 4, CODEX-001):**
+   > este `WHERE category IN (...)` describe el encargo frente a la regla de coincidencia
+   > vigente cuando se escribió (`category_matches_query`, comparación contra el único
+   > término presente en la consulta). §11.5-M14 más abajo (incidencia #486, PR #488, ya
+   > fusionada) sustituyó esa regla por `category_index_matches_query` (ADR-113/ADR-114):
+   > activación múltiple que ya no compara la categoría del candidato contra un término
+   > concreto. M14 se fusionó antes de que esta incidencia (#489) implementara la parte SQL
+   > de M13, así que el filtro que expresa esa regla ya aprobada es `WHERE category IS NOT
+   > NULL` tras la puerta de activación en Python, no `WHERE category IN (vocabulario)` —
+   > ver ADR-121, sección «Reconciliación con la especificación de arquitectura», para el
+   > contrato vigente y la cita exacta de la aprobación.
 3. **M17** (medición) mide si M13 basta para bajar de los ~450-780 ms actuales a ≤ 300 ms
    P95 en los tres escenarios; si no basta, M17 lo registra tal cual —igual que ADR-117
    registró el incumplimiento de M11— y esta arquitectura no promete de antemano que M13
@@ -1947,6 +1959,18 @@ siguiera enumerando. Ninguna prueba de identidad existente
 `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`, el arnés de examen) cambia de
 resultado — la optimización no puede alterar qué se admite ni en qué orden, solo cuántas
 filas cuesta calcularlo.
+
+> **Nota de reconciliación post-M14 (ADR-121, incidencia #489, ronda 4, CODEX-001):** "la
+> categoría solicitada" y "coincide con la categoría", arriba, describen el encargo frente
+> a la regla de coincidencia vigente cuando se escribió (comparación contra un único
+> término). Tras fusionarse M14 (§11.5-M14, justo abajo; ADR-113/ADR-114; incidencia #486,
+> PR #488), `solo_por_categoria` activa la ampliación para todo candidato ya categorizado
+> en cuanto la consulta contiene cualquier término del vocabulario, sin comparar contra un
+> término concreto. El criterio de aceptación sigue vigente sin cambiar su forma de medir
+> (contar filas devueltas, comprobar que dependen del subconjunto ya categorizado y no del
+> corpus completo); lo que queda supersedido es únicamente la lectura de "la categoría
+> solicitada" como una categoría única — ver ADR-121, sección «Reconciliación con la
+> especificación de arquitectura».
 
 **M14 — Índice de categoría buscable de activación múltiple, con restricción de ámbito, tras la puerta**
 
