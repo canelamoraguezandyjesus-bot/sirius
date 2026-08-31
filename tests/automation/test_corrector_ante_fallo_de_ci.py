@@ -261,3 +261,26 @@ def test_el_rol_del_corrector_declara_la_autoridad_de_las_decisiones() -> None:
         "el rol ya no dice que una decisión registrada del propietario se "
         "ejecuta en vez de re-plantearse: #469 y #471 se repetirían"
     )
+
+
+def test_el_head_movido_relanza_el_quality_ya_consumido() -> None:
+    """Revisión de la PR #477 (P1): si el Quality del head actual TERMINÓ antes
+    de la transición a ci-pending, su workflow_run ya se consumió y nadie
+    volvería a enrutar hasta el reconciliador. La rama relanza ese run."""
+    guion = _sin_comentarios(_paso_de_la_puerta())
+    despues = guion[guion.index("head-movido-tras-ci") :]
+    assert "/rerun" in despues.split("sin-observaciones")[0], (
+        "la rama head-movido-tras-ci no relanza el run terminado: un verde "
+        "llegado antes de la transición dejaría la incidencia horas en "
+        "ci-pending y un rojo exigiría intervención manual"
+    )
+
+
+def test_una_lectura_caida_de_decisiones_para_en_seguro() -> None:
+    """Revisión de la PR #477 (P1): una lectura caída NO es «(ninguna)».
+    Arrancar al corrector sin saber si existen decisiones recrearía H-35."""
+    guion = _sin_comentarios(_paso_de_la_puerta())
+    assert "decisiones-ilegibles" in guion, (
+        "desapareció la parada segura ante decisiones ilegibles: el corrector "
+        "podría revertir una decisión que nunca llegó a leer"
+    )

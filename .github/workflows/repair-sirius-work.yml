@@ -402,6 +402,24 @@ jobs:
               parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
                 "sirius:ci-pending" "FBCA04" "Evento consumible: en espera de Quality" \
                 "noclose" "sirius:repair-requested" || echo "::error::No se pudo devolver la incidencia a ci-pending (head-movido-tras-ci)."
+              # Carrera de eventos (revision de la PR #477): si el Quality del
+              # head actual TERMINO antes de esta transicion, su workflow_run
+              # ya se consumio con la incidencia todavia en repair-requested y
+              # nadie volvera a disparar el enrutado hasta el reconciliador.
+              # Se relanza ese run terminado con el PAT (identidad real): su
+              # nueva finalizacion vuelve a emitir workflow_run y el avance,
+              # ahora si, encuentra la incidencia en ci-pending. Si no hay run
+              # terminado (sigue en cola o corriendo), no hace falta nada: su
+              # finalizacion natural disparara el enrutado.
+              run_terminado="$(sirius_retry gh api \
+                "repos/${GH_REPO}/actions/workflows/quality.yml/runs?head_sha=${pr_head}&status=completed&per_page=1" \
+                --jq '.workflow_runs[0].id // empty' 2>/dev/null || true)"
+              if [ -n "${run_terminado:-}" ]; then
+                ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"
+                  sirius_retry gh api -X POST \
+                    "repos/${GH_REPO}/actions/runs/${run_terminado}/rerun" >/dev/null ) \
+                  || echo "::warning::No se pudo relanzar el run ${run_terminado}; el reconciliador lo recogera."
+              fi
               rm -f "$body_file" "$comments_file"
               echo "valid=false" >> "$GITHUB_OUTPUT"
               exit 0
@@ -425,13 +443,28 @@ jobs:
           # propietario publica en la incidencia no llegaban al corrector, que
           # re-planteaba disyuntivas ya resueltas o las revertia sin saberlo.
           # Se extraen aqui (autoria OWNER, cuerpo que empieza por DECISI) y el
-          # prompt las inyecta como contexto vinculante. Best-effort: si la
-          # lectura falla, el fichero queda vacio y el prompt dice "(ninguna)" —
-          # exactamente el comportamiento de antes de este arreglo.
-          sirius_retry gh api --paginate "repos/${GH_REPO}/issues/${ISSUE_NUMBER}/comments?per_page=100" \
+          # prompt las inyecta como contexto vinculante.
+          #
+          # Una lectura CAIDA no es "(ninguna)" (revision de la PR #477): si
+          # esta llamada falla tras los reintentos, no se sabe si existen
+          # decisiones, y arrancar al corrector sin ellas recrearia exactamente
+          # lo que H-35 impide — corregir revirtiendo una decision que nunca
+          # llego. Ante la duda, parada segura, como el resto de la puerta.
+          if ! sirius_retry gh api --paginate "repos/${GH_REPO}/issues/${ISSUE_NUMBER}/comments?per_page=100" \
             --jq '[.[] | select(.author_association=="OWNER") | select(.body | startswith("DECISI"))] | .[].body' \
-            >"${RUNNER_TEMP}/sirius_owner_decisions.md" 2>/dev/null \
-            || : >"${RUNNER_TEMP}/sirius_owner_decisions.md"
+            >"${RUNNER_TEMP}/sirius_owner_decisions.md" 2>/dev/null; then
+            marker="<!-- sirius-verdict:corrector:precheck:decisiones-ilegibles:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
+            body_file="$(mktemp)"
+            printf '%s\n\n%s\n\n%s\n' \
+              "$marker" "🔴 **Me he detenido de forma segura**" \
+              "No pude leer los comentarios de la incidencia para extraer las decisiones del propietario. Sin saber si existen, corregir a ciegas podría revertir una decisión ya tomada (H-35), así que me detengo. Reintentable con \\`continua\\`." >"$body_file"
+            parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+              "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
+              "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar la parada segura (decisiones-ilegibles)."
+            rm -f "$body_file" "$comments_file"
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           # Puede quedar VACÍO a propósito: es el caso de H-14, una ronda abierta
           # por un fallo de Quality. El corrector lo distingue por el propio

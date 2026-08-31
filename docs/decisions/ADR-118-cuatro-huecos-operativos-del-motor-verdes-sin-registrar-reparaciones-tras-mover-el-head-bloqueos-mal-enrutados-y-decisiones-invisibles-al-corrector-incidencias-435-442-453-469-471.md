@@ -102,6 +102,24 @@ Los cuatro arreglos descritos, cada uno con su prueba:
   `ci-pending`; la extracción de decisiones con su filtro de autoría; la
   inyección en el prompt; la declaración de autoridad en el rol).
 
+## Ronda de revisión de la PR #477
+
+La revisión de Codex afinó tres piezas, incorporadas antes de fusionar:
+
+1. **Carrera de eventos en H-36**: si el Quality del head actual terminó
+   antes de la transición a `ci-pending`, su `workflow_run` ya se consumió;
+   la rama relanza ese run terminado (con el PAT) para que su nueva
+   finalización dispare el enrutado, en vez de esperar horas al
+   reconciliador.
+2. **H-35 falla cerrado**: una lectura caída de los comentarios no es
+   «(ninguna) decisión» — la puerta se detiene en seguro en vez de arrancar
+   al corrector a ciegas.
+3. **El reset de convergencia es solo para bloqueos de convergencia**: un
+   `blocked-decision` emitido por un rol (marcador `:blocked:`) se reanuda
+   sin perdonar rondas; el listón del bucle queda intacto. Sin marcador
+   (historiales anteriores al convenio) se conserva el comportamiento
+   histórico.
+
 ## Consecuencias
 
 - Positivas: las cuatro paradas mudas de la noche pasan a resolverse solas o

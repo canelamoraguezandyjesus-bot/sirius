@@ -570,6 +570,11 @@ def test_un_implementador_bloqueado_con_pr_vuelve_a_implementacion(tmp_path: Pat
     )
     assert "sirius:repair-requested" not in _etiquetas(env)
     assert "sirius:blocked-decision" not in _etiquetas(env)
+    assert "sirius-convergence-reset" not in _comentarios(env), (
+        "un bloqueo de ROL no perdona rondas de convergencia: el propietario "
+        "contestó una decisión, no autorizó borrar el listón del bucle"
+    )
+    assert "sirius-resume-stop" in _comentarios(env)
 
 
 def test_un_corrector_bloqueado_sigue_volviendo_al_corrector(tmp_path: Path) -> None:
@@ -583,6 +588,10 @@ def test_un_corrector_bloqueado_sigue_volviendo_al_corrector(tmp_path: Path) -> 
     resultado = _ejecutar(env)
     assert resultado.returncode == 0, resultado.stderr
     assert "sirius:repair-requested" in _etiquetas(env)
+    assert "sirius-convergence-reset" not in _comentarios(env), (
+        "también un BLOCKED_BY_DECISION del propio corrector es una decisión "
+        "de rol, no una parada de convergencia: el listón no se toca"
+    )
 
 
 def test_manda_la_ultima_parada_tambien_entre_bloqueos(tmp_path: Path) -> None:
@@ -604,6 +613,10 @@ def test_manda_la_ultima_parada_tambien_entre_bloqueos(tmp_path: Path) -> None:
     assert "sirius:repair-requested" in _etiquetas(env), (
         "la parada vigente es la última publicada (convergencia, del corrector); "
         "una parada vieja del implementador no puede secuestrar la vuelta"
+    )
+    assert f"<!-- sirius-convergence-reset:{HEAD} -->" in _comentarios(env), (
+        "un bloqueo DE CONVERGENCIA sí resetea el listón al reanudarse: ese es "
+        "el comportamiento de ADR-030 que no se quería cambiar"
     )
 
 

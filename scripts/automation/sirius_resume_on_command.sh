@@ -227,9 +227,20 @@ case "$parada" in
       echo "::error::No se pudieron leer los comentarios de #${ISSUE}; no puedo saber que fase se detuvo. Reintentable."
       exit 1
     fi
-    rol_parado="$(grep -oE '<!-- sirius-verdict:(implementer|reviewer|corrector):(FAILED_SAFELY|precheck|blocked):' \
-      "$dump_file" | tail -n 1 | cut -d: -f2)"
+    marcador_vigente="$(grep -oE '<!-- sirius-verdict:(implementer|reviewer|corrector):(FAILED_SAFELY|precheck|blocked)[^>]*-->' \
+      "$dump_file" | tail -n 1)"
+    rol_parado="$(printf '%s' "$marcador_vigente" | cut -d: -f2)"
     rm -f "$dump_file"
+    # El reset del liston de convergencia solo corresponde cuando el bloqueo
+    # FUE de la politica de convergencia (revision de la PR #477): perdonar
+    # rondas porque un ROL pidio una decision debilitaria el guarda del bucle
+    # para las correcciones posteriores. Sin marcador (historiales anteriores
+    # al convenio) se conserva el comportamiento historico: convergencia.
+    if [ -z "$marcador_vigente" ] || printf '%s' "$marcador_vigente" | grep -q ':precheck:convergencia-'; then
+      bloqueo_de_convergencia="true"
+    else
+      bloqueo_de_convergencia="false"
+    fi
     if ! etiqueta_destino="$(destino_de_rol "$rol_parado")"; then
       etiqueta_destino="sirius:repair-requested"
     fi
@@ -287,7 +298,7 @@ if [ "$sin_pr" = "true" ]; then
     "🟢 **Reinicio autorizado por el propietario**" \
     "Esta incidencia se detuvo **antes de producir ninguna rama ni PR**, así que no hay ningún head sobre el que continuar: lo que se autoriza es **repetir desde cero** la fase que se paró (\`${etiqueta_destino}\`)." \
     "El historial queda intacto y no se perdona ninguna ronda: sin PR no hubo rondas que contar. Si la fase se vuelve a caer, se detendrá otra vez con su diagnóstico." >"$body_file"
-elif [ "$parada" = "sirius:blocked-decision" ]; then
+elif [ "$parada" = "sirius:blocked-decision" ] && [ "${bloqueo_de_convergencia:-true}" = "true" ]; then
   marker="<!-- sirius-convergence-reset:${head_sha} -->"
   printf '%s\n\n%s\n\n%s\n\n%s\n' \
     "$marker" \
