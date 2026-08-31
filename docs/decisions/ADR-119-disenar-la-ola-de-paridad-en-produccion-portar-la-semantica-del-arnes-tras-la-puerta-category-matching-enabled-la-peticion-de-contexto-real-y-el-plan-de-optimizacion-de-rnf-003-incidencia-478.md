@@ -117,21 +117,45 @@ Para RNF-003:
 **Semántica de puerta abierta: opción (b), acotada a cuatro de las cinco
 piezas.** Se diseña sustituir, exclusiva y únicamente cuando
 `category_matching_enabled` es `True`, la activación única y el candado-unión
-de M10 por las piezas que ADR-113 (causas 1 y 2 de ADR-112), ADR-114
-(restricción de ámbito) y ADR-115 (G8/G12 sobre la ampliación) ya midieron en
-el arnés como necesarias para alcanzar 29/47, ≤1 crítica y 63/81 de cobertura
-— categoría buscable de activación múltiple con restricción de ámbito, regla
-de críticas original RF-25/RF-26, y G8/G12 sobre esa ampliación. La quinta
-pieza que ADR-113 también midió, la siembra en contexto, **no** forma parte
-de lo que este ADR decide portar: la definición de Producto documenta que
+de M10 por cuatro piezas que ADR-113 (causas 1 y 2 de ADR-112), ADR-114
+(restricción de ámbito) y ADR-115 (G8/G12 sobre la ampliación) ya midieron,
+cada una por separado, como necesaria para cerrar la causa que le
+corresponde — categoría buscable de activación múltiple con restricción de
+ámbito, regla de críticas original RF-25/RF-26, y G8/G12 sobre esa
+ampliación. **Ninguna medición existente aísla estas cuatro piezas de la
+quinta** (la siembra en contexto): la fila final de ADR-113 que primero
+alcanza 0 omisiones críticas y 63/81 de cobertura ya incluye la siembra
+(fila 3, con siembra), y la fila final de ADR-115 que alcanza el suelo D1
+completo, 29/47, aplica G8/G12 sobre `obtenido_por_el_motor | categoria |
+siembra` (ADR-115, sección «Decisión») — también con la siembra dentro del
+conjunto. La única medición de las cuatro piezas *sin* la quinta es la fila
+2 de ADR-113 (categoría + RF-25/RF-26, todavía sin restricción de ámbito ni
+G8/G12): 27/47, 4 omisiones críticas, 59/81 de cobertura — por debajo del
+suelo D1 en tres de las cuatro métricas. Por tanto, **este ADR no puede
+afirmar, ni afirma, que las cuatro piezas solas basten para 29/47/≤1
+crítica/63/81**: esa cifra combinada nunca se midió sin la quinta pieza.
+Lo que la decisión de abajo diseña es la sustitución de las cuatro piezas;
+si son o no suficientes por sí solas queda como pregunta abierta que M16
+mide por primera vez sobre el camino real (§11.5 de la Arquitectura) y que
+M17 evalúa contra el suelo D1, registrando el resultado real —alcanzado o
+no— sin maquillarlo, exactamente como ya exige el criterio de aceptación de
+M17. La quinta pieza que ADR-113 también midió, la siembra en contexto,
+**no** forma parte de lo que este ADR decide portar: la definición de Producto documenta que
 `siembra_de_contexto` se confirma «por construcción» (solo 2 de los 47 casos
 del banco la ejercitan, no de forma independiente), y el plan de pruebas fija
-como precondición de PA-0.2-REC-01 que el banco se amplíe con casos
-independientes que la ejerciten, o que se retire del código, antes de poder
-portarla — ninguna de las dos se ha resuelto todavía. Portar
-`siembra_de_contexto` queda como decisión de un encargo posterior, condicionado
-a que el propietario registre esa precondición como resuelta, igual que D3
-(§6.6) deja aplazada la omisión léxica. El detalle de esta exclusión vive en
+como precondición de PA-0.2-REC-01 que se resuelva por una de dos vías
+excluyentes entre sí, nunca ambas — ampliar el banco con casos independientes
+que la ejerciten, o retirarla del código —; ninguna de las dos se ha resuelto
+todavía. Estas dos vías no llevan al mismo destino: si el propietario amplía
+el banco, la precondición queda resuelta dejando abierto que un encargo
+posterior reconsidere portar `siembra_de_contexto`, condicionado a que el
+propietario registre esa reconsideración; si el propietario la retira del
+código, la precondición queda resuelta cerrando esa alternativa — no
+quedaría `siembra_de_contexto` que portar, y ningún encargo posterior la
+porta. Este ADR no escoge por el propietario cuál de las dos vías se sigue;
+solo la deja fuera de la opción (b) mientras la elección no se registre,
+igual que D3 (§6.6) deja aplazada la omisión léxica hasta que se registre su
+propia decisión. El detalle de esta bifurcación vive en
 `docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md` §11.2 y
 §11.5 (M15). Se justifica citando el coste medido de no sustituir las cuatro
 piezas que sí se deciden: ADR-111 mide 23/47 con la petición por caso ya

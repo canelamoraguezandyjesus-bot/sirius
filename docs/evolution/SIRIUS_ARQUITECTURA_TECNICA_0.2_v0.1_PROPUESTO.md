@@ -1690,6 +1690,20 @@ sustituir estas piezas, ningún encargo futuro puede acercar el camino real al s
 la misma disyuntiva que ADR-117 dejó explícitamente para «la siguiente ola, del
 propietario», y esta incidencia es esa ola.
 
+**Lo que esta justificación no puede afirmar: que las cuatro piezas de abajo, solas y sin
+la siembra en contexto, ya se midieron suficientes para 29/47, ≤1 crítica y 63/81.**
+Ninguna medición existente aísla estas cuatro piezas de la quinta (la siembra): la fila
+final de ADR-113 que primero llega a 0 omisiones críticas y 63/81 de cobertura ya incluye
+la siembra (fila 3), y la fila final de ADR-115 que alcanza el suelo D1 completo, 29/47,
+aplica G8/G12 sobre `obtenido_por_el_motor | categoria | siembra` — también con la siembra
+dentro del conjunto. La única medición de las cuatro piezas *sin* la quinta es la fila 2 de
+ADR-113 (categoría + RF-25/RF-26, todavía sin restricción de ámbito ni G8/G12): 27/47, 4
+omisiones críticas, 59/81 de cobertura — por debajo del suelo D1 en tres de las cuatro
+métricas. Si estas cuatro piezas bastan por sí solas es, por tanto, una pregunta abierta,
+no una cifra ya establecida: M16 la mide por primera vez sobre el camino real (§11.5) y M17
+la evalúa contra el suelo D1, registrando el resultado real —alcanzado o no— sin
+maquillarlo.
+
 **Qué se porta, detrás de la puerta abierta, en producción:**
 
 - Un índice de categoría buscable de activación múltiple, paralelo a
@@ -1724,13 +1738,19 @@ propietario», y esta incidencia es esa ola.
 **Siembra en contexto: aplazada, no se porta en esta decisión.** `siembra_de_contexto`
 queda fuera de la sustitución anterior mientras su precondición documentada siga sin
 resolverse (M15, más abajo, la nombra con su cita exacta): solo dos de los 47 casos del
-banco la ejercitan y se confirma «por construcción», no de forma independiente. Portarla
-exige, antes, que el propietario registre esa decisión y se cumpla una de las dos
-alternativas que el plan de pruebas fija como precondición de PA-0.2-REC-01 — ampliar el
-banco con casos independientes que la ejerciten, o retirarla del código —, igual que D3
-(§6.6) deja aplazada la omisión léxica hasta que se registre su propia decisión. Esta ola
-no la incluye en la opción (b) que ADR-119 decide: la opción (b) se restringe, en esta
-incidencia, a las cuatro piezas de arriba.
+banco la ejercitan y se confirma «por construcción», no de forma independiente. El plan de
+pruebas fija como precondición de PA-0.2-REC-01 que se resuelva por una de dos vías
+excluyentes entre sí, nunca ambas — ampliar el banco con casos independientes que la
+ejerciten, o retirarla del código —, y las dos vías no llevan al mismo destino: ampliar el
+banco resuelve la precondición dejando abierto que un encargo posterior reconsidere portar
+`siembra_de_contexto` (condicionado a que el propietario registre esa reconsideración);
+retirarla del código resuelve la precondición cerrando esa alternativa — no quedaría
+`siembra_de_contexto` que portar, y ningún encargo posterior la porta. Este documento no
+escoge por el propietario cuál de las dos vías se sigue; solo la deja fuera de la opción
+(b) mientras la elección no se registre, igual que D3 (§6.6) deja aplazada la omisión
+léxica hasta que se registre su propia decisión. Esta ola no la incluye en la opción (b)
+que ADR-119 decide: la opción (b) se restringe, en esta incidencia, a las cuatro piezas de
+arriba.
 
 Estas cuatro piezas viven, con la puerta abierta, en el mismo punto de integración que §6.2
 ya fijaba —dentro de `RankRelevantKnowledgeUseCase._rank_via_staged_engine`
@@ -1953,15 +1973,18 @@ observar fallos y que solo dos de los 47 casos del banco la ejercitan, por lo qu
 confirma «por construcción», no de forma independiente
 (`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:100-106`); el plan de
 pruebas fija como precondición de PA-0.2-REC-01, antes de poder declarar superada esa PA,
-que el banco se amplíe con casos independientes que ejerciten la siembra, o que la siembra
-se retire del código
+que se resuelva por una de dos vías excluyentes entre sí — el banco se amplíe con casos
+independientes que ejerciten la siembra, o la siembra se retire del código —
 (`docs/evolution/SIRIUS_PLAN_PRUEBAS_0.2_v0.1_PROPUESTO.md:124-131`). M15 **no** porta la
 siembra a producción mientras esa precondición siga sin resolverse: construye únicamente
-RF-25/RF-26 y G8/G12 sobre el conjunto motor+categoría (sin siembra). Portar
-`siembra_de_contexto` queda como alcance de un encargo posterior, condicionado a que el
-propietario registre la decisión y se cumpla una de las dos alternativas — ampliar el
-banco o retirar la siembra —, igual que D3 (§6.6) deja aplazada la omisión léxica hasta
-que se registre su propia decisión.
+RF-25/RF-26 y G8/G12 sobre el conjunto motor+categoría (sin siembra). Las dos vías no
+llevan al mismo destino: si el propietario amplía el banco, la precondición queda resuelta
+dejando `siembra_de_contexto` como alcance de un encargo posterior, condicionado a que el
+propietario registre esa reconsideración; si el propietario la retira del código, la
+precondición queda resuelta cerrando esa alternativa — no dejándola abierta a un encargo
+posterior, porque no quedaría siembra que portar. Este encargo no escoge por el
+propietario cuál de las dos vías se sigue, igual que D3 (§6.6) deja aplazada la omisión
+léxica hasta que se registre su propia decisión.
 
 **Criterio de aceptación:** una prueba con un doble determinista de `RelevanceFilterPort`
 que descarta explícitamente una identidad de categoría de máxima criticidad confirma que
@@ -1991,7 +2014,11 @@ pasar por `ContextBuilder` (si alguna existe en la suite) no se ve afectada porq
 propósito lo fija `rank()` mismo, no el llamador; re-ejecutar la prueba de M7/M11 sobre el
 banco con las piezas de M13-M16 integradas y reportar las cuatro métricas —sin exigir
 todavía el suelo D1 completo, eso es M17—; volver a correr el benchmark de ADR-008/§6.4/§11.4
-y publicar el P95 medido con las piezas ya integradas.
+y publicar el P95 medido con las piezas ya integradas. **Esta re-ejecución es la primera
+medición de las cuatro piezas de §11.2 sin la siembra en contexto**: ningún ADR previo
+(ADR-113/114/115) midió esa combinación exacta —sus cifras de 29/47, 0 críticas y 63/81
+incluyen siempre la siembra dentro del conjunto—, así que su resultado no está
+predeterminado por evidencia ya publicada; M17 lo evalúa contra el suelo D1 tal cual salga.
 
 **M17 — Medición final: cierre de la ola**
 
@@ -2015,9 +2042,11 @@ retiren sus cuatro marcas; al retirarlas todas (sustituyendo cada
 `@pytest.mark.xfail(strict=True, reason=...)` por una aserción ordinaria, sin debilitar
 ningún umbral que afirman), la suite completa queda en verde. Si M13-M16 no bastan para
 alcanzar alguno de los cuatro suelos —el propio §11.4 ya advierte que optimizar las causas
-conocidas no garantiza llegar a 300 ms, y que la Producción de M14/M15 podría no cerrar el
-29/47 ni las otras dos métricas si la parte no cerrable de §11.3 resulta ser la causa
-dominante—, M17 no fuerza el verde: registra la cifra real alcanzada para cada una de las
+conocidas no garantiza llegar a 300 ms; la Producción de M14/M15 podría no cerrar el 29/47
+ni las otras dos métricas si la parte no cerrable de §11.3 resulta ser la causa dominante;
+y, como registra §11.2 arriba, ninguna medición previa aísla las cuatro piezas portadas de
+la siembra en contexto que queda fuera, así que 29/47, ≤1 crítica y 63/81 tampoco están
+garantizados solo con esas cuatro piezas—, M17 no fuerza el verde: registra la cifra real alcanzada para cada una de las
 cuatro métricas, actualiza este documento y `docs/evolution/STATUS.md` con el resultado, y
 dejar en pie las marcas `xfail` que no hayan pasado es la única salida honesta,
 exactamente como D3 (§6.6) ya deja abierta y aplazada la omisión léxica si M12 no la
