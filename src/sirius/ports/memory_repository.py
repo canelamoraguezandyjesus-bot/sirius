@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Protocol
 
 from sirius.domain.memory import Memory, MemoryRevision
@@ -43,6 +44,25 @@ class MemoryRepository(Protocol):
 
     def list_current_memories(self) -> list[Memory]:
         """Return every memory whose status is CURRENT."""
+        ...
+
+    def list_current_memories_by_category(self, categories: Sequence[str]) -> list[Memory]:
+        """Return every CURRENT memory with a non-``None`` ``category``,
+        filtered in SQL (ADR-122/M13; CODEX-001, incidencia #489).
+
+        ``categories`` (the closed vocabulary) is only ever an activation
+        gate here, mirroring ``category_index_matches_query``'s own
+        condition (``category is not None``, never compared against a
+        specific vocabulary term): empty returns an empty list without
+        querying, exactly like that function's "no vocabulary term
+        activated, matches nothing" rule. When non-empty, every memory whose
+        persisted ``category`` is not ``None`` is returned, even one that no
+        longer belongs to the current vocabulary — ``SetCategoryUseCase``
+        never validates the category it writes, and the vocabulary itself is
+        a provisional constant a later milestone can replace, so a legacy,
+        out-of-vocabulary category is reachable state and must still widen
+        the category-only match (M9 §6.2), not be silently dropped.
+        """
         ...
 
     def list_archived_memories(self) -> list[Memory]:

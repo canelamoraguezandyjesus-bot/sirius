@@ -164,6 +164,9 @@ class _StaticMemoryRepository:
     def list_current_memories(self) -> list[Memory]:
         return self._memories
 
+    def list_current_memories_by_category(self, categories: Sequence[str]) -> list[Memory]:
+        raise AssertionError("export_structured() must never list memories by category")
+
     def list_archived_memories(self) -> list[Memory]:
         raise AssertionError("export_structured() must never list archived memories")
 
@@ -211,6 +214,9 @@ class _StaticDecisionRepository:
 
     def list_current_decisions(self) -> list[Decision]:
         return self._decisions
+
+    def list_current_decisions_by_category(self, categories: Sequence[str]) -> list[Decision]:
+        raise AssertionError("export_structured() must never list decisions by category")
 
     def list_proposed_decisions(self) -> list[Decision]:
         raise AssertionError("export_structured() must never list proposed decisions")

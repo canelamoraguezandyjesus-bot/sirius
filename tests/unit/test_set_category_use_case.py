@@ -8,6 +8,7 @@ exactly that — which repository gets called, with which arguments, for each
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from sirius.application.set_category import SetCategoryUseCase
@@ -75,6 +76,9 @@ class _FakeMemoryRepository:
     def list_current_memories(self) -> list[Memory]:
         raise AssertionError(_UNUSED_MEMORY_MESSAGE)
 
+    def list_current_memories_by_category(self, categories: Sequence[str]) -> list[Memory]:
+        raise AssertionError(_UNUSED_MEMORY_MESSAGE)
+
     def list_archived_memories(self) -> list[Memory]:
         raise AssertionError(_UNUSED_MEMORY_MESSAGE)
 
@@ -121,6 +125,9 @@ class _UnusedMemoryRepository:
         raise AssertionError(_UNUSED_MEMORY_MESSAGE)
 
     def list_current_memories(self) -> list[Memory]:
+        raise AssertionError(_UNUSED_MEMORY_MESSAGE)
+
+    def list_current_memories_by_category(self, categories: Sequence[str]) -> list[Memory]:
         raise AssertionError(_UNUSED_MEMORY_MESSAGE)
 
     def list_archived_memories(self) -> list[Memory]:
@@ -178,6 +185,9 @@ class _FakeDecisionRepository:
     def list_current_decisions(self) -> list[Decision]:
         raise AssertionError(_UNUSED_DECISION_MESSAGE)
 
+    def list_current_decisions_by_category(self, categories: Sequence[str]) -> list[Decision]:
+        raise AssertionError(_UNUSED_DECISION_MESSAGE)
+
     def list_proposed_decisions(self) -> list[Decision]:
         raise AssertionError(_UNUSED_DECISION_MESSAGE)
 
@@ -221,6 +231,9 @@ class _UnusedDecisionRepository:
         raise AssertionError(_UNUSED_DECISION_MESSAGE)
 
     def list_current_decisions(self) -> list[Decision]:
+        raise AssertionError(_UNUSED_DECISION_MESSAGE)
+
+    def list_current_decisions_by_category(self, categories: Sequence[str]) -> list[Decision]:
         raise AssertionError(_UNUSED_DECISION_MESSAGE)
 
     def list_proposed_decisions(self) -> list[Decision]:

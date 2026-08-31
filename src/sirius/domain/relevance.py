@@ -54,6 +54,13 @@ half), ``truncate_to_hard_limit`` (G12's hard-limit half) and
 ``rescue_max_criticality_candidates`` (RF-25/RF-26, replacing M10's
 candado-union as the integrity mechanism for max-criticality candidates).
 None of the three is used by ``rank_relevant_knowledge`` itself.
+
+M13 (SIRIUS-ARQ-0.2 §11.5, incidencia #489) factors ``category_index_activated``
+out of ``category_index_matches_query``: the same activation boolean, without
+a candidate's ``category``, so the amplification's caller can decide whether
+querying persistence for the category-filtered subset is worth it at all
+*before* asking, instead of loading the whole corpus to find out candidate by
+candidate.
 """
 
 from __future__ import annotations
@@ -71,6 +78,7 @@ __all__ = [
     "RankedKnowledge",
     "candidate_currently_valid",
     "candidate_in_declared_scope",
+    "category_index_activated",
     "category_index_matches_query",
     "category_matches_query",
     "rank_relevant_knowledge",
@@ -193,6 +201,26 @@ def category_matches_query(
     return category.casefold() in activated
 
 
+def category_index_activated(query_text: str, vocabulary: frozenset[str]) -> bool:
+    """M13 (SIRIUS-ARQ-0.2 §11.5, incidencia #489): the same activation
+    condition ``category_index_matches_query`` checks, factored out of the
+    per-candidate check below so a caller that needs to decide *before*
+    querying persistence (whether it is worth asking the repository for the
+    category-filtered subset at all) does not have to duplicate the
+    normalization rule and risk it diverging (ADR-008's own precedent for
+    this kind of factoring: ``activated_category_term`` did the same for
+    ``category_matches_query`` in the pre-M14 attempt at this optimization).
+
+    A blank query, or one that activates no vocabulary term at all, is not
+    activated — exactly like ``category_index_matches_query`` for any
+    candidate.
+    """
+    normalized_query = query_text.strip().casefold()
+    if not normalized_query:
+        return False
+    return any(term.casefold() in normalized_query for term in vocabulary)
+
+
 def category_index_matches_query(
     category: str | None, query_text: str, vocabulary: frozenset[str]
 ) -> bool:
@@ -211,14 +239,12 @@ def category_index_matches_query(
     ``category`` is ``None`` for a candidate with no classification yet
     (D7 point 2) — never a match, exactly like ``category_matches_query``. A
     blank query, or one that activates no vocabulary term at all, matches
-    nothing either.
+    nothing either. Delegates the activation rule itself to
+    ``category_index_activated``.
     """
     if category is None:
         return False
-    normalized_query = query_text.strip().casefold()
-    if not normalized_query:
-        return False
-    return any(term.casefold() in normalized_query for term in vocabulary)
+    return category_index_activated(query_text, vocabulary)
 
 
 def candidate_in_declared_scope(

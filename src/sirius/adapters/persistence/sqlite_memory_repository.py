@@ -205,6 +205,20 @@ class SqliteMemoryRepository:
             ).all()
             return _load_memories(session, models)
 
+    def list_current_memories_by_category(self, categories: Sequence[str]) -> list[Memory]:
+        if not categories:
+            return []
+        with self._scope() as session:
+            models = session.scalars(
+                select(MemoryModel)
+                .where(
+                    MemoryModel.status == MemoryStatus.CURRENT,
+                    MemoryModel.category.is_not(None),
+                )
+                .order_by(MemoryModel.id)
+            ).all()
+            return _load_memories(session, models)
+
     def list_archived_memories(self) -> list[Memory]:
         with self._scope() as session:
             models = session.scalars(
