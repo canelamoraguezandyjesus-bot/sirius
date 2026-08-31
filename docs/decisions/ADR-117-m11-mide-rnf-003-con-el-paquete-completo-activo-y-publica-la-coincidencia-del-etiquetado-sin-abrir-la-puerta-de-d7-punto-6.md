@@ -215,6 +215,49 @@ cómo se registra.
   registre en `STATUS.md` no puede apoyarse todavía en un dato real, solo en
   el mecanismo ya construido y verificado por su doble determinista.
 
+## Estado del hito: decisión
+
+Decisión del propietario en la incidencia #471 (comentario del 31 de agosto
+de 2026, 06:48, sesión interactiva bajo la delegación del paquete D1/D7,
+misma figura que la registrada en el ADR-115/incidencia #469): **M11 se
+entrega con su criterio de suelo explícitamente NO aprobado.**
+
+- **Queda aprobado** (se fusiona como evidencia): la maquinaria completa del
+  encargo — el cableado de la puerta de D7 punto 6 en `composition_root` con
+  validación estricta sobre el booleano JSON `true` exacto (CODEX-001,
+  incidencia #471), `MainWindow._save_configuration()` conservando claves
+  ajenas, las tres mediciones de RNF-003 con el paquete completo activo, la
+  ejecución del banco de 47 casos por el camino real de producción como
+  evidencia adicional, y el mecanismo de coincidencia del etiquetado (D7
+  punto 6). La puerta permanece cerrada al fusionar.
+- **Queda abierto**: el suelo del criterio de §8-M11 —
+  `aciertos_exactos ≥ 29/47` sobre el pipeline integrado real (hoy 4/47) y
+  `P95 ≤ 300 ms` (`LIMITE_OPERACION_MS`) en los tres escenarios de RNF-003
+  (hoy muy por encima) — no se alcanza en el camino de producción. Ese suelo
+  queda registrado como conocimiento ejecutable, no como prosa: dos pruebas
+  marcadas `pytest.mark.xfail(strict=True)` (
+  `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py::test_el_suelo_del_criterio_de_m11_aciertos_exactos_29_47_en_el_paquete_completo`
+  y
+  `tests/integration/test_local_performance.py::test_el_suelo_de_rnf_003_p95_300ms_en_los_tres_escenarios_del_paquete_completo`)
+  afirman el suelo tal cual está escrito en §8-M11 y fallan-como-se-espera
+  hoy; el día que el camino real lo alcance, `strict=True` hará que la
+  suite falle por un XPASS inesperado y obligará a retirar la marca — el
+  hito solo se aprueba cuando eso sea verdad. Esto resuelve CODEX-002
+  (r3892166684) y CODEX-003 (r3892166675) de la revisión de la PR #472: la
+  aserción de rango 0-47 que señalaba CODEX-002 se sustituye por una cota
+  de no regresión a lo medido (`_MINIMO_ACIERTOS_EXACTOS_PAQUETE_COMPLETO =
+  4`, el patrón de ADR-109..ADR-115); el guardarraíl de 1.500 ms que
+  señalaba CODEX-003 se conserva tal cual, solo como cota de no regresión
+  separada (`GUARDARRAIL_MS`, `test_construir_contexto_con_el_paquete_completo_activo_en_los_tres_escenarios`),
+  nunca presentado como el límite de M11.
+- **Decisión que NO se toma aquí**: elegir entre portar la semántica de
+  laboratorio del arnés de examen (§457-#469) al camino real de producción,
+  u optimizar el motor por etapas bajo carga para bajar de ~480 ms a
+  300 ms, es una decisión de producto de la **siguiente ola**, del
+  propietario — el propio comentario de decisión de la incidencia #471 lo
+  fija así, y ninguna corrección la toma por su cuenta. Ni Arquitectura ni
+  Producto se tocan por esta decisión.
+
 ## Alternativas descartadas y por qué
 
 Forzar el P95 de RNF-003 bajo 300 ms bajando `_RELEVANCE_FILTER_TIMEOUT_SECONDS`

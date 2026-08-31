@@ -608,3 +608,52 @@ def test_construir_contexto_con_el_paquete_completo_activo_en_los_tres_escenario
         "Escenarios de RNF-003 por encima del guardarraíl de "
         f"{GUARDARRAIL_MS:.0f} ms: {[(n, str(m)) for n, m in excedidas]}."
     )
+
+
+@pytest.mark.integration
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "M11 (incidencia #471, decisión del propietario del 31-08-2026 "
+        "06:48, ADR-117 sección 'Estado del hito: decisión'): el suelo de "
+        "RNF-003 en el camino integrado real (P95 <= 300 ms, "
+        "LIMITE_OPERACION_MS, en los tres escenarios de la incidencia "
+        "#435/CODEX-003) queda explícitamente NO aprobado -- hoy las tres "
+        "cifras miden muy por encima de 300 ms (ADR-117). Esta prueba "
+        "afirma el requisito tal cual está escrito (CODEX-003, "
+        "https://github.com/canelamoraguezandyjesus-bot/sirius/pull/472#discussion_r3892166675) "
+        "y falla-como-se-espera; el día que el motor por etapas baje de "
+        "300 ms P95 en los tres escenarios, strict=True hará que pase "
+        "inesperadamente y obligue a retirar la marca xfail -- el hito solo "
+        "se aprueba cuando eso sea verdad."
+    ),
+)
+def test_el_suelo_de_rnf_003_p95_300ms_en_los_tres_escenarios_del_paquete_completo(
+    banco: BancoDePruebas,
+) -> None:
+    """Criterio de aceptación de RNF-003/§8-M11
+    (`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:1415-1418`),
+    convertido en prueba ejecutable honesta por decisión del propietario
+    (incidencia #471, comentario del 31-08-2026 06:48). Reconstruye los
+    mismos tres escenarios que
+    `test_construir_contexto_con_el_paquete_completo_activo_en_los_tres_escenarios`
+    y afirma el límite real de RNF-003 (`LIMITE_OPERACION_MS`), no el
+    guardarraíl de disparate (`GUARDARRAIL_MS`) que esa prueba usa -- ver el
+    `reason` de arriba y ADR-117.
+    """
+    timeout_seconds = _RELEVANCE_FILTER_TIMEOUT_SECONDS
+    for _nombre, construir_cliente in _ESCENARIOS_RNF_003:
+        adapter = OllamaRelevanceFilterAdapter(
+            _RELEVANCE_FILTER_MODEL,
+            timeout_seconds=timeout_seconds,
+            client=construir_cliente(timeout_seconds),
+        )
+        builder = _build_context_builder_with_relevance_filter(banco.database_path, adapter)
+
+        def _construir(builder: ContextBuilder = builder) -> object:
+            return builder.build("cómo vamos con el despliegue")
+
+        medicion = _medir("construir contexto", _construir)
+        assert medicion.p95 <= LIMITE_OPERACION_MS, (
+            f"{medicion} supera el límite aprobado de {LIMITE_OPERACION_MS:.0f} ms."
+        )

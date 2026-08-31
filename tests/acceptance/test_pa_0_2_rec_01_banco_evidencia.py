@@ -205,6 +205,20 @@ _MAXIMO_ELEMENTOS_DE_MAS_MOTOR: Final[int] = 50
 _MAXIMO_OMISIONES_CRITICAS_MOTOR: Final[int] = 0
 _MINIMO_ELEMENTOS_HALLADOS_MOTOR: Final[int] = 63
 
+#: Medición actual publicada en el docstring de
+#: `test_el_banco_se_ejecuta_contra_el_paquete_completo_de_produccion_como_evidencia_adicional`
+#: (M11, incidencia #471, ADR-117): el camino de código real de producción
+#: (`RankRelevantKnowledgeUseCase`/`ContextBuilder` tal como `composition_root`
+#: los construye con la puerta de D7 punto 6 abierta) mide 4/47. CODEX-002
+#: (r3892166684) señaló que la aserción anterior aceptaba cualquier valor
+#: entre 0 y 47; por decisión del propietario (incidencia #471, comentario
+#: del 31-08-2026 06:48) se sustituye por esta cota unidireccional de no
+#: regresión a lo medido, el mismo patrón de `_MINIMO_ACIERTOS_EXACTOS_M7` y
+#: `_MINIMO_ACIERTOS_EXACTOS_MOTOR` de arriba — **no** es el suelo de
+#: §8-M11 (29/47): ese suelo lo afirma, sin salvedad, la prueba marcada
+#: `xfail(strict=True)` de más abajo.
+_MINIMO_ACIERTOS_EXACTOS_PAQUETE_COMPLETO: Final[int] = 4
+
 pytestmark = [pytest.mark.acceptance, pytest.mark.integration]
 
 
@@ -2073,13 +2087,44 @@ def test_el_banco_se_ejecuta_contra_el_paquete_completo_de_produccion_como_evide
         f"({examen.cobertura:.1%})"
     )
 
-    # Sanidad, no un suelo D1/D2: el arnés de examen sigue siendo la única
-    # medición que afirma esos suelos (ver arriba). Aquí solo se comprueba
-    # que las cuatro métricas son valores agregados válidos sobre las 47
-    # filas, para que un error de cableado (p. ej. una excepción silenciada
-    # que dejara `obtenido` siempre vacío) no pase desapercibido como "cero
-    # aciertos, evidencia igualmente publicada".
-    assert 0 <= paquete_completo.aciertos_exactos <= 47
+    # Cota de no regresión a lo medido (CODEX-002, incidencia #471), no un
+    # suelo D1/D2: el arnés de examen sigue siendo la única medición que
+    # afirma esos suelos (ver arriba). El suelo real de §8-M11 para este
+    # camino lo afirma, sin salvedad, la prueba `xfail(strict=True)` de más
+    # abajo.
+    assert paquete_completo.aciertos_exactos >= _MINIMO_ACIERTOS_EXACTOS_PAQUETE_COMPLETO
     assert paquete_completo.elementos_de_mas >= 0
     assert paquete_completo.omisiones_criticas >= 0
     assert 0 <= paquete_completo.elementos_hallados <= paquete_completo.elementos_esperados_total
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "M11 (incidencia #471, decisión del propietario del 31-08-2026 "
+        "06:48, ADR-117 sección 'Estado del hito: decisión'): el suelo del "
+        "criterio de §8-M11 (aciertos_exactos >= 29/47 sobre el pipeline "
+        "integrado real de producción, con la puerta de D7 punto 6 abierta "
+        "y dobles deterministas) queda explícitamente NO aprobado -- hoy el "
+        "camino real mide 4/47 (ADR-117). Esta prueba afirma el suelo del "
+        "criterio tal cual está escrito (CODEX-002, "
+        "https://github.com/canelamoraguezandyjesus-bot/sirius/pull/472#discussion_r3892166684) "
+        "y falla-como-se-espera; el día que el motor por etapas alcance "
+        "29/47 en producción, strict=True hará que esta prueba pase "
+        "inesperadamente y obligue a retirar la marca xfail -- el hito solo "
+        "se aprueba cuando eso sea verdad."
+    ),
+)
+def test_el_suelo_del_criterio_de_m11_aciertos_exactos_29_47_en_el_paquete_completo(
+    ejecucion_del_banco_paquete_completo: _EjecucionDelBanco,
+) -> None:
+    """Criterio de aceptación de §8-M11
+    (`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:1393-1398`),
+    convertido en prueba ejecutable honesta por decisión del propietario
+    (incidencia #471, comentario del 31-08-2026 06:48). A diferencia de
+    `_MINIMO_ACIERTOS_EXACTOS_PAQUETE_COMPLETO` de arriba (cota de no
+    regresión), esta prueba afirma el suelo real del hito sin salvedad, con
+    `strict=True` -- ver el `reason` y ADR-117.
+    """
+    metricas = ejecucion_del_banco_paquete_completo.metricas
+    assert metricas.aciertos_exactos >= 29
