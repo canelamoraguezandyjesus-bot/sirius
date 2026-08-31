@@ -253,8 +253,10 @@ repositorio, y correspondían a correcciones reales de rondas 2 a 5 — ver
 §3.1 y la fila de #469 en §3.3). De los 12 goteos reales totales, 10 (83.3%)
 los detectó el nivel mecánico sin necesitar lectura del contenido más allá
 de comprobar que la línea citada cae fuera de todo `hunk` modificado: el
-propio mecanismo de §3.1 usado en vivo es exactamente el guardián propuesto
-en §7.1.
+propio mecanismo de §3.1 usado en vivo es, con dos excepciones conocidas
+(#459 rondas 3 y 4, ver §5), el guardián propuesto en §7.1 — esas dos filas
+son `LEGITIMO` pese a que su línea citada no cambió, porque una línea
+hermana del mismo hunk sí lo hizo.
 
 ### 3.3 Lista clasificada completa (89 hallazgos)
 
@@ -435,7 +437,7 @@ guardián en ejecución.
 | Familia | Guardián candidato | Aciertos reales estimados | Falsos positivos estimados | Evidencia |
 |---|---|---|---|---|
 | F4 (rondas repetidas) | Conectar `round_family_detector` (ya construido) al flujo de revisión | 4 de 14 incidencias candidatas | 0 | Medición ya publicada y verificada a mano en ADR-078 — no es una estimación, es un resultado. |
-| §3 (goteo) | Marcar como posible goteo un hallazgo de ronda N>1 cuyo fichero/línea citados no cambiaron desde el head de la ronda 1 (exactamente el mecanismo de §3.1) | 10 de 12 goteos reales confirmados en la muestra de este informe (83.3%) | 0 sobre el subconjunto mecánico corregido y reverificado línea a línea — ver §3.1 | §3.2 de este mismo informe. |
+| §3 (goteo) | Marcar como posible goteo un hallazgo de ronda N>1 cuyo fichero/línea citados no cambiaron desde el head de la ronda 1 (exactamente el mecanismo de §3.1) | 10 de 12 goteos reales confirmados en la muestra de este informe (83.3%) | 2 sobre los 89 hallazgos completos, no solo sobre el subconjunto mecánico: §459 ronda 3 (`CLAUDE-REVISOR-001`, línea 87) y ronda 4 (`CLAUDE-REVISOR-004`, línea 136) citan una línea de contexto sin tocar, que la condición mecánica pura marcaría como posible goteo, pero son `LEGITIMO` — una línea hermana del mismo hunk sí cambió y reveló la inconsistencia recién en esa ronda, matiz que la condición no distingue. Neto: 10−2=8. | §3.2 y §3.3 (filas #459 ronda 3 y ronda 4) de este mismo informe. |
 | F1 (fuera de alcance) | Ningún fichero tocado por la PR aparece citado textualmente en la sección "Fuera de alcance" de la incidencia | 1 de 7 hallazgos de la familia (#193, que nombra `scripts/automation/**` en prosa) | Bajo si se exige coincidencia literal de ruta, pero la cobertura es baja: la mayoría de las secciones de alcance de este repositorio son prosa sin rutas literales (incluida la de esta misma incidencia #493), así que el guardián callaría casi siempre sin poder afirmar nada. | Lectura directa de los cuerpos de incidencia citados en F1. |
 | F2/F5 (citas y cifras) | Ampliar el guardián de citas ya existente (`tests/automation/test_citas_de_los_adr.py`, hoy limitado a `docs/decisions/ADR-*.md` y solo a existencia de ruta — no de línea, `tests/automation/test_citas_de_los_adr.py:296-320`) a todo `docs/**.md` | 0 aciertos directos sobre los ejemplos de F2/F5 de este informe (ninguno es una ruta inexistente; todos son desplazamiento de línea o contradicción semántica, que un guardián de mera existencia no distingue) | Bajo: mismo mecanismo ya en producción sobre ADR, que midió 0 falsos y evitó 18 abstenciones deliberadas (ADR-052) | El guardián actual seguiría sin cazar los casos reales encontrados; es una mejora de higiene general, no una respuesta directa a F2/F5. |
 | F3 (sin lector) | Analizador estático de referencias (tipo `vulture`) sobre `src/` | Potencialmente alto — la familia ya mordió 7 veces documentadas | Alto sin medir: la arquitectura de puertos/adaptadores invoca implementaciones por inyección de dependencias, no por llamada directa por nombre, así que un analizador ingenuo marcaría adaptadores legítimos como "sin uso". No cumple el criterio de la incidencia #267 sin antes medirse contra el árbol real. | `AGENTS.md:17-20`, `docs/audits/registro_defectos.yml:312-334` (H-24). |
@@ -488,8 +490,11 @@ exige el objetivo de la incidencia #493.
    restringido al fichero), marcarlo explícitamente como «posible goteo,
    ¿por qué no se vio en la ronda 1?» antes de aceptarlo como bloqueante.
    Sobre la muestra de este informe habría señalado 10 de los 12 goteos
-   reales confirmados, sin ningún falso positivo en el subconjunto mecánico
-   ya reverificado línea a línea (§3.1). Aplicaría sobre todo al revisor
+   reales confirmados, con 2 falsos positivos conocidos sobre el conjunto
+   completo de 89 (§459 rondas 3 y 4: la línea citada es contexto sin tocar,
+   pero el hallazgo es `LEGITIMO` porque una línea hermana del mismo hunk sí
+   cambió — la condición mecánica pura no distingue ese caso; ver §5). Neto
+   estimado: 8. Aplicaría sobre todo al revisor
    CLAUDE, cuya tasa de goteo medida (30.6%) es aproximadamente 14 veces la
    de CODEX (2.2%).
 2. **Conectar `round_family_detector` (ya construido en ADR-078) al flujo de
@@ -499,14 +504,7 @@ exige el objetivo de la incidencia #493.
    (`sirius-familia-repetida`) a `.github/workflows/repair-sirius-work.yml`
    o equivalente, que ADR-078 dejó fuera a propósito por ser trabajo de
    `.github/**` (ADR-002).
-3. **Ampliar el guardián de citas de fichero** (`tests/automation/test_citas_de_los_adr.py`)
-   de `docs/decisions/ADR-*.md` a todo `docs/**.md`, con la misma regla
-   conservadora ya probada (solo existencia de ruta, sin razonar sobre
-   contenido). No habría cazado los ejemplos concretos de F2/F5 de este
-   informe (todos son desplazamiento de línea, no ruta inexistente), pero
-   extiende a más documentación una comprobación que ya evitó 3 citas rotas
-   reales en `bbfb625` (ADR-052) con 0 falsos conocidos hasta hoy.
-4. **Guardián de alcance textual:** fallar si algún fichero tocado por la PR
+3. **Guardián de alcance textual:** fallar si algún fichero tocado por la PR
    aparece citado literalmente dentro de la sección "Fuera de alcance" del
    cuerpo de la incidencia. Cobertura parcial y honesta: solo 1 de los 7
    casos reales de F1 tenía una ruta literal citada (#193); el resto son
@@ -514,6 +512,13 @@ exige el objetivo de la incidencia #493.
    pedido"), que un guardián simple de coincidencia de texto no puede
    interpretar. Se propone como mejora incremental de bajo riesgo, no como
    solución de la familia.
+4. **Ampliar el guardián de citas de fichero** (`tests/automation/test_citas_de_los_adr.py`)
+   de `docs/decisions/ADR-*.md` a todo `docs/**.md`, con la misma regla
+   conservadora ya probada (solo existencia de ruta, sin razonar sobre
+   contenido). No habría cazado los ejemplos concretos de F2/F5 de este
+   informe (todos son desplazamiento de línea, no ruta inexistente), pero
+   extiende a más documentación una comprobación que ya evitó 3 citas rotas
+   reales en `bbfb625` (ADR-052) con 0 falsos conocidos hasta hoy.
 5. **Medir antes de decidir: analizador de "pieza sin lector"** (F3) sobre
    `src/sirius_engine/` sin tocar `adapters/`/`ports/` (donde la invocación
    por inyección de dependencias haría que cualquier analizador ingenuo
