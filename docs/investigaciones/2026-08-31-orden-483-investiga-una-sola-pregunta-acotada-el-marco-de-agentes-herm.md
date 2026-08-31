@@ -20,23 +20,23 @@ Hermes Agent es un framework de agentes de código abierto de Nous Research, lic
 
 ### (a) Componentes con nombre propio
 
-**Ninguna fila de esta tabla está verificada contra el código fuente del repositorio.** Ubicación, función y estado son los que describen los fragmentos y páginas de terceros (blogs, documentación espejo, foros) listados en «Fuentes»; no se ha leído directamente `NousResearch/hermes-agent` (ver «Lo que NO queda demostrado»).
+**Ninguna fila de esta tabla está verificada contra el código fuente del repositorio.** Ubicación, función y estado proceden de fragmentos y páginas de terceros (blogs, documentación espejo, foros) listados en «Fuentes»; no se ha leído directamente `NousResearch/hermes-agent` (ver «Lo que NO queda demostrado»). La ejecución original (gpt-researcher) no registró, por fila, cuál de las 33 URL de «Fuentes» sustenta cada dato aislado: por eso la columna «Fuente por fila» se declara **ND (no determinada)** en las once filas, en vez de inventar una atribución URL-a-fila que no se puede sostener con lo que quedó registrado.
 
-| Componente | Ubicación (según fragmentos, no verificada) | Función (según fragmentos) | Estado (según fragmentos, no verificado) |
-|---|---|---|---|
-| **AIAgent** | `run_agent.py` | Bucle principal: orquestación, prompt, herramientas, reintentos, persistencia | Implementado |
-| **skill_manage** | `skills/skill_manage.py` | Crea/actualiza/borra las habilidades propias del agente | Implementado |
-| **Curator** | `skills/curator.py` | Archiva habilidades de bajo valor | Implementado |
-| **Atropos** | `atropos/` | RL para entrenar la llamada a herramientas | Implementado |
-| **GEPA Optimizer** | `evolution/gepa.py` | Evolución genético-Pareto de habilidades, descripciones de herramientas y prompt a partir de trazados de ejecución | Implementado |
-| **Batch Runner** | `batch_runner.py` | Ejecuta el agente en paralelo y guarda trayectorias (harness de evaluación) | Implementado |
-| **Trajectory Saving** | `agent/trajectory.py` | Guarda conversaciones (formato ShareGPT) como datos para el aprendizaje | Implementado |
-| **RL Environments** | `environments/` | Entornos de refuerzo reutilizables como funciones de fitness | Implementado |
-| **Darwinian Evolver** | `evolution/darwinian.py` | Evolucionaría el código de las herramientas | Planificado |
-| **Continuous Improvement Loop** | `improvement/pipeline.py` | Integraría los componentes anteriores en una mejora continua | Planificado |
-| **Memory Layers** | `~/.hermes/*.md`, SQLite | Memoria persistente entre sesiones; no decide, solo almacena | Implementado |
+| Componente | Ubicación (según fragmentos, no verificada) | Función (según fragmentos) | Estado (según fragmentos, no verificado) | Fuente por fila |
+|---|---|---|---|---|
+| **AIAgent** | `run_agent.py` | Bucle principal: orquestación, prompt, herramientas, reintentos, persistencia | Implementado | ND |
+| **skill_manage** | `skills/skill_manage.py` | Crea/actualiza/borra las habilidades propias del agente | Implementado | ND |
+| **Curator** | `skills/curator.py` | Archiva habilidades de bajo valor | Implementado | ND |
+| **Atropos** | `atropos/` | RL para entrenar la llamada a herramientas | Implementado | ND |
+| **GEPA Optimizer** | `evolution/gepa.py` | Evolución genético-Pareto de habilidades, descripciones de herramientas y prompt a partir de trazados de ejecución | Implementado | ND |
+| **Batch Runner** | `batch_runner.py` | Ejecuta el agente en paralelo y guarda trayectorias (harness de evaluación) | Implementado | ND |
+| **Trajectory Saving** | `agent/trajectory.py` | Guarda conversaciones (formato ShareGPT) como datos para el aprendizaje | Implementado | ND |
+| **RL Environments** | `environments/` | Entornos de refuerzo reutilizables como funciones de fitness | Implementado | ND |
+| **Darwinian Evolver** | `evolution/darwinian.py` | Evolucionaría el código de las herramientas | Planificado | ND |
+| **Continuous Improvement Loop** | `improvement/pipeline.py` | Integraría los componentes anteriores en una mejora continua | Planificado | ND |
+| **Memory Layers** | `~/.hermes/*.md`, SQLite | Memoria persistente entre sesiones; no decide, solo almacena | Implementado | ND |
 
-Fuente de la tabla: fragmentos y páginas de terceros citados en la sección «Fuentes» de este informe (blogs, documentación espejo, foros); ninguna fila se ha contrastado con una lectura directa y versionada del código del repositorio, por lo que los estados «Implementado»/«Planificado» y las rutas de archivo son los que esas fuentes secundarias describen, no un hecho confirmado.
+**ND = no determinado**: no queda registro, en la ejecución original ni en esta corrección, de qué fragmento concreto (de cuál de las 33 URL listadas en «Fuentes», con qué fecha) sustenta la ubicación, la función o el estado de esa fila en particular. Ubicación, función y estado son, como conjunto, lo que describen los fragmentos y páginas de terceros citados en «Fuentes»; pero no puede afirmarse cuál URL concreta sustenta cuál fila sin verificarlo de nuevo contra esas fuentes, verificación que esta corrección no realiza (ver «Lo que NO queda demostrado»).
 
 Ningún componente se llama literalmente «Control». Según los fragmentos consultados —no verificados directamente en el código—, el mejor candidato es **GEPA Optimizer**, al que esas fuentes describen como ya implementado (no planificado): sería el único que modifica el comportamiento del propio agente (habilidades, herramientas, prompt) a partir de sus propias ejecuciones. Las mismas fuentes describen a `AIAgent` como controlador del bucle de *ejecución*, no de la auto-mejora, y a `Continuous Improvement Loop` como mejor encaje conceptual pero marcado como planificado, no como código existente. Ninguna de estas tres afirmaciones de estado —que GEPA esté implementado, que `AIAgent` no decida mejoras, o que los dos bucles restantes estén solo planificados— se ha confirmado contra el repositorio; quedan como lo que dicen los fragmentos, no como hechos verificados.
 
@@ -51,6 +51,7 @@ Licencia **MIT**, que permite reutilizar, modificar y redistribuir el código �
 ## Lo que NO queda demostrado
 
 - El código fuente de Hermes Agent no se verificó directamente; el informe se apoya en fragmentos y páginas de terceros citados en «Fuentes», no en lectura línea a línea del repositorio.
+- **La atribución de la tabla de componentes es a nivel de conjunto, no por fila**: no queda registrado qué URL concreta de las 33 listadas sustenta la ubicación, función o estado de cada componente individual (columna «Fuente por fila» = ND en las once filas).
 - Ningún componente localizado se llama literalmente «control»; GEPA Optimizer es la mejor coincidencia razonada, no una cita textual del propietario.
 - No se confirmó si «Continuous Improvement Loop» y «Darwinian Evolver» ya existen en el repositorio a 2026-08-31, más allá de figurar como planificados en los fragmentos.
 - **No se ha comprobado si GEPA Optimizer aplica sus cambios de forma automática o si requiere aprobación humana**; los fragmentos consultados no documentan esa transición en ningún sentido.
