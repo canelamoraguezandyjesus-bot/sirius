@@ -44,7 +44,32 @@ A partir de los fragmentos se pudieron distinguir los siguientes módulos, subsi
 | **RL Environments** | `environments/hermes_base_env.py` y `environments/hermes_agent_loop.py` | Entornos de refuerzo que abstraen la resolución de herramientas y el bucle de llamada a herramientas, reutilizables como funciones de fitness. | ([NousResearch, 2026-05-31](https://github.com/NousResearch/hermes-agent/blob/main/environments/hermes_base_env.py)) |
 | **Darwinian Evolver** (planificado) | `evolution/darwinian.py` (planeado) | Evolucionará el código de implementación de herramientas mediante algoritmos darwinianos. | ([NousResearch, 2026](https://github.com/NousResearch/hermes-agent/blob/main/evolution/darwinian.py)) |
 | **Continuous Improvement Loop** (planificado) | `improvement/pipeline.py` (planeado) | Canalización automatizada que integra los componentes anteriores para lograr una mejora continua del agente. | ([NousResearch, 2026](https://github.com/NousResearch/hermes-agent/blob/main/improvement/pipeline.py)) |
-| **Memory Layers** | `~/.hermes/MEMORY.md`, `~/.hermes/USER.md`, SQLite F
+| **Memory Layers** | `~/.hermes/MEMORY.md`, `~/.hermes/USER.md`, SQLite | Capas de memoria persistente entre sesiones (hechos, preferencias del usuario, historial); no toman decisiones de mejora por sí mismas, solo almacenan datos que otros componentes consultan. | ([NousResearch, 2026](https://github.com/NousResearch/hermes-agent)) |
+
+### Componente que controla el ciclo o la auto-mejora
+
+Ninguno de los componentes con nombre propio localizados en los fragmentos disponibles se llama literalmente «Control» o «Controller». De los candidatos de la tabla, el que mejor coincide con «control del ciclo o auto-mejora del propio agente» es el **GEPA Optimizer** (`evolution/gepa.py`): es el único componente, ya implementado (no planificado), cuya función descrita es modificar el propio comportamiento del agente —habilidades, descripciones de herramientas y secciones del prompt del sistema— a partir de trazados de sus propias ejecuciones. **AIAgent** controla el *bucle de ejecución* (orquestación, reintentos, persistencia) pero no decide mejoras sobre sí mismo; **Continuous Improvement Loop** encajaría mejor en el rol de «control de la auto-mejora» pero los fragmentos disponibles lo marcan como planificado, no como código existente. Por eso se adopta GEPA Optimizer como respuesta a la parte (a), dejando constancia de la alternativa y de la incertidumbre en la sección «Lo que NO queda demostrado».
+
+### (b) Cómo funciona GEPA Optimizer
+
+GEPA Optimizer (Genetic-Pareto Prompt Evolution) toma como entrada los trazados de ejecución (*execution traces*) que el agente guarda de sus propias sesiones —qué habilidad o herramienta se invocó, con qué prompt y con qué resultado— y los usa como señal de fitness para una búsqueda evolutiva de tipo genético-Pareto: genera variantes de las habilidades, de las descripciones de herramientas y de las secciones del prompt del sistema, las evalúa por el resultado observado en los trazados y conserva las variantes no dominadas en el frente de Pareto (mejor en al menos una dimensión —p. ej. tasa de éxito, coste, longitud— sin empeorar las demás). Según los fragmentos disponibles, el resultado de esa búsqueda se aplica sobre los propios artefactos del agente (habilidades y prompt), es decir, el componente se auto-aplica sus mejoras; los fragmentos citados no detallan si existe un paso de aprobación humana intermedio antes de aplicar cada cambio, lo cual queda recogido como no demostrado.
+
+### (c) Licencia y reutilización según el veredicto de la incidencia #172
+
+El repositorio de Hermes Agent (NousResearch) está publicado bajo **licencia MIT** (confirmado en la introducción de este informe y en la página del propio repositorio). Una licencia MIT permite, en principio, reutilizar, modificar y redistribuir el código —incluido GEPA Optimizer de forma aislada— sujeto únicamente a conservar el aviso de copyright y la propia licencia.
+
+El veredicto ya registrado en la incidencia #172 de este repositorio, sección «Hermes», es explícito: **no adoptar Hermes como núcleo de Sirius**. La misma incidencia deja abierto que Hermes «puede ser futuro: Worker externo; runtime de un perfil; fuente de skills reutilizables; referencia de implementación», y añade la salvaguarda de «no entregar a Hermes memoria, estado, permisos ni ciclo canónico de Sirius».
+
+Aplicado a GEPA Optimizer: la licencia MIT no lo impide, y el veredicto de la incidencia #172 sí lo permite encajar como **fuente de skills reutilizables** o como **referencia de implementación** para un mecanismo propio de mejora de habilidades — nunca como el componente que posea memoria, estado, permisos o el ciclo canónico de Sirius, que la incidencia #172 reserva al Motor de Trabajo. No se ha evaluado en este informe la viabilidad técnica de extraer GEPA Optimizer sin el resto del framework de Hermes; eso queda fuera del alcance de esta pregunta acotada.
+
+## Lo que NO queda demostrado
+
+- No se ha verificado directamente el código fuente de Hermes Agent (`run_agent.py`, `evolution/gepa.py`, etc.); el informe se apoya en fragmentos y páginas de terceros (blogs, Medium, Reddit) citados en «Fuentes», no en una lectura línea a línea del repositorio.
+- No existe, entre los componentes localizados, ninguno cuyo nombre propio coincida literalmente con «control»; la identificación de GEPA Optimizer como respuesta a la parte (a) es la mejor coincidencia razonada disponible con los fragmentos consultados, no una cita textual del propietario del repositorio.
+- No se ha confirmado si «Continuous Improvement Loop» y «Darwinian Evolver», marcados como planificados en los fragmentos, ya existen en la versión actual del repositorio a fecha 2026-08-31.
+- No se ha comprobado si GEPA Optimizer aplica sus cambios de forma automática sin supervisión humana en todos los casos, o si existe algún paso de aprobación que los fragmentos disponibles no mencionan.
+- No se ha evaluado la viabilidad técnica ni el esfuerzo de extraer GEPA Optimizer (o cualquier otro componente) del resto del framework de Hermes Agent para reutilizarlo suelto; el informe solo constata que la licencia y el veredicto de la incidencia #172 no lo prohíben en principio.
+- Esta nota caduca con sus fuentes (ver cabecera): es una fotografía a 2026-08-31, no un hecho estable sobre un proyecto en desarrollo activo.
 
 ## Fuentes
 
