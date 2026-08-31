@@ -1699,11 +1699,10 @@ propietario», y esta incidencia es esa ola.
   que `activa_categoria_buscable` demuestra en el arnés, ahora sobre el vocabulario real
   de producto en vez del vocabulario de cinco palabras del banco.
 - Restricción por ámbito sobre esa activación: un candidato solo se admite por categoría
-  (o por siembra, punto siguiente) si su `project_id` coincide con el proyecto activo de
-  la petición, o si es de ámbito global — mismo criterio que `_en_ambito_declarado`. Sin
-  esta restricción, ADR-114 ya midió que `elementos_de_mas` casi se duplica (62 → 110)
-  sobre el banco; no hay razón para esperar que el efecto sea menor sobre datos reales con
-  más de un proyecto.
+  si su `project_id` coincide con el proyecto activo de la petición, o si es de ámbito
+  global — mismo criterio que `_en_ambito_declarado`. Sin esta restricción, ADR-114 ya
+  midió que `elementos_de_mas` casi se duplica (62 → 110) sobre el banco; no hay razón
+  para esperar que el efecto sea menor sobre datos reales con más de un proyecto.
 - La regla de críticas original (RF-25/RF-26) sustituye al candado-unión como el mecanismo
   de integridad de críticas **cuando la puerta está abierta**: rescata una identidad
   descartada por `RelevanceFilterPort` solo si es de la categoría de máxima criticidad
@@ -1715,18 +1714,25 @@ propietario», y esta incidencia es esa ola.
   ola: la Definición de Producto exige que ningún elemento crítico recuperado pueda
   descartarse (§6.3 arriba), y un elemento sin clasificar todavía no puede excluirse con
   seguridad de ser justo ese elemento crítico.
-- Siembra en contexto: cuando el propósito que la petición declara (§11.3) indica que la
-  llamada ensambla el contexto de un turno, se añade toda identidad vigente de categoría
-  de máxima criticidad dentro del ámbito declarado que el motor y la ampliación por
-  categoría no hayan admitido ya — mismo criterio que `siembra_de_contexto`.
-- G8/G12 sobre la ampliación por categoría/siembra: antes de entregar el conjunto
-  combinado (motor + categoría + siembra) a la regla de críticas, se descarta lo que no
-  esté vigente en el tiempo objetivo de la petición (mitad de `G8`) y se trunca al límite
-  duro de la petición ordenando por criticidad (mitad de `G12`) — mismo criterio que
+- G8/G12 sobre la ampliación por categoría: antes de entregar el conjunto combinado
+  (motor + categoría) a la regla de críticas, se descarta lo que no esté vigente en el
+  tiempo objetivo de la petición (mitad de `G8`) y se trunca al límite duro de la petición
+  ordenando por criticidad (mitad de `G12`) — mismo criterio que
   `vigente_en_tiempo_objetivo`/`truncar_por_limite_duro`, ahora también sobre datos reales
   y no solo sobre el banco.
 
-Estas cinco piezas viven, con la puerta abierta, en el mismo punto de integración que §6.2
+**Siembra en contexto: aplazada, no se porta en esta decisión.** `siembra_de_contexto`
+queda fuera de la sustitución anterior mientras su precondición documentada siga sin
+resolverse (M15, más abajo, la nombra con su cita exacta): solo dos de los 47 casos del
+banco la ejercitan y se confirma «por construcción», no de forma independiente. Portarla
+exige, antes, que el propietario registre esa decisión y se cumpla una de las dos
+alternativas que el plan de pruebas fija como precondición de PA-0.2-REC-01 — ampliar el
+banco con casos independientes que la ejerciten, o retirarla del código —, igual que D3
+(§6.6) deja aplazada la omisión léxica hasta que se registre su propia decisión. Esta ola
+no la incluye en la opción (b) que ADR-119 decide: la opción (b) se restringe, en esta
+incidencia, a las cuatro piezas de arriba.
+
+Estas cuatro piezas viven, con la puerta abierta, en el mismo punto de integración que §6.2
 ya fijaba —dentro de `RankRelevantKnowledgeUseCase._rank_via_staged_engine`
 (`src/sirius/application/rank_relevant_knowledge.py:153-282`), sustituyendo el bloque
 `solo_por_categoria` actual (líneas 243-280)— y en `ContextBuilder._apply_relevance_filter`

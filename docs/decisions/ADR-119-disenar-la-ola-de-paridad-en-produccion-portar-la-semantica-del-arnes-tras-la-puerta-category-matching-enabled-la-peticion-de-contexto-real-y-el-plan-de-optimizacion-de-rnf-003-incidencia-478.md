@@ -88,7 +88,11 @@ críticas):
   suficientes en el arnés (categoría buscable de activación múltiple con
   restricción de ámbito, regla de críticas original RF-25/RF-26, siembra en
   contexto, G8/G12 sobre esa ampliación), conservando el diseño (a) intacto
-  como estado-cerrado.
+  como estado-cerrado. De estas piezas, la siembra en contexto queda excluida
+  del alcance que este ADR decide portar: su precondición documentada (banco
+  con solo 2/47 casos que la ejercitan, confirmada «por construcción») sigue
+  sin resolverse, así que se aplaza a un encargo posterior — ver «Decisión»
+  más abajo.
 
 Para la petición en producción:
 
@@ -110,25 +114,40 @@ Para RNF-003:
 
 ## Decisión
 
-**Semántica de puerta abierta: opción (b).** Se diseña sustituir, exclusiva y
-únicamente cuando `category_matching_enabled` es `True`, la activación única
-y el candado-unión de M10 por las piezas que ADR-113 (causas 1 y 2 de
-ADR-112), ADR-114 (restricción de ámbito) y ADR-115 (G8/G12 sobre la
-ampliación) ya midieron en el arnés como necesarias para alcanzar 29/47, ≤1
-crítica y 63/81 de cobertura. Se justifica citando el coste medido de no
-hacerlo: ADR-111 mide 23/47 con la petición por caso ya portada pero sin estas
-piezas; ADR-112 mide que, conectadas sin más, el candado de M10 protege el
-100 % del banco (neutraliza el filtro) y `category_matches_query` de
-activación única deja fuera 4 de 5 consultas que activan más de un término del
-vocabulario a la vez; y el camino real de producción, con exactamente esas dos
-piezas del diseño (a) vigentes, mide **4/47** hoy (ADR-117) — una cifra peor
-que el 23/47 aislado de ADR-111 porque además le falta la petición por caso
-(§11.3). El diseño (a) —activación única, candado-unión— **se conserva
-literalmente, sin cambiar una línea de comportamiento**, como el
-estado-cerrado: con la puerta cerrada (el valor por defecto y el único que
-`composition_root` fija hoy en la construcción con la que Sirius arranca), el
-camino de producción sigue siendo exactamente el de hoy, verificado por las
-pruebas de identidad ya existentes (`tests/unit/test_composition_root_relevance_gate.py`,
+**Semántica de puerta abierta: opción (b), acotada a cuatro de las cinco
+piezas.** Se diseña sustituir, exclusiva y únicamente cuando
+`category_matching_enabled` es `True`, la activación única y el candado-unión
+de M10 por las piezas que ADR-113 (causas 1 y 2 de ADR-112), ADR-114
+(restricción de ámbito) y ADR-115 (G8/G12 sobre la ampliación) ya midieron en
+el arnés como necesarias para alcanzar 29/47, ≤1 crítica y 63/81 de cobertura
+— categoría buscable de activación múltiple con restricción de ámbito, regla
+de críticas original RF-25/RF-26, y G8/G12 sobre esa ampliación. La quinta
+pieza que ADR-113 también midió, la siembra en contexto, **no** forma parte
+de lo que este ADR decide portar: la definición de Producto documenta que
+`siembra_de_contexto` se confirma «por construcción» (solo 2 de los 47 casos
+del banco la ejercitan, no de forma independiente), y el plan de pruebas fija
+como precondición de PA-0.2-REC-01 que el banco se amplíe con casos
+independientes que la ejerciten, o que se retire del código, antes de poder
+portarla — ninguna de las dos se ha resuelto todavía. Portar
+`siembra_de_contexto` queda como decisión de un encargo posterior, condicionado
+a que el propietario registre esa precondición como resuelta, igual que D3
+(§6.6) deja aplazada la omisión léxica. El detalle de esta exclusión vive en
+`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md` §11.2 y
+§11.5 (M15). Se justifica citando el coste medido de no sustituir las cuatro
+piezas que sí se deciden: ADR-111 mide 23/47 con la petición por caso ya
+portada pero sin estas piezas; ADR-112 mide que, conectadas sin más, el
+candado de M10 protege el 100 % del banco (neutraliza el filtro) y
+`category_matches_query` de activación única deja fuera 4 de 5 consultas que
+activan más de un término del vocabulario a la vez; y el camino real de
+producción, con exactamente esas dos piezas del diseño (a) vigentes, mide
+**4/47** hoy (ADR-117) — una cifra peor que el 23/47 aislado de ADR-111 porque
+además le falta la petición por caso (§11.3). El diseño (a) —activación
+única, candado-unión— **se conserva literalmente, sin cambiar una línea de
+comportamiento**, como el estado-cerrado: con la puerta cerrada (el valor por
+defecto y el único que `composition_root` fija hoy en la construcción con la
+que Sirius arranca), el camino de producción sigue siendo exactamente el de
+hoy, verificado por las pruebas de identidad ya existentes
+(`tests/unit/test_composition_root_relevance_gate.py`,
 `tests/integration/test_rank_relevant_knowledge.py`,
 `tests/integration/test_context_builder.py`), que esta incidencia no toca ni
 debilita.
