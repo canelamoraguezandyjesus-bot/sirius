@@ -239,11 +239,15 @@ para el resultado completo.
 4. **Aplicar el suelo D1 (≤21) de `elementos_de_mas` sobre las 47 filas sin
    la salvedad de población que lo publicó, o debilitar la cota de no
    regresión de `elementos_de_mas` sobre esas 47 filas por debajo de lo
-   medido (50)** — descartada explícitamente por la incidencia y por la
-   disciplina de evidencia de `CLAUDE.md`: mezclaría la población que fija
-   el suelo D1 (los 31 `casos_con_contenido`) con la de la cota de no
-   regresión (las 47 filas), sustituyendo la métrica aprobada por otra más
-   favorable.
+   medido (50)** — descartada explícitamente por la incidencia, por la
+   disciplina de evidencia de `CLAUDE.md` y por el desempate del propietario
+   registrado en «Población del umbral: decisión» más abajo: mezclaría la
+   población que fija el suelo D1 (los 31 `casos_con_contenido`) con la de
+   la cota de no regresión (las 47 filas). Esa lectura sobre 47 no sustituye
+   la métrica aprobada por otra más favorable — al revés, es más estricta:
+   bajo ella, la propia corrida congelada del laboratorio (50) incumpliría
+   el suelo que ella misma originó (50 > 21), dejando D1 sin alcanzar pese a
+   que el laboratorio sí lo cumple bajo la población que publicó el umbral.
 5. **Cerrar la causa exactamente donde el diagnóstico elemento a elemento la
    localiza (`G8`/`G12` sobre la ampliación), afirmar `aciertos_exactos` como
    aserción dura ahora que alcanza su suelo D1, afirmar `elementos_de_mas`
