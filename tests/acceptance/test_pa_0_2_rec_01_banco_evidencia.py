@@ -1435,6 +1435,23 @@ def test_el_doble_del_filtro_de_relevancia_reproduce_la_corrida_congelada() -> N
     assert filtro_congelado_conserva("CASO-INEXISTENTE", "MEM-001") is True
 
 
+def test_el_fixture_del_filtro_cita_el_commit_que_introdujo_su_fichero_origen() -> None:
+    """Incidencia #475 (observación CLAUDE-SIRIUS-469-001 de la PR #470):
+    `resultado_modelo_local_v0.7.json` no está en el commit
+    `a4c910a9773b9c9e2f0016e462eb709b81805d50` de `evidence/adr001-spikes`
+    —ese commit es el que ya citaba la procedencia del corpus compartido,
+    no el que introdujo este fichero— sino en
+    `8ff535b91dc6a7a2c42eb886699ebdefd902e4fd` (contenido idéntico a la
+    punta de la rama, verificado byte a byte). Prueba de forma para que
+    `fuente.commit` no vuelva a citar el commit equivocado."""
+    datos = json.loads(
+        (Path(__file__).parent / "fixtures" / "relevance_filter_frozen_run.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert datos["fuente"]["commit"] == "8ff535b91dc6a7a2c42eb886699ebdefd902e4fd"
+
+
 def test_el_candado_protege_todo_candidato_de_este_banco() -> None:
     """ADR-112: con solo dos categorías posibles en este banco —la única
     categoría de máxima criticidad que el arnés deriva de la criticidad del
