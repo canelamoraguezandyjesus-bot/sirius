@@ -83,12 +83,17 @@ El fallo vive en dos sitios y el arreglo va en esos mismos sitios:
   la consulta no activa nada — y, cuando activa, sustituye la enumeración
   completa por `list_current_memories_by_category`/
   `list_current_decisions_by_category` filtrados en SQL por
-  `self._category_vocabulary` (el vocabulario cerrado completo, D7 punto 1:
-  toda categoría real, tanto la del clasificador automático como la que un
-  usuario fija a mano, es siempre `None` o un miembro de ese vocabulario —
-  así que `WHERE category IN (vocabulario)` es exactamente la misma
-  condición que `category is not None`, resuelta en SQL en vez de en
-  Python). Sí puede observar el fallo: una prueba con un repositorio real
+  `category IS NOT NULL` (D7 punto 1: `self._category_vocabulary` solo se
+  usa como puerta de activación en Python, vía `category_index_activated`
+  — no como filtro SQL. `SetCategoryUseCase` no valida la categoría que
+  escribe, y el vocabulario es una constante provisional que un milestone
+  posterior puede sustituir, así que una categoría persistida heredada,
+  fuera del vocabulario cerrado, es estado alcanzable y también debe
+  ampliar el match, no perderse — CODEX-001, ronda 2, incidencia #489. Por
+  eso `WHERE category IS NOT NULL` es exactamente la misma condición que
+  `category is not None`, resuelta en SQL en vez de en Python, y no
+  `WHERE category IN (vocabulario)`). Sí puede observar el fallo: una
+  prueba con un repositorio real
   sobre un corpus con muchos elementos sin categoría y pocos ya
   categorizados cuenta las filas que el repositorio devuelve.
 
@@ -148,8 +153,10 @@ falla con la versión vieja y pasa con la corregida):
 ## Opciones consideradas
 
 1. **Consulta en lote con `UNION ALL` (claves/prefijos), y
-   `list_current_*_by_category` filtrado por el vocabulario completo en SQL
-   — elegida.** Mismo patrón que `_por_ids_mixtos` (ids) y ADR-008
+   `list_current_*_by_category` filtrado en SQL por `category IS NOT NULL`,
+   con el vocabulario completo como puerta de activación en Python, no como
+   filtro SQL (CODEX-001, ronda 2, incidencia #489) — elegida.** Mismo
+   patrón que `_por_ids_mixtos` (ids) y ADR-008
    (revisiones vigentes) ya establecen en este código; no introduce
    abstracciones nuevas, y expresa en SQL exactamente la condición que
    `category_index_matches_query` ya exige en Python.
@@ -179,19 +186,26 @@ vez de igualdad. Ninguno de los dos cambia con M14: son independientes de
 
 `MemoryRepository`/`DecisionRepository` ganan
 `list_current_memories_by_category`/`list_current_decisions_by_category`,
-implementados en SQLite con `WHERE status = ... AND category IN (...)`
-(comparación insensible a mayúsculas). `sirius.domain.relevance` gana
-`category_index_activated(query_text, vocabulary) -> bool`, la condición de
-activación que `category_index_matches_query` ya comprobaba internamente,
-factorizada para que un caller pueda decidir *antes* de tocar el
-repositorio si vale la pena consultarlo. `_rank_via_staged_engine` llama a
-`category_index_activated` primero; si no activa nada, el resultado de
-`solo_por_categoria` es vacío sin tocar el repositorio, exactamente como
-ya ocurría. Si activa, consulta `list_current_memories_by_category`/
-`list_current_decisions_by_category` con `self._category_vocabulary`
-completo (no con el término literal presente en la consulta) y aplica
-`candidate_in_declared_scope` en Python sobre ese subconjunto ya filtrado —
-la misma restricción de ámbito que M14 introdujo, sin tocarla.
+implementados en SQLite con `WHERE status = ... AND category IS NOT NULL`
+(CODEX-001, ronda 2, incidencia #489: `categories` solo actúa como puerta
+de activación de la llamada — lista vacía devuelve vacío sin consultar —,
+nunca como filtro SQL contra el vocabulario). `sirius.domain.relevance`
+gana `category_index_activated(query_text, vocabulary) -> bool`, la
+condición de activación que `category_index_matches_query` ya comprobaba
+internamente, factorizada para que un caller pueda decidir *antes* de
+tocar el repositorio si vale la pena consultarlo. `_rank_via_staged_engine`
+llama a `category_index_activated` primero; si no activa nada, el
+resultado de `solo_por_categoria` es vacío sin tocar el repositorio,
+exactamente como ya ocurría. Si activa, consulta
+`list_current_memories_by_category`/`list_current_decisions_by_category`
+pasándole `self._category_vocabulary` completo como puerta de activación
+(no con el término literal presente en la consulta) — el filtro SQL real
+es `category IS NOT NULL`, no una comparación contra el vocabulario, para
+que una categoría persistida heredada fuera del vocabulario cerrado
+(`SetCategoryUseCase` no valida lo que escribe) también amplíe el match en
+vez de perderse — y aplica `candidate_in_declared_scope` en Python sobre
+ese subconjunto ya filtrado — la misma restricción de ámbito que M14
+introdujo, sin tocarla.
 
 ## Comprobación que la sostiene
 

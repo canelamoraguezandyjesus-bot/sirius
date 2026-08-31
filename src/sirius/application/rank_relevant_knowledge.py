@@ -198,17 +198,20 @@ class RankRelevantKnowledgeUseCase:
         ``category_index_matches_query`` exige junto con
         ``category is not None``); si no lo activa, el resultado es vacío
         sin ejecutar ninguna consulta, igual que antes. Si lo activa,
-        interroga el repositorio filtrado en SQL por
-        ``self._category_vocabulary`` (D7 punto 1: el vocabulario cerrado
-        que toda categoría real ya respeta, tanto la que asigna el
-        clasificador automático como la que un usuario fija a mano —
-        ``list_current_memories_by_category``/``list_current_decisions_by_category``,
-        ``WHERE category IN (...)`` insensible a mayúsculas), que solo
-        devuelve los candidatos con categoría vigente en vez del corpus
-        completo — exactamente la subcondición que
-        ``category_index_matches_query`` comprueba candidato a candidato
-        (``category is not None``, sin comparar contra un término
-        concreto), ahora resuelta en SQL. La restricción de ámbito
+        interroga el repositorio pasándole ``self._category_vocabulary``
+        únicamente como puerta de activación (D7 punto 1) —
+        ``list_current_memories_by_category``/``list_current_decisions_by_category``
+        no filtran en SQL por ese vocabulario, sino por
+        ``category IS NOT NULL`` (CODEX-001, ronda 2, incidencia #489): una
+        categoría persistida heredada, fuera del vocabulario cerrado, sigue
+        siendo estado alcanzable —``SetCategoryUseCase`` no valida lo que
+        escribe, y el vocabulario es una constante provisional que un
+        milestone posterior puede sustituir— y también debe ampliar el
+        match por categoría, no perderse silenciosamente. El resultado es
+        exactamente la subcondición que ``category_index_matches_query``
+        comprueba candidato a candidato (``category is not None``, sin
+        comparar contra un término concreto), ahora resuelta en SQL en vez
+        del corpus completo. La restricción de ámbito
         (``candidate_in_declared_scope``) sigue aplicándose en Python sobre
         ese subconjunto ya filtrado, no en SQL: es sobre filas que ya dejaron
         de depender del tamaño del corpus.
