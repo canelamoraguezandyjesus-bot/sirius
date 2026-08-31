@@ -26,7 +26,7 @@ from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_p
 from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.composition_root import build_conversation_dependencies
 from sirius.config.secrets_config import OPENAI_API_KEY_SECRET_NAME
-from sirius.config.settings import load_settings
+from sirius.config.settings import load_settings, save_settings
 from sirius.ports.secrets import SecretStore, SecretStoreError
 from sirius.presentation.main_window import MainWindow
 
@@ -321,3 +321,31 @@ def test_saving_configuration_with_non_positive_limits_is_rejected(
     settings = load_settings()
     assert "openai_max_output_tokens" not in settings
     assert "openai_monthly_budget_usd" not in settings
+
+
+@pytest.mark.gui
+def test_saving_any_setting_never_drops_an_unrelated_persisted_key(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """M11 (SIRIUS-ARQ-0.2 §6.3): reproduce, para `category_matching_enabled`,
+    el hallazgo ya corregido en M8 para su propia clave — `_save_configuration`
+    sobrescribía `settings.json` entero con un diccionario de solo seis
+    claves, así que activar la puerta de D7 punto 6 y luego guardar cualquier
+    otro ajuste desde este diálogo la habría vuelto a cerrar sin que nadie lo
+    pidiera. Falla antes del arreglo: `settings["category_matching_enabled"]`
+    quedaba ausente tras `_save_configuration()`.
+    """
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path, FakeSecretStore())
+    qtbot.addWidget(window)
+
+    existing = dict(load_settings())
+    existing["category_matching_enabled"] = True
+    save_settings(existing)
+
+    window.name_input.setText("Ada")
+    window._save_configuration()
+
+    settings = load_settings()
+    assert settings["category_matching_enabled"] is True
+    assert settings["user_name"] == "Ada"
