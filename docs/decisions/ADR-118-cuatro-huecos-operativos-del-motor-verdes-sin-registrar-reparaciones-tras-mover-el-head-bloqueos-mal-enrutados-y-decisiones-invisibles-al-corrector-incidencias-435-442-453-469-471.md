@@ -134,6 +134,21 @@ La segunda pasada de la revisión afinó tres más, también incorporadas:
    revisión con observaciones; si estas no se pudieron leer, la parada es
    «observaciones-ilegibles», reintentable, no un consumo de la ronda.
 
+La tercera pasada endureció cuatro bordes más:
+
+7. **Un head ilegible es reintentable, no un head movido** — pr_head vacío
+   significa lectura caída; la rama sale con error en vez de consumir la
+   reparación con una consulta de runs sin head.
+8. **Un relanzamiento fallido se propaga** — el reconciliador solo
+   auto-recupera verdes; el fallo del POST deja el job en rojo reintentable
+   con la incidencia ya en `ci-pending`.
+9. **Las decisiones llevan la doble ruta del contrato** — REST y, si cae,
+   GraphQL (conservando la asociación de autoría) antes de declarar la
+   parada.
+10. **El avance deduplica incidencias con las dos etiquetas** — una
+    transición parcial anterior no fabrica una falsa ambigüedad, y la
+    etiqueta sobrante se retira tras la transición de éxito.
+
 ## Consecuencias
 
 - Positivas: las cuatro paradas mudas de la noche pasan a resolverse solas o

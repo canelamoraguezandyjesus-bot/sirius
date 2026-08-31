@@ -387,6 +387,15 @@ jobs:
             [ "$(_sirius_now)" -lt "$gate_deadline" ] || sin_tiempo
             pr_head="$(sirius_retry gh pr view "${pr_numbers[0]}" --repo "$GH_REPO" \
               --json headRefOid --jq '.headRefOid' 2>/dev/null || true)"
+            if [ -z "${pr_head:-}" ]; then
+              # Una PR siempre tiene head: vacio = lectura caida (revision de
+              # la PR #477, P1). Interpretarlo como "head movido" consumiria
+              # una reparacion legitima con head_sha= vacio en la consulta de
+              # runs. Reintentable, sin consumir el evento.
+              echo "::error::No se pudo leer el head de la PR #${pr_numbers[0]}; reintentable (head-ilegible)."
+              rm -f "$comments_file"
+              exit 1
+            fi
             if sirius_ronda_disparada_por_ci "$comments_file" "$pr_head"; then
               echo "Sin observaciones estructuradas, pero hay un fallo de Quality registrado"
               echo "para el head ${pr_head}: la causa corregible es ese run (H-14). Sigo."
@@ -442,9 +451,16 @@ jobs:
                 "repos/${GH_REPO}/actions/workflows/quality.yml/runs?head_sha=${pr_head}&status=completed&per_page=1" \
                 --jq '.workflow_runs[0].id // empty' 2>/dev/null || true)"
               if [ -n "${run_terminado:-}" ]; then
-                sirius_retry gh api -X POST \
-                  "repos/${GH_REPO}/actions/runs/${run_terminado}/rerun" >/dev/null \
-                  || echo "::warning::No se pudo relanzar el run ${run_terminado}; el reconciliador lo recogera."
+                if ! sirius_retry gh api -X POST \
+                  "repos/${GH_REPO}/actions/runs/${run_terminado}/rerun" >/dev/null; then
+                  # El reconciliador solo auto-recupera VERDES; un run rojo sin
+                  # relanzar dejaria la correccion sin arrancar (revision de la
+                  # PR #477, P1). Se propaga el fallo: el job queda en rojo y
+                  # reintentable, con la incidencia ya en ci-pending.
+                  echo "::error::No se pudo relanzar el run ${run_terminado} (relanzamiento-fallido); reintentable."
+                  rm -f "$comments_file"
+                  exit 1
+                fi
               fi
               rm -f "$body_file" "$comments_file"
               echo "valid=false" >> "$GITHUB_OUTPUT"
@@ -504,6 +520,9 @@ jobs:
           # llego. Ante la duda, parada segura, como el resto de la puerta.
           if ! sirius_retry gh api --paginate "repos/${GH_REPO}/issues/${ISSUE_NUMBER}/comments?per_page=100" \
             --jq '[.[] | select(.author_association=="OWNER") | select(.body | startswith("DECISI"))] | .[].body' \
+            >"${RUNNER_TEMP}/sirius_owner_decisions.md" 2>/dev/null \
+            && ! sirius_retry gh issue view "$ISSUE_NUMBER" --repo "$GH_REPO" --json comments \
+            --jq '[.comments[] | select(.authorAssociation=="OWNER") | select(.body | startswith("DECISI"))] | .[].body' \
             >"${RUNNER_TEMP}/sirius_owner_decisions.md" 2>/dev/null; then
             marker="<!-- sirius-verdict:corrector:precheck:decisiones-ilegibles:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
             body_file="$(mktemp)"

@@ -329,3 +329,28 @@ def test_una_revision_ilegible_no_se_confunde_con_un_head_movido() -> None:
         "desapareció la parada para la revisión ilegible: una lectura caída "
         "de observaciones se trataría como head movido y saltaría la corrección"
     )
+
+
+def test_un_head_ilegible_es_reintentable_no_un_head_movido() -> None:
+    """PR #477 ronda 3 (P1): pr_head vacío = lectura caída; tratarlo como
+    head movido consumiría la reparación con head_sha= vacío."""
+    guion = _sin_comentarios(_paso_de_la_puerta())
+    assert "head-ilegible" in guion
+
+
+def test_un_relanzamiento_fallido_se_propaga() -> None:
+    """PR #477 ronda 3 (P1): el reconciliador solo auto-recupera verdes; un
+    rojo sin relanzar dejaría la corrección sin arrancar."""
+    guion = _sin_comentarios(_paso_de_la_puerta())
+    assert "relanzamiento-fallido" in guion
+
+
+def test_las_decisiones_tienen_la_doble_ruta_del_contrato() -> None:
+    """PR #477 ronda 3 (P2): REST → GraphQL antes de declarar parada, como
+    exige el contrato de lecturas y ya hace sirius_dump_comments."""
+    guion = _sin_comentarios(_paso_de_la_puerta())
+    assert 'authorAssociation=="OWNER"' in guion, (
+        "falta la ruta GraphQL de respaldo para las decisiones del "
+        "propietario: una caída de un solo endpoint se convertiría en "
+        "reactivación humana"
+    )

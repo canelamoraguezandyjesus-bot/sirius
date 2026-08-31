@@ -116,6 +116,7 @@ jobs:
           # `ci-pending`: revivir una parada segura hacia correccion seria
           # tomar una decision, no registrar un resultado.
           declare -A origen_de=()
+          declare -A etiqueta_sobrante_de=()
           candidate_issues=()
           for etiqueta_origen in "sirius:ci-pending" "sirius:failed-safely"; do
             if [ "$etiqueta_origen" = "sirius:failed-safely" ] && [ "$CONCLUSION" != "success" ]; then
@@ -128,6 +129,16 @@ jobs:
             )
             for n in "${lote[@]:-}"; do
               [ -z "${n:-}" ] && continue
+              if [ -n "${origen_de[$n]:-}" ]; then
+                # La incidencia lleva LAS DOS etiquetas (transicion parcial
+                # anterior): una sola entrada, con ci-pending como origen (se
+                # listo primero) y la otra apuntada para retirarla tras la
+                # transicion — sin esto se contaria dos veces (falsa
+                # ambiguedad) y la parada segura intentaria poner y quitar
+                # failed-safely a la vez (revision de la PR #477, P2).
+                etiqueta_sobrante_de["$n"]="$etiqueta_origen"
+                continue
+              fi
               candidate_issues+=("$n")
               origen_de["$n"]="$etiqueta_origen"
             done
@@ -194,6 +205,12 @@ jobs:
               trigger_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
                 "sirius:review-requested" "8250DF" "Evento consumible: iniciar revisión independiente" \
                 "noclose" "${origen_de[$issue_number]}" || rc=1
+              if [ "$rc" -eq 0 ] && [ -n "${etiqueta_sobrante_de[$issue_number]:-}" ]; then
+                ( export GH_TOKEN="$SIRIUS_TRIGGER_TOKEN"
+                  sirius_retry gh issue edit "$issue_number" --repo "$GH_REPO" \
+                    --remove-label "${etiqueta_sobrante_de[$issue_number]}" >/dev/null ) \
+                  || echo "::warning::No se pudo retirar la etiqueta sobrante ${etiqueta_sobrante_de[$issue_number]} de #${issue_number}."
+              fi
               ;;
             failure|timed_out)
               marker="<!-- sirius-quality:${HEAD_SHA}:${CONCLUSION} -->"

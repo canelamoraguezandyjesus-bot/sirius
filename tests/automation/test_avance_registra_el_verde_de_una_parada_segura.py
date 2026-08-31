@@ -71,3 +71,14 @@ def test_la_transicion_retira_la_etiqueta_de_origen_no_una_fija() -> None:
         "dejaría failed-safely puesta junto a review-requested, un estado doble "
         "que la máquina de estados no contempla"
     )
+
+
+def test_una_incidencia_con_las_dos_etiquetas_cuenta_una_sola_vez() -> None:
+    """PR #477 ronda 3 (P2): una transición parcial anterior puede dejar las
+    dos etiquetas; contarla dos veces fabricaría una falsa ambigüedad y la
+    parada segura intentaría poner y quitar failed-safely a la vez."""
+    guion = _sin_comentarios(_paso_de_avance())
+    assert "etiqueta_sobrante_de" in guion, (
+        "desapareció la deduplicación por número de incidencia y la retirada "
+        "de la etiqueta sobrante tras la transición"
+    )
