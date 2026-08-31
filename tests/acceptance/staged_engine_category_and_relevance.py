@@ -175,7 +175,7 @@ petición declara, o de ámbito global (`PRJ-GLOBAL`), que `G4` admite siempre
 `aciertos_exactos` (27/47), `omisiones_criticas` (0) y `cobertura` (63/81)
 no se mueven. D1 (aciertos exactos ≥ 29/47, elementos de más ≤ 21) sigue sin
 alcanzarse; ADR-114 diagnostica, elemento a elemento contra el fixture, las
-dos causas residuales que quedan tras cerrar esta.
+tres causas residuales que quedan tras cerrar esta.
 """
 
 from __future__ import annotations
@@ -328,7 +328,7 @@ def indice_de_categoria(
     incidencia #467 autoriza reproducir aquí, únicamente en este arnés, la
     semántica de ámbito que el laboratorio aplicaba aguas abajo del índice
     de categoría: `experiments/adr002/lateral/categoria.py:46-49` y
-    `:158-159` (rama `evidence/adr001-spikes`) — "la razon es el ambito: G4
+    `:174-175` (rama `evidence/adr001-spikes`) — "la razon es el ambito: G4
     filtra por proyecto antes de entregar" / "El ambito hace el resto: G4
     filtra por proyecto, de modo que entran las criticas de ese proyecto y
     no las de otro")."""

@@ -899,7 +899,7 @@ def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metric
     por ámbito; la incidencia #467 autoriza cerrar esa causa, únicamente en
     este arnés, reproduciendo la semántica de ámbito que el laboratorio
     aplicaba aguas abajo del índice de categoría
-    (`experiments/adr002/lateral/categoria.py:46-49`/`:158-159`, rama
+    (`experiments/adr002/lateral/categoria.py:46-49`/`:174-175`, rama
     `evidence/adr001-spikes` — ver
     `tests.acceptance.staged_engine_category_and_relevance`, sección
     "INCIDENCIA #467").
