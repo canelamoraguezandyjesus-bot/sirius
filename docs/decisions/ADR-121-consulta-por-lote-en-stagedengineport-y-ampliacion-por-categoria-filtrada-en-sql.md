@@ -230,7 +230,7 @@ introdujo, sin tocarla.
 ## Reconciliación con la especificación de arquitectura (ronda 4, CODEX-001, incidencia #489)
 
 `docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:1888-1895` (§11.4, punto
-2 del plan de optimización) y `:1937-1948` (§11.5, criterio de aceptación de M13) fijan
+2 del plan de optimización) y `:1949-1954` (§11.5, criterio de aceptación de M13) fijan
 `WHERE category IN (...)` y miden "las filas que coinciden con la categoría solicitada".
 Ese texto describe correctamente el encargo M13 tal como estaba planteado frente a la regla
 de coincidencia vigente cuando se escribió: `category_matches_query`, que compara la
