@@ -170,12 +170,18 @@ _MINIMO_ELEMENTOS_HALLADOS_M7: Final[int] = 57
 #: (motor por etapas con petición por caso, categoría buscable, regla de las
 #: críticas original, siembra al ensamblar contexto, restricción por ámbito
 #: del índice de categoría y las dos puertas (G8/G12) que la ampliación del
-#: arnés no heredaba — incidencias #465/#467/#469, ADR-113/ADR-114). Misma
-#: convención de cotas unidireccionales de no regresión, no el suelo de D1
-#: (29/47, ≤21, ≤1, ≥63/81): `aciertos_exactos` alcanza su suelo (29/47) y se
-#: afirma como aserción dura aparte, más abajo; `elementos_de_mas` (50 > 21)
-#: todavía no, aunque `omisiones_criticas` y `cobertura` sí lo alcanzan (0 ≤
-#: 1, 63/81 ≥ 63/81).
+#: arnés no heredaba — incidencias #465/#467/#469, ADR-113/ADR-114/ADR-115).
+#: Misma convención de cotas unidireccionales de no regresión, no el suelo de
+#: D1 (29/47, ≤21, ≤1, ≥63/81): `aciertos_exactos` alcanza su suelo (29/47) y
+#: se afirma como aserción dura aparte, más abajo; `omisiones_criticas` y
+#: `cobertura` también (0 ≤ 1, 63/81 ≥ 63/81). `elementos_de_mas` mide 50
+#: sobre las 47 filas sin salvedad, por encima de 21 — pero el umbral D1
+#: publicado de ≤21 lo fija la fuente sumando solo sobre los 31 `casos_con_
+#: contenido` (CODEX-001): medido con esa misma población (`test_elementos_
+#: de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publicado`, más
+#: abajo), el arnés mide 21 y sí alcanza su suelo D1. `_MAXIMO_ELEMENTOS_DE_
+#: MAS_MOTOR` (50) sigue siendo la cota de no regresión de la métrica sin esa
+#: salvedad, que el arnés también reporta.
 _MINIMO_ACIERTOS_EXACTOS_MOTOR: Final[int] = 29
 _MAXIMO_ELEMENTOS_DE_MAS_MOTOR: Final[int] = 50
 _MAXIMO_OMISIONES_CRITICAS_MOTOR: Final[int] = 0
@@ -988,9 +994,20 @@ def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metric
 
     La fila 5 es la medición final de este test. `aciertos_exactos` (29/47),
     `omisiones_criticas` (0 ≤ 1) y `cobertura` (63/81 ≥ 63/81) alcanzan su
-    suelo D1/D2; `elementos_de_mas` (50 > 21) no, aunque baja un 19% frente a
-    la fila 4 (62 → 50) al cerrar la infidelidad de porte que ADR-114 dejó
-    sin explicar.
+    suelo D1/D2 sobre las 47 filas sin salvedad. `elementos_de_mas` mide 50
+    sobre las 47 filas — por encima del ≤21 publicado si se compara sin más—,
+    pero el umbral D1 de ≤21 lo fija la fuente sobre una población distinta
+    (los 31 `casos_con_contenido`, no los 47): medido con esa misma
+    población, el arnés mide exactamente 21 y sí alcanza su suelo D1
+    (CODEX-001,
+    `test_elementos_de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publicado`,
+    más abajo). Las cuatro métricas D1/D2 quedan así alcanzadas por este
+    arnés, cada una medida bajo la población que su propio umbral publicado
+    usa — sin que eso cierre PA-0.2-REC-01 en `main`, que exige el pipeline
+    de producto integrado (M8-M12), no este arnés de evaluación (ver
+    docstring del módulo). `elementos_de_mas` baja además un 19% frente a la
+    fila 4 (62 → 50) al cerrar la infidelidad de porte que ADR-114 dejó sin
+    explicar.
 
     **Método de la incidencia #469**: para cada uno de los 62 elementos de
     más que ADR-114 nombró (elemento a elemento, agrupados A/B/C), comprobar
@@ -1044,20 +1061,31 @@ def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metric
       27 a 29/47, el suelo de D1 para esa métrica.
 
     Ningún elemento de los 62 queda sin explicar: 50 son del laboratorio, 12
-    eran infidelidad del porte y ya están corregidos. La brecha restante en
-    `elementos_de_mas` (50 > 21) no es un defecto de esta incidencia: es la
-    diferencia irreducible entre lo que este arnés puede reproducir sin
-    tocar el motor, la corrida congelada o la activación de la categoría
-    buscable (grupos A/C, 42 elementos) y lo que el laboratorio consigue con
-    esas piezas conectadas de otra forma — cerrarla exigiría autorización
-    sobre piezas que #469 deja fuera de alcance, igual que #467 ya lo
-    declaró para el grupo A/C.
+    eran infidelidad del porte y ya están corregidos. Los 50 que quedan sobre
+    las 47 filas sin salvedad (por encima del 21 publicado si se compara
+    contra esa cifra sin restringir la población) no son un defecto de esta
+    incidencia: son la diferencia irreducible entre lo que este arnés puede
+    reproducir sin tocar el motor, la corrida congelada o la activación de la
+    categoría buscable (grupos A/C, 42 elementos) y lo que el laboratorio
+    consigue con esas piezas conectadas de otra forma — cerrarla exigiría
+    autorización sobre piezas que #469 deja fuera de alcance, igual que #467
+    ya lo declaró para el grupo A/C. Bajo la población que sí originó el
+    umbral D1 (los 31 `casos_con_contenido`), esos mismos 50 se reparten en
+    21 dentro de esa población y 29 en los 16 `casos_de_ausencia` que el
+    umbral nunca contó — el suelo D1 de `elementos_de_mas` (≤21) sí se
+    alcanza, medido así (CODEX-001, más abajo).
 
-    El suelo de D1 **no** queda afirmado aquí como aserción dura sobre las
-    cuatro métricas a la vez —una de las cuatro no lo alcanza—; las cotas de
-    no regresión se actualizan a la medición de la fila 5 (≥29/47, ≤50, ≤0,
-    ≥63/81), nunca por debajo de lo medido; `aciertos_exactos` se afirma
-    además como aserción dura aparte, ahora que alcanza su suelo D1."""
+    Las cotas de no regresión se actualizan a la medición de la fila 5 sobre
+    las 47 filas sin salvedad (≥29/47, ≤50, ≤0, ≥63/81), nunca por debajo de
+    lo medido; `aciertos_exactos`, `omisiones_criticas` y `cobertura` se
+    afirman además como aserción dura aparte, cada una sobre esa misma
+    medición de 47 filas, que ya alcanza su suelo D1/D2 sin ninguna
+    salvedad de población. `elementos_de_mas` no se afirma como aserción
+    dura aquí frente a ≤21 sobre las 47 filas —esa comparación mezclaría
+    poblaciones distintas, el defecto que corrige CODEX-001—; su suelo D1 se
+    afirma como aserción dura por separado, sobre la población que lo
+    origina, en
+    `test_elementos_de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publicado`."""
     metricas = ejecucion_del_banco_motor_portado.metricas
 
     print(
@@ -1079,11 +1107,15 @@ def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metric
     assert metricas.elementos_de_mas <= _MAXIMO_ELEMENTOS_DE_MAS_MOTOR
     assert metricas.omisiones_criticas <= _MAXIMO_OMISIONES_CRITICAS_MOTOR
     assert metricas.elementos_hallados >= _MINIMO_ELEMENTOS_HALLADOS_MOTOR
-    # Incidencia #465/#469: tres de las cuatro métricas de D1/D2 sí se
-    # alcanzan sobre esta medición, y se afirman como aserciones duras aparte
-    # de las cotas de no regresión de arriba (D1: aciertos exactos ≥ 29/47,
-    # omisiones críticas ≤ 1; D1/D2: cobertura ≥ 63/81) — nunca
-    # `elementos_de_mas` (50 > 21), que quedaría falseada.
+    # Incidencia #465/#469: de las cuatro métricas de D1/D2, tres se afirman
+    # aquí como aserciones duras aparte de las cotas de no regresión de
+    # arriba (D1: aciertos exactos ≥ 29/47, omisiones críticas ≤ 1; D1/D2:
+    # cobertura ≥ 63/81) — nunca `metricas.elementos_de_mas <= 21` aquí, que
+    # compararía las 47 filas sin salvedad (50) contra un umbral que la
+    # fuente fija solo sobre los 31 `casos_con_contenido` (CODEX-001). El
+    # suelo D1 de `elementos_de_mas` sí se afirma como aserción dura, sobre
+    # esa misma población, en
+    # `test_elementos_de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publicado`.
     assert metricas.aciertos_exactos >= 29
     assert metricas.omisiones_criticas <= 1
     assert metricas.cobertura >= 63 / 81
@@ -1193,6 +1225,50 @@ def test_los_elementos_de_mas_restantes_son_los_del_laboratorio(
             sin_explicar[caso_id] = no_explicados
 
     assert sin_explicar == {}
+
+
+def test_elementos_de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publicado(
+    ejecucion_del_banco_motor_portado: _EjecucionDelBanco,
+) -> None:
+    """CODEX-001: el umbral D1 publicado para `elementos_de_mas` (≤21) lo fija
+    la fuente (`experiments/adr002/modelo_local/medir.py:255-269`) sumando
+    `obtenido - esperado` solo sobre los 31 `casos_con_contenido`
+    (`resultado_esperado` no vacío) — nunca sobre los 47. El `elementos_de_
+    mas=50` que reporta `test_el_banco_se_ejecuta_contra_el_motor_portado_y_
+    reporta_las_cuatro_metricas` suma sobre las 47 filas sin esa salvedad, así
+    que compararlo contra ≤21 compara dos poblaciones distintas — el defecto
+    que corrige esta prueba, midiendo la misma población que originó el
+    umbral directamente sobre la ejecución real del arnés (`obtenido_por_
+    caso`), no sobre el fixture del laboratorio.
+
+    `test_la_corrida_del_laboratorio_reproduce_las_metricas_publicadas_de_la_
+    fuente` ya demuestra que, sobre esa misma población, el laboratorio mide
+    exactamente 21. `test_los_elementos_de_mas_restantes_son_los_del_
+    laboratorio` demuestra que, para cada caso, los sobrantes del arnés
+    (`obtenido - esperado`) son subconjunto de `obtenido` del laboratorio —y
+    como ambos comparten el mismo `esperado` por caso, un sobrante del arnés
+    nunca puede ser un elemento esperado, así que ese subconjunto cae dentro
+    de `obtenido - esperado` del laboratorio, acotando el recuento de
+    sobrantes del arnés por el recuento de sobrantes del laboratorio, caso a
+    caso. Sumando esa cota sobre los 31 `casos_con_contenido`, el arnés no
+    puede medir más de 21 bajo esta población — esta prueba lo confirma
+    midiéndolo directamente en vez de solo derivarlo por cota, y lo mide en
+    exactamente 21: bajo la definición de población que originó el umbral
+    D1 de `elementos_de_mas`, el arnés SÍ lo alcanza (≤21), aunque el total
+    sin esa salvedad sobre las 47 filas (50) siga por encima — son dos
+    métricas distintas, no la misma con dos resultados."""
+    banco = _fixture()
+    obtenido_por_caso = ejecucion_del_banco_motor_portado.obtenido_por_caso
+
+    elementos_de_mas_con_contenido = 0
+    for caso in banco["casos"]:
+        esperado = set(caso["resultado_esperado"])
+        if not esperado:
+            continue
+        elementos_de_mas_con_contenido += len(obtenido_por_caso[caso["id"]] - esperado)
+
+    assert elementos_de_mas_con_contenido == 21
+    assert elementos_de_mas_con_contenido <= 21  # suelo D1, sobre la población publicada
 
 
 def test_el_cargador_no_lee_criticidad(ejecucion_del_banco: _EjecucionDelBanco) -> None:

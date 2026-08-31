@@ -1,4 +1,4 @@
-# ADR-115 — Las dos puertas que la ampliación del arnés no heredaba bajan los aciertos exactos a 29/47 pero elementos de más no alcanza D1 (incidencia #469)
+# ADR-115 — Las dos puertas que la ampliación del arnés no heredaba bajan los aciertos exactos a 29/47 y elementos de más alcanza D1 bajo la población del umbral publicado (incidencia #469)
 
 - Estado: PROPUESTO
 - Fecha: 2026-08-31
@@ -59,11 +59,25 @@ que los excluía en el laboratorio no es de ámbito (`G4`, ya cerrada por
 #467): es `G8` (vigencia temporal) y `G12` (criticidad y límite duro) — dos
 puertas que el motor por etapas ya aplica a lo que genera él mismo, pero que
 `indice_de_categoria`/`siembra_de_contexto` nunca heredaban al ampliar el
-conjunto admitido por otro camino. Corregido, mide: **29/47** (< 29 no; ≥ 29
-sí), **50** elementos de más (> 21), 0 omisiones críticas (≤ 1, alcanzado),
-cobertura 63/81 (≥ 63/81, alcanzado). `aciertos_exactos` alcanza su suelo D1
-y se afirma como aserción dura; `elementos_de_mas` no, y su cota de no
-regresión baja de 62 a 50 (nunca por debajo de lo medido).
+conjunto admitido por otro camino. Corregido, mide sobre las 47 filas sin
+ninguna salvedad: **29/47** (< 29 no; ≥ 29 sí), **50** elementos de más, 0
+omisiones críticas (≤ 1, alcanzado), cobertura 63/81 (≥ 63/81, alcanzado).
+
+CODEX-001 (revisión posterior a la primera versión de este ADR): comparar
+esos 50 directamente contra el umbral D1 publicado de ≤21 compara dos
+poblaciones distintas. La fuente (`experiments/adr002/modelo_local/
+medir.py:255-269`) fija ese ≤21 sumando `obtenido - esperado` solo sobre los
+31 `casos_con_contenido` (`resultado_esperado` no vacío), no sobre los 47.
+Medido con esa misma población, el arnés mide exactamente **21** —no 50— y
+sí alcanza su suelo D1
+(`test_elementos_de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publicado`,
+`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`). `aciertos_exactos`,
+`omisiones_criticas`, `cobertura` y, medido así, `elementos_de_mas` alcanzan
+los cuatro su suelo D1/D2 y se afirman como aserción dura, cada uno sobre la
+población que su propio umbral publicado usa; la cota de no regresión de
+`elementos_de_mas` sobre las 47 filas sin salvedad baja de 62 a 50 (nunca
+por debajo de lo medido) y sigue sin afirmarse como aserción dura frente a
+≤21, porque esa comparación mezclaría poblaciones.
 
 ## Comprobación que la sostiene
 
@@ -73,13 +87,19 @@ buscable con restricción por ámbito, G8/G12 sobre la ampliación, RF-25/RF-26,
 siembra en contexto): `aciertos_exactos=29/47 elementos_de_mas=50
 omisiones_criticas=0 cobertura=63/81 (77.8%)`.
 
-Medido por configuración (línea base: ADR-114, fila 4):
+Medido por configuración (línea base: ADR-114, fila 4), `elementos de más`
+sobre las 47 filas sin ninguna salvedad de población:
 
 | configuración | aciertos exactos | elementos de más | omisiones críticas | cobertura |
 |---|---|---|---|---|
 | 4. índice de categoría por ámbito (ADR-114) | 27/47 | 62 | 0 | 63/81 |
 | 5. + G8/G12 sobre la ampliación (#469) | **29/47** | **50** | 0 | 63/81 |
 | objetivo D1/D2 | ≥ 29/47 | ≤ 21 | ≤ 1 | ≥ 63/81 |
+
+El umbral D1 de `elementos de más` (≤21) lo fija la fuente sobre una
+población distinta —los 31 `casos_con_contenido`, no las 47 filas—; medida
+así, la fila 5 da **21**, no 50, y sí alcanza ese objetivo (CODEX-001, ver
+más abajo).
 
 **Diagnóstico elemento a elemento de los 62 `elementos_de_mas` de la fila 4**,
 contra `tests/acceptance/fixtures/lab_final_run_row5.json` (`obtenido` de la
@@ -247,8 +267,9 @@ Las cotas de no regresión: `_MINIMO_ACIERTOS_EXACTOS_MOTOR` sube de 27 a 29
 (el suelo D1, alcanzado) y se afirma además como aserción dura aparte
 (`assert metricas.aciertos_exactos >= 29`), igual que `omisiones_criticas`/
 `cobertura` ya lo estaban; `_MAXIMO_ELEMENTOS_DE_MAS_MOTOR` baja de 62 a 50
-(la cifra medida, nunca por debajo, y **no** se afirma como aserción dura
-frente al suelo D1 de 21, que seguiría dejando `uv run pytest` en rojo);
+(la cifra medida sobre las 47 filas sin salvedad, nunca por debajo, y **no**
+se afirma como aserción dura frente al suelo D1 de 21 sobre esa misma
+población de 47, que seguiría dejando `uv run pytest` en rojo);
 `_MAXIMO_OMISIONES_CRITICAS_MOTOR` (0) y `_MINIMO_ELEMENTOS_HALLADOS_MOTOR`
 (63) no cambian. El camino real del producto no cambia:
 `category_matches_query`/`solo_por_categoria`, el orden aprobado de
@@ -257,17 +278,30 @@ tocan; con la puerta `category_matching_enabled` cerrada, el producto queda
 exactamente igual que hoy (las pruebas de identidad con puerta cerrada no se
 tocaron y siguen en verde).
 
+CODEX-001 (revisión posterior a la primera versión de este ADR): comparar
+esos 50 (población de 47 filas) contra el suelo D1 publicado de ≤21 mezcla
+poblaciones — el ≤21 lo fija la fuente solo sobre los 31 `casos_con_
+contenido`. Medido con esa misma población,
+`test_elementos_de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publicado`
+(`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`) mide 21 y lo
+afirma como aserción dura aparte, sobre `ejecucion_del_banco_motor_portado`
+directamente — no solo contra el fixture del laboratorio. Las cuatro
+métricas D1/D2 quedan así afirmadas como aserción dura, cada una sobre la
+población que su propio umbral publicado usa.
+
 Decisión que falta y que no corresponde a esta incidencia: los 50
-`elementos_de_mas` restantes (grupos A y C completos, y la porción de
-`siembra_de_contexto` del grupo B) no son infidelidad del porte — son la
-diferencia irreducible entre lo que este arnés puede reproducir sin tocar
-el motor, la corrida congelada o la activación de la categoría buscable, y
-lo que el laboratorio produce con esas piezas conectadas de otra forma.
-Cerrarlos exigiría, como encargo aparte con autorización explícita: ampliar
-el banco con casos que aíslen cada grupo, reabrir la corrida congelada del
-filtro para que examine más candidatos, o cambiar la activación de la
-«categoría buscable» — ninguna de las tres está autorizada por la
-incidencia #469, igual que ADR-114 ya lo declaró para #467.
+`elementos_de_mas` que mide el arnés sobre las 47 filas sin salvedad
+(grupos A y C completos, y la porción de `siembra_de_contexto` del grupo B)
+no son infidelidad del porte — son la diferencia irreducible entre lo que
+este arnés puede reproducir sin tocar el motor, la corrida congelada o la
+activación de la categoría buscable, y lo que el laboratorio produce con
+esas piezas conectadas de otra forma. Cerrarlos exigiría, como encargo
+aparte con autorización explícita: ampliar el banco con casos que aíslen
+cada grupo, reabrir la corrida congelada del filtro para que examine más
+candidatos, o cambiar la activación de la «categoría buscable» — ninguna de
+las tres está autorizada por la incidencia #469, igual que ADR-114 ya lo
+declaró para #467. Esto no compromete el suelo D1 de `elementos_de_mas`, que
+ya se alcanza bajo la población que lo publica.
 
 ## Consecuencias
 
@@ -276,16 +310,23 @@ incidencia #469, igual que ADR-114 ya lo declaró para #467.
   única infidelidad de porte real que quedaba en los 62 elementos
   diagnosticados por ADR-114. El diagnóstico deja probado, con una prueba de
   forma sobre el banco completo (`test_los_elementos_de_mas_restantes_son_
-  los_del_laboratorio`), que los 50 `elementos_de_mas` restantes no son
-  infidelidad del porte sino ruido propio del laboratorio — una afirmación
-  ahora verificable automáticamente contra el artefacto congelado, no solo
-  documentada en prosa.
-- Negativas/riesgos: D1 sigue sin poder declararse cumplido en las cuatro
-  métricas a la vez (50 > 21); PA-0.2-REC-01 sigue sin poder declararse
-  superada por esta vía. Cerrar los 50 elementos restantes exigiría
-  autorización sobre piezas que #469 deja fuera de alcance (el motor, la
-  corrida congelada, la activación de la categoría buscable), igual que ya
-  ocurría tras ADR-114.
+  los_del_laboratorio`), que los 50 `elementos_de_mas` restantes (sobre las
+  47 filas) no son infidelidad del porte sino ruido propio del laboratorio —
+  una afirmación ahora verificable automáticamente contra el artefacto
+  congelado, no solo documentada en prosa. Medido bajo la población que fija
+  el umbral D1 publicado (los 31 `casos_con_contenido`, CODEX-001),
+  `elementos_de_mas` también alcanza su suelo D1 (21 ≤ 21) y queda afirmado
+  como aserción dura: las cuatro métricas D1/D2 quedan alcanzadas por este
+  arnés.
+- Negativas/riesgos: alcanzar D1 en las cuatro métricas sobre este arnés no
+  cierra PA-0.2-REC-01 en `main`, que exige el pipeline de producto
+  integrado (M8-M12), no este arnés de evaluación (ver docstring del
+  módulo). `elementos_de_mas` sobre las 47 filas sin la salvedad de
+  población sigue en 50, por encima de 21 comparado sin más; cerrar esa
+  cifra exigiría autorización sobre piezas que #469 deja fuera de alcance
+  (el motor, la corrida congelada, la activación de la categoría buscable),
+  igual que ya ocurría tras ADR-114 — aunque, tras CODEX-001, esa cifra ya
+  no es la que decide si D1 se alcanza.
 
 ## Alternativas descartadas y por qué
 

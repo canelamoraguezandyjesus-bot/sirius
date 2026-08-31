@@ -146,7 +146,8 @@ _ADR_114 = (
 )
 _ADR_115 = (
     "ADR-115-las-dos-puertas-que-la-ampliacion-del-arnes-no-heredaba-bajan-los-aciertos-"
-    "exactos-a-29-47-pero-elementos-de-mas-no-alcanza-d1-incidencia-469.md"
+    "exactos-a-29-47-y-elementos-de-mas-alcanza-d1-bajo-la-poblacion-del-umbral-publicado-"
+    "incidencia-469.md"
 )
 
 RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
