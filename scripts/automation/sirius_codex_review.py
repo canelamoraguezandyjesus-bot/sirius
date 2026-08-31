@@ -371,7 +371,17 @@ def _observations_from_comments(comments: list[dict[str, Any]]) -> list[dict[str
     for index, comment in enumerate(sorted(comments, key=sort_key), start=1):
         body = str(comment.get("body") or "").strip()
         path = str(comment.get("path") or "").strip()
-        line = comment.get("line") or comment.get("original_line")
+        # Solo `line` (lado nuevo del diff) es una numeración que
+        # `_line_kind_in_patch` de `drip_guard.py` sabe interpretar: ese
+        # guardián recorre el patch contando únicamente líneas del lado
+        # nuevo. `original_line` ancla al lado eliminado/base, una
+        # numeración distinta -usarla aquí como si fuera del lado nuevo hacía
+        # que una línea legítima del hallazgo citara una posición que nunca
+        # existió en ese lado, y el guardián de goteo la marcaba
+        # incorrectamente como POSIBLE_GOTEO (incidencia #501,
+        # CLAUDE-REVISOR-003). Sin `line`, se omite el número en vez de
+        # arriesgar uno incorrecto.
+        line = comment.get("line")
         location = f"{path}:{line}" if isinstance(line, int) else (path or "desconocido")
         permalink = str(comment.get("html_url") or "").strip()
         observations.append(

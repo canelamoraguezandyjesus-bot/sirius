@@ -9,6 +9,11 @@ es puro: el `fetch` de comparación se inyecta, sin red ni `gh`.
 
 from __future__ import annotations
 
+import json
+import subprocess
+
+import pytest
+
 from sirius_engine.drip_guard import (
     MENSAJE_POSIBLE_GOTEO,
     CompareFetcher,
@@ -17,6 +22,7 @@ from sirius_engine.drip_guard import (
     annotate_observations,
     annotate_observations_with_verdicts,
     evaluate_finding,
+    gh_compare_file,
     parse_archivo_location,
 )
 
@@ -315,3 +321,106 @@ def test_annotate_observations_with_verdicts_coincide_con_annotate_observations(
     )
     assert anotadas_simple == anotadas_detallada
     assert veredictos == [DripVerdict.POSIBLE_GOTEO]
+
+
+# --------------------------------------------------------------------------- #
+# Presupuesto y deduplicación por fichero (incidencia #501, CLAUDE-REVISOR-001)
+# --------------------------------------------------------------------------- #
+
+
+def test_dos_observaciones_del_mismo_fichero_reutilizan_una_unica_comparacion() -> None:
+    llamadas: list[str] = []
+
+    def fetch(repo: str, head1: str, head2: str, ruta: str) -> FileCompareResult:
+        llamadas.append(ruta)
+        return FileCompareResult(changed=False, patch=None)
+
+    observations = [
+        {"id": "R1", "archivo": "src/x.py:10", "problema": "..."},
+        {"id": "R2", "archivo": "src/x.py:20", "problema": "..."},
+    ]
+    anotadas, veredictos = annotate_observations_with_verdicts(
+        observations,
+        round_number=2,
+        round_records=[_registro_ronda_1()],
+        current_head=HEAD2,
+        repo=REPO,
+        fetch=fetch,
+    )
+    assert llamadas == ["src/x.py"]
+    assert veredictos == [DripVerdict.POSIBLE_GOTEO, DripVerdict.POSIBLE_GOTEO]
+    assert anotadas[0]["posible_goteo"] == MENSAJE_POSIBLE_GOTEO
+    assert anotadas[1]["posible_goteo"] == MENSAJE_POSIBLE_GOTEO
+
+
+def test_presupuesto_de_tiempo_agotado_no_intenta_mas_comparaciones(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    llamadas: list[str] = []
+
+    def fetch(repo: str, head1: str, head2: str, ruta: str) -> FileCompareResult:
+        llamadas.append(ruta)
+        return FileCompareResult(changed=False, patch=None)
+
+    # Tres lecturas del reloj: (1) al fijar el plazo, (2) antes de la primera
+    # comparación -todavía dentro del presupuesto-, (3) antes de la segunda
+    # -ya fuera-. Un reloj falso hace la prueba determinista, sin depender de
+    # un `sleep` real ni de un `fetch` que tarde de verdad.
+    tiempos = iter([0.0, 0.0, 100.0])
+    monkeypatch.setattr("sirius_engine.drip_guard.time.monotonic", lambda: next(tiempos))
+
+    observations = [
+        {"id": "R1", "archivo": "src/a.py:1", "problema": "..."},
+        {"id": "R2", "archivo": "src/b.py:1", "problema": "..."},
+    ]
+    anotadas, veredictos = annotate_observations_with_verdicts(
+        observations,
+        round_number=2,
+        round_records=[_registro_ronda_1()],
+        current_head=HEAD2,
+        repo=REPO,
+        fetch=fetch,
+        time_budget_seconds=10.0,
+    )
+    # Solo la primera comparación llegó a llamar a `fetch`: la segunda vio el
+    # presupuesto agotado y se resolvió sin ninguna llamada real.
+    assert llamadas == ["src/a.py"]
+    assert veredictos == [DripVerdict.POSIBLE_GOTEO, DripVerdict.SIN_INFORMACION]
+    assert "posible_goteo" not in anotadas[1]
+
+
+# --------------------------------------------------------------------------- #
+# Lista de ficheros posiblemente truncada (incidencia #501, CLAUDE-REVISOR-002)
+# --------------------------------------------------------------------------- #
+
+
+def _instalar_gh_falso(monkeypatch: pytest.MonkeyPatch, stdout: str, returncode: int = 0) -> None:
+    def _run_falso(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(cmd, returncode, stdout=stdout, stderr="")
+
+    monkeypatch.setattr("sirius_engine.drip_guard.subprocess.run", _run_falso)
+
+
+def test_lista_de_ficheros_en_el_limite_documentado_es_lectura_fallida(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # 300 es el límite documentado de la API de comparación de GitHub: si la
+    # lista alcanza justo ese tamaño y el fichero citado no aparece en ella,
+    # puede estar truncada -no es evidencia de que no cambiara.
+    ficheros = [{"filename": f"src/f{i}.py", "status": "modified"} for i in range(300)]
+    _instalar_gh_falso(monkeypatch, json.dumps({"files": ficheros}))
+
+    resultado = gh_compare_file(REPO, HEAD1, HEAD2, "src/ausente.py")
+
+    assert resultado is None
+
+
+def test_lista_de_ficheros_corta_sin_el_fichero_citado_es_sin_cambios(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ficheros = [{"filename": "src/otro.py", "status": "modified"}]
+    _instalar_gh_falso(monkeypatch, json.dumps({"files": ficheros}))
+
+    resultado = gh_compare_file(REPO, HEAD1, HEAD2, "src/ausente.py")
+
+    assert resultado == FileCompareResult(changed=False, patch=None)

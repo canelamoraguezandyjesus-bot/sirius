@@ -37,6 +37,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
@@ -46,6 +47,17 @@ from typing import Any
 MENSAJE_POSIBLE_GOTEO = (
     "posible goteo: este contenido ya estaba idéntico en la ronda 1, ¿por qué no se vio entonces?"
 )
+
+#: Presupuesto de tiempo por defecto para TODAS las comparaciones de una
+#: ronda (incidencia #501, CLAUDE-REVISOR-001). El paso que invoca este
+#: guardián (`sirius_apply_verdict.sh`, vía `sirius_drip_guard_cli.py`) tiene
+#: un `timeout-minutes: 10` en el workflow; 120s deja margen de sobra para el
+#: resto del paso (leer el historial, aplicar el veredicto, publicar el
+#: fallback informativo) incluso si cada comparación agota su propio
+#: `timeout` de 30s. Una vez agotado, ninguna comparación nueva se intenta:
+#: las observaciones restantes se resuelven a SIN_INFORMACION, nunca a "no
+#: cambió" (regla (c) de la incidencia #496).
+DEFAULT_TIME_BUDGET_SECONDS = 120.0
 
 # Sufijo de línea (o rango) que el recolector añade al `archivo` de un
 # hallazgo: `scripts/x.py:120`, `scripts/x.py:120-134`. Solo se usa el
@@ -205,6 +217,7 @@ def annotate_observations(
     current_head: str,
     repo: str,
     fetch: CompareFetcher,
+    time_budget_seconds: float = DEFAULT_TIME_BUDGET_SECONDS,
 ) -> list[dict[str, Any]]:
     """Copia ``observations`` añadiendo ``posible_goteo`` donde corresponda.
 
@@ -225,6 +238,7 @@ def annotate_observations(
         current_head=current_head,
         repo=repo,
         fetch=fetch,
+        time_budget_seconds=time_budget_seconds,
     )
     return anotadas
 
@@ -237,6 +251,7 @@ def annotate_observations_with_verdicts(
     current_head: str,
     repo: str,
     fetch: CompareFetcher,
+    time_budget_seconds: float = DEFAULT_TIME_BUDGET_SECONDS,
 ) -> tuple[list[dict[str, Any]], list[DripVerdict]]:
     """Igual que :func:`annotate_observations`, y además devuelve el
     :class:`DripVerdict` de cada observación, en el mismo orden.
@@ -256,7 +271,40 @@ def annotate_observations_with_verdicts(
         current_head=current_head,
         repo=repo,
         fetch=fetch,
+        time_budget_seconds=time_budget_seconds,
     )
+
+
+def _memoize_fetch_with_budget(
+    fetch: CompareFetcher, *, time_budget_seconds: float
+) -> CompareFetcher:
+    """Envuelve ``fetch`` con caché por fichero y un presupuesto de tiempo global.
+
+    Dos observaciones de la misma ronda que citan el mismo fichero (mismo
+    ``repo``/``head1``/``head2``/``ruta``) reutilizan una única llamada real
+    (incidencia #501, CLAUDE-REVISOR-001): sin esto, cada observación
+    disparaba su propia llamada secuencial a ``gh api compare``, aunque
+    varias citaran el mismo fichero.
+
+    El presupuesto es un reloj de pared compartido por TODAS las llamadas que
+    pasen por este envoltorio: en cuanto se agota, ninguna llamada real nueva
+    se intenta -se resuelve como lectura fallida (``None``), nunca como "no
+    cambió" (regla (c) de la incidencia #496)-, así que un endpoint lento o
+    bloqueado no puede agotar por sí solo el timeout del paso que llama a
+    este guardián.
+    """
+    cache: dict[tuple[str, str, str, str], FileCompareResult | None] = {}
+    deadline = time.monotonic() + time_budget_seconds
+
+    def _fetch_memoizado(repo: str, head1: str, head2: str, ruta: str) -> FileCompareResult | None:
+        clave = (repo, head1, head2, ruta)
+        if clave in cache:
+            return cache[clave]
+        resultado = None if time.monotonic() >= deadline else fetch(repo, head1, head2, ruta)
+        cache[clave] = resultado
+        return resultado
+
+    return _fetch_memoizado
 
 
 def _annotate_with_verdicts(
@@ -267,7 +315,9 @@ def _annotate_with_verdicts(
     current_head: str,
     repo: str,
     fetch: CompareFetcher,
+    time_budget_seconds: float = DEFAULT_TIME_BUDGET_SECONDS,
 ) -> tuple[list[dict[str, Any]], list[DripVerdict]]:
+    fetch_acotado = _memoize_fetch_with_budget(fetch, time_budget_seconds=time_budget_seconds)
     anotadas: list[dict[str, Any]] = []
     veredictos: list[DripVerdict] = []
     for observation in observations:
@@ -279,13 +329,22 @@ def _annotate_with_verdicts(
             current_head=current_head,
             repo=repo,
             archivo=observation.get("archivo"),
-            fetch=fetch,
+            fetch=fetch_acotado,
         )
         if veredicto is DripVerdict.POSIBLE_GOTEO:
             copia["posible_goteo"] = MENSAJE_POSIBLE_GOTEO
         anotadas.append(copia)
         veredictos.append(veredicto)
     return anotadas, veredictos
+
+
+#: Límite documentado de ficheros que devuelve la API de comparación de
+#: GitHub (`gh api repos/.../compare/...`) en la clave ``files`` de una sola
+#: respuesta. Por encima de este número la lista viene truncada sin que la
+#: respuesta lo señale con un campo propio (incidencia #501,
+#: CLAUDE-REVISOR-002): la única señal observable es que ``files`` alcanza
+#: exactamente este tamaño.
+_MAX_COMPARE_FILES = 300
 
 
 def gh_compare_file(
@@ -332,4 +391,11 @@ def gh_compare_file(
             continue
         patch = entrada.get("patch")
         return FileCompareResult(changed=True, patch=patch if isinstance(patch, str) else None)
+    if len(ficheros) >= _MAX_COMPARE_FILES:
+        # La lista alcanzó el límite documentado de la API: puede estar
+        # truncada, así que la ausencia de `file_path` en ella no es
+        # evidencia de que no cambiara -sería asumir "no cambió" sobre una
+        # lectura potencialmente incompleta (regla (c) de la incidencia
+        # #496). Se declara lectura fallida, nunca "sin cambios".
+        return None
     return FileCompareResult(changed=False, patch=None)

@@ -783,6 +783,28 @@ def test_collect_review_with_comments_yields_changes_requested(tmp_path: Path) -
     assert first["criterio_esperado"]
 
 
+def test_collect_review_comment_anchored_on_removed_line_omits_line_number(
+    tmp_path: Path,
+) -> None:
+    # Hallazgo CLAUDE-REVISOR-003 (incidencia #501): un comentario inline de
+    # Codex anclado en el lado eliminado del diff (`line` ausente,
+    # `original_line` presente) no debe convertirse en un número de línea del
+    # lado nuevo -drip_guard.py (`_line_kind_in_patch`) solo sabe interpretar
+    # esa numeración-, así que la ubicación se queda sin línea en vez de citar
+    # una posición que nunca existió en el lado nuevo.
+    env = _setup(tmp_path)
+    _write_state(tmp_path)
+    _seed(env, "reviews.json", [_review()])
+    comment = _review_comment(801, "src/a.py", 10)
+    del comment["line"]
+    comment["original_line"] = 10
+    _seed(env, "review_comments_700.json", [comment])
+    r = _run_collect(env, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["observations"][0]["archivo"] == "src/a.py"
+
+
 def test_collect_normalized_json_has_stable_shape(tmp_path: Path) -> None:
     env = _setup(tmp_path)
     _write_state(tmp_path)
