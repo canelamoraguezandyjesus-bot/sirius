@@ -199,7 +199,10 @@ if [ "$sin_pr" = "true" ]; then
     echo "::error::No se pudieron leer los comentarios de #${ISSUE}; no puedo saber que fase se detuvo. Reintentable."
     exit 1
   fi
-  rol_parado="$(grep -oE '<!-- sirius-verdict:(implementer|reviewer|corrector):(FAILED_SAFELY|precheck):' \
+  # H-33: sin PR, la parada tambien puede ser un BLOCKED_BY_DECISION del
+  # implementador (le paso a #453, que se detuvo a pedir decision antes de
+  # abrir rama): su marcador es `:blocked:` y tambien dice que fase devolver.
+  rol_parado="$(grep -oE '<!-- sirius-verdict:(implementer|reviewer|corrector):(FAILED_SAFELY|precheck|blocked):' \
     "$dump_file" | tail -n 1 | cut -d: -f2)"
   rm -f "$dump_file"
   if ! etiqueta_destino="$(destino_de_rol "$rol_parado")"; then
@@ -209,7 +212,53 @@ if [ "$sin_pr" = "true" ]; then
 else
 case "$parada" in
   sirius:blocked-decision)
-    etiqueta_destino="sirius:repair-requested"
+    # H-33 (incidencias #453 y #471): `blocked-decision` NO siempre lo emite la
+    # politica de convergencia. Cualquier rol publica BLOCKED_BY_DECISION con su
+    # marcador `:blocked:` en el historial (sirius_apply_verdict.sh). Devolverlo
+    # siempre al corrector reanudaba la fase equivocada: el corrector arrancaba
+    # sin observaciones que corregir y se paraba en seguro, y la orden del
+    # propietario moria en un rebote. La fase se LEE del historial, como ya hace
+    # `failed-safely`; si el historial no publica ningun rol (las paradas por
+    # convergencia, que son del corrector y anteriores a este marcador), se
+    # conserva la vuelta historica al corrector.
+    dump_file="$(mktemp)"
+    if ! sirius_dump_comments "$REPO" "$ISSUE" "$dump_file"; then
+      rm -f "$dump_file"
+      echo "::error::No se pudieron leer los comentarios de #${ISSUE}; no puedo saber que fase se detuvo. Reintentable."
+      exit 1
+    fi
+    # Solo cuentan los marcadores de parada de la EPOCA actual: los
+    # posteriores al ultimo permiso de reanudacion publicado por este mismo
+    # guion (revision de la PR #477, P2). Si la parada actual aplico su
+    # etiqueta pero su marcador no llego a publicarse (estado parcial que
+    # sirius_transition admite), un marcador de una parada YA REANUDADA no
+    # puede decidir la vuelta: sin marcador de esta epoca, se conserva la
+    # vuelta historica al corrector con su reset de convergencia.
+    ultima_reanudacion="$(grep -nE 'sirius-(convergence-reset|resume-stop|restart-sin-pr)' "$dump_file" | tail -n 1 | cut -d: -f1)"
+    if [ -n "${ultima_reanudacion:-}" ]; then
+      epoca_file="$(mktemp)"
+      tail -n "+$((ultima_reanudacion + 1))" "$dump_file" >"$epoca_file"
+    else
+      epoca_file="$dump_file"
+    fi
+    marcador_vigente="$(grep -oE '<!-- sirius-verdict:(implementer|reviewer|corrector):(FAILED_SAFELY|precheck|blocked)[^>]*-->' \
+      "$epoca_file" | tail -n 1)"
+    [ "$epoca_file" != "$dump_file" ] && rm -f "$epoca_file"
+    rol_parado="$(printf '%s' "$marcador_vigente" | cut -d: -f2)"
+    rm -f "$dump_file"
+    # El reset del liston de convergencia solo corresponde cuando el bloqueo
+    # FUE de la politica de convergencia (revision de la PR #477): perdonar
+    # rondas porque un ROL pidio una decision debilitaria el guarda del bucle
+    # para las correcciones posteriores. Sin marcador (historiales anteriores
+    # al convenio) se conserva el comportamiento historico: convergencia.
+    if [ -z "$marcador_vigente" ] || printf '%s' "$marcador_vigente" | grep -q ':precheck:convergencia-'; then
+      bloqueo_de_convergencia="true"
+    else
+      bloqueo_de_convergencia="false"
+    fi
+    if ! etiqueta_destino="$(destino_de_rol "$rol_parado")"; then
+      etiqueta_destino="sirius:repair-requested"
+    fi
     ;;
   sirius:failed-safely)
     dump_file="$(mktemp)"
@@ -264,7 +313,7 @@ if [ "$sin_pr" = "true" ]; then
     "🟢 **Reinicio autorizado por el propietario**" \
     "Esta incidencia se detuvo **antes de producir ninguna rama ni PR**, así que no hay ningún head sobre el que continuar: lo que se autoriza es **repetir desde cero** la fase que se paró (\`${etiqueta_destino}\`)." \
     "El historial queda intacto y no se perdona ninguna ronda: sin PR no hubo rondas que contar. Si la fase se vuelve a caer, se detendrá otra vez con su diagnóstico." >"$body_file"
-elif [ "$parada" = "sirius:blocked-decision" ]; then
+elif [ "$parada" = "sirius:blocked-decision" ] && [ "${bloqueo_de_convergencia:-true}" = "true" ]; then
   marker="<!-- sirius-convergence-reset:${head_sha} -->"
   printf '%s\n\n%s\n\n%s\n\n%s\n' \
     "$marker" \

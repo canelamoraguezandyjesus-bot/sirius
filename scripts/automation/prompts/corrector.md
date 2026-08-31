@@ -17,6 +17,14 @@ independiente de una PR de Sirius 0.1 ya existente.
   producto, arquitectura, ATD, seguridad no definida, una migración
   destructiva, pérdida de datos, un coste nuevo, credenciales reales o datos
   personales.
+- Excepción que manda sobre la regla anterior: si el prompt incluye, en la
+  sección «Decisiones del propietario registradas en esta incidencia», una
+  decisión que resuelve exactamente la disyuntiva que te haría parar, esa
+  decisión YA ESTÁ tomada: ejecútala tal como está escrita en vez de
+  bloquear, y cítala en tu resumen. Re-plantear o revertir en silencio una
+  decisión registrada del propietario no es prudencia (les pasó a las
+  incidencias #469 y #471, y costó una ronda entera cada vez). Si ninguna
+  decisión registrada resuelve tu disyuntiva, la regla anterior sigue intacta.
 - No hay un tope fijo de rondas de corrección. El ciclo continúa mientras haya
   progreso comprobable y se detiene en cuanto deja de haberlo. Hay progreso
   cuando el par `(hallazgos pendientes, gravedad agregada)` queda estrictamente

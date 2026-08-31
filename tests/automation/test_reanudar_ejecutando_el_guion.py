@@ -541,3 +541,124 @@ def test_sin_pr_y_sin_saber_que_fase_se_paro_no_se_inventa_ninguna(tmp_path: Pat
     assert "sirius:implement-requested" not in etiquetas
     assert "sirius:review-requested" not in etiquetas
     assert "sirius:repair-requested" not in etiquetas
+
+
+# --------------------------------------------------------------------------- #
+# H-33: `blocked-decision` tampoco tiene vuelta fija — la fase se lee del
+# historial. Se lo llevó por delante dos veces en una noche: #453 (implementador
+# bloqueado SIN PR, la reanudación despertó a un corrector sin nada que
+# corregir) y #471 (misma familia, con la decisión ya publicada en la
+# incidencia). El atajo «blocked vuelve siempre al corrector» era verdad solo
+# para la política de convergencia.
+# --------------------------------------------------------------------------- #
+
+
+def test_un_implementador_bloqueado_con_pr_vuelve_a_implementacion(tmp_path: Path) -> None:
+    """El marcador `:blocked:` del veredicto dice qué fase pidió la decisión."""
+    env = _setup(tmp_path)
+    _sembrar(
+        env,
+        etiquetas=["sirius:blocked-decision"],
+        historial=_historial("<!-- sirius-verdict:implementer:blocked:run-7 -->"),
+    )
+    resultado = _ejecutar(env)
+    assert resultado.returncode == 0, resultado.stderr
+    assert "sirius:implement-requested" in _etiquetas(env), (
+        "un BLOCKED_BY_DECISION del implementador tiene que volver al "
+        "implementador; devolverlo al corrector repite el rebote de #453/#471: "
+        "un corrector sin observaciones que se para en seguro"
+    )
+    assert "sirius:repair-requested" not in _etiquetas(env)
+    assert "sirius:blocked-decision" not in _etiquetas(env)
+    assert "sirius-convergence-reset" not in _comentarios(env), (
+        "un bloqueo de ROL no perdona rondas de convergencia: el propietario "
+        "contestó una decisión, no autorizó borrar el listón del bucle"
+    )
+    assert "sirius-resume-stop" in _comentarios(env)
+
+
+def test_un_corrector_bloqueado_sigue_volviendo_al_corrector(tmp_path: Path) -> None:
+    """El caso que SÍ era verdad del atajo antiguo no puede romperse."""
+    env = _setup(tmp_path)
+    _sembrar(
+        env,
+        etiquetas=["sirius:blocked-decision"],
+        historial=_historial("<!-- sirius-verdict:corrector:blocked:run-3 -->"),
+    )
+    resultado = _ejecutar(env)
+    assert resultado.returncode == 0, resultado.stderr
+    assert "sirius:repair-requested" in _etiquetas(env)
+    assert "sirius-convergence-reset" not in _comentarios(env), (
+        "también un BLOCKED_BY_DECISION del propio corrector es una decisión "
+        "de rol, no una parada de convergencia: el listón no se toca"
+    )
+
+
+def test_manda_la_ultima_parada_tambien_entre_bloqueos(tmp_path: Path) -> None:
+    """Un `:blocked:` viejo del implementador no desvía un bloqueo posterior
+    de convergencia (que publica su marcador `precheck:convergencia-`)."""
+    env = _setup(tmp_path)
+    _sembrar(
+        env,
+        etiquetas=["sirius:blocked-decision"],
+        historial=(
+            f"https://github.com/{REPO}/pull/{PR}\n"
+            f"- Head SHA: `{HEAD}`\n"
+            "<!-- sirius-verdict:implementer:blocked:run-1 -->\n"
+            "<!-- sirius-verdict:corrector:precheck:convergencia-sin-progreso:run-9 -->\n"
+        ),
+    )
+    resultado = _ejecutar(env)
+    assert resultado.returncode == 0, resultado.stderr
+    assert "sirius:repair-requested" in _etiquetas(env), (
+        "la parada vigente es la última publicada (convergencia, del corrector); "
+        "una parada vieja del implementador no puede secuestrar la vuelta"
+    )
+    assert f"<!-- sirius-convergence-reset:{HEAD} -->" in _comentarios(env), (
+        "un bloqueo DE CONVERGENCIA sí resetea el listón al reanudarse: ese es "
+        "el comportamiento de ADR-030 que no se quería cambiar"
+    )
+
+
+def test_un_implementador_bloqueado_sin_pr_repite_su_fase_desde_cero(tmp_path: Path) -> None:
+    """El caso exacto de #453: bloqueado pidiendo decisión antes de abrir rama."""
+    env = _setup(tmp_path)
+    _sembrar(
+        env,
+        etiquetas=["sirius:blocked-decision"],
+        historial=_historial_sin_pr("<!-- sirius-verdict:implementer:blocked:run-2 -->"),
+    )
+    resultado = _ejecutar(env)
+    assert resultado.returncode == 0, resultado.stderr
+    assert "sirius:implement-requested" in _etiquetas(env)
+    assert "sirius:repair-requested" not in _etiquetas(env)
+    assert "sirius-restart-sin-pr" in _comentarios(env), (
+        "sin PR el permiso publicado es el de reinicio desde cero, sin head"
+    )
+
+
+def test_un_marcador_de_una_parada_ya_reanudada_no_decide_la_vuelta(tmp_path: Path) -> None:
+    """PR #477 ronda 7 (P2): si la parada actual aplicó su etiqueta pero su
+    marcador no llegó a publicarse, el marcador de una parada YA REANUDADA
+    (anterior al último permiso de reanudación) no puede decidir la vuelta:
+    sin marcador de esta época, manda la vuelta histórica al corrector."""
+    env = _setup(tmp_path)
+    _sembrar(
+        env,
+        etiquetas=["sirius:blocked-decision"],
+        historial=(
+            f"https://github.com/{REPO}/pull/{PR}\n"
+            f"- Head SHA: `{HEAD}`\n"
+            "<!-- sirius-verdict:implementer:blocked:run-1 -->\n"
+            f"<!-- sirius-convergence-reset:{HEAD} -->\n"
+            "(la parada actual no llegó a publicar marcador)\n"
+        ),
+    )
+    resultado = _ejecutar(env)
+    assert resultado.returncode == 0, resultado.stderr
+    assert "sirius:repair-requested" in _etiquetas(env), (
+        "un marcador anterior al último permiso de reanudación decidió la "
+        "vuelta: reanudaría el rol equivocado y saltaría el reset de "
+        "convergencia"
+    )
+    assert "sirius:implement-requested" not in _etiquetas(env)

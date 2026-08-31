@@ -188,3 +188,190 @@ def test_el_volcado_sigue_vivo_cuando_se_le_pregunta() -> None:
             "devolvería 1 en silencio y el corrector volvería a morir ante cada "
             "fallo de Quality"
         )
+
+
+# --------------------------------------------------------------------------- #
+# H-36: el head se movió tras el CI_FAILURE — la ronda no puede morir por eso.
+# H-35: las decisiones del propietario tienen que LLEGAR al corrector.
+# Ambos mordieron la noche del 30 al 31 de agosto (#441/#442 y #469/#471).
+# --------------------------------------------------------------------------- #
+
+
+def test_un_head_movido_tras_el_fallo_devuelve_a_ci_pending() -> None:
+    """Sin observaciones y con un CI_FAILURE de OTRO head, la salida no es la
+    muerte en `failed-safely`: es volver a `ci-pending` y dejar que el Quality
+    del head actual enrute por el camino normal. La cura que antes era cirugía
+    manual de etiquetas (dos veces en una noche), ahora en el guion."""
+    guion = _sin_comentarios(_paso_de_la_puerta())
+    assert "head-movido-tras-ci" in guion, (
+        "desapareció la rama que trata el CI_FAILURE de un head anterior: la "
+        "incidencia volvería a morir en failed-safely con una corrección "
+        "legítima pendiente (H-36, #441/#442)"
+    )
+    assert "quality:[0-9a-f]+:(failure|timed_out)" in guion, (
+        "la detección del fallo-de-cualquier-head tiene que ser el mismo "
+        "marcador que publica el avance, no una heurística nueva"
+    )
+    assert "verdict:reviewer:changes" in guion, (
+        "la rama tiene que decidir por el ÚLTIMO disparador (revisión o CI): "
+        "sin eso, un fallo histórico de Quality consumiría una ronda cuyo "
+        "disparador real fue una revisión con observaciones (PR #477, P2)"
+    )
+    despues = guion[guion.index("head-movido-tras-ci") :]
+    assert '"sirius:ci-pending"' in despues.split("sin-observaciones")[0], (
+        "la rama head-movido-tras-ci tiene que transicionar a ci-pending; "
+        "cualquier otra etiqueta reinventa la máquina de estados"
+    )
+
+
+def test_la_puerta_extrae_las_decisiones_del_propietario() -> None:
+    """H-35: el corrector re-planteaba o revertía decisiones ya publicadas en
+    la incidencia porque nunca las recibía. La puerta las extrae (autoría
+    OWNER, cuerpo que empieza por DECISI) a un fichero que el prompt inyecta."""
+    guion = _sin_comentarios(_paso_de_la_puerta())
+    assert "sirius_owner_decisions.md" in guion, (
+        "la puerta ya no extrae las decisiones del propietario: el corrector "
+        "volvería a revertirlas sin saberlo (H-35, #469 ronda 4 y #471)"
+    )
+    assert 'author_association=="OWNER"' in guion, (
+        "la extracción tiene que filtrar por autoría OWNER: un comentario de "
+        "cualquiera no es una decisión del propietario"
+    )
+    assert 'startswith("DECISI")' in guion
+
+
+def _paso_del_prompt() -> str:
+    for job in (_doc().get("jobs") or {}).values():
+        for paso in job.get("steps") or []:
+            if paso.get("id") == "build_prompt":
+                return str(paso.get("run", ""))
+    raise AssertionError("no encontré el paso `id: build_prompt` en repair-sirius-work.yml")
+
+
+def test_el_prompt_inyecta_las_decisiones_extraidas() -> None:
+    """Extraerlas sin inyectarlas sería la quinta pieza sin llamante."""
+    guion = _sin_comentarios(_paso_del_prompt())
+    assert "Decisiones del propietario registradas en esta incidencia" in guion
+    assert "sirius_owner_decisions.md" in guion, (
+        "el prompt no lee el fichero de decisiones que la puerta extrae: "
+        "pieza sin llamante, la enfermedad de esta casa"
+    )
+
+
+def test_el_rol_del_corrector_declara_la_autoridad_de_las_decisiones() -> None:
+    """La regla vive en el prompt del rol, no solo en la fontanería."""
+    rol = (RAIZ / "scripts" / "automation" / "prompts" / "corrector.md").read_text(encoding="utf-8")
+    assert "Decisiones del propietario registradas en esta incidencia" in rol
+    assert "YA ESTÁ tomada" in rol, (
+        "el rol ya no dice que una decisión registrada del propietario se "
+        "ejecuta en vez de re-plantearse: #469 y #471 se repetirían"
+    )
+
+
+def test_el_head_movido_relanza_el_quality_ya_consumido() -> None:
+    """Revisión de la PR #477 (P1): si el Quality del head actual TERMINÓ antes
+    de la transición a ci-pending, su workflow_run ya se consumió y nadie
+    volvería a enrutar hasta el reconciliador. La rama relanza ese run."""
+    guion = _sin_comentarios(_paso_de_la_puerta())
+    despues = guion[guion.index("head-movido-tras-ci") :]
+    assert "/rerun" in despues.split("sin-observaciones")[0], (
+        "la rama head-movido-tras-ci no relanza el run terminado: un verde "
+        "llegado antes de la transición dejaría la incidencia horas en "
+        "ci-pending y un rojo exigiría intervención manual"
+    )
+
+
+def test_una_lectura_caida_de_decisiones_para_en_seguro() -> None:
+    """Revisión de la PR #477 (P1): una lectura caída NO es «(ninguna)».
+    Arrancar al corrector sin saber si existen decisiones recrearía H-35."""
+    guion = _sin_comentarios(_paso_de_la_puerta())
+    assert "decisiones-ilegibles" in guion, (
+        "desapareció la parada segura ante decisiones ilegibles: el corrector "
+        "podría revertir una decisión que nunca llegó a leer"
+    )
+
+
+def test_la_transicion_fallida_no_consume_el_evento() -> None:
+    """PR #477 (P1): relanzar Quality con la transición a ci-pending fallida
+    consumiría el nuevo evento con la incidencia aún en repair-requested."""
+    guion = _sin_comentarios(_paso_de_la_puerta())
+    assert "rc_parada" in guion, (
+        "la rama head-movido-tras-ci ya no comprueba si la transición se "
+        "completó antes de relanzar: recrearía el atasco que viene a cerrar"
+    )
+
+
+def test_el_rerun_va_con_el_token_del_workflow_no_con_el_pat() -> None:
+    """PR #477 (P1): el PAT no tiene alcance de Actions (nota en el avance);
+    el relanzamiento necesita el GITHUB_TOKEN y el permiso actions:write."""
+    import yaml as _yaml
+
+    doc = _yaml.safe_load(CORRECTOR.read_text(encoding="utf-8"))
+    permisos = doc.get("permissions") or {}
+    assert permisos.get("actions") == "read", (
+        "el GET de runs va con el github.token del paso y necesita "
+        "actions:read; write no hace falta porque el POST va con el PAT"
+    )
+    guion = _paso_de_la_puerta()
+    tramo = guion[guion.index("run_terminado=") : guion.rindex("/rerun")]
+    assert "SIRIUS_TRIGGER_TOKEN" in tramo, (
+        "el POST de rerun tiene que ir con el PAT: un workflow_run emitido a "
+        "partir del GITHUB_TOKEN no despierta al avance (anti-recursión, la "
+        "misma restricción que sirius_apply_verdict.sh documenta y aplica)"
+    )
+
+
+def test_una_revision_ilegible_no_se_confunde_con_un_head_movido() -> None:
+    """PR #477 (P2): si el último disparador fue una revisión, unas
+    observaciones vacías son una lectura caída — parada reintentable, no
+    consumo de la ronda."""
+    guion = _sin_comentarios(_paso_de_la_puerta())
+    assert "observaciones-ilegibles" in guion, (
+        "desapareció la parada para la revisión ilegible: una lectura caída "
+        "de observaciones se trataría como head movido y saltaría la corrección"
+    )
+
+
+def test_un_head_ilegible_es_reintentable_no_un_head_movido() -> None:
+    """PR #477 ronda 3 (P1): pr_head vacío = lectura caída; tratarlo como
+    head movido consumiría la reparación con head_sha= vacío."""
+    guion = _sin_comentarios(_paso_de_la_puerta())
+    assert "head-ilegible" in guion
+
+
+def test_un_relanzamiento_fallido_se_propaga() -> None:
+    """PR #477 ronda 3 (P1): el reconciliador solo auto-recupera verdes; un
+    rojo sin relanzar dejaría la corrección sin arrancar."""
+    guion = _sin_comentarios(_paso_de_la_puerta())
+    assert "relanzamiento-fallido" in guion
+
+
+def test_las_decisiones_tienen_la_doble_ruta_del_contrato() -> None:
+    """PR #477 ronda 3 (P2): REST → GraphQL antes de declarar parada, como
+    exige el contrato de lecturas y ya hace sirius_dump_comments."""
+    guion = _sin_comentarios(_paso_de_la_puerta())
+    assert 'authorAssociation=="OWNER"' in guion, (
+        "falta la ruta GraphQL de respaldo para las decisiones del "
+        "propietario: una caída de un solo endpoint se convertiría en "
+        "reactivación humana"
+    )
+
+
+def test_el_ultimo_disparador_gobierna_tambien_el_camino_feliz() -> None:
+    """PR #477 ronda 4 (P2): un fallo histórico del MISMO head (con rerun
+    verde y revisión posterior) no puede colarse como ronda de CI. El brazo
+    del head actual exige que el ÚLTIMO disparador sea su fallo de Quality."""
+    guion = _sin_comentarios(_paso_de_la_puerta())
+    assert "quality:${pr_head}:" in guion, (
+        "el brazo del camino feliz ya no comprueba que el último disparador "
+        "sea el fallo del head ACTUAL: un fallo histórico del mismo head "
+        "volvería a consumir una ronda de revisión con lectura caída"
+    )
+
+
+def test_una_consulta_de_runs_caida_es_reintentable() -> None:
+    """PR #477 ronda 5 (P1): «no pude consultar» no es «no hay run
+    terminado» — con el evento ya consumido, salir en verde sin relanzar
+    dejaría un rojo esperando cirugía manual."""
+    guion = _sin_comentarios(_paso_de_la_puerta())
+    assert "consulta-runs-fallida" in guion

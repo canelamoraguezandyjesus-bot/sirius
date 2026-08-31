@@ -33,6 +33,13 @@ permissions:
   issues: write
   pull-requests: write
   id-token: write
+  # Para CONSULTAR los runs de Quality en la rama head-movido-tras-ci
+  # (revision de la PR #477): el GET va con el github.token ambiente del
+  # paso. El RELANZAMIENTO, en cambio, va con el PAT — un workflow_run
+  # emitido a partir del GITHUB_TOKEN no despertaria al avance (regla
+  # anti-recursion; es la misma razon documentada y en produccion en
+  # sirius_apply_verdict.sh, reejecucion de CHECKS_UNRELATED).
+  actions: read
 
 concurrency:
   group: sirius-repair-${{ github.event.issue.number }}-${{ github.event.label.name }}
@@ -382,9 +389,123 @@ jobs:
             [ "$(_sirius_now)" -lt "$gate_deadline" ] || sin_tiempo
             pr_head="$(sirius_retry gh pr view "${pr_numbers[0]}" --repo "$GH_REPO" \
               --json headRefOid --jq '.headRefOid' 2>/dev/null || true)"
-            if sirius_ronda_disparada_por_ci "$comments_file" "$pr_head"; then
-              echo "Sin observaciones estructuradas, pero hay un fallo de Quality registrado"
+            if [ -z "${pr_head:-}" ]; then
+              # Una PR siempre tiene head: vacio = lectura caida (revision de
+              # la PR #477, P1). Interpretarlo como "head movido" consumiria
+              # una reparacion legitima con head_sha= vacio en la consulta de
+              # runs. Reintentable, sin consumir el evento.
+              echo "::error::No se pudo leer el head de la PR #${pr_numbers[0]}; reintentable (head-ilegible)."
+              rm -f "$comments_file"
+              exit 1
+            fi
+            # ¿Que disparo ESTA ronda? Manda el ULTIMO marcador publicado
+            # (revision de la PR #477, P2, dos veces): un fallo historico de
+            # Quality — incluso del MISMO head, si despues hubo un rerun verde
+            # y una revision con observaciones — no puede decidir la ronda.
+            # Por eso el ultimo disparador se calcula ANTES y gobierna todo el
+            # arbol; la confirmacion H-14 (sirius_ronda_disparada_por_ci) se
+            # ejecuta DENTRO del brazo del head actual, como cinturon.
+            ultimo_disparador="$(grep -oiE '<!--[[:space:]]*sirius-(verdict:reviewer:changes|quality:[0-9a-f]+:(failure|timed_out))[^>]*-->' \
+              "$comments_file" | tail -n 1 || true)"
+            if [ -n "$ultimo_disparador" ] && printf '%s' "$ultimo_disparador" | grep -q "quality:${pr_head}:" \
+              && sirius_ronda_disparada_por_ci "$comments_file" "$pr_head"; then
+              echo "Sin observaciones estructuradas, y el ultimo disparador es un fallo de Quality"
               echo "para el head ${pr_head}: la causa corregible es ese run (H-14). Sigo."
+            elif [ -n "$ultimo_disparador" ]; then
+              case "$ultimo_disparador" in
+              *quality*)
+              # H-36 (incidencias #441 y #442): la ronda SI nacio de un fallo de
+              # Quality, pero el head se movio despues (update-branch o un push
+              # nuevo) y el fallo registrado ya no corresponde al head actual.
+              # Pararse en `failed-safely` aqui dejaba el ciclo mudo con una
+              # correccion legitima pendiente; la salida correcta es devolver la
+              # incidencia a `ci-pending` y dejar que el resultado de Quality
+              # del head actual — que el propio push ya disparo — la enrute por
+              # el camino normal (exito → revision; fallo → correccion).
+              marker="<!-- sirius-verdict:corrector:precheck:head-movido-tras-ci -->"
+              body_file="$(mktemp)"
+              printf '%s\n\n%s\n\n%s\n' \
+                "$marker" "🟡 **El fallo de Quality registrado es de un head anterior**" \
+                "No hay observaciones estructuradas y el fallo de Quality registrado no corresponde al head actual de la PR (el head se movió después). Devuelvo la incidencia a \\`sirius:ci-pending\\`: el resultado de Quality del head actual la encaminará por el camino normal." >"$body_file"
+              rc_parada=0
+              parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+                "sirius:ci-pending" "FBCA04" "Evento consumible: en espera de Quality" \
+                "noclose" "sirius:repair-requested" || rc_parada=1
+              if [ "$rc_parada" -ne 0 ]; then
+                # Sin la transicion hecha, relanzar consumiria el nuevo evento
+                # con la incidencia aun en repair-requested — el mismo atasco
+                # que esta rama viene a cerrar (revision de la PR #477, P1).
+                # Se sale reintentable, sin marcar el evento como consumido.
+                echo "::error::No se pudo devolver la incidencia a ci-pending (head-movido-tras-ci); reintentable."
+                rm -f "$body_file" "$comments_file"
+                exit 1
+              fi
+              # Carrera de eventos (revision de la PR #477): si el Quality del
+              # head actual TERMINO antes de esta transicion, su workflow_run
+              # ya se consumio con la incidencia todavia en repair-requested y
+              # nadie volvera a disparar el enrutado hasta el reconciliador.
+              # Se relanza ese run terminado con el PAT: un workflow_run
+              # emitido a partir del GITHUB_TOKEN no despertaria al avance
+              # (regla anti-recursion de GitHub) — exactamente la restriccion
+              # que sirius_apply_verdict.sh documenta y aplica en produccion
+              # para la reejecucion de CHECKS_UNRELATED. Su nueva finalizacion
+              # vuelve a emitir workflow_run y el avance, ahora si, encuentra
+              # la incidencia en ci-pending. Si no hay run terminado (sigue en
+              # cola o corriendo), no hace falta nada: su finalizacion natural
+              # disparara el enrutado.
+              # La lectura con su codigo comprobado (revision de la PR #477,
+              # P1): "no pude consultar" NO es "no hay run terminado" — con la
+              # incidencia ya en ci-pending y el evento consumido, salir en
+              # verde sin relanzar dejaria un rojo esperando cirugia manual.
+              if ! run_terminado="$(sirius_retry gh api \
+                "repos/${GH_REPO}/actions/workflows/quality.yml/runs?head_sha=${pr_head}&status=completed&per_page=1" \
+                --jq '.workflow_runs[0].id // empty' 2>/dev/null)"; then
+                echo "::error::No se pudo consultar los runs de Quality del head ${pr_head} (consulta-runs-fallida); reintentable."
+                rm -f "$comments_file"
+                exit 1
+              fi
+              if [ -n "${run_terminado:-}" ]; then
+                if ! ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"
+                  sirius_retry gh api -X POST \
+                  "repos/${GH_REPO}/actions/runs/${run_terminado}/rerun" >/dev/null ); then
+                  # El reconciliador solo auto-recupera VERDES; un run rojo sin
+                  # relanzar dejaria la correccion sin arrancar (revision de la
+                  # PR #477, P1). Se propaga el fallo: el job queda en rojo y
+                  # reintentable, con la incidencia ya en ci-pending.
+                  echo "::error::No se pudo relanzar el run ${run_terminado} (relanzamiento-fallido); reintentable."
+                  rm -f "$comments_file"
+                  exit 1
+                fi
+              fi
+              rm -f "$body_file" "$comments_file"
+              echo "valid=false" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+              *verdict:reviewer:changes*)
+                # El ultimo disparador fue una revision CON observaciones que
+                # no se pudieron extraer: lectura caida, no ronda de CI. Parada
+                # segura reintentable; consumir la ronda saltaria la correccion
+                # que la revision pidio.
+                marker="<!-- sirius-verdict:corrector:precheck:observaciones-ilegibles:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
+                body_file="$(mktemp)"
+                printf '%s\n\n%s\n\n%s\n' \
+                  "$marker" "🔴 **Me he detenido de forma segura**" \
+                  "La última ronda la abrió una revisión con observaciones, pero no pude extraerlas (lectura caída). Corregir sin ellas saltaría lo que la revisión pidió, así que me detengo. Reintentable con \\`continua\\`." >"$body_file"
+                parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+                  "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
+                  "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar la parada segura (observaciones-ilegibles)."
+                rm -f "$body_file" "$comments_file"
+                echo "valid=false" >> "$GITHUB_OUTPUT"
+                exit 0
+              ;;
+              *)
+                # Inalcanzable por la condicion del elif; por higiene, parada
+                # clasica reintentable si algun dia el patron cambiara.
+                echo "::error::Disparador no reconocido: ${ultimo_disparador}"
+                rm -f "$comments_file"
+                exit 1
+              ;;
+              esac
             else
               marker="<!-- sirius-verdict:corrector:precheck:sin-observaciones -->"
               body_file="$(mktemp)"
@@ -400,6 +521,36 @@ jobs:
             fi
           fi
           rm -f "$comments_file"
+
+          # H-35 (incidencias #469 ronda 4 y #471): las DECISIONES que el
+          # propietario publica en la incidencia no llegaban al corrector, que
+          # re-planteaba disyuntivas ya resueltas o las revertia sin saberlo.
+          # Se extraen aqui (autoria OWNER, cuerpo que empieza por DECISI) y el
+          # prompt las inyecta como contexto vinculante.
+          #
+          # Una lectura CAIDA no es "(ninguna)" (revision de la PR #477): si
+          # esta llamada falla tras los reintentos, no se sabe si existen
+          # decisiones, y arrancar al corrector sin ellas recrearia exactamente
+          # lo que H-35 impide — corregir revirtiendo una decision que nunca
+          # llego. Ante la duda, parada segura, como el resto de la puerta.
+          if ! sirius_retry gh api --paginate "repos/${GH_REPO}/issues/${ISSUE_NUMBER}/comments?per_page=100" \
+            --jq '[.[] | select(.author_association=="OWNER") | select(.body | startswith("DECISI"))] | .[].body' \
+            >"${RUNNER_TEMP}/sirius_owner_decisions.md" 2>/dev/null \
+            && ! sirius_retry gh issue view "$ISSUE_NUMBER" --repo "$GH_REPO" --json comments \
+            --jq '[.comments[] | select(.authorAssociation=="OWNER") | select(.body | startswith("DECISI"))] | .[].body' \
+            >"${RUNNER_TEMP}/sirius_owner_decisions.md" 2>/dev/null; then
+            marker="<!-- sirius-verdict:corrector:precheck:decisiones-ilegibles:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
+            body_file="$(mktemp)"
+            printf '%s\n\n%s\n\n%s\n' \
+              "$marker" "🔴 **Me he detenido de forma segura**" \
+              "No pude leer los comentarios de la incidencia para extraer las decisiones del propietario. Sin saber si existen, corregir a ciegas podría revertir una decisión ya tomada (H-35), así que me detengo. Reintentable con \\`continua\\`." >"$body_file"
+            parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+              "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
+              "noclose" "sirius:repair-requested" || echo "::error::No se pudo aplicar la parada segura (decisiones-ilegibles)."
+            rm -f "$body_file" "$comments_file"
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           # Puede quedar VACÍO a propósito: es el caso de H-14, una ronda abierta
           # por un fallo de Quality. El corrector lo distingue por el propio
@@ -454,6 +605,16 @@ jobs:
             echo "- Ronda de corrección: ${CYCLE}. No hay un tope fijo de rondas: el ciclo continúa mientras haya progreso comprobable y se detiene en cuanto deja de haberlo."
             echo "- Las observaciones estructuradas están en la ruta exacta de la variable de entorno SIRIUS_OBSERVATIONS_FILE."
             echo "- El archivo de veredicto debe escribirse en la ruta exacta de la variable de entorno SIRIUS_VERDICT_FILE."
+            echo ""
+            echo "## Decisiones del propietario registradas en esta incidencia"
+            echo ""
+            echo "Si hay decisiones aquí abajo, son contexto VINCULANTE (ver la regla del rol)."
+            echo ""
+            if [ -s "${RUNNER_TEMP}/sirius_owner_decisions.md" ]; then
+              cat "${RUNNER_TEMP}/sirius_owner_decisions.md"
+            else
+              echo "(ninguna)"
+            fi
             echo "SIRIUS_PROMPT_EOF"
           } >> "$GITHUB_OUTPUT"
 

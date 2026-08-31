@@ -701,6 +701,20 @@ sirius_transition() {
     local verified=1 labels_now="" state_now=""
     labels_now="$(sirius_retry _sirius_gh api "repos/${repo}/issues/${num}" --jq '.labels[].name' 2>/dev/null)" || verified=0
     printf '%s\n' "$labels_now" | grep -Fxq "$add" || verified=0
+    # La verificacion idempotente exige TAMBIEN las retiradas (revision de la
+    # PR #477, P2): con el marcador y la etiqueta puestos pero un remove
+    # pendiente, salir en exito dejaria una parada falsa (p. ej.
+    # failed-safely) conviviendo con el estado activo para siempre.
+    if [ "$verified" -eq 1 ] && [ -n "${remove_csv:-}" ]; then
+      local _pendiente
+      IFS=',' read -r -a _pendientes <<<"$remove_csv"
+      for _pendiente in "${_pendientes[@]}"; do
+        [ -z "${_pendiente:-}" ] && continue
+        if printf '%s\n' "$labels_now" | grep -Fxq "$_pendiente"; then
+          verified=0
+        fi
+      done
+    fi
     if [ "$close_flag" = "close" ] && [ "$verified" -eq 1 ]; then
       state_now="$(sirius_retry _sirius_gh api "repos/${repo}/issues/${num}" --jq '.state' 2>/dev/null)" || verified=0
       [ "$state_now" = "closed" ] || verified=0

@@ -103,23 +103,73 @@ jobs:
 
           # Candidatas: incidencias abiertas con sirius:ci-pending (REST, con
           # reintentos). Se excluyen PR (REST /issues las incluye).
-          mapfile -t candidate_issues < <(
-            sirius_retry gh api -X GET "repos/${GH_REPO}/issues" \
-              -f state=open -f labels=sirius:ci-pending -f per_page=100 --paginate \
-              --jq '.[] | select(has("pull_request") | not) | .number'
-          )
+          #
+          # H-34 (incidencias #435 y #442): un verde de Quality puede llegar
+          # cuando la incidencia ya no esta en `ci-pending` sino en
+          # `failed-safely` (tipicamente tras un update-branch durante la
+          # parada, que dispara Quality de nuevo). Buscar candidatas solo en
+          # `ci-pending` dejaba ese verde sin registrar: el revisor nunca
+          # despertaba y el ciclo quedaba mudo hasta cirugia manual de
+          # etiquetas (reponer `ci-pending` + rerun del run de Quality). El
+          # resultado VERDE considera tambien `failed-safely` y lo revive
+          # hacia revision; un resultado ROJO sigue actuando solo sobre
+          # `ci-pending`: revivir una parada segura hacia correccion seria
+          # tomar una decision, no registrar un resultado.
+          declare -A origen_de=()
+          candidate_issues=()
+          for etiqueta_origen in "sirius:ci-pending" "sirius:failed-safely"; do
+            if [ "$etiqueta_origen" = "sirius:failed-safely" ] && [ "$CONCLUSION" != "success" ]; then
+              continue
+            fi
+            # La consulta va a fichero con su codigo comprobado (revision de
+            # la PR #477, P1): con `mapfile < <(...)` el fallo del productor se
+            # perdia y una lectura caida se convertia en "no hay candidatas",
+            # consumiendo el workflow_run en silencio.
+            lote_file="$(mktemp)"
+            if ! sirius_retry gh api -X GET "repos/${GH_REPO}/issues" \
+                -f state=open -f labels="$etiqueta_origen" -f per_page=100 --paginate \
+                --jq '.[] | select(has("pull_request") | not) | .number' >"$lote_file"; then
+              rm -f "$lote_file"
+              echo "::error::No se pudo listar las incidencias con ${etiqueta_origen}; reintentable."
+              exit 1
+            fi
+            mapfile -t lote <"$lote_file"
+            rm -f "$lote_file"
+            for n in "${lote[@]:-}"; do
+              [ -z "${n:-}" ] && continue
+              if [ -n "${origen_de[$n]:-}" ]; then
+                # La incidencia lleva LAS DOS etiquetas (transicion parcial
+                # anterior): una sola entrada — el saneado lo hace la propia
+                # transicion, que retira AMBAS etiquetas-fuente (CSV) dentro
+                # de su verificacion (revision de la PR #477, P2 dos veces).
+                continue
+              fi
+              candidate_issues+=("$n")
+              origen_de["$n"]="$etiqueta_origen"
+            done
+          done
 
           matched_issues=()
           for issue_number in "${candidate_issues[@]:-}"; do
             [ -z "${issue_number:-}" ] && continue
             body_file="$(mktemp)"
             comments_file="$(mktemp)"
+            # Ambas lecturas con su fallo propagado (revision de la PR #477,
+            # P1): la URL de la PR vive normalmente en un COMENTARIO
+            # (sirius_apply_verdict.sh), asi que una lectura caida no es "este
+            # candidato no referencia ninguna PR" — descartarlo en silencio
+            # consumiria el workflow_run de un solo disparo con la incidencia
+            # parada. Reintentable.
             if ! sirius_read_issue_body "$GH_REPO" "$issue_number" >"$body_file"; then
-              echo "::warning::No se pudo leer el cuerpo de #${issue_number}; se ignora en esta pasada."
+              echo "::error::No se pudo leer el cuerpo de #${issue_number} (lectura-candidato-fallida); reintentable."
               rm -f "$body_file" "$comments_file"
-              continue
+              exit 1
             fi
-            sirius_read_issue_comments "$GH_REPO" "$issue_number" >"$comments_file" 2>/dev/null || true
+            if ! sirius_read_issue_comments "$GH_REPO" "$issue_number" >"$comments_file" 2>/dev/null; then
+              echo "::error::No se pudieron leer los comentarios de #${issue_number} (lectura-candidato-fallida); reintentable."
+              rm -f "$body_file" "$comments_file"
+              exit 1
+            fi
             if cat "$body_file" "$comments_file" \
               | grep -oE 'https://github\.com/[^/[:space:]]+/[^/[:space:]]+/pull/[0-9]+' \
               | grep -Fxq "$pr_url"; then
@@ -144,9 +194,15 @@ jobs:
                 "El flujo encontro varias incidencias \`sirius:ci-pending\` que referencian la PR #${pr_number}. Se detiene de forma segura para evitar una transicion ambigua." \
                 "- Head SHA: \`${HEAD_SHA}\`" \
                 "- Quality run: ${RUN_URL}" >"$body_file"
+              # La parada anade failed-safely: si el ORIGEN de esta candidata
+              # ya era failed-safely, no se retira nada (poner y quitar la
+              # misma etiqueta hace fallar la verificacion — revision de la
+              # PR #477, P1); si venia de ci-pending, se retira esa.
+              remueve_ambiguedad="sirius:ci-pending"
+              [ "${origen_de[$issue_number]}" = "sirius:failed-safely" ] && remueve_ambiguedad=""
               trigger_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
                 "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
-                "noclose" "sirius:ci-pending" \
+                "noclose" "$remueve_ambiguedad" \
                 || echo "::error::No se pudo completar la parada segura en #${issue_number}."
               rm -f "$body_file"
             done
@@ -167,9 +223,15 @@ jobs:
                 "- Quality run: ${RUN_URL}" \
                 "- Resultado: \`success\`" \
                 "- Siguiente transicion: revision independiente." >"$body_file"
+              # Las DOS etiquetas-fuente van como removes (CSV) DENTRO de la
+              # transicion verificada: retirar una etiqueta ausente se tolera,
+              # las etiquetas se aplican y verifican ANTES de publicar el
+              # marcador, y el estado no puede quedar con failed-safely
+              # conviviendo con review-requested ni en primera ejecucion ni en
+              # reintento (revision de la PR #477, P2 dos veces).
               trigger_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
                 "sirius:review-requested" "8250DF" "Evento consumible: iniciar revisión independiente" \
-                "noclose" "sirius:ci-pending" || rc=1
+                "noclose" "sirius:ci-pending,sirius:failed-safely" || rc=1
               ;;
             failure|timed_out)
               marker="<!-- sirius-quality:${HEAD_SHA}:${CONCLUSION} -->"
