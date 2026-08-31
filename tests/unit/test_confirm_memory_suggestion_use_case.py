@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from types import TracebackType
 from typing import Self
@@ -88,6 +89,9 @@ class _RecordingMemoryRepository:
         raise AssertionError("confirm() must never read a memory back")
 
     def list_current_memories(self) -> list[Memory]:
+        raise AssertionError("confirm() must never list memories")
+
+    def list_current_memories_by_category(self, categories: Sequence[str]) -> list[Memory]:
         raise AssertionError("confirm() must never list memories")
 
     def get_history(self, memory_id: int) -> list[MemoryRevision]:
@@ -183,6 +187,9 @@ class _UnusedDecisionRepository:
         raise AssertionError("confirm() must never supersede a decision")
 
     def list_current_decisions(self) -> list[Decision]:
+        raise AssertionError("confirm() must never list decisions")
+
+    def list_current_decisions_by_category(self, categories: Sequence[str]) -> list[Decision]:
         raise AssertionError("confirm() must never list decisions")
 
     def get_superseding_decision(self, decision_id: int) -> Decision | None:

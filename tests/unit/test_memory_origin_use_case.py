@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 import pytest
@@ -70,6 +71,9 @@ class _StaticMemoryRepository:
         raise AssertionError("get_origin() must never create a memory")
 
     def list_current_memories(self) -> list[Memory]:
+        raise AssertionError("get_origin() must never list memories")
+
+    def list_current_memories_by_category(self, categories: Sequence[str]) -> list[Memory]:
         raise AssertionError("get_origin() must never list memories")
 
     def get_history(self, memory_id: int) -> list[MemoryRevision]:

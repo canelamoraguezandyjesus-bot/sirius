@@ -45,6 +45,7 @@ from datetime import UTC, datetime
 from sirius.domain.relevance import (
     KnowledgeKind,
     RankedKnowledge,
+    activated_category_term,
     category_matches_query,
     rank_relevant_knowledge,
     subject_matches_query,
@@ -242,10 +243,21 @@ class RankRelevantKnowledgeUseCase:
 
         solo_por_categoria: list[RankedKnowledge] = []
         if self._category_matching_enabled:
-            for memory in self._memory_repository.list_current_memories():
-                if (KnowledgeKind.MEMORY, memory.id) in admitidos_por_el_motor:
-                    continue
-                if category_match(memory.category):
+            # ADR-120/M13: la consulta activa como mucho una categoría del
+            # vocabulario a la vez (``activated_category_term``, la misma
+            # regla que ``category_matches_query`` ya aplicaba candidato a
+            # candidato); con eso, el puerto de persistencia puede filtrar
+            # por esa categoría en SQL en vez de traer el corpus vigente
+            # completo para filtrarlo aquí. Con cero o más de una categoría
+            # activada, el resultado sigue siendo vacío sin consultar nada —
+            # el mismo repliegue que ``category_match`` ya producía.
+            categoria_activada = activated_category_term(query_text, self._category_vocabulary)
+            if categoria_activada is not None:
+                for memory in self._memory_repository.list_current_memories_by_category(
+                    (categoria_activada,)
+                ):
+                    if (KnowledgeKind.MEMORY, memory.id) in admitidos_por_el_motor:
+                        continue
                     solo_por_categoria.append(
                         RankedKnowledge(
                             kind=KnowledgeKind.MEMORY,
@@ -259,10 +271,11 @@ class RankRelevantKnowledgeUseCase:
                             category_match=True,
                         )
                     )
-            for decision in self._decision_repository.list_current_decisions():
-                if (KnowledgeKind.DECISION, decision.id) in admitidos_por_el_motor:
-                    continue
-                if category_match(decision.category):
+                for decision in self._decision_repository.list_current_decisions_by_category(
+                    (categoria_activada,)
+                ):
+                    if (KnowledgeKind.DECISION, decision.id) in admitidos_por_el_motor:
+                        continue
                     solo_por_categoria.append(
                         RankedKnowledge(
                             kind=KnowledgeKind.DECISION,

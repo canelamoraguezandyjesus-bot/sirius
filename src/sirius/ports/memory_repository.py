@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Protocol
 
 from sirius.domain.memory import Memory, MemoryRevision
@@ -43,6 +44,20 @@ class MemoryRepository(Protocol):
 
     def list_current_memories(self) -> list[Memory]:
         """Return every memory whose status is CURRENT."""
+        ...
+
+    def list_current_memories_by_category(self, categories: Sequence[str]) -> list[Memory]:
+        """Return every CURRENT memory whose ``category`` matches one of
+        ``categories`` (case-insensitive), filtered in SQL (ADR-120/M13).
+
+        Unlike ``list_current_memories``, this never returns a memory with
+        no category (``category is None``) or one outside ``categories`` —
+        the candidate set for the category-only widening of M9 (§6.2) is the
+        matching subset, not the whole vigente corpus. ``categories`` empty
+        returns an empty list without querying, mirroring
+        ``category_matches_query``'s "no vocabulary term activated, matches
+        nothing" rule.
+        """
         ...
 
     def list_archived_memories(self) -> list[Memory]:

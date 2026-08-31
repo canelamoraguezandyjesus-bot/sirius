@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Protocol
 
 from sirius.domain.decision import Decision
@@ -67,6 +68,13 @@ class DecisionRepository(Protocol):
         Excludes PROPOSED, SUPERSEDED and ARCHIVED decisions — this is the
         ordinary query B4c/B4d require to never surface a substituted or
         archived decision as if it were still current.
+        """
+        ...
+
+    def list_current_decisions_by_category(self, categories: Sequence[str]) -> list[Decision]:
+        """Return every APPROVED decision whose ``category`` matches one of
+        ``categories`` (case-insensitive), filtered in SQL (ADR-120/M13).
+        Mirrors ``MemoryRepository.list_current_memories_by_category``.
         """
         ...
 

@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
-from sqlalchemy import CursorResult, Engine, exists, select, update
+from sqlalchemy import CursorResult, Engine, exists, func, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from sirius.adapters.persistence.database import (
@@ -233,6 +233,21 @@ class SqliteDecisionRepository:
             models = session.scalars(
                 select(DecisionModel)
                 .where(DecisionModel.status == DecisionStatus.APPROVED)
+                .order_by(DecisionModel.id)
+            ).all()
+            return _load_decisions(session, models)
+
+    def list_current_decisions_by_category(self, categories: Sequence[str]) -> list[Decision]:
+        if not categories:
+            return []
+        normalized = [category.casefold() for category in categories]
+        with self._scope() as session:
+            models = session.scalars(
+                select(DecisionModel)
+                .where(
+                    DecisionModel.status == DecisionStatus.APPROVED,
+                    func.lower(DecisionModel.category).in_(normalized),
+                )
                 .order_by(DecisionModel.id)
             ).all()
             return _load_decisions(session, models)

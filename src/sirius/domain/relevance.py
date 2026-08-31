@@ -52,6 +52,7 @@ from sirius.domain.memory import Memory, MemoryStatus
 __all__ = [
     "KnowledgeKind",
     "RankedKnowledge",
+    "activated_category_term",
     "category_matches_query",
     "rank_relevant_knowledge",
     "subject_matches_query",
@@ -139,6 +140,31 @@ def subject_matches_query(subject: str, query_text: str) -> bool:
     return normalized_subject in normalized_query or normalized_query in normalized_subject
 
 
+def activated_category_term(query_text: str, vocabulary: frozenset[str]) -> str | None:
+    """The single, casefolded vocabulary term ``query_text`` unambiguously
+    activates, or ``None`` when it activates zero or more than one (M9,
+    SIRIUS-ARQ-0.2 §6.2) — the same activation rule ``category_matches_query``
+    uses, factored out (ADR-120/M13) so a caller that needs the activated
+    category itself (to query persistence filtered by it, instead of
+    comparing it against every candidate's already-known category) does not
+    have to re-derive this rule and risk it diverging.
+
+    A blank query, or one that activates no vocabulary term at all, returns
+    ``None`` — it does not penalize, exactly like ``subject_matches_query``
+    when the query names no subject. A query that activates more than one
+    vocabulary term at once is ambiguous and also returns ``None``: this
+    function only ever affirms a single, unambiguous activation, never
+    guesses among several.
+    """
+    normalized_query = query_text.strip().casefold()
+    if not normalized_query:
+        return None
+    activated = {term.casefold() for term in vocabulary if term.casefold() in normalized_query}
+    if len(activated) != 1:
+        return None
+    return next(iter(activated))
+
+
 def category_matches_query(
     category: str | None, query_text: str, vocabulary: frozenset[str]
 ) -> bool:
@@ -153,22 +179,15 @@ def category_matches_query(
 
     ``category`` is ``None`` when the candidate has no classification yet
     (D7 point 2's open failure) — never a match, the candidate keeps being
-    found through the other three signals instead. A blank query, or one
-    that activates no vocabulary term at all, matches nothing — it does not
-    penalize, exactly like ``subject_matches_query`` when the query names no
-    subject. A query that activates more than one vocabulary term at once is
-    ambiguous and also matches nothing: this function only ever affirms a
-    single, unambiguous activation, never guesses among several.
+    found through the other three signals instead. Delegates the activation
+    rule itself to ``activated_category_term``.
     """
     if category is None:
         return False
-    normalized_query = query_text.strip().casefold()
-    if not normalized_query:
+    term = activated_category_term(query_text, vocabulary)
+    if term is None:
         return False
-    activated = {term.casefold() for term in vocabulary if term.casefold() in normalized_query}
-    if len(activated) != 1:
-        return False
-    return category.casefold() in activated
+    return category.casefold() == term
 
 
 def _synthetic_id(candidate: RankedKnowledge) -> int:

@@ -221,25 +221,33 @@ class StagedEnginePort:
     # -- Métodos del puerto -------------------------------------------------
 
     def por_clave_exacta(self, claves: Sequence[str]) -> tuple[ItemCanonico, ...]:
-        """``E1``: coincidencia literal sobre claves normalizadas."""
+        """``E1``: coincidencia literal sobre claves normalizadas, en una
+        sola consulta por lote (``IN (...)``) en vez de dos por clave
+        (ADR-120/M13): el número de consultas deja de crecer con el número
+        de claves de una llamada."""
         utiles = _acotar(claves)
         if not utiles:
             return ()
         with self._scope() as session:
             encontrados: list[tuple[str, int]] = []
-            for clave in utiles:
-                for fila in session.execute(
-                    text(
-                        "SELECT id FROM memories WHERE subject_key = :clave ORDER BY id LIMIT :cota"
-                    ),
-                    {"clave": clave, "cota": LIMITE_POR_CONSULTA},
-                ).all():
-                    encontrados.append(("memory", int(fila[0])))
-                for fila in session.execute(
-                    text("SELECT id FROM decisions WHERE subject = :clave ORDER BY id LIMIT :cota"),
-                    {"clave": clave, "cota": LIMITE_POR_CONSULTA},
-                ).all():
-                    encontrados.append(("decision", int(fila[0])))
+            marcas = ",".join(f":c{i}" for i in range(len(utiles)))
+            parametros = {f"c{i}": valor for i, valor in enumerate(utiles)}
+            cota = LIMITE_POR_CONSULTA * len(utiles)
+            for fila in session.execute(
+                text(
+                    f"SELECT id FROM memories WHERE subject_key IN ({marcas}) "
+                    "ORDER BY id LIMIT :cota"
+                ),
+                {**parametros, "cota": cota},
+            ).all():
+                encontrados.append(("memory", int(fila[0])))
+            for fila in session.execute(
+                text(
+                    f"SELECT id FROM decisions WHERE subject IN ({marcas}) ORDER BY id LIMIT :cota"
+                ),
+                {**parametros, "cota": cota},
+            ).all():
+                encontrados.append(("decision", int(fila[0])))
             return tuple(self._por_ids_mixtos(session, encontrados))
 
     def por_termino_lexico(self, terminos: Sequence[str]) -> tuple[ItemCanonico, ...]:
@@ -265,34 +273,34 @@ class StagedEnginePort:
             return tuple(self._por_ids_mixtos(session, pares))
 
     def por_prefijo_de_sujeto(self, prefijos: Sequence[str]) -> tuple[ItemCanonico, ...]:
-        """``E3``: familia de sujetos por prefijo estructural, dirigida."""
-        utiles = _acotar(prefijos)
+        """``E3``: familia de sujetos por prefijo estructural, dirigida, en
+        una sola consulta por lote (``OR`` de ``LIKE`` encadenados) en vez de
+        dos por prefijo (ADR-120/M13): ``IN (...)`` no expresa coincidencia
+        de prefijo, así que el patrón por lote aquí es el ``OR`` encadenado
+        que §11.4 punto 1 autoriza como alternativa."""
+        # Un prefijo de una o dos letras seleccionaria media base: no es una
+        # relacion, es un barrido con otro nombre.
+        utiles = [prefijo for prefijo in _acotar(prefijos) if len(prefijo) >= 3]
         if not utiles:
             return ()
         with self._scope() as session:
             encontrados: list[tuple[str, int]] = []
-            for prefijo in utiles:
-                if len(prefijo) < 3:
-                    # Un prefijo de una o dos letras seleccionaria media
-                    # base: no es una relacion, es un barrido con otro nombre.
-                    continue
-                patron = f"{prefijo}%"
-                for fila in session.execute(
-                    text(
-                        "SELECT id FROM memories WHERE subject_key LIKE :patron "
-                        "ORDER BY id LIMIT :cota"
-                    ),
-                    {"patron": patron, "cota": LIMITE_POR_PREFIJO},
-                ).all():
-                    encontrados.append(("memory", int(fila[0])))
-                for fila in session.execute(
-                    text(
-                        "SELECT id FROM decisions WHERE subject LIKE :patron "
-                        "ORDER BY id LIMIT :cota"
-                    ),
-                    {"patron": patron, "cota": LIMITE_POR_PREFIJO},
-                ).all():
-                    encontrados.append(("decision", int(fila[0])))
+            condicion = " OR ".join(f"subject_key LIKE :p{i}" for i in range(len(utiles)))
+            condicion_decisiones = " OR ".join(f"subject LIKE :p{i}" for i in range(len(utiles)))
+            parametros = {f"p{i}": f"{prefijo}%" for i, prefijo in enumerate(utiles)}
+            cota = LIMITE_POR_PREFIJO * len(utiles)
+            for fila in session.execute(
+                text(f"SELECT id FROM memories WHERE {condicion} ORDER BY id LIMIT :cota"),
+                {**parametros, "cota": cota},
+            ).all():
+                encontrados.append(("memory", int(fila[0])))
+            for fila in session.execute(
+                text(
+                    f"SELECT id FROM decisions WHERE {condicion_decisiones} ORDER BY id LIMIT :cota"
+                ),
+                {**parametros, "cota": cota},
+            ).all():
+                encontrados.append(("decision", int(fila[0])))
             return tuple(self._por_ids_mixtos(session, encontrados))
 
     def por_identificadores(self, identificadores: Sequence[str]) -> MaterializacionPorIdentidad:
