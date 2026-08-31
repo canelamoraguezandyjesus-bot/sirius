@@ -128,10 +128,12 @@ alcanza 0 omisiones críticas y 63/81 de cobertura ya incluye la siembra
 (fila 3, con siembra), y la fila final de ADR-115 que alcanza el suelo D1
 completo, 29/47, aplica G8/G12 sobre `obtenido_por_el_motor | categoria |
 siembra` (ADR-115, sección «Decisión») — también con la siembra dentro del
-conjunto. La única medición de las cuatro piezas *sin* la quinta es la fila
-2 de ADR-113 (categoría + RF-25/RF-26, todavía sin restricción de ámbito ni
-G8/G12): 27/47, 4 omisiones críticas, 59/81 de cobertura — por debajo del
-suelo D1 en tres de las cuatro métricas. Por tanto, **este ADR no puede
+conjunto. La fila 2 de ADR-113 (categoría + RF-25/RF-26) es una línea base
+parcial sin siembra, no una medición de las cuatro piezas: le faltan las
+otras dos, restricción de ámbito y G8/G12. Mide 27/47, 102 elementos de más,
+4 omisiones críticas, 59/81 de cobertura — por debajo del suelo D1 en las
+cuatro métricas, no en tres; el paquete completo de cuatro piezas no tiene
+medición propia hasta M16. Por tanto, **este ADR no puede
 afirmar, ni afirma, que las cuatro piezas solas basten para 29/47/≤1
 crítica/63/81**: esa cifra combinada nunca se midió sin la quinta pieza.
 Lo que la decisión de abajo diseña es la sustitución de las cuatro piezas;

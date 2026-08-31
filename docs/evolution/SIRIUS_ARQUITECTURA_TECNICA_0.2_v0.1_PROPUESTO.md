@@ -1696,13 +1696,14 @@ Ninguna medición existente aísla estas cuatro piezas de la quinta (la siembra)
 final de ADR-113 que primero llega a 0 omisiones críticas y 63/81 de cobertura ya incluye
 la siembra (fila 3), y la fila final de ADR-115 que alcanza el suelo D1 completo, 29/47,
 aplica G8/G12 sobre `obtenido_por_el_motor | categoria | siembra` — también con la siembra
-dentro del conjunto. La única medición de las cuatro piezas *sin* la quinta es la fila 2 de
-ADR-113 (categoría + RF-25/RF-26, todavía sin restricción de ámbito ni G8/G12): 27/47, 4
-omisiones críticas, 59/81 de cobertura — por debajo del suelo D1 en tres de las cuatro
-métricas. Si estas cuatro piezas bastan por sí solas es, por tanto, una pregunta abierta,
-no una cifra ya establecida: M16 la mide por primera vez sobre el camino real (§11.5) y M17
-la evalúa contra el suelo D1, registrando el resultado real —alcanzado o no— sin
-maquillarlo.
+dentro del conjunto. La fila 2 de ADR-113 (categoría + RF-25/RF-26) es una línea base
+parcial sin siembra, no una medición de las cuatro piezas: le faltan las otras dos,
+restricción de ámbito y G8/G12. Mide 27/47, 102 elementos de más, 4 omisiones críticas,
+59/81 de cobertura — por debajo del suelo D1 en las cuatro métricas, no en tres; el
+paquete completo de cuatro piezas no tiene medición propia hasta M16. Si estas cuatro
+piezas bastan por sí solas es, por tanto, una pregunta abierta, no una cifra ya
+establecida: M16 la mide por primera vez sobre el camino real (§11.5) y M17 la evalúa
+contra el suelo D1, registrando el resultado real —alcanzado o no— sin maquillarlo.
 
 **Qué se porta, detrás de la puerta abierta, en producción:**
 
@@ -1868,7 +1869,7 @@ incidencia):**
 Sobre el conjunto de referencia de ADR-008 (5.000 mensajes, 500 recuerdos, 100 decisiones,
 10 proyectos), estas tres causas son plausiblemente responsables de la mayor parte de la
 diferencia entre los ~120,9 ms que B12e mide con la puerta cerrada
-(`docs/implementation/V8_EXECUTION.md:44-48`) y los ~450-780 ms que ADR-117 mide con la
+(`docs/implementation/V8_EXECUTION.md:270`) y los ~450-780 ms que ADR-117 mide con la
 puerta abierta: ninguna de las tres depende de si Ollama está disponible (coherente con
 que el escenario (b), sin Ollama, mida en la misma banda que (a)/(c)).
 
