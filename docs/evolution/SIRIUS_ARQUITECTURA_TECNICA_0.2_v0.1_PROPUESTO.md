@@ -1524,3 +1524,554 @@ Pull Request que lo introduce, y queda registrada en `docs/evolution/STATUS.md` 
 excepción explícita, igual que ya se registró la del Sirius Work Engine y la de la
 Definición de Producto de esta misma versión
 (`docs/canonical/STATUS.md:26`).
+
+## 11. Ola de paridad en producción — M13 en adelante
+
+> Ampliación añadida por la incidencia #478 (WI-20260831-104900), por orden del
+> propietario del 31-08-2026 (referencia `sesion-cli`): «si recuerda 29 cosas de 47 a mí
+> no me vale… necesito que lo recuerde bien». Este §11 se añade al final del documento, sin
+> tocar una sola línea de §0-§10: cualquier cita externa a una línea de este fichero
+> (`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:2139`,
+> `tests/integration/test_local_performance.py:635`, entre otras) sigue apuntando
+> exactamente a donde apuntaba. El registro de la decisión que este §11 desarrolla es
+> `docs/decisions/ADR-119-disenar-la-ola-de-paridad-en-produccion-portar-la-semantica-del-arnes-tras-la-puerta-category-matching-enabled-la-peticion-de-contexto-real-y-el-plan-de-optimizacion-de-rnf-003-incidencia-478.md`
+> (PROPUESTO); este apartado es su desarrollo de diseño, no una copia de su decisión.
+
+### 11.0 Hechos de partida (cítalos, no se reinterpretan)
+
+M11 (incidencias #471/#473, ADR-117, §8-M11 arriba) dejó completamente cableado el
+circuito de la puerta `category_matching_enabled` —de `settings.json` a
+`RankRelevantKnowledgeUseCase`/`ContextBuilder`, vía `composition_root`
+(`src/sirius/composition_root.py:455-482`)— pero con su criterio de suelo
+explícitamente **NO aprobado**. Verificado contra `main` en el momento de esta
+incidencia:
+
+- Con la puerta abierta, el camino real de producción —`RankRelevantKnowledgeUseCase`/
+  `ContextBuilder` construidos exactamente como `composition_root` los construiría, nunca
+  el arnés de examen— mide **4/47** aciertos exactos, 609 elementos de más, 9 omisiones
+  críticas y 59/81 de cobertura (ADR-117, tabla «Banco con la puerta abierta»), y P95 de
+  «construir contexto» **438,8-496,1 ms** en los tres escenarios de RNF-003, medidos en el
+  runner de ADR-117; el comentario del corrector en la incidencia #471 reprodujo la misma
+  brecha en otro runner con P95 **718,5-778,2 ms** — la incidencia de origen de esta
+  ampliación cita ese rango como «hoy ese camino mide 4/47 y P95 438-780 ms».
+- El arnés de examen ya fusionado (`tests/acceptance/staged_engine_category_and_relevance.py`,
+  ADR-109..ADR-115) blinda como aserción dura, sobre su propia traducción de laboratorio
+  —que nunca se ejecuta en producción—, **aciertos exactos ≥ 29/47**, **omisiones críticas
+  ≤ 1** y **cobertura ≥ 63/81**
+  (`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:1148-1153`, función
+  `test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metricas`).
+- La línea de llegada de esta ola ya existe como conocimiento ejecutable: dos pruebas
+  `pytest.mark.xfail(strict=True)` que hoy fallan-como-se-espera sobre el camino real de
+  producción —
+  `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:2135`
+  (`test_el_suelo_del_criterio_de_m11_aciertos_exactos_29_47_en_el_paquete_completo`,
+  afirma `metricas.aciertos_exactos >= 29`, línea 2147) y
+  `tests/integration/test_local_performance.py:631`
+  (`test_el_suelo_de_rnf_003_p95_300ms_en_los_tres_escenarios_del_paquete_completo`, afirma
+  `medicion.p95 <= LIMITE_OPERACION_MS` —300 ms, `tests/integration/test_local_performance.py:187`—
+  en los tres escenarios, líneas 651-658)—, ambas citando ADR-117 en su `reason` (ADR-117
+  §«Estado del hito: decisión»). Esta ola no termina solo con estas dos: §11.5 (M17) exige
+  además, como aserciones duras propias del propio M17, que `omisiones_criticas <= 1` y
+  `cobertura >= 63 / 81` pasen sobre el mismo camino real antes de declarar la ola cerrada
+  (§11.5, M17).
+- Ninguna de las piezas que faltan es trabajo nuevo por inventar: **todas están ya
+  fusionadas en `main`**, viviendo en el arnés de examen
+  (`tests/acceptance/staged_engine_category_and_relevance.py`,
+  `tests/acceptance/staged_engine_case_translation.py`) o detrás de las reglas de
+  producto más estrictas que M9/M10 ya construyeron (§6.2, §6.3 arriba): activación única
+  de `category_matches_query` en vez de activación múltiple con restricción de ámbito
+  (ADR-113/114/115), el candado-unión de `ContextBuilder._apply_relevance_filter` en vez
+  de la regla de críticas original RF-25/RF-26 (ADR-112/113), la ausencia de siembra en
+  contexto (ADR-113), y la política uniforme `_peticion_ordinaria` en vez de la petición
+  por caso del laboratorio (ADR-110/111) que ninguna consulta real declara.
+
+### 11.1 Diagnóstico: qué falta en el camino real, pieza por pieza
+
+Las cinco piezas siguen exactamente el orden en que ADR-112..ADR-115 las midieron
+necesarias en el arnés. Para cada una: dónde vive hoy (solo en el arnés), su equivalente
+—o ausencia— en producción, y la cifra que ADR-112..ADR-115 le atribuyen.
+
+1. **Activación de categoría múltiple, no única.** `activa_categoria_buscable`
+   (`tests/acceptance/staged_engine_category_and_relevance.py:317-336`) activa la
+   categoría si la consulta contiene **cualquiera** de las palabras del vocabulario del
+   banco, sin exigir unicidad — réplica de que el índice lateral del laboratorio
+   (`experiments/adr002/lateral/categoria.py`, rama `evidence/adr001-spikes`) indexa las
+   palabras del vocabulario juntas como el mismo contenido para toda identidad no
+   ordinaria. El equivalente de producto, `category_matches_query`
+   (`src/sirius/domain/relevance.py:142-171`), exige activación única: `activated =
+   {...}; if len(activated) != 1: return False` (líneas 168-169) — diseño deliberado de
+   M9/PR #450, no un descuido. ADR-112 mide el coste de esa diferencia: de las cinco
+   consultas del banco que activan alguna palabra del vocabulario, la activación única
+   solo activa una; las otras cuatro contienen dos palabras a la vez y no activan nada
+   (`docs/decisions/ADR-112-el-indice-de-categoria-y-el-filtro-de-relevancia-conectados-al-arnes-del-banco-incidencia-463-mejoran-cobertura-y-omisiones-criticas-pero-empeoran-los-elementos-de-mas-y-no-alcanzan-d1.md`,
+   causa 1).
+2. **Regla de críticas original (RF-25/RF-26), no el candado-unión de M10.**
+   `aplicar_regla_de_criticas_original`
+   (`tests/acceptance/staged_engine_category_and_relevance.py:472-513`) solo rescata una
+   identidad descartada por el filtro si es de categoría de máxima criticidad **y** el
+   filtro sí conservó algo de lo que le llegó para ese caso (RF-25); si el filtro declaró
+   ausencia total, ese veredicto se respeta entero, sin rescate (RF-26). El candado-unión
+   de M10 (`ContextBuilder._apply_relevance_filter`,
+   `src/sirius/application/context.py:239-258`) protege, en cambio, **todo** candidato de
+   la categoría de máxima criticidad y **todo** candidato sin categoría todavía,
+   incondicionalmente — sobre un banco con solo dos estados de categoría posibles
+   (`"restriccion"` o ninguna), esa unión protege al 100 % de los candidatos y neutraliza
+   el filtro por completo
+   (`docs/decisions/ADR-112-el-indice-de-categoria-y-el-filtro-de-relevancia-conectados-al-arnes-del-banco-incidencia-463-mejoran-cobertura-y-omisiones-criticas-pero-empeoran-los-elementos-de-mas-y-no-alcanzan-d1.md`,
+   causa 2). ADR-113 mide que sustituir el candado por RF-25/RF-26 baja `elementos_de_mas`
+   de 153 a 102 sobre su configuración intermedia.
+3. **Siembra en contexto.** `siembra_de_contexto`
+   (`tests/acceptance/staged_engine_category_and_relevance.py:412-444`), activada solo
+   cuando `pide_contexto(proposito)` es cierto (`proposito` contiene la subcadena
+   `"contexto"`, líneas 403-409), añade toda identidad no admitida de categoría de máxima
+   criticidad dentro del ámbito declarado. No existe ningún equivalente en producción: ni
+   `ContextBuilder` (`src/sirius/application/context.py`) ni
+   `RankRelevantKnowledgeUseCase` (`src/sirius/application/rank_relevant_knowledge.py`)
+   inspeccionan jamás el campo `proposito` de la `Peticion` para sembrar candidatos —
+   `_peticion_ordinaria` fija `proposito` a un literal fijo
+   (`_PROPOSITO_RECUPERACION_ORDINARIA`, `src/sirius/application/rank_relevant_knowledge.py:75`)
+   que ninguna función de producción llega a inspeccionar con `pide_contexto`. Solo dos de
+   los 47 casos del banco declaran ese propósito (`B04-CA-33`, `B04-CA-34`): el propio
+   módulo del arnés documenta que esta regla se confirma «por construcción», no de forma
+   independiente (docstring de `siembra_de_contexto`).
+4. **Restricción por ámbito del índice de categoría.** `_en_ambito_declarado`
+   (`tests/acceptance/staged_engine_category_and_relevance.py:339-356`) exige que el
+   proyecto de la identidad coincida con el ámbito declarado de la petición, o que sea de
+   ámbito global (`"PRJ-GLOBAL"`); la usan tanto `indice_de_categoria`
+   (líneas 359-401) como `siembra_de_contexto`. El bloque `solo_por_categoria` de
+   producción (`src/sirius/application/rank_relevant_knowledge.py:243-280`) no filtra por
+   ámbito en ningún punto: itera `list_current_memories()`/`list_current_decisions()`
+   completos y solo comprueba `category_match(...)`, nunca `project_id` contra la consulta
+   — «`category_match` no es un filtro de alcance» es, hoy, el diseño de producto vigente
+   (§6.2 arriba). ADR-114 mide que añadir esta restricción en el arnés baja
+   `elementos_de_mas` de 110 a 62.
+5. **Dos mitades de puerta (G8/G12) sobre la ampliación por categoría/siembra.**
+   `vigente_en_tiempo_objetivo`
+   (`tests/acceptance/staged_engine_category_and_relevance.py:516-540`) y
+   `truncar_por_limite_duro` (líneas 544-574) reproducen, respectivamente, la mitad de
+   vigencia temporal de `G8` (`src/sirius/domain/staged_engine_gates.py:194-210`, sin el
+   corte de registro) y la mitad de límite de `G12`
+   (`src/sirius/domain/staged_engine_gates.py:304-332`, sin la declaración de
+   desbordamiento), aplicadas **solo** sobre el conjunto que `indice_de_categoria`/
+   `siembra_de_contexto` añaden — nunca sobre lo que el motor por etapas genera por sí
+   mismo, que ya pasa por `G8`/`G12` completas dentro de `recuperar()`
+   (`src/sirius/domain/staged_engine.py:300`, `:357`). El bloque `solo_por_categoria` de
+   producción tampoco pasa nunca por `G8`/`G12` del motor: el mismo hueco que ADR-115
+   cerró en el arnés sigue abierto, sin cerrar, en el camino de producción. ADR-115 mide
+   que cerrarlo en el arnés recupera 12 de los 62 `elementos_de_mas` de ADR-114 y alcanza
+   el suelo D1 (29/47, ≤1 crítica, 63/81).
+6. **Petición por caso, no política uniforme.** Ver §11.3 — se trata aparte porque, a
+   diferencia de las cinco anteriores, no toda su brecha es igual de cerrable con
+   información que una consulta real posee.
+
+### 11.2 Decisión de diseño (a): activación de categoría e integridad de críticas con la puerta abierta
+
+**Decisión (ADR-119): sí se sustituyen, exclusiva y únicamente cuando
+`category_matching_enabled` es `True`.** El diseño anterior —`category_matches_query` de
+activación única (§6.2) y el candado-unión de M10 (§6.3)— **se conserva literalmente, sin
+cambiar una línea de comportamiento, como el estado-cerrado**: con la puerta cerrada (el
+valor por defecto, `False` o ausente, y el único que `composition_root` fija hoy en la
+construcción con la que Sirius arranca, `src/sirius/composition_root.py:455`), el camino
+de producción sigue siendo exactamente el de hoy — las pruebas de identidad ya existentes
+(`tests/unit/test_composition_root_relevance_gate.py`,
+`tests/integration/test_rank_relevant_knowledge.py`,
+`tests/integration/test_context_builder.py`) siguen intactas y en verde, tal como exige el
+objetivo de esta incidencia, porque ningún encargo de §11.5 toca su código bajo ese
+estado.
+
+**Justificación, citando el coste que ADR-109..ADR-115 y ADR-117 ya midieron de no
+sustituir:** ADR-111 mide 23/47 con la petición por caso ya portada pero sin estas cinco
+piezas; ADR-112 mide que, conectadas sin más las piezas de producto ya existentes
+(activación única + candado-unión), el candado protege el 100 % del banco y neutraliza el
+filtro, sin mejorar `aciertos_exactos` (sigue en 23/47); y el camino real de producción,
+que hoy tiene exactamente esas dos piezas vigentes tras la puerta, mide **4/47** — peor
+que el 23/47 aislado de ADR-111 porque además le falta la petición por caso (§11.3). Sin
+sustituir estas piezas, ningún encargo futuro puede acercar el camino real al suelo D1: es
+la misma disyuntiva que ADR-117 dejó explícitamente para «la siguiente ola, del
+propietario», y esta incidencia es esa ola.
+
+**Lo que esta justificación no puede afirmar: que las cuatro piezas de abajo, solas y sin
+la siembra en contexto, ya se midieron suficientes para 29/47, ≤1 crítica y 63/81.**
+Ninguna medición existente aísla estas cuatro piezas de la quinta (la siembra): la fila
+final de ADR-113 que primero llega a 0 omisiones críticas y 63/81 de cobertura ya incluye
+la siembra (fila 3), y la fila final de ADR-115 que alcanza el suelo D1 completo, 29/47,
+aplica G8/G12 sobre `obtenido_por_el_motor | categoria | siembra` — también con la siembra
+dentro del conjunto. La fila 2 de ADR-113 (categoría + RF-25/RF-26) es una línea base
+parcial sin siembra, no una medición de las cuatro piezas: le faltan las otras dos,
+restricción de ámbito y G8/G12. Mide 27/47, 102 elementos de más (sobre las 47 filas
+sin la salvedad de `casos_con_contenido`; ADR-115:298-307 fija el suelo D1 de
+`elementos_de_mas` ≤21 solo sobre los 31 `casos_con_contenido`, y la fila 2 de ADR-113
+no publica ese subtotal), 4 omisiones críticas, 59/81 de cobertura — por debajo del
+suelo D1 en tres métricas confirmadas (aciertos_exactos, omisiones_criticas,
+cobertura); la cuarta, `elementos_de_mas`, queda no determinada bajo la población que
+fija su propio umbral publicado; el paquete completo de cuatro piezas no tiene
+medición propia hasta M16. Si estas cuatro
+piezas bastan por sí solas es, por tanto, una pregunta abierta, no una cifra ya
+establecida: M16 la mide por primera vez sobre el camino real (§11.5) y M17 la evalúa
+contra el suelo D1, registrando el resultado real —alcanzado o no— sin maquillarlo.
+
+**Qué se porta, detrás de la puerta abierta, en producción:**
+
+- Un índice de categoría buscable de activación múltiple, paralelo a
+  `category_matches_query` (que sigue existiendo, sin cambios, para el estado-cerrado):
+  activa la categoría del candidato si la consulta contiene **cualquiera** de los
+  términos del vocabulario cerrado (§6.1/§6.5), no exactamente uno — mismo comportamiento
+  que `activa_categoria_buscable` demuestra en el arnés, ahora sobre el vocabulario real
+  de producto en vez del vocabulario de cinco palabras del banco.
+- Restricción por ámbito sobre esa activación: un candidato solo se admite por categoría
+  si su `project_id` coincide con el proyecto activo de la petición, o si es de ámbito
+  global — mismo criterio que `_en_ambito_declarado`. Sin esta restricción, ADR-114 ya
+  midió que `elementos_de_mas` casi se duplica (62 → 110) sobre el banco; no hay razón
+  para esperar que el efecto sea menor sobre datos reales con más de un proyecto.
+- La regla de críticas original (RF-25/RF-26) sustituye al candado-unión como el mecanismo
+  de integridad de críticas **cuando la puerta está abierta**: rescata una identidad
+  descartada por `RelevanceFilterPort` solo si es de la categoría de máxima criticidad
+  (`composition_root._MAX_CRITICALITY_CATEGORY`, `"salud"`,
+  `src/sirius/composition_root.py:144`) **y** el filtro sí conservó algo de lo que le
+  llegó para esa consulta; si el filtro declaró ausencia total para la consulta completa,
+  ese veredicto se respeta sin rescate. Un candidato **sin categoría todavía** (D7 punto 2,
+  etiquetado pendiente) sigue protegido siempre, sin condición — eso no lo cambia esta
+  ola: la Definición de Producto exige que ningún elemento crítico recuperado pueda
+  descartarse (§6.3 arriba), y un elemento sin clasificar todavía no puede excluirse con
+  seguridad de ser justo ese elemento crítico.
+- G8/G12 sobre la ampliación por categoría: antes de entregar el conjunto combinado
+  (motor + categoría) a la regla de críticas, se descarta lo que no esté vigente en el
+  tiempo objetivo de la petición (mitad de `G8`) y se trunca al límite duro de la petición
+  ordenando por criticidad (mitad de `G12`) — mismo criterio que
+  `vigente_en_tiempo_objetivo`/`truncar_por_limite_duro`, ahora también sobre datos reales
+  y no solo sobre el banco.
+
+**Siembra en contexto: aplazada, no se porta en esta decisión.** `siembra_de_contexto`
+queda fuera de la sustitución anterior mientras su precondición documentada siga sin
+resolverse (M15, más abajo, la nombra con su cita exacta): solo dos de los 47 casos del
+banco la ejercitan y se confirma «por construcción», no de forma independiente. El plan de
+pruebas fija como precondición de PA-0.2-REC-01 que se resuelva por una de dos vías
+excluyentes entre sí, nunca ambas — ampliar el banco con casos independientes que la
+ejerciten, o retirarla del código —, y las dos vías no llevan al mismo destino: ampliar el
+banco resuelve la precondición dejando abierto que un encargo posterior reconsidere portar
+`siembra_de_contexto` (condicionado a que el propietario registre esa reconsideración);
+retirarla del código resuelve la precondición cerrando esa alternativa — no quedaría
+`siembra_de_contexto` que portar, y ningún encargo posterior la porta. Este documento no
+escoge por el propietario cuál de las dos vías se sigue; solo la deja fuera de la opción
+(b) mientras la elección no se registre, igual que D3 (§6.6) deja aplazada la omisión
+léxica hasta que se registre su propia decisión. Esta ola no la incluye en la opción (b)
+que ADR-119 decide: la opción (b) se restringe, en esta incidencia, a las cuatro piezas de
+arriba.
+
+Estas cuatro piezas viven, con la puerta abierta, en el mismo punto de integración que §6.2
+ya fijaba —dentro de `RankRelevantKnowledgeUseCase._rank_via_staged_engine`
+(`src/sirius/application/rank_relevant_knowledge.py:153-282`), sustituyendo el bloque
+`solo_por_categoria` actual (líneas 243-280)— y en `ContextBuilder._apply_relevance_filter`
+(`src/sirius/application/context.py:239-258`), sustituyendo su candado-unión actual, sin
+mover ninguno de los dos puntos de integración que D1 ya fijó.
+
+### 11.3 La petición en producción (b): ámbito y propósito reales, y la parte de la brecha que no se cierra
+
+Las consultas reales que llegan a `RankRelevantKnowledgeUseCase.rank()` no declaran
+modo, propósito, cardinalidad ni límite: `_peticion_ordinaria`
+(`src/sirius/application/rank_relevant_knowledge.py:84-105`) fija los cuatro a un valor
+único y fijo para toda consulta — `Modo.M1_ORDINARIO`, un propósito literal fijo,
+`Cardinalidad.EXHAUSTIVA`, y un límite que no ata (`_LIMITE_SIN_ATAR = 100_000`, línea 81)
+— nunca una `Peticion` distinta por consulta, a diferencia de `peticion_desde_caso`
+(`tests/acceptance/staged_engine_case_translation.py:120-153`), que construye una
+`Peticion` propia para cada uno de los 47 casos del banco a partir de un campo del propio
+fixture, `peticion_p2` (modo, propósito, permiso, cardinalidad, límite declarados por
+caso). ADR-110 mide el coste de la política uniforme (11/47, sin petición por caso) frente
+a ADR-111 (23/47, con petición por caso portada) — una ganancia de **+12/47** que ninguno
+de los dos ADR atribuye a un campo aislado, porque ambos midieron el efecto combinado de
+los cuatro campos a la vez.
+
+**Diseño de la petición por defecto del producto:**
+
+- **Ámbito**: se deriva del proyecto activo, información que `rank()` ya lee para calcular
+  `project_matches_active` (`self._project_repository.get_active_project()`,
+  `src/sirius/application/rank_relevant_knowledge.py:193-194`) — con un proyecto activo,
+  `Ambito(global_=False, proyectos=(active_project_id,))`; sin proyecto activo,
+  `Ambito(global_=True, proyectos=())`, igual que hoy. Esto no es información inventada:
+  es la misma que ya existe y ya se usa para otra señal.
+- **Propósito**: se declara honestamente que la llamada ensambla el contexto de un turno,
+  porque eso es estructuralmente cierto para **toda** llamada real a `rank()` — la única
+  que existe en producción ocurre desde `ContextBuilder._rank_related_knowledge`
+  (`src/sirius/application/context.py:221-237`) para construir el `Context` que
+  `SendMessageUseCase` envía al proveedor. A diferencia del ámbito o de la cardinalidad,
+  esto no exige ningún dato nuevo del turno: es un hecho sobre quién llama, no sobre el
+  contenido de la consulta, y permite que la siembra en contexto (§11.2) se active para
+  toda consulta real, no solo para los dos casos del banco que la declaran expresamente.
+- **Modo y cardinalidad**: se mantienen en `Modo.M1_ORDINARIO`/`Cardinalidad.EXHAUSTIVA`
+  para toda consulta real. No hay ninguna señal en una consulta de conversación ordinaria
+  que distinga «modo histórico» (`M2`, `admite_no_vigentes=True`) de un turno normal, ni
+  ningún oráculo de cuántos resultados una consulta real «espera» —
+  `Cardinalidad.EXACTA` exige `objetivos = max(1, len(caso["resultado_esperado"]))`
+  (`tests/acceptance/staged_engine_case_translation.py:136-138`), un campo que solo existe
+  porque el banco es un fixture de prueba con resultado esperado conocido de antemano.
+- **Límite**: se mantiene sin atar (`_LIMITE_SIN_ATAR`). Ningún encargo de esta ola
+  introduce un límite duro por consulta real: hacerlo exigiría una política de producto
+  sobre cuántos elementos "basta" recuperar por turno, que ni la Definición de Producto ni
+  esta incidencia piden diseñar — `apply_context_budget`
+  (`src/sirius/application/context_budget.py:149-195`) ya recorta el resultado final por
+  presupuesto de tokens, aguas abajo de este punto, sin necesidad de un límite duro aquí.
+
+**Honestidad sobre lo que esta parte de la brecha no puede cerrar, cuantificado y
+nombrado, no escondido:** de los +12/47 que ADR-110→ADR-111 miden al portar la petición
+por caso completa, este documento no puede afirmar cuánto corresponde solo a declarar
+ámbito y propósito reales (las dos piezas que sí se diseñan arriba) frente a declarar
+`Cardinalidad.EXACTA`/límite `DURO` por caso (las dos que no se diseñan, porque exigirían
+un oráculo de resultados esperados que ninguna consulta real tiene) — ninguno de los dos
+ADR midió el efecto de cada campo por separado. Lo que sí se puede afirmar: **la parte de
+la petición por caso que depende de conocer de antemano el resultado esperado de la
+consulta (cardinalidad `EXACTA`, límite `DURO` declarado por caso) no tiene ningún
+equivalente honesto en producción y esta ampliación no la diseña** — es una brecha
+reconocida, no cerrada, que M17 (§11.5) debe cuantificar de nuevo, esta vez sobre datos
+reales, si al medir el pipeline integrado con ámbito/propósito reales pero sin
+cardinalidad/límite por caso el suelo D1 sigue sin alcanzarse por esta causa específica.
+
+### 11.4 RNF-003 (c): presupuesto y plan de optimización para volver a ≤ 300 ms P95 con el paquete abierto
+
+**Estado medido (ADR-117, sin remedir aquí — este documento es diseño, no medición):**
+P95 de «construir contexto» con el paquete completo activo, 438,8-496,1 ms en los tres
+escenarios de RNF-003 sobre el runner de ADR-117 (145-165 % del límite de 300 ms), y
+718,5-778,2 ms sobre el runner que usó el corrector de la incidencia #471 — el rango
+«438-780 ms» que cita el objetivo de esta incidencia. ADR-117 ya descarta que el coste
+dominante sea el `timeout` del filtro de relevancia
+(`composition_root._RELEVANCE_FILTER_TIMEOUT_SECONDS`, 50 ms,
+`src/sirius/composition_root.py:157`): el escenario (b) —Ollama ausente, conexión
+rechazada de inmediato, sin esperar ningún `timeout`— mide en la misma banda que (a)/(c),
+así que bajar el `timeout` no cerraría la brecha (§6.4 arriba ya lo advertía en abstracto;
+ADR-117 lo confirma con la medición).
+
+**Diagnóstico de causa, por lectura directa del código (no una medición nueva de esta
+incidencia):**
+
+1. `_peticion_ordinaria` fija siempre `Cardinalidad.EXHAUSTIVA`
+   (`src/sirius/application/rank_relevant_knowledge.py:102`), y `S1` —la parada temprana
+   por cardinalidad— está deshabilitada por diseño bajo `EXHAUSTIVA`, sin excepción
+   (`src/sirius/domain/staged_engine_stops.py:54-55`): «una búsqueda exhaustiva no puede
+   declararse suficiente por cuota». En consecuencia, `recuperar()` recorre siempre las
+   cuatro etapas de expansión `E1`-`E4` en cada llamada a `rank()`
+   (`src/sirius/domain/staged_engine.py:292-323`, el bucle `for etapa in
+   ETAPAS_DE_EXPANSION`), nunca para antes por haber encontrado ya suficiente.
+2. Cada etapa dispara sus propias consultas al puerto de persistencia
+   (`src/sirius/adapters/persistence/staged_engine_candidate.py:118-119`, `E1` llama a
+   `por_clave_exacta` y `por_termino_lexico`; `:149` y `:175-176`, `E2`/`E3` llaman de
+   nuevo a `por_termino_lexico`/`por_prefijo_de_sujeto`; `:219`, `E4` llama a
+   `historial_y_fuentes`), y dos
+   de esos métodos del puerto ejecutan **dos consultas SQL por cada clave o prefijo**,
+   dentro de un bucle Python, en vez de una sola consulta por lote —
+   `StagedEnginePort.por_clave_exacta`
+   (`src/sirius/adapters/persistence/staged_engine_port.py:223-243`, el bucle `for clave
+   in utiles`) y `por_prefijo_de_sujeto`
+   (`src/sirius/adapters/persistence/staged_engine_port.py:267-296`, el bucle `for prefijo
+   in utiles`) — a diferencia del patrón ya adoptado en ADR-008 para el listado de
+   revisiones vigentes (`docs/decisions/ADR-008-cargar-en-lote-las-revisiones-vigentes-al-listar.md`),
+   que sustituyó exactamente este tipo de bucle por una consulta en lote.
+3. El bloque `solo_por_categoria` de `_rank_via_staged_engine`
+   (`src/sirius/application/rank_relevant_knowledge.py:243-280`) recorre, además de lo que
+   el motor por etapas ya recorrió por su cuenta, la totalidad de
+   `list_current_memories()`/`list_current_decisions()` — un segundo barrido completo del
+   corpus en cada llamada a `rank()` con la puerta abierta, sobre el mismo conjunto de
+   referencia de 500 recuerdos/100 decisiones que ya usa ADR-008.
+
+Sobre el conjunto de referencia de ADR-008 (5.000 mensajes, 500 recuerdos, 100 decisiones,
+10 proyectos), estas tres causas son plausiblemente responsables de la mayor parte de la
+diferencia entre los ~120,9 ms que B12e mide con la puerta cerrada
+(`docs/implementation/V8_EXECUTION.md:270`) y los ~450-780 ms que ADR-117 mide con la
+puerta abierta: ninguna de las tres depende de si Ollama está disponible (coherente con
+que el escenario (b), sin Ollama, mida en la misma banda que (a)/(c)).
+
+**Plan de optimización, por causa, cada uno asignado a un encargo de §11.5:**
+
+1. **M13** — batch de consultas en `StagedEnginePort`: sustituir los bucles de
+   `por_clave_exacta`/`por_prefijo_de_sujeto` por una sola consulta SQL con `IN (...)` (o
+   `OR` encadenado) sobre todas las claves/prefijos de una llamada, mismo patrón que
+   `_por_ids_mixtos` ya usa para ids (`src/sirius/adapters/persistence/staged_engine_port.py:201-219`,
+   marcas de parámetro nombradas `:m0`, `:m1`, …).
+2. **M13** (mismo encargo, misma causa) — evitar el segundo barrido completo del corpus en
+   `solo_por_categoria`: sustituir `list_current_memories()`/`list_current_decisions()`
+   (que ya se invocan una sola vez por llamada a `rank()` hoy — construir un índice en
+   memoria a partir de esa misma llamada no reduce nada, sigue leyendo el corpus completo)
+   por una consulta al puerto de persistencia filtrada por categoría, ejecutada en SQL
+   (`WHERE category IN (...)`, mismo patrón por lote que el punto 1), que solo devuelve los
+   candidatos de las categorías relevantes en vez de cargar el corpus completo en memoria
+   para filtrarlo en Python.
+3. **M17** (medición) mide si M13 basta para bajar de los ~450-780 ms actuales a ≤ 300 ms
+   P95 en los tres escenarios; si no basta, M17 lo registra tal cual —igual que ADR-117
+   registró el incumplimiento de M11— y esta arquitectura no promete de antemano que M13
+   sea suficiente.
+
+**Cómo se mide (sin cambios de metodología frente a §6.4/ADR-008/ADR-117):** el mismo
+benchmark de ADR-008, mismo conjunto de referencia, misma máquina, los mismos tres
+escenarios de RNF-003 que §6.4 ya fija (Ollama disponible dentro de presupuesto, Ollama
+ausente con fallo abierto inmediato, Ollama acepta la conexión y agota el `timeout`), con
+el paquete completo activo (M8-M12 más las piezas de §11.2 ya integradas) — exactamente lo
+que `test_construir_contexto_con_el_paquete_completo_activo_en_los_tres_escenarios`
+(`tests/integration/test_local_performance.py`) ya ejecuta hoy, y lo que
+`test_el_suelo_de_rnf_003_p95_300ms_en_los_tres_escenarios_del_paquete_completo`
+(`tests/integration/test_local_performance.py:631`) ya afirma como suelo `xfail(strict=True)`.
+
+### 11.5 Encargos M13 en adelante (d)
+
+Continúan la numeración de §8 (M1…M12); viven en este §11 por la restricción de evidencia
+de esta incidencia (no desplazar ninguna línea de §0-§10, ver la nota al inicio de este
+apartado), no porque rompan el orden de encargos. Dependencias: M13 y M14 son
+independientes entre sí y pueden construirse en paralelo; M15 depende de M14 (la regla de
+críticas original necesita el candidato ya expuesto por la activación múltiple de
+categoría para poder rescatarlo o no); M16 depende de M14 y M15 (cablea ambos en
+`RankRelevantKnowledgeUseCase`/`ContextBuilder`); M16 también depende de la petición de
+producción (mismo encargo, ver más abajo); M17 depende de M13-M16 completos (mide el
+paquete integrado, no piezas sueltas — mismo principio que ya fijaba M11 respecto de
+M9/M10).
+
+**M13 — Optimización de consultas del motor por etapas y de la ampliación por categoría**
+
+`StagedEnginePort.por_clave_exacta`/`por_prefijo_de_sujeto` en consulta por lote (§11.4,
+punto 1); eliminar el segundo barrido completo del corpus de `solo_por_categoria` (§11.4,
+punto 2), sustituyendo `list_current_memories()`/`list_current_decisions()` por una
+consulta al puerto de persistencia filtrada por categoría, ejecutada en SQL, que devuelve
+solo los candidatos de las categorías relevantes en vez de cargar el corpus completo en
+memoria para filtrarlo en Python.
+
+**Criterio de aceptación:** una prueba de integración con un doble instrumentado del
+puerto (o un contador de consultas SQL reales sobre SQLite) confirma que el número de
+consultas ejecutadas por `por_clave_exacta`/`por_prefijo_de_sujeto` para *n* claves/prefijos
+deja de crecer linealmente con *n* (una consulta por lote, no dos por clave); una prueba
+sobre `_rank_via_staged_engine` con un repositorio instrumentado confirma que la ampliación
+por categoría deja de enumerar la totalidad del corpus — contando las filas que el
+repositorio devuelve (o las filas que SQLite lee) para un corpus con muchos más elementos
+fuera de la categoría solicitada que dentro, y comprobando que ese número depende del
+tamaño del subconjunto que coincide con la categoría, no del tamaño total de recuerdos o
+decisiones vigentes; contar solo las invocaciones a `list_current_memories()`/
+`list_current_decisions()` no basta, porque ambas ya se invocan una sola vez por llamada a
+`rank()` antes de este encargo y esa cuenta no cambiaría aunque el corpus completo se
+siguiera enumerando. Ninguna prueba de identidad existente
+(`tests/integration/test_rank_relevant_knowledge.py`,
+`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`, el arnés de examen) cambia de
+resultado — la optimización no puede alterar qué se admite ni en qué orden, solo cuántas
+filas cuesta calcularlo.
+
+**M14 — Índice de categoría buscable de activación múltiple, con restricción de ámbito, tras la puerta**
+
+El índice de activación múltiple de §11.2 (paralelo a `category_matches_query`, que sigue
+existiendo sin cambios para el estado-cerrado) y la restricción por ámbito, cableados
+**solo** cuando `category_matching_enabled` es `True`, sustituyendo el bloque
+`solo_por_categoria` actual de `_rank_via_staged_engine`
+(`src/sirius/application/rank_relevant_knowledge.py:243-280`).
+
+**Criterio de aceptación:** una prueba de dominio con candidatos de categorías distintas
+confirma que una consulta que activa dos o más términos del vocabulario a la vez sí activa
+la categoría para toda identidad no ordinaria cuando la puerta está abierta —a diferencia
+de `category_matches_query`, que sigue exigiendo activación única y que otra prueba
+confirma sin cambios—; una prueba de integración con dos proyectos distintos confirma que
+un candidato de categoría no ordinaria en el proyecto B no se admite por categoría cuando
+la petición declara ámbito del proyecto A, ni al revés, y que sí se admite cuando el
+candidato es de ámbito global; con la puerta cerrada, una prueba de identidad confirma que
+`_rank_via_staged_engine` produce exactamente el mismo resultado que antes de este
+encargo, byte a byte sobre el mismo caso de prueba.
+
+**M15 — Regla de críticas original (RF-25/RF-26) y siembra en contexto, tras la puerta**
+
+RF-25/RF-26 sustituyendo el candado-unión de `ContextBuilder._apply_relevance_filter`
+**solo** cuando la puerta está abierta (§11.2); G8/G12 sobre el conjunto combinado
+motor+categoría antes de aplicar RF-25/RF-26 (§11.2, último punto).
+
+**Precondición pendiente sobre la siembra en contexto — no forma parte de este encargo
+todavía:** la definición aprobada documenta que `siembra_de_contexto` se escribió tras
+observar fallos y que solo dos de los 47 casos del banco la ejercitan, por lo que se
+confirma «por construcción», no de forma independiente
+(`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:100-106`); el plan de
+pruebas fija como precondición de PA-0.2-REC-01, antes de poder declarar superada esa PA,
+que se resuelva por una de dos vías excluyentes entre sí — el banco se amplíe con casos
+independientes que ejerciten la siembra, o la siembra se retire del código —
+(`docs/evolution/SIRIUS_PLAN_PRUEBAS_0.2_v0.1_PROPUESTO.md:124-131`). M15 **no** porta la
+siembra a producción mientras esa precondición siga sin resolverse: construye únicamente
+RF-25/RF-26 y G8/G12 sobre el conjunto motor+categoría (sin siembra). Las dos vías no
+llevan al mismo destino: si el propietario amplía el banco, la precondición queda resuelta
+dejando `siembra_de_contexto` como alcance de un encargo posterior, condicionado a que el
+propietario registre esa reconsideración; si el propietario la retira del código, la
+precondición queda resuelta cerrando esa alternativa — no dejándola abierta a un encargo
+posterior, porque no quedaría siembra que portar. Este encargo no escoge por el
+propietario cuál de las dos vías se sigue, igual que D3 (§6.6) deja aplazada la omisión
+léxica hasta que se registre su propia decisión.
+
+**Criterio de aceptación:** una prueba con un doble determinista de `RelevanceFilterPort`
+que descarta explícitamente una identidad de categoría de máxima criticidad confirma que
+se rescata cuando el filtro sí conservó algo de la misma consulta, y que **no** se rescata
+cuando el filtro declaró ausencia total para esa consulta (RF-26); una prueba confirma que
+un candidato sin categoría todavía sigue protegido siempre, sin condición, igual que hoy;
+una prueba confirma que una identidad admitida por categoría, pero no vigente en el tiempo
+objetivo de la petición, se descarta (G8) y que el conjunto combinado se trunca al límite
+duro de la petición ordenando por criticidad (G12) antes de que RF-25/RF-26 actúe; con la
+puerta cerrada, una prueba de identidad confirma que
+`ContextBuilder._apply_relevance_filter` produce exactamente el mismo resultado que antes
+de este encargo. Ninguna prueba de este encargo ejercita `siembra_de_contexto`: esa
+cobertura queda pendiente del encargo posterior que resuelva la precondición de arriba.
+
+**M16 — Petición de producción: ámbito real, propósito real, cableado en `ContextBuilder`/`RankRelevantKnowledgeUseCase`**
+
+`_peticion_ordinaria` gana ámbito derivado del proyecto activo y propósito honesto de
+ensamblar contexto (§11.3), sin tocar modo, cardinalidad ni límite (siguen fijos, §11.3).
+Cablea M14/M15 en el punto de integración real.
+
+**Criterio de aceptación:** una prueba confirma que, con un proyecto activo configurado,
+la `Peticion` que `rank()` construye declara `Ambito(global_=False, proyectos=(id,))` con
+el id de ese proyecto, y `Ambito(global_=True, proyectos=())` sin proyecto activo — mismo
+criterio que ya usa `project_matches_active`; una prueba confirma que el `proposito`
+declarado por toda llamada real activa `pide_contexto`, y que una petición construida sin
+pasar por `ContextBuilder` (si alguna existe en la suite) no se ve afectada porque el
+propósito lo fija `rank()` mismo, no el llamador; re-ejecutar la prueba de M7/M11 sobre el
+banco con las piezas de M13-M16 integradas y reportar las cuatro métricas —sin exigir
+todavía el suelo D1 completo, eso es M17—; volver a correr el benchmark de ADR-008/§6.4/§11.4
+y publicar el P95 medido con las piezas ya integradas. **Esta re-ejecución es la primera
+medición de las cuatro piezas de §11.2 sin la siembra en contexto**: ningún ADR previo
+(ADR-113/114/115) midió esa combinación exacta —sus cifras de 29/47, 0 críticas y 63/81
+incluyen siempre la siembra dentro del conjunto—, así que su resultado no está
+predeterminado por evidencia ya publicada; M17 lo evalúa contra el suelo D1 tal cual salga.
+
+**M17 — Medición final: cierre de la ola**
+
+Sobre el pipeline con M13-M16 integrados, ejecutar las dos pruebas `xfail(strict=True)` de
+M11 (`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:2135`,
+`tests/integration/test_local_performance.py:631`) y comprobar su resultado. Además, sobre
+esa misma ejecución del banco, M17 añade dos aserciones duras nuevas, también bajo
+`xfail(strict=True)`, que hoy no existen sobre el camino real: `omisiones_criticas <= 1` y
+`cobertura >= 63 / 81` (mismo suelo que ADR-115 ya blinda en el arnés, §11.0). Ninguna de
+las dos figura como aserción dura en las dos pruebas de M11 (§11.0 lo señala
+explícitamente: solo afirman `aciertos_exactos >= 29` y `P95 <= 300 ms`), pero sí forman
+parte de las cifras que el objetivo de esta ola fija como destino, así que M17 no se limita
+a registrarlas como evidencia adicional: las convierte en la misma clase de aserción dura y
+aplazable que las otras dos, para que un resultado incompleto (por ejemplo, las dos XPASS
+de M11 pero `omisiones_criticas > 1` o `cobertura < 63/81`) no pueda cerrar la ola.
+
+**Criterio de aceptación — exactamente el que fija el objetivo de la incidencia #478:**
+las cuatro pruebas `xfail(strict=True)` — las dos ya existentes de M11 y las dos que M17
+añade — pasan inesperadamente (XPASS) y, por `strict=True`, la suite falla hasta que se
+retiren sus cuatro marcas; al retirarlas todas (sustituyendo cada
+`@pytest.mark.xfail(strict=True, reason=...)` por una aserción ordinaria, sin debilitar
+ningún umbral que afirman), la suite completa queda en verde. Si M13-M16 no bastan para
+alcanzar alguno de los cuatro suelos —el propio §11.4 ya advierte que optimizar las causas
+conocidas no garantiza llegar a 300 ms; la Producción de M14/M15 podría no cerrar el 29/47
+ni las otras dos métricas si la parte no cerrable de §11.3 resulta ser la causa dominante;
+y, como registra §11.2 arriba, ninguna medición previa aísla las cuatro piezas portadas de
+la siembra en contexto que queda fuera, así que 29/47, ≤1 crítica y 63/81 tampoco están
+garantizados solo con esas cuatro piezas—, M17 no fuerza el verde: registra la cifra real alcanzada para cada una de las
+cuatro métricas, actualiza este documento y `docs/evolution/STATUS.md` con el resultado, y
+dejar en pie las marcas `xfail` que no hayan pasado es la única salida honesta,
+exactamente como D3 (§6.6) ya deja abierta y aplazada la omisión léxica si M12 no la
+cierra. La ola no se declara cerrada por decisión de M17 mismo, ni de forma parcial sobre
+solo dos de las cuatro métricas: se declara cerrada cuando las cuatro pruebas lo digan, no
+antes.
+
+### 11.6 Qué no decide esta ampliación
+
+Registrar el umbral de coincidencia exigible del etiquetado automático de Ollama (D7 punto
+6, §6.3/§9 arriba) sigue siendo una decisión del propietario **distinta** y **anterior**
+en el tiempo a que esta ola tenga ningún efecto real: `category_matching_enabled` sigue
+siendo la misma clave única (§6.3), y esta ampliación no cambia cuándo ni cómo se activa
+—sigue exigiendo que el propietario registre ese umbral en `STATUS.md` y que alguien fije
+la clave a `True` en `settings.json`, dos pasos separados y explícitos, ninguno asignado a
+M13-M17—. Lo que esta ola sí hace es asegurar que, el día que esa puerta se abra de
+verdad sobre datos reales, el camino que se activa alcance las cifras que el arnés ya
+demostró posibles, en vez de degradar a 4/47. Optimizar el motor por etapas más allá de lo
+que M13 diagnostica (por ejemplo, paralelizar etapas, cachear resultados entre llamadas, o
+rediseñar el motor por etapas mismo) queda fuera de esta ampliación si M17 mide que M13 no
+basta: esa decisión, de ocurrir, es de una ola posterior, del propietario, exactamente como
+ADR-117 ya lo dejó dicho para la disyuntiva de la que esta ola nace.
