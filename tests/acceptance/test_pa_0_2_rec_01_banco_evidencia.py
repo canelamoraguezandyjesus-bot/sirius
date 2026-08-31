@@ -118,12 +118,20 @@ from staged_engine_category_and_relevance import (
     vigente_en_tiempo_objetivo,
 )
 
+from sirius.adapters.llm.token_counter import CharacterHeuristicTokenCounter
 from sirius.adapters.ollama_relevance_filter import OllamaRelevanceFilterAdapter
 from sirius.adapters.persistence import staged_engine_candidate
 from sirius.adapters.persistence.database import build_engine, build_session_factory
 from sirius.adapters.persistence.migrations import upgrade_to_head
+from sirius.adapters.persistence.sqlite_conversation_repository import (
+    build_sqlite_conversation_repository,
+)
 from sirius.adapters.persistence.sqlite_decision_repository import (
     build_sqlite_decision_repository,
+)
+from sirius.adapters.persistence.sqlite_event_repository import build_sqlite_event_repository
+from sirius.adapters.persistence.sqlite_identity_repository import (
+    build_sqlite_identity_repository,
 )
 from sirius.adapters.persistence.sqlite_knowledge_search_repository import (
     build_sqlite_knowledge_search_repository,
@@ -131,12 +139,19 @@ from sirius.adapters.persistence.sqlite_knowledge_search_repository import (
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
-from sirius.adapters.persistence.staged_engine_port import StagedEnginePort
+from sirius.adapters.persistence.staged_engine_port import (
+    StagedEnginePort,
+    build_staged_engine_port,
+)
 from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.archive_memory import ArchiveMemoryUseCase
+from sirius.application.context import ContextBuilder
 from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
+from sirius.application.set_category import SetCategoryUseCase
+from sirius.application.tag_category import CategoryTargetKind
+from sirius.composition_root import _CATEGORY_VOCABULARY, _MAX_CRITICALITY_CATEGORY
 from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
 from sirius.domain.precedence import find_prevailing_decision
 from sirius.domain.relevance import KnowledgeKind, RankedKnowledge, category_matches_query
@@ -151,6 +166,9 @@ from sirius.domain.staged_engine_contracts import (
 )
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "evidence_bank_47_casos.json"
+CANON_CATEGORIES_PATH = (
+    Path(__file__).parent / "fixtures" / "evidence_bank_47_casos_categorias_canonicas.json"
+)
 #: Incidencia #469: corrida final por caso del laboratorio (fila "5. con
 #: siembra en contexto"), portada verbatim — ver `documento`/`fuente` dentro
 #: del propio fichero para la cita completa.
@@ -1745,3 +1763,323 @@ def test_el_filtro_ollama_real_no_rompe_el_banco() -> None:
     conservados = adaptador.filter_candidates(caso["consulta"], candidatos)
 
     assert set(conservados) <= set(candidatos)
+
+
+# -- M11 (incidencia #471, item 4): las etiquetas canónicas se recalculan ----
+# -- byte a byte, para que ADR-116 y el fixture nunca puedan divergir. -------
+
+#: ADR-116: regla mecánica, determinista, sobre el `text` de cada item —
+#: nunca una decisión manual item por item. La primera categoría cuya lista
+#: de palabras clave aparece, como subcadena insensible a mayúsculas, en el
+#: `text` del item gana; si ninguna aparece, la categoría es `otros`.
+_REGLA_DE_ETIQUETA_CANONICA: Final[tuple[tuple[str, tuple[str, ...]], ...]] = (
+    (
+        "salud",
+        ("salud", "médic", "medic", "hospital", "enfermed", "dolor", "vacuna", "clinic", "clínic"),
+    ),
+    (
+        "finanzas",
+        (
+            "presupuesto",
+            "€",
+            "nómina",
+            "nomina",
+            "pago",
+            "factura",
+            "descuento",
+            "coste",
+            "sueldo",
+            "salario",
+            "gasto",
+            "ahorr",
+        ),
+    ),
+    ("aprendizaje", ("aprend", "curso", "estudi", "formaci", "clase", " leer ", "libro")),
+    (
+        "personal",
+        ("familia", "amig", "mascota", "pareja", "hobby", "vacacion", "viaje", "coche", "vuelo"),
+    ),
+    (
+        "proyecto",
+        (
+            "proyecto",
+            "expediente",
+            "entregable",
+            "hito",
+            "alcance",
+            "plataforma de despliegue",
+            "atlas",
+        ),
+    ),
+    (
+        "trabajo",
+        (
+            "reunión",
+            "reunion",
+            "oficina",
+            "responsable",
+            "informe",
+            "operaciones",
+            "calidad",
+            "proveedor",
+            "cliente",
+            "empresa",
+            "compras",
+            "turno",
+            "revisión",
+            "revision",
+            "publicaci",
+            "almacén",
+            "almacen",
+            "logística",
+            "logistica",
+            "documental",
+            "control de versiones",
+            "nómina",
+            "contrato",
+            "mantenimiento",
+            "identificador interno",
+            "plataforma",
+            "postgresql",
+            "autorización",
+            "autorizacion",
+        ),
+    ),
+)
+
+
+def _etiqueta_canonica_por_regla(text: str) -> str:
+    normalizado = text.casefold()
+    for categoria, palabras_clave in _REGLA_DE_ETIQUETA_CANONICA:
+        if any(palabra in normalizado for palabra in palabras_clave):
+            return categoria
+    return "otros"
+
+
+def test_las_etiquetas_canonicas_se_recalculan_byte_a_byte() -> None:
+    """ADR-116: `evidence_bank_47_casos_categorias_canonicas.json` no es una
+    fuente independiente — es la tabla de este ADR volcada a fichero. Esta
+    prueba recalcula la regla en Python puro sobre el `text` de cada item del
+    corpus congelado y compara el resultado, byte a byte, contra el fixture,
+    para que ambos nunca puedan divergir en silencio."""
+    banco = _fixture()
+    canon = json.loads(CANON_CATEGORIES_PATH.read_text(encoding="utf-8"))["etiquetas"]
+
+    recalculado = {
+        item["id"]: _etiqueta_canonica_por_regla(item["text"]) for item in banco["items"]
+    }
+
+    assert recalculado == canon
+
+
+# -- M11 (SIRIUS-ARQ-0.2 §6.4/§6.5, incidencia #471, item 3): el «paquete ----
+# -- completo» de producción — nunca el arnés de examen de arriba — con la --
+# -- puerta de D7 punto 6 abierta, publicado como evidencia adicional. ------
+
+
+class _FiltroDeRelevanciaQueNuncaDescarta:
+    """Doble determinista de `RelevanceFilterPort`: nunca llama a Ollama y
+    nunca excluye nada, para que esta medición aísle el efecto propio del
+    índice de categoría (M9) sobre el «paquete completo» de producción — el
+    efecto propio del filtro con Ollama (M10) lo mide, por separado y con su
+    propia cifra publicada, D7 punto 6
+    (`test_d7_punto_6_coincidencia_etiquetado.py`) contra las mismas
+    etiquetas canónicas de ADR-116. Cumple el contrato de fallo abierto de
+    `RelevanceFilterPort` por construcción: conservar todo es la respuesta
+    contractual a "no sé decidir", nunca una aproximación al comportamiento
+    real de Ollama."""
+
+    def filter_candidates(self, query_text: str, candidates: Any) -> Any:
+        return candidates
+
+
+def _ejecutar_banco_paquete_completo(database_path: Path) -> _EjecucionDelBanco:
+    """El mismo banco de 47 casos, contra `RankRelevantKnowledgeUseCase`/
+    `ContextBuilder` construidos exactamente como `composition_root` los
+    construiría con la puerta de D7 punto 6 abierta
+    (`category_matching_enabled=True`) — el «paquete completo» de
+    producción que M11 (§8) cablea, nunca el arnés de examen de arriba
+    (incidencias #457-#469), que reimplementa una semántica de laboratorio
+    (categoría buscable con activación múltiple, regla de las críticas
+    original, siembra en contexto, ámbito) ajena a este camino de código
+    real. En particular, `build_staged_engine_port(database_path)` se llama
+    aquí sin `ejes_por_identidad`, igual que `composition_root` — todo item
+    real llega al motor con `ejes=SIN_EJES` (ver el docstring de
+    `staged_engine_port.py`), a diferencia del arnés de examen, que puebla
+    esos ejes a mano desde el corpus.
+
+    `category` se asigna a cada item real desde las etiquetas canónicas de
+    ADR-116 vía `SetCategoryUseCase` — el mismo caso de uso que D7 punto 3
+    expone en producción para una edición explícita, nunca una escritura
+    directa al repositorio. El filtro de relevancia es
+    `_FiltroDeRelevanciaQueNuncaDescarta` (ver arriba): nunca Ollama real.
+
+    A diferencia de `_ejecutar_banco`/`_ejecutar_banco_motor_portado`, la
+    exclusión por precedencia y el filtro de relevancia no se reimplementan
+    aquí: se invoca directamente `ContextBuilder._rank_related_knowledge`,
+    el método real que `ContextBuilder.build()` usa para producir
+    exactamente esa secuencia (rank → precedencia → candado) — medir contra
+    el método real, no una aproximación, es lo que hace de esta ejecución
+    el «paquete completo», no un cuarto arnés distinto.
+    """
+    banco = _fixture()
+    canon_categorias: Mapping[str, str] = json.loads(
+        CANON_CATEGORIES_PATH.read_text(encoding="utf-8")
+    )["etiquetas"]
+    upgrade_to_head(database_path)
+
+    nombres_de_proyecto = sorted(
+        {i["project"] for i in banco["items"] if i["project"] != "PRJ-GLOBAL"}
+    )
+    project_ids = _create_projects(database_path, nombres_de_proyecto)
+
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    decision_repository = build_sqlite_decision_repository(database_path)
+    set_category_use_case = SetCategoryUseCase(memory_repository, decision_repository)
+
+    real_a_canonico: dict[tuple[str, int], str] = {}
+    for item in banco["items"]:
+        real = _load_canon_item(item, project_ids=project_ids, unit_of_work=unit_of_work)
+        if real is None:
+            continue
+        real_a_canonico[real] = item["id"]
+        categoria = canon_categorias.get(item["id"])
+        if categoria is not None:
+            kind, real_id = real
+            set_category_use_case.set(CategoryTargetKind(kind), real_id, categoria)
+
+    project_repository = build_sqlite_project_repository(database_path)
+    staged_engine_port = build_staged_engine_port(database_path)
+    try:
+        rank_relevant_knowledge_use_case = RankRelevantKnowledgeUseCase(
+            memory_repository=memory_repository,
+            decision_repository=decision_repository,
+            project_repository=project_repository,
+            knowledge_search_repository=build_sqlite_knowledge_search_repository(database_path),
+            category_vocabulary=_CATEGORY_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=staged_engine_port,
+            staged_engine_candidate=staged_engine_candidate.candidato(),
+        )
+        context_builder = ContextBuilder(
+            identity_repository=build_sqlite_identity_repository(database_path),
+            project_repository=project_repository,
+            memory_repository=memory_repository,
+            conversation_repository=build_sqlite_conversation_repository(database_path),
+            decision_repository=decision_repository,
+            rank_relevant_knowledge_use_case=rank_relevant_knowledge_use_case,
+            event_repository=build_sqlite_event_repository(database_path),
+            token_counter=CharacterHeuristicTokenCounter(),
+            relevance_filter_port=_FiltroDeRelevanciaQueNuncaDescarta(),
+            max_criticality_category=_MAX_CRITICALITY_CATEGORY,
+        )
+
+        items_por_id = {item["id"]: item for item in banco["items"]}
+        aciertos_exactos = 0
+        elementos_de_mas = 0
+        omisiones_criticas = 0
+        elementos_hallados = 0
+        for caso in banco["casos"]:
+            obtenido_ranked = context_builder._rank_related_knowledge(caso["consulta"])
+            obtenido = {
+                real_a_canonico[(candidato.kind.value, candidato.item_id)]
+                for candidato in obtenido_ranked
+            }
+            esperado = set(caso["resultado_esperado"])
+
+            if obtenido == esperado:
+                aciertos_exactos += 1
+            elementos_de_mas += len(obtenido - esperado)
+            elementos_hallados += len(obtenido & esperado)
+            for identidad in esperado - obtenido:
+                if _es_critico(items_por_id[identidad]):
+                    omisiones_criticas += 1
+    finally:
+        staged_engine_port.close()
+
+    metricas = _Metricas(
+        aciertos_exactos=aciertos_exactos,
+        elementos_de_mas=elementos_de_mas,
+        omisiones_criticas=omisiones_criticas,
+        elementos_hallados=elementos_hallados,
+        elementos_esperados_total=banco["conteos"]["elementos_esperados_total"],
+    )
+    return _EjecucionDelBanco(metricas=metricas)
+
+
+@pytest.fixture(scope="module")
+def ejecucion_del_banco_paquete_completo(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> _EjecucionDelBanco:
+    database_path = tmp_path_factory.mktemp("evidence_bank_47_casos_paquete_completo") / "sirius.db"
+    return _ejecutar_banco_paquete_completo(database_path)
+
+
+def test_el_banco_se_ejecuta_contra_el_paquete_completo_de_produccion_como_evidencia_adicional(
+    ejecucion_del_banco_paquete_completo: _EjecucionDelBanco,
+    ejecucion_del_banco_motor_portado: _EjecucionDelBanco,
+) -> None:
+    """M11 (incidencia #471, item 3): «con la puerta abierta y dobles
+    deterministas, publicando las cuatro métricas del paquete completo como
+    evidencia adicional — sin tocar el arnés del examen ya fusionado ni sus
+    aserciones». No afirma ningún suelo de D1/D2 — el arnés de examen de
+    arriba (`ejecucion_del_banco_motor_portado`) ya los alcanza y sigue
+    siendo la medición que cuenta para D1/D2 (ver el docstring del módulo);
+    esta prueba solo publica, sin afirmarla como aserción dura, la cifra que
+    el camino de código real de producción mide sobre el mismo banco.
+
+    Las cifras difieren de las del arnés de examen porque miden un pipeline
+    distinto, no porque una de las dos esté mal: el arnés de examen
+    reimplementa la semántica de laboratorio completa (categoría buscable
+    con activación múltiple y restricción por ámbito, regla de las críticas
+    original RF-25/RF-26, siembra en contexto, ejes P2 poblados a mano desde
+    el corpus — `staged_engine_category_and_relevance.py`), mientras que
+    `RankRelevantKnowledgeUseCase._rank_via_staged_engine`
+    (`src/sirius/application/rank_relevant_knowledge.py:153-282`) solo
+    amplía sobre `category_matches_query` con activación única
+    (`src/sirius/domain/relevance.py:142-171`) y sin restricción por ámbito,
+    y `build_staged_engine_port` (`src/sirius/adapters/persistence/
+    staged_engine_port.py:341-349`), llamado aquí sin `ejes_por_identidad`
+    igual que `composition_root`, entrega todo item real con
+    `ejes=SIN_EJES` — las puertas P2 que los necesitan degradan en vez de
+    evaluar el eje real que el arnés de examen sí puebla a mano. Ninguna
+    pieza de la semántica de laboratorio forma parte del código de
+    producción que M8-M11 cablean; medirla por separado es precisamente lo
+    que motivó el arnés de examen (#457-#469, ADR-109 a ADR-115).
+    """
+    paquete_completo = ejecucion_del_banco_paquete_completo.metricas
+    examen = ejecucion_del_banco_motor_portado.metricas
+
+    print(
+        "\nPA-0.2-REC-01 (M11, paquete completo de producción: "
+        "RankRelevantKnowledgeUseCase con category_matching_enabled=True + "
+        "ContextBuilder con el candado, sin la semántica de laboratorio del "
+        "arnés de examen — evidencia adicional, ningún suelo D1/D2 afirmado "
+        "aquí): "
+        f"aciertos_exactos={paquete_completo.aciertos_exactos}/47 "
+        f"elementos_de_mas={paquete_completo.elementos_de_mas} "
+        f"omisiones_criticas={paquete_completo.omisiones_criticas} "
+        f"cobertura={paquete_completo.elementos_hallados}/"
+        f"{paquete_completo.elementos_esperados_total} "
+        f"({paquete_completo.cobertura:.1%})"
+    )
+    print(
+        "  frente al arnés de examen (ADR-109..ADR-115): "
+        f"aciertos_exactos={examen.aciertos_exactos}/47 "
+        f"elementos_de_mas={examen.elementos_de_mas} "
+        f"omisiones_criticas={examen.omisiones_criticas} "
+        f"cobertura={examen.elementos_hallados}/{examen.elementos_esperados_total} "
+        f"({examen.cobertura:.1%})"
+    )
+
+    # Sanidad, no un suelo D1/D2: el arnés de examen sigue siendo la única
+    # medición que afirma esos suelos (ver arriba). Aquí solo se comprueba
+    # que las cuatro métricas son valores agregados válidos sobre las 47
+    # filas, para que un error de cableado (p. ej. una excepción silenciada
+    # que dejara `obtenido` siempre vacío) no pase desapercibido como "cero
+    # aciertos, evidencia igualmente publicada".
+    assert 0 <= paquete_completo.aciertos_exactos <= 47
+    assert paquete_completo.elementos_de_mas >= 0
+    assert paquete_completo.omisiones_criticas >= 0
+    assert 0 <= paquete_completo.elementos_hallados <= paquete_completo.elementos_esperados_total

@@ -2572,14 +2572,21 @@ class MainWindow(QMainWindow):
             )
             return
 
-        data: dict[str, Any] = {
-            "user_name": name,
-            "data_path": data_path,
-            "llm_provider": self.provider_combo.currentText(),
-            "openai_model": self.model_input.text().strip(),
-            "openai_max_output_tokens": max_output_tokens,
-            "openai_monthly_budget_usd": monthly_budget_usd,
-        }
+        # M11 (SIRIUS-ARQ-0.2 §6.3): parte de lo ya persistido en vez de
+        # construir el diccionario desde cero, para no perder una clave ajena
+        # a esta vista — p. ej. `category_matching_enabled` — que un guardado
+        # anterior, no hecho desde aquí, ya hubiera activado.
+        data: dict[str, Any] = dict(load_settings())
+        data.update(
+            {
+                "user_name": name,
+                "data_path": data_path,
+                "llm_provider": self.provider_combo.currentText(),
+                "openai_model": self.model_input.text().strip(),
+                "openai_max_output_tokens": max_output_tokens,
+                "openai_monthly_budget_usd": monthly_budget_usd,
+            }
+        )
         save_settings(data)
 
         self._show_information(
