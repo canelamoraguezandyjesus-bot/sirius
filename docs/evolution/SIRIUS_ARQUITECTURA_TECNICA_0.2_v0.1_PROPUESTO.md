@@ -1542,7 +1542,7 @@ Definición de Producto de esta misma versión
 M11 (incidencias #471/#473, ADR-117, §8-M11 arriba) dejó completamente cableado el
 circuito de la puerta `category_matching_enabled` —de `settings.json` a
 `RankRelevantKnowledgeUseCase`/`ContextBuilder`, vía `composition_root`
-(`src/sirius/composition_root.py:455-482`, `:602`)— pero con su criterio de suelo
+(`src/sirius/composition_root.py:455-482`)— pero con su criterio de suelo
 explícitamente **NO aprobado**. Verificado contra `main` en el momento de esta
 incidencia:
 
@@ -1698,9 +1698,14 @@ la siembra (fila 3), y la fila final de ADR-115 que alcanza el suelo D1 completo
 aplica G8/G12 sobre `obtenido_por_el_motor | categoria | siembra` — también con la siembra
 dentro del conjunto. La fila 2 de ADR-113 (categoría + RF-25/RF-26) es una línea base
 parcial sin siembra, no una medición de las cuatro piezas: le faltan las otras dos,
-restricción de ámbito y G8/G12. Mide 27/47, 102 elementos de más, 4 omisiones críticas,
-59/81 de cobertura — por debajo del suelo D1 en las cuatro métricas, no en tres; el
-paquete completo de cuatro piezas no tiene medición propia hasta M16. Si estas cuatro
+restricción de ámbito y G8/G12. Mide 27/47, 102 elementos de más (sobre las 47 filas
+sin la salvedad de `casos_con_contenido`; ADR-115:298-307 fija el suelo D1 de
+`elementos_de_mas` ≤21 solo sobre los 31 `casos_con_contenido`, y la fila 2 de ADR-113
+no publica ese subtotal), 4 omisiones críticas, 59/81 de cobertura — por debajo del
+suelo D1 en tres métricas confirmadas (aciertos_exactos, omisiones_criticas,
+cobertura); la cuarta, `elementos_de_mas`, queda no determinada bajo la población que
+fija su propio umbral publicado; el paquete completo de cuatro piezas no tiene
+medición propia hasta M16. Si estas cuatro
 piezas bastan por sí solas es, por tanto, una pregunta abierta, no una cifra ya
 establecida: M16 la mide por primera vez sobre el camino real (§11.5) y M17 la evalúa
 contra el suelo D1, registrando el resultado real —alcanzado o no— sin maquillarlo.
