@@ -379,3 +379,49 @@ def test_el_prompt_cuyo_workflow_no_prepara_el_entorno_lo_advierte(
     assert posicion_propiedad < posicion_ejemplos, (
         f"{prompt_path.name} pone los ejemplos antes que la propiedad que los explica"
     )
+
+
+# --------------------------------------------------------------------------- #
+# Dirección del propietario (31-08-2026): la revisión es UNA pasada exhaustiva.
+# El goteo — un hallazgo por ronda sobre texto que llevaba idéntico desde la
+# primera — convierte cada gota en un ciclo entero de máquina.
+# --------------------------------------------------------------------------- #
+
+
+def _prompts_de_revision_mas_nuevos() -> list[Path]:
+    """Un fichero por perfil: el de la versión @N más alta del carril revisión.
+
+    Se resuelve contra el manifiesto (H-28) y no contra nombres fijos: al
+    registrar rol@N+1 el guardián sigue vigilando el texto que de verdad se
+    entrega, no una copia vieja."""
+    import json
+
+    manifiesto = json.loads((PROMPTS_DIR / "manifiesto.json").read_text(encoding="utf-8"))
+    mas_nuevas: dict[str, tuple[int, Path]] = {}
+    for clave, fila in manifiesto["carriles"]["revision"].items():
+        rol, _, version = clave.partition("@")
+        candidata = (int(version), REPO_ROOT / fila["fichero"])
+        if rol not in mas_nuevas or candidata[0] > mas_nuevas[rol][0]:
+            mas_nuevas[rol] = candidata
+    return sorted({ruta for _, ruta in mas_nuevas.values()})
+
+
+@pytest.mark.parametrize("prompt_path", _prompts_de_revision_mas_nuevos(), ids=lambda p: p.name)
+def test_todo_revisor_manda_una_pasada_exhaustiva(prompt_path: Path) -> None:
+    nombre = prompt_path.name
+    texto = prompt_path.read_text(encoding="utf-8")
+    assert "EXHAUSTIVA" in texto, (
+        f"{nombre} ya no manda la pasada exhaustiva: el goteo de un hallazgo "
+        "por ronda volvería, y cada gota cuesta un ciclo entero"
+    )
+    assert "goteo" in texto, (
+        f"{nombre} ya no exige que un hallazgo tardío declare su origen "
+        "(código nuevo de la corrección, regresión, o goteo del revisor)"
+    )
+
+
+def test_agents_declara_la_politica_de_revision() -> None:
+    """Codex lee AGENTS.md: la política tiene que vivir también ahí."""
+    texto = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    assert "Política de revisión" in texto
+    assert "EXHAUSTIVA" in texto

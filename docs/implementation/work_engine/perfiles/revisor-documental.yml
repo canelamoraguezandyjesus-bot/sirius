@@ -1,7 +1,7 @@
 # AgentProfile versionado: revisor documental independiente de Sirius
 # (arquitectura §5.1).
 #
-# Procedimiento real en scripts/automation/prompts/revisor-documental.md.
+# Procedimiento real en scripts/automation/prompts/revisor-documental-v2.md.
 # Perfil de solo lectura del repositorio, igual que `reviewer.yml`: ninguna
 # capacidad de escritura sobre el árbol versionado, ninguna de red. El único
 # ámbito de escritura que declara es `veredicto` -acotado al canal que da el
@@ -13,7 +13,7 @@
 # (incidencia #202, ronda 4, CODEX-001; incidencia #247, bloque C3b).
 
 ref: revisor-documental
-version: 1
+version: 2
 
 mision: >
   Revisar de forma independiente una Pull Request documental ya existente de
@@ -22,7 +22,7 @@ mision: >
   (REVIEW_APPROVED o CHANGES_REQUESTED con observaciones concretas) sin
   modificar documentación, código ni pruebas.
 
-procedimiento_ref: scripts/automation/prompts/revisor-documental.md
+procedimiento_ref: scripts/automation/prompts/revisor-documental-v2.md
 
 capacidades:
   - incidencia.leer

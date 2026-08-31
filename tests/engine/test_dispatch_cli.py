@@ -268,7 +268,7 @@ def test_una_auditoria_declara_el_perfil_auditor_y_no_el_implementador(tmp_path:
     assert codigo == 0, texto
     assert "clase «auditoria»" in texto
     assert "Perfil: auditor@1" in texto
-    assert "Perfil: implementer@1" not in texto
+    assert "Perfil: implementer@" not in texto
 
 
 def test_una_programacion_sigue_declarando_el_perfil_implementador(tmp_path: Path) -> None:
@@ -278,7 +278,7 @@ def test_una_programacion_sigue_declarando_el_perfil_implementador(tmp_path: Pat
 
     assert codigo == 0, texto
     assert "clase «programacion»" in texto
-    assert "Perfil: implementer@1" in texto
+    assert "Perfil: implementer@2" in texto
 
 
 def test_documenta_despacha_con_la_etiqueta_de_activacion_y_el_perfil_documentalista(
@@ -318,7 +318,7 @@ def test_documenta_despacha_con_la_etiqueta_de_activacion_y_el_perfil_documental
     verbos = [nombre for nombre, _ in llamadas]
     assert verbos == ["crear_incidencia", "aplicar_etiqueta"]
     _, args_creacion = llamadas[0]
-    assert "Perfil: documentalista@1" in args_creacion["cuerpo"]
+    assert "Perfil: documentalista@2" in args_creacion["cuerpo"]
     _, args_etiqueta = llamadas[1]
     assert args_etiqueta["etiqueta"] == ETIQUETA_ACTIVACION
 
@@ -368,6 +368,6 @@ def test_investiga_despacha_con_la_etiqueta_de_activacion_y_el_perfil_investigad
     verbos = [nombre for nombre, _ in llamadas]
     assert verbos == ["crear_incidencia", "aplicar_etiqueta"]
     _, args_creacion = llamadas[0]
-    assert "Perfil: investigador@1" in args_creacion["cuerpo"]
+    assert "Perfil: investigador@2" in args_creacion["cuerpo"]
     _, args_etiqueta = llamadas[1]
     assert args_etiqueta["etiqueta"] == ETIQUETA_ACTIVACION

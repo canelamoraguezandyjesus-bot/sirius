@@ -76,6 +76,15 @@ Cuatro avisos que ya han costado tiempo:
 - No introduzcas disparador API, eventos de GitHub, auto-fix, merge automático, coordinación de agentes ni otro nivel de automatización antes de la puerta y aprobación expresa definidas en `AUTOMATION_OPERATING_CONTRACT.md`.
 - No pidas repetir una acción ya realizada. Antes de indicar el siguiente paso, verifica el estado real y la fase vigente.
 
+## Política de revisión (revisores automáticos)
+
+- Una revisión es una pasada EXHAUSTIVA: reporta en esta ronda TODOS los
+  hallazgos que el diff contiene; no guardes ninguno para una ronda futura.
+- En rondas posteriores a la primera, cada hallazgo nuevo debe nacer del
+  código introducido por la corrección anterior o ser una regresión suya; un
+  hallazgo sobre líneas ya idénticas en la ronda previa se reporta igualmente,
+  declarando que llega tarde por goteo del revisor.
+
 ## Criterio de parada
 
 Detente y pide decisión cuando una tarea implique:

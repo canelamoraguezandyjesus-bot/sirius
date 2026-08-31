@@ -8,7 +8,7 @@
 # `.github/workflows/implement-sirius-work.yml` ya hace hoy (A4-P2).
 
 ref: implementer
-version: 1
+version: 2
 
 mision: >
   Implementar de forma completa y autónoma una única incidencia de trabajo

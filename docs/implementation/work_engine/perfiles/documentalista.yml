@@ -9,7 +9,7 @@
 # (incidencia #247, bloque C3b).
 
 ref: documentalista
-version: 1
+version: 2
 
 mision: >
   Implementar de forma completa y autónoma una única incidencia de trabajo
