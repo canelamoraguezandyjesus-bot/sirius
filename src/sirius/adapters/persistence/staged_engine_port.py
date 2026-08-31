@@ -222,31 +222,34 @@ class StagedEnginePort:
 
     def por_clave_exacta(self, claves: Sequence[str]) -> tuple[ItemCanonico, ...]:
         """``E1``: coincidencia literal sobre claves normalizadas, en una
-        sola consulta por lote (``IN (...)``) en vez de dos por clave
-        (ADR-120/M13): el número de consultas deja de crecer con el número
-        de claves de una llamada."""
+        sola sentencia SQL por tabla (``UNION ALL`` de una subconsulta por
+        clave, cada una con su propio ``ORDER BY id LIMIT``) en vez de dos
+        consultas por clave (ADR-120/M13): el número de sentencias deja de
+        crecer con el número de claves de una llamada, y cada clave conserva
+        su propia cota de filas (``LIMITE_POR_CONSULTA``) sin que el volumen
+        de coincidencias de una clave pueda desplazar las de otra dentro de
+        la misma llamada (``subject_key`` no es único: CLAUDE-M13-001/
+        CODEX-001)."""
         utiles = _acotar(claves)
         if not utiles:
             return ()
         with self._scope() as session:
             encontrados: list[tuple[str, int]] = []
-            marcas = ",".join(f":c{i}" for i in range(len(utiles)))
-            parametros = {f"c{i}": valor for i, valor in enumerate(utiles)}
-            cota = LIMITE_POR_CONSULTA * len(utiles)
-            for fila in session.execute(
-                text(
-                    f"SELECT id FROM memories WHERE subject_key IN ({marcas}) "
-                    "ORDER BY id LIMIT :cota"
-                ),
-                {**parametros, "cota": cota},
-            ).all():
+            parametros: dict[str, str | int] = {f"c{i}": valor for i, valor in enumerate(utiles)}
+            parametros["cota"] = LIMITE_POR_CONSULTA
+            consulta_memorias = " UNION ALL ".join(
+                f"SELECT id FROM (SELECT id FROM memories WHERE subject_key = :c{i} "
+                "ORDER BY id LIMIT :cota)"
+                for i in range(len(utiles))
+            )
+            for fila in session.execute(text(consulta_memorias), parametros).all():
                 encontrados.append(("memory", int(fila[0])))
-            for fila in session.execute(
-                text(
-                    f"SELECT id FROM decisions WHERE subject IN ({marcas}) ORDER BY id LIMIT :cota"
-                ),
-                {**parametros, "cota": cota},
-            ).all():
+            consulta_decisiones = " UNION ALL ".join(
+                f"SELECT id FROM (SELECT id FROM decisions WHERE subject = :c{i} "
+                "ORDER BY id LIMIT :cota)"
+                for i in range(len(utiles))
+            )
+            for fila in session.execute(text(consulta_decisiones), parametros).all():
                 encontrados.append(("decision", int(fila[0])))
             return tuple(self._por_ids_mixtos(session, encontrados))
 
@@ -274,10 +277,14 @@ class StagedEnginePort:
 
     def por_prefijo_de_sujeto(self, prefijos: Sequence[str]) -> tuple[ItemCanonico, ...]:
         """``E3``: familia de sujetos por prefijo estructural, dirigida, en
-        una sola consulta por lote (``OR`` de ``LIKE`` encadenados) en vez de
-        dos por prefijo (ADR-120/M13): ``IN (...)`` no expresa coincidencia
-        de prefijo, así que el patrón por lote aquí es el ``OR`` encadenado
-        que §11.4 punto 1 autoriza como alternativa."""
+        una sola sentencia SQL por tabla (``UNION ALL`` de una subconsulta
+        por prefijo, cada una con su propio ``ORDER BY id LIMIT``) en vez de
+        dos consultas por prefijo (ADR-120/M13): el número de sentencias deja
+        de crecer con el número de prefijos de una llamada, y cada prefijo
+        conserva su propia cota de filas (``LIMITE_POR_PREFIJO``) sin que el
+        volumen de coincidencias de un prefijo pueda desplazar las de otro
+        dentro de la misma llamada (``subject_key``/``subject`` no son
+        únicos: CLAUDE-M13-001/CODEX-001)."""
         # Un prefijo de una o dos letras seleccionaria media base: no es una
         # relacion, es un barrido con otro nombre.
         utiles = [prefijo for prefijo in _acotar(prefijos) if len(prefijo) >= 3]
@@ -285,21 +292,23 @@ class StagedEnginePort:
             return ()
         with self._scope() as session:
             encontrados: list[tuple[str, int]] = []
-            condicion = " OR ".join(f"subject_key LIKE :p{i}" for i in range(len(utiles)))
-            condicion_decisiones = " OR ".join(f"subject LIKE :p{i}" for i in range(len(utiles)))
-            parametros = {f"p{i}": f"{prefijo}%" for i, prefijo in enumerate(utiles)}
-            cota = LIMITE_POR_PREFIJO * len(utiles)
-            for fila in session.execute(
-                text(f"SELECT id FROM memories WHERE {condicion} ORDER BY id LIMIT :cota"),
-                {**parametros, "cota": cota},
-            ).all():
+            parametros: dict[str, str | int] = {
+                f"p{i}": f"{prefijo}%" for i, prefijo in enumerate(utiles)
+            }
+            parametros["cota"] = LIMITE_POR_PREFIJO
+            consulta_memorias = " UNION ALL ".join(
+                f"SELECT id FROM (SELECT id FROM memories WHERE subject_key LIKE :p{i} "
+                "ORDER BY id LIMIT :cota)"
+                for i in range(len(utiles))
+            )
+            for fila in session.execute(text(consulta_memorias), parametros).all():
                 encontrados.append(("memory", int(fila[0])))
-            for fila in session.execute(
-                text(
-                    f"SELECT id FROM decisions WHERE {condicion_decisiones} ORDER BY id LIMIT :cota"
-                ),
-                {**parametros, "cota": cota},
-            ).all():
+            consulta_decisiones = " UNION ALL ".join(
+                f"SELECT id FROM (SELECT id FROM decisions WHERE subject LIKE :p{i} "
+                "ORDER BY id LIMIT :cota)"
+                for i in range(len(utiles))
+            )
+            for fila in session.execute(text(consulta_decisiones), parametros).all():
                 encontrados.append(("decision", int(fila[0])))
             return tuple(self._por_ids_mixtos(session, encontrados))
 
