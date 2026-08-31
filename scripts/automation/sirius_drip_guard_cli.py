@@ -137,7 +137,19 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _escribir_sin_anotar(observations: list[object], output: str) -> int:
-    Path(output).write_text(json.dumps(observations, ensure_ascii=False), encoding="utf-8")
+    # `posible_goteo` está reservada a este guardián (ver docstring de
+    # `annotate_observations` en `drip_guard.py`): incluso cuando no se pudo
+    # evaluar ninguna observación -historial ilegible, JSON corrupto- hay que
+    # retirar cualquier valor ajeno que ya trajera la entrada, para que
+    # `sirius_apply_verdict.sh` nunca la lea como un aviso propio del
+    # guardián que en realidad nadie emitió.
+    limpias = [
+        {clave: valor for clave, valor in observation.items() if clave != "posible_goteo"}
+        if isinstance(observation, dict)
+        else observation
+        for observation in observations
+    ]
+    Path(output).write_text(json.dumps(limpias, ensure_ascii=False), encoding="utf-8")
     return 0
 
 

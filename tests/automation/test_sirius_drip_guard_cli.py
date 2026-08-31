@@ -274,3 +274,41 @@ def test_historial_ilegible_publica_las_observaciones_sin_anotar(
     assert codigo == 0
     anotadas = json.loads(output.read_text(encoding="utf-8"))
     assert anotadas == [_observation()]
+
+
+def test_historial_ilegible_retira_marca_ajena_de_la_entrada(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Hallazgo Codex (incidencia #501, ronda 3): la ruta de fallback por
+    # historial ilegible escribía las observaciones de entrada tal cual, así
+    # que una clave `posible_goteo` ajena que ya trajera la observación (modo
+    # solo-Claude) se colaba en la salida y `sirius_apply_verdict.sh` la leía
+    # como si el guardián la hubiera marcado, sin haber evaluado nada.
+    _instalar_gh_stub(tmp_path, monkeypatch, respuesta='{"files": []}')
+    observation = _observation()
+    observation["posible_goteo"] = "inventado"
+    observations = tmp_path / "observations.json"
+    _write_json(observations, [observation])
+    output = tmp_path / "output.json"
+
+    codigo = _module().main(
+        [
+            "--repo",
+            "owner/repo",
+            "--comments-file",
+            str(tmp_path / "no-existe.txt"),
+            "--round",
+            "2",
+            "--head",
+            HEAD2,
+            "--observations",
+            str(observations),
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert codigo == 0
+    anotadas = json.loads(output.read_text(encoding="utf-8"))
+    assert anotadas == [_observation()]
+    assert "posible_goteo" not in anotadas[0]
