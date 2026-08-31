@@ -649,6 +649,107 @@ def test_reviewer_changes_requested_increments_the_round_number(tmp_path: Path) 
     assert "<!-- sirius-round:3 -->" in _comments(env)
 
 
+def test_reviewer_changes_requested_publishes_family_repeated_notice(tmp_path: Path) -> None:
+    # ADR-078 (incidencia #277) construyó y midió el detector de familia
+    # repetida, pero sin llamante: nada del ciclo lo invocaba (incidencia
+    # #495). Antes de cablearlo, esta prueba falla porque "AVISO_FAMILIA_
+    # REPETIDA" nunca aparece en ningún comentario publicado, sin importar
+    # cuántas rondas consecutivas toquen el mismo archivo.
+    env = _setup(tmp_path)
+    ronda_1 = (
+        "<!-- sirius-round:1 -->\n\n## RONDA_HALLAZGOS\n```json\n"
+        '{"round": 1, "head": "h1", "findings": '
+        '[{"fingerprint": "f1", "severity": "P2", "source": "CODEX", "file": "src/x.py"}], '
+        '"pending": 1, "severity_total": 2}\n```\n'
+    )
+    ronda_2 = (
+        "<!-- sirius-round:2 -->\n\n## RONDA_HALLAZGOS\n```json\n"
+        '{"round": 2, "head": "h2", "findings": '
+        '[{"fingerprint": "f2", "severity": "P2", "source": "CODEX", "file": "src/x.py"}], '
+        '"pending": 1, "severity_total": 2}\n```\n'
+    )
+    _seed_issue(
+        env,
+        ["sirius:reviewing"],
+        comments=(
+            "QUALITY_SUCCESS\n- Head SHA: `c4d482267d9a`\n"
+            "PR abierta: https://github.com/owner/repo/pull/9\n" + ronda_1 + ronda_2
+        ),
+    )
+    _seed_pr(env, 9, head="c4d482267d9a")
+    vf = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "CHANGES_REQUESTED",
+            "summary": "sigue fallando lo mismo",
+            "reviewed_head_sha": "c4d482267d9a",
+            "observations": [
+                {
+                    "id": "CODEX-003",
+                    "severidad": "P2",
+                    "archivo": "src/x.py:42",
+                    "problema": "sigue sin validar la entrada",
+                    "criterio_esperado": "debe validar",
+                    "prueba": "test_x_invalid",
+                    "limites_correccion": "solo src/x.py",
+                }
+            ],
+        },
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    comments = _comments(env)
+    assert "<!-- sirius-round:3 -->" in comments
+    assert "AVISO_FAMILIA_REPETIDA" in comments
+    aviso = comments.split("AVISO_FAMILIA_REPETIDA", 1)[1].split("RONDA_HALLAZGOS", 1)[0]
+    assert "src/x.py" in aviso
+    assert "rondas 1-3" in aviso
+    # Es puramente informativo (requisito (b) de la incidencia #495): la
+    # transición sigue siendo exactamente la misma que sin el aviso.
+    assert "sirius:repair-requested" in _labels(env)
+    assert "sirius:reviewing" not in _labels(env)
+
+
+def test_reviewer_changes_requested_without_three_consecutive_rounds_has_no_family_notice(
+    tmp_path: Path,
+) -> None:
+    # Caso normal declarado en el requisito 3 de la incidencia #277: corregir
+    # un archivo y que la revisión lo mire una vez más no es una familia
+    # repetida, así que el aviso no debe aparecer con una sola ronda previa.
+    env = _setup(tmp_path)
+    _seed_issue(
+        env,
+        ["sirius:reviewing"],
+        comments=(
+            "QUALITY_SUCCESS\n- Head SHA: `c4d482267d9a`\n"
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+        ),
+    )
+    _seed_pr(env, 9, head="c4d482267d9a")
+    vf = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "CHANGES_REQUESTED",
+            "summary": "hay defectos",
+            "reviewed_head_sha": "c4d482267d9a",
+            "observations": [
+                {
+                    "id": "R1",
+                    "severidad": "alta",
+                    "archivo": "src/x.py",
+                    "problema": "no valida entrada",
+                    "criterio_esperado": "debe validar",
+                    "prueba": "test_x_invalid",
+                    "limites_correccion": "solo src/x.py",
+                }
+            ],
+        },
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "AVISO_FAMILIA_REPETIDA" not in _comments(env)
+
+
 def test_reviewer_changes_requested_is_idempotent(tmp_path: Path) -> None:
     env = _setup(tmp_path)
     _seed_issue(

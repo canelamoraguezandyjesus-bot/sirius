@@ -91,6 +91,58 @@ severity_weight = _round_history.severity_weight
 _normalize_text = _round_history._normalize_text
 _normalize_location = _round_history._normalize_location
 
+#: Detector de familia repetida (ADR-078, incidencia #277): construido y
+#: medido, pero sin llamante hasta esta incidencia (#495, informe de la mina
+#: `docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-08.md` §7). Se carga
+#: por ruta, igual que ``round_history.py`` arriba y por el mismo motivo: este
+#: script corre con el ``python3`` del sistema, sin el proyecto instalado.
+#:
+#: A diferencia de ``round_history.py``, ``round_family_detector.py`` SÍ hace
+#: ``from sirius_engine.round_history import _normalize_location`` -es un
+#: módulo normal del paquete, pensado para instalarse-, y esa importación
+#: fallaría con ``ModuleNotFoundError`` bajo un intérprete sin el paquete
+#: instalado. En vez de tocar su interfaz (el objetivo de la incidencia #495
+#: pide no hacerlo salvo que sea imprescindible), se registra en
+#: ``sys.modules`` un paquete ``sirius_engine`` mínimo con su submódulo
+#: ``round_history`` ya apuntando al módulo cargado por ruta arriba, ANTES de
+#: ejecutar el archivo: el import de ``round_family_detector.py`` encuentra el
+#: nombre completo ya resuelto en ``sys.modules`` y nunca toca el sistema de
+#: importación real. Verificado bajo el ``python3`` desnudo del runner en
+#: ``test_cli_family_check_runs_under_the_bare_system_python_without_the_project_installed``.
+_RUTA_FAMILY_DETECTOR = (
+    Path(__file__).resolve().parents[2] / "src" / "sirius_engine" / "round_family_detector.py"
+)
+
+
+def _cargar_round_family_detector() -> ModuleType:
+    paquete_falso = sys.modules.get("sirius_engine")
+    if paquete_falso is None:
+        paquete_falso = ModuleType("sirius_engine")
+        paquete_falso.__path__ = []  # type: ignore[attr-defined]
+        sys.modules["sirius_engine"] = paquete_falso
+    sys.modules["sirius_engine.round_history"] = _round_history
+    paquete_falso.round_history = _round_history  # type: ignore[attr-defined]
+
+    ruta = _RUTA_FAMILY_DETECTOR
+    spec = importlib.util.spec_from_file_location("sirius_round_family_detector", ruta)
+    if spec is None or spec.loader is None:  # pragma: no cover - defensivo
+        raise ImportError(f"No se pudo cargar el módulo compartido en {ruta}")
+    modulo = importlib.util.module_from_spec(spec)
+    # Registrado ANTES de ejecutar, con su propio nombre: el módulo declara
+    # ``@dataclass(frozen=True, slots=True)``, y ``dataclasses`` resuelve sus
+    # anotaciones buscando ``sys.modules[cls.__module__]`` mientras la clase se
+    # procesa. Sin este registro previo, la búsqueda encuentra ``None`` y la
+    # carga falla con ``AttributeError`` antes de llegar a la primera línea
+    # útil del módulo -``round_history.py``, cargado igual arriba, no lo
+    # necesita porque no define ninguna dataclass-.
+    sys.modules[spec.name] = modulo
+    spec.loader.exec_module(modulo)
+    return modulo
+
+
+_round_family_detector = _cargar_round_family_detector()
+detectar_familia_repetida = _round_family_detector.detectar_familia_repetida
+
 
 # Intentos consecutivos de corrección motivados por un fallo de Quality, sin un
 # Quality en verde de por medio, antes de pasar a decisión humana. Tres da
@@ -396,6 +448,45 @@ def cmd_decide(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_family_check(args: argparse.Namespace) -> int:
+    """Aviso informativo de familia repetida (ADR-078) sobre un historial ya leído.
+
+    ``comments_file`` es responsabilidad de quien invoca (incidencia #495,
+    mismo contrato que ``sirius-familia-repetida``): el historial de
+    comentarios de confianza, del más antiguo al más reciente, incluyendo YA
+    la ronda que se está publicando -este comando no llama a ``gh`` ni
+    conoce la ronda actual por sí mismo-.
+
+    Nunca falla de forma que bloquee al llamador (requisito (b) de la
+    incidencia #495: este aviso informa, no decide): un historial ilegible se
+    publica como ``hay_familia_repetida: false`` con el motivo en ``error``,
+    en vez de como código de salida distinto de 0.
+    """
+    try:
+        with open(args.comments_file, encoding="utf-8") as handle:
+            text = handle.read()
+    except OSError as exc:
+        result: dict[str, Any] = {
+            "hay_familia_repetida": False,
+            "evidencias": [],
+            "error": f"No se pudo leer el historial ({exc}).",
+        }
+    else:
+        vigente = history_after_last_resume(text)
+        deteccion = detectar_familia_repetida(parse_round_records(vigente))
+        result = {
+            "hay_familia_repetida": deteccion.hay_familia_repetida,
+            "evidencias": [
+                {"archivo": e.archivo, "rondas": list(e.rondas), "detalle": e.detalle}
+                for e in deteccion.evidencias
+            ],
+        }
+    with open(args.output, "w", encoding="utf-8") as handle:
+        json.dump(result, handle, ensure_ascii=False, indent=2)
+        handle.write("\n")
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -415,6 +506,20 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     decide_cmd.add_argument("--output", required=True, help="archivo JSON con la decisión")
     decide_cmd.set_defaults(func=cmd_decide)
+
+    family_check = subparsers.add_parser(
+        "family-check", help="aviso informativo de familia repetida (ADR-078)"
+    )
+    family_check.add_argument(
+        "--comments-file",
+        required=True,
+        help=(
+            "archivo con los comentarios de confianza de la incidencia, del más antiguo "
+            "al más reciente, incluyendo ya la ronda que se está publicando"
+        ),
+    )
+    family_check.add_argument("--output", required=True, help="archivo JSON con el aviso")
+    family_check.set_defaults(func=cmd_family_check)
     return parser
 
 

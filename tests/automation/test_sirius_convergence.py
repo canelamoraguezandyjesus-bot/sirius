@@ -586,6 +586,78 @@ def test_cli_decide_blocks_when_history_is_unreadable(tmp_path: Path) -> None:
     assert decision["reason"] == "historial-ilegible"
 
 
+# --------------------------------------------------------------------------- #
+# CLI family-check (ADR-078, incidencia #495: el detector existía y ya estaba
+# medido, pero sin llamante desde ningún punto del ciclo)
+# --------------------------------------------------------------------------- #
+
+
+def test_cli_family_check_writes_the_evidence_when_three_consecutive_rounds_share_a_file(
+    tmp_path: Path,
+) -> None:
+    comments = tmp_path / "comments.txt"
+    same_file = [_observation("CODEX-001", archivo="src/x.py:10")]
+    comments.write_text(
+        "\n".join(
+            [
+                _round_comment(1, HEAD_A, same_file),
+                _round_comment(2, HEAD_B, [_observation("CODEX-002", archivo="src/x.py:20")]),
+                _round_comment(3, HEAD_C, [_observation("CODEX-003", archivo="src/x.py:30")]),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "family.json"
+    result = _run(["family-check", "--comments-file", str(comments), "--output", str(output)])
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["hay_familia_repetida"] is True
+    assert payload["evidencias"][0]["archivo"] == "src/x.py"
+    assert payload["evidencias"][0]["rondas"] == [1, 2, 3]
+
+
+def test_cli_family_check_two_rounds_is_the_normal_case_not_a_family(tmp_path: Path) -> None:
+    comments = tmp_path / "comments.txt"
+    comments.write_text(
+        "\n".join(
+            [
+                _round_comment(1, HEAD_A, [_observation("CODEX-001", archivo="src/x.py:10")]),
+                _round_comment(2, HEAD_B, [_observation("CODEX-002", archivo="src/x.py:20")]),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "family.json"
+    result = _run(["family-check", "--comments-file", str(comments), "--output", str(output)])
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload == {"hay_familia_repetida": False, "evidencias": []}
+
+
+def test_cli_family_check_unreadable_history_reports_false_and_never_fails(
+    tmp_path: Path,
+) -> None:
+    # Requisito (b) de la incidencia #495: este aviso informa, nunca bloquea.
+    # Un historial ilegible se traduce en "no hay familia" con el motivo en
+    # `error`, no en un código de salida distinto de 0 que pudiera detener al
+    # llamador.
+    output = tmp_path / "family.json"
+    result = _run(
+        [
+            "family-check",
+            "--comments-file",
+            str(tmp_path / "no-existe.txt"),
+            "--output",
+            str(output),
+        ]
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["hay_familia_repetida"] is False
+    assert payload["evidencias"] == []
+    assert "error" in payload
+
+
 def _bare_system_python() -> str | None:
     """Un ``python3`` distinto del que ejecuta esta suite, sin el proyecto instalado.
 
@@ -657,6 +729,58 @@ def test_cli_decide_runs_under_the_bare_system_python_without_the_project_instal
     decision = json.loads(output.read_text(encoding="utf-8"))
     assert decision["decision"] == "CONTINUE"
     assert decision["reason"] == "primera-ronda-con-hallazgos"
+
+
+@pytest.mark.skipif(
+    _BARE_PYTHON is None,
+    reason="No hay un python3 del sistema distinto del de este proyecto en este entorno.",
+)
+def test_cli_family_check_runs_under_the_bare_system_python_without_the_project_installed(
+    tmp_path: Path,
+) -> None:
+    """El detector (round_family_detector.py) SÍ hace ``import sirius_engine...``.
+
+    A diferencia de ``round_history.py``, es un módulo de paquete normal, no
+    pensado para cargarse por ruta. ``_cargar_round_family_detector`` registra
+    un ``sirius_engine`` mínimo en ``sys.modules`` antes de ejecutarlo
+    (incidencia #495); sin ese registro, esta prueba fallaría con
+    ``ModuleNotFoundError: No module named 'sirius_engine'`` en vez de con el
+    resultado esperado.
+    """
+    assert _BARE_PYTHON is not None
+    comments = tmp_path / "comments.txt"
+    comments.write_text(
+        "\n".join(
+            [
+                _round_comment(1, HEAD_A, [_observation("CODEX-001", archivo="src/x.py:10")]),
+                _round_comment(2, HEAD_B, [_observation("CODEX-002", archivo="src/x.py:20")]),
+                _round_comment(3, HEAD_C, [_observation("CODEX-003", archivo="src/x.py:30")]),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "family.json"
+    entorno_reducido = {"PATH": os.environ.get("PATH", "")}
+    result = subprocess.run(
+        [
+            _BARE_PYTHON,
+            str(SCRIPT),
+            "family-check",
+            "--comments-file",
+            str(comments),
+            "--output",
+            str(output),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=REPO_ROOT,
+        env=entorno_reducido,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["hay_familia_repetida"] is True
+    assert payload["evidencias"][0]["archivo"] == "src/x.py"
 
 
 # --------------------------------------------------------------------------- #
