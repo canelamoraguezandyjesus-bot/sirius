@@ -63,14 +63,26 @@ def test_un_resultado_rojo_no_revive_una_parada_segura() -> None:
     )
 
 
-def test_la_transicion_retira_la_etiqueta_de_origen_no_una_fija() -> None:
+def test_la_transicion_de_exito_retira_las_dos_etiquetas_fuente() -> None:
+    """PR #477 rondas 3-5: las dos etiquetas-fuente van como removes (CSV)
+    DENTRO de la transición verificada — retirar una ausente se tolera, y el
+    estado no puede quedar con failed-safely junto a review-requested ni en
+    primera ejecución ni en reintento."""
     guion = _sin_comentarios(_paso_de_avance())
-    assert guion.count('"${origen_de[$issue_number]}"') >= 2, (
-        "las transiciones tienen que retirar la etiqueta de ORIGEN de cada "
-        "incidencia (ci-pending o failed-safely); retirar siempre ci-pending "
-        "dejaría failed-safely puesta junto a review-requested, un estado doble "
-        "que la máquina de estados no contempla"
+    assert '"sirius:ci-pending,sirius:failed-safely"' in guion, (
+        "la transición de éxito ya no retira ambas etiquetas-fuente en su "
+        "verificación: una transición parcial anterior dejaría una parada "
+        "falsa conviviendo con el estado activo"
     )
+
+
+def test_la_ambiguedad_nunca_pone_y_quita_failed_safely() -> None:
+    """PR #477 ronda 5 (P1): si el origen ya era failed-safely, la parada
+    ambigua no puede retirarla a la vez que la pone — la verificación del
+    helper fallaría y la incidencia quedaría sin su etiqueta de parada."""
+    guion = _sin_comentarios(_paso_de_avance())
+    assert "remueve_ambiguedad" in guion
+    assert 'remueve_ambiguedad=""' in guion
 
 
 def test_una_incidencia_con_las_dos_etiquetas_cuenta_una_sola_vez() -> None:
@@ -78,9 +90,10 @@ def test_una_incidencia_con_las_dos_etiquetas_cuenta_una_sola_vez() -> None:
     dos etiquetas; contarla dos veces fabricaría una falsa ambigüedad y la
     parada segura intentaría poner y quitar failed-safely a la vez."""
     guion = _sin_comentarios(_paso_de_avance())
-    assert "etiqueta_sobrante_de" in guion, (
-        "desapareció la deduplicación por número de incidencia y la retirada "
-        "de la etiqueta sobrante tras la transición"
+    assert "origen_de[$n]" in guion, (
+        "desapareció la deduplicación por número de incidencia: una "
+        "incidencia con las dos etiquetas se contaría dos veces (falsa "
+        "ambigüedad)"
     )
 
 
@@ -89,8 +102,8 @@ def test_la_retirada_de_la_sobrante_es_reintentable() -> None:
     reintentable — no un warning que deja failed-safely como parada falsa
     junto a review-requested."""
     guion = _sin_comentarios(_paso_de_avance())
-    tramo = guion[guion.rindex("etiqueta_sobrante_de") :][:500]
-    assert "rc=1" in tramo, (
-        "la retirada de la etiqueta sobrante volvió a ser un warning: la "
-        "garantía de la transición exige que el fallo se propague"
+    assert "No se pudo listar las incidencias" in guion, (
+        "la consulta de candidatas volvió a tragarse el fallo del productor "
+        "(mapfile en sustitución de proceso): una lectura caída se "
+        "convertiría en «no hay candidatas» y el verde se consumiría mudo"
     )

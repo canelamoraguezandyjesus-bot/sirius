@@ -116,27 +116,32 @@ jobs:
           # `ci-pending`: revivir una parada segura hacia correccion seria
           # tomar una decision, no registrar un resultado.
           declare -A origen_de=()
-          declare -A etiqueta_sobrante_de=()
           candidate_issues=()
           for etiqueta_origen in "sirius:ci-pending" "sirius:failed-safely"; do
             if [ "$etiqueta_origen" = "sirius:failed-safely" ] && [ "$CONCLUSION" != "success" ]; then
               continue
             fi
-            mapfile -t lote < <(
-              sirius_retry gh api -X GET "repos/${GH_REPO}/issues" \
+            # La consulta va a fichero con su codigo comprobado (revision de
+            # la PR #477, P1): con `mapfile < <(...)` el fallo del productor se
+            # perdia y una lectura caida se convertia en "no hay candidatas",
+            # consumiendo el workflow_run en silencio.
+            lote_file="$(mktemp)"
+            if ! sirius_retry gh api -X GET "repos/${GH_REPO}/issues" \
                 -f state=open -f labels="$etiqueta_origen" -f per_page=100 --paginate \
-                --jq '.[] | select(has("pull_request") | not) | .number'
-            )
+                --jq '.[] | select(has("pull_request") | not) | .number' >"$lote_file"; then
+              rm -f "$lote_file"
+              echo "::error::No se pudo listar las incidencias con ${etiqueta_origen}; reintentable."
+              exit 1
+            fi
+            mapfile -t lote <"$lote_file"
+            rm -f "$lote_file"
             for n in "${lote[@]:-}"; do
               [ -z "${n:-}" ] && continue
               if [ -n "${origen_de[$n]:-}" ]; then
                 # La incidencia lleva LAS DOS etiquetas (transicion parcial
-                # anterior): una sola entrada, con ci-pending como origen (se
-                # listo primero) y la otra apuntada para retirarla tras la
-                # transicion — sin esto se contaria dos veces (falsa
-                # ambiguedad) y la parada segura intentaria poner y quitar
-                # failed-safely a la vez (revision de la PR #477, P2).
-                etiqueta_sobrante_de["$n"]="$etiqueta_origen"
+                # anterior): una sola entrada — el saneado lo hace la propia
+                # transicion, que retira AMBAS etiquetas-fuente (CSV) dentro
+                # de su verificacion (revision de la PR #477, P2 dos veces).
                 continue
               fi
               candidate_issues+=("$n")
@@ -179,9 +184,15 @@ jobs:
                 "El flujo encontro varias incidencias \`sirius:ci-pending\` que referencian la PR #${pr_number}. Se detiene de forma segura para evitar una transicion ambigua." \
                 "- Head SHA: \`${HEAD_SHA}\`" \
                 "- Quality run: ${RUN_URL}" >"$body_file"
+              # La parada anade failed-safely: si el ORIGEN de esta candidata
+              # ya era failed-safely, no se retira nada (poner y quitar la
+              # misma etiqueta hace fallar la verificacion — revision de la
+              # PR #477, P1); si venia de ci-pending, se retira esa.
+              remueve_ambiguedad="sirius:ci-pending"
+              [ "${origen_de[$issue_number]}" = "sirius:failed-safely" ] && remueve_ambiguedad=""
               trigger_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
                 "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
-                "noclose" "${origen_de[$issue_number]}" \
+                "noclose" "$remueve_ambiguedad" \
                 || echo "::error::No se pudo completar la parada segura en #${issue_number}."
               rm -f "$body_file"
             done
@@ -202,21 +213,15 @@ jobs:
                 "- Quality run: ${RUN_URL}" \
                 "- Resultado: \`success\`" \
                 "- Siguiente transicion: revision independiente." >"$body_file"
+              # Las DOS etiquetas-fuente van como removes (CSV) DENTRO de la
+              # transicion verificada: retirar una etiqueta ausente se tolera,
+              # las etiquetas se aplican y verifican ANTES de publicar el
+              # marcador, y el estado no puede quedar con failed-safely
+              # conviviendo con review-requested ni en primera ejecucion ni en
+              # reintento (revision de la PR #477, P2 dos veces).
               trigger_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
                 "sirius:review-requested" "8250DF" "Evento consumible: iniciar revisión independiente" \
-                "noclose" "${origen_de[$issue_number]}" || rc=1
-              if [ "$rc" -eq 0 ] && [ -n "${etiqueta_sobrante_de[$issue_number]:-}" ]; then
-                # La retirada es parte de la garantia de la transicion
-                # (revision de la PR #477, P2): si falla, el paso queda en
-                # rojo reintentable — el marcador hace idempotente la
-                # transicion ya publicada y el reintento repite SOLO esta
-                # limpieza, en vez de dejar failed-safely conviviendo con
-                # review-requested como parada falsa.
-                ( export GH_TOKEN="$SIRIUS_TRIGGER_TOKEN"
-                  sirius_retry gh issue edit "$issue_number" --repo "$GH_REPO" \
-                    --remove-label "${etiqueta_sobrante_de[$issue_number]}" >/dev/null ) \
-                  || { echo "::error::No se pudo retirar la etiqueta sobrante ${etiqueta_sobrante_de[$issue_number]} de #${issue_number}; reintentable."; rc=1; }
-              fi
+                "noclose" "sirius:ci-pending,sirius:failed-safely" || rc=1
               ;;
             failure|timed_out)
               marker="<!-- sirius-quality:${HEAD_SHA}:${CONCLUSION} -->"

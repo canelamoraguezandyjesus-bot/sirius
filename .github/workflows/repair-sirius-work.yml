@@ -449,9 +449,17 @@ jobs:
               # incidencia en ci-pending. Si no hay run terminado (sigue en
               # cola o corriendo), no hace falta nada: su finalizacion natural
               # disparara el enrutado.
-              run_terminado="$(sirius_retry gh api \
+              # La lectura con su codigo comprobado (revision de la PR #477,
+              # P1): "no pude consultar" NO es "no hay run terminado" — con la
+              # incidencia ya en ci-pending y el evento consumido, salir en
+              # verde sin relanzar dejaria un rojo esperando cirugia manual.
+              if ! run_terminado="$(sirius_retry gh api \
                 "repos/${GH_REPO}/actions/workflows/quality.yml/runs?head_sha=${pr_head}&status=completed&per_page=1" \
-                --jq '.workflow_runs[0].id // empty' 2>/dev/null || true)"
+                --jq '.workflow_runs[0].id // empty' 2>/dev/null)"; then
+                echo "::error::No se pudo consultar los runs de Quality del head ${pr_head} (consulta-runs-fallida); reintentable."
+                rm -f "$comments_file"
+                exit 1
+              fi
               if [ -n "${run_terminado:-}" ]; then
                 if ! sirius_retry gh api -X POST \
                   "repos/${GH_REPO}/actions/runs/${run_terminado}/rerun" >/dev/null; then

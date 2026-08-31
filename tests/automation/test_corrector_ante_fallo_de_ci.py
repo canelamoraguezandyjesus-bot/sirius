@@ -366,3 +366,11 @@ def test_el_ultimo_disparador_gobierna_tambien_el_camino_feliz() -> None:
         "sea el fallo del head ACTUAL: un fallo histórico del mismo head "
         "volvería a consumir una ronda de revisión con lectura caída"
     )
+
+
+def test_una_consulta_de_runs_caida_es_reintentable() -> None:
+    """PR #477 ronda 5 (P1): «no pude consultar» no es «no hay run
+    terminado» — con el evento ya consumido, salir en verde sin relanzar
+    dejaría un rojo esperando cirugía manual."""
+    guion = _sin_comentarios(_paso_de_la_puerta())
+    assert "consulta-runs-fallida" in guion
