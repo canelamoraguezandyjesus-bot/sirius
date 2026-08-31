@@ -294,7 +294,13 @@ def test_una_parada_segura_no_mueve_el_liston_de_convergencia() -> None:
     para siempre.
     """
     texto = REANUDAR.read_text(encoding="utf-8")
-    inicio = texto.index('if [ "$parada" = "sirius:blocked-decision" ]; then')
+    # PR #477 (H-33): la rama de bloqueo exige ademas que el bloqueo vigente
+    # sea DE CONVERGENCIA — un bloqueo emitido por un rol se reanuda sin
+    # perdonar rondas, que es una segunda cara del mismo invariante.
+    inicio = texto.index(
+        'elif [ "$parada" = "sirius:blocked-decision" ] '
+        '&& [ "${bloqueo_de_convergencia:-true}" = "true" ]; then'
+    )
     fin = texto.index("# --- 5)", inicio)
     rama_bloqueo, rama_operativa = texto[inicio:fin].split("else", 1)
     assert "sirius-convergence-reset" in rama_bloqueo, (
