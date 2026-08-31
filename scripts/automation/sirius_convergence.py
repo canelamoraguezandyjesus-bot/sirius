@@ -109,19 +109,33 @@ _normalize_location = _round_history._normalize_location
 #: nombre completo ya resuelto en ``sys.modules`` y nunca toca el sistema de
 #: importación real. Verificado bajo el ``python3`` desnudo del runner en
 #: ``test_cli_family_check_runs_under_the_bare_system_python_without_the_project_installed``.
+#:
+#: Ese registro se **deshace siempre al terminar**, tanto si ``sirius_engine``
+#: no existía en el proceso como si ya era el paquete real -por ejemplo, bajo
+#: pytest, que lo importa de verdad al recolectar otras pruebas del árbol-:
+#: sin esto, el simulacro sustituía en ``sys.modules`` el submódulo real
+#: ``sirius_engine.round_history`` por el duplicado cargado por ruta durante
+#: el resto del proceso, rompiendo el aislamiento que ``_cargar_round_history``
+#: ya garantiza dos funciones más arriba con su nombre privado
+#: ``sirius_round_history`` (hallazgo CLAUDE-FAM-DETECT-001, incidencia #495).
 _RUTA_FAMILY_DETECTOR = (
     Path(__file__).resolve().parents[2] / "src" / "sirius_engine" / "round_family_detector.py"
 )
 
 
 def _cargar_round_family_detector() -> ModuleType:
-    paquete_falso = sys.modules.get("sirius_engine")
-    if paquete_falso is None:
-        paquete_falso = ModuleType("sirius_engine")
-        paquete_falso.__path__ = []  # type: ignore[attr-defined]
-        sys.modules["sirius_engine"] = paquete_falso
+    paquete_previo = sys.modules.get("sirius_engine")
+    round_history_previo = sys.modules.get("sirius_engine.round_history")
+    tenia_atributo = paquete_previo is not None and hasattr(paquete_previo, "round_history")
+    atributo_previo = getattr(paquete_previo, "round_history", None)
+
+    paquete_simulado = paquete_previo
+    if paquete_simulado is None:
+        paquete_simulado = ModuleType("sirius_engine")
+        paquete_simulado.__path__ = []  # type: ignore[attr-defined]
+    sys.modules["sirius_engine"] = paquete_simulado
     sys.modules["sirius_engine.round_history"] = _round_history
-    paquete_falso.round_history = _round_history  # type: ignore[attr-defined]
+    paquete_simulado.round_history = _round_history  # type: ignore[attr-defined]
 
     ruta = _RUTA_FAMILY_DETECTOR
     spec = importlib.util.spec_from_file_location("sirius_round_family_detector", ruta)
@@ -136,12 +150,44 @@ def _cargar_round_family_detector() -> ModuleType:
     # útil del módulo -``round_history.py``, cargado igual arriba, no lo
     # necesita porque no define ninguna dataclass-.
     sys.modules[spec.name] = modulo
-    spec.loader.exec_module(modulo)
+    try:
+        spec.loader.exec_module(modulo)
+    finally:
+        if paquete_previo is None:
+            sys.modules.pop("sirius_engine", None)
+        else:
+            sys.modules["sirius_engine"] = paquete_previo
+            if tenia_atributo:
+                paquete_previo.round_history = atributo_previo  # type: ignore[attr-defined]
+            elif hasattr(paquete_previo, "round_history"):
+                del paquete_previo.round_history  # type: ignore[attr-defined]
+        if round_history_previo is None:
+            sys.modules.pop("sirius_engine.round_history", None)
+        else:
+            sys.modules["sirius_engine.round_history"] = round_history_previo
     return modulo
 
 
-_round_family_detector = _cargar_round_family_detector()
-detectar_familia_repetida = _round_family_detector.detectar_familia_repetida
+#: Caché de la carga perezosa: ``None`` hasta que ``family-check`` se ejecuta
+#: de verdad por primera vez en el proceso.
+_round_family_detector_cache: ModuleType | None = None
+
+
+def _obtener_round_family_detector() -> ModuleType:
+    """Carga perezosa de ``round_family_detector.py``.
+
+    Cargarlo al importar este módulo -como antes- hacía que un fallo del
+    detector (archivo ausente, error de importación, regresión al evaluarlo)
+    también hiciera fallar los subcomandos críticos ``record`` y ``decide``,
+    que ni siquiera lo usan: `record` y `decide` se ejecutan en cada ronda,
+    mientras que el detector es solo un aviso informativo (ADR-121). Se carga
+    aquí, solo cuando ``cmd_family_check`` lo necesita de verdad (hallazgo
+    CODEX-001, incidencia #495).
+    """
+    global _round_family_detector_cache
+    if _round_family_detector_cache is None:
+        _round_family_detector_cache = _cargar_round_family_detector()
+    return _round_family_detector_cache
 
 
 # Intentos consecutivos de corrección motivados por un fallo de Quality, sin un
@@ -458,9 +504,10 @@ def cmd_family_check(args: argparse.Namespace) -> int:
     conoce la ronda actual por sí mismo-.
 
     Nunca falla de forma que bloquee al llamador (requisito (b) de la
-    incidencia #495: este aviso informa, no decide): un historial ilegible se
-    publica como ``hay_familia_repetida: false`` con el motivo en ``error``,
-    en vez de como código de salida distinto de 0.
+    incidencia #495 y ADR-121: este aviso informa, no decide): un historial
+    ilegible, o un fallo al cargar el propio detector (hallazgo CODEX-001),
+    se publican como ``hay_familia_repetida: false`` con el motivo en
+    ``error``, en vez de como código de salida distinto de 0.
     """
     try:
         with open(args.comments_file, encoding="utf-8") as handle:
@@ -472,15 +519,24 @@ def cmd_family_check(args: argparse.Namespace) -> int:
             "error": f"No se pudo leer el historial ({exc}).",
         }
     else:
-        vigente = history_after_last_resume(text)
-        deteccion = detectar_familia_repetida(parse_round_records(vigente))
-        result = {
-            "hay_familia_repetida": deteccion.hay_familia_repetida,
-            "evidencias": [
-                {"archivo": e.archivo, "rondas": list(e.rondas), "detalle": e.detalle}
-                for e in deteccion.evidencias
-            ],
-        }
+        try:
+            detector = _obtener_round_family_detector()
+        except Exception as exc:
+            result = {
+                "hay_familia_repetida": False,
+                "evidencias": [],
+                "error": f"No se pudo cargar el detector de familia repetida ({exc}).",
+            }
+        else:
+            vigente = history_after_last_resume(text)
+            deteccion = detector.detectar_familia_repetida(parse_round_records(vigente))
+            result = {
+                "hay_familia_repetida": deteccion.hay_familia_repetida,
+                "evidencias": [
+                    {"archivo": e.archivo, "rondas": list(e.rondas), "detalle": e.detalle}
+                    for e in deteccion.evidencias
+                ],
+            }
     with open(args.output, "w", encoding="utf-8") as handle:
         json.dump(result, handle, ensure_ascii=False, indent=2)
         handle.write("\n")

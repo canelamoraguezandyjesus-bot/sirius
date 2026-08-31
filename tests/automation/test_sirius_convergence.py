@@ -9,6 +9,7 @@ red ni ``gh``.
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 import os
@@ -656,6 +657,100 @@ def test_cli_family_check_unreadable_history_reports_false_and_never_fails(
     assert payload["hay_familia_repetida"] is False
     assert payload["evidencias"] == []
     assert "error" in payload
+
+
+def test_record_and_decide_never_load_the_family_detector(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CODEX-001: ``record``/``decide`` no dependen del detector de familia.
+
+    Antes de esta corrección, el detector se cargaba incondicionalmente al
+    importar el módulo: un detector roto (archivo ausente, error de
+    importación) hacía fallar también estos dos subcomandos críticos, que ni
+    siquiera lo usan. Se rompe deliberadamente la ruta del detector y se
+    comprueba que ninguno de los dos lo toca: ni fallan, ni disparan la carga
+    perezosa.
+    """
+    module = _module()
+    monkeypatch.setattr(module, "_round_family_detector_cache", None)
+    monkeypatch.setattr(module, "_RUTA_FAMILY_DETECTOR", tmp_path / "no-existe.py")
+
+    verdict = tmp_path / "verdict.json"
+    verdict.write_text(json.dumps({"observations": [_observation()]}), encoding="utf-8")
+    record_output = tmp_path / "record.json"
+    record_args = argparse.Namespace(
+        verdict_file=str(verdict), round=1, head=HEAD_A, output=str(record_output)
+    )
+    assert module.cmd_record(record_args) == 0
+
+    comments = tmp_path / "comments.txt"
+    comments.write_text(_round_comment(1, HEAD_A, [_observation()]), encoding="utf-8")
+    decide_output = tmp_path / "decision.json"
+    decide_args = argparse.Namespace(comments_file=str(comments), output=str(decide_output))
+    assert module.cmd_decide(decide_args) == 0
+
+    assert module._round_family_detector_cache is None
+
+
+def test_cli_family_check_broken_detector_reports_false_and_never_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CODEX-001 / ADR-121: un fallo al cargar el detector no bloquea el ciclo.
+
+    Igual que un historial ilegible (arriba), un fallo al cargar el propio
+    detector se traduce en ``hay_familia_repetida: false`` con el motivo en
+    ``error``, nunca en un código de salida distinto de 0: este aviso informa,
+    no decide.
+    """
+    module = _module()
+    monkeypatch.setattr(module, "_round_family_detector_cache", None)
+    monkeypatch.setattr(module, "_RUTA_FAMILY_DETECTOR", tmp_path / "no-existe.py")
+
+    comments = tmp_path / "comments.txt"
+    comments.write_text(
+        "\n".join(
+            [
+                _round_comment(1, HEAD_A, [_observation("CODEX-001", archivo="src/x.py:10")]),
+                _round_comment(2, HEAD_B, [_observation("CODEX-002", archivo="src/x.py:20")]),
+                _round_comment(3, HEAD_C, [_observation("CODEX-003", archivo="src/x.py:30")]),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "family.json"
+    args = argparse.Namespace(comments_file=str(comments), output=str(output))
+    assert module.cmd_family_check(args) == 0
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["hay_familia_repetida"] is False
+    assert payload["evidencias"] == []
+    assert "error" in payload
+
+
+def test_loading_the_family_detector_does_not_clobber_a_real_sirius_engine_package() -> None:
+    """CLAUDE-FAM-DETECT-001: no debe sustituir un ``sirius_engine`` ya real.
+
+    Cuando ``sirius_engine.round_history`` YA está importado como paquete real
+    en el proceso -como ocurre bajo esta misma suite, que lo importa de verdad
+    a través de otros módulos del árbol-, cargar el detector por ruta no debe
+    dejar en ``sys.modules`` el duplicado cargado por ruta en su lugar: al
+    terminar, debe quedar exactamente el mismo objeto de módulo que había
+    antes.
+    """
+    import sirius_engine.round_history as real_round_history
+
+    sys.modules["sirius_engine.round_history"] = real_round_history
+    paquete_real = sys.modules["sirius_engine"]
+    paquete_real.round_history = real_round_history  # type: ignore[attr-defined]
+    identidad_previa = id(sys.modules["sirius_engine.round_history"])
+
+    module = _module()
+    detector = module._cargar_round_family_detector()
+
+    assert sys.modules["sirius_engine"] is paquete_real
+    assert sys.modules["sirius_engine.round_history"] is real_round_history
+    assert id(sys.modules["sirius_engine.round_history"]) == identidad_previa
+    assert paquete_real.round_history is real_round_history
+    assert detector.detectar_familia_repetida is not None
 
 
 def _bare_system_python() -> str | None:
