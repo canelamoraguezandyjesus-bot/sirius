@@ -452,17 +452,48 @@ case "$verdict" in
       stop_safely "sanitizacion-fallida" \
         "No se pudieron sanear las observaciones estructuradas antes de publicarlas; me detengo para no entregar al corrector un bloque corrupto."
     fi
-    readable="$(printf '%s' "$observations" | jq -r '.[] | "- **\(.id // "?")** (\(.severidad // "?")) \(.archivo // "?"): \(.problema // "?")\n  - Criterio esperado: \(.criterio_esperado // "?")\n  - Prueba: \(.prueba // "?")\n  - Límites de corrección: \(.limites_correccion // "?")"')"
     pr_hint="https://github.com/${REPO}/pull/${pr_number}"
 
     # Registro de convergencia (contrato §5, v1.5). Sustituye al contador ciego
     # de ciclos: publica las huellas estables de los hallazgos de esta ronda
     # para que la puerta del corrector pueda medir progreso real entre rondas
     # en vez de detenerse en un número fijo.
-    if ! round_number="$(sirius_next_round_number "$REPO" "$ISSUE")"; then
+    #
+    # El volcado se lee UNA vez y se reutiliza para numerar la ronda y para el
+    # guardián de goteo (incidencia #496, ADR-121) que va justo debajo: los dos
+    # necesitan el mismo historial cronológico de la incidencia.
+    round_dump="$(mktemp)"
+    if ! sirius_dump_comments "$REPO" "$ISSUE" "$round_dump" >/dev/null 2>&1; then
+      rm -f "$round_dump"
       stop_safely "historial-de-rondas-ilegible" \
         "No he podido leer el historial de rondas de esta incidencia, así que no puedo numerar esta ronda sin arriesgarme a repetir un número ya usado y corromper la medida de convergencia. Me detengo de forma segura."
     fi
+    if ! round_number="$(sirius_next_round_number "$REPO" "$ISSUE" "$round_dump")"; then
+      rm -f "$round_dump"
+      stop_safely "historial-de-rondas-ilegible" \
+        "No he podido leer el historial de rondas de esta incidencia, así que no puedo numerar esta ronda sin arriesgarme a repetir un número ya usado y corromper la medida de convergencia. Me detengo de forma segura."
+    fi
+
+    # Guardián de goteo en vivo (incidencia #496, ADR-121): SOLO informa -no
+    # bloquea, no cambia ninguna transición de estado, no descarta ningún
+    # hallazgo-. Marca, en el propio comentario, los hallazgos de esta ronda
+    # cuyo fichero/línea citados ya eran idénticos en la ronda 1. Es
+    # best-effort por diseño: si falla por cualquier motivo, publica las
+    # observaciones sin anotar en vez de bloquear la ronda.
+    drip_obs_file="$(mktemp)"
+    drip_out_file="$(mktemp)"
+    printf '%s' "$observations" >"$drip_obs_file"
+    if python3 "${SIRIUS_VERDICT_DIR}/sirius_drip_guard_cli.py" \
+      --repo "$REPO" --comments-file "$round_dump" --round "$round_number" \
+      --head "$head_sha" --observations "$drip_obs_file" --output "$drip_out_file" \
+      && [ -s "$drip_out_file" ] && jq -e . "$drip_out_file" >/dev/null 2>&1; then
+      readable_observations="$(cat "$drip_out_file")"
+    else
+      readable_observations="$observations"
+    fi
+    rm -f "$drip_obs_file" "$drip_out_file" "$round_dump"
+    readable="$(printf '%s' "$readable_observations" | jq -r '.[] | "- **\(.id // "?")** (\(.severidad // "?")) \(.archivo // "?"): \(.problema // "?")\n  - Criterio esperado: \(.criterio_esperado // "?")\n  - Prueba: \(.prueba // "?")\n  - Límites de corrección: \(.limites_correccion // "?")" + (if .posible_goteo then "\n  - ⚠️ Guardián de goteo: \(.posible_goteo)" else "" end)')"
+
     round_verdict="$(mktemp)"
     round_record="$(mktemp)"
     jq -n --argjson obs "$observations" '{observations: $obs}' >"$round_verdict"
