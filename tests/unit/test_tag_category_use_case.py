@@ -11,6 +11,7 @@ whether the write actually happened.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 import pytest
@@ -87,6 +88,9 @@ class _FakeMemoryRepository:
     def list_current_memories(self) -> list[Memory]:
         raise AssertionError("tag() must never list memories")
 
+    def list_current_memories_by_category(self, categories: Sequence[str]) -> list[Memory]:
+        raise AssertionError("tag() must never list memories")
+
     def list_archived_memories(self) -> list[Memory]:
         raise AssertionError("tag() must never list archived memories")
 
@@ -133,6 +137,9 @@ class _UnusedMemoryRepository:
         raise AssertionError("tag() must never read a memory when kind is DECISION")
 
     def list_current_memories(self) -> list[Memory]:
+        raise AssertionError("tag() must never touch a memory when kind is DECISION")
+
+    def list_current_memories_by_category(self, categories: Sequence[str]) -> list[Memory]:
         raise AssertionError("tag() must never touch a memory when kind is DECISION")
 
     def list_archived_memories(self) -> list[Memory]:
@@ -192,6 +199,9 @@ class _FakeDecisionRepository:
     def list_current_decisions(self) -> list[Decision]:
         raise AssertionError("tag() must never list decisions")
 
+    def list_current_decisions_by_category(self, categories: Sequence[str]) -> list[Decision]:
+        raise AssertionError("tag() must never list decisions")
+
     def list_proposed_decisions(self) -> list[Decision]:
         raise AssertionError("tag() must never list proposed decisions")
 
@@ -235,6 +245,9 @@ class _UnusedDecisionRepository:
         raise AssertionError("tag() must never touch a decision when kind is MEMORY")
 
     def list_current_decisions(self) -> list[Decision]:
+        raise AssertionError("tag() must never touch a decision when kind is MEMORY")
+
+    def list_current_decisions_by_category(self, categories: Sequence[str]) -> list[Decision]:
         raise AssertionError("tag() must never touch a decision when kind is MEMORY")
 
     def list_proposed_decisions(self) -> list[Decision]:

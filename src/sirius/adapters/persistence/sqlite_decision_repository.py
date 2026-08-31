@@ -237,6 +237,20 @@ class SqliteDecisionRepository:
             ).all()
             return _load_decisions(session, models)
 
+    def list_current_decisions_by_category(self, categories: Sequence[str]) -> list[Decision]:
+        if not categories:
+            return []
+        with self._scope() as session:
+            models = session.scalars(
+                select(DecisionModel)
+                .where(
+                    DecisionModel.status == DecisionStatus.APPROVED,
+                    DecisionModel.category.is_not(None),
+                )
+                .order_by(DecisionModel.id)
+            ).all()
+            return _load_decisions(session, models)
+
     def archive_decision(self, decision_id: int) -> Decision:
         with self._scope() as session:
             decision_model = session.get(DecisionModel, decision_id)
