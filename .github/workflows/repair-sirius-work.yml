@@ -385,6 +385,26 @@ jobs:
             if sirius_ronda_disparada_por_ci "$comments_file" "$pr_head"; then
               echo "Sin observaciones estructuradas, pero hay un fallo de Quality registrado"
               echo "para el head ${pr_head}: la causa corregible es ese run (H-14). Sigo."
+            elif grep -qiE '<!--[[:space:]]*sirius-quality:[0-9a-f]+:(failure|timed_out)[[:space:]]*-->' "$comments_file"; then
+              # H-36 (incidencias #441 y #442): la ronda SI nacio de un fallo de
+              # Quality, pero el head se movio despues (update-branch o un push
+              # nuevo) y el fallo registrado ya no corresponde al head actual.
+              # Pararse en `failed-safely` aqui dejaba el ciclo mudo con una
+              # correccion legitima pendiente; la salida correcta es devolver la
+              # incidencia a `ci-pending` y dejar que el resultado de Quality
+              # del head actual — que el propio push ya disparo — la enrute por
+              # el camino normal (exito → revision; fallo → correccion).
+              marker="<!-- sirius-verdict:corrector:precheck:head-movido-tras-ci -->"
+              body_file="$(mktemp)"
+              printf '%s\n\n%s\n\n%s\n' \
+                "$marker" "🟡 **El fallo de Quality registrado es de un head anterior**" \
+                "No hay observaciones estructuradas y el fallo de Quality registrado no corresponde al head actual de la PR (el head se movió después). Devuelvo la incidencia a \\`sirius:ci-pending\\`: el resultado de Quality del head actual la encaminará por el camino normal." >"$body_file"
+              parada "$GH_REPO" "$ISSUE_NUMBER" "$marker" "$body_file" \
+                "sirius:ci-pending" "FBCA04" "Evento consumible: en espera de Quality" \
+                "noclose" "sirius:repair-requested" || echo "::error::No se pudo devolver la incidencia a ci-pending (head-movido-tras-ci)."
+              rm -f "$body_file" "$comments_file"
+              echo "valid=false" >> "$GITHUB_OUTPUT"
+              exit 0
             else
               marker="<!-- sirius-verdict:corrector:precheck:sin-observaciones -->"
               body_file="$(mktemp)"
@@ -400,6 +420,18 @@ jobs:
             fi
           fi
           rm -f "$comments_file"
+
+          # H-35 (incidencias #469 ronda 4 y #471): las DECISIONES que el
+          # propietario publica en la incidencia no llegaban al corrector, que
+          # re-planteaba disyuntivas ya resueltas o las revertia sin saberlo.
+          # Se extraen aqui (autoria OWNER, cuerpo que empieza por DECISI) y el
+          # prompt las inyecta como contexto vinculante. Best-effort: si la
+          # lectura falla, el fichero queda vacio y el prompt dice "(ninguna)" —
+          # exactamente el comportamiento de antes de este arreglo.
+          sirius_retry gh api --paginate "repos/${GH_REPO}/issues/${ISSUE_NUMBER}/comments?per_page=100" \
+            --jq '[.[] | select(.author_association=="OWNER") | select(.body | startswith("DECISI"))] | .[].body' \
+            >"${RUNNER_TEMP}/sirius_owner_decisions.md" 2>/dev/null \
+            || : >"${RUNNER_TEMP}/sirius_owner_decisions.md"
 
           # Puede quedar VACÍO a propósito: es el caso de H-14, una ronda abierta
           # por un fallo de Quality. El corrector lo distingue por el propio
@@ -454,6 +486,16 @@ jobs:
             echo "- Ronda de corrección: ${CYCLE}. No hay un tope fijo de rondas: el ciclo continúa mientras haya progreso comprobable y se detiene en cuanto deja de haberlo."
             echo "- Las observaciones estructuradas están en la ruta exacta de la variable de entorno SIRIUS_OBSERVATIONS_FILE."
             echo "- El archivo de veredicto debe escribirse en la ruta exacta de la variable de entorno SIRIUS_VERDICT_FILE."
+            echo ""
+            echo "## Decisiones del propietario registradas en esta incidencia"
+            echo ""
+            echo "Si hay decisiones aquí abajo, son contexto VINCULANTE (ver la regla del rol)."
+            echo ""
+            if [ -s "${RUNNER_TEMP}/sirius_owner_decisions.md" ]; then
+              cat "${RUNNER_TEMP}/sirius_owner_decisions.md"
+            else
+              echo "(ninguna)"
+            fi
             echo "SIRIUS_PROMPT_EOF"
           } >> "$GITHUB_OUTPUT"
 

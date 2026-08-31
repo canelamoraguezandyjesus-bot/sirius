@@ -103,11 +103,35 @@ jobs:
 
           # Candidatas: incidencias abiertas con sirius:ci-pending (REST, con
           # reintentos). Se excluyen PR (REST /issues las incluye).
-          mapfile -t candidate_issues < <(
-            sirius_retry gh api -X GET "repos/${GH_REPO}/issues" \
-              -f state=open -f labels=sirius:ci-pending -f per_page=100 --paginate \
-              --jq '.[] | select(has("pull_request") | not) | .number'
-          )
+          #
+          # H-34 (incidencias #435 y #442): un verde de Quality puede llegar
+          # cuando la incidencia ya no esta en `ci-pending` sino en
+          # `failed-safely` (tipicamente tras un update-branch durante la
+          # parada, que dispara Quality de nuevo). Buscar candidatas solo en
+          # `ci-pending` dejaba ese verde sin registrar: el revisor nunca
+          # despertaba y el ciclo quedaba mudo hasta cirugia manual de
+          # etiquetas (reponer `ci-pending` + rerun del run de Quality). El
+          # resultado VERDE considera tambien `failed-safely` y lo revive
+          # hacia revision; un resultado ROJO sigue actuando solo sobre
+          # `ci-pending`: revivir una parada segura hacia correccion seria
+          # tomar una decision, no registrar un resultado.
+          declare -A origen_de=()
+          candidate_issues=()
+          for etiqueta_origen in "sirius:ci-pending" "sirius:failed-safely"; do
+            if [ "$etiqueta_origen" = "sirius:failed-safely" ] && [ "$CONCLUSION" != "success" ]; then
+              continue
+            fi
+            mapfile -t lote < <(
+              sirius_retry gh api -X GET "repos/${GH_REPO}/issues" \
+                -f state=open -f labels="$etiqueta_origen" -f per_page=100 --paginate \
+                --jq '.[] | select(has("pull_request") | not) | .number'
+            )
+            for n in "${lote[@]:-}"; do
+              [ -z "${n:-}" ] && continue
+              candidate_issues+=("$n")
+              origen_de["$n"]="$etiqueta_origen"
+            done
+          done
 
           matched_issues=()
           for issue_number in "${candidate_issues[@]:-}"; do
@@ -146,7 +170,7 @@ jobs:
                 "- Quality run: ${RUN_URL}" >"$body_file"
               trigger_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
                 "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
-                "noclose" "sirius:ci-pending" \
+                "noclose" "${origen_de[$issue_number]}" \
                 || echo "::error::No se pudo completar la parada segura en #${issue_number}."
               rm -f "$body_file"
             done
@@ -169,7 +193,7 @@ jobs:
                 "- Siguiente transicion: revision independiente." >"$body_file"
               trigger_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
                 "sirius:review-requested" "8250DF" "Evento consumible: iniciar revisión independiente" \
-                "noclose" "sirius:ci-pending" || rc=1
+                "noclose" "${origen_de[$issue_number]}" || rc=1
               ;;
             failure|timed_out)
               marker="<!-- sirius-quality:${HEAD_SHA}:${CONCLUSION} -->"

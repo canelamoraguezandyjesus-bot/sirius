@@ -199,7 +199,10 @@ if [ "$sin_pr" = "true" ]; then
     echo "::error::No se pudieron leer los comentarios de #${ISSUE}; no puedo saber que fase se detuvo. Reintentable."
     exit 1
   fi
-  rol_parado="$(grep -oE '<!-- sirius-verdict:(implementer|reviewer|corrector):(FAILED_SAFELY|precheck):' \
+  # H-33: sin PR, la parada tambien puede ser un BLOCKED_BY_DECISION del
+  # implementador (le paso a #453, que se detuvo a pedir decision antes de
+  # abrir rama): su marcador es `:blocked:` y tambien dice que fase devolver.
+  rol_parado="$(grep -oE '<!-- sirius-verdict:(implementer|reviewer|corrector):(FAILED_SAFELY|precheck|blocked):' \
     "$dump_file" | tail -n 1 | cut -d: -f2)"
   rm -f "$dump_file"
   if ! etiqueta_destino="$(destino_de_rol "$rol_parado")"; then
@@ -209,7 +212,27 @@ if [ "$sin_pr" = "true" ]; then
 else
 case "$parada" in
   sirius:blocked-decision)
-    etiqueta_destino="sirius:repair-requested"
+    # H-33 (incidencias #453 y #471): `blocked-decision` NO siempre lo emite la
+    # politica de convergencia. Cualquier rol publica BLOCKED_BY_DECISION con su
+    # marcador `:blocked:` en el historial (sirius_apply_verdict.sh). Devolverlo
+    # siempre al corrector reanudaba la fase equivocada: el corrector arrancaba
+    # sin observaciones que corregir y se paraba en seguro, y la orden del
+    # propietario moria en un rebote. La fase se LEE del historial, como ya hace
+    # `failed-safely`; si el historial no publica ningun rol (las paradas por
+    # convergencia, que son del corrector y anteriores a este marcador), se
+    # conserva la vuelta historica al corrector.
+    dump_file="$(mktemp)"
+    if ! sirius_dump_comments "$REPO" "$ISSUE" "$dump_file"; then
+      rm -f "$dump_file"
+      echo "::error::No se pudieron leer los comentarios de #${ISSUE}; no puedo saber que fase se detuvo. Reintentable."
+      exit 1
+    fi
+    rol_parado="$(grep -oE '<!-- sirius-verdict:(implementer|reviewer|corrector):(FAILED_SAFELY|precheck|blocked):' \
+      "$dump_file" | tail -n 1 | cut -d: -f2)"
+    rm -f "$dump_file"
+    if ! etiqueta_destino="$(destino_de_rol "$rol_parado")"; then
+      etiqueta_destino="sirius:repair-requested"
+    fi
     ;;
   sirius:failed-safely)
     dump_file="$(mktemp)"

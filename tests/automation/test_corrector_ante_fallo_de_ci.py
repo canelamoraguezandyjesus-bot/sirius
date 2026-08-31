@@ -188,3 +188,76 @@ def test_el_volcado_sigue_vivo_cuando_se_le_pregunta() -> None:
             "devolvería 1 en silencio y el corrector volvería a morir ante cada "
             "fallo de Quality"
         )
+
+
+# --------------------------------------------------------------------------- #
+# H-36: el head se movió tras el CI_FAILURE — la ronda no puede morir por eso.
+# H-35: las decisiones del propietario tienen que LLEGAR al corrector.
+# Ambos mordieron la noche del 30 al 31 de agosto (#441/#442 y #469/#471).
+# --------------------------------------------------------------------------- #
+
+
+def test_un_head_movido_tras_el_fallo_devuelve_a_ci_pending() -> None:
+    """Sin observaciones y con un CI_FAILURE de OTRO head, la salida no es la
+    muerte en `failed-safely`: es volver a `ci-pending` y dejar que el Quality
+    del head actual enrute por el camino normal. La cura que antes era cirugía
+    manual de etiquetas (dos veces en una noche), ahora en el guion."""
+    guion = _sin_comentarios(_paso_de_la_puerta())
+    assert "head-movido-tras-ci" in guion, (
+        "desapareció la rama que trata el CI_FAILURE de un head anterior: la "
+        "incidencia volvería a morir en failed-safely con una corrección "
+        "legítima pendiente (H-36, #441/#442)"
+    )
+    assert "sirius-quality:[0-9a-f]+:(failure|timed_out)" in guion, (
+        "la detección del fallo-de-cualquier-head tiene que ser el mismo "
+        "marcador que publica el avance, no una heurística nueva"
+    )
+    despues = guion[guion.index("head-movido-tras-ci") :]
+    assert '"sirius:ci-pending"' in despues.split("sin-observaciones")[0], (
+        "la rama head-movido-tras-ci tiene que transicionar a ci-pending; "
+        "cualquier otra etiqueta reinventa la máquina de estados"
+    )
+
+
+def test_la_puerta_extrae_las_decisiones_del_propietario() -> None:
+    """H-35: el corrector re-planteaba o revertía decisiones ya publicadas en
+    la incidencia porque nunca las recibía. La puerta las extrae (autoría
+    OWNER, cuerpo que empieza por DECISI) a un fichero que el prompt inyecta."""
+    guion = _sin_comentarios(_paso_de_la_puerta())
+    assert "sirius_owner_decisions.md" in guion, (
+        "la puerta ya no extrae las decisiones del propietario: el corrector "
+        "volvería a revertirlas sin saberlo (H-35, #469 ronda 4 y #471)"
+    )
+    assert 'author_association=="OWNER"' in guion, (
+        "la extracción tiene que filtrar por autoría OWNER: un comentario de "
+        "cualquiera no es una decisión del propietario"
+    )
+    assert 'startswith("DECISI")' in guion
+
+
+def _paso_del_prompt() -> str:
+    for job in (_doc().get("jobs") or {}).values():
+        for paso in job.get("steps") or []:
+            if paso.get("id") == "build_prompt":
+                return str(paso.get("run", ""))
+    raise AssertionError("no encontré el paso `id: build_prompt` en repair-sirius-work.yml")
+
+
+def test_el_prompt_inyecta_las_decisiones_extraidas() -> None:
+    """Extraerlas sin inyectarlas sería la quinta pieza sin llamante."""
+    guion = _sin_comentarios(_paso_del_prompt())
+    assert "Decisiones del propietario registradas en esta incidencia" in guion
+    assert "sirius_owner_decisions.md" in guion, (
+        "el prompt no lee el fichero de decisiones que la puerta extrae: "
+        "pieza sin llamante, la enfermedad de esta casa"
+    )
+
+
+def test_el_rol_del_corrector_declara_la_autoridad_de_las_decisiones() -> None:
+    """La regla vive en el prompt del rol, no solo en la fontanería."""
+    rol = (RAIZ / "scripts" / "automation" / "prompts" / "corrector.md").read_text(encoding="utf-8")
+    assert "Decisiones del propietario registradas en esta incidencia" in rol
+    assert "YA ESTÁ tomada" in rol, (
+        "el rol ya no dice que una decisión registrada del propietario se "
+        "ejecuta en vez de re-plantearse: #469 y #471 se repetirían"
+    )
