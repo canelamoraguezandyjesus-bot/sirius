@@ -396,18 +396,20 @@ jobs:
               rm -f "$comments_file"
               exit 1
             fi
-            if sirius_ronda_disparada_por_ci "$comments_file" "$pr_head"; then
-              echo "Sin observaciones estructuradas, pero hay un fallo de Quality registrado"
+            # ¿Que disparo ESTA ronda? Manda el ULTIMO marcador publicado
+            # (revision de la PR #477, P2, dos veces): un fallo historico de
+            # Quality — incluso del MISMO head, si despues hubo un rerun verde
+            # y una revision con observaciones — no puede decidir la ronda.
+            # Por eso el ultimo disparador se calcula ANTES y gobierna todo el
+            # arbol; la confirmacion H-14 (sirius_ronda_disparada_por_ci) se
+            # ejecuta DENTRO del brazo del head actual, como cinturon.
+            ultimo_disparador="$(grep -oiE '<!--[[:space:]]*sirius-(verdict:reviewer:changes|quality:[0-9a-f]+:(failure|timed_out))[^>]*-->' \
+              "$comments_file" | tail -n 1 || true)"
+            if [ -n "$ultimo_disparador" ] && printf '%s' "$ultimo_disparador" | grep -q "quality:${pr_head}:" \
+              && sirius_ronda_disparada_por_ci "$comments_file" "$pr_head"; then
+              echo "Sin observaciones estructuradas, y el ultimo disparador es un fallo de Quality"
               echo "para el head ${pr_head}: la causa corregible es ese run (H-14). Sigo."
-            elif ultimo_disparador="$(grep -oiE '<!--[[:space:]]*sirius-(verdict:reviewer:changes|quality:[0-9a-f]+:(failure|timed_out))[^>]*-->' \
-                "$comments_file" | tail -n 1)" && [ -n "$ultimo_disparador" ]; then
-              # ¿Que disparo ESTA ronda? Manda el ultimo marcador publicado
-              # (revision de la PR #477, P2): un fallo historico de Quality no
-              # convierte en "head movido" una ronda cuyo ultimo disparador fue
-              # una revision con observaciones — si estas no se pudieron LEER,
-              # eso es una lectura caida, no una ronda de CI, y se para en
-              # seguro reintentable en vez de consumir la correccion. Sin
-              # ningun disparador publicado, cae a la parada clasica de abajo.
+            elif [ -n "$ultimo_disparador" ]; then
               case "$ultimo_disparador" in
               *quality*)
               # H-36 (incidencias #441 y #442): la ronda SI nacio de un fallo de

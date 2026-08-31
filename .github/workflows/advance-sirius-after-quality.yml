@@ -206,10 +206,16 @@ jobs:
                 "sirius:review-requested" "8250DF" "Evento consumible: iniciar revisión independiente" \
                 "noclose" "${origen_de[$issue_number]}" || rc=1
               if [ "$rc" -eq 0 ] && [ -n "${etiqueta_sobrante_de[$issue_number]:-}" ]; then
+                # La retirada es parte de la garantia de la transicion
+                # (revision de la PR #477, P2): si falla, el paso queda en
+                # rojo reintentable — el marcador hace idempotente la
+                # transicion ya publicada y el reintento repite SOLO esta
+                # limpieza, en vez de dejar failed-safely conviviendo con
+                # review-requested como parada falsa.
                 ( export GH_TOKEN="$SIRIUS_TRIGGER_TOKEN"
                   sirius_retry gh issue edit "$issue_number" --repo "$GH_REPO" \
                     --remove-label "${etiqueta_sobrante_de[$issue_number]}" >/dev/null ) \
-                  || echo "::warning::No se pudo retirar la etiqueta sobrante ${etiqueta_sobrante_de[$issue_number]} de #${issue_number}."
+                  || { echo "::error::No se pudo retirar la etiqueta sobrante ${etiqueta_sobrante_de[$issue_number]} de #${issue_number}; reintentable."; rc=1; }
               fi
               ;;
             failure|timed_out)

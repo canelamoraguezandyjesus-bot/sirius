@@ -354,3 +354,15 @@ def test_las_decisiones_tienen_la_doble_ruta_del_contrato() -> None:
         "propietario: una caída de un solo endpoint se convertiría en "
         "reactivación humana"
     )
+
+
+def test_el_ultimo_disparador_gobierna_tambien_el_camino_feliz() -> None:
+    """PR #477 ronda 4 (P2): un fallo histórico del MISMO head (con rerun
+    verde y revisión posterior) no puede colarse como ronda de CI. El brazo
+    del head actual exige que el ÚLTIMO disparador sea su fallo de Quality."""
+    guion = _sin_comentarios(_paso_de_la_puerta())
+    assert "quality:${pr_head}:" in guion, (
+        "el brazo del camino feliz ya no comprueba que el último disparador "
+        "sea el fallo del head ACTUAL: un fallo histórico del mismo head "
+        "volvería a consumir una ronda de revisión con lectura caída"
+    )

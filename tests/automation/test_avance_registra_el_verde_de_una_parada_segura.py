@@ -82,3 +82,15 @@ def test_una_incidencia_con_las_dos_etiquetas_cuenta_una_sola_vez() -> None:
         "desapareció la deduplicación por número de incidencia y la retirada "
         "de la etiqueta sobrante tras la transición"
     )
+
+
+def test_la_retirada_de_la_sobrante_es_reintentable() -> None:
+    """PR #477 ronda 4 (P2): si la limpieza falla, el paso queda en rojo
+    reintentable — no un warning que deja failed-safely como parada falsa
+    junto a review-requested."""
+    guion = _sin_comentarios(_paso_de_avance())
+    tramo = guion[guion.rindex("etiqueta_sobrante_de") :][:500]
+    assert "rc=1" in tramo, (
+        "la retirada de la etiqueta sobrante volvió a ser un warning: la "
+        "garantía de la transición exige que el fallo se propague"
+    )
