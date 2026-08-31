@@ -119,6 +119,29 @@ def test_gate_closed_explicitly_in_settings_builds_the_same_way(
     assert _RecordingRankUseCase.captured[0]["category_matching_enabled"] is False
 
 
+def test_gate_stays_closed_on_a_truthy_but_non_boolean_value(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Incidencia #471/CODEX-001: una edición manual de ``settings.json`` que
+    deje ``category_matching_enabled`` como una cadena no vacía —p. ej.
+    ``"false"``, truthy en Python aunque su intención sea evidentemente
+    cerrar la puerta— no debe abrirla. Solo el booleano JSON ``true`` exacto
+    lo hace; cualquier otro valor truthy pero no booleano se trata como
+    cerrado."""
+    _patch_recorders(monkeypatch)
+    save_settings({"category_matching_enabled": "false"})
+
+    build_conversation_dependencies(
+        tmp_path / "sirius.db", tmp_path / "backups", secret_store=FakeSecretStore()
+    )
+
+    assert _RecordingRelevanceFilterAdapter.captured == []
+    assert _RecordingRankUseCase.captured[0]["category_matching_enabled"] is False
+    assert _RecordingRankUseCase.captured[0]["category_vocabulary"] == frozenset()
+    assert _RecordingContextBuilder.captured[0]["relevance_filter_port"] is None
+    assert _RecordingContextBuilder.captured[0]["max_criticality_category"] is None
+
+
 def test_gate_open_wires_the_real_vocabulary_and_the_ollama_relevance_filter(
     tmp_path: Path, monkeypatch: Any
 ) -> None:

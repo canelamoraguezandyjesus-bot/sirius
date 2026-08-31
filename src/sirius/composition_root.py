@@ -452,7 +452,7 @@ def build_conversation_dependencies(
     # que sus valores por defecto ya producen — ningún camino de código
     # nuevo para el estado cerrado. M11 cablea el parámetro; abrirlo en
     # settings.json no es trabajo suyo (§6.3, docs/evolution/STATUS.md, D7).
-    category_matching_enabled = bool(load_settings().get("category_matching_enabled", False))
+    category_matching_enabled = load_settings().get("category_matching_enabled", False) is True
     rank_relevant_knowledge_use_case = RankRelevantKnowledgeUseCase(
         memory_repository=memory_repository,
         decision_repository=decision_repository,
