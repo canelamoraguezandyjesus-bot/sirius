@@ -104,7 +104,9 @@ cambia en ninguno de los dos caminos.
 
 - `uv run pytest tests/unit/test_relevance_domain.py
   tests/integration/test_context_builder.py
-  tests/unit/test_composition_root_relevance_gate.py -q` → 93 passed.
+  tests/unit/test_composition_root_relevance_gate.py -q` → 95 passed (recuento
+  reejecutado sobre el head actual tras las pruebas añadidas en las rondas 2
+  y 3 de corrección de la incidencia #490).
 - Las pruebas nuevas de `tests/unit/test_relevance_domain.py`
   (`test_candidate_currently_valid_*`, `test_truncate_to_hard_limit_*`,
   `test_rf25_*`/`test_rf26_*`/`test_rescue_*`) fallan con

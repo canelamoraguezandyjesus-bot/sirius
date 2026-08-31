@@ -155,14 +155,20 @@ class _KeepOnlyRelevanceFilterPort:
     whose ``item_id`` is in ``kept_ids`` — standing in for a real model
     verdict that judged some candidates relevant and discarded the rest, so
     RF-25's rescue (only when the filter conserved *something*) can be
-    told apart from RF-26 (total absence, no rescue)."""
+    told apart from RF-26 (total absence, no rescue). Also a spy: records
+    the ``item_id``s it was actually called with on each invocation, so a
+    test can assert that a G12-excluded candidate never reached the filter
+    in the first place — not just that it is absent from the final result,
+    which a filter-side change could produce for the wrong reason."""
 
     def __init__(self, kept_ids: frozenset[int]) -> None:
         self._kept_ids = kept_ids
+        self.received_item_ids: list[frozenset[int]] = []
 
     def filter_candidates(
         self, query_text: str, candidates: Sequence[RankedKnowledge]
     ) -> Sequence[RankedKnowledge]:
+        self.received_item_ids.append(frozenset(c.item_id for c in candidates))
         return tuple(c for c in candidates if c.item_id in self._kept_ids)
 
 
@@ -885,15 +891,25 @@ def test_g12_hard_limit_exclusion_survives_the_real_context_builder_composition(
     # lowered hard limit, so excluded_by_g12 never reaches the filter or
     # RF-25 inside the real composition.
     monkeypatch.setattr(context_module, "_HARD_LIMIT_SIN_ATAR", 2)
+    relevance_filter_port = _KeepOnlyRelevanceFilterPort(frozenset({kept_by_filter.id}))
     builder = _build_context_builder(
         database_path,
-        relevance_filter_port=_KeepOnlyRelevanceFilterPort(frozenset({kept_by_filter.id})),
+        relevance_filter_port=relevance_filter_port,
         max_criticality_category="salud",
         category_matching_enabled=True,
     )
 
     context = builder.build("candidato")
 
+    # The precondition this test is named after: G12 must drop
+    # excluded_by_g12 *before* the filter is even called, not merely end up
+    # excluding it from the final result some other way. A spy on the
+    # filter double, not just the final assertion below, is what would
+    # catch a wiring regression that calls the filter with all three
+    # candidates and still happens to land on the same two survivors.
+    assert relevance_filter_port.received_item_ids == [
+        frozenset({kept_by_filter.id, rescuable_by_rf25.id})
+    ]
     result_ids = {m.id for m in context.memories}
     assert result_ids == {kept_by_filter.id, rescuable_by_rf25.id}
     assert excluded_by_g12.id not in result_ids
