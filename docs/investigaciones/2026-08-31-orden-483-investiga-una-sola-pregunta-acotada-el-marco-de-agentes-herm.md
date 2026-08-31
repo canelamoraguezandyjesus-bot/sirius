@@ -20,29 +20,29 @@ Hermes Agent es un framework de agentes de código abierto de Nous Research, lic
 
 ### (a) Componentes con nombre propio
 
-**Ninguna fila de esta tabla está verificada contra el código fuente del repositorio.** Ubicación, función y estado proceden de fragmentos y páginas de terceros (blogs, documentación espejo, foros) listados en «Fuentes»; no se ha leído directamente `NousResearch/hermes-agent` (ver «Lo que NO queda demostrado»). La ejecución original (gpt-researcher) no registró, por fila, cuál de las 33 URL de «Fuentes» sustenta cada dato aislado: por eso la columna «Fuente por fila» se declara **ND (no determinada)** en las once filas, en vez de inventar una atribución URL-a-fila que no se puede sostener con lo que quedó registrado.
+**Ninguna fila de esta tabla está verificada contra el código fuente del repositorio ni contra una fuente registrada propia.** La ejecución original (gpt-researcher) no registró, por fila, cuál de las 33 URL de «Fuentes» sustenta cada dato aislado, y ninguna de esas 33 fuentes nombra explícitamente —en el título o la URL ya citados en «Fuentes»— la ubicación, función o estado de un componente concreto: no hay, para ninguna fila, una excepción atribuible que aplicar. Por eso **ubicación, función, estado y fuente se declaran ND (no determinado)** en las once filas, en vez de inventar una atribución que no se puede sostener con lo que quedó registrado. Solo el nombre de cada componente se conserva: es la pista que esta investigación logró recuperar, no un dato verificado (ver «Lo que NO queda demostrado»).
 
-| Componente | Ubicación (según fragmentos, no verificada) | Función (según fragmentos) | Estado (según fragmentos, no verificado) | Fuente por fila |
+| Componente | Ubicación | Función | Estado | Fuente por fila |
 |---|---|---|---|---|
-| **AIAgent** | `run_agent.py` | Bucle principal: orquestación, prompt, herramientas, reintentos, persistencia | Implementado | ND |
-| **skill_manage** | `skills/skill_manage.py` | Crea/actualiza/borra las habilidades propias del agente | Implementado | ND |
-| **Curator** | `skills/curator.py` | Archiva habilidades de bajo valor | Implementado | ND |
-| **Atropos** | `atropos/` | RL para entrenar la llamada a herramientas | Implementado | ND |
-| **GEPA Optimizer** | `evolution/gepa.py` | Evolución genético-Pareto de habilidades, descripciones de herramientas y prompt a partir de trazados de ejecución | Implementado | ND |
-| **Batch Runner** | `batch_runner.py` | Ejecuta el agente en paralelo y guarda trayectorias (harness de evaluación) | Implementado | ND |
-| **Trajectory Saving** | `agent/trajectory.py` | Guarda conversaciones (formato ShareGPT) como datos para el aprendizaje | Implementado | ND |
-| **RL Environments** | `environments/` | Entornos de refuerzo reutilizables como funciones de fitness | Implementado | ND |
-| **Darwinian Evolver** | `evolution/darwinian.py` | Evolucionaría el código de las herramientas | Planificado | ND |
-| **Continuous Improvement Loop** | `improvement/pipeline.py` | Integraría los componentes anteriores en una mejora continua | Planificado | ND |
-| **Memory Layers** | `~/.hermes/*.md`, SQLite | Memoria persistente entre sesiones; no decide, solo almacena | Implementado | ND |
+| **AIAgent** | ND | ND | ND | ND |
+| **skill_manage** | ND | ND | ND | ND |
+| **Curator** | ND | ND | ND | ND |
+| **Atropos** | ND | ND | ND | ND |
+| **GEPA Optimizer** | ND | ND | ND | ND |
+| **Batch Runner** | ND | ND | ND | ND |
+| **Trajectory Saving** | ND | ND | ND | ND |
+| **RL Environments** | ND | ND | ND | ND |
+| **Darwinian Evolver** | ND | ND | ND | ND |
+| **Continuous Improvement Loop** | ND | ND | ND | ND |
+| **Memory Layers** | ND | ND | ND | ND |
 
-**ND = no determinado**: no queda registro, en la ejecución original ni en esta corrección, de qué fragmento concreto (de cuál de las 33 URL listadas en «Fuentes», con qué fecha) sustenta la ubicación, la función o el estado de esa fila en particular. Ubicación, función y estado son, como conjunto, lo que describen los fragmentos y páginas de terceros citados en «Fuentes»; pero no puede afirmarse cuál URL concreta sustenta cuál fila sin verificarlo de nuevo contra esas fuentes, verificación que esta corrección no realiza (ver «Lo que NO queda demostrado»).
+**ND = no determinado**: no queda registro, en la ejecución original ni en esta corrección, de qué fragmento concreto (de cuál de las 33 URL listadas en «Fuentes», con qué fecha) sustenta la ubicación, la función o el estado de esa fila en particular, y ninguna de esas 33 fuentes nombra ese dato explícitamente en su título o URL. No puede afirmarse cuál URL concreta sustenta cuál fila sin verificarlo de nuevo contra esas fuentes, verificación que esta corrección no realiza (ver «Lo que NO queda demostrado»).
 
-Ningún componente se llama literalmente «Control». Según los fragmentos consultados —no verificados directamente en el código—, el mejor candidato es **GEPA Optimizer**, al que esas fuentes describen como ya implementado (no planificado): sería el único que modifica el comportamiento del propio agente (habilidades, herramientas, prompt) a partir de sus propias ejecuciones. Las mismas fuentes describen a `AIAgent` como controlador del bucle de *ejecución*, no de la auto-mejora, y a `Continuous Improvement Loop` como mejor encaje conceptual pero marcado como planificado, no como código existente. Ninguna de estas tres afirmaciones de estado —que GEPA esté implementado, que `AIAgent` no decida mejoras, o que los dos bucles restantes estén solo planificados— se ha confirmado contra el repositorio; quedan como lo que dicen los fragmentos, no como hechos verificados.
+Ningún componente se llama literalmente «Control». El nombre que esta investigación recupera como pista es **GEPA Optimizer**: los fragmentos consultados (no verificados directamente en el código) lo asocian con la evolución de habilidades, herramientas y prompt a partir de las propias ejecuciones del agente, y describen a `AIAgent` más como controlador del bucle de *ejecución* que de la auto-mejora, y a `Continuous Improvement Loop` como mejor encaje conceptual pero sin confirmar si ya existe como código. Como ninguna fuente registrada permite atribuir por fila la ubicación, función o estado de estos componentes (ver tabla), esta identificación de GEPA Optimizer como el componente de «control» es una **pista recuperada, pendiente de verificación dirigida** contra el repositorio — no un hallazgo verificado. No puede afirmarse que GEPA Optimizer esté implementado, que `AIAgent` no decida mejoras, o que otros componentes estén solo planificados: son afirmaciones de los fragmentos consultados, no hechos confirmados en esta corrección.
 
 ### (b) Cómo funciona GEPA Optimizer
 
-GEPA Optimizer toma como entrada los trazados de ejecución que el agente guarda de sus propias sesiones (habilidad/herramienta invocada, prompt usado, resultado) y los usa como señal de fitness para una búsqueda evolutiva genético-Pareto: genera variantes de habilidades, descripciones de herramientas y secciones del prompt, y conserva las no dominadas en el frente de Pareto. **No se ha determinado, a partir de los fragmentos consultados, si el resultado se aplica automáticamente sobre los artefactos del agente o si solo se propone a la espera de aprobación humana**: los fragmentos describen que la búsqueda produce las variantes ganadoras, pero ninguno documenta ni confirma el paso final de aplicación, por lo que esa transición queda como no demostrada (ver «Lo que NO queda demostrado»).
+**Esto es lo que describen los fragmentos consultados, no un hallazgo verificado línea a línea contra el código** (la función de GEPA Optimizer figura como ND en la tabla de (a); ver «Lo que NO queda demostrado»). Según esos fragmentos, GEPA Optimizer tomaría como entrada los trazados de ejecución que el agente guarda de sus propias sesiones (habilidad/herramienta invocada, prompt usado, resultado) y los usaría como señal de fitness para una búsqueda evolutiva genético-Pareto: generaría variantes de habilidades, descripciones de herramientas y secciones del prompt, y conservaría las no dominadas en el frente de Pareto. **No se ha determinado, a partir de los fragmentos consultados, si el resultado se aplica automáticamente sobre los artefactos del agente o si solo se propone a la espera de aprobación humana**: los fragmentos describen que la búsqueda produce las variantes ganadoras, pero ninguno documenta ni confirma el paso final de aplicación, por lo que esa transición queda como no demostrada (ver «Lo que NO queda demostrado»).
 
 ### (c) Licencia y reutilización (veredicto incidencia #172)
 
@@ -51,9 +51,10 @@ Licencia **MIT**, que permite reutilizar, modificar y redistribuir el código �
 ## Lo que NO queda demostrado
 
 - El código fuente de Hermes Agent no se verificó directamente; el informe se apoya en fragmentos y páginas de terceros citados en «Fuentes», no en lectura línea a línea del repositorio.
-- **La atribución de la tabla de componentes es a nivel de conjunto, no por fila**: no queda registrado qué URL concreta de las 33 listadas sustenta la ubicación, función o estado de cada componente individual (columna «Fuente por fila» = ND en las once filas).
-- Ningún componente localizado se llama literalmente «control»; GEPA Optimizer es la mejor coincidencia razonada, no una cita textual del propietario.
+- **La atribución de la tabla de componentes es a nivel de conjunto, no por fila, y ninguna de las 33 fuentes nombra esos datos explícitamente por componente**: no queda registrado qué URL concreta sustenta la ubicación, función o estado de cada componente individual, por lo que las cuatro columnas —ubicación, función, estado y fuente— se declaran ND en las once filas; solo el nombre de cada componente se conserva, como pista recuperada por la investigación.
+- Ningún componente localizado se llama literalmente «control»; GEPA Optimizer es la mejor coincidencia razonada, no una cita textual del propietario ni un hallazgo verificado: es una **pista recuperada, pendiente de verificación dirigida** contra el repositorio.
 - No se confirmó si «Continuous Improvement Loop» y «Darwinian Evolver» ya existen en el repositorio a 2026-08-31, más allá de figurar como planificados en los fragmentos.
+- **La verificación dato por dato (ubicación, función, estado de cada componente) queda fuera del alcance de esta incidencia**: requeriría una misión de investigación dirigida, futura, con el registro de fuente por fila como requisito explícito del encargo — algo que esta ejecución no tuvo.
 - **No se ha comprobado si GEPA Optimizer aplica sus cambios de forma automática o si requiere aprobación humana**; los fragmentos consultados no documentan esa transición en ningún sentido.
 - No se evaluó la viabilidad técnica ni el esfuerzo de extraer GEPA Optimizer del resto del framework para reutilizarlo suelto.
 - Esta nota caduca con sus fuentes (ver cabecera): es una fotografía a 2026-08-31, no un hecho estable sobre un proyecto en desarrollo activo.
