@@ -107,3 +107,11 @@ def test_la_retirada_de_la_sobrante_es_reintentable() -> None:
         "(mapfile en sustitución de proceso): una lectura caída se "
         "convertiría en «no hay candidatas» y el verde se consumiría mudo"
     )
+
+
+def test_una_lectura_caida_del_candidato_es_reintentable() -> None:
+    """PR #477 ronda 6 (P1): la URL de la PR vive en los comentarios; una
+    lectura caída no es «no referencia ninguna PR» — descartar al candidato
+    consumiría el evento de un solo disparo con la incidencia parada."""
+    guion = _sin_comentarios(_paso_de_avance())
+    assert "lectura-candidato-fallida" in guion

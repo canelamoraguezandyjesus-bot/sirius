@@ -154,12 +154,22 @@ jobs:
             [ -z "${issue_number:-}" ] && continue
             body_file="$(mktemp)"
             comments_file="$(mktemp)"
+            # Ambas lecturas con su fallo propagado (revision de la PR #477,
+            # P1): la URL de la PR vive normalmente en un COMENTARIO
+            # (sirius_apply_verdict.sh), asi que una lectura caida no es "este
+            # candidato no referencia ninguna PR" — descartarlo en silencio
+            # consumiria el workflow_run de un solo disparo con la incidencia
+            # parada. Reintentable.
             if ! sirius_read_issue_body "$GH_REPO" "$issue_number" >"$body_file"; then
-              echo "::warning::No se pudo leer el cuerpo de #${issue_number}; se ignora en esta pasada."
+              echo "::error::No se pudo leer el cuerpo de #${issue_number} (lectura-candidato-fallida); reintentable."
               rm -f "$body_file" "$comments_file"
-              continue
+              exit 1
             fi
-            sirius_read_issue_comments "$GH_REPO" "$issue_number" >"$comments_file" 2>/dev/null || true
+            if ! sirius_read_issue_comments "$GH_REPO" "$issue_number" >"$comments_file" 2>/dev/null; then
+              echo "::error::No se pudieron leer los comentarios de #${issue_number} (lectura-candidato-fallida); reintentable."
+              rm -f "$body_file" "$comments_file"
+              exit 1
+            fi
             if cat "$body_file" "$comments_file" \
               | grep -oE 'https://github\.com/[^/[:space:]]+/[^/[:space:]]+/pull/[0-9]+' \
               | grep -Fxq "$pr_url"; then
