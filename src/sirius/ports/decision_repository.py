@@ -72,9 +72,9 @@ class DecisionRepository(Protocol):
         ...
 
     def list_current_decisions_by_category(self, categories: Sequence[str]) -> list[Decision]:
-        """Return every APPROVED decision whose ``category`` matches one of
-        ``categories`` (case-insensitive), filtered in SQL (ADR-120/M13).
-        Mirrors ``MemoryRepository.list_current_memories_by_category``.
+        """Return every APPROVED decision with a non-``None`` ``category``,
+        filtered in SQL (ADR-121/M13; CODEX-001, incidencia #489). Mirrors
+        ``MemoryRepository.list_current_memories_by_category``.
         """
         ...
 

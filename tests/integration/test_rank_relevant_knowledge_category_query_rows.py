@@ -1,9 +1,9 @@
-"""M13 (§11.5, ADR-120/incidencia #489), segunda mitad: la ampliación por
+"""M13 (§11.5, ADR-121/incidencia #489), segunda mitad: la ampliación por
 categoría de ``_rank_via_staged_engine`` deja de enumerar la totalidad del
 corpus vigente — integrada sobre M14 (índice de categoría buscable de
 activación múltiple, con restricción de ámbito, incidencia #486).
 
-Nota de arranque (ADR-120/§11.5-M13): el criterio de aceptación exige contar
+Nota de arranque (ADR-121/§11.5-M13): el criterio de aceptación exige contar
 filas devueltas por el repositorio, no invocaciones a
 ``list_current_memories()``/``list_current_decisions()`` — esas ya se
 invocaban una sola vez por ``rank()`` antes de este encargo, así que esa
@@ -20,10 +20,18 @@ consulta: activan la ampliación para **todo** candidato con categoría no
 nula en cuanto la consulta contiene cualquier término del vocabulario
 (``activa_categoria_buscable``, ADR-113) — a diferencia del intento anterior
 a M14 (incidencia #485), que solo consultaba por el único término activado.
-Por eso la consulta SQL filtra por el vocabulario completo
-(``WHERE category IN (<vocabulario>)``), y el subconjunto que no crece con
-el corpus es "todo lo ya categorizado", no "todo lo etiquetado con este
-término" — de ahí que, en este archivo, lo que queda fuera de la categoría
+Por eso el vocabulario solo actúa como puerta de activación en Python
+(``category_index_activated``, antes de consultar) y la consulta SQL filtra
+únicamente por ``category IS NOT NULL`` (CODEX-001, incidencia #489, ronda
+2): ``WHERE category IN (<vocabulario>)`` asumía que toda categoría
+persistida era siempre ``None`` o un miembro del vocabulario cerrado
+vigente, pero ``SetCategoryUseCase.set()`` nunca valida esa cadena y el
+vocabulario mismo es una constante provisional — una categoría heredada
+fuera del vocabulario actual es estado alcanzable y ``category_index_matches_query``
+la admite igual que a cualquier otra no nula, así que el SQL debe hacerlo
+también. El subconjunto que no crece con el corpus es "todo lo ya
+categorizado", no "todo lo etiquetado con un término del vocabulario
+vigente" — de ahí que, en este archivo, lo que queda fuera de la categoría
 sean memorias sin clasificar (``category is None``), no memorias con una
 categoría distinta.
 """
@@ -51,6 +59,8 @@ from sirius.adapters.persistence.sqlite_memory_repository import (
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
 from sirius.adapters.persistence.staged_engine_port import build_staged_engine_port
+from sirius.application.approve_decision import ApproveDecisionUseCase
+from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.set_category import SetCategoryUseCase
@@ -308,3 +318,76 @@ def test_filas_por_categoria_depende_del_subconjunto_no_del_total(tmp_path: Path
     assert len(with_many_outside) == CATEGORIZADOS
 
     assert memory_repository.filas_por_categoria == [CATEGORIZADOS, CATEGORIZADOS]
+
+
+@pytest.mark.integration
+def test_categoria_fuera_del_vocabulario_no_se_pierde_en_la_ampliacion(tmp_path: Path) -> None:
+    """CODEX-001 (incidencia #489, ronda 2): una fila vigente con una
+    categoría no nula que ya no pertenece al vocabulario cerrado actual
+    (D7 punto 1) es estado alcanzable — ``SetCategoryUseCase.set()`` nunca
+    valida la cadena que escribe, y ``composition_root._CATEGORY_VOCABULARY``
+    está documentada como provisional. ``category_index_matches_query`` solo
+    exige ``category is not None`` para activar la ampliación, sin comparar
+    contra el vocabulario; el filtro SQL de ``list_current_*_by_category``
+    debe admitir exactamente esa misma condición, o esta fila desaparece de
+    ``solo_por_categoria`` aunque la semántica del dominio la siga
+    admitiendo."""
+    database_path = tmp_path / "sirius.db"
+    upgrade_to_head(database_path)
+    project_repository = build_sqlite_project_repository(database_path)
+    project_repository.ensure_bootstrap_project()
+    active_project = project_repository.get_active_project()
+    assert active_project is not None
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    real_memory_repository = build_sqlite_memory_repository(database_path)
+    real_decision_repository = build_sqlite_decision_repository(database_path)
+    tag_use_case = SetCategoryUseCase(real_memory_repository, real_decision_repository)
+
+    memoria = SaveManualMemoryUseCase(unit_of_work).save("contenido neutro sin relacion alguna")
+    tag_use_case.set(CategoryTargetKind.MEMORY, memoria.id, "legado")
+
+    propuesta = ProposeDecisionUseCase(unit_of_work).propose(
+        "Asunto neutro sin relacion", active_project.id, "contenido"
+    )
+    decision = ApproveDecisionUseCase(unit_of_work).approve(propuesta.id, confirmed=True)
+    tag_use_case.set(CategoryTargetKind.DECISION, decision.id, "legado")
+
+    assert "legado" not in _VOCABULARY
+
+    # El filtro SQL debe seguir devolviendo estas filas: su categoría no es
+    # nula, aunque ya no pertenezca al vocabulario cerrado consultado.
+    memorias_por_categoria = real_memory_repository.list_current_memories_by_category(
+        tuple(_VOCABULARY)
+    )
+    assert [m.id for m in memorias_por_categoria] == [memoria.id]
+
+    decisiones_por_categoria = real_decision_repository.list_current_decisions_by_category(
+        tuple(_VOCABULARY)
+    )
+    assert [d.id for d in decisiones_por_categoria] == [decision.id]
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        use_case = RankRelevantKnowledgeUseCase(
+            memory_repository=real_memory_repository,
+            decision_repository=real_decision_repository,
+            project_repository=build_sqlite_project_repository(database_path),
+            knowledge_search_repository=build_sqlite_knowledge_search_repository(database_path),
+            category_vocabulary=_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        )
+        # "trabajo" activa el índice de categoría (M14: cualquier término del
+        # vocabulario basta), pero ninguna de las dos filas está etiquetada
+        # "trabajo": deben seguir apareciendo por ``category_index_matches_query``,
+        # cuya única condición por candidato es ``category is not None``.
+        resultado = use_case.rank("trabajo")
+    finally:
+        puerto.close()
+
+    resultado_ids = {(candidate.kind.value, candidate.item_id) for candidate in resultado}
+    assert ("memory", memoria.id) in resultado_ids
+    assert ("decision", decision.id) in resultado_ids

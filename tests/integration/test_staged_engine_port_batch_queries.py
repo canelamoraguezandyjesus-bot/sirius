@@ -1,8 +1,8 @@
-"""M13 (§11.5, ADR-120), primera mitad: ``StagedEnginePort.por_clave_exacta``/
+"""M13 (§11.5, ADR-121), primera mitad: ``StagedEnginePort.por_clave_exacta``/
 ``por_prefijo_de_sujeto`` en consulta por lote, en vez de dos consultas SQL
 por cada clave o prefijo dentro de un bucle Python.
 
-Nota de arranque (ADR-120): el criterio de aceptación de §11.5-M13 exige un
+Nota de arranque (ADR-121): el criterio de aceptación de §11.5-M13 exige un
 contador de consultas SQL reales sobre SQLite, no de invocaciones al método
 del puerto — mismo instrumento (``event.listen(Engine,
 "before_cursor_execute", ...)``) que
@@ -258,7 +258,7 @@ def test_por_prefijo_de_sujeto_conserva_cota_independiente_por_prefijo(tmp_path:
     el ``LIMIT`` combinado que introdujo el batching, ``por_prefijo_de_sujeto
     (("aaa-", "bbb-"))`` devuelve los 128 ``aaa-*`` y omite el ``bbb-*``,
     alterando qué candidatos se admiten frente al invariante «sin alterar qué
-    se admite ni en qué orden» de ADR-120. A diferencia de
+    se admite ni en qué orden» de ADR-121. A diferencia de
     ``por_clave_exacta``, aquí el recorte agregado y preexistente de
     ``_por_ids_mixtos`` (``LIMITE_POR_CONSULTA`` = 512) no interfiere: el
     total de coincidencias de esta llamada (~129) queda muy por debajo, así

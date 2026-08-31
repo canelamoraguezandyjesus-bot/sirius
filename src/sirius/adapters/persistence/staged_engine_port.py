@@ -224,7 +224,7 @@ class StagedEnginePort:
         """``E1``: coincidencia literal sobre claves normalizadas, en una
         sola sentencia SQL por tabla (``UNION ALL`` de una subconsulta por
         clave, cada una con su propio ``ORDER BY id LIMIT``) en vez de dos
-        consultas por clave (ADR-120/M13): el número de sentencias deja de
+        consultas por clave (ADR-121/M13): el número de sentencias deja de
         crecer con el número de claves de una llamada, y cada clave conserva
         su propia cota de filas (``LIMITE_POR_CONSULTA``) sin que el volumen
         de coincidencias de una clave pueda desplazar las de otra dentro de
@@ -279,7 +279,7 @@ class StagedEnginePort:
         """``E3``: familia de sujetos por prefijo estructural, dirigida, en
         una sola sentencia SQL por tabla (``UNION ALL`` de una subconsulta
         por prefijo, cada una con su propio ``ORDER BY id LIMIT``) en vez de
-        dos consultas por prefijo (ADR-120/M13): el número de sentencias deja
+        dos consultas por prefijo (ADR-121/M13): el número de sentencias deja
         de crecer con el número de prefijos de una llamada, y cada prefijo
         conserva su propia cota de filas (``LIMITE_POR_PREFIJO``) sin que el
         volumen de coincidencias de un prefijo pueda desplazar las de otro

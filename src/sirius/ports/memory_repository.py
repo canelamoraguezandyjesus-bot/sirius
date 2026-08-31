@@ -47,16 +47,21 @@ class MemoryRepository(Protocol):
         ...
 
     def list_current_memories_by_category(self, categories: Sequence[str]) -> list[Memory]:
-        """Return every CURRENT memory whose ``category`` matches one of
-        ``categories`` (case-insensitive), filtered in SQL (ADR-120/M13).
+        """Return every CURRENT memory with a non-``None`` ``category``,
+        filtered in SQL (ADR-121/M13; CODEX-001, incidencia #489).
 
-        Unlike ``list_current_memories``, this never returns a memory with
-        no category (``category is None``) or one outside ``categories`` —
-        the candidate set for the category-only widening of M9 (§6.2) is the
-        matching subset, not the whole vigente corpus. ``categories`` empty
-        returns an empty list without querying, mirroring
-        ``category_matches_query``'s "no vocabulary term activated, matches
-        nothing" rule.
+        ``categories`` (the closed vocabulary) is only ever an activation
+        gate here, mirroring ``category_index_matches_query``'s own
+        condition (``category is not None``, never compared against a
+        specific vocabulary term): empty returns an empty list without
+        querying, exactly like that function's "no vocabulary term
+        activated, matches nothing" rule. When non-empty, every memory whose
+        persisted ``category`` is not ``None`` is returned, even one that no
+        longer belongs to the current vocabulary — ``SetCategoryUseCase``
+        never validates the category it writes, and the vocabulary itself is
+        a provisional constant a later milestone can replace, so a legacy,
+        out-of-vocabulary category is reachable state and must still widen
+        the category-only match (M9 §6.2), not be silently dropped.
         """
         ...
 
