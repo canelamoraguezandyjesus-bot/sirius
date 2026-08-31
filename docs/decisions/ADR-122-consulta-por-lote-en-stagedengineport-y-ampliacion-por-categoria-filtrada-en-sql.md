@@ -1,6 +1,6 @@
 # ADR-122 — Consulta por lote en StagedEnginePort y ampliación por categoría filtrada en SQL (M13, incidencia #489, integrado sobre M14)
 
-- Estado: APROBADO
+- Estado: PROPUESTO
 - Fecha: 2026-08-31
 - Aprobación: fusión de la PR por el propietario
 
@@ -212,11 +212,11 @@ introdujo, sin tocarla.
 - `uv run ruff format --check .` — 574 files already formatted.
 - `uv run ruff check .` — All checks passed!
 - `uv run mypy src tests` — Success: no issues found in 545 source files.
-- `uv run pytest` — 4436 passed, 15 skipped, 2 xfailed (los mismos dos xfail
+- `uv run pytest` — 4461 passed, 15 skipped, 2 xfailed (los mismos dos xfail
   preexistentes de M11, sin cambios).
 - `git diff --check` — sin salida.
 - `tests/integration/test_staged_engine_port_batch_queries.py`: 4 passed.
-- `tests/integration/test_rank_relevant_knowledge_category_query_rows.py`: 2
+- `tests/integration/test_rank_relevant_knowledge_category_query_rows.py`: 3
   passed; verificado por mutación contra el código previo a este encargo
   (falla con `veces_enumeracion_completa == 1` y con
   `AttributeError` al no existir el método nuevo).
