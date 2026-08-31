@@ -9,6 +9,7 @@ red ni ``gh``.
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 import os
@@ -586,6 +587,172 @@ def test_cli_decide_blocks_when_history_is_unreadable(tmp_path: Path) -> None:
     assert decision["reason"] == "historial-ilegible"
 
 
+# --------------------------------------------------------------------------- #
+# CLI family-check (ADR-078, incidencia #495: el detector existía y ya estaba
+# medido, pero sin llamante desde ningún punto del ciclo)
+# --------------------------------------------------------------------------- #
+
+
+def test_cli_family_check_writes_the_evidence_when_three_consecutive_rounds_share_a_file(
+    tmp_path: Path,
+) -> None:
+    comments = tmp_path / "comments.txt"
+    same_file = [_observation("CODEX-001", archivo="src/x.py:10")]
+    comments.write_text(
+        "\n".join(
+            [
+                _round_comment(1, HEAD_A, same_file),
+                _round_comment(2, HEAD_B, [_observation("CODEX-002", archivo="src/x.py:20")]),
+                _round_comment(3, HEAD_C, [_observation("CODEX-003", archivo="src/x.py:30")]),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "family.json"
+    result = _run(["family-check", "--comments-file", str(comments), "--output", str(output)])
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["hay_familia_repetida"] is True
+    assert payload["evidencias"][0]["archivo"] == "src/x.py"
+    assert payload["evidencias"][0]["rondas"] == [1, 2, 3]
+
+
+def test_cli_family_check_two_rounds_is_the_normal_case_not_a_family(tmp_path: Path) -> None:
+    comments = tmp_path / "comments.txt"
+    comments.write_text(
+        "\n".join(
+            [
+                _round_comment(1, HEAD_A, [_observation("CODEX-001", archivo="src/x.py:10")]),
+                _round_comment(2, HEAD_B, [_observation("CODEX-002", archivo="src/x.py:20")]),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "family.json"
+    result = _run(["family-check", "--comments-file", str(comments), "--output", str(output)])
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload == {"hay_familia_repetida": False, "evidencias": []}
+
+
+def test_cli_family_check_unreadable_history_reports_false_and_never_fails(
+    tmp_path: Path,
+) -> None:
+    # Requisito (b) de la incidencia #495: este aviso informa, nunca bloquea.
+    # Un historial ilegible se traduce en "no hay familia" con el motivo en
+    # `error`, no en un código de salida distinto de 0 que pudiera detener al
+    # llamador.
+    output = tmp_path / "family.json"
+    result = _run(
+        [
+            "family-check",
+            "--comments-file",
+            str(tmp_path / "no-existe.txt"),
+            "--output",
+            str(output),
+        ]
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["hay_familia_repetida"] is False
+    assert payload["evidencias"] == []
+    assert "error" in payload
+
+
+def test_record_and_decide_never_load_the_family_detector(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CODEX-001: ``record``/``decide`` no dependen del detector de familia.
+
+    Antes de esta corrección, el detector se cargaba incondicionalmente al
+    importar el módulo: un detector roto (archivo ausente, error de
+    importación) hacía fallar también estos dos subcomandos críticos, que ni
+    siquiera lo usan. Se rompe deliberadamente la ruta del detector y se
+    comprueba que ninguno de los dos lo toca: ni fallan, ni disparan la carga
+    perezosa.
+    """
+    module = _module()
+    monkeypatch.setattr(module, "_round_family_detector_cache", None)
+    monkeypatch.setattr(module, "_RUTA_FAMILY_DETECTOR", tmp_path / "no-existe.py")
+
+    verdict = tmp_path / "verdict.json"
+    verdict.write_text(json.dumps({"observations": [_observation()]}), encoding="utf-8")
+    record_output = tmp_path / "record.json"
+    record_args = argparse.Namespace(
+        verdict_file=str(verdict), round=1, head=HEAD_A, output=str(record_output)
+    )
+    assert module.cmd_record(record_args) == 0
+
+    comments = tmp_path / "comments.txt"
+    comments.write_text(_round_comment(1, HEAD_A, [_observation()]), encoding="utf-8")
+    decide_output = tmp_path / "decision.json"
+    decide_args = argparse.Namespace(comments_file=str(comments), output=str(decide_output))
+    assert module.cmd_decide(decide_args) == 0
+
+    assert module._round_family_detector_cache is None
+
+
+def test_cli_family_check_broken_detector_reports_false_and_never_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CODEX-001 / ADR-121: un fallo al cargar el detector no bloquea el ciclo.
+
+    Igual que un historial ilegible (arriba), un fallo al cargar el propio
+    detector se traduce en ``hay_familia_repetida: false`` con el motivo en
+    ``error``, nunca en un código de salida distinto de 0: este aviso informa,
+    no decide.
+    """
+    module = _module()
+    monkeypatch.setattr(module, "_round_family_detector_cache", None)
+    monkeypatch.setattr(module, "_RUTA_FAMILY_DETECTOR", tmp_path / "no-existe.py")
+
+    comments = tmp_path / "comments.txt"
+    comments.write_text(
+        "\n".join(
+            [
+                _round_comment(1, HEAD_A, [_observation("CODEX-001", archivo="src/x.py:10")]),
+                _round_comment(2, HEAD_B, [_observation("CODEX-002", archivo="src/x.py:20")]),
+                _round_comment(3, HEAD_C, [_observation("CODEX-003", archivo="src/x.py:30")]),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "family.json"
+    args = argparse.Namespace(comments_file=str(comments), output=str(output))
+    assert module.cmd_family_check(args) == 0
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["hay_familia_repetida"] is False
+    assert payload["evidencias"] == []
+    assert "error" in payload
+
+
+def test_loading_the_family_detector_does_not_clobber_a_real_sirius_engine_package() -> None:
+    """CLAUDE-FAM-DETECT-001: no debe sustituir un ``sirius_engine`` ya real.
+
+    Cuando ``sirius_engine.round_history`` YA está importado como paquete real
+    en el proceso -como ocurre bajo esta misma suite, que lo importa de verdad
+    a través de otros módulos del árbol-, cargar el detector por ruta no debe
+    dejar en ``sys.modules`` el duplicado cargado por ruta en su lugar: al
+    terminar, debe quedar exactamente el mismo objeto de módulo que había
+    antes.
+    """
+    import sirius_engine.round_history as real_round_history
+
+    sys.modules["sirius_engine.round_history"] = real_round_history
+    paquete_real = sys.modules["sirius_engine"]
+    paquete_real.round_history = real_round_history  # type: ignore[attr-defined]
+    identidad_previa = id(sys.modules["sirius_engine.round_history"])
+
+    module = _module()
+    detector = module._cargar_round_family_detector()
+
+    assert sys.modules["sirius_engine"] is paquete_real
+    assert sys.modules["sirius_engine.round_history"] is real_round_history
+    assert id(sys.modules["sirius_engine.round_history"]) == identidad_previa
+    assert paquete_real.round_history is real_round_history
+    assert detector.detectar_familia_repetida is not None
+
+
 def _bare_system_python() -> str | None:
     """Un ``python3`` distinto del que ejecuta esta suite, sin el proyecto instalado.
 
@@ -657,6 +824,58 @@ def test_cli_decide_runs_under_the_bare_system_python_without_the_project_instal
     decision = json.loads(output.read_text(encoding="utf-8"))
     assert decision["decision"] == "CONTINUE"
     assert decision["reason"] == "primera-ronda-con-hallazgos"
+
+
+@pytest.mark.skipif(
+    _BARE_PYTHON is None,
+    reason="No hay un python3 del sistema distinto del de este proyecto en este entorno.",
+)
+def test_cli_family_check_runs_under_the_bare_system_python_without_the_project_installed(
+    tmp_path: Path,
+) -> None:
+    """El detector (round_family_detector.py) SÍ hace ``import sirius_engine...``.
+
+    A diferencia de ``round_history.py``, es un módulo de paquete normal, no
+    pensado para cargarse por ruta. ``_cargar_round_family_detector`` registra
+    un ``sirius_engine`` mínimo en ``sys.modules`` antes de ejecutarlo
+    (incidencia #495); sin ese registro, esta prueba fallaría con
+    ``ModuleNotFoundError: No module named 'sirius_engine'`` en vez de con el
+    resultado esperado.
+    """
+    assert _BARE_PYTHON is not None
+    comments = tmp_path / "comments.txt"
+    comments.write_text(
+        "\n".join(
+            [
+                _round_comment(1, HEAD_A, [_observation("CODEX-001", archivo="src/x.py:10")]),
+                _round_comment(2, HEAD_B, [_observation("CODEX-002", archivo="src/x.py:20")]),
+                _round_comment(3, HEAD_C, [_observation("CODEX-003", archivo="src/x.py:30")]),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "family.json"
+    entorno_reducido = {"PATH": os.environ.get("PATH", "")}
+    result = subprocess.run(
+        [
+            _BARE_PYTHON,
+            str(SCRIPT),
+            "family-check",
+            "--comments-file",
+            str(comments),
+            "--output",
+            str(output),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=REPO_ROOT,
+        env=entorno_reducido,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["hay_familia_repetida"] is True
+    assert payload["evidencias"][0]["archivo"] == "src/x.py"
 
 
 # --------------------------------------------------------------------------- #

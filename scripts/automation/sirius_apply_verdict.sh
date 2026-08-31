@@ -459,7 +459,21 @@ case "$verdict" in
     # de ciclos: publica las huellas estables de los hallazgos de esta ronda
     # para que la puerta del corrector pueda medir progreso real entre rondas
     # en vez de detenerse en un número fijo.
-    if ! round_number="$(sirius_next_round_number "$REPO" "$ISSUE")"; then
+    #
+    # El historial se lee UNA sola vez y se reutiliza para dos cosas: numerar
+    # la ronda (abajo) y, más adelante, comprobar familia repetida
+    # (incidencia #495) sobre el historial + esta ronda. Antes cada llamador
+    # pedía su propio volcado; con uno solo el número de lecturas a la API no
+    # cambia (`sirius_next_round_number` ya hacía exactamente una cuando no
+    # recibía volcado) y la comprobación de familia no añade ninguna.
+    history_dump="$(mktemp)"
+    if ! sirius_dump_comments "$REPO" "$ISSUE" "$history_dump" >/dev/null 2>&1; then
+      rm -f "$history_dump"
+      stop_safely "historial-de-rondas-ilegible" \
+        "No he podido leer el historial de rondas de esta incidencia, así que no puedo numerar esta ronda sin arriesgarme a repetir un número ya usado y corromper la medida de convergencia. Me detengo de forma segura."
+    fi
+    if ! round_number="$(sirius_next_round_number "$REPO" "$ISSUE" "$history_dump")"; then
+      rm -f "$history_dump"
       stop_safely "historial-de-rondas-ilegible" \
         "No he podido leer el historial de rondas de esta incidencia, así que no puedo numerar esta ronda sin arriesgarme a repetir un número ya usado y corromper la medida de convergencia. Me detengo de forma segura."
     fi
@@ -469,12 +483,34 @@ case "$verdict" in
     if ! python3 "${SIRIUS_VERDICT_DIR}/sirius_convergence.py" record \
       --verdict-file "$round_verdict" --round "$round_number" \
       --head "$head_sha" --output "$round_record"; then
-      rm -f "$round_verdict" "$round_record"
+      rm -f "$round_verdict" "$round_record" "$history_dump"
       stop_safely "registro-de-ronda-fallido" \
         "No se pudo construir el registro de convergencia de esta ronda; sin él la puerta del corrector no puede medir progreso y me detengo de forma segura."
     fi
     round_json="$(cat "$round_record")"
     rm -f "$round_verdict" "$round_record"
+
+    # Aviso informativo de familia repetida (ADR-078, incidencia #495): el
+    # detector ya existe y ya está medido (4 aciertos, 0 falsos sobre 14
+    # incidencias candidatas), pero nunca tuvo llamante. Esta comprobación
+    # SOLO informa -no bloquea ni cambia la transición de más abajo, ni el
+    # `sirius:repair-requested` que sigue aplicándose siempre-: se publica el
+    # dato para poder medir su tasa de aciertos y falsos en producción real
+    # antes de darle autoridad (criterio de la incidencia #267). Un fallo al
+    # comprobarlo (python3 ausente, historial corrupto) se ignora en silencio
+    # por el mismo motivo: no puede convertirse en una parada segura de algo
+    # que solo informa.
+    printf '\n<!-- sirius-round:%s -->\n\n## RONDA_HALLAZGOS\n```json\n%s\n```\n' \
+      "$round_number" "$round_json" >>"$history_dump"
+    family_notice=""
+    family_result="$(mktemp)"
+    if python3 "${SIRIUS_VERDICT_DIR}/sirius_convergence.py" family-check \
+      --comments-file "$history_dump" --output "$family_result" >/dev/null 2>&1; then
+      if [ "$(jq -r '.hay_familia_repetida // false' "$family_result" 2>/dev/null)" = "true" ]; then
+        family_notice="$(jq -r '[.evidencias[].detalle] | map("- " + .) | join("\n")' "$family_result" 2>/dev/null)"
+      fi
+    fi
+    rm -f "$family_result" "$history_dump"
 
     # El marcador incluye head Y run: NO puede depender solo del contenido. Si
     # dos rondas distintas encontraran exactamente los mismos hallazgos —el caso
@@ -491,6 +527,10 @@ case "$verdict" in
       printf '%s\n\n%s\n' "$marker" "## CHANGES_REQUESTED"
       printf '- PR: %s\n' "$pr_hint"
       printf '%s\n\n%s\n\n## OBSERVACIONES_ESTRUCTURADAS\n```json\n%s\n```\n' "${summary}" "${readable}" "${observations}"
+      if [ -n "$family_notice" ]; then
+        printf '\n## AVISO_FAMILIA_REPETIDA\n%s\n\nAviso informativo (ADR-078, incidencia #495): no bloquea ni cambia esta transición.\n' \
+          "$family_notice"
+      fi
       printf '\n<!-- sirius-round:%s -->\n\n## RONDA_HALLAZGOS\n```json\n%s\n```\n' \
         "${round_number}" "${round_json}"
     } >"$body_file"
