@@ -2,7 +2,7 @@
   "documento": "Veredicto congelado del filtro de relevancia con modelo local (fila \"4. filtro con regla, con categoria\"), portado sin modificar desde evidence/adr001-spikes a tests/acceptance/fixtures/relevance_filter_frozen_run.json (incidencia #463).",
   "fuente": {
     "rama": "evidence/adr001-spikes",
-    "commit": "a4c910a9773b9c9e2f0016e462eb709b81805d50",
+    "commit": "8ff535b91dc6a7a2c42eb886699ebdefd902e4fd",
     "fichero": "resultado_modelo_local_v0.7.json",
     "fila": "4. filtro con regla, con categoria",
     "nota": "Es la corrida que combina el indice de categoria (M8/M9) y el filtro con modelo local (M9/M10) sobre el mismo corpus congelado que porta este fixture (mismo commit dfdcdaff04dcba10939cc0b0569c55b6a636296f para cases_v0_5.json/references_v0_5.json/conformance_corpus_v0_6.json/property_keys_v0_2.json/applied_criticality_v0_1.json, verificado byte a byte sin diferencias entre ambos commits). No se porta la fila \"5. con siembra en contexto\": esa fila anade una siembra de las criticas del ambito cuando la peticion declara proposito de ensamblar contexto (experiments/adr002/lateral/categoria.py:_pide_contexto), mecanismo que no forma parte del diseno aprobado de category_match (SIRIUS-ARQ-0.2 SS6.2), que compara unicamente el texto de la consulta contra el vocabulario cerrado, nunca el proposito de la peticion.",

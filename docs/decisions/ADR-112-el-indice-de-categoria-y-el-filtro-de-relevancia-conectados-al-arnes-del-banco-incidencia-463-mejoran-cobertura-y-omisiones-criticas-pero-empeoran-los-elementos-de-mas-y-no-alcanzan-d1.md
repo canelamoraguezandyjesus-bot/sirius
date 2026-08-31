@@ -56,7 +56,7 @@ aplicado con el mismo candado de M10.
     corrida congelada portada en
     `tests/acceptance/fixtures/relevance_filter_frozen_run.json` (de
     `resultado_modelo_local_v0.7.json`, fila "4. filtro con regla, con
-    categoria", commit `a4c910a9773b9c9e2f0016e462eb709b81805d50` de
+    categoria", commit `8ff535b91dc6a7a2c42eb886699ebdefd902e4fd` de
     `evidence/adr001-spikes` — el mismo corpus que el fixture del banco, sin
     diferencias byte a byte comprobadas contra el commit
     `dfdcdaff04dcba10939cc0b0569c55b6a636296f` que ya citaba su procedencia).
@@ -261,7 +261,7 @@ congelado no puede tener evidencia por sí solo.
   `experiments/adr002/benchmark/cases_v0_5.json`,
   `references_v0_5.json`, `conformance_corpus_v0_6.json`,
   `property_keys_v0_2.json` y `applied_criticality_v0_1.json` entre los
-  commits `a4c910a9773b9c9e2f0016e462eb709b81805d50` (el de
+  commits `8ff535b91dc6a7a2c42eb886699ebdefd902e4fd` (el de
   `resultado_modelo_local_v0.7.json`) y
   `dfdcdaff04dcba10939cc0b0569c55b6a636296f` (el que ya citaba la
   procedencia del fixture del banco) en `evidence/adr001-spikes`: sin
