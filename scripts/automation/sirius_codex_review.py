@@ -381,8 +381,20 @@ def _observations_from_comments(comments: list[dict[str, Any]]) -> list[dict[str
         # incorrectamente como POSIBLE_GOTEO (incidencia #501,
         # CLAUDE-REVISOR-003). Sin `line`, se omite el número en vez de
         # arriesgar uno incorrecto.
+        #
+        # Pero `line` puede venir presente aun con `side: "LEFT"` (GitHub
+        # también lo rellena para comentarios anclados en el lado eliminado):
+        # en ese caso la coordenada es del lado antiguo, no del nuevo, y
+        # conservarla igual reproduce el mismo goteo que el párrafo anterior
+        # ya evita para el caso sin `line` (incidencia #501, CODEX-001). Por
+        # eso también se consulta `side`/`original_side` antes de conservarla.
         line = comment.get("line")
-        location = f"{path}:{line}" if isinstance(line, int) else (path or "desconocido")
+        side = comment.get("side") or comment.get("original_side")
+        location = (
+            f"{path}:{line}"
+            if isinstance(line, int) and side != "LEFT"
+            else (path or "desconocido")
+        )
         permalink = str(comment.get("html_url") or "").strip()
         observations.append(
             {

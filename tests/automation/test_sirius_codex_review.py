@@ -805,6 +805,28 @@ def test_collect_review_comment_anchored_on_removed_line_omits_line_number(
     assert result["observations"][0]["archivo"] == "src/a.py"
 
 
+def test_collect_review_comment_on_left_side_with_line_omits_line_number(
+    tmp_path: Path,
+) -> None:
+    # Hallazgo CODEX-001 (incidencia #501, ronda 6): GitHub puede rellenar
+    # `line` aunque el comentario esté anclado en el lado eliminado
+    # (`side: "LEFT"`); esa coordenada pertenece al lado antiguo, no al
+    # nuevo, así que conservarla reproduce el mismo goteo que el caso sin
+    # `line` ya evita: la ubicación debe quedarse sin número en vez de citar
+    # una posición del lado nuevo que nunca existió.
+    env = _setup(tmp_path)
+    _write_state(tmp_path)
+    _seed(env, "reviews.json", [_review()])
+    comment = _review_comment(801, "src/a.py", 10)
+    comment["original_line"] = 5
+    comment["side"] = "LEFT"
+    _seed(env, "review_comments_700.json", [comment])
+    r = _run_collect(env, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["observations"][0]["archivo"] == "src/a.py"
+
+
 def test_collect_normalized_json_has_stable_shape(tmp_path: Path) -> None:
     env = _setup(tmp_path)
     _write_state(tmp_path)
