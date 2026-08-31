@@ -207,6 +207,12 @@ def test_gh_no_disponible_se_calla_y_no_bloquea(
     assert codigo == 0
     anotadas = json.loads(output.read_text(encoding="utf-8"))
     assert "posible_goteo" not in anotadas[0]
+    # Hallazgo Codex (incidencia #501): el resumen por stderr no puede
+    # confundir "0 marcadas porque no hubo goteo" con "0 marcadas porque no
+    # se pudo comparar nada" -declara aparte cuántas quedaron sin
+    # información, en vez de callarlo dentro del mismo "0 de N marcadas".
+    stderr = capsys.readouterr().err
+    assert "1 sin información" in stderr
 
 
 def test_observaciones_ilegibles_publica_sin_anotar_y_no_falla(

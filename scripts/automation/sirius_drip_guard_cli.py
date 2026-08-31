@@ -15,9 +15,15 @@ Se ejecuta con el ``python3`` del sistema, igual que
 de fichero en vez de con ``import sirius_engine...``.
 
 Nunca hace fallar el proceso completo por un problema propio: el guardián es
-estrictamente informativo (regla (a) de la incidencia #496). Ante cualquier
-error -historial ilegible, `gh` no disponible, JSON corrupto- escribe las
-observaciones de entrada SIN anotar y declara el motivo por stderr.
+estrictamente informativo (regla (a) de la incidencia #496). Ante un error
+que impide evaluar CUALQUIER observación -historial ilegible, JSON corrupto-
+escribe las observaciones de entrada SIN anotar y declara el motivo por
+stderr. Cuando el fallo es parcial -`gh` no disponible o `gh api compare`
+falla solo para algunas observaciones concretas- el resto de la ronda se
+evalúa con normalidad y el resumen final por stderr declara aparte cuántas
+observaciones quedaron `SIN_INFORMACION` (ADR-123): esa cuenta nunca se
+confunde con "marcadas" ni con "sin marca", para que un fallo de lectura no
+pueda leerse como si todas las comparaciones hubieran sido concluyentes.
 """
 
 from __future__ import annotations
@@ -56,7 +62,8 @@ def _cargar(nombre: str, archivo: str) -> ModuleType:
 _round_history = _cargar("sirius_round_history", "round_history.py")
 _drip_guard = _cargar("sirius_drip_guard", "drip_guard.py")
 parse_round_records = _round_history.parse_round_records
-annotate_observations = _drip_guard.annotate_observations
+annotate_observations_with_verdicts = _drip_guard.annotate_observations_with_verdicts
+DripVerdict = _drip_guard.DripVerdict
 gh_compare_file = _drip_guard.gh_compare_file
 
 
@@ -100,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         texto_historial = Path(args.comments_file).read_text(encoding="utf-8")
         round_records = parse_round_records(texto_historial)
-        anotadas = annotate_observations(
+        anotadas, veredictos = annotate_observations_with_verdicts(
             observations,
             round_number=args.round,
             round_records=round_records,
@@ -116,11 +123,15 @@ def main(argv: list[str] | None = None) -> int:
         )
         return _escribir_sin_anotar(observations, args.output)
 
-    marcadas = sum(1 for item in anotadas if isinstance(item, dict) and item.get("posible_goteo"))
-    print(
-        f"sirius_drip_guard_cli: {marcadas} de {len(anotadas)} observación(es) marcadas.",
-        file=sys.stderr,
-    )
+    marcadas = sum(1 for veredicto in veredictos if veredicto is DripVerdict.POSIBLE_GOTEO)
+    sin_informacion = sum(1 for veredicto in veredictos if veredicto is DripVerdict.SIN_INFORMACION)
+    mensaje = f"sirius_drip_guard_cli: {marcadas} de {len(anotadas)} observación(es) marcadas."
+    if sin_informacion:
+        mensaje += (
+            f" {sin_informacion} sin información (comparación con la ronda 1 no disponible): "
+            "no se cuentan como concluyentes ni a favor ni en contra de la marca."
+        )
+    print(mensaje, file=sys.stderr)
     Path(args.output).write_text(json.dumps(anotadas, ensure_ascii=False), encoding="utf-8")
     return 0
 

@@ -15,6 +15,7 @@ from sirius_engine.drip_guard import (
     DripVerdict,
     FileCompareResult,
     annotate_observations,
+    annotate_observations_with_verdicts,
     evaluate_finding,
     parse_archivo_location,
 )
@@ -248,3 +249,69 @@ def test_annotate_observations_no_muta_la_entrada() -> None:
         fetch=fetch,
     )
     assert "posible_goteo" not in original
+
+
+def test_annotate_observations_descarta_una_marca_ajena_ya_presente() -> None:
+    # Modo solo-Claude (incidencia #501, hallazgo Codex): la observación de
+    # entrada puede traer ya una clave `posible_goteo` inventada por el
+    # revisor, no por este guardián. Aquí ni siquiera hay ronda 1 con la que
+    # comparar (round_number=1, regla (e) de la incidencia #496), así que
+    # `fetch` no se llama y la única fuente posible de la clave es la propia
+    # entrada: debe descartarse, no publicarse como si el guardián la
+    # hubiera puesto.
+    def _fetch_no_deberia_llamarse(repo: str, h1: str, h2: str, ruta: str) -> FileCompareResult:
+        raise AssertionError("ronda 1 nunca compara")
+
+    observations = [{"archivo": "src/x.py:10", "posible_goteo": "inventado"}]
+    anotadas = annotate_observations(
+        observations,
+        round_number=1,
+        round_records=[],
+        current_head=HEAD1,
+        repo=REPO,
+        fetch=_fetch_no_deberia_llamarse,
+    )
+    assert "posible_goteo" not in anotadas[0]
+
+
+# --------------------------------------------------------------------------- #
+# annotate_observations_with_verdicts
+# --------------------------------------------------------------------------- #
+
+
+def test_annotate_observations_with_verdicts_expone_sin_informacion() -> None:
+    fetch = _fetch_devolviendo(None)
+    observations = [{"id": "R1", "archivo": "src/x.py:10", "problema": "..."}]
+    anotadas, veredictos = annotate_observations_with_verdicts(
+        observations,
+        round_number=2,
+        round_records=[_registro_ronda_1()],
+        current_head=HEAD2,
+        repo=REPO,
+        fetch=fetch,
+    )
+    assert "posible_goteo" not in anotadas[0]
+    assert veredictos == [DripVerdict.SIN_INFORMACION]
+
+
+def test_annotate_observations_with_verdicts_coincide_con_annotate_observations() -> None:
+    fetch = _fetch_devolviendo(FileCompareResult(changed=False, patch=None))
+    observations = [{"id": "R1", "archivo": "src/x.py:10", "problema": "..."}]
+    anotadas_simple = annotate_observations(
+        observations,
+        round_number=2,
+        round_records=[_registro_ronda_1()],
+        current_head=HEAD2,
+        repo=REPO,
+        fetch=fetch,
+    )
+    anotadas_detallada, veredictos = annotate_observations_with_verdicts(
+        observations,
+        round_number=2,
+        round_records=[_registro_ronda_1()],
+        current_head=HEAD2,
+        repo=REPO,
+        fetch=fetch,
+    )
+    assert anotadas_simple == anotadas_detallada
+    assert veredictos == [DripVerdict.POSIBLE_GOTEO]

@@ -211,11 +211,68 @@ def annotate_observations(
     No muta la entrada. Cada observación que evalúa a
     :data:`DripVerdict.POSIBLE_GOTEO` recibe el campo nuevo
     ``posible_goteo`` con :data:`MENSAJE_POSIBLE_GOTEO`; las demás se
-    devuelven sin ese campo, sin ningún otro cambio.
+    devuelven sin ese campo, sin ningún otro cambio. Si la observación de
+    entrada ya traía una clave ``posible_goteo`` propia -en modo solo-Claude,
+    directamente del veredicto del revisor, no de este guardián-, se
+    descarta: esa clave está reservada a este módulo y un valor ajeno
+    conservado por copia se publicaría como si el guardián la hubiera
+    marcado.
     """
+    anotadas, _ = _annotate_with_verdicts(
+        observations,
+        round_number=round_number,
+        round_records=round_records,
+        current_head=current_head,
+        repo=repo,
+        fetch=fetch,
+    )
+    return anotadas
+
+
+def annotate_observations_with_verdicts(
+    observations: Sequence[Mapping[str, Any]],
+    *,
+    round_number: int,
+    round_records: Sequence[Mapping[str, Any]],
+    current_head: str,
+    repo: str,
+    fetch: CompareFetcher,
+) -> tuple[list[dict[str, Any]], list[DripVerdict]]:
+    """Igual que :func:`annotate_observations`, y además devuelve el
+    :class:`DripVerdict` de cada observación, en el mismo orden.
+
+    Existe para que un llamador (el CLI) pueda distinguir cuántas
+    observaciones quedaron en :data:`DripVerdict.SIN_INFORMACION` -lectura de
+    `gh api compare` caída, historial sin ronda 1- de cuántas se evaluaron de
+    verdad, sin invocar ``fetch`` una segunda vez y sin que esa distinción
+    toque el JSON anotado (``anotadas``) ni la transición del ciclo (regla
+    (a) de la incidencia #496): los veredictos se devuelven aparte, nunca
+    como un campo adicional de la observación.
+    """
+    return _annotate_with_verdicts(
+        observations,
+        round_number=round_number,
+        round_records=round_records,
+        current_head=current_head,
+        repo=repo,
+        fetch=fetch,
+    )
+
+
+def _annotate_with_verdicts(
+    observations: Sequence[Mapping[str, Any]],
+    *,
+    round_number: int,
+    round_records: Sequence[Mapping[str, Any]],
+    current_head: str,
+    repo: str,
+    fetch: CompareFetcher,
+) -> tuple[list[dict[str, Any]], list[DripVerdict]]:
     anotadas: list[dict[str, Any]] = []
+    veredictos: list[DripVerdict] = []
     for observation in observations:
         copia = dict(observation)
+        copia.pop("posible_goteo", None)
         veredicto = evaluate_finding(
             round_number=round_number,
             round_records=round_records,
@@ -227,7 +284,8 @@ def annotate_observations(
         if veredicto is DripVerdict.POSIBLE_GOTEO:
             copia["posible_goteo"] = MENSAJE_POSIBLE_GOTEO
         anotadas.append(copia)
-    return anotadas
+        veredictos.append(veredicto)
+    return anotadas, veredictos
 
 
 def gh_compare_file(
