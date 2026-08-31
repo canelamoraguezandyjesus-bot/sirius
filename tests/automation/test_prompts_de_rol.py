@@ -379,3 +379,32 @@ def test_el_prompt_cuyo_workflow_no_prepara_el_entorno_lo_advierte(
     assert posicion_propiedad < posicion_ejemplos, (
         f"{prompt_path.name} pone los ejemplos antes que la propiedad que los explica"
     )
+
+
+# --------------------------------------------------------------------------- #
+# Dirección del propietario (31-08-2026): la revisión es UNA pasada exhaustiva.
+# El goteo — un hallazgo por ronda sobre texto que llevaba idéntico desde la
+# primera — convierte cada gota en un ciclo entero de máquina.
+# --------------------------------------------------------------------------- #
+
+_REVISORES = ("reviewer.md", "revisor-documental.md")
+
+
+@pytest.mark.parametrize("nombre", _REVISORES)
+def test_todo_revisor_manda_una_pasada_exhaustiva(nombre: str) -> None:
+    texto = (PROMPTS_DIR / nombre).read_text(encoding="utf-8")
+    assert "EXHAUSTIVA" in texto, (
+        f"{nombre} ya no manda la pasada exhaustiva: el goteo de un hallazgo "
+        "por ronda volvería, y cada gota cuesta un ciclo entero"
+    )
+    assert "goteo" in texto, (
+        f"{nombre} ya no exige que un hallazgo tardío declare su origen "
+        "(código nuevo de la corrección, regresión, o goteo del revisor)"
+    )
+
+
+def test_agents_declara_la_politica_de_revision() -> None:
+    """Codex lee AGENTS.md: la política tiene que vivir también ahí."""
+    texto = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    assert "Política de revisión" in texto
+    assert "EXHAUSTIVA" in texto
