@@ -45,6 +45,8 @@ from datetime import UTC, datetime
 from sirius.domain.relevance import (
     KnowledgeKind,
     RankedKnowledge,
+    candidate_in_declared_scope,
+    category_index_matches_query,
     category_matches_query,
     rank_relevant_knowledge,
     subject_matches_query,
@@ -168,8 +170,24 @@ class RankRelevantKnowledgeUseCase:
         frente a la recencia — ninguna de las dos cosas que el motor por sí
         mismo puede dar, porque nunca ve esos candidatos. Por eso, tras
         traducir lo que el motor sí admitió, esta función completa la
-        ampliación de M9 por separado: recorre el conocimiento vigente que
-        el motor no admitió y añade el que coincide solo por categoría.
+        ampliación por separado: recorre el conocimiento vigente que el
+        motor no admitió y añade el que coincide por categoría.
+
+        M14 (§11.2/§11.5, incidencia #486) sustituye la regla de esa
+        ampliación: en vez de la activación única de ``category_matches_query``
+        sin restricción de ámbito que M9 portaba aquí, usa el índice de
+        categoría buscable de activación múltiple
+        (``category_index_matches_query`` — cualquier término del
+        vocabulario, no uno único) con restricción por ámbito
+        (``candidate_in_declared_scope`` — el proyecto activo de la petición
+        más el ámbito global siempre admitido), réplica de
+        ``indice_de_categoria``/``activa_categoria_buscable``/
+        ``_en_ambito_declarado`` del arnés
+        (``tests/acceptance/staged_engine_category_and_relevance.py``,
+        ADR-113/114). ``category_matches_query`` sigue existiendo sin
+        cambios, tanto para el estado-cerrado (``_rank_via_current_pipeline``)
+        como para la señal ``category_match`` de los candidatos que el motor
+        ya admitió arriba — solo la ampliación de este bloque cambia.
 
         Las puertas y la agrupación del motor (qué se admite y qué se
         trunca por ``limite_duro``) no se tocan: ``ranked`` es exactamente
@@ -245,7 +263,11 @@ class RankRelevantKnowledgeUseCase:
             for memory in self._memory_repository.list_current_memories():
                 if (KnowledgeKind.MEMORY, memory.id) in admitidos_por_el_motor:
                     continue
-                if category_match(memory.category):
+                if category_index_matches_query(
+                    memory.category, query_text, self._category_vocabulary
+                ) and candidate_in_declared_scope(
+                    memory.project_id, active_project_id=active_project_id
+                ):
                     solo_por_categoria.append(
                         RankedKnowledge(
                             kind=KnowledgeKind.MEMORY,
@@ -262,7 +284,11 @@ class RankRelevantKnowledgeUseCase:
             for decision in self._decision_repository.list_current_decisions():
                 if (KnowledgeKind.DECISION, decision.id) in admitidos_por_el_motor:
                     continue
-                if category_match(decision.category):
+                if category_index_matches_query(
+                    decision.category, query_text, self._category_vocabulary
+                ) and candidate_in_declared_scope(
+                    decision.project_id, active_project_id=active_project_id
+                ):
                     solo_por_categoria.append(
                         RankedKnowledge(
                             kind=KnowledgeKind.DECISION,

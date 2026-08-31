@@ -38,6 +38,14 @@ also widens "elemento general no relacionado" (``is_related``): a candidate
 with neither a matching subject nor an FTS5 hit can still be related through
 a category match alone, so it stays found by that signal even when the other
 two are absent.
+
+M14 (SIRIUS-ARQ-0.2 §11.2/§11.5, incidencia #486) adds two more pure
+functions, wired only in ``RankRelevantKnowledgeUseCase._rank_via_staged_engine``'s
+category amplification behind the same gate: ``category_index_matches_query``
+(multi-activation, in parallel to ``category_matches_query`` above, which
+keeps its single-activation rule for the closed-gate state) and
+``candidate_in_declared_scope`` (the scope restriction over that
+amplification). Neither one is used by ``rank_relevant_knowledge`` itself.
 """
 
 from __future__ import annotations
@@ -52,6 +60,8 @@ from sirius.domain.memory import Memory, MemoryStatus
 __all__ = [
     "KnowledgeKind",
     "RankedKnowledge",
+    "candidate_in_declared_scope",
+    "category_index_matches_query",
     "category_matches_query",
     "rank_relevant_knowledge",
     "subject_matches_query",
@@ -169,6 +179,53 @@ def category_matches_query(
     if len(activated) != 1:
         return False
     return category.casefold() in activated
+
+
+def category_index_matches_query(
+    category: str | None, query_text: str, vocabulary: frozenset[str]
+) -> bool:
+    """M14 (SIRIUS-ARQ-0.2 §11.2/§11.5, incidencia #486): the searchable
+    category index's multi-activation, wired behind ``category_matching_enabled``
+    in parallel to ``category_matches_query`` above (which keeps its single-
+    activation rule unchanged for the closed-gate state). Replica of
+    ``activa_categoria_buscable``
+    (``tests/acceptance/staged_engine_category_and_relevance.py:317-336``,
+    ADR-113): the index stores the whole vocabulary as the same content for
+    every non-ordinary identity, so **any** vocabulary term present in the
+    query activates the category for every candidate that already has one —
+    a query naming two or more vocabulary terms at once still activates it,
+    unlike ``category_matches_query``'s single-activation rule.
+
+    ``category`` is ``None`` for a candidate with no classification yet
+    (D7 point 2) — never a match, exactly like ``category_matches_query``. A
+    blank query, or one that activates no vocabulary term at all, matches
+    nothing either.
+    """
+    if category is None:
+        return False
+    normalized_query = query_text.strip().casefold()
+    if not normalized_query:
+        return False
+    return any(term.casefold() in normalized_query for term in vocabulary)
+
+
+def candidate_in_declared_scope(
+    candidate_project_id: int | None, *, active_project_id: int | None
+) -> bool:
+    """M14 (SIRIUS-ARQ-0.2 §11.2/§11.5, incidencia #486): the scope
+    restriction over ``category_index_matches_query``'s activation. Replica
+    of ``_en_ambito_declarado``
+    (``tests/acceptance/staged_engine_category_and_relevance.py:339-356``,
+    ADR-114): without an active project, the request's own scope is global
+    and admits every candidate; with one, a candidate is only admitted if
+    its own project matches the active one, or if the candidate itself is
+    globally scoped (``candidate_project_id`` is ``None`` — only possible
+    for a ``Memory``, never a ``Decision``, whose ``project_id`` is always
+    set).
+    """
+    if active_project_id is None:
+        return True
+    return candidate_project_id is None or candidate_project_id == active_project_id
 
 
 def _synthetic_id(candidate: RankedKnowledge) -> int:

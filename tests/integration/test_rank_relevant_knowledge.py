@@ -600,6 +600,241 @@ def test_staged_engine_path_orders_by_the_full_m9_tuple_not_by_block(tmp_path: P
 
 
 @pytest.mark.integration
+def test_staged_engine_category_index_activates_for_two_vocabulary_terms_at_once(
+    tmp_path: Path,
+) -> None:
+    """M14 (§11.2/§11.5, incidencia #486): a diferencia de la activación
+    única de ``category_matches_query``, el índice de categoría buscable
+    tras la puerta admite un candidato que el motor no encontró cuando la
+    consulta contiene dos o más términos del vocabulario a la vez — réplica
+    de ``activa_categoria_buscable`` (ADR-113) sobre el vocabulario real."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    solo_por_categoria = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido sin ninguna palabra en comun con la consulta"
+    )
+    SetCategoryUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CategoryTargetKind.MEMORY, solo_por_categoria.id, "trabajo")
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            category_vocabulary=_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("trabajo y salud a la vez")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [solo_por_categoria.id]
+    assert resultado[0].category_match is True
+
+
+@pytest.mark.integration
+def test_staged_engine_category_index_rejects_a_decision_scoped_to_a_different_project(
+    tmp_path: Path,
+) -> None:
+    """M14 (§11.2/§11.5, incidencia #486): la restricción por ámbito —
+    réplica de ``_en_ambito_declarado`` (ADR-114)— excluye un candidato de
+    categoría no ordinaria cuyo ``project_id`` no coincide con el proyecto
+    activo de la petición, aunque la consulta active la categoría. Una
+    decisión siempre declara proyecto (nunca ``None``), así que nunca es de
+    ámbito global por sí misma."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    active_project_id, other_project_id = _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    decision_de_otro_proyecto = ProposeDecisionUseCase(unit_of_work).propose(
+        "asunto sin ninguna palabra en comun", other_project_id, "contenido"
+    )
+    ApproveDecisionUseCase(unit_of_work).approve(decision_de_otro_proyecto.id, confirmed=True)
+    SetCategoryUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CategoryTargetKind.DECISION, decision_de_otro_proyecto.id, "trabajo")
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            category_vocabulary=_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("trabajo")
+    finally:
+        puerto.close()
+
+    assert active_project_id != other_project_id
+    assert resultado == ()
+
+
+@pytest.mark.integration
+def test_staged_engine_category_index_admits_a_globally_scoped_memory_regardless_of_active_project(
+    tmp_path: Path,
+) -> None:
+    """M14 (§11.2/§11.5, incidencia #486): un candidato de ámbito global
+    (``project_id`` ``None``, solo posible para ``Memory``) se admite por
+    categoría sin importar cuál sea el proyecto activo de la petición —
+    misma excepción que ``G4`` ya aplica siempre."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    memoria_global = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido sin ninguna palabra en comun con la consulta"
+    )
+    SetCategoryUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CategoryTargetKind.MEMORY, memoria_global.id, "trabajo")
+    assert memoria_global.project_id is None
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            category_vocabulary=_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("trabajo")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [memoria_global.id]
+
+
+@pytest.mark.integration
+def test_staged_engine_category_index_scope_restriction_is_symmetric_between_two_projects(
+    tmp_path: Path,
+) -> None:
+    """M14 (§11.2/§11.5, incidencia #486): la restricción de ámbito no
+    favorece a ningún proyecto en particular — un candidato del proyecto que
+    dejó de estar activo se excluye exactamente igual que uno que nunca lo
+    estuvo, así que un candidato del proyecto A se rechaza cuando el ámbito
+    declarado es el B, y viceversa cuando el ámbito activo vuelve a
+    cambiar."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    project_repository = build_sqlite_project_repository(database_path)
+
+    project_repository.ensure_bootstrap_project()
+    proyecto_1 = project_repository.create_project(
+        "Proyecto 1", "objetivo", state_summary="estado", blockers=(), next_step="siguiente"
+    )
+    memoria_1 = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido sin ninguna palabra en comun con la consulta", project_id=proyecto_1.id
+    )
+    SetCategoryUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CategoryTargetKind.MEMORY, memoria_1.id, "trabajo")
+
+    project_repository.complete_active_project(proyecto_1.id)
+    proyecto_2 = project_repository.create_project(
+        "Proyecto 2", "objetivo", state_summary="estado", blockers=(), next_step="siguiente"
+    )
+    memoria_2 = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido sin ninguna palabra en comun con la consulta", project_id=proyecto_2.id
+    )
+    SetCategoryUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CategoryTargetKind.MEMORY, memoria_2.id, "trabajo")
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        # Ámbito activo: proyecto 2 — memoria_1 (proyecto 1) se rechaza,
+        # memoria_2 (el propio proyecto activo) se admite.
+        con_proyecto_2_activo = _use_case(
+            database_path,
+            category_vocabulary=_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("trabajo")
+
+        # El ámbito activo cambia de nuevo: ahora ninguno de los dos es el
+        # proyecto activo, así que ambos se rechazan — "ni al revés" no deja
+        # a memoria_2 exenta solo por haber sido el ámbito activo antes.
+        project_repository.complete_active_project(proyecto_2.id)
+        project_repository.create_project(
+            "Proyecto 3", "objetivo", state_summary="estado", blockers=(), next_step="siguiente"
+        )
+        con_proyecto_3_activo = _use_case(
+            database_path,
+            category_vocabulary=_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("trabajo")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in con_proyecto_2_activo] == [memoria_2.id]
+    assert con_proyecto_3_activo == ()
+
+
+@pytest.mark.integration
+def test_staged_engine_path_with_the_gate_closed_never_runs_the_category_amplification(
+    tmp_path: Path,
+) -> None:
+    """M14 (§11.2/§11.5, incidencia #486): con la puerta cerrada,
+    ``_rank_via_staged_engine`` produce exactamente el mismo resultado que
+    antes de este encargo, byte a byte, sobre el mismo caso — el bloque de
+    ampliación (ahora el índice de activación múltiple con restricción de
+    ámbito) solo se ejecuta cuando ``category_matching_enabled`` es
+    ``True``, así que con la puerta cerrada el resultado depende
+    exclusivamente de lo que el motor por etapas admitió, exactamente como
+    siempre."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    admitida_por_el_motor = SaveManualMemoryUseCase(unit_of_work).save(
+        "trabajo intenso en la fabrica"
+    )
+    solo_por_categoria = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido sin ninguna palabra en comun con la consulta"
+    )
+    SetCategoryUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CategoryTargetKind.MEMORY, solo_por_categoria.id, "trabajo")
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        use_case = _use_case(
+            database_path,
+            category_vocabulary=_VOCABULARY,
+            category_matching_enabled=False,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        )
+        resultado = use_case._rank_via_staged_engine("trabajo")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [admitida_por_el_motor.id]
+
+
+@pytest.mark.integration
 def test_staged_engine_path_preserves_engine_order_between_two_admitted_candidates(
     tmp_path: Path,
 ) -> None:

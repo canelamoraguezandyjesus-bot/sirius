@@ -14,6 +14,8 @@ from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
 from sirius.domain.relevance import (
     KnowledgeKind,
     RankedKnowledge,
+    candidate_in_declared_scope,
+    category_index_matches_query,
     category_matches_query,
     rank_relevant_knowledge,
     subject_matches_query,
@@ -300,6 +302,66 @@ def test_category_matches_query_is_case_insensitive_against_the_persisted_catego
     # The persisted category (SetCategoryUseCase accepts any string, D7 punto
     # 3) may differ in capitalization from the closed vocabulary's own term.
     assert category_matches_query("Trabajo", "hablemos de Trabajo hoy", _VOCABULARY)
+
+
+# --- M14 (§11.2/§11.5, incidencia #486): category_index_matches_query, la ---
+# --- activación múltiple del índice de categoría buscable tras la puerta, ---
+# --- réplica de activa_categoria_buscable (ADR-113). ---
+
+
+def test_category_index_matches_query_activates_for_two_vocabulary_terms_at_once() -> None:
+    # A diferencia de category_matches_query (que exige activación única),
+    # una consulta con dos o más términos del vocabulario sigue activando la
+    # categoría para toda identidad ya clasificada.
+    assert category_index_matches_query("trabajo", "trabajo y salud a la vez", _VOCABULARY)
+
+
+def test_category_index_matches_query_does_not_require_the_category_to_equal_a_term() -> None:
+    # activa_categoria_buscable ignora por completo el valor de la categoría:
+    # el índice guarda el vocabulario entero como el mismo contenido para
+    # toda identidad no ordinaria.
+    assert category_index_matches_query("personal", "hablemos de trabajo hoy", _VOCABULARY)
+
+
+def test_category_index_matches_query_is_false_when_the_candidate_has_no_category_yet() -> None:
+    assert not category_index_matches_query(None, "trabajo y salud a la vez", _VOCABULARY)
+
+
+def test_category_index_matches_query_is_false_when_the_query_activates_no_vocabulary_term() -> (
+    None
+):
+    assert not category_index_matches_query("trabajo", "receta de cocina", _VOCABULARY)
+
+
+@pytest.mark.parametrize("query_text", ["", "   "])
+def test_category_index_matches_query_is_false_for_a_blank_query(query_text: str) -> None:
+    assert not category_index_matches_query("trabajo", query_text, _VOCABULARY)
+
+
+def test_category_index_matches_query_is_case_insensitive_against_the_vocabulary() -> None:
+    assert category_index_matches_query("trabajo", "TRABAJO y SALUD a la vez", _VOCABULARY)
+
+
+# --- M14 (§11.2/§11.5, incidencia #486): candidate_in_declared_scope, la ---
+# --- restricción de ámbito sobre esa activación, réplica de ---
+# --- _en_ambito_declarado (ADR-114). ---
+
+
+def test_candidate_in_declared_scope_admits_everything_without_an_active_project() -> None:
+    assert candidate_in_declared_scope(_OTHER_PROJECT, active_project_id=None)
+    assert candidate_in_declared_scope(None, active_project_id=None)
+
+
+def test_candidate_in_declared_scope_admits_a_candidate_of_the_active_project() -> None:
+    assert candidate_in_declared_scope(_PROJECT, active_project_id=_PROJECT)
+
+
+def test_candidate_in_declared_scope_rejects_a_candidate_of_a_different_project() -> None:
+    assert not candidate_in_declared_scope(_OTHER_PROJECT, active_project_id=_PROJECT)
+
+
+def test_candidate_in_declared_scope_admits_a_global_candidate_with_an_active_project() -> None:
+    assert candidate_in_declared_scope(None, active_project_id=_PROJECT)
 
 
 # --- Criterio 3.5 (M9, §6.2): category_match entra después de fts_match y ---
