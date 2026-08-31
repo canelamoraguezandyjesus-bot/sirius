@@ -20,7 +20,9 @@ Hermes Agent es un framework de agentes de código abierto de Nous Research, lic
 
 ### (a) Componentes con nombre propio
 
-| Componente | Ubicación | Función | Estado |
+**Ninguna fila de esta tabla está verificada contra el código fuente del repositorio.** Ubicación, función y estado son los que describen los fragmentos y páginas de terceros (blogs, documentación espejo, foros) listados en «Fuentes»; no se ha leído directamente `NousResearch/hermes-agent` (ver «Lo que NO queda demostrado»).
+
+| Componente | Ubicación (según fragmentos, no verificada) | Función (según fragmentos) | Estado (según fragmentos, no verificado) |
 |---|---|---|---|
 | **AIAgent** | `run_agent.py` | Bucle principal: orquestación, prompt, herramientas, reintentos, persistencia | Implementado |
 | **skill_manage** | `skills/skill_manage.py` | Crea/actualiza/borra las habilidades propias del agente | Implementado |
@@ -34,9 +36,9 @@ Hermes Agent es un framework de agentes de código abierto de Nous Research, lic
 | **Continuous Improvement Loop** | `improvement/pipeline.py` | Integraría los componentes anteriores en una mejora continua | Planificado |
 | **Memory Layers** | `~/.hermes/*.md`, SQLite | Memoria persistente entre sesiones; no decide, solo almacena | Implementado |
 
-Fuente de la tabla: archivos del repositorio [NousResearch/hermes-agent](https://github.com/nousresearch/hermes-agent) (rutas de la columna «Ubicación»); [`evolution/gepa.py`](https://github.com/NousResearch/hermes-agent/blob/main/evolution/gepa.py) fechado 2026‑06‑17.
+Fuente de la tabla: fragmentos y páginas de terceros citados en la sección «Fuentes» de este informe (blogs, documentación espejo, foros); ninguna fila se ha contrastado con una lectura directa y versionada del código del repositorio, por lo que los estados «Implementado»/«Planificado» y las rutas de archivo son los que esas fuentes secundarias describen, no un hecho confirmado.
 
-Ningún componente se llama literalmente «Control». El mejor candidato ya implementado es **GEPA Optimizer**: es el único que modifica el comportamiento del propio agente (habilidades, herramientas, prompt) a partir de sus propias ejecuciones. `AIAgent` controla el bucle de *ejecución*, no la auto-mejora; `Continuous Improvement Loop` encajaría mejor pero los fragmentos disponibles lo marcan como planificado, no como código existente.
+Ningún componente se llama literalmente «Control». Según los fragmentos consultados —no verificados directamente en el código—, el mejor candidato es **GEPA Optimizer**, al que esas fuentes describen como ya implementado (no planificado): sería el único que modifica el comportamiento del propio agente (habilidades, herramientas, prompt) a partir de sus propias ejecuciones. Las mismas fuentes describen a `AIAgent` como controlador del bucle de *ejecución*, no de la auto-mejora, y a `Continuous Improvement Loop` como mejor encaje conceptual pero marcado como planificado, no como código existente. Ninguna de estas tres afirmaciones de estado —que GEPA esté implementado, que `AIAgent` no decida mejoras, o que los dos bucles restantes estén solo planificados— se ha confirmado contra el repositorio; quedan como lo que dicen los fragmentos, no como hechos verificados.
 
 ### (b) Cómo funciona GEPA Optimizer
 
