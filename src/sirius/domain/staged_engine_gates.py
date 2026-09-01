@@ -148,7 +148,21 @@ def _g4(candidata: Candidata, peticion: Peticion) -> VeredictoDePuerta:
         return VeredictoDePuerta(
             "G4", dentro, "" if dentro else "lista cerrada con miembros fuera del ambito"
         )
-    dentro = peticion.ambito.autoriza(item.project_id)
+    if ambito is None:
+        dentro = peticion.ambito.autoriza(item.project_id)
+    else:
+        # Eje de ambito declarado explicitamente (p.ej. "PROYECTO"): a
+        # diferencia del caso sin eje, aqui el candidato afirma pertenecer a
+        # un proyecto, asi que su membresia debe poder comprobarse. La
+        # excepcion de ``Ambito.autoriza`` para ``project_id is None`` es
+        # para el candidato sin eje declarado (ver docstring de
+        # ``autoriza``); aplicarla aqui admitiria un item que se declara de
+        # proyecto sin poder verificar cual, colando el atajo pensado para
+        # memorias globales. Sin project_id resuelto, la peticion cerrada
+        # cierra el ambito; una peticion global lo sigue admitiendo.
+        dentro = peticion.ambito.global_ or (
+            item.project_id is not None and item.project_id in peticion.ambito.proyectos
+        )
     return VeredictoDePuerta("G4", dentro, "" if dentro else "fuera del ambito autorizado")
 
 

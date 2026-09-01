@@ -484,7 +484,15 @@ def _build_context_builder_with_relevance_filter(
     ``ContextBuilder`` con el filtro de relevancia y la categoría de máxima
     criticidad — reutiliza las mismas constantes de ``composition_root``
     para que esta medición mida de verdad lo que produciría la construcción
-    de producción, no una aproximación."""
+    de producción, no una aproximación.
+
+    M16 (SIRIUS-ARQ-0.2 §11.4/§11.5, incidencia #504, ADR-124):
+    ``category_matching_enabled=True`` también en ``ContextBuilder``, igual
+    que ``composition_root`` (``src/sirius/composition_root.py:483``) pasa
+    la misma bandera a los dos — antes de este encargo faltaba aquí, así
+    que esta medición ejercitaba el candado de M10 en vez de RF-25/RF-26 y
+    G8/G12 de M15, pese a que ``RankRelevantKnowledgeUseCase`` ya tenía la
+    puerta abierta."""
     memory_repository = build_sqlite_memory_repository(database_path)
     decision_repository = build_sqlite_decision_repository(database_path)
     project_repository = build_sqlite_project_repository(database_path)
@@ -509,6 +517,7 @@ def _build_context_builder_with_relevance_filter(
         token_counter=CharacterHeuristicTokenCounter(),
         relevance_filter_port=relevance_filter_port,
         max_criticality_category=_MAX_CRITICALITY_CATEGORY,
+        category_matching_enabled=True,
     )
 
 
