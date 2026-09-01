@@ -191,6 +191,30 @@ el problema estaba en el arnés de medición, no en el cableado — la sección
 `tests/integration/test_rank_relevant_knowledge.py::test_staged_engine_rejects_a_motor_admitted_candidate_outside_the_active_project`)
 siguió en verde durante todo el diagnóstico.
 
+## Correcciones tras revisión
+
+Dos rondas de revisión independiente sobre la PR #505 encontraron
+divergencias reales entre `G4` y `candidate_in_declared_scope` (M14) que la
+decisión de arriba no había previsto. Se corrigieron en el propio código, sin
+reabrir el diseño ya aprobado:
+
+- **Ronda 2 (commit `c2105666`, corrige CLAUDE-REV-M16-001 y CODEX-001):**
+  `Ambito.autoriza` (`src/sirius/domain/staged_engine_contracts.py`)
+  rechazaba `project_id=None` en cuanto la petición declaraba un proyecto
+  activo, divergiendo de `candidate_in_declared_scope` y descartando por G4
+  memorias de ámbito global que el motor por etapas sí encontraba. Se cambió
+  para tratar `project_id=None` como siempre autorizado — la misma regla que
+  `candidate_in_declared_scope` ya aplicaba a la ampliación por categoría de
+  M14.
+- **Ronda 3 (commit `344a74a`, corrige CODEX-001):** esa misma excepción de
+  `project_id=None`, pensada para el candidato sin eje de ámbito declarado,
+  se aplicaba también en `_g4` (`src/sirius/domain/staged_engine_gates.py`)
+  cuando el eje venía declarado explícitamente (p. ej. `"PROYECTO"`) sin
+  `project_id` resuelto, colando un candidato que se declara de proyecto sin
+  poder verificar su pertenencia. Se limitó la excepción al caso sin eje
+  declarado; con el eje declarado y sin `project_id`, la petición cerrada
+  cierra el ámbito y solo una petición global lo sigue admitiendo.
+
 ## Comprobación que la sostiene
 
 - Prueba por mutación (ADR-001 punto 3): con `_peticion_ordinaria` forzada
