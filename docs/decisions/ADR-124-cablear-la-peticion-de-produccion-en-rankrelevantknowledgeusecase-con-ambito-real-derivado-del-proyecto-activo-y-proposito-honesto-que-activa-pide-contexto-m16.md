@@ -1,8 +1,8 @@
 # ADR-124 — Cablear la petición de producción en RankRelevantKnowledgeUseCase con ámbito real derivado del proyecto activo y propósito honesto que activa pide_contexto (M16)
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-01
-- Aprobación: [quién y cómo; en este repositorio, la fusión de la PR por el propietario]
+- Aprobación: fusión de la PR por el propietario
 
 **Esta sección es también la nota de arranque de la rama** (skill
 `disciplina-evidencia`, ADR-001): se publica y se commitea antes de tocar
@@ -148,15 +148,116 @@ presente → `Ambito(global_=False, proyectos=(active_project_id,))`; ausente �
 (ya satisface `pide_contexto`) y añadir las pruebas que lo confirman
 explícitamente.
 
+### Hallazgos durante la implementación, con la raíz encontrada antes de publicar la cifra
+
+Aplicando el criterio de parada de arriba: al re-ejecutar el banco de 47 casos
+tras cablear el ámbito real, la primera cifra medida fue **cobertura 0/81
+(0.0%)** — una caída, no una brecha reconocida, así que se paró a buscar la
+raíz en vez de publicarla:
+
+1. `_ejecutar_banco_paquete_completo` (`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`)
+   construye un único `RankRelevantKnowledgeUseCase`/`ContextBuilder` y
+   ejecuta los 47 casos en secuencia contra ellos, pero solo deja **un**
+   proyecto `ACTIVE` para las 47 consultas (el que `_create_projects` deja
+   activo al terminar) — correcto mientras el ámbito era inerte
+   (`_create_projects` lo documentaba así explícitamente: "cuál quede activo
+   no importa para las cuatro métricas"), pero cada caso del banco declara su
+   propio `ambito` (`PRJ-ALFA`/`PRJ-BETA`/`PRJ-GAMMA`/`PRJ-MADEIRA`/`GLOBAL`,
+   `tests/acceptance/fixtures/evidence_bank_47_casos.json`), ya usado por el
+   arnés de examen vía `peticion_desde_caso`. Con el ámbito real de M16, cada
+   caso necesitaba su propio proyecto activo, no uno fijo — se añadió
+   `_set_active_project` (SQL directo sobre `projects.status`/`is_active`,
+   nunca a través del caso de uso real e irreversible por diseño de
+   `ProjectRepository`) para simularlo caso a caso, sin tocar el banco, el
+   corpus ni ninguna adjudicación. Tras el arreglo: **7/47, 285 elementos de
+   más, 9 omisiones críticas, cobertura 62/81 (76.5%)** — coherente con el
+   arnés de examen (63/81) en vez de contradictorio con él.
+2. `ContextBuilder` en ambos arneses de medición (`_ejecutar_banco_paquete_completo`
+   y `_build_context_builder_with_relevance_filter` de
+   `tests/integration/test_local_performance.py`) se construía **sin**
+   `category_matching_enabled=True`, pese a que `composition_root` pasa la
+   misma bandera a `RankRelevantKnowledgeUseCase` y a `ContextBuilder`
+   (`src/sirius/composition_root.py:462,483`) — un vestigio de cuando M15
+   (RF-25/RF-26+G8/G12) todavía no estaba fusionado. Corregido en ambos
+   sitios para medir de verdad "M13-M16 integradas", no una aproximación con
+   el candado de M10.
+
+Ninguno de los dos es un defecto en `_peticion_ordinaria`: el código de
+producción (`src/sirius/application/rank_relevant_knowledge.py`) se comprobó
+línea a línea contra `G4`/`candidate_in_declared_scope` antes de aceptar que
+el problema estaba en el arnés de medición, no en el cableado — la sección
+"Qué haría el fallo IMPOSIBLE" de arriba (las cuatro pruebas de
+`tests/unit/test_peticion_ordinaria.py` y
+`tests/integration/test_rank_relevant_knowledge.py::test_staged_engine_rejects_a_motor_admitted_candidate_outside_the_active_project`)
+siguió en verde durante todo el diagnóstico.
+
 ## Comprobación que la sostiene
 
-(Se completa tras implementar y ejecutar las validaciones obligatorias — ver
-el cierre de este ADR más abajo, actualizado antes del commit final.)
+- Prueba por mutación (ADR-001 punto 3): con `_peticion_ordinaria` forzada
+  temporalmente a `Ambito(global_=True, proyectos=())` siempre (revirtiendo
+  solo esa expresión), `test_ambito_is_scoped_to_the_active_project_when_one_is_configured`
+  y `test_staged_engine_rejects_a_motor_admitted_candidate_outside_the_active_project`
+  fallan como se espera; restaurado el código, las 36 pruebas de
+  `tests/integration/test_rank_relevant_knowledge.py`+`tests/unit/test_peticion_ordinaria.py`
+  pasan.
+- `uv run ruff format --check .`: 579 archivos ya formateados.
+- `uv run ruff check .`: todas las comprobaciones superadas.
+- `uv run mypy src tests`: sin incidencias en 549 archivos fuente.
+- `uv run pytest`: 4518 aprobadas, 15 omitidas (Ollama real/QtMultimedia,
+  igual que antes de este encargo), 2 falladas-como-se-espera
+  (`xfail(strict=True)` de M11, sin XPASS — el suelo D1/RNF-003 sigue sin
+  alcanzarse, evaluarlo es M17, no este encargo).
+- `git diff --check`: sin espacios en blanco conflictivos.
 
 ## Consecuencias
 
-(Se completa con las cuatro métricas del banco de 47 casos y el P95 del
-benchmark de ADR-008/§6.4/§11.4, medidos sobre esta integración — ver cierre.)
+**Banco de 47 casos (PA-0.2-REC-01), pipeline real con M13-M16 integradas
+(`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py::test_el_banco_se_ejecuta_contra_el_paquete_completo_de_produccion_como_evidencia_adicional`,
+`-s` para ver la impresión):**
+
+| Métrica | Antes de M16 (M13/M14 wired, ámbito global) | Con M16 |
+|---|---|---|
+| aciertos_exactos | 4/47 | **7/47** |
+| elementos_de_mas | (no comparable: medido con el defecto de arnés arriba) | **285** |
+| omisiones_criticas | (ídem) | **9** |
+| cobertura | (ídem) | **62/81 (76.5%)** |
+
+Frente al arnés de examen (semántica de laboratorio completa, con siembra):
+29/47, 50 de más, 0 críticas, 63/81 (77.8%). Ninguna de las cuatro alcanza el
+suelo D1 (§11.5-M17 lo evalúa, no este encargo) — el resultado no estaba
+predeterminado (§11.2/§11.5 lo advierten explícitamente) y se publica tal
+cual salió: `elementos_de_mas` alto es consistente con la brecha ya nombrada
+en §11.3 y no cerrada por este encargo (cardinalidad `EXHAUSTIVA`/límite sin
+atar por consulta real, sin el oráculo de resultado esperado que solo el
+banco tiene).
+
+**RNF-003, benchmark de ADR-008/§6.4/§11.4, pipeline real con M13-M16
+integradas (`tests/integration/test_local_performance.py::test_construir_contexto_con_el_paquete_completo_activo_en_los_tres_escenarios`):**
+
+| Escenario | P95 | Límite |
+|---|---|---|
+| Ollama disponible dentro del presupuesto | 489.0 ms | 300 ms |
+| Ollama ausente (conexión rechazada) | 468.5 ms | 300 ms |
+| Ollama acepta la conexión y agota el timeout | 524.0 ms | 300 ms |
+
+Las tres siguen por encima de 300 ms (RNF-003 no se cumple, sin sorpresa: es
+el mismo diagnóstico de §11.4 que M13 en solitario no promete cerrar) pero
+bajan frente al rango 438-780 ms que ADR-117 midió antes de M13-M16 —
+consistente con que el ámbito real reduce el volumen de candidatos que el
+motor y la ampliación por categoría procesan cuando hay un proyecto activo.
+Las dos pruebas `xfail(strict=True)` (aciertos_exactos ≥29/47 y P95 ≤300 ms)
+siguen fallando-como-se-espera, sin XPASS — M17 evalúa el suelo D1/RNF-003
+final, no este encargo.
+
+**Wiring:** M14 (índice de categoría multi-activación con restricción de
+ámbito) y M15 (RF-25/RF-26, G8/G12) ya vivían en
+`RankRelevantKnowledgeUseCase._rank_via_staged_engine`/
+`ContextBuilder._apply_relevance_filter` antes de esta incidencia; M16 añade
+el ámbito real y confirma el propósito honesto de `_peticion_ordinaria`, y
+corrige dos arneses de medición que construían `ContextBuilder` sin la misma
+bandera `category_matching_enabled` que `RankRelevantKnowledgeUseCase` ya
+tenía, para que "M13-M16 integradas" mida lo que de verdad se cablea, no una
+aproximación.
 
 ## Alternativas descartadas y por qué
 

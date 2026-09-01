@@ -103,6 +103,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
+from sqlalchemy import text
 from staged_engine_case_translation import peticion_desde_caso
 from staged_engine_category_and_relevance import (
     CATEGORIA_DE_MAXIMA_CRITICIDAD,
@@ -209,15 +210,18 @@ _MINIMO_ELEMENTOS_HALLADOS_MOTOR: Final[int] = 63
 #: `test_el_banco_se_ejecuta_contra_el_paquete_completo_de_produccion_como_evidencia_adicional`
 #: (M11, incidencia #471, ADR-117): el camino de código real de producción
 #: (`RankRelevantKnowledgeUseCase`/`ContextBuilder` tal como `composition_root`
-#: los construye con la puerta de D7 punto 6 abierta) mide 4/47. CODEX-002
-#: (r3892166684) señaló que la aserción anterior aceptaba cualquier valor
-#: entre 0 y 47; por decisión del propietario (incidencia #471, comentario
-#: del 31-08-2026 06:48) se sustituye por esta cota unidireccional de no
-#: regresión a lo medido, el mismo patrón de `_MINIMO_ACIERTOS_EXACTOS_M7` y
+#: los construye con la puerta de D7 punto 6 abierta) medía 4/47 antes de
+#: M13-M16 (ADR-117). CODEX-002 (r3892166684) señaló que la aserción
+#: anterior aceptaba cualquier valor entre 0 y 47; por decisión del
+#: propietario (incidencia #471, comentario del 31-08-2026 06:48) se
+#: sustituye por esta cota unidireccional de no regresión a lo medido, el
+#: mismo patrón de `_MINIMO_ACIERTOS_EXACTOS_M7` y
 #: `_MINIMO_ACIERTOS_EXACTOS_MOTOR` de arriba — **no** es el suelo de
 #: §8-M11 (29/47): ese suelo lo afirma, sin salvedad, la prueba marcada
-#: `xfail(strict=True)` de más abajo.
-_MINIMO_ACIERTOS_EXACTOS_PAQUETE_COMPLETO: Final[int] = 4
+#: `xfail(strict=True)` de más abajo. M16 (incidencia #504, ADR-124) cablea
+#: ámbito real y propósito honesto, más M13-M15 ya integradas, y remide:
+#: 7/47 — la cota sube a lo nuevo medido, nunca a lo esperado.
+_MINIMO_ACIERTOS_EXACTOS_PAQUETE_COMPLETO: Final[int] = 7
 
 pytestmark = [pytest.mark.acceptance, pytest.mark.integration]
 
@@ -1924,18 +1928,74 @@ class _FiltroDeRelevanciaQueNuncaDescarta:
         return candidates
 
 
+def _set_active_project(database_path: Path, project_id: int | None) -> None:
+    """M16 (SIRIUS-ARQ-0.2 §11.3/§11.5, incidencia #504): simula, entre un
+    caso del banco y el siguiente, cuál era el proyecto ACTIVE en el
+    momento de esa consulta — el mismo dato que ``_peticion_ordinaria``
+    ahora lee de verdad (``ADR-124``) para derivar el ámbito real de la
+    petición. El ciclo de vida real de ``ProjectRepository`` es de un solo
+    sentido (``ACTIVE`` -> ``COMPLETED``, sin volver atrás,
+    ``src/sirius/ports/project_repository.py``), así que no hay caso de uso
+    real con el que reactivar un proyecto ya completado 47 veces seguidas;
+    esta función pone `projects.status`/`projects.is_active` directamente
+    por SQL, igual que ``_set_updated_at`` de
+    ``tests/integration/test_rank_relevant_knowledge.py`` hace con
+    `updated_at` — nunca a través del caso de uso real, y nunca tocando el
+    banco, el corpus ni ninguna adjudicación. ``get_active_project()``
+    resuelve por `is_active`
+    (`src/sirius/adapters/persistence/sqlite_project_repository.py:90-93`,
+    `_find_active_project_model`), no por `status` — hay que poner los dos,
+    o `is_active` seguiría señalando al último proyecto que
+    `_create_projects` dejó activo pese a que `status` ya diga otra cosa.
+    `is_active` tiene además un índice único parcial
+    (`uq_projects_single_active`,
+    `src/sirius/adapters/persistence/models.py:144-149`): como máximo una
+    fila con `is_active = 1` a la vez, así que el `UPDATE` que lo apaga para
+    todos corre antes que el que lo enciende para el proyecto elegido.
+
+    ``project_id=None`` no deja ningún proyecto ``ACTIVE`` (ámbito global),
+    para los casos cuyo ``ambito`` declarado es ``"GLOBAL"``.
+    """
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        connection.execute(text("UPDATE projects SET status = 'completed', is_active = 0"))
+        if project_id is not None:
+            connection.execute(
+                text("UPDATE projects SET status = 'active', is_active = 1 WHERE id = :id"),
+                {"id": project_id},
+            )
+
+
 def _ejecutar_banco_paquete_completo(database_path: Path) -> _EjecucionDelBanco:
     """El mismo banco de 47 casos, contra `RankRelevantKnowledgeUseCase`/
     `ContextBuilder` construidos exactamente como `composition_root` los
     construiría con la puerta de D7 punto 6 abierta
     (`category_matching_enabled=True`) — el «paquete completo» de
-    producción que M11 (§8) cablea, nunca el arnés de examen de arriba
-    (incidencias #457-#469), que reimplementa una semántica de laboratorio
-    (categoría buscable con activación múltiple, regla de las críticas
-    original, siembra en contexto, ámbito) ajena a este camino de código
-    real. En particular, `build_staged_engine_port(database_path)` se llama
-    aquí sin `ejes_por_identidad`, igual que `composition_root` — todo item
-    real llega al motor con `ejes=SIN_EJES` (ver el docstring de
+    producción, nunca el arnés de examen de arriba (incidencias #457-#469),
+    que sigue siendo la única medición que afirma los suelos D1/D2 (ver el
+    docstring del módulo).
+
+    M13-M16 (SIRIUS-ARQ-0.2 §11, incidencias #486/#489/#490/#504) ya cablean,
+    tras la misma puerta, buena parte de la semántica que el arnés de examen
+    mide por separado: categoría buscable con activación múltiple y
+    restricción de ámbito (M14, `RankRelevantKnowledgeUseCase.
+    _rank_via_staged_engine`), RF-25/RF-26 y G8/G12 sobre el conjunto
+    combinado (M15, `ContextBuilder._apply_relevance_filter` —aquí inertes
+    en la práctica, porque `_FiltroDeRelevanciaQueNuncaDescarta` no descarta
+    nada, así que no hay nada que RF-25/RF-26 tenga que rescatar—), y ámbito
+    real derivado del proyecto activo (M16, `_peticion_ordinaria`). Lo único
+    que sigue sin portar es `siembra_de_contexto`: su precondición
+    documentada (M15, §11.2) sigue sin resolverse. `_set_active_project`
+    (arriba) simula, caso a caso, qué proyecto estaba `ACTIVE` en el momento
+    de cada consulta según su propio campo `ambito` — sin eso, los 47 casos
+    compartirían un único proyecto activo arbitrario (el que
+    `_create_projects` deja `ACTIVE` al terminar) durante toda la ejecución,
+    y el ámbito real de M16 mediría un artefacto del arnés, no el
+    comportamiento real de producción para cada consulta.
+
+    En particular, `build_staged_engine_port(database_path)` se llama aquí
+    sin `ejes_por_identidad`, igual que `composition_root` — todo item real
+    llega al motor con `ejes=SIN_EJES` (ver el docstring de
     `staged_engine_port.py`), a diferencia del arnés de examen, que puebla
     esos ejes a mano desde el corpus.
 
@@ -2004,6 +2064,7 @@ def _ejecutar_banco_paquete_completo(database_path: Path) -> _EjecucionDelBanco:
             token_counter=CharacterHeuristicTokenCounter(),
             relevance_filter_port=_FiltroDeRelevanciaQueNuncaDescarta(),
             max_criticality_category=_MAX_CRITICALITY_CATEGORY,
+            category_matching_enabled=True,
         )
 
         items_por_id = {item["id"]: item for item in banco["items"]}
@@ -2012,6 +2073,8 @@ def _ejecutar_banco_paquete_completo(database_path: Path) -> _EjecucionDelBanco:
         omisiones_criticas = 0
         elementos_hallados = 0
         for caso in banco["casos"]:
+            ambito = caso["ambito"]
+            _set_active_project(database_path, None if ambito == "GLOBAL" else project_ids[ambito])
             obtenido_ranked = context_builder._rank_related_knowledge(caso["consulta"])
             obtenido = {
                 real_a_canonico[(candidato.kind.value, candidato.item_id)]
@@ -2062,31 +2125,32 @@ def test_el_banco_se_ejecuta_contra_el_paquete_completo_de_produccion_como_evide
 
     Las cifras difieren de las del arnés de examen porque miden un pipeline
     distinto, no porque una de las dos esté mal: el arnés de examen
-    reimplementa la semántica de laboratorio completa (categoría buscable
-    con activación múltiple y restricción por ámbito, regla de las críticas
-    original RF-25/RF-26, siembra en contexto, ejes P2 poblados a mano desde
-    el corpus — `staged_engine_category_and_relevance.py`), mientras que
-    `RankRelevantKnowledgeUseCase._rank_via_staged_engine`
-    (`src/sirius/application/rank_relevant_knowledge.py:153-282`) solo
-    amplía sobre `category_matches_query` con activación única
-    (`src/sirius/domain/relevance.py:142-171`) y sin restricción por ámbito,
-    y `build_staged_engine_port` (`src/sirius/adapters/persistence/
-    staged_engine_port.py:341-349`), llamado aquí sin `ejes_por_identidad`
-    igual que `composition_root`, entrega todo item real con
-    `ejes=SIN_EJES` — las puertas P2 que los necesitan degradan en vez de
-    evaluar el eje real que el arnés de examen sí puebla a mano. Ninguna
-    pieza de la semántica de laboratorio forma parte del código de
-    producción que M8-M11 cablean; medirla por separado es precisamente lo
-    que motivó el arnés de examen (#457-#469, ADR-109 a ADR-115).
+    reimplementa la semántica de laboratorio completa con ejes P2 poblados a
+    mano desde el corpus (`staged_engine_category_and_relevance.py`) —en
+    particular, `siembra_de_contexto`, que sigue sin tener equivalente en
+    producción mientras su precondición documentada (M15, §11.2) no se
+    resuelva—, mientras que el camino real (M13-M16 ya integradas, ver el
+    docstring de `_ejecutar_banco_paquete_completo`) entrega todo item real
+    con `ejes=SIN_EJES` — las puertas P2 que los necesitan degradan en vez
+    de evaluar el eje real que el arnés de examen sí puebla a mano. Medir
+    por separado el resto de la semántica de laboratorio es precisamente lo
+    que motivó el arnés de examen (#457-#469, ADR-109 a ADR-115); esta
+    incidencia (#504) es la primera que mide las piezas ya cableadas de
+    M13-M16 sobre el camino real, sin la siembra dentro del conjunto — ver
+    ADR-124 para el detalle de qué cambió y por qué el resultado no estaba
+    predeterminado.
     """
     paquete_completo = ejecucion_del_banco_paquete_completo.metricas
     examen = ejecucion_del_banco_motor_portado.metricas
 
     print(
-        "\nPA-0.2-REC-01 (M11, paquete completo de producción: "
-        "RankRelevantKnowledgeUseCase con category_matching_enabled=True + "
-        "ContextBuilder con el candado, sin la semántica de laboratorio del "
-        "arnés de examen — evidencia adicional, ningún suelo D1/D2 afirmado "
+        "\nPA-0.2-REC-01 (M16, paquete completo de producción: "
+        "RankRelevantKnowledgeUseCase y ContextBuilder con "
+        "category_matching_enabled=True (M13-M16 integradas: consulta por "
+        "lote, índice de categoría de activación múltiple con ámbito real, "
+        "RF-25/RF-26 y G8/G12, ámbito y propósito reales de la petición), "
+        "sin siembra_de_contexto ni la semántica de laboratorio del arnés "
+        "de examen — evidencia adicional, ningún suelo D1/D2 afirmado "
         "aquí): "
         f"aciertos_exactos={paquete_completo.aciertos_exactos}/47 "
         f"elementos_de_mas={paquete_completo.elementos_de_mas} "
@@ -2122,8 +2186,10 @@ def test_el_banco_se_ejecuta_contra_el_paquete_completo_de_produccion_como_evide
         "06:48, ADR-117 sección 'Estado del hito: decisión'): el suelo del "
         "criterio de §8-M11 (aciertos_exactos >= 29/47 sobre el pipeline "
         "integrado real de producción, con la puerta de D7 punto 6 abierta "
-        "y dobles deterministas) queda explícitamente NO aprobado -- hoy el "
-        "camino real mide 4/47 (ADR-117). Esta prueba afirma el suelo del "
+        "y dobles deterministas) queda explícitamente NO aprobado -- medía "
+        "4/47 antes de M13-M16 (ADR-117); tras M16 (incidencia #504, "
+        "ADR-124) mide 7/47, todavía por debajo de 29/47. Esta prueba afirma "
+        "el suelo del "
         "criterio tal cual está escrito (CODEX-002, "
         "https://github.com/canelamoraguezandyjesus-bot/sirius/pull/472#discussion_r3892166684) "
         "y falla-como-se-espera; el día que el motor por etapas alcance "

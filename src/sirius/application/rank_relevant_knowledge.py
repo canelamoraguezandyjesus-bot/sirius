@@ -73,7 +73,15 @@ __all__ = ["RankRelevantKnowledgeUseCase"]
 #: Propósito declarado de toda petición al motor por etapas: E0 exige uno no
 #: vacío (G1) y Sirius 0.1 no tiene hoy un permiso explícito por llamada —
 #: cada llamada a ``rank()`` es, por construcción, una recuperación de
-#: contexto ordinaria.
+#: contexto ordinaria. M16 (SIRIUS-ARQ-0.2 §11.3/§11.5, incidencia #504)
+#: confirma que este literal ya es honesto: contiene la subcadena
+#: ``"contexto"`` a propósito, la misma condición que la réplica del arnés
+#: ``pide_contexto``/``PROPOSITO_DE_CONTEXTO`` exige
+#: (``tests/acceptance/staged_engine_category_and_relevance.py:257,403-409``),
+#: porque la única llamada real a ``rank()`` ocurre desde
+#: ``ContextBuilder._rank_related_knowledge`` para ensamblar el contexto de
+#: un turno — un hecho estructural sobre quién llama, no una adivinanza
+#: sobre la consulta.
 _PROPOSITO_RECUPERACION_ORDINARIA = "recuperacion de contexto relevante (B6b)"
 
 #: Límite que "no ata" (misma convención que
@@ -83,23 +91,48 @@ _PROPOSITO_RECUPERACION_ORDINARIA = "recuperacion de contexto relevante (B6b)"
 _LIMITE_SIN_ATAR = 100_000
 
 
-def _peticion_ordinaria(query_text: str, operation_id: str) -> Peticion:
+def _peticion_ordinaria(
+    query_text: str, operation_id: str, *, active_project_id: int | None
+) -> Peticion:
     """La política uniforme con la que ``rank()`` interroga al motor.
 
-    Modo M1 (ordinario), ámbito global (``rank()`` nunca restringió por
-    proyecto: ``project_matches_active`` es una señal de orden, no un
-    filtro) y cardinalidad EXHAUSTIVA — la misma semántica de "todo lo
-    relevante, sin cuota" que la política de hoy ya tiene, y la que menos
-    depende de un objetivo de resultados que ninguna llamada a ``rank()``
-    declara.
+    Modo M1 (ordinario) y cardinalidad EXHAUSTIVA — la misma semántica de
+    "todo lo relevante, sin cuota" que la política de hoy ya tiene, y la que
+    menos depende de un objetivo de resultados que ninguna llamada a
+    ``rank()`` declara. Ninguno de los dos cambia con M16.
+
+    M16 (SIRIUS-ARQ-0.2 §11.3/§11.5, incidencia #504): el ámbito deja de ser
+    siempre global y se deriva de ``active_project_id`` — el mismo valor que
+    ``_rank_via_staged_engine`` ya calcula para ``project_matches_active``
+    (``self._project_repository.get_active_project()``) — con la misma regla
+    que ``candidate_in_declared_scope``/``project_matches_active`` ya usan:
+    con proyecto activo, ``Ambito(global_=False, proyectos=(id,))``; sin él,
+    ``Ambito(global_=True, proyectos=())``, igual que antes de este encargo.
+    No es información inventada: es la misma señal que ``rank()`` ya lee para
+    otro propósito. A diferencia de la ampliación por categoría de M14
+    (que aplica su propia restricción de ámbito en Python, después de
+    consultar), este ámbito real alimenta directamente ``G4``
+    (``src/sirius/domain/staged_engine_gates.py:135-152``,
+    ``peticion.ambito.autoriza(item.project_id)``) dentro del motor por
+    etapas mismo — la restricción llega también a lo que el motor admite,
+    no solo a la ampliación de categoría. ``Ambito.proyectos`` exige
+    cadenas (``src/sirius/domain/staged_engine_contracts.py:136``, mismo
+    formato que los ids de proyecto que el motor ya persiste como texto,
+    ``src/sirius/adapters/persistence/staged_engine_port.py:129-133``), de
+    ahí ``str(active_project_id)``.
     """
     ahora = datetime.now(UTC).isoformat()
+    ambito = (
+        Ambito(global_=True, proyectos=())
+        if active_project_id is None
+        else Ambito(global_=False, proyectos=(str(active_project_id),))
+    )
     return Peticion(
         operation_id=operation_id,
         consulta=query_text,
         proposito=_PROPOSITO_RECUPERACION_ORDINARIA,
         modo=Modo.M1_ORDINARIO,
-        ambito=Ambito(global_=True, proyectos=()),
+        ambito=ambito,
         ventana=VentanaTemporal(tiempo_objetivo=ahora, corte_de_registro=None),
         cardinalidad=Cardinalidad.EXHAUSTIVA,
         limite_objetivo=_LIMITE_SIN_ATAR,
@@ -238,7 +271,11 @@ class RankRelevantKnowledgeUseCase:
         active_project = self._project_repository.get_active_project()
         active_project_id = active_project.id if active_project is not None else None
 
-        peticion = _peticion_ordinaria(query_text, operation_id=f"rank:{query_text[:64]}")
+        peticion = _peticion_ordinaria(
+            query_text,
+            operation_id=f"rank:{query_text[:64]}",
+            active_project_id=active_project_id,
+        )
         recuperacion = recuperar(
             peticion, self._staged_engine_port, self._staged_engine_candidate, PLANO_COMUN_VACIO
         )

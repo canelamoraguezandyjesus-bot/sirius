@@ -487,12 +487,20 @@ def test_staged_engine_stays_unused_with_the_gate_closed_even_if_wired(tmp_path:
 def test_staged_engine_is_used_with_the_gate_open_and_wired(tmp_path: Path) -> None:
     """Con la puerta abierta y el puerto/candidato configurados,
     ``rank()`` delega en ``sirius.domain.staged_engine.recuperar`` (ADR-109)
-    en vez del filtro-y-orden de siempre."""
+    en vez del filtro-y-orden de siempre.
+
+    M16 (incidencia #504) cablea la petición con ámbito real derivado del
+    proyecto activo: la memoria vive en ese mismo proyecto para que ``G4``
+    (``src/sirius/domain/staged_engine_gates.py:135-152``) la admita — sin
+    esto, ``G4`` la descartaría por no declarar ámbito global ni pertenecer
+    al proyecto que la petición ahora autoriza."""
     database_path = tmp_path / "sirius.db"
     _bootstrap(database_path)
-    _two_projects(database_path)
+    active_project_id, _ = _two_projects(database_path)
     unit_of_work = build_sqlite_unit_of_work(database_path)
-    memoria = SaveManualMemoryUseCase(unit_of_work).save("faroquenopalabraunica sobre la costa")
+    memoria = SaveManualMemoryUseCase(unit_of_work).save(
+        "faroquenopalabraunica sobre la costa", project_id=active_project_id
+    )
 
     puerto = build_staged_engine_port(database_path)
     candidato = staged_engine_candidate.candidato()
@@ -507,6 +515,51 @@ def test_staged_engine_is_used_with_the_gate_open_and_wired(tmp_path: Path) -> N
         puerto.close()
 
     assert [c.item_id for c in resultado] == [memoria.id]
+
+
+@pytest.mark.integration
+def test_staged_engine_rejects_a_motor_admitted_candidate_outside_the_active_project(
+    tmp_path: Path,
+) -> None:
+    """M16 (§11.3/§11.5, incidencia #504): a diferencia de M14 (que ya
+    restringe por ámbito solo la ampliación por categoría,
+    ``candidate_in_declared_scope``), el ámbito real de la petición ahora
+    alimenta también ``G4`` (``src/sirius/domain/staged_engine_gates.py:135-152``)
+    dentro del motor por etapas mismo: la misma consulta contra la misma
+    memoria cambia de resultado solo por el proyecto activo declarado — con
+    un proyecto activo distinto del suyo, el motor deja de admitirla; sin
+    proyecto activo (ámbito global, igual que antes de este encargo), vuelve
+    a admitirla."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    active_project_id, other_project_id = _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    memoria_de_otro_proyecto = SaveManualMemoryUseCase(unit_of_work).save(
+        "faroquenopalabraunica sobre la costa", project_id=other_project_id
+    )
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        con_proyecto_activo_ajeno = _use_case(
+            database_path,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("faroquenopalabraunica")
+
+        build_sqlite_project_repository(database_path).complete_active_project(active_project_id)
+        sin_proyecto_activo = _use_case(
+            database_path,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("faroquenopalabraunica")
+    finally:
+        puerto.close()
+
+    assert con_proyecto_activo_ajeno == ()
+    assert [c.item_id for c in sin_proyecto_activo] == [memoria_de_otro_proyecto.id]
 
 
 @pytest.mark.integration
@@ -554,27 +607,37 @@ def test_staged_engine_path_orders_by_the_full_m9_tuple_not_by_block(tmp_path: P
     admitido por el motor) delante de ``solo_por_categoria`` sin más,
     colocando siempre todo lo admitido por el motor antes que lo hallado
     solo por categoría con independencia de las demás señales (S7.5/M9:
-    sujeto, proyecto activo, FTS5, categoría, recencia). Aquí el candidato
-    hallado solo por categoría pertenece al proyecto activo (una señal que
-    el orden aprobado sitúa por delante de un simple acierto FTS5) mientras
-    que el admitido por el motor no pertenece a ningún proyecto activo: el
-    orden corregido debe anteponer el primero pese a haber llegado por el
-    bloque de categoría, no por el del motor."""
+    sujeto, proyecto activo, FTS5, categoría, recencia).
+
+    M16 (incidencia #504) cablea el ámbito real de la petición: un candidato
+    fuera del proyecto activo ya no lo admite ni siquiera el motor (``G4``),
+    así que el proyecto deja de servir como señal que distinga los dos
+    candidatos de esta prueba — los dos deben vivir en el proyecto activo
+    para que el motor pueda admitir el suyo. La señal que ahora demuestra
+    que el orden no es una concatenación de bloques es el sujeto (la
+    primera del criterio S7.5/M9, por delante de proyecto/FTS5/categoría):
+    la decisión hallada solo por categoría tiene un asunto que coincide con
+    la consulta (``subject_matches_query``), una memoria nunca lo declara
+    (``rank_relevant_knowledge.py``, ``subject_matches_query=False`` fijo
+    para toda memoria) — así que el orden correcto antepone la decisión
+    pese a haber llegado por el bloque de categoría, no por el del motor."""
     database_path = tmp_path / "sirius.db"
     _bootstrap(database_path)
-    active_project_id, other_project_id = _two_projects(database_path)
+    active_project_id, _ = _two_projects(database_path)
     unit_of_work = build_sqlite_unit_of_work(database_path)
 
-    memoria_por_categoria = SaveManualMemoryUseCase(unit_of_work).save(
+    decision_por_categoria = ProposeDecisionUseCase(unit_of_work).propose(
+        "trabajo cotidiano",
+        active_project_id,
         "contenido sin ninguna palabra en comun con la consulta",
-        project_id=active_project_id,
     )
+    ApproveDecisionUseCase(unit_of_work).approve(decision_por_categoria.id, confirmed=True)
     SetCategoryUseCase(
         build_sqlite_memory_repository(database_path),
         build_sqlite_decision_repository(database_path),
-    ).set(CategoryTargetKind.MEMORY, memoria_por_categoria.id, "trabajo")
+    ).set(CategoryTargetKind.DECISION, decision_por_categoria.id, "trabajo")
     memoria_por_motor = SaveManualMemoryUseCase(unit_of_work).save(
-        "trabajo intenso esta semana en la fabrica", project_id=other_project_id
+        "trabajo intenso esta semana en la fabrica", project_id=active_project_id
     )
 
     puerto = build_staged_engine_port(database_path)
@@ -590,13 +653,16 @@ def test_staged_engine_path_orders_by_the_full_m9_tuple_not_by_block(tmp_path: P
     finally:
         puerto.close()
 
-    assert [c.item_id for c in resultado] == [memoria_por_categoria.id, memoria_por_motor.id]
-    encontrada_por_categoria = next(c for c in resultado if c.item_id == memoria_por_categoria.id)
-    encontrada_por_motor = next(c for c in resultado if c.item_id == memoria_por_motor.id)
+    assert [(c.kind.value, c.item_id) for c in resultado] == [
+        ("decision", decision_por_categoria.id),
+        ("memory", memoria_por_motor.id),
+    ]
+    encontrada_por_categoria = next(c for c in resultado if c.kind.value == "decision")
+    encontrada_por_motor = next(c for c in resultado if c.kind.value == "memory")
     assert encontrada_por_categoria.category_match is True
-    assert encontrada_por_categoria.project_matches_active is True
+    assert encontrada_por_categoria.subject_matches_query is True
     assert encontrada_por_motor.fts_match is True
-    assert encontrada_por_motor.project_matches_active is False
+    assert encontrada_por_motor.subject_matches_query is False
 
 
 @pytest.mark.integration
@@ -847,21 +913,32 @@ def test_staged_engine_path_preserves_engine_order_between_two_admitted_candidat
     ``solo_por_categoria`` está vacío. Se reproduce con dos memorias que el
     motor admite en etapas distintas: una en ``E1`` (coincidencia literal,
     mayor autoridad) y otra en ``E2`` (variante morfológica "trabajos" de
-    "trabajo", menor autoridad), donde la de menor autoridad pertenece al
-    proyecto activo. Un ``rank_relevant_knowledge`` global sobre ambas las
-    invertiría por esa señal de proyecto; el orden corregido debe conservar
-    el que el motor ya fijó por autoridad de etapa."""
+    "trabajo", menor autoridad).
+
+    M16 (incidencia #504) cablea el ámbito real de la petición: ``G4``
+    (``src/sirius/domain/staged_engine_gates.py:135-152``) ya no admite un
+    candidato fuera del proyecto activo, así que ambas memorias deben vivir
+    en el proyecto activo para que el motor las admita — el proyecto deja
+    de servir como señal que un resort global pudiera invertir. En su lugar,
+    la de menor autoridad (``E2``) es más reciente que la de mayor autoridad
+    (``E1``): un ``rank_relevant_knowledge`` global sobre ambas invertiría el
+    orden por esa señal de recencia (la última del criterio S7.5/M9, con
+    sujeto/proyecto/FTS5/categoría empatados entre las dos); el orden
+    corregido debe conservar el que el motor ya fijó por autoridad de
+    etapa."""
     database_path = tmp_path / "sirius.db"
     _bootstrap(database_path)
-    active_project_id, other_project_id = _two_projects(database_path)
+    active_project_id, _ = _two_projects(database_path)
     unit_of_work = build_sqlite_unit_of_work(database_path)
 
     encontrada_en_e1 = SaveManualMemoryUseCase(unit_of_work).save(
-        "trabajo intenso en la fabrica", project_id=other_project_id
+        "trabajo intenso en la fabrica", project_id=active_project_id
     )
     encontrada_en_e2 = SaveManualMemoryUseCase(unit_of_work).save(
         "trabajos pendientes de revision", project_id=active_project_id
     )
+    _set_updated_at(database_path, "memories", encontrada_en_e1.id, "2020-01-01 00:00:00")
+    _set_updated_at(database_path, "memories", encontrada_en_e2.id, "2026-01-01 00:00:00")
 
     puerto = build_staged_engine_port(database_path)
     candidato = staged_engine_candidate.candidato()
@@ -876,10 +953,11 @@ def test_staged_engine_path_preserves_engine_order_between_two_admitted_candidat
         puerto.close()
 
     assert [c.item_id for c in resultado] == [encontrada_en_e1.id, encontrada_en_e2.id]
-    encontrada_por_e2 = next(c for c in resultado if c.item_id == encontrada_en_e2.id)
     encontrada_por_e1 = next(c for c in resultado if c.item_id == encontrada_en_e1.id)
+    encontrada_por_e2 = next(c for c in resultado if c.item_id == encontrada_en_e2.id)
+    assert encontrada_por_e1.project_matches_active is True
     assert encontrada_por_e2.project_matches_active is True
-    assert encontrada_por_e1.project_matches_active is False
+    assert encontrada_por_e1.item.updated_at < encontrada_por_e2.item.updated_at
 
 
 @pytest.mark.integration
