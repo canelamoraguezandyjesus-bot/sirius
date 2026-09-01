@@ -133,7 +133,7 @@ STUDIO_VOICE_SETTING = "model_studio_voice"
 _CATEGORY_VOCABULARY: frozenset[str] = frozenset(
     {"trabajo", "personal", "salud", "finanzas", "proyecto", "aprendizaje", "otros"}
 )
-_CATEGORY_CLASSIFIER_MODEL = "llama3.2"
+_CATEGORY_CLASSIFIER_MODEL = "qwen3:4b-instruct"
 
 # ADR-116: "salud" es, dentro del vocabulario provisional de arriba, la
 # categoría de máxima criticidad que el candado de §6.3 protege siempre —
@@ -154,7 +154,7 @@ _RELEVANCE_FILTER_MODEL = _CATEGORY_CLASSIFIER_MODEL
 # mantenga por debajo de los 300 ms de RNF-003 sobre el conjunto de
 # referencia de ADR-008. Ver la tabla de medición de los tres escenarios en
 # ese módulo y en el PR de M11.
-_RELEVANCE_FILTER_TIMEOUT_SECONDS = 0.05
+_RELEVANCE_FILTER_TIMEOUT_SECONDS = 30.0
 
 
 def save_studio_voice(voice: str) -> None:

@@ -68,7 +68,7 @@ def test_filter_candidates_returns_the_expected_subset_and_order() -> None:
     candidates = (_candidate(1, "primero"), _candidate(2, "segundo"), _candidate(3, "tercero"))
 
     def _handle(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"response": json.dumps({"keep": [2, 1]})})
+        return httpx.Response(200, json={"message": {"content": json.dumps({"responden": [2, 1]})}})
 
     adapter = _adapter(httpx.MockTransport(_handle))
 
@@ -131,7 +131,9 @@ def test_filter_candidates_returns_candidates_unmodified_when_keep_is_not_a_list
     candidates = (_candidate(1, "contenido"),)
 
     def _handle(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"response": json.dumps({"keep": "todos"})})
+        return httpx.Response(
+            200, json={"message": {"content": json.dumps({"responden": "todos"})}}
+        )
 
     adapter = _adapter(httpx.MockTransport(_handle))
 
@@ -144,7 +146,7 @@ def test_filter_candidates_returns_candidates_unmodified_when_keep_references_ou
     candidates = (_candidate(1, "contenido"),)
 
     def _handle(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"response": json.dumps({"keep": [7]})})
+        return httpx.Response(200, json={"message": {"content": json.dumps({"responden": [7]})}})
 
     adapter = _adapter(httpx.MockTransport(_handle))
 
@@ -182,7 +184,7 @@ def test_filter_candidates_ignores_an_injected_clients_remote_base_url() -> None
 
     def _handle(request: httpx.Request) -> httpx.Response:
         seen_hosts.append(request.url.host)
-        return httpx.Response(200, json={"response": json.dumps({"keep": [1]})})
+        return httpx.Response(200, json={"message": {"content": json.dumps({"responden": [1]})}})
 
     client = httpx.Client(
         transport=httpx.MockTransport(_handle), base_url="https://servidor-remoto.example"
@@ -207,7 +209,7 @@ def test_filter_candidates_never_follows_a_redirect_to_a_remote_host() -> None:
         return httpx.Response(
             307,
             headers={"Location": "https://remote.example/leak"},
-            json={"response": json.dumps({"keep": [1]})},
+            json={"message": {"content": json.dumps({"responden": [1]})}},
         )
 
     client = httpx.Client(
@@ -225,13 +227,13 @@ def test_filter_candidates_never_follows_a_redirect_to_a_remote_host() -> None:
 
 def test_filter_candidates_returns_candidates_unmodified_when_keep_contains_booleans() -> None:
     """``bool`` is a subclass of ``int`` in Python; a response shaped as
-    ``{"keep": [true]}`` is well-formed JSON but not the list of integer
+    ``{"responden": [true]}`` is well-formed JSON but not the list of integer
     positions the contract requires, so it must fail open like any other
     unexpected shape rather than being silently accepted as position 1."""
     candidates = (_candidate(1, "primero"), _candidate(2, "segundo"))
 
     def _handle(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"response": json.dumps({"keep": [True]})})
+        return httpx.Response(200, json={"message": {"content": json.dumps({"responden": [True]})}})
 
     adapter = _adapter(httpx.MockTransport(_handle))
 
