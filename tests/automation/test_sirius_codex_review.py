@@ -314,10 +314,14 @@ def _review(
 def _review_comment(
     comment_id: int = 801, path: str = "src/x.py", line: int = 12
 ) -> dict[str, Any]:
+    # GitHub siempre rellena `side` en los comentarios inline de revisión
+    # (por defecto "RIGHT" cuando el comentario ancla en el lado nuevo del
+    # diff); el valor por defecto de esta fixture refleja ese payload real.
     return {
         "id": comment_id,
         "path": path,
         "line": line,
+        "side": "RIGHT",
         "body": "**![P2 Badge](https://img.shields.io/badge/P2-yellow)** No valida la entrada.",
         "html_url": f"https://github.com/{REPO}/pull/{PR}#discussion_r{comment_id}",
     }
@@ -820,6 +824,45 @@ def test_collect_review_comment_on_left_side_with_line_omits_line_number(
     comment = _review_comment(801, "src/a.py", 10)
     comment["original_line"] = 5
     comment["side"] = "LEFT"
+    _seed(env, "review_comments_700.json", [comment])
+    r = _run_collect(env, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["observations"][0]["archivo"] == "src/a.py"
+
+
+def test_collect_review_comment_without_side_with_line_omits_line_number(
+    tmp_path: Path,
+) -> None:
+    # Hallazgo CODEX-001 (incidencia #501, ronda 7): si el comentario trae
+    # `line` pero omite `side` (y `original_side`), no está demostrado que la
+    # coordenada pertenezca al lado nuevo del diff; conservarla igual
+    # reproduce el mismo goteo que los casos ya cubiertos arriba. La
+    # ubicación debe quedarse sin número en vez de asumir el lado nuevo.
+    env = _setup(tmp_path)
+    _write_state(tmp_path)
+    _seed(env, "reviews.json", [_review()])
+    comment = _review_comment(801, "src/a.py", 10)
+    del comment["side"]
+    _seed(env, "review_comments_700.json", [comment])
+    r = _run_collect(env, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["observations"][0]["archivo"] == "src/a.py"
+
+
+def test_collect_review_comment_with_unknown_side_and_line_omits_line_number(
+    tmp_path: Path,
+) -> None:
+    # Hallazgo CODEX-001 (incidencia #501, ronda 7): un valor de `side` que
+    # no sea "RIGHT" (ni siquiera "LEFT", cualquier otro inesperado) tampoco
+    # demuestra que la coordenada pertenezca al lado nuevo, así que debe
+    # tratarse igual que su ausencia.
+    env = _setup(tmp_path)
+    _write_state(tmp_path)
+    _seed(env, "reviews.json", [_review()])
+    comment = _review_comment(801, "src/a.py", 10)
+    comment["side"] = "UNKNOWN"
     _seed(env, "review_comments_700.json", [comment])
     r = _run_collect(env, tmp_path)
     assert r.returncode == 0, r.stdout + r.stderr

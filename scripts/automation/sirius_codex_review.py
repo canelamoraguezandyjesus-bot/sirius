@@ -387,12 +387,14 @@ def _observations_from_comments(comments: list[dict[str, Any]]) -> list[dict[str
         # en ese caso la coordenada es del lado antiguo, no del nuevo, y
         # conservarla igual reproduce el mismo goteo que el párrafo anterior
         # ya evita para el caso sin `line` (incidencia #501, CODEX-001). Por
-        # eso también se consulta `side`/`original_side` antes de conservarla.
+        # eso se exige demostrar `side == "RIGHT"` antes de conservarla: si
+        # falta o trae un valor que no sea ese, no está probado que la
+        # coordenada pertenezca al lado nuevo.
         line = comment.get("line")
         side = comment.get("side") or comment.get("original_side")
         location = (
             f"{path}:{line}"
-            if isinstance(line, int) and side != "LEFT"
+            if isinstance(line, int) and side == "RIGHT"
             else (path or "desconocido")
         )
         permalink = str(comment.get("html_url") or "").strip()
