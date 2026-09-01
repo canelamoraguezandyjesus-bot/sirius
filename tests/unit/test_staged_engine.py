@@ -135,6 +135,26 @@ def test_g4_sin_ejes_degrades_to_peticion_ambito_over_real_project_id() -> None:
     assert filtrado.admitidas == (_candidata(item),)
 
 
+def test_g4_project_scoped_item_without_project_id_closes_a_restricted_ambito() -> None:
+    """Eje declarado como "PROYECTO" pero sin ``project_id`` resuelto: la
+    pertenencia no puede comprobarse, asi que una peticion cerrada descarta
+    (incidencia #504/#505, CODEX-001 de la ronda 3: la excepcion de
+    ``Ambito.autoriza`` para ``project_id is None`` es solo para el
+    candidato sin eje de ambito declarado, no para este caso)."""
+    item = _item("MEMORIA:1", project_id=None, ejes=EjesDeclarados(ambito="PROYECTO"))
+    peticion = _peticion(ambito=Ambito(global_=False, proyectos=("9",)))
+    filtrado = gates.aplicar_previas([_candidata(item)], peticion)
+    assert filtrado.admitidas == ()
+    assert any(puerta == "G4" for _item_id, puerta, _motivo in filtrado.descartes)
+
+
+def test_g4_project_scoped_item_without_project_id_passes_a_global_peticion() -> None:
+    item = _item("MEMORIA:1", project_id=None, ejes=EjesDeclarados(ambito="PROYECTO"))
+    peticion = _peticion(ambito=Ambito(global_=True, proyectos=()))
+    filtrado = gates.aplicar_previas([_candidata(item)], peticion)
+    assert filtrado.admitidas == (_candidata(item),)
+
+
 def test_g8_item_not_yet_valid_at_target_time_is_discarded_even_with_no_vigentes() -> None:
     item = _item("MEMORIA:1", ejes=EjesDeclarados(valid_from="2027-01-01T00:00:00Z"))
     peticion = _peticion(admite_no_vigentes=True)
