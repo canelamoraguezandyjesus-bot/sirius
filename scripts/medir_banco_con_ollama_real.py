@@ -122,7 +122,12 @@ def main() -> int:
     print("Ejecutando los 47 casos contra el camino real. Esto tarda varios minutos.\n")
 
     comienzo = time.monotonic()
-    with tempfile.TemporaryDirectory() as carpeta:
+    # ``ignore_cleanup_errors``: en Windows no se puede borrar un fichero que
+    # sigue abierto, y las conexiones de SQLite del arnés aún lo están al
+    # salir del bloque. Sin esto, la limpieza revienta DESPUÉS de haber
+    # medido y antes de imprimir nada: se pierde una medición de minutos por
+    # un fichero temporal que da igual.
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as carpeta:
         ejecucion = _ejecutar_banco_paquete_completo(
             Path(carpeta) / "banco.db",
             relevance_filter_port=contador,
