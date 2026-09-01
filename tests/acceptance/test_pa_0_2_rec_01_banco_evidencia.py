@@ -165,6 +165,7 @@ from sirius.domain.staged_engine_contracts import (
     EjesDeclarados,
     Peticion,
 )
+from sirius.ports.relevance_filter import RelevanceFilterPort
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "evidence_bank_47_casos.json"
 CANON_CATEGORIES_PATH = (
@@ -1966,7 +1967,9 @@ def _set_active_project(database_path: Path, project_id: int | None) -> None:
             )
 
 
-def _ejecutar_banco_paquete_completo(database_path: Path) -> _EjecucionDelBanco:
+def _ejecutar_banco_paquete_completo(
+    database_path: Path, *, relevance_filter_port: RelevanceFilterPort | None = None
+) -> _EjecucionDelBanco:
     """El mismo banco de 47 casos, contra `RankRelevantKnowledgeUseCase`/
     `ContextBuilder` construidos exactamente como `composition_root` los
     construiría con la puerta de D7 punto 6 abierta
@@ -2062,7 +2065,11 @@ def _ejecutar_banco_paquete_completo(database_path: Path) -> _EjecucionDelBanco:
             rank_relevant_knowledge_use_case=rank_relevant_knowledge_use_case,
             event_repository=build_sqlite_event_repository(database_path),
             token_counter=CharacterHeuristicTokenCounter(),
-            relevance_filter_port=_FiltroDeRelevanciaQueNuncaDescarta(),
+            relevance_filter_port=(
+                relevance_filter_port
+                if relevance_filter_port is not None
+                else _FiltroDeRelevanciaQueNuncaDescarta()
+            ),
             max_criticality_category=_MAX_CRITICALITY_CATEGORY,
             category_matching_enabled=True,
         )
