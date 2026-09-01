@@ -136,10 +136,21 @@ class Ambito:
     proyectos: tuple[str, ...]
 
     def autoriza(self, project_id: str | None) -> bool:
-        """Un item fuera de ámbito no contamina, ni siquiera para descartarse."""
-        if self.global_:
+        """Un item fuera de ámbito no contamina, ni siquiera para descartarse.
+
+        ``project_id is None`` significa que el propio candidato es de
+        ámbito global (nunca que se desconozca su proyecto: una ``Decision``
+        siempre trae uno) y se admite pase lo que pase con el ámbito de la
+        petición — la misma regla que ``candidate_in_declared_scope``
+        (``relevance.py``) ya aplica a la ampliación por categoría de M14
+        para la misma noción de proyecto activo. Sin esto, G4 (incidencia
+        #504/#505) divergía de esa regla y descartaba memorias globales en
+        cuanto había un proyecto activo, aunque el motor las admitiera por
+        coincidencia literal o FTS5.
+        """
+        if self.global_ or project_id is None:
             return True
-        return project_id is not None and project_id in self.proyectos
+        return project_id in self.proyectos
 
 
 @dataclass(frozen=True, slots=True)

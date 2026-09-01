@@ -563,6 +563,42 @@ def test_staged_engine_rejects_a_motor_admitted_candidate_outside_the_active_pro
 
 
 @pytest.mark.integration
+def test_staged_engine_admits_a_globally_scoped_memory_with_an_active_project(
+    tmp_path: Path,
+) -> None:
+    """CLAUDE-REV-M16-001/CODEX-001 (incidencia #504/#505): ``G4`` debe
+    seguir la misma regla que ``candidate_in_declared_scope``
+    (``src/sirius/domain/relevance.py:250-266``) ya aplica a la ampliación
+    por categoría de M14 — un candidato sin ``project_id`` (ámbito global)
+    se admite pase lo que pase con el ámbito de la petición. Antes de esta
+    corrección, ``Ambito.autoriza`` (``src/sirius/domain/
+    staged_engine_contracts.py``) exigía ``project_id is not None``, así que
+    el motor por etapas descartaba por ``G4`` una memoria global en cuanto
+    había un proyecto activo, aunque la encontrara por coincidencia literal."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    memoria_global = SaveManualMemoryUseCase(unit_of_work).save(
+        "faroglobalunicasola sobre la costa"
+    )
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("faroglobalunicasola")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [memoria_global.id]
+
+
+@pytest.mark.integration
 def test_staged_engine_path_still_finds_a_category_only_match(tmp_path: Path) -> None:
     """CODEX-001 (incidencia #457): el motor por etapas solo genera
     candidatos por asunto exacto o FTS5, nunca por categoría, así que con
