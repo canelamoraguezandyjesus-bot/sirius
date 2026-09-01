@@ -193,10 +193,17 @@ siguió en verde durante todo el diagnóstico.
 
 ## Correcciones tras revisión
 
-Dos rondas de revisión independiente sobre la PR #505 encontraron
-divergencias reales entre `G4` y `candidate_in_declared_scope` (M14) que la
-decisión de arriba no había previsto. Se corrigieron en el propio código, sin
-reabrir el diseño ya aprobado:
+Dos rondas de revisión independiente sobre la PR #505 encontraron defectos en
+`G4`, pero de raíz distinta, no la misma divergencia dos veces. La ronda 2
+corrigió una divergencia real y preexistente entre `G4` y
+`candidate_in_declared_scope` (M14) que la decisión de arriba no había
+previsto. La ronda 3, en cambio, corrigió una sobreautorización que el propio
+arreglo de la ronda 2 introdujo en `_g4` — no una divergencia que ya existiera
+antes de ese arreglo — y cuyo resultado final, para el candidato con eje de
+ámbito declarado explícitamente (p. ej. `"PROYECTO"`), diverge deliberadamente
+de `candidate_in_declared_scope`, que seguiría aceptando `project_id=None` sin
+distinguir si el candidato declara eje o no. Se corrigieron en el propio
+código, sin reabrir el diseño ya aprobado:
 
 - **Ronda 2 (commit `c2105666`, corrige CLAUDE-REV-M16-001 y CODEX-001):**
   `Ambito.autoriza` (`src/sirius/domain/staged_engine_contracts.py`)
@@ -206,14 +213,17 @@ reabrir el diseño ya aprobado:
   para tratar `project_id=None` como siempre autorizado — la misma regla que
   `candidate_in_declared_scope` ya aplicaba a la ampliación por categoría de
   M14.
-- **Ronda 3 (commit `344a74a`, corrige CODEX-001):** esa misma excepción de
-  `project_id=None`, pensada para el candidato sin eje de ámbito declarado,
-  se aplicaba también en `_g4` (`src/sirius/domain/staged_engine_gates.py`)
-  cuando el eje venía declarado explícitamente (p. ej. `"PROYECTO"`) sin
-  `project_id` resuelto, colando un candidato que se declara de proyecto sin
-  poder verificar su pertenencia. Se limitó la excepción al caso sin eje
-  declarado; con el eje declarado y sin `project_id`, la petición cerrada
-  cierra el ámbito y solo una petición global lo sigue admitiendo.
+- **Ronda 3 (commit `344a74a`, corrige CODEX-001):** ese arreglo de la ronda 2
+  sobreautorizaba: la excepción de `project_id=None`, pensada para el
+  candidato sin eje de ámbito declarado, se aplicaba también en `_g4`
+  (`src/sirius/domain/staged_engine_gates.py`) cuando el eje venía declarado
+  explícitamente (p. ej. `"PROYECTO"`) sin `project_id` resuelto, colando un
+  candidato que se declara de proyecto sin poder verificar su pertenencia. Se
+  limitó la excepción al caso sin eje declarado; con el eje declarado y sin
+  `project_id`, la petición cerrada cierra el ámbito y solo una petición
+  global lo sigue admitiendo — con eje declarado, `_g4` y
+  `candidate_in_declared_scope` quedan así deliberadamente distintos, no
+  realineados.
 
 ## Comprobación que la sostiene
 
