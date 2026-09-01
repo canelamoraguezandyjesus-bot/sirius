@@ -55,6 +55,10 @@ issue_from() { printf '%s' "$1" | grep -oE 'issues/[0-9]+' | head -1 | cut -d/ -
 case "$sub" in
   api)
     args="$*"
+    if printf '%s' "$args" | grep -q '/compare/'; then
+      cat "$D/compare_response.json" 2>/dev/null || printf '{"files": []}'
+      exit 0
+    fi
     if printf '%s' "$args" | grep -q '/pulls/'; then
       pr="$(printf '%s' "$args" | grep -oE 'pulls/[0-9]+' | cut -d/ -f2)"
       cat "$D/pr_${pr}.json" 2>/dev/null || exit 1
@@ -189,6 +193,11 @@ def _seed_issue(
     (md / f"labels_{ISSUE}.txt").write_text("".join(f"{x}\n" for x in labels), encoding="utf-8")
     (md / f"comments_{ISSUE}.txt").write_text(comments, encoding="utf-8")
     (md / f"body_{ISSUE}.txt").write_text(body, encoding="utf-8")
+
+
+def _seed_compare(env: dict[str, str], files: list[dict[str, object]]) -> None:
+    """Respuesta que `gh api .../compare/{h1}...{h2}` devolverá (guardián de goteo, ADR-123)."""
+    (_md(env) / "compare_response.json").write_text(json.dumps({"files": files}), encoding="utf-8")
 
 
 def _seed_pr(
@@ -611,6 +620,168 @@ def test_identical_findings_in_a_new_round_still_publish_their_record(tmp_path: 
         for block in re.findall(r"## RONDA_HALLAZGOS\s*```json\s*(.*?)\s*```", comments, re.DOTALL)
     ]
     assert heads == ["aaaaaaaaaaaa", "bbbbbbbbbbbb"]
+
+
+# --------------------------------------------------------------------------- #
+# Guardián de goteo en vivo (incidencia #496, ADR-123): cableado de extremo a
+# extremo dentro de sirius_apply_verdict.sh, con `gh api compare` simulado.
+# --------------------------------------------------------------------------- #
+
+
+def _seed_round1_history(head1: str, head2: str, *, archivo: str = "src/x.py:10") -> str:
+    round1_record = json.dumps(
+        {
+            "round": 1,
+            "head": head1,
+            "findings": [
+                {
+                    "fingerprint": "f" * 16,
+                    "severity": "P2",
+                    "source": "CODEX",
+                    "file": archivo,
+                }
+            ],
+            "pending": 1,
+            "severity_total": 2,
+        }
+    )
+    return (
+        f"QUALITY_SUCCESS\n- Head SHA: `{head1}`\n"
+        "PR abierta: https://github.com/owner/repo/pull/9\n"
+        f"<!-- sirius-round:1 -->\n\n## RONDA_HALLAZGOS\n```json\n{round1_record}\n```\n"
+        f"QUALITY_SUCCESS\n- Head SHA: `{head2}`\n"
+    )
+
+
+def test_drip_guard_marks_a_finding_whose_file_did_not_change_since_round_1(
+    tmp_path: Path,
+) -> None:
+    head1, head2 = "1111aaaa1111", "2222bbbb2222"
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:reviewing"], comments=_seed_round1_history(head1, head2))
+    _seed_pr(env, 9, head=head2)
+    # El fichero citado no aparece en la comparación ronda1->ronda2: sin
+    # cambios de por medio, es exactamente el caso mecánico de goteo real.
+    _seed_compare(env, files=[])
+    vf = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "CHANGES_REQUESTED",
+            "summary": "hay defectos",
+            "reviewed_head_sha": head2,
+            "observations": [
+                {
+                    "id": "CLAUDE-REV-001",
+                    "severidad": "alta",
+                    "archivo": "src/x.py:10",
+                    "problema": "vuelve a citar la misma línea",
+                    "criterio_esperado": "debe validar",
+                    "prueba": "test_x_invalid",
+                    "limites_correccion": "solo src/x.py",
+                }
+            ],
+        },
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    comments = _comments(env)
+    assert "Guardián de goteo" in comments
+    assert "posible goteo: este contenido ya estaba idéntico en la ronda 1" in comments
+
+
+def test_drip_guard_does_not_mark_a_finding_on_an_added_line(tmp_path: Path) -> None:
+    head1, head2 = "3333cccc3333", "4444dddd4444"
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:reviewing"], comments=_seed_round1_history(head1, head2))
+    _seed_pr(env, 9, head=head2)
+    # La línea 10 citada por el hallazgo es una línea AÑADIDA en el hunk: es
+    # contenido nuevo desde la ronda 1, no goteo.
+    patch = "@@ -8,2 +8,4 @@\n context\n+añadida\n+línea 10 añadida\n context"
+    _seed_compare(env, files=[{"filename": "src/x.py", "status": "modified", "patch": patch}])
+    vf = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "CHANGES_REQUESTED",
+            "summary": "hay defectos",
+            "reviewed_head_sha": head2,
+            "observations": [
+                {
+                    "id": "CLAUDE-REV-002",
+                    "severidad": "alta",
+                    "archivo": "src/x.py:10",
+                    "problema": "la línea 10 nueva no valida entrada",
+                    "criterio_esperado": "debe validar",
+                    "prueba": "test_x_invalid",
+                    "limites_correccion": "solo src/x.py",
+                }
+            ],
+        },
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    comments = _comments(env)
+    assert "Guardián de goteo" not in comments
+
+
+def test_drip_guard_cli_total_failure_does_not_leak_foreign_posible_goteo(
+    tmp_path: Path,
+) -> None:
+    """CLAUDE-001 (incidencia #501, ronda 4).
+
+    Si la invocación completa del CLI del guardián falla (aquí: `python3` no
+    disponible para ese script en concreto), el `else` de
+    `sirius_apply_verdict.sh` cae a `$observations` tal cual. Si el revisor
+    ya incluía una clave `posible_goteo` ajena, esa rama no debe reenviarla
+    como si el guardián la hubiera marcado sin haber evaluado nada.
+    """
+    head1, head2 = "5555eeee5555", "6666ffff6666"
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:reviewing"], comments=_seed_round1_history(head1, head2))
+    _seed_pr(env, 9, head=head2)
+    _seed_compare(env, files=[])
+
+    # `python3` real sigue disponible para sirius_convergence.py (record,
+    # family-check): solo se simula el fallo del CLI del guardián en
+    # concreto, para no tapar el resto de la ronda con un entorno sin Python.
+    real_python3 = shutil.which("python3")
+    assert real_python3 is not None
+    bin_dir = Path(env["PATH"].split(os.pathsep, 1)[0])
+    fake_python3 = bin_dir / "python3"
+    fake_python3.write_text(
+        "#!/usr/bin/env bash\n"
+        "if printf '%s' \"$*\" | grep -q sirius_drip_guard_cli.py; then\n"
+        "  echo 'python3 no disponible (simulado)' >&2\n"
+        "  exit 127\n"
+        "fi\n"
+        f'exec "{real_python3}" "$@"\n',
+        encoding="utf-8",
+    )
+    fake_python3.chmod(0o755)
+
+    vf = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "CHANGES_REQUESTED",
+            "summary": "hay defectos",
+            "reviewed_head_sha": head2,
+            "observations": [
+                {
+                    "id": "CLAUDE-REV-003",
+                    "severidad": "alta",
+                    "archivo": "src/x.py:10",
+                    "problema": "vuelve a citar la misma línea",
+                    "criterio_esperado": "debe validar",
+                    "prueba": "test_x_invalid",
+                    "limites_correccion": "solo src/x.py",
+                    "posible_goteo": "marca ajena inventada por el revisor",
+                }
+            ],
+        },
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    comments = _comments(env)
+    assert "Guardián de goteo" not in comments
 
 
 def test_reviewer_changes_requested_increments_the_round_number(tmp_path: Path) -> None:

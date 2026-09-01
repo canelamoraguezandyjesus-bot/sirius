@@ -50,6 +50,7 @@ SCRIPTS_RUN_ON_THE_RUNNER = (
     "sirius_convergence.py",
     "validate_issue_body.py",
     "resolver_prompt.py",
+    "sirius_drip_guard_cli.py",
 )
 
 #: El módulo compartido no vive en `scripts/automation/` -vive en el paquete,
@@ -63,6 +64,8 @@ MODULOS_COMPARTIDOS = (
     Path(__file__).resolve().parents[2] / "src" / "sirius_engine" / "round_history.py",
     # Lo carga `resolver_prompt.py` (H-28): una sola verdad para `Perfil: rol@N`.
     Path(__file__).resolve().parents[2] / "src" / "sirius_engine" / "profile_field.py",
+    # Lo carga `sirius_drip_guard_cli.py` (incidencia #496, ADR-123).
+    Path(__file__).resolve().parents[2] / "src" / "sirius_engine" / "drip_guard.py",
 )
 
 

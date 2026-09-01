@@ -371,8 +371,32 @@ def _observations_from_comments(comments: list[dict[str, Any]]) -> list[dict[str
     for index, comment in enumerate(sorted(comments, key=sort_key), start=1):
         body = str(comment.get("body") or "").strip()
         path = str(comment.get("path") or "").strip()
-        line = comment.get("line") or comment.get("original_line")
-        location = f"{path}:{line}" if isinstance(line, int) else (path or "desconocido")
+        # Solo `line` (lado nuevo del diff) es una numeración que
+        # `_line_kind_in_patch` de `drip_guard.py` sabe interpretar: ese
+        # guardián recorre el patch contando únicamente líneas del lado
+        # nuevo. `original_line` ancla al lado eliminado/base, una
+        # numeración distinta -usarla aquí como si fuera del lado nuevo hacía
+        # que una línea legítima del hallazgo citara una posición que nunca
+        # existió en ese lado, y el guardián de goteo la marcaba
+        # incorrectamente como POSIBLE_GOTEO (incidencia #501,
+        # CLAUDE-REVISOR-003). Sin `line`, se omite el número en vez de
+        # arriesgar uno incorrecto.
+        #
+        # Pero `line` puede venir presente aun con `side: "LEFT"` (GitHub
+        # también lo rellena para comentarios anclados en el lado eliminado):
+        # en ese caso la coordenada es del lado antiguo, no del nuevo, y
+        # conservarla igual reproduce el mismo goteo que el párrafo anterior
+        # ya evita para el caso sin `line` (incidencia #501, CODEX-001). Por
+        # eso se exige demostrar `side == "RIGHT"` antes de conservarla: si
+        # falta o trae un valor que no sea ese, no está probado que la
+        # coordenada pertenezca al lado nuevo.
+        line = comment.get("line")
+        side = comment.get("side") or comment.get("original_side")
+        location = (
+            f"{path}:{line}"
+            if isinstance(line, int) and side == "RIGHT"
+            else (path or "desconocido")
+        )
         permalink = str(comment.get("html_url") or "").strip()
         observations.append(
             {
