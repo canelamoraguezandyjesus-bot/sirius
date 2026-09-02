@@ -151,10 +151,10 @@ class _StaticMemoryRepository:
         raise AssertionError("correct() must never list uncategorized memories")
 
     def set_user_criticality(self, memory_id: int, criticality: Criticality | None) -> Memory:
-        raise AssertionError("correct() must never list uncategorized memories")
+        raise AssertionError("correct() must never set a criticality")
 
     def list_current_memories_by_criticality(self, levels: Sequence[Criticality]) -> list[Memory]:
-        raise AssertionError("correct() must never list uncategorized memories")
+        raise AssertionError("correct() must never list memories by criticality")
 
 
 class _UnusedDecisionRepository:
@@ -206,12 +206,12 @@ class _UnusedDecisionRepository:
         raise AssertionError("correct() must never list uncategorized decisions")
 
     def set_user_criticality(self, decision_id: int, criticality: Criticality | None) -> Decision:
-        raise AssertionError("correct() must never list uncategorized decisions")
+        raise AssertionError("correct() must never set a criticality")
 
     def list_current_decisions_by_criticality(
         self, levels: Sequence[Criticality]
     ) -> list[Decision]:
-        raise AssertionError("correct() must never list uncategorized decisions")
+        raise AssertionError("correct() must never list decisions by criticality")
 
 
 class _UnusedConversationRepository:

@@ -106,12 +106,12 @@ class _StaticDecisionRepository:
         raise AssertionError("get_origin() must never list uncategorized decisions")
 
     def set_user_criticality(self, decision_id: int, criticality: Criticality | None) -> Decision:
-        raise AssertionError("get_origin() must never list uncategorized decisions")
+        raise AssertionError("get_origin() must never set a criticality")
 
     def list_current_decisions_by_criticality(
         self, levels: Sequence[Criticality]
     ) -> list[Decision]:
-        raise AssertionError("get_origin() must never list uncategorized decisions")
+        raise AssertionError("get_origin() must never list decisions by criticality")
 
 
 class _StaticEventRepository:

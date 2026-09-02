@@ -381,8 +381,9 @@ class _TrackingMapping(Mapping[str, Any]):
 
 
 def _es_critico(item: Mapping[str, Any]) -> bool:
-    """Si un item esperado es crítico. Único lugar del módulo que lee
-    `criticidad`, y únicamente su `nivel`: `razon_segura` nunca se pide."""
+    """Si un item esperado es crítico. Único lugar del arnés de evaluación
+    que lee `criticidad` (el cargador la lee aparte, en `_apply_criticidad`),
+    y únicamente su `nivel`: `razon_segura` nunca se pide."""
     criticidad = item.get("criticidad")
     return criticidad is not None and criticidad["nivel"] == "CRITICO"
 
