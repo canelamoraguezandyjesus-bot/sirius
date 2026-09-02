@@ -14,6 +14,7 @@ from sirius.application.approve_decision import (
     UnknownDecisionError,
 )
 from sirius.domain.conversation import Conversation, Message, MessageRole, MessageStatus
+from sirius.domain.criticality import Criticality
 from sirius.domain.decision import Decision, DecisionRevision, DecisionStatus
 from sirius.domain.event import DECISION_APPROVED_EVENT_TYPE, USER_ACTOR, Event
 from sirius.domain.memory import Memory, MemoryRevision
@@ -128,6 +129,14 @@ class _StaticDecisionRepository:
     def list_uncategorized(self) -> list[Decision]:
         raise AssertionError("approve() must never list uncategorized decisions")
 
+    def set_user_criticality(self, decision_id: int, criticality: Criticality | None) -> Decision:
+        raise AssertionError("approve() must never list uncategorized decisions")
+
+    def list_current_decisions_by_criticality(
+        self, levels: Sequence[Criticality]
+    ) -> list[Decision]:
+        raise AssertionError("approve() must never list uncategorized decisions")
+
 
 class _UnusedMemoryRepository:
     """B4a's ``UnitOfWork.memory_repository``; ``approve()`` never touches it."""
@@ -178,6 +187,12 @@ class _UnusedMemoryRepository:
         raise AssertionError("approve() must never set a category")
 
     def list_uncategorized(self) -> list[Memory]:
+        raise AssertionError("approve() must never list uncategorized memories")
+
+    def set_user_criticality(self, memory_id: int, criticality: Criticality | None) -> Memory:
+        raise AssertionError("approve() must never list uncategorized memories")
+
+    def list_current_memories_by_criticality(self, levels: Sequence[Criticality]) -> list[Memory]:
         raise AssertionError("approve() must never list uncategorized memories")
 
 

@@ -19,6 +19,7 @@ from sirius.adapters.persistence.database import (
     sqlite_variable_limit,
 )
 from sirius.adapters.persistence.models import MemoryModel, MemoryRevisionModel
+from sirius.domain.criticality import Criticality
 from sirius.domain.memory import (
     Memory,
     MemoryRevision,
@@ -49,6 +50,21 @@ def _to_domain_revision(model: MemoryRevisionModel) -> MemoryRevision:
     )
 
 
+def _to_domain_criticality(value: str | None) -> Criticality | None:
+    """Validate a raw ``criticality`` column value at load time (M18b,
+    ADR-126): an unknown string can never silently become a made-up
+    ``Criticality`` member, or turn into ``None`` as if nobody had marked it
+    — it fails clearly instead.
+    """
+    if value is None:
+        return None
+    try:
+        return Criticality(value)
+    except ValueError as error:
+        msg = f"Unknown criticality value in database: {value!r}"
+        raise ValueError(msg) from error
+
+
 def _to_domain_memory(model: MemoryModel, revision_model: MemoryRevisionModel) -> Memory:
     return Memory(
         id=model.id,
@@ -60,6 +76,7 @@ def _to_domain_memory(model: MemoryModel, revision_model: MemoryRevisionModel) -
         project_id=model.project_id,
         category=model.category,
         category_locked=model.category_locked,
+        criticality=_to_domain_criticality(model.criticality),
     )
 
 
@@ -361,6 +378,30 @@ class SqliteMemoryRepository:
                 .where(
                     MemoryModel.category.is_(None),
                     MemoryModel.category_locked.is_(False),
+                )
+                .order_by(MemoryModel.id)
+            ).all()
+            return _load_memories(session, models)
+
+    def set_user_criticality(self, memory_id: int, criticality: Criticality | None) -> Memory:
+        with self._scope() as session:
+            memory_model = session.get(MemoryModel, memory_id)
+            if memory_model is None:
+                msg = f"Unknown memory id: {memory_id}"
+                raise ValueError(msg)
+            memory_model.criticality = None if criticality is None else criticality.value
+            session.flush()
+            return _load_memory(session, memory_model)
+
+    def list_current_memories_by_criticality(self, levels: Sequence[Criticality]) -> list[Memory]:
+        if not levels:
+            return []
+        with self._scope() as session:
+            models = session.scalars(
+                select(MemoryModel)
+                .where(
+                    MemoryModel.status == MemoryStatus.CURRENT,
+                    MemoryModel.criticality.in_([level.value for level in levels]),
                 )
                 .order_by(MemoryModel.id)
             ).all()

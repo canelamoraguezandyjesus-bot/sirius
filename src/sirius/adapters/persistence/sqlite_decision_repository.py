@@ -19,6 +19,7 @@ from sirius.adapters.persistence.database import (
     sqlite_variable_limit,
 )
 from sirius.adapters.persistence.models import DecisionModel, DecisionRevisionModel
+from sirius.domain.criticality import Criticality
 from sirius.domain.decision import (
     Decision,
     DecisionRevision,
@@ -46,6 +47,19 @@ def _to_domain_revision(model: DecisionRevisionModel) -> DecisionRevision:
     )
 
 
+def _to_domain_criticality(value: str | None) -> Criticality | None:
+    """Mirrors ``sqlite_memory_repository._to_domain_criticality`` (M18b,
+    ADR-126): fail clearly on an unknown persisted value.
+    """
+    if value is None:
+        return None
+    try:
+        return Criticality(value)
+    except ValueError as error:
+        msg = f"Unknown criticality value in database: {value!r}"
+        raise ValueError(msg) from error
+
+
 def _to_domain_decision(model: DecisionModel, revision_model: DecisionRevisionModel) -> Decision:
     return Decision(
         id=model.id,
@@ -58,6 +72,7 @@ def _to_domain_decision(model: DecisionModel, revision_model: DecisionRevisionMo
         supersedes_decision_id=model.supersedes_decision_id,
         category=model.category,
         category_locked=model.category_locked,
+        criticality=_to_domain_criticality(model.criticality),
     )
 
 
@@ -331,6 +346,32 @@ class SqliteDecisionRepository:
                 .where(
                     DecisionModel.category.is_(None),
                     DecisionModel.category_locked.is_(False),
+                )
+                .order_by(DecisionModel.id)
+            ).all()
+            return _load_decisions(session, models)
+
+    def set_user_criticality(self, decision_id: int, criticality: Criticality | None) -> Decision:
+        with self._scope() as session:
+            decision_model = session.get(DecisionModel, decision_id)
+            if decision_model is None:
+                msg = f"Unknown decision id: {decision_id}"
+                raise ValueError(msg)
+            decision_model.criticality = None if criticality is None else criticality.value
+            session.flush()
+            return _load_decision(session, decision_model)
+
+    def list_current_decisions_by_criticality(
+        self, levels: Sequence[Criticality]
+    ) -> list[Decision]:
+        if not levels:
+            return []
+        with self._scope() as session:
+            models = session.scalars(
+                select(DecisionModel)
+                .where(
+                    DecisionModel.status == DecisionStatus.APPROVED,
+                    DecisionModel.criticality.in_([level.value for level in levels]),
                 )
                 .order_by(DecisionModel.id)
             ).all()

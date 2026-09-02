@@ -15,6 +15,7 @@ from pathlib import Path
 
 from sirius.application.export_structured import ExportStructuredUseCase
 from sirius.domain.conversation import Conversation, Message, MessageRole, MessageStatus
+from sirius.domain.criticality import Criticality
 from sirius.domain.decision import Decision, DecisionRevision, DecisionStatus
 from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
 from sirius.domain.project import Project, ProjectRevision, ProjectStatus
@@ -193,6 +194,12 @@ class _StaticMemoryRepository:
     def list_uncategorized(self) -> list[Memory]:
         raise AssertionError("export() must never list uncategorized memories")
 
+    def set_user_criticality(self, memory_id: int, criticality: Criticality | None) -> Memory:
+        raise AssertionError("export() must never list uncategorized memories")
+
+    def list_current_memories_by_criticality(self, levels: Sequence[Criticality]) -> list[Memory]:
+        raise AssertionError("export() must never list uncategorized memories")
+
 
 class _StaticDecisionRepository:
     def __init__(self, decisions: list[Decision]) -> None:
@@ -239,6 +246,14 @@ class _StaticDecisionRepository:
         raise AssertionError("export() must never set a category")
 
     def list_uncategorized(self) -> list[Decision]:
+        raise AssertionError("export() must never list uncategorized decisions")
+
+    def set_user_criticality(self, decision_id: int, criticality: Criticality | None) -> Decision:
+        raise AssertionError("export() must never list uncategorized decisions")
+
+    def list_current_decisions_by_criticality(
+        self, levels: Sequence[Criticality]
+    ) -> list[Decision]:
         raise AssertionError("export() must never list uncategorized decisions")
 
 

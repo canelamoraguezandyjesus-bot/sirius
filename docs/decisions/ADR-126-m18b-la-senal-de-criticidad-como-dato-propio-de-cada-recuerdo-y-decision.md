@@ -144,8 +144,44 @@ Si tras M19 no salen 3, o tras M20 no sale 0, se para y se busca la raíz
 
 ## Comprobación que la sostiene
 
-[Se completa al terminar la implementación, con los comandos y resultados
-reales.]
+Comandos ejecutados tras completar la implementación (dominio, migración
+`de3545536503`, puertos, repositorios SQLite, `SetCriticalityUseCase`,
+cargador del banco), en este orden:
+
+1. `uv run pytest tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py -q`
+   → `27 passed, 1 skipped, 1 xfailed`. Las cuatro métricas del paquete
+   completo (aciertos exactos, elementos de más, omisiones críticas,
+   cobertura) siguen siendo **7/47, 285, 9, 62/81** — las mismas de hoy,
+   confirmadas por las aserciones que ya fijaban esos números antes de este
+   encargo. `test_el_cargador_no_lee_criticidad` (actualizada) confirma que
+   el cargador lee exactamente `("criticidad", "nivel")` bajo `criticidad` y
+   ninguna otra ruta.
+2. `uv run python scripts/medir_variantes_de_criticidad.py` →
+   `hoy=7/47,285,9,62/81` / `A_porte_fiel=7/47,260,3,68/81` /
+   `B_arreglo_ingenuo=7/47,354,3,68/81` — es decir, **hoy=9 / A=3 / B=3** en
+   omisiones críticas, exactamente la predicción de la nota de arranque. Sin
+   cambio respecto a antes de este encargo.
+3. `uv run ruff format --check .` → `587 files already formatted`.
+4. `uv run ruff check .` → `All checks passed!`.
+5. `uv run mypy src tests` → `Success: no issues found in 555 source files`.
+6. `uv run pytest -q` (suite completa) → `4545 passed, 15 skipped, 2 xfailed`
+   en 430 s. Ningún fallo, ninguna prueba debilitada u omitida.
+7. `git diff --check` → limpio (sin salida, código de salida 0).
+8. Prueba por mutación (ADR-001) sobre
+   `test_unknown_criticality_value_in_database_fails_clearly_for_memories`:
+   se sustituyó temporalmente el cuerpo de
+   `_to_domain_criticality`/validación por `return None`, se confirmó que la
+   prueba **falla** (`DID NOT RAISE ValueError`), y se restauró el código
+   real — la prueba sí detecta la ausencia de la comprobación que dice
+   sostener.
+9. La migración `de3545536503` se probó explícitamente en ambos sentidos
+   sobre una base con datos
+   (`tests/integration/test_migrations.py::test_upgrading_from_previous_head_preserves_rows_and_backfills_criticality`
+   y
+   `test_downgrade_to_previous_head_removes_only_the_criticality_column`),
+   además de las pruebas de round-trip/valor desconocido/`None` limpia la
+   marca/`list_current_*_by_criticality` en
+   `tests/integration/test_criticality_persistence.py`.
 
 ## Consecuencias
 

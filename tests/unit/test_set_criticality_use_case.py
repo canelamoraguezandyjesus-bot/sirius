@@ -1,9 +1,9 @@
-"""Unit tests for ``SetCategoryUseCase`` (D7 punto 3, SIRIUS-ARQ-0.2 §6.1).
+"""Unit tests for ``SetCriticalityUseCase`` (M18b, ADR-126).
 
-Unlike ``TagCategoryUseCase``, this write is never conditional: dispatch to
-the right repository method is all this use case does, so these tests pin
-exactly that — which repository gets called, with which arguments, for each
-``CategoryTargetKind``.
+Calcado de ``test_set_category_use_case.py``: dispatch to the right
+repository method is all this use case does, so these tests pin exactly
+that — which repository gets called, with which arguments (including
+``None`` to clear the mark), for each ``CriticalityTargetKind``.
 """
 
 from __future__ import annotations
@@ -11,8 +11,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
-from sirius.application.set_category import SetCategoryUseCase
-from sirius.application.tag_category import CategoryTargetKind
+from sirius.application.set_criticality import CriticalityTargetKind, SetCriticalityUseCase
 from sirius.domain.criticality import Criticality
 from sirius.domain.decision import Decision, DecisionRevision, DecisionStatus
 from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
@@ -58,7 +57,7 @@ class _FakeMemoryRepository:
 
     def __init__(self, result: Memory) -> None:
         self._result = result
-        self.calls: list[tuple[int, str]] = []
+        self.calls: list[tuple[int, Criticality | None]] = []
 
     def create_memory(
         self,
@@ -100,17 +99,17 @@ class _FakeMemoryRepository:
     def set_category(
         self, memory_id: int, category: str, *, observed_revision_version: int
     ) -> bool:
-        raise AssertionError("set() must never write a conditional (automatic) category")
+        raise AssertionError(_UNUSED_MEMORY_MESSAGE)
 
     def set_user_category(self, memory_id: int, category: str) -> Memory:
-        self.calls.append((memory_id, category))
-        return self._result
+        raise AssertionError(_UNUSED_MEMORY_MESSAGE)
 
     def list_uncategorized(self) -> list[Memory]:
         raise AssertionError(_UNUSED_MEMORY_MESSAGE)
 
     def set_user_criticality(self, memory_id: int, criticality: Criticality | None) -> Memory:
-        raise AssertionError(_UNUSED_MEMORY_MESSAGE)
+        self.calls.append((memory_id, criticality))
+        return self._result
 
     def list_current_memories_by_criticality(self, levels: Sequence[Criticality]) -> list[Memory]:
         raise AssertionError(_UNUSED_MEMORY_MESSAGE)
@@ -177,7 +176,7 @@ class _FakeDecisionRepository:
 
     def __init__(self, result: Decision) -> None:
         self._result = result
-        self.calls: list[tuple[int, str]] = []
+        self.calls: list[tuple[int, Criticality | None]] = []
 
     def create_proposal(
         self, subject: str, project_id: int, content: str, *, source_event_id: int | None = None
@@ -216,17 +215,17 @@ class _FakeDecisionRepository:
     def set_category(
         self, decision_id: int, category: str, *, observed_revision_version: int
     ) -> bool:
-        raise AssertionError("set() must never write a conditional (automatic) category")
+        raise AssertionError(_UNUSED_DECISION_MESSAGE)
 
     def set_user_category(self, decision_id: int, category: str) -> Decision:
-        self.calls.append((decision_id, category))
-        return self._result
+        raise AssertionError(_UNUSED_DECISION_MESSAGE)
 
     def list_uncategorized(self) -> list[Decision]:
         raise AssertionError(_UNUSED_DECISION_MESSAGE)
 
     def set_user_criticality(self, decision_id: int, criticality: Criticality | None) -> Decision:
-        raise AssertionError(_UNUSED_DECISION_MESSAGE)
+        self.calls.append((decision_id, criticality))
+        return self._result
 
     def list_current_decisions_by_criticality(
         self, levels: Sequence[Criticality]
@@ -289,26 +288,43 @@ class _UnusedDecisionRepository:
         raise AssertionError(_UNUSED_DECISION_MESSAGE)
 
 
-def test_set_writes_a_memory_category_unconditionally() -> None:
+def test_set_writes_a_memory_criticality_unconditionally() -> None:
     result = Memory(
         id=1,
         status=MemoryStatus.CURRENT,
         current_revision=_memory().current_revision,
         created_at=_memory().created_at,
         updated_at=_memory().updated_at,
-        category="trabajo",
-        category_locked=True,
+        criticality=Criticality.CRITICO,
     )
     memory_repository = _FakeMemoryRepository(result)
-    use_case = SetCategoryUseCase(memory_repository, _UnusedDecisionRepository())
+    use_case = SetCriticalityUseCase(memory_repository, _UnusedDecisionRepository())
 
-    written = use_case.set(CategoryTargetKind.MEMORY, 1, "trabajo")
+    outcome = use_case.set(CriticalityTargetKind.MEMORY, 1, Criticality.CRITICO)
 
-    assert written is result
-    assert memory_repository.calls == [(1, "trabajo")]
+    assert outcome is result
+    assert memory_repository.calls == [(1, Criticality.CRITICO)]
 
 
-def test_set_writes_a_decision_category_unconditionally() -> None:
+def test_set_with_none_clears_a_memory_criticality() -> None:
+    result = Memory(
+        id=1,
+        status=MemoryStatus.CURRENT,
+        current_revision=_memory().current_revision,
+        created_at=_memory().created_at,
+        updated_at=_memory().updated_at,
+        criticality=None,
+    )
+    memory_repository = _FakeMemoryRepository(result)
+    use_case = SetCriticalityUseCase(memory_repository, _UnusedDecisionRepository())
+
+    outcome = use_case.set(CriticalityTargetKind.MEMORY, 1, None)
+
+    assert outcome is result
+    assert memory_repository.calls == [(1, None)]
+
+
+def test_set_writes_a_decision_criticality_unconditionally() -> None:
     result = Decision(
         id=1,
         subject="asunto",
@@ -317,13 +333,12 @@ def test_set_writes_a_decision_category_unconditionally() -> None:
         current_revision=_decision().current_revision,
         created_at=_decision().created_at,
         updated_at=_decision().updated_at,
-        category="proyecto",
-        category_locked=True,
+        criticality=Criticality.IMPORTANTE,
     )
     decision_repository = _FakeDecisionRepository(result)
-    use_case = SetCategoryUseCase(_UnusedMemoryRepository(), decision_repository)
+    use_case = SetCriticalityUseCase(_UnusedMemoryRepository(), decision_repository)
 
-    written = use_case.set(CategoryTargetKind.DECISION, 1, "proyecto")
+    outcome = use_case.set(CriticalityTargetKind.DECISION, 1, Criticality.IMPORTANTE)
 
-    assert written is result
-    assert decision_repository.calls == [(1, "proyecto")]
+    assert outcome is result
+    assert decision_repository.calls == [(1, Criticality.IMPORTANTE)]

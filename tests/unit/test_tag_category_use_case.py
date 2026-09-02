@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 import pytest
 
 from sirius.application.tag_category import CategoryTargetKind, TagCategoryUseCase
+from sirius.domain.criticality import Criticality
 from sirius.domain.decision import Decision, DecisionRevision, DecisionStatus
 from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
 
@@ -120,6 +121,12 @@ class _FakeMemoryRepository:
     def list_uncategorized(self) -> list[Memory]:
         raise AssertionError("tag() must never list uncategorized memories")
 
+    def set_user_criticality(self, memory_id: int, criticality: Criticality | None) -> Memory:
+        raise AssertionError("tag() must never list uncategorized memories")
+
+    def list_current_memories_by_criticality(self, levels: Sequence[Criticality]) -> list[Memory]:
+        raise AssertionError("tag() must never list uncategorized memories")
+
 
 class _UnusedMemoryRepository:
     def create_memory(
@@ -168,6 +175,12 @@ class _UnusedMemoryRepository:
         raise AssertionError("tag() must never touch a memory when kind is DECISION")
 
     def list_uncategorized(self) -> list[Memory]:
+        raise AssertionError("tag() must never touch a memory when kind is DECISION")
+
+    def set_user_criticality(self, memory_id: int, criticality: Criticality | None) -> Memory:
+        raise AssertionError("tag() must never touch a memory when kind is DECISION")
+
+    def list_current_memories_by_criticality(self, levels: Sequence[Criticality]) -> list[Memory]:
         raise AssertionError("tag() must never touch a memory when kind is DECISION")
 
 
@@ -226,6 +239,14 @@ class _FakeDecisionRepository:
     def list_uncategorized(self) -> list[Decision]:
         raise AssertionError("tag() must never list uncategorized decisions")
 
+    def set_user_criticality(self, decision_id: int, criticality: Criticality | None) -> Decision:
+        raise AssertionError("tag() must never list uncategorized decisions")
+
+    def list_current_decisions_by_criticality(
+        self, levels: Sequence[Criticality]
+    ) -> list[Decision]:
+        raise AssertionError("tag() must never list uncategorized decisions")
+
 
 class _UnusedDecisionRepository:
     def create_proposal(
@@ -271,6 +292,14 @@ class _UnusedDecisionRepository:
         raise AssertionError("tag() must never touch a decision when kind is MEMORY")
 
     def list_uncategorized(self) -> list[Decision]:
+        raise AssertionError("tag() must never touch a decision when kind is MEMORY")
+
+    def set_user_criticality(self, decision_id: int, criticality: Criticality | None) -> Decision:
+        raise AssertionError("tag() must never touch a decision when kind is MEMORY")
+
+    def list_current_decisions_by_criticality(
+        self, levels: Sequence[Criticality]
+    ) -> list[Decision]:
         raise AssertionError("tag() must never touch a decision when kind is MEMORY")
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Protocol
 
+from sirius.domain.criticality import Criticality
 from sirius.domain.decision import Decision
 
 
@@ -136,5 +137,20 @@ class DecisionRepository(Protocol):
         """Return every decision with ``category is None`` and
         ``category_locked is False`` (D7 point 4). Mirrors
         ``MemoryRepository.list_uncategorized``.
+        """
+        ...
+
+    def set_user_criticality(self, decision_id: int, criticality: Criticality | None) -> Decision:
+        """Unconditionally write ``criticality`` (M18b, ADR-126), for
+        ``SetCriticalityUseCase`` only. Mirrors
+        ``MemoryRepository.set_user_criticality``.
+        """
+        ...
+
+    def list_current_decisions_by_criticality(
+        self, levels: Sequence[Criticality]
+    ) -> list[Decision]:
+        """Return every APPROVED decision whose ``criticality`` is one of
+        ``levels``. Mirrors ``MemoryRepository.list_current_memories_by_criticality``.
         """
         ...

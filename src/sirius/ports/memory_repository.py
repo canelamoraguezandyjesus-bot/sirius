@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Protocol
 
+from sirius.domain.criticality import Criticality
 from sirius.domain.memory import Memory, MemoryRevision
 
 
@@ -125,5 +126,23 @@ class MemoryRepository(Protocol):
         ``category_locked is False`` (D7 point 4): the retroactive pass's
         input, and a memory already tagged or already locked is excluded
         even without a category.
+        """
+        ...
+
+    def set_user_criticality(self, memory_id: int, criticality: Criticality | None) -> Memory:
+        """Unconditionally write ``criticality`` (M18b, ADR-126), for
+        ``SetCriticalityUseCase`` only. ``None`` clears the mark. Unlike
+        ``set_user_category``, there is no ``_locked`` flag to set alongside
+        it: this milestone introduces no automatic classifier to guard
+        against, so every write is equally authoritative.
+        """
+        ...
+
+    def list_current_memories_by_criticality(self, levels: Sequence[Criticality]) -> list[Memory]:
+        """Return every CURRENT memory whose ``criticality`` is one of
+        ``levels``. Mirrors ``list_current_memories_by_category``'s
+        "vigentes" semantics (same base query, same batched load of the
+        current revision, ADR-008) — the same behavior against a closed
+        two-value enum instead of an open vocabulary of strings.
         """
         ...

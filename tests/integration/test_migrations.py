@@ -112,6 +112,7 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
         "updated_at",
         "category",
         "category_locked",
+        "criticality",
     }
     assert memory_revision_columns == {
         "id",
@@ -141,6 +142,7 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
         "updated_at",
         "category",
         "category_locked",
+        "criticality",
     }
     assert decision_revision_columns == {
         "id",
@@ -1656,3 +1658,135 @@ def test_upgrading_from_the_previous_head_preserves_memories_and_decisions_and_b
     assert decision_rows[0].subject == "asunto previo a M8"
     assert decision_rows[0].category is None
     assert decision_rows[0].category_locked == 0
+
+
+_M18B_PREVIOUS_HEAD_REVISION = "71bb52f6cc2b"  # head immediately before M18b's criticality column
+
+
+@pytest.mark.integration
+def test_upgrade_head_adds_criticality_column_to_memories_and_decisions(tmp_path: Path) -> None:
+    """M18b, ADR-126: one new column on both tables after upgrading to head,
+    purely additive — mirrors the M8 category migration test above."""
+    database_path = tmp_path / "sirius.db"
+
+    command.upgrade(_alembic_config(database_path), "head")
+
+    inspector = inspect(build_engine(database_path))
+    memory_columns = {c["name"] for c in inspector.get_columns("memories")}
+    decision_columns = {c["name"] for c in inspector.get_columns("decisions")}
+    assert "criticality" in memory_columns
+    assert "criticality" in decision_columns
+
+
+@pytest.mark.integration
+def test_downgrade_to_previous_head_removes_only_the_criticality_column(tmp_path: Path) -> None:
+    """M18b: downgrading past this migration removes only ``criticality``
+    from ``memories`` and ``decisions``; ``category``/``category_locked``
+    (added by the earlier M8 migration this one revises) are unaffected."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+
+    command.upgrade(config, "head")
+    command.downgrade(config, _M18B_PREVIOUS_HEAD_REVISION)
+
+    inspector = inspect(build_engine(database_path))
+    memory_columns = {c["name"] for c in inspector.get_columns("memories")}
+    decision_columns = {c["name"] for c in inspector.get_columns("decisions")}
+    assert "criticality" not in memory_columns
+    assert "criticality" not in decision_columns
+    assert memory_columns == {
+        "id",
+        "status",
+        "subject_key",
+        "project_id",
+        "created_at",
+        "updated_at",
+        "category",
+        "category_locked",
+    }
+    assert decision_columns == {
+        "id",
+        "subject",
+        "project_id",
+        "status",
+        "supersedes_decision_id",
+        "created_at",
+        "updated_at",
+        "category",
+        "category_locked",
+    }
+
+
+@pytest.mark.integration
+def test_upgrading_from_previous_head_preserves_rows_and_backfills_criticality(
+    tmp_path: Path,
+) -> None:
+    """M18b compatibility: a base created before this migration existed
+    (still at the previous head) upgrades to the new head without losing any
+    existing memory or decision; ``criticality`` backfills to ``NULL`` —
+    "nadie la ha marcado" (ADR-126)."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+    command.upgrade(config, _M18B_PREVIOUS_HEAD_REVISION)
+
+    now = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO memories (id, status, created_at, updated_at) "
+                "VALUES (1, 'current', :now, :now)"
+            ),
+            {"now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO memory_revisions "
+                "(memory_id, version, content, origin, is_current, created_at) "
+                "VALUES (1, 1, 'recuerdo previo a M18b', 'manual', 1, :now)"
+            ),
+            {"now": now},
+        )
+        project_id = connection.execute(
+            text(
+                "INSERT INTO projects "
+                "(name, objective, current_state, next_step, is_active, status, created_at, "
+                "updated_at) VALUES ('Sirius 0.1', '', '', '', 1, 'active', :now, :now)"
+            ),
+            {"now": now},
+        ).lastrowid
+        connection.execute(
+            text(
+                "INSERT INTO decisions (id, subject, project_id, status, created_at, updated_at) "
+                "VALUES (1, 'asunto previo a M18b', :project_id, 'approved', :now, :now)"
+            ),
+            {"project_id": project_id, "now": now},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO decision_revisions "
+                "(decision_id, version, content, is_current, created_at) "
+                "VALUES (1, 1, 'decision previa a M18b', 1, :now)"
+            ),
+            {"now": now},
+        )
+
+    command.upgrade(config, "head")
+
+    with engine.begin() as connection:
+        memory_rows = connection.execute(
+            text("SELECT id, status, criticality FROM memories")
+        ).fetchall()
+        decision_rows = connection.execute(
+            text("SELECT id, subject, criticality FROM decisions")
+        ).fetchall()
+
+    assert len(memory_rows) == 1
+    assert memory_rows[0].id == 1
+    assert memory_rows[0].status == "current"
+    assert memory_rows[0].criticality is None
+
+    assert len(decision_rows) == 1
+    assert decision_rows[0].id == 1
+    assert decision_rows[0].subject == "asunto previo a M18b"
+    assert decision_rows[0].criticality is None

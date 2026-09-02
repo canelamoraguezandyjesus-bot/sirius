@@ -78,11 +78,14 @@ integren, no de este módulo — aunque la cifra de cobertura de este ADR
 
 `criticidad.razon_segura` viaja en el fixture porque así la porta la rama de
 evidencia, pero nunca se lee: el cargador que construye los `Memory`/
-`Decision` reales (`_load_canon_item`) no toca `criticidad` en absoluto, y el
+`Decision` reales (`_load_canon_item`) lee, desde M18b (ADR-126), únicamente
+`criticidad.nivel` — para rellenar `Memory.criticality`/
+`Decision.criticality`, la segunda señal que ADR-126 introduce —, y el
 arnés de evaluación (`_es_critico`) solo lee `criticidad.nivel` para puntuar
 la métrica de omisiones críticas. `test_el_cargador_no_lee_criticidad`
-demuestra por construcción, no por convención, que el cargador nunca toca
-`criticidad` (replica la garantía de
+demuestra por construcción, no por convención, que el cargador nunca lee
+`criticidad.razon_segura` ni ninguna otra ruta bajo `criticidad` (replica la
+garantía de
 `experiments/adr002/candidates/test_adr002_categoria.py` en
 `evidence/adr001-spikes`); `test_es_critico_lee_nivel_pero_nunca_razon_segura`
 demuestra, con un caso controlado independiente de la ejecución real del
@@ -151,8 +154,10 @@ from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.set_category import SetCategoryUseCase
+from sirius.application.set_criticality import CriticalityTargetKind, SetCriticalityUseCase
 from sirius.application.tag_category import CategoryTargetKind
 from sirius.composition_root import _CATEGORY_VOCABULARY, _MAX_CRITICALITY_CATEGORY
+from sirius.domain.criticality import Criticality
 from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
 from sirius.domain.precedence import find_prevailing_decision
 from sirius.domain.relevance import KnowledgeKind, RankedKnowledge, category_matches_query
@@ -250,11 +255,41 @@ def _vigente(item: Mapping[str, Any]) -> bool:
     )
 
 
+#: M18b (ADR-126): traducción cerrada de `criticidad.nivel` al `Criticality`
+#: real. `ORDINARIO` no aparece nunca en el fixture (ver módulo); un nivel
+#: ausente de este diccionario (incluido `None`, cuando `criticidad` es
+#: `None`) se traduce como "no tocar el campo", que ya nace en `None`.
+_NIVEL_A_CRITICALITY: Mapping[str, Criticality] = {
+    "CRITICO": Criticality.CRITICO,
+    "IMPORTANTE": Criticality.IMPORTANTE,
+}
+
+
+def _apply_criticidad(
+    item: Mapping[str, Any],
+    kind: str,
+    real_id: int,
+    set_criticality_use_case: SetCriticalityUseCase,
+) -> None:
+    """M18b (ADR-126): copia `criticidad.nivel` del canon al `Memory`/
+    `Decision` real recién creado — la única ruta bajo `criticidad` que este
+    cargador lee, nunca `criticidad.razon_segura`."""
+    criticidad = item.get("criticidad")
+    if criticidad is None:
+        return
+    nivel = criticidad["nivel"]
+    criticality = _NIVEL_A_CRITICALITY.get(nivel)
+    if criticality is None:
+        return
+    set_criticality_use_case.set(CriticalityTargetKind(kind), real_id, criticality)
+
+
 def _load_canon_item(
     item: Mapping[str, Any],
     *,
     project_ids: Mapping[str, int],
     unit_of_work: Any,
+    set_criticality_use_case: SetCriticalityUseCase,
 ) -> tuple[str, int] | None:
     """Crea el `Memory`/`Decision` real de un item del canon portado, o
     `None` si el canon lo declara sin contenido persistible (una memoria
@@ -264,12 +299,11 @@ def _load_canon_item(
     Ninguno de los dos casos del banco con texto vacío aparece en ningún
     `resultado_esperado`, así que no crearlos no cambia ninguna métrica.
 
-    El cargador que alimenta el pipeline bajo prueba: solo lee `id`, `kind`,
-    `project`, `text`, `confirmacion`, `validez` y `disponibilidad`. Nunca
-    lee `criticidad` — ni `nivel` ni `razon_segura` — porque ninguno de los
-    dos puertos reales (`MemoryRepository`/`DecisionRepository`) tiene ese
-    campo hoy: solo el arnés de evaluación de más abajo lo necesita, y por
-    separado.
+    El cargador que alimenta el pipeline bajo prueba: lee `id`, `kind`,
+    `project`, `text`, `confirmacion`, `validez`, `disponibilidad` y, desde
+    M18b (ADR-126), `criticidad.nivel` (vía `_apply_criticidad`) — nunca
+    `criticidad.razon_segura`, la única ruta bajo `criticidad` que sigue
+    prohibida.
     """
     project_name = item["project"]
     project_id = None if project_name == "PRJ-GLOBAL" else project_ids[project_name]
@@ -280,12 +314,14 @@ def _load_canon_item(
         memory = SaveManualMemoryUseCase(unit_of_work).save(text, project_id=project_id)
         if not _vigente(item):
             ArchiveMemoryUseCase(unit_of_work).archive(memory.id)
+        _apply_criticidad(item, "memory", memory.id, set_criticality_use_case)
         return ("memory", memory.id)
     assert item["kind"] == "DECISION"
     assert project_id is not None
     decision = ProposeDecisionUseCase(unit_of_work).propose(text, project_id, text)
     if _vigente(item):
         ApproveDecisionUseCase(unit_of_work).approve(decision.id, confirmed=True)
+    _apply_criticidad(item, "decision", decision.id, set_criticality_use_case)
     return ("decision", decision.id)
 
 
@@ -392,11 +428,20 @@ def _ejecutar_banco(database_path: Path) -> _EjecucionDelBanco:
     project_ids = _create_projects(database_path, nombres_de_proyecto)
 
     unit_of_work = build_sqlite_unit_of_work(database_path)
+    set_criticality_use_case = SetCriticalityUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    )
     accesos_del_cargador: list[tuple[str, ...]] = []
     real_a_canonico: dict[tuple[str, int], str] = {}
     for item in banco["items"]:
         vigilado = _TrackingMapping(item, accesos_del_cargador)
-        real = _load_canon_item(vigilado, project_ids=project_ids, unit_of_work=unit_of_work)
+        real = _load_canon_item(
+            vigilado,
+            project_ids=project_ids,
+            unit_of_work=unit_of_work,
+            set_criticality_use_case=set_criticality_use_case,
+        )
         if real is None:
             continue
         real_a_canonico[real] = item["id"]
@@ -601,9 +646,18 @@ def _ejecutar_banco_motor_portado(database_path: Path) -> _EjecucionDelBanco:
     project_ids = _create_projects(database_path, nombres_de_proyecto)
 
     unit_of_work = build_sqlite_unit_of_work(database_path)
+    set_criticality_use_case = SetCriticalityUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    )
     real_a_canonico: dict[tuple[str, int], str] = {}
     for item in banco["items"]:
-        real = _load_canon_item(item, project_ids=project_ids, unit_of_work=unit_of_work)
+        real = _load_canon_item(
+            item,
+            project_ids=project_ids,
+            unit_of_work=unit_of_work,
+            set_criticality_use_case=set_criticality_use_case,
+        )
         if real is None:
             continue
         real_a_canonico[real] = item["id"]
@@ -1315,8 +1369,13 @@ def test_elementos_de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publi
 
 
 def test_el_cargador_no_lee_criticidad(ejecucion_del_banco: _EjecucionDelBanco) -> None:
-    rutas_del_cargador = {ruta[0] for ruta in ejecucion_del_banco.accesos_del_cargador}
-    assert "criticidad" not in rutas_del_cargador
+    """M18b (ADR-126): el cargador ya no ignora `criticidad` por completo —
+    ahora rellena `Memory.criticality`/`Decision.criticality` desde ella —
+    pero sigue sin leer, jamás, `criticidad.razon_segura`: la única ruta que
+    lee bajo `criticidad` es `("criticidad", "nivel")`, ninguna otra."""
+    rutas_del_cargador = set(ejecucion_del_banco.accesos_del_cargador)
+    rutas_bajo_criticidad = {ruta for ruta in rutas_del_cargador if ruta[0] == "criticidad"}
+    assert rutas_bajo_criticidad == {("criticidad",), ("criticidad", "nivel")}
 
     # `razon_segura` nunca debe leerse, la produzca o no una omisión crítica
     # real esta ejecución concreta del banco (ver módulo: M12 puede cerrarlas
@@ -2042,10 +2101,16 @@ def _ejecutar_banco_paquete_completo(
     memory_repository = build_sqlite_memory_repository(database_path)
     decision_repository = build_sqlite_decision_repository(database_path)
     set_category_use_case = SetCategoryUseCase(memory_repository, decision_repository)
+    set_criticality_use_case = SetCriticalityUseCase(memory_repository, decision_repository)
 
     real_a_canonico: dict[tuple[str, int], str] = {}
     for item in banco["items"]:
-        real = _load_canon_item(item, project_ids=project_ids, unit_of_work=unit_of_work)
+        real = _load_canon_item(
+            item,
+            project_ids=project_ids,
+            unit_of_work=unit_of_work,
+            set_criticality_use_case=set_criticality_use_case,
+        )
         if real is None:
             continue
         real_a_canonico[real] = item["id"]
