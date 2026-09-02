@@ -564,6 +564,23 @@ def _cliente_ollama_acepta_y_agota_el_timeout(timeout_seconds: float) -> httpx.C
     return httpx.Client(transport=httpx.MockTransport(handler), timeout=timeout_seconds)
 
 
+def _cliente_ollama_acepta_y_agota_el_timeout_instantaneo(invocaciones: list[None]) -> httpx.Client:
+    """CODEX-001: doble ligero del escenario (c) que confirma, sin pagar la
+    espera de producción, que la petición realmente llega al transporte
+    (registra la invocación en ``invocaciones`` y falla al instante). Solo
+    sirve para verificar que el filtro sigue cableado antes de sintetizar el
+    ``pytest.fail`` barato de la ruta rápida más abajo -- no mide nada."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        invocaciones.append(None)
+        raise httpx.ReadTimeout(
+            "Ollama acepta la conexión y no responde (doble instantáneo, CODEX-001)",
+            request=request,
+        )
+
+    return httpx.Client(transport=httpx.MockTransport(handler), timeout=1.0)
+
+
 _ESCENARIOS_RNF_003: tuple[tuple[str, Callable[[float], httpx.Client]], ...] = (
     ("Ollama disponible dentro del presupuesto", _cliente_ollama_disponible_dentro_del_presupuesto),
     ("Ollama ausente (conexión rechazada)", _cliente_ollama_ausente),
@@ -688,6 +705,16 @@ def test_el_suelo_de_rnf_003_p95_300ms_en_los_tres_escenarios_del_paquete_comple
     doble duerme antes de fallar, y esa espera sola ya excede
     `LIMITE_OPERACION_MS`. La prueba falla igual (`pytest.fail`, barato) y
     sigue sosteniendo el `xfail(strict=True)` de arriba.
+
+    CODEX-001: ese razonamiento solo vale si la petición al filtro realmente
+    llega al transporte -- si una regresión desconecta o evita el filtro, la
+    operación sería rápida de verdad y el atajo no debe sostenerse (dejaría
+    pasar la regresión: las tres mediciones bajarían de 300 ms y
+    `xfail(strict=True)` debería producir un XPASS que alerte del problema).
+    Por eso, antes de sintetizar el fallo, se hace una única llamada barata
+    con `_cliente_ollama_acepta_y_agota_el_timeout_instantaneo` (falla al
+    instante, no duerme) que solo confirma que la invocación ocurre; si no
+    ocurre, se cede el paso a la medición real de abajo.
     """
     timeout_seconds = _RELEVANCE_FILTER_TIMEOUT_SECONDS
     espera_supera_el_guardarrail = timeout_seconds * 1000 > GUARDARRAIL_MS
@@ -696,13 +723,29 @@ def test_el_suelo_de_rnf_003_p95_300ms_en_los_tres_escenarios_del_paquete_comple
             espera_supera_el_guardarrail
             and construir_cliente is _cliente_ollama_acepta_y_agota_el_timeout
         ):
-            pytest.fail(
-                f"{nombre}: la espera de producción ({timeout_seconds * 1000:.0f} ms) "
-                f"ya supera el límite aprobado de {LIMITE_OPERACION_MS:.0f} ms por "
-                "construcción (ADR-125 punto 5); no se mide con _medir para no "
-                "pagar los ~30 s del timeout completo en cada una de las "
-                f"{REPETICIONES + 1} llamadas."
+            invocaciones: list[None] = []
+            adapter_de_verificacion = OllamaRelevanceFilterAdapter(
+                _RELEVANCE_FILTER_MODEL,
+                timeout_seconds=timeout_seconds,
+                client=_cliente_ollama_acepta_y_agota_el_timeout_instantaneo(invocaciones),
             )
+            builder_de_verificacion = _build_context_builder_with_relevance_filter(
+                banco.database_path, adapter_de_verificacion
+            )
+            builder_de_verificacion.build("cómo vamos con el despliegue")
+            if invocaciones:
+                pytest.fail(
+                    f"{nombre}: la espera de producción ({timeout_seconds * 1000:.0f} ms) "
+                    f"ya supera el límite aprobado de {LIMITE_OPERACION_MS:.0f} ms por "
+                    "construcción (ADR-125 punto 5); no se mide con _medir para no "
+                    "pagar los ~30 s del timeout completo en cada una de las "
+                    f"{REPETICIONES + 1} llamadas. Confirmado antes (CODEX-001): la "
+                    "petición sí llega al transporte."
+                )
+            # Si no hubo invocación, el filtro quedó desconectado por una
+            # posible regresión: no se toma el atajo y se sigue con la
+            # medición real de abajo, que entonces puede producir el XPASS
+            # que alerta del problema.
         adapter = OllamaRelevanceFilterAdapter(
             _RELEVANCE_FILTER_MODEL,
             timeout_seconds=timeout_seconds,

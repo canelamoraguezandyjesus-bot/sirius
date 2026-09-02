@@ -18,7 +18,10 @@ from datetime import UTC, datetime
 
 import httpx
 
-from sirius.adapters.ollama_relevance_filter import OllamaRelevanceFilterAdapter
+from sirius.adapters.ollama_relevance_filter import (
+    _ESQUEMA_RESPUESTA,
+    OllamaRelevanceFilterAdapter,
+)
 from sirius.domain.decision import Decision, DecisionRevision, DecisionStatus
 from sirius.domain.relevance import KnowledgeKind, RankedKnowledge
 
@@ -238,3 +241,33 @@ def test_filter_candidates_returns_candidates_unmodified_when_keep_contains_bool
     adapter = _adapter(httpx.MockTransport(_handle))
 
     assert adapter.filter_candidates("consulta", candidates) == candidates
+
+
+def test_filter_candidates_sends_the_request_body_the_lab_measured() -> None:
+    """CLAUDE-M18A-003: ninguna prueba anterior inspeccionaba el cuerpo JSON
+    que el adaptador realmente envía, así que borrar o corromper cualquiera
+    de los campos portados del laboratorio (ADR-125) no hacía fallar nada.
+    Captura la petición dentro del handler y afirma sobre su contenido real,
+    no solo sobre la forma de la respuesta."""
+    candidates = (_candidate(1, "contenido"),)
+    peticiones: list[httpx.Request] = []
+
+    def _handle(request: httpx.Request) -> httpx.Response:
+        peticiones.append(request)
+        return httpx.Response(200, json={"message": {"content": json.dumps({"responden": [1]})}})
+
+    adapter = _adapter(httpx.MockTransport(_handle))
+
+    adapter.filter_candidates("consulta", candidates)
+
+    assert len(peticiones) == 1
+    peticion = peticiones[0]
+    assert peticion.url.path == "/api/chat"
+    cuerpo = json.loads(peticion.content)
+    assert cuerpo["model"] == "llama3.2"
+    assert [mensaje["role"] for mensaje in cuerpo["messages"]] == ["system", "user"]
+    assert "consulta" in cuerpo["messages"][1]["content"]
+    assert cuerpo["format"] == _ESQUEMA_RESPUESTA
+    assert cuerpo["think"] is False
+    assert cuerpo["keep_alive"] == "15m"
+    assert cuerpo["options"] == {"temperature": 0.1, "num_ctx": 8192}
