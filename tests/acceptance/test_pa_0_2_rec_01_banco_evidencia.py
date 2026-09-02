@@ -96,7 +96,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -1974,7 +1974,12 @@ def _set_active_project(database_path: Path, project_id: int | None) -> None:
 
 
 def _ejecutar_banco_paquete_completo(
-    database_path: Path, *, relevance_filter_port: RelevanceFilterPort | None = None
+    database_path: Path,
+    *,
+    relevance_filter_port: RelevanceFilterPort | None = None,
+    category_vocabulary: frozenset[str] | None = None,
+    categoria_por_item: Callable[[Mapping[str, Any]], str | None] | None = None,
+    max_criticality_category: str | None = None,
 ) -> _EjecucionDelBanco:
     """El mismo banco de 47 casos, contra `RankRelevantKnowledgeUseCase`/
     `ContextBuilder` construidos exactamente como `composition_root` los
@@ -2044,7 +2049,11 @@ def _ejecutar_banco_paquete_completo(
         if real is None:
             continue
         real_a_canonico[real] = item["id"]
-        categoria = canon_categorias.get(item["id"])
+        categoria = (
+            categoria_por_item(item)
+            if categoria_por_item is not None
+            else canon_categorias.get(item["id"])
+        )
         if categoria is not None:
             kind, real_id = real
             set_category_use_case.set(CategoryTargetKind(kind), real_id, categoria)
@@ -2057,7 +2066,9 @@ def _ejecutar_banco_paquete_completo(
             decision_repository=decision_repository,
             project_repository=project_repository,
             knowledge_search_repository=build_sqlite_knowledge_search_repository(database_path),
-            category_vocabulary=_CATEGORY_VOCABULARY,
+            category_vocabulary=(
+                category_vocabulary if category_vocabulary is not None else _CATEGORY_VOCABULARY
+            ),
             category_matching_enabled=True,
             staged_engine_port=staged_engine_port,
             staged_engine_candidate=staged_engine_candidate.candidato(),
@@ -2076,7 +2087,11 @@ def _ejecutar_banco_paquete_completo(
                 if relevance_filter_port is not None
                 else _FiltroDeRelevanciaQueNuncaDescarta()
             ),
-            max_criticality_category=_MAX_CRITICALITY_CATEGORY,
+            max_criticality_category=(
+                max_criticality_category
+                if max_criticality_category is not None
+                else _MAX_CRITICALITY_CATEGORY
+            ),
             category_matching_enabled=True,
         )
 

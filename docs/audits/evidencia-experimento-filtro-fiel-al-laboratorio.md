@@ -255,3 +255,54 @@ propietario dio 40 rendiciones en 2,8 min con el mismo código; la siguiente,
 idéntica, dio 0. No se investigó la causa (transitoria, probablemente el modelo
 descargándose o recargándose); el medidor ahora publica el motivo de cada
 rendición para que, si se repite, quede registrado en vez de adivinado.
+
+## Medición previa a la decisión: qué haría cada forma de marcar lo crítico
+
+**Pregunta:** antes de decidir cómo se marca lo crítico en producción, ¿qué
+haría cada opción sobre el camino real? **Instrumento:**
+`scripts/medir_variantes_de_criticidad.py`, que inyecta al arnés de producción
+otro vocabulario, otra asignación de categoría y otra categoría de máxima
+criticidad (tres parámetros opcionales nuevos de
+`_ejecutar_banco_paquete_completo`, con el comportamiento de hoy por defecto),
+con el doble que nunca descarta: sin Ollama, solo la etapa de búsqueda
+(`NO_ENTRO`), que es la mitad grande del problema (9 de 10).
+
+**Predicción, escrita en el guion antes de ejecutar:** `hoy` = 9; `A` (porte
+fiel: `restriccion` solo en lo no ordinario, vocabulario del laboratorio) baja a
+**4**; `B` (etiquetas de tema para todo + las cinco palabras) baja también pero
+**dispara** los elementos de más.
+
+**Resultado (02-09-2026, sin Ollama, mypy y ruff en verde):**
+
+| variante | exactos | de más | críticas `NO_ENTRO` | cobertura |
+|---|---|---|---|---|
+| `hoy` | 7/47 | 285 | **9** | 62/81 |
+| `A_porte_fiel` | 7/47 | **260** | **3** | **68/81** |
+| `B_arreglo_ingenuo` | 7/47 | **354** | 3 | 68/81 |
+
+- `hoy` = 9: el control reproduce lo medido.
+- `A` = **3**, una mejor que la predicción: B04-CA-33 `DEC-003` la encuentra
+  producción aunque el laboratorio no. Las tres que quedan son las de
+  B04-CA-34 («Prepara el **contexto** de planificación de Alfa»), que el
+  laboratorio también pierde en la fila 4 y solo recupera con la **siembra**
+  (fila 5): esa consulta no nombra ninguna palabra del vocabulario; declara que
+  ensambla contexto, y la siembra es precisamente lo que responde a eso.
+- `B` = 3 también, pero **354** elementos de más frente a 260: la predicción
+  se cumple en dirección y tamaño (+94 sobre `A`, +69 sobre `hoy`). En
+  producción todo item lleva etiqueta de tema; activar el índice con palabras
+  nuevas trae todo lo del ámbito, ordinario incluido. **Añadir palabras al
+  vocabulario queda descartado con datos.**
+- `A` baja además el ruido respecto a `hoy` (285 → 260): al llevar categoría
+  solo lo no ordinario, el índice deja de traer todo lo etiquetado
+  `proyecto`/`trabajo` cuando la consulta nombra esos temas.
+
+**Conclusión de la medición:** de las 9 críticas que la búsqueda de producción
+no ve, **6 son la etiqueta** (se recuperan derivando la categoría de la
+criticidad, como el laboratorio) y **3 son la siembra** (no se recuperan con
+ninguna etiqueta; hace falta la pieza que ADR-119 dejó fuera). La décima, la
+que tira el filtro, es la regla de rescate apuntando a `salud`; con `A` apunta
+a `restriccion` y tendría a quién rescatar — eso se mide con Ollama, no aquí.
+
+**Lo que NO afirma:** no decide qué etiqueta debe usar producción ni cómo
+convive con las etiquetas de tema (que también sirven para otra cosa: D7). Mide
+qué recupera cada opción y qué le cuesta. Decidir es del propietario.
