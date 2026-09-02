@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 import tempfile
 import time
@@ -115,16 +116,51 @@ class _FiltroQueSeDejaContar:
         self.rendiciones = 0
         #: Por llamada, en orden: (entraron, salieron) como claves (kind, id).
         self.trazas: list[tuple[frozenset[Clave], frozenset[Clave]]] = []
+        #: Motivo de cada rendición (nombre de la excepción que el adaptador
+        #: registró), contado. Se captura reactivando el ``logger`` del
+        #: adaptador en la PRIMERA llamada, que ocurre ya después de que
+        #: ``alembic`` lo haya desactivado — por eso no vale engancharlo antes.
+        self.motivos: dict[str, int] = {}
+        self._captura = _CapturaDeMotivos(self.motivos)
+        self._logger_reactivado = False
 
     def filter_candidates(
         self, query_text: str, candidates: Sequence[RankedKnowledge]
     ) -> Sequence[RankedKnowledge]:
+        if not self._logger_reactivado:
+            logger = logging.getLogger("sirius.adapters.ollama_relevance_filter")
+            logger.disabled = False
+            logger.addHandler(self._captura)
+            self._logger_reactivado = True
         self.llamadas += 1
         resultado = self._real.filter_candidates(query_text, candidates)
         if candidates and resultado is candidates:
             self.rendiciones += 1
         self.trazas.append((_claves(candidates), _claves(resultado)))
         return resultado
+
+
+class _CapturaDeMotivos(logging.Handler):
+    """Recoge el nombre de la excepción con la que el adaptador se rindió.
+
+    El adaptador registra ``"Filtro de relevancia no disponible, se falla
+    abierto (<NombreDeExcepcion>)"``. Ese nombre es lo único que distingue
+    «Ollama apagado» (``ConnectError``), «tardó demasiado» (``ReadTimeout``),
+    «Ollama rechazó la petición» (``HTTPStatusError``) y «contestó algo que no
+    es el JSON pedido» (``ValueError``/``JSONDecodeError``). Sin él, 40
+    rendiciones son un número; con él, son un diagnóstico.
+    """
+
+    def __init__(self, destino: dict[str, int]) -> None:
+        super().__init__(level=logging.WARNING)
+        self._destino = destino
+
+    def emit(self, record: logging.LogRecord) -> None:
+        mensaje = record.getMessage()
+        if "se falla abierto (" not in mensaje:
+            return
+        motivo = mensaje.rsplit("(", 1)[1].rstrip(")")
+        self._destino[motivo] = self._destino.get(motivo, 0) + 1
 
 
 def _claves(candidatos: Sequence[RankedKnowledge]) -> frozenset[Clave]:
@@ -288,7 +324,12 @@ def main() -> int:
         print()
         print("  AVISO: el filtro se rindio en algunas consultas, asi que estas cifras")
         print("  mezclan consultas filtradas con consultas sin filtrar. NO son validas.")
-        print("  Sube --espera y vuelve a medir.")
+        print(f"  Por que se rindio: {contador.motivos or 'motivo no capturado'}")
+        print("    ConnectError ..... Ollama no acepta conexiones (apagado o en otro puerto)")
+        print("    ReadTimeout ...... tardo mas que --espera; sube la espera")
+        print("    HTTPStatusError .. Ollama rechazo la peticion (version antigua sin")
+        print("                       'think' o sin 'format' por esquema); mira 'ollama -v'")
+        print("    ValueError ....... contesto, pero no el JSON pedido")
     print("=" * 62)
 
     if args.diagnostico:
