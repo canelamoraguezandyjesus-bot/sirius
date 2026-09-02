@@ -27,9 +27,10 @@ vez (02-09-2026) llevaba el filtro cableado y, en la práctica, apagado.
 
 Además, el adaptador de producción no hacía la misma llamada que el
 laboratorio que midió 29/47 sobre el banco de 47 casos (rama
-`evidence/adr001-spikes`, `experiments/adr002/modelo_local/`). Seis
-diferencias, comprobadas leyendo los dos ficheros (tabla completa y citas en la
-evidencia, sección «Por qué existe esta rama»):
+`evidence/adr001-spikes`, ficheros `experiments/adr002/modelo_local/puerto.py`
+y `experiments/adr002/modelo_local/filtro.py`, que nunca se copian a `main`).
+Seis diferencias, comprobadas leyendo los dos ficheros (tabla completa y citas
+en la evidencia, sección «Por qué existe esta rama»):
 
 | | Laboratorio (`puerto.py`, `filtro.py`) | `main` antes de esta PR |
 |---|---|---|
