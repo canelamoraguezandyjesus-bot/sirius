@@ -306,3 +306,41 @@ a `restriccion` y tendría a quién rescatar — eso se mide con Ollama, no aqu�
 **Lo que NO afirma:** no decide qué etiqueta debe usar producción ni cómo
 convive con las etiquetas de tema (que también sirven para otra cosa: D7). Mide
 qué recupera cada opción y qué le cuesta. Decidir es del propietario.
+
+## Decisión del propietario y plan (02-09-2026)
+
+Con la medición de variantes delante, el propietario decide (sesión
+interactiva) y entrega las riendas de la ejecución con dos condiciones:
+«necesito acabar la memoria y hacerla bien» y «no te olvides del objetivo de
+Sirius» — una memoria que no pierde lo importante; el ruido es tolerable.
+
+**Decisión 1 — dos señales, no una.** `category` sigue siendo *de qué va* un
+item (tema; D7 la necesita). Cada `Memory` y `Decision` gana `criticality:
+CRITICO | IMPORTANTE | None`, el concepto del propio canon
+(`criticidad.nivel`). El índice de categoría, la regla de rescate RF-25/RF-26
+y la siembra pasan a mirar la criticidad, no el tema.
+
+**Decisión 2 — la siembra entra.** Su precondición documentada (ampliar el
+banco o retirarla) se resuelve así: el propietario la porta **sabiendo** que el
+banco no puede validarla de forma independiente (solo B04-CA-34 y otro caso la
+ejercitan); su aceptación es la medición de críticas perdidas (3 → 0) y el uso
+real del propietario, no una prueba del banco. Queda escrito para que nadie lo
+lea después como un olvido.
+
+**Decisión 3 — RNF-003 suspendido para el camino del filtro** mientras se mide
+su coste real («me da igual que tarde diez, veinte segundos, mientras lo haga
+bien»). Medido en su máquina: 47 consultas en 0,4 min con `qwen3:4b-instruct`.
+
+**Plan, un encargo detrás de otro (sin paralelo), con la predicción escrita
+antes de construir:**
+
+| Encargo | Qué | Predicción sobre el banco de 47 (Ollama real) |
+|---|---|---|
+| M18 | Señal de criticidad en dominio/persistencia/caso de uso + filtro fiel al laboratorio portado a `main` | Sin cambio en lo recuperado: 7/47, 285, 9 NO_ENTRO, 62/81 con el doble |
+| M19 | Índice y rescate por criticidad | Críticas perdidas **10 → 3**; TIRADO **1 → 0** |
+| M20 | Siembra en contexto | Críticas perdidas **3 → 0** |
+| M21 | Sirius propone la criticidad, el usuario confirma | Que funcione con los recuerdos reales del propietario, no solo con el banco |
+
+Si tras M19 no salen 3, o tras M20 no sale 0, se para y se busca la raíz
+(regla de las dos rondas, ADR-001). M18 despachado el 02-09-2026 con esta
+decisión embebida en la orden; su ADR la registra.
