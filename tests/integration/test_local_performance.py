@@ -93,8 +93,13 @@ escenarios que §6.4 exige (incidencia #435, hallazgo CODEX-003): (a) Ollama
 disponible dentro de su presupuesto; (b) Ollama ausente, conexión rechazada
 de inmediato; (c) Ollama acepta la conexión y no responde hasta agotar el
 `timeout` completo, el peor caso real. `timeout_seconds` es
-`composition_root._RELEVANCE_FILTER_TIMEOUT_SECONDS` (50 ms) — el valor real
-con el que producción construye el adaptador.
+`composition_root._RELEVANCE_FILTER_TIMEOUT_SECONDS` — el valor real con el
+que producción construye el adaptador (50 ms cuando se midió la tabla de
+abajo; 30 s desde ADR-125, que suspende el límite de 300 ms en el camino del
+filtro mientras se mide su coste real. Con esa espera, el escenario (c)
+costaría la constante entera por construcción y no mediría el motor: la
+prueba lo publica como no medido en vez de esperarlo, y sigue midiendo y
+afirmando (a) y (b)).
 
 Medición del 31 de agosto de 2026, mismo conjunto de referencia y misma
 máquina, tres pasadas del mismo código:
@@ -581,10 +586,26 @@ def test_construir_contexto_con_el_paquete_completo_activo_en_los_tres_escenario
     — el valor real con el que producción construye el adaptador — para que
     esta medición sea la que de verdad decide ese valor (§6.4 punto 2), no
     una aproximación con un número distinto.
+
+    ADR-125 suspende el límite de 300 ms en el camino del filtro mientras se
+    mide su coste real, y fija esa espera en 30 s: por encima del guardarraíl
+    por sí sola. El escenario (c) paga la espera íntegra por construcción, así
+    que su P95 sería la constante y no una medida del motor. Mientras la
+    espera supere el guardarraíl, (c) no se ejecuta ni se afirma y se publica
+    como tal en la tabla; (a) y (b) se miden y afirman como siempre. Si la
+    espera vuelve a bajar del guardarraíl, (c) se mide de nuevo sin tocar
+    esta prueba.
     """
     timeout_seconds = _RELEVANCE_FILTER_TIMEOUT_SECONDS
-    mediciones: list[tuple[str, Medicion]] = []
+    espera_supera_el_guardarrail = timeout_seconds * 1000 > GUARDARRAIL_MS
+    mediciones: list[tuple[str, Medicion | None]] = []
     for nombre, construir_cliente in _ESCENARIOS_RNF_003:
+        if (
+            espera_supera_el_guardarrail
+            and construir_cliente is _cliente_ollama_acepta_y_agota_el_timeout
+        ):
+            mediciones.append((nombre, None))
+            continue
         adapter = OllamaRelevanceFilterAdapter(
             _RELEVANCE_FILTER_MODEL,
             timeout_seconds=timeout_seconds,
@@ -604,15 +625,24 @@ def test_construir_contexto_con_el_paquete_completo_activo_en_los_tres_escenario
         )
         print("  | Escenario | P95 | Límite |")
         print("  |---|---|---|")
-        for nombre, medicion in mediciones:
-            print(f"  | {nombre} | {medicion.p95:.1f} ms | {LIMITE_OPERACION_MS:.0f} ms |")
+        for nombre, resultado in mediciones:
+            if resultado is None:
+                print(
+                    f"  | {nombre} | no medido: = espera de producción "
+                    f"({timeout_seconds * 1000:.0f} ms) por construcción, ADR-125 "
+                    f"| {LIMITE_OPERACION_MS:.0f} ms |"
+                )
+            else:
+                print(f"  | {nombre} | {resultado.p95:.1f} ms | {LIMITE_OPERACION_MS:.0f} ms |")
 
     # Guardarraíl (ADR-007), no el requisito: el requisito de 300 ms lo
     # comprueba PA-025 en la máquina real; el margen del escenario (c) sobre
     # este conjunto de referencia y esta máquina no llega al orden de
     # magnitud que ADR-007 exige para afirmarlo aquí como aserción dura. La
     # tabla impresa arriba es la evidencia publicada del encargo M11.
-    excedidas = [(nombre, m) for nombre, m in mediciones if m.p95 > GUARDARRAIL_MS]
+    excedidas = [
+        (nombre, m) for nombre, m in mediciones if m is not None and m.p95 > GUARDARRAIL_MS
+    ]
     assert not excedidas, (
         "Escenarios de RNF-003 por encima del guardarraíl de "
         f"{GUARDARRAIL_MS:.0f} ms: {[(n, str(m)) for n, m in excedidas]}."

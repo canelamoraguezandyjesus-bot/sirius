@@ -345,7 +345,7 @@ Si tras M19 no salen 3, o tras M20 no sale 0, se para y se busca la raíz
 (regla de las dos rondas, ADR-001). M18 despachado el 02-09-2026 con esta
 decisión embebida en la orden; su ADR la registra.
 
-### Corrección del plan (02-09-2026, 16:55 UTC): M18 se parte en M18a y M18b
+### Corrección del plan (02-09-2026, 17:44 UTC): M18 se parte en M18a y M18b
 
 M18 (#507) se despachó como un solo encargo con las dos partes y falló de forma
 segura a los 36 minutos: el implementador hizo **262 turnos**, gastó **~15 USD**,
@@ -359,7 +359,43 @@ Se cierra #507 y se despachan dos encargos en serie:
 
 | Encargo | Qué | Estado |
 |---|---|---|
-| M18a | Porte mecánico del filtro fiel (commits de esta rama hasta 877d11f) + clave `ollama_model` + ADR de la suspensión de RNF-003 | despachado 16:55 UTC |
+| M18a | Porte mecánico del filtro fiel (commits de esta rama hasta 877d11f) + clave `ollama_model` + ADR de la suspensión de RNF-003 | despachado 17:44 UTC (#508); falló de forma segura 18:44 UTC |
 | M18b | La señal de criticidad (dominio, migración, repositorios, puertos, caso de uso, cargador del banco) + ADR de las dos señales y el plan | tras M18a |
 
 El resto del plan (M19, M20, M21) y sus predicciones no cambian.
+
+(La primera redacción de esta sección decía «16:55 UTC»; la hora real del
+despacho de #508 es 17:44:18 UTC. Se corrige sin borrar el error.)
+
+### Segundo fallo seguro (02-09-2026, 18:44 UTC): M18a entra por plan B
+
+M18a (#508) agotó el tope de 60 minutos del implementador (run 33662923270,
+17:44:22 → 18:44:50 UTC) sin sustituir el veredicto provisional y **sin subir
+ninguna rama**, igual que #507. Ya no es la orden juntando dos encargos: es que
+leer esta evidencia, portar siete archivos y escribir un ADR con seis citas
+fichero:línea no cabe en una ejecución del motor. Dos intentos seguidos con el
+mismo desenlace activan la regla de las dos rondas (ADR-001): se para de
+insistir por ese camino.
+
+El plan B, decidido antes de despachar #508: esta misma rama, que ya contiene
+el porte verificado (`bd79d88`: ruff, mypy `src tests` y las pruebas unitarias
+afectadas en verde; 8 archivos frente a `main`, ninguno tocado en `main`
+desde la base), gana el ADR de la suspensión de RNF-003 y se abre como PR
+contra `main`. El motor solo revisa y fusiona; no vuelve a implementar nada.
+M18b se despacha después, como estaba previsto.
+
+**Hallazgo al preparar la PR, declarado porque cambia una prueba:** el banco
+de latencia (`tests/integration/test_local_performance.py`, encargo M11)
+construye el adaptador real con `_RELEVANCE_FILTER_TIMEOUT_SECONDS` y, en su
+escenario (c), un doble que **duerme la espera entera** antes de fallar. Con
+la espera en 30 s, ese escenario dormiría 30 s por repetición (15 minutos en
+total) para acabar midiendo la constante, y el guardarraíl de 1.500 ms lo
+pondría en rojo por construcción. Esta rama no lo ejecutó antes (declarado en
+«Comprobación»: «mediría peor a propósito»); al abrir la PR ya no vale
+declararlo, hay que resolverlo. Se resuelve así, y ADR-125 lo registra: mientras
+la espera de producción supere el guardarraíl, el escenario (c) no se ejecuta
+ni se afirma y la tabla lo publica como «no medido: = espera de producción por
+construcción»; (a) y (b) se miden y afirman como siempre; si la espera vuelve
+a bajar del guardarraíl, (c) se mide de nuevo sin tocar la prueba. La prueba
+`xfail(strict=True)` del suelo de RNF-003 no cambia: sigue fallando-como-se-
+espera en (a), antes de llegar a (c).
