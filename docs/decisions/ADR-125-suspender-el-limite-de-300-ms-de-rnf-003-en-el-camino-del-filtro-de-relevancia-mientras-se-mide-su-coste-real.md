@@ -105,14 +105,14 @@ Para la suspensión misma, lo que la hará revisar, fijado ahora:
    `num_ctx: 8192`, lectura de `message.content`. La instrucción y el esquema
    se portan **literales** de `filtro.py:139-180` y llevan su cita en el
    código. Sigue siendo solo-`localhost` y falla abierto.
-3. **La espera pasa de 0,05 s a 30 s** (`composition_root.py:166`). Es la
+3. **La espera pasa de 0,05 s a 30 s** (`composition_root.py:169`). Es la
    cifra que llevaba la orden aprobada por el propietario; está por encima
    del laboratorio (10 s) a propósito, para observar la calidad separada de la
    velocidad, y muy por encima del coste medido (~0,5 s por consulta).
 4. **El modelo local deja de ser una constante:** clave nueva `ollama_model`
    en `settings.json`, por defecto `qwen3:4b-instruct`, leída una sola vez y
    entregada al filtro **y** al clasificador de categoría
-   (`composition_root.py:143-180` y punto de construcción en `:502`), porque
+   (`composition_root.py:143-180` y punto de construcción en `:504-506`), porque
    el comentario de `_RELEVANCE_FILTER_MODEL` ya exigía que ambos usaran el
    mismo modelo. Valores vacíos o de otro tipo caen al valor por defecto.
 5. **El banco de latencia deja de dormir la espera.** Su escenario (c)
