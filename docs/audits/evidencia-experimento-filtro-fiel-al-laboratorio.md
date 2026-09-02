@@ -17,7 +17,7 @@ diferencias, comprobadas leyendo los dos ficheros:
 |---|---|---|
 | Modelo | `qwen3:4b-instruct` (`puerto.py:73`) | `llama3.2` (`composition_root.py:136`) |
 | Espera | `10.0 s` (`puerto.py:91`) | `0.05 s` (`composition_root.py:157`) |
-| Extremo | `/api/chat` (`puerto.py:319`) | `/api/generate` |
+| Extremo | `/api/chat` (`puerto.py:320`) | `/api/generate` |
 | Formato | esquema JSON impuesto al generar (`filtro.py:139`) | pedido por escrito en el prompt |
 | Modo razonador | `think: False` (`puerto.py:316`) | no se envía |
 | `temperature` / `num_ctx` | `0.1` / `8192` (`puerto.py:78-86`) | no se envían |
@@ -397,5 +397,8 @@ la espera de producción supere el guardarraíl, el escenario (c) no se ejecuta
 ni se afirma y la tabla lo publica como «no medido: = espera de producción por
 construcción»; (a) y (b) se miden y afirman como siempre; si la espera vuelve
 a bajar del guardarraíl, (c) se mide de nuevo sin tocar la prueba. La prueba
-`xfail(strict=True)` del suelo de RNF-003 no cambia: sigue fallando-como-se-
-espera en (a), antes de llegar a (c).
+`xfail(strict=True)` del suelo de RNF-003 lleva la misma guardia: mientras la
+espera supere el guardarraíl, falla rápido en (c) sin medirlo (su fracaso ya
+es cierto por construcción, porque la espera sola ya excede
+`LIMITE_OPERACION_MS`) en vez de pagar los ~15 minutos; su veredicto (fallo,
+sosteniendo el `xfail`) no cambia.

@@ -36,7 +36,7 @@ en la evidencia, sección «Por qué existe esta rama»):
 |---|---|---|
 | Modelo | `qwen3:4b-instruct` (`puerto.py:73`) | `llama3.2` (`composition_root.py:136`) |
 | Espera | `10.0 s` (`puerto.py:91`) | `0.05 s` (`composition_root.py:157`) |
-| Extremo | `/api/chat` (`puerto.py:319`) | `/api/generate` |
+| Extremo | `/api/chat` (`puerto.py:320`) | `/api/generate` |
 | Formato | esquema JSON impuesto al generar (`filtro.py:139`) | pedido por escrito en el prompt |
 | Modo razonador | `think: False` (`puerto.py:316`) | no se envía |
 | `temperature` / `num_ctx` | `0.1` / `8192` (`puerto.py:78-86`) | no se envían |
@@ -120,12 +120,18 @@ Para la suspensión misma, lo que la hará revisar, fijado ahora:
    la espera real y un doble que duerme esa espera entera: con 30 s serían
    15 minutos para medir una constante y el guardarraíl de 1.500 ms lo pondría
    en rojo por construcción. Mientras la espera de producción supere el
-   guardarraíl, (c) no se ejecuta ni se afirma y la tabla lo publica como «no
-   medido: = espera de producción por construcción»; (a) y (b) se miden y
-   afirman como siempre; si la espera vuelve a bajar del guardarraíl, (c) se
-   mide de nuevo sin tocar la prueba
-   (`tests/integration/test_local_performance.py`). La prueba
-   `xfail(strict=True)` del suelo de RNF-003 no cambia.
+   guardarraíl, (c) no se ejecuta ni se afirma en
+   `test_construir_contexto_con_el_paquete_completo_activo_en_los_tres_escenarios`
+   y la tabla lo publica como «no medido: = espera de producción por
+   construcción»; (a) y (b) se miden y afirman como siempre; si la espera
+   vuelve a bajar del guardarraíl, (c) se mide de nuevo sin tocar la prueba.
+   La prueba `xfail(strict=True)` del suelo de RNF-003
+   (`test_el_suelo_de_rnf_003_p95_300ms_en_los_tres_escenarios_del_paquete_completo`,
+   `tests/integration/test_local_performance.py`) lleva la misma guardia:
+   mientras la espera supere el guardarraíl, falla rápido en (c) sin medirlo
+   con `_medir` -- su fracaso ya es cierto por construcción, porque la espera
+   sola ya excede `LIMITE_OPERACION_MS` -- en vez de pagar los ~15 minutos; su
+   veredicto (fallo, sosteniendo el `xfail`) no cambia.
 6. **Nada más.** La puerta `category_matching_enabled` sigue cerrada por
    defecto; `category` y su semántica D7 no cambian; el banco, el corpus y sus
    adjudicaciones no se tocan; `criticidad.razon_segura` no se lee; no entra

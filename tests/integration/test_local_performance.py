@@ -679,9 +679,30 @@ def test_el_suelo_de_rnf_003_p95_300ms_en_los_tres_escenarios_del_paquete_comple
     y afirma el límite real de RNF-003 (`LIMITE_OPERACION_MS`), no el
     guardarraíl de disparate (`GUARDARRAIL_MS`) que esa prueba usa -- ver el
     `reason` de arriba y ADR-117.
+
+    Misma guardia que la prueba hermana (ADR-125 punto 5): mientras la espera
+    de producción (`timeout_seconds`) supere `GUARDARRAIL_MS`, el escenario
+    (c) no se mide con `_medir` (31 llamadas que dormirían la espera entera
+    cada una, ~15 min) porque su fracaso ya es cierto por construcción --
+    construir el contexto no puede tardar menos que la espera que el propio
+    doble duerme antes de fallar, y esa espera sola ya excede
+    `LIMITE_OPERACION_MS`. La prueba falla igual (`pytest.fail`, barato) y
+    sigue sosteniendo el `xfail(strict=True)` de arriba.
     """
     timeout_seconds = _RELEVANCE_FILTER_TIMEOUT_SECONDS
-    for _nombre, construir_cliente in _ESCENARIOS_RNF_003:
+    espera_supera_el_guardarrail = timeout_seconds * 1000 > GUARDARRAIL_MS
+    for nombre, construir_cliente in _ESCENARIOS_RNF_003:
+        if (
+            espera_supera_el_guardarrail
+            and construir_cliente is _cliente_ollama_acepta_y_agota_el_timeout
+        ):
+            pytest.fail(
+                f"{nombre}: la espera de producción ({timeout_seconds * 1000:.0f} ms) "
+                f"ya supera el límite aprobado de {LIMITE_OPERACION_MS:.0f} ms por "
+                "construcción (ADR-125 punto 5); no se mide con _medir para no "
+                "pagar los ~30 s del timeout completo en cada una de las "
+                f"{REPETICIONES + 1} llamadas."
+            )
         adapter = OllamaRelevanceFilterAdapter(
             _RELEVANCE_FILTER_MODEL,
             timeout_seconds=timeout_seconds,
