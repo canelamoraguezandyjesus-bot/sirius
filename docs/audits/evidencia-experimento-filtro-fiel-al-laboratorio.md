@@ -344,3 +344,22 @@ antes de construir:**
 Si tras M19 no salen 3, o tras M20 no sale 0, se para y se busca la raíz
 (regla de las dos rondas, ADR-001). M18 despachado el 02-09-2026 con esta
 decisión embebida en la orden; su ADR la registra.
+
+### Corrección del plan (02-09-2026, 16:55 UTC): M18 se parte en M18a y M18b
+
+M18 (#507) se despachó como un solo encargo con las dos partes y falló de forma
+segura a los 36 minutos: el implementador hizo **262 turnos**, gastó **~15 USD**,
+terminó con `is_error: true` y **no subió ninguna rama ni escribió veredicto**
+(run 33633342725, job 100257963608). No fue el límite de 60 minutos ni el de
+300 turnos: la orden no cabía en una ejecución. Es el mismo defecto de
+proporción que registra #503, esta vez del lado de quien ordena, y queda
+declarado aquí como tal.
+
+Se cierra #507 y se despachan dos encargos en serie:
+
+| Encargo | Qué | Estado |
+|---|---|---|
+| M18a | Porte mecánico del filtro fiel (commits de esta rama hasta 877d11f) + clave `ollama_model` + ADR de la suspensión de RNF-003 | despachado 16:55 UTC |
+| M18b | La señal de criticidad (dominio, migración, repositorios, puertos, caso de uso, cargador del banco) + ADR de las dos señales y el plan | tras M18a |
+
+El resto del plan (M19, M20, M21) y sus predicciones no cambian.
