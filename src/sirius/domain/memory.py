@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
+from sirius.domain.criticality import Criticality
+
 
 class MemoryStatus(StrEnum):
     """Lifecycle of a memory item. Superseded revisions are a history concern,
@@ -66,6 +68,13 @@ class Memory:
     ``category_locked`` starts ``False`` and becomes ``True`` only through an
     explicit user edit (``SetCategoryUseCase``); once ``True``, no automatic
     classification may ever overwrite ``category`` again.
+
+    ``criticality`` (M18b, ADR-126) is a second, independent signal — *how
+    much this memory matters*, not *what it is about* — likewise optional
+    and living on the memory itself, not its revision. Unlike ``category``,
+    it has no ``_locked`` counterpart: this milestone only lets a user mark
+    or clear it (``SetCriticalityUseCase``); nothing classifies it
+    automatically yet, so there is no automatic writer to guard against.
     """
 
     id: int
@@ -77,6 +86,7 @@ class Memory:
     project_id: int | None = None
     category: str | None = None
     category_locked: bool = False
+    criticality: Criticality | None = None
 
 
 def ensure_valid_origin(origin: str) -> None:

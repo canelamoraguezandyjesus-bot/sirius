@@ -5,6 +5,7 @@ import pytest
 
 from sirius.application.decision_origin import DecisionOriginNotFoundError, GetDecisionOriginUseCase
 from sirius.domain.conversation import Conversation, Message, MessageRole, MessageStatus
+from sirius.domain.criticality import Criticality
 from sirius.domain.decision import Decision, DecisionRevision, DecisionStatus
 from sirius.domain.event import DECISION_PROPOSED_EVENT_TYPE, USER_ACTOR, Event
 
@@ -103,6 +104,14 @@ class _StaticDecisionRepository:
 
     def list_uncategorized(self) -> list[Decision]:
         raise AssertionError("get_origin() must never list uncategorized decisions")
+
+    def set_user_criticality(self, decision_id: int, criticality: Criticality | None) -> Decision:
+        raise AssertionError("get_origin() must never set a criticality")
+
+    def list_current_decisions_by_criticality(
+        self, levels: Sequence[Criticality]
+    ) -> list[Decision]:
+        raise AssertionError("get_origin() must never list decisions by criticality")
 
 
 class _StaticEventRepository:

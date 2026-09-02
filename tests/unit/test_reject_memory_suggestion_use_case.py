@@ -9,6 +9,7 @@ import pytest
 
 from sirius.application.reject_memory_suggestion import RejectMemorySuggestionUseCase
 from sirius.domain.conversation import Conversation, Message, MessageRole, MessageStatus
+from sirius.domain.criticality import Criticality
 from sirius.domain.decision import Decision
 from sirius.domain.event import MEMORY_SUGGESTION_REJECTED_EVENT_TYPE, USER_ACTOR, Event
 from sirius.domain.memory import Memory, MemoryRevision
@@ -89,6 +90,12 @@ class _UnusedMemoryRepository:
 
     def list_uncategorized(self) -> list[Memory]:
         raise AssertionError("reject() must never list uncategorized memories")
+
+    def set_user_criticality(self, memory_id: int, criticality: Criticality | None) -> Memory:
+        raise AssertionError("reject() must never set a criticality")
+
+    def list_current_memories_by_criticality(self, levels: Sequence[Criticality]) -> list[Memory]:
+        raise AssertionError("reject() must never list memories by criticality")
 
 
 class _RecordingMemorySuggestionRepository:
@@ -186,6 +193,14 @@ class _UnusedDecisionRepository:
 
     def list_uncategorized(self) -> list[Decision]:
         raise AssertionError("reject() must never list uncategorized decisions")
+
+    def set_user_criticality(self, decision_id: int, criticality: Criticality | None) -> Decision:
+        raise AssertionError("reject() must never set a criticality")
+
+    def list_current_decisions_by_criticality(
+        self, levels: Sequence[Criticality]
+    ) -> list[Decision]:
+        raise AssertionError("reject() must never list decisions by criticality")
 
 
 class _UnusedConversationRepository:

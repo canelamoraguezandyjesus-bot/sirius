@@ -236,6 +236,11 @@ class MemoryModel(Base):
     updated_at: Mapped[datetime] = mapped_column(nullable=False)
     category: Mapped[str | None] = mapped_column(Text, nullable=True)
     category_locked: Mapped[bool] = mapped_column(nullable=False, default=False)
+    #: M18b (ADR-126): segunda señal, independiente de `category`. Texto
+    #: plano, no `SAEnum`: el repositorio valida el valor leído contra
+    #: `Criticality` al cargarlo y falla claro si no es uno de los dos
+    #: miembros válidos, en vez de dejar que un `SAEnum` lo intente adivinar.
+    criticality: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class MemoryRevisionModel(Base):
@@ -318,6 +323,8 @@ class DecisionModel(Base):
     updated_at: Mapped[datetime] = mapped_column(nullable=False)
     category: Mapped[str | None] = mapped_column(Text, nullable=True)
     category_locked: Mapped[bool] = mapped_column(nullable=False, default=False)
+    #: M18b (ADR-126): mirrors `MemoryModel.criticality`.
+    criticality: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class DecisionRevisionModel(Base):

@@ -65,6 +65,7 @@ from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseC
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.set_category import SetCategoryUseCase
 from sirius.application.tag_category import CategoryTargetKind
+from sirius.domain.criticality import Criticality
 from sirius.domain.decision import Decision
 from sirius.domain.memory import Memory, MemoryRevision
 
@@ -140,6 +141,12 @@ class _ContandoMemoriasPorCategoria:
     def list_uncategorized(self) -> list[Memory]:
         return self._real.list_uncategorized()
 
+    def set_user_criticality(self, memory_id: int, criticality: Criticality | None) -> Memory:
+        return self._real.set_user_criticality(memory_id, criticality)
+
+    def list_current_memories_by_criticality(self, levels: Sequence[Criticality]) -> list[Memory]:
+        return self._real.list_current_memories_by_criticality(levels)
+
 
 class _ContandoDecisionesPorCategoria:
     """Mirror de ``_ContandoMemoriasPorCategoria`` para
@@ -201,6 +208,14 @@ class _ContandoDecisionesPorCategoria:
 
     def list_uncategorized(self) -> list[Decision]:
         return self._real.list_uncategorized()
+
+    def set_user_criticality(self, decision_id: int, criticality: Criticality | None) -> Decision:
+        return self._real.set_user_criticality(decision_id, criticality)
+
+    def list_current_decisions_by_criticality(
+        self, levels: Sequence[Criticality]
+    ) -> list[Decision]:
+        return self._real.list_current_decisions_by_criticality(levels)
 
 
 _VOCABULARY = frozenset({"trabajo", "personal"})

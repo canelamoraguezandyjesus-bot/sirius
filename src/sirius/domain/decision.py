@@ -34,6 +34,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
+from sirius.domain.criticality import Criticality
+
 
 class DecisionStatus(StrEnum):
     """Lifecycle of a decision. A decision is either still a proposal, has
@@ -93,6 +95,10 @@ class Decision:
     supersedes_decision_id: int | None = None
     category: str | None = None
     category_locked: bool = False
+    #: Segunda señal independiente (M18b, ADR-126): cuánto importa, no de qué
+    #: va. Mirrors ``Memory.criticality``: sin candado, solo escritura manual
+    #: por ahora (``SetCriticalityUseCase``).
+    criticality: Criticality | None = None
 
 
 def ensure_valid_subject(subject: str) -> None:

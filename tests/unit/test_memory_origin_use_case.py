@@ -5,6 +5,7 @@ import pytest
 
 from sirius.application.memory_origin import GetMemoryOriginUseCase, MemoryOriginNotFoundError
 from sirius.domain.conversation import Conversation, Message, MessageRole, MessageStatus
+from sirius.domain.criticality import Criticality
 from sirius.domain.event import MANUAL_MEMORY_SAVE_EVENT_TYPE, USER_ACTOR, Event
 from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
 
@@ -103,6 +104,12 @@ class _StaticMemoryRepository:
 
     def list_uncategorized(self) -> list[Memory]:
         raise AssertionError("get_origin() must never list uncategorized memories")
+
+    def set_user_criticality(self, memory_id: int, criticality: Criticality | None) -> Memory:
+        raise AssertionError("get_origin() must never set a criticality")
+
+    def list_current_memories_by_criticality(self, levels: Sequence[Criticality]) -> list[Memory]:
+        raise AssertionError("get_origin() must never list memories by criticality")
 
 
 class _StaticEventRepository:
