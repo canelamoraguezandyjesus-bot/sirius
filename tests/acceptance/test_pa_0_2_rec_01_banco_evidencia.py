@@ -374,6 +374,12 @@ class _EjecucionDelBanco:
     #: el motor una segunda vez, que cada `elementos_de_mas` restante es un
     #: elemento que el laboratorio también producía (`lab_final_run_row5.json`).
     obtenido_por_caso: Mapping[str, frozenset[str]] = field(default_factory=dict)
+    #: Mapa ``(kind, id_real) -> id canónico`` del banco cargado. Solo lo
+    #: puebla ``_ejecutar_banco_paquete_completo``: permite a un instrumento
+    #: externo (``scripts/medir_banco_con_ollama_real.py --diagnostico``)
+    #: traducir lo que vio el filtro a identidades del banco sin reconstruir
+    #: la carga — reconstruirla sería medir otra cosa.
+    real_a_canonico: Mapping[tuple[str, int], str] = field(default_factory=dict)
 
 
 def _ejecutar_banco(database_path: Path) -> _EjecucionDelBanco:
@@ -2075,6 +2081,7 @@ def _ejecutar_banco_paquete_completo(
         )
 
         items_por_id = {item["id"]: item for item in banco["items"]}
+        obtenido_por_caso: dict[str, frozenset[str]] = {}
         aciertos_exactos = 0
         elementos_de_mas = 0
         omisiones_criticas = 0
@@ -2088,6 +2095,7 @@ def _ejecutar_banco_paquete_completo(
                 for candidato in obtenido_ranked
             }
             esperado = set(caso["resultado_esperado"])
+            obtenido_por_caso[caso["id"]] = frozenset(obtenido)
 
             if obtenido == esperado:
                 aciertos_exactos += 1
@@ -2106,7 +2114,11 @@ def _ejecutar_banco_paquete_completo(
         elementos_hallados=elementos_hallados,
         elementos_esperados_total=banco["conteos"]["elementos_esperados_total"],
     )
-    return _EjecucionDelBanco(metricas=metricas)
+    return _EjecucionDelBanco(
+        metricas=metricas,
+        obtenido_por_caso=obtenido_por_caso,
+        real_a_canonico=real_a_canonico,
+    )
 
 
 @pytest.fixture(scope="module")

@@ -135,3 +135,85 @@ y una tupla NUEVA cuando el modelo contesta.
 **Comprobación:** ejecutado en una máquina sin Ollama, informa `47 llamadas,
 40 rendiciones` y declara las cifras no válidas. Antes del arreglo informaba
 `0 rendiciones` sobre esa misma ejecución.
+
+## Medición: por qué producción pierde el doble de críticas que el laboratorio
+
+**Pregunta (del propietario, 01-09-2026):** con la misma receta —filtro + categoría,
+sin siembra—, el laboratorio (fila 4) pierde 4 críticas del banco y producción
+pierde 10. ¿Por qué?
+
+**Instrumento:** `scripts/medir_banco_con_ollama_real.py --diagnostico`. El arnés
+de producción ahora devuelve `obtenido_por_caso` y el mapa `real_a_canonico`
+(campos opcionales de `_EjecucionDelBanco`, vacíos para todo llamador
+anterior); el envoltorio del filtro recuerda qué entró y qué salió en cada
+llamada, y cada crítica perdida se clasifica en la etapa donde se perdió:
+`NO_ENTRO` (la búsqueda nunca la puso delante del filtro),
+`TIRADO_POR_EL_FILTRO` (el modelo la descartó y ninguna regla la rescató) o
+`PERDIDO_TRAS_FILTRO`. La correlación llamada↔caso exige exactamente una
+llamada por caso, que es el contrato de `_apply_relevance_filter`; el
+instrumento se niega a diagnosticar si no se cumple.
+
+**Criterio de parada, escrito antes de ejecutar:** si la mayoría de las pérdidas
+adicionales de producción son `TIRADO_POR_EL_FILTRO`, la causa está en la regla
+de rescate; si son `NO_ENTRO`, la causa está antes del filtro y el filtro es
+inocente.
+
+**Resultado (ejecución en seco, sin Ollama: el filtro falla abierto en todas las
+llamadas, así que NADA se tira — solo puede aparecer `NO_ENTRO`):**
+
+| caso | crítica | laboratorio (fila 4) | producción |
+|---|---|---|---|
+| B04-CA-02 | MEM-002 | OK | **NO_ENTRO** |
+| B04-CA-31 | DEC-003, DEC-010, MEM-014, MEM-016, MEM-025 | OK | **NO_ENTRO** (las cinco) |
+| B04-CA-33 | DEC-003 | NO_ENTRO | OK |
+| B04-CA-34 | DEC-003, MEM-014, MEM-016 | NO_ENTRO | NO_ENTRO |
+
+Laboratorio: 4 perdidas, todas `NO_ENTRO`. Producción: **9 perdidas, todas
+`NO_ENTRO`** — sin que el filtro haya descartado ni una. El filtro es inocente:
+la diferencia está en la búsqueda. Con Ollama real el propietario midió 10; la
+décima es la única que puede atribuirse al filtro y su ejecución con
+`--diagnostico` lo dirá.
+
+**La causa, comprobada en el código:** las consultas que producción pierde piden
+literalmente *restricciones*:
+
+- B04-CA-31: «Dame todas las **restricciones** esenciales que debo respetar.»
+- B04-CA-02: «¿Qué **restricciones** de transporte tengo?»
+
+En el laboratorio, la búsqueda por texto no encuentra nada para ellas (fila 1,
+`obtenido = []`); quien las encuentra es el **índice de categoría** (fila 2). Ese
+índice guarda, para todo item no ordinario, las palabras con las que alguien
+pediría lo crítico —`esencial`, `restriccion`, `critica`, `obligatoria`,
+`imprescindible`
+(`tests/acceptance/staged_engine_category_and_relevance.py:240-251`, portado
+literal de `experiments/adr002/lateral/categoria.py:72-78`)— y la categoría se
+**deriva de la criticidad** (`categoria_del_item`, `:268-276`).
+
+Producción activa el índice con la misma regla —alguna palabra del vocabulario
+dentro de la consulta (`src/sirius/domain/relevance.py:204-221`)— pero con
+**otro vocabulario**: `trabajo`, `personal`, `salud`, `finanzas`, `proyecto`,
+`aprendizaje`, `otros` (`src/sirius/composition_root.py:133-135`, fijado por
+ADR-116 como etiquetas *provisionales* para M11). Ninguna de esas palabras
+aparece en «restricciones esenciales» ni en «restricciones de transporte»: el
+índice **no se activa**, solo corre FTS5, y FTS5 no las encuentra, igual que en
+la fila 1 del laboratorio.
+
+Es decir: el laboratorio etiquetaba por **criticidad** y producción etiqueta
+por **tema**. La palabra con la que el usuario pide lo importante dejó de estar
+en el vocabulario, y con ella se fue la pieza que hacía subir la cobertura de
+64 a 70 (filas 1→2 del laboratorio).
+
+**Segunda consecuencia de la misma decisión, también comprobada:** la regla de
+las críticas RF-25/RF-26 rescata por `category == max_criticality_category`
+(`src/sirius/domain/relevance.py:328-372`), y esa categoría en producción es
+`"salud"` (`composition_root.py:144`, ADR-116:80). Las 18 críticas del banco
+están etiquetadas `personal`, `finanzas`, `proyecto` o `trabajo`; el único item
+`salud` (MEM-010) no es crítico. La regla, tal como está cableada, **no protege
+ninguna crítica del banco**. En la ejecución en seco esto no pesa (nada se
+tira); con el filtro trabajando, es lo que impide rescatar lo que el modelo
+descarte.
+
+**Lo que este resultado NO afirma:** no dice qué vocabulario debe tener
+producción, ni que ADR-116 estuviera mal en su momento (era provisional y para
+otro hito). Dice que, con el vocabulario actual, la receta medida en #117 no
+puede reproducirse por construcción, y señala exactamente dónde.

@@ -23,7 +23,7 @@ USO
 ===
 
     uv run python scripts/medir_banco_con_ollama_real.py
-
+    uv run python scripts/medir_banco_con_ollama_real.py --diagnostico
     uv run python scripts/medir_banco_con_ollama_real.py --modelo llama3.2 --espera 60
 
 QUE MIRAR
@@ -33,15 +33,21 @@ La cifra que manda es **omisiones críticas**: es lo que el propietario declaró
 intolerable. ``elementos_de_mas`` es ruido tolerable. Y si el contador de
 «rendiciones» no es cero, la medición está contaminada: parte de las consultas
 no pasaron por el modelo y el número no vale.
+
+``--diagnostico`` responde a la pregunta siguiente: de cada crítica perdida,
+**en qué etapa se perdió** — nunca llegó al filtro (búsqueda), el filtro la tiró
+y nadie la rescató, o sobrevivió al filtro y se perdió después. Y lo compara con
+lo que el laboratorio perdió en su fila equivalente.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import tempfile
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 _RAIZ = Path(__file__).resolve().parent.parent
@@ -68,9 +74,28 @@ _SUELO_ACIERTOS = 29
 _SUELO_CRITICAS = 1
 _SUELO_COBERTURA = 63
 
+_BANCO = _RAIZ / "tests" / "acceptance" / "fixtures" / "evidence_bank_47_casos.json"
+
+#: Lo que el laboratorio perdió en su fila equivalente a producción —«4. filtro
+#: con regla, con categoría», SIN siembra— leído de
+#: ``resultado_modelo_local_v0.7.json`` (rama ``evidence/adr001-spikes``,
+#: ``detalle_por_caso``), traducido con la correspondencia que declara
+#: ``tests/acceptance/fixtures/relevance_filter_frozen_run.json``
+#: (``N1-NN -> B04-CA-NN``, ``MEMORIA:n -> MEM-nnn``, ``DECISION:n -> DEC-nnn``)
+#: y contando como crítico lo mismo que el arnés (``criticidad.nivel == CRITICO``).
+#: Las cuatro son ``NO_ENTRO``: nunca llegaron al filtro. El laboratorio publica
+#: 5 con su propia lista de críticos; con la del banco son estas 4.
+_LABORATORIO_FILA_4: Mapping[str, Mapping[str, str]] = {
+    "B04-CA-33": {"DEC-003": "NO_ENTRO"},
+    "B04-CA-34": {"DEC-003": "NO_ENTRO", "MEM-014": "NO_ENTRO", "MEM-016": "NO_ENTRO"},
+}
+
+Clave = tuple[str, int]
+
 
 class _FiltroQueSeDejaContar:
-    """Envuelve el adaptador real y cuenta llamadas y rendiciones.
+    """Envuelve el adaptador real; cuenta llamadas y rendiciones y recuerda
+    qué entró y qué salió en cada llamada.
 
     NO se cuenta leyendo el registro: ``alembic`` reconfigura ``logging`` al
     aplicar las migraciones y desactiva los ``logger`` ya existentes, así que
@@ -88,6 +113,8 @@ class _FiltroQueSeDejaContar:
         self._real = real
         self.llamadas = 0
         self.rendiciones = 0
+        #: Por llamada, en orden: (entraron, salieron) como claves (kind, id).
+        self.trazas: list[tuple[frozenset[Clave], frozenset[Clave]]] = []
 
     def filter_candidates(
         self, query_text: str, candidates: Sequence[RankedKnowledge]
@@ -96,7 +123,95 @@ class _FiltroQueSeDejaContar:
         resultado = self._real.filter_candidates(query_text, candidates)
         if candidates and resultado is candidates:
             self.rendiciones += 1
+        self.trazas.append((_claves(candidates), _claves(resultado)))
         return resultado
+
+
+def _claves(candidatos: Sequence[RankedKnowledge]) -> frozenset[Clave]:
+    return frozenset((c.kind.value, c.item_id) for c in candidatos)
+
+
+def _etapa(identidad: str, entraron: frozenset[str], salieron: frozenset[str]) -> str:
+    if identidad not in entraron:
+        return "NO_ENTRO"
+    if identidad not in salieron:
+        return "TIRADO_POR_EL_FILTRO"
+    return "PERDIDO_TRAS_FILTRO"
+
+
+def _diagnostico(
+    contador: _FiltroQueSeDejaContar,
+    obtenido_por_caso: Mapping[str, frozenset[str]],
+    real_a_canonico: Mapping[Clave, str],
+) -> None:
+    banco = json.loads(_BANCO.read_text(encoding="utf-8"))
+    criticos = {
+        item["id"]
+        for item in banco["items"]
+        if (item.get("criticidad") or {}).get("nivel") == "CRITICO"
+    }
+    casos = banco["casos"]
+    if len(contador.trazas) != len(casos):
+        print()
+        print(
+            f"  DIAGNOSTICO NO POSIBLE: {len(contador.trazas)} llamadas al filtro para "
+            f"{len(casos)} casos. La correlacion llamada<->caso exige exactamente una "
+            "llamada por caso (contrato de _apply_relevance_filter)."
+        )
+        return
+
+    def traducir(claves: frozenset[Clave]) -> frozenset[str]:
+        return frozenset(real_a_canonico[c] for c in claves if c in real_a_canonico)
+
+    filas: list[tuple[str, str, str, str]] = []
+    resumen_prod: dict[str, int] = {}
+    resumen_lab: dict[str, int] = {}
+    for caso, (entraron_raw, salieron_raw) in zip(casos, contador.trazas, strict=True):
+        caso_id = caso["id"]
+        esperadas = [x for x in caso["resultado_esperado"] if x in criticos]
+        if not esperadas:
+            continue
+        entraron = traducir(entraron_raw)
+        salieron = traducir(salieron_raw)
+        obtenido = obtenido_por_caso.get(caso_id, frozenset())
+        lab = _LABORATORIO_FILA_4.get(caso_id, {})
+        for identidad in esperadas:
+            en_prod = "OK" if identidad in obtenido else _etapa(identidad, entraron, salieron)
+            en_lab = lab.get(identidad, "OK")
+            if en_prod != "OK" or en_lab != "OK":
+                filas.append((caso_id, identidad, en_lab, en_prod))
+            if en_prod != "OK":
+                resumen_prod[en_prod] = resumen_prod.get(en_prod, 0) + 1
+            if en_lab != "OK":
+                resumen_lab[en_lab] = resumen_lab.get(en_lab, 0) + 1
+
+    print()
+    print("=" * 62)
+    print("DIAGNOSTICO: DONDE SE PIERDE CADA CRITICA")
+    print("=" * 62)
+    print(f"  {'caso':10} {'critica':9} {'laboratorio (fila 4)':22} produccion (hoy)")
+    print(f"  {'-' * 10} {'-' * 9} {'-' * 22} {'-' * 22}")
+    for caso_id, identidad, en_lab, en_prod in filas:
+        print(f"  {caso_id:10} {identidad:9} {en_lab:22} {en_prod}")
+    print()
+    print("  NO_ENTRO ............. la busqueda nunca la puso delante del filtro")
+    print("  TIRADO_POR_EL_FILTRO . el modelo la descarto y ninguna regla la rescato")
+    print("  PERDIDO_TRAS_FILTRO .. sobrevivio al filtro y se perdio despues")
+    print()
+    n_lab = sum(resumen_lab.values())
+    n_prod = sum(resumen_prod.values())
+    print(f"  Laboratorio, fila 4:  {n_lab} criticas perdidas  {dict(resumen_lab)}")
+    print(f"  Produccion, hoy:      {n_prod} criticas perdidas  {dict(resumen_prod)}")
+    tiradas = resumen_prod.get("TIRADO_POR_EL_FILTRO", 0)
+    if tiradas:
+        print()
+        print(f"  {tiradas} criticas las TIRO EL FILTRO y la regla de las criticas no las rescato.")
+        print("  Motivo comprobado en el codigo: la regla protege la categoria")
+        print("  'salud' (composition_root._MAX_CRITICALITY_CATEGORY) y ninguna critica")
+        print("  del banco esta etiquetada 'salud' (personal/finanzas/proyecto/trabajo).")
+        print("  En el laboratorio la categoria se DERIVA de la criticidad, asi que la")
+        print("  misma regla protegia todo lo no ordinario. En produccion no protege nada.")
+    print("=" * 62)
 
 
 def main() -> int:
@@ -111,6 +226,11 @@ def main() -> int:
         type=float,
         default=30.0,
         help="Segundos de espera por consulta antes de rendirse.",
+    )
+    parser.add_argument(
+        "--diagnostico",
+        action="store_true",
+        help="Ademas de las metricas, decir en que etapa se perdio cada critica.",
     )
     args = parser.parse_args()
 
@@ -170,6 +290,9 @@ def main() -> int:
         print("  mezclan consultas filtradas con consultas sin filtrar. NO son validas.")
         print("  Sube --espera y vuelve a medir.")
     print("=" * 62)
+
+    if args.diagnostico:
+        _diagnostico(contador, ejecucion.obtenido_por_caso, ejecucion.real_a_canonico)
     return 0
 
 
