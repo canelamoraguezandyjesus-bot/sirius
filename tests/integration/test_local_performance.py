@@ -737,7 +737,9 @@ def test_el_suelo_de_rnf_003_p95_300ms_en_los_tres_escenarios_del_paquete_comple
     alerta del problema, igual que antes de ADR-125 y sin pagar 15 minutos.
     """
     timeout_seconds = _RELEVANCE_FILTER_TIMEOUT_SECONDS
-    for _nombre, construir_cliente in _ESCENARIOS_RNF_003:
+
+    mediciones_ab: list[tuple[str, Medicion]] = []
+    for nombre, construir_cliente in _ESCENARIOS_RNF_003:
         adapter = OllamaRelevanceFilterAdapter(
             _RELEVANCE_FILTER_MODEL,
             timeout_seconds=timeout_seconds,
@@ -748,14 +750,16 @@ def test_el_suelo_de_rnf_003_p95_300ms_en_los_tres_escenarios_del_paquete_comple
         def _construir(builder: ContextBuilder = builder) -> object:
             return builder.build("cómo vamos con el despliegue")
 
-        medicion = _medir("construir contexto", _construir)
-        assert medicion.p95 <= LIMITE_OPERACION_MS, (
-            f"{medicion} supera el límite aprobado de {LIMITE_OPERACION_MS:.0f} ms."
-        )
+        mediciones_ab.append((nombre, _medir("construir contexto", _construir)))
 
     medicion_c, transporte_c = _medir_escenario_c(banco, timeout_seconds)
     espera_pagada_ms = timeout_seconds * 1000 if transporte_c.invocaciones else 0.0
     total_c = medicion_c.p95 + espera_pagada_ms
+
+    for nombre, medicion in mediciones_ab:
+        assert medicion.p95 <= LIMITE_OPERACION_MS, (
+            f"{nombre}: {medicion} supera el límite aprobado de {LIMITE_OPERACION_MS:.0f} ms."
+        )
     assert total_c <= LIMITE_OPERACION_MS, (
         f"{NOMBRE_DEL_ESCENARIO_C}: {medicion_c} + espera de producción "
         f"{espera_pagada_ms:.0f} ms = {total_c:.1f} ms supera el límite aprobado de "

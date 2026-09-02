@@ -157,12 +157,15 @@ _MAX_CRITICALITY_CATEGORY = "salud"
 # red.
 _RELEVANCE_FILTER_MODEL = _CATEGORY_CLASSIFIER_MODEL
 
-# M11 (§6.4): valor medido en tests/integration/test_local_performance.py
-# para que, incluso en el peor caso —Ollama acepta la conexión y no responde
-# hasta agotar el timeout completo—, el P95 de «construir contexto» se
-# mantenga por debajo de los 300 ms de RNF-003 sobre el conjunto de
-# referencia de ADR-008. Ver la tabla de medición de los tres escenarios en
-# ese módulo y en el PR de M11.
+# ADR-125: RNF-003 (300 ms P95, M11 §6.4) queda suspendido en este camino
+# —el filtro de relevancia con la puerta de D7 punto 6 abierta— mientras se
+# mide su coste real. El valor anterior de 0.05 s (ADR-117) buscaba caber en
+# ese presupuesto, pero un modelo local no contesta en 50 ms: el filtro
+# fallaba abierto en todas las llamadas y nunca filtraba. 30 s es la cifra
+# aprobada por el propietario (02-09-2026), por encima de los 10 s del
+# laboratorio a propósito, para observar la calidad separada de la
+# velocidad. Ver la medición completa en
+# tests/integration/test_local_performance.py y en ADR-125.
 _RELEVANCE_FILTER_TIMEOUT_SECONDS = 30.0
 
 

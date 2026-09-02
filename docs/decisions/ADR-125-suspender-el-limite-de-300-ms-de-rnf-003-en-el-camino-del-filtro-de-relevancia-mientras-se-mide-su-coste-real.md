@@ -185,9 +185,11 @@ con el doble (7/47, 285, 9, 62/81).
   instrumento que mide el camino real con Ollama puesto.
 - Negativas y riesgos: con la puerta abierta, construir el contexto puede
   tardar hasta 30 s si Ollama acepta la conexión y no contesta; RNF-003 no se
-  afirma en ese camino; el banco de latencia deja de cubrir el escenario (c)
-  mientras dure la suspensión. Las tres cosas están dichas aquí y en la prueba,
-  no escondidas.
+  afirma en ese camino; el banco de latencia mide el escenario (c) con un
+  doble que no duerme la espera —cuenta las invocaciones y suma la espera de
+  producción sin pagarla en tiempo de suite (punto 5)—, así que la cobertura
+  es simulada, no ejecutada contra el tiempo real. Las tres cosas están dichas
+  aquí y en la prueba, no escondidas.
 - Deuda declarada (evidencia, «Nota de arranque», punto 4): nada impide que
   las dos implementaciones del filtro vuelvan a divergir. Cerrarlo exige una
   prueba compartida entre la corrida congelada del laboratorio y el adaptador
