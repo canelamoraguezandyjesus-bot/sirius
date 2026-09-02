@@ -96,7 +96,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -165,6 +165,7 @@ from sirius.domain.staged_engine_contracts import (
     EjesDeclarados,
     Peticion,
 )
+from sirius.ports.relevance_filter import RelevanceFilterPort
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "evidence_bank_47_casos.json"
 CANON_CATEGORIES_PATH = (
@@ -373,6 +374,12 @@ class _EjecucionDelBanco:
     #: el motor una segunda vez, que cada `elementos_de_mas` restante es un
     #: elemento que el laboratorio también producía (`lab_final_run_row5.json`).
     obtenido_por_caso: Mapping[str, frozenset[str]] = field(default_factory=dict)
+    #: Mapa ``(kind, id_real) -> id canónico`` del banco cargado. Solo lo
+    #: puebla ``_ejecutar_banco_paquete_completo``: permite a un instrumento
+    #: externo (``scripts/medir_banco_con_ollama_real.py --diagnostico``)
+    #: traducir lo que vio el filtro a identidades del banco sin reconstruir
+    #: la carga — reconstruirla sería medir otra cosa.
+    real_a_canonico: Mapping[tuple[str, int], str] = field(default_factory=dict)
 
 
 def _ejecutar_banco(database_path: Path) -> _EjecucionDelBanco:
@@ -1966,7 +1973,14 @@ def _set_active_project(database_path: Path, project_id: int | None) -> None:
             )
 
 
-def _ejecutar_banco_paquete_completo(database_path: Path) -> _EjecucionDelBanco:
+def _ejecutar_banco_paquete_completo(
+    database_path: Path,
+    *,
+    relevance_filter_port: RelevanceFilterPort | None = None,
+    category_vocabulary: frozenset[str] | None = None,
+    categoria_por_item: Callable[[Mapping[str, Any]], str | None] | None = None,
+    max_criticality_category: str | None = None,
+) -> _EjecucionDelBanco:
     """El mismo banco de 47 casos, contra `RankRelevantKnowledgeUseCase`/
     `ContextBuilder` construidos exactamente como `composition_root` los
     construiría con la puerta de D7 punto 6 abierta
@@ -2035,7 +2049,11 @@ def _ejecutar_banco_paquete_completo(database_path: Path) -> _EjecucionDelBanco:
         if real is None:
             continue
         real_a_canonico[real] = item["id"]
-        categoria = canon_categorias.get(item["id"])
+        categoria = (
+            categoria_por_item(item)
+            if categoria_por_item is not None
+            else canon_categorias.get(item["id"])
+        )
         if categoria is not None:
             kind, real_id = real
             set_category_use_case.set(CategoryTargetKind(kind), real_id, categoria)
@@ -2048,7 +2066,9 @@ def _ejecutar_banco_paquete_completo(database_path: Path) -> _EjecucionDelBanco:
             decision_repository=decision_repository,
             project_repository=project_repository,
             knowledge_search_repository=build_sqlite_knowledge_search_repository(database_path),
-            category_vocabulary=_CATEGORY_VOCABULARY,
+            category_vocabulary=(
+                category_vocabulary if category_vocabulary is not None else _CATEGORY_VOCABULARY
+            ),
             category_matching_enabled=True,
             staged_engine_port=staged_engine_port,
             staged_engine_candidate=staged_engine_candidate.candidato(),
@@ -2062,12 +2082,21 @@ def _ejecutar_banco_paquete_completo(database_path: Path) -> _EjecucionDelBanco:
             rank_relevant_knowledge_use_case=rank_relevant_knowledge_use_case,
             event_repository=build_sqlite_event_repository(database_path),
             token_counter=CharacterHeuristicTokenCounter(),
-            relevance_filter_port=_FiltroDeRelevanciaQueNuncaDescarta(),
-            max_criticality_category=_MAX_CRITICALITY_CATEGORY,
+            relevance_filter_port=(
+                relevance_filter_port
+                if relevance_filter_port is not None
+                else _FiltroDeRelevanciaQueNuncaDescarta()
+            ),
+            max_criticality_category=(
+                max_criticality_category
+                if max_criticality_category is not None
+                else _MAX_CRITICALITY_CATEGORY
+            ),
             category_matching_enabled=True,
         )
 
         items_por_id = {item["id"]: item for item in banco["items"]}
+        obtenido_por_caso: dict[str, frozenset[str]] = {}
         aciertos_exactos = 0
         elementos_de_mas = 0
         omisiones_criticas = 0
@@ -2081,6 +2110,7 @@ def _ejecutar_banco_paquete_completo(database_path: Path) -> _EjecucionDelBanco:
                 for candidato in obtenido_ranked
             }
             esperado = set(caso["resultado_esperado"])
+            obtenido_por_caso[caso["id"]] = frozenset(obtenido)
 
             if obtenido == esperado:
                 aciertos_exactos += 1
@@ -2099,7 +2129,11 @@ def _ejecutar_banco_paquete_completo(database_path: Path) -> _EjecucionDelBanco:
         elementos_hallados=elementos_hallados,
         elementos_esperados_total=banco["conteos"]["elementos_esperados_total"],
     )
-    return _EjecucionDelBanco(metricas=metricas)
+    return _EjecucionDelBanco(
+        metricas=metricas,
+        obtenido_por_caso=obtenido_por_caso,
+        real_a_canonico=real_a_canonico,
+    )
 
 
 @pytest.fixture(scope="module")

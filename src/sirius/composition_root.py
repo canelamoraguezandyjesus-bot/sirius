@@ -13,9 +13,10 @@ la interfaz").
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import openai
 
@@ -133,7 +134,15 @@ STUDIO_VOICE_SETTING = "model_studio_voice"
 _CATEGORY_VOCABULARY: frozenset[str] = frozenset(
     {"trabajo", "personal", "salud", "finanzas", "proyecto", "aprendizaje", "otros"}
 )
-_CATEGORY_CLASSIFIER_MODEL = "llama3.2"
+#: Modelo local por defecto para el filtro de relevancia y el clasificador de
+#: categoría: el mismo con el que el laboratorio midió 29/47
+#: (`experiments/adr002/modelo_local/puerto.py:73`, rama `evidence/adr001-spikes`)
+#: y con el que el propietario midió en su máquina el 02-09-2026. Se puede
+#: sustituir desde settings.json con la clave `ollama_model`; los dos
+#: consumidores leen SIEMPRE el mismo valor (`_ollama_model`), nunca dos.
+_DEFAULT_OLLAMA_MODEL = "qwen3:4b-instruct"
+_OLLAMA_MODEL_SETTING = "ollama_model"
+_CATEGORY_CLASSIFIER_MODEL = _DEFAULT_OLLAMA_MODEL
 
 # ADR-116: "salud" es, dentro del vocabulario provisional de arriba, la
 # categoría de máxima criticidad que el candado de §6.3 protege siempre —
@@ -148,13 +157,30 @@ _MAX_CRITICALITY_CATEGORY = "salud"
 # red.
 _RELEVANCE_FILTER_MODEL = _CATEGORY_CLASSIFIER_MODEL
 
-# M11 (§6.4): valor medido en tests/integration/test_local_performance.py
-# para que, incluso en el peor caso —Ollama acepta la conexión y no responde
-# hasta agotar el timeout completo—, el P95 de «construir contexto» se
-# mantenga por debajo de los 300 ms de RNF-003 sobre el conjunto de
-# referencia de ADR-008. Ver la tabla de medición de los tres escenarios en
-# ese módulo y en el PR de M11.
-_RELEVANCE_FILTER_TIMEOUT_SECONDS = 0.05
+# ADR-125: RNF-003 (300 ms P95, M11 §6.4) queda suspendido en este camino
+# —el filtro de relevancia con la puerta de D7 punto 6 abierta— mientras se
+# mide su coste real. El valor anterior de 0.05 s (ADR-117) buscaba caber en
+# ese presupuesto, pero un modelo local no contesta en 50 ms: el filtro
+# fallaba abierto en todas las llamadas y nunca filtraba. 30 s es la cifra
+# aprobada por el propietario (02-09-2026), por encima de los 10 s del
+# laboratorio a propósito, para observar la calidad separada de la
+# velocidad. Ver la medición completa en
+# tests/integration/test_local_performance.py y en ADR-125.
+_RELEVANCE_FILTER_TIMEOUT_SECONDS = 30.0
+
+
+def _ollama_model(settings: Mapping[str, Any]) -> str:
+    """El modelo local que usan el filtro de relevancia y el clasificador.
+
+    Lee `ollama_model` de los ajustes persistidos; con la clave ausente, vacía
+    o de otro tipo, el valor por defecto. Un solo punto de lectura para los dos
+    consumidores: el comentario de `_RELEVANCE_FILTER_MODEL` exige que sean el
+    mismo modelo, y dos lecturas independientes es como dejan de serlo.
+    """
+    value = settings.get(_OLLAMA_MODEL_SETTING)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return _DEFAULT_OLLAMA_MODEL
 
 
 def save_studio_voice(voice: str) -> None:
@@ -452,7 +478,9 @@ def build_conversation_dependencies(
     # que sus valores por defecto ya producen — ningún camino de código
     # nuevo para el estado cerrado. M11 cablea el parámetro; abrirlo en
     # settings.json no es trabajo suyo (§6.3, docs/evolution/STATUS.md, D7).
-    category_matching_enabled = load_settings().get("category_matching_enabled", False) is True
+    persisted_settings = load_settings()
+    category_matching_enabled = persisted_settings.get("category_matching_enabled", False) is True
+    ollama_model = _ollama_model(persisted_settings)
     rank_relevant_knowledge_use_case = RankRelevantKnowledgeUseCase(
         memory_repository=memory_repository,
         decision_repository=decision_repository,
@@ -474,7 +502,7 @@ def build_conversation_dependencies(
         token_counter=CharacterHeuristicTokenCounter(),
         relevance_filter_port=(
             OllamaRelevanceFilterAdapter(
-                _RELEVANCE_FILTER_MODEL, timeout_seconds=_RELEVANCE_FILTER_TIMEOUT_SECONDS
+                ollama_model, timeout_seconds=_RELEVANCE_FILTER_TIMEOUT_SECONDS
             )
             if category_matching_enabled
             else None
@@ -524,7 +552,7 @@ def build_conversation_dependencies(
     tag_category_use_case = TagCategoryUseCase(
         memory_repository,
         decision_repository,
-        OllamaCategoryClassifierAdapter(_CATEGORY_CLASSIFIER_MODEL, _CATEGORY_VOCABULARY),
+        OllamaCategoryClassifierAdapter(ollama_model, _CATEGORY_VOCABULARY),
     )
     set_category_use_case = SetCategoryUseCase(memory_repository, decision_repository)
 

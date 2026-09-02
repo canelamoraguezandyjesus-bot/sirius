@@ -68,7 +68,7 @@ def test_filter_candidates_returns_the_expected_subset_and_order() -> None:
     candidates = (_candidate(1, "primero"), _candidate(2, "segundo"), _candidate(3, "tercero"))
 
     def _handle(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"response": json.dumps({"keep": [2, 1]})})
+        return httpx.Response(200, json={"message": {"content": json.dumps({"responden": [2, 1]})}})
 
     adapter = _adapter(httpx.MockTransport(_handle))
 
@@ -131,7 +131,9 @@ def test_filter_candidates_returns_candidates_unmodified_when_keep_is_not_a_list
     candidates = (_candidate(1, "contenido"),)
 
     def _handle(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"response": json.dumps({"keep": "todos"})})
+        return httpx.Response(
+            200, json={"message": {"content": json.dumps({"responden": "todos"})}}
+        )
 
     adapter = _adapter(httpx.MockTransport(_handle))
 
@@ -144,7 +146,7 @@ def test_filter_candidates_returns_candidates_unmodified_when_keep_references_ou
     candidates = (_candidate(1, "contenido"),)
 
     def _handle(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"response": json.dumps({"keep": [7]})})
+        return httpx.Response(200, json={"message": {"content": json.dumps({"responden": [7]})}})
 
     adapter = _adapter(httpx.MockTransport(_handle))
 
@@ -182,7 +184,7 @@ def test_filter_candidates_ignores_an_injected_clients_remote_base_url() -> None
 
     def _handle(request: httpx.Request) -> httpx.Response:
         seen_hosts.append(request.url.host)
-        return httpx.Response(200, json={"response": json.dumps({"keep": [1]})})
+        return httpx.Response(200, json={"message": {"content": json.dumps({"responden": [1]})}})
 
     client = httpx.Client(
         transport=httpx.MockTransport(_handle), base_url="https://servidor-remoto.example"
@@ -207,7 +209,7 @@ def test_filter_candidates_never_follows_a_redirect_to_a_remote_host() -> None:
         return httpx.Response(
             307,
             headers={"Location": "https://remote.example/leak"},
-            json={"response": json.dumps({"keep": [1]})},
+            json={"message": {"content": json.dumps({"responden": [1]})}},
         )
 
     client = httpx.Client(
@@ -225,14 +227,95 @@ def test_filter_candidates_never_follows_a_redirect_to_a_remote_host() -> None:
 
 def test_filter_candidates_returns_candidates_unmodified_when_keep_contains_booleans() -> None:
     """``bool`` is a subclass of ``int`` in Python; a response shaped as
-    ``{"keep": [true]}`` is well-formed JSON but not the list of integer
+    ``{"responden": [true]}`` is well-formed JSON but not the list of integer
     positions the contract requires, so it must fail open like any other
     unexpected shape rather than being silently accepted as position 1."""
     candidates = (_candidate(1, "primero"), _candidate(2, "segundo"))
 
     def _handle(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"response": json.dumps({"keep": [True]})})
+        return httpx.Response(200, json={"message": {"content": json.dumps({"responden": [True]})}})
 
     adapter = _adapter(httpx.MockTransport(_handle))
 
     assert adapter.filter_candidates("consulta", candidates) == candidates
+
+
+#: Oráculo INDEPENDIENTE del cuerpo que el laboratorio envió al modelo
+#: (``experiments/adr002/modelo_local/puerto.py`` y ``filtro.py``, rama
+#: ``evidence/adr001-spikes``; ADR-125). Es una copia congelada a propósito:
+#: si se comparara con las constantes del adaptador, cambiar una de ellas
+#: cambiaría también lo esperado y la prueba no vería nada (CODEX-001,
+#: ronda 3 de la PR #509). Cualquier divergencia respecto de este sobre —un
+#: campo borrado, la instrucción vaciada, ``stream`` omitido, el esquema
+#: alterado— tiene que hacer fallar la prueba de abajo.
+_INSTRUCCION_DEL_LABORATORIO = (
+    "Eres el filtro de relevancia de una memoria personal. Recibes una PREGUNTA "
+    "y una lista numerada de FRASES guardadas. Dices cuales responden a la "
+    "pregunta.\n\n"
+    "Reglas:\n"
+    "- Devuelve solo los numeros de las frases que responden a la pregunta.\n"
+    "- Una prohibicion SI responde a una pregunta sobre si algo se puede hacer: "
+    "a «¿puedo usar vuelos con escala?», la frase «no uses vuelos con escala» "
+    "es la respuesta, y es que no. Incluyela.\n"
+    "- Si hay dos frases opuestas sobre lo mismo, devuelve LAS DOS: quien "
+    "pregunta tiene que ver que hay un permiso y una prohibicion.\n"
+    "- Respeta el tiempo: si preguntan solo por lo ANTERIOR, lo vigente no "
+    "responde; si preguntan solo por lo vigente, lo derogado no responde. Pero "
+    "si piden LAS DOS —«cual es la actual y cual reemplazo»—, devuelve las dos.\n"
+    "- Si la pregunta pide VARIAS cosas o una lista —«todas las restricciones», "
+    "«el presupuesto y la preferencia»—, devuelve TODAS las frases que hagan "
+    "falta. No elijas la mejor: la respuesta completa son todas.\n"
+    "- Frases parecidas entre si NO son repeticiones. Si cinco frases dicen "
+    "«restriccion numero 1», «numero 2»... y la pregunta las pide, son cinco "
+    "respuestas distintas y van las cinco.\n"
+    "- Una frase que habla del mismo tema pero no responde a la pregunta no "
+    "cuenta.\n"
+    "- Si ninguna frase responde, devuelve la lista vacia.\n"
+    "- Ante duda razonable, incluyela: es peor perder algo importante que "
+    "entregar de mas."
+)
+
+_SOBRE_DEL_LABORATORIO = {
+    "model": "llama3.2",
+    "messages": [
+        {"role": "system", "content": _INSTRUCCION_DEL_LABORATORIO},
+        {
+            "role": "user",
+            "content": "Pregunta: consulta\n\nFrases guardadas:\n1. primero\n2. segundo",
+        },
+    ],
+    "stream": False,
+    "format": {
+        "type": "object",
+        "properties": {"responden": {"type": "array", "items": {"type": "integer"}}},
+        "required": ["responden"],
+    },
+    "think": False,
+    "keep_alive": "15m",
+    "options": {"temperature": 0.1, "num_ctx": 8192},
+}
+
+
+def test_filter_candidates_sends_the_request_body_the_lab_measured() -> None:
+    """CLAUDE-M18A-003 / CODEX-001 (PR #509): ninguna prueba anterior
+    inspeccionaba el cuerpo JSON que el adaptador realmente envía, así que
+    borrar o corromper cualquiera de los campos portados del laboratorio
+    (ADR-125) no hacía fallar nada. Captura la petición dentro del handler y
+    compara el cuerpo ENTERO con el oráculo congelado de arriba, nunca con
+    las constantes del propio adaptador."""
+    candidates = (_candidate(1, "primero"), _candidate(2, "segundo"))
+    peticiones: list[httpx.Request] = []
+
+    def _handle(request: httpx.Request) -> httpx.Response:
+        peticiones.append(request)
+        return httpx.Response(200, json={"message": {"content": json.dumps({"responden": [1]})}})
+
+    adapter = _adapter(httpx.MockTransport(_handle))
+
+    adapter.filter_candidates("consulta", candidates)
+
+    assert len(peticiones) == 1
+    peticion = peticiones[0]
+    assert peticion.method == "POST"
+    assert peticion.url.path == "/api/chat"
+    assert json.loads(peticion.content) == _SOBRE_DEL_LABORATORIO

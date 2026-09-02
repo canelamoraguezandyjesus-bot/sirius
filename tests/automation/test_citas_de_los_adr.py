@@ -149,6 +149,10 @@ _ADR_115 = (
     "exactos-a-29-47-y-elementos-de-mas-alcanza-d1-bajo-la-poblacion-del-umbral-publicado-"
     "incidencia-469.md"
 )
+_ADR_125 = (
+    "ADR-125-suspender-el-limite-de-300-ms-de-rnf-003-en-el-camino-del-filtro-de-relevancia-"
+    "mientras-se-mide-su-coste-real.md"
+)
 
 RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     "experiments/adr002/round/cases.py": [
@@ -211,7 +215,13 @@ RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     # completamente distinto del motor por etapas, nunca portado a
     # Sirius— para documentar dónde consta que el salto de 24/47 a 29/47
     # depende de ese filtro y no del motor de búsqueda.
-    "experiments/adr002/modelo_local/filtro.py": [_ADR_111],
+    # ADR-125 porta a `src/sirius/adapters/ollama_relevance_filter.py` la
+    # llamada exacta del laboratorio (extremo, esquema impuesto, `think`,
+    # `keep_alive`, `temperature`, `num_ctx`) y cita los dos ficheros de
+    # origen para documentar las seis diferencias con producción; el porte
+    # cita su fuente, la fuente sigue sin fusionarse a `main`.
+    "experiments/adr002/modelo_local/filtro.py": [_ADR_111, _ADR_125],
+    "experiments/adr002/modelo_local/puerto.py": [_ADR_125],
     # ADR-112 (incidencia #463) conecta el índice de categoría y el filtro
     # de relevancia al arnés del banco, portando como fixture el veredicto
     # congelado de una corrida concreta del experimento del laboratorio —
