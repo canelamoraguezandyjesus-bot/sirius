@@ -217,3 +217,41 @@ descarte.
 producción, ni que ADR-116 estuviera mal en su momento (era provisional y para
 otro hito). Dice que, con el vocabulario actual, la receta medida en #117 no
 puede reproducirse por construcción, y señala exactamente dónde.
+
+### Resultado en la máquina del propietario (Ollama real, 02-09-2026)
+
+`uv run python scripts/medir_banco_con_ollama_real.py --diagnostico`, modelo
+`qwen3:4b-instruct`, espera 30 s: **47 llamadas, 0 rendiciones, 0,4 min** —
+medición válida por su propio criterio.
+
+Métricas: 22/47 aciertos exactos, 39 de más, **10 críticas perdidas**, 59/81.
+
+| caso | crítica | laboratorio (fila 4) | producción (propietario) |
+|---|---|---|---|
+| B04-CA-02 | MEM-002 | OK | NO_ENTRO |
+| B04-CA-23 | DEC-003 | OK | **TIRADO_POR_EL_FILTRO** |
+| B04-CA-31 | DEC-003, DEC-010, MEM-014, MEM-016, MEM-025 | OK | NO_ENTRO (las cinco) |
+| B04-CA-33 | DEC-003 | NO_ENTRO | OK |
+| B04-CA-34 | DEC-003, MEM-014, MEM-016 | NO_ENTRO | NO_ENTRO |
+
+**Reparto de las 10: 9 `NO_ENTRO` + 1 `TIRADO_POR_EL_FILTRO`.** Coincide con la
+ejecución en seco en las 9 de búsqueda; la décima solo podía verse con el
+filtro vivo y es exactamente la que la regla de rescate debería haber salvado:
+DEC-003 (crítica, categoría `finanzas`) en B04-CA-23, descartada por el modelo
+y no rescatada porque la regla solo rescata `"salud"`.
+
+**Conclusión de la medición pedida («por qué perdemos el doble»):** las dos
+mitades del doble salen de la misma decisión — el vocabulario temático y la
+categoría de máxima criticidad `"salud"` de ADR-116 sustituyeron a la categoría
+derivada de la criticidad del laboratorio. Sin la palabra `restriccion` en el
+vocabulario, el índice de categoría no se activa para las consultas que piden
+lo crítico (5 pérdidas extra en B04-CA-31 y 1 en B04-CA-02); sin una categoría
+de máxima criticidad que alguna crítica del banco lleve, la regla RF-25/RF-26
+no rescata nada (1 pérdida en B04-CA-23). El filtro en sí funciona: baja el
+ruido de 285 a 39 y sube los aciertos exactos de 7 a 22.
+
+**Nota sobre una ejecución anterior contaminada:** una corrida intermedia del
+propietario dio 40 rendiciones en 2,8 min con el mismo código; la siguiente,
+idéntica, dio 0. No se investigó la causa (transitoria, probablemente el modelo
+descargándose o recargándose); el medidor ahora publica el motivo de cada
+rendición para que, si se repite, quede registrado en vez de adivinado.
