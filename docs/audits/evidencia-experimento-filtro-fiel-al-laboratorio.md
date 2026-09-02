@@ -392,13 +392,20 @@ la espera en 30 s, ese escenario dormiría 30 s por repetición (15 minutos en
 total) para acabar midiendo la constante, y el guardarraíl de 1.500 ms lo
 pondría en rojo por construcción. Esta rama no lo ejecutó antes (declarado en
 «Comprobación»: «mediría peor a propósito»); al abrir la PR ya no vale
-declararlo, hay que resolverlo. Se resuelve así, y ADR-125 lo registra: mientras
-la espera de producción supere el guardarraíl, el escenario (c) no se ejecuta
-ni se afirma y la tabla lo publica como «no medido: = espera de producción por
-construcción»; (a) y (b) se miden y afirman como siempre; si la espera vuelve
-a bajar del guardarraíl, (c) se mide de nuevo sin tocar la prueba. La prueba
-`xfail(strict=True)` del suelo de RNF-003 lleva la misma guardia: mientras la
-espera supere el guardarraíl, falla rápido en (c) sin medirlo (su fracaso ya
-es cierto por construcción, porque la espera sola ya excede
-`LIMITE_OPERACION_MS`) en vez de pagar los ~15 minutos; su veredicto (fallo,
-sosteniendo el `xfail`) no cambia.
+declararlo, hay que resolverlo.
+
+**Cómo se resolvió, y por qué hizo falta ir a la raíz (rondas 1-3 de la PR
+#509):** la primera versión saltaba (c) en una prueba mientras la espera
+superara el guardarraíl; la ronda 1 señaló que la prueba hermana (`xfail`) no
+tenía la guardia; la ronda 2, que el fallo rápido añadido ya no verificaba que
+el filtro se invocara; la ronda 3, que los documentos no describían la
+verificación. Tres rondas con la misma familia de defecto es la señal de
+ADR-001 de que se estaba parcheando alrededor de la raíz. La raíz era que el
+doble de (c) **dormía** la espera. Se quitó el sueño (ADR-125, punto 5): el
+doble lanza `ReadTimeout` al instante y cuenta las invocaciones; las dos
+pruebas miden (c) como (a) y (b) y publican `coste medido + espera`; el
+guardarraíl afirma la invocación real y el coste medido; la prueba `xfail`
+afirma el total y solo suma la espera si el filtro se invocó, con lo que
+conserva el XPASS de alerta si una regresión desconectara el filtro. Sin
+guardias, sin fallos sintéticos, sin dependencia de qué escenario falla
+primero.

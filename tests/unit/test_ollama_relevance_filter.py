@@ -18,10 +18,7 @@ from datetime import UTC, datetime
 
 import httpx
 
-from sirius.adapters.ollama_relevance_filter import (
-    _ESQUEMA_RESPUESTA,
-    OllamaRelevanceFilterAdapter,
-)
+from sirius.adapters.ollama_relevance_filter import OllamaRelevanceFilterAdapter
 from sirius.domain.decision import Decision, DecisionRevision, DecisionStatus
 from sirius.domain.relevance import KnowledgeKind, RankedKnowledge
 
@@ -243,13 +240,70 @@ def test_filter_candidates_returns_candidates_unmodified_when_keep_contains_bool
     assert adapter.filter_candidates("consulta", candidates) == candidates
 
 
+#: Oráculo INDEPENDIENTE del cuerpo que el laboratorio envió al modelo
+#: (``experiments/adr002/modelo_local/puerto.py`` y ``filtro.py``, rama
+#: ``evidence/adr001-spikes``; ADR-125). Es una copia congelada a propósito:
+#: si se comparara con las constantes del adaptador, cambiar una de ellas
+#: cambiaría también lo esperado y la prueba no vería nada (CODEX-001,
+#: ronda 3 de la PR #509). Cualquier divergencia respecto de este sobre —un
+#: campo borrado, la instrucción vaciada, ``stream`` omitido, el esquema
+#: alterado— tiene que hacer fallar la prueba de abajo.
+_INSTRUCCION_DEL_LABORATORIO = (
+    "Eres el filtro de relevancia de una memoria personal. Recibes una PREGUNTA "
+    "y una lista numerada de FRASES guardadas. Dices cuales responden a la "
+    "pregunta.\n\n"
+    "Reglas:\n"
+    "- Devuelve solo los numeros de las frases que responden a la pregunta.\n"
+    "- Una prohibicion SI responde a una pregunta sobre si algo se puede hacer: "
+    "a «¿puedo usar vuelos con escala?», la frase «no uses vuelos con escala» "
+    "es la respuesta, y es que no. Incluyela.\n"
+    "- Si hay dos frases opuestas sobre lo mismo, devuelve LAS DOS: quien "
+    "pregunta tiene que ver que hay un permiso y una prohibicion.\n"
+    "- Respeta el tiempo: si preguntan solo por lo ANTERIOR, lo vigente no "
+    "responde; si preguntan solo por lo vigente, lo derogado no responde. Pero "
+    "si piden LAS DOS —«cual es la actual y cual reemplazo»—, devuelve las dos.\n"
+    "- Si la pregunta pide VARIAS cosas o una lista —«todas las restricciones», "
+    "«el presupuesto y la preferencia»—, devuelve TODAS las frases que hagan "
+    "falta. No elijas la mejor: la respuesta completa son todas.\n"
+    "- Frases parecidas entre si NO son repeticiones. Si cinco frases dicen "
+    "«restriccion numero 1», «numero 2»... y la pregunta las pide, son cinco "
+    "respuestas distintas y van las cinco.\n"
+    "- Una frase que habla del mismo tema pero no responde a la pregunta no "
+    "cuenta.\n"
+    "- Si ninguna frase responde, devuelve la lista vacia.\n"
+    "- Ante duda razonable, incluyela: es peor perder algo importante que "
+    "entregar de mas."
+)
+
+_SOBRE_DEL_LABORATORIO = {
+    "model": "llama3.2",
+    "messages": [
+        {"role": "system", "content": _INSTRUCCION_DEL_LABORATORIO},
+        {
+            "role": "user",
+            "content": "Pregunta: consulta\n\nFrases guardadas:\n1. primero\n2. segundo",
+        },
+    ],
+    "stream": False,
+    "format": {
+        "type": "object",
+        "properties": {"responden": {"type": "array", "items": {"type": "integer"}}},
+        "required": ["responden"],
+    },
+    "think": False,
+    "keep_alive": "15m",
+    "options": {"temperature": 0.1, "num_ctx": 8192},
+}
+
+
 def test_filter_candidates_sends_the_request_body_the_lab_measured() -> None:
-    """CLAUDE-M18A-003: ninguna prueba anterior inspeccionaba el cuerpo JSON
-    que el adaptador realmente envía, así que borrar o corromper cualquiera
-    de los campos portados del laboratorio (ADR-125) no hacía fallar nada.
-    Captura la petición dentro del handler y afirma sobre su contenido real,
-    no solo sobre la forma de la respuesta."""
-    candidates = (_candidate(1, "contenido"),)
+    """CLAUDE-M18A-003 / CODEX-001 (PR #509): ninguna prueba anterior
+    inspeccionaba el cuerpo JSON que el adaptador realmente envía, así que
+    borrar o corromper cualquiera de los campos portados del laboratorio
+    (ADR-125) no hacía fallar nada. Captura la petición dentro del handler y
+    compara el cuerpo ENTERO con el oráculo congelado de arriba, nunca con
+    las constantes del propio adaptador."""
+    candidates = (_candidate(1, "primero"), _candidate(2, "segundo"))
     peticiones: list[httpx.Request] = []
 
     def _handle(request: httpx.Request) -> httpx.Response:
@@ -262,12 +316,6 @@ def test_filter_candidates_sends_the_request_body_the_lab_measured() -> None:
 
     assert len(peticiones) == 1
     peticion = peticiones[0]
+    assert peticion.method == "POST"
     assert peticion.url.path == "/api/chat"
-    cuerpo = json.loads(peticion.content)
-    assert cuerpo["model"] == "llama3.2"
-    assert [mensaje["role"] for mensaje in cuerpo["messages"]] == ["system", "user"]
-    assert "consulta" in cuerpo["messages"][1]["content"]
-    assert cuerpo["format"] == _ESQUEMA_RESPUESTA
-    assert cuerpo["think"] is False
-    assert cuerpo["keep_alive"] == "15m"
-    assert cuerpo["options"] == {"temperature": 0.1, "num_ctx": 8192}
+    assert json.loads(peticion.content) == _SOBRE_DEL_LABORATORIO

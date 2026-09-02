@@ -96,10 +96,11 @@ de inmediato; (c) Ollama acepta la conexión y no responde hasta agotar el
 `composition_root._RELEVANCE_FILTER_TIMEOUT_SECONDS` — el valor real con el
 que producción construye el adaptador (50 ms cuando se midió la tabla de
 abajo; 30 s desde ADR-125, que suspende el límite de 300 ms en el camino del
-filtro mientras se mide su coste real. Con esa espera, el escenario (c)
-costaría la constante entera por construcción y no mediría el motor: la
-prueba lo publica como no medido en vez de esperarlo, y sigue midiendo y
-afirmando (a) y (b)).
+filtro mientras se mide su coste real). Desde ADR-125 el doble del escenario
+(c) ya no duerme la espera: falla al instante, cuenta las invocaciones y las
+pruebas publican `coste medido + espera` — lo mismo que medía el doble que
+dormía, sin pagar ~15 minutos de suite por una constante conocida (ver
+`_TransporteQueAceptaYNuncaContesta`).
 
 Medición del 31 de agosto de 2026, mismo conjunto de referencia y misma
 máquina, tres pasadas del mismo código:
@@ -548,44 +549,69 @@ def _cliente_ollama_ausente(timeout_seconds: float) -> httpx.Client:
     return httpx.Client(transport=httpx.MockTransport(handler), timeout=timeout_seconds)
 
 
-def _cliente_ollama_acepta_y_agota_el_timeout(timeout_seconds: float) -> httpx.Client:
+class _TransporteQueAceptaYNuncaContesta:
     """Escenario (c) — incidencia #435, hallazgo CODEX-003: Ollama acepta la
     conexión y no responde hasta agotar el presupuesto de tiempo completo, a
     diferencia de un rechazo inmediato. Es el peor caso real que RNF-003 debe
-    soportar, y el único de los tres que paga el coste íntegro del
-    ``timeout``."""
+    soportar, y el único de los tres cuyo coste incluye la espera entera.
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        time.sleep(timeout_seconds)
+    No duerme esa espera (ADR-125). Antes sí lo hacía: con 50 ms era barato;
+    con los 30 s de producción, dormirla en cada una de las 31 llamadas de
+    ``_medir`` costaría ~15 minutos para medir una constante ya conocida.
+    Lo que el adaptador ve cuando Ollama agota la espera es un ``ReadTimeout``,
+    y eso es lo que este doble lanza al instante; además **cuenta cada
+    invocación**, porque lo que hay que comprobar en este escenario no es
+    cuánto dura la espera —es una constante— sino que el filtro se llama de
+    verdad. El coste de la espera se suma aparte en las pruebas:
+    ``coste total = coste medido + espera``, exactamente lo que medía el
+    doble que dormía, sin pagarlo en tiempo de suite."""
+
+    def __init__(self) -> None:
+        self.invocaciones = 0
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        self.invocaciones += 1
         raise httpx.ReadTimeout(
             "Ollama acepta la conexión y no responde (doble de prueba, M11 §6.4)", request=request
         )
 
-    return httpx.Client(transport=httpx.MockTransport(handler), timeout=timeout_seconds)
+
+def _cliente_ollama_acepta_y_agota_el_timeout(
+    timeout_seconds: float,
+) -> tuple[httpx.Client, _TransporteQueAceptaYNuncaContesta]:
+    """Escenario (c): el cliente y su transporte, para poder leer las
+    invocaciones después de medir."""
+    transporte = _TransporteQueAceptaYNuncaContesta()
+    client = httpx.Client(transport=httpx.MockTransport(transporte), timeout=timeout_seconds)
+    return client, transporte
 
 
-def _cliente_ollama_acepta_y_agota_el_timeout_instantaneo(invocaciones: list[None]) -> httpx.Client:
-    """CODEX-001: doble ligero del escenario (c) que confirma, sin pagar la
-    espera de producción, que la petición realmente llega al transporte
-    (registra la invocación en ``invocaciones`` y falla al instante). Solo
-    sirve para verificar que el filtro sigue cableado antes de sintetizar el
-    ``pytest.fail`` barato de la ruta rápida más abajo -- no mide nada."""
+NOMBRE_DEL_ESCENARIO_C = "Ollama acepta la conexión y agota el timeout"
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        invocaciones.append(None)
-        raise httpx.ReadTimeout(
-            "Ollama acepta la conexión y no responde (doble instantáneo, CODEX-001)",
-            request=request,
-        )
-
-    return httpx.Client(transport=httpx.MockTransport(handler), timeout=1.0)
-
-
+#: Los dos escenarios que no pagan la espera; el (c) se construye aparte con
+#: ``_cliente_ollama_acepta_y_agota_el_timeout`` porque necesita exponer su
+#: transporte.
 _ESCENARIOS_RNF_003: tuple[tuple[str, Callable[[float], httpx.Client]], ...] = (
     ("Ollama disponible dentro del presupuesto", _cliente_ollama_disponible_dentro_del_presupuesto),
     ("Ollama ausente (conexión rechazada)", _cliente_ollama_ausente),
-    ("Ollama acepta la conexión y agota el timeout", _cliente_ollama_acepta_y_agota_el_timeout),
 )
+
+
+def _medir_escenario_c(
+    banco: BancoDePruebas, timeout_seconds: float
+) -> tuple[Medicion, _TransporteQueAceptaYNuncaContesta]:
+    """Mide «construir contexto» en el escenario (c) sin dormir la espera y
+    devuelve también el transporte, con el número de invocaciones."""
+    client, transporte = _cliente_ollama_acepta_y_agota_el_timeout(timeout_seconds)
+    adapter = OllamaRelevanceFilterAdapter(
+        _RELEVANCE_FILTER_MODEL, timeout_seconds=timeout_seconds, client=client
+    )
+    builder = _build_context_builder_with_relevance_filter(banco.database_path, adapter)
+
+    def _construir(builder: ContextBuilder = builder) -> object:
+        return builder.build("cómo vamos con el despliegue")
+
+    return _medir("construir contexto", _construir), transporte
 
 
 @pytest.mark.integration
@@ -605,24 +631,18 @@ def test_construir_contexto_con_el_paquete_completo_activo_en_los_tres_escenario
     una aproximación con un número distinto.
 
     ADR-125 suspende el límite de 300 ms en el camino del filtro mientras se
-    mide su coste real, y fija esa espera en 30 s: por encima del guardarraíl
-    por sí sola. El escenario (c) paga la espera íntegra por construcción, así
-    que su P95 sería la constante y no una medida del motor. Mientras la
-    espera supere el guardarraíl, (c) no se ejecuta ni se afirma y se publica
-    como tal en la tabla; (a) y (b) se miden y afirman como siempre. Si la
-    espera vuelve a bajar del guardarraíl, (c) se mide de nuevo sin tocar
-    esta prueba.
+    mide su coste real y fija la espera en 30 s. El escenario (c) ya no duerme
+    esa espera (ver ``_TransporteQueAceptaYNuncaContesta``): se mide el coste
+    del motor con un doble que falla al instante y cuenta las invocaciones, se
+    afirma que el filtro se invocó de verdad, y el coste total se publica como
+    ``medido + espera``. El guardarraíl se afirma sobre el coste medido en los
+    tres escenarios: la espera es una constante de política (ADR-125), no una
+    regresión que este tope pueda cazar.
     """
     timeout_seconds = _RELEVANCE_FILTER_TIMEOUT_SECONDS
-    espera_supera_el_guardarrail = timeout_seconds * 1000 > GUARDARRAIL_MS
-    mediciones: list[tuple[str, Medicion | None]] = []
+    espera_ms = timeout_seconds * 1000
+    mediciones: list[tuple[str, Medicion, float]] = []
     for nombre, construir_cliente in _ESCENARIOS_RNF_003:
-        if (
-            espera_supera_el_guardarrail
-            and construir_cliente is _cliente_ollama_acepta_y_agota_el_timeout
-        ):
-            mediciones.append((nombre, None))
-            continue
         adapter = OllamaRelevanceFilterAdapter(
             _RELEVANCE_FILTER_MODEL,
             timeout_seconds=timeout_seconds,
@@ -634,32 +654,41 @@ def test_construir_contexto_con_el_paquete_completo_activo_en_los_tres_escenario
             return builder.build("cómo vamos con el despliegue")
 
         medicion = _medir("construir contexto", _construir)
-        mediciones.append((nombre, medicion))
+        mediciones.append((nombre, medicion, medicion.p95))
+
+    medicion_c, transporte_c = _medir_escenario_c(banco, timeout_seconds)
+    mediciones.append((NOMBRE_DEL_ESCENARIO_C, medicion_c, medicion_c.p95 + espera_ms))
 
     with capsys.disabled():
+        print(f"\n  M11 — RNF-003, paquete completo activo, timeout={espera_ms:.0f} ms:")
+        print("  | Escenario | P95 medido | P95 total | Límite |")
+        print("  |---|---|---|---|")
+        for nombre, medicion, total in mediciones:
+            print(
+                f"  | {nombre} | {medicion.p95:.1f} ms | {total:.1f} ms "
+                f"| {LIMITE_OPERACION_MS:.0f} ms |"
+            )
         print(
-            f"\n  M11 — RNF-003, paquete completo activo, timeout={timeout_seconds * 1000:.0f} ms:"
+            f"  (c): {transporte_c.invocaciones} invocaciones al filtro; el total suma "
+            f"la espera de producción ({espera_ms:.0f} ms) sin dormirla (ADR-125)."
         )
-        print("  | Escenario | P95 | Límite |")
-        print("  |---|---|---|")
-        for nombre, resultado in mediciones:
-            if resultado is None:
-                print(
-                    f"  | {nombre} | no medido: = espera de producción "
-                    f"({timeout_seconds * 1000:.0f} ms) por construcción, ADR-125 "
-                    f"| {LIMITE_OPERACION_MS:.0f} ms |"
-                )
-            else:
-                print(f"  | {nombre} | {resultado.p95:.1f} ms | {LIMITE_OPERACION_MS:.0f} ms |")
+
+    # El escenario (c) solo dice algo si el filtro se invocó de verdad: si una
+    # regresión lo desconectara, su coste medido sería el de (b) y la espera
+    # nunca se pagaría en producción tampoco — pero eso es un defecto, no una
+    # mejora, y aquí se caza.
+    assert transporte_c.invocaciones >= 1, (
+        "el escenario (c) no llegó a invocar al filtro de relevancia: el filtro está "
+        "desconectado del camino de construir contexto."
+    )
 
     # Guardarraíl (ADR-007), no el requisito: el requisito de 300 ms lo
-    # comprueba PA-025 en la máquina real; el margen del escenario (c) sobre
-    # este conjunto de referencia y esta máquina no llega al orden de
-    # magnitud que ADR-007 exige para afirmarlo aquí como aserción dura. La
-    # tabla impresa arriba es la evidencia publicada del encargo M11.
-    excedidas = [
-        (nombre, m) for nombre, m in mediciones if m is not None and m.p95 > GUARDARRAIL_MS
-    ]
+    # comprueba PA-025 en la máquina real; el margen sobre este conjunto de
+    # referencia y esta máquina no llega al orden de magnitud que ADR-007
+    # exige para afirmarlo aquí como aserción dura. La tabla impresa arriba
+    # es la evidencia publicada del encargo M11. Se afirma sobre el coste
+    # MEDIDO: la espera sumada en (c) es una constante de ADR-125.
+    excedidas = [(nombre, m) for nombre, m, _total in mediciones if m.p95 > GUARDARRAIL_MS]
     assert not excedidas, (
         "Escenarios de RNF-003 por encima del guardarraíl de "
         f"{GUARDARRAIL_MS:.0f} ms: {[(n, str(m)) for n, m in excedidas]}."
@@ -697,55 +726,18 @@ def test_el_suelo_de_rnf_003_p95_300ms_en_los_tres_escenarios_del_paquete_comple
     guardarraíl de disparate (`GUARDARRAIL_MS`) que esa prueba usa -- ver el
     `reason` de arriba y ADR-117.
 
-    Misma guardia que la prueba hermana (ADR-125 punto 5): mientras la espera
-    de producción (`timeout_seconds`) supere `GUARDARRAIL_MS`, el escenario
-    (c) no se mide con `_medir` (31 llamadas que dormirían la espera entera
-    cada una, ~15 min) porque su fracaso ya es cierto por construcción --
-    construir el contexto no puede tardar menos que la espera que el propio
-    doble duerme antes de fallar, y esa espera sola ya excede
-    `LIMITE_OPERACION_MS`. La prueba falla igual (`pytest.fail`, barato) y
-    sigue sosteniendo el `xfail(strict=True)` de arriba.
-
-    CODEX-001: ese razonamiento solo vale si la petición al filtro realmente
-    llega al transporte -- si una regresión desconecta o evita el filtro, la
-    operación sería rápida de verdad y el atajo no debe sostenerse (dejaría
-    pasar la regresión: las tres mediciones bajarían de 300 ms y
-    `xfail(strict=True)` debería producir un XPASS que alerte del problema).
-    Por eso, antes de sintetizar el fallo, se hace una única llamada barata
-    con `_cliente_ollama_acepta_y_agota_el_timeout_instantaneo` (falla al
-    instante, no duerme) que solo confirma que la invocación ocurre; si no
-    ocurre, se cede el paso a la medición real de abajo.
+    El escenario (c) no duerme la espera de producción (ADR-125, ver
+    ``_TransporteQueAceptaYNuncaContesta``): mide el coste del motor con un
+    doble que falla al instante y cuenta las invocaciones, y afirma sobre el
+    coste total ``medido + espera``. La espera solo se suma si el filtro se
+    invocó de verdad: con el filtro cableado, (c) falla por construcción
+    mientras la espera supere los 300 ms (sostiene el ``xfail``); si una
+    regresión desconectara el filtro, no habría espera que sumar y el día que
+    el motor baje de 300 ms esta prueba pasaría — el XPASS estricto que
+    alerta del problema, igual que antes de ADR-125 y sin pagar 15 minutos.
     """
     timeout_seconds = _RELEVANCE_FILTER_TIMEOUT_SECONDS
-    espera_supera_el_guardarrail = timeout_seconds * 1000 > GUARDARRAIL_MS
-    for nombre, construir_cliente in _ESCENARIOS_RNF_003:
-        if (
-            espera_supera_el_guardarrail
-            and construir_cliente is _cliente_ollama_acepta_y_agota_el_timeout
-        ):
-            invocaciones: list[None] = []
-            adapter_de_verificacion = OllamaRelevanceFilterAdapter(
-                _RELEVANCE_FILTER_MODEL,
-                timeout_seconds=timeout_seconds,
-                client=_cliente_ollama_acepta_y_agota_el_timeout_instantaneo(invocaciones),
-            )
-            builder_de_verificacion = _build_context_builder_with_relevance_filter(
-                banco.database_path, adapter_de_verificacion
-            )
-            builder_de_verificacion.build("cómo vamos con el despliegue")
-            if invocaciones:
-                pytest.fail(
-                    f"{nombre}: la espera de producción ({timeout_seconds * 1000:.0f} ms) "
-                    f"ya supera el límite aprobado de {LIMITE_OPERACION_MS:.0f} ms por "
-                    "construcción (ADR-125 punto 5); no se mide con _medir para no "
-                    "pagar los ~30 s del timeout completo en cada una de las "
-                    f"{REPETICIONES + 1} llamadas. Confirmado antes (CODEX-001): la "
-                    "petición sí llega al transporte."
-                )
-            # Si no hubo invocación, el filtro quedó desconectado por una
-            # posible regresión: no se toma el atajo y se sigue con la
-            # medición real de abajo, que entonces puede producir el XPASS
-            # que alerta del problema.
+    for _nombre, construir_cliente in _ESCENARIOS_RNF_003:
         adapter = OllamaRelevanceFilterAdapter(
             _RELEVANCE_FILTER_MODEL,
             timeout_seconds=timeout_seconds,
@@ -760,3 +752,12 @@ def test_el_suelo_de_rnf_003_p95_300ms_en_los_tres_escenarios_del_paquete_comple
         assert medicion.p95 <= LIMITE_OPERACION_MS, (
             f"{medicion} supera el límite aprobado de {LIMITE_OPERACION_MS:.0f} ms."
         )
+
+    medicion_c, transporte_c = _medir_escenario_c(banco, timeout_seconds)
+    espera_pagada_ms = timeout_seconds * 1000 if transporte_c.invocaciones else 0.0
+    total_c = medicion_c.p95 + espera_pagada_ms
+    assert total_c <= LIMITE_OPERACION_MS, (
+        f"{NOMBRE_DEL_ESCENARIO_C}: {medicion_c} + espera de producción "
+        f"{espera_pagada_ms:.0f} ms = {total_c:.1f} ms supera el límite aprobado de "
+        f"{LIMITE_OPERACION_MS:.0f} ms."
+    )

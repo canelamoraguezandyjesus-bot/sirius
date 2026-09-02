@@ -117,21 +117,26 @@ Para la suspensión misma, lo que la hará revisar, fijado ahora:
    mismo modelo. Valores vacíos o de otro tipo caen al valor por defecto.
 5. **El banco de latencia deja de dormir la espera.** Su escenario (c)
    («Ollama acepta la conexión y agota el timeout») construía el adaptador con
-   la espera real y un doble que duerme esa espera entera: con 30 s serían
-   15 minutos para medir una constante y el guardarraíl de 1.500 ms lo pondría
-   en rojo por construcción. Mientras la espera de producción supere el
-   guardarraíl, (c) no se ejecuta ni se afirma en
-   `test_construir_contexto_con_el_paquete_completo_activo_en_los_tres_escenarios`
-   y la tabla lo publica como «no medido: = espera de producción por
-   construcción»; (a) y (b) se miden y afirman como siempre; si la espera
-   vuelve a bajar del guardarraíl, (c) se mide de nuevo sin tocar la prueba.
-   La prueba `xfail(strict=True)` del suelo de RNF-003
-   (`test_el_suelo_de_rnf_003_p95_300ms_en_los_tres_escenarios_del_paquete_completo`,
-   `tests/integration/test_local_performance.py`) lleva la misma guardia:
-   mientras la espera supere el guardarraíl, falla rápido en (c) sin medirlo
-   con `_medir` -- su fracaso ya es cierto por construcción, porque la espera
-   sola ya excede `LIMITE_OPERACION_MS` -- en vez de pagar los ~15 minutos; su
-   veredicto (fallo, sosteniendo el `xfail`) no cambia.
+   la espera real y un doble que **dormía** esa espera entera antes de fallar:
+   con 30 s serían 15 minutos para medir una constante ya conocida, y el
+   guardarraíl de 1.500 ms lo pondría en rojo por construcción. La raíz es el
+   sueño, no las pruebas que lo rodean, así que se quita de raíz
+   (`tests/integration/test_local_performance.py`,
+   `_TransporteQueAceptaYNuncaContesta`): el doble de (c) lanza al instante el
+   mismo `ReadTimeout` que el adaptador ve cuando Ollama agota la espera, y
+   **cuenta cada invocación**. Las dos pruebas miden (c) con ese doble, igual
+   que (a) y (b), y publican `coste medido + espera` — lo mismo que medía el
+   doble que dormía, sin pagarlo en tiempo de suite. La prueba del guardarraíl
+   afirma que el filtro se invocó de verdad (si una regresión lo desconectara,
+   se caza ahí) y el guardarraíl sobre el coste medido en los tres escenarios:
+   la espera es una constante de esta decisión, no una regresión. La prueba
+   `xfail(strict=True)` del suelo afirma el total; la espera solo se suma si
+   el filtro se invocó, así que con el filtro cableado falla por construcción
+   (sostiene el `xfail`) y, si una regresión lo desconectara, no habría espera
+   que sumar y el día que el motor baje de 300 ms pasaría: el XPASS estricto
+   que alerta, exactamente la semántica anterior a esta decisión. No hay
+   guardias ni fallos sintéticos: nada que dependa de qué escenario falla
+   primero.
 6. **Nada más.** La puerta `category_matching_enabled` sigue cerrada por
    defecto; `category` y su semántica D7 no cambian; el banco, el corpus y sus
    adjudicaciones no se tocan; `criticidad.razon_segura` no se lee; no entra
@@ -207,25 +212,39 @@ con el doble (7/47, 285, 9, 62/81).
 
 El hallazgo del punto 5 apareció al preparar la PR, no antes: la rama del
 experimento había declarado que no ejecutaba el banco de latencia («mediría
-peor a propósito») y al abrir la PR eso deja de valer. Comprobación del
-ajuste, en el runner donde se preparó la PR (02-09-2026, sin Ollama, dobles
-deterministas del transporte como siempre):
+peor a propósito») y al abrir la PR eso deja de valer.
+
+La primera solución (saltar (c) mientras la espera superara el guardarraíl)
+produjo tres rondas de revisión con un hallazgo de la misma familia cada una
+—la prueba hermana sin la guardia; el fallo rápido que ya no verificaba la
+invocación; los documentos sin describir esa verificación— hasta que el motor
+paró el ciclo por falta de progreso. Es la señal de ADR-001: se estaba
+parcheando alrededor de la raíz (el sueño del doble), y la raíz se quitó como
+dice el punto 5. Comprobación del arreglo de raíz, en el runner donde se
+preparó la PR (02-09-2026, sin Ollama, dobles deterministas del transporte
+como siempre):
 
 ```
 uv run pytest tests/integration/test_local_performance.py -k "tres_escenarios or suelo_de_rnf_003" -s
 
   M11 — RNF-003, paquete completo activo, timeout=30000 ms:
-  | Escenario | P95 | Límite |
-  | Ollama disponible dentro del presupuesto | 577.3 ms | 300 ms |
-  | Ollama ausente (conexión rechazada) | 556.5 ms | 300 ms |
-  | Ollama acepta la conexión y agota el timeout | no medido: = espera de producción (30000 ms) por construcción, ADR-125 | 300 ms |
-1 passed, 1 xfailed in 65.19s
+  | Escenario | P95 medido | P95 total | Límite |
+  | Ollama disponible dentro del presupuesto | 723.9 ms | 723.9 ms | 300 ms |
+  | Ollama ausente (conexión rechazada) | 674.5 ms | 674.5 ms | 300 ms |
+  | Ollama acepta la conexión y agota el timeout | 676.0 ms | 30676.0 ms | 300 ms |
+  (c): 31 invocaciones al filtro; el total suma la espera de producción (30000 ms) sin dormirla (ADR-125).
+1 passed, 1 xfailed in 91.80s
 ```
 
-Antes del ajuste, con la misma espera, la prueba habría dormido 30 s por
-repetición en (c) y fallado el guardarraíl por construcción. (a) y (b) siguen
-midiéndose y afirmándose contra el guardarraíl; siguen por encima de 300 ms,
-como ya registró ADR-117 en otro runner, y la prueba `xfail(strict=True)` del
-suelo sigue fallando-como-se-espera sin llegar a (c). `uv run mypy src tests`:
-sin incidencias en 550 archivos. `uv run ruff format --check` y `uv run ruff
-check` sobre los archivos tocados: en verde. `git diff --check`: limpio.
+Los tres escenarios se miden; (c) cuesta lo mismo que (b) en el motor
+(ambos fallan abierto al instante) más la espera, que se suma sin dormirla:
+con el doble que dormía, esa fila habría tardado ~15 minutos para dar la
+misma cifra. Las 31 invocaciones (1 calentamiento + 30 repeticiones) son la
+prueba de que el filtro está cableado en el camino medido. (a) y (b) siguen
+por encima de 300 ms, como ya registró ADR-117 en otro runner; la prueba
+`xfail(strict=True)` del suelo sigue fallando-como-se-espera. `uv run mypy src
+tests`: sin incidencias en 550 archivos. `uv run ruff format --check` y `uv
+run ruff check` sobre los archivos tocados: en verde. `git diff --check`:
+limpio. `uv run pytest tests/unit/test_ollama_relevance_filter.py`: 13 pasan,
+la nueva compara el cuerpo entero de la petición con un oráculo literal
+independiente del adaptador (CODEX-001, ronda 3).
