@@ -321,6 +321,41 @@ una vista fallar y restaurada por copia:
    `test_correcting_a_memory_while_its_worker_is_in_flight_requests_the_new_revision`
    **falla** (la segunda consulta nunca llega).
 
+### Ronda 3 → corrección (propietario)
+
+Dos hallazgos, severidad total 3 (13 → 8 → 3: la consolidación cerró la
+familia; lo que queda es acotado):
+
+- **CLAUDE-REV-R3-001 (baja, solo pruebas).** La prueba de la revisión
+  nueva usaba un doble con un único resultado y un único cerrojo, así que
+  no distinguía si lo mostrado venía de v1 (obsoleto) o de v2. Nuevo doble
+  `_SequencedBlockingProposeCriticalityUseCase` (un resultado y un cerrojo
+  por llamada); la prueba libera primero v2 (IMPORTANTE), comprueba que se
+  muestra, libera después v1 (CRITICO) y afirma que lo mostrado sigue
+  siendo IMPORTANTE y que reseleccionar no vuelve a consultar: el descarte
+  por época queda demostrado en el orden que importa.
+- **CODEX-001 (P2).** La reanudación al salir del estado ocupado arrancaba
+  un worker también en los flujos terminales de `MainWindow` — un envío que
+  termina con el cierre ya solicitado (`_finish_sending`) y una
+  restauración satisfactoria que cierra la ventana
+  (`_on_restore_backup_succeeded`) —: una llamada a Ollama de hasta 30 s
+  sobre una ventana que se cierra o una base recién restaurada.
+  `KnowledgeWidget.set_external_busy` gana `resume_proposals: bool = True`;
+  esos dos flujos pasan `False` (el primero, `not self._close_requested`),
+  y el resto de liberaciones conserva la reanudación. Prueba nueva:
+  `test_releasing_the_busy_state_without_resume_starts_no_proposal_worker`.
+
+Comprobación: `ruff check` limpio, `mypy` sin incidencias (562 archivos);
+`tests/gui/test_knowledge_widget.py` + `test_backup_recovery_ui.py` +
+`test_criticality_proposal_worker.py` → `124 passed`;
+`tests/gui/test_main_window.py` + `test_validated_main_window.py` →
+`18 passed`. Dos mutaciones, vistas fallar y restauradas por copia:
+suprimir el descarte por época (`if False:`) →
+`test_correcting_a_memory_while_its_worker_is_in_flight_requests_the_new_revision`
+**falla** (se muestra el CRITICO obsoleto); ignorar `resume_proposals` →
+`test_releasing_the_busy_state_without_resume_starts_no_proposal_worker`
+**falla** (arranca el worker).
+
 ## Consecuencias
 
 - Se cierra M21 (M21a + M21b): Sirius puede sugerir criticidad y el

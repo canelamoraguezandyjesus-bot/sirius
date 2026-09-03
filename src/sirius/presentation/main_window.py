@@ -1655,7 +1655,10 @@ class MainWindow(QMainWindow):
         self._set_backup_controls_enabled(True)
         self.export_button.setEnabled(True)
         self.project_continuity_widget.set_external_busy(False)
-        self.knowledge_widget.set_external_busy(False)
+        # Con el cierre ya solicitado no se reanuda ninguna propuesta de
+        # criticidad (#520, ronda 3, CODEX-001): arrancaría un worker sobre
+        # una ventana que se cierra en la línea siguiente.
+        self.knowledge_widget.set_external_busy(False, resume_proposals=not self._close_requested)
         self.context_panel_widget.set_external_busy(False)
         # Un fallo deja el estado en ERROR y el motivo a la vista; un envío
         # normal vuelve a PREPARADO. En ninguno de los dos casos la superficie
@@ -2399,7 +2402,10 @@ class MainWindow(QMainWindow):
         self._is_backup_busy = False
         self._active_backup_worker = None
         self.project_continuity_widget.set_external_busy(False)
-        self.knowledge_widget.set_external_busy(False)
+        # La ventana se cierra al final de este método: no se reanuda
+        # ninguna propuesta de criticidad sobre la base recién restaurada
+        # (#520, ronda 3, CODEX-001).
+        self.knowledge_widget.set_external_busy(False, resume_proposals=False)
         self.context_panel_widget.set_external_busy(False)
         self._clear_backup_feedback(self.restore_backup_status_label)
         self._set_backup_feedback(

@@ -1487,17 +1487,21 @@ class KnowledgeWidget(QGroupBox):
         for kind in self._criticality_proposal_widgets:
             self._hide_criticality_proposal(kind)
 
-    def set_external_busy(self, is_busy: bool) -> None:
+    def set_external_busy(self, is_busy: bool, *, resume_proposals: bool = True) -> None:
         """Coordinate with a ``MainWindow``-level operation this widget does
         not own (sending a message, or a backup/restore in flight): mirrors
         ``ProjectContinuityWidget.set_external_busy``.
         """
         self._is_externally_busy = is_busy
         self._set_controls_enabled(not is_busy and not self._is_busy)
-        if not is_busy and not self._is_busy:
+        if not is_busy and not self._is_busy and resume_proposals:
             # Ronda 3 de #520 (CODEX-001): una selección hecha mientras el
             # panel estaba ocupado no pudo arrancar su worker; al liberarse,
             # la derivación desde el estado lo arranca o muestra la caché.
+            # ``resume_proposals=False`` es para los flujos terminales de
+            # ``MainWindow`` (ronda 3, CODEX-001): la ventana va a cerrarse
+            # y un worker nuevo solo alargaría el cierre o tocaría una base
+            # recién restaurada sin que la propuesta llegara a verse.
             for kind in self._criticality_proposal_widgets:
                 self._reconcile_criticality_proposal(kind)
 

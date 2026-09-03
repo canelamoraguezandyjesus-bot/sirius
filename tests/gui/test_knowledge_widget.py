@@ -1994,6 +1994,30 @@ class _BlockingProposeCriticalityUseCase:
         self._continue_event.set()
 
 
+class _SequencedBlockingProposeCriticalityUseCase:
+    """Como ``_BlockingProposeCriticalityUseCase``, pero cada llamada tiene
+    su propio resultado y su propio cerrojo: ``release(n)`` libera solo la
+    llamada n-ésima. Permite forzar el orden de llegada (por ejemplo, que
+    el resultado obsoleto de v1 llegue DESPUÉS del de v2) y distinguir en
+    pantalla cuál de los dos gobernó (CLAUDE-REV-R3-001)."""
+
+    def __init__(self, results: Sequence[Criticality | None]) -> None:
+        self._results = list(results)
+        self._events = [threading.Event() for _ in self._results]
+        self.calls: list[tuple[CriticalityTargetKind, int]] = []
+        self._lock = threading.Lock()
+
+    def propose(self, kind: CriticalityTargetKind, item_id: int) -> Criticality | None:
+        with self._lock:
+            index = len(self.calls)
+            self.calls.append((kind, item_id))
+        self._events[index].wait(timeout=5)
+        return self._results[index]
+
+    def release(self, index: int) -> None:
+        self._events[index].set()
+
+
 class _RecordingSetCriticalityUseCase:
     """Doble de ``SetCriticalityUseCase`` que registra cada llamada, para
     afirmar que ``Rechazar`` nunca la invoca."""
@@ -2750,14 +2774,18 @@ def test_leaving_the_externally_busy_state_resumes_the_proposal_for_the_selectio
 def test_correcting_a_memory_while_its_worker_is_in_flight_requests_the_new_revision(
     qtbot: QtBot, tmp_path: Path
 ) -> None:
-    """CODEX-002 (ronda 2): con el worker de la revisión v1 en vuelo, el
-    usuario corrige el recuerdo (v2, mismo id) y lo reselecciona antes de
-    que v1 termine. El resultado de v1 se descarta (época) y la revisión
-    vigente recibe su propia consulta — el worker en vuelo de v1 no bloquea
-    el de v2."""
+    """CODEX-002 (ronda 2) y CLAUDE-REV-R3-001 (ronda 3): con el worker de
+    la revisión v1 en vuelo, el usuario corrige el recuerdo (v2, mismo id) y
+    lo reselecciona antes de que v1 termine. La revisión vigente recibe su
+    propia consulta (el worker en vuelo de v1 no bloquea el de v2), y el
+    resultado de v1 — que aquí se hace llegar DESPUÉS del de v2, con un
+    valor distinto — se descarta por época: lo mostrado sigue siendo lo que
+    respondió v2, y la caché no retrocede."""
     dependencies = _bootstrapped_dependencies(tmp_path)
     memory = dependencies.save_manual_memory_use_case.save("contenido v1")
-    propose_criticality_use_case = _BlockingProposeCriticalityUseCase(Criticality.CRITICO)
+    propose_criticality_use_case = _SequencedBlockingProposeCriticalityUseCase(
+        [Criticality.CRITICO, Criticality.IMPORTANTE]
+    )
     thread_pool = QThreadPool()
     widget = _build_widget(
         dependencies,
@@ -2773,13 +2801,57 @@ def test_correcting_a_memory_while_its_worker_is_in_flight_requests_the_new_revi
     widget.correct_memory_button.click()
     widget.memories_list.setCurrentRow(0)
     qtbot.waitUntil(lambda: len(propose_criticality_use_case.calls) == 2, timeout=5000)
-    propose_criticality_use_case.release()
-    assert thread_pool.waitForDone(5000)
+    # Primero llega v2 (IMPORTANTE) y se muestra.
+    propose_criticality_use_case.release(1)
     qtbot.waitUntil(
-        lambda: widget.memory_criticality_proposal_label.text() == "Sirius propone: CRITICO",
+        lambda: widget.memory_criticality_proposal_label.text() == "Sirius propone: IMPORTANTE",
         timeout=5000,
     )
+    # Después llega v1 (CRITICO), obsoleto: ni se muestra ni se cachea.
+    propose_criticality_use_case.release(0)
+    assert thread_pool.waitForDone(5000)
+    qtbot.wait(200)
+    assert widget.memory_criticality_proposal_label.text() == "Sirius propone: IMPORTANTE"
     assert propose_criticality_use_case.calls == [
         (CriticalityTargetKind.MEMORY, memory.id),
         (CriticalityTargetKind.MEMORY, memory.id),
     ]
+    # Reseleccionar no vuelve a consultar y sigue mostrando lo de v2.
+    widget.memories_list.setCurrentRow(-1)
+    widget.memories_list.setCurrentRow(0)
+    assert widget.memory_criticality_proposal_label.text() == "Sirius propone: IMPORTANTE"
+    assert len(propose_criticality_use_case.calls) == 2
+
+
+@pytest.mark.gui
+def test_releasing_the_busy_state_without_resume_starts_no_proposal_worker(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CODEX-001 (ronda 3): los flujos terminales de ``MainWindow`` (un envío
+    que termina con el cierre ya solicitado; una restauración de copia que
+    va a cerrar la ventana) liberan el estado ocupado sin reanudar la
+    propuesta: no debe arrancar ningún worker — en producción sería una
+    llamada a Ollama de hasta 30 s sobre una ventana que se cierra o una
+    base recién restaurada."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.save_manual_memory_use_case.save("sin criticidad todavía")
+    propose_criticality_use_case = _RecordingProposeCriticalityUseCase(Criticality.CRITICO)
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+        thread_pool=thread_pool,
+    )
+    qtbot.addWidget(widget)
+    widget.set_external_busy(True)
+    widget.memories_list.setCurrentRow(0)
+    assert propose_criticality_use_case.calls == []
+    widget.set_external_busy(False, resume_proposals=False)
+    assert thread_pool.waitForDone(200) is True or thread_pool.activeThreadCount() == 0
+    assert propose_criticality_use_case.calls == []
+    assert not widget.has_pending_criticality_proposal
+    assert widget.memory_criticality_proposal_label.text() == ""
+    # Los controles sí se han liberado.
+    assert widget.save_memory_button.isEnabled()
