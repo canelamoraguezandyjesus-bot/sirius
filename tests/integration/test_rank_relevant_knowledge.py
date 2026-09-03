@@ -37,9 +37,11 @@ from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.set_category import SetCategoryUseCase
+from sirius.application.set_criticality import CriticalityTargetKind, SetCriticalityUseCase
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
 from sirius.application.tag_category import CategoryTargetKind
 from sirius.domain.conversation import SourceMessageChoice
+from sirius.domain.criticality import Criticality
 from sirius.domain.staged_engine_contracts import PuertoDeRecuperacion, SenalesDeCandidato
 
 
@@ -68,6 +70,7 @@ def _use_case(
     database_path: Path,
     *,
     category_vocabulary: frozenset[str] = frozenset(),
+    criticality_vocabulary: frozenset[str] = frozenset(),
     category_matching_enabled: bool = False,
     staged_engine_port: PuertoDeRecuperacion | None = None,
     staged_engine_candidate: SenalesDeCandidato | None = None,
@@ -78,6 +81,7 @@ def _use_case(
         project_repository=build_sqlite_project_repository(database_path),
         knowledge_search_repository=build_sqlite_knowledge_search_repository(database_path),
         category_vocabulary=category_vocabulary,
+        criticality_vocabulary=criticality_vocabulary,
         category_matching_enabled=category_matching_enabled,
         staged_engine_port=staged_engine_port,
         staged_engine_candidate=staged_engine_candidate,
@@ -338,6 +342,12 @@ def test_stopwords_shared_with_unrelated_content_never_match_by_themselves(
 # --- ambos estados — cerrada (por defecto) y abierta. -----------------------
 
 _VOCABULARY = frozenset({"trabajo", "personal", "salud"})
+
+#: M19a (ADR-127, incidencia #512): el mismo vocabulario real que
+#: ``composition_root._CRITICALITY_VOCABULARY``.
+_CRITICALITY_VOCABULARY = frozenset(
+    {"esencial", "restriccion", "critica", "obligatoria", "imprescindible"}
+)
 
 
 @pytest.mark.integration
@@ -994,6 +1004,282 @@ def test_staged_engine_path_preserves_engine_order_between_two_admitted_candidat
     assert encontrada_por_e1.project_matches_active is True
     assert encontrada_por_e2.project_matches_active is True
     assert encontrada_por_e1.item.updated_at < encontrada_por_e2.item.updated_at
+
+
+# --- M19a (ADR-127, incidencia #512): solo_por_criticidad, el segundo -----
+# --- bloque de ampliación, sobre Memory.criticality/Decision.criticality --
+# --- (M18b) en vez de category — misma forma, mismo vocabulario propio. ---
+
+
+@pytest.mark.integration
+def test_staged_engine_path_still_finds_a_criticality_only_match(tmp_path: Path) -> None:
+    """M19a: igual que un candidato solo por categoría, uno hallado solo por
+    su criticidad se encuentra aunque el motor por etapas nunca lo admita —
+    el motor nunca busca por ``criticality``, solo por asunto exacto y
+    FTS5. Consulta real del banco de 47 (B04-CA-31)."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    memoria_critica = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido sin ninguna palabra en comun con la consulta"
+    )
+    SetCriticalityUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CriticalityTargetKind.MEMORY, memoria_critica.id, Criticality.CRITICO)
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            category_vocabulary=_VOCABULARY,
+            criticality_vocabulary=_CRITICALITY_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("Dame todas las restricciones esenciales que debo respetar.")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [memoria_critica.id]
+    assert resultado[0].criticality_match is True
+    assert resultado[0].fts_match is False
+    assert resultado[0].category_match is False
+
+
+@pytest.mark.integration
+def test_staged_engine_importante_criticality_also_activates_the_criticality_index(
+    tmp_path: Path,
+) -> None:
+    """M19a: IMPORTANTE, no solo CRITICO, amplía — el canon reconoce dos
+    niveles no ordinarios (M18b) y ``_NIVELES_DE_CRITICIDAD_NO_ORDINARIOS``
+    pide los dos."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    memoria_importante = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido sin ninguna palabra en comun con la consulta"
+    )
+    SetCriticalityUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CriticalityTargetKind.MEMORY, memoria_importante.id, Criticality.IMPORTANTE)
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            criticality_vocabulary=_CRITICALITY_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("restricciones obligatorias")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [memoria_importante.id]
+
+
+@pytest.mark.integration
+def test_staged_engine_criticality_index_rejects_a_decision_scoped_to_a_different_project(
+    tmp_path: Path,
+) -> None:
+    """M19a: la misma restricción de ámbito (``candidate_in_declared_scope``)
+    que protege el bloque de categoría protege también el de criticidad."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    active_project_id, other_project_id = _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    decision_de_otro_proyecto = ProposeDecisionUseCase(unit_of_work).propose(
+        "asunto sin ninguna palabra en comun", other_project_id, "contenido"
+    )
+    ApproveDecisionUseCase(unit_of_work).approve(decision_de_otro_proyecto.id, confirmed=True)
+    SetCriticalityUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CriticalityTargetKind.DECISION, decision_de_otro_proyecto.id, Criticality.CRITICO)
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            criticality_vocabulary=_CRITICALITY_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("restricciones esenciales")
+    finally:
+        puerto.close()
+
+    assert active_project_id != other_project_id
+    assert resultado == ()
+
+
+@pytest.mark.integration
+def test_staged_engine_criticality_index_admits_a_globally_scoped_memory(
+    tmp_path: Path,
+) -> None:
+    """M19a: un candidato de ámbito global (``project_id`` ``None``) se
+    admite por criticidad sin importar cuál sea el proyecto activo — misma
+    excepción que ``G4`` ya aplica siempre, réplica de la equivalente para
+    categoría."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    memoria_global = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido sin ninguna palabra en comun con la consulta"
+    )
+    SetCriticalityUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CriticalityTargetKind.MEMORY, memoria_global.id, Criticality.CRITICO)
+    assert memoria_global.project_id is None
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            criticality_vocabulary=_CRITICALITY_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("restricciones esenciales")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [memoria_global.id]
+
+
+@pytest.mark.integration
+def test_staged_engine_path_with_the_gate_closed_never_runs_the_criticality_amplification(
+    tmp_path: Path,
+) -> None:
+    """M19a: con la puerta cerrada, ``_rank_via_staged_engine`` nunca
+    ejecuta ``solo_por_criticidad`` — depende exclusivamente de lo que el
+    motor admitió, exactamente como el bloque de categoría."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    admitida_por_el_motor = SaveManualMemoryUseCase(unit_of_work).save(
+        "trabajo intenso en la fabrica"
+    )
+    solo_por_criticidad = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido sin ninguna palabra en comun con la consulta"
+    )
+    SetCriticalityUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CriticalityTargetKind.MEMORY, solo_por_criticidad.id, Criticality.CRITICO)
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        use_case = _use_case(
+            database_path,
+            criticality_vocabulary=_CRITICALITY_VOCABULARY,
+            category_matching_enabled=False,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        )
+        resultado = use_case._rank_via_staged_engine("trabajo restricciones esenciales")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [admitida_por_el_motor.id]
+
+
+@pytest.mark.integration
+def test_staged_engine_criticality_block_never_duplicates_a_candidate_the_motor_already_admitted(
+    tmp_path: Path,
+) -> None:
+    """M19a: el dedup del bloque de criticidad comprueba también contra lo
+    admitido por el motor (no solo contra el bloque de categoría) — un
+    candidato con FTS5 real y criticidad no ordinaria aparece una sola vez,
+    con la señal ``fts_match=True`` que el motor ya le dio, nunca sustituida
+    por una entrada de solo-criticidad con ``fts_match=False``."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    admitida_por_motor_y_critica = SaveManualMemoryUseCase(unit_of_work).save(
+        "trabajo intenso en la fabrica"
+    )
+    SetCriticalityUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CriticalityTargetKind.MEMORY, admitida_por_motor_y_critica.id, Criticality.CRITICO)
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            criticality_vocabulary=_CRITICALITY_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("trabajo y restricciones esenciales")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [admitida_por_motor_y_critica.id]
+    assert resultado[0].fts_match is True
+
+
+@pytest.mark.integration
+def test_staged_engine_criticality_block_dedups_against_the_category_block(
+    tmp_path: Path,
+) -> None:
+    """M19a: un candidato con categoría (activada por su propio vocabulario)
+    Y criticidad no ordinaria, con una consulta que activa los dos índices a
+    la vez, aparece una sola vez — el dedup del bloque de criticidad
+    comprueba también contra lo que el bloque de categoría ya trajo."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    memoria = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido sin ninguna palabra en comun con la consulta"
+    )
+    SetCategoryUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CategoryTargetKind.MEMORY, memoria.id, "trabajo")
+    SetCriticalityUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CriticalityTargetKind.MEMORY, memoria.id, Criticality.CRITICO)
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            category_vocabulary=_VOCABULARY,
+            criticality_vocabulary=_CRITICALITY_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("trabajo y restricciones esenciales")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [memoria.id]
+    assert resultado[0].category_match is True
+    assert resultado[0].criticality_match is False
 
 
 @pytest.mark.integration

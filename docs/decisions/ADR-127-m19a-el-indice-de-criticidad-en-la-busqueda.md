@@ -4,6 +4,15 @@
 - Fecha: 2026-09-03
 - Aprobación: [quién y cómo; en este repositorio, la fusión de la PR por el propietario]
 
+**Nota sobre líneas citadas por la incidencia:** #512 cita
+`composition_root.py:631` como segundo punto de cableado del parámetro nuevo,
+junto a `:489`. En el estado actual del árbol, `:631` es
+`ConversationDependencies.category_vocabulary` (el vocabulario que expone la
+interfaz de etiquetado manual, D7 punto 3) — un campo sin relación con
+`RankRelevantKnowledgeUseCase` ni con esta ampliación de búsqueda. Verificado
+con `grep -n "RankRelevantKnowledgeUseCase(" src/sirius/composition_root.py`:
+una única construcción en todo el fichero, en `:484-493`. No se toca `:631`.
+
 Esta es también la nota de arranque de la rama
 `feature/m19a-indice-criticidad-busqueda` (incidencia #512, Work ID
 WI-20260903-000204), publicada antes del primer cambio de código, con las
@@ -173,8 +182,74 @@ en vez de `category`/`list_current_*_by_category`:
 
 ## Comprobación que la sostiene
 
-(completar tras implementar y ejecutar las cuatro validaciones obligatorias y
-las dos mediciones del criterio de parada)
+Comandos ejecutados tras completar la implementación (vocabulario en
+`composition_root.py`, parámetro `criticality_vocabulary` en
+`RankRelevantKnowledgeUseCase`, bloque `solo_por_criticidad` en
+`_rank_via_staged_engine`, `RankedKnowledge.criticality_match` y su
+ampliación de `is_related`/`_sort_key`), en este orden:
+
+1. `uv run pytest tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py -q -s`
+   → `27 passed, 1 skipped, 1 xfailed`. Fila del paquete completo:
+   `aciertos_exactos=7/47 elementos_de_mas=290 omisiones_criticas=3
+   cobertura=68/81 (84.0%)` — coincide con la predicción en aciertos exactos
+   (7/47), omisiones críticas (9→3, quedan solo B04-CA-34: DEC-003, MEM-014,
+   MEM-016) y cobertura (68/81). `elementos_de_mas` mide 290, dentro del
+   límite del criterio de aceptación (≤300) pero por encima de la banda
+   ±5 sobre 260 que la nota de arranque estimaba a partir de la variante
+   `A_porte_fiel` (M18b) — explicado abajo, no es motivo de parada porque el
+   criterio de parada escrito es el límite de 300, no esa banda.
+2. `uv run python scripts/medir_variantes_de_criticidad.py` →
+   `hoy=7/47,290,3,68/81` / `A_porte_fiel=7/47,260,3,68/81` /
+   `B_arreglo_ingenuo=7/47,354,3,68/81`. `hoy` y `A_porte_fiel` coinciden
+   ahora en las tres métricas de búsqueda (exactos, `NO_ENTRO`, cobertura) —
+   confirma que el índice de criticidad cierra la causa (a) de la evidencia
+   igual que lo hacía la variante fiel al laboratorio. La diferencia de
+   `elementos_de_mas` (290 vs 260) es explicable, no un error: `hoy` sigue
+   ejecutando el índice de categoría temático (ADR-116) EN PARALELO al de
+   criticidad —los dos bloques de ampliación conviven, tal como pide la
+   incidencia («sin tocar `_CATEGORY_VOCABULARY`»)—, mientras que
+   `A_porte_fiel` **sustituye** la categoría por la derivada de criticidad en
+   vez de sumarla; `hoy` trae, además de lo que aporta el índice de
+   criticidad, lo que ya aportaba el índice de categoría antes de este
+   encargo (285 en la medición base de M18b) más el neto de criticidad. Sigue
+   por debajo del límite duro de 300 que fija el criterio de aceptación de la
+   incidencia.
+3. `uv run ruff format --check .` → `587 files already formatted`.
+4. `uv run ruff check .` → `All checks passed!`.
+5. `uv run mypy src tests` → `Success: no issues found in 555 source files`.
+6. `uv run pytest -q` (suite completa) → `4563 passed, 15 skipped, 2 xfailed`
+   en 407 s. Ningún fallo, ninguna prueba debilitada u omitida. (La primera
+   corrida completa encontró un fallo real y distinto de la implementación:
+   `tests/automation/test_citas_de_los_adr.py` — este ADR cita
+   `experiments/adr002/lateral/categoria.py` con línea concreta, réplica del
+   vocabulario del laboratorio, y esa ruta vive en `evidence/adr001-spikes`,
+   nunca fusionada a `main`; se corrigió registrando `_ADR_127` en la entrada
+   ya existente de `RAMA_DE_ORIGEN_NO_FUSIONADA` para esa ruta —el mismo
+   mecanismo que ya usan ADR-112/113/114 para la misma cita—, no ocultando ni
+   debilitando la prueba.)
+7. `git diff --check` → limpio (sin salida, código de salida 0).
+8. Prueba por mutación (ADR-001) sobre el dedup del bloque de criticidad
+   contra lo admitido por el motor: se sustituyó temporalmente la condición
+   `if clave in admitidos_por_el_motor or clave in ya_admitidos_por_categoria`
+   por `if clave in ya_admitidos_por_categoria` (quitando la mitad del dedup
+   contra el motor) en el bloque de memorias de `solo_por_criticidad`; se
+   confirmó que
+   `test_staged_engine_criticality_block_never_duplicates_a_candidate_the_motor_already_admitted`
+   **falla** (`assert [1, 1] == [1]`, el candidato aparece duplicado), y se
+   restauró el código real, confirmando que la prueba vuelve a pasar — la
+   prueba sí detecta la ausencia del dedup que dice sostener.
+9. Pruebas nuevas vistas fallar antes del cambio (ADR-001): las unitarias de
+   `criticality_match`/`is_related`/`_sort_key`
+   (`tests/unit/test_relevance_domain.py`) y las de integración del bloque
+   `solo_por_criticidad` (`tests/integration/test_rank_relevant_knowledge.py`)
+   fallaban con `TypeError: RankRelevantKnowledgeUseCase.__init__() got an
+   unexpected keyword argument 'criticality_vocabulary'` (o, para las
+   puramente de dominio, con `RankedKnowledge` sin el campo) contra el código
+   de antes de este encargo — reproducido explícitamente durante el propio
+   desarrollo (el mismo error resurgió al revertir por accidente
+   `rank_relevant_knowledge.py` mientras se hacía la prueba por mutación del
+   punto 8, y las siete pruebas de integración de criticidad fallaron con
+   exactamente ese `TypeError` hasta reaplicar el cambio).
 
 ## Consecuencias
 

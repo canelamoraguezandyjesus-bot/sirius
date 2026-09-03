@@ -42,11 +42,13 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
+from sirius.domain.criticality import Criticality
 from sirius.domain.relevance import (
     KnowledgeKind,
     RankedKnowledge,
     candidate_in_declared_scope,
     category_index_activated,
+    category_index_matches_query,
     category_matches_query,
     rank_relevant_knowledge,
     subject_matches_query,
@@ -89,6 +91,12 @@ _PROPOSITO_RECUPERACION_ORDINARIA = "recuperacion de contexto relevante (B6b)"
 #: reciben un limite que no ata"): mayor que cualquier canon real de Sirius
 #: 0.1 hoy, así que nunca es la causa de que algo se omita.
 _LIMITE_SIN_ATAR = 100_000
+
+#: M19a (ADR-127): los dos niveles no ordinarios del canon (M18b,
+#: ``sirius.domain.criticality.Criticality``) — ``None`` ("nadie la ha
+#: marcado") nunca entra aquí, igual que el laboratorio nunca amplía por el
+#: nivel ``ORDINARIO`` implícito.
+_NIVELES_DE_CRITICIDAD_NO_ORDINARIOS = (Criticality.CRITICO, Criticality.IMPORTANTE)
 
 
 def _peticion_ordinaria(
@@ -151,6 +159,7 @@ class RankRelevantKnowledgeUseCase:
         knowledge_search_repository: KnowledgeSearchRepository,
         *,
         category_vocabulary: frozenset[str] = frozenset(),
+        criticality_vocabulary: frozenset[str] = frozenset(),
         category_matching_enabled: bool = False,
         staged_engine_port: PuertoDeRecuperacion | None = None,
         staged_engine_candidate: SenalesDeCandidato | None = None,
@@ -160,6 +169,11 @@ class RankRelevantKnowledgeUseCase:
         self._project_repository = project_repository
         self._knowledge_search_repository = knowledge_search_repository
         self._category_vocabulary = category_vocabulary
+        #: M19a (ADR-127, incidencia #512): el índice de criticidad, calcado
+        #: de ``category_vocabulary`` — vacío por defecto para que ningún
+        #: llamador existente cambie, cableado a producción/medición solo
+        #: donde la puerta ``category_matching_enabled`` ya está abierta.
+        self._criticality_vocabulary = criticality_vocabulary
         self._category_matching_enabled = category_matching_enabled
         self._staged_engine_port = staged_engine_port
         self._staged_engine_candidate = staged_engine_candidate
@@ -265,6 +279,21 @@ class RankRelevantKnowledgeUseCase:
         jamás la posición relativa de dos elementos de ``ranked`` entre sí,
         y sin la ceguera a las demás señales que una simple concatenación de
         bloques produciría.
+
+        M19a (ADR-127, incidencia #512) añade un segundo bloque de
+        ampliación, ``solo_por_criticidad``, con la misma forma exacta que
+        ``solo_por_categoria`` (activación por índice, dedup contra el motor,
+        restricción de ámbito) pero sobre ``Memory.criticality``/
+        ``Decision.criticality`` (M18b, ADR-126) en vez de ``category``: el
+        vocabulario de categoría (D7, temático) nunca contiene las palabras
+        con las que alguien pide lo crítico
+        (``composition_root._CRITICALITY_VOCABULARY``, portado literal del
+        laboratorio), así que una consulta como «Dame todas las restricciones
+        esenciales…» no activaba ninguna ampliación antes de este bloque. Los
+        dos bloques deduplican entre sí (un candidato que el bloque de
+        categoría ya trajo nunca se repite en el de criticidad) y se unen en
+        una sola lista antes de ``_intercalar_por_categoria``, que sigue sin
+        tocar ni la posición relativa de ``ranked`` ni su propio algoritmo.
         """
         assert self._staged_engine_port is not None
         assert self._staged_engine_candidate is not None
@@ -370,7 +399,67 @@ class RankRelevantKnowledgeUseCase:
                         )
                     )
 
-        return _intercalar_por_categoria(ranked, solo_por_categoria)
+        ya_admitidos_por_categoria = {
+            (candidato.kind, candidato.item_id) for candidato in solo_por_categoria
+        }
+        solo_por_criticidad: list[RankedKnowledge] = []
+        if self._category_matching_enabled and category_index_activated(
+            query_text, self._criticality_vocabulary
+        ):
+            for memory in self._memory_repository.list_current_memories_by_criticality(
+                _NIVELES_DE_CRITICIDAD_NO_ORDINARIOS
+            ):
+                clave = (KnowledgeKind.MEMORY, memory.id)
+                if clave in admitidos_por_el_motor or clave in ya_admitidos_por_categoria:
+                    continue
+                if candidate_in_declared_scope(
+                    memory.project_id, active_project_id=active_project_id
+                ):
+                    solo_por_criticidad.append(
+                        RankedKnowledge(
+                            kind=KnowledgeKind.MEMORY,
+                            item=memory,
+                            subject_matches_query=False,
+                            project_matches_active=(
+                                active_project_id is not None
+                                and memory.project_id == active_project_id
+                            ),
+                            fts_match=False,
+                            category_match=category_index_matches_query(
+                                memory.category, query_text, self._category_vocabulary
+                            ),
+                            criticality_match=True,
+                        )
+                    )
+            for decision in self._decision_repository.list_current_decisions_by_criticality(
+                _NIVELES_DE_CRITICIDAD_NO_ORDINARIOS
+            ):
+                clave = (KnowledgeKind.DECISION, decision.id)
+                if clave in admitidos_por_el_motor or clave in ya_admitidos_por_categoria:
+                    continue
+                if candidate_in_declared_scope(
+                    decision.project_id, active_project_id=active_project_id
+                ):
+                    solo_por_criticidad.append(
+                        RankedKnowledge(
+                            kind=KnowledgeKind.DECISION,
+                            item=decision,
+                            subject_matches_query=subject_matches_query(
+                                decision.subject, query_text
+                            ),
+                            project_matches_active=(
+                                active_project_id is not None
+                                and decision.project_id == active_project_id
+                            ),
+                            fts_match=False,
+                            category_match=category_index_matches_query(
+                                decision.category, query_text, self._category_vocabulary
+                            ),
+                            criticality_match=True,
+                        )
+                    )
+
+        return _intercalar_por_categoria(ranked, (*solo_por_categoria, *solo_por_criticidad))
 
     def _rank_via_current_pipeline(self, query_text: str) -> tuple[RankedKnowledge, ...]:
         """El filtro-y-orden de S7.5/M9, sin cambios: lo que ``rank()``

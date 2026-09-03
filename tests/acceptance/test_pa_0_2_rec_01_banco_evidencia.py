@@ -156,7 +156,11 @@ from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.set_category import SetCategoryUseCase
 from sirius.application.set_criticality import CriticalityTargetKind, SetCriticalityUseCase
 from sirius.application.tag_category import CategoryTargetKind
-from sirius.composition_root import _CATEGORY_VOCABULARY, _MAX_CRITICALITY_CATEGORY
+from sirius.composition_root import (
+    _CATEGORY_VOCABULARY,
+    _CRITICALITY_VOCABULARY,
+    _MAX_CRITICALITY_CATEGORY,
+)
 from sirius.domain.criticality import Criticality
 from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
 from sirius.domain.precedence import find_prevailing_decision
@@ -2038,6 +2042,7 @@ def _ejecutar_banco_paquete_completo(
     *,
     relevance_filter_port: RelevanceFilterPort | None = None,
     category_vocabulary: frozenset[str] | None = None,
+    criticality_vocabulary: frozenset[str] | None = None,
     categoria_por_item: Callable[[Mapping[str, Any]], str | None] | None = None,
     max_criticality_category: str | None = None,
 ) -> _EjecucionDelBanco:
@@ -2078,6 +2083,15 @@ def _ejecutar_banco_paquete_completo(
     expone en producción para una edición explícita, nunca una escritura
     directa al repositorio. El filtro de relevancia es
     `_FiltroDeRelevanciaQueNuncaDescarta` (ver arriba): nunca Ollama real.
+
+    M19a (ADR-127, incidencia #512): `criticality_vocabulary` por defecto
+    (`None`) es `_CRITICALITY_VOCABULARY`, el vocabulario real de
+    producción — así que, desde este encargo, el índice de criticidad
+    (`RankRelevantKnowledgeUseCase._rank_via_staged_engine`'s
+    `solo_por_criticidad`) se ejercita por defecto sobre el paquete completo,
+    igual que el de categoría ya lo hacía. `criticality` de cada item real ya
+    la fija `_apply_criticidad` (M18b) desde `criticidad.nivel` del canon,
+    sin que este cargador necesite ningún cambio.
 
     A diferencia de `_ejecutar_banco`/`_ejecutar_banco_motor_portado`, la
     exclusión por precedencia y el filtro de relevancia no se reimplementan
@@ -2134,6 +2148,11 @@ def _ejecutar_banco_paquete_completo(
             knowledge_search_repository=build_sqlite_knowledge_search_repository(database_path),
             category_vocabulary=(
                 category_vocabulary if category_vocabulary is not None else _CATEGORY_VOCABULARY
+            ),
+            criticality_vocabulary=(
+                criticality_vocabulary
+                if criticality_vocabulary is not None
+                else _CRITICALITY_VOCABULARY
             ),
             category_matching_enabled=True,
             staged_engine_port=staged_engine_port,

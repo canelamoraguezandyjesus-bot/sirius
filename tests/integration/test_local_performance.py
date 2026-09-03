@@ -173,6 +173,7 @@ from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.composition_root import (
     _CATEGORY_VOCABULARY,
+    _CRITICALITY_VOCABULARY,
     _MAX_CRITICALITY_CATEGORY,
     _RELEVANCE_FILTER_MODEL,
     _RELEVANCE_FILTER_TIMEOUT_SECONDS,
@@ -508,6 +509,7 @@ def _build_context_builder_with_relevance_filter(
         project_repository=project_repository,
         knowledge_search_repository=build_sqlite_knowledge_search_repository(database_path),
         category_vocabulary=_CATEGORY_VOCABULARY,
+        criticality_vocabulary=_CRITICALITY_VOCABULARY,
         category_matching_enabled=True,
         staged_engine_port=build_staged_engine_port(database_path),
         staged_engine_candidate=staged_engine_candidato(),
