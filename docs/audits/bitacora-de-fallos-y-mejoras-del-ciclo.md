@@ -318,6 +318,28 @@ ADR o su incidencia cuando se adopte.
   medirlo antes de subir el presupuesto a ciegas: cuántos turnos gasta el
   corrector en una ronda GUI frente a una sin GUI.
 
+### 19. M21b: mi corrección de la ronda 3 tenía la forma equivocada (17:47 → 17:57 UTC)
+
+- **Qué falló.** La ronda 4 devolvió tres hallazgos sobre `resume_proposals`,
+  que yo había introducido: interruptor por llamada, aplicado a dos de los
+  cuatro flujos terminales (faltaban copia y exportación), y sin efecto
+  cuando un worker en vuelo termina después del cierre. La revisión lo
+  encontró por goteo, igual que a mí me lo había encontrado en el
+  implementador (entrada 15).
+- **Por qué.** Modelé «cerrando» como un argumento de una llamada en vez de
+  como un estado del widget. Un estado que debe sobrevivir a varios eventos
+  no puede vivir en un parámetro.
+- **Qué se hizo.** `prepare_to_close()` persistente en el widget; un único
+  punto de liberación en `MainWindow` para los tres `_finish_*`; llamada
+  también en `closeEvent` y en la restauración que cierra. Tres pruebas
+  (dos del widget, una de `MainWindow`), dos mutaciones cazadas, 144 en
+  verde en las cinco suites afectadas.
+- **Mejor manera.** Regla para la lista de comprobación (entradas 14 y
+  17): todo estado que condicione más de un evento futuro se guarda en el
+  objeto, nunca en un argumento; y cuando un flujo terminal se corrige,
+  enumerar con `grep` TODOS los sitios que cierran la ventana antes de
+  tocar el primero.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
