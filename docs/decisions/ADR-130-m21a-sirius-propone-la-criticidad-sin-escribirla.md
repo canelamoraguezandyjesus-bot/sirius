@@ -182,6 +182,69 @@ Ollama, caso de uso, cableado en `composition_root.py`), en este orden:
    el código real; la prueba vuelve a pasar junto con el resto del archivo
    (8 pruebas).
 
+## Ronda 1 de revisión (03-09-2026): el adaptador, corregido por el propietario
+
+El corrector del motor agotó su ejecución (13:14 → 13:45 UTC) sin subir
+ningún commit y la incidencia pasó a `failed-safely`; la corrección la hizo el
+propietario directamente en la rama de la PR. Hallazgos atendidos, todos
+sobre `src/sirius/adapters/ollama_criticality_classifier.py` y sus pruebas:
+
+- **CODEX-001 (P1).** El adaptador llamaba a `/api/generate` con un prompt
+  libre, sin `think: false` y con 5 s de espera. ADR-125 ya documentaba que
+  con `qwen3:4b-instruct` (el modelo por defecto) eso pasa de segundos a
+  minutos y que pedir el formato solo en el prompt falla con modelos
+  pequeños: en la máquina del propietario M21a no habría propuesto nunca
+  nada. Ahora usa el mismo contrato validado del filtro de relevancia:
+  `/api/chat`, `think: false`, esquema JSON cerrado en `format` (un solo
+  campo `nivel` con enum CRITICO/IMPORTANTE/ORDINARIO), temperatura 0.1,
+  `num_ctx` 8192 y `keep_alive` 15m. El tiempo de espera pasa a 30 s por la
+  misma razón: es el único valor que este repositorio ha medido para este
+  modelo con `think: false` (ADR-125); el coste real de una propuesta lo
+  mide el propietario en uso (M21b). La prueba
+  `test_propose_sends_the_contract_validated_against_the_real_model`
+  afirma el cuerpo de la petición literalmente.
+- **Observación del propietario (13:01 UTC) y CLAUDE-M21A-001 (media).**
+  La petición usaba una ruta relativa a la `base_url` del cliente y no
+  pasaba `follow_redirects=False`: el mismo hueco que CODEX-001 de la PR
+  #452 cerró en el filtro (`ollama_relevance_filter.py`). Y las dos pruebas
+  de «nunca sale de localhost» no podían fallar: una solo inspecciona la
+  firma del constructor y la otra dependía de un `AssertionError` lanzado
+  dentro del handler que el `except Exception` del adaptador convertía en
+  `None`, el mismo resultado que el camino correcto. Ahora la URL es
+  absoluta a `_OLLAMA_LOCAL_BASE_URL`, se pasa `follow_redirects=False`, y
+  las pruebas `test_propose_ignores_an_injected_clients_remote_base_url` y
+  `test_propose_never_follows_a_redirect_to_a_remote_host` afirman sobre
+  los hosts que vio el transporte (`seen_hosts == ["localhost"]`), nunca
+  sobre el valor devuelto.
+- **CLAUDE-M21A-002 (baja).** `CriticalityProposalTargetKind` duplicaba
+  `CriticalityTargetKind` (`set_criticality.py`, M18b). Se retira el enum
+  nuevo y `ProposeCriticalityUseCase.propose` usa el existente, igual que
+  `SetCategoryUseCase` reutiliza `CategoryTargetKind`.
+
+Comprobación (ejecutada en el runner del propietario sobre la rama):
+`ruff format`, `ruff check` (`All checks passed!`), `mypy src tests`
+(`Success: no issues found in 560 source files`), y las pruebas de los tres
+archivos tocados (`105 passed`). Tres mutaciones, cada una vista fallar y
+restaurada:
+
+1. Ruta relativa (`"/api/chat"` en vez de la absoluta) →
+   `test_propose_ignores_an_injected_clients_remote_base_url` falla con
+   `assert ['servidor-remoto.example'] == ['localhost']`.
+2. Sin `follow_redirects=False` →
+   `test_propose_never_follows_a_redirect_to_a_remote_host` falla con
+   `assert ['localhost', 'remote.example', ...] == ['localhost']`.
+3. `_PENSAMIENTO_APAGADO = True` →
+   `test_propose_sends_the_contract_validated_against_the_real_model`
+   falla con `assert True is False`.
+
+**Deuda registrada, no corregida aquí (fuera del alcance de M21a):**
+`src/sirius/adapters/ollama_category_classifier.py` tiene el mismo hueco de
+ruta relativa y redirecciones, y la misma llamada a `/api/generate` sin
+`think: false`. Necesita su propia incidencia. La manera mejor, candidata a
+encargo de refactor: un único cliente de Ollama local (URL, redirecciones,
+`think`, `format`, tiempo de espera) del que dependan los tres adaptadores,
+en vez de tres copias del mismo contrato.
+
 ## Consecuencias
 
 - Sirius gana un mecanismo capaz de sugerir criticidad, pero **ningún**

@@ -15,10 +15,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
-from sirius.application.propose_criticality import (
-    CriticalityProposalTargetKind,
-    ProposeCriticalityUseCase,
-)
+from sirius.application.propose_criticality import ProposeCriticalityUseCase
+from sirius.application.set_criticality import CriticalityTargetKind
 from sirius.domain.criticality import Criticality
 from sirius.domain.decision import Decision, DecisionRevision, DecisionStatus
 from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
@@ -323,7 +321,7 @@ def test_propose_returns_the_classifiers_proposal_for_an_unmarked_memory() -> No
     classifier = _FakeClassifier(Criticality.CRITICO)
     use_case = ProposeCriticalityUseCase(memory_repository, _UnusedDecisionRepository(), classifier)
 
-    proposal = use_case.propose(CriticalityProposalTargetKind.MEMORY, 7)
+    proposal = use_case.propose(CriticalityTargetKind.MEMORY, 7)
 
     assert proposal is Criticality.CRITICO
     assert classifier.proposed_content == ["no volver a exponer la clave en texto plano"]
@@ -340,7 +338,7 @@ def test_propose_skips_the_classifier_for_an_already_marked_memory() -> None:
     classifier = _FakeClassifier(Criticality.CRITICO)
     use_case = ProposeCriticalityUseCase(memory_repository, _UnusedDecisionRepository(), classifier)
 
-    proposal = use_case.propose(CriticalityProposalTargetKind.MEMORY, 1)
+    proposal = use_case.propose(CriticalityTargetKind.MEMORY, 1)
 
     assert proposal is None
     assert classifier.proposed_content == []
@@ -352,7 +350,7 @@ def test_propose_returns_none_for_a_memory_when_the_classifier_cannot_decide() -
     classifier = _FakeClassifier(None)
     use_case = ProposeCriticalityUseCase(memory_repository, _UnusedDecisionRepository(), classifier)
 
-    proposal = use_case.propose(CriticalityProposalTargetKind.MEMORY, 1)
+    proposal = use_case.propose(CriticalityTargetKind.MEMORY, 1)
 
     assert proposal is None
     assert classifier.proposed_content == ["contenido"]
@@ -368,7 +366,7 @@ def test_propose_never_writes_a_memory_criticality() -> None:
     classifier = _FakeClassifier(Criticality.CRITICO)
     use_case = ProposeCriticalityUseCase(memory_repository, _UnusedDecisionRepository(), classifier)
 
-    use_case.propose(CriticalityProposalTargetKind.MEMORY, 1)
+    use_case.propose(CriticalityTargetKind.MEMORY, 1)
 
     assert memory_repository.get_memory(1).criticality is None
 
@@ -393,7 +391,7 @@ def test_propose_classifies_an_empty_string_when_a_deleted_memory_has_no_content
     classifier = _FakeClassifier(None)
     use_case = ProposeCriticalityUseCase(memory_repository, _UnusedDecisionRepository(), classifier)
 
-    use_case.propose(CriticalityProposalTargetKind.MEMORY, 1)
+    use_case.propose(CriticalityTargetKind.MEMORY, 1)
 
     assert classifier.proposed_content == [""]
 
@@ -404,7 +402,7 @@ def test_propose_returns_the_classifiers_proposal_for_an_unmarked_decision() -> 
     classifier = _FakeClassifier(Criticality.IMPORTANTE)
     use_case = ProposeCriticalityUseCase(_UnusedMemoryRepository(), decision_repository, classifier)
 
-    proposal = use_case.propose(CriticalityProposalTargetKind.DECISION, 9)
+    proposal = use_case.propose(CriticalityTargetKind.DECISION, 9)
 
     assert proposal is Criticality.IMPORTANTE
     assert classifier.proposed_content == ["usar SQLite local"]
@@ -416,7 +414,7 @@ def test_propose_skips_the_classifier_for_an_already_marked_decision() -> None:
     classifier = _FakeClassifier(Criticality.IMPORTANTE)
     use_case = ProposeCriticalityUseCase(_UnusedMemoryRepository(), decision_repository, classifier)
 
-    proposal = use_case.propose(CriticalityProposalTargetKind.DECISION, 1)
+    proposal = use_case.propose(CriticalityTargetKind.DECISION, 1)
 
     assert proposal is None
     assert classifier.proposed_content == []
@@ -428,6 +426,6 @@ def test_propose_never_writes_a_decision_criticality() -> None:
     classifier = _FakeClassifier(Criticality.CRITICO)
     use_case = ProposeCriticalityUseCase(_UnusedMemoryRepository(), decision_repository, classifier)
 
-    use_case.propose(CriticalityProposalTargetKind.DECISION, 1)
+    use_case.propose(CriticalityTargetKind.DECISION, 1)
 
     assert decision_repository.get_decision(1).criticality is None
