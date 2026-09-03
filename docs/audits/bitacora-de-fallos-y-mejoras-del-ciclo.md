@@ -300,6 +300,24 @@ ADR o su incidencia cuando se adopte.
   está corrigiendo una incidencia, poder cancelar el corrector en vez de
   dejar que muera por push rechazado.
 
+### 18. M21b: tercera muerte del corrector y segunda carrera de Quality (17:30 UTC)
+
+- **Qué falló.** El corrector de la ronda 3 (17:06 → 17:30) murió sin
+  commit por tercera vez en #520 (run 33782613151), con dos hallazgos
+  pequeños — uno de ellos solo de pruebas — que yo cerré en seis minutos.
+  Y Quality en verde sobre `6899ecf` (17:20) llegó con la incidencia aún en
+  `repairing`, así que la ruta H-34 no lo registró: segunda vez hoy con esta
+  carrera (entrada 3).
+- **Qué se hizo.** Relanzado el run de Quality 33783164462 en cuanto la
+  incidencia pasó a `failed-safely`.
+- **Mejor manera.** Las dos deudas ya abiertas (3 y 8) tienen ahora tres
+  datos cada una. Para el corrector: tres muertes de tres en esta
+  incidencia, siempre con pruebas de interfaz de por medio; la hipótesis
+  más simple es que el arnés Qt (offscreen, `qtbot.waitUntil`) consume el
+  presupuesto de turnos en ejecuciones lentas y reintentos. Vale la pena
+  medirlo antes de subir el presupuesto a ciegas: cuántos turnos gasta el
+  corrector en una ronda GUI frente a una sin GUI.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -309,7 +327,8 @@ ADR o su incidencia cuando se adopte.
    fuera del alcance de M21a.
 2. Intérprete de intención del despachador: falsos positivos por subcadena
    (5). ADR-043 lo reconoce como apaño.
-3. Ruta H-34: el verde de Quality se pierde si llega en `repairing` (3).
+3. Ruta H-34: el verde de Quality se pierde si llega en `repairing`
+   (entradas 3 y 18: tres veces hoy).
 4. Cliente único de Ollama local para los tres adaptadores (7, 8).
 5. Vigilancia durable con modelo barato (4, 11).
 6. Rechazo de una propuesta de criticidad recordado solo en sesión (M21b):
