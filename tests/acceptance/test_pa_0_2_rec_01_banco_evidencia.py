@@ -246,7 +246,18 @@ _MINIMO_ELEMENTOS_HALLADOS_MOTOR: Final[int] = 63
 #: la cobertura sube (68 → 72/81). La cota baja a lo nuevo medido: sigue
 #: siendo no regresión a lo medido, nunca al suelo de D1/§8-M11, que la
 #: siembra no persigue.
+#:
+#: CODEX-001 (incidencia #516, r3924271714): al bajar `aciertos_exactos` a su
+#: nuevo suelo (0), esa cota sola queda tautológica -- toda ejecución la
+#: cumple, incluida una que no recuperase nada. La guarda real de esta prueba
+#: son las otras dos cifras que M20 sí mueve con intención (ver el párrafo de
+#: arriba): `omisiones_criticas` no debe regresar por encima de 0, y
+#: `cobertura` no debe caer por debajo de lo medido (72/81) -- ambas, como
+#: `aciertos_exactos`, cotas unidireccionales de no regresión a lo medido,
+#: nunca el suelo de D1/§8-M11.
 _MINIMO_ACIERTOS_EXACTOS_PAQUETE_COMPLETO: Final[int] = 0
+_MAXIMO_OMISIONES_CRITICAS_PAQUETE_COMPLETO: Final[int] = 0
+_MINIMO_ELEMENTOS_HALLADOS_PAQUETE_COMPLETO: Final[int] = 72
 
 pytestmark = [pytest.mark.acceptance, pytest.mark.integration]
 
@@ -2314,10 +2325,42 @@ def test_el_banco_se_ejecuta_contra_el_paquete_completo_de_produccion_como_evide
     # afirma esos suelos (ver arriba). El suelo real de §8-M11 para este
     # camino lo afirma, sin salvedad, la prueba `xfail(strict=True)` de más
     # abajo.
+    #
+    # `aciertos_exactos >= 0` es tautológica desde que M20 bajó su suelo a 0
+    # (CODEX-001, incidencia #516): la guarda efectiva de esta prueba son las
+    # otras dos cotas de no regresión que sí pueden fallar --
+    # `omisiones_criticas` y `cobertura` -- ver el docstring del módulo junto
+    # a `_MAXIMO_OMISIONES_CRITICAS_PAQUETE_COMPLETO`.
     assert paquete_completo.aciertos_exactos >= _MINIMO_ACIERTOS_EXACTOS_PAQUETE_COMPLETO
     assert paquete_completo.elementos_de_mas >= 0
-    assert paquete_completo.omisiones_criticas >= 0
-    assert 0 <= paquete_completo.elementos_hallados <= paquete_completo.elementos_esperados_total
+    assert paquete_completo.omisiones_criticas <= _MAXIMO_OMISIONES_CRITICAS_PAQUETE_COMPLETO
+    assert paquete_completo.elementos_hallados >= _MINIMO_ELEMENTOS_HALLADOS_PAQUETE_COMPLETO
+    assert paquete_completo.elementos_hallados <= paquete_completo.elementos_esperados_total
+
+
+def test_el_guardia_del_paquete_completo_ya_no_es_tautologico() -> None:
+    """CODEX-001 (incidencia #516, r3924271714): antes de esta corrección,
+    `aciertos_exactos >= _MINIMO_ACIERTOS_EXACTOS_PAQUETE_COMPLETO` era la
+    única cota no trivial de
+    `test_el_banco_se_ejecuta_contra_el_paquete_completo_de_produccion_como_evidencia_adicional`,
+    y quedó tautológica cuando M20 bajó ese suelo a 0 -- una ejecución que no
+    recuperase nada (0 aciertos exactos, 0 elementos de más, cobertura 0,
+    omisiones críticas positivas) la habría superado igual, junto con las
+    demás aserciones de esa prueba (todas piden solo métricas no negativas o
+    cobertura dentro de rango). Prueba de forma: ese caso degenerado --
+    exactamente el que describe el hallazgo -- sigue cumpliendo la cota
+    tautológica pero ya incumple las dos cotas nuevas que protegen la
+    aceptación declarada por M20 (0 omisiones críticas, cobertura >= 72/81)."""
+    degenerada = _Metricas(
+        aciertos_exactos=0,
+        elementos_de_mas=0,
+        omisiones_criticas=1,
+        elementos_hallados=0,
+        elementos_esperados_total=81,
+    )
+    assert degenerada.aciertos_exactos >= _MINIMO_ACIERTOS_EXACTOS_PAQUETE_COMPLETO
+    assert degenerada.omisiones_criticas > _MAXIMO_OMISIONES_CRITICAS_PAQUETE_COMPLETO
+    assert degenerada.elementos_hallados < _MINIMO_ELEMENTOS_HALLADOS_PAQUETE_COMPLETO
 
 
 @pytest.mark.xfail(
