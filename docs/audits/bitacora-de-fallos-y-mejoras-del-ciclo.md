@@ -253,6 +253,28 @@ ADR o su incidencia cuando se adopte.
   misma lección que la 14, un nivel más arriba: no basta enumerar guardas,
   hay que quitar la necesidad de enumerarlas.
 
+### 16. M21b: el corrector murió por segunda vez y apliqué la raíz yo (16:35 → 16:50 UTC)
+
+- **Qué falló.** El corrector del motor agotó otra vez su ejecución sin
+  subir nada (`failed-safely`, 16:04 → 16:35), como en M21a: dos de dos
+  veces que le tocan varios hallazgos con pruebas de interfaz.
+- **Qué se hizo.** Consolidación desde el estado (entrada 15) aplicada por
+  mí en la rama: una sola derivación, «en vuelo» por época, reconciliación
+  al terminar el worker y al salir de ocupado. Tres pruebas nuevas vistas
+  fallar antes; tres mutaciones cazadas; 123 en verde en los tres archivos.
+- **Ruido encontrado por el camino.**
+  `tests/gui/test_conversation_ui.py::test_streaming_message_grows_without_overlapping_neighbours`
+  falla en mi runner solo dentro de `tests/gui` completo (pasa aislado en
+  mi árbol, en la rama limpia y en `main`; Quality lo pasa en verde). Es
+  dependiente del orden/estado de Qt, no del código. Candidato a
+  incidencia de estabilidad de la suite GUI.
+- **Mejor manera (motor).** El corrector no está dimensionado para rondas
+  con varios hallazgos de interfaz: o se le da más presupuesto de turnos
+  cuando la ronda trae dos o más hallazgos con prueba GUI, o se le pide
+  que atienda los hallazgos de uno en uno con un commit por hallazgo (así
+  lo que llega antes de morir no se pierde). Dos muertes seguidas sin
+  commit intermedio son el dato.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -267,6 +289,10 @@ ADR o su incidencia cuando se adopte.
 5. Vigilancia durable con modelo barato (4, 11).
 6. Rechazo de una propuesta de criticidad recordado solo en sesión (M21b):
    persistirlo necesita columna y decisión del propietario.
-7. Medición con Ollama real de M19b y M20 en la máquina del propietario
+7. Suite GUI: `test_streaming_message_grows_without_overlapping_neighbours`
+   depende del orden/estado de Qt (entrada 16).
+8. Corrector del motor: presupuesto o un commit por hallazgo cuando la
+   ronda trae varios hallazgos de interfaz (entradas 9 y 16).
+9. Medición con Ollama real de M19b y M20 en la máquina del propietario
    (filas pendientes en ADR-128 y ADR-129): `uv run python
    scripts/medir_banco_con_ollama_real.py --diagnostico`.
