@@ -38,8 +38,10 @@ from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_me
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.delete_memory import OLD_BACKUP_WARNING, SourceMessageChoice
+from sirius.application.set_criticality import CriticalityTargetKind
 from sirius.application.tag_category import CategoryTargetKind, TagCategoryUseCase
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
+from sirius.domain.criticality import Criticality
 from sirius.domain.decision import Decision
 from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
 from sirius.presentation.knowledge_widget import KnowledgeWidget, _DeleteMemoryDialog
@@ -99,6 +101,8 @@ def _build_widget(
     tag_category_use_case: Any = None,
     set_category_use_case: Any = None,
     category_vocabulary: frozenset[str] | None = None,
+    propose_criticality_use_case: Any = None,
+    set_criticality_use_case: Any = None,
     thread_pool: QThreadPool | None = None,
 ) -> KnowledgeWidget:
     def _choose_superseding(candidates: Sequence[Decision]) -> Decision | None:
@@ -125,6 +129,8 @@ def _build_widget(
         tag_category_use_case=tag_category_use_case,
         set_category_use_case=set_category_use_case,
         category_vocabulary=category_vocabulary,
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=set_criticality_use_case,
         thread_pool=thread_pool,
         show_warning=recorder.show_warning,
         show_information=recorder.show_information,
@@ -1942,3 +1948,951 @@ def test_edit_memory_category_cancelled_prompt_changes_nothing(
     widget.edit_memory_category_button.click()
 
     assert " · " not in widget.memories_list.item(0).text()
+
+
+# --- Criticidad: propuesta y edición manual (M21b, ADR-131) -----------------
+#
+# «Sirius propone, el usuario decide» (M18b/ADR-126, ADR-130): la única
+# escritura de ``criticality`` sigue siendo ``SetCriticalityUseCase.set()``,
+# disparada exclusivamente por una acción explícita del usuario. Los dobles
+# de abajo son deliberadamente los mismos dos, calcados de
+# ``_RecordingTagCategoryUseCase``/``_BlockingTagCategoryUseCase``, ya que la
+# propuesta comparte exactamente el mismo patrón de worker que la categoría.
+
+
+class _RecordingProposeCriticalityUseCase:
+    """Doble de ``ProposeCriticalityUseCase`` que registra cada llamada, para
+    afirmar cuántos ``CriticalityProposalWorker`` arrancó realmente el
+    panel — nunca más de uno por selección (ADR-131: nunca un barrido)."""
+
+    def __init__(self, result: Criticality | None = None) -> None:
+        self.calls: list[tuple[CriticalityTargetKind, int]] = []
+        self._result = result
+
+    def propose(self, kind: CriticalityTargetKind, item_id: int) -> Criticality | None:
+        self.calls.append((kind, item_id))
+        return self._result
+
+
+class _BlockingProposeCriticalityUseCase:
+    """Bloquea ``propose()`` hasta que el test llame a ``release()`` — mismo
+    patrón que ``_BlockingTagCategoryUseCase`` —, para poder cambiar la
+    selección mientras un worker sigue en vuelo y comprobar que la propuesta
+    tardía se descarta sin mostrarse (ADR-131)."""
+
+    def __init__(self, result: Criticality | None = Criticality.CRITICO) -> None:
+        self._continue_event = threading.Event()
+        self.calls: list[tuple[CriticalityTargetKind, int]] = []
+        self._result = result
+
+    def propose(self, kind: CriticalityTargetKind, item_id: int) -> Criticality | None:
+        self.calls.append((kind, item_id))
+        self._continue_event.wait(timeout=5)
+        return self._result
+
+    def release(self) -> None:
+        self._continue_event.set()
+
+
+class _SequencedBlockingProposeCriticalityUseCase:
+    """Como ``_BlockingProposeCriticalityUseCase``, pero cada llamada tiene
+    su propio resultado y su propio cerrojo: ``release(n)`` libera solo la
+    llamada n-ésima. Permite forzar el orden de llegada (por ejemplo, que
+    el resultado obsoleto de v1 llegue DESPUÉS del de v2) y distinguir en
+    pantalla cuál de los dos gobernó (CLAUDE-REV-R3-001)."""
+
+    def __init__(self, results: Sequence[Criticality | None]) -> None:
+        self._results = list(results)
+        self._events = [threading.Event() for _ in self._results]
+        self.calls: list[tuple[CriticalityTargetKind, int]] = []
+        self._lock = threading.Lock()
+
+    def propose(self, kind: CriticalityTargetKind, item_id: int) -> Criticality | None:
+        with self._lock:
+            index = len(self.calls)
+            self.calls.append((kind, item_id))
+        self._events[index].wait(timeout=5)
+        return self._results[index]
+
+    def release(self, index: int) -> None:
+        self._events[index].set()
+
+
+class _RecordingSetCriticalityUseCase:
+    """Doble de ``SetCriticalityUseCase`` que registra cada llamada, para
+    afirmar que ``Rechazar`` nunca la invoca."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[CriticalityTargetKind, int, Criticality | None]] = []
+
+    def set(
+        self, kind: CriticalityTargetKind, item_id: int, criticality: Criticality | None
+    ) -> None:
+        self.calls.append((kind, item_id, criticality))
+
+
+@pytest.mark.gui
+def test_memory_label_shows_its_criticality(qtbot: QtBot, tmp_path: Path) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    memory = dependencies.save_manual_memory_use_case.save("nunca compartir la clave privada")
+    dependencies.set_criticality_use_case.set(
+        CriticalityTargetKind.MEMORY, memory.id, Criticality.CRITICO
+    )
+    widget = _build_widget(dependencies, _Recorder())
+    qtbot.addWidget(widget)
+
+    assert "[CRITICO]" in widget.memories_list.item(0).text()
+
+
+@pytest.mark.gui
+def test_decision_label_shows_its_criticality(qtbot: QtBot, tmp_path: Path) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    project_id = dependencies.project_continuity_use_case.get_summary().project_id
+    decision = dependencies.propose_decision_use_case.propose(
+        "Motor de persistencia", project_id, "Usar SQLite local"
+    )
+    dependencies.set_criticality_use_case.set(
+        CriticalityTargetKind.DECISION, decision.id, Criticality.IMPORTANTE
+    )
+    widget = _build_widget(dependencies, _Recorder())
+    qtbot.addWidget(widget)
+
+    assert "[IMPORTANTE]" in widget.decisions_list.item(0).text()
+
+
+@pytest.mark.gui
+def test_edit_memory_criticality_button_sets_critico(qtbot: QtBot, tmp_path: Path) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.save_manual_memory_use_case.save("no perder este dato")
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        prompt_line_value="CRITICO",
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+    )
+    qtbot.addWidget(widget)
+    widget.memories_list.setCurrentRow(0)
+
+    widget.edit_memory_criticality_button.click()
+
+    assert "[CRITICO]" in widget.memories_list.item(0).text()
+
+
+@pytest.mark.gui
+def test_edit_memory_criticality_button_sets_importante(qtbot: QtBot, tmp_path: Path) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.save_manual_memory_use_case.save("recordar esto también")
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        prompt_line_value="IMPORTANTE",
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+    )
+    qtbot.addWidget(widget)
+    widget.memories_list.setCurrentRow(0)
+
+    widget.edit_memory_criticality_button.click()
+
+    assert "[IMPORTANTE]" in widget.memories_list.item(0).text()
+
+
+@pytest.mark.gui
+def test_edit_memory_criticality_button_ordinario_clears_the_mark(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """ORDINARIO no es un tercer nivel del enum ``Criticality`` (M18b): se
+    traduce a ``None``, que quita la marca por completo."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    memory = dependencies.save_manual_memory_use_case.save("marcado y luego desmarcado")
+    dependencies.set_criticality_use_case.set(
+        CriticalityTargetKind.MEMORY, memory.id, Criticality.CRITICO
+    )
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        prompt_line_value="ORDINARIO",
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+    )
+    qtbot.addWidget(widget)
+    widget.memories_list.setCurrentRow(0)
+
+    widget.edit_memory_criticality_button.click()
+
+    assert "[CRITICO]" not in widget.memories_list.item(0).text()
+    assert "[IMPORTANTE]" not in widget.memories_list.item(0).text()
+
+
+@pytest.mark.gui
+def test_edit_decision_criticality_button_sets_a_manual_criticality(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    project_id = dependencies.project_continuity_use_case.get_summary().project_id
+    dependencies.propose_decision_use_case.propose(
+        "Motor de persistencia", project_id, "Usar SQLite local"
+    )
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        prompt_line_value="CRITICO",
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+    )
+    qtbot.addWidget(widget)
+    widget.decisions_list.setCurrentRow(0)
+
+    widget.edit_decision_criticality_button.click()
+
+    assert "[CRITICO]" in widget.decisions_list.item(0).text()
+
+
+@pytest.mark.gui
+def test_edit_memory_criticality_rejects_a_value_outside_the_closed_vocabulary(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.save_manual_memory_use_case.save("recuerdo cualquiera")
+    recorder = _Recorder()
+    widget = _build_widget(
+        dependencies,
+        recorder,
+        prompt_line_value="URGENTISIMO",
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+    )
+    qtbot.addWidget(widget)
+    widget.memories_list.setCurrentRow(0)
+
+    widget.edit_memory_criticality_button.click()
+
+    assert "[" not in widget.memories_list.item(0).text()
+    assert len(recorder.warnings) == 1
+
+
+@pytest.mark.gui
+def test_edit_memory_criticality_without_selection_warns(qtbot: QtBot, tmp_path: Path) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    recorder = _Recorder()
+    widget = _build_widget(
+        dependencies, recorder, set_criticality_use_case=dependencies.set_criticality_use_case
+    )
+    qtbot.addWidget(widget)
+
+    widget.edit_memory_criticality_button.click()
+
+    assert len(recorder.warnings) == 1
+
+
+@pytest.mark.gui
+def test_selecting_an_unmarked_memory_starts_exactly_one_proposal_worker(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    memory = dependencies.save_manual_memory_use_case.save("sin criticidad todavía")
+    propose_criticality_use_case = _RecordingProposeCriticalityUseCase(Criticality.CRITICO)
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+        thread_pool=thread_pool,
+    )
+    qtbot.addWidget(widget)
+
+    widget.memories_list.setCurrentRow(0)
+
+    assert thread_pool.waitForDone(5000)
+    assert propose_criticality_use_case.calls == [(CriticalityTargetKind.MEMORY, memory.id)]
+
+
+@pytest.mark.gui
+def test_selecting_an_already_marked_memory_does_not_start_a_worker(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    memory = dependencies.save_manual_memory_use_case.save("ya con criticidad")
+    dependencies.set_criticality_use_case.set(
+        CriticalityTargetKind.MEMORY, memory.id, Criticality.IMPORTANTE
+    )
+    propose_criticality_use_case = _RecordingProposeCriticalityUseCase(Criticality.CRITICO)
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+        thread_pool=thread_pool,
+    )
+    qtbot.addWidget(widget)
+
+    widget.memories_list.setCurrentRow(0)
+
+    assert thread_pool.waitForDone(200) is True or thread_pool.activeThreadCount() == 0
+    assert propose_criticality_use_case.calls == []
+
+
+@pytest.mark.gui
+def test_selecting_an_unmarked_memory_without_dependencies_proposes_nothing(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Sin ``propose_criticality_use_case``/``thread_pool`` inyectados no se
+    propone nada, igual que ``_start_tagging_worker`` para categoría."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.save_manual_memory_use_case.save("sin criticidad, sin dependencias")
+    widget = _build_widget(dependencies, _Recorder())
+    qtbot.addWidget(widget)
+
+    widget.memories_list.setCurrentRow(0)
+
+    assert widget.memory_criticality_proposal_label.text() == ""
+
+
+@pytest.mark.gui
+def test_criticality_proposal_appears_for_the_current_selection(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.save_manual_memory_use_case.save("posible fuga de credenciales")
+    propose_criticality_use_case = _RecordingProposeCriticalityUseCase(Criticality.CRITICO)
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+        thread_pool=thread_pool,
+    )
+    qtbot.addWidget(widget)
+
+    widget.memories_list.setCurrentRow(0)
+
+    qtbot.waitUntil(
+        lambda: widget.memory_criticality_proposal_label.text() == "Sirius propone: CRITICO",
+        timeout=5000,
+    )
+    assert widget.confirm_memory_criticality_button.isEnabled()
+    assert widget.reject_memory_criticality_button.isEnabled()
+
+
+@pytest.mark.gui
+def test_confirm_criticality_proposal_writes_the_exact_proposal_and_refreshes(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.save_manual_memory_use_case.save("posible fuga de credenciales")
+    propose_criticality_use_case = _RecordingProposeCriticalityUseCase(Criticality.CRITICO)
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+        thread_pool=thread_pool,
+    )
+    qtbot.addWidget(widget)
+    widget.memories_list.setCurrentRow(0)
+    qtbot.waitUntil(
+        lambda: widget.memory_criticality_proposal_label.text() == "Sirius propone: CRITICO",
+        timeout=5000,
+    )
+
+    widget.confirm_memory_criticality_button.click()
+
+    assert "[CRITICO]" in widget.memories_list.item(0).text()
+    assert widget.memory_criticality_proposal_label.text() == ""
+    assert not widget.confirm_memory_criticality_button.isEnabled()
+
+
+@pytest.mark.gui
+def test_reject_criticality_proposal_does_not_write(qtbot: QtBot, tmp_path: Path) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.save_manual_memory_use_case.save("posible fuga de credenciales")
+    propose_criticality_use_case = _RecordingProposeCriticalityUseCase(Criticality.CRITICO)
+    set_criticality_use_case = _RecordingSetCriticalityUseCase()
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=set_criticality_use_case,
+        thread_pool=thread_pool,
+    )
+    qtbot.addWidget(widget)
+    widget.memories_list.setCurrentRow(0)
+    qtbot.waitUntil(
+        lambda: widget.memory_criticality_proposal_label.text() == "Sirius propone: CRITICO",
+        timeout=5000,
+    )
+
+    widget.reject_memory_criticality_button.click()
+
+    assert set_criticality_use_case.calls == []
+    assert widget.memory_criticality_proposal_label.text() == ""
+    assert not widget.confirm_memory_criticality_button.isEnabled()
+
+
+@pytest.mark.gui
+def test_reselecting_a_queried_memory_does_not_start_a_second_worker(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Un elemento consultado una vez no se vuelve a consultar en la misma
+    sesión (ADR-131): la caché por ``(kind, id)`` evita un segundo worker."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    memory = dependencies.save_manual_memory_use_case.save("consultada una vez")
+    other = dependencies.save_manual_memory_use_case.save("otro recuerdo distinto")
+    propose_criticality_use_case = _RecordingProposeCriticalityUseCase(Criticality.CRITICO)
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+        thread_pool=thread_pool,
+    )
+    qtbot.addWidget(widget)
+
+    # ``QThreadPool.waitForDone`` solo espera a que el hilo del worker
+    # termine — la señal ``finished``, entre hilos, sigue en cola hasta que
+    # el bucle de eventos de la GUI la procese; ``qtbot.waitUntil`` lo pumpea
+    # hasta que la caché refleja el resultado (no basta con ``waitForDone``).
+    widget.memories_list.setCurrentRow(0)
+    assert thread_pool.waitForDone(5000)
+    qtbot.waitUntil(
+        lambda: (CriticalityTargetKind.MEMORY, memory.id) in widget._criticality_proposal_cache,
+        timeout=5000,
+    )
+    assert propose_criticality_use_case.calls.count((CriticalityTargetKind.MEMORY, memory.id)) == 1
+
+    widget.memories_list.setCurrentRow(1)
+    assert thread_pool.waitForDone(5000)
+    qtbot.waitUntil(
+        lambda: (CriticalityTargetKind.MEMORY, other.id) in widget._criticality_proposal_cache,
+        timeout=5000,
+    )
+
+    widget.memories_list.setCurrentRow(0)
+    assert thread_pool.waitForDone(2000)
+    qtbot.wait(200)
+
+    assert propose_criticality_use_case.calls.count((CriticalityTargetKind.MEMORY, memory.id)) == 1
+
+
+@pytest.mark.gui
+def test_late_criticality_proposal_after_selection_changed_is_not_shown(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Si la selección cambió antes de que la propuesta llegara, se descarta
+    sin mostrarse (ADR-131) — comparando ``kind``/``id`` con la selección
+    vigente. ``other`` se marca de antemano para que seleccionarlo no
+    arranque un segundo worker que compita por la misma señal ``finished``."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    memory = dependencies.save_manual_memory_use_case.save("primera selección")
+    other = dependencies.save_manual_memory_use_case.save("segunda selección")
+    dependencies.set_criticality_use_case.set(
+        CriticalityTargetKind.MEMORY, other.id, Criticality.IMPORTANTE
+    )
+    propose_criticality_use_case = _BlockingProposeCriticalityUseCase(Criticality.CRITICO)
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+        thread_pool=thread_pool,
+    )
+    qtbot.addWidget(widget)
+
+    widget.memories_list.setCurrentRow(0)
+    qtbot.waitUntil(lambda: propose_criticality_use_case.calls != [], timeout=5000)
+    # La selección cambia antes de que la propuesta llegue.
+    widget.memories_list.setCurrentRow(1)
+
+    propose_criticality_use_case.release()
+    assert thread_pool.waitForDone(5000)
+    # Igual que arriba: da tiempo a que la señal ``finished``, encolada entre
+    # hilos, llegue a procesarse antes de comprobar que no se mostró nada.
+    qtbot.wait(200)
+
+    assert propose_criticality_use_case.calls == [(CriticalityTargetKind.MEMORY, memory.id)]
+    assert widget.memory_criticality_proposal_label.text() == ""
+    assert not widget.confirm_memory_criticality_button.isEnabled()
+
+
+# --- Coordinación con una restauración de copia de seguridad (CODEX-001) ---
+#
+# Mismo mecanismo que ``has_pending_category_tagging``/``category_tagging_idle``
+# (ver la sección "Etiquetado automático de categoría" arriba), aplicado ahora
+# a ``CriticalityProposalWorker``: un worker en vuelo también sigue usando los
+# repositorios, y una restauración debe esperar a que no quede ninguno.
+
+
+@pytest.mark.gui
+def test_criticality_worker_reference_is_retained_while_in_flight_and_released_on_completion(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Mirrors test_tagging_worker_reference_is_retained_while_in_flight_and_released_on_completion
+    for CriticalityProposalWorker: sin la referencia fuerte en
+    ``_active_criticality_workers``, un worker que termine muy rápido podría
+    recolectarse antes de que su señal ``finished`` se procese, y
+    ``criticality_proposal_idle`` nunca llegaría a emitirse."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.save_manual_memory_use_case.save("sin criticidad todavía")
+    propose_criticality_use_case = _BlockingProposeCriticalityUseCase(Criticality.CRITICO)
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+        thread_pool=thread_pool,
+    )
+    qtbot.addWidget(widget)
+
+    assert widget._active_criticality_workers == []
+    assert not widget.has_pending_criticality_proposal
+
+    widget.memories_list.setCurrentRow(0)
+    qtbot.waitUntil(lambda: propose_criticality_use_case.calls != [], timeout=5000)
+
+    assert len(widget._active_criticality_workers) == 1
+    assert widget.has_pending_criticality_proposal
+
+    idle_signals: list[None] = []
+    widget.criticality_proposal_idle.connect(lambda: idle_signals.append(None))
+
+    propose_criticality_use_case.release()
+
+    qtbot.waitUntil(lambda: len(idle_signals) == 1, timeout=5000)
+    assert widget._active_criticality_workers == []
+    assert not widget.has_pending_criticality_proposal
+
+
+@pytest.mark.gui
+def test_selecting_an_item_does_not_start_a_criticality_worker_while_externally_busy(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CODEX-001: mientras una operación externa (por ejemplo, una
+    restauración de copia de seguridad ya confirmada) mantiene el panel
+    ocupado, seleccionar un elemento sin criticidad no debe arrancar un
+    ``CriticalityProposalWorker`` nuevo — arrancaría después de que la
+    restauración ya hubiera comprobado que no quedaba ninguno pendiente."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.save_manual_memory_use_case.save("sin criticidad todavía")
+    propose_criticality_use_case = _RecordingProposeCriticalityUseCase(Criticality.CRITICO)
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+        thread_pool=thread_pool,
+    )
+    qtbot.addWidget(widget)
+
+    widget.set_external_busy(True)
+    widget.memories_list.setCurrentRow(0)
+
+    assert thread_pool.waitForDone(200) is True or thread_pool.activeThreadCount() == 0
+    assert propose_criticality_use_case.calls == []
+    assert not widget.has_pending_criticality_proposal
+
+
+# --- Invalidación de la propuesta al corregir un recuerdo (CODEX-002) ------
+#
+# ``CorrectMemoryUseCase.correct`` crea una nueva revisión bajo el mismo id
+# (RF-022): cualquier caché, rechazo o resultado en vuelo de una propuesta
+# calculada sobre el contenido anterior deja de ser válido.
+
+
+@pytest.mark.gui
+def test_correcting_a_memory_invalidates_its_cached_criticality_proposal(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    memory = dependencies.save_manual_memory_use_case.save("contenido original")
+    propose_criticality_use_case = _RecordingProposeCriticalityUseCase(Criticality.CRITICO)
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        prompt_multiline_value="contenido corregido",
+        correct_memory_use_case=dependencies.correct_memory_use_case,
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+        thread_pool=thread_pool,
+    )
+    qtbot.addWidget(widget)
+
+    widget.memories_list.setCurrentRow(0)
+    qtbot.waitUntil(
+        lambda: (CriticalityTargetKind.MEMORY, memory.id) in widget._criticality_proposal_cache,
+        timeout=5000,
+    )
+    assert propose_criticality_use_case.calls.count((CriticalityTargetKind.MEMORY, memory.id)) == 1
+
+    widget.correct_memory_button.click()
+    assert (CriticalityTargetKind.MEMORY, memory.id) not in widget._criticality_proposal_cache
+
+    # refresh() reconstruye la lista y pierde la selección (ver comentario en
+    # KnowledgeWidget.refresh): hay que reseleccionar el mismo recuerdo.
+    widget.memories_list.setCurrentRow(0)
+    qtbot.waitUntil(
+        lambda: (
+            propose_criticality_use_case.calls.count((CriticalityTargetKind.MEMORY, memory.id)) == 2
+        ),
+        timeout=5000,
+    )
+
+
+@pytest.mark.gui
+def test_correcting_a_memory_forgets_a_previous_rejection_of_its_criticality_proposal(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Un rechazo de esta sesión (ADR-131) es del contenido rechazado, no del
+    id: tras corregir, la propuesta calculada sobre el contenido nuevo debe
+    poder volver a mostrarse."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    memory = dependencies.save_manual_memory_use_case.save("contenido original")
+    propose_criticality_use_case = _RecordingProposeCriticalityUseCase(Criticality.CRITICO)
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        prompt_multiline_value="contenido corregido",
+        correct_memory_use_case=dependencies.correct_memory_use_case,
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+        thread_pool=thread_pool,
+    )
+    qtbot.addWidget(widget)
+
+    widget.memories_list.setCurrentRow(0)
+    qtbot.waitUntil(
+        lambda: widget.memory_criticality_proposal_label.text() == "Sirius propone: CRITICO",
+        timeout=5000,
+    )
+    widget.reject_memory_criticality_button.click()
+    assert (CriticalityTargetKind.MEMORY, memory.id) in widget._rejected_criticality_proposals
+
+    widget.correct_memory_button.click()
+    assert (CriticalityTargetKind.MEMORY, memory.id) not in widget._rejected_criticality_proposals
+
+    widget.memories_list.setCurrentRow(0)
+    qtbot.waitUntil(
+        lambda: widget.memory_criticality_proposal_label.text() == "Sirius propone: CRITICO",
+        timeout=5000,
+    )
+
+
+# --- Botones de confirmar/rechazar criticidad durante un estado ocupado ----
+# (CLAUDE-REV-002/CODEX-003)
+
+
+@pytest.mark.gui
+def test_set_external_busy_disables_criticality_buttons_even_without_a_shown_proposal(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Sin ninguna propuesta visible, los cuatro botones ya estaban
+    deshabilitados; un estado ocupado no debe dejarlos habilitados al volver
+    (CLAUDE-REV-002: antes ni siquiera se forzaban a False)."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    widget = _build_widget(dependencies, _Recorder())
+    qtbot.addWidget(widget)
+
+    widget.set_external_busy(True)
+    assert not widget.confirm_memory_criticality_button.isEnabled()
+    assert not widget.reject_memory_criticality_button.isEnabled()
+    assert not widget.confirm_decision_criticality_button.isEnabled()
+    assert not widget.reject_decision_criticality_button.isEnabled()
+
+    widget.set_external_busy(False)
+    assert not widget.confirm_memory_criticality_button.isEnabled()
+    assert not widget.reject_memory_criticality_button.isEnabled()
+    assert not widget.confirm_decision_criticality_button.isEnabled()
+    assert not widget.reject_decision_criticality_button.isEnabled()
+
+
+@pytest.mark.gui
+def test_set_external_busy_disables_and_restores_a_shown_criticality_proposal(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.save_manual_memory_use_case.save("posible fuga de credenciales")
+    propose_criticality_use_case = _RecordingProposeCriticalityUseCase(Criticality.CRITICO)
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+        thread_pool=thread_pool,
+    )
+    qtbot.addWidget(widget)
+    widget.memories_list.setCurrentRow(0)
+    qtbot.waitUntil(
+        lambda: widget.memory_criticality_proposal_label.text() == "Sirius propone: CRITICO",
+        timeout=5000,
+    )
+
+    widget.set_external_busy(True)
+    assert not widget.confirm_memory_criticality_button.isEnabled()
+    assert not widget.reject_memory_criticality_button.isEnabled()
+
+    widget.set_external_busy(False)
+    assert widget.confirm_memory_criticality_button.isEnabled()
+    assert widget.reject_memory_criticality_button.isEnabled()
+
+
+@pytest.mark.gui
+def test_criticality_worker_finishing_while_externally_busy_keeps_buttons_disabled(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CODEX-003: un worker que arrancó antes del estado ocupado puede
+    terminar mientras dura — ``_show_criticality_proposal`` no debe habilitar
+    los botones en ese caso; deben seguir deshabilitados hasta que el estado
+    ocupado termine."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.save_manual_memory_use_case.save("posible fuga de credenciales")
+    propose_criticality_use_case = _BlockingProposeCriticalityUseCase(Criticality.CRITICO)
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+        thread_pool=thread_pool,
+    )
+    qtbot.addWidget(widget)
+    widget.memories_list.setCurrentRow(0)
+    qtbot.waitUntil(lambda: propose_criticality_use_case.calls != [], timeout=5000)
+
+    widget.set_external_busy(True)
+    propose_criticality_use_case.release()
+    qtbot.waitUntil(
+        lambda: widget.memory_criticality_proposal_label.text() == "Sirius propone: CRITICO",
+        timeout=5000,
+    )
+
+    assert not widget.confirm_memory_criticality_button.isEnabled()
+    assert not widget.reject_memory_criticality_button.isEnabled()
+
+    widget.set_external_busy(False)
+    assert widget.confirm_memory_criticality_button.isEnabled()
+    assert widget.reject_memory_criticality_button.isEnabled()
+
+
+# --- Ronda 3 (#520): una sola derivación desde el estado -------------------
+#
+# La propuesta mostrada y el arranque de un worker se recalculan desde el
+# estado en cada transición (selección, fin del estado ocupado, fin del
+# worker), en vez de decidirse con guardas sueltas en cada manejador
+# (raíz de las rondas 1 y 2, ADR-001). Cada prueba fija una transición que
+# antes abría un hueco.
+
+
+@pytest.mark.gui
+def test_manual_edit_before_the_worker_answers_never_resurrects_a_proposal(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CLAUDE-REV-R2-001: seleccionar un recuerdo sin marca (arranca el
+    worker), fijar la criticidad a mano antes de que responda, reseleccionar
+    el mismo recuerdo (ya marcado) y dejar terminar el worker viejo: la
+    propuesta NO se muestra — el elemento ya no está sin marca — y por tanto
+    «Confirmar» no puede sobrescribir el valor que el usuario acaba de fijar."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    memory = dependencies.save_manual_memory_use_case.save("sin criticidad todavía")
+    propose_criticality_use_case = _BlockingProposeCriticalityUseCase(Criticality.CRITICO)
+    set_criticality_use_case = _RecordingSetCriticalityUseCase()
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=set_criticality_use_case,
+        thread_pool=thread_pool,
+        prompt_line_value="IMPORTANTE",
+    )
+    qtbot.addWidget(widget)
+    widget.memories_list.setCurrentRow(0)
+    qtbot.waitUntil(lambda: propose_criticality_use_case.calls != [], timeout=5000)
+    # Edición manual mientras el worker sigue en vuelo: escribe IMPORTANTE.
+    widget.edit_memory_criticality_button.click()
+    assert set_criticality_use_case.calls == [
+        (CriticalityTargetKind.MEMORY, memory.id, Criticality.IMPORTANTE)
+    ]
+    # El doble no persiste: la lista debe ver el recuerdo ya marcado, como
+    # lo vería tras una escritura real.
+    dependencies.set_criticality_use_case.set(
+        CriticalityTargetKind.MEMORY, memory.id, Criticality.IMPORTANTE
+    )
+    widget.refresh()
+    widget.memories_list.setCurrentRow(0)
+    propose_criticality_use_case.release()
+    assert thread_pool.waitForDone(5000)
+    qtbot.wait(200)
+    assert propose_criticality_use_case.calls == [(CriticalityTargetKind.MEMORY, memory.id)]
+    assert widget.memory_criticality_proposal_label.text() == ""
+    assert not widget.confirm_memory_criticality_button.isEnabled()
+    # Y aunque alguien pulsara Confirmar, no hay propuesta que escribir.
+    widget.confirm_memory_criticality_button.click()
+    assert len(set_criticality_use_case.calls) == 1
+
+
+@pytest.mark.gui
+def test_leaving_the_externally_busy_state_resumes_the_proposal_for_the_selection(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CODEX-001 (ronda 2): seleccionar un recuerdo sin marca mientras el
+    panel está ocupado no arranca worker (CODEX-001 de la ronda 1); al
+    dejar de estar ocupado, la selección vigente sí obtiene su propuesta sin
+    que el usuario tenga que reseleccionar."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    memory = dependencies.save_manual_memory_use_case.save("sin criticidad todavía")
+    propose_criticality_use_case = _RecordingProposeCriticalityUseCase(Criticality.CRITICO)
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+        thread_pool=thread_pool,
+    )
+    qtbot.addWidget(widget)
+    widget.set_external_busy(True)
+    widget.memories_list.setCurrentRow(0)
+    assert propose_criticality_use_case.calls == []
+    widget.set_external_busy(False)
+    qtbot.waitUntil(
+        lambda: widget.memory_criticality_proposal_label.text() == "Sirius propone: CRITICO",
+        timeout=5000,
+    )
+    assert thread_pool.waitForDone(5000)
+    assert propose_criticality_use_case.calls == [(CriticalityTargetKind.MEMORY, memory.id)]
+    assert widget.confirm_memory_criticality_button.isEnabled()
+
+
+@pytest.mark.gui
+def test_correcting_a_memory_while_its_worker_is_in_flight_requests_the_new_revision(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CODEX-002 (ronda 2) y CLAUDE-REV-R3-001 (ronda 3): con el worker de
+    la revisión v1 en vuelo, el usuario corrige el recuerdo (v2, mismo id) y
+    lo reselecciona antes de que v1 termine. La revisión vigente recibe su
+    propia consulta (el worker en vuelo de v1 no bloquea el de v2), y el
+    resultado de v1 — que aquí se hace llegar DESPUÉS del de v2, con un
+    valor distinto — se descarta por época: lo mostrado sigue siendo lo que
+    respondió v2, y la caché no retrocede."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    memory = dependencies.save_manual_memory_use_case.save("contenido v1")
+    propose_criticality_use_case = _SequencedBlockingProposeCriticalityUseCase(
+        [Criticality.CRITICO, Criticality.IMPORTANTE]
+    )
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+        thread_pool=thread_pool,
+        prompt_multiline_value="contenido v2",
+    )
+    qtbot.addWidget(widget)
+    widget.memories_list.setCurrentRow(0)
+    qtbot.waitUntil(lambda: len(propose_criticality_use_case.calls) == 1, timeout=5000)
+    widget.correct_memory_button.click()
+    widget.memories_list.setCurrentRow(0)
+    qtbot.waitUntil(lambda: len(propose_criticality_use_case.calls) == 2, timeout=5000)
+    # Primero llega v2 (IMPORTANTE) y se muestra.
+    propose_criticality_use_case.release(1)
+    qtbot.waitUntil(
+        lambda: widget.memory_criticality_proposal_label.text() == "Sirius propone: IMPORTANTE",
+        timeout=5000,
+    )
+    # Después llega v1 (CRITICO), obsoleto: ni se muestra ni se cachea.
+    propose_criticality_use_case.release(0)
+    assert thread_pool.waitForDone(5000)
+    qtbot.wait(200)
+    assert widget.memory_criticality_proposal_label.text() == "Sirius propone: IMPORTANTE"
+    assert propose_criticality_use_case.calls == [
+        (CriticalityTargetKind.MEMORY, memory.id),
+        (CriticalityTargetKind.MEMORY, memory.id),
+    ]
+    # Reseleccionar no vuelve a consultar y sigue mostrando lo de v2.
+    widget.memories_list.setCurrentRow(-1)
+    widget.memories_list.setCurrentRow(0)
+    assert widget.memory_criticality_proposal_label.text() == "Sirius propone: IMPORTANTE"
+    assert len(propose_criticality_use_case.calls) == 2
+
+
+@pytest.mark.gui
+def test_releasing_the_busy_state_after_prepare_to_close_starts_no_proposal_worker(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CODEX-001 (ronda 3) y ronda 4: los flujos terminales de ``MainWindow``
+    (un envío, una copia o una exportación que terminan con el cierre ya
+    solicitado; una restauración que va a cerrar la ventana) llaman a
+    ``prepare_to_close`` antes de liberar el estado ocupado: no debe
+    arrancar ningún worker — en producción sería una llamada a Ollama de
+    hasta 30 s sobre una ventana que se cierra o una base recién
+    restaurada."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.save_manual_memory_use_case.save("sin criticidad todavía")
+    propose_criticality_use_case = _RecordingProposeCriticalityUseCase(Criticality.CRITICO)
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+        thread_pool=thread_pool,
+    )
+    qtbot.addWidget(widget)
+    widget.set_external_busy(True)
+    widget.memories_list.setCurrentRow(0)
+    assert propose_criticality_use_case.calls == []
+    widget.prepare_to_close()
+    widget.set_external_busy(False)
+    assert thread_pool.waitForDone(200) is True or thread_pool.activeThreadCount() == 0
+    assert propose_criticality_use_case.calls == []
+    assert not widget.has_pending_criticality_proposal
+    assert widget.memory_criticality_proposal_label.text() == ""
+    # Los controles sí se han liberado.
+    assert widget.save_memory_button.isEnabled()
+
+
+@pytest.mark.gui
+def test_a_worker_finishing_after_prepare_to_close_starts_nothing_and_shows_nothing(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CODEX-001 (ronda 4): el estado terminal es persistente. Con el worker
+    de A en vuelo, el panel pasa a ocupado, el usuario selecciona B (sin
+    marca), se solicita el cierre (``prepare_to_close``) y se libera el
+    estado ocupado; cuando A termina después, ni se muestra su propuesta ni
+    arranca el worker de B — un interruptor de un solo uso al liberar no
+    bastaba."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.save_manual_memory_use_case.save("recuerdo A")
+    dependencies.save_manual_memory_use_case.save("recuerdo B")
+    propose_criticality_use_case = _BlockingProposeCriticalityUseCase(Criticality.CRITICO)
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+        thread_pool=thread_pool,
+    )
+    qtbot.addWidget(widget)
+    widget.memories_list.setCurrentRow(0)
+    qtbot.waitUntil(lambda: len(propose_criticality_use_case.calls) == 1, timeout=5000)
+    widget.set_external_busy(True)
+    widget.memories_list.setCurrentRow(1)
+    assert len(propose_criticality_use_case.calls) == 1
+    widget.prepare_to_close()
+    widget.set_external_busy(False)
+    assert len(propose_criticality_use_case.calls) == 1
+    propose_criticality_use_case.release()
+    assert thread_pool.waitForDone(5000)
+    qtbot.wait(200)
+    assert len(propose_criticality_use_case.calls) == 1
+    assert widget.memory_criticality_proposal_label.text() == ""
+    assert not widget.has_pending_criticality_proposal

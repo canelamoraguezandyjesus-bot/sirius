@@ -29,9 +29,11 @@ from sirius.adapters.persistence.sqlite_conversation_repository import (
 from sirius.adapters.persistence.sqlite_identity_repository import (
     build_sqlite_identity_repository,
 )
+from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.composition_root import build_conversation_dependencies
+from sirius.domain.criticality import Criticality
 from sirius.ports.backup import (
     BackupError,
     BackupManifest,
@@ -94,6 +96,21 @@ def _bootstrapped_database(database_path: Path) -> Path:
         identity_repository.close()
 
     return database_path
+
+
+def _save_memory(database_path: Path, content: str) -> int:
+    """Guarda un recuerdo directamente contra el fichero, sin pasar por
+    ``MainWindow``: hace falta un elemento real en ``memories_list`` para que
+    seleccionarlo arranque un ``CriticalityProposalWorker`` (CODEX-001), y
+    ``_build_window`` no expone ``save_manual_memory_use_case``. Repositorio
+    cerrado explícitamente, igual que el resto de este helper, para no dejar
+    una conexión abierta que bloquee el reemplazo atómico del fichero."""
+    memory_repository = build_sqlite_memory_repository(database_path)
+    try:
+        memory = memory_repository.create_memory(content, origin="prueba")
+    finally:
+        memory_repository.close()
+    return memory.id
 
 
 def test_bootstrapped_database_helper_leaves_no_connection_blocking_a_file_replace(
@@ -264,6 +281,29 @@ class _BlockingTagCategoryUseCase:
         return False
 
 
+class _BlockingProposeCriticalityUseCase:
+    """Simula un ``CriticalityProposalWorker`` en vuelo (CODEX-001): mismo
+    patrón que ``_BlockingTagCategoryUseCase``, pero para
+    ``ProposeCriticalityUseCase``, cuyo worker arranca al seleccionar un
+    elemento sin criticidad en ``KnowledgeWidget`` en vez de en un pase
+    retroactivo de arranque."""
+
+    def __init__(self, result: Criticality | None = Criticality.CRITICO) -> None:
+        import threading
+
+        self._continue_event = threading.Event()
+        self._result = result
+        self.calls: list[tuple[Any, int]] = []
+
+    def release(self) -> None:
+        self._continue_event.set()
+
+    def propose(self, kind: Any, item_id: int) -> Criticality | None:
+        self.calls.append((kind, item_id))
+        self._continue_event.wait(timeout=5)
+        return self._result
+
+
 class _FakeRestoreBackupUseCase:
     def __init__(
         self, result: BackupRestoreResult | None = None, error: Exception | None = None
@@ -295,6 +335,7 @@ def _build_window(
     choose_backup_file: Any = None,
     open_containing_folder: Any = None,
     tag_category_use_case: Any = None,
+    propose_criticality_use_case: Any = None,
 ) -> MainWindow:
     dependencies = build_conversation_dependencies(
         database_path, database_path.parent / "backups", secret_store=FakeSecretStore()
@@ -336,6 +377,7 @@ def _build_window(
         choose_backup_file=choose_backup_file or (lambda title: ""),
         open_containing_folder=open_containing_folder or (lambda path: None),
         tag_category_use_case=tag_category_use_case,
+        propose_criticality_use_case=propose_criticality_use_case,
     )
 
 
@@ -802,6 +844,51 @@ def test_restore_backup_waits_for_pending_category_tagging_before_closing_connec
     assert restore_use_case.calls == []
 
     tag_category_use_case.release()
+
+    qtbot.waitUntil(lambda: restore_use_case.calls != [], timeout=5000)
+    assert close_calls == [True]
+    assert restore_use_case.calls == [(backup_path, _PASSWORD, True)]
+
+
+@pytest.mark.gui
+def test_restore_backup_waits_for_pending_criticality_proposal_before_closing_connections(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CODEX-001: mismo mecanismo que la prueba anterior, pero para un
+    ``CriticalityProposalWorker`` en vuelo — arrancado aquí seleccionando un
+    recuerdo sin criticidad en ``KnowledgeWidget`` en vez de por el pase
+    retroactivo de categoría. ``ProposeCriticalityUseCase.propose()`` abre
+    los mismos repositorios que la restauración necesita dejar libres antes
+    de cerrar y reemplazar sirius.db."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    _save_memory(database_path, "posible fuga de credenciales")
+    backup_path = tmp_path / "b.siriusbackup"
+    validate_use_case = _FakeValidateBackupUseCase(result=_fake_validation_result(backup_path))
+    restore_use_case = _FakeRestoreBackupUseCase(result=_fake_restore_result(backup_path, None))
+    propose_criticality_use_case = _BlockingProposeCriticalityUseCase()
+    close_calls: list[bool] = []
+    window = _build_window(
+        database_path,
+        validate_backup_use_case=validate_use_case,
+        restore_backup_use_case=restore_use_case,
+        confirm_restore=lambda title, text: True,
+        close_database_connections=lambda: close_calls.append(True),
+        propose_criticality_use_case=propose_criticality_use_case,
+    )
+    qtbot.addWidget(window)
+    window.show()
+
+    window.knowledge_widget.memories_list.setCurrentRow(0)
+    assert window.knowledge_widget.has_pending_criticality_proposal
+
+    window.restore_backup_path_input.setText(str(backup_path))
+    window.restore_backup_password_input.setText(_PASSWORD)
+    window.restore_backup_button.click()
+
+    assert close_calls == []
+    assert restore_use_case.calls == []
+
+    propose_criticality_use_case.release()
 
     qtbot.waitUntil(lambda: restore_use_case.calls != [], timeout=5000)
     assert close_calls == [True]
@@ -1444,3 +1531,45 @@ def test_opening_the_folder_does_nothing_before_any_backup_exists(
 
     assert opened == []
     assert window.validate_backup_path_input.text() == ""
+
+
+@pytest.mark.gui
+def test_close_requested_during_a_backup_starts_no_criticality_proposal_when_it_finishes(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CLAUDE-REV-R4-001 / CODEX-002 (ronda 4 de #520): el usuario pide
+    cerrar Sirius mientras se crea una copia (``closeEvent`` difiere el
+    cierre) con un recuerdo sin criticidad seleccionado. Cuando la copia
+    termina, ``_finish_backup_operation`` libera los paneles y cierra la
+    ventana: ningún ``CriticalityProposalWorker`` debe arrancar en ese paso
+    — sería una llamada a Ollama de hasta 30 s sobre una ventana que se
+    cierra. Mismo camino (``_release_widgets_after_operation``) para el
+    envío y la exportación."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    _save_memory(database_path, "sin criticidad todavía")
+    create_use_case = _BlockingCreateBackupUseCase()
+    create_use_case.set_result(_fake_backup_result(tmp_path / "backups" / "copia.siriusbackup"))
+    propose_criticality_use_case = _BlockingProposeCriticalityUseCase()
+    infos: list[tuple[str, str]] = []
+    window = _build_window(
+        database_path,
+        create_backup_use_case=create_use_case,
+        show_information=lambda title, text: infos.append((title, text)),
+        propose_criticality_use_case=propose_criticality_use_case,
+    )
+    qtbot.addWidget(window)
+    window.show()
+    window.create_backup_password_input.setText(_PASSWORD)
+    window.create_backup_password_repeat_input.setText(_PASSWORD)
+    window.create_backup_button.click()
+    qtbot.waitUntil(lambda: create_use_case.received_passwords != [], timeout=5000)
+    # Selección hecha con el panel ocupado por la copia: no arranca worker.
+    window.knowledge_widget.memories_list.setCurrentRow(0)
+    assert propose_criticality_use_case.calls == []
+    window.close()  # deferred: the backup is still in progress
+    assert window.isVisible() is True
+    create_use_case.release()
+    qtbot.waitUntil(lambda: not window.isVisible(), timeout=5000)
+    qtbot.wait(200)
+    assert propose_criticality_use_case.calls == []
+    assert not window.knowledge_widget.has_pending_criticality_proposal

@@ -26,6 +26,7 @@ from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
 from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.project_lifecycle import ProjectLifecycleUseCase
+from sirius.application.propose_criticality import ProposeCriticalityUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.propose_memory_suggestion import ProposeMemorySuggestionUseCase
 from sirius.application.reject_memory_suggestion import RejectMemorySuggestionUseCase
@@ -33,6 +34,7 @@ from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageUseCase
 from sirius.application.set_category import SetCategoryUseCase
+from sirius.application.set_criticality import SetCriticalityUseCase
 from sirius.application.studio_capture import StudioCaptureUseCase
 from sirius.application.studio_voice import StudioVoiceUseCase
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
@@ -80,6 +82,8 @@ class ValidatedMainWindow(MainWindow):
         tag_category_use_case: TagCategoryUseCase | None = None,
         set_category_use_case: SetCategoryUseCase | None = None,
         category_vocabulary: frozenset[str] | None = None,
+        propose_criticality_use_case: ProposeCriticalityUseCase | None = None,
+        set_criticality_use_case: SetCriticalityUseCase | None = None,
         studio_voice_use_case: StudioVoiceUseCase | None = None,
         studio_capture_use_case: StudioCaptureUseCase | None = None,
         save_studio_voice: Callable[[str], None] | None = None,
@@ -126,6 +130,8 @@ class ValidatedMainWindow(MainWindow):
             tag_category_use_case=tag_category_use_case,
             set_category_use_case=set_category_use_case,
             category_vocabulary=category_vocabulary,
+            propose_criticality_use_case=propose_criticality_use_case,
+            set_criticality_use_case=set_criticality_use_case,
             studio_voice_use_case=studio_voice_use_case,
             studio_capture_use_case=studio_capture_use_case,
             save_studio_voice=save_studio_voice,

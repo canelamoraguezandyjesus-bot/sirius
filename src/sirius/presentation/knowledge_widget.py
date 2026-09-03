@@ -72,6 +72,7 @@ from sirius.application.project_continuity import (
     ProjectContinuityUseCase,
     ProjectNotConfiguredError,
 )
+from sirius.application.propose_criticality import ProposeCriticalityUseCase
 from sirius.application.propose_decision import (
     InvalidDecisionProposalDataError,
     ProposeDecisionUseCase,
@@ -82,18 +83,21 @@ from sirius.application.save_manual_memory import (
     SaveManualMemoryUseCase,
 )
 from sirius.application.set_category import SetCategoryUseCase
+from sirius.application.set_criticality import CriticalityTargetKind, SetCriticalityUseCase
 from sirius.application.supersede_decision import (
     DecisionSupersessionNotConfirmedError,
     InvalidDecisionSupersessionError,
     SupersedeDecisionUseCase,
 )
 from sirius.application.tag_category import CategoryTargetKind, TagCategoryUseCase
+from sirius.domain.criticality import Criticality
 from sirius.domain.decision import Decision, is_same_subject_and_project
 from sirius.domain.memory import Memory
 from sirius.domain.memory_suggestion import MemorySuggestion
 from sirius.domain.precedence import PrecedenceOutcome
 from sirius.infrastructure.logging import get_logger
 from sirius.presentation.category_tagging_worker import CategoryTaggingWorker
+from sirius.presentation.criticality_proposal_worker import CriticalityProposalWorker
 
 _logger = get_logger(__name__)
 
@@ -102,6 +106,12 @@ _NO_SELECTION_TITLE = "Nada seleccionado"
 _NO_PROJECT_WARNING = (
     "No hay un proyecto configurado todavía: no se puede proponer una decisión sin proyecto."
 )
+
+#: Vocabulario cerrado de la edición manual de criticidad (M21b, ADR-131):
+#: los dos niveles del canon más ORDINARIO, que ``_edit_criticality`` traduce
+#: a ``None`` — ordinario es la ausencia de marca (M18b), nunca un tercer
+#: miembro de ``Criticality``.
+_CRITICALITY_EDIT_VOCABULARY = frozenset({"CRITICO", "IMPORTANTE", "ORDINARIO"})
 
 
 def _short(content: str | None, limit: int = 60) -> str:
@@ -115,18 +125,23 @@ def _category_suffix(category: str | None) -> str:
     return f" · {category}" if category is not None else ""
 
 
+def _criticality_suffix(criticality: Criticality | None) -> str:
+    return f" [{criticality.value}]" if criticality is not None else ""
+
+
 def _memory_label(memory: Memory) -> str:
     subject = f" [{memory.subject_key}]" if memory.subject_key is not None else ""
     return (
         f"#{memory.id} ({memory.status.value}) v{memory.current_revision.version}{subject}"
-        f"{_category_suffix(memory.category)} — {_short(memory.current_revision.content)}"
+        f"{_category_suffix(memory.category)}{_criticality_suffix(memory.criticality)} — "
+        f"{_short(memory.current_revision.content)}"
     )
 
 
 def _decision_label(decision: Decision) -> str:
     return (
         f"#{decision.id} ({decision.status.value}) v{decision.current_revision.version}"
-        f"{_category_suffix(decision.category)} — "
+        f"{_category_suffix(decision.category)}{_criticality_suffix(decision.criticality)} — "
         f"{decision.subject}: {_short(decision.current_revision.content)}"
     )
 
@@ -220,6 +235,13 @@ class KnowledgeWidget(QGroupBox):
     #: haya etiquetadores pendientes.
     category_tagging_idle = Signal()
 
+    #: Igual que ``category_tagging_idle`` pero para ``CriticalityProposalWorker``
+    #: (CODEX-001): ``ProposeCriticalityUseCase.propose()`` también abre los
+    #: repositorios, así que una restauración de copia de seguridad debe
+    #: esperar a que no quede ninguna propuesta en vuelo, no solo al
+    #: etiquetado de categorías.
+    criticality_proposal_idle = Signal()
+
     def __init__(
         self,
         get_knowledge_overview_use_case: GetKnowledgeOverviewUseCase,
@@ -241,6 +263,8 @@ class KnowledgeWidget(QGroupBox):
         tag_category_use_case: TagCategoryUseCase | None = None,
         set_category_use_case: SetCategoryUseCase | None = None,
         category_vocabulary: frozenset[str] | None = None,
+        propose_criticality_use_case: ProposeCriticalityUseCase | None = None,
+        set_criticality_use_case: SetCriticalityUseCase | None = None,
         thread_pool: QThreadPool | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
@@ -269,6 +293,8 @@ class KnowledgeWidget(QGroupBox):
         self._tag_category_use_case = tag_category_use_case
         self._set_category_use_case = set_category_use_case
         self._category_vocabulary = category_vocabulary
+        self._propose_criticality_use_case = propose_criticality_use_case
+        self._set_criticality_use_case = set_criticality_use_case
         self._thread_pool = thread_pool
 
         self._show_warning = show_warning or self._default_show_warning
@@ -295,6 +321,55 @@ class KnowledgeWidget(QGroupBox):
         self._active_tagging_workers: list[CategoryTaggingWorker] = []
         self._overview: KnowledgeOverview | None = None
         self._last_touched_list: QListWidget | None = None
+
+        # Propuesta de criticidad (M21b, ADR-131): "Sirius propone, el
+        # usuario decide" aplicado a la interfaz. Ninguna de estas
+        # estructuras escribe nada por sí sola — solo rastrean qué se ha
+        # propuesto, para qué elemento, y si el usuario ya la rechazó en
+        # esta sesión.
+        # Caché por (kind, id), incluido el valor `None` (el clasificador no
+        # decidió): un elemento consultado una vez no se vuelve a consultar.
+        self._criticality_proposal_cache: dict[
+            tuple[CriticalityTargetKind, int], Criticality | None
+        ] = {}
+        # Claves (kind, id, época) con un CriticalityProposalWorker en vuelo:
+        # evita arrancar un segundo worker para la misma revisión si el
+        # usuario la reselecciona antes de que el primero termine — pero no
+        # bloquea el de una revisión nueva del mismo id (ronda 3 de #520,
+        # CODEX-002): la época forma parte de la clave.
+        self._criticality_proposal_in_flight: set[tuple[CriticalityTargetKind, int, int]] = set()
+        # Rechazos de esta sesión: en memoria únicamente, nunca persistidos
+        # (decisión pendiente del propietario, ver ADR-131).
+        self._rejected_criticality_proposals: set[tuple[CriticalityTargetKind, int]] = set()
+        # Contador por (kind, id) que se incrementa cada vez que el contenido
+        # de ese elemento cambia bajo el mismo id (CODEX-002: hoy solo
+        # _handle_correct_memory_clicked, una corrección de recuerdo). Un
+        # worker en vuelo captura el valor vigente al arrancar; si no coincide
+        # con el valor vigente cuando termina, su resultado corresponde a una
+        # revisión ya obsoleta y se descarta sin cachearse ni mostrarse.
+        self._criticality_proposal_epoch: dict[tuple[CriticalityTargetKind, int], int] = {}
+        # Igual que _active_tagging_workers: QThreadPool.start() no conserva
+        # la referencia Python a un QRunnable (CODEX-001), así que cada
+        # CriticalityProposalWorker en vuelo necesita una referencia fuerte
+        # propia hasta que su señal finished se procese.
+        self._active_criticality_workers: list[CriticalityProposalWorker] = []
+        # Estado terminal (ronda 4 de #520): cuando la ventana va a cerrarse,
+        # ``prepare_to_close`` lo fija y ya no se arranca ningún worker ni se
+        # muestra ninguna propuesta, pase lo que pase después (un worker en
+        # vuelo que termina, una liberación del estado ocupado, una
+        # selección). Es persistente hasta destruir el widget: un interruptor
+        # por llamada no bastaba (rondas 3 y 4).
+        self._is_closing = False
+        # La propuesta mostrada ahora mismo por sección (memorias/decisiones),
+        # si hay alguna: (item_id, criticidad propuesta).
+        self._shown_criticality_proposal: dict[CriticalityTargetKind, tuple[int, Criticality]] = {}
+        # Rellenado por _build_memories_section/_build_decisions_section con
+        # los widgets (etiqueta, botón confirmar, botón rechazar) de cada
+        # sección, para que _show_criticality_proposal/_hide_criticality_proposal
+        # no dupliquen la misma lógica por cada kind.
+        self._criticality_proposal_widgets: dict[
+            CriticalityTargetKind, tuple[QLabel, QPushButton, QPushButton]
+        ] = {}
 
         layout = QVBoxLayout(self)
         layout.addWidget(self._build_memories_section())
@@ -375,6 +450,10 @@ class KnowledgeWidget(QGroupBox):
         self.memory_origin_button.clicked.connect(self._handle_memory_origin_clicked)
         self.edit_memory_category_button = QPushButton("Editar categoría…")
         self.edit_memory_category_button.clicked.connect(self._handle_edit_memory_category_clicked)
+        self.edit_memory_criticality_button = QPushButton("Editar criticidad…")
+        self.edit_memory_criticality_button.clicked.connect(
+            self._handle_edit_memory_criticality_clicked
+        )
 
         buttons_row = QHBoxLayout()
         buttons_row.addWidget(self.save_memory_button)
@@ -383,11 +462,34 @@ class KnowledgeWidget(QGroupBox):
         buttons_row.addWidget(self.delete_memory_button)
         buttons_row.addWidget(self.memory_origin_button)
         buttons_row.addWidget(self.edit_memory_category_button)
+        buttons_row.addWidget(self.edit_memory_criticality_button)
+
+        self.memory_criticality_proposal_label = QLabel("")
+        self.confirm_memory_criticality_button = QPushButton("Confirmar")
+        self.confirm_memory_criticality_button.setEnabled(False)
+        self.confirm_memory_criticality_button.clicked.connect(
+            lambda: self._handle_confirm_criticality_clicked(CriticalityTargetKind.MEMORY)
+        )
+        self.reject_memory_criticality_button = QPushButton("Rechazar")
+        self.reject_memory_criticality_button.setEnabled(False)
+        self.reject_memory_criticality_button.clicked.connect(
+            lambda: self._handle_reject_criticality_clicked(CriticalityTargetKind.MEMORY)
+        )
+        self._criticality_proposal_widgets[CriticalityTargetKind.MEMORY] = (
+            self.memory_criticality_proposal_label,
+            self.confirm_memory_criticality_button,
+            self.reject_memory_criticality_button,
+        )
+        criticality_proposal_row = QHBoxLayout()
+        criticality_proposal_row.addWidget(self.memory_criticality_proposal_label)
+        criticality_proposal_row.addWidget(self.confirm_memory_criticality_button)
+        criticality_proposal_row.addWidget(self.reject_memory_criticality_button)
 
         group = QGroupBox("Recuerdos")
         layout = QVBoxLayout(group)
         layout.addWidget(self.memories_list)
         layout.addLayout(buttons_row)
+        layout.addLayout(criticality_proposal_row)
         return group
 
     def _selected_memory(self) -> Memory | None:
@@ -404,6 +506,7 @@ class KnowledgeWidget(QGroupBox):
     ) -> None:
         self._last_touched_list = self.memories_list
         self._refresh_action_buttons_enabled()
+        self._reconcile_criticality_proposal(CriticalityTargetKind.MEMORY)
 
     def _handle_save_memory_clicked(self) -> None:
         if self._is_busy or self._is_externally_busy:
@@ -442,8 +545,27 @@ class KnowledgeWidget(QGroupBox):
             _logger.error("No se pudo corregir el recuerdo (%s)", type(exc).__name__)
             self._show_warning("No se pudo corregir el recuerdo", _GENERIC_ERROR_TEXT)
             return
+        self._invalidate_criticality_proposal_for_new_revision(
+            CriticalityTargetKind.MEMORY, corrected.id
+        )
         self._enqueue_category_tagging_if_needed(corrected, CategoryTargetKind.MEMORY)
         self.refresh()
+
+    def _invalidate_criticality_proposal_for_new_revision(
+        self, kind: CriticalityTargetKind, item_id: int
+    ) -> None:
+        """CODEX-002: una corrección crea una nueva revisión bajo el mismo
+        id (``CorrectMemoryUseCase.correct``); cualquier caché, rechazo o
+        propuesta en vuelo anterior corresponde al contenido viejo y deja de
+        ser válida. Incrementar la época hace que el resultado de un worker
+        ya en vuelo para la revisión anterior se descarte al llegar (ver
+        ``_handle_criticality_proposal_finished``), sin necesidad de
+        cancelarlo."""
+        key = (kind, item_id)
+        self._hide_criticality_proposal(kind)
+        self._rejected_criticality_proposals.discard(key)
+        self._criticality_proposal_cache.pop(key, None)
+        self._criticality_proposal_epoch[key] = self._criticality_proposal_epoch.get(key, 0) + 1
 
     def _enqueue_category_tagging_if_needed(
         self, item: Memory | Decision, kind: CategoryTargetKind
@@ -548,6 +670,201 @@ class KnowledgeWidget(QGroupBox):
             return
         self.refresh()
 
+    def _edit_criticality(self, kind: CriticalityTargetKind, item_id: int, noun: str) -> None:
+        """Edición manual de criticidad (M18b/M21b, ADR-126/ADR-131): a
+        través de ``SetCriticalityUseCase``, siempre incondicional — a
+        diferencia de la categoría, no hay ningún candado que fijar junto a
+        la escritura (ADR-130: nada automático escribe criticidad).
+
+        Restringida al vocabulario cerrado de dos niveles más ORDINARIO
+        (M18b: ordinario es la ausencia de marca, no un tercer nivel), igual
+        que ``_edit_category`` restringe la categoría a su propio
+        vocabulario cerrado."""
+        if self._set_criticality_use_case is None:
+            return
+        options = ", ".join(sorted(_CRITICALITY_EDIT_VOCABULARY))
+        value = self._prompt_line("Editar criticidad", f"Criticidad (una de: {options}):")
+        if value is None:
+            return
+        clean_value = value.strip()
+        if clean_value not in _CRITICALITY_EDIT_VOCABULARY:
+            self._show_warning(
+                "No se pudo editar la criticidad",
+                f"La criticidad debe ser una de: {options}.",
+            )
+            return
+        criticality = None if clean_value == "ORDINARIO" else Criticality(clean_value)
+        try:
+            self._set_criticality_use_case.set(kind, item_id, criticality)
+        except Exception as exc:
+            _logger.error("No se pudo editar la criticidad de %s (%s)", noun, type(exc).__name__)
+            self._show_warning("No se pudo editar la criticidad", _GENERIC_ERROR_TEXT)
+            return
+        # Una edición manual sustituye por completo lo que la propuesta
+        # automática supiera de este elemento (ADR-131): un ORDINARIO
+        # explícito debe poder proponerse de nuevo más adelante si el
+        # usuario vuelve a seleccionarlo, así que se olvida tanto el
+        # rechazo previo como la caché de propuesta.
+        self._hide_criticality_proposal(kind)
+        self._rejected_criticality_proposals.discard((kind, item_id))
+        self._criticality_proposal_cache.pop((kind, item_id), None)
+        self.refresh()
+
+    # --- Propuesta automática de criticidad (M21b, ADR-131) -------------------
+    #
+    # Sirius propone, el usuario decide: lo único que escribe ``criticality``
+    # sigue siendo ``_edit_criticality`` (arriba) o la confirmación explícita
+    # de una propuesta (``_handle_confirm_criticality_clicked``). Todo lo
+    # demás aquí solo lee, cachea o descarta.
+
+    def _reconcile_criticality_proposal(self, kind: CriticalityTargetKind) -> None:
+        """La única derivación de la propuesta desde el estado (ronda 3 de
+        #520, ADR-001: las rondas 1 y 2 abrieron un hueco por cada transición
+        que una guarda suelta olvidaba). Se llama en TODAS las transiciones —
+        cambio de selección, fin de un worker, salida del estado ocupado — y
+        decide solo dos cosas mirando el estado vigente: si se muestra una
+        propuesta ahora (solo si el elemento seleccionado sigue SIN marca y
+        la caché tiene una propuesta no nula y no rechazada) y si hay que
+        arrancar un worker ahora (solo si está sin marca, sin caché, sin
+        rechazo, sin worker en vuelo para su época y con el panel libre — las
+        últimas dos las comprueba ``_start_criticality_proposal_worker``).
+        Los manejadores de eventos solo actualizan el estado y llaman aquí;
+        ninguno decide por su cuenta qué mostrar."""
+        if self._is_closing:
+            self._hide_criticality_proposal(kind)
+            return
+        self._hide_criticality_proposal(kind)
+        item = (
+            self._selected_memory()
+            if kind is CriticalityTargetKind.MEMORY
+            else self._selected_decision()
+        )
+        if item is None or item.criticality is not None:
+            return
+        key = (kind, item.id)
+        if key in self._rejected_criticality_proposals:
+            return
+        if key in self._criticality_proposal_cache:
+            proposal = self._criticality_proposal_cache[key]
+            if proposal is not None:
+                self._show_criticality_proposal(kind, item.id, proposal)
+            return
+        self._start_criticality_proposal_worker(kind, item.id)
+
+    def _start_criticality_proposal_worker(self, kind: CriticalityTargetKind, item_id: int) -> None:
+        """Arranca UN ``CriticalityProposalWorker`` para ``(kind, item_id)``
+        — nunca un barrido de todos los elementos (ADR-131). Sin
+        dependencias (pruebas que no las inyectan, o un arranque sin Ollama
+        configurado) no hace nada, igual que ``_start_tagging_worker``.
+
+        CODEX-001: tampoco arranca ninguno mientras el panel está ocupado
+        (interna o externamente, por ejemplo una restauración de copia de
+        seguridad ya en curso): ``ProposeCriticalityUseCase.propose()`` abre
+        los mismos repositorios que una restauración necesita dejar libres
+        antes de cerrar y reemplazar sirius.db."""
+        if self._propose_criticality_use_case is None or self._thread_pool is None:
+            return
+        if self._is_closing or self._is_busy or self._is_externally_busy:
+            return
+        key = (kind, item_id)
+        epoch = self._criticality_proposal_epoch.get(key, 0)
+        if (kind, item_id, epoch) in self._criticality_proposal_in_flight:
+            return
+        worker = CriticalityProposalWorker(self._propose_criticality_use_case, kind, item_id)
+        self._criticality_proposal_in_flight.add((kind, item_id, epoch))
+        self._active_criticality_workers.append(worker)
+        worker.signals.finished.connect(
+            lambda worker_kind, worker_item_id, proposal, worker=worker, epoch=epoch: (
+                self._handle_criticality_proposal_finished(
+                    worker, worker_kind, worker_item_id, proposal, epoch
+                )
+            )
+        )
+        self._thread_pool.start(worker)
+
+    def _handle_criticality_proposal_finished(
+        self,
+        worker: CriticalityProposalWorker,
+        kind: CriticalityTargetKind,
+        item_id: int,
+        proposal: Criticality | None,
+        epoch: int,
+    ) -> None:
+        self._active_criticality_workers.remove(worker)
+        self._criticality_proposal_in_flight.discard((kind, item_id, epoch))
+        try:
+            if self._criticality_proposal_epoch.get((kind, item_id), 0) != epoch:
+                # Resultado de una revisión ya obsoleta (CODEX-002): ni se
+                # cachea ni se muestra; la revisión vigente tiene (o tendrá)
+                # su propio worker.
+                return
+            self._criticality_proposal_cache[(kind, item_id)] = proposal
+            # Ronda 3: no se decide aquí si se muestra — la derivación desde
+            # el estado comprueba, entre otras cosas, que el elemento siga
+            # sin marca (CLAUDE-REV-R2-001: una edición manual mientras el
+            # worker estaba en vuelo ya no resucita la propuesta).
+            self._reconcile_criticality_proposal(kind)
+        finally:
+            if not self._active_criticality_workers:
+                self.criticality_proposal_idle.emit()
+
+    @property
+    def has_pending_criticality_proposal(self) -> bool:
+        """``True`` mientras quede al menos un ``CriticalityProposalWorker``
+        en vuelo (CODEX-001): una restauración de copia de seguridad debe
+        comprobarlo antes de cerrar las conexiones a sirius.db, igual que
+        ``has_pending_category_tagging``."""
+        return len(self._active_criticality_workers) > 0
+
+    def _show_criticality_proposal(
+        self, kind: CriticalityTargetKind, item_id: int, criticality: Criticality
+    ) -> None:
+        label, confirm_button, reject_button = self._criticality_proposal_widgets[kind]
+        self._shown_criticality_proposal[kind] = (item_id, criticality)
+        label.setText(f"Sirius propone: {criticality.value}")
+        # CODEX-003: un worker que arrancó antes de un estado ocupado puede
+        # terminar durante ese intervalo; los botones deben seguir
+        # deshabilitados hasta que _set_controls_enabled(True) los reaplique
+        # a través de _refresh_criticality_proposal_buttons_enabled.
+        is_enabled = not (self._is_busy or self._is_externally_busy)
+        confirm_button.setEnabled(is_enabled)
+        reject_button.setEnabled(is_enabled)
+
+    def _hide_criticality_proposal(self, kind: CriticalityTargetKind) -> None:
+        label, confirm_button, reject_button = self._criticality_proposal_widgets[kind]
+        self._shown_criticality_proposal.pop(kind, None)
+        label.setText("")
+        confirm_button.setEnabled(False)
+        reject_button.setEnabled(False)
+
+    def _handle_confirm_criticality_clicked(self, kind: CriticalityTargetKind) -> None:
+        if self._is_busy or self._is_externally_busy:
+            return
+        shown = self._shown_criticality_proposal.get(kind)
+        if shown is None or self._set_criticality_use_case is None:
+            return
+        item_id, criticality = shown
+        try:
+            self._set_criticality_use_case.set(kind, item_id, criticality)
+        except Exception as exc:
+            _logger.error("No se pudo confirmar la criticidad propuesta (%s)", type(exc).__name__)
+            self._show_warning("No se pudo confirmar la criticidad", _GENERIC_ERROR_TEXT)
+            return
+        self._hide_criticality_proposal(kind)
+        self.refresh()
+
+    def _handle_reject_criticality_clicked(self, kind: CriticalityTargetKind) -> None:
+        if self._is_busy or self._is_externally_busy:
+            return
+        shown = self._shown_criticality_proposal.get(kind)
+        if shown is None:
+            return
+        item_id, _criticality = shown
+        # Rechazo recordado solo en memoria, solo durante esta sesión —
+        # decisión pendiente del propietario, ver ADR-131.
+        self._rejected_criticality_proposals.add((kind, item_id))
+        self._hide_criticality_proposal(kind)
+
     def _memory_for_resolution(self) -> Memory | None:
         """Prefer the ``conflicts_list`` entity (§4.2) only while it is the
         list the user last touched: acting on a conflict never depends on a
@@ -631,6 +948,15 @@ class KnowledgeWidget(QGroupBox):
             return
         self._edit_category(CategoryTargetKind.MEMORY, memory.id, "el recuerdo")
 
+    def _handle_edit_memory_criticality_clicked(self) -> None:
+        if self._is_busy or self._is_externally_busy:
+            return
+        memory = self._selected_memory()
+        if memory is None:
+            self._show_warning(_NO_SELECTION_TITLE, "Selecciona primero un recuerdo.")
+            return
+        self._edit_criticality(CriticalityTargetKind.MEMORY, memory.id, "el recuerdo")
+
     # --- Decisiones ----------------------------------------------------------
 
     def _build_decisions_section(self) -> QWidget:
@@ -658,6 +984,10 @@ class KnowledgeWidget(QGroupBox):
         self.edit_decision_category_button.clicked.connect(
             self._handle_edit_decision_category_clicked
         )
+        self.edit_decision_criticality_button = QPushButton("Editar criticidad…")
+        self.edit_decision_criticality_button.clicked.connect(
+            self._handle_edit_decision_criticality_clicked
+        )
 
         buttons_row = QHBoxLayout()
         buttons_row.addWidget(self.propose_decision_button)
@@ -666,11 +996,34 @@ class KnowledgeWidget(QGroupBox):
         buttons_row.addWidget(self.archive_decision_button)
         buttons_row.addWidget(self.decision_origin_button)
         buttons_row.addWidget(self.edit_decision_category_button)
+        buttons_row.addWidget(self.edit_decision_criticality_button)
+
+        self.decision_criticality_proposal_label = QLabel("")
+        self.confirm_decision_criticality_button = QPushButton("Confirmar")
+        self.confirm_decision_criticality_button.setEnabled(False)
+        self.confirm_decision_criticality_button.clicked.connect(
+            lambda: self._handle_confirm_criticality_clicked(CriticalityTargetKind.DECISION)
+        )
+        self.reject_decision_criticality_button = QPushButton("Rechazar")
+        self.reject_decision_criticality_button.setEnabled(False)
+        self.reject_decision_criticality_button.clicked.connect(
+            lambda: self._handle_reject_criticality_clicked(CriticalityTargetKind.DECISION)
+        )
+        self._criticality_proposal_widgets[CriticalityTargetKind.DECISION] = (
+            self.decision_criticality_proposal_label,
+            self.confirm_decision_criticality_button,
+            self.reject_decision_criticality_button,
+        )
+        criticality_proposal_row = QHBoxLayout()
+        criticality_proposal_row.addWidget(self.decision_criticality_proposal_label)
+        criticality_proposal_row.addWidget(self.confirm_decision_criticality_button)
+        criticality_proposal_row.addWidget(self.reject_decision_criticality_button)
 
         group = QGroupBox("Decisiones")
         layout = QVBoxLayout(group)
         layout.addWidget(self.decisions_list)
         layout.addLayout(buttons_row)
+        layout.addLayout(criticality_proposal_row)
         return group
 
     def _selected_decision(self) -> Decision | None:
@@ -687,6 +1040,7 @@ class KnowledgeWidget(QGroupBox):
     ) -> None:
         self._last_touched_list = self.decisions_list
         self._refresh_action_buttons_enabled()
+        self._reconcile_criticality_proposal(CriticalityTargetKind.DECISION)
 
     def _active_project_id(self) -> int | None:
         try:
@@ -850,6 +1204,15 @@ class KnowledgeWidget(QGroupBox):
             self._show_warning(_NO_SELECTION_TITLE, "Selecciona primero una decisión.")
             return
         self._edit_category(CategoryTargetKind.DECISION, decision.id, "la decisión")
+
+    def _handle_edit_decision_criticality_clicked(self) -> None:
+        if self._is_busy or self._is_externally_busy:
+            return
+        decision = self._selected_decision()
+        if decision is None:
+            self._show_warning(_NO_SELECTION_TITLE, "Selecciona primero una decisión.")
+            return
+        self._edit_criticality(CriticalityTargetKind.DECISION, decision.id, "la decisión")
 
     # --- Sugerencias pendientes (M6, SIRIUS-ARQ-0.2 §3.6) ---------------------
 
@@ -1127,6 +1490,24 @@ class KnowledgeWidget(QGroupBox):
         finally:
             self.suggestions_list.blockSignals(False)
 
+        # Repoblar las listas pierde la selección (clear() deja
+        # currentItem() en None): cualquier propuesta mostrada dejaría de
+        # corresponder a una selección vigente, así que se oculta en vez de
+        # quedar huérfana en pantalla.
+        for kind in self._criticality_proposal_widgets:
+            self._hide_criticality_proposal(kind)
+
+    def prepare_to_close(self) -> None:
+        """La ventana va a cerrarse (ronda 4 de #520): desde ahora ningún
+        ``CriticalityProposalWorker`` arranca y ninguna propuesta se muestra,
+        también si un worker en vuelo termina después o si el estado ocupado
+        se libera después. ``MainWindow`` lo llama antes de liberar el estado
+        ocupado en cualquier flujo que acabe cerrando la ventana, y en su
+        propio ``closeEvent``; es irreversible para este widget."""
+        self._is_closing = True
+        for kind in self._criticality_proposal_widgets:
+            self._hide_criticality_proposal(kind)
+
     def set_external_busy(self, is_busy: bool) -> None:
         """Coordinate with a ``MainWindow``-level operation this widget does
         not own (sending a message, or a backup/restore in flight): mirrors
@@ -1134,6 +1515,14 @@ class KnowledgeWidget(QGroupBox):
         """
         self._is_externally_busy = is_busy
         self._set_controls_enabled(not is_busy and not self._is_busy)
+        if not is_busy and not self._is_busy:
+            # Ronda 3 de #520 (CODEX-001): una selección hecha mientras el
+            # panel estaba ocupado no pudo arrancar su worker; al liberarse,
+            # la derivación desde el estado lo arranca o muestra la caché —
+            # salvo que la ventana vaya a cerrarse (``prepare_to_close``,
+            # ronda 4), en cuyo caso la derivación no arranca nada.
+            for kind in self._criticality_proposal_widgets:
+                self._reconcile_criticality_proposal(kind)
 
     def _set_controls_enabled(self, enabled: bool) -> None:
         for button in (
@@ -1141,9 +1530,11 @@ class KnowledgeWidget(QGroupBox):
             self.delete_memory_button,
             self.memory_origin_button,
             self.edit_memory_category_button,
+            self.edit_memory_criticality_button,
             self.propose_decision_button,
             self.decision_origin_button,
             self.edit_decision_category_button,
+            self.edit_decision_criticality_button,
             self.detect_conflicts_button,
             self.confirm_suggestion_button,
             self.reject_suggestion_button,
@@ -1154,8 +1545,14 @@ class KnowledgeWidget(QGroupBox):
         # conflicts_list debe reactivarlos, CODEX-003); al dejar de estarlo,
         # _refresh_action_buttons_enabled vuelve a aplicar la restricción por
         # tipo de miembro en conflicto (§4.2) en vez de reactivarlos todos.
+        # Los cuatro botones de confirmar/rechazar criticidad tampoco se
+        # fijan a ciegas, por el mismo motivo (CLAUDE-REV-002/CODEX-003):
+        # solo deben quedar habilitados si, además de no estar ocupado, hay
+        # una propuesta visible para esa sección — nunca los dos aquí, y
+        # _refresh_criticality_proposal_buttons_enabled es quien decide.
         if enabled:
             self._refresh_action_buttons_enabled()
+            self._refresh_criticality_proposal_buttons_enabled()
         else:
             for button in (
                 self.correct_memory_button,
@@ -1163,8 +1560,26 @@ class KnowledgeWidget(QGroupBox):
                 self.archive_memory_button,
                 self.supersede_decision_button,
                 self.archive_decision_button,
+                self.confirm_memory_criticality_button,
+                self.reject_memory_criticality_button,
+                self.confirm_decision_criticality_button,
+                self.reject_decision_criticality_button,
             ):
                 button.setEnabled(False)
+
+    def _refresh_criticality_proposal_buttons_enabled(self) -> None:
+        """Aplica el estado enabled/disabled correcto a los botones de
+        confirmar/rechazar criticidad de cada sección: solo el par de una
+        sección con una propuesta vigente (``_shown_criticality_proposal``)
+        queda habilitado, nunca los dos ciegamente (CLAUDE-REV-002/CODEX-003)."""
+        for kind, (
+            _label,
+            confirm_button,
+            reject_button,
+        ) in self._criticality_proposal_widgets.items():
+            has_proposal = kind in self._shown_criticality_proposal
+            confirm_button.setEnabled(has_proposal)
+            reject_button.setEnabled(has_proposal)
 
 
 __all__ = ["KnowledgeWidget"]

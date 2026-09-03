@@ -55,6 +55,7 @@ from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.project_errors import ProjectContinuityError
 from sirius.application.project_lifecycle import ProjectLifecycleUseCase
+from sirius.application.propose_criticality import ProposeCriticalityUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.propose_memory_suggestion import (
     InvalidMemorySuggestionProposalDataError,
@@ -65,6 +66,7 @@ from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageResult, SendMessageUseCase
 from sirius.application.set_category import SetCategoryUseCase
+from sirius.application.set_criticality import SetCriticalityUseCase
 from sirius.application.studio_brief import MODEL_STUDIO_BRIEF
 from sirius.application.studio_capture import CaptureFeedback, StudioCaptureUseCase
 from sirius.application.studio_voice import (
@@ -259,6 +261,8 @@ class MainWindow(QMainWindow):
         tag_category_use_case: TagCategoryUseCase | None = None,
         set_category_use_case: SetCategoryUseCase | None = None,
         category_vocabulary: frozenset[str] | None = None,
+        propose_criticality_use_case: ProposeCriticalityUseCase | None = None,
+        set_criticality_use_case: SetCriticalityUseCase | None = None,
         studio_voice_use_case: StudioVoiceUseCase | None = None,
         studio_capture_use_case: StudioCaptureUseCase | None = None,
         save_studio_voice: Callable[[str], None] | None = None,
@@ -301,6 +305,8 @@ class MainWindow(QMainWindow):
         self._tag_category_use_case = tag_category_use_case
         self._set_category_use_case = set_category_use_case
         self._category_vocabulary = category_vocabulary
+        self._propose_criticality_use_case = propose_criticality_use_case
+        self._set_criticality_use_case = set_criticality_use_case
         # Not a use case: the minimal SQLAlchemy-lifecycle mechanism a safe
         # restoration needs (see ConversationDependencies' docstring). Called
         # right before RestoreBackupUseCase so the atomic file replace is not
@@ -1213,6 +1219,8 @@ class MainWindow(QMainWindow):
             tag_category_use_case=self._tag_category_use_case,
             set_category_use_case=self._set_category_use_case,
             category_vocabulary=self._category_vocabulary,
+            propose_criticality_use_case=self._propose_criticality_use_case,
+            set_criticality_use_case=self._set_criticality_use_case,
             thread_pool=self._thread_pool,
             show_warning=self._show_warning,
             show_information=self._show_information,
@@ -1633,6 +1641,20 @@ class MainWindow(QMainWindow):
         self._last_failed_text = self._active_send_text
         self._finish_sending()
 
+    def _release_widgets_after_operation(self) -> None:
+        """Libera los tres paneles al terminar un envío, una copia o una
+        exportación — el único punto por el que pasan los cuatro flujos que
+        pueden acabar cerrando la ventana (#520, ronda 4). Si el cierre ya
+        está solicitado, el panel de conocimiento pasa antes a estado
+        terminal: ningún ``CriticalityProposalWorker`` debe arrancar sobre una
+        ventana que ``_finish_*`` cierra unas líneas más abajo, ni cuando un
+        worker en vuelo termine después del cierre."""
+        if self._close_requested:
+            self.knowledge_widget.prepare_to_close()
+        self.project_continuity_widget.set_external_busy(False)
+        self.knowledge_widget.set_external_busy(False)
+        self.context_panel_widget.set_external_busy(False)
+
     def _finish_sending(self) -> None:
         self._is_sending = False
         self._active_operation_id = None
@@ -1646,9 +1668,7 @@ class MainWindow(QMainWindow):
         self.status_label.setText("")
         self._set_backup_controls_enabled(True)
         self.export_button.setEnabled(True)
-        self.project_continuity_widget.set_external_busy(False)
-        self.knowledge_widget.set_external_busy(False)
-        self.context_panel_widget.set_external_busy(False)
+        self._release_widgets_after_operation()
         # Un fallo deja el estado en ERROR y el motivo a la vista; un envío
         # normal vuelve a PREPARADO. En ninguno de los dos casos la superficie
         # se queda colgada en PENSANDO.
@@ -1710,6 +1730,10 @@ class MainWindow(QMainWindow):
             self._close_requested = True
             event.ignore()
             return
+        # Cierre efectivo: el panel de conocimiento no debe arrancar ni
+        # mostrar nada más, aunque un worker en vuelo termine después
+        # (#520, ronda 4).
+        self.knowledge_widget.prepare_to_close()
         super().closeEvent(event)
 
     # --- Configuración ---------------------------------------------------
@@ -2047,9 +2071,7 @@ class MainWindow(QMainWindow):
         self.send_button.setEnabled(True)
         self.message_input.setEnabled(True)
         self.export_button.setEnabled(True)
-        self.project_continuity_widget.set_external_busy(False)
-        self.knowledge_widget.set_external_busy(False)
-        self.context_panel_widget.set_external_busy(False)
+        self._release_widgets_after_operation()
         self._update_retry_button()
         if self._close_requested:
             self._close_requested = False
@@ -2295,20 +2317,39 @@ class MainWindow(QMainWindow):
             )
             return
 
+        self._restore_when_knowledge_widget_idle(backup_path, password)
+
+    def _restore_when_knowledge_widget_idle(self, backup_path: Path, password: str) -> None:
+        """CODEX-001: tanto un ``CategoryTaggingWorker`` como un
+        ``CriticalityProposalWorker`` en vuelo siguen usando los repositorios
+        (``TagCategoryUseCase.tag()``/``ProposeCriticalityUseCase.propose()``)
+        y podrían reabrir una conexión a sirius.db mientras se cierra o se
+        reemplaza el fichero. Espera a que ambos terminen, uno detrás del
+        otro, antes de cerrar las conexiones; no se toca el guardado ni la
+        propuesta, que siguen siendo asíncronos. ``set_external_busy(True)``
+        ya está activo desde ``_start_backup_operation()``, así que
+        ``KnowledgeWidget`` no arranca ningún worker nuevo mientras se
+        espera."""
         if self.knowledge_widget.has_pending_category_tagging:
-            # CODEX-001: un CategoryTaggingWorker en vuelo sigue usando los
-            # repositorios (TagCategoryUseCase.tag() -> *Repository.set_category())
-            # y podría reabrir una conexión a sirius.db mientras se cierra o se
-            # reemplaza el fichero. Esperar aquí a category_tagging_idle en vez
-            # de cerrar las conexiones ahora mismo; no se toca el guardado, que
-            # sigue siendo asíncrono.
             self._set_backup_feedback(
                 self.restore_backup_status_label,
                 BACKUP_STATE_IN_PROGRESS,
                 "Esperando a que termine el etiquetado automático de categorías...",
             )
             self.knowledge_widget.category_tagging_idle.connect(
-                lambda: self._close_connections_and_start_restore(backup_path, password),
+                lambda: self._restore_when_knowledge_widget_idle(backup_path, password),
+                Qt.ConnectionType.SingleShotConnection,
+            )
+            return
+
+        if self.knowledge_widget.has_pending_criticality_proposal:
+            self._set_backup_feedback(
+                self.restore_backup_status_label,
+                BACKUP_STATE_IN_PROGRESS,
+                "Esperando a que termine la propuesta automática de criticidad...",
+            )
+            self.knowledge_widget.criticality_proposal_idle.connect(
+                lambda: self._restore_when_knowledge_widget_idle(backup_path, password),
                 Qt.ConnectionType.SingleShotConnection,
             )
             return
@@ -2371,6 +2412,10 @@ class MainWindow(QMainWindow):
         # to close, and re-enabling now-obsolete controls would be pointless.
         self._is_backup_busy = False
         self._active_backup_worker = None
+        # La ventana se cierra al final de este método (#520, rondas 3 y 4):
+        # el panel de conocimiento pasa a estado terminal antes de liberarse,
+        # para que nada arranque sobre la base recién restaurada.
+        self.knowledge_widget.prepare_to_close()
         self.project_continuity_widget.set_external_busy(False)
         self.knowledge_widget.set_external_busy(False)
         self.context_panel_widget.set_external_busy(False)
@@ -2468,9 +2513,7 @@ class MainWindow(QMainWindow):
         self.send_button.setEnabled(True)
         self.message_input.setEnabled(True)
         self._set_backup_controls_enabled(True)
-        self.project_continuity_widget.set_external_busy(False)
-        self.knowledge_widget.set_external_busy(False)
-        self.context_panel_widget.set_external_busy(False)
+        self._release_widgets_after_operation()
         self._update_retry_button()
         if self._close_requested:
             self._close_requested = False
