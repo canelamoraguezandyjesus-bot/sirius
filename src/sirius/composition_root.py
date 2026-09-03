@@ -164,8 +164,10 @@ _CATEGORY_CLASSIFIER_MODEL = _DEFAULT_OLLAMA_MODEL
 #
 # M19b (ADR-128, incidencia #514): con la puerta ABIERTA, RF-25/RF-26
 # (rescue_max_criticality_candidates) y la prioridad de G12
-# (truncate_to_hard_limit) ya no miran esta constante — miran
-# `criticality is not None` (ContextBuilder._is_protected_by_criticality).
+# (truncate_to_hard_limit) ya no miran esta constante — miran la
+# criticidad directamente (ContextBuilder._is_protected_by_criticality para
+# RF-25/RF-26; ContextBuilder._criticality_protection_rank para G12, que
+# distingue CRITICO de IMPORTANTE en vez de tratarlos por igual).
 # Esta constante sigue gobernando, sin cambios, el candado del camino
 # CERRADO (category is None or category == _MAX_CRITICALITY_CATEGORY) y D7.
 _MAX_CRITICALITY_CATEGORY = "salud"

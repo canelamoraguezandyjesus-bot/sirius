@@ -77,15 +77,21 @@ only on a vocabulary and a query.
 
 M19b (ADR-128, incidencia #514) replaces ``truncate_to_hard_limit`` and
 ``rescue_max_criticality_candidates``'s fixed ``max_criticality_category:
-str | None`` parameter with a caller-supplied ``is_protected:
-Callable[[RankedKnowledge], bool]`` predicate: neither function knows
-anything about ``category`` or ``criticality`` any more, only about
-whatever predicate it is given. ``ContextBuilder`` is the only real caller
-of either function (both wired exclusively in
-``_apply_relevance_filter``'s open-gate path); with the D7 point 6 gate
-closed, the candado-union in that same method never calls either function
-and keeps comparing ``category`` inline, byte for byte, unchanged by this
-incidence.
+str | None`` parameter with a caller-supplied predicate: neither function
+knows anything about ``category`` or ``criticality`` any more, only about
+whatever predicate it is given. ``rescue_max_criticality_candidates`` takes
+a boolean ``is_protected: Callable[[RankedKnowledge], bool]`` — RF-25/RF-26
+only ever need "protected or not". ``truncate_to_hard_limit`` takes an
+integer ``protection_rank: Callable[[RankedKnowledge], int]`` instead
+(fixed in incidencia #514's review round 2, after a first, boolean version
+could not reproduce ``aplicar_g12``'s own CRITICO-outranks-IMPORTANTE
+priority — see that function's own docstring) — lower rank survives first
+when the hard limit ties, letting the caller express as many priority tiers
+as it needs. ``ContextBuilder`` is the only real caller of either function
+(both wired exclusively in ``_apply_relevance_filter``'s open-gate path);
+with the D7 point 6 gate closed, the candado-union in that same method
+never calls either function and keeps comparing ``category`` inline, byte
+for byte, unchanged by this incidence.
 """
 
 from __future__ import annotations
@@ -336,23 +342,37 @@ def truncate_to_hard_limit(
     candidates: Sequence[RankedKnowledge],
     *,
     hard_limit: int,
-    is_protected: Callable[[RankedKnowledge], bool],
+    protection_rank: Callable[[RankedKnowledge], int],
 ) -> tuple[RankedKnowledge, ...]:
     """M15 (SIRIUS-ARQ-0.2 §11.2/§11.5, incidencia #490): the hard-limit
     half of ``G12`` — keep only the first ``hard_limit`` candidates,
-    prioritising whatever ``is_protected`` marks as "no ordinario". Replica
-    of ``aplicar_g12`` (``src/sirius/domain/staged_engine_gates.py:304-332``)
-    and its harness twin ``truncar_por_limite_duro``
+    prioritising by whatever ``protection_rank`` scores lowest. Replica of
+    ``aplicar_g12`` (``src/sirius/domain/staged_engine_gates.py:304-332``,
+    which sorts on ``-ORDEN_DE_CRITICIDAD.index(...)``) and its harness twin
+    ``truncar_por_limite_duro``
     (``tests/acceptance/staged_engine_category_and_relevance.py:544-574``,
     ADR-115).
 
     M19b (ADR-128, incidencia #514) replaced the fixed
     ``max_criticality_category: str | None`` comparison this function used
-    to make itself with a caller-supplied predicate: this function has no
-    opinion on what "protected" means — ``ContextBuilder`` decides, and with
-    the D7 point 6 gate open that predicate is ``criticality is not None``
-    (CRITICO or IMPORTANTE), never a category comparison (see
-    ``context._is_protected_by_criticality``).
+    to make itself with a caller-supplied predicate. A first version of that
+    replacement (incidencia #514, ronda 1) used a boolean ``is_protected``,
+    which could only ever split candidates into two tiers and therefore
+    could not reproduce ``aplicar_g12``'s own priority among protected
+    candidates: CRITICO must outrank IMPORTANTE, not merely tie with it (an
+    IMPORTANTE arriving earlier in ``candidates`` must not survive over a
+    CRITICO arriving later — caught by
+    ``test_truncate_to_hard_limit_prioritises_critico_over_importante_even_when_importante_arrives_first``
+    in ``tests/unit/test_relevance_domain.py``). ``protection_rank`` fixes
+    that: this function still has no opinion on what "protected" means or
+    how many tiers exist — ``ContextBuilder`` decides — but the caller can
+    now express as many priority tiers as it needs (lower rank survives
+    first) instead of only two. With the D7 point 6 gate open,
+    ``ContextBuilder`` ranks CRITICO above IMPORTANTE above ordinary (see
+    ``context._criticality_protection_rank``); ``rescue_max_criticality_candidates``
+    below is unaffected and keeps the boolean ``is_protected`` predicate,
+    since RF-25/RF-26 only ever needs "protected or not", never a priority
+    among protected levels.
 
     Returns the survivors in their ORIGINAL relative order (never the
     priority order used only to decide who survives): who is kept is this
@@ -360,7 +380,7 @@ def truncate_to_hard_limit(
     contract ``_apply_relevance_filter`` already relies on for the
     filter/candado union.
     """
-    prioritised = sorted(candidates, key=lambda candidate: not is_protected(candidate))
+    prioritised = sorted(candidates, key=protection_rank)
     survivors = {id(candidate) for candidate in prioritised[:hard_limit]}
     return tuple(candidate for candidate in candidates if id(candidate) in survivors)
 

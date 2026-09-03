@@ -607,17 +607,37 @@ def test_candidate_currently_valid_admits_a_valid_to_after_the_target_time() -> 
 
 # --- M15 (§11.2/§11.5, incidencia #490): truncate_to_hard_limit, the hard- ---
 # --- limit half of G12, replica of truncar_por_limite_duro (ADR-115). Since ---
-# --- M19b (ADR-128, incidencia #514) the predicate is caller-supplied ------
-# --- (``is_protected``) instead of a fixed ``max_criticality_category`` — ---
-# --- these tests exercise it with the same criticality-based predicate ----
-# --- ContextBuilder itself builds for the open-gate path. -----------------
+# --- M19b (ADR-128, incidencia #514) the priority is caller-supplied -------
+# --- (``protection_rank``) instead of a fixed ``max_criticality_category`` -
+# --- these tests exercise it with the same criticality-based rank ---------
+# --- ContextBuilder itself builds for the open-gate path: CRITICO (0) -----
+# --- outranks IMPORTANTE (1), which outranks ordinary (2) — fixed in ------
+# --- this incidencia's review round 2 after a first, boolean version ------
+# --- (is_protected) could only ever tell "protected" from "ordinary", -----
+# --- never CRITICO from IMPORTANTE. ----------------------------------------
 
 
 def _is_not_ordinary(candidate: RankedKnowledge) -> bool:
-    """The M19b (ADR-128) predicate ``ContextBuilder`` builds for the
-    open-gate path: "no ordinario" is ``criticality is not None`` (CRITICO
-    or IMPORTANTE), never a category comparison."""
+    """The M19b (ADR-128) predicate ``ContextBuilder`` builds for
+    ``rescue_max_criticality_candidates`` (RF-25/RF-26): "no ordinario" is
+    ``criticality is not None`` (CRITICO or IMPORTANTE), never a category
+    comparison. RF-25/RF-26 only ever need "protected or not" — unlike G12
+    below, this stays a boolean."""
     return candidate.item.criticality is not None
+
+
+def _criticality_rank(candidate: RankedKnowledge) -> int:
+    """The M19b (ADR-128, review round 2) priority ``ContextBuilder`` builds
+    for ``truncate_to_hard_limit`` (G12): CRITICO (0) outranks IMPORTANTE
+    (1), which outranks every ordinary candidate (2) — mirrors
+    ``aplicar_g12``'s own ``-ORDEN_DE_CRITICIDAD.index(...)`` sort key
+    (``src/sirius/domain/staged_engine_gates.py:333``)."""
+    criticality = candidate.item.criticality
+    if criticality is Criticality.CRITICO:
+        return 0
+    if criticality is Criticality.IMPORTANTE:
+        return 1
+    return 2
 
 
 def test_truncate_to_hard_limit_keeps_everything_under_the_limit() -> None:
@@ -625,7 +645,7 @@ def test_truncate_to_hard_limit_keeps_everything_under_the_limit() -> None:
     critical = _ranked_memory(dataclasses.replace(_memory(2), criticality=Criticality.CRITICO))
 
     result = truncate_to_hard_limit(
-        [ordinary, critical], hard_limit=5, is_protected=_is_not_ordinary
+        [ordinary, critical], hard_limit=5, protection_rank=_criticality_rank
     )
 
     assert result == (ordinary, critical)
@@ -636,10 +656,33 @@ def test_truncate_to_hard_limit_keeps_the_protected_candidate_over_an_ordinary_o
     critical = _ranked_memory(dataclasses.replace(_memory(2), criticality=Criticality.CRITICO))
 
     result = truncate_to_hard_limit(
-        [ordinary, critical], hard_limit=1, is_protected=_is_not_ordinary
+        [ordinary, critical], hard_limit=1, protection_rank=_criticality_rank
     )
 
     assert result == (critical,)
+
+
+def test_truncate_to_hard_limit_prioritises_critico_over_importante_even_when_importante_arrives_first() -> (  # noqa: E501
+    None
+):
+    """CODEX-001 (revisión de la incidencia #514, PR #515): con el límite
+    duro atado y un IMPORTANTE precedente a un CRITICO, un ``is_protected``
+    booleano agrupaba ambos como igualmente protegidos y conservaba el
+    orden de llegada, devolviendo el IMPORTANTE. G12 ordena por criticidad
+    (``docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:1737-1742``):
+    CRITICO debe desplazar a IMPORTANTE aunque este llegue antes."""
+    importante_first = _ranked_memory(
+        dataclasses.replace(_memory(1), criticality=Criticality.IMPORTANTE)
+    )
+    critico_second = _ranked_memory(
+        dataclasses.replace(_memory(2), criticality=Criticality.CRITICO)
+    )
+
+    result = truncate_to_hard_limit(
+        [importante_first, critico_second], hard_limit=1, protection_rank=_criticality_rank
+    )
+
+    assert result == (critico_second,)
 
 
 def test_truncate_to_hard_limit_preserves_original_relative_order_of_survivors() -> None:
@@ -653,7 +696,7 @@ def test_truncate_to_hard_limit_preserves_original_relative_order_of_survivors()
     result = truncate_to_hard_limit(
         [first_ordinary, critical, second_ordinary],
         hard_limit=3,
-        is_protected=_is_not_ordinary,
+        protection_rank=_criticality_rank,
     )
 
     assert result == (first_ordinary, critical, second_ordinary)
@@ -663,10 +706,11 @@ def test_truncate_to_hard_limit_without_any_protected_candidate() -> None:
     first = _ranked_memory(dataclasses.replace(_memory(1), criticality=Criticality.CRITICO))
     second = _ranked_memory(_memory(2))
 
-    result = truncate_to_hard_limit([first, second], hard_limit=1, is_protected=lambda _: False)
+    result = truncate_to_hard_limit([first, second], hard_limit=1, protection_rank=lambda _: 0)
 
-    # With no candidate ever protected, the first hard_limit candidates in
-    # their original order survive — same stable-sort guarantee as before.
+    # With every candidate ranked identically, the first hard_limit
+    # candidates in their original order survive — same stable-sort
+    # guarantee as before.
     assert result == (first,)
 
 
@@ -802,7 +846,7 @@ def test_g12_hard_limit_exclusion_is_final_and_is_never_undone_by_rf25_rescue() 
     gated = truncate_to_hard_limit(
         [kept_by_filter, rescuable_by_rf25, excluded_by_g12],
         hard_limit=2,
-        is_protected=_is_not_ordinary,
+        protection_rank=_criticality_rank,
     )
     assert excluded_by_g12 not in gated
 
