@@ -40,16 +40,26 @@ El fallo vive en `rescue_max_criticality_candidates` y
 `truncate_to_hard_limit` (`src/sirius/domain/relevance.py`): ambas reciben
 `max_criticality_category: str | None` y comparan `candidate.item.category`
 contra él — la señal de *tema*, no la de *cuánto importa*. El arreglo vive
-en las mismas dos funciones, que pasan a recibir un predicado
-`is_protected: Callable[[RankedKnowledge], bool]` en vez de la categoría; y
-en `ContextBuilder._apply_relevance_filter`
-(`src/sirius/application/context.py`), que con la puerta ABIERTA construye
-ese predicado sobre `criticality is not None` en vez de sobre `category`. Sí
-puede observarse: cada pieza tiene su propia prueba unitaria de dominio
-(RF-25/RF-26 y G12 con predicados de criticidad, ambas vistas fallar antes
-del cambio con `TypeError` por el parámetro inexistente) y de integración
-(`ContextBuilder` real con un doble de filtro que descarta un CRITICO de
-categoría `finanzas`), y el banco de 47 casos mide el agregado.
+en las mismas dos funciones, que dejan de recibir la categoría:
+`rescue_max_criticality_candidates` pasa a recibir un predicado
+`is_protected: Callable[[RankedKnowledge], bool]` (RF-25/RF-26 solo
+necesitan "protegido o no"); `truncate_to_hard_limit` pasa a recibir
+`protection_rank: Callable[[RankedKnowledge], int]` (corregido en la ronda
+2 de esta revisión, CODEX-001: una primera versión reutilizó el mismo
+booleano para G12, lo que dejaba a un IMPORTANTE llegado antes en la lista
+sobrevivir sobre un CRITICO llegado después; G12 necesita un rango de tres
+niveles — CRITICO=0, IMPORTANTE=1, ordinario=2 — porque prioriza *entre*
+candidatos protegidos al truncar, algo que RF-25/RF-26 nunca necesitan
+decidir). En `ContextBuilder._apply_relevance_filter`
+(`src/sirius/application/context.py`), con la puerta ABIERTA,
+`_is_protected_by_criticality` (booleano, `criticality is not None`)
+construye el predicado de RF-25/RF-26 y `_criticality_protection_rank`
+(entero de tres niveles) construye el de G12 — ninguno de los dos mira ya
+`category`. Sí puede observarse: cada pieza tiene su propia prueba unitaria
+de dominio (RF-25/RF-26 y G12 con predicados de criticidad, ambas vistas
+fallar antes del cambio con `TypeError` por el parámetro inexistente) y de
+integración (`ContextBuilder` real con un doble de filtro que descarta un
+CRITICO de categoría `finanzas`), y el banco de 47 casos mide el agregado.
 
 **2. ¿Qué NO va a garantizar esto?**
 
@@ -135,32 +145,56 @@ que esa prueba SÍ detecta la ausencia de esa protección.
 
 ## Decisión
 
-`truncate_to_hard_limit` y `rescue_max_criticality_candidates`
-(`src/sirius/domain/relevance.py`) cambian su parámetro
-`max_criticality_category: str | None` por
-`is_protected: Callable[[RankedKnowledge], bool]`. Se conserva el nombre
-público `rescue_max_criticality_candidates` (cambiarlo obligaría a tocar
-más superficie de la necesaria); su docstring documenta que «máxima
+`rescue_max_criticality_candidates` (`src/sirius/domain/relevance.py`)
+cambia su parámetro `max_criticality_category: str | None` por
+`is_protected: Callable[[RankedKnowledge], bool]`: RF-25/RF-26 solo
+necesitan distinguir protegido de no protegido, nunca priorizar entre dos
+candidatos protegidos. Se conserva el nombre público
+`rescue_max_criticality_candidates` (cambiarlo obligaría a tocar más
+superficie de la necesaria); su docstring documenta que «máxima
 criticidad» ahora la decide el predicado que reciba, y que
-`ContextBuilder` es quien construye ese predicado según la puerta.
+`ContextBuilder` es quien lo construye según la puerta.
+
+`truncate_to_hard_limit` cambia el mismo parámetro por
+`protection_rank: Callable[[RankedKnowledge], int]`, no por un booleano: a
+diferencia de RF-25/RF-26, G12 prioriza *entre* candidatos protegidos al
+truncar por el límite duro, y un booleano agruparía CRITICO e IMPORTANTE en
+un mismo nivel, dejando que el orden de llegada decidiera cuál sobrevive
+entre los dos. Esto se corrigió en la ronda 2 de esta revisión (CODEX-001):
+la primera versión reutilizaba el mismo `is_protected` booleano también
+para G12, y una prueba dedicada
+(`test_truncate_to_hard_limit_prioritises_critico_over_importante_even_when_importante_arrives_first`,
+`tests/unit/test_relevance_domain.py`) demostró que un IMPORTANTE llegado
+antes en la lista sobrevivía sobre un CRITICO llegado después. Menor
+sobrevive antes, con tres niveles — CRITICO=0, IMPORTANTE=1, ordinario=2 —,
+el mismo orden que `aplicar_g12` ya usaba
+(`src/sirius/domain/staged_engine_gates.py:333`, `ORDEN_DE_CRITICIDAD`).
 
 `ContextBuilder._apply_relevance_filter`
-(`src/sirius/application/context.py`) gana una función privada de módulo,
-`_is_protected_by_criticality(candidate) -> candidate.item.criticality is
-not None`, y la pasa como `is_protected` a las dos llamadas del camino
-ABIERTO (G12 y RF-25/RF-26). El camino CERRADO no cambia: sigue comparando
-`category is None or category == self._max_criticality_category` inline,
-sin pasar por ninguna de las dos funciones de dominio. La protección
-incondicional de `category is None` en el camino ABIERTO tampoco cambia.
-`_MAX_CRITICALITY_CATEGORY`
+(`src/sirius/application/context.py`) gana dos funciones privadas de
+módulo: `_is_protected_by_criticality(candidate) -> candidate.item.criticality
+is not None`, que pasa como `is_protected` a la llamada de
+`rescue_max_criticality_candidates` (RF-25/RF-26); y
+`_criticality_protection_rank(candidate) -> int`, que pasa como
+`protection_rank` a la llamada de `truncate_to_hard_limit` (G12), con
+CRITICO=0, IMPORTANTE=1 y ordinario=2. El camino CERRADO no cambia: sigue
+comparando `category is None or category == self._max_criticality_category`
+inline, sin pasar por ninguna de las dos funciones de dominio. La
+protección incondicional de `category is None` en el camino ABIERTO
+tampoco cambia. `_MAX_CRITICALITY_CATEGORY`
 (`composition_root.py:164`) se conserva sin modificar; su docstring pasa a
 decir que solo gobierna ya el camino cerrado.
 
 ## Comprobación que la sostiene
 
 Comandos ejecutados tras completar la implementación (predicado
-`is_protected` en las dos funciones de dominio, `_is_protected_by_criticality`
-en `ContextBuilder`, camino cerrado intacto), en este orden:
+`is_protected` en `rescue_max_criticality_candidates`, `protection_rank` en
+`truncate_to_hard_limit`, `_is_protected_by_criticality` y
+`_criticality_protection_rank` en `ContextBuilder`, camino cerrado intacto),
+en este orden — los pasos 1 a 4 corresponden a la ronda 1 de esta revisión
+(antes de que `protection_rank` sustituyera a `is_protected` en G12); el
+paso 5 se repitió al completar la ronda 2 (CODEX-001) y refleja ya esa
+corrección:
 
 1. Pruebas nuevas vistas fallar antes del cambio (ADR-001):
    `uv run pytest tests/unit/test_relevance_domain.py -q` contra el código
@@ -189,10 +223,13 @@ en `ContextBuilder`, camino cerrado intacto), en este orden:
 5. `uv run ruff format --check .` → `587 files already formatted`.
    `uv run ruff check .` → `All checks passed!`.
    `uv run mypy src tests` → `Success: no issues found in 555 source files`.
-   `uv run pytest -q` (suite completa) → `4569 passed, 15 skipped, 2 xfailed`
-   en 423 s (una prueba más que en M19a: la nueva de integración que rescata
-   un IMPORTANTE). Ningún fallo, ninguna prueba debilitada u omitida.
-   `git diff --check` → limpio (sin salida, código de salida 0).
+   `uv run pytest -q` (suite completa) → `4570 passed, 15 skipped, 2 xfailed`
+   en 445 s — cifra tras la corrección de la ronda 2 (CODEX-001), que añadió
+   `protection_rank` a G12 y su prueba de regresión
+   `test_truncate_to_hard_limit_prioritises_critico_over_importante_even_when_importante_arrives_first`
+   (una prueba más que la ronda 1, que había cerrado con `4569 passed`).
+   Ningún fallo, ninguna prueba debilitada u omitida. `git diff --check` →
+   limpio (sin salida, código de salida 0).
 6. Prueba por mutación (ADR-001), en dos niveles:
    - Dominio: `test_rf25_rescue_mutation_excluding_importante_is_caught_by_the_importante_test`
      (`tests/unit/test_relevance_domain.py`) construye el mismo montaje que
