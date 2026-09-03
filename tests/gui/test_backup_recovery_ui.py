@@ -293,12 +293,13 @@ class _BlockingProposeCriticalityUseCase:
 
         self._continue_event = threading.Event()
         self._result = result
+        self.calls: list[tuple[Any, int]] = []
 
     def release(self) -> None:
         self._continue_event.set()
 
     def propose(self, kind: Any, item_id: int) -> Criticality | None:
-        del kind, item_id
+        self.calls.append((kind, item_id))
         self._continue_event.wait(timeout=5)
         return self._result
 
@@ -1530,3 +1531,45 @@ def test_opening_the_folder_does_nothing_before_any_backup_exists(
 
     assert opened == []
     assert window.validate_backup_path_input.text() == ""
+
+
+@pytest.mark.gui
+def test_close_requested_during_a_backup_starts_no_criticality_proposal_when_it_finishes(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CLAUDE-REV-R4-001 / CODEX-002 (ronda 4 de #520): el usuario pide
+    cerrar Sirius mientras se crea una copia (``closeEvent`` difiere el
+    cierre) con un recuerdo sin criticidad seleccionado. Cuando la copia
+    termina, ``_finish_backup_operation`` libera los paneles y cierra la
+    ventana: ningún ``CriticalityProposalWorker`` debe arrancar en ese paso
+    — sería una llamada a Ollama de hasta 30 s sobre una ventana que se
+    cierra. Mismo camino (``_release_widgets_after_operation``) para el
+    envío y la exportación."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    _save_memory(database_path, "sin criticidad todavía")
+    create_use_case = _BlockingCreateBackupUseCase()
+    create_use_case.set_result(_fake_backup_result(tmp_path / "backups" / "copia.siriusbackup"))
+    propose_criticality_use_case = _BlockingProposeCriticalityUseCase()
+    infos: list[tuple[str, str]] = []
+    window = _build_window(
+        database_path,
+        create_backup_use_case=create_use_case,
+        show_information=lambda title, text: infos.append((title, text)),
+        propose_criticality_use_case=propose_criticality_use_case,
+    )
+    qtbot.addWidget(window)
+    window.show()
+    window.create_backup_password_input.setText(_PASSWORD)
+    window.create_backup_password_repeat_input.setText(_PASSWORD)
+    window.create_backup_button.click()
+    qtbot.waitUntil(lambda: create_use_case.received_passwords != [], timeout=5000)
+    # Selección hecha con el panel ocupado por la copia: no arranca worker.
+    window.knowledge_widget.memories_list.setCurrentRow(0)
+    assert propose_criticality_use_case.calls == []
+    window.close()  # deferred: the backup is still in progress
+    assert window.isVisible() is True
+    create_use_case.release()
+    qtbot.waitUntil(lambda: not window.isVisible(), timeout=5000)
+    qtbot.wait(200)
+    assert propose_criticality_use_case.calls == []
+    assert not window.knowledge_widget.has_pending_criticality_proposal

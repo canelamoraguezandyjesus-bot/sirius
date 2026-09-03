@@ -353,6 +353,13 @@ class KnowledgeWidget(QGroupBox):
         # CriticalityProposalWorker en vuelo necesita una referencia fuerte
         # propia hasta que su señal finished se procese.
         self._active_criticality_workers: list[CriticalityProposalWorker] = []
+        # Estado terminal (ronda 4 de #520): cuando la ventana va a cerrarse,
+        # ``prepare_to_close`` lo fija y ya no se arranca ningún worker ni se
+        # muestra ninguna propuesta, pase lo que pase después (un worker en
+        # vuelo que termina, una liberación del estado ocupado, una
+        # selección). Es persistente hasta destruir el widget: un interruptor
+        # por llamada no bastaba (rondas 3 y 4).
+        self._is_closing = False
         # La propuesta mostrada ahora mismo por sección (memorias/decisiones),
         # si hay alguna: (item_id, criticidad propuesta).
         self._shown_criticality_proposal: dict[CriticalityTargetKind, tuple[int, Criticality]] = {}
@@ -723,6 +730,9 @@ class KnowledgeWidget(QGroupBox):
         últimas dos las comprueba ``_start_criticality_proposal_worker``).
         Los manejadores de eventos solo actualizan el estado y llaman aquí;
         ninguno decide por su cuenta qué mostrar."""
+        if self._is_closing:
+            self._hide_criticality_proposal(kind)
+            return
         self._hide_criticality_proposal(kind)
         item = (
             self._selected_memory()
@@ -754,7 +764,7 @@ class KnowledgeWidget(QGroupBox):
         antes de cerrar y reemplazar sirius.db."""
         if self._propose_criticality_use_case is None or self._thread_pool is None:
             return
-        if self._is_busy or self._is_externally_busy:
+        if self._is_closing or self._is_busy or self._is_externally_busy:
             return
         key = (kind, item_id)
         epoch = self._criticality_proposal_epoch.get(key, 0)
@@ -1487,21 +1497,30 @@ class KnowledgeWidget(QGroupBox):
         for kind in self._criticality_proposal_widgets:
             self._hide_criticality_proposal(kind)
 
-    def set_external_busy(self, is_busy: bool, *, resume_proposals: bool = True) -> None:
+    def prepare_to_close(self) -> None:
+        """La ventana va a cerrarse (ronda 4 de #520): desde ahora ningún
+        ``CriticalityProposalWorker`` arranca y ninguna propuesta se muestra,
+        también si un worker en vuelo termina después o si el estado ocupado
+        se libera después. ``MainWindow`` lo llama antes de liberar el estado
+        ocupado en cualquier flujo que acabe cerrando la ventana, y en su
+        propio ``closeEvent``; es irreversible para este widget."""
+        self._is_closing = True
+        for kind in self._criticality_proposal_widgets:
+            self._hide_criticality_proposal(kind)
+
+    def set_external_busy(self, is_busy: bool) -> None:
         """Coordinate with a ``MainWindow``-level operation this widget does
         not own (sending a message, or a backup/restore in flight): mirrors
         ``ProjectContinuityWidget.set_external_busy``.
         """
         self._is_externally_busy = is_busy
         self._set_controls_enabled(not is_busy and not self._is_busy)
-        if not is_busy and not self._is_busy and resume_proposals:
+        if not is_busy and not self._is_busy:
             # Ronda 3 de #520 (CODEX-001): una selección hecha mientras el
             # panel estaba ocupado no pudo arrancar su worker; al liberarse,
-            # la derivación desde el estado lo arranca o muestra la caché.
-            # ``resume_proposals=False`` es para los flujos terminales de
-            # ``MainWindow`` (ronda 3, CODEX-001): la ventana va a cerrarse
-            # y un worker nuevo solo alargaría el cierre o tocaría una base
-            # recién restaurada sin que la propuesta llegara a verse.
+            # la derivación desde el estado lo arranca o muestra la caché —
+            # salvo que la ventana vaya a cerrarse (``prepare_to_close``,
+            # ronda 4), en cuyo caso la derivación no arranca nada.
             for kind in self._criticality_proposal_widgets:
                 self._reconcile_criticality_proposal(kind)
 

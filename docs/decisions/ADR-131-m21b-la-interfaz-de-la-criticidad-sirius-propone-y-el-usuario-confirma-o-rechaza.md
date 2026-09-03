@@ -356,6 +356,46 @@ suprimir el descarte por época (`if False:`) →
 `test_releasing_the_busy_state_without_resume_starts_no_proposal_worker`
 **falla** (arranca el worker).
 
+### Ronda 4 → corrección (propietario): el estado terminal es persistente
+
+Tres hallazgos (severidad 7), todos sobre la corrección de la ronda 3, que
+tenía la forma equivocada: `resume_proposals` era un interruptor **por
+llamada**, aplicado a dos de los cuatro flujos que pueden cerrar la
+ventana — faltaban `_finish_backup_operation` y `_finish_export_operation`
+(CLAUDE-REV-R4-001, alta; CODEX-002, P2) — y no impedía que un worker en
+vuelo que terminase después del cierre reconciliara sobre una ventana ya
+cerrada y arrancase otro (CODEX-001, P2).
+
+Corrección de raíz, no otro sitio más con el interruptor:
+
+- `KnowledgeWidget.prepare_to_close()` fija un estado terminal
+  **persistente** (`_is_closing`): la derivación no muestra nada y
+  `_start_criticality_proposal_worker` no arranca nada, pase lo que pase
+  después (fin de un worker en vuelo, liberación del estado ocupado, una
+  selección). `resume_proposals` desaparece.
+- `MainWindow._release_widgets_after_operation()` es el único punto por el
+  que pasan los tres `_finish_*` (envío, copia, exportación): si el cierre
+  está solicitado, llama a `prepare_to_close()` antes de liberar.
+  `_on_restore_backup_succeeded` lo llama siempre (cierra al final), y
+  `closeEvent` lo llama en el cierre efectivo, de modo que un cierre directo
+  con un worker en vuelo tampoco reanuda nada.
+
+Pruebas: la del widget de la ronda 3 pasa a usar `prepare_to_close`;
+`test_a_worker_finishing_after_prepare_to_close_starts_nothing_and_shows_nothing`
+(A en vuelo, B seleccionado en ocupado, cierre solicitado, liberación, A
+termina: ni propuesta ni segundo worker); y a nivel de `MainWindow`,
+`test_close_requested_during_a_backup_starts_no_criticality_proposal_when_it_finishes`
+(cierre pedido durante una copia con un recuerdo sin marca seleccionado:
+al terminar la copia no arranca ningún worker y la ventana se cierra).
+
+Comprobación: `ruff check` limpio, `mypy` sin incidencias (562 archivos);
+`test_knowledge_widget.py` + `test_backup_recovery_ui.py` +
+`test_criticality_proposal_worker.py` + `test_main_window.py` +
+`test_validated_main_window.py` → `144 passed`. Dos mutaciones vistas
+fallar y restauradas por copia: `prepare_to_close` sin fijar el estado →
+fallan las dos pruebas del widget; el helper sin llamar a
+`prepare_to_close` → falla la prueba de `MainWindow`.
+
 ## Consecuencias
 
 - Se cierra M21 (M21a + M21b): Sirius puede sugerir criticidad y el

@@ -2824,15 +2824,16 @@ def test_correcting_a_memory_while_its_worker_is_in_flight_requests_the_new_revi
 
 
 @pytest.mark.gui
-def test_releasing_the_busy_state_without_resume_starts_no_proposal_worker(
+def test_releasing_the_busy_state_after_prepare_to_close_starts_no_proposal_worker(
     qtbot: QtBot, tmp_path: Path
 ) -> None:
-    """CODEX-001 (ronda 3): los flujos terminales de ``MainWindow`` (un envío
-    que termina con el cierre ya solicitado; una restauración de copia que
-    va a cerrar la ventana) liberan el estado ocupado sin reanudar la
-    propuesta: no debe arrancar ningún worker — en producción sería una
-    llamada a Ollama de hasta 30 s sobre una ventana que se cierra o una
-    base recién restaurada."""
+    """CODEX-001 (ronda 3) y ronda 4: los flujos terminales de ``MainWindow``
+    (un envío, una copia o una exportación que terminan con el cierre ya
+    solicitado; una restauración que va a cerrar la ventana) llaman a
+    ``prepare_to_close`` antes de liberar el estado ocupado: no debe
+    arrancar ningún worker — en producción sería una llamada a Ollama de
+    hasta 30 s sobre una ventana que se cierra o una base recién
+    restaurada."""
     dependencies = _bootstrapped_dependencies(tmp_path)
     dependencies.save_manual_memory_use_case.save("sin criticidad todavía")
     propose_criticality_use_case = _RecordingProposeCriticalityUseCase(Criticality.CRITICO)
@@ -2848,10 +2849,50 @@ def test_releasing_the_busy_state_without_resume_starts_no_proposal_worker(
     widget.set_external_busy(True)
     widget.memories_list.setCurrentRow(0)
     assert propose_criticality_use_case.calls == []
-    widget.set_external_busy(False, resume_proposals=False)
+    widget.prepare_to_close()
+    widget.set_external_busy(False)
     assert thread_pool.waitForDone(200) is True or thread_pool.activeThreadCount() == 0
     assert propose_criticality_use_case.calls == []
     assert not widget.has_pending_criticality_proposal
     assert widget.memory_criticality_proposal_label.text() == ""
     # Los controles sí se han liberado.
     assert widget.save_memory_button.isEnabled()
+
+
+@pytest.mark.gui
+def test_a_worker_finishing_after_prepare_to_close_starts_nothing_and_shows_nothing(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CODEX-001 (ronda 4): el estado terminal es persistente. Con el worker
+    de A en vuelo, el panel pasa a ocupado, el usuario selecciona B (sin
+    marca), se solicita el cierre (``prepare_to_close``) y se libera el
+    estado ocupado; cuando A termina después, ni se muestra su propuesta ni
+    arranca el worker de B — un interruptor de un solo uso al liberar no
+    bastaba."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.save_manual_memory_use_case.save("recuerdo A")
+    dependencies.save_manual_memory_use_case.save("recuerdo B")
+    propose_criticality_use_case = _BlockingProposeCriticalityUseCase(Criticality.CRITICO)
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+        thread_pool=thread_pool,
+    )
+    qtbot.addWidget(widget)
+    widget.memories_list.setCurrentRow(0)
+    qtbot.waitUntil(lambda: len(propose_criticality_use_case.calls) == 1, timeout=5000)
+    widget.set_external_busy(True)
+    widget.memories_list.setCurrentRow(1)
+    assert len(propose_criticality_use_case.calls) == 1
+    widget.prepare_to_close()
+    widget.set_external_busy(False)
+    assert len(propose_criticality_use_case.calls) == 1
+    propose_criticality_use_case.release()
+    assert thread_pool.waitForDone(5000)
+    qtbot.wait(200)
+    assert len(propose_criticality_use_case.calls) == 1
+    assert widget.memory_criticality_proposal_label.text() == ""
+    assert not widget.has_pending_criticality_proposal

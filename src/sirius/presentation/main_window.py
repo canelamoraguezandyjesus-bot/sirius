@@ -1641,6 +1641,20 @@ class MainWindow(QMainWindow):
         self._last_failed_text = self._active_send_text
         self._finish_sending()
 
+    def _release_widgets_after_operation(self) -> None:
+        """Libera los tres paneles al terminar un envío, una copia o una
+        exportación — el único punto por el que pasan los cuatro flujos que
+        pueden acabar cerrando la ventana (#520, ronda 4). Si el cierre ya
+        está solicitado, el panel de conocimiento pasa antes a estado
+        terminal: ningún ``CriticalityProposalWorker`` debe arrancar sobre una
+        ventana que ``_finish_*`` cierra unas líneas más abajo, ni cuando un
+        worker en vuelo termine después del cierre."""
+        if self._close_requested:
+            self.knowledge_widget.prepare_to_close()
+        self.project_continuity_widget.set_external_busy(False)
+        self.knowledge_widget.set_external_busy(False)
+        self.context_panel_widget.set_external_busy(False)
+
     def _finish_sending(self) -> None:
         self._is_sending = False
         self._active_operation_id = None
@@ -1654,12 +1668,7 @@ class MainWindow(QMainWindow):
         self.status_label.setText("")
         self._set_backup_controls_enabled(True)
         self.export_button.setEnabled(True)
-        self.project_continuity_widget.set_external_busy(False)
-        # Con el cierre ya solicitado no se reanuda ninguna propuesta de
-        # criticidad (#520, ronda 3, CODEX-001): arrancaría un worker sobre
-        # una ventana que se cierra en la línea siguiente.
-        self.knowledge_widget.set_external_busy(False, resume_proposals=not self._close_requested)
-        self.context_panel_widget.set_external_busy(False)
+        self._release_widgets_after_operation()
         # Un fallo deja el estado en ERROR y el motivo a la vista; un envío
         # normal vuelve a PREPARADO. En ninguno de los dos casos la superficie
         # se queda colgada en PENSANDO.
@@ -1721,6 +1730,10 @@ class MainWindow(QMainWindow):
             self._close_requested = True
             event.ignore()
             return
+        # Cierre efectivo: el panel de conocimiento no debe arrancar ni
+        # mostrar nada más, aunque un worker en vuelo termine después
+        # (#520, ronda 4).
+        self.knowledge_widget.prepare_to_close()
         super().closeEvent(event)
 
     # --- Configuración ---------------------------------------------------
@@ -2058,9 +2071,7 @@ class MainWindow(QMainWindow):
         self.send_button.setEnabled(True)
         self.message_input.setEnabled(True)
         self.export_button.setEnabled(True)
-        self.project_continuity_widget.set_external_busy(False)
-        self.knowledge_widget.set_external_busy(False)
-        self.context_panel_widget.set_external_busy(False)
+        self._release_widgets_after_operation()
         self._update_retry_button()
         if self._close_requested:
             self._close_requested = False
@@ -2401,11 +2412,12 @@ class MainWindow(QMainWindow):
         # to close, and re-enabling now-obsolete controls would be pointless.
         self._is_backup_busy = False
         self._active_backup_worker = None
+        # La ventana se cierra al final de este método (#520, rondas 3 y 4):
+        # el panel de conocimiento pasa a estado terminal antes de liberarse,
+        # para que nada arranque sobre la base recién restaurada.
+        self.knowledge_widget.prepare_to_close()
         self.project_continuity_widget.set_external_busy(False)
-        # La ventana se cierra al final de este método: no se reanuda
-        # ninguna propuesta de criticidad sobre la base recién restaurada
-        # (#520, ronda 3, CODEX-001).
-        self.knowledge_widget.set_external_busy(False, resume_proposals=False)
+        self.knowledge_widget.set_external_busy(False)
         self.context_panel_widget.set_external_busy(False)
         self._clear_backup_feedback(self.restore_backup_status_label)
         self._set_backup_feedback(
@@ -2501,9 +2513,7 @@ class MainWindow(QMainWindow):
         self.send_button.setEnabled(True)
         self.message_input.setEnabled(True)
         self._set_backup_controls_enabled(True)
-        self.project_continuity_widget.set_external_busy(False)
-        self.knowledge_widget.set_external_busy(False)
-        self.context_panel_widget.set_external_busy(False)
+        self._release_widgets_after_operation()
         self._update_retry_button()
         if self._close_requested:
             self._close_requested = False
