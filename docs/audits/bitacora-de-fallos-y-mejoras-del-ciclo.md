@@ -204,6 +204,30 @@ ADR o su incidencia cuando se adopte.
   archivos conocidos), búsquedas directas; reservar los subagentes para
   barridos anchos.
 
+### 14. M21b: dos huecos en mi orden que la revisión encontró (15:30 UTC)
+
+- **Qué falló.** La ronda 1 de #520 devolvió seis hallazgos; cuatro son
+  del implementador (botones no deshabilitados en estado ocupado,
+  aritmética del ADR), pero dos vienen de cómo escribí la orden:
+  (a) pedí «caché de sesión por (kind, id)» — si el usuario corrige el
+  recuerdo (revisión nueva, mismo id), la propuesta calculada sobre el
+  contenido viejo seguiría valiendo y podría confirmarse sobre el nuevo
+  (CODEX-002, P1); (b) pedí «calcado de `CategoryTaggingWorker`» pero no
+  nombré la guarda que ese worker tiene para la restauración de copias
+  (`has_pending_category_tagging` + `category_tagging_idle`,
+  main_window.py:2306): un worker de propuesta en vuelo puede reabrir
+  `sirius.db` mientras se sustituye (CLAUDE-REV-001 / CODEX-001, P1).
+- **Por qué.** Especifiqué el camino feliz del molde y no sus guardas; y
+  pensé la caché en términos de identidad, no de contenido.
+- **Qué se hizo.** El corrector del motor está atendiendo los seis; yo
+  vigilo y, si muere como en M21a, corrijo en la rama.
+- **Mejor manera.** Cuando una orden diga «calcado de X», enumerar también
+  las guardas de X (estado ocupado, señales de inactividad, ciclo de vida
+  frente a copias/restauraciones) como requisitos explícitos; y toda caché
+  ligada a un elemento editable se invalida por revisión, no por id.
+  Candidato de proceso: una lista de comprobación fija para órdenes con
+  workers en la interfaz.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
