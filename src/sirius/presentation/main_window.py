@@ -2303,20 +2303,39 @@ class MainWindow(QMainWindow):
             )
             return
 
+        self._restore_when_knowledge_widget_idle(backup_path, password)
+
+    def _restore_when_knowledge_widget_idle(self, backup_path: Path, password: str) -> None:
+        """CODEX-001: tanto un ``CategoryTaggingWorker`` como un
+        ``CriticalityProposalWorker`` en vuelo siguen usando los repositorios
+        (``TagCategoryUseCase.tag()``/``ProposeCriticalityUseCase.propose()``)
+        y podrían reabrir una conexión a sirius.db mientras se cierra o se
+        reemplaza el fichero. Espera a que ambos terminen, uno detrás del
+        otro, antes de cerrar las conexiones; no se toca el guardado ni la
+        propuesta, que siguen siendo asíncronos. ``set_external_busy(True)``
+        ya está activo desde ``_start_backup_operation()``, así que
+        ``KnowledgeWidget`` no arranca ningún worker nuevo mientras se
+        espera."""
         if self.knowledge_widget.has_pending_category_tagging:
-            # CODEX-001: un CategoryTaggingWorker en vuelo sigue usando los
-            # repositorios (TagCategoryUseCase.tag() -> *Repository.set_category())
-            # y podría reabrir una conexión a sirius.db mientras se cierra o se
-            # reemplaza el fichero. Esperar aquí a category_tagging_idle en vez
-            # de cerrar las conexiones ahora mismo; no se toca el guardado, que
-            # sigue siendo asíncrono.
             self._set_backup_feedback(
                 self.restore_backup_status_label,
                 BACKUP_STATE_IN_PROGRESS,
                 "Esperando a que termine el etiquetado automático de categorías...",
             )
             self.knowledge_widget.category_tagging_idle.connect(
-                lambda: self._close_connections_and_start_restore(backup_path, password),
+                lambda: self._restore_when_knowledge_widget_idle(backup_path, password),
+                Qt.ConnectionType.SingleShotConnection,
+            )
+            return
+
+        if self.knowledge_widget.has_pending_criticality_proposal:
+            self._set_backup_feedback(
+                self.restore_backup_status_label,
+                BACKUP_STATE_IN_PROGRESS,
+                "Esperando a que termine la propuesta automática de criticidad...",
+            )
+            self.knowledge_widget.criticality_proposal_idle.connect(
+                lambda: self._restore_when_knowledge_widget_idle(backup_path, password),
                 Qt.ConnectionType.SingleShotConnection,
             )
             return

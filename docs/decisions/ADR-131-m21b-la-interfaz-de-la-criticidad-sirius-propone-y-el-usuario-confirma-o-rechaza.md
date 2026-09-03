@@ -199,7 +199,7 @@ selección, sufijo de presentación), en este orden:
 
 1. `uv run pytest tests/gui/test_criticality_proposal_worker.py
    tests/gui/test_knowledge_widget.py -q` → `80 passed` (5 del worker nuevo,
-   12 nuevas de criticidad en `KnowledgeWidget`, 63 ya existentes sin
+   16 nuevas de criticidad en `KnowledgeWidget`, 59 ya existentes sin
    regresión).
 2. `uv run pytest tests/gui -q` → `467 passed, 2 skipped` (los dos
    `skipped` son preexistentes, por falta de `QtMultimedia` en esta
