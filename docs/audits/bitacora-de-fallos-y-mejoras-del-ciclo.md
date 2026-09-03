@@ -228,6 +228,31 @@ ADR o su incidencia cuando se adopte.
   Candidato de proceso: una lista de comprobación fija para órdenes con
   workers en la interfaz.
 
+### 15. M21b: ronda 2 con la misma familia de defectos que la ronda 1 (16:04 UTC)
+
+- **Qué falló.** Tras corregir los seis hallazgos de la ronda 1, la ronda 2
+  devolvió cuatro más de la misma familia — el estado de la propuesta frente
+  a transiciones —: propuesta fantasma si el usuario edita a mano antes de
+  que el worker responda (podría sobrescribir el valor manual al pulsar
+  Confirmar; CLAUDE-REV-R2-001, alta), propuesta nunca reanudada al salir
+  del estado ocupado (CODEX-001), revisión nueva sin propuesta si la
+  corrección ocurre con el worker en vuelo (CODEX-002), y el ADR sin la
+  ronda 2 registrada (CLAUDE-REV-R2-002). Total de severidad 13 → 8:
+  progreso, pero por goteo.
+- **Por qué (raíz).** La decisión «¿se muestra una propuesta? ¿se arranca
+  un worker?» está repartida en cinco manejadores con guardas sueltas; cada
+  transición olvidada abre un hueco nuevo.
+- **Qué se hizo.** Observación en #520 pidiendo una única función de
+  reconciliación desde el estado, llamada en todas las transiciones; los
+  manejadores solo actualizan estado. Si la ronda 3 repite la familia, lo
+  aplico yo en la rama.
+- **Mejor manera.** Para cualquier elemento de interfaz derivado de estado
+  asíncrono (workers + selección + ocupado + ediciones), exigir en la orden
+  «una sola derivación desde el estado, recalculada en cada transición», y
+  una tabla de transiciones en el ADR como prueba de completitud. Es la
+  misma lección que la 14, un nivel más arriba: no basta enumerar guardas,
+  hay que quitar la necesidad de enumerarlas.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
