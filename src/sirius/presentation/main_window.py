@@ -55,6 +55,7 @@ from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.project_errors import ProjectContinuityError
 from sirius.application.project_lifecycle import ProjectLifecycleUseCase
+from sirius.application.propose_criticality import ProposeCriticalityUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.propose_memory_suggestion import (
     InvalidMemorySuggestionProposalDataError,
@@ -65,6 +66,7 @@ from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageResult, SendMessageUseCase
 from sirius.application.set_category import SetCategoryUseCase
+from sirius.application.set_criticality import SetCriticalityUseCase
 from sirius.application.studio_brief import MODEL_STUDIO_BRIEF
 from sirius.application.studio_capture import CaptureFeedback, StudioCaptureUseCase
 from sirius.application.studio_voice import (
@@ -259,6 +261,8 @@ class MainWindow(QMainWindow):
         tag_category_use_case: TagCategoryUseCase | None = None,
         set_category_use_case: SetCategoryUseCase | None = None,
         category_vocabulary: frozenset[str] | None = None,
+        propose_criticality_use_case: ProposeCriticalityUseCase | None = None,
+        set_criticality_use_case: SetCriticalityUseCase | None = None,
         studio_voice_use_case: StudioVoiceUseCase | None = None,
         studio_capture_use_case: StudioCaptureUseCase | None = None,
         save_studio_voice: Callable[[str], None] | None = None,
@@ -301,6 +305,8 @@ class MainWindow(QMainWindow):
         self._tag_category_use_case = tag_category_use_case
         self._set_category_use_case = set_category_use_case
         self._category_vocabulary = category_vocabulary
+        self._propose_criticality_use_case = propose_criticality_use_case
+        self._set_criticality_use_case = set_criticality_use_case
         # Not a use case: the minimal SQLAlchemy-lifecycle mechanism a safe
         # restoration needs (see ConversationDependencies' docstring). Called
         # right before RestoreBackupUseCase so the atomic file replace is not
@@ -1213,6 +1219,8 @@ class MainWindow(QMainWindow):
             tag_category_use_case=self._tag_category_use_case,
             set_category_use_case=self._set_category_use_case,
             category_vocabulary=self._category_vocabulary,
+            propose_criticality_use_case=self._propose_criticality_use_case,
+            set_criticality_use_case=self._set_criticality_use_case,
             thread_pool=self._thread_pool,
             show_warning=self._show_warning,
             show_information=self._show_information,
