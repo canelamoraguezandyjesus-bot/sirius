@@ -144,7 +144,9 @@ ADR o su incidencia cuando se adopte.
 ### 9. M21a: el corrector del motor murió sin producir nada (13:14 → 13:45 UTC)
 
 - **Qué falló.** El corrector agotó su ejecución («veredicto provisional no
-  sustituido») sin subir ningún commit. La incidencia pasó a
+  sustituido») sin subir ningún commit (run 33759989103, «Corregir bloque
+  Sirius», 13:14:48 → 13:45:49 UTC, conclusión `success` del workflow aunque
+  el paso de Claude terminó sin veredicto). La incidencia pasó a
   `failed-safely`.
 - **Por qué (probable).** Tres hallazgos a la vez, uno de ellos (P1) exigía
   rehacer el contrato HTTP y todas sus pruebas; 120 turnos no bastaron. Sin
@@ -177,6 +179,31 @@ ADR o su incidencia cuando se adopte.
   y aviso solo por cambio de etiqueta; el modelo caro solo para revisar y
   decidir.
 
+### 12. Mi prueba por mutación me pisó el archivo nuevo (14:10 UTC)
+
+- **Qué falló.** Para probar las mutaciones del adaptador de M21a mezclé
+  `sed` con `git checkout -- archivo` y `git stash`: el `checkout` restauró la
+  versión COMMITEADA (la vieja) y perdí mi versión nueva del adaptador en el
+  árbol de trabajo; la segunda mutación se midió sin querer contra el código
+  viejo.
+- **Por qué.** Usar git para «restaurar» un archivo que aún no estaba
+  commiteado.
+- **Qué se hizo.** Reescribí el archivo y repetí las tres mutaciones con
+  copia de seguridad en el scratchpad (`cp` antes, `cp` después), sin git.
+- **Mejor manera.** Regla fija para mutaciones: copia de respaldo con `cp`,
+  mutar con `python -c`, ejecutar la prueba, restaurar con `cp`. Nunca
+  `git checkout`/`stash` sobre trabajo sin commitear.
+
+### 13. El agente de exploración cayó por sobrecarga de la API (14:42 UTC)
+
+- **Qué falló.** El subagente lanzado para inventariar la interfaz murió con
+  un 529 (Overloaded) antes de devolver nada.
+- **Qué se hizo.** Hice el inventario a mano con búsquedas directas (más
+  barato y suficiente para redactar la orden de M21b).
+- **Mejor manera.** Para inventarios acotados (menos de diez preguntas con
+  archivos conocidos), búsquedas directas; reservar los subagentes para
+  barridos anchos.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -189,6 +216,8 @@ ADR o su incidencia cuando se adopte.
 3. Ruta H-34: el verde de Quality se pierde si llega en `repairing` (3).
 4. Cliente único de Ollama local para los tres adaptadores (7, 8).
 5. Vigilancia durable con modelo barato (4, 11).
-6. Medición con Ollama real de M19b y M20 en la máquina del propietario
+6. Rechazo de una propuesta de criticidad recordado solo en sesión (M21b):
+   persistirlo necesita columna y decisión del propietario.
+7. Medición con Ollama real de M19b y M20 en la máquina del propietario
    (filas pendientes en ADR-128 y ADR-129): `uv run python
    scripts/medir_banco_con_ollama_real.py --diagnostico`.
