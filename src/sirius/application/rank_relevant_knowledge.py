@@ -50,6 +50,7 @@ from sirius.domain.relevance import (
     category_index_activated,
     category_index_matches_query,
     category_matches_query,
+    pide_contexto,
     rank_relevant_knowledge,
     subject_matches_query,
 )
@@ -294,6 +295,25 @@ class RankRelevantKnowledgeUseCase:
         categoría ya trajo nunca se repite en el de criticidad) y se unen en
         una sola lista antes de ``_intercalar_por_categoria``, que sigue sin
         tocar ni la posición relativa de ``ranked`` ni su propio algoritmo.
+
+        M20 (ADR-129, incidencia #516, Decisión 2 del propietario del
+        02-09-2026, citada en ADR-126) añade un TERCER bloque de
+        ampliación, ``siembra``, con la misma forma exacta que
+        ``solo_por_criticidad`` (dedup contra el motor y los dos bloques
+        anteriores, restricción de ámbito, sobre
+        ``Memory.criticality``/``Decision.criticality``) pero con una
+        condición de activación distinta: en vez del VOCABULARIO de la
+        consulta (``category_index_activated``), la siembra se activa por el
+        PROPÓSITO de la propia petición (``pide_contexto(peticion.proposito)``,
+        réplica de ``siembra_de_contexto`` del arnés,
+        ``tests/acceptance/staged_engine_category_and_relevance.py:412-445``).
+        ``_peticion_ordinaria`` (arriba) fija ese propósito a un literal fijo
+        que ya contiene la subcadena "contexto" a propósito (M16, ADR-124) —
+        así que, en producción, toda llamada real a ``rank()`` siembra en
+        cada turno, sin depender de que la consulta nombre ninguna palabra
+        de ningún vocabulario: quien poda el ruido resultante es el filtro
+        de relevancia (ADR-125), con el rescate RF-25/RF-26 (M19b)
+        protegiendo lo crítico que el filtro descarte.
         """
         assert self._staged_engine_port is not None
         assert self._staged_engine_candidate is not None
@@ -459,7 +479,80 @@ class RankRelevantKnowledgeUseCase:
                         )
                     )
 
-        return _intercalar_por_categoria(ranked, (*solo_por_categoria, *solo_por_criticidad))
+        ya_admitidos_por_criticidad = {
+            (candidato.kind, candidato.item_id) for candidato in solo_por_criticidad
+        }
+        siembra: list[RankedKnowledge] = []
+        if self._category_matching_enabled and pide_contexto(peticion.proposito):
+            criticidad_index_activada = category_index_activated(
+                query_text, self._criticality_vocabulary
+            )
+            for memory in self._memory_repository.list_current_memories_by_criticality(
+                _NIVELES_DE_CRITICIDAD_NO_ORDINARIOS
+            ):
+                clave = (KnowledgeKind.MEMORY, memory.id)
+                if (
+                    clave in admitidos_por_el_motor
+                    or clave in ya_admitidos_por_categoria
+                    or clave in ya_admitidos_por_criticidad
+                ):
+                    continue
+                if candidate_in_declared_scope(
+                    memory.project_id, active_project_id=active_project_id
+                ):
+                    siembra.append(
+                        RankedKnowledge(
+                            kind=KnowledgeKind.MEMORY,
+                            item=memory,
+                            subject_matches_query=False,
+                            project_matches_active=(
+                                active_project_id is not None
+                                and memory.project_id == active_project_id
+                            ),
+                            fts_match=False,
+                            category_match=category_index_matches_query(
+                                memory.category, query_text, self._category_vocabulary
+                            ),
+                            criticality_match=criticidad_index_activada,
+                            seeded=True,
+                        )
+                    )
+            for decision in self._decision_repository.list_current_decisions_by_criticality(
+                _NIVELES_DE_CRITICIDAD_NO_ORDINARIOS
+            ):
+                clave = (KnowledgeKind.DECISION, decision.id)
+                if (
+                    clave in admitidos_por_el_motor
+                    or clave in ya_admitidos_por_categoria
+                    or clave in ya_admitidos_por_criticidad
+                ):
+                    continue
+                if candidate_in_declared_scope(
+                    decision.project_id, active_project_id=active_project_id
+                ):
+                    siembra.append(
+                        RankedKnowledge(
+                            kind=KnowledgeKind.DECISION,
+                            item=decision,
+                            subject_matches_query=subject_matches_query(
+                                decision.subject, query_text
+                            ),
+                            project_matches_active=(
+                                active_project_id is not None
+                                and decision.project_id == active_project_id
+                            ),
+                            fts_match=False,
+                            category_match=category_index_matches_query(
+                                decision.category, query_text, self._category_vocabulary
+                            ),
+                            criticality_match=criticidad_index_activada,
+                            seeded=True,
+                        )
+                    )
+
+        return _intercalar_por_categoria(
+            ranked, (*solo_por_categoria, *solo_por_criticidad, *siembra)
+        )
 
     def _rank_via_current_pipeline(self, query_text: str) -> tuple[RankedKnowledge, ...]:
         """El filtro-y-orden de S7.5/M9, sin cambios: lo que ``rank()``

@@ -154,6 +154,7 @@ _ADR_125 = (
     "mientras-se-mide-su-coste-real.md"
 )
 _ADR_127 = "ADR-127-m19a-el-indice-de-criticidad-en-la-busqueda.md"
+_ADR_129 = "ADR-129-m20-la-siembra-en-contexto-por-criticidad.md"
 
 RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     "experiments/adr002/round/cases.py": [
@@ -238,7 +239,16 @@ RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     # restricción por ámbito del índice de categoría del arnés: la cita
     # documenta de dónde sale la semántica portada, nunca se copia el
     # fichero a Sirius.
-    "experiments/adr002/lateral/categoria.py": [_ADR_112, _ADR_113, _ADR_114, _ADR_127],
+    "experiments/adr002/lateral/categoria.py": [
+        _ADR_112,
+        _ADR_113,
+        _ADR_114,
+        _ADR_127,
+        # ADR-129 (M20, incidencia #516) porta pide_contexto/siembra_de_contexto
+        # al dominio, réplica exacta del laboratorio — el fichero de origen
+        # sigue sin fusionarse a Sirius.
+        _ADR_129,
+    ],
     "experiments/adr002/lateral/categoria.py:_pide_contexto": [_ADR_112, _ADR_113, _ADR_115],
 }
 

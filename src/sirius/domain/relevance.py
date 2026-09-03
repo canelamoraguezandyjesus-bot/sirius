@@ -92,6 +92,31 @@ as it needs. ``ContextBuilder`` is the only real caller of either function
 with the D7 point 6 gate closed, the candado-union in that same method
 never calls either function and keeps comparing ``category`` inline, byte
 for byte, unchanged by this incidence.
+
+M20 (ADR-129, incidencia #516, Decisión 2 del propietario del 02-09-2026,
+citada en ADR-126) ports ``pide_contexto``/``PROPOSITO_DE_CONTEXTO``, the
+laboratory's third piece of the PR #117 semantics (replica of
+``experiments/adr002/lateral/categoria.py:_pide_contexto``, harness twin
+``tests/acceptance/staged_engine_category_and_relevance.py:403-409``):
+whether a request's own ``Peticion.proposito`` field — never a guess over
+the query text — declares that it assembles context (the literal substring
+``"contexto"``, case-insensitive). Wired only in
+``RankRelevantKnowledgeUseCase._rank_via_staged_engine``'s third
+amplification block (``siembra``, parallel to ``solo_por_categoria`` and
+``solo_por_criticidad``), behind the same ``category_matching_enabled``
+gate. Unlike ``solo_por_criticidad``, which activates on the query's
+*vocabulary*, ``siembra`` activates on the request's *purpose* — a query
+with no criticality vocabulary at all still seeds every non-ordinary
+identity of the declared scope when the request assembles context (M20's
+own test, mirroring B04-CA-34's "Prepara el contexto de planificación de
+Alfa"). ``RankedKnowledge`` gains a sixth structural signal, ``seeded``,
+parallel to ``category_match``/``criticality_match``: inserted right after
+``criticality_match`` in ``_sort_key`` and, like the other two, widening
+``is_related``. The owner ports this knowing the 47-case bank cannot
+validate it independently (only B04-CA-33/34 exercise it) — its acceptance
+is the lost-criticals measurement (3 → 0) and real use, not a bank proof
+(evidence: ``docs/audits/evidencia-experimento-filtro-fiel-al-laboratorio.md``,
+section "Decisión del propietario y plan").
 """
 
 from __future__ import annotations
@@ -100,11 +125,13 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from typing import Final
 
 from sirius.domain.decision import Decision, DecisionStatus
 from sirius.domain.memory import Memory, MemoryStatus
 
 __all__ = [
+    "PROPOSITO_DE_CONTEXTO",
     "KnowledgeKind",
     "RankedKnowledge",
     "candidate_currently_valid",
@@ -112,11 +139,21 @@ __all__ = [
     "category_index_activated",
     "category_index_matches_query",
     "category_matches_query",
+    "pide_contexto",
     "rank_relevant_knowledge",
     "rescue_max_criticality_candidates",
     "subject_matches_query",
     "truncate_to_hard_limit",
 ]
+
+#: M20 (ADR-129, incidencia #516): réplica exacta de
+#: ``experiments/adr002/lateral/categoria.py:_pide_contexto`` (rama
+#: ``evidence/adr001-spikes``), calcada del arnés
+#: (``tests/acceptance/staged_engine_category_and_relevance.py:257``). El
+#: propósito real que toda llamada a ``rank()`` declara ya contiene esta
+#: subcadena a propósito (M16, ADR-124,
+#: ``rank_relevant_knowledge._PROPOSITO_RECUPERACION_ORDINARIA``).
+PROPOSITO_DE_CONTEXTO: Final = "contexto"
 
 
 class KnowledgeKind(StrEnum):
@@ -162,6 +199,16 @@ class RankedKnowledge:
     "how much it matters" signal instead of "what it is about". ``False`` by
     default for the same reason ``category_match`` is."""
 
+    seeded: bool = False
+    """The sixth structural signal (M20, ADR-129, incidencia #516): whether
+    the candidate was found through the context-assembly seeding —
+    ``pide_contexto(peticion.proposito)`` true and the candidate's
+    ``criticality`` non-ordinary within the declared scope — exactly
+    parallel to ``category_match``/``criticality_match`` above, but
+    activated by the request's declared *purpose* instead of the query's
+    vocabulary. ``False`` by default for the same reason the other two
+    are."""
+
     def __post_init__(self) -> None:
         if self.kind is KnowledgeKind.MEMORY and self.subject_matches_query:
             msg = (
@@ -190,17 +237,18 @@ class RankedKnowledge:
         """Whether this candidate is related to the query at all. A
         ``False`` here is S7.5's other negative term, "elemento general no
         relacionado" — a matching subject, an actual FTS5 hit, (M9,
-        SIRIUS-ARQ-0.2 §6.2) a category match, or (M19a, ADR-127) a
-        criticality match, never project membership or recency alone.
-        ``category_match``/``criticality_match`` can only ever add a
-        candidate here, never remove one the other signals already keep:
-        both stay ``False`` for every real candidate while D7 point 6's
-        activation gate is closed."""
+        SIRIUS-ARQ-0.2 §6.2) a category match, (M19a, ADR-127) a
+        criticality match, or (M20, ADR-129) being seeded, never project
+        membership or recency alone. ``category_match``/``criticality_match``/
+        ``seeded`` can only ever add a candidate here, never remove one the
+        other signals already keep: all three stay ``False`` for every real
+        candidate while D7 point 6's activation gate is closed."""
         return (
             self.subject_matches_query
             or self.fts_match
             or self.category_match
             or self.criticality_match
+            or self.seeded
         )
 
 
@@ -292,6 +340,18 @@ def category_index_matches_query(
     if category is None:
         return False
     return category_index_activated(query_text, vocabulary)
+
+
+def pide_contexto(proposito: str) -> bool:
+    """M20 (ADR-129, incidencia #516): réplica de
+    ``experiments/adr002/lateral/categoria.py:_pide_contexto`` (rama
+    ``evidence/adr001-spikes``): si ``proposito`` —el campo propio de la
+    petición (``Peticion.proposito``), nunca una adivinanza sobre el texto
+    de la consulta— declara que se ensambla el contexto de un proyecto.
+    Calcada del arnés (``tests/acceptance/staged_engine_category_and_relevance.
+    py:403-409``): subcadena ``PROPOSITO_DE_CONTEXTO`` ("contexto"),
+    insensible a mayúsculas, en cualquier posición del propósito."""
+    return PROPOSITO_DE_CONTEXTO in proposito.casefold()
 
 
 def candidate_in_declared_scope(
@@ -446,13 +506,16 @@ def _synthetic_id(candidate: RankedKnowledge) -> int:
     return candidate.item_id * 2 + 1
 
 
-def _sort_key(candidate: RankedKnowledge) -> tuple[bool, bool, bool, bool, bool, float, int]:
+def _sort_key(
+    candidate: RankedKnowledge,
+) -> tuple[bool, bool, bool, bool, bool, bool, float, int]:
     return (
         not candidate.subject_matches_query,
         not candidate.project_matches_active,
         not candidate.fts_match,
         not candidate.category_match,
         not candidate.criticality_match,
+        not candidate.seeded,
         -candidate.item.updated_at.timestamp(),
         _synthetic_id(candidate),
     )

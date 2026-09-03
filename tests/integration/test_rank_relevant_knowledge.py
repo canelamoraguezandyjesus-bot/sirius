@@ -29,6 +29,7 @@ from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_me
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
 from sirius.adapters.persistence.staged_engine_port import build_staged_engine_port
+from sirius.application import rank_relevant_knowledge as rank_relevant_knowledge_module
 from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.archive_decision import ArchiveDecisionUseCase
 from sirius.application.archive_memory import ArchiveMemoryUseCase
@@ -1301,3 +1302,354 @@ def test_staged_engine_gate_open_without_a_configured_port_falls_back_to_current
     sin_puerta = _use_case(database_path).rank("faroquenopalabraunica")
 
     assert con_puerta_abierta_sin_motor == sin_puerta
+
+
+# --- M20 (ADR-129, incidencia #516, Decisión 2 del propietario del ---------
+# --- 02-09-2026): siembra, el tercer bloque de ampliación — activado por ---
+# --- el PROPÓSITO de la petición (pide_contexto), no por vocabulario. ------
+
+#: `_peticion_ordinaria` declara siempre este propósito fijo (M16, ADR-124),
+#: que ya contiene la subcadena "contexto" — así que toda llamada real a
+#: ``rank()`` siembra por defecto. Estas pruebas lo confirman con el mismo
+#: propósito real de producción, sin monkeypatch, salvo la única prueba que
+#: comprueba el caso contrario (sin propósito de contexto).
+_PROPOSITO_SIN_CONTEXTO = "consultar"
+
+
+@pytest.mark.integration
+def test_siembra_finds_a_criticality_only_match_with_a_query_naming_no_vocabulary_term(
+    tmp_path: Path,
+) -> None:
+    """M20: a diferencia de ``solo_por_criticidad`` (activado por
+    vocabulario), la siembra encuentra un candidato CRITICO aunque la
+    consulta no nombre ninguna palabra de ningún vocabulario — B04-CA-34
+    ("Prepara el contexto de planificación de Alfa") es exactamente ese
+    caso real del banco (incidencia #516, objetivo, punto d)."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    memoria_critica = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido sin ninguna palabra en comun con la consulta"
+    )
+    SetCriticalityUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CriticalityTargetKind.MEMORY, memoria_critica.id, Criticality.CRITICO)
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            criticality_vocabulary=_CRITICALITY_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("Prepara el contexto de planificacion de Alfa.")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [memoria_critica.id]
+    assert resultado[0].seeded is True
+    assert resultado[0].criticality_match is False
+    assert resultado[0].fts_match is False
+    assert resultado[0].category_match is False
+
+
+@pytest.mark.integration
+def test_siembra_never_seeds_an_ordinary_candidate(tmp_path: Path) -> None:
+    """M20: la siembra solo amplía lo no ordinario
+    (``_NIVELES_DE_CRITICIDAD_NO_ORDINARIOS``) — un recuerdo sin
+    ``criticality`` (``None``, el nivel ordinario implícito) nunca se
+    siembra, aunque el propósito declare contexto."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    SaveManualMemoryUseCase(unit_of_work).save(
+        "recuerdo ordinario sin ninguna palabra en comun con la consulta"
+    )
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            criticality_vocabulary=_CRITICALITY_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("Prepara el contexto de planificacion de Alfa.")
+    finally:
+        puerto.close()
+
+    assert resultado == ()
+
+
+@pytest.mark.integration
+def test_siembra_rejects_a_critico_decision_scoped_to_a_different_project(
+    tmp_path: Path,
+) -> None:
+    """M20: la misma restricción de ámbito (``candidate_in_declared_scope``)
+    que protege categoría/criticidad protege también la siembra — un CRITICO
+    de otro proyecto no entra, aunque el propósito declare contexto (mismo
+    caso que ``test_siembra_de_contexto_respeta_el_ambito_declarado`` del
+    arnés de examen)."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    active_project_id, other_project_id = _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    decision_de_otro_proyecto = ProposeDecisionUseCase(unit_of_work).propose(
+        "asunto sin ninguna palabra en comun", other_project_id, "contenido"
+    )
+    ApproveDecisionUseCase(unit_of_work).approve(decision_de_otro_proyecto.id, confirmed=True)
+    SetCriticalityUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CriticalityTargetKind.DECISION, decision_de_otro_proyecto.id, Criticality.CRITICO)
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            criticality_vocabulary=_CRITICALITY_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("Prepara el contexto de planificacion de Alfa.")
+    finally:
+        puerto.close()
+
+    assert active_project_id != other_project_id
+    assert resultado == ()
+
+
+@pytest.mark.integration
+def test_siembra_admits_a_globally_scoped_critico_memory(tmp_path: Path) -> None:
+    """M20: un candidato de ámbito global (``project_id`` ``None``) se
+    siembra sin importar cuál sea el proyecto activo — misma excepción que
+    ``G4`` ya aplica siempre, réplica de la equivalente para categoría y
+    criticidad."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    memoria_global = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido sin ninguna palabra en comun con la consulta"
+    )
+    SetCriticalityUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CriticalityTargetKind.MEMORY, memoria_global.id, Criticality.CRITICO)
+    assert memoria_global.project_id is None
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            criticality_vocabulary=_CRITICALITY_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("Prepara el contexto de planificacion de Alfa.")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [memoria_global.id]
+    assert resultado[0].seeded is True
+
+
+@pytest.mark.integration
+def test_siembra_never_duplicates_a_candidate_the_motor_already_admitted(tmp_path: Path) -> None:
+    """M20: el dedup de la siembra comprueba también contra lo admitido por
+    el motor — un candidato con FTS5 real y criticidad no ordinaria aparece
+    una sola vez, con la señal ``fts_match=True`` que el motor ya le dio,
+    nunca sustituida por una entrada de siembra con ``fts_match=False``."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    admitida_por_motor_y_critica = SaveManualMemoryUseCase(unit_of_work).save(
+        "trabajo intenso en la fabrica"
+    )
+    SetCriticalityUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CriticalityTargetKind.MEMORY, admitida_por_motor_y_critica.id, Criticality.CRITICO)
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            criticality_vocabulary=_CRITICALITY_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("trabajo intenso en la fabrica")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [admitida_por_motor_y_critica.id]
+    assert resultado[0].fts_match is True
+    assert resultado[0].seeded is False
+
+
+@pytest.mark.integration
+def test_siembra_never_duplicates_a_candidate_the_criticality_block_already_admitted(
+    tmp_path: Path,
+) -> None:
+    """M20: el dedup de la siembra comprueba también contra
+    ``solo_por_criticidad`` — un candidato que la consulta ya activa por
+    vocabulario de criticidad aparece una sola vez, sin una segunda entrada
+    de siembra."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    memoria_critica = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido sin ninguna palabra en comun con la consulta"
+    )
+    SetCriticalityUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CriticalityTargetKind.MEMORY, memoria_critica.id, Criticality.CRITICO)
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            criticality_vocabulary=_CRITICALITY_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("Dame todas las restricciones esenciales que debo respetar.")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [memoria_critica.id]
+    assert resultado[0].criticality_match is True
+    assert resultado[0].seeded is False
+
+
+@pytest.mark.integration
+def test_siembra_never_duplicates_a_candidate_the_category_block_already_admitted(
+    tmp_path: Path,
+) -> None:
+    """M20: el dedup de la siembra comprueba también contra
+    ``solo_por_categoria`` — un candidato con categoría (activada por su
+    propio vocabulario) Y criticidad no ordinaria, con una consulta que
+    activa el índice de categoría, aparece una sola vez."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    memoria = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido sin ninguna palabra en comun con la consulta"
+    )
+    SetCategoryUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CategoryTargetKind.MEMORY, memoria.id, "trabajo")
+    SetCriticalityUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CriticalityTargetKind.MEMORY, memoria.id, Criticality.CRITICO)
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            category_vocabulary=_VOCABULARY,
+            criticality_vocabulary=_CRITICALITY_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("trabajo, por favor")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [memoria.id]
+    assert resultado[0].category_match is True
+    assert resultado[0].seeded is False
+
+
+@pytest.mark.integration
+def test_siembra_seeds_nothing_without_a_context_purpose(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """M20: sin propósito de contexto (``pide_contexto`` falso), la siembra
+    no aporta nada — réplica de
+    ``test_siembra_de_contexto_respeta_el_ambito_declarado``'s segunda mitad
+    en el arnés de examen. ``_peticion_ordinaria`` fija el propósito real de
+    producción (M16), así que esta prueba lo sustituye por uno sin la
+    subcadena "contexto" para poder ejercitar la rama contraria."""
+    monkeypatch.setattr(
+        rank_relevant_knowledge_module,
+        "_PROPOSITO_RECUPERACION_ORDINARIA",
+        _PROPOSITO_SIN_CONTEXTO,
+    )
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    memoria_critica = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido sin ninguna palabra en comun con la consulta"
+    )
+    SetCriticalityUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CriticalityTargetKind.MEMORY, memoria_critica.id, Criticality.CRITICO)
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            criticality_vocabulary=_CRITICALITY_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("Prepara el contexto de planificacion de Alfa.")
+    finally:
+        puerto.close()
+
+    assert resultado == ()
+
+
+@pytest.mark.integration
+def test_siembra_seeds_nothing_with_the_gate_closed(tmp_path: Path) -> None:
+    """M20: con ``category_matching_enabled=False``,
+    ``_rank_via_staged_engine`` ni siquiera se ejecuta —``rank()`` sigue
+    ``_rank_via_current_pipeline`` en su lugar—, así que la siembra nunca
+    puede aportar nada, aunque el propósito real ya declare contexto."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    memoria_critica = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido sin ninguna palabra en comun con la consulta"
+    )
+    SetCriticalityUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CriticalityTargetKind.MEMORY, memoria_critica.id, Criticality.CRITICO)
+
+    resultado = _use_case(database_path, category_matching_enabled=False).rank(
+        "Prepara el contexto de planificacion de Alfa."
+    )
+
+    assert resultado == ()

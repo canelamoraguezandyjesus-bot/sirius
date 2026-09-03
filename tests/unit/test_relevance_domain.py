@@ -21,6 +21,7 @@ from sirius.domain.relevance import (
     category_index_activated,
     category_index_matches_query,
     category_matches_query,
+    pide_contexto,
     rank_relevant_knowledge,
     rescue_max_criticality_candidates,
     subject_matches_query,
@@ -102,6 +103,7 @@ def _ranked_memory(
     fts_match: bool = False,
     category_match: bool = False,
     criticality_match: bool = False,
+    seeded: bool = False,
 ) -> RankedKnowledge:
     return RankedKnowledge(
         kind=KnowledgeKind.MEMORY,
@@ -111,6 +113,7 @@ def _ranked_memory(
         fts_match=fts_match,
         category_match=category_match,
         criticality_match=criticality_match,
+        seeded=seeded,
     )
 
 
@@ -122,6 +125,7 @@ def _ranked_decision(
     fts_match: bool = False,
     category_match: bool = False,
     criticality_match: bool = False,
+    seeded: bool = False,
 ) -> RankedKnowledge:
     return RankedKnowledge(
         kind=KnowledgeKind.DECISION,
@@ -131,6 +135,7 @@ def _ranked_decision(
         fts_match=fts_match,
         category_match=category_match,
         criticality_match=criticality_match,
+        seeded=seeded,
     )
 
 
@@ -561,6 +566,106 @@ def test_a_criticality_match_alone_is_not_enough_when_the_gate_is_closed() -> No
     # punto 6's activation gate stays closed (application layer), exactly
     # like category_match — this documents the domain side of that.
     candidate = _ranked_memory(_memory(1), fts_match=False, criticality_match=False)
+
+    assert rank_relevant_knowledge([candidate]) == ()
+
+
+# --- M20 (ADR-129, incidencia #516): pide_contexto — the request's own ---
+# --- proposito, never a guess over the query text, replica of the ---
+# --- harness's _pide_contexto (staged_engine_category_and_relevance.py: ---
+# --- 403-409). ---
+
+
+def test_pide_contexto_is_true_when_proposito_names_context() -> None:
+    assert pide_contexto("ensamblar_contexto_b05")
+
+
+def test_pide_contexto_is_true_for_the_real_production_purpose() -> None:
+    # M16 (ADR-124): la única llamada real a rank() declara este propósito,
+    # que contiene la subcadena "contexto" a propósito.
+    assert pide_contexto("recuperacion de contexto relevante (B6b)")
+
+
+def test_pide_contexto_is_case_insensitive() -> None:
+    assert pide_contexto("ENSAMBLAR EL CONTEXTO")
+    assert pide_contexto("Contexto")
+
+
+def test_pide_contexto_is_false_without_the_word_contexto() -> None:
+    assert not pide_contexto("consultar")
+    assert not pide_contexto("")
+
+
+# --- M20 (ADR-129, incidencia #516): seeded, the sixth structural signal, --
+# --- parallel to category_match/criticality_match — enters _sort_key -----
+# --- right after criticality_match and also widens is_related. -----------
+
+
+def test_a_seeded_candidate_outranks_a_non_seeded_one_when_everything_else_ties() -> None:
+    seeded = _ranked_decision(_decision(1), fts_match=True, seeded=True)
+    non_seeded = _ranked_decision(_decision(2), fts_match=True, seeded=False)
+
+    result = rank_relevant_knowledge([non_seeded, seeded])
+
+    assert result == (seeded, non_seeded)
+
+
+def test_a_criticality_match_still_outranks_seeded() -> None:
+    # seeded sits right after criticality_match in _sort_key: weaker than
+    # it, exactly like criticality_match is weaker than category_match.
+    with_criticality = _ranked_decision(
+        _decision(1), fts_match=True, criticality_match=True, seeded=False
+    )
+    only_seeded = _ranked_decision(
+        _decision(2), fts_match=True, criticality_match=False, seeded=True
+    )
+
+    result = rank_relevant_knowledge([only_seeded, with_criticality])
+
+    assert result == (with_criticality, only_seeded)
+
+
+def test_active_project_membership_still_outranks_seeded() -> None:
+    other_project_seeded = _ranked_decision(
+        _decision(1, project_id=_OTHER_PROJECT),
+        fts_match=True,
+        project_matches_active=False,
+        seeded=True,
+    )
+    active_project_not_seeded = _ranked_decision(
+        _decision(2, project_id=_PROJECT),
+        fts_match=True,
+        project_matches_active=True,
+        seeded=False,
+    )
+
+    result = rank_relevant_knowledge([other_project_seeded, active_project_not_seeded])
+
+    assert result == (active_project_not_seeded, other_project_seeded)
+
+
+def test_seeded_still_outranks_a_more_recent_non_seeded_candidate() -> None:
+    older_seeded = _ranked_memory(_memory(1, updated_at=_NOW), fts_match=True, seeded=True)
+    newer_not_seeded = _ranked_memory(
+        _memory(2, updated_at=_NOW + timedelta(days=1)), fts_match=True, seeded=False
+    )
+
+    result = rank_relevant_knowledge([newer_not_seeded, older_seeded])
+
+    assert result == (older_seeded, newer_not_seeded)
+
+
+def test_seeded_alone_makes_an_otherwise_unrelated_candidate_related() -> None:
+    candidate = _ranked_memory(_memory(1), fts_match=False, seeded=True)
+
+    assert rank_relevant_knowledge([candidate]) == (candidate,)
+
+
+def test_seeded_alone_is_not_enough_when_the_gate_is_closed() -> None:
+    # seeded is always False for every real candidate while D7 punto 6's
+    # activation gate stays closed (application layer) — this documents the
+    # domain side of that, exactly like category_match/criticality_match.
+    candidate = _ranked_memory(_memory(1), fts_match=False, seeded=False)
 
     assert rank_relevant_knowledge([candidate]) == ()
 

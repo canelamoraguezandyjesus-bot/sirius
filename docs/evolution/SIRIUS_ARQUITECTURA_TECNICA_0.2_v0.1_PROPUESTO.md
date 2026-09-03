@@ -1758,6 +1758,17 @@ léxica hasta que se registre su propia decisión. Esta ola no la incluye en la 
 que ADR-119 decide: la opción (b) se restringe, en esta incidencia, a las cuatro piezas de
 arriba.
 
+**Nota (02-09-2026, M20, ADR-129, incidencia #516):** la precondición de arriba quedó
+resuelta el 02-09-2026 por decisión explícita del propietario (Decisión 2, sesión
+interactiva) mediante una tercera vía que este bloque no enumeraba: portar
+`siembra_de_contexto` sabiendo que el banco de 47 casos no puede validarla de forma
+independiente (solo dos casos la ejercitan), aceptada por la medición de críticas
+perdidas (3 → 0) y el uso real del propietario, no por una prueba del banco. Evidencia:
+`docs/audits/evidencia-experimento-filtro-fiel-al-laboratorio.md`, sección «Decisión del
+propietario y plan»; ADR-126 (M18b, donde se cita literal la decisión); ADR-129 (M20, que
+la ejecuta). El bloque de arriba se conserva íntegro como registro histórico de la
+precondición tal como se dejó escrita antes de esta nota.
+
 Estas cuatro piezas viven, con la puerta abierta, en el mismo punto de integración que §6.2
 ya fijaba —dentro de `RankRelevantKnowledgeUseCase._rank_via_staged_engine`
 (`src/sirius/application/rank_relevant_knowledge.py:153-282`), sustituyendo el bloque
