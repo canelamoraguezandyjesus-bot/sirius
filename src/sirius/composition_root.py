@@ -41,6 +41,7 @@ from sirius.adapters.llm.openai_responses import OpenAIResponsesProvider
 from sirius.adapters.llm.token_counter import CharacterHeuristicTokenCounter
 from sirius.adapters.llm.unconfigured import UnconfiguredLLMProvider
 from sirius.adapters.ollama_category_classifier import OllamaCategoryClassifierAdapter
+from sirius.adapters.ollama_criticality_classifier import OllamaCriticalityClassifierAdapter
 from sirius.adapters.ollama_relevance_filter import OllamaRelevanceFilterAdapter
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
@@ -88,6 +89,7 @@ from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
 from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.project_lifecycle import ProjectLifecycleUseCase
+from sirius.application.propose_criticality import ProposeCriticalityUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.propose_memory_suggestion import ProposeMemorySuggestionUseCase
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
@@ -96,6 +98,7 @@ from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageUseCase
 from sirius.application.set_category import SetCategoryUseCase
+from sirius.application.set_criticality import SetCriticalityUseCase
 from sirius.application.studio_capture import StudioCaptureUseCase
 from sirius.application.studio_voice import StudioVoiceUseCase, VoiceSettings
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
@@ -237,6 +240,13 @@ class ConversationDependencies:
     ``export_structured_use_case`` (B9a) is wired here but not yet called from
     any presentation code: the personal-data warning, background thread and
     "show the resulting path" UI belong to B9b, a later, separate cut.
+
+    ``propose_criticality_use_case`` (M21a, ADR-130) is likewise wired but not
+    yet called from anywhere: the interface that shows a proposal and lets
+    the user confirm or correct it is M21b, a later, separate cut. Wiring it
+    here does not change any behaviour — the use case never writes
+    ``criticality`` itself (only ``set_criticality_use_case``, M18b, does,
+    always manually and unconditionally).
     """
 
     send_message_use_case: SendMessageUseCase
@@ -265,6 +275,8 @@ class ConversationDependencies:
     tag_category_use_case: TagCategoryUseCase
     set_category_use_case: SetCategoryUseCase
     category_vocabulary: frozenset[str]
+    propose_criticality_use_case: ProposeCriticalityUseCase
+    set_criticality_use_case: SetCriticalityUseCase
     create_backup_use_case: CreateBackupUseCase
     validate_backup_use_case: ValidateBackupUseCase
     restore_backup_use_case: RestoreBackupUseCase
@@ -579,6 +591,16 @@ def build_conversation_dependencies(
     )
     set_category_use_case = SetCategoryUseCase(memory_repository, decision_repository)
 
+    # M21a (ADR-130): proposes criticality, never writes it. The only use
+    # case allowed to write criticality remains set_criticality_use_case
+    # below (M18b, ADR-126), always manual and unconditional.
+    propose_criticality_use_case = ProposeCriticalityUseCase(
+        memory_repository,
+        decision_repository,
+        OllamaCriticalityClassifierAdapter(ollama_model),
+    )
+    set_criticality_use_case = SetCriticalityUseCase(memory_repository, decision_repository)
+
     repositories = (
         conversation_repository,
         identity_repository,
@@ -652,6 +674,8 @@ def build_conversation_dependencies(
         tag_category_use_case=tag_category_use_case,
         set_category_use_case=set_category_use_case,
         category_vocabulary=_CATEGORY_VOCABULARY,
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=set_criticality_use_case,
         create_backup_use_case=CreateBackupUseCase(backup_service),
         validate_backup_use_case=ValidateBackupUseCase(backup_service),
         restore_backup_use_case=RestoreBackupUseCase(backup_service),
