@@ -135,13 +135,25 @@ que esa prueba SÍ detecta la ausencia de esa protección.
    idéntico de las dos funciones para una única diferencia (qué predicado se
    evalúa) es la abstracción equivocada que el propio criterio de simplicidad
    del repositorio desaconseja.
-3. **Un predicado `is_protected: Callable[[RankedKnowledge], bool]`
-   inyectado por el llamador** (elegida, la que pide el propio encargo): las
-   dos funciones de dominio dejan de saber nada sobre `category` ni sobre
-   `criticality` — solo aplican el predicado que reciben —, y
-   `ContextBuilder` decide qué predicado construir según el estado de la
+3. **Una función inyectada por el llamador en cada una de las dos** (elegida,
+   la que pide el propio encargo): las dos funciones de dominio dejan de
+   saber nada sobre `category` ni sobre `criticality` — solo aplican lo que
+   reciben —, y `ContextBuilder` decide qué construir según el estado de la
    puerta. El camino CERRADO no las llama en absoluto (sigue con su unión
    inline byte a byte), así que cambiar su firma no lo toca.
+
+   No es la misma función para las dos, y esa es la corrección de la ronda 2
+   (CODEX-001): `rescue_max_criticality_candidates` (RF-25/RF-26) recibe un
+   **predicado booleano**, `is_protected: Callable[[RankedKnowledge], bool]`
+   —solo necesita distinguir protegido de no protegido—, mientras que
+   `truncate_to_hard_limit` (G12) recibe un **rango entero**,
+   `protection_rank: Callable[[RankedKnowledge], int]` (menor sobrevive
+   antes), porque prioriza *entre* candidatos protegidos al truncar y un
+   booleano los agruparía en un solo nivel, dejando a un IMPORTANTE llegado
+   antes sobrevivir sobre un CRITICO llegado después. La primera versión de
+   esta opción usaba el booleano para las dos; se descartó al medirlo contra
+   la prioridad que `aplicar_g12` ya fijaba
+   (`src/sirius/domain/staged_engine_gates.py:333`).
 
 ## Decisión
 
