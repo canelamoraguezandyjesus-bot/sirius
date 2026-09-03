@@ -34,6 +34,7 @@ from sirius.application import context as context_module
 from sirius.application.context import Context, ContextAssemblyError, ContextBuilder
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.domain.conversation import MessageRole
+from sirius.domain.criticality import Criticality
 from sirius.domain.identity import (
     INITIAL_IDENTITY_DESCRIPTION,
     INITIAL_IDENTITY_NAME,
@@ -804,16 +805,22 @@ def test_category_matching_enabled_false_keeps_the_old_candado_byte_for_byte(
 
 @pytest.mark.integration
 def test_rf25_rescues_a_max_criticality_candidate_the_filter_discarded(tmp_path: Path) -> None:
-    """RF-25: with the gate open, a max-criticality candidate the filter
-    discarded is still rescued, but only because the filter did conserve a
-    different candidate for the same query."""
+    """RF-25: with the gate open, a protected (CRITICO/IMPORTANTE)
+    candidate the filter discarded is still rescued, but only because the
+    filter did conserve a different candidate for the same query. M19b
+    (ADR-128, incidencia #514): protection is ``criticality is not None``,
+    not the thematic category — this candidate gets an ordinary, non-``None``
+    category (``"otros"``) precisely so the unconditional ``category is
+    None`` protection (untouched by this incidence, see D7 point 2) cannot
+    account for the rescue on its own; only the criticality predicate can."""
     database_path = tmp_path / "sirius.db"
     _prepare_schema(database_path)
     _seed_bootstrap_singletons(database_path)
     memory_repository = build_sqlite_memory_repository(database_path)
     kept = memory_repository.create_memory("candidato conservado", "manual")
     discarded_critical = memory_repository.create_memory("candidato critico", "manual")
-    memory_repository.set_user_category(discarded_critical.id, "salud")
+    memory_repository.set_user_category(discarded_critical.id, "otros")
+    memory_repository.set_user_criticality(discarded_critical.id, Criticality.CRITICO)
     builder = _build_context_builder(
         database_path,
         relevance_filter_port=_KeepOnlyRelevanceFilterPort(frozenset({kept.id})),
@@ -824,6 +831,101 @@ def test_rf25_rescues_a_max_criticality_candidate_the_filter_discarded(tmp_path:
     context = builder.build("candidato")
 
     assert {m.id for m in context.memories} == {kept.id, discarded_critical.id}
+
+
+@pytest.mark.integration
+def test_rf25_rescues_a_discarded_importante_candidate_the_filter_discarded(
+    tmp_path: Path,
+) -> None:
+    """RF-25 protects IMPORTANTE exactly like CRITICO — both are
+    "no ordinario" for M19b's predicate
+    (``ContextBuilder._is_protected_by_criticality``). The mutation ADR-128
+    documents (narrowing that predicate to ``criticality is
+    Criticality.CRITICO``) is exactly what would make this test fail while
+    leaving the CRITICO test above green — an ordinary, non-``None``
+    category (``"otros"``) rules out the unconditional no-category
+    protection as an alternative explanation, same reasoning as the CRITICO
+    test above."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    kept = memory_repository.create_memory("candidato conservado", "manual")
+    discarded_importante = memory_repository.create_memory("candidato importante", "manual")
+    memory_repository.set_user_category(discarded_importante.id, "otros")
+    memory_repository.set_user_criticality(discarded_importante.id, Criticality.IMPORTANTE)
+    builder = _build_context_builder(
+        database_path,
+        relevance_filter_port=_KeepOnlyRelevanceFilterPort(frozenset({kept.id})),
+        max_criticality_category="salud",
+        category_matching_enabled=True,
+    )
+
+    context = builder.build("candidato")
+
+    assert {m.id for m in context.memories} == {kept.id, discarded_importante.id}
+
+
+@pytest.mark.integration
+def test_rf25_rescues_a_discarded_critico_of_a_non_max_criticality_category_when_gate_is_open(
+    tmp_path: Path,
+) -> None:
+    """M19b (ADR-128, incidencia #514): DEC-003's own scenario from the
+    owner's Ollama measurement
+    (docs/audits/evidencia-experimento-filtro-fiel-al-laboratorio.md,
+    sección «Resultado en la máquina del propietario») — a CRITICO of
+    category ``finanzas`` (never ``salud``) the filter discards is still
+    rescued with the gate open, because RF-25/RF-26 now protect by
+    criticality, not by the thematic max-criticality category."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    kept = memory_repository.create_memory("candidato conservado", "manual")
+    discarded_critico = memory_repository.create_memory("candidato critico finanzas", "manual")
+    memory_repository.set_user_category(discarded_critico.id, "finanzas")
+    memory_repository.set_user_criticality(discarded_critico.id, Criticality.CRITICO)
+    builder = _build_context_builder(
+        database_path,
+        relevance_filter_port=_KeepOnlyRelevanceFilterPort(frozenset({kept.id})),
+        max_criticality_category="salud",
+        category_matching_enabled=True,
+    )
+
+    context = builder.build("candidato")
+
+    assert {m.id for m in context.memories} == {kept.id, discarded_critico.id}
+
+
+@pytest.mark.integration
+def test_the_same_finanzas_critico_setup_with_the_gate_closed_keeps_todays_m10_candado_result(
+    tmp_path: Path,
+) -> None:
+    """Same montage as
+    ``test_rf25_rescues_a_discarded_critico_of_a_non_max_criticality_category_when_gate_is_open``,
+    gate closed: M10's candado only ever protects unconditionally
+    ``category is None`` or ``category == max_criticality_category``
+    (``"salud"``) — a CRITICO of category ``finanzas`` gets neither, so the
+    filter's discard stands, exactly today's behaviour, untouched by this
+    incidence."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    kept = memory_repository.create_memory("candidato conservado", "manual")
+    discarded_critico = memory_repository.create_memory("candidato critico finanzas", "manual")
+    memory_repository.set_user_category(discarded_critico.id, "finanzas")
+    memory_repository.set_user_criticality(discarded_critico.id, Criticality.CRITICO)
+    builder = _build_context_builder(
+        database_path,
+        relevance_filter_port=_KeepOnlyRelevanceFilterPort(frozenset({kept.id})),
+        max_criticality_category="salud",
+        category_matching_enabled=False,
+    )
+
+    context = builder.build("candidato")
+
+    assert {m.id for m in context.memories} == {kept.id}
 
 
 @pytest.mark.integration
@@ -876,11 +978,11 @@ def test_g12_hard_limit_exclusion_survives_the_real_context_builder_composition(
     _seed_bootstrap_singletons(database_path)
     memory_repository = build_sqlite_memory_repository(database_path)
     kept_by_filter = memory_repository.create_memory("candidato uno", "manual")
-    memory_repository.set_user_category(kept_by_filter.id, "salud")
+    memory_repository.set_user_criticality(kept_by_filter.id, Criticality.CRITICO)
     rescuable_by_rf25 = memory_repository.create_memory("candidato dos", "manual")
-    memory_repository.set_user_category(rescuable_by_rf25.id, "salud")
+    memory_repository.set_user_criticality(rescuable_by_rf25.id, Criticality.CRITICO)
     excluded_by_g12 = memory_repository.create_memory("candidato tres", "manual")
-    memory_repository.set_user_category(excluded_by_g12.id, "salud")
+    memory_repository.set_user_criticality(excluded_by_g12.id, Criticality.CRITICO)
     # Pin recency so G12's hard limit (below) deterministically keeps the
     # first two and drops the third: kept_by_filter, then rescuable_by_rf25,
     # then excluded_by_g12.

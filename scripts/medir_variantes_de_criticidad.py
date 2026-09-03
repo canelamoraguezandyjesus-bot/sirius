@@ -21,9 +21,11 @@ vocabulario (``composition_root._CRITICALITY_VOCABULARY``, portado literal del
 laboratorio) — la variante ``hoy`` de este guion pasa a ejercitarlo por
 defecto (`_ejecutar_banco_paquete_completo`` ya construye
 ``RankRelevantKnowledgeUseCase`` con ``criticality_vocabulary=
-_CRITICALITY_VOCABULARY``). M19b (encargo siguiente) cierra la causa (b): la
-regla de rescate RF-25/RF-26 y la categoría de máxima criticidad seguirán
-mirando el tema, no la criticidad, hasta entonces.
+_CRITICALITY_VOCABULARY``). M19b (ADR-128, incidencia #514) cerró la causa
+(b): la regla de rescate RF-25/RF-26 y la prioridad de G12 pasaron a mirar,
+con la puerta abierta, ``criticality is not None`` en vez del tema — la
+categoría de máxima criticidad (``_MAX_CRITICALITY_CATEGORY``) ya solo
+gobierna el candado del camino cerrado.
 
 Este guion mide **qué haría cada forma de marcar lo crítico** sobre el arnés
 de producción real, sin reimplementar nada: solo le inyecta al arnés otro
@@ -33,7 +35,7 @@ por defecto conservan el comportamiento — desde M19a, ``hoy`` incluido).
 
 Corre **sin Ollama**: el filtro es el doble que nunca descarta. Por eso solo
 puede ver la mitad de búsqueda (``NO_ENTRO``); no puede ver la de rescate
-(RF-25/RF-26, M19b). Es deliberado: la búsqueda es determinista y se puede
+(RF-25/RF-26). Es deliberado: la búsqueda es determinista y se puede
 medir en cualquier máquina; el filtro se mide aparte con Ollama.
 
 LAS VARIANTES
@@ -41,8 +43,9 @@ LAS VARIANTES
 
 - ``hoy``: producción real, desde M19a — etiquetas canónicas de tema
   (ADR-116) **más** el índice de criticidad (M19a) sobre
-  ``criticidad.nivel`` del canon; máxima criticidad ``salud`` (M19b no
-  cambia esto todavía).
+  ``criticidad.nivel`` del canon; máxima criticidad ``salud`` para el
+  candado del camino cerrado (M19b no toca ese candado; con la puerta
+  abierta, que este guion no ejercita, el rescate ya mira criticidad).
 - ``A_porte_fiel``: la semántica del laboratorio, portada tal cual: categoría
   ``restriccion`` **solo** para los items con criticidad declarada (CRITICO o
   IMPORTANTE), ``None`` para el resto; vocabulario del laboratorio (las cinco

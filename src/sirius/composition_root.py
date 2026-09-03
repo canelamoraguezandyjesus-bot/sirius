@@ -161,6 +161,15 @@ _CATEGORY_CLASSIFIER_MODEL = _DEFAULT_OLLAMA_MODEL
 # _CATEGORY_VOCABULARY, y ya usada como tal en los dobles de prueba de M10
 # (tests/integration/test_context_builder.py) antes de que M11 la hiciera
 # explícita aquí.
+#
+# M19b (ADR-128, incidencia #514): con la puerta ABIERTA, RF-25/RF-26
+# (rescue_max_criticality_candidates) y la prioridad de G12
+# (truncate_to_hard_limit) ya no miran esta constante — miran la
+# criticidad directamente (ContextBuilder._is_protected_by_criticality para
+# RF-25/RF-26; ContextBuilder._criticality_protection_rank para G12, que
+# distingue CRITICO de IMPORTANTE en vez de tratarlos por igual).
+# Esta constante sigue gobernando, sin cambios, el candado del camino
+# CERRADO (category is None or category == _MAX_CRITICALITY_CATEGORY) y D7.
 _MAX_CRITICALITY_CATEGORY = "salud"
 
 # El mismo modelo local que ya clasifica categorías (D7 punto 5, §6.3): un

@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from sirius.domain.criticality import Criticality
 from sirius.domain.decision import Decision, DecisionRevision, DecisionStatus
 from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
 from sirius.domain.relevance import (
@@ -605,29 +606,83 @@ def test_candidate_currently_valid_admits_a_valid_to_after_the_target_time() -> 
 
 
 # --- M15 (§11.2/§11.5, incidencia #490): truncate_to_hard_limit, the hard- ---
-# --- limit half of G12, replica of truncar_por_limite_duro (ADR-115). ---
+# --- limit half of G12, replica of truncar_por_limite_duro (ADR-115). Since ---
+# --- M19b (ADR-128, incidencia #514) the priority is caller-supplied -------
+# --- (``protection_rank``) instead of a fixed ``max_criticality_category`` -
+# --- these tests exercise it with the same criticality-based rank ---------
+# --- ContextBuilder itself builds for the open-gate path: CRITICO (0) -----
+# --- outranks IMPORTANTE (1), which outranks ordinary (2) — fixed in ------
+# --- this incidencia's review round 2 after a first, boolean version ------
+# --- (is_protected) could only ever tell "protected" from "ordinary", -----
+# --- never CRITICO from IMPORTANTE. ----------------------------------------
+
+
+def _is_not_ordinary(candidate: RankedKnowledge) -> bool:
+    """The M19b (ADR-128) predicate ``ContextBuilder`` builds for
+    ``rescue_max_criticality_candidates`` (RF-25/RF-26): "no ordinario" is
+    ``criticality is not None`` (CRITICO or IMPORTANTE), never a category
+    comparison. RF-25/RF-26 only ever need "protected or not" — unlike G12
+    below, this stays a boolean."""
+    return candidate.item.criticality is not None
+
+
+def _criticality_rank(candidate: RankedKnowledge) -> int:
+    """The M19b (ADR-128, review round 2) priority ``ContextBuilder`` builds
+    for ``truncate_to_hard_limit`` (G12): CRITICO (0) outranks IMPORTANTE
+    (1), which outranks every ordinary candidate (2) — mirrors
+    ``aplicar_g12``'s own ``-ORDEN_DE_CRITICIDAD.index(...)`` sort key
+    (``src/sirius/domain/staged_engine_gates.py:333``)."""
+    criticality = candidate.item.criticality
+    if criticality is Criticality.CRITICO:
+        return 0
+    if criticality is Criticality.IMPORTANTE:
+        return 1
+    return 2
 
 
 def test_truncate_to_hard_limit_keeps_everything_under_the_limit() -> None:
     ordinary = _ranked_memory(_memory(1))
-    critical = _ranked_memory(dataclasses.replace(_memory(2), category="salud"))
+    critical = _ranked_memory(dataclasses.replace(_memory(2), criticality=Criticality.CRITICO))
 
     result = truncate_to_hard_limit(
-        [ordinary, critical], hard_limit=5, max_criticality_category="salud"
+        [ordinary, critical], hard_limit=5, protection_rank=_criticality_rank
     )
 
     assert result == (ordinary, critical)
 
 
-def test_truncate_to_hard_limit_keeps_the_max_criticality_candidate_over_an_ordinary_one() -> None:
+def test_truncate_to_hard_limit_keeps_the_protected_candidate_over_an_ordinary_one() -> None:
     ordinary = _ranked_memory(_memory(1))
-    critical = _ranked_memory(dataclasses.replace(_memory(2), category="salud"))
+    critical = _ranked_memory(dataclasses.replace(_memory(2), criticality=Criticality.CRITICO))
 
     result = truncate_to_hard_limit(
-        [ordinary, critical], hard_limit=1, max_criticality_category="salud"
+        [ordinary, critical], hard_limit=1, protection_rank=_criticality_rank
     )
 
     assert result == (critical,)
+
+
+def test_truncate_to_hard_limit_prioritises_critico_over_importante_even_when_importante_arrives_first() -> (  # noqa: E501
+    None
+):
+    """CODEX-001 (revisión de la incidencia #514, PR #515): con el límite
+    duro atado y un IMPORTANTE precedente a un CRITICO, un ``is_protected``
+    booleano agrupaba ambos como igualmente protegidos y conservaba el
+    orden de llegada, devolviendo el IMPORTANTE. G12 ordena por criticidad
+    (``docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:1737-1742``):
+    CRITICO debe desplazar a IMPORTANTE aunque este llegue antes."""
+    importante_first = _ranked_memory(
+        dataclasses.replace(_memory(1), criticality=Criticality.IMPORTANTE)
+    )
+    critico_second = _ranked_memory(
+        dataclasses.replace(_memory(2), criticality=Criticality.CRITICO)
+    )
+
+    result = truncate_to_hard_limit(
+        [importante_first, critico_second], hard_limit=1, protection_rank=_criticality_rank
+    )
+
+    assert result == (critico_second,)
 
 
 def test_truncate_to_hard_limit_preserves_original_relative_order_of_survivors() -> None:
@@ -635,71 +690,126 @@ def test_truncate_to_hard_limit_preserves_original_relative_order_of_survivors()
     # result into that criticidad-first order — same "who, not how it's
     # displayed" contract the candado/filter union already relies on.
     first_ordinary = _ranked_memory(_memory(1))
-    critical = _ranked_memory(dataclasses.replace(_memory(2), category="salud"))
+    critical = _ranked_memory(dataclasses.replace(_memory(2), criticality=Criticality.CRITICO))
     second_ordinary = _ranked_memory(_memory(3))
 
     result = truncate_to_hard_limit(
         [first_ordinary, critical, second_ordinary],
         hard_limit=3,
-        max_criticality_category="salud",
+        protection_rank=_criticality_rank,
     )
 
     assert result == (first_ordinary, critical, second_ordinary)
 
 
-def test_truncate_to_hard_limit_without_a_max_criticality_category() -> None:
-    first = _ranked_memory(dataclasses.replace(_memory(1), category="salud"))
+def test_truncate_to_hard_limit_without_any_protected_candidate() -> None:
+    first = _ranked_memory(dataclasses.replace(_memory(1), criticality=Criticality.CRITICO))
     second = _ranked_memory(_memory(2))
 
-    result = truncate_to_hard_limit([first, second], hard_limit=1, max_criticality_category=None)
+    result = truncate_to_hard_limit([first, second], hard_limit=1, protection_rank=lambda _: 0)
 
+    # With every candidate ranked identically, the first hard_limit
+    # candidates in their original order survive — same stable-sort
+    # guarantee as before.
     assert result == (first,)
 
 
 # --- M15 (RF-25/RF-26, §11.2/§11.5, incidencia #490): rescue_max_criticality ---
 # --- _candidates, replica of aplicar_regla_de_criticas_original (ADR-112/113). ---
+# --- Since M19b (ADR-128, incidencia #514), "máxima criticidad" is decided ---
+# --- by the caller-supplied ``is_protected`` predicate; ContextBuilder's ----
+# --- own predicate is ``criticality is not None`` (CRITICO or IMPORTANTE), -
+# --- exactly what the laboratory's own ``restriccion`` tag protected -------
+# --- (tests/acceptance/staged_engine_category_and_relevance.py:472-513). ---
 
 
-def test_rf25_rescues_a_discarded_max_criticality_candidate_when_the_filter_kept_something() -> (
-    None
-):
+def test_rf25_rescues_a_discarded_critico_when_the_filter_kept_something() -> None:
     kept = _ranked_memory(_memory(1))
-    discarded_critical = _ranked_memory(dataclasses.replace(_memory(2), category="salud"))
-
-    rescued = rescue_max_criticality_candidates(
-        [kept, discarded_critical], [kept], max_criticality_category="salud"
+    discarded_critico = _ranked_memory(
+        dataclasses.replace(_memory(2), criticality=Criticality.CRITICO)
     )
 
-    assert rescued == (discarded_critical,)
+    rescued = rescue_max_criticality_candidates(
+        [kept, discarded_critico], [kept], is_protected=_is_not_ordinary
+    )
+
+    assert rescued == (discarded_critico,)
+
+
+def test_rf25_rescues_a_discarded_importante_when_the_filter_kept_something() -> None:
+    """RF-25 protects both non-ordinary levels alike, not just CRITICO —
+    exactly what the mutation below (narrowing the predicate to CRITICO
+    only) is meant to catch."""
+    kept = _ranked_memory(_memory(1))
+    discarded_importante = _ranked_memory(
+        dataclasses.replace(_memory(2), criticality=Criticality.IMPORTANTE)
+    )
+
+    rescued = rescue_max_criticality_candidates(
+        [kept, discarded_importante], [kept], is_protected=_is_not_ordinary
+    )
+
+    assert rescued == (discarded_importante,)
+
+
+def test_rf25_rescue_mutation_excluding_importante_is_caught_by_the_importante_test() -> None:
+    """Prueba por mutación (ADR-001): un predicado que solo protege CRITICO
+    (excluyendo IMPORTANTE, la mutación que sugiere la incidencia #514) deja
+    de rescatar un IMPORTANTE descartado — confirma que
+    ``test_rf25_rescues_a_discarded_importante_when_the_filter_kept_something``
+    detecta esa ausencia de protección."""
+    kept = _ranked_memory(_memory(1))
+    discarded_importante = _ranked_memory(
+        dataclasses.replace(_memory(2), criticality=Criticality.IMPORTANTE)
+    )
+
+    def only_critico(candidate: RankedKnowledge) -> bool:
+        return candidate.item.criticality is Criticality.CRITICO
+
+    rescued = rescue_max_criticality_candidates(
+        [kept, discarded_importante], [kept], is_protected=only_critico
+    )
+
+    assert rescued == ()
 
 
 def test_rf26_does_not_rescue_when_the_filter_conserved_nothing_at_all() -> None:
-    discarded_critical = _ranked_memory(dataclasses.replace(_memory(1), category="salud"))
+    discarded_critico = _ranked_memory(
+        dataclasses.replace(_memory(1), criticality=Criticality.CRITICO)
+    )
 
     rescued = rescue_max_criticality_candidates(
-        [discarded_critical], [], max_criticality_category="salud"
+        [discarded_critico], [], is_protected=_is_not_ordinary
     )
 
     assert rescued == ()
 
 
-def test_rescue_never_rescues_a_non_critical_candidate() -> None:
+def test_rescue_never_rescues_an_ordinary_candidate_even_with_the_max_criticality_category() -> (
+    None
+):
+    """An ordinary candidate (``criticality is None``) is never rescued by
+    the M19b predicate even if it still carries the thematic
+    max-criticality category (``"salud"``, ADR-116) — that category no
+    longer decides anything on the open-gate path."""
     kept = _ranked_memory(_memory(1))
-    discarded_non_critical = _ranked_memory(dataclasses.replace(_memory(2), category="otros"))
+    discarded_ordinary = _ranked_memory(dataclasses.replace(_memory(2), category="salud"))
 
     rescued = rescue_max_criticality_candidates(
-        [kept, discarded_non_critical], [kept], max_criticality_category="salud"
+        [kept, discarded_ordinary], [kept], is_protected=_is_not_ordinary
     )
 
     assert rescued == ()
 
 
-def test_rescue_never_rescues_anything_without_a_max_criticality_category() -> None:
+def test_rescue_never_rescues_anything_when_nothing_is_protected() -> None:
     kept = _ranked_memory(_memory(1))
-    discarded_critical = _ranked_memory(dataclasses.replace(_memory(2), category="salud"))
+    discarded_critico = _ranked_memory(
+        dataclasses.replace(_memory(2), criticality=Criticality.CRITICO)
+    )
 
     rescued = rescue_max_criticality_candidates(
-        [kept, discarded_critical], [kept], max_criticality_category=None
+        [kept, discarded_critico], [kept], is_protected=lambda _: False
     )
 
     assert rescued == ()
@@ -721,16 +831,22 @@ def test_rescue_never_rescues_anything_without_a_max_criticality_category() -> N
 
 
 def test_g12_hard_limit_exclusion_is_final_and_is_never_undone_by_rf25_rescue() -> None:
-    kept_by_filter = _ranked_memory(dataclasses.replace(_memory(1), category="salud"))
-    rescuable_by_rf25 = _ranked_memory(dataclasses.replace(_memory(2), category="salud"))
-    excluded_by_g12 = _ranked_memory(dataclasses.replace(_memory(3), category="salud"))
+    kept_by_filter = _ranked_memory(
+        dataclasses.replace(_memory(1), criticality=Criticality.CRITICO)
+    )
+    rescuable_by_rf25 = _ranked_memory(
+        dataclasses.replace(_memory(2), criticality=Criticality.CRITICO)
+    )
+    excluded_by_g12 = _ranked_memory(
+        dataclasses.replace(_memory(3), criticality=Criticality.CRITICO)
+    )
 
-    # G12 first: only two of the three max-criticality candidates fit the
-    # hard limit, so `excluded_by_g12` never reaches the filter or RF-25.
+    # G12 first: only two of the three protected candidates fit the hard
+    # limit, so `excluded_by_g12` never reaches the filter or RF-25.
     gated = truncate_to_hard_limit(
         [kept_by_filter, rescuable_by_rf25, excluded_by_g12],
         hard_limit=2,
-        max_criticality_category="salud",
+        protection_rank=_criticality_rank,
     )
     assert excluded_by_g12 not in gated
 
@@ -738,7 +854,7 @@ def test_g12_hard_limit_exclusion_is_final_and_is_never_undone_by_rf25_rescue() 
     # exactly the "conserved something else for this query" condition that
     # makes RF-25 rescue a discarded max-criticality candidate.
     filtered = (kept_by_filter,)
-    rescued = rescue_max_criticality_candidates(gated, filtered, max_criticality_category="salud")
+    rescued = rescue_max_criticality_candidates(gated, filtered, is_protected=_is_not_ordinary)
     assert rescued == (rescuable_by_rf25,)
 
     kept_positions = {id(candidate) for candidate in filtered}

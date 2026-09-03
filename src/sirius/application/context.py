@@ -19,6 +19,21 @@ relevance query text; the budget's ``protected_tokens`` covers exactly the
 sections that are never trimmed here — identity/rules, the active project (if
 any), and the current user message itself.
 
+M19b (ADR-128, incidencia #514): with the D7 point 6 gate open, "máxima
+criticidad" for RF-25/RF-26 (``rescue_max_criticality_candidates``) means
+"no ordinario" — ``criticality is not None`` (CRITICO or IMPORTANTE) — never
+the thematic ``category`` comparison the closed-gate candado still uses. See
+``_is_protected_by_criticality`` below. G12's priority
+(``truncate_to_hard_limit``) needs one level more than that boolean:
+CRITICO must outrank IMPORTANTE, which outranks ordinary, so it uses
+``_criticality_protection_rank`` instead (fixed in this incidencia's review
+round 2, after a first version reused the RF-25/RF-26 boolean for G12 too
+and let an IMPORTANTE arriving earlier in the candidate list outlive a
+CRITICO arriving later). With the gate closed, nothing in this module
+changes: the candado stays byte for byte the same union it was before this
+incidence, and ``_MAX_CRITICALITY_CATEGORY`` only ever governs that closed
+path now.
+
 M15 (SIRIUS-ARQ-0.2 §11.2/§11.5, incidencia #490) explicitly does not port
 ``siembra_de_contexto`` here: the architecture's own precondition
 (``docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:1744-1759``)
@@ -42,6 +57,7 @@ from sirius.application.context_budget import (
 )
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.domain.conversation import Message, MessageStatus
+from sirius.domain.criticality import Criticality
 from sirius.domain.decision import Decision
 from sirius.domain.event import Event
 from sirius.domain.identity import Identity
@@ -75,6 +91,41 @@ _DEFAULT_RECENT_MESSAGES_LIMIT = 20
 #: wired, currently inert gate rather than a new per-turn limit this
 #: incidence does not have authority to design.
 _HARD_LIMIT_SIN_ATAR = 100_000
+
+
+def _is_protected_by_criticality(candidate: RankedKnowledge) -> bool:
+    """M19b (ADR-128, incidencia #514): the predicate the open-gate path
+    passes to ``rescue_max_criticality_candidates`` (RF-25/RF-26) — "no
+    ordinario" is ``criticality is not None`` (CRITICO or IMPORTANTE),
+    exactly what the laboratory's own ``restriccion`` tag protected for
+    every non-ordinary identity alike
+    (``tests/acceptance/staged_engine_category_and_relevance.py:472-513``,
+    ``:544-574``), never a thematic ``category`` comparison — that stays the
+    closed-gate candado's own concern, via ``_max_criticality_category``,
+    unchanged by this incidence. RF-25/RF-26 only ever need "protected or
+    not", so a boolean is enough here — unlike ``_criticality_protection_rank``
+    below, which ``truncate_to_hard_limit`` (G12) uses instead."""
+    return candidate.item.criticality is not None
+
+
+def _criticality_protection_rank(candidate: RankedKnowledge) -> int:
+    """The priority ``truncate_to_hard_limit`` (G12) passes for the
+    open-gate path: lower survives first. Fixed in incidencia #514's review
+    round 2 — a first version reused the boolean
+    ``_is_protected_by_criticality`` above for G12 too, which could only
+    ever split candidates into two tiers and let an IMPORTANTE arriving
+    earlier in the candidate list survive over a CRITICO arriving later.
+    Mirrors ``aplicar_g12``'s own ``-ORDEN_DE_CRITICIDAD.index(...)`` sort
+    key (``src/sirius/domain/staged_engine_gates.py:333``): CRITICO (0)
+    outranks IMPORTANTE (1), which outranks every ordinary candidate (2) —
+    the same three-level order ``ORDEN_DE_CRITICIDAD`` fixes, from most to
+    least critical."""
+    criticality = candidate.item.criticality
+    if criticality is Criticality.CRITICO:
+        return 0
+    if criticality is Criticality.IMPORTANTE:
+        return 1
+    return 2
 
 
 class ContextAssemblyError(RuntimeError):
@@ -286,14 +337,26 @@ class ContextBuilder:
         With the gate open, M15 (§11.2/§11.5, incidencia #490) replaces the
         max-criticality half of that union with RF-25/RF-26
         (``rescue_max_criticality_candidates``): the filter's own verdict on
-        a max-criticality candidate is only overridden if it conserved
-        something else for this query, never when it declared total
-        absence. A candidate with no category yet stays unconditionally
-        protected either way — this ola does not change that. G8/G12
+        a protected candidate is only overridden if it conserved something
+        else for this query, never when it declared total absence. A
+        candidate with no category yet stays unconditionally protected
+        either way — this ola does not change that. G8/G12
         (``candidate_currently_valid``/``truncate_to_hard_limit``) gate the
         combined motor+categoría set first, before either mechanism sees it
         — same order ``_rank_via_staged_engine``'s harness twin already
         established (ADR-115).
+
+        M19b (ADR-128, incidencia #514): with the gate open, what counts as
+        "protected" is ``criticality is not None`` for both G12 and
+        RF-25/RF-26 — never the thematic ``_max_criticality_category`` the
+        closed-gate candado above still uses; that constant governs only the
+        closed-gate path from this incidence onward. RF-25/RF-26
+        (``rescue_max_criticality_candidates``) only ever need that as a
+        boolean (``_is_protected_by_criticality``); G12
+        (``truncate_to_hard_limit``) needs CRITICO to outrank IMPORTANTE
+        when the hard limit ties, so it gets a three-level priority instead
+        (``_criticality_protection_rank``, fixed in this incidencia's review
+        round 2).
 
         Either path preserves the order §6.2 already fixed on ``candidates``
         for every survivor.
@@ -325,11 +388,11 @@ class ContextBuilder:
         gated = truncate_to_hard_limit(
             gated,
             hard_limit=_HARD_LIMIT_SIN_ATAR,
-            max_criticality_category=self._max_criticality_category,
+            protection_rank=_criticality_protection_rank,
         )
         filtered = self._relevance_filter_port.filter_candidates(current_user_message, gated)
         rescued = rescue_max_criticality_candidates(
-            gated, filtered, max_criticality_category=self._max_criticality_category
+            gated, filtered, is_protected=_is_protected_by_criticality
         )
         kept_positions = {id(candidate) for candidate in filtered}
         kept_positions.update(id(candidate) for candidate in rescued)
