@@ -275,6 +275,31 @@ ADR o su incidencia cuando se adopte.
   lo que llega antes de morir no se pierde). Dos muertes seguidas sin
   commit intermedio son el dato.
 
+### 17. M21b: ronda 3, la familia se cierra y quedan dos flecos (17:06 → 17:13 UTC)
+
+- **Qué pasó.** Tras la consolidación (entrada 16), la ronda 3 devolvió
+  dos hallazgos y severidad 3 (13 → 8 → 3): mi prueba de la revisión nueva
+  no distinguía el resultado obsoleto del vigente (el doble devolvía lo
+  mismo en las dos llamadas: CLAUDE-REV-R3-001, baja), y la reanudación al
+  salir de ocupado arrancaba un worker de hasta 30 s también cuando la
+  ventana iba a cerrarse (CODEX-001, P2). El motor emitió
+  `AVISO_FAMILIA_REPETIDA` (mismo archivo tres rondas seguidas): exacto, y
+  precisamente lo que la consolidación atacaba.
+- **Qué se hizo.** Corregido por mí sin esperar al corrector (que ya
+  había muerto dos veces en esta incidencia): doble con resultado y cerrojo
+  por llamada, prueba que libera v2 antes que v1; `resume_proposals=False`
+  en los dos flujos terminales. Dos mutaciones cazadas. Empujado a las
+  17:12 con el corrector aún en marcha: su push, si llega, será rechazado
+  y quedará `failed-safely`; la ruta H-34 lo lleva a revisión.
+- **Mejor manera.** (a) Al escribir una prueba de «se descarta lo
+  obsoleto», forzar el orden de llegada y usar valores distintos: si el
+  doble devuelve lo mismo, la prueba no puede fallar. (b) Toda reanudación
+  automática de trabajo asíncrono debe conocer el ciclo de vida de la
+  ventana (cierre solicitado, restauración que cierra): meterlo en la lista
+  de comprobación de la entrada 14. (c) Motor: cuando el propietario ya
+  está corrigiendo una incidencia, poder cancelar el corrector en vez de
+  dejar que muera por push rechazado.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -292,7 +317,8 @@ ADR o su incidencia cuando se adopte.
 7. Suite GUI: `test_streaming_message_grows_without_overlapping_neighbours`
    depende del orden/estado de Qt (entrada 16).
 8. Corrector del motor: presupuesto o un commit por hallazgo cuando la
-   ronda trae varios hallazgos de interfaz (entradas 9 y 16).
+   ronda trae varios hallazgos de interfaz (entradas 9 y 16), y poder
+   cancelarlo cuando el propietario corrige a mano (entrada 17).
 9. Medición con Ollama real de M19b y M20 en la máquina del propietario
    (filas pendientes en ADR-128 y ADR-129): `uv run python
    scripts/medir_banco_con_ollama_real.py --diagnostico`.
