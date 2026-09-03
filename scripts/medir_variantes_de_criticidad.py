@@ -27,6 +27,20 @@ con la puerta abierta, ``criticality is not None`` en vez del tema — la
 categoría de máxima criticidad (``_MAX_CRITICALITY_CATEGORY``) ya solo
 gobierna el candado del camino cerrado.
 
+M20 (ADR-129, incidencia #516, Decisión 2 del propietario del 02-09-2026)
+porta la siembra en contexto (``RankRelevantKnowledgeUseCase.
+_rank_via_staged_engine``'s tercer bloque, ``siembra``): activada por el
+PROPÓSITO de la petición (``pide_contexto``), no por vocabulario, y
+``_peticion_ordinaria`` declara el mismo propósito fijo para las 47
+consultas del banco — así que, desde este encargo, la variante ``hoy`` (y
+también ``A_porte_fiel``/``B_arreglo_ingenuo``, que comparten el mismo
+``criticality`` real por item) siembra en cada una de las 47 consultas, no
+solo en las dos que el arnés de examen declara con propósito de contexto.
+Las tres ``NO_ENTRO`` bajan a **0** (las tres pérdidas de B04-CA-34 que
+M19a/M19b dejaban sin cerrar) y ``elementos_de_mas`` sube sin cota, tal como
+predecía la incidencia #516: la siembra mete en cada consulta todo lo no
+ordinario del ámbito, y este guion mide sin filtro (el doble nunca poda).
+
 Este guion mide **qué haría cada forma de marcar lo crítico** sobre el arnés
 de producción real, sin reimplementar nada: solo le inyecta al arnés otro
 vocabulario, otra asignación de categoría y otra categoría de máxima
@@ -63,8 +77,8 @@ LAS VARIANTES
   sirviendo de control negativo: confirma con datos por qué M19a no fusionó
   los dos vocabularios en un único índice.
 
-PREDICCION, ESCRITA ANTES DE EJECUTAR M19a (ADR-127, ADR-001)
-===============================================================
+PREDICCION HISTORICA, ESCRITA ANTES DE EJECUTAR M19a (ADR-127, ADR-001)
+========================================================================
 
 - ``hoy``: las críticas ``NO_ENTRO`` bajan de 9 a **3** (quedan solo las tres
   de B04-CA-34: DEC-003, MEM-014, MEM-016 — la siembra, M20, no el índice),
@@ -77,9 +91,21 @@ PREDICCION, ESCRITA ANTES DE EJECUTAR M19a (ADR-127, ADR-001)
   vocabularios en el índice de categoría trae todo el ámbito, ordinario
   incluido, en vez de solo lo no ordinario.
 
-Si ``hoy`` no baja a 3 ``NO_ENTRO``, o si sus elementos de más superan 300, se
-para y se busca la raíz (regla de las dos rondas, ADR-001) — no se ajusta el
-vocabulario para cuadrar el número.
+Esa predicción se cumplió sin ajustar el vocabulario (ver ADR-127/ADR-128).
+
+VERDAD NUEVA TRAS M20 (ADR-129, incidencia #516)
+=================================================
+
+Con la siembra en contexto portada y activa en las 47 consultas (ver arriba,
+"M20" en el docstring del módulo), las tres variantes miden ``hoy`` = **0**
+``NO_ENTRO`` (las tres pérdidas de B04-CA-34 ya se siembran), cobertura
+**72/81**, y ``elementos_de_mas`` sube sin cota respecto a la medición de
+M19a/M19b — predicho por la incidencia #516 y no motivo de parada: la
+siembra mete en cada consulta todo lo no ordinario del ámbito, y este guion
+mide sin filtro (el doble nunca poda ese ruido).
+
+Si ``hoy`` no baja a 0 ``NO_ENTRO``, o si algún caso PIERDE una crítica que
+antes tenía, se para y se busca la raíz (regla de las dos rondas, ADR-001).
 
 USO
 ===
@@ -219,8 +245,10 @@ def main() -> int:
             print(f"      {caso_id}  {identidad}")
     print()
     print(
-        "  Prediccion M19a (ADR-127) escrita antes de ejecutar: hoy=3 NO_ENTRO "
-        "(68/81), A=3 (sin cambio), B baja pero dispara 'de mas'."
+        "  Verdad nueva tras M20 (ADR-129, incidencia #516): hoy=0 NO_ENTRO "
+        "(72/81), A=0, B=0 (sin cambio entre variantes: la siembra siembra "
+        "igual en las tres) -- 'de mas' sube sin cota, previsto y no motivo "
+        "de parada."
     )
     print("  Sin Ollama solo se ve la etapa de busqueda (NO_ENTRO): la de rescate se mide aparte.")
     print("=" * 74)

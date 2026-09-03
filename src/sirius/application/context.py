@@ -34,15 +34,21 @@ changes: the candado stays byte for byte the same union it was before this
 incidence, and ``_MAX_CRITICALITY_CATEGORY`` only ever governs that closed
 path now.
 
-M15 (SIRIUS-ARQ-0.2 §11.2/§11.5, incidencia #490) explicitly does not port
-``siembra_de_contexto`` here: the architecture's own precondition
+M20 (ADR-129, incidencia #516) ports ``siembra_de_contexto`` — not here, but
+in ``RankRelevantKnowledgeUseCase._rank_via_staged_engine``'s third
+amplification block (``siembra``), the same integration point §11.2 already
+fixed for it. The owner's Decisión 2 (02-09-2026, cited in ADR-126 and
+``docs/audits/evidencia-experimento-filtro-fiel-al-laboratorio.md``, section
+"Decisión del propietario y plan") resolves the architecture's precondition
 (``docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:1744-1759``)
-requires the owner to first resolve, by one of two mutually exclusive
-routes, ``docs/evolution/SIRIUS_PLAN_PRUEBAS_0.2_v0.1_PROPUESTO.md:124-131``'s
-open precondition on PA-0.2-REC-01 — expanding the 47-case bank with
-independent cases that exercise the seeding, or removing it from the code —
-before any encargo may port it into production. This class stays exactly as
-before this incidence in that respect: no seeding of any kind happens here.
+through a third route neither of the two mutually exclusive ones that block
+named: porting it knowing the 47-case bank cannot validate it independently
+(only two cases exercise it), accepted instead by the lost-criticals
+measurement (3 → 0) and real use. ``ContextBuilder`` itself is untouched by
+this — it keeps calling ``rank_relevant_knowledge_use_case.rank()`` exactly
+as before, so the seeded candidates it now receives flow through the
+existing relevance filter (§6.3) and budget (B6c) unchanged, the same way
+category/criticality-amplified candidates already did.
 """
 
 from __future__ import annotations

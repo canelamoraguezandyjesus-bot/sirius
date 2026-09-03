@@ -230,8 +230,34 @@ _MINIMO_ELEMENTOS_HALLADOS_MOTOR: Final[int] = 63
 #: §8-M11 (29/47): ese suelo lo afirma, sin salvedad, la prueba marcada
 #: `xfail(strict=True)` de más abajo. M16 (incidencia #504, ADR-124) cablea
 #: ámbito real y propósito honesto, más M13-M15 ya integradas, y remide:
-#: 7/47 — la cota sube a lo nuevo medido, nunca a lo esperado.
-_MINIMO_ACIERTOS_EXACTOS_PAQUETE_COMPLETO: Final[int] = 7
+#: 7/47.
+#:
+#: M20 (ADR-129, incidencia #516) porta la siembra en contexto
+#: (`RankRelevantKnowledgeUseCase._rank_via_staged_engine`'s bloque
+#: `siembra`): dado que `_peticion_ordinaria` declara el mismo propósito fijo
+#: para las 47 consultas (M16, ADR-124), `pide_contexto` es cierto para
+#: TODAS, no solo para las dos que el fixture del arnés de examen declara con
+#: propósito de contexto — la siembra actúa en cada turno, tal como registra
+#: el docstring de `_rank_via_staged_engine`. Eso amplía cada una de las 47
+#: filas con todo lo no ordinario de su ámbito, sin cota (predicho: "elementos
+#: de más suben claramente y sin cota", ADR-129) — ningún caso conserva ya un
+#: acierto exacto (`aciertos_exactos` 7 → 0/47), mientras que
+#: `omisiones_criticas` baja a 0 (3 → 0, la medición que Decisión 2 pedía) y
+#: la cobertura sube (68 → 72/81). La cota baja a lo nuevo medido: sigue
+#: siendo no regresión a lo medido, nunca al suelo de D1/§8-M11, que la
+#: siembra no persigue.
+#:
+#: CODEX-001 (incidencia #516, r3924271714): al bajar `aciertos_exactos` a su
+#: nuevo suelo (0), esa cota sola queda tautológica -- toda ejecución la
+#: cumple, incluida una que no recuperase nada. La guarda real de esta prueba
+#: son las otras dos cifras que M20 sí mueve con intención (ver el párrafo de
+#: arriba): `omisiones_criticas` no debe regresar por encima de 0, y
+#: `cobertura` no debe caer por debajo de lo medido (72/81) -- ambas, como
+#: `aciertos_exactos`, cotas unidireccionales de no regresión a lo medido,
+#: nunca el suelo de D1/§8-M11.
+_MINIMO_ACIERTOS_EXACTOS_PAQUETE_COMPLETO: Final[int] = 0
+_MAXIMO_OMISIONES_CRITICAS_PAQUETE_COMPLETO: Final[int] = 0
+_MINIMO_ELEMENTOS_HALLADOS_PAQUETE_COMPLETO: Final[int] = 72
 
 pytestmark = [pytest.mark.acceptance, pytest.mark.integration]
 
@@ -2062,9 +2088,14 @@ def _ejecutar_banco_paquete_completo(
     combinado (M15, `ContextBuilder._apply_relevance_filter` —aquí inertes
     en la práctica, porque `_FiltroDeRelevanciaQueNuncaDescarta` no descarta
     nada, así que no hay nada que RF-25/RF-26 tenga que rescatar—), y ámbito
-    real derivado del proyecto activo (M16, `_peticion_ordinaria`). Lo único
-    que sigue sin portar es `siembra_de_contexto`: su precondición
-    documentada (M15, §11.2) sigue sin resolverse. `_set_active_project`
+    real derivado del proyecto activo (M16, `_peticion_ordinaria`). M20
+    (ADR-129, incidencia #516) porta también `siembra_de_contexto` (bloque
+    `siembra` de `_rank_via_staged_engine`): a diferencia del arnés de examen
+    de arriba, que solo la ejercita para los dos casos cuyo `peticion_p2.
+    proposito` propio declara contexto, aquí `_peticion_ordinaria` declara el
+    mismo propósito fijo para las 47 consultas — así que la siembra actúa en
+    cada una, no solo en dos, exactamente como actuaría en producción real
+    (ver el docstring de `_rank_via_staged_engine`). `_set_active_project`
     (arriba) simula, caso a caso, qué proyecto estaba `ACTIVE` en el momento
     de cada consulta según su propio campo `ambito` — sin eso, los 47 casos
     compartirían un único proyecto activo arbitrario (el que
@@ -2245,19 +2276,21 @@ def test_el_banco_se_ejecuta_contra_el_paquete_completo_de_produccion_como_evide
     Las cifras difieren de las del arnés de examen porque miden un pipeline
     distinto, no porque una de las dos esté mal: el arnés de examen
     reimplementa la semántica de laboratorio completa con ejes P2 poblados a
-    mano desde el corpus (`staged_engine_category_and_relevance.py`) —en
-    particular, `siembra_de_contexto`, que sigue sin tener equivalente en
-    producción mientras su precondición documentada (M15, §11.2) no se
-    resuelva—, mientras que el camino real (M13-M16 ya integradas, ver el
-    docstring de `_ejecutar_banco_paquete_completo`) entrega todo item real
-    con `ejes=SIN_EJES` — las puertas P2 que los necesitan degradan en vez
-    de evaluar el eje real que el arnés de examen sí puebla a mano. Medir
-    por separado el resto de la semántica de laboratorio es precisamente lo
-    que motivó el arnés de examen (#457-#469, ADR-109 a ADR-115); esta
-    incidencia (#504) es la primera que mide las piezas ya cableadas de
-    M13-M16 sobre el camino real, sin la siembra dentro del conjunto — ver
-    ADR-124 para el detalle de qué cambió y por qué el resultado no estaba
-    predeterminado.
+    mano desde el corpus (`staged_engine_category_and_relevance.py`) y activa
+    la siembra únicamente para los dos casos cuyo propio `peticion_p2.
+    proposito` la declara, mientras que el camino real (M13-M16 y, desde
+    M20/ADR-129/incidencia #516, también la siembra — ver el docstring de
+    `_ejecutar_banco_paquete_completo`) entrega todo item real con
+    `ejes=SIN_EJES` — las puertas P2 que los necesitan degradan en vez de
+    evaluar el eje real que el arnés de examen sí puebla a mano — y activa la
+    siembra en las 47 consultas por igual, porque `_peticion_ordinaria`
+    declara un único propósito fijo para todas. Medir por separado el resto
+    de la semántica de laboratorio es precisamente lo que motivó el arnés de
+    examen (#457-#469, ADR-109 a ADR-115); esta incidencia (#504) fue la
+    primera que midió las piezas ya cableadas de M13-M16 sobre el camino
+    real, sin la siembra dentro del conjunto — ver ADR-124 para el detalle de
+    qué cambió y por qué el resultado no estaba predeterminado, y ADR-129
+    para la medición con la siembra ya dentro.
     """
     paquete_completo = ejecucion_del_banco_paquete_completo.metricas
     examen = ejecucion_del_banco_motor_portado.metricas
@@ -2267,10 +2300,10 @@ def test_el_banco_se_ejecuta_contra_el_paquete_completo_de_produccion_como_evide
         "RankRelevantKnowledgeUseCase y ContextBuilder con "
         "category_matching_enabled=True (M13-M16 integradas: consulta por "
         "lote, índice de categoría de activación múltiple con ámbito real, "
-        "RF-25/RF-26 y G8/G12, ámbito y propósito reales de la petición), "
-        "sin siembra_de_contexto ni la semántica de laboratorio del arnés "
-        "de examen — evidencia adicional, ningún suelo D1/D2 afirmado "
-        "aquí): "
+        "RF-25/RF-26 y G8/G12, ámbito y propósito reales de la petición, "
+        "siembra en contexto desde M20/ADR-129), sin la semántica de "
+        "laboratorio del arnés de examen — evidencia adicional, ningún "
+        "suelo D1/D2 afirmado aquí): "
         f"aciertos_exactos={paquete_completo.aciertos_exactos}/47 "
         f"elementos_de_mas={paquete_completo.elementos_de_mas} "
         f"omisiones_criticas={paquete_completo.omisiones_criticas} "
@@ -2292,10 +2325,42 @@ def test_el_banco_se_ejecuta_contra_el_paquete_completo_de_produccion_como_evide
     # afirma esos suelos (ver arriba). El suelo real de §8-M11 para este
     # camino lo afirma, sin salvedad, la prueba `xfail(strict=True)` de más
     # abajo.
+    #
+    # `aciertos_exactos >= 0` es tautológica desde que M20 bajó su suelo a 0
+    # (CODEX-001, incidencia #516): la guarda efectiva de esta prueba son las
+    # otras dos cotas de no regresión que sí pueden fallar --
+    # `omisiones_criticas` y `cobertura` -- ver el docstring del módulo junto
+    # a `_MAXIMO_OMISIONES_CRITICAS_PAQUETE_COMPLETO`.
     assert paquete_completo.aciertos_exactos >= _MINIMO_ACIERTOS_EXACTOS_PAQUETE_COMPLETO
     assert paquete_completo.elementos_de_mas >= 0
-    assert paquete_completo.omisiones_criticas >= 0
-    assert 0 <= paquete_completo.elementos_hallados <= paquete_completo.elementos_esperados_total
+    assert paquete_completo.omisiones_criticas <= _MAXIMO_OMISIONES_CRITICAS_PAQUETE_COMPLETO
+    assert paquete_completo.elementos_hallados >= _MINIMO_ELEMENTOS_HALLADOS_PAQUETE_COMPLETO
+    assert paquete_completo.elementos_hallados <= paquete_completo.elementos_esperados_total
+
+
+def test_el_guardia_del_paquete_completo_ya_no_es_tautologico() -> None:
+    """CODEX-001 (incidencia #516, r3924271714): antes de esta corrección,
+    `aciertos_exactos >= _MINIMO_ACIERTOS_EXACTOS_PAQUETE_COMPLETO` era la
+    única cota no trivial de
+    `test_el_banco_se_ejecuta_contra_el_paquete_completo_de_produccion_como_evidencia_adicional`,
+    y quedó tautológica cuando M20 bajó ese suelo a 0 -- una ejecución que no
+    recuperase nada (0 aciertos exactos, 0 elementos de más, cobertura 0,
+    omisiones críticas positivas) la habría superado igual, junto con las
+    demás aserciones de esa prueba (todas piden solo métricas no negativas o
+    cobertura dentro de rango). Prueba de forma: ese caso degenerado --
+    exactamente el que describe el hallazgo -- sigue cumpliendo la cota
+    tautológica pero ya incumple las dos cotas nuevas que protegen la
+    aceptación declarada por M20 (0 omisiones críticas, cobertura >= 72/81)."""
+    degenerada = _Metricas(
+        aciertos_exactos=0,
+        elementos_de_mas=0,
+        omisiones_criticas=1,
+        elementos_hallados=0,
+        elementos_esperados_total=81,
+    )
+    assert degenerada.aciertos_exactos >= _MINIMO_ACIERTOS_EXACTOS_PAQUETE_COMPLETO
+    assert degenerada.omisiones_criticas > _MAXIMO_OMISIONES_CRITICAS_PAQUETE_COMPLETO
+    assert degenerada.elementos_hallados < _MINIMO_ELEMENTOS_HALLADOS_PAQUETE_COMPLETO
 
 
 @pytest.mark.xfail(
