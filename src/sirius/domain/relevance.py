@@ -61,6 +61,19 @@ a candidate's ``category``, so the amplification's caller can decide whether
 querying persistence for the category-filtered subset is worth it at all
 *before* asking, instead of loading the whole corpus to find out candidate by
 candidate.
+
+M19a (ADR-127, incidencia #512) adds a sixth structural signal,
+``criticality_match``, exactly parallel to ``category_match``: inserted right
+after it in ``_sort_key`` and, like it, widening ``is_related`` — a candidate
+can be found through criticality alone, with neither a subject/FTS5 hit nor a
+category match. Wired only in
+``RankRelevantKnowledgeUseCase._rank_via_staged_engine``'s second amplification
+block (``solo_por_criticidad``, parallel to ``solo_por_categoria``), behind
+the same ``category_matching_enabled`` gate, over ``Memory.criticality``/
+``Decision.criticality`` (M18b, ADR-126) instead of ``category``.
+``category_index_activated`` is reused as-is with the criticality vocabulary
+instead of a new function — it never depended on anything category-specific,
+only on a vocabulary and a query.
 """
 
 from __future__ import annotations
@@ -122,6 +135,15 @@ class RankedKnowledge:
     signal, never a penalty" default the other three booleans imply through
     an unrelated/non-current candidate being filtered instead."""
 
+    criticality_match: bool = False
+    """The fifth structural signal (M19a, ADR-127, incidencia #512): whether
+    the candidate was found through the criticality index —
+    ``Memory.criticality``/``Decision.criticality`` (M18b, ADR-126) being
+    CRITICO or IMPORTANTE, with the query activating the criticality
+    vocabulary — exactly parallel to ``category_match`` above, but over the
+    "how much it matters" signal instead of "what it is about". ``False`` by
+    default for the same reason ``category_match`` is."""
+
     def __post_init__(self) -> None:
         if self.kind is KnowledgeKind.MEMORY and self.subject_matches_query:
             msg = (
@@ -149,12 +171,19 @@ class RankedKnowledge:
     def is_related(self) -> bool:
         """Whether this candidate is related to the query at all. A
         ``False`` here is S7.5's other negative term, "elemento general no
-        relacionado" — a matching subject, an actual FTS5 hit, or (M9,
-        SIRIUS-ARQ-0.2 §6.2) a category match, never project membership or
-        recency alone. ``category_match`` can only ever add a candidate here,
-        never remove one the other two already keep: it stays ``False`` for
-        every real candidate while D7 point 6's activation gate is closed."""
-        return self.subject_matches_query or self.fts_match or self.category_match
+        relacionado" — a matching subject, an actual FTS5 hit, (M9,
+        SIRIUS-ARQ-0.2 §6.2) a category match, or (M19a, ADR-127) a
+        criticality match, never project membership or recency alone.
+        ``category_match``/``criticality_match`` can only ever add a
+        candidate here, never remove one the other signals already keep:
+        both stay ``False`` for every real candidate while D7 point 6's
+        activation gate is closed."""
+        return (
+            self.subject_matches_query
+            or self.fts_match
+            or self.category_match
+            or self.criticality_match
+        )
 
 
 def subject_matches_query(subject: str, query_text: str) -> bool:
@@ -376,12 +405,13 @@ def _synthetic_id(candidate: RankedKnowledge) -> int:
     return candidate.item_id * 2 + 1
 
 
-def _sort_key(candidate: RankedKnowledge) -> tuple[bool, bool, bool, bool, float, int]:
+def _sort_key(candidate: RankedKnowledge) -> tuple[bool, bool, bool, bool, bool, float, int]:
     return (
         not candidate.subject_matches_query,
         not candidate.project_matches_active,
         not candidate.fts_match,
         not candidate.category_match,
+        not candidate.criticality_match,
         -candidate.item.updated_at.timestamp(),
         _synthetic_id(candidate),
     )

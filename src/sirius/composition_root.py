@@ -134,6 +134,17 @@ STUDIO_VOICE_SETTING = "model_studio_voice"
 _CATEGORY_VOCABULARY: frozenset[str] = frozenset(
     {"trabajo", "personal", "salud", "finanzas", "proyecto", "aprendizaje", "otros"}
 )
+
+# M19a (ADR-127, incidencia #512): el vocabulario del índice de criticidad,
+# portado sin modificar de `experiments/adr002/lateral/categoria.py:72-78`
+# (rama `evidence/adr001-spikes`, réplica en
+# `tests/acceptance/staged_engine_category_and_relevance.py:244-251`,
+# `VOCABULARIO_DE_CATEGORIA`) — las cinco palabras con las que alguien pide lo
+# crítico, nunca el vocabulario temático de `_CATEGORY_VOCABULARY` de arriba.
+# Igual de provisional y confinado a esta única raíz de composición.
+_CRITICALITY_VOCABULARY: frozenset[str] = frozenset(
+    {"esencial", "restriccion", "critica", "obligatoria", "imprescindible"}
+)
 #: Modelo local por defecto para el filtro de relevancia y el clasificador de
 #: categoría: el mismo con el que el laboratorio midió 29/47
 #: (`experiments/adr002/modelo_local/puerto.py:73`, rama `evidence/adr001-spikes`)
@@ -487,6 +498,9 @@ def build_conversation_dependencies(
         project_repository=project_repository,
         knowledge_search_repository=knowledge_search_repository,
         category_vocabulary=_CATEGORY_VOCABULARY if category_matching_enabled else frozenset(),
+        criticality_vocabulary=(
+            _CRITICALITY_VOCABULARY if category_matching_enabled else frozenset()
+        ),
         category_matching_enabled=category_matching_enabled,
         staged_engine_port=staged_engine_port,
         staged_engine_candidate=staged_engine_candidato(),

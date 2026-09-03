@@ -14,50 +14,69 @@ ordinario, ``None`` para lo ordinario). Con eso, (a) las consultas que piden
 (b) la regla de rescate RF-25/RF-26, que protege ``"salud"``, no protege
 ninguna crítica del banco —1 pérdida ``TIRADO_POR_EL_FILTRO``—.
 
-Antes de que el propietario decida cómo marcar lo crítico en producción, este
-guion mide **qué haría cada opción** sobre el arnés de producción real, sin
-reimplementar nada: solo le inyecta al arnés otro vocabulario, otra asignación
-de categoría y otra categoría de máxima criticidad (parámetros opcionales de
-``_ejecutar_banco_paquete_completo`` que por defecto conservan el comportamiento
-de hoy).
+M19a (ADR-127, incidencia #512) cerró la causa (a): ``RankRelevantKnowledgeUseCase``
+gana un segundo bloque de ampliación, ``solo_por_criticidad``, sobre
+``Memory.criticality``/``Decision.criticality`` (M18b, ADR-126) y su propio
+vocabulario (``composition_root._CRITICALITY_VOCABULARY``, portado literal del
+laboratorio) — la variante ``hoy`` de este guion pasa a ejercitarlo por
+defecto (`_ejecutar_banco_paquete_completo`` ya construye
+``RankRelevantKnowledgeUseCase`` con ``criticality_vocabulary=
+_CRITICALITY_VOCABULARY``). M19b (encargo siguiente) cierra la causa (b): la
+regla de rescate RF-25/RF-26 y la categoría de máxima criticidad seguirán
+mirando el tema, no la criticidad, hasta entonces.
+
+Este guion mide **qué haría cada forma de marcar lo crítico** sobre el arnés
+de producción real, sin reimplementar nada: solo le inyecta al arnés otro
+vocabulario, otra asignación de categoría y otra categoría de máxima
+criticidad (parámetros opcionales de ``_ejecutar_banco_paquete_completo`` que
+por defecto conservan el comportamiento — desde M19a, ``hoy`` incluido).
 
 Corre **sin Ollama**: el filtro es el doble que nunca descarta. Por eso solo
-puede ver la mitad de búsqueda (``NO_ENTRO``), que es la mitad grande (9 de 10),
-y no puede ver la de rescate. Es deliberado: la búsqueda es determinista y se
-puede medir en cualquier máquina; el filtro se mide aparte con Ollama.
+puede ver la mitad de búsqueda (``NO_ENTRO``); no puede ver la de rescate
+(RF-25/RF-26, M19b). Es deliberado: la búsqueda es determinista y se puede
+medir en cualquier máquina; el filtro se mide aparte con Ollama.
 
 LAS VARIANTES
 =============
 
-- ``hoy``: exactamente producción (etiquetas canónicas de tema, vocabulario de
-  ADR-116, máxima criticidad ``salud``).
+- ``hoy``: producción real, desde M19a — etiquetas canónicas de tema
+  (ADR-116) **más** el índice de criticidad (M19a) sobre
+  ``criticidad.nivel`` del canon; máxima criticidad ``salud`` (M19b no
+  cambia esto todavía).
 - ``A_porte_fiel``: la semántica del laboratorio, portada tal cual: categoría
   ``restriccion`` **solo** para los items con criticidad declarada (CRITICO o
   IMPORTANTE), ``None`` para el resto; vocabulario del laboratorio (las cinco
   palabras con las que alguien pide lo crítico); máxima criticidad
-  ``restriccion``.
-- ``B_arreglo_ingenuo``: lo que haría quien solo añadiera palabras: etiquetas
-  de tema para todo (como hoy) + las cinco palabras del laboratorio sumadas al
-  vocabulario. Máxima criticidad ``salud`` (como hoy).
+  ``restriccion``. Desde M19a ya no aporta nada distinto de ``hoy`` en
+  búsqueda (las cuatro métricas de ``NO_ENTRO``/cobertura/exactos coinciden):
+  la única diferencia que le queda es la categoría derivada de criticidad,
+  que ``hoy`` no tiene — y por eso ``elementos_de_mas`` difiere entre las dos
+  (``hoy`` sigue trayendo también lo hallado por el índice de categoría
+  temático, que ``A_porte_fiel`` sustituye en vez de sumar).
+- ``B_arreglo_ingenuo``: lo que haría quien solo añadiera palabras al índice
+  de categoría existente en vez de crear uno propio de criticidad: etiquetas
+  de tema para todo (como hoy) + las cinco palabras del laboratorio sumadas
+  al vocabulario de categoría. Máxima criticidad ``salud`` (como hoy). Sigue
+  sirviendo de control negativo: confirma con datos por qué M19a no fusionó
+  los dos vocabularios en un único índice.
 
-PREDICCION, ESCRITA ANTES DE EJECUTAR (ADR-001)
-===============================================
+PREDICCION, ESCRITA ANTES DE EJECUTAR M19a (ADR-127, ADR-001)
+===============================================================
 
-- ``hoy``: 9 críticas ``NO_ENTRO`` (lo ya medido; sirve de control).
-- ``A_porte_fiel``: las críticas ``NO_ENTRO`` bajan a **4** —las mismas cuatro
-  que pierde el laboratorio (B04-CA-33 DEC-003; B04-CA-34 DEC-003, MEM-014,
-  MEM-016)— porque las cinco de B04-CA-31 y la de B04-CA-02 entran por el
-  índice al activarse con «restricciones». Los elementos de más suben respecto
-  a ``hoy`` (el índice ahora sí trae lo no ordinario del ámbito), pero no
-  explotan: solo lo no ordinario lleva categoría.
-- ``B_arreglo_ingenuo``: las ``NO_ENTRO`` también bajan (el índice se activa),
-  pero los elementos de más **se disparan** muy por encima de ``A``: en
-  producción **todo** item lleva etiqueta de tema, así que activar el índice
-  trae todo lo del ámbito, ordinario incluido. Si esta predicción se cumple,
-  «añadir palabras» queda descartado con datos.
+- ``hoy``: las críticas ``NO_ENTRO`` bajan de 9 a **3** (quedan solo las tres
+  de B04-CA-34: DEC-003, MEM-014, MEM-016 — la siembra, M20, no el índice),
+  cobertura 62 → **68/81**, elementos de más ≤ 300.
+- ``A_porte_fiel``: sin cambio respecto a la medición de M18b (260 elementos
+  de más, 3 ``NO_ENTRO``, 68/81) — este encargo no toca esa variante.
+- ``B_arreglo_ingenuo``: sus ``NO_ENTRO`` también bajan a 3 (mismo vocabulario
+  de criticidad que activa el índice de categoría existente), pero sus
+  elementos de más siguen muy por encima de ``hoy``/``A``: fusionar
+  vocabularios en el índice de categoría trae todo el ámbito, ordinario
+  incluido, en vez de solo lo no ordinario.
 
-Si ``A`` no baja a 4, la causa de las 9 no es (solo) el vocabulario y este
-guion lo habrá dicho antes de que nadie construya nada.
+Si ``hoy`` no baja a 3 ``NO_ENTRO``, o si sus elementos de más superan 300, se
+para y se busca la raíz (regla de las dos rondas, ADR-001) — no se ajusta el
+vocabulario para cuadrar el número.
 
 USO
 ===
@@ -196,7 +215,10 @@ def main() -> int:
         for caso_id, identidad in perdidas:
             print(f"      {caso_id}  {identidad}")
     print()
-    print("  Prediccion escrita antes de ejecutar: hoy=9, A=4, B baja pero dispara 'de mas'.")
+    print(
+        "  Prediccion M19a (ADR-127) escrita antes de ejecutar: hoy=3 NO_ENTRO "
+        "(68/81), A=3 (sin cambio), B baja pero dispara 'de mas'."
+    )
     print("  Sin Ollama solo se ve la etapa de busqueda (NO_ENTRO): la de rescate se mide aparte.")
     print("=" * 74)
     return 0

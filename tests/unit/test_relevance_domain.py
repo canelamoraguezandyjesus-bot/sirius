@@ -17,6 +17,7 @@ from sirius.domain.relevance import (
     RankedKnowledge,
     candidate_currently_valid,
     candidate_in_declared_scope,
+    category_index_activated,
     category_index_matches_query,
     category_matches_query,
     rank_relevant_knowledge,
@@ -29,6 +30,14 @@ _NOW = datetime(2026, 7, 21, tzinfo=UTC)
 _PROJECT = 1
 _OTHER_PROJECT = 2
 _VOCABULARY = frozenset({"trabajo", "personal", "salud"})
+#: M19a (ADR-127, incidencia #512): el mismo vocabulario que
+#: ``composition_root._CRITICALITY_VOCABULARY`` — repetido aquí, no
+#: importado, porque este módulo prueba el dominio puro sin depender de la
+#: raíz de composición, igual que ``_VOCABULARY`` de arriba repite (no
+#: importa) el vocabulario de categoría.
+_CRITICALITY_VOCABULARY = frozenset(
+    {"esencial", "restriccion", "critica", "obligatoria", "imprescindible"}
+)
 
 
 def _memory(
@@ -91,6 +100,7 @@ def _ranked_memory(
     project_matches_active: bool = False,
     fts_match: bool = False,
     category_match: bool = False,
+    criticality_match: bool = False,
 ) -> RankedKnowledge:
     return RankedKnowledge(
         kind=KnowledgeKind.MEMORY,
@@ -99,6 +109,7 @@ def _ranked_memory(
         project_matches_active=project_matches_active,
         fts_match=fts_match,
         category_match=category_match,
+        criticality_match=criticality_match,
     )
 
 
@@ -109,6 +120,7 @@ def _ranked_decision(
     project_matches_active: bool = False,
     fts_match: bool = False,
     category_match: bool = False,
+    criticality_match: bool = False,
 ) -> RankedKnowledge:
     return RankedKnowledge(
         kind=KnowledgeKind.DECISION,
@@ -117,6 +129,7 @@ def _ranked_decision(
         project_matches_active=project_matches_active,
         fts_match=fts_match,
         category_match=category_match,
+        criticality_match=criticality_match,
     )
 
 
@@ -430,6 +443,123 @@ def test_a_category_match_alone_is_not_enough_when_the_gate_is_closed() -> None:
     # documents the domain side of that: without any of the three signals,
     # a candidate stays excluded exactly like before M9.
     candidate = _ranked_memory(_memory(1), fts_match=False, category_match=False)
+
+    assert rank_relevant_knowledge([candidate]) == ()
+
+
+# --- M19a (ADR-127, incidencia #512): the criticality index's activation ---
+# --- rule — category_index_activated reused as-is with the criticality ---
+# --- vocabulary instead of a new function (issue #512, item b). ---
+
+
+def test_criticality_index_activates_for_a_query_naming_two_criticality_terms_at_once() -> None:
+    # incidencia #512: "Dame todas las restricciones esenciales que debo
+    # respetar" — el caso real del banco (B04-CA-31) que hoy no activa
+    # ningún índice porque el vocabulario de categoría es temático.
+    assert category_index_activated(
+        "Dame todas las restricciones esenciales que debo respetar.",
+        _CRITICALITY_VOCABULARY,
+    )
+
+
+def test_criticality_index_activates_for_a_single_criticality_term() -> None:
+    # incidencia #512: "¿Qué restricciones de transporte tengo?" (B04-CA-02).
+    assert category_index_activated(
+        "¿Qué restricciones de transporte tengo?", _CRITICALITY_VOCABULARY
+    )
+
+
+def test_criticality_index_does_not_activate_for_a_query_naming_no_criticality_term() -> None:
+    # incidencia #512: "Prepara el contexto de planificación de Alfa"
+    # (B04-CA-34) — la siembra (M20), no el índice de este encargo.
+    assert not category_index_activated(
+        "Prepara el contexto de planificación de Alfa.", _CRITICALITY_VOCABULARY
+    )
+
+
+def test_criticality_index_activation_is_plain_substring_without_diacritic_folding() -> None:
+    # Limitación conocida y compartida con el índice de categoría (issue
+    # #512, item b): la coincidencia es subcadena tal cual, sin normalizar
+    # tildes — "crítica" con tilde NO activa el término "critica" del
+    # vocabulario. No se arregla aquí.
+    assert not category_index_activated("es una decisión crítica", _CRITICALITY_VOCABULARY)
+    assert category_index_activated("es una decision critica", _CRITICALITY_VOCABULARY)
+
+
+# --- M19a (ADR-127, incidencia #512): criticality_match, the fifth ---
+# --- structural signal, parallel to category_match — enters _sort_key ---
+# --- right after it and also widens is_related. ---
+
+
+def test_a_criticality_match_outranks_a_non_match_when_everything_else_ties() -> None:
+    matching = _ranked_decision(_decision(1), fts_match=True, criticality_match=True)
+    non_matching = _ranked_decision(_decision(2), fts_match=True, criticality_match=False)
+
+    result = rank_relevant_knowledge([non_matching, matching])
+
+    assert result == (matching, non_matching)
+
+
+def test_a_category_match_still_outranks_a_criticality_match() -> None:
+    # criticality_match sits right after category_match in _sort_key: weaker
+    # than it, exactly like category_match is weaker than an FTS5 hit.
+    with_category = _ranked_decision(
+        _decision(1), fts_match=True, category_match=True, criticality_match=False
+    )
+    with_criticality = _ranked_decision(
+        _decision(2), fts_match=True, category_match=False, criticality_match=True
+    )
+
+    result = rank_relevant_knowledge([with_criticality, with_category])
+
+    assert result == (with_category, with_criticality)
+
+
+def test_active_project_membership_still_outranks_a_criticality_match() -> None:
+    other_project_with_criticality = _ranked_decision(
+        _decision(1, project_id=_OTHER_PROJECT),
+        fts_match=True,
+        project_matches_active=False,
+        criticality_match=True,
+    )
+    active_project_without_criticality = _ranked_decision(
+        _decision(2, project_id=_PROJECT),
+        fts_match=True,
+        project_matches_active=True,
+        criticality_match=False,
+    )
+
+    result = rank_relevant_knowledge(
+        [other_project_with_criticality, active_project_without_criticality]
+    )
+
+    assert result == (active_project_without_criticality, other_project_with_criticality)
+
+
+def test_a_criticality_match_still_outranks_a_more_recent_non_match() -> None:
+    older_with_criticality = _ranked_memory(
+        _memory(1, updated_at=_NOW), fts_match=True, criticality_match=True
+    )
+    newer_without_criticality = _ranked_memory(
+        _memory(2, updated_at=_NOW + timedelta(days=1)), fts_match=True, criticality_match=False
+    )
+
+    result = rank_relevant_knowledge([newer_without_criticality, older_with_criticality])
+
+    assert result == (older_with_criticality, newer_without_criticality)
+
+
+def test_a_criticality_match_alone_makes_an_otherwise_unrelated_candidate_related() -> None:
+    candidate = _ranked_memory(_memory(1), fts_match=False, criticality_match=True)
+
+    assert rank_relevant_knowledge([candidate]) == (candidate,)
+
+
+def test_a_criticality_match_alone_is_not_enough_when_the_gate_is_closed() -> None:
+    # criticality_match is always False for every real candidate while D7
+    # punto 6's activation gate stays closed (application layer), exactly
+    # like category_match — this documents the domain side of that.
+    candidate = _ranked_memory(_memory(1), fts_match=False, criticality_match=False)
 
     assert rank_relevant_knowledge([candidate]) == ()
 
