@@ -2654,3 +2654,132 @@ def test_criticality_worker_finishing_while_externally_busy_keeps_buttons_disabl
     widget.set_external_busy(False)
     assert widget.confirm_memory_criticality_button.isEnabled()
     assert widget.reject_memory_criticality_button.isEnabled()
+
+
+# --- Ronda 3 (#520): una sola derivación desde el estado -------------------
+#
+# La propuesta mostrada y el arranque de un worker se recalculan desde el
+# estado en cada transición (selección, fin del estado ocupado, fin del
+# worker), en vez de decidirse con guardas sueltas en cada manejador
+# (raíz de las rondas 1 y 2, ADR-001). Cada prueba fija una transición que
+# antes abría un hueco.
+
+
+@pytest.mark.gui
+def test_manual_edit_before_the_worker_answers_never_resurrects_a_proposal(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CLAUDE-REV-R2-001: seleccionar un recuerdo sin marca (arranca el
+    worker), fijar la criticidad a mano antes de que responda, reseleccionar
+    el mismo recuerdo (ya marcado) y dejar terminar el worker viejo: la
+    propuesta NO se muestra — el elemento ya no está sin marca — y por tanto
+    «Confirmar» no puede sobrescribir el valor que el usuario acaba de fijar."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    memory = dependencies.save_manual_memory_use_case.save("sin criticidad todavía")
+    propose_criticality_use_case = _BlockingProposeCriticalityUseCase(Criticality.CRITICO)
+    set_criticality_use_case = _RecordingSetCriticalityUseCase()
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=set_criticality_use_case,
+        thread_pool=thread_pool,
+        prompt_line_value="IMPORTANTE",
+    )
+    qtbot.addWidget(widget)
+    widget.memories_list.setCurrentRow(0)
+    qtbot.waitUntil(lambda: propose_criticality_use_case.calls != [], timeout=5000)
+    # Edición manual mientras el worker sigue en vuelo: escribe IMPORTANTE.
+    widget.edit_memory_criticality_button.click()
+    assert set_criticality_use_case.calls == [
+        (CriticalityTargetKind.MEMORY, memory.id, Criticality.IMPORTANTE)
+    ]
+    # El doble no persiste: la lista debe ver el recuerdo ya marcado, como
+    # lo vería tras una escritura real.
+    dependencies.set_criticality_use_case.set(
+        CriticalityTargetKind.MEMORY, memory.id, Criticality.IMPORTANTE
+    )
+    widget.refresh()
+    widget.memories_list.setCurrentRow(0)
+    propose_criticality_use_case.release()
+    assert thread_pool.waitForDone(5000)
+    qtbot.wait(200)
+    assert propose_criticality_use_case.calls == [(CriticalityTargetKind.MEMORY, memory.id)]
+    assert widget.memory_criticality_proposal_label.text() == ""
+    assert not widget.confirm_memory_criticality_button.isEnabled()
+    # Y aunque alguien pulsara Confirmar, no hay propuesta que escribir.
+    widget.confirm_memory_criticality_button.click()
+    assert len(set_criticality_use_case.calls) == 1
+
+
+@pytest.mark.gui
+def test_leaving_the_externally_busy_state_resumes_the_proposal_for_the_selection(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CODEX-001 (ronda 2): seleccionar un recuerdo sin marca mientras el
+    panel está ocupado no arranca worker (CODEX-001 de la ronda 1); al
+    dejar de estar ocupado, la selección vigente sí obtiene su propuesta sin
+    que el usuario tenga que reseleccionar."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    memory = dependencies.save_manual_memory_use_case.save("sin criticidad todavía")
+    propose_criticality_use_case = _RecordingProposeCriticalityUseCase(Criticality.CRITICO)
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+        thread_pool=thread_pool,
+    )
+    qtbot.addWidget(widget)
+    widget.set_external_busy(True)
+    widget.memories_list.setCurrentRow(0)
+    assert propose_criticality_use_case.calls == []
+    widget.set_external_busy(False)
+    qtbot.waitUntil(
+        lambda: widget.memory_criticality_proposal_label.text() == "Sirius propone: CRITICO",
+        timeout=5000,
+    )
+    assert thread_pool.waitForDone(5000)
+    assert propose_criticality_use_case.calls == [(CriticalityTargetKind.MEMORY, memory.id)]
+    assert widget.confirm_memory_criticality_button.isEnabled()
+
+
+@pytest.mark.gui
+def test_correcting_a_memory_while_its_worker_is_in_flight_requests_the_new_revision(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """CODEX-002 (ronda 2): con el worker de la revisión v1 en vuelo, el
+    usuario corrige el recuerdo (v2, mismo id) y lo reselecciona antes de
+    que v1 termine. El resultado de v1 se descarta (época) y la revisión
+    vigente recibe su propia consulta — el worker en vuelo de v1 no bloquea
+    el de v2."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    memory = dependencies.save_manual_memory_use_case.save("contenido v1")
+    propose_criticality_use_case = _BlockingProposeCriticalityUseCase(Criticality.CRITICO)
+    thread_pool = QThreadPool()
+    widget = _build_widget(
+        dependencies,
+        _Recorder(),
+        propose_criticality_use_case=propose_criticality_use_case,
+        set_criticality_use_case=dependencies.set_criticality_use_case,
+        thread_pool=thread_pool,
+        prompt_multiline_value="contenido v2",
+    )
+    qtbot.addWidget(widget)
+    widget.memories_list.setCurrentRow(0)
+    qtbot.waitUntil(lambda: len(propose_criticality_use_case.calls) == 1, timeout=5000)
+    widget.correct_memory_button.click()
+    widget.memories_list.setCurrentRow(0)
+    qtbot.waitUntil(lambda: len(propose_criticality_use_case.calls) == 2, timeout=5000)
+    propose_criticality_use_case.release()
+    assert thread_pool.waitForDone(5000)
+    qtbot.waitUntil(
+        lambda: widget.memory_criticality_proposal_label.text() == "Sirius propone: CRITICO",
+        timeout=5000,
+    )
+    assert propose_criticality_use_case.calls == [
+        (CriticalityTargetKind.MEMORY, memory.id),
+        (CriticalityTargetKind.MEMORY, memory.id),
+    ]

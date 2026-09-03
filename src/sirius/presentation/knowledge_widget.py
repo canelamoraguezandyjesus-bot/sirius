@@ -332,10 +332,12 @@ class KnowledgeWidget(QGroupBox):
         self._criticality_proposal_cache: dict[
             tuple[CriticalityTargetKind, int], Criticality | None
         ] = {}
-        # Claves con un CriticalityProposalWorker en vuelo: evita arrancar un
-        # segundo worker para el mismo elemento si el usuario lo reselecciona
-        # antes de que el primero termine.
-        self._criticality_proposal_in_flight: set[tuple[CriticalityTargetKind, int]] = set()
+        # Claves (kind, id, época) con un CriticalityProposalWorker en vuelo:
+        # evita arrancar un segundo worker para la misma revisión si el
+        # usuario la reselecciona antes de que el primero termine — pero no
+        # bloquea el de una revisión nueva del mismo id (ronda 3 de #520,
+        # CODEX-002): la época forma parte de la clave.
+        self._criticality_proposal_in_flight: set[tuple[CriticalityTargetKind, int, int]] = set()
         # Rechazos de esta sesión: en memoria únicamente, nunca persistidos
         # (decisión pendiente del propietario, ver ADR-131).
         self._rejected_criticality_proposals: set[tuple[CriticalityTargetKind, int]] = set()
@@ -497,7 +499,7 @@ class KnowledgeWidget(QGroupBox):
     ) -> None:
         self._last_touched_list = self.memories_list
         self._refresh_action_buttons_enabled()
-        self._update_criticality_proposal_for_selection(CriticalityTargetKind.MEMORY)
+        self._reconcile_criticality_proposal(CriticalityTargetKind.MEMORY)
 
     def _handle_save_memory_clicked(self) -> None:
         if self._is_busy or self._is_externally_busy:
@@ -708,12 +710,19 @@ class KnowledgeWidget(QGroupBox):
     # de una propuesta (``_handle_confirm_criticality_clicked``). Todo lo
     # demás aquí solo lee, cachea o descarta.
 
-    def _update_criticality_proposal_for_selection(self, kind: CriticalityTargetKind) -> None:
-        """Al cambiar la selección de recuerdos/decisiones: oculta cualquier
-        propuesta mostrada para ``kind`` (ya no corresponde a la selección
-        vigente) y, si el elemento recién seleccionado no tiene criticidad
-        marcada, muestra la propuesta ya cacheada o arranca un worker nuevo
-        para obtenerla — nunca las dos cosas."""
+    def _reconcile_criticality_proposal(self, kind: CriticalityTargetKind) -> None:
+        """La única derivación de la propuesta desde el estado (ronda 3 de
+        #520, ADR-001: las rondas 1 y 2 abrieron un hueco por cada transición
+        que una guarda suelta olvidaba). Se llama en TODAS las transiciones —
+        cambio de selección, fin de un worker, salida del estado ocupado — y
+        decide solo dos cosas mirando el estado vigente: si se muestra una
+        propuesta ahora (solo si el elemento seleccionado sigue SIN marca y
+        la caché tiene una propuesta no nula y no rechazada) y si hay que
+        arrancar un worker ahora (solo si está sin marca, sin caché, sin
+        rechazo, sin worker en vuelo para su época y con el panel libre — las
+        últimas dos las comprueba ``_start_criticality_proposal_worker``).
+        Los manejadores de eventos solo actualizan el estado y llaman aquí;
+        ninguno decide por su cuenta qué mostrar."""
         self._hide_criticality_proposal(kind)
         item = (
             self._selected_memory()
@@ -748,11 +757,11 @@ class KnowledgeWidget(QGroupBox):
         if self._is_busy or self._is_externally_busy:
             return
         key = (kind, item_id)
-        if key in self._criticality_proposal_in_flight:
-            return
         epoch = self._criticality_proposal_epoch.get(key, 0)
+        if (kind, item_id, epoch) in self._criticality_proposal_in_flight:
+            return
         worker = CriticalityProposalWorker(self._propose_criticality_use_case, kind, item_id)
-        self._criticality_proposal_in_flight.add(key)
+        self._criticality_proposal_in_flight.add((kind, item_id, epoch))
         self._active_criticality_workers.append(worker)
         worker.signals.finished.connect(
             lambda worker_kind, worker_item_id, proposal, worker=worker, epoch=epoch: (
@@ -772,34 +781,19 @@ class KnowledgeWidget(QGroupBox):
         epoch: int,
     ) -> None:
         self._active_criticality_workers.remove(worker)
-        self._criticality_proposal_in_flight.discard((kind, item_id))
+        self._criticality_proposal_in_flight.discard((kind, item_id, epoch))
         try:
-            # CODEX-002: si el elemento se corrigió mientras este worker
-            # estaba en vuelo, ``epoch`` (capturado al arrancarlo) ya no
-            # coincide con el vigente: la propuesta calculada corresponde a
-            # una revisión obsoleta y se descarta entera, sin cachearse ni
-            # mostrarse — quien reseleccione el elemento arrancará un worker
-            # nuevo sobre el contenido corregido.
             if self._criticality_proposal_epoch.get((kind, item_id), 0) != epoch:
+                # Resultado de una revisión ya obsoleta (CODEX-002): ni se
+                # cachea ni se muestra; la revisión vigente tiene (o tendrá)
+                # su propio worker.
                 return
-            # Se cachea siempre, incluido ``None``: un elemento consultado una
-            # vez no se vuelve a consultar en esta sesión (ADR-131).
             self._criticality_proposal_cache[(kind, item_id)] = proposal
-            if proposal is None:
-                return
-            if (kind, item_id) in self._rejected_criticality_proposals:
-                return
-            current = (
-                self._selected_memory()
-                if kind is CriticalityTargetKind.MEMORY
-                else self._selected_decision()
-            )
-            # La selección vigente tiene que seguir siendo este mismo elemento:
-            # si cambió antes de que la propuesta llegara, se descarta sin
-            # mostrarse (ADR-131) — aunque ya quedó cacheada, arriba.
-            if current is None or current.id != item_id:
-                return
-            self._show_criticality_proposal(kind, item_id, proposal)
+            # Ronda 3: no se decide aquí si se muestra — la derivación desde
+            # el estado comprueba, entre otras cosas, que el elemento siga
+            # sin marca (CLAUDE-REV-R2-001: una edición manual mientras el
+            # worker estaba en vuelo ya no resucita la propuesta).
+            self._reconcile_criticality_proposal(kind)
         finally:
             if not self._active_criticality_workers:
                 self.criticality_proposal_idle.emit()
@@ -1036,7 +1030,7 @@ class KnowledgeWidget(QGroupBox):
     ) -> None:
         self._last_touched_list = self.decisions_list
         self._refresh_action_buttons_enabled()
-        self._update_criticality_proposal_for_selection(CriticalityTargetKind.DECISION)
+        self._reconcile_criticality_proposal(CriticalityTargetKind.DECISION)
 
     def _active_project_id(self) -> int | None:
         try:
@@ -1500,6 +1494,12 @@ class KnowledgeWidget(QGroupBox):
         """
         self._is_externally_busy = is_busy
         self._set_controls_enabled(not is_busy and not self._is_busy)
+        if not is_busy and not self._is_busy:
+            # Ronda 3 de #520 (CODEX-001): una selección hecha mientras el
+            # panel estaba ocupado no pudo arrancar su worker; al liberarse,
+            # la derivación desde el estado lo arranca o muestra la caché.
+            for kind in self._criticality_proposal_widgets:
+                self._reconcile_criticality_proposal(kind)
 
     def _set_controls_enabled(self, enabled: bool) -> None:
         for button in (

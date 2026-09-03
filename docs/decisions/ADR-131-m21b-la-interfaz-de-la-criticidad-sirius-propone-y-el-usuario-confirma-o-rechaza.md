@@ -244,6 +244,83 @@ selección, sufijo de presentación), en este orden:
      `assert 2 == 1` — sin la caché, reseleccionar un elemento ya
      consultado vuelve a arrancar un worker. Restaurado.
 
+## Rondas de revisión (03-09-2026)
+
+### Ronda 1 → corrección `66a4197` (corrector del motor)
+
+Seis hallazgos, todos atendidos con prueba: CLAUDE-REV-001/CODEX-001
+(alta/P1: un `CriticalityProposalWorker` en vuelo podía reabrir `sirius.db`
+mientras una restauración de copia lo sustituía — ahora `KnowledgeWidget`
+expone `has_pending_criticality_proposal` y `criticality_proposal_idle`, y
+`_handle_restore_backup_clicked` espera a categoría y criticidad; además no
+se arranca ningún worker con el panel ocupado), CODEX-002 (P1: corregir un
+recuerdo dejaba vigente la propuesta calculada sobre el contenido anterior —
+contador de época por `(kind, id)` que invalida caché, rechazo y resultado en
+vuelo), CLAUDE-REV-002/CODEX-003 (los cuatro botones de confirmar/rechazar
+bajo `_set_controls_enabled`, restaurados solo si la propuesta sigue
+visible) y CLAUDE-REV-003 (desglose de pruebas: 16 nuevas y 59
+preexistentes). Ocho pruebas nuevas
+(`tests/gui/test_knowledge_widget.py`, `tests/gui/test_backup_recovery_ui.py`).
+Suite completa tras esta ronda: `4645 passed, 15 skipped, 2 xfailed`
+(el punto 5 de arriba registra la cifra de la ronda 1, `4637`).
+
+### Ronda 2 → corrección `(ver head de la PR #521)` (propietario)
+
+Cuatro hallazgos más, **de la misma familia** que la ronda 1 — el estado de
+la propuesta frente a transiciones —: CLAUDE-REV-R2-001 (alta: editar la
+criticidad a mano mientras el worker estaba en vuelo y reseleccionar el
+elemento mostraba una propuesta fantasma que «Confirmar» habría escrito
+sobre el valor manual), CODEX-001 (P2: una selección hecha con el panel
+ocupado se quedaba sin propuesta al liberarse), CODEX-002 (P2: corregir con
+el worker en vuelo y reseleccionar dejaba la revisión nueva sin consulta,
+porque «en vuelo» bloqueaba por `(kind, id)` sin época) y CLAUDE-REV-R2-002
+(este ADR no registraba la ronda 1). El corrector del motor agotó su
+ejecución sin subir nada (`failed-safely`, 16:04 → 16:35 UTC), igual que en
+M21a; la corrección la hizo el propietario en la rama.
+
+Dos rondas con la misma familia es el criterio de parada de ADR-001, así que
+la corrección no añade otra guarda: **quita la necesidad de enumerarlas**.
+`_update_criticality_proposal_for_selection` pasa a llamarse
+`_reconcile_criticality_proposal` y es la única derivación de la propuesta
+desde el estado — selección vigente, su `criticality`, caché, rechazos,
+época, «en vuelo» y estado ocupado —, llamada en todas las transiciones:
+cambio de selección (como antes), fin de un worker
+(`_handle_criticality_proposal_finished` ahora solo actualiza el estado y
+llama a la derivación, que comprueba entre otras cosas que el elemento siga
+sin marca: cierra CLAUDE-REV-R2-001) y salida del estado ocupado
+(`set_external_busy(False)`: cierra CODEX-001). «En vuelo» se indexa por
+`(kind, id, época)`, de modo que el worker de la revisión anterior no
+bloquea el de la nueva (cierra CODEX-002). Las mutaciones del punto 6 de
+arriba que nombran `_update_criticality_proposal_for_selection` se refieren
+a esa función con su nombre antiguo; siguen valiendo.
+
+Comprobación (runner del propietario): `ruff check` → `All checks passed!`;
+`mypy src tests` → `Success: no issues found in 562 source files`; las tres
+pruebas nuevas, vistas fallar contra `66a4197` antes del cambio
+(`assert 'Sirius propone: CRITICO' == ''` la de la propuesta fantasma; dos
+`waitUntil timed out` las de reanudación y revisión nueva) y en verde
+después; `tests/gui/test_knowledge_widget.py` +
+`test_backup_recovery_ui.py` + `test_criticality_proposal_worker.py` →
+`123 passed`; `tests/gui` completo → `477 passed, 2 skipped, 1 failed`,
+donde el fallo es
+`test_conversation_ui.py::test_streaming_message_grows_without_overlapping_neighbours`
+(interfaz de conversación, sin relación con este cambio): pasa aislado en
+este mismo árbol, en `66a4197` limpio y en `main` `1b96508`, y Quality ya
+lo ejecutó en verde dentro de la suite completa sobre `66a4197` — depende
+del orden/estado de Qt en el runner del propietario, no del código.
+Queda anotado en la bitácora de fallos del ciclo. Tres mutaciones, cada
+una vista fallar y restaurada por copia:
+
+1. Quitar `item.criticality is not None` de la derivación →
+   `test_manual_edit_before_the_worker_answers_never_resurrects_a_proposal`
+   **falla** (la propuesta fantasma vuelve a mostrarse).
+2. No reconciliar al salir del estado ocupado →
+   `test_leaving_the_externally_busy_state_resumes_the_proposal_for_the_selection`
+   **falla** (`waitUntil timed out`: nadie arranca el worker).
+3. «En vuelo» sin época (bloquear por `(kind, id)`) →
+   `test_correcting_a_memory_while_its_worker_is_in_flight_requests_the_new_revision`
+   **falla** (la segunda consulta nunca llega).
+
 ## Consecuencias
 
 - Se cierra M21 (M21a + M21b): Sirius puede sugerir criticidad y el
