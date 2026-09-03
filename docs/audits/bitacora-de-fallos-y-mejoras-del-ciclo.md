@@ -340,6 +340,29 @@ ADR o su incidencia cuando se adopte.
   enumerar con `grep` TODOS los sitios que cierran la ventana antes de
   tocar el primero.
 
+### 20. Cierre de la ola de criticidad (18:33 UTC): lo que funcionó
+
+- **Resultado.** Siete encargos fusionados en `main` en ~30 horas: M18a
+  (`9ad873a`), M18b (`ea79523`), M19a (`cacc632`), M19b (`b1d6c34`), M20
+  (`1d5e2d2`), M21a (`1b96508`), M21b (`dc731d4`). Sobre el banco de 47
+  casos, en el runner: críticas perdidas 9 → 0 y cobertura 62 → 72/81
+  (medición con Ollama real pendiente del propietario).
+- **Lo que funcionó y conviene conservar.** (a) Verificar la orden contra
+  los marcadores del intérprete ANTES de despachar y confirmar la incidencia
+  DESPUÉS: cero rechazos desde que se aplica. (b) Publicar mi observación en
+  la incidencia mientras corre la revisión: en M20 y M21a el revisor
+  independiente llegó al mismo hallazgo y el corrector lo cerró en una
+  ronda. (c) ADR-001 aplicado a la letra en M21b: dos rondas de la misma
+  familia → consolidar desde el estado; la severidad fue 13 → 8 → 3 → 7
+  (mi error de forma) → 0. (d) El corrector de la ronda 4 de M21b encontró
+  mi commit ya en la rama, lo verificó con la suite completa y lo adoptó sin
+  empujar: es el comportamiento correcto cuando el propietario corrige a
+  mano, y merece quedar como norma explícita del corrector.
+- **Coste del ciclo de M21b.** 5 rondas de revisión, 3 muertes del
+  corrector, 2 verdes de Quality perdidos por la carrera de `repairing`, 4
+  correcciones mías. El resultado es sólido; el camino, caro. Las deudas de
+  abajo son el plan para que la próxima ola cueste la mitad.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
