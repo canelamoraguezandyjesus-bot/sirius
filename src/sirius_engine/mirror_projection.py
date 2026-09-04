@@ -128,17 +128,36 @@ _QUALITY_EVENT_RE = re.compile(
 # de grupos.
 _VERDICT_MARKER_RE = re.compile(r"<!--\s*sirius-verdict:([^>]*?)\s*-->")
 
-# Cuerpo exacto que `sirius_apply_verdict.sh` publica para FAILED_SAFELY y
-# USAGE_LIMIT_REACHED (incidencia #529):
+# Cuerpo exacto que publica toda parada segura que aplica `sirius:failed-safely`
+# (incidencia #529, ampliado en la #530 tras el hallazgo CODEX-001):
 #   <!-- sirius-verdict:<rol>:<verdict>:<SIRIUS_RUN_TAG> -->
 #
 #   🔴 **Me he detenido de forma segura**
 #
 #   <diagnóstico>
+#
+# `<verdict>` no es siempre `FAILED_SAFELY`/`USAGE_LIMIT_REACHED` -el veredicto
+# que publica el propio agente-: las puertas deterministas de
+# `review-sirius-work.yml` (`stop_gate`), `repair-sirius-work.yml` (`sin_tiempo`
+# y las paradas de `parada ... "sirius:failed-safely" ...`) y
+# `sirius_apply_verdict.sh` (`stop_safely`) publican en su lugar
+# `precheck:<motivo>[:<run>]` y aplican EXACTAMENTE la misma etiqueta con el
+# mismo cuerpo. Antes de esta corrección esta expresión solo reconocía el
+# primer caso, así que el diagnóstico de cualquier parada de puerta se leía
+# como `None` (defecto CODEX-001, PR #530).
+#
+# El resto de paradas `precheck` que existen en el repositorio -las de
+# `convergencia-<motivo>` y `head-movido-tras-ci`, que aplican
+# `sirius:blocked-decision`/`sirius:ci-pending`- no se aceptan: publican una
+# cabecera distinta (`🟡 ...`), así que el filtro de la cabecera fija que
+# sigue ya las excluye sin necesidad de enumerarlas aquí. Los comentarios de
+# notificación de `notify-sirius-state.yml` tampoco entran: usan el marcador
+# `sirius-notification:`, no `sirius-verdict:`, así que no coinciden con este
+# prefijo aunque citen la misma cabecera.
 # Se captura solo el diagnóstico -lo que sigue a la cabecera fija-, no el
 # marcador ni el emoji: eso ya lo interpreta `_interpretar_veredictos`.
 _DIAGNOSTICO_FALLO_RE = re.compile(
-    r"<!--\s*sirius-verdict:[^:]+:(?:FAILED_SAFELY|USAGE_LIMIT_REACHED):[^>]*-->"
+    r"<!--\s*sirius-verdict:[^:]+:(?:FAILED_SAFELY|USAGE_LIMIT_REACHED|precheck):[^>]*-->"
     r"\s*\n+.*?Me he detenido de forma segura.*?\n+(.*)",
     re.DOTALL,
 )

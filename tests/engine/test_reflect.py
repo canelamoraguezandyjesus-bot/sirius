@@ -62,10 +62,12 @@ from sirius_engine.domain.work_item import (
 )
 from sirius_engine.reflect import (
     PASO_COMPROBACION_INICIADA,
+    PASO_DECISION_RESUELTA,
     PASO_EJECUCION_INICIADA,
     PASO_ENTREGADO,
     PASO_ESCALADO,
     PASO_FALLO_SEGURO,
+    PASO_REACTIVADO,
     PASO_REPARACION_REANUDADA,
     PASO_REPARACION_SOLICITADA,
     PASO_REVISION_APROBADA,
@@ -287,6 +289,64 @@ def test_nunca_hacia_atras_si_el_motor_ya_paso_el_objetivo() -> None:
     # No se aplicó nada: el motor sigue exactamente donde estaba.
     aplicar_pasos(store, _WORK_ID, resultado.pasos, now=_AHORA)
     assert store.get_work_item(_WORK_ID) == adelantado
+
+
+# --- Sección C bis: reanudación de una parada por orden del propietario -----
+#
+# `sirius_resume_on_command.sh:338-350` repone la etiqueta activa que la
+# parada había retirado -sin tocar el motor, que se queda en FAILED_SAFELY o
+# NEEDS_DECISION-, así que el espejo vuelve a proyectar ACTIVE mientras el
+# motor sigue parado. Antes de esta corrección esa combinación se trataba
+# como "hacia atrás": divergencia para siempre (CODEX-002, PR #530).
+
+
+def test_reanudacion_desde_failed_safely_reactiva_antes_de_caminar_la_fase() -> None:
+    store = InMemoryWorkEngineStore()
+    _work_item_activo(store)
+    en_ejecutar = store.begin_work_item_execution(_WORK_ID, now=_AHORA)
+    parado = store.fail_work_item_safely(_WORK_ID, diagnostico="motivo", now=_AHORA)
+    assert parado.estado is WorkItemState.FAILED_SAFELY
+    assert parado.fase is en_ejecutar.fase is WorkItemPhase.EJECUTAR
+
+    # El propietario reanudó y la incidencia quedó, de nuevo, ACTIVE (la
+    # etiqueta repuesta por el script apunta a `ci-pending`, fase COMPROBAR).
+    espejo = _espejo(estado=WorkItemState.ACTIVE, fase=WorkItemPhase.COMPROBAR)
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert tuple(paso.kind for paso in resultado.pasos) == (
+        PASO_REACTIVADO,
+        PASO_COMPROBACION_INICIADA,
+    )
+    assert resultado.divergencia is None
+
+    aplicados = aplicar_pasos(store, _WORK_ID, resultado.pasos, now=_AHORA)
+    final = aplicados[-1]
+    assert final.estado is WorkItemState.ACTIVE
+    assert final.fase is WorkItemPhase.COMPROBAR
+
+
+def test_reanudacion_desde_needs_decision_resuelve_la_decision_antes_de_caminar_la_fase() -> None:
+    store = InMemoryWorkEngineStore()
+    _work_item_activo(store)
+    en_ejecutar = store.begin_work_item_execution(_WORK_ID, now=_AHORA)
+    escalado = store.escalate_work_item(_WORK_ID, now=_AHORA)
+    assert escalado.estado is WorkItemState.NEEDS_DECISION
+    assert escalado.fase is en_ejecutar.fase is WorkItemPhase.EJECUTAR
+
+    espejo = _espejo(estado=WorkItemState.ACTIVE, fase=WorkItemPhase.COMPROBAR)
+    resultado = reflejar_desenlace(escalado, espejo, _episodio())
+
+    assert tuple(paso.kind for paso in resultado.pasos) == (
+        PASO_DECISION_RESUELTA,
+        PASO_COMPROBACION_INICIADA,
+    )
+    assert resultado.pasos[0].resultado == {"continuar": True}
+    assert resultado.divergencia is None
+
+    aplicados = aplicar_pasos(store, _WORK_ID, resultado.pasos, now=_AHORA)
+    final = aplicados[-1]
+    assert final.estado is WorkItemState.ACTIVE
+    assert final.fase is WorkItemPhase.COMPROBAR
 
 
 # --- Sección D: contradicción / sin etiqueta --------------------------------

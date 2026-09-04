@@ -26,9 +26,10 @@ Dos funciones, deliberadamente separadas:
   ``begin_work_item_check``, ``begin_work_item_review``,
   ``approve_work_item_review``, ``request_work_item_repair``,
   ``resume_work_item_after_repair``, ``deliver_work_item``,
-  ``fail_work_item_safely``, ``escalate_work_item``). Ninguno es nuevo:
-  reflejar no añade vocabulario al almacén, solo lo llama por primera vez
-  desde un camino de producción real.
+  ``fail_work_item_safely``, ``escalate_work_item``,
+  ``reactivate_work_item``, ``resolve_work_item_decision``). Ninguno es
+  nuevo: reflejar no añade vocabulario al almacén, solo lo llama por primera
+  vez desde un camino de producción real.
 
 **Reglas, en el orden en que se comprueban** (objetivo de la incidencia):
 
@@ -41,7 +42,12 @@ Dos funciones, deliberadamente separadas:
    como único camino de vuelta (el bucle revisar-reparar real). Si el
    objetivo no es alcanzable caminando solo hacia delante -incluido el caso
    en que el motor ya está más adelante que lo que la incidencia proyecta-,
-   no se toca nada; se devuelve el motivo.
+   no se toca nada; se devuelve el motivo. Única excepción: si el espejo
+   proyecta ACTIVE mientras el motor sigue en FAILED_SAFELY o NEEDS_DECISION,
+   no es "hacia atrás" -es una reanudación autoritativa ya registrada por el
+   propietario (``sirius_resume_on_command.sh``, CODEX-002, PR #530)-, así
+   que primero se reactiva/resuelve la decisión con el puerto existente que
+   corresponda y el camino de fase se calcula igual que siempre.
 4. **Nunca inventa.** El plan usa exclusivamente los puertos ya existentes
    del almacén, con exactamente los datos que el espejo trae (SHA de fusión,
    diagnóstico de fallo); si algo hiciera falta que el espejo no expone o que
@@ -76,6 +82,8 @@ PASO_REPARACION_REANUDADA = "work_item_repair_resumed"
 PASO_ENTREGADO = "work_item_delivered"
 PASO_FALLO_SEGURO = "work_item_failed_safely"
 PASO_ESCALADO = "work_item_escalated"
+PASO_REACTIVADO = "work_item_reactivated"
+PASO_DECISION_RESUELTA = "work_item_decision_resolved"
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,13 +225,35 @@ def reflejar_desenlace(
         )
 
     # espejo.estado is ACTIVE: los ocho pares (ACTIVE, fase) del mapa.
-    if work_item.estado is not WorkItemState.ACTIVE:
+    #
+    # El propietario puede reanudar una parada con una orden explícita
+    # (`sirius_resume_on_command.sh:338-350`): repone la etiqueta activa que
+    # la parada había retirado, así que el espejo vuelve a proyectar ACTIVE
+    # mientras el motor sigue en FAILED_SAFELY o NEEDS_DECISION. Antes de esta
+    # corrección esa combinación se trataba como "hacia atrás" y devolvía
+    # divergencia para siempre -el motor nunca llegaba al desenlace final
+    # (CODEX-002, PR #530)-. La vuelta usa los puertos autoritativos que ya
+    # existen para esto -``reactivate_work_item``
+    # (``FAILED_SAFELY -> ACTIVE``) y ``resolve_work_item_decision(...,
+    # continuar=True)`` (``NEEDS_DECISION -> ACTIVE``)-, sin inventar
+    # vocabulario nuevo. Ninguna de las dos transiciones toca ``fase``
+    # (:meth:`WorkItem.fail_safely`/:meth:`WorkItem.escalate` tampoco la
+    # tocaron al parar), así que el camino de fase se sigue calculando desde
+    # ``work_item.fase`` tal cual, exactamente como si nunca hubiera parado.
+    pasos_reanudacion: tuple[PasoReflejo, ...] = ()
+    if work_item.estado is WorkItemState.FAILED_SAFELY:
+        pasos_reanudacion = (PasoReflejo(kind=PASO_REACTIVADO),)
+    elif work_item.estado is WorkItemState.NEEDS_DECISION:
+        pasos_reanudacion = (
+            PasoReflejo(kind=PASO_DECISION_RESUELTA, resultado={"continuar": True}),
+        )
+    elif work_item.estado is not WorkItemState.ACTIVE:
         return ResultadoReflejo(pasos=(), divergencia=_divergencia_atras(work_item, espejo))
     assert espejo.fase is not None, "ACTIVE siempre trae fase en el mapa etiqueta -> (estado, fase)"
     camino = _camino_de_fase(work_item.fase, espejo.fase)
     if camino is None:
         return ResultadoReflejo(pasos=(), divergencia=_divergencia_atras(work_item, espejo))
-    return ResultadoReflejo(pasos=camino)
+    return ResultadoReflejo(pasos=(*pasos_reanudacion, *camino))
 
 
 def _divergencia_atras(work_item: WorkItem, espejo: MirroredWorkItem) -> str:
@@ -241,6 +271,7 @@ _APLICAR: dict[str, str] = {
     PASO_REPARACION_SOLICITADA: "request_work_item_repair",
     PASO_REPARACION_REANUDADA: "resume_work_item_after_repair",
     PASO_ESCALADO: "escalate_work_item",
+    PASO_REACTIVADO: "reactivate_work_item",
 }
 
 
@@ -265,6 +296,12 @@ def aplicar_pasos(
             assert paso.diagnostico is not None
             aplicados.append(
                 store.fail_work_item_safely(work_id, diagnostico=paso.diagnostico, now=now)
+            )
+        elif paso.kind == PASO_DECISION_RESUELTA:
+            assert paso.resultado is not None
+            continuar = bool(paso.resultado["continuar"])
+            aplicados.append(
+                store.resolve_work_item_decision(work_id, continuar=continuar, now=now)
             )
         else:
             metodo = getattr(store, _APLICAR[paso.kind])

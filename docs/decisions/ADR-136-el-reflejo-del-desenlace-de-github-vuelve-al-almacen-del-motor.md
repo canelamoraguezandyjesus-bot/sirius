@@ -62,12 +62,15 @@ Cuatro preguntas, decididas antes de escribir la primera línea de
    del espejo (de hecho, ninguno de los tres se tocó).
 4. **Criterio de parada.** Si reflejar una etiqueta del mapa exigiera un
    suceso o un puerto que el almacén no tuviera hoy, parar con
-   `BLOCKED_BY_DECISION`. No hizo falta: las nueve transiciones que usa
+   `BLOCKED_BY_DECISION`. No hizo falta: las once transiciones que usa
    `reflect.py` (`begin_work_item_execution`, `begin_work_item_check`,
    `begin_work_item_review`, `approve_work_item_review`,
    `request_work_item_repair`, `resume_work_item_after_repair`,
-   `deliver_work_item`, `fail_work_item_safely`, `escalate_work_item`) ya
-   existían, con o sin llamante previo.
+   `deliver_work_item`, `fail_work_item_safely`, `escalate_work_item`,
+   `reactivate_work_item`, `resolve_work_item_decision`) ya existían, con o
+   sin llamante previo. Las dos últimas se sumaron en la ronda de corrección
+   de la revisión independiente (CODEX-002, PR #530): ver «Reanudación de una
+   parada por orden del propietario» más abajo.
 
 **Predicción, escrita antes de correr la integración real:** el reflejo de
 las siete incidencias reales produce, por incidencia, entre 4 y 9 sucesos, y
@@ -115,6 +118,44 @@ pretende que `reflejar_desenlace` provoque una excepción sin capturar en
 producción. Registrado aquí en vez de en silencio para que quien revise
 pueda estar en desacuerdo con el criterio.
 
+## Reanudación de una parada por orden del propietario (corrección CODEX-002, PR #530)
+
+La revisión independiente de la PR de esta incidencia encontró que la regla
+«nunca hacia atrás» de arriba trataba como divergencia permanente un caso que
+sí es hacia delante: `sirius_resume_on_command.sh:338-350` reanuda una parada
+(`sirius:blocked-decision`/`sirius:failed-safely`) por orden explícita del
+propietario reponiendo la etiqueta ACTIVA que la parada había retirado, sin
+tocar el `WorkItem` del motor -que se queda en `NEEDS_DECISION`/
+`FAILED_SAFELY`-. La primera versión de `reflejar_desenlace` no reconocía esa
+combinación (espejo `ACTIVE`, motor parado) como una reanudación autoritativa
+ya registrada: la trataba igual que cualquier otro `WorkItem` que no está
+`ACTIVE`, y devolvía divergencia («no hay camino hacia delante») en cada
+pasada, para siempre -el motor nunca llegaba al desenlace final de una
+incidencia reanudada-.
+
+**Corrección:** cuando el espejo proyecta `ACTIVE` y el motor está en
+`FAILED_SAFELY` o `NEEDS_DECISION`, el plan antepone el paso de reanudación
+correspondiente -`reactivate_work_item` (`FAILED_SAFELY -> ACTIVE`) o
+`resolve_work_item_decision(..., continuar=True)`
+(`NEEDS_DECISION -> ACTIVE`)- antes de calcular el camino de fase con
+`_camino_de_fase`, exactamente igual que en cualquier otro caso ACTIVE. Esto
+no rompe «nunca hacia atrás»: ninguno de los dos puertos toca `fase` (ni
+`fail_safely` ni `escalate` la tocaron al parar), así que el camino se sigue
+calculando desde la misma `work_item.fase` de antes de la parada, con la
+misma caminata determinista de la sección «Opciones consideradas». No es
+vocabulario nuevo: los dos puertos (`reactivate_work_item`,
+`resolve_work_item_decision`) ya existían en `ports/store.py` sin llamante de
+producción, igual que las otras nueve transiciones que usa este módulo.
+
+Probado en `tests/engine/test_reflect.py`
+(`test_reanudacion_desde_failed_safely_reactiva_antes_de_caminar_la_fase`,
+`test_reanudacion_desde_needs_decision_resuelve_la_decision_antes_de_caminar_la_fase`):
+un motor que falla en fase EJECUTAR y cuyo espejo, tras la reanudación,
+proyecta `ACTIVE`/COMPROBAR produce exactamente `(PASO_REACTIVADO,
+PASO_COMPROBACION_INICIADA)` (o el equivalente con
+`PASO_DECISION_RESUELTA`), y termina en `ACTIVE`/COMPROBAR real tras
+aplicarlo contra `InMemoryWorkEngineStore`.
+
 ## Opciones consideradas
 
 1. **Rango escalar de fase** (`PREPARAR=0 < EJECUTAR=1 < ... < ENTREGAR=5`) y
@@ -161,6 +202,28 @@ comentario de `complete-sirius-after-merge.yml` que planta
 `<!-- sirius-completed:<sha> -->` también escribe «- Merge SHA: `<sha>`», que
 `_SHA_MARKER_RE` ya interpretaba.
 
+**Corrección CODEX-001 (PR #530):** la primera versión de
+`_DIAGNOSTICO_FALLO_RE` solo reconocía el marcador que publica el VEREDICTO
+de un rol (`sirius-verdict:<rol>:FAILED_SAFELY:<tag>` o
+`:USAGE_LIMIT_REACHED:<tag>`), pero las puertas deterministas que también
+aplican `sirius:failed-safely` -`stop_gate` en `review-sirius-work.yml`, las
+paradas de `parada ...` en `repair-sirius-work.yml`, `stop_safely` en
+`sirius_apply_verdict.sh`- publican en su lugar
+`sirius-verdict:<rol>:precheck:<motivo>[:<tag>]`, con el mismo cuerpo y la
+misma cabecera fija (`🔴 **Me he detenido de forma segura**`). La expresión
+no los reconocía, así que el diagnóstico de cualquier parada de puerta se
+leía como `None`. Se amplió la expresión para aceptar también
+`precheck` como tercer campo del marcador, sin tocar el resto de la gramática
+-el filtro de la cabecera fija que sigue ya excluye las paradas `precheck`
+que aplican otra etiqueta (`convergencia-<motivo>` -> `blocked-decision`,
+`head-movido-tras-ci` -> `ci-pending`, que usan cabeceras `🟡` distintas) y
+los comentarios de `notify-sirius-state.yml`, que usan el marcador
+`sirius-notification:`, no `sirius-verdict:`-. Probado en
+`tests/engine/test_mirror_projection.py`
+(`test_diagnostico_fallo_se_extrae_de_una_parada_precheck`,
+`test_diagnostico_fallo_de_precheck_con_otra_etiqueta_no_cuenta`,
+`test_diagnostico_fallo_de_notificacion_no_cuenta`).
+
 **Recomendación de enganche para C1b** (fuera de alcance, decisión del
 propietario, ADR-002): llamar a `uv run sirius-reflejar` justo después de
 cada cambio de etiqueta que ya aplican `advance-sirius-after-quality.yml`,
@@ -171,23 +234,26 @@ cuota de la API.
 
 ## Comprobación que la sostiene
 
-- `tests/engine/test_reflect.py` (19 pruebas): las cinco secuencias exactas
+- `tests/engine/test_reflect.py` (21 pruebas): las cinco secuencias exactas
   del mapa de etiquetas activas, `blocked-decision` (1 paso), `planned` (0
   pasos, hacia atrás), idempotencia (dos casos), nunca-hacia-atrás,
   contradicción, sin etiqueta, `completed` con SHA de fusión (incluida la
   prueba de que camina TODAS las fases intermedias, no salta a
   `deliver_work_item`), `failed-safely` con y sin diagnóstico de confianza,
-  el cierre del bucle `REPARAR -> COMPROBAR`, y las dos pruebas de mutación
-  de abajo.
+  el cierre del bucle `REPARAR -> COMPROBAR`, las dos pruebas de reanudación
+  de una parada por orden del propietario (corrección CODEX-002, PR #530), y
+  las dos pruebas de mutación de abajo.
 - `tests/engine/test_reflect_cli.py` (6 pruebas): ensayo no toca nada,
   ejecución real aplica y dice cuántos pasos, un `WorkItem` terminal se
   salta sin volver a leer su incidencia, una incidencia ilegible no corta
   las demás, espejo sin etiqueta no dice nada, `completed` con SHA entrega
   de verdad.
-- `tests/engine/test_mirror_projection.py` (4 pruebas nuevas):
+- `tests/engine/test_mirror_projection.py` (7 pruebas nuevas):
   `diagnostico_fallo` desde el último comentario de confianza, el más
   reciente cuando hay varios, un comentario no confiable no cuenta, ausente
-  sin comentario de fallo.
+  sin comentario de fallo, y las tres de la corrección CODEX-001 (PR #530):
+  una parada `precheck` sí cuenta, una parada `precheck` con otra etiqueta no
+  cuenta, un comentario de notificación no cuenta.
 - `tests/automation/test_reflejar_desenlace_github.py` (2 pruebas,
   integración con `DurableWorkEngineStore` y `DurableDispatchJournal` reales
   sobre copias de `tests/automation/fixtures/diario_ola_criticidad.jsonl` y
@@ -205,11 +271,14 @@ cuota de la API.
   representativos del desenlace documentado (issue #529: «cerradas y
   fusionadas») con SHAs de relleno, no una segunda lectura de red — este
   entorno no tiene ni token ni acceso a GitHub.
-- Comandos ejecutados, en verde: `uv run ruff format --check .`,
-  `uv run ruff check .`, `uv run mypy src tests` (569 ficheros, sin
-  incidencias), `uv run pytest` (4743 passed, 15 skipped, 2 xfailed — los
-  xfailed y skipped son preexistentes, ninguno de este bloque), `git diff
-  --check` (limpio).
+- Comandos ejecutados, en verde, sobre el árbol de la corrección CODEX-001/
+  CODEX-002 (PR #530, ronda 2, 2026-09-04): `uv run ruff format --check .`
+  (601 ficheros ya formateados), `uv run ruff check .` (todas las
+  comprobaciones superadas), `uv run mypy src tests` (569 ficheros, sin
+  incidencias), `uv run pytest` (4749 passed, 15 skipped, 2 xfailed en
+  429.42s — los xfailed y skipped son preexistentes, ninguno de este bloque;
+  las 5 pruebas nuevas de esta ronda, 2 en `test_reflect.py` y 3 en
+  `test_mirror_projection.py`, están incluidas en el recuento).
 
 ### Las dos mutaciones (nota de arranque, criterio 2)
 
@@ -244,9 +313,12 @@ Las dos mutaciones se aplicaron y revirtieron a mano sobre
   Sigue siendo falsa en producción HOY porque nada invoca el comando
   todavía (C1b) y `CLASES_CON_ESTADO_PROPIO` sigue vacío (C2): esta
   incidencia entrega la maquinaria, no el interruptor.
-- Nueve puertos del almacén que existían sin llamante de producción (o con
+- Once puertos del almacén que existían sin llamante de producción (o con
   uno de un contexto distinto) tienen ahora un camino real de producción
-  -`sirius-reflejar`- que puede invocarlos. Ninguno cambió de forma.
+  -`sirius-reflejar`- que puede invocarlos. Ninguno cambió de forma. Los
+  últimos dos (`reactivate_work_item`, `resolve_work_item_decision`) se
+  sumaron en la ronda de corrección de la revisión independiente
+  (CODEX-002, PR #530).
 - `MirroredWorkItem` creció un campo obligatorio (`diagnostico_fallo`): las
   tres construcciones directas fuera de `mirror_projection.py`
   (`test_authority_reversion.py`, `test_projection_verifier.py`) se

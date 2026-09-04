@@ -545,6 +545,107 @@ def test_diagnostico_fallo_de_un_comentario_no_confiable_no_cuenta() -> None:
     assert mirrored.diagnostico_fallo is None
 
 
+def test_diagnostico_fallo_se_extrae_de_una_parada_precheck(  # CODEX-001, PR #530
+) -> None:
+    """Cuerpo exacto que publica `stop_gate` en `review-sirius-work.yml`
+    (y las paradas equivalentes de `repair-sirius-work.yml`/
+    `sirius_apply_verdict.sh`): el marcador lleva `precheck:<motivo>` en vez
+    de `FAILED_SAFELY`/`USAGE_LIMIT_REACHED`, pero aplica la misma etiqueta
+    `sirius:failed-safely` con la misma cabecera fija. Antes de esta
+    corrección esta lectura devolvía ``None`` (CODEX-001).
+    """
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    comentario = Comentario(
+        autor_login="github-actions[bot]",
+        autor_asociacion="NONE",
+        cuerpo=(
+            "<!-- sirius-verdict:reviewer:precheck:sin-pr:12345-1 -->\n\n"
+            "🔴 **Me he detenido de forma segura**\n\n"
+            "No encuentro ninguna PR asociada a esta incidencia; no hay nada que revisar."
+        ),
+        creado_en=_AHORA,
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(comentario,))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert (
+        mirrored.diagnostico_fallo
+        == "No encuentro ninguna PR asociada a esta incidencia; no hay nada que revisar."
+    )
+
+
+def test_diagnostico_fallo_de_precheck_con_otra_etiqueta_no_cuenta() -> None:
+    """Las paradas `precheck` que NO aplican `sirius:failed-safely` -por
+    ejemplo `convergencia-<motivo>`, que aplica `sirius:blocked-decision`-
+    publican una cabecera distinta (`🟡 Necesito una decisión`), así que no
+    deben leerse como diagnóstico de fallo aunque compartan el prefijo
+    `sirius-verdict:...:precheck:`.
+    """
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    comentario = Comentario(
+        autor_login="github-actions[bot]",
+        autor_asociacion="NONE",
+        cuerpo=(
+            "<!-- sirius-verdict:corrector:precheck:convergencia-mismo-defecto:1-1 -->\n\n"
+            "🟡 **Necesito una decisión**\n\n"
+            "El ciclo de revisión-corrección ha dejado de converger."
+        ),
+        creado_en=_AHORA,
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(comentario,))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.diagnostico_fallo is None
+
+
+def test_diagnostico_fallo_de_notificacion_no_cuenta() -> None:
+    """Los comentarios de `notify-sirius-state.yml` usan el marcador
+    `sirius-notification:`, no `sirius-verdict:`, aunque repitan la misma
+    cabecera fija y el mismo texto genérico: no deben leerse como
+    diagnóstico real.
+    """
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    comentario = Comentario(
+        autor_login="github-actions[bot]",
+        autor_asociacion="NONE",
+        cuerpo=(
+            "<!-- sirius-notification:sirius:failed-safely:abc1234 -->\n\n"
+            "🔴 **Me he detenido de forma segura**\n\n"
+            "He encontrado un problema que no puedo resolver automáticamente sin riesgo.\n\n"
+            "La incidencia contiene el diagnóstico y el siguiente paso recomendado."
+        ),
+        creado_en=_AHORA,
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(comentario,))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.diagnostico_fallo is None
+
+
 def test_diagnostico_fallo_ausente_sin_comentario_de_fallo() -> None:
     metadatos = _metadatos_minimos()
     cuerpo = _cuerpo_de_confianza("")
