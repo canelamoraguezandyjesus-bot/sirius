@@ -363,6 +363,32 @@ ADR o su incidencia cuando se adopte.
   correcciones mías. El resultado es sólido; el camino, caro. Las deudas de
   abajo son el plan para que la próxima ola cueste la mitad.
 
+## 2026-09-03 / 04 — la mina v2 (informe de aprendizaje)
+
+### 21. Tres defectos de método de la propia mina
+
+- **Qué falló.** (a) El flujo multiagente se cortó dos veces por el límite de
+  sesión del plan del propietario (18:58 → 19:12 con 4 de 8 extracciones;
+  20:15 → 20:53 con 14 de 21 agentes); cada relanzamiento reutilizó la caché,
+  pero el tercer intento no pudo empezar hasta el reinicio de las 01:10.
+  (b) Mi guion pasaba a los refutadores la extracción recortada a 12 000
+  caracteres (`JSON.stringify(x).slice(0, 12000)`): la de #520 (32 KB) llegó
+  truncada a mitad de la ronda 3; los dos refutadores lo declararon y
+  recontaron por su cuenta (5 pasadas, 15 hallazgos), así que el dato no se
+  perdió, pero por mérito suyo, no del guion. (c) El listado de runs de
+  Actions por workflow devolvió el mismo listado sin filtrar tres veces; las
+  duraciones salieron de las marcas de tiempo de los comentarios y de los
+  runs citados por id.
+- **Por qué.** (a) Un flujo de 20+ agentes sobre un plan por sesión no cabe
+  en una ventana; (b) un recorte arbitrario para «no pasarse» sin medir el
+  tamaño real; (c) confiar en un filtro de herramienta sin comprobar que
+  filtra.
+- **Mejor manera.** (a) Dimensionar el flujo al presupuesto antes de lanzar
+  (`budget.total`) y ordenar las fases para que lo caro (extracción) quede
+  cacheado antes del corte; (b) nunca recortar datos que otro agente debe
+  verificar: pasar la ruta del fichero y que lo lea entero; (c) verificar la
+  salida de cada herramienta de listado con una muestra antes de usarla.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
