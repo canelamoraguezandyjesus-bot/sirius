@@ -155,6 +155,10 @@ _ADR_125 = (
 )
 _ADR_127 = "ADR-127-m19a-el-indice-de-criticidad-en-la-busqueda.md"
 _ADR_129 = "ADR-129-m20-la-siembra-en-contexto-por-criticidad.md"
+_ADR_132 = (
+    "ADR-132-el-guardian-del-contrato-local-de-ollama-convierte-adr-125-en-prueba-y-"
+    "corrige-ollama-category-classifier.md"
+)
 
 RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     "experiments/adr002/round/cases.py": [
@@ -250,6 +254,15 @@ RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
         _ADR_129,
     ],
     "experiments/adr002/lateral/categoria.py:_pide_contexto": [_ADR_112, _ADR_113, _ADR_115],
+    # ADR-132 (G1, incidencia #522) registra el guardián del contrato local de
+    # Ollama y la corrección de ollama_category_classifier.py. Cita la mina de
+    # aprendizaje operativo de 2026-09 que aprobó la propuesta y la nota de
+    # medición del propietario que documentó la llamada partida en varias
+    # líneas — ambas viven en la rama `claude/adr002-tol209-forensic-audit-
+    # i0ui8k`, que a propósito nunca se fusiona entera a `main`; el ADR cita
+    # su fuente, la fuente sigue sin fusionarse.
+    "docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09.md": [_ADR_132],
+    "docs/audits/mina-2026-09-medicion-de-guardianes.md": [_ADR_132],
 }
 
 
