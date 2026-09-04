@@ -546,6 +546,68 @@ ADR o su incidencia cuando se adopte.
   otras cifras de evidencia idénticas entre commits que afirman
   ejecuciones separadas.
 
+### 29. La tarde de G3: tres maneras nuevas de perder una ronda, y cómo se destascó cada una (04-09-2026, 15:35-16:54 UTC)
+
+- **Qué falló, por orden.** (a) La ronda dual sobre el head puesto al día
+  terminó en `failed-safely` porque Codex no entregó resultado en su plazo
+  absoluto de 1200 s — fallo de infraestructura, no del contenido. (b) El
+  verde de Quality del head nuevo no se consumía desde `ready-for-merge`
+  (la ruta solo consume en `ci-pending`/`failed-safely`): segunda aparición
+  del agujero de la entrada 25, el mismo día. (c) La política de
+  convergencia paró el ciclo por «sin progreso en rondas 2→4» cuando la
+  causa real era que `main` se movió dos veces bajo la rama (los merges de
+  ADR-134 y ADR-135 sumaban casos parametrizados al guardián de citas y
+  desfasaban las cifras de suite del ADR-133 a cada puesta al día): el
+  par (1 hallazgo, gravedad 2) se mantenía, pero cada hallazgo era NUEVO
+  y fabricado fuera de la rama. (d) Mi primer `continua` fue inválido en
+  silencio: llevaba un párrafo de decisión detrás, y la orden debe ser la
+  palabra exacta (solo tolera la firma tras `---`); el guion salió con
+  «no es la orden exacta» sin avisar en la incidencia.
+- **Qué funcionó.** (a) Relanzar el run verde de Quality: la ruta detectó
+  «marcador presente pero estado incompleto; se completa sin duplicar
+  comentario» y repuso la revisión — el mecanismo existe y es limpio.
+  (b) Para el atasco en `ready-for-merge`: etiqueta a mano a `ci-pending`
+  + relanzar el run verde (receta de la mañana, repetida con éxito).
+  (c) `continua` (la palabra sola) tras dejar la decisión razonada en un
+  comentario SEPARADO, que es de donde el corrector la lee («Decisiones
+  del propietario registradas»). Reanudó, reseteando el listón de
+  convergencia desde el head actual.
+- **Mejores maneras (candidatas).** (1) Los ADR no deberían citar
+  recuentos de la suite COMPLETA: se desfasan con cada merge a `main` y
+  hoy costaron 3 rondas entre G3 (2) y G2 (1); citar recuentos por
+  fichero propio del encargo, que solo cambian con la rama. (2) El
+  reanudador podría contestar en la incidencia cuando la orden está
+  malformada, en vez de salir en silencio (hoy costó 10 minutos de espera
+  ciega). (3) La ruta de vuelta a revisión desde `ready-for-merge` ya es
+  el agujero más repetido del motor: dos veces en un día (entradas 25 y
+  esta) — sube a la lista de deudas.
+
+### 30. ADR-135 en vivo: el primer corrector con las reglas nuevas, y mi propia evidencia vieja (04-09-2026, 16:26 UTC)
+
+- **El dato a favor.** El primer corrector que corrió con el prompt del
+  ADR-135 (G3, ciclo 5, tras el `continua`) hizo exactamente lo que las
+  dos viñetas piden: re-ejecutó ruff, mypy y la suite completa DE VERDAD
+  sobre el head actual y refrescó TODA la evidencia dependiente en el
+  mismo commit — la cifra señalada, el desglose por fichero (23→34, 7→8,
+  130→131) y las cifras de ruff/mypy que nadie le había señalado. Los
+  ciclos 2-4 de esa misma incidencia, con el prompt viejo, tocaban solo
+  el número señalado y dejaban el resto viejo. Un dato no es la
+  predicción (que se mide sobre los dos próximos encargos completos),
+  pero apunta en la dirección prevista.
+- **El palo en mi propio tejado.** Al preparar la PR #528 del ADR-135
+  cité en su cuerpo una pasada de ruff anterior a mi última edición del
+  guardián de citas: Quality la tumbó en 20 segundos («Would reformat»).
+  Evidencia vieja citada como fresca — la familia exacta contra la que
+  legisla la PR que la llevaba, cometida por quien la escribió. Cazada
+  por la CI, corregida con ejecuciones frescas y registrada en el propio
+  ADR-135. La regla no distingue autores; bien.
+- **Otras dos lecciones operativas del tramo.** El `fusiona` comentado en
+  la PR se ignora en silencio (el workflow de fusión escucha en la
+  INCIDENCIA y salta los comentarios de PRs) — el de G2 se perdió así 10
+  minutos; y las dos fusiones manuales de hoy (la #528 por orden del
+  propietario, cauce ADR-002 opción 2) conviven bien con el motor si se
+  hacen ANTES de poner al día las ramas en vuelo, no después.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -569,3 +631,11 @@ ADR o su incidencia cuando se adopte.
 9. Medición con Ollama real de M19b y M20 en la máquina del propietario
    (filas pendientes en ADR-128 y ADR-129): `uv run python
    scripts/medir_banco_con_ollama_real.py --diagnostico`.
+10. Ruta de vuelta a revisión desde `ready-for-merge` cuando el head se
+    mueve: el agujero más repetido del motor (entradas 25 y 29, dos veces
+    el 04-09). Mientras tanto, receta manual: etiqueta a `ci-pending` +
+    relanzar el run verde de Quality del head nuevo.
+11. Los ADR citan recuentos de la suite completa, que se desfasan con
+    cada merge a `main` (3 rondas perdidas el 04-09, entrada 29):
+    convenio candidato — citar recuentos por fichero del encargo, o
+    marcar el total como «del árbol en <sha>».
