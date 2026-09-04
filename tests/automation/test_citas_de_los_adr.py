@@ -159,6 +159,10 @@ _ADR_132 = (
     "ADR-132-el-guardian-del-contrato-local-de-ollama-convierte-adr-125-en-prueba-y-"
     "corrige-ollama-category-classifier.md"
 )
+_ADR_134 = (
+    "ADR-134-el-guardian-del-suelo-de-prueba-muerto-retira-las-dos-cotas-tautologicas-"
+    "del-banco-de-evidencia.md"
+)
 _ADR_135 = (
     "ADR-135-el-corrector-actualiza-en-el-mismo-commit-el-papel-que-depende-de-su-correccion.md"
 )
@@ -263,11 +267,18 @@ RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     # medición del propietario que documentó la llamada partida en varias
     # líneas — ambas viven en la rama `claude/adr002-tol209-forensic-audit-
     # i0ui8k`, que a propósito nunca se fusiona entera a `main`; el ADR cita
-    # su fuente, la fuente sigue sin fusionarse. ADR-135 (el prompt del
-    # corrector) cita el mismo informe como origen de las dos familias que
-    # motivan su cambio (prosa desincronizada y cifras a mano).
-    "docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09.md": [_ADR_132, _ADR_135],
-    "docs/audits/mina-2026-09-medicion-de-guardianes.md": [_ADR_132],
+    # su fuente, la fuente sigue sin fusionarse.
+    # ADR-134 (G2, incidencia #526) registra el guardián del suelo de prueba
+    # muerto y la retirada de los dos existentes en el banco de evidencia.
+    # Cita las mismas dos rutas que ADR-132 (la mina que aprobó la propuesta
+    # y la nota de medición del propietario), por el mismo motivo: ambas
+    # viven solo en la rama `claude/adr002-tol209-forensic-audit-i0ui8k`, que
+    # a propósito nunca se fusiona entera a `main`.
+    # ADR-135 (el prompt del corrector) cita el mismo informe como origen de
+    # las dos familias que motivan su cambio (prosa desincronizada y cifras
+    # a mano).
+    "docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09.md": [_ADR_132, _ADR_134, _ADR_135],
+    "docs/audits/mina-2026-09-medicion-de-guardianes.md": [_ADR_132, _ADR_134],
 }
 
 

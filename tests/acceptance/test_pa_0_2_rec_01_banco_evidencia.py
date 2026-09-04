@@ -248,14 +248,21 @@ _MINIMO_ELEMENTOS_HALLADOS_MOTOR: Final[int] = 63
 #: siembra no persigue.
 #:
 #: CODEX-001 (incidencia #516, r3924271714): al bajar `aciertos_exactos` a su
-#: nuevo suelo (0), esa cota sola queda tautológica -- toda ejecución la
-#: cumple, incluida una que no recuperase nada. La guarda real de esta prueba
-#: son las otras dos cifras que M20 sí mueve con intención (ver el párrafo de
-#: arriba): `omisiones_criticas` no debe regresar por encima de 0, y
-#: `cobertura` no debe caer por debajo de lo medido (72/81) -- ambas, como
-#: `aciertos_exactos`, cotas unidireccionales de no regresión a lo medido,
-#: nunca el suelo de D1/§8-M11.
-_MINIMO_ACIERTOS_EXACTOS_PAQUETE_COMPLETO: Final[int] = 0
+#: nuevo suelo (0), la cota que lo afirmaba (`_MINIMO_ACIERTOS_EXACTOS_
+#: PAQUETE_COMPLETO`) quedó tautológica -- toda ejecución la cumple, incluida
+#: una que no recuperase nada. La corrección de entonces añadió, AL LADO de
+#: esa cota ya muerta, las otras dos que sí mueve con intención (ver el
+#: párrafo de arriba): `omisiones_criticas` no debe regresar por encima de 0,
+#: y `cobertura` no debe caer por debajo de lo medido (72/81) -- pero dejó la
+#: cota tautológica puesta. G2 (incidencia #526, ADR-134) la retira: era el
+#: caso más simple y mecánicamente detectable de «prueba que no puede fallar»
+#: (mina de aprendizaje operativo de 2026-09 §4/§6) -- una constante `_MINIMO_
+#: *` en 0 nunca puede fallar porque ninguna de estas métricas es negativa. La
+#: cifra de `aciertos_exactos` sigue publicándose, IMPRESA como evidencia
+#: (más abajo, sin afirmarse: el porqué está en ADR-129 y en el párrafo
+#: anterior), pero deja de afirmarse como aserción -- las dos cotas
+#: unidireccionales de no regresión que sí pueden fallar, nunca el suelo de
+#: D1/§8-M11, siguen intactas.
 _MAXIMO_OMISIONES_CRITICAS_PAQUETE_COMPLETO: Final[int] = 0
 _MINIMO_ELEMENTOS_HALLADOS_PAQUETE_COMPLETO: Final[int] = 72
 
@@ -2326,31 +2333,35 @@ def test_el_banco_se_ejecuta_contra_el_paquete_completo_de_produccion_como_evide
     # camino lo afirma, sin salvedad, la prueba `xfail(strict=True)` de más
     # abajo.
     #
-    # `aciertos_exactos >= 0` es tautológica desde que M20 bajó su suelo a 0
-    # (CODEX-001, incidencia #516): la guarda efectiva de esta prueba son las
-    # otras dos cotas de no regresión que sí pueden fallar --
+    # `aciertos_exactos` ya no se afirma aquí: G2 (incidencia #526, ADR-134)
+    # retira la cota tautológica que CODEX-001 dejó puesta (`aciertos_exactos
+    # >= 0`, cierta para cualquier ejecución posible) -- la cifra sigue
+    # publicándose, arriba, como evidencia. La guarda efectiva de esta prueba
+    # son las dos cotas de no regresión que sí pueden fallar --
     # `omisiones_criticas` y `cobertura` -- ver el docstring del módulo junto
     # a `_MAXIMO_OMISIONES_CRITICAS_PAQUETE_COMPLETO`.
-    assert paquete_completo.aciertos_exactos >= _MINIMO_ACIERTOS_EXACTOS_PAQUETE_COMPLETO
-    assert paquete_completo.elementos_de_mas >= 0
     assert paquete_completo.omisiones_criticas <= _MAXIMO_OMISIONES_CRITICAS_PAQUETE_COMPLETO
     assert paquete_completo.elementos_hallados >= _MINIMO_ELEMENTOS_HALLADOS_PAQUETE_COMPLETO
     assert paquete_completo.elementos_hallados <= paquete_completo.elementos_esperados_total
 
 
 def test_el_guardia_del_paquete_completo_ya_no_es_tautologico() -> None:
-    """CODEX-001 (incidencia #516, r3924271714): antes de esta corrección,
-    `aciertos_exactos >= _MINIMO_ACIERTOS_EXACTOS_PAQUETE_COMPLETO` era la
-    única cota no trivial de
+    """CODEX-001 (incidencia #516, r3924271714): antes de esa corrección,
+    `aciertos_exactos >= _MINIMO_ACIERTOS_EXACTOS_PAQUETE_COMPLETO` (una
+    constante en 0, retirada por G2/ADR-134/incidencia #526 -- ver el
+    docstring del módulo) era la única cota no trivial de
     `test_el_banco_se_ejecuta_contra_el_paquete_completo_de_produccion_como_evidencia_adicional`,
     y quedó tautológica cuando M20 bajó ese suelo a 0 -- una ejecución que no
     recuperase nada (0 aciertos exactos, 0 elementos de más, cobertura 0,
     omisiones críticas positivas) la habría superado igual, junto con las
     demás aserciones de esa prueba (todas piden solo métricas no negativas o
-    cobertura dentro de rango). Prueba de forma: ese caso degenerado --
-    exactamente el que describe el hallazgo -- sigue cumpliendo la cota
-    tautológica pero ya incumple las dos cotas nuevas que protegen la
-    aceptación declarada por M20 (0 omisiones críticas, cobertura >= 72/81)."""
+    cobertura dentro de rango). CODEX-001 corrigió añadiendo, al lado de la
+    tautológica, las dos cotas que sí pueden fallar; G2 retira la propia cota
+    tautológica, ya innecesaria. Prueba de forma, todavía vigente tras la
+    retirada: ese caso degenerado -- exactamente el que describe el hallazgo
+    -- ya no tiene cota tautológica que cumplir, pero sigue incumpliendo las
+    dos cotas que protegen la aceptación declarada por M20 (0 omisiones
+    críticas, cobertura >= 72/81)."""
     degenerada = _Metricas(
         aciertos_exactos=0,
         elementos_de_mas=0,
@@ -2358,7 +2369,6 @@ def test_el_guardia_del_paquete_completo_ya_no_es_tautologico() -> None:
         elementos_hallados=0,
         elementos_esperados_total=81,
     )
-    assert degenerada.aciertos_exactos >= _MINIMO_ACIERTOS_EXACTOS_PAQUETE_COMPLETO
     assert degenerada.omisiones_criticas > _MAXIMO_OMISIONES_CRITICAS_PAQUETE_COMPLETO
     assert degenerada.elementos_hallados < _MINIMO_ELEMENTOS_HALLADOS_PAQUETE_COMPLETO
 
