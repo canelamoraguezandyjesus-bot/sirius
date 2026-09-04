@@ -389,6 +389,25 @@ ADR o su incidencia cuando se adopte.
   verificar: pasar la ruta del fichero y que lo lea entero; (c) verificar la
   salida de cada herramienta de listado con una muestra antes de usarla.
 
+### 22. La mina v2, cerrada a mano (04-09-2026, 10:30 UTC)
+
+- **Qué pasó.** El flujo de agentes se cortó por tercera vez por el límite
+  de sesión (06:10 UTC) con 18 de 22 agentes hechos. En vez de relanzar por
+  cuarta vez, el propietario escribió el informe con lo verificado: 8
+  extracciones completas, 8 refutadores (28 refutaciones), el agrupamiento
+  de familias con su crítico, y la medición de guardianes hecha a mano con
+  `grep` sobre `main`. Informe en
+  `docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09.md`.
+- **Lo que enseñó.** Dos de las cuatro predicciones de la nota de arranque
+  eran falsas: la familia más extendida no es la del estado de la interfaz
+  (8 hallazgos pero en un solo encargo) sino «prueba que no puede fallar»
+  (7 en cuatro encargos); y las muertes del corrector no dependen de que
+  haya pruebas de interfaz (#518 murió sin ninguna), sino de que el arreglo
+  exija reescribir un contrato entero y sus pruebas.
+- **Mejor manera.** Dimensionar el flujo al presupuesto de la sesión antes
+  de lanzarlo y ordenar las fases para que lo caro quede cacheado primero;
+  y, cuando un flujo se corte dos veces, cerrar a mano en vez de insistir.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
