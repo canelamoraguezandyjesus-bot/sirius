@@ -653,6 +653,31 @@ ADR o su incidencia cuando se adopte.
   motor (deuda 12): reintento automático de la ronda ante fallo de
   infraestructura del revisor, en vez de failed-safely + mano.
 
+### 32. C1b en vivo: el guardián que me salvó del contador, y el motor conociendo su historia (04-09-2026, 22:57-22:59 UTC)
+
+- **Qué pasó.** El enganche (ADR-137, PR #531, cauce ADR-002 en sesión)
+  se fusionó a las 22:57 y la cadena automática se encendió sola quince
+  segundos después: merge → Quality → Advance → «Reflejar el desenlace de
+  GitHub» (run 1, `workflow_run`), que escribió y empujó el primer
+  reflejo real (`fbf9c92` en `estado-del-motor`). Mi pasada manual de
+  verificación (run 2) no añadió nada: idempotencia en producción a la
+  primera. El diario refleja ya la historia ENTERA: 35 entregados, 5
+  parados con diagnóstico, 1 escalado, de 70 WorkItems históricos.
+- **El fallo del que me salvó un guardián.** Mi primera versión ponía la
+  red diaria a las 03:04, «20 minutos antes del contador, para que mida
+  fresco». `test_la_hora_del_contador_deja_pasar_la_ventana_de_tolerancia`
+  la tumbó: el contador exige 170 minutos de tranquilidad (tolerancia =
+  máximo timeout × 2), y mi cron habría hecho declarar NO_COMPARABLE cada
+  día, en verde, para siempre — la «red de seguridad» matando en silencio
+  al contador que venía a alimentar. Movida a las 00:04 (200 min). La
+  intuición «cuanto más pegado, más fresco» era exactamente al revés, y
+  solo un guardián con la regla derivada lo sabía.
+- **Lección.** Los guardianes sembrados esta semana ya se defienden de
+  quien los siembra: hoy cazaron mi evidencia vieja de ruff (PR #528) y
+  mi cron (PR #531). Queda para mañana la comprobación que cierra el
+  bloque C: la pasada del contador de las 03:24 debería, por primera vez,
+  tener estado comparable — y C2 se decide después de verla.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
