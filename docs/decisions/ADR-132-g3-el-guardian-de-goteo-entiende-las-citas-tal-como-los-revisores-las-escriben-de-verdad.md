@@ -21,7 +21,7 @@ Medición previa al cambio, ejecutando `parse_archivo_location`
 | 1 | `src/sirius/presentation/knowledge_widget.py (_handle_criticality_proposal_finished, ~líneas 766-805)` (CLAUDE-REV-R2-001 de #520) | (texto entero, `None`) | (`.../knowledge_widget.py`, 766) |
 | 2 | `src/sirius/presentation/knowledge_widget.py:1436-1449 (_set_controls_enabled)` | (texto entero, `None`) | (ruta, 1436) |
 | 3 | `tests/unit/test_ollama_relevance_filter.py` | (ruta, `None`) | igual |
-| 4 | `docs/decisions/ADR-128-...md` | (ruta, `None`) | igual |
+| 4 | `docs/decisions/ADR-128-m19b-el-rescate-rf-25-rf-26-y-la-prioridad-de-g12-por-criticidad.md` | (ruta, `None`) | igual |
 | 5 | `src/sirius/domain/relevance.py:363` | (ruta, 363) | igual |
 | 6 | `src/sirius/presentation/knowledge_widget.py:1490 en 6899ecf` | (texto entero, `None`) | (ruta, 1490) |
 
