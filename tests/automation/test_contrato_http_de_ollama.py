@@ -48,29 +48,35 @@ def _adaptadores_de_ollama() -> list[Path]:
 # con los ficheros reales (ver la sección "Anti-vacua" más abajo).
 
 
-_MENCION_EN_PROSA = re.compile(r"``/api/generate``")
+#: Todo lo envuelto en dobles comillas invertidas (`` ``así`` ``, el estilo RST
+#: que este repositorio usa en docstrings y comentarios para mencionar código
+#: SIN ejecutarlo — por ejemplo, ``ollama_criticality_classifier.py`` explica
+#: por contraste por qué NO usa ``/api/generate``, y los tres adaptadores
+#: explican en un comentario qué hace ``follow_redirects=False`` antes de la
+#: línea que de verdad lo fija). Las cuatro propiedades comprueban sobre el
+#: texto SIN esas menciones: si no lo hicieran, una propiedad de presencia
+#: (2, 3, 4) podría dar un falso verde cuando el código real se rompe pero el
+#: comentario que lo describe sigue ahí, y una propiedad de ausencia (1)
+#: podría dar un falso rojo por una mención que no es una petición real.
+#: Medido con mutación: quitar el ``follow_redirects=False`` real de
+#: ``ollama_category_classifier.py`` dejando su comentario intacto pasaba en
+#: verde sin este filtro.
+_PROSA_ENTRE_COMILLAS_INVERTIDAS = re.compile(r"``[^`]*``")
+
+
+def _sin_prosa(texto: str) -> str:
+    return _PROSA_ENTRE_COMILLAS_INVERTIDAS.sub("", texto)
 
 
 def pide_api_chat_no_api_generate(texto: str) -> bool:
-    """Propiedad 1: ``/api/chat``, nunca ``/api/generate``.
-
-    Ignora las apariciones envueltas en dobles comillas invertidas
-    (`` ``/api/generate`` ``): un docstring puede mencionar ``/api/generate``
-    en prosa para explicar, por contraste, por qué el adaptador NO lo usa —
-    así lo hace ``ollama_criticality_classifier.py`` (ADR-125) — sin que eso
-    sea una petición real a ese extremo. Cualquier otra aparición (una
-    cadena de código, con comillas simples/dobles o dentro de una f-string)
-    sí cuenta como violación.
-    """
-    if "/api/chat" not in texto:
-        return False
-    sin_prosa = _MENCION_EN_PROSA.sub("", texto)
-    return "/api/generate" not in sin_prosa
+    """Propiedad 1: ``/api/chat``, nunca ``/api/generate``."""
+    sin_prosa = _sin_prosa(texto)
+    return "/api/chat" in sin_prosa and "/api/generate" not in sin_prosa
 
 
 def apaga_el_pensamiento_explicitamente(texto: str) -> bool:
     """Propiedad 2: el cuerpo de la petición lleva la clave ``"think"``."""
-    return '"think"' in texto
+    return '"think"' in _sin_prosa(texto)
 
 
 def la_url_del_post_es_absoluta(texto: str) -> bool:
@@ -80,12 +86,12 @@ def la_url_del_post_es_absoluta(texto: str) -> bool:
     ``base_url`` del cliente inyectado — el mismo cliente que un test seam o
     una configuración remota podría apuntar fuera de ``localhost``.
     """
-    return "_OLLAMA_LOCAL_BASE_URL}/api" in texto
+    return "_OLLAMA_LOCAL_BASE_URL}/api" in _sin_prosa(texto)
 
 
 def no_sigue_redirecciones(texto: str) -> bool:
     """Propiedad 4: ``follow_redirects=False`` en la llamada."""
-    return "follow_redirects=False" in texto
+    return "follow_redirects=False" in _sin_prosa(texto)
 
 
 # --- La guarda ------------------------------------------------------------
@@ -106,7 +112,7 @@ def test_apaga_el_pensamiento_explicitamente(adaptador: Path) -> None:
     texto = adaptador.read_text(encoding="utf-8")
     assert apaga_el_pensamiento_explicitamente(texto), (
         f"{adaptador.name} incumple el contrato validado (ADR-125): el cuerpo de "
-        "la petición debe llevar la clave \"think\" (el apagado explícito del "
+        'la petición debe llevar la clave "think" (el apagado explícito del '
         "razonamiento) — sin ella, el modelo Qwen3 por defecto razona durante "
         "minutos antes de contestar."
     )
@@ -142,11 +148,11 @@ def test_no_sigue_redirecciones(adaptador: Path) -> None:
 # repositorio hoy — mismo patrón que test_citas_de_los_adr.py.
 
 _TEXTO_CONFORME = (
-    'response = client.post(\n'
+    "response = client.post(\n"
     '    f"{_OLLAMA_LOCAL_BASE_URL}/api/chat",\n'
     '    json={"think": False},\n'
-    '    follow_redirects=False,\n'
-    ')\n'
+    "    follow_redirects=False,\n"
+    ")\n"
 )
 
 
@@ -175,7 +181,7 @@ def test_una_mencion_en_prosa_de_api_generate_no_se_confunde_con_una_peticion_re
     invertidas, para explicar por qué NO lo usa (ADR-125). Esa mención no es
     una petición real y no debe hacer fallar la propiedad."""
     prosa = (
-        'response = self._client.post(\n'
+        "response = self._client.post(\n"
         '    f"{_OLLAMA_LOCAL_BASE_URL}/api/chat",\n'
         "    follow_redirects=False,\n"
         ")\n"
@@ -191,7 +197,7 @@ def test_una_llamada_partida_en_varias_lineas_se_lee_igual() -> None:
     sobre la línea del ``.post(``."""
     partido = (
         "response = self._client.post(\n"
-        "    f\"{_OLLAMA_LOCAL_BASE_URL}\"\n"
+        '    f"{_OLLAMA_LOCAL_BASE_URL}"\n'
         '    "/api/chat",\n'
         "    json={\n"
         '        "think": False,\n'
@@ -214,7 +220,25 @@ def test_una_url_relativa_se_detecta() -> None:
 
 
 def test_faltar_follow_redirects_false_se_detecta() -> None:
-    roto = _TEXTO_CONFORME.replace('    follow_redirects=False,\n', "")
+    roto = _TEXTO_CONFORME.replace("    follow_redirects=False,\n", "")
+    assert not no_sigue_redirecciones(roto)
+
+
+def test_faltar_follow_redirects_false_se_detecta_aunque_un_comentario_lo_mencione() -> None:
+    """El defecto que esta guarda casi comete, cazado por mutación: los tres
+    adaptadores traen un comentario que EXPLICA ``follow_redirects=False``
+    justo antes de la línea que de verdad lo fija. Quitar solo esa línea
+    (mutación real sobre ollama_category_classifier.py) dejaba el comentario
+    intacto, y una comprobación que no ignorara la prosa entre comillas
+    invertidas habría pasado en verde con el código roto."""
+    roto = (
+        "response = self._client.post(\n"
+        '    f"{_OLLAMA_LOCAL_BASE_URL}/api/chat",\n'
+        "    # ``follow_redirects=False`` overrides any injected client that\n"
+        "    # sets follow_redirects=True.\n"
+        "    json={},\n"
+        ")\n"
+    )
     assert not no_sigue_redirecciones(roto)
 
 

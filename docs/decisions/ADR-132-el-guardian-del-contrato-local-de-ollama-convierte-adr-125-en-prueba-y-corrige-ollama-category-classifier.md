@@ -2,7 +2,7 @@
 
 - Estado: PROPUESTO
 - Fecha: 2026-09-04
-- Aprobación: fusión de la PR por el propietario
+- Aprobación: [quién y cómo; en este repositorio, la fusión de la PR por el propietario]
 
 Este ADR registra G1, la propuesta 1 de
 `docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09.md` (rama
@@ -133,14 +133,153 @@ gemelo `tests/unit/test_ollama_criticality_classifier.py`.
 
 ## Comprobación que la sostiene
 
-(Se completa en el mismo commit o en uno posterior de esta rama, con la
-salida literal del guardián en rojo sobre el código viejo, las tres
-mutaciones y las cifras del banco antes/después, según el punto (e) del
-encargo.)
+**(a) El guardián, en rojo sobre el código viejo, exactamente como predijo el
+encargo.** `tests/automation/test_contrato_http_de_ollama.py` recorre por
+glob `src/sirius/adapters/ollama_*.py` y afirma las cuatro propiedades sobre
+el texto completo de cada fichero. Antes del arreglo:
+
+```
+$ uv run pytest tests/automation/test_contrato_http_de_ollama.py -v
+FAILED ...test_pide_api_chat_y_no_api_generate[ollama_category_classifier.py]
+PASSED ...test_pide_api_chat_y_no_api_generate[ollama_criticality_classifier.py]
+PASSED ...test_pide_api_chat_y_no_api_generate[ollama_relevance_filter.py]
+FAILED ...test_apaga_el_pensamiento_explicitamente[ollama_category_classifier.py]
+PASSED ...test_apaga_el_pensamiento_explicitamente[ollama_criticality_classifier.py]
+PASSED ...test_apaga_el_pensamiento_explicitamente[ollama_relevance_filter.py]
+FAILED ...test_la_url_del_post_es_absoluta[ollama_category_classifier.py]
+PASSED ...test_la_url_del_post_es_absoluta[ollama_criticality_classifier.py]
+PASSED ...test_la_url_del_post_es_absoluta[ollama_relevance_filter.py]
+FAILED ...test_no_sigue_redirecciones[ollama_category_classifier.py]
+PASSED ...test_no_sigue_redirecciones[ollama_criticality_classifier.py]
+PASSED ...test_no_sigue_redirecciones[ollama_relevance_filter.py]
+========================= 4 failed, 17 passed in 0.08s =========================
+```
+
+Exactamente un fichero falla (`ollama_category_classifier.py`), sobre las
+cuatro propiedades, y ninguno de los dos adaptadores de referencia falla
+nunca — la predicción exacta del encargo, y el criterio de parada de la nota
+de arranque no se disparó.
+
+**Un defecto propio, cazado y corregido antes de aceptar el rojo como
+bueno.** Al escribir el guardián por primera vez, la propiedad 1
+(`pide_api_chat_no_api_generate`) marcaba también `ollama_criticality_classifier.py`
+como incumplidor — la referencia, justo lo que el criterio de parada prohíbe
+tocar. La causa: esa comprobación buscaba la subcadena `/api/generate` en
+todo el texto, y el docstring de `ollama_criticality_classifier.py` la
+menciona en prosa (envuelta en `` ``comillas invertidas`` ``, el estilo RST
+de este repositorio) para explicar, por CONTRASTE, por qué el adaptador NO
+la usa. No era un incumplimiento real del contrato: era una imprecisión del
+propio guardián. Se corrigió ignorando las apariciones envueltas en dobles
+comillas invertidas antes de comprobar, y una segunda ronda de mutación
+(quitar el `follow_redirects=False` real de `ollama_category_classifier.py`
+dejando intacto el comentario que lo menciona, también entre comillas
+invertidas) encontró el mismo defecto en la propiedad 4 antes de publicarla:
+el guardián pasaba en verde con el código roto porque el comentario seguía
+mencionando la cadena buscada. Ambas se corrigieron con la misma técnica
+general (`_sin_prosa`, que quita todo lo envuelto en `` `` `` antes de
+comprobar cualquiera de las cuatro propiedades) y quedan fijadas con texto
+sintético en `test_una_mencion_en_prosa_de_api_generate_no_se_confunde_con_una_peticion_real`
+y `test_faltar_follow_redirects_false_se_detecta_aunque_un_comentario_lo_mencione`.
+Ninguno de los dos adaptadores de referencia se tocó: la parada correcta,
+seguida en la nota de arranque, era corregir el guardián, no el código que
+vigilaba correctamente.
+
+**(b) El arreglo, verde sobre los tres adaptadores:**
+
+```
+$ uv run pytest tests/automation/test_contrato_http_de_ollama.py -q
+.....................
+21 passed in 0.05s
+```
+
+(21 propiedades tras el arreglo: 12 parametrizadas por los tres adaptadores
+más 9 pruebas de la sección anti-vacua/mutación del propio guardián.)
+
+**(c) Las pruebas del adaptador, vistas fallar antes del arreglo.** Con
+`ollama_category_classifier.py` revertido temporalmente a su versión vieja
+(`/api/generate`), las cuatro pruebas nuevas de
+`tests/unit/test_ollama_category_classifier.py` fallan:
+
+```
+FAILED test_classify_returns_the_categoria_ollama_answers_with - AssertionError: assert None == 'trabajo'
+FAILED test_classify_sends_the_contract_validated_against_the_real_model - AssertionError: assert '/api/generate' == '/api/chat'
+FAILED test_classify_ignores_an_injected_clients_remote_base_url - AssertionError: assert ['servidor-remoto.example'] == ['localhost']
+FAILED test_classify_never_follows_a_redirect_to_a_remote_host - AssertionError: assert ['localhost',...example', ...] == ['localhost']
+4 failed, 8 passed in 0.35s
+```
+
+Con el arreglo aplicado, las 12 pruebas del fichero pasan.
+
+**(d) Las tres mutaciones, cada una vista fallar exactamente donde predice
+el encargo (adaptador corregido, mutado, restaurado tras cada prueba):**
+
+1. Quitar `follow_redirects=False` real (dejando el comentario que lo
+   menciona): fallan `test_classify_never_follows_a_redirect_to_a_remote_host`
+   (unitaria) y `test_no_sigue_redirecciones[ollama_category_classifier.py]`
+   (guardián); los dos adaptadores de referencia siguen en verde.
+2. Cambiar la URL absoluta por ruta relativa (`"/api/chat"` en vez de
+   `f"{_OLLAMA_LOCAL_BASE_URL}/api/chat"`): fallan
+   `test_classify_ignores_an_injected_clients_remote_base_url` (unitaria,
+   `['servidor-remoto.example'] != ['localhost']`) y
+   `test_la_url_del_post_es_absoluta[ollama_category_classifier.py]`
+   (guardián).
+3. Poner `_PENSAMIENTO_APAGADO` a `True`: falla
+   `test_classify_sends_the_contract_validated_against_the_real_model`
+   (`assert True is False` sobre `cuerpo["think"]`).
+
+**(e) Nada del banco de evidencia se movió**, tal como predecía la nota de
+arranque (el contrato público de `classify` no cambia):
+
+```
+$ uv run python scripts/medir_variantes_de_criticidad.py
+  variante            exactos  de mas  crit perdidas  cobertura
+  hoy                    0/47     487              0      72/81
+```
+
+Idéntico antes (en `main`, `dc731d4`) y después del arreglo: 0 omisiones
+críticas, 72/81. `uv run pytest tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`
+también idéntico en ambos árboles: 28 passed, 1 skipped, 1 xfailed.
+
+**Validaciones obligatorias, en verde sobre el árbol final:**
+
+```
+$ uv run ruff format --check .    # 595 files already formatted
+$ uv run ruff check .             # All checks passed!
+$ uv run mypy src tests           # Success: no issues found in 563 source files
+$ uv run pytest -q                # 4678 passed, 15 skipped, 2 xfailed
+```
+
+(`test_toda_ruta_citada_por_un_adr_existe` exigió registrar las dos citas de
+este ADR a `docs/audits/` en `RAMA_DE_ORIGEN_NO_FUSIONADA` de
+`tests/automation/test_citas_de_los_adr.py:163-266`, porque ambas viven solo
+en la rama `claude/adr002-tol209-forensic-audit-i0ui8k` que la mina cita como
+origen y que a propósito nunca se fusiona entera — mismo patrón que las
+demás excepciones ya registradas ahí para ADR-104 y siguientes.)
 
 ## Consecuencias
 
-(Se completa junto con la comprobación.)
+- `ollama_category_classifier.py` cumple ahora el mismo contrato HTTP
+  validado contra el modelo real que los otros dos adaptadores (ADR-125): el
+  defecto medido en la incidencia #518 para esa familia queda cerrado para
+  los tres adaptadores existentes.
+- Un cuarto adaptador `ollama_*.py` que aparezca en el futuro queda cubierto
+  por el guardián sin tocar la prueba: el defecto de "un adaptador nuevo
+  repite el incumplimiento" pasa de improbable a imposible en ese sentido
+  concreto (ver "Nota de arranque", pregunta 4).
+- El propio guardián recibió dos rondas de mutación antes de publicarse
+  (propiedades 1 y 4), cada una encontrando el mismo tipo de defecto: una
+  comprobación textual ingenua confundida por prosa que menciona, en vez de
+  usar, la cadena buscada. Queda como patrón a vigilar en futuros guardianes
+  de texto de este repositorio: cualquier comprobación sobre código en un
+  fichero con docstrings/comentarios en el mismo estilo RST de este
+  repositorio debería considerar ignorar las menciones entre `` `` ``.
+- El vocabulario, la firma de `classify`, `TagCategoryUseCase` y la puerta
+  `category_matching_enabled` no cambian: ninguna prohibición dura del
+  encargo se tocó.
+- `_REQUEST_TIMEOUT_SECONDS` de `ollama_category_classifier.py` pasa de 5.0 s
+  a 30.0 s (el mismo valor medido para `ollama_criticality_classifier.py`,
+  ADR-125): con `think: false`, es el único techo que este repositorio ha
+  medido contra el modelo real para esta familia de llamada.
 
 ## Alternativas descartadas y por qué
 
