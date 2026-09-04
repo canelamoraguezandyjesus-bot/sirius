@@ -397,7 +397,10 @@ def test_reanudacion_que_aterriza_en_planned_reactiva_sin_camino_de_fase() -> No
     # El propietario reanudó al implementador: `destino_de_rol` repone
     # `sirius:implement-requested`, que el espejo proyecta como PLANNED/PREPARAR.
     espejo = _espejo(
-        estado=WorkItemState.PLANNED, fase=WorkItemPhase.PREPARAR, reanudacion_publicada=True
+        estado=WorkItemState.PLANNED,
+        fase=WorkItemPhase.PREPARAR,
+        etiquetas=("sirius:implement-requested",),
+        reanudacion_publicada=True,
     )
     resultado = reflejar_desenlace(parado, espejo, _episodio())
 
@@ -583,14 +586,20 @@ def test_sin_marcador_de_reanudacion_no_reactiva_aunque_el_espejo_aterrice_en_de
 # (CODEX-002, ronda 4, PR #530) -----------------------------------------------
 #
 # `destino_de_rol` (`sirius_resume_on_command.sh:180-186`) repone
-# `sirius:implement-requested` para CUALQUIER rol que se hubiera detenido -no
-# solo el implementador-, y esa etiqueta siempre proyecta PLANNED/PREPARAR
-# (`mirror_projection.py`), sea cual sea la fase real en la que el motor se
-# paró. Antes de esta corrección, `_camino_de_fase(fase_actual, PREPARAR)`
-# devolvía `None` en cuanto `fase_actual` no era ya PREPARAR -PREPARAR es la
-# primera fase del grafo, así que no hay ningún camino hacia delante hacia
-# ella- y la rama PLANNED descartaba TAMBIÉN el paso de reactivación ya
-# calculado, dejando el motor parado para siempre.
+# `sirius:implement-requested` SOLO para el implementador -`reviewer` recibe
+# `review-requested` y `corrector`, `repair-requested`, ninguno de los cuales
+# proyecta PLANNED (corrección del enunciado, CODEX-001, ronda 5, PR #530: la
+# versión anterior de este comentario y de la ADR-136 afirmaban, los dos por
+# error, que la reponía "para cualquier rol"). El escenario real que sí
+# reproduce esta sección es otro: el implementador puede haberse parado más
+# adelante que PREPARAR -en EJECUTAR, su propia fase real- antes de que el
+# propietario reanude, y esa etiqueta siempre proyecta PLANNED/PREPARAR
+# (`mirror_projection.py`), no la fase real en la que el motor se paró. Antes
+# de esta corrección, `_camino_de_fase(fase_actual, PREPARAR)` devolvía `None`
+# en cuanto `fase_actual` no era ya PREPARAR -PREPARAR es la primera fase del
+# grafo, así que no hay ningún camino hacia delante hacia ella- y la rama
+# PLANNED descartaba TAMBIÉN el paso de reactivación ya calculado, dejando el
+# motor parado para siempre.
 
 
 def test_reanudacion_hacia_planned_desde_una_fase_mas_adelantada_reactiva_sin_caminar() -> None:
@@ -607,7 +616,10 @@ def test_reanudacion_hacia_planned_desde_una_fase_mas_adelantada_reactiva_sin_ca
     assert parado.fase is en_ejecutar.fase is WorkItemPhase.EJECUTAR
 
     espejo = _espejo(
-        estado=WorkItemState.PLANNED, fase=WorkItemPhase.PREPARAR, reanudacion_publicada=True
+        estado=WorkItemState.PLANNED,
+        fase=WorkItemPhase.PREPARAR,
+        etiquetas=("sirius:implement-requested",),
+        reanudacion_publicada=True,
     )
     resultado = reflejar_desenlace(parado, espejo, _episodio())
 
@@ -627,11 +639,17 @@ def test_reanudacion_hacia_planned_desde_una_fase_mas_adelantada_reactiva_sin_ca
     assert segundo.pasos == ()
 
 
-def test_reanudacion_hacia_planned_desde_reparar_reactiva_sin_caminar() -> None:
-    """Mismo caso que arriba, un paso más adelante: el corrector se paró en
-    REPARAR, pero `sin_pr=true` en el guion lee el rol parado del historial y
-    puede reponer `implement-requested` si el rol parado fue el implementador
-    -aunque el ciclo ya hubiera avanzado a REPARAR en una vuelta anterior-.
+def test_reanudacion_no_reactiva_hacia_planned_sin_la_etiqueta_disparadora_real() -> None:
+    """`sirius:planned` proyecta el MISMO (estado, fase) que
+    `sirius:implement-requested` -es el único par de activación válido del
+    mapa etiqueta -> (estado, fase)-, pero ningún guion de reanudación repone
+    nunca `sirius:planned`: `destino_de_rol` solo aplica
+    `sirius:implement-requested` para el implementador
+    (`sirius_resume_on_command.sh:180-186`). Un espejo que lleva
+    `sirius:planned` -por ejemplo, tras una transición parcial o una edición
+    manual posterior al permiso- no debe reactivarse como si el marcador ya
+    publicado autorizara justo esa etiqueta (CODEX-003, ronda 5, PR #530): se
+    conserva la parada y se registra divergencia, igual que sin marcador.
     """
     store = InMemoryWorkEngineStore()
     _work_item_activo(store)
@@ -644,15 +662,19 @@ def test_reanudacion_hacia_planned_desde_reparar_reactiva_sin_caminar() -> None:
     assert parado.fase is en_reparar.fase is WorkItemPhase.REPARAR
 
     espejo = _espejo(
-        estado=WorkItemState.PLANNED, fase=WorkItemPhase.PREPARAR, reanudacion_publicada=True
+        estado=WorkItemState.PLANNED,
+        fase=WorkItemPhase.PREPARAR,
+        etiquetas=("sirius:planned",),
+        reanudacion_publicada=True,
     )
     resultado = reflejar_desenlace(parado, espejo, _episodio())
 
-    assert tuple(paso.kind for paso in resultado.pasos) == (PASO_REACTIVADO,)
-    aplicados = aplicar_pasos(store, _WORK_ID, resultado.pasos, now=_AHORA)
-    final = aplicados[-1]
-    assert final.estado is WorkItemState.ACTIVE
-    assert final.fase is WorkItemPhase.REPARAR
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+    assert "no hay camino hacia delante" in resultado.divergencia
+
+    aplicar_pasos(store, _WORK_ID, resultado.pasos, now=_AHORA)
+    assert store.get_work_item(_WORK_ID) == parado
 
 
 # --- Sección D: contradicción / sin etiqueta --------------------------------

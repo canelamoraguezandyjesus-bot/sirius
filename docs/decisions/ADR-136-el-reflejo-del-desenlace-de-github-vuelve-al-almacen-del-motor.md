@@ -246,10 +246,14 @@ ya podía leer (los tres marcadores llevan meses en producción,
 ronda 2) y que `reflect.py` todavía no consultaba.
 
 **CODEX-002 (ronda 4):** `destino_de_rol` repone `sirius:implement-requested`
-para CUALQUIER rol que se hubiera detenido, no solo para el implementador, y
-esa etiqueta siempre proyecta `PLANNED`/`PREPARAR` -`PREPARAR` es la PRIMERA
-fase del grafo, no la fase real en la que el rol se detuvo-. Cuando el motor
-se había parado más adelante que `PREPARAR` (por ejemplo en `EJECUTAR`),
+SOLO para el implementador -`reviewer` recibe `review-requested` y
+`corrector`, `repair-requested`, ninguno de los cuales proyecta `PLANNED`
+(corrección del enunciado de este párrafo, CODEX-001, ronda 5, PR #530: la
+versión anterior afirmaba, por error, que la reponía "para cualquier rol")-,
+y esa etiqueta siempre proyecta `PLANNED`/`PREPARAR` -`PREPARAR` es la PRIMERA
+fase del grafo, no la fase real en la que el implementador se detuvo-. Cuando
+el motor se había parado más adelante que `PREPARAR` (por ejemplo en
+`EJECUTAR`, la fase real del implementador),
 `_camino_de_fase(EJECUTAR, PREPARAR)` no encuentra ningún camino hacia
 delante -`PREPARAR` queda estrictamente detrás- y devuelve `None`; la rama
 `PLANNED` de `reflejar_desenlace` trataba ese `None` exactamente como
@@ -275,11 +279,15 @@ Probado en `tests/engine/test_reflect.py`, sección "C quater" (CODEX-001:
 - las cuatro reproducen los espejos legítimos de las secciones C bis/C ter con
 `reanudacion_publicada=False` y esperan divergencia, no reanudación) y "C
 quinquies" (CODEX-002:
-`test_reanudacion_hacia_planned_desde_una_fase_mas_adelantada_reactiva_sin_caminar`,
-`test_reanudacion_hacia_planned_desde_reparar_reactiva_sin_caminar` - un motor
-parado en `EJECUTAR`/`REPARAR` con espejo `PLANNED`/`PREPARAR` y
-`reanudacion_publicada=True` produce `(PASO_REACTIVADO,)` y conserva la fase
-real tras aplicarlo). Las cuatro pruebas de reanudación ya existentes de las
+`test_reanudacion_hacia_planned_desde_una_fase_mas_adelantada_reactiva_sin_caminar`
+- un motor parado en `EJECUTAR`, la fase real del implementador, con espejo
+`PLANNED`/`PREPARAR` y `reanudacion_publicada=True` produce
+`(PASO_REACTIVADO,)` y conserva `EJECUTAR` tras aplicarlo; la prueba hermana
+de esta sección que reproducía el mismo caso desde `REPARAR` describía una
+combinación que `destino_de_rol` no produce nunca en la práctica -`REPARAR`
+es la fase del corrector, no la del implementador- y se sustituyó en la ronda
+5 por `test_reanudacion_no_reactiva_hacia_planned_sin_la_etiqueta_disparadora_real`,
+ver sección siguiente). Las cuatro pruebas de reanudación ya existentes de las
 secciones C bis/C ter se actualizaron para pasar
 `reanudacion_publicada=True` explícito -sin ese ajuste, CODEX-001 las habría
 hecho caer, porque antes de esta ronda ningún caso de la batería distinguía
@@ -288,6 +296,117 @@ hecho caer, porque antes de esta ronda ningún caso de la batería distinguía
 `_interpretar_reanudacion_publicada`: los tres marcadores por separado
 (parametrizada), ausencia, y un comentario no confiable que cita el marcador
 sin que cuente.
+
+## El marcador de reanudación se ancla a la parada vigente, y PLANNED exige su disparador real (correcciones CLAUDE-REVISOR-001/CODEX-002/CODEX-003, ronda 5, PR #530)
+
+La revisión independiente de la ronda 5 encontró que la corrección de la
+ronda 4 (arriba) cerraba solo la mitad del problema: `reanudacion_publicada`
+pasó de "nunca reanuda" a "reanuda en cuanto el marcador se haya publicado
+alguna vez", pero "alguna vez" no es lo mismo que "para la parada vigente".
+
+**CLAUDE-REVISOR-001/CODEX-002 (mismo defecto, dos hallazgos independientes
+del mismo revisor y de Codex):** `_interpretar_reanudacion_publicada`
+buscaba los tres marcadores con `any(...)` sobre TODO el historial de
+confianza, sin acotar a "el más reciente" ni a "posterior a la parada
+vigente" -a diferencia de `_interpretar_pr_url`/`_interpretar_head_sha`, en
+el mismo fichero, que sí anclan con `reversed(comentarios)`-. Consecuencia:
+una vez publicado cualquiera de los tres marcadores, `reanudacion_publicada`
+quedaba `True` para siempre en cualquier proyección futura de esa misma
+incidencia, incluso frente a una parada POSTERIOR y sin relación que nunca
+recibió su propio marcador -exactamente el escenario que la corrección de la
+ronda 4 (CODEX-001, "El marcador de reanudación...", arriba) quería cerrar
+según su propio enunciado-. La propia incidencia #529 ya contiene dos
+marcadores de este tipo en su historial real (`sirius-resume-stop` de la
+ronda 2 y `sirius-convergence-reset` de la ronda 3), así que cualquier parada
+futura de esa misma incidencia ya cumplía la condición sin publicar ningún
+marcador nuevo.
+
+**Corrección:** `_interpretar_reanudacion_publicada` recorre ahora el
+historial de confianza en orden cronológico (cuerpo primero, comentarios en
+el orden en que ya llegan del puerto) y compara la posición del ÚLTIMO
+marcador de reanudación (`_RESUME_MARKER_RE`) con la del ÚLTIMO marcador de
+parada (`_STOP_MARKER_RE`, expresión nueva que reconoce
+`sirius-verdict:<rol>:(FAILED_SAFELY|USAGE_LIMIT_REACHED|precheck|blocked):...`
+-los mismos cuatro veredictos que paran el ciclo, deliberadamente sin
+`approved`/`changes`/`CHECKS_UNRELATED`, que no paran nada-): `True` solo si
+hay un marcador de reanudación y, o bien no hay ninguna parada publicada, o
+la parada más reciente es ANTERIOR a él. Una reanudación anterior ya
+consumida por una parada posterior sin marcador propio deja de autorizar
+nada. No es vocabulario nuevo ni cambia `sirius_resume_on_command.sh`: es una
+lectura más precisa de marcadores que el guion ya escribe en producción.
+
+Probado en `tests/engine/test_mirror_projection.py`
+(`test_reanudacion_publicada_es_false_si_hay_parada_nueva_tras_marcador_consumido`,
+`test_reanudacion_publicada_es_true_si_el_marcador_llega_tras_la_ultima_parada`):
+un historial con un `sirius-resume-stop` antiguo seguido de un veredicto
+`FAILED_SAFELY` nuevo y sin marcador propio proyecta ahora
+`reanudacion_publicada=False` -antes de esta corrección, `True`-; el orden
+inverso (parada primero, marcador de reanudación después, el caso normal de
+una orden real del propietario) sigue proyectando `True`.
+
+**CODEX-003:** `sirius:planned` y `sirius:implement-requested` proyectan el
+MISMO `(estado, fase)` -`PLANNED`/`PREPARAR`- porque son el único par de
+activación válido del mapa etiqueta -> (estado, fase)
+(`_PAR_DE_ACTIVACION_VALIDO`). Pero solo la segunda es un disparador de
+reanudación real: `destino_de_rol` (`sirius_resume_on_command.sh:180-186`)
+nunca repone `sirius:planned`. La rama `PLANNED` de `reflejar_desenlace` no
+distinguía las dos etiquetas -bastaba con que el espejo proyectara ese
+`(estado, fase)` y hubiera un marcador de reanudación vigente (ya corregido
+arriba) para reactivar-, así que un espejo que llegara a llevar
+`sirius:planned` -por ejemplo, tras una transición parcial o una edición
+manual posterior al permiso, sin que `sirius_resume_on_command.sh` volviera a
+correr- se reactivaba igual que si llevara el disparador real.
+
+**Corrección:** la rama `PLANNED` exige ahora, además del marcador de
+reanudación y `pasos_reanudacion` no vacío, que
+`"sirius:implement-requested"` esté literalmente en `espejo.etiquetas`
+(constante `_ETIQUETA_REANUDACION_A_PLANNED`); sin ella, se conserva la
+parada con divergencia, igual que sin marcador. El mapa general de `PLANNED`
+y los workflows no cambian: `sirius:planned` sigue proyectando
+`PLANNED`/`PREPARAR` como siempre, solo que ya no autoriza por sí sola una
+reactivación que ningún guion produce.
+
+Probado en `tests/engine/test_reflect.py`
+(`test_reanudacion_no_reactiva_hacia_planned_sin_la_etiqueta_disparadora_real`):
+un motor `FAILED_SAFELY`/`REPARAR` con espejo `PLANNED`/`PREPARAR`,
+`reanudacion_publicada=True` pero `etiquetas=("sirius:planned",)` -sin
+`sirius:implement-requested`- produce divergencia, no reactivación. Las tres
+pruebas de reanudación hacia `PLANNED` que sí son legítimas
+(`test_reanudacion_que_aterriza_en_planned_reactiva_sin_camino_de_fase`,
+`test_reanudacion_hacia_planned_desde_una_fase_mas_adelantada_reactiva_sin_caminar`,
+y la de C quinquies ya citada arriba) se actualizaron para pasar
+`etiquetas=("sirius:implement-requested",)` explícito -sin ese ajuste, esta
+corrección las habría hecho caer, porque antes de esta ronda ninguna prueba
+de la batería fijaba la etiqueta observada al aterrizar en `PLANNED`-.
+
+**CODEX-001 (ronda 5, distinta de las CODEX-001 de las rondas 2/3/4
+descritas más arriba):** la sección "CODEX-002 (ronda 4)" de esta misma ADR,
+y el comentario que encabeza la sección "C quinquies" de
+`tests/engine/test_reflect.py`, afirmaban los dos que `destino_de_rol` repone
+`sirius:implement-requested` "para cualquier rol que se hubiera detenido, no
+solo para el implementador". Eso es falso: `sirius_resume_on_command.sh:180-186`
+devuelve `sirius:implement-requested` únicamente para `implementer`;
+`reviewer` recibe `review-requested` y `corrector`, `repair-requested`. Esa
+afirmación falsa sustentaba además `test_reanudacion_hacia_planned_desde_reparar_reactiva_sin_caminar`,
+que reproducía un motor parado en `REPARAR` -la fase del corrector, no del
+implementador- reanudando hacia `PLANNED` como si el rol parado hubiera sido
+el implementador: una combinación que el flujo documentado no produce
+normalmente (para que `destino_de_rol("implementer")` decida la vuelta hace
+falta que el ÚLTIMO veredicto de rol publicado sea del implementador, y eso
+es incompatible con que el motor ya hubiera avanzado hasta `REPARAR` -fase
+que solo alcanza el corrector, en una ronda necesariamente posterior-).
+
+**Corrección:** se reescribió el párrafo falso en ambos sitios (esta ADR,
+arriba, y el comentario de `test_reflect.py`) para describir el mapeo real
+-implementador -> `implement-requested`, revisor -> `review-requested`,
+corrector -> `repair-requested`- sin tocar el mapeo aprobado del guion, y se
+sustituyó la prueba del escenario inalcanzable por
+`test_reanudacion_no_reactiva_hacia_planned_sin_la_etiqueta_disparadora_real`
+(CODEX-003, arriba), que además no perdía cobertura real: `_camino_de_fase`
+devuelve `None` por la misma rama final ("`ENTREGAR` sin coincidir con el
+objetivo") tanto partiendo de `REPARAR` como de `EJECUTAR` -verificado
+trazando la caminata a mano-, así que la prueba de `REPARAR` no ejercitaba
+ningún camino de código que la de `EJECUTAR` no ejercitara ya.
 
 ## Opciones consideradas
 
@@ -383,23 +502,32 @@ cuota de la API.
   `PLANNED`/`DELIVERED` (corrección CODEX-001, ronda 3, PR #530), las cuatro
   pruebas de "sin marcador, no reanuda" y las dos de "implement-requested
   reactiva sin caminar" (correcciones CODEX-001/CODEX-002, ronda 4, PR #530,
-  sección «El marcador de reanudación...» arriba), y las dos pruebas de
+  sección «El marcador de reanudación...» arriba; una de las dos —el caso
+  `REPARAR`— se sustituyó en la ronda 5 por
+  `test_reanudacion_no_reactiva_hacia_planned_sin_la_etiqueta_disparadora_real`,
+  CODEX-003, sección «El marcador de reanudación se ancla...» arriba, sin
+  cambiar el total de 30: una prueba sale, otra entra), y las dos pruebas de
   mutación de abajo.
 - `tests/engine/test_reflect_cli.py` (6 pruebas): ensayo no toca nada,
   ejecución real aplica y dice cuántos pasos, un `WorkItem` terminal se
   salta sin volver a leer su incidencia, una incidencia ilegible no corta
   las demás, espejo sin etiqueta no dice nada, `completed` con SHA entrega
   de verdad.
-- `tests/engine/test_mirror_projection.py` (36 pruebas en total, 12 nuevas
+- `tests/engine/test_mirror_projection.py` (38 pruebas en total, 14 nuevas
   desde la ronda 1): `diagnostico_fallo` desde el último comentario de
   confianza, el más reciente cuando hay varios, un comentario no confiable no
   cuenta, ausente sin comentario de fallo, y las tres de la corrección
   CODEX-001 de la ronda 2 (PR #530): una parada `precheck` sí cuenta, una
   parada `precheck` con otra etiqueta no cuenta, un comentario de
-  notificación no cuenta; y, de la ronda 4 (CODEX-001, sección «El marcador
-  de reanudación...» arriba), cinco pruebas de `reanudacion_publicada`: cada
-  uno de los tres marcadores por separado (parametrizada), ausencia, y un
-  comentario no confiable que cita el marcador sin que cuente.
+  notificación no cuenta; de la ronda 4 (CODEX-001, sección «El marcador de
+  reanudación...» arriba), cinco pruebas de `reanudacion_publicada`: cada uno
+  de los tres marcadores por separado (parametrizada), ausencia, y un
+  comentario no confiable que cita el marcador sin que cuente; y, de la
+  ronda 5 (CLAUDE-REVISOR-001/CODEX-002, sección «El marcador de reanudación
+  se ancla...» arriba), dos pruebas más que anclan ese resultado al orden
+  cronológico: un marcador de reanudación antiguo seguido de una parada nueva
+  y sin marcador propio ya no cuenta, y el orden inverso (parada, luego
+  marcador) sigue contando.
 - `tests/automation/test_reflejar_desenlace_github.py` (2 pruebas,
   integración con `DurableWorkEngineStore` y `DurableDispatchJournal` reales
   sobre copias de `tests/automation/fixtures/diario_ola_criticidad.jsonl` y
@@ -442,6 +570,24 @@ cuota de la API.
   confirmado con `uv run pytest --collect-only -q`, que mide 4780 pruebas
   recogidas (4763 + 15 + 2), 11 más que las 4769 de la ronda 3 — la misma
   diferencia que las 11 funciones `def test_` nuevas de este commit.
+- Comandos ejecutados, en verde, sobre el árbol de la corrección
+  CLAUDE-REVISOR-001/CODEX-001/CODEX-002/CODEX-003 de la ronda 5 (PR #530,
+  2026-09-04): `uv run ruff format --check .` (601 ficheros ya formateados,
+  tras `uv run ruff format .` sobre `mirror_projection.py`), `uv run ruff
+  check .` (todas las comprobaciones superadas), `uv run mypy src tests` (569
+  ficheros, sin incidencias), `uv run pytest -q` (4765 passed, 15 skipped, 2
+  xfailed en 435.22s — los xfailed y skipped son preexistentes, ninguno de
+  este bloque). Esta ronda añade 3 funciones `def test_` nuevas y quita 1
+  -`test_reanudacion_hacia_planned_desde_reparar_reactiva_sin_caminar`,
+  sustituida (CODEX-001, ver sección «El marcador de reanudación se ancla...»
+  arriba)-, neto +2; confirmado con `uv run pytest --collect-only -q`, que
+  mide 4782 pruebas recogidas (4765 + 15 + 2), 2 más que las 4780 de la
+  ronda 4 — la misma diferencia neta que arroja
+  `git diff --stat HEAD -- tests/` sobre las funciones `def test_` de este
+  commit (+3/-1 en `tests/engine/test_mirror_projection.py` y
+  `tests/engine/test_reflect.py`). `uv run pytest --collect-only -q
+  tests/engine/test_reflect.py` mide 30 pruebas (igual que la ronda 4, +1/-1
+  neto cero) y `tests/engine/test_mirror_projection.py` mide 38 (36 + 2).
 - **Reconciliación de la cifra de la ronda 2 (corrección CLAUDE-REVIEWER-002,
   ronda 3):** la ronda 1 (head `e759958`) documentó «4743 passed»; la ronda 2
   (head `72e6218`) documentó «4749 passed», una diferencia de 6, mientras que

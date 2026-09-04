@@ -753,6 +753,85 @@ def test_reanudacion_publicada_de_un_comentario_no_confiable_no_cuenta() -> None
     assert mirrored.reanudacion_publicada is False
 
 
+# --- reanudacion_publicada se ancla a la parada VIGENTE, no a "alguna vez"
+# (CLAUDE-REVISOR-001/CODEX-002, ronda 5, PR #530) ---------------------------
+#
+# Las pruebas de arriba solo cubrían "el marcador está" / "el marcador no
+# está" sobre un historial de un único comentario. Ninguna reproducía un
+# marcador de una reanudación YA CONSUMIDA seguido de una parada NUEVA y sin
+# relación: la versión de la ronda 4 devolvía `True` en ese caso con
+# `any(...)` sin noción de orden, reabriendo exactamente el escenario que esa
+# misma ronda decía cerrar.
+
+
+def test_reanudacion_publicada_es_false_si_hay_parada_nueva_tras_marcador_consumido() -> None:
+    """Un `sirius-resume-stop` antiguo no autoriza una parada `FAILED_SAFELY`
+    posterior y distinta que nunca recibió su propio marcador de reanudación.
+    """
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    viejo = Comentario(
+        autor_login=_OWNER_LOGIN,
+        autor_asociacion="OWNER",
+        cuerpo="<!-- sirius-resume-stop:deadbee1 -->\n\ncontinua",
+        creado_en=datetime(2026, 8, 1, tzinfo=UTC),
+    )
+    nuevo = Comentario(
+        autor_login="canelamoraguezandyjesus-bot",
+        autor_asociacion="OWNER",
+        cuerpo=(
+            "<!-- sirius-verdict:corrector:FAILED_SAFELY:run-2 -->\n\n"
+            "🔴 **Me he detenido de forma segura**\n\ndiagnóstico nuevo, sin relación"
+        ),
+        creado_en=datetime(2026, 8, 2, tzinfo=UTC),
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(viejo, nuevo))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.reanudacion_publicada is False
+
+
+def test_reanudacion_publicada_es_true_si_el_marcador_llega_tras_la_ultima_parada() -> None:
+    """Orden normal de una reanudación real: la parada primero, el marcador de
+    reanudación de `sirius_resume_on_command.sh` después. Sigue autorizando.
+    """
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    parada = Comentario(
+        autor_login="canelamoraguezandyjesus-bot",
+        autor_asociacion="OWNER",
+        cuerpo=(
+            "<!-- sirius-verdict:corrector:FAILED_SAFELY:run-2 -->\n\n"
+            "🔴 **Me he detenido de forma segura**\n\ndiagnóstico"
+        ),
+        creado_en=datetime(2026, 8, 1, tzinfo=UTC),
+    )
+    reanudacion = Comentario(
+        autor_login=_OWNER_LOGIN,
+        autor_asociacion="OWNER",
+        cuerpo="<!-- sirius-resume-stop:deadbee1 -->\n\ncontinua",
+        creado_en=datetime(2026, 8, 2, tzinfo=UTC),
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(parada, reanudacion))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.reanudacion_publicada is True
+
+
 # --- El cuerpo pasa por el MISMO filtro que los comentarios (H-1, #215) ----
 #
 # El defecto: `_texto_cronologico_de_confianza` filtraba los comentarios por

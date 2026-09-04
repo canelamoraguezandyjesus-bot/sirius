@@ -165,15 +165,34 @@ _DIAGNOSTICO_FALLO_RE = re.compile(
 # Los tres marcadores que `sirius_resume_on_command.sh` publica ANTES de
 # reponer la etiqueta activa (líneas 297-324 de ese guion), en ese orden
 # exacto por diseño: el permiso escrito siempre precede a la etiqueta que
-# autoriza, así que su sola presencia en el historial de confianza es la
-# prueba de que un cambio de etiqueta sobre una parada vino de una orden real
-# del propietario, y no de una edición manual o una transición parcial
-# (CODEX-001, ronda 4, PR #530). `sirius-convergence-reset` y
+# autoriza (CODEX-001, ronda 4, PR #530). `sirius-convergence-reset` y
 # `sirius-resume-stop` llevan un SHA de head; `sirius-restart-sin-pr` lleva
 # `<incidencia>:<run>-<intento>` porque una parada sin PR no tiene head sobre
 # el que continuar (comentario del propio guion, líneas 305-309).
+#
+# Su sola PRESENCIA en el historial no basta -eso bastaba en la versión de la
+# ronda 4 y reabría exactamente lo que esa ronda quería cerrar (hallazgo
+# CLAUDE-REVISOR-001/CODEX-002, ronda 5, PR #530): una incidencia que se para,
+# se reanuda, y vuelve a pararse por algo NUEVO y sin relación seguía leyendo
+# el marcador de la reanudación anterior -ya consumida- como si autorizara
+# también la parada posterior. `_interpretar_reanudacion_publicada` usa este
+# marcador junto con `_STOP_MARKER_RE` de abajo para exigir que el más
+# reciente de los dos, en el historial de confianza, sea el de reanudación.
 _RESUME_MARKER_RE = re.compile(
     r"<!--\s*sirius-(?:resume-stop|convergence-reset|restart-sin-pr):[^>]*-->"
+)
+
+# El marcador que publica CUALQUIER parada -de veredicto de rol o de puerta
+# determinista- que deja la incidencia en `sirius:failed-safely` o
+# `sirius:blocked-decision`: los mismos cuatro valores de veredicto que
+# `sirius_resume_on_command.sh` lee para decidir a qué fase volver
+# (`FAILED_SAFELY`/`USAGE_LIMIT_REACHED`/`precheck`/`blocked`). Deliberadamente
+# NO incluye `approved`/`changes`/`CHECKS_UNRELATED` -esos veredictos no paran
+# el ciclo, así que no cuentan como "parada vigente" a efectos de anclar la
+# reanudación-.
+_STOP_MARKER_RE = re.compile(
+    r"<!--\s*sirius-verdict:[^:]+:(?:FAILED_SAFELY|USAGE_LIMIT_REACHED|precheck|blocked)"
+    r"(?::[^>]*)?-->"
 )
 
 # --- Etiquetas -> (estado, fase) --------------------------------------------
@@ -356,7 +375,8 @@ def _interpretar_head_sha(cuerpo: str, comentarios: Sequence[Comentario]) -> str
 def _interpretar_reanudacion_publicada(
     cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
 ) -> bool:
-    """``True`` si alguno de los tres marcadores de reanudación está publicado.
+    """``True`` solo si el marcador de reanudación más reciente es POSTERIOR
+    a la última parada publicada en el historial de confianza.
 
     Mismo filtro de confianza que el resto de marcadores -``sirius_comment_once``
     los publica el propio bot o el evento ya viene filtrado por
@@ -364,13 +384,37 @@ def _interpretar_reanudacion_publicada(
     cuerpo entra por el mismo predicado que ``_texto_cronologico_de_confianza``
     para no reabrir el defecto H-1 (incidencia #215, ADR-051) de tratar el
     cuerpo distinto que los comentarios.
+
+    La primera versión de esta función devolvía ``True`` en cuanto CUALQUIER
+    marcador de reanudación aparecía en TODO el historial, con ``any(...)`` sin
+    noción de orden -a diferencia de ``_interpretar_pr_url``/
+    ``_interpretar_head_sha`` en este mismo fichero, que sí anclan al
+    comentario más reciente con ``reversed(comentarios)``-. Consecuencia: una
+    vez publicado un marcador, cualquier parada NUEVA y sin relación de esa
+    misma incidencia se leía como ya reanudada (CLAUDE-REVISOR-001/CODEX-002,
+    ronda 5, PR #530). Aquí se recorre el historial en orden cronológico
+    -cuerpo primero, comentarios en el orden en que ya llegan del puerto- y se
+    compara la posición del último marcador de reanudación con la del último
+    marcador de parada (``_STOP_MARKER_RE``): sin parada posterior a la
+    reanudación, o sin ninguna parada en absoluto, el marcador sigue vigente.
     """
-    if es_autor_de_confianza(cuerpo) and _RESUME_MARKER_RE.search(cuerpo.texto):
-        return True
-    return any(
-        es_autor_de_confianza(comentario) and _RESUME_MARKER_RE.search(comentario.cuerpo)
-        for comentario in comentarios
+    textos: list[str] = []
+    if es_autor_de_confianza(cuerpo):
+        textos.append(cuerpo.texto)
+    textos.extend(
+        comentario.cuerpo for comentario in comentarios if es_autor_de_confianza(comentario)
     )
+
+    ultimo_resume: int | None = None
+    ultima_parada: int | None = None
+    for indice, texto in enumerate(textos):
+        if _RESUME_MARKER_RE.search(texto):
+            ultimo_resume = indice
+        if _STOP_MARKER_RE.search(texto):
+            ultima_parada = indice
+    if ultimo_resume is None:
+        return False
+    return ultima_parada is None or ultimo_resume > ultima_parada
 
 
 def _interpretar_diagnostico_fallo(comentarios: Sequence[Comentario]) -> str | None:

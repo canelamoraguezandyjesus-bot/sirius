@@ -99,6 +99,13 @@ PASO_ESCALADO = "work_item_escalated"
 PASO_REACTIVADO = "work_item_reactivated"
 PASO_DECISION_RESUELTA = "work_item_decision_resolved"
 
+#: Única etiqueta que `sirius_resume_on_command.sh:180-186` repone para volver
+#: a PLANNED (`destino_de_rol("implementer")`); `sirius:planned` proyecta el
+#: mismo (estado, fase) -es el único par de activación válido,
+#: `mirror_projection._PAR_DE_ACTIVACION_VALIDO`- pero ningún guion de
+#: reanudación la repone nunca (CODEX-003, ronda 5, PR #530).
+_ETIQUETA_REANUDACION_A_PLANNED = "sirius:implement-requested"
+
 
 @dataclass(frozen=True, slots=True)
 class PasoReflejo:
@@ -280,7 +287,17 @@ def reflejar_desenlace(
     if espejo.estado is WorkItemState.PLANNED:
         if work_item.estado is WorkItemState.PLANNED:
             return ResultadoReflejo(pasos=())
-        if not pasos_reanudacion:
+        # `sirius:planned` proyecta el MISMO (estado, fase) que
+        # `sirius:implement-requested` -es el único par de activación válido
+        # del mapa etiqueta -> (estado, fase)-, pero solo la segunda es un
+        # disparador de reanudación real: `destino_de_rol` nunca repone
+        # `sirius:planned`. Sin ella en el espejo, un marcador de reanudación
+        # vigente no autoriza reactivar hacia PLANNED -sería tratar una
+        # transición parcial o una edición manual posterior al permiso como si
+        # fuera la orden que repuso el disparador real (CODEX-003, ronda 5, PR
+        # #530)-: se conserva la parada y se registra divergencia, igual que
+        # si no hubiera marcador.
+        if not pasos_reanudacion or _ETIQUETA_REANUDACION_A_PLANNED not in espejo.etiquetas:
             return ResultadoReflejo(pasos=(), divergencia=_divergencia_atras(work_item, espejo))
         assert espejo.fase is not None, (
             "PLANNED siempre trae fase en el mapa etiqueta -> (estado, fase)"
