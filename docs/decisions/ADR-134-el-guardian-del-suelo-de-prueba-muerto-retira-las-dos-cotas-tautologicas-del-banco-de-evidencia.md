@@ -51,7 +51,25 @@ literales, la medición que confirma que esas dos formas son las únicas que
 aparecen hoy en el corpus real (§6 del informe), la misma medición que este
 ADR repite más abajo (ver "Comprobación que la sostiene").
 
-## Nota de arranque (ADR-001, disciplina-evidencia, publicada antes del primer commit de código)
+## Nota de arranque (ADR-001, disciplina-evidencia)
+
+**Nota de método, para que conste.** Esta nota **no** se publicó antes del
+primer commit de código. El guardián y la retirada se implementaron en
+`6e3d803`; este documento —con las cuatro preguntas, el criterio de parada y
+las comprobaciones— se añadió después, en `d525252`, hijo de aquel commit
+(`git cat-file -e 6e3d803:docs/decisions/ADR-134-...md` falla: el ADR no
+existe ahí). No es, por tanto, una nota de arranque en el sentido de ADR-001,
+sino una reconstrucción posterior de la misma decisión, redactada antes de
+fusionar la PR pero después de escribir y ejecutar el código. Eso no
+invalida las comprobaciones que reporta la sección "Comprobación que la
+sostiene" más abajo: el guardián en rojo sobre `main`, la retirada en verde y
+las tres mutaciones son ejecuciones reales, capturadas de la salida real de
+`pytest`. Lo retrospectivo es el documento, no las pruebas que describe. Se
+distingue esto explícitamente en vez de dejar pasar el encabezado anterior,
+para no repetir con otro nombre el defecto que
+`docs/decisions/ADR-004-red-de-seguridad-periodica-para-estados-que-no-avanzan.md:214-218`
+ya reconoció: un criterio redactado después de ver los resultados no es un
+criterio de arranque, y fingir lo contrario vacía de sentido la disciplina.
 
 **1. ¿Dónde vive el fallo y dónde voy a poner el arreglo? ¿Puede el sitio del
 arreglo observar el fallo que arregla?**
@@ -130,10 +148,11 @@ aceptado, no eliminado — es exactamente el trade-off que ya validó
 `test_contrato_http_de_ollama.py` (G1, ADR-132) para el mismo estilo de
 guardián textual.
 
-## Criterio de parada (escrito ANTES de decidir)
+## Criterio de parada
 
-Ver "Nota de arranque" arriba, punto 3: es el mismo criterio, publicado antes
-de ejecutar el guardián por primera vez.
+Ver "Nota de arranque" arriba, punto 3: es el mismo criterio, recogido en el
+documento retrospectivo descrito en la nota de método de esa sección — no
+publicado antes de ejecutar el guardián por primera vez.
 
 ## Opciones consideradas
 
