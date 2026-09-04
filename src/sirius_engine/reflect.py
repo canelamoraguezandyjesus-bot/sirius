@@ -42,12 +42,15 @@ Dos funciones, deliberadamente separadas:
    como único camino de vuelta (el bucle revisar-reparar real). Si el
    objetivo no es alcanzable caminando solo hacia delante -incluido el caso
    en que el motor ya está más adelante que lo que la incidencia proyecta-,
-   no se toca nada; se devuelve el motivo. Única excepción: si el espejo
-   proyecta ACTIVE mientras el motor sigue en FAILED_SAFELY o NEEDS_DECISION,
-   no es "hacia atrás" -es una reanudación autoritativa ya registrada por el
-   propietario (``sirius_resume_on_command.sh``, CODEX-002, PR #530)-, así
-   que primero se reactiva/resuelve la decisión con el puerto existente que
-   corresponda y el camino de fase se calcula igual que siempre.
+   no se toca nada; se devuelve el motivo. Única excepción: si el motor está
+   en FAILED_SAFELY o NEEDS_DECISION y el espejo deja de proyectar ese MISMO
+   estado detenido -sea cual sea el estado al que pase a apuntar (ACTIVE,
+   PLANNED o DELIVERED, los tres alcanzables tras una reanudación real)-, no
+   es "hacia atrás" -es una reanudación autoritativa ya registrada por el
+   propietario (``sirius_resume_on_command.sh``, CODEX-002/CODEX-001, PR
+   #530)-, así que primero se reactiva/resuelve la decisión con el puerto
+   existente que corresponda y el camino de fase se calcula igual que
+   siempre, desde ``work_item.fase`` sin tocar.
 4. **Nunca inventa.** El plan usa exclusivamente los puertos ya existentes
    del almacén, con exactamente los datos que el espejo trae (SHA de fusión,
    diagnóstico de fallo); si algo hiciera falta que el espejo no expone o que
@@ -185,34 +188,88 @@ def reflejar_desenlace(
     if espejo.estado is None:
         return ResultadoReflejo(pasos=())
 
+    # El propietario puede reanudar una parada con una orden explícita
+    # (`sirius_resume_on_command.sh:338-350`): repone la etiqueta activa que
+    # la parada había retirado, sin tocar el `WorkItem` del motor -que se
+    # queda en FAILED_SAFELY o NEEDS_DECISION-. Se calcula UNA sola vez, antes
+    # de mirar a qué apunta el espejo, porque la reanudación puede aterrizar
+    # en cualquiera de los estados del mapa -no solo ACTIVE-: el destino
+    # depende de a qué fase vuelve cada rol (`destino_de_rol`,
+    # `sirius_resume_on_command.sh:180-186`, que para el implementador repone
+    # `sirius:implement-requested`, y ese proyecta PLANNED, no ACTIVE -
+    # `mirror_projection.py:173-175`) y de cuánto haya avanzado ya el ciclo
+    # real para cuando esta reflexión se ejecuta (pudo llegar hasta
+    # `sirius:completed` sin que ninguna pasada observara el ACTIVE
+    # intermedio). Antes de esta corrección solo la rama ACTIVE reanudaba
+    # (CODEX-002, PR #530); las ramas PLANNED y DELIVERED seguían rechazando
+    # el `WorkItem` detenido como "hacia atrás" para siempre (CODEX-001,
+    # ronda 3, PR #530). La vuelta usa los puertos autoritativos que ya
+    # existen para esto -``reactivate_work_item`` (``FAILED_SAFELY ->
+    # ACTIVE``) y ``resolve_work_item_decision(..., continuar=True)``
+    # (``NEEDS_DECISION -> ACTIVE``)-, sin inventar vocabulario nuevo.
+    # Ninguna de las dos transiciones toca ``fase``
+    # (:meth:`WorkItem.fail_safely`/:meth:`WorkItem.escalate` tampoco la
+    # tocaron al parar), así que el camino de fase se sigue calculando desde
+    # ``work_item.fase`` tal cual, exactamente como si nunca hubiera parado.
+    #
+    # Solo cuenta como reanudación cuando el espejo deja de proyectar el
+    # MISMO estado detenido -si sigue en el mismo, es la idempotencia de esa
+    # rama la que decide, no una reanudación-. Y solo se dispara desde
+    # FAILED_SAFELY/NEEDS_DECISION: un `WorkItem` que ya está ACTIVE (nunca se
+    # paró) sigue las reglas de siempre en cada rama, sin este paso extra -no
+    # convierte ningún retroceso ordinario a PLANNED, ni ningún desenlace
+    # terminal observado sin más, en permiso para reactivar-.
+    pasos_reanudacion: tuple[PasoReflejo, ...] = ()
+    estado_efectivo = work_item.estado
+    if work_item.estado is WorkItemState.FAILED_SAFELY and espejo.estado is not (
+        WorkItemState.FAILED_SAFELY
+    ):
+        pasos_reanudacion = (PasoReflejo(kind=PASO_REACTIVADO),)
+        estado_efectivo = WorkItemState.ACTIVE
+    elif work_item.estado is WorkItemState.NEEDS_DECISION and espejo.estado is not (
+        WorkItemState.NEEDS_DECISION
+    ):
+        pasos_reanudacion = (
+            PasoReflejo(kind=PASO_DECISION_RESUELTA, resultado={"continuar": True}),
+        )
+        estado_efectivo = WorkItemState.ACTIVE
+
     if espejo.estado is WorkItemState.FAILED_SAFELY:
         if work_item.estado is WorkItemState.FAILED_SAFELY:
             return ResultadoReflejo(pasos=())
-        if work_item.estado is not WorkItemState.ACTIVE:
+        if estado_efectivo is not WorkItemState.ACTIVE:
             return ResultadoReflejo(pasos=(), divergencia=_divergencia_atras(work_item, espejo))
         diagnostico = espejo.diagnostico_fallo or (
             "la incidencia lleva sirius:failed-safely sin diagnóstico de confianza publicado"
         )
         return ResultadoReflejo(
-            pasos=(PasoReflejo(kind=PASO_FALLO_SEGURO, diagnostico=diagnostico),)
+            pasos=(*pasos_reanudacion, PasoReflejo(kind=PASO_FALLO_SEGURO, diagnostico=diagnostico))
         )
 
     if espejo.estado is WorkItemState.NEEDS_DECISION:
         if work_item.estado is WorkItemState.NEEDS_DECISION:
             return ResultadoReflejo(pasos=())
-        if work_item.estado is not WorkItemState.ACTIVE:
+        if estado_efectivo is not WorkItemState.ACTIVE:
             return ResultadoReflejo(pasos=(), divergencia=_divergencia_atras(work_item, espejo))
-        return ResultadoReflejo(pasos=(PasoReflejo(kind=PASO_ESCALADO),))
+        return ResultadoReflejo(pasos=(*pasos_reanudacion, PasoReflejo(kind=PASO_ESCALADO)))
 
     if espejo.estado is WorkItemState.PLANNED:
         if work_item.estado is WorkItemState.PLANNED:
             return ResultadoReflejo(pasos=())
-        return ResultadoReflejo(pasos=(), divergencia=_divergencia_atras(work_item, espejo))
+        if not pasos_reanudacion:
+            return ResultadoReflejo(pasos=(), divergencia=_divergencia_atras(work_item, espejo))
+        assert espejo.fase is not None, (
+            "PLANNED siempre trae fase en el mapa etiqueta -> (estado, fase)"
+        )
+        camino = _camino_de_fase(work_item.fase, espejo.fase)
+        if camino is None:
+            return ResultadoReflejo(pasos=(), divergencia=_divergencia_atras(work_item, espejo))
+        return ResultadoReflejo(pasos=(*pasos_reanudacion, *camino))
 
     if espejo.estado is WorkItemState.DELIVERED:
         if work_item.estado is WorkItemState.DELIVERED:
             return ResultadoReflejo(pasos=())
-        if work_item.estado is not WorkItemState.ACTIVE:
+        if estado_efectivo is not WorkItemState.ACTIVE:
             return ResultadoReflejo(pasos=(), divergencia=_divergencia_atras(work_item, espejo))
         camino = _camino_de_fase(work_item.fase, WorkItemPhase.ENTREGAR)
         if camino is None:
@@ -220,34 +277,11 @@ def reflejar_desenlace(
         resultado: dict[str, object] = {"numero_incidencia": episodio.numero_incidencia}
         if espejo.head_sha:
             resultado["merge_sha"] = espejo.head_sha
-        return ResultadoReflejo(
-            pasos=(*camino, PasoReflejo(kind=PASO_ENTREGADO, resultado=resultado))
-        )
+        paso_entregado = PasoReflejo(kind=PASO_ENTREGADO, resultado=resultado)
+        return ResultadoReflejo(pasos=(*pasos_reanudacion, *camino, paso_entregado))
 
     # espejo.estado is ACTIVE: los ocho pares (ACTIVE, fase) del mapa.
-    #
-    # El propietario puede reanudar una parada con una orden explícita
-    # (`sirius_resume_on_command.sh:338-350`): repone la etiqueta activa que
-    # la parada había retirado, así que el espejo vuelve a proyectar ACTIVE
-    # mientras el motor sigue en FAILED_SAFELY o NEEDS_DECISION. Antes de esta
-    # corrección esa combinación se trataba como "hacia atrás" y devolvía
-    # divergencia para siempre -el motor nunca llegaba al desenlace final
-    # (CODEX-002, PR #530)-. La vuelta usa los puertos autoritativos que ya
-    # existen para esto -``reactivate_work_item``
-    # (``FAILED_SAFELY -> ACTIVE``) y ``resolve_work_item_decision(...,
-    # continuar=True)`` (``NEEDS_DECISION -> ACTIVE``)-, sin inventar
-    # vocabulario nuevo. Ninguna de las dos transiciones toca ``fase``
-    # (:meth:`WorkItem.fail_safely`/:meth:`WorkItem.escalate` tampoco la
-    # tocaron al parar), así que el camino de fase se sigue calculando desde
-    # ``work_item.fase`` tal cual, exactamente como si nunca hubiera parado.
-    pasos_reanudacion: tuple[PasoReflejo, ...] = ()
-    if work_item.estado is WorkItemState.FAILED_SAFELY:
-        pasos_reanudacion = (PasoReflejo(kind=PASO_REACTIVADO),)
-    elif work_item.estado is WorkItemState.NEEDS_DECISION:
-        pasos_reanudacion = (
-            PasoReflejo(kind=PASO_DECISION_RESUELTA, resultado={"continuar": True}),
-        )
-    elif work_item.estado is not WorkItemState.ACTIVE:
+    if estado_efectivo is not WorkItemState.ACTIVE:
         return ResultadoReflejo(pasos=(), divergencia=_divergencia_atras(work_item, espejo))
     assert espejo.fase is not None, "ACTIVE siempre trae fase en el mapa etiqueta -> (estado, fase)"
     camino = _camino_de_fase(work_item.fase, espejo.fase)

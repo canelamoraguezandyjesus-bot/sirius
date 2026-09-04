@@ -154,7 +154,59 @@ un motor que falla en fase EJECUTAR y cuyo espejo, tras la reanudación,
 proyecta `ACTIVE`/COMPROBAR produce exactamente `(PASO_REACTIVADO,
 PASO_COMPROBACION_INICIADA)` (o el equivalente con
 `PASO_DECISION_RESUELTA`), y termina en `ACTIVE`/COMPROBAR real tras
-aplicarlo contra `InMemoryWorkEngineStore`.
+aplicarlo contra `InMemoryWorkEngineStore`. Cada una de las dos pruebas
+incluye también una segunda pasada sobre el motor ya reactivado, con el mismo
+espejo, que confirma `pasos == ()` (idempotencia; corrección
+CLAUDE-REVIEWER-001, ronda 3, PR #530 — la primera versión de estas dos
+pruebas solo comprobaba la primera pasada, a diferencia de las demás pruebas
+de idempotencia del mismo fichero).
+
+## Reanudación generalizada a PLANNED y DELIVERED (corrección CODEX-001, ronda 3, PR #530)
+
+La corrección CODEX-002 (ronda 2, arriba) solo anteponía el paso de
+reanudación (`work_item_reactivated`/`work_item_decision_resolved`) dentro de
+la rama en la que el espejo proyecta `ACTIVE`. La revisión independiente de
+la ronda 3 encontró que eso deja sin cubrir dos caminos reales por los que
+una reanudación autorizada NO aterriza en `ACTIVE`:
+
+1. **`destino_de_rol`** (`sirius_resume_on_command.sh:180-186`) repone
+   `sirius:implement-requested` para el implementador, y esa etiqueta
+   proyecta `PLANNED`/`PREPARAR` (`mirror_projection.py:173-175`), no
+   `ACTIVE` — así que ni siquiera una reflexión inmediata tras la reanudación
+   reactivaba esa clase de parada.
+2. Si el ciclo real avanza deprisa tras la reanudación -o esta reflexión no
+   se ejecuta hasta después de que la incidencia ya cerró-, el espejo puede
+   pasar directamente a `DELIVERED` sin que ninguna pasada observe el
+   `ACTIVE` intermedio; la rama `DELIVERED` rechazaba entonces el `WorkItem`
+   detenido como "hacia atrás" para siempre.
+
+**Corrección:** el cálculo de `pasos_reanudacion` se hizo común a las cinco
+ramas de estado del espejo (antes vivía solo dentro de la rama `ACTIVE`):
+se dispara exactamente cuando el motor está en `FAILED_SAFELY` o
+`NEEDS_DECISION` y el espejo deja de proyectar ese MISMO estado detenido
+-nunca por la sola presencia de un espejo `PLANNED` o `DELIVERED`, que es
+justo la salvaguarda que pide el hallazgo: "sin convertir cualquier
+retroceso ordinario a PLANNED ni cualquier desenlace terminal en permiso
+para reactivar"-. Un `estado_efectivo` (el estado ya reanudado, o el mismo
+si no hubo reanudación) sustituye a `work_item.estado` en las comprobaciones
+"¿hay camino hacia delante?" de las ramas `FAILED_SAFELY`, `NEEDS_DECISION`,
+`PLANNED` (con el paso de reanudación gateado además por
+`pasos_reanudacion` no vacío, para no tocar el comportamiento ya probado de
+un motor que nunca se paró) y `DELIVERED`; la rama `ACTIVE` queda igual que
+en la ronda 2. Ningún puerto ni vocabulario nuevo: los mismos dos de
+CODEX-002.
+
+Probado en `tests/engine/test_reflect.py`
+(`test_reanudacion_que_aterriza_en_planned_reactiva_sin_camino_de_fase`,
+`test_etiqueta_planned_sigue_hacia_atras_si_el_motor_nunca_paro`,
+`test_reanudacion_que_aterriza_en_delivered_reactiva_y_camina_hasta_entregar`):
+un motor `FAILED_SAFELY`/`PREPARAR` con espejo `PLANNED`/`PREPARAR` produce
+ahora `(PASO_REACTIVADO,)` en vez de cero pasos; el mismo espejo `PLANNED`
+contra un motor que nunca se paró (`ACTIVE`) sigue siendo divergencia
+-la salvaguarda no tocó ese caso, ya cubierto desde la ronda 1-; y un motor
+`FAILED_SAFELY`/`COMPROBAR` con espejo `DELIVERED` produce
+`(PASO_REACTIVADO, PASO_REVISION_INICIADA, PASO_REVISION_APROBADA,
+PASO_ENTREGADO)` y entrega de verdad contra `InMemoryWorkEngineStore`.
 
 ## Opciones consideradas
 
@@ -202,7 +254,10 @@ comentario de `complete-sirius-after-merge.yml` que planta
 `<!-- sirius-completed:<sha> -->` también escribe «- Merge SHA: `<sha>`», que
 `_SHA_MARKER_RE` ya interpretaba.
 
-**Corrección CODEX-001 (PR #530):** la primera versión de
+**Corrección CODEX-001 (ronda 2, PR #530 — distinta de la CODEX-001 de la
+ronda 3 descrita más arriba; el revisor independiente reinicia la
+numeración en cada ronda, así que el mismo identificador nombra dos
+hallazgos distintos según la ronda):** la primera versión de
 `_DIAGNOSTICO_FALLO_RE` solo reconocía el marcador que publica el VEREDICTO
 de un rol (`sirius-verdict:<rol>:FAILED_SAFELY:<tag>` o
 `:USAGE_LIMIT_REACHED:<tag>`), pero las puertas deterministas que también
@@ -234,15 +289,18 @@ cuota de la API.
 
 ## Comprobación que la sostiene
 
-- `tests/engine/test_reflect.py` (21 pruebas): las cinco secuencias exactas
+- `tests/engine/test_reflect.py` (24 pruebas): las cinco secuencias exactas
   del mapa de etiquetas activas, `blocked-decision` (1 paso), `planned` (0
   pasos, hacia atrás), idempotencia (dos casos), nunca-hacia-atrás,
   contradicción, sin etiqueta, `completed` con SHA de fusión (incluida la
   prueba de que camina TODAS las fases intermedias, no salta a
   `deliver_work_item`), `failed-safely` con y sin diagnóstico de confianza,
   el cierre del bucle `REPARAR -> COMPROBAR`, las dos pruebas de reanudación
-  de una parada por orden del propietario (corrección CODEX-002, PR #530), y
-  las dos pruebas de mutación de abajo.
+  de una parada por orden del propietario (corrección CODEX-002, PR #530,
+  cada una con su segunda pasada de idempotencia añadida en la ronda 3 —
+  CLAUDE-REVIEWER-001), las tres pruebas de reanudación generalizada a
+  `PLANNED`/`DELIVERED` (corrección CODEX-001, ronda 3, PR #530), y las dos
+  pruebas de mutación de abajo.
 - `tests/engine/test_reflect_cli.py` (6 pruebas): ensayo no toca nada,
   ejecución real aplica y dice cuántos pasos, un `WorkItem` terminal se
   salta sin volver a leer su incidencia, una incidencia ilegible no corta
@@ -251,9 +309,9 @@ cuota de la API.
 - `tests/engine/test_mirror_projection.py` (7 pruebas nuevas):
   `diagnostico_fallo` desde el último comentario de confianza, el más
   reciente cuando hay varios, un comentario no confiable no cuenta, ausente
-  sin comentario de fallo, y las tres de la corrección CODEX-001 (PR #530):
-  una parada `precheck` sí cuenta, una parada `precheck` con otra etiqueta no
-  cuenta, un comentario de notificación no cuenta.
+  sin comentario de fallo, y las tres de la corrección CODEX-001 de la ronda 2
+  (PR #530): una parada `precheck` sí cuenta, una parada `precheck` con otra
+  etiqueta no cuenta, un comentario de notificación no cuenta.
 - `tests/automation/test_reflejar_desenlace_github.py` (2 pruebas,
   integración con `DurableWorkEngineStore` y `DurableDispatchJournal` reales
   sobre copias de `tests/automation/fixtures/diario_ola_criticidad.jsonl` y
@@ -272,13 +330,35 @@ cuota de la API.
   fusionadas») con SHAs de relleno, no una segunda lectura de red — este
   entorno no tiene ni token ni acceso a GitHub.
 - Comandos ejecutados, en verde, sobre el árbol de la corrección CODEX-001/
-  CODEX-002 (PR #530, ronda 2, 2026-09-04): `uv run ruff format --check .`
+  CODEX-002 (PR #530, ronda 3, 2026-09-04): `uv run ruff format --check .`
   (601 ficheros ya formateados), `uv run ruff check .` (todas las
   comprobaciones superadas), `uv run mypy src tests` (569 ficheros, sin
-  incidencias), `uv run pytest` (4749 passed, 15 skipped, 2 xfailed en
-  429.42s — los xfailed y skipped son preexistentes, ninguno de este bloque;
-  las 5 pruebas nuevas de esta ronda, 2 en `test_reflect.py` y 3 en
-  `test_mirror_projection.py`, están incluidas en el recuento).
+  incidencias), `uv run pytest` (4752 passed, 15 skipped, 2 xfailed en
+  425.34s — los xfailed y skipped son preexistentes, ninguno de este bloque;
+  las 3 pruebas nuevas de esta ronda, todas en `test_reflect.py`
+  -`test_reanudacion_que_aterriza_en_planned_reactiva_sin_camino_de_fase`,
+  `test_etiqueta_planned_sigue_hacia_atras_si_el_motor_nunca_paro`,
+  `test_reanudacion_que_aterriza_en_delivered_reactiva_y_camina_hasta_entregar`-,
+  están incluidas en el recuento; confirmado también con
+  `uv run pytest --collect-only -q` sobre el árbol de esta ronda antes de
+  correr la suite completa, 4769 = 4752 + 15 + 2).
+- **Reconciliación de la cifra de la ronda 2 (corrección CLAUDE-REVIEWER-002,
+  ronda 3):** la ronda 1 (head `e759958`) documentó «4743 passed»; la ronda 2
+  (head `72e6218`) documentó «4749 passed», una diferencia de 6, mientras que
+  `git diff e759958..72e6218 -- tests/` solo añade 5 funciones `def test_`
+  nuevas (2 en `test_reflect.py`, 3 en `test_mirror_projection.py`) — no hay
+  ninguna sexta prueba, nuevo caso de `@pytest.mark.parametrize`, ni cambio de
+  resultado de una prueba preexistente de por medio. La cifra que no
+  cuadraba era la de la ronda 1: `uv run pytest --collect-only -q` mide 4761
+  pruebas recogidas en el head `e759958` y 4766 en `72e6218` -una diferencia
+  de 5, la que predice el diff-, y `uv run pytest` recién ejecutado sobre
+  `72e6218` (antes de aplicar ningún cambio de esta ronda) confirma
+  exactamente 4749 passed, 15 skipped, 2 xfailed (4766 en total, igual que lo
+  recogido). Con los mismos 15 skipped/2 xfailed en ambos heads, la ronda 1
+  debió documentar 4744 passed (4761 − 15 − 2), no 4743: un error de
+  transcripción de esa ronda, no un defecto de la ronda 2. La cifra de la
+  ronda 2 («4749 passed») ya era correcta y no se ha tocado; se deja esta
+  nota para que la discrepancia quede explicada en vez de repetirse.
 
 ### Las dos mutaciones (nota de arranque, criterio 2)
 

@@ -324,6 +324,14 @@ def test_reanudacion_desde_failed_safely_reactiva_antes_de_caminar_la_fase() -> 
     assert final.estado is WorkItemState.ACTIVE
     assert final.fase is WorkItemPhase.COMPROBAR
 
+    # Idempotencia (CLAUDE-REVIEWER-001): una segunda pasada sobre el motor ya
+    # reactivado, con el mismo espejo, no debe volver a intentar reactivar.
+    motor_reactivado = store.get_work_item(_WORK_ID)
+    assert motor_reactivado is not None
+    segundo = reflejar_desenlace(motor_reactivado, espejo, _episodio())
+    assert segundo.pasos == ()
+    assert segundo.divergencia is None
+
 
 def test_reanudacion_desde_needs_decision_resuelve_la_decision_antes_de_caminar_la_fase() -> None:
     store = InMemoryWorkEngineStore()
@@ -347,6 +355,119 @@ def test_reanudacion_desde_needs_decision_resuelve_la_decision_antes_de_caminar_
     final = aplicados[-1]
     assert final.estado is WorkItemState.ACTIVE
     assert final.fase is WorkItemPhase.COMPROBAR
+
+    # Idempotencia (CLAUDE-REVIEWER-001): una segunda pasada sobre el motor ya
+    # con la decisión resuelta, con el mismo espejo, no debe volver a
+    # intentar resolverla.
+    motor_resuelto = store.get_work_item(_WORK_ID)
+    assert motor_resuelto is not None
+    segundo = reflejar_desenlace(motor_resuelto, espejo, _episodio())
+    assert segundo.pasos == ()
+    assert segundo.divergencia is None
+
+
+# --- Sección C ter: reanudación que aterriza en PLANNED o DELIVERED ---------
+#
+# CODEX-001 (ronda 3, PR #530): la corrección de la sección C bis (CODEX-002,
+# ronda 2) solo reactivaba/resolvía la decisión dentro de la rama ACTIVE. Pero
+# una reanudación real no siempre aterriza ahí: `destino_de_rol` repone
+# `sirius:implement-requested` para el implementador, que
+# `mirror_projection.py` proyecta como PLANNED -no ACTIVE-; y si el ciclo real
+# avanza deprisa (o esta reflexión se ejecuta tarde), el espejo puede llegar a
+# proyectar DELIVERED sin que ninguna pasada observara el ACTIVE intermedio.
+# Antes de esta corrección, ambas ramas rechazaban el `WorkItem` detenido como
+# "hacia atrás" para siempre.
+
+
+def test_reanudacion_que_aterriza_en_planned_reactiva_sin_camino_de_fase() -> None:
+    store = InMemoryWorkEngineStore()
+    _work_item_activo(store)
+    parado = store.fail_work_item_safely(_WORK_ID, diagnostico="motivo", now=_AHORA)
+    assert parado.estado is WorkItemState.FAILED_SAFELY
+    assert parado.fase is WorkItemPhase.PREPARAR
+
+    # El propietario reanudó al implementador: `destino_de_rol` repone
+    # `sirius:implement-requested`, que el espejo proyecta como PLANNED/PREPARAR.
+    espejo = _espejo(estado=WorkItemState.PLANNED, fase=WorkItemPhase.PREPARAR)
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert tuple(paso.kind for paso in resultado.pasos) == (PASO_REACTIVADO,)
+    assert resultado.divergencia is None
+
+    aplicados = aplicar_pasos(store, _WORK_ID, resultado.pasos, now=_AHORA)
+    final = aplicados[-1]
+    assert final.estado is WorkItemState.ACTIVE
+    assert final.fase is WorkItemPhase.PREPARAR
+
+    # Idempotencia (regla 5): una segunda pasada sobre el motor ya reactivado
+    # no añade ningún suceso -``pasos == ()``-. No exige ``divergencia is
+    # None``: el motor, tras reactivarse, es genuinamente ACTIVE, y ACTIVE ya
+    # no es "exactamente el objetivo" que sigue siendo PLANNED
+    # (`test_etiqueta_planned_no_toca_nada_porque_el_motor_ya_esta_activo`
+    # cubre esa misma regla para un motor que nunca se paró); esto no reabre
+    # CODEX-001 porque no hay suceso de más -la reactivación ya ocurrió una
+    # sola vez, en la primera pasada-.
+    motor_reactivado = store.get_work_item(_WORK_ID)
+    assert motor_reactivado is not None
+    segundo = reflejar_desenlace(motor_reactivado, espejo, _episodio())
+    assert segundo.pasos == ()
+
+
+def test_etiqueta_planned_sigue_hacia_atras_si_el_motor_nunca_paro() -> None:
+    """Sin una reanudación real de por medio -el motor sigue ACTIVE, nunca se
+    paró-, un espejo PLANNED sigue siendo "hacia atrás": CODEX-001 no debe
+    convertir cualquier retroceso ordinario a PLANNED en permiso para
+    reactivar.
+    """
+    store = InMemoryWorkEngineStore()
+    motor = _work_item_activo(store)
+    espejo = _espejo(estado=WorkItemState.PLANNED, fase=WorkItemPhase.PREPARAR)
+
+    resultado = reflejar_desenlace(motor, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+    assert "no hay camino hacia delante" in resultado.divergencia
+
+
+def test_reanudacion_que_aterriza_en_delivered_reactiva_y_camina_hasta_entregar() -> None:
+    """El ciclo real puede llegar hasta `sirius:completed` sin que ninguna
+    pasada de reflejo observara el ACTIVE intermedio -por ejemplo, si
+    `sirius-reflejar` no corrió entre la reanudación y el cierre real de la
+    incidencia-. El motor sigue detenido (FAILED_SAFELY), pero el espejo ya
+    proyecta DELIVERED directamente.
+    """
+    store = InMemoryWorkEngineStore()
+    _work_item_activo(store)
+    en_comprobar = store.begin_work_item_execution(_WORK_ID, now=_AHORA)
+    en_comprobar = store.begin_work_item_check(_WORK_ID, now=_AHORA)
+    parado = store.fail_work_item_safely(_WORK_ID, diagnostico="motivo", now=_AHORA)
+    assert parado.estado is WorkItemState.FAILED_SAFELY
+    assert parado.fase is en_comprobar.fase is WorkItemPhase.COMPROBAR
+
+    espejo = _espejo(estado=WorkItemState.DELIVERED, fase=None, head_sha="deadbeef1234")
+    resultado = reflejar_desenlace(parado, espejo, _episodio(numero_incidencia=508))
+
+    assert tuple(paso.kind for paso in resultado.pasos) == (
+        PASO_REACTIVADO,
+        PASO_REVISION_INICIADA,
+        PASO_REVISION_APROBADA,
+        PASO_ENTREGADO,
+    )
+    assert resultado.divergencia is None
+    paso_entrega = resultado.pasos[-1]
+    assert paso_entrega.resultado == {"numero_incidencia": 508, "merge_sha": "deadbeef1234"}
+
+    aplicados = aplicar_pasos(store, _WORK_ID, resultado.pasos, now=_AHORA)
+    final = aplicados[-1]
+    assert final.estado is WorkItemState.DELIVERED
+
+    # Idempotencia: segunda pasada sobre el motor ya entregado.
+    motor_entregado = store.get_work_item(_WORK_ID)
+    assert motor_entregado is not None
+    segundo = reflejar_desenlace(motor_entregado, espejo, _episodio(numero_incidencia=508))
+    assert segundo.pasos == ()
+    assert segundo.divergencia is None
 
 
 # --- Sección D: contradicción / sin etiqueta --------------------------------
