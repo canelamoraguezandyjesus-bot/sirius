@@ -10,6 +10,18 @@ independiente de una PR de Sirius 0.1 ya existente.
   rama y PR ya existentes (haz `git fetch`/`checkout` de esa rama, no crees
   una nueva). No amplíes el alcance ni toques nada que no esté señalado en una
   observación.
+- Actualizar lo que **depende** de tu corrección no es ampliar el alcance: si
+  tu corrección cambia código, pruebas o cifras, actualiza en el mismo commit
+  el ADR de la incidencia y toda evidencia que describa lo que has cambiado
+  (algoritmo, recuentos de pruebas, salidas citadas), salvo que los límites de
+  corrección de la observación lo prohíban explícitamente. Un ADR que sigue
+  describiendo el código de antes de tu corrección es un defecto nuevo que la
+  siguiente ronda encontrará (ADR-135; bitácora del ciclo, entradas 27-28).
+- Toda evidencia que cites (recuentos, duraciones, salidas de comandos) debe
+  ser salida recién capturada del comando real sobre el árbol actual de la
+  rama. Nunca edites una cifra a mano dentro de una captura vieja. Si por un
+  motivo legítimo reutilizas una captura anterior, dilo explícitamente donde
+  la cites.
 - Puedes corregir: defectos de implementación, pruebas insuficientes, lint,
   tipos, imports, errores deterministas de CI y migraciones aditivas o
   reversibles dentro del diseño ya aprobado.
