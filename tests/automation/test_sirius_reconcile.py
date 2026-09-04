@@ -680,7 +680,12 @@ def test_recon_stuck_007_el_reconciliador_esta_programado_y_sigue_siendo_manual(
     assert "schedule" in disparo, "sin `schedule:` la detección sigue dependiendo de un humano"
     assert "workflow_dispatch" in disparo, "quitar el disparo manual sería una regresión"
     crons = [e["cron"] for e in disparo["schedule"]]
-    assert crons == ["17 */6 * * *"], crons
+    # Reanclado a conciencia con ADR-139: cada hora activa (00 y 04-23) al
+    # minuto :17, saltando la ventana de tranquilidad del contador (03:24
+    # menos 170 min). Lista explícita porque el lector de crones del motor
+    # no entiende rangos; el porqué, con los dos rojos vistos fallar, en el
+    # propio ADR-139.
+    assert crons == ["17 0,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23 * * *"], crons
     # Y sigue sin poder fusionar ni iniciar bloques: la excepción del contrato
     # v1.6 §9.1 se apoya en que este workflow NO es el motor del flujo.
     permisos = doc["permissions"]
