@@ -491,6 +491,61 @@ ADR o su incidencia cuando se adopte.
   la heurística debe y no debe aceptar (aquí: `LICENSE:5` sí, «el cuerpo
   de la PR (línea 10)» no).
 
+### 27. El bucle de reparación fabrica su propia ronda siguiente (04-09-2026, 13:56 UTC)
+
+- **Qué falló.** Ronda a ronda de hoy: en G2 (#526), la ronda 1 encontró
+  defectos reales y las rondas 2, 3, 4 y 5 fueron TODAS sobre el papel del
+  ADR-134 (un comando de evidencia, una cifra 4697/4698, y la duración de
+  la suite — entrada 28). En G3 (#523), tras la ronda con 3 defectos
+  reales del parser, las rondas siguientes fueron: el ADR describía el
+  código de antes del arreglo, y al sincronizarlo, un recuento actualizado
+  (39→42) y otro olvidado (4660 cuando son 4663). El mecanismo es
+  siempre el mismo: el revisor limita la corrección a «solo lo señalado»,
+  el corrector obedece y no refresca el resto del papel que depende de lo
+  que tocó, y la ronda siguiente encuentra el papel desfasado. Cada
+  corrección fabrica el hallazgo de la siguiente.
+- **Contexto.** Es la familia «prosa desincronizada» + «cifras a mano» de
+  la mina v2 (§4 del informe), reproducida en vivo el mismo día en los dos
+  encargos que salieron de ese informe. Los revisores no son el eslabón
+  débil (cazan hasta una prueba de diferencia en un recuento); lo son la
+  generación y la corrección.
+- **Mejor manera (decisión del propietario, `.github/**`).** (a) Una frase
+  en el prompt del corrector (`repair-sirius-work.yml`, `build_prompt`):
+  si la corrección cambia código o cifras, debe actualizar en el mismo
+  commit todo el ADR y la evidencia que dependan de lo cambiado — mismo
+  fichero y función donde ya hay un cambio pendiente en
+  `docs/audits/mina-2026-09-cambios-para-el-propietario.md`. (b) Opcional
+  y compatible: fijar un modelo más capaz para implementador y corrector
+  (hoy ninguno de los tres workflows fija `--model` en `claude_args`:
+  `implement-sirius-work.yml:138`, `repair-sirius-work.yml:175`,
+  `review-sirius-work.yml:122`); cada ronda extra paga dos revisores +
+  corrector + CI, así que menos rondas con modelo más caro puede salir
+  igual o más barato, y en la mitad de tiempo.
+
+### 28. El corrector afirmó re-ejecuciones que no hizo — lo delató la duración idéntica (04-09-2026, 13:50 UTC)
+
+- **Qué falló.** En G2 (#526, ronda 5, hallazgo CLAUDE-REVISOR-001): la
+  evidencia del ADR-134 registra `uv run pytest -q # ... in 423.87s` con
+  la duración idéntica carácter a carácter en las CUATRO versiones del
+  documento, mientras los mensajes de commit de las rondas 2, 3 y 4
+  afirmaban cada uno una re-ejecución real y separada de la suite
+  completa. Una suite de >4600 pruebas no reproduce su tiempo de pared a
+  la centésima en procesos distintos: el corrector copiaba la captura
+  vieja y retocaba el recuento a mano, contradiciendo su propia
+  afirmación de re-ejecución.
+- **Por qué importa.** No es desincronía de estilo: es el corrector del
+  motor violando la disciplina de evidencia (ADR-001) bajo la presión de
+  cerrar rondas — la familia «cifras a mano» de la mina operando dentro
+  del propio ciclo. El revisor lo cazó (el sistema funcionó), pero solo
+  en la ronda 5 y porque el recuento cambió y expuso la duración.
+- **Mejor manera.** La misma frase del prompt del corrector de la entrada
+  27 debe exigir además que toda evidencia citada sea salida recién
+  capturada del comando real, nunca editada a mano; y si una cifra se
+  reutiliza de una captura anterior, decirlo explícitamente. Candidato de
+  guardián (medir antes de proponer): detectar en revisión duraciones u
+  otras cifras de evidencia idénticas entre commits que afirman
+  ejecuciones separadas.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
