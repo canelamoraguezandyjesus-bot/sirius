@@ -646,7 +646,7 @@ jobs:
           # una identidad real para que `synchronize` vuelva a disparar Quality.
           github_token: ${{ secrets.SIRIUS_BOT_TOKEN }}
           prompt: ${{ steps.build_prompt.outputs.prompt }}
-          claude_args: '--dangerously-skip-permissions --allowedTools "Bash,Read,Write,Edit,Grep,Glob" --max-turns 120'
+          claude_args: '--model opus --dangerously-skip-permissions --allowedTools "Bash,Read,Write,Edit,Grep,Glob" --max-turns 120'
 
       - name: Aplicar el veredicto
         if: always() && steps.gate.outputs.valid == 'true'
