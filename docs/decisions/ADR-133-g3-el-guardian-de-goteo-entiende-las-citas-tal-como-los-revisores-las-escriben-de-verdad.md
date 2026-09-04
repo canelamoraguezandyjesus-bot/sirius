@@ -1,4 +1,4 @@
-# ADR-132 — G3: el guardian de goteo entiende las citas tal como los revisores las escriben de verdad
+# ADR-133 — G3: el guardian de goteo entiende las citas tal como los revisores las escriben de verdad
 
 - Estado: PROPUESTO
 - Fecha: 2026-09-04
