@@ -67,6 +67,109 @@ def test_parse_archivo_location_con_valor_vacio() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Los seis campos reales de la ola de criticidad (incidencia #523, G3): la
+# mina midió que solo el caso 5 se entendía con el parser viejo. Cada uno de
+# estos casos se vio FALLAR contra `_LOCATION_LINE_RE` antes del cambio
+# (ADR-001); los comentarios documentan qué devolvía entonces.
+# --------------------------------------------------------------------------- #
+
+
+def test_caso_1_sufijo_entre_parentesis_con_funcion_y_lineas_con_virgulilla() -> None:
+    # Antes: (texto completo, None). CLAUDE-REV-R2-001 de #520.
+    archivo = (
+        "src/sirius/presentation/knowledge_widget.py "
+        "(_handle_criticality_proposal_finished, ~líneas 766-805)"
+    )
+    assert parse_archivo_location(archivo) == (
+        "src/sirius/presentation/knowledge_widget.py",
+        766,
+    )
+
+
+def test_caso_2_rango_pegado_a_la_ruta_seguido_de_parentesis_con_funcion() -> None:
+    # Antes: (texto completo, None).
+    archivo = "src/sirius/presentation/knowledge_widget.py:1436-1449 (_set_controls_enabled)"
+    assert parse_archivo_location(archivo) == (
+        "src/sirius/presentation/knowledge_widget.py",
+        1436,
+    )
+
+
+def test_caso_3_ruta_sin_linea_sigue_sin_evaluarse() -> None:
+    # Ya funcionaba, y debe seguir igual: sin línea no hay evaluación mecánica.
+    archivo = "tests/unit/test_ollama_relevance_filter.py"
+    assert parse_archivo_location(archivo) == (archivo, None)
+
+
+def test_caso_4_ruta_de_un_adr_sin_linea_sigue_sin_evaluarse() -> None:
+    # Ya funcionaba, y debe seguir igual.
+    archivo = (
+        "docs/decisions/ADR-128-m19b-el-rescate-rf-25-rf-26-y-la-prioridad-de-g12-por-criticidad.md"
+    )
+    assert parse_archivo_location(archivo) == (archivo, None)
+
+
+def test_caso_5_ruta_limpia_con_linea_ya_funcionaba_y_no_cambia() -> None:
+    assert parse_archivo_location("src/sirius/domain/relevance.py:363") == (
+        "src/sirius/domain/relevance.py",
+        363,
+    )
+
+
+def test_caso_6_numero_pegado_a_la_ruta_seguido_de_en_sha() -> None:
+    # Antes: (texto completo, None).
+    archivo = "src/sirius/presentation/knowledge_widget.py:1490 en 6899ecf"
+    assert parse_archivo_location(archivo) == (
+        "src/sirius/presentation/knowledge_widget.py",
+        1490,
+    )
+
+
+def test_adversario_texto_sin_ninguna_ruta_reconocible() -> None:
+    # Sin ningún carácter de ruta reconocible (ni "/" ni "."): el texto
+    # completo es la única ruta razonable, igual que hoy sin sufijo de línea.
+    archivo = "el cuerpo de la PR"
+    assert parse_archivo_location(archivo) == (archivo, None)
+
+
+def test_adversario_dos_numero_pegado_a_la_ruta_gana_al_parentesis() -> None:
+    # Cuando la ruta lleva ":NNN" Y además el paréntesis dice "líneas MMM",
+    # gana el ":NNN" pegado a la ruta (regla (1) antes que la (2)).
+    archivo = "src/x.py:50 (líneas 80)"
+    assert parse_archivo_location(archivo) == ("src/x.py", 50)
+
+
+# --------------------------------------------------------------------------- #
+# Ronda 2 de la incidencia #523: hallazgos CLAUDE-R2-001, CODEX-001 y
+# CODEX-002 sobre el mismo bloque, byte-idéntico desde la ronda 1.
+# --------------------------------------------------------------------------- #
+
+
+def test_ronda2_fichero_raiz_sin_extension_con_linea_pegada() -> None:
+    # Antes: ("LICENSE:5", None) -"LICENSE" no tiene "/" ni ".", así que no
+    # se reconocía como ruta y el sufijo ":5" nunca se evaluaba. El parser
+    # previo a esta PR (`_LOCATION_LINE_RE`) sí resolvía este caso.
+    # CLAUDE-R2-001, CODEX-002 (incidencia #523, ronda 2).
+    assert parse_archivo_location("LICENSE:5") == ("LICENSE", 5)
+
+
+def test_ronda2_fichero_raiz_sin_extension_con_rango_y_texto_detras() -> None:
+    # El mismo formato que ya se acepta para rutas con "/" o ".": rango y
+    # texto arbitrario detrás del número.
+    assert parse_archivo_location("LICENSE:5-10 en abc1234") == ("LICENSE", 5)
+
+
+def test_ronda2_prosa_sin_ninguna_ruta_reconocible_no_marca_linea() -> None:
+    # Antes: ("el cuerpo de la PR (línea 10)", 10) -la búsqueda en prosa se
+    # aplicaba sobre el texto completo aunque ningún prefijo fuera una ruta
+    # reconocible, así que `evaluate_finding` podía marcar POSIBLE_GOTEO sin
+    # haber comparado nunca un fichero real. CODEX-001 (incidencia #523,
+    # ronda 2): sin ruta reconocible, no se extrae ninguna línea.
+    archivo = "el cuerpo de la PR (línea 10)"
+    assert parse_archivo_location(archivo) == (archivo, None)
+
+
+# --------------------------------------------------------------------------- #
 # Los cinco escenarios exigidos por la incidencia #496
 # --------------------------------------------------------------------------- #
 

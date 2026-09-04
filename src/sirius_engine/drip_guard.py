@@ -59,12 +59,34 @@ MENSAJE_POSIBLE_GOTEO = (
 #: cambió" (regla (c) de la incidencia #496).
 DEFAULT_TIME_BUDGET_SECONDS = 120.0
 
-# Sufijo de línea (o rango) que el recolector añade al `archivo` de un
-# hallazgo: `scripts/x.py:120`, `scripts/x.py:120-134`. Solo se usa el
-# primer número: es el que ancla la comparación mecánica de §3.1 del informe
-# de la mina (el rango, cuando aparece, describe un tramo citado a mano, no
-# un hunk).
-_LOCATION_LINE_RE = re.compile(r"^(.*?):(\d+)(?:-\d+)?$")
+# Prefijo de `archivo` que parece una ruta de fichero del repositorio: letras,
+# dígitos, `/`, `.`, `_`, `-`. No es suficiente por sí solo -"el" también
+# encaja-, así que solo se acepta como ruta reconocible cuando además
+# contiene un separador de directorio o una extensión (incidencia #523, G3),
+# o cuando va seguido inmediatamente de `:NNN` (incidencia #523, ronda 2:
+# CLAUDE-R2-001/CODEX-002): un fichero real del repositorio en la raíz sin
+# extensión, como `LICENSE`, no tiene ni "/" ni ".", pero "`LICENSE:5`" es un
+# formato `ruta:línea` inequívoco -el mismo que ya se acepta para rutas con
+# separador- y no una cita en prosa. El adorno que los revisores añaden
+# alrededor de la ruta real (nombre de función entre paréntesis, "en <sha>",
+# "líneas NNN-MMM") nunca usa esos caracteres, así que el prefijo se detiene
+# exactamente donde termina la ruta.
+_RUTA_PREFIX_RE = re.compile(r"^[A-Za-z0-9/._-]+")
+
+# Sufijo de línea (o rango) pegado directamente a una ruta reconocible:
+# `scripts/x.py:120`, `scripts/x.py:120-134`, y con texto arbitrario detrás
+# ("en <sha>", un nombre de función entre paréntesis). Solo se usa el primer
+# número: es el que ancla la comparación mecánica de §3.1 del informe de la
+# mina (el rango o el sha, cuando aparecen, describen un tramo o un commit
+# citados a mano, no un hunk).
+_LOCATION_SUFFIX_RE = re.compile(r"^:(\d+)(?:-\d+)?")
+
+# Cita en prosa de una línea cuando no va pegada a la ruta con `:NNN`, tal
+# como los revisores la escriben dentro de un paréntesis junto al nombre de
+# la función: "línea 723", "líneas ~766-805". El signo `~` (aproximación) se
+# tolera antes del número; el que preceda a la palabra "línea(s)" no importa,
+# porque la búsqueda no ancla el inicio del texto.
+_LOCATION_PROSE_RE = re.compile(r"l[ií]neas?\s*~?\s*(\d+)", re.IGNORECASE)
 
 
 class DripVerdict(Enum):
@@ -105,16 +127,57 @@ CompareFetcher = Callable[[str, str, str, str], "FileCompareResult | None"]
 def parse_archivo_location(archivo: object) -> tuple[str, int | None]:
     """Separa el ``archivo`` de un hallazgo en (ruta, línea).
 
-    Sin sufijo de línea reconocible, la línea es ``None`` y la ruta es el
-    texto completo tal cual -el nivel mecánico de §3.1 del informe de la mina
-    no es aplicable sin una línea concreta, así que el llamador decide qué
-    hacer con esa ausencia.
+    Los revisores adornan el campo ``archivo`` de formas que la lectura
+    mecánica de §3.1 del informe de la mina no anticipaba: un sufijo entre
+    paréntesis con el nombre de la función, "en <sha>" detrás del número, o
+    la línea citada en prosa ("líneas ~766-805") en vez de pegada a la ruta.
+    Regla conservadora, en este orden (incidencia #523, G3):
+
+    1. Si tras una ruta reconocible hay ``:NNN`` (con o sin ``-MMM`` y con o
+       sin texto detrás), la línea es ``NNN``. Un prefijo sin ``/`` ni ``.``
+       cuenta como ruta reconocible precisamente cuando le sigue ese ``:NNN``
+       pegado (p.ej. ``LICENSE:5``): el formato ``ruta:línea`` es la señal,
+       no la presencia de un separador de directorio o una extensión.
+    2. Si no, si en el resto del texto aparece ``línea(s) ~?NNN`` **y ya hay
+       una ruta reconocible** (por ``/``, ``.`` o el ``:NNN`` pegado de la
+       regla 1), la línea es ``NNN``. Sin una ruta reconocible, una mención
+       de "línea NNN" en prosa suelta no ancla ninguna comparación mecánica
+       -el texto no identifica ningún fichero del repositorio- así que no se
+       extrae ningún número (incidencia #523, ronda 2: CODEX-001).
+    3. Si no hay número reconocible, la línea es ``None`` -el nivel mecánico
+       de §3.1 no es aplicable sin una línea concreta, así que el llamador
+       decide qué hacer con esa ausencia- y la ruta es la ruta reconocible
+       si la hay, o el texto completo si no la hay.
+
+    Esta función no valida la ruta contra el disco: el ``fetch`` inyectado ya
+    resuelve a ``SIN_INFORMACION`` si la ruta no existe en la comparación.
     """
     texto = str(archivo or "").strip()
-    match = _LOCATION_LINE_RE.match(texto)
-    if not match:
+    if not texto:
+        return "", None
+
+    ruta_reconocible: str | None = None
+    resto = texto
+    prefijo = _RUTA_PREFIX_RE.match(texto)
+    if prefijo:
+        candidato = prefijo.group(0)
+        candidato_resto = texto[len(candidato) :]
+        sufijo_pegado = _LOCATION_SUFFIX_RE.match(candidato_resto)
+        if "/" in candidato or "." in candidato or sufijo_pegado:
+            ruta_reconocible = candidato
+            resto = candidato_resto
+
+    if ruta_reconocible is None:
         return texto, None
-    return match.group(1), int(match.group(2))
+
+    sufijo = _LOCATION_SUFFIX_RE.match(resto)
+    if sufijo:
+        return ruta_reconocible, int(sufijo.group(1))
+
+    prosa = _LOCATION_PROSE_RE.search(resto)
+    if prosa:
+        return ruta_reconocible, int(prosa.group(1))
+    return ruta_reconocible, None
 
 
 _HUNK_HEADER_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
