@@ -1,0 +1,176 @@
+# EL QUINTO CABLE: C1b (ADR-137, ejecuta la recomendación de ADR-136).
+# `sirius-reflejar` (C1, incidencia #529) existe desde el 04-09-2026, pero sin
+# este workflow nadie lo ejecuta solo: el motor despacha y no vuelve a
+# enterarse de nada, y cada pasada de `sirius-racha` escribe `no_comparable`.
+#
+# ADR-136 recomienda llamarlo «justo después de cada cambio de etiqueta que ya
+# aplican advance-sirius-after-quality.yml, review-sirius-work.yml,
+# repair-sirius-work.yml y complete-sirius-after-merge.yml». ADR-137 decide el
+# CÓMO: un workflow PROPIO disparado por `workflow_run` al completarse esos
+# cuatro, en vez de pasos incrustados en cada uno. Tres razones, en el ADR:
+# es puramente aditivo (los cuatro workflows críticos no se tocan), concentra
+# los permisos de escritura sobre la rama de memoria en un único sitio, y
+# reutiliza VERBATIM el patrón ya probado de contador-siete-dias.yml (worktree
+# de la rama de memoria, pasada, confirmación con `if: always()`).
+#
+# La pasada de las 00:04 UTC es la red de seguridad diaria. NO puede correr
+# pegada al contador (03:24): su guardián de hora exige 170 minutos de
+# tranquilidad sin disparos programados por delante (tolerancia = max
+# timeout-minutes x 2; test_la_hora_del_contador_deja_pasar_la_ventana_de_
+# tolerancia), porque etiquetas más frescas que la tolerancia harían declarar
+# NO_COMPARABLE cada día, en verde. A las 00:04 quedan 200 min de margen y el
+# almacén del día llega reflejado igualmente (los workflow_run cubren el
+# tiempo real; esta red solo recoge lo que se hubiera perdido).
+# `workflow_dispatch` permite la pasada manual del propietario.
+#
+# `sirius-reflejar` devuelve 0 tanto si aplicó transiciones como si no
+# (reflect_cli.py): su verde significa «la pasada se hizo», nunca «hubo algo
+# que reflejar». Un WorkItem cuyo espejo no se puede leer se declara y no
+# corta a los demás (mismo contrato que la pasada del contador, ADR-084).
+
+name: Reflejar el desenlace de GitHub
+
+on:
+  workflow_run:
+    workflows:
+      - "Advance Sirius after Quality"
+      - "Revisar bloque Sirius"
+      - "Corregir bloque Sirius"
+      - "Complete Sirius after merge"
+    types: [completed]
+  schedule:
+    # Red de seguridad diaria. 200 min antes del contador (03:24 UTC): su
+    # guardián exige >=170 de tranquilidad. Si se cambia la hora del
+    # contador o algún timeout-minutes, rederivar (ver cabecera).
+    - cron: '4 0 * * *'
+  workflow_dispatch:
+
+concurrency:
+  # MISMO grupo que el motor, el despachador y el contador, a propósito: el
+  # diario del motor vive en una rama y dos escritores concurrentes se
+  # pisarían el push. La cola serializa; `cancel-in-progress: false` porque
+  # cada pasada pendiente puede tener algo que reflejar.
+  group: motor-sirius
+  cancel-in-progress: false
+
+# `contents: write` para confirmar el diario en la rama de memoria (ADR-083,
+# ADR-093). Sin `issues: write`: este comando solo LEE el espejo por `gh`.
+permissions:
+  contents: write
+
+jobs:
+  reflejo:
+    name: Reflejar los desenlaces en el almacén
+    runs-on: ubuntu-latest
+    # workflow_run también se dispara por runs cancelados o saltados del
+    # workflow observado; reflejar igualmente es inocuo (idempotente, C1) y
+    # más simple que adivinar qué conclusiones traen cambio de etiqueta.
+    timeout-minutes: 15
+    env:
+      RAMA_MEMORIA: estado-del-motor
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # La pasada confirma el diario en la rama de memoria, así que
+          # necesita credenciales que persistan para el `git push` final.
+          persist-credentials: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+          # El paquete exige `>=3.14,<3.15`. Con el `python3` del sistema
+          # (3.12 en `ubuntu-latest`) el comando no arranca: familia de H-13.
+          python-version: "3.14.6"
+
+      - name: Sync environment
+        run: uv sync --locked --all-groups
+
+      - name: Traer la memoria del motor
+        env:
+          # `env:` de PASO: aquí `runner` SÍ está resuelto. Se declara en cada
+          # paso que la use, y no por `$GITHUB_ENV`, por la misma razón que en
+          # contador-siete-dias.yml: el paso que confirma lleva `if: always()`.
+          MEMORIA: ${{ runner.temp }}/memoria
+        run: |
+          set -uo pipefail
+          git config user.name "sirius-motor"
+          git config user.email "canelamoraguezandyjesus@gmail.com"
+
+          # Se ramifica por el CÓDIGO de `ls-remote`, no por su signo: 2 es "el
+          # remoto contestó y la rama no está" y 128 es "no pude hablar con el
+          # remoto". Colapsarlos crearía una rama huérfana VACÍA por un corte
+          # de red, y el reflejo escribiría sobre un diario en blanco.
+          codigo=0
+          git ls-remote --exit-code --heads origin "$RAMA_MEMORIA" >/dev/null || codigo=$?
+          case "$codigo" in
+            0)
+              git fetch --depth=1 origin "$RAMA_MEMORIA"
+              git worktree add "$MEMORIA" "origin/$RAMA_MEMORIA"
+              ;;
+            2)
+              echo "La rama $RAMA_MEMORIA no existe todavía; no hay diario que reflejar."
+              exit 0
+              ;;
+            *)
+              echo "::error::no se pudo consultar el remoto (ls-remote salió con $codigo)." >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Reflejar
+        env:
+          # `gh` es quien lee el espejo (`GitHubCliMirrorReader`), y sin token
+          # no lee nada. Una lectura caída no rompe la pasada —el comando la
+          # declara y sigue— así que un token ausente daría una pasada VERDE
+          # que no refleja nada: mismo modo de fallo silencioso que la pasada
+          # del contador, documentado allí.
+          GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
+          SIRIUS_MOTOR_DIARIO: ${{ runner.temp }}/memoria/diario.jsonl
+          MEMORIA: ${{ runner.temp }}/memoria
+        run: |
+          set -uo pipefail
+          if [ ! -d "$MEMORIA" ]; then
+            echo "No hay memoria del motor; nada que reflejar."
+            exit 0
+          fi
+          # El diario y su hermano de despacho viven en la RAMA DE MEMORIA
+          # (ADR-083, ADR-093), no en main: mismas razones que el contador.
+          uv run sirius-reflejar
+
+      - name: Confirmar el diario
+        # Se ejecuta aunque el reflejo falle: si llegó a aplicar transiciones
+        # y luego murió, esos sucesos ya están escritos y perderlos sería
+        # peor que el propio fallo. Una pasada sin sucesos no confirma nada.
+        if: always()
+        env:
+          MEMORIA: ${{ runner.temp }}/memoria
+        run: |
+          set -uo pipefail
+          if [ ! -d "$MEMORIA" ]; then
+            echo "No se llegó a preparar la memoria; no hay nada que confirmar."
+            exit 0
+          fi
+          cd "$MEMORIA"
+
+          # Se mira el CÓDIGO de `git status`, no su salida: una salida vacía
+          # porque el comando reventó se leería como "no hay sucesos nuevos" y
+          # este paso saldría en VERDE tirando el reflejo de la pasada.
+          if ! estado=$(git status --porcelain); then
+            echo "::error::no se pudo leer el estado de la memoria; esto NO es una pasada sin sucesos." >&2
+            exit 1
+          fi
+          if [ -z "$estado" ]; then
+            echo "El reflejo no aplicó ninguna transición nueva."
+            echo "No es un fallo: espejos sin cambios, divergencias ya observadas o"
+            echo "WorkItems terminales no producen sucesos, a propósito (idempotencia, C1)."
+            exit 0
+          fi
+          git add -A
+          git commit -m "Reflejo del desenlace del $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          # Sin reintento ni rebase: el grupo de concurrencia garantiza que no
+          # hay otra invocación empujando a la vez. Si esto falla, esa
+          # garantía no se cumplió, y eso hay que verlo en rojo.
+          git push origin "HEAD:refs/heads/$RAMA_MEMORIA"
