@@ -608,6 +608,51 @@ ADR o su incidencia cuando se adopte.
   propietario, cauce ADR-002 opción 2) conviven bien con el motor si se
   hacen ANTES de poner al día las ramas en vuelo, no después.
 
+### 31. C1 completo: seis rondas, y de qué estaban hechas (04-09-2026, 17:23-22:03 UTC)
+
+- **El ciclo.** Orden C1 (`sirius-reflejar`, incidencia #529, ADR-136)
+  despachada a las 17:23 sobre `main` fce1f6b; implementada en 31 minutos;
+  seis rondas de revisión hasta `ready-for-merge` (22:01) y fusión
+  (`9e01e06`, 22:03). PR #524→#530: +3303 líneas, 0 borradas, alcance
+  impecable (nada de `.github/`, `src/sirius/` ni `scripts/`; cero
+  sucesos o puertos nuevos).
+- **De qué estaban hechas las rondas: UNA pregunta sin especificar.**
+  Todas las rondas fueron código real sobre la misma esquina — ¿cuándo
+  puede el motor dar por levantada una parada? (la semántica de
+  `continua`): R1 las reanudaciones ni se contemplaban; R2 solo si el
+  reflejo pilla el espejo en ACTIVE; R3 generalizado pero permisivo de
+  más (cualquier cambio de etiqueta levantaba la parada); R4 los DOS
+  revisores por separado: el marcador se buscaba en todo el historial —
+  reanudada una vez, autorizada para siempre; R5 anclaje por épocas, un
+  borde pendiente; R6 el precheck no bloqueante excluido del ancla.
+  Convergencia real: gravedad 5→6→5→10→2→0.
+- **Mi parte (lección de órdenes, refuerza la entrada 26).** La orden
+  especificaba las reglas del reflejo (nunca atrás, nunca inventar,
+  idempotente) pero no decía NADA de las reanudaciones — la esquina que
+  costó cinco rondas, y que nos había mordido esa misma tarde con G3.
+  Regla: una orden que define comportamiento con paradas trae escritos
+  sus casos de «parada y vuelta». Dato para la palanca aplazada del
+  modelo: un implementador más capaz probablemente especifica esa
+  semántica en 1-2 rondas en vez de descubrirla a parches.
+- **ADR-135, primera medición: predicción sostenida.** Cero rondas de
+  solo-papel en todo C1 (predicción: 0-1 por encargo). El corrector
+  actualizó ADR-136 y su evidencia en el MISMO commit en todas las
+  rondas, con salidas recién capturadas — incluida una reconciliación
+  ejemplar de una cifra descuadrada (R3: `--collect-only` sobre los dos
+  heads históricos para localizar la errata en la ronda vieja en vez de
+  «corregir» la cifra buena). Queda un encargo más para cerrar la
+  medición.
+- **Las pérdidas de infraestructura no son rondas.** Dos vueltas del
+  contador se perdieron sin veredicto por fallos de los revisores (el
+  timeout de Codex a 1200 s en G3 por la tarde; aquí el revisor Claude
+  sin `reviewed_head_sha` en R6) y una corrección murió por tope de
+  turnos (el veredicto provisional hizo su trabajo: diagnóstico honesto,
+  `continua`, y el reintento salió a la primera). Receta que funcionó
+  las tres veces: relanzar el run verde de Quality del head — la ruta
+  «completa sin duplicar» el estado y repone la revisión. Candidata de
+  motor (deuda 12): reintento automático de la ronda ante fallo de
+  infraestructura del revisor, en vez de failed-safely + mano.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -639,3 +684,14 @@ ADR o su incidencia cuando se adopte.
     cada merge a `main` (3 rondas perdidas el 04-09, entrada 29):
     convenio candidato — citar recuentos por fichero del encargo, o
     marcar el total como «del árbol en <sha>».
+12. Fallos de infraestructura de los revisores (timeout de Codex a
+    1200 s; revisor Claude sin `reviewed_head_sha`) cuestan una vuelta
+    entera cada uno (entradas 29 y 31, tres el 04-09): candidato —
+    reintento automático de la ronda cuando la parada es de esa clase,
+    en vez de `failed-safely` + relanzamiento manual del run verde.
+13. C1b — el enganche de `sirius-reflejar` en los workflows (tras cada
+    cambio de etiqueta en advance/review/repair/complete/resume): es
+    `.github/**`, del propietario; los puntos exactos están documentados
+    en ADR-136. Hasta entonces el reflejo existe pero nadie lo ejecuta
+    solo. C2 (declarar `programacion` en `CLASES_CON_ESTADO_PROPIO`,
+    ADR-101) va después de observar al menos una pasada real.
