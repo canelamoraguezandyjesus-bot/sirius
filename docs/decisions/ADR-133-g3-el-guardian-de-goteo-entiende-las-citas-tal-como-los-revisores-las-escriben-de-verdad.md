@@ -75,18 +75,24 @@ de precedencia fija en `parse_archivo_location`
 (`src/sirius_engine/drip_guard.py`):
 
 1. `_RUTA_PREFIX_RE` (`^[A-Za-z0-9/._-]+`) captura el prefijo de caracteres
-   de ruta. Se acepta como "ruta reconocible" solo si ese prefijo contiene
-   `/` o `.` -evita que una palabra suelta sin ninguna pinta de ruta (`"el"`
-   de `"el cuerpo de la PR"`) se cuele como ruta.
+   de ruta. Se acepta como "ruta reconocible" si ese prefijo contiene `/` o
+   `.`, o -sin contener ninguno de los dos- si le sigue pegado `:NNN`
+   (`_LOCATION_SUFFIX_RE`): el formato `ruta:línea` es en sí mismo la señal
+   para ficheros raíz sin extensión (`LICENSE:5`), no solo el separador de
+   directorio o la extensión (CLAUDE-R2-001, CODEX-002, ronda 2). Evita que
+   una palabra suelta sin ninguna pinta de ruta (`"el"` de `"el cuerpo de la
+   PR"`) se cuele como ruta.
 2. Regla (1): si justo después de la ruta reconocible hay `_LOCATION_SUFFIX_RE`
    (`^:(\d+)(?:-\d+)?`), la línea es el primer número, sin importar qué
    texto venga después (paréntesis con función, `en <sha>`).
-3. Regla (2): si la regla (1) no encontró nada, se busca
-   `_LOCATION_PROSE_RE` (`l[ií]neas?\s*~?\s*(\d+)`, sin distinguir
-   mayúsculas) en el resto del texto (o en el texto completo si no hubo ruta
-   reconocible). El `~` es tolerado antes del número; como la búsqueda no
-   ancla el inicio, un `~` delante de la propia palabra "líneas" (como en
-   "~líneas 766-805") no rompe la coincidencia.
+3. Regla (2): si la regla (1) no encontró nada **y ya hay una ruta
+   reconocible**, se busca `_LOCATION_PROSE_RE` (`l[ií]neas?\s*~?\s*(\d+)`,
+   sin distinguir mayúsculas) en el resto del texto. Sin una ruta reconocible
+   previa, no se busca en prosa: una mención de "línea NNN" suelta en un
+   texto que no identifica ningún fichero del repositorio no ancla ninguna
+   comparación mecánica (CODEX-001, ronda 2). El `~` es tolerado antes del
+   número; como la búsqueda no ancla el inicio, un `~` delante de la propia
+   palabra "líneas" (como en "~líneas 766-805") no rompe la coincidencia.
 4. Regla (3): sin número por ninguna de las dos reglas, la línea es `None` y
    la ruta es la ruta reconocible si la hubo, o el texto completo si no la
    hubo -igual que el comportamiento original para ese caso.
@@ -139,7 +145,29 @@ resto del módulo (`evaluate_finding`, `annotate_observations*`,
    39 passed in 0.10s
    ```
 
-4. Mutaciones (ADR-001), ambas aplicadas y revertidas sobre el código ya
+4. Corrección de ronda 2 (CLAUDE-R2-001, CODEX-001, CODEX-002): tres pruebas
+   nuevas en `tests/engine/test_drip_guard.py` fijan el comportamiento
+   descrito arriba en la regla (1) y la regla (2), vistas FALLAR contra el
+   parser de la ronda 1 antes de esa corrección:
+
+   - `test_ronda2_fichero_raiz_sin_extension_con_linea_pegada`:
+     `parse_archivo_location("LICENSE:5") == ("LICENSE", 5)` -un fichero
+     raíz sin `/` ni `.` sí cuenta como ruta reconocible cuando le sigue
+     `:NNN` pegado.
+   - `test_ronda2_fichero_raiz_sin_extension_con_rango_y_texto_detras`:
+     mismo caso con rango y texto arbitrario detrás del número
+     (`"LICENSE:5-10 en abc1234"` → `("LICENSE", 5)`).
+   - `test_ronda2_prosa_sin_ninguna_ruta_reconocible_no_marca_linea`:
+     `parse_archivo_location("el cuerpo de la PR (línea 10)")` devuelve la
+     línea `None` -sin una ruta reconocible previa, la búsqueda en prosa de
+     la regla (2) no se aplica sobre el texto completo.
+
+   ```
+   $ uv run pytest tests/engine/test_drip_guard.py tests/automation/test_sirius_drip_guard_cli.py -q
+   42 passed in 0.15s
+   ```
+
+5. Mutaciones (ADR-001), ambas aplicadas y revertidas sobre el código ya
    corregido:
 
    - **Mutación 1** (revertir la regla (1) a la regex vieja, sobre el texto
@@ -163,7 +191,7 @@ resto del módulo (`evaluate_finding`, `annotate_observations*`,
      sigue en verde, así que la mutación no se camufla dentro de un fallo
      más amplio.
 
-5. Validaciones obligatorias completas sobre el árbol final:
+6. Validaciones obligatorias completas sobre el árbol final:
 
    ```
    $ uv run ruff format --check .   → 594 files already formatted
