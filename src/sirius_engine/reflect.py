@@ -43,14 +43,25 @@ Dos funciones, deliberadamente separadas:
    objetivo no es alcanzable caminando solo hacia delante -incluido el caso
    en que el motor ya está más adelante que lo que la incidencia proyecta-,
    no se toca nada; se devuelve el motivo. Única excepción: si el motor está
-   en FAILED_SAFELY o NEEDS_DECISION y el espejo deja de proyectar ese MISMO
+   en FAILED_SAFELY o NEEDS_DECISION, el espejo deja de proyectar ese MISMO
    estado detenido -sea cual sea el estado al que pase a apuntar (ACTIVE,
-   PLANNED o DELIVERED, los tres alcanzables tras una reanudación real)-, no
+   PLANNED o DELIVERED, los tres alcanzables tras una reanudación real)- Y
+   el historial de confianza lleva publicado alguno de los tres marcadores
+   que ``sirius_resume_on_command.sh:290-350`` escribe ANTES de reponer la
+   etiqueta (``sirius-resume-stop``, ``sirius-convergence-reset``,
+   ``sirius-restart-sin-pr``; ``espejo.reanudacion_publicada``), entonces no
    es "hacia atrás" -es una reanudación autoritativa ya registrada por el
-   propietario (``sirius_resume_on_command.sh``, CODEX-002/CODEX-001, PR
-   #530)-, así que primero se reactiva/resuelve la decisión con el puerto
-   existente que corresponda y el camino de fase se calcula igual que
-   siempre, desde ``work_item.fase`` sin tocar.
+   propietario (CODEX-002/CODEX-001, PR #530)-, así que primero se
+   reactiva/resuelve la decisión con el puerto existente que corresponda y
+   el camino de fase se calcula igual que siempre, desde ``work_item.fase``
+   sin tocar -salvo para ``sirius:implement-requested`` (el único disparador
+   que reanuda hacia PLANNED/PREPARAR sea cual sea la fase real en que se
+   paró el rol): si el camino hacia PREPARAR no existe porque el motor ya
+   estaba más adelante, se reactiva conservando la fase, sin caminarla
+   (CODEX-002, ronda 4, PR #530). Sin el marcador -etiqueta de parada
+   sustituida a mano o alterada por una transición parcial, sin que el
+   propietario escribiera `continua`- no hay reanudación: se conserva la
+   parada y se registra divergencia (CODEX-001, ronda 4, PR #530).
 4. **Nunca inventa.** El plan usa exclusivamente los puertos ya existentes
    del almacén, con exactamente los datos que el espejo trae (SHA de fusión,
    diagnóstico de fallo); si algo hiciera falta que el espejo no expone o que
@@ -212,22 +223,35 @@ def reflejar_desenlace(
     # tocaron al parar), así que el camino de fase se sigue calculando desde
     # ``work_item.fase`` tal cual, exactamente como si nunca hubiera parado.
     #
-    # Solo cuenta como reanudación cuando el espejo deja de proyectar el
-    # MISMO estado detenido -si sigue en el mismo, es la idempotencia de esa
-    # rama la que decide, no una reanudación-. Y solo se dispara desde
+    # Solo cuenta como reanudación cuando se cumplen DOS condiciones, no una:
+    # el espejo deja de proyectar el MISMO estado detenido -si sigue en el
+    # mismo, es la idempotencia de esa rama la que decide, no una
+    # reanudación- Y el historial de confianza lleva publicado alguno de los
+    # tres marcadores que ese guion escribe ANTES de reponer la etiqueta
+    # (``espejo.reanudacion_publicada``). La primera condición sola no basta:
+    # una etiqueta de parada sustituida a mano, o alterada por una transición
+    # parcial sin que el propietario escribiera `continua`, también deja de
+    # proyectar el mismo estado detenido, y sin el marcador no hay ninguna
+    # orden real que autorice a tratar eso como reanudación (CODEX-001, ronda
+    # 4, PR #530) -se conserva la parada y se registra divergencia, igual que
+    # si el espejo no hubiera cambiado nada-. Y solo se dispara desde
     # FAILED_SAFELY/NEEDS_DECISION: un `WorkItem` que ya está ACTIVE (nunca se
     # paró) sigue las reglas de siempre en cada rama, sin este paso extra -no
     # convierte ningún retroceso ordinario a PLANNED, ni ningún desenlace
     # terminal observado sin más, en permiso para reactivar-.
     pasos_reanudacion: tuple[PasoReflejo, ...] = ()
     estado_efectivo = work_item.estado
-    if work_item.estado is WorkItemState.FAILED_SAFELY and espejo.estado is not (
-        WorkItemState.FAILED_SAFELY
+    if (
+        work_item.estado is WorkItemState.FAILED_SAFELY
+        and espejo.estado is not WorkItemState.FAILED_SAFELY
+        and espejo.reanudacion_publicada
     ):
         pasos_reanudacion = (PasoReflejo(kind=PASO_REACTIVADO),)
         estado_efectivo = WorkItemState.ACTIVE
-    elif work_item.estado is WorkItemState.NEEDS_DECISION and espejo.estado is not (
-        WorkItemState.NEEDS_DECISION
+    elif (
+        work_item.estado is WorkItemState.NEEDS_DECISION
+        and espejo.estado is not WorkItemState.NEEDS_DECISION
+        and espejo.reanudacion_publicada
     ):
         pasos_reanudacion = (
             PasoReflejo(kind=PASO_DECISION_RESUELTA, resultado={"continuar": True}),
@@ -263,7 +287,17 @@ def reflejar_desenlace(
         )
         camino = _camino_de_fase(work_item.fase, espejo.fase)
         if camino is None:
-            return ResultadoReflejo(pasos=(), divergencia=_divergencia_atras(work_item, espejo))
+            # `sirius:implement-requested` -el único disparador que reanuda
+            # hacia PLANNED- siempre proyecta PREPARAR sea cual sea la fase
+            # real en la que se paró el rol (`destino_de_rol` en
+            # `sirius_resume_on_command.sh` no lee ni repone fase, solo
+            # rol -> etiqueta): es el disparador de reanudación, no una orden
+            # de retroceder de fase. Si el motor ya estaba más adelante que
+            # PREPARAR cuando se paró, ``reactivate_work_item`` no toca
+            # ``fase`` y el resultado correcto es conservarla tal cual -no
+            # caminar hacia atrás ni descartar la reactivación ya calculada
+            # (CODEX-002, ronda 4, PR #530).
+            return ResultadoReflejo(pasos=pasos_reanudacion)
         return ResultadoReflejo(pasos=(*pasos_reanudacion, *camino))
 
     if espejo.estado is WorkItemState.DELIVERED:

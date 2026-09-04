@@ -162,6 +162,20 @@ _DIAGNOSTICO_FALLO_RE = re.compile(
     re.DOTALL,
 )
 
+# Los tres marcadores que `sirius_resume_on_command.sh` publica ANTES de
+# reponer la etiqueta activa (líneas 297-324 de ese guion), en ese orden
+# exacto por diseño: el permiso escrito siempre precede a la etiqueta que
+# autoriza, así que su sola presencia en el historial de confianza es la
+# prueba de que un cambio de etiqueta sobre una parada vino de una orden real
+# del propietario, y no de una edición manual o una transición parcial
+# (CODEX-001, ronda 4, PR #530). `sirius-convergence-reset` y
+# `sirius-resume-stop` llevan un SHA de head; `sirius-restart-sin-pr` lleva
+# `<incidencia>:<run>-<intento>` porque una parada sin PR no tiene head sobre
+# el que continuar (comentario del propio guion, líneas 305-309).
+_RESUME_MARKER_RE = re.compile(
+    r"<!--\s*sirius-(?:resume-stop|convergence-reset|restart-sin-pr):[^>]*-->"
+)
+
 # --- Etiquetas -> (estado, fase) --------------------------------------------
 #
 # Vocabulario real de `.github/workflows/*.yml` (bootstrap-sirius-automation-labels.yml
@@ -339,6 +353,26 @@ def _interpretar_head_sha(cuerpo: str, comentarios: Sequence[Comentario]) -> str
     return match.group(1) if match else None
 
 
+def _interpretar_reanudacion_publicada(
+    cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
+) -> bool:
+    """``True`` si alguno de los tres marcadores de reanudación está publicado.
+
+    Mismo filtro de confianza que el resto de marcadores -``sirius_comment_once``
+    los publica el propio bot o el evento ya viene filtrado por
+    ``author_association == OWNER`` en el workflow que invoca al guion-, y el
+    cuerpo entra por el mismo predicado que ``_texto_cronologico_de_confianza``
+    para no reabrir el defecto H-1 (incidencia #215, ADR-051) de tratar el
+    cuerpo distinto que los comentarios.
+    """
+    if es_autor_de_confianza(cuerpo) and _RESUME_MARKER_RE.search(cuerpo.texto):
+        return True
+    return any(
+        es_autor_de_confianza(comentario) and _RESUME_MARKER_RE.search(comentario.cuerpo)
+        for comentario in comentarios
+    )
+
+
 def _interpretar_diagnostico_fallo(comentarios: Sequence[Comentario]) -> str | None:
     """El diagnóstico del último comentario de confianza que paró de forma segura.
 
@@ -401,6 +435,9 @@ def proyectar_work_item(
         fallos_quality_consecutivos=ci_failure_streak(texto_vigente),
         origen=OrigenLectura(fuente=f"github:{repo}#{numero}", leido_en=ahora),
         diagnostico_fallo=_interpretar_diagnostico_fallo(comentarios.comentarios),
+        reanudacion_publicada=_interpretar_reanudacion_publicada(
+            cuerpo.cuerpo, comentarios.comentarios
+        ),
     )
 
 

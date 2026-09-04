@@ -208,6 +208,87 @@ contra un motor que nunca se paró (`ACTIVE`) sigue siendo divergencia
 `(PASO_REACTIVADO, PASO_REVISION_INICIADA, PASO_REVISION_APROBADA,
 PASO_ENTREGADO)` y entrega de verdad contra `InMemoryWorkEngineStore`.
 
+## El marcador de reanudación y `implement-requested` sin retroceder de fase (correcciones CODEX-001/CODEX-002, ronda 4, PR #530)
+
+La revisión independiente de la ronda 4 encontró dos defectos más en la misma
+salvaguarda que las rondas 2 y 3 (arriba) fueron ampliando.
+
+**CODEX-001 (ronda 4):** las dos correcciones anteriores disparaban
+`pasos_reanudacion` con una sola condición: que el espejo dejara de proyectar
+el MISMO estado detenido (`FAILED_SAFELY`/`NEEDS_DECISION`). Pero esa
+condición sola no distingue una reanudación real -orden explícita del
+propietario, vía `sirius_resume_on_command.sh`- de una etiqueta de parada
+sustituida a mano o alterada por una transición parcial sin que el
+propietario escribiera `continua`: cualquiera de las dos deja igualmente de
+proyectar el estado detenido, y la versión anterior trataba las dos por
+igual como autorización para continuar -incluido el caso de aterrizar en
+`DELIVERED` o en la OTRA clase de parada (`NEEDS_DECISION` visto desde
+`FAILED_SAFELY` o viceversa)-, exactamente lo que el hallazgo señala.
+
+**Corrección:** `MirroredWorkItem` gana un campo nuevo,
+`reanudacion_publicada: bool` (con valor por defecto `False`, para no romper
+las construcciones directas de `test_authority_reversion.py` y
+`test_projection_verifier.py` que no lo pasan), poblado en
+`mirror_projection.py` por `_interpretar_reanudacion_publicada`: `True` si el
+historial de confianza (cuerpo + comentarios, mismo filtro
+`es_autor_de_confianza` que el resto de marcadores del módulo) lleva
+publicado alguno de los tres marcadores que
+`sirius_resume_on_command.sh:290-350` escribe ANTES de reponer la etiqueta
+activa -`sirius-resume-stop`, `sirius-convergence-reset`,
+`sirius-restart-sin-pr`-, vía la expresión regular nueva `_RESUME_MARKER_RE`.
+`reflejar_desenlace` exige ahora las DOS condiciones -estado distinto Y
+`espejo.reanudacion_publicada`- para disparar `pasos_reanudacion`; sin el
+marcador, el `WorkItem` sigue las reglas de "hacia atrás" de siempre y la
+parada se conserva con divergencia. No es vocabulario nuevo del almacén -los
+mismos dos puertos de las rondas anteriores-, es un hecho nuevo que el espejo
+ya podía leer (los tres marcadores llevan meses en producción,
+`sirius_resume_on_command.sh` los escribe desde la corrección CODEX-002 de la
+ronda 2) y que `reflect.py` todavía no consultaba.
+
+**CODEX-002 (ronda 4):** `destino_de_rol` repone `sirius:implement-requested`
+para CUALQUIER rol que se hubiera detenido, no solo para el implementador, y
+esa etiqueta siempre proyecta `PLANNED`/`PREPARAR` -`PREPARAR` es la PRIMERA
+fase del grafo, no la fase real en la que el rol se detuvo-. Cuando el motor
+se había parado más adelante que `PREPARAR` (por ejemplo en `EJECUTAR`),
+`_camino_de_fase(EJECUTAR, PREPARAR)` no encuentra ningún camino hacia
+delante -`PREPARAR` queda estrictamente detrás- y devuelve `None`; la rama
+`PLANNED` de `reflejar_desenlace` trataba ese `None` exactamente como
+cualquier otro camino inalcanzable: divergencia, descartando TAMBIÉN el
+`PASO_REACTIVADO` ya calculado. El motor se quedaba parado para siempre pese
+a que la reanudación era legítima.
+
+**Corrección:** dentro de la rama `PLANNED`, cuando `pasos_reanudacion` no
+está vacío (reanudación real, ya gateada por CODEX-001) y `_camino_de_fase`
+devuelve `None`, el plan es `pasos_reanudacion` solos -reactivar sin caminar
+ninguna fase-, en vez de descartarlo como divergencia. Es correcto porque
+`implement-requested` es solo el disparador de la reanudación, no una orden
+de retroceder de fase, y ninguno de los dos puertos de reanudación
+(`reactivate_work_item`, `resolve_work_item_decision`) toca `fase`: el motor
+se reactiva exactamente donde se había parado, tal como ya documenta la regla
+3 del docstring del módulo.
+
+Probado en `tests/engine/test_reflect.py`, sección "C quater" (CODEX-001:
+`test_sin_marcador_de_reanudacion_failed_safely_no_reactiva_aunque_el_espejo_cambie`,
+`test_sin_marcador_de_reanudacion_needs_decision_no_resuelve_aunque_el_espejo_cambie`,
+`test_sin_marcador_de_reanudacion_no_reactiva_aunque_el_espejo_aterrice_en_planned`,
+`test_sin_marcador_de_reanudacion_no_reactiva_aunque_el_espejo_aterrice_en_delivered`
+- las cuatro reproducen los espejos legítimos de las secciones C bis/C ter con
+`reanudacion_publicada=False` y esperan divergencia, no reanudación) y "C
+quinquies" (CODEX-002:
+`test_reanudacion_hacia_planned_desde_una_fase_mas_adelantada_reactiva_sin_caminar`,
+`test_reanudacion_hacia_planned_desde_reparar_reactiva_sin_caminar` - un motor
+parado en `EJECUTAR`/`REPARAR` con espejo `PLANNED`/`PREPARAR` y
+`reanudacion_publicada=True` produce `(PASO_REACTIVADO,)` y conserva la fase
+real tras aplicarlo). Las cuatro pruebas de reanudación ya existentes de las
+secciones C bis/C ter se actualizaron para pasar
+`reanudacion_publicada=True` explícito -sin ese ajuste, CODEX-001 las habría
+hecho caer, porque antes de esta ronda ningún caso de la batería distinguía
+"el espejo cambió" de "el espejo cambió CON permiso publicado"-.
+`tests/engine/test_mirror_projection.py` suma cinco pruebas nuevas para
+`_interpretar_reanudacion_publicada`: los tres marcadores por separado
+(parametrizada), ausencia, y un comentario no confiable que cita el marcador
+sin que cuente.
+
 ## Opciones consideradas
 
 1. **Rango escalar de fase** (`PREPARAR=0 < EJECUTAR=1 < ... < ENTREGAR=5`) y
@@ -289,29 +370,36 @@ cuota de la API.
 
 ## Comprobación que la sostiene
 
-- `tests/engine/test_reflect.py` (24 pruebas): las cinco secuencias exactas
+- `tests/engine/test_reflect.py` (30 pruebas): las cinco secuencias exactas
   del mapa de etiquetas activas, `blocked-decision` (1 paso), `planned` (0
   pasos, hacia atrás), idempotencia (dos casos), nunca-hacia-atrás,
   contradicción, sin etiqueta, `completed` con SHA de fusión (incluida la
   prueba de que camina TODAS las fases intermedias, no salta a
   `deliver_work_item`), `failed-safely` con y sin diagnóstico de confianza,
   el cierre del bucle `REPARAR -> COMPROBAR`, las dos pruebas de reanudación
-  de una parada por orden del propietario (corrección CODEX-002, PR #530,
-  cada una con su segunda pasada de idempotencia añadida en la ronda 3 —
+  de una parada por orden del propietario (corrección CODEX-002, ronda 2, PR
+  #530, cada una con su segunda pasada de idempotencia añadida en la ronda 3 —
   CLAUDE-REVIEWER-001), las tres pruebas de reanudación generalizada a
-  `PLANNED`/`DELIVERED` (corrección CODEX-001, ronda 3, PR #530), y las dos
-  pruebas de mutación de abajo.
+  `PLANNED`/`DELIVERED` (corrección CODEX-001, ronda 3, PR #530), las cuatro
+  pruebas de "sin marcador, no reanuda" y las dos de "implement-requested
+  reactiva sin caminar" (correcciones CODEX-001/CODEX-002, ronda 4, PR #530,
+  sección «El marcador de reanudación...» arriba), y las dos pruebas de
+  mutación de abajo.
 - `tests/engine/test_reflect_cli.py` (6 pruebas): ensayo no toca nada,
   ejecución real aplica y dice cuántos pasos, un `WorkItem` terminal se
   salta sin volver a leer su incidencia, una incidencia ilegible no corta
   las demás, espejo sin etiqueta no dice nada, `completed` con SHA entrega
   de verdad.
-- `tests/engine/test_mirror_projection.py` (7 pruebas nuevas):
-  `diagnostico_fallo` desde el último comentario de confianza, el más
-  reciente cuando hay varios, un comentario no confiable no cuenta, ausente
-  sin comentario de fallo, y las tres de la corrección CODEX-001 de la ronda 2
-  (PR #530): una parada `precheck` sí cuenta, una parada `precheck` con otra
-  etiqueta no cuenta, un comentario de notificación no cuenta.
+- `tests/engine/test_mirror_projection.py` (36 pruebas en total, 12 nuevas
+  desde la ronda 1): `diagnostico_fallo` desde el último comentario de
+  confianza, el más reciente cuando hay varios, un comentario no confiable no
+  cuenta, ausente sin comentario de fallo, y las tres de la corrección
+  CODEX-001 de la ronda 2 (PR #530): una parada `precheck` sí cuenta, una
+  parada `precheck` con otra etiqueta no cuenta, un comentario de
+  notificación no cuenta; y, de la ronda 4 (CODEX-001, sección «El marcador
+  de reanudación...» arriba), cinco pruebas de `reanudacion_publicada`: cada
+  uno de los tres marcadores por separado (parametrizada), ausencia, y un
+  comentario no confiable que cita el marcador sin que cuente.
 - `tests/automation/test_reflejar_desenlace_github.py` (2 pruebas,
   integración con `DurableWorkEngineStore` y `DurableDispatchJournal` reales
   sobre copias de `tests/automation/fixtures/diario_ola_criticidad.jsonl` y
@@ -342,6 +430,18 @@ cuota de la API.
   están incluidas en el recuento; confirmado también con
   `uv run pytest --collect-only -q` sobre el árbol de esta ronda antes de
   correr la suite completa, 4769 = 4752 + 15 + 2).
+- Comandos ejecutados, en verde, sobre el árbol de la corrección CODEX-001/
+  CODEX-002 de la ronda 4 (PR #530, 2026-09-04): `uv run ruff format
+  --check .` (601 ficheros ya formateados), `uv run ruff check .` (todas las
+  comprobaciones superadas), `uv run mypy src tests` (569 ficheros, sin
+  incidencias), `uv run pytest -q` (4763 passed, 15 skipped, 2 xfailed en
+  478.00s — los xfailed y skipped son preexistentes, ninguno de este bloque).
+  Las 11 pruebas nuevas de esta ronda -6 en `test_reflect.py` (sección «C
+  quater»/«C quinquies» de ese fichero) y 5 en `test_mirror_projection.py`
+  (sección `reanudacion_publicada`)- están incluidas en el recuento;
+  confirmado con `uv run pytest --collect-only -q`, que mide 4780 pruebas
+  recogidas (4763 + 15 + 2), 11 más que las 4769 de la ronda 3 — la misma
+  diferencia que las 11 funciones `def test_` nuevas de este commit.
 - **Reconciliación de la cifra de la ronda 2 (corrección CLAUDE-REVIEWER-002,
   ronda 3):** la ronda 1 (head `e759958`) documentó «4743 passed»; la ronda 2
   (head `72e6218`) documentó «4749 passed», una diferencia de 6, mientras que
@@ -403,6 +503,11 @@ Las dos mutaciones se aplicaron y revirtieron a mano sobre
   tres construcciones directas fuera de `mirror_projection.py`
   (`test_authority_reversion.py`, `test_projection_verifier.py`) se
   actualizaron con `diagnostico_fallo=None`.
+- `MirroredWorkItem` creció un segundo campo, `reanudacion_publicada: bool`
+  (ronda 4, CODEX-001) — con valor por defecto `False`, así que las
+  construcciones directas existentes que no lo pasan (incluidas las de
+  `test_authority_reversion.py`/`test_projection_verifier.py`) siguen
+  funcionando sin tocarlas: el defecto seguro es "no reanudar sin marcador".
 
 ## Alternativas descartadas y por qué
 

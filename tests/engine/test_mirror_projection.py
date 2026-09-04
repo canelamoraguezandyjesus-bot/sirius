@@ -662,6 +662,97 @@ def test_diagnostico_fallo_ausente_sin_comentario_de_fallo() -> None:
     assert mirrored.diagnostico_fallo is None
 
 
+# --- reanudacion_publicada: los tres marcadores de sirius_resume_on_command.sh
+# (CODEX-001, ronda 4, PR #530) ----------------------------------------------
+#
+# Sin uno de estos tres marcadores publicado por una identidad de confianza,
+# un cambio de etiqueta sobre un `WorkItem` parado no es una reanudación
+# autoritativa: es indistinguible de una etiqueta sustituida a mano. Estas
+# pruebas cubren los tres marcadores, la ausencia, y que un comentario no
+# confiable no cuenta -mismo criterio que el resto de marcadores de este
+# módulo (`es_autor_de_confianza`)-.
+
+
+@pytest.mark.parametrize(
+    "marcador",
+    [
+        "<!-- sirius-resume-stop:deadbee1 -->",
+        "<!-- sirius-convergence-reset:deadbee2 -->",
+        "<!-- sirius-restart-sin-pr:508:12345-1 -->",
+    ],
+)
+def test_reanudacion_publicada_es_true_con_cada_uno_de_los_tres_marcadores(
+    marcador: str,
+) -> None:
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    comentario = Comentario(
+        autor_login=_OWNER_LOGIN,
+        autor_asociacion="OWNER",
+        cuerpo=f"{marcador}\n\n🟢 **Parada segura levantada por orden del propietario**\n",
+        creado_en=_AHORA,
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(comentario,))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.reanudacion_publicada is True
+
+
+def test_reanudacion_publicada_es_false_sin_ningun_marcador() -> None:
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    comentario = Comentario(
+        autor_login=_OWNER_LOGIN,
+        autor_asociacion="OWNER",
+        cuerpo="continua",
+        creado_en=_AHORA,
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(comentario,))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.reanudacion_publicada is False
+
+
+def test_reanudacion_publicada_de_un_comentario_no_confiable_no_cuenta() -> None:
+    """Un marcador de reanudación citado -o publicado- por alguien que no es
+    el propietario ni el bot no autoriza nada: mismo criterio de confianza
+    que gobierna el resto de marcadores de este módulo.
+    """
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    comentario = Comentario(
+        autor_login="alguien-de-fuera",
+        autor_asociacion="NONE",
+        cuerpo="<!-- sirius-resume-stop:deadbee1 -->\n\ncontinua",
+        creado_en=_AHORA,
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(comentario,))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.reanudacion_publicada is False
+
+
 # --- El cuerpo pasa por el MISMO filtro que los comentarios (H-1, #215) ----
 #
 # El defecto: `_texto_cronologico_de_confianza` filtraba los comentarios por

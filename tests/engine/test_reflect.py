@@ -100,6 +100,7 @@ def _espejo(
     etiquetas_contradictorias: bool = False,
     head_sha: str | None = None,
     diagnostico_fallo: str | None = None,
+    reanudacion_publicada: bool = False,
 ) -> MirroredWorkItem:
     return MirroredWorkItem(
         work_id=f"{_REPO}#508",
@@ -116,6 +117,7 @@ def _espejo(
         fallos_quality_consecutivos=0,
         origen=OrigenLectura(fuente="test", leido_en=_AHORA),
         diagnostico_fallo=diagnostico_fallo,
+        reanudacion_publicada=reanudacion_publicada,
     )
 
 
@@ -310,7 +312,11 @@ def test_reanudacion_desde_failed_safely_reactiva_antes_de_caminar_la_fase() -> 
 
     # El propietario reanudó y la incidencia quedó, de nuevo, ACTIVE (la
     # etiqueta repuesta por el script apunta a `ci-pending`, fase COMPROBAR).
-    espejo = _espejo(estado=WorkItemState.ACTIVE, fase=WorkItemPhase.COMPROBAR)
+    # `reanudacion_publicada=True` porque el guion publica su marcador de
+    # permiso ANTES de reponer la etiqueta (CODEX-001, ronda 4, PR #530).
+    espejo = _espejo(
+        estado=WorkItemState.ACTIVE, fase=WorkItemPhase.COMPROBAR, reanudacion_publicada=True
+    )
     resultado = reflejar_desenlace(parado, espejo, _episodio())
 
     assert tuple(paso.kind for paso in resultado.pasos) == (
@@ -341,7 +347,9 @@ def test_reanudacion_desde_needs_decision_resuelve_la_decision_antes_de_caminar_
     assert escalado.estado is WorkItemState.NEEDS_DECISION
     assert escalado.fase is en_ejecutar.fase is WorkItemPhase.EJECUTAR
 
-    espejo = _espejo(estado=WorkItemState.ACTIVE, fase=WorkItemPhase.COMPROBAR)
+    espejo = _espejo(
+        estado=WorkItemState.ACTIVE, fase=WorkItemPhase.COMPROBAR, reanudacion_publicada=True
+    )
     resultado = reflejar_desenlace(escalado, espejo, _episodio())
 
     assert tuple(paso.kind for paso in resultado.pasos) == (
@@ -388,7 +396,9 @@ def test_reanudacion_que_aterriza_en_planned_reactiva_sin_camino_de_fase() -> No
 
     # El propietario reanudó al implementador: `destino_de_rol` repone
     # `sirius:implement-requested`, que el espejo proyecta como PLANNED/PREPARAR.
-    espejo = _espejo(estado=WorkItemState.PLANNED, fase=WorkItemPhase.PREPARAR)
+    espejo = _espejo(
+        estado=WorkItemState.PLANNED, fase=WorkItemPhase.PREPARAR, reanudacion_publicada=True
+    )
     resultado = reflejar_desenlace(parado, espejo, _episodio())
 
     assert tuple(paso.kind for paso in resultado.pasos) == (PASO_REACTIVADO,)
@@ -445,7 +455,12 @@ def test_reanudacion_que_aterriza_en_delivered_reactiva_y_camina_hasta_entregar(
     assert parado.estado is WorkItemState.FAILED_SAFELY
     assert parado.fase is en_comprobar.fase is WorkItemPhase.COMPROBAR
 
-    espejo = _espejo(estado=WorkItemState.DELIVERED, fase=None, head_sha="deadbeef1234")
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=None,
+        head_sha="deadbeef1234",
+        reanudacion_publicada=True,
+    )
     resultado = reflejar_desenlace(parado, espejo, _episodio(numero_incidencia=508))
 
     assert tuple(paso.kind for paso in resultado.pasos) == (
@@ -468,6 +483,176 @@ def test_reanudacion_que_aterriza_en_delivered_reactiva_y_camina_hasta_entregar(
     segundo = reflejar_desenlace(motor_entregado, espejo, _episodio(numero_incidencia=508))
     assert segundo.pasos == ()
     assert segundo.divergencia is None
+
+
+# --- Sección C quater: sin marcador de reanudación, la parada se conserva ---
+#
+# Las secciones C bis y C ter probaron que un espejo que deja de proyectar el
+# MISMO estado detenido reanuda. Pero eso solo, sin más, es exactamente lo que
+# encontró la revisión independiente de la ronda 4 (CODEX-001, PR #530): una
+# etiqueta de parada sustituida a mano, o alterada por una transición parcial
+# sin que el propietario escribiera `continua`, TAMBIÉN deja de proyectar el
+# mismo estado detenido, y antes de esta corrección eso bastaba para
+# reanudar. Estas pruebas fijan `reanudacion_publicada=False` -sin ninguno de
+# los tres marcadores de `sirius_resume_on_command.sh` publicado- y esperan
+# que la parada se conserve con divergencia, para las tres formas de aterrizar
+# que las secciones C bis/C ter cubrían con el marcador presente.
+
+
+def test_sin_marcador_de_reanudacion_failed_safely_no_reactiva_aunque_el_espejo_cambie() -> None:
+    store = InMemoryWorkEngineStore()
+    _work_item_activo(store)
+    en_ejecutar = store.begin_work_item_execution(_WORK_ID, now=_AHORA)
+    parado = store.fail_work_item_safely(_WORK_ID, diagnostico="motivo", now=_AHORA)
+    assert parado.estado is WorkItemState.FAILED_SAFELY
+    assert parado.fase is en_ejecutar.fase is WorkItemPhase.EJECUTAR
+
+    # Mismo espejo que la reanudación legítima de la sección C bis, pero sin
+    # ninguno de los tres marcadores publicados.
+    espejo = _espejo(
+        estado=WorkItemState.ACTIVE, fase=WorkItemPhase.COMPROBAR, reanudacion_publicada=False
+    )
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+    assert "no hay camino hacia delante" in resultado.divergencia
+
+    aplicar_pasos(store, _WORK_ID, resultado.pasos, now=_AHORA)
+    assert store.get_work_item(_WORK_ID) == parado
+
+
+def test_sin_marcador_de_reanudacion_needs_decision_no_resuelve_aunque_el_espejo_cambie() -> None:
+    store = InMemoryWorkEngineStore()
+    _work_item_activo(store)
+    en_ejecutar = store.begin_work_item_execution(_WORK_ID, now=_AHORA)
+    escalado = store.escalate_work_item(_WORK_ID, now=_AHORA)
+    assert escalado.estado is WorkItemState.NEEDS_DECISION
+    assert escalado.fase is en_ejecutar.fase is WorkItemPhase.EJECUTAR
+
+    espejo = _espejo(
+        estado=WorkItemState.ACTIVE, fase=WorkItemPhase.COMPROBAR, reanudacion_publicada=False
+    )
+    resultado = reflejar_desenlace(escalado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+    assert "no hay camino hacia delante" in resultado.divergencia
+
+
+def test_sin_marcador_de_reanudacion_no_reactiva_aunque_el_espejo_aterrice_en_planned() -> None:
+    store = InMemoryWorkEngineStore()
+    _work_item_activo(store)
+    parado = store.fail_work_item_safely(_WORK_ID, diagnostico="motivo", now=_AHORA)
+    assert parado.estado is WorkItemState.FAILED_SAFELY
+    assert parado.fase is WorkItemPhase.PREPARAR
+
+    espejo = _espejo(
+        estado=WorkItemState.PLANNED, fase=WorkItemPhase.PREPARAR, reanudacion_publicada=False
+    )
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+    assert "no hay camino hacia delante" in resultado.divergencia
+
+
+def test_sin_marcador_de_reanudacion_no_reactiva_aunque_el_espejo_aterrice_en_delivered() -> None:
+    store = InMemoryWorkEngineStore()
+    _work_item_activo(store)
+    en_comprobar = store.begin_work_item_execution(_WORK_ID, now=_AHORA)
+    en_comprobar = store.begin_work_item_check(_WORK_ID, now=_AHORA)
+    parado = store.fail_work_item_safely(_WORK_ID, diagnostico="motivo", now=_AHORA)
+    assert parado.estado is WorkItemState.FAILED_SAFELY
+    assert parado.fase is en_comprobar.fase is WorkItemPhase.COMPROBAR
+
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=None,
+        head_sha="deadbeef1234",
+        reanudacion_publicada=False,
+    )
+    resultado = reflejar_desenlace(parado, espejo, _episodio(numero_incidencia=508))
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+    assert "no hay camino hacia delante" in resultado.divergencia
+
+
+# --- Sección C quinquies: implement-requested reactiva sin retroceder de fase
+# (CODEX-002, ronda 4, PR #530) -----------------------------------------------
+#
+# `destino_de_rol` (`sirius_resume_on_command.sh:180-186`) repone
+# `sirius:implement-requested` para CUALQUIER rol que se hubiera detenido -no
+# solo el implementador-, y esa etiqueta siempre proyecta PLANNED/PREPARAR
+# (`mirror_projection.py`), sea cual sea la fase real en la que el motor se
+# paró. Antes de esta corrección, `_camino_de_fase(fase_actual, PREPARAR)`
+# devolvía `None` en cuanto `fase_actual` no era ya PREPARAR -PREPARAR es la
+# primera fase del grafo, así que no hay ningún camino hacia delante hacia
+# ella- y la rama PLANNED descartaba TAMBIÉN el paso de reactivación ya
+# calculado, dejando el motor parado para siempre.
+
+
+def test_reanudacion_hacia_planned_desde_una_fase_mas_adelantada_reactiva_sin_caminar() -> None:
+    """El motor se paró en EJECUTAR (más adelante que PREPARAR); el propietario
+    reanudó y la etiqueta repuesta (`implement-requested`) proyecta
+    PLANNED/PREPARAR igualmente. Se espera reactivar conservando EJECUTAR -no
+    hay ninguna transición real que retroceda la fase-.
+    """
+    store = InMemoryWorkEngineStore()
+    _work_item_activo(store)
+    en_ejecutar = store.begin_work_item_execution(_WORK_ID, now=_AHORA)
+    parado = store.fail_work_item_safely(_WORK_ID, diagnostico="motivo", now=_AHORA)
+    assert parado.estado is WorkItemState.FAILED_SAFELY
+    assert parado.fase is en_ejecutar.fase is WorkItemPhase.EJECUTAR
+
+    espejo = _espejo(
+        estado=WorkItemState.PLANNED, fase=WorkItemPhase.PREPARAR, reanudacion_publicada=True
+    )
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert tuple(paso.kind for paso in resultado.pasos) == (PASO_REACTIVADO,)
+    assert resultado.divergencia is None
+
+    aplicados = aplicar_pasos(store, _WORK_ID, resultado.pasos, now=_AHORA)
+    final = aplicados[-1]
+    assert final.estado is WorkItemState.ACTIVE
+    assert final.fase is WorkItemPhase.EJECUTAR
+
+    # Idempotencia: el motor ya reactivado, con el mismo espejo, no vuelve a
+    # producir ningún suceso.
+    motor_reactivado = store.get_work_item(_WORK_ID)
+    assert motor_reactivado is not None
+    segundo = reflejar_desenlace(motor_reactivado, espejo, _episodio())
+    assert segundo.pasos == ()
+
+
+def test_reanudacion_hacia_planned_desde_reparar_reactiva_sin_caminar() -> None:
+    """Mismo caso que arriba, un paso más adelante: el corrector se paró en
+    REPARAR, pero `sin_pr=true` en el guion lee el rol parado del historial y
+    puede reponer `implement-requested` si el rol parado fue el implementador
+    -aunque el ciclo ya hubiera avanzado a REPARAR en una vuelta anterior-.
+    """
+    store = InMemoryWorkEngineStore()
+    _work_item_activo(store)
+    en_reparar = store.begin_work_item_execution(_WORK_ID, now=_AHORA)
+    en_reparar = store.begin_work_item_check(_WORK_ID, now=_AHORA)
+    en_reparar = store.begin_work_item_review(_WORK_ID, now=_AHORA)
+    en_reparar = store.request_work_item_repair(_WORK_ID, now=_AHORA)
+    parado = store.fail_work_item_safely(_WORK_ID, diagnostico="motivo", now=_AHORA)
+    assert parado.estado is WorkItemState.FAILED_SAFELY
+    assert parado.fase is en_reparar.fase is WorkItemPhase.REPARAR
+
+    espejo = _espejo(
+        estado=WorkItemState.PLANNED, fase=WorkItemPhase.PREPARAR, reanudacion_publicada=True
+    )
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert tuple(paso.kind for paso in resultado.pasos) == (PASO_REACTIVADO,)
+    aplicados = aplicar_pasos(store, _WORK_ID, resultado.pasos, now=_AHORA)
+    final = aplicados[-1]
+    assert final.estado is WorkItemState.ACTIVE
+    assert final.fase is WorkItemPhase.REPARAR
 
 
 # --- Sección D: contradicción / sin etiqueta --------------------------------

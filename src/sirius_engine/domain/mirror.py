@@ -124,6 +124,16 @@ class MirroredWorkItem:
     #: (incidencia #529) necesita para llevar el diagnóstico real al almacén
     #: del motor cuando refleja ``sirius:failed-safely``.
     diagnostico_fallo: str | None
+    #: ``True`` si el historial de confianza lleva publicado alguno de los
+    #: tres marcadores que ``sirius_resume_on_command.sh`` escribe ANTES de
+    #: reponer la etiqueta activa (``sirius-resume-stop``,
+    #: ``sirius-convergence-reset``, ``sirius-restart-sin-pr``: líneas
+    #: 297-324 de ese guion). Es el único hecho que distingue una etiqueta de
+    #: parada sustituida por una orden real del propietario de una que
+    #: cambió por cualquier otra vía -edición manual, una transición
+    #: parcial-: sin este marcador, un cambio de etiqueta sobre un
+    #: ``WorkItem`` parado no autoriza reanudar (CODEX-001, ronda 4, PR #530).
+    reanudacion_publicada: bool = False
     autoritativo: bool = field(default=False, init=False)
 
 
