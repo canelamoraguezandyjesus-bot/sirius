@@ -143,6 +143,56 @@ def test_no_marca_una_linea_dentro_de_un_hunk_anadido(
     assert "posible_goteo" not in anotadas[0]
 
 
+def test_marca_una_observacion_real_de_la_ola_con_archivo_adornado(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Observación real de la ola de criticidad (incidencia #523, G3):
+    # CLAUDE-REV-R2-001 de #520, con el `archivo` tal cual lo escribió el
+    # revisor (ruta, nombre de función entre paréntesis, "líneas ~NNN-MMM").
+    # Antes del endurecimiento de `parse_archivo_location` esto se veía
+    # FALLAR: el parser viejo no reconocía ninguna línea en este texto, así
+    # que `evaluate_finding` se callaba con SIN_MARCA en vez de evaluar el
+    # fichero, y esta observación nunca se anotaba pese a que el fichero
+    # citado no había cambiado desde la ronda 1.
+    _instalar_gh_stub(tmp_path, monkeypatch, respuesta='{"files": []}')
+    comments = tmp_path / "comments.txt"
+    comments.write_text(_round1_history(head=HEAD1), encoding="utf-8")
+    observations = tmp_path / "observations.json"
+    _write_json(
+        observations,
+        [
+            _observation(
+                archivo=(
+                    "src/sirius/presentation/knowledge_widget.py "
+                    "(_handle_criticality_proposal_finished, ~líneas 766-805)"
+                )
+            )
+        ],
+    )
+    output = tmp_path / "output.json"
+
+    codigo = _module().main(
+        [
+            "--repo",
+            "owner/repo",
+            "--comments-file",
+            str(comments),
+            "--round",
+            "2",
+            "--head",
+            HEAD2,
+            "--observations",
+            str(observations),
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert codigo == 0
+    anotadas = json.loads(output.read_text(encoding="utf-8"))
+    assert "posible goteo" in anotadas[0]["posible_goteo"]
+
+
 def test_ronda_1_nunca_marca(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _instalar_gh_stub(tmp_path, monkeypatch, respuesta='{"files": []}')
     comments = tmp_path / "comments.txt"
