@@ -197,15 +197,19 @@ resto del módulo (`evaluate_finding`, `annotate_observations*`,
    $ uv run ruff format --check .   → 594 files already formatted
    $ uv run ruff check .            → All checks passed!
    $ uv run mypy src tests          → Success: no issues found in 562 source files
-   $ uv run pytest -q               → 4660 passed, 15 skipped, 2 xfailed in 457.47s
+   $ uv run pytest -q               → 4691 passed, 15 skipped, 2 xfailed in 452.14s
    $ git diff --check               → limpio
    ```
 
-   La cifra de la suite completa (4660 passed) no se compara aquí contra un
-   `main` anterior porque este encargo no reduce ni añade pruebas fuera de
-   `tests/engine/test_drip_guard.py` (+8) y
-   `tests/automation/test_sirius_drip_guard_cli.py` (+1): la suite base ya
-   traía 4651 pruebas antes de esta rama.
+   Cifra re-ejecutada sobre el árbol final, después de la corrección de
+   ronda 2 (paso 4). Comparada contra `main` (9fd2666, 4695 pruebas
+   recolectadas antes de esta rama) mediante `pytest --collect-only`, esta
+   rama recolecta 4708, +13 en total: `tests/engine/test_drip_guard.py` pasa
+   de 8 a 11 pruebas nuevas sobre el archivo original (6 casos reales + 2
+   adversarios + 3 de ronda 2), `tests/automation/test_sirius_drip_guard_cli.py`
+   añade 1, y `tests/automation/test_citas_de_los_adr.py::test_toda_ruta_citada_por_un_adr_existe`
+   -parametrizada sobre cada archivo de `docs/decisions/`- gana 1 caso más
+   porque este propio ADR-133 es un archivo nuevo en ese directorio.
 
 ## Consecuencias
 
