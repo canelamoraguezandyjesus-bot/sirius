@@ -425,6 +425,23 @@ ADR o su incidencia cuando se adopte.
   extremo a extremo con una observación real de #520. Pendiente del OK del
   propietario.
 
+### 24. Dos encargos en paralelo, dos ADR-132 (04-09-2026, 11:22 UTC)
+
+- **Qué falló.** G1 (#522) y G3 (#523), despachados en paralelo por primera
+  vez, pidieron cada uno «el siguiente número de ADR» en su propia rama y
+  los dos crearon un ADR-132 (slugs distintos, así que git no avisa). Es el
+  mismo defecto histórico de los dos ADR-016 que la skill `adr` recuerda.
+  No existe guardián de unicidad en tests/automation (comprobado con grep):
+  los dos habrían entrado en silencio.
+- **Qué se hizo.** Detectado por el propietario al revisar los diffs antes
+  de fusionar; el segundo en llegar a `ready-for-merge` se renumera a
+  ADR-133 en su rama antes del `fusiona`.
+- **Mejor manera.** (a) Cuando se despache en paralelo, la orden debe
+  asignar el número de ADR de antemano (el despachante mira el registro y
+  reserva N y N+1); (b) guardián de unicidad: una prueba en
+  tests/automation que falle si dos ficheros de docs/decisions comparten
+  número — candidata a encargo pequeño, sin `.github/**`.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
