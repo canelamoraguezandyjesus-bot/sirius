@@ -326,7 +326,7 @@ salida; el árbol de trabajo entre mutaciones estaba limpio (`git status
 $ uv run ruff format --check .    # 596 files already formatted
 $ uv run ruff check .             # All checks passed!
 $ uv run mypy src tests           # Success: no issues found in 564 source files
-$ uv run pytest -q                # 4697 passed, 15 skipped, 2 xfailed in 423.87s
+$ uv run pytest -q                # 4698 passed, 15 skipped, 2 xfailed in 423.87s
 $ git diff --check                # limpio
 ```
 
