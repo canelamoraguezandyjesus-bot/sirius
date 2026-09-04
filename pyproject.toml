@@ -45,6 +45,12 @@ sirius-familia-repetida = "sirius_engine.round_family_detector_cli:main"
 # construida y probada desde C1 y NADIE la llamaba -cero llamadas en src/-, asi
 # que no habia forma de pedirle al motor que diera un turno.
 sirius-supervisar = "sirius_engine.supervise_cli:main"
+# El reflejo del desenlace de GitHub en el almacen del motor (C1, #529):
+# hasta ahora el motor despachaba y nunca volvia a enterarse de nada -su
+# WorkItem se quedaba para siempre en ACTIVE/PREPARAR-, precondicion literal
+# del contador de los siete dias (contrato parrafo 11.2) que este comando
+# empieza a satisfacer.
+sirius-reflejar = "sirius_engine.reflect_cli:main"
 
 [build-system]
 requires = ["uv_build>=0.11.28,<0.12"]

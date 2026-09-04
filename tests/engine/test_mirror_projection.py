@@ -451,6 +451,442 @@ def test_marcador_pr_abierta_citado_en_texto_no_se_confunde_con_uno_real() -> No
     assert mirrored.pr_url is None
 
 
+# --- El diagnóstico de un comentario FAILED_SAFELY (C1, incidencia #529) ---
+
+
+def test_diagnostico_fallo_se_extrae_del_ultimo_comentario_de_confianza() -> None:
+    """Mismo cuerpo exacto que ``sirius_apply_verdict.sh`` publica para
+    ``FAILED_SAFELY``/``USAGE_LIMIT_REACHED``: marcador, cabecera fija en
+    negrita, y el diagnóstico libre debajo.
+    """
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    comentario = Comentario(
+        autor_login="canelamoraguezandyjesus-bot",
+        autor_asociacion="OWNER",
+        cuerpo=(
+            "<!-- sirius-verdict:implementer:FAILED_SAFELY:run-1 -->\n\n"
+            "🔴 **Me he detenido de forma segura**\n\n"
+            "uv no estaba instalado en el runner y curl estaba denegado."
+        ),
+        creado_en=_AHORA,
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(comentario,))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert (
+        mirrored.diagnostico_fallo == "uv no estaba instalado en el runner y curl estaba denegado."
+    )
+
+
+def test_diagnostico_fallo_toma_el_ultimo_cuando_hay_varios() -> None:
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    viejo = Comentario(
+        autor_login="canelamoraguezandyjesus-bot",
+        autor_asociacion="OWNER",
+        cuerpo=(
+            "<!-- sirius-verdict:implementer:FAILED_SAFELY:run-1 -->\n\n"
+            "🔴 **Me he detenido de forma segura**\n\ndiagnóstico viejo"
+        ),
+        creado_en=_AHORA,
+    )
+    nuevo = Comentario(
+        autor_login="canelamoraguezandyjesus-bot",
+        autor_asociacion="OWNER",
+        cuerpo=(
+            "<!-- sirius-verdict:corrector:FAILED_SAFELY:run-2 -->\n\n"
+            "🔴 **Me he detenido de forma segura**\n\ndiagnóstico nuevo"
+        ),
+        creado_en=_AHORA,
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(viejo, nuevo))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.diagnostico_fallo == "diagnóstico nuevo"
+
+
+def test_diagnostico_fallo_de_un_comentario_no_confiable_no_cuenta() -> None:
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    comentario = Comentario(
+        autor_login="un-tercero",
+        autor_asociacion="NONE",
+        cuerpo=(
+            "<!-- sirius-verdict:implementer:FAILED_SAFELY:run-1 -->\n\n"
+            "🔴 **Me he detenido de forma segura**\n\ndiagnóstico ajeno"
+        ),
+        creado_en=_AHORA,
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(comentario,))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.diagnostico_fallo is None
+
+
+def test_diagnostico_fallo_se_extrae_de_una_parada_precheck(  # CODEX-001, PR #530
+) -> None:
+    """Cuerpo exacto que publica `stop_gate` en `review-sirius-work.yml`
+    (y las paradas equivalentes de `repair-sirius-work.yml`/
+    `sirius_apply_verdict.sh`): el marcador lleva `precheck:<motivo>` en vez
+    de `FAILED_SAFELY`/`USAGE_LIMIT_REACHED`, pero aplica la misma etiqueta
+    `sirius:failed-safely` con la misma cabecera fija. Antes de esta
+    corrección esta lectura devolvía ``None`` (CODEX-001).
+    """
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    comentario = Comentario(
+        autor_login="github-actions[bot]",
+        autor_asociacion="NONE",
+        cuerpo=(
+            "<!-- sirius-verdict:reviewer:precheck:sin-pr:12345-1 -->\n\n"
+            "🔴 **Me he detenido de forma segura**\n\n"
+            "No encuentro ninguna PR asociada a esta incidencia; no hay nada que revisar."
+        ),
+        creado_en=_AHORA,
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(comentario,))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert (
+        mirrored.diagnostico_fallo
+        == "No encuentro ninguna PR asociada a esta incidencia; no hay nada que revisar."
+    )
+
+
+def test_diagnostico_fallo_de_precheck_con_otra_etiqueta_no_cuenta() -> None:
+    """Las paradas `precheck` que NO aplican `sirius:failed-safely` -por
+    ejemplo `convergencia-<motivo>`, que aplica `sirius:blocked-decision`-
+    publican una cabecera distinta (`🟡 Necesito una decisión`), así que no
+    deben leerse como diagnóstico de fallo aunque compartan el prefijo
+    `sirius-verdict:...:precheck:`.
+    """
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    comentario = Comentario(
+        autor_login="github-actions[bot]",
+        autor_asociacion="NONE",
+        cuerpo=(
+            "<!-- sirius-verdict:corrector:precheck:convergencia-mismo-defecto:1-1 -->\n\n"
+            "🟡 **Necesito una decisión**\n\n"
+            "El ciclo de revisión-corrección ha dejado de converger."
+        ),
+        creado_en=_AHORA,
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(comentario,))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.diagnostico_fallo is None
+
+
+def test_diagnostico_fallo_de_notificacion_no_cuenta() -> None:
+    """Los comentarios de `notify-sirius-state.yml` usan el marcador
+    `sirius-notification:`, no `sirius-verdict:`, aunque repitan la misma
+    cabecera fija y el mismo texto genérico: no deben leerse como
+    diagnóstico real.
+    """
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    comentario = Comentario(
+        autor_login="github-actions[bot]",
+        autor_asociacion="NONE",
+        cuerpo=(
+            "<!-- sirius-notification:sirius:failed-safely:abc1234 -->\n\n"
+            "🔴 **Me he detenido de forma segura**\n\n"
+            "He encontrado un problema que no puedo resolver automáticamente sin riesgo.\n\n"
+            "La incidencia contiene el diagnóstico y el siguiente paso recomendado."
+        ),
+        creado_en=_AHORA,
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(comentario,))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.diagnostico_fallo is None
+
+
+def test_diagnostico_fallo_ausente_sin_comentario_de_fallo() -> None:
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=())
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.diagnostico_fallo is None
+
+
+# --- reanudacion_publicada: los tres marcadores de sirius_resume_on_command.sh
+# (CODEX-001, ronda 4, PR #530) ----------------------------------------------
+#
+# Sin uno de estos tres marcadores publicado por una identidad de confianza,
+# un cambio de etiqueta sobre un `WorkItem` parado no es una reanudación
+# autoritativa: es indistinguible de una etiqueta sustituida a mano. Estas
+# pruebas cubren los tres marcadores, la ausencia, y que un comentario no
+# confiable no cuenta -mismo criterio que el resto de marcadores de este
+# módulo (`es_autor_de_confianza`)-.
+
+
+@pytest.mark.parametrize(
+    "marcador",
+    [
+        "<!-- sirius-resume-stop:deadbee1 -->",
+        "<!-- sirius-convergence-reset:deadbee2 -->",
+        "<!-- sirius-restart-sin-pr:508:12345-1 -->",
+    ],
+)
+def test_reanudacion_publicada_es_true_con_cada_uno_de_los_tres_marcadores(
+    marcador: str,
+) -> None:
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    comentario = Comentario(
+        autor_login=_OWNER_LOGIN,
+        autor_asociacion="OWNER",
+        cuerpo=f"{marcador}\n\n🟢 **Parada segura levantada por orden del propietario**\n",
+        creado_en=_AHORA,
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(comentario,))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.reanudacion_publicada is True
+
+
+def test_reanudacion_publicada_es_false_sin_ningun_marcador() -> None:
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    comentario = Comentario(
+        autor_login=_OWNER_LOGIN,
+        autor_asociacion="OWNER",
+        cuerpo="continua",
+        creado_en=_AHORA,
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(comentario,))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.reanudacion_publicada is False
+
+
+def test_reanudacion_publicada_de_un_comentario_no_confiable_no_cuenta() -> None:
+    """Un marcador de reanudación citado -o publicado- por alguien que no es
+    el propietario ni el bot no autoriza nada: mismo criterio de confianza
+    que gobierna el resto de marcadores de este módulo.
+    """
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    comentario = Comentario(
+        autor_login="alguien-de-fuera",
+        autor_asociacion="NONE",
+        cuerpo="<!-- sirius-resume-stop:deadbee1 -->\n\ncontinua",
+        creado_en=_AHORA,
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(comentario,))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.reanudacion_publicada is False
+
+
+# --- reanudacion_publicada se ancla a la parada VIGENTE, no a "alguna vez"
+# (CLAUDE-REVISOR-001/CODEX-002, ronda 5, PR #530) ---------------------------
+#
+# Las pruebas de arriba solo cubrían "el marcador está" / "el marcador no
+# está" sobre un historial de un único comentario. Ninguna reproducía un
+# marcador de una reanudación YA CONSUMIDA seguido de una parada NUEVA y sin
+# relación: la versión de la ronda 4 devolvía `True` en ese caso con
+# `any(...)` sin noción de orden, reabriendo exactamente el escenario que esa
+# misma ronda decía cerrar.
+
+
+def test_reanudacion_publicada_es_false_si_hay_parada_nueva_tras_marcador_consumido() -> None:
+    """Un `sirius-resume-stop` antiguo no autoriza una parada `FAILED_SAFELY`
+    posterior y distinta que nunca recibió su propio marcador de reanudación.
+    """
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    viejo = Comentario(
+        autor_login=_OWNER_LOGIN,
+        autor_asociacion="OWNER",
+        cuerpo="<!-- sirius-resume-stop:deadbee1 -->\n\ncontinua",
+        creado_en=datetime(2026, 8, 1, tzinfo=UTC),
+    )
+    nuevo = Comentario(
+        autor_login="canelamoraguezandyjesus-bot",
+        autor_asociacion="OWNER",
+        cuerpo=(
+            "<!-- sirius-verdict:corrector:FAILED_SAFELY:run-2 -->\n\n"
+            "🔴 **Me he detenido de forma segura**\n\ndiagnóstico nuevo, sin relación"
+        ),
+        creado_en=datetime(2026, 8, 2, tzinfo=UTC),
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(viejo, nuevo))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.reanudacion_publicada is False
+
+
+def test_reanudacion_publicada_no_se_invalida_por_head_movido_tras_ci() -> None:
+    """`precheck:head-movido-tras-ci` no es una parada: no debe invalidar una
+    reanudación ya publicada (CODEX-001, ronda 6, PR #530).
+
+    Esa rama de `repair-sirius-work.yml` (líneas 425-433) publica ese verdict
+    y devuelve la incidencia a `sirius:ci-pending`, no a `failed-safely` ni a
+    `blocked-decision`: es un evento consumible del camino normal, no una
+    parada. Secuencia: parada real → reanudación → `head-movido-tras-ci`. Antes
+    de esta corrección, `_STOP_MARKER_RE` clasificaba también ese último
+    marcador como parada, así que `ultima_parada` quedaba DESPUÉS de
+    `ultimo_resume` y `reanudacion_publicada` se leía como `False` pese a que
+    nada nuevo había parado el ciclo.
+    """
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    parada = Comentario(
+        autor_login="canelamoraguezandyjesus-bot",
+        autor_asociacion="OWNER",
+        cuerpo=(
+            "<!-- sirius-verdict:corrector:FAILED_SAFELY:run-1 -->\n\n"
+            "🔴 **Me he detenido de forma segura**\n\ndiagnóstico"
+        ),
+        creado_en=datetime(2026, 8, 1, tzinfo=UTC),
+    )
+    reanudacion = Comentario(
+        autor_login=_OWNER_LOGIN,
+        autor_asociacion="OWNER",
+        cuerpo="<!-- sirius-resume-stop:deadbee1 -->\n\ncontinua",
+        creado_en=datetime(2026, 8, 2, tzinfo=UTC),
+    )
+    head_movido = Comentario(
+        autor_login="canelamoraguezandyjesus-bot",
+        autor_asociacion="OWNER",
+        cuerpo=(
+            "<!-- sirius-verdict:corrector:precheck:head-movido-tras-ci -->\n\n"
+            "🟡 **El fallo de Quality registrado es de un head anterior**\n\n"
+            "Devuelvo la incidencia a `sirius:ci-pending`."
+        ),
+        creado_en=datetime(2026, 8, 3, tzinfo=UTC),
+    )
+    comentarios = LecturaComentarios(
+        estado=LecturaEstado.OK, comentarios=(parada, reanudacion, head_movido)
+    )
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.reanudacion_publicada is True
+
+
+def test_reanudacion_publicada_es_true_si_el_marcador_llega_tras_la_ultima_parada() -> None:
+    """Orden normal de una reanudación real: la parada primero, el marcador de
+    reanudación de `sirius_resume_on_command.sh` después. Sigue autorizando.
+    """
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    parada = Comentario(
+        autor_login="canelamoraguezandyjesus-bot",
+        autor_asociacion="OWNER",
+        cuerpo=(
+            "<!-- sirius-verdict:corrector:FAILED_SAFELY:run-2 -->\n\n"
+            "🔴 **Me he detenido de forma segura**\n\ndiagnóstico"
+        ),
+        creado_en=datetime(2026, 8, 1, tzinfo=UTC),
+    )
+    reanudacion = Comentario(
+        autor_login=_OWNER_LOGIN,
+        autor_asociacion="OWNER",
+        cuerpo="<!-- sirius-resume-stop:deadbee1 -->\n\ncontinua",
+        creado_en=datetime(2026, 8, 2, tzinfo=UTC),
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(parada, reanudacion))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.reanudacion_publicada is True
+
+
 # --- El cuerpo pasa por el MISMO filtro que los comentarios (H-1, #215) ----
 #
 # El defecto: `_texto_cronologico_de_confianza` filtraba los comentarios por

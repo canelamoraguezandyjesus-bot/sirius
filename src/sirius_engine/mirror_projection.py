@@ -128,6 +128,89 @@ _QUALITY_EVENT_RE = re.compile(
 # de grupos.
 _VERDICT_MARKER_RE = re.compile(r"<!--\s*sirius-verdict:([^>]*?)\s*-->")
 
+# Cuerpo exacto que publica toda parada segura que aplica `sirius:failed-safely`
+# (incidencia #529, ampliado en la #530 tras el hallazgo CODEX-001):
+#   <!-- sirius-verdict:<rol>:<verdict>:<SIRIUS_RUN_TAG> -->
+#
+#   🔴 **Me he detenido de forma segura**
+#
+#   <diagnóstico>
+#
+# `<verdict>` no es siempre `FAILED_SAFELY`/`USAGE_LIMIT_REACHED` -el veredicto
+# que publica el propio agente-: las puertas deterministas de
+# `review-sirius-work.yml` (`stop_gate`), `repair-sirius-work.yml` (`sin_tiempo`
+# y las paradas de `parada ... "sirius:failed-safely" ...`) y
+# `sirius_apply_verdict.sh` (`stop_safely`) publican en su lugar
+# `precheck:<motivo>[:<run>]` y aplican EXACTAMENTE la misma etiqueta con el
+# mismo cuerpo. Antes de esta corrección esta expresión solo reconocía el
+# primer caso, así que el diagnóstico de cualquier parada de puerta se leía
+# como `None` (defecto CODEX-001, PR #530).
+#
+# El resto de paradas `precheck` que existen en el repositorio -las de
+# `convergencia-<motivo>` y `head-movido-tras-ci`, que aplican
+# `sirius:blocked-decision`/`sirius:ci-pending`- no se aceptan: publican una
+# cabecera distinta (`🟡 ...`), así que el filtro de la cabecera fija que
+# sigue ya las excluye sin necesidad de enumerarlas aquí. Los comentarios de
+# notificación de `notify-sirius-state.yml` tampoco entran: usan el marcador
+# `sirius-notification:`, no `sirius-verdict:`, así que no coinciden con este
+# prefijo aunque citen la misma cabecera.
+# Se captura solo el diagnóstico -lo que sigue a la cabecera fija-, no el
+# marcador ni el emoji: eso ya lo interpreta `_interpretar_veredictos`.
+_DIAGNOSTICO_FALLO_RE = re.compile(
+    r"<!--\s*sirius-verdict:[^:]+:(?:FAILED_SAFELY|USAGE_LIMIT_REACHED|precheck):[^>]*-->"
+    r"\s*\n+.*?Me he detenido de forma segura.*?\n+(.*)",
+    re.DOTALL,
+)
+
+# Los tres marcadores que `sirius_resume_on_command.sh` publica ANTES de
+# reponer la etiqueta activa (líneas 297-324 de ese guion), en ese orden
+# exacto por diseño: el permiso escrito siempre precede a la etiqueta que
+# autoriza (CODEX-001, ronda 4, PR #530). `sirius-convergence-reset` y
+# `sirius-resume-stop` llevan un SHA de head; `sirius-restart-sin-pr` lleva
+# `<incidencia>:<run>-<intento>` porque una parada sin PR no tiene head sobre
+# el que continuar (comentario del propio guion, líneas 305-309).
+#
+# Su sola PRESENCIA en el historial no basta -eso bastaba en la versión de la
+# ronda 4 y reabría exactamente lo que esa ronda quería cerrar (hallazgo
+# CLAUDE-REVISOR-001/CODEX-002, ronda 5, PR #530): una incidencia que se para,
+# se reanuda, y vuelve a pararse por algo NUEVO y sin relación seguía leyendo
+# el marcador de la reanudación anterior -ya consumida- como si autorizara
+# también la parada posterior. `_interpretar_reanudacion_publicada` usa este
+# marcador junto con `_STOP_MARKER_RE` de abajo para exigir que el más
+# reciente de los dos, en el historial de confianza, sea el de reanudación.
+_RESUME_MARKER_RE = re.compile(
+    r"<!--\s*sirius-(?:resume-stop|convergence-reset|restart-sin-pr):[^>]*-->"
+)
+
+# El marcador que publica CUALQUIER parada -de veredicto de rol o de puerta
+# determinista- que deja la incidencia en `sirius:failed-safely` o
+# `sirius:blocked-decision`: los mismos cuatro valores de veredicto que
+# `sirius_resume_on_command.sh` lee para decidir a qué fase volver
+# (`FAILED_SAFELY`/`USAGE_LIMIT_REACHED`/`precheck`/`blocked`). Deliberadamente
+# NO incluye `approved`/`changes`/`CHECKS_UNRELATED` -esos veredictos no paran
+# el ciclo, así que no cuentan como "parada vigente" a efectos de anclar la
+# reanudación-.
+#
+# `precheck` en sí no basta: la rama `head-movido-tras-ci` de
+# `repair-sirius-work.yml` (líneas 425-433) publica exactamente ese verdict
+# -`<!-- sirius-verdict:corrector:precheck:head-movido-tras-ci -->`- y
+# devuelve la incidencia a `sirius:ci-pending`, no a `failed-safely` ni a
+# `blocked-decision`: no es una parada, es un evento consumible que sigue el
+# camino normal. Tratarlo como parada hacía que una reanudación publicada
+# ANTES de esa rama -que no cerró nada, porque no había nada que cerrar- se
+# leyera como ya consumida por ella (CODEX-001, ronda 6, PR #530). El resto de
+# `precheck` (`puerta-sin-tiempo`, `historial-ilegible`, `ronda-innumerable`,
+# `convergencia-<motivo>`, `observaciones-ilegibles`, `sin-observaciones`,
+# `decisiones-ilegibles`, y los de `sirius_apply_verdict.sh`/
+# `review-sirius-work.yml`) sí aplican `failed-safely`/`blocked-decision` y
+# siguen contando como parada vigente.
+_STOP_MARKER_RE = re.compile(
+    r"<!--\s*sirius-verdict:[^:]+:"
+    r"(?:FAILED_SAFELY|USAGE_LIMIT_REACHED|blocked"
+    r"|precheck(?!:head-movido-tras-ci\s*-->))"
+    r"(?::[^>]*)?-->"
+)
+
 # --- Etiquetas -> (estado, fase) --------------------------------------------
 #
 # Vocabulario real de `.github/workflows/*.yml` (bootstrap-sirius-automation-labels.yml
@@ -305,6 +388,69 @@ def _interpretar_head_sha(cuerpo: str, comentarios: Sequence[Comentario]) -> str
     return match.group(1) if match else None
 
 
+def _interpretar_reanudacion_publicada(
+    cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
+) -> bool:
+    """``True`` solo si el marcador de reanudación más reciente es POSTERIOR
+    a la última parada publicada en el historial de confianza.
+
+    Mismo filtro de confianza que el resto de marcadores -``sirius_comment_once``
+    los publica el propio bot o el evento ya viene filtrado por
+    ``author_association == OWNER`` en el workflow que invoca al guion-, y el
+    cuerpo entra por el mismo predicado que ``_texto_cronologico_de_confianza``
+    para no reabrir el defecto H-1 (incidencia #215, ADR-051) de tratar el
+    cuerpo distinto que los comentarios.
+
+    La primera versión de esta función devolvía ``True`` en cuanto CUALQUIER
+    marcador de reanudación aparecía en TODO el historial, con ``any(...)`` sin
+    noción de orden -a diferencia de ``_interpretar_pr_url``/
+    ``_interpretar_head_sha`` en este mismo fichero, que sí anclan al
+    comentario más reciente con ``reversed(comentarios)``-. Consecuencia: una
+    vez publicado un marcador, cualquier parada NUEVA y sin relación de esa
+    misma incidencia se leía como ya reanudada (CLAUDE-REVISOR-001/CODEX-002,
+    ronda 5, PR #530). Aquí se recorre el historial en orden cronológico
+    -cuerpo primero, comentarios en el orden en que ya llegan del puerto- y se
+    compara la posición del último marcador de reanudación con la del último
+    marcador de parada (``_STOP_MARKER_RE``): sin parada posterior a la
+    reanudación, o sin ninguna parada en absoluto, el marcador sigue vigente.
+    """
+    textos: list[str] = []
+    if es_autor_de_confianza(cuerpo):
+        textos.append(cuerpo.texto)
+    textos.extend(
+        comentario.cuerpo for comentario in comentarios if es_autor_de_confianza(comentario)
+    )
+
+    ultimo_resume: int | None = None
+    ultima_parada: int | None = None
+    for indice, texto in enumerate(textos):
+        if _RESUME_MARKER_RE.search(texto):
+            ultimo_resume = indice
+        if _STOP_MARKER_RE.search(texto):
+            ultima_parada = indice
+    if ultimo_resume is None:
+        return False
+    return ultima_parada is None or ultimo_resume > ultima_parada
+
+
+def _interpretar_diagnostico_fallo(comentarios: Sequence[Comentario]) -> str | None:
+    """El diagnóstico del último comentario de confianza que paró de forma segura.
+
+    Nunca en el cuerpo -a diferencia de SHA/PR-: ``FAILED_SAFELY`` es un
+    veredicto de un rol de ejecución, y esos solo se publican como
+    comentario (misma fuente que :func:`_interpretar_veredictos`).
+    """
+    for comentario in reversed(comentarios):
+        if not es_autor_de_confianza(comentario):
+            continue
+        match = _DIAGNOSTICO_FALLO_RE.search(comentario.cuerpo)
+        if match:
+            texto = match.group(1).strip()
+            if texto:
+                return texto
+    return None
+
+
 def proyectar_work_item(
     *,
     repo: str,
@@ -348,6 +494,10 @@ def proyectar_work_item(
         eventos_quality=_interpretar_eventos_quality(texto_vigente),
         fallos_quality_consecutivos=ci_failure_streak(texto_vigente),
         origen=OrigenLectura(fuente=f"github:{repo}#{numero}", leido_en=ahora),
+        diagnostico_fallo=_interpretar_diagnostico_fallo(comentarios.comentarios),
+        reanudacion_publicada=_interpretar_reanudacion_publicada(
+            cuerpo.cuerpo, comentarios.comentarios
+        ),
     )
 
 

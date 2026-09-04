@@ -102,6 +102,7 @@ def _espejo(
         eventos_quality=(),
         fallos_quality_consecutivos=0,
         origen=OrigenLectura(fuente="test", leido_en=_AHORA),
+        diagnostico_fallo=None,
     )
     return replace(base, **overrides)  # type: ignore[arg-type]
 
