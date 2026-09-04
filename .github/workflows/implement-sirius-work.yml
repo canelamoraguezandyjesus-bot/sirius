@@ -278,7 +278,7 @@ jobs:
           # 120 turnos previos a mitad del trabajo real (run 29868614857:
           # error_max_turns, 121 turnos, 14,6 min) sin llegar a push/PR/veredicto.
           # 300 da margen para bloques grandes; los pequeños terminan mucho antes.
-          claude_args: '--dangerously-skip-permissions --allowedTools "Bash,Read,Write,Edit,Grep,Glob" --max-turns 300'
+          claude_args: '--model opus --dangerously-skip-permissions --allowedTools "Bash,Read,Write,Edit,Grep,Glob" --max-turns 300'
           # La salida completa del agente NO va al log: el repositorio es
           # publico y los registros de Actions de un repositorio publico los lee
           # cualquiera, sin cuenta, durante 90 dias. La transcripcion integra
