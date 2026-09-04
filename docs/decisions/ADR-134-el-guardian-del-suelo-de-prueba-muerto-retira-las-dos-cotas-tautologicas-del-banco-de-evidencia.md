@@ -57,8 +57,12 @@ ADR repite más abajo (ver "Comprobación que la sostiene").
 primer commit de código. El guardián y la retirada se implementaron en
 `6e3d803`; este documento —con las cuatro preguntas, el criterio de parada y
 las comprobaciones— se añadió después, en `d525252`, hijo de aquel commit
-(`git cat-file -e 6e3d803:docs/decisions/ADR-134-...md` falla: el ADR no
-existe ahí). No es, por tanto, una nota de arranque en el sentido de ADR-001,
+(`git cat-file -e 6e3d803:docs/decisions/ADR-134-el-guardian-del-suelo-de-prueba-muerto-retira-las-dos-cotas-tautologicas-del-banco-de-evidencia.md`
+falla con "not in '6e3d803'": el ADR no existe ahí; la misma ruta completa en
+`d525252` (`git cat-file -e
+d525252:docs/decisions/ADR-134-el-guardian-del-suelo-de-prueba-muerto-retira-las-dos-cotas-tautologicas-del-banco-de-evidencia.md`)
+devuelve 0, lo que distingue ambos commits). No es, por tanto, una nota de
+arranque en el sentido de ADR-001,
 sino una reconstrucción posterior de la misma decisión, redactada antes de
 fusionar la PR pero después de escribir y ejecutar el código. Eso no
 invalida las comprobaciones que reporta la sección "Comprobación que la
