@@ -194,22 +194,24 @@ resto del módulo (`evaluate_finding`, `annotate_observations*`,
 6. Validaciones obligatorias completas sobre el árbol final:
 
    ```
-   $ uv run ruff format --check .   → 594 files already formatted
+   $ uv run ruff format --check .   → 596 files already formatted
    $ uv run ruff check .            → All checks passed!
-   $ uv run mypy src tests          → Success: no issues found in 562 source files
-   $ uv run pytest -q               → 4691 passed, 15 skipped, 2 xfailed in 452.14s
+   $ uv run mypy src tests          → Success: no issues found in 564 source files
+   $ uv run pytest -q               → 4712 passed, 15 skipped, 2 xfailed in 445.70s
    $ git diff --check               → limpio
    ```
 
-   Cifra re-ejecutada sobre el árbol final, después de la corrección de
-   ronda 2 (paso 4). Comparada contra `main` (9fd2666, 4695 pruebas
-   recolectadas antes de esta rama) mediante `pytest --collect-only`, esta
-   rama recolecta 4708, +13 en total: `tests/engine/test_drip_guard.py` pasa
-   de 8 a 11 pruebas nuevas sobre el archivo original (6 casos reales + 2
-   adversarios + 3 de ronda 2), `tests/automation/test_sirius_drip_guard_cli.py`
-   añade 1, y `tests/automation/test_citas_de_los_adr.py::test_toda_ruta_citada_por_un_adr_existe`
-   -parametrizada sobre cada archivo de `docs/decisions/`- gana 1 caso más
-   porque este propio ADR-133 es un archivo nuevo en ese directorio.
+   Cifra re-ejecutada sobre el árbol final, después de que la rama incorporó
+   ADR-135 (incidencia #523, CODEX-001 de ronda 5: el merge trajo un ADR
+   nuevo y desfasó la medición anterior). Comparada contra `main` (c87554a,
+   4716 pruebas recolectadas, con `tests/automation/test_citas_de_los_adr.py::test_toda_ruta_citada_por_un_adr_existe`
+   ya en 130 casos por incluir ADR-134 y ADR-135) mediante `pytest --collect-only`,
+   esta rama recolecta 4729, +13 en total: `tests/engine/test_drip_guard.py`
+   pasa de 23 a 34 -11 pruebas nuevas sobre el archivo original (6 casos
+   reales + 2 adversarios + 3 de ronda 2)-, `tests/automation/test_sirius_drip_guard_cli.py`
+   pasa de 7 a 8 -añade 1-, y `test_toda_ruta_citada_por_un_adr_existe` pasa
+   de 130 a 131 -gana 1 caso más porque este propio ADR-133 es un archivo
+   nuevo en `docs/decisions/`-.
 
 ## Consecuencias
 
