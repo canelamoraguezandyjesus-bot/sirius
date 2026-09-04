@@ -798,6 +798,61 @@ def test_reanudacion_publicada_es_false_si_hay_parada_nueva_tras_marcador_consum
     assert mirrored.reanudacion_publicada is False
 
 
+def test_reanudacion_publicada_no_se_invalida_por_head_movido_tras_ci() -> None:
+    """`precheck:head-movido-tras-ci` no es una parada: no debe invalidar una
+    reanudación ya publicada (CODEX-001, ronda 6, PR #530).
+
+    Esa rama de `repair-sirius-work.yml` (líneas 425-433) publica ese verdict
+    y devuelve la incidencia a `sirius:ci-pending`, no a `failed-safely` ni a
+    `blocked-decision`: es un evento consumible del camino normal, no una
+    parada. Secuencia: parada real → reanudación → `head-movido-tras-ci`. Antes
+    de esta corrección, `_STOP_MARKER_RE` clasificaba también ese último
+    marcador como parada, así que `ultima_parada` quedaba DESPUÉS de
+    `ultimo_resume` y `reanudacion_publicada` se leía como `False` pese a que
+    nada nuevo había parado el ciclo.
+    """
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    parada = Comentario(
+        autor_login="canelamoraguezandyjesus-bot",
+        autor_asociacion="OWNER",
+        cuerpo=(
+            "<!-- sirius-verdict:corrector:FAILED_SAFELY:run-1 -->\n\n"
+            "🔴 **Me he detenido de forma segura**\n\ndiagnóstico"
+        ),
+        creado_en=datetime(2026, 8, 1, tzinfo=UTC),
+    )
+    reanudacion = Comentario(
+        autor_login=_OWNER_LOGIN,
+        autor_asociacion="OWNER",
+        cuerpo="<!-- sirius-resume-stop:deadbee1 -->\n\ncontinua",
+        creado_en=datetime(2026, 8, 2, tzinfo=UTC),
+    )
+    head_movido = Comentario(
+        autor_login="canelamoraguezandyjesus-bot",
+        autor_asociacion="OWNER",
+        cuerpo=(
+            "<!-- sirius-verdict:corrector:precheck:head-movido-tras-ci -->\n\n"
+            "🟡 **El fallo de Quality registrado es de un head anterior**\n\n"
+            "Devuelvo la incidencia a `sirius:ci-pending`."
+        ),
+        creado_en=datetime(2026, 8, 3, tzinfo=UTC),
+    )
+    comentarios = LecturaComentarios(
+        estado=LecturaEstado.OK, comentarios=(parada, reanudacion, head_movido)
+    )
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.reanudacion_publicada is True
+
+
 def test_reanudacion_publicada_es_true_si_el_marcador_llega_tras_la_ultima_parada() -> None:
     """Orden normal de una reanudación real: la parada primero, el marcador de
     reanudación de `sirius_resume_on_command.sh` después. Sigue autorizando.

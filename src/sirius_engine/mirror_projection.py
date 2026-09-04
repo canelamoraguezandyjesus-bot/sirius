@@ -190,8 +190,24 @@ _RESUME_MARKER_RE = re.compile(
 # NO incluye `approved`/`changes`/`CHECKS_UNRELATED` -esos veredictos no paran
 # el ciclo, así que no cuentan como "parada vigente" a efectos de anclar la
 # reanudación-.
+#
+# `precheck` en sí no basta: la rama `head-movido-tras-ci` de
+# `repair-sirius-work.yml` (líneas 425-433) publica exactamente ese verdict
+# -`<!-- sirius-verdict:corrector:precheck:head-movido-tras-ci -->`- y
+# devuelve la incidencia a `sirius:ci-pending`, no a `failed-safely` ni a
+# `blocked-decision`: no es una parada, es un evento consumible que sigue el
+# camino normal. Tratarlo como parada hacía que una reanudación publicada
+# ANTES de esa rama -que no cerró nada, porque no había nada que cerrar- se
+# leyera como ya consumida por ella (CODEX-001, ronda 6, PR #530). El resto de
+# `precheck` (`puerta-sin-tiempo`, `historial-ilegible`, `ronda-innumerable`,
+# `convergencia-<motivo>`, `observaciones-ilegibles`, `sin-observaciones`,
+# `decisiones-ilegibles`, y los de `sirius_apply_verdict.sh`/
+# `review-sirius-work.yml`) sí aplican `failed-safely`/`blocked-decision` y
+# siguen contando como parada vigente.
 _STOP_MARKER_RE = re.compile(
-    r"<!--\s*sirius-verdict:[^:]+:(?:FAILED_SAFELY|USAGE_LIMIT_REACHED|precheck|blocked)"
+    r"<!--\s*sirius-verdict:[^:]+:"
+    r"(?:FAILED_SAFELY|USAGE_LIMIT_REACHED|blocked"
+    r"|precheck(?!:head-movido-tras-ci\s*-->))"
     r"(?::[^>]*)?-->"
 )
 

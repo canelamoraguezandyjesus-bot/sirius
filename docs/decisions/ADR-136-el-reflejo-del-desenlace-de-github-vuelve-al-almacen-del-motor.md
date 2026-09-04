@@ -408,6 +408,47 @@ objetivo") tanto partiendo de `REPARAR` como de `EJECUTAR` -verificado
 trazando la caminata a mano-, así que la prueba de `REPARAR` no ejercitaba
 ningún camino de código que la de `EJECUTAR` no ejercitara ya.
 
+## `_STOP_MARKER_RE` no cuenta un `precheck` que no para nada (corrección CODEX-001, ronda 6, PR #530)
+
+La sección «El marcador de reanudación se ancla...» (arriba) documentó
+`_STOP_MARKER_RE` como reconociendo cualquier `sirius-verdict:<rol>:precheck:...`
+como parada. Eso era demasiado ancho: la rama `head-movido-tras-ci` de
+`repair-sirius-work.yml` (líneas 425-433) publica exactamente ese verdict
+-`<!-- sirius-verdict:corrector:precheck:head-movido-tras-ci -->`- pero
+devuelve la incidencia a `sirius:ci-pending`, no a `failed-safely` ni a
+`blocked-decision`: es el mismo evento consumible del camino normal que
+cualquier resultado de Quality, no una parada. `_DIAGNOSTICO_FALLO_RE` ya la
+excluía (por su cabecera `🟡` distinta de `🔴 **Me he detenido de forma
+segura**`), pero `_STOP_MARKER_RE` no mira la cabecera, solo el marcador, así
+que la clasificaba igual que un `FAILED_SAFELY` real.
+
+**Consecuencia:** si una incidencia parada se reanuda (`sirius-resume-stop`
+publicado) y, ANTES de que el corrector llegue a ejecutar el reflejo, la
+rama `head-movido-tras-ci` devuelve la incidencia a `ci-pending`, ese
+`precheck` posterior a la reanudación se leía como una parada NUEVA:
+`_interpretar_reanudacion_publicada` comparaba las posiciones de
+`_RESUME_MARKER_RE` y `_STOP_MARKER_RE` y encontraba la parada después de la
+reanudación, así que `reanudacion_publicada` salía `False` pese a que nada
+había vuelto a parar el ciclo.
+
+**Corrección:** `_STOP_MARKER_RE` excluye ahora, con una negación de
+anchura fija (`precheck(?!:head-movido-tras-ci\s*-->)`), el único `precheck`
+del repositorio que no aplica una etiqueta de parada. El resto de `precheck`
+-`puerta-sin-tiempo`, `historial-ilegible`, `ronda-innumerable`,
+`convergencia-<motivo>`, `observaciones-ilegibles`, `sin-observaciones`,
+`decisiones-ilegibles`, y los de `sirius_apply_verdict.sh`/
+`review-sirius-work.yml`- sí aplican `sirius:failed-safely` o
+`sirius:blocked-decision` (verificado leyendo cada llamada a `parada`/
+`transition` que los publica) y siguen contando como parada vigente. No se
+tocó ningún workflow ni el protocolo `continua`: es una lectura más
+estrecha y correcta de marcadores que la automatización ya escribe en
+producción.
+
+Probado en `tests/engine/test_mirror_projection.py`
+(`test_reanudacion_publicada_no_se_invalida_por_head_movido_tras_ci`): una
+parada real, una reanudación, y un `precheck:head-movido-tras-ci` posterior
+proyectan `reanudacion_publicada=True` -antes de esta corrección, `False`-.
+
 ## Opciones consideradas
 
 1. **Rango escalar de fase** (`PREPARAR=0 < EJECUTAR=1 < ... < ENTREGAR=5`) y
@@ -513,7 +554,7 @@ cuota de la API.
   salta sin volver a leer su incidencia, una incidencia ilegible no corta
   las demás, espejo sin etiqueta no dice nada, `completed` con SHA entrega
   de verdad.
-- `tests/engine/test_mirror_projection.py` (38 pruebas en total, 14 nuevas
+- `tests/engine/test_mirror_projection.py` (39 pruebas en total, 15 nuevas
   desde la ronda 1): `diagnostico_fallo` desde el último comentario de
   confianza, el más reciente cuando hay varios, un comentario no confiable no
   cuenta, ausente sin comentario de fallo, y las tres de la corrección
@@ -522,12 +563,16 @@ cuota de la API.
   notificación no cuenta; de la ronda 4 (CODEX-001, sección «El marcador de
   reanudación...» arriba), cinco pruebas de `reanudacion_publicada`: cada uno
   de los tres marcadores por separado (parametrizada), ausencia, y un
-  comentario no confiable que cita el marcador sin que cuente; y, de la
+  comentario no confiable que cita el marcador sin que cuente; de la
   ronda 5 (CLAUDE-REVISOR-001/CODEX-002, sección «El marcador de reanudación
   se ancla...» arriba), dos pruebas más que anclan ese resultado al orden
   cronológico: un marcador de reanudación antiguo seguido de una parada nueva
   y sin marcador propio ya no cuenta, y el orden inverso (parada, luego
-  marcador) sigue contando.
+  marcador) sigue contando; y, de la ronda 6 (CODEX-001, sección
+  «`_STOP_MARKER_RE` no cuenta un `precheck` que no para nada» arriba), una
+  prueba más: una parada real, una reanudación, y un
+  `precheck:head-movido-tras-ci` posterior siguen proyectando
+  `reanudacion_publicada=True`.
 - `tests/automation/test_reflejar_desenlace_github.py` (2 pruebas,
   integración con `DurableWorkEngineStore` y `DurableDispatchJournal` reales
   sobre copias de `tests/automation/fixtures/diario_ola_criticidad.jsonl` y
@@ -588,6 +633,19 @@ cuota de la API.
   `tests/engine/test_reflect.py`). `uv run pytest --collect-only -q
   tests/engine/test_reflect.py` mide 30 pruebas (igual que la ronda 4, +1/-1
   neto cero) y `tests/engine/test_mirror_projection.py` mide 38 (36 + 2).
+- Comandos ejecutados, en verde, sobre el árbol de la corrección CODEX-001 de
+  la ronda 6 (PR #530, 2026-09-04): `uv run ruff format --check .` (601
+  ficheros ya formateados), `uv run ruff check .` (todas las comprobaciones
+  superadas), `uv run mypy src tests` (569 ficheros, sin incidencias),
+  `uv run pytest -q` (4766 passed, 15 skipped, 2 xfailed en 441.98s — los
+  xfailed y skipped son preexistentes, ninguno de este bloque). Esta ronda
+  añade 1 función `def test_` nueva
+  (`test_reanudacion_publicada_no_se_invalida_por_head_movido_tras_ci` en
+  `tests/engine/test_mirror_projection.py`); confirmado con
+  `uv run pytest --collect-only -q`, que mide 4783 pruebas recogidas (4766 +
+  15 + 2), 1 más que las 4782 de la ronda 5, y
+  `uv run pytest --collect-only -q tests/engine/test_mirror_projection.py`,
+  que mide 39 (38 + 1).
 - **Reconciliación de la cifra de la ronda 2 (corrección CLAUDE-REVIEWER-002,
   ronda 3):** la ronda 1 (head `e759958`) documentó «4743 passed»; la ronda 2
   (head `72e6218`) documentó «4749 passed», una diferencia de 6, mientras que
