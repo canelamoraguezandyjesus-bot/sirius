@@ -126,13 +126,17 @@ def test_una_constante_minimo_en_cero_indentada_se_detecta() -> None:
 
 def test_una_constante_minimo_con_valor_positivo_no_se_detecta() -> None:
     """El suelo que sí puede fallar: M20 lo dejó al lado del muerto (ADR-134)."""
-    assert not es_constante_minimo_cero("_MINIMO_ELEMENTOS_HALLADOS_PAQUETE_COMPLETO: Final[int] = 72")
+    assert not es_constante_minimo_cero(
+        "_MINIMO_ELEMENTOS_HALLADOS_PAQUETE_COMPLETO: Final[int] = 72"
+    )
 
 
 def test_una_constante_maximo_en_cero_no_se_detecta() -> None:
     """Un techo en 0 SÍ puede fallar (cualquier valor positivo lo rompe): no es un
     suelo. Solo `_MINIMO_*` se señala, nunca `_MAXIMO_*`."""
-    assert not es_constante_minimo_cero("_MAXIMO_OMISIONES_CRITICAS_PAQUETE_COMPLETO: Final[int] = 0")
+    assert not es_constante_minimo_cero(
+        "_MAXIMO_OMISIONES_CRITICAS_PAQUETE_COMPLETO: Final[int] = 0"
+    )
 
 
 def test_una_constante_minimo_sin_anotacion_final_int_no_se_detecta() -> None:
@@ -164,9 +168,8 @@ def test_una_comparacion_encadenada_con_cero_a_la_izquierda_no_se_detecta() -> N
     assert not es_assert_mayor_o_igual_a_cero("assert 0 <= x <= y")
 
 
-def test_una_comparacion_encadenada_con_cero_a_la_izquierda_y_cota_superior_variable_no_se_detecta() -> (
-    None
-):
+def test_una_comparacion_encadenada_real_del_banco_no_se_detecta() -> None:
+    """La misma forma que usa de verdad `test_pa_0_2_rec_01_banco_evidencia.py`."""
     assert not es_assert_mayor_o_igual_a_cero(
         "assert 0 <= paquete_completo.omisiones_criticas <= limite_superior"
     )
@@ -177,13 +180,7 @@ def test_un_assert_de_igualdad_no_se_confunde_con_mayor_o_igual() -> None:
 
 
 def test_suelos_muertos_reporta_linea_y_regla_de_cada_hallazgo() -> None:
-    texto = (
-        "x = 1\n"
-        "_MINIMO_ALGO: Final[int] = 0\n"
-        "y = 2\n"
-        "assert y >= 0\n"
-        "assert 0 <= y <= 10\n"
-    )
+    texto = "x = 1\n_MINIMO_ALGO: Final[int] = 0\ny = 2\nassert y >= 0\nassert 0 <= y <= 10\n"
     assert suelos_muertos(texto) == [
         (2, "constante _MINIMO_*: Final[int] = 0"),
         (4, "assert <expresión> >= 0"),
