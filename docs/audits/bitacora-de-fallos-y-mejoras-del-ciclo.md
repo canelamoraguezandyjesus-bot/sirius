@@ -442,6 +442,26 @@ ADR o su incidencia cuando se adopte.
   tests/automation que falle si dos ficheros de docs/decisions comparten
   número — candidata a encargo pequeño, sin `.github/**`.
 
+### 25. El segundo encargo paralelo no tiene camino de vuelta a revisión (04-09-2026, 12:43 UTC)
+
+- **Qué falló.** Con G1 y G3 en paralelo, el `fusiona` del segundo (G3, PR
+  #524) rebotó dos veces, las dos con razón: primero «1 commit por detrás de
+  main» (G1 entró antes), y tras el «Update branch», «commits posteriores a
+  la última aprobación» (el merge de main movió el head aprobado
+  `806d206` → `ec7539f`). El motor no tiene ruta de `ready-for-merge` de
+  vuelta a revisión: la ruta de avance solo consume verdes en
+  `ci-pending`/`failed-safely`.
+- **Qué se hizo.** El propietario repuso a mano `sirius:review-requested`
+  (la transición exacta que la ruta habría hecho con el verde de Quality del
+  head nuevo, run 33872295031) y lo dejó comentado en la incidencia.
+- **Mejor manera (candidata de motor).** Una de dos: (a) que el bloqueo de
+  «commits posteriores a la aprobación» reponga él mismo `review-requested`
+  cuando el único commit nuevo sea un merge limpio de `main` con Quality en
+  verde; o (b) que la ruta de avance acepte también `ready-for-merge` con
+  head distinto del aprobado. Mientras tanto, todo segundo encargo paralelo
+  pagará una ronda extra de revisión más este empujón manual: coste a tener
+  en cuenta al decidir si despachar en paralelo.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
