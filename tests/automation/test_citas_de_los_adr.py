@@ -160,8 +160,7 @@ _ADR_132 = (
     "corrige-ollama-category-classifier.md"
 )
 _ADR_135 = (
-    "ADR-135-el-corrector-actualiza-en-el-mismo-commit-el-papel-que-depende-de-su-"
-    "correccion.md"
+    "ADR-135-el-corrector-actualiza-en-el-mismo-commit-el-papel-que-depende-de-su-correccion.md"
 )
 
 RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
