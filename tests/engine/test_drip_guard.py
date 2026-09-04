@@ -140,6 +140,36 @@ def test_adversario_dos_numero_pegado_a_la_ruta_gana_al_parentesis() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Ronda 2 de la incidencia #523: hallazgos CLAUDE-R2-001, CODEX-001 y
+# CODEX-002 sobre el mismo bloque, byte-idéntico desde la ronda 1.
+# --------------------------------------------------------------------------- #
+
+
+def test_ronda2_fichero_raiz_sin_extension_con_linea_pegada() -> None:
+    # Antes: ("LICENSE:5", None) -"LICENSE" no tiene "/" ni ".", así que no
+    # se reconocía como ruta y el sufijo ":5" nunca se evaluaba. El parser
+    # previo a esta PR (`_LOCATION_LINE_RE`) sí resolvía este caso.
+    # CLAUDE-R2-001, CODEX-002 (incidencia #523, ronda 2).
+    assert parse_archivo_location("LICENSE:5") == ("LICENSE", 5)
+
+
+def test_ronda2_fichero_raiz_sin_extension_con_rango_y_texto_detras() -> None:
+    # El mismo formato que ya se acepta para rutas con "/" o ".": rango y
+    # texto arbitrario detrás del número.
+    assert parse_archivo_location("LICENSE:5-10 en abc1234") == ("LICENSE", 5)
+
+
+def test_ronda2_prosa_sin_ninguna_ruta_reconocible_no_marca_linea() -> None:
+    # Antes: ("el cuerpo de la PR (línea 10)", 10) -la búsqueda en prosa se
+    # aplicaba sobre el texto completo aunque ningún prefijo fuera una ruta
+    # reconocible, así que `evaluate_finding` podía marcar POSIBLE_GOTEO sin
+    # haber comparado nunca un fichero real. CODEX-001 (incidencia #523,
+    # ronda 2): sin ruta reconocible, no se extrae ninguna línea.
+    archivo = "el cuerpo de la PR (línea 10)"
+    assert parse_archivo_location(archivo) == (archivo, None)
+
+
+# --------------------------------------------------------------------------- #
 # Los cinco escenarios exigidos por la incidencia #496
 # --------------------------------------------------------------------------- #
 

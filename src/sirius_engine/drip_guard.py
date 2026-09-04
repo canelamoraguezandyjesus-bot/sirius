@@ -62,10 +62,15 @@ DEFAULT_TIME_BUDGET_SECONDS = 120.0
 # Prefijo de `archivo` que parece una ruta de fichero del repositorio: letras,
 # dígitos, `/`, `.`, `_`, `-`. No es suficiente por sí solo -"el" también
 # encaja-, así que solo se acepta como ruta reconocible cuando además
-# contiene un separador de directorio o una extensión (incidencia #523, G3):
-# el adorno que los revisores añaden alrededor de la ruta real (nombre de
-# función entre paréntesis, "en <sha>", "líneas NNN-MMM") nunca usa esos
-# caracteres, así que el prefijo se detiene exactamente donde termina la ruta.
+# contiene un separador de directorio o una extensión (incidencia #523, G3),
+# o cuando va seguido inmediatamente de `:NNN` (incidencia #523, ronda 2:
+# CLAUDE-R2-001/CODEX-002): un fichero real del repositorio en la raíz sin
+# extensión, como `LICENSE`, no tiene ni "/" ni ".", pero "`LICENSE:5`" es un
+# formato `ruta:línea` inequívoco -el mismo que ya se acepta para rutas con
+# separador- y no una cita en prosa. El adorno que los revisores añaden
+# alrededor de la ruta real (nombre de función entre paréntesis, "en <sha>",
+# "líneas NNN-MMM") nunca usa esos caracteres, así que el prefijo se detiene
+# exactamente donde termina la ruta.
 _RUTA_PREFIX_RE = re.compile(r"^[A-Za-z0-9/._-]+")
 
 # Sufijo de línea (o rango) pegado directamente a una ruta reconocible:
@@ -129,9 +134,16 @@ def parse_archivo_location(archivo: object) -> tuple[str, int | None]:
     Regla conservadora, en este orden (incidencia #523, G3):
 
     1. Si tras una ruta reconocible hay ``:NNN`` (con o sin ``-MMM`` y con o
-       sin texto detrás), la línea es ``NNN``.
-    2. Si no, si en el resto del texto aparece ``línea(s) ~?NNN``, la línea
-       es ``NNN``.
+       sin texto detrás), la línea es ``NNN``. Un prefijo sin ``/`` ni ``.``
+       cuenta como ruta reconocible precisamente cuando le sigue ese ``:NNN``
+       pegado (p.ej. ``LICENSE:5``): el formato ``ruta:línea`` es la señal,
+       no la presencia de un separador de directorio o una extensión.
+    2. Si no, si en el resto del texto aparece ``línea(s) ~?NNN`` **y ya hay
+       una ruta reconocible** (por ``/``, ``.`` o el ``:NNN`` pegado de la
+       regla 1), la línea es ``NNN``. Sin una ruta reconocible, una mención
+       de "línea NNN" en prosa suelta no ancla ninguna comparación mecánica
+       -el texto no identifica ningún fichero del repositorio- así que no se
+       extrae ningún número (incidencia #523, ronda 2: CODEX-001).
     3. Si no hay número reconocible, la línea es ``None`` -el nivel mecánico
        de §3.1 no es aplicable sin una línea concreta, así que el llamador
        decide qué hacer con esa ausencia- y la ruta es la ruta reconocible
@@ -147,20 +159,25 @@ def parse_archivo_location(archivo: object) -> tuple[str, int | None]:
     ruta_reconocible: str | None = None
     resto = texto
     prefijo = _RUTA_PREFIX_RE.match(texto)
-    if prefijo and ("/" in prefijo.group(0) or "." in prefijo.group(0)):
-        ruta_reconocible = prefijo.group(0)
-        resto = texto[len(ruta_reconocible) :]
+    if prefijo:
+        candidato = prefijo.group(0)
+        candidato_resto = texto[len(candidato) :]
+        sufijo_pegado = _LOCATION_SUFFIX_RE.match(candidato_resto)
+        if "/" in candidato or "." in candidato or sufijo_pegado:
+            ruta_reconocible = candidato
+            resto = candidato_resto
 
-    if ruta_reconocible is not None:
-        sufijo = _LOCATION_SUFFIX_RE.match(resto)
-        if sufijo:
-            return ruta_reconocible, int(sufijo.group(1))
+    if ruta_reconocible is None:
+        return texto, None
 
-    prosa = _LOCATION_PROSE_RE.search(resto if ruta_reconocible is not None else texto)
-    ruta = ruta_reconocible if ruta_reconocible is not None else texto
+    sufijo = _LOCATION_SUFFIX_RE.match(resto)
+    if sufijo:
+        return ruta_reconocible, int(sufijo.group(1))
+
+    prosa = _LOCATION_PROSE_RE.search(resto)
     if prosa:
-        return ruta, int(prosa.group(1))
-    return ruta, None
+        return ruta_reconocible, int(prosa.group(1))
+    return ruta_reconocible, None
 
 
 _HUNK_HEADER_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
