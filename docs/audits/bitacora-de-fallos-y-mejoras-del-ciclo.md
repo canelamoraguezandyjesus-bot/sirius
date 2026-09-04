@@ -408,6 +408,23 @@ ADR o su incidencia cuando se adopte.
   de lanzarlo y ordenar las fases para que lo caro quede cacheado primero;
   y, cuando un flujo se corte dos veces, cerrar a mano en vez de insistir.
 
+### 23. El guardián de goteo lleva mudo desde que se cableó (04-09-2026)
+
+- **Qué falló.** ADR-123 cableó el guardián en `sirius_apply_verdict.sh:492`
+  y funciona… con citas limpias. Su lector (`parse_archivo_location`,
+  `drip_guard.py:67`, regex `^(.*?):(\d+)(?:-\d+)?$`) exige `ruta:número`
+  exacto al final del campo `archivo`. Los revisores escriben ese campo con
+  adornos (paréntesis con la función, «en <sha>», rangos con texto detrás).
+  Probado con los seis campos reales de la ola: 1 de 6 se entiende. Resultado
+  medido por la mina: 5 goteos reales, 0 marcas.
+- **Por qué.** El contrato de entrada del guardián nunca se validó contra lo
+  que el revisor escribe de verdad; las pruebas del cableado usaron citas
+  limpias.
+- **Mejor manera.** Encargo pequeño: endurecer `parse_archivo_location` con
+  los seis casos reales como pruebas (vistas fallar antes), y una prueba de
+  extremo a extremo con una observación real de #520. Pendiente del OK del
+  propietario.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
