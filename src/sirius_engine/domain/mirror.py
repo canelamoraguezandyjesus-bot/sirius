@@ -117,6 +117,13 @@ class MirroredWorkItem:
     eventos_quality: tuple[EventoQuality, ...]
     fallos_quality_consecutivos: int
     origen: OrigenLectura
+    #: El texto del último comentario de confianza que publicó un veredicto
+    #: ``FAILED_SAFELY``/``USAGE_LIMIT_REACHED`` (mismo cuerpo que
+    #: ``sirius_apply_verdict.sh`` escribe bajo "🔴 **Me he detenido de forma
+    #: segura**"), o ``None`` si ninguno publicó uno. Es lo que C1
+    #: (incidencia #529) necesita para llevar el diagnóstico real al almacén
+    #: del motor cuando refleja ``sirius:failed-safely``.
+    diagnostico_fallo: str | None
     autoritativo: bool = field(default=False, init=False)
 
 

@@ -128,6 +128,21 @@ _QUALITY_EVENT_RE = re.compile(
 # de grupos.
 _VERDICT_MARKER_RE = re.compile(r"<!--\s*sirius-verdict:([^>]*?)\s*-->")
 
+# Cuerpo exacto que `sirius_apply_verdict.sh` publica para FAILED_SAFELY y
+# USAGE_LIMIT_REACHED (incidencia #529):
+#   <!-- sirius-verdict:<rol>:<verdict>:<SIRIUS_RUN_TAG> -->
+#
+#   🔴 **Me he detenido de forma segura**
+#
+#   <diagnóstico>
+# Se captura solo el diagnóstico -lo que sigue a la cabecera fija-, no el
+# marcador ni el emoji: eso ya lo interpreta `_interpretar_veredictos`.
+_DIAGNOSTICO_FALLO_RE = re.compile(
+    r"<!--\s*sirius-verdict:[^:]+:(?:FAILED_SAFELY|USAGE_LIMIT_REACHED):[^>]*-->"
+    r"\s*\n+.*?Me he detenido de forma segura.*?\n+(.*)",
+    re.DOTALL,
+)
+
 # --- Etiquetas -> (estado, fase) --------------------------------------------
 #
 # Vocabulario real de `.github/workflows/*.yml` (bootstrap-sirius-automation-labels.yml
@@ -305,6 +320,24 @@ def _interpretar_head_sha(cuerpo: str, comentarios: Sequence[Comentario]) -> str
     return match.group(1) if match else None
 
 
+def _interpretar_diagnostico_fallo(comentarios: Sequence[Comentario]) -> str | None:
+    """El diagnóstico del último comentario de confianza que paró de forma segura.
+
+    Nunca en el cuerpo -a diferencia de SHA/PR-: ``FAILED_SAFELY`` es un
+    veredicto de un rol de ejecución, y esos solo se publican como
+    comentario (misma fuente que :func:`_interpretar_veredictos`).
+    """
+    for comentario in reversed(comentarios):
+        if not es_autor_de_confianza(comentario):
+            continue
+        match = _DIAGNOSTICO_FALLO_RE.search(comentario.cuerpo)
+        if match:
+            texto = match.group(1).strip()
+            if texto:
+                return texto
+    return None
+
+
 def proyectar_work_item(
     *,
     repo: str,
@@ -348,6 +381,7 @@ def proyectar_work_item(
         eventos_quality=_interpretar_eventos_quality(texto_vigente),
         fallos_quality_consecutivos=ci_failure_streak(texto_vigente),
         origen=OrigenLectura(fuente=f"github:{repo}#{numero}", leido_en=ahora),
+        diagnostico_fallo=_interpretar_diagnostico_fallo(comentarios.comentarios),
     )
 
 

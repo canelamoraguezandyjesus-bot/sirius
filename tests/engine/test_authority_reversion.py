@@ -414,6 +414,7 @@ def _linea_de_incidencia_contradictoria(dia: int) -> LineaRegistro:
         eventos_quality=(),
         fallos_quality_consecutivos=0,
         origen=OrigenLectura(fuente="test", leido_en=_instante(dia)),
+        diagnostico_fallo=None,
     )
     assert motor.estado is WorkItemState.ACTIVE
     assert motor.fase is WorkItemPhase.PREPARAR

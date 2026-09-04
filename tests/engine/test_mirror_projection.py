@@ -451,6 +451,116 @@ def test_marcador_pr_abierta_citado_en_texto_no_se_confunde_con_uno_real() -> No
     assert mirrored.pr_url is None
 
 
+# --- El diagnóstico de un comentario FAILED_SAFELY (C1, incidencia #529) ---
+
+
+def test_diagnostico_fallo_se_extrae_del_ultimo_comentario_de_confianza() -> None:
+    """Mismo cuerpo exacto que ``sirius_apply_verdict.sh`` publica para
+    ``FAILED_SAFELY``/``USAGE_LIMIT_REACHED``: marcador, cabecera fija en
+    negrita, y el diagnóstico libre debajo.
+    """
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    comentario = Comentario(
+        autor_login="canelamoraguezandyjesus-bot",
+        autor_asociacion="OWNER",
+        cuerpo=(
+            "<!-- sirius-verdict:implementer:FAILED_SAFELY:run-1 -->\n\n"
+            "🔴 **Me he detenido de forma segura**\n\n"
+            "uv no estaba instalado en el runner y curl estaba denegado."
+        ),
+        creado_en=_AHORA,
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(comentario,))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert (
+        mirrored.diagnostico_fallo == "uv no estaba instalado en el runner y curl estaba denegado."
+    )
+
+
+def test_diagnostico_fallo_toma_el_ultimo_cuando_hay_varios() -> None:
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    viejo = Comentario(
+        autor_login="canelamoraguezandyjesus-bot",
+        autor_asociacion="OWNER",
+        cuerpo=(
+            "<!-- sirius-verdict:implementer:FAILED_SAFELY:run-1 -->\n\n"
+            "🔴 **Me he detenido de forma segura**\n\ndiagnóstico viejo"
+        ),
+        creado_en=_AHORA,
+    )
+    nuevo = Comentario(
+        autor_login="canelamoraguezandyjesus-bot",
+        autor_asociacion="OWNER",
+        cuerpo=(
+            "<!-- sirius-verdict:corrector:FAILED_SAFELY:run-2 -->\n\n"
+            "🔴 **Me he detenido de forma segura**\n\ndiagnóstico nuevo"
+        ),
+        creado_en=_AHORA,
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(viejo, nuevo))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.diagnostico_fallo == "diagnóstico nuevo"
+
+
+def test_diagnostico_fallo_de_un_comentario_no_confiable_no_cuenta() -> None:
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    comentario = Comentario(
+        autor_login="un-tercero",
+        autor_asociacion="NONE",
+        cuerpo=(
+            "<!-- sirius-verdict:implementer:FAILED_SAFELY:run-1 -->\n\n"
+            "🔴 **Me he detenido de forma segura**\n\ndiagnóstico ajeno"
+        ),
+        creado_en=_AHORA,
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(comentario,))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.diagnostico_fallo is None
+
+
+def test_diagnostico_fallo_ausente_sin_comentario_de_fallo() -> None:
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=())
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.diagnostico_fallo is None
+
+
 # --- El cuerpo pasa por el MISMO filtro que los comentarios (H-1, #215) ----
 #
 # El defecto: `_texto_cronologico_de_confianza` filtraba los comentarios por
