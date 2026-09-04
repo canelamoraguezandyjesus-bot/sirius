@@ -462,6 +462,35 @@ ADR o su incidencia cuando se adopte.
   pagará una ronda extra de revisión más este empujón manual: coste a tener
   en cuenta al decidir si despachar en paralelo.
 
+### 26. La ronda extra de G3 encontró tres defectos reales que la aprobación anterior y mi verificación no vieron (04-09-2026, 13:06 UTC)
+
+- **Qué falló.** La revisión sobre el head `ec7539f` de G3 (#523) devolvió
+  CHANGES_REQUESTED con tres hallazgos legítimos del parser nuevo que la
+  ronda anterior había aprobado en `806d206`: (1) regresión con ficheros
+  sin extensión — `parse_archivo_location("LICENSE:5")` devuelve
+  `("LICENSE:5", None)` porque la «ruta reconocible» del implementador
+  exige `/` o `.`, cuando el parser viejo sí lo entendía (CLAUDE-R2-001 y
+  CODEX-002, el mismo defecto visto por los dos revisores); y (2) la regla
+  de prosa extrae número sin exigir ruta — `"el cuerpo de la PR (línea
+  10)"` devuelve `(texto, 10)`, la comparación sobre una ruta inexistente
+  da «no cambió», y eso acaba en un POSIBLE_GOTEO falso (CODEX-001).
+- **Dos lecciones, no una.** Primera: el rebote de la entrada 25 salió
+  caro pero pagó — la ronda «redundante» forzada por el guard de
+  aprobación obsoleta cazó defectos que dos revisores ya habían dejado
+  pasar. Segunda: mi propia verificación local (8/8 casos en verde) tampoco
+  los habría cazado, porque mis casos eran los de mi propia orden: quien
+  redacta el encargo no puede ser la única fuente de sus casos de prueba.
+- **Mi parte en la regresión.** La orden definía «ruta reconocible» como
+  «el prefijo más largo que parece ruta (letras, dígitos, `/`, `.`, `_`,
+  `-`)» y a la vez exigía el caso adversario «texto sin ninguna ruta →
+  (texto, None)». Con esa definición, «el» en «el cuerpo de la PR» ya
+  parece ruta: la orden pedía dos cosas incompatibles sin resolver el
+  conflicto, y el implementador lo resolvió estrechando (exigir `/` o
+  `.`), que es lo que rompió `LICENSE:5`. Mejor manera: cuando una orden
+  define una heurística, incluir en la propia orden los casos frontera que
+  la heurística debe y no debe aceptar (aquí: `LICENSE:5` sí, «el cuerpo
+  de la PR (línea 10)» no).
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
