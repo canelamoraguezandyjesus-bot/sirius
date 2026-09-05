@@ -43,6 +43,8 @@ Estructura de este fichero:
 - Sección E: ``completed`` -> ``delivered`` con el SHA de fusión;
   ``failed-safely`` -> ``failed_safely`` con el diagnóstico real.
 - Sección F: las dos mutaciones de la nota de arranque, vistas caer.
+- Sección G: el recorrido acreditado y el permiso escrito que acredita salir
+  de una parada (ADR-147, incidencia #545; material de partida de la PR #540).
 """
 
 from __future__ import annotations
@@ -53,13 +55,20 @@ import pytest
 
 from sirius_engine.adapters.memory_store import InMemoryWorkEngineStore
 from sirius_engine.domain.dispatch import DispatchEpisode
-from sirius_engine.domain.mirror import MirroredWorkItem, OrigenLectura
+from sirius_engine.domain.mirror import (
+    EstadoAcreditado,
+    FormaDePermiso,
+    MirroredWorkItem,
+    OrigenLectura,
+    PermisoDeReanudacion,
+)
 from sirius_engine.domain.work_item import (
     WorkItem,
     WorkItemClass,
     WorkItemPhase,
     WorkItemState,
 )
+from sirius_engine.mirror_projection import _LABEL_STATE
 from sirius_engine.reflect import (
     PASO_COMPROBACION_INICIADA,
     PASO_DECISION_RESUELTA,
@@ -101,6 +110,8 @@ def _espejo(
     head_sha: str | None = None,
     diagnostico_fallo: str | None = None,
     reanudacion_publicada: bool = False,
+    historial_estados: tuple[EstadoAcreditado, ...] = (),
+    permisos_reanudacion: tuple[PermisoDeReanudacion, ...] = (),
 ) -> MirroredWorkItem:
     return MirroredWorkItem(
         work_id=f"{_REPO}#508",
@@ -118,6 +129,8 @@ def _espejo(
         origen=OrigenLectura(fuente="test", leido_en=_AHORA),
         diagnostico_fallo=diagnostico_fallo,
         reanudacion_publicada=reanudacion_publicada,
+        historial_estados=historial_estados,
+        permisos_reanudacion=permisos_reanudacion,
     )
 
 
@@ -862,3 +875,680 @@ def test_mutacion_quitar_idempotencia_la_detecta_esta_prueba() -> None:
     )
     # Si esto no fuera así, la siguiente línea lanzaría IllegalTransitionError.
     aplicar_pasos(store, _WORK_ID, segundo.pasos, now=_AHORA)
+
+
+# --- Sección G: el recorrido acreditado y el permiso escrito (ADR-147, #545) ---
+#
+# Nota de arranque en ADR-147. El caso vivo es WI-20260905-034826 (incidencia
+# #537): el motor se quedó en `failed_safely`/`reparar` en su parada de las
+# 05:17 del 05-09-2026 y la incidencia siguió sin él -segunda orden `continua`
+# a las 05:29, dos vueltas de Quality+revisión, `completed` a las 07:00-. El
+# reflector comparaba su estado guardado con la foto actual, no encontraba
+# camino hacia delante y se negaba (fail-open correcto, memoria
+# desactualizada).
+#
+# El criterio que estas pruebas fijan, y que ADR-147 decidió ANTES de
+# escribirlas: la salida de una parada la acredita ÚNICAMENTE un permiso
+# escrito del propietario posterior a ESA parada, consumido en orden. Ni la
+# foto vigente, ni la posición de un aviso, ni ninguna otra heurística.
+
+
+def _cronologia(
+    *entradas: tuple[str, str],
+) -> tuple[tuple[EstadoAcreditado, ...], tuple[PermisoDeReanudacion, ...]]:
+    """El historial de confianza como UNA secuencia, con su ``orden`` compartido.
+
+    Cada entrada es ``("estado", "<etiqueta>")`` -un marcador
+    ``sirius-notification``- o ``("marcador"|"orden", "<referencia>")`` -un
+    permiso escrito del propietario-, en el orden en que se publicaron; el
+    ``orden`` se asigna por posición, exactamente como hace la proyección real
+    sobre los textos de confianza.
+
+    Que las dos cosas se declaren JUNTAS es deliberado: lo que el reflector
+    mide es la posición relativa entre una parada y el permiso que la levanta,
+    y dos listas independientes dejarían esa relación escrita en ningún sitio
+    -que es justo como se colaba la foto en las tres rondas de la #539-.
+    """
+    estados: list[EstadoAcreditado] = []
+    permisos: list[PermisoDeReanudacion] = []
+    for orden, (tipo, referencia) in enumerate(entradas):
+        if tipo == "estado":
+            estado, fase = _LABEL_STATE[referencia]
+            estados.append(
+                EstadoAcreditado(
+                    etiqueta=referencia, estado=estado, fase=fase, head="1c934781", orden=orden
+                )
+            )
+        else:
+            permisos.append(
+                PermisoDeReanudacion(
+                    forma=FormaDePermiso.MARCADOR if tipo == "marcador" else FormaDePermiso.ORDEN,
+                    referencia=referencia,
+                    orden=orden,
+                )
+            )
+    return tuple(estados), tuple(permisos)
+
+
+#: El historial de confianza REAL de la incidencia #537, medido con
+#: `gh api repos/.../issues/537/comments --paginate` el 05-09-2026 y recortado
+#: a lo que la proyección extrae: los marcadores `sirius-notification` y los
+#: permisos escritos. Los dos hechos que lo hacen el caso vivo:
+#:
+#: - el ÚNICO marcador de reanudación (`sirius-resume-stop:1c934781`, 04:46:18Z)
+#:   es ANTERIOR a la parada de las 05:17 y quedó consumido por la salida del
+#:   `blocked-decision` de las 04:37;
+#: - lo que hay DESPUÉS de la parada es la orden `continua` del propietario
+#:   (05:29:04Z). No hay segundo marcador porque `sirius_comment_once`
+#:   deduplica por el texto completo y el head no se había movido.
+_CRONOLOGIA_537 = _cronologia(
+    ("estado", "sirius:implementing"),
+    ("estado", "sirius:repair-requested"),
+    ("estado", "sirius:blocked-decision"),
+    ("orden", "continua"),
+    ("marcador", "<!-- sirius-resume-stop:1c934781 -->"),
+    ("estado", "sirius:failed-safely"),
+    ("orden", "continua"),
+    ("estado", "sirius:repair-requested"),
+    ("estado", "sirius:ready-for-merge"),
+    ("estado", "sirius:completed"),
+)
+
+
+def _motor_parado_en_reparar(store: InMemoryWorkEngineStore) -> WorkItem:
+    """El estado exacto en que se quedó WI-20260905-034826: failed_safely/reparar."""
+    _work_item_activo(store)
+    store.begin_work_item_execution(_WORK_ID, now=_AHORA)
+    store.begin_work_item_check(_WORK_ID, now=_AHORA)
+    store.begin_work_item_review(_WORK_ID, now=_AHORA)
+    store.request_work_item_repair(_WORK_ID, now=_AHORA)
+    parado = store.fail_work_item_safely(_WORK_ID, diagnostico="sin tiempo", now=_AHORA)
+    assert parado.estado is WorkItemState.FAILED_SAFELY
+    assert parado.fase is WorkItemPhase.REPARAR
+    return parado
+
+
+def test_recorrido_acreditado_avanza_el_caso_vivo_de_la_537() -> None:
+    """El caso que motivó ADR-147, con el historial real de la incidencia #537.
+
+    El espejo NO trae `reanudacion_publicada`: el único marcador de
+    reanudación es anterior a la parada. Lo que acredita la salida es la orden
+    `continua` del propietario de las 05:29, posterior a ella.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    historial, permisos = _CRONOLOGIA_537
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        head_sha="92e5b9f469485c537c9cec5b37f6131f17d9903a",
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.divergencia is None
+    assert tuple(paso.kind for paso in resultado.pasos) == (
+        PASO_REACTIVADO,
+        PASO_REPARACION_REANUDADA,
+        PASO_REVISION_INICIADA,
+        PASO_REVISION_APROBADA,
+        PASO_ENTREGADO,
+    )
+
+    aplicados = aplicar_pasos(store, _WORK_ID, resultado.pasos, now=_AHORA)
+    entregado = aplicados[-1]
+    assert entregado.estado is WorkItemState.DELIVERED
+    assert entregado.fase is WorkItemPhase.ENTREGAR
+    assert entregado.resultado is not None
+    assert entregado.resultado["merge_sha"] == "92e5b9f469485c537c9cec5b37f6131f17d9903a"
+
+    # C1, invariante 3: la pasada siguiente no añade nada.
+    segunda = reflejar_desenlace(entregado, espejo, _episodio())
+    assert segunda.pasos == ()
+    assert segunda.divergencia is None
+
+
+def test_sin_permiso_posterior_a_la_parada_se_declara_y_no_se_toca_nada() -> None:
+    """Contraejemplo 1 de la incidencia #545: la revivificación H-34 de etiqueta.
+
+    Mismo motor, misma foto y el MISMO camino acreditado que el caso vivo, con
+    una sola diferencia: nadie escribió nada tras la parada. La recuperación
+    queda como divergencia declarada hasta que una persona la mire. Es la
+    consecuencia aceptada y deliberada del encargo: es honesto y no inventa
+    permisos.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    historial, permisos = _cronologia(
+        ("estado", "sirius:implementing"),
+        ("estado", "sirius:failed-safely"),
+        ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:ready-for-merge"),
+        ("estado", "sirius:completed"),
+    )
+    assert permisos == ()
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        historial_estados=historial,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+    assert "no hay camino hacia delante, no se toca nada" in resultado.divergencia
+    item = store.get_work_item(_WORK_ID)
+    assert item is not None
+    assert item.estado is WorkItemState.FAILED_SAFELY
+
+
+def test_un_permiso_anterior_a_la_parada_no_la_levanta() -> None:
+    """La premisa que la primera ronda de la #545 midió falsa, convertida en prueba.
+
+    El historial de la #537 contiene un marcador de reanudación, pero es de
+    las 04:46 y la parada es de las 05:17: ya lo consumió la salida del
+    `blocked-decision` anterior. Un permiso anterior a la parada no acredita
+    nada, y al saltárselo queda descartado para siempre.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    historial, permisos = _cronologia(
+        ("estado", "sirius:implementing"),
+        ("marcador", "<!-- sirius-resume-stop:1c934781 -->"),
+        ("estado", "sirius:failed-safely"),
+        ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:ready-for-merge"),
+        ("estado", "sirius:completed"),
+    )
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+
+
+def test_el_marcador_de_reanudacion_acredita_igual_que_la_orden() -> None:
+    """Las dos formas del permiso pesan lo mismo (ADR-147).
+
+    Misma cronología que la prueba anterior con el marcador movido DESPUÉS de
+    la parada: el recibo de la máquina, cuando existe y es posterior, acredita
+    exactamente igual que la orden del propietario.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    historial, permisos = _cronologia(
+        ("estado", "sirius:implementing"),
+        ("estado", "sirius:failed-safely"),
+        ("marcador", "<!-- sirius-resume-stop:1c934781 -->"),
+        ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:ready-for-merge"),
+        ("estado", "sirius:completed"),
+    )
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.divergencia is None
+    assert tuple(paso.kind for paso in resultado.pasos) == (
+        PASO_REACTIVADO,
+        PASO_REPARACION_REANUDADA,
+        PASO_REVISION_INICIADA,
+        PASO_REVISION_APROBADA,
+        PASO_ENTREGADO,
+    )
+
+
+def test_dos_paradas_y_un_solo_permiso_no_acreditan_la_segunda() -> None:
+    """Contraejemplo 2 de la incidencia #545 (el de la ronda 3 de la #539).
+
+    El recorrido pasa por un `blocked-decision` intermedio y solo hay UN
+    permiso posterior a la primera parada. La primera salida se acredita; la
+    segunda no, así que el recorrido se abandona entero: un `needs_decision`
+    jamás se resuelve en el almacén sin su permiso.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    historial, permisos = _cronologia(
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:blocked-decision"),
+        ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:ready-for-merge"),
+        ("estado", "sirius:completed"),
+    )
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        head_sha="92e5b9f4",
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == (), (
+        "ni la foto final ni los avisos de estado posteriores acreditan la "
+        "salida de la segunda parada: sería resolver un NEEDS_DECISION sin "
+        "ninguna orden del propietario"
+    )
+    assert resultado.divergencia is not None
+    item = store.get_work_item(_WORK_ID)
+    assert item is not None
+    assert item.estado is WorkItemState.FAILED_SAFELY
+
+
+def test_dos_paradas_con_su_permiso_cada_una_recorren_entero() -> None:
+    """La cara positiva del contraejemplo 2: cada parada con SU permiso.
+
+    Mismo recorrido que la prueba anterior más una segunda orden `continua`,
+    esta vez posterior al `blocked-decision`. Las dos salidas quedan
+    acreditadas por su propio permiso y el recorrido entero se aplica.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    historial, permisos = _cronologia(
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:blocked-decision"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:ready-for-merge"),
+        ("estado", "sirius:completed"),
+    )
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        head_sha="92e5b9f4",
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.divergencia is None
+    assert tuple(paso.kind for paso in resultado.pasos) == (
+        PASO_REACTIVADO,
+        PASO_ESCALADO,
+        PASO_DECISION_RESUELTA,
+        PASO_REPARACION_REANUDADA,
+        PASO_REVISION_INICIADA,
+        PASO_REVISION_APROBADA,
+        PASO_ENTREGADO,
+    )
+    aplicados = aplicar_pasos(store, _WORK_ID, resultado.pasos, now=_AHORA)
+    assert aplicados[-1].estado is WorkItemState.DELIVERED
+
+
+def test_un_permiso_no_puede_acreditar_dos_salidas_de_parada() -> None:
+    """El consumo en orden: el puntero solo avanza.
+
+    Un solo `continua`, y está DESPUÉS de las dos paradas del recorrido: es
+    posterior a la primera -así que la acredita- y también posterior a la
+    segunda. Si el consumo no gastara el permiso -si se limitara a preguntar
+    «¿hay alguno posterior a esta parada?»-, ese único `continua` levantaría
+    las dos y el `NEEDS_DECISION` se resolvería en el almacén con la palabra
+    que el propietario escribió para otra cosa.
+
+    Es la mutación que fija que la k-ésima salida consume el primer permiso
+    AÚN NO CONSUMIDO, no simplemente el primero posterior. Su hermana
+    `test_dos_paradas_con_su_permiso_cada_una_recorren_entero` fija que dos
+    permisos sí bastan.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    historial, permisos = _cronologia(
+        ("estado", "sirius:failed-safely"),
+        ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:blocked-decision"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:completed"),
+    )
+    assert len(permisos) == 1
+    assert permisos[0].orden > historial[2].orden, (
+        "el único permiso es posterior a las DOS paradas: lo que lo impide no "
+        "es su fecha, es que ya se gastó en la primera"
+    )
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        head_sha="92e5b9f4",
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+
+
+def test_el_recorrido_ancla_en_la_ULTIMA_coincidencia_con_el_estado_guardado() -> None:
+    """El motor está donde se quedó, no donde estuvo la primera vez.
+
+    Este historial para dos veces en seguro, y cada parada trae su permiso.
+    Anclando en la PRIMERA, el recorrido intentaría llevar el motor hasta
+    ENTREGAR y desde ahí volver a REPARAR -y no existe ninguna arista de
+    ENTREGAR a REPARAR-, así que se abandonaría entero. Anclando en la última
+    -que es donde el motor se quedó de verdad- el camino existe.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    historial, permisos = _cronologia(
+        ("estado", "sirius:implementing"),
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:ready-for-merge"),
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:ready-for-merge"),
+        ("estado", "sirius:completed"),
+    )
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert tuple(paso.kind for paso in resultado.pasos) == (
+        PASO_REACTIVADO,
+        PASO_REPARACION_REANUDADA,
+        PASO_REVISION_INICIADA,
+        PASO_REVISION_APROBADA,
+        PASO_ENTREGADO,
+    ), "anclar en la PRIMERA parada habría abandonado el recorrido entero"
+
+
+def test_sin_ancla_en_el_historial_no_hay_recorrido() -> None:
+    """El estado guardado tiene que estar EN el historial acreditado.
+
+    Un historial que nunca menciona el estado del motor no conecta nada con
+    nada: recorrerlo sería empezar por un punto que nadie acreditó, y el
+    permiso escrito no diría a qué parada corresponde.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    historial, permisos = _cronologia(
+        ("estado", "sirius:implementing"),
+        ("orden", "continua"),
+        ("estado", "sirius:ready-for-merge"),
+        ("estado", "sirius:completed"),
+    )
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+
+
+def test_un_tramo_ilegal_abandona_el_recorrido_entero() -> None:
+    """Todo o nada: si un tramo no es una transición real, no se aplica ninguno.
+
+    El historial acredita aquí un retroceso imposible (de ENTREGAR a
+    EJECUTAR), con su permiso para salir de la parada en regla. El recorrido
+    no puede "saltárselo" ni aplicar solo el trozo bueno: se abandona entero y
+    se declara la divergencia de siempre.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    historial, permisos = _cronologia(
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:ready-for-merge"),
+        ("estado", "sirius:implementing"),
+        ("estado", "sirius:completed"),
+    )
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+    item = store.get_work_item(_WORK_ID)
+    assert item is not None
+    assert item.estado is WorkItemState.FAILED_SAFELY
+
+
+def test_el_recorrido_solo_entra_cuando_la_foto_sola_no_basta() -> None:
+    """El cálculo por foto manda: el recorrido es el plan B, no el plan A.
+
+    Con un motor ACTIVE/EJECUTAR y una foto ACTIVE/REVISAR, el cálculo de
+    siempre ya encuentra camino; el historial acreditado -que aquí describe
+    un rodeo por REPARAR- no puede cambiar ese plan mínimo.
+    """
+    store = InMemoryWorkEngineStore()
+    _work_item_activo(store)
+    ejecutando = store.begin_work_item_execution(_WORK_ID, now=_AHORA)
+    historial, permisos = _cronologia(
+        ("estado", "sirius:implementing"),
+        ("estado", "sirius:repair-requested"),
+        ("orden", "continua"),
+    )
+    espejo = _espejo(
+        estado=WorkItemState.ACTIVE,
+        fase=WorkItemPhase.REVISAR,
+        etiquetas=("sirius:reviewing",),
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+    )
+
+    resultado = reflejar_desenlace(ejecutando, espejo, _episodio())
+
+    assert tuple(paso.kind for paso in resultado.pasos) == (
+        PASO_COMPROBACION_INICIADA,
+        PASO_REVISION_INICIADA,
+    )
+
+
+def test_las_etiquetas_contradictorias_siguen_sin_recorrer_nada() -> None:
+    """Invariante de la incidencia #545: las contradicciones se declaran, no se recorren.
+
+    Con etiquetas de estado que se contradicen no hay foto a la que llegar, y
+    un permiso escrito en el historial no cambia eso: el recorrido no tiene
+    destino.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    historial, permisos = _CRONOLOGIA_537
+    espejo = _espejo(
+        estado=None,
+        fase=None,
+        etiquetas=("sirius:completed", "sirius:implementing"),
+        etiquetas_contradictorias=True,
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+    assert "etiquetas de estado que se contradicen" in resultado.divergencia
+
+
+# --- Sección G bis: la acreditación no mira la foto, ni de refilón ---------
+#
+# Las tres rondas de la incidencia #539 encontraron la MISMA familia de
+# defecto: el criterio de acreditación se apoyaba, por una puerta o por otra,
+# en la etiqueta vigente en el instante de la pasada. Estas pruebas son las
+# trazas literales de esas rondas, con el criterio de ADR-147.
+
+
+def test_ni_la_foto_ni_un_aviso_de_estado_acreditan_la_salida_de_una_parada() -> None:
+    """CLAUDE-REV-001 (ronda 1, PR #540): el relabelado a mano no es un permiso.
+
+    Motor parado en `failed_safely`/`reparar`, foto `sirius:reviewing` -que
+    `notify-sirius-state.yml` NO notifica, así que jamás aparece en el
+    historial- y una sola observación del bot tras la parada. Es exactamente
+    lo que produce una etiqueta de parada sustituida a mano: el marcador de
+    notificación lo publica `github-actions[bot]`, autor de confianza, así que
+    la observación es auténtica. Lo que falta es el permiso, y sin él no se
+    toca nada.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    historial, _ = _cronologia(
+        ("estado", "sirius:implementing"),
+        ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:failed-safely"),
+        ("estado", "sirius:repair-requested"),
+    )
+    espejo = _espejo(
+        estado=WorkItemState.ACTIVE,
+        fase=WorkItemPhase.REVISAR,
+        etiquetas=("sirius:reviewing",),
+        historial_estados=historial,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == (), (
+        "reactivar aquí es leer un relabelado a mano como orden del propietario"
+    )
+    assert resultado.divergencia is not None
+    assert "no hay camino hacia delante, no se toca nada" in resultado.divergencia
+    item = store.get_work_item(_WORK_ID)
+    assert item is not None
+    assert item.estado is WorkItemState.FAILED_SAFELY
+
+
+def test_el_mismo_historial_con_el_permiso_del_propietario_si_recorre() -> None:
+    """La cara positiva de la anterior: lo único que cambia es la palabra escrita.
+
+    Mismo motor, misma foto no notificada y el mismo historial de estados. Se
+    añade la orden `continua` del propietario después de la parada, y eso -y
+    solo eso- es lo que convierte una divergencia declarada en un recorrido.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    historial, permisos = _cronologia(
+        ("estado", "sirius:implementing"),
+        ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+    )
+    espejo = _espejo(
+        estado=WorkItemState.ACTIVE,
+        fase=WorkItemPhase.REVISAR,
+        etiquetas=("sirius:reviewing",),
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.divergencia is None
+    assert tuple(paso.kind for paso in resultado.pasos) == (
+        PASO_REACTIVADO,
+        PASO_REPARACION_REANUDADA,
+        PASO_REVISION_INICIADA,
+    )
+    aplicados = aplicar_pasos(store, _WORK_ID, resultado.pasos, now=_AHORA)
+    assert aplicados[-1].estado is WorkItemState.ACTIVE
+    assert aplicados[-1].fase is WorkItemPhase.REVISAR
+
+
+def test_la_acreditacion_no_depende_de_la_etiqueta_vigente_en_la_pasada() -> None:
+    """CLAUDE-R2-001 y CODEX-001 (ronda 2, PR #540): el mismo historial, dos fotos.
+
+    `reflejar-desenlace.yml` se dispara por `workflow_run`, así que la misma
+    recuperación se observa varias veces con etiquetas distintas: primero
+    `sirius:ready-for-merge`, minutos después `sirius:completed`. Con el
+    criterio anterior el resultado dependía de cuál tocara -dos pasadas sobre
+    la misma evidencia con resultado opuesto-. Con el permiso escrito, la
+    acreditación es la misma en las dos y solo cambia el destino.
+    """
+    hasta_ready = (
+        ("estado", "sirius:implementing"),
+        ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:ready-for-merge"),
+    )
+
+    store_ready = InMemoryWorkEngineStore()
+    parado_ready = _motor_parado_en_reparar(store_ready)
+    historial, permisos = _cronologia(*hasta_ready)
+    resultado_ready = reflejar_desenlace(
+        parado_ready,
+        _espejo(
+            estado=WorkItemState.ACTIVE,
+            fase=WorkItemPhase.ENTREGAR,
+            etiquetas=("sirius:ready-for-merge",),
+            historial_estados=historial,
+            permisos_reanudacion=permisos,
+        ),
+        _episodio(),
+    )
+
+    store_completed = InMemoryWorkEngineStore()
+    parado_completed = _motor_parado_en_reparar(store_completed)
+    historial, permisos = _cronologia(*hasta_ready, ("estado", "sirius:completed"))
+    resultado_completed = reflejar_desenlace(
+        parado_completed,
+        _espejo(
+            estado=WorkItemState.DELIVERED,
+            fase=WorkItemPhase.ENTREGAR,
+            etiquetas=("sirius:completed",),
+            head_sha="786c82dc",
+            historial_estados=historial,
+            permisos_reanudacion=permisos,
+        ),
+        _episodio(),
+    )
+
+    esperado = (
+        PASO_REACTIVADO,
+        PASO_REPARACION_REANUDADA,
+        PASO_REVISION_INICIADA,
+        PASO_REVISION_APROBADA,
+    )
+    assert tuple(paso.kind for paso in resultado_ready.pasos) == esperado
+    assert tuple(paso.kind for paso in resultado_completed.pasos) == (*esperado, PASO_ENTREGADO)
+    assert resultado_ready.divergencia is None
+    assert resultado_completed.divergencia is None

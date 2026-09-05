@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import StrEnum
 
 from sirius_engine.domain.work_item import WorkItemPhase, WorkItemState
 
@@ -92,6 +93,72 @@ class VeredictoPublicado:
 
 
 @dataclass(frozen=True, slots=True)
+class EstadoAcreditado:
+    """Un estado por el que la incidencia PASÓ, probado por un marcador del historial.
+
+    A diferencia de ``estado``/``fase`` -que son la FOTO actual, lo que las
+    etiquetas vigentes proyectan-, esto es el camino: cada
+    ``<!-- sirius-notification:sirius:<etiqueta>:<head> -->`` que
+    ``notify-sirius-state.yml`` publica al aplicarse una etiqueta deja
+    constancia fechada de que la incidencia estuvo en ese estado. Es lo que
+    permite AVANZAR el almacén del motor por transiciones ya legales cuando
+    una recuperación entera ocurrió sin que ninguna pasada de reflejo la
+    observara (ADR-147, incidencia #545; material de partida de la PR #540).
+
+    La interpretación de ``etiqueta`` a ``(estado, fase)`` es exactamente la
+    misma tabla que usa la foto (``mirror_projection._LABEL_STATE``): aquí no
+    se reinterpreta el vocabulario, solo se aplica a otro sitio del historial.
+
+    ``orden`` es la posición de este marcador en el historial de confianza, en
+    la MISMA escala que la de :class:`PermisoDeReanudacion`: las dos las
+    produce el mismo recorrido de textos, y compararlas es lo que permite
+    decir "este permiso es posterior a esta parada" sin volver a mirar la foto
+    (ADR-147).
+    """
+
+    etiqueta: str
+    estado: WorkItemState
+    fase: WorkItemPhase | None
+    head: str
+    orden: int
+
+
+class FormaDePermiso(StrEnum):
+    """Las dos formas del permiso escrito del propietario, con el mismo peso.
+
+    Se distinguen para poder contarlas y explicarlas, no para tratarlas
+    distinto: la acreditación de salir de una parada no mira la forma
+    (ADR-147, decisión del propietario en #545).
+    """
+
+    #: Uno de los tres marcadores que ``sirius_resume_on_command.sh`` publica
+    #: ANTES de reponer la etiqueta: el RECIBO de la máquina.
+    MARCADOR = "marcador"
+    #: La orden exacta ``continua`` publicada por el propietario: el PERMISO
+    #: mismo. Existe como forma propia porque el recibo puede faltar
+    #: estructuralmente -``sirius_comment_once`` deduplica por el texto
+    #: completo del marcador, así que dos reanudaciones sobre el mismo head
+    #: nunca dejan un segundo recibo (medición de #545)-.
+    ORDEN = "orden"
+
+
+@dataclass(frozen=True, slots=True)
+class PermisoDeReanudacion:
+    """Un permiso escrito del propietario para salir de una parada, con su posición.
+
+    ``orden`` está en la MISMA escala que el de :class:`EstadoAcreditado`
+    -ambos son la posición del texto que lo contiene dentro del historial de
+    confianza, del más antiguo al más reciente-, y ``referencia`` guarda el
+    texto exacto que lo acredita (el marcador entero, o la orden tal y como se
+    normalizó) para que una divergencia se pueda explicar sin releer GitHub.
+    """
+
+    forma: FormaDePermiso
+    referencia: str
+    orden: int
+
+
+@dataclass(frozen=True, slots=True)
 class MirroredWorkItem:
     """Proyección NO-autoritativa de una incidencia de la vía GitHub.
 
@@ -134,6 +201,19 @@ class MirroredWorkItem:
     #: parcial-: sin este marcador, un cambio de etiqueta sobre un
     #: ``WorkItem`` parado no autoriza reanudar (CODEX-001, ronda 4, PR #530).
     reanudacion_publicada: bool = False
+    #: Los estados que el historial DE CONFIANZA acredita, del más antiguo al
+    #: más reciente, uno por marcador ``sirius-notification`` con etiqueta
+    #: reconocida. Vacío cuando la incidencia no tiene ninguno -lo normal
+    #: mientras el ciclo no ha cambiado de etiqueta ni una vez-, y también
+    #: cuando los tiene pero ninguno es de confianza.
+    historial_estados: tuple[EstadoAcreditado, ...] = ()
+    #: La CRONOLOGÍA de los permisos escritos del propietario, del más antiguo
+    #: al más reciente. A diferencia de ``reanudacion_publicada`` -que reduce
+    #: el historial a un booleano sobre la parada más reciente-, aquí no se
+    #: pierde ni el orden ni la cuenta: el recorrido acreditado los consume
+    #: uno a uno, y la k-ésima salida de parada solo puede usar uno posterior
+    #: a ESA parada y aún no consumido (ADR-147, incidencia #545).
+    permisos_reanudacion: tuple[PermisoDeReanudacion, ...] = ()
     autoritativo: bool = field(default=False, init=False)
 
 

@@ -177,6 +177,39 @@ pasada.
 - La proyección se prueba contra los textos literales de los marcadores y de
   la orden, incluida la forma con el bloque de atribución tras `---` que el
   propietario publica de verdad.
+- **La pasada real, sobre el diario real y el GitHub real.** Con el diario de
+  `origin/estado-del-motor` copiado a `/tmp` y el lector `gh` de producción:
+
+      # con el reflector de main
+      WI-20260905-034826: el motor está en estado=failed_safely fase=reparar y la
+      incidencia proyecta estado=delivered fase=entregar; no hay camino hacia
+      delante, no se toca nada
+
+      # con este cambio (--ensayo, y después aplicado sobre la copia)
+      WI-20260905-034826: aplicados 5 paso(s): work_item_reactivated,
+      work_item_repair_resumed, work_item_review_started,
+      work_item_review_approved, work_item_delivered
+      Pasos aplicados en total: 5.
+
+      # segunda pasada
+      Pasos aplicados en total: 0.
+
+      # agregado resultante
+      delivered entregar {'merge_sha': '78e81fc7...', 'numero_incidencia': 537}
+
+  Solo se escribió sobre la copia en `/tmp`: la rama `estado-del-motor` no se
+  toca desde aquí, eso lo hace el workflow del motor.
+- **Pruebas por mutación, las nueve vistas caer** (ADR-001, regla 3). En el
+  reflector: quitar el recorrido (= el reflector de `main`) tumba las seis
+  pruebas del caso vivo y sus gemelas, incluida la de punta a punta del CLI;
+  no gastar el permiso al consumirlo tumba
+  `test_un_permiso_no_puede_acreditar_dos_salidas_de_parada`; aceptar un
+  permiso anterior a la parada tumba `test_un_permiso_anterior_a_la_parada...`;
+  acreditar toda salida de parada tumba las cinco pruebas de contraejemplo;
+  anclar en la primera coincidencia tumba la prueba del ancla. En la
+  proyección: aceptar la orden del bot, usar `str.lower()`, aceptar la palabra
+  contenida en un texto mayor y quitar el filtro de confianza tumban cada una
+  su prueba.
 - Validaciones obligatorias completas con una sola invocación de
   `scripts/check.ps1` (ADR-145).
 

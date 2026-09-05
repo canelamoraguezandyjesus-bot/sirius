@@ -48,10 +48,13 @@ from datetime import datetime
 
 from sirius_engine.domain.mirror import (
     EspejoIlegibleError,
+    EstadoAcreditado,
     EventoQuality,
+    FormaDePermiso,
     MirroredRun,
     MirroredWorkItem,
     OrigenLectura,
+    PermisoDeReanudacion,
     RondaHallazgos,
     VeredictoPublicado,
 )
@@ -90,6 +93,21 @@ def es_autor_de_confianza(contenido: ContenidoConAutor) -> bool:
     y se concatenaba sin filtrar (defecto H-1, incidencia #215, ADR-051).
     """
     return contenido.autor_asociacion == "OWNER" or contenido.autor_login == _BOT_LOGIN
+
+
+def es_del_propietario(contenido: ContenidoConAutor) -> bool:
+    """La mitad ESTRICTA del filtro de confianza: solo el propietario, no el bot.
+
+    Mismo `author_association == "OWNER"` con el que
+    `.github/workflows/resume-sirius-on-command.yml` filtra el evento antes de
+    invocar a `sirius_resume_on_command.sh`. Se separa de
+    :func:`es_autor_de_confianza` porque hay exactamente un hecho del historial
+    que no puede aceptarse del bot: la orden `continua`. Un marcador es un
+    recibo que la automatización emite; la orden es la palabra del propietario,
+    y dejar que el bot la escribiera sería dejar que la automatización se diera
+    permiso a sí misma (ADR-147).
+    """
+    return contenido.autor_asociacion == "OWNER"
 
 
 # --- Marcadores sin módulo Python de referencia -----------------------------
@@ -211,6 +229,57 @@ _STOP_MARKER_RE = re.compile(
     r"(?::[^>]*)?-->"
 )
 
+# Marcador que `notify-sirius-state.yml` publica cada vez que se APLICA una de
+# las seis etiquetas que vigila (`implementing`, `repair-requested`,
+# `ready-for-merge`, `blocked-decision`, `failed-safely`, `completed`):
+#
+#   marker="<!-- sirius-notification:${STATE_LABEL}:${head_sha} -->"
+#
+# A diferencia de las etiquetas vigentes -que son la FOTO de ahora mismo-,
+# estos marcadores son el CAMINO: cada uno prueba, fechado y por escrito, que
+# la incidencia estuvo en ese estado. `head_sha` vale `no-head` cuando la
+# incidencia todavía no tenía ningún SHA publicado (mismo guion), así que aquí
+# se captura tal cual, sin exigir forma de SHA.
+#
+# El guion deduplica por marcador COMPLETO -etiqueta y head-, así que la
+# secuencia no es exhaustiva: una etiqueta repuesta sobre el mismo head no
+# publica un segundo marcador. Eso la hace incompleta, nunca falsa; el
+# recorrido acreditado (ADR-147) solo necesita que lo que diga haya ocurrido,
+# no que diga todo lo que ocurrió.
+_NOTIFICATION_MARKER_RE = re.compile(r"<!--\s*sirius-notification:(sirius:[a-z-]+):([^\s>]*)\s*-->")
+
+# La orden exacta del propietario que `sirius_resume_on_command.sh` acepta como
+# permiso para reanudar (líneas 72-89 de ese guion), reproducida aquí paso a
+# paso porque no hay forma de *importar* un `sed`:
+#
+#   sin_firma="$(printf '%s' "$COMMENT_BODY" | tr -d '\r' \
+#     | sed -e '/^[[:space:]]*---[[:space:]]*$/,$d')"
+#   trimmed="$(printf '%s' "$sin_firma" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+#   lowered="$(printf '%s' "$trimmed" | tr '[:upper:]' '[:lower:]')"
+#   if [ "$lowered" != "continua" ] && [ "$lowered" != "continúa" ]; then ... exit 0
+#
+# La excepción del bloque de atribución tras `---` es deliberada y medida en
+# ese guion: quien comenta por API no controla la firma que el servidor le
+# anexa. Cualquier OTRO texto sigue invalidando la orden.
+_ORDEN_FIRMA_RE = re.compile(r"^[ \t]*---[ \t]*$.*", re.DOTALL | re.MULTILINE)
+_ORDENES_DE_CONTINUAR = ("continua", "contin\u00faa")
+
+
+def _es_orden_de_continuar(texto: str) -> bool:
+    """El MISMO predicado que la guarda 1 de ``sirius_resume_on_command.sh``.
+
+    El paso de minúsculas es ASCII a propósito: `tr '[:upper:]' '[:lower:]'` en
+    la localización C del runner no toca la `Ú`, así que usar `str.lower()`
+    aceptaría un `CONTINÚA` que el guion rechaza -es decir, inventaría un
+    permiso que el propietario no llegó a dar-. Ser fiel aquí es ser
+    conservador.
+    """
+    sin_retornos = texto.replace("\r", "")
+    sin_firma = _ORDEN_FIRMA_RE.sub("", sin_retornos)
+    normalizada = "".join(chr(ord(c) + 32) if "A" <= c <= "Z" else c for c in sin_firma.strip())
+    return normalizada in _ORDENES_DE_CONTINUAR
+
+
 # --- Etiquetas -> (estado, fase) --------------------------------------------
 #
 # Vocabulario real de `.github/workflows/*.yml` (bootstrap-sirius-automation-labels.yml
@@ -279,6 +348,40 @@ def _estado_y_fase(
     return estado, fase, False
 
 
+def _historial_de_confianza(
+    cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
+) -> tuple[tuple[str, bool], ...]:
+    """``(texto, es_del_propietario)`` del cuerpo y los comentarios DE CONFIANZA, en orden.
+
+    Un único recorrido para todo el módulo: el cuerpo primero -es lo primero
+    que existe en una incidencia- y los comentarios en el orden en que ya
+    llegan del puerto. La posición en esta tupla es lo que
+    :class:`~sirius_engine.domain.mirror.EstadoAcreditado` y
+    :class:`~sirius_engine.domain.mirror.PermisoDeReanudacion` guardan como
+    ``orden``, y por eso las dos escalas son comparables sin ponerse de
+    acuerdo: son la misma.
+
+    El indicador de propietario viaja EMPAREJADO con su texto, no en una lista
+    paralela, para que no exista ninguna forma de desalinearlos.
+    """
+    historial: list[tuple[str, bool]] = []
+    if es_autor_de_confianza(cuerpo):
+        historial.append((cuerpo.texto, es_del_propietario(cuerpo)))
+    historial.extend(
+        (comentario.cuerpo, es_del_propietario(comentario))
+        for comentario in comentarios
+        if es_autor_de_confianza(comentario)
+    )
+    return tuple(historial)
+
+
+def _textos_de_confianza(
+    cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
+) -> tuple[str, ...]:
+    """Solo los textos de :func:`_historial_de_confianza`, mismas posiciones."""
+    return tuple(texto for texto, _ in _historial_de_confianza(cuerpo, comentarios))
+
+
 def _texto_cronologico_de_confianza(
     cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
 ) -> str:
@@ -310,10 +413,7 @@ def _texto_cronologico_de_confianza(
     nuevo. Si algún día hiciera falta observarlo, es un campo de
     ``MirroredWorkItem`` y otra decisión.
     """
-    partes = [c.cuerpo for c in comentarios if es_autor_de_confianza(c)]
-    if es_autor_de_confianza(cuerpo):
-        partes.insert(0, cuerpo.texto)
-    return "\n".join(partes)
+    return "\n".join(_textos_de_confianza(cuerpo, comentarios))
 
 
 def _interpretar_rondas(texto_vigente: str) -> tuple[RondaHallazgos, ...]:
@@ -414,12 +514,7 @@ def _interpretar_reanudacion_publicada(
     marcador de parada (``_STOP_MARKER_RE``): sin parada posterior a la
     reanudación, o sin ninguna parada en absoluto, el marcador sigue vigente.
     """
-    textos: list[str] = []
-    if es_autor_de_confianza(cuerpo):
-        textos.append(cuerpo.texto)
-    textos.extend(
-        comentario.cuerpo for comentario in comentarios if es_autor_de_confianza(comentario)
-    )
+    textos = _textos_de_confianza(cuerpo, comentarios)
 
     ultimo_resume: int | None = None
     ultima_parada: int | None = None
@@ -431,6 +526,87 @@ def _interpretar_reanudacion_publicada(
     if ultimo_resume is None:
         return False
     return ultima_parada is None or ultimo_resume > ultima_parada
+
+
+def _interpretar_historial_estados(
+    cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
+) -> tuple[EstadoAcreditado, ...]:
+    """Los estados acreditados por marcadores ``sirius-notification``, en orden.
+
+    Mismo filtro de confianza y mismo orden cronológico que
+    :func:`_textos_de_confianza` -cuerpo primero, comentarios en el orden en
+    que ya llegan del puerto-, y la MISMA tabla ``_LABEL_STATE`` que interpreta
+    la foto: una etiqueta no significa una cosa cuando está puesta y otra
+    cuando la nombra un marcador. Una etiqueta que la tabla no reconozca se
+    ignora en silencio, igual que en :func:`_estado_y_fase`.
+
+    Deliberadamente NO se corta por ``history_after_last_resume``: una orden de
+    reanudación mueve el listón de la convergencia -cuántas rondas cuentan-,
+    no borra los estados por los que la incidencia pasó antes. El recorrido
+    acreditado ancla en el estado guardado del motor, que puede ser anterior a
+    esa orden (ADR-147).
+    """
+    acreditados: list[EstadoAcreditado] = []
+    for orden, texto in enumerate(_textos_de_confianza(cuerpo, comentarios)):
+        for match in _NOTIFICATION_MARKER_RE.finditer(texto):
+            etiqueta = match.group(1)
+            if etiqueta not in _LABEL_STATE:
+                continue
+            estado, fase = _LABEL_STATE[etiqueta]
+            acreditados.append(
+                EstadoAcreditado(
+                    etiqueta=etiqueta,
+                    estado=estado,
+                    fase=fase,
+                    head=match.group(2),
+                    orden=orden,
+                )
+            )
+    return tuple(acreditados)
+
+
+def _interpretar_permisos_reanudacion(
+    cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
+) -> tuple[PermisoDeReanudacion, ...]:
+    """La CRONOLOGÍA de los permisos escritos del propietario, del más antiguo al más reciente.
+
+    Dos formas, con el mismo peso y en la misma lista (ADR-147, decisión del
+    propietario en #545):
+
+    - el **marcador** de reanudación (``_RESUME_MARKER_RE``, los tres tipos que
+      ``sirius_resume_on_command.sh`` publica antes de reponer la etiqueta),
+      con el filtro de confianza de siempre: lo publica ``github-actions[bot]``;
+    - la **orden** exacta ``continua``, que exige ``author_association ==
+      "OWNER"`` y no el filtro general -``continua`` es palabra del
+      propietario, no del bot, y aceptarla del bot sería dejar que la
+      automatización se diera permiso a sí misma-.
+
+    El marcador es el recibo de la máquina y la orden es el permiso mismo. Las
+    dos formas hacen falta porque el recibo puede faltar ESTRUCTURALMENTE:
+    ``sirius_comment_once`` deduplica por el texto completo del marcador y el
+    de ``sirius-resume-stop`` solo lleva el head, así que dos reanudaciones
+    sobre un mismo head nunca dejan un segundo recibo (medición de la primera
+    ronda de #545 sobre el historial real de la #537).
+
+    ``orden`` es la posición del texto en el historial de confianza, la misma
+    escala que usa :func:`_interpretar_historial_estados`. Un texto que
+    contenga las dos cosas produce dos permisos con el mismo ``orden``; el
+    consumo en orden del recorrido los toma uno detrás de otro, que es lo
+    correcto: son dos permisos escritos, no uno.
+    """
+    permisos: list[PermisoDeReanudacion] = []
+    for orden, (texto, del_propietario) in enumerate(_historial_de_confianza(cuerpo, comentarios)):
+        for match in _RESUME_MARKER_RE.finditer(texto):
+            permisos.append(
+                PermisoDeReanudacion(
+                    forma=FormaDePermiso.MARCADOR, referencia=match.group(0), orden=orden
+                )
+            )
+        if del_propietario and _es_orden_de_continuar(texto):
+            permisos.append(
+                PermisoDeReanudacion(forma=FormaDePermiso.ORDEN, referencia="continua", orden=orden)
+            )
+    return tuple(permisos)
 
 
 def _interpretar_diagnostico_fallo(comentarios: Sequence[Comentario]) -> str | None:
@@ -496,6 +672,10 @@ def proyectar_work_item(
         origen=OrigenLectura(fuente=f"github:{repo}#{numero}", leido_en=ahora),
         diagnostico_fallo=_interpretar_diagnostico_fallo(comentarios.comentarios),
         reanudacion_publicada=_interpretar_reanudacion_publicada(
+            cuerpo.cuerpo, comentarios.comentarios
+        ),
+        historial_estados=_interpretar_historial_estados(cuerpo.cuerpo, comentarios.comentarios),
+        permisos_reanudacion=_interpretar_permisos_reanudacion(
             cuerpo.cuerpo, comentarios.comentarios
         ),
     )
