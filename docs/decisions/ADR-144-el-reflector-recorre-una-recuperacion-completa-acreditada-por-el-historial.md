@@ -106,8 +106,8 @@ etiquetas que `notify-sirius-state.yml` vigila).
    CODEX-001 de la ronda 4 de la PR #530 —una etiqueta de parada sustituida a
    mano se leería como orden del propietario.
 3. **Recorrer los estados que el historial de confianza acredita**, anclando en
-   el estado guardado y exigiendo al menos un estado intermedio acreditado
-   entre el ancla y la foto. Elegida.
+   el estado guardado y exigiendo al menos un estado acreditado estrictamente
+   entre el ancla y el destino que el historial alcanza. Elegida.
 
 ## Decisión
 
@@ -127,13 +127,27 @@ cuando— ese cálculo devuelve divergencia, intenta el **recorrido acreditado**
 1. **Ancla.** Busca en `historial_estados` la ÚLTIMA observación que coincide
    con el estado guardado del motor (mismo `estado`; misma `fase` cuando el
    marcador la trae). Sin ancla no hay recorrido.
-2. **Acreditación intermedia.** De las observaciones posteriores al ancla, al
-   menos una tiene que ser distinta de la foto actual. Si el historial no dice
-   nada que la foto no dijera ya, el recorrido no aporta ninguna acreditación
-   nueva y se conserva el comportamiento de hoy: declarar y no tocar nada. Este
+2. **Acreditación intermedia.** Tiene que haber al menos una observación
+   ESTRICTAMENTE ENTRE el ancla y el destino que el historial alcanza —su
+   última observación—, y esa intermedia tiene que decir algo que la foto no
+   dijera ya. Lo que se mide es el SALTO —¿hay algo entre el ancla y el
+   destino?—, no la coincidencia con la foto. La primera redacción de este
+   punto sí medía la coincidencia («de las observaciones posteriores al ancla,
+   al menos una distinta de la foto») y eso NO filtraba nada cuando la foto
+   vigente no es expresable como marcador: `notify-sirius-state.yml` solo
+   vigila seis etiquetas, así que los tres pares `sirius:ci-pending` →
+   (ACTIVE, COMPROBAR) y `sirius:review-requested`/`sirius:reviewing` →
+   (ACTIVE, REVISAR) no aparecen nunca en el historial, la comparación era
+   falsa por construcción y una sola observación posterior al ancla bastaba
+   para recorrer. Y son justo las fotos que la pasada ve más a menudo, porque
+   `reflejar-desenlace.yml` se dispara por `workflow_run`
+   (corrección CLAUDE-REV-001, ronda 1, PR #540). Con la forma corregida, un
+   historial que no acredita nada intermedio no acredita ninguna secuencia y
+   se conserva el comportamiento de hoy: declarar y no tocar nada. Este
    requisito es lo que preserva CODEX-001: una etiqueta de parada sustituida a
    mano por la etiqueta activa es un salto de una sola observación, sin nada
-   intermedio, y sigue rechazándose.
+   intermedio, y sigue rechazándose —ahora también cuando la foto ya se movió
+   a `ci-pending` o `reviewing`.
 3. **Saltos ya legales, uno a uno.** Cada observación posterior al ancla es un
    objetivo intermedio, y el plan de cada tramo lo calcula **la misma función**
    `reflejar_desenlace` sobre un espejo derivado del real con `estado`/`fase`
@@ -147,8 +161,21 @@ cuando— ese cálculo devuelve divergencia, intenta el **recorrido acreditado**
 
 La acreditación de la salida de una parada dentro del recorrido es la
 observación intermedia misma —un marcador que el bot publicó, fechado y
-posterior a la parada—, no la foto. Fuera del recorrido, el gate
-`reanudacion_publicada` sigue exactamente como estaba.
+posterior a la parada—, no la foto. Y es **por tramo**, no una vez por
+recorrido: un recorrido puede contener más de una parada (el historial real de
+la #537 tiene dos), y la salida de la SEGUNDA la tiene que acreditar una
+observación posterior a ELLA, distinta de la foto. La primera implementación
+pasaba `reanudacion_acreditada=True` a todos los tramos, así que con un
+historial `failed-safely → repair-requested → blocked-decision → completed` el
+reflector resolvía solo el `NEEDS_DECISION` intermedio apoyándose en la foto
+final: exactamente la salvaguarda que este párrafo declara
+(corrección CODEX-001, ronda 1, PR #540). Con la acreditación por tramo, ese
+recorrido se abandona entero; y si el historial sí acredita algo después de la
+segunda parada, se recorre completo. El último tramo —el que va contra el
+espejo real— no tiene por construcción ninguna observación posterior, así que
+solo el marcador real (`espejo.reanudacion_publicada`) puede autorizarlo.
+Fuera del recorrido, el gate `reanudacion_publicada` sigue exactamente como
+estaba.
 
 ## Comprobación que la sostiene
 
@@ -156,11 +183,20 @@ posterior a la parada—, no la foto. Fuera del recorrido, el gate
   `gh issue view 537 --repo canelamoraguezandyjesus-bot/sirius --json comments`
   (tabla de arriba): confirma que la segunda reanudación no publicó marcador y
   que las tres notificaciones intermedias sí existen.
-- `tests/engine/test_reflect.py`, sección G: siete pruebas nuevas -el caso
+- `tests/engine/test_reflect.py`, sección G: siete pruebas -el caso
   vivo con sus cinco pasos y su segunda pasada a cero, el contraejemplo sin
   acreditación intermedia, la foto repetida, el ancla, el historial sin ancla,
   el tramo ilegal, y la garantía de que el recorrido no altera un plan que la
   foto ya resolvía.
+- `tests/engine/test_reflect.py`, sección G bis (correcciones de la ronda 1 de
+  la PR #540): seis pruebas más -la traza literal de CLAUDE-REV-001 (foto
+  `sirius:reviewing`, una sola observación posterior al ancla); su gemela con
+  foto `sirius:ci-pending`; la cara positiva de las dos, en la que el mismo
+  motor y la misma foto no notificada SÍ recorren cuando el historial acredita
+  algo intermedio; la misma medida del salto sin ninguna parada de por medio;
+  la segunda parada que la foto final no acredita (CODEX-001); y su cara
+  positiva, la segunda parada que sí sale cuando una observación posterior la
+  acredita, con sus siete pasos aplicados.
 - `tests/engine/test_reflect_cli.py::test_una_pasada_real_recorre_la_recuperacion_de_la_537`:
   la pasada ENTERA de `sirius-reflejar` -comentarios crudos, proyección real,
   plan y almacén- sobre un doble del espejo con los 22 comentarios de la #537.
@@ -171,18 +207,34 @@ posterior a la parada—, no la foto. Fuera del recorrido, el gate
 - Rojo previo, visto fallar: con el recorrido desactivado en
   `reflejar_desenlace` (una línea: `return por_foto`), caen exactamente tres
   pruebas —las dos del caso vivo y la del ancla— con el texto literal del run
-  real: «no hay camino hacia delante, no se toca nada». Con el recorrido
-  activo, 4945 pruebas en verde.
-- Prueba por mutación (tres sembradas, una prueba distinta cae con cada una):
+  real: «no hay camino hacia delante, no se toca nada».
+- Rojo previo de las dos correcciones de la ronda 1 de la PR #540, visto
+  fallar: con `src/sirius_engine/reflect.py` restaurado al commit `d2b50384`
+  (el head auditado) y las cinco pruebas nuevas puestas, `uv run pytest
+  tests/engine/test_reflect.py -q` da «4 failed, 39 passed», incluida la traza
+  literal de la revisión.
+- Prueba por mutación (cinco sembradas, una prueba distinta cae con cada una):
   anclar en la PRIMERA coincidencia en vez de la última →
   `test_el_recorrido_ancla_en_la_ULTIMA_coincidencia_con_el_estado_guardado`;
   quitar la exigencia de acreditación intermedia →
   `test_la_foto_repetida_en_el_historial_no_es_acreditacion_intermedia`;
   aplicar el trozo bueno de un recorrido ilegal en vez de abandonarlo entero →
-  `test_un_tramo_ilegal_abandona_el_recorrido_entero`.
-- Validaciones obligatorias completas con UNA sola invocación de
-  `scripts/check.ps1` (Ruff format, Ruff lint, mypy, pytest): «4945 passed, 15
-  skipped, 2 xfailed», exit 0. Más `git diff --check`, limpio.
+  `test_un_tramo_ilegal_abandona_el_recorrido_entero`; medir la acreditación
+  contra la foto en vez del salto (`intermedias = posteriores` en vez de
+  `posteriores[:-1]`) →
+  `test_una_sola_observacion_posterior_tampoco_acredita_sin_ninguna_parada_de_por_medio`;
+  y volver a acreditar todos los tramos de golpe
+  (`reanudacion_acreditada=True`) →
+  `test_la_segunda_parada_del_recorrido_no_sale_acreditada_por_la_foto_final`.
+- Validaciones obligatorias completas, sobre el árbol de la ronda 1 de
+  correcciones de la PR #540: `uv run ruff format --check .` («602 files
+  already formatted»), `uv run ruff check .` («All checks passed!»),
+  `uv run mypy src tests` («Success: no issues found in 570 source files») y
+  `uv run pytest` («4951 passed, 15 skipped, 2 xfailed in 837.22s», exit 0).
+  Más `git diff --check`, limpio. La cifra anterior de este ADR —«4945
+  passed», con `scripts/check.ps1`— era la del commit `d2b50384`: las seis que
+  la separan de 4951 son exactamente las seis pruebas nuevas de la sección G
+  bis (`pytest --collect-only -q` da 4962 en `d2b50384` y 4968 aquí).
 
 ## Consecuencias
 

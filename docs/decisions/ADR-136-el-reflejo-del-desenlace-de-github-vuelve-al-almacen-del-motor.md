@@ -708,8 +708,18 @@ incidencia (`MirroredWorkItem.historial_estados`, los marcadores
 arista nueva del dominio: cada tramo lo calculan estas mismas cinco reglas.
 La sección «Reanudación de una parada por orden del propietario» y su
 salvaguarda CODEX-001 siguen vigentes tal cual para el cálculo por foto —el
-recorrido exige, en su lugar, al menos un estado acreditado INTERMEDIO
-distinto de la foto, que es lo que un relabelado a mano no produce.
+recorrido exige, en su lugar, al menos un estado acreditado ESTRICTAMENTE
+ENTRE el ancla y el destino que el historial alcanza y distinto de la foto,
+que es lo que un relabelado a mano no produce. La exigencia mide el salto, no
+la coincidencia con la foto: medirla contra la foto no filtraba nada cuando la
+foto vigente no es expresable como marcador `sirius-notification`
+(`sirius:ci-pending` y `sirius:review-requested`/`sirius:reviewing` no están
+entre las seis etiquetas que `notify-sirius-state.yml` vigila). Y la
+acreditación de salir de una parada es POR TRAMO: si el recorrido pasa por una
+segunda parada, la salida de esa parada la tiene que acreditar una observación
+posterior a ELLA, nunca la foto final. Las dos precisiones son correcciones de
+la ronda 1 de la PR #540 (CLAUDE-REV-001 y CODEX-001); ADR-144 las documenta
+con su rojo previo y sus mutaciones.
 
 `.github/workflows/reflejar-desenlace.yml` y ADR-137 no cambian: el enganche,
 sus disparadores y su horario son exactamente los mismos; lo que cambia es qué

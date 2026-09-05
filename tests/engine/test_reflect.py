@@ -1121,3 +1121,229 @@ def test_el_recorrido_solo_entra_cuando_la_foto_sola_no_basta() -> None:
         PASO_COMPROBACION_INICIADA,
         PASO_REVISION_INICIADA,
     )
+
+
+# --- Sección G bis: la acreditación mide el salto, y es por tramo ----------
+#
+# Los dos agujeros que la revisión independiente de la PR #540 encontró en la
+# sección G: la exigencia de acreditación intermedia se medía comparando con
+# la foto -y hay pares (estado, fase) que ningún marcador puede producir, así
+# que la comparación era falsa por construcción y no filtraba nada-, y la
+# salida de una SEGUNDA parada dentro del recorrido se autorizaba sola.
+
+
+def test_una_sola_observacion_posterior_no_acredita_aunque_la_foto_sea_reviewing() -> None:
+    """CLAUDE-REV-001: la foto `sirius:reviewing` no la produce ningún marcador.
+
+    Traza de la revisión: motor parado en `failed_safely`/`reparar`, espejo en
+    (ACTIVE, REVISAR) por `sirius:reviewing`, sin marcador de reanudación, y
+    un historial en el que lo ÚNICO acreditado tras la parada es una sola
+    observación -exactamente lo que produce una etiqueta de parada sustituida
+    a mano, porque `notify-sirius-state.yml` publica el marcador como
+    `github-actions[bot]`, autor de confianza-.
+
+    `notify-sirius-state.yml` solo vigila seis etiquetas, así que
+    `sirius:reviewing` -> (ACTIVE, REVISAR) NUNCA aparece en el historial:
+    comparar con la foto era una comprobación vacía. Lo que hay que medir es
+    el salto, y aquí no hay nada entre el ancla y el destino.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    espejo = _espejo(
+        estado=WorkItemState.ACTIVE,
+        fase=WorkItemPhase.REVISAR,
+        etiquetas=("sirius:reviewing",),
+        historial_estados=(
+            _acreditado("sirius:implementing", "no-head"),
+            _acreditado("sirius:repair-requested", "1c934781"),
+            _acreditado("sirius:failed-safely", "1c934781"),
+            _acreditado("sirius:repair-requested", "786c82dc"),
+        ),
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == (), (
+        "una sola observación posterior al ancla no acredita ninguna secuencia: "
+        "reactivar aquí es leer un relabelado a mano como orden del propietario"
+    )
+    assert resultado.divergencia is not None
+    assert "no hay camino hacia delante, no se toca nada" in resultado.divergencia
+    item = store.get_work_item(_WORK_ID)
+    assert item is not None
+    assert item.estado is WorkItemState.FAILED_SAFELY
+
+
+def test_una_sola_observacion_posterior_no_acredita_aunque_la_foto_sea_ci_pending() -> None:
+    """La gemela del anterior en la otra fase expuesta: `sirius:ci-pending`.
+
+    `sirius:ci-pending` -> (ACTIVE, COMPROBAR) tampoco es una de las seis
+    etiquetas notificadas, y `reflejar-desenlace.yml` se dispara por
+    `workflow_run` al completarse los workflows del ciclo, así que esta foto
+    es de las que la pasada real ve más a menudo.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    espejo = _espejo(
+        estado=WorkItemState.ACTIVE,
+        fase=WorkItemPhase.COMPROBAR,
+        etiquetas=("sirius:ci-pending",),
+        historial_estados=(
+            _acreditado("sirius:implementing", "no-head"),
+            _acreditado("sirius:failed-safely", "1c934781"),
+            _acreditado("sirius:repair-requested", "786c82dc"),
+        ),
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+
+
+def test_la_acreditacion_intermedia_real_sigue_recorriendo_con_una_foto_no_notificada() -> None:
+    """El endurecimiento no cierra el caso legítimo: mide el salto, no la foto.
+
+    Mismo motor y misma foto no notificada (`sirius:reviewing`) que la prueba
+    de arriba, pero aquí el historial SÍ acredita algo entre el ancla y el
+    destino: la reparación se reanudó y el ciclo llegó a `ready-for-merge`
+    antes de que la etiqueta volviera a `sirius:reviewing`.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    espejo = _espejo(
+        estado=WorkItemState.ACTIVE,
+        fase=WorkItemPhase.REVISAR,
+        etiquetas=("sirius:reviewing",),
+        historial_estados=(
+            _acreditado("sirius:implementing", "no-head"),
+            _acreditado("sirius:failed-safely", "1c934781"),
+            _acreditado("sirius:repair-requested", "786c82dc"),
+            _acreditado("sirius:ci-pending", "786c82dc"),
+        ),
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.divergencia is None
+    assert tuple(paso.kind for paso in resultado.pasos) == (
+        PASO_REACTIVADO,
+        PASO_REPARACION_REANUDADA,
+        PASO_REVISION_INICIADA,
+    )
+    aplicados = aplicar_pasos(store, _WORK_ID, resultado.pasos, now=_AHORA)
+    assert aplicados[-1].estado is WorkItemState.ACTIVE
+    assert aplicados[-1].fase is WorkItemPhase.REVISAR
+
+
+def test_la_segunda_parada_del_recorrido_no_sale_acreditada_por_la_foto_final() -> None:
+    """CODEX-001 (ronda 1, PR #540): cada parada acredita su propia salida.
+
+    El recorrido llega a un `blocked-decision` intermedio y lo único que hay
+    DESPUÉS de esa segunda parada es la propia foto final. Resolver ahí la
+    decisión sería continuar un `NEEDS_DECISION` sin ninguna orden del
+    propietario -exactamente la salvaguarda de ADR-144-, así que el recorrido
+    se abandona entero.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        head_sha="92e5b9f469485c537c9cec5b37f6131f17d9903a",
+        historial_estados=(
+            _acreditado("sirius:failed-safely", "1c934781"),
+            _acreditado("sirius:repair-requested", "786c82dc"),
+            _acreditado("sirius:blocked-decision", "786c82dc"),
+            _acreditado("sirius:completed", "92e5b9f4"),
+        ),
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == (), (
+        "la foto final no acredita la salida de la parada intermedia: "
+        "sería resolver un NEEDS_DECISION sin orden del propietario"
+    )
+    assert resultado.divergencia is not None
+    item = store.get_work_item(_WORK_ID)
+    assert item is not None
+    assert item.estado is WorkItemState.FAILED_SAFELY
+
+
+def test_la_segunda_parada_sale_cuando_una_observacion_posterior_la_acredita() -> None:
+    """La cara positiva: la acreditación por tramo no prohíbe la segunda parada.
+
+    Mismo recorrido que el anterior, pero ahora el historial acredita que la
+    incidencia volvió a estar viva DESPUÉS del `blocked-decision` -otra
+    `repair-requested` y un `ready-for-merge`, dos marcadores del bot
+    posteriores a esa parada-, así que las dos salidas quedan acreditadas por
+    su propia evidencia y el recorrido entero se aplica.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        head_sha="92e5b9f469485c537c9cec5b37f6131f17d9903a",
+        historial_estados=(
+            _acreditado("sirius:failed-safely", "1c934781"),
+            _acreditado("sirius:repair-requested", "786c82dc"),
+            _acreditado("sirius:blocked-decision", "786c82dc"),
+            _acreditado("sirius:repair-requested", "92e5b9f4"),
+            _acreditado("sirius:ready-for-merge", "92e5b9f4"),
+            _acreditado("sirius:completed", "92e5b9f4"),
+        ),
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.divergencia is None
+    assert tuple(paso.kind for paso in resultado.pasos) == (
+        PASO_REACTIVADO,
+        PASO_ESCALADO,
+        PASO_DECISION_RESUELTA,
+        PASO_REPARACION_REANUDADA,
+        PASO_REVISION_INICIADA,
+        PASO_REVISION_APROBADA,
+        PASO_ENTREGADO,
+    )
+    aplicados = aplicar_pasos(store, _WORK_ID, resultado.pasos, now=_AHORA)
+    assert aplicados[-1].estado is WorkItemState.DELIVERED
+
+
+def test_una_sola_observacion_posterior_tampoco_acredita_sin_ninguna_parada_de_por_medio() -> None:
+    """La exigencia mide el SALTO, y por eso también aplica fuera de las paradas.
+
+    Motor vivo en `ACTIVE`/`REVISAR`, foto `sirius:ci-pending` -> (ACTIVE,
+    COMPROBAR) -que ningún marcador `sirius-notification` puede producir- y un
+    historial cuya única observación posterior al ancla es una
+    `sirius:repair-requested`. Comparando con la foto, la comprobación era
+    vacía y el motor avanzaba dos fases apoyado en un solo marcador. Midiendo
+    el salto, no hay nada entre el ancla y el destino: se declara y no se toca
+    nada.
+    """
+    store = InMemoryWorkEngineStore()
+    _work_item_activo(store)
+    store.begin_work_item_execution(_WORK_ID, now=_AHORA)
+    store.begin_work_item_check(_WORK_ID, now=_AHORA)
+    revisando = store.begin_work_item_review(_WORK_ID, now=_AHORA)
+
+    espejo = _espejo(
+        estado=WorkItemState.ACTIVE,
+        fase=WorkItemPhase.COMPROBAR,
+        etiquetas=("sirius:ci-pending",),
+        historial_estados=(
+            _acreditado("sirius:implementing", "no-head"),
+            _acreditado("sirius:reviewing", "1c934781"),
+            _acreditado("sirius:repair-requested", "1c934781"),
+        ),
+    )
+
+    resultado = reflejar_desenlace(revisando, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+    assert "no hay camino hacia delante, no se toca nada" in resultado.divergencia

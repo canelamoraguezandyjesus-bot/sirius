@@ -87,10 +87,18 @@ Dos funciones, deliberadamente separadas:
    que se legaliza es RECORRER saltos ya legales -cada tramo lo calculan
    estas mismas cinco reglas, y el ``WorkItem`` intermedio avanza llamando a
    los métodos del dominio, que son los que dicen qué es legal-. Y hace falta
-   al menos un estado acreditado INTERMEDIO, distinto de la foto: un
-   historial que solo repite lo que la foto ya decía no acredita ninguna
-   secuencia, y ese salto se sigue rechazando como hoy (CODEX-001, ronda 4,
-   PR #530).
+   al menos un estado acreditado ESTRICTAMENTE ENTRE el ancla y el destino
+   que el historial alcanza, distinto de la foto: lo que se mide es el
+   SALTO -¿hay algo entre el ancla y el destino?-, no la coincidencia con la
+   foto, porque hay pares del mapa etiqueta -> (estado, fase) que ningún
+   marcador ``sirius-notification`` puede producir y contra los que comparar
+   con la foto no filtra nada (CLAUDE-REV-001, ronda 1, PR #540). Un
+   historial que no acredita nada intermedio no acredita ninguna secuencia, y
+   ese salto de una sola observación se sigue rechazando como hoy (CODEX-001,
+   ronda 4, PR #530). Y la acreditación es POR TRAMO: si el recorrido pasa
+   por una segunda parada, la salida de esa parada la tiene que acreditar una
+   observación posterior a ELLA -o el marcador real de reanudación-, nunca la
+   foto final (CODEX-001, ronda 1, PR #540).
 """
 
 from __future__ import annotations
@@ -223,10 +231,10 @@ def _reflejar_por_foto(
     ``reanudacion_acreditada`` es lo único que este cálculo no decide por sí
     mismo: qué autoriza a salir de una parada. Desde la foto actual es
     ``espejo.reanudacion_publicada`` -el permiso escrito del propietario,
-    regla 3-; desde un tramo del recorrido acreditado (regla 6) lo autoriza el
-    marcador intermedio que ya se verificó antes de llamar aquí. El parámetro
-    existe para que esa diferencia se vea en la firma en vez de esconderse en
-    un espejo fabricado con el campo cambiado.
+    regla 3-; desde un tramo del recorrido acreditado (regla 6) lo decide
+    :func:`_salida_de_parada_acreditada` para ESE tramo, y nunca lo autoriza
+    la foto. El parámetro existe para que esa diferencia se vea en la firma en
+    vez de esconderse en un espejo fabricado con el campo cambiado.
     """
     if espejo.etiquetas_contradictorias:
         contradictorias = ", ".join(sorted(espejo.etiquetas))
@@ -417,13 +425,23 @@ def _objetivos_acreditados(
       ``sirius:blocked-decision`` proyectan ``fase=None``), así que en esos la
       coincidencia es solo de estado; en los demás tienen que coincidir los
       dos ejes.
-    - **Acreditación intermedia**: al menos una de las observaciones
-      posteriores al ancla tiene que ser distinta de la foto actual. Si todas
-      son la foto, el historial no acredita ninguna secuencia -solo repite lo
-      que la foto ya decía-, y ese salto de una sola observación es
-      exactamente el que el reflector rechaza desde CODEX-001 (ronda 4, PR
-      #530): una etiqueta de parada sustituida a mano, sin ninguna orden del
-      propietario, no autoriza nada.
+    - **Acreditación intermedia**: tiene que haber al menos una observación
+      ESTRICTAMENTE ENTRE el ancla y el destino que el historial alcanza -su
+      última observación-, y esa observación intermedia tiene que decir algo
+      que la foto no dijera ya. Lo que se mide es el SALTO, no la coincidencia
+      con la foto: sin esta forma, un historial cuya única observación
+      posterior al ancla es la etiqueta activa repuesta pasaba el filtro
+      siempre que la foto vigente no fuera expresable como marcador
+      ``sirius-notification`` -y tres pares del mapa etiqueta -> (estado,
+      fase) no lo son: ``sirius:ci-pending`` -> (ACTIVE, COMPROBAR) y
+      ``sirius:review-requested``/``sirius:reviewing`` -> (ACTIVE, REVISAR),
+      porque ``notify-sirius-state.yml`` solo vigila seis etiquetas-. Ese
+      salto de una sola observación es exactamente el que el reflector rechaza
+      desde CODEX-001 (ronda 4, PR #530): una etiqueta de parada sustituida a
+      mano, sin ninguna orden del propietario, no autoriza nada, y la foto que
+      la pasada ve muy a menudo es ``ci-pending`` o ``reviewing`` -las tres
+      expuestas- porque ``reflejar-desenlace.yml`` se dispara por
+      ``workflow_run`` (CLAUDE-REV-001, ronda 1, PR #540).
     """
     historial = espejo.historial_estados
     ancla: int | None = None
@@ -439,9 +457,48 @@ def _objetivos_acreditados(
     if not posteriores:
         return None
     foto = (espejo.estado, espejo.fase)
-    if all((acreditado.estado, acreditado.fase) == foto for acreditado in posteriores):
+    # La ÚLTIMA observación es el destino al que el historial llega, no una
+    # acreditación de cómo se llegó: lo que acredita el recorrido es lo que
+    # hay entre el ancla y ese destino. Y una intermedia que solo repite la
+    # foto no acredita nada, porque no dice nada que la foto no dijera ya.
+    intermedias = posteriores[:-1]
+    if all((acreditado.estado, acreditado.fase) == foto for acreditado in intermedias):
         return None
     return posteriores
+
+
+def _salida_de_parada_acreditada(
+    espejo: MirroredWorkItem,
+    objetivos: tuple[EstadoAcreditado, ...],
+    indice: int,
+    foto: tuple[WorkItemState | None, WorkItemPhase | None],
+) -> bool:
+    """Qué autoriza a salir de una parada en el tramo ``indice`` del recorrido.
+
+    El recorrido acreditado no es un permiso global: es un permiso POR TRAMO,
+    y cada tramo tiene que acreditar el suyo. Un recorrido puede contener más
+    de una parada -el historial real de la #537 tiene dos-, y la salida de la
+    SEGUNDA no puede apoyarse en la acreditación que autorizó la primera ni,
+    peor, en la propia foto final: eso resolvería solo un ``NEEDS_DECISION``
+    sin ninguna orden del propietario, que es justo lo que CODEX-001 (ronda 4,
+    PR #530) cerró y lo que ADR-144 exige preservar (CODEX-001, ronda 1, PR
+    #540).
+
+    Autoriza una de dos cosas, nunca la foto:
+
+    - el marcador REAL de reanudación (``espejo.reanudacion_publicada``, el
+      permiso escrito del propietario), que vale para todo el recorrido; o
+    - una observación acreditada POSTERIOR a este tramo que sea distinta de la
+      foto -el bot la publicó, fechada, después de esta parada-. La foto no
+      cuenta: es el destino, no evidencia de haber salido.
+
+    Por construcción, el último tramo del recorrido -el que va contra el
+    espejo real- nunca tiene observación posterior, así que solo el marcador
+    real puede autorizarlo.
+    """
+    if espejo.reanudacion_publicada:
+        return True
+    return any((posterior.estado, posterior.fase) != foto for posterior in objetivos[indice + 1 :])
 
 
 def _recorrer_historial_acreditado(
@@ -455,7 +512,10 @@ def _recorrer_historial_acreditado(
     media recuperación dejaría el diario en un punto que nadie acreditó.
 
     Cada tramo se calcula con la MISMA :func:`_reflejar_por_foto` que la foto
-    actual, sobre un espejo derivado del real al que solo se le cambian
+    actual y con su PROPIA acreditación de salida de parada
+    (:func:`_salida_de_parada_acreditada`: un recorrido puede contener más de
+    una parada, y cada una tiene que acreditar la suya), sobre un espejo
+    derivado del real al que solo se le cambian
     ``estado``/``fase``/``etiquetas`` por los del estado acreditado: el resto
     -diagnóstico de fallo, SHA de fusión- sigue siendo el del espejo real,
     porque es el único que hay. Y entre tramo y tramo el ``WorkItem`` avanza
@@ -473,9 +533,10 @@ def _recorrer_historial_acreditado(
     if objetivos is None:
         return None
 
+    foto = (espejo.estado, espejo.fase)
     pasos: list[PasoReflejo] = []
     simulado = work_item
-    for acreditado in objetivos:
+    for indice, acreditado in enumerate(objetivos):
         espejo_del_tramo = replace(
             espejo,
             estado=acreditado.estado,
@@ -483,7 +544,10 @@ def _recorrer_historial_acreditado(
             etiquetas=(acreditado.etiqueta,),
         )
         tramo = _reflejar_por_foto(
-            simulado, espejo_del_tramo, episodio, reanudacion_acreditada=True
+            simulado,
+            espejo_del_tramo,
+            episodio,
+            reanudacion_acreditada=_salida_de_parada_acreditada(espejo, objetivos, indice, foto),
         )
         if tramo.divergencia is not None:
             return None
@@ -496,7 +560,9 @@ def _recorrer_historial_acreditado(
     # El último tramo va contra el espejo REAL, no contra un derivado: es el
     # que trae el SHA de fusión de la entrega y el que garantiza que el
     # recorrido termina exactamente en la foto, no cerca.
-    ultimo = _reflejar_por_foto(simulado, espejo, episodio, reanudacion_acreditada=True)
+    ultimo = _reflejar_por_foto(
+        simulado, espejo, episodio, reanudacion_acreditada=espejo.reanudacion_publicada
+    )
     if ultimo.divergencia is not None:
         return None
     pasos.extend(ultimo.pasos)
