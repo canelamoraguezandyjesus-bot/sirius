@@ -929,6 +929,49 @@ ADR o su incidencia cuando se adopte.
   del motor: acotada, con el caso vivo de esta noche como escenario de
   aceptación. C2 va DESPUÉS de esa ficha, no antes.
 
+### 39. El encargo del reflector (#539): tres rondas de la misma familia, el freno de convergencia acertando, y la premisa que estaba rota desde el principio (05-09-2026, 10:35-13:10 UTC)
+
+- **El ciclo**: implementador en ~30 min (PR #540, ADR-144). Ronda 1:
+  los DOS revisores con defectos reales — la «acreditación intermedia»
+  implementada como comparación con la foto (Claude, con traza: una
+  etiqueta cambiada a mano podría reactivar un WI parado) y la segunda
+  parada saliendo acreditada por la foto final (Codex: un
+  `needs_decision` resuelto sin orden del propietario). Ronda 2: el
+  arreglo introdujo una función nueva CON EL MISMO VICIO, cazado por
+  los dos revisores convergiendo en la corrección exacta; más dos
+  menores (pruebas sobre historiales imposibles; un «cinco» por
+  «seis»). Ronda 3: TERCERA aparición de la familia (la foto seguía
+  dentro del criterio), el aviso de familia repetida (ADR-078), y el
+  freno de convergencia parando el ciclo: «(3, 8) no mejora la mejor
+  marca histórica (2, 6)».
+- **El descubrimiento que cambió las premisas** (Codex, ronda 3):
+  `notify-sirius-state.yml` lleva el nombre de la etiqueta en su grupo
+  de concurrencia — las notificaciones de etiquetas distintas NO se
+  serializan, así que el orden de publicación de los avisos no acredita
+  el orden real de aplicación. Todo el modelo de «historial acreditado»
+  de mi encargo descansaba en ese orden. Y de las rondas también quedó
+  medido: solo SEIS de las trece etiquetas se notifican — el historial
+  es un esqueleto, no una película.
+- **La decisión registrada** (bajo la autorización vigente): la WI se
+  detiene — el freno tiene razón y un cuarto parche local violaría
+  ADR-001. Rama y PR quedan sin fusionar como material del sucesor. El
+  encargo sucesor llevará el modelo de acreditación DECIDIDO: la salida
+  de una parada solo la acredita el permiso escrito del propietario
+  presente en el historial (los marcadores de reanudación), nunca la
+  posición de un aviso posiblemente rezagado; recuperación sin permiso
+  escrito = divergencia declarada, que es honesta. El caso vivo de
+  #537 recorre igualmente: sus dos `continua` están en el historial.
+- **Cuarta lección de encargos en cuatro ciclos** (26: caso frontera;
+  31: semántica; 37: hecho sin medir; hoy): cuando el encargo toca
+  SEMÁNTICA DE EVIDENCIA, el modelo de qué acredita qué debe venir
+  decidido en el encargo, no dejarse a descubrir por rondas — y las
+  premisas de infraestructura (qué serializa, qué se notifica) hay que
+  verificarlas ANTES, como hechos, igual que los números. Contraste el
+  mismo día: #537 (dialecto, semántica cerrada de antemano) = 3 rondas
+  y cero defectos de código; #539 (modelo abierto) = 3 rondas de
+  parches sobre el mismo vicio y parada. La diferencia no fue el motor:
+  fue el encargo.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
