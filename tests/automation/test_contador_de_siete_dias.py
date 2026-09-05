@@ -33,7 +33,7 @@ import pytest
 import yaml
 
 from sirius_engine.projection_verifier import ventana_tolerancia_etiqueta_maquina
-from sirius_engine.seven_day_streak import _horas_de_disparo
+from sirius_engine.seven_day_streak import _horas_de_disparo, hora_recomendada_pasada
 
 RAIZ = Path(__file__).resolve().parents[2]
 WORKFLOWS = RAIZ / ".github" / "workflows"
@@ -87,6 +87,19 @@ def _tranquilidad_antes_de(minuto: int, disparos: set[int]) -> int:
     return min((minuto - otro) % MINUTOS_DEL_DIA for otro in otros)
 
 
+def _cableado_es_exactamente(minutos: list[int], derivada: int) -> bool:
+    """¿El contador declara UN solo disparo periódico y es el derivado?
+
+    Sobre la LISTA de minutos, nunca sobre un conjunto: `set(...)` colapsa dos
+    entradas idénticas -``'24 3 * * *'`` declarado dos veces da ``[204, 204]``,
+    y el conjunto lo reduce a ``{204}``- y daría por buena una hora programada
+    dos veces al día, que es justo lo que el mensaje de más abajo dice que no
+    puede pasar. Comparar contra ``[derivada]`` comprueba a la vez la cantidad
+    (una sola entrada) y el valor.
+    """
+    return minutos == [derivada]
+
+
 def test_el_contador_existe_y_tiene_horario() -> None:
     """Anti-vacua: sin horario, las demás pruebas medirían un contador que no corre."""
     assert CONTADOR.is_file(), (
@@ -129,6 +142,43 @@ def test_la_hora_del_contador_deja_pasar_la_ventana_de_tolerancia() -> None:
             "acabas de subir un tope, ÉSA es la causa. Vuelve a derivar la hora con "
             "`uv run sirius-racha --hora-recomendada` y mueve el cron, o baja el tope."
         )
+
+
+def test_el_cron_cableado_del_contador_es_la_hora_que_el_derivador_devuelve() -> None:
+    """La cabecera declara su cron DERIVADO: esto comprueba que lo sigue siendo.
+
+    `contador-siete-dias.yml` dice de sí mismo «03:24 UTC - punto medio del mayor
+    hueco libre (345 min, tras las 00:32)», y ADR-144 declara que esa frase vuelve
+    a ser verdad SOLA. Hasta aquí esa afirmación descansaba en dos pines que nunca
+    se comparaban entre sí: uno fija lo que DERIVA el motor (03:24, en
+    `tests/engine/test_seven_day_streak.py`) y el otro solo exige que el cron
+    CABLEADO deje pasar la ventana de tolerancia. Entre los dos cabe una hora que
+    cumpla la tolerancia sin ser la derivada -`0 5 * * *`, por ejemplo: 268 min
+    tranquilos, de sobra para los 170 de tolerancia-, y con ella la cabecera
+    mentiría sin que nada se pusiera rojo. Éste es el guardián que compara los dos
+    lados, que es lo único que hace de la cabecera una afirmación sostenida.
+
+    No es circular: el derivador excluye por nombre los disparos de este mismo
+    fichero (ADR-144), así que el número con el que se compara no depende del cron
+    que se está comprobando.
+    """
+    hora, motivo = hora_recomendada_pasada()
+    derivada = hora.hour * 60 + hora.minute
+
+    cableados = _minutos_de(_doc(CONTADOR))
+
+    assert _cableado_es_exactamente(cableados, derivada), (
+        f"el contador dispara en {cableados} (minutos del día) y la "
+        f"derivación devuelve {derivada} ({hora.hour:02d}:{hora.minute:02d} UTC, "
+        f"{motivo}).\n"
+        "  La cabecera de `contador-siete-dias.yml` declara su hora DERIVADA, y "
+        "ADR-144 apoya en eso que la frase de la cabecera es verdad sola. Si "
+        "acabas de mover un `schedule:` de otro workflow, la hora derivada se "
+        "movió y hay que volver a cablear el cron con "
+        "`uv run sirius-racha --hora-recomendada`; si acabas de tocar el cron del "
+        "contador, no lo derivaste. Un solo cron, además: dos disparos diarios no "
+        "pueden ser los dos «la hora derivada»."
+    )
 
 
 def test_el_contador_se_serializa_con_el_motor() -> None:
@@ -220,3 +270,32 @@ def test_el_criterio_rechaza_una_hora_mala() -> None:
         "una hora pegada a otro disparo tiene que quedar por debajo de la "
         "tolerancia; si no, el criterio no está midiendo nada"
     )
+
+
+@pytest.mark.parametrize(
+    ("cableados", "esperado"),
+    [
+        # Lo único que vale: una sola entrada, y es la derivada.
+        ([204], True),
+        # El caso que `set(...)` daba por bueno: `'24 3 * * *'` declarado DOS
+        # veces. El conjunto lo colapsaba en `{204}` y la comprobación pasaba
+        # con el contador programado dos veces al día.
+        ([204, 204], False),
+        # Dos disparos distintos: ninguno de los dos puede ser «la» derivada.
+        ([204, 300], False),
+        # Una sola entrada, pero no la derivada.
+        ([300], False),
+        # Sin ningún disparo periódico no hay nada que comparar.
+        ([], False),
+    ],
+)
+def test_el_guardian_del_cron_cableado_no_colapsa_los_duplicados(
+    cableados: list[int], esperado: bool
+) -> None:
+    """La mutación, fijada: contar los disparos, no solo mirar cuáles son.
+
+    El guardián de arriba exige «un solo cron», y con `set(...)` esa exigencia
+    era decorativa: dos entradas idénticas se reducían a una y pasaban. Aquí se
+    fija que la cantidad cuenta, para que volver al conjunto se ponga rojo.
+    """
+    assert _cableado_es_exactamente(cableados, 204) is esperado
